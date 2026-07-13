@@ -150,6 +150,25 @@
       cursor: not-allowed;
     }
 
+    .btn.active {
+      background: rgba(110, 231, 168, 0.15);
+      border-color: var(--success);
+      color: var(--success);
+    }
+
+    .toggle-group {
+      display: flex;
+      gap: 6px;
+      margin-top: 8px;
+    }
+
+    .toggle-btn {
+      flex: 1;
+      height: 32px;
+      font-size: 0.7rem;
+      padding: 0 10px;
+    }
+
     .legend {
       padding: 16px;
       background: rgba(20, 22, 25, 0.8);
@@ -199,6 +218,10 @@
           Roads, Trails and Rails from NS Open Data via Socrata API
         </div>
         <button class="btn" id="ns-btn">Load NS Data</button>
+        <div class="toggle-group" id="ns-toggle-group" style="display: none;">
+          <button class="toggle-btn" id="ns-show">Show</button>
+          <button class="toggle-btn" id="ns-hide">Hide</button>
+        </div>
         <div class="source-details" id="ns-details" style="display: none;"></div>
       </div>
 
@@ -223,6 +246,10 @@
           Trail and track data from Overpass API (already working)
         </div>
         <button class="btn" id="osm-btn">Load OSM Data</button>
+        <div class="toggle-group" id="osm-toggle-group" style="display: none;">
+          <button class="toggle-btn" id="osm-show">Show</button>
+          <button class="toggle-btn" id="osm-hide">Hide</button>
+        </div>
         <div class="source-details" id="osm-details" style="display: none;"></div>
       </div>
     </div>
@@ -270,8 +297,8 @@
 
     map.addControl(new maplibregl.NavigationControl(), 'top-right');
 
-    // Track loaded layers
-    const loadedLayers = new Set();
+    // Track loaded layers and their visibility
+    const loadedLayers = new Map(); // layerId -> { visible: bool, color: string }
 
     // Nova Scotia Open Data integration
     document.getElementById('ns-btn').addEventListener('click', async () => {
@@ -317,8 +344,12 @@
             }
           });
 
-          loadedLayers.add('ns-trails');
+          loadedLayers.set('ns-trails', { visible: true, color: '#6ee7a8' });
         }
+
+        // Show toggle controls
+        document.getElementById('ns-toggle-group').style.display = 'flex';
+        setupToggleControls('ns', 'ns-trails');
 
         detailsEl.innerHTML += `<div><strong>Demo Features:</strong> ${demoFeatures.features.length} trails</div>`;
         
@@ -399,10 +430,14 @@
             }
           });
 
-          loadedLayers.add('osm-trails');
+          loadedLayers.set('osm-trails', { visible: true, color: '#ff8a1e' });
         } else {
           map.getSource('osm-trails').setData(geojson);
         }
+
+        // Show toggle controls
+        document.getElementById('osm-toggle-group').style.display = 'flex';
+        setupToggleControls('osm', 'osm-trails');
 
         statusEl.textContent = 'loaded';
         statusEl.className = 'source-status success';
@@ -422,6 +457,29 @@
 
       btn.disabled = false;
     });
+
+    // Setup show/hide toggle controls for a source
+    function setupToggleControls(sourceId, layerId) {
+      const showBtn = document.getElementById(`${sourceId}-show`);
+      const hideBtn = document.getElementById(`${sourceId}-hide`);
+
+      // Set initial state
+      showBtn.classList.add('active');
+
+      showBtn.addEventListener('click', () => {
+        map.setLayoutProperty(layerId, 'visibility', 'visible');
+        showBtn.classList.add('active');
+        hideBtn.classList.remove('active');
+        loadedLayers.get(layerId).visible = true;
+      });
+
+      hideBtn.addEventListener('click', () => {
+        map.setLayoutProperty(layerId, 'visibility', 'none');
+        hideBtn.classList.add('active');
+        showBtn.classList.remove('active');
+        loadedLayers.get(layerId).visible = false;
+      });
+    }
 
     // Generate demo NS trail data
     function generateDemoNSTrails() {
