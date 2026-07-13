@@ -319,21 +319,18 @@
         const nsBounds = [-66.5, 43.3, -59.5, 47.1]; // Nova Scotia bbox
         const [west, south, east, north] = nsBounds;
         
-        const query = `
-          [out:json][timeout:25];
-          (
-            way["highway"~"track|path"]["surface"~"unpaved|gravel|dirt|ground"](${south},${west},${north},${east});
-            way["highway"="track"](${south},${west},${north},${east});
-          );
-          out geom;
-        `;
+        const query = `[out:json][timeout:25];
+(
+  way["highway"="track"](${south},${west},${north},${east});
+  way["highway"="path"]["surface"~"dirt|ground|earth|gravel|unpaved|fine_gravel|compacted|sand|grass"](${south},${west},${north},${east});
+  way["highway"="bridleway"](${south},${west},${north},${east});
+);
+out geom tags;`;
         
-        const response = await fetch('https://overpass-api.de/api/interpreter', {
-          method: 'POST',
-          body: query
-        });
+        const url = 'https://overpass-api.de/api/interpreter?data=' + encodeURIComponent(query);
+        const response = await fetch(url, { method: 'GET' });
         
-        if (!response.ok) throw new Error('Overpass API failed');
+        if (!response.ok) throw new Error('HTTP ' + response.status);
         
         const data = await response.json();
         const features = data.elements
