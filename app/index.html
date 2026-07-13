@@ -548,9 +548,12 @@
       return `[out:json][timeout:25];
 (
   way["highway"="track"](${south},${west},${north},${east});
-  way["highway"="path"]["surface"~"dirt|ground|earth|gravel|unpaved|fine_gravel|compacted|sand|grass"](${south},${west},${north},${east});
-  way["highway"="path"]["motorcycle"](${south},${west},${north},${east});
+  way["highway"="path"](${south},${west},${north},${east});
   way["highway"="bridleway"](${south},${west},${north},${east});
+  way["highway"="unclassified"]["surface"~"unpaved|gravel|dirt|ground|earth|compacted"](${south},${west},${north},${east});
+  way["highway"="service"]["surface"~"unpaved|gravel|dirt|ground|earth"](${south},${west},${north},${east});
+  way["highway"]["motor_vehicle"="no"]["bicycle"="yes"](${south},${west},${north},${east});
+  way["route"="mtb"](${south},${west},${north},${east});
 );
 out geom tags;`;
     }
