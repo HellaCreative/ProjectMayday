@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Overpass API Test</title>
+  <style>
+    body {
+      font-family: monospace;
+      padding: 20px;
+      background: #0b0c0e;
+      color: #f2f0eb;
+    }
+    button {
+      padding: 10px 20px;
+      font-size: 16px;
+      cursor: pointer;
+      background: #ff8a1e;
+      border: none;
+      color: white;
+      margin: 10px 0;
+    }
+    #output {
+      margin-top: 20px;
+      white-space: pre-wrap;
+      background: #141619;
+      padding: 15px;
+      border: 1px solid #333;
+    }
+    .error { color: #ff4d4d; }
+    .success { color: #6ee7a8; }
+  </style>
+</head>
+<body>
+  <h1>Overpass API Connection Test</h1>
+  
+  <button onclick="testOverpass()">Test Overpass API</button>
+  <button onclick="testSimpleFetch()">Test Basic Fetch</button>
+  
+  <div id="output">Click a button to test...</div>
+
+  <script>
+    const output = document.getElementById('output');
+
+    function log(msg, type = 'info') {
+      const line = document.createElement('div');
+      line.className = type;
+      line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+      output.appendChild(line);
+    }
+
+    async function testSimpleFetch() {
+      output.innerHTML = '';
+      log('Testing basic fetch to Overpass...');
+      
+      try {
+        const url = 'https://overpass-api.de/api/status';
+        log('Fetching: ' + url);
+        
+        const response = await fetch(url);
+        log('Response status: ' + response.status, response.ok ? 'success' : 'error');
+        
+        const text = await response.text();
+        log('Response body: ' + text.substring(0, 200), 'success');
+        
+      } catch (error) {
+        log('ERROR: ' + error.message, 'error');
+        log('Error details: ' + JSON.stringify(error, null, 2), 'error');
+      }
+    }
+
+    async function testOverpass() {
+      output.innerHTML = '';
+      log('Testing Overpass query for Halifax trails...');
+      
+      try {
+        // Simple query for Halifax area
+        const query = `[out:json][timeout:25];
+way["highway"="track"](44.6,-63.6,44.7,-63.5);
+out geom;`;
+        
+        log('Query: ' + query);
+        
+        const url = 'https://overpass-api.de/api/interpreter?data=' + encodeURIComponent(query);
+        log('Full URL length: ' + url.length);
+        
+        log('Sending fetch request...');
+        const response = await fetch(url, { method: 'GET' });
+        
+        log('Response status: ' + response.status, response.ok ? 'success' : 'error');
+        log('Response headers: ' + JSON.stringify([...response.headers]), 'info');
+        
+        const data = await response.json();
+        log('Response data: ' + JSON.stringify(data, null, 2), 'success');
+        log('Number of elements: ' + (data.elements?.length || 0), 'success');
+        
+      } catch (error) {
+        log('ERROR: ' + error.message, 'error');
+        log('Error type: ' + error.name, 'error');
+        log('Error stack: ' + error.stack, 'error');
+      }
+    }
+  </script>
+</body>
+</html>
