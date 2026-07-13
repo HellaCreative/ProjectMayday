@@ -300,6 +300,14 @@
     // Track loaded layers and their visibility
     const loadedLayers = new Map(); // layerId -> { visible: bool, color: string }
 
+    // Auto-load OSM data on map load
+    map.on('load', () => {
+      // Automatically trigger OSM load after a short delay
+      setTimeout(() => {
+        document.getElementById('osm-btn').click();
+      }, 500);
+    });
+
     // Nova Scotia Open Data integration
     document.getElementById('ns-btn').addEventListener('click', async () => {
       const statusEl = document.getElementById('ns-status');
@@ -311,26 +319,57 @@
       statusEl.className = 'source-status loading';
 
       try {
-        // Note: This is a demo URL - actual dataset ID needs research
-        // The Socrata API pattern is: https://data.novascotia.ca/resource/{dataset-id}.geojson
-        // We'll use a placeholder approach here
-        statusEl.textContent = 'Demo mode';
-        statusEl.className = 'source-status error';
-        detailsEl.style.display = 'block';
-        detailsEl.innerHTML = `
-          <div><strong>Status:</strong> Demo mode</div>
-          <div><strong>Note:</strong> NS dataset ID needs research</div>
-          <div><strong>API Pattern:</strong> https://data.novascotia.ca/resource/[id].geojson</div>
-          <div><strong>Next Step:</strong> Browse catalogue for trail dataset resource ID</div>
+        // Try to fetch real NS Open Data
+        // First, let's use Overpass for Nova Scotia as a fallback
+        statusEl.textContent = 'loading';
+        statusEl.className = 'source-status loading';
+        
+        const nsBounds = [-66.5, 43.3, -59.5, 47.1]; // Nova Scotia bbox
+        const [west, south, east, north] = nsBounds;
+        
+        const query = `
+          [out:json][timeout:25];
+          (
+            way["highway"~"track|path"]["surface"~"unpaved|gravel|dirt|ground"](${south},${west},${north},${east});
+            way["highway"="track"](${south},${west},${north},${east});
+          );
+          out geom;
         `;
         
-        // Generate demo data around Nova Scotia
-        const demoFeatures = generateDemoNSTrails();
+        const response = await fetch('https://overpass-api.de/api/interpreter', {
+          method: 'POST',
+          body: query
+        });
+        
+        if (!response.ok) throw new Error('Overpass API failed');
+        
+        const data = await response.json();
+        const features = data.elements
+          .filter(el => el.type === 'way' && el.geometry && el.geometry.length >= 2)
+          .slice(0, 200) // Limit to prevent overwhelming the map
+          .map(way => ({
+            type: 'Feature',
+            geometry: {
+              type: 'LineString',
+              coordinates: way.geometry.map(pt => [pt.lon, pt.lat])
+            },
+            properties: {
+              highway: way.tags?.highway,
+              surface: way.tags?.surface,
+              name: way.tags?.name || 'Unnamed trail',
+              source: 'openstreetmap-ns'
+            }
+          }));
+        
+        const geojson = {
+          type: 'FeatureCollection',
+          features: features
+        };
         
         if (!map.getSource('ns-trails')) {
           map.addSource('ns-trails', {
             type: 'geojson',
-            data: demoFeatures
+            data: geojson
           });
 
           map.addLayer({
@@ -351,7 +390,15 @@
         document.getElementById('ns-toggle-group').style.display = 'flex';
         setupToggleControls('ns', 'ns-trails');
 
-        detailsEl.innerHTML += `<div><strong>Demo Features:</strong> ${demoFeatures.features.length} trails</div>`;
+        statusEl.textContent = 'loaded';
+        statusEl.className = 'source-status success';
+        detailsEl.style.display = 'block';
+        detailsEl.innerHTML = `
+          <div><strong>Features:</strong> ${features.length} trails (sample)</div>
+          <div><strong>Coverage:</strong> All of Nova Scotia</div>
+          <div><strong>Source:</strong> OpenStreetMap (Nova Scotia extract)</div>
+          <div><strong>Note:</strong> Using OSM data for NS. Official NS Open Data requires dataset ID research.</div>
+        `;
         
       } catch (error) {
         statusEl.textContent = 'error';
@@ -481,39 +528,6 @@
       });
     }
 
-    // Generate demo NS trail data
-    function generateDemoNSTrails() {
-      // Demo trails around Nova Scotia
-      const nsTrails = [
-        {
-          name: "Cape Breton Highlands Trail",
-          coords: [[-60.7, 46.7], [-60.6, 46.75], [-60.5, 46.8]]
-        },
-        {
-          name: "Annapolis Valley Trail",
-          coords: [[-64.5, 45.1], [-64.3, 45.15], [-64.1, 45.2]]
-        },
-        {
-          name: "South Shore Trail",
-          coords: [[-64.8, 44.0], [-64.6, 43.95], [-64.4, 43.9]]
-        }
-      ];
-
-      return {
-        type: 'FeatureCollection',
-        features: nsTrails.map(trail => ({
-          type: 'Feature',
-          geometry: {
-            type: 'LineString',
-            coordinates: trail.coords
-          },
-          properties: {
-            name: trail.name,
-            source: 'nova-scotia-demo'
-          }
-        }))
-      };
-    }
   </script>
 </body>
 </html>
