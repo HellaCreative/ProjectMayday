@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>DIRT. Data diag</title>
+  <style>
+    :root {
+      --bg: #0b0c0e;
+      --panel: #141619;
+      --panel-2: #1b1e22;
+      --line: rgba(255, 255, 255, 0.08);
+      --text: #f2f0eb;
+      --muted: #8b8f96;
+      --amber: #ff8a1e;
+      --g2: #6ee7a8;
+      --g3: #ffd24a;
+      --g4: #ff8a1e;
+      --g5: #ff4d4d;
+      --single: #b98bff;
+      --unknown: #6b7078;
+      --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
+      --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      min-height: 100dvh;
+      background:
+        radial-gradient(ellipse 70% 40% at 50% -5%, rgba(255, 138, 30, 0.1), transparent 50%),
+        var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      padding: 24px 18px 48px;
+    }
+
+    a.back {
+      display: inline-block;
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      text-decoration: none;
+      margin-bottom: 18px;
+    }
+
+    a.back:hover { color: var(--amber); }
+
+    .brand {
+      font-family: var(--mono);
+      font-size: 1.6rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      margin-bottom: 6px;
+    }
+
+    .brand span { color: var(--amber); }
+
+    h1 {
+      font-size: 1.05rem;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+
+    .lead {
+      color: var(--muted);
+      font-size: 0.92rem;
+      line-height: 1.45;
+      max-width: 48ch;
+      margin-bottom: 22px;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 16px;
+      margin-bottom: 14px;
+    }
+
+    .panel h2 {
+      font-family: var(--mono);
+      font-size: 0.68rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    button {
+      min-height: 52px;
+      padding: 0 16px;
+      border-radius: 16px;
+      border: 1px solid var(--line);
+      background: var(--panel-2);
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      cursor: pointer;
+    }
+
+    button.primary {
+      background: var(--amber);
+      color: #111;
+      border-color: transparent;
+      font-weight: 700;
+    }
+
+    button:disabled { opacity: 0.5; cursor: wait; }
+
+    code.box {
+      display: block;
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      color: var(--muted);
+      background: #0e1012;
+      border-radius: 10px;
+      padding: 10px 12px;
+      word-break: break-all;
+    }
+
+    .verdict {
+      font-size: 1.15rem;
+      font-weight: 650;
+      margin-bottom: 8px;
+    }
+
+    .verdict.rich { color: var(--g2); }
+    .verdict.sparse { color: var(--g3); }
+    .verdict.empty { color: var(--g5); }
+    .verdict.fail { color: #ff8a8a; }
+
+    .meta {
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      color: var(--muted);
+      letter-spacing: 0.04em;
+      line-height: 1.5;
+      margin-bottom: 14px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 8px;
+    }
+
+    .cell {
+      background: #0e1012;
+      border-radius: 12px;
+      padding: 12px;
+    }
+
+    .cell .n {
+      font-family: var(--mono);
+      font-size: 1.25rem;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .cell .l {
+      font-family: var(--mono);
+      font-size: 0.65rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    .note {
+      margin-top: 12px;
+      color: var(--muted);
+      font-size: 0.88rem;
+      line-height: 1.45;
+    }
+
+    pre {
+      margin-top: 12px;
+      max-height: 240px;
+      overflow: auto;
+      background: #0e1012;
+      border-radius: 12px;
+      padding: 12px;
+      font-family: var(--mono);
+      font-size: 0.68rem;
+      color: #aeb3bb;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+  </style>
+</head>
+<body>
+  <a class="back" href="../index.html">← DIRT home</a>
+  <div class="brand">DIRT<span>.</span></div>
+  <h1>Overpass data pipe</h1>
+  <p class="lead">HIT the Nova Scotia box around Porter's Lake over real https. Confirms OSM track geometry and grading before we build further.</p>
+
+  <section class="panel">
+    <h2>Target bbox</h2>
+    <code class="box" id="bboxLabel">44.60, -63.70, 44.85, -63.10</code>
+    <div class="row" style="margin-top:14px">
+      <button class="primary" id="runBtn">Run Porter's Lake</button>
+      <button id="nearBtn">Use my GPS bbox</button>
+      <a href="../app/index.html" style="align-self:center;color:var(--amber);font-family:var(--mono);font-size:0.72rem;letter-spacing:0.08em;text-transform:uppercase;text-decoration:none;padding:0 8px">Open map →</a>
+    </div>
+  </section>
+
+  <section class="panel" id="resultPanel">
+    <h2>Result</h2>
+    <div class="verdict" id="verdict">Waiting</div>
+    <div class="meta" id="meta">No request yet.</div>
+    <div class="grid" id="counts"></div>
+    <p class="note" id="note"></p>
+    <pre id="log" hidden></pre>
+  </section>
+
+  <script>
+    const DEFAULT_BBOX = [44.6, -63.7, 44.85, -63.1];
+    const OVERPASS_ENDPOINTS = [
+      "https://overpass-api.de/api/interpreter",
+      "https://overpass.kumi.systems/api/interpreter",
+      "https://maps.mail.ru/osm/tools/overpass/api/interpreter"
+    ];
+
+    const GRADES = [
+      { id: "g2", label: "G2", color: "#6ee7a8" },
+      { id: "g3", label: "G3", color: "#ffd24a" },
+      { id: "g4", label: "G4", color: "#ff8a1e" },
+      { id: "g5", label: "G5", color: "#ff4d4d" },
+      { id: "single", label: "Single", color: "#b98bff" },
+      { id: "unknown", label: "Ungraded", color: "#6b7078" }
+    ];
+
+    const runBtn = document.getElementById("runBtn");
+    const nearBtn = document.getElementById("nearBtn");
+    const verdictEl = document.getElementById("verdict");
+    const metaEl = document.getElementById("meta");
+    const countsEl = document.getElementById("counts");
+    const noteEl = document.getElementById("note");
+    const logEl = document.getElementById("log");
+    const bboxLabel = document.getElementById("bboxLabel");
+
+    function classify(tags) {
+      const hw = tags.highway || "";
+      if (hw === "path" || hw === "bridleway") return "single";
+      if (hw === "track") {
+        const tt = tags.tracktype || "";
+        if (tt === "grade1" || tt === "grade2") return "g2";
+        if (tt === "grade3") return "g3";
+        if (tt === "grade4") return "g4";
+        if (tt === "grade5") return "g5";
+        return "unknown";
+      }
+      return "unknown";
+    }
+
+    function queryFor(bbox) {
+      const [south, west, north, east] = bbox;
+      return `[out:json][timeout:25];
+(
+  way["highway"="track"](${south},${west},${north},${east});
+  way["highway"="path"]["surface"~"dirt|ground|earth|gravel|unpaved|fine_gravel|compacted|sand|grass"](${south},${west},${north},${east});
+  way["highway"="path"]["motorcycle"](${south},${west},${north},${east});
+  way["highway"="bridleway"](${south},${west},${north},${east});
+);
+out geom tags;`;
+    }
+
+    async function fetchOverpass(bbox) {
+      const q = queryFor(bbox);
+      const errors = [];
+      for (const endpoint of OVERPASS_ENDPOINTS) {
+        const started = performance.now();
+        try {
+          const url = endpoint + "?data=" + encodeURIComponent(q);
+          const res = await fetch(url, { method: "GET" });
+          const ms = Math.round(performance.now() - started);
+          if (!res.ok) {
+            errors.push(`${endpoint} → HTTP ${res.status} (${ms}ms)`);
+            continue;
+          }
+          const json = await res.json();
+          return { json, endpoint, ms };
+        } catch (err) {
+          errors.push(`${endpoint} → ${err.message}`);
+        }
+      }
+      throw new Error(errors.join("\n"));
+    }
+
+    function summarize(elements) {
+      const counts = Object.fromEntries(GRADES.map((g) => [g.id, 0]));
+      let gradedTracks = 0;
+      let ungradedTracks = 0;
+      for (const el of elements) {
+        if (el.type !== "way") continue;
+        const tags = el.tags || {};
+        const grade = classify(tags);
+        counts[grade] = (counts[grade] || 0) + 1;
+        if (tags.highway === "track") {
+          if (tags.tracktype) gradedTracks += 1;
+          else ungradedTracks += 1;
+        }
+      }
+      const total = Object.values(counts).reduce((a, b) => a + b, 0);
+      return { counts, total, gradedTracks, ungradedTracks };
+    }
+
+    function renderCounts(counts) {
+      countsEl.innerHTML = GRADES.map((g) => `
+        <div class="cell">
+          <div class="n" style="color:${g.color}">${counts[g.id] || 0}</div>
+          <div class="l">${g.label}</div>
+        </div>
+      `).join("");
+    }
+
+    async function run(bbox, label) {
+      bboxLabel.textContent = bbox.map((n) => n.toFixed(2)).join(", ");
+      runBtn.disabled = true;
+      nearBtn.disabled = true;
+      verdictEl.className = "verdict";
+      verdictEl.textContent = "Running…";
+      metaEl.textContent = "Querying Overpass for " + label;
+      noteEl.textContent = "";
+      logEl.hidden = true;
+      logEl.textContent = "";
+
+      try {
+        const { json, endpoint, ms } = await fetchOverpass(bbox);
+        const elements = json.elements || [];
+        const summary = summarize(elements);
+        renderCounts(summary.counts);
+
+        metaEl.textContent = `${summary.total} ways · ${ms}ms · ${endpoint}`;
+
+        if (summary.total === 0) {
+          verdictEl.className = "verdict empty";
+          verdictEl.textContent = "Empty";
+          noteEl.textContent = "No matching ways in this box. Check tagging or expand the area.";
+        } else {
+          const gradedShare = summary.gradedTracks / Math.max(1, summary.gradedTracks + summary.ungradedTracks);
+          const hasGrades = (summary.counts.g2 + summary.counts.g3 + summary.counts.g4 + summary.counts.g5) > 0;
+          if (summary.total >= 40 && hasGrades && gradedShare >= 0.25) {
+            verdictEl.className = "verdict rich";
+            verdictEl.textContent = "Rich + graded";
+            noteEl.textContent = "OSM looks strong enough here for the prototype path.";
+          } else if (summary.total > 0) {
+            verdictEl.className = "verdict sparse";
+            verdictEl.textContent = "Present, mostly ungraded";
+            noteEl.textContent = `${summary.ungradedTracks} ungraded tracks vs ${summary.gradedTracks} graded. NS Topographic Roads/Trails/Rails is the likely differentiator.`;
+          }
+        }
+
+        const sample = elements.slice(0, 8).map((el) => ({
+          id: el.id,
+          highway: el.tags?.highway,
+          tracktype: el.tags?.tracktype,
+          surface: el.tags?.surface,
+          motorcycle: el.tags?.motorcycle
+        }));
+        logEl.hidden = false;
+        logEl.textContent = JSON.stringify(sample, null, 2);
+      } catch (err) {
+        verdictEl.className = "verdict fail";
+        verdictEl.textContent = "Failed to fetch";
+        metaEl.textContent = "All Overpass endpoints failed.";
+        noteEl.textContent = "If you opened this as file://, serve over http(s) instead.";
+        logEl.hidden = false;
+        logEl.textContent = String(err.message || err);
+        renderCounts(Object.fromEntries(GRADES.map((g) => [g.id, 0])));
+      } finally {
+        runBtn.disabled = false;
+        nearBtn.disabled = false;
+      }
+    }
+
+    runBtn.addEventListener("click", () => run(DEFAULT_BBOX, "Porter's Lake box"));
+
+    nearBtn.addEventListener("click", () => {
+      if (!navigator.geolocation) {
+        run(DEFAULT_BBOX, "Porter's Lake box (no GPS)");
+        return;
+      }
+      nearBtn.disabled = true;
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const lat = pos.coords.latitude;
+          const lng = pos.coords.longitude;
+          const d = 0.12;
+          run([lat - d, lng - d, lat + d, lng + d], "GPS vicinity");
+        },
+        () => run(DEFAULT_BBOX, "Porter's Lake box (GPS denied)"),
+        { enableHighAccuracy: true, timeout: 10000 }
+      );
+    });
+  </script>
+</body>
+</html>
