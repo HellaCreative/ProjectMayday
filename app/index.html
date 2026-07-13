@@ -401,38 +401,22 @@
       style: {
         version: 8,
         sources: {
-          cartoDark: {
+          cartoVoyager: {
             type: "raster",
             tiles: [
-              "https://a.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}@2x.png",
-              "https://b.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}@2x.png",
-              "https://c.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}@2x.png"
+              "https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png",
+              "https://b.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png",
+              "https://c.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png"
             ],
             tileSize: 256,
             attribution: "&copy; OpenStreetMap &copy; CARTO"
-          },
-          cartoLabels: {
-            type: "raster",
-            tiles: [
-              "https://a.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}@2x.png",
-              "https://b.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}@2x.png",
-              "https://c.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}@2x.png"
-            ],
-            tileSize: 256
           }
         },
         layers: [
           {
-            id: "carto-dark",
+            id: "carto-light",
             type: "raster",
-            source: "cartoDark",
-            paint: { "raster-saturation": -0.15, "raster-brightness-min": 0.05 }
-          },
-          {
-            id: "carto-labels",
-            type: "raster",
-            source: "cartoLabels",
-            paint: { "raster-opacity": 0.5, "raster-saturation": -0.2 }
+            source: "cartoVoyager"
           }
         ]
       },
