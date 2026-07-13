@@ -606,6 +606,7 @@ out geom tags;`;
         if (el.type !== "way" || !el.geometry || el.geometry.length < 2) continue;
         const tags = el.tags || {};
         const grade = classify(tags);
+        const roadType = classifyRoadType(tags);
         const access = legalAccess(tags);
         out.push({
           type: "Feature",
@@ -613,6 +614,7 @@ out geom tags;`;
           properties: {
             id: el.id,
             grade,
+            roadType,
             highway: tags.highway || "",
             tracktype: tags.tracktype || "",
             surface: tags.surface || "",
@@ -630,7 +632,10 @@ out geom tags;`;
     }
 
     function applyFilters() {
-      const visible = features.filter((f) => gradeOn[f.properties.grade]);
+      const visible = features.filter((f) => {
+        const props = f.properties;
+        return gradeOn[props.grade] && roadTypeOn[props.roadType || 'dirt'];
+      });
       if (map.getSource("trails")) {
         map.getSource("trails").setData({ type: "FeatureCollection", features: visible });
       }
