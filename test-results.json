@@ -1,0 +1,209 @@
+[
+  {
+    "id": "osm-geofabrik",
+    "name": "OpenStreetMap via Geofabrik",
+    "url": "https://download.geofabrik.de/north-america/canada.html",
+    "testUrl": "https://download.geofabrik.de/north-america/canada-latest.osm.pbf",
+    "status": "accessible",
+    "statusCode": 200,
+    "contentType": "application/octet-stream",
+    "priority": 1,
+    "type": "data"
+  },
+  {
+    "id": "nrcan-nrn",
+    "name": "National Road Network (NRCan)",
+    "url": "https://open.canada.ca/data/en/dataset/3d282116-e556-400c-9306-ca1a3cada77f",
+    "testUrl": "https://open.canada.ca/data/en/dataset/3d282116-e556-400c-9306-ca1a3cada77f",
+    "status": "accessible",
+    "statusCode": 200,
+    "contentType": "text/html; charset=utf-8",
+    "priority": 1,
+    "type": "catalogue"
+  },
+  {
+    "id": "geo-ca",
+    "name": "Geo.ca / CanVec",
+    "url": "https://geo.ca",
+    "testUrl": "https://geo.ca",
+    "status": "accessible",
+    "statusCode": 200,
+    "contentType": "text/html",
+    "priority": 2,
+    "type": "catalogue"
+  },
+  {
+    "id": "statcan-roads",
+    "name": "Statistics Canada Road Network",
+    "url": "https://www150.statcan.gc.ca/n1/en/catalogue/92-500-G",
+    "testUrl": "https://www150.statcan.gc.ca/n1/en/catalogue/92-500-G",
+    "status": "accessible",
+    "statusCode": 200,
+    "contentType": "text/html; charset=UTF-8",
+    "priority": 2,
+    "type": "catalogue"
+  },
+  {
+    "id": "bc-data",
+    "name": "British Columbia Data Catalogue",
+    "url": "https://catalogue.data.gov.bc.ca",
+    "testUrl": "https://catalogue.data.gov.bc.ca/api/3/action/package_search?q=forest+service+roads",
+    "status": "accessible",
+    "statusCode": 200,
+    "contentType": "application/json;charset=utf-8",
+    "priority": 1,
+    "type": "api"
+  },
+  {
+    "id": "alberta-geodiscover",
+    "name": "Alberta GeoDiscover",
+    "url": "https://geodiscover.alberta.ca",
+    "testUrl": "https://geodiscover.alberta.ca",
+    "status": "accessible",
+    "statusCode": 200,
+    "contentType": "text/html",
+    "priority": 1,
+    "type": "catalogue"
+  },
+  {
+    "id": "ontario-geohub",
+    "name": "Ontario GeoHub",
+    "url": "https://geohub.lio.gov.on.ca",
+    "testUrl": "https://geohub.lio.gov.on.ca",
+    "status": "accessible",
+    "statusCode": 200,
+    "contentType": "text/html; charset=utf-8",
+    "priority": 1,
+    "type": "catalogue"
+  },
+  {
+    "id": "quebec-donnees",
+    "name": "Données Québec",
+    "url": "https://www.donneesquebec.ca",
+    "testUrl": "https://www.donneesquebec.ca",
+    "status": "accessible",
+    "statusCode": 200,
+    "contentType": "text/html; charset=UTF-8",
+    "priority": 1,
+    "type": "catalogue"
+  },
+  {
+    "id": "ns-opendata",
+    "name": "Nova Scotia Open Data / GeoNOVA",
+    "url": "https://data.novascotia.ca",
+    "testUrl": "https://data.novascotia.ca/api/views/metadata/v1",
+    "status": "accessible",
+    "statusCode": 200,
+    "contentType": "application/json; charset=utf-8",
+    "priority": 1,
+    "type": "api",
+    "note": "HEAD failed, GET succeeded"
+  },
+  {
+    "id": "nb-geonb",
+    "name": "New Brunswick GeoNB",
+    "url": "https://geonb.snb.ca",
+    "testUrl": "https://geonb.snb.ca",
+    "status": "accessible",
+    "statusCode": 200,
+    "contentType": "text/html; charset=UTF-8",
+    "priority": 2,
+    "type": "catalogue"
+  },
+  {
+    "id": "mb-geoportal",
+    "name": "Manitoba Geoportal",
+    "url": "https://mli2.gov.mb.ca",
+    "testUrl": "https://mli2.gov.mb.ca",
+    "status": "failed",
+    "error": "fetch failed",
+    "priority": 2,
+    "type": "catalogue"
+  },
+  {
+    "id": "sk-geohub",
+    "name": "Saskatchewan GeoHub",
+    "url": "https://www.saskatchewan.ca/geohub",
+    "testUrl": "https://www.saskatchewan.ca/geohub",
+    "status": "error",
+    "statusCode": 404,
+    "contentType": "text/html; charset=utf-8",
+    "priority": 2,
+    "type": "catalogue"
+  },
+  {
+    "id": "nl-geoportal",
+    "name": "Newfoundland and Labrador Geoportal",
+    "url": "https://www.gov.nl.ca/ecc/maps",
+    "testUrl": "https://www.gov.nl.ca/ecc/maps",
+    "status": "accessible",
+    "statusCode": 200,
+    "contentType": "text/html; charset=UTF-8",
+    "priority": 2,
+    "type": "catalogue"
+  },
+  {
+    "id": "pei-opendata",
+    "name": "Prince Edward Island Open Data",
+    "url": "https://data.princeedwardisland.ca",
+    "testUrl": "https://data.princeedwardisland.ca",
+    "status": "accessible",
+    "statusCode": 200,
+    "contentType": "text/html; charset=utf-8",
+    "priority": 2,
+    "type": "catalogue"
+  },
+  {
+    "id": "yukon-opendata",
+    "name": "Yukon Open Data",
+    "url": "https://open.yukon.ca",
+    "testUrl": "https://open.yukon.ca",
+    "status": "accessible",
+    "statusCode": 200,
+    "contentType": "text/html; charset=utf-8",
+    "priority": 2,
+    "type": "catalogue"
+  },
+  {
+    "id": "nwt-opendata",
+    "name": "Northwest Territories Spatial Data",
+    "url": "https://www.nwtgeomatics.ca",
+    "testUrl": "https://www.nwtgeomatics.ca",
+    "status": "failed",
+    "error": "fetch failed",
+    "priority": 3,
+    "type": "catalogue"
+  },
+  {
+    "id": "nunavut-geoportal",
+    "name": "Nunavut Geoportal",
+    "url": "https://nunavutgeoportal.ca",
+    "testUrl": "https://nunavutgeoportal.ca",
+    "status": "failed",
+    "error": "fetch failed",
+    "priority": 3,
+    "type": "catalogue"
+  },
+  {
+    "id": "graveltravel",
+    "name": "GravelTravel.ca",
+    "url": "https://graveltravel.ca",
+    "testUrl": "https://graveltravel.ca",
+    "status": "accessible",
+    "statusCode": 200,
+    "contentType": "text/html; charset=utf-8",
+    "priority": 1,
+    "type": "gpx"
+  },
+  {
+    "id": "trans-canada-trail",
+    "name": "Trans Canada Trail",
+    "url": "https://tctrail.ca",
+    "testUrl": "https://tctrail.ca",
+    "status": "accessible",
+    "statusCode": 200,
+    "contentType": "text/html; charset=UTF-8",
+    "priority": 2,
+    "type": "gpx"
+  }
+]

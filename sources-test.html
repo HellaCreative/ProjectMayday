@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>DIRT. Source Testing</title>
+  <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
+  <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+  <style>
+    :root {
+      --bg: #0b0c0e;
+      --panel: #141619;
+      --line: rgba(255, 255, 255, 0.08);
+      --text: #f2f0eb;
+      --muted: #8b8f96;
+      --amber: #ff8a1e;
+      --success: #6ee7a8;
+      --error: #ff4d4d;
+      --mono: ui-monospace, "SF Mono", monospace;
+      --sans: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--sans); overflow: hidden; }
+    
+    #map { position: absolute; inset: 0; }
+
+    .sidebar {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      bottom: 12px;
+      width: 380px;
+      background: rgba(11, 12, 14, 0.95);
+      backdrop-filter: blur(20px);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      z-index: 10;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .sidebar-header {
+      padding: 20px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .brand {
+      font-family: var(--mono);
+      font-size: 1.3rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      margin-bottom: 4px;
+    }
+
+    .brand span { color: var(--amber); }
+
+    .subtitle {
+      font-size: 0.82rem;
+      color: var(--muted);
+      letter-spacing: 0.02em;
+    }
+
+    .sidebar-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+    }
+
+    .source-card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 14px;
+      margin-bottom: 10px;
+    }
+
+    .source-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .source-name {
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text);
+    }
+
+    .source-status {
+      font-size: 0.7rem;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-family: var(--mono);
+      letter-spacing: 0.06em;
+    }
+
+    .source-status.idle { background: rgba(107, 112, 120, 0.2); color: var(--muted); }
+    .source-status.loading { background: rgba(255, 138, 30, 0.2); color: var(--amber); }
+    .source-status.success { background: rgba(110, 231, 168, 0.2); color: var(--success); }
+    .source-status.error { background: rgba(255, 77, 77, 0.2); color: var(--error); }
+
+    .source-desc {
+      font-size: 0.82rem;
+      color: var(--muted);
+      line-height: 1.4;
+      margin-bottom: 10px;
+    }
+
+    .source-details {
+      font-family: var(--mono);
+      font-size: 0.68rem;
+      color: var(--muted);
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid var(--line);
+    }
+
+    .source-details div {
+      margin-bottom: 4px;
+    }
+
+    .btn {
+      width: 100%;
+      height: 40px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 0.75rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+
+    .btn:hover:not(:disabled) {
+      background: rgba(255, 138, 30, 0.1);
+      border-color: var(--amber);
+      color: var(--amber);
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .legend {
+      padding: 16px;
+      background: rgba(20, 22, 25, 0.8);
+      border-top: 1px solid var(--line);
+    }
+
+    .legend-title {
+      font-family: var(--mono);
+      font-size: 0.68rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 6px;
+      font-size: 0.8rem;
+    }
+
+    .legend-color {
+      width: 20px;
+      height: 3px;
+      border-radius: 2px;
+    }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+
+  <div class="sidebar">
+    <div class="sidebar-header">
+      <div class="brand">DIRT<span>.</span></div>
+      <div class="subtitle">Multi-Source Data Testing</div>
+    </div>
+
+    <div class="sidebar-body">
+      <div class="source-card" id="ns-card">
+        <div class="source-header">
+          <div class="source-name">Nova Scotia Trails</div>
+          <div class="source-status idle" id="ns-status">idle</div>
+        </div>
+        <div class="source-desc">
+          Roads, Trails and Rails from NS Open Data via Socrata API
+        </div>
+        <button class="btn" id="ns-btn">Load NS Data</button>
+        <div class="source-details" id="ns-details" style="display: none;"></div>
+      </div>
+
+      <div class="source-card" id="bc-card">
+        <div class="source-header">
+          <div class="source-name">BC Forest Roads</div>
+          <div class="source-status idle" id="bc-status">idle</div>
+        </div>
+        <div class="source-desc">
+          BC Forest Service Roads via CKAN API
+        </div>
+        <button class="btn" id="bc-btn" disabled>Coming Soon</button>
+        <div class="source-details" id="bc-details" style="display: none;"></div>
+      </div>
+
+      <div class="source-card" id="osm-card">
+        <div class="source-header">
+          <div class="source-name">OpenStreetMap</div>
+          <div class="source-status idle" id="osm-status">idle</div>
+        </div>
+        <div class="source-desc">
+          Trail and track data from Overpass API (already working)
+        </div>
+        <button class="btn" id="osm-btn">Load OSM Data</button>
+        <div class="source-details" id="osm-details" style="display: none;"></div>
+      </div>
+    </div>
+
+    <div class="legend">
+      <div class="legend-title">Data Sources</div>
+      <div class="legend-item">
+        <div class="legend-color" style="background: #ff8a1e;"></div>
+        <div>OpenStreetMap (Overpass)</div>
+      </div>
+      <div class="legend-item">
+        <div class="legend-color" style="background: #6ee7a8;"></div>
+        <div>Nova Scotia Open Data</div>
+      </div>
+      <div class="legend-item">
+        <div class="legend-color" style="background: #b98bff;"></div>
+        <div>BC Forest Service Roads</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Initialize map centered on Nova Scotia
+    const map = new maplibregl.Map({
+      container: 'map',
+      center: [-63.5752, 44.6488], // Halifax
+      zoom: 8,
+      style: {
+        version: 8,
+        glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
+        sources: {
+          cartoDark: {
+            type: 'raster',
+            tiles: ['https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png'],
+            tileSize: 256,
+            attribution: '©OpenStreetMap, ©CartoDB'
+          }
+        },
+        layers: [
+          { id: 'background', type: 'background', paint: { 'background-color': '#0b0c0e' }},
+          { id: 'carto', type: 'raster', source: 'cartoDark' }
+        ]
+      }
+    });
+
+    map.addControl(new maplibregl.NavigationControl(), 'top-right');
+
+    // Track loaded layers
+    const loadedLayers = new Set();
+
+    // Nova Scotia Open Data integration
+    document.getElementById('ns-btn').addEventListener('click', async () => {
+      const statusEl = document.getElementById('ns-status');
+      const detailsEl = document.getElementById('ns-details');
+      const btn = document.getElementById('ns-btn');
+
+      btn.disabled = true;
+      statusEl.textContent = 'loading';
+      statusEl.className = 'source-status loading';
+
+      try {
+        // Note: This is a demo URL - actual dataset ID needs research
+        // The Socrata API pattern is: https://data.novascotia.ca/resource/{dataset-id}.geojson
+        // We'll use a placeholder approach here
+        statusEl.textContent = 'Demo mode';
+        statusEl.className = 'source-status error';
+        detailsEl.style.display = 'block';
+        detailsEl.innerHTML = `
+          <div><strong>Status:</strong> Demo mode</div>
+          <div><strong>Note:</strong> NS dataset ID needs research</div>
+          <div><strong>API Pattern:</strong> https://data.novascotia.ca/resource/[id].geojson</div>
+          <div><strong>Next Step:</strong> Browse catalogue for trail dataset resource ID</div>
+        `;
+        
+        // Generate demo data around Nova Scotia
+        const demoFeatures = generateDemoNSTrails();
+        
+        if (!map.getSource('ns-trails')) {
+          map.addSource('ns-trails', {
+            type: 'geojson',
+            data: demoFeatures
+          });
+
+          map.addLayer({
+            id: 'ns-trails',
+            type: 'line',
+            source: 'ns-trails',
+            paint: {
+              'line-color': '#6ee7a8',
+              'line-width': 3,
+              'line-opacity': 0.8
+            }
+          });
+
+          loadedLayers.add('ns-trails');
+        }
+
+        detailsEl.innerHTML += `<div><strong>Demo Features:</strong> ${demoFeatures.features.length} trails</div>`;
+        
+      } catch (error) {
+        statusEl.textContent = 'error';
+        statusEl.className = 'source-status error';
+        detailsEl.style.display = 'block';
+        detailsEl.innerHTML = `<div><strong>Error:</strong> ${error.message}</div>`;
+      }
+
+      btn.disabled = false;
+    });
+
+    // OpenStreetMap integration (existing Overpass code)
+    document.getElementById('osm-btn').addEventListener('click', async () => {
+      const statusEl = document.getElementById('osm-status');
+      const detailsEl = document.getElementById('osm-details');
+      const btn = document.getElementById('osm-btn');
+
+      btn.disabled = true;
+      statusEl.textContent = 'loading';
+      statusEl.className = 'source-status loading';
+
+      try {
+        const center = map.getCenter();
+        const bounds = map.getBounds();
+        
+        const query = `
+          [out:json][timeout:25];
+          (
+            way["highway"~"track|path|unclassified"]["surface"~"unpaved|gravel|dirt|ground"](${bounds.getSouth()},${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()});
+            way["highway"="track"](${bounds.getSouth()},${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()});
+          );
+          out geom;
+        `;
+
+        const response = await fetch('https://overpass-api.de/api/interpreter', {
+          method: 'POST',
+          body: query
+        });
+
+        const data = await response.json();
+        const features = data.elements
+          .filter(el => el.type === 'way' && el.geometry)
+          .map(way => ({
+            type: 'Feature',
+            geometry: {
+              type: 'LineString',
+              coordinates: way.geometry.map(pt => [pt.lon, pt.lat])
+            },
+            properties: {
+              highway: way.tags?.highway,
+              surface: way.tags?.surface,
+              name: way.tags?.name,
+              source: 'openstreetmap'
+            }
+          }));
+
+        const geojson = {
+          type: 'FeatureCollection',
+          features: features
+        };
+
+        if (!map.getSource('osm-trails')) {
+          map.addSource('osm-trails', {
+            type: 'geojson',
+            data: geojson
+          });
+
+          map.addLayer({
+            id: 'osm-trails',
+            type: 'line',
+            source: 'osm-trails',
+            paint: {
+              'line-color': '#ff8a1e',
+              'line-width': 2,
+              'line-opacity': 0.7
+            }
+          });
+
+          loadedLayers.add('osm-trails');
+        } else {
+          map.getSource('osm-trails').setData(geojson);
+        }
+
+        statusEl.textContent = 'loaded';
+        statusEl.className = 'source-status success';
+        detailsEl.style.display = 'block';
+        detailsEl.innerHTML = `
+          <div><strong>Features:</strong> ${features.length} trails</div>
+          <div><strong>Bounds:</strong> ${bounds.getNorth().toFixed(4)}, ${bounds.getWest().toFixed(4)}</div>
+          <div><strong>Source:</strong> OpenStreetMap via Overpass API</div>
+        `;
+
+      } catch (error) {
+        statusEl.textContent = 'error';
+        statusEl.className = 'source-status error';
+        detailsEl.style.display = 'block';
+        detailsEl.innerHTML = `<div><strong>Error:</strong> ${error.message}</div>`;
+      }
+
+      btn.disabled = false;
+    });
+
+    // Generate demo NS trail data
+    function generateDemoNSTrails() {
+      // Demo trails around Nova Scotia
+      const nsTrails = [
+        {
+          name: "Cape Breton Highlands Trail",
+          coords: [[-60.7, 46.7], [-60.6, 46.75], [-60.5, 46.8]]
+        },
+        {
+          name: "Annapolis Valley Trail",
+          coords: [[-64.5, 45.1], [-64.3, 45.15], [-64.1, 45.2]]
+        },
+        {
+          name: "South Shore Trail",
+          coords: [[-64.8, 44.0], [-64.6, 43.95], [-64.4, 43.9]]
+        }
+      ];
+
+      return {
+        type: 'FeatureCollection',
+        features: nsTrails.map(trail => ({
+          type: 'Feature',
+          geometry: {
+            type: 'LineString',
+            coordinates: trail.coords
+          },
+          properties: {
+            name: trail.name,
+            source: 'nova-scotia-demo'
+          }
+        }))
+      };
+    }
+  </script>
+</body>
+</html>
