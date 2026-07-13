@@ -457,9 +457,9 @@
         type: "line",
         source: "trails",
         paint: {
-          "line-color": "#000000",
-          "line-width": ["interpolate", ["linear"], ["zoom"], 10, 4, 14, 7],
-          "line-opacity": 0.75
+          "line-color": "#ffffff",
+          "line-width": ["interpolate", ["linear"], ["zoom"], 10, 5, 14, 8],
+          "line-opacity": 0.9
         }
       });
 
@@ -471,14 +471,14 @@
         paint: {
           "line-color": [
             "match", ["get", "grade"],
-            "g2", "#6ee7a8",
-            "g3", "#ffd24a",
-            "g4", "#ff8a1e",
-            "g5", "#ff4d4d",
-            "#6b7078"
+            "g2", "#00a86b",
+            "g3", "#f0a000",
+            "g4", "#e85d04",
+            "g5", "#c1121f",
+            "#4a5568"
           ],
-          "line-width": ["interpolate", ["linear"], ["zoom"], 10, 2, 14, 3.5],
-          "line-opacity": 0.95
+          "line-width": ["interpolate", ["linear"], ["zoom"], 10, 3, 14, 5],
+          "line-opacity": 1
         }
       });
 
@@ -488,10 +488,10 @@
         source: "trails",
         filter: ["==", ["get", "grade"], "single"],
         paint: {
-          "line-color": "#b98bff",
-          "line-width": ["interpolate", ["linear"], ["zoom"], 10, 2, 14, 3],
-          "line-dasharray": [1.2, 1.6],
-          "line-opacity": 0.95
+          "line-color": "#7c3aed",
+          "line-width": ["interpolate", ["linear"], ["zoom"], 10, 2.5, 14, 4],
+          "line-dasharray": [2, 2],
+          "line-opacity": 1
         }
       });
 
