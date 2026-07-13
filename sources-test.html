@@ -276,7 +276,7 @@
     const map = new maplibregl.Map({
       container: 'map',
       center: [-63.5752, 44.6488], // Halifax
-      zoom: 8,
+      zoom: 11,
       style: {
         version: 8,
         glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
@@ -434,6 +434,7 @@ out geom tags;`;
         const data = await response.json();
         const features = data.elements
           .filter(el => el.type === 'way' && el.geometry)
+          .slice(0, 500)
           .map(way => ({
             type: 'Feature',
             geometry: {
