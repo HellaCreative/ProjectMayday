@@ -243,9 +243,9 @@
           <div class="source-status idle" id="osm-status">idle</div>
         </div>
         <div class="source-desc">
-          Trail and track data from Overpass API (already working)
+          Trail and track data from Overpass API - loads trails in current map view
         </div>
-        <button class="btn" id="osm-btn">Load OSM Data</button>
+        <button class="btn" id="osm-btn" style="background: rgba(255, 138, 30, 0.2); border-color: var(--amber); color: var(--amber);">Load OSM Data (Start Here)</button>
         <div class="toggle-group" id="osm-toggle-group" style="display: none;">
           <button class="toggle-btn" id="osm-show">Show</button>
           <button class="toggle-btn" id="osm-hide">Hide</button>
@@ -299,14 +299,6 @@
 
     // Track loaded layers and their visibility
     const loadedLayers = new Map(); // layerId -> { visible: bool, color: string }
-
-    // Auto-load OSM data on map load
-    map.on('load', () => {
-      // Automatically trigger OSM load after a short delay
-      setTimeout(() => {
-        document.getElementById('osm-btn').click();
-      }, 500);
-    });
 
     // Nova Scotia Open Data integration
     document.getElementById('ns-btn').addEventListener('click', async () => {
