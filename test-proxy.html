@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Proxy Test - DIRT</title>
+  <style>
+    body {
+      font-family: monospace;
+      padding: 20px;
+      background: #0b0c0e;
+      color: #f2f0eb;
+    }
+    button {
+      padding: 10px 20px;
+      font-size: 16px;
+      cursor: pointer;
+      background: #ff8a1e;
+      border: none;
+      color: white;
+      margin: 10px 0;
+    }
+    #output {
+      margin-top: 20px;
+      white-space: pre-wrap;
+      background: #141619;
+      padding: 15px;
+      border: 1px solid #333;
+    }
+    .error { color: #ff4d4d; }
+    .success { color: #6ee7a8; }
+  </style>
+</head>
+<body>
+  <h1>Testing Vercel Proxy</h1>
+  
+  <button onclick="testProxy()">Test Proxy API</button>
+  
+  <div id="output">Click button to test...</div>
+
+  <script>
+    const output = document.getElementById('output');
+
+    function log(msg, type = 'info') {
+      const line = document.createElement('div');
+      line.className = type;
+      line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+      output.appendChild(line);
+    }
+
+    async function testProxy() {
+      output.innerHTML = '';
+      log('Testing Vercel proxy for Overpass API...');
+      
+      try {
+        const query = `[out:json][timeout:25];
+way["highway"="track"](44.6,-63.6,44.7,-63.5);
+out geom;`;
+        
+        log('Query: ' + query);
+        
+        const url = '/api/overpass?query=' + encodeURIComponent(query);
+        log('Fetching via proxy: ' + url);
+        
+        const response = await fetch(url);
+        
+        log('Response status: ' + response.status, response.ok ? 'success' : 'error');
+        
+        const data = await response.json();
+        
+        if (data.error) {
+          log('API Error: ' + data.error, 'error');
+          log('Message: ' + data.message, 'error');
+        } else {
+          log('SUCCESS! Got data from Overpass', 'success');
+          log('Number of elements: ' + (data.elements?.length || 0), 'success');
+          log('Sample data: ' + JSON.stringify(data.elements?.[0] || {}, null, 2), 'success');
+        }
+        
+      } catch (error) {
+        log('ERROR: ' + error.message, 'error');
+        log('Error type: ' + error.name, 'error');
+      }
+    }
+  </script>
+</body>
+</html>
