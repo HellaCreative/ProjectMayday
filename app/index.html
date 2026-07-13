@@ -334,6 +334,7 @@
     ];
 
     const gradeOn = Object.fromEntries(GRADES.map((g) => [g.id, true]));
+    const roadTypeOn = Object.fromEntries(ROAD_TYPES.map((r) => [r.id, true]));
     let rider = { ...FALLBACK };
     let features = [];
     let settling = false;
@@ -349,6 +350,34 @@
     function setStatus(text, kind = "") {
       statusEl.textContent = text;
       statusEl.className = "status" + (kind ? " " + kind : "");
+    }
+
+    function classifyRoadType(tags) {
+      const hw = tags.highway || "";
+      const surface = tags.surface || "";
+      
+      // Major roads: paved highways and primary roads
+      if (["motorway", "trunk", "primary", "secondary", "tertiary"].includes(hw)) {
+        return "highway";
+      }
+      
+      // Trails: paths, bridleways, singletrack
+      if (["path", "bridleway", "footway", "cycleway"].includes(hw)) {
+        return "trail";
+      }
+      
+      // Service/Forestry: service roads, resource roads
+      if (hw === "service" || hw === "track" && (tags.tracktype === "grade1" || tags.tracktype === "grade2")) {
+        return "service";
+      }
+      
+      // Dirt roads: tracks, unclassified unpaved
+      if (hw === "track" || (hw === "unclassified" && surface.match(/unpaved|gravel|dirt|ground/i))) {
+        return "dirt";
+      }
+      
+      // Default to dirt for unknown
+      return "dirt";
     }
 
     function classify(tags) {
