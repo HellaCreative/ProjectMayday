@@ -634,19 +634,85 @@ out geom tags;`;
       const token = ++fetchToken;
       setStatus("Scanning dirt…");
       try {
-        const osm = await fetchOverpass(currentBBox());
+        const bbox = currentBBox();
+        
+        // Fetch both OSM and NS data in parallel
+        const [osmResult, nsResult] = await Promise.allSettled([
+          fetchOverpass(bbox),
+          fetchNSTrails(bbox)
+        ]);
+        
         if (token !== fetchToken) return;
-        features = toFeatures(osm);
+        
+        // Process OSM data
+        let osmFeatures = [];
+        if (osmResult.status === 'fulfilled') {
+          osmFeatures = toFeatures(osmResult.value);
+        } else {
+          console.warn('OSM fetch failed:', osmResult.reason);
+        }
+        
+        // Process NS data
+        let nsFeatures = [];
+        if (nsResult.status === 'fulfilled' && nsResult.value.features) {
+          nsFeatures = nsResult.value.features.map(f => ({
+            ...f,
+            properties: {
+              ...f.properties,
+              id: f.id || 'ns-' + Math.random(),
+              grade: classifyNSTrail(f.properties),
+              highway: f.properties.road_class || 'trail',
+              source: 'ns-open-data'
+            }
+          }));
+        } else {
+          console.warn('NS data fetch failed:', nsResult.reason);
+        }
+        
+        // Merge both sources
+        features = [...osmFeatures, ...nsFeatures];
         applyFilters();
         setStatus(
-          features.length ? `${features.length} segments · ${reason}` : "No tracks in view",
+          features.length ? `${features.length} segments (${osmFeatures.length} OSM + ${nsFeatures.length} NS) · ${reason}` : "No tracks in view",
           features.length ? "ok" : ""
         );
       } catch (err) {
         if (token !== fetchToken) return;
         console.error(err);
-        setStatus("Overpass failed · " + (err.message || "fetch error"), "error");
+        setStatus("Scan failed · " + (err.message || "fetch error"), "error");
       }
+    }
+    
+    async function fetchNSTrails(bbox) {
+      const bboxStr = bbox.join(',');
+      const url = `/api/ns-trails?bbox=${bboxStr}&limit=2000`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      return await res.json();
+    }
+    
+    function classifyNSTrail(props) {
+      const fcode = (props.fcode || '').toLowerCase();
+      const roadClass = (props.road_class || '').toLowerCase();
+      const surface = (props.surface || '').toLowerCase();
+      
+      // Classify NS trails into our grade system
+      if (fcode.includes('trail') || roadClass.includes('trail')) {
+        return 'single';
+      }
+      if (surface.includes('paved') || surface.includes('asphalt')) {
+        return 'g2'; // Well-maintained
+      }
+      if (surface.includes('gravel')) {
+        return 'g3';
+      }
+      if (surface.includes('dirt') || surface.includes('earth')) {
+        return 'g4';
+      }
+      if (fcode.includes('resource') || roadClass.includes('resource')) {
+        return 'g4'; // Resource roads typically rough
+      }
+      return 'unknown';
     }
 
     function scheduleScan(reason) {
