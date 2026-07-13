@@ -327,7 +327,7 @@
 );
 out geom tags;`;
         
-        const url = 'https://overpass-api.de/api/interpreter?data=' + encodeURIComponent(query);
+        const url = '/api/overpass?query=' + encodeURIComponent(query);
         const response = await fetch(url, { method: 'GET' });
         
         if (!response.ok) throw new Error('HTTP ' + response.status);
@@ -427,7 +427,7 @@ out geom tags;`;
 );
 out geom tags;`;
 
-        const url = 'https://overpass-api.de/api/interpreter?data=' + encodeURIComponent(query);
+        const url = '/api/overpass?query=' + encodeURIComponent(query);
         const response = await fetch(url, { method: 'GET' });
         
         if (!response.ok) throw new Error('HTTP ' + response.status);

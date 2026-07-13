@@ -567,18 +567,14 @@ out geom tags;`;
 
     async function fetchOverpass(bbox) {
       const q = overpassQuery(bbox);
-      let lastErr = null;
-      for (const endpoint of OVERPASS_ENDPOINTS) {
-        try {
-          const url = endpoint + "?data=" + encodeURIComponent(q);
-          const res = await fetch(url, { method: "GET" });
-          if (!res.ok) throw new Error("HTTP " + res.status);
-          return await res.json();
-        } catch (err) {
-          lastErr = err;
-        }
+      try {
+        const url = "/api/overpass?query=" + encodeURIComponent(q);
+        const res = await fetch(url, { method: "GET" });
+        if (!res.ok) throw new Error("HTTP " + res.status);
+        return await res.json();
+      } catch (err) {
+        throw err || new Error("Overpass proxy failed");
       }
-      throw lastErr || new Error("Overpass failed");
     }
 
     function toFeatures(osm) {

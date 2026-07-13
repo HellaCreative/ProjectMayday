@@ -278,24 +278,19 @@ out geom tags;`;
 
     async function fetchOverpass(bbox) {
       const q = queryFor(bbox);
-      const errors = [];
-      for (const endpoint of OVERPASS_ENDPOINTS) {
-        const started = performance.now();
-        try {
-          const url = endpoint + "?data=" + encodeURIComponent(q);
-          const res = await fetch(url, { method: "GET" });
-          const ms = Math.round(performance.now() - started);
-          if (!res.ok) {
-            errors.push(`${endpoint} → HTTP ${res.status} (${ms}ms)`);
-            continue;
-          }
-          const json = await res.json();
-          return { json, endpoint, ms };
-        } catch (err) {
-          errors.push(`${endpoint} → ${err.message}`);
+      const started = performance.now();
+      try {
+        const url = "/api/overpass?query=" + encodeURIComponent(q);
+        const res = await fetch(url, { method: "GET" });
+        const ms = Math.round(performance.now() - started);
+        if (!res.ok) {
+          throw new Error(`HTTP ${res.status}`);
         }
+        const json = await res.json();
+        return { json, endpoint: "Vercel proxy", ms };
+      } catch (err) {
+        throw new Error(`Proxy error: ${err.message}`);
       }
-      throw new Error(errors.join("\n"));
     }
 
     function summarize(elements) {
