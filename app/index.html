@@ -340,6 +340,33 @@
     let settling = false;
     let debounceTimer = null;
     let fetchToken = 0;
+    
+    // Data cache: store fetched areas to avoid re-scanning
+    const dataCache = new Map(); // key: "south,west,north,east", value: features array
+    
+    function getCacheKey(bbox) {
+      return bbox.map(n => n.toFixed(3)).join(',');
+    }
+    
+    function isCached(bbox) {
+      const key = getCacheKey(bbox);
+      return dataCache.has(key);
+    }
+    
+    function getCached(bbox) {
+      const key = getCacheKey(bbox);
+      return dataCache.get(key) || [];
+    }
+    
+    function setCache(bbox, features) {
+      const key = getCacheKey(bbox);
+      dataCache.set(key, features);
+      // Keep cache size reasonable - remove oldest if > 50 entries
+      if (dataCache.size > 50) {
+        const firstKey = dataCache.keys().next().value;
+        dataCache.delete(firstKey);
+      }
+    }
 
     const statusEl = document.getElementById("status");
     const totalEl = document.getElementById("totalCount");
@@ -563,15 +590,35 @@
       }
     }
 
-    function overpassQuery(bbox) {
+    // Layer 1: Major roads (fast)
+    function queryMajorRoads(bbox) {
       const [south, west, north, east] = bbox;
-      return `[out:json][timeout:25];
+      return `[out:json][timeout:15];
+(
+  way["highway"~"motorway|trunk|primary|secondary|tertiary"](${south},${west},${north},${east});
+  way["highway"="unclassified"](${south},${west},${north},${east});
+);
+out geom tags;`;
+    }
+    
+    // Layer 2: Service & forestry roads (medium)
+    function queryServiceRoads(bbox) {
+      const [south, west, north, east] = bbox;
+      return `[out:json][timeout:15];
 (
   way["highway"="track"](${south},${west},${north},${east});
+  way["highway"="service"](${south},${west},${north},${east});
+);
+out geom tags;`;
+    }
+    
+    // Layer 3: Trails (slower)
+    function queryTrails(bbox) {
+      const [south, west, north, east] = bbox;
+      return `[out:json][timeout:15];
+(
   way["highway"="path"](${south},${west},${north},${east});
   way["highway"="bridleway"](${south},${west},${north},${east});
-  way["highway"="unclassified"]["surface"~"unpaved|gravel|dirt|ground|earth|compacted"](${south},${west},${north},${east});
-  way["highway"="service"]["surface"~"unpaved|gravel|dirt|ground|earth"](${south},${west},${north},${east});
   way["highway"]["motor_vehicle"="no"]["bicycle"="yes"](${south},${west},${north},${east});
   way["route"="mtb"](${south},${west},${north},${east});
 );
@@ -657,10 +704,21 @@ out geom tags;`;
       }
 
       const token = ++fetchToken;
+      const bbox = currentBBox();
+      
+      // Check cache first
+      if (isCached(bbox)) {
+        features = getCached(bbox);
+        applyFilters();
+        setStatus(
+          features.length ? `${features.length} segments (cached) · ${reason}` : "No tracks in view",
+          features.length ? "ok" : ""
+        );
+        return;
+      }
+      
       setStatus("Scanning dirt…");
       try {
-        const bbox = currentBBox();
-        
         // Fetch both OSM and NS data in parallel
         const [osmResult, nsResult] = await Promise.allSettled([
           fetchOverpass(bbox),
@@ -696,6 +754,10 @@ out geom tags;`;
         
         // Merge both sources
         features = [...osmFeatures, ...nsFeatures];
+        
+        // Cache the results
+        setCache(bbox, features);
+        
         applyFilters();
         setStatus(
           features.length ? `${features.length} segments (${osmFeatures.length} OSM + ${nsFeatures.length} NS) · ${reason}` : "No tracks in view",
