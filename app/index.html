@@ -317,13 +317,20 @@
       "https://maps.mail.ru/osm/tools/overpass/api/interpreter"
     ];
 
+    const ROAD_TYPES = [
+      { id: "highway", label: "Major Roads", color: "#1e40af", width: 4 },
+      { id: "dirt", label: "Dirt Roads", color: "#92400e", width: 3 },
+      { id: "service", label: "Service/Forestry", color: "#15803d", width: 2.5 },
+      { id: "trail", label: "Trails", color: "#7c3aed", width: 2, dash: [2, 2] }
+    ];
+
     const GRADES = [
-      { id: "g2", label: "G2 solid", color: "#6ee7a8" },
-      { id: "g3", label: "G3 mixed", color: "#ffd24a" },
-      { id: "g4", label: "G4 rough", color: "#ff8a1e" },
-      { id: "g5", label: "G5 sparse", color: "#ff4d4d" },
-      { id: "single", label: "Single", color: "#b98bff" },
-      { id: "unknown", label: "Ungraded", color: "#6b7078" }
+      { id: "g2", label: "G2 solid", color: "#00a86b" },
+      { id: "g3", label: "G3 mixed", color: "#f0a000" },
+      { id: "g4", label: "G4 rough", color: "#e85d04" },
+      { id: "g5", label: "G5 sparse", color: "#c1121f" },
+      { id: "single", label: "Single", color: "#7c3aed" },
+      { id: "unknown", label: "Ungraded", color: "#4a5568" }
     ];
 
     const gradeOn = Object.fromEntries(GRADES.map((g) => [g.id, true]));
