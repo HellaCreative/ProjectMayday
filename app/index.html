@@ -635,8 +635,8 @@ out geom tags;`;
       ].map((n) => Number(n.toFixed(5)));
     }
 
-    async function fetchOverpass(bbox) {
-      const q = overpassQuery(bbox);
+    async function fetchOverpassLayer(bbox, queryFn) {
+      const q = queryFn(bbox);
       try {
         const url = "/api/overpass?query=" + encodeURIComponent(q);
         const res = await fetch(url, { method: "GET" });
@@ -717,50 +717,57 @@ out geom tags;`;
         return;
       }
       
-      setStatus("Scanning dirt…");
       try {
-        // Fetch both OSM and NS data in parallel
-        const [osmResult, nsResult] = await Promise.allSettled([
-          fetchOverpass(bbox),
+        // Layer 1: Major roads (fast)
+        setStatus("Loading roads…");
+        const layer1Result = await fetchOverpassLayer(bbox, queryMajorRoads);
+        if (token !== fetchToken) return;
+        
+        let allFeatures = toFeatures(layer1Result);
+        features = allFeatures;
+        applyFilters();
+        setStatus(`${features.length} roads • loading trails…`);
+        
+        // Layer 2 & 3: Service roads and trails in parallel
+        const [layer2Result, layer3Result, nsResult] = await Promise.allSettled([
+          fetchOverpassLayer(bbox, queryServiceRoads),
+          fetchOverpassLayer(bbox, queryTrails),
           fetchNSTrails(bbox)
         ]);
         
         if (token !== fetchToken) return;
         
-        // Process OSM data
-        let osmFeatures = [];
-        if (osmResult.status === 'fulfilled') {
-          osmFeatures = toFeatures(osmResult.value);
-        } else {
-          console.warn('OSM fetch failed:', osmResult.reason);
+        // Process layer 2
+        if (layer2Result.status === 'fulfilled') {
+          allFeatures = [...allFeatures, ...toFeatures(layer2Result.value)];
+        }
+        
+        // Process layer 3
+        if (layer3Result.status === 'fulfilled') {
+          allFeatures = [...allFeatures, ...toFeatures(layer3Result.value)];
         }
         
         // Process NS data
-        let nsFeatures = [];
         if (nsResult.status === 'fulfilled' && nsResult.value.features) {
-          nsFeatures = nsResult.value.features.map(f => ({
+          const nsFeatures = nsResult.value.features.map(f => ({
             ...f,
             properties: {
               ...f.properties,
               id: f.id || 'ns-' + Math.random(),
               grade: classifyNSTrail(f.properties),
+              roadType: classifyNSTrail(f.properties) === 'single' ? 'trail' : 'dirt',
               highway: f.properties.road_class || 'trail',
               source: 'ns-open-data'
             }
           }));
-        } else {
-          console.warn('NS data fetch failed:', nsResult.reason);
+          allFeatures = [...allFeatures, ...nsFeatures];
         }
         
-        // Merge both sources
-        features = [...osmFeatures, ...nsFeatures];
-        
-        // Cache the results
+        features = allFeatures;
         setCache(bbox, features);
-        
         applyFilters();
         setStatus(
-          features.length ? `${features.length} segments (${osmFeatures.length} OSM + ${nsFeatures.length} NS) · ${reason}` : "No tracks in view",
+          features.length ? `${features.length} segments · ${reason}` : "No tracks in view",
           features.length ? "ok" : ""
         );
       } catch (err) {
