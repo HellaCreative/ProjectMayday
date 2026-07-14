@@ -382,29 +382,30 @@
     function classifyRoadType(tags) {
       const hw = tags.highway || "";
       const surface = tags.surface || "";
+      const access = tags.access || "";
       
-      // Major roads: paved highways and primary roads
-      if (["motorway", "trunk", "primary", "secondary", "tertiary"].includes(hw)) {
-        return "highway";
-      }
-      
-      // Trails: paths, bridleways, singletrack
+      // Trails: paths, bridleways, footways - NARROW singletrack
       if (["path", "bridleway", "footway", "cycleway"].includes(hw)) {
         return "trail";
       }
       
-      // Service/Forestry: service roads, resource roads
-      if (hw === "service" || hw === "track" && (tags.tracktype === "grade1" || tags.tracktype === "grade2")) {
+      // Service roads: explicitly tagged service roads (forestry, logging, etc.)
+      if (hw === "service") {
         return "service";
       }
       
-      // Dirt roads: tracks, unclassified unpaved
-      if (hw === "track" || (hw === "unclassified" && surface.match(/unpaved|gravel|dirt|ground/i))) {
-        return "dirt";
+      // Tracks = forestry/resource roads (wide enough for vehicles)
+      if (hw === "track") {
+        return "service"; // All tracks are service/forestry roads
       }
       
-      // Default to dirt for unknown
-      return "dirt";
+      // Unpaved unclassified = dirt back roads
+      if (hw === "unclassified" && surface.match(/unpaved|gravel|dirt|ground/i)) {
+        return "service";
+      }
+      
+      // Default
+      return "trail";
     }
 
     function classify(tags) {
