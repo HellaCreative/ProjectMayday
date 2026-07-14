@@ -464,16 +464,6 @@
         data: { type: "FeatureCollection", features: [] }
       });
       map.addLayer({
-        id: "trails-casing",
-        type: "line",
-        source: "trails",
-        paint: {
-          "line-color": "#000000",
-          "line-width": ["interpolate", ["linear"], ["zoom"], 10, 4.5, 14, 8],
-          "line-opacity": 0.78
-        }
-      });
-      map.addLayer({
         id: "trails-line",
         type: "line",
         source: "trails",
@@ -487,7 +477,7 @@
             "g5", "#c1122f",
             "#5d6874"
           ],
-          "line-width": ["interpolate", ["linear"], ["zoom"], 10, 2.6, 14, 4.2],
+          "line-width": ["interpolate", ["linear"], ["zoom"], 10, 1.3, 14, 2.1],
           "line-opacity": 0.98
         }
       });
@@ -498,7 +488,7 @@
         filter: ["==", ["get", "grade"], "single"],
         paint: {
           "line-color": "#6d36c9",
-          "line-width": ["interpolate", ["linear"], ["zoom"], 10, 2.8, 14, 4],
+          "line-width": ["interpolate", ["linear"], ["zoom"], 10, 1.4, 14, 2],
           "line-dasharray": [1.2, 1.6],
           "line-opacity": 0.95
         }
