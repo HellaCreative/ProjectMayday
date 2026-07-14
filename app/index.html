@@ -572,7 +572,8 @@
     const SOURCE_LAYER_MAP = { nsGov: NS_GOV_LAYER_IDS };
     const layerEnabled = { access: true, gravel: true, track: true, bridge: true, tunnel: true, unserviced: true, single: true };
     const sourceEnabled = { nsGov: true };
-    const MAX_ROUTE_MATCH_KM = 0.001;
+    const ROUTE_MATCH_TOLERANCE_KM = 0.02;
+    const EDGE_GRID_SIZE = 0.01;
 
     const db = new Dexie("dirt_sources_v4");
     db.version(1).stores({
@@ -1015,6 +1016,129 @@
       return total;
     }
 
+    function edgeGridKey(x, y) {
+      return x + "," + y;
+    }
+
+    function edgeGridCell(coord) {
+      return {
+        x: Math.floor(coord[0] / EDGE_GRID_SIZE),
+        y: Math.floor(coord[1] / EDGE_GRID_SIZE)
+      };
+    }
+
+    function addEdgeToGrid(graph, edgeIndex, coords) {
+      let minLng = Infinity;
+      let minLat = Infinity;
+      let maxLng = -Infinity;
+      let maxLat = -Infinity;
+      for (const coord of coords) {
+        minLng = Math.min(minLng, coord[0]);
+        minLat = Math.min(minLat, coord[1]);
+        maxLng = Math.max(maxLng, coord[0]);
+        maxLat = Math.max(maxLat, coord[1]);
+      }
+      const min = edgeGridCell([minLng, minLat]);
+      const max = edgeGridCell([maxLng, maxLat]);
+      for (let x = min.x; x <= max.x; x += 1) {
+        for (let y = min.y; y <= max.y; y += 1) {
+          const key = edgeGridKey(x, y);
+          let bucket = graph.edgeGrid.get(key);
+          if (!bucket) {
+            bucket = [];
+            graph.edgeGrid.set(key, bucket);
+          }
+          bucket.push(edgeIndex);
+        }
+      }
+    }
+
+    function projectedPointOnSegment(point, a, b) {
+      const cosLat = Math.cos(point.lat * Math.PI / 180);
+      const px = point.lng * cosLat;
+      const py = point.lat;
+      const ax = a[0] * cosLat;
+      const ay = a[1];
+      const bx = b[0] * cosLat;
+      const by = b[1];
+      const dx = bx - ax;
+      const dy = by - ay;
+      const lengthSq = dx * dx + dy * dy;
+      const t = lengthSq ? Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / lengthSq)) : 0;
+      const lng = a[0] + (b[0] - a[0]) * t;
+      const lat = a[1] + (b[1] - a[1]) * t;
+      const distanceKm = haversineKm(point, { lng, lat });
+      return { coord: [lng, lat], t, distanceKm };
+    }
+
+    function findNearestEdgeMatch(graph, point) {
+      const center = edgeGridCell([point.lng, point.lat]);
+      let best = null;
+      const checked = new Set();
+      for (let radius = 0; radius <= 2; radius += 1) {
+        for (let x = center.x - radius; x <= center.x + radius; x += 1) {
+          for (let y = center.y - radius; y <= center.y + radius; y += 1) {
+            const bucket = graph.edgeGrid.get(edgeGridKey(x, y));
+            if (!bucket) continue;
+            for (const edgeIndex of bucket) {
+              if (checked.has(edgeIndex)) continue;
+              checked.add(edgeIndex);
+              const edge = graph.edges[edgeIndex];
+              let distanceAlongKm = 0;
+              for (let i = 1; i < edge.coords.length; i += 1) {
+                const a = edge.coords[i - 1];
+                const b = edge.coords[i];
+                const projected = projectedPointOnSegment(point, a, b);
+                const segmentKm = distanceKmCoords(a, b);
+                const candidate = {
+                  edgeIndex,
+                  segmentIndex: i - 1,
+                  coord: projected.coord,
+                  distanceKm: projected.distanceKm,
+                  distanceAlongKm: distanceAlongKm + segmentKm * projected.t
+                };
+                if (!best || candidate.distanceKm < best.distanceKm) best = candidate;
+                distanceAlongKm += segmentKm;
+              }
+            }
+          }
+        }
+        if (best && best.distanceKm <= ROUTE_MATCH_TOLERANCE_KM) break;
+      }
+      return best;
+    }
+
+    function dedupeLineCoords(coords) {
+      const out = [];
+      for (const coord of coords) {
+        const last = out[out.length - 1];
+        if (last && last[0] === coord[0] && last[1] === coord[1]) continue;
+        out.push(coord);
+      }
+      return out;
+    }
+
+    function edgeCoordsFromAToMatch(edge, match) {
+      return dedupeLineCoords([...edge.coords.slice(0, match.segmentIndex + 1), match.coord]);
+    }
+
+    function edgeCoordsFromMatchToB(edge, match) {
+      return dedupeLineCoords([match.coord, ...edge.coords.slice(match.segmentIndex + 1)]);
+    }
+
+    function edgeCoordsBetweenMatches(edge, first, second) {
+      const forward = first.distanceAlongKm <= second.distanceAlongKm;
+      const start = forward ? first : second;
+      const end = forward ? second : first;
+      const coords = [start.coord];
+      for (let i = start.segmentIndex + 1; i <= end.segmentIndex; i += 1) {
+        coords.push(edge.coords[i]);
+      }
+      coords.push(end.coord);
+      const line = dedupeLineCoords(coords);
+      return forward ? line : line.reverse();
+    }
+
     function routeWeight(trackClass, distanceKm, preference = routePreference, edge = null) {
       const profiles = {
         direct: {
@@ -1086,7 +1210,8 @@
         nodeLookup: new Map(),
         nodes: [],
         adjacency: [],
-        edges: []
+        edges: [],
+        edgeGrid: new Map()
       };
 
       function addNode(coord) {
@@ -1126,6 +1251,7 @@
           graph.edges.push(edge);
           graph.adjacency[a].push({ to: b, edgeIndex });
           graph.adjacency[b].push({ to: a, edgeIndex });
+          addEdgeToGrid(graph, edgeIndex, coords);
         }
         if (featureIndex > 0 && featureIndex % 2500 === 0) {
           routeMessage = "Building route graph<strong>" + featureIndex.toLocaleString() + " / " + features.length.toLocaleString() + "</strong>";
@@ -1174,47 +1300,80 @@
       }
     }
 
-    function nearestGraphNode(graph, point) {
-      const cosLat = Math.cos(point.lat * Math.PI / 180);
-      let bestNode = -1;
-      let bestScore = Infinity;
-      let bestDistanceKm = Infinity;
-      for (let i = 0; i < graph.nodes.length; i += 1) {
-        const node = graph.nodes[i];
-        const dx = (node[0] - point.lng) * cosLat;
-        const dy = node[1] - point.lat;
-        const score = dx * dx + dy * dy;
-        if (score < bestScore) {
-          bestScore = score;
-          bestNode = i;
-          bestDistanceKm = distanceKmCoords([point.lng, point.lat], node);
-        }
-      }
-      return { node: bestNode, distanceKm: bestDistanceKm };
-    }
-
-    function findNetworkRoute(graph, start, end) {
+    function buildRouteContext(graph, start, end) {
       lastNetworkRouteReason = "";
-      const startSnap = nearestGraphNode(graph, start);
-      const endSnap = nearestGraphNode(graph, end);
-      const startNode = startSnap.node;
-      const endNode = endSnap.node;
-      if (startNode < 0 || endNode < 0 || startNode === endNode) return null;
-      if (startSnap.distanceKm > MAX_ROUTE_MATCH_KM) {
+      const startMatch = findNearestEdgeMatch(graph, start);
+      if (!startMatch || startMatch.distanceKm > ROUTE_MATCH_TOLERANCE_KM) {
         lastNetworkRouteReason = "Start is not on a verified road/trail line";
         return null;
       }
-      if (endSnap.distanceKm > MAX_ROUTE_MATCH_KM) {
+      const endMatch = findNearestEdgeMatch(graph, end);
+      if (!endMatch || endMatch.distanceKm > ROUTE_MATCH_TOLERANCE_KM) {
         lastNetworkRouteReason = "Destination is not on a verified road/trail line";
         return null;
       }
 
-      const distances = new Float64Array(graph.nodes.length);
+      const context = {
+        graph,
+        virtualNodes: [startMatch.coord, endMatch.coord],
+        virtualAdjacency: new Map(),
+        startNode: graph.nodes.length,
+        endNode: graph.nodes.length + 1
+      };
+
+      function addVirtualEdge(a, b, coords, trackClass, distanceKm) {
+        if (!Number.isFinite(distanceKm) || distanceKm <= 0) return;
+        const edge = { a, b, coords, trackClass, distanceKm, virtual: true };
+        if (!context.virtualAdjacency.has(a)) context.virtualAdjacency.set(a, []);
+        if (!context.virtualAdjacency.has(b)) context.virtualAdjacency.set(b, []);
+        context.virtualAdjacency.get(a).push({ to: b, edge });
+        context.virtualAdjacency.get(b).push({ to: a, edge: { ...edge, a: b, b: a, coords: [...coords].reverse() } });
+      }
+
+      function addMatchEdges(node, match) {
+        const edge = graph.edges[match.edgeIndex];
+        const toA = edgeCoordsFromAToMatch(edge, match);
+        const toB = edgeCoordsFromMatchToB(edge, match);
+        addVirtualEdge(node, edge.a, [...toA].reverse(), edge.trackClass, match.distanceAlongKm);
+        addVirtualEdge(node, edge.b, toB, edge.trackClass, Math.max(edge.distanceKm - match.distanceAlongKm, 0));
+      }
+
+      addMatchEdges(context.startNode, startMatch);
+      addMatchEdges(context.endNode, endMatch);
+
+      if (startMatch.edgeIndex === endMatch.edgeIndex) {
+        const edge = graph.edges[startMatch.edgeIndex];
+        const coords = edgeCoordsBetweenMatches(edge, startMatch, endMatch);
+        const distanceKm = lineLengthKm(coords);
+        addVirtualEdge(context.startNode, context.endNode, coords, edge.trackClass, distanceKm);
+      }
+
+      return context;
+    }
+
+    function nodeCoordinates(context, node) {
+      if (node < context.graph.nodes.length) return context.graph.nodes[node];
+      return context.virtualNodes[node - context.graph.nodes.length];
+    }
+
+    function routeAdjacency(context, node) {
+      const base = node < context.graph.adjacency.length ? context.graph.adjacency[node] : [];
+      const virtual = context.virtualAdjacency.get(node) || [];
+      return base.length && virtual.length ? [...base, ...virtual] : (base.length ? base : virtual);
+    }
+
+    function findNetworkRoute(graph, start, end) {
+      const context = buildRouteContext(graph, start, end);
+      if (!context) return null;
+      const totalNodes = graph.nodes.length + context.virtualNodes.length;
+      const startNode = context.startNode;
+      const endNode = context.endNode;
+
+      const distances = new Float64Array(totalNodes);
       distances.fill(Infinity);
-      const previousNode = new Int32Array(graph.nodes.length);
+      const previousNode = new Int32Array(totalNodes);
       previousNode.fill(-1);
-      const previousEdge = new Int32Array(graph.nodes.length);
-      previousEdge.fill(-1);
+      const previousEdge = new Array(totalNodes);
       const heap = new MinHeap();
       distances[startNode] = 0;
       heap.push({ node: startNode, cost: 0 });
@@ -1223,39 +1382,38 @@
         const current = heap.pop();
         if (!current || current.cost !== distances[current.node]) continue;
         if (current.node === endNode) break;
-        for (const next of graph.adjacency[current.node]) {
-          const edge = graph.edges[next.edgeIndex];
+        for (const next of routeAdjacency(context, current.node)) {
+          const edge = next.edge || graph.edges[next.edgeIndex];
           const costDistance = edge.costDistanceKm || edge.distanceKm;
           const cost = current.cost + routeWeight(edge.trackClass, costDistance, routePreference, edge);
           if (cost < distances[next.to]) {
             distances[next.to] = cost;
             previousNode[next.to] = current.node;
-            previousEdge[next.to] = next.edgeIndex;
+            previousEdge[next.to] = edge;
             heap.push({ node: next.to, cost });
           }
         }
       }
 
       if (!Number.isFinite(distances[endNode])) return null;
-      const edgeIndexes = [];
+      const routeEdges = [];
       for (let node = endNode; node !== startNode;) {
-        const edgeIndex = previousEdge[node];
-        if (edgeIndex < 0) return null;
-        edgeIndexes.push(edgeIndex);
+        const edge = previousEdge[node];
+        if (!edge) return null;
+        routeEdges.push(edge);
         node = previousNode[node];
       }
-      edgeIndexes.reverse();
+      routeEdges.reverse();
 
       const coordinates = [];
       const segments = [];
-      const startCoord = graph.nodes[startNode];
+      const startCoord = nodeCoordinates(context, startNode);
       coordinates.push(startCoord);
       let cursor = startNode;
       let distanceKm = 0;
       let dirtKm = 0;
       const byClass = {};
-      for (const edgeIndex of edgeIndexes) {
-        const edge = graph.edges[edgeIndex];
+      for (const edge of routeEdges) {
         const forward = edge.a === cursor;
         const edgeCoords = forward ? edge.coords : [...edge.coords].reverse();
         segments.push({
@@ -1271,7 +1429,7 @@
         }
         cursor = forward ? edge.b : edge.a;
         distanceKm += edge.distanceKm;
-        dirtKm += edge.distanceKm;
+        if (edge.trackClass !== "connector") dirtKm += edge.distanceKm;
         byClass[edge.trackClass] = (byClass[edge.trackClass] || 0) + edge.distanceKm;
       }
       return { kind: "nstdb", coordinates, segments, distanceKm, dirtKm, byClass };
@@ -1387,15 +1545,19 @@
 
     function shouldUseDirtRoute(dirtRoute, roadRoute) {
       if (!dirtRoute) return false;
-      if (routePreference === "direct") return true;
+      if (routePreference === "direct") {
+        if (!roadRoute) return true;
+        return dirtRoute.distanceKm <= roadRoute.distanceKm;
+      }
       if (!roadRoute) return true;
       const connectorPct = dirtRoute.distanceKm ? (dirtRoute.byClass.connector || 0) / dirtRoute.distanceKm : 0;
       const detourRatio = dirtRoute.distanceKm / Math.max(roadRoute.distanceKm, 0.001);
       if (routePreference === "dirt") return true;
       if (routePreference === "cleanest") {
-        return detourRatio <= 1.8 && connectorPct <= 0.18;
+        return false;
       }
-      return detourRatio <= 2.0 && connectorPct <= 0.35;
+      const dirtPct = dirtRoute.distanceKm ? dirtRoute.dirtKm / dirtRoute.distanceKm : 0;
+      return dirtPct >= 0.35 && detourRatio <= 2.5 && connectorPct <= 0.35;
     }
 
     async function calculateRoute() {
@@ -1409,10 +1571,20 @@
       const jobId = ++routeJobId;
       activeRoute = null;
       routeMessage = routePreference === "direct"
-        ? "Routing<strong>Shortest verified network</strong>"
+        ? "Routing<strong>Shortest available route</strong>"
+        : routePreference === "cleanest"
+          ? "Routing<strong>Clean paved route</strong>"
         : "Building dirt graph<strong>" + routePreference + "</strong>";
       refreshRouteDraft();
       try {
+        if (routePreference === "cleanest") {
+          const roadRoute = await fetchRoadConnectorRoute(start, destination);
+          if (jobId !== routeJobId) return;
+          activeRoute = roadRoute;
+          routeMessage = "";
+          refreshRouteDraft();
+          return;
+        }
         const graph = await ensureRoutingGraph();
         if (jobId !== routeJobId) return;
         routeMessage = "Routing<strong>Matching NSTDB intersections</strong>";
@@ -1420,7 +1592,7 @@
         const dirtRoute = findNetworkRoute(graph, start, destination);
         if (jobId !== routeJobId) return;
         let roadRoute = null;
-        if (routePreference !== "dirt" && routePreference !== "direct") {
+        if (routePreference !== "dirt") {
           routeMessage = "Checking route shape<strong>Comparing connector</strong>";
           refreshRouteDraft();
           try {
@@ -1432,6 +1604,12 @@
         }
         if (shouldUseDirtRoute(dirtRoute, roadRoute)) {
           activeRoute = dirtRoute;
+          routeMessage = "";
+          refreshRouteDraft();
+          return;
+        }
+        if (routePreference === "direct" && roadRoute) {
+          activeRoute = roadRoute;
           routeMessage = "";
           refreshRouteDraft();
           return;
