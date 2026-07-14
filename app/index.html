@@ -518,6 +518,161 @@
       color: #ffffff;
       font-weight: 600;
     }
+
+    .route-nav {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      min-height: 42px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--route-dark);
+      color: #ffffff;
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      cursor: pointer;
+    }
+    .route-nav.active {
+      background: #c1122f;
+      border-color: transparent;
+    }
+    .route-nav:active { transform: scale(0.98); }
+
+    .nav-hud {
+      position: absolute;
+      left: 12px;
+      right: 12px;
+      top: calc(max(12px, env(safe-area-inset-top)) + 66px);
+      z-index: 25;
+      display: none;
+      gap: 8px;
+      pointer-events: none;
+    }
+    .nav-hud.visible {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: stretch;
+    }
+    .nav-cue-card {
+      pointer-events: auto;
+      background: rgba(17, 24, 32, 0.92);
+      color: #ffffff;
+      border-radius: 16px;
+      padding: 14px 16px;
+      backdrop-filter: blur(12px);
+      min-width: 0;
+    }
+    .nav-cue-dist {
+      font-family: var(--mono);
+      font-size: 0.68rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: rgba(255, 255, 255, 0.72);
+      margin-bottom: 4px;
+    }
+    .nav-cue-main {
+      font-size: 1.35rem;
+      font-weight: 700;
+      letter-spacing: 0.01em;
+      line-height: 1.15;
+    }
+    .nav-cue-sub {
+      margin-top: 6px;
+      font-family: var(--mono);
+      font-size: 0.68rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: rgba(255, 176, 0, 0.95);
+    }
+    .nav-stop {
+      pointer-events: auto;
+      width: 56px;
+      border: 0;
+      border-radius: 16px;
+      background: #c1122f;
+      color: #ffffff;
+      font-family: var(--mono);
+      font-size: 0.62rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    .follow-chip {
+      display: none;
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      bottom: max(96px, calc(env(safe-area-inset-bottom) + 88px));
+      z-index: 26;
+      min-height: 44px;
+      padding: 0 18px;
+      border: 0;
+      border-radius: 999px;
+      background: var(--accent);
+      color: #ffffff;
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      cursor: pointer;
+      box-shadow: 0 10px 24px rgba(10, 102, 194, 0.28);
+    }
+    .follow-chip.visible { display: inline-flex; align-items: center; gap: 8px; }
+
+    .pip {
+      display: none;
+      position: absolute;
+      right: 12px;
+      bottom: max(12px, calc(env(safe-area-inset-bottom) + 12px));
+      z-index: 24;
+      width: min(42vw, 168px);
+      height: min(42vw, 168px);
+      border: 2px solid #ffffff;
+      border-radius: 18px;
+      overflow: hidden;
+      box-shadow: 0 12px 28px rgba(22, 36, 51, 0.28);
+      background: var(--panel);
+    }
+    .pip.visible { display: block; }
+    .pip #pipMap { width: 100%; height: 100%; }
+    .pip-label {
+      position: absolute;
+      top: 6px;
+      left: 8px;
+      z-index: 2;
+      font-family: var(--mono);
+      font-size: 0.56rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: #ffffff;
+      background: rgba(17, 24, 32, 0.72);
+      border-radius: 999px;
+      padding: 3px 8px;
+      pointer-events: none;
+    }
+    body.navigating .route-card { display: none; }
+    body.navigating .topbar-left .btn.mini { display: none; }
+    body.navigating .legend { display: none; }
+    body.navigating .nav-hud {
+      top: calc(max(12px, env(safe-area-inset-top)) + 12px);
+    }
+    body.navigating .stack {
+      bottom: max(196px, calc(env(safe-area-inset-bottom) + 188px));
+    }
+    @media (max-width: 760px) {
+      .pip {
+        width: 132px;
+        height: 132px;
+      }
+      .nav-cue-main { font-size: 1.18rem; }
+    }
     .route-debug {
       margin-top: 8px;
       padding: 8px 10px;
@@ -653,6 +808,7 @@
       <button class="route-clear" id="routeClear" type="button" title="Close route planner" aria-label="Close route planner">×</button>
     </div>
     <div class="route-actions" id="routeActions">
+      <button class="route-nav" id="routeNavBtn" type="button" title="Start turn-by-turn navigation">Start navigation</button>
       <button class="route-export" id="routeExport" type="button" title="Export this route as GPX for OsmAnd, Gaia GPS, and other apps" aria-label="Export route as GPX">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
         Export GPX
@@ -730,9 +886,27 @@
     </div>
   </div>
 
+  <div class="nav-hud" id="navHud" aria-live="polite">
+    <div class="nav-cue-card">
+      <div class="nav-cue-dist" id="navCueDist">Ready</div>
+      <div class="nav-cue-main" id="navCueMain">Start navigation</div>
+      <div class="nav-cue-sub" id="navCueSub">Follow the orange line</div>
+    </div>
+    <button class="nav-stop" id="navStopBtn" type="button" title="End navigation">End</button>
+  </div>
+
+  <button class="follow-chip" id="followChip" type="button" title="Recenter on your location">
+    <span aria-hidden="true">◎</span> Recenter
+  </button>
+
+  <div class="pip" id="pip" aria-hidden="true">
+    <div class="pip-label">Overview</div>
+    <div id="pipMap"></div>
+  </div>
+
   <div class="stack">
     <button class="btn" id="panelBtn" title="Data info" aria-label="Data info">ℹ</button>
-    <button class="btn primary" id="recenterBtn" title="Recenter" aria-label="Recenter">◎</button>
+    <button class="btn primary" id="recenterBtn" title="Follow my location" aria-label="Follow my location">◎</button>
   </div>
 
   <div class="panel hidden" id="panel">
@@ -803,7 +977,7 @@
       indexedDB.deleteDatabase("dirt_sources_v5");
     } catch (_) { /* best effort cleanup of old giant caches */ }
 
-    let rider = { ...FALLBACK };
+    let rider = { ...FALLBACK, heading: null, speed: 0, accuracy: null };
     let trailCount = 0;
     let nsGovManifest = null;
     let nsGovManifestPromise = null;
@@ -824,6 +998,16 @@
     let routeJobId = 0;
     const sourceCounts = { nsGov: 0 };
 
+    // Navigation / follow camera
+    let geoWatchId = null;
+    let followLocked = false;
+    let suppressFollowBreak = false;
+    let navigating = false;
+    let navManeuvers = [];
+    let lastSpokenCueKey = "";
+    let overviewMap = null;
+    let overviewReady = false;
+
     const statusEl = document.getElementById("status");
     const modePill = document.getElementById("modePill");
     const modeLabel = document.getElementById("modeLabel");
@@ -836,11 +1020,19 @@
     const routeActions = document.getElementById("routeActions");
     const routeExport = document.getElementById("routeExport");
     const routeExportFloat = document.getElementById("routeExportFloat");
+    const routeNavBtn = document.getElementById("routeNavBtn");
     const exportSheet = document.getElementById("exportSheet");
     const exportNameInput = document.getElementById("exportNameInput");
     const exportCancel = document.getElementById("exportCancel");
     const exportConfirm = document.getElementById("exportConfirm");
     const routeDebugEl = document.getElementById("routeDebug");
+    const navHud = document.getElementById("navHud");
+    const navCueDist = document.getElementById("navCueDist");
+    const navCueMain = document.getElementById("navCueMain");
+    const navCueSub = document.getElementById("navCueSub");
+    const navStopBtn = document.getElementById("navStopBtn");
+    const followChip = document.getElementById("followChip");
+    const pipEl = document.getElementById("pip");
 
     function applyLayerVisibility() {
       if (!map || !map.isStyleLoaded()) return;
@@ -1230,8 +1422,14 @@
       refreshRouteDraft();
     }
 
-    function setRider(lng, lat) {
-      rider = { lng, lat };
+    function setRider(lng, lat, meta = {}) {
+      rider = {
+        lng,
+        lat,
+        heading: meta.heading != null && Number.isFinite(meta.heading) ? meta.heading : rider.heading,
+        speed: meta.speed != null ? meta.speed : rider.speed,
+        accuracy: meta.accuracy != null ? meta.accuracy : rider.accuracy
+      };
       if (map.getSource("rider")) {
         map.getSource("rider").setData({
           type: "FeatureCollection",
@@ -1242,7 +1440,9 @@
           }]
         });
       }
-      if (routeMode === "here" && destination) calculateRoute();
+      syncOverviewRider();
+      if (navigating) updateNavGuidance();
+      else if (followLocked) syncFollowCamera();
     }
 
     function pointFromLngLat(lngLat) {
@@ -2021,9 +2221,350 @@
     function syncRouteExportUi() {
       const canExport = !!(activeRoute && activeRouteCoordinates().length >= 2);
       routeActions.classList.toggle("ready", canExport);
-      routeExportFloat.classList.toggle("visible", canExport);
+      routeExportFloat.classList.toggle("visible", canExport && !navigating);
       routeExport.disabled = !canExport;
       routeExportFloat.disabled = !canExport;
+      routeNavBtn.textContent = navigating ? "End navigation" : "Start navigation";
+      routeNavBtn.classList.toggle("active", navigating);
+      routeNavBtn.disabled = !canExport && !navigating;
+    }
+
+    // ---- Follow camera + navigation guidance -------------------------------
+
+    function ensureGeoWatch() {
+      if (!navigator.geolocation) {
+        setStatus("Location not supported on this device", "error");
+        return false;
+      }
+      if (geoWatchId != null) return true;
+      geoWatchId = navigator.geolocation.watchPosition(
+        (pos) => {
+          const heading = pos.coords.heading;
+          setRider(pos.coords.longitude, pos.coords.latitude, {
+            heading: Number.isFinite(heading) ? heading : null,
+            speed: pos.coords.speed || 0,
+            accuracy: pos.coords.accuracy
+          });
+        },
+        (err) => {
+          if (err && err.code === 1) setStatus("Location permission denied", "error");
+        },
+        { enableHighAccuracy: true, maximumAge: 2000, timeout: 15000 }
+      );
+      return true;
+    }
+
+    function setFollowLocked(locked) {
+      followLocked = locked;
+      followChip.classList.toggle("visible", !locked && (navigating || geoWatchId != null));
+      recenterBtn.classList.toggle("primary", locked || navigating);
+      if (locked) {
+        ensureGeoWatch();
+        syncFollowCamera(true);
+      }
+    }
+
+    function syncFollowCamera(immediate) {
+      if (!followLocked) return;
+      const zoom = navigating ? Math.max(map.getZoom(), 15.2) : Math.max(map.getZoom(), 13.5);
+      const heading = Number.isFinite(rider.heading) ? rider.heading : map.getBearing();
+      const pitch = navigating ? 50 : map.getPitch();
+      suppressFollowBreak = true;
+      const cam = {
+        center: [rider.lng, rider.lat],
+        zoom,
+        bearing: navigating && Number.isFinite(rider.heading) ? heading : map.getBearing(),
+        pitch: navigating ? pitch : map.getPitch(),
+        duration: immediate ? 0 : 700,
+        essential: true
+      };
+      if (immediate) map.jumpTo(cam);
+      else map.easeTo(cam);
+      setTimeout(() => { suppressFollowBreak = false; }, immediate ? 50 : 750);
+    }
+
+    function bearingDeg(a, b) {
+      const toRad = (d) => d * Math.PI / 180;
+      const φ1 = toRad(a[1]);
+      const φ2 = toRad(b[1]);
+      const Δλ = toRad(b[0] - a[0]);
+      const y = Math.sin(Δλ) * Math.cos(φ2);
+      const x = Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
+      return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+    }
+
+    function angleDeltaDeg(a, b) {
+      let d = b - a;
+      while (d > 180) d -= 360;
+      while (d < -180) d += 360;
+      return d;
+    }
+
+    function densifyRouteCoords(coords, stepKm = 0.02) {
+      if (!coords || coords.length < 2) return [];
+      const out = [coords[0]];
+      for (let i = 1; i < coords.length; i += 1) {
+        const a = coords[i - 1];
+        const b = coords[i];
+        const segKm = distanceKmCoords(a, b);
+        const steps = Math.max(1, Math.ceil(segKm / stepKm));
+        for (let s = 1; s <= steps; s += 1) {
+          const t = s / steps;
+          out.push([a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]);
+        }
+      }
+      return out;
+    }
+
+    function projectPointOnRoute(point, coords) {
+      let best = null;
+      let traveled = 0;
+      for (let i = 1; i < coords.length; i += 1) {
+        const a = coords[i - 1];
+        const b = coords[i];
+        const projected = projectedPointOnSegment(point, a, b);
+        const segKm = distanceKmCoords(a, b);
+        const along = traveled + segKm * projected.t;
+        if (!best || projected.distanceKm < best.distanceKm) {
+          best = {
+            distanceKm: projected.distanceKm,
+            alongKm: along,
+            coord: projected.coord,
+            index: i - 1,
+            bearing: bearingDeg(a, b)
+          };
+        }
+        traveled += segKm;
+      }
+      return best ? { ...best, totalKm: traveled } : null;
+    }
+
+    function turnLabel(delta) {
+      const abs = Math.abs(delta);
+      const side = delta > 0 ? "right" : "left";
+      if (abs < 25) return { key: "straight", text: "Continue straight", severity: "straight" };
+      if (abs < 45) return { key: "slight-" + side, text: "Bear " + side, severity: "slight" };
+      if (abs < 120) return { key: "turn-" + side, text: "Turn " + side, severity: "turn" };
+      if (abs < 155) return { key: "hard-" + side, text: "Hard " + side, severity: "hard" };
+      return { key: "uturn-" + side, text: "Sharp " + side + " / u-turn", severity: "uturn" };
+    }
+
+    function buildNavManeuvers(coords) {
+      const dense = densifyRouteCoords(coords, 0.025);
+      if (dense.length < 3) return [];
+      const maneuvers = [];
+      let along = 0;
+      let lastEmitAlong = -Infinity;
+      for (let i = 1; i < dense.length - 1; i += 1) {
+        const a = dense[i - 1];
+        const b = dense[i];
+        const c = dense[i + 1];
+        const segKm = distanceKmCoords(a, b);
+        along += segKm;
+        const delta = angleDeltaDeg(bearingDeg(a, b), bearingDeg(b, c));
+        if (Math.abs(delta) < 32) continue;
+        if (along - lastEmitAlong < 0.08) continue;
+        const turn = turnLabel(delta);
+        if (turn.severity === "straight") continue;
+        maneuvers.push({
+          alongKm: along,
+          coord: b,
+          delta,
+          ...turn
+        });
+        lastEmitAlong = along;
+      }
+      maneuvers.push({
+        alongKm: lineLengthKm(dense),
+        coord: dense[dense.length - 1],
+        delta: 0,
+        key: "arrive",
+        text: "Arrive at destination",
+        severity: "arrive"
+      });
+      return maneuvers;
+    }
+
+    function speakCue(text, key) {
+      if (!navigating || !window.speechSynthesis) return;
+      if (key && key === lastSpokenCueKey) return;
+      lastSpokenCueKey = key || text;
+      window.speechSynthesis.cancel();
+      const utter = new SpeechSynthesisUtterance(text);
+      utter.rate = 1.05;
+      utter.pitch = 1;
+      window.speechSynthesis.speak(utter);
+    }
+
+    function updateNavGuidance() {
+      if (!navigating || !activeRoute) return;
+      const coords = activeRouteCoordinates();
+      const progress = projectPointOnRoute(rider, coords);
+      if (!progress) return;
+
+      const offRoute = progress.distanceKm > 0.05;
+      const remainKm = Math.max(0, (progress.totalKm || activeRoute.distanceKm) - progress.alongKm);
+      let next = null;
+      for (const man of navManeuvers) {
+        if (man.alongKm > progress.alongKm + 0.015) {
+          next = man;
+          break;
+        }
+      }
+      if (!next) next = navManeuvers[navManeuvers.length - 1];
+
+      const toTurnKm = Math.max(0, next.alongKm - progress.alongKm);
+      const distLabel = toTurnKm >= 1
+        ? toTurnKm.toFixed(1) + " km"
+        : Math.max(10, Math.round(toTurnKm * 1000)) + " m";
+
+      if (offRoute) {
+        navCueDist.textContent = Math.round(progress.distanceKm * 1000) + " m off route";
+        navCueMain.textContent = "Return to the orange line";
+        navCueSub.textContent = remainKm.toFixed(remainKm >= 10 ? 1 : 2) + " km remaining if on route";
+        speakCue("Off route. Return to the orange line.", "off-route");
+      } else if (next.severity === "arrive" && toTurnKm < 0.04) {
+        navCueDist.textContent = "Destination";
+        navCueMain.textContent = "You have arrived";
+        navCueSub.textContent = "End navigation when ready";
+        speakCue("You have arrived", "arrive");
+      } else {
+        navCueDist.textContent = "In " + distLabel;
+        navCueMain.textContent = next.text;
+        navCueSub.textContent = remainKm.toFixed(remainKm >= 10 ? 1 : 2) + " km remaining · " + routePreference;
+        if (toTurnKm < 0.05) speakCue(next.text + " now", next.key + "-now");
+        else if (toTurnKm < 0.18) speakCue("In " + Math.round(toTurnKm * 1000) + " meters, " + next.text, next.key + "-near");
+        else if (toTurnKm < 0.45) speakCue("In " + Math.round(toTurnKm * 1000) + " meters, " + next.text, next.key + "-mid");
+      }
+
+      syncFollowCamera(false);
+      syncOverviewRider();
+    }
+
+    function ensureOverviewMap() {
+      if (overviewMap) return overviewMap;
+      overviewMap = new maplibregl.Map({
+        container: "pipMap",
+        style: SHORTBREAD_STYLE_URL,
+        center: [rider.lng, rider.lat],
+        zoom: 10,
+        interactive: false,
+        attributionControl: false
+      });
+      overviewMap.on("load", () => {
+        overviewMap.addSource("pipRoute", {
+          type: "geojson",
+          data: { type: "FeatureCollection", features: [] }
+        });
+        overviewMap.addSource("pipRider", {
+          type: "geojson",
+          data: { type: "FeatureCollection", features: [] }
+        });
+        overviewMap.addLayer({
+          id: "pip-route",
+          type: "line",
+          source: "pipRoute",
+          paint: {
+            "line-color": "#ffb000",
+            "line-width": 3,
+            "line-opacity": 0.95
+          }
+        });
+        overviewMap.addLayer({
+          id: "pip-rider",
+          type: "circle",
+          source: "pipRider",
+          paint: {
+            "circle-radius": 5,
+            "circle-color": "#0a66c2",
+            "circle-stroke-color": "#ffffff",
+            "circle-stroke-width": 2
+          }
+        });
+        overviewReady = true;
+        syncOverviewRoute();
+        syncOverviewRider();
+      });
+      return overviewMap;
+    }
+
+    function syncOverviewRoute() {
+      if (!overviewMap || !overviewReady || !activeRoute) return;
+      const coords = activeRouteCoordinates();
+      overviewMap.getSource("pipRoute").setData({
+        type: "FeatureCollection",
+        features: [{
+          type: "Feature",
+          geometry: { type: "LineString", coordinates: coords },
+          properties: {}
+        }]
+      });
+      if (coords.length >= 2) {
+        const bounds = coords.reduce((b, c) => b.extend(c), new maplibregl.LngLatBounds(coords[0], coords[0]));
+        overviewMap.fitBounds(bounds, { padding: 22, maxZoom: 12, duration: 0 });
+      }
+    }
+
+    function syncOverviewRider() {
+      if (!overviewMap || !overviewReady) return;
+      overviewMap.getSource("pipRider").setData({
+        type: "FeatureCollection",
+        features: [{
+          type: "Feature",
+          geometry: { type: "Point", coordinates: [rider.lng, rider.lat] },
+          properties: {}
+        }]
+      });
+    }
+
+    function setPipVisible(visible) {
+      pipEl.classList.toggle("visible", visible);
+      pipEl.setAttribute("aria-hidden", visible ? "false" : "true");
+      if (visible) {
+        ensureOverviewMap();
+        setTimeout(() => {
+          if (overviewMap) overviewMap.resize();
+          syncOverviewRoute();
+          syncOverviewRider();
+        }, 80);
+      }
+    }
+
+    function startNavigation() {
+      if (!activeRoute || activeRouteCoordinates().length < 2) {
+        setStatus("Plan a route before starting navigation", "error");
+        return;
+      }
+      if (!ensureGeoWatch()) return;
+      navigating = true;
+      navManeuvers = buildNavManeuvers(activeRouteCoordinates());
+      lastSpokenCueKey = "";
+      document.body.classList.add("navigating");
+      navHud.classList.add("visible");
+      setRouteCardOpen(false);
+      setPipVisible(true);
+      setFollowLocked(true);
+      syncRouteExportUi();
+      updateNavGuidance();
+      speakCue("Navigation started. Follow the orange line.", "nav-start");
+      setStatus("Navigation on · follow locked", "ok");
+    }
+
+    function stopNavigation() {
+      navigating = false;
+      document.body.classList.remove("navigating");
+      navHud.classList.remove("visible");
+      setPipVisible(false);
+      if (window.speechSynthesis) window.speechSynthesis.cancel();
+      map.easeTo({ pitch: 0, bearing: 0, duration: 500 });
+      syncRouteExportUi();
+      followChip.classList.toggle("visible", !followLocked && geoWatchId != null);
+      setStatus("Navigation ended", "ok");
+    }
+
+    function toggleNavigation() {
+      if (navigating) stopNavigation();
+      else startNavigation();
     }
 
     function updateRouteStatus() {
@@ -2076,6 +2617,7 @@
     }
 
     function clearRoute() {
+      if (navigating) stopNavigation();
       routeJobId += 1;
       plannedStart = null;
       destination = null;
@@ -2084,9 +2626,11 @@
       routeDebug = null;
       hidePopup();
       refreshRouteDraft();
+      syncRouteExportUi();
     }
 
     function setRouteMode(nextMode) {
+      if (navigating) stopNavigation();
       routeJobId += 1;
       routeMode = nextMode;
       plannedStart = null;
@@ -2144,6 +2688,7 @@
           routeMessage = "";
           setRouteCardOpen(true);
           refreshRouteDraft();
+          syncRouteExportUi();
           return;
         }
         await ensureRouteEnvelope(start, destination);
@@ -2164,8 +2709,16 @@
           }
           activeRoute = networkRoute;
           routeMessage = "";
-          setRouteCardOpen(true);
+          if (navigating) {
+            navManeuvers = buildNavManeuvers(activeRouteCoordinates());
+            lastSpokenCueKey = "";
+            syncOverviewRoute();
+            updateNavGuidance();
+          } else {
+            setRouteCardOpen(true);
+          }
           refreshRouteDraft();
+          syncRouteExportUi();
           return;
         }
         routeMessage = "No network route<strong>" + (lastNetworkRouteReason || "Mapped lines do not connect") + "</strong>";
@@ -2260,9 +2813,18 @@
     // Pull new chunks as the user pans or zooms into fresh territory.
     map.on("moveend", () => { loadViewportChunks(); });
 
+    // Pan breaks follow-lock (Google Maps style); recenter chip brings it back.
+    map.on("dragstart", () => {
+      if (suppressFollowBreak) return;
+      if (followLocked) setFollowLocked(false);
+    });
+
     map.once("idle", collapseAttribution);
 
-    map.on("click", handleRouteClick);
+    map.on("click", (e) => {
+      if (navigating) return;
+      handleRouteClick(e);
+    });
 
     const legendEl = document.getElementById("legend");
     const legendBtn = document.getElementById("legendBtn");
@@ -2321,27 +2883,31 @@
       panel.classList.toggle("hidden");
     });
     const recenterBtn = document.getElementById("recenterBtn");
-    recenterBtn.addEventListener("click", () => {
-      if (!navigator.geolocation) {
-        setStatus("Location not supported on this device", "error");
-        return;
-      }
-      // Always ask for a fresh fix: the stored rider position may be the
-      // hardcoded fallback if geolocation failed or was denied at load.
+    function activateFollowFromControl() {
+      if (!ensureGeoWatch()) return;
       recenterBtn.disabled = true;
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           recenterBtn.disabled = false;
-          setRider(pos.coords.longitude, pos.coords.latitude);
-          map.flyTo({ center: [pos.coords.longitude, pos.coords.latitude], zoom: Math.max(map.getZoom(), 11.5) });
+          setRider(pos.coords.longitude, pos.coords.latitude, {
+            heading: Number.isFinite(pos.coords.heading) ? pos.coords.heading : null,
+            speed: pos.coords.speed || 0,
+            accuracy: pos.coords.accuracy
+          });
+          setFollowLocked(true);
+          setStatus(navigating ? "Following route" : "Following your location", "ok");
         },
         (err) => {
           recenterBtn.disabled = false;
           setStatus("Location unavailable · " + (err && err.code === 1 ? "permission denied" : "no GPS fix"), "error");
         },
-        { enableHighAccuracy: true, timeout: 12000, maximumAge: 5000 }
+        { enableHighAccuracy: true, timeout: 12000, maximumAge: 2000 }
       );
-    });
+    }
+    recenterBtn.addEventListener("click", activateFollowFromControl);
+    followChip.addEventListener("click", activateFollowFromControl);
+    routeNavBtn.addEventListener("click", toggleNavigation);
+    navStopBtn.addEventListener("click", stopNavigation);
     document.querySelectorAll("[data-layer-toggle]").forEach((input) => {
       input.addEventListener("change", () => {
         layerEnabled[input.dataset.layerToggle] = input.checked;
