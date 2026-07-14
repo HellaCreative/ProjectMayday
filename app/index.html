@@ -683,7 +683,7 @@ out geom tags;`;
     function applyFilters() {
       const visible = features.filter((f) => {
         const props = f.properties;
-        return gradeOn[props.grade] && roadTypeOn[props.roadType || 'dirt'];
+        return trailTypeOn[props.trailType || 'single'];
       });
       if (map.getSource("trails")) {
         map.getSource("trails").setData({ type: "FeatureCollection", features: visible });
@@ -744,8 +744,7 @@ out geom tags;`;
             properties: {
               ...f.properties,
               id: f.id || 'ns-' + Math.random(),
-              grade: classifyNSTrail(f.properties),
-              roadType: classifyNSTrail(f.properties) === 'single' ? 'trail' : 'dirt',
+              trailType: classifyNSTrail(f.properties),
               highway: f.properties.road_class || 'trail',
               source: 'ns-open-data'
             }
