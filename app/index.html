@@ -406,6 +406,57 @@
       if (el) el.classList.remove("maplibregl-compact-show");
     }
 
+    function tuneShortbreadContrast() {
+      const layers = map.getStyle().layers || [];
+      for (const layer of layers) {
+        const id = layer.id || "";
+        if (layer.type === "fill") {
+          if (id.includes("water")) {
+            map.setPaintProperty(id, "fill-color", "#8fc7d8");
+          } else if (id.includes("forest")) {
+            map.setPaintProperty(id, "fill-color", "#9fbe89");
+          } else if (id.includes("park") || id.includes("recreation") || id.includes("grass")) {
+            map.setPaintProperty(id, "fill-color", "#b8d795");
+            map.setPaintProperty(id, "fill-opacity", 0.78);
+          } else if (id.includes("residential")) {
+            map.setPaintProperty(id, "fill-color", "#d2d5d8");
+          } else if (id.includes("farmland") || id.includes("farmyard")) {
+            map.setPaintProperty(id, "fill-color", "#ead7bb");
+          }
+        }
+
+        if (layer.type === "line") {
+          if (id.includes("motorway")) {
+            map.setPaintProperty(id, "line-color", id.includes("casing") ? "#496682" : "#78a6d8");
+          } else if (id.includes("trunk") || id.includes("primary")) {
+            map.setPaintProperty(id, "line-color", id.includes("casing") ? "#8b4a4a" : "#e08b8b");
+          } else if (id.includes("secondary")) {
+            map.setPaintProperty(id, "line-color", id.includes("casing") ? "#9a6a30" : "#f2b35f");
+          } else if (id.includes("tertiary")) {
+            map.setPaintProperty(id, "line-color", id.includes("casing") ? "#8d8128" : "#f4df63");
+          } else if (id.includes("unclassified") || id.includes("service") || id.includes("living_street")) {
+            map.setPaintProperty(id, "line-color", id.includes("casing") ? "#6f7478" : "#ffffff");
+          } else if (id.includes("track") || id.includes("path") || id.includes("bridleway")) {
+            map.setPaintProperty(id, "line-color", id.includes("casing") ? "#111820" : "#111820");
+          } else if (id.includes("water")) {
+            map.setPaintProperty(id, "line-color", "#6aa9c2");
+          }
+        }
+
+        if (layer.type === "symbol") {
+          if (id.includes("label") || id.includes("pois") || id.includes("street")) {
+            if (layer.paint && Object.prototype.hasOwnProperty.call(layer.paint, "text-color")) {
+              map.setPaintProperty(id, "text-color", "#15202b");
+            }
+            if (layer.paint && Object.prototype.hasOwnProperty.call(layer.paint, "text-halo-color")) {
+              map.setPaintProperty(id, "text-halo-color", "#ffffff");
+              map.setPaintProperty(id, "text-halo-width", 1.6);
+            }
+          }
+        }
+      }
+    }
+
     function ensureLayers() {
       if (map.getSource("trails")) return;
       map.addSource("trails", {
@@ -524,6 +575,7 @@
     }
 
     map.on("load", async () => {
+      tuneShortbreadContrast();
       ensureLayers();
       collapseAttribution();
       loadMeta();
