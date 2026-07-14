@@ -481,25 +481,22 @@
       style: {
         version: 8,
         sources: {
-          osm: {
+          cartoLight: {
             type: "raster",
             tiles: [
-              "https://a.tile.openstreetmap.org/{z}/{x}/{y}.png",
-              "https://b.tile.openstreetmap.org/{z}/{x}/{y}.png",
-              "https://c.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              "https://a.basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png",
+              "https://b.basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png",
+              "https://c.basemaps.cartocdn.com/light_all/{z}/{x}/{y}@2x.png"
             ],
             tileSize: 256,
-            attribution: "&copy; OpenStreetMap contributors"
+            attribution: "&copy; OpenStreetMap &copy; CARTO"
           }
         },
         layers: [
           {
-            id: "osm-base",
+            id: "carto-base",
             type: "raster",
-            source: "osm",
-            paint: {
-              "raster-brightness-max": 0.95
-            }
+            source: "cartoLight"
           }
         ]
       },
