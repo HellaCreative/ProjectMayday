@@ -552,6 +552,12 @@
     let routeMode = "here";
     let plannedStart = null;
     let destination = null;
+    let nsGovFeatureCollection = null;
+    let routingGraph = null;
+    let routingGraphPromise = null;
+    let activeRoute = null;
+    let routeMessage = "";
+    let routeJobId = 0;
     const sourceCounts = { nsGov: 0 };
 
     const statusEl = document.getElementById("status");
@@ -651,6 +657,7 @@
       if (nsGovLoaded) return;
       const t0 = performance.now();
       const fc = addTrackTypes(await loadBundledNsGov());
+      nsGovFeatureCollection = fc;
       map.getSource("nsGov").setData(fc);
       sourceCounts.nsGov = fc.features.length;
       nsGovLoaded = true;
@@ -802,25 +809,36 @@
         data: routeFeatureCollection()
       });
       map.addLayer({
-        id: "route-intent-casing",
+        id: "route-network-casing",
         type: "line",
         source: "routeDraft",
-        filter: ["==", ["geometry-type"], "LineString"],
+        filter: ["==", ["get", "role"], "route"],
         paint: {
           "line-color": "#111820",
-          "line-width": 8,
+          "line-width": 9,
           "line-opacity": 0.92
         }
       });
       map.addLayer({
-        id: "route-intent",
+        id: "route-network",
         type: "line",
         source: "routeDraft",
-        filter: ["==", ["geometry-type"], "LineString"],
+        filter: ["==", ["get", "role"], "route"],
         paint: {
           "line-color": "#ffb000",
-          "line-width": 4,
-          "line-opacity": 0.96,
+          "line-width": 5,
+          "line-opacity": 0.98
+        }
+      });
+      map.addLayer({
+        id: "route-direct",
+        type: "line",
+        source: "routeDraft",
+        filter: ["==", ["get", "role"], "direct"],
+        paint: {
+          "line-color": "#d22730",
+          "line-width": 3,
+          "line-opacity": 0.72,
           "line-dasharray": [1.2, 1.1]
         }
       });
@@ -867,7 +885,7 @@
           }]
         });
       }
-      if (routeMode === "here" && destination) refreshRouteDraft();
+      if (routeMode === "here" && destination) calculateRoute();
     }
 
     function pointFromLngLat(lngLat) {
@@ -881,14 +899,23 @@
     function routeFeatureCollection() {
       const start = activeStart();
       const features = [];
-      if (start && destination) {
+      if (activeRoute) {
+        features.push({
+          type: "Feature",
+          geometry: {
+            type: "LineString",
+            coordinates: activeRoute.coordinates
+          },
+          properties: { role: "route" }
+        });
+      } else if (start && destination) {
         features.push({
           type: "Feature",
           geometry: {
             type: "LineString",
             coordinates: [[start.lng, start.lat], [destination.lng, destination.lat]]
           },
-          properties: { role: "intent" }
+          properties: { role: "direct" }
         });
       }
       if (start && (destination || routeMode === "plan")) {
@@ -920,12 +947,269 @@
       return 2 * r * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
     }
 
+    function distanceKmCoords(a, b) {
+      return haversineKm({ lng: a[0], lat: a[1] }, { lng: b[0], lat: b[1] });
+    }
+
+    function lineLengthKm(coords) {
+      let total = 0;
+      for (let i = 1; i < coords.length; i += 1) {
+        total += distanceKmCoords(coords[i - 1], coords[i]);
+      }
+      return total;
+    }
+
+    function routeWeight(trackClass, distanceKm) {
+      const multipliers = {
+        track: 0.72,
+        access: 0.78,
+        gravel: 0.86,
+        bridge: 0.9,
+        tunnel: 0.92,
+        single: 1.05,
+        unserviced: 1.55
+      };
+      return distanceKm * (multipliers[trackClass] || 1);
+    }
+
+    function nodeKey(coord) {
+      return coord[0].toFixed(5) + "," + coord[1].toFixed(5);
+    }
+
+    function yieldToBrowser() {
+      return new Promise((resolve) => setTimeout(resolve, 0));
+    }
+
+    async function ensureRoutingGraph() {
+      if (routingGraph) return routingGraph;
+      if (routingGraphPromise) return routingGraphPromise;
+      routingGraphPromise = buildRoutingGraph();
+      routingGraph = await routingGraphPromise;
+      return routingGraph;
+    }
+
+    async function buildRoutingGraph() {
+      if (!nsGovFeatureCollection) {
+        await ensureNsGovLoaded();
+      }
+      const graph = {
+        nodeLookup: new Map(),
+        nodes: [],
+        adjacency: [],
+        edges: []
+      };
+
+      function addNode(coord) {
+        const key = nodeKey(coord);
+        const existing = graph.nodeLookup.get(key);
+        if (existing != null) return existing;
+        const id = graph.nodes.length;
+        graph.nodeLookup.set(key, id);
+        graph.nodes.push([Number(coord[0]), Number(coord[1])]);
+        graph.adjacency.push([]);
+        return id;
+      }
+
+      const features = nsGovFeatureCollection.features || [];
+      for (let featureIndex = 0; featureIndex < features.length; featureIndex += 1) {
+        const feature = features[featureIndex];
+        const geometry = feature.geometry;
+        const parts = geometry.type === "MultiLineString" ? geometry.coordinates : [geometry.coordinates];
+        for (const coords of parts) {
+          if (!coords || coords.length < 2) continue;
+          const a = addNode(coords[0]);
+          const b = addNode(coords[coords.length - 1]);
+          if (a === b) continue;
+          const trackClass = feature.properties?.trackClass || "gravel";
+          const measuredKm = Number(feature.properties?.lengthMeters) > 0
+            ? Number(feature.properties.lengthMeters) / 1000
+            : lineLengthKm(coords);
+          const distanceKm = Math.max(measuredKm, 0.001);
+          const edgeIndex = graph.edges.length;
+          const edge = {
+            a,
+            b,
+            coords,
+            trackClass,
+            distanceKm,
+            weight: routeWeight(trackClass, distanceKm)
+          };
+          graph.edges.push(edge);
+          graph.adjacency[a].push({ to: b, edgeIndex, weight: edge.weight });
+          graph.adjacency[b].push({ to: a, edgeIndex, weight: edge.weight });
+        }
+        if (featureIndex > 0 && featureIndex % 2500 === 0) {
+          routeMessage = "Building route graph<strong>" + featureIndex.toLocaleString() + " / " + features.length.toLocaleString() + "</strong>";
+          refreshRouteDraft();
+          await yieldToBrowser();
+        }
+      }
+      return graph;
+    }
+
+    class MinHeap {
+      constructor() { this.items = []; }
+      push(item) {
+        this.items.push(item);
+        this.bubbleUp(this.items.length - 1);
+      }
+      pop() {
+        if (!this.items.length) return null;
+        const top = this.items[0];
+        const end = this.items.pop();
+        if (this.items.length) {
+          this.items[0] = end;
+          this.sinkDown(0);
+        }
+        return top;
+      }
+      bubbleUp(index) {
+        while (index > 0) {
+          const parent = Math.floor((index - 1) / 2);
+          if (this.items[parent].cost <= this.items[index].cost) break;
+          [this.items[parent], this.items[index]] = [this.items[index], this.items[parent]];
+          index = parent;
+        }
+      }
+      sinkDown(index) {
+        for (;;) {
+          const left = index * 2 + 1;
+          const right = left + 1;
+          let smallest = index;
+          if (left < this.items.length && this.items[left].cost < this.items[smallest].cost) smallest = left;
+          if (right < this.items.length && this.items[right].cost < this.items[smallest].cost) smallest = right;
+          if (smallest === index) break;
+          [this.items[smallest], this.items[index]] = [this.items[index], this.items[smallest]];
+          index = smallest;
+        }
+      }
+    }
+
+    function nearestGraphNode(graph, point) {
+      const cosLat = Math.cos(point.lat * Math.PI / 180);
+      let bestNode = -1;
+      let bestScore = Infinity;
+      for (let i = 0; i < graph.nodes.length; i += 1) {
+        const node = graph.nodes[i];
+        const dx = (node[0] - point.lng) * cosLat;
+        const dy = node[1] - point.lat;
+        const score = dx * dx + dy * dy;
+        if (score < bestScore) {
+          bestScore = score;
+          bestNode = i;
+        }
+      }
+      return bestNode;
+    }
+
+    function findNetworkRoute(graph, start, end) {
+      const startNode = nearestGraphNode(graph, start);
+      const endNode = nearestGraphNode(graph, end);
+      if (startNode < 0 || endNode < 0 || startNode === endNode) return null;
+
+      const distances = new Float64Array(graph.nodes.length);
+      distances.fill(Infinity);
+      const previousNode = new Int32Array(graph.nodes.length);
+      previousNode.fill(-1);
+      const previousEdge = new Int32Array(graph.nodes.length);
+      previousEdge.fill(-1);
+      const heap = new MinHeap();
+      distances[startNode] = 0;
+      heap.push({ node: startNode, cost: 0 });
+
+      while (heap.items.length) {
+        const current = heap.pop();
+        if (!current || current.cost !== distances[current.node]) continue;
+        if (current.node === endNode) break;
+        for (const next of graph.adjacency[current.node]) {
+          const cost = current.cost + next.weight;
+          if (cost < distances[next.to]) {
+            distances[next.to] = cost;
+            previousNode[next.to] = current.node;
+            previousEdge[next.to] = next.edgeIndex;
+            heap.push({ node: next.to, cost });
+          }
+        }
+      }
+
+      if (!Number.isFinite(distances[endNode])) return null;
+      const edgeIndexes = [];
+      for (let node = endNode; node !== startNode;) {
+        const edgeIndex = previousEdge[node];
+        if (edgeIndex < 0) return null;
+        edgeIndexes.push(edgeIndex);
+        node = previousNode[node];
+      }
+      edgeIndexes.reverse();
+
+      const coordinates = [[start.lng, start.lat]];
+      let cursor = startNode;
+      let distanceKm = 0;
+      let dirtKm = 0;
+      const byClass = {};
+      for (const edgeIndex of edgeIndexes) {
+        const edge = graph.edges[edgeIndex];
+        const forward = edge.a === cursor;
+        const edgeCoords = forward ? edge.coords : [...edge.coords].reverse();
+        for (let i = 0; i < edgeCoords.length; i += 1) {
+          const coord = edgeCoords[i];
+          const last = coordinates[coordinates.length - 1];
+          if (last && last[0] === coord[0] && last[1] === coord[1]) continue;
+          coordinates.push(coord);
+        }
+        cursor = forward ? edge.b : edge.a;
+        distanceKm += edge.distanceKm;
+        dirtKm += edge.distanceKm;
+        byClass[edge.trackClass] = (byClass[edge.trackClass] || 0) + edge.distanceKm;
+      }
+      coordinates.push([end.lng, end.lat]);
+      return { kind: "nstdb", coordinates, distanceKm, dirtKm, byClass };
+    }
+
+    async function fetchRoadConnectorRoute(start, end) {
+      const coords = start.lng + "," + start.lat + ";" + end.lng + "," + end.lat;
+      const url = "https://router.project-osrm.org/route/v1/driving/" + coords + "?overview=full&geometries=geojson&steps=false";
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("OSM road connector HTTP " + res.status);
+      const json = await res.json();
+      const route = json.routes && json.routes[0];
+      if (!route || !route.geometry || !route.geometry.coordinates) {
+        throw new Error("No OSM road connector route");
+      }
+      return {
+        kind: "roadConnector",
+        coordinates: route.geometry.coordinates,
+        distanceKm: route.distance / 1000,
+        dirtKm: 0,
+        byClass: { connector: route.distance / 1000 }
+      };
+    }
+
     function updateRouteStatus() {
       const start = activeStart();
       routeClear.disabled = !plannedStart && !destination;
+      if (routeMessage) {
+        routeStatus.innerHTML = routeMessage;
+        return;
+      }
+      if (activeRoute) {
+        if (activeRoute.kind === "roadConnector") {
+          routeStatus.innerHTML =
+            "Road route beta<strong>" +
+            activeRoute.distanceKm.toFixed(activeRoute.distanceKm >= 10 ? 1 : 2) +
+            " km · OSM connector</strong>";
+          return;
+        }
+        const dirtPct = activeRoute.distanceKm ? Math.round((activeRoute.dirtKm / activeRoute.distanceKm) * 100) : 0;
+        routeStatus.innerHTML =
+          "Network route<strong>" +
+          activeRoute.distanceKm.toFixed(activeRoute.distanceKm >= 10 ? 1 : 2) +
+          " km · " + dirtPct + "% dirt</strong>";
+        return;
+      }
       if (start && destination) {
         const km = haversineKm(start, destination);
-        routeStatus.innerHTML = "Intent line<strong>" + km.toFixed(km >= 10 ? 1 : 2) + " km direct</strong>";
+        routeStatus.innerHTML = "Direct only<strong>" + km.toFixed(km >= 10 ? 1 : 2) + " km as the crow flies</strong>";
         return;
       }
       if (routeMode === "here") {
@@ -947,16 +1231,22 @@
     }
 
     function clearRoute() {
+      routeJobId += 1;
       plannedStart = null;
       destination = null;
+      activeRoute = null;
+      routeMessage = "";
       hidePopup();
       refreshRouteDraft();
     }
 
     function setRouteMode(nextMode) {
+      routeJobId += 1;
       routeMode = nextMode;
       plannedStart = null;
       destination = null;
+      activeRoute = null;
+      routeMessage = "";
       document.querySelectorAll("[data-route-mode]").forEach((button) => {
         const active = button.dataset.routeMode === routeMode;
         button.classList.toggle("active", active);
@@ -965,22 +1255,73 @@
       refreshRouteDraft();
     }
 
+    async function calculateRoute() {
+      const start = activeStart();
+      if (!start || !destination) {
+        activeRoute = null;
+        routeMessage = "";
+        refreshRouteDraft();
+        return;
+      }
+      const jobId = ++routeJobId;
+      activeRoute = null;
+      routeMessage = "Routing<strong>Using OSM road connector</strong>";
+      refreshRouteDraft();
+      try {
+        const roadRoute = await fetchRoadConnectorRoute(start, destination);
+        if (jobId !== routeJobId) return;
+        activeRoute = roadRoute;
+        routeMessage = "";
+        refreshRouteDraft();
+      } catch (roadErr) {
+        console.warn("OSM road connector failed; trying NSTDB graph", roadErr);
+        if (jobId !== routeJobId) return;
+        routeMessage = "Building route graph<strong>Trying NSTDB fallback</strong>";
+        refreshRouteDraft();
+        try {
+          const graph = await ensureRoutingGraph();
+          if (jobId !== routeJobId) return;
+          routeMessage = "Routing<strong>Snapping to NSTDB network</strong>";
+          refreshRouteDraft();
+          const route = findNetworkRoute(graph, start, destination);
+          if (jobId !== routeJobId) return;
+          if (!route) {
+            routeMessage = "No connected route<strong>Showing direct line only</strong>";
+            activeRoute = null;
+            refreshRouteDraft();
+            return;
+          }
+          activeRoute = route;
+          routeMessage = "";
+          refreshRouteDraft();
+        } catch (err) {
+          console.error(err);
+          if (jobId !== routeJobId) return;
+          routeMessage = "Routing failed<strong>" + (err.message || "Try again") + "</strong>";
+          activeRoute = null;
+          refreshRouteDraft();
+        }
+      }
+    }
+
     function handleRouteClick(e) {
       hidePopup();
       const clicked = pointFromLngLat(e.lngLat);
       if (routeMode === "here") {
         destination = clicked;
-        refreshRouteDraft();
+        calculateRoute();
         return;
       }
       if (!plannedStart) {
         plannedStart = clicked;
         destination = null;
+        activeRoute = null;
+        routeMessage = "";
         refreshRouteDraft();
         return;
       }
       destination = clicked;
-      refreshRouteDraft();
+      calculateRoute();
     }
 
     function hidePopup() { popupEl.classList.remove("visible"); }
