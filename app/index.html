@@ -396,8 +396,12 @@
         if (tracktype === "grade3" || tracktype === "grade4") {
           return "atv";
         }
-        // Grade 5 or no grade = narrow = singletrack
-        return "single";
+        // Grade 5 = very narrow
+        if (tracktype === "grade5") {
+          return "single";
+        }
+        // NO GRADE = assume ATV (safer than assuming singletrack)
+        return "atv";
       }
       
       // Service roads = assume truck-width
@@ -779,23 +783,23 @@ out geom tags;`;
       const roadClass = (props.road_class || '').toLowerCase();
       const surface = (props.surface || '').toLowerCase();
       
-      // Classify NS trails into our grade system
+      // Trails = singletrack
       if (fcode.includes('trail') || roadClass.includes('trail')) {
         return 'single';
       }
-      if (surface.includes('paved') || surface.includes('asphalt')) {
-        return 'g2'; // Well-maintained
+      
+      // Paved/gravel resource roads = truck roads
+      if (surface.includes('paved') || surface.includes('gravel')) {
+        return 'truck';
       }
-      if (surface.includes('gravel')) {
-        return 'g3';
+      
+      // Resource/dirt roads = ATV
+      if (fcode.includes('resource') || roadClass.includes('resource') || surface.includes('dirt')) {
+        return 'atv';
       }
-      if (surface.includes('dirt') || surface.includes('earth')) {
-        return 'g4';
-      }
-      if (fcode.includes('resource') || roadClass.includes('resource')) {
-        return 'g4'; // Resource roads typically rough
-      }
-      return 'unknown';
+      
+      // Default to ATV
+      return 'atv';
     }
 
     function scheduleScan(reason) {
