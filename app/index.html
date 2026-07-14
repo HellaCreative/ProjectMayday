@@ -4,9 +4,10 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#0b0c0e" />
-  <title>DIRT. Map</title>
+  <title>DIRT. Offline POC</title>
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
   <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
+  <script src="https://unpkg.com/dexie@4.0.11/dist/dexie.min.js"></script>
   <style>
     :root {
       --bg: #0b0c0e;
@@ -48,45 +49,44 @@
       font-family: var(--mono);
       font-weight: 700;
       font-size: 1.15rem;
-      letter-spacing: 0.06em;
+      letter-spacing: 0.04em;
       text-decoration: none;
       color: var(--text);
-      background: rgba(11, 12, 14, 0.72);
-      backdrop-filter: blur(10px);
+      background: rgba(20, 22, 25, 0.92);
       border: 1px solid var(--line);
-      border-radius: 12px;
+      border-radius: 14px;
       padding: 10px 14px;
+      backdrop-filter: blur(12px);
     }
-
     .brand span { color: var(--amber); }
 
-    .stat {
+    .pill {
       pointer-events: auto;
       font-family: var(--mono);
-      font-size: 0.72rem;
-      letter-spacing: 0.08em;
+      font-size: 0.68rem;
+      letter-spacing: 0.1em;
       text-transform: uppercase;
-      background: rgba(11, 12, 14, 0.72);
-      backdrop-filter: blur(10px);
+      background: rgba(20, 22, 25, 0.92);
       border: 1px solid var(--line);
-      border-radius: 12px;
+      border-radius: 14px;
       padding: 10px 12px;
+      backdrop-filter: blur(12px);
       color: var(--muted);
       text-align: right;
-      min-width: 120px;
     }
-
-    .stat strong {
+    .pill strong {
       display: block;
       color: var(--text);
-      font-size: 1.05rem;
-      letter-spacing: 0.02em;
+      font-size: 0.95rem;
       margin-top: 2px;
     }
+    .pill.offline { border-color: rgba(110, 231, 168, 0.45); color: var(--g2); }
+    .pill.offline strong { color: var(--g2); }
+    .pill.live { border-color: rgba(255, 138, 30, 0.35); }
 
     .status {
       position: absolute;
-      top: calc(max(12px, env(safe-area-inset-top)) + 58px);
+      top: calc(max(12px, env(safe-area-inset-top)) + 64px);
       left: 50%;
       transform: translateX(-50%);
       z-index: 20;
@@ -94,8 +94,7 @@
       font-size: 0.68rem;
       letter-spacing: 0.1em;
       text-transform: uppercase;
-      color: var(--muted);
-      background: rgba(11, 12, 14, 0.8);
+      background: rgba(20, 22, 25, 0.92);
       border: 1px solid var(--line);
       border-radius: 999px;
       padding: 8px 14px;
@@ -103,106 +102,14 @@
       max-width: calc(100vw - 24px);
       overflow: hidden;
       text-overflow: ellipsis;
-      transition: opacity 0.25s ease;
     }
-
-    .status.error { color: #ff8a8a; border-color: rgba(255, 77, 77, 0.35); }
     .status.ok { color: var(--g2); }
-
-    .sources {
-      position: absolute;
-      top: max(64px, calc(env(safe-area-inset-top) + 56px));
-      left: 12px;
-      z-index: 20;
-      display: flex;
-      flex-direction: column;
-      gap: 6px;
-      pointer-events: auto;
-    }
-
-    .source-toggle {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 8px 12px;
-      border-radius: 10px;
-      border: 1px solid var(--line);
-      background: rgba(20, 22, 25, 0.92);
-      backdrop-filter: blur(12px);
-      color: var(--muted);
-      font-family: var(--mono);
-      font-size: 0.68rem;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      cursor: pointer;
-      opacity: 0.5;
-      transition: opacity 0.15s ease, border-color 0.15s ease, color 0.15s ease;
-    }
-
-    .source-toggle.on {
-      opacity: 1;
-      color: var(--text);
-      border-color: rgba(255, 138, 30, 0.45);
-    }
-
-    .source-toggle .dot {
-      width: 7px;
-      height: 7px;
-      border-radius: 50%;
-      background: var(--dot, var(--amber));
-      flex-shrink: 0;
-    }
-
-    .legend {
-      position: absolute;
-      left: 12px;
-      bottom: max(18px, calc(env(safe-area-inset-bottom) + 12px));
-      z-index: 20;
-      display: flex;
-      flex-direction: column;
-      gap: 4px;
-      padding: 10px 12px;
-      border-radius: 12px;
-      border: 1px solid var(--line);
-      background: rgba(20, 22, 25, 0.92);
-      backdrop-filter: blur(12px);
-      pointer-events: auto;
-    }
-
-    .legend-item {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 4px 2px;
-      border: 0;
-      background: transparent;
-      color: var(--muted);
-      font-family: var(--mono);
-      font-size: 0.68rem;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      cursor: pointer;
-      opacity: 0.4;
-      transition: opacity 0.15s ease, color 0.15s ease;
-    }
-
-    .legend-item.on {
-      opacity: 1;
-      color: var(--text);
-    }
-
-    .legend-line {
-      width: 22px;
-      height: 3px;
-      border-radius: 2px;
-      background: var(--line-color);
-      flex-shrink: 0;
-    }
+    .status.error { color: #ff8a8a; border-color: rgba(255, 77, 77, 0.35); }
 
     .stack {
       position: absolute;
       right: 12px;
-      bottom: max(88px, calc(env(safe-area-inset-bottom) + 80px));
+      bottom: max(120px, calc(env(safe-area-inset-bottom) + 110px));
       z-index: 20;
       display: flex;
       flex-direction: column;
@@ -222,42 +129,163 @@
       cursor: pointer;
       font-size: 1.1rem;
     }
+    .btn.amber { background: var(--amber); border-color: transparent; color: #111; }
+    .btn:active { transform: scale(0.96); }
 
-    .btn.amber {
+    .panel {
+      position: absolute;
+      left: 12px;
+      right: 12px;
+      bottom: max(12px, calc(env(safe-area-inset-bottom) + 12px));
+      z-index: 20;
+      background: rgba(20, 22, 25, 0.96);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 14px;
+      backdrop-filter: blur(14px);
+      max-height: min(58vh, 480px);
+      overflow: auto;
+    }
+    .panel.hidden { display: none; }
+
+    .panel h2 {
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--amber);
+      margin-bottom: 10px;
+    }
+
+    .row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    label {
+      font-family: var(--mono);
+      font-size: 0.68rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      min-width: 64px;
+    }
+
+    input[type="range"] { flex: 1; accent-color: var(--amber); }
+    .val {
+      font-family: var(--mono);
+      font-size: 0.78rem;
+      color: var(--text);
+      min-width: 52px;
+      text-align: right;
+    }
+
+    .estimate {
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      color: var(--muted);
+      line-height: 1.45;
+      margin: 8px 0 12px;
+      padding: 10px 12px;
+      background: var(--panel-2);
+      border-radius: 12px;
+      border: 1px solid var(--line);
+    }
+
+    .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+    .action {
+      flex: 1;
+      min-height: 48px;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: var(--panel-2);
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      cursor: pointer;
+      padding: 0 14px;
+    }
+    .action.primary {
       background: var(--amber);
       border-color: transparent;
       color: #111;
+      font-weight: 700;
     }
+    .action:disabled { opacity: 0.45; cursor: not-allowed; }
 
-    .btn:active { transform: scale(0.96); }
-
-    .maplibregl-ctrl-bottom-right {
-      right: 12px !important;
-      bottom: max(150px, calc(env(safe-area-inset-bottom) + 142px)) !important;
-    }
-
-    .maplibregl-ctrl-group {
-      background: rgba(20, 22, 25, 0.92) !important;
-      border: 1px solid var(--line) !important;
-      border-radius: 16px !important;
+    .progress {
+      display: none;
+      margin-top: 10px;
+      height: 8px;
+      border-radius: 999px;
+      background: var(--panel-2);
       overflow: hidden;
-      box-shadow: none !important;
+      border: 1px solid var(--line);
+    }
+    .progress.on { display: block; }
+    .progress > i {
+      display: block;
+      height: 100%;
+      width: 0%;
+      background: var(--amber);
+      transition: width 0.15s ease;
     }
 
-    .maplibregl-ctrl-group button {
-      width: 42px !important;
-      height: 42px !important;
-      background-color: transparent !important;
+    .regions { margin-top: 14px; }
+    .region {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: center;
+      padding: 10px 0;
+      border-top: 1px solid var(--line);
+      font-size: 0.86rem;
+    }
+    .region .meta {
+      font-family: var(--mono);
+      font-size: 0.65rem;
+      color: var(--muted);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      margin-top: 4px;
+    }
+    .region button {
+      border: 1px solid var(--line);
+      background: transparent;
+      color: var(--muted);
+      border-radius: 10px;
+      padding: 8px 10px;
+      font-family: var(--mono);
+      font-size: 0.65rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      cursor: pointer;
     }
 
-    .maplibregl-ctrl-group button + button {
-      border-top: 1px solid var(--line) !important;
+    .legend {
+      position: absolute;
+      left: 12px;
+      top: calc(max(12px, env(safe-area-inset-top)) + 118px);
+      z-index: 20;
+      background: rgba(20, 22, 25, 0.92);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 10px 12px;
+      backdrop-filter: blur(12px);
+      font-family: var(--mono);
+      font-size: 0.65rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--muted);
     }
-
-    .maplibregl-ctrl button.maplibregl-ctrl-zoom-in .maplibregl-ctrl-icon,
-    .maplibregl-ctrl button.maplibregl-ctrl-zoom-out .maplibregl-ctrl-icon {
-      filter: invert(1) brightness(1.2);
-    }
+    .legend div { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
+    .legend div:last-child { margin-bottom: 0; }
+    .legend i { width: 18px; height: 3px; border-radius: 2px; display: block; }
+    .legend i.dash { background: repeating-linear-gradient(90deg, var(--single) 0 4px, transparent 4px 7px); height: 2px; }
 
     .popup {
       position: absolute;
@@ -266,14 +294,11 @@
       background: rgba(20, 22, 25, 0.96);
       border: 1px solid var(--line);
       border-radius: 16px;
-      padding: 14px 14px 12px;
+      padding: 14px;
       backdrop-filter: blur(14px);
-      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
       display: none;
     }
-
     .popup.visible { display: block; }
-
     .popup .k {
       font-family: var(--mono);
       font-size: 0.65rem;
@@ -282,42 +307,33 @@
       color: var(--muted);
       margin-bottom: 4px;
     }
-
-    .popup .v {
-      font-size: 0.95rem;
-      margin-bottom: 10px;
-    }
-
+    .popup .v { font-size: 0.95rem; margin-bottom: 10px; }
     .popup .v:last-child { margin-bottom: 0; }
-
-    .popup .grade {
-      display: inline-flex;
-      align-items: center;
-      gap: 8px;
-      font-family: var(--mono);
-      font-size: 0.78rem;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
-    }
-
-    .popup .grade i {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: var(--g);
-    }
-
     .popup .close {
-      position: absolute;
-      top: 8px;
-      right: 8px;
-      width: 32px;
-      height: 32px;
-      border: 0;
-      background: transparent;
-      color: var(--muted);
-      font-size: 1.1rem;
-      cursor: pointer;
+      position: absolute; top: 8px; right: 8px;
+      width: 32px; height: 32px; border: 0; background: transparent;
+      color: var(--muted); font-size: 1.1rem; cursor: pointer;
+    }
+
+    .maplibregl-ctrl-bottom-right {
+      right: 12px !important;
+      bottom: max(150px, calc(env(safe-area-inset-bottom) + 142px)) !important;
+    }
+    .maplibregl-ctrl-group {
+      background: rgba(20, 22, 25, 0.92) !important;
+      border: 1px solid var(--line) !important;
+      border-radius: 16px !important;
+      overflow: hidden;
+      box-shadow: none !important;
+    }
+    .maplibregl-ctrl-group button {
+      width: 52px !important;
+      height: 52px !important;
+      background-color: transparent !important;
+    }
+    .maplibregl-ctrl button.maplibregl-ctrl-zoom-in .maplibregl-ctrl-icon,
+    .maplibregl-ctrl button.maplibregl-ctrl-zoom-out .maplibregl-ctrl-icon {
+      filter: invert(1) brightness(1.2);
     }
   </style>
 </head>
@@ -326,45 +342,43 @@
 
   <div class="topbar">
     <a class="brand" href="../index.html">DIRT<span>.</span></a>
-    <div class="stat">In view<strong id="totalCount">0</strong></div>
+    <div class="pill live" id="modePill">Mode<strong id="modeLabel">Live tiles</strong></div>
   </div>
 
-  <div class="sources" id="sources">
-    <button class="source-toggle on" data-source="osm" type="button">
-      <span class="dot" style="--dot:#ff8a1e"></span>OSM
-    </button>
-    <button class="source-toggle on" data-source="ns" type="button">
-      <span class="dot" style="--dot:#6ee7a8"></span>NS Open Data
-    </button>
-    <button class="source-toggle on" data-source="canada" type="button">
-      <span class="dot" style="--dot:#111111"></span>Canada NRN
-    </button>
-    <button class="source-toggle on" data-source="nbforest" type="button">
-      <span class="dot" style="--dot:#333333"></span>NB Forest
-    </button>
-  </div>
+  <div class="status" id="status">Ready</div>
 
-  <div class="status" id="status">Locating rider…</div>
+  <div class="legend">
+    <div><i style="background:var(--g2)"></i>G2 solid</div>
+    <div><i style="background:var(--g3)"></i>G3 mixed</div>
+    <div><i style="background:var(--g4)"></i>G4 rough</div>
+    <div><i style="background:var(--g5)"></i>G5 sparse</div>
+    <div><i class="dash"></i>Single</div>
+    <div><i style="background:var(--unknown)"></i>Unknown</div>
+  </div>
 
   <div class="stack">
-    <button class="btn" id="refreshBtn" title="Refresh trails" aria-label="Refresh trails">↻</button>
-    <button class="btn amber" id="recenterBtn" title="Recenter on me" aria-label="Recenter on me">◎</button>
+    <button class="btn" id="panelBtn" title="Download / regions" aria-label="Download regions">⬇</button>
+    <button class="btn" id="refreshBtn" title="Reload local region" aria-label="Reload local">↻</button>
+    <button class="btn" id="recenterBtn" title="Recenter" aria-label="Recenter">◎</button>
   </div>
 
-  <div class="legend" id="legend">
-    <button class="legend-item on" data-type="paved" type="button">
-      <span class="legend-line" style="background:#ff9500"></span>Paved
-    </button>
-    <button class="legend-item on" data-type="service" type="button">
-      <span class="legend-line" style="background:#111111"></span>Service
-    </button>
-    <button class="legend-item on" data-type="atv" type="button">
-      <span class="legend-line" style="background:#996633"></span>ATV
-    </button>
-    <button class="legend-item on" data-type="single" type="button">
-      <span class="legend-line" style="background:#7c3aed"></span>Single
-    </button>
+  <div class="panel" id="panel">
+    <h2>Download region</h2>
+    <div class="row">
+      <label>Radius</label>
+      <input type="range" id="radius" min="25" max="500" step="5" value="30" />
+      <div class="val" id="radiusVal">30 km</div>
+    </div>
+    <div class="estimate" id="estimate">Tap map or use GPS for center. Default radius kept small for testing.</div>
+    <div class="actions">
+      <button class="action" id="useGpsBtn" type="button">Use GPS</button>
+      <button class="action" id="pickCenterBtn" type="button">Pick center</button>
+      <button class="action primary" id="downloadBtn" type="button">Download</button>
+    </div>
+    <div class="progress" id="progress"><i id="progressBar"></i></div>
+    <div class="regions" id="regionList"></div>
   </div>
+
   <div class="popup" id="popup">
     <button class="close" id="popupClose" aria-label="Close">×</button>
     <div id="popupBody"></div>
@@ -372,129 +386,81 @@
 
   <script>
     const FALLBACK = { lng: -63.2985, lat: 44.7427, name: "Porter's Lake, NS" };
-    const MIN_ZOOM = 10;
-    const DEBOUNCE_MS = 900;
+    const ZOOM_MIN = 10;
+    const ZOOM_MAX = 14;
+    // Estimate covers base + label layers at z10-z14
+    const BYTES_PER_TILE = 28000;
+    const TILE_LAYERS = 2;
     const OVERPASS_ENDPOINTS = [
       "https://overpass-api.de/api/interpreter",
       "https://overpass.kumi.systems/api/interpreter",
       "https://maps.mail.ru/osm/tools/overpass/api/interpreter"
     ];
+    const CARTO_BASE = "https://a.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}@2x.png";
+    const CARTO_LABELS = "https://a.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}@2x.png";
 
-    const TRAIL_TYPES = [
-      { id: "service", label: "Service", color: "#111111" },
-      { id: "atv", label: "ATV", color: "#996633" },
-      { id: "single", label: "Single", color: "#7c3aed" }
-    ];
+    const GRADE_COLOR = {
+      g2: "#6ee7a8",
+      g3: "#ffd24a",
+      g4: "#ff8a1e",
+      g5: "#ff4d4d",
+      single: "#b98bff",
+      unknown: "#6b7078"
+    };
 
-    const trailTypeOn = { paved: true, service: true, atv: true, single: true };
-    const sourceOn = { osm: true, ns: true, canada: true, nbforest: true };
+    const db = new Dexie("dirt_offline_poc");
+    db.version(1).stores({
+      regions: "id, createdAt",
+      trails: "regionId",
+      tiles: "key, regionId"
+    });
+
     let rider = { ...FALLBACK };
-    let features = [];
-    let settling = false;
-    let debounceTimer = null;
-    let fetchToken = 0;
-    
-    // Data cache: store fetched areas to avoid re-scanning
-    const dataCache = new Map();
-    
-    function getCacheKey(bbox) {
-      return bbox.map(n => n.toFixed(3)).join(',');
-    }
-    
-    function isCached(bbox) {
-      return dataCache.has(getCacheKey(bbox));
-    }
-    
-    function getCached(bbox) {
-      return dataCache.get(getCacheKey(bbox)) || [];
-    }
-    
-    function setCache(bbox, feats) {
-      dataCache.set(getCacheKey(bbox), feats);
-      if (dataCache.size > 50) {
-        dataCache.delete(dataCache.keys().next().value);
-      }
-    }
+    let downloadCenter = { ...FALLBACK };
+    let pickingCenter = false;
+    let downloading = false;
+    let online = navigator.onLine;
+    let activeRegionId = null;
 
     const statusEl = document.getElementById("status");
-    const totalEl = document.getElementById("totalCount");
+    const modePill = document.getElementById("modePill");
+    const modeLabel = document.getElementById("modeLabel");
+    const panel = document.getElementById("panel");
+    const radiusInput = document.getElementById("radius");
+    const radiusVal = document.getElementById("radiusVal");
+    const estimateEl = document.getElementById("estimate");
+    const progress = document.getElementById("progress");
+    const progressBar = document.getElementById("progressBar");
+    const regionList = document.getElementById("regionList");
     const popupEl = document.getElementById("popup");
     const popupBody = document.getElementById("popupBody");
+    const downloadBtn = document.getElementById("downloadBtn");
 
-    function setStatus(text, kind = "") {
+    function setStatus(text, kind) {
       statusEl.textContent = text;
       statusEl.className = "status" + (kind ? " " + kind : "");
     }
 
-    // Wire source toggles
-    document.querySelectorAll(".source-toggle").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const src = btn.dataset.source;
-        sourceOn[src] = !sourceOn[src];
-        btn.classList.toggle("on", sourceOn[src]);
-        applyFilters();
-      });
-    });
-
-    // Wire legend type toggles
-    document.querySelectorAll(".legend-item").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const type = btn.dataset.type;
-        trailTypeOn[type] = !trailTypeOn[type];
-        btn.classList.toggle("on", trailTypeOn[type]);
-        applyFilters();
-      });
-    });
-
-    function classifyTrailType(tags) {
-      const hw = tags.highway || "";
-      const tracktype = tags.tracktype || "";
-      
-      if (["path", "bridleway", "footway", "cycleway"].includes(hw)) {
-        return "single";
-      }
-      
-      if (hw === "track") {
-        if (tracktype === "grade1" || tracktype === "grade2") return "service";
-        if (tracktype === "grade3" || tracktype === "grade4") return "atv";
-        if (tracktype === "grade5") return "single";
-        return "atv";
-      }
-      
-      if (hw === "service") return "service";
-      if (hw === "unclassified") return "atv";
-      return "single";
+    function updateModePill() {
+      const offlineCapable = !!activeRegionId && !online;
+      modePill.className = "pill " + (offlineCapable ? "offline" : "live");
+      modeLabel.textContent = offlineCapable
+        ? "Offline local"
+        : (activeRegionId ? "Local + network" : "Live tiles");
     }
 
     function classify(tags) {
       const hw = tags.highway || "";
-      const surface = tags.surface || "";
-      
-      // Major roads get good grade
-      if (["motorway", "trunk", "primary", "secondary", "tertiary", "unclassified"].includes(hw)) {
-        if (surface.match(/paved|asphalt|concrete/i) || !surface) {
-          return "g2"; // Paved roads = solid
-        }
-        return "g3"; // Unpaved major roads = mixed
-      }
-      
-      // Paths and trails
       if (hw === "path" || hw === "bridleway") return "single";
-      
-      // Tracks by grade
       if (hw === "track") {
         const tt = tags.tracktype || "";
         if (tt === "grade1" || tt === "grade2") return "g2";
         if (tt === "grade3") return "g3";
         if (tt === "grade4") return "g4";
         if (tt === "grade5") return "g5";
-        return "g3"; // Default for tracks without grade
+        return "unknown";
       }
-      
-      // Service roads
-      if (hw === "service") return "g3";
-      
-      return "g3"; // Default to mixed
+      return "unknown";
     }
 
     function legalAccess(tags) {
@@ -507,183 +473,11 @@
         }
       }
       if (!value) return { status: "unknown", detail: "use judgment" };
-      const allowed = ["yes", "permissive", "designated"];
-      const restricted = ["no", "private", "delivery", "agricultural", "forestry"];
-      if (allowed.includes(value)) return { status: "allowed", detail: value };
-      if (restricted.includes(value)) return { status: "restricted", detail: value };
+      if (["yes", "permissive", "designated"].includes(value)) return { status: "allowed", detail: value };
+      if (["no", "private", "delivery", "agricultural", "forestry"].includes(value)) {
+        return { status: "restricted", detail: value };
+      }
       return { status: "unknown", detail: value };
-    }
-
-    function gradeLabel(id) {
-      const labels = { service: "Service", atv: "ATV", single: "Single", paved: "Paved" };
-      return labels[id] || id;
-    }
-
-    const map = new maplibregl.Map({
-      container: "map",
-      style: {
-        version: 8,
-        sources: {
-          osmCarto: {
-            type: "raster",
-            tiles: [
-              "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
-            ],
-            tileSize: 256,
-            attribution: "&copy; OpenStreetMap contributors"
-          }
-        },
-        layers: [
-          {
-            id: "osm-base",
-            type: "raster",
-            source: "osmCarto",
-            paint: {
-              "raster-brightness-max": 0.92,
-              "raster-saturation": -0.1
-            }
-          }
-        ]
-      },
-      center: [FALLBACK.lng, FALLBACK.lat],
-      zoom: 11.5,
-      attributionControl: false
-    });
-
-    map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "bottom-right");
-    map.addControl(new maplibregl.AttributionControl({ compact: true }));
-
-    function ensureLayers() {
-      if (map.getSource("trails")) return;
-
-      map.addSource("trails", {
-        type: "geojson",
-        data: { type: "FeatureCollection", features: [] }
-      });
-
-      // Service roads - black (forestry / truck-width)
-      map.addLayer({
-        id: "service-roads",
-        type: "line",
-        source: "trails",
-        filter: ["==", ["get", "trailType"], "service"],
-        paint: {
-          "line-color": "#111111",
-          "line-width": ["interpolate", ["linear"], ["zoom"], 10, 3, 14, 5],
-          "line-opacity": 0.9
-        }
-      });
-
-      // ATV trails - tan/brown
-      map.addLayer({
-        id: "atv-trails",
-        type: "line",
-        source: "trails",
-        filter: ["==", ["get", "trailType"], "atv"],
-        paint: {
-          "line-color": "#996633",
-          "line-width": ["interpolate", ["linear"], ["zoom"], 10, 2.5, 14, 4],
-          "line-opacity": 0.85
-        }
-      });
-
-      // Singletrack - purple solid
-      map.addLayer({
-        id: "singletrack",
-        type: "line",
-        source: "trails",
-        filter: ["==", ["get", "trailType"], "single"],
-        paint: {
-          "line-color": "#7c3aed",
-          "line-width": ["interpolate", ["linear"], ["zoom"], 10, 2, 14, 3.5],
-          "line-opacity": 1
-        }
-      });
-
-      map.addSource("rider", {
-        type: "geojson",
-        data: pointFC(rider.lng, rider.lat)
-      });
-
-      map.addLayer({
-        id: "rider-halo",
-        type: "circle",
-        source: "rider",
-        paint: {
-          "circle-radius": 18,
-          "circle-color": "#ff8a1e",
-          "circle-opacity": 0.18,
-          "circle-blur": 0.6
-        }
-      });
-
-      map.addLayer({
-        id: "rider-core",
-        type: "circle",
-        source: "rider",
-        paint: {
-          "circle-radius": 7,
-          "circle-color": "#ff8a1e",
-          "circle-stroke-width": 2,
-          "circle-stroke-color": "#0b0c0e"
-        }
-      });
-    }
-
-    function pointFC(lng, lat) {
-      return {
-        type: "FeatureCollection",
-        features: [{
-          type: "Feature",
-          geometry: { type: "Point", coordinates: [lng, lat] },
-          properties: {}
-        }]
-      };
-    }
-
-    function setRider(lng, lat) {
-      rider = { lng, lat };
-      if (map.getSource("rider")) {
-        map.getSource("rider").setData(pointFC(lng, lat));
-      }
-    }
-
-    // Single query - ONLY off-road stuff (basemap has all the roads already!)
-    function queryOffRoadOnly(bbox) {
-      const [south, west, north, east] = bbox;
-      return `[out:json][timeout:25];
-(
-  way["highway"="track"](${south},${west},${north},${east});
-  way["highway"="service"]["surface"~"unpaved|gravel|dirt|ground|earth"](${south},${west},${north},${east});
-  way["highway"="path"](${south},${west},${north},${east});
-  way["highway"="bridleway"](${south},${west},${north},${east});
-  way["highway"="unclassified"]["surface"~"unpaved|gravel|dirt|ground|earth"](${south},${west},${north},${east});
-  way["highway"]["motor_vehicle"="no"]["bicycle"="yes"](${south},${west},${north},${east});
-  way["route"="mtb"](${south},${west},${north},${east});
-);
-out geom tags;`;
-    }
-
-    function currentBBox() {
-      const b = map.getBounds();
-      return [
-        b.getSouth(),
-        b.getWest(),
-        b.getNorth(),
-        b.getEast()
-      ].map((n) => Number(n.toFixed(5)));
-    }
-
-    async function fetchOverpassLayer(bbox, queryFn) {
-      const q = queryFn(bbox);
-      try {
-        const url = "/api/overpass?query=" + encodeURIComponent(q);
-        const res = await fetch(url, { method: "GET" });
-        if (!res.ok) throw new Error("HTTP " + res.status);
-        return await res.json();
-      } catch (err) {
-        throw err || new Error("Overpass proxy failed");
-      }
     }
 
     function toFeatures(osm) {
@@ -691,15 +485,14 @@ out geom tags;`;
       for (const el of osm.elements || []) {
         if (el.type !== "way" || !el.geometry || el.geometry.length < 2) continue;
         const tags = el.tags || {};
-        const trailType = classifyTrailType(tags);
+        const grade = classify(tags);
         const access = legalAccess(tags);
         out.push({
           type: "Feature",
           id: el.id,
           properties: {
             id: el.id,
-            trailType,
-            source: "osm",
+            grade,
             highway: tags.highway || "",
             tracktype: tags.tracktype || "",
             surface: tags.surface || "",
@@ -716,273 +509,569 @@ out geom tags;`;
       return out;
     }
 
-    function applyFilters() {
-      const visible = features.filter((f) => {
-        const props = f.properties;
-        const type = props.trailType || "single";
-        let src = "osm";
-        if (props.source === "ns-open-data") src = "ns";
-        else if (props.source === "canada-open-data") src = "canada";
-        else if (props.source === "nb-forest") src = "nbforest";
-        return trailTypeOn[type] && sourceOn[src];
-      });
-      if (map.getSource("trails")) {
-        map.getSource("trails").setData({ type: "FeatureCollection", features: visible });
-      }
-      totalEl.textContent = String(visible.length);
+    function bboxFromRadius(lng, lat, km) {
+      const dLat = km / 111.32;
+      const dLng = km / (111.32 * Math.cos((lat * Math.PI) / 180));
+      return {
+        south: lat - dLat,
+        west: lng - dLng,
+        north: lat + dLat,
+        east: lng + dLng
+      };
     }
 
-    async function scanTrails(reason = "scan") {
-      if (map.getZoom() < MIN_ZOOM) {
-        setStatus("Zoom in to scan trails");
-        features = [];
-        applyFilters();
-        return;
+    function splitBBox(bbox, maxDeg) {
+      const cells = [];
+      for (let s = bbox.south; s < bbox.north; s += maxDeg) {
+        for (let w = bbox.west; w < bbox.east; w += maxDeg) {
+          cells.push({
+            south: s,
+            west: w,
+            north: Math.min(s + maxDeg, bbox.north),
+            east: Math.min(w + maxDeg, bbox.east)
+          });
+        }
       }
+      return cells;
+    }
 
-      const token = ++fetchToken;
-      const bbox = currentBBox();
-      
-      // Check cache first
-      if (isCached(bbox)) {
-        features = getCached(bbox);
-        applyFilters();
-        setStatus(
-          features.length ? `${features.length} segments (cached) · ${reason}` : "No tracks in view",
-          features.length ? "ok" : ""
-        );
-        return;
+    function lon2tile(lon, z) {
+      return Math.floor(((lon + 180) / 360) * Math.pow(2, z));
+    }
+    function lat2tile(lat, z) {
+      return Math.floor(
+        ((1 - Math.log(Math.tan((lat * Math.PI) / 180) + 1 / Math.cos((lat * Math.PI) / 180)) / Math.PI) / 2) *
+          Math.pow(2, z)
+      );
+    }
+
+    function enumerateTiles(bbox, zMin, zMax) {
+      const tiles = [];
+      for (let z = zMin; z <= zMax; z++) {
+        const xMin = lon2tile(bbox.west, z);
+        const xMax = lon2tile(bbox.east, z);
+        const yMin = lat2tile(bbox.north, z);
+        const yMax = lat2tile(bbox.south, z);
+        for (let x = xMin; x <= xMax; x++) {
+          for (let y = yMin; y <= yMax; y++) {
+            tiles.push({ z, x, y });
+          }
+        }
       }
-      
+      return tiles;
+    }
+
+    function formatBytes(n) {
+      if (n < 1024 * 1024) return Math.round(n / 1024) + " KB";
+      return (n / (1024 * 1024)).toFixed(1) + " MB";
+    }
+
+    function updateEstimate() {
+      const km = Number(radiusInput.value);
+      radiusVal.textContent = km + " km";
+      const bbox = bboxFromRadius(downloadCenter.lng, downloadCenter.lat, km);
+      const tiles = enumerateTiles(bbox, ZOOM_MIN, ZOOM_MAX);
+      const requests = tiles.length * TILE_LAYERS;
+      const bytes = requests * BYTES_PER_TILE;
+      estimateEl.innerHTML =
+        "Center " + downloadCenter.lat.toFixed(4) + ", " + downloadCenter.lng.toFixed(4) + "<br>" +
+        "Tiles z" + ZOOM_MIN + "-" + ZOOM_MAX + ": ~" + requests.toLocaleString() +
+        " (" + tiles.length.toLocaleString() + " xy × 2 layers)<br>" +
+        "Est. size: ~" + formatBytes(bytes) + " (plus trail JSON)";
+    }
+
+    function tileKey(z, x, y, layer) {
+      return z + "/" + x + "/" + y + ":" + layer;
+    }
+
+    async function fetchOverpassCell(bbox) {
+      const q =
+        `[out:json][timeout:60];\n(` +
+        `way["highway"="track"](${bbox.south},${bbox.west},${bbox.north},${bbox.east});` +
+        `way["highway"="path"]["surface"~"dirt|ground|earth|gravel|unpaved|fine_gravel|compacted|sand|grass"](${bbox.south},${bbox.west},${bbox.north},${bbox.east});` +
+        `way["highway"="path"]["motorcycle"](${bbox.south},${bbox.west},${bbox.north},${bbox.east});` +
+        `way["highway"="bridleway"](${bbox.south},${bbox.west},${bbox.north},${bbox.east});` +
+        `);\nout geom tags;`;
+
+      let lastErr = null;
+
+      // Prefer same-origin proxy when available (mobile Safari often blocks Overpass)
       try {
-        // Fetch off-road layers in parallel (basemap already shows paved roads)
-        setStatus("Scanning trails…");
-        
-        const [osmResult, nsResult, caResult, nbResult] = await Promise.allSettled([
-          fetchOverpassLayer(bbox, queryOffRoadOnly),
-          fetchNSTrails(bbox),
-          fetchCanadaRoads(bbox),
-          fetchNbForest(bbox)
-        ]);
-        
-        if (token !== fetchToken) return;
-        
-        let allFeatures = [];
-        let osmN = 0, nsN = 0, caN = 0, nbN = 0;
-        
-        if (osmResult.status === 'fulfilled') {
-          const osmFeatures = toFeatures(osmResult.value);
-          osmN = osmFeatures.length;
-          allFeatures = [...allFeatures, ...osmFeatures];
-        } else {
-          console.warn('OSM failed:', osmResult.reason);
-        }
-        
-        if (nsResult.status === 'fulfilled' && nsResult.value.features) {
-          const nsFeatures = nsResult.value.features.map(f => ({
-            ...f,
-            properties: {
-              ...f.properties,
-              id: f.id || 'ns-' + Math.random(),
-              trailType: classifyNSTrail(f.properties),
-              highway: f.properties.road_class || 'trail',
-              source: 'ns-open-data'
-            }
-          }));
-          nsN = nsFeatures.length;
-          allFeatures = [...allFeatures, ...nsFeatures];
-        } else {
-          console.warn('NS failed:', nsResult.reason);
-        }
-
-        if (caResult.status === 'fulfilled' && caResult.value.features) {
-          const caFeatures = caResult.value.features;
-          caN = caFeatures.length;
-          allFeatures = [...allFeatures, ...caFeatures];
-        } else {
-          console.warn('Canada failed:', caResult.reason);
-        }
-
-        if (nbResult.status === 'fulfilled' && nbResult.value.features) {
-          const nbFeatures = nbResult.value.features;
-          nbN = nbFeatures.length;
-          allFeatures = [...allFeatures, ...nbFeatures];
-        } else {
-          console.warn('NB Forest failed:', nbResult.reason);
-        }
-        
-        features = allFeatures;
-        setCache(bbox, features);
-        applyFilters();
-        setStatus(
-          features.length
-            ? `${features.length} · OSM ${osmN} · NS ${nsN} · NRN ${caN} · NB ${nbN}`
-            : "No tracks in view",
-          features.length ? "ok" : ""
-        );
+        const proxy = "/api/overpass?query=" + encodeURIComponent(q);
+        const res = await fetch(proxy);
+        if (res.ok) return await res.json();
+        lastErr = new Error("proxy HTTP " + res.status);
       } catch (err) {
-        if (token !== fetchToken) return;
+        lastErr = err;
+      }
+
+      for (const endpoint of OVERPASS_ENDPOINTS) {
+        try {
+          const url = endpoint + "?data=" + encodeURIComponent(q);
+          const res = await fetch(url, { method: "GET" });
+          if (!res.ok) throw new Error("HTTP " + res.status);
+          return await res.json();
+        } catch (err) {
+          lastErr = err;
+        }
+      }
+      throw lastErr || new Error("Overpass failed");
+    }
+
+    async function downloadTrails(bbox, onProgress) {
+      const cells = splitBBox(bbox, 0.35);
+      const byId = new Map();
+      for (let i = 0; i < cells.length; i++) {
+        const osm = await fetchOverpassCell(cells[i]);
+        for (const f of toFeatures(osm)) byId.set(f.id, f);
+        onProgress((i + 1) / (cells.length + 1), "Trails " + (i + 1) + "/" + cells.length);
+        await new Promise((r) => setTimeout(r, 350));
+      }
+      return { type: "FeatureCollection", features: [...byId.values()] };
+    }
+
+    async function downloadTiles(regionId, bbox, onProgress) {
+      const tiles = enumerateTiles(bbox, ZOOM_MIN, ZOOM_MAX);
+      const jobs = [];
+      for (const t of tiles) {
+        jobs.push({ ...t, layer: "base", url: CARTO_BASE.replace("{z}", t.z).replace("{x}", t.x).replace("{y}", t.y) });
+        jobs.push({ ...t, layer: "labels", url: CARTO_LABELS.replace("{z}", t.z).replace("{x}", t.x).replace("{y}", t.y) });
+      }
+      let done = 0;
+      let savedBytes = 0;
+      for (const job of jobs) {
+        const key = tileKey(job.z, job.x, job.y, job.layer);
+        const existing = await db.tiles.get(key);
+        if (!existing) {
+          try {
+            const res = await fetch(job.url);
+            if (res.ok) {
+              const blob = await res.blob();
+              try {
+                await db.tiles.put({
+                  key,
+                  regionId,
+                  z: job.z,
+                  x: job.x,
+                  y: job.y,
+                  layer: job.layer,
+                  blob,
+                  bytes: blob.size
+                });
+                savedBytes += blob.size;
+              } catch (err) {
+                if (err && (err.name === "QuotaExceededError" || String(err.message || "").includes("Quota"))) {
+                  throw new Error("Storage quota exceeded. Delete a region or use a smaller radius.");
+                }
+                throw err;
+              }
+            }
+          } catch (err) {
+            if (err && String(err.message || "").includes("quota")) throw err;
+            // skip failed tile; offline will miss it
+          }
+        } else {
+          if (!existing.regionId) await db.tiles.update(key, { regionId });
+          savedBytes += existing.bytes || existing.blob?.size || 0;
+        }
+        done += 1;
+        if (done % 8 === 0 || done === jobs.length) {
+          onProgress(done / jobs.length, "Tiles " + done + "/" + jobs.length);
+        }
+        if (done % 40 === 0) await new Promise((r) => setTimeout(r, 20));
+      }
+      return { tileCount: jobs.length, bytes: savedBytes };
+    }
+
+    async function requestPersist() {
+      try {
+        if (navigator.storage && navigator.storage.persist) {
+          await navigator.storage.persist();
+        }
+      } catch (_) {}
+    }
+
+    function setProgress(frac, label) {
+      progress.classList.add("on");
+      progressBar.style.width = Math.round(frac * 100) + "%";
+      if (label) setStatus(label);
+    }
+
+    async function runDownload() {
+      if (downloading) return;
+      downloading = true;
+      downloadBtn.disabled = true;
+      await requestPersist();
+
+      const km = Number(radiusInput.value);
+      const bbox = bboxFromRadius(downloadCenter.lng, downloadCenter.lat, km);
+      const tiles = enumerateTiles(bbox, ZOOM_MIN, ZOOM_MAX);
+      const requests = tiles.length * TILE_LAYERS;
+      const est = requests * BYTES_PER_TILE;
+      const ok = confirm(
+        "Download this region?\n\n" +
+          "~" + requests.toLocaleString() + " tiles (base + labels)\n" +
+          "~" + formatBytes(est) + " map data\n" +
+          "Radius " + km + " km"
+      );
+      if (!ok) {
+        downloading = false;
+        downloadBtn.disabled = false;
+        progress.classList.remove("on");
+        return;
+      }
+
+      const id = "r_" + Date.now();
+      try {
+        setProgress(0.02, "Downloading trails…");
+        const fc = await downloadTrails(bbox, (p, label) => setProgress(p * 0.45, label));
+        let trailBytes = 0;
+        try {
+          const trailJson = JSON.stringify(fc);
+          trailBytes = new Blob([trailJson]).size;
+          await db.trails.put({ regionId: id, featureCollection: fc, bytes: trailBytes });
+        } catch (err) {
+          if (err && (err.name === "QuotaExceededError" || String(err.message || "").includes("Quota"))) {
+            throw new Error("Storage quota exceeded. Delete a region or use a smaller radius.");
+          }
+          throw err;
+        }
+
+        setProgress(0.5, "Downloading map tiles…");
+        const tileResult = await downloadTiles(id, bbox, (p, label) => setProgress(0.5 + p * 0.48, label));
+
+        const region = {
+          id,
+          name: km + " km around " + downloadCenter.lat.toFixed(3) + ", " + downloadCenter.lng.toFixed(3),
+          center: { lng: downloadCenter.lng, lat: downloadCenter.lat },
+          radiusKm: km,
+          bounds: bbox,
+          zoomMin: ZOOM_MIN,
+          zoomMax: ZOOM_MAX,
+          featureCount: fc.features.length,
+          tileCount: tileResult.tileCount,
+          bytes: trailBytes + tileResult.bytes,
+          createdAt: Date.now()
+        };
+        await db.regions.put(region);
+        activeRegionId = id;
+        await renderRegion(id);
+        setProgress(1, "Saved " + fc.features.length + " trails · " + formatBytes(region.bytes));
+        setStatus(
+          "Region saved · " + fc.features.length + " trails · " + formatBytes(region.bytes),
+          "ok"
+        );
+        await refreshRegionList();
+        updateModePill();
+      } catch (err) {
         console.error(err);
-        setStatus("Scan failed · " + (err.message || "fetch error"), "error");
+        setStatus("Download failed · " + (err.message || "error"), "error");
+        try {
+          await db.trails.delete(id);
+          await db.tiles.where("regionId").equals(id).delete();
+          await db.regions.delete(id);
+        } catch (_) {}
+      } finally {
+        downloading = false;
+        downloadBtn.disabled = false;
+        setTimeout(() => progress.classList.remove("on"), 800);
       }
     }
-    
-    async function fetchNSTrails(bbox) {
-      const bboxStr = bbox.join(',');
-      const url = `/api/ns-trails?bbox=${bboxStr}&limit=2000`;
+
+    async function renderRegion(regionId) {
+      const row = await db.trails.get(regionId);
+      const region = await db.regions.get(regionId);
+      if (!row || !region) return;
+      activeRegionId = regionId;
+      const fc = row.featureCollection;
+      if (map.getSource("trails")) {
+        map.getSource("trails").setData(fc);
+      }
+      map.fitBounds(
+        [
+          [region.bounds.west, region.bounds.south],
+          [region.bounds.east, region.bounds.north]
+        ],
+        { padding: 40, duration: 800 }
+      );
+      updateModePill();
+    }
+
+    async function deleteRegion(id) {
+      await db.trails.delete(id);
+      await db.tiles.where("regionId").equals(id).delete();
+      await db.regions.delete(id);
+      if (activeRegionId === id) {
+        activeRegionId = null;
+        if (map.getSource("trails")) {
+          map.getSource("trails").setData({ type: "FeatureCollection", features: [] });
+        }
+      }
+      await refreshRegionList();
+      updateModePill();
+      setStatus("Region deleted");
+    }
+
+    async function refreshRegionList() {
+      const regions = await db.regions.orderBy("createdAt").reverse().toArray();
+      if (!regions.length) {
+        regionList.innerHTML = '<div class="meta" style="color:var(--muted);font-family:var(--mono);font-size:0.68rem;margin-top:12px;">No regions downloaded yet.</div>';
+        return;
+      }
+      regionList.innerHTML = regions.map((r) => `
+        <div class="region">
+          <div>
+            <div>${r.name}</div>
+            <div class="meta">${r.featureCount} trails · ${r.tileCount} tiles · ${r.bytes ? formatBytes(r.bytes) + " · " : ""}${r.radiusKm} km</div>
+          </div>
+          <div style="display:flex;gap:6px;">
+            <button data-load="${r.id}" type="button">Load</button>
+            <button data-del="${r.id}" type="button">Delete</button>
+          </div>
+        </div>
+      `).join("");
+      regionList.querySelectorAll("[data-load]").forEach((btn) => {
+        btn.addEventListener("click", () => renderRegion(btn.getAttribute("data-load")));
+      });
+      regionList.querySelectorAll("[data-del]").forEach((btn) => {
+        btn.addEventListener("click", () => deleteRegion(btn.getAttribute("data-del")));
+      });
+      if (!activeRegionId && regions[0]) activeRegionId = regions[0].id;
+    }
+
+    // Serve tiles from IndexedDB first; network only when missing and online
+    maplibregl.addProtocol("dirt", async (params) => {
+      const path = params.url.replace(/^dirt:\/\//, "").split("?")[0];
+      const parts = path.split("/");
+      const kind = parts[0];
+      const z = parts[1];
+      const x = parts[2];
+      const y = parts[3];
+      const key = tileKey(z, x, y, kind === "labels" ? "labels" : "base");
+      const hit = await db.tiles.get(key);
+      if (hit && hit.blob) {
+        return { data: await hit.blob.arrayBuffer() };
+      }
+      if (!online) {
+        const empty = Uint8Array.from(
+          atob("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="),
+          (c) => c.charCodeAt(0)
+        );
+        return { data: empty.buffer };
+      }
+      const template = kind === "labels" ? CARTO_LABELS : CARTO_BASE;
+      const url = template.replace("{z}", z).replace("{x}", x).replace("{y}", y);
       const res = await fetch(url);
-      if (!res.ok) throw new Error("HTTP " + res.status);
-      return await res.json();
+      if (!res.ok) throw new Error("tile " + res.status);
+      return { data: await res.arrayBuffer() };
+    });
+
+    const map = new maplibregl.Map({
+      container: "map",
+      style: {
+        version: 8,
+        sources: {
+          cartoBase: {
+            type: "raster",
+            tiles: ["dirt://base/{z}/{x}/{y}"],
+            tileSize: 256,
+            attribution: "&copy; OpenStreetMap &copy; CARTO"
+          },
+          cartoLabels: {
+            type: "raster",
+            tiles: ["dirt://labels/{z}/{x}/{y}"],
+            tileSize: 256
+          }
+        },
+        layers: [
+          { id: "base", type: "raster", source: "cartoBase", paint: { "raster-saturation": -0.1, "raster-brightness-min": 0.05 } },
+          { id: "labels", type: "raster", source: "cartoLabels", paint: { "raster-opacity": 0.55 } }
+        ]
+      },
+      center: [FALLBACK.lng, FALLBACK.lat],
+      zoom: 11.5,
+      attributionControl: false
+    });
+
+    map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "bottom-right");
+    map.addControl(new maplibregl.AttributionControl({ compact: true }));
+
+    function ensureLayers() {
+      if (map.getSource("trails")) return;
+      map.addSource("trails", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+      map.addLayer({
+        id: "trails-casing",
+        type: "line",
+        source: "trails",
+        paint: {
+          "line-color": "#000000",
+          "line-width": ["interpolate", ["linear"], ["zoom"], 10, 4, 14, 7],
+          "line-opacity": 0.75
+        }
+      });
+      map.addLayer({
+        id: "trails-line",
+        type: "line",
+        source: "trails",
+        filter: ["!=", ["get", "grade"], "single"],
+        paint: {
+          "line-color": [
+            "match", ["get", "grade"],
+            "g2", "#6ee7a8",
+            "g3", "#ffd24a",
+            "g4", "#ff8a1e",
+            "g5", "#ff4d4d",
+            "#6b7078"
+          ],
+          "line-width": ["interpolate", ["linear"], ["zoom"], 10, 2, 14, 3.5],
+          "line-opacity": 0.95
+        }
+      });
+      map.addLayer({
+        id: "trails-single",
+        type: "line",
+        source: "trails",
+        filter: ["==", ["get", "grade"], "single"],
+        paint: {
+          "line-color": "#b98bff",
+          "line-width": ["interpolate", ["linear"], ["zoom"], 10, 2, 14, 3],
+          "line-dasharray": [1.2, 1.6],
+          "line-opacity": 0.95
+        }
+      });
+      map.addSource("rider", {
+        type: "geojson",
+        data: {
+          type: "FeatureCollection",
+          features: [{ type: "Feature", geometry: { type: "Point", coordinates: [rider.lng, rider.lat] }, properties: {} }]
+        }
+      });
+      map.addLayer({
+        id: "rider-halo",
+        type: "circle",
+        source: "rider",
+        paint: { "circle-radius": 18, "circle-color": "#ff8a1e", "circle-opacity": 0.18, "circle-blur": 0.6 }
+      });
+      map.addLayer({
+        id: "rider-core",
+        type: "circle",
+        source: "rider",
+        paint: {
+          "circle-radius": 7,
+          "circle-color": "#ff8a1e",
+          "circle-stroke-width": 2,
+          "circle-stroke-color": "#0b0c0e"
+        }
+      });
     }
 
-    async function fetchCanadaRoads(bbox) {
-      const bboxStr = bbox.join(',');
-      const url = `/api/canada-roads?bbox=${bboxStr}&limit=3000`;
-      const res = await fetch(url);
-      if (!res.ok) throw new Error("HTTP " + res.status);
-      return await res.json();
-    }
-
-    async function fetchNbForest(bbox) {
-      const bboxStr = bbox.join(',');
-      const url = `/api/nb-forest?bbox=${bboxStr}&limit=3000`;
-      const res = await fetch(url);
-      if (!res.ok) throw new Error("HTTP " + res.status);
-      return await res.json();
-    }
-    
-    function classifyNSTrail(props) {
-      const fcode = (props.fcode || '').toLowerCase();
-      const roadClass = (props.road_class || '').toLowerCase();
-      const surface = (props.surface || '').toLowerCase();
-      
-      if (fcode.includes('trail') || roadClass.includes('trail')) {
-        return 'single';
+    function setRider(lng, lat) {
+      rider = { lng, lat };
+      downloadCenter = { lng, lat };
+      updateEstimate();
+      if (map.getSource("rider")) {
+        map.getSource("rider").setData({
+          type: "FeatureCollection",
+          features: [{ type: "Feature", geometry: { type: "Point", coordinates: [lng, lat] }, properties: {} }]
+        });
       }
-      if (surface.includes('paved') || surface.includes('gravel')) {
-        return 'service';
-      }
-      if (fcode.includes('resource') || roadClass.includes('resource') || surface.includes('dirt')) {
-        return 'atv';
-      }
-      return 'atv';
     }
 
-    function scheduleScan(reason) {
-      clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(() => {
-        if (settling) return;
-        scanTrails(reason);
-      }, DEBOUNCE_MS);
-    }
-
-    function hidePopup() {
-      popupEl.classList.remove("visible");
-    }
+    function hidePopup() { popupEl.classList.remove("visible"); }
 
     function showPopup(feature, point) {
       const p = feature.properties;
-      const colors = { service: "#111111", atv: "#996633", single: "#7c3aed", paved: "#ff9500" };
-      const color = colors[p.trailType] || "#6b7078";
-      popupBody.innerHTML = `
-        <div class="k">Type</div>
-        <div class="v">${p.highway || "—"}${p.name ? " · " + p.name : ""}</div>
-        <div class="k">Class</div>
-        <div class="v"><span class="grade" style="--g:${color}"><i></i>${gradeLabel(p.trailType)}${p.tracktype ? " · " + p.tracktype : ""}</span></div>
-        <div class="k">Surface</div>
-        <div class="v">${p.surface || "unspecified"}</div>
-        <div class="k">Source</div>
-        <div class="v">${
-          p.source === "ns-open-data" ? "NS Open Data"
-          : p.source === "canada-open-data" ? "Canada NRN (Resource / Service)"
-          : p.source === "nb-forest" ? "NB Forest Roads (unmaintained)"
-          : "OpenStreetMap"
-        }</div>
-        <div class="k">Motor access</div>
-        <div class="v">${p.accessStatus || "unknown"}${p.accessDetail ? " · " + p.accessDetail : ""}</div>
-      `;
+      const color = GRADE_COLOR[p.grade] || GRADE_COLOR.unknown;
+      popupBody.innerHTML =
+        '<div class="k">Type</div><div class="v">' + (p.highway || "unspecified") + (p.name ? " · " + p.name : "") + "</div>" +
+        '<div class="k">Grade</div><div class="v" style="color:' + color + '">' + (p.grade || "unknown") + (p.tracktype ? " · " + p.tracktype : "") + "</div>" +
+        '<div class="k">Surface</div><div class="v">' + (p.surface || "unspecified") + "</div>" +
+        '<div class="k">Motor access</div><div class="v">' + (p.accessStatus || "unknown") + (p.accessDetail ? " · " + p.accessDetail : "") + "</div>";
       const pad = 12;
       const w = Math.min(300, window.innerWidth - 24);
       let left = point.x - w / 2;
       left = Math.max(pad, Math.min(left, window.innerWidth - w - pad));
-      let top = point.y - 170;
+      let top = point.y - 160;
       if (top < pad + 70) top = point.y + 18;
       popupEl.style.left = left + "px";
       popupEl.style.top = top + "px";
       popupEl.classList.add("visible");
     }
 
-    function flyToRider() {
-      settling = true;
-      hidePopup();
-      map.flyTo({
-        center: [rider.lng, rider.lat],
-        zoom: Math.max(map.getZoom(), 12),
-        essential: true,
-        duration: 1200
-      });
-      map.once("moveend", () => {
-        settling = false;
-        scanTrails("recenter");
-      });
-    }
-
-    function locateRider() {
-      setStatus("Locating rider…");
-      if (!navigator.geolocation) {
-        setRider(FALLBACK.lng, FALLBACK.lat);
-        setStatus("GPS unavailable · " + FALLBACK.name);
-        flyToRider();
-        return;
-      }
-
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          setRider(pos.coords.longitude, pos.coords.latitude);
-          setStatus("Rider locked");
-          flyToRider();
-        },
-        () => {
-          setRider(FALLBACK.lng, FALLBACK.lat);
-          setStatus("GPS denied · starting at " + FALLBACK.name);
-          flyToRider();
-        },
-        { enableHighAccuracy: true, timeout: 12000, maximumAge: 10000 }
-      );
-    }
-
-    map.on("load", () => {
+    map.on("load", async () => {
       ensureLayers();
-      applyFilters();
-      locateRider();
-    });
+      await refreshRegionList();
+      const regions = await db.regions.orderBy("createdAt").reverse().toArray();
+      if (regions[0]) {
+        await renderRegion(regions[0].id);
+        setStatus("Loaded local region · " + regions[0].featureCount + " trails", "ok");
+      } else {
+        setStatus("No local region · download to go offline");
+      }
+      updateModePill();
+      updateEstimate();
 
-    map.on("moveend", () => {
-      if (settling) return;
-      scheduleScan("pan");
+      if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            setRider(pos.coords.longitude, pos.coords.latitude);
+            map.flyTo({ center: [rider.lng, rider.lat], zoom: 11.5 });
+          },
+          () => setRider(FALLBACK.lng, FALLBACK.lat),
+          { enableHighAccuracy: true, timeout: 10000 }
+        );
+      }
     });
 
     map.on("click", (e) => {
-      const hits = map.queryRenderedFeatures(e.point, {
-        layers: ["service-roads", "atv-trails", "singletrack"]
-      });
-      if (!hits.length) {
-        hidePopup();
+      if (pickingCenter) {
+        downloadCenter = { lng: e.lngLat.lng, lat: e.lngLat.lat };
+        pickingCenter = false;
+        setStatus("Center set · " + downloadCenter.lat.toFixed(4) + ", " + downloadCenter.lng.toFixed(4));
+        updateEstimate();
         return;
       }
+      const hits = map.queryRenderedFeatures(e.point, { layers: ["trails-line", "trails-single"] });
+      if (!hits.length) { hidePopup(); return; }
       showPopup(hits[0], e.point);
     });
 
-    document.getElementById("refreshBtn").addEventListener("click", () => {
-      hidePopup();
-      scanTrails("manual");
-    });
-
-    document.getElementById("recenterBtn").addEventListener("click", () => {
-      locateRider();
-    });
-
     document.getElementById("popupClose").addEventListener("click", hidePopup);
+    document.getElementById("panelBtn").addEventListener("click", () => panel.classList.toggle("hidden"));
+    document.getElementById("refreshBtn").addEventListener("click", async () => {
+      if (!activeRegionId) {
+        setStatus("No local region loaded");
+        return;
+      }
+      await renderRegion(activeRegionId);
+      setStatus("Reloaded from local storage", "ok");
+    });
+    document.getElementById("recenterBtn").addEventListener("click", () => {
+      map.flyTo({ center: [rider.lng, rider.lat], zoom: Math.max(map.getZoom(), 11.5) });
+    });
+    document.getElementById("useGpsBtn").addEventListener("click", () => {
+      if (!navigator.geolocation) {
+        setStatus("GPS unavailable", "error");
+        return;
+      }
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          setRider(pos.coords.longitude, pos.coords.latitude);
+          map.flyTo({ center: [rider.lng, rider.lat], zoom: 11.5 });
+          setStatus("GPS locked as download center", "ok");
+        },
+        () => setStatus("GPS denied", "error")
+      );
+    });
+    document.getElementById("pickCenterBtn").addEventListener("click", () => {
+      pickingCenter = true;
+      setStatus("Tap the map to set download center");
+    });
+    downloadBtn.addEventListener("click", runDownload);
+    radiusInput.addEventListener("input", updateEstimate);
+
+    window.addEventListener("online", () => { online = true; updateModePill(); setStatus("Back online"); });
+    window.addEventListener("offline", () => { online = false; updateModePill(); setStatus("Offline · using local data", "ok"); });
   </script>
 </body>
 </html>
