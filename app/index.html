@@ -3,26 +3,27 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
-  <meta name="theme-color" content="#0b0c0e" />
+  <meta name="theme-color" content="#f7f9fb" />
   <title>DIRT. Map</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23f7f9fb'/%3E%3Cpath d='M12 42h40' stroke='%230a66c2' stroke-width='7' stroke-linecap='round'/%3E%3Cpath d='M16 24h32' stroke='%23162433' stroke-width='7' stroke-linecap='round'/%3E%3C/svg%3E" />
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
   <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
   <script src="https://unpkg.com/dexie@4.0.11/dist/dexie.min.js"></script>
   <style>
     :root {
-      --bg: #0b0c0e;
-      --panel: #141619;
-      --panel-2: #1b1e22;
-      --line: rgba(255, 255, 255, 0.08);
-      --text: #f2f0eb;
-      --muted: #8b8f96;
-      --amber: #ff8a1e;
-      --g2: #6ee7a8;
-      --g3: #ffd24a;
-      --g4: #ff8a1e;
-      --g5: #ff4d4d;
-      --single: #b98bff;
-      --unknown: #6b7078;
+      --bg: #f7f9fb;
+      --panel: rgba(255, 255, 255, 0.94);
+      --panel-2: #eef3f7;
+      --line: rgba(24, 39, 55, 0.18);
+      --text: #162433;
+      --muted: #536170;
+      --accent: #0a66c2;
+      --g2: #008a56;
+      --g3: #b96f00;
+      --g4: #d84400;
+      --g5: #c1122f;
+      --single: #6d36c9;
+      --unknown: #5d6874;
       --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
       --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
     }
@@ -52,13 +53,13 @@
       letter-spacing: 0.04em;
       text-decoration: none;
       color: var(--text);
-      background: rgba(20, 22, 25, 0.92);
+      background: var(--panel);
       border: 1px solid var(--line);
       border-radius: 14px;
       padding: 10px 14px;
       backdrop-filter: blur(12px);
     }
-    .brand span { color: var(--amber); }
+    .brand span { color: var(--accent); }
 
     .pill {
       pointer-events: auto;
@@ -66,7 +67,7 @@
       font-size: 0.68rem;
       letter-spacing: 0.1em;
       text-transform: uppercase;
-      background: rgba(20, 22, 25, 0.92);
+      background: var(--panel);
       border: 1px solid var(--line);
       border-radius: 14px;
       padding: 10px 12px;
@@ -80,7 +81,7 @@
       font-size: 0.95rem;
       margin-top: 2px;
     }
-    .pill.ready { border-color: rgba(110, 231, 168, 0.45); }
+    .pill.ready { border-color: rgba(0, 138, 86, 0.42); }
     .pill.ready strong { color: var(--g2); }
 
     .status {
@@ -93,7 +94,7 @@
       font-size: 0.68rem;
       letter-spacing: 0.1em;
       text-transform: uppercase;
-      background: rgba(20, 22, 25, 0.92);
+      background: var(--panel);
       border: 1px solid var(--line);
       border-radius: 999px;
       padding: 8px 14px;
@@ -103,7 +104,7 @@
       text-overflow: ellipsis;
     }
     .status.ok { color: var(--g2); }
-    .status.error { color: #ff8a8a; border-color: rgba(255, 77, 77, 0.35); }
+    .status.error { color: var(--g5); border-color: rgba(193, 18, 47, 0.35); }
 
     .stack {
       position: absolute;
@@ -120,7 +121,7 @@
       height: 52px;
       border-radius: 16px;
       border: 1px solid var(--line);
-      background: rgba(20, 22, 25, 0.92);
+      background: var(--panel);
       backdrop-filter: blur(12px);
       color: var(--text);
       display: grid;
@@ -128,7 +129,7 @@
       cursor: pointer;
       font-size: 1.1rem;
     }
-    .btn.amber { background: var(--amber); border-color: transparent; color: #111; }
+    .btn.primary { background: var(--accent); border-color: transparent; color: #fff; }
     .btn:active { transform: scale(0.96); }
 
     .panel {
@@ -137,7 +138,7 @@
       right: 12px;
       bottom: max(12px, calc(env(safe-area-inset-bottom) + 12px));
       z-index: 20;
-      background: rgba(20, 22, 25, 0.96);
+      background: var(--panel);
       border: 1px solid var(--line);
       border-radius: 18px;
       padding: 14px;
@@ -151,7 +152,7 @@
       font-size: 0.72rem;
       letter-spacing: 0.12em;
       text-transform: uppercase;
-      color: var(--amber);
+      color: var(--accent);
       margin-bottom: 8px;
     }
     .panel p {
@@ -178,7 +179,7 @@
       left: 12px;
       top: calc(max(12px, env(safe-area-inset-top)) + 118px);
       z-index: 20;
-      background: rgba(20, 22, 25, 0.92);
+      background: var(--panel);
       border: 1px solid var(--line);
       border-radius: 12px;
       padding: 10px 12px;
@@ -201,7 +202,7 @@
       position: absolute;
       z-index: 30;
       width: min(300px, calc(100vw - 24px));
-      background: rgba(20, 22, 25, 0.96);
+      background: var(--panel);
       border: 1px solid var(--line);
       border-radius: 16px;
       padding: 14px;
@@ -235,7 +236,7 @@
     }
     .maplibregl-ctrl-bottom-right .maplibregl-ctrl { margin: 0 !important; }
     .maplibregl-ctrl-group {
-      background: rgba(20, 22, 25, 0.92) !important;
+      background: var(--panel) !important;
       border: 1px solid var(--line) !important;
       border-radius: 16px !important;
       overflow: hidden;
@@ -246,12 +247,8 @@
       height: 52px !important;
       background-color: transparent !important;
     }
-    .maplibregl-ctrl button.maplibregl-ctrl-zoom-in .maplibregl-ctrl-icon,
-    .maplibregl-ctrl button.maplibregl-ctrl-zoom-out .maplibregl-ctrl-icon {
-      filter: invert(1) brightness(1.2);
-    }
     .maplibregl-ctrl-attrib {
-      background: rgba(20, 22, 25, 0.92) !important;
+      background: var(--panel) !important;
       color: var(--muted) !important;
       border: 1px solid var(--line) !important;
       border-radius: 12px !important;
@@ -289,7 +286,7 @@
 
   <div class="stack">
     <button class="btn" id="panelBtn" title="Data info" aria-label="Data info">ℹ</button>
-    <button class="btn amber" id="recenterBtn" title="Recenter" aria-label="Recenter">◎</button>
+    <button class="btn primary" id="recenterBtn" title="Recenter" aria-label="Recenter">◎</button>
   </div>
 
   <div class="panel hidden" id="panel">
@@ -310,16 +307,16 @@
     const FALLBACK = { lng: -63.2985, lat: 44.7427, name: "Porter's Lake, NS" };
     const BUNDLED_TRAILS_URL = "data/ns-trails.geojson.gz";
     const BUNDLED_META_URL = "data/ns-trails.meta.json";
-    const CARTO_BASE = "https://a.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}@2x.png";
-    const CARTO_LABELS = "https://a.basemaps.cartocdn.com/dark_only_labels/{z}/{x}/{y}@2x.png";
+    const CARTO_BASE = "https://a.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}@2x.png";
+    const CARTO_LABELS = "https://a.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}@2x.png";
 
     const GRADE_COLOR = {
-      g2: "#6ee7a8",
-      g3: "#ffd24a",
-      g4: "#ff8a1e",
-      g5: "#ff4d4d",
-      single: "#b98bff",
-      unknown: "#6b7078"
+      g2: "#008a56",
+      g3: "#b96f00",
+      g4: "#d84400",
+      g5: "#c1122f",
+      single: "#6d36c9",
+      unknown: "#5d6874"
     };
 
     const db = new Dexie("dirt_bundled_v1");
@@ -451,8 +448,8 @@
         source: "trails",
         paint: {
           "line-color": "#000000",
-          "line-width": ["interpolate", ["linear"], ["zoom"], 10, 4, 14, 7],
-          "line-opacity": 0.7
+          "line-width": ["interpolate", ["linear"], ["zoom"], 10, 4.5, 14, 8],
+          "line-opacity": 0.78
         }
       });
       map.addLayer({
@@ -463,14 +460,14 @@
         paint: {
           "line-color": [
             "match", ["get", "grade"],
-            "g2", "#6ee7a8",
-            "g3", "#ffd24a",
-            "g4", "#ff8a1e",
-            "g5", "#ff4d4d",
-            "#6b7078"
+            "g2", "#008a56",
+            "g3", "#b96f00",
+            "g4", "#d84400",
+            "g5", "#c1122f",
+            "#5d6874"
           ],
-          "line-width": ["interpolate", ["linear"], ["zoom"], 10, 2, 14, 3.5],
-          "line-opacity": 0.95
+          "line-width": ["interpolate", ["linear"], ["zoom"], 10, 2.6, 14, 4.2],
+          "line-opacity": 0.98
         }
       });
       map.addLayer({
@@ -479,8 +476,8 @@
         source: "trails",
         filter: ["==", ["get", "grade"], "single"],
         paint: {
-          "line-color": "#b98bff",
-          "line-width": ["interpolate", ["linear"], ["zoom"], 10, 2, 14, 3],
+          "line-color": "#6d36c9",
+          "line-width": ["interpolate", ["linear"], ["zoom"], 10, 2.8, 14, 4],
           "line-dasharray": [1.2, 1.6],
           "line-opacity": 0.95
         }
@@ -502,8 +499,8 @@
         source: "rider",
         paint: {
           "circle-radius": 18,
-          "circle-color": "#ff8a1e",
-          "circle-opacity": 0.18,
+          "circle-color": "#0a66c2",
+          "circle-opacity": 0.2,
           "circle-blur": 0.6
         }
       });
@@ -513,9 +510,9 @@
         source: "rider",
         paint: {
           "circle-radius": 7,
-          "circle-color": "#ff8a1e",
+          "circle-color": "#0a66c2",
           "circle-stroke-width": 2,
-          "circle-stroke-color": "#0b0c0e"
+          "circle-stroke-color": "#ffffff"
         }
       });
     }

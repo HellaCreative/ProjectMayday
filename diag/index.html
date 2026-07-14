@@ -6,19 +6,19 @@
   <title>DIRT. Data diag</title>
   <style>
     :root {
-      --bg: #0b0c0e;
-      --panel: #141619;
-      --panel-2: #1b1e22;
-      --line: rgba(255, 255, 255, 0.08);
-      --text: #f2f0eb;
-      --muted: #8b8f96;
-      --amber: #ff8a1e;
-      --g2: #6ee7a8;
-      --g3: #ffd24a;
-      --g4: #ff8a1e;
-      --g5: #ff4d4d;
-      --single: #b98bff;
-      --unknown: #6b7078;
+      --bg: #f7f9fb;
+      --panel: #ffffff;
+      --panel-2: #eef3f7;
+      --line: rgba(24, 39, 55, 0.18);
+      --text: #162433;
+      --muted: #536170;
+      --accent: #0a66c2;
+      --g2: #008a56;
+      --g3: #b96f00;
+      --g4: #d84400;
+      --g5: #c1122f;
+      --single: #6d36c9;
+      --unknown: #5d6874;
       --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
       --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
     }
@@ -27,9 +27,7 @@
 
     body {
       min-height: 100dvh;
-      background:
-        radial-gradient(ellipse 70% 40% at 50% -5%, rgba(255, 138, 30, 0.1), transparent 50%),
-        var(--bg);
+      background: var(--bg);
       color: var(--text);
       font-family: var(--sans);
       padding: 24px 18px 48px;
@@ -46,7 +44,7 @@
       margin-bottom: 18px;
     }
 
-    a.back:hover { color: var(--amber); }
+    a.back:hover { color: var(--accent); }
 
     .brand {
       font-family: var(--mono);
@@ -56,7 +54,7 @@
       margin-bottom: 6px;
     }
 
-    .brand span { color: var(--amber); }
+    .brand span { color: var(--accent); }
 
     h1 {
       font-size: 1.05rem;
@@ -111,8 +109,8 @@
     }
 
     button.primary {
-      background: var(--amber);
-      color: #111;
+      background: var(--accent);
+      color: #fff;
       border-color: transparent;
       font-weight: 700;
     }
@@ -124,7 +122,7 @@
       font-family: var(--mono);
       font-size: 0.75rem;
       color: var(--muted);
-      background: #0e1012;
+      background: var(--panel-2);
       border-radius: 10px;
       padding: 10px 12px;
       word-break: break-all;
@@ -139,7 +137,7 @@
     .verdict.rich { color: var(--g2); }
     .verdict.sparse { color: var(--g3); }
     .verdict.empty { color: var(--g5); }
-    .verdict.fail { color: #ff8a8a; }
+    .verdict.fail { color: var(--g5); }
 
     .meta {
       font-family: var(--mono);
@@ -157,7 +155,7 @@
     }
 
     .cell {
-      background: #0e1012;
+      background: var(--panel-2);
       border-radius: 12px;
       padding: 12px;
     }
@@ -188,12 +186,12 @@
       margin-top: 12px;
       max-height: 240px;
       overflow: auto;
-      background: #0e1012;
+      background: var(--panel-2);
       border-radius: 12px;
       padding: 12px;
       font-family: var(--mono);
       font-size: 0.68rem;
-      color: #aeb3bb;
+      color: var(--text);
       white-space: pre-wrap;
       word-break: break-word;
     }
@@ -211,7 +209,7 @@
     <div class="row" style="margin-top:14px">
       <button class="primary" id="runBtn">Run Porter's Lake</button>
       <button id="nearBtn">Use my GPS bbox</button>
-      <a href="../app/index.html" style="align-self:center;color:var(--amber);font-family:var(--mono);font-size:0.72rem;letter-spacing:0.08em;text-transform:uppercase;text-decoration:none;padding:0 8px">Open map →</a>
+      <a href="../app/index.html" style="align-self:center;color:var(--accent);font-family:var(--mono);font-size:0.72rem;letter-spacing:0.08em;text-transform:uppercase;text-decoration:none;padding:0 8px">Open map →</a>
     </div>
   </section>
 
@@ -233,12 +231,12 @@
     ];
 
     const GRADES = [
-      { id: "g2", label: "G2", color: "#6ee7a8" },
-      { id: "g3", label: "G3", color: "#ffd24a" },
-      { id: "g4", label: "G4", color: "#ff8a1e" },
-      { id: "g5", label: "G5", color: "#ff4d4d" },
-      { id: "single", label: "Single", color: "#b98bff" },
-      { id: "unknown", label: "Ungraded", color: "#6b7078" }
+      { id: "g2", label: "G2", color: "#008a56" },
+      { id: "g3", label: "G3", color: "#b96f00" },
+      { id: "g4", label: "G4", color: "#d84400" },
+      { id: "g5", label: "G5", color: "#c1122f" },
+      { id: "single", label: "Single", color: "#6d36c9" },
+      { id: "unknown", label: "Ungraded", color: "#5d6874" }
     ];
 
     const runBtn = document.getElementById("runBtn");

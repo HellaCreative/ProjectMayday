@@ -8,14 +8,14 @@
   <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
   <style>
     :root {
-      --bg: #0b0c0e;
-      --panel: #141619;
-      --line: rgba(255, 255, 255, 0.08);
-      --text: #f2f0eb;
-      --muted: #8b8f96;
-      --amber: #ff8a1e;
-      --success: #6ee7a8;
-      --error: #ff4d4d;
+      --bg: #f7f9fb;
+      --panel: #ffffff;
+      --line: rgba(24, 39, 55, 0.18);
+      --text: #162433;
+      --muted: #536170;
+      --accent: #0a66c2;
+      --success: #008a56;
+      --error: #c1122f;
       --mono: ui-monospace, "SF Mono", monospace;
       --sans: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
     }
@@ -31,7 +31,7 @@
       left: 12px;
       bottom: 12px;
       width: 380px;
-      background: rgba(11, 12, 14, 0.95);
+      background: rgba(255, 255, 255, 0.95);
       backdrop-filter: blur(20px);
       border: 1px solid var(--line);
       border-radius: 16px;
@@ -54,7 +54,7 @@
       margin-bottom: 4px;
     }
 
-    .brand span { color: var(--amber); }
+    .brand span { color: var(--accent); }
 
     .subtitle {
       font-size: 0.82rem;
@@ -100,7 +100,7 @@
     }
 
     .source-status.idle { background: rgba(107, 112, 120, 0.2); color: var(--muted); }
-    .source-status.loading { background: rgba(255, 138, 30, 0.2); color: var(--amber); }
+    .source-status.loading { background: rgba(10, 102, 194, 0.12); color: var(--accent); }
     .source-status.success { background: rgba(110, 231, 168, 0.2); color: var(--success); }
     .source-status.error { background: rgba(255, 77, 77, 0.2); color: var(--error); }
 
@@ -140,9 +140,9 @@
     }
 
     .btn:hover:not(:disabled) {
-      background: rgba(255, 138, 30, 0.1);
-      border-color: var(--amber);
-      color: var(--amber);
+      background: rgba(10, 102, 194, 0.1);
+      border-color: var(--accent);
+      color: var(--accent);
     }
 
     .btn:disabled {
@@ -171,7 +171,7 @@
 
     .legend {
       padding: 16px;
-      background: rgba(20, 22, 25, 0.8);
+      background: #eef3f7;
       border-top: 1px solid var(--line);
     }
 
@@ -245,7 +245,7 @@
         <div class="source-desc">
           Trail and track data from Overpass API - loads trails in current map view
         </div>
-        <button class="btn" id="osm-btn" style="background: rgba(255, 138, 30, 0.2); border-color: var(--amber); color: var(--amber);">Load OSM Data (Start Here)</button>
+        <button class="btn" id="osm-btn" style="background: rgba(10, 102, 194, 0.12); border-color: var(--accent); color: var(--accent);">Load OSM Data (Start Here)</button>
         <div class="toggle-group" id="osm-toggle-group" style="display: none;">
           <button class="toggle-btn" id="osm-show">Show</button>
           <button class="toggle-btn" id="osm-hide">Hide</button>
@@ -257,15 +257,15 @@
     <div class="legend">
       <div class="legend-title">Data Sources</div>
       <div class="legend-item">
-        <div class="legend-color" style="background: #ff8a1e;"></div>
+        <div class="legend-color" style="background: #0a66c2;"></div>
         <div>OpenStreetMap (Overpass)</div>
       </div>
       <div class="legend-item">
-        <div class="legend-color" style="background: #6ee7a8;"></div>
+        <div class="legend-color" style="background: #008a56;"></div>
         <div>Nova Scotia Open Data</div>
       </div>
       <div class="legend-item">
-        <div class="legend-color" style="background: #b98bff;"></div>
+        <div class="legend-color" style="background: #6d36c9;"></div>
         <div>BC Forest Service Roads</div>
       </div>
     </div>
@@ -281,16 +281,16 @@
         version: 8,
         glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
         sources: {
-          cartoDark: {
+          cartoBase: {
             type: 'raster',
-            tiles: ['https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png'],
+            tiles: ['https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png'],
             tileSize: 256,
             attribution: '©OpenStreetMap, ©CartoDB'
           }
         },
         layers: [
-          { id: 'background', type: 'background', paint: { 'background-color': '#0b0c0e' }},
-          { id: 'carto', type: 'raster', source: 'cartoDark' }
+          { id: 'background', type: 'background', paint: { 'background-color': '#f7f9fb' }},
+          { id: 'carto', type: 'raster', source: 'cartoBase' }
         ]
       }
     });

@@ -1,6 +1,6 @@
 # DIRT. Routing Architecture
 
-> **Product goal:** Plot a route from A to B where the rider defines the road-surface mix — e.g. maximize dirt, minimize pavement, avoid singletrack.
+> **Product goal:** Plot a route from A to B where the rider defines the road-surface mix — e.g. maximize tracks and trails, minimize pavement, avoid singletrack.
 
 This is a **routing engine**, not a trail viewer. The current map app is a useful visual foundation. The architecture below is what turns it into the product.
 
@@ -8,7 +8,7 @@ This is a **routing engine**, not a trail viewer. The current map app is a usefu
 
 ## One-sentence verdict
 
-Keep the visual language and the tag→surface classification. Replace live Overpass viewport fetches with a **pre-built routable graph** and a **cost-profile routing engine** (Valhalla). The map is the display surface; the product is the routing brain behind it.
+Keep the daylight-readable navigation map and the tag→surface classification. Replace live Overpass viewport fetches with a **pre-built routable graph** and a **cost-profile routing engine** (Valhalla). The map is the display surface; the product is the routing brain behind it.
 
 ---
 
@@ -16,7 +16,8 @@ Keep the visual language and the tag→surface classification. Replace live Over
 
 | Asset | Why it survives |
 |-------|-----------------|
-| Dark rally-dash + amber aesthetic | Real product language |
+| Clear daylight basemap | Riders need street, place, gas, camping, and service context at a glance in outdoor conditions |
+| High-contrast road + track overlays | Roads and tracks must both stay readable while plotting A→B routes |
 | Surface classification (tracktype → Service / ATV / Single) | Becomes edge cost inputs |
 | Legal-access parsing | Route eligibility filter |
 | Basemap + overlay hierarchy (Paved / Service / ATV / Single) | Route visualization language |
@@ -95,6 +96,8 @@ These map 1:1 to the legend the rider sees:
 
 The slider ("minimize pavement / maximize trail") reweights these costs and re-runs the same A→B query.
 
+The rider should be able to request an ideal target such as "100% tracks or trails." The engine should try to satisfy that target, report the achieved percentage, and explain the unavoidable paved connectors when a fully off-road route is not possible.
+
 ---
 
 ## Build order
@@ -114,6 +117,7 @@ The slider ("minimize pavement / maximize trail") reweights these costs and re-r
 - Tap origin, tap destination (or long-press)
 - Draw route polyline
 - Show: distance, estimated time, **% Paved / Service / ATV / Single**
+- Show: requested dirt/trail target vs. achieved dirt/trail percentage
 - That surface breakdown is the product moment
 
 ### 4. Mix slider
@@ -142,6 +146,7 @@ While the routing brain is built, the map viewer can stay as:
 1. **Legend** — Paved / Service / ATV / Single (toggle visibility)
 2. **Source toggles** — OSM / NS / Canada (see where data comes from)
 3. **Classification QA** — confirm Lake Charlotte etc. look right before graph build
+4. **Navigation basemap QA** — confirm roads, place names, gas, camping, and services remain readable in daylight
 
 This validates the cost taxonomy riders will use in routing.
 
