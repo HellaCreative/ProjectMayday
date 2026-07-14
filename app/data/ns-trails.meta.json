@@ -1,0 +1,15 @@
+{
+  "generatedAt": "2026-07-14T12:32:44.843Z",
+  "source": "https://download.geofabrik.de/north-america/canada/nova-scotia-latest.osm.pbf",
+  "featureCount": 31251,
+  "bytes": 27639861,
+  "gzBytes": 5306173,
+  "grades": {
+    "g2": 641,
+    "g3": 449,
+    "unknown": 27370,
+    "single": 2062,
+    "g5": 238,
+    "g4": 491
+  }
+}
