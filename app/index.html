@@ -339,6 +339,9 @@
     <button class="source-toggle on" data-source="canada" type="button">
       <span class="dot" style="--dot:#111111"></span>Canada NRN
     </button>
+    <button class="source-toggle on" data-source="nbforest" type="button">
+      <span class="dot" style="--dot:#333333"></span>NB Forest
+    </button>
   </div>
 
   <div class="status" id="status">Locating rider…</div>
@@ -384,7 +387,7 @@
     ];
 
     const trailTypeOn = { paved: true, service: true, atv: true, single: true };
-    const sourceOn = { osm: true, ns: true, canada: true };
+    const sourceOn = { osm: true, ns: true, canada: true, nbforest: true };
     let rider = { ...FALLBACK };
     let features = [];
     let settling = false;
@@ -720,6 +723,7 @@ out geom tags;`;
         let src = "osm";
         if (props.source === "ns-open-data") src = "ns";
         else if (props.source === "canada-open-data") src = "canada";
+        else if (props.source === "nb-forest") src = "nbforest";
         return trailTypeOn[type] && sourceOn[src];
       });
       if (map.getSource("trails")) {
@@ -754,16 +758,17 @@ out geom tags;`;
         // Fetch off-road layers in parallel (basemap already shows paved roads)
         setStatus("Scanning trails…");
         
-        const [osmResult, nsResult, caResult] = await Promise.allSettled([
+        const [osmResult, nsResult, caResult, nbResult] = await Promise.allSettled([
           fetchOverpassLayer(bbox, queryOffRoadOnly),
           fetchNSTrails(bbox),
-          fetchCanadaRoads(bbox)
+          fetchCanadaRoads(bbox),
+          fetchNbForest(bbox)
         ]);
         
         if (token !== fetchToken) return;
         
         let allFeatures = [];
-        let osmN = 0, nsN = 0, caN = 0;
+        let osmN = 0, nsN = 0, caN = 0, nbN = 0;
         
         if (osmResult.status === 'fulfilled') {
           const osmFeatures = toFeatures(osmResult.value);
@@ -797,13 +802,21 @@ out geom tags;`;
         } else {
           console.warn('Canada failed:', caResult.reason);
         }
+
+        if (nbResult.status === 'fulfilled' && nbResult.value.features) {
+          const nbFeatures = nbResult.value.features;
+          nbN = nbFeatures.length;
+          allFeatures = [...allFeatures, ...nbFeatures];
+        } else {
+          console.warn('NB Forest failed:', nbResult.reason);
+        }
         
         features = allFeatures;
         setCache(bbox, features);
         applyFilters();
         setStatus(
           features.length
-            ? `${features.length} · OSM ${osmN} · NS ${nsN} · CA ${caN}`
+            ? `${features.length} · OSM ${osmN} · NS ${nsN} · NRN ${caN} · NB ${nbN}`
             : "No tracks in view",
           features.length ? "ok" : ""
         );
@@ -825,6 +838,14 @@ out geom tags;`;
     async function fetchCanadaRoads(bbox) {
       const bboxStr = bbox.join(',');
       const url = `/api/canada-roads?bbox=${bboxStr}&limit=3000`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      return await res.json();
+    }
+
+    async function fetchNbForest(bbox) {
+      const bboxStr = bbox.join(',');
+      const url = `/api/nb-forest?bbox=${bboxStr}&limit=3000`;
       const res = await fetch(url);
       if (!res.ok) throw new Error("HTTP " + res.status);
       return await res.json();
@@ -874,6 +895,7 @@ out geom tags;`;
         <div class="v">${
           p.source === "ns-open-data" ? "NS Open Data"
           : p.source === "canada-open-data" ? "Canada NRN (Resource / Service)"
+          : p.source === "nb-forest" ? "NB Forest Roads (unmaintained)"
           : "OpenStreetMap"
         }</div>
         <div class="k">Motor access</div>
