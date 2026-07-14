@@ -21,6 +21,7 @@
       --gravel: #5d6874;
       --atv: #0a66c2;
       --single: #6d36c9;
+      --resource: #d22730;
       --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
       --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
     }
@@ -346,6 +347,10 @@
         <span class="legend-label"><i class="dash"></i>Single track</span>
         <span class="switch"><input type="checkbox" data-layer-toggle="single" checked aria-label="Toggle single track"><span></span></span>
       </label>
+      <label class="legend-row">
+        <span class="legend-label"><i style="background:var(--resource)"></i>Resource road</span>
+        <span class="switch"><input type="checkbox" data-layer-toggle="resource" checked aria-label="Toggle unclassified resource roads"><span></span></span>
+      </label>
     </div>
     <div class="legend-group">
       <span class="legend-title">Data sources</span>
@@ -356,6 +361,10 @@
       <label class="legend-row">
         <span class="legend-label"><i style="background:var(--text)"></i>NRN gravel</span>
         <span class="switch"><input type="checkbox" data-source-toggle="nrn" aria-label="Toggle National Road Network gravel source"><span></span></span>
+      </label>
+      <label class="legend-row">
+        <span class="legend-label"><i style="background:var(--text)"></i>NS government</span>
+        <span class="switch"><input type="checkbox" data-source-toggle="nsGov" aria-label="Toggle Nova Scotia government source"><span></span></span>
       </label>
     </div>
   </div>
@@ -368,8 +377,8 @@
   <div class="panel hidden" id="panel">
     <h2>Bundled data sources</h2>
     <p>
-      OSM Overpass-style lines and NRN gravel roads are compiled into this
-      build. No live Overpass call. No scan-on-pan.
+      OSM Overpass-style lines, NRN gravel roads, and Nova Scotia government
+      NSTDB roads are compiled into this build. No live Overpass call.
     </p>
     <div class="meta" id="dataMeta">Loading metadata…</div>
   </div>
@@ -385,19 +394,23 @@
     const BUNDLED_META_URL = "/app/data/osm-overpass-trails.meta.json";
     const BUNDLED_NRN_URL = "/app/data/nrn-road-backbone.geojson.gz";
     const BUNDLED_NRN_META_URL = "/app/data/nrn-road-backbone.meta.json";
+    const BUNDLED_NS_GOV_URL = "/app/data/ns-gov-roads.geojson.gz";
+    const BUNDLED_NS_GOV_META_URL = "/app/data/ns-gov-roads.meta.json";
     const SHORTBREAD_STYLE_URL = "/app/data/shortbread-style.json";
 
     const TRACK_TYPES = {
-      gravel: { label: "Gravel road", color: "#5d6874", layers: ["nrn-gravel", "trails-gravel"] },
+      gravel: { label: "Gravel road", color: "#5d6874", layers: ["nrn-gravel", "ns-gov-gravel", "trails-gravel"] },
       atv: { label: "ATV trail", color: "#0a66c2", layers: ["trails-atv"] },
-      single: { label: "Single track", color: "#6d36c9", layers: ["trails-single"] }
+      single: { label: "Single track", color: "#6d36c9", layers: ["trails-single"] },
+      resource: { label: "Resource road", color: "#d22730", layers: ["ns-gov-resource"] }
     };
     const TRAIL_LAYER_IDS = Object.values(TRACK_TYPES).flatMap((type) => type.layers);
     const OSM_LAYER_IDS = ["trails-gravel", "trails-atv", "trails-single"];
     const NRN_LAYER_IDS = ["nrn-gravel"];
-    const SOURCE_LAYER_MAP = { osm: OSM_LAYER_IDS, nrn: NRN_LAYER_IDS };
-    const layerEnabled = { gravel: true, atv: true, single: true };
-    const sourceEnabled = { osm: true, nrn: false };
+    const NS_GOV_LAYER_IDS = ["ns-gov-gravel", "ns-gov-resource"];
+    const SOURCE_LAYER_MAP = { osm: OSM_LAYER_IDS, nrn: NRN_LAYER_IDS, nsGov: NS_GOV_LAYER_IDS };
+    const layerEnabled = { gravel: true, atv: true, single: true, resource: true };
+    const sourceEnabled = { osm: true, nrn: false, nsGov: false };
 
     const db = new Dexie("dirt_sources_v2");
     db.version(1).stores({
@@ -407,7 +420,8 @@
     let rider = { ...FALLBACK };
     let trailCount = 0;
     let nrnLoaded = false;
-    const sourceCounts = { osm: 0, nrn: 0 };
+    let nsGovLoaded = false;
+    const sourceCounts = { osm: 0, nrn: 0, nsGov: 0 };
 
     const statusEl = document.getElementById("status");
     const modePill = document.getElementById("modePill");
@@ -524,6 +538,27 @@
       return fc;
     }
 
+    async function loadBundledNsGov() {
+      const cached = await db.bundled.get("ns-gov-roads");
+      if (cached && cached.featureCollection && cached.featureCollection.features) {
+        setStatus("Loaded " + cached.featureCollection.features.length.toLocaleString() + " NS government roads from device cache", "ok");
+        return cached.featureCollection;
+      }
+
+      setStatus("Loading NS government roads…");
+      const fc = await fetchGzipJson(BUNDLED_NS_GOV_URL);
+      try {
+        await db.bundled.put({
+          id: "ns-gov-roads",
+          featureCollection: fc,
+          cachedAt: Date.now()
+        });
+      } catch (err) {
+        console.warn("Could not cache NS government roads in IndexedDB", err);
+      }
+      return fc;
+    }
+
     async function ensureNrnLoaded() {
       if (nrnLoaded) return;
       const t0 = performance.now();
@@ -538,15 +573,31 @@
       );
     }
 
+    async function ensureNsGovLoaded() {
+      if (nsGovLoaded) return;
+      const t0 = performance.now();
+      const fc = addTrackTypes(await loadBundledNsGov());
+      map.getSource("nsGov").setData(fc);
+      sourceCounts.nsGov = fc.features.length;
+      nsGovLoaded = true;
+      setReadyTotal();
+      setStatus(
+        fc.features.length.toLocaleString() + " NS government roads ready · " + Math.round(performance.now() - t0) + " ms",
+        "ok"
+      );
+    }
+
     async function loadMeta() {
       try {
-        const [meta, nrnMeta] = await Promise.all([
+        const [meta, nrnMeta, nsGovMeta] = await Promise.all([
           fetch(BUNDLED_META_URL).then((res) => res.json()),
-          fetch(BUNDLED_NRN_META_URL).then((res) => res.json())
+          fetch(BUNDLED_NRN_META_URL).then((res) => res.json()),
+          fetch(BUNDLED_NS_GOV_META_URL).then((res) => res.json())
         ]);
         dataMeta.innerHTML =
           "OSM Overpass: " + (meta.featureCount || 0).toLocaleString() + " lines · ~" + ((meta.gzBytes || 0) / (1024 * 1024)).toFixed(1) + " MB<br>" +
           "NRN gravel: " + (nrnMeta.featureCount || 0).toLocaleString() + " lines · ~" + ((nrnMeta.gzBytes || 0) / (1024 * 1024)).toFixed(1) + " MB<br>" +
+          "NS government: " + (nsGovMeta.featureCount || 0).toLocaleString() + " lines · ~" + ((nsGovMeta.gzBytes || 0) / (1024 * 1024)).toFixed(1) + " MB<br>" +
           "NRN surface: " + (nrnMeta.surfaceConfidence?.["pavement-field"] ? "official pavement fields" : "road-class inferred") + "<br>" +
           "Built: " + (meta.generatedAt ? new Date(meta.generatedAt).toLocaleString() : "unknown");
       } catch (_) {
@@ -636,6 +687,32 @@
           "line-color": TRACK_TYPES.gravel.color,
           "line-width": 2,
           "line-opacity": 0.68
+        }
+      });
+      map.addSource("nsGov", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] }
+      });
+      map.addLayer({
+        id: "ns-gov-gravel",
+        type: "line",
+        source: "nsGov",
+        filter: ["==", ["get", "trackClass"], "gravel"],
+        paint: {
+          "line-color": TRACK_TYPES.gravel.color,
+          "line-width": 2,
+          "line-opacity": 0.72
+        }
+      });
+      map.addLayer({
+        id: "ns-gov-resource",
+        type: "line",
+        source: "nsGov",
+        filter: ["==", ["get", "trackClass"], "resource"],
+        paint: {
+          "line-color": TRACK_TYPES.resource.color,
+          "line-width": 2,
+          "line-opacity": 0.72
         }
       });
       map.addSource("trails", {
@@ -733,16 +810,24 @@
       const trackType = TRACK_TYPES[p.trackClass] || TRACK_TYPES.gravel;
       const sourceLabel = p.source === "NRN"
         ? "National Road Network"
+        : p.source === "NS Government"
+          ? "Nova Scotia government NSTDB"
         : "OSM Overpass track/path overlay";
       const typeLabel = p.highway || p.roadClass || "road";
       const detailLabel = p.source === "NRN"
         ? (p.roadClass || "unknown") + (p.surfaceConfidence ? " · " + p.surfaceConfidence : "")
+        : p.source === "NS Government"
+          ? (p.featCode || "NSTDB") + (p.surfaceConfidence ? " · " + p.surfaceConfidence : "")
         : (p.highway || "unknown") + (p.tracktype ? " · " + p.tracktype : "");
       const surfaceLabel = p.source === "NRN"
         ? (p.pavementStatus || "unknown") + (p.unpavedSurface && p.unpavedSurface !== "Unknown" ? " · " + p.unpavedSurface : "")
+        : p.source === "NS Government"
+          ? (p.surfaceConfidence === "nstdb-unpaved" ? "unpaved" : "not classified")
         : (p.surface || "unspecified");
       const accessLabel = p.source === "NRN"
         ? (p.jurisdiction || "unknown") + (p.trafficDirection ? " · " + p.trafficDirection : "")
+        : p.source === "NS Government"
+          ? (p.accessStatus || "unknown") + (p.accessDetail ? " · " + p.accessDetail : "")
         : (p.accessStatus || "unknown") + (p.accessDetail ? " · " + p.accessDetail : "");
       popupBody.innerHTML =
         '<div class="k">Type</div><div class="v">' + typeLabel + (p.name ? " · " + p.name : "") + "</div>" +
@@ -834,6 +919,16 @@
             setStatus("Failed to load NRN gravel roads · " + (err.message || "error"), "error");
             input.checked = false;
             sourceEnabled.nrn = false;
+          }
+        }
+        if (input.dataset.sourceToggle === "nsGov" && input.checked) {
+          try {
+            await ensureNsGovLoaded();
+          } catch (err) {
+            console.error(err);
+            setStatus("Failed to load NS government roads · " + (err.message || "error"), "error");
+            input.checked = false;
+            sourceEnabled.nsGov = false;
           }
         }
         applyLayerVisibility();

@@ -1,0 +1,60 @@
+{
+  "generatedAt": "2026-07-14T15:53:36.206Z",
+  "sourceName": "Nova Scotia Topographic DataBase Roads, Trails and Rails - Road Line Layer",
+  "source": "https://data.novascotia.ca/resource/a6gf-w68e.json",
+  "catalogue": "https://data.novascotia.ca/Roads-Driving-and-Transport/Nova-Scotia-Topographic-DataBase-Roads-Trails-and-/a6gf-w68e",
+  "queryModel": "NSTDB Road Line Layer filtered to Unpaved and TRACK feature descriptions; paved/non-vehicular/driveway/ferry/rail excluded",
+  "license": "Open Government Licence - Nova Scotia",
+  "region": "Nova Scotia",
+  "featureCount": 204699,
+  "fetched": 204758,
+  "skipped": 59,
+  "bytes": 253204858,
+  "gzBytes": 41067376,
+  "classes": {
+    "gravel": 58015,
+    "resource": 146684
+  },
+  "surfaceConfidence": {
+    "nstdb-unpaved": 58015,
+    "track-ambiguous": 146462,
+    "abandoned-unpaved": 222
+  },
+  "sourceDescriptions": {
+    "ROAD - Local - 1 Lane - Unpaved": 13588,
+    "ROAD - Local - 2 Lanes - Unpaved": 7713,
+    "TRACK": 144610,
+    "ROAD - Resource Access - Dry Weather - 1 Lane - Unpaved": 24936,
+    "BRIDGE - Resource Access - Dry Weather - 1 Lane - Unpaved": 636,
+    "ROAD - Local - Dry Weather - 1 Lane - Unpaved": 7854,
+    "BRIDGE - Local - 1 Lane - Unpaved": 676,
+    "ROAD - Resource Access - 1 Lane - Unpaved": 1833,
+    "ROAD - Abandoned - Local - 1 Lane - Unpaved": 215,
+    "BRIDGE - Track": 774,
+    "BRIDGE - Resource Access - 1 Lane - Unpaved": 20,
+    "BRIDGE - Local - 2 Lanes - Unpaved": 321,
+    "ROAD - Abandoned - TRACK": 495,
+    "ROAD - Resource Access - 2 Lanes - Unpaved": 191,
+    "BRIDGE - Local - Dry Weather - 1 Lane - Unpaved": 197,
+    "ROAD - Median Crossover - 1 Lane - Unpaved": 50,
+    "TUNNEL - Local - 1 Lane - Unpaved": 29,
+    "ROAD - Local - Driveway - 1 Lane - Unpaved": 3,
+    "ROAD - Resource Access - Dry Weather - 2 Lanes - Unpaved": 6,
+    "TRACK - Indefinite/Approximate": 562,
+    "TUNNEL - Track": 21,
+    "TUNNEL - Resource Access - Dry Weather - Unpaved": 13,
+    "ROAD - Abandoned - 1 Lane - Unpaved": 1,
+    "ROAD - Abandoned - Dry Weather - 1 Lane - Unpaved": 2,
+    "BRIDGE - Abandoned - 1 Lane - Unpaved": 4,
+    "SERVICE LANE - 1 Lane - Unpaved": 2,
+    "RAMP - 2 Lanes - Unpaved": 1,
+    "DAM - Local - 1 Lane - Unpaved": 2,
+    "ROAD - Local Collector - 2 Lanes - Unpaved": 1,
+    "BRIDGE - Resource Access - 2 Lanes - Unpaved": 1,
+    "RAMP - 1 Lane - Unpaved": 1
+  },
+  "limitations": [
+    "TRACK features do not explicitly classify motorized access or surface, so they render red as resource roads.",
+    "Explicit no-vehicular-traffic trails are excluded from this bundle."
+  ]
+}
