@@ -631,6 +631,8 @@
       position: absolute;
       right: 12px;
       bottom: max(12px, calc(env(safe-area-inset-bottom) + 12px));
+      left: auto;
+      top: auto;
       z-index: 24;
       width: min(42vw, 168px);
       height: min(42vw, 168px);
@@ -639,11 +641,21 @@
       overflow: hidden;
       box-shadow: 0 12px 28px rgba(22, 36, 51, 0.28);
       background: var(--panel);
-      cursor: pointer;
+      cursor: grab;
+      touch-action: none;
+      user-select: none;
+      -webkit-user-select: none;
       -webkit-tap-highlight-color: transparent;
     }
     .pip.visible { display: block; }
-    .pip:active { transform: scale(0.98); }
+    .pip.dragging {
+      cursor: grabbing;
+      box-shadow: 0 16px 36px rgba(22, 36, 51, 0.38);
+    }
+    .pip.placed {
+      right: auto;
+      bottom: auto;
+    }
     .pip #pipMap {
       width: 100%;
       height: 100%;
@@ -915,10 +927,10 @@
     <span aria-hidden="true">◎</span> Recenter
   </button>
 
-  <div class="pip" id="pip" aria-hidden="true" role="button" tabindex="0" title="Tap to switch main map and overview" aria-label="Switch between detail and overview map">
+  <div class="pip" id="pip" aria-hidden="true" role="button" tabindex="0" title="Drag to move · tap to switch views" aria-label="Picture in picture map. Drag to move, tap to switch views">
     <div class="pip-label">
       <span id="pipModeLabel">Overview</span>
-      <span class="pip-hint">Tap to switch</span>
+      <span class="pip-hint">Drag / tap</span>
     </div>
     <div id="pipMap"></div>
   </div>
@@ -1028,6 +1040,7 @@
     let overviewReady = false;
     // false = main detail / pip overview; true = main overview / pip detail
     let pipSwapped = false;
+    let pipDrag = null;
 
     const statusEl = document.getElementById("status");
     const modePill = document.getElementById("modePill");
@@ -2621,6 +2634,35 @@
       if (pipSwapped) syncPipDetailCamera();
     }
 
+    function clampPipPosition(left, top) {
+      const pad = 8;
+      const safeTop = (window.visualViewport?.offsetTop || 0) + pad;
+      const safeLeft = pad;
+      const maxLeft = window.innerWidth - pipEl.offsetWidth - pad;
+      const maxTop = window.innerHeight - pipEl.offsetHeight - pad;
+      return {
+        left: Math.max(safeLeft, Math.min(left, maxLeft)),
+        top: Math.max(safeTop, Math.min(top, Math.max(safeTop, maxTop)))
+      };
+    }
+
+    function placePipAt(left, top) {
+      const pos = clampPipPosition(left, top);
+      pipEl.classList.add("placed");
+      pipEl.style.left = pos.left + "px";
+      pipEl.style.top = pos.top + "px";
+      pipEl.style.right = "auto";
+      pipEl.style.bottom = "auto";
+    }
+
+    function resetPipPosition() {
+      pipEl.classList.remove("placed", "dragging");
+      pipEl.style.left = "";
+      pipEl.style.top = "";
+      pipEl.style.right = "";
+      pipEl.style.bottom = "";
+    }
+
     function setPipVisible(visible) {
       pipEl.classList.toggle("visible", visible);
       pipEl.setAttribute("aria-hidden", visible ? "false" : "true");
@@ -2635,6 +2677,7 @@
         }, 80);
       } else {
         pipSwapped = false;
+        resetPipPosition();
         updatePipChrome();
       }
     }
@@ -3019,15 +3062,52 @@
     followChip.addEventListener("click", activateFollowFromControl);
     routeNavBtn.addEventListener("click", toggleNavigation);
     navStopBtn.addEventListener("click", stopNavigation);
-    pipEl.addEventListener("click", (event) => {
+    pipEl.addEventListener("pointerdown", (event) => {
+      if (event.button != null && event.button !== 0) return;
+      const rect = pipEl.getBoundingClientRect();
+      pipDrag = {
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
+        originLeft: rect.left,
+        originTop: rect.top,
+        moved: false
+      };
+      pipEl.setPointerCapture(event.pointerId);
       event.preventDefault();
-      togglePipSwap();
     });
+    pipEl.addEventListener("pointermove", (event) => {
+      if (!pipDrag || event.pointerId !== pipDrag.pointerId) return;
+      const dx = event.clientX - pipDrag.startX;
+      const dy = event.clientY - pipDrag.startY;
+      if (!pipDrag.moved && (Math.abs(dx) > 6 || Math.abs(dy) > 6)) {
+        pipDrag.moved = true;
+        pipEl.classList.add("dragging");
+      }
+      if (!pipDrag.moved) return;
+      placePipAt(pipDrag.originLeft + dx, pipDrag.originTop + dy);
+    });
+    function endPipPointer(event) {
+      if (!pipDrag || event.pointerId !== pipDrag.pointerId) return;
+      const wasDrag = pipDrag.moved;
+      pipEl.classList.remove("dragging");
+      try { pipEl.releasePointerCapture(event.pointerId); } catch (_) { /* already released */ }
+      pipDrag = null;
+      if (!wasDrag) togglePipSwap();
+    }
+    pipEl.addEventListener("pointerup", endPipPointer);
+    pipEl.addEventListener("pointercancel", endPipPointer);
     pipEl.addEventListener("keydown", (event) => {
       if (event.key === "Enter" || event.key === " ") {
         event.preventDefault();
         togglePipSwap();
       }
+    });
+    window.addEventListener("resize", () => {
+      if (!pipEl.classList.contains("placed") || !pipEl.classList.contains("visible")) return;
+      const left = parseFloat(pipEl.style.left) || 0;
+      const top = parseFloat(pipEl.style.top) || 0;
+      placePipAt(left, top);
     });
     document.querySelectorAll("[data-layer-toggle]").forEach((input) => {
       input.addEventListener("change", () => {
