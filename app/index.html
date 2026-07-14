@@ -380,10 +380,6 @@
       font-size: 1.2rem;
       cursor: pointer;
     }
-    .route-clear:disabled {
-      opacity: 0.38;
-      cursor: default;
-    }
     .route-actions {
       display: none;
       grid-template-columns: 1fr;
@@ -654,7 +650,7 @@
     </div>
     <div class="route-readout">
       <div class="route-status" id="routeStatus">Tap destination<strong>No route set</strong></div>
-      <button class="route-clear" id="routeClear" type="button" title="Clear route" aria-label="Clear route" disabled>×</button>
+      <button class="route-clear" id="routeClear" type="button" title="Close route planner" aria-label="Close route planner">×</button>
     </div>
     <div class="route-actions" id="routeActions">
       <button class="route-export" id="routeExport" type="button" title="Export this route as GPX for OsmAnd, Gaia GPS, and other apps" aria-label="Export route as GPX">
@@ -1981,7 +1977,6 @@
 
     function updateRouteStatus() {
       const start = activeStart();
-      routeClear.disabled = !plannedStart && !destination;
       syncRouteExportUi();
       renderRouteDebug();
       if (routeMessage) {
@@ -2230,7 +2225,9 @@
     });
 
     document.getElementById("popupClose").addEventListener("click", hidePopup);
-    routeClear.addEventListener("click", clearRoute);
+    // X only closes the planner panel. Clearing a route used to disable GPX
+    // export; keep the mapped route available until a new one replaces it.
+    routeClear.addEventListener("click", () => setRouteCardOpen(false));
     function handleRouteExportClick() {
       openExportNameSheet();
     }
