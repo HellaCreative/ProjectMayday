@@ -298,6 +298,32 @@
       background: var(--route-dark);
       color: #ffffff;
     }
+    .route-preferences {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 4px;
+      margin-top: 8px;
+      padding: 3px;
+      background: #ffffff;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+    }
+    .route-pref {
+      border: 0;
+      border-radius: 8px;
+      min-height: 30px;
+      background: transparent;
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 0.62rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      cursor: pointer;
+    }
+    .route-pref.active {
+      background: var(--accent);
+      color: #ffffff;
+    }
     .route-readout {
       display: grid;
       grid-template-columns: 1fr auto;
@@ -434,6 +460,12 @@
       <button class="route-mode active" type="button" data-route-mode="here" role="tab" aria-selected="true">From here</button>
       <button class="route-mode" type="button" data-route-mode="plan" role="tab" aria-selected="false">Plan route</button>
     </div>
+    <div class="route-preferences" role="tablist" aria-label="Route preference">
+      <button class="route-pref" type="button" data-route-pref="direct" role="tab" aria-selected="false">Direct</button>
+      <button class="route-pref active" type="button" data-route-pref="balanced" role="tab" aria-selected="true">Balanced</button>
+      <button class="route-pref" type="button" data-route-pref="dirt" role="tab" aria-selected="false">Dirt</button>
+      <button class="route-pref" type="button" data-route-pref="cleanest" role="tab" aria-selected="false">Cleanest</button>
+    </div>
     <div class="route-readout">
       <div class="route-status" id="routeStatus">Tap destination<strong>No route set</strong></div>
       <button class="route-clear" id="routeClear" type="button" title="Clear route" aria-label="Clear route" disabled>×</button>
@@ -550,6 +582,7 @@
     let trailCount = 0;
     let nsGovLoaded = false;
     let routeMode = "here";
+    let routePreference = "balanced";
     let plannedStart = null;
     let destination = null;
     let nsGovFeatureCollection = null;
@@ -980,18 +1013,52 @@
       return total;
     }
 
-    function routeWeight(trackClass, distanceKm) {
-      const multipliers = {
-        track: 0.72,
-        access: 0.78,
-        gravel: 0.86,
-        bridge: 0.9,
-        tunnel: 0.92,
-        single: 1.05,
-        unserviced: 1.55,
-        connector: 4.0
+    function routeWeight(trackClass, distanceKm, preference = routePreference, edge = null) {
+      const profiles = {
+        direct: {
+          track: 0.95,
+          access: 0.95,
+          gravel: 0.95,
+          bridge: 0.95,
+          tunnel: 0.95,
+          single: 1.18,
+          unserviced: 1.35,
+          connector: 1.75
+        },
+        balanced: {
+          track: 0.72,
+          access: 0.78,
+          gravel: 0.86,
+          bridge: 0.9,
+          tunnel: 0.92,
+          single: 1.12,
+          unserviced: 1.65,
+          connector: 4.5
+        },
+        dirt: {
+          track: 0.45,
+          access: 0.55,
+          gravel: 0.68,
+          bridge: 0.74,
+          tunnel: 0.78,
+          single: 0.9,
+          unserviced: 1.15,
+          connector: 7.5
+        },
+        cleanest: {
+          track: 0.95,
+          access: 0.72,
+          gravel: 0.78,
+          bridge: 0.82,
+          tunnel: 0.9,
+          single: 2.4,
+          unserviced: 3.2,
+          connector: 8.5
+        }
       };
-      return distanceKm * (multipliers[trackClass] || 1);
+      const multipliers = profiles[preference] || profiles.balanced;
+      const stitchPenalty = edge?.synthetic ? 0.22 : 0;
+      return distanceKm * (multipliers[trackClass] || 1) + stitchPenalty;
     }
 
     function nodeKey(coord) {
@@ -1054,12 +1121,11 @@
             b,
             coords,
             trackClass,
-            distanceKm,
-            weight: routeWeight(trackClass, distanceKm)
+            distanceKm
           };
           graph.edges.push(edge);
-          graph.adjacency[a].push({ to: b, edgeIndex, weight: edge.weight });
-          graph.adjacency[b].push({ to: a, edgeIndex, weight: edge.weight });
+          graph.adjacency[a].push({ to: b, edgeIndex });
+          graph.adjacency[b].push({ to: a, edgeIndex });
         }
         if (featureIndex > 0 && featureIndex % 2500 === 0) {
           routeMessage = "Building route graph<strong>" + featureIndex.toLocaleString() + " / " + features.length.toLocaleString() + "</strong>";
@@ -1147,11 +1213,12 @@
             coords,
             trackClass: "connector",
             distanceKm,
-            weight: routeWeight("connector", Math.max(distanceKm, radiusKm))
+            synthetic: true,
+            costDistanceKm: Math.max(distanceKm, radiusKm)
           };
           graph.edges.push(edge);
-          graph.adjacency[i].push({ to: other, edgeIndex, weight: edge.weight });
-          graph.adjacency[other].push({ to: i, edgeIndex, weight: edge.weight });
+          graph.adjacency[i].push({ to: other, edgeIndex });
+          graph.adjacency[other].push({ to: i, edgeIndex });
           graph.stitches += 1;
         }
         if (i > 0 && i % 10000 === 0) {
@@ -1237,7 +1304,9 @@
         if (!current || current.cost !== distances[current.node]) continue;
         if (current.node === endNode) break;
         for (const next of graph.adjacency[current.node]) {
-          const cost = current.cost + next.weight;
+          const edge = graph.edges[next.edgeIndex];
+          const costDistance = edge.costDistanceKm || edge.distanceKm;
+          const cost = current.cost + routeWeight(edge.trackClass, costDistance, routePreference, edge);
           if (cost < distances[next.to]) {
             distances[next.to] = cost;
             previousNode[next.to] = current.node;
@@ -1345,16 +1414,19 @@
       if (activeRoute) {
         if (activeRoute.kind === "roadConnector") {
           routeStatus.innerHTML =
-            "Paved fallback<strong>" +
+            (routePreference === "direct" ? "Direct route" : "Paved fallback") + "<strong>" +
             activeRoute.distanceKm.toFixed(activeRoute.distanceKm >= 10 ? 1 : 2) +
             " km · OSM connector</strong>";
           return;
         }
         const dirtPct = activeRoute.distanceKm ? Math.round((activeRoute.dirtKm / activeRoute.distanceKm) * 100) : 0;
+        const connectorPct = activeRoute.distanceKm ? Math.round(((activeRoute.byClass.connector || 0) / activeRoute.distanceKm) * 100) : 0;
         routeStatus.innerHTML =
           "Network route<strong>" +
           activeRoute.distanceKm.toFixed(activeRoute.distanceKm >= 10 ? 1 : 2) +
-          " km · " + dirtPct + "% dirt</strong>";
+          " km · " + dirtPct + "% dirt" +
+          (connectorPct ? " · " + connectorPct + "% connector" : "") +
+          "</strong>";
         return;
       }
       if (start && destination) {
@@ -1405,6 +1477,30 @@
       refreshRouteDraft();
     }
 
+    function setRoutePreference(nextPreference) {
+      routePreference = nextPreference;
+      document.querySelectorAll("[data-route-pref]").forEach((button) => {
+        const active = button.dataset.routePref === routePreference;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-selected", active ? "true" : "false");
+      });
+      if (activeStart() && destination) calculateRoute();
+      else refreshRouteDraft();
+    }
+
+    function shouldUseDirtRoute(dirtRoute, roadRoute) {
+      if (!dirtRoute) return false;
+      if (!roadRoute) return true;
+      const connectorPct = dirtRoute.distanceKm ? (dirtRoute.byClass.connector || 0) / dirtRoute.distanceKm : 0;
+      const detourRatio = dirtRoute.distanceKm / Math.max(roadRoute.distanceKm, 0.001);
+      if (routePreference === "dirt") return true;
+      if (routePreference === "direct") return false;
+      if (routePreference === "cleanest") {
+        return detourRatio <= 1.8 && connectorPct <= 0.18;
+      }
+      return detourRatio <= 2.0 && connectorPct <= 0.35;
+    }
+
     async function calculateRoute() {
       const start = activeStart();
       if (!start || !destination) {
@@ -1415,24 +1511,47 @@
       }
       const jobId = ++routeJobId;
       activeRoute = null;
-      routeMessage = "Building dirt graph<strong>Trying NSTDB first</strong>";
+      routeMessage = routePreference === "direct"
+        ? "Routing<strong>Most direct connector</strong>"
+        : "Building dirt graph<strong>" + routePreference + "</strong>";
       refreshRouteDraft();
       try {
+        if (routePreference === "direct") {
+          const roadRoute = await fetchRoadConnectorRoute(start, destination);
+          if (jobId !== routeJobId) return;
+          activeRoute = roadRoute;
+          routeMessage = "";
+          refreshRouteDraft();
+          return;
+        }
         const graph = await ensureRoutingGraph();
         if (jobId !== routeJobId) return;
         routeMessage = "Routing<strong>Snapping to NSTDB network</strong>";
         refreshRouteDraft();
         const dirtRoute = findNetworkRoute(graph, start, destination);
         if (jobId !== routeJobId) return;
-        if (dirtRoute) {
+        let roadRoute = null;
+        if (routePreference !== "dirt") {
+          routeMessage = "Checking route shape<strong>Comparing connector</strong>";
+          refreshRouteDraft();
+          try {
+            roadRoute = await fetchRoadConnectorRoute(start, destination);
+          } catch (err) {
+            console.warn("OSM connector comparison failed", err);
+          }
+          if (jobId !== routeJobId) return;
+        }
+        if (shouldUseDirtRoute(dirtRoute, roadRoute)) {
           activeRoute = dirtRoute;
           routeMessage = "";
           refreshRouteDraft();
           return;
         }
-        routeMessage = "No dirt connection<strong>Trying paved connector</strong>";
+        routeMessage = dirtRoute
+          ? "Dirt detour rejected<strong>Using connector</strong>"
+          : "No dirt connection<strong>Trying paved connector</strong>";
         refreshRouteDraft();
-        const roadRoute = await fetchRoadConnectorRoute(start, destination);
+        roadRoute = roadRoute || await fetchRoadConnectorRoute(start, destination);
         if (jobId !== routeJobId) return;
         activeRoute = roadRoute;
         routeMessage = "";
@@ -1534,6 +1653,9 @@
     routeClear.addEventListener("click", clearRoute);
     document.querySelectorAll("[data-route-mode]").forEach((button) => {
       button.addEventListener("click", () => setRouteMode(button.dataset.routeMode));
+    });
+    document.querySelectorAll("[data-route-pref]").forEach((button) => {
+      button.addEventListener("click", () => setRoutePreference(button.dataset.routePref));
     });
     document.getElementById("panelBtn").addEventListener("click", () => {
       panel.classList.toggle("hidden");
