@@ -708,12 +708,6 @@ out geom tags;`;
         map.getSource("trails").setData({ type: "FeatureCollection", features: visible });
       }
       totalEl.textContent = String(visible.length);
-      const counts = Object.fromEntries(GRADES.map((g) => [g.id, 0]));
-      for (const f of features) counts[f.properties.grade] = (counts[f.properties.grade] || 0) + 1;
-      for (const g of GRADES) {
-        const el = filtersEl.querySelector(`[data-count="${g.id}"]`);
-        if (el) el.textContent = String(counts[g.id] || 0);
-      }
     }
 
     async function scanTrails(reason = "scan") {
@@ -894,7 +888,6 @@ out geom tags;`;
 
     map.on("load", () => {
       ensureLayers();
-      buildFilters();
       applyFilters();
       locateRider();
     });
