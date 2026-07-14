@@ -1823,8 +1823,27 @@
     document.getElementById("panelBtn").addEventListener("click", () => {
       panel.classList.toggle("hidden");
     });
-    document.getElementById("recenterBtn").addEventListener("click", () => {
-      map.flyTo({ center: [rider.lng, rider.lat], zoom: Math.max(map.getZoom(), 11.5) });
+    const recenterBtn = document.getElementById("recenterBtn");
+    recenterBtn.addEventListener("click", () => {
+      if (!navigator.geolocation) {
+        setStatus("Location not supported on this device", "error");
+        return;
+      }
+      // Always ask for a fresh fix: the stored rider position may be the
+      // hardcoded fallback if geolocation failed or was denied at load.
+      recenterBtn.disabled = true;
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          recenterBtn.disabled = false;
+          setRider(pos.coords.longitude, pos.coords.latitude);
+          map.flyTo({ center: [pos.coords.longitude, pos.coords.latitude], zoom: Math.max(map.getZoom(), 11.5) });
+        },
+        (err) => {
+          recenterBtn.disabled = false;
+          setStatus("Location unavailable · " + (err && err.code === 1 ? "permission denied" : "no GPS fix"), "error");
+        },
+        { enableHighAccuracy: true, timeout: 12000, maximumAge: 5000 }
+      );
     });
     document.querySelectorAll("[data-layer-toggle]").forEach((input) => {
       input.addEventListener("change", () => {
