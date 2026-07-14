@@ -11,17 +11,6 @@
     "type": "data"
   },
   {
-    "id": "nrcan-nrn",
-    "name": "National Road Network (NRCan)",
-    "url": "https://open.canada.ca/data/en/dataset/3d282116-e556-400c-9306-ca1a3cada77f",
-    "testUrl": "https://open.canada.ca/data/en/dataset/3d282116-e556-400c-9306-ca1a3cada77f",
-    "status": "accessible",
-    "statusCode": 200,
-    "contentType": "text/html; charset=utf-8",
-    "priority": 1,
-    "type": "catalogue"
-  },
-  {
     "id": "geo-ca",
     "name": "Geo.ca / CanVec",
     "url": "https://geo.ca",
@@ -78,7 +67,7 @@
   },
   {
     "id": "quebec-donnees",
-    "name": "Données Québec",
+    "name": "Donn\u00e9es Qu\u00e9bec",
     "url": "https://www.donneesquebec.ca",
     "testUrl": "https://www.donneesquebec.ca",
     "status": "accessible",
@@ -98,17 +87,6 @@
     "priority": 1,
     "type": "api",
     "note": "HEAD failed, GET succeeded"
-  },
-  {
-    "id": "nb-geonb",
-    "name": "New Brunswick GeoNB",
-    "url": "https://geonb.snb.ca",
-    "testUrl": "https://geonb.snb.ca",
-    "status": "accessible",
-    "statusCode": 200,
-    "contentType": "text/html; charset=UTF-8",
-    "priority": 2,
-    "type": "catalogue"
   },
   {
     "id": "mb-geoportal",

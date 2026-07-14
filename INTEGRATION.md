@@ -3,7 +3,7 @@
 Tested and verified data sources with specific integration instructions.
 
 **Test date**: July 13, 2026  
-**Result**: ✅ 15/19 sources accessible | 🎯 8/8 Priority 1 sources working
+**Result**: ✅ Priority sources accessible (OSM, BC, AB, ON, QC, NS, GravelTravel)
 
 ---
 
@@ -11,14 +11,13 @@ Tested and verified data sources with specific integration instructions.
 
 These sources are **verified accessible** and ready for integration:
 
-1. ✅ **OpenStreetMap via Geofabrik** — Direct PBF download
-2. ✅ **National Road Network (NRCan)** — Province-level downloads
-3. ✅ **British Columbia Data Catalogue** — JSON API + direct downloads
-4. ✅ **Alberta GeoDiscover** — Catalogue with download links
-5. ✅ **Ontario GeoHub** — ArcGIS REST services
-6. ✅ **Données Québec** — CKAN API + downloads
-7. ✅ **Nova Scotia Open Data** — Socrata API
-8. ✅ **GravelTravel.ca** — Curated GPX routes
+1. ✅ **OpenStreetMap via Geofabrik** - Direct PBF download
+2. ✅ **British Columbia Data Catalogue** - JSON API + direct downloads
+3. ✅ **Alberta GeoDiscover** - Catalogue with download links
+4. ✅ **Ontario GeoHub** - ArcGIS REST services
+5. ✅ **Données Québec** - CKAN API + downloads
+6. ✅ **Nova Scotia Open Data** - Socrata API
+7. ✅ **GravelTravel.ca** - Curated GPX routes
 
 ---
 
@@ -26,7 +25,7 @@ These sources are **verified accessible** and ready for integration:
 
 ### 1. OpenStreetMap via Geofabrik ✅
 
-**Status**: Working — Direct binary download available
+**Status**: Working - Direct binary download available
 
 **Data URL**: 
 ```
@@ -56,37 +55,9 @@ https://download.geofabrik.de/north-america/canada/nova-scotia-latest.osm.pbf
 
 ---
 
-### 2. National Road Network (NRCan) ✅
+### 2. British Columbia Data Catalogue ✅
 
-**Status**: Working — Catalogue page accessible
-
-**Catalogue URL**:
-```
-https://open.canada.ca/data/en/dataset/3d282116-e556-400c-9306-ca1a3cada77f
-```
-
-**Integration approach**:
-- Visit catalogue page
-- Find province-specific download links (shapefile or GeoPackage)
-- Parse HTML or use Open Canada API
-- Download and merge provincial datasets
-
-**API endpoint** (to discover downloads):
-```
-https://open.canada.ca/data/api/3/action/package_show?id=3d282116-e556-400c-9306-ca1a3cada77f
-```
-
-**Next steps**:
-1. Fetch package metadata via API
-2. Extract download URLs for shapefiles
-3. Build automated downloader
-4. Convert to GeoJSON
-
----
-
-### 3. British Columbia Data Catalogue ✅
-
-**Status**: Working — CKAN API responding with JSON
+**Status**: Working - CKAN API responding with JSON
 
 **API Test URL**:
 ```
@@ -124,7 +95,7 @@ https://catalogue.data.gov.bc.ca/api/3/action/package_list
 
 ---
 
-### 4. Alberta GeoDiscover ✅
+### 3. Alberta GeoDiscover ✅
 
 **Status**: Working — Catalogue accessible
 
@@ -151,7 +122,7 @@ https://geodiscover.alberta.ca
 
 ---
 
-### 5. Ontario GeoHub ✅
+### 4. Ontario GeoHub ✅
 
 **Status**: Working — ArcGIS Hub accessible
 
@@ -184,7 +155,7 @@ https://ws.lioservices.lrc.gov.on.ca/arcgis1071a/rest/services/LIO_Cartographic/
 
 ---
 
-### 6. Données Québec ✅
+### 5. Données Québec ✅
 
 **Status**: Working — CKAN catalogue accessible
 
@@ -222,7 +193,7 @@ https://www.donneesquebec.ca/recherche/api/3/action/package_show?id=[id]
 
 ---
 
-### 7. Nova Scotia Open Data / GeoNOVA ✅
+### 6. Nova Scotia Open Data / GeoNOVA ✅
 
 **Status**: Working — Socrata API responding
 
@@ -255,7 +226,7 @@ https://data.novascotia.ca/resource/[dataset-id].geojson
 
 ---
 
-### 8. GravelTravel.ca ✅
+### 7. GravelTravel.ca ✅
 
 **Status**: Working — Site accessible
 
@@ -318,10 +289,9 @@ https://graveltravel.ca
 6. **Ontario Road Network** — ArcGIS REST
 7. **Québec forest roads** — CKAN API (French)
 
-### Phase 3: National Coverage (Week 4+)
-8. **National Road Network** — All provinces
-9. **Remaining accessible provinces** — NB, NL, PEI, YT
-10. **Secondary GPX sources** — Trans Canada Trail, forums
+### Phase 3: Broader coverage (later)
+8. **Remaining accessible provinces** - NL, PEI, YT (not NB)
+9. **Secondary GPX sources** - Trans Canada Trail, forums
 
 ---
 
