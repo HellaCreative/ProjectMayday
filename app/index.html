@@ -35,7 +35,7 @@
       top: max(12px, env(safe-area-inset-top));
       left: 12px;
       right: 12px;
-      z-index: 5;
+      z-index: 20;
       display: flex;
       align-items: flex-start;
       justify-content: space-between;
@@ -109,66 +109,101 @@
     .status.error { color: #ff8a8a; border-color: rgba(255, 77, 77, 0.35); }
     .status.ok { color: var(--g2); }
 
-    .filters {
+    .sources {
       position: absolute;
+      top: max(64px, calc(env(safe-area-inset-top) + 56px));
       left: 12px;
-      right: 12px;
-      bottom: max(18px, calc(env(safe-area-inset-bottom) + 12px));
-      z-index: 5;
+      z-index: 20;
       display: flex;
-      gap: 8px;
-      overflow-x: auto;
-      padding-bottom: 2px;
-      -webkit-overflow-scrolling: touch;
-      scrollbar-width: none;
+      flex-direction: column;
+      gap: 6px;
+      pointer-events: auto;
     }
 
-    .filters::-webkit-scrollbar { display: none; }
-
-    .chip {
-      flex: 0 0 auto;
+    .source-toggle {
       display: flex;
       align-items: center;
       gap: 8px;
-      min-height: 52px;
-      padding: 0 14px;
-      border-radius: 16px;
+      padding: 8px 12px;
+      border-radius: 10px;
       border: 1px solid var(--line);
       background: rgba(20, 22, 25, 0.92);
       backdrop-filter: blur(12px);
-      color: var(--text);
+      color: var(--muted);
       font-family: var(--mono);
-      font-size: 0.72rem;
+      font-size: 0.68rem;
       letter-spacing: 0.08em;
       text-transform: uppercase;
       cursor: pointer;
-      opacity: 0.45;
-      transition: opacity 0.2s ease, border-color 0.2s ease;
+      opacity: 0.5;
+      transition: opacity 0.15s ease, border-color 0.15s ease, color 0.15s ease;
     }
 
-    .chip.on {
+    .source-toggle.on {
       opacity: 1;
-      border-color: color-mix(in srgb, var(--chip, var(--amber)) 55%, transparent);
+      color: var(--text);
+      border-color: rgba(255, 138, 30, 0.45);
     }
 
-    .chip .dot {
-      width: 8px;
-      height: 8px;
+    .source-toggle .dot {
+      width: 7px;
+      height: 7px;
       border-radius: 50%;
-      background: var(--chip);
-      box-shadow: 0 0 0 2px color-mix(in srgb, var(--chip) 25%, transparent);
+      background: var(--dot, var(--amber));
+      flex-shrink: 0;
     }
 
-    .chip .count {
+    .legend {
+      position: absolute;
+      left: 12px;
+      bottom: max(18px, calc(env(safe-area-inset-bottom) + 12px));
+      z-index: 20;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: rgba(20, 22, 25, 0.92);
+      backdrop-filter: blur(12px);
+      pointer-events: auto;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 4px 2px;
+      border: 0;
+      background: transparent;
       color: var(--muted);
-      font-variant-numeric: tabular-nums;
+      font-family: var(--mono);
+      font-size: 0.68rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      cursor: pointer;
+      opacity: 0.4;
+      transition: opacity 0.15s ease, color 0.15s ease;
+    }
+
+    .legend-item.on {
+      opacity: 1;
+      color: var(--text);
+    }
+
+    .legend-line {
+      width: 22px;
+      height: 3px;
+      border-radius: 2px;
+      background: var(--line-color);
+      flex-shrink: 0;
     }
 
     .stack {
       position: absolute;
       right: 12px;
       bottom: max(88px, calc(env(safe-area-inset-bottom) + 80px));
-      z-index: 5;
+      z-index: 20;
       display: flex;
       flex-direction: column;
       gap: 10px;
@@ -294,6 +329,15 @@
     <div class="stat">In view<strong id="totalCount">0</strong></div>
   </div>
 
+  <div class="sources" id="sources">
+    <button class="source-toggle on" data-source="osm" type="button">
+      <span class="dot" style="--dot:#ff8a1e"></span>OSM
+    </button>
+    <button class="source-toggle on" data-source="ns" type="button">
+      <span class="dot" style="--dot:#6ee7a8"></span>NS Open Data
+    </button>
+  </div>
+
   <div class="status" id="status">Locating rider…</div>
 
   <div class="stack">
@@ -301,23 +345,19 @@
     <button class="btn amber" id="recenterBtn" title="Recenter on me" aria-label="Recenter on me">◎</button>
   </div>
 
-  <div class="legend">
-    <div class="legend-item">
-      <div class="legend-line" style="background: #ff9500;"></div>
-      <div class="legend-label">Paved Roads</div>
-    </div>
-    <div class="legend-item">
-      <div class="legend-line" style="background: #666666;"></div>
-      <div class="legend-label">Service</div>
-    </div>
-    <div class="legend-item">
-      <div class="legend-line" style="background: #996633;"></div>
-      <div class="legend-label">ATV</div>
-    </div>
-    <div class="legend-item">
-      <div class="legend-line" style="background: #7c3aed;"></div>
-      <div class="legend-label">Single</div>
-    </div>
+  <div class="legend" id="legend">
+    <button class="legend-item on" data-type="paved" type="button">
+      <span class="legend-line" style="background:#ff9500"></span>Paved
+    </button>
+    <button class="legend-item on" data-type="service" type="button">
+      <span class="legend-line" style="background:#111111"></span>Service
+    </button>
+    <button class="legend-item on" data-type="atv" type="button">
+      <span class="legend-line" style="background:#996633"></span>ATV
+    </button>
+    <button class="legend-item on" data-type="single" type="button">
+      <span class="legend-line" style="background:#7c3aed"></span>Single
+    </button>
   </div>
   <div class="popup" id="popup">
     <button class="close" id="popupClose" aria-label="Close">×</button>
@@ -335,21 +375,13 @@
     ];
 
     const TRAIL_TYPES = [
-      { id: "truck", label: "Truck Roads", color: "#666666", width: 3 },
-      { id: "atv", label: "ATV/4WD", color: "#996633", width: 2.5 },
-      { id: "single", label: "Singletrack", color: "#7c3aed", width: 2, dash: [2, 2] }
+      { id: "service", label: "Service", color: "#111111" },
+      { id: "atv", label: "ATV", color: "#996633" },
+      { id: "single", label: "Single", color: "#7c3aed" }
     ];
 
-    const GRADES = [
-      { id: "g2", label: "G2 solid", color: "#00a86b" },
-      { id: "g3", label: "G3 mixed", color: "#f0a000" },
-      { id: "g4", label: "G4 rough", color: "#e85d04" },
-      { id: "g5", label: "G5 sparse", color: "#c1121f" },
-      { id: "single", label: "Single", color: "#7c3aed" },
-      { id: "unknown", label: "Ungraded", color: "#4a5568" }
-    ];
-
-    const trailTypeOn = Object.fromEntries(TRAIL_TYPES.map((t) => [t.id, true]));
+    const trailTypeOn = { paved: true, service: true, atv: true, single: true };
+    const sourceOn = { osm: true, ns: true };
     let rider = { ...FALLBACK };
     let features = [];
     let settling = false;
@@ -357,29 +389,24 @@
     let fetchToken = 0;
     
     // Data cache: store fetched areas to avoid re-scanning
-    const dataCache = new Map(); // key: "south,west,north,east", value: features array
+    const dataCache = new Map();
     
     function getCacheKey(bbox) {
       return bbox.map(n => n.toFixed(3)).join(',');
     }
     
     function isCached(bbox) {
-      const key = getCacheKey(bbox);
-      return dataCache.has(key);
+      return dataCache.has(getCacheKey(bbox));
     }
     
     function getCached(bbox) {
-      const key = getCacheKey(bbox);
-      return dataCache.get(key) || [];
+      return dataCache.get(getCacheKey(bbox)) || [];
     }
     
-    function setCache(bbox, features) {
-      const key = getCacheKey(bbox);
-      dataCache.set(key, features);
-      // Keep cache size reasonable - remove oldest if > 50 entries
+    function setCache(bbox, feats) {
+      dataCache.set(getCacheKey(bbox), feats);
       if (dataCache.size > 50) {
-        const firstKey = dataCache.keys().next().value;
-        dataCache.delete(firstKey);
+        dataCache.delete(dataCache.keys().next().value);
       }
     }
 
@@ -393,44 +420,43 @@
       statusEl.className = "status" + (kind ? " " + kind : "");
     }
 
+    // Wire source toggles
+    document.querySelectorAll(".source-toggle").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const src = btn.dataset.source;
+        sourceOn[src] = !sourceOn[src];
+        btn.classList.toggle("on", sourceOn[src]);
+        applyFilters();
+      });
+    });
+
+    // Wire legend type toggles
+    document.querySelectorAll(".legend-item").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const type = btn.dataset.type;
+        trailTypeOn[type] = !trailTypeOn[type];
+        btn.classList.toggle("on", trailTypeOn[type]);
+        applyFilters();
+      });
+    });
+
     function classifyTrailType(tags) {
       const hw = tags.highway || "";
       const tracktype = tags.tracktype || "";
       
-      // Paths/bridleways = singletrack (narrow, hiking/bikes)
       if (["path", "bridleway", "footway", "cycleway"].includes(hw)) {
         return "single";
       }
       
-      // Tracks - classify by grade
       if (hw === "track") {
-        // Grade 1-2 = solid surface, wide = TRUCK ROADS
-        if (tracktype === "grade1" || tracktype === "grade2") {
-          return "truck";
-        }
-        // Grade 3-4 = rough, medium = ATV/4WD
-        if (tracktype === "grade3" || tracktype === "grade4") {
-          return "atv";
-        }
-        // Grade 5 = very narrow
-        if (tracktype === "grade5") {
-          return "single";
-        }
-        // NO GRADE = assume ATV (safer than assuming singletrack)
+        if (tracktype === "grade1" || tracktype === "grade2") return "service";
+        if (tracktype === "grade3" || tracktype === "grade4") return "atv";
+        if (tracktype === "grade5") return "single";
         return "atv";
       }
       
-      // Service roads = assume truck-width
-      if (hw === "service") {
-        return "truck";
-      }
-      
-      // Unclassified unpaved = ATV
-      if (hw === "unclassified") {
-        return "atv";
-      }
-      
-      // Default to singletrack
+      if (hw === "service") return "service";
+      if (hw === "unclassified") return "atv";
       return "single";
     }
 
@@ -483,24 +509,8 @@
     }
 
     function gradeLabel(id) {
-      return GRADES.find((g) => g.id === id)?.label || id;
-    }
-
-    function buildFilters() {
-      filtersEl.innerHTML = "";
-      for (const g of GRADES) {
-        const btn = document.createElement("button");
-        btn.className = "chip on";
-        btn.style.setProperty("--chip", g.color);
-        btn.dataset.grade = g.id;
-        btn.innerHTML = `<span class="dot"></span><span>${g.label}</span><span class="count" data-count="${g.id}">0</span>`;
-        btn.addEventListener("click", () => {
-          gradeOn[g.id] = !gradeOn[g.id];
-          btn.classList.toggle("on", gradeOn[g.id]);
-          applyFilters();
-        });
-        filtersEl.appendChild(btn);
-      }
+      const labels = { service: "Service", atv: "ATV", single: "Single", paved: "Paved" };
+      return labels[id] || id;
     }
 
     const map = new maplibregl.Map({
@@ -545,20 +555,20 @@
         data: { type: "FeatureCollection", features: [] }
       });
 
-      // Truck roads - wide gray (hauler access)
+      // Service roads - black (forestry / truck-width)
       map.addLayer({
-        id: "truck-roads",
+        id: "service-roads",
         type: "line",
         source: "trails",
-        filter: ["==", ["get", "trailType"], "truck"],
+        filter: ["==", ["get", "trailType"], "service"],
         paint: {
-          "line-color": "#666666",
+          "line-color": "#111111",
           "line-width": ["interpolate", ["linear"], ["zoom"], 10, 3, 14, 5],
           "line-opacity": 0.9
         }
       });
 
-      // ATV/4WD trails - medium tan/brown
+      // ATV trails - tan/brown
       map.addLayer({
         id: "atv-trails",
         type: "line",
@@ -571,7 +581,7 @@
         }
       });
 
-      // Singletrack - narrow purple SOLID (no dash)
+      // Singletrack - purple solid
       map.addLayer({
         id: "singletrack",
         type: "line",
@@ -683,6 +693,7 @@ out geom tags;`;
           properties: {
             id: el.id,
             trailType,
+            source: "osm",
             highway: tags.highway || "",
             tracktype: tags.tracktype || "",
             surface: tags.surface || "",
@@ -702,7 +713,9 @@ out geom tags;`;
     function applyFilters() {
       const visible = features.filter((f) => {
         const props = f.properties;
-        return trailTypeOn[props.trailType || 'single'];
+        const type = props.trailType || "single";
+        const src = props.source === "ns-open-data" ? "ns" : "osm";
+        return trailTypeOn[type] && sourceOn[src];
       });
       if (map.getSource("trails")) {
         map.getSource("trails").setData({ type: "FeatureCollection", features: visible });
@@ -792,22 +805,15 @@ out geom tags;`;
       const roadClass = (props.road_class || '').toLowerCase();
       const surface = (props.surface || '').toLowerCase();
       
-      // Trails = singletrack
       if (fcode.includes('trail') || roadClass.includes('trail')) {
         return 'single';
       }
-      
-      // Paved/gravel resource roads = truck roads
       if (surface.includes('paved') || surface.includes('gravel')) {
-        return 'truck';
+        return 'service';
       }
-      
-      // Resource/dirt roads = ATV
       if (fcode.includes('resource') || roadClass.includes('resource') || surface.includes('dirt')) {
         return 'atv';
       }
-      
-      // Default to ATV
       return 'atv';
     }
 
@@ -825,16 +831,19 @@ out geom tags;`;
 
     function showPopup(feature, point) {
       const p = feature.properties;
-      const g = GRADES.find((x) => x.id === p.grade);
+      const colors = { service: "#111111", atv: "#996633", single: "#7c3aed", paved: "#ff9500" };
+      const color = colors[p.trailType] || "#6b7078";
       popupBody.innerHTML = `
         <div class="k">Type</div>
         <div class="v">${p.highway || "—"}${p.name ? " · " + p.name : ""}</div>
-        <div class="k">Grade</div>
-        <div class="v"><span class="grade" style="--g:${g?.color || "#6b7078"}"><i></i>${gradeLabel(p.grade)}${p.tracktype ? " · " + p.tracktype : ""}</span></div>
+        <div class="k">Class</div>
+        <div class="v"><span class="grade" style="--g:${color}"><i></i>${gradeLabel(p.trailType)}${p.tracktype ? " · " + p.tracktype : ""}</span></div>
         <div class="k">Surface</div>
         <div class="v">${p.surface || "unspecified"}</div>
+        <div class="k">Source</div>
+        <div class="v">${p.source === "ns-open-data" ? "NS Open Data" : "OpenStreetMap"}</div>
         <div class="k">Motor access</div>
-        <div class="v">${p.accessStatus}${p.accessDetail ? " · " + p.accessDetail : ""}</div>
+        <div class="v">${p.accessStatus || "unknown"}${p.accessDetail ? " · " + p.accessDetail : ""}</div>
       `;
       const pad = 12;
       const w = Math.min(300, window.innerWidth - 24);
@@ -899,7 +908,7 @@ out geom tags;`;
 
     map.on("click", (e) => {
       const hits = map.queryRenderedFeatures(e.point, {
-        layers: ["trails-line", "trails-single"]
+        layers: ["service-roads", "atv-trails", "singletrack"]
       });
       if (!hits.length) {
         hidePopup();

@@ -1,434 +1,160 @@
 # DIRT. Routing Architecture
 
-Point-to-point route planning using trail data sources.
+> **Product goal:** Plot a route from A to B where the rider defines the road-surface mix — e.g. maximize dirt, minimize pavement, avoid singletrack.
 
-## User Goal
-
-**"Click point A, click point B, get a route using available trail data"**
-
-This transforms DIRT from a trail **viewer** into a trail **planner**.
+This is a **routing engine**, not a trail viewer. The current map app is a useful visual foundation. The architecture below is what turns it into the product.
 
 ---
 
-## Core Requirements
+## One-sentence verdict
 
-### User Experience
-1. User clicks point A on map
-2. User clicks point B on map
-3. App calculates best route along available trails
-4. Shows route on map with stats (distance, estimated time, difficulty)
-5. Optionally: Turn-by-turn guidance or segment list
-
-### Technical Requirements
-1. Convert trail data into a **routable network graph**
-2. Find trails near point A and B (snap to network)
-3. Run routing algorithm (A*, Dijkstra, or similar)
-4. Handle disconnected networks (no route found)
-5. Consider trail attributes (difficulty, surface, grade)
+Keep the visual language and the tag→surface classification. Replace live Overpass viewport fetches with a **pre-built routable graph** and a **cost-profile routing engine** (Valhalla). The map is the display surface; the product is the routing brain behind it.
 
 ---
 
-## Architecture Overview
+## What to keep from the current chassis
+
+| Asset | Why it survives |
+|-------|-----------------|
+| Dark rally-dash + amber aesthetic | Real product language |
+| Surface classification (tracktype → Service / ATV / Single) | Becomes edge cost inputs |
+| Legal-access parsing | Route eligibility filter |
+| Basemap + overlay hierarchy (Paved / Service / ATV / Single) | Route visualization language |
+
+## What to replace
+
+| Current | Problem | Replace with |
+|---------|---------|--------------|
+| Live Overpass per viewport | No topology, no region graph | Pre-processed NS (then Canada) graph |
+| Isolated GeoJSON LineStrings | Trails don't "connect" | Nodes + edges with shared endpoints |
+| Auto-scan on pan | Viewer mental model | Load region once, route over it |
+| Client A* sketch | Fragile, incomplete | Valhalla (or GraphHopper) custom profiles |
+
+---
+
+## Recommended stack: Valhalla
+
+**Why Valhalla over GraphHopper / OSRM:**
+
+- Custom **costing models** per edge (surface, tracktype, highway class)
+- "Avoid pavement / prefer dirt" is a config profile, not a custom pathfinder
+- Mature motorcycle / bicycle costing as starting points
+- Self-hostable; tile-based graph builds from OSM PBF
+
+**GraphHopper** is a solid alternative if Valhalla ops are too heavy early on.  
+**OSRM** is fast but rigid on custom costs — poor fit for surface-mix routing.
+
+---
+
+## Architecture
 
 ```
-┌─────────────────┐
-│  Data Sources   │  OSM, NS Open Data, BC Forest Roads, etc.
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│ Data Ingestion  │  Download, parse, normalize formats
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│ Graph Builder   │  Convert trails to network graph
-└────────┬────────┘   Nodes = intersections, Edges = trail segments
-         │
-         ▼
-┌─────────────────┐
-│ Routing Engine  │  A* or Dijkstra pathfinding
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│   Map Display   │  Show route, stats, turn-by-turn
-└─────────────────┘
-```
-
----
-
-## Implementation Phases
-
-### Phase 1: Network Graph Construction ✅ START HERE
-
-**Goal**: Convert trail line data into a routable graph
-
-**What we need**:
-- Trail data as GeoJSON LineStrings
-- Node extraction (start/end points + intersections)
-- Edge creation (trail segments between nodes)
-- Edge properties (length, surface, grade, name)
-
-**Output**: 
-```javascript
-{
-  nodes: [
-    { id: 'n1', lat: 44.123, lng: -63.456 },
-    { id: 'n2', lat: 44.124, lng: -63.457 }
-  ],
-  edges: [
-    { 
-      id: 'e1',
-      from: 'n1', 
-      to: 'n2',
-      distance: 150, // meters
-      surface: 'gravel',
-      grade: 'g3',
-      name: 'Forest Service Road 123'
-    }
-  ]
-}
-```
-
-**Tools to consider**:
-- [Turf.js](https://turfjs.org/) for geometry operations
-- Custom graph builder
-- Consider [Geograph](https://github.com/davetimmins/Geograph) or similar
-
----
-
-### Phase 2: Routing Algorithm
-
-**Goal**: Find shortest/best path between two points
-
-**Algorithm options**:
-
-1. **A\* (Recommended)**
-   - Fast, optimal
-   - Considers heuristic (straight-line distance to goal)
-   - Good for geographic networks
-   
-2. **Dijkstra**
-   - Simpler, guaranteed optimal
-   - Slower than A* but works
-   
-3. **Contraction Hierarchies** (Advanced)
-   - Pre-processes graph for speed
-   - Used by commercial routing engines
-   - Overkill for v1
-
-**Libraries**:
-- [ngraph.path](https://github.com/anvaka/ngraph.path) - A* in JavaScript
-- [Dijkstrajs](https://github.com/tcort/dijkstrajs) - Simple Dijkstra
-- Roll your own (educational, good for custom cost functions)
-
-**Cost function considerations**:
-- Distance (shortest path)
-- Surface preference (avoid difficult terrain)
-- Grade preference (avoid G5 if user wants easy)
-- Scenic routes (longer but more interesting)
-
----
-
-### Phase 3: Snap-to-Network
-
-**Goal**: Connect arbitrary map clicks to nearest trail
-
-**Process**:
-1. User clicks at (44.123, -63.456)
-2. Find nearest node or edge in graph
-3. Snap click point to that location
-4. Use snapped point as start/end of route
-
-**Implementation**:
-- Turf.js `nearestPointOnLine()` for snapping to edges
-- Spatial index (R-tree) for fast nearest-neighbor search
-- Consider [rbush](https://github.com/mourner/rbush) for spatial indexing
-
----
-
-### Phase 4: Route Display
-
-**Goal**: Show calculated route on map
-
-**Features**:
-- Highlighted route line (different color/width)
-- Start/end markers
-- Waypoint markers at turns/intersections
-- Route stats panel:
-  - Total distance
-  - Estimated time
-  - Surface breakdown (60% gravel, 30% dirt, 10% pavement)
-  - Grade breakdown
-- Optional: Elevation profile
-
-**MapLibre implementation**:
-```javascript
-map.addSource('route', {
-  type: 'geojson',
-  data: routeGeoJSON
-});
-
-map.addLayer({
-  id: 'route-line',
-  type: 'line',
-  source: 'route',
-  paint: {
-    'line-color': '#00ff00',
-    'line-width': 6,
-    'line-opacity': 0.8
-  }
-});
+┌──────────────────────────────┐
+│ Data sources                 │
+│ OSM PBF (Geofabrik NS)       │
+│ NS Topographic / resource    │
+│ Canada forestry roads (later)│
+└──────────────┬───────────────┘
+               │ one-time / scheduled build
+               ▼
+┌──────────────────────────────┐
+│ Graph builder                │
+│ • Extract ways + nodes       │
+│ • Tag → surface class        │
+│ • Build Valhalla tiles       │
+└──────────────┬───────────────┘
+               │
+               ▼
+┌──────────────────────────────┐
+│ Valhalla routing service     │
+│ Custom cost profiles:        │
+│   dirt_max / mixed / easy    │
+└──────────────┬───────────────┘
+               │ /route API
+               ▼
+┌──────────────────────────────┐
+│ DIRT. map UI                 │
+│ Drop A + B → route polyline  │
+│ Surface breakdown bar        │
+│ Mix slider (re-cost + re-run)│
+└──────────────────────────────┘
 ```
 
 ---
 
-### Phase 5: Advanced Features (Future)
+## Surface classes → edge costs
 
-- **Turn-by-turn directions**
-- **Alternative routes** (fastest, scenic, easy)
-- **Avoid sections** (user can mark trails as closed/blocked)
-- **Multi-point routing** (waypoints A → B → C → D)
-- **Export GPX** (download route for GPS device)
-- **Offline routing** (pre-build graph, run in browser)
-- **Community edits** (users report trail conditions)
+These map 1:1 to the legend the rider sees:
 
----
+| Class | OSM signals | Rider meaning | Cost when "prefer dirt" |
+|-------|-------------|---------------|-------------------------|
+| **Paved** | motorway, primary, secondary, paved | Highway / street | High |
+| **Service** | track grade1–2, service, forestry | Truck / logging road | Low–medium |
+| **ATV** | track grade3–4, unpaved unclassified | Quad / intermediate | Low |
+| **Single** | path, bridleway, track grade5 | Narrow / hard | Configurable (often high to avoid) |
 
-## Technology Stack
-
-### Frontend (Browser)
-- **MapLibre GL JS** — Map rendering (already using)
-- **Turf.js** — Geospatial calculations
-- **ngraph.path or Dijkstrajs** — Routing algorithm
-- **RBush** — Spatial indexing for snapping
-
-### Data Processing (Build-time)
-- **Node.js** — Download and process trail data
-- **GDAL/ogr2ogr** — Convert shapefile/PBF to GeoJSON
-- **PostGIS** (optional) — Spatial database for complex queries
-- **Tippecanoe** (optional) — Generate vector tiles for performance
-
-### Backend (Future, optional)
-- **Node.js + Express** — Route calculation API
-- **PostgreSQL + PostGIS** — Store trail network
-- **pgRouting** — Server-side routing (very powerful)
-- **Redis** — Cache popular routes
+The slider ("minimize pavement / maximize trail") reweights these costs and re-runs the same A→B query.
 
 ---
 
-## Data Structure: Routable Network
+## Build order
 
-### Input: Trail GeoJSON
-```json
-{
-  "type": "FeatureCollection",
-  "features": [
-    {
-      "type": "Feature",
-      "geometry": {
-        "type": "LineString",
-        "coordinates": [[-63.5, 44.6], [-63.51, 44.61], [-63.52, 44.62]]
-      },
-      "properties": {
-        "name": "Trail 123",
-        "surface": "gravel",
-        "grade": "g3",
-        "source": "openstreetmap"
-      }
-    }
-  ]
-}
-```
+### 1. Region graph (Nova Scotia first)
+- Download `nova-scotia-latest.osm.pbf` from Geofabrik
+- Build Valhalla tiles for NS bounding box
+- Host Valhalla (Docker on a small VPS, or managed later)
+- Verify: route between two known points returns geometry
 
-### Output: Graph (Nodes + Edges)
-```json
-{
-  "nodes": {
-    "n1": { "lat": 44.6, "lng": -63.5 },
-    "n2": { "lat": 44.61, "lng": -63.51 },
-    "n3": { "lat": 44.62, "lng": -63.52 }
-  },
-  "edges": [
-    {
-      "id": "e1",
-      "from": "n1",
-      "to": "n2",
-      "distance": 1234.5,
-      "geometry": [[-63.5, 44.6], [-63.51, 44.61]],
-      "properties": {
-        "name": "Trail 123",
-        "surface": "gravel",
-        "grade": "g3"
-      }
-    },
-    {
-      "id": "e2",
-      "from": "n2",
-      "to": "n3",
-      "distance": 1234.5,
-      "geometry": [[-63.51, 44.61], [-63.52, 44.62]],
-      "properties": {
-        "name": "Trail 123",
-        "surface": "gravel",
-        "grade": "g3"
-      }
-    }
-  ]
-}
-```
+### 2. Cost profile
+- Map `highway` + `tracktype` + `surface` into the four classes above
+- Expose profiles: `dirt_max`, `mixed`, `easy` (less single, more service/paved)
+- Return per-leg surface stats for the breakdown UI
+
+### 3. A→B UI (on current map chassis)
+- Tap origin, tap destination (or long-press)
+- Draw route polyline
+- Show: distance, estimated time, **% Paved / Service / ATV / Single**
+- That surface breakdown is the product moment
+
+### 4. Mix slider
+- Re-run route with different costs
+- Cheap once Valhalla profiles exist
+
+### 5. Expand data
+- Merge NS Open Data resource roads into graph build
+- Add Canada forestry layers where OSM is thin
+- Then other provinces
 
 ---
 
-## Example: Building a Simple Graph
+## What NOT to do next
 
-### Step 1: Extract Nodes
-```javascript
-const nodes = new Map();
-let nodeId = 0;
-
-features.forEach(feature => {
-  const coords = feature.geometry.coordinates;
-  
-  // Add start point
-  const startKey = `${coords[0][0]},${coords[0][1]}`;
-  if (!nodes.has(startKey)) {
-    nodes.set(startKey, { 
-      id: `n${nodeId++}`, 
-      lat: coords[0][1], 
-      lng: coords[0][0] 
-    });
-  }
-  
-  // Add end point
-  const endKey = `${coords[coords.length-1][0]},${coords[coords.length-1][1]}`;
-  if (!nodes.has(endKey)) {
-    nodes.set(endKey, { 
-      id: `n${nodeId++}`, 
-      lat: coords[coords.length-1][1], 
-      lng: coords[coords.length-1][0] 
-    });
-  }
-});
-```
-
-### Step 2: Create Edges
-```javascript
-const edges = [];
-
-features.forEach(feature => {
-  const coords = feature.geometry.coordinates;
-  const startKey = `${coords[0][0]},${coords[0][1]}`;
-  const endKey = `${coords[coords.length-1][0]},${coords[coords.length-1][1]}`;
-  
-  const distance = turf.length(feature, { units: 'meters' });
-  
-  edges.push({
-    from: nodes.get(startKey).id,
-    to: nodes.get(endKey).id,
-    distance: distance,
-    geometry: coords,
-    properties: feature.properties
-  });
-});
-```
-
-### Step 3: Run A*
-```javascript
-import createGraph from 'ngraph.graph';
-import path from 'ngraph.path';
-
-const graph = createGraph();
-
-// Add edges (ngraph will auto-create nodes)
-edges.forEach(edge => {
-  graph.addLink(edge.from, edge.to, { 
-    weight: edge.distance,
-    ...edge 
-  });
-});
-
-// Find path
-const pathFinder = path.aStar(graph, {
-  distance(fromNode, toNode, link) {
-    return link.data.weight; // Use distance as cost
-  },
-  heuristic(fromNode, toNode) {
-    // Straight-line distance as heuristic
-    const from = nodes.get(fromNode.id);
-    const to = nodes.get(toNode.id);
-    return turf.distance([from.lng, from.lat], [to.lng, to.lat], { units: 'meters' });
-  }
-});
-
-const route = pathFinder.find('n1', 'n100');
-```
+- Don't invest more in "scan everything in viewport" as the core architecture
+- Don't write a custom A* over live GeoJSON — topology and costing will fight you
+- Don't treat Canada Open Data shapefiles as a live browser API — bake them into the graph build
 
 ---
 
-## Immediate Next Steps
+## Parallel track: viewer UX (still useful)
 
-### 1. Visual Test (Now)
-- Enhance `sources-test.html` with show/hide toggles ✅ DONE
-- Load multiple sources simultaneously
-- See what data looks like overlaid
-- Identify coverage gaps
+While the routing brain is built, the map viewer can stay as:
 
-### 2. Build Graph Builder (This Week)
-- Create `graph-builder.js`
-- Ingest GeoJSON from OSM or NS
-- Extract nodes and edges
-- Export as JSON
+1. **Legend** — Paved / Service / ATV / Single (toggle visibility)
+2. **Source toggles** — OSM / NS / Canada (see where data comes from)
+3. **Classification QA** — confirm Lake Charlotte etc. look right before graph build
 
-### 3. Proof-of-Concept Router (Next Week)
-- Integrate ngraph.path
-- Build simple UI: click point A, click point B
-- Show calculated route
-- Display distance/stats
-
-### 4. Iterate on UX
-- Add waypoint support
-- Improve snapping
-- Add alternative routes
-- Route preferences (fast, scenic, easy)
+This validates the cost taxonomy riders will use in routing.
 
 ---
 
-## Questions to Consider
+## Immediate next engineering steps
 
-1. **Client-side or server-side routing?**
-   - Client: Faster, works offline, but limited by browser memory
-   - Server: Can handle larger datasets, but requires backend
-
-2. **Pre-built graph or build on-demand?**
-   - Pre-built: Faster, but requires build step and updates
-   - On-demand: More flexible, but slower for large areas
-
-3. **How to handle disconnected networks?**
-   - Show "no route found" message
-   - Suggest nearest connected trails
-   - Allow multi-modal (trail + road)
-
-4. **Route preferences**:
-   - Shortest distance?
-   - Fastest (consider surface quality)?
-   - Easiest (prefer lower grades)?
-   - Most scenic (longer, avoid roads)?
+1. Fix and ship viewer legend + source toggles (display layer)
+2. Spin up Valhalla + NS PBF in Docker; prove one A→B route
+3. Wire `/api/route?from=&to=&profile=` through Vercel → Valhalla
+4. Add drop-two-pins UI + surface breakdown
+5. Add mix slider
 
 ---
 
-## Conclusion
-
-**Your vision is clear**: Turn trail data into routes between points.
-
-**Recommended path forward**:
-1. ✅ Test sources visually (see what we have)
-2. Build graph from one source (start with NS or OSM)
-3. Implement basic A* routing
-4. Add UI for clicking points and showing routes
-5. Iterate on cost function and preferences
-
-This is achievable with client-side JavaScript and doesn't require a complex backend initially. We can start simple and add sophistication over time.
-
-**Ready to start on the graph builder?**
+*Updated from product audit: routing-first reframing, July 2026.*
