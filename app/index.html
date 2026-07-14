@@ -496,7 +496,12 @@
           {
             id: "carto-light",
             type: "raster",
-            source: "cartoVoyager"
+            source: "cartoVoyager",
+            paint: {
+              "raster-saturation": 0.15,
+              "raster-contrast": 0.2,
+              "raster-brightness-min": 0.05
+            }
           }
         ]
       },
