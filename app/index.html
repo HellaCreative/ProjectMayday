@@ -1083,6 +1083,8 @@
     let pipDrag = null;
     let view3d = false;
     let headingUp = false;
+    const DEFAULT_DETAIL_ZOOM = 15.2;
+    let userZooming = false;
 
     const statusEl = document.getElementById("status");
     const modePill = document.getElementById("modePill");
@@ -2341,6 +2343,7 @@
       if (locked) {
         headingUp = true;
         ensureGeoWatch();
+        // Recenter after a pan keeps the rider's current zoom level.
         syncFollowCamera(true);
       }
     }
@@ -2400,46 +2403,53 @@
       setStatus("North up", "ok");
     }
 
-    function applyMainDetailCamera(immediate) {
-      const zoom = navigating ? Math.max(map.getZoom(), 15.2) : Math.max(map.getZoom(), 13.5);
+    function applyMainDetailCamera(immediate, opts = {}) {
+      // Pinch/scroll zoom is user-owned. Continuous follow updates only pan/rotate/
+      // tilt — they must not force a zoom floor or the map "snaps back".
+      if (userZooming && !immediate && !opts.resetZoom) {
+        map.setCenter([rider.lng, rider.lat]);
+        return;
+      }
       suppressFollowBreak = true;
       const cam = {
         center: [rider.lng, rider.lat],
-        zoom,
         bearing: desiredBearing(),
         pitch: desiredPitch(),
-        duration: immediate ? 0 : 700,
+        duration: immediate ? 0 : 450,
         essential: true
       };
+      if (opts.resetZoom) cam.zoom = DEFAULT_DETAIL_ZOOM;
       if (immediate) map.jumpTo(cam);
       else map.easeTo(cam);
-      setTimeout(() => { suppressFollowBreak = false; }, immediate ? 50 : 750);
+      setTimeout(() => { suppressFollowBreak = false; }, immediate ? 50 : 480);
     }
 
     function applyMainOverviewCamera(immediate) {
+      // Only refit when entering overview (swap / start). After that the rider
+      // can pinch the wide view freely without us yanking maxZoom every tick.
+      if (!immediate) return;
       const bounds = routeOverviewBounds();
       suppressFollowBreak = true;
       if (bounds) {
         map.fitBounds(bounds, {
           padding: { top: 120, bottom: 140, left: 40, right: 40 },
           maxZoom: 13,
-          duration: immediate ? 0 : 700,
+          duration: 0,
           pitch: view3d ? 35 : 0,
           bearing: 0
         });
       } else {
-        map.easeTo({
+        map.jumpTo({
           center: [rider.lng, rider.lat],
           zoom: 11,
           pitch: view3d ? 35 : 0,
-          bearing: 0,
-          duration: immediate ? 0 : 700
+          bearing: 0
         });
       }
-      setTimeout(() => { suppressFollowBreak = false; }, immediate ? 50 : 750);
+      setTimeout(() => { suppressFollowBreak = false; }, 50);
     }
 
-    function syncFollowCamera(immediate) {
+    function syncFollowCamera(immediate, opts = {}) {
       if (!followLocked && !navigating) return;
       if (navigating && pipSwapped) {
         applyMainOverviewCamera(immediate);
@@ -2447,14 +2457,21 @@
         return;
       }
       if (!followLocked) return;
-      applyMainDetailCamera(immediate);
+      applyMainDetailCamera(immediate, opts);
       syncPipOverviewCamera();
     }
 
     function togglePipSwap() {
       if (!pipEl.classList.contains("visible")) return;
       pipSwapped = !pipSwapped;
-      syncFollowCamera(true);
+      // Swap restores the default framing for whichever view becomes main.
+      if (pipSwapped) {
+        applyMainOverviewCamera(true);
+        syncPipDetailCamera();
+      } else {
+        applyMainDetailCamera(true, { resetZoom: true });
+        syncPipOverviewCamera();
+      }
       setTimeout(() => {
         if (overviewMap) overviewMap.resize();
         if (pipSwapped) syncPipDetailCamera();
@@ -2783,6 +2800,7 @@
       setRouteCardOpen(false);
       setPipVisible(true);
       setFollowLocked(true);
+      applyMainDetailCamera(true, { resetZoom: true });
       syncRouteExportUi();
       updateNavGuidance();
       speakCue("Navigation started. Follow the orange line.", "nav-start");
@@ -3069,6 +3087,14 @@
     map.on("rotatestart", () => {
       if (suppressFollowBreak) return;
       headingUp = false;
+    });
+    // Pinch/scroll zoom must not be overwritten by follow camera ticks.
+    map.on("zoomstart", () => {
+      if (suppressFollowBreak) return;
+      userZooming = true;
+    });
+    map.on("zoomend", () => {
+      userZooming = false;
     });
     map.on("rotate", updateCompass);
     map.on("pitch", updateCompass);
