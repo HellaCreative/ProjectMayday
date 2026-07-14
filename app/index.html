@@ -49,11 +49,19 @@
       pointer-events: none;
     }
 
+    .topbar-left {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 8px;
+      pointer-events: auto;
+    }
+
     .brand {
       pointer-events: auto;
       font-family: var(--mono);
       font-weight: 700;
-      font-size: 1.15rem;
+      font-size: 1.02rem;
       letter-spacing: 0.04em;
       text-decoration: none;
       color: var(--text);
@@ -62,50 +70,56 @@
       border-radius: 14px;
       padding: 10px 14px;
       backdrop-filter: blur(12px);
+      white-space: nowrap;
     }
     .brand span { color: var(--accent); }
 
     .pill {
       pointer-events: auto;
       font-family: var(--mono);
-      font-size: 0.68rem;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 14px;
-      padding: 10px 12px;
-      backdrop-filter: blur(12px);
-      color: var(--muted);
-      text-align: right;
-    }
-    .pill strong {
-      display: block;
-      color: var(--text);
-      font-size: 0.95rem;
-      margin-top: 2px;
-    }
-    .pill.ready { border-color: rgba(10, 102, 194, 0.42); }
-    .pill.ready strong { color: var(--accent); }
-
-    .status {
-      position: absolute;
-      top: calc(max(12px, env(safe-area-inset-top)) + 64px);
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 20;
-      font-family: var(--mono);
-      font-size: 0.68rem;
-      letter-spacing: 0.1em;
+      font-size: 0.56rem;
+      letter-spacing: 0.09em;
       text-transform: uppercase;
       background: var(--panel);
       border: 1px solid var(--line);
       border-radius: 999px;
-      padding: 8px 14px;
-      white-space: nowrap;
-      max-width: calc(100vw - 24px);
-      overflow: hidden;
-      text-overflow: ellipsis;
+      padding: 4px 10px;
+      backdrop-filter: blur(12px);
+      color: var(--muted);
+    }
+    .pill strong {
+      color: var(--text);
+      font-size: 0.62rem;
+      font-weight: 600;
+    }
+    .pill.ready { border-color: rgba(10, 102, 194, 0.42); }
+    .pill.ready strong { color: var(--accent); }
+
+    .btn.mini {
+      width: 42px;
+      height: 42px;
+      border-radius: 12px;
+    }
+    .btn.mini[aria-expanded="true"],
+    .route-toggle[aria-expanded="true"] {
+      background: var(--route-dark);
+      color: #ffffff;
+      border-color: transparent;
+    }
+    .route-toggle { pointer-events: auto; }
+
+    .status {
+      font-family: var(--mono);
+      font-size: 0.66rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      background: var(--panel-2);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 8px 12px;
+      margin-bottom: 12px;
+      color: var(--muted);
+      line-height: 1.5;
     }
     .status.ok { color: var(--accent); }
     .status.error { color: #c1122f; border-color: rgba(193, 18, 47, 0.35); }
@@ -181,8 +195,8 @@
     .legend {
       position: absolute;
       left: 12px;
-      top: calc(max(12px, env(safe-area-inset-top)) + 118px);
-      z-index: 20;
+      top: calc(max(12px, env(safe-area-inset-top)) + 148px);
+      z-index: 19;
       background: var(--panel);
       border: 1px solid var(--line);
       border-radius: 12px;
@@ -194,6 +208,14 @@
       text-transform: uppercase;
       color: var(--muted);
       min-width: 160px;
+      max-height: calc(100vh - 280px);
+      overflow: auto;
+      transition: transform 200ms ease, opacity 200ms ease;
+    }
+    .legend.collapsed {
+      transform: translateX(calc(-100% - 24px));
+      opacity: 0;
+      pointer-events: none;
     }
     .legend-group + .legend-group {
       margin-top: 10px;
@@ -263,7 +285,7 @@
 
     .route-card {
       position: absolute;
-      top: calc(max(12px, env(safe-area-inset-top)) + 88px);
+      top: calc(max(12px, env(safe-area-inset-top)) + 66px);
       right: 12px;
       z-index: 20;
       width: min(312px, calc(100vw - 24px));
@@ -274,6 +296,7 @@
       backdrop-filter: blur(12px);
       color: var(--text);
     }
+    .route-card.collapsed { display: none; }
     .route-segment {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -447,18 +470,13 @@
 
     @media (max-width: 760px) {
       .route-card {
-        top: calc(max(12px, env(safe-area-inset-top)) + 92px);
-        left: 12px;
+        top: calc(max(12px, env(safe-area-inset-top)) + 66px);
+        left: auto;
         right: 12px;
-        width: auto;
+        width: min(312px, calc(100vw - 24px));
       }
       .legend {
-        top: calc(max(12px, env(safe-area-inset-top)) + 214px);
-        max-height: calc(100vh - 330px);
-        overflow: auto;
-      }
-      .status {
-        top: calc(max(12px, env(safe-area-inset-top)) + 58px);
+        max-height: calc(100vh - 320px);
       }
     }
   </style>
@@ -467,13 +485,19 @@
   <div id="map"></div>
 
   <div class="topbar">
-    <a class="brand" href="../index.html">DIRT<span>.</span></a>
-    <div class="pill" id="modePill">NSTDB<strong id="modeLabel">Loading…</strong></div>
+    <div class="topbar-left">
+      <a class="brand" href="../index.html">DIRT<span>.</span> MAYDAY<span>.</span></a>
+      <div class="pill" id="modePill"><strong id="modeLabel">Loading…</strong></div>
+      <button class="btn mini" id="legendBtn" title="Track types" aria-label="Toggle track type drawer" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="14" y2="18"/></svg>
+      </button>
+    </div>
+    <button class="btn route-toggle" id="routeToggleBtn" title="Route planner" aria-label="Toggle route planner" aria-expanded="false">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="19" r="2.4"/><circle cx="18" cy="5" r="2.4"/><path d="M8.4 19h6.1a3.5 3.5 0 0 0 0-7H9.5a3.5 3.5 0 0 1 0-7h6.1"/></svg>
+    </button>
   </div>
 
-  <div class="status" id="status">Loading NS government roads…</div>
-
-  <div class="route-card" id="routeCard">
+  <div class="route-card collapsed" id="routeCard">
     <div class="route-segment" role="tablist" aria-label="Routing mode">
       <button class="route-mode active" type="button" data-route-mode="here" role="tab" aria-selected="true">From here</button>
       <button class="route-mode" type="button" data-route-mode="plan" role="tab" aria-selected="false">Plan route</button>
@@ -491,7 +515,7 @@
     <div class="route-debug" id="routeDebug"></div>
   </div>
 
-  <div class="legend">
+  <div class="legend collapsed" id="legend">
     <div class="legend-group">
       <span class="legend-title">Track type</span>
       <label class="legend-row">
@@ -555,6 +579,7 @@
 
   <div class="panel hidden" id="panel">
     <h2>Bundled data sources</h2>
+    <div class="status" id="status">Loading NS government roads…</div>
     <p>
       Nova Scotia government NSTDB roads are compiled into this build. OSM
       Overpass and NRN are retained in the repo but disabled for this POC.
@@ -675,7 +700,7 @@
     function setReady(count) {
       trailCount = count;
       modePill.className = "pill ready";
-      modeLabel.textContent = count.toLocaleString() + " bundled";
+      modeLabel.textContent = count.toLocaleString() + " segments";
     }
 
     function setReadyTotal() {
@@ -1654,6 +1679,7 @@
           if (jobId !== routeJobId) return;
           activeRoute = roadRoute;
           routeMessage = "";
+          setRouteCardOpen(true);
           refreshRouteDraft();
           return;
         }
@@ -1666,17 +1692,20 @@
         if (networkRoute) {
           activeRoute = networkRoute;
           routeMessage = "";
+          setRouteCardOpen(true);
           refreshRouteDraft();
           return;
         }
         routeMessage = "No network route<strong>" + (lastNetworkRouteReason || "Mapped lines do not connect") + "</strong>";
         activeRoute = null;
+        setRouteCardOpen(true);
         refreshRouteDraft();
       } catch (err) {
         console.error(err);
         if (jobId !== routeJobId) return;
         routeMessage = "Routing failed<strong>" + (err.message || "Try again") + "</strong>";
         activeRoute = null;
+        setRouteCardOpen(true);
         refreshRouteDraft();
       }
     }
@@ -1764,6 +1793,24 @@
     map.once("idle", collapseAttribution);
 
     map.on("click", handleRouteClick);
+
+    const legendEl = document.getElementById("legend");
+    const legendBtn = document.getElementById("legendBtn");
+    const routeCard = document.getElementById("routeCard");
+    const routeToggleBtn = document.getElementById("routeToggleBtn");
+
+    legendBtn.addEventListener("click", () => {
+      const open = legendEl.classList.toggle("collapsed") === false;
+      legendBtn.setAttribute("aria-expanded", open ? "true" : "false");
+    });
+
+    function setRouteCardOpen(open) {
+      routeCard.classList.toggle("collapsed", !open);
+      routeToggleBtn.setAttribute("aria-expanded", open ? "true" : "false");
+    }
+    routeToggleBtn.addEventListener("click", () => {
+      setRouteCardOpen(routeCard.classList.contains("collapsed"));
+    });
 
     document.getElementById("popupClose").addEventListener("click", hidePopup);
     routeClear.addEventListener("click", clearRoute);
