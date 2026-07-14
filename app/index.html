@@ -825,7 +825,19 @@
         source: "routeDraft",
         filter: ["==", ["get", "role"], "route"],
         paint: {
-          "line-color": "#ffb000",
+          "line-color": [
+            "match",
+            ["get", "trackClass"],
+            "access", "#0a66c2",
+            "gravel", "#5d6874",
+            "track", "#7c3aed",
+            "bridge", "#00876c",
+            "tunnel", "#8b5e34",
+            "unserviced", "#d22730",
+            "single", "#6d36c9",
+            "connector", "#d22730",
+            "#ffb000"
+          ],
           "line-width": 5,
           "line-opacity": 0.98
         }
@@ -900,14 +912,23 @@
       const start = activeStart();
       const features = [];
       if (activeRoute) {
-        features.push({
-          type: "Feature",
-          geometry: {
-            type: "LineString",
-            coordinates: activeRoute.coordinates
-          },
-          properties: { role: "route" }
-        });
+        const segments = activeRoute.segments?.length
+          ? activeRoute.segments
+          : [{ coords: activeRoute.coordinates, trackClass: "connector" }];
+        for (const segment of segments) {
+          features.push({
+            type: "Feature",
+            geometry: {
+              type: "LineString",
+              coordinates: segment.coords
+            },
+            properties: {
+              role: "route",
+              routeKind: activeRoute.kind,
+              trackClass: segment.trackClass || "connector"
+            }
+          });
+        }
       } else if (start && destination) {
         features.push({
           type: "Feature",
@@ -1143,6 +1164,17 @@
       edgeIndexes.reverse();
 
       const coordinates = [[start.lng, start.lat]];
+      const segments = [];
+      const startSnap = graph.nodes[startNode];
+      const startConnectorKm = distanceKmCoords([start.lng, start.lat], startSnap);
+      if (startConnectorKm > 0.03) {
+        segments.push({
+          trackClass: "connector",
+          coords: [[start.lng, start.lat], startSnap],
+          distanceKm: startConnectorKm
+        });
+        coordinates.push(startSnap);
+      }
       let cursor = startNode;
       let distanceKm = 0;
       let dirtKm = 0;
@@ -1151,6 +1183,11 @@
         const edge = graph.edges[edgeIndex];
         const forward = edge.a === cursor;
         const edgeCoords = forward ? edge.coords : [...edge.coords].reverse();
+        segments.push({
+          trackClass: edge.trackClass,
+          coords: edgeCoords,
+          distanceKm: edge.distanceKm
+        });
         for (let i = 0; i < edgeCoords.length; i += 1) {
           const coord = edgeCoords[i];
           const last = coordinates[coordinates.length - 1];
@@ -1162,8 +1199,22 @@
         dirtKm += edge.distanceKm;
         byClass[edge.trackClass] = (byClass[edge.trackClass] || 0) + edge.distanceKm;
       }
-      coordinates.push([end.lng, end.lat]);
-      return { kind: "nstdb", coordinates, distanceKm, dirtKm, byClass };
+      const endCoord = [end.lng, end.lat];
+      const lastCoord = coordinates[coordinates.length - 1];
+      const endConnectorKm = distanceKmCoords(lastCoord, endCoord);
+      if (endConnectorKm > 0.03) {
+        segments.push({
+          trackClass: "connector",
+          coords: [lastCoord, endCoord],
+          distanceKm: endConnectorKm
+        });
+        coordinates.push(endCoord);
+      }
+      distanceKm += startConnectorKm + endConnectorKm;
+      if (startConnectorKm || endConnectorKm) {
+        byClass.connector = (byClass.connector || 0) + startConnectorKm + endConnectorKm;
+      }
+      return { kind: "nstdb", coordinates, segments, distanceKm, dirtKm, byClass };
     }
 
     async function fetchRoadConnectorRoute(start, end) {
@@ -1179,6 +1230,11 @@
       return {
         kind: "roadConnector",
         coordinates: route.geometry.coordinates,
+        segments: [{
+          trackClass: "connector",
+          coords: route.geometry.coordinates,
+          distanceKm: route.distance / 1000
+        }],
         distanceKm: route.distance / 1000,
         dirtKm: 0,
         byClass: { connector: route.distance / 1000 }
@@ -1195,7 +1251,7 @@
       if (activeRoute) {
         if (activeRoute.kind === "roadConnector") {
           routeStatus.innerHTML =
-            "Road route beta<strong>" +
+            "Paved fallback<strong>" +
             activeRoute.distanceKm.toFixed(activeRoute.distanceKm >= 10 ? 1 : 2) +
             " km · OSM connector</strong>";
           return;
@@ -1265,42 +1321,34 @@
       }
       const jobId = ++routeJobId;
       activeRoute = null;
-      routeMessage = "Routing<strong>Using OSM road connector</strong>";
+      routeMessage = "Building dirt graph<strong>Trying NSTDB first</strong>";
       refreshRouteDraft();
       try {
+        const graph = await ensureRoutingGraph();
+        if (jobId !== routeJobId) return;
+        routeMessage = "Routing<strong>Snapping to NSTDB network</strong>";
+        refreshRouteDraft();
+        const dirtRoute = findNetworkRoute(graph, start, destination);
+        if (jobId !== routeJobId) return;
+        if (dirtRoute) {
+          activeRoute = dirtRoute;
+          routeMessage = "";
+          refreshRouteDraft();
+          return;
+        }
+        routeMessage = "No dirt connection<strong>Trying paved connector</strong>";
+        refreshRouteDraft();
         const roadRoute = await fetchRoadConnectorRoute(start, destination);
         if (jobId !== routeJobId) return;
         activeRoute = roadRoute;
         routeMessage = "";
         refreshRouteDraft();
-      } catch (roadErr) {
-        console.warn("OSM road connector failed; trying NSTDB graph", roadErr);
+      } catch (err) {
+        console.error(err);
         if (jobId !== routeJobId) return;
-        routeMessage = "Building route graph<strong>Trying NSTDB fallback</strong>";
+        routeMessage = "Routing failed<strong>" + (err.message || "Try again") + "</strong>";
+        activeRoute = null;
         refreshRouteDraft();
-        try {
-          const graph = await ensureRoutingGraph();
-          if (jobId !== routeJobId) return;
-          routeMessage = "Routing<strong>Snapping to NSTDB network</strong>";
-          refreshRouteDraft();
-          const route = findNetworkRoute(graph, start, destination);
-          if (jobId !== routeJobId) return;
-          if (!route) {
-            routeMessage = "No connected route<strong>Showing direct line only</strong>";
-            activeRoute = null;
-            refreshRouteDraft();
-            return;
-          }
-          activeRoute = route;
-          routeMessage = "";
-          refreshRouteDraft();
-        } catch (err) {
-          console.error(err);
-          if (jobId !== routeJobId) return;
-          routeMessage = "Routing failed<strong>" + (err.message || "Try again") + "</strong>";
-          activeRoute = null;
-          refreshRouteDraft();
-        }
       }
     }
 
