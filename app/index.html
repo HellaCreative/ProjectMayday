@@ -358,6 +358,10 @@
         <span class="legend-label"><i style="background:var(--text)"></i>OSM Overpass</span>
         <span class="switch"><input type="checkbox" data-source-toggle="osm" checked aria-label="Toggle OSM Overpass source"><span></span></span>
       </label>
+      <label class="legend-row">
+        <span class="legend-label"><i style="background:var(--text)"></i>NRN roads</span>
+        <span class="switch"><input type="checkbox" data-source-toggle="nrn" aria-label="Toggle National Road Network source"><span></span></span>
+      </label>
     </div>
   </div>
 
@@ -384,26 +388,32 @@
     const FALLBACK = { lng: -63.2985, lat: 44.7427, name: "Porter's Lake, NS" };
     const BUNDLED_TRAILS_URL = "/app/data/osm-overpass-trails.geojson.gz";
     const BUNDLED_META_URL = "/app/data/osm-overpass-trails.meta.json";
+    const BUNDLED_NRN_URL = "/app/data/nrn-road-backbone.geojson.gz";
+    const BUNDLED_NRN_META_URL = "/app/data/nrn-road-backbone.meta.json";
     const SHORTBREAD_STYLE_URL = "/app/data/shortbread-style.json";
 
     const TRACK_TYPES = {
-      paved: { label: "Paved road", color: "#d87900", layers: ["trails-paved"] },
-      gravel: { label: "Gravel road", color: "#5d6874", layers: ["trails-gravel"] },
+      paved: { label: "Paved road", color: "#d87900", layers: ["nrn-paved", "trails-paved"] },
+      gravel: { label: "Gravel road", color: "#5d6874", layers: ["nrn-gravel", "trails-gravel"] },
       atv: { label: "ATV trail", color: "#0a66c2", layers: ["trails-atv"] },
       single: { label: "Single track", color: "#6d36c9", layers: ["trails-single"] }
     };
     const TRAIL_LAYER_IDS = Object.values(TRACK_TYPES).flatMap((type) => type.layers);
-    const SOURCE_LAYER_MAP = { osm: TRAIL_LAYER_IDS };
+    const OSM_LAYER_IDS = ["trails-paved", "trails-gravel", "trails-atv", "trails-single"];
+    const NRN_LAYER_IDS = ["nrn-paved", "nrn-gravel"];
+    const SOURCE_LAYER_MAP = { osm: OSM_LAYER_IDS, nrn: NRN_LAYER_IDS };
     const layerEnabled = { paved: true, gravel: true, atv: true, single: true };
-    const sourceEnabled = { osm: true };
+    const sourceEnabled = { osm: true, nrn: false };
 
-    const db = new Dexie("dirt_osm_overpass_v1");
+    const db = new Dexie("dirt_sources_v1");
     db.version(1).stores({
       bundled: "id"
     });
 
     let rider = { ...FALLBACK };
     let trailCount = 0;
+    let nrnLoaded = false;
+    const sourceCounts = { osm: 0, nrn: 0 };
 
     const statusEl = document.getElementById("status");
     const modePill = document.getElementById("modePill");
@@ -464,6 +474,10 @@
       modeLabel.textContent = count.toLocaleString() + " bundled";
     }
 
+    function setReadyTotal() {
+      setReady(Object.values(sourceCounts).reduce((sum, count) => sum + count, 0));
+    }
+
     async function fetchGzipJson(url) {
       const res = await fetch(url);
       if (!res.ok) throw new Error("HTTP " + res.status + " for " + url);
@@ -496,14 +510,52 @@
       return fc;
     }
 
+    async function loadBundledNrn() {
+      const cached = await db.bundled.get("nrn-road-backbone");
+      if (cached && cached.featureCollection && cached.featureCollection.features) {
+        setStatus("Loaded " + cached.featureCollection.features.length.toLocaleString() + " NRN roads from device cache", "ok");
+        return cached.featureCollection;
+      }
+
+      setStatus("Loading NRN road backbone…");
+      const fc = await fetchGzipJson(BUNDLED_NRN_URL);
+      try {
+        await db.bundled.put({
+          id: "nrn-road-backbone",
+          featureCollection: fc,
+          cachedAt: Date.now()
+        });
+      } catch (err) {
+        console.warn("Could not cache NRN roads in IndexedDB", err);
+      }
+      return fc;
+    }
+
+    async function ensureNrnLoaded() {
+      if (nrnLoaded) return;
+      const t0 = performance.now();
+      const fc = addTrackTypes(await loadBundledNrn());
+      map.getSource("nrn").setData(fc);
+      sourceCounts.nrn = fc.features.length;
+      nrnLoaded = true;
+      setReadyTotal();
+      setStatus(
+        fc.features.length.toLocaleString() + " NRN roads ready · " + Math.round(performance.now() - t0) + " ms",
+        "ok"
+      );
+    }
+
     async function loadMeta() {
       try {
-        const meta = await (await fetch(BUNDLED_META_URL)).json();
+        const [meta, nrnMeta] = await Promise.all([
+          fetch(BUNDLED_META_URL).then((res) => res.json()),
+          fetch(BUNDLED_NRN_META_URL).then((res) => res.json())
+        ]);
         dataMeta.innerHTML =
-          "Features: " + (meta.featureCount || 0).toLocaleString() + "<br>" +
-          "Pack size: ~" + ((meta.gzBytes || 0) / (1024 * 1024)).toFixed(1) + " MB gzipped<br>" +
-          "Built: " + (meta.generatedAt ? new Date(meta.generatedAt).toLocaleString() : "unknown") + "<br>" +
-          "Source: OSM Overpass track/path rules";
+          "OSM Overpass: " + (meta.featureCount || 0).toLocaleString() + " lines · ~" + ((meta.gzBytes || 0) / (1024 * 1024)).toFixed(1) + " MB<br>" +
+          "NRN roads: " + (nrnMeta.featureCount || 0).toLocaleString() + " lines · ~" + ((nrnMeta.gzBytes || 0) / (1024 * 1024)).toFixed(1) + " MB<br>" +
+          "NRN surface: " + (nrnMeta.surfaceConfidence?.["pavement-field"] ? "official pavement fields" : "road-class inferred") + "<br>" +
+          "Built: " + (meta.generatedAt ? new Date(meta.generatedAt).toLocaleString() : "unknown");
       } catch (_) {
         dataMeta.textContent = "Metadata unavailable";
       }
@@ -578,6 +630,32 @@
 
     function ensureLayers() {
       if (map.getSource("trails")) return;
+      map.addSource("nrn", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] }
+      });
+      map.addLayer({
+        id: "nrn-paved",
+        type: "line",
+        source: "nrn",
+        filter: ["==", ["get", "trackClass"], "paved"],
+        paint: {
+          "line-color": TRACK_TYPES.paved.color,
+          "line-width": 2,
+          "line-opacity": 0.58
+        }
+      });
+      map.addLayer({
+        id: "nrn-gravel",
+        type: "line",
+        source: "nrn",
+        filter: ["==", ["get", "trackClass"], "gravel"],
+        paint: {
+          "line-color": TRACK_TYPES.gravel.color,
+          "line-width": 2,
+          "line-opacity": 0.68
+        }
+      });
       map.addSource("trails", {
         type: "geojson",
         data: { type: "FeatureCollection", features: [] }
@@ -682,13 +760,24 @@
     function showPopup(feature, point) {
       const p = feature.properties || {};
       const trackType = TRACK_TYPES[p.trackClass] || TRACK_TYPES.gravel;
+      const sourceLabel = p.source === "NRN" ? "National Road Network" : "OSM Overpass track/path overlay";
+      const typeLabel = p.highway || p.roadClass || "road";
+      const detailLabel = p.source === "NRN"
+        ? (p.roadClass || "unknown") + (p.surfaceConfidence ? " · " + p.surfaceConfidence : "")
+        : (p.highway || "unknown") + (p.tracktype ? " · " + p.tracktype : "");
+      const surfaceLabel = p.source === "NRN"
+        ? (p.pavementStatus || "unknown") + (p.unpavedSurface && p.unpavedSurface !== "Unknown" ? " · " + p.unpavedSurface : "")
+        : (p.surface || "unspecified");
+      const accessLabel = p.source === "NRN"
+        ? (p.jurisdiction || "unknown") + (p.trafficDirection ? " · " + p.trafficDirection : "")
+        : (p.accessStatus || "unknown") + (p.accessDetail ? " · " + p.accessDetail : "");
       popupBody.innerHTML =
-        '<div class="k">Type</div><div class="v">' + (p.highway || "unspecified") + (p.name ? " · " + p.name : "") + "</div>" +
+        '<div class="k">Type</div><div class="v">' + typeLabel + (p.name ? " · " + p.name : "") + "</div>" +
         '<div class="k">Track class</div><div class="v" style="color:' + trackType.color + '">' + trackType.label + "</div>" +
-        '<div class="k">OSM detail</div><div class="v">' + (p.highway || "unknown") + (p.tracktype ? " · " + p.tracktype : "") + "</div>" +
-        '<div class="k">Surface</div><div class="v">' + (p.surface || "unspecified") + "</div>" +
-        '<div class="k">Motor access</div><div class="v">' + (p.accessStatus || "unknown") + (p.accessDetail ? " · " + p.accessDetail : "") + "</div>" +
-        '<div class="k">Source</div><div class="v">OSM Overpass track/path overlay</div>';
+        '<div class="k">Detail</div><div class="v">' + detailLabel + "</div>" +
+        '<div class="k">Surface</div><div class="v">' + surfaceLabel + "</div>" +
+        '<div class="k">Access / jurisdiction</div><div class="v">' + accessLabel + "</div>" +
+        '<div class="k">Source</div><div class="v">' + sourceLabel + "</div>";
       const pad = 12;
       const w = Math.min(300, window.innerWidth - 24);
       let left = point.x - w / 2;
@@ -711,7 +800,8 @@
         const fc = addTrackTypes(await loadBundledTrails());
         map.getSource("trails").setData(fc);
         const ms = Math.round(performance.now() - t0);
-        setReady(fc.features.length);
+        sourceCounts.osm = fc.features.length;
+        setReadyTotal();
         setStatus(
           fc.features.length.toLocaleString() + " OSM overlay lines ready · " + ms + " ms",
           "ok"
@@ -761,8 +851,18 @@
       });
     });
     document.querySelectorAll("[data-source-toggle]").forEach((input) => {
-      input.addEventListener("change", () => {
+      input.addEventListener("change", async () => {
         sourceEnabled[input.dataset.sourceToggle] = input.checked;
+        if (input.dataset.sourceToggle === "nrn" && input.checked) {
+          try {
+            await ensureNrnLoaded();
+          } catch (err) {
+            console.error(err);
+            setStatus("Failed to load NRN roads · " + (err.message || "error"), "error");
+            input.checked = false;
+            sourceEnabled.nrn = false;
+          }
+        }
         applyLayerVisibility();
       });
     });
