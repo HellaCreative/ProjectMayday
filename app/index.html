@@ -639,14 +639,28 @@
       overflow: hidden;
       box-shadow: 0 12px 28px rgba(22, 36, 51, 0.28);
       background: var(--panel);
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
     }
     .pip.visible { display: block; }
-    .pip #pipMap { width: 100%; height: 100%; }
+    .pip:active { transform: scale(0.98); }
+    .pip #pipMap {
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+    }
     .pip-label {
       position: absolute;
       top: 6px;
       left: 8px;
+      right: 8px;
       z-index: 2;
+      display: flex;
+      justify-content: space-between;
+      gap: 6px;
+      pointer-events: none;
+    }
+    .pip-label span {
       font-family: var(--mono);
       font-size: 0.56rem;
       letter-spacing: 0.1em;
@@ -655,7 +669,9 @@
       background: rgba(17, 24, 32, 0.72);
       border-radius: 999px;
       padding: 3px 8px;
-      pointer-events: none;
+    }
+    .pip-hint {
+      background: rgba(10, 102, 194, 0.88) !important;
     }
     body.navigating .route-card { display: none; }
     body.navigating .topbar-left .btn.mini { display: none; }
@@ -899,8 +915,11 @@
     <span aria-hidden="true">◎</span> Recenter
   </button>
 
-  <div class="pip" id="pip" aria-hidden="true">
-    <div class="pip-label">Overview</div>
+  <div class="pip" id="pip" aria-hidden="true" role="button" tabindex="0" title="Tap to switch main map and overview" aria-label="Switch between detail and overview map">
+    <div class="pip-label">
+      <span id="pipModeLabel">Overview</span>
+      <span class="pip-hint">Tap to switch</span>
+    </div>
     <div id="pipMap"></div>
   </div>
 
@@ -1007,6 +1026,8 @@
     let lastSpokenCueKey = "";
     let overviewMap = null;
     let overviewReady = false;
+    // false = main detail / pip overview; true = main overview / pip detail
+    let pipSwapped = false;
 
     const statusEl = document.getElementById("status");
     const modePill = document.getElementById("modePill");
@@ -1033,6 +1054,7 @@
     const navStopBtn = document.getElementById("navStopBtn");
     const followChip = document.getElementById("followChip");
     const pipEl = document.getElementById("pip");
+    const pipModeLabel = document.getElementById("pipModeLabel");
 
     function applyLayerVisibility() {
       if (!map || !map.isStyleLoaded()) return;
@@ -2264,16 +2286,21 @@
       }
     }
 
-    function syncFollowCamera(immediate) {
-      if (!followLocked) return;
+    function routeOverviewBounds() {
+      const coords = activeRouteCoordinates();
+      if (coords.length < 2) return null;
+      return coords.reduce((b, c) => b.extend(c), new maplibregl.LngLatBounds(coords[0], coords[0]));
+    }
+
+    function applyMainDetailCamera(immediate) {
       const zoom = navigating ? Math.max(map.getZoom(), 15.2) : Math.max(map.getZoom(), 13.5);
-      const heading = Number.isFinite(rider.heading) ? rider.heading : map.getBearing();
+      const bearing = navigating && Number.isFinite(rider.heading) ? rider.heading : map.getBearing();
       const pitch = navigating ? 50 : map.getPitch();
       suppressFollowBreak = true;
       const cam = {
         center: [rider.lng, rider.lat],
         zoom,
-        bearing: navigating && Number.isFinite(rider.heading) ? heading : map.getBearing(),
+        bearing,
         pitch: navigating ? pitch : map.getPitch(),
         duration: immediate ? 0 : 700,
         essential: true
@@ -2281,6 +2308,63 @@
       if (immediate) map.jumpTo(cam);
       else map.easeTo(cam);
       setTimeout(() => { suppressFollowBreak = false; }, immediate ? 50 : 750);
+    }
+
+    function applyMainOverviewCamera(immediate) {
+      const bounds = routeOverviewBounds();
+      suppressFollowBreak = true;
+      if (bounds) {
+        map.fitBounds(bounds, {
+          padding: { top: 120, bottom: 140, left: 40, right: 40 },
+          maxZoom: 13,
+          duration: immediate ? 0 : 700,
+          pitch: 0,
+          bearing: 0
+        });
+      } else {
+        map.easeTo({
+          center: [rider.lng, rider.lat],
+          zoom: 11,
+          pitch: 0,
+          bearing: 0,
+          duration: immediate ? 0 : 700
+        });
+      }
+      setTimeout(() => { suppressFollowBreak = false; }, immediate ? 50 : 750);
+    }
+
+    function syncFollowCamera(immediate) {
+      if (!followLocked && !navigating) return;
+      if (navigating && pipSwapped) {
+        applyMainOverviewCamera(immediate);
+        syncPipDetailCamera();
+        return;
+      }
+      if (!followLocked) return;
+      applyMainDetailCamera(immediate);
+      syncPipOverviewCamera();
+    }
+
+    function updatePipChrome() {
+      if (!pipModeLabel) return;
+      // Label describes what the SMALL map is showing.
+      pipModeLabel.textContent = pipSwapped ? "Detail" : "Overview";
+    }
+
+    function togglePipSwap() {
+      if (!pipEl.classList.contains("visible")) return;
+      pipSwapped = !pipSwapped;
+      updatePipChrome();
+      syncFollowCamera(true);
+      setTimeout(() => {
+        if (overviewMap) overviewMap.resize();
+        if (pipSwapped) syncPipDetailCamera();
+        else {
+          syncOverviewRoute();
+          syncOverviewRider();
+        }
+      }, 60);
+      setStatus(pipSwapped ? "Main map: overview · PiP: detail" : "Main map: detail · PiP: overview", "ok");
     }
 
     function bearingDeg(a, b) {
@@ -2437,8 +2521,13 @@
         else if (toTurnKm < 0.45) speakCue("In " + Math.round(toTurnKm * 1000) + " meters, " + next.text, next.key + "-mid");
       }
 
-      syncFollowCamera(false);
       syncOverviewRider();
+      if (pipSwapped) {
+        applyMainOverviewCamera(false);
+        syncPipDetailCamera();
+      } else {
+        syncFollowCamera(false);
+      }
     }
 
     function ensureOverviewMap() {
@@ -2499,10 +2588,24 @@
           properties: {}
         }]
       });
-      if (coords.length >= 2) {
-        const bounds = coords.reduce((b, c) => b.extend(c), new maplibregl.LngLatBounds(coords[0], coords[0]));
-        overviewMap.fitBounds(bounds, { padding: 22, maxZoom: 12, duration: 0 });
-      }
+      syncPipOverviewCamera();
+    }
+
+    function syncPipOverviewCamera() {
+      if (!overviewMap || !overviewReady || pipSwapped) return;
+      const bounds = routeOverviewBounds();
+      if (bounds) overviewMap.fitBounds(bounds, { padding: 22, maxZoom: 12, duration: 0 });
+    }
+
+    function syncPipDetailCamera() {
+      if (!overviewMap || !overviewReady || !pipSwapped) return;
+      const bearing = Number.isFinite(rider.heading) ? rider.heading : 0;
+      overviewMap.jumpTo({
+        center: [rider.lng, rider.lat],
+        zoom: 15.4,
+        bearing,
+        pitch: 45
+      });
     }
 
     function syncOverviewRider() {
@@ -2515,6 +2618,7 @@
           properties: {}
         }]
       });
+      if (pipSwapped) syncPipDetailCamera();
     }
 
     function setPipVisible(visible) {
@@ -2522,11 +2626,16 @@
       pipEl.setAttribute("aria-hidden", visible ? "false" : "true");
       if (visible) {
         ensureOverviewMap();
+        updatePipChrome();
         setTimeout(() => {
           if (overviewMap) overviewMap.resize();
           syncOverviewRoute();
           syncOverviewRider();
+          syncFollowCamera(true);
         }, 80);
+      } else {
+        pipSwapped = false;
+        updatePipChrome();
       }
     }
 
@@ -2537,6 +2646,7 @@
       }
       if (!ensureGeoWatch()) return;
       navigating = true;
+      pipSwapped = false;
       navManeuvers = buildNavManeuvers(activeRouteCoordinates());
       lastSpokenCueKey = "";
       document.body.classList.add("navigating");
@@ -2547,11 +2657,12 @@
       syncRouteExportUi();
       updateNavGuidance();
       speakCue("Navigation started. Follow the orange line.", "nav-start");
-      setStatus("Navigation on · follow locked", "ok");
+      setStatus("Navigation on · tap overview to switch views", "ok");
     }
 
     function stopNavigation() {
       navigating = false;
+      pipSwapped = false;
       document.body.classList.remove("navigating");
       navHud.classList.remove("visible");
       setPipVisible(false);
@@ -2908,6 +3019,16 @@
     followChip.addEventListener("click", activateFollowFromControl);
     routeNavBtn.addEventListener("click", toggleNavigation);
     navStopBtn.addEventListener("click", stopNavigation);
+    pipEl.addEventListener("click", (event) => {
+      event.preventDefault();
+      togglePipSwap();
+    });
+    pipEl.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        togglePipSwap();
+      }
+    });
     document.querySelectorAll("[data-layer-toggle]").forEach((input) => {
       input.addEventListener("change", () => {
         layerEnabled[input.dataset.layerToggle] = input.checked;
