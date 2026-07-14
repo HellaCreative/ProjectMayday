@@ -1,0 +1,22 @@
+{
+  "generatedAt": "2026-07-14T14:32:37.939Z",
+  "sourceName": "OSM motorized/off-road overlay",
+  "source": "https://download.geofabrik.de/north-america/canada/nova-scotia-latest.osm.pbf",
+  "queryModel": "Overpass-equivalent OSM tag filter",
+  "license": "ODbL - OpenStreetMap contributors",
+  "region": "Nova Scotia",
+  "featureCount": 23771,
+  "skipped": 15474,
+  "bytes": 24254640,
+  "gzBytes": 4378934,
+  "classes": {
+    "gravel": 22860,
+    "atv": 819,
+    "single": 58,
+    "paved": 34
+  },
+  "access": {
+    "unknown": 23446,
+    "allowed": 325
+  }
+}
