@@ -25,6 +25,8 @@
       --tunnel: #8b5e34;
       --unserviced: #d22730;
       --single: #6d36c9;
+      --route: #ffb000;
+      --route-dark: #111820;
       --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
       --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
     }
@@ -258,6 +260,81 @@
       outline-offset: 2px;
     }
 
+    .route-card {
+      position: absolute;
+      top: calc(max(12px, env(safe-area-inset-top)) + 88px);
+      right: 12px;
+      z-index: 20;
+      width: min(312px, calc(100vw - 24px));
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 10px;
+      backdrop-filter: blur(12px);
+      color: var(--text);
+    }
+    .route-segment {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4px;
+      padding: 3px;
+      background: var(--panel-2);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+    }
+    .route-mode {
+      border: 0;
+      border-radius: 8px;
+      min-height: 34px;
+      background: transparent;
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 0.68rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      cursor: pointer;
+    }
+    .route-mode.active {
+      background: var(--route-dark);
+      color: #ffffff;
+    }
+    .route-readout {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .route-status {
+      min-width: 0;
+      font-family: var(--mono);
+      font-size: 0.67rem;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      color: var(--muted);
+      line-height: 1.35;
+    }
+    .route-status strong {
+      display: block;
+      color: var(--text);
+      font-size: 0.82rem;
+      margin-top: 2px;
+    }
+    .route-clear {
+      width: 38px;
+      height: 38px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #ffffff;
+      color: var(--text);
+      font-size: 1.2rem;
+      cursor: pointer;
+    }
+    .route-clear:disabled {
+      opacity: 0.38;
+      cursor: default;
+    }
+
     .popup {
       position: absolute;
       z-index: 30;
@@ -323,6 +400,23 @@
     .maplibregl-ctrl-attrib.maplibregl-compact:not(.maplibregl-compact-show) .maplibregl-ctrl-attrib-inner {
       display: none !important;
     }
+
+    @media (max-width: 760px) {
+      .route-card {
+        top: calc(max(12px, env(safe-area-inset-top)) + 92px);
+        left: 12px;
+        right: 12px;
+        width: auto;
+      }
+      .legend {
+        top: calc(max(12px, env(safe-area-inset-top)) + 214px);
+        max-height: calc(100vh - 330px);
+        overflow: auto;
+      }
+      .status {
+        top: calc(max(12px, env(safe-area-inset-top)) + 58px);
+      }
+    }
   </style>
 </head>
 <body>
@@ -334,6 +428,17 @@
   </div>
 
   <div class="status" id="status">Loading NS government roads…</div>
+
+  <div class="route-card" id="routeCard">
+    <div class="route-segment" role="tablist" aria-label="Routing mode">
+      <button class="route-mode active" type="button" data-route-mode="here" role="tab" aria-selected="true">From here</button>
+      <button class="route-mode" type="button" data-route-mode="plan" role="tab" aria-selected="false">Plan route</button>
+    </div>
+    <div class="route-readout">
+      <div class="route-status" id="routeStatus">Tap destination<strong>No route set</strong></div>
+      <button class="route-clear" id="routeClear" type="button" title="Clear route" aria-label="Clear route" disabled>×</button>
+    </div>
+  </div>
 
   <div class="legend">
     <div class="legend-group">
@@ -444,6 +549,9 @@
     let rider = { ...FALLBACK };
     let trailCount = 0;
     let nsGovLoaded = false;
+    let routeMode = "here";
+    let plannedStart = null;
+    let destination = null;
     const sourceCounts = { nsGov: 0 };
 
     const statusEl = document.getElementById("status");
@@ -453,6 +561,8 @@
     const dataMeta = document.getElementById("dataMeta");
     const popupEl = document.getElementById("popup");
     const popupBody = document.getElementById("popupBody");
+    const routeStatus = document.getElementById("routeStatus");
+    const routeClear = document.getElementById("routeClear");
 
     function classifyTrack(feature) {
       const p = feature.properties || {};
@@ -687,6 +797,62 @@
           "circle-stroke-color": "#ffffff"
         }
       });
+      map.addSource("routeDraft", {
+        type: "geojson",
+        data: routeFeatureCollection()
+      });
+      map.addLayer({
+        id: "route-intent-casing",
+        type: "line",
+        source: "routeDraft",
+        filter: ["==", ["geometry-type"], "LineString"],
+        paint: {
+          "line-color": "#111820",
+          "line-width": 8,
+          "line-opacity": 0.92
+        }
+      });
+      map.addLayer({
+        id: "route-intent",
+        type: "line",
+        source: "routeDraft",
+        filter: ["==", ["geometry-type"], "LineString"],
+        paint: {
+          "line-color": "#ffb000",
+          "line-width": 4,
+          "line-opacity": 0.96,
+          "line-dasharray": [1.2, 1.1]
+        }
+      });
+      map.addLayer({
+        id: "route-points",
+        type: "circle",
+        source: "routeDraft",
+        filter: ["==", ["geometry-type"], "Point"],
+        paint: {
+          "circle-radius": 11,
+          "circle-color": ["case", ["==", ["get", "role"], "start"], "#111820", "#ffb000"],
+          "circle-stroke-color": "#ffffff",
+          "circle-stroke-width": 3
+        }
+      });
+      map.addLayer({
+        id: "route-point-labels",
+        type: "symbol",
+        source: "routeDraft",
+        filter: ["==", ["geometry-type"], "Point"],
+        layout: {
+          "text-field": ["get", "label"],
+          "text-size": 11,
+          "text-font": ["Noto Sans Regular"],
+          "text-allow-overlap": true,
+          "text-ignore-placement": true
+        },
+        paint: {
+          "text-color": ["case", ["==", ["get", "role"], "start"], "#ffffff", "#111820"]
+        }
+      });
+      refreshRouteDraft();
     }
 
     function setRider(lng, lat) {
@@ -701,6 +867,120 @@
           }]
         });
       }
+      if (routeMode === "here" && destination) refreshRouteDraft();
+    }
+
+    function pointFromLngLat(lngLat) {
+      return { lng: lngLat.lng, lat: lngLat.lat };
+    }
+
+    function activeStart() {
+      return routeMode === "here" ? rider : plannedStart;
+    }
+
+    function routeFeatureCollection() {
+      const start = activeStart();
+      const features = [];
+      if (start && destination) {
+        features.push({
+          type: "Feature",
+          geometry: {
+            type: "LineString",
+            coordinates: [[start.lng, start.lat], [destination.lng, destination.lat]]
+          },
+          properties: { role: "intent" }
+        });
+      }
+      if (start && (destination || routeMode === "plan")) {
+        features.push({
+          type: "Feature",
+          geometry: { type: "Point", coordinates: [start.lng, start.lat] },
+          properties: { role: "start", label: "A" }
+        });
+      }
+      if (destination) {
+        features.push({
+          type: "Feature",
+          geometry: { type: "Point", coordinates: [destination.lng, destination.lat] },
+          properties: { role: "destination", label: "B" }
+        });
+      }
+      return { type: "FeatureCollection", features };
+    }
+
+    function haversineKm(a, b) {
+      if (!a || !b) return 0;
+      const toRad = (deg) => deg * Math.PI / 180;
+      const r = 6371;
+      const dLat = toRad(b.lat - a.lat);
+      const dLng = toRad(b.lng - a.lng);
+      const lat1 = toRad(a.lat);
+      const lat2 = toRad(b.lat);
+      const x = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+      return 2 * r * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+    }
+
+    function updateRouteStatus() {
+      const start = activeStart();
+      routeClear.disabled = !plannedStart && !destination;
+      if (start && destination) {
+        const km = haversineKm(start, destination);
+        routeStatus.innerHTML = "Intent line<strong>" + km.toFixed(km >= 10 ? 1 : 2) + " km direct</strong>";
+        return;
+      }
+      if (routeMode === "here") {
+        routeStatus.innerHTML = "Tap destination<strong>From current location</strong>";
+        return;
+      }
+      if (!plannedStart) {
+        routeStatus.innerHTML = "Tap start<strong>Point A needed</strong>";
+        return;
+      }
+      routeStatus.innerHTML = "Tap destination<strong>Point B needed</strong>";
+    }
+
+    function refreshRouteDraft() {
+      if (map.getSource("routeDraft")) {
+        map.getSource("routeDraft").setData(routeFeatureCollection());
+      }
+      updateRouteStatus();
+    }
+
+    function clearRoute() {
+      plannedStart = null;
+      destination = null;
+      hidePopup();
+      refreshRouteDraft();
+    }
+
+    function setRouteMode(nextMode) {
+      routeMode = nextMode;
+      plannedStart = null;
+      destination = null;
+      document.querySelectorAll("[data-route-mode]").forEach((button) => {
+        const active = button.dataset.routeMode === routeMode;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-selected", active ? "true" : "false");
+      });
+      refreshRouteDraft();
+    }
+
+    function handleRouteClick(e) {
+      hidePopup();
+      const clicked = pointFromLngLat(e.lngLat);
+      if (routeMode === "here") {
+        destination = clicked;
+        refreshRouteDraft();
+        return;
+      }
+      if (!plannedStart) {
+        plannedStart = clicked;
+        destination = null;
+        refreshRouteDraft();
+        return;
+      }
+      destination = clicked;
+      refreshRouteDraft();
     }
 
     function hidePopup() { popupEl.classList.remove("visible"); }
@@ -765,18 +1045,13 @@
 
     map.once("idle", collapseAttribution);
 
-    map.on("click", (e) => {
-      const hits = map.queryRenderedFeatures(e.point, {
-        layers: TRAIL_LAYER_IDS
-      });
-      if (!hits.length) {
-        hidePopup();
-        return;
-      }
-      showPopup(hits[0], e.point);
-    });
+    map.on("click", handleRouteClick);
 
     document.getElementById("popupClose").addEventListener("click", hidePopup);
+    routeClear.addEventListener("click", clearRoute);
+    document.querySelectorAll("[data-route-mode]").forEach((button) => {
+      button.addEventListener("click", () => setRouteMode(button.dataset.routeMode));
+    });
     document.getElementById("panelBtn").addEventListener("click", () => {
       panel.classList.toggle("hidden");
     });
