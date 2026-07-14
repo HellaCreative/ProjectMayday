@@ -481,26 +481,24 @@
       style: {
         version: 8,
         sources: {
-          cartoVoyager: {
+          osm: {
             type: "raster",
             tiles: [
-              "https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png",
-              "https://b.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png",
-              "https://c.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png"
+              "https://a.tile.openstreetmap.org/{z}/{x}/{y}.png",
+              "https://b.tile.openstreetmap.org/{z}/{x}/{y}.png",
+              "https://c.tile.openstreetmap.org/{z}/{x}/{y}.png"
             ],
             tileSize: 256,
-            attribution: "&copy; OpenStreetMap &copy; CARTO"
+            attribution: "&copy; OpenStreetMap contributors"
           }
         },
         layers: [
           {
-            id: "carto-light",
+            id: "osm-base",
             type: "raster",
-            source: "cartoVoyager",
+            source: "osm",
             paint: {
-              "raster-saturation": 0.15,
-              "raster-contrast": 0.2,
-              "raster-brightness-min": 0.05
+              "raster-brightness-max": 0.95
             }
           }
         ]
@@ -521,10 +519,37 @@
         data: { type: "FeatureCollection", features: [] }
       });
 
+      // Service/forestry/gravel roads - gray tones
+      map.addLayer({
+        id: "roads-service",
+        type: "line",
+        source: "trails",
+        filter: ["==", ["get", "roadType"], "service"],
+        paint: {
+          "line-color": "#666666",
+          "line-width": ["interpolate", ["linear"], ["zoom"], 10, 2.5, 14, 4],
+          "line-opacity": 0.85
+        }
+      });
+
+      map.addLayer({
+        id: "roads-dirt",
+        type: "line",
+        source: "trails",
+        filter: ["==", ["get", "roadType"], "dirt"],
+        paint: {
+          "line-color": "#888888",
+          "line-width": ["interpolate", ["linear"], ["zoom"], 10, 2.5, 14, 4],
+          "line-opacity": 0.8
+        }
+      });
+
+      // Trails - vibrant colors with white casing
       map.addLayer({
         id: "trails-casing",
         type: "line",
         source: "trails",
+        filter: ["==", ["get", "roadType"], "trail"],
         paint: {
           "line-color": "#ffffff",
           "line-width": ["interpolate", ["linear"], ["zoom"], 10, 5, 14, 8],
@@ -536,7 +561,7 @@
         id: "trails-line",
         type: "line",
         source: "trails",
-        filter: ["!=", ["get", "grade"], "single"],
+        filter: ["all", ["==", ["get", "roadType"], "trail"], ["!=", ["get", "grade"], "single"]],
         paint: {
           "line-color": [
             "match", ["get", "grade"],
@@ -555,7 +580,7 @@
         id: "trails-single",
         type: "line",
         source: "trails",
-        filter: ["==", ["get", "grade"], "single"],
+        filter: ["all", ["==", ["get", "roadType"], "trail"], ["==", ["get", "grade"], "single"]],
         paint: {
           "line-color": "#7c3aed",
           "line-width": ["interpolate", ["linear"], ["zoom"], 10, 2.5, 14, 4],
