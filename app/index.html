@@ -357,10 +357,6 @@
         <span class="legend-label"><i style="background:var(--text)"></i>NRN gravel</span>
         <span class="switch"><input type="checkbox" data-source-toggle="nrn" aria-label="Toggle National Road Network gravel source"><span></span></span>
       </label>
-      <label class="legend-row">
-        <span class="legend-label"><i style="background:var(--text)"></i>OSM GPKG</span>
-        <span class="switch"><input type="checkbox" data-source-toggle="gpkg" aria-label="Toggle OSM Geofabrik GPKG source"><span></span></span>
-      </label>
     </div>
   </div>
 
@@ -372,8 +368,8 @@
   <div class="panel hidden" id="panel">
     <h2>Bundled data sources</h2>
     <p>
-      OSM Overpass-style lines, NRN gravel roads, and the Geofabrik GPKG
-      comparison layer are compiled into this build. No scan-on-pan.
+      OSM Overpass-style lines and NRN gravel roads are compiled into this
+      build. No live Overpass call. No scan-on-pan.
     </p>
     <div class="meta" id="dataMeta">Loading metadata…</div>
   </div>
@@ -389,22 +385,19 @@
     const BUNDLED_META_URL = "/app/data/osm-overpass-trails.meta.json";
     const BUNDLED_NRN_URL = "/app/data/nrn-road-backbone.geojson.gz";
     const BUNDLED_NRN_META_URL = "/app/data/nrn-road-backbone.meta.json";
-    const BUNDLED_GPKG_URL = "/app/data/osm-geofabrik-gpkg.geojson.gz";
-    const BUNDLED_GPKG_META_URL = "/app/data/osm-geofabrik-gpkg.meta.json";
     const SHORTBREAD_STYLE_URL = "/app/data/shortbread-style.json";
 
     const TRACK_TYPES = {
-      gravel: { label: "Gravel road", color: "#5d6874", layers: ["nrn-gravel", "gpkg-gravel", "trails-gravel"] },
-      atv: { label: "ATV trail", color: "#0a66c2", layers: ["gpkg-atv", "trails-atv"] },
-      single: { label: "Single track", color: "#6d36c9", layers: ["gpkg-single", "trails-single"] }
+      gravel: { label: "Gravel road", color: "#5d6874", layers: ["nrn-gravel", "trails-gravel"] },
+      atv: { label: "ATV trail", color: "#0a66c2", layers: ["trails-atv"] },
+      single: { label: "Single track", color: "#6d36c9", layers: ["trails-single"] }
     };
     const TRAIL_LAYER_IDS = Object.values(TRACK_TYPES).flatMap((type) => type.layers);
     const OSM_LAYER_IDS = ["trails-gravel", "trails-atv", "trails-single"];
     const NRN_LAYER_IDS = ["nrn-gravel"];
-    const GPKG_LAYER_IDS = ["gpkg-gravel", "gpkg-atv", "gpkg-single"];
-    const SOURCE_LAYER_MAP = { osm: OSM_LAYER_IDS, nrn: NRN_LAYER_IDS, gpkg: GPKG_LAYER_IDS };
+    const SOURCE_LAYER_MAP = { osm: OSM_LAYER_IDS, nrn: NRN_LAYER_IDS };
     const layerEnabled = { gravel: true, atv: true, single: true };
-    const sourceEnabled = { osm: true, nrn: false, gpkg: false };
+    const sourceEnabled = { osm: true, nrn: false };
 
     const db = new Dexie("dirt_sources_v2");
     db.version(1).stores({
@@ -414,8 +407,7 @@
     let rider = { ...FALLBACK };
     let trailCount = 0;
     let nrnLoaded = false;
-    let gpkgLoaded = false;
-    const sourceCounts = { osm: 0, nrn: 0, gpkg: 0 };
+    const sourceCounts = { osm: 0, nrn: 0 };
 
     const statusEl = document.getElementById("status");
     const modePill = document.getElementById("modePill");
@@ -532,27 +524,6 @@
       return fc;
     }
 
-    async function loadBundledGpkg() {
-      const cached = await db.bundled.get("osm-geofabrik-gpkg");
-      if (cached && cached.featureCollection && cached.featureCollection.features) {
-        setStatus("Loaded " + cached.featureCollection.features.length.toLocaleString() + " OSM GPKG lines from device cache", "ok");
-        return cached.featureCollection;
-      }
-
-      setStatus("Loading OSM Geofabrik GPKG overlay…");
-      const fc = await fetchGzipJson(BUNDLED_GPKG_URL);
-      try {
-        await db.bundled.put({
-          id: "osm-geofabrik-gpkg",
-          featureCollection: fc,
-          cachedAt: Date.now()
-        });
-      } catch (err) {
-        console.warn("Could not cache OSM Geofabrik GPKG overlay in IndexedDB", err);
-      }
-      return fc;
-    }
-
     async function ensureNrnLoaded() {
       if (nrnLoaded) return;
       const t0 = performance.now();
@@ -567,31 +538,15 @@
       );
     }
 
-    async function ensureGpkgLoaded() {
-      if (gpkgLoaded) return;
-      const t0 = performance.now();
-      const fc = addTrackTypes(await loadBundledGpkg());
-      map.getSource("gpkg").setData(fc);
-      sourceCounts.gpkg = fc.features.length;
-      gpkgLoaded = true;
-      setReadyTotal();
-      setStatus(
-        fc.features.length.toLocaleString() + " OSM GPKG lines ready · " + Math.round(performance.now() - t0) + " ms",
-        "ok"
-      );
-    }
-
     async function loadMeta() {
       try {
-        const [meta, nrnMeta, gpkgMeta] = await Promise.all([
+        const [meta, nrnMeta] = await Promise.all([
           fetch(BUNDLED_META_URL).then((res) => res.json()),
-          fetch(BUNDLED_NRN_META_URL).then((res) => res.json()),
-          fetch(BUNDLED_GPKG_META_URL).then((res) => res.json())
+          fetch(BUNDLED_NRN_META_URL).then((res) => res.json())
         ]);
         dataMeta.innerHTML =
           "OSM Overpass: " + (meta.featureCount || 0).toLocaleString() + " lines · ~" + ((meta.gzBytes || 0) / (1024 * 1024)).toFixed(1) + " MB<br>" +
           "NRN gravel: " + (nrnMeta.featureCount || 0).toLocaleString() + " lines · ~" + ((nrnMeta.gzBytes || 0) / (1024 * 1024)).toFixed(1) + " MB<br>" +
-          "OSM GPKG: " + (gpkgMeta.featureCount || 0).toLocaleString() + " lines · ~" + ((gpkgMeta.gzBytes || 0) / (1024 * 1024)).toFixed(1) + " MB<br>" +
           "NRN surface: " + (nrnMeta.surfaceConfidence?.["pavement-field"] ? "official pavement fields" : "road-class inferred") + "<br>" +
           "Built: " + (meta.generatedAt ? new Date(meta.generatedAt).toLocaleString() : "unknown");
       } catch (_) {
@@ -681,44 +636,6 @@
           "line-color": TRACK_TYPES.gravel.color,
           "line-width": 2,
           "line-opacity": 0.68
-        }
-      });
-      map.addSource("gpkg", {
-        type: "geojson",
-        data: { type: "FeatureCollection", features: [] }
-      });
-      map.addLayer({
-        id: "gpkg-gravel",
-        type: "line",
-        source: "gpkg",
-        filter: ["==", ["get", "trackClass"], "gravel"],
-        paint: {
-          "line-color": TRACK_TYPES.gravel.color,
-          "line-width": 2,
-          "line-opacity": 0.62
-        }
-      });
-      map.addLayer({
-        id: "gpkg-atv",
-        type: "line",
-        source: "gpkg",
-        filter: ["==", ["get", "trackClass"], "atv"],
-        paint: {
-          "line-color": TRACK_TYPES.atv.color,
-          "line-width": 2,
-          "line-opacity": 0.7
-        }
-      });
-      map.addLayer({
-        id: "gpkg-single",
-        type: "line",
-        source: "gpkg",
-        filter: ["==", ["get", "trackClass"], "single"],
-        paint: {
-          "line-color": TRACK_TYPES.single.color,
-          "line-width": 2,
-          "line-dasharray": [1.2, 1.6],
-          "line-opacity": 0.7
         }
       });
       map.addSource("trails", {
@@ -816,20 +733,14 @@
       const trackType = TRACK_TYPES[p.trackClass] || TRACK_TYPES.gravel;
       const sourceLabel = p.source === "NRN"
         ? "National Road Network"
-        : p.source === "OSM Geofabrik GPKG"
-          ? "OSM Geofabrik GPKG simplified export"
-          : "OSM Overpass track/path overlay";
+        : "OSM Overpass track/path overlay";
       const typeLabel = p.highway || p.roadClass || "road";
       const detailLabel = p.source === "NRN"
         ? (p.roadClass || "unknown") + (p.surfaceConfidence ? " · " + p.surfaceConfidence : "")
-        : p.source === "OSM Geofabrik GPKG"
-          ? (p.fclass || p.highway || "unknown")
-          : (p.highway || "unknown") + (p.tracktype ? " · " + p.tracktype : "");
+        : (p.highway || "unknown") + (p.tracktype ? " · " + p.tracktype : "");
       const surfaceLabel = p.source === "NRN"
         ? (p.pavementStatus || "unknown") + (p.unpavedSurface && p.unpavedSurface !== "Unknown" ? " · " + p.unpavedSurface : "")
-        : p.source === "OSM Geofabrik GPKG"
-          ? "not included in simplified GPKG"
-          : (p.surface || "unspecified");
+        : (p.surface || "unspecified");
       const accessLabel = p.source === "NRN"
         ? (p.jurisdiction || "unknown") + (p.trafficDirection ? " · " + p.trafficDirection : "")
         : (p.accessStatus || "unknown") + (p.accessDetail ? " · " + p.accessDetail : "");
@@ -923,16 +834,6 @@
             setStatus("Failed to load NRN gravel roads · " + (err.message || "error"), "error");
             input.checked = false;
             sourceEnabled.nrn = false;
-          }
-        }
-        if (input.dataset.sourceToggle === "gpkg" && input.checked) {
-          try {
-            await ensureGpkgLoaded();
-          } catch (err) {
-            console.error(err);
-            setStatus("Failed to load OSM Geofabrik GPKG overlay · " + (err.message || "error"), "error");
-            input.checked = false;
-            sourceEnabled.gpkg = false;
           }
         }
         applyLayerVisibility();
