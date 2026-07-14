@@ -1109,6 +1109,8 @@
     // "junctions" = only true network junctions (rally tulip style).
     let cueMode = "bends";
     let lastSpokenCueKey = "";
+    let lastAlongKm = null;
+    let wrongWayHits = 0;
     let overviewMap = null;
     let overviewReady = false;
     // false = main detail / pip overview; true = main overview / pip detail
@@ -1336,12 +1338,139 @@
         "Built: " + (nsGovManifest.generatedAt ? new Date(nsGovManifest.generatedAt).toLocaleString() : "unknown");
     }
 
+    // ---- Offline basemap for active navigation ----------------------------
+    // OSM Shortbread vector tiles are live by default. During navigation we
+    // prefetch the route corridor into Cache Storage and read tiles through
+    // an offline:// protocol so the map keeps rendering off-cell.
+    const NAV_TILE_CACHE = "dirt-nav-basemap-v1";
+    const navTileRuntime = { active: false };
+
+    function lonToTileX(lon, z) {
+      return Math.floor((lon + 180) / 360 * (2 ** z));
+    }
+    function latToTileY(lat, z) {
+      const rad = lat * Math.PI / 180;
+      return Math.floor((1 - Math.log(Math.tan(rad) + 1 / Math.cos(rad)) / Math.PI) / 2 * (2 ** z));
+    }
+    function basemapTileUrl(z, x, y) {
+      return "https://vector.openstreetmap.org/shortbread_v1/" + z + "/" + x + "/" + y + ".mvt";
+    }
+
+    function basemapTransformRequest(url) {
+      if (url.indexOf("vector.openstreetmap.org/shortbread_v1/") !== -1) {
+        return { url: url.replace(/^https:\/\//, "offline://") };
+      }
+      return { url };
+    }
+
+    if (!maplibregl._dirtOfflineRegistered) {
+      maplibregl._dirtOfflineRegistered = true;
+      maplibregl.addProtocol("offline", async (params) => {
+        const realUrl = params.url.replace(/^offline:\/\//, "https://");
+        const cache = await caches.open(NAV_TILE_CACHE);
+        const cached = await cache.match(realUrl);
+        if (cached) return { data: await cached.arrayBuffer() };
+        try {
+          const res = await fetch(realUrl);
+          if (!res.ok) throw new Error("HTTP " + res.status);
+          if (navTileRuntime.active) {
+            try { await cache.put(realUrl, res.clone()); } catch (_) { /* quota */ }
+          }
+          return { data: await res.arrayBuffer() };
+        } catch (err) {
+          const again = await cache.match(realUrl);
+          if (again) return { data: await again.arrayBuffer() };
+          throw err;
+        }
+      });
+    }
+
+    function collectRouteBasemapTiles(coords) {
+      const keys = new Set();
+      if (!coords || coords.length < 2) return [];
+      const samples = densifyRouteCoords(coords, 0.35);
+      const levels = [
+        { z: 12, pad: 0, step: 2 },
+        { z: 13, pad: 1, step: 1 },
+        { z: 14, pad: 1, step: 1 }
+      ];
+      for (const level of levels) {
+        for (let i = 0; i < samples.length; i += level.step) {
+          const c = samples[i];
+          const cx = lonToTileX(c[0], level.z);
+          const cy = latToTileY(c[1], level.z);
+          const max = 2 ** level.z;
+          for (let dx = -level.pad; dx <= level.pad; dx += 1) {
+            for (let dy = -level.pad; dy <= level.pad; dy += 1) {
+              const x = cx + dx;
+              const y = cy + dy;
+              if (x < 0 || y < 0 || x >= max || y >= max) continue;
+              keys.add(level.z + "/" + x + "/" + y);
+            }
+          }
+        }
+      }
+      return Array.from(keys);
+    }
+
+    async function prefetchRouteBasemap(coords) {
+      if (!("caches" in window)) return { ok: false, reason: "no-cache-api" };
+      const tiles = collectRouteBasemapTiles(coords).slice(0, 700);
+      if (!tiles.length) return { ok: true, cached: 0, total: 0 };
+      const cache = await caches.open(NAV_TILE_CACHE);
+      let cached = 0;
+      let fetched = 0;
+      for (let i = 0; i < tiles.length; i += 1) {
+        const parts = tiles[i].split("/");
+        const url = basemapTileUrl(Number(parts[0]), Number(parts[1]), Number(parts[2]));
+        if (await cache.match(url)) {
+          cached += 1;
+        } else {
+          try {
+            const res = await fetch(url);
+            if (res.ok) {
+              await cache.put(url, res.clone());
+              fetched += 1;
+            }
+          } catch (_) { /* keep going; cached tiles still help */ }
+        }
+        if (i % 24 === 0 || i === tiles.length - 1) {
+          setStatus("Saving map for this ride · " + (i + 1) + " / " + tiles.length, "ok");
+          await yieldToBrowser();
+        }
+      }
+      return { ok: true, cached: cached + fetched, total: tiles.length, fetched };
+    }
+
+    async function clearNavBasemapCache() {
+      navTileRuntime.active = false;
+      if (!("caches" in window)) return;
+      try { await caches.delete(NAV_TILE_CACHE); } catch (_) { /* ignore */ }
+    }
+
+    async function ensureRouteCorridorChunks(coords) {
+      if (!coords || coords.length < 2) return;
+      let minLng = Infinity;
+      let minLat = Infinity;
+      let maxLng = -Infinity;
+      let maxLat = -Infinity;
+      for (const c of coords) {
+        minLng = Math.min(minLng, c[0]);
+        minLat = Math.min(minLat, c[1]);
+        maxLng = Math.max(maxLng, c[0]);
+        maxLat = Math.max(maxLat, c[1]);
+      }
+      const pad = 0.12;
+      await loadChunksForBbox([minLng - pad, minLat - pad, maxLng + pad, maxLat + pad], "ride corridor");
+    }
+
     const map = new maplibregl.Map({
       container: "map",
       style: SHORTBREAD_STYLE_URL,
       center: [FALLBACK.lng, FALLBACK.lat],
       zoom: 11.5,
-      attributionControl: false
+      attributionControl: false,
+      transformRequest: basemapTransformRequest
     });
 
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "bottom-right");
@@ -2804,6 +2933,30 @@
       window.speechSynthesis.speak(utter);
     }
 
+    function remainLabel(remainKm) {
+      return remainKm.toFixed(remainKm >= 10 ? 1 : 2) + " km remaining";
+    }
+
+    function detectWrongWay(progress) {
+      if (!progress || progress.distanceKm > 0.05) {
+        wrongWayHits = 0;
+        return false;
+      }
+      const moving = Number.isFinite(rider.speed) ? rider.speed > 1.5 : false;
+      let headingWrong = false;
+      if (moving && Number.isFinite(rider.heading) && progress.bearing != null) {
+        const diff = Math.abs(angleDeltaDeg(rider.heading, progress.bearing));
+        headingWrong = diff > 120;
+      }
+      let reversing = false;
+      if (moving && lastAlongKm != null && progress.alongKm < lastAlongKm - 0.03) {
+        reversing = true;
+      }
+      if (headingWrong || reversing) wrongWayHits += 1;
+      else wrongWayHits = Math.max(0, wrongWayHits - 1);
+      return wrongWayHits >= 3;
+    }
+
     function updateNavGuidance() {
       if (!navigating || !activeRoute) return;
       const coords = activeRouteCoordinates();
@@ -2811,6 +2964,10 @@
       if (!progress) return;
 
       const offRoute = progress.distanceKm > 0.05;
+      const wrongWay = !offRoute && detectWrongWay(progress);
+      if (!offRoute) lastAlongKm = progress.alongKm;
+      else lastAlongKm = null;
+
       const remainKm = Math.max(0, (progress.totalKm || activeRoute.distanceKm) - progress.alongKm);
       let next = null;
       for (const man of navManeuvers) {
@@ -2827,10 +2984,16 @@
         : Math.max(10, Math.round(toTurnKm * 1000)) + " m";
 
       if (offRoute) {
-        navCueDist.textContent = Math.round(progress.distanceKm * 1000) + " m off route";
-        navCueMain.textContent = "Return to the orange line";
-        navCueSub.textContent = remainKm.toFixed(remainKm >= 10 ? 1 : 2) + " km remaining if on route";
-        speakCue("Off route. Return to the orange line.", "off-route");
+        // Distance off is the critical signal; the action is obvious.
+        navCueDist.textContent = "Return to orange line";
+        navCueMain.textContent = Math.round(progress.distanceKm * 1000) + " m off route";
+        navCueSub.textContent = remainLabel(remainKm);
+        speakCue("Off route. " + Math.round(progress.distanceKm * 1000) + " meters from the orange line.", "off-route");
+      } else if (wrongWay) {
+        navCueDist.textContent = "Turn around";
+        navCueMain.textContent = "Wrong direction";
+        navCueSub.textContent = remainLabel(remainKm);
+        speakCue("Wrong direction. Turn around.", "wrong-way");
       } else if (next.severity === "arrive" && toTurnKm < 0.04) {
         navCueDist.textContent = "Destination";
         navCueMain.textContent = "You have arrived";
@@ -2845,7 +3008,7 @@
         if (next.trackClass && TRACK_TYPES[next.trackClass]) subBits.push(TRACK_TYPES[next.trackClass].label);
         if (next.kind === "junction") subBits.push("junction");
         else if (next.kind === "bend") subBits.push("bend");
-        subBits.push(remainKm.toFixed(remainKm >= 10 ? 1 : 2) + " km left");
+        subBits.push(remainLabel(remainKm));
         navCueSub.textContent = subBits.join(" · ");
         const spoken = next.spoken || next.text;
         if (toTurnKm < 0.05) speakCue(spoken + " now", next.key + "-now");
@@ -2870,7 +3033,8 @@
         center: [rider.lng, rider.lat],
         zoom: 10,
         interactive: false,
-        attributionControl: false
+        attributionControl: false,
+        transformRequest: basemapTransformRequest
       });
       overviewMap.on("load", () => {
         overviewMap.addSource("pipRoute", {
@@ -3005,17 +3169,22 @@
         return;
       }
       if (!ensureGeoWatch()) return;
+      const coords = activeRouteCoordinates();
       try {
         await ensureRoutingGraph();
       } catch (err) {
         console.warn("Nav graph unavailable for junction cues", err);
       }
+
       navigating = true;
+      navTileRuntime.active = true;
       pipSwapped = false;
       view3d = true;
       headingUp = true;
+      lastAlongKm = null;
+      wrongWayHits = 0;
       syncViewModeBtn();
-      navManeuvers = buildNavManeuvers(activeRouteCoordinates());
+      navManeuvers = buildNavManeuvers(coords);
       lastSpokenCueKey = "";
       document.body.classList.add("navigating");
       navHud.classList.add("visible");
@@ -3026,22 +3195,35 @@
       applyMainDetailCamera(true, { resetZoom: true });
       syncRouteExportUi();
       updateNavGuidance();
-      speakCue("Navigation started. Follow the orange line.", "nav-start");
-      setStatus(
-        "Navigation on · " + Math.max(0, navManeuvers.length - 1) + " " +
-        (cueMode === "junctions" ? "junction" : "bend") + " cues",
-        "ok"
-      );
+      speakCue("Navigation started. Saving map for this ride.", "nav-start");
+
+      setStatus("Saving map for this ride…", "ok");
+      try {
+        await ensureRouteCorridorChunks(coords);
+        const result = await prefetchRouteBasemap(coords);
+        setStatus(
+          "Navigation on · map saved (" + (result.cached || 0) + " tiles) · " +
+          Math.max(0, navManeuvers.length - 1) + " " +
+          (cueMode === "junctions" ? "junction" : "bend") + " cues",
+          "ok"
+        );
+      } catch (err) {
+        console.warn("Route map prefetch failed", err);
+        setStatus("Navigation on · map download incomplete · ride cues still active", "error");
+      }
     }
 
     function stopNavigation() {
       navigating = false;
       pipSwapped = false;
       headingUp = followLocked;
+      lastAlongKm = null;
+      wrongWayHits = 0;
       document.body.classList.remove("navigating");
       navHud.classList.remove("visible");
       setPipVisible(false);
       if (window.speechSynthesis) window.speechSynthesis.cancel();
+      clearNavBasemapCache().catch(() => {});
       if (!followLocked) {
         view3d = false;
         syncViewModeBtn();
@@ -3051,7 +3233,7 @@
       }
       syncRouteExportUi();
       followChip.classList.toggle("visible", !followLocked && geoWatchId != null);
-      setStatus("Navigation ended", "ok");
+      setStatus("Navigation ended · offline map cleared", "ok");
     }
 
     function toggleNavigation() {
