@@ -657,14 +657,14 @@
       left: auto;
       top: auto;
       z-index: 24;
-      width: min(42vw, 168px);
-      height: min(42vw, 168px);
+      width: min(55vw, 220px);
+      height: min(55vw, 220px);
       border: 2px solid #ffffff;
       border-radius: 18px;
       overflow: hidden;
       box-shadow: 0 12px 28px rgba(22, 36, 51, 0.28);
       background: var(--panel);
-      cursor: grab;
+      cursor: pointer;
       touch-action: none;
       user-select: none;
       -webkit-user-select: none;
@@ -684,29 +684,31 @@
       height: 100%;
       pointer-events: none;
     }
-    .pip-label {
+    .pip-grip {
       position: absolute;
       top: 6px;
-      left: 8px;
-      right: 8px;
+      left: 6px;
       z-index: 2;
-      display: flex;
-      justify-content: space-between;
-      gap: 6px;
-      pointer-events: none;
-    }
-    .pip-label span {
-      font-family: var(--mono);
-      font-size: 0.56rem;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
+      width: 28px;
+      height: 28px;
+      border: 0;
+      border-radius: 10px;
+      display: grid;
+      place-items: center;
+      background: rgba(17, 24, 32, 0.55);
       color: #ffffff;
-      background: rgba(17, 24, 32, 0.72);
-      border-radius: 999px;
-      padding: 3px 8px;
+      cursor: grab;
+      touch-action: none;
+      padding: 0;
     }
-    .pip-hint {
-      background: rgba(10, 102, 194, 0.88) !important;
+    .pip-grip:active,
+    .pip.dragging .pip-grip {
+      cursor: grabbing;
+      background: rgba(17, 24, 32, 0.78);
+    }
+    .pip-grip svg {
+      display: block;
+      opacity: 0.95;
     }
     body.navigating .route-card { display: none; }
     body.navigating .topbar-left .btn.mini { display: none; }
@@ -719,8 +721,8 @@
     }
     @media (max-width: 760px) {
       .pip {
-        width: 132px;
-        height: 132px;
+        width: 172px;
+        height: 172px;
       }
       .nav-cue-main { font-size: 1.18rem; }
     }
@@ -950,11 +952,17 @@
     <span aria-hidden="true">◎</span> Recenter
   </button>
 
-  <div class="pip" id="pip" aria-hidden="true" role="button" tabindex="0" title="Drag to move · tap to switch views" aria-label="Picture in picture map. Drag to move, tap to switch views">
-    <div class="pip-label">
-      <span id="pipModeLabel">Overview</span>
-      <span class="pip-hint">Drag / tap</span>
-    </div>
+  <div class="pip" id="pip" aria-hidden="true" role="button" tabindex="0" title="Tap to switch views" aria-label="Picture in picture map. Tap to switch views">
+    <button class="pip-grip" id="pipGrip" type="button" title="Drag to move" aria-label="Drag picture in picture">
+      <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
+        <circle cx="4" cy="3" r="1.35" fill="currentColor"/>
+        <circle cx="10" cy="3" r="1.35" fill="currentColor"/>
+        <circle cx="4" cy="7" r="1.35" fill="currentColor"/>
+        <circle cx="10" cy="7" r="1.35" fill="currentColor"/>
+        <circle cx="4" cy="11" r="1.35" fill="currentColor"/>
+        <circle cx="10" cy="11" r="1.35" fill="currentColor"/>
+      </svg>
+    </button>
     <div id="pipMap"></div>
   </div>
 
@@ -1101,7 +1109,7 @@
     const navStopBtn = document.getElementById("navStopBtn");
     const followChip = document.getElementById("followChip");
     const pipEl = document.getElementById("pip");
-    const pipModeLabel = document.getElementById("pipModeLabel");
+    const pipGrip = document.getElementById("pipGrip");
     const viewModeBtn = document.getElementById("viewModeBtn");
     const compassBtn = document.getElementById("compassBtn");
     const compassRose = document.getElementById("compassRose");
@@ -2443,16 +2451,9 @@
       syncPipOverviewCamera();
     }
 
-    function updatePipChrome() {
-      if (!pipModeLabel) return;
-      // Label describes what the SMALL map is showing.
-      pipModeLabel.textContent = pipSwapped ? "Detail" : "Overview";
-    }
-
     function togglePipSwap() {
       if (!pipEl.classList.contains("visible")) return;
       pipSwapped = !pipSwapped;
-      updatePipChrome();
       syncFollowCamera(true);
       setTimeout(() => {
         if (overviewMap) overviewMap.resize();
@@ -2462,7 +2463,6 @@
           syncOverviewRider();
         }
       }, 60);
-      setStatus(pipSwapped ? "Main map: overview · PiP: detail" : "Main map: detail · PiP: overview", "ok");
     }
 
     function bearingDeg(a, b) {
@@ -2753,7 +2753,6 @@
       pipEl.setAttribute("aria-hidden", visible ? "false" : "true");
       if (visible) {
         ensureOverviewMap();
-        updatePipChrome();
         setTimeout(() => {
           if (overviewMap) overviewMap.resize();
           syncOverviewRoute();
@@ -2763,7 +2762,6 @@
       } else {
         pipSwapped = false;
         resetPipPosition();
-        updatePipChrome();
       }
     }
 
@@ -3168,8 +3166,10 @@
     compassBtn.addEventListener("click", resetNorthUp);
     routeNavBtn.addEventListener("click", toggleNavigation);
     navStopBtn.addEventListener("click", stopNavigation);
-    pipEl.addEventListener("pointerdown", (event) => {
+    pipGrip.addEventListener("pointerdown", (event) => {
       if (event.button != null && event.button !== 0) return;
+      event.preventDefault();
+      event.stopPropagation();
       const rect = pipEl.getBoundingClientRect();
       pipDrag = {
         pointerId: event.pointerId,
@@ -3179,30 +3179,36 @@
         originTop: rect.top,
         moved: false
       };
-      pipEl.setPointerCapture(event.pointerId);
-      event.preventDefault();
+      pipGrip.setPointerCapture(event.pointerId);
+      pipEl.classList.add("dragging");
     });
-    pipEl.addEventListener("pointermove", (event) => {
+    pipGrip.addEventListener("pointermove", (event) => {
       if (!pipDrag || event.pointerId !== pipDrag.pointerId) return;
       const dx = event.clientX - pipDrag.startX;
       const dy = event.clientY - pipDrag.startY;
-      if (!pipDrag.moved && (Math.abs(dx) > 6 || Math.abs(dy) > 6)) {
-        pipDrag.moved = true;
-        pipEl.classList.add("dragging");
-      }
+      if (!pipDrag.moved && (Math.abs(dx) > 3 || Math.abs(dy) > 3)) pipDrag.moved = true;
       if (!pipDrag.moved) return;
+      event.preventDefault();
       placePipAt(pipDrag.originLeft + dx, pipDrag.originTop + dy);
     });
-    function endPipPointer(event) {
+    function endPipGripPointer(event) {
       if (!pipDrag || event.pointerId !== pipDrag.pointerId) return;
-      const wasDrag = pipDrag.moved;
       pipEl.classList.remove("dragging");
-      try { pipEl.releasePointerCapture(event.pointerId); } catch (_) { /* already released */ }
+      try { pipGrip.releasePointerCapture(event.pointerId); } catch (_) { /* already released */ }
       pipDrag = null;
-      if (!wasDrag) togglePipSwap();
+      event.preventDefault();
+      event.stopPropagation();
     }
-    pipEl.addEventListener("pointerup", endPipPointer);
-    pipEl.addEventListener("pointercancel", endPipPointer);
+    pipGrip.addEventListener("pointerup", endPipGripPointer);
+    pipGrip.addEventListener("pointercancel", endPipGripPointer);
+    pipGrip.addEventListener("click", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+    });
+    pipEl.addEventListener("click", (event) => {
+      if (event.target === pipGrip || pipGrip.contains(event.target)) return;
+      togglePipSwap();
+    });
     pipEl.addEventListener("keydown", (event) => {
       if (event.key === "Enter" || event.key === " ") {
         event.preventDefault();
