@@ -18,6 +18,7 @@
       --text: #162433;
       --muted: #536170;
       --accent: #0a66c2;
+      --paved: #31404d;
       --access: #0a66c2;
       --gravel: #5d6874;
       --track: #7c3aed;
@@ -360,6 +361,23 @@
       opacity: 0.38;
       cursor: default;
     }
+    .route-debug {
+      margin-top: 8px;
+      padding: 8px 10px;
+      background: var(--panel-2);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      font-family: var(--mono);
+      font-size: 0.6rem;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+    .route-debug:empty { display: none; }
+    .route-debug b { color: var(--text); font-weight: 600; }
+    .route-debug .bad { color: #c1122f; }
+    .route-debug .good { color: #00876c; }
 
     .popup {
       position: absolute;
@@ -470,6 +488,7 @@
       <div class="route-status" id="routeStatus">Tap destination<strong>No route set</strong></div>
       <button class="route-clear" id="routeClear" type="button" title="Clear route" aria-label="Clear route" disabled>×</button>
     </div>
+    <div class="route-debug" id="routeDebug"></div>
   </div>
 
   <div class="legend">
@@ -502,6 +521,10 @@
       <label class="legend-row">
         <span class="legend-label"><i class="dash"></i>Single track</span>
         <span class="switch"><input type="checkbox" data-layer-toggle="single" checked aria-label="Toggle single track"><span></span></span>
+      </label>
+      <label class="legend-row">
+        <span class="legend-label"><i style="background:var(--paved)"></i>Paved (network)</span>
+        <span class="switch"><input type="checkbox" data-layer-toggle="paved" aria-label="Toggle paved network roads"><span></span></span>
       </label>
     </div>
     <div class="legend-group">
@@ -563,19 +586,23 @@
       bridge: { label: "Bridge", color: "#00876c", layers: ["ns-gov-bridge"] },
       tunnel: { label: "Tunnel", color: "#8b5e34", layers: ["ns-gov-tunnel"] },
       unserviced: { label: "Unserviced", color: "#d22730", layers: ["ns-gov-unserviced"] },
-      single: { label: "Single track", color: "#6d36c9", layers: ["ns-gov-single"] }
+      single: { label: "Single track", color: "#6d36c9", layers: ["ns-gov-single"] },
+      paved: { label: "Paved (network)", color: "#31404d", layers: ["ns-gov-paved"] }
     };
     const TRAIL_LAYER_IDS = Object.values(TRACK_TYPES).flatMap((type) => type.layers);
     // const OSM_LAYER_IDS = ["trails-gravel", "trails-atv", "trails-single"];
     // const NRN_LAYER_IDS = ["nrn-gravel"];
     const NS_GOV_LAYER_IDS = Object.values(TRACK_TYPES).flatMap((type) => type.layers);
     const SOURCE_LAYER_MAP = { nsGov: NS_GOV_LAYER_IDS };
-    const layerEnabled = { access: true, gravel: true, track: true, bridge: true, tunnel: true, unserviced: true, single: true };
+    const layerEnabled = { access: true, gravel: true, track: true, bridge: true, tunnel: true, unserviced: true, single: true, paved: false };
     const sourceEnabled = { nsGov: true };
-    const ROUTE_MATCH_TOLERANCE_KM = 0.02;
+    // Max distance from a tapped/GPS point to the nearest network edge.
+    // This is access matching for A/B only - the network itself is never
+    // gap-bridged (junctions are exact shared vertices, baked in offline).
+    const ROUTE_MATCH_TOLERANCE_KM = 0.25;
     const EDGE_GRID_SIZE = 0.01;
 
-    const db = new Dexie("dirt_sources_v4");
+    const db = new Dexie("dirt_sources_v5");
     db.version(1).stores({
       bundled: "id"
     });
@@ -593,6 +620,7 @@
     let activeRoute = null;
     let routeMessage = "";
     let lastNetworkRouteReason = "";
+    let routeDebug = null;
     let routeJobId = 0;
     const sourceCounts = { nsGov: 0 };
 
@@ -605,6 +633,7 @@
     const popupBody = document.getElementById("popupBody");
     const routeStatus = document.getElementById("routeStatus");
     const routeClear = document.getElementById("routeClear");
+    const routeDebugEl = document.getElementById("routeDebug");
 
     function classifyTrack(feature) {
       const p = feature.properties || {};
@@ -667,8 +696,15 @@
     // OSM Overpass and NRN loaders disabled for NSTDB-only POC.
 
     async function loadBundledNsGov() {
+      let buildStamp = null;
+      try {
+        const meta = await fetch(BUNDLED_NS_GOV_META_URL).then((res) => res.json());
+        buildStamp = meta.generatedAt || null;
+      } catch (_) { /* offline: fall back to cache below */ }
+
       const cached = await db.bundled.get("ns-gov-roads");
-      if (cached && cached.featureCollection && cached.featureCollection.features) {
+      if (cached && cached.featureCollection && cached.featureCollection.features &&
+          (!buildStamp || cached.buildStamp === buildStamp)) {
         setStatus("Loaded " + cached.featureCollection.features.length.toLocaleString() + " NS government roads from device cache", "ok");
         return cached.featureCollection;
       }
@@ -679,6 +715,7 @@
         await db.bundled.put({
           id: "ns-gov-roads",
           featureCollection: fc,
+          buildStamp,
           cachedAt: Date.now()
         });
       } catch (err) {
@@ -800,8 +837,8 @@
           filter: ["==", ["get", "trackClass"], key],
           paint: {
             "line-color": config.color,
-            "line-width": 2,
-            "line-opacity": key === "unserviced" ? 0.82 : 0.74,
+            "line-width": key === "paved" ? 1.4 : 2,
+            "line-opacity": key === "paved" ? 0.45 : (key === "unserviced" ? 0.82 : 0.74),
             ...(key === "single" ? { "line-dasharray": [1.2, 1.6] } : {})
           }
         });
@@ -871,6 +908,7 @@
             "tunnel", "#8b5e34",
             "unserviced", "#d22730",
             "single", "#6d36c9",
+            "paved", "#31404d",
             "connector", "#d22730",
             "#ffb000"
           ],
@@ -1139,47 +1177,40 @@
       return forward ? line : line.reverse();
     }
 
-    function routeWeight(trackClass, distanceKm, preference = routePreference, edge = null) {
+    // Cost multipliers per NSTDB class. Paved edges are real network edges
+    // now (same dataset, exact shared vertices), so every mode routes over
+    // one graph - the profile only changes how expensive pavement feels.
+    function routeWeight(trackClass, distanceKm, preference = routePreference) {
       const profiles = {
         direct: {
-          track: 0.95,
-          access: 0.95,
-          gravel: 0.95,
-          bridge: 0.95,
-          tunnel: 0.95,
-          single: 1.18,
-          unserviced: 1.35,
-          connector: 1.75
+          paved: 1.0,
+          track: 1.0,
+          access: 1.0,
+          gravel: 1.0,
+          bridge: 1.0,
+          tunnel: 1.0,
+          single: 1.15,
+          unserviced: 1.3
         },
         balanced: {
+          paved: 1.9,
           track: 0.72,
           access: 0.78,
           gravel: 0.86,
           bridge: 0.9,
           tunnel: 0.92,
           single: 1.12,
-          unserviced: 1.65,
-          connector: 4.5
+          unserviced: 1.65
         },
         dirt: {
+          paved: 6.0,
           track: 0.45,
           access: 0.55,
           gravel: 0.68,
           bridge: 0.74,
           tunnel: 0.78,
           single: 0.9,
-          unserviced: 1.15,
-          connector: 7.5
-        },
-        cleanest: {
-          track: 0.95,
-          access: 0.72,
-          gravel: 0.78,
-          bridge: 0.82,
-          tunnel: 0.9,
-          single: 2.4,
-          unserviced: 3.2,
-          connector: 8.5
+          unserviced: 1.15
         }
       };
       const multipliers = profiles[preference] || profiles.balanced;
@@ -1246,7 +1277,8 @@
             b,
             coords,
             trackClass,
-            distanceKm
+            distanceKm,
+            componentId: feature.properties?.componentId ?? null
           };
           graph.edges.push(edge);
           graph.adjacency[a].push({ to: b, edgeIndex });
@@ -1300,16 +1332,39 @@
       }
     }
 
+    function describeSnap(graph, match) {
+      if (!match) return { ok: false, text: "no line within range" };
+      const edge = graph.edges[match.edgeIndex];
+      return {
+        ok: match.distanceKm <= ROUTE_MATCH_TOLERANCE_KM,
+        meters: Math.round(match.distanceKm * 1000),
+        trackClass: edge.trackClass,
+        componentId: edge.componentId
+      };
+    }
+
     function buildRouteContext(graph, start, end) {
       lastNetworkRouteReason = "";
       const startMatch = findNearestEdgeMatch(graph, start);
+      const endMatch = findNearestEdgeMatch(graph, end);
+      routeDebug = {
+        start: describeSnap(graph, startMatch),
+        end: describeSnap(graph, endMatch),
+        sameComponent: null
+      };
       if (!startMatch || startMatch.distanceKm > ROUTE_MATCH_TOLERANCE_KM) {
-        lastNetworkRouteReason = "Start is not on a verified road/trail line";
+        lastNetworkRouteReason = "Start is more than " + Math.round(ROUTE_MATCH_TOLERANCE_KM * 1000) + " m from any mapped line";
         return null;
       }
-      const endMatch = findNearestEdgeMatch(graph, end);
       if (!endMatch || endMatch.distanceKm > ROUTE_MATCH_TOLERANCE_KM) {
-        lastNetworkRouteReason = "Destination is not on a verified road/trail line";
+        lastNetworkRouteReason = "Destination is more than " + Math.round(ROUTE_MATCH_TOLERANCE_KM * 1000) + " m from any mapped line";
+        return null;
+      }
+      const startComponent = graph.edges[startMatch.edgeIndex].componentId;
+      const endComponent = graph.edges[endMatch.edgeIndex].componentId;
+      routeDebug.sameComponent = startComponent != null && startComponent === endComponent;
+      if (startComponent != null && endComponent != null && startComponent !== endComponent) {
+        lastNetworkRouteReason = "A and B are on disconnected networks (no shared intersections between them in NSTDB)";
         return null;
       }
 
@@ -1429,7 +1484,7 @@
         }
         cursor = forward ? edge.b : edge.a;
         distanceKm += edge.distanceKm;
-        if (edge.trackClass !== "connector") dirtKm += edge.distanceKm;
+        if (edge.trackClass !== "connector" && edge.trackClass !== "paved") dirtKm += edge.distanceKm;
         byClass[edge.trackClass] = (byClass[edge.trackClass] || 0) + edge.distanceKm;
       }
       return { kind: "nstdb", coordinates, segments, distanceKm, dirtKm, byClass };
@@ -1459,9 +1514,34 @@
       };
     }
 
+    function renderRouteDebug() {
+      if (!routeDebug) {
+        routeDebugEl.innerHTML = "";
+        return;
+      }
+      function snapLine(label, snap) {
+        if (!snap) return label + ": <b>not checked</b>";
+        if (!snap.ok) {
+          return label + ': <b class="bad">no match</b>' +
+            (snap.meters != null ? " · nearest line " + snap.meters + " m away" : "");
+        }
+        return label + ': <b class="good">' + snap.meters + " m</b> → " +
+          (TRACK_TYPES[snap.trackClass]?.label || snap.trackClass) +
+          (snap.componentId != null ? " · net " + snap.componentId : "");
+      }
+      const rows = [snapLine("A", routeDebug.start), snapLine("B", routeDebug.end)];
+      if (routeDebug.sameComponent != null) {
+        rows.push(routeDebug.sameComponent
+          ? 'Network: <b class="good">connected</b>'
+          : 'Network: <b class="bad">A and B on separate networks</b>');
+      }
+      routeDebugEl.innerHTML = rows.join("<br>");
+    }
+
     function updateRouteStatus() {
       const start = activeStart();
       routeClear.disabled = !plannedStart && !destination;
+      renderRouteDebug();
       if (routeMessage) {
         routeStatus.innerHTML = routeMessage;
         return;
@@ -1469,18 +1549,18 @@
       if (activeRoute) {
         if (activeRoute.kind === "roadConnector") {
           routeStatus.innerHTML =
-            (routePreference === "direct" ? "Direct route" : "Paved fallback") + "<strong>" +
+            "Cleanest route<strong>" +
             activeRoute.distanceKm.toFixed(activeRoute.distanceKm >= 10 ? 1 : 2) +
-            " km · OSM connector</strong>";
+            " km · OSM highway</strong>";
           return;
         }
         const dirtPct = activeRoute.distanceKm ? Math.round((activeRoute.dirtKm / activeRoute.distanceKm) * 100) : 0;
-        const connectorPct = activeRoute.distanceKm ? Math.round(((activeRoute.byClass.connector || 0) / activeRoute.distanceKm) * 100) : 0;
+        const pavedPct = activeRoute.distanceKm ? Math.round(((activeRoute.byClass.paved || 0) / activeRoute.distanceKm) * 100) : 0;
         routeStatus.innerHTML =
           "Network route<strong>" +
           activeRoute.distanceKm.toFixed(activeRoute.distanceKm >= 10 ? 1 : 2) +
           " km · " + dirtPct + "% dirt" +
-          (connectorPct ? " · " + connectorPct + "% connector" : "") +
+          (pavedPct ? " · " + pavedPct + "% paved" : "") +
           "</strong>";
         return;
       }
@@ -1513,6 +1593,7 @@
       destination = null;
       activeRoute = null;
       routeMessage = "";
+      routeDebug = null;
       hidePopup();
       refreshRouteDraft();
     }
@@ -1524,6 +1605,7 @@
       destination = null;
       activeRoute = null;
       routeMessage = "";
+      routeDebug = null;
       document.querySelectorAll("[data-route-mode]").forEach((button) => {
         const active = button.dataset.routeMode === routeMode;
         button.classList.toggle("active", active);
@@ -1543,38 +1625,28 @@
       else refreshRouteDraft();
     }
 
-    function shouldUseDirtRoute(dirtRoute, roadRoute) {
-      if (!dirtRoute) return false;
-      if (routePreference === "direct") {
-        if (!roadRoute) return true;
-        return dirtRoute.distanceKm <= roadRoute.distanceKm;
-      }
-      if (!roadRoute) return true;
-      const connectorPct = dirtRoute.distanceKm ? (dirtRoute.byClass.connector || 0) / dirtRoute.distanceKm : 0;
-      const detourRatio = dirtRoute.distanceKm / Math.max(roadRoute.distanceKm, 0.001);
-      if (routePreference === "dirt") return true;
-      if (routePreference === "cleanest") {
-        return false;
-      }
-      const dirtPct = dirtRoute.distanceKm ? dirtRoute.dirtKm / dirtRoute.distanceKm : 0;
-      return dirtPct >= 0.35 && detourRatio <= 2.5 && connectorPct <= 0.35;
-    }
-
+    // Mode policy:
+    //   cleanest - OSRM highway routing, never touches the NSTDB graph
+    //   direct   - NSTDB graph, all classes near-neutral cost
+    //   balanced - NSTDB graph, pavement costs ~2x dirt
+    //   dirt     - NSTDB graph, pavement costs 6x (used only to bridge dirt)
+    // The graph includes paved NSTDB roads, so no invisible OSRM overrides:
+    // if the graph cannot route, we say why instead of silently substituting.
     async function calculateRoute() {
       const start = activeStart();
       if (!start || !destination) {
         activeRoute = null;
         routeMessage = "";
+        routeDebug = null;
         refreshRouteDraft();
         return;
       }
       const jobId = ++routeJobId;
       activeRoute = null;
-      routeMessage = routePreference === "direct"
-        ? "Routing<strong>Shortest available route</strong>"
-        : routePreference === "cleanest"
-          ? "Routing<strong>Clean paved route</strong>"
-        : "Building dirt graph<strong>" + routePreference + "</strong>";
+      routeDebug = null;
+      routeMessage = routePreference === "cleanest"
+        ? "Routing<strong>Paved highway route</strong>"
+        : "Routing<strong>" + routePreference + " profile on NSTDB network</strong>";
       refreshRouteDraft();
       try {
         if (routePreference === "cleanest") {
@@ -1587,47 +1659,18 @@
         }
         const graph = await ensureRoutingGraph();
         if (jobId !== routeJobId) return;
-        routeMessage = "Routing<strong>Matching NSTDB intersections</strong>";
+        routeMessage = "Routing<strong>Matching NSTDB network</strong>";
         refreshRouteDraft();
-        const dirtRoute = findNetworkRoute(graph, start, destination);
+        const networkRoute = findNetworkRoute(graph, start, destination);
         if (jobId !== routeJobId) return;
-        let roadRoute = null;
-        if (routePreference !== "dirt") {
-          routeMessage = "Checking route shape<strong>Comparing connector</strong>";
-          refreshRouteDraft();
-          try {
-            roadRoute = await fetchRoadConnectorRoute(start, destination);
-          } catch (err) {
-            console.warn("OSM connector comparison failed", err);
-          }
-          if (jobId !== routeJobId) return;
-        }
-        if (shouldUseDirtRoute(dirtRoute, roadRoute)) {
-          activeRoute = dirtRoute;
+        if (networkRoute) {
+          activeRoute = networkRoute;
           routeMessage = "";
           refreshRouteDraft();
           return;
         }
-        if (routePreference === "direct" && roadRoute) {
-          activeRoute = roadRoute;
-          routeMessage = "";
-          refreshRouteDraft();
-          return;
-        }
-        if (routePreference === "direct" || routePreference === "dirt") {
-          routeMessage = "No verified network route<strong>" + (lastNetworkRouteReason || "Mapped lines do not connect") + "</strong>";
-          activeRoute = null;
-          refreshRouteDraft();
-          return;
-        }
-        routeMessage = dirtRoute
-          ? "Dirt detour rejected<strong>Using connector</strong>"
-          : "No verified dirt route<strong>" + (lastNetworkRouteReason || "Trying paved connector") + "</strong>";
-        refreshRouteDraft();
-        roadRoute = roadRoute || await fetchRoadConnectorRoute(start, destination);
-        if (jobId !== routeJobId) return;
-        activeRoute = roadRoute;
-        routeMessage = "";
+        routeMessage = "No network route<strong>" + (lastNetworkRouteReason || "Mapped lines do not connect") + "</strong>";
+        activeRoute = null;
         refreshRouteDraft();
       } catch (err) {
         console.error(err);
