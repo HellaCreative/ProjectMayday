@@ -572,6 +572,7 @@
     const SOURCE_LAYER_MAP = { nsGov: NS_GOV_LAYER_IDS };
     const layerEnabled = { access: true, gravel: true, track: true, bridge: true, tunnel: true, unserviced: true, single: true };
     const sourceEnabled = { nsGov: true };
+    const MAX_ROUTE_MATCH_KM = 0.001;
 
     const db = new Dexie("dirt_sources_v4");
     db.version(1).stores({
@@ -590,6 +591,7 @@
     let routingGraphPromise = null;
     let activeRoute = null;
     let routeMessage = "";
+    let lastNetworkRouteReason = "";
     let routeJobId = 0;
     const sourceCounts = { nsGov: 0 };
 
@@ -962,7 +964,7 @@
             }
           });
         }
-      } else if (start && destination) {
+      } else if (start && destination && !routeMessage) {
         features.push({
           type: "Feature",
           geometry: {
@@ -1057,8 +1059,7 @@
         }
       };
       const multipliers = profiles[preference] || profiles.balanced;
-      const stitchPenalty = edge?.synthetic ? 0.22 : 0;
-      return distanceKm * (multipliers[trackClass] || 1) + stitchPenalty;
+      return distanceKm * (multipliers[trackClass] || 1);
     }
 
     function nodeKey(coord) {
@@ -1085,8 +1086,7 @@
         nodeLookup: new Map(),
         nodes: [],
         adjacency: [],
-        edges: [],
-        stitches: 0
+        edges: []
       };
 
       function addNode(coord) {
@@ -1133,100 +1133,7 @@
           await yieldToBrowser();
         }
       }
-      await addProximityStitches(graph);
       return graph;
-    }
-
-    async function addProximityStitches(graph) {
-      const radiusDeg = 0.003;
-      const radiusKm = 0.333;
-      const maxPerNode = 2;
-      const grid = new Map();
-      const parent = Array.from({ length: graph.nodes.length }, (_, i) => i);
-      const sizes = Array(graph.nodes.length).fill(1);
-
-      function find(x) {
-        while (parent[x] !== x) {
-          parent[x] = parent[parent[x]];
-          x = parent[x];
-        }
-        return x;
-      }
-
-      function union(a, b) {
-        a = find(a);
-        b = find(b);
-        if (a === b) return false;
-        if (sizes[a] < sizes[b]) [a, b] = [b, a];
-        parent[b] = a;
-        sizes[a] += sizes[b];
-        return true;
-      }
-
-      for (const edge of graph.edges) {
-        union(edge.a, edge.b);
-      }
-
-      for (let i = 0; i < graph.nodes.length; i += 1) {
-        const node = graph.nodes[i];
-        const gx = Math.floor(node[0] / radiusDeg);
-        const gy = Math.floor(node[1] / radiusDeg);
-        const key = gx + "," + gy;
-        let bucket = grid.get(key);
-        if (!bucket) {
-          bucket = [];
-          grid.set(key, bucket);
-        }
-        bucket.push(i);
-      }
-
-      for (let i = 0; i < graph.nodes.length; i += 1) {
-        const node = graph.nodes[i];
-        const gx = Math.floor(node[0] / radiusDeg);
-        const gy = Math.floor(node[1] / radiusDeg);
-        const cosLat = Math.cos(node[1] * Math.PI / 180);
-        const candidates = [];
-        for (let dx = -1; dx <= 1; dx += 1) {
-          for (let dy = -1; dy <= 1; dy += 1) {
-            const bucket = grid.get((gx + dx) + "," + (gy + dy));
-            if (!bucket) continue;
-            for (const other of bucket) {
-              if (other <= i || find(i) === find(other)) continue;
-              const otherNode = graph.nodes[other];
-              const dLng = (otherNode[0] - node[0]) * cosLat;
-              const dLat = otherNode[1] - node[1];
-              const score = dLng * dLng + dLat * dLat;
-              if (score <= radiusDeg * radiusDeg) candidates.push({ other, score });
-            }
-          }
-        }
-        candidates.sort((a, b) => a.score - b.score);
-        for (let n = 0; n < Math.min(maxPerNode, candidates.length); n += 1) {
-          const other = candidates[n].other;
-          if (!union(i, other)) continue;
-          const coords = [graph.nodes[i], graph.nodes[other]];
-          const distanceKm = Math.max(distanceKmCoords(coords[0], coords[1]), 0.001);
-          const edgeIndex = graph.edges.length;
-          const edge = {
-            a: i,
-            b: other,
-            coords,
-            trackClass: "connector",
-            distanceKm,
-            synthetic: true,
-            costDistanceKm: Math.max(distanceKm, radiusKm)
-          };
-          graph.edges.push(edge);
-          graph.adjacency[i].push({ to: other, edgeIndex });
-          graph.adjacency[other].push({ to: i, edgeIndex });
-          graph.stitches += 1;
-        }
-        if (i > 0 && i % 10000 === 0) {
-          routeMessage = "Stitching dirt graph<strong>" + i.toLocaleString() + " / " + graph.nodes.length.toLocaleString() + "</strong>";
-          refreshRouteDraft();
-          await yieldToBrowser();
-        }
-      }
     }
 
     class MinHeap {
@@ -1271,6 +1178,7 @@
       const cosLat = Math.cos(point.lat * Math.PI / 180);
       let bestNode = -1;
       let bestScore = Infinity;
+      let bestDistanceKm = Infinity;
       for (let i = 0; i < graph.nodes.length; i += 1) {
         const node = graph.nodes[i];
         const dx = (node[0] - point.lng) * cosLat;
@@ -1279,15 +1187,27 @@
         if (score < bestScore) {
           bestScore = score;
           bestNode = i;
+          bestDistanceKm = distanceKmCoords([point.lng, point.lat], node);
         }
       }
-      return bestNode;
+      return { node: bestNode, distanceKm: bestDistanceKm };
     }
 
     function findNetworkRoute(graph, start, end) {
-      const startNode = nearestGraphNode(graph, start);
-      const endNode = nearestGraphNode(graph, end);
+      lastNetworkRouteReason = "";
+      const startSnap = nearestGraphNode(graph, start);
+      const endSnap = nearestGraphNode(graph, end);
+      const startNode = startSnap.node;
+      const endNode = endSnap.node;
       if (startNode < 0 || endNode < 0 || startNode === endNode) return null;
+      if (startSnap.distanceKm > MAX_ROUTE_MATCH_KM) {
+        lastNetworkRouteReason = "Start is not on a verified road/trail line";
+        return null;
+      }
+      if (endSnap.distanceKm > MAX_ROUTE_MATCH_KM) {
+        lastNetworkRouteReason = "Destination is not on a verified road/trail line";
+        return null;
+      }
 
       const distances = new Float64Array(graph.nodes.length);
       distances.fill(Infinity);
@@ -1326,18 +1246,10 @@
       }
       edgeIndexes.reverse();
 
-      const coordinates = [[start.lng, start.lat]];
+      const coordinates = [];
       const segments = [];
-      const startSnap = graph.nodes[startNode];
-      const startConnectorKm = distanceKmCoords([start.lng, start.lat], startSnap);
-      if (startConnectorKm > 0.03) {
-        segments.push({
-          trackClass: "connector",
-          coords: [[start.lng, start.lat], startSnap],
-          distanceKm: startConnectorKm
-        });
-        coordinates.push(startSnap);
-      }
+      const startCoord = graph.nodes[startNode];
+      coordinates.push(startCoord);
       let cursor = startNode;
       let distanceKm = 0;
       let dirtKm = 0;
@@ -1361,21 +1273,6 @@
         distanceKm += edge.distanceKm;
         dirtKm += edge.distanceKm;
         byClass[edge.trackClass] = (byClass[edge.trackClass] || 0) + edge.distanceKm;
-      }
-      const endCoord = [end.lng, end.lat];
-      const lastCoord = coordinates[coordinates.length - 1];
-      const endConnectorKm = distanceKmCoords(lastCoord, endCoord);
-      if (endConnectorKm > 0.03) {
-        segments.push({
-          trackClass: "connector",
-          coords: [lastCoord, endCoord],
-          distanceKm: endConnectorKm
-        });
-        coordinates.push(endCoord);
-      }
-      distanceKm += startConnectorKm + endConnectorKm;
-      if (startConnectorKm || endConnectorKm) {
-        byClass.connector = (byClass.connector || 0) + startConnectorKm + endConnectorKm;
       }
       return { kind: "nstdb", coordinates, segments, distanceKm, dirtKm, byClass };
     }
@@ -1490,11 +1387,11 @@
 
     function shouldUseDirtRoute(dirtRoute, roadRoute) {
       if (!dirtRoute) return false;
+      if (routePreference === "direct") return true;
       if (!roadRoute) return true;
       const connectorPct = dirtRoute.distanceKm ? (dirtRoute.byClass.connector || 0) / dirtRoute.distanceKm : 0;
       const detourRatio = dirtRoute.distanceKm / Math.max(roadRoute.distanceKm, 0.001);
       if (routePreference === "dirt") return true;
-      if (routePreference === "direct") return false;
       if (routePreference === "cleanest") {
         return detourRatio <= 1.8 && connectorPct <= 0.18;
       }
@@ -1512,26 +1409,18 @@
       const jobId = ++routeJobId;
       activeRoute = null;
       routeMessage = routePreference === "direct"
-        ? "Routing<strong>Most direct connector</strong>"
+        ? "Routing<strong>Shortest verified network</strong>"
         : "Building dirt graph<strong>" + routePreference + "</strong>";
       refreshRouteDraft();
       try {
-        if (routePreference === "direct") {
-          const roadRoute = await fetchRoadConnectorRoute(start, destination);
-          if (jobId !== routeJobId) return;
-          activeRoute = roadRoute;
-          routeMessage = "";
-          refreshRouteDraft();
-          return;
-        }
         const graph = await ensureRoutingGraph();
         if (jobId !== routeJobId) return;
-        routeMessage = "Routing<strong>Snapping to NSTDB network</strong>";
+        routeMessage = "Routing<strong>Matching NSTDB intersections</strong>";
         refreshRouteDraft();
         const dirtRoute = findNetworkRoute(graph, start, destination);
         if (jobId !== routeJobId) return;
         let roadRoute = null;
-        if (routePreference !== "dirt") {
+        if (routePreference !== "dirt" && routePreference !== "direct") {
           routeMessage = "Checking route shape<strong>Comparing connector</strong>";
           refreshRouteDraft();
           try {
@@ -1547,9 +1436,15 @@
           refreshRouteDraft();
           return;
         }
+        if (routePreference === "direct" || routePreference === "dirt") {
+          routeMessage = "No verified network route<strong>" + (lastNetworkRouteReason || "Mapped lines do not connect") + "</strong>";
+          activeRoute = null;
+          refreshRouteDraft();
+          return;
+        }
         routeMessage = dirtRoute
           ? "Dirt detour rejected<strong>Using connector</strong>"
-          : "No dirt connection<strong>Trying paved connector</strong>";
+          : "No verified dirt route<strong>" + (lastNetworkRouteReason || "Trying paved connector") + "</strong>";
         refreshRouteDraft();
         roadRoute = roadRoute || await fetchRoadConnectorRoute(start, destination);
         if (jobId !== routeJobId) return;
