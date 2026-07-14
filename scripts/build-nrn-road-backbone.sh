@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build bundled Nova Scotia NRN road backbone overlay.
+# Build bundled Nova Scotia NRN gravel/resource road overlay.
 # Run from repo root. Requires: curl, unzip, GDAL/ogr2ogr, node.
 set -euo pipefail
 

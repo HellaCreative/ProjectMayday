@@ -26,7 +26,8 @@ const PAVED_SURFACE = /^(paved|asphalt|concrete|paving_stones|sett|cobblestone)$
 
 function shouldKeep(tags) {
   const highway = tags.highway || "";
-  return /^(track|path|bridleway)$/.test(highway);
+  if (!/^(track|path|bridleway)$/.test(highway)) return false;
+  return classify(tags) !== "paved";
 }
 
 function classify(tags) {

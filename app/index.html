@@ -18,7 +18,6 @@
       --text: #162433;
       --muted: #536170;
       --accent: #0a66c2;
-      --paved: #d87900;
       --gravel: #5d6874;
       --atv: #0a66c2;
       --single: #6d36c9;
@@ -336,10 +335,6 @@
     <div class="legend-group">
       <span class="legend-title">Track type</span>
       <label class="legend-row">
-        <span class="legend-label"><i style="background:var(--paved)"></i>Paved road</span>
-        <span class="switch"><input type="checkbox" data-layer-toggle="paved" checked aria-label="Toggle paved roads"><span></span></span>
-      </label>
-      <label class="legend-row">
         <span class="legend-label"><i style="background:var(--gravel)"></i>Gravel road</span>
         <span class="switch"><input type="checkbox" data-layer-toggle="gravel" checked aria-label="Toggle gravel roads"><span></span></span>
       </label>
@@ -359,8 +354,8 @@
         <span class="switch"><input type="checkbox" data-source-toggle="osm" checked aria-label="Toggle OSM Overpass source"><span></span></span>
       </label>
       <label class="legend-row">
-        <span class="legend-label"><i style="background:var(--text)"></i>NRN roads</span>
-        <span class="switch"><input type="checkbox" data-source-toggle="nrn" aria-label="Toggle National Road Network source"><span></span></span>
+        <span class="legend-label"><i style="background:var(--text)"></i>NRN gravel</span>
+        <span class="switch"><input type="checkbox" data-source-toggle="nrn" aria-label="Toggle National Road Network gravel source"><span></span></span>
       </label>
     </div>
   </div>
@@ -393,19 +388,18 @@
     const SHORTBREAD_STYLE_URL = "/app/data/shortbread-style.json";
 
     const TRACK_TYPES = {
-      paved: { label: "Paved road", color: "#d87900", layers: ["nrn-paved", "trails-paved"] },
       gravel: { label: "Gravel road", color: "#5d6874", layers: ["nrn-gravel", "trails-gravel"] },
       atv: { label: "ATV trail", color: "#0a66c2", layers: ["trails-atv"] },
       single: { label: "Single track", color: "#6d36c9", layers: ["trails-single"] }
     };
     const TRAIL_LAYER_IDS = Object.values(TRACK_TYPES).flatMap((type) => type.layers);
-    const OSM_LAYER_IDS = ["trails-paved", "trails-gravel", "trails-atv", "trails-single"];
-    const NRN_LAYER_IDS = ["nrn-paved", "nrn-gravel"];
+    const OSM_LAYER_IDS = ["trails-gravel", "trails-atv", "trails-single"];
+    const NRN_LAYER_IDS = ["nrn-gravel"];
     const SOURCE_LAYER_MAP = { osm: OSM_LAYER_IDS, nrn: NRN_LAYER_IDS };
-    const layerEnabled = { paved: true, gravel: true, atv: true, single: true };
+    const layerEnabled = { gravel: true, atv: true, single: true };
     const sourceEnabled = { osm: true, nrn: false };
 
-    const db = new Dexie("dirt_sources_v1");
+    const db = new Dexie("dirt_sources_v2");
     db.version(1).stores({
       bundled: "id"
     });
@@ -432,7 +426,6 @@
       if (p.trackClass) return p.trackClass;
       const surface = surfaceValue(feature);
       if (p.grade === "single" || p.highway === "path" || p.highway === "bridleway") return "single";
-      if (/^(paved|asphalt|concrete|paving_stones|sett|cobblestone)$/.test(surface) || p.tracktype === "grade1") return "paved";
       if (p.grade === "g4" || p.grade === "g5" || p.tracktype === "grade4" || p.tracktype === "grade5") return "atv";
       return "gravel";
     }
@@ -513,11 +506,11 @@
     async function loadBundledNrn() {
       const cached = await db.bundled.get("nrn-road-backbone");
       if (cached && cached.featureCollection && cached.featureCollection.features) {
-        setStatus("Loaded " + cached.featureCollection.features.length.toLocaleString() + " NRN roads from device cache", "ok");
+        setStatus("Loaded " + cached.featureCollection.features.length.toLocaleString() + " NRN gravel roads from device cache", "ok");
         return cached.featureCollection;
       }
 
-      setStatus("Loading NRN road backbone…");
+      setStatus("Loading NRN gravel roads…");
       const fc = await fetchGzipJson(BUNDLED_NRN_URL);
       try {
         await db.bundled.put({
@@ -526,7 +519,7 @@
           cachedAt: Date.now()
         });
       } catch (err) {
-        console.warn("Could not cache NRN roads in IndexedDB", err);
+        console.warn("Could not cache NRN gravel roads in IndexedDB", err);
       }
       return fc;
     }
@@ -540,7 +533,7 @@
       nrnLoaded = true;
       setReadyTotal();
       setStatus(
-        fc.features.length.toLocaleString() + " NRN roads ready · " + Math.round(performance.now() - t0) + " ms",
+        fc.features.length.toLocaleString() + " NRN gravel roads ready · " + Math.round(performance.now() - t0) + " ms",
         "ok"
       );
     }
@@ -553,7 +546,7 @@
         ]);
         dataMeta.innerHTML =
           "OSM Overpass: " + (meta.featureCount || 0).toLocaleString() + " lines · ~" + ((meta.gzBytes || 0) / (1024 * 1024)).toFixed(1) + " MB<br>" +
-          "NRN roads: " + (nrnMeta.featureCount || 0).toLocaleString() + " lines · ~" + ((nrnMeta.gzBytes || 0) / (1024 * 1024)).toFixed(1) + " MB<br>" +
+          "NRN gravel: " + (nrnMeta.featureCount || 0).toLocaleString() + " lines · ~" + ((nrnMeta.gzBytes || 0) / (1024 * 1024)).toFixed(1) + " MB<br>" +
           "NRN surface: " + (nrnMeta.surfaceConfidence?.["pavement-field"] ? "official pavement fields" : "road-class inferred") + "<br>" +
           "Built: " + (meta.generatedAt ? new Date(meta.generatedAt).toLocaleString() : "unknown");
       } catch (_) {
@@ -635,17 +628,6 @@
         data: { type: "FeatureCollection", features: [] }
       });
       map.addLayer({
-        id: "nrn-paved",
-        type: "line",
-        source: "nrn",
-        filter: ["==", ["get", "trackClass"], "paved"],
-        paint: {
-          "line-color": TRACK_TYPES.paved.color,
-          "line-width": 2,
-          "line-opacity": 0.58
-        }
-      });
-      map.addLayer({
         id: "nrn-gravel",
         type: "line",
         source: "nrn",
@@ -659,17 +641,6 @@
       map.addSource("trails", {
         type: "geojson",
         data: { type: "FeatureCollection", features: [] }
-      });
-      map.addLayer({
-        id: "trails-paved",
-        type: "line",
-        source: "trails",
-        filter: ["==", ["get", "trackClass"], "paved"],
-        paint: {
-          "line-color": TRACK_TYPES.paved.color,
-          "line-width": 2,
-          "line-opacity": 0.98
-        }
       });
       map.addLayer({
         id: "trails-gravel",
@@ -858,7 +829,7 @@
             await ensureNrnLoaded();
           } catch (err) {
             console.error(err);
-            setStatus("Failed to load NRN roads · " + (err.message || "error"), "error");
+            setStatus("Failed to load NRN gravel roads · " + (err.message || "error"), "error");
             input.checked = false;
             sourceEnabled.nrn = false;
           }

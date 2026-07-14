@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Pack NRN road segments into a lightweight DIRT road-backbone overlay.
+ * Pack NRN resource/recreation road segments into a lightweight DIRT gravel overlay.
  */
 const fs = require("fs");
 const path = require("path");
@@ -71,6 +71,7 @@ function featureFromNrn(feature) {
   if (!geometry) return null;
   const props = feature.properties || {};
   const classification = classify(props);
+  if (classification.trackClass === "paved") return null;
   const roadClass = value(props.ROADCLASS);
   const pavStatus = value(props.PAVSTATUS);
   const pavSurf = value(props.PAVSURF);
@@ -150,7 +151,7 @@ async function main() {
 
   const meta = {
     generatedAt: new Date().toISOString(),
-    sourceName: "National Road Network road backbone",
+    sourceName: "National Road Network gravel/resource roads",
     source: sourceUrl,
     license: "Open Government Licence - Canada",
     region: "Nova Scotia",

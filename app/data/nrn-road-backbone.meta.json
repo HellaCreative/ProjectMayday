@@ -1,29 +1,20 @@
 {
-  "generatedAt": "2026-07-14T15:03:44.562Z",
-  "sourceName": "National Road Network road backbone",
+  "generatedAt": "2026-07-14T15:13:07.016Z",
+  "sourceName": "National Road Network gravel/resource roads",
   "source": "https://geo.statcan.gc.ca/nrn_rrn/ns/nrn_rrn_ns_GPKG.zip",
   "license": "Open Government Licence - Canada",
   "region": "Nova Scotia",
-  "featureCount": 119846,
-  "skipped": 0,
-  "bytes": 135381083,
-  "gzBytes": 21906266,
+  "featureCount": 31879,
+  "skipped": 87967,
+  "bytes": 45618441,
+  "gzBytes": 8145819,
   "classes": {
-    "paved": 87967,
     "gravel": 31879
   },
   "surfaceConfidence": {
-    "roadclass-inferred": 119846
+    "roadclass-inferred": 31879
   },
   "roadClasses": {
-    "Local / Street": 68736,
-    "Ramp": 1479,
-    "Resource / Recreation": 31879,
-    "Arterial": 7557,
-    "Service Lane": 324,
-    "Collector": 6910,
-    "Expressway / Highway": 1845,
-    "Freeway": 1038,
-    "Unknown": 78
+    "Resource / Recreation": 31879
   }
 }

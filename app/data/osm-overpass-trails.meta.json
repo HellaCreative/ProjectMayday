@@ -1,23 +1,22 @@
 {
-  "generatedAt": "2026-07-14T14:42:52.560Z",
+  "generatedAt": "2026-07-14T15:11:23.879Z",
   "sourceName": "OSM Overpass track/path overlay",
   "source": "https://download.geofabrik.de/north-america/canada/nova-scotia-latest.osm.pbf",
   "queryModel": "Overpass-equivalent OSM highway=track/path/bridleway filter",
   "license": "ODbL - OpenStreetMap contributors",
   "region": "Nova Scotia",
-  "featureCount": 35293,
-  "skipped": 3952,
-  "bytes": 31486165,
-  "gzBytes": 5726885,
+  "featureCount": 35085,
+  "skipped": 4160,
+  "bytes": 31367459,
+  "gzBytes": 5707759,
   "classes": {
     "gravel": 28240,
     "single": 5900,
-    "atv": 945,
-    "paved": 208
+    "atv": 945
   },
   "access": {
-    "unknown": 34159,
-    "restricted": 809,
-    "allowed": 325
+    "unknown": 33961,
+    "restricted": 800,
+    "allowed": 324
   }
 }
