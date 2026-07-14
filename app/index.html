@@ -444,6 +444,84 @@
       pointer-events: none;
     }
     .topbar-right > * { pointer-events: auto; }
+
+    .export-sheet {
+      position: absolute;
+      inset: 0;
+      z-index: 40;
+      display: none;
+      align-items: flex-end;
+      justify-content: center;
+      padding: 16px;
+      padding-bottom: max(16px, env(safe-area-inset-bottom));
+      background: rgba(22, 36, 51, 0.38);
+    }
+    .export-sheet.open { display: flex; }
+    .export-sheet-card {
+      width: min(420px, 100%);
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 16px;
+      backdrop-filter: blur(14px);
+      box-shadow: 0 18px 40px rgba(22, 36, 51, 0.18);
+    }
+    .export-sheet-card h2 {
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 8px;
+    }
+    .export-sheet-card p {
+      color: var(--muted);
+      font-size: 0.88rem;
+      line-height: 1.4;
+      margin-bottom: 12px;
+    }
+    .export-sheet-card input {
+      width: 100%;
+      min-height: 46px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #ffffff;
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 1rem;
+      padding: 10px 14px;
+      margin-bottom: 12px;
+    }
+    .export-sheet-card input:focus {
+      outline: 2px solid rgba(10, 102, 194, 0.35);
+      outline-offset: 1px;
+      border-color: var(--accent);
+    }
+    .export-sheet-actions {
+      display: grid;
+      grid-template-columns: 1fr 1.4fr;
+      gap: 8px;
+    }
+    .export-sheet-actions button {
+      min-height: 44px;
+      border-radius: 12px;
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      cursor: pointer;
+    }
+    .export-cancel {
+      border: 1px solid var(--line);
+      background: #ffffff;
+      color: var(--text);
+    }
+    .export-confirm {
+      border: 0;
+      background: var(--accent);
+      color: #ffffff;
+      font-weight: 600;
+    }
     .route-debug {
       margin-top: 8px;
       padding: 8px 10px;
@@ -585,6 +663,18 @@
       </button>
     </div>
     <div class="route-debug" id="routeDebug"></div>
+  </div>
+
+  <div class="export-sheet" id="exportSheet" aria-hidden="true">
+    <div class="export-sheet-card" role="dialog" aria-modal="true" aria-labelledby="exportSheetTitle">
+      <h2 id="exportSheetTitle">Name this route</h2>
+      <p>This is what Gaia, OsmAnd, and the saved file will call it.</p>
+      <input id="exportNameInput" type="text" maxlength="80" autocomplete="off" enterkeyhint="done" aria-label="Route name" />
+      <div class="export-sheet-actions">
+        <button class="export-cancel" id="exportCancel" type="button">Cancel</button>
+        <button class="export-confirm" id="exportConfirm" type="button">Save GPX</button>
+      </div>
+    </div>
   </div>
 
   <div class="legend collapsed" id="legend">
@@ -743,6 +833,10 @@
     const routeActions = document.getElementById("routeActions");
     const routeExport = document.getElementById("routeExport");
     const routeExportFloat = document.getElementById("routeExportFloat");
+    const exportSheet = document.getElementById("exportSheet");
+    const exportNameInput = document.getElementById("exportNameInput");
+    const exportCancel = document.getElementById("exportCancel");
+    const exportConfirm = document.getElementById("exportConfirm");
     const routeDebugEl = document.getElementById("routeDebug");
 
     function applyLayerVisibility() {
@@ -1182,23 +1276,32 @@
       return coords;
     }
 
-    function routeExportName() {
+    function routeExportDefaultName() {
       const km = activeRoute ? activeRoute.distanceKm : 0;
       const dist = km >= 10 ? km.toFixed(1) : km.toFixed(2);
-      return "DIRT MAYDAY · " + routePreference + " · " + dist + " km";
+      const profile = routePreference.charAt(0).toUpperCase() + routePreference.slice(1);
+      return "DIRT " + profile + " " + dist + " km";
     }
 
-    function routeExportFilename() {
-      const km = activeRoute ? activeRoute.distanceKm : 0;
-      const dist = (km >= 10 ? km.toFixed(1) : km.toFixed(2)).replace(".", "p");
-      return "dirt-mayday-" + routePreference + "-" + dist + "km.gpx";
+    function sanitizeRouteName(raw) {
+      const cleaned = String(raw || "").replace(/\s+/g, " ").trim();
+      return cleaned.slice(0, 80) || routeExportDefaultName();
     }
 
-    function buildRouteGpx() {
+    function routeExportFilename(displayName) {
+      const base = sanitizeRouteName(displayName)
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+        .slice(0, 60) || "dirt-mayday-route";
+      return base + ".gpx";
+    }
+
+    function buildRouteGpx(displayName) {
       const coords = activeRouteCoordinates();
       if (coords.length < 2) throw new Error("No route geometry to export");
       const start = activeStart();
-      const name = routeExportName();
+      const name = sanitizeRouteName(displayName);
       const descParts = [
         "Profile: " + routePreference,
         "Distance: " + activeRoute.distanceKm.toFixed(activeRoute.distanceKm >= 10 ? 1 : 2) + " km",
@@ -1249,19 +1352,37 @@
       );
     }
 
-    async function exportActiveRouteGpx() {
+    function openExportNameSheet() {
       if (!activeRoute) return;
-      const filename = routeExportFilename();
-      const gpx = buildRouteGpx();
+      exportNameInput.value = routeExportDefaultName();
+      exportSheet.classList.add("open");
+      exportSheet.setAttribute("aria-hidden", "false");
+      setTimeout(() => {
+        exportNameInput.focus();
+        exportNameInput.select();
+      }, 30);
+    }
+
+    function closeExportNameSheet() {
+      exportSheet.classList.remove("open");
+      exportSheet.setAttribute("aria-hidden", "true");
+    }
+
+    async function exportActiveRouteGpx(displayName) {
+      if (!activeRoute) return;
+      const name = sanitizeRouteName(displayName);
+      const filename = routeExportFilename(name);
+      const gpx = buildRouteGpx(name);
       const file = new File([gpx], filename, { type: "application/gpx+xml" });
+      closeExportNameSheet();
       try {
         if (navigator.canShare && navigator.canShare({ files: [file] })) {
           await navigator.share({
             files: [file],
-            title: routeExportName(),
-            text: "DIRT. MAYDAY. route · " + routePreference
+            title: name,
+            text: name + " · DIRT. MAYDAY."
           });
-          setStatus("Route shared as GPX", "ok");
+          setStatus("Saved as “" + name + "”", "ok");
           return;
         }
       } catch (err) {
@@ -1277,7 +1398,7 @@
       link.click();
       link.remove();
       setTimeout(() => URL.revokeObjectURL(url), 2000);
-      setStatus("GPX downloaded · import into OsmAnd or Gaia", "ok");
+      setStatus("Saved as “" + name + "” · " + filename, "ok");
     }
 
     function routeFeatureCollection() {
@@ -2111,13 +2232,30 @@
     document.getElementById("popupClose").addEventListener("click", hidePopup);
     routeClear.addEventListener("click", clearRoute);
     function handleRouteExportClick() {
-      exportActiveRouteGpx().catch((err) => {
+      openExportNameSheet();
+    }
+    function confirmNamedExport() {
+      exportActiveRouteGpx(exportNameInput.value).catch((err) => {
         console.error(err);
         setStatus("GPX export failed · " + (err.message || "Try again"), "error");
       });
     }
     routeExport.addEventListener("click", handleRouteExportClick);
     routeExportFloat.addEventListener("click", handleRouteExportClick);
+    exportCancel.addEventListener("click", closeExportNameSheet);
+    exportConfirm.addEventListener("click", confirmNamedExport);
+    exportNameInput.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        confirmNamedExport();
+      } else if (event.key === "Escape") {
+        event.preventDefault();
+        closeExportNameSheet();
+      }
+    });
+    exportSheet.addEventListener("click", (event) => {
+      if (event.target === exportSheet) closeExportNameSheet();
+    });
     document.querySelectorAll("[data-route-mode]").forEach((button) => {
       button.addEventListener("click", () => setRouteMode(button.dataset.routeMode));
     });
