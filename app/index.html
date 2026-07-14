@@ -409,16 +409,33 @@
 
     function classify(tags) {
       const hw = tags.highway || "";
+      const surface = tags.surface || "";
+      
+      // Major roads get good grade
+      if (["motorway", "trunk", "primary", "secondary", "tertiary", "unclassified"].includes(hw)) {
+        if (surface.match(/paved|asphalt|concrete/i) || !surface) {
+          return "g2"; // Paved roads = solid
+        }
+        return "g3"; // Unpaved major roads = mixed
+      }
+      
+      // Paths and trails
       if (hw === "path" || hw === "bridleway") return "single";
+      
+      // Tracks by grade
       if (hw === "track") {
         const tt = tags.tracktype || "";
         if (tt === "grade1" || tt === "grade2") return "g2";
         if (tt === "grade3") return "g3";
         if (tt === "grade4") return "g4";
         if (tt === "grade5") return "g5";
-        return "unknown";
+        return "g3"; // Default for tracks without grade
       }
-      return "unknown";
+      
+      // Service roads
+      if (hw === "service") return "g3";
+      
+      return "g3"; // Default to mixed
     }
 
     function legalAccess(tags) {
@@ -718,33 +735,21 @@ out geom tags;`;
       }
       
       try {
-        // Layer 1: Major roads (fast)
-        setStatus("Loading roads…");
-        const layer1Result = await fetchOverpassLayer(bbox, queryMajorRoads);
-        if (token !== fetchToken) return;
+        // Fetch ONLY off-road data (basemap has roads already!)
+        setStatus("Scanning trails…");
         
-        let allFeatures = toFeatures(layer1Result);
-        features = allFeatures;
-        applyFilters();
-        setStatus(`${features.length} roads • loading trails…`);
-        
-        // Layer 2 & 3: Service roads and trails in parallel
-        const [layer2Result, layer3Result, nsResult] = await Promise.allSettled([
-          fetchOverpassLayer(bbox, queryServiceRoads),
-          fetchOverpassLayer(bbox, queryTrails),
+        const [osmResult, nsResult] = await Promise.allSettled([
+          fetchOverpassLayer(bbox, queryOffRoadOnly),
           fetchNSTrails(bbox)
         ]);
         
         if (token !== fetchToken) return;
         
-        // Process layer 2
-        if (layer2Result.status === 'fulfilled') {
-          allFeatures = [...allFeatures, ...toFeatures(layer2Result.value)];
-        }
+        let allFeatures = [];
         
-        // Process layer 3
-        if (layer3Result.status === 'fulfilled') {
-          allFeatures = [...allFeatures, ...toFeatures(layer3Result.value)];
+        // Process OSM off-road data
+        if (osmResult.status === 'fulfilled') {
+          allFeatures = toFeatures(osmResult.value);
         }
         
         // Process NS data
