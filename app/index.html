@@ -779,11 +779,18 @@
     const SOURCE_LAYER_MAP = { nsGov: NS_GOV_LAYER_IDS };
     const layerEnabled = { access: true, gravel: true, track: true, bridge: true, tunnel: true, unserviced: true, single: true, paved: false };
     const sourceEnabled = { nsGov: true };
-    // Max distance from a tapped/GPS point to the nearest network edge.
-    // This is access matching for A/B only - the network itself is never
-    // gap-bridged (junctions are exact shared vertices, baked in offline).
-    const ROUTE_MATCH_TOLERANCE_KM = 0.25;
+    // Access matching for A/B only - the network itself is never gap-bridged
+    // (junctions stay exact shared vertices, baked in offline). Tolerance grows
+    // when zoomed out so a fat phone tap can still latch onto a nearby track.
     const EDGE_GRID_SIZE = 0.01;
+    function routeMatchToleranceKm() {
+      const zoom = map && typeof map.getZoom === "function" ? map.getZoom() : 11;
+      if (zoom >= 13) return 0.35;
+      if (zoom >= 11) return 0.8;
+      if (zoom >= 9) return 2.0;
+      if (zoom >= 7) return 4.0;
+      return 6.0;
+    }
 
     // New DB name: v5 stored the whole province as one IndexedDB blob, which
     // itself crashed iOS Safari on read. Chunks are cached individually now.
@@ -1524,13 +1531,23 @@
       return { coord: [lng, lat], t, distanceKm };
     }
 
-    function findNearestEdgeMatch(graph, point) {
+    function findNearestEdgeMatch(graph, point, options = {}) {
+      const maxDistanceKm = options.maxDistanceKm ?? routeMatchToleranceKm();
+      const preferComponentId = options.preferComponentId;
       const center = edgeGridCell([point.lng, point.lat]);
+      const cellKm = EDGE_GRID_SIZE * 111;
+      const maxRadius = Math.max(2, Math.ceil(maxDistanceKm / cellKm) + 1);
       let best = null;
+      let bestPreferred = null;
       const checked = new Set();
-      for (let radius = 0; radius <= 2; radius += 1) {
+      for (let radius = 0; radius <= maxRadius; radius += 1) {
         for (let x = center.x - radius; x <= center.x + radius; x += 1) {
           for (let y = center.y - radius; y <= center.y + radius; y += 1) {
+            if (radius > 0 &&
+                x > center.x - radius && x < center.x + radius &&
+                y > center.y - radius && y < center.y + radius) {
+              continue;
+            }
             const bucket = graph.edgeGrid.get(edgeGridKey(x, y));
             if (!bucket) continue;
             for (const edgeIndex of bucket) {
@@ -1551,13 +1568,26 @@
                   distanceAlongKm: distanceAlongKm + segmentKm * projected.t
                 };
                 if (!best || candidate.distanceKm < best.distanceKm) best = candidate;
+                if (preferComponentId != null &&
+                    edge.componentId === preferComponentId &&
+                    (!bestPreferred || candidate.distanceKm < bestPreferred.distanceKm)) {
+                  bestPreferred = candidate;
+                }
                 distanceAlongKm += segmentKm;
               }
             }
           }
         }
-        if (best && best.distanceKm <= ROUTE_MATCH_TOLERANCE_KM) break;
+        // Absolute nearest is settled once the search ring is farther than it.
+        if (!preferComponentId && best && (radius + 1) * cellKm >= best.distanceKm) break;
+        if (preferComponentId != null &&
+            bestPreferred &&
+            bestPreferred.distanceKm <= maxDistanceKm &&
+            (radius + 1) * cellKm >= bestPreferred.distanceKm) {
+          break;
+        }
       }
+      if (bestPreferred && bestPreferred.distanceKm <= maxDistanceKm) return bestPreferred;
       return best;
     }
 
@@ -1761,11 +1791,11 @@
       }
     }
 
-    function describeSnap(graph, match) {
+    function describeSnap(graph, match, toleranceKm) {
       if (!match) return { ok: false, text: "no line within range" };
       const edge = graph.edges[match.edgeIndex];
       return {
-        ok: match.distanceKm <= ROUTE_MATCH_TOLERANCE_KM,
+        ok: match.distanceKm <= toleranceKm,
         meters: Math.round(match.distanceKm * 1000),
         trackClass: edge.trackClass,
         componentId: edge.componentId
@@ -1774,22 +1804,29 @@
 
     function buildRouteContext(graph, start, end) {
       lastNetworkRouteReason = "";
-      const startMatch = findNearestEdgeMatch(graph, start);
-      const endMatch = findNearestEdgeMatch(graph, end);
+      const toleranceKm = routeMatchToleranceKm();
+      const startMatch = findNearestEdgeMatch(graph, start, { maxDistanceKm: toleranceKm });
+      const startComponent = startMatch ? graph.edges[startMatch.edgeIndex].componentId : null;
+      // Prefer B on A's connected network so a fat zoomed-out tap doesn't
+      // latch onto a nearby dead-end fragment and report "separate networks".
+      const endMatch = findNearestEdgeMatch(graph, end, {
+        maxDistanceKm: toleranceKm,
+        preferComponentId: startComponent
+      });
       routeDebug = {
-        start: describeSnap(graph, startMatch),
-        end: describeSnap(graph, endMatch),
-        sameComponent: null
+        start: describeSnap(graph, startMatch, toleranceKm),
+        end: describeSnap(graph, endMatch, toleranceKm),
+        sameComponent: null,
+        snapToleranceM: Math.round(toleranceKm * 1000)
       };
-      if (!startMatch || startMatch.distanceKm > ROUTE_MATCH_TOLERANCE_KM) {
-        lastNetworkRouteReason = "Start is more than " + Math.round(ROUTE_MATCH_TOLERANCE_KM * 1000) + " m from any mapped line";
+      if (!startMatch || startMatch.distanceKm > toleranceKm) {
+        lastNetworkRouteReason = "Start is more than " + Math.round(toleranceKm * 1000) + " m from any mapped line — zoom in or tap nearer a track";
         return null;
       }
-      if (!endMatch || endMatch.distanceKm > ROUTE_MATCH_TOLERANCE_KM) {
-        lastNetworkRouteReason = "Destination is more than " + Math.round(ROUTE_MATCH_TOLERANCE_KM * 1000) + " m from any mapped line";
+      if (!endMatch || endMatch.distanceKm > toleranceKm) {
+        lastNetworkRouteReason = "Destination is more than " + Math.round(toleranceKm * 1000) + " m from any mapped line — zoom in or tap nearer a track";
         return null;
       }
-      const startComponent = graph.edges[startMatch.edgeIndex].componentId;
       const endComponent = graph.edges[endMatch.edgeIndex].componentId;
       routeDebug.sameComponent = startComponent != null && startComponent === endComponent;
       if (startComponent != null && endComponent != null && startComponent !== endComponent) {
@@ -1802,7 +1839,9 @@
         virtualNodes: [startMatch.coord, endMatch.coord],
         virtualAdjacency: new Map(),
         startNode: graph.nodes.length,
-        endNode: graph.nodes.length + 1
+        endNode: graph.nodes.length + 1,
+        startMatch,
+        endMatch
       };
 
       function addVirtualEdge(a, b, coords, trackClass, distanceKm) {
@@ -1916,7 +1955,16 @@
         if (edge.trackClass !== "connector" && edge.trackClass !== "paved") dirtKm += edge.distanceKm;
         byClass[edge.trackClass] = (byClass[edge.trackClass] || 0) + edge.distanceKm;
       }
-      return { kind: "nstdb", coordinates, segments, distanceKm, dirtKm, byClass };
+      return {
+        kind: "nstdb",
+        coordinates,
+        segments,
+        distanceKm,
+        dirtKm,
+        byClass,
+        snapStart: context.startMatch.coord,
+        snapEnd: context.endMatch.coord
+      };
     }
 
     async function fetchRoadConnectorRoute(start, end) {
@@ -1959,6 +2007,9 @@
           (snap.componentId != null ? " · net " + snap.componentId : "");
       }
       const rows = [snapLine("A", routeDebug.start), snapLine("B", routeDebug.end)];
+      if (routeDebug.snapToleranceM != null) {
+        rows.push("Snap reach: <b>" + routeDebug.snapToleranceM + " m</b> at this zoom");
+      }
       if (routeDebug.sameComponent != null) {
         rows.push(routeDebug.sameComponent
           ? 'Network: <b class="good">connected</b>'
@@ -2104,6 +2155,13 @@
         const networkRoute = findNetworkRoute(graph, start, destination);
         if (jobId !== routeJobId) return;
         if (networkRoute) {
+          // Move A/B markers onto the snapped track so the tap latches visually.
+          if (networkRoute.snapEnd) {
+            destination = { lng: networkRoute.snapEnd[0], lat: networkRoute.snapEnd[1] };
+          }
+          if (routeMode === "plan" && networkRoute.snapStart) {
+            plannedStart = { lng: networkRoute.snapStart[0], lat: networkRoute.snapStart[1] };
+          }
           activeRoute = networkRoute;
           routeMessage = "";
           setRouteCardOpen(true);
