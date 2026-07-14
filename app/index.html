@@ -144,6 +144,32 @@
       color: #ffffff;
       border-color: transparent;
     }
+    .btn.cue-mode {
+      font-family: var(--mono);
+      font-size: 0.58rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      line-height: 1.1;
+      text-align: center;
+      padding: 4px;
+    }
+    .btn.cue-mode .cue-mode-top {
+      display: block;
+      font-size: 0.52rem;
+      letter-spacing: 0.08em;
+      opacity: 0.72;
+      text-transform: uppercase;
+    }
+    .btn.cue-mode .cue-mode-main {
+      display: block;
+      font-size: 0.72rem;
+      letter-spacing: 0.06em;
+    }
+    .btn.cue-mode.on {
+      background: var(--route-dark);
+      color: #ffffff;
+      border-color: transparent;
+    }
     .btn.compass-btn {
       position: relative;
     }
@@ -969,6 +995,10 @@
   <div class="stack">
     <button class="btn" id="panelBtn" title="Data info" aria-label="Data info">ℹ</button>
     <button class="btn view-mode" id="viewModeBtn" type="button" title="Toggle 3D tilt" aria-label="Toggle 3D view" aria-pressed="false">3D</button>
+    <button class="btn cue-mode" id="cueModeBtn" type="button" title="Cue mode: all bends or junctions only" aria-label="Toggle navigation cue mode">
+      <span class="cue-mode-top">Cues</span>
+      <span class="cue-mode-main" id="cueModeLabel">ALL</span>
+    </button>
     <button class="btn compass-btn" id="compassBtn" type="button" title="Reset map north" aria-label="Compass, reset north">
       <svg class="compass-rose" id="compassRose" viewBox="0 0 24 24" aria-hidden="true">
         <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.35"/>
@@ -1075,6 +1105,9 @@
     let suppressFollowBreak = false;
     let navigating = false;
     let navManeuvers = [];
+    // "bends" = every meaningful curve (bush / fast riding);
+    // "junctions" = only true network junctions (rally tulip style).
+    let cueMode = "bends";
     let lastSpokenCueKey = "";
     let overviewMap = null;
     let overviewReady = false;
@@ -1113,6 +1146,8 @@
     const pipEl = document.getElementById("pip");
     const pipGrip = document.getElementById("pipGrip");
     const viewModeBtn = document.getElementById("viewModeBtn");
+    const cueModeBtn = document.getElementById("cueModeBtn");
+    const cueModeLabel = document.getElementById("cueModeLabel");
     const compassBtn = document.getElementById("compassBtn");
     const compassRose = document.getElementById("compassRose");
 
@@ -2610,9 +2645,25 @@
       return (routingGraph.adjacency[id] || []).length;
     }
 
-    // Cues only at real network junctions (degree >= 3), not every bend on a
-    // twisty NS paved stretch — that matches rally "tulip at intersection" logic.
-    function buildNavManeuvers(coords) {
+    function makeArriveManeuver(coords, alongKm, endCoord) {
+      return {
+        alongKm: alongKm || lineLengthKm(coords || []),
+        coord: endCoord || (coords && coords[coords.length - 1]),
+        delta: 0,
+        number: 0,
+        side: null,
+        key: "arrive",
+        text: "Arrive at destination",
+        spoken: "arrive at destination",
+        severity: "arrive",
+        degrees: 0,
+        exitBearing: null,
+        trackClass: null,
+        kind: "arrive"
+      };
+    }
+
+    function buildJunctionManeuvers(coords) {
       const segments = activeRoute?.segments?.length
         ? activeRoute.segments
         : [{ coords: coords || [], trackClass: "connector" }];
@@ -2633,9 +2684,7 @@
         const junction = segCoords[segCoords.length - 1];
         const nextCoords = segments[s + 1].coords || [];
         if (!junction || nextCoords.length < 2) continue;
-
-        const degree = graphDegreeAtCoord(junction);
-        if (degree < 3) continue;
+        if (graphDegreeAtCoord(junction) < 3) continue;
 
         const behind = pointAlongFromEnd(segCoords, LOOK_KM) || segCoords[0];
         const ahead = pointAlongFromStart(nextCoords, LOOK_KM) || nextCoords[nextCoords.length - 1];
@@ -2652,27 +2701,96 @@
           delta,
           exitBearing: Math.round(bearingOut),
           trackClass: segments[s + 1].trackClass || segments[s].trackClass || "track",
+          kind: "junction",
           ...turn
         });
         lastEmitAlong = along;
       }
 
       const endCoords = segments[segments.length - 1].coords || coords || [];
-      maneuvers.push({
-        alongKm: along || lineLengthKm(coords || []),
-        coord: endCoords[endCoords.length - 1] || (coords && coords[coords.length - 1]),
-        delta: 0,
-        number: 0,
-        side: null,
-        key: "arrive",
-        text: "Arrive at destination",
-        spoken: "arrive at destination",
-        severity: "arrive",
-        degrees: 0,
-        exitBearing: null,
-        trackClass: null
-      });
+      maneuvers.push(makeArriveManeuver(coords, along, endCoords[endCoords.length - 1]));
       return maneuvers;
+    }
+
+    // Every meaningful bend / sweeping turn — useful at speed in the bush where
+    // you need advance warning before the tree line blocks the view.
+    function buildBendManeuvers(coords) {
+      const dense = densifyRouteCoords(coords, 0.02);
+      if (dense.length < 4) {
+        return [makeArriveManeuver(coords, lineLengthKm(coords || []), coords && coords[coords.length - 1])];
+      }
+
+      const LOOK = 3; // samples each side (~60 m at 20 m spacing)
+      const maneuvers = [];
+      let along = 0;
+      const alongAt = [0];
+      for (let i = 1; i < dense.length; i += 1) {
+        along += distanceKmCoords(dense[i - 1], dense[i]);
+        alongAt.push(along);
+      }
+
+      let lastEmitAlong = -Infinity;
+      for (let i = LOOK; i < dense.length - LOOK; i += 1) {
+        const bearingIn = bearingDeg(dense[i - LOOK], dense[i]);
+        const bearingOut = bearingDeg(dense[i], dense[i + LOOK]);
+        const delta = angleDeltaDeg(bearingIn, bearingOut);
+        const turn = rallyTurn(delta);
+        if (turn.severity === "straight") continue;
+        // Skip gentle 1-corners unless fairly decisive, keep 2+ for awareness.
+        if (turn.number === 1 && Math.abs(delta) < 32) continue;
+        if (alongAt[i] - lastEmitAlong < 0.09) continue;
+
+        const atJunction = graphDegreeAtCoord(dense[i]) >= 3;
+        maneuvers.push({
+          alongKm: alongAt[i],
+          coord: dense[i],
+          delta,
+          exitBearing: Math.round(bearingOut),
+          trackClass: null,
+          kind: atJunction ? "junction" : "bend",
+          ...turn
+        });
+        lastEmitAlong = alongAt[i];
+      }
+
+      maneuvers.push(makeArriveManeuver(coords, along, dense[dense.length - 1]));
+      return maneuvers;
+    }
+
+    function buildNavManeuvers(coords) {
+      return cueMode === "junctions"
+        ? buildJunctionManeuvers(coords)
+        : buildBendManeuvers(coords);
+    }
+
+    function syncCueModeBtn() {
+      const isJunctions = cueMode === "junctions";
+      cueModeLabel.textContent = isJunctions ? "JCT" : "ALL";
+      cueModeBtn.title = isJunctions
+        ? "Cue mode: junctions only. Tap for all bends."
+        : "Cue mode: all bends. Tap for junctions only.";
+      cueModeBtn.setAttribute("aria-label", cueModeBtn.title);
+      cueModeBtn.classList.toggle("on", isJunctions);
+    }
+
+    function setCueMode(next) {
+      cueMode = next === "junctions" ? "junctions" : "bends";
+      syncCueModeBtn();
+      if (activeRoute && activeRouteCoordinates().length >= 2) {
+        navManeuvers = buildNavManeuvers(activeRouteCoordinates());
+        lastSpokenCueKey = "";
+        if (navigating) updateNavGuidance();
+      }
+      setStatus(
+        cueMode === "junctions"
+          ? "Cues: junctions only"
+          : "Cues: all bends · left and right",
+        "ok"
+      );
+    }
+
+    function toggleCueMode() {
+      setCueMode(cueMode === "junctions" ? "bends" : "junctions");
     }
 
     function speakCue(text, key) {
@@ -2725,6 +2843,8 @@
         if (next.exitBearing != null) subBits.push(next.exitBearing + "°");
         if (next.degrees) subBits.push(next.degrees + "° turn");
         if (next.trackClass && TRACK_TYPES[next.trackClass]) subBits.push(TRACK_TYPES[next.trackClass].label);
+        if (next.kind === "junction") subBits.push("junction");
+        else if (next.kind === "bend") subBits.push("bend");
         subBits.push(remainKm.toFixed(remainKm >= 10 ? 1 : 2) + " km left");
         navCueSub.textContent = subBits.join(" · ");
         const spoken = next.spoken || next.text;
@@ -2907,7 +3027,11 @@
       syncRouteExportUi();
       updateNavGuidance();
       speakCue("Navigation started. Follow the orange line.", "nav-start");
-      setStatus("Navigation on · " + Math.max(0, navManeuvers.length - 1) + " junction cues", "ok");
+      setStatus(
+        "Navigation on · " + Math.max(0, navManeuvers.length - 1) + " " +
+        (cueMode === "junctions" ? "junction" : "bend") + " cues",
+        "ok"
+      );
     }
 
     function stopNavigation() {
@@ -3206,6 +3330,7 @@
     map.on("rotate", updateCompass);
     map.on("pitch", updateCompass);
     syncViewModeBtn();
+    syncCueModeBtn();
     updateCompass();
 
     map.once("idle", collapseAttribution);
@@ -3296,6 +3421,7 @@
     recenterBtn.addEventListener("click", activateFollowFromControl);
     followChip.addEventListener("click", activateFollowFromControl);
     viewModeBtn.addEventListener("click", () => setView3d(!view3d));
+    cueModeBtn.addEventListener("click", toggleCueMode);
     compassBtn.addEventListener("click", resetNorthUp);
     routeNavBtn.addEventListener("click", toggleNavigation);
     navStopBtn.addEventListener("click", stopNavigation);
