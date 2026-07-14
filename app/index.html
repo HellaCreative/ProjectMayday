@@ -555,7 +555,7 @@
         }
       });
 
-      // Singletrack - narrow purple dashed
+      // Singletrack - narrow purple SOLID (no dash)
       map.addLayer({
         id: "singletrack",
         type: "line",
@@ -564,7 +564,6 @@
         paint: {
           "line-color": "#7c3aed",
           "line-width": ["interpolate", ["linear"], ["zoom"], 10, 2, 14, 3.5],
-          "line-dasharray": [2, 2],
           "line-opacity": 1
         }
       });
