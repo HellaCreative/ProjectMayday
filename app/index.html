@@ -607,35 +607,16 @@
       }
     }
 
-    // Layer 1: Major roads (fast)
-    function queryMajorRoads(bbox) {
+    // Single query - ONLY off-road stuff (basemap has all the roads already!)
+    function queryOffRoadOnly(bbox) {
       const [south, west, north, east] = bbox;
-      return `[out:json][timeout:15];
-(
-  way["highway"~"motorway|trunk|primary|secondary|tertiary"](${south},${west},${north},${east});
-  way["highway"="unclassified"](${south},${west},${north},${east});
-);
-out geom tags;`;
-    }
-    
-    // Layer 2: Service & forestry roads (medium)
-    function queryServiceRoads(bbox) {
-      const [south, west, north, east] = bbox;
-      return `[out:json][timeout:15];
+      return `[out:json][timeout:25];
 (
   way["highway"="track"](${south},${west},${north},${east});
-  way["highway"="service"](${south},${west},${north},${east});
-);
-out geom tags;`;
-    }
-    
-    // Layer 3: Trails (slower)
-    function queryTrails(bbox) {
-      const [south, west, north, east] = bbox;
-      return `[out:json][timeout:15];
-(
+  way["highway"="service"]["surface"~"unpaved|gravel|dirt|ground|earth"](${south},${west},${north},${east});
   way["highway"="path"](${south},${west},${north},${east});
   way["highway"="bridleway"](${south},${west},${north},${east});
+  way["highway"="unclassified"]["surface"~"unpaved|gravel|dirt|ground|earth"](${south},${west},${north},${east});
   way["highway"]["motor_vehicle"="no"]["bicycle"="yes"](${south},${west},${north},${east});
   way["route"="mtb"](${south},${west},${north},${east});
 );
