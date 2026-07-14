@@ -290,7 +290,7 @@ https://graveltravel.ca
 7. **Québec forest roads** — CKAN API (French)
 
 ### Phase 3: Broader coverage (later)
-8. **Remaining accessible provinces** - NL, PEI, YT (not NB)
+8. **Remaining accessible provinces** - NL, PEI, YT
 9. **Secondary GPX sources** - Trans Canada Trail, forums
 
 ---

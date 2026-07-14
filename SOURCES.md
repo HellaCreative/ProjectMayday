@@ -239,7 +239,6 @@ Comprehensive list of open-source trail, road, and track data sources for Canadi
 **Test Date**: July 13, 2026  
 **Total Sources Tested**: 17  
 **Accessible**: 13+  
-**Note**: Canada NRN and New Brunswick entries dropped from catalogue and APIs.
 
 ### ✅ Priority 1 Sources: 7/7 accessible
 Critical sources for initial map are working.
