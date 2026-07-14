@@ -330,7 +330,7 @@
     <div class="pill" id="modePill">Trails<strong id="modeLabel">Loading…</strong></div>
   </div>
 
-  <div class="status" id="status">Loading OSM motorized overlay…</div>
+  <div class="status" id="status">Loading OSM Overpass overlay…</div>
 
   <div class="legend">
     <div class="legend-group">
@@ -355,8 +355,8 @@
     <div class="legend-group">
       <span class="legend-title">Data sources</span>
       <label class="legend-row">
-        <span class="legend-label"><i style="background:var(--text)"></i>OSM motorized</span>
-        <span class="switch"><input type="checkbox" data-source-toggle="osm" checked aria-label="Toggle OSM motorized source"><span></span></span>
+        <span class="legend-label"><i style="background:var(--text)"></i>OSM Overpass</span>
+        <span class="switch"><input type="checkbox" data-source-toggle="osm" checked aria-label="Toggle OSM Overpass source"><span></span></span>
       </label>
     </div>
   </div>
@@ -369,8 +369,8 @@
   <div class="panel hidden" id="panel">
     <h2>Bundled OSM overlay</h2>
     <p>
-      OSM motorized and off-road lines are compiled into this build using
-      Overpass-style tags. No live Overpass call. No scan-on-pan.
+      OSM track, path, and bridleway lines are compiled into this build using
+      Overpass-style rules. No live Overpass call. No scan-on-pan.
     </p>
     <div class="meta" id="dataMeta">Loading metadata…</div>
   </div>
@@ -382,8 +382,8 @@
 
   <script>
     const FALLBACK = { lng: -63.2985, lat: 44.7427, name: "Porter's Lake, NS" };
-    const BUNDLED_TRAILS_URL = "/app/data/osm-overpass-motorized.geojson.gz";
-    const BUNDLED_META_URL = "/app/data/osm-overpass-motorized.meta.json";
+    const BUNDLED_TRAILS_URL = "/app/data/osm-overpass-trails.geojson.gz";
+    const BUNDLED_META_URL = "/app/data/osm-overpass-trails.meta.json";
     const SHORTBREAD_STYLE_URL = "/app/data/shortbread-style.json";
 
     const TRACK_TYPES = {
@@ -397,7 +397,7 @@
     const layerEnabled = { paved: true, gravel: true, atv: true, single: true };
     const sourceEnabled = { osm: true };
 
-    const db = new Dexie("dirt_osm_motorized_v1");
+    const db = new Dexie("dirt_osm_overpass_v1");
     db.version(1).stores({
       bundled: "id"
     });
@@ -476,17 +476,17 @@
     }
 
     async function loadBundledTrails() {
-      const cached = await db.bundled.get("osm-overpass-motorized");
+      const cached = await db.bundled.get("osm-overpass-trails");
       if (cached && cached.featureCollection && cached.featureCollection.features) {
         setStatus("Loaded " + cached.featureCollection.features.length.toLocaleString() + " OSM overlay lines from device cache", "ok");
         return cached.featureCollection;
       }
 
-      setStatus("Loading OSM motorized overlay…");
+      setStatus("Loading OSM Overpass overlay…");
       const fc = await fetchGzipJson(BUNDLED_TRAILS_URL);
       try {
         await db.bundled.put({
-          id: "osm-overpass-motorized",
+          id: "osm-overpass-trails",
           featureCollection: fc,
           cachedAt: Date.now()
         });
@@ -503,7 +503,7 @@
           "Features: " + (meta.featureCount || 0).toLocaleString() + "<br>" +
           "Pack size: ~" + ((meta.gzBytes || 0) / (1024 * 1024)).toFixed(1) + " MB gzipped<br>" +
           "Built: " + (meta.generatedAt ? new Date(meta.generatedAt).toLocaleString() : "unknown") + "<br>" +
-          "Source: OSM motorized/off-road tags";
+          "Source: OSM Overpass track/path rules";
       } catch (_) {
         dataMeta.textContent = "Metadata unavailable";
       }
@@ -688,7 +688,7 @@
         '<div class="k">OSM detail</div><div class="v">' + (p.highway || "unknown") + (p.tracktype ? " · " + p.tracktype : "") + "</div>" +
         '<div class="k">Surface</div><div class="v">' + (p.surface || "unspecified") + "</div>" +
         '<div class="k">Motor access</div><div class="v">' + (p.accessStatus || "unknown") + (p.accessDetail ? " · " + p.accessDetail : "") + "</div>" +
-        '<div class="k">Source</div><div class="v">OSM motorized/off-road overlay</div>';
+        '<div class="k">Source</div><div class="v">OSM Overpass track/path overlay</div>';
       const pad = 12;
       const w = Math.min(300, window.innerWidth - 24);
       let left = point.x - w / 2;
