@@ -1110,6 +1110,13 @@
     let lastSpokenCueKey = "";
     let lastAlongKm = null;
     let wrongWayHits = 0;
+    // Approach → join → aligned (bend cues). Avoids driveway "fake turns".
+    let navAlignHits = 0;
+    let navEverAligned = false;
+    const NAV_ON_ROUTE_KM = 0.05; // 50 m
+    const NAV_ALIGN_DEG = 50;
+    const NAV_ALIGN_HITS = 2;
+    const navSimEnabled = new URLSearchParams(location.search).has("sim");
     let overviewMap = null;
     let overviewReady = false;
     // false = main detail / pip overview; true = main overview / pip detail
@@ -2812,6 +2819,7 @@
         if (turn.severity === "straight") continue;
         if (along - lastEmitAlong < 0.05) continue;
 
+        const cueKey = turn.key + "-j-" + along.toFixed(3);
         maneuvers.push({
           alongKm: along,
           coord: junction,
@@ -2819,7 +2827,8 @@
           exitBearing: Math.round(bearingOut),
           trackClass: segments[s + 1].trackClass || segments[s].trackClass || "track",
           kind: "junction",
-          ...turn
+          ...turn,
+          key: cueKey
         });
         lastEmitAlong = along;
       }
@@ -2858,6 +2867,7 @@
         if (alongAt[i] - lastEmitAlong < 0.09) continue;
 
         const atJunction = graphDegreeAtCoord(dense[i]) >= 3;
+        const cueKey = turn.key + "-b-" + alongAt[i].toFixed(3);
         maneuvers.push({
           alongKm: alongAt[i],
           coord: dense[i],
@@ -2865,7 +2875,8 @@
           exitBearing: Math.round(bearingOut),
           trackClass: null,
           kind: atJunction ? "junction" : "bend",
-          ...turn
+          ...turn,
+          key: cueKey
         });
         lastEmitAlong = alongAt[i];
       }
@@ -2925,8 +2936,66 @@
       return remainKm.toFixed(remainKm >= 10 ? 1 : 2) + " km remaining";
     }
 
+    function metersLabel(km) {
+      return Math.max(1, Math.round(km * 1000)) + " m";
+    }
+
+    // Side to turn when reaching the orange line so you face along A→B.
+    // Uses travel heading when moving; otherwise bearing toward the snap point
+    // (driveway → road case).
+    function joinInstruction(progress) {
+      if (!progress || progress.bearing == null) {
+        return { side: null, text: "Join the route", spoken: "join the orange line", delta: 0 };
+      }
+      const toRoute = bearingDeg([rider.lng, rider.lat], progress.coord);
+      const moving = Number.isFinite(rider.speed) && rider.speed > 1.2;
+      const closeToLine = progress.distanceKm < 0.01;
+      // Far: aim at snap point (driveway). Close/on-line: prefer travel heading —
+      // bearing-to-snap collapses when you're already on the point.
+      let approach = toRoute;
+      if ((moving || closeToLine) && Number.isFinite(rider.heading)) {
+        approach = rider.heading;
+      } else if (Number.isFinite(rider.heading) && progress.distanceKm < 0.03) {
+        approach = rider.heading;
+      }
+      const delta = angleDeltaDeg(approach, progress.bearing);
+      if (Math.abs(delta) < 28) {
+        return { side: null, text: "Join ahead", spoken: "join the route ahead", delta };
+      }
+      const side = delta > 0 ? "right" : "left";
+      return {
+        side,
+        text: "Join " + side.toUpperCase(),
+        spoken: "join " + side,
+        delta
+      };
+    }
+
+    function headingAlignedWithRoute(progress) {
+      if (!progress || progress.bearing == null) return false;
+      const moving = Number.isFinite(rider.speed) && rider.speed > 1.2;
+      if (moving && Number.isFinite(rider.heading)) {
+        return Math.abs(angleDeltaDeg(rider.heading, progress.bearing)) <= NAV_ALIGN_DEG;
+      }
+      // Stationary GPS heading is unreliable; treat "tight on the line" as joined.
+      return progress.distanceKm < 0.022;
+    }
+
+    function updateNavAlignState(progress, onRoute) {
+      if (!onRoute) {
+        navAlignHits = 0;
+        return false;
+      }
+      if (headingAlignedWithRoute(progress)) navAlignHits += 1;
+      else navAlignHits = Math.max(0, navAlignHits - 1);
+      const aligned = navAlignHits >= NAV_ALIGN_HITS;
+      if (aligned) navEverAligned = true;
+      return aligned;
+    }
+
     function detectWrongWay(progress) {
-      if (!progress || progress.distanceKm > 0.05) {
+      // Only after a real join — otherwise driveway approach looks "wrong".
+      if (!navEverAligned || !progress || progress.distanceKm > NAV_ON_ROUTE_KM) {
         wrongWayHits = 0;
         return false;
       }
@@ -2945,63 +3014,89 @@
       return wrongWayHits >= 3;
     }
 
+    function nextManeuverAfter(alongKm) {
+      for (const man of navManeuvers) {
+        if (man.alongKm > alongKm + 0.015) return man;
+      }
+      return navManeuvers[navManeuvers.length - 1] || null;
+    }
+
     function updateNavGuidance() {
       if (!navigating || !activeRoute) return;
       const coords = activeRouteCoordinates();
       const progress = projectPointOnRoute(rider, coords);
       if (!progress) return;
 
-      const offRoute = progress.distanceKm > 0.05;
-      const wrongWay = !offRoute && detectWrongWay(progress);
-      if (!offRoute) lastAlongKm = progress.alongKm;
+      const onRoute = progress.distanceKm <= NAV_ON_ROUTE_KM;
+      const aligned = updateNavAlignState(progress, onRoute);
+      const wrongWay = aligned && detectWrongWay(progress);
+      if (onRoute) lastAlongKm = progress.alongKm;
       else lastAlongKm = null;
 
       const remainKm = Math.max(0, (progress.totalKm || activeRoute.distanceKm) - progress.alongKm);
-      let next = null;
-      for (const man of navManeuvers) {
-        if (man.alongKm > progress.alongKm + 0.015) {
-          next = man;
-          break;
+      const join = joinInstruction(progress);
+      const offM = Math.round(progress.distanceKm * 1000);
+
+      if (!onRoute) {
+        // Approach from house/driveway — distance + how you'll join. No bend talk.
+        if (!navEverAligned) {
+          navCueDist.textContent = metersLabel(progress.distanceKm) + " to route";
+          navCueMain.textContent = join.text;
+          navCueSub.textContent = "Reach the orange line · then follow A → B";
+          const band = Math.round(offM / 25) * 25;
+          speakCue(
+            metersLabel(progress.distanceKm) + " to the orange line. Then " + join.spoken + ".",
+            "approach-" + join.side + "-" + band
+          );
+        } else {
+          navCueDist.textContent = "Return to orange line";
+          navCueMain.textContent = offM + " m off route";
+          navCueSub.textContent = remainLabel(remainKm);
+          const band = Math.round(offM / 25) * 25;
+          speakCue("Off route. " + offM + " meters from the orange line.", "off-" + band);
         }
-      }
-      if (!next) next = navManeuvers[navManeuvers.length - 1];
-
-      const toTurnKm = Math.max(0, next.alongKm - progress.alongKm);
-      const distLabel = toTurnKm >= 1
-        ? toTurnKm.toFixed(1) + " km"
-        : Math.max(10, Math.round(toTurnKm * 1000)) + " m";
-
-      if (offRoute) {
-        // Distance off is the critical signal; the action is obvious.
-        navCueDist.textContent = "Return to orange line";
-        navCueMain.textContent = Math.round(progress.distanceKm * 1000) + " m off route";
-        navCueSub.textContent = remainLabel(remainKm);
-        speakCue("Off route. " + Math.round(progress.distanceKm * 1000) + " meters from the orange line.", "off-route");
+      } else if (!aligned && !wrongWay) {
+        // On the line (or close) but not yet facing along the route.
+        navCueDist.textContent = "At the route";
+        navCueMain.textContent = join.text;
+        navCueSub.textContent = join.side
+          ? "Turn " + join.side + " to follow the orange line"
+          : "Align with the orange line";
+        speakCue(join.spoken + " to follow the orange line", "join-" + (join.side || "ahead"));
       } else if (wrongWay) {
         navCueDist.textContent = "Turn around";
         navCueMain.textContent = "Wrong direction";
         navCueSub.textContent = remainLabel(remainKm);
         speakCue("Wrong direction. Turn around.", "wrong-way");
-      } else if (next.severity === "arrive" && toTurnKm < 0.04) {
-        navCueDist.textContent = "Destination";
-        navCueMain.textContent = "You have arrived";
-        navCueSub.textContent = "End navigation when ready";
-        speakCue("You have arrived", "arrive");
       } else {
-        navCueDist.textContent = "In " + distLabel;
-        navCueMain.textContent = next.text;
-        const subBits = [];
-        if (next.exitBearing != null) subBits.push(next.exitBearing + "°");
-        if (next.degrees) subBits.push(next.degrees + "° turn");
-        if (next.trackClass && TRACK_TYPES[next.trackClass]) subBits.push(TRACK_TYPES[next.trackClass].label);
-        if (next.kind === "junction") subBits.push("junction");
-        else if (next.kind === "bend") subBits.push("bend");
-        subBits.push(remainLabel(remainKm));
-        navCueSub.textContent = subBits.join(" · ");
-        const spoken = next.spoken || next.text;
-        if (toTurnKm < 0.05) speakCue(spoken + " now", next.key + "-now");
-        else if (toTurnKm < 0.18) speakCue("In " + Math.round(toTurnKm * 1000) + " meters, " + spoken, next.key + "-near");
-        else if (toTurnKm < 0.45) speakCue("In " + Math.round(toTurnKm * 1000) + " meters, " + spoken, next.key + "-mid");
+        const next = nextManeuverAfter(progress.alongKm);
+        if (!next) return;
+        const toTurnKm = Math.max(0, next.alongKm - progress.alongKm);
+        const distLabel = toTurnKm >= 1
+          ? toTurnKm.toFixed(1) + " km"
+          : Math.max(10, Math.round(toTurnKm * 1000)) + " m";
+
+        if (next.severity === "arrive" && toTurnKm < 0.04) {
+          navCueDist.textContent = "Destination";
+          navCueMain.textContent = "You have arrived";
+          navCueSub.textContent = "End navigation when ready";
+          speakCue("You have arrived", "arrive");
+        } else {
+          navCueDist.textContent = "In " + distLabel;
+          navCueMain.textContent = next.text;
+          const after = nextManeuverAfter(next.alongKm);
+          const subBits = [];
+          if (after && after.severity !== "arrive") subBits.push("then " + after.text);
+          if (next.degrees) subBits.push(next.degrees + "°");
+          if (next.kind === "junction") subBits.push("junction");
+          else if (next.kind === "bend") subBits.push("bend");
+          subBits.push(remainLabel(remainKm));
+          navCueSub.textContent = subBits.join(" · ");
+          const spoken = next.spoken || next.text;
+          if (toTurnKm < 0.05) speakCue(spoken + " now", next.key + "-now");
+          else if (toTurnKm < 0.18) speakCue("In " + Math.round(toTurnKm * 1000) + " meters, " + spoken, next.key + "-near");
+          else if (toTurnKm < 0.45) speakCue("In " + Math.round(toTurnKm * 1000) + " meters, " + spoken, next.key + "-mid");
+        }
       }
 
       syncOverviewRider();
@@ -3171,6 +3266,8 @@
       headingUp = true;
       lastAlongKm = null;
       wrongWayHits = 0;
+      navAlignHits = 0;
+      navEverAligned = false;
       syncViewModeBtn();
       navManeuvers = buildNavManeuvers(coords);
       lastSpokenCueKey = "";
@@ -3184,12 +3281,17 @@
       syncRouteExportUi();
       updateNavGuidance();
       speakCue("Navigation started. Saving map for this ride.", "nav-start");
-
-      setStatus("Saving map for this ride…", "ok");
+      setStatus(
+        navSimEnabled
+          ? "Nav sim · tap map to place rider · arrows nudge · saving map…"
+          : "Saving map for this ride…",
+        "ok"
+      );
       try {
         await ensureRouteCorridorChunks(coords);
         const result = await prefetchRouteBasemap(coords);
         setStatus(
+          (navSimEnabled ? "Sim · " : "") +
           "Navigation on · map saved (" + (result.cached || 0) + " tiles) · " +
           Math.max(0, navManeuvers.length - 1) + " " +
           (cueMode === "junctions" ? "junction" : "bend") + " cues",
@@ -3207,6 +3309,8 @@
       headingUp = followLocked;
       lastAlongKm = null;
       wrongWayHits = 0;
+      navAlignHits = 0;
+      navEverAligned = false;
       document.body.classList.remove("navigating");
       navHud.classList.remove("visible");
       setPipVisible(false);
@@ -3503,9 +3607,38 @@
     updateCompass();
 
     map.on("click", (e) => {
-      if (navigating) return;
+      if (navigating) {
+        if (!navSimEnabled) return;
+        // Virtual driveway / join tests: tap places the rider with a heading
+        // toward the current route snap so join left/right can be rehearsed.
+        const coords = activeRouteCoordinates();
+        const progress = coords.length >= 2 ? projectPointOnRoute({ lng: e.lngLat.lng, lat: e.lngLat.lat }, coords) : null;
+        let heading = rider.heading;
+        if (progress) {
+          heading = bearingDeg([e.lngLat.lng, e.lngLat.lat], progress.coord);
+        }
+        setRider(e.lngLat.lng, e.lngLat.lat, { heading, speed: 4, accuracy: 8 });
+        setStatus("Sim rider placed · " + (progress ? metersLabel(progress.distanceKm) + " from route" : "no route"), "ok");
+        return;
+      }
       handleRouteClick(e);
     });
+
+    if (navSimEnabled) {
+      window.addEventListener("keydown", (event) => {
+        if (!navigating) return;
+        const step = event.shiftKey ? 0.00035 : 0.00012; // ~35 m / ~12 m
+        let { lng, lat } = rider;
+        if (event.key === "ArrowUp") lat += step;
+        else if (event.key === "ArrowDown") lat -= step;
+        else if (event.key === "ArrowLeft") lng -= step;
+        else if (event.key === "ArrowRight") lng += step;
+        else return;
+        event.preventDefault();
+        const heading = bearingDeg([rider.lng, rider.lat], [lng, lat]);
+        setRider(lng, lat, { heading, speed: 5, accuracy: 5 });
+      });
+    }
 
     const legendEl = document.getElementById("legend");
     const legendBtn = document.getElementById("legendBtn");
