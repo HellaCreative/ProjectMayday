@@ -146,7 +146,7 @@ While the routing brain is built, the map viewer can stay as:
 1. **Legend** — Paved / Service / ATV / Single (toggle visibility)
 2. **Source toggles** — OSM / NS / Canada (see where data comes from)
 3. **Classification QA** — confirm Lake Charlotte etc. look right before graph build
-4. **Navigation basemap QA** — confirm roads, place names, gas, camping, and services remain readable in daylight
+4. **Navigation basemap QA** — use the OpenStreetMap Shortbread vector basemap and confirm roads, place names, gas, camping, and services remain readable in daylight
 
 This validates the cost taxonomy riders will use in routing.
 

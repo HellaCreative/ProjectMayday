@@ -307,8 +307,7 @@
     const FALLBACK = { lng: -63.2985, lat: 44.7427, name: "Porter's Lake, NS" };
     const BUNDLED_TRAILS_URL = "/app/data/ns-trails.geojson.gz";
     const BUNDLED_META_URL = "/app/data/ns-trails.meta.json";
-    const CARTO_BASE = "https://a.basemaps.cartocdn.com/rastertiles/voyager_nolabels/{z}/{x}/{y}@2x.png";
-    const CARTO_LABELS = "https://a.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}@2x.png";
+    const SHORTBREAD_STYLE_URL = "https://vector.openstreetmap.org/styles/svwd/svwd03style.json";
 
     const GRADE_COLOR = {
       g2: "#008a56",
@@ -391,38 +390,9 @@
       }
     }
 
-    maplibregl.addProtocol("carto", async (params) => {
-      const path = params.url.replace(/^carto:\/\//, "").split("?")[0];
-      const [kind, z, x, y] = path.split("/");
-      const template = kind === "labels" ? CARTO_LABELS : CARTO_BASE;
-      const url = template.replace("{z}", z).replace("{x}", x).replace("{y}", y);
-      const res = await fetch(url);
-      if (!res.ok) throw new Error("tile " + res.status);
-      return { data: await res.arrayBuffer() };
-    });
-
     const map = new maplibregl.Map({
       container: "map",
-      style: {
-        version: 8,
-        sources: {
-          cartoBase: {
-            type: "raster",
-            tiles: ["carto://base/{z}/{x}/{y}"],
-            tileSize: 256,
-            attribution: "&copy; OpenStreetMap &copy; CARTO"
-          },
-          cartoLabels: {
-            type: "raster",
-            tiles: ["carto://labels/{z}/{x}/{y}"],
-            tileSize: 256
-          }
-        },
-        layers: [
-          { id: "base", type: "raster", source: "cartoBase" },
-          { id: "labels", type: "raster", source: "cartoLabels", paint: { "raster-opacity": 0.55 } }
-        ]
-      },
+      style: SHORTBREAD_STYLE_URL,
       center: [FALLBACK.lng, FALLBACK.lat],
       zoom: 11.5,
       attributionControl: false

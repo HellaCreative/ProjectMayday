@@ -272,27 +272,14 @@
   </div>
 
   <script>
+    const SHORTBREAD_STYLE_URL = 'https://vector.openstreetmap.org/styles/svwd/svwd03style.json';
+
     // Initialize map centered on Nova Scotia
     const map = new maplibregl.Map({
       container: 'map',
       center: [-63.5752, 44.6488], // Halifax
       zoom: 11,
-      style: {
-        version: 8,
-        glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
-        sources: {
-          cartoBase: {
-            type: 'raster',
-            tiles: ['https://a.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}@2x.png'],
-            tileSize: 256,
-            attribution: '©OpenStreetMap, ©CartoDB'
-          }
-        },
-        layers: [
-          { id: 'background', type: 'background', paint: { 'background-color': '#f7f9fb' }},
-          { id: 'carto', type: 'raster', source: 'cartoBase' }
-        ]
-      }
+      style: SHORTBREAD_STYLE_URL
     });
 
     map.addControl(new maplibregl.NavigationControl(), 'top-right');
