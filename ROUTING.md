@@ -25,7 +25,7 @@ Keep the visual language and the tag→surface classification. Replace live Over
 
 | Current | Problem | Replace with |
 |---------|---------|--------------|
-| Live Overpass per viewport | No topology, no region graph | Pre-processed NS (then Canada) graph |
+| Live Overpass per viewport | No topology, no region graph | Pre-processed NS graph |
 | Isolated GeoJSON LineStrings | Trails don't "connect" | Nodes + edges with shared endpoints |
 | Auto-scan on pan | Viewer mental model | Load region once, route over it |
 | Client A* sketch | Fragile, incomplete | Valhalla (or GraphHopper) custom profiles |
@@ -53,7 +53,6 @@ Keep the visual language and the tag→surface classification. Replace live Over
 │ Data sources                 │
 │ OSM PBF (Geofabrik NS)       │
 │ NS Topographic / resource    │
-│ Canada forestry roads (later)│
 └──────────────┬───────────────┘
                │ one-time / scheduled build
                ▼
@@ -122,16 +121,14 @@ The slider ("minimize pavement / maximize trail") reweights these costs and re-r
 
 ### 5. Expand data
 - Merge NS Open Data resource roads into graph build
-- Add Canada forestry layers where OSM is thin
-- Then other provinces
+- Then other provinces where OSM is thin
 
 ---
 
 ## What NOT to do next
 
 - Don't invest more in "scan everything in viewport" as the core architecture
-- Don't write a custom A* over live GeoJSON — topology and costing will fight you
-- Don't treat Canada Open Data shapefiles as a live browser API — bake them into the graph build
+- Don't write a custom A* over live GeoJSON - topology and costing will fight you
 
 ---
 
@@ -139,9 +136,9 @@ The slider ("minimize pavement / maximize trail") reweights these costs and re-r
 
 While the routing brain is built, the map viewer can stay as:
 
-1. **Legend** — Paved / Service / ATV / Single (toggle visibility)
-2. **Source toggles** — OSM / NS / Canada (see where data comes from)
-3. **Classification QA** — confirm Lake Charlotte etc. look right before graph build
+1. **Legend** - Paved / Service / ATV / Single (toggle visibility)
+2. **Source toggles** - OSM / NS (see where data comes from)
+3. **Classification QA** - confirm Lake Charlotte etc. look right before graph build
 
 This validates the cost taxonomy riders will use in routing.
 

@@ -18,13 +18,6 @@ const sources = [
     priority: 1
   },
   {
-    id: "nrcan-nrn",
-    name: "National Road Network (NRCan)",
-    url: "https://open.canada.ca/data/en/dataset/3d282116-e556-400c-9306-ca1a3cada77f",
-    type: "catalogue",
-    priority: 1
-  },
-  {
     id: "geo-ca",
     name: "Geo.ca / CanVec",
     url: "https://geo.ca",
@@ -79,13 +72,6 @@ const sources = [
   },
 
   // Provincial - Secondary
-  {
-    id: "nb-geonb",
-    name: "New Brunswick GeoNB",
-    url: "https://geonb.snb.ca",
-    type: "catalogue",
-    priority: 2
-  },
   {
     id: "mb-geoportal",
     name: "Manitoba Geoportal",
@@ -247,7 +233,7 @@ async function runTests() {
   const priority1 = results.filter(r => r.priority === 1);
   const priority1Accessible = priority1.filter(r => r.status === 'accessible');
   
-  console.log('📊 PRIORITY 1 SOURCES (OSM, NRN, BC, AB, ON, QC, NS, GravelTravel)');
+  console.log('PRIORITY 1 SOURCES (OSM, BC, AB, ON, QC, NS, GravelTravel)');
   console.log(`   ${priority1Accessible.length}/${priority1.length} accessible\n`);
   
   priority1.forEach(r => {

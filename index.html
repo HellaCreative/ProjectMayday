@@ -124,27 +124,27 @@
   <main class="shell">
     <div class="brand">DIRT<span>.</span></div>
     <h1>Legal dirt near you.</h1>
-    <p>Off-road trail finder for dual-sport riding. Grade filters, live map, no hiking clutter.</p>
+    <p>Offline-first off-road trail app for dual-sport riding. Download a region once, then ride with the network off.</p>
     <nav class="links">
+      <a class="card" href="app/index.html">
+        <span class="label">POC</span>
+        <span class="title">Offline map</span>
+        <span class="desc">Download region to IndexedDB. Trails + CARTO tiles work in airplane mode.</span>
+      </a>
       <a class="card" href="test-proxy.html">
-        <span class="label">🔧 Debug</span>
-        <span class="title">Proxy Connection Test</span>
+        <span class="label">Debug</span>
+        <span class="title">Proxy connection test</span>
         <span class="desc">Test the Vercel serverless proxy that routes Overpass requests.</span>
       </a>
       <a class="card" href="test-overpass.html">
-        <span class="label">🔧 Debug</span>
-        <span class="title">Direct API Connection Test</span>
+        <span class="label">Debug</span>
+        <span class="title">Direct API connection test</span>
         <span class="desc">Test direct connection to Overpass (shows the network blocking issue).</span>
-      </a>
-      <a class="card" href="app/index.html">
-        <span class="label">App</span>
-        <span class="title">Main map viewer</span>
-        <span class="desc">Geolocate, scan trails in view, filter by grade.</span>
       </a>
       <a class="card" href="sources-test.html">
         <span class="label">Testing</span>
         <span class="title">Multi-source data testing</span>
-        <span class="desc">Load & toggle OSM, NS Open Data, BC Forest Roads. Compare coverage.</span>
+        <span class="desc">Load and toggle OSM and NS Open Data. Compare coverage.</span>
       </a>
       <a class="card" href="diag/index.html">
         <span class="label">Diagnostic</span>
@@ -164,10 +164,10 @@
       <a class="card" href="ROUTING.md">
         <span class="label">Documentation</span>
         <span class="title">Routing architecture</span>
-        <span class="desc">Point-to-point route planning: graph building, A* pathfinding, implementation phases.</span>
+        <span class="desc">Deferred until offline loop is proven. Valhalla + surface cost profiles.</span>
       </a>
     </nav>
-    <footer>HTML prototype · iOS next · All sources tested July 13, 2026 · v1.0</footer>
+    <footer>Offline POC · Serve over http/https · Nova Scotia first · July 2026</footer>
   </main>
 </body>
 </html>
