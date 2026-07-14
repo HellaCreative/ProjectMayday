@@ -317,11 +317,10 @@
       "https://maps.mail.ru/osm/tools/overpass/api/interpreter"
     ];
 
-    const ROAD_TYPES = [
-      { id: "highway", label: "Major Roads", color: "#1e40af", width: 4 },
-      { id: "dirt", label: "Dirt Roads", color: "#92400e", width: 3 },
-      { id: "service", label: "Service/Forestry", color: "#15803d", width: 2.5 },
-      { id: "trail", label: "Trails", color: "#7c3aed", width: 2, dash: [2, 2] }
+    const TRAIL_TYPES = [
+      { id: "truck", label: "Truck Roads", color: "#666666", width: 3 },
+      { id: "atv", label: "ATV/4WD", color: "#996633", width: 2.5 },
+      { id: "single", label: "Singletrack", color: "#7c3aed", width: 2, dash: [2, 2] }
     ];
 
     const GRADES = [
@@ -333,8 +332,7 @@
       { id: "unknown", label: "Ungraded", color: "#4a5568" }
     ];
 
-    const gradeOn = Object.fromEntries(GRADES.map((g) => [g.id, true]));
-    const roadTypeOn = Object.fromEntries(ROAD_TYPES.map((r) => [r.id, true]));
+    const trailTypeOn = Object.fromEntries(TRAIL_TYPES.map((t) => [t.id, true]));
     let rider = { ...FALLBACK };
     let features = [];
     let settling = false;
@@ -379,33 +377,41 @@
       statusEl.className = "status" + (kind ? " " + kind : "");
     }
 
-    function classifyRoadType(tags) {
+    function classifyTrailType(tags) {
       const hw = tags.highway || "";
-      const surface = tags.surface || "";
-      const access = tags.access || "";
+      const tracktype = tags.tracktype || "";
       
-      // Trails: paths, bridleways, footways - NARROW singletrack
+      // Paths/bridleways = singletrack (narrow, hiking/bikes)
       if (["path", "bridleway", "footway", "cycleway"].includes(hw)) {
-        return "trail";
+        return "single";
       }
       
-      // Service roads: explicitly tagged service roads (forestry, logging, etc.)
-      if (hw === "service") {
-        return "service";
-      }
-      
-      // Tracks = forestry/resource roads (wide enough for vehicles)
+      // Tracks - classify by grade
       if (hw === "track") {
-        return "service"; // All tracks are service/forestry roads
+        // Grade 1-2 = solid surface, wide = TRUCK ROADS
+        if (tracktype === "grade1" || tracktype === "grade2") {
+          return "truck";
+        }
+        // Grade 3-4 = rough, medium = ATV/4WD
+        if (tracktype === "grade3" || tracktype === "grade4") {
+          return "atv";
+        }
+        // Grade 5 or no grade = narrow = singletrack
+        return "single";
       }
       
-      // Unpaved unclassified = dirt back roads
-      if (hw === "unclassified" && surface.match(/unpaved|gravel|dirt|ground/i)) {
-        return "service";
+      // Service roads = assume truck-width
+      if (hw === "service") {
+        return "truck";
       }
       
-      // Default
-      return "trail";
+      // Unclassified unpaved = ATV
+      if (hw === "unclassified") {
+        return "atv";
+      }
+      
+      // Default to singletrack
+      return "single";
     }
 
     function classify(tags) {
@@ -680,16 +686,14 @@ out geom tags;`;
       for (const el of osm.elements || []) {
         if (el.type !== "way" || !el.geometry || el.geometry.length < 2) continue;
         const tags = el.tags || {};
-        const grade = classify(tags);
-        const roadType = classifyRoadType(tags);
+        const trailType = classifyTrailType(tags);
         const access = legalAccess(tags);
         out.push({
           type: "Feature",
           id: el.id,
           properties: {
             id: el.id,
-            grade,
-            roadType,
+            trailType,
             highway: tags.highway || "",
             tracktype: tags.tracktype || "",
             surface: tags.surface || "",
