@@ -525,71 +525,41 @@
         data: { type: "FeatureCollection", features: [] }
       });
 
-      // Service/forestry/gravel roads - gray tones
+      // Truck roads - wide gray (hauler access)
       map.addLayer({
-        id: "roads-service",
+        id: "truck-roads",
         type: "line",
         source: "trails",
-        filter: ["==", ["get", "roadType"], "service"],
+        filter: ["==", ["get", "trailType"], "truck"],
         paint: {
           "line-color": "#666666",
+          "line-width": ["interpolate", ["linear"], ["zoom"], 10, 3, 14, 5],
+          "line-opacity": 0.9
+        }
+      });
+
+      // ATV/4WD trails - medium tan/brown
+      map.addLayer({
+        id: "atv-trails",
+        type: "line",
+        source: "trails",
+        filter: ["==", ["get", "trailType"], "atv"],
+        paint: {
+          "line-color": "#996633",
           "line-width": ["interpolate", ["linear"], ["zoom"], 10, 2.5, 14, 4],
           "line-opacity": 0.85
         }
       });
 
+      // Singletrack - narrow purple dashed
       map.addLayer({
-        id: "roads-dirt",
+        id: "singletrack",
         type: "line",
         source: "trails",
-        filter: ["==", ["get", "roadType"], "dirt"],
-        paint: {
-          "line-color": "#888888",
-          "line-width": ["interpolate", ["linear"], ["zoom"], 10, 2.5, 14, 4],
-          "line-opacity": 0.8
-        }
-      });
-
-      // Trails - vibrant colors with white casing
-      map.addLayer({
-        id: "trails-casing",
-        type: "line",
-        source: "trails",
-        filter: ["==", ["get", "roadType"], "trail"],
-        paint: {
-          "line-color": "#ffffff",
-          "line-width": ["interpolate", ["linear"], ["zoom"], 10, 5, 14, 8],
-          "line-opacity": 0.9
-        }
-      });
-
-      map.addLayer({
-        id: "trails-line",
-        type: "line",
-        source: "trails",
-        filter: ["all", ["==", ["get", "roadType"], "trail"], ["!=", ["get", "grade"], "single"]],
-        paint: {
-          "line-color": [
-            "match", ["get", "grade"],
-            "g2", "#00a86b",
-            "g3", "#f0a000",
-            "g4", "#e85d04",
-            "g5", "#c1121f",
-            "#4a5568"
-          ],
-          "line-width": ["interpolate", ["linear"], ["zoom"], 10, 3, 14, 5],
-          "line-opacity": 1
-        }
-      });
-
-      map.addLayer({
-        id: "trails-single",
-        type: "line",
-        source: "trails",
-        filter: ["all", ["==", ["get", "roadType"], "trail"], ["==", ["get", "grade"], "single"]],
+        filter: ["==", ["get", "trailType"], "single"],
         paint: {
           "line-color": "#7c3aed",
-          "line-width": ["interpolate", ["linear"], ["zoom"], 10, 2.5, 14, 4],
+          "line-width": ["interpolate", ["linear"], ["zoom"], 10, 2, 14, 3.5],
           "line-dasharray": [2, 2],
           "line-opacity": 1
         }
