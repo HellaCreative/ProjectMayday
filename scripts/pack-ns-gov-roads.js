@@ -163,20 +163,15 @@ async function main() {
         skipped += 1;
         continue;
       }
+      // Keep properties minimal: constant strings (source, access notes)
+      // are synthesized in the app instead of repeated 300k times.
       const name = value(row.name);
-      const rteNo = value(row.rte_no);
       const props = {
-        source: "NS Government",
-        dataSource: "ns-gov",
         trackClass: classification.trackClass,
         surfaceConfidence: classification.confidence,
-        roadClass: value(row.feat_desc),
-        featCode: value(row.feat_code),
-        accessStatus: "unknown",
-        accessDetail: "motorized access not explicit in NSTDB road-line layer"
+        roadClass: value(row.feat_desc)
       };
       if (name) props.name = name;
-      if (rteNo && rteNo !== "0") props.routeNumber = rteNo;
       for (const coords of parts) lines.push({ coords, props });
     }
 
@@ -273,12 +268,15 @@ async function main() {
     else if (d === 1) deadEnds += 1;
   }
 
-  // ---- 6. Emit --------------------------------------------------------------
+  // ---- 6. Emit as grid chunks ----------------------------------------------
+  // iOS Safari kills pages that parse the whole province at once, so the
+  // output is a manifest plus ~0.4 degree grid chunks the app loads on demand.
+  const CHUNK_DEG = Number(process.env.NS_GOV_CHUNK_DEG || 0.4);
+
   const features = segments.map((segment, i) => ({
     type: "Feature",
     properties: {
       ...segment.props,
-      id: `ns-gov-${i}`,
       lengthMeters: Math.round(segment.meters),
       componentId: componentRank.get(find(segmentNodes[i][0]))
     },
@@ -290,37 +288,71 @@ async function main() {
     acc[key] = (acc[key] || 0) + 1;
     return acc;
   }, {});
-  const confidence = features.reduce((acc, feature) => {
-    const key = feature.properties.surfaceConfidence;
-    acc[key] = (acc[key] || 0) + 1;
-    return acc;
-  }, {});
+
+  const chunkMap = new Map();
+  for (const feature of features) {
+    const first = feature.geometry.coordinates[0];
+    const cx = Math.floor(first[0] / CHUNK_DEG);
+    const cy = Math.floor(first[1] / CHUNK_DEG);
+    const id = cx + "_" + cy;
+    let chunk = chunkMap.get(id);
+    if (!chunk) {
+      chunk = { id, features: [], bbox: [Infinity, Infinity, -Infinity, -Infinity] };
+      chunkMap.set(id, chunk);
+    }
+    chunk.features.push(feature);
+    for (const c of feature.geometry.coordinates) {
+      chunk.bbox[0] = Math.min(chunk.bbox[0], c[0]);
+      chunk.bbox[1] = Math.min(chunk.bbox[1], c[1]);
+      chunk.bbox[2] = Math.max(chunk.bbox[2], c[0]);
+      chunk.bbox[3] = Math.max(chunk.bbox[3], c[1]);
+    }
+  }
 
   fs.mkdirSync(outDir, { recursive: true });
-  const fc = { type: "FeatureCollection", features };
-  const json = JSON.stringify(fc);
-  const gzPath = path.join(outDir, `${OUT_BASENAME}.geojson.gz`);
-  const metaPath = path.join(outDir, `${OUT_BASENAME}.meta.json`);
-  fs.writeFileSync(gzPath, zlib.gzipSync(Buffer.from(json), { level: 9 }));
+  const chunkDir = path.join(outDir, "ns-gov-chunks");
+  fs.rmSync(chunkDir, { recursive: true, force: true });
+  fs.mkdirSync(chunkDir, { recursive: true });
 
-  const meta = {
+  const chunkIndex = [];
+  let totalBytes = 0;
+  let totalGzBytes = 0;
+  for (const chunk of chunkMap.values()) {
+    const json = JSON.stringify({ type: "FeatureCollection", features: chunk.features });
+    const gz = zlib.gzipSync(Buffer.from(json), { level: 9 });
+    const file = `${chunk.id}.geojson.gz`;
+    fs.writeFileSync(path.join(chunkDir, file), gz);
+    totalBytes += Buffer.byteLength(json);
+    totalGzBytes += gz.length;
+    chunkIndex.push({
+      id: chunk.id,
+      file,
+      bbox: chunk.bbox.map((n) => Math.round(n * 1e5) / 1e5),
+      count: chunk.features.length,
+      gzBytes: gz.length
+    });
+  }
+  chunkIndex.sort((a, b) => b.count - a.count);
+
+  const manifest = {
     generatedAt: new Date().toISOString(),
     sourceName: "Nova Scotia Topographic DataBase Roads, Trails and Rails - Road Line Layer",
     source: sourceUrl,
     catalogue: "https://data.novascotia.ca/Roads-Driving-and-Transport/Nova-Scotia-Topographic-DataBase-Roads-Trails-and-/a6gf-w68e",
-    queryModel: "NSTDB Road Line Layer: unpaved, track, trail, AND paved roads; split at exact shared vertices; component-tagged",
+    queryModel: "NSTDB Road Line Layer: unpaved, track, trail, AND paved roads; split at exact shared vertices; component-tagged; grid-chunked",
     license: "Open Government Licence - Nova Scotia",
     region: REGION,
     bbox: BBOX.length === 4 ? BBOX : null,
+    chunkDeg: CHUNK_DEG,
+    chunkDir: "ns-gov-chunks",
     featureCount: features.length,
     sourceLines: lines.length,
     junctionSplits: splitCount,
     fetched,
     skipped,
-    bytes: Buffer.byteLength(json),
-    gzBytes: fs.statSync(gzPath).size,
+    bytes: totalBytes,
+    gzBytes: totalGzBytes,
     classes,
-    surfaceConfidence: confidence,
     topology: {
       nodes: nodeIds.size,
       junctionNodes: junctions,
@@ -333,10 +365,11 @@ async function main() {
       "NSTDB trail records do not explicitly validate motorized access; they are displayed as single track for visual comparison.",
       "TRACK records are normalized to Track, including indefinite/approximate track records.",
       "Junctions are exact shared-vertex matches only. Lines that visually touch without a shared vertex remain disconnected by design."
-    ]
+    ],
+    chunks: chunkIndex
   };
-  fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2));
-  console.log(JSON.stringify({ ...meta, sourceDescriptions: "(omitted)" }, null, 2));
+  fs.writeFileSync(path.join(outDir, `${OUT_BASENAME}.manifest.json`), JSON.stringify(manifest, null, 2));
+  console.log(JSON.stringify({ ...manifest, sourceDescriptions: "(omitted)", chunks: `${chunkIndex.length} chunks, largest ${chunkIndex[0].count} features / ${(chunkIndex[0].gzBytes / 1048576).toFixed(1)} MB gz` }, null, 2));
 }
 
 main().catch((err) => {

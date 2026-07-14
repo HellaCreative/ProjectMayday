@@ -600,8 +600,8 @@
     // NRN gravel disabled for NSTDB-only POC.
     // const BUNDLED_NRN_URL = "/app/data/nrn-road-backbone.geojson.gz";
     // const BUNDLED_NRN_META_URL = "/app/data/nrn-road-backbone.meta.json";
-    const BUNDLED_NS_GOV_URL = "/app/data/ns-gov-roads.geojson.gz";
-    const BUNDLED_NS_GOV_META_URL = "/app/data/ns-gov-roads.meta.json";
+    const NS_GOV_MANIFEST_URL = "/app/data/ns-gov-roads.manifest.json";
+    const NS_GOV_CHUNK_BASE = "/app/data/ns-gov-chunks/";
     const SHORTBREAD_STYLE_URL = "/app/data/shortbread-style.json";
 
     const TRACK_TYPES = {
@@ -627,19 +627,29 @@
     const ROUTE_MATCH_TOLERANCE_KM = 0.25;
     const EDGE_GRID_SIZE = 0.01;
 
-    const db = new Dexie("dirt_sources_v5");
+    // New DB name: v5 stored the whole province as one IndexedDB blob, which
+    // itself crashed iOS Safari on read. Chunks are cached individually now.
+    const db = new Dexie("dirt_chunks_v1");
     db.version(1).stores({
-      bundled: "id"
+      chunks: "id"
     });
+    try {
+      indexedDB.deleteDatabase("dirt_sources_v4");
+      indexedDB.deleteDatabase("dirt_sources_v5");
+    } catch (_) { /* best effort cleanup of old giant caches */ }
 
     let rider = { ...FALLBACK };
     let trailCount = 0;
-    let nsGovLoaded = false;
+    let nsGovManifest = null;
+    let nsGovManifestPromise = null;
+    const loadedChunkIds = new Set();
+    const chunkPromises = new Map();
+    const nsGovFeatures = [];
     let routeMode = "here";
     let routePreference = "balanced";
     let plannedStart = null;
     let destination = null;
-    let nsGovFeatureCollection = null;
+    const nsGovFeatureCollection = { type: "FeatureCollection", features: nsGovFeatures };
     let routingGraph = null;
     let routingGraphPromise = null;
     let activeRoute = null;
@@ -659,25 +669,6 @@
     const routeStatus = document.getElementById("routeStatus");
     const routeClear = document.getElementById("routeClear");
     const routeDebugEl = document.getElementById("routeDebug");
-
-    function classifyTrack(feature) {
-      const p = feature.properties || {};
-      if (p.trackClass) return p.trackClass;
-      return "gravel";
-    }
-
-    function addTrackTypes(fc) {
-      return {
-        ...fc,
-        features: (fc.features || []).map((feature) => ({
-          ...feature,
-          properties: {
-            ...(feature.properties || {}),
-            trackClass: classifyTrack(feature)
-          }
-        }))
-      };
-    }
 
     function applyLayerVisibility() {
       if (!map || !map.isStyleLoaded()) return;
@@ -718,67 +709,150 @@
       return JSON.parse(text);
     }
 
-    // OSM Overpass and NRN loaders disabled for NSTDB-only POC.
+    // ---- Chunked NSTDB loading ---------------------------------------------
+    // The province is packed as ~76 grid chunks (manifest + gz files). The app
+    // only loads chunks near the viewport and along the A-B route envelope, so
+    // iOS Safari never has to parse the whole 260 MB province at once.
 
-    async function loadBundledNsGov() {
-      let buildStamp = null;
-      try {
-        const meta = await fetch(BUNDLED_NS_GOV_META_URL).then((res) => res.json());
-        buildStamp = meta.generatedAt || null;
-      } catch (_) { /* offline: fall back to cache below */ }
-
-      const cached = await db.bundled.get("ns-gov-roads");
-      if (cached && cached.featureCollection && cached.featureCollection.features &&
-          (!buildStamp || cached.buildStamp === buildStamp)) {
-        setStatus("Loaded " + cached.featureCollection.features.length.toLocaleString() + " NS government roads from device cache", "ok");
-        return cached.featureCollection;
-      }
-
-      setStatus("Loading NS government roads…");
-      const fc = await fetchGzipJson(BUNDLED_NS_GOV_URL);
-      try {
-        await db.bundled.put({
-          id: "ns-gov-roads",
-          featureCollection: fc,
-          buildStamp,
-          cachedAt: Date.now()
+    async function ensureManifest() {
+      if (nsGovManifest) return nsGovManifest;
+      if (!nsGovManifestPromise) {
+        nsGovManifestPromise = fetch(NS_GOV_MANIFEST_URL).then((res) => {
+          if (!res.ok) throw new Error("HTTP " + res.status + " for manifest");
+          return res.json();
         });
-      } catch (err) {
-        console.warn("Could not cache NS government roads in IndexedDB", err);
       }
-      return fc;
+      nsGovManifest = await nsGovManifestPromise;
+      return nsGovManifest;
     }
 
-    // NRN loading disabled for NSTDB-only POC.
-
-    async function ensureNsGovLoaded() {
-      if (nsGovLoaded) return;
-      const t0 = performance.now();
-      const fc = addTrackTypes(await loadBundledNsGov());
-      nsGovFeatureCollection = fc;
-      map.getSource("nsGov").setData(fc);
-      sourceCounts.nsGov = fc.features.length;
-      nsGovLoaded = true;
-      setReadyTotal();
-      setStatus(
-        fc.features.length.toLocaleString() + " NS government roads ready · " + Math.round(performance.now() - t0) + " ms",
-        "ok"
-      );
+    function bboxIntersects(a, b) {
+      return a[0] <= b[2] && a[2] >= b[0] && a[1] <= b[3] && a[3] >= b[1];
     }
 
-    async function loadMeta() {
+    async function loadChunk(chunk, buildStamp) {
+      const cacheId = "chunk:" + chunk.id;
       try {
-        const nsGovMeta = await fetch(BUNDLED_NS_GOV_META_URL).then((res) => res.json());
-        const classSummary = Object.entries(nsGovMeta.classes || {})
-          .map(([key, count]) => (TRACK_TYPES[key]?.label || key) + " " + count.toLocaleString())
-          .join(" · ");
-        dataMeta.innerHTML =
-          "NS government: " + (nsGovMeta.featureCount || 0).toLocaleString() + " lines · ~" + ((nsGovMeta.gzBytes || 0) / (1024 * 1024)).toFixed(1) + " MB<br>" +
-          "Classes: " + classSummary + "<br>" +
-          "Built: " + (nsGovMeta.generatedAt ? new Date(nsGovMeta.generatedAt).toLocaleString() : "unknown");
-      } catch (_) {
-        dataMeta.textContent = "Metadata unavailable";
+        const cached = await db.chunks.get(cacheId);
+        if (cached && cached.buildStamp === buildStamp && cached.features) {
+          return cached.features;
+        }
+      } catch (_) { /* cache miss or unavailable */ }
+      const features = (await fetchGzipJson(NS_GOV_CHUNK_BASE + chunk.file)).features || [];
+      try {
+        await db.chunks.put({ id: cacheId, buildStamp, features, cachedAt: Date.now() });
+      } catch (err) {
+        console.warn("Could not cache chunk " + chunk.id, err);
       }
+      return features;
+    }
+
+    // One shared promise per chunk so overlapping callers (viewport pan and
+    // route envelope) both wait for the same load instead of skipping it.
+    function chunkLoadPromise(chunk, buildStamp) {
+      if (loadedChunkIds.has(chunk.id)) return Promise.resolve(false);
+      let promise = chunkPromises.get(chunk.id);
+      if (promise) return promise;
+      promise = (async () => {
+        const features = await loadChunk(chunk, buildStamp);
+        for (const feature of features) {
+          if (!feature.properties.trackClass) feature.properties.trackClass = "gravel";
+          nsGovFeatures.push(feature);
+        }
+        loadedChunkIds.add(chunk.id);
+        return true;
+      })().catch((err) => {
+        chunkPromises.delete(chunk.id);
+        throw err;
+      });
+      chunkPromises.set(chunk.id, promise);
+      return promise;
+    }
+
+    async function loadChunksForBbox(bbox, label) {
+      const manifest = await ensureManifest();
+      const wanted = manifest.chunks.filter((chunk) =>
+        !loadedChunkIds.has(chunk.id) && bboxIntersects(chunk.bbox, bbox)
+      );
+      if (!wanted.length) return false;
+      const buildStamp = manifest.generatedAt || null;
+      let loadedAny = false;
+      let done = 0;
+      for (const chunk of wanted) {
+        if (label) {
+          setStatus("Loading " + label + " · area " + (done + 1) + " / " + wanted.length + "…");
+        }
+        if (await chunkLoadPromise(chunk, buildStamp)) loadedAny = true;
+        done += 1;
+        await yieldToBrowser();
+      }
+      if (loadedAny) {
+        map.getSource("nsGov").setData(nsGovFeatureCollection);
+        sourceCounts.nsGov = nsGovFeatures.length;
+        setReadyTotal();
+        invalidateRoutingGraph();
+        updateDataMeta();
+      }
+      return loadedAny;
+    }
+
+    function viewportBbox(bufferDeg) {
+      const bounds = map.getBounds();
+      return [
+        bounds.getWest() - bufferDeg,
+        bounds.getSouth() - bufferDeg,
+        bounds.getEast() + bufferDeg,
+        bounds.getNorth() + bufferDeg
+      ];
+    }
+
+    // Only pull chunks when reasonably zoomed in; a whole-province view on a
+    // phone would otherwise fetch everything and recreate the crash.
+    const CHUNK_LOAD_MIN_ZOOM = 8;
+    let viewportLoadQueued = false;
+    async function loadViewportChunks() {
+      if (map.getZoom() < CHUNK_LOAD_MIN_ZOOM) return;
+      if (viewportLoadQueued) return;
+      viewportLoadQueued = true;
+      try {
+        const loaded = await loadChunksForBbox(viewportBbox(0.1), "trails");
+        if (loaded) {
+          setStatus(nsGovFeatures.length.toLocaleString() + " segments loaded for this area", "ok");
+        }
+      } catch (err) {
+        console.error(err);
+        setStatus("Failed to load trail data · " + (err.message || "error"), "error");
+      } finally {
+        viewportLoadQueued = false;
+      }
+    }
+
+    // Before graph routing, everything in a padded box around A and B must be
+    // loaded so Dijkstra can detour outside the direct corridor.
+    async function ensureRouteEnvelope(start, end) {
+      const pad = 0.35;
+      const bbox = [
+        Math.min(start.lng, end.lng) - pad,
+        Math.min(start.lat, end.lat) - pad,
+        Math.max(start.lng, end.lng) + pad,
+        Math.max(start.lat, end.lat) + pad
+      ];
+      await loadChunksForBbox(bbox, "route area");
+    }
+
+    function updateDataMeta() {
+      if (!nsGovManifest) {
+        dataMeta.textContent = "Metadata unavailable";
+        return;
+      }
+      const classSummary = Object.entries(nsGovManifest.classes || {})
+        .map(([key, count]) => (TRACK_TYPES[key]?.label || key) + " " + count.toLocaleString())
+        .join(" · ");
+      dataMeta.innerHTML =
+        "NS government: " + (nsGovManifest.featureCount || 0).toLocaleString() + " lines province-wide<br>" +
+        "Loaded here: " + nsGovFeatures.length.toLocaleString() + " segments · " + loadedChunkIds.size + " / " + (nsGovManifest.chunks || []).length + " areas<br>" +
+        "Classes (province): " + classSummary + "<br>" +
+        "Built: " + (nsGovManifest.generatedAt ? new Date(nsGovManifest.generatedAt).toLocaleString() : "unknown");
     }
 
     const map = new maplibregl.Map({
@@ -1250,18 +1324,32 @@
       return new Promise((resolve) => setTimeout(resolve, 0));
     }
 
+    // Token guards against a stale graph finishing its build after new chunks
+    // invalidated it: only the build matching the current token is kept.
+    let graphBuildToken = 0;
+    function invalidateRoutingGraph() {
+      graphBuildToken += 1;
+      routingGraph = null;
+      routingGraphPromise = null;
+    }
+
     async function ensureRoutingGraph() {
-      if (routingGraph) return routingGraph;
-      if (routingGraphPromise) return routingGraphPromise;
-      routingGraphPromise = buildRoutingGraph();
-      routingGraph = await routingGraphPromise;
-      return routingGraph;
+      for (;;) {
+        if (routingGraph) return routingGraph;
+        if (!routingGraphPromise) {
+          const token = graphBuildToken;
+          routingGraphPromise = buildRoutingGraph().then((graph) => {
+            if (token === graphBuildToken) routingGraph = graph;
+            return graph;
+          });
+        }
+        await routingGraphPromise;
+        if (routingGraph) return routingGraph;
+        // Invalidated mid-build (new chunks loaded): loop and rebuild.
+      }
     }
 
     async function buildRoutingGraph() {
-      if (!nsGovFeatureCollection) {
-        await ensureNsGovLoaded();
-      }
       const graph = {
         nodeLookup: new Map(),
         nodes: [],
@@ -1683,6 +1771,8 @@
           refreshRouteDraft();
           return;
         }
+        await ensureRouteEnvelope(start, destination);
+        if (jobId !== routeJobId) return;
         const graph = await ensureRoutingGraph();
         if (jobId !== routeJobId) return;
         routeMessage = "Routing<strong>Matching NSTDB network</strong>";
@@ -1737,9 +1827,9 @@
       const trackType = TRACK_TYPES[p.trackClass] || TRACK_TYPES.gravel;
       const sourceLabel = "Nova Scotia government NSTDB";
       const typeLabel = p.roadClass || "NSTDB road";
-      const detailLabel = (p.featCode || "NSTDB") + (p.surfaceConfidence ? " · " + p.surfaceConfidence : "");
+      const detailLabel = "NSTDB" + (p.surfaceConfidence ? " · " + p.surfaceConfidence : "");
       const surfaceLabel = p.surfaceConfidence === "nstdb-unpaved" ? "unpaved" : "NSTDB category";
-      const accessLabel = (p.accessStatus || "unknown") + (p.accessDetail ? " · " + p.accessDetail : "");
+      const accessLabel = "unknown · motorized access not explicit in NSTDB road-line layer";
       popupBody.innerHTML =
         '<div class="k">Type</div><div class="v">' + typeLabel + (p.name ? " · " + p.name : "") + "</div>" +
         '<div class="k">Track class</div><div class="v" style="color:' + trackType.color + '">' + trackType.label + "</div>" +
@@ -1762,19 +1852,14 @@
       tuneShortbreadContrast();
       ensureLayers();
       collapseAttribution();
-      loadMeta();
 
       try {
-        const t0 = performance.now();
-        await ensureNsGovLoaded();
-        const ms = Math.round(performance.now() - t0);
-        setStatus(
-          sourceCounts.nsGov.toLocaleString() + " NS government roads ready · " + ms + " ms",
-          "ok"
-        );
+        await ensureManifest();
+        updateDataMeta();
+        await loadViewportChunks();
       } catch (err) {
         console.error(err);
-        setStatus("Failed to load NS government roads · " + (err.message || "error"), "error");
+        setStatus("Failed to load trail data · " + (err.message || "error"), "error");
         modeLabel.textContent = "Load failed";
       }
 
@@ -1789,6 +1874,9 @@
         );
       }
     });
+
+    // Pull new chunks as the user pans or zooms into fresh territory.
+    map.on("moveend", () => { loadViewportChunks(); });
 
     map.once("idle", collapseAttribution);
 
@@ -1855,14 +1943,7 @@
       input.addEventListener("change", async () => {
         sourceEnabled[input.dataset.sourceToggle] = input.checked;
         if (input.dataset.sourceToggle === "nsGov" && input.checked) {
-          try {
-            await ensureNsGovLoaded();
-          } catch (err) {
-            console.error(err);
-            setStatus("Failed to load NS government roads · " + (err.message || "error"), "error");
-            input.checked = false;
-            sourceEnabled.nsGov = false;
-          }
+          loadViewportChunks();
         }
         applyLayerVisibility();
       });

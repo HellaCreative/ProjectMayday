@@ -1,0 +1,1085 @@
+{
+  "generatedAt": "2026-07-14T19:01:56.137Z",
+  "sourceName": "Nova Scotia Topographic DataBase Roads, Trails and Rails - Road Line Layer",
+  "source": "https://data.novascotia.ca/resource/a6gf-w68e.json",
+  "catalogue": "https://data.novascotia.ca/Roads-Driving-and-Transport/Nova-Scotia-Topographic-DataBase-Roads-Trails-and-/a6gf-w68e",
+  "queryModel": "NSTDB Road Line Layer: unpaved, track, trail, AND paved roads; split at exact shared vertices; component-tagged; grid-chunked",
+  "license": "Open Government Licence - Nova Scotia",
+  "region": "Nova Scotia",
+  "bbox": null,
+  "chunkDeg": 0.4,
+  "chunkDir": "ns-gov-chunks",
+  "featureCount": 303443,
+  "sourceLines": 266576,
+  "junctionSplits": 36867,
+  "fetched": 268753,
+  "skipped": 2177,
+  "bytes": 259181420,
+  "gzBytes": 47253785,
+  "classes": {
+    "paved": 67465,
+    "gravel": 36416,
+    "track": 155499,
+    "access": 37425,
+    "bridge": 2635,
+    "unserviced": 832,
+    "single": 3096,
+    "tunnel": 75
+  },
+  "topology": {
+    "nodes": 299065,
+    "junctionNodes": 124828,
+    "deadEndNodes": 126279,
+    "componentCount": 24709,
+    "topComponentsKm": [
+      88362.7,
+      105,
+      52.1,
+      37.6,
+      33.8,
+      31.8,
+      24.4,
+      23.8,
+      21.4,
+      20.9
+    ]
+  },
+  "sourceDescriptions": {
+    "ROAD - Local - 2 Lanes - Paved": 35809,
+    "ROAD - Local - Divided - 2 Lanes - Paved": 399,
+    "ROAD - Local - Divided - 1 Lane - Paved": 67,
+    "RAMP - 1 Lane - Paved": 1483,
+    "ROAD - Local - 1 Lane - Unpaved": 13588,
+    "ROAD - Local - 2 Lanes - Unpaved": 7713,
+    "RAMP - 2 Lanes - Paved": 230,
+    "ROAD - Local - 3 Lanes - Paved": 346,
+    "ROAD - Local Arterial - 3 Lanes - Paved": 176,
+    "TRACK": 144610,
+    "ROAD - Resource Access - Dry Weather - 1 Lane - Unpaved": 24936,
+    "BRIDGE - Local - 2 Lanes - Paved": 944,
+    "ROAD - Local - 1 Lane - Paved": 4138,
+    "ROAD - Local Arterial - 1 Lane - Paved": 41,
+    "BRIDGE - Local Arterial - 1 Lane - Paved": 4,
+    "ROAD - Local - 4 Lanes - Paved": 135,
+    "ROAD - Collector - 2 Lanes - Paved": 5413,
+    "BRIDGE - Collector - 2 Lanes - Paved": 429,
+    "BRIDGE - Resource Access - Dry Weather - 1 Lane - Unpaved": 636,
+    "ROAD - Highway - Divided - 2 Lanes - Paved": 648,
+    "BRIDGE - Highway - Divided - 2 Lanes - Paved": 137,
+    "ROAD - Collector - 3 Lanes - Paved": 9,
+    "ROAD - Local - Dry Weather - 1 Lane - Unpaved": 7854,
+    "BRIDGE - Local - 1 Lane - Unpaved": 676,
+    "ROAD - Resource Access - 1 Lane - Unpaved": 1833,
+    "ROAD - Local Collector - 2 Lanes - Paved": 781,
+    "ROAD - Highway - 2 Lanes - Paved": 661,
+    "ROAD - Local Arterial - 2 Lanes - Paved": 1097,
+    "ROAD - Abandoned - Local - 1 Lane - Unpaved": 215,
+    "BRIDGE - Local - Divided - 2 Lanes - Paved": 18,
+    "ROAD - Median Crossover - 1 Lane - Paved": 42,
+    "ROAD - Local Arterial - Divided - 2 Lanes - Paved": 37,
+    "ROAD - Arterial - 2 Lanes - Paved": 5277,
+    "BRIDGE - Local - 1 Lane - Paved": 105,
+    "BRIDGE - Track": 774,
+    "ROAD - Local Collector - 3 Lanes - Paved": 81,
+    "ROAD - Arterial - 4 Lanes - Paved": 90,
+    "BRIDGE - Arterial - 4 Lanes - Paved": 3,
+    "BRIDGE - Local - 3 Lanes - Paved": 7,
+    "ROAD - Local Collector - 4 Lanes - Paved": 9,
+    "ROAD - Highway - Divided - 3 Lanes - Paved": 54,
+    "BRIDGE - Local Arterial - 3 Lanes - Paved": 5,
+    "TRAIL  - No Vehicular Traffic - No Vehicular Traffic": 2874,
+    "BRIDGE - Local Arterial - 2 Lanes - Paved": 34,
+    "ROAD - Trans-Canada - 2 Lanes - Paved": 332,
+    "BRIDGE - Highway - Divided - 3 Lanes - Paved": 16,
+    "BRIDGE - Local Collector - Divided - 2 Lanes - Paved": 2,
+    "ROAD - Local Collector - Divided - 2 Lanes - Paved": 9,
+    "BRIDGE - RAMP - 2 Lanes - Paved": 10,
+    "BRIDGE - RAMP - 1 Lane - Paved": 30,
+    "ROAD - Local Highway - 2 Lanes - Paved": 9,
+    "RAMP - 3 Lanes - Paved": 4,
+    "BRIDGE - RAMP - 3 Lanes - Paved": 1,
+    "BRIDGE - Resource Access - 1 Lane - Unpaved": 20,
+    "BRIDGE - Local - 2 Lanes - Unpaved": 321,
+    "BRIDGE - Local Highway - 2 Lanes - Paved": 1,
+    "ROAD - Resource Access - 2 Lanes - Paved": 106,
+    "BRIDGE - Local Collector - 2 Lanes - Paved": 25,
+    "ROAD - Local Collector - Divided - 3 Lanes - Paved": 3,
+    "ROAD - Highway - 3 Lanes - Paved": 98,
+    "ROAD - Abandoned - TRACK": 495,
+    "BRIDGE - Resource Access - 2 Lanes - Paved": 6,
+    "BRIDGE - Arterial - 2 Lanes - Paved": 407,
+    "ROAD - Resource Access - 2 Lanes - Unpaved": 191,
+    "ROAD - Arterial - 1 Lane - Paved": 170,
+    "BRIDGE - Highway - 2 Lanes - Paved": 129,
+    "BRIDGE - Local - Dry Weather - 1 Lane - Unpaved": 197,
+    "BRIDGE - Local Collector - 3 Lanes - Paved": 2,
+    "TUNNEL - Local - 1 Lane - Paved": 19,
+    "SERVICE LANE - 1 Lane - Paved": 11,
+    "SERVICE LANE - 2 Lanes - Paved": 6,
+    "ROAD - Median Crossover - 1 Lane - Unpaved": 50,
+    "BRIDGE - Trans-Canada - 2 Lanes - Paved": 39,
+    "ROAD - Local Arterial - 4 Lanes - Paved": 47,
+    "ROAD - Arterial - 3 Lanes - Paved": 38,
+    "TUNNEL - Local - 1 Lane - Unpaved": 29,
+    "ROAD - Local - Driveway - 1 Lane - Unpaved": 3,
+    "ROAD - Trans-Canada - Divided - 2 Lanes - Paved": 501,
+    "BRIDGE - Trans-Canada - Divided - 2 Lanes - Paved": 112,
+    "ROAD - Resource Access - Dry Weather - 2 Lanes - Unpaved": 6,
+    "BRIDGE - Local Highway - 4 Lanes - Paved": 3,
+    "ROAD - Local Highway - 4 Lanes - Paved": 3,
+    "ROAD - Highway - 4 Lanes - Paved": 7,
+    "ROAD - Highway - Divided - 1 Lane - Paved": 15,
+    "ROAD - Trans-Canada - 1 Lane - Paved": 19,
+    "ROAD - Local Highway - 1 Lane - Paved": 11,
+    "BRIDGE - Local Highway - 1 Lane - Paved": 2,
+    "TRACK - Indefinite/Approximate": 562,
+    "ROAD - Resource Access - 1 Lane - Paved": 77,
+    "BRIDGE - Collector - 1 Lane - Paved": 5,
+    "ROAD - Collector - 1 Lane - Paved": 32,
+    "ROAD - Trans-Canada - 3 Lanes - Paved": 26,
+    "ROAD - Median Crossover - 2 Lanes - Paved": 29,
+    "ROAD - Local Arterial - Divided - 1 Lane - Paved": 2,
+    "TUNNEL - Track": 21,
+    "BRIDGE - Local Arterial - Divided - 2 Lanes - Paved": 2,
+    "TUNNEL - Resource Access - Dry Weather - Unpaved": 13,
+    "BRIDGE - Local - 4 Lanes - Paved": 1,
+    "ROAD - Abandoned - 1 Lane - Unpaved": 1,
+    "BRIDGE - Highway - 3 Lanes - Paved": 8,
+    "BRIDGE - Moveable - Trans-Canada - 2 Lanes - Paved": 1,
+    "ROAD - Local Collector - 1 Lane - Paved": 13,
+    "ROAD - Collector - 4 Lanes - Paved": 2,
+    "TUNNEL - Local - 2 Lanes - Paved": 3,
+    "BRIDGE - Arterial - 3 Lanes - Paved": 3,
+    "BRIDGE - Arterial - 1 Lane - Paved": 2,
+    "ROAD - Abandoned - Dry Weather - 1 Lane - Unpaved": 2,
+    "BRIDGE - Abandoned - 1 Lane - Unpaved": 4,
+    "TRAIL -  Indefinite/Approximate - No Vehicular Traffic": 3,
+    "ROAD - Local Collector - Divided - 1 Lane - Paved": 1,
+    "SERVICE LANE - 1 Lane - Unpaved": 2,
+    "RAMP - 2 Lanes - Unpaved": 1,
+    "DAM - Local - 1 Lane - Unpaved": 2,
+    "ROAD - Local Collector - 2 Lanes - Unpaved": 1,
+    "BRIDGE - Resource Access - 2 Lanes - Unpaved": 1,
+    "RAMP - 1 Lane - Unpaved": 1,
+    "TRAIL - Addressed Feature - No Vehicular Traffic": 9
+  },
+  "limitations": [
+    "NSTDB trail records do not explicitly validate motorized access; they are displayed as single track for visual comparison.",
+    "TRACK records are normalized to Track, including indefinite/approximate track records.",
+    "Junctions are exact shared-vertex matches only. Lines that visually touch without a shared vertex remain disconnected by design."
+  ],
+  "chunks": [
+    {
+      "id": "-160_111",
+      "file": "-160_111.geojson.gz",
+      "bbox": [
+        -64.01914,
+        44.43314,
+        -63.57583,
+        44.8116
+      ],
+      "count": 13475,
+      "gzBytes": 1578440
+    },
+    {
+      "id": "-151_115",
+      "file": "-151_115.geojson.gz",
+      "bbox": [
+        -60.43367,
+        45.99413,
+        -59.98804,
+        46.33549
+      ],
+      "count": 12173,
+      "gzBytes": 1121074
+    },
+    {
+      "id": "-162_111",
+      "file": "-162_111.geojson.gz",
+      "bbox": [
+        -64.80968,
+        44.39677,
+        -64.38241,
+        44.80955
+      ],
+      "count": 11629,
+      "gzBytes": 1712706
+    },
+    {
+      "id": "-159_111",
+      "file": "-159_111.geojson.gz",
+      "bbox": [
+        -63.61361,
+        44.45898,
+        -63.19215,
+        44.82311
+      ],
+      "count": 10783,
+      "gzBytes": 1045721
+    },
+    {
+      "id": "-159_113",
+      "file": "-159_113.geojson.gz",
+      "bbox": [
+        -63.61022,
+        45.188,
+        -63.16599,
+        45.61685
+      ],
+      "count": 9955,
+      "gzBytes": 1688299
+    },
+    {
+      "id": "-155_113",
+      "file": "-155_113.geojson.gz",
+      "bbox": [
+        -62.00947,
+        45.18845,
+        -61.5899,
+        45.62024
+      ],
+      "count": 9306,
+      "gzBytes": 1235649
+    },
+    {
+      "id": "-162_112",
+      "file": "-162_112.geojson.gz",
+      "bbox": [
+        -64.80792,
+        44.79589,
+        -64.38899,
+        45.20899
+      ],
+      "count": 9205,
+      "gzBytes": 1408766
+    },
+    {
+      "id": "-159_112",
+      "file": "-159_112.geojson.gz",
+      "bbox": [
+        -63.61535,
+        44.79611,
+        -63.19216,
+        45.21061
+      ],
+      "count": 8842,
+      "gzBytes": 1564812
+    },
+    {
+      "id": "-157_113",
+      "file": "-157_113.geojson.gz",
+      "bbox": [
+        -62.81315,
+        45.19324,
+        -62.38214,
+        45.60848
+      ],
+      "count": 8395,
+      "gzBytes": 1351935
+    },
+    {
+      "id": "-158_113",
+      "file": "-158_113.geojson.gz",
+      "bbox": [
+        -63.20586,
+        45.18996,
+        -62.78916,
+        45.62386
+      ],
+      "count": 8053,
+      "gzBytes": 1688935
+    },
+    {
+      "id": "-162_110",
+      "file": "-162_110.geojson.gz",
+      "bbox": [
+        -64.81052,
+        43.98095,
+        -64.3864,
+        44.40495
+      ],
+      "count": 7550,
+      "gzBytes": 1107181
+    },
+    {
+      "id": "-160_112",
+      "file": "-160_112.geojson.gz",
+      "bbox": [
+        -64.0058,
+        44.79026,
+        -63.58738,
+        45.2107
+      ],
+      "count": 7411,
+      "gzBytes": 1394532
+    },
+    {
+      "id": "-161_112",
+      "file": "-161_112.geojson.gz",
+      "bbox": [
+        -64.41404,
+        44.76892,
+        -63.9736,
+        45.21769
+      ],
+      "count": 7105,
+      "gzBytes": 1348433
+    },
+    {
+      "id": "-163_111",
+      "file": "-163_111.geojson.gz",
+      "bbox": [
+        -65.21124,
+        44.38634,
+        -64.77495,
+        44.80998
+      ],
+      "count": 6944,
+      "gzBytes": 1018507
+    },
+    {
+      "id": "-160_114",
+      "file": "-160_114.geojson.gz",
+      "bbox": [
+        -64.01032,
+        45.58771,
+        -63.58927,
+        45.99694
+      ],
+      "count": 6756,
+      "gzBytes": 996321
+    },
+    {
+      "id": "-161_111",
+      "file": "-161_111.geojson.gz",
+      "bbox": [
+        -64.40917,
+        44.39489,
+        -63.9893,
+        44.81712
+      ],
+      "count": 6588,
+      "gzBytes": 1165397
+    },
+    {
+      "id": "-163_112",
+      "file": "-163_112.geojson.gz",
+      "bbox": [
+        -65.20325,
+        44.78987,
+        -64.78626,
+        45.15628
+      ],
+      "count": 6400,
+      "gzBytes": 854552
+    },
+    {
+      "id": "-161_114",
+      "file": "-161_114.geojson.gz",
+      "bbox": [
+        -64.4152,
+        45.59025,
+        -63.98266,
+        46.00182
+      ],
+      "count": 6370,
+      "gzBytes": 877287
+    },
+    {
+      "id": "-156_113",
+      "file": "-156_113.geojson.gz",
+      "bbox": [
+        -62.40768,
+        45.18911,
+        -61.98279,
+        45.61007
+      ],
+      "count": 6335,
+      "gzBytes": 1072972
+    },
+    {
+      "id": "-154_114",
+      "file": "-154_114.geojson.gz",
+      "bbox": [
+        -61.60554,
+        45.5913,
+        -61.18192,
+        46.00557
+      ],
+      "count": 6168,
+      "gzBytes": 859569
+    },
+    {
+      "id": "-160_113",
+      "file": "-160_113.geojson.gz",
+      "bbox": [
+        -64.01253,
+        45.19055,
+        -63.5933,
+        45.60978
+      ],
+      "count": 5834,
+      "gzBytes": 1184689
+    },
+    {
+      "id": "-161_113",
+      "file": "-161_113.geojson.gz",
+      "bbox": [
+        -64.41496,
+        45.18729,
+        -63.99041,
+        45.61543
+      ],
+      "count": 5714,
+      "gzBytes": 941213
+    },
+    {
+      "id": "-165_111",
+      "file": "-165_111.geojson.gz",
+      "bbox": [
+        -66.00615,
+        44.39545,
+        -65.57395,
+        44.7819
+      ],
+      "count": 5588,
+      "gzBytes": 824382
+    },
+    {
+      "id": "-164_111",
+      "file": "-164_111.geojson.gz",
+      "bbox": [
+        -65.6061,
+        44.4,
+        -65.19278,
+        44.81379
+      ],
+      "count": 5183,
+      "gzBytes": 890682
+    },
+    {
+      "id": "-166_110",
+      "file": "-166_110.geojson.gz",
+      "bbox": [
+        -66.39264,
+        43.99536,
+        -65.98522,
+        44.4109
+      ],
+      "count": 5180,
+      "gzBytes": 799196
+    },
+    {
+      "id": "-158_112",
+      "file": "-158_112.geojson.gz",
+      "bbox": [
+        -63.20796,
+        44.79159,
+        -62.77303,
+        45.21034
+      ],
+      "count": 5123,
+      "gzBytes": 916289
+    },
+    {
+      "id": "-159_114",
+      "file": "-159_114.geojson.gz",
+      "bbox": [
+        -63.61293,
+        45.58479,
+        -63.18508,
+        45.87838
+      ],
+      "count": 4982,
+      "gzBytes": 953695
+    },
+    {
+      "id": "-162_113",
+      "file": "-162_113.geojson.gz",
+      "bbox": [
+        -64.80418,
+        45.18565,
+        -64.39464,
+        45.60779
+      ],
+      "count": 4811,
+      "gzBytes": 829779
+    },
+    {
+      "id": "-153_115",
+      "file": "-153_115.geojson.gz",
+      "bbox": [
+        -61.21219,
+        45.98368,
+        -60.79092,
+        46.40752
+      ],
+      "count": 4691,
+      "gzBytes": 794898
+    },
+    {
+      "id": "-157_112",
+      "file": "-157_112.geojson.gz",
+      "bbox": [
+        -62.8136,
+        44.78878,
+        -62.37961,
+        45.2105
+      ],
+      "count": 4458,
+      "gzBytes": 1066541
+    },
+    {
+      "id": "-154_113",
+      "file": "-154_113.geojson.gz",
+      "bbox": [
+        -61.60949,
+        45.19785,
+        -61.19641,
+        45.60567
+      ],
+      "count": 4405,
+      "gzBytes": 661313
+    },
+    {
+      "id": "-153_114",
+      "file": "-153_114.geojson.gz",
+      "bbox": [
+        -61.21133,
+        45.59358,
+        -60.78823,
+        46.00903
+      ],
+      "count": 4402,
+      "gzBytes": 718523
+    },
+    {
+      "id": "-152_114",
+      "file": "-152_114.geojson.gz",
+      "bbox": [
+        -60.80825,
+        45.5938,
+        -60.38832,
+        46.00381
+      ],
+      "count": 4287,
+      "gzBytes": 692860
+    },
+    {
+      "id": "-152_115",
+      "file": "-152_115.geojson.gz",
+      "bbox": [
+        -60.8099,
+        45.9974,
+        -60.38382,
+        46.40536
+      ],
+      "count": 4211,
+      "gzBytes": 643924
+    },
+    {
+      "id": "-165_110",
+      "file": "-165_110.geojson.gz",
+      "bbox": [
+        -66.02046,
+        43.98539,
+        -65.59051,
+        44.41673
+      ],
+      "count": 4163,
+      "gzBytes": 835922
+    },
+    {
+      "id": "-164_109",
+      "file": "-164_109.geojson.gz",
+      "bbox": [
+        -65.60728,
+        43.59485,
+        -65.2,
+        44.01516
+      ],
+      "count": 3603,
+      "gzBytes": 607672
+    },
+    {
+      "id": "-165_109",
+      "file": "-165_109.geojson.gz",
+      "bbox": [
+        -66.01141,
+        43.59662,
+        -65.6,
+        44.00206
+      ],
+      "count": 3505,
+      "gzBytes": 592983
+    },
+    {
+      "id": "-153_116",
+      "file": "-153_116.geojson.gz",
+      "bbox": [
+        -61.15589,
+        46.39767,
+        -60.78503,
+        46.82313
+      ],
+      "count": 3420,
+      "gzBytes": 429277
+    },
+    {
+      "id": "-166_109",
+      "file": "-166_109.geojson.gz",
+      "bbox": [
+        -66.17072,
+        43.65004,
+        -65.99436,
+        44.00824
+      ],
+      "count": 3369,
+      "gzBytes": 427500
+    },
+    {
+      "id": "-157_114",
+      "file": "-157_114.geojson.gz",
+      "bbox": [
+        -62.81061,
+        45.59224,
+        -62.3957,
+        45.82826
+      ],
+      "count": 3013,
+      "gzBytes": 318917
+    },
+    {
+      "id": "-156_112",
+      "file": "-156_112.geojson.gz",
+      "bbox": [
+        -62.42282,
+        44.88627,
+        -61.98728,
+        45.21292
+      ],
+      "count": 2980,
+      "gzBytes": 615941
+    },
+    {
+      "id": "-163_110",
+      "file": "-163_110.geojson.gz",
+      "bbox": [
+        -65.22152,
+        43.99771,
+        -64.78357,
+        44.41177
+      ],
+      "count": 2964,
+      "gzBytes": 608430
+    },
+    {
+      "id": "-158_114",
+      "file": "-158_114.geojson.gz",
+      "bbox": [
+        -63.20774,
+        45.57855,
+        -62.78437,
+        45.80525
+      ],
+      "count": 2949,
+      "gzBytes": 586721
+    },
+    {
+      "id": "-156_114",
+      "file": "-156_114.geojson.gz",
+      "bbox": [
+        -62.40599,
+        45.58863,
+        -61.98239,
+        45.84476
+      ],
+      "count": 2743,
+      "gzBytes": 423023
+    },
+    {
+      "id": "-152_116",
+      "file": "-152_116.geojson.gz",
+      "bbox": [
+        -60.80529,
+        46.38955,
+        -60.39374,
+        46.80571
+      ],
+      "count": 2693,
+      "gzBytes": 330889
+    },
+    {
+      "id": "-154_115",
+      "file": "-154_115.geojson.gz",
+      "bbox": [
+        -61.57135,
+        45.99649,
+        -61.18297,
+        46.35772
+      ],
+      "count": 2681,
+      "gzBytes": 441197
+    },
+    {
+      "id": "-150_115",
+      "file": "-150_115.geojson.gz",
+      "bbox": [
+        -60.00786,
+        45.99592,
+        -59.67685,
+        46.22067
+      ],
+      "count": 2642,
+      "gzBytes": 228416
+    },
+    {
+      "id": "-151_114",
+      "file": "-151_114.geojson.gz",
+      "bbox": [
+        -60.40991,
+        45.65356,
+        -59.99404,
+        46.00456
+      ],
+      "count": 2550,
+      "gzBytes": 471066
+    },
+    {
+      "id": "-155_114",
+      "file": "-155_114.geojson.gz",
+      "bbox": [
+        -62.01568,
+        45.59157,
+        -61.59567,
+        45.88503
+      ],
+      "count": 2466,
+      "gzBytes": 346436
+    },
+    {
+      "id": "-164_112",
+      "file": "-164_112.geojson.gz",
+      "bbox": [
+        -65.56354,
+        44.78655,
+        -65.18984,
+        44.98046
+      ],
+      "count": 2092,
+      "gzBytes": 270320
+    },
+    {
+      "id": "-153_113",
+      "file": "-153_113.geojson.gz",
+      "bbox": [
+        -61.20181,
+        45.21452,
+        -60.8963,
+        45.60623
+      ],
+      "count": 2059,
+      "gzBytes": 265250
+    },
+    {
+      "id": "-158_111",
+      "file": "-158_111.geojson.gz",
+      "bbox": [
+        -63.20376,
+        44.67804,
+        -62.79895,
+        44.80595
+      ],
+      "count": 1835,
+      "gzBytes": 284862
+    },
+    {
+      "id": "-161_110",
+      "file": "-161_110.geojson.gz",
+      "bbox": [
+        -64.40818,
+        44.22313,
+        -64.21063,
+        44.40547
+      ],
+      "count": 1821,
+      "gzBytes": 227523
+    },
+    {
+      "id": "-163_109",
+      "file": "-163_109.geojson.gz",
+      "bbox": [
+        -65.2194,
+        43.65694,
+        -64.8,
+        44
+      ],
+      "count": 1683,
+      "gzBytes": 304575
+    },
+    {
+      "id": "-155_112",
+      "file": "-155_112.geojson.gz",
+      "bbox": [
+        -62.01541,
+        44.98803,
+        -61.59389,
+        45.21135
+      ],
+      "count": 1411,
+      "gzBytes": 218934
+    },
+    {
+      "id": "-165_108",
+      "file": "-165_108.geojson.gz",
+      "bbox": [
+        -65.80716,
+        43.40794,
+        -65.59438,
+        43.61477
+      ],
+      "count": 1136,
+      "gzBytes": 136384
+    },
+    {
+      "id": "-164_108",
+      "file": "-164_108.geojson.gz",
+      "bbox": [
+        -65.61007,
+        43.4323,
+        -65.33803,
+        43.6134
+      ],
+      "count": 1130,
+      "gzBytes": 157346
+    },
+    {
+      "id": "-152_117",
+      "file": "-152_117.geojson.gz",
+      "bbox": [
+        -60.80498,
+        46.80397,
+        -60.36218,
+        47.04086
+      ],
+      "count": 942,
+      "gzBytes": 153137
+    },
+    {
+      "id": "-164_110",
+      "file": "-164_110.geojson.gz",
+      "bbox": [
+        -65.62559,
+        43.99009,
+        -65.19523,
+        44.40559
+      ],
+      "count": 930,
+      "gzBytes": 256391
+    },
+    {
+      "id": "-163_113",
+      "file": "-163_113.geojson.gz",
+      "bbox": [
+        -65.00545,
+        45.25087,
+        -64.79031,
+        45.49974
+      ],
+      "count": 831,
+      "gzBytes": 142685
+    },
+    {
+      "id": "-166_111",
+      "file": "-166_111.geojson.gz",
+      "bbox": [
+        -66.18971,
+        44.39004,
+        -65.99804,
+        44.56761
+      ],
+      "count": 752,
+      "gzBytes": 124573
+    },
+    {
+      "id": "-150_114",
+      "file": "-150_114.geojson.gz",
+      "bbox": [
+        -60.0649,
+        45.87552,
+        -59.82909,
+        46.00365
+      ],
+      "count": 604,
+      "gzBytes": 80769
+    },
+    {
+      "id": "-162_114",
+      "file": "-162_114.geojson.gz",
+      "bbox": [
+        -64.58015,
+        45.59723,
+        -64.38924,
+        45.75364
+      ],
+      "count": 599,
+      "gzBytes": 108435
+    },
+    {
+      "id": "-151_116",
+      "file": "-151_116.geojson.gz",
+      "bbox": [
+        -60.4071,
+        46.56436,
+        -60.31797,
+        46.79822
+      ],
+      "count": 381,
+      "gzBytes": 57967
+    },
+    {
+      "id": "-162_109",
+      "file": "-162_109.geojson.gz",
+      "bbox": [
+        -64.81472,
+        43.88086,
+        -64.66195,
+        44
+      ],
+      "count": 257,
+      "gzBytes": 41996
+    },
+    {
+      "id": "-157_111",
+      "file": "-157_111.geojson.gz",
+      "bbox": [
+        -62.80896,
+        44.75429,
+        -62.56126,
+        44.80321
+      ],
+      "count": 240,
+      "gzBytes": 34704
+    },
+    {
+      "id": "-154_112",
+      "file": "-154_112.geojson.gz",
+      "bbox": [
+        -61.60506,
+        45.14701,
+        -61.34397,
+        45.20286
+      ],
+      "count": 227,
+      "gzBytes": 41627
+    },
+    {
+      "id": "-151_117",
+      "file": "-151_117.geojson.gz",
+      "bbox": [
+        -60.39825,
+        46.78766,
+        -60.14833,
+        47.19408
+      ],
+      "count": 185,
+      "gzBytes": 26767
+    },
+    {
+      "id": "-152_113",
+      "file": "-152_113.geojson.gz",
+      "bbox": [
+        -60.75094,
+        45.56635,
+        -60.648,
+        45.60455
+      ],
+      "count": 153,
+      "gzBytes": 25536
+    },
+    {
+      "id": "-153_117",
+      "file": "-153_117.geojson.gz",
+      "bbox": [
+        -60.82827,
+        46.82129,
+        -60.79963,
+        46.83038
+      ],
+      "count": 47,
+      "gzBytes": 3454
+    },
+    {
+      "id": "-151_109",
+      "file": "-151_109.geojson.gz",
+      "bbox": [
+        -60.02973,
+        43.92901,
+        -60.00242,
+        43.93452
+      ],
+      "count": 34,
+      "gzBytes": 7410
+    },
+    {
+      "id": "-150_109",
+      "file": "-150_109.geojson.gz",
+      "bbox": [
+        -59.95741,
+        43.93143,
+        -59.77955,
+        43.96402
+      ],
+      "count": 17,
+      "gzBytes": 2350
+    },
+    {
+      "id": "-161_115",
+      "file": "-161_115.geojson.gz",
+      "bbox": [
+        -64.06333,
+        45.99963,
+        -64.02393,
+        46.00403
+      ],
+      "count": 15,
+      "gzBytes": 1189
+    },
+    {
+      "id": "-166_108",
+      "file": "-166_108.geojson.gz",
+      "bbox": [
+        -66.02013,
+        43.39308,
+        -66.00942,
+        43.41125
+      ],
+      "count": 4,
+      "gzBytes": 1558
+    },
+    {
+      "id": "-151_118",
+      "file": "-151_118.geojson.gz",
+      "bbox": [
+        -60.14833,
+        47.19036,
+        -60.13864,
+        47.22319
+      ],
+      "count": 3,
+      "gzBytes": 3791
+    },
+    {
+      "id": "-153_112",
+      "file": "-153_112.geojson.gz",
+      "bbox": [
+        -61.13758,
+        45.19733,
+        -61.13148,
+        45.20193
+      ],
+      "count": 2,
+      "gzBytes": 790
+    }
+  ]
+}
