@@ -385,38 +385,65 @@
       cursor: default;
     }
     .route-actions {
-      display: grid;
+      display: none;
       grid-template-columns: 1fr;
       gap: 6px;
       margin-top: 8px;
     }
+    .route-actions.ready { display: grid; }
     .route-export {
       display: flex;
       align-items: center;
       justify-content: center;
       gap: 8px;
-      min-height: 38px;
-      border: 1px solid var(--line);
+      min-height: 42px;
+      border: 0;
       border-radius: 10px;
-      background: #ffffff;
-      color: var(--text);
+      background: var(--accent);
+      color: #ffffff;
       font-family: var(--mono);
-      font-size: 0.68rem;
+      font-size: 0.72rem;
+      font-weight: 600;
       letter-spacing: 0.08em;
       text-transform: uppercase;
       cursor: pointer;
     }
     .route-export svg {
       flex: 0 0 auto;
-      opacity: 0.85;
     }
-    .route-export:disabled {
-      opacity: 0.38;
-      cursor: default;
-    }
-    .route-export:not(:disabled):active {
+    .route-export:active {
       transform: scale(0.98);
     }
+    .route-export-float {
+      display: none;
+      pointer-events: auto;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      min-height: 42px;
+      padding: 0 14px;
+      border: 0;
+      border-radius: 12px;
+      background: var(--accent);
+      color: #ffffff;
+      font-family: var(--mono);
+      font-size: 0.68rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      cursor: pointer;
+      box-shadow: 0 8px 20px rgba(10, 102, 194, 0.28);
+    }
+    .route-export-float.visible { display: inline-flex; }
+    .route-export-float svg { flex: 0 0 auto; }
+    .topbar-right {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 8px;
+      pointer-events: none;
+    }
+    .topbar-right > * { pointer-events: auto; }
     .route-debug {
       margin-top: 8px;
       padding: 8px 10px;
@@ -525,9 +552,15 @@
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="14" y2="18"/></svg>
       </button>
     </div>
-    <button class="btn route-toggle" id="routeToggleBtn" title="Route planner" aria-label="Toggle route planner" aria-expanded="false">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="19" r="2.4"/><circle cx="18" cy="5" r="2.4"/><path d="M8.4 19h6.1a3.5 3.5 0 0 0 0-7H9.5a3.5 3.5 0 0 1 0-7h6.1"/></svg>
-    </button>
+    <div class="topbar-right">
+      <button class="btn route-toggle" id="routeToggleBtn" title="Route planner" aria-label="Toggle route planner" aria-expanded="false">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="19" r="2.4"/><circle cx="18" cy="5" r="2.4"/><path d="M8.4 19h6.1a3.5 3.5 0 0 0 0-7H9.5a3.5 3.5 0 0 1 0-7h6.1"/></svg>
+      </button>
+      <button class="route-export-float" id="routeExportFloat" type="button" title="Export this route as GPX" aria-label="Export route as GPX">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+        Export GPX
+      </button>
+    </div>
   </div>
 
   <div class="route-card collapsed" id="routeCard">
@@ -545,8 +578,8 @@
       <div class="route-status" id="routeStatus">Tap destination<strong>No route set</strong></div>
       <button class="route-clear" id="routeClear" type="button" title="Clear route" aria-label="Clear route" disabled>×</button>
     </div>
-    <div class="route-actions">
-      <button class="route-export" id="routeExport" type="button" title="Export this route as GPX for OsmAnd, Gaia GPS, and other apps" aria-label="Export route as GPX" disabled>
+    <div class="route-actions" id="routeActions">
+      <button class="route-export" id="routeExport" type="button" title="Export this route as GPX for OsmAnd, Gaia GPS, and other apps" aria-label="Export route as GPX">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
         Export GPX
       </button>
@@ -707,7 +740,9 @@
     const popupBody = document.getElementById("popupBody");
     const routeStatus = document.getElementById("routeStatus");
     const routeClear = document.getElementById("routeClear");
+    const routeActions = document.getElementById("routeActions");
     const routeExport = document.getElementById("routeExport");
+    const routeExportFloat = document.getElementById("routeExportFloat");
     const routeDebugEl = document.getElementById("routeDebug");
 
     function applyLayerVisibility() {
@@ -1815,10 +1850,18 @@
       routeDebugEl.innerHTML = rows.join("<br>");
     }
 
+    function syncRouteExportUi() {
+      const canExport = !!(activeRoute && activeRouteCoordinates().length >= 2);
+      routeActions.classList.toggle("ready", canExport);
+      routeExportFloat.classList.toggle("visible", canExport);
+      routeExport.disabled = !canExport;
+      routeExportFloat.disabled = !canExport;
+    }
+
     function updateRouteStatus() {
       const start = activeStart();
       routeClear.disabled = !plannedStart && !destination;
-      routeExport.disabled = !activeRoute || activeRouteCoordinates().length < 2;
+      syncRouteExportUi();
       renderRouteDebug();
       if (routeMessage) {
         routeStatus.innerHTML = routeMessage;
@@ -2067,12 +2110,14 @@
 
     document.getElementById("popupClose").addEventListener("click", hidePopup);
     routeClear.addEventListener("click", clearRoute);
-    routeExport.addEventListener("click", () => {
+    function handleRouteExportClick() {
       exportActiveRouteGpx().catch((err) => {
         console.error(err);
         setStatus("GPX export failed · " + (err.message || "Try again"), "error");
       });
-    });
+    }
+    routeExport.addEventListener("click", handleRouteExportClick);
+    routeExportFloat.addEventListener("click", handleRouteExportClick);
     document.querySelectorAll("[data-route-mode]").forEach((button) => {
       button.addEventListener("click", () => setRouteMode(button.dataset.routeMode));
     });
