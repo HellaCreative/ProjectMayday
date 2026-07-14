@@ -133,6 +133,29 @@
       flex-direction: column;
       gap: 10px;
     }
+    .btn.view-mode {
+      font-family: var(--mono);
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+    }
+    .btn.view-mode.on {
+      background: var(--route-dark);
+      color: #ffffff;
+      border-color: transparent;
+    }
+    .btn.compass-btn {
+      position: relative;
+    }
+    .btn.compass-btn .compass-rose {
+      width: 28px;
+      height: 28px;
+      display: block;
+      transition: transform 120ms linear;
+    }
+    .btn.compass-btn.north {
+      border-color: rgba(10, 102, 194, 0.45);
+    }
 
     .btn {
       width: 52px;
@@ -937,6 +960,15 @@
 
   <div class="stack">
     <button class="btn" id="panelBtn" title="Data info" aria-label="Data info">ℹ</button>
+    <button class="btn view-mode" id="viewModeBtn" type="button" title="Toggle 3D tilt" aria-label="Toggle 3D view" aria-pressed="false">3D</button>
+    <button class="btn compass-btn" id="compassBtn" type="button" title="Reset map north" aria-label="Compass, reset north">
+      <svg class="compass-rose" id="compassRose" viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.35"/>
+        <path d="M12 3.5 L14.2 12 L12 10.6 L9.8 12 Z" fill="#c1122f"/>
+        <path d="M12 20.5 L9.8 12 L12 13.4 L14.2 12 Z" fill="currentColor" opacity="0.55"/>
+        <circle cx="12" cy="12" r="1.4" fill="currentColor"/>
+      </svg>
+    </button>
     <button class="btn primary" id="recenterBtn" title="Follow my location" aria-label="Follow my location">◎</button>
   </div>
 
@@ -1041,6 +1073,8 @@
     // false = main detail / pip overview; true = main overview / pip detail
     let pipSwapped = false;
     let pipDrag = null;
+    let view3d = false;
+    let headingUp = false;
 
     const statusEl = document.getElementById("status");
     const modePill = document.getElementById("modePill");
@@ -1068,6 +1102,9 @@
     const followChip = document.getElementById("followChip");
     const pipEl = document.getElementById("pip");
     const pipModeLabel = document.getElementById("pipModeLabel");
+    const viewModeBtn = document.getElementById("viewModeBtn");
+    const compassBtn = document.getElementById("compassBtn");
+    const compassRose = document.getElementById("compassRose");
 
     function applyLayerVisibility() {
       if (!map || !map.isStyleLoaded()) return;
@@ -2294,6 +2331,7 @@
       followChip.classList.toggle("visible", !locked && (navigating || geoWatchId != null));
       recenterBtn.classList.toggle("primary", locked || navigating);
       if (locked) {
+        headingUp = true;
         ensureGeoWatch();
         syncFollowCamera(true);
       }
@@ -2305,16 +2343,63 @@
       return coords.reduce((b, c) => b.extend(c), new maplibregl.LngLatBounds(coords[0], coords[0]));
     }
 
+    function desiredPitch() {
+      if (!view3d) return 0;
+      return navigating || followLocked ? 55 : 45;
+    }
+
+    function desiredBearing() {
+      if (headingUp && Number.isFinite(rider.heading)) return rider.heading;
+      if (!headingUp && (followLocked || navigating)) return 0;
+      return map.getBearing();
+    }
+
+    function syncViewModeBtn() {
+      viewModeBtn.textContent = view3d ? "2D" : "3D";
+      viewModeBtn.setAttribute("aria-pressed", view3d ? "true" : "false");
+      viewModeBtn.classList.toggle("on", view3d);
+      viewModeBtn.title = view3d ? "Switch to top-down 2D" : "Switch to 3D tilt";
+    }
+
+    function updateCompass() {
+      const bearing = map.getBearing();
+      compassRose.style.transform = "rotate(" + (-bearing) + "deg)";
+      compassBtn.classList.toggle("north", Math.abs(((bearing % 360) + 360) % 360) < 1.5);
+    }
+
+    function setView3d(next) {
+      view3d = !!next;
+      syncViewModeBtn();
+      if (followLocked || navigating) {
+        syncFollowCamera(false);
+      } else {
+        suppressFollowBreak = true;
+        map.easeTo({ pitch: desiredPitch(), duration: 500 });
+        setTimeout(() => { suppressFollowBreak = false; }, 520);
+      }
+    }
+
+    function resetNorthUp() {
+      headingUp = false;
+      suppressFollowBreak = true;
+      map.easeTo({
+        bearing: 0,
+        pitch: desiredPitch(),
+        duration: 500,
+        essential: true
+      });
+      setTimeout(() => { suppressFollowBreak = false; }, 520);
+      setStatus("North up", "ok");
+    }
+
     function applyMainDetailCamera(immediate) {
       const zoom = navigating ? Math.max(map.getZoom(), 15.2) : Math.max(map.getZoom(), 13.5);
-      const bearing = navigating && Number.isFinite(rider.heading) ? rider.heading : map.getBearing();
-      const pitch = navigating ? 50 : map.getPitch();
       suppressFollowBreak = true;
       const cam = {
         center: [rider.lng, rider.lat],
         zoom,
-        bearing,
-        pitch: navigating ? pitch : map.getPitch(),
+        bearing: desiredBearing(),
+        pitch: desiredPitch(),
         duration: immediate ? 0 : 700,
         essential: true
       };
@@ -2331,14 +2416,14 @@
           padding: { top: 120, bottom: 140, left: 40, right: 40 },
           maxZoom: 13,
           duration: immediate ? 0 : 700,
-          pitch: 0,
+          pitch: view3d ? 35 : 0,
           bearing: 0
         });
       } else {
         map.easeTo({
           center: [rider.lng, rider.lat],
           zoom: 11,
-          pitch: 0,
+          pitch: view3d ? 35 : 0,
           bearing: 0,
           duration: immediate ? 0 : 700
         });
@@ -2612,12 +2697,12 @@
 
     function syncPipDetailCamera() {
       if (!overviewMap || !overviewReady || !pipSwapped) return;
-      const bearing = Number.isFinite(rider.heading) ? rider.heading : 0;
+      const bearing = headingUp && Number.isFinite(rider.heading) ? rider.heading : 0;
       overviewMap.jumpTo({
         center: [rider.lng, rider.lat],
         zoom: 15.4,
         bearing,
-        pitch: 45
+        pitch: view3d ? 45 : 0
       });
     }
 
@@ -2690,6 +2775,9 @@
       if (!ensureGeoWatch()) return;
       navigating = true;
       pipSwapped = false;
+      view3d = true;
+      headingUp = true;
+      syncViewModeBtn();
       navManeuvers = buildNavManeuvers(activeRouteCoordinates());
       lastSpokenCueKey = "";
       document.body.classList.add("navigating");
@@ -2706,11 +2794,18 @@
     function stopNavigation() {
       navigating = false;
       pipSwapped = false;
+      headingUp = followLocked;
       document.body.classList.remove("navigating");
       navHud.classList.remove("visible");
       setPipVisible(false);
       if (window.speechSynthesis) window.speechSynthesis.cancel();
-      map.easeTo({ pitch: 0, bearing: 0, duration: 500 });
+      if (!followLocked) {
+        view3d = false;
+        syncViewModeBtn();
+        map.easeTo({ pitch: 0, bearing: 0, duration: 500 });
+      } else {
+        syncFollowCamera(false);
+      }
       syncRouteExportUi();
       followChip.classList.toggle("visible", !followLocked && geoWatchId != null);
       setStatus("Navigation ended", "ok");
@@ -2972,6 +3067,15 @@
       if (suppressFollowBreak) return;
       if (followLocked) setFollowLocked(false);
     });
+    // Manual map rotate leaves north-up until follow/recenter restores heading-up.
+    map.on("rotatestart", () => {
+      if (suppressFollowBreak) return;
+      headingUp = false;
+    });
+    map.on("rotate", updateCompass);
+    map.on("pitch", updateCompass);
+    syncViewModeBtn();
+    updateCompass();
 
     map.once("idle", collapseAttribution);
 
@@ -3060,6 +3164,8 @@
     }
     recenterBtn.addEventListener("click", activateFollowFromControl);
     followChip.addEventListener("click", activateFollowFromControl);
+    viewModeBtn.addEventListener("click", () => setView3d(!view3d));
+    compassBtn.addEventListener("click", resetNorthUp);
     routeNavBtn.addEventListener("click", toggleNavigation);
     navStopBtn.addEventListener("click", stopNavigation);
     pipEl.addEventListener("pointerdown", (event) => {
