@@ -336,6 +336,9 @@
     <button class="source-toggle on" data-source="ns" type="button">
       <span class="dot" style="--dot:#6ee7a8"></span>NS Open Data
     </button>
+    <button class="source-toggle on" data-source="canada" type="button">
+      <span class="dot" style="--dot:#111111"></span>Canada Forest
+    </button>
   </div>
 
   <div class="status" id="status">Locating rider…</div>
@@ -381,7 +384,7 @@
     ];
 
     const trailTypeOn = { paved: true, service: true, atv: true, single: true };
-    const sourceOn = { osm: true, ns: true };
+    const sourceOn = { osm: true, ns: true, canada: true };
     let rider = { ...FALLBACK };
     let features = [];
     let settling = false;
@@ -714,7 +717,9 @@ out geom tags;`;
       const visible = features.filter((f) => {
         const props = f.properties;
         const type = props.trailType || "single";
-        const src = props.source === "ns-open-data" ? "ns" : "osm";
+        let src = "osm";
+        if (props.source === "ns-open-data") src = "ns";
+        else if (props.source === "canada-open-data") src = "canada";
         return trailTypeOn[type] && sourceOn[src];
       });
       if (map.getSource("trails")) {
@@ -746,24 +751,28 @@ out geom tags;`;
       }
       
       try {
-        // Fetch ONLY off-road data (basemap has roads already!)
+        // Fetch off-road layers in parallel (basemap already shows paved roads)
         setStatus("Scanning trails…");
         
-        const [osmResult, nsResult] = await Promise.allSettled([
+        const [osmResult, nsResult, caResult] = await Promise.allSettled([
           fetchOverpassLayer(bbox, queryOffRoadOnly),
-          fetchNSTrails(bbox)
+          fetchNSTrails(bbox),
+          fetchCanadaRoads(bbox)
         ]);
         
         if (token !== fetchToken) return;
         
         let allFeatures = [];
+        let osmN = 0, nsN = 0, caN = 0;
         
-        // Process OSM off-road data
         if (osmResult.status === 'fulfilled') {
-          allFeatures = toFeatures(osmResult.value);
+          const osmFeatures = toFeatures(osmResult.value);
+          osmN = osmFeatures.length;
+          allFeatures = [...allFeatures, ...osmFeatures];
+        } else {
+          console.warn('OSM failed:', osmResult.reason);
         }
         
-        // Process NS data
         if (nsResult.status === 'fulfilled' && nsResult.value.features) {
           const nsFeatures = nsResult.value.features.map(f => ({
             ...f,
@@ -775,14 +784,27 @@ out geom tags;`;
               source: 'ns-open-data'
             }
           }));
+          nsN = nsFeatures.length;
           allFeatures = [...allFeatures, ...nsFeatures];
+        } else {
+          console.warn('NS failed:', nsResult.reason);
+        }
+
+        if (caResult.status === 'fulfilled' && caResult.value.features) {
+          const caFeatures = caResult.value.features;
+          caN = caFeatures.length;
+          allFeatures = [...allFeatures, ...caFeatures];
+        } else {
+          console.warn('Canada failed:', caResult.reason);
         }
         
         features = allFeatures;
         setCache(bbox, features);
         applyFilters();
         setStatus(
-          features.length ? `${features.length} segments · ${reason}` : "No tracks in view",
+          features.length
+            ? `${features.length} · OSM ${osmN} · NS ${nsN} · CA ${caN}`
+            : "No tracks in view",
           features.length ? "ok" : ""
         );
       } catch (err) {
@@ -795,6 +817,14 @@ out geom tags;`;
     async function fetchNSTrails(bbox) {
       const bboxStr = bbox.join(',');
       const url = `/api/ns-trails?bbox=${bboxStr}&limit=2000`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      return await res.json();
+    }
+
+    async function fetchCanadaRoads(bbox) {
+      const bboxStr = bbox.join(',');
+      const url = `/api/canada-roads?bbox=${bboxStr}&limit=3000`;
       const res = await fetch(url);
       if (!res.ok) throw new Error("HTTP " + res.status);
       return await res.json();
@@ -841,7 +871,11 @@ out geom tags;`;
         <div class="k">Surface</div>
         <div class="v">${p.surface || "unspecified"}</div>
         <div class="k">Source</div>
-        <div class="v">${p.source === "ns-open-data" ? "NS Open Data" : "OpenStreetMap"}</div>
+        <div class="v">${
+          p.source === "ns-open-data" ? "NS Open Data"
+          : p.source === "canada-open-data" ? "Canada / NB Forest Roads"
+          : "OpenStreetMap"
+        }</div>
         <div class="k">Motor access</div>
         <div class="v">${p.accessStatus || "unknown"}${p.accessDetail ? " · " + p.accessDetail : ""}</div>
       `;
