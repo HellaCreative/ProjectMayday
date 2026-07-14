@@ -1,24 +1,34 @@
 {
-  "generatedAt": "2026-07-14T15:53:36.206Z",
+  "generatedAt": "2026-07-14T16:12:17.644Z",
   "sourceName": "Nova Scotia Topographic DataBase Roads, Trails and Rails - Road Line Layer",
   "source": "https://data.novascotia.ca/resource/a6gf-w68e.json",
   "catalogue": "https://data.novascotia.ca/Roads-Driving-and-Transport/Nova-Scotia-Topographic-DataBase-Roads-Trails-and-/a6gf-w68e",
-  "queryModel": "NSTDB Road Line Layer filtered to Unpaved and TRACK feature descriptions; paved/non-vehicular/driveway/ferry/rail excluded",
+  "queryModel": "NSTDB Road Line Layer filtered to Unpaved, TRACK, and TRAIL feature descriptions; paved/driveway/ferry/rail excluded",
   "license": "Open Government Licence - Nova Scotia",
   "region": "Nova Scotia",
-  "featureCount": 204699,
-  "fetched": 204758,
+  "featureCount": 207585,
+  "fetched": 207644,
   "skipped": 59,
-  "bytes": 253204858,
-  "gzBytes": 41067376,
+  "bytes": 256053259,
+  "gzBytes": 41585106,
   "classes": {
-    "gravel": 58015,
-    "resource": 146684
+    "gravel": 29156,
+    "track": 145172,
+    "access": 26966,
+    "bridge": 2629,
+    "unserviced": 713,
+    "single": 2886,
+    "tunnel": 63
   },
   "surfaceConfidence": {
-    "nstdb-unpaved": 58015,
-    "track-ambiguous": 146462,
-    "abandoned-unpaved": 222
+    "nstdb-unpaved": 29156,
+    "nstdb-track": 144610,
+    "nstdb-dry-weather-resource-access": 24942,
+    "nstdb-structure": 2692,
+    "nstdb-resource-access": 2024,
+    "nstdb-abandoned": 713,
+    "nstdb-trail": 2886,
+    "nstdb-approximate-track": 562
   },
   "sourceDescriptions": {
     "ROAD - Local - 1 Lane - Unpaved": 13588,
@@ -31,6 +41,7 @@
     "ROAD - Resource Access - 1 Lane - Unpaved": 1833,
     "ROAD - Abandoned - Local - 1 Lane - Unpaved": 215,
     "BRIDGE - Track": 774,
+    "TRAIL  - No Vehicular Traffic - No Vehicular Traffic": 2874,
     "BRIDGE - Resource Access - 1 Lane - Unpaved": 20,
     "BRIDGE - Local - 2 Lanes - Unpaved": 321,
     "ROAD - Abandoned - TRACK": 495,
@@ -46,15 +57,17 @@
     "ROAD - Abandoned - 1 Lane - Unpaved": 1,
     "ROAD - Abandoned - Dry Weather - 1 Lane - Unpaved": 2,
     "BRIDGE - Abandoned - 1 Lane - Unpaved": 4,
+    "TRAIL -  Indefinite/Approximate - No Vehicular Traffic": 3,
     "SERVICE LANE - 1 Lane - Unpaved": 2,
     "RAMP - 2 Lanes - Unpaved": 1,
     "DAM - Local - 1 Lane - Unpaved": 2,
     "ROAD - Local Collector - 2 Lanes - Unpaved": 1,
     "BRIDGE - Resource Access - 2 Lanes - Unpaved": 1,
-    "RAMP - 1 Lane - Unpaved": 1
+    "RAMP - 1 Lane - Unpaved": 1,
+    "TRAIL - Addressed Feature - No Vehicular Traffic": 9
   },
   "limitations": [
-    "TRACK features do not explicitly classify motorized access or surface, so they render red as resource roads.",
-    "Explicit no-vehicular-traffic trails are excluded from this bundle."
+    "NSTDB trail records do not explicitly validate motorized access; they are displayed as single track for visual comparison.",
+    "TRACK records are normalized to Track, including indefinite/approximate track records."
   ]
 }

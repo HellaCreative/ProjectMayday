@@ -2,8 +2,8 @@
 /**
  * Pack Nova Scotia government NSTDB road-line features into a DIRT overlay.
  *
- * Clear unpaved road/resource-access features normalize to gravel. Ambiguous
- * TRACK features are kept as red resource roads until we validate access.
+ * NSTDB feature descriptions become first-class DIRT categories for the
+ * Nova Scotia POC.
  */
 const fs = require("fs");
 const path = require("path");
@@ -19,7 +19,8 @@ const WHERE = [
   "feat_desc='TRACK - Indefinite/Approximate'",
   "feat_desc='BRIDGE - Track'",
   "feat_desc='TUNNEL - Track'",
-  "feat_desc='ROAD - Abandoned - TRACK'"
+  "feat_desc='ROAD - Abandoned - TRACK'",
+  "feat_desc like 'TRAIL%'"
 ].join(" OR ");
 
 function value(v) {
@@ -43,17 +44,31 @@ function roundGeom(g) {
 
 function classify(props) {
   const desc = value(props.feat_desc);
-  if (/No Vehicular Traffic|Railroad|Ferry|Driveway|Median Crossover|Service Lane|Ramp|Dam/i.test(desc)) {
+  if (/Railroad|Ferry|Driveway|Median Crossover|Service Lane|Ramp|Dam/i.test(desc)) {
     return null;
   }
   if (/\bPaved\b/i.test(desc) && !/\bUnpaved\b/i.test(desc)) {
     return null;
   }
+  if (/Trail/i.test(desc)) {
+    return { trackClass: "single", confidence: "nstdb-trail" };
+  }
+  if (/Bridge/i.test(desc)) {
+    return { trackClass: "bridge", confidence: "nstdb-structure" };
+  }
+  if (/Tunnel/i.test(desc)) {
+    return { trackClass: "tunnel", confidence: "nstdb-structure" };
+  }
+  if (/Abandoned/i.test(desc)) {
+    return { trackClass: "unserviced", confidence: "nstdb-abandoned" };
+  }
+  if (/Resource Access/i.test(desc)) {
+    return { trackClass: "access", confidence: /Dry Weather/i.test(desc) ? "nstdb-dry-weather-resource-access" : "nstdb-resource-access" };
+  }
   if (/Track/i.test(desc) || desc === "TRACK") {
-    return { trackClass: "resource", confidence: "track-ambiguous" };
+    return { trackClass: "track", confidence: /Indefinite|Approximate/i.test(desc) ? "nstdb-approximate-track" : "nstdb-track" };
   }
   if (/Unpaved/i.test(desc)) {
-    if (/Abandoned/i.test(desc)) return { trackClass: "resource", confidence: "abandoned-unpaved" };
     return { trackClass: "gravel", confidence: "nstdb-unpaved" };
   }
   return null;
@@ -142,7 +157,7 @@ async function main() {
     sourceName: "Nova Scotia Topographic DataBase Roads, Trails and Rails - Road Line Layer",
     source: sourceUrl,
     catalogue: "https://data.novascotia.ca/Roads-Driving-and-Transport/Nova-Scotia-Topographic-DataBase-Roads-Trails-and-/a6gf-w68e",
-    queryModel: "NSTDB Road Line Layer filtered to Unpaved and TRACK feature descriptions; paved/non-vehicular/driveway/ferry/rail excluded",
+    queryModel: "NSTDB Road Line Layer filtered to Unpaved, TRACK, and TRAIL feature descriptions; paved/driveway/ferry/rail excluded",
     license: "Open Government Licence - Nova Scotia",
     region: "Nova Scotia",
     featureCount: features.length,
@@ -154,8 +169,8 @@ async function main() {
     surfaceConfidence: confidence,
     sourceDescriptions,
     limitations: [
-      "TRACK features do not explicitly classify motorized access or surface, so they render red as resource roads.",
-      "Explicit no-vehicular-traffic trails are excluded from this bundle."
+      "NSTDB trail records do not explicitly validate motorized access; they are displayed as single track for visual comparison.",
+      "TRACK records are normalized to Track, including indefinite/approximate track records."
     ]
   };
   fs.writeFileSync(metaPath, JSON.stringify(meta, null, 2));
