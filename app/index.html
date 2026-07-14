@@ -202,7 +202,8 @@
     .stack {
       position: absolute;
       right: 12px;
-      bottom: max(88px, calc(env(safe-area-inset-bottom) + 80px));
+      /* Sit above MapLibre zoom + attribution so nothing covers zoom-out */
+      bottom: max(176px, calc(env(safe-area-inset-bottom) + 164px));
       z-index: 20;
       display: flex;
       flex-direction: column;
@@ -231,9 +232,19 @@
 
     .btn:active { transform: scale(0.96); }
 
+    /* Zoom + attribution column, attribution pinned to far bottom-right */
     .maplibregl-ctrl-bottom-right {
       right: 12px !important;
-      bottom: max(150px, calc(env(safe-area-inset-bottom) + 142px)) !important;
+      bottom: max(12px, env(safe-area-inset-bottom)) !important;
+      display: flex !important;
+      flex-direction: column-reverse !important;
+      align-items: flex-end !important;
+      gap: 10px !important;
+      z-index: 15;
+    }
+
+    .maplibregl-ctrl-bottom-right .maplibregl-ctrl {
+      margin: 0 !important;
     }
 
     .maplibregl-ctrl-group {
@@ -245,8 +256,8 @@
     }
 
     .maplibregl-ctrl-group button {
-      width: 42px !important;
-      height: 42px !important;
+      width: 52px !important;
+      height: 52px !important;
       background-color: transparent !important;
     }
 
@@ -257,6 +268,44 @@
     .maplibregl-ctrl button.maplibregl-ctrl-zoom-in .maplibregl-ctrl-icon,
     .maplibregl-ctrl button.maplibregl-ctrl-zoom-out .maplibregl-ctrl-icon {
       filter: invert(1) brightness(1.2);
+    }
+
+    /* Attribution: compact closed by default, tucked bottom-right */
+    .maplibregl-ctrl-attrib {
+      background: rgba(20, 22, 25, 0.92) !important;
+      color: var(--muted) !important;
+      border: 1px solid var(--line) !important;
+      border-radius: 12px !important;
+      box-shadow: none !important;
+      font-family: var(--mono) !important;
+      font-size: 0.62rem !important;
+      max-width: min(70vw, 280px);
+    }
+
+    .maplibregl-ctrl-attrib a {
+      color: var(--muted) !important;
+    }
+
+    .maplibregl-ctrl-attrib.maplibregl-compact {
+      min-height: 28px;
+      padding: 0 !important;
+    }
+
+    .maplibregl-ctrl-attrib.maplibregl-compact:not(.maplibregl-compact-show) {
+      width: 28px !important;
+      height: 28px !important;
+      min-height: 28px !important;
+      padding: 0 !important;
+      background: rgba(20, 22, 25, 0.92) !important;
+    }
+
+    .maplibregl-ctrl-attrib.maplibregl-compact:not(.maplibregl-compact-show) .maplibregl-ctrl-attrib-inner {
+      display: none !important;
+    }
+
+    .maplibregl-ctrl-attrib-button {
+      background-color: transparent !important;
+      color: var(--muted) !important;
     }
 
     .popup {
@@ -336,12 +385,6 @@
     <button class="source-toggle on" data-source="ns" type="button">
       <span class="dot" style="--dot:#6ee7a8"></span>NS Open Data
     </button>
-    <button class="source-toggle on" data-source="canada" type="button">
-      <span class="dot" style="--dot:#111111"></span>Canada NRN
-    </button>
-    <button class="source-toggle on" data-source="nbforest" type="button">
-      <span class="dot" style="--dot:#333333"></span>NB Forest
-    </button>
   </div>
 
   <div class="status" id="status">Locating rider…</div>
@@ -387,7 +430,7 @@
     ];
 
     const trailTypeOn = { paved: true, service: true, atv: true, single: true };
-    const sourceOn = { osm: true, ns: true, canada: true, nbforest: true };
+    const sourceOn = { osm: true, ns: true };
     let rider = { ...FALLBACK };
     let features = [];
     let settling = false;
@@ -551,7 +594,12 @@
     });
 
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "bottom-right");
-    map.addControl(new maplibregl.AttributionControl({ compact: true }));
+    map.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-right");
+
+    function collapseAttribution() {
+      const el = document.querySelector(".maplibregl-ctrl-attrib");
+      if (el) el.classList.remove("maplibregl-compact-show");
+    }
 
     function ensureLayers() {
       if (map.getSource("trails")) return;
@@ -722,8 +770,6 @@ out geom tags;`;
         const type = props.trailType || "single";
         let src = "osm";
         if (props.source === "ns-open-data") src = "ns";
-        else if (props.source === "canada-open-data") src = "canada";
-        else if (props.source === "nb-forest") src = "nbforest";
         return trailTypeOn[type] && sourceOn[src];
       });
       if (map.getSource("trails")) {
@@ -758,17 +804,15 @@ out geom tags;`;
         // Fetch off-road layers in parallel (basemap already shows paved roads)
         setStatus("Scanning trails…");
         
-        const [osmResult, nsResult, caResult, nbResult] = await Promise.allSettled([
+        const [osmResult, nsResult] = await Promise.allSettled([
           fetchOverpassLayer(bbox, queryOffRoadOnly),
-          fetchNSTrails(bbox),
-          fetchCanadaRoads(bbox),
-          fetchNbForest(bbox)
+          fetchNSTrails(bbox)
         ]);
         
         if (token !== fetchToken) return;
         
         let allFeatures = [];
-        let osmN = 0, nsN = 0, caN = 0, nbN = 0;
+        let osmN = 0, nsN = 0;
         
         if (osmResult.status === 'fulfilled') {
           const osmFeatures = toFeatures(osmResult.value);
@@ -794,29 +838,13 @@ out geom tags;`;
         } else {
           console.warn('NS failed:', nsResult.reason);
         }
-
-        if (caResult.status === 'fulfilled' && caResult.value.features) {
-          const caFeatures = caResult.value.features;
-          caN = caFeatures.length;
-          allFeatures = [...allFeatures, ...caFeatures];
-        } else {
-          console.warn('Canada failed:', caResult.reason);
-        }
-
-        if (nbResult.status === 'fulfilled' && nbResult.value.features) {
-          const nbFeatures = nbResult.value.features;
-          nbN = nbFeatures.length;
-          allFeatures = [...allFeatures, ...nbFeatures];
-        } else {
-          console.warn('NB Forest failed:', nbResult.reason);
-        }
         
         features = allFeatures;
         setCache(bbox, features);
         applyFilters();
         setStatus(
           features.length
-            ? `${features.length} · OSM ${osmN} · NS ${nsN} · NRN ${caN} · NB ${nbN}`
+            ? `${features.length} · OSM ${osmN} · NS ${nsN}`
             : "No tracks in view",
           features.length ? "ok" : ""
         );
@@ -830,22 +858,6 @@ out geom tags;`;
     async function fetchNSTrails(bbox) {
       const bboxStr = bbox.join(',');
       const url = `/api/ns-trails?bbox=${bboxStr}&limit=2000`;
-      const res = await fetch(url);
-      if (!res.ok) throw new Error("HTTP " + res.status);
-      return await res.json();
-    }
-
-    async function fetchCanadaRoads(bbox) {
-      const bboxStr = bbox.join(',');
-      const url = `/api/canada-roads?bbox=${bboxStr}&limit=3000`;
-      const res = await fetch(url);
-      if (!res.ok) throw new Error("HTTP " + res.status);
-      return await res.json();
-    }
-
-    async function fetchNbForest(bbox) {
-      const bboxStr = bbox.join(',');
-      const url = `/api/nb-forest?bbox=${bboxStr}&limit=3000`;
       const res = await fetch(url);
       if (!res.ok) throw new Error("HTTP " + res.status);
       return await res.json();
@@ -886,7 +898,7 @@ out geom tags;`;
       const color = colors[p.trailType] || "#6b7078";
       popupBody.innerHTML = `
         <div class="k">Type</div>
-        <div class="v">${p.highway || "—"}${p.name ? " · " + p.name : ""}</div>
+        <div class="v">${p.highway || "unspecified"}${p.name ? " · " + p.name : ""}</div>
         <div class="k">Class</div>
         <div class="v"><span class="grade" style="--g:${color}"><i></i>${gradeLabel(p.trailType)}${p.tracktype ? " · " + p.tracktype : ""}</span></div>
         <div class="k">Surface</div>
@@ -894,8 +906,6 @@ out geom tags;`;
         <div class="k">Source</div>
         <div class="v">${
           p.source === "ns-open-data" ? "NS Open Data"
-          : p.source === "canada-open-data" ? "Canada NRN (Resource / Service)"
-          : p.source === "nb-forest" ? "NB Forest Roads (unmaintained)"
           : "OpenStreetMap"
         }</div>
         <div class="k">Motor access</div>
@@ -954,8 +964,11 @@ out geom tags;`;
     map.on("load", () => {
       ensureLayers();
       applyFilters();
+      collapseAttribution();
       locateRider();
     });
+
+    map.once("idle", () => collapseAttribution());
 
     map.on("moveend", () => {
       if (settling) return;
@@ -975,6 +988,8 @@ out geom tags;`;
 
     document.getElementById("refreshBtn").addEventListener("click", () => {
       hidePopup();
+      // Bypass viewport cache so refresh actually re-fetches
+      dataCache.delete(getCacheKey(currentBBox()));
       scanTrails("manual");
     });
 
