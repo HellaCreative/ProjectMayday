@@ -384,6 +384,39 @@
       opacity: 0.38;
       cursor: default;
     }
+    .route-actions {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 6px;
+      margin-top: 8px;
+    }
+    .route-export {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      min-height: 38px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #ffffff;
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 0.68rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      cursor: pointer;
+    }
+    .route-export svg {
+      flex: 0 0 auto;
+      opacity: 0.85;
+    }
+    .route-export:disabled {
+      opacity: 0.38;
+      cursor: default;
+    }
+    .route-export:not(:disabled):active {
+      transform: scale(0.98);
+    }
     .route-debug {
       margin-top: 8px;
       padding: 8px 10px;
@@ -511,6 +544,12 @@
     <div class="route-readout">
       <div class="route-status" id="routeStatus">Tap destination<strong>No route set</strong></div>
       <button class="route-clear" id="routeClear" type="button" title="Clear route" aria-label="Clear route" disabled>×</button>
+    </div>
+    <div class="route-actions">
+      <button class="route-export" id="routeExport" type="button" title="Export this route as GPX for OsmAnd, Gaia GPS, and other apps" aria-label="Export route as GPX" disabled>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+        Export GPX
+      </button>
     </div>
     <div class="route-debug" id="routeDebug"></div>
   </div>
@@ -668,6 +707,7 @@
     const popupBody = document.getElementById("popupBody");
     const routeStatus = document.getElementById("routeStatus");
     const routeClear = document.getElementById("routeClear");
+    const routeExport = document.getElementById("routeExport");
     const routeDebugEl = document.getElementById("routeDebug");
 
     function applyLayerVisibility() {
@@ -1079,6 +1119,130 @@
 
     function activeStart() {
       return routeMode === "here" ? rider : plannedStart;
+    }
+
+    function escapeXml(value) {
+      return String(value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&apos;");
+    }
+
+    function activeRouteCoordinates() {
+      if (!activeRoute) return [];
+      if (Array.isArray(activeRoute.coordinates) && activeRoute.coordinates.length >= 2) {
+        return activeRoute.coordinates;
+      }
+      const coords = [];
+      for (const segment of activeRoute.segments || []) {
+        const part = segment.coords || [];
+        for (let i = 0; i < part.length; i += 1) {
+          const point = part[i];
+          const prev = coords[coords.length - 1];
+          if (!prev || prev[0] !== point[0] || prev[1] !== point[1]) coords.push(point);
+        }
+      }
+      return coords;
+    }
+
+    function routeExportName() {
+      const km = activeRoute ? activeRoute.distanceKm : 0;
+      const dist = km >= 10 ? km.toFixed(1) : km.toFixed(2);
+      return "DIRT MAYDAY · " + routePreference + " · " + dist + " km";
+    }
+
+    function routeExportFilename() {
+      const km = activeRoute ? activeRoute.distanceKm : 0;
+      const dist = (km >= 10 ? km.toFixed(1) : km.toFixed(2)).replace(".", "p");
+      return "dirt-mayday-" + routePreference + "-" + dist + "km.gpx";
+    }
+
+    function buildRouteGpx() {
+      const coords = activeRouteCoordinates();
+      if (coords.length < 2) throw new Error("No route geometry to export");
+      const start = activeStart();
+      const name = routeExportName();
+      const descParts = [
+        "Profile: " + routePreference,
+        "Distance: " + activeRoute.distanceKm.toFixed(activeRoute.distanceKm >= 10 ? 1 : 2) + " km",
+        activeRoute.kind === "roadConnector" ? "Source: OSRM paved" : "Source: NSTDB network"
+      ];
+      if (activeRoute.dirtKm != null && activeRoute.kind !== "roadConnector") {
+        const dirtPct = activeRoute.distanceKm
+          ? Math.round((activeRoute.dirtKm / activeRoute.distanceKm) * 100)
+          : 0;
+        descParts.push("Dirt share: " + dirtPct + "%");
+      }
+      const trkpts = coords.map((coord) =>
+        "      <trkpt lat=\"" + coord[1].toFixed(6) + "\" lon=\"" + coord[0].toFixed(6) + "\"></trkpt>"
+      ).join("\n");
+      let waypoints = "";
+      if (start) {
+        waypoints +=
+          "  <wpt lat=\"" + start.lat.toFixed(6) + "\" lon=\"" + start.lng.toFixed(6) + "\">\n" +
+          "    <name>A</name>\n" +
+          "    <desc>Route start</desc>\n" +
+          "  </wpt>\n";
+      }
+      if (destination) {
+        waypoints +=
+          "  <wpt lat=\"" + destination.lat.toFixed(6) + "\" lon=\"" + destination.lng.toFixed(6) + "\">\n" +
+          "    <name>B</name>\n" +
+          "    <desc>Route destination</desc>\n" +
+          "  </wpt>\n";
+      }
+      return (
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
+        "<gpx version=\"1.1\" creator=\"DIRT. MAYDAY.\" xmlns=\"http://www.topografix.com/GPX/1/1\">\n" +
+        "  <metadata>\n" +
+        "    <name>" + escapeXml(name) + "</name>\n" +
+        "    <desc>" + escapeXml(descParts.join(" · ")) + "</desc>\n" +
+        "    <time>" + new Date().toISOString() + "</time>\n" +
+        "  </metadata>\n" +
+        waypoints +
+        "  <trk>\n" +
+        "    <name>" + escapeXml(name) + "</name>\n" +
+        "    <desc>" + escapeXml(descParts.join(" · ")) + "</desc>\n" +
+        "    <type>" + escapeXml(routePreference) + "</type>\n" +
+        "    <trkseg>\n" +
+        trkpts + "\n" +
+        "    </trkseg>\n" +
+        "  </trk>\n" +
+        "</gpx>\n"
+      );
+    }
+
+    async function exportActiveRouteGpx() {
+      if (!activeRoute) return;
+      const filename = routeExportFilename();
+      const gpx = buildRouteGpx();
+      const file = new File([gpx], filename, { type: "application/gpx+xml" });
+      try {
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          await navigator.share({
+            files: [file],
+            title: routeExportName(),
+            text: "DIRT. MAYDAY. route · " + routePreference
+          });
+          setStatus("Route shared as GPX", "ok");
+          return;
+        }
+      } catch (err) {
+        // User dismissed the share sheet — not an error.
+        if (err && err.name === "AbortError") return;
+        console.warn("Share failed, falling back to download", err);
+      }
+      const url = URL.createObjectURL(file);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+      setStatus("GPX downloaded · import into OsmAnd or Gaia", "ok");
     }
 
     function routeFeatureCollection() {
@@ -1654,6 +1818,7 @@
     function updateRouteStatus() {
       const start = activeStart();
       routeClear.disabled = !plannedStart && !destination;
+      routeExport.disabled = !activeRoute || activeRouteCoordinates().length < 2;
       renderRouteDebug();
       if (routeMessage) {
         routeStatus.innerHTML = routeMessage;
@@ -1902,6 +2067,12 @@
 
     document.getElementById("popupClose").addEventListener("click", hidePopup);
     routeClear.addEventListener("click", clearRoute);
+    routeExport.addEventListener("click", () => {
+      exportActiveRouteGpx().catch((err) => {
+        console.error(err);
+        setStatus("GPX export failed · " + (err.message || "Try again"), "error");
+      });
+    });
     document.querySelectorAll("[data-route-mode]").forEach((button) => {
       button.addEventListener("click", () => setRouteMode(button.dataset.routeMode));
     });
