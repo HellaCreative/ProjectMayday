@@ -18,12 +18,10 @@
       --text: #162433;
       --muted: #536170;
       --accent: #0a66c2;
-      --g2: #008a56;
-      --g3: #b96f00;
-      --g4: #d84400;
-      --g5: #c1122f;
+      --paved: #d87900;
+      --gravel: #5d6874;
+      --atv: #0a66c2;
       --single: #6d36c9;
-      --unknown: #5d6874;
       --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
       --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
     }
@@ -81,8 +79,8 @@
       font-size: 0.95rem;
       margin-top: 2px;
     }
-    .pill.ready { border-color: rgba(0, 138, 86, 0.42); }
-    .pill.ready strong { color: var(--g2); }
+    .pill.ready { border-color: rgba(10, 102, 194, 0.42); }
+    .pill.ready strong { color: var(--accent); }
 
     .status {
       position: absolute;
@@ -103,8 +101,8 @@
       overflow: hidden;
       text-overflow: ellipsis;
     }
-    .status.ok { color: var(--g2); }
-    .status.error { color: var(--g5); border-color: rgba(193, 18, 47, 0.35); }
+    .status.ok { color: var(--accent); }
+    .status.error { color: #c1122f; border-color: rgba(193, 18, 47, 0.35); }
 
     .stack {
       position: absolute;
@@ -189,13 +187,72 @@
       letter-spacing: 0.08em;
       text-transform: uppercase;
       color: var(--muted);
+      min-width: 160px;
     }
-    .legend div { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
-    .legend div:last-child { margin-bottom: 0; }
-    .legend i { width: 18px; height: 3px; border-radius: 2px; display: block; }
+    .legend-group + .legend-group {
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid var(--line);
+    }
+    .legend-title {
+      display: block;
+      margin-bottom: 7px;
+      color: var(--text);
+      font-size: 0.62rem;
+    }
+    .legend-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      min-height: 24px;
+      margin-bottom: 5px;
+    }
+    .legend-row:last-child { margin-bottom: 0; }
+    .legend-label { display: flex; align-items: center; gap: 8px; min-width: 0; }
+    .legend i { width: 18px; height: 2px; border-radius: 2px; display: block; flex: 0 0 auto; }
     .legend i.dash {
       background: repeating-linear-gradient(90deg, var(--single) 0 4px, transparent 4px 7px);
       height: 2px;
+    }
+    .switch {
+      position: relative;
+      display: inline-flex;
+      width: 34px;
+      height: 18px;
+      flex: 0 0 auto;
+    }
+    .switch input {
+      position: absolute;
+      opacity: 0;
+      width: 1px;
+      height: 1px;
+    }
+    .switch span {
+      position: absolute;
+      inset: 0;
+      border-radius: 999px;
+      background: rgba(93, 104, 116, 0.3);
+      border: 1px solid rgba(24, 39, 55, 0.22);
+      transition: background 140ms ease;
+    }
+    .switch span::after {
+      content: "";
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #ffffff;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.22);
+      transition: transform 140ms ease;
+    }
+    .switch input:checked + span { background: var(--accent); border-color: transparent; }
+    .switch input:checked + span::after { transform: translateX(16px); }
+    .switch input:focus-visible + span {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
     }
 
     .popup {
@@ -276,12 +333,32 @@
   <div class="status" id="status">Loading bundled NS trails…</div>
 
   <div class="legend">
-    <div><i style="background:var(--g2)"></i>G2 solid</div>
-    <div><i style="background:var(--g3)"></i>G3 mixed</div>
-    <div><i style="background:var(--g4)"></i>G4 rough</div>
-    <div><i style="background:var(--g5)"></i>G5 sparse</div>
-    <div><i class="dash"></i>Single</div>
-    <div><i style="background:var(--unknown)"></i>Unknown</div>
+    <div class="legend-group">
+      <span class="legend-title">Track type</span>
+      <label class="legend-row">
+        <span class="legend-label"><i style="background:var(--paved)"></i>Paved road</span>
+        <span class="switch"><input type="checkbox" data-layer-toggle="paved" checked aria-label="Toggle paved roads"><span></span></span>
+      </label>
+      <label class="legend-row">
+        <span class="legend-label"><i style="background:var(--gravel)"></i>Gravel road</span>
+        <span class="switch"><input type="checkbox" data-layer-toggle="gravel" checked aria-label="Toggle gravel roads"><span></span></span>
+      </label>
+      <label class="legend-row">
+        <span class="legend-label"><i style="background:var(--atv)"></i>ATV trail</span>
+        <span class="switch"><input type="checkbox" data-layer-toggle="atv" checked aria-label="Toggle ATV trails"><span></span></span>
+      </label>
+      <label class="legend-row">
+        <span class="legend-label"><i class="dash"></i>Single track</span>
+        <span class="switch"><input type="checkbox" data-layer-toggle="single" checked aria-label="Toggle single track"><span></span></span>
+      </label>
+    </div>
+    <div class="legend-group">
+      <span class="legend-title">Data sources</span>
+      <label class="legend-row">
+        <span class="legend-label"><i style="background:var(--text)"></i>OSM NS</span>
+        <span class="switch"><input type="checkbox" data-source-toggle="osm" checked aria-label="Toggle OSM Nova Scotia source"><span></span></span>
+      </label>
+    </div>
   </div>
 
   <div class="stack">
@@ -309,14 +386,16 @@
     const BUNDLED_META_URL = "/app/data/ns-trails.meta.json";
     const SHORTBREAD_STYLE_URL = "/app/data/shortbread-style.json";
 
-    const GRADE_COLOR = {
-      g2: "#008a56",
-      g3: "#b96f00",
-      g4: "#d84400",
-      g5: "#c1122f",
-      single: "#6d36c9",
-      unknown: "#5d6874"
+    const TRACK_TYPES = {
+      paved: { label: "Paved road", color: "#d87900", layers: ["trails-paved"] },
+      gravel: { label: "Gravel road", color: "#5d6874", layers: ["trails-gravel"] },
+      atv: { label: "ATV trail", color: "#0a66c2", layers: ["trails-atv"] },
+      single: { label: "Single track", color: "#6d36c9", layers: ["trails-single"] }
     };
+    const TRAIL_LAYER_IDS = Object.values(TRACK_TYPES).flatMap((type) => type.layers);
+    const SOURCE_LAYER_MAP = { osm: TRAIL_LAYER_IDS };
+    const layerEnabled = { paved: true, gravel: true, atv: true, single: true };
+    const sourceEnabled = { osm: true };
 
     const db = new Dexie("dirt_bundled_v1");
     db.version(1).stores({
@@ -333,6 +412,45 @@
     const dataMeta = document.getElementById("dataMeta");
     const popupEl = document.getElementById("popup");
     const popupBody = document.getElementById("popupBody");
+
+    function surfaceValue(feature) {
+      return String(feature.properties?.surface || "").toLowerCase();
+    }
+
+    function classifyTrack(feature) {
+      const p = feature.properties || {};
+      const surface = surfaceValue(feature);
+      if (p.grade === "single" || p.highway === "path" || p.highway === "bridleway") return "single";
+      if (/^(paved|asphalt|concrete|paving_stones|sett|cobblestone)$/.test(surface) || p.tracktype === "grade1") return "paved";
+      if (p.grade === "g4" || p.grade === "g5" || p.tracktype === "grade4" || p.tracktype === "grade5") return "atv";
+      return "gravel";
+    }
+
+    function addTrackTypes(fc) {
+      return {
+        ...fc,
+        features: (fc.features || []).map((feature) => ({
+          ...feature,
+          properties: {
+            ...(feature.properties || {}),
+            trackClass: classifyTrack(feature)
+          }
+        }))
+      };
+    }
+
+    function applyLayerVisibility() {
+      if (!map || !map.isStyleLoaded()) return;
+      for (const [key, config] of Object.entries(TRACK_TYPES)) {
+        for (const layerId of config.layers) {
+          const sourceVisible = Object.entries(SOURCE_LAYER_MAP).some(([source, layerIds]) => {
+            return layerIds.includes(layerId) && sourceEnabled[source];
+          });
+          const visible = layerEnabled[key] && sourceVisible ? "visible" : "none";
+          if (map.getLayer(layerId)) map.setLayoutProperty(layerId, "visibility", visible);
+        }
+      }
+    }
 
     function setStatus(text, kind) {
       statusEl.textContent = text;
@@ -464,20 +582,35 @@
         data: { type: "FeatureCollection", features: [] }
       });
       map.addLayer({
-        id: "trails-line",
+        id: "trails-paved",
         type: "line",
         source: "trails",
-        filter: ["!=", ["get", "grade"], "single"],
+        filter: ["==", ["get", "trackClass"], "paved"],
         paint: {
-          "line-color": [
-            "match", ["get", "grade"],
-            "g2", "#008a56",
-            "g3", "#b96f00",
-            "g4", "#d84400",
-            "g5", "#c1122f",
-            "#5d6874"
-          ],
-          "line-width": ["interpolate", ["linear"], ["zoom"], 10, 1.3, 14, 2.1],
+          "line-color": TRACK_TYPES.paved.color,
+          "line-width": 2,
+          "line-opacity": 0.98
+        }
+      });
+      map.addLayer({
+        id: "trails-gravel",
+        type: "line",
+        source: "trails",
+        filter: ["==", ["get", "trackClass"], "gravel"],
+        paint: {
+          "line-color": TRACK_TYPES.gravel.color,
+          "line-width": 2,
+          "line-opacity": 0.98
+        }
+      });
+      map.addLayer({
+        id: "trails-atv",
+        type: "line",
+        source: "trails",
+        filter: ["==", ["get", "trackClass"], "atv"],
+        paint: {
+          "line-color": TRACK_TYPES.atv.color,
+          "line-width": 2,
           "line-opacity": 0.98
         }
       });
@@ -485,14 +618,15 @@
         id: "trails-single",
         type: "line",
         source: "trails",
-        filter: ["==", ["get", "grade"], "single"],
+        filter: ["==", ["get", "trackClass"], "single"],
         paint: {
-          "line-color": "#6d36c9",
-          "line-width": ["interpolate", ["linear"], ["zoom"], 10, 1.4, 14, 2],
+          "line-color": TRACK_TYPES.single.color,
+          "line-width": 2,
           "line-dasharray": [1.2, 1.6],
           "line-opacity": 0.95
         }
       });
+      applyLayerVisibility();
       map.addSource("rider", {
         type: "geojson",
         data: {
@@ -546,10 +680,11 @@
 
     function showPopup(feature, point) {
       const p = feature.properties || {};
-      const color = GRADE_COLOR[p.grade] || GRADE_COLOR.unknown;
+      const trackType = TRACK_TYPES[p.trackClass] || TRACK_TYPES.gravel;
       popupBody.innerHTML =
         '<div class="k">Type</div><div class="v">' + (p.highway || "unspecified") + (p.name ? " · " + p.name : "") + "</div>" +
-        '<div class="k">Grade</div><div class="v" style="color:' + color + '">' + (p.grade || "unknown") + (p.tracktype ? " · " + p.tracktype : "") + "</div>" +
+        '<div class="k">Track class</div><div class="v" style="color:' + trackType.color + '">' + trackType.label + "</div>" +
+        '<div class="k">OSM detail</div><div class="v">' + (p.grade || "unknown") + (p.tracktype ? " · " + p.tracktype : "") + "</div>" +
         '<div class="k">Surface</div><div class="v">' + (p.surface || "unspecified") + "</div>" +
         '<div class="k">Motor access</div><div class="v">' + (p.accessStatus || "unknown") + (p.accessDetail ? " · " + p.accessDetail : "") + "</div>" +
         '<div class="k">Source</div><div class="v">Bundled OSM (Geofabrik NS)</div>';
@@ -572,7 +707,7 @@
 
       try {
         const t0 = performance.now();
-        const fc = await loadBundledTrails();
+        const fc = addTrackTypes(await loadBundledTrails());
         map.getSource("trails").setData(fc);
         const ms = Math.round(performance.now() - t0);
         setReady(fc.features.length);
@@ -602,7 +737,7 @@
 
     map.on("click", (e) => {
       const hits = map.queryRenderedFeatures(e.point, {
-        layers: ["trails-line", "trails-single"]
+        layers: TRAIL_LAYER_IDS
       });
       if (!hits.length) {
         hidePopup();
@@ -617,6 +752,18 @@
     });
     document.getElementById("recenterBtn").addEventListener("click", () => {
       map.flyTo({ center: [rider.lng, rider.lat], zoom: Math.max(map.getZoom(), 11.5) });
+    });
+    document.querySelectorAll("[data-layer-toggle]").forEach((input) => {
+      input.addEventListener("change", () => {
+        layerEnabled[input.dataset.layerToggle] = input.checked;
+        applyLayerVisibility();
+      });
+    });
+    document.querySelectorAll("[data-source-toggle]").forEach((input) => {
+      input.addEventListener("change", () => {
+        sourceEnabled[input.dataset.sourceToggle] = input.checked;
+        applyLayerVisibility();
+      });
     });
   </script>
 </body>
