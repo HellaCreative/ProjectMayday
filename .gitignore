@@ -4,6 +4,7 @@ node_modules
 .temp
 temp
 *.osm.pbf
+*.gpkg
 .temp/
 temp/
 /tmp/
