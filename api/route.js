@@ -9,7 +9,7 @@ const { routeRequest } = require("../routing/lib/router.js");
 
 export const config = {
   maxDuration: 60,
-  memory: 3008,
+  memory: 2048,
   includeFiles: ["routing/data/**", "routing/lib/**"]
 };
 
