@@ -225,15 +225,28 @@ present in source and reviewed, but on-screen behavior was not exercised.
 ## Vercel URLs
 
 - **Production (public):** https://dirt-mayday.vercel.app
-  - App: https://dirt-mayday.vercel.app/app/
+  - App: https://dirt-mayday.vercel.app/app
   - Route API: https://dirt-mayday.vercel.app/api/route
-- **Production deployment (this build):**
-  https://dirt-mayday-8p79clygh-goricksmith-7678s-projects.vercel.app
+- **Production deployment (git-triggered by this commit, Ready):**
+  https://dirt-mayday-iaru9qyah-goricksmith-7678s-projects.vercel.app
 - **Preview deployment:**
   https://dirt-mayday-ksd7futil-goricksmith-7678s-projects.vercel.app
   (team SSO / deployment protection is enabled on `*-goricksmith-7678s-projects`
   preview URLs, so automated curl verification was run against the public
   production alias instead; the same build serves both.)
+
+## Git / deploy provenance
+
+- Feature commit: `135f0fd` — "Add route incident recovery (report + verified
+  detour/backtrack)", pushed to `origin/main`
+  (`github.com/HellaCreative/ProjectMayday`), advancing `bc72a4e..135f0fd`.
+- The push triggered a git-based Vercel **Production** deployment that reached
+  **Ready** (`dirt-mayday-iaru9qyah-…`, 18s build).
+- The public alias `dirt-mayday.vercel.app` serves this build: the deployed
+  `/app` HTML is SHA-256 `c546a577…f39de9d1`, byte-identical to the committed
+  source, and the live `/api/route` re-confirmed server-side avoidance after the
+  git deploy (baseline 20,288 m → avoided 19,180 m, avoided edge absent,
+  `avoided_edges` warning present).
 
 ## Verification evidence
 
