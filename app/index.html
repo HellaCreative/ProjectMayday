@@ -1195,7 +1195,8 @@
 
   <script src="../routing/lib/roadbook-curves.js"></script>
   <script>
-    const FALLBACK = { lng: -63.2985, lat: 44.7427, name: "Porter's Lake, NS" };
+    // Neutral Nova Scotia regional overview — not a rider position / routing origin.
+    const NS_OVERVIEW = { lng: -63.0, lat: 45.1, zoom: 7.25 };
     const DEBUG_UI = new URLSearchParams(location.search).has("debug");
     if (DEBUG_UI) document.body.classList.add("debug-ui");
     // OSM Overpass disabled for NSTDB-only POC.
@@ -1346,7 +1347,11 @@
       indexedDB.deleteDatabase("dirt_sources_v5");
     } catch (_) { /* best effort cleanup of old giant caches */ }
 
-    let rider = { ...FALLBACK, heading: null, speed: 0, accuracy: null };
+    // Placeholder only — never treat as GPS until hasRealLocation is true.
+    let rider = { lng: null, lat: null, heading: null, speed: 0, accuracy: null, hasRealLocation: false };
+    let hasRealLocation = false;
+    /** pending | ready | unavailable — drives From-here messaging before/after GPS probe. */
+    let locationProbeState = "pending";
     let nsGovManifest = null;
     let nsGovManifestPromise = null;
     const loadedChunkIds = new Set();
@@ -1692,11 +1697,58 @@
       return { loadedAny, showedLoading };
     }
 
-    function contextFocusPoint() {
-      if (navigating && rider && Number.isFinite(rider.lng) && Number.isFinite(rider.lat)) {
-        return [rider.lng, rider.lat];
+    function hasRiderLocation() {
+      return !!(
+        hasRealLocation &&
+        rider &&
+        rider.hasRealLocation &&
+        Number.isFinite(rider.lng) &&
+        Number.isFinite(rider.lat)
+      );
+    }
+
+    function riderFeatureCollection() {
+      if (!hasRiderLocation()) {
+        return { type: "FeatureCollection", features: [] };
       }
-      if (isDetailContextZoom() && rider && Number.isFinite(rider.lng) && Number.isFinite(rider.lat)) {
+      return {
+        type: "FeatureCollection",
+        features: [{
+          type: "Feature",
+          geometry: { type: "Point", coordinates: [rider.lng, rider.lat] },
+          properties: {}
+        }]
+      };
+    }
+
+    function locationUnavailableMessage(err) {
+      if (!navigator.geolocation) return "Location not supported on this device";
+      if (err && err.code === 1) return "Location permission denied";
+      if (err && err.code === 2) return "Location unavailable";
+      if (err && err.code === 3) return "Location timed out";
+      return "Location unavailable";
+    }
+
+    function markLocationUnavailable(err) {
+      locationProbeState = "unavailable";
+      const reason = locationUnavailableMessage(err);
+      setStatus(reason + " · use Plan route to set a start", "error", "route");
+      updateRouteStatus();
+    }
+
+    function markLocationReady() {
+      const becameReady = !hasRealLocation || locationProbeState !== "ready";
+      hasRealLocation = true;
+      locationProbeState = "ready";
+      if (becameReady) {
+        const warn = document.getElementById("routeWarn");
+        if (warn && /Location /i.test(warn.textContent || "")) setRouteWarn("");
+        updateRouteStatus();
+      }
+    }
+
+    function contextFocusPoint() {
+      if (hasRiderLocation() && (navigating || isDetailContextZoom())) {
         return [rider.lng, rider.lat];
       }
       const c = map.getCenter();
@@ -2042,8 +2094,8 @@
     const map = new maplibregl.Map({
       container: "map",
       style: SHORTBREAD_STYLE_URL,
-      center: [FALLBACK.lng, FALLBACK.lat],
-      zoom: 11.5,
+      center: [NS_OVERVIEW.lng, NS_OVERVIEW.lat],
+      zoom: NS_OVERVIEW.zoom,
       attributionControl: false,
       transformRequest: basemapTransformRequest
     });
@@ -2172,14 +2224,7 @@
       applyLayerVisibility();
       map.addSource("rider", {
         type: "geojson",
-        data: {
-          type: "FeatureCollection",
-          features: [{
-            type: "Feature",
-            geometry: { type: "Point", coordinates: [rider.lng, rider.lat] },
-            properties: {}
-          }]
-        }
+        data: riderFeatureCollection()
       });
       map.addSource("routeDraft", {
         type: "geojson",
@@ -2283,23 +2328,19 @@
     }
 
     function setRider(lng, lat, meta = {}) {
+      if (!Number.isFinite(lng) || !Number.isFinite(lat)) return;
       const prev = rider;
       rider = {
         lng,
         lat,
         heading: meta.heading != null && Number.isFinite(meta.heading) ? meta.heading : rider.heading,
         speed: meta.speed != null ? meta.speed : rider.speed,
-        accuracy: meta.accuracy != null ? meta.accuracy : rider.accuracy
+        accuracy: meta.accuracy != null ? meta.accuracy : rider.accuracy,
+        hasRealLocation: true
       };
+      markLocationReady();
       if (map.getSource("rider")) {
-        map.getSource("rider").setData({
-          type: "FeatureCollection",
-          features: [{
-            type: "Feature",
-            geometry: { type: "Point", coordinates: [lng, lat] },
-            properties: {}
-          }]
-        });
+        map.getSource("rider").setData(riderFeatureCollection());
       }
       syncOverviewRider();
       if (navigating) updateNavGuidance();
@@ -2323,7 +2364,8 @@
     }
 
     function activeStart() {
-      return routeMode === "here" ? rider : plannedStart;
+      if (routeMode === "here") return hasRiderLocation() ? rider : null;
+      return plannedStart;
     }
 
     function escapeXml(value) {
@@ -3199,7 +3241,7 @@
 
     function ensureGeoWatch() {
       if (!navigator.geolocation) {
-        setStatus("Location not supported on this device", "error");
+        markLocationUnavailable({ code: 0 });
         return false;
       }
       if (geoWatchId != null) return true;
@@ -3213,7 +3255,7 @@
           });
         },
         (err) => {
-          if (err && err.code === 1) setStatus("Location permission denied", "error");
+          if (!hasRiderLocation()) markLocationUnavailable(err);
         },
         { enableHighAccuracy: true, maximumAge: 2000, timeout: 15000 }
       );
@@ -3288,6 +3330,7 @@
     }
 
     function applyMainDetailCamera(immediate, opts = {}) {
+      if (!hasRiderLocation()) return;
       // Pinch/scroll zoom is user-owned. Continuous follow updates only pan/rotate/
       // tilt — they must not force a zoom floor or the map "snaps back".
       if (userZooming && !immediate && !opts.resetZoom) {
@@ -3322,10 +3365,17 @@
           pitch: view3d ? 35 : 0,
           bearing: 0
         });
-      } else {
+      } else if (hasRiderLocation()) {
         map.jumpTo({
           center: [rider.lng, rider.lat],
           zoom: 11,
+          pitch: view3d ? 35 : 0,
+          bearing: 0
+        });
+      } else {
+        map.jumpTo({
+          center: [NS_OVERVIEW.lng, NS_OVERVIEW.lat],
+          zoom: NS_OVERVIEW.zoom,
           pitch: view3d ? 35 : 0,
           bearing: 0
         });
@@ -3334,6 +3384,7 @@
     }
 
     function syncFollowCamera(immediate, opts = {}) {
+      if (!hasRiderLocation()) return;
       if (!followLocked && !navigating) return;
       if (navigating && pipSwapped) {
         applyMainOverviewCamera(immediate);
@@ -3717,7 +3768,7 @@
     }
 
     function updateNavGuidance() {
-      if (!navigating || !activeRoute) return;
+      if (!navigating || !activeRoute || !hasRiderLocation()) return;
       const coords = activeRouteCoordinates();
       const progress = projectPointOnRoute(rider, coords);
       if (!progress) return;
@@ -3816,8 +3867,10 @@
       overviewMap = new maplibregl.Map({
         container: "pipMap",
         style: SHORTBREAD_STYLE_URL,
-        center: [rider.lng, rider.lat],
-        zoom: 10,
+        center: hasRiderLocation()
+          ? [rider.lng, rider.lat]
+          : [NS_OVERVIEW.lng, NS_OVERVIEW.lat],
+        zoom: hasRiderLocation() ? 10 : NS_OVERVIEW.zoom,
         interactive: false,
         attributionControl: false,
         transformRequest: basemapTransformRequest
@@ -3880,7 +3933,7 @@
     }
 
     function syncPipDetailCamera() {
-      if (!overviewMap || !overviewReady || !pipSwapped) return;
+      if (!overviewMap || !overviewReady || !pipSwapped || !hasRiderLocation()) return;
       const bearing = headingUp && Number.isFinite(rider.heading) ? rider.heading : 0;
       overviewMap.jumpTo({
         center: [rider.lng, rider.lat],
@@ -3892,14 +3945,7 @@
 
     function syncOverviewRider() {
       if (!overviewMap || !overviewReady) return;
-      overviewMap.getSource("pipRider").setData({
-        type: "FeatureCollection",
-        features: [{
-          type: "Feature",
-          geometry: { type: "Point", coordinates: [rider.lng, rider.lat] },
-          properties: {}
-        }]
-      });
+      overviewMap.getSource("pipRider").setData(riderFeatureCollection());
       if (pipSwapped) syncPipDetailCamera();
     }
 
@@ -4090,6 +4136,14 @@
         return;
       }
       if (routeMode === "here") {
+        if (!hasRiderLocation()) {
+          if (locationProbeState === "pending") {
+            routeStatus.innerHTML = "From here<strong>Finding your location…</strong>";
+          } else {
+            routeStatus.innerHTML = "Location unavailable<strong>Switch to Plan route</strong>";
+          }
+          return;
+        }
         routeStatus.innerHTML = "From here<strong>Tap a destination</strong>";
         return;
       }
@@ -4289,6 +4343,16 @@
       hidePopup();
       const clicked = pointFromLngLat(e.lngLat);
       if (routeMode === "here") {
+        if (!hasRiderLocation()) {
+          if (locationProbeState === "pending") {
+            setStatus("Still finding your location · use Plan route to set a start now", "error", "route");
+            updateRouteStatus();
+          } else {
+            markLocationUnavailable({ code: 2 });
+          }
+          setRouteCardOpen(true);
+          return;
+        }
         destination = clicked;
         calculateRoute();
         return;
@@ -4348,14 +4412,24 @@
         setStatus("Failed to load trail data · " + (err.message || "error"), "error");
       }
 
-      if (navigator.geolocation) {
+      locationProbeState = "pending";
+      updateRouteStatus();
+      if (!navigator.geolocation) {
+        markLocationUnavailable({ code: 0 });
+      } else {
         navigator.geolocation.getCurrentPosition(
           (pos) => {
-            setRider(pos.coords.longitude, pos.coords.latitude);
+            setRider(pos.coords.longitude, pos.coords.latitude, {
+              heading: Number.isFinite(pos.coords.heading) ? pos.coords.heading : null,
+              speed: pos.coords.speed || 0,
+              accuracy: pos.coords.accuracy
+            });
             map.flyTo({ center: [rider.lng, rider.lat], zoom: 11.5 });
           },
-          () => setRider(FALLBACK.lng, FALLBACK.lat),
-          { enableHighAccuracy: true, timeout: 10000 }
+          (err) => {
+            markLocationUnavailable(err);
+          },
+          { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
         );
       }
     });
@@ -4407,7 +4481,7 @@
 
     if (navSimEnabled) {
       window.addEventListener("keydown", (event) => {
-        if (!navigating) return;
+        if (!navigating || !hasRiderLocation()) return;
         const step = event.shiftKey ? 0.00035 : 0.00012; // ~35 m / ~12 m
         let { lng, lat } = rider;
         if (event.key === "ArrowUp") lat += step;
@@ -4526,7 +4600,7 @@
         },
         (err) => {
           recenterBtn.disabled = false;
-          setStatus("Location unavailable · " + (err && err.code === 1 ? "permission denied" : "no GPS fix"), "error");
+          markLocationUnavailable(err);
         },
         { enableHighAccuracy: true, timeout: 12000, maximumAge: 2000 }
       );
