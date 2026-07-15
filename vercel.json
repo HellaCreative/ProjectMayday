@@ -1,6 +1,13 @@
 {
   "cleanUrls": true,
   "trailingSlash": false,
+  "functions": {
+    "api/route.js": {
+      "memory": 3008,
+      "maxDuration": 60,
+      "includeFiles": "routing/**"
+    }
+  },
   "headers": [
     {
       "source": "/(.*)",
