@@ -22,7 +22,9 @@ The current `main` branch contains:
 - A later province-wide NSTDB build from commit `5fc0e04`.
 - A later chunking build from commit `6fdb355`.
 - The current navigation work through commit `e5d91a1`.
-- A Nova Scotia manifest with 303,443 segments in 76 chunks.
+- Phase 2A eligibility and schema work through commit `3f3ab5f`.
+- Phase 2A preflight (unknown-access default off, ramps restored, guide committed) through `8177232`.
+- A Nova Scotia manifest with 301,635 eligible production edges in 76 chunks (`schemaVersion` `2a-2`).
 
 The current implementation is useful as a visual and interaction reference, but it should not remain the production routing architecture.
 
@@ -30,7 +32,7 @@ Known current limitations:
 
 - The browser builds a graph from loaded GeoJSON.
 - Loaded chunks are retained and are not evicted.
-- Explicitly non-motorized trails are still present in the current data pack.
+- Browser can enforce access policy for demos, but Phase 2B must enforce the same policies in the routing service.
 - Route profiles use client-side multipliers rather than calibrated route objectives.
 - Cleanest still calls public OSRM separately.
 - Long-distance routing can load too much data and exceed mobile memory.
@@ -128,6 +130,31 @@ Recommended values:
 - `motorized_excluded`
 
 Default routing should use verified and permissive edges only. Unknown access may be offered through an explicit advanced option later, but it must never be silently treated as safe or legal.
+
+### Routing policy versus map visibility
+
+Access controls are routing-policy controls. They determine which edges the route engine may use and must be saved with each stage.
+
+The production default is:
+
+- `motorized_permissive`: enabled
+- `motorized_unknown`: disabled
+- `motorized_restricted`: never routable by default
+
+When `motorized_unknown` is enabled, the rider must receive an explicit warning before calculation. The route result must show the distance and percentage of unknown-access edges and save the choice with the stage. The warning must say that unknown access is not permission and may expose the rider to closures, private land, seasonal restrictions, or enforcement.
+
+Do not use the same switch for route eligibility and map visibility. A rider may want to hide nearby context while still allowing the route engine to use an access class, or inspect nearby context without changing the route.
+
+The route request must include the stage access policy, for example:
+
+```json
+{
+  "accessPolicy": {
+    "motorizedPermissive": true,
+    "motorizedUnknown": false
+  }
+}
+```
 
 ### Separate surface from structure
 
@@ -315,6 +342,8 @@ Load:
 
 Do not load the raw trail network by default.
 
+The overview legend should focus on route eligibility and trip information, not raw-line visibility. It may show which access policy is active for the selected stage.
+
 ### Stage planning
 
 Load:
@@ -335,6 +364,8 @@ Load:
 
 The nearby network should be visually subordinate to the selected route. The route is the primary navigation object; nearby tracks exist for orientation and junction awareness.
 
+Nearby context is controlled by a separate navigation-view switch such as `Nearby tracks`. This switch changes visibility only. It must not change the route or the stage access policy.
+
 ### Moving context window
 
 Use a moving corridor around the rider rather than loading an entire stage.
@@ -346,6 +377,7 @@ Recommended initial behavior:
 - Keep a smaller buffer behind the rider for recovery and wrong-turn awareness.
 - Evict context that is outside the active window.
 - Keep the active route geometry and route metadata available for the whole stage.
+- Keep nearby context limited to eligible motorized lines unless the rider explicitly enables an advanced unverified-context view.
 
 The current 0.4 degree chunks are too coarse for this purpose. Use smaller display tiles or a corridor endpoint that returns only nearby context.
 
@@ -387,6 +419,8 @@ Show:
 This is an inspection mode, not the default planning experience.
 
 When enabled, show only the nearby eligible network around the map viewport. Keep restricted/non-motorized geometry absent from the production experience. Use this mode for data QA and advanced users who want local context.
+
+In normal navigation, this becomes a small `Nearby tracks` control. It should show tracks on both sides of the active route and several kilometres ahead of the rider. It should not reveal the entire province-wide network.
 
 ### Navigation screen
 
@@ -512,6 +546,9 @@ Acceptance criteria:
 - Route requests use one service for all four profiles.
 - Direct, Balanced, Dirt, and Cleanest have documented objectives.
 - The service returns route geometry, segments, stats, warnings, and maneuvers.
+- Each request accepts a stage-specific access policy.
+- Unknown-access routing is opt-in, warned, measured, and saved with the stage.
+- Restricted and excluded edges cannot be enabled through the normal rider UI.
 - Long Nova Scotia routes do not require the browser to load the full graph.
 
 ### Phase 2C: Trip and stage UI
@@ -529,6 +566,7 @@ Acceptance criteria:
 
 - Overview mode does not load raw trail context.
 - Navigation mode loads nearby eligible context only.
+- `Nearby tracks` changes visibility only and never changes route eligibility.
 - Context prefetch follows the rider and heading.
 - Old context is evicted.
 - The active route remains available throughout the stage.
@@ -583,6 +621,9 @@ Keep fixed fixtures for:
 
 - Planning a long route does not reload the page.
 - Overview mode does not fetch the raw network.
+- Turning `Nearby tracks` on or off does not change the calculated route.
+- Turning `motorized_unknown` on or off changes route eligibility and produces a visible policy summary.
+- Unknown-access routes require acknowledgement and show unknown-access distance.
 - Navigation context appears near the rider and disappears after leaving the window.
 - Route remains visible when raw context is unavailable.
 - Offline stage assets are verified before navigation begins.
@@ -621,8 +662,9 @@ Phase Two is complete when a rider can:
 3. Request Direct, Balanced, Dirt, or Cleanest routing.
 4. See the selected route without a dense raw network overlay.
 5. Inspect nearby eligible tracks while navigating.
-6. Understand distance, time, dirt percentage, fuel gaps, and access warnings.
-7. Download the active stage for offline use.
-8. Navigate with rally-style cues and a PiP overview.
-9. Complete a long Nova Scotia route without a browser crash.
-10. Extend the same architecture to another Canadian province.
+6. Choose an access policy for each stage.
+7. Understand distance, time, dirt percentage, fuel gaps, and access warnings.
+8. Download the active stage for offline use.
+9. Navigate with rally-style cues and a PiP overview.
+10. Complete a long Nova Scotia route without a browser crash.
+11. Extend the same architecture to another Canadian province.
