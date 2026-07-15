@@ -266,7 +266,7 @@
     }
     .legend-row:last-child { margin-bottom: 0; }
     .legend-label { display: flex; align-items: center; gap: 8px; min-width: 0; }
-    .legend i { width: 18px; height: 2px; border-radius: 2px; display: block; flex: 0 0 auto; }
+    .legend i { width: 18px; height: 4px; border-radius: 2px; display: block; flex: 0 0 auto; }
     .legend i.dash {
       background: repeating-linear-gradient(90deg, var(--single) 0 4px, transparent 4px 7px);
       height: 2px;
@@ -861,7 +861,7 @@
     <div class="topbar-left">
       <a class="brand" href="../index.html">DIRT<span>.</span> MAYDAY<span>.</span></a>
       <div class="pill" id="modePill"><strong id="modeLabel">Loading…</strong></div>
-      <button class="btn mini" id="legendBtn" title="Track types" aria-label="Toggle track type drawer" aria-expanded="false">
+      <button class="btn mini" id="legendBtn" title="Map layers" aria-label="Toggle map layers" aria-expanded="false">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="14" y2="18"/></svg>
       </button>
     </div>
@@ -925,16 +925,8 @@
         <span class="switch"><input type="checkbox" data-layer-toggle="gravel" checked aria-label="Toggle gravel roads"><span></span></span>
       </label>
       <label class="legend-row">
-        <span class="legend-label"><i style="background:var(--track)"></i>Track</span>
-        <span class="switch"><input type="checkbox" data-layer-toggle="track" checked aria-label="Toggle tracks"><span></span></span>
-      </label>
-      <label class="legend-row">
-        <span class="legend-label"><i style="background:var(--paved)"></i>Paved (network)</span>
-        <span class="switch"><input type="checkbox" data-layer-toggle="paved" aria-label="Toggle paved network roads"><span></span></span>
-      </label>
-      <label class="legend-row">
-        <span class="legend-label"><i style="background:#9aa3ad"></i>Unknown surface</span>
-        <span class="switch"><input type="checkbox" data-layer-toggle="unknown" checked aria-label="Toggle unknown surface"><span></span></span>
+        <span class="legend-label"><i style="background:var(--track)"></i>Branches</span>
+        <span class="switch"><input type="checkbox" data-layer-toggle="track" checked aria-label="Toggle branches"><span></span></span>
       </label>
       <label class="legend-row">
         <span class="legend-label"><i style="background:var(--bridge)"></i>Bridge (structure)</span>
@@ -972,7 +964,7 @@
       <span class="legend-title">Stage access policy</span>
       <label class="legend-row">
         <span class="legend-label">Route on unknown access</span>
-        <span class="switch"><input type="checkbox" id="unknownAccessToggle" aria-label="Allow routing on unknown-access tracks"><span></span></span>
+        <span class="switch"><input type="checkbox" id="unknownAccessToggle" aria-label="Allow routing on unknown-access edges"><span></span></span>
       </label>
       <p class="meta" id="unknownAccessHint" style="margin:6px 2px 0;max-width:220px;">
         Visibility toggles above do not change eligibility. Default routes permissive/verified only.
@@ -984,7 +976,7 @@
     <div class="export-sheet-card" role="dialog" aria-modal="true" aria-labelledby="accessWarnTitle">
       <h2 id="accessWarnTitle">Unknown access is not permission</h2>
       <p id="accessWarnBody">
-        Enabling unknown-access routing may include NSTDB TRACK lines that are unverified for motorcycles.
+        Enabling unknown-access routing may include NSTDB branch lines (source class TRACK) that are unverified for motorcycles.
         That is not legal permission and may expose you to closures, private land, seasonal restrictions, or enforcement.
       </p>
       <div class="export-sheet-actions">
@@ -1060,15 +1052,14 @@
     const NS_GOV_CHUNK_BASE = "/app/data/ns-gov-chunks/";
     const SHORTBREAD_STYLE_URL = "/app/data/shortbread-style.json";
 
-    // Surface classes drive default paint. Bridge/tunnel are structure overlays.
-    // Restricted is accessClass, not a surface. Single-track / trail is excluded
-    // from the Phase 2A production pack (see scripts/pack-ns-gov-roads.js).
+    // Visible overlays only (map visibility). Schema still uses surfaceClass=track
+    // and may include paved/unknown internally for routing — those are not map layers.
+    // Bridge/tunnel are structure overlays. Restricted is accessClass, not a surface.
+    const NETWORK_LINE_WIDTH = 4;
     const TRACK_TYPES = {
       access: { label: "Access road", color: "#0a66c2", layers: ["ns-gov-access"] },
       gravel: { label: "Gravel road", color: "#5d6874", layers: ["ns-gov-gravel"] },
-      track: { label: "Track", color: "#7c3aed", layers: ["ns-gov-track"] },
-      paved: { label: "Paved (network)", color: "#31404d", layers: ["ns-gov-paved"] },
-      unknown: { label: "Unknown surface", color: "#9aa3ad", layers: ["ns-gov-unknown"] }
+      track: { label: "Branches", color: "#7c3aed", layers: ["ns-gov-track"] }
     };
     const STRUCTURE_LAYERS = {
       bridge: { label: "Bridge", color: "#00876c", layer: "ns-gov-bridge" },
@@ -1088,12 +1079,19 @@
       access: true,
       gravel: true,
       track: true,
-      paved: false,
-      unknown: true,
       bridge: true,
       tunnel: true,
       restricted: true
     };
+
+    /** User-facing surface labels. Schema keys (track, paved, …) stay unchanged. */
+    function surfaceDisplayLabel(surfaceKey) {
+      if (surfaceKey === "track") return "Branches";
+      if (TRACK_TYPES[surfaceKey]) return TRACK_TYPES[surfaceKey].label;
+      if (surfaceKey === "paved") return "Paved";
+      if (surfaceKey === "unknown") return "Unknown surface";
+      return surfaceKey || "Unknown";
+    }
     // Kodak / Phase 2A preflight: default graph = verified + permissive only.
     // Advanced: allow motorized_unknown (mostly TRACK) with acknowledgement.
     // Restricted / excluded never route. Map visibility toggles are separate.
@@ -1647,6 +1645,8 @@
         type: "geojson",
         data: { type: "FeatureCollection", features: [] }
       });
+      // Paved / unknown surface stay in the GeoJSON for routing metadata, but are
+      // not painted as overlays — basemap already shows pavement.
       for (const [key, config] of Object.entries(TRACK_TYPES)) {
         map.addLayer({
           id: config.layers[0],
@@ -1659,8 +1659,8 @@
           ],
           paint: {
             "line-color": config.color,
-            "line-width": key === "paved" ? 1.4 : 2,
-            "line-opacity": key === "paved" ? 0.45 : 0.74
+            "line-width": NETWORK_LINE_WIDTH,
+            "line-opacity": 0.88
           }
         });
       }
@@ -1671,8 +1671,8 @@
         filter: ["==", ["get", "accessClass"], "motorized_restricted"],
         paint: {
           "line-color": ACCESS_LAYERS.restricted.color,
-          "line-width": 2,
-          "line-opacity": 0.82,
+          "line-width": NETWORK_LINE_WIDTH,
+          "line-opacity": 0.85,
           "line-dasharray": [1.2, 1.4]
         }
       });
@@ -1683,8 +1683,8 @@
         filter: ["==", ["get", "structureType"], "bridge"],
         paint: {
           "line-color": STRUCTURE_LAYERS.bridge.color,
-          "line-width": 3.2,
-          "line-opacity": 0.9
+          "line-width": NETWORK_LINE_WIDTH,
+          "line-opacity": 0.92
         }
       });
       map.addLayer({
@@ -1694,8 +1694,8 @@
         filter: ["==", ["get", "structureType"], "tunnel"],
         paint: {
           "line-color": STRUCTURE_LAYERS.tunnel.color,
-          "line-width": 3.2,
-          "line-opacity": 0.9,
+          "line-width": NETWORK_LINE_WIDTH,
+          "line-opacity": 0.92,
           "line-dasharray": [0.8, 0.8]
         }
       });
@@ -1715,17 +1715,8 @@
         type: "geojson",
         data: routeFeatureCollection()
       });
-      map.addLayer({
-        id: "route-network-casing",
-        type: "line",
-        source: "routeDraft",
-        filter: ["==", ["get", "role"], "route"],
-        paint: {
-          "line-color": "#111820",
-          "line-width": 9,
-          "line-opacity": 0.92
-        }
-      });
+      // Selected route: bright primary stroke, thicker than ~4px network overlays.
+      // No dark casing that would mute category color on network lines.
       map.addLayer({
         id: "route-network",
         type: "line",
@@ -1738,12 +1729,12 @@
             "access", "#0a66c2",
             "gravel", "#5d6874",
             "track", "#7c3aed",
-            "paved", "#31404d",
-            "unknown", "#9aa3ad",
+            "paved", "#ffb000",
+            "unknown", "#ffb000",
             "connector", "#d22730",
             "#ffb000"
           ],
-          "line-width": 5,
+          "line-width": 7,
           "line-opacity": 0.98
         }
       });
@@ -2594,7 +2585,7 @@
             (snap.meters != null ? " · nearest line " + snap.meters + " m away" : "");
         }
         return label + ': <b class="good">' + snap.meters + " m</b> → " +
-          (TRACK_TYPES[snap.trackClass]?.label || snap.trackClass) +
+          surfaceDisplayLabel(snap.trackClass) +
           (snap.componentId != null ? " · net " + snap.componentId : "");
       }
       const rows = [snapLine("A", routeDebug.start), snapLine("B", routeDebug.end)];
@@ -3755,13 +3746,13 @@
     function showPopup(feature, point) {
       const p = feature.properties || {};
       const surfaceKey = p.surfaceClass || p.trackClass || "gravel";
-      const trackType = TRACK_TYPES[surfaceKey] || TRACK_TYPES.gravel;
+      const surfaceColor = (TRACK_TYPES[surfaceKey] && TRACK_TYPES[surfaceKey].color) || "#5d6874";
       const typeLabel = p.sourceDescription || p.roadClass || "NSTDB road";
       const accessLabel = p.accessClass || "motorized_unknown";
       const structureLabel = p.structureType && p.structureType !== "none" ? p.structureType : "none";
       popupBody.innerHTML =
         '<div class="k">Type</div><div class="v">' + typeLabel + (p.name ? " · " + p.name : "") + "</div>" +
-        '<div class="k">Surface</div><div class="v" style="color:' + trackType.color + '">' + trackType.label + "</div>" +
+        '<div class="k">Surface</div><div class="v" style="color:' + surfaceColor + '">' + surfaceDisplayLabel(surfaceKey) + "</div>" +
         '<div class="k">Structure</div><div class="v">' + structureLabel + "</div>" +
         '<div class="k">Access</div><div class="v">' + accessLabel + (p.confidence ? " · " + p.confidence + " confidence" : "") + "</div>" +
         '<div class="k">Edge</div><div class="v">' + (p.edgeId || "legacy") + "</div>" +
@@ -4045,7 +4036,7 @@
       if (unknownAccessAcknowledged) return Promise.resolve(true);
       if (!accessWarnSheet) {
         unknownAccessAcknowledged = window.confirm(
-          "Unknown access is not permission. Routes may use unverified TRACK lines and may expose you to closures, private land, seasonal restrictions, or enforcement. Continue?"
+          "Unknown access is not permission. Routes may use unverified branch lines (NSTDB TRACK) and may expose you to closures, private land, seasonal restrictions, or enforcement. Continue?"
         );
         return Promise.resolve(unknownAccessAcknowledged);
       }
