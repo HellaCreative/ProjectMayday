@@ -1,41 +1,40 @@
 {
-  "generatedAt": "2026-07-15T01:27:41.024Z",
-  "schemaVersion": "2a-1",
+  "generatedAt": "2026-07-15T01:38:58.616Z",
+  "schemaVersion": "2a-2",
   "sourceName": "Nova Scotia Topographic DataBase Roads, Trails and Rails - Road Line Layer",
   "source": "https://data.novascotia.ca/resource/a6gf-w68e.json",
   "catalogue": "https://data.novascotia.ca/Roads-Driving-and-Transport/Nova-Scotia-Topographic-DataBase-Roads-Trails-and-/a6gf-w68e",
-  "queryModel": "Phase 2A: eligible motorized NSTDB roads/tracks only; trails and No Vehicular Traffic excluded; surface/structure/access separated; exact vertex splits; grid-chunked",
+  "queryModel": "Phase 2A.2: TRAIL/no-vehicle excluded; TRACK retained as unknown access; ramps kept for paved continuity; surface/structure/access separated; exact vertex splits; grid-chunked",
   "license": "Open Government Licence - Nova Scotia",
   "region": "Nova Scotia",
   "bbox": null,
   "chunkDeg": 0.4,
   "chunkDir": "ns-gov-chunks",
-  "featureCount": 299805,
-  "sourceLines": 263694,
-  "junctionSplits": 36111,
+  "featureCount": 301635,
+  "sourceLines": 265454,
+  "junctionSplits": 36181,
   "fetched": 268937,
-  "skipped": 5243,
-  "bytes": 314491452,
-  "gzBytes": 52582338,
+  "skipped": 3483,
+  "bytes": 315902464,
+  "gzBytes": 52787686,
   "classes": {
-    "paved": 59263,
-    "gravel": 30601,
+    "paved": 61021,
+    "gravel": 30603,
     "track": 146192,
     "access": 27636,
     "unknown": 2
   },
   "accessClasses": {
-    "motorized_permissive": 117278,
+    "motorized_permissive": 119038,
     "motorized_unknown": 145701,
     "motorized_restricted": 715
   },
   "structureTypes": {
-    "none": 258527,
-    "bridge": 5080,
+    "none": 260246,
+    "bridge": 5121,
     "tunnel": 87
   },
   "excludedByReason": {
-    "ramp": 1760,
     "median_crossover": 121,
     "no_vehicular_traffic": 2886,
     "driveway": 131,
@@ -45,12 +44,12 @@
     "dam": 2
   },
   "topology": {
-    "nodes": 295433,
-    "junctionNodes": 123258,
-    "deadEndNodes": 124525,
-    "componentCount": 24247,
+    "nodes": 295920,
+    "junctionNodes": 125281,
+    "deadEndNodes": 124359,
+    "componentCount": 24226,
     "topComponentsKm": [
-      87766.6,
+      88171.2,
       105,
       52.1,
       37.6,
@@ -191,7 +190,8 @@
     "Junctions are exact shared-vertex matches only.",
     "Grade-separated crossings are tagged via structureType but not fully modeled in the graph.",
     "Access classes are inferred from NSTDB descriptions; motorized_verified requires future field/source confirmation.",
-    "motorized_unknown tracks are packed but should not be silently treated as legal."
+    "motorized_unknown TRACK inventory is packed for display and advanced routing, not assumed legal by default.",
+    "TRAIL exclusion does not remove TRACK features."
   ],
   "rawArchive": "data-raw/ns-gov/ (outside app bundle)",
   "chunks": [
@@ -204,8 +204,8 @@
         -63.57583,
         44.8116
       ],
-      "count": 13090,
-      "gzBytes": 1749853
+      "count": 13521,
+      "gzBytes": 1790399
     },
     {
       "id": "-151_115",
@@ -216,8 +216,8 @@
         -59.98804,
         46.33531
       ],
-      "count": 11813,
-      "gzBytes": 1308996
+      "count": 11960,
+      "gzBytes": 1323120
     },
     {
       "id": "-162_111",
@@ -228,8 +228,8 @@
         -64.38241,
         44.80955
       ],
-      "count": 11608,
-      "gzBytes": 1932312
+      "count": 11615,
+      "gzBytes": 1933438
     },
     {
       "id": "-159_111",
@@ -240,8 +240,8 @@
         -63.19215,
         44.82311
       ],
-      "count": 10409,
-      "gzBytes": 1195809
+      "count": 10660,
+      "gzBytes": 1221348
     },
     {
       "id": "-159_113",
@@ -252,8 +252,8 @@
         -63.16599,
         45.61685
       ],
-      "count": 9893,
-      "gzBytes": 1873494
+      "count": 10016,
+      "gzBytes": 1890152
     },
     {
       "id": "-155_113",
@@ -264,8 +264,8 @@
         -61.5899,
         45.62024
       ],
-      "count": 9245,
-      "gzBytes": 1402822
+      "count": 9253,
+      "gzBytes": 1403383
     },
     {
       "id": "-162_112",
@@ -276,8 +276,8 @@
         -64.38899,
         45.20899
       ],
-      "count": 9164,
-      "gzBytes": 1580994
+      "count": 9212,
+      "gzBytes": 1585709
     },
     {
       "id": "-159_112",
@@ -288,8 +288,8 @@
         -63.19216,
         45.21061
       ],
-      "count": 8757,
-      "gzBytes": 1722371
+      "count": 8840,
+      "gzBytes": 1732363
     },
     {
       "id": "-157_113",
@@ -300,8 +300,8 @@
         -62.38214,
         45.60848
       ],
-      "count": 8359,
-      "gzBytes": 1509020
+      "count": 8448,
+      "gzBytes": 1520780
     },
     {
       "id": "-158_113",
@@ -312,8 +312,8 @@
         -62.78916,
         45.62386
       ],
-      "count": 8049,
-      "gzBytes": 1849163
+      "count": 8077,
+      "gzBytes": 1853695
     },
     {
       "id": "-162_110",
@@ -324,8 +324,8 @@
         -64.3864,
         44.40495
       ],
-      "count": 7507,
-      "gzBytes": 1246440
+      "count": 7559,
+      "gzBytes": 1252371
     },
     {
       "id": "-160_112",
@@ -336,8 +336,8 @@
         -63.58738,
         45.2107
       ],
-      "count": 7353,
-      "gzBytes": 1534739
+      "count": 7382,
+      "gzBytes": 1538550
     },
     {
       "id": "-161_112",
@@ -348,8 +348,8 @@
         -63.9736,
         45.21769
       ],
-      "count": 7051,
-      "gzBytes": 1480010
+      "count": 7154,
+      "gzBytes": 1491995
     },
     {
       "id": "-163_111",
@@ -360,8 +360,8 @@
         -64.77495,
         44.80998
       ],
-      "count": 6944,
-      "gzBytes": 1150353
+      "count": 6945,
+      "gzBytes": 1150358
     },
     {
       "id": "-160_114",
@@ -372,8 +372,8 @@
         -63.58927,
         45.99694
       ],
-      "count": 6654,
-      "gzBytes": 1115231
+      "count": 6680,
+      "gzBytes": 1119396
     },
     {
       "id": "-161_111",
@@ -384,8 +384,8 @@
         -63.9893,
         44.81712
       ],
-      "count": 6548,
-      "gzBytes": 1288599
+      "count": 6585,
+      "gzBytes": 1293454
     },
     {
       "id": "-161_114",
@@ -396,8 +396,8 @@
         -63.98266,
         46.00182
       ],
-      "count": 6314,
-      "gzBytes": 992827
+      "count": 6365,
+      "gzBytes": 998986
     },
     {
       "id": "-156_113",
@@ -408,8 +408,8 @@
         -61.98279,
         45.61007
       ],
-      "count": 6296,
-      "gzBytes": 1189786
+      "count": 6309,
+      "gzBytes": 1193480
     },
     {
       "id": "-163_112",
@@ -420,8 +420,8 @@
         -64.78626,
         45.15628
       ],
-      "count": 6220,
-      "gzBytes": 957383
+      "count": 6249,
+      "gzBytes": 960930
     },
     {
       "id": "-154_114",
@@ -432,8 +432,8 @@
         -61.18192,
         46.00557
       ],
-      "count": 6133,
-      "gzBytes": 969336
+      "count": 6148,
+      "gzBytes": 970949
     },
     {
       "id": "-160_113",
@@ -445,7 +445,7 @@
         45.60978
       ],
       "count": 5798,
-      "gzBytes": 1295708
+      "gzBytes": 1295724
     },
     {
       "id": "-161_113",
@@ -457,7 +457,7 @@
         45.61543
       ],
       "count": 5656,
-      "gzBytes": 1047431
+      "gzBytes": 1047440
     },
     {
       "id": "-165_111",
@@ -468,8 +468,8 @@
         -65.57395,
         44.7819
       ],
-      "count": 5577,
-      "gzBytes": 931478
+      "count": 5621,
+      "gzBytes": 936803
     },
     {
       "id": "-166_110",
@@ -480,8 +480,8 @@
         -65.98522,
         44.4109
       ],
-      "count": 5157,
-      "gzBytes": 896185
+      "count": 5181,
+      "gzBytes": 899674
     },
     {
       "id": "-164_111",
@@ -492,8 +492,8 @@
         -65.19278,
         44.81379
       ],
-      "count": 5131,
-      "gzBytes": 987271
+      "count": 5138,
+      "gzBytes": 988231
     },
     {
       "id": "-158_112",
@@ -505,7 +505,7 @@
         45.21034
       ],
       "count": 5081,
-      "gzBytes": 1012882
+      "gzBytes": 1012867
     },
     {
       "id": "-159_114",
@@ -517,7 +517,7 @@
         45.87838
       ],
       "count": 4948,
-      "gzBytes": 1047047
+      "gzBytes": 1047108
     },
     {
       "id": "-162_113",
@@ -529,7 +529,7 @@
         45.60779
       ],
       "count": 4803,
-      "gzBytes": 920408
+      "gzBytes": 920394
     },
     {
       "id": "-153_115",
@@ -541,7 +541,7 @@
         46.40752
       ],
       "count": 4662,
-      "gzBytes": 878569
+      "gzBytes": 878578
     },
     {
       "id": "-157_112",
@@ -553,7 +553,7 @@
         45.2105
       ],
       "count": 4418,
-      "gzBytes": 1150954
+      "gzBytes": 1150959
     },
     {
       "id": "-153_114",
@@ -564,8 +564,8 @@
         -60.78823,
         46.00903
       ],
-      "count": 4367,
-      "gzBytes": 798168
+      "count": 4389,
+      "gzBytes": 800097
     },
     {
       "id": "-154_113",
@@ -577,7 +577,7 @@
         45.60567
       ],
       "count": 4327,
-      "gzBytes": 735028
+      "gzBytes": 735033
     },
     {
       "id": "-152_114",
@@ -589,7 +589,7 @@
         46.00381
       ],
       "count": 4231,
-      "gzBytes": 763873
+      "gzBytes": 763865
     },
     {
       "id": "-152_115",
@@ -600,8 +600,8 @@
         -60.38382,
         46.40536
       ],
-      "count": 4179,
-      "gzBytes": 716810
+      "count": 4185,
+      "gzBytes": 717526
     },
     {
       "id": "-165_110",
@@ -612,8 +612,8 @@
         -65.59051,
         44.41673
       ],
-      "count": 4157,
-      "gzBytes": 918040
+      "count": 4158,
+      "gzBytes": 918128
     },
     {
       "id": "-164_109",
@@ -624,8 +624,8 @@
         -65.2,
         44.01516
       ],
-      "count": 3598,
-      "gzBytes": 677721
+      "count": 3599,
+      "gzBytes": 677834
     },
     {
       "id": "-165_109",
@@ -636,8 +636,8 @@
         -65.6,
         44.00206
       ],
-      "count": 3492,
-      "gzBytes": 658139
+      "count": 3498,
+      "gzBytes": 658742
     },
     {
       "id": "-153_116",
@@ -648,8 +648,8 @@
         -60.78503,
         46.82313
       ],
-      "count": 3385,
-      "gzBytes": 485696
+      "count": 3387,
+      "gzBytes": 485823
     },
     {
       "id": "-166_109",
@@ -660,8 +660,8 @@
         -65.99436,
         44.00824
       ],
-      "count": 3309,
-      "gzBytes": 482465
+      "count": 3328,
+      "gzBytes": 484877
     },
     {
       "id": "-157_114",
@@ -672,8 +672,8 @@
         -62.3957,
         45.82826
       ],
-      "count": 2998,
-      "gzBytes": 376493
+      "count": 3018,
+      "gzBytes": 378758
     },
     {
       "id": "-156_112",
@@ -685,7 +685,7 @@
         45.21292
       ],
       "count": 2952,
-      "gzBytes": 669604
+      "gzBytes": 669621
     },
     {
       "id": "-163_110",
@@ -697,7 +697,7 @@
         44.41177
       ],
       "count": 2948,
-      "gzBytes": 664742
+      "gzBytes": 664741
     },
     {
       "id": "-158_114",
@@ -709,7 +709,7 @@
         45.80525
       ],
       "count": 2928,
-      "gzBytes": 643186
+      "gzBytes": 643140
     },
     {
       "id": "-156_114",
@@ -720,8 +720,8 @@
         -61.98239,
         45.84476
       ],
-      "count": 2701,
-      "gzBytes": 471436
+      "count": 2714,
+      "gzBytes": 472973
     },
     {
       "id": "-154_115",
@@ -733,7 +733,7 @@
         46.35772
       ],
       "count": 2667,
-      "gzBytes": 488458
+      "gzBytes": 488463
     },
     {
       "id": "-152_116",
@@ -745,7 +745,7 @@
         46.80571
       ],
       "count": 2641,
-      "gzBytes": 362655
+      "gzBytes": 362640
     },
     {
       "id": "-151_114",
@@ -757,7 +757,7 @@
         46.00456
       ],
       "count": 2538,
-      "gzBytes": 518694
+      "gzBytes": 518669
     },
     {
       "id": "-150_115",
@@ -768,8 +768,8 @@
         -59.67685,
         46.22051
       ],
-      "count": 2438,
-      "gzBytes": 257599
+      "count": 2442,
+      "gzBytes": 257831
     },
     {
       "id": "-155_114",
@@ -780,8 +780,8 @@
         -61.59567,
         45.88503
       ],
-      "count": 2327,
-      "gzBytes": 377950
+      "count": 2357,
+      "gzBytes": 381949
     },
     {
       "id": "-164_112",
@@ -792,8 +792,8 @@
         -65.18984,
         44.98046
       ],
-      "count": 2050,
-      "gzBytes": 307728
+      "count": 2070,
+      "gzBytes": 310094
     },
     {
       "id": "-153_113",
@@ -805,19 +805,7 @@
         45.60623
       ],
       "count": 1989,
-      "gzBytes": 295629
-    },
-    {
-      "id": "-161_110",
-      "file": "-161_110.geojson.gz",
-      "bbox": [
-        -64.40818,
-        44.22313,
-        -64.21063,
-        44.40547
-      ],
-      "count": 1805,
-      "gzBytes": 260993
+      "gzBytes": 295611
     },
     {
       "id": "-158_111",
@@ -828,8 +816,20 @@
         -62.79895,
         44.80595
       ],
-      "count": 1804,
-      "gzBytes": 317233
+      "count": 1806,
+      "gzBytes": 317404
+    },
+    {
+      "id": "-161_110",
+      "file": "-161_110.geojson.gz",
+      "bbox": [
+        -64.40818,
+        44.22313,
+        -64.21063,
+        44.40547
+      ],
+      "count": 1806,
+      "gzBytes": 261090
     },
     {
       "id": "-163_109",
@@ -840,8 +840,8 @@
         -64.8,
         44
       ],
-      "count": 1671,
-      "gzBytes": 333824
+      "count": 1680,
+      "gzBytes": 334652
     },
     {
       "id": "-155_112",
@@ -853,7 +853,7 @@
         45.21135
       ],
       "count": 1402,
-      "gzBytes": 244773
+      "gzBytes": 244777
     },
     {
       "id": "-165_108",
@@ -861,11 +861,11 @@
       "bbox": [
         -65.80716,
         43.40794,
-        -65.59438,
+        -65.5927,
         43.61477
       ],
-      "count": 1129,
-      "gzBytes": 158336
+      "count": 1136,
+      "gzBytes": 159334
     },
     {
       "id": "-164_108",
@@ -876,8 +876,8 @@
         -65.33803,
         43.6134
       ],
-      "count": 1124,
-      "gzBytes": 177872
+      "count": 1127,
+      "gzBytes": 178288
     },
     {
       "id": "-164_110",
@@ -889,7 +889,7 @@
         44.40559
       ],
       "count": 907,
-      "gzBytes": 271278
+      "gzBytes": 271260
     },
     {
       "id": "-152_117",
@@ -901,7 +901,7 @@
         47.04086
       ],
       "count": 893,
-      "gzBytes": 161931
+      "gzBytes": 161950
     },
     {
       "id": "-163_113",
@@ -913,7 +913,7 @@
         45.49974
       ],
       "count": 826,
-      "gzBytes": 157715
+      "gzBytes": 157724
     },
     {
       "id": "-166_111",
@@ -924,8 +924,8 @@
         -65.99804,
         44.56761
       ],
-      "count": 750,
-      "gzBytes": 139377
+      "count": 758,
+      "gzBytes": 140174
     },
     {
       "id": "-162_114",
@@ -937,7 +937,7 @@
         45.75364
       ],
       "count": 599,
-      "gzBytes": 120731
+      "gzBytes": 120722
     },
     {
       "id": "-150_114",
@@ -948,8 +948,8 @@
         -59.82909,
         46.00518
       ],
-      "count": 592,
-      "gzBytes": 92253
+      "count": 596,
+      "gzBytes": 92533
     },
     {
       "id": "-151_116",
@@ -960,8 +960,8 @@
         -60.32421,
         46.79032
       ],
-      "count": 327,
-      "gzBytes": 54011
+      "count": 332,
+      "gzBytes": 54230
     },
     {
       "id": "-162_109",
@@ -972,8 +972,8 @@
         -64.66195,
         44
       ],
-      "count": 242,
-      "gzBytes": 46339
+      "count": 243,
+      "gzBytes": 46410
     },
     {
       "id": "-157_111",
@@ -985,7 +985,7 @@
         44.80227
       ],
       "count": 228,
-      "gzBytes": 35332
+      "gzBytes": 35333
     },
     {
       "id": "-154_112",
@@ -997,7 +997,7 @@
         45.20286
       ],
       "count": 218,
-      "gzBytes": 44573
+      "gzBytes": 44571
     },
     {
       "id": "-151_117",
@@ -1009,7 +1009,7 @@
         47.19408
       ],
       "count": 184,
-      "gzBytes": 30374
+      "gzBytes": 30371
     },
     {
       "id": "-152_113",
@@ -1021,7 +1021,7 @@
         45.60455
       ],
       "count": 153,
-      "gzBytes": 28932
+      "gzBytes": 28935
     },
     {
       "id": "-153_117",
@@ -1033,7 +1033,7 @@
         46.83038
       ],
       "count": 47,
-      "gzBytes": 4490
+      "gzBytes": 4489
     },
     {
       "id": "-151_109",
@@ -1045,7 +1045,7 @@
         43.93452
       ],
       "count": 17,
-      "gzBytes": 5442
+      "gzBytes": 5444
     },
     {
       "id": "-161_115",
@@ -1057,7 +1057,7 @@
         46.00403
       ],
       "count": 15,
-      "gzBytes": 1576
+      "gzBytes": 1577
     },
     {
       "id": "-166_108",
@@ -1069,7 +1069,7 @@
         43.41125
       ],
       "count": 4,
-      "gzBytes": 1745
+      "gzBytes": 1747
     },
     {
       "id": "-150_109",
@@ -1105,7 +1105,7 @@
         45.20193
       ],
       "count": 2,
-      "gzBytes": 933
+      "gzBytes": 932
     }
   ]
 }

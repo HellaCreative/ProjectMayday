@@ -1,30 +1,37 @@
 {
-  "generatedAt": "2026-07-15T01:27:41.024Z",
+  "generatedAt": "2026-07-15T01:38:58.616Z",
   "region": "Nova Scotia",
-  "schemaVersion": "2a-1",
+  "schemaVersion": "2a-2",
   "totals": {
     "fetchedRows": 268937,
-    "eligibleSourceLines": 263694,
-    "edges": 299805,
-    "nodes": 295433,
-    "junctionNodes": 123258,
-    "deadEndNodes": 124525,
-    "degree2Nodes": 47650,
-    "sameLevelJunctionSplits": 36111,
-    "connectedComponents": 24247,
+    "eligibleSourceLines": 265454,
+    "edges": 301635,
+    "nodes": 295920,
+    "junctionNodes": 125281,
+    "deadEndNodes": 124359,
+    "degree2Nodes": 46280,
+    "sameLevelJunctionSplits": 36181,
+    "connectedComponents": 24226,
     "invalidEndpointEdges": 0,
-    "freeSpaceConnectors": 0
+    "freeSpaceConnectors": 0,
+    "rampSourceParts": 1760,
+    "trackSourceParts": 146192,
+    "trailLikeRowsExcluded": 2940
+  },
+  "eligibilityPolicy": {
+    "trailVsTrack": "TRAIL features (including No Vehicular Traffic) are excluded from the production pack. TRACK features remain as surfaceClass=track with accessClass=motorized_unknown. Do not call TRACK exclusion 'trails excluded'.",
+    "ramps": "Ramps are included as motorized_permissive paved edges for network continuity. They display with the paved surface layer (off by default in the rider UI).",
+    "unknownAccess": "Default routing policy (client / future service): verified + permissive only. Advanced/research may allow motorized_unknown with a visible warning. Restricted and excluded never route."
   },
   "gradeSeparatedCrossings": {
     "status": "not_evaluated",
-    "note": "Phase 2A preserves bridge/tunnel as structureType but does not yet planarize or grade-separate visual crossings without shared vertices."
+    "note": "Phase 2A preserves bridge/tunnel as structureType but does not yet planarize or grade-separate visual crossings without shared vertices. Keep this visible through Phase 2B."
   },
   "intersectionsNotConnected": {
     "status": "by_design",
-    "note": "Visual crossings without an exact shared vertex remain disconnected. No proximity stitching."
+    "note": "Visual crossings without an exact shared vertex remain disconnected. No proximity stitching. Planarization is explicit route-correctness work, not silently assumed done."
   },
   "excludedByReason": {
-    "ramp": 1760,
     "median_crossover": 121,
     "no_vehicular_traffic": 2886,
     "driveway": 131,
@@ -34,24 +41,24 @@
     "dam": 2
   },
   "accessCounts": {
-    "motorized_permissive": 117278,
+    "motorized_permissive": 119038,
     "motorized_unknown": 145701,
     "motorized_restricted": 715
   },
   "surfaceCounts": {
-    "paved": 59263,
-    "gravel": 30601,
+    "paved": 61021,
+    "gravel": 30603,
     "track": 146192,
     "access": 27636,
     "unknown": 2
   },
   "structureCounts": {
-    "none": 258527,
-    "bridge": 5080,
+    "none": 260246,
+    "bridge": 5121,
     "tunnel": 87
   },
   "topComponentsKm": [
-    87766.6,
+    88171.2,
     105,
     52.1,
     37.6,
@@ -72,6 +79,7 @@
     "Junctions are exact shared-vertex matches only.",
     "Grade-separated crossings are tagged via structureType but not fully modeled in the graph.",
     "Access classes are inferred from NSTDB descriptions; motorized_verified requires future field/source confirmation.",
-    "motorized_unknown tracks are packed but should not be silently treated as legal."
+    "motorized_unknown TRACK inventory is packed for display and advanced routing, not assumed legal by default.",
+    "TRAIL exclusion does not remove TRACK features."
   ]
 }

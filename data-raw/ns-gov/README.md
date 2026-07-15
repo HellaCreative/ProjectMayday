@@ -7,6 +7,6 @@ It includes eligible and excluded source features with exclude reasons.
 
 Format: gzipped NDJSON (`raw-features.ndjson.gz`), one GeoJSON Feature per line.
 
-- Generated: 2026-07-15T01:27:41.024Z
+- Generated: 2026-07-15T01:38:58.616Z
 - Features: 268,937
-- Gzip bytes: 139,788,353
+- Gzip bytes: 139,769,285
