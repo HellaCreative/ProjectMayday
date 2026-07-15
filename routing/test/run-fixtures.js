@@ -125,6 +125,46 @@ await check("direct has distance field", async () => {
   }
 });
 
+await check("avoidEdgeIds excludes a reported edge server-side", async () => {
+  const base = await route("balanced", PORTERS, MUSQUODOBOIT);
+  assertComplete(base, "avoid-base");
+  // Pick a mid-route edge to avoid so start/end snapping is unaffected.
+  const mid = base.segments[Math.floor(base.segments.length / 2)];
+  const avoidId = mid.edgeId;
+  assert.ok(avoidId, "picked an edge id to avoid");
+  const avoided = await route(
+    "balanced",
+    PORTERS,
+    MUSQUODOBOIT,
+    {},
+    { avoidEdgeIds: [avoidId] }
+  );
+  // Either a complete alternate that never uses the avoided edge, or a clean
+  // failure — never a straight-line / free-space route.
+  if (avoided.status === "complete") {
+    for (const seg of avoided.segments) {
+      assert.notStrictEqual(String(seg.edgeId), String(avoidId), "alternate must not use avoided edge");
+    }
+    assert.ok(
+      avoided.debug.avoidedEdgeIds.map(String).includes(String(avoidId)),
+      "debug reports avoided edge"
+    );
+    assert.ok(
+      avoided.warnings.some((w) => w.code === "avoided_edges"),
+      "warns that edges were avoided"
+    );
+  } else {
+    assert.ok(["failed"].includes(avoided.status), "clean failure status");
+    assert.ok(!avoided.geometry || avoided.geometry.length === 0, "no fake geometry on failure");
+  }
+});
+
+await check("avoidEdgeIds is a no-op when the edge is off-route", async () => {
+  const r = await route("balanced", PORTERS, MUSQUODOBOIT, {}, { avoidEdgeIds: ["__no_such_edge__"] });
+  assertComplete(r, "avoid-noop");
+  assert.deepStrictEqual(r.debug.avoidedEdgeIds, ["__no_such_edge__"]);
+});
+
 await check("no OSRM / no straight-line fake route on failure", async () => {
   const r = await route("cleanest", loc(-60, 40, "nowhere"), loc(-61, 41, "also-nowhere"));
   assert.notStrictEqual(r.status, "complete");

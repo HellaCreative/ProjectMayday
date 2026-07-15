@@ -1262,6 +1262,151 @@
       font-weight: 600;
     }
 
+    /* ---- Route incident recovery ---- */
+    .report-sheet {
+      position: absolute;
+      inset: 0;
+      z-index: 45;
+      display: none;
+      align-items: flex-end;
+      justify-content: center;
+      padding: 16px;
+      padding-bottom: max(16px, env(safe-area-inset-bottom));
+      background: rgba(22, 36, 51, 0.42);
+    }
+    .report-sheet.open { display: flex; }
+    .report-sheet-card {
+      width: min(440px, 100%);
+      max-height: calc(100dvh - 88px);
+      overflow-y: auto;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 12px 16px 16px;
+      backdrop-filter: blur(14px);
+      box-shadow: 0 18px 40px rgba(22, 36, 51, 0.22);
+    }
+    .report-sheet-grip {
+      width: 40px;
+      height: 4px;
+      border-radius: 999px;
+      background: var(--line);
+      margin: 2px auto 12px;
+    }
+    .report-sheet-card h2 {
+      font-family: var(--sans);
+      font-size: 1.02rem;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      color: var(--text);
+      margin-bottom: 6px;
+    }
+    .report-sheet-sub {
+      color: var(--muted);
+      font-size: 0.85rem;
+      line-height: 1.4;
+      margin-bottom: 12px;
+    }
+    .report-cat-grid {
+      display: grid;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .report-cat {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-height: 50px;
+      padding: 8px 14px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #ffffff;
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 0.92rem;
+      font-weight: 600;
+      text-align: left;
+      cursor: pointer;
+    }
+    .report-cat:active { background: var(--panel-2); }
+    .report-cat i {
+      flex: 0 0 auto;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+    }
+    .report-sheet-actions {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 8px;
+    }
+    .report-sheet-actions.two { grid-template-columns: 1fr 1.4fr; }
+    .report-sheet-actions button {
+      min-height: 44px;
+      border-radius: 12px;
+      font-family: var(--sans);
+      font-size: 0.84rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .report-cancel {
+      border: 1px solid var(--line);
+      background: #ffffff;
+      color: var(--text);
+    }
+    .recovery-report-meta {
+      font-family: var(--mono);
+      font-size: 0.74rem;
+      line-height: 1.5;
+      color: var(--muted);
+      background: var(--panel-2);
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 8px 10px;
+      margin-bottom: 12px;
+    }
+    .recovery-report-meta strong { color: var(--text); }
+    .recovery-actions {
+      display: grid;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .recovery-action {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 2px;
+      min-height: 54px;
+      padding: 9px 14px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #ffffff;
+      color: var(--text);
+      font-family: var(--sans);
+      text-align: left;
+      cursor: pointer;
+    }
+    .recovery-action:active { background: var(--panel-2); }
+    .recovery-action strong { font-size: 0.92rem; font-weight: 700; }
+    .recovery-action span { font-size: 0.78rem; color: var(--muted); }
+    .recovery-action[disabled] { opacity: 0.5; cursor: default; }
+    .recovery-action.recovery-end { border-color: rgba(187, 37, 26, 0.4); }
+    .recovery-action.recovery-end strong { color: var(--unserviced); }
+    .recovery-confirm-body {
+      font-size: 0.9rem;
+      line-height: 1.5;
+      color: var(--text);
+      margin-bottom: 14px;
+    }
+    .recovery-confirm-body .rc-label { font-weight: 700; margin-bottom: 6px; }
+    .recovery-confirm-body .rc-note { color: var(--muted); font-size: 0.82rem; }
+    .recovery-confirm-body .rc-fail { color: var(--unserviced); font-weight: 600; white-space: pre-line; }
+    .btn.report-vis.is-active {
+      background: var(--route);
+      border-color: transparent;
+      color: #ffffff;
+    }
+
     .route-nav {
       display: flex;
       align-items: center;
@@ -1293,7 +1438,7 @@
       margin-left: auto;
       gap: 0;
       min-width: 0;
-      max-width: min(248px, calc(100vw - 168px));
+      max-width: min(300px, calc(100vw - 120px));
       pointer-events: auto;
       border-radius: var(--radius);
       overflow: hidden;
@@ -1369,6 +1514,30 @@
       font-weight: 700;
       cursor: pointer;
     }
+
+    /* Compact incident report affordance, sits between the cue card and End. */
+    .nav-report {
+      flex: 0 0 auto;
+      align-self: stretch;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 1px;
+      width: 52px;
+      border: 0;
+      border-left: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 0;
+      background: var(--route);
+      color: #ffffff;
+      font-family: var(--sans);
+      font-size: 0.6rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      cursor: pointer;
+    }
+    .nav-report svg { width: 15px; height: 15px; }
+    .nav-report:active { filter: brightness(0.94); }
 
     .follow-chip {
       display: none;
@@ -1789,6 +1958,10 @@
         <div class="nav-cue-main" id="navCueMain">Start navigation</div>
         <div class="nav-cue-sub" id="navCueSub">Follow the orange line</div>
       </div>
+      <button class="nav-report" id="navReportBtn" type="button" title="Report a closure or hazard" aria-label="Report a route incident">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>
+        <span>Report</span>
+      </button>
       <button class="nav-stop" id="navStopBtn" type="button" title="End navigation">End</button>
     </div>
     <div class="topbar-right">
@@ -1923,6 +2096,57 @@
     </div>
   </div>
 
+  <!-- Route incident recovery sheets. Body-level so map/POI/route clicks never
+       fire underneath. Each sheet stops propagation and places no route points. -->
+  <div class="report-sheet" id="reportSheet" aria-hidden="true">
+    <div class="report-sheet-card" role="dialog" aria-modal="true" aria-labelledby="reportSheetTitle">
+      <div class="report-sheet-grip"></div>
+      <h2 id="reportSheetTitle">Report what's ahead</h2>
+      <p class="report-sheet-sub">One tap. No typing. We log it against your current route.</p>
+      <div class="report-cat-grid" id="reportCatGrid">
+        <button class="report-cat" type="button" data-report-cat="access_closed"><i style="background:#d22730"></i>Access closed / no trespassing</button>
+        <button class="report-cat" type="button" data-report-cat="gate_seasonal"><i style="background:#dc6803"></i>Gate or seasonal closure</button>
+        <button class="report-cat" type="button" data-report-cat="flooded"><i style="background:#0a66c2"></i>Flooded or impassable crossing</button>
+        <button class="report-cat" type="button" data-report-cat="blocked"><i style="background:#f97316"></i>Blocked route</button>
+        <button class="report-cat" type="button" data-report-cat="unsafe"><i style="background:#eab308"></i>Unsafe condition</button>
+        <button class="report-cat" type="button" data-report-cat="other"><i style="background:#6b7078"></i>Other</button>
+      </div>
+      <div class="report-sheet-actions">
+        <button class="report-cancel" id="reportCancel" type="button">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="report-sheet" id="recoverySheet" aria-hidden="true">
+    <div class="report-sheet-card" role="dialog" aria-modal="true" aria-labelledby="recoverySheetTitle">
+      <div class="report-sheet-grip"></div>
+      <h2 id="recoverySheetTitle">Report logged</h2>
+      <div class="recovery-report-meta" id="recoveryReportMeta"></div>
+      <p class="report-sheet-sub">Pick how you want to get clear. Your route won't change until you confirm.</p>
+      <div class="recovery-actions">
+        <button class="recovery-action" type="button" data-recovery="around"><strong>Find a way around</strong><span>Verified detour avoiding the report</span></button>
+        <button class="recovery-action" type="button" data-recovery="backtrack"><strong>Backtrack</strong><span>Return along your route to the last junction</span></button>
+        <button class="recovery-action" type="button" data-recovery="return"><strong>Return to nearest verified network</strong><span>Route back to the verified network</span></button>
+        <button class="recovery-action recovery-end" type="button" data-recovery="end"><strong>End stage</strong><span>Stop navigation for this stage</span></button>
+      </div>
+      <div class="report-sheet-actions">
+        <button class="report-cancel" id="recoveryClose" type="button">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="report-sheet" id="recoveryConfirmSheet" aria-hidden="true">
+    <div class="report-sheet-card" role="dialog" aria-modal="true" aria-labelledby="recoveryConfirmTitle">
+      <div class="report-sheet-grip"></div>
+      <h2 id="recoveryConfirmTitle">Replace route?</h2>
+      <div class="recovery-confirm-body" id="recoveryConfirmBody"></div>
+      <div class="report-sheet-actions">
+        <button class="report-cancel" id="recoveryConfirmCancel" type="button">Keep current route</button>
+        <button class="export-confirm" id="recoveryConfirmApply" type="button">Apply route</button>
+      </div>
+    </div>
+  </div>
+
   <div class="legend collapsed" id="legend">
     <div class="legend-head">
       <span class="legend-head-title">Layers</span>
@@ -2040,6 +2264,9 @@
         <path d="M12 20.5 L9.8 12 L12 13.4 L14.2 12 Z" fill="currentColor" opacity="0.55"/>
         <circle cx="12" cy="12" r="1.4" fill="currentColor"/>
       </svg>
+    </button>
+    <button class="btn report-vis" id="reportVisBtn" type="button" title="Show or hide rider reports" aria-label="Toggle rider report visibility" aria-pressed="false">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>
     </button>
     <button class="btn primary" id="recenterBtn" title="Follow my location" aria-label="Follow my location">◎</button>
   </div>
@@ -4130,6 +4357,7 @@
       const dirtKm = distanceKm * ((api.stats?.gravelPercent || 0) + (api.stats?.accessPercent || 0) + (api.stats?.trackPercent || 0)) / 100;
       return {
         kind: "service",
+        routeId: api.routeId || null,
         coordinates: api.geometry || [],
         segments,
         distanceKm,
@@ -6246,6 +6474,7 @@
       syncRouteExportUi();
       syncRouteChrome();
       followChip.classList.toggle("visible", !followLocked && geoWatchId != null);
+      if (typeof clearIncidentRecoveryUI === "function") clearIncidentRecoveryUI();
       setStatus("Navigation ended · offline map cleared", "ok");
     }
 
@@ -6443,6 +6672,7 @@
       const dirtKm = distanceKm * ((api.stats?.gravelPercent || 0) + (api.stats?.accessPercent || 0) + (api.stats?.trackPercent || 0)) / 100;
       return {
         kind: "service",
+        routeId: api.routeId || null,
         coordinates: api.geometry || [],
         segments,
         distanceKm,
@@ -6691,7 +6921,8 @@
     updateCompass();
 
     map.on("click", (e) => {
-      // POI inspection works in every mode and never places a route point.
+      // Rider reports + POI inspection work in every mode and never place a route point.
+      if (handleReportClick(e)) return;
       if (handlePoiClick(e)) return;
       if (navigating) {
         if (!navSimEnabled) return;
@@ -7326,6 +7557,794 @@
         drawerScrollEl.addEventListener("scroll", () => { if (accessInfoOpen) positionAccessTip(); }, { passive: true });
       }
     }
+
+    // ======================================================================
+    // Route incident recovery (closures / gates / floods / blocks / hazards)
+    // ----------------------------------------------------------------------
+    // Product rules enforced here:
+    //  - never silently reroute; never invent a location; a rider report never
+    //    modifies the authoritative NSTDB network; recovery routes are computed
+    //    on the verified graph (server), previewed, and require confirmation
+    //    before they replace the active route. See ROUTE-INCIDENT-RECOVERY.md.
+    // ======================================================================
+
+    // Freshness default (documented in AUDIT). Unverified reports expire after
+    // this window unless confirmed or renewed. Chosen to match a multi-day ride
+    // planning horizon while keeping temporary conditions from becoming truth.
+    const REPORT_FRESHNESS_HOURS = 72;
+    const REPORT_DETAIL_ZOOM = 13;          // gate: show reports when zoomed in
+    const REPORT_CORRIDOR_KM = 0.3;         // gate: show reports near active route
+    const REPORT_AFFECTS_KM = 0.05;         // report "affects" route if within 50 m
+
+    const REPORT_CATEGORIES = {
+      access_closed: { label: "Access closed / no trespassing", color: "#d22730" },
+      gate_seasonal: { label: "Gate or seasonal closure", color: "#dc6803" },
+      flooded:       { label: "Flooded or impassable crossing", color: "#0a66c2" },
+      blocked:       { label: "Blocked route", color: "#f97316" },
+      unsafe:        { label: "Unsafe condition", color: "#eab308" },
+      other:         { label: "Other", color: "#6b7078" }
+    };
+    const REPORT_NO_ALTERNATE_COPY =
+      "No verified alternate route found.\nBacktrack to the last verified junction or end this stage.";
+    const REPORT_NO_RETURN_COPY =
+      "No verified route back to the network was found.\nBacktrack to the last verified junction or end this stage.";
+
+    // ---- Persistence adapter boundary -----------------------------------
+    // No durable *shared* store exists in this repo/Vercel config (functions are
+    // stateless; only static assets + the routing graph ship). Local reports use
+    // IndexedDB and work for the current rider's session. The remote adapter is
+    // a clear boundary that reports shared persistence as BLOCKED — it never
+    // claims cross-rider sharing and holds no client secrets. Swap the remote
+    // adapter when a durable store (Vercel Postgres/KV/Blob index) is added.
+    let reportsDb = null;
+    try {
+      reportsDb = new Dexie("dirt_reports_v1");
+      reportsDb.version(1).stores({ reports: "id, routeId, createdAt, status" });
+    } catch (_) { reportsDb = null; }
+
+    const ReportPersistence = {
+      mode: reportsDb ? "local-indexeddb" : "memory-fallback",
+      sharedAvailable: false,
+      _mem: new Map(),
+      async put(report) {
+        if (reportsDb) { try { await reportsDb.reports.put(report); return report; } catch (_) {} }
+        this._mem.set(report.id, report);
+        return report;
+      },
+      async update(report) { return this.put(report); },
+      async all() {
+        if (reportsDb) { try { return await reportsDb.reports.toArray(); } catch (_) {} }
+        return Array.from(this._mem.values());
+      },
+      async remoteSync() {
+        return { ok: false, blocked: true, reason: "No durable shared store configured for this deployment." };
+      }
+    };
+
+    let sessionReports = [];         // in-memory mirror of persisted reports
+    let reportsForced = false;       // explicit rider visibility toggle
+    let recoveryState = null;        // { report, kind, candidate, api, rejoin, fail, label, note }
+
+    const navReportBtn = document.getElementById("navReportBtn");
+    const reportSheet = document.getElementById("reportSheet");
+    const reportCatGrid = document.getElementById("reportCatGrid");
+    const reportCancel = document.getElementById("reportCancel");
+    const recoverySheet = document.getElementById("recoverySheet");
+    const recoveryReportMeta = document.getElementById("recoveryReportMeta");
+    const recoveryClose = document.getElementById("recoveryClose");
+    const recoveryConfirmSheet = document.getElementById("recoveryConfirmSheet");
+    const recoveryConfirmBody = document.getElementById("recoveryConfirmBody");
+    const recoveryConfirmCancel = document.getElementById("recoveryConfirmCancel");
+    const recoveryConfirmApply = document.getElementById("recoveryConfirmApply");
+    const reportVisBtn = document.getElementById("reportVisBtn");
+
+    function reportNewId() {
+      return "rpt-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 7);
+    }
+
+    function effectiveReportStatus(report) {
+      if (report.status === "unverified" && report.expiresAt && Date.now() > Date.parse(report.expiresAt)) {
+        return "expired";
+      }
+      return report.status;
+    }
+
+    function reportAgeLabel(report) {
+      const ms = Date.now() - Date.parse(report.createdAt);
+      if (!Number.isFinite(ms) || ms < 0) return "just now";
+      const min = Math.floor(ms / 60000);
+      if (min < 1) return "just now";
+      if (min < 60) return min + " min ago";
+      const hr = Math.floor(min / 60);
+      if (hr < 24) return hr + " h ago";
+      const d = Math.floor(hr / 24);
+      return d + " d ago";
+    }
+
+    // Only source of a report location — GPS first, then a map position that is
+    // already on the active route. Never invents a coordinate.
+    function captureReportLocation() {
+      if (hasRiderLocation()) {
+        return { lng: rider.lng, lat: rider.lat, source: "gps" };
+      }
+      const coords = (activeRoute && activeRouteCoordinates()) || [];
+      if (coords.length >= 2) {
+        const c = map.getCenter();
+        const proj = projectPointOnRoute({ lng: c.lng, lat: c.lat }, coords);
+        if (proj && proj.distanceKm <= 0.15) {
+          return { lng: proj.coord[0], lat: proj.coord[1], source: "map_on_route" };
+        }
+      }
+      return null;
+    }
+
+    function riderPointForRecovery() {
+      const loc = captureReportLocation();
+      return loc ? { lng: loc.lng, lat: loc.lat } : null;
+    }
+
+    // Nearest active-route segment to a point → its authoritative edge id.
+    function nearestRouteSegment(point) {
+      if (!activeRoute || !Array.isArray(activeRoute.segments)) return null;
+      let best = null;
+      for (const seg of activeRoute.segments) {
+        const coords = seg.coords || seg.geometry || [];
+        for (let i = 1; i < coords.length; i += 1) {
+          const proj = projectedPointOnSegment(point, coords[i - 1], coords[i]);
+          if (!best || proj.distanceKm < best.distanceKm) {
+            best = { distanceKm: proj.distanceKm, coord: proj.coord, edgeId: seg.edgeId || null, segment: seg };
+          }
+        }
+      }
+      return best;
+    }
+
+    function segmentsWithCumulative(segments) {
+      const out = [];
+      let startKm = 0;
+      for (const seg of segments || []) {
+        const coords = seg.coords || seg.geometry || [];
+        let km = 0;
+        for (let i = 1; i < coords.length; i += 1) km += distanceKmCoords(coords[i - 1], coords[i]);
+        out.push({ edgeId: seg.edgeId || null, startKm, distanceKm: km, coords, trackClass: seg.trackClass || "connector" });
+        startKm += km;
+      }
+      return out;
+    }
+
+    // Forward slice of a polyline between two along-distances (km), with exact
+    // interpolation at both ends. Uses ONLY existing route geometry.
+    function sliceRouteByDistance(coords, fromKm, toKm) {
+      if (!coords || coords.length < 2 || toKm <= fromKm) return [];
+      const out = [];
+      let traveled = 0;
+      for (let i = 1; i < coords.length; i += 1) {
+        const a = coords[i - 1];
+        const b = coords[i];
+        const segKm = distanceKmCoords(a, b);
+        const segStart = traveled;
+        const segEnd = traveled + segKm;
+        if (segEnd >= fromKm && segStart <= toKm && segKm > 0) {
+          const tStart = Math.max(0, (fromKm - segStart) / segKm);
+          const tEnd = Math.min(1, (toKm - segStart) / segKm);
+          const pStart = [a[0] + (b[0] - a[0]) * tStart, a[1] + (b[1] - a[1]) * tStart];
+          const pEnd = [a[0] + (b[0] - a[0]) * tEnd, a[1] + (b[1] - a[1]) * tEnd];
+          if (!out.length) out.push(pStart);
+          else {
+            const last = out[out.length - 1];
+            if (last[0] !== pStart[0] || last[1] !== pStart[1]) out.push(pStart);
+          }
+          out.push(pEnd);
+        }
+        traveled = segEnd;
+      }
+      return out;
+    }
+
+    function reportAffectsActiveRoute(report) {
+      if (!activeRoute) return false;
+      const edgeIds = new Set((activeRoute.segments || []).map((s) => String(s.edgeId)));
+      if (report.edgeId && edgeIds.has(String(report.edgeId))) return true;
+      const coords = activeRouteCoordinates();
+      if (coords.length >= 2) {
+        const proj = projectPointOnRoute({ lng: report.lon, lat: report.lat }, coords);
+        if (proj && proj.distanceKm <= REPORT_AFFECTS_KM) return true;
+      }
+      return false;
+    }
+
+    // ---- Report sheet (item 1) ------------------------------------------
+    function openReportSheet() {
+      if (!navigating) {
+        setStatus("Start navigation to report a route incident", "error");
+        return;
+      }
+      if (!captureReportLocation()) {
+        setStatus("No verified location yet — cannot log a report without GPS or an on-route position", "error");
+        return;
+      }
+      reportSheet.classList.add("open");
+      reportSheet.setAttribute("aria-hidden", "false");
+    }
+    function closeReportSheet() {
+      reportSheet.classList.remove("open");
+      reportSheet.setAttribute("aria-hidden", "true");
+    }
+
+    async function submitReport(category) {
+      const loc = captureReportLocation();
+      if (!loc) {
+        setStatus("No verified location — report not logged", "error");
+        return;
+      }
+      const match = nearestRouteSegment({ lng: loc.lng, lat: loc.lat });
+      const created = new Date();
+      const expires = new Date(created.getTime() + REPORT_FRESHNESS_HOURS * 3600 * 1000);
+      const report = {
+        id: reportNewId(),
+        category,
+        lat: loc.lat,
+        lon: loc.lng,
+        routeId: (activeRoute && activeRoute.routeId) || null,
+        stageId: (navContext && navContext.stages && navContext.index != null && navContext.stages[navContext.index])
+          ? (navContext.stages[navContext.index].id || null)
+          : (typeof activeStageId !== "undefined" ? activeStageId : null),
+        edgeId: match && match.edgeId ? match.edgeId : null,
+        direction: (rider && Number.isFinite(rider.heading)) ? Math.round(rider.heading) : null,
+        status: "unverified",
+        confidence: "unverified",
+        confirmations: 0,
+        locationSource: loc.source,
+        createdAt: created.toISOString(),
+        expiresAt: expires.toISOString(),
+        source: "rider_report",
+        note: null
+      };
+      await ReportPersistence.put(report);
+      sessionReports.push(report);
+      refreshReportLayer();
+      closeReportSheet();
+      openRecoverySheet(report);
+    }
+
+    // ---- Recovery sheet (item 3) ----------------------------------------
+    function openRecoverySheet(report) {
+      recoveryState = { report };
+      const cat = REPORT_CATEGORIES[report.category] || { label: report.category };
+      const affects = reportAffectsActiveRoute(report);
+      recoveryReportMeta.innerHTML =
+        '<div><strong>' + escapeHtml(cat.label) + '</strong></div>' +
+        '<div>Status: unverified · ' + escapeHtml(reportAgeLabel(report)) + '</div>' +
+        '<div>Location: ' + report.lat.toFixed(5) + ', ' + report.lon.toFixed(5) +
+          ' · ' + (report.locationSource === "gps" ? "GPS" : "on-route") + '</div>' +
+        '<div>Edge: ' + escapeHtml(report.edgeId || "not matched") + '</div>' +
+        '<div>Affects current route: ' + (affects ? "yes" : "no") + '</div>';
+      recoverySheet.classList.add("open");
+      recoverySheet.setAttribute("aria-hidden", "false");
+    }
+    function closeRecoverySheet() {
+      recoverySheet.classList.remove("open");
+      recoverySheet.setAttribute("aria-hidden", "true");
+    }
+
+    async function runRecovery(kind) {
+      const report = recoveryState && recoveryState.report;
+      if (!report) return;
+      if (kind === "end") {
+        closeRecoverySheet();
+        clearIncidentPreview();
+        stopNavigation();
+        setStatus("Stage ended from route report", "ok");
+        return;
+      }
+      setStatus("Finding a verified " + (kind === "backtrack" ? "backtrack" : kind === "return" ? "return" : "detour") + "…", "ok");
+      let result;
+      try {
+        if (kind === "around") result = await computeFindAround(report);
+        else if (kind === "backtrack") result = computeBacktrack(report);
+        else if (kind === "return") result = await computeReturnToNetwork(report);
+      } catch (err) {
+        console.error("recovery failed", err);
+        result = { fail: "Recovery failed · " + ((err && err.message) || "error") };
+      }
+      recoveryState = { report, kind, ...result };
+      showRecoveryConfirm();
+    }
+
+    function currentDestinationPoint() {
+      if (destination && Number.isFinite(destination.lng)) return { lng: destination.lng, lat: destination.lat };
+      const coords = activeRouteCoordinates();
+      if (coords.length >= 2) {
+        const last = coords[coords.length - 1];
+        return { lng: last[0], lat: last[1] };
+      }
+      return null;
+    }
+
+    async function routeApi(startPt, endPt, avoidEdgeIds) {
+      const res = await fetch(ROUTE_API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          profile: routePreference,
+          locations: [
+            { lat: startPt.lat, lon: startPt.lng, label: "A" },
+            { lat: endPt.lat, lon: endPt.lng, label: "B" }
+          ],
+          vehicle: "dual-sport-motorcycle",
+          accessPolicy: currentAccessPolicy(),
+          options: { matchLimitMeters: 250, avoidEdgeIds: avoidEdgeIds || [] }
+        })
+      });
+      return res.json();
+    }
+
+    // Item 4: Find a way around — server-enforced avoidance, preserves
+    // destination / profile / access policy, full verified route or failure.
+    async function computeFindAround(report) {
+      const startPt = riderPointForRecovery();
+      const destPt = currentDestinationPoint();
+      if (!startPt || !destPt) return { fail: "No verified start or destination for a detour." };
+      const avoid = report.edgeId ? [report.edgeId] : [];
+      const api = await routeApi(startPt, destPt, avoid);
+      if (api.status !== "complete") {
+        return { fail: REPORT_NO_ALTERNATE_COPY, api };
+      }
+      const candidate = mapApiRouteToActiveRoute(api);
+      const rejoin = computeRejoin(report, candidate);
+      const usedAvoided = (candidate.segments || []).some((s) => report.edgeId && String(s.edgeId) === String(report.edgeId));
+      return {
+        candidate,
+        api,
+        rejoin,
+        avoidedCoords: reportedSectionCoords(report),
+        label: rejoin.reliable
+          ? "Reported closure avoided. Rejoins original route in " + rejoin.rejoinKm.toFixed(1) + " km."
+          : "Reported section avoided. Verified detour to your destination.",
+        note: rejoin.reliable ? null
+          : "Automatic rejoining is not available yet — this is a full replacement route to your destination.",
+        warnAvoided: usedAvoided
+      };
+    }
+
+    // Downstream rejoin via shared authoritative edge identity (not geometry
+    // proximity). Reliable when the detour re-uses an original edge that lies
+    // past the reported point; otherwise reports rejoining as unavailable.
+    function computeRejoin(report, candidate) {
+      if (!activeRoute) return { reliable: false };
+      const origCoords = activeRouteCoordinates();
+      const reportAlong = origCoords.length >= 2
+        ? projectPointOnRoute({ lng: report.lon, lat: report.lat }, origCoords)
+        : null;
+      const origCum = segmentsWithCumulative(activeRoute.segments);
+      const downstream = new Set();
+      for (const s of origCum) {
+        if (!s.edgeId) continue;
+        if (!reportAlong || s.startKm >= reportAlong.alongKm - 0.02) downstream.add(String(s.edgeId));
+      }
+      const candCum = segmentsWithCumulative(candidate.segments);
+      for (const c of candCum) {
+        if (c.edgeId && downstream.has(String(c.edgeId))) {
+          return { reliable: true, rejoinKm: c.startKm, rejoinCoord: c.coords[0] || null };
+        }
+      }
+      return { reliable: false };
+    }
+
+    // The stretch of the original route right around the report (for the "this
+    // was avoided" red overlay). Never a straight line — clipped route geometry.
+    function reportedSectionCoords(report) {
+      const coords = activeRouteCoordinates();
+      if (coords.length < 2) return [];
+      const proj = projectPointOnRoute({ lng: report.lon, lat: report.lat }, coords);
+      if (!proj) return [];
+      const half = 0.15; // ~150 m either side
+      return sliceRouteByDistance(coords, Math.max(0, proj.alongKm - half), proj.alongKm + half);
+    }
+
+    // Item 5: Backtrack — reversed slice of the existing verified route back to
+    // the last junction/node. No straight line, no proximity stitch.
+    function computeBacktrack(report) {
+      const pos = riderPointForRecovery();
+      const coords = activeRouteCoordinates();
+      if (!pos || coords.length < 2) return { fail: "No route geometry to backtrack along." };
+      const proj = projectPointOnRoute(pos, coords);
+      if (!proj) return { fail: "Cannot locate you on the route to backtrack." };
+      const origCum = segmentsWithCumulative(activeRoute.segments);
+      let targetKm = 0;
+      for (const s of origCum) {
+        if (s.startKm < proj.alongKm - 0.01) targetKm = s.startKm;
+        else break;
+      }
+      const forward = sliceRouteByDistance(coords, targetKm, proj.alongKm);
+      if (forward.length < 2) return { fail: "You are already at the last junction." };
+      const geometry = forward.slice().reverse();
+      let km = 0;
+      for (let i = 1; i < geometry.length; i += 1) km += distanceKmCoords(geometry[i - 1], geometry[i]);
+      const nearClass = (nearestRouteSegment(pos) || {}).segment;
+      const candidate = {
+        kind: "service",
+        recovery: "backtrack",
+        routeId: activeRoute.routeId ? activeRoute.routeId + "-backtrack" : null,
+        coordinates: geometry,
+        segments: [{ trackClass: (nearClass && nearClass.trackClass) || "connector", coords: geometry, distanceKm: km, edgeId: null }],
+        distanceKm: km,
+        dirtKm: 0,
+        byClass: {},
+        byAccess: {},
+        unknownAccessKm: 0,
+        unknownAccessPercent: 0,
+        accessPolicy: currentAccessPolicy(),
+        warnings: [],
+        estimatedMovingSeconds: null
+      };
+      return {
+        candidate,
+        label: "Backtrack " + km.toFixed(1) + " km along your route to the last junction.",
+        note: null
+      };
+    }
+
+    // Item 6: Return to nearest verified network — route via the graph to the
+    // nearest reachable verified point on the original route, avoiding the
+    // reported edge. Clear failure if none; never an arbitrary connector.
+    async function computeReturnToNetwork(report) {
+      const pos = riderPointForRecovery();
+      const coords = activeRouteCoordinates();
+      if (!pos || coords.length < 2) return { fail: REPORT_NO_RETURN_COPY };
+      const reportAlong = projectPointOnRoute({ lng: report.lon, lat: report.lat }, coords);
+      // Prefer a target downstream of the report so we return ahead of it.
+      let target = null;
+      let bestKm = Infinity;
+      let traveled = 0;
+      for (let i = 0; i < coords.length; i += 1) {
+        if (i > 0) traveled += distanceKmCoords(coords[i - 1], coords[i]);
+        if (reportAlong && traveled < reportAlong.alongKm + 0.05) continue;
+        const d = distanceKmCoords([pos.lng, pos.lat], coords[i]);
+        if (d < bestKm) { bestKm = d; target = coords[i]; }
+      }
+      if (!target) target = coords[coords.length - 1];
+      const destPt = { lng: target[0], lat: target[1] };
+      const avoid = report.edgeId ? [report.edgeId] : [];
+      const api = await routeApi(pos, destPt, avoid);
+      if (api.status !== "complete") return { fail: REPORT_NO_RETURN_COPY, api };
+      const candidate = mapApiRouteToActiveRoute(api);
+      const rejoin = computeRejoin(report, candidate);
+      return {
+        candidate,
+        api,
+        rejoin,
+        avoidedCoords: reportedSectionCoords(report),
+        label: rejoin.reliable
+          ? "Return to the verified network. Rejoins original route in " + rejoin.rejoinKm.toFixed(1) + " km."
+          : "Return route to the nearest verified network point.",
+        note: rejoin.reliable ? null : "Automatic rejoining is not available yet — this route returns you to the verified network."
+      };
+    }
+
+    // ---- Confirmation step (items 4/7: preview, then confirm) -----------
+    function showRecoveryConfirm() {
+      const st = recoveryState;
+      if (st.fail) {
+        recoveryConfirmBody.innerHTML = '<div class="rc-fail">' + escapeHtml(st.fail) + '</div>';
+        recoveryConfirmApply.style.display = "none";
+        recoveryConfirmCancel.textContent = "Back";
+        clearIncidentPreview();
+      } else {
+        let html = '<div class="rc-label">' + escapeHtml(st.label || "Replacement route ready.") + '</div>';
+        if (st.candidate && st.candidate.distanceKm != null) {
+          html += '<div class="rc-note">New route: ' + st.candidate.distanceKm.toFixed(st.candidate.distanceKm >= 10 ? 1 : 2) + ' km. Your current route is kept until you apply.</div>';
+        }
+        if (st.note) html += '<div class="rc-note">' + escapeHtml(st.note) + '</div>';
+        recoveryConfirmBody.innerHTML = html;
+        recoveryConfirmApply.style.display = "";
+        recoveryConfirmCancel.textContent = "Keep current route";
+        drawIncidentPreview(st);
+      }
+      recoveryConfirmSheet.classList.add("open");
+      recoveryConfirmSheet.setAttribute("aria-hidden", "false");
+    }
+    function closeRecoveryConfirm() {
+      recoveryConfirmSheet.classList.remove("open");
+      recoveryConfirmSheet.setAttribute("aria-hidden", "true");
+    }
+
+    function applyRecovery() {
+      const st = recoveryState;
+      if (!st || !st.candidate) return;
+      // Only now — after explicit confirmation — do we replace the active route.
+      activeRoute = st.candidate;
+      const coords = activeRouteCoordinates();
+      if (coords.length) {
+        const end = coords[coords.length - 1];
+        destination = { lng: end[0], lat: end[1] };
+      }
+      navManeuvers = buildNavManeuvers(coords);
+      lastSpokenCueKey = "";
+      clearIncidentPreview();
+      // "here" mode renders the active route (now the replacement) itself with
+      // per-surface colors. In plan mode the draft renders stages, so keep the
+      // applied replacement visible on its own source instead.
+      if (typeof plannerTab !== "undefined" && plannerTab !== "here") {
+        setIncidentSource("incidentApplied", [lineFeature(coords, { role: "applied" })]);
+      } else {
+        setIncidentSource("incidentApplied", []);
+      }
+      refreshRouteDraft();
+      if (typeof syncOverviewRoute === "function") { try { syncOverviewRoute(); } catch (_) {} }
+      updateNavGuidance();
+      ensureRiderOnTop();
+      closeRecoveryConfirm();
+      closeRecoverySheet();
+      setStatus("Replacement route applied · reported section avoided", "ok");
+    }
+
+    // ---- Incident preview + report map layer (items 7/8) ----------------
+    function lineFeature(coords, props) {
+      return { type: "Feature", geometry: { type: "LineString", coordinates: coords }, properties: props || {} };
+    }
+    function pointFeature(coord, props) {
+      return { type: "Feature", geometry: { type: "Point", coordinates: coord }, properties: props || {} };
+    }
+    function setIncidentSource(id, features) {
+      const src = map.getSource(id);
+      if (src) src.setData({ type: "FeatureCollection", features: features || [] });
+    }
+    function drawIncidentPreview(st) {
+      const feats = [];
+      if (st.candidate) feats.push(lineFeature(activeRouteCoordinatesOf(st.candidate), { role: "preview" }));
+      if (st.avoidedCoords && st.avoidedCoords.length >= 2) feats.push(lineFeature(st.avoidedCoords, { role: "avoid" }));
+      setIncidentSource("incidentPreview", feats);
+      const pts = [];
+      if (st.rejoin && st.rejoin.reliable && st.rejoin.rejoinCoord) pts.push(pointFeature(st.rejoin.rejoinCoord, { role: "rejoin" }));
+      if (st.report) pts.push(pointFeature([st.report.lon, st.report.lat], { role: "report-focus" }));
+      setIncidentSource("incidentPoints", pts);
+    }
+    function clearIncidentPreview() {
+      setIncidentSource("incidentPreview", []);
+      setIncidentSource("incidentPoints", []);
+    }
+    function clearIncidentRecoveryUI() {
+      clearIncidentPreview();
+      setIncidentSource("incidentApplied", []);
+      closeReportSheet();
+      closeRecoverySheet();
+      closeRecoveryConfirm();
+      recoveryState = null;
+    }
+    function activeRouteCoordinatesOf(route) {
+      if (!route) return [];
+      if (Array.isArray(route.coordinates) && route.coordinates.length >= 2) return route.coordinates;
+      const coords = [];
+      for (const seg of route.segments || []) {
+        for (const c of (seg.coords || seg.geometry || [])) {
+          const prev = coords[coords.length - 1];
+          if (!prev || prev[0] !== c[0] || prev[1] !== c[1]) coords.push(c);
+        }
+      }
+      return coords;
+    }
+
+    function reportMarkerFeatures(reports) {
+      return reports.map((r) => pointFeature([r.lon, r.lat], {
+        id: r.id,
+        category: r.category,
+        status: effectiveReportStatus(r)
+      }));
+    }
+
+    // Visibility gate (item 8): zoomed-in OR near corridor OR explicitly enabled.
+    // Local session reports only — never a province-wide preload.
+    function computeVisibleReports() {
+      const zoom = map.getZoom();
+      const routeCoords = (activeRoute && activeRouteCoordinates()) || [];
+      return sessionReports.filter((r) => {
+        if (reportsForced) return true;
+        if (zoom >= REPORT_DETAIL_ZOOM) return true;
+        if (routeCoords.length >= 2) {
+          const proj = projectPointOnRoute({ lng: r.lon, lat: r.lat }, routeCoords);
+          if (proj && proj.distanceKm <= REPORT_CORRIDOR_KM) return true;
+        }
+        return false;
+      });
+    }
+    function refreshReportLayer() {
+      setIncidentSource("reportMarkers", reportMarkerFeatures(computeVisibleReports()));
+    }
+
+    function openReportPopup(report, lngLat) {
+      const cat = REPORT_CATEGORIES[report.category] || { label: report.category, color: "#555" };
+      const status = effectiveReportStatus(report);
+      const affects = reportAffectsActiveRoute(report);
+      const rows =
+        '<div class="poi-pop-row"><dt>Status</dt><dd>' + escapeHtml(status) + '</dd></div>' +
+        '<div class="poi-pop-row"><dt>Age</dt><dd>' + escapeHtml(reportAgeLabel(report)) + '</dd></div>' +
+        '<div class="poi-pop-row"><dt>Affects route</dt><dd>' + (affects ? "yes" : "no") + '</dd></div>' +
+        '<div class="poi-pop-row"><dt>Confirmations</dt><dd>' + (report.confirmations || 0) + '</dd></div>';
+      const html =
+        '<div class="poi-pop">' +
+          '<div class="poi-pop-head">' +
+            '<span class="poi-pop-dot" style="background:' + (cat.color || "#555") + '"></span>' +
+            '<span class="poi-pop-cat">Rider report</span>' +
+          '</div>' +
+          '<div class="poi-pop-name">' + escapeHtml(cat.label) + '</div>' +
+          '<dl class="poi-pop-rows">' + rows + '</dl>' +
+          '<div class="poi-pop-src">Source: rider report · unverified community data</div>' +
+        '</div>';
+      new maplibregl.Popup({ offset: 16, closeButton: true, maxWidth: "260px", className: "poi-popup" })
+        .setLngLat(lngLat)
+        .setHTML(html)
+        .addTo(map);
+    }
+
+    // Called from the main map click handler BEFORE route placement so a report
+    // tap never drops a route point (interaction safety, item 10).
+    function handleReportClick(e) {
+      if (!map.getLayer("report-marker")) return false;
+      const r = 10;
+      const box = [[e.point.x - r, e.point.y - r], [e.point.x + r, e.point.y + r]];
+      let feats = map.queryRenderedFeatures(box, { layers: ["report-marker"] });
+      if (!feats.length) feats = map.queryRenderedFeatures(e.point, { layers: ["report-marker"] });
+      if (!feats.length) return false;
+      const id = feats[0].properties && feats[0].properties.id;
+      const report = sessionReports.find((x) => x.id === id);
+      if (!report) return false;
+      openReportPopup(report, feats[0].geometry.coordinates.slice());
+      return true;
+    }
+
+    function initIncidentLayers() {
+      if (!map || map.getSource("reportMarkers")) return;
+      map.addSource("incidentApplied", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+      map.addSource("incidentPreview", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+      map.addSource("incidentPoints", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+      map.addSource("reportMarkers", { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+
+      map.addLayer({
+        id: "incident-applied-line",
+        type: "line",
+        source: "incidentApplied",
+        paint: { "line-color": "#dc6803", "line-width": 7, "line-opacity": 0.98 }
+      });
+      map.addLayer({
+        id: "incident-preview-line",
+        type: "line",
+        source: "incidentPreview",
+        filter: ["==", ["get", "role"], "preview"],
+        paint: { "line-color": "#0891b2", "line-width": 6, "line-opacity": 0.95, "line-dasharray": [1.4, 1] }
+      });
+      map.addLayer({
+        id: "incident-avoid-line",
+        type: "line",
+        source: "incidentPreview",
+        filter: ["==", ["get", "role"], "avoid"],
+        paint: { "line-color": "#d22730", "line-width": 6, "line-opacity": 0.9, "line-dasharray": [1, 1] }
+      });
+      map.addLayer({
+        id: "incident-rejoin-point",
+        type: "circle",
+        source: "incidentPoints",
+        filter: ["==", ["get", "role"], "rejoin"],
+        paint: { "circle-radius": 7, "circle-color": "#0891b2", "circle-stroke-color": "#ffffff", "circle-stroke-width": 2 }
+      });
+      map.addLayer({
+        id: "incident-report-focus",
+        type: "circle",
+        source: "incidentPoints",
+        filter: ["==", ["get", "role"], "report-focus"],
+        paint: { "circle-radius": 8, "circle-color": "#d22730", "circle-stroke-color": "#ffffff", "circle-stroke-width": 2, "circle-opacity": 0.85 }
+      });
+
+      const colorMatch = ["match", ["get", "category"]];
+      for (const [key, cfg] of Object.entries(REPORT_CATEGORIES)) colorMatch.push(key, cfg.color);
+      colorMatch.push("#6b7078");
+      map.addLayer({
+        id: "report-marker",
+        type: "circle",
+        source: "reportMarkers",
+        paint: {
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 11, 6, 16, 10],
+          "circle-color": colorMatch,
+          "circle-stroke-color": "#ffffff",
+          "circle-stroke-width": 2.4,
+          "circle-opacity": ["match", ["get", "status"], "expired", 0.4, "dismissed", 0.35, 0.95]
+        }
+      });
+      map.addLayer({
+        id: "report-marker-glyph",
+        type: "symbol",
+        source: "reportMarkers",
+        layout: {
+          "text-field": "!",
+          "text-font": ["Noto Sans Regular"],
+          "text-size": ["interpolate", ["linear"], ["zoom"], 11, 9, 16, 13],
+          "text-allow-overlap": true,
+          "text-ignore-placement": true
+        },
+        paint: { "text-color": "#ffffff" }
+      });
+      map.on("mouseenter", "report-marker", () => { map.getCanvas().style.cursor = "pointer"; });
+      map.on("mouseleave", "report-marker", () => { map.getCanvas().style.cursor = ""; });
+      ensureRiderOnTop();
+    }
+
+    async function loadPersistedReports() {
+      try {
+        const all = await ReportPersistence.all();
+        sessionReports = Array.isArray(all) ? all : [];
+        // Persist freshness transitions so expired reports stop being unverified.
+        for (const r of sessionReports) {
+          const eff = effectiveReportStatus(r);
+          if (eff !== r.status) { r.status = eff; ReportPersistence.update(r).catch(() => {}); }
+        }
+      } catch (_) { sessionReports = []; }
+      refreshReportLayer();
+    }
+
+    // Wire everything up. All report/recovery controls stop propagation so they
+    // never reach the map (no route points, POI untouched — item 10).
+    function stop(e) { e.stopPropagation(); }
+    [reportSheet, recoverySheet, recoveryConfirmSheet].forEach((el) => {
+      if (!el) return;
+      el.addEventListener("click", (e) => {
+        e.stopPropagation();
+        // Tap on the dim backdrop closes the sheet.
+        if (e.target === el) {
+          if (el === reportSheet) closeReportSheet();
+          else if (el === recoverySheet) closeRecoverySheet();
+          else closeRecoveryConfirm();
+        }
+      });
+      el.addEventListener("pointerdown", stop);
+      el.addEventListener("mousedown", stop);
+      el.addEventListener("touchstart", stop, { passive: true });
+    });
+    if (navReportBtn) navReportBtn.addEventListener("click", (e) => { e.stopPropagation(); openReportSheet(); });
+    if (reportCancel) reportCancel.addEventListener("click", (e) => { e.stopPropagation(); closeReportSheet(); });
+    if (reportCatGrid) {
+      reportCatGrid.addEventListener("click", (e) => {
+        const btn = e.target.closest("[data-report-cat]");
+        if (!btn) return;
+        e.stopPropagation();
+        submitReport(btn.dataset.reportCat);
+      });
+    }
+    if (recoveryClose) recoveryClose.addEventListener("click", (e) => { e.stopPropagation(); closeRecoverySheet(); });
+    if (recoverySheet) {
+      recoverySheet.addEventListener("click", (e) => {
+        const btn = e.target.closest("[data-recovery]");
+        if (!btn) return;
+        e.stopPropagation();
+        runRecovery(btn.dataset.recovery);
+      });
+    }
+    if (recoveryConfirmApply) recoveryConfirmApply.addEventListener("click", (e) => { e.stopPropagation(); applyRecovery(); });
+    if (recoveryConfirmCancel) {
+      recoveryConfirmCancel.addEventListener("click", (e) => {
+        e.stopPropagation();
+        clearIncidentPreview();
+        closeRecoveryConfirm();
+        // Original route was never discarded — reopen the recovery choices.
+        if (recoveryState && recoveryState.report) openRecoverySheet(recoveryState.report);
+      });
+    }
+    if (reportVisBtn) {
+      reportVisBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        reportsForced = !reportsForced;
+        reportVisBtn.classList.toggle("is-active", reportsForced);
+        reportVisBtn.setAttribute("aria-pressed", reportsForced ? "true" : "false");
+        refreshReportLayer();
+        setStatus(reportsForced ? "Rider reports shown" : "Rider reports follow zoom / route", "ok");
+      });
+    }
+
+    map.on("load", () => {
+      initIncidentLayers();
+      loadPersistedReports();
+    });
+    map.on("moveend", refreshReportLayer);
+    map.on("zoomend", refreshReportLayer);
   </script>
 </body>
 </html>

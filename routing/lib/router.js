@@ -115,17 +115,21 @@ function edgeCandidateIndexes(runtime, lng, lat, radiusMeters) {
   return out;
 }
 
-function matchPoint(runtime, location, policy, matchMeters) {
+function matchPoint(runtime, location, policy, matchMeters, avoidEdgeIds) {
   const enums = runtime.enums;
   const point = [Number(location.lon ?? location.lng), Number(location.lat)];
   if (!Number.isFinite(point[0]) || !Number.isFinite(point[1])) {
     return { ok: false, reason: "invalid_location" };
   }
+  const avoid = avoidEdgeIds instanceof Set ? avoidEdgeIds : null;
   const candidates = edgeCandidateIndexes(runtime, point[0], point[1], matchMeters);
   let best = null;
   for (const index of candidates) {
     const edge = runtime.data.edges[index];
     if (!accessAllowed(edge.ac, policy, enums)) continue;
+    // Never snap onto a reported/avoided edge — the recovery route must start
+    // from an eligible verified edge, not the closure the rider reported.
+    if (avoid && avoid.has(String(edge.i))) continue;
     const coords = edge.g;
     let along = 0;
     for (let i = 1; i < coords.length; i += 1) {
@@ -307,10 +311,19 @@ async function routeRequest(body = {}) {
     ? matchMeters
     : DEFAULT_MATCH_METERS;
 
+  // Optional server-enforced avoidance (route incident recovery). Edge IDs are
+  // excluded from snapping AND from graph traversal. This is never a browser
+  // filter of a returned route — the alternate is computed without these edges.
+  const avoidEdgeIds = new Set(
+    (Array.isArray(options.avoidEdgeIds) ? options.avoidEdgeIds : [])
+      .filter((id) => id != null)
+      .map((id) => String(id))
+  );
+
   const start = locations[0];
   const end = locations[locations.length - 1];
-  const startMatch = matchPoint(runtime, start, policy, limit);
-  const endMatch = matchPoint(runtime, end, policy, limit);
+  const startMatch = matchPoint(runtime, start, policy, limit, avoidEdgeIds);
+  const endMatch = matchPoint(runtime, end, policy, limit, avoidEdgeIds);
 
   if (!startMatch.ok || !endMatch.ok) {
     return {
@@ -374,7 +387,7 @@ async function routeRequest(body = {}) {
     };
   }
 
-  const path = findPath(runtime, startMatch, endMatch, profile, policy);
+  const path = findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds);
   if (!path) {
     return {
       status: "failed",
@@ -395,6 +408,7 @@ async function routeRequest(body = {}) {
         endAccessClass: endMatch.accessClass,
         componentId: startMatch.componentId,
         matchLimitMeters: limit,
+        avoidedEdgeIds: Array.from(avoidEdgeIds),
         fallback: null
       },
       maneuvers: [],
@@ -429,6 +443,15 @@ async function routeRequest(body = {}) {
       message: "Start/end were snapped onto the graph. Access distances are reported separately and are not free-space connectors through unmapped land."
     });
   }
+  if (avoidEdgeIds.size > 0) {
+    const usedAvoided = path.segments.some((seg) => avoidEdgeIds.has(String(seg.edgeId)));
+    warnings.push({
+      code: "avoided_edges",
+      message: avoidEdgeIds.size + " reported edge(s) were excluded from routing server-side.",
+      avoidedEdgeIds: Array.from(avoidEdgeIds),
+      containedAvoidedEdge: usedAvoided
+    });
+  }
 
   return {
     status: "complete",
@@ -453,6 +476,7 @@ async function routeRequest(body = {}) {
       endAccessClass: endMatch.accessClass,
       componentId: startMatch.componentId,
       matchLimitMeters: limit,
+      avoidedEdgeIds: Array.from(avoidEdgeIds),
       engine: "dirt-node-astar",
       fallback: null,
       graph: {
@@ -464,9 +488,10 @@ async function routeRequest(body = {}) {
   };
 }
 
-function findPath(runtime, startMatch, endMatch, profile, policy) {
+function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds) {
   const { data, adjacency, enums } = runtime;
   const edges = data.edges;
+  const avoid = avoidEdgeIds instanceof Set ? avoidEdgeIds : null;
 
   // Virtual nodes: start = n, end = n+1
   const n = data.nodeCount;
@@ -565,6 +590,9 @@ function findPath(runtime, startMatch, endMatch, profile, policy) {
       for (const idx of adjacency[node]) {
         const edge = edges[idx];
         if (!accessAllowed(edge.ac, policy, enums)) continue;
+        // Server-enforced incident avoidance: the reported edge is removed from
+        // the traversable graph, so the alternate cannot use it.
+        if (avoid && avoid.has(String(edge.i))) continue;
         const other = edge.a === node ? edge.b : edge.a;
         const forward = edge.a === node;
         out.push({
