@@ -1,0 +1,21 @@
+{
+  "generatedAt": "2026-07-15T01:47:36.162Z",
+  "schemaVersion": "2a-2",
+  "nodeCount": 295920,
+  "edgeCount": 300582,
+  "accessCounts": {
+    "motorized_unknown": 155363,
+    "motorized_permissive": 144383,
+    "motorized_restricted": 836
+  },
+  "surfaceCounts": {
+    "track": 155869,
+    "paved": 68970,
+    "gravel": 37828,
+    "access": 37913,
+    "unknown": 2
+  },
+  "jsonBytes": 250117528,
+  "gzBytes": 53501268,
+  "outFile": "routing/data/ns-graph.v1.json.gz"
+}
