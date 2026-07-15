@@ -1,0 +1,9 @@
+data-raw
+.git
+.temp
+temp
+*.osm.pbf
+*.gpkg
+node_modules
+.DS_Store
+.env.local

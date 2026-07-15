@@ -35,7 +35,7 @@ export default async function handler(req, res) {
 
   try {
     const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
-    const result = routeRequest(body);
+    const result = await routeRequest(body);
     const code = result.status === "complete" ? 200 : (result.status === "error" ? 400 : 422);
     return res.status(code).json(result);
   } catch (err) {

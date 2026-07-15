@@ -1,6 +1,6 @@
 "use strict";
 
-const { loadGraph } = require("./graph");
+const { loadGraph, loadGraphAsync } = require("./graph");
 
 const DEFAULT_MATCH_METERS = 250;
 const EARTH_M = 6371000;
@@ -269,8 +269,8 @@ function normalizePolicy(input) {
   };
 }
 
-function routeRequest(body = {}) {
-  const runtime = loadGraph();
+async function routeRequest(body = {}) {
+  const runtime = await loadGraphAsync();
   const enums = runtime.enums;
   const profile = String(body.profile || "balanced").toLowerCase();
   if (!["direct", "balanced", "dirt", "cleanest"].includes(profile)) {

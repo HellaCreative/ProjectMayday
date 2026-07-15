@@ -5,7 +5,7 @@
     "api/route.js": {
       "memory": 2048,
       "maxDuration": 60,
-      "includeFiles": "routing/**"
+      "includeFiles": "routing/lib/**"
     }
   },
   "headers": [

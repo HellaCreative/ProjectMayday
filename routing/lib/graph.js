@@ -3,17 +3,89 @@
 const fs = require("fs");
 const path = require("path");
 const zlib = require("zlib");
+const https = require("https");
+const http = require("http");
 
 const DEFAULT_GRAPH_PATH = path.join(__dirname, "..", "data", "ns-graph.v1.json.gz");
 
 let cached = null;
+let loadingPromise = null;
 
-function loadGraph(graphPath = process.env.ROUTING_GRAPH_PATH || DEFAULT_GRAPH_PATH) {
+function fetchBuffer(url) {
+  return new Promise((resolve, reject) => {
+    const lib = url.startsWith("https") ? https : http;
+    lib.get(url, (res) => {
+      if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        fetchBuffer(res.headers.location).then(resolve, reject);
+        return;
+      }
+      if (res.statusCode !== 200) {
+        reject(new Error("Graph fetch HTTP " + res.statusCode + " for " + url));
+        return;
+      }
+      const chunks = [];
+      res.on("data", (c) => chunks.push(c));
+      res.on("end", () => resolve(Buffer.concat(chunks)));
+      res.on("error", reject);
+    }).on("error", reject);
+  });
+}
+
+function inflateGraphBuffer(buf) {
+  // Accept gzip bytes or raw JSON.
+  if (buf.length >= 2 && buf[0] === 0x1f && buf[1] === 0x8b) {
+    return JSON.parse(zlib.gunzipSync(buf).toString("utf8"));
+  }
+  return JSON.parse(buf.toString("utf8"));
+}
+
+function loadGraphSync(graphPath = process.env.ROUTING_GRAPH_PATH || DEFAULT_GRAPH_PATH) {
   if (cached && cached.path === graphPath) return cached.runtime;
 
   const started = Date.now();
-  const raw = zlib.gunzipSync(fs.readFileSync(graphPath));
-  const data = JSON.parse(raw.toString("utf8"));
+  let data;
+  if (graphPath.startsWith("http://") || graphPath.startsWith("https://")) {
+    throw new Error("Use loadGraphAsync for remote graph URLs");
+  }
+  const raw = fs.readFileSync(graphPath);
+  data = inflateGraphBuffer(raw);
+  return materializeRuntime(graphPath, data, started);
+}
+
+async function loadGraphAsync(graphPath = process.env.ROUTING_GRAPH_PATH || DEFAULT_GRAPH_PATH) {
+  if (cached && cached.path === graphPath) return cached.runtime;
+  if (loadingPromise) return loadingPromise;
+
+  loadingPromise = (async () => {
+    const started = Date.now();
+    let data;
+    if (graphPath.startsWith("http://") || graphPath.startsWith("https://")) {
+      const buf = await fetchBuffer(graphPath);
+      data = inflateGraphBuffer(buf);
+    } else if (fs.existsSync(graphPath)) {
+      data = inflateGraphBuffer(fs.readFileSync(graphPath));
+    } else {
+      // On Vercel Hobby, prefer the static asset so the function bundle stays small.
+      const base = process.env.VERCEL_URL ? ("https://" + process.env.VERCEL_URL) : "";
+      const remote = process.env.ROUTING_GRAPH_URL || (base + "/routing/data/ns-graph.v1.json.gz");
+      if (!remote.startsWith("http")) {
+        throw new Error("Routing graph not found at " + graphPath);
+      }
+      const buf = await fetchBuffer(remote);
+      data = inflateGraphBuffer(buf);
+      return materializeRuntime(remote, data, started);
+    }
+    return materializeRuntime(graphPath, data, started);
+  })();
+
+  try {
+    return await loadingPromise;
+  } finally {
+    loadingPromise = null;
+  }
+}
+
+function materializeRuntime(graphPath, data, started) {
 
   const adjacency = Array.from({ length: data.nodeCount }, () => []);
   for (let index = 0; index < data.edges.length; index += 1) {
@@ -67,8 +139,20 @@ function loadGraph(graphPath = process.env.ROUTING_GRAPH_PATH || DEFAULT_GRAPH_P
   return runtime;
 }
 
-function clearGraphCache() {
-  cached = null;
+function loadGraph(graphPath) {
+  // Sync path for local fixture tests.
+  return loadGraphSync(graphPath);
 }
 
-module.exports = { loadGraph, clearGraphCache, DEFAULT_GRAPH_PATH };
+function clearGraphCache() {
+  cached = null;
+  loadingPromise = null;
+}
+
+module.exports = {
+  loadGraph,
+  loadGraphSync,
+  loadGraphAsync,
+  clearGraphCache,
+  DEFAULT_GRAPH_PATH
+};
