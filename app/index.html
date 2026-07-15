@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#f7f9fb" />
-  <title>DIRT. Map</title>
+  <title>DIRT. MAYDAY.</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23f7f9fb'/%3E%3Cpath d='M12 42h40' stroke='%230a66c2' stroke-width='7' stroke-linecap='round'/%3E%3Cpath d='M16 24h32' stroke='%23162433' stroke-width='7' stroke-linecap='round'/%3E%3C/svg%3E" />
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
   <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
@@ -29,7 +29,10 @@
       --route: #ffb000;
       --route-dark: #111820;
       --mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace;
-      --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+      --sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", Helvetica, Arial, sans-serif;
+      --radius: 8px;
+      --brand-dot: #ff9500;
+      --navy: #162433;
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -51,33 +54,49 @@
 
     .topbar-left {
       display: flex;
-      flex-direction: column;
-      align-items: flex-start;
-      gap: 8px;
+      flex-direction: row;
+      align-items: center;
+      gap: 10px;
       pointer-events: auto;
     }
 
     .brand {
       pointer-events: auto;
-      font-family: var(--mono);
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 1px;
+      text-decoration: none;
+      color: var(--navy);
+      background: var(--panel);
+      border: 1px solid var(--navy);
+      border-radius: var(--radius);
+      padding: 5px 9px;
+      backdrop-filter: blur(8px);
+      white-space: nowrap;
+      line-height: 1.05;
+    }
+    .brand-dirt {
+      font-family: var(--sans);
       font-weight: 700;
       font-size: 1.02rem;
-      letter-spacing: 0.04em;
-      text-decoration: none;
-      color: var(--text);
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 14px;
-      padding: 10px 14px;
-      backdrop-filter: blur(12px);
-      white-space: nowrap;
+      letter-spacing: 0.01em;
+      color: var(--navy);
     }
-    .brand span { color: var(--accent); }
+    .brand-dirt span { color: var(--brand-dot); }
+    .brand-by {
+      font-family: var(--sans);
+      font-weight: 700;
+      font-size: 0.44rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--navy);
+    }
 
     .btn.mini {
       width: 42px;
       height: 42px;
-      border-radius: 12px;
+      border-radius: var(--radius);
     }
     .btn.mini[aria-expanded="true"],
     .route-toggle[aria-expanded="true"] {
@@ -90,54 +109,57 @@
     .status-dock {
       position: absolute;
       left: 12px;
-      bottom: max(36px, calc(env(safe-area-inset-bottom) + 28px));
+      bottom: max(10px, calc(env(safe-area-inset-bottom) + 8px));
       z-index: 18;
-      max-width: min(220px, calc(100vw - 96px));
+      max-width: min(280px, calc(100vw - 72px));
       pointer-events: none;
     }
     .status {
+      display: none;
       font-family: var(--mono);
       font-size: 0.58rem;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      text-transform: none;
       color: var(--muted);
       line-height: 1.35;
       margin: 0;
       padding: 0;
       background: none;
       border: 0;
-      text-shadow: 0 1px 2px rgba(247, 249, 251, 0.9);
     }
+    body.debug-ui .status { display: block; }
     .status.ok { color: var(--accent); }
     .status.error { color: #c1122f; }
     .meta {
+      display: none;
       font-family: var(--mono);
-      font-size: 0.52rem;
-      letter-spacing: 0.05em;
-      text-transform: uppercase;
-      color: rgba(83, 97, 112, 0.78);
+      font-size: 0.5rem;
+      letter-spacing: 0.02em;
+      text-transform: none;
+      color: rgba(13, 33, 62, 0.72);
       line-height: 1.35;
-      margin-top: 4px;
+      margin-top: 0;
       padding: 0;
       background: none;
       border: 0;
-      text-shadow: 0 1px 2px rgba(247, 249, 251, 0.9);
     }
+    body.debug-ui .meta { display: block; }
+    .meta:empty { display: none; }
 
     .stack {
       position: absolute;
       right: 12px;
-      bottom: max(88px, calc(env(safe-area-inset-bottom) + 80px));
+      bottom: max(72px, calc(env(safe-area-inset-bottom) + 64px));
       z-index: 20;
       display: flex;
       flex-direction: column;
       gap: 10px;
     }
     .btn.view-mode {
-      font-family: var(--mono);
+      font-family: var(--sans);
       font-size: 0.72rem;
       font-weight: 700;
-      letter-spacing: 0.06em;
+      letter-spacing: 0;
     }
     .btn.view-mode.on {
       background: var(--route-dark);
@@ -145,11 +167,11 @@
       border-color: transparent;
     }
     .btn.cue-mode {
-      font-family: var(--mono);
+      font-family: var(--sans);
       font-size: 0.58rem;
       font-weight: 700;
-      letter-spacing: 0.04em;
-      line-height: 1.1;
+      letter-spacing: 0;
+      line-height: 1.05;
       text-align: center;
       padding: 4px;
     }
@@ -184,17 +206,17 @@
     }
 
     .btn {
-      width: 52px;
-      height: 52px;
-      border-radius: 16px;
-      border: 1px solid var(--line);
+      width: 42px;
+      height: 42px;
+      border-radius: var(--radius);
+      border: 1px solid var(--navy);
       background: var(--panel);
-      backdrop-filter: blur(12px);
+      backdrop-filter: blur(8px);
       color: var(--text);
       display: grid;
       place-items: center;
       cursor: pointer;
-      font-size: 1.1rem;
+      font-size: 1.05rem;
     }
     .btn.primary { background: var(--accent); border-color: transparent; color: #fff; }
     .btn:active { transform: scale(0.96); }
@@ -202,22 +224,23 @@
     .legend {
       position: absolute;
       left: 12px;
-      top: calc(max(12px, env(safe-area-inset-top)) + 148px);
+      top: calc(max(12px, env(safe-area-inset-top)) + 62px);
       z-index: 19;
       background: var(--panel);
       border: 1px solid var(--line);
-      border-radius: 12px;
-      padding: 10px 12px;
-      backdrop-filter: blur(12px);
-      font-family: var(--mono);
-      font-size: 0.65rem;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: var(--muted);
-      min-width: 160px;
-      max-height: calc(100vh - 280px);
+      border-radius: var(--radius);
+      padding: 12px 12px 10px;
+      backdrop-filter: blur(10px);
+      font-family: var(--sans);
+      font-size: 0.84rem;
+      letter-spacing: 0;
+      text-transform: none;
+      color: var(--text);
+      width: min(220px, calc(100vw - 84px));
+      max-height: calc(100vh - 180px);
       overflow: auto;
       transition: transform 200ms ease, opacity 200ms ease;
+      box-shadow: 0 8px 24px rgba(22, 36, 51, 0.08);
     }
     .legend.collapsed {
       transform: translateX(calc(-100% - 24px));
@@ -231,9 +254,12 @@
     }
     .legend-title {
       display: block;
-      margin-bottom: 7px;
-      color: var(--text);
-      font-size: 0.62rem;
+      margin-bottom: 8px;
+      color: var(--muted);
+      font-size: 0.68rem;
+      font-weight: 700;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
     }
     .legend-row {
       display: flex;
@@ -292,18 +318,91 @@
 
     .route-card {
       position: absolute;
-      top: calc(max(12px, env(safe-area-inset-top)) + 66px);
+      top: calc(max(12px, env(safe-area-inset-top)) + 62px);
       right: 12px;
       z-index: 20;
-      width: min(312px, calc(100vw - 24px));
+      width: min(300px, calc(100vw - 72px));
       background: var(--panel);
       border: 1px solid var(--line);
-      border-radius: 12px;
+      border-radius: var(--radius);
       padding: 10px;
-      backdrop-filter: blur(12px);
+      backdrop-filter: blur(10px);
       color: var(--text);
+      box-shadow: 0 8px 24px rgba(22, 36, 51, 0.1);
     }
     .route-card.collapsed { display: none; }
+    .route-warn {
+      margin-top: 8px;
+      font-size: 0.72rem;
+      line-height: 1.35;
+      color: #c1122f;
+    }
+    .route-warn:empty { display: none; }
+    .route-mini {
+      position: absolute;
+      right: 12px;
+      top: calc(max(12px, env(safe-area-inset-top)) + 62px);
+      z-index: 20;
+      display: none;
+      flex-direction: column;
+      gap: 8px;
+      padding: 8px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      backdrop-filter: blur(10px);
+      box-shadow: 0 8px 24px rgba(22, 36, 51, 0.1);
+      width: min(220px, calc(100vw - 84px));
+    }
+    .route-mini.visible { display: flex; }
+    .route-mini-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .route-mini select,
+    .route-mini button {
+      min-height: 36px;
+      border-radius: var(--radius);
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 0.78rem;
+      font-weight: 600;
+      padding: 0 10px;
+      cursor: pointer;
+    }
+    .route-mini select {
+      flex: 1;
+      min-width: 0;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5 6 6.5 11 1.5' fill='none' stroke='%23162433' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 10px center;
+      padding-right: 28px;
+    }
+    .route-mini .mini-nav,
+    .route-mini .mini-export {
+      width: 100%;
+    }
+    .route-mini .mini-nav {
+      background: var(--navy);
+      color: #fff;
+      border-color: transparent;
+    }
+    .route-mini .mini-export {
+      background: var(--accent);
+      color: #fff;
+      border-color: transparent;
+    }
+    .route-mini .mini-clear {
+      width: 36px;
+      flex: 0 0 36px;
+      padding: 0;
+      font-size: 1.1rem;
+      font-weight: 500;
+    }
     .route-segment {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -319,10 +418,11 @@
       min-height: 34px;
       background: transparent;
       color: var(--muted);
-      font-family: var(--mono);
-      font-size: 0.68rem;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
+      font-family: var(--sans);
+      font-size: 0.78rem;
+      letter-spacing: 0;
+      text-transform: none;
+      font-weight: 600;
       cursor: pointer;
     }
     .route-mode.active {
@@ -345,10 +445,11 @@
       min-height: 30px;
       background: transparent;
       color: var(--muted);
-      font-family: var(--mono);
-      font-size: 0.62rem;
-      letter-spacing: 0.06em;
-      text-transform: uppercase;
+      font-family: var(--sans);
+      font-size: 0.72rem;
+      letter-spacing: 0;
+      text-transform: none;
+      font-weight: 600;
       cursor: pointer;
     }
     .route-pref.active {
@@ -364,18 +465,26 @@
     }
     .route-status {
       min-width: 0;
-      font-family: var(--mono);
-      font-size: 0.67rem;
-      letter-spacing: 0.07em;
-      text-transform: uppercase;
+      font-family: var(--sans);
+      font-size: 0.78rem;
+      letter-spacing: 0;
+      text-transform: none;
       color: var(--muted);
       line-height: 1.35;
     }
     .route-status strong {
       display: block;
       color: var(--text);
-      font-size: 0.82rem;
+      font-size: 0.95rem;
+      font-weight: 700;
       margin-top: 2px;
+    }
+    .route-status .route-stats {
+      display: block;
+      margin-top: 4px;
+      font-family: var(--mono);
+      font-size: 0.68rem;
+      color: var(--muted);
     }
     .route-clear {
       width: 38px;
@@ -401,14 +510,14 @@
       gap: 8px;
       min-height: 42px;
       border: 0;
-      border-radius: 10px;
+      border-radius: var(--radius);
       background: var(--accent);
       color: #ffffff;
-      font-family: var(--mono);
-      font-size: 0.72rem;
+      font-family: var(--sans);
+      font-size: 0.84rem;
       font-weight: 600;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
+      letter-spacing: 0;
+      text-transform: none;
       cursor: pointer;
     }
     .route-export svg {
@@ -437,7 +546,7 @@
       cursor: pointer;
       box-shadow: 0 8px 20px rgba(10, 102, 194, 0.28);
     }
-    .route-export-float.visible { display: inline-flex; }
+    .route-export-float.visible { display: none; } /* replaced by route-mini */
     .route-export-float svg { flex: 0 0 auto; }
     .topbar-right {
       display: flex;
@@ -532,15 +641,15 @@
       justify-content: center;
       gap: 8px;
       min-height: 42px;
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      background: var(--route-dark);
+      border: 1px solid transparent;
+      border-radius: var(--radius);
+      background: var(--navy);
       color: #ffffff;
-      font-family: var(--mono);
-      font-size: 0.72rem;
+      font-family: var(--sans);
+      font-size: 0.84rem;
       font-weight: 600;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
+      letter-spacing: 0;
+      text-transform: none;
       cursor: pointer;
     }
     .route-nav.active {
@@ -553,7 +662,7 @@
       position: absolute;
       left: 12px;
       right: 12px;
-      top: calc(max(12px, env(safe-area-inset-top)) + 66px);
+      top: calc(max(12px, env(safe-area-inset-top)) + 12px);
       z-index: 25;
       display: none;
       gap: 8px;
@@ -566,46 +675,50 @@
     }
     .nav-cue-card {
       pointer-events: auto;
-      background: rgba(17, 24, 32, 0.92);
-      color: #ffffff;
-      border-radius: 16px;
-      padding: 14px 16px;
-      backdrop-filter: blur(12px);
+      background: var(--panel);
+      color: var(--navy);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 12px 14px;
+      backdrop-filter: blur(10px);
       min-width: 0;
+      box-shadow: 0 8px 24px rgba(22, 36, 51, 0.1);
     }
     .nav-cue-dist {
       font-family: var(--mono);
-      font-size: 0.68rem;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
-      color: rgba(255, 255, 255, 0.72);
-      margin-bottom: 4px;
+      font-size: 0.72rem;
+      letter-spacing: 0;
+      text-transform: none;
+      color: var(--muted);
+      margin-bottom: 2px;
     }
     .nav-cue-main {
-      font-size: 1.35rem;
+      font-family: var(--sans);
+      font-size: 1.55rem;
       font-weight: 700;
-      letter-spacing: 0.01em;
-      line-height: 1.15;
+      letter-spacing: 0;
+      line-height: 1.1;
+      color: var(--navy);
     }
     .nav-cue-sub {
-      margin-top: 6px;
-      font-family: var(--mono);
-      font-size: 0.68rem;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: rgba(255, 176, 0, 0.95);
+      margin-top: 4px;
+      font-family: var(--sans);
+      font-size: 0.8rem;
+      letter-spacing: 0;
+      text-transform: none;
+      color: var(--muted);
     }
     .nav-stop {
       pointer-events: auto;
       width: 56px;
       border: 0;
-      border-radius: 16px;
+      border-radius: var(--radius);
       background: #c1122f;
       color: #ffffff;
-      font-family: var(--mono);
-      font-size: 0.62rem;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
+      font-family: var(--sans);
+      font-size: 0.78rem;
+      letter-spacing: 0;
+      text-transform: none;
       font-weight: 700;
       cursor: pointer;
     }
@@ -644,7 +757,7 @@
       width: min(55vw, 220px);
       height: min(55vw, 220px);
       border: 2px solid #ffffff;
-      border-radius: 18px;
+      border-radius: var(--radius);
       overflow: hidden;
       box-shadow: 0 12px 28px rgba(22, 36, 51, 0.28);
       background: var(--panel);
@@ -695,6 +808,7 @@
       opacity: 0.95;
     }
     body.navigating .route-card { display: none; }
+    body.navigating .route-mini { display: none !important; }
     body.navigating .topbar-left .btn.mini { display: none; }
     body.navigating .legend { display: none; }
     body.navigating .nav-hud {
@@ -715,6 +829,7 @@
       .nav-cue-main { font-size: 1.18rem; }
     }
     .route-debug {
+      display: none;
       margin-top: 8px;
       padding: 8px 10px;
       background: var(--panel-2);
@@ -728,6 +843,7 @@
       line-height: 1.6;
     }
     .route-debug:empty { display: none; }
+    body.debug-ui .route-debug { display: block; }
     .route-debug b { color: var(--text); font-weight: 600; }
     .route-debug .bad { color: #c1122f; }
     .route-debug .good { color: #00876c; }
@@ -789,6 +905,9 @@
       justify-content: center !important;
       pointer-events: none !important;
     }
+        .maplibregl-ctrl-group:has(.maplibregl-ctrl-zoom-in),
+    .maplibregl-ctrl-zoom-in,
+    .maplibregl-ctrl-zoom-out { display: none !important; }
     .maplibregl-ctrl-attrib {
       background: transparent !important;
       color: rgba(83, 97, 112, 0.45) !important;
@@ -838,16 +957,23 @@
 
   <div class="topbar">
     <div class="topbar-left">
-      <a class="brand" href="../index.html">DIRT<span>.</span> MAYDAY<span>.</span></a>
+      <a class="brand" href="../index.html" aria-label="DIRT. MAYDAY">
+        <span class="brand-dirt">DIRT<span>.</span></span>
+        <span class="brand-by">MAYDAY</span>
+      </a>
       <button class="btn mini" id="legendBtn" title="Map layers" aria-label="Toggle map layers" aria-expanded="false">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="14" y2="18"/></svg>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 4 3 8.5 12 13l9-4.5L12 4Z"/>
+          <path d="M3 12.5 12 17l9-4.5"/>
+          <path d="M3 16.5 12 21l9-4.5"/>
+        </svg>
       </button>
     </div>
     <div class="topbar-right">
       <button class="btn route-toggle" id="routeToggleBtn" title="Route planner" aria-label="Toggle route planner" aria-expanded="false">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="19" r="2.4"/><circle cx="18" cy="5" r="2.4"/><path d="M8.4 19h6.1a3.5 3.5 0 0 0 0-7H9.5a3.5 3.5 0 0 1 0-7h6.1"/></svg>
       </button>
-      <button class="route-export-float" id="routeExportFloat" type="button" title="Export this route as GPX" aria-label="Export route as GPX">
+      <button class="route-export-float" id="routeExportFloat" type="button" title="Export this route as GPX" aria-label="Export route as GPX" hidden>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
         Export GPX
       </button>
@@ -867,16 +993,31 @@
     </div>
     <div class="route-readout">
       <div class="route-status" id="routeStatus">Tap destination<strong>No route set</strong></div>
-      <button class="route-clear" id="routeClear" type="button" title="Close route planner" aria-label="Close route planner">×</button>
+      <button class="route-clear" id="routeClear" type="button" title="Minimize route planner" aria-label="Minimize route planner">×</button>
     </div>
+    <div class="route-warn" id="routeWarn" role="status"></div>
     <div class="route-actions" id="routeActions">
-      <button class="route-nav" id="routeNavBtn" type="button" title="Start turn-by-turn navigation">Start navigation</button>
       <button class="route-export" id="routeExport" type="button" title="Export this route as GPX for OsmAnd, Gaia GPS, and other apps" aria-label="Export route as GPX">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
         Export GPX
       </button>
+      <button class="route-nav" id="routeNavBtn" type="button" title="Start turn-by-turn navigation">Start navigation</button>
     </div>
     <div class="route-debug" id="routeDebug"></div>
+  </div>
+
+  <div class="route-mini" id="routeMini" aria-label="Minimized route actions">
+    <div class="route-mini-row">
+      <select id="routeMiniPref" aria-label="Route profile">
+        <option value="direct">Direct</option>
+        <option value="balanced">Balanced</option>
+        <option value="dirt">Dirt</option>
+        <option value="cleanest">Cleanest</option>
+      </select>
+      <button class="mini-clear" id="routeMiniClear" type="button" title="Clear route" aria-label="Clear route">×</button>
+    </div>
+    <button class="mini-export" id="routeMiniExport" type="button">Export GPX</button>
+    <button class="mini-nav" id="routeMiniNav" type="button">Start Nav</button>
   </div>
 
   <div class="export-sheet" id="exportSheet" aria-hidden="true">
@@ -907,11 +1048,11 @@
         <span class="switch"><input type="checkbox" data-layer-toggle="track" checked aria-label="Toggle branches"><span></span></span>
       </label>
       <label class="legend-row">
-        <span class="legend-label"><i style="background:var(--bridge)"></i>Bridge (structure)</span>
+        <span class="legend-label"><i style="background:var(--bridge)"></i>Bridge</span>
         <span class="switch"><input type="checkbox" data-layer-toggle="bridge" checked aria-label="Toggle bridges"><span></span></span>
       </label>
       <label class="legend-row">
-        <span class="legend-label"><i style="background:var(--tunnel)"></i>Tunnel (structure)</span>
+        <span class="legend-label"><i style="background:var(--tunnel)"></i>Tunnel</span>
         <span class="switch"><input type="checkbox" data-layer-toggle="tunnel" checked aria-label="Toggle tunnels"><span></span></span>
       </label>
       <label class="legend-row">
@@ -934,7 +1075,7 @@
       </label>
       -->
       <label class="legend-row">
-        <span class="legend-label"><i style="background:var(--text)"></i>NS government</span>
+        <span class="legend-label"><i style="background:var(--text)"></i>NS Government</span>
         <span class="switch"><input type="checkbox" data-source-toggle="nsGov" checked aria-label="Toggle Nova Scotia government source"><span></span></span>
       </label>
     </div>
@@ -944,9 +1085,7 @@
         <span class="legend-label">Route on unknown access</span>
         <span class="switch"><input type="checkbox" id="unknownAccessToggle" aria-label="Allow routing on unknown-access edges"><span></span></span>
       </label>
-      <p class="meta" id="unknownAccessHint" style="margin:6px 2px 0;max-width:220px;">
-        Visibility toggles above do not change eligibility. Default routes permissive/verified only.
-      </p>
+      <p class="meta" id="unknownAccessHint" style="margin:6px 2px 0;display:none;"></p>
     </div>
   </div>
 
@@ -1021,6 +1160,8 @@
   <script src="../routing/lib/roadbook-curves.js"></script>
   <script>
     const FALLBACK = { lng: -63.2985, lat: 44.7427, name: "Porter's Lake, NS" };
+    const DEBUG_UI = new URLSearchParams(location.search).has("debug");
+    if (DEBUG_UI) document.body.classList.add("debug-ui");
     // OSM Overpass disabled for NSTDB-only POC.
     // const BUNDLED_TRAILS_URL = "/app/data/osm-overpass-trails.geojson.gz";
     // const BUNDLED_META_URL = "/app/data/osm-overpass-trails.meta.json";
@@ -1279,11 +1420,27 @@
       }
     }
 
+    function setRouteWarn(text) {
+      const el = document.getElementById("routeWarn");
+      if (el) el.textContent = text || "";
+    }
+
     function setStatus(text, kind, owner) {
-      statusEl.textContent = text || "";
-      statusEl.className = "status" + (kind ? " " + kind : "");
       statusOwner = owner || null;
       if (owner !== "context") contextLoadingActive = false;
+      // Keep the map clean: dock status is debug-only. Safety copy goes on the route panel.
+      if (DEBUG_UI && statusEl) {
+        statusEl.textContent = text || "";
+        statusEl.className = "status" + (kind ? " " + kind : "");
+      } else if (statusEl) {
+        statusEl.textContent = "";
+        statusEl.className = "status";
+      }
+      // Only route failure / safety messages feed the planner warning strip.
+      if (owner === "route") {
+        if (kind === "error") setRouteWarn(text || "");
+        else if (!text) setRouteWarn("");
+      }
     }
 
     function clearStatus() {
@@ -1709,6 +1866,10 @@
     }
 
     function updateDataMeta() {
+      if (!DEBUG_UI || !dataMeta) {
+        if (dataMeta) dataMeta.textContent = "";
+        return;
+      }
       if (!nsGovManifest) {
         dataMeta.textContent = "Metadata unavailable";
         return;
@@ -1851,8 +2012,8 @@
       transformRequest: basemapTransformRequest
     });
 
-    map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "bottom-right");
-    map.addControl(new maplibregl.AttributionControl({ compact: false }), "bottom-left");
+    // Pinch + mouse-wheel zoom only — no plus/minus chrome.
+    map.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-left");
 
     function tuneShortbreadContrast() {
       const layers = map.getStyle().layers || [];
@@ -3463,6 +3624,12 @@
       };
     }
 
+    function metersToJoinLabel(distanceKm) {
+      if (distanceKm >= 1) return "in " + distanceKm.toFixed(1) + " km";
+      const meters = Math.max(10, Math.round(distanceKm * 1000));
+      return "in " + meters + " m";
+    }
+
     function headingAlignedWithRoute(progress) {
       if (!progress || progress.bearing == null) return false;
       const moving = Number.isFinite(rider.speed) && rider.speed > 1.2;
@@ -3530,18 +3697,18 @@
       const offM = Math.round(progress.distanceKm * 1000);
 
       if (!onRoute) {
-        // Approach from house/driveway — distance + how you'll join. No bend talk.
+        // Approach from house/driveway — Figma-style Join / LEFT / in N m.
         if (!navEverAligned) {
-          navCueDist.textContent = metersLabel(progress.distanceKm) + " to route";
-          navCueMain.textContent = join.text;
-          navCueSub.textContent = "Reach the orange line · then follow A → B";
+          navCueDist.textContent = "Join";
+          navCueMain.textContent = join.side ? join.side.toUpperCase() : "AHEAD";
+          navCueSub.textContent = metersToJoinLabel(progress.distanceKm);
           const band = Math.round(offM / 25) * 25;
           speakCue(
             metersLabel(progress.distanceKm) + " to the orange line. Then " + join.spoken + ".",
             "approach-" + join.side + "-" + band
           );
         } else {
-          navCueDist.textContent = "Return to orange line";
+          navCueDist.textContent = "Return";
           navCueMain.textContent = offM + " m off route";
           navCueSub.textContent = remainLabel(remainKm);
           const band = Math.round(offM / 25) * 25;
@@ -3549,10 +3716,10 @@
         }
       } else if (!aligned && !wrongWay) {
         // On the line (or close) but not yet facing along the route.
-        navCueDist.textContent = "At the route";
-        navCueMain.textContent = join.text;
+        navCueDist.textContent = "Join";
+        navCueMain.textContent = join.side ? join.side.toUpperCase() : "AHEAD";
         navCueSub.textContent = join.side
-          ? "Turn " + join.side + " to follow the orange line"
+          ? "Turn " + join.side + " onto the orange line"
           : "Align with the orange line";
         speakCue(join.spoken + " to follow the orange line", "join-" + (join.side || "ahead"));
       } else if (wrongWay) {
@@ -3826,6 +3993,7 @@
         syncFollowCamera(false);
       }
       syncRouteExportUi();
+      syncRouteChrome();
       followChip.classList.toggle("visible", !followLocked && geoWatchId != null);
       setStatus("Navigation ended · offline map cleared", "ok");
     }
@@ -3841,7 +4009,9 @@
     function updateRouteStatus() {
       const start = activeStart();
       syncRouteExportUi();
-      renderRouteDebug();
+      syncRouteChrome();
+      if (DEBUG_UI) renderRouteDebug();
+      else if (routeDebugEl) routeDebugEl.innerHTML = "";
       if (routeMessage) {
         routeStatus.innerHTML = routeMessage;
         return;
@@ -3850,36 +4020,48 @@
         const dirtPct = activeRoute.distanceKm ? Math.round((activeRoute.dirtKm / activeRoute.distanceKm) * 100) : 0;
         const pavedPct = activeRoute.distanceKm ? Math.round(((activeRoute.byClass.paved || 0) / activeRoute.distanceKm) * 100) : 0;
         const unknownPct = activeRoute.unknownAccessPercent || 0;
-        const policy = activeRoute.accessPolicy || currentAccessPolicy();
-        const policyLabel = policy.motorizedUnknown ? "unknown access on" : "permissive only";
         const mins = activeRoute.estimatedMovingSeconds
           ? Math.round(activeRoute.estimatedMovingSeconds / 60) + " min"
           : null;
+        const profile = routePreference.charAt(0).toUpperCase() + routePreference.slice(1);
         routeStatus.innerHTML =
-          routePreference.charAt(0).toUpperCase() + routePreference.slice(1) + " route<strong>" +
+          profile + " route<strong>" +
           activeRoute.distanceKm.toFixed(activeRoute.distanceKm >= 10 ? 1 : 2) +
           " km" + (mins ? " · ~" + mins : "") +
-          " · " + dirtPct + "% dirt" +
+          "</strong><span class=\"route-stats\">" +
+          dirtPct + "% dirt" +
           (pavedPct ? " · " + pavedPct + "% paved" : "") +
           (unknownPct ? " · " + unknownPct + "% unknown access" : "") +
-          " · " + policyLabel +
-          "</strong>";
+          "</span>";
+        const warnText = (activeRoute.warnings || [])
+          .filter((w) => {
+            if (!w) return false;
+            const code = w.code || "";
+            const msg = (w.message || "").toLowerCase();
+            return code.indexOf("unknown_access") === 0 || msg.indexOf("unknown access") !== -1;
+          })
+          .map((w) => w.message || w.code)
+          .filter(Boolean)
+          .join(" · ");
+        if (warnText) setRouteWarn(warnText);
+        else if (!lastNetworkRouteReason) setRouteWarn("");
         return;
       }
+      setRouteWarn("");
       if (start && destination) {
         const km = haversineKm(start, destination);
-        routeStatus.innerHTML = "Direct only<strong>" + km.toFixed(km >= 10 ? 1 : 2) + " km as the crow flies</strong>";
+        routeStatus.innerHTML = "Straight line<strong>" + km.toFixed(km >= 10 ? 1 : 2) + " km</strong>";
         return;
       }
       if (routeMode === "here") {
-        routeStatus.innerHTML = "Tap destination<strong>From current location</strong>";
+        routeStatus.innerHTML = "From here<strong>Tap a destination</strong>";
         return;
       }
       if (!plannedStart) {
-        routeStatus.innerHTML = "Tap start<strong>Point A needed</strong>";
+        routeStatus.innerHTML = "Plan route<strong>Tap point A</strong>";
         return;
       }
-      routeStatus.innerHTML = "Tap destination<strong>Point B needed</strong>";
+      routeStatus.innerHTML = "Plan route<strong>Tap point B</strong>";
     }
 
     function refreshRouteDraft() {
@@ -4037,8 +4219,12 @@
         activeRoute = networkRoute;
         routeMessage = "";
         const warnText = (api.warnings || []).map((w) => w.message || w.code).filter(Boolean).join(" · ");
-        if (warnText) setStatus(warnText, api.accessPolicy?.motorizedUnknown ? "error" : "ok", "route");
-        else setStatus("Route from service · browser did not build the graph", "ok", "route");
+        const showWarn = Boolean(
+          warnText &&
+          (api.accessPolicy?.motorizedUnknown || /unknown|acknowledg/i.test(warnText))
+        );
+        if (showWarn) setStatus(warnText, "error", "route");
+        else setRouteWarn("");
         if (navigating) {
           navManeuvers = buildNavManeuvers(activeRouteCoordinates());
           lastSpokenCueKey = "";
@@ -4203,24 +4389,59 @@
     const legendBtn = document.getElementById("legendBtn");
     const routeCard = document.getElementById("routeCard");
     const routeToggleBtn = document.getElementById("routeToggleBtn");
+    const routeMini = document.getElementById("routeMini");
+    const routeMiniPref = document.getElementById("routeMiniPref");
+    const routeMiniExport = document.getElementById("routeMiniExport");
+    const routeMiniNav = document.getElementById("routeMiniNav");
+    const routeMiniClear = document.getElementById("routeMiniClear");
 
     legendBtn.addEventListener("click", () => {
       const open = legendEl.classList.toggle("collapsed") === false;
       legendBtn.setAttribute("aria-expanded", open ? "true" : "false");
+      if (open) setRouteCardOpen(false);
     });
+
+    function syncRouteChrome() {
+      if (!routeMini) return;
+      const expanded = routeCard && !routeCard.classList.contains("collapsed");
+      const showMini = !navigating && !expanded && !!(activeRoute && activeRouteCoordinates().length >= 2);
+      routeMini.classList.toggle("visible", showMini);
+      if (routeMiniPref) routeMiniPref.value = routePreference;
+      if (routeToggleBtn) {
+        routeToggleBtn.setAttribute("aria-expanded", expanded ? "true" : "false");
+      }
+    }
 
     function setRouteCardOpen(open) {
       routeCard.classList.toggle("collapsed", !open);
       routeToggleBtn.setAttribute("aria-expanded", open ? "true" : "false");
+      if (open && legendEl && !legendEl.classList.contains("collapsed")) {
+        legendEl.classList.add("collapsed");
+        legendBtn.setAttribute("aria-expanded", "false");
+      }
+      syncRouteChrome();
     }
     routeToggleBtn.addEventListener("click", () => {
       setRouteCardOpen(routeCard.classList.contains("collapsed"));
     });
 
     document.getElementById("popupClose").addEventListener("click", hidePopup);
-    // X only closes the planner panel. Clearing a route used to disable GPX
-    // export; keep the mapped route available until a new one replaces it.
+    // X minimizes the planner without clearing the mapped route.
     routeClear.addEventListener("click", () => setRouteCardOpen(false));
+    if (routeMiniPref) {
+      routeMiniPref.addEventListener("change", () => {
+        setRoutePreference(routeMiniPref.value);
+      });
+    }
+    if (routeMiniExport) routeMiniExport.addEventListener("click", () => openExportNameSheet());
+    if (routeMiniNav) routeMiniNav.addEventListener("click", () => toggleNavigation());
+    if (routeMiniClear) {
+      routeMiniClear.addEventListener("click", () => {
+        clearRoute();
+        setRouteCardOpen(false);
+        syncRouteChrome();
+      });
+    }
     function handleRouteExportClick() {
       openExportNameSheet();
     }
@@ -4361,9 +4582,8 @@
     function syncUnknownAccessUi() {
       if (unknownAccessToggle) unknownAccessToggle.checked = allowUnknownAccess;
       if (unknownAccessHint) {
-        unknownAccessHint.textContent = allowUnknownAccess
-          ? "Stage policy: unknown access enabled. Visibility toggles above do not change this."
-          : "Visibility toggles above do not change eligibility. Default routes permissive/verified only.";
+        unknownAccessHint.textContent = "";
+        unknownAccessHint.style.display = "none";
       }
     }
 
