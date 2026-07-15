@@ -18,11 +18,14 @@
   const DEFAULTS = {
     densifyMeters: 15,
     smoothWindow: 3,
-    minTurnDeg: 28,
-    startRateDeg: 1.8,
-    continueRateDeg: 0.7,
-    minCurveLengthM: 28,
-    minSeparationM: 80,
+    // More sensitive geometry: catch gentle-but-real bends without firing on
+    // GPS jitter. A curve only counts when accumulated same-sign heading change
+    // clears minTurnDeg over at least minCurveLengthM of travel.
+    minTurnDeg: 15,
+    startRateDeg: 1.0,
+    continueRateDeg: 0.4,
+    minCurveLengthM: 18,
+    minSeparationM: 40,
     mergeJunctionM: 70,
     endQuietSamples: 2
   };
@@ -161,20 +164,61 @@
     };
   }
 
-  function formatCurveLabels(side, number, isHairpin) {
-    const dir = side === "right" ? "RIGHT" : "LEFT";
-    const spokenDir = side === "right" ? "right" : "left";
+  function titleDir(side) {
+    return side === "right" ? "Right" : "Left";
+  }
+
+  function spokenDirOf(side) {
+    return side === "right" ? "right" : "left";
+  }
+
+  /**
+   * Roadbook (rally curve) cue wording — ALWAYS numbered.
+   *   text/main:  "Right 5"  ·  "Left 1 hairpin"
+   *   spoken:     "right 5"  ·  "left 1 hairpin"
+   * Visual at-turn is identical ("Right 5"); speech at-turn adds " now".
+   */
+  function formatRoadbookCue(side, number, isHairpin) {
+    const dir = titleDir(side);
+    const sp = spokenDirOf(side);
     if (isHairpin && number === 1) {
+      const main = dir + " 1 hairpin";
       return {
-        text: dir + " 1 HAIRPIN",
-        spoken: spokenDir + " 1 hairpin",
-        key: "1-" + spokenDir + "-hairpin"
+        text: main,
+        main,
+        spoken: sp + " 1 hairpin",
+        key: "1-" + sp + "-hairpin"
       };
     }
+    const main = dir + " " + number;
     return {
-      text: dir + " " + number,
-      spoken: spokenDir + " " + number,
-      key: number + "-" + spokenDir
+      text: main,
+      main,
+      spoken: sp + " " + number,
+      key: number + "-" + sp
+    };
+  }
+
+  // Backward-compatible alias — curve labels are always the numbered roadbook form.
+  function formatCurveLabels(side, number, isHairpin) {
+    return formatRoadbookCue(side, number, isHairpin);
+  }
+
+  /**
+   * Junction (navigation decision) cue wording — NEVER numbered.
+   *   main:       "Left turn"        (visual, before)
+   *   here:       "Left turn here"   (visual + speech, at turn)
+   *   spoken:     "left turn"        (speech fragment for "In N metres, left turn.")
+   */
+  function formatJunctionCue(side) {
+    const dir = titleDir(side);
+    const sp = spokenDirOf(side);
+    return {
+      text: dir + " turn",
+      main: dir + " turn",
+      here: dir + " turn here",
+      spoken: sp + " turn",
+      key: "jct-" + sp
     };
   }
 
@@ -317,36 +361,36 @@
     return Math.max(0, Math.round((cueAlongKm - riderAlongKm) * 1000));
   }
 
+  /**
+   * Classify a network junction from its deflection angle.
+   * Junctions are navigation DECISIONS: side/direction only, NEVER a rally
+   * number. Below the meaningful-turn threshold the route runs "straight
+   * through" the junction and no cue is emitted.
+   */
   function classifyJunctionDelta(deltaDeg, opts) {
-    // Junctions are short; estimate a compact length from the deflection.
+    const merged = Object.assign({}, DEFAULTS, opts || {});
     const abs = Math.abs(deltaDeg);
-    const lengthM = Math.max(22, Math.min(55, abs * 0.45));
-    const classified = classifyCurve(abs, lengthM, opts);
-    if (!classified) {
+    if (!(abs >= merged.minTurnDeg)) {
       return {
-        number: 0,
         side: null,
         key: "straight",
         text: "Straight",
         spoken: "straight",
         severity: "straight",
         degrees: Math.round(abs),
-        confidence: 0
+        kind: "junction"
       };
     }
     const side = deltaDeg > 0 ? "right" : "left";
-    const isHairpin = classified.number === 1;
-    const labels = formatCurveLabels(side, classified.number, isHairpin);
+    const labels = formatJunctionCue(side);
     return {
-      number: classified.number,
       side,
       key: labels.key,
-      text: labels.text,
+      text: labels.main,
       spoken: labels.spoken,
-      severity: classified.severity,
+      severity: "turn",
       degrees: Math.round(abs),
-      confidence: classified.confidence,
-      radiusM: classified.radiusM
+      kind: "junction"
     };
   }
 
@@ -357,7 +401,9 @@
   function mergeNavCues(curves, junctions, options) {
     const opts = Object.assign({}, DEFAULTS, options || {});
     const items = [];
-    for (const c of curves || []) items.push(Object.assign({}, c));
+    for (const c of curves || []) {
+      items.push(Object.assign({}, c, { kind: "curve" }));
+    }
     for (const j of junctions || []) {
       if (!j || j.severity === "arrive") continue;
       items.push(
@@ -377,46 +423,22 @@
         prev &&
         Math.abs(item.alongKm - prev.alongKm) * 1000 < opts.mergeJunctionM
       ) {
-        // Prefer real junction decision when overlapping a geometry curve.
-        if (item.kind === "junction" && prev.kind !== "junction") {
-          merged[merged.length - 1] = Object.assign({}, item, {
-            // Keep the tighter roadbook number if curve was more severe.
-            number:
-              prev.number && item.number
-                ? Math.min(prev.number, item.number)
-                : item.number || prev.number,
-            text:
-              prev.number && item.number && prev.number < item.number
-                ? prev.text
-                : item.text,
-            spoken:
-              prev.number && item.number && prev.number < item.number
-                ? prev.spoken
-                : item.spoken
-          });
-          const keep = merged[merged.length - 1];
-          if (keep.number && keep.side) {
-            const labels = formatCurveLabels(
-              keep.side,
-              keep.number,
-              keep.number === 1
-            );
-            keep.text = labels.text;
-            keep.spoken = labels.spoken;
+        const prevIsJct = prev.kind === "junction";
+        const itemIsJct = item.kind === "junction";
+        // Overlap: the junction is the navigation DECISION and always wins.
+        // It keeps its own non-numbered wording — a curve's number/text/spoken
+        // is NEVER copied onto a junction.
+        if (itemIsJct && !prevIsJct) {
+          merged[merged.length - 1] = item;
+        } else if (!itemIsJct && prevIsJct) {
+          // Keep the junction; drop the overlapping curve entirely.
+        } else if (itemIsJct && prevIsJct) {
+          // Two junctions almost on top of each other — keep the sharper turn.
+          if ((item.degrees || 0) > (prev.degrees || 0)) {
+            merged[merged.length - 1] = item;
           }
-        } else if (item.kind !== "junction" && prev.kind === "junction") {
-          if (item.number && prev.number && item.number < prev.number) {
-            prev.number = item.number;
-            const labels = formatCurveLabels(
-              prev.side || item.side,
-              prev.number,
-              prev.number === 1
-            );
-            prev.text = labels.text;
-            prev.spoken = labels.spoken;
-            prev.degrees = item.degrees || prev.degrees;
-          }
-        } else if (item.number && prev.number && item.number < prev.number) {
+        } else if (item.number < prev.number) {
+          // Two curves overlapping — keep the tighter (lower) number.
           merged[merged.length - 1] = item;
         }
         continue;
@@ -445,6 +467,8 @@
     buildCurveEvents,
     mergeNavCues,
     distanceToCueMeters,
-    formatCurveLabels
+    formatCurveLabels,
+    formatRoadbookCue,
+    formatJunctionCue
   };
 });

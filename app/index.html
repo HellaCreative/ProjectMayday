@@ -1641,13 +1641,6 @@
       <button class="btn route-toggle" id="routeToggleBtn" title="Route planner" aria-label="Toggle route planner" aria-expanded="false">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="12" r="2.5"/><path d="M8 7l8 4M8 17l8-4"/></svg>
       </button>
-      <button class="btn roadbook-btn" id="roadbookBtn" type="button" title="View roadbook" aria-label="View roadbook" aria-expanded="false">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
-          <line x1="5" y1="7" x2="19" y2="7"></line>
-          <line x1="5" y1="12" x2="19" y2="12"></line>
-          <line x1="5" y1="17" x2="13" y2="17"></line>
-        </svg>
-      </button>
       <button class="route-export-float" id="routeExportFloat" type="button" title="Export this route as GPX" aria-label="Export route as GPX" hidden>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
         Export GPX
@@ -1751,7 +1744,6 @@
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
           Export GPX
         </button>
-        <button class="route-roadbook" id="routeRoadbookBtn" type="button" title="View route roadbook">View roadbook</button>
       </div>
       <div class="route-debug" id="routeDebug"></div>
     </div>
@@ -1832,19 +1824,6 @@
         <span class="switch"><input type="checkbox" data-source-toggle="nsGov" checked aria-label="Toggle Nova Scotia government source"><span></span></span>
       </label>
     </div>
-  </div>
-
-  <div class="roadbook-panel" id="roadbookPanel" aria-hidden="true">
-    <div class="roadbook-head">
-      <button class="roadbook-back" id="roadbookBack" type="button" title="Close roadbook" aria-label="Close roadbook">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5l-7 7 7 7"></path></svg>
-      </button>
-      <div class="roadbook-titles">
-        <h2>Roadbook</h2>
-        <div class="roadbook-meta" id="roadbookMeta">No route</div>
-      </div>
-    </div>
-    <div class="roadbook-list" id="roadbookList"></div>
   </div>
 
   <div class="export-sheet" id="accessWarnSheet" aria-hidden="true">
@@ -2128,6 +2107,7 @@
     const NAV_ON_ROUTE_KM = 0.05; // 50 m
     const NAV_ALIGN_DEG = 50;
     const NAV_ALIGN_HITS = 2;
+    const NAV_HERE_KM = 0.02; // ~20 m: "here" / "now" threshold
     const navSimEnabled = new URLSearchParams(location.search).has("sim");
     let overviewMap = null;
     let overviewReady = false;
@@ -2153,7 +2133,6 @@
     const routeActions = document.getElementById("routeActions");
     const routeExport = document.getElementById("routeExport");
     const routeExportFloat = document.getElementById("routeExportFloat");
-    const routeRoadbookBtn = document.getElementById("routeRoadbookBtn");
     const routeNavBtn = document.getElementById("routeNavBtn");
     const exportSheet = document.getElementById("exportSheet");
     const exportNameInput = document.getElementById("exportNameInput");
@@ -4787,7 +4766,6 @@
       routeExportFloat.classList.toggle("visible", canExport && !navigating);
       routeExport.disabled = !canExport;
       routeExportFloat.disabled = !canExport;
-      if (routeRoadbookBtn) routeRoadbookBtn.disabled = !canExport;
       routeNavBtn.textContent = navigating ? "End navigation" : "Start navigation";
       routeNavBtn.classList.toggle("active", navigating);
       routeNavBtn.disabled = !canExport && !navigating;
@@ -5196,8 +5174,8 @@
       const isJunctions = cueMode === "junctions";
       cueModeLabel.textContent = isJunctions ? "JCT" : "ALL";
       cueModeBtn.title = isJunctions
-        ? "Cue mode: junctions only. Tap for all bends."
-        : "Cue mode: all bends. Tap for junctions only.";
+        ? "Cue mode: junctions only. Tap for all bends + junctions."
+        : "Cue mode: all bends + junctions. Tap for junctions only.";
       cueModeBtn.setAttribute("aria-label", cueModeBtn.title);
       cueModeBtn.classList.toggle("on", isJunctions);
     }
@@ -5213,7 +5191,7 @@
       setStatus(
         cueMode === "junctions"
           ? "Cues: junctions only"
-          : "Cues: roadbook curves + junctions",
+          : "Cues: all bends + junctions",
         "ok"
       );
     }
@@ -5328,6 +5306,27 @@
       return navManeuvers[navManeuvers.length - 1] || null;
     }
 
+    // Cue wording is derived STRICTLY from the maneuver kind so junction and
+    // roadbook-curve semantics never bleed into each other.
+    //   junction -> "Left turn" / "Left turn here" (no number, ever)
+    //   curve    -> "Right 5" (numbered rally roadbook)
+    function cueLabels(man) {
+      const RB = window.RoadbookCurves;
+      if (!man) return { main: "", here: "", spoken: "" };
+      if (man.kind === "junction") {
+        if (RB && man.side) return RB.formatJunctionCue(man.side);
+        const main = man.text || "Turn";
+        return { main, here: main + " here", spoken: man.spoken || "turn" };
+      }
+      if (man.kind === "curve") {
+        if (RB && man.side) {
+          return RB.formatRoadbookCue(man.side, man.number, man.number === 1);
+        }
+      }
+      const fallback = man.text || "";
+      return { main: fallback, here: fallback, spoken: man.spoken || fallback };
+    }
+
     function updateNavGuidance() {
       if (!navigating || !activeRoute || !hasRiderLocation()) return;
       const coords = activeRouteCoordinates();
@@ -5399,28 +5398,60 @@
             speakCue("You have arrived", "arrive");
           }
         } else {
-          navCueDist.textContent = "In " + distLabel;
-          navCueMain.textContent = next.text;
-          const after = nextManeuverAfter(next.alongKm);
-          const subBits = [];
-          if (after && after.severity !== "arrive") subBits.push("then " + after.text);
-          if (next.degrees) subBits.push(next.degrees + "°");
-          if (next.kind === "junction") subBits.push("junction");
-          else if (next.kind === "curve") subBits.push("roadbook");
-          if (next.curveLengthM) subBits.push(next.curveLengthM + " m curve");
-          subBits.push(remainLabel(remainKm));
-          navCueSub.textContent = subBits.join(" · ");
-          const spoken = next.spoken || next.text;
+          // Junction and curve cues are semantically different and NEVER share
+          // wording. Junctions = navigation decisions (side only, no number).
+          // Curves = rally roadbook (numbered 6..1). Branch on next.kind before
+          // touching navCueDist / navCueMain / navCueSub / spoken text.
+          const isHere = toTurnKm <= NAV_HERE_KM;
           const meters =
             window.RoadbookCurves && next.alongKm != null
               ? window.RoadbookCurves.distanceToCueMeters(progress.alongKm, next.alongKm)
               : Math.round(toTurnKm * 1000);
-          if (toTurnKm < 0.05) speakCue(spoken + " now", next.key + "-now");
-          else if (toTurnKm < 0.18) {
-            speakCue("In " + meters + " metres, " + spoken + ".", next.key + "-near");
-          } else if (toTurnKm < 0.45) {
-            speakCue("In " + meters + " metres, " + spoken + ".", next.key + "-mid");
+
+          if (next.kind === "junction") {
+            const jc = cueLabels(next);
+            if (isHere) {
+              navCueDist.textContent = "Now";
+              navCueMain.textContent = jc.here; // "Left turn here"
+              speakCue(jc.here + ".", next.key + "-now");
+            } else {
+              navCueDist.textContent = "In " + distLabel;
+              navCueMain.textContent = jc.main; // "Left turn"
+              if (toTurnKm < 0.18) {
+                speakCue("In " + meters + " metres, " + jc.spoken + ".", next.key + "-near");
+              } else if (toTurnKm < 0.45) {
+                speakCue("In " + meters + " metres, " + jc.spoken + ".", next.key + "-mid");
+              }
+            }
+          } else {
+            // Roadbook curve (or any numbered cue).
+            const rc = cueLabels(next);
+            if (isHere) {
+              navCueDist.textContent = "Now";
+              navCueMain.textContent = rc.main; // "Right 5"
+              speakCue(rc.spoken + " now.", next.key + "-now");
+            } else {
+              navCueDist.textContent = "In " + distLabel;
+              navCueMain.textContent = rc.main; // "Right 5"
+              if (toTurnKm < 0.18) {
+                speakCue("In " + meters + " metres, " + rc.spoken + ".", next.key + "-near");
+              } else if (toTurnKm < 0.45) {
+                speakCue("In " + meters + " metres, " + rc.spoken + ".", next.key + "-mid");
+              }
+            }
           }
+
+          // Sub line: preview + cue type + distance. No degrees / curve length,
+          // and never a rally number for a junction.
+          const after = nextManeuverAfter(next.alongKm);
+          const subBits = [];
+          if (after && after.severity !== "arrive") {
+            subBits.push("then " + cueLabels(after).main);
+          }
+          if (next.kind === "junction") subBits.push("junction");
+          else if (next.kind === "curve") subBits.push("roadbook");
+          subBits.push(remainLabel(remainKm));
+          navCueSub.textContent = subBits.join(" · ");
         }
       }
 
@@ -5589,7 +5620,6 @@
       document.body.classList.add("navigating");
       navHud.classList.add("visible");
       updateNavStageHud();
-      if (typeof setRoadbookOpen === "function") setRoadbookOpen(false);
       setRouteCardOpen(false);
       setPipVisible(true);
       setFollowLocked(true);
@@ -5639,7 +5669,6 @@
       navHud.classList.remove("visible");
       navContext = null;
       if (navStageLine) navStageLine.hidden = true;
-      if (typeof setRoadbookOpen === "function") setRoadbookOpen(false);
       setPipVisible(false);
       if (window.speechSynthesis) window.speechSynthesis.cancel();
       clearNavBasemapCache().catch(() => {});
@@ -6138,12 +6167,6 @@
     const legendClose = document.getElementById("legendClose");
     const routeCard = document.getElementById("routeCard");
     const routeToggleBtn = document.getElementById("routeToggleBtn");
-    const roadbookBtn = document.getElementById("roadbookBtn");
-    const roadbookPanel = document.getElementById("roadbookPanel");
-    const roadbookBack = document.getElementById("roadbookBack");
-    const roadbookList = document.getElementById("roadbookList");
-    const roadbookMeta = document.getElementById("roadbookMeta");
-    let roadbookReturnToPlanner = false;
     let plannerDrawerState = "closed"; // closed | collapsed | expanded
     let drawerDrag = null;
     const DRAWER_SWIPE_PX = 56;
@@ -6153,7 +6176,6 @@
       legendEl.classList.toggle("collapsed", !open);
       if (legendBtn) legendBtn.setAttribute("aria-expanded", open ? "true" : "false");
       if (open) {
-        setRoadbookOpen(false);
         setRouteCardOpen(false);
       }
     }
@@ -6163,126 +6185,12 @@
     });
     if (legendClose) legendClose.addEventListener("click", () => setLegendOpen(false));
 
-    function ensureRoadbookManeuvers() {
-      if (!activeRoute) return [];
-      const coords = activeRouteCoordinates();
-      if (coords.length < 2) return [];
-      navManeuvers = buildNavManeuvers(coords);
-      return navManeuvers;
-    }
-
-    function roadbookCumLabel(alongKm) {
-      if (!(alongKm >= 0)) return "—";
-      if (alongKm < 1) return Math.round(alongKm * 1000) + " m";
-      return alongKm.toFixed(alongKm >= 10 ? 1 : 2) + " km";
-    }
-
-    function roadbookSurfaceTag(man) {
-      if (!man) return { label: "", className: "" };
-      if (man.severity === "arrive" || man.key === "arrive") {
-        return { label: "End", className: "kind-arrive" };
-      }
-      const cls = man.trackClass || man.surfaceClass || "";
-      if (cls && cls !== "connector") {
-        return {
-          label: surfaceDisplayLabel(cls),
-          className: "surface-" + cls
-        };
-      }
-      if (man.kind === "curve") return { label: "Curve", className: "kind-curve" };
-      if (man.kind === "junction") return { label: "Junction", className: "" };
-      return { label: "", className: "" };
-    }
-
-    function roadbookNoteFor(man) {
-      const bits = [];
-      const surface = man.trackClass || man.surfaceClass;
-      if (surface && surface !== "connector") bits.push(surfaceDisplayLabel(surface));
-      if (man.kind === "junction") bits.push("Junction");
-      else if (man.kind === "curve") bits.push("Roadbook curve");
-      if (man.degrees) bits.push(man.degrees + "°");
-      if (man.curveLengthM) bits.push(man.curveLengthM + " m");
-      // Only surface live route fields — never invent hazard copy.
-      return bits.join(" · ");
-    }
-
-    function renderRoadbook() {
-      if (!roadbookList || !roadbookMeta) return;
-      const mans = ensureRoadbookManeuvers();
-      if (!activeRoute || mans.length === 0) {
-        roadbookMeta.textContent = "No route";
-        roadbookList.innerHTML = "<div class=\"roadbook-empty\">Plan a route to see live roadbook cues.</div>";
-        return;
-      }
-      const km = activeRoute.distanceKm || 0;
-      const mins = activeRoute.estimatedMovingSeconds
-        ? Math.round(activeRoute.estimatedMovingSeconds / 60) + " min"
-        : null;
-      const profile = routePreference.charAt(0).toUpperCase() + routePreference.slice(1);
-      roadbookMeta.textContent =
-        km.toFixed(km >= 10 ? 1 : 2) + " km" +
-        (mins ? " · ~" + mins : "") +
-        " · " + profile;
-      roadbookList.innerHTML = mans.map((man) => {
-        const tag = roadbookSurfaceTag(man);
-        const note = roadbookNoteFor(man);
-        const title = man.text || (man.severity === "arrive" ? "Arrive at destination" : "Cue");
-        return (
-          "<div class=\"roadbook-row\">" +
-            "<div class=\"roadbook-cum\">" + roadbookCumLabel(man.alongKm) + "</div>" +
-            "<div class=\"roadbook-body\">" +
-              "<div class=\"roadbook-title\">" + escapeHtml(title) + "</div>" +
-              (note ? "<div class=\"roadbook-note\">" + escapeHtml(note) + "</div>" : "") +
-            "</div>" +
-            (tag.label
-              ? "<span class=\"roadbook-tag " + tag.className + "\">" + escapeHtml(tag.label) + "</span>"
-              : "") +
-          "</div>"
-        );
-      }).join("");
-    }
-
     function escapeHtml(value) {
       return String(value == null ? "" : value)
         .replace(/&/g, "&amp;")
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;")
         .replace(/"/g, "&quot;");
-    }
-
-    function setRoadbookOpen(open) {
-      if (!roadbookPanel) return;
-      const next = !!open;
-      const wasOpen = roadbookPanel.classList.contains("open");
-      if (next === wasOpen) {
-        if (next) renderRoadbook();
-        return;
-      }
-      roadbookPanel.classList.toggle("open", next);
-      roadbookPanel.setAttribute("aria-hidden", next ? "false" : "true");
-      document.body.classList.toggle("roadbook-open", next);
-      if (roadbookBtn) roadbookBtn.setAttribute("aria-expanded", next ? "true" : "false");
-      if (next) {
-        if (plannerDrawerState !== "closed") {
-          roadbookReturnToPlanner = true;
-          applyPlannerDrawerState("closed", { silent: true });
-        } else {
-          roadbookReturnToPlanner = false;
-        }
-        if (legendEl && !legendEl.classList.contains("collapsed")) {
-          legendEl.classList.add("collapsed");
-          if (legendBtn) legendBtn.setAttribute("aria-expanded", "false");
-        }
-        renderRoadbook();
-        syncRouteChrome();
-        return;
-      }
-      // Closing: optionally restore planner without re-entering setRouteCardOpen→setRoadbookOpen.
-      if (roadbookReturnToPlanner && !navigating) {
-        roadbookReturnToPlanner = false;
-        applyPlannerDrawerState("expanded", { silent: true });
-      }
-      syncRouteChrome();
     }
 
     function applyPlannerDrawerState(next, opts) {
@@ -6321,13 +6229,6 @@
 
     function setPlannerDrawerState(next) {
       if (next === "expanded" || next === "collapsed") {
-        roadbookReturnToPlanner = false;
-        if (roadbookPanel && roadbookPanel.classList.contains("open")) {
-          roadbookPanel.classList.remove("open");
-          roadbookPanel.setAttribute("aria-hidden", "true");
-          document.body.classList.remove("roadbook-open");
-          if (roadbookBtn) roadbookBtn.setAttribute("aria-expanded", "false");
-        }
         if (legendEl && !legendEl.classList.contains("collapsed")) {
           legendEl.classList.add("collapsed");
           if (legendBtn) legendBtn.setAttribute("aria-expanded", "false");
@@ -6398,19 +6299,6 @@
           togglePlannerExpandedCollapsed();
         }
       });
-    }
-
-    if (roadbookBtn) {
-      roadbookBtn.addEventListener("click", () => {
-        const open = !roadbookPanel.classList.contains("open");
-        setRoadbookOpen(open);
-      });
-    }
-    if (routeRoadbookBtn) {
-      routeRoadbookBtn.addEventListener("click", () => setRoadbookOpen(true));
-    }
-    if (roadbookBack) {
-      roadbookBack.addEventListener("click", () => setRoadbookOpen(false));
     }
 
     document.getElementById("popupClose").addEventListener("click", hidePopup);

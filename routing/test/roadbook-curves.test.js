@@ -5,10 +5,13 @@ const assert = require("assert");
 const {
   buildCurveEvents,
   classifyCurve,
+  classifyJunctionDelta,
   mergeNavCues,
   distanceToCueMeters,
   haversineMeters,
-  bearingDeg
+  bearingDeg,
+  formatJunctionCue,
+  formatRoadbookCue
 } = require("../lib/roadbook-curves");
 
 function destination(lon, lat, bearingDegValue, distanceM) {
@@ -103,6 +106,23 @@ check("gentle sweeping left curve produces high-numbered LEFT cue", () => {
   assert.ok(c.number >= 5, "expected easy/fast number, got " + c.number);
   assert.strictEqual(c.source, "geometry");
   assert.ok(c.confidence > 0.3);
+});
+
+check("gentle 15-25 degree bend still emits a numbered roadbook cue", () => {
+  const coords = makeArcRoute({
+    side: "right",
+    totalDeg: 20,
+    arcLengthM: 120,
+    approachM: 60,
+    exitM: 60
+  });
+  const events = buildCurveEvents(coords);
+  assert.ok(events.length >= 1, "expected a gentle curve cue, got " + events.length);
+  const c = events[0];
+  assert.strictEqual(c.kind, "curve");
+  assert.strictEqual(c.side, "right");
+  assert.ok(c.number >= 1 && c.number <= 6, "number in 1..6, got " + c.number);
+  assert.match(c.spoken, /^right [1-6]/);
 });
 
 check("tighter left curve produces a lower-numbered LEFT cue", () => {
@@ -213,32 +233,61 @@ check("cue distance counts down as rider progresses", () => {
   assert.strictEqual(distanceToCueMeters(0.5, cueAlong), 0);
 });
 
-check("merge prefers junction when overlapping a curve", () => {
+check("junction cue is side-only and never carries a rally number", () => {
+  const right = classifyJunctionDelta(45);
+  assert.strictEqual(right.side, "right");
+  assert.strictEqual(right.kind, "junction");
+  assert.ok(!("number" in right), "junction must not carry a number field");
+  assert.ok(!/\d/.test(right.text), "junction text has a digit: " + right.text);
+  assert.ok(!/\d/.test(right.spoken), "junction speech has a digit: " + right.spoken);
+
+  const left = classifyJunctionDelta(-70);
+  assert.strictEqual(left.side, "left");
+  assert.ok(!/\d/.test(left.text));
+  assert.ok(!/\d/.test(left.spoken));
+
+  // A shallow deflection is "straight through" — no turn cue.
+  const straight = classifyJunctionDelta(5);
+  assert.strictEqual(straight.severity, "straight");
+});
+
+check("formatJunctionCue wording has no number; formatRoadbookCue keeps it", () => {
+  const j = formatJunctionCue("left");
+  assert.strictEqual(j.main, "Left turn");
+  assert.strictEqual(j.here, "Left turn here");
+  assert.strictEqual(j.spoken, "left turn");
+  assert.ok(!/\d/.test(j.main + j.here + j.spoken));
+
+  const r = formatRoadbookCue("right", 5, false);
+  assert.strictEqual(r.main, "Right 5");
+  assert.strictEqual(r.spoken, "right 5");
+  const hairpin = formatRoadbookCue("left", 1, true);
+  assert.match(hairpin.main, /hairpin/);
+  assert.match(hairpin.spoken, /^left 1 hairpin/);
+});
+
+check("overlap keeps a non-numbered junction while distant curves stay numbered", () => {
   const curves = [
-    {
-      alongKm: 1.0,
-      number: 4,
-      side: "left",
-      kind: "curve",
-      text: "LEFT 4",
-      spoken: "left 4",
-      source: "geometry"
-    }
+    { alongKm: 1.0, number: 4, side: "left", kind: "curve", text: "Left 4", spoken: "left 4", source: "geometry" },
+    { alongKm: 2.0, number: 3, side: "right", kind: "curve", text: "Right 3", spoken: "right 3", source: "geometry" }
   ];
   const junctions = [
-    {
-      alongKm: 1.04,
-      number: 3,
-      side: "left",
-      kind: "junction",
-      text: "LEFT 3",
-      spoken: "left 3",
-      source: "junction"
-    }
+    Object.assign({ alongKm: 1.04 }, classifyJunctionDelta(-50))
   ];
   const merged = mergeNavCues(curves, junctions);
-  assert.strictEqual(merged.length, 1);
-  assert.strictEqual(merged[0].kind, "junction");
+
+  const jct = merged.find((m) => Math.abs(m.alongKm - 1.02) < 0.2);
+  assert.ok(jct, "expected a merged cue near the junction");
+  assert.strictEqual(jct.kind, "junction");
+  assert.ok(!("number" in jct), "junction must not gain a number from merge");
+  assert.ok(!/\d/.test(jct.text), "junction text gained a digit: " + jct.text);
+  assert.ok(!/\d/.test(jct.spoken), "junction speech gained a digit: " + jct.spoken);
+
+  const curve = merged.find((m) => Math.abs(m.alongKm - 2.0) < 0.1);
+  assert.ok(curve, "distant curve should survive");
+  assert.strictEqual(curve.kind, "curve");
+  assert.strictEqual(curve.number, 3);
+  assert.match(curve.text, /\d/);
 });
 
 console.log("roadbook-curves:", passed, "passed");
