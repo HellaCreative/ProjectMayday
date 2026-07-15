@@ -2582,35 +2582,6 @@
       };
     }
 
-    async function fetchRoadConnectorRoute(start, end) {
-      const coords = start.lng + "," + start.lat + ";" + end.lng + "," + end.lat;
-      const url = "https://router.project-osrm.org/route/v1/driving/" + coords + "?overview=full&geometries=geojson&steps=false";
-      const res = await fetch(url);
-      if (!res.ok) throw new Error("OSM road connector HTTP " + res.status);
-      const json = await res.json();
-      const route = json.routes && json.routes[0];
-      if (!route || !route.geometry || !route.geometry.coordinates) {
-        throw new Error("No OSM road connector route");
-      }
-      return {
-        kind: "roadConnector",
-        coordinates: route.geometry.coordinates,
-        segments: [{
-          trackClass: "connector",
-          accessClass: "motorized_permissive",
-          coords: route.geometry.coordinates,
-          distanceKm: route.distance / 1000
-        }],
-        distanceKm: route.distance / 1000,
-        dirtKm: 0,
-        byClass: { connector: route.distance / 1000 },
-        byAccess: { motorized_permissive: route.distance / 1000 },
-        unknownAccessKm: 0,
-        unknownAccessPercent: 0,
-        accessPolicy: currentAccessPolicy()
-      };
-    }
-
     function renderRouteDebug() {
       if (!routeDebug) {
         routeDebugEl.innerHTML = "";
@@ -2646,6 +2617,16 @@
               (activeRoute.unknownAccessPercent || 0) + "%)"
             : "")
         );
+      }
+      if (routeDebug.service) {
+        rows.push("Engine: <b>" + (routeDebug.service.engine || "route-service") + "</b>");
+        if (routeDebug.service.startAccessMeters != null) {
+          rows.push("Access A/B: <b>" + routeDebug.service.startAccessMeters + " m / " +
+            routeDebug.service.endAccessMeters + " m</b> (limit " + routeDebug.service.matchLimitMeters + " m)");
+        }
+      }
+      if (routeDebug.warnings && routeDebug.warnings.length) {
+        rows.push("Warnings: <b>" + routeDebug.warnings.map((w) => w.code || w.message).join(", ") + "</b>");
       }
       routeDebugEl.innerHTML = rows.join("<br>");
     }
@@ -3527,22 +3508,19 @@
         return;
       }
       if (activeRoute) {
-        if (activeRoute.kind === "roadConnector") {
-          routeStatus.innerHTML =
-            "Cleanest route<strong>" +
-            activeRoute.distanceKm.toFixed(activeRoute.distanceKm >= 10 ? 1 : 2) +
-            " km · OSM highway</strong>";
-          return;
-        }
         const dirtPct = activeRoute.distanceKm ? Math.round((activeRoute.dirtKm / activeRoute.distanceKm) * 100) : 0;
         const pavedPct = activeRoute.distanceKm ? Math.round(((activeRoute.byClass.paved || 0) / activeRoute.distanceKm) * 100) : 0;
         const unknownPct = activeRoute.unknownAccessPercent || 0;
         const policy = activeRoute.accessPolicy || currentAccessPolicy();
         const policyLabel = policy.motorizedUnknown ? "unknown access on" : "permissive only";
+        const mins = activeRoute.estimatedMovingSeconds
+          ? Math.round(activeRoute.estimatedMovingSeconds / 60) + " min"
+          : null;
         routeStatus.innerHTML =
-          "Network route<strong>" +
+          routePreference.charAt(0).toUpperCase() + routePreference.slice(1) + " route<strong>" +
           activeRoute.distanceKm.toFixed(activeRoute.distanceKm >= 10 ? 1 : 2) +
-          " km · " + dirtPct + "% dirt" +
+          " km" + (mins ? " · ~" + mins : "") +
+          " · " + dirtPct + "% dirt" +
           (pavedPct ? " · " + pavedPct + "% paved" : "") +
           (unknownPct ? " · " + unknownPct + "% unknown access" : "") +
           " · " + policyLabel +
@@ -3613,13 +3591,44 @@
       else refreshRouteDraft();
     }
 
-    // Mode policy:
-    //   cleanest - OSRM highway routing, never touches the NSTDB graph
-    //   direct   - NSTDB graph, all classes near-neutral cost
-    //   balanced - NSTDB graph, pavement costs ~2x dirt
-    //   dirt     - NSTDB graph, pavement costs 6x (used only to bridge dirt)
-    // The graph includes paved NSTDB roads, so no invisible OSRM overrides:
-    // if the graph cannot route, we say why instead of silently substituting.
+    // Phase 2B: all profiles (including Cleanest) call the server route API.
+    // The browser does not build or search the province graph for routing.
+    const ROUTE_API_URL = "/api/route";
+
+    function mapApiRouteToActiveRoute(api) {
+      const distanceKm = (api.distanceMeters || 0) / 1000;
+      const byClass = {};
+      const segments = (api.segments || []).map((seg) => {
+        const trackClass = seg.surfaceClass || "unknown";
+        byClass[trackClass] = (byClass[trackClass] || 0) + ((seg.distanceMeters || 0) / 1000);
+        return {
+          trackClass,
+          accessClass: seg.accessClass,
+          edgeId: seg.edgeId,
+          coords: seg.geometry || [],
+          distanceKm: (seg.distanceMeters || 0) / 1000
+        };
+      });
+      const dirtKm = distanceKm * ((api.stats?.gravelPercent || 0) + (api.stats?.accessPercent || 0) + (api.stats?.trackPercent || 0)) / 100;
+      return {
+        kind: "service",
+        coordinates: api.geometry || [],
+        segments,
+        distanceKm,
+        dirtKm,
+        byClass,
+        byAccess: api.stats || {},
+        unknownAccessKm: ((api.stats?.unknownAccessPercent || 0) / 100) * distanceKm,
+        unknownAccessPercent: api.stats?.unknownAccessPercent || 0,
+        accessPolicy: api.accessPolicy || currentAccessPolicy(),
+        warnings: api.warnings || [],
+        serviceDebug: api.debug || null,
+        estimatedMovingSeconds: api.estimatedMovingSeconds || null,
+        snapStart: api.geometry && api.geometry[0] ? api.geometry[0] : null,
+        snapEnd: api.geometry && api.geometry.length ? api.geometry[api.geometry.length - 1] : null
+      };
+    }
+
     async function calculateRoute() {
       const start = activeStart();
       if (!start || !destination) {
@@ -3634,7 +3643,6 @@
         if (!accepted) {
           allowUnknownAccess = false;
           syncUnknownAccessUi();
-          invalidateRoutingGraph();
           setStatus("Routing policy: permissive/verified only", "ok");
           return;
         }
@@ -3642,55 +3650,76 @@
       const jobId = ++routeJobId;
       activeRoute = null;
       routeDebug = null;
-      routeMessage = routePreference === "cleanest"
-        ? "Routing<strong>Paved highway route</strong>"
-        : "Routing<strong>" + routePreference + " profile on NSTDB network</strong>";
+      routeMessage = "Routing<strong>" + routePreference + " via route service</strong>";
       refreshRouteDraft();
       try {
-        if (routePreference === "cleanest") {
-          const roadRoute = await fetchRoadConnectorRoute(start, destination);
-          if (jobId !== routeJobId) return;
-          activeRoute = roadRoute;
-          routeMessage = "";
+        const res = await fetch(ROUTE_API_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            profile: routePreference,
+            locations: [
+              { lat: start.lat, lon: start.lng, label: "A" },
+              { lat: destination.lat, lon: destination.lng, label: "B" }
+            ],
+            vehicle: "dual-sport-motorcycle",
+            accessPolicy: currentAccessPolicy(),
+            options: { matchLimitMeters: 250 }
+          })
+        });
+        const api = await res.json();
+        if (jobId !== routeJobId) return;
+
+        routeDebug = {
+          start: api.debug ? {
+            ok: !!api.debug.startMatchedEdge,
+            meters: api.debug.startAccessMeters,
+            trackClass: api.debug.startAccessClass,
+            componentId: api.debug.componentId
+          } : null,
+          end: api.debug ? {
+            ok: !!api.debug.endMatchedEdge,
+            meters: api.debug.endAccessMeters,
+            trackClass: api.debug.endAccessClass,
+            componentId: api.debug.componentId
+          } : null,
+          sameComponent: api.status === "complete",
+          snapToleranceM: api.debug?.matchLimitMeters ?? 250,
+          service: api.debug || null,
+          warnings: api.warnings || []
+        };
+
+        if (api.status !== "complete") {
+          lastNetworkRouteReason = api.message || api.error || "No route";
+          routeMessage = "No route<strong>" + lastNetworkRouteReason + "</strong>";
+          activeRoute = null;
           setRouteCardOpen(true);
           refreshRouteDraft();
-          syncRouteExportUi();
           return;
         }
-        await ensureRouteEnvelope(start, destination);
-        if (jobId !== routeJobId) return;
-        const graph = await ensureRoutingGraph();
-        if (jobId !== routeJobId) return;
-        routeMessage = "Routing<strong>Matching NSTDB network</strong>";
-        refreshRouteDraft();
-        const networkRoute = findNetworkRoute(graph, start, destination);
-        if (jobId !== routeJobId) return;
-        if (networkRoute) {
-          // Move A/B markers onto the snapped track so the tap latches visually.
-          if (networkRoute.snapEnd) {
-            destination = { lng: networkRoute.snapEnd[0], lat: networkRoute.snapEnd[1] };
-          }
-          if (routeMode === "plan" && networkRoute.snapStart) {
-            plannedStart = { lng: networkRoute.snapStart[0], lat: networkRoute.snapStart[1] };
-          }
-          activeRoute = networkRoute;
-          routeMessage = "";
-          if (navigating) {
-            navManeuvers = buildNavManeuvers(activeRouteCoordinates());
-            lastSpokenCueKey = "";
-            syncOverviewRoute();
-            updateNavGuidance();
-          } else {
-            setRouteCardOpen(true);
-          }
-          refreshRouteDraft();
-          syncRouteExportUi();
-          return;
+
+        const networkRoute = mapApiRouteToActiveRoute(api);
+        if (networkRoute.snapEnd) {
+          destination = { lng: networkRoute.snapEnd[0], lat: networkRoute.snapEnd[1] };
         }
-        routeMessage = "No network route<strong>" + (lastNetworkRouteReason || "Mapped lines do not connect") + "</strong>";
-        activeRoute = null;
-        setRouteCardOpen(true);
+        if (routeMode === "plan" && networkRoute.snapStart) {
+          plannedStart = { lng: networkRoute.snapStart[0], lat: networkRoute.snapStart[1] };
+        }
+        activeRoute = networkRoute;
+        routeMessage = "";
+        const warnText = (api.warnings || []).map((w) => w.message || w.code).filter(Boolean).join(" · ");
+        if (warnText) setStatus(warnText, api.accessPolicy?.motorizedUnknown ? "error" : "ok");
+        else setStatus("Route from service · browser did not build the graph", "ok");
+        if (navigating) {
+          navManeuvers = buildNavManeuvers(activeRouteCoordinates());
+          lastSpokenCueKey = "";
+          syncOverviewRoute();
+          updateNavGuidance();
+        } else {
+          setRouteCardOpen(true);
+        }
         refreshRouteDraft();
+        syncRouteExportUi();
       } catch (err) {
         console.error(err);
         if (jobId !== routeJobId) return;
