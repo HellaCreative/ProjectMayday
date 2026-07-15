@@ -74,27 +74,6 @@
     }
     .brand span { color: var(--accent); }
 
-    .pill {
-      pointer-events: auto;
-      font-family: var(--mono);
-      font-size: 0.56rem;
-      letter-spacing: 0.09em;
-      text-transform: uppercase;
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 999px;
-      padding: 4px 10px;
-      backdrop-filter: blur(12px);
-      color: var(--muted);
-    }
-    .pill strong {
-      color: var(--text);
-      font-size: 0.62rem;
-      font-weight: 600;
-    }
-    .pill.ready { border-color: rgba(10, 102, 194, 0.42); }
-    .pill.ready strong { color: var(--accent); }
-
     .btn.mini {
       width: 42px;
       height: 42px;
@@ -860,7 +839,6 @@
   <div class="topbar">
     <div class="topbar-left">
       <a class="brand" href="../index.html">DIRT<span>.</span> MAYDAY<span>.</span></a>
-      <div class="pill" id="modePill"><strong id="modeLabel">Loading…</strong></div>
       <button class="btn mini" id="legendBtn" title="Map layers" aria-label="Toggle map layers" aria-expanded="false">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="14" y2="18"/></svg>
       </button>
@@ -1031,8 +1009,8 @@
   </div>
 
   <div class="status-dock" id="statusDock" aria-live="polite">
-    <div class="status" id="status">Loading NS government roads…</div>
-    <div class="meta" id="dataMeta">Loading metadata…</div>
+    <div class="status" id="status"></div>
+    <div class="meta" id="dataMeta"></div>
   </div>
 
   <div class="popup" id="popup">
@@ -1191,7 +1169,6 @@
     } catch (_) { /* best effort cleanup of old giant caches */ }
 
     let rider = { ...FALLBACK, heading: null, speed: 0, accuracy: null };
-    let trailCount = 0;
     let nsGovManifest = null;
     let nsGovManifestPromise = null;
     const loadedChunkIds = new Set();
@@ -1212,7 +1189,9 @@
     let lastNetworkRouteReason = "";
     let routeDebug = null;
     let routeJobId = 0;
-    const sourceCounts = { nsGov: 0 };
+    // Status dock ownership: "route" wins over transient "context" loading.
+    let statusOwner = null;
+    let contextLoadingActive = false;
 
     // Navigation / follow camera
     let geoWatchId = null;
@@ -1244,8 +1223,6 @@
     let userZooming = false;
 
     const statusEl = document.getElementById("status");
-    const modePill = document.getElementById("modePill");
-    const modeLabel = document.getElementById("modeLabel");
     const dataMeta = document.getElementById("dataMeta");
     const popupEl = document.getElementById("popup");
     const popupBody = document.getElementById("popupBody");
@@ -1301,19 +1278,52 @@
       }
     }
 
-    function setStatus(text, kind) {
-      statusEl.textContent = text;
+    function setStatus(text, kind, owner) {
+      statusEl.textContent = text || "";
       statusEl.className = "status" + (kind ? " " + kind : "");
+      statusOwner = owner || null;
+      if (owner !== "context") contextLoadingActive = false;
     }
 
-    function setReady(count) {
-      trailCount = count;
-      modePill.className = "pill ready";
-      modeLabel.textContent = count.toLocaleString() + " segments";
+    function clearStatus() {
+      setStatus("", null, null);
     }
 
-    function setReadyTotal() {
-      setReady(Object.values(sourceCounts).reduce((sum, count) => sum + count, 0));
+    function activeRouteStatus() {
+      if (lastNetworkRouteReason && !(activeRoute && activeRouteCoordinates().length >= 2)) {
+        return { text: lastNetworkRouteReason, kind: "error" };
+      }
+      if (!activeRoute) return null;
+      const warnText = (activeRoute.warnings || [])
+        .map((w) => w.message || w.code)
+        .filter(Boolean)
+        .join(" · ");
+      if (warnText) {
+        return {
+          text: warnText,
+          kind: activeRoute.accessPolicy?.motorizedUnknown ? "error" : "ok"
+        };
+      }
+      return null;
+    }
+
+    function canAnnounceContextLoad() {
+      return statusOwner !== "route" && !activeRouteStatus();
+    }
+
+    function beginContextLoading(message) {
+      if (!canAnnounceContextLoad()) return false;
+      contextLoadingActive = true;
+      setStatus(message, null, "context");
+      return true;
+    }
+
+    function finishContextLoading() {
+      if (!contextLoadingActive && statusOwner !== "context") return;
+      contextLoadingActive = false;
+      const routeStatus = activeRouteStatus();
+      if (routeStatus) setStatus(routeStatus.text, routeStatus.kind, "route");
+      else clearStatus();
     }
 
     async function fetchGzipJson(url) {
@@ -1365,8 +1375,6 @@
       if (map.getSource("nsGov")) {
         map.getSource("nsGov").setData(nsGovFeatureCollection);
       }
-      sourceCounts.nsGov = nsGovDisplayFeatures.length;
-      setReadyTotal();
       updateDataMeta();
     }
 
@@ -1468,21 +1476,26 @@
       const wanted = candidates.filter((c) => !chunkFeaturesById.has(c.chunk.id));
       if (!wanted.length) {
         enforceChunkMemoryCap(focus, keepIds);
-        return false;
+        return { loadedAny: false, showedLoading: false };
       }
       const buildStamp = manifest.generatedAt || null;
       let loadedAny = false;
       let done = 0;
+      let showedLoading = false;
       for (const item of wanted) {
-        if (label) {
-          setStatus("Loading nearby network · " + (done + 1) + " / " + wanted.length + "…");
+        const msg = "Loading nearby network · " + (done + 1) + " / " + wanted.length + "…";
+        if (contextLoadingActive) {
+          setStatus(msg, null, "context");
+          showedLoading = true;
+        } else if (beginContextLoading(msg)) {
+          showedLoading = true;
         }
         if (await chunkLoadPromise(item.chunk, buildStamp)) loadedAny = true;
         done += 1;
         await yieldToBrowser();
       }
       enforceChunkMemoryCap(focus, keepIds);
-      return loadedAny;
+      return { loadedAny, showedLoading };
     }
 
     function contextFocusPoint() {
@@ -1640,6 +1653,7 @@
         }
         invalidateRoutingGraph();
         lastContextFocus = null;
+        if (contextLoadingActive || statusOwner === "context") finishContextLoading();
         return;
       }
 
@@ -1663,22 +1677,21 @@
         }
         const points = [focus].concat(anchors);
         const bbox = bboxFromPoints(points, CONTEXT_CHUNK_PAD_DEG);
-        await loadChunksNearFocus(bbox, focus, label);
+        const loadResult = await loadChunksNearFocus(bbox, focus, label);
         const selected = selectCorridorFeatures(focus, anchors, corridorKm);
         publishNsGovDisplay(selected);
         invalidateRoutingGraph();
         lastContextFocus = focus;
-        if (options.announce !== false && selected.length) {
-          setStatus(
-            selected.length.toLocaleString() + " nearby · " +
-            chunkFeaturesById.size + "/" + CONTEXT_MAX_CHUNKS + " chunks · " +
-            corridorKm + " km corridor",
-            "ok"
-          );
-        }
+        // Never replace an active route warning with corridor completion chatter.
+        if (loadResult && loadResult.showedLoading) finishContextLoading();
       } catch (err) {
         console.error(err);
-        setStatus("Failed to load nearby network · " + (err.message || "error"), "error");
+        contextLoadingActive = false;
+        if (statusOwner !== "route" && !activeRouteStatus()) {
+          setStatus("Failed to load nearby network · " + (err.message || "error"), "error", "context");
+        } else {
+          finishContextLoading();
+        }
       } finally {
         contextLoadQueued = false;
         if (contextLoadPending) {
@@ -1691,7 +1704,7 @@
 
     // Compatibility alias used by a few event handlers.
     function loadViewportChunks() {
-      return refreshContextNetwork({ label: "nearby network" });
+      return refreshContextNetwork({ label: "nearby network", announce: false });
     }
 
     function updateDataMeta() {
@@ -2969,8 +2982,8 @@
 
     function clearRouteDerivedStatus(message, kind) {
       lastNetworkRouteReason = "";
-      if (message) setStatus(message, kind || "ok");
-      else setStatus("Ready", "ok");
+      if (message) setStatus(message, kind || "ok", "route");
+      else clearStatus();
     }
 
     function syncRouteExportUi() {
@@ -3990,7 +4003,7 @@
         if (!accepted) {
           allowUnknownAccess = false;
           syncUnknownAccessUi();
-          setStatus("Routing policy: permissive/verified only", "ok");
+          setStatus("Routing policy: permissive/verified only", "ok", "route");
           return;
         }
       }
@@ -4000,7 +4013,7 @@
       lastNetworkRouteReason = "";
       routeMessage = "Routing<strong>" + routePreference + " via route service</strong>";
       // Neutral in-flight status — never leave the previous route’s warnings up.
-      setStatus("Routing…", "ok");
+      setStatus("Routing…", "ok", "route");
       refreshRouteDraft();
       try {
         const res = await fetch(ROUTE_API_URL, {
@@ -4026,7 +4039,7 @@
           lastNetworkRouteReason = api.message || api.error || "No route";
           routeMessage = "No route<strong>" + lastNetworkRouteReason + "</strong>";
           activeRoute = null;
-          setStatus(lastNetworkRouteReason, "error");
+          setStatus(lastNetworkRouteReason, "error", "route");
           setRouteCardOpen(true);
           refreshRouteDraft();
           return;
@@ -4042,8 +4055,8 @@
         activeRoute = networkRoute;
         routeMessage = "";
         const warnText = (api.warnings || []).map((w) => w.message || w.code).filter(Boolean).join(" · ");
-        if (warnText) setStatus(warnText, api.accessPolicy?.motorizedUnknown ? "error" : "ok");
-        else setStatus("Route from service · browser did not build the graph", "ok");
+        if (warnText) setStatus(warnText, api.accessPolicy?.motorizedUnknown ? "error" : "ok", "route");
+        else setStatus("Route from service · browser did not build the graph", "ok", "route");
         if (navigating) {
           navManeuvers = buildNavManeuvers(activeRouteCoordinates());
           lastSpokenCueKey = "";
@@ -4062,7 +4075,7 @@
         routeDebug = null;
         lastNetworkRouteReason = err.message || "Try again";
         routeMessage = "Routing failed<strong>" + lastNetworkRouteReason + "</strong>";
-        setStatus(lastNetworkRouteReason, "error");
+        setStatus(lastNetworkRouteReason, "error", "route");
         setRouteCardOpen(true);
         refreshRouteDraft();
       }
@@ -4129,7 +4142,6 @@
       } catch (err) {
         console.error(err);
         setStatus("Failed to load trail data · " + (err.message || "error"), "error");
-        modeLabel.textContent = "Load failed";
       }
 
       if (navigator.geolocation) {
