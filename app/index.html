@@ -3249,7 +3249,15 @@
     function handlePoiClick(e) {
       if (!map.getLayer("poi-marker")) return false;
       const hitLayers = ["poi-cluster", "poi-marker"].filter((id) => map.getLayer(id));
-      const feats = map.queryRenderedFeatures(e.point, { layers: hitLayers });
+      // Pad the hit target so finger taps / near-misses still select a marker
+      // instead of falling through to the route planner.
+      const r = 10;
+      const box = [
+        [e.point.x - r, e.point.y - r],
+        [e.point.x + r, e.point.y + r]
+      ];
+      let feats = map.queryRenderedFeatures(box, { layers: hitLayers });
+      if (!feats.length) feats = map.queryRenderedFeatures(e.point, { layers: hitLayers });
       if (!feats.length) return false;
       const feat = feats[0];
       const props = feat.properties || {};
