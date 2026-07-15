@@ -1057,13 +1057,21 @@
     // Bridge/tunnel are structure overlays. Restricted is accessClass, not a surface.
     // Legend swatches stay ~4px (.legend i); map strokes stay thinner so the route dominates.
     const NETWORK_LINE_WIDTH = 2;
-    // Overview / planning: basemap (+ route). NSTDB overlays only in a hard-capped
-    // detail corridor so the browser never paints the province network.
-    const CONTEXT_MIN_ZOOM = 12.5;
-    const CONTEXT_CORRIDOR_KM = 1.5;
-    const CONTEXT_MAX_FEATURES = 1800;
-    const CONTEXT_CHUNK_PAD_DEG = 0.03; // ~3 km chunk fetch pad around focus
-    const CONTEXT_ROUTE_WINDOW_KM = 6; // only nearby route geometry anchors context
+    const BRANCH_LINE_WIDTH_DETAIL = 2.5;
+    // Detail/nav shows a moving rider corridor. Overview may show a bounded
+    // route-context corridor near the map focus — never the full A–B envelope.
+    const CONTEXT_DETAIL_MIN_ZOOM = 12.5;
+    const CONTEXT_CORRIDOR_KM_DETAIL = 1.5;
+    const CONTEXT_CORRIDOR_KM_OVERVIEW = 2.0;
+    const CONTEXT_MAX_FEATURES = 1600;
+    const CONTEXT_MAX_CHUNKS = 6;
+    const CONTEXT_CHUNK_PAD_DEG = 0.025;
+    const CONTEXT_ROUTE_ARM_KM_DETAIL = 6;
+    const CONTEXT_ROUTE_ARM_KM_OVERVIEW = 20;
+    const CONTEXT_ROUTE_SAMPLE_STEP_KM = 3;
+    const CONTEXT_MAX_ANCHORS = 8;
+    const CONTEXT_REFRESH_DEBOUNCE_MS = 450;
+    const CONTEXT_RIDER_MOVE_KM = 0.35;
     const TRACK_TYPES = {
       access: { label: "Access road", color: "#0a66c2", layers: ["ns-gov-access"] },
       gravel: { label: "Gravel road", color: "#5d6874", layers: ["ns-gov-gravel"] },
@@ -1320,8 +1328,8 @@
     }
 
     // ---- Chunked NSTDB context (display only) ------------------------------
-    // Full routing stays on /api/route. The browser only loads a small corridor
-    // of chunks when zoomed into detail/navigation — never the province overview.
+    // Full routing stays on /api/route. Overview may paint a focus-bounded route
+    // corridor; detail/nav paints a moving rider window. Both hard-cap chunks.
 
     async function ensureManifest() {
       if (nsGovManifest) return nsGovManifest;
@@ -1337,6 +1345,18 @@
 
     function bboxIntersects(a, b) {
       return a[0] <= b[2] && a[2] >= b[0] && a[1] <= b[3] && a[3] >= b[1];
+    }
+
+    function isDetailContextZoom() {
+      return map && typeof map.getZoom === "function" && map.getZoom() >= CONTEXT_DETAIL_MIN_ZOOM;
+    }
+
+    function contextCorridorKm() {
+      return isDetailContextZoom() ? CONTEXT_CORRIDOR_KM_DETAIL : CONTEXT_CORRIDOR_KM_OVERVIEW;
+    }
+
+    function contextRouteArmKm() {
+      return isDetailContextZoom() ? CONTEXT_ROUTE_ARM_KM_DETAIL : CONTEXT_ROUTE_ARM_KM_OVERVIEW;
     }
 
     function publishNsGovDisplay(features) {
@@ -1392,78 +1412,148 @@
       return promise;
     }
 
-    async function loadChunksForBbox(bbox, label) {
+    function chunkCenter(chunk) {
+      const b = chunk.bbox;
+      return [(b[0] + b[2]) / 2, (b[1] + b[3]) / 2];
+    }
+
+    function enforceChunkMemoryCap(focus, keepIds) {
+      const keep = keepIds || new Set();
+      if (chunkFeaturesById.size <= CONTEXT_MAX_CHUNKS && !keep.size) return;
+      const ranked = [];
+      for (const id of loadedChunkIds) {
+        if (keep.has(id)) continue;
+        const chunk = (nsGovManifest.chunks || []).find((c) => c.id === id);
+        const center = chunk ? chunkCenter(chunk) : focus;
+        ranked.push({ id, dist: distanceKmCoords(focus, center) });
+      }
+      ranked.sort((a, b) => b.dist - a.dist);
+      while (chunkFeaturesById.size > CONTEXT_MAX_CHUNKS && ranked.length) {
+        const drop = ranked.shift();
+        loadedChunkIds.delete(drop.id);
+        chunkFeaturesById.delete(drop.id);
+        chunkPromises.delete(drop.id);
+      }
+      // Drop any leftovers not in keep when over cap.
+      if (chunkFeaturesById.size > CONTEXT_MAX_CHUNKS) {
+        const extras = [];
+        for (const id of loadedChunkIds) {
+          if (keep.has(id)) continue;
+          extras.push(id);
+        }
+        for (const id of extras) {
+          if (chunkFeaturesById.size <= CONTEXT_MAX_CHUNKS) break;
+          loadedChunkIds.delete(id);
+          chunkFeaturesById.delete(id);
+          chunkPromises.delete(id);
+        }
+      }
+    }
+
+    async function loadChunksNearFocus(bbox, focus, label) {
       const manifest = await ensureManifest();
-      const wanted = manifest.chunks.filter((chunk) =>
-        bboxIntersects(chunk.bbox, bbox) &&
-        !(loadedChunkIds.has(chunk.id) && chunkFeaturesById.has(chunk.id))
-      );
-      if (!wanted.length) return false;
+      const candidates = (manifest.chunks || [])
+        .filter((chunk) => bboxIntersects(chunk.bbox, bbox))
+        .map((chunk) => ({ chunk, dist: distanceKmCoords(focus, chunkCenter(chunk)) }))
+        .sort((a, b) => a.dist - b.dist)
+        .slice(0, CONTEXT_MAX_CHUNKS);
+      const keepIds = new Set(candidates.map((c) => c.chunk.id));
+      // Evict anything outside this window before loading more.
+      for (const id of Array.from(loadedChunkIds)) {
+        if (keepIds.has(id)) continue;
+        loadedChunkIds.delete(id);
+        chunkFeaturesById.delete(id);
+        chunkPromises.delete(id);
+      }
+      const wanted = candidates.filter((c) => !chunkFeaturesById.has(c.chunk.id));
+      if (!wanted.length) {
+        enforceChunkMemoryCap(focus, keepIds);
+        return false;
+      }
       const buildStamp = manifest.generatedAt || null;
       let loadedAny = false;
       let done = 0;
-      for (const chunk of wanted) {
+      for (const item of wanted) {
         if (label) {
           setStatus("Loading nearby network · " + (done + 1) + " / " + wanted.length + "…");
         }
-        if (await chunkLoadPromise(chunk, buildStamp)) loadedAny = true;
+        if (await chunkLoadPromise(item.chunk, buildStamp)) loadedAny = true;
         done += 1;
         await yieldToBrowser();
       }
+      enforceChunkMemoryCap(focus, keepIds);
       return loadedAny;
     }
 
-    function evictChunksOutsideBbox(bbox) {
-      if (!nsGovManifest) return;
-      for (const chunk of nsGovManifest.chunks || []) {
-        if (!loadedChunkIds.has(chunk.id)) continue;
-        if (bboxIntersects(chunk.bbox, bbox)) continue;
-        loadedChunkIds.delete(chunk.id);
-        chunkFeaturesById.delete(chunk.id);
-        chunkPromises.delete(chunk.id);
-      }
-    }
-
     function contextFocusPoint() {
-      if (rider && Number.isFinite(rider.lng) && Number.isFinite(rider.lat)) {
+      if (navigating && rider && Number.isFinite(rider.lng) && Number.isFinite(rider.lat)) {
+        return [rider.lng, rider.lat];
+      }
+      if (isDetailContextZoom() && rider && Number.isFinite(rider.lng) && Number.isFinite(rider.lat)) {
         return [rider.lng, rider.lat];
       }
       const c = map.getCenter();
       return [c.lng, c.lat];
     }
 
-    function sampleNearbyRouteAnchors(focus, maxKm) {
+    function nearestRouteIndex(coords, focus) {
+      let bestI = 0;
+      let bestD = Infinity;
+      for (let i = 0; i < coords.length; i += 1) {
+        const d = distanceKmCoords(focus, coords[i]);
+        if (d < bestD) {
+          bestD = d;
+          bestI = i;
+        }
+      }
+      return { index: bestI, distKm: bestD };
+    }
+
+    function sampleRouteAnchorsAroundFocus(focus, armKm) {
       const coords = activeRouteCoordinates();
       if (!coords || coords.length < 2) return [];
+      const near = nearestRouteIndex(coords, focus);
+      // If the focus is nowhere near the route (overview pan away), skip route arms.
+      if (near.distKm > armKm + 8) return [];
+      const alongAt = new Array(coords.length);
+      alongAt[0] = 0;
+      for (let i = 1; i < coords.length; i += 1) {
+        alongAt[i] = alongAt[i - 1] + distanceKmCoords(coords[i - 1], coords[i]);
+      }
+      const originAlong = alongAt[near.index];
+      const minAlong = originAlong - armKm;
+      const maxAlong = originAlong + armKm;
       const anchors = [];
-      let along = 0;
       let lastKeep = -Infinity;
       for (let i = 0; i < coords.length; i += 1) {
-        if (i > 0) along += distanceKmCoords(coords[i - 1], coords[i]);
-        const d = distanceKmCoords(focus, coords[i]);
-        if (d > maxKm) continue;
-        if (along - lastKeep < 0.4 && anchors.length) continue;
+        if (alongAt[i] < minAlong || alongAt[i] > maxAlong) continue;
+        if (anchors.length && alongAt[i] - lastKeep < CONTEXT_ROUTE_SAMPLE_STEP_KM) continue;
         anchors.push(coords[i]);
-        lastKeep = along;
+        lastKeep = alongAt[i];
+      }
+      if (anchors.length > CONTEXT_MAX_ANCHORS) {
+        const picked = [];
+        const step = (anchors.length - 1) / (CONTEXT_MAX_ANCHORS - 1);
+        for (let i = 0; i < CONTEXT_MAX_ANCHORS; i += 1) {
+          picked.push(anchors[Math.round(i * step)]);
+        }
+        return picked;
       }
       return anchors;
     }
 
-    function contextFetchBbox() {
-      const focus = contextFocusPoint();
-      const anchors = sampleNearbyRouteAnchors(focus, CONTEXT_ROUTE_WINDOW_KM);
-      let minLng = focus[0];
-      let minLat = focus[1];
-      let maxLng = focus[0];
-      let maxLat = focus[1];
-      for (const c of anchors) {
+    function bboxFromPoints(points, padDeg) {
+      let minLng = Infinity;
+      let minLat = Infinity;
+      let maxLng = -Infinity;
+      let maxLat = -Infinity;
+      for (const c of points) {
         minLng = Math.min(minLng, c[0]);
         minLat = Math.min(minLat, c[1]);
         maxLng = Math.max(maxLng, c[0]);
         maxLat = Math.max(maxLat, c[1]);
       }
-      const pad = CONTEXT_CHUNK_PAD_DEG;
-      return [minLng - pad, minLat - pad, maxLng + pad, maxLat + pad];
+      return [minLng - padDeg, minLat - padDeg, maxLng + padDeg, maxLat + padDeg];
     }
 
     function featureMidCoord(feature) {
@@ -1476,7 +1566,18 @@
       return line[Math.floor(line.length / 2)];
     }
 
-    function selectCorridorFeatures(focus, anchors) {
+    function surfacePriority(feature) {
+      const s = feature.properties && feature.properties.surfaceClass;
+      if (s === "track") return 4;
+      if (s === "access") return 3;
+      if (s === "gravel") return 2;
+      if (feature.properties && feature.properties.structureType === "bridge") return 3;
+      if (feature.properties && feature.properties.structureType === "tunnel") return 3;
+      if (feature.properties && feature.properties.accessClass === "motorized_restricted") return 1;
+      return 0;
+    }
+
+    function selectCorridorFeatures(focus, anchors, corridorKm) {
       const refs = [focus].concat(anchors || []);
       const scored = [];
       for (const features of chunkFeaturesById.values()) {
@@ -1487,13 +1588,13 @@
           for (const ref of refs) {
             const d = distanceKmCoords(mid, ref);
             if (d < best) best = d;
-            if (best <= CONTEXT_CORRIDOR_KM) break;
+            if (best <= corridorKm) break;
           }
-          if (best > CONTEXT_CORRIDOR_KM) continue;
-          scored.push({ feature, dist: best });
+          if (best > corridorKm) continue;
+          scored.push({ feature, dist: best, pri: surfacePriority(feature) });
         }
       }
-      scored.sort((a, b) => a.dist - b.dist);
+      scored.sort((a, b) => (a.dist - b.dist) || (b.pri - a.pri));
       const out = [];
       for (let i = 0; i < scored.length && out.length < CONTEXT_MAX_FEATURES; i += 1) {
         out.push(scored[i].feature);
@@ -1503,6 +1604,17 @@
 
     let contextLoadQueued = false;
     let contextLoadPending = null;
+    let contextDebounceTimer = null;
+    let lastContextFocus = null;
+
+    function scheduleContextNetworkRefresh(options = {}) {
+      if (contextDebounceTimer) clearTimeout(contextDebounceTimer);
+      contextDebounceTimer = setTimeout(() => {
+        contextDebounceTimer = null;
+        refreshContextNetwork({ announce: false, ...options });
+      }, options.debounceMs != null ? options.debounceMs : CONTEXT_REFRESH_DEBOUNCE_MS);
+    }
+
     async function refreshContextNetwork(options = {}) {
       const label = options.label || null;
       if (!sourceEnabled.nsGov) {
@@ -1510,19 +1622,26 @@
         invalidateRoutingGraph();
         return;
       }
-      if (!map || typeof map.getZoom !== "function" || map.getZoom() < CONTEXT_MIN_ZOOM) {
-        // Overview / planning scale: basemap (+ selected route). No NSTDB paint.
+      if (!map || typeof map.getZoom !== "function") return;
+
+      const detail = isDetailContextZoom();
+      const hasRoute = !!(activeRoute && activeRouteCoordinates().length >= 2);
+
+      // Overview without a route: basemap only. Overview with a route: bounded
+      // focus arm corridor — never the full Halifax–Yarmouth envelope.
+      if (!detail && !hasRoute) {
         if (nsGovDisplayFeatures.length) publishNsGovDisplay([]);
         else updateDataMeta();
-        // Release corridor memory at overview; IndexedDB keeps chunks for later detail.
         if (chunkFeaturesById.size || loadedChunkIds.size) {
           chunkFeaturesById.clear();
           loadedChunkIds.clear();
           chunkPromises.clear();
         }
         invalidateRoutingGraph();
+        lastContextFocus = null;
         return;
       }
+
       if (contextLoadQueued) {
         contextLoadPending = options;
         return;
@@ -1530,17 +1649,23 @@
       contextLoadQueued = true;
       try {
         const focus = contextFocusPoint();
-        const anchors = sampleNearbyRouteAnchors(focus, CONTEXT_ROUTE_WINDOW_KM);
-        const bbox = contextFetchBbox();
-        await loadChunksForBbox(bbox, label);
-        evictChunksOutsideBbox(bbox);
-        const selected = selectCorridorFeatures(focus, anchors);
+        const armKm = contextRouteArmKm();
+        const corridorKm = contextCorridorKm();
+        const anchors = hasRoute
+          ? sampleRouteAnchorsAroundFocus(focus, armKm)
+          : [];
+        const points = [focus].concat(anchors);
+        const bbox = bboxFromPoints(points, CONTEXT_CHUNK_PAD_DEG);
+        await loadChunksNearFocus(bbox, focus, label);
+        const selected = selectCorridorFeatures(focus, anchors, corridorKm);
         publishNsGovDisplay(selected);
         invalidateRoutingGraph();
+        lastContextFocus = focus;
         if (options.announce !== false && selected.length) {
           setStatus(
-            selected.length.toLocaleString() + " nearby segments · " +
-            CONTEXT_CORRIDOR_KM + " km corridor",
+            selected.length.toLocaleString() + " nearby · " +
+            chunkFeaturesById.size + "/" + CONTEXT_MAX_CHUNKS + " chunks · " +
+            corridorKm + " km corridor",
             "ok"
           );
         }
@@ -1567,14 +1692,17 @@
         dataMeta.textContent = "Metadata unavailable";
         return;
       }
-      if (!map || map.getZoom() < CONTEXT_MIN_ZOOM) {
-        dataMeta.textContent = "Overview · base map only · NSTDB context in detail view";
+      const detail = isDetailContextZoom();
+      const hasRoute = !!(activeRoute && activeRouteCoordinates().length >= 2);
+      if (!detail && !hasRoute) {
+        dataMeta.textContent = "Overview · base map only · route corridor when a route exists";
         return;
       }
       dataMeta.textContent =
-        nsGovDisplayFeatures.length.toLocaleString() + " nearby · ≤" +
+        nsGovDisplayFeatures.length.toLocaleString() + " painted · ≤" +
         CONTEXT_MAX_FEATURES.toLocaleString() + " · " +
-        CONTEXT_CORRIDOR_KM + " km corridor · NSTDB";
+        chunkFeaturesById.size + "/" + CONTEXT_MAX_CHUNKS + " chunks · " +
+        (detail ? "detail" : "overview") + " corridor · NSTDB";
     }
 
     // ---- Offline basemap for active navigation ----------------------------
@@ -1776,7 +1904,14 @@
           ],
           paint: {
             "line-color": config.color,
-            "line-width": NETWORK_LINE_WIDTH,
+            // Branches thicken slightly in detail/nav; other overlays stay ~2px.
+            "line-width": key === "track"
+              ? [
+                  "interpolate", ["linear"], ["zoom"],
+                  CONTEXT_DETAIL_MIN_ZOOM - 0.05, NETWORK_LINE_WIDTH,
+                  CONTEXT_DETAIL_MIN_ZOOM, BRANCH_LINE_WIDTH_DETAIL
+                ]
+              : NETWORK_LINE_WIDTH,
             "line-opacity": 0.88
           }
         });
@@ -1930,6 +2065,7 @@
     }
 
     function setRider(lng, lat, meta = {}) {
+      const prev = rider;
       rider = {
         lng,
         lat,
@@ -1950,6 +2086,18 @@
       syncOverviewRider();
       if (navigating) updateNavGuidance();
       else if (followLocked) syncFollowCamera();
+      // Navigation corridor must follow the rider — not only map moveend.
+      if (navigating || (isDetailContextZoom() && activeRoute)) {
+        const movedKm = prev && Number.isFinite(prev.lng)
+          ? distanceKmCoords([prev.lng, prev.lat], [lng, lat])
+          : Infinity;
+        const sinceFocusKm = lastContextFocus
+          ? distanceKmCoords(lastContextFocus, [lng, lat])
+          : Infinity;
+        if (movedKm >= CONTEXT_RIDER_MOVE_KM || sinceFocusKm >= CONTEXT_RIDER_MOVE_KM) {
+          scheduleContextNetworkRefresh({ reason: "rider" });
+        }
+      }
     }
 
     function pointFromLngLat(lngLat) {
@@ -3751,6 +3899,7 @@
       hidePopup();
       refreshRouteDraft();
       syncRouteExportUi();
+      refreshContextNetwork({ announce: false }).catch(() => {});
     }
 
     function setRouteMode(nextMode) {
