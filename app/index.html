@@ -672,11 +672,11 @@
     }
     .nav-cue-card {
       flex: 1 1 auto;
+      align-self: flex-start;
       width: 139px;
       max-width: 139px;
       min-width: 0;
-      min-height: 101px;
-      padding: 12px 14px;
+      padding: 10px 14px;
       background: rgba(17, 24, 32, 0.92);
       color: #ffffff;
       border: 0;
@@ -722,8 +722,11 @@
     }
     .nav-stop {
       flex: 0 0 56px;
+      align-self: stretch;
+      display: flex;
+      align-items: center;
+      justify-content: center;
       width: 56px;
-      min-height: 101px;
       border: 0;
       border-radius: 0 var(--radius) var(--radius) 0;
       background: #c1122f;
@@ -734,7 +737,6 @@
       text-transform: none;
       font-weight: 700;
       cursor: pointer;
-      align-self: stretch;
     }
 
     .follow-chip {
@@ -860,11 +862,7 @@
         display: none;
       }
       .nav-cue-card {
-        padding: 10px 12px;
-        min-height: 88px;
-      }
-      .nav-stop {
-        min-height: 88px;
+        padding: 8px 12px;
       }
     }
     .route-debug {
