@@ -1,0 +1,77 @@
+{
+  "generatedAt": "2026-07-15T01:27:41.024Z",
+  "region": "Nova Scotia",
+  "schemaVersion": "2a-1",
+  "totals": {
+    "fetchedRows": 268937,
+    "eligibleSourceLines": 263694,
+    "edges": 299805,
+    "nodes": 295433,
+    "junctionNodes": 123258,
+    "deadEndNodes": 124525,
+    "degree2Nodes": 47650,
+    "sameLevelJunctionSplits": 36111,
+    "connectedComponents": 24247,
+    "invalidEndpointEdges": 0,
+    "freeSpaceConnectors": 0
+  },
+  "gradeSeparatedCrossings": {
+    "status": "not_evaluated",
+    "note": "Phase 2A preserves bridge/tunnel as structureType but does not yet planarize or grade-separate visual crossings without shared vertices."
+  },
+  "intersectionsNotConnected": {
+    "status": "by_design",
+    "note": "Visual crossings without an exact shared vertex remain disconnected. No proximity stitching."
+  },
+  "excludedByReason": {
+    "ramp": 1760,
+    "median_crossover": 121,
+    "no_vehicular_traffic": 2886,
+    "driveway": 131,
+    "service_lane": 19,
+    "non_motorized_trail": 54,
+    "no_usable_geometry": 270,
+    "dam": 2
+  },
+  "accessCounts": {
+    "motorized_permissive": 117278,
+    "motorized_unknown": 145701,
+    "motorized_restricted": 715
+  },
+  "surfaceCounts": {
+    "paved": 59263,
+    "gravel": 30601,
+    "track": 146192,
+    "access": 27636,
+    "unknown": 2
+  },
+  "structureCounts": {
+    "none": 258527,
+    "bridge": 5080,
+    "tunnel": 87
+  },
+  "topComponentsKm": [
+    87766.6,
+    105,
+    52.1,
+    37.6,
+    33.8,
+    24.4,
+    23.8,
+    21.4,
+    20.9,
+    19.8,
+    19,
+    18.8,
+    17.7,
+    17.4,
+    17.1
+  ],
+  "limitations": [
+    "No free-space connectors are emitted.",
+    "Junctions are exact shared-vertex matches only.",
+    "Grade-separated crossings are tagged via structureType but not fully modeled in the graph.",
+    "Access classes are inferred from NSTDB descriptions; motorized_verified requires future field/source confirmation.",
+    "motorized_unknown tracks are packed but should not be silently treated as legal."
+  ]
+}

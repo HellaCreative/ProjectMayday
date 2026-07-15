@@ -1,48 +1,68 @@
 {
-  "generatedAt": "2026-07-14T19:01:56.137Z",
+  "generatedAt": "2026-07-15T01:27:41.024Z",
+  "schemaVersion": "2a-1",
   "sourceName": "Nova Scotia Topographic DataBase Roads, Trails and Rails - Road Line Layer",
   "source": "https://data.novascotia.ca/resource/a6gf-w68e.json",
   "catalogue": "https://data.novascotia.ca/Roads-Driving-and-Transport/Nova-Scotia-Topographic-DataBase-Roads-Trails-and-/a6gf-w68e",
-  "queryModel": "NSTDB Road Line Layer: unpaved, track, trail, AND paved roads; split at exact shared vertices; component-tagged; grid-chunked",
+  "queryModel": "Phase 2A: eligible motorized NSTDB roads/tracks only; trails and No Vehicular Traffic excluded; surface/structure/access separated; exact vertex splits; grid-chunked",
   "license": "Open Government Licence - Nova Scotia",
   "region": "Nova Scotia",
   "bbox": null,
   "chunkDeg": 0.4,
   "chunkDir": "ns-gov-chunks",
-  "featureCount": 303443,
-  "sourceLines": 266576,
-  "junctionSplits": 36867,
-  "fetched": 268753,
-  "skipped": 2177,
-  "bytes": 259181420,
-  "gzBytes": 47253785,
+  "featureCount": 299805,
+  "sourceLines": 263694,
+  "junctionSplits": 36111,
+  "fetched": 268937,
+  "skipped": 5243,
+  "bytes": 314491452,
+  "gzBytes": 52582338,
   "classes": {
-    "paved": 67465,
-    "gravel": 36416,
-    "track": 155499,
-    "access": 37425,
-    "bridge": 2635,
-    "unserviced": 832,
-    "single": 3096,
-    "tunnel": 75
+    "paved": 59263,
+    "gravel": 30601,
+    "track": 146192,
+    "access": 27636,
+    "unknown": 2
+  },
+  "accessClasses": {
+    "motorized_permissive": 117278,
+    "motorized_unknown": 145701,
+    "motorized_restricted": 715
+  },
+  "structureTypes": {
+    "none": 258527,
+    "bridge": 5080,
+    "tunnel": 87
+  },
+  "excludedByReason": {
+    "ramp": 1760,
+    "median_crossover": 121,
+    "no_vehicular_traffic": 2886,
+    "driveway": 131,
+    "service_lane": 19,
+    "non_motorized_trail": 54,
+    "no_usable_geometry": 270,
+    "dam": 2
   },
   "topology": {
-    "nodes": 299065,
-    "junctionNodes": 124828,
-    "deadEndNodes": 126279,
-    "componentCount": 24709,
+    "nodes": 295433,
+    "junctionNodes": 123258,
+    "deadEndNodes": 124525,
+    "componentCount": 24247,
     "topComponentsKm": [
-      88362.7,
+      87766.6,
       105,
       52.1,
       37.6,
       33.8,
-      31.8,
       24.4,
       23.8,
       21.4,
-      20.9
-    ]
+      20.9,
+      19.8
+    ],
+    "freeSpaceConnectors": 0,
+    "gradeSeparatedCrossings": "not_evaluated"
   },
   "sourceDescriptions": {
     "ROAD - Local - 2 Lanes - Paved": 35809,
@@ -90,6 +110,7 @@
     "TRAIL  - No Vehicular Traffic - No Vehicular Traffic": 2874,
     "BRIDGE - Local Arterial - 2 Lanes - Paved": 34,
     "ROAD - Trans-Canada - 2 Lanes - Paved": 332,
+    "BRIDGE - Driveway": 128,
     "BRIDGE - Highway - Divided - 3 Lanes - Paved": 16,
     "BRIDGE - Local Collector - Divided - 2 Lanes - Paved": 2,
     "ROAD - Local Collector - Divided - 2 Lanes - Paved": 9,
@@ -134,6 +155,7 @@
     "BRIDGE - Local Highway - 1 Lane - Paved": 2,
     "TRACK - Indefinite/Approximate": 562,
     "ROAD - Resource Access - 1 Lane - Paved": 77,
+    "BRIDGE - Trail": 54,
     "BRIDGE - Collector - 1 Lane - Paved": 5,
     "ROAD - Collector - 1 Lane - Paved": 32,
     "ROAD - Trans-Canada - 3 Lanes - Paved": 26,
@@ -154,6 +176,7 @@
     "ROAD - Abandoned - Dry Weather - 1 Lane - Unpaved": 2,
     "BRIDGE - Abandoned - 1 Lane - Unpaved": 4,
     "TRAIL -  Indefinite/Approximate - No Vehicular Traffic": 3,
+    "TUNNEL line": 2,
     "ROAD - Local Collector - Divided - 1 Lane - Paved": 1,
     "SERVICE LANE - 1 Lane - Unpaved": 2,
     "RAMP - 2 Lanes - Unpaved": 1,
@@ -164,10 +187,13 @@
     "TRAIL - Addressed Feature - No Vehicular Traffic": 9
   },
   "limitations": [
-    "NSTDB trail records do not explicitly validate motorized access; they are displayed as single track for visual comparison.",
-    "TRACK records are normalized to Track, including indefinite/approximate track records.",
-    "Junctions are exact shared-vertex matches only. Lines that visually touch without a shared vertex remain disconnected by design."
+    "No free-space connectors are emitted.",
+    "Junctions are exact shared-vertex matches only.",
+    "Grade-separated crossings are tagged via structureType but not fully modeled in the graph.",
+    "Access classes are inferred from NSTDB descriptions; motorized_verified requires future field/source confirmation.",
+    "motorized_unknown tracks are packed but should not be silently treated as legal."
   ],
+  "rawArchive": "data-raw/ns-gov/ (outside app bundle)",
   "chunks": [
     {
       "id": "-160_111",
@@ -178,8 +204,8 @@
         -63.57583,
         44.8116
       ],
-      "count": 13475,
-      "gzBytes": 1578440
+      "count": 13090,
+      "gzBytes": 1749853
     },
     {
       "id": "-151_115",
@@ -188,10 +214,10 @@
         -60.43367,
         45.99413,
         -59.98804,
-        46.33549
+        46.33531
       ],
-      "count": 12173,
-      "gzBytes": 1121074
+      "count": 11813,
+      "gzBytes": 1308996
     },
     {
       "id": "-162_111",
@@ -202,8 +228,8 @@
         -64.38241,
         44.80955
       ],
-      "count": 11629,
-      "gzBytes": 1712706
+      "count": 11608,
+      "gzBytes": 1932312
     },
     {
       "id": "-159_111",
@@ -214,8 +240,8 @@
         -63.19215,
         44.82311
       ],
-      "count": 10783,
-      "gzBytes": 1045721
+      "count": 10409,
+      "gzBytes": 1195809
     },
     {
       "id": "-159_113",
@@ -226,8 +252,8 @@
         -63.16599,
         45.61685
       ],
-      "count": 9955,
-      "gzBytes": 1688299
+      "count": 9893,
+      "gzBytes": 1873494
     },
     {
       "id": "-155_113",
@@ -238,8 +264,8 @@
         -61.5899,
         45.62024
       ],
-      "count": 9306,
-      "gzBytes": 1235649
+      "count": 9245,
+      "gzBytes": 1402822
     },
     {
       "id": "-162_112",
@@ -250,8 +276,8 @@
         -64.38899,
         45.20899
       ],
-      "count": 9205,
-      "gzBytes": 1408766
+      "count": 9164,
+      "gzBytes": 1580994
     },
     {
       "id": "-159_112",
@@ -262,8 +288,8 @@
         -63.19216,
         45.21061
       ],
-      "count": 8842,
-      "gzBytes": 1564812
+      "count": 8757,
+      "gzBytes": 1722371
     },
     {
       "id": "-157_113",
@@ -274,8 +300,8 @@
         -62.38214,
         45.60848
       ],
-      "count": 8395,
-      "gzBytes": 1351935
+      "count": 8359,
+      "gzBytes": 1509020
     },
     {
       "id": "-158_113",
@@ -286,8 +312,8 @@
         -62.78916,
         45.62386
       ],
-      "count": 8053,
-      "gzBytes": 1688935
+      "count": 8049,
+      "gzBytes": 1849163
     },
     {
       "id": "-162_110",
@@ -298,8 +324,8 @@
         -64.3864,
         44.40495
       ],
-      "count": 7550,
-      "gzBytes": 1107181
+      "count": 7507,
+      "gzBytes": 1246440
     },
     {
       "id": "-160_112",
@@ -310,8 +336,8 @@
         -63.58738,
         45.2107
       ],
-      "count": 7411,
-      "gzBytes": 1394532
+      "count": 7353,
+      "gzBytes": 1534739
     },
     {
       "id": "-161_112",
@@ -322,8 +348,8 @@
         -63.9736,
         45.21769
       ],
-      "count": 7105,
-      "gzBytes": 1348433
+      "count": 7051,
+      "gzBytes": 1480010
     },
     {
       "id": "-163_111",
@@ -335,7 +361,7 @@
         44.80998
       ],
       "count": 6944,
-      "gzBytes": 1018507
+      "gzBytes": 1150353
     },
     {
       "id": "-160_114",
@@ -346,8 +372,8 @@
         -63.58927,
         45.99694
       ],
-      "count": 6756,
-      "gzBytes": 996321
+      "count": 6654,
+      "gzBytes": 1115231
     },
     {
       "id": "-161_111",
@@ -358,20 +384,8 @@
         -63.9893,
         44.81712
       ],
-      "count": 6588,
-      "gzBytes": 1165397
-    },
-    {
-      "id": "-163_112",
-      "file": "-163_112.geojson.gz",
-      "bbox": [
-        -65.20325,
-        44.78987,
-        -64.78626,
-        45.15628
-      ],
-      "count": 6400,
-      "gzBytes": 854552
+      "count": 6548,
+      "gzBytes": 1288599
     },
     {
       "id": "-161_114",
@@ -382,8 +396,8 @@
         -63.98266,
         46.00182
       ],
-      "count": 6370,
-      "gzBytes": 877287
+      "count": 6314,
+      "gzBytes": 992827
     },
     {
       "id": "-156_113",
@@ -394,8 +408,20 @@
         -61.98279,
         45.61007
       ],
-      "count": 6335,
-      "gzBytes": 1072972
+      "count": 6296,
+      "gzBytes": 1189786
+    },
+    {
+      "id": "-163_112",
+      "file": "-163_112.geojson.gz",
+      "bbox": [
+        -65.20325,
+        44.78987,
+        -64.78626,
+        45.15628
+      ],
+      "count": 6220,
+      "gzBytes": 957383
     },
     {
       "id": "-154_114",
@@ -406,8 +432,8 @@
         -61.18192,
         46.00557
       ],
-      "count": 6168,
-      "gzBytes": 859569
+      "count": 6133,
+      "gzBytes": 969336
     },
     {
       "id": "-160_113",
@@ -418,8 +444,8 @@
         -63.5933,
         45.60978
       ],
-      "count": 5834,
-      "gzBytes": 1184689
+      "count": 5798,
+      "gzBytes": 1295708
     },
     {
       "id": "-161_113",
@@ -430,8 +456,8 @@
         -63.99041,
         45.61543
       ],
-      "count": 5714,
-      "gzBytes": 941213
+      "count": 5656,
+      "gzBytes": 1047431
     },
     {
       "id": "-165_111",
@@ -442,20 +468,8 @@
         -65.57395,
         44.7819
       ],
-      "count": 5588,
-      "gzBytes": 824382
-    },
-    {
-      "id": "-164_111",
-      "file": "-164_111.geojson.gz",
-      "bbox": [
-        -65.6061,
-        44.4,
-        -65.19278,
-        44.81379
-      ],
-      "count": 5183,
-      "gzBytes": 890682
+      "count": 5577,
+      "gzBytes": 931478
     },
     {
       "id": "-166_110",
@@ -466,8 +480,20 @@
         -65.98522,
         44.4109
       ],
-      "count": 5180,
-      "gzBytes": 799196
+      "count": 5157,
+      "gzBytes": 896185
+    },
+    {
+      "id": "-164_111",
+      "file": "-164_111.geojson.gz",
+      "bbox": [
+        -65.6061,
+        44.4,
+        -65.19278,
+        44.81379
+      ],
+      "count": 5131,
+      "gzBytes": 987271
     },
     {
       "id": "-158_112",
@@ -478,8 +504,8 @@
         -62.77303,
         45.21034
       ],
-      "count": 5123,
-      "gzBytes": 916289
+      "count": 5081,
+      "gzBytes": 1012882
     },
     {
       "id": "-159_114",
@@ -490,8 +516,8 @@
         -63.18508,
         45.87838
       ],
-      "count": 4982,
-      "gzBytes": 953695
+      "count": 4948,
+      "gzBytes": 1047047
     },
     {
       "id": "-162_113",
@@ -502,8 +528,8 @@
         -64.39464,
         45.60779
       ],
-      "count": 4811,
-      "gzBytes": 829779
+      "count": 4803,
+      "gzBytes": 920408
     },
     {
       "id": "-153_115",
@@ -514,8 +540,8 @@
         -60.79092,
         46.40752
       ],
-      "count": 4691,
-      "gzBytes": 794898
+      "count": 4662,
+      "gzBytes": 878569
     },
     {
       "id": "-157_112",
@@ -526,20 +552,8 @@
         -62.37961,
         45.2105
       ],
-      "count": 4458,
-      "gzBytes": 1066541
-    },
-    {
-      "id": "-154_113",
-      "file": "-154_113.geojson.gz",
-      "bbox": [
-        -61.60949,
-        45.19785,
-        -61.19641,
-        45.60567
-      ],
-      "count": 4405,
-      "gzBytes": 661313
+      "count": 4418,
+      "gzBytes": 1150954
     },
     {
       "id": "-153_114",
@@ -550,8 +564,20 @@
         -60.78823,
         46.00903
       ],
-      "count": 4402,
-      "gzBytes": 718523
+      "count": 4367,
+      "gzBytes": 798168
+    },
+    {
+      "id": "-154_113",
+      "file": "-154_113.geojson.gz",
+      "bbox": [
+        -61.60949,
+        45.19785,
+        -61.19641,
+        45.60567
+      ],
+      "count": 4327,
+      "gzBytes": 735028
     },
     {
       "id": "-152_114",
@@ -562,8 +588,8 @@
         -60.38832,
         46.00381
       ],
-      "count": 4287,
-      "gzBytes": 692860
+      "count": 4231,
+      "gzBytes": 763873
     },
     {
       "id": "-152_115",
@@ -574,8 +600,8 @@
         -60.38382,
         46.40536
       ],
-      "count": 4211,
-      "gzBytes": 643924
+      "count": 4179,
+      "gzBytes": 716810
     },
     {
       "id": "-165_110",
@@ -586,8 +612,8 @@
         -65.59051,
         44.41673
       ],
-      "count": 4163,
-      "gzBytes": 835922
+      "count": 4157,
+      "gzBytes": 918040
     },
     {
       "id": "-164_109",
@@ -598,8 +624,8 @@
         -65.2,
         44.01516
       ],
-      "count": 3603,
-      "gzBytes": 607672
+      "count": 3598,
+      "gzBytes": 677721
     },
     {
       "id": "-165_109",
@@ -610,8 +636,8 @@
         -65.6,
         44.00206
       ],
-      "count": 3505,
-      "gzBytes": 592983
+      "count": 3492,
+      "gzBytes": 658139
     },
     {
       "id": "-153_116",
@@ -622,8 +648,8 @@
         -60.78503,
         46.82313
       ],
-      "count": 3420,
-      "gzBytes": 429277
+      "count": 3385,
+      "gzBytes": 485696
     },
     {
       "id": "-166_109",
@@ -634,8 +660,8 @@
         -65.99436,
         44.00824
       ],
-      "count": 3369,
-      "gzBytes": 427500
+      "count": 3309,
+      "gzBytes": 482465
     },
     {
       "id": "-157_114",
@@ -646,8 +672,8 @@
         -62.3957,
         45.82826
       ],
-      "count": 3013,
-      "gzBytes": 318917
+      "count": 2998,
+      "gzBytes": 376493
     },
     {
       "id": "-156_112",
@@ -658,8 +684,8 @@
         -61.98728,
         45.21292
       ],
-      "count": 2980,
-      "gzBytes": 615941
+      "count": 2952,
+      "gzBytes": 669604
     },
     {
       "id": "-163_110",
@@ -670,8 +696,8 @@
         -64.78357,
         44.41177
       ],
-      "count": 2964,
-      "gzBytes": 608430
+      "count": 2948,
+      "gzBytes": 664742
     },
     {
       "id": "-158_114",
@@ -682,8 +708,8 @@
         -62.78437,
         45.80525
       ],
-      "count": 2949,
-      "gzBytes": 586721
+      "count": 2928,
+      "gzBytes": 643186
     },
     {
       "id": "-156_114",
@@ -694,20 +720,8 @@
         -61.98239,
         45.84476
       ],
-      "count": 2743,
-      "gzBytes": 423023
-    },
-    {
-      "id": "-152_116",
-      "file": "-152_116.geojson.gz",
-      "bbox": [
-        -60.80529,
-        46.38955,
-        -60.39374,
-        46.80571
-      ],
-      "count": 2693,
-      "gzBytes": 330889
+      "count": 2701,
+      "gzBytes": 471436
     },
     {
       "id": "-154_115",
@@ -718,20 +732,20 @@
         -61.18297,
         46.35772
       ],
-      "count": 2681,
-      "gzBytes": 441197
+      "count": 2667,
+      "gzBytes": 488458
     },
     {
-      "id": "-150_115",
-      "file": "-150_115.geojson.gz",
+      "id": "-152_116",
+      "file": "-152_116.geojson.gz",
       "bbox": [
-        -60.00786,
-        45.99592,
-        -59.67685,
-        46.22067
+        -60.80529,
+        46.38955,
+        -60.39374,
+        46.80571
       ],
-      "count": 2642,
-      "gzBytes": 228416
+      "count": 2641,
+      "gzBytes": 362655
     },
     {
       "id": "-151_114",
@@ -742,8 +756,20 @@
         -59.99404,
         46.00456
       ],
-      "count": 2550,
-      "gzBytes": 471066
+      "count": 2538,
+      "gzBytes": 518694
+    },
+    {
+      "id": "-150_115",
+      "file": "-150_115.geojson.gz",
+      "bbox": [
+        -60.00786,
+        45.99592,
+        -59.67685,
+        46.22051
+      ],
+      "count": 2438,
+      "gzBytes": 257599
     },
     {
       "id": "-155_114",
@@ -754,8 +780,8 @@
         -61.59567,
         45.88503
       ],
-      "count": 2466,
-      "gzBytes": 346436
+      "count": 2327,
+      "gzBytes": 377950
     },
     {
       "id": "-164_112",
@@ -766,8 +792,8 @@
         -65.18984,
         44.98046
       ],
-      "count": 2092,
-      "gzBytes": 270320
+      "count": 2050,
+      "gzBytes": 307728
     },
     {
       "id": "-153_113",
@@ -778,20 +804,8 @@
         -60.8963,
         45.60623
       ],
-      "count": 2059,
-      "gzBytes": 265250
-    },
-    {
-      "id": "-158_111",
-      "file": "-158_111.geojson.gz",
-      "bbox": [
-        -63.20376,
-        44.67804,
-        -62.79895,
-        44.80595
-      ],
-      "count": 1835,
-      "gzBytes": 284862
+      "count": 1989,
+      "gzBytes": 295629
     },
     {
       "id": "-161_110",
@@ -802,8 +816,20 @@
         -64.21063,
         44.40547
       ],
-      "count": 1821,
-      "gzBytes": 227523
+      "count": 1805,
+      "gzBytes": 260993
+    },
+    {
+      "id": "-158_111",
+      "file": "-158_111.geojson.gz",
+      "bbox": [
+        -63.20376,
+        44.67804,
+        -62.79895,
+        44.80595
+      ],
+      "count": 1804,
+      "gzBytes": 317233
     },
     {
       "id": "-163_109",
@@ -814,20 +840,20 @@
         -64.8,
         44
       ],
-      "count": 1683,
-      "gzBytes": 304575
+      "count": 1671,
+      "gzBytes": 333824
     },
     {
       "id": "-155_112",
       "file": "-155_112.geojson.gz",
       "bbox": [
         -62.01541,
-        44.98803,
+        44.98903,
         -61.59389,
         45.21135
       ],
-      "count": 1411,
-      "gzBytes": 218934
+      "count": 1402,
+      "gzBytes": 244773
     },
     {
       "id": "-165_108",
@@ -838,8 +864,8 @@
         -65.59438,
         43.61477
       ],
-      "count": 1136,
-      "gzBytes": 136384
+      "count": 1129,
+      "gzBytes": 158336
     },
     {
       "id": "-164_108",
@@ -850,20 +876,8 @@
         -65.33803,
         43.6134
       ],
-      "count": 1130,
-      "gzBytes": 157346
-    },
-    {
-      "id": "-152_117",
-      "file": "-152_117.geojson.gz",
-      "bbox": [
-        -60.80498,
-        46.80397,
-        -60.36218,
-        47.04086
-      ],
-      "count": 942,
-      "gzBytes": 153137
+      "count": 1124,
+      "gzBytes": 177872
     },
     {
       "id": "-164_110",
@@ -874,8 +888,20 @@
         -65.19523,
         44.40559
       ],
-      "count": 930,
-      "gzBytes": 256391
+      "count": 907,
+      "gzBytes": 271278
+    },
+    {
+      "id": "-152_117",
+      "file": "-152_117.geojson.gz",
+      "bbox": [
+        -60.80498,
+        46.80397,
+        -60.36218,
+        47.04086
+      ],
+      "count": 893,
+      "gzBytes": 161931
     },
     {
       "id": "-163_113",
@@ -886,8 +912,8 @@
         -64.79031,
         45.49974
       ],
-      "count": 831,
-      "gzBytes": 142685
+      "count": 826,
+      "gzBytes": 157715
     },
     {
       "id": "-166_111",
@@ -898,20 +924,8 @@
         -65.99804,
         44.56761
       ],
-      "count": 752,
-      "gzBytes": 124573
-    },
-    {
-      "id": "-150_114",
-      "file": "-150_114.geojson.gz",
-      "bbox": [
-        -60.0649,
-        45.87552,
-        -59.82909,
-        46.00365
-      ],
-      "count": 604,
-      "gzBytes": 80769
+      "count": 750,
+      "gzBytes": 139377
     },
     {
       "id": "-162_114",
@@ -923,19 +937,31 @@
         45.75364
       ],
       "count": 599,
-      "gzBytes": 108435
+      "gzBytes": 120731
+    },
+    {
+      "id": "-150_114",
+      "file": "-150_114.geojson.gz",
+      "bbox": [
+        -60.0649,
+        45.87552,
+        -59.82909,
+        46.00518
+      ],
+      "count": 592,
+      "gzBytes": 92253
     },
     {
       "id": "-151_116",
       "file": "-151_116.geojson.gz",
       "bbox": [
-        -60.4071,
+        -60.40701,
         46.56436,
-        -60.31797,
-        46.79822
+        -60.32421,
+        46.79032
       ],
-      "count": 381,
-      "gzBytes": 57967
+      "count": 327,
+      "gzBytes": 54011
     },
     {
       "id": "-162_109",
@@ -946,8 +972,8 @@
         -64.66195,
         44
       ],
-      "count": 257,
-      "gzBytes": 41996
+      "count": 242,
+      "gzBytes": 46339
     },
     {
       "id": "-157_111",
@@ -955,11 +981,11 @@
       "bbox": [
         -62.80896,
         44.75429,
-        -62.56126,
-        44.80321
+        -62.66444,
+        44.80227
       ],
-      "count": 240,
-      "gzBytes": 34704
+      "count": 228,
+      "gzBytes": 35332
     },
     {
       "id": "-154_112",
@@ -970,20 +996,20 @@
         -61.34397,
         45.20286
       ],
-      "count": 227,
-      "gzBytes": 41627
+      "count": 218,
+      "gzBytes": 44573
     },
     {
       "id": "-151_117",
       "file": "-151_117.geojson.gz",
       "bbox": [
         -60.39825,
-        46.78766,
+        46.77801,
         -60.14833,
         47.19408
       ],
-      "count": 185,
-      "gzBytes": 26767
+      "count": 184,
+      "gzBytes": 30374
     },
     {
       "id": "-152_113",
@@ -995,7 +1021,7 @@
         45.60455
       ],
       "count": 153,
-      "gzBytes": 25536
+      "gzBytes": 28932
     },
     {
       "id": "-153_117",
@@ -1007,7 +1033,7 @@
         46.83038
       ],
       "count": 47,
-      "gzBytes": 3454
+      "gzBytes": 4490
     },
     {
       "id": "-151_109",
@@ -1018,20 +1044,8 @@
         -60.00242,
         43.93452
       ],
-      "count": 34,
-      "gzBytes": 7410
-    },
-    {
-      "id": "-150_109",
-      "file": "-150_109.geojson.gz",
-      "bbox": [
-        -59.95741,
-        43.93143,
-        -59.77955,
-        43.96402
-      ],
       "count": 17,
-      "gzBytes": 2350
+      "gzBytes": 5442
     },
     {
       "id": "-161_115",
@@ -1043,7 +1057,7 @@
         46.00403
       ],
       "count": 15,
-      "gzBytes": 1189
+      "gzBytes": 1576
     },
     {
       "id": "-166_108",
@@ -1055,7 +1069,19 @@
         43.41125
       ],
       "count": 4,
-      "gzBytes": 1558
+      "gzBytes": 1745
+    },
+    {
+      "id": "-150_109",
+      "file": "-150_109.geojson.gz",
+      "bbox": [
+        -59.78636,
+        43.95907,
+        -59.78227,
+        43.96063
+      ],
+      "count": 3,
+      "gzBytes": 705
     },
     {
       "id": "-151_118",
@@ -1067,7 +1093,7 @@
         47.22319
       ],
       "count": 3,
-      "gzBytes": 3791
+      "gzBytes": 3985
     },
     {
       "id": "-153_112",
@@ -1079,7 +1105,7 @@
         45.20193
       ],
       "count": 2,
-      "gzBytes": 790
+      "gzBytes": 933
     }
   ]
 }
