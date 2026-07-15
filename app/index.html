@@ -167,11 +167,13 @@
       position: absolute;
       right: 12px;
       bottom: max(72px, calc(env(safe-area-inset-bottom) + 64px));
-      z-index: 20;
+      /* Above the planner drawer (21) so compass/locate stay clickable. */
+      z-index: 28;
       display: flex;
       flex-direction: column;
       gap: 10px;
       transition: bottom 200ms ease;
+      pointer-events: auto;
     }
     body.planner-collapsed .stack {
       bottom: max(calc(var(--drawer-collapsed-h) + 16px), calc(env(safe-area-inset-bottom) + 140px));
@@ -1798,6 +1800,7 @@
     const cueModeLabel = document.getElementById("cueModeLabel");
     const compassBtn = document.getElementById("compassBtn");
     const compassRose = document.getElementById("compassRose");
+    const recenterBtn = document.getElementById("recenterBtn");
 
     function setLayerKeyVisibility(key, layerIds) {
       for (const layerId of layerIds) {
@@ -2094,10 +2097,33 @@
       return "Location unavailable";
     }
 
-    function markLocationUnavailable(err) {
+    function surfaceLocationMessage(text, kind, opts = {}) {
+      const msg = text || "";
+      if (kind === "error") {
+        setStatus(msg, "error", "route");
+      } else if (kind === "pending") {
+        setRouteWarn(msg);
+        setStatus(msg, null, "route");
+      } else {
+        // Clear a previous locate error, keep map chrome quiet.
+        const warn = document.getElementById("routeWarn");
+        if (warn && /Location |Finding your location/i.test(warn.textContent || "")) {
+          setRouteWarn("");
+        }
+        setStatus(msg, kind || null);
+      }
+      if (opts.revealPlanner && (kind === "error" || kind === "pending")) {
+        // routeWarn lives in the planner — crack it open so locate feedback is visible.
+        if (typeof setPlannerDrawerState === "function" && plannerDrawerState === "closed") {
+          setPlannerDrawerState("collapsed");
+        }
+      }
+    }
+
+    function markLocationUnavailable(err, opts = {}) {
       locationProbeState = "unavailable";
       const reason = locationUnavailableMessage(err);
-      setStatus(reason + " · use Plan route to set a start", "error", "route");
+      surfaceLocationMessage(reason + " · use Plan route to set a start", "error", opts);
       updateRouteStatus();
     }
 
@@ -5197,9 +5223,39 @@
     document.querySelectorAll("[data-route-pref]").forEach((button) => {
       button.addEventListener("click", () => setRoutePreference(button.dataset.routePref));
     });
-    const recenterBtn = document.getElementById("recenterBtn");
     function activateFollowFromControl() {
-      if (!ensureGeoWatch()) return;
+      if (!navigator.geolocation) {
+        markLocationUnavailable({ code: 0 }, { revealPlanner: true });
+        return;
+      }
+
+      // Already have a real GPS fix: snap immediately. Do not block on a fresh sample.
+      if (hasRiderLocation()) {
+        ensureGeoWatch();
+        setFollowLocked(true);
+        surfaceLocationMessage(
+          navigating ? "Following route" : "Following your location",
+          "ok"
+        );
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            setRider(pos.coords.longitude, pos.coords.latitude, {
+              heading: Number.isFinite(pos.coords.heading) ? pos.coords.heading : null,
+              speed: pos.coords.speed || 0,
+              accuracy: pos.coords.accuracy
+            });
+            if (followLocked || navigating) syncFollowCamera(true);
+          },
+          () => { /* keep last known good position */ },
+          { enableHighAccuracy: true, timeout: 12000, maximumAge: 5000 }
+        );
+        return;
+      }
+
+      // No fix yet — request geolocation, with visible pending/unavailable feedback.
+      locationProbeState = "pending";
+      surfaceLocationMessage("Finding your location…", "pending", { revealPlanner: true });
+      ensureGeoWatch();
       recenterBtn.disabled = true;
       navigator.geolocation.getCurrentPosition(
         (pos) => {
@@ -5210,13 +5266,16 @@
             accuracy: pos.coords.accuracy
           });
           setFollowLocked(true);
-          setStatus(navigating ? "Following route" : "Following your location", "ok");
+          surfaceLocationMessage(
+            navigating ? "Following route" : "Following your location",
+            "ok"
+          );
         },
         (err) => {
           recenterBtn.disabled = false;
-          markLocationUnavailable(err);
+          markLocationUnavailable(err, { revealPlanner: true });
         },
-        { enableHighAccuracy: true, timeout: 12000, maximumAge: 2000 }
+        { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
       );
     }
     recenterBtn.addEventListener("click", activateFollowFromControl);
