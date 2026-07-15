@@ -226,13 +226,28 @@ async function fetchRows(offset) {
 
 async function main() {
   const lines = [];
-  const rawFeatures = [];
   let fetched = 0;
+  let rawFeatureCount = 0;
   const excludedByReason = {};
   const sourceDescriptions = {};
   const accessCounts = {};
   const surfaceCounts = {};
   const structureCounts = {};
+
+  let rawGzip = null;
+  let rawOut = null;
+  if (!SKIP_RAW) {
+    fs.mkdirSync(RAW_DIR, { recursive: true });
+    rawOut = fs.createWriteStream(path.join(RAW_DIR, "raw-features.ndjson.gz"));
+    rawGzip = zlib.createGzip({ level: 6 });
+    rawGzip.pipe(rawOut);
+  }
+
+  function writeRawFeature(feature) {
+    if (!rawGzip) return;
+    rawGzip.write(JSON.stringify(feature) + "\n");
+    rawFeatureCount += 1;
+  }
 
   for (let offset = 0; ; offset += PAGE_SIZE) {
     const rows = await fetchRows(offset);
@@ -249,24 +264,22 @@ async function main() {
       const classification = classifyRow(row);
       const parts = rowToParts(row);
 
-      if (!SKIP_RAW) {
-        rawFeatures.push({
-          type: "Feature",
-          properties: {
-            sourceRecordId: recordId,
-            feat_desc: desc,
-            name: value(row.name) || null,
-            eligible: classification.ok,
-            excludeReason: classification.ok ? null : classification.reason,
-            surfaceClass: classification.ok ? classification.surfaceClass : null,
-            structureType: classification.ok ? classification.structureType : null,
-            accessClass: classification.ok ? classification.accessClass : null
-          },
-          geometry: row.the_geom && ["LineString", "MultiLineString"].includes(row.the_geom.type)
-            ? row.the_geom
-            : null
-        });
-      }
+      writeRawFeature({
+        type: "Feature",
+        properties: {
+          sourceRecordId: recordId,
+          feat_desc: desc,
+          name: value(row.name) || null,
+          eligible: classification.ok,
+          excludeReason: classification.ok ? null : classification.reason,
+          surfaceClass: classification.ok ? classification.surfaceClass : null,
+          structureType: classification.ok ? classification.structureType : null,
+          accessClass: classification.ok ? classification.accessClass : null
+        },
+        geometry: row.the_geom && ["LineString", "MultiLineString"].includes(row.the_geom.type)
+          ? row.the_geom
+          : null
+      });
 
       if (!classification.ok) {
         bump(excludedByReason, classification.reason);
@@ -299,6 +312,15 @@ async function main() {
     }
 
     if (rows.length < PAGE_SIZE) break;
+  }
+
+  if (rawGzip && rawOut) {
+    await new Promise((resolve, reject) => {
+      rawOut.on("finish", resolve);
+      rawOut.on("error", reject);
+      rawGzip.on("error", reject);
+      rawGzip.end();
+    });
   }
 
   console.log(`Eligible line parts: ${lines.length.toLocaleString()}`);
@@ -568,18 +590,8 @@ async function main() {
   fs.writeFileSync(path.join(outDir, `${OUT_BASENAME}.topology.json`), JSON.stringify(topology, null, 2));
 
   if (!SKIP_RAW) {
-    fs.mkdirSync(RAW_DIR, { recursive: true });
-    const rawCollection = {
-      type: "FeatureCollection",
-      features: rawFeatures,
-      properties: {
-        generatedAt: topology.generatedAt,
-        note: "Audit archive including excluded features. Not loaded by the production map client."
-      }
-    };
-    const rawJson = JSON.stringify(rawCollection);
-    const rawGz = zlib.gzipSync(Buffer.from(rawJson), { level: 9 });
-    fs.writeFileSync(path.join(RAW_DIR, "raw-features.geojson.gz"), rawGz);
+    const rawPath = path.join(RAW_DIR, "raw-features.ndjson.gz");
+    const rawBytes = fs.existsSync(rawPath) ? fs.statSync(rawPath).size : 0;
     fs.writeFileSync(
       path.join(RAW_DIR, "README.md"),
       [
@@ -590,13 +602,15 @@ async function main() {
         "",
         "**Do not ship this into `app/data` or load it from the browser client.**",
         "",
+        "Format: gzipped NDJSON (`raw-features.ndjson.gz`), one GeoJSON Feature per line.",
+        "",
         `- Generated: ${topology.generatedAt}`,
-        `- Features: ${rawFeatures.length.toLocaleString()}`,
-        `- Gzip bytes: ${rawGz.length.toLocaleString()}`,
+        `- Features: ${rawFeatureCount.toLocaleString()}`,
+        `- Gzip bytes: ${rawBytes.toLocaleString()}`,
         ""
       ].join("\n")
     );
-    console.log(`Raw archive → ${path.join(RAW_DIR, "raw-features.geojson.gz")} (${(rawGz.length / 1048576).toFixed(1)} MB)`);
+    console.log(`Raw archive → ${rawPath} (${(rawBytes / 1048576).toFixed(1)} MB, ${rawFeatureCount.toLocaleString()} features)`);
   }
 
   console.log(JSON.stringify({
