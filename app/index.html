@@ -1018,6 +1018,7 @@
     <div id="popupBody"></div>
   </div>
 
+  <script src="../routing/lib/roadbook-curves.js"></script>
   <script>
     const FALLBACK = { lng: -63.2985, lat: 44.7427, name: "Porter's Lake, NS" };
     // OSM Overpass disabled for NSTDB-only POC.
@@ -3224,28 +3225,22 @@
       return best ? { ...best, totalKm: traveled } : null;
     }
 
-    // Rally roadbook corner numbers: 1 = mild through 6 = hairpin.
+    // Rally roadbook numbers from shared geometry classifier:
+    // 6 = fast/easy … 1 = hairpin. Never invert this scale.
     function rallyTurn(delta) {
-      const abs = Math.abs(delta);
-      if (abs < 28) {
-        return { number: 0, side: null, key: "straight", text: "Straight", spoken: "straight", severity: "straight", degrees: Math.round(abs) };
+      const RB = window.RoadbookCurves;
+      if (!RB) {
+        return {
+          number: 0,
+          side: null,
+          key: "straight",
+          text: "Straight",
+          spoken: "straight",
+          severity: "straight",
+          degrees: Math.round(Math.abs(delta))
+        };
       }
-      const side = delta > 0 ? "right" : "left";
-      let number = 1;
-      if (abs >= 35) number = 2;
-      if (abs >= 50) number = 3;
-      if (abs >= 70) number = 4;
-      if (abs >= 100) number = 5;
-      if (abs >= 135) number = 6;
-      return {
-        number,
-        side,
-        key: number + "-" + side,
-        text: number + " " + side.toUpperCase(),
-        spoken: number + " " + side,
-        severity: "rally",
-        degrees: Math.round(abs)
-      };
+      return RB.classifyJunctionDelta(delta);
     }
 
     function pointAlongFromStart(coords, targetKm) {
@@ -3356,57 +3351,36 @@
       return maneuvers;
     }
 
-    // Every meaningful bend / sweeping turn — useful at speed in the bush where
-    // you need advance warning before the tree line blocks the view.
-    function buildBendManeuvers(coords) {
-      const dense = densifyRouteCoords(coords, 0.02);
-      if (dense.length < 4) {
-        return [makeArriveManeuver(coords, lineLengthKm(coords || []), coords && coords[coords.length - 1])];
-      }
-
-      const LOOK = 3; // samples each side (~60 m at 20 m spacing)
-      const maneuvers = [];
-      let along = 0;
-      const alongAt = [0];
-      for (let i = 1; i < dense.length; i += 1) {
-        along += distanceKmCoords(dense[i - 1], dense[i]);
-        alongAt.push(along);
-      }
-
-      let lastEmitAlong = -Infinity;
-      for (let i = LOOK; i < dense.length - LOOK; i += 1) {
-        const bearingIn = bearingDeg(dense[i - LOOK], dense[i]);
-        const bearingOut = bearingDeg(dense[i], dense[i + LOOK]);
-        const delta = angleDeltaDeg(bearingIn, bearingOut);
-        const turn = rallyTurn(delta);
-        if (turn.severity === "straight") continue;
-        // Skip gentle 1-corners unless fairly decisive, keep 2+ for awareness.
-        if (turn.number === 1 && Math.abs(delta) < 32) continue;
-        if (alongAt[i] - lastEmitAlong < 0.09) continue;
-
-        const atJunction = graphDegreeAtCoord(dense[i]) >= 3;
-        const cueKey = turn.key + "-b-" + alongAt[i].toFixed(3);
-        maneuvers.push({
-          alongKm: alongAt[i],
-          coord: dense[i],
-          delta,
-          exitBearing: Math.round(bearingOut),
-          trackClass: null,
-          kind: atJunction ? "junction" : "bend",
-          ...turn,
-          key: cueKey
-        });
-        lastEmitAlong = alongAt[i];
-      }
-
-      maneuvers.push(makeArriveManeuver(coords, along, dense[dense.length - 1]));
-      return maneuvers;
+    // Geometry-derived roadbook curves (authoritative RoadbookCurves module).
+    function buildRoadbookCurveManeuvers(coords) {
+      const RB = window.RoadbookCurves;
+      if (!RB || !coords || coords.length < 2) return [];
+      return RB.buildCurveEvents(coords).map((ev) => ({
+        ...ev,
+        kind: "curve",
+        severity: ev.severity || "normal"
+      }));
     }
 
     function buildNavManeuvers(coords) {
-      return cueMode === "junctions"
-        ? buildJunctionManeuvers(coords)
-        : buildBendManeuvers(coords);
+      const arrive = makeArriveManeuver(
+        coords,
+        lineLengthKm(coords || []),
+        coords && coords[coords.length - 1]
+      );
+      if (cueMode === "junctions") {
+        const junctions = buildJunctionManeuvers(coords).filter((m) => m.severity !== "arrive");
+        return junctions.concat([arrive]);
+      }
+
+      // ALL: geometry roadbook curves + junctions, merged cleanly.
+      const RB = window.RoadbookCurves;
+      const curves = buildRoadbookCurveManeuvers(coords);
+      const junctions = buildJunctionManeuvers(coords).filter((m) => m.severity !== "arrive");
+      const merged = RB
+        ? RB.mergeNavCues(curves, junctions)
+        : curves.concat(junctions).sort((a, b) => a.alongKm - b.alongKm);
+      return merged.concat([arrive]);
     }
 
     function syncCueModeBtn() {
@@ -3430,7 +3404,7 @@
       setStatus(
         cueMode === "junctions"
           ? "Cues: junctions only"
-          : "Cues: all bends · left and right",
+          : "Cues: roadbook curves + junctions",
         "ok"
       );
     }
@@ -3607,13 +3581,21 @@
           if (after && after.severity !== "arrive") subBits.push("then " + after.text);
           if (next.degrees) subBits.push(next.degrees + "°");
           if (next.kind === "junction") subBits.push("junction");
-          else if (next.kind === "bend") subBits.push("bend");
+          else if (next.kind === "curve") subBits.push("roadbook");
+          if (next.curveLengthM) subBits.push(next.curveLengthM + " m curve");
           subBits.push(remainLabel(remainKm));
           navCueSub.textContent = subBits.join(" · ");
           const spoken = next.spoken || next.text;
+          const meters =
+            window.RoadbookCurves && next.alongKm != null
+              ? window.RoadbookCurves.distanceToCueMeters(progress.alongKm, next.alongKm)
+              : Math.round(toTurnKm * 1000);
           if (toTurnKm < 0.05) speakCue(spoken + " now", next.key + "-now");
-          else if (toTurnKm < 0.18) speakCue("In " + Math.round(toTurnKm * 1000) + " meters, " + spoken, next.key + "-near");
-          else if (toTurnKm < 0.45) speakCue("In " + Math.round(toTurnKm * 1000) + " meters, " + spoken, next.key + "-mid");
+          else if (toTurnKm < 0.18) {
+            speakCue("In " + meters + " metres, " + spoken + ".", next.key + "-near");
+          } else if (toTurnKm < 0.45) {
+            speakCue("In " + meters + " metres, " + spoken + ".", next.key + "-mid");
+          }
         }
       }
 
@@ -3814,7 +3796,7 @@
           (navSimEnabled ? "Sim · " : "") +
           "Navigation on · map saved (" + (result.cached || 0) + " tiles) · " +
           Math.max(0, navManeuvers.length - 1) + " " +
-          (cueMode === "junctions" ? "junction" : "bend") + " cues",
+          (cueMode === "junctions" ? "junction" : "roadbook") + " cues",
           "ok"
         );
       } catch (err) {
