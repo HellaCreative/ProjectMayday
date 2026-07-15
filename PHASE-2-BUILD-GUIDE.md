@@ -112,8 +112,12 @@ The following features must not be included in the production routable/display p
 - Bicycle-only trails
 - Hiking paths
 - Private or explicitly closed roads
-- Railways, ferries, driveways, ramps, and service artifacts unless deliberately supported by the routing model
+- Railways, ferries, driveways, and service artifacts unless deliberately supported by the routing model
 - Geometry with no usable line coordinates
+
+**Ramps:** included by design as `motorized_permissive` paved edges for highway continuity. They are not a display-priority dirt layer; they paint with paved surface.
+
+**TRAIL vs TRACK:** excluding `TRAIL` / `No Vehicular Traffic` does **not** remove `TRACK`. TRACK remains in the pack as `surfaceClass=track` with `accessClass=motorized_unknown` until verified.
 
 The raw source archive may be kept outside the application bundle for audit and future classification work. It must not be loaded by the normal map or routing client.
 
@@ -279,8 +283,11 @@ Example request:
     {"lat": 45.20, "lon": -61.15, "label": "B"}
   ],
   "vehicle": "dual-sport-motorcycle",
+  "accessPolicy": {
+    "motorizedPermissive": true,
+    "motorizedUnknown": false
+  },
   "options": {
-    "allowUnknownAccess": false,
     "includeNearbyContext": false
   }
 }

@@ -915,7 +915,7 @@
 
   <div class="legend collapsed" id="legend">
     <div class="legend-group">
-      <span class="legend-title">Surface / structure</span>
+      <span class="legend-title">Map visibility</span>
       <label class="legend-row">
         <span class="legend-label"><i style="background:var(--access)"></i>Access road</span>
         <span class="switch"><input type="checkbox" data-layer-toggle="access" checked aria-label="Toggle access roads"><span></span></span>
@@ -969,14 +969,28 @@
       </label>
     </div>
     <div class="legend-group">
-      <span class="legend-title">Routing policy</span>
+      <span class="legend-title">Stage access policy</span>
       <label class="legend-row">
-        <span class="legend-label">Allow unknown access</span>
+        <span class="legend-label">Route on unknown access</span>
         <span class="switch"><input type="checkbox" id="unknownAccessToggle" aria-label="Allow routing on unknown-access tracks"><span></span></span>
       </label>
       <p class="meta" id="unknownAccessHint" style="margin:6px 2px 0;max-width:220px;">
-        Default routes verified/permissive only. TRACK inventory is mostly unknown.
+        Visibility toggles above do not change eligibility. Default routes permissive/verified only.
       </p>
+    </div>
+  </div>
+
+  <div class="export-sheet" id="accessWarnSheet" aria-hidden="true">
+    <div class="export-sheet-card" role="dialog" aria-modal="true" aria-labelledby="accessWarnTitle">
+      <h2 id="accessWarnTitle">Unknown access is not permission</h2>
+      <p id="accessWarnBody">
+        Enabling unknown-access routing may include NSTDB TRACK lines that are unverified for motorcycles.
+        That is not legal permission and may expose you to closures, private land, seasonal restrictions, or enforcement.
+      </p>
+      <div class="export-sheet-actions">
+        <button class="export-cancel" id="accessWarnCancel" type="button">Cancel</button>
+        <button class="export-confirm" id="accessWarnConfirm" type="button">I understand — continue</button>
+      </div>
     </div>
   </div>
 
@@ -1081,11 +1095,20 @@
       restricted: true
     };
     // Kodak / Phase 2A preflight: default graph = verified + permissive only.
-    // Advanced: allow motorized_unknown (mostly TRACK) with a visible warning.
-    // Restricted / excluded never route. Phase 2B must enforce the same in the
-    // routing service, not only in the browser.
+    // Advanced: allow motorized_unknown (mostly TRACK) with acknowledgement.
+    // Restricted / excluded never route. Map visibility toggles are separate.
+    // Phase 2B must enforce the same policies in the routing service.
     let allowUnknownAccess = false;
+    let unknownAccessAcknowledged = false;
+    let accessWarnResolver = null;
     const sourceEnabled = { nsGov: true };
+
+    function currentAccessPolicy() {
+      return {
+        motorizedPermissive: true,
+        motorizedUnknown: !!allowUnknownAccess
+      };
+    }
 
     function normalizeEdgeFeature(feature) {
       const p = feature.properties || (feature.properties = {});
@@ -2415,9 +2438,18 @@
         endMatch
       };
 
-      function addVirtualEdge(a, b, coords, trackClass, distanceKm) {
+      function addVirtualEdge(a, b, coords, trackClass, distanceKm, accessClass, edgeId) {
         if (!Number.isFinite(distanceKm) || distanceKm <= 0) return;
-        const edge = { a, b, coords, trackClass, distanceKm, virtual: true };
+        const edge = {
+          a,
+          b,
+          coords,
+          trackClass,
+          accessClass: accessClass || "motorized_permissive",
+          edgeId: edgeId || null,
+          distanceKm,
+          virtual: true
+        };
         if (!context.virtualAdjacency.has(a)) context.virtualAdjacency.set(a, []);
         if (!context.virtualAdjacency.has(b)) context.virtualAdjacency.set(b, []);
         context.virtualAdjacency.get(a).push({ to: b, edge });
@@ -2428,8 +2460,8 @@
         const edge = graph.edges[match.edgeIndex];
         const toA = edgeCoordsFromAToMatch(edge, match);
         const toB = edgeCoordsFromMatchToB(edge, match);
-        addVirtualEdge(node, edge.a, [...toA].reverse(), edge.trackClass, match.distanceAlongKm);
-        addVirtualEdge(node, edge.b, toB, edge.trackClass, Math.max(edge.distanceKm - match.distanceAlongKm, 0));
+        addVirtualEdge(node, edge.a, [...toA].reverse(), edge.trackClass, match.distanceAlongKm, edge.accessClass, edge.edgeId);
+        addVirtualEdge(node, edge.b, toB, edge.trackClass, Math.max(edge.distanceKm - match.distanceAlongKm, 0), edge.accessClass, edge.edgeId);
       }
 
       addMatchEdges(context.startNode, startMatch);
@@ -2439,7 +2471,7 @@
         const edge = graph.edges[startMatch.edgeIndex];
         const coords = edgeCoordsBetweenMatches(edge, startMatch, endMatch);
         const distanceKm = lineLengthKm(coords);
-        addVirtualEdge(context.startNode, context.endNode, coords, edge.trackClass, distanceKm);
+        addVirtualEdge(context.startNode, context.endNode, coords, edge.trackClass, distanceKm, edge.accessClass, edge.edgeId);
       }
 
       return context;
@@ -2506,12 +2538,17 @@
       let cursor = startNode;
       let distanceKm = 0;
       let dirtKm = 0;
+      let unknownKm = 0;
       const byClass = {};
+      const byAccess = {};
       for (const edge of routeEdges) {
         const forward = edge.a === cursor;
         const edgeCoords = forward ? edge.coords : [...edge.coords].reverse();
+        const access = edge.accessClass || (edge.virtual ? "motorized_permissive" : "motorized_unknown");
         segments.push({
           trackClass: edge.trackClass,
+          accessClass: access,
+          edgeId: edge.edgeId || null,
           coords: edgeCoords,
           distanceKm: edge.distanceKm
         });
@@ -2525,7 +2562,10 @@
         distanceKm += edge.distanceKm;
         if (edge.trackClass !== "connector" && edge.trackClass !== "paved") dirtKm += edge.distanceKm;
         byClass[edge.trackClass] = (byClass[edge.trackClass] || 0) + edge.distanceKm;
+        byAccess[access] = (byAccess[access] || 0) + edge.distanceKm;
+        if (access === "motorized_unknown") unknownKm += edge.distanceKm;
       }
+      const accessPolicy = currentAccessPolicy();
       return {
         kind: "nstdb",
         coordinates,
@@ -2533,6 +2573,10 @@
         distanceKm,
         dirtKm,
         byClass,
+        byAccess,
+        unknownAccessKm: unknownKm,
+        unknownAccessPercent: distanceKm > 0 ? Math.round((unknownKm / distanceKm) * 100) : 0,
+        accessPolicy,
         snapStart: context.startMatch.coord,
         snapEnd: context.endMatch.coord
       };
@@ -2553,12 +2597,17 @@
         coordinates: route.geometry.coordinates,
         segments: [{
           trackClass: "connector",
+          accessClass: "motorized_permissive",
           coords: route.geometry.coordinates,
           distanceKm: route.distance / 1000
         }],
         distanceKm: route.distance / 1000,
         dirtKm: 0,
-        byClass: { connector: route.distance / 1000 }
+        byClass: { connector: route.distance / 1000 },
+        byAccess: { motorized_permissive: route.distance / 1000 },
+        unknownAccessKm: 0,
+        unknownAccessPercent: 0,
+        accessPolicy: currentAccessPolicy()
       };
     }
 
@@ -2585,6 +2634,18 @@
         rows.push(routeDebug.sameComponent
           ? 'Network: <b class="good">connected</b>'
           : 'Network: <b class="bad">A and B on separate networks</b>');
+      }
+      if (activeRoute && activeRoute.accessPolicy) {
+        const pol = activeRoute.accessPolicy;
+        rows.push(
+          "Access policy: <b>" +
+          (pol.motorizedUnknown ? "unknown enabled" : "permissive only") +
+          "</b>" +
+          (activeRoute.unknownAccessKm
+            ? " · " + activeRoute.unknownAccessKm.toFixed(2) + " km unknown (" +
+              (activeRoute.unknownAccessPercent || 0) + "%)"
+            : "")
+        );
       }
       routeDebugEl.innerHTML = rows.join("<br>");
     }
@@ -3475,11 +3536,16 @@
         }
         const dirtPct = activeRoute.distanceKm ? Math.round((activeRoute.dirtKm / activeRoute.distanceKm) * 100) : 0;
         const pavedPct = activeRoute.distanceKm ? Math.round(((activeRoute.byClass.paved || 0) / activeRoute.distanceKm) * 100) : 0;
+        const unknownPct = activeRoute.unknownAccessPercent || 0;
+        const policy = activeRoute.accessPolicy || currentAccessPolicy();
+        const policyLabel = policy.motorizedUnknown ? "unknown access on" : "permissive only";
         routeStatus.innerHTML =
           "Network route<strong>" +
           activeRoute.distanceKm.toFixed(activeRoute.distanceKm >= 10 ? 1 : 2) +
           " km · " + dirtPct + "% dirt" +
           (pavedPct ? " · " + pavedPct + "% paved" : "") +
+          (unknownPct ? " · " + unknownPct + "% unknown access" : "") +
+          " · " + policyLabel +
           "</strong>";
         return;
       }
@@ -3562,6 +3628,16 @@
         routeDebug = null;
         refreshRouteDraft();
         return;
+      }
+      if (allowUnknownAccess && !unknownAccessAcknowledged) {
+        const accepted = await requestUnknownAccessAck();
+        if (!accepted) {
+          allowUnknownAccess = false;
+          syncUnknownAccessUi();
+          invalidateRoutingGraph();
+          setStatus("Routing policy: permissive/verified only", "ok");
+          return;
+        }
       }
       const jobId = ++routeJobId;
       activeRoute = null;
@@ -3914,24 +3990,78 @@
     });
     const unknownAccessToggle = document.getElementById("unknownAccessToggle");
     const unknownAccessHint = document.getElementById("unknownAccessHint");
+    const accessWarnSheet = document.getElementById("accessWarnSheet");
+    const accessWarnCancel = document.getElementById("accessWarnCancel");
+    const accessWarnConfirm = document.getElementById("accessWarnConfirm");
+
     function syncUnknownAccessUi() {
       if (unknownAccessToggle) unknownAccessToggle.checked = allowUnknownAccess;
       if (unknownAccessHint) {
         unknownAccessHint.textContent = allowUnknownAccess
-          ? "Warning: routes may use unverified TRACK access. Research mode."
-          : "Default routes verified/permissive only. TRACK inventory is mostly unknown.";
+          ? "Stage policy: unknown access enabled. Visibility toggles above do not change this."
+          : "Visibility toggles above do not change eligibility. Default routes permissive/verified only.";
       }
     }
+
+    function closeAccessWarnSheet(accepted) {
+      if (!accessWarnSheet) return;
+      accessWarnSheet.classList.remove("open");
+      accessWarnSheet.setAttribute("aria-hidden", "true");
+      const resolve = accessWarnResolver;
+      accessWarnResolver = null;
+      if (resolve) resolve(!!accepted);
+    }
+
+    function requestUnknownAccessAck() {
+      if (unknownAccessAcknowledged) return Promise.resolve(true);
+      if (!accessWarnSheet) {
+        unknownAccessAcknowledged = window.confirm(
+          "Unknown access is not permission. Routes may use unverified TRACK lines and may expose you to closures, private land, seasonal restrictions, or enforcement. Continue?"
+        );
+        return Promise.resolve(unknownAccessAcknowledged);
+      }
+      return new Promise((resolve) => {
+        accessWarnResolver = (accepted) => {
+          if (accepted) unknownAccessAcknowledged = true;
+          resolve(!!accepted);
+        };
+        accessWarnSheet.classList.add("open");
+        accessWarnSheet.setAttribute("aria-hidden", "false");
+      });
+    }
+
     syncUnknownAccessUi();
+    if (accessWarnCancel) accessWarnCancel.addEventListener("click", () => closeAccessWarnSheet(false));
+    if (accessWarnConfirm) accessWarnConfirm.addEventListener("click", () => closeAccessWarnSheet(true));
+    if (accessWarnSheet) {
+      accessWarnSheet.addEventListener("click", (event) => {
+        if (event.target === accessWarnSheet) closeAccessWarnSheet(false);
+      });
+    }
     if (unknownAccessToggle) {
-      unknownAccessToggle.addEventListener("change", () => {
-        allowUnknownAccess = unknownAccessToggle.checked;
+      unknownAccessToggle.addEventListener("change", async () => {
+        if (unknownAccessToggle.checked) {
+          // Keep the switch visually pending until acknowledgement.
+          unknownAccessToggle.checked = false;
+          const accepted = await requestUnknownAccessAck();
+          if (!accepted) {
+            allowUnknownAccess = false;
+            unknownAccessAcknowledged = false;
+            syncUnknownAccessUi();
+            setStatus("Routing policy: permissive/verified only", "ok");
+            return;
+          }
+          allowUnknownAccess = true;
+        } else {
+          allowUnknownAccess = false;
+          unknownAccessAcknowledged = false;
+        }
         syncUnknownAccessUi();
         invalidateRoutingGraph();
         setStatus(
           allowUnknownAccess
-            ? "Routing policy: unknown access allowed (visible warning)"
-            : "Routing policy: permissive/verified only",
+            ? "Stage access policy: unknown access enabled"
+            : "Stage access policy: permissive/verified only",
           allowUnknownAccess ? "error" : "ok"
         );
         if (plannedStart && destination) calculateRoute();
