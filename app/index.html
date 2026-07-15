@@ -40,7 +40,8 @@
       --navy: #17181c;
       --danger: #bb251a;
       --ctrl: 42px;
-      --sheet-max: min(46vh, 400px);
+      --sheet-max: min(52vh, 440px);
+      --drawer-collapsed-h: calc(128px + env(safe-area-inset-bottom, 0px));
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -172,7 +173,10 @@
       gap: 10px;
       transition: bottom 200ms ease;
     }
-    body.planner-open.planner-sheet .stack {
+    body.planner-collapsed .stack {
+      bottom: max(calc(var(--drawer-collapsed-h) + 16px), calc(env(safe-area-inset-bottom) + 140px));
+    }
+    body.planner-expanded .stack {
       bottom: max(calc(var(--sheet-max) + 28px), calc(env(safe-area-inset-bottom) + 220px));
     }
     .btn.view-mode {
@@ -377,34 +381,155 @@
       outline-offset: 2px;
     }
 
-    /* Desktop / wide: right rail. Narrow: bottom sheet (see media query). */
+    /* Bottom drawer on every viewport — never a floating/right-rail card. */
     .route-card {
-      position: absolute;
-      top: calc(max(12px, env(safe-area-inset-top)) + 62px);
-      right: 12px;
-      left: auto;
-      bottom: auto;
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      top: auto;
       z-index: 21;
-      width: min(300px, calc(100vw - 72px));
-      max-height: calc(100dvh - 96px);
-      overflow: auto;
+      width: 100%;
+      max-width: none;
+      display: flex;
+      flex-direction: column;
       background: var(--panel);
       border: 1px solid var(--line);
-      border-radius: 14px;
-      padding: 10px;
+      border-left: 0;
+      border-right: 0;
+      border-bottom: 0;
+      border-radius: 16px 16px 0 0;
+      padding: 0 12px max(10px, env(safe-area-inset-bottom, 0px));
       backdrop-filter: blur(14px);
       color: var(--text);
-      box-shadow: var(--panel-shadow);
+      box-shadow: 0 -10px 28px rgba(16, 24, 40, 0.16);
       -webkit-overflow-scrolling: touch;
+      transition: max-height 220ms ease;
+      will-change: max-height;
     }
-    .route-card.collapsed { display: none; }
-    .route-sheet-handle {
+    .route-card.closed {
       display: none;
-      width: 36px;
+    }
+    .route-card.is-collapsed {
+      max-height: var(--drawer-collapsed-h);
+      overflow: hidden;
+    }
+    .route-card.is-expanded {
+      max-height: var(--sheet-max);
+      overflow: auto;
+    }
+    .route-sheet-handle {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex: 0 0 auto;
+      width: 100%;
+      min-height: 28px;
+      margin: 0;
+      padding: 10px 0 6px;
+      border: 0;
+      background: transparent;
+      cursor: pointer;
+      touch-action: none;
+      -webkit-user-select: none;
+      user-select: none;
+    }
+    .route-sheet-handle::after {
+      content: "";
+      width: 40px;
       height: 4px;
       border-radius: 999px;
-      background: rgba(24, 39, 55, 0.18);
-      margin: 0 auto 8px;
+      background: rgba(24, 39, 55, 0.22);
+    }
+    .route-sheet-handle:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+      border-radius: 8px;
+    }
+    .route-drawer-compact {
+      display: none;
+      flex-direction: column;
+      gap: 8px;
+      padding-bottom: 2px;
+    }
+    .route-card.is-collapsed .route-drawer-compact { display: flex; }
+    .route-card.is-collapsed .route-drawer-full { display: none; }
+    .route-card.is-expanded .route-drawer-compact { display: none; }
+    .route-card.is-expanded .route-drawer-full { display: block; }
+    .route-compact-top {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 10px;
+      align-items: center;
+      min-height: 40px;
+    }
+    .route-compact-pref {
+      min-height: 40px;
+      min-width: 7.5rem;
+      border-radius: var(--radius);
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 0.72rem;
+      font-weight: 600;
+      padding: 0 28px 0 10px;
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5 6 6.5 11 1.5' fill='none' stroke='%23162433' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 10px center;
+      cursor: pointer;
+    }
+    .route-compact-summary {
+      min-width: 0;
+      font-family: var(--sans);
+      font-size: 0.68rem;
+      line-height: 1.3;
+      color: var(--muted);
+    }
+    .route-compact-summary strong {
+      display: block;
+      color: var(--text);
+      font-family: var(--mono);
+      font-size: 0.82rem;
+      font-weight: 700;
+      margin-top: 1px;
+    }
+    .route-compact-summary .route-stats {
+      display: block;
+      margin-top: 2px;
+      font-family: var(--mono);
+      font-size: 0.6rem;
+      color: var(--muted);
+    }
+    .route-compact-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+    }
+    .route-compact-actions button {
+      min-height: 40px;
+      border-radius: var(--radius);
+      border: 0;
+      font-family: var(--sans);
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0;
+      text-transform: none;
+      cursor: pointer;
+      padding: 0 10px;
+    }
+    .route-compact-actions button:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+    .route-compact-export {
+      background: var(--accent);
+      color: #fff;
+    }
+    .route-compact-nav {
+      background: var(--navy);
+      color: #fff;
     }
     .route-warn {
       margin-top: 6px;
@@ -441,86 +566,6 @@
       color: #c1122f;
     }
     .route-access-warn.visible { display: block; }
-    .route-mini {
-      position: absolute;
-      right: 12px;
-      top: calc(max(12px, env(safe-area-inset-top)) + 62px);
-      z-index: 20;
-      display: none;
-      flex-direction: column;
-      gap: 6px;
-      padding: 8px;
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 12px;
-      backdrop-filter: blur(14px);
-      box-shadow: var(--panel-shadow);
-      width: min(220px, calc(100vw - 84px));
-    }
-    .route-mini.visible { display: flex; }
-    .route-mini-row {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-    }
-    .route-mini-access {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-      min-height: 40px;
-      margin: 0;
-      cursor: pointer;
-    }
-    .route-mini-access span:first-child {
-      font-size: 0.68rem;
-      font-weight: 600;
-      color: var(--text);
-      line-height: 1.2;
-    }
-    .route-mini select,
-    .route-mini button {
-      min-height: 40px;
-      border-radius: var(--radius);
-      border: 1px solid var(--line);
-      background: #fff;
-      color: var(--text);
-      font-family: var(--sans);
-      font-size: 0.72rem;
-      font-weight: 600;
-      padding: 0 10px;
-      cursor: pointer;
-    }
-    .route-mini select {
-      flex: 1;
-      min-width: 0;
-      appearance: none;
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1.5 6 6.5 11 1.5' fill='none' stroke='%23162433' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
-      background-repeat: no-repeat;
-      background-position: right 10px center;
-      padding-right: 28px;
-    }
-    .route-mini .mini-nav,
-    .route-mini .mini-export {
-      width: 100%;
-    }
-    .route-mini .mini-nav {
-      background: var(--navy);
-      color: #fff;
-      border-color: transparent;
-    }
-    .route-mini .mini-export {
-      background: var(--accent);
-      color: #fff;
-      border-color: transparent;
-    }
-    .route-mini .mini-clear {
-      width: 40px;
-      flex: 0 0 40px;
-      padding: 0;
-      font-size: 1.1rem;
-      font-weight: 500;
-    }
     .route-segment {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -683,7 +728,7 @@
       cursor: pointer;
       box-shadow: 0 8px 20px rgba(10, 102, 194, 0.28);
     }
-    .route-export-float.visible { display: none; } /* replaced by route-mini */
+    .route-export-float.visible { display: none; } /* replaced by bottom drawer */
     .route-export-float svg { flex: 0 0 auto; }
     .topbar-right {
       display: flex;
@@ -888,6 +933,7 @@
       transform: translateX(-50%);
       bottom: max(96px, calc(env(safe-area-inset-bottom) + 88px));
       z-index: 26;
+      transition: bottom 200ms ease;
       min-height: 44px;
       padding: 0 18px;
       border: 0;
@@ -903,6 +949,12 @@
       box-shadow: 0 10px 24px rgba(3, 84, 166, 0.28);
     }
     .follow-chip.visible { display: inline-flex; align-items: center; gap: 8px; }
+    body.planner-collapsed .follow-chip {
+      bottom: max(calc(var(--drawer-collapsed-h) + 12px), calc(env(safe-area-inset-bottom) + 140px));
+    }
+    body.planner-expanded .follow-chip {
+      bottom: max(calc(var(--sheet-max) + 16px), calc(env(safe-area-inset-bottom) + 210px));
+    }
 
     .roadbook-panel {
       position: absolute;
@@ -1088,8 +1140,7 @@
       display: block;
       opacity: 0.95;
     }
-    body.navigating .route-card { display: none; }
-    body.navigating .route-mini { display: none !important; }
+    body.navigating .route-card { display: none !important; }
     body.navigating .legend { display: none; }
     body.navigating .topbar {
       top: max(10px, env(safe-area-inset-top));
@@ -1118,7 +1169,7 @@
     }
     body.roadbook-open .topbar,
     body.roadbook-open .stack,
-    body.roadbook-open .route-mini,
+    body.roadbook-open .route-card,
     body.roadbook-open .legend,
     body.roadbook-open .follow-chip,
     body.roadbook-open .pip,
@@ -1254,43 +1305,10 @@
       pointer-events: auto !important;
     }
 
-    /* Narrow / motorcycle phone: planner as bottom sheet so map stays usable */
     @media (max-width: 640px) {
-      body.planner-sheet .route-card {
-        top: auto;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        width: 100%;
-        max-width: none;
-        max-height: var(--sheet-max);
-        border-radius: 16px 16px 0 0;
-        border-left: 0;
-        border-right: 0;
-        border-bottom: 0;
-        padding: 8px 12px max(12px, env(safe-area-inset-bottom));
-        box-shadow: 0 -12px 36px rgba(16, 24, 40, 0.18);
-      }
-      body.planner-sheet .route-sheet-handle { display: block; }
-      body.planner-sheet .route-mini {
-        top: auto;
-        bottom: max(12px, env(safe-area-inset-bottom));
-        right: 12px;
-        left: auto;
-      }
       .legend {
         max-height: calc(100dvh - 220px);
         width: min(296px, calc(100vw - 24px));
-      }
-      body.planner-open.planner-sheet .follow-chip {
-        bottom: max(calc(var(--sheet-max) + 16px), calc(env(safe-area-inset-bottom) + 210px));
-      }
-    }
-    @media (min-width: 641px) {
-      .route-card {
-        top: calc(max(12px, env(safe-area-inset-top)) + 62px);
-        right: 12px;
-        width: min(300px, calc(100vw - 84px));
       }
     }
   </style>
@@ -1338,57 +1356,63 @@
     </div>
   </div>
 
-  <div class="route-card collapsed" id="routeCard">
-    <div class="route-sheet-handle" aria-hidden="true"></div>
-    <div class="route-segment" role="tablist" aria-label="Routing mode">
-      <button class="route-mode active" type="button" data-route-mode="here" role="tab" aria-selected="true">From here</button>
-      <button class="route-mode" type="button" data-route-mode="plan" role="tab" aria-selected="false">Plan route</button>
+  <div class="route-card closed" id="routeCard" data-drawer="closed">
+    <button
+      class="route-sheet-handle"
+      id="routeSheetHandle"
+      type="button"
+      aria-label="Expand or collapse route planner"
+      aria-controls="routeCard"
+      aria-expanded="false"
+    ></button>
+    <div class="route-drawer-compact" id="routeDrawerCompact">
+      <div class="route-compact-top">
+        <select class="route-compact-pref" id="routeCompactPref" aria-label="Route profile">
+          <option value="direct">Direct</option>
+          <option value="balanced" selected>Balanced</option>
+          <option value="dirt">Dirt</option>
+          <option value="cleanest">Cleanest</option>
+        </select>
+        <div class="route-compact-summary" id="routeCompactSummary">No route<strong>Tap map to plan</strong></div>
+      </div>
+      <div class="route-compact-actions">
+        <button class="route-compact-export" id="routeCompactExport" type="button" title="Export this route as GPX">Export GPX</button>
+        <button class="route-compact-nav" id="routeCompactNav" type="button" title="Start turn-by-turn navigation">Start navigation</button>
+      </div>
     </div>
-    <div class="route-preferences" role="tablist" aria-label="Route preference">
-      <button class="route-pref" type="button" data-route-pref="direct" role="tab" aria-selected="false">Direct</button>
-      <button class="route-pref active" type="button" data-route-pref="balanced" role="tab" aria-selected="true">Balanced</button>
-      <button class="route-pref" type="button" data-route-pref="dirt" role="tab" aria-selected="false">Dirt</button>
-      <button class="route-pref" type="button" data-route-pref="cleanest" role="tab" aria-selected="false">Cleanest</button>
+    <div class="route-drawer-full" id="routeDrawerFull">
+      <div class="route-segment" role="tablist" aria-label="Routing mode">
+        <button class="route-mode active" type="button" data-route-mode="here" role="tab" aria-selected="true">From here</button>
+        <button class="route-mode" type="button" data-route-mode="plan" role="tab" aria-selected="false">Plan route</button>
+      </div>
+      <div class="route-preferences" role="tablist" aria-label="Route preference">
+        <button class="route-pref" type="button" data-route-pref="direct" role="tab" aria-selected="false">Direct</button>
+        <button class="route-pref active" type="button" data-route-pref="balanced" role="tab" aria-selected="true">Balanced</button>
+        <button class="route-pref" type="button" data-route-pref="dirt" role="tab" aria-selected="false">Dirt</button>
+        <button class="route-pref" type="button" data-route-pref="cleanest" role="tab" aria-selected="false">Cleanest</button>
+      </div>
+      <div class="route-access" id="routeAccess">
+        <label class="route-access-row">
+          <span class="route-access-label">Allow unknown access</span>
+          <span class="switch"><input type="checkbox" id="unknownAccessToggle" aria-label="Allow unknown access"><span></span></span>
+        </label>
+        <p class="route-access-warn" id="unknownAccessHint" role="status">Unknown access may include closures, private land, seasonal restrictions, or enforcement.</p>
+      </div>
+      <div class="route-readout">
+        <div class="route-status" id="routeStatus">Tap destination<strong>No route set</strong></div>
+        <button class="route-clear" id="routeClear" type="button" title="Collapse route planner" aria-label="Collapse route planner">×</button>
+      </div>
+      <div class="route-warn" id="routeWarn" role="status"></div>
+      <div class="route-actions" id="routeActions">
+        <button class="route-nav" id="routeNavBtn" type="button" title="Start turn-by-turn navigation">Start navigation</button>
+        <button class="route-export" id="routeExport" type="button" title="Export this route as GPX for OsmAnd, Gaia GPS, and other apps" aria-label="Export route as GPX">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+          Export GPX
+        </button>
+        <button class="route-roadbook" id="routeRoadbookBtn" type="button" title="View route roadbook">View roadbook</button>
+      </div>
+      <div class="route-debug" id="routeDebug"></div>
     </div>
-    <div class="route-access" id="routeAccess">
-      <label class="route-access-row">
-        <span class="route-access-label">Allow unknown access</span>
-        <span class="switch"><input type="checkbox" id="unknownAccessToggle" aria-label="Allow unknown access"><span></span></span>
-      </label>
-      <p class="route-access-warn" id="unknownAccessHint" role="status">Unknown access may include closures, private land, seasonal restrictions, or enforcement.</p>
-    </div>
-    <div class="route-readout">
-      <div class="route-status" id="routeStatus">Tap destination<strong>No route set</strong></div>
-      <button class="route-clear" id="routeClear" type="button" title="Minimize route planner" aria-label="Minimize route planner">×</button>
-    </div>
-    <div class="route-warn" id="routeWarn" role="status"></div>
-    <div class="route-actions" id="routeActions">
-      <button class="route-nav" id="routeNavBtn" type="button" title="Start turn-by-turn navigation">Start navigation</button>
-      <button class="route-export" id="routeExport" type="button" title="Export this route as GPX for OsmAnd, Gaia GPS, and other apps" aria-label="Export route as GPX">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
-        Export GPX
-      </button>
-      <button class="route-roadbook" id="routeRoadbookBtn" type="button" title="View route roadbook">View roadbook</button>
-    </div>
-    <div class="route-debug" id="routeDebug"></div>
-  </div>
-
-  <div class="route-mini" id="routeMini" aria-label="Minimized route actions">
-    <div class="route-mini-row">
-      <select id="routeMiniPref" aria-label="Route profile">
-        <option value="direct">Direct</option>
-        <option value="balanced">Balanced</option>
-        <option value="dirt">Dirt</option>
-        <option value="cleanest">Cleanest</option>
-      </select>
-      <button class="mini-clear" id="routeMiniClear" type="button" title="Clear route" aria-label="Clear route">×</button>
-    </div>
-    <label class="route-mini-access">
-      <span>Allow unknown access</span>
-      <span class="switch"><input type="checkbox" id="unknownAccessToggleMini" aria-label="Allow unknown access"><span></span></span>
-    </label>
-    <button class="mini-export" id="routeMiniExport" type="button">Export GPX</button>
-    <button class="mini-nav" id="routeMiniNav" type="button">Start navigation</button>
   </div>
 
   <div class="export-sheet" id="exportSheet" aria-hidden="true">
@@ -1745,6 +1769,11 @@
     const popupEl = document.getElementById("popup");
     const popupBody = document.getElementById("popupBody");
     const routeStatus = document.getElementById("routeStatus");
+    const routeCompactSummary = document.getElementById("routeCompactSummary");
+    const routeCompactPref = document.getElementById("routeCompactPref");
+    const routeCompactExport = document.getElementById("routeCompactExport");
+    const routeCompactNav = document.getElementById("routeCompactNav");
+    const routeSheetHandle = document.getElementById("routeSheetHandle");
     const routeClear = document.getElementById("routeClear");
     const routeActions = document.getElementById("routeActions");
     const routeExport = document.getElementById("routeExport");
@@ -3573,6 +3602,11 @@
       routeNavBtn.textContent = navigating ? "End navigation" : "Start navigation";
       routeNavBtn.classList.toggle("active", navigating);
       routeNavBtn.disabled = !canExport && !navigating;
+      if (routeCompactExport) routeCompactExport.disabled = !canExport;
+      if (routeCompactNav) {
+        routeCompactNav.textContent = navigating ? "End navigation" : "Start navigation";
+        routeCompactNav.disabled = !canExport && !navigating;
+      }
     }
 
     // ---- Follow camera + navigation guidance -------------------------------
@@ -4428,14 +4462,20 @@
       });
     }
 
+    function setRouteStatusHtml(html) {
+      if (routeStatus) routeStatus.innerHTML = html;
+      if (routeCompactSummary) routeCompactSummary.innerHTML = html;
+    }
+
     function updateRouteStatus() {
       const start = activeStart();
       syncRouteExportUi();
       syncRouteChrome();
       if (DEBUG_UI) renderRouteDebug();
       else if (routeDebugEl) routeDebugEl.innerHTML = "";
+      if (routeCompactPref) routeCompactPref.value = routePreference;
       if (routeMessage) {
-        routeStatus.innerHTML = routeMessage;
+        setRouteStatusHtml(routeMessage);
         return;
       }
       if (activeRoute) {
@@ -4446,7 +4486,7 @@
           ? Math.round(activeRoute.estimatedMovingSeconds / 60) + " min"
           : null;
         const profile = routePreference.charAt(0).toUpperCase() + routePreference.slice(1);
-        routeStatus.innerHTML =
+        setRouteStatusHtml(
           profile + " route<strong>" +
           activeRoute.distanceKm.toFixed(activeRoute.distanceKm >= 10 ? 1 : 2) +
           " km" + (mins ? " · ~" + mins : "") +
@@ -4454,7 +4494,8 @@
           dirtPct + "% dirt" +
           (pavedPct ? " · " + pavedPct + "% paved" : "") +
           (unknownPct ? " · " + unknownPct + "% unknown access" : "") +
-          "</span>";
+          "</span>"
+        );
         const warnText = (activeRoute.warnings || [])
           .filter((w) => {
             if (!w) return false;
@@ -4472,26 +4513,26 @@
       setRouteWarn("");
       if (start && destination) {
         const km = haversineKm(start, destination);
-        routeStatus.innerHTML = "Straight line<strong>" + km.toFixed(km >= 10 ? 1 : 2) + " km</strong>";
+        setRouteStatusHtml("Straight line<strong>" + km.toFixed(km >= 10 ? 1 : 2) + " km</strong>");
         return;
       }
       if (routeMode === "here") {
         if (!hasRiderLocation()) {
           if (locationProbeState === "pending") {
-            routeStatus.innerHTML = "From here<strong>Finding your location…</strong>";
+            setRouteStatusHtml("From here<strong>Finding your location…</strong>");
           } else {
-            routeStatus.innerHTML = "Location unavailable<strong>Switch to Plan route</strong>";
+            setRouteStatusHtml("Location unavailable<strong>Switch to Plan route</strong>");
           }
           return;
         }
-        routeStatus.innerHTML = "From here<strong>Tap a destination</strong>";
+        setRouteStatusHtml("From here<strong>Tap a destination</strong>");
         return;
       }
       if (!plannedStart) {
-        routeStatus.innerHTML = "Plan route<strong>Tap point A</strong>";
+        setRouteStatusHtml("Plan route<strong>Tap point A</strong>");
         return;
       }
-      routeStatus.innerHTML = "Plan route<strong>Tap point B</strong>";
+      setRouteStatusHtml("Plan route<strong>Tap point B</strong>");
     }
 
     function refreshRouteDraft() {
@@ -4845,12 +4886,10 @@
     const roadbookBack = document.getElementById("roadbookBack");
     const roadbookList = document.getElementById("roadbookList");
     const roadbookMeta = document.getElementById("roadbookMeta");
-    const routeMini = document.getElementById("routeMini");
-    const routeMiniPref = document.getElementById("routeMiniPref");
-    const routeMiniExport = document.getElementById("routeMiniExport");
-    const routeMiniNav = document.getElementById("routeMiniNav");
-    const routeMiniClear = document.getElementById("routeMiniClear");
     let roadbookReturnToPlanner = false;
+    let plannerDrawerState = "closed"; // closed | collapsed | expanded
+    let drawerDrag = null;
+    const DRAWER_SWIPE_PX = 56;
 
     function setLegendOpen(open) {
       if (!legendEl) return;
@@ -4866,12 +4905,6 @@
       setLegendOpen(legendEl.classList.contains("collapsed"));
     });
     if (legendClose) legendClose.addEventListener("click", () => setLegendOpen(false));
-
-    function syncPlannerLayoutClass() {
-      const sheetWidest = window.matchMedia("(max-width: 640px)").matches;
-      document.body.classList.toggle("planner-sheet", sheetWidest);
-    }
-    syncPlannerLayoutClass();
 
     function ensureRoadbookManeuvers() {
       if (!activeRoute) return [];
@@ -4973,11 +5006,9 @@
       document.body.classList.toggle("roadbook-open", next);
       if (roadbookBtn) roadbookBtn.setAttribute("aria-expanded", next ? "true" : "false");
       if (next) {
-        if (routeCard && !routeCard.classList.contains("collapsed")) {
+        if (plannerDrawerState !== "closed") {
           roadbookReturnToPlanner = true;
-          routeCard.classList.add("collapsed");
-          document.body.classList.remove("planner-open");
-          if (routeToggleBtn) routeToggleBtn.setAttribute("aria-expanded", "false");
+          applyPlannerDrawerState("closed", { silent: true });
         } else {
           roadbookReturnToPlanner = false;
         }
@@ -4990,31 +5021,49 @@
         return;
       }
       // Closing: optionally restore planner without re-entering setRouteCardOpen→setRoadbookOpen.
-      if (roadbookReturnToPlanner && !navigating && routeCard) {
+      if (roadbookReturnToPlanner && !navigating) {
         roadbookReturnToPlanner = false;
-        routeCard.classList.remove("collapsed");
-        document.body.classList.add("planner-open");
-        if (routeToggleBtn) routeToggleBtn.setAttribute("aria-expanded", "true");
+        applyPlannerDrawerState("expanded", { silent: true });
       }
       syncRouteChrome();
     }
 
-    function syncRouteChrome() {
-      if (!routeMini) return;
-      const expanded = routeCard && !routeCard.classList.contains("collapsed");
-      const roadbookOpen = roadbookPanel && roadbookPanel.classList.contains("open");
-      const showMini = !navigating && !expanded && !roadbookOpen && !!(activeRoute && activeRouteCoordinates().length >= 2);
-      routeMini.classList.toggle("visible", showMini);
-      document.body.classList.toggle("planner-open", !!expanded);
-      syncPlannerLayoutClass();
-      if (routeMiniPref) routeMiniPref.value = routePreference;
-      if (routeToggleBtn) {
-        routeToggleBtn.setAttribute("aria-expanded", expanded ? "true" : "false");
+    function applyPlannerDrawerState(next, opts) {
+      const state = next === "collapsed" || next === "expanded" ? next : "closed";
+      plannerDrawerState = state;
+      if (!routeCard) return;
+      routeCard.dataset.drawer = state;
+      routeCard.classList.toggle("closed", state === "closed");
+      routeCard.classList.toggle("is-collapsed", state === "collapsed");
+      routeCard.classList.toggle("is-expanded", state === "expanded");
+      document.body.classList.toggle("planner-open", state !== "closed");
+      document.body.classList.toggle("planner-collapsed", state === "collapsed");
+      document.body.classList.toggle("planner-expanded", state === "expanded");
+      const open = state !== "closed";
+      if (routeToggleBtn) routeToggleBtn.setAttribute("aria-expanded", open ? "true" : "false");
+      if (routeSheetHandle) {
+        routeSheetHandle.setAttribute("aria-expanded", state === "expanded" ? "true" : "false");
+        routeSheetHandle.setAttribute(
+          "aria-label",
+          state === "expanded" ? "Collapse route planner" : "Expand route planner"
+        );
+      }
+      if (!opts || !opts.silent) {
+        // no-op hook for callers that may want side effects later
       }
     }
 
-    function setRouteCardOpen(open) {
-      if (open) {
+    function syncRouteChrome() {
+      if (routeCompactPref) routeCompactPref.value = routePreference;
+      const open = plannerDrawerState !== "closed";
+      if (routeToggleBtn) routeToggleBtn.setAttribute("aria-expanded", open ? "true" : "false");
+      document.body.classList.toggle("planner-open", open);
+      document.body.classList.toggle("planner-collapsed", plannerDrawerState === "collapsed");
+      document.body.classList.toggle("planner-expanded", plannerDrawerState === "expanded");
+    }
+
+    function setPlannerDrawerState(next) {
+      if (next === "expanded" || next === "collapsed") {
         roadbookReturnToPlanner = false;
         if (roadbookPanel && roadbookPanel.classList.contains("open")) {
           roadbookPanel.classList.remove("open");
@@ -5022,20 +5071,78 @@
           document.body.classList.remove("roadbook-open");
           if (roadbookBtn) roadbookBtn.setAttribute("aria-expanded", "false");
         }
+        if (legendEl && !legendEl.classList.contains("collapsed")) {
+          legendEl.classList.add("collapsed");
+          if (legendBtn) legendBtn.setAttribute("aria-expanded", "false");
+        }
       }
-      routeCard.classList.toggle("collapsed", !open);
-      routeToggleBtn.setAttribute("aria-expanded", open ? "true" : "false");
-      document.body.classList.toggle("planner-open", !!open);
-      syncPlannerLayoutClass();
-      if (open && legendEl && !legendEl.classList.contains("collapsed")) {
-        legendEl.classList.add("collapsed");
-        legendBtn.setAttribute("aria-expanded", "false");
-      }
+      applyPlannerDrawerState(next);
       syncRouteChrome();
     }
+
+    function setRouteCardOpen(open) {
+      // Compat: open → expanded drawer; close → fully hidden (route preserved).
+      setPlannerDrawerState(open ? "expanded" : "closed");
+    }
+
+    function togglePlannerExpandedCollapsed() {
+      if (plannerDrawerState === "expanded") setPlannerDrawerState("collapsed");
+      else if (plannerDrawerState === "collapsed") setPlannerDrawerState("expanded");
+    }
+
     routeToggleBtn.addEventListener("click", () => {
-      setRouteCardOpen(routeCard.classList.contains("collapsed"));
+      if (plannerDrawerState === "closed") setPlannerDrawerState("expanded");
+      else setPlannerDrawerState("closed");
     });
+
+    if (routeSheetHandle) {
+      routeSheetHandle.addEventListener("pointerdown", (event) => {
+        if (event.button != null && event.button !== 0) return;
+        if (plannerDrawerState === "closed") return;
+        drawerDrag = {
+          pointerId: event.pointerId,
+          startY: event.clientY,
+          startX: event.clientX,
+          moved: false,
+          vertical: false
+        };
+        try { routeSheetHandle.setPointerCapture(event.pointerId); } catch (_) { /* ignore */ }
+      });
+      routeSheetHandle.addEventListener("pointermove", (event) => {
+        if (!drawerDrag || event.pointerId !== drawerDrag.pointerId) return;
+        const dy = event.clientY - drawerDrag.startY;
+        const dx = event.clientX - drawerDrag.startX;
+        if (!drawerDrag.moved && (Math.abs(dy) > 8 || Math.abs(dx) > 8)) {
+          drawerDrag.moved = true;
+          drawerDrag.vertical = Math.abs(dy) >= Math.abs(dx);
+        }
+        if (drawerDrag.vertical) event.preventDefault();
+      });
+      function endDrawerDrag(event) {
+        if (!drawerDrag || event.pointerId !== drawerDrag.pointerId) return;
+        const dy = event.clientY - drawerDrag.startY;
+        const wasClick = !drawerDrag.moved;
+        const vertical = drawerDrag.vertical;
+        try { routeSheetHandle.releasePointerCapture(event.pointerId); } catch (_) { /* ignore */ }
+        drawerDrag = null;
+        if (wasClick) {
+          togglePlannerExpandedCollapsed();
+          return;
+        }
+        if (!vertical) return;
+        if (dy <= -DRAWER_SWIPE_PX) setPlannerDrawerState("expanded");
+        else if (dy >= DRAWER_SWIPE_PX) setPlannerDrawerState("collapsed");
+      }
+      routeSheetHandle.addEventListener("pointerup", endDrawerDrag);
+      routeSheetHandle.addEventListener("pointercancel", endDrawerDrag);
+      routeSheetHandle.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          togglePlannerExpandedCollapsed();
+        }
+      });
+    }
+
     if (roadbookBtn) {
       roadbookBtn.addEventListener("click", () => {
         const open = !roadbookPanel.classList.contains("open");
@@ -5050,22 +5157,15 @@
     }
 
     document.getElementById("popupClose").addEventListener("click", hidePopup);
-    // X minimizes the planner without clearing the mapped route.
-    routeClear.addEventListener("click", () => setRouteCardOpen(false));
-    if (routeMiniPref) {
-      routeMiniPref.addEventListener("change", () => {
-        setRoutePreference(routeMiniPref.value);
+    // X collapses the planner without clearing the mapped route.
+    routeClear.addEventListener("click", () => setPlannerDrawerState("collapsed"));
+    if (routeCompactPref) {
+      routeCompactPref.addEventListener("change", () => {
+        setRoutePreference(routeCompactPref.value);
       });
     }
-    if (routeMiniExport) routeMiniExport.addEventListener("click", () => openExportNameSheet());
-    if (routeMiniNav) routeMiniNav.addEventListener("click", () => toggleNavigation());
-    if (routeMiniClear) {
-      routeMiniClear.addEventListener("click", () => {
-        clearRoute();
-        setRouteCardOpen(false);
-        syncRouteChrome();
-      });
-    }
+    if (routeCompactExport) routeCompactExport.addEventListener("click", () => openExportNameSheet());
+    if (routeCompactNav) routeCompactNav.addEventListener("click", () => toggleNavigation());
     function handleRouteExportClick() {
       openExportNameSheet();
     }
@@ -5176,7 +5276,6 @@
       }
     });
     window.addEventListener("resize", () => {
-      syncPlannerLayoutClass();
       if (!pipEl.classList.contains("placed") || !pipEl.classList.contains("visible")) return;
       const left = parseFloat(pipEl.style.left) || 0;
       const top = parseFloat(pipEl.style.top) || 0;
@@ -5199,7 +5298,6 @@
       });
     });
     const unknownAccessToggle = document.getElementById("unknownAccessToggle");
-    const unknownAccessToggleMini = document.getElementById("unknownAccessToggleMini");
     const unknownAccessHint = document.getElementById("unknownAccessHint");
     const accessWarnSheet = document.getElementById("accessWarnSheet");
     const accessWarnCancel = document.getElementById("accessWarnCancel");
@@ -5207,7 +5305,6 @@
 
     function syncUnknownAccessUi() {
       if (unknownAccessToggle) unknownAccessToggle.checked = allowUnknownAccess;
-      if (unknownAccessToggleMini) unknownAccessToggleMini.checked = allowUnknownAccess;
       if (unknownAccessHint) {
         unknownAccessHint.classList.toggle("visible", !!allowUnknownAccess);
       }
@@ -5278,14 +5375,10 @@
     async function onUnknownAccessChange(event) {
       const wantsEnabled = !!event.target.checked;
       // Keep switches visually pending until acknowledgement resolves.
-      if (wantsEnabled) {
-        if (unknownAccessToggle) unknownAccessToggle.checked = false;
-        if (unknownAccessToggleMini) unknownAccessToggleMini.checked = false;
-      }
+      if (wantsEnabled && unknownAccessToggle) unknownAccessToggle.checked = false;
       await applyUnknownAccessToggle(wantsEnabled);
     }
     if (unknownAccessToggle) unknownAccessToggle.addEventListener("change", onUnknownAccessChange);
-    if (unknownAccessToggleMini) unknownAccessToggleMini.addEventListener("change", onUnknownAccessChange);
   </script>
 </body>
 </html>
