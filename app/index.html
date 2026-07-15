@@ -968,6 +968,16 @@
         <span class="switch"><input type="checkbox" data-source-toggle="nsGov" checked aria-label="Toggle Nova Scotia government source"><span></span></span>
       </label>
     </div>
+    <div class="legend-group">
+      <span class="legend-title">Routing policy</span>
+      <label class="legend-row">
+        <span class="legend-label">Allow unknown access</span>
+        <span class="switch"><input type="checkbox" id="unknownAccessToggle" aria-label="Allow routing on unknown-access tracks"><span></span></span>
+      </label>
+      <p class="meta" id="unknownAccessHint" style="margin:6px 2px 0;max-width:220px;">
+        Default routes verified/permissive only. TRACK inventory is mostly unknown.
+      </p>
+    </div>
   </div>
 
   <div class="nav-hud" id="navHud" aria-live="polite">
@@ -1070,9 +1080,11 @@
       tunnel: true,
       restricted: true
     };
-    // Phase 2A interim: include motorized_unknown tracks so dirt routing still
-    // works over NSTDB TRACK inventory. Never include restricted by default.
-    const allowUnknownAccess = true;
+    // Kodak / Phase 2A preflight: default graph = verified + permissive only.
+    // Advanced: allow motorized_unknown (mostly TRACK) with a visible warning.
+    // Restricted / excluded never route. Phase 2B must enforce the same in the
+    // routing service, not only in the browser.
+    let allowUnknownAccess = false;
     const sourceEnabled = { nsGov: true };
 
     function normalizeEdgeFeature(feature) {
@@ -3900,6 +3912,32 @@
         applyLayerVisibility();
       });
     });
+    const unknownAccessToggle = document.getElementById("unknownAccessToggle");
+    const unknownAccessHint = document.getElementById("unknownAccessHint");
+    function syncUnknownAccessUi() {
+      if (unknownAccessToggle) unknownAccessToggle.checked = allowUnknownAccess;
+      if (unknownAccessHint) {
+        unknownAccessHint.textContent = allowUnknownAccess
+          ? "Warning: routes may use unverified TRACK access. Research mode."
+          : "Default routes verified/permissive only. TRACK inventory is mostly unknown.";
+      }
+    }
+    syncUnknownAccessUi();
+    if (unknownAccessToggle) {
+      unknownAccessToggle.addEventListener("change", () => {
+        allowUnknownAccess = unknownAccessToggle.checked;
+        syncUnknownAccessUi();
+        invalidateRoutingGraph();
+        setStatus(
+          allowUnknownAccess
+            ? "Routing policy: unknown access allowed (visible warning)"
+            : "Routing policy: permissive/verified only",
+          allowUnknownAccess ? "error" : "ok"
+        );
+        if (plannedStart && destination) calculateRoute();
+        else if (routeMode === "here" && destination) calculateRoute();
+      });
+    }
   </script>
 </body>
 </html>

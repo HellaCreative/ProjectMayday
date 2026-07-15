@@ -4,8 +4,13 @@
  * overlay with surface / structure / access separation and a topology report.
  *
  * Production pack rules (PHASE-2-BUILD-GUIDE.md):
- * - Exclude No Vehicular Traffic, trails, ramps, railways, ferries, driveways,
+ * - Exclude No Vehicular Traffic, TRAIL features, railways, ferries, driveways,
  *   service artifacts, and empty geometry.
+ * - Ramps are kept as motorized_permissive paved edges (needed for highway
+ *   continuity). They paint with the paved surface layer.
+ * - TRACK (resource/indefinite linework) is NOT the same as TRAIL:
+ *   TRAIL = excluded non-motorized recreation. TRACK = packed as surface
+ *   "track" with access motorized_unknown until verified.
  * - surfaceClass and structureType are separate fields.
  * - Every edge has accessClass, source provenance, and a stable edgeId.
  * - Split only at exact shared vertices (no proximity stitching).
@@ -94,7 +99,8 @@ function classifyRow(props) {
   if (/Driveway/i.test(desc)) return { ok: false, reason: "driveway" };
   if (/Median Crossover/i.test(desc)) return { ok: false, reason: "median_crossover" };
   if (/Service Lane/i.test(desc)) return { ok: false, reason: "service_lane" };
-  if (/\bRAMP\b/i.test(desc)) return { ok: false, reason: "ramp" };
+  // Ramps stay in the pack: they are legitimate motor-vehicle connectors for
+  // paved-network continuity (Kodak / Phase 2A preflight). Painted via paved.
   if (/\bDam\b/i.test(desc)) return { ok: false, reason: "dam" };
   if (/Pedestrian|Footpath|Sidewalk/i.test(desc)) {
     return { ok: false, reason: "pedestrian_only" };
@@ -136,9 +142,10 @@ function classifyRow(props) {
   } else if (surfaceClass === "track") {
     accessClass = "motorized_unknown";
     confidence = /Indefinite|Approximate/i.test(desc) ? "low" : "medium";
-  } else if (surfaceClass === "paved" || surfaceClass === "gravel" || surfaceClass === "access") {
+  }   else if (surfaceClass === "paved" || surfaceClass === "gravel" || surfaceClass === "access") {
     accessClass = "motorized_permissive";
     confidence = surfaceClass === "access" && /Dry Weather/i.test(desc) ? "medium" : "high";
+    if (/\bRAMP\b/i.test(desc)) confidence = "high";
   }
 
   if (!SURFACE_CLASSES.has(surfaceClass)) {
@@ -233,6 +240,9 @@ async function main() {
   const accessCounts = {};
   const surfaceCounts = {};
   const structureCounts = {};
+  let rampEdges = 0;
+  let trailExcluded = 0;
+  let trackEligible = 0;
 
   let rawGzip = null;
   let rawOut = null;
@@ -283,6 +293,9 @@ async function main() {
 
       if (!classification.ok) {
         bump(excludedByReason, classification.reason);
+        if (classification.reason === "non_motorized_trail" || classification.reason === "no_vehicular_traffic") {
+          trailExcluded += 1;
+        }
         continue;
       }
       if (!parts.length) {
@@ -293,6 +306,8 @@ async function main() {
       bump(accessCounts, classification.accessClass);
       bump(surfaceCounts, classification.surfaceClass);
       bump(structureCounts, classification.structureType);
+      if (/\bRAMP\b/i.test(desc)) rampEdges += parts.length;
+      if (classification.surfaceClass === "track") trackEligible += parts.length;
 
       const name = value(row.name);
       for (let partIndex = 0; partIndex < parts.length; partIndex += 1) {
@@ -510,7 +525,7 @@ async function main() {
   const topology = {
     generatedAt: new Date().toISOString(),
     region: REGION,
-    schemaVersion: "2a-1",
+    schemaVersion: "2a-2",
     totals: {
       fetchedRows: fetched,
       eligibleSourceLines: lines.length,
@@ -522,15 +537,26 @@ async function main() {
       sameLevelJunctionSplits: splitCount,
       connectedComponents: rankedRoots.length,
       invalidEndpointEdges,
-      freeSpaceConnectors: 0
+      freeSpaceConnectors: 0,
+      rampSourceParts: rampEdges,
+      trackSourceParts: trackEligible,
+      trailLikeRowsExcluded: trailExcluded
+    },
+    eligibilityPolicy: {
+      trailVsTrack:
+        "TRAIL features (including No Vehicular Traffic) are excluded from the production pack. TRACK features remain as surfaceClass=track with accessClass=motorized_unknown. Do not call TRACK exclusion 'trails excluded'.",
+      ramps:
+        "Ramps are included as motorized_permissive paved edges for network continuity. They display with the paved surface layer (off by default in the rider UI).",
+      unknownAccess:
+        "Default routing policy (client / future service): verified + permissive only. Advanced/research may allow motorized_unknown with a visible warning. Restricted and excluded never route."
     },
     gradeSeparatedCrossings: {
       status: "not_evaluated",
-      note: "Phase 2A preserves bridge/tunnel as structureType but does not yet planarize or grade-separate visual crossings without shared vertices."
+      note: "Phase 2A preserves bridge/tunnel as structureType but does not yet planarize or grade-separate visual crossings without shared vertices. Keep this visible through Phase 2B."
     },
     intersectionsNotConnected: {
       status: "by_design",
-      note: "Visual crossings without an exact shared vertex remain disconnected. No proximity stitching."
+      note: "Visual crossings without an exact shared vertex remain disconnected. No proximity stitching. Planarization is explicit route-correctness work, not silently assumed done."
     },
     excludedByReason,
     accessCounts,
@@ -544,17 +570,18 @@ async function main() {
       "Junctions are exact shared-vertex matches only.",
       "Grade-separated crossings are tagged via structureType but not fully modeled in the graph.",
       "Access classes are inferred from NSTDB descriptions; motorized_verified requires future field/source confirmation.",
-      "motorized_unknown tracks are packed but should not be silently treated as legal."
+      "motorized_unknown TRACK inventory is packed for display and advanced routing, not assumed legal by default.",
+      "TRAIL exclusion does not remove TRACK features."
     ]
   };
 
   const manifest = {
     generatedAt: topology.generatedAt,
-    schemaVersion: "2a-1",
+    schemaVersion: "2a-2",
     sourceName: "Nova Scotia Topographic DataBase Roads, Trails and Rails - Road Line Layer",
     source: sourceUrl,
     catalogue: "https://data.novascotia.ca/Roads-Driving-and-Transport/Nova-Scotia-Topographic-DataBase-Roads-Trails-and-/a6gf-w68e",
-    queryModel: "Phase 2A: eligible motorized NSTDB roads/tracks only; trails and No Vehicular Traffic excluded; surface/structure/access separated; exact vertex splits; grid-chunked",
+    queryModel: "Phase 2A.2: TRAIL/no-vehicle excluded; TRACK retained as unknown access; ramps kept for paved continuity; surface/structure/access separated; exact vertex splits; grid-chunked",
     license: "Open Government Licence - Nova Scotia",
     region: REGION,
     bbox: BBOX.length === 4 ? BBOX : null,
