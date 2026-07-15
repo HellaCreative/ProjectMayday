@@ -23,8 +23,15 @@ node scripts/build-routing-graph.js
 ## Tests
 
 ```bash
-node routing/test/run-fixtures.js
+node routing/test/run-fixtures.js   # offline graph routing fixtures
+node routing/test/stages.test.js    # multi-stage trip model (aggregation, weighted %, serialize, transitions, stale tokens)
 ```
+
+`routing/lib/stages.js` is a framework-free UMD module shared by the browser
+planner (`app/index.html`) and the Node tests. It owns the multi-stage trip
+model: stage status transitions, distance-weighted aggregation, saved-route
+serialize/deserialize, gap detection (no invented connectors), and per-stage
+stale-request tokens.
 
 ## API
 

@@ -669,6 +669,317 @@
       margin-top: 8px;
     }
     .route-actions.ready { display: grid; }
+
+    /* ---- Multi-stage planner + saved routes ---- */
+    .route-tabs { grid-template-columns: 1fr 1fr 1fr; }
+    .route-panel { margin-top: 8px; }
+    .route-shared { margin-top: 0; }
+    body.planner-tab-saved .route-shared { display: none; }
+    body.planner-tab-saved .route-actions { display: none !important; }
+
+    /* Consolidated collapsible unknown-access warning */
+    .access-warn-panel {
+      margin-top: 8px;
+      border: 1px solid rgba(193, 18, 47, 0.35);
+      border-radius: 10px;
+      background: rgba(193, 18, 47, 0.06);
+      overflow: hidden;
+    }
+    .access-warn-collapsed {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      min-height: 40px;
+      padding: 0 10px;
+      border: 0;
+      background: transparent;
+      color: #c1122f;
+      font-family: var(--sans);
+      font-size: 0.68rem;
+      font-weight: 700;
+      text-align: left;
+      cursor: pointer;
+    }
+    .access-warn-collapsed-text { flex: 1 1 auto; min-width: 0; }
+    .access-warn-collapsed .access-warn-metric-inline { font-family: var(--mono); font-weight: 600; }
+    .access-warn-chevron { flex: 0 0 auto; opacity: 0.7; }
+    .access-warn-icon { flex: 0 0 auto; color: #c1122f; }
+    .access-warn-expanded { padding: 8px 10px 10px; }
+    .access-warn-head {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 8px;
+      align-items: start;
+    }
+    .access-warn-copy {
+      margin: 0;
+      font-size: 0.66rem;
+      line-height: 1.4;
+      color: #8a0f24;
+      font-weight: 600;
+    }
+    .access-warn-hide {
+      flex: 0 0 auto;
+      width: 24px;
+      height: 24px;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      color: #c1122f;
+      font-size: 1rem;
+      line-height: 1;
+      cursor: pointer;
+    }
+    .access-warn-metric {
+      margin: 6px 0 0;
+      font-family: var(--mono);
+      font-size: 0.62rem;
+      color: #8a0f24;
+    }
+
+    /* Stage list */
+    .stage-trip-summary {
+      font-family: var(--sans);
+      font-size: 0.7rem;
+      color: var(--muted);
+      line-height: 1.35;
+      margin-bottom: 6px;
+      min-height: 1em;
+    }
+    .stage-trip-summary strong {
+      color: var(--text);
+      font-family: var(--mono);
+      font-weight: 700;
+    }
+    .stage-trip-summary .stage-trip-metrics { font-family: var(--mono); color: var(--text); }
+    .stage-list { display: flex; flex-direction: column; gap: 6px; }
+    .stage-row {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      align-items: center;
+      gap: 8px;
+      min-height: 44px;
+      padding: 6px 8px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fff;
+      cursor: pointer;
+      text-align: left;
+    }
+    .stage-row.is-active {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 1px var(--accent) inset;
+      background: rgba(10, 102, 194, 0.05);
+    }
+    .stage-row.is-editing {
+      border-color: var(--navy);
+      box-shadow: 0 0 0 1px var(--navy) inset;
+    }
+    .stage-badge {
+      flex: 0 0 auto;
+      width: 24px;
+      height: 24px;
+      border-radius: 999px;
+      background: var(--navy);
+      color: #fff;
+      font-family: var(--mono);
+      font-size: 0.7rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .stage-main { min-width: 0; }
+    .stage-title {
+      font-family: var(--sans);
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .stage-sub {
+      font-family: var(--mono);
+      font-size: 0.6rem;
+      color: var(--muted);
+      margin-top: 1px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .stage-sub .stage-status-draft { color: #b26a00; }
+    .stage-sub .stage-status-loading { color: var(--accent); }
+    .stage-sub .stage-status-failed { color: #c1122f; }
+    .stage-sub .stage-status-complete { color: #0a7d3c; }
+    .stage-controls { display: flex; align-items: center; gap: 2px; flex: 0 0 auto; }
+    .stage-icon-btn {
+      width: 30px;
+      height: 30px;
+      border: 0;
+      border-radius: 7px;
+      background: transparent;
+      color: var(--muted);
+      font-size: 0.9rem;
+      line-height: 1;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .stage-icon-btn:hover { background: var(--panel-2); color: var(--text); }
+    .stage-icon-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+    .stage-plan-actions {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 6px;
+      margin-top: 8px;
+    }
+    .stage-add, .stage-edit-toggle {
+      min-height: 42px;
+      border: 1px dashed var(--line);
+      border-radius: var(--radius);
+      background: transparent;
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 0.74rem;
+      font-weight: 700;
+      cursor: pointer;
+      padding: 0 14px;
+    }
+    .stage-edit-toggle { border-style: solid; }
+    .stage-edit-toggle.is-editing { background: var(--navy); color: #fff; border-color: var(--navy); }
+    .stage-save {
+      width: 100%;
+      min-height: 44px;
+      margin-top: 8px;
+      border: 0;
+      border-radius: var(--radius);
+      background: var(--accent);
+      color: #fff;
+      font-family: var(--sans);
+      font-size: 0.78rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .stage-save:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    /* Saved routes list */
+    .saved-list { display: flex; flex-direction: column; gap: 8px; }
+    .saved-empty {
+      text-align: center;
+      padding: 18px 12px;
+      color: var(--muted);
+      font-size: 0.72rem;
+      line-height: 1.5;
+    }
+    .saved-row {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fff;
+      padding: 8px 10px;
+    }
+    .saved-row-head {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      align-items: baseline;
+    }
+    .saved-name {
+      font-family: var(--sans);
+      font-size: 0.76rem;
+      font-weight: 700;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .saved-draft-tag {
+      font-family: var(--mono);
+      font-size: 0.56rem;
+      font-weight: 700;
+      color: #b26a00;
+      background: rgba(178, 106, 0, 0.12);
+      border-radius: 5px;
+      padding: 2px 5px;
+      white-space: nowrap;
+    }
+    .saved-meta {
+      font-family: var(--mono);
+      font-size: 0.6rem;
+      color: var(--muted);
+      margin-top: 3px;
+    }
+    .saved-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-top: 8px;
+    }
+    .saved-action {
+      min-height: 34px;
+      padding: 0 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: transparent;
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 0.66rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .saved-action.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .saved-action.danger { color: #c1122f; border-color: rgba(193,18,47,0.4); }
+
+    /* Multi-stage nav HUD extras */
+    .nav-stage-line {
+      font-family: var(--mono);
+      font-size: 0.6rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 2px;
+    }
+    .nav-next-stage {
+      display: block;
+      width: 100%;
+      margin-top: 8px;
+      min-height: 40px;
+      border: 0;
+      border-radius: 10px;
+      background: var(--accent);
+      color: #fff;
+      font-family: var(--sans);
+      font-size: 0.74rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    /* Real MapLibre stage endpoint markers */
+    .stage-marker {
+      width: 26px;
+      height: 26px;
+      border-radius: 999px;
+      background: #ffb000;
+      color: #111820;
+      border: 3px solid #fff;
+      box-shadow: 0 1px 4px rgba(16,24,40,0.35);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: var(--mono);
+      font-size: 0.66rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .stage-marker.is-start { background: #111820; color: #fff; }
+    .stage-marker.is-editing {
+      cursor: grab;
+      box-shadow: 0 0 0 3px rgba(10,102,194,0.55), 0 1px 4px rgba(16,24,40,0.35);
+    }
+    .stage-marker.is-editing:active { cursor: grabbing; }
     .route-roadbook {
       display: flex;
       align-items: center;
@@ -1334,9 +1645,11 @@
     </div>
     <div class="nav-hud" id="navHud" aria-live="polite">
       <div class="nav-cue-card">
+        <div class="nav-stage-line" id="navStageLine" hidden></div>
         <div class="nav-cue-dist" id="navCueDist">Ready</div>
         <div class="nav-cue-main" id="navCueMain">Start navigation</div>
         <div class="nav-cue-sub" id="navCueSub">Follow the orange line</div>
+        <button class="nav-next-stage" id="navNextStageBtn" type="button" hidden>Start next stage</button>
       </div>
       <button class="nav-stop" id="navStopBtn" type="button" title="End navigation">End</button>
     </div>
@@ -1383,28 +1696,71 @@
       </div>
     </div>
     <div class="route-drawer-full" id="routeDrawerFull">
-      <div class="route-segment" role="tablist" aria-label="Routing mode">
+      <div class="route-segment route-tabs" role="tablist" aria-label="Route planner tabs">
         <button class="route-mode active" type="button" data-route-mode="here" role="tab" aria-selected="true">From here</button>
         <button class="route-mode" type="button" data-route-mode="plan" role="tab" aria-selected="false">Plan route</button>
+        <button class="route-mode" type="button" data-route-mode="saved" role="tab" aria-selected="false">Saved routes</button>
       </div>
-      <div class="route-preferences" role="tablist" aria-label="Route preference">
-        <button class="route-pref" type="button" data-route-pref="direct" role="tab" aria-selected="false">Direct</button>
-        <button class="route-pref active" type="button" data-route-pref="balanced" role="tab" aria-selected="true">Balanced</button>
-        <button class="route-pref" type="button" data-route-pref="dirt" role="tab" aria-selected="false">Dirt</button>
-        <button class="route-pref" type="button" data-route-pref="cleanest" role="tab" aria-selected="false">Cleanest</button>
+
+      <!-- Shared trip settings (From here + Plan route) -->
+      <div class="route-shared" id="routeSharedSettings">
+        <div class="route-preferences" role="tablist" aria-label="Route preference">
+          <button class="route-pref" type="button" data-route-pref="direct" role="tab" aria-selected="false">Direct</button>
+          <button class="route-pref active" type="button" data-route-pref="balanced" role="tab" aria-selected="true">Balanced</button>
+          <button class="route-pref" type="button" data-route-pref="dirt" role="tab" aria-selected="false">Dirt</button>
+          <button class="route-pref" type="button" data-route-pref="cleanest" role="tab" aria-selected="false">Cleanest</button>
+        </div>
+        <div class="route-access" id="routeAccess">
+          <label class="route-access-row">
+            <span class="route-access-label">Allow unknown access</span>
+            <span class="switch"><input type="checkbox" id="unknownAccessToggle" aria-label="Allow unknown access"><span></span></span>
+          </label>
+          <!-- Consolidated, collapsible unknown-access warning (canonical copy only here). -->
+          <div class="access-warn-panel" id="accessWarnPanel" hidden>
+            <button class="access-warn-collapsed" id="accessWarnCollapsedRow" type="button" hidden aria-expanded="false" aria-controls="accessWarnExpanded">
+              <svg class="access-warn-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+              <span class="access-warn-collapsed-text" id="accessWarnCollapsedText">Unknown access enabled</span>
+              <svg class="access-warn-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+            </button>
+            <div class="access-warn-expanded" id="accessWarnExpanded">
+              <div class="access-warn-head">
+                <svg class="access-warn-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                <p class="access-warn-copy" id="unknownAccessHint">Unknown access is not permission. Routes may include closures, private land, seasonal restrictions, or enforcement.</p>
+                <button class="access-warn-hide" id="accessWarnHide" type="button" aria-label="Collapse unknown-access warning">×</button>
+              </div>
+              <p class="access-warn-metric" id="accessWarnMetric" hidden></p>
+            </div>
+          </div>
+        </div>
       </div>
-      <div class="route-access" id="routeAccess">
-        <label class="route-access-row">
-          <span class="route-access-label">Allow unknown access</span>
-          <span class="switch"><input type="checkbox" id="unknownAccessToggle" aria-label="Allow unknown access"><span></span></span>
-        </label>
-        <p class="route-access-warn" id="unknownAccessHint" role="status">Unknown access may include closures, private land, seasonal restrictions, or enforcement.</p>
+
+      <!-- From here + single-destination readout -->
+      <div class="route-panel" id="routePanelHere">
+        <div class="route-readout">
+          <div class="route-status" id="routeStatus">Tap destination<strong>No route set</strong></div>
+          <button class="route-clear" id="routeClear" type="button" title="Collapse route planner" aria-label="Collapse route planner">×</button>
+        </div>
+        <div class="route-warn" id="routeWarn" role="status"></div>
       </div>
-      <div class="route-readout">
-        <div class="route-status" id="routeStatus">Tap destination<strong>No route set</strong></div>
-        <button class="route-clear" id="routeClear" type="button" title="Collapse route planner" aria-label="Collapse route planner">×</button>
+
+      <!-- Multi-stage plan -->
+      <div class="route-panel" id="routePanelPlan" hidden>
+        <div class="stage-trip-summary" id="stageTripSummary" aria-live="polite"></div>
+        <div class="stage-list" id="stageList" role="list"></div>
+        <div class="stage-plan-actions">
+          <button class="stage-add" id="stageAddBtn" type="button">+ Add stage</button>
+          <button class="stage-edit-toggle" id="stageEditToggle" type="button" hidden>Edit stage</button>
+        </div>
+        <div class="route-warn" id="stagePlanWarn" role="status"></div>
+        <button class="stage-save" id="stageSaveBtn" type="button">Save route</button>
       </div>
-      <div class="route-warn" id="routeWarn" role="status"></div>
+
+      <!-- Saved routes / Route Book -->
+      <div class="route-panel" id="routePanelSaved" hidden>
+        <div class="saved-list" id="savedList" role="list"></div>
+        <button class="stage-save" id="savedCreateBtn" type="button">Create new route</button>
+      </div>
+
       <div class="route-actions" id="routeActions">
         <button class="route-nav" id="routeNavBtn" type="button" title="Start turn-by-turn navigation">Start navigation</button>
         <button class="route-export" id="routeExport" type="button" title="Export this route as GPX for OsmAnd, Gaia GPS, and other apps" aria-label="Export route as GPX">
@@ -1425,6 +1781,18 @@
       <div class="export-sheet-actions">
         <button class="export-cancel" id="exportCancel" type="button">Cancel</button>
         <button class="export-confirm" id="exportConfirm" type="button">Save GPX</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="export-sheet" id="saveRouteSheet" aria-hidden="true">
+    <div class="export-sheet-card" role="dialog" aria-modal="true" aria-labelledby="saveRouteTitle">
+      <h2 id="saveRouteTitle">Name this route</h2>
+      <p id="saveRouteHint">Saved to this device. Incomplete stages are stored as a draft.</p>
+      <input id="saveRouteInput" type="text" maxlength="80" autocomplete="off" enterkeyhint="done" aria-label="Route name" />
+      <div class="export-sheet-actions">
+        <button class="export-cancel" id="saveRouteCancel" type="button">Cancel</button>
+        <button class="export-confirm" id="saveRouteConfirm" type="button">Save route</button>
       </div>
     </div>
   </div>
@@ -1555,6 +1923,7 @@
   </div>
 
   <script src="../routing/lib/roadbook-curves.js"></script>
+  <script src="../routing/lib/stages.js"></script>
   <script>
     // Neutral Nova Scotia regional overview — not a rider position / routing origin.
     const NS_OVERVIEW = { lng: -63.0, lat: 45.1, zoom: 7.25 };
@@ -1733,6 +2102,26 @@
     let lastNetworkRouteReason = "";
     let routeDebug = null;
     let routeJobId = 0;
+
+    // ---- Multi-stage planner state (RouteStages is the pure model) ---------
+    // plannerTab: here | plan | saved. routeMode stays here|plan for the legacy
+    // single-destination path so From-here behaviour is byte-for-byte unchanged.
+    let plannerTab = "here";
+    let planTrip = RouteStages.createTrip({
+      profile: routePreference,
+      accessPolicy: { motorizedPermissive: true, motorizedUnknown: allowUnknownAccess }
+    });
+    let activeStageId = planTrip.stages[0].id;
+    let editingStageId = null;
+    const stageTracker = RouteStages.createRequestTracker();
+    let planAggregate = RouteStages.aggregateTrip(planTrip);
+    let savedRoutes = [];
+    let savedRoutesLoaded = false;
+    let viewedSavedRouteId = null; // saved route shown on map (view-only)
+    // Multi-stage navigation context. null = single-stage / not multi-stage nav.
+    let navContext = null; // { stages:[{start,end,route}], index, total, name, awaitingNext:bool }
+    const stageMarkers = []; // real MapLibre markers for stage endpoints (draggable in edit mode)
+    let accessWarnCollapsed = false; // user collapsed the consolidated warning
     // Status dock ownership: "route" wins over transient "context" loading.
     let statusOwner = null;
     let contextLoadingActive = false;
@@ -1787,6 +2176,31 @@
     const exportCancel = document.getElementById("exportCancel");
     const exportConfirm = document.getElementById("exportConfirm");
     const routeDebugEl = document.getElementById("routeDebug");
+    // Multi-stage + saved-routes DOM
+    const routePanelHere = document.getElementById("routePanelHere");
+    const routePanelPlan = document.getElementById("routePanelPlan");
+    const routePanelSaved = document.getElementById("routePanelSaved");
+    const stageListEl = document.getElementById("stageList");
+    const stageTripSummaryEl = document.getElementById("stageTripSummary");
+    const stagePlanWarn = document.getElementById("stagePlanWarn");
+    const stageAddBtn = document.getElementById("stageAddBtn");
+    const stageEditToggle = document.getElementById("stageEditToggle");
+    const stageSaveBtn = document.getElementById("stageSaveBtn");
+    const savedListEl = document.getElementById("savedList");
+    const savedCreateBtn = document.getElementById("savedCreateBtn");
+    const saveRouteSheet = document.getElementById("saveRouteSheet");
+    const saveRouteInput = document.getElementById("saveRouteInput");
+    const saveRouteCancel = document.getElementById("saveRouteCancel");
+    const saveRouteConfirm = document.getElementById("saveRouteConfirm");
+    const saveRouteHint = document.getElementById("saveRouteHint");
+    const accessWarnPanel = document.getElementById("accessWarnPanel");
+    const accessWarnCollapsedRow = document.getElementById("accessWarnCollapsedRow");
+    const accessWarnCollapsedText = document.getElementById("accessWarnCollapsedText");
+    const accessWarnExpanded = document.getElementById("accessWarnExpanded");
+    const accessWarnHide = document.getElementById("accessWarnHide");
+    const accessWarnMetric = document.getElementById("accessWarnMetric");
+    const navStageLine = document.getElementById("navStageLine");
+    const navNextStageBtn = document.getElementById("navNextStageBtn");
     const navHud = document.getElementById("navHud");
     const navCueDist = document.getElementById("navCueDist");
     const navCueMain = document.getElementById("navCueMain");
@@ -2911,6 +3325,13 @@
     }
 
     function routeFeatureCollection() {
+      // Plan tab renders every stage's own geometry as a separate segment/feature
+      // (no merge across gaps). Endpoints are real MapLibre markers, not circles.
+      if (plannerTab === "plan") return planFeatureCollection();
+      // Saved "View on map" also paints stage geometry without touching the draft.
+      if (plannerTab === "saved") {
+        return viewedSavedRouteId ? savedViewFeatureCollection() : { type: "FeatureCollection", features: [] };
+      }
       const start = activeStart();
       const features = [];
       if (activeRoute) {
@@ -2956,6 +3377,781 @@
         });
       }
       return { type: "FeatureCollection", features };
+    }
+
+    // ======================================================================
+    // Multi-stage plan controller (uses RouteStages pure model)
+    // ======================================================================
+    const RS = window.RouteStages;
+
+    function stageTrackFeatures(stages) {
+      const features = [];
+      stages.forEach((stage, si) => {
+        if (RS.computeStageStatus(stage) !== RS.STAGE_STATUS.COMPLETE || !stage.route) return;
+        const segments = stage.route.segments || [];
+        if (segments.length) {
+          for (const seg of segments) {
+            const coords = seg.geometry || seg.coords || [];
+            if (coords.length < 2) continue;
+            features.push({
+              type: "Feature",
+              geometry: { type: "LineString", coordinates: coords },
+              properties: {
+                role: "route",
+                routeKind: "service-multistage",
+                stageIndex: si,
+                trackClass: seg.surfaceClass || seg.trackClass || "connector"
+              }
+            });
+          }
+        } else {
+          const coords = stage.route.geometry || [];
+          if (coords.length >= 2) {
+            features.push({
+              type: "Feature",
+              geometry: { type: "LineString", coordinates: coords },
+              properties: { role: "route", stageIndex: si, trackClass: "connector" }
+            });
+          }
+        }
+      });
+      return features;
+    }
+
+    function planFeatureCollection() {
+      // Lines only — endpoints are real draggable markers (renderStageMarkers).
+      return { type: "FeatureCollection", features: stageTrackFeatures(planTrip.stages) };
+    }
+
+    function savedViewFeatureCollection() {
+      const record = savedRoutes.find((r) => r.id === viewedSavedRouteId);
+      if (!record) return { type: "FeatureCollection", features: [] };
+      const stages = (record.stages || []).map((s) => RS.createStage({
+        start: s.start, end: s.end,
+        route: s.route ? Object.assign({ status: "complete" }, s.route) : null
+      }));
+      const features = stageTrackFeatures(stages);
+      const single = stages.length === 1;
+      stages.forEach((stage, i) => {
+        if (stage.start) {
+          features.push({
+            type: "Feature",
+            geometry: { type: "Point", coordinates: [stage.start.lng, stage.start.lat] },
+            properties: { role: "start", label: single ? "A" : String(i + 1) }
+          });
+        }
+        if (stage.end && i === stages.length - 1) {
+          features.push({
+            type: "Feature",
+            geometry: { type: "Point", coordinates: [stage.end.lng, stage.end.lat] },
+            properties: { role: "destination", label: single ? "B" : "B" }
+          });
+        }
+      });
+      return { type: "FeatureCollection", features };
+    }
+
+    function getActiveStage() {
+      const idx = RS.findStageIndex(planTrip, activeStageId);
+      if (idx >= 0) return planTrip.stages[idx];
+      activeStageId = planTrip.stages[0].id;
+      return planTrip.stages[0];
+    }
+
+    function setActiveStage(stageId) {
+      if (RS.findStageIndex(planTrip, stageId) < 0) return;
+      activeStageId = stageId;
+      renderStageList();
+      renderStageMarkers();
+    }
+
+    function handlePlanStageClick(clicked) {
+      const idx = RS.findStageIndex(planTrip, activeStageId);
+      if (idx < 0) return;
+      let stage = planTrip.stages[idx];
+      if (!stage.start) {
+        stage = RS.transitionStage(stage, "set-start", { point: clicked });
+        planTrip.stages[idx] = stage;
+        setStatus("Stage " + (idx + 1) + " · tap point B", "ok", "route");
+        afterStageEdit(stage.id, false);
+        return;
+      }
+      if (!stage.end) {
+        stage = RS.transitionStage(stage, "set-end", { point: clicked });
+        planTrip.stages[idx] = stage;
+        afterStageEdit(stage.id, true);
+        return;
+      }
+      // Active stage already has both points — guide the rider to add a stage.
+      setStatus("Add a stage or edit points to change this stage", "ok", "route");
+    }
+
+    // Refresh model-derived state after a stage's points/route change.
+    function afterStageEdit(stageId, shouldRoute) {
+      planAggregate = RS.aggregateTrip(planTrip);
+      renderStageList();
+      renderStageMarkers();
+      syncPlanActiveRoute();
+      refreshRouteDraft();
+      renderAccessWarning();
+      if (shouldRoute) routeStage(stageId);
+    }
+
+    function addPlanStage() {
+      const stage = RS.addStage(planTrip);
+      activeStageId = stage.id;
+      editingStageId = null;
+      planAggregate = RS.aggregateTrip(planTrip);
+      renderStageList();
+      renderStageMarkers();
+      setStatus("Stage " + planTrip.stages.length + " added · place its points", "ok", "route");
+    }
+
+    function deletePlanStage(stageId) {
+      if (planTrip.stages.length <= 1) return;
+      const wasActive = stageId === activeStageId;
+      stageTracker.cancel(stageId);
+      RS.removeStage(planTrip, stageId);
+      if (wasActive) activeStageId = planTrip.stages[Math.max(0, planTrip.stages.length - 1)].id;
+      if (editingStageId === stageId) editingStageId = null;
+      afterStageEdit(activeStageId, false);
+    }
+
+    function movePlanStage(stageId, delta) {
+      const idx = RS.findStageIndex(planTrip, stageId);
+      if (idx < 0) return;
+      const to = idx + delta;
+      if (to < 0 || to >= planTrip.stages.length) return;
+      RS.moveStage(planTrip, idx, to);
+      afterStageEdit(activeStageId, false);
+    }
+
+    async function routeStage(stageId) {
+      const idx = RS.findStageIndex(planTrip, stageId);
+      if (idx < 0) return;
+      let stage = planTrip.stages[idx];
+      if (!RS.stageHasBothPoints(stage)) return; // never route a draft
+      const token = stageTracker.issue(stageId);
+      planTrip.stages[idx] = RS.transitionStage(stage, "route-start", { requestToken: token });
+      planAggregate = RS.aggregateTrip(planTrip);
+      renderStageList();
+      updatePlanStatus();
+      try {
+        const res = await fetch(ROUTE_API_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            profile: routePreference,
+            // EXACTLY two locations per stage request (A -> B only).
+            locations: [
+              { lat: stage.start.lat, lon: stage.start.lng, label: "A" },
+              { lat: stage.end.lat, lon: stage.end.lng, label: "B" }
+            ],
+            vehicle: "dual-sport-motorcycle",
+            accessPolicy: currentAccessPolicy(),
+            options: { matchLimitMeters: 250 }
+          })
+        });
+        const api = await res.json();
+        // Stale-guard: a newer edit/request for this stage supersedes us.
+        if (!stageTracker.isCurrent(stageId, token)) return;
+        const cur = RS.findStageIndex(planTrip, stageId);
+        if (cur < 0) return;
+        if (api.status !== "complete") {
+          planTrip.stages[cur] = RS.transitionStage(planTrip.stages[cur], "route-failed", {
+            error: api.message || api.error || "No route"
+          });
+        } else {
+          planTrip.stages[cur] = RS.transitionStage(planTrip.stages[cur], "route-success", { route: api });
+        }
+      } catch (err) {
+        if (!stageTracker.isCurrent(stageId, token)) return;
+        const cur = RS.findStageIndex(planTrip, stageId);
+        if (cur >= 0) {
+          planTrip.stages[cur] = RS.transitionStage(planTrip.stages[cur], "route-failed", {
+            error: (err && err.message) || "Routing failed"
+          });
+        }
+      }
+      afterStageUpdate();
+    }
+
+    function recalcAllStages() {
+      for (const stage of planTrip.stages) {
+        if (RS.stageHasBothPoints(stage)) routeStage(stage.id);
+        else stageTracker.cancel(stage.id);
+      }
+      afterStageUpdate();
+    }
+
+    function afterStageUpdate() {
+      planAggregate = RS.aggregateTrip(planTrip);
+      syncPlanActiveRoute();
+      renderStageList();
+      updatePlanStatus();
+      renderStageMarkers();
+      refreshRouteDraft();
+      renderAccessWarning();
+      syncRouteExportUi();
+    }
+
+    function stageToActiveRoute(stage, index) {
+      const api = stage.route;
+      const distanceKm = (api.distanceMeters || 0) / 1000;
+      const byClass = {};
+      const segments = (api.segments || []).map((seg) => {
+        const trackClass = seg.surfaceClass || "unknown";
+        byClass[trackClass] = (byClass[trackClass] || 0) + ((seg.distanceMeters || 0) / 1000);
+        return {
+          trackClass,
+          accessClass: seg.accessClass,
+          edgeId: seg.edgeId,
+          coords: seg.geometry || [],
+          distanceKm: (seg.distanceMeters || 0) / 1000
+        };
+      });
+      const dirtKm = distanceKm * ((api.stats?.gravelPercent || 0) + (api.stats?.accessPercent || 0) + (api.stats?.trackPercent || 0)) / 100;
+      return {
+        kind: "service",
+        coordinates: api.geometry || [],
+        segments,
+        distanceKm,
+        dirtKm,
+        byClass,
+        byAccess: api.stats || {},
+        unknownAccessKm: ((api.stats?.unknownAccessPercent || 0) / 100) * distanceKm,
+        unknownAccessPercent: api.stats?.unknownAccessPercent || 0,
+        accessPolicy: api.accessPolicy || currentAccessPolicy(),
+        warnings: api.warnings || [],
+        estimatedMovingSeconds: api.estimatedMovingSeconds || null,
+        stageIndex: index != null ? index : null
+      };
+    }
+
+    // Build a whole-trip activeRoute so GPX / export / roadbook see every complete
+    // stage. Map rendering + navigation use per-stage geometry (no cross-gap merge).
+    function syncPlanActiveRoute() {
+      const completes = planTrip.stages.filter(
+        (s) => RS.computeStageStatus(s) === RS.STAGE_STATUS.COMPLETE && s.route
+      );
+      if (!completes.length) {
+        activeRoute = null;
+        return;
+      }
+      const segments = [];
+      const coordinates = [];
+      const byClass = {};
+      let distanceKm = 0;
+      let movingSec = 0;
+      completes.forEach((s, si) => {
+        for (const seg of s.route.segments || []) {
+          const trackClass = seg.surfaceClass || "unknown";
+          const dKm = (seg.distanceMeters || 0) / 1000;
+          byClass[trackClass] = (byClass[trackClass] || 0) + dKm;
+          segments.push({
+            trackClass,
+            accessClass: seg.accessClass,
+            edgeId: seg.edgeId,
+            coords: seg.geometry || [],
+            distanceKm: dKm,
+            stageIndex: si
+          });
+        }
+        for (const c of s.route.geometry || []) {
+          const last = coordinates[coordinates.length - 1];
+          if (!last || last[0] !== c[0] || last[1] !== c[1]) coordinates.push(c);
+        }
+        distanceKm += (s.route.distanceMeters || 0) / 1000;
+        movingSec += s.route.estimatedMovingSeconds || 0;
+      });
+      const agg = planAggregate || RS.aggregateTrip(planTrip);
+      activeRoute = {
+        kind: "service-multistage",
+        coordinates,
+        segments,
+        distanceKm,
+        dirtKm: (agg.dirtMeters || 0) / 1000,
+        byClass,
+        byAccess: {},
+        unknownAccessKm: (agg.unknownAccessMeters || 0) / 1000,
+        unknownAccessPercent: agg.percentages.unknownAccessPercent || 0,
+        accessPolicy: currentAccessPolicy(),
+        warnings: agg.warnings || [],
+        estimatedMovingSeconds: movingSec,
+        multiStage: planTrip.stages.length > 1,
+        stageCount: planTrip.stages.length
+      };
+    }
+
+    // ---- Stage list + summary rendering ----
+    function stageStatusMarkup(stage) {
+      const status = RS.computeStageStatus(stage);
+      if (status === RS.STAGE_STATUS.DRAFT) {
+        const need = !stage.start ? "tap A" : "tap B";
+        return '<span class="stage-status-draft">Draft · ' + need + "</span>";
+      }
+      if (status === RS.STAGE_STATUS.LOADING) return '<span class="stage-status-loading">Routing…</span>';
+      if (status === RS.STAGE_STATUS.FAILED) {
+        return '<span class="stage-status-failed">Failed · ' + escapeHtml(stage.error || "no route") + "</span>";
+      }
+      if (status === RS.STAGE_STATUS.COMPLETE && stage.route) {
+        const km = (stage.route.distanceMeters || 0) / 1000;
+        const mins = stage.route.estimatedMovingSeconds
+          ? Math.round(stage.route.estimatedMovingSeconds / 60) + " min"
+          : null;
+        const b = RS.routeBreakdown(stage.route);
+        const dirtPct = RS.weightedPercent(b.dirtMeters, b.distanceMeters);
+        return '<span class="stage-status-complete">' +
+          km.toFixed(km >= 10 ? 1 : 2) + " km" +
+          (mins ? " · " + mins : "") +
+          " · " + dirtPct + "% dirt</span>";
+      }
+      return "Ready · not routed";
+    }
+
+    function renderStageList() {
+      if (!stageListEl) return;
+      const stages = planTrip.stages;
+      stageListEl.innerHTML = stages.map((stage, i) => {
+        const active = stage.id === activeStageId;
+        const editing = stage.id === editingStageId;
+        const aLabel = stage.start ? "A set" : "A —";
+        const bLabel = stage.end ? "B set" : "B —";
+        return (
+          '<div class="stage-row' + (active ? " is-active" : "") + (editing ? " is-editing" : "") +
+            '" role="listitem" data-stage-id="' + stage.id + '">' +
+            '<span class="stage-badge">' + (i + 1) + "</span>" +
+            '<span class="stage-main">' +
+              '<span class="stage-title">Stage ' + (i + 1) + " · " + aLabel + " → " + bLabel + "</span>" +
+              '<span class="stage-sub">' + stageStatusMarkup(stage) + "</span>" +
+            "</span>" +
+            '<span class="stage-controls">' +
+              '<button class="stage-icon-btn" data-stage-move="up" data-stage-id="' + stage.id + '" title="Move up" aria-label="Move stage up"' + (i === 0 ? " disabled" : "") + ">↑</button>" +
+              '<button class="stage-icon-btn" data-stage-move="down" data-stage-id="' + stage.id + '" title="Move down" aria-label="Move stage down"' + (i === stages.length - 1 ? " disabled" : "") + ">↓</button>" +
+              '<button class="stage-icon-btn" data-stage-delete="' + stage.id + '" title="Delete stage" aria-label="Delete stage"' + (stages.length <= 1 ? " disabled" : "") + ">×</button>" +
+            "</span>" +
+          "</div>"
+        );
+      }).join("");
+      if (stageEditToggle) {
+        const active = getActiveStage();
+        const canEdit = active && RS.stageHasBothPoints(active) && !navigating;
+        stageEditToggle.hidden = !canEdit;
+        stageEditToggle.classList.toggle("is-editing", editingStageId === activeStageId);
+        stageEditToggle.textContent = editingStageId === activeStageId ? "Done editing" : "Edit stage";
+      }
+      if (stageSaveBtn) {
+        stageSaveBtn.disabled = !planTrip.stages.some((s) => RS.stageHasBothPoints(s));
+      }
+    }
+
+    function updatePlanStatus() {
+      planAggregate = RS.aggregateTrip(planTrip);
+      const agg = planAggregate;
+      const activeIdx = RS.findStageIndex(planTrip, activeStageId);
+      const stageCount = planTrip.stages.length;
+      // Trip-wide vs selected-stage distinction.
+      let summary = "";
+      if (agg.completedStageCount > 0) {
+        const km = agg.totalDistanceMeters / 1000;
+        summary = '<span class="stage-trip-metrics">' +
+          km.toFixed(km >= 10 ? 1 : 2) + " km · " + RS.secondsToLabel(agg.totalMovingSeconds) +
+          " · " + agg.percentages.dirtPercent + "% dirt" +
+          (agg.percentages.unknownAccessPercent ? " · " + agg.percentages.unknownAccessPercent + "% unknown" : "") +
+          "</span>";
+      }
+      const completeLabel = agg.complete
+        ? "Trip complete"
+        : "Trip incomplete · " + agg.completedStageCount + "/" + agg.requiredStageCount + " stages";
+      if (stageTripSummaryEl) {
+        stageTripSummaryEl.innerHTML =
+          "<strong>" + completeLabel + "</strong>" +
+          (stageCount > 1 && activeIdx >= 0 ? " · Stage " + (activeIdx + 1) + " of " + stageCount + " selected" : "") +
+          (summary ? "<br>" + summary : "");
+      }
+      // Gap / transfer warnings (never a straight-line connector).
+      if (stagePlanWarn) {
+        const gapWarn = (agg.warnings || []).filter((w) => w && w.code === "stage_gap").map((w) => w.message);
+        stagePlanWarn.textContent = gapWarn.join(" · ");
+      }
+      // Compact drawer summary mirrors trip totals.
+      const compact = agg.completedStageCount > 0
+        ? (agg.complete ? "Trip" : "Trip (draft)") + "<strong>" +
+            (agg.totalDistanceMeters / 1000).toFixed(agg.totalDistanceMeters >= 10000 ? 1 : 2) + " km · " +
+            stageCount + (stageCount === 1 ? " stage" : " stages") + "</strong>"
+        : "Plan route<strong>" + stageCount + (stageCount === 1 ? " stage" : " stages") + " · place points</strong>";
+      setRouteStatusHtml(compact);
+    }
+
+    // ---- Real MapLibre markers for stage endpoints ----
+    function clearStageMarkers() {
+      while (stageMarkers.length) {
+        const m = stageMarkers.pop();
+        try { m.remove(); } catch (_) { /* ignore */ }
+      }
+    }
+
+    function stageMarkerPoints() {
+      const stages = planTrip.stages;
+      const single = stages.length === 1;
+      const points = [];
+      stages.forEach((stage, i) => {
+        if (stage.start) {
+          const prev = points[points.length - 1];
+          if (prev && RS.samePoint({ lng: prev.lng, lat: prev.lat }, stage.start)) {
+            prev.alsoStageId = stage.id;
+            prev.alsoWhich = "start";
+          } else {
+            points.push({
+              lng: stage.start.lng, lat: stage.start.lat,
+              label: single ? "A" : String(i + 1),
+              role: "start", stageId: stage.id, which: "start"
+            });
+          }
+        }
+        if (stage.end) {
+          const isLast = i === stages.length - 1;
+          points.push({
+            lng: stage.end.lng, lat: stage.end.lat,
+            label: single ? "B" : (isLast ? "B" : String(i + 2)),
+            role: isLast ? "destination" : "boundary", stageId: stage.id, which: "end"
+          });
+        }
+      });
+      return points;
+    }
+
+    function renderStageMarkers() {
+      clearStageMarkers();
+      if (plannerTab !== "plan") return;
+      const points = stageMarkerPoints();
+      for (const p of points) createStageMarker(p);
+    }
+
+    function createStageMarker(p) {
+      const el = document.createElement("div");
+      el.className = "stage-marker" + (p.role === "start" ? " is-start" : "");
+      el.textContent = p.label;
+      const involvesEdit =
+        editingStageId && (p.stageId === editingStageId || p.alsoStageId === editingStageId);
+      const draggable = !!involvesEdit && !navigating;
+      if (draggable) el.classList.add("is-editing");
+      const marker = new maplibregl.Marker({ element: el, draggable });
+      marker.setLngLat([p.lng, p.lat]).addTo(map);
+      // Tapping a marker selects its stage (and never places a new point).
+      el.addEventListener("click", (event) => {
+        event.stopPropagation();
+        setActiveStage(p.stageId);
+      });
+      if (draggable) {
+        marker.on("dragend", () => handleMarkerDragEnd(p, marker));
+      }
+      stageMarkers.push(marker);
+    }
+
+    function setStagePoint(stageId, which, point) {
+      const idx = RS.findStageIndex(planTrip, stageId);
+      if (idx < 0) return;
+      planTrip.stages[idx] = RS.transitionStage(
+        planTrip.stages[idx],
+        which === "start" ? "set-start" : "set-end",
+        { point }
+      );
+      stageTracker.cancel(stageId); // any in-flight response becomes stale
+    }
+
+    function handleMarkerDragEnd(p, marker) {
+      const ll = marker.getLngLat();
+      const np = { lng: ll.lng, lat: ll.lat };
+      setStagePoint(p.stageId, p.which, np);
+      // Linked endpoint: the shared boundary updates the adjacent stage too.
+      if (p.alsoStageId) setStagePoint(p.alsoStageId, p.alsoWhich, np);
+      planAggregate = RS.aggregateTrip(planTrip);
+      renderStageList();
+      renderStageMarkers();
+      syncPlanActiveRoute();
+      refreshRouteDraft();
+      // Recalculate the affected stage(s); stale tokens protect older responses.
+      routeStage(p.stageId);
+      if (p.alsoStageId) routeStage(p.alsoStageId);
+    }
+
+    function toggleEditStage() {
+      const active = getActiveStage();
+      if (!active || !RS.stageHasBothPoints(active)) return;
+      if (navigating) return; // no drag during navigation
+      editingStageId = editingStageId === active.id ? null : active.id;
+      setStatus(
+        editingStageId ? "Editing Stage " + (RS.findStageIndex(planTrip, active.id) + 1) + " · drag A/B markers" : "Edit committed",
+        "ok", "route"
+      );
+      renderStageList();
+      renderStageMarkers();
+    }
+
+    function fitToCoords(coordsList) {
+      const flat = [];
+      for (const c of coordsList) if (Array.isArray(c) && c.length >= 2) flat.push(c);
+      if (flat.length < 2) return;
+      const bounds = flat.reduce((b, c) => b.extend(c), new maplibregl.LngLatBounds(flat[0], flat[0]));
+      try {
+        map.fitBounds(bounds, { padding: { top: 90, bottom: 260, left: 40, right: 40 }, maxZoom: 14, duration: 500 });
+      } catch (_) { /* ignore */ }
+    }
+
+    // ---- Saved routes (versioned IndexedDB, separate from chunk DB) ----
+    const savedDb = new Dexie("dirt_saved_routes_v1");
+    savedDb.version(1).stores({ routes: "id, updatedAt" });
+
+    async function loadSavedRoutes() {
+      try {
+        const rows = await savedDb.routes.toArray();
+        rows.sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)));
+        savedRoutes = rows;
+        savedRoutesLoaded = true;
+      } catch (err) {
+        console.warn("Saved routes load failed", err);
+        savedRoutes = [];
+        savedRoutesLoaded = true;
+      }
+    }
+
+    async function loadSavedRoutesUi() {
+      if (!savedRoutesLoaded) {
+        if (savedListEl) savedListEl.innerHTML = '<div class="saved-empty">Loading saved routes…</div>';
+        await loadSavedRoutes();
+      }
+      renderSavedList();
+    }
+
+    function savedCompactSummaryHtml() {
+      const n = savedRoutes.length;
+      return "Saved routes<strong>" + n + (n === 1 ? " route" : " routes") + "</strong>";
+    }
+
+    function renderSavedList() {
+      if (!savedListEl) return;
+      if (!savedRoutes.length) {
+        savedListEl.innerHTML =
+          '<div class="saved-empty">No saved routes yet.<br>Plan a route, then tap “Save route” to keep it on this device.</div>';
+        setRouteStatusHtml(savedCompactSummaryHtml());
+        return;
+      }
+      savedListEl.innerHTML = savedRoutes.map((r) => {
+        const agg = r.aggregate || {};
+        const km = (agg.totalDistanceMeters || 0) / 1000;
+        const dirt = agg.percentages ? agg.percentages.dirtPercent : 0;
+        const updated = r.updatedAt ? new Date(r.updatedAt).toLocaleDateString() : "";
+        return (
+          '<div class="saved-row" data-saved-id="' + r.id + '">' +
+            '<div class="saved-row-head">' +
+              '<span class="saved-name">' + escapeHtml(r.name || "Untitled route") + "</span>" +
+              (r.isDraft ? '<span class="saved-draft-tag">DRAFT</span>' : "") +
+            "</div>" +
+            '<div class="saved-meta">' +
+              (r.stageCount || 1) + (r.stageCount === 1 ? " stage" : " stages") +
+              " · " + km.toFixed(km >= 10 ? 1 : 2) + " km" +
+              " · " + RS.secondsToLabel(agg.totalMovingSeconds) +
+              " · " + (dirt || 0) + "% dirt" +
+              (updated ? " · " + updated : "") +
+              " · saved on this device" +
+            "</div>" +
+            '<div class="saved-actions">' +
+              '<button class="saved-action" data-saved-view="' + r.id + '">View on map</button>' +
+              '<button class="saved-action primary" data-saved-apply="' + r.id + '">Apply route</button>' +
+              '<button class="saved-action" data-saved-duplicate="' + r.id + '">Duplicate</button>' +
+              '<button class="saved-action danger" data-saved-delete="' + r.id + '">Delete</button>' +
+            "</div>" +
+          "</div>"
+        );
+      }).join("");
+      setRouteStatusHtml(savedCompactSummaryHtml());
+    }
+
+    function viewSavedRoute(id) {
+      viewedSavedRouteId = id;
+      const record = savedRoutes.find((r) => r.id === id);
+      if (!record) return;
+      refreshRouteDraft();
+      const coords = [];
+      for (const s of record.stages || []) {
+        if (s.route && s.route.geometry) for (const c of s.route.geometry) coords.push(c);
+      }
+      fitToCoords(coords);
+      setStatus("Viewing “" + (record.name || "route") + "” · Apply to edit", "ok", "route");
+    }
+
+    function applySavedRoute(id) {
+      const record = savedRoutes.find((r) => r.id === id);
+      if (!record) return;
+      try {
+        planTrip = RS.deserializeSavedRoute(record);
+      } catch (err) {
+        setStatus("Could not open saved route · " + (err.message || "error"), "error", "route");
+        return;
+      }
+      activeStageId = planTrip.stages[0].id;
+      editingStageId = null;
+      viewedSavedRouteId = null;
+      // Sync UI-level policy + profile to the loaded trip.
+      routePreference = planTrip.profile || "balanced";
+      allowUnknownAccess = !!(planTrip.accessPolicy && planTrip.accessPolicy.motorizedUnknown);
+      unknownAccessAcknowledged = allowUnknownAccess;
+      if (typeof syncUnknownAccessUi === "function") syncUnknownAccessUi();
+      document.querySelectorAll("[data-route-pref]").forEach((b) => {
+        const active = b.dataset.routePref === routePreference;
+        b.classList.toggle("active", active);
+        b.setAttribute("aria-selected", active ? "true" : "false");
+      });
+      setRouteMode("plan");
+      planAggregate = RS.aggregateTrip(planTrip);
+      syncPlanActiveRoute();
+      renderStageList();
+      renderStageMarkers();
+      updatePlanStatus();
+      const coords = [];
+      for (const s of planTrip.stages) if (s.route && s.route.geometry) for (const c of s.route.geometry) coords.push(c);
+      fitToCoords(coords);
+      setStatus("Loaded “" + (record.name || "route") + "” into the planner", "ok", "route");
+    }
+
+    async function duplicateSavedRoute(id) {
+      const record = savedRoutes.find((r) => r.id === id);
+      if (!record) return;
+      const copy = RS.duplicateSavedRoute(record);
+      try {
+        await savedDb.routes.put(copy);
+        await loadSavedRoutes();
+        renderSavedList();
+        setStatus("Duplicated as “" + copy.name + "”", "ok", "route");
+      } catch (err) {
+        setStatus("Could not duplicate · " + (err.message || "error"), "error", "route");
+      }
+    }
+
+    async function deleteSavedRoute(id) {
+      const record = savedRoutes.find((r) => r.id === id);
+      if (!record) return;
+      if (!window.confirm("Delete “" + (record.name || "this route") + "”? This cannot be undone.")) return;
+      try {
+        await savedDb.routes.delete(id);
+        if (viewedSavedRouteId === id) { viewedSavedRouteId = null; refreshRouteDraft(); }
+        await loadSavedRoutes();
+        renderSavedList();
+        setStatus("Route deleted", "ok", "route");
+      } catch (err) {
+        setStatus("Could not delete · " + (err.message || "error"), "error", "route");
+      }
+    }
+
+    function createNewRouteDraft() {
+      planTrip = RS.createTrip({
+        profile: routePreference,
+        accessPolicy: { motorizedPermissive: true, motorizedUnknown: allowUnknownAccess }
+      });
+      activeStageId = planTrip.stages[0].id;
+      editingStageId = null;
+      planAggregate = RS.aggregateTrip(planTrip);
+      setRouteMode("plan");
+      setStatus("New route · place Stage 1 points", "ok", "route");
+    }
+
+    // ---- Save sheet ----
+    function openSaveSheet() {
+      if (!saveRouteSheet) return;
+      const agg = RS.aggregateTrip(planTrip);
+      if (!planTrip.stages.some((s) => RS.stageHasBothPoints(s))) {
+        setStatus("Place at least one stage before saving", "error", "route");
+        return;
+      }
+      saveRouteInput.value = planTrip.name || routeExportDefaultName();
+      if (saveRouteHint) {
+        saveRouteHint.textContent = agg.complete
+          ? "Saved to this device."
+          : "Some stages are incomplete — this will be saved as a draft.";
+      }
+      saveRouteSheet.classList.add("open");
+      saveRouteSheet.setAttribute("aria-hidden", "false");
+      setTimeout(() => { saveRouteInput.focus(); saveRouteInput.select(); }, 30);
+    }
+
+    function closeSaveSheet() {
+      if (!saveRouteSheet) return;
+      saveRouteSheet.classList.remove("open");
+      saveRouteSheet.setAttribute("aria-hidden", "true");
+    }
+
+    async function confirmSaveRoute() {
+      const name = String(saveRouteInput.value || "").replace(/\s+/g, " ").trim();
+      if (!name) {
+        if (saveRouteHint) saveRouteHint.textContent = "Please enter a name for this route.";
+        saveRouteInput.focus();
+        return;
+      }
+      planTrip.name = name;
+      const record = RS.serializeSavedRoute(planTrip, { name });
+      try {
+        await savedDb.routes.put(record);
+        planTrip.id = record.id;
+        savedRoutesLoaded = false;
+        await loadSavedRoutes();
+        closeSaveSheet();
+        setStatus("Saved “" + name + "”" + (record.isDraft ? " (draft)" : "") + " on this device", "ok", "route");
+      } catch (err) {
+        console.error(err);
+        if (saveRouteHint) saveRouteHint.textContent = "Storage failed: " + (err.message || "could not save on this device.");
+        setStatus("Could not save route · " + (err.message || "storage error"), "error", "route");
+      }
+    }
+
+    // ---- Multi-stage navigation ----
+    function startMultiStageNav() {
+      if (!RS.tripComplete(planTrip)) {
+        const agg = RS.aggregateTrip(planTrip);
+        setStatus(
+          "All stages must be complete to navigate (" + agg.completedStageCount + "/" + agg.requiredStageCount + ")",
+          "error", "route"
+        );
+        setRouteCardOpen(true);
+        return false;
+      }
+      const ordered = planTrip.stages.filter((s) => RS.computeStageStatus(s) === RS.STAGE_STATUS.COMPLETE);
+      let startIndex = ordered.findIndex((s) => s.id === activeStageId);
+      if (startIndex < 0) startIndex = 0;
+      navContext = {
+        stages: ordered.map((s) => s),
+        index: startIndex,
+        total: ordered.length,
+        awaitingNext: false
+      };
+      activeRoute = stageToActiveRoute(ordered[startIndex], startIndex);
+      return true;
+    }
+
+    function updateNavStageHud() {
+      if (!navStageLine) return;
+      if (navContext && navContext.total > 1) {
+        navStageLine.hidden = false;
+        navStageLine.textContent = "Stage " + (navContext.index + 1) + " of " + navContext.total;
+      } else {
+        navStageLine.hidden = true;
+      }
+    }
+
+    function advanceNavStage() {
+      if (!navContext) return;
+      if (navContext.index >= navContext.total - 1) return;
+      navContext.index += 1;
+      navContext.awaitingNext = false;
+      if (navNextStageBtn) navNextStageBtn.hidden = true;
+      activeRoute = stageToActiveRoute(navContext.stages[navContext.index], navContext.index);
+      navManeuvers = buildNavManeuvers(activeRouteCoordinates());
+      lastSpokenCueKey = "";
+      updateNavStageHud();
+      syncOverviewRoute();
+      applyMainDetailCamera(true, { resetZoom: true });
+      updateNavGuidance();
+      setStatus("Stage " + (navContext.index + 1) + " of " + navContext.total, "ok");
     }
 
     function haversineKm(a, b) {
@@ -4221,10 +5417,24 @@
           : Math.max(10, Math.round(toTurnKm * 1000)) + " m";
 
         if (next.severity === "arrive" && toTurnKm < 0.04) {
-          navCueDist.textContent = "Destination";
-          navCueMain.textContent = "You have arrived";
-          navCueSub.textContent = "End navigation when ready";
-          speakCue("You have arrived", "arrive");
+          if (navContext && navContext.total > 1 && navContext.index < navContext.total - 1) {
+            // Stage complete — explicit handoff, never a silent advance.
+            const doneStage = navContext.index + 1;
+            navCueDist.textContent = "Stage " + doneStage + " done";
+            navCueMain.textContent = "Stage " + doneStage + " complete";
+            navCueSub.textContent = "Start Stage " + (doneStage + 1) + " when ready";
+            if (navNextStageBtn && !navContext.awaitingNext) {
+              navNextStageBtn.hidden = false;
+              navNextStageBtn.textContent = "Start Stage " + (doneStage + 1);
+            }
+            if (!navContext.awaitingNext) speakCue("Stage " + doneStage + " complete.", "stage-done-" + doneStage);
+            navContext.awaitingNext = true;
+          } else {
+            navCueDist.textContent = "Destination";
+            navCueMain.textContent = "You have arrived";
+            navCueSub.textContent = "End navigation when ready";
+            speakCue("You have arrived", "arrive");
+          }
         } else {
           navCueDist.textContent = "In " + distLabel;
           navCueMain.textContent = next.text;
@@ -4415,6 +5625,8 @@
       lastSpokenCueKey = "";
       document.body.classList.add("navigating");
       navHud.classList.add("visible");
+      if (navNextStageBtn) navNextStageBtn.hidden = true;
+      updateNavStageHud();
       if (typeof setRoadbookOpen === "function") setRoadbookOpen(false);
       setRouteCardOpen(false);
       setPipVisible(true);
@@ -4463,6 +5675,9 @@
       navEverAligned = false;
       document.body.classList.remove("navigating");
       navHud.classList.remove("visible");
+      navContext = null;
+      if (navStageLine) navStageLine.hidden = true;
+      if (navNextStageBtn) navNextStageBtn.hidden = true;
       if (typeof setRoadbookOpen === "function") setRoadbookOpen(false);
       setPipVisible(false);
       if (window.speechSynthesis) window.speechSynthesis.cancel();
@@ -4474,6 +5689,12 @@
       } else {
         syncFollowCamera(false);
       }
+      // Multi-stage: restore the whole-trip activeRoute and stage list.
+      if (plannerTab === "plan") {
+        syncPlanActiveRoute();
+        renderStageMarkers();
+        refreshRouteDraft();
+      }
       syncRouteExportUi();
       syncRouteChrome();
       followChip.classList.toggle("visible", !followLocked && geoWatchId != null);
@@ -4481,8 +5702,12 @@
     }
 
     function toggleNavigation() {
-      if (navigating) stopNavigation();
-      else startNavigation().catch((err) => {
+      if (navigating) { stopNavigation(); return; }
+      // Multi-stage plan: navigate stage by stage; require all stages complete.
+      if (plannerTab === "plan" && planTrip.stages.length > 1) {
+        if (!startMultiStageNav()) return;
+      }
+      startNavigation().catch((err) => {
         console.error(err);
         setStatus("Could not start navigation · " + (err.message || "error"), "error");
       });
@@ -4494,12 +5719,15 @@
     }
 
     function updateRouteStatus() {
-      const start = activeStart();
       syncRouteExportUi();
       syncRouteChrome();
+      renderAccessWarning();
       if (DEBUG_UI) renderRouteDebug();
       else if (routeDebugEl) routeDebugEl.innerHTML = "";
       if (routeCompactPref) routeCompactPref.value = routePreference;
+      if (plannerTab === "plan") { updatePlanStatus(); return; }
+      if (plannerTab === "saved") { setRouteStatusHtml(savedCompactSummaryHtml()); return; }
+      const start = activeStart();
       if (routeMessage) {
         setRouteStatusHtml(routeMessage);
         return;
@@ -4522,12 +5750,15 @@
           (unknownPct ? " · " + unknownPct + "% unknown access" : "") +
           "</span>"
         );
+        // Unknown-access warning lives ONLY in the consolidated panel now; the
+        // planner strip keeps non-unknown safety/failure messages only.
         const warnText = (activeRoute.warnings || [])
           .filter((w) => {
             if (!w) return false;
             const code = w.code || "";
             const msg = (w.message || "").toLowerCase();
-            return code.indexOf("unknown_access") === 0 || msg.indexOf("unknown access") !== -1;
+            if (code.indexOf("unknown_access") === 0 || msg.indexOf("unknown access") !== -1) return false;
+            return code === "unavoidable_pavement";
           })
           .map((w) => w.message || w.code)
           .filter(Boolean)
@@ -4583,31 +5814,62 @@
       refreshContextNetwork({ announce: false }).catch(() => {});
     }
 
-    function setRouteMode(nextMode) {
+    function setRouteMode(nextTab) {
       if (navigating) stopNavigation();
-      routeJobId += 1;
-      routeMode = nextMode;
-      plannedStart = null;
-      destination = null;
-      activeRoute = null;
-      routeMessage = "";
-      routeDebug = null;
-      clearRouteDerivedStatus("Ready", "ok");
+      plannerTab = nextTab === "plan" || nextTab === "saved" ? nextTab : "here";
+      // routeMode drives the legacy single-destination path (From here only).
+      if (plannerTab === "here") routeMode = "here";
+      else if (plannerTab === "plan") routeMode = "plan";
+      // Leaving edit mode whenever the tab changes.
+      editingStageId = null;
+
+      if (plannerTab === "here") {
+        // Reset the single-destination scratch state (unchanged behaviour).
+        routeJobId += 1;
+        plannedStart = null;
+        destination = null;
+        activeRoute = null;
+        routeMessage = "";
+        routeDebug = null;
+        clearRouteDerivedStatus("Ready", "ok");
+      }
+
       document.querySelectorAll("[data-route-mode]").forEach((button) => {
-        const active = button.dataset.routeMode === routeMode;
+        const active = button.dataset.routeMode === plannerTab;
         button.classList.toggle("active", active);
         button.setAttribute("aria-selected", active ? "true" : "false");
       });
+      if (routePanelHere) routePanelHere.hidden = plannerTab !== "here";
+      if (routePanelPlan) routePanelPlan.hidden = plannerTab !== "plan";
+      if (routePanelSaved) routePanelSaved.hidden = plannerTab !== "saved";
+      document.body.classList.toggle("planner-tab-saved", plannerTab === "saved");
+
+      if (plannerTab === "plan") {
+        viewedSavedRouteId = null;
+        syncPlanActiveRoute();
+        renderStageList();
+      } else if (plannerTab === "saved") {
+        clearStageMarkers();
+        loadSavedRoutesUi();
+      } else {
+        clearStageMarkers();
+      }
+      renderStageMarkers();
       refreshRouteDraft();
     }
 
     function setRoutePreference(nextPreference) {
       routePreference = nextPreference;
+      planTrip.profile = nextPreference;
       document.querySelectorAll("[data-route-pref]").forEach((button) => {
         const active = button.dataset.routePref === routePreference;
         button.classList.toggle("active", active);
         button.setAttribute("aria-selected", active ? "true" : "false");
       });
+      if (plannerTab === "plan") {
+        recalcAllStages();
+        return;
+      }
       if (activeStart() && destination) calculateRoute();
       else refreshRouteDraft();
     }
@@ -4749,6 +6011,14 @@
     function handleRouteClick(e) {
       hidePopup();
       const clicked = pointFromLngLat(e.lngLat);
+      if (plannerTab === "saved") {
+        setStatus("Switch to Plan route to place points", "ok", "route");
+        return;
+      }
+      if (plannerTab === "plan") {
+        handlePlanStageClick(clicked);
+        return;
+      }
       if (routeMode === "here") {
         if (!hasRiderLocation()) {
           if (locationProbeState === "pending") {
@@ -5223,6 +6493,58 @@
     document.querySelectorAll("[data-route-pref]").forEach((button) => {
       button.addEventListener("click", () => setRoutePreference(button.dataset.routePref));
     });
+
+    // ---- Multi-stage + saved routes wiring ----
+    if (stageAddBtn) stageAddBtn.addEventListener("click", addPlanStage);
+    if (stageEditToggle) stageEditToggle.addEventListener("click", toggleEditStage);
+    if (stageSaveBtn) stageSaveBtn.addEventListener("click", openSaveSheet);
+    if (savedCreateBtn) savedCreateBtn.addEventListener("click", createNewRouteDraft);
+    if (stageListEl) {
+      stageListEl.addEventListener("click", (event) => {
+        const moveBtn = event.target.closest("[data-stage-move]");
+        if (moveBtn) {
+          event.stopPropagation();
+          movePlanStage(moveBtn.dataset.stageId, moveBtn.dataset.stageMove === "up" ? -1 : 1);
+          return;
+        }
+        const delBtn = event.target.closest("[data-stage-delete]");
+        if (delBtn) {
+          event.stopPropagation();
+          deletePlanStage(delBtn.dataset.stageDelete);
+          return;
+        }
+        const row = event.target.closest("[data-stage-id]");
+        if (row) setActiveStage(row.dataset.stageId);
+      });
+    }
+    if (savedListEl) {
+      savedListEl.addEventListener("click", (event) => {
+        const view = event.target.closest("[data-saved-view]");
+        if (view) { viewSavedRoute(view.dataset.savedView); return; }
+        const apply = event.target.closest("[data-saved-apply]");
+        if (apply) { applySavedRoute(apply.dataset.savedApply); return; }
+        const dup = event.target.closest("[data-saved-duplicate]");
+        if (dup) { duplicateSavedRoute(dup.dataset.savedDuplicate); return; }
+        const del = event.target.closest("[data-saved-delete]");
+        if (del) { deleteSavedRoute(del.dataset.savedDelete); return; }
+      });
+    }
+    if (saveRouteCancel) saveRouteCancel.addEventListener("click", closeSaveSheet);
+    if (saveRouteConfirm) saveRouteConfirm.addEventListener("click", confirmSaveRoute);
+    if (saveRouteInput) {
+      saveRouteInput.addEventListener("keydown", (event) => {
+        if (event.key === "Enter") { event.preventDefault(); confirmSaveRoute(); }
+        else if (event.key === "Escape") { event.preventDefault(); closeSaveSheet(); }
+      });
+    }
+    if (saveRouteSheet) {
+      saveRouteSheet.addEventListener("click", (event) => {
+        if (event.target === saveRouteSheet) closeSaveSheet();
+      });
+    }
+    if (navNextStageBtn) navNextStageBtn.addEventListener("click", advanceNavStage);
+    // Preload saved routes so the compact/summary counts are ready.
+    loadSavedRoutes().catch(() => {});
     function activateFollowFromControl() {
       if (!navigator.geolocation) {
         markLocationUnavailable({ code: 0 }, { revealPlanner: true });
@@ -5362,11 +6684,56 @@
     const accessWarnCancel = document.getElementById("accessWarnCancel");
     const accessWarnConfirm = document.getElementById("accessWarnConfirm");
 
+    function currentUnknownAccessShare() {
+      // Route-specific unknown distance/% when available (plan aggregate first).
+      if (plannerTab === "plan" && planAggregate && planAggregate.completedStageCount > 0) {
+        return {
+          percent: planAggregate.percentages.unknownAccessPercent || 0,
+          km: (planAggregate.unknownAccessMeters || 0) / 1000
+        };
+      }
+      if (activeRoute && activeRoute.unknownAccessPercent != null) {
+        return {
+          percent: activeRoute.unknownAccessPercent || 0,
+          km: activeRoute.unknownAccessKm || 0
+        };
+      }
+      return { percent: 0, km: 0 };
+    }
+
+    function renderAccessWarning() {
+      if (!accessWarnPanel) return;
+      if (!allowUnknownAccess) {
+        accessWarnPanel.hidden = true;
+        return;
+      }
+      accessWarnPanel.hidden = false;
+      const share = currentUnknownAccessShare();
+      const pctLabel = share.percent ? share.percent + "%" : "";
+      if (accessWarnCollapsedRow) {
+        accessWarnCollapsedRow.hidden = !accessWarnCollapsed;
+        accessWarnCollapsedRow.setAttribute("aria-expanded", accessWarnCollapsed ? "false" : "true");
+      }
+      if (accessWarnExpanded) accessWarnExpanded.hidden = accessWarnCollapsed;
+      if (accessWarnCollapsedText) {
+        accessWarnCollapsedText.textContent = "Unknown access enabled" + (pctLabel ? " · " + pctLabel : "");
+      }
+      if (accessWarnMetric) {
+        if (share.percent) {
+          const km = share.km;
+          const kmLabel = km ? (km >= 10 ? km.toFixed(1) : km.toFixed(2)) + " km · " : "";
+          accessWarnMetric.hidden = false;
+          accessWarnMetric.textContent = kmLabel + share.percent + "% of this route uses unknown-access edges.";
+        } else {
+          accessWarnMetric.hidden = true;
+          accessWarnMetric.textContent = "";
+        }
+      }
+    }
+
     function syncUnknownAccessUi() {
       if (unknownAccessToggle) unknownAccessToggle.checked = allowUnknownAccess;
-      if (unknownAccessHint) {
-        unknownAccessHint.classList.toggle("visible", !!allowUnknownAccess);
-      }
+      renderAccessWarning();
     }
 
     function closeAccessWarnSheet(accepted) {
@@ -5407,10 +6774,13 @@
           return;
         }
         allowUnknownAccess = true;
+        accessWarnCollapsed = false; // first enable → warning expanded
       } else {
         allowUnknownAccess = false;
         unknownAccessAcknowledged = false;
       }
+      // Keep the plan trip's policy in lockstep so saved routes record it.
+      planTrip.accessPolicy = { motorizedPermissive: true, motorizedUnknown: allowUnknownAccess };
       syncUnknownAccessUi();
       invalidateRoutingGraph();
       setStatus(
@@ -5420,7 +6790,22 @@
         allowUnknownAccess ? "error" : "ok"
       );
       // Recalculate whenever A/B exist so geometry never stays under stale policy.
-      if (activeStart() && destination) calculateRoute();
+      if (plannerTab === "plan") recalcAllStages();
+      else if (activeStart() && destination) calculateRoute();
+    }
+
+    if (accessWarnCollapsedRow) {
+      accessWarnCollapsedRow.addEventListener("click", () => {
+        accessWarnCollapsed = false;
+        renderAccessWarning();
+      });
+    }
+    if (accessWarnHide) {
+      accessWarnHide.addEventListener("click", () => {
+        // Collapsing never disables unknown-access routing.
+        accessWarnCollapsed = true;
+        renderAccessWarning();
+      });
     }
 
     syncUnknownAccessUi();
