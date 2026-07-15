@@ -2692,6 +2692,73 @@
       };
     }
 
+    function snapFromApiMatch(match, legacyDebug, side) {
+      if (match && typeof match === "object") {
+        if (match.ok) {
+          return {
+            ok: true,
+            meters: Math.round(match.distanceM),
+            trackClass: match.surfaceClass || match.accessClass || null,
+            accessClass: match.accessClass || null,
+            componentId: match.componentId
+          };
+        }
+        return {
+          ok: false,
+          meters: match.nearestMeters != null ? match.nearestMeters : null
+        };
+      }
+      if (!legacyDebug) return null;
+      const edge = side === "start" ? legacyDebug.startMatchedEdge : legacyDebug.endMatchedEdge;
+      const meters = side === "start" ? legacyDebug.startAccessMeters : legacyDebug.endAccessMeters;
+      const accessClass = side === "start" ? legacyDebug.startAccessClass : legacyDebug.endAccessClass;
+      if (edge == null && (meters == null || !Number.isFinite(meters))) {
+        return { ok: false, meters: null };
+      }
+      if (edge == null) return { ok: false, meters: meters != null ? meters : null };
+      return {
+        ok: true,
+        meters: meters != null ? meters : null,
+        trackClass: accessClass || null,
+        accessClass: accessClass || null,
+        componentId: legacyDebug.componentId
+      };
+    }
+
+    function sameComponentFromSnaps(startSnap, endSnap) {
+      // Only claim connected/disconnected when both points actually matched
+      // with known component IDs. Never infer from overall route failure.
+      if (!startSnap || !endSnap || !startSnap.ok || !endSnap.ok) return null;
+      const a = startSnap.componentId;
+      const b = endSnap.componentId;
+      if (a == null || b == null || a < 0 || b < 0) return null;
+      return a === b;
+    }
+
+    function mapApiDebugToRouteDebug(api) {
+      const dbg = api && api.debug ? api.debug : null;
+      const start = snapFromApiMatch(dbg && dbg.startMatch, dbg, "start");
+      const end = snapFromApiMatch(dbg && dbg.endMatch, dbg, "end");
+      return {
+        start,
+        end,
+        sameComponent: sameComponentFromSnaps(start, end),
+        snapToleranceM: dbg && dbg.matchLimitMeters != null ? dbg.matchLimitMeters : 250,
+        service: dbg,
+        warnings: (api && api.status === "complete" ? (api.warnings || []) : (api && api.warnings) || [])
+          .filter((w) => {
+            if (!w) return false;
+            // On incomplete responses, keep only failure-related codes —
+            // never leftovers implying a successful unknown-access route.
+            if (api.status === "complete") return true;
+            const code = w.code || "";
+            return code === "match_failed" ||
+              code === "disconnected_components" ||
+              code === "no_route";
+          })
+      };
+    }
+
     function renderRouteDebug() {
       if (!routeDebug) {
         routeDebugEl.innerHTML = "";
@@ -2709,12 +2776,12 @@
       }
       const rows = [snapLine("A", routeDebug.start), snapLine("B", routeDebug.end)];
       if (routeDebug.snapToleranceM != null) {
-        rows.push("Snap reach: <b>" + routeDebug.snapToleranceM + " m</b> at this zoom");
+        rows.push("Snap reach: <b>" + routeDebug.snapToleranceM + " m</b>");
       }
-      if (routeDebug.sameComponent != null) {
-        rows.push(routeDebug.sameComponent
-          ? 'Network: <b class="good">connected</b>'
-          : 'Network: <b class="bad">A and B on separate networks</b>');
+      if (routeDebug.sameComponent === true) {
+        rows.push('Network: <b class="good">connected</b>');
+      } else if (routeDebug.sameComponent === false) {
+        rows.push('Network: <b class="bad">A and B on separate networks</b>');
       }
       if (activeRoute && activeRoute.accessPolicy) {
         const pol = activeRoute.accessPolicy;
@@ -2730,7 +2797,11 @@
       }
       if (routeDebug.service) {
         rows.push("Engine: <b>" + (routeDebug.service.engine || "route-service") + "</b>");
-        if (routeDebug.service.startAccessMeters != null) {
+        if (
+          routeDebug.start && routeDebug.start.ok &&
+          routeDebug.end && routeDebug.end.ok &&
+          routeDebug.service.startAccessMeters != null
+        ) {
           rows.push("Access A/B: <b>" + routeDebug.service.startAccessMeters + " m / " +
             routeDebug.service.endAccessMeters + " m</b> (limit " + routeDebug.service.matchLimitMeters + " m)");
         }
@@ -2739,6 +2810,12 @@
         rows.push("Warnings: <b>" + routeDebug.warnings.map((w) => w.code || w.message).join(", ") + "</b>");
       }
       routeDebugEl.innerHTML = rows.join("<br>");
+    }
+
+    function clearRouteDerivedStatus(message, kind) {
+      lastNetworkRouteReason = "";
+      if (message) setStatus(message, kind || "ok");
+      else setStatus("Ready", "ok");
     }
 
     function syncRouteExportUi() {
@@ -3670,6 +3747,7 @@
       activeRoute = null;
       routeMessage = "";
       routeDebug = null;
+      clearRouteDerivedStatus("Route cleared", "ok");
       hidePopup();
       refreshRouteDraft();
       syncRouteExportUi();
@@ -3684,6 +3762,7 @@
       activeRoute = null;
       routeMessage = "";
       routeDebug = null;
+      clearRouteDerivedStatus("Ready", "ok");
       document.querySelectorAll("[data-route-mode]").forEach((button) => {
         const active = button.dataset.routeMode === routeMode;
         button.classList.toggle("active", active);
@@ -3762,7 +3841,10 @@
       const jobId = ++routeJobId;
       activeRoute = null;
       routeDebug = null;
+      lastNetworkRouteReason = "";
       routeMessage = "Routing<strong>" + routePreference + " via route service</strong>";
+      // Neutral in-flight status — never leave the previous route’s warnings up.
+      setStatus("Routing…", "ok");
       refreshRouteDraft();
       try {
         const res = await fetch(ROUTE_API_URL, {
@@ -3782,29 +3864,13 @@
         const api = await res.json();
         if (jobId !== routeJobId) return;
 
-        routeDebug = {
-          start: api.debug ? {
-            ok: !!api.debug.startMatchedEdge,
-            meters: api.debug.startAccessMeters,
-            trackClass: api.debug.startAccessClass,
-            componentId: api.debug.componentId
-          } : null,
-          end: api.debug ? {
-            ok: !!api.debug.endMatchedEdge,
-            meters: api.debug.endAccessMeters,
-            trackClass: api.debug.endAccessClass,
-            componentId: api.debug.componentId
-          } : null,
-          sameComponent: api.status === "complete",
-          snapToleranceM: api.debug?.matchLimitMeters ?? 250,
-          service: api.debug || null,
-          warnings: api.warnings || []
-        };
+        routeDebug = mapApiDebugToRouteDebug(api);
 
         if (api.status !== "complete") {
           lastNetworkRouteReason = api.message || api.error || "No route";
           routeMessage = "No route<strong>" + lastNetworkRouteReason + "</strong>";
           activeRoute = null;
+          setStatus(lastNetworkRouteReason, "error");
           setRouteCardOpen(true);
           refreshRouteDraft();
           return;
@@ -3836,8 +3902,11 @@
       } catch (err) {
         console.error(err);
         if (jobId !== routeJobId) return;
-        routeMessage = "Routing failed<strong>" + (err.message || "Try again") + "</strong>";
         activeRoute = null;
+        routeDebug = null;
+        lastNetworkRouteReason = err.message || "Try again";
+        routeMessage = "Routing failed<strong>" + lastNetworkRouteReason + "</strong>";
+        setStatus(lastNetworkRouteReason, "error");
         setRouteCardOpen(true);
         refreshRouteDraft();
       }
@@ -3856,6 +3925,8 @@
         destination = null;
         activeRoute = null;
         routeMessage = "";
+        routeDebug = null;
+        clearRouteDerivedStatus("Start set · tap destination", "ok");
         refreshRouteDraft();
         return;
       }
