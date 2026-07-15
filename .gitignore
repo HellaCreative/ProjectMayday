@@ -9,3 +9,6 @@ temp
 temp/
 /tmp/
 .temp-deploy-args.json
+
+# Phase 2A: raw NSTDB audit archive stays outside the app bundle
+data-raw/ns-gov/raw-features.geojson.gz

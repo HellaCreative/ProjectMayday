@@ -1,25 +1,28 @@
 #!/usr/bin/env node
 /**
- * Pack Nova Scotia government NSTDB road-line features into a DIRT overlay
- * with routable topology.
+ * Phase 2A — Pack Nova Scotia NSTDB road lines into an eligible production
+ * overlay with surface / structure / access separation and a topology report.
  *
- * What this build does beyond the raw fetch:
- * 1. Includes PAVED roads as a first-class "paved" class so dirt segments can
- *    legally connect through the road network (same dataset, same vertices).
- * 2. Splits every line at vertices shared with any other line (exact 0 m
- *    coordinate match after 1e-5 rounding). No tolerance snapping, no gap
- *    bridging: junctions must already exist in the data.
- * 3. Tags every output segment with a connected-component id so the app can
- *    explain routing failures ("A and B are on different networks").
+ * Production pack rules (PHASE-2-BUILD-GUIDE.md):
+ * - Exclude No Vehicular Traffic, trails, ramps, railways, ferries, driveways,
+ *   service artifacts, and empty geometry.
+ * - surfaceClass and structureType are separate fields.
+ * - Every edge has accessClass, source provenance, and a stable edgeId.
+ * - Split only at exact shared vertices (no proximity stitching).
+ * - Raw archive written outside app/data for audit; not loaded by the client.
  *
  * Env:
- *   NS_GOV_BBOX="W,S,E,N"   optional clip (Socrata intersects filter)
- *   NS_GOV_REGION="label"   region label recorded in meta
+ *   NS_GOV_BBOX="W,S,E,N"   optional clip
+ *   NS_GOV_REGION="label"   region label
  *   NS_GOV_PAGE_SIZE        Socrata page size (default 50000)
+ *   NS_GOV_CHUNK_DEG        display chunk size (default 0.4)
+ *   NS_GOV_RAW_DIR          raw archive output (default ../data-raw/ns-gov)
+ *   NS_GOV_SKIP_RAW=1       skip writing the raw archive
  */
 const fs = require("fs");
 const path = require("path");
 const zlib = require("zlib");
+const crypto = require("crypto");
 
 const outDir = process.argv[2] || path.join(__dirname, "..", "app", "data");
 const sourceUrl = process.argv[3] || "https://data.novascotia.ca/resource/a6gf-w68e.json";
@@ -27,17 +30,30 @@ const OUT_BASENAME = "ns-gov-roads";
 const PAGE_SIZE = Number(process.env.NS_GOV_PAGE_SIZE || 50000);
 const BBOX = (process.env.NS_GOV_BBOX || "").split(",").map(Number).filter((n) => Number.isFinite(n));
 const REGION = process.env.NS_GOV_REGION || (BBOX.length === 4 ? "Custom bbox" : "Nova Scotia");
+const RAW_DIR = process.env.NS_GOV_RAW_DIR || path.join(__dirname, "..", "data-raw", "ns-gov");
+const SKIP_RAW = process.env.NS_GOV_SKIP_RAW === "1";
 
+// Candidate rows: paved + unpaved + tracks. Trails are fetched only so they
+// can be counted/excluded with an explicit reason (not put in the pack).
 const DESC_FILTER = [
   "feat_desc like '%Unpaved%'",
   "feat_desc like '%Paved%'",
   "feat_desc='TRACK'",
   "feat_desc='TRACK - Indefinite/Approximate'",
-  "feat_desc='BRIDGE - Track'",
-  "feat_desc='TUNNEL - Track'",
-  "feat_desc='ROAD - Abandoned - TRACK'",
+  "feat_desc like 'BRIDGE%'",
+  "feat_desc like 'TUNNEL%'",
+  "feat_desc like 'ROAD - Abandoned%'",
   "feat_desc like 'TRAIL%'"
 ].join(" OR ");
+
+const SURFACE_CLASSES = new Set(["paved", "gravel", "access", "track", "unknown"]);
+const ACCESS_CLASSES = new Set([
+  "motorized_verified",
+  "motorized_permissive",
+  "motorized_unknown",
+  "motorized_restricted",
+  "motorized_excluded"
+]);
 
 function buildWhere() {
   if (BBOX.length !== 4) return `(${DESC_FILTER})`;
@@ -54,36 +70,93 @@ function roundCoord(c) {
   return [Math.round(c[0] * 1e5) / 1e5, Math.round(c[1] * 1e5) / 1e5];
 }
 
-function classify(props) {
+function bump(map, key, n = 1) {
+  map[key] = (map[key] || 0) + n;
+}
+
+/**
+ * Classify one NSTDB row into surface / structure / access, or exclude it.
+ * Returns { ok:true, ...attrs } or { ok:false, reason }.
+ */
+function classifyRow(props) {
   const desc = value(props.feat_desc);
-  if (/Railroad|Ferry|Driveway|Median Crossover|Service Lane|Ramp|Dam/i.test(desc)) {
-    return null;
+  if (!desc) return { ok: false, reason: "missing_feat_desc" };
+
+  // ---- Hard exclusions ----------------------------------------------------
+  if (/No Vehicular Traffic/i.test(desc)) {
+    return { ok: false, reason: "no_vehicular_traffic" };
   }
+  if (/\bTRAIL\b/i.test(desc)) {
+    return { ok: false, reason: "non_motorized_trail" };
+  }
+  if (/Railroad|Railway/i.test(desc)) return { ok: false, reason: "railway" };
+  if (/Ferry/i.test(desc)) return { ok: false, reason: "ferry" };
+  if (/Driveway/i.test(desc)) return { ok: false, reason: "driveway" };
+  if (/Median Crossover/i.test(desc)) return { ok: false, reason: "median_crossover" };
+  if (/Service Lane/i.test(desc)) return { ok: false, reason: "service_lane" };
+  if (/\bRAMP\b/i.test(desc)) return { ok: false, reason: "ramp" };
+  if (/\bDam\b/i.test(desc)) return { ok: false, reason: "dam" };
+  if (/Pedestrian|Footpath|Sidewalk/i.test(desc)) {
+    return { ok: false, reason: "pedestrian_only" };
+  }
+  if (/Bicycle|Cycleway/i.test(desc)) return { ok: false, reason: "bicycle_only" };
+
+  // ---- Structure (independent of surface) ---------------------------------
+  let structureType = "none";
+  if (/\bBRIDGE\b/i.test(desc)) structureType = "bridge";
+  else if (/\bTUNNEL\b/i.test(desc)) structureType = "tunnel";
+  else if (/\bFord\b/i.test(desc)) structureType = "ford";
+
+  // ---- Surface ------------------------------------------------------------
+  let surfaceClass = "unknown";
   if (/\bPaved\b/i.test(desc) && !/\bUnpaved\b/i.test(desc)) {
-    return { trackClass: "paved", confidence: "nstdb-paved" };
+    surfaceClass = "paved";
+  } else if (/Resource Access/i.test(desc)) {
+    surfaceClass = "access";
+  } else if (/\bTRACK\b/i.test(desc) || desc === "TRACK") {
+    surfaceClass = "track";
+  } else if (/Unpaved/i.test(desc)) {
+    surfaceClass = "gravel";
+  } else if (structureType !== "none") {
+    // BRIDGE/TUNNEL without paved/unpaved/track cue — keep unknown surface.
+    surfaceClass = "unknown";
+  } else {
+    return { ok: false, reason: "unclassified_description" };
   }
-  if (/Trail/i.test(desc)) {
-    return { trackClass: "single", confidence: "nstdb-trail" };
-  }
-  if (/Bridge/i.test(desc)) {
-    return { trackClass: "bridge", confidence: "nstdb-structure" };
-  }
-  if (/Tunnel/i.test(desc)) {
-    return { trackClass: "tunnel", confidence: "nstdb-structure" };
-  }
+
+  // ---- Access -------------------------------------------------------------
+  // NSTDB does not field-verify motorcycle legality. Government roadway /
+  // resource inventory is treated as permissive; ambiguous tracks as unknown;
+  // abandoned as restricted (packed for QA, not default-routed).
+  let accessClass = "motorized_unknown";
+  let confidence = "medium";
   if (/Abandoned/i.test(desc)) {
-    return { trackClass: "unserviced", confidence: "nstdb-abandoned" };
+    accessClass = "motorized_restricted";
+    confidence = "low";
+  } else if (surfaceClass === "track") {
+    accessClass = "motorized_unknown";
+    confidence = /Indefinite|Approximate/i.test(desc) ? "low" : "medium";
+  } else if (surfaceClass === "paved" || surfaceClass === "gravel" || surfaceClass === "access") {
+    accessClass = "motorized_permissive";
+    confidence = surfaceClass === "access" && /Dry Weather/i.test(desc) ? "medium" : "high";
   }
-  if (/Resource Access/i.test(desc)) {
-    return { trackClass: "access", confidence: /Dry Weather/i.test(desc) ? "nstdb-dry-weather-resource-access" : "nstdb-resource-access" };
+
+  if (!SURFACE_CLASSES.has(surfaceClass)) {
+    return { ok: false, reason: "invalid_surface" };
   }
-  if (/Track/i.test(desc) || desc === "TRACK") {
-    return { trackClass: "track", confidence: /Indefinite|Approximate/i.test(desc) ? "nstdb-approximate-track" : "nstdb-track" };
+  if (!ACCESS_CLASSES.has(accessClass)) {
+    return { ok: false, reason: "invalid_access" };
   }
-  if (/Unpaved/i.test(desc)) {
-    return { trackClass: "gravel", confidence: "nstdb-unpaved" };
-  }
-  return null;
+
+  return {
+    ok: true,
+    surfaceClass,
+    structureType,
+    accessClass,
+    confidence,
+    sourceDescription: desc,
+    seasonal: /Dry Weather|Seasonal|Winter/i.test(desc)
+  };
 }
 
 function vertexKey(c) {
@@ -111,7 +184,9 @@ function lineMeters(coords) {
 function normalizeLine(coords) {
   const out = [];
   for (const raw of coords) {
+    if (!Array.isArray(raw) || raw.length < 2) continue;
     const c = roundCoord(raw);
+    if (!Number.isFinite(c[0]) || !Number.isFinite(c[1])) continue;
     const last = out[out.length - 1];
     if (last && last[0] === c[0] && last[1] === c[1]) continue;
     out.push(c);
@@ -126,6 +201,18 @@ function rowToParts(row) {
   return rawParts.map(normalizeLine).filter((coords) => coords.length >= 2);
 }
 
+function sourceRecordId(row, fallback) {
+  const id = value(row[":id"] || row.objectid || row.id || row.fid);
+  return id || fallback;
+}
+
+function makeEdgeId(recordId, partIndex, segIndex, coords) {
+  const seed = recordId + "|" + partIndex + "|" + segIndex + "|" +
+    coords[0].join(",") + "|" + coords[coords.length - 1].join(",");
+  const hash = crypto.createHash("sha1").update(seed).digest("hex").slice(0, 12);
+  return "ns-gov-" + hash;
+}
+
 async function fetchRows(offset) {
   const url = new URL(sourceUrl);
   url.searchParams.set("$limit", String(PAGE_SIZE));
@@ -138,11 +225,14 @@ async function fetchRows(offset) {
 }
 
 async function main() {
-  // ---- 1. Fetch + classify ------------------------------------------------
-  const lines = []; // { coords, props }
+  const lines = [];
+  const rawFeatures = [];
   let fetched = 0;
-  let skipped = 0;
+  const excludedByReason = {};
   const sourceDescriptions = {};
+  const accessCounts = {};
+  const surfaceCounts = {};
+  const structureCounts = {};
 
   for (let offset = 0; ; offset += PAGE_SIZE) {
     const rows = await fetchRows(offset);
@@ -150,39 +240,70 @@ async function main() {
     fetched += rows.length;
     console.log(`Fetched ${fetched.toLocaleString()} NSTDB candidate rows`);
 
-    for (const row of rows) {
+    for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
+      const row = rows[rowIndex];
       const desc = value(row.feat_desc) || "Unknown";
-      sourceDescriptions[desc] = (sourceDescriptions[desc] || 0) + 1;
-      const classification = classify(row);
-      if (!classification) {
-        skipped += 1;
-        continue;
-      }
+      bump(sourceDescriptions, desc);
+
+      const recordId = sourceRecordId(row, "off" + offset + "i" + rowIndex);
+      const classification = classifyRow(row);
       const parts = rowToParts(row);
-      if (!parts.length) {
-        skipped += 1;
+
+      if (!SKIP_RAW) {
+        rawFeatures.push({
+          type: "Feature",
+          properties: {
+            sourceRecordId: recordId,
+            feat_desc: desc,
+            name: value(row.name) || null,
+            eligible: classification.ok,
+            excludeReason: classification.ok ? null : classification.reason,
+            surfaceClass: classification.ok ? classification.surfaceClass : null,
+            structureType: classification.ok ? classification.structureType : null,
+            accessClass: classification.ok ? classification.accessClass : null
+          },
+          geometry: row.the_geom && ["LineString", "MultiLineString"].includes(row.the_geom.type)
+            ? row.the_geom
+            : null
+        });
+      }
+
+      if (!classification.ok) {
+        bump(excludedByReason, classification.reason);
         continue;
       }
-      // Keep properties minimal: constant strings (source, access notes)
-      // are synthesized in the app instead of repeated 300k times.
+      if (!parts.length) {
+        bump(excludedByReason, "no_usable_geometry");
+        continue;
+      }
+
+      bump(accessCounts, classification.accessClass);
+      bump(surfaceCounts, classification.surfaceClass);
+      bump(structureCounts, classification.structureType);
+
       const name = value(row.name);
-      const props = {
-        trackClass: classification.trackClass,
-        surfaceConfidence: classification.confidence,
-        roadClass: value(row.feat_desc)
-      };
-      if (name) props.name = name;
-      for (const coords of parts) lines.push({ coords, props });
+      for (let partIndex = 0; partIndex < parts.length; partIndex += 1) {
+        lines.push({
+          coords: parts[partIndex],
+          recordId,
+          partIndex,
+          name,
+          surfaceClass: classification.surfaceClass,
+          structureType: classification.structureType,
+          accessClass: classification.accessClass,
+          confidence: classification.confidence,
+          sourceDescription: classification.sourceDescription,
+          seasonal: classification.seasonal
+        });
+      }
     }
 
     if (rows.length < PAGE_SIZE) break;
   }
 
-  console.log(`Classified ${lines.length.toLocaleString()} line parts (${skipped.toLocaleString()} rows skipped)`);
+  console.log(`Eligible line parts: ${lines.length.toLocaleString()}`);
 
-  // ---- 2. Count vertex usage across all lines ------------------------------
-  // A vertex used by 2+ lines (or twice by intersecting geometry) is a real,
-  // in-data junction. Exact match only: the dataset is pre-rounded to 1e-5.
+  // ---- Vertex usage + exact shared-vertex splits --------------------------
   const vertexUse = new Map();
   for (const line of lines) {
     for (const c of line.coords) {
@@ -191,19 +312,32 @@ async function main() {
     }
   }
 
-  // ---- 3. Split every line at shared interior vertices ---------------------
-  const segments = []; // { coords, props, meters }
+  const segments = [];
   let splitCount = 0;
   for (const line of lines) {
     const coords = line.coords;
     let start = 0;
+    let segIndex = 0;
     for (let i = 1; i < coords.length; i += 1) {
       const isLast = i === coords.length - 1;
       const isJunction = !isLast && (vertexUse.get(vertexKey(coords[i])) || 0) >= 2;
       if (isJunction || isLast) {
         const piece = coords.slice(start, i + 1);
         if (piece.length >= 2) {
-          segments.push({ coords: piece, props: line.props, meters: lineMeters(piece) });
+          segments.push({
+            coords: piece,
+            meters: lineMeters(piece),
+            edgeId: makeEdgeId(line.recordId, line.partIndex, segIndex, piece),
+            sourceRecordId: line.recordId,
+            name: line.name,
+            surfaceClass: line.surfaceClass,
+            structureType: line.structureType,
+            accessClass: line.accessClass,
+            confidence: line.confidence,
+            sourceDescription: line.sourceDescription,
+            seasonal: line.seasonal
+          });
+          segIndex += 1;
         }
         if (isJunction) splitCount += 1;
         start = i;
@@ -211,9 +345,9 @@ async function main() {
     }
   }
 
-  console.log(`Split ${lines.length.toLocaleString()} lines into ${segments.length.toLocaleString()} segments (${splitCount.toLocaleString()} junction splits)`);
+  console.log(`Split into ${segments.length.toLocaleString()} edges (${splitCount.toLocaleString()} junction splits)`);
 
-  // ---- 4. Connected components over segment endpoints ----------------------
+  // ---- Connected components ----------------------------------------------
   const nodeIds = new Map();
   function nodeId(c) {
     const key = vertexKey(c);
@@ -255,39 +389,55 @@ async function main() {
   const rankedRoots = [...componentMeters.entries()].sort((a, b) => b[1] - a[1]).map(([root]) => root);
   const componentRank = new Map(rankedRoots.map((root, rank) => [root, rank]));
 
-  // ---- 5. Junction stats ----------------------------------------------------
   const degree = new Map();
   for (const [a, b] of segmentNodes) {
     degree.set(a, (degree.get(a) || 0) + 1);
     degree.set(b, (degree.get(b) || 0) + 1);
   }
-  let junctions = 0;
-  let deadEnds = 0;
+  let junctionNodes = 0;
+  let deadEndNodes = 0;
+  let degree2Nodes = 0;
   for (const d of degree.values()) {
-    if (d >= 3) junctions += 1;
-    else if (d === 1) deadEnds += 1;
+    if (d >= 3) junctionNodes += 1;
+    else if (d === 1) deadEndNodes += 1;
+    else if (d === 2) degree2Nodes += 1;
   }
 
-  // ---- 6. Emit as grid chunks ----------------------------------------------
-  // iOS Safari kills pages that parse the whole province at once, so the
-  // output is a manifest plus ~0.4 degree grid chunks the app loads on demand.
+  // Geometry validation: every edge start/end is a declared node
+  let invalidEndpointEdges = 0;
+  for (const segment of segments) {
+    if (!nodeIds.has(vertexKey(segment.coords[0])) ||
+        !nodeIds.has(vertexKey(segment.coords[segment.coords.length - 1]))) {
+      invalidEndpointEdges += 1;
+    }
+  }
+
+  // ---- Feature emit ------------------------------------------------------
   const CHUNK_DEG = Number(process.env.NS_GOV_CHUNK_DEG || 0.4);
-
-  const features = segments.map((segment, i) => ({
-    type: "Feature",
-    properties: {
-      ...segment.props,
+  const features = segments.map((segment, i) => {
+    const props = {
+      edgeId: segment.edgeId,
+      surfaceClass: segment.surfaceClass,
+      structureType: segment.structureType,
+      accessClass: segment.accessClass,
+      source: "ns-gov",
+      sourceDescription: segment.sourceDescription,
+      sourceRecordId: segment.sourceRecordId,
+      confidence: segment.confidence,
+      seasonal: !!segment.seasonal,
       lengthMeters: Math.round(segment.meters),
-      componentId: componentRank.get(find(segmentNodes[i][0]))
-    },
-    geometry: { type: "LineString", coordinates: segment.coords }
-  }));
-
-  const classes = features.reduce((acc, feature) => {
-    const key = feature.properties.trackClass;
-    acc[key] = (acc[key] || 0) + 1;
-    return acc;
-  }, {});
+      distanceMeters: Math.round(segment.meters),
+      componentId: componentRank.get(find(segmentNodes[i][0])),
+      // Compat for current MapLibre layers / interim client A*
+      trackClass: segment.surfaceClass
+    };
+    if (segment.name) props.name = segment.name;
+    return {
+      type: "Feature",
+      properties: props,
+      geometry: { type: "LineString", coordinates: segment.coords }
+    };
+  });
 
   const chunkMap = new Map();
   for (const feature of features) {
@@ -332,14 +482,57 @@ async function main() {
       gzBytes: gz.length
     });
   }
+  chunkIndex.sort((a, b) => a.id.localeCompare(b.id));
   chunkIndex.sort((a, b) => b.count - a.count);
 
-  const manifest = {
+  const topology = {
     generatedAt: new Date().toISOString(),
+    region: REGION,
+    schemaVersion: "2a-1",
+    totals: {
+      fetchedRows: fetched,
+      eligibleSourceLines: lines.length,
+      edges: features.length,
+      nodes: nodeIds.size,
+      junctionNodes,
+      deadEndNodes,
+      degree2Nodes,
+      sameLevelJunctionSplits: splitCount,
+      connectedComponents: rankedRoots.length,
+      invalidEndpointEdges,
+      freeSpaceConnectors: 0
+    },
+    gradeSeparatedCrossings: {
+      status: "not_evaluated",
+      note: "Phase 2A preserves bridge/tunnel as structureType but does not yet planarize or grade-separate visual crossings without shared vertices."
+    },
+    intersectionsNotConnected: {
+      status: "by_design",
+      note: "Visual crossings without an exact shared vertex remain disconnected. No proximity stitching."
+    },
+    excludedByReason,
+    accessCounts,
+    surfaceCounts,
+    structureCounts,
+    topComponentsKm: rankedRoots.slice(0, 15).map((root) =>
+      Math.round(componentMeters.get(root) / 100) / 10
+    ),
+    limitations: [
+      "No free-space connectors are emitted.",
+      "Junctions are exact shared-vertex matches only.",
+      "Grade-separated crossings are tagged via structureType but not fully modeled in the graph.",
+      "Access classes are inferred from NSTDB descriptions; motorized_verified requires future field/source confirmation.",
+      "motorized_unknown tracks are packed but should not be silently treated as legal."
+    ]
+  };
+
+  const manifest = {
+    generatedAt: topology.generatedAt,
+    schemaVersion: "2a-1",
     sourceName: "Nova Scotia Topographic DataBase Roads, Trails and Rails - Road Line Layer",
     source: sourceUrl,
     catalogue: "https://data.novascotia.ca/Roads-Driving-and-Transport/Nova-Scotia-Topographic-DataBase-Roads-Trails-and-/a6gf-w68e",
-    queryModel: "NSTDB Road Line Layer: unpaved, track, trail, AND paved roads; split at exact shared vertices; component-tagged; grid-chunked",
+    queryModel: "Phase 2A: eligible motorized NSTDB roads/tracks only; trails and No Vehicular Traffic excluded; surface/structure/access separated; exact vertex splits; grid-chunked",
     license: "Open Government Licence - Nova Scotia",
     region: REGION,
     bbox: BBOX.length === 4 ? BBOX : null,
@@ -349,27 +542,74 @@ async function main() {
     sourceLines: lines.length,
     junctionSplits: splitCount,
     fetched,
-    skipped,
+    skipped: Object.values(excludedByReason).reduce((a, b) => a + b, 0),
     bytes: totalBytes,
     gzBytes: totalGzBytes,
-    classes,
+    classes: surfaceCounts,
+    accessClasses: accessCounts,
+    structureTypes: structureCounts,
+    excludedByReason,
     topology: {
       nodes: nodeIds.size,
-      junctionNodes: junctions,
-      deadEndNodes: deadEnds,
+      junctionNodes,
+      deadEndNodes,
       componentCount: rankedRoots.length,
-      topComponentsKm: rankedRoots.slice(0, 10).map((root) => Math.round(componentMeters.get(root) / 100) / 10)
+      topComponentsKm: topology.topComponentsKm.slice(0, 10),
+      freeSpaceConnectors: 0,
+      gradeSeparatedCrossings: topology.gradeSeparatedCrossings.status
     },
     sourceDescriptions,
-    limitations: [
-      "NSTDB trail records do not explicitly validate motorized access; they are displayed as single track for visual comparison.",
-      "TRACK records are normalized to Track, including indefinite/approximate track records.",
-      "Junctions are exact shared-vertex matches only. Lines that visually touch without a shared vertex remain disconnected by design."
-    ],
+    limitations: topology.limitations,
+    rawArchive: SKIP_RAW ? null : "data-raw/ns-gov/ (outside app bundle)",
     chunks: chunkIndex
   };
+
   fs.writeFileSync(path.join(outDir, `${OUT_BASENAME}.manifest.json`), JSON.stringify(manifest, null, 2));
-  console.log(JSON.stringify({ ...manifest, sourceDescriptions: "(omitted)", chunks: `${chunkIndex.length} chunks, largest ${chunkIndex[0].count} features / ${(chunkIndex[0].gzBytes / 1048576).toFixed(1)} MB gz` }, null, 2));
+  fs.writeFileSync(path.join(outDir, `${OUT_BASENAME}.topology.json`), JSON.stringify(topology, null, 2));
+
+  if (!SKIP_RAW) {
+    fs.mkdirSync(RAW_DIR, { recursive: true });
+    const rawCollection = {
+      type: "FeatureCollection",
+      features: rawFeatures,
+      properties: {
+        generatedAt: topology.generatedAt,
+        note: "Audit archive including excluded features. Not loaded by the production map client."
+      }
+    };
+    const rawJson = JSON.stringify(rawCollection);
+    const rawGz = zlib.gzipSync(Buffer.from(rawJson), { level: 9 });
+    fs.writeFileSync(path.join(RAW_DIR, "raw-features.geojson.gz"), rawGz);
+    fs.writeFileSync(
+      path.join(RAW_DIR, "README.md"),
+      [
+        "# NSTDB raw archive",
+        "",
+        "This folder holds the audit export from `scripts/pack-ns-gov-roads.js`.",
+        "It includes eligible and excluded source features with exclude reasons.",
+        "",
+        "**Do not ship this into `app/data` or load it from the browser client.**",
+        "",
+        `- Generated: ${topology.generatedAt}`,
+        `- Features: ${rawFeatures.length.toLocaleString()}`,
+        `- Gzip bytes: ${rawGz.length.toLocaleString()}`,
+        ""
+      ].join("\n")
+    );
+    console.log(`Raw archive → ${path.join(RAW_DIR, "raw-features.geojson.gz")} (${(rawGz.length / 1048576).toFixed(1)} MB)`);
+  }
+
+  console.log(JSON.stringify({
+    schemaVersion: manifest.schemaVersion,
+    featureCount: manifest.featureCount,
+    skipped: manifest.skipped,
+    excludedByReason,
+    accessCounts,
+    surfaceCounts,
+    structureCounts,
+    topology: manifest.topology,
+    chunks: `${chunkIndex.length} chunks, largest ${chunkIndex[0] ? chunkIndex[0].count : 0} features`
+  }, null, 2));
 }
 
 main().catch((err) => {
