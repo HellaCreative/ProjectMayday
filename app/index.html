@@ -1055,7 +1055,15 @@
     // Visible overlays only (map visibility). Schema still uses surfaceClass=track
     // and may include paved/unknown internally for routing — those are not map layers.
     // Bridge/tunnel are structure overlays. Restricted is accessClass, not a surface.
-    const NETWORK_LINE_WIDTH = 4;
+    // Legend swatches stay ~4px (.legend i); map strokes stay thinner so the route dominates.
+    const NETWORK_LINE_WIDTH = 2;
+    // Overview / planning: basemap (+ route). NSTDB overlays only in a hard-capped
+    // detail corridor so the browser never paints the province network.
+    const CONTEXT_MIN_ZOOM = 12.5;
+    const CONTEXT_CORRIDOR_KM = 1.5;
+    const CONTEXT_MAX_FEATURES = 1800;
+    const CONTEXT_CHUNK_PAD_DEG = 0.03; // ~3 km chunk fetch pad around focus
+    const CONTEXT_ROUTE_WINDOW_KM = 6; // only nearby route geometry anchors context
     const TRACK_TYPES = {
       access: { label: "Access road", color: "#0a66c2", layers: ["ns-gov-access"] },
       gravel: { label: "Gravel road", color: "#5d6874", layers: ["ns-gov-gravel"] },
@@ -1180,12 +1188,15 @@
     let nsGovManifestPromise = null;
     const loadedChunkIds = new Set();
     const chunkPromises = new Map();
-    const nsGovFeatures = [];
+    /** In-memory chunk store for the current corridor window only (not province-wide). */
+    const chunkFeaturesById = new Map();
+    /** Features currently painted on the map (corridor-filtered + capped). */
+    let nsGovDisplayFeatures = [];
     let routeMode = "here";
     let routePreference = "balanced";
     let plannedStart = null;
     let destination = null;
-    const nsGovFeatureCollection = { type: "FeatureCollection", features: nsGovFeatures };
+    const nsGovFeatureCollection = { type: "FeatureCollection", features: nsGovDisplayFeatures };
     let routingGraph = null;
     let routingGraphPromise = null;
     let activeRoute = null;
@@ -1308,10 +1319,9 @@
       return JSON.parse(text);
     }
 
-    // ---- Chunked NSTDB loading ---------------------------------------------
-    // The province is packed as ~76 grid chunks (manifest + gz files). The app
-    // only loads chunks near the viewport and along the A-B route envelope, so
-    // iOS Safari never has to parse the whole 260 MB province at once.
+    // ---- Chunked NSTDB context (display only) ------------------------------
+    // Full routing stays on /api/route. The browser only loads a small corridor
+    // of chunks when zoomed into detail/navigation — never the province overview.
 
     async function ensureManifest() {
       if (nsGovManifest) return nsGovManifest;
@@ -1327,6 +1337,17 @@
 
     function bboxIntersects(a, b) {
       return a[0] <= b[2] && a[2] >= b[0] && a[1] <= b[3] && a[3] >= b[1];
+    }
+
+    function publishNsGovDisplay(features) {
+      nsGovDisplayFeatures = features;
+      nsGovFeatureCollection.features = nsGovDisplayFeatures;
+      if (map.getSource("nsGov")) {
+        map.getSource("nsGov").setData(nsGovFeatureCollection);
+      }
+      sourceCounts.nsGov = nsGovDisplayFeatures.length;
+      setReadyTotal();
+      updateDataMeta();
     }
 
     async function loadChunk(chunk, buildStamp) {
@@ -1346,19 +1367,21 @@
       return features;
     }
 
-    // One shared promise per chunk so overlapping callers (viewport pan and
-    // route envelope) both wait for the same load instead of skipping it.
     function chunkLoadPromise(chunk, buildStamp) {
-      if (loadedChunkIds.has(chunk.id)) return Promise.resolve(false);
+      if (loadedChunkIds.has(chunk.id) && chunkFeaturesById.has(chunk.id)) {
+        return Promise.resolve(false);
+      }
       let promise = chunkPromises.get(chunk.id);
       if (promise) return promise;
       promise = (async () => {
-        const features = await loadChunk(chunk, buildStamp);
-        for (const feature of features) {
+        const raw = await loadChunk(chunk, buildStamp);
+        const kept = [];
+        for (const feature of raw) {
           normalizeEdgeFeature(feature);
           if (feature.properties.accessClass === "motorized_excluded") continue;
-          nsGovFeatures.push(feature);
+          kept.push(feature);
         }
+        chunkFeaturesById.set(chunk.id, kept);
         loadedChunkIds.add(chunk.id);
         return true;
       })().catch((err) => {
@@ -1372,7 +1395,8 @@
     async function loadChunksForBbox(bbox, label) {
       const manifest = await ensureManifest();
       const wanted = manifest.chunks.filter((chunk) =>
-        !loadedChunkIds.has(chunk.id) && bboxIntersects(chunk.bbox, bbox)
+        bboxIntersects(chunk.bbox, bbox) &&
+        !(loadedChunkIds.has(chunk.id) && chunkFeaturesById.has(chunk.id))
       );
       if (!wanted.length) return false;
       const buildStamp = manifest.generatedAt || null;
@@ -1380,64 +1404,162 @@
       let done = 0;
       for (const chunk of wanted) {
         if (label) {
-          setStatus("Loading " + label + " · area " + (done + 1) + " / " + wanted.length + "…");
+          setStatus("Loading nearby network · " + (done + 1) + " / " + wanted.length + "…");
         }
         if (await chunkLoadPromise(chunk, buildStamp)) loadedAny = true;
         done += 1;
         await yieldToBrowser();
       }
-      if (loadedAny) {
-        map.getSource("nsGov").setData(nsGovFeatureCollection);
-        sourceCounts.nsGov = nsGovFeatures.length;
-        setReadyTotal();
-        invalidateRoutingGraph();
-        updateDataMeta();
-      }
       return loadedAny;
     }
 
-    function viewportBbox(bufferDeg) {
-      const bounds = map.getBounds();
-      return [
-        bounds.getWest() - bufferDeg,
-        bounds.getSouth() - bufferDeg,
-        bounds.getEast() + bufferDeg,
-        bounds.getNorth() + bufferDeg
-      ];
-    }
-
-    // Only pull chunks when reasonably zoomed in; a whole-province view on a
-    // phone would otherwise fetch everything and recreate the crash.
-    const CHUNK_LOAD_MIN_ZOOM = 8;
-    let viewportLoadQueued = false;
-    async function loadViewportChunks() {
-      if (map.getZoom() < CHUNK_LOAD_MIN_ZOOM) return;
-      if (viewportLoadQueued) return;
-      viewportLoadQueued = true;
-      try {
-        const loaded = await loadChunksForBbox(viewportBbox(0.1), "trails");
-        if (loaded) {
-          setStatus(nsGovFeatures.length.toLocaleString() + " segments loaded for this area", "ok");
-        }
-      } catch (err) {
-        console.error(err);
-        setStatus("Failed to load trail data · " + (err.message || "error"), "error");
-      } finally {
-        viewportLoadQueued = false;
+    function evictChunksOutsideBbox(bbox) {
+      if (!nsGovManifest) return;
+      for (const chunk of nsGovManifest.chunks || []) {
+        if (!loadedChunkIds.has(chunk.id)) continue;
+        if (bboxIntersects(chunk.bbox, bbox)) continue;
+        loadedChunkIds.delete(chunk.id);
+        chunkFeaturesById.delete(chunk.id);
+        chunkPromises.delete(chunk.id);
       }
     }
 
-    // Before graph routing, everything in a padded box around A and B must be
-    // loaded so Dijkstra can detour outside the direct corridor.
-    async function ensureRouteEnvelope(start, end) {
-      const pad = 0.35;
-      const bbox = [
-        Math.min(start.lng, end.lng) - pad,
-        Math.min(start.lat, end.lat) - pad,
-        Math.max(start.lng, end.lng) + pad,
-        Math.max(start.lat, end.lat) + pad
-      ];
-      await loadChunksForBbox(bbox, "route area");
+    function contextFocusPoint() {
+      if (rider && Number.isFinite(rider.lng) && Number.isFinite(rider.lat)) {
+        return [rider.lng, rider.lat];
+      }
+      const c = map.getCenter();
+      return [c.lng, c.lat];
+    }
+
+    function sampleNearbyRouteAnchors(focus, maxKm) {
+      const coords = activeRouteCoordinates();
+      if (!coords || coords.length < 2) return [];
+      const anchors = [];
+      let along = 0;
+      let lastKeep = -Infinity;
+      for (let i = 0; i < coords.length; i += 1) {
+        if (i > 0) along += distanceKmCoords(coords[i - 1], coords[i]);
+        const d = distanceKmCoords(focus, coords[i]);
+        if (d > maxKm) continue;
+        if (along - lastKeep < 0.4 && anchors.length) continue;
+        anchors.push(coords[i]);
+        lastKeep = along;
+      }
+      return anchors;
+    }
+
+    function contextFetchBbox() {
+      const focus = contextFocusPoint();
+      const anchors = sampleNearbyRouteAnchors(focus, CONTEXT_ROUTE_WINDOW_KM);
+      let minLng = focus[0];
+      let minLat = focus[1];
+      let maxLng = focus[0];
+      let maxLat = focus[1];
+      for (const c of anchors) {
+        minLng = Math.min(minLng, c[0]);
+        minLat = Math.min(minLat, c[1]);
+        maxLng = Math.max(maxLng, c[0]);
+        maxLat = Math.max(maxLat, c[1]);
+      }
+      const pad = CONTEXT_CHUNK_PAD_DEG;
+      return [minLng - pad, minLat - pad, maxLng + pad, maxLat + pad];
+    }
+
+    function featureMidCoord(feature) {
+      const geometry = feature && feature.geometry;
+      if (!geometry) return null;
+      const line = geometry.type === "MultiLineString"
+        ? (geometry.coordinates && geometry.coordinates[0])
+        : geometry.coordinates;
+      if (!line || line.length < 1) return null;
+      return line[Math.floor(line.length / 2)];
+    }
+
+    function selectCorridorFeatures(focus, anchors) {
+      const refs = [focus].concat(anchors || []);
+      const scored = [];
+      for (const features of chunkFeaturesById.values()) {
+        for (const feature of features) {
+          const mid = featureMidCoord(feature);
+          if (!mid) continue;
+          let best = Infinity;
+          for (const ref of refs) {
+            const d = distanceKmCoords(mid, ref);
+            if (d < best) best = d;
+            if (best <= CONTEXT_CORRIDOR_KM) break;
+          }
+          if (best > CONTEXT_CORRIDOR_KM) continue;
+          scored.push({ feature, dist: best });
+        }
+      }
+      scored.sort((a, b) => a.dist - b.dist);
+      const out = [];
+      for (let i = 0; i < scored.length && out.length < CONTEXT_MAX_FEATURES; i += 1) {
+        out.push(scored[i].feature);
+      }
+      return out;
+    }
+
+    let contextLoadQueued = false;
+    let contextLoadPending = null;
+    async function refreshContextNetwork(options = {}) {
+      const label = options.label || null;
+      if (!sourceEnabled.nsGov) {
+        publishNsGovDisplay([]);
+        invalidateRoutingGraph();
+        return;
+      }
+      if (!map || typeof map.getZoom !== "function" || map.getZoom() < CONTEXT_MIN_ZOOM) {
+        // Overview / planning scale: basemap (+ selected route). No NSTDB paint.
+        if (nsGovDisplayFeatures.length) publishNsGovDisplay([]);
+        else updateDataMeta();
+        // Release corridor memory at overview; IndexedDB keeps chunks for later detail.
+        if (chunkFeaturesById.size || loadedChunkIds.size) {
+          chunkFeaturesById.clear();
+          loadedChunkIds.clear();
+          chunkPromises.clear();
+        }
+        invalidateRoutingGraph();
+        return;
+      }
+      if (contextLoadQueued) {
+        contextLoadPending = options;
+        return;
+      }
+      contextLoadQueued = true;
+      try {
+        const focus = contextFocusPoint();
+        const anchors = sampleNearbyRouteAnchors(focus, CONTEXT_ROUTE_WINDOW_KM);
+        const bbox = contextFetchBbox();
+        await loadChunksForBbox(bbox, label);
+        evictChunksOutsideBbox(bbox);
+        const selected = selectCorridorFeatures(focus, anchors);
+        publishNsGovDisplay(selected);
+        invalidateRoutingGraph();
+        if (options.announce !== false && selected.length) {
+          setStatus(
+            selected.length.toLocaleString() + " nearby segments · " +
+            CONTEXT_CORRIDOR_KM + " km corridor",
+            "ok"
+          );
+        }
+      } catch (err) {
+        console.error(err);
+        setStatus("Failed to load nearby network · " + (err.message || "error"), "error");
+      } finally {
+        contextLoadQueued = false;
+        if (contextLoadPending) {
+          const pending = contextLoadPending;
+          contextLoadPending = null;
+          refreshContextNetwork({ ...pending, announce: false });
+        }
+      }
+    }
+
+    // Compatibility alias used by a few event handlers.
+    function loadViewportChunks() {
+      return refreshContextNetwork({ label: "nearby network" });
     }
 
     function updateDataMeta() {
@@ -1445,9 +1567,14 @@
         dataMeta.textContent = "Metadata unavailable";
         return;
       }
+      if (!map || map.getZoom() < CONTEXT_MIN_ZOOM) {
+        dataMeta.textContent = "Overview · base map only · NSTDB context in detail view";
+        return;
+      }
       dataMeta.textContent =
-        nsGovFeatures.length.toLocaleString() + " loaded · " +
-        loadedChunkIds.size + "/" + (nsGovManifest.chunks || []).length + " areas · NSTDB";
+        nsGovDisplayFeatures.length.toLocaleString() + " nearby · ≤" +
+        CONTEXT_MAX_FEATURES.toLocaleString() + " · " +
+        CONTEXT_CORRIDOR_KM + " km corridor · NSTDB";
     }
 
     // ---- Offline basemap for active navigation ----------------------------
@@ -1560,20 +1687,10 @@
       try { await caches.delete(NAV_TILE_CACHE); } catch (_) { /* ignore */ }
     }
 
-    async function ensureRouteCorridorChunks(coords) {
-      if (!coords || coords.length < 2) return;
-      let minLng = Infinity;
-      let minLat = Infinity;
-      let maxLng = -Infinity;
-      let maxLat = -Infinity;
-      for (const c of coords) {
-        minLng = Math.min(minLng, c[0]);
-        minLat = Math.min(minLat, c[1]);
-        maxLng = Math.max(maxLng, c[0]);
-        maxLat = Math.max(maxLat, c[1]);
-      }
-      const pad = 0.12;
-      await loadChunksForBbox([minLng - pad, minLat - pad, maxLng + pad, maxLat + pad], "ride corridor");
+    async function ensureRouteCorridorChunks() {
+      // Navigation context is a moving corridor around the rider / nearby route —
+      // never the full A–B envelope (that would reload tens of thousands of edges).
+      await refreshContextNetwork({ label: "ride corridor", force: true, announce: false });
     }
 
     const map = new maplibregl.Map({
@@ -2296,6 +2413,8 @@
         return id;
       }
 
+      // Cue graph for junction detection only — painted corridor features, not
+      // the province pack. Route calculation always stays on /api/route.
       const features = nsGovFeatureCollection.features || [];
       for (let featureIndex = 0; featureIndex < features.length; featureIndex += 1) {
         const feature = features[featureIndex];
@@ -3407,11 +3526,6 @@
       }
       if (!ensureGeoWatch()) return;
       const coords = activeRouteCoordinates();
-      try {
-        await ensureRoutingGraph();
-      } catch (err) {
-        console.warn("Nav graph unavailable for junction cues", err);
-      }
 
       navigating = true;
       navTileRuntime.active = true;
@@ -3442,7 +3556,14 @@
         "ok"
       );
       try {
-        await ensureRouteCorridorChunks(coords);
+        await ensureRouteCorridorChunks();
+        // Junction cues may use a tiny corridor graph only — never the province pack.
+        try {
+          await ensureRoutingGraph();
+        } catch (err) {
+          console.warn("Nav corridor graph unavailable for junction cues", err);
+        }
+        navManeuvers = buildNavManeuvers(coords);
         const result = await prefetchRouteBasemap(coords);
         setStatus(
           (navSimEnabled ? "Sim · " : "") +
@@ -3711,6 +3832,7 @@
         }
         refreshRouteDraft();
         syncRouteExportUi();
+        refreshContextNetwork({ announce: false }).catch(() => {});
       } catch (err) {
         console.error(err);
         if (jobId !== routeJobId) return;
@@ -4002,8 +4124,9 @@
     document.querySelectorAll("[data-source-toggle]").forEach((input) => {
       input.addEventListener("change", async () => {
         sourceEnabled[input.dataset.sourceToggle] = input.checked;
-        if (input.dataset.sourceToggle === "nsGov" && input.checked) {
-          loadViewportChunks();
+        if (input.dataset.sourceToggle === "nsGov") {
+          // Visibility of the NSTDB source never loads the full province pack.
+          refreshContextNetwork({ announce: false });
         }
         applyLayerVisibility();
       });
