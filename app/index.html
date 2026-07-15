@@ -1625,7 +1625,8 @@
       if (!map || typeof map.getZoom !== "function") return;
 
       const detail = isDetailContextZoom();
-      const hasRoute = !!(activeRoute && activeRouteCoordinates().length >= 2);
+      const routeCoords = activeRouteCoordinates();
+      const hasRoute = !!activeRoute;
 
       // Overview without a route: basemap only. Overview with a route: bounded
       // focus arm corridor — never the full Halifax–Yarmouth envelope.
@@ -1651,9 +1652,15 @@
         const focus = contextFocusPoint();
         const armKm = contextRouteArmKm();
         const corridorKm = contextCorridorKm();
-        const anchors = hasRoute
-          ? sampleRouteAnchorsAroundFocus(focus, armKm)
-          : [];
+        let anchors = [];
+        if (hasRoute && routeCoords.length >= 2) {
+          anchors = sampleRouteAnchorsAroundFocus(focus, armKm);
+        } else if (hasRoute) {
+          // Degenerate geometry: still bound context to A/B / focus, not province.
+          const start = activeStart();
+          if (start) anchors.push([start.lng, start.lat]);
+          if (destination) anchors.push([destination.lng, destination.lat]);
+        }
         const points = [focus].concat(anchors);
         const bbox = bboxFromPoints(points, CONTEXT_CHUNK_PAD_DEG);
         await loadChunksNearFocus(bbox, focus, label);
@@ -1693,7 +1700,7 @@
         return;
       }
       const detail = isDetailContextZoom();
-      const hasRoute = !!(activeRoute && activeRouteCoordinates().length >= 2);
+      const hasRoute = !!activeRoute;
       if (!detail && !hasRoute) {
         dataMeta.textContent = "Overview · base map only · route corridor when a route exists";
         return;
