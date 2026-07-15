@@ -942,21 +942,6 @@
       color: var(--accent);
       margin-bottom: 2px;
     }
-    .nav-next-stage {
-      display: block;
-      width: 100%;
-      margin-top: 8px;
-      min-height: 40px;
-      border: 0;
-      border-radius: 10px;
-      background: var(--accent);
-      color: #fff;
-      font-family: var(--sans);
-      font-size: 0.74rem;
-      font-weight: 700;
-      cursor: pointer;
-    }
-
     /* Real MapLibre stage endpoint markers */
     .stage-marker {
       width: 26px;
@@ -1649,7 +1634,6 @@
         <div class="nav-cue-dist" id="navCueDist">Ready</div>
         <div class="nav-cue-main" id="navCueMain">Start navigation</div>
         <div class="nav-cue-sub" id="navCueSub">Follow the orange line</div>
-        <button class="nav-next-stage" id="navNextStageBtn" type="button" hidden>Start next stage</button>
       </div>
       <button class="nav-stop" id="navStopBtn" type="button" title="End navigation">End</button>
     </div>
@@ -2200,7 +2184,6 @@
     const accessWarnHide = document.getElementById("accessWarnHide");
     const accessWarnMetric = document.getElementById("accessWarnMetric");
     const navStageLine = document.getElementById("navStageLine");
-    const navNextStageBtn = document.getElementById("navNextStageBtn");
     const navHud = document.getElementById("navHud");
     const navCueDist = document.getElementById("navCueDist");
     const navCueMain = document.getElementById("navCueMain");
@@ -4138,22 +4121,6 @@
       }
     }
 
-    function advanceNavStage() {
-      if (!navContext) return;
-      if (navContext.index >= navContext.total - 1) return;
-      navContext.index += 1;
-      navContext.awaitingNext = false;
-      if (navNextStageBtn) navNextStageBtn.hidden = true;
-      activeRoute = stageToActiveRoute(navContext.stages[navContext.index], navContext.index);
-      navManeuvers = buildNavManeuvers(activeRouteCoordinates());
-      lastSpokenCueKey = "";
-      updateNavStageHud();
-      syncOverviewRoute();
-      applyMainDetailCamera(true, { resetZoom: true });
-      updateNavGuidance();
-      setStatus("Stage " + (navContext.index + 1) + " of " + navContext.total, "ok");
-    }
-
     function haversineKm(a, b) {
       if (!a || !b) return 0;
       const toRad = (deg) => deg * Math.PI / 180;
@@ -5418,15 +5385,11 @@
 
         if (next.severity === "arrive" && toTurnKm < 0.04) {
           if (navContext && navContext.total > 1 && navContext.index < navContext.total - 1) {
-            // Stage complete — explicit handoff, never a silent advance.
+            // Stage complete — no teleport to the next stage; end nav and start from the stage list.
             const doneStage = navContext.index + 1;
             navCueDist.textContent = "Stage " + doneStage + " done";
             navCueMain.textContent = "Stage " + doneStage + " complete";
-            navCueSub.textContent = "Start Stage " + (doneStage + 1) + " when ready";
-            if (navNextStageBtn && !navContext.awaitingNext) {
-              navNextStageBtn.hidden = false;
-              navNextStageBtn.textContent = "Start Stage " + (doneStage + 1);
-            }
+            navCueSub.textContent = "End navigation to return to the stage list";
             if (!navContext.awaitingNext) speakCue("Stage " + doneStage + " complete.", "stage-done-" + doneStage);
             navContext.awaitingNext = true;
           } else {
@@ -5625,7 +5588,6 @@
       lastSpokenCueKey = "";
       document.body.classList.add("navigating");
       navHud.classList.add("visible");
-      if (navNextStageBtn) navNextStageBtn.hidden = true;
       updateNavStageHud();
       if (typeof setRoadbookOpen === "function") setRoadbookOpen(false);
       setRouteCardOpen(false);
@@ -5677,7 +5639,6 @@
       navHud.classList.remove("visible");
       navContext = null;
       if (navStageLine) navStageLine.hidden = true;
-      if (navNextStageBtn) navNextStageBtn.hidden = true;
       if (typeof setRoadbookOpen === "function") setRoadbookOpen(false);
       setPipVisible(false);
       if (window.speechSynthesis) window.speechSynthesis.cancel();
@@ -6542,7 +6503,6 @@
         if (event.target === saveRouteSheet) closeSaveSheet();
       });
     }
-    if (navNextStageBtn) navNextStageBtn.addEventListener("click", advanceNavStage);
     // Preload saved routes so the compact/summary counts are ready.
     loadSavedRoutes().catch(() => {});
     function activateFollowFromControl() {
