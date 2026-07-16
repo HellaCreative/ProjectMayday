@@ -1,0 +1,117 @@
+(function (global) {
+  "use strict";
+
+  let client = null;
+  let currentGroupChannel = null;
+
+  async function init() {
+    if (client) return client;
+    if (!global.supabase || typeof global.supabase.createClient !== "function") throw new Error("Supabase client library is unavailable.");
+    const response = await fetch("/api/supabase-config", { cache: "no-store" });
+    const config = await response.json();
+    if (!config.url || !config.publishableKey) throw new Error("Supabase is not configured for this deployment.");
+    client = global.supabase.createClient(config.url, config.publishableKey, {
+      auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
+    });
+    return client;
+  }
+
+  async function signUp(email, password, displayName) {
+    const db = await init();
+    return db.auth.signUp({ email, password, options: { data: { display_name: displayName || "" } } });
+  }
+
+  async function signIn(email, password) {
+    const db = await init();
+    return db.auth.signInWithPassword({ email, password });
+  }
+
+  async function signOut() {
+    const db = await init();
+    return db.auth.signOut();
+  }
+
+  async function session() {
+    const db = await init();
+    return db.auth.getSession();
+  }
+
+  async function user() {
+    const db = await init();
+    return db.auth.getUser();
+  }
+
+  async function onAuthStateChange(callback) {
+    const db = await init();
+    return db.auth.onAuthStateChange(callback);
+  }
+
+  async function createGroup(name, ownerId) {
+    const db = await init();
+    const { data: group, error } = await db.from("groups").insert({ name, owner_id: ownerId }).select().single();
+    if (error) throw error;
+    const { error: memberError } = await db.from("group_members").insert({ group_id: group.id, user_id: ownerId, role: "owner" });
+    if (memberError) throw memberError;
+    return group;
+  }
+
+  async function listGroups(userId) {
+    const db = await init();
+    const { data, error } = await db.from("group_members").select("role, groups(id,name,owner_id,invite_code,created_at)").eq("user_id", userId);
+    if (error) throw error;
+    return (data || []).map((row) => Object.assign({}, row.groups, { role: row.role }));
+  }
+
+  async function joinGroup(inviteCode, userId) {
+    const db = await init();
+    const { data: group, error } = await db.from("groups").select("id,name,owner_id,invite_code,created_at").eq("invite_code", String(inviteCode || "").trim().toUpperCase()).single();
+    if (error) throw error;
+    const { error: memberError } = await db.from("group_members").upsert({ group_id: group.id, user_id: userId, role: "member" }, { onConflict: "group_id,user_id" });
+    if (memberError) throw memberError;
+    return group;
+  }
+
+  async function listMembers(groupId) {
+    const db = await init();
+    const { data, error } = await db.from("group_members").select("user_id,role,profiles(display_name)").eq("group_id", groupId);
+    if (error) throw error;
+    return data || [];
+  }
+
+  async function savePresence(payload) {
+    const db = await init();
+    return db.from("rider_presence").upsert(payload, { onConflict: "user_id" });
+  }
+
+  async function saveAlert(payload) {
+    const db = await init();
+    return db.from("rider_alerts").insert(payload).select().single();
+  }
+
+  async function openGroupChannel(groupId, userId, handlers) {
+    const db = await init();
+    if (currentGroupChannel) await db.removeChannel(currentGroupChannel);
+    const channel = db.channel("group:" + groupId, { config: { presence: { key: userId } } });
+    channel
+      .on("presence", { event: "sync" }, () => handlers?.presence?.(channel.presenceState()))
+      .on("presence", { event: "join" }, () => handlers?.presence?.(channel.presenceState()))
+      .on("presence", { event: "leave" }, () => handlers?.presence?.(channel.presenceState()))
+      .on("broadcast", { event: "location" }, ({ payload }) => handlers?.location?.(payload));
+    const status = await new Promise((resolve, reject) => {
+      channel.subscribe((value) => {
+        if (value === "SUBSCRIBED") resolve(value);
+        if (value === "CHANNEL_ERROR" || value === "TIMED_OUT") reject(new Error("Could not connect to the group channel."));
+      });
+    });
+    currentGroupChannel = channel;
+    return { status, track: (payload) => channel.track(payload), sendLocation: (payload) => channel.send({ type: "broadcast", event: "location", payload }) };
+  }
+
+  async function closeGroupChannel() {
+    if (!client || !currentGroupChannel) return;
+    await client.removeChannel(currentGroupChannel);
+    currentGroupChannel = null;
+  }
+
+  global.DirtSupabase = { init, signUp, signIn, signOut, session, user, onAuthStateChange, createGroup, listGroups, joinGroup, listMembers, savePresence, saveAlert, openGroupChannel, closeGroupChannel };
+})(window);

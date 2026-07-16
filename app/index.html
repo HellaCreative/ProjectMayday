@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
   <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
   <script src="https://unpkg.com/dexie@4.0.11/dist/dexie.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     :root {
       --bg: #f7f9fb;
@@ -1075,6 +1076,69 @@
     }
     .saved-action.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
     .saved-action.danger { color: #c1122f; border-color: rgba(193,18,47,0.4); }
+    .gpx-tools {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      margin-top: 8px;
+    }
+    .gpx-import-btn {
+      min-height: 38px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--panel-2);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 0.72rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .gpx-import-btn:hover { background: #ffffff; }
+    .gpx-help {
+      align-self: center;
+      color: var(--muted);
+      font-size: 0.62rem;
+      line-height: 1.3;
+    }
+    .track-editor {
+      display: none;
+      margin-top: 8px;
+      padding: 9px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--panel-2);
+    }
+    .track-editor.open { display: block; }
+    .track-editor-title {
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .track-editor-meta {
+      margin-top: 3px;
+      color: var(--muted);
+      font-family: var(--mono);
+      font-size: 0.58rem;
+      line-height: 1.35;
+    }
+    .track-editor-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      margin-top: 8px;
+    }
+    .track-editor-actions button {
+      min-height: 34px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #ffffff;
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 0.66rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .track-editor-actions .primary { background: var(--accent); border-color: var(--accent); color: #ffffff; }
 
     /* Multi-stage nav HUD extras */
     .nav-stage-line {
@@ -1181,6 +1245,63 @@
       flex: 0 0 auto;
     }
     .topbar-right > * { pointer-events: auto; }
+    .account-sheet {
+      position: absolute;
+      top: max(64px, calc(env(safe-area-inset-top) + 54px));
+      right: 12px;
+      z-index: 36;
+      width: min(360px, calc(100vw - 24px));
+      max-height: min(72dvh, 620px);
+      overflow: auto;
+      display: none;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--panel);
+      box-shadow: var(--panel-shadow);
+      backdrop-filter: blur(16px);
+    }
+    .account-sheet.open { display: block; }
+    .account-title { font-size: 0.82rem; font-weight: 750; color: var(--text); }
+    .account-subtitle { margin-top: 3px; color: var(--muted); font-size: 0.64rem; line-height: 1.35; }
+    .account-form { display: grid; gap: 7px; margin-top: 12px; }
+    .account-form input, .group-form input {
+      min-height: 36px;
+      width: 100%;
+      padding: 7px 9px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      color: var(--text);
+      font: 0.72rem var(--sans);
+    }
+    .account-actions, .group-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .account-actions button, .group-actions button, .account-signout {
+      min-height: 34px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel-2);
+      color: var(--text);
+      font: 700 0.66rem var(--sans);
+      cursor: pointer;
+    }
+    .account-actions button.primary, .group-actions button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .account-signout { width: 100%; margin-top: 8px; }
+    .account-status { min-height: 18px; margin-top: 8px; color: var(--muted); font: 0.62rem/1.35 var(--mono); }
+    .account-status.error { color: var(--danger); }
+    .account-divider { height: 1px; margin: 12px 0; background: var(--line); }
+    .group-title { font-size: 0.68rem; font-weight: 750; color: var(--text); }
+    .group-form { display: grid; gap: 7px; margin-top: 8px; }
+    .group-list { display: grid; gap: 5px; margin-top: 8px; }
+    .group-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 7px 8px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+    .group-row button { border: 0; background: transparent; color: var(--accent); font: 700 0.62rem var(--sans); cursor: pointer; }
+    .group-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.68rem; font-weight: 700; }
+    .group-code { margin-top: 2px; color: var(--muted); font: 0.56rem var(--mono); }
+    .group-live { display: none; margin-top: 9px; padding-top: 9px; border-top: 1px solid var(--line); }
+    .group-live.open { display: block; }
+    .group-live-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 7px; }
+    .group-live-row button { min-height: 30px; padding: 0 8px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel-2); color: var(--text); font: 700 0.62rem var(--sans); cursor: pointer; }
+    .group-live-row button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
 
     .export-sheet {
       position: absolute;
@@ -1965,6 +2086,9 @@
       <button class="nav-stop" id="navStopBtn" type="button" title="End navigation">End</button>
     </div>
     <div class="topbar-right">
+      <button class="btn mini" id="accountBtn" title="Account and riding group" aria-label="Account and riding group" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="3.2"/><path d="M5.5 20c.7-3.2 2.9-5 6.5-5s5.8 1.8 6.5 5"/></svg>
+      </button>
       <button class="btn route-toggle" id="routeToggleBtn" title="Route planner" aria-label="Toggle route planner" aria-expanded="false">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="12" r="2.5"/><path d="M8 7l8 4M8 17l8-4"/></svg>
       </button>
@@ -2055,6 +2179,19 @@
       <div class="route-panel" id="routePanelSaved" hidden>
         <div class="saved-list" id="savedList" role="list"></div>
         <button class="stage-save" id="savedCreateBtn" type="button">Create new route</button>
+        <div class="gpx-tools">
+          <button class="gpx-import-btn" id="gpxImportBtn" type="button">Import GPX track</button>
+          <span class="gpx-help">Edit and export tracks from Gaia, Garmin, or another app.</span>
+        </div>
+        <input id="gpxFileInput" type="file" accept=".gpx,application/gpx+xml" hidden />
+        <div class="track-editor" id="trackEditor" aria-live="polite">
+          <div class="track-editor-title" id="trackEditorTitle">Edit imported track</div>
+          <div class="track-editor-meta" id="trackEditorMeta"></div>
+          <div class="track-editor-actions">
+            <button id="trackEditorCancel" type="button">Cancel edits</button>
+            <button class="primary" id="trackEditorSave" type="button">Save edits</button>
+          </div>
+        </div>
       </div>
 
       <div class="route-actions" id="routeActions">
@@ -2071,6 +2208,46 @@
 
   <!-- Unknown-access info popover (body-level so it never clips inside the drawer). -->
   <div class="access-info-tip" id="accessInfoTip" role="tooltip" hidden>Unknown access is not permission. Routes may include closures, private land, seasonal restrictions, or enforcement.</div>
+
+  <section class="account-sheet" id="accountSheet" aria-label="Account and riding group" aria-hidden="true">
+    <div class="account-title" id="accountTitle">Rider account</div>
+    <div class="account-subtitle" id="accountSubtitle">Sign in to share live location with a riding group. You can keep using the map without an account.</div>
+    <div class="account-form" id="accountForm">
+      <input id="accountDisplayName" type="text" maxlength="60" autocomplete="name" placeholder="Display name" aria-label="Display name" />
+      <input id="accountEmail" type="email" autocomplete="email" placeholder="Email" aria-label="Email" />
+      <input id="accountPassword" type="password" autocomplete="current-password" placeholder="Password" aria-label="Password" />
+      <div class="account-actions">
+        <button class="primary" id="accountSignIn" type="button">Sign in</button>
+        <button id="accountSignUp" type="button">Create account</button>
+      </div>
+    </div>
+    <div class="account-status" id="accountStatus" role="status"></div>
+    <div id="accountAuthed" hidden>
+      <button class="account-signout" id="accountSignOut" type="button">Sign out</button>
+      <div class="account-divider"></div>
+      <div class="group-title">Riding groups</div>
+      <div class="group-form">
+        <input id="groupNameInput" type="text" maxlength="80" placeholder="New group name" aria-label="New group name" />
+        <div class="group-actions">
+          <button class="primary" id="groupCreateBtn" type="button">Create group</button>
+          <button id="groupJoinBtn" type="button">Join by code</button>
+        </div>
+        <input id="groupInviteInput" type="text" maxlength="20" placeholder="Invite code" aria-label="Invite code" />
+      </div>
+      <div class="group-list" id="groupList"></div>
+      <div class="group-live" id="groupLive">
+        <div class="group-title" id="groupLiveTitle">Live group</div>
+        <div class="account-subtitle" id="groupLiveMeta">Share only when you choose to.</div>
+        <div class="group-live-row">
+          <button id="groupShareBtn" type="button">Share my location</button>
+          <button data-rider-status="available" type="button">Available</button>
+          <button data-rider-status="breakdown" type="button">Breakdown</button>
+          <button data-rider-status="injured" type="button">Injured</button>
+          <button data-rider-status="stuck" type="button">Stuck</button>
+        </div>
+      </div>
+    </div>
+  </section>
 
   <div class="export-sheet" id="exportSheet" aria-hidden="true">
     <div class="export-sheet-card" role="dialog" aria-modal="true" aria-labelledby="exportSheetTitle">
@@ -2283,6 +2460,8 @@
 
   <script src="../routing/lib/roadbook-curves.js"></script>
   <script src="../routing/lib/stages.js"></script>
+  <script src="gpx.js"></script>
+  <script src="supabase-client.js"></script>
   <script>
     // Neutral Nova Scotia regional overview — not a rider position / routing origin.
     const NS_OVERVIEW = { lng: -63.0, lat: 45.1, zoom: 7.25 };
@@ -2543,6 +2722,20 @@
     let savedRoutes = [];
     let savedRoutesLoaded = false;
     let viewedSavedRouteId = null; // saved route shown on map (view-only)
+    let viewedImportedTrackId = null;
+    let editingImportedTrackId = null;
+    let importedTrackDraft = null;
+    const importedTrackMarkers = [];
+    const groupRiders = new Map();
+    let currentAuthUser = null;
+    let ridingGroups = [];
+    let selectedRidingGroup = null;
+    let groupChannel = null;
+    let groupSharing = false;
+    let groupStatus = "available";
+    let lastGroupPublishAt = 0;
+    let groupRouteTarget = null;
+    let accountReadyPromise = null;
     // Multi-stage navigation context. null = single-stage / not multi-stage nav.
     let navContext = null; // { stages:[{start,end,route}], index, total, name, awaitingNext:bool }
     const stageMarkers = []; // real MapLibre markers for stage endpoints (draggable in edit mode)
@@ -2613,6 +2806,13 @@
     const stageSaveBtn = document.getElementById("stageSaveBtn");
     const savedListEl = document.getElementById("savedList");
     const savedCreateBtn = document.getElementById("savedCreateBtn");
+    const gpxImportBtn = document.getElementById("gpxImportBtn");
+    const gpxFileInput = document.getElementById("gpxFileInput");
+    const trackEditor = document.getElementById("trackEditor");
+    const trackEditorTitle = document.getElementById("trackEditorTitle");
+    const trackEditorMeta = document.getElementById("trackEditorMeta");
+    const trackEditorCancel = document.getElementById("trackEditorCancel");
+    const trackEditorSave = document.getElementById("trackEditorSave");
     const saveRouteSheet = document.getElementById("saveRouteSheet");
     const saveRouteInput = document.getElementById("saveRouteInput");
     const saveRouteCancel = document.getElementById("saveRouteCancel");
@@ -2925,6 +3125,26 @@
           properties: {}
         }]
       };
+    }
+
+    function groupRiderFeatureCollection() {
+      return {
+        type: "FeatureCollection",
+        features: Array.from(groupRiders.values()).filter((entry) => Number.isFinite(entry.lng) && Number.isFinite(entry.lat)).map((entry) => ({
+          type: "Feature",
+          geometry: { type: "Point", coordinates: [entry.lng, entry.lat] },
+          properties: {
+            userId: entry.userId,
+            displayName: entry.displayName || "Rider",
+            status: entry.status || "available",
+            lastSeenAt: entry.lastSeenAt || null
+          }
+        }))
+      };
+    }
+
+    function refreshGroupRiderLayer() {
+      if (map.getSource("groupRiders")) map.getSource("groupRiders").setData(groupRiderFeatureCollection());
     }
 
     function locationUnavailableMessage(err) {
@@ -3774,10 +3994,71 @@
         type: "geojson",
         data: riderFeatureCollection()
       });
+      map.addSource("groupRiders", {
+        type: "geojson",
+        data: groupRiderFeatureCollection()
+      });
+      map.addLayer({
+        id: "group-rider-halo",
+        type: "circle",
+        source: "groupRiders",
+        paint: {
+          "circle-radius": 13,
+          "circle-color": ["match", ["get", "status"], "breakdown", "#dc6803", "injured", "#c1122f", "stuck", "#7c3aed", "#0354a6"],
+          "circle-opacity": 0.22,
+          "circle-blur": 0.3
+        }
+      });
+      map.addLayer({
+        id: "group-rider-core",
+        type: "circle",
+        source: "groupRiders",
+        paint: {
+          "circle-radius": 7,
+          "circle-color": ["match", ["get", "status"], "breakdown", "#dc6803", "injured", "#c1122f", "stuck", "#7c3aed", "#0354a6"],
+          "circle-stroke-width": 2,
+          "circle-stroke-color": "#ffffff"
+        }
+      });
+      map.addLayer({
+        id: "group-rider-labels",
+        type: "symbol",
+        source: "groupRiders",
+        layout: { "text-field": ["get", "displayName"], "text-size": 11, "text-offset": [0, 1.4], "text-anchor": "top", "text-allow-overlap": true },
+        paint: { "text-color": "#172433", "text-halo-color": "#ffffff", "text-halo-width": 1.5 }
+      });
       map.addSource("routeDraft", {
         type: "geojson",
         data: routeFeatureCollection()
       });
+      map.addSource("importedTrack", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] }
+      });
+      map.addLayer({
+        id: "imported-track-line",
+        type: "line",
+        source: "importedTrack",
+        filter: ["!=", ["get", "editing"], true],
+        paint: {
+          "line-color": "#dc6803",
+          "line-width": 5,
+          "line-opacity": 0.95
+        }
+      });
+      map.addLayer({
+        id: "imported-track-edit-line",
+        type: "line",
+        source: "importedTrack",
+        filter: ["==", ["get", "editing"], true],
+        paint: {
+          "line-color": "#0354a6",
+          "line-width": 6,
+          "line-opacity": 0.92,
+          "line-dasharray": [1.2, 1]
+        }
+      });
+      map.setLayoutProperty("imported-track-edit-line", "visibility", "none");
       // Selected route: bright primary stroke, thicker than ~4px network overlays.
       // No dark casing that would mute category color on network lines.
       map.addLayer({
@@ -3893,6 +4174,7 @@
       syncOverviewRider();
       if (navigating) updateNavGuidance();
       else if (followLocked) syncFollowCamera();
+      publishGroupLocation(false).catch(() => {});
       // Navigation corridor must follow the rider — not only map moveend.
       if (navigating || (isDetailContextZoom() && activeRoute)) {
         const movedKm = prev && Number.isFinite(prev.lng)
@@ -4676,6 +4958,169 @@
       return "Saved routes<strong>" + n + (n === 1 ? " route" : " routes") + "</strong>";
     }
 
+    function makeSavedId(prefix) {
+      if (globalThis.crypto && typeof globalThis.crypto.randomUUID === "function") {
+        return prefix + "-" + globalThis.crypto.randomUUID();
+      }
+      return prefix + "-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10);
+    }
+
+    function importedTrackPoints(record) {
+      return Array.isArray(record?.trackPoints) ? record.trackPoints.filter(Boolean) : [];
+    }
+
+    function importedTrackGeoJson(record, points, editing) {
+      const track = DirtGpx.summarize({ name: record.name, points });
+      const geoJson = DirtGpx.toGeoJson(track);
+      for (const feature of geoJson.features) {
+        feature.properties = Object.assign({}, feature.properties, { editing: !!editing });
+      }
+      return geoJson;
+    }
+
+    function clearImportedTrackMarkers() {
+      while (importedTrackMarkers.length) {
+        try { importedTrackMarkers.pop().remove(); } catch (_) { /* ignore */ }
+      }
+    }
+
+    function clearImportedTrackView() {
+      clearImportedTrackMarkers();
+      viewedImportedTrackId = null;
+      editingImportedTrackId = null;
+      importedTrackDraft = null;
+      if (trackEditor) trackEditor.classList.remove("open");
+      if (map.getSource("importedTrack")) {
+        map.getSource("importedTrack").setData({ type: "FeatureCollection", features: [] });
+      }
+    }
+
+    function showImportedTrack(record, editing) {
+      if (!record || record.kind !== "imported-track") return;
+      viewedSavedRouteId = null;
+      clearImportedTrackMarkers();
+      viewedImportedTrackId = record.id;
+      editingImportedTrackId = editing ? record.id : null;
+      const source = map.getSource("importedTrack");
+      if (!source) return;
+      const points = editing
+        ? DirtGpx.simplify({ points: importedTrackPoints(record) }, 80)
+        : importedTrackPoints(record);
+      importedTrackDraft = { record, points: points.slice() };
+      source.setData(importedTrackGeoJson(record, points, editing));
+      if (trackEditor) trackEditor.classList.toggle("open", !!editing);
+      if (trackEditorTitle) trackEditorTitle.textContent = editing ? "Edit imported track" : (record.name || "Imported GPX track");
+      if (trackEditorMeta) {
+        const summary = DirtGpx.summarize({ name: record.name, points });
+        trackEditorMeta.textContent = summary.pointCount + " points · " + (summary.distanceMeters / 1000).toFixed(summary.distanceMeters >= 10000 ? 1 : 2) + " km · drag the blue points to reshape";
+      }
+      if (editing) {
+        points.forEach((point, index) => {
+          const marker = new maplibregl.Marker({ draggable: true, color: "#0354a6" })
+            .setLngLat([point.lon, point.lat])
+            .addTo(map);
+          marker.on("drag", () => {
+            const ll = marker.getLngLat();
+            importedTrackDraft.points[index] = Object.assign({}, importedTrackDraft.points[index], { lat: ll.lat, lon: ll.lng });
+            source.setData(importedTrackGeoJson(record, importedTrackDraft.points, true));
+            if (trackEditorMeta) {
+              const summary = DirtGpx.summarize({ name: record.name, points: importedTrackDraft.points });
+              trackEditorMeta.textContent = summary.pointCount + " points · " + (summary.distanceMeters / 1000).toFixed(summary.distanceMeters >= 10000 ? 1 : 2) + " km · drag the blue points to reshape";
+            }
+          });
+          importedTrackMarkers.push(marker);
+        });
+      }
+      const coords = points.map((point) => [point.lon, point.lat]);
+      fitToCoords(coords);
+    }
+
+    async function importGpxFile(file) {
+      if (!file) return;
+      try {
+        const parsed = DirtGpx.parseGpx(await file.text(), file.name.replace(/\.gpx$/i, ""));
+        const now = new Date().toISOString();
+        const record = {
+          id: makeSavedId("track"),
+          schemaVersion: 1,
+          kind: "imported-track",
+          source: "gpx-import",
+          name: parsed.name || file.name,
+          fileName: file.name,
+          trackPoints: parsed.points,
+          originalTrackPoints: parsed.points,
+          pointCount: parsed.pointCount,
+          distanceMeters: parsed.distanceMeters,
+          bounds: parsed.bounds,
+          createdAt: now,
+          updatedAt: now,
+          isDraft: false
+        };
+        await savedDb.routes.put(record);
+        savedRoutesLoaded = false;
+        await loadSavedRoutes();
+        setRouteMode("saved");
+        renderSavedList();
+        showImportedTrack(record, false);
+        setStatus("Imported “" + (record.name || file.name) + "”", "ok", "route");
+      } catch (err) {
+        console.error(err);
+        setStatus("GPX import failed · " + (err.message || "Could not read that file."), "error", "route");
+      } finally {
+        if (gpxFileInput) gpxFileInput.value = "";
+      }
+    }
+
+    function downloadImportedTrack(record) {
+      const points = importedTrackPoints(record);
+      if (points.length < 2) return;
+      const gpx = DirtGpx.toGpx({ name: record.name, points });
+      const blob = new Blob([gpx], { type: "application/gpx+xml;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = (record.name || "dirt-mayday-track").replace(/[^a-z0-9-_]+/gi, "-").replace(/^-|-$/g, "") + ".gpx";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+      setStatus("Exported “" + (record.name || "track") + "” as GPX", "ok", "route");
+    }
+
+    async function saveImportedTrackEdits() {
+      if (!importedTrackDraft || !editingImportedTrackId) return;
+      const record = importedTrackDraft.record;
+      const points = importedTrackDraft.points.filter(Boolean);
+      if (points.length < 2) {
+        setStatus("A track needs at least two points", "error", "route");
+        return;
+      }
+      const summary = DirtGpx.summarize({ name: record.name, points });
+      const updated = Object.assign({}, record, {
+        trackPoints: points,
+        pointCount: summary.pointCount,
+        distanceMeters: summary.distanceMeters,
+        bounds: summary.bounds,
+        updatedAt: new Date().toISOString()
+      });
+      try {
+        await savedDb.routes.put(updated);
+        savedRoutesLoaded = false;
+        await loadSavedRoutes();
+        showImportedTrack(updated, false);
+        renderSavedList();
+        setStatus("Saved edits to “" + (updated.name || "track") + "”", "ok", "route");
+      } catch (err) {
+        setStatus("Could not save track edits · " + (err.message || "storage error"), "error", "route");
+      }
+    }
+
+    function cancelImportedTrackEdits() {
+      const record = savedRoutes.find((row) => row.id === editingImportedTrackId);
+      if (record) showImportedTrack(record, false);
+      else clearImportedTrackView();
+    }
+
     function renderSavedList() {
       if (!savedListEl) return;
       if (!savedRoutes.length) {
@@ -4685,6 +5130,27 @@
         return;
       }
       savedListEl.innerHTML = savedRoutes.map((r) => {
+        if (r.kind === "imported-track") {
+          const km = (Number(r.distanceMeters) || 0) / 1000;
+          const updated = r.updatedAt ? new Date(r.updatedAt).toLocaleDateString() : "";
+          return (
+            '<div class="saved-row" data-saved-id="' + r.id + '">' +
+              '<div class="saved-row-head">' +
+                '<span class="saved-name">' + escapeHtml(r.name || "Imported GPX track") + "</span>" +
+                '<span class="saved-draft-tag">GPX</span>' +
+              "</div>" +
+              '<div class="saved-meta">Imported track · ' + (r.pointCount || 0) + " points · " +
+                km.toFixed(km >= 10 ? 1 : 2) + " km" + (updated ? " · " + updated : "") +
+              "</div>" +
+              '<div class="saved-actions">' +
+                '<button class="saved-action" data-saved-view="' + r.id + '">View on map</button>' +
+                '<button class="saved-action primary" data-saved-edit-track="' + r.id + '">Edit track</button>' +
+                '<button class="saved-action" data-saved-export-track="' + r.id + '">Export GPX</button>' +
+                '<button class="saved-action danger" data-saved-delete="' + r.id + '">Delete</button>' +
+              "</div>" +
+            "</div>"
+          );
+        }
         const agg = r.aggregate || {};
         const km = (agg.totalDistanceMeters || 0) / 1000;
         const dirt = agg.percentages ? agg.percentages.dirtPercent : 0;
@@ -4719,6 +5185,12 @@
       viewedSavedRouteId = id;
       const record = savedRoutes.find((r) => r.id === id);
       if (!record) return;
+      if (record.kind === "imported-track") {
+        showImportedTrack(record, false);
+        setStatus("Viewing “" + (record.name || "imported track") + "”", "ok", "route");
+        return;
+      }
+      clearImportedTrackView();
       refreshRouteDraft();
       const coords = [];
       for (const s of record.stages || []) {
@@ -4783,6 +5255,7 @@
       try {
         await savedDb.routes.delete(id);
         if (viewedSavedRouteId === id) { viewedSavedRouteId = null; refreshRouteDraft(); }
+        if (viewedImportedTrackId === id) clearImportedTrackView();
         await loadSavedRoutes();
         renderSavedList();
         setStatus("Route deleted", "ok", "route");
@@ -6602,6 +7075,7 @@
 
       if (plannerTab === "here") {
         // Reset the single-destination scratch state (unchanged behaviour).
+        clearImportedTrackView();
         routeJobId += 1;
         plannedStart = null;
         destination = null;
@@ -6629,6 +7103,7 @@
         clearStageMarkers();
         loadSavedRoutesUi();
       } else {
+        clearImportedTrackView();
         clearStageMarkers();
       }
       renderStageMarkers();
@@ -6853,6 +7328,258 @@
       popupEl.classList.add("visible");
     }
 
+    function accountStatus(text, kind) {
+      const el = document.getElementById("accountStatus");
+      if (el) { el.textContent = text || ""; el.className = "account-status" + (kind === "error" ? " error" : ""); }
+    }
+
+    function syncAccountUi() {
+      const form = document.getElementById("accountForm");
+      const authed = document.getElementById("accountAuthed");
+      const title = document.getElementById("accountTitle");
+      const subtitle = document.getElementById("accountSubtitle");
+      if (form) form.hidden = !!currentAuthUser;
+      if (authed) authed.hidden = !currentAuthUser;
+      if (title) title.textContent = currentAuthUser ? (currentAuthUser.user_metadata?.display_name || currentAuthUser.email || "Rider account") : "Rider account";
+      if (subtitle) subtitle.textContent = currentAuthUser
+        ? "Your location is private until you choose a group and turn sharing on."
+        : "Sign in to share live location with a riding group. You can keep using the map without an account.";
+    }
+
+    function renderGroupList() {
+      const list = document.getElementById("groupList");
+      if (!list) return;
+      if (!ridingGroups.length) {
+        list.innerHTML = '<div class="account-subtitle">No groups yet. Create one or join with an invite code.</div>';
+        return;
+      }
+      list.innerHTML = ridingGroups.map((group) => (
+        '<div class="group-row">' +
+          '<div><div class="group-name">' + escapeHtml(group.name) + '</div>' +
+          '<div class="group-code">Code: ' + escapeHtml(group.invite_code || "") + '</div></div>' +
+          '<button type="button" data-select-group="' + group.id + '">' + (selectedRidingGroup?.id === group.id ? "Selected" : "Open") + '</button>' +
+        '</div>'
+      )).join("");
+    }
+
+    function groupPresencePayload() {
+      if (!currentAuthUser || !selectedRidingGroup || !groupSharing || !hasRiderLocation()) return null;
+      return {
+        userId: currentAuthUser.id,
+        displayName: currentAuthUser.user_metadata?.display_name || currentAuthUser.email?.split("@")[0] || "Rider",
+        lng: rider.lng,
+        lat: rider.lat,
+        heading: rider.heading,
+        speed: rider.speed,
+        status: groupStatus,
+        lastSeenAt: new Date().toISOString()
+      };
+    }
+
+    async function publishGroupLocation(force) {
+      const payload = groupPresencePayload();
+      if (!payload || !groupChannel) return;
+      const now = Date.now();
+      if (!force && now - lastGroupPublishAt < 15000) return;
+      lastGroupPublishAt = now;
+      try {
+        await groupChannel.track(payload);
+        await groupChannel.sendLocation(payload);
+        if (force || now - lastGroupPublishAt < 1000) {
+          await DirtSupabase.savePresence({
+            user_id: currentAuthUser.id,
+            sharing_enabled: true,
+            status: groupStatus,
+            latitude: rider.lat,
+            longitude: rider.lng,
+            heading: rider.heading,
+            speed_mps: rider.speed,
+            accuracy_m: rider.accuracy,
+            last_seen_at: payload.lastSeenAt
+          });
+        }
+      } catch (err) {
+        accountStatus("Live sharing reconnecting · " + (err.message || "connection issue"), "error");
+      }
+    }
+
+    function applyGroupPresence(state) {
+      for (const [userId, values] of Object.entries(state || {})) {
+        const entry = Array.isArray(values) ? values[values.length - 1] : values;
+        if (!entry || userId === currentAuthUser?.id) continue;
+        groupRiders.set(userId, Object.assign({}, entry, { userId }));
+      }
+      refreshGroupRiderLayer();
+    }
+
+    function applyGroupLocation(payload) {
+      if (!payload || payload.userId === currentAuthUser?.id || !Number.isFinite(payload.lat) || !Number.isFinite(payload.lng)) return;
+      groupRiders.set(payload.userId, payload);
+      refreshGroupRiderLayer();
+    }
+
+    async function selectRidingGroup(group) {
+      if (!group) return;
+      await DirtSupabase.closeGroupChannel().catch(() => {});
+      groupChannel = null;
+      selectedRidingGroup = group;
+      groupRiders.clear();
+      refreshGroupRiderLayer();
+      const live = document.getElementById("groupLive");
+      const title = document.getElementById("groupLiveTitle");
+      const meta = document.getElementById("groupLiveMeta");
+      if (live) live.classList.add("open");
+      if (title) title.textContent = group.name;
+      if (meta) meta.textContent = "Invite code " + (group.invite_code || "") + " · sharing is off";
+      renderGroupList();
+      try {
+        groupChannel = await DirtSupabase.openGroupChannel(group.id, currentAuthUser.id, { presence: applyGroupPresence, location: applyGroupLocation });
+        if (meta) meta.textContent = "Invite code " + (group.invite_code || "") + " · live channel connected";
+        if (groupSharing) await publishGroupLocation(true);
+      } catch (err) {
+        accountStatus("Group channel unavailable · " + (err.message || "try again"), "error");
+      }
+    }
+
+    async function loadRidingGroups() {
+      if (!currentAuthUser) return;
+      try {
+        ridingGroups = await DirtSupabase.listGroups(currentAuthUser.id);
+        renderGroupList();
+        const selected = ridingGroups.find((group) => group.id === selectedRidingGroup?.id) || ridingGroups[0];
+        if (selected) await selectRidingGroup(selected);
+      } catch (err) {
+        accountStatus("Could not load groups · " + (err.message || "error"), "error");
+      }
+    }
+
+    async function refreshAuthState(user) {
+      currentAuthUser = user || null;
+      if (!currentAuthUser) {
+        await DirtSupabase.closeGroupChannel().catch(() => {});
+        groupChannel = null;
+        selectedRidingGroup = null;
+        ridingGroups = [];
+        groupSharing = false;
+        groupRiders.clear();
+        refreshGroupRiderLayer();
+      }
+      syncAccountUi();
+      renderGroupList();
+      if (currentAuthUser) await loadRidingGroups();
+    }
+
+    async function ensureAccountReady() {
+      if (accountReadyPromise) return accountReadyPromise;
+      accountReadyPromise = (async () => {
+      try {
+        const result = await DirtSupabase.session();
+        await refreshAuthState(result.data?.session?.user || null);
+        await DirtSupabase.onAuthStateChange((_event, session) => {
+          refreshAuthState(session?.user || null).catch((err) => accountStatus(err.message || "Account refresh failed", "error"));
+        });
+        return true;
+      } catch (err) {
+        accountStatus(err.message || "Account services are not configured on this preview.", "error");
+        syncAccountUi();
+        return false;
+      }
+      })();
+      return accountReadyPromise;
+    }
+
+    async function accountSignIn() {
+      const email = document.getElementById("accountEmail")?.value.trim();
+      const password = document.getElementById("accountPassword")?.value;
+      if (!email || !password) { accountStatus("Enter your email and password.", "error"); return; }
+      try { accountStatus("Signing in…"); const result = await DirtSupabase.signIn(email, password); if (result.error) throw result.error; accountStatus("Signed in."); await refreshAuthState(result.data.user); }
+      catch (err) { accountStatus(err.message || "Could not sign in.", "error"); }
+    }
+
+    async function accountSignUp() {
+      const displayName = document.getElementById("accountDisplayName")?.value.trim();
+      const email = document.getElementById("accountEmail")?.value.trim();
+      const password = document.getElementById("accountPassword")?.value;
+      if (!email || !password) { accountStatus("Enter your email and password.", "error"); return; }
+      if (password.length < 6) { accountStatus("Use a password with at least 6 characters.", "error"); return; }
+      try { accountStatus("Creating account…"); const result = await DirtSupabase.signUp(email, password, displayName); if (result.error) throw result.error; if (result.data.user) await refreshAuthState(result.data.user); accountStatus(result.data.session ? "Account created." : "Check your email to confirm the account."); }
+      catch (err) { accountStatus(err.message || "Could not create account.", "error"); }
+    }
+
+    async function createRidingGroup() {
+      const name = document.getElementById("groupNameInput")?.value.trim();
+      if (!name || !currentAuthUser) { accountStatus("Enter a group name first.", "error"); return; }
+      try { const group = await DirtSupabase.createGroup(name, currentAuthUser.id); document.getElementById("groupNameInput").value = ""; ridingGroups.push(Object.assign({}, group, { role: "owner" })); await selectRidingGroup(group); renderGroupList(); accountStatus("Group created. Share its invite code with your riders."); }
+      catch (err) { accountStatus(err.message || "Could not create group.", "error"); }
+    }
+
+    async function joinRidingGroup() {
+      const code = document.getElementById("groupInviteInput")?.value.trim();
+      if (!code || !currentAuthUser) { accountStatus("Enter an invite code first.", "error"); return; }
+      try { const group = await DirtSupabase.joinGroup(code, currentAuthUser.id); document.getElementById("groupInviteInput").value = ""; ridingGroups = await DirtSupabase.listGroups(currentAuthUser.id); await selectRidingGroup(group); renderGroupList(); accountStatus("Joined “" + group.name + "”."); }
+      catch (err) { accountStatus(err.message || "Could not join group.", "error"); }
+    }
+
+    async function toggleGroupSharing() {
+      if (!selectedRidingGroup || !currentAuthUser) return;
+      groupSharing = !groupSharing;
+      const button = document.getElementById("groupShareBtn");
+      if (button) { button.textContent = groupSharing ? "Stop sharing location" : "Share my location"; button.classList.toggle("active", groupSharing); }
+      if (!groupSharing) {
+        await DirtSupabase.closeGroupChannel().catch(() => {});
+        groupChannel = null;
+        await DirtSupabase.savePresence({ user_id: currentAuthUser.id, sharing_enabled: false, status: "offline", last_seen_at: new Date().toISOString() }).catch(() => {});
+        accountStatus("Location sharing stopped.");
+      } else {
+        if (!groupChannel) await selectRidingGroup(selectedRidingGroup);
+        await publishGroupLocation(true);
+        accountStatus("Live location sharing is on for “" + selectedRidingGroup.name + "”.");
+      }
+    }
+
+    async function setGroupRiderStatus(status) {
+      groupStatus = status;
+      document.querySelectorAll("[data-rider-status]").forEach((button) => button.classList.toggle("active", button.dataset.riderStatus === status));
+      if (!currentAuthUser || !selectedRidingGroup) return;
+      if (groupSharing) await publishGroupLocation(true);
+      if (["breakdown", "injured", "stuck"].includes(status)) {
+        await DirtSupabase.saveAlert({ group_id: selectedRidingGroup.id, user_id: currentAuthUser.id, status, latitude: hasRiderLocation() ? rider.lat : null, longitude: hasRiderLocation() ? rider.lng : null }).catch((err) => accountStatus(err.message || "Could not send alert.", "error"));
+      }
+      accountStatus(status === "available" ? "Rider status cleared." : "Group alerted: " + status + ".");
+    }
+
+    function handleGroupRiderClick(event) {
+      if (!map.getLayer("group-rider-core")) return false;
+      const features = map.queryRenderedFeatures(event.point, { layers: ["group-rider-core", "group-rider-halo"] });
+      if (!features.length) return false;
+      const feature = features[0];
+      const p = feature.properties || {};
+      groupRouteTarget = { lng: event.lngLat.lng, lat: event.lngLat.lat, userId: p.userId, displayName: p.displayName || "Rider" };
+      popupBody.innerHTML = '<div class="k">Rider</div><div class="v">' + escapeHtml(p.displayName || "Rider") + '</div><div class="k">Status</div><div class="v">' + escapeHtml(p.status || "available") + '</div><div class="k">Last seen</div><div class="v">' + escapeHtml(p.lastSeenAt ? new Date(p.lastSeenAt).toLocaleTimeString() : "just now") + '</div><button class="saved-action primary" data-route-to-rider="1" type="button">Route to this rider</button>';
+      popupEl.style.left = Math.max(12, Math.min(event.point.x - 130, window.innerWidth - 272)) + "px";
+      popupEl.style.top = Math.max(80, event.point.y - 150) + "px";
+      popupEl.classList.add("visible");
+      return true;
+    }
+
+    async function routeToGroupRider() {
+      if (!groupRouteTarget || !hasRiderLocation()) { setStatus("Your location is needed to route to a rider", "error", "route"); return; }
+      setStatus("Routing to “" + groupRouteTarget.displayName + "”…", "ok", "route");
+      try {
+        const api = await routeApi({ lng: rider.lng, lat: rider.lat }, { lng: groupRouteTarget.lng, lat: groupRouteTarget.lat });
+        if (!api || api.status !== "complete") throw new Error(api?.message || "No route found");
+        plannedStart = { lng: rider.lng, lat: rider.lat };
+        destination = { lng: groupRouteTarget.lng, lat: groupRouteTarget.lat };
+        activeRoute = mapApiRouteToActiveRoute(api);
+        routeMessage = "";
+        routeMode = "here";
+        setRouteMode("here");
+        refreshRouteDraft();
+        setPlannerDrawerState("expanded");
+        setStatus("Route to “" + groupRouteTarget.displayName + "” ready", "ok", "route");
+      } catch (err) { setStatus("Could not route to rider · " + (err.message || "no route"), "error", "route"); }
+    }
+
     map.on("load", async () => {
       tuneShortbreadContrast();
       ensureLayers();
@@ -6924,6 +7651,7 @@
       // Rider reports + POI inspection work in every mode and never place a route point.
       if (handleReportClick(e)) return;
       if (handlePoiClick(e)) return;
+      if (handleGroupRiderClick(e)) return;
       if (navigating) {
         if (!navSimEnabled) return;
         // Virtual driveway / join tests: tap places the rider with a heading
@@ -7164,6 +7892,10 @@
     const plannerSavedBtn = document.getElementById("plannerSavedBtn");
     if (plannerSavedBtn) plannerSavedBtn.addEventListener("click", () => setRouteMode("saved"));
     if (savedCreateBtn) savedCreateBtn.addEventListener("click", createNewRouteDraft);
+    if (gpxImportBtn) gpxImportBtn.addEventListener("click", () => gpxFileInput?.click());
+    if (gpxFileInput) gpxFileInput.addEventListener("change", () => importGpxFile(gpxFileInput.files?.[0]));
+    if (trackEditorCancel) trackEditorCancel.addEventListener("click", cancelImportedTrackEdits);
+    if (trackEditorSave) trackEditorSave.addEventListener("click", saveImportedTrackEdits);
     if (stageListEl) {
       stageListEl.addEventListener("click", (event) => {
         const moveBtn = event.target.closest("[data-stage-move]");
@@ -7188,12 +7920,56 @@
         if (view) { viewSavedRoute(view.dataset.savedView); return; }
         const apply = event.target.closest("[data-saved-apply]");
         if (apply) { applySavedRoute(apply.dataset.savedApply); return; }
+        const editTrack = event.target.closest("[data-saved-edit-track]");
+        if (editTrack) {
+          const record = savedRoutes.find((row) => row.id === editTrack.dataset.savedEditTrack);
+          if (record) showImportedTrack(record, true);
+          return;
+        }
+        const exportTrack = event.target.closest("[data-saved-export-track]");
+        if (exportTrack) {
+          const record = savedRoutes.find((row) => row.id === exportTrack.dataset.savedExportTrack);
+          if (record) downloadImportedTrack(record);
+          return;
+        }
         const dup = event.target.closest("[data-saved-duplicate]");
         if (dup) { duplicateSavedRoute(dup.dataset.savedDuplicate); return; }
         const del = event.target.closest("[data-saved-delete]");
         if (del) { deleteSavedRoute(del.dataset.savedDelete); return; }
       });
     }
+    const accountBtn = document.getElementById("accountBtn");
+    const accountSheet = document.getElementById("accountSheet");
+    if (accountBtn && accountSheet) {
+      accountBtn.addEventListener("click", async () => {
+        const open = !accountSheet.classList.contains("open");
+        accountSheet.classList.toggle("open", open);
+        accountSheet.setAttribute("aria-hidden", open ? "false" : "true");
+        accountBtn.setAttribute("aria-expanded", open ? "true" : "false");
+        accountBtn.classList.toggle("active", open);
+        if (open) await ensureAccountReady();
+      });
+    }
+    document.getElementById("accountSignIn")?.addEventListener("click", accountSignIn);
+    document.getElementById("accountSignUp")?.addEventListener("click", accountSignUp);
+    document.getElementById("accountSignOut")?.addEventListener("click", async () => {
+      try { await DirtSupabase.signOut(); await refreshAuthState(null); accountStatus("Signed out."); }
+      catch (err) { accountStatus(err.message || "Could not sign out.", "error"); }
+    });
+    document.getElementById("groupCreateBtn")?.addEventListener("click", createRidingGroup);
+    document.getElementById("groupJoinBtn")?.addEventListener("click", joinRidingGroup);
+    document.getElementById("groupShareBtn")?.addEventListener("click", toggleGroupSharing);
+    document.querySelectorAll("[data-rider-status]").forEach((button) => button.addEventListener("click", () => setGroupRiderStatus(button.dataset.riderStatus)));
+    document.getElementById("groupList")?.addEventListener("click", (event) => {
+      const button = event.target.closest("[data-select-group]");
+      if (!button) return;
+      const group = ridingGroups.find((row) => row.id === button.dataset.selectGroup);
+      if (group) selectRidingGroup(group);
+    });
+    popupBody?.addEventListener("click", (event) => {
+      const routeButton = event.target.closest("[data-route-to-rider]");
+      if (routeButton) { event.stopPropagation(); hidePopup(); routeToGroupRider(); }
+    });
     if (saveRouteCancel) saveRouteCancel.addEventListener("click", closeSaveSheet);
     if (saveRouteConfirm) saveRouteConfirm.addEventListener("click", confirmSaveRoute);
     if (saveRouteInput) {
