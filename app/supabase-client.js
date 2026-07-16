@@ -82,7 +82,27 @@
     const db = await init();
     const { data, error } = await db.from("group_members").select("role, groups(id,name,owner_id,invite_code,created_at,deleted_at)").eq("user_id", userId);
     if (error) throw error;
-    return (data || []).map((row) => Object.assign({}, row.groups, { role: row.role }));
+    const groups = (data || []).map((row) => Object.assign({}, row.groups, { role: row.role }));
+    const groupIds = groups.map((group) => group.id).filter(Boolean);
+    if (!groupIds.length) return groups;
+    const { data: memberships, error: membershipError } = await db.from("group_members").select("group_id,user_id").in("group_id", groupIds);
+    if (membershipError) throw membershipError;
+    const userIds = [...new Set((memberships || []).map((row) => row.user_id).filter(Boolean))];
+    const { data: presence, error: presenceError } = userIds.length
+      ? await db.from("rider_presence").select("user_id,sharing_enabled,last_seen_at").in("user_id", userIds)
+      : { data: [], error: null };
+    if (presenceError) throw presenceError;
+    const liveByUser = new Map((presence || []).filter((row) => {
+      if (row.sharing_enabled !== true) return false;
+      if (!row.last_seen_at) return true;
+      const lastSeen = Date.parse(row.last_seen_at);
+      return Number.isNaN(lastSeen) || Date.now() - lastSeen < 120000;
+    }).map((row) => [row.user_id, true]));
+    return groups.map((group) => {
+      const members = (memberships || []).filter((row) => row.group_id === group.id);
+      const liveCount = members.filter((row) => liveByUser.has(row.user_id)).length;
+      return Object.assign({}, group, { member_count: members.length, live_count: liveCount });
+    });
   }
 
   async function joinGroup(inviteCode, userId) {

@@ -133,7 +133,7 @@
       pointer-events: none;
     }
     .status {
-      display: none;
+      display: block;
       font-family: var(--mono);
       font-size: 0.58rem;
       letter-spacing: 0.04em;
@@ -1246,13 +1246,14 @@
     }
     .topbar-right > * { pointer-events: auto; }
     .account-sheet {
-      position: absolute;
+      position: fixed;
       top: max(64px, calc(env(safe-area-inset-top) + 54px));
-      right: 12px;
+      left: 50%;
       z-index: 36;
-      width: min(360px, calc(100vw - 24px));
+      width: min(250px, calc(100vw - 24px));
       max-height: min(72dvh, 620px);
-      overflow: auto;
+      overflow-x: hidden;
+      overflow-y: auto;
       display: none;
       padding: 14px;
       border: 1px solid var(--line);
@@ -1260,10 +1261,34 @@
       background: var(--panel);
       box-shadow: var(--panel-shadow);
       backdrop-filter: blur(16px);
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transform: translate(-50%, -10px) scale(0.96);
+      transform-origin: var(--sheet-anchor, 50%) top;
+      transition: opacity 160ms ease, transform 180ms cubic-bezier(.2,.8,.2,1), visibility 0s linear 180ms;
     }
-    .account-sheet.open { display: block; }
+    .account-sheet::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: var(--sheet-anchor, 50%);
+      width: 12px;
+      height: 12px;
+      border-top: 1px solid var(--line);
+      border-left: 1px solid var(--line);
+      background: var(--panel);
+      transform: translate(-50%, -50%) rotate(45deg);
+    }
+    .account-sheet.open {
+      display: block;
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+      transform: translate(-50%, 0) scale(1);
+      transition-delay: 0s;
+    }
     .account-sheet [hidden] { display: none !important; }
-    .group-sheet { right: 58px; }
     .account-title { font-size: 0.82rem; font-weight: 750; color: var(--text); }
     .account-subtitle { margin-top: 3px; color: var(--muted); font-size: 0.64rem; line-height: 1.35; }
     .account-form { display: grid; gap: 10px; margin-top: 12px; }
@@ -1334,8 +1359,15 @@
     .group-deleted { margin-top: 2px; color: #b42318; font: 700 0.56rem var(--sans); }
     .group-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.68rem; font-weight: 700; }
     .group-code { margin-top: 2px; color: var(--muted); font: 0.56rem var(--mono); }
+    .group-stats { margin-top: 2px; color: var(--muted); font: 0.56rem var(--mono); }
     .group-live { display: none; margin-top: 9px; padding-top: 9px; border-top: 1px solid var(--line); }
     .group-live.open { display: block; }
+    .group-participant-summary { margin-top: 8px; color: var(--muted); font: 0.58rem/1.35 var(--mono); }
+    .group-participant-list { display: grid; gap: 4px; margin-top: 7px; max-height: 150px; overflow-y: auto; }
+    .group-participant { display: flex; align-items: center; gap: 7px; padding: 5px 7px; border: 1px solid var(--line); border-radius: 7px; background: #fff; font: 0.62rem var(--sans); }
+    .group-participant-dot { width: 7px; height: 7px; flex: 0 0 7px; border-radius: 50%; background: #a6adb5; }
+    .group-participant-dot.live { background: #20a464; box-shadow: 0 0 0 2px rgba(32, 164, 100, 0.14); }
+    .group-participant-state { margin-left: auto; color: var(--muted); font: 0.54rem var(--mono); }
     .group-live-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 7px; }
     .group-live-row button { min-height: 30px; padding: 0 8px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel-2); color: var(--text); font: 700 0.62rem var(--sans); cursor: pointer; }
     .group-live-row button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
@@ -2296,6 +2328,8 @@
       <div class="group-live" id="groupLive">
         <div class="group-title" id="groupLiveTitle">Live group</div>
         <div class="account-subtitle" id="groupLiveMeta">Share only when you choose to.</div>
+        <div class="group-participant-summary" id="groupParticipantSummary"></div>
+        <div class="group-participant-list" id="groupParticipantList"></div>
         <div class="group-live-row">
           <button id="groupShareBtn" type="button">Share my location</button>
           <button data-rider-status="available" type="button">Available</button>
@@ -2813,7 +2847,27 @@
     const db = await init();
     const { data, error } = await db.from("group_members").select("role, groups(id,name,owner_id,invite_code,created_at,deleted_at)").eq("user_id", userId);
     if (error) throw error;
-    return (data || []).map((row) => Object.assign({}, row.groups, { role: row.role }));
+    const groups = (data || []).map((row) => Object.assign({}, row.groups, { role: row.role }));
+    const groupIds = groups.map((group) => group.id).filter(Boolean);
+    if (!groupIds.length) return groups;
+    const { data: memberships, error: membershipError } = await db.from("group_members").select("group_id,user_id").in("group_id", groupIds);
+    if (membershipError) throw membershipError;
+    const userIds = [...new Set((memberships || []).map((row) => row.user_id).filter(Boolean))];
+    const { data: presence, error: presenceError } = userIds.length
+      ? await db.from("rider_presence").select("user_id,sharing_enabled,last_seen_at").in("user_id", userIds)
+      : { data: [], error: null };
+    if (presenceError) throw presenceError;
+    const liveByUser = new Map((presence || []).filter((row) => {
+      if (row.sharing_enabled !== true) return false;
+      if (!row.last_seen_at) return true;
+      const lastSeen = Date.parse(row.last_seen_at);
+      return Number.isNaN(lastSeen) || Date.now() - lastSeen < 120000;
+    }).map((row) => [row.user_id, true]));
+    return groups.map((group) => {
+      const members = (memberships || []).filter((row) => row.group_id === group.id);
+      const liveCount = members.filter((row) => liveByUser.has(row.user_id)).length;
+      return Object.assign({}, group, { member_count: members.length, live_count: liveCount });
+    });
   }
 
   async function joinGroup(inviteCode, userId) {
@@ -3163,6 +3217,7 @@
     let currentAuthUser = null;
     let ridingGroups = [];
     let selectedRidingGroup = null;
+    let selectedGroupMembers = [];
     let groupChannel = null;
     let groupSharing = false;
     let groupStatus = "available";
@@ -7836,10 +7891,12 @@
       list.innerHTML = ridingGroups.map((group) => {
         const deleted = !!group.deleted_at;
         const actionLabel = deleted ? "Remove" : group.role === "owner" ? "Delete" : "Leave";
+        const memberCount = Number.isFinite(Number(group.member_count)) ? Number(group.member_count) : 0;
+        const liveCount = Number.isFinite(Number(group.live_count)) ? Number(group.live_count) : 0;
         return (
         '<div class="group-row' + (deleted ? ' deleted' : '') + '">' +
           '<div><div class="group-name">' + escapeHtml(group.name) + '</div>' +
-          (deleted ? '<div class="group-deleted">Deleted by group owner</div>' : '<div class="group-code">Code: ' + escapeHtml(group.invite_code || "") + '</div>') + '</div>' +
+          (deleted ? '<div class="group-deleted">Deleted by group owner</div>' : '<div class="group-code">Code: ' + escapeHtml(group.invite_code || "") + '</div><div class="group-stats">' + memberCount + ' members · ' + liveCount + ' sharing</div>') + '</div>' +
           '<div class="group-row-actions">' +
           (deleted ? '' : '<button type="button" data-select-group="' + group.id + '">' + (selectedRidingGroup?.id === group.id ? "Selected" : "Open") + '</button>') +
           '<button type="button" data-remove-group="' + group.id + '">' + actionLabel + '</button>' +
@@ -7847,6 +7904,35 @@
         '</div>'
         );
       }).join("");
+    }
+
+    function renderGroupParticipants() {
+      const summary = document.getElementById("groupParticipantSummary");
+      const list = document.getElementById("groupParticipantList");
+      if (!summary || !list) return;
+      const members = Array.isArray(selectedGroupMembers) ? selectedGroupMembers : [];
+      const liveMembers = members.filter((member) => member.user_id === currentAuthUser?.id ? groupSharing : groupRiders.has(member.user_id));
+      summary.textContent = members.length + " members · " + liveMembers.length + " sharing location";
+      if (!members.length) {
+        list.innerHTML = '<div class="account-subtitle">No participants found.</div>';
+        return;
+      }
+      list.innerHTML = members.map((member) => {
+        const profile = Array.isArray(member.profiles) ? member.profiles[0] : member.profiles;
+        const name = member.user_id === currentAuthUser?.id
+          ? (currentAuthUser.user_metadata?.display_name || currentAuthUser.email?.split("@")[0] || "You")
+          : (profile?.display_name || "Rider");
+        const live = member.user_id === currentAuthUser?.id ? groupSharing : groupRiders.has(member.user_id);
+        return '<div class="group-participant"><span class="group-participant-dot' + (live ? ' live' : '') + '" aria-hidden="true"></span><span>' + escapeHtml(name) + (member.role === "owner" ? ' <span class="group-participant-state">owner</span>' : '') + '</span><span class="group-participant-state">' + (live ? 'live' : 'offline') + '</span></div>';
+      }).join("");
+    }
+
+    function syncSelectedGroupStats() {
+      if (!selectedRidingGroup) return;
+      const group = ridingGroups.find((item) => item.id === selectedRidingGroup.id);
+      if (group) group.live_count = groupRiders.size + (groupSharing ? 1 : 0);
+      renderGroupList();
+      renderGroupParticipants();
     }
 
     function groupPresencePayload() {
@@ -7925,18 +8011,21 @@
     }
 
     function applyGroupPresence(state) {
+      groupRiders.clear();
       for (const [userId, values] of Object.entries(state || {})) {
         const entry = Array.isArray(values) ? values[values.length - 1] : values;
         if (!entry || userId === currentAuthUser?.id) continue;
         groupRiders.set(userId, Object.assign({}, entry, { userId }));
       }
       refreshGroupRiderLayer();
+      syncSelectedGroupStats();
     }
 
     function applyGroupLocation(payload) {
       if (!payload || payload.userId === currentAuthUser?.id || !Number.isFinite(payload.lat) || !Number.isFinite(payload.lng)) return;
       groupRiders.set(payload.userId, payload);
       refreshGroupRiderLayer();
+      syncSelectedGroupStats();
     }
 
     async function selectRidingGroup(group) {
@@ -7944,6 +8033,7 @@
       await DirtSupabase.closeGroupChannel().catch(() => {});
       groupChannel = null;
       selectedRidingGroup = group;
+      selectedGroupMembers = [];
       groupRiders.clear();
       refreshGroupRiderLayer();
       const live = document.getElementById("groupLive");
@@ -7958,8 +8048,11 @@
         return;
       }
       try {
+        selectedGroupMembers = await DirtSupabase.listMembers(group.id);
+        renderGroupParticipants();
         groupChannel = await DirtSupabase.openGroupChannel(group.id, currentAuthUser.id, { presence: applyGroupPresence, location: applyGroupLocation });
         if (meta) meta.textContent = "Invite code " + (group.invite_code || "") + " · live channel connected";
+        renderGroupParticipants();
         if (groupSharing) await publishGroupLocation(true);
       } catch (err) {
         accountStatus("Group channel unavailable · " + (err.message || "try again"), "error");
@@ -7978,9 +8071,11 @@
         if (selectedRidingGroup?.id === group.id) {
           await DirtSupabase.closeGroupChannel().catch(() => {});
           selectedRidingGroup = null;
+          selectedGroupMembers = [];
           groupChannel = null;
           groupRiders.clear();
           document.getElementById("groupLive")?.classList.remove("open");
+          renderGroupParticipants();
           refreshGroupRiderLayer();
         }
         ridingGroups = await DirtSupabase.listGroups(currentAuthUser.id);
@@ -8009,6 +8104,7 @@
         await DirtSupabase.closeGroupChannel().catch(() => {});
         groupChannel = null;
         selectedRidingGroup = null;
+        selectedGroupMembers = [];
         ridingGroups = [];
         groupSharing = false;
         groupRiders.clear();
@@ -8111,7 +8207,15 @@
     async function createRidingGroup() {
       const name = document.getElementById("groupNameInput")?.value.trim();
       if (!name || !currentAuthUser) { accountStatus("Enter a group name first.", "error"); return; }
-      try { const group = await DirtSupabase.createGroup(name, currentAuthUser.id); document.getElementById("groupNameInput").value = ""; ridingGroups.push(Object.assign({}, group, { role: "owner" })); await selectRidingGroup(group); renderGroupList(); accountStatus("Group created. Share its invite code with your riders."); }
+      try {
+        const group = await DirtSupabase.createGroup(name, currentAuthUser.id);
+        document.getElementById("groupNameInput").value = "";
+        ridingGroups = await DirtSupabase.listGroups(currentAuthUser.id);
+        const created = ridingGroups.find((item) => item.id === group.id) || Object.assign({}, group, { role: "owner", member_count: 1, live_count: 0 });
+        await selectRidingGroup(created);
+        renderGroupList();
+        accountStatus("Group created. Share its invite code with your riders.");
+      }
       catch (err) { accountStatus(err.message || "Could not create group.", "error"); }
     }
 
@@ -8130,6 +8234,7 @@
       if (!groupSharing) {
         await DirtSupabase.closeGroupChannel().catch(() => {});
         groupChannel = null;
+        groupRiders.clear();
         await DirtSupabase.savePresence({ user_id: currentAuthUser.id, sharing_enabled: false, status: "offline", last_seen_at: new Date().toISOString() }).catch(() => {});
         accountStatus("Location sharing stopped.");
       } else {
@@ -8137,6 +8242,7 @@
         await publishGroupLocation(true);
         accountStatus("Live location sharing is on for “" + selectedRidingGroup.name + "”.");
       }
+      syncSelectedGroupStats();
     }
 
     async function setGroupRiderStatus(status) {
@@ -8544,8 +8650,17 @@
     const accountSheet = document.getElementById("accountSheet");
     const groupBtn = document.getElementById("groupBtn");
     const groupSheet = document.getElementById("groupSheet");
+    function positionAccountSheet(sheet, trigger) {
+      if (!sheet) return;
+      const width = Math.min(250, Math.max(0, window.innerWidth - 24));
+      const left = (window.innerWidth - width) / 2;
+      const center = trigger?.getBoundingClientRect().left + trigger?.getBoundingClientRect().width / 2;
+      const anchor = Number.isFinite(center) ? ((center - left) / width) * 100 : 50;
+      sheet.style.setProperty("--sheet-anchor", Math.max(12, Math.min(88, anchor)) + "%");
+    }
     function setAccountSheetOpen(open) {
       if (!accountSheet) return;
+      if (open) positionAccountSheet(accountSheet, accountBtn);
       accountSheet.classList.toggle("open", open);
       accountSheet.setAttribute("aria-hidden", open ? "false" : "true");
       accountBtn?.setAttribute("aria-expanded", open ? "true" : "false");
@@ -8553,11 +8668,16 @@
     }
     function setGroupSheetOpen(open) {
       if (!groupSheet) return;
+      if (open) positionAccountSheet(groupSheet, groupBtn);
       groupSheet.classList.toggle("open", open);
       groupSheet.setAttribute("aria-hidden", open ? "false" : "true");
       groupBtn?.setAttribute("aria-expanded", open ? "true" : "false");
       groupBtn?.classList.toggle("active", open);
     }
+    window.addEventListener("resize", () => {
+      if (accountSheet?.classList.contains("open")) positionAccountSheet(accountSheet, accountBtn);
+      if (groupSheet?.classList.contains("open")) positionAccountSheet(groupSheet, groupBtn);
+    });
     if (accountBtn && accountSheet) {
       accountBtn.addEventListener("click", async () => {
         const open = !accountSheet.classList.contains("open");
