@@ -2789,6 +2789,17 @@
 })(window);
   </script>
   <script>
+    // Some protected Vercel previews defer inline module execution while the
+    // deployment-access cookie is established. Re-run the embedded modules
+    // from the page itself before the app references them.
+    (function ensureEmbeddedClients() {
+      for (const marker of ["global.DirtGpx", "global.DirtSupabase"]) {
+        if ((marker === "global.DirtGpx" && window.DirtGpx) || (marker === "global.DirtSupabase" && window.DirtSupabase)) continue;
+        const script = Array.from(document.scripts).find((node) => node.textContent.includes(marker));
+        if (!script) continue;
+        try { (0, eval)(script.textContent); } catch (err) { console.error("Embedded client failed", marker, err); }
+      }
+    })();
     // Neutral Nova Scotia regional overview — not a rider position / routing origin.
     const NS_OVERVIEW = { lng: -63.0, lat: 45.1, zoom: 7.25 };
     const DEBUG_UI = new URLSearchParams(location.search).has("debug");
