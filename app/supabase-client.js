@@ -54,9 +54,12 @@
 
   async function createGroup(name, ownerId) {
     const db = await init();
-    const { data: group, error } = await db.from("groups").insert({ name, owner_id: ownerId }).select().single();
+    const { data: sessionData } = await db.auth.getSession();
+    const sessionUserId = sessionData?.session?.user?.id;
+    if (!sessionUserId) throw new Error("Your sign-in session has expired. Verify your email code again.");
+    const { data: group, error } = await db.from("groups").insert({ name, owner_id: sessionUserId }).select().single();
     if (error) throw error;
-    const { error: memberError } = await db.from("group_members").insert({ group_id: group.id, user_id: ownerId, role: "owner" });
+    const { error: memberError } = await db.from("group_members").insert({ group_id: group.id, user_id: sessionUserId, role: "owner" });
     if (memberError) throw memberError;
     return group;
   }
