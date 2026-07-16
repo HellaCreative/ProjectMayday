@@ -91,7 +91,7 @@
   async function openGroupChannel(groupId, userId, handlers) {
     const db = await init();
     if (currentGroupChannel) await db.removeChannel(currentGroupChannel);
-    const channel = db.channel("group:" + groupId, { config: { presence: { key: userId } } });
+    const channel = db.channel("group:" + groupId, { config: { private: true, presence: { key: userId } } });
     channel
       .on("presence", { event: "sync" }, () => handlers?.presence?.(channel.presenceState()))
       .on("presence", { event: "join" }, () => handlers?.presence?.(channel.presenceState()))

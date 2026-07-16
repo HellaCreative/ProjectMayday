@@ -171,3 +171,21 @@ create policy alerts_update_self_or_owner on public.rider_alerts for update to a
 -- presence/status record and alert history, never a high-volume GPS breadcrumb stream.
 alter table public.rider_presence replica identity full;
 alter table public.rider_alerts replica identity full;
+
+-- Private Realtime channels: only authenticated members of the matching group
+-- can publish or receive presence/broadcast messages for group:<uuid> topics.
+drop policy if exists group_members_can_receive_realtime on realtime.messages;
+create policy group_members_can_receive_realtime on realtime.messages for select to authenticated using (
+  realtime.topic() like 'group:%' and exists (
+    select 1 from public.group_members gm
+    where gm.group_id = split_part(realtime.topic(), ':', 2)::uuid and gm.user_id = auth.uid()
+  )
+);
+
+drop policy if exists group_members_can_send_realtime on realtime.messages;
+create policy group_members_can_send_realtime on realtime.messages for insert to authenticated with check (
+  realtime.topic() like 'group:%' and exists (
+    select 1 from public.group_members gm
+    where gm.group_id = split_part(realtime.topic(), ':', 2)::uuid and gm.user_id = auth.uid()
+  )
+);
