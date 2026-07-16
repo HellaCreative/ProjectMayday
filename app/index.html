@@ -3389,6 +3389,103 @@
     .legend-scroll {
       padding-bottom: calc(var(--p2-dock-h) + 8px);
     }
+
+    /* ——— Sheet chrome + control sizing pass ———
+       1) One close handle only (kill leftover decorative pills).
+       2) Scroll regions clear the persistent bottom dock.
+       3) Right stack + primary nav back to tappable size. */
+    .account-sheet::before,
+    .group-sheet::before,
+    .legend::before {
+      content: none !important;
+      display: none !important;
+    }
+
+    .account-sheet,
+    .group-sheet,
+    .legend {
+      padding-top: 0;
+    }
+
+    .sheet-scroll,
+    .legend-scroll,
+    .route-card .route-drawer-scroll,
+    .group-panel,
+    .group-details,
+    #groupDetails #groupParticipantList {
+      padding-bottom: calc(var(--p2-dock-h) + 16px);
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .account-sheet > .sheet-scroll {
+      padding-bottom: calc(var(--p2-dock-h) + 16px);
+    }
+
+    /* Right map stack: ~2× prior 36px controls, ≥4px inset padding */
+    :root {
+      --p2-ctrl: 56px;
+      --ctrl: 56px;
+    }
+    .stack {
+      gap: 12px;
+    }
+    .stack .btn,
+    .stack .btn.mini,
+    .stack .btn.view-mode,
+    .stack .btn.cue-mode,
+    .stack .btn.primary {
+      width: var(--p2-ctrl);
+      min-width: var(--p2-ctrl);
+      height: var(--p2-ctrl);
+      min-height: var(--p2-ctrl);
+      padding: 4px;
+      box-sizing: border-box;
+      border-radius: var(--p2-r);
+    }
+    .stack .btn svg {
+      width: 28px;
+      height: 28px;
+    }
+    .stack .btn.view-mode {
+      font-size: 0.85rem;
+    }
+    .stack .btn.cue-mode {
+      font-size: 0.62rem;
+      line-height: 1.15;
+      padding: 4px;
+    }
+    .btn.cue-mode .cue-mode-top {
+      font-size: 0.58rem;
+    }
+    .btn.cue-mode .cue-mode-main {
+      font-size: 0.72rem;
+    }
+
+    /* Primary bottom nav: larger icons + labels, roomier hit targets */
+    .bottom-nav {
+      gap: 6px;
+      padding: 8px;
+    }
+    .nav-btn {
+      height: 64px;
+      min-height: 64px;
+      grid-template-rows: 32px auto;
+      gap: 4px;
+      padding: 6px 4px;
+      font-family: var(--font-ui);
+      font-size: var(--text-caption1);
+      font-weight: 700;
+      line-height: 1.1;
+      letter-spacing: var(--text-caption-tracking);
+    }
+    .nav-btn svg {
+      width: 28px;
+      height: 28px;
+    }
+
+    :root {
+      --p2-dock-h: calc(88px + var(--p2-bottom-pad) + 12px);
+    }
   </style>
 </head>
 <body>
@@ -3927,7 +4024,7 @@
 
   <script src="../routing/lib/roadbook-curves.js"></script>
   <script src="../routing/lib/stages.js"></script>
-  <script src="group-sharing.js"></script>
+  <script src="../app/group-sharing.js"></script>
   <script>
 (function (global) {
   "use strict";
@@ -9631,7 +9728,10 @@
     function applyGroupPresence(group, state) {
       if (!groupSharing) return;
       const GS = window.DirtGroupSharing;
-      if (!GS) return;
+      if (!GS) {
+        console.error("DirtGroupSharing missing — peer locations cannot render");
+        return;
+      }
       const next = GS.mergePresenceKeepLastKnown(groupRiders, state, currentAuthUser?.id, {
         groupId: group.id,
         groupName: group.name || "Group"
@@ -9644,7 +9744,10 @@
     function applyGroupLocation(payload) {
       if (!groupSharing) return;
       const GS = window.DirtGroupSharing;
-      if (!GS) return;
+      if (!GS) {
+        console.error("DirtGroupSharing missing — peer locations cannot render");
+        return;
+      }
       const next = GS.applyLocationUpdate(groupRiders, payload, currentAuthUser?.id);
       replaceGroupRiders(next);
       refreshGroupRiderLayer();
@@ -9907,6 +10010,10 @@
 
     async function toggleGroupSharing() {
       if (!selectedRidingGroup || !currentAuthUser) return;
+      if (!window.DirtGroupSharing) {
+        accountStatus("Group sharing library failed to load. Refresh and try again.", "error");
+        return;
+      }
       groupSharing = !groupSharing;
       const button = document.getElementById("groupShareBtn");
       if (button) { button.textContent = groupSharing ? "Stop sharing" : "Start sharing"; button.classList.toggle("active", groupSharing); }
