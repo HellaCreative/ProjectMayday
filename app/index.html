@@ -7382,6 +7382,11 @@
       const now = Date.now();
       if (!force && now - lastGroupPublishAt < 15000) return;
       lastGroupPublishAt = now;
+      if (!navigator.onLine) {
+        try { localStorage.setItem("dirt_group_pending_presence_v1", JSON.stringify(payload)); } catch (_) { /* storage may be unavailable */ }
+        accountStatus("Offline · last location will publish when reconnected.");
+        return;
+      }
       try {
         await groupChannel.track(payload);
         await groupChannel.sendLocation(payload);
@@ -7399,7 +7404,21 @@
           });
         }
       } catch (err) {
+        try { localStorage.setItem("dirt_group_pending_presence_v1", JSON.stringify(payload)); } catch (_) { /* storage may be unavailable */ }
         accountStatus("Live sharing reconnecting · " + (err.message || "connection issue"), "error");
+      }
+    }
+
+    async function reconnectGroupSharing() {
+      if (!currentAuthUser || !selectedRidingGroup || !groupSharing || !navigator.onLine) return;
+      try {
+        await selectRidingGroup(selectedRidingGroup);
+        const pending = localStorage.getItem("dirt_group_pending_presence_v1");
+        if (pending) localStorage.removeItem("dirt_group_pending_presence_v1");
+        await publishGroupLocation(true);
+        accountStatus("Live group connection restored.");
+      } catch (err) {
+        accountStatus("Still offline from group sharing · retrying when connected.", "error");
       }
     }
 
@@ -7568,12 +7587,12 @@
       try {
         const api = await routeApi({ lng: rider.lng, lat: rider.lat }, { lng: groupRouteTarget.lng, lat: groupRouteTarget.lat });
         if (!api || api.status !== "complete") throw new Error(api?.message || "No route found");
+        setRouteMode("here");
         plannedStart = { lng: rider.lng, lat: rider.lat };
         destination = { lng: groupRouteTarget.lng, lat: groupRouteTarget.lat };
         activeRoute = mapApiRouteToActiveRoute(api);
         routeMessage = "";
         routeMode = "here";
-        setRouteMode("here");
         refreshRouteDraft();
         setPlannerDrawerState("expanded");
         setStatus("Route to “" + groupRouteTarget.displayName + "” ready", "ok", "route");
@@ -7966,6 +7985,10 @@
       const group = ridingGroups.find((row) => row.id === button.dataset.selectGroup);
       if (group) selectRidingGroup(group);
     });
+    window.addEventListener("offline", () => {
+      if (groupSharing) accountStatus("Offline · live group sharing paused until connection returns.", "error");
+    });
+    window.addEventListener("online", () => { reconnectGroupSharing().catch(() => {}); });
     popupBody?.addEventListener("click", (event) => {
       const routeButton = event.target.closest("[data-route-to-rider]");
       if (routeButton) { event.stopPropagation(); hidePopup(); routeToGroupRider(); }
