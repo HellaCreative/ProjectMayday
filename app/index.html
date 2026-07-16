@@ -2615,7 +2615,7 @@
        cannot override the current visual system. */
     :root {
       --p2-shell-w: min(388px, calc(100vw - 24px));
-      --p2-dock-h: calc(64px + var(--p2-bottom-pad) + 12px);
+      --p2-dock-h: calc(76px + var(--p2-bottom-pad) + 12px);
     }
     .bottom-dock {
       left: 50%;
@@ -2629,7 +2629,14 @@
       gap: 4px;
       padding: 10px 12px;
     }
-    .nav-btn { height: 44px; }
+    .nav-btn {
+      height: 56px;
+      grid-template-rows: 20px auto;
+      gap: 3px;
+      padding: 4px 2px;
+      font: 700 0.62rem/1 var(--p2-sans);
+    }
+    .nav-btn span { display: block; }
     #legendBtn.is-active,
     .nav-btn.active,
     .nav-btn.is-active,
@@ -2871,15 +2878,19 @@
     <nav class="bottom-nav" aria-label="Primary">
       <button class="nav-btn" id="legendBtn" title="Layers" aria-label="Layers" aria-expanded="false">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" aria-hidden="true"><path d="M4 8l8-4 8 4-8 4-8-4z"/><path d="M4 12l8 4 8-4"/><path d="M4 16l8 4 8-4"/></svg>
+        <span>Layers</span>
       </button>
       <button class="nav-btn" id="accountBtn" title="Profile" aria-label="Profile" aria-expanded="false">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="3.2"/><path d="M5.5 20c.7-3.2 2.9-5 6.5-5s5.8 1.8 6.5 5"/></svg>
+        <span>Profile</span>
       </button>
       <button class="nav-btn" id="groupBtn" title="Group" aria-label="Group" aria-expanded="false">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M3.5 20c.6-3.1 2.4-5 5.5-5s4.9 1.9 5.5 5"/><path d="M15 5.5a3 3 0 0 1 0 5.8M17 15c2 .5 3.2 2.1 3.5 5"/></svg>
+        <span>Group</span>
       </button>
       <button class="nav-btn" id="routeToggleBtn" title="Route" aria-label="Route" aria-expanded="false">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="12" r="2.5"/><path d="M8 7l8 4M8 17l8-4"/></svg>
+        <span>Route</span>
       </button>
     </nav>
   </div>
