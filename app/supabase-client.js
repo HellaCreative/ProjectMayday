@@ -16,14 +16,20 @@
     return client;
   }
 
-  async function signUp(email, password, displayName) {
+  async function sendEmailCode(email, displayName) {
     const db = await init();
-    return db.auth.signUp({ email, password, options: { data: { display_name: displayName || "" } } });
+    return db.auth.signInWithOtp({
+      email,
+      options: {
+        shouldCreateUser: true,
+        data: { display_name: displayName || "" }
+      }
+    });
   }
 
-  async function signIn(email, password) {
+  async function verifyEmailCode(email, token) {
     const db = await init();
-    return db.auth.signInWithPassword({ email, password });
+    return db.auth.verifyOtp({ email, token, type: "email" });
   }
 
   async function signOut() {
@@ -113,5 +119,5 @@
     currentGroupChannel = null;
   }
 
-  global.DirtSupabase = { init, signUp, signIn, signOut, session, user, onAuthStateChange, createGroup, listGroups, joinGroup, listMembers, savePresence, saveAlert, openGroupChannel, closeGroupChannel };
+  global.DirtSupabase = { init, sendEmailCode, verifyEmailCode, signOut, session, user, onAuthStateChange, createGroup, listGroups, joinGroup, listMembers, savePresence, saveAlert, openGroupChannel, closeGroupChannel };
 })(window);

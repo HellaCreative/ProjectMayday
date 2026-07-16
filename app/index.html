@@ -1262,9 +1262,11 @@
       backdrop-filter: blur(16px);
     }
     .account-sheet.open { display: block; }
+    .group-sheet { right: 58px; }
     .account-title { font-size: 0.82rem; font-weight: 750; color: var(--text); }
     .account-subtitle { margin-top: 3px; color: var(--muted); font-size: 0.64rem; line-height: 1.35; }
     .account-form { display: grid; gap: 7px; margin-top: 12px; }
+    .account-code-form { display: grid; gap: 7px; margin-top: 12px; }
     .account-form input, .group-form input {
       min-height: 36px;
       width: 100%;
@@ -1275,6 +1277,7 @@
       color: var(--text);
       font: 0.72rem var(--sans);
     }
+    .account-code-input { letter-spacing: 0.22em; text-align: center; font: 700 1rem var(--mono); }
     .account-actions, .group-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
     .account-actions button, .group-actions button, .account-signout {
       min-height: 34px;
@@ -1287,6 +1290,8 @@
     }
     .account-actions button.primary, .group-actions button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
     .account-signout { width: 100%; margin-top: 8px; }
+    .account-open-groups { width: 100%; min-height: 34px; margin-top: 10px; border: 1px solid var(--accent); border-radius: 8px; background: var(--accent); color: #fff; font: 700 0.66rem var(--sans); cursor: pointer; }
+    .account-identity { padding: 8px 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2); color: var(--text); font: 0.68rem/1.35 var(--sans); }
     .account-status { min-height: 18px; margin-top: 8px; color: var(--muted); font: 0.62rem/1.35 var(--mono); }
     .account-status.error { color: var(--danger); }
     .account-divider { height: 1px; margin: 12px 0; background: var(--line); }
@@ -2089,6 +2094,9 @@
       <button class="btn mini" id="accountBtn" title="Account and riding group" aria-label="Account and riding group" aria-expanded="false">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="3.2"/><path d="M5.5 20c.7-3.2 2.9-5 6.5-5s5.8 1.8 6.5 5"/></svg>
       </button>
+      <button class="btn mini" id="groupBtn" title="Riding groups" aria-label="Riding groups" aria-expanded="false">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M3.5 20c.6-3.1 2.4-5 5.5-5s4.9 1.9 5.5 5"/><path d="M15 5.5a3 3 0 0 1 0 5.8M17 15c2 .5 3.2 2.1 3.5 5"/></svg>
+      </button>
       <button class="btn route-toggle" id="routeToggleBtn" title="Route planner" aria-label="Toggle route planner" aria-expanded="false">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="12" r="2.5"/><path d="M8 7l8 4M8 17l8-4"/></svg>
       </button>
@@ -2209,23 +2217,35 @@
   <!-- Unknown-access info popover (body-level so it never clips inside the drawer). -->
   <div class="access-info-tip" id="accessInfoTip" role="tooltip" hidden>Unknown access is not permission. Routes may include closures, private land, seasonal restrictions, or enforcement.</div>
 
-  <section class="account-sheet" id="accountSheet" aria-label="Account and riding group" aria-hidden="true">
+  <section class="account-sheet" id="accountSheet" aria-label="Rider account" aria-hidden="true">
     <div class="account-title" id="accountTitle">Rider account</div>
-    <div class="account-subtitle" id="accountSubtitle">Sign in to share live location with a riding group. You can keep using the map without an account.</div>
+    <div class="account-subtitle" id="accountSubtitle">Enter your email and we’ll send you a one-time code. New riders are created automatically.</div>
     <div class="account-form" id="accountForm">
-      <input id="accountDisplayName" type="text" maxlength="60" autocomplete="name" placeholder="Display name" aria-label="Display name" />
+      <input id="accountDisplayName" type="text" maxlength="60" autocomplete="name" placeholder="Display name (optional)" aria-label="Display name (optional)" />
       <input id="accountEmail" type="email" autocomplete="email" placeholder="Email" aria-label="Email" />
-      <input id="accountPassword" type="password" autocomplete="current-password" placeholder="Password" aria-label="Password" />
+      <button class="primary" id="accountSendCode" type="button">Send email code</button>
+    </div>
+    <div class="account-code-form" id="accountCodeForm" hidden>
+      <div class="account-subtitle">Enter the six-digit code we sent to your email.</div>
+      <input id="accountCode" class="account-code-input" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6-digit code" aria-label="Email verification code" />
       <div class="account-actions">
-        <button class="primary" id="accountSignIn" type="button">Sign in</button>
-        <button id="accountSignUp" type="button">Create account</button>
+        <button class="primary" id="accountVerifyCode" type="button">Verify code</button>
+        <button id="accountUseDifferentEmail" type="button">Use different email</button>
       </div>
     </div>
     <div class="account-status" id="accountStatus" role="status"></div>
     <div id="accountAuthed" hidden>
+      <div class="account-identity" id="accountIdentity"></div>
+      <button class="account-open-groups" id="accountOpenGroups" type="button">Open riding groups</button>
       <button class="account-signout" id="accountSignOut" type="button">Sign out</button>
+    </div>
+  </section>
+
+  <section class="account-sheet group-sheet" id="groupSheet" aria-label="Riding groups" aria-hidden="true">
+    <div class="account-title">Riding groups</div>
+    <div class="account-subtitle" id="groupAuthNotice">Sign in first to create a group, join a group, or share your location.</div>
+    <div id="groupAuthed" hidden>
       <div class="account-divider"></div>
-      <div class="group-title">Riding groups</div>
       <div class="group-form">
         <input id="groupNameInput" type="text" maxlength="80" placeholder="New group name" aria-label="New group name" />
         <div class="group-actions">
@@ -2246,6 +2266,7 @@
           <button data-rider-status="stuck" type="button">Stuck</button>
         </div>
       </div>
+      <div class="account-status" id="groupStatus" role="status"></div>
     </div>
   </section>
 
@@ -2688,14 +2709,20 @@
     return client;
   }
 
-  async function signUp(email, password, displayName) {
+  async function sendEmailCode(email, displayName) {
     const db = await init();
-    return db.auth.signUp({ email, password, options: { data: { display_name: displayName || "" } } });
+    return db.auth.signInWithOtp({
+      email,
+      options: {
+        shouldCreateUser: true,
+        data: { display_name: displayName || "" }
+      }
+    });
   }
 
-  async function signIn(email, password) {
+  async function verifyEmailCode(email, token) {
     const db = await init();
-    return db.auth.signInWithPassword({ email, password });
+    return db.auth.verifyOtp({ email, token, type: "email" });
   }
 
   async function signOut() {
@@ -2785,7 +2812,7 @@
     currentGroupChannel = null;
   }
 
-  global.DirtSupabase = { init, signUp, signIn, signOut, session, user, onAuthStateChange, createGroup, listGroups, joinGroup, listMembers, savePresence, saveAlert, openGroupChannel, closeGroupChannel };
+  global.DirtSupabase = { init, sendEmailCode, verifyEmailCode, signOut, session, user, onAuthStateChange, createGroup, listGroups, joinGroup, listMembers, savePresence, saveAlert, openGroupChannel, closeGroupChannel };
 })(window);
   </script>
   <script>
@@ -3073,6 +3100,8 @@
     let lastGroupPublishAt = 0;
     let groupRouteTarget = null;
     let accountReadyPromise = null;
+    let groupsReadyPromise = null;
+    let pendingOtpEmail = "";
     // Multi-stage navigation context. null = single-stage / not multi-stage nav.
     let navContext = null; // { stages:[{start,end,route}], index, total, name, awaitingNext:bool }
     const stageMarkers = []; // real MapLibre markers for stage endpoints (draggable in edit mode)
@@ -7666,21 +7695,33 @@
     }
 
     function accountStatus(text, kind) {
-      const el = document.getElementById("accountStatus");
-      if (el) { el.textContent = text || ""; el.className = "account-status" + (kind === "error" ? " error" : ""); }
+      for (const id of ["accountStatus", "groupStatus"]) {
+        const el = document.getElementById(id);
+        if (el) { el.textContent = text || ""; el.className = "account-status" + (kind === "error" ? " error" : ""); }
+      }
     }
 
     function syncAccountUi() {
       const form = document.getElementById("accountForm");
+      const codeForm = document.getElementById("accountCodeForm");
       const authed = document.getElementById("accountAuthed");
       const title = document.getElementById("accountTitle");
       const subtitle = document.getElementById("accountSubtitle");
-      if (form) form.hidden = !!currentAuthUser;
+      const identity = document.getElementById("accountIdentity");
+      const groupAuthed = document.getElementById("groupAuthed");
+      const groupNotice = document.getElementById("groupAuthNotice");
+      if (form) form.hidden = !!currentAuthUser || !!pendingOtpEmail;
+      if (codeForm) codeForm.hidden = !!currentAuthUser || !pendingOtpEmail;
       if (authed) authed.hidden = !currentAuthUser;
       if (title) title.textContent = currentAuthUser ? (currentAuthUser.user_metadata?.display_name || currentAuthUser.email || "Rider account") : "Rider account";
       if (subtitle) subtitle.textContent = currentAuthUser
-        ? "Your location is private until you choose a group and turn sharing on."
-        : "Sign in to share live location with a riding group. You can keep using the map without an account.";
+        ? "Your account is ready. Open riding groups separately when you want to ride with others."
+        : pendingOtpEmail
+          ? "Code sent to " + pendingOtpEmail
+          : "Enter your email and we’ll send you a one-time code. New riders are created automatically.";
+      if (identity) identity.textContent = currentAuthUser ? (currentAuthUser.email || "Signed-in rider") : "";
+      if (groupAuthed) groupAuthed.hidden = !currentAuthUser;
+      if (groupNotice) groupNotice.hidden = !!currentAuthUser;
     }
 
     function renderGroupList() {
@@ -7744,6 +7785,21 @@
         try { localStorage.setItem("dirt_group_pending_presence_v1", JSON.stringify(payload)); } catch (_) { /* storage may be unavailable */ }
         accountStatus("Live sharing reconnecting · " + (err.message || "connection issue"), "error");
       }
+    }
+
+    async function ensureGroupsReady() {
+      const ready = await ensureAccountReady();
+      if (!ready || !currentAuthUser) {
+        accountStatus("Sign in with your email before opening riding groups.", "error");
+        return false;
+      }
+      if (groupsReadyPromise) return groupsReadyPromise;
+      groupsReadyPromise = loadRidingGroups().catch((err) => {
+        accountStatus("Could not load groups · " + (err.message || "error"), "error");
+        return false;
+      });
+      await groupsReadyPromise;
+      return true;
     }
 
     async function reconnectGroupSharing() {
@@ -7822,7 +7878,12 @@
       }
       syncAccountUi();
       renderGroupList();
-      if (currentAuthUser) await loadRidingGroups();
+      if (!currentAuthUser) {
+        groupsReadyPromise = null;
+        pendingOtpEmail = "";
+        const code = document.getElementById("accountCode");
+        if (code) code.value = "";
+      }
     }
 
     async function ensureAccountReady() {
@@ -7844,22 +7905,42 @@
       return accountReadyPromise;
     }
 
-    async function accountSignIn() {
-      const email = document.getElementById("accountEmail")?.value.trim();
-      const password = document.getElementById("accountPassword")?.value;
-      if (!email || !password) { accountStatus("Enter your email and password.", "error"); return; }
-      try { accountStatus("Signing in…"); const result = await DirtSupabase.signIn(email, password); if (result.error) throw result.error; accountStatus("Signed in."); await refreshAuthState(result.data.user); }
-      catch (err) { accountStatus(err.message || "Could not sign in.", "error"); }
-    }
-
-    async function accountSignUp() {
+    async function accountSendCode() {
       const displayName = document.getElementById("accountDisplayName")?.value.trim();
       const email = document.getElementById("accountEmail")?.value.trim();
-      const password = document.getElementById("accountPassword")?.value;
-      if (!email || !password) { accountStatus("Enter your email and password.", "error"); return; }
-      if (password.length < 6) { accountStatus("Use a password with at least 6 characters.", "error"); return; }
-      try { accountStatus("Creating account…"); const result = await DirtSupabase.signUp(email, password, displayName); if (result.error) throw result.error; if (result.data.user) await refreshAuthState(result.data.user); accountStatus(result.data.session ? "Account created." : "Check your email to confirm the account."); }
-      catch (err) { accountStatus(err.message || "Could not create account.", "error"); }
+      if (!email || !email.includes("@")) { accountStatus("Enter a valid email address.", "error"); return; }
+      try {
+        accountStatus("Sending your code…");
+        const result = await DirtSupabase.sendEmailCode(email, displayName);
+        if (result.error) throw result.error;
+        pendingOtpEmail = email;
+        syncAccountUi();
+        document.getElementById("accountCode")?.focus();
+        accountStatus("We sent a six-digit code to " + email + ".");
+      } catch (err) { accountStatus(err.message || "Could not send your code.", "error"); }
+    }
+
+    async function accountVerifyCode() {
+      const email = pendingOtpEmail || document.getElementById("accountEmail")?.value.trim();
+      const token = document.getElementById("accountCode")?.value.trim();
+      if (!email || !/^\d{6}$/.test(token || "")) { accountStatus("Enter the six-digit code from your email.", "error"); return; }
+      try {
+        accountStatus("Verifying code…");
+        const result = await DirtSupabase.verifyEmailCode(email, token);
+        if (result.error) throw result.error;
+        pendingOtpEmail = "";
+        await refreshAuthState(result.data.user || null);
+        accountStatus("You’re signed in.");
+      } catch (err) { accountStatus(err.message || "That code could not be verified.", "error"); }
+    }
+
+    function accountUseDifferentEmail() {
+      pendingOtpEmail = "";
+      const code = document.getElementById("accountCode");
+      if (code) code.value = "";
+      syncAccountUi();
+      document.getElementById("accountEmail")?.focus();
+      accountStatus("");
     }
 
     async function createRidingGroup() {
@@ -8296,20 +8377,49 @@
     }
     const accountBtn = document.getElementById("accountBtn");
     const accountSheet = document.getElementById("accountSheet");
+    const groupBtn = document.getElementById("groupBtn");
+    const groupSheet = document.getElementById("groupSheet");
+    function setAccountSheetOpen(open) {
+      if (!accountSheet) return;
+      accountSheet.classList.toggle("open", open);
+      accountSheet.setAttribute("aria-hidden", open ? "false" : "true");
+      accountBtn?.setAttribute("aria-expanded", open ? "true" : "false");
+      accountBtn?.classList.toggle("active", open);
+    }
+    function setGroupSheetOpen(open) {
+      if (!groupSheet) return;
+      groupSheet.classList.toggle("open", open);
+      groupSheet.setAttribute("aria-hidden", open ? "false" : "true");
+      groupBtn?.setAttribute("aria-expanded", open ? "true" : "false");
+      groupBtn?.classList.toggle("active", open);
+    }
     if (accountBtn && accountSheet) {
       accountBtn.addEventListener("click", async () => {
         const open = !accountSheet.classList.contains("open");
-        accountSheet.classList.toggle("open", open);
-        accountSheet.setAttribute("aria-hidden", open ? "false" : "true");
-        accountBtn.setAttribute("aria-expanded", open ? "true" : "false");
-        accountBtn.classList.toggle("active", open);
+        setGroupSheetOpen(false);
+        setAccountSheetOpen(open);
         if (open) await ensureAccountReady();
       });
     }
-    document.getElementById("accountSignIn")?.addEventListener("click", accountSignIn);
-    document.getElementById("accountSignUp")?.addEventListener("click", accountSignUp);
+    groupBtn?.addEventListener("click", async () => {
+      const open = !groupSheet?.classList.contains("open");
+      setAccountSheetOpen(false);
+      setGroupSheetOpen(open);
+      if (open) await ensureGroupsReady();
+    });
+    document.getElementById("accountSendCode")?.addEventListener("click", accountSendCode);
+    document.getElementById("accountVerifyCode")?.addEventListener("click", accountVerifyCode);
+    document.getElementById("accountUseDifferentEmail")?.addEventListener("click", accountUseDifferentEmail);
+    document.getElementById("accountCode")?.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") { event.preventDefault(); accountVerifyCode(); }
+    });
+    document.getElementById("accountOpenGroups")?.addEventListener("click", async () => {
+      setAccountSheetOpen(false);
+      setGroupSheetOpen(true);
+      await ensureGroupsReady();
+    });
     document.getElementById("accountSignOut")?.addEventListener("click", async () => {
-      try { await DirtSupabase.signOut(); await refreshAuthState(null); accountStatus("Signed out."); }
+      try { await DirtSupabase.signOut(); await refreshAuthState(null); setGroupSheetOpen(false); accountStatus("Signed out."); }
       catch (err) { accountStatus(err.message || "Could not sign out.", "error"); }
     });
     document.getElementById("groupCreateBtn")?.addEventListener("click", createRidingGroup);
