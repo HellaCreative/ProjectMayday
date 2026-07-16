@@ -42,7 +42,7 @@
       --danger: #bb251a;
       --ctrl: 42px;
       --sheet-max: min(52vh, 440px);
-      --drawer-collapsed-h: calc(128px + env(safe-area-inset-bottom, 0px));
+      --drawer-collapsed-h: calc(210px + env(safe-area-inset-bottom, 0px));
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -555,6 +555,9 @@
     .route-card.is-collapsed .route-drawer-full { display: none; }
     .route-card.is-expanded .route-drawer-compact { display: none; }
     .route-card.is-expanded .route-drawer-full { display: block; }
+    .route-drawer-compact .route-tabs { margin-bottom: 1px; }
+    .route-drawer-compact .route-mode { min-height: 36px; }
+    .route-card.is-collapsed .route-sheet-handle-bar { display: none; }
     .route-compact-top {
       display: grid;
       grid-template-columns: auto 1fr;
@@ -814,6 +817,7 @@
     .route-shared { margin-top: 0; }
     body.planner-tab-saved .route-shared { display: none; }
     body.planner-tab-saved .route-actions { display: none !important; }
+    body.planner-tab-plan .route-shared .route-preferences { display: none; }
 
     /* Consolidated collapsible unknown-access warning */
     .access-warn-panel {
@@ -951,6 +955,17 @@
     .stage-sub .stage-status-loading { color: var(--accent); }
     .stage-sub .stage-status-failed { color: #c1122f; }
     .stage-sub .stage-status-complete { color: #0a7d3c; }
+    .stage-profile-select {
+      min-width: 84px;
+      min-height: 30px;
+      padding: 0 22px 0 7px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: #fff;
+      color: var(--text);
+      font: 700 0.58rem var(--sans);
+      cursor: pointer;
+    }
     .stage-controls { display: flex; align-items: center; gap: 2px; flex: 0 0 auto; }
     .stage-icon-btn {
       width: 30px;
@@ -2198,6 +2213,10 @@
     </div>
     <div class="route-drawer-scroll" id="routeDrawerScroll">
     <div class="route-drawer-compact" id="routeDrawerCompact">
+      <div class="route-segment route-tabs" role="tablist" aria-label="Route planner tabs">
+        <button class="route-mode active" type="button" data-route-mode="here" role="tab" aria-selected="true">From here</button>
+        <button class="route-mode" type="button" data-route-mode="plan" role="tab" aria-selected="false">Plan a route</button>
+      </div>
       <div class="route-compact-top">
         <select class="route-compact-pref" id="routeCompactPref" aria-label="Route profile">
           <option value="direct">Direct</option>
@@ -2206,6 +2225,15 @@
           <option value="cleanest">Cleanest</option>
         </select>
         <div class="route-compact-summary" id="routeCompactSummary">No route<strong>Tap map to plan</strong></div>
+      </div>
+      <div class="route-access route-access-compact" id="routeAccessCompact">
+        <div class="route-access-row">
+          <span class="route-access-label">Allow unknown access</span>
+          <button class="access-info-btn" id="accessInfoBtn" type="button" aria-label="What allowing unknown access means" aria-describedby="accessInfoTip" aria-expanded="false">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+          </button>
+          <label class="switch"><input type="checkbox" id="unknownAccessToggle" aria-label="Allow unknown access"><span></span></label>
+        </div>
       </div>
       <div class="route-compact-actions">
         <button class="route-compact-export" id="routeCompactExport" type="button" title="Export this route as GPX">Export GPX</button>
@@ -2229,10 +2257,10 @@
         <div class="route-access" id="routeAccess">
           <div class="route-access-row">
             <span class="route-access-label">Allow unknown access</span>
-            <button class="access-info-btn" id="accessInfoBtn" type="button" aria-label="What allowing unknown access means" aria-describedby="accessInfoTip" aria-expanded="false">
+            <button class="access-info-btn" id="accessInfoBtnPlan" type="button" aria-label="What allowing unknown access means" aria-describedby="accessInfoTip" aria-expanded="false">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
             </button>
-            <label class="switch"><input type="checkbox" id="unknownAccessToggle" aria-label="Allow unknown access"><span></span></label>
+            <label class="switch"><input type="checkbox" id="unknownAccessTogglePlan" aria-label="Allow unknown access"><span></span></label>
           </div>
         </div>
       </div>
@@ -3216,6 +3244,7 @@
       profile: routePreference,
       accessPolicy: { motorizedPermissive: true, motorizedUnknown: allowUnknownAccess }
     });
+    planTrip.stages[0].profile = routePreference;
     let activeStageId = planTrip.stages[0].id;
     let editingStageId = null;
     const stageTracker = RouteStages.createRequestTracker();
@@ -5030,7 +5059,8 @@
     }
 
     function addPlanStage() {
-      const stage = RS.addStage(planTrip);
+      const previous = planTrip.stages[planTrip.stages.length - 1];
+      const stage = RS.addStage(planTrip, { profile: previous?.profile || routePreference });
       activeStageId = stage.id;
       editingStageId = null;
       planAggregate = RS.aggregateTrip(planTrip);
@@ -5064,6 +5094,7 @@
       let stage = planTrip.stages[idx];
       if (!RS.stageHasBothPoints(stage)) return; // never route a draft
       const token = stageTracker.issue(stageId);
+      const stageProfile = stage.profile || routePreference;
       planTrip.stages[idx] = RS.transitionStage(stage, "route-start", { requestToken: token });
       planAggregate = RS.aggregateTrip(planTrip);
       renderStageList();
@@ -5073,7 +5104,7 @@
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            profile: routePreference,
+            profile: stageProfile,
             // EXACTLY two locations per stage request (A -> B only).
             locations: [
               { lat: stage.start.lat, lon: stage.start.lng, label: "A" },
@@ -5259,6 +5290,12 @@
               '<span class="stage-sub">' + stageStatusMarkup(stage) + "</span>" +
             "</span>" +
             '<span class="stage-controls">' +
+              '<select class="stage-profile-select" data-stage-profile="' + stage.id + '" aria-label="Stage ' + (i + 1) + ' route profile">' +
+                '<option value="direct"' + ((stage.profile || "balanced") === "direct" ? " selected" : "") + '>Direct</option>' +
+                '<option value="balanced"' + ((stage.profile || "balanced") === "balanced" ? " selected" : "") + '>Balanced</option>' +
+                '<option value="dirt"' + ((stage.profile || "balanced") === "dirt" ? " selected" : "") + '>Dirt</option>' +
+                '<option value="cleanest"' + ((stage.profile || "balanced") === "cleanest" ? " selected" : "") + '>Cleanest</option>' +
+              '</select>' +
               '<button class="stage-icon-btn" data-stage-move="up" data-stage-id="' + stage.id + '" title="Move up" aria-label="Move stage up"' + (i === 0 ? " disabled" : "") + ">↑</button>" +
               '<button class="stage-icon-btn" data-stage-move="down" data-stage-id="' + stage.id + '" title="Move down" aria-label="Move stage down"' + (i === stages.length - 1 ? " disabled" : "") + ">↓</button>" +
               '<button class="stage-icon-btn" data-stage-delete="' + stage.id + '" title="Delete stage" aria-label="Delete stage"' + (stages.length <= 1 ? " disabled" : "") + ">×</button>" +
@@ -5276,6 +5313,19 @@
       if (stageSaveBtn) {
         stageSaveBtn.disabled = !planTrip.stages.some((s) => RS.stageHasBothPoints(s));
       }
+    }
+
+    function setStageProfile(stageId, profile) {
+      const allowed = ["direct", "balanced", "dirt", "cleanest"];
+      if (!allowed.includes(profile)) return;
+      const idx = RS.findStageIndex(planTrip, stageId);
+      if (idx < 0) return;
+      const stage = RS.transitionStage(planTrip.stages[idx], "invalidate");
+      stage.profile = profile;
+      planTrip.stages[idx] = stage;
+      planTrip.updatedAt = new Date().toISOString();
+      if (RS.stageHasBothPoints(stage)) routeStage(stageId);
+      else afterStageUpdate();
     }
 
     function updatePlanStatus() {
@@ -5775,6 +5825,7 @@
         profile: routePreference,
         accessPolicy: { motorizedPermissive: true, motorizedUnknown: allowUnknownAccess }
       });
+      planTrip.stages[0].profile = routePreference;
       activeStageId = planTrip.stages[0].id;
       editingStageId = null;
       planAggregate = RS.aggregateTrip(planTrip);
@@ -7600,6 +7651,7 @@
       if (routePanelPlan) routePanelPlan.hidden = plannerTab !== "plan";
       if (routePanelSaved) routePanelSaved.hidden = plannerTab !== "saved";
       document.body.classList.toggle("planner-tab-saved", plannerTab === "saved");
+      document.body.classList.toggle("planner-tab-plan", plannerTab === "plan");
 
       if (plannerTab === "plan") {
         viewedSavedRouteId = null;
@@ -7614,6 +7666,9 @@
       }
       renderStageMarkers();
       refreshRouteDraft();
+      if (typeof setPlannerDrawerState === "function" && plannerDrawerState !== "closed") {
+        setPlannerDrawerState(plannerTab === "plan" ? "expanded" : "collapsed");
+      }
     }
 
     function setRoutePreference(nextPreference) {
@@ -7625,7 +7680,15 @@
         button.setAttribute("aria-selected", active ? "true" : "false");
       });
       if (plannerTab === "plan") {
-        recalcAllStages();
+        const active = getActiveStage();
+        if (active) {
+          active.profile = nextPreference;
+          active.route = null;
+          active.error = null;
+          active.status = RS.computeStageStatus(active);
+          if (RS.stageHasBothPoints(active)) routeStage(active.id);
+          else afterStageUpdate();
+        }
         return;
       }
       if (activeStart() && destination) calculateRoute();
@@ -8508,12 +8571,16 @@
     }
 
     function togglePlannerExpandedCollapsed() {
+      if (plannerTab === "here") return;
       if (plannerDrawerState === "expanded") setPlannerDrawerState("collapsed");
       else if (plannerDrawerState === "collapsed") setPlannerDrawerState("expanded");
     }
 
     routeToggleBtn.addEventListener("click", () => {
-      if (plannerDrawerState === "closed") setPlannerDrawerState("expanded");
+      if (plannerDrawerState === "closed") {
+        setRouteMode("here");
+        setPlannerDrawerState("collapsed");
+      }
       else setPlannerDrawerState("closed");
     });
 
@@ -8551,6 +8618,7 @@
           togglePlannerExpandedCollapsed();
           return;
         }
+        if (plannerTab === "here") return;
         if (!vertical) return;
         if (dy <= -DRAWER_SWIPE_PX) setPlannerDrawerState("expanded");
         else if (dy >= DRAWER_SWIPE_PX) setPlannerDrawerState("collapsed");
@@ -8619,6 +8687,12 @@
     if (trackEditorCancel) trackEditorCancel.addEventListener("click", cancelImportedTrackEdits);
     if (trackEditorSave) trackEditorSave.addEventListener("click", saveImportedTrackEdits);
     if (stageListEl) {
+      stageListEl.addEventListener("change", (event) => {
+        const profileSelect = event.target.closest("[data-stage-profile]");
+        if (!profileSelect) return;
+        event.stopPropagation();
+        setStageProfile(profileSelect.dataset.stageProfile, profileSelect.value);
+      });
       stageListEl.addEventListener("click", (event) => {
         const moveBtn = event.target.closest("[data-stage-move]");
         if (moveBtn) {
@@ -8903,6 +8977,7 @@
       });
     });
     const unknownAccessToggle = document.getElementById("unknownAccessToggle");
+    const unknownAccessTogglePlan = document.getElementById("unknownAccessTogglePlan");
     const unknownAccessHint = document.getElementById("unknownAccessHint");
     const accessWarnSheet = document.getElementById("accessWarnSheet");
     const accessWarnCancel = document.getElementById("accessWarnCancel");
@@ -8957,6 +9032,7 @@
 
     function syncUnknownAccessUi() {
       if (unknownAccessToggle) unknownAccessToggle.checked = allowUnknownAccess;
+      if (unknownAccessTogglePlan) unknownAccessTogglePlan.checked = allowUnknownAccess;
       renderAccessWarning();
     }
 
@@ -9044,17 +9120,23 @@
       const wantsEnabled = !!event.target.checked;
       // Keep switches visually pending until acknowledgement resolves.
       if (wantsEnabled && unknownAccessToggle) unknownAccessToggle.checked = false;
+      if (wantsEnabled && unknownAccessTogglePlan) unknownAccessTogglePlan.checked = false;
       await applyUnknownAccessToggle(wantsEnabled);
     }
     if (unknownAccessToggle) unknownAccessToggle.addEventListener("change", onUnknownAccessChange);
+    if (unknownAccessTogglePlan) unknownAccessTogglePlan.addEventListener("change", onUnknownAccessChange);
 
     // ---- Unknown-access info popover (hover / focus / tap) ----
     const accessInfoBtn = document.getElementById("accessInfoBtn");
+    const accessInfoBtnPlan = document.getElementById("accessInfoBtnPlan");
+    const accessInfoButtons = [accessInfoBtn, accessInfoBtnPlan].filter(Boolean);
     const accessInfoTip = document.getElementById("accessInfoTip");
     let accessInfoOpen = false;
-    function positionAccessTip() {
-      if (!accessInfoBtn || !accessInfoTip) return;
-      const rect = accessInfoBtn.getBoundingClientRect();
+    let accessInfoAnchor = accessInfoBtn || accessInfoBtnPlan;
+    function positionAccessTip(button) {
+      const anchor = button || accessInfoAnchor;
+      if (!anchor || !accessInfoTip) return;
+      const rect = anchor.getBoundingClientRect();
       const tipW = accessInfoTip.offsetWidth;
       const tipH = accessInfoTip.offsetHeight;
       const gap = 8;
@@ -9068,44 +9150,47 @@
       accessInfoTip.style.left = left + "px";
       accessInfoTip.style.top = top + "px";
     }
-    function showAccessTip() {
+    function showAccessTip(button) {
       if (!accessInfoTip) return;
+      accessInfoAnchor = button || accessInfoAnchor;
       accessInfoTip.hidden = false;
       accessInfoOpen = true;
-      if (accessInfoBtn) accessInfoBtn.setAttribute("aria-expanded", "true");
-      positionAccessTip();
+      accessInfoButtons.forEach((item) => item.setAttribute("aria-expanded", item === accessInfoAnchor ? "true" : "false"));
+      positionAccessTip(accessInfoAnchor);
     }
     function hideAccessTip() {
       if (!accessInfoTip) return;
       accessInfoTip.hidden = true;
       accessInfoOpen = false;
-      if (accessInfoBtn) accessInfoBtn.setAttribute("aria-expanded", "false");
+      accessInfoButtons.forEach((item) => item.setAttribute("aria-expanded", "false"));
     }
-    if (accessInfoBtn && accessInfoTip) {
-      accessInfoBtn.addEventListener("mouseenter", showAccessTip);
-      accessInfoBtn.addEventListener("mouseleave", () => {
-        if (accessInfoBtn.matches(":focus")) return;
-        hideAccessTip();
-      });
-      accessInfoBtn.addEventListener("focus", showAccessTip);
-      accessInfoBtn.addEventListener("blur", hideAccessTip);
-      accessInfoBtn.addEventListener("click", (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        showAccessTip();
-      });
-      accessInfoBtn.addEventListener("keydown", (event) => {
-        if (event.key === "Escape") { hideAccessTip(); accessInfoBtn.blur(); }
+    if (accessInfoButtons.length && accessInfoTip) {
+      accessInfoButtons.forEach((button) => {
+        button.addEventListener("mouseenter", () => showAccessTip(button));
+        button.addEventListener("mouseleave", () => {
+          if (button.matches(":focus")) return;
+          hideAccessTip();
+        });
+        button.addEventListener("focus", () => showAccessTip(button));
+        button.addEventListener("blur", hideAccessTip);
+        button.addEventListener("click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          showAccessTip(button);
+        });
+        button.addEventListener("keydown", (event) => {
+          if (event.key === "Escape") { hideAccessTip(); button.blur(); }
+        });
       });
       document.addEventListener("click", (event) => {
         if (!accessInfoOpen) return;
-        if (event.target === accessInfoBtn || accessInfoBtn.contains(event.target)) return;
+        if (accessInfoButtons.some((button) => event.target === button || button.contains(event.target))) return;
         hideAccessTip();
       });
-      window.addEventListener("resize", () => { if (accessInfoOpen) positionAccessTip(); });
+      window.addEventListener("resize", () => { if (accessInfoOpen) positionAccessTip(accessInfoAnchor); });
       const drawerScrollEl = document.getElementById("routeDrawerScroll");
       if (drawerScrollEl) {
-        drawerScrollEl.addEventListener("scroll", () => { if (accessInfoOpen) positionAccessTip(); }, { passive: true });
+        drawerScrollEl.addEventListener("scroll", () => { if (accessInfoOpen) positionAccessTip(accessInfoAnchor); }, { passive: true });
       }
     }
 

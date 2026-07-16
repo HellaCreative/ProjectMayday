@@ -73,6 +73,7 @@
     const stage = {
       id: newId("stage"),
       name: null,
+      profile: "balanced",
       start: null,
       end: null,
       route: null,
@@ -84,6 +85,7 @@
     if (overrides) {
       if (overrides.id) stage.id = overrides.id;
       if (overrides.name != null) stage.name = overrides.name;
+      if (overrides.profile) stage.profile = String(overrides.profile);
       if (overrides.start) stage.start = normalizePoint(overrides.start);
       if (overrides.end) stage.end = normalizePoint(overrides.end);
       if (overrides.route) stage.route = overrides.route;
@@ -474,6 +476,7 @@
     const stages = (trip.stages || []).map((stage, index) => ({
       id: stage.id,
       name: stage.name || null,
+      profile: stage.profile || trip.profile || "balanced",
       index,
       start: normalizePoint(stage.start),
       end: normalizePoint(stage.end),
@@ -522,6 +525,7 @@
       stages: (record.stages || []).map((s) => ({
         id: s.id,
         name: s.name,
+        profile: s.profile || record.profile || "balanced",
         start: s.start,
         end: s.end,
         route: s.route ? Object.assign({ status: "complete" }, s.route) : null
