@@ -3485,6 +3485,132 @@
 
     :root {
       --p2-dock-h: calc(88px + var(--p2-bottom-pad) + 12px);
+      /* Sheet heights: profile +25%, layers +80px */
+      --p2-sheet-account: 62.5%;
+      --p2-sheet-layers: calc(62% + 80px);
+    }
+
+    /* Profile: taller sheet + real scroll above dock */
+    .account-sheet:not(.group-sheet) {
+      height: var(--p2-sheet-account);
+      max-height: var(--p2-sheet-account);
+      overflow: hidden;
+      display: none;
+      flex-direction: column;
+    }
+    .account-sheet:not(.group-sheet).open {
+      display: flex;
+    }
+    .account-sheet:not(.group-sheet) > .sheet-scroll {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      padding-bottom: calc(var(--p2-dock-h) + 16px);
+    }
+
+    /* Layers: taller + Rider Services first (markup order) */
+    .legend {
+      height: var(--p2-sheet-layers);
+      max-height: var(--p2-sheet-layers);
+    }
+    body.legend-open .stack {
+      bottom: calc(var(--p2-sheet-layers) + var(--p2-locate-gap));
+    }
+    body.account-open .stack {
+      bottom: calc(var(--p2-sheet-account) + var(--p2-locate-gap));
+    }
+
+    /* Groups: one scroll body; title stays above; tabs sticky; details scroll fully */
+    .group-sheet.open {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .group-sheet > #groupAuthed {
+      display: flex;
+      flex: 1 1 auto;
+      min-height: 0;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .group-sheet .group-sheet-body {
+      display: flex;
+      flex-direction: column;
+      flex: 1 1 auto;
+      min-height: 0;
+      margin-top: 0;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      padding-bottom: calc(var(--p2-dock-h) + 16px);
+    }
+    .group-sheet .group-tabs {
+      position: sticky;
+      top: 0;
+      z-index: 4;
+      flex: 0 0 auto;
+      background: var(--p2-sheet);
+      padding-bottom: 8px;
+      margin-bottom: 0;
+    }
+    .group-sheet .group-panel,
+    .group-sheet .group-details {
+      flex: 0 0 auto;
+      min-height: 0;
+      max-height: none;
+      overflow: visible;
+      padding-right: 0;
+    }
+    .group-sheet #groupDetails:not([hidden]) {
+      display: block;
+      overflow: visible;
+    }
+    .group-sheet #groupDetails #groupParticipantList {
+      flex: none;
+      max-height: none;
+      overflow: visible;
+    }
+    .group-sheet .group-sheet-head {
+      flex: 0 0 auto;
+      position: relative;
+      z-index: 5;
+      background: var(--p2-sheet);
+    }
+
+    /* Route Finder / Plan a route: give expanded sheet a real height so stage list scrolls */
+    .route-card.is-expanded {
+      height: var(--p2-sheet-max);
+      max-height: var(--p2-sheet-max);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .route-card.is-expanded .route-drawer-scroll {
+      flex: 1 1 auto;
+      min-height: 0;
+      height: auto;
+      max-height: none;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      padding-bottom: 0;
+    }
+    .route-card.is-expanded .route-drawer-full {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
+      padding-bottom: calc(var(--p2-dock-h) + 16px);
+      scrollbar-gutter: stable;
+    }
+    .route-card.is-expanded #routePanelPlan {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      min-height: 0;
+    }
+    .route-card.is-expanded #routePanelPlan .stage-list {
+      min-height: 48px;
     }
   </style>
 </head>
@@ -3891,6 +4017,25 @@
     </div>
     <div class="sheet-scroll legend-scroll">
     <div class="legend-group">
+      <span class="legend-title">Rider services</span>
+      <label class="legend-row">
+        <span class="legend-label"><i class="poi-dot" style="background:#e8730c"></i>Fuel</span>
+        <span class="switch"><input type="checkbox" data-poi-toggle="fuel" checked aria-label="Toggle fuel stations"><span></span></span>
+      </label>
+      <label class="legend-row">
+        <span class="legend-label"><i class="poi-dot" style="background:#8a5a2b"></i>Lodging</span>
+        <span class="switch"><input type="checkbox" data-poi-toggle="lodging" checked aria-label="Toggle lodging"><span></span></span>
+      </label>
+      <label class="legend-row">
+        <span class="legend-label"><i class="poi-dot" style="background:#2f9e44"></i>Campground</span>
+        <span class="switch"><input type="checkbox" data-poi-toggle="campground" checked aria-label="Toggle campgrounds"><span></span></span>
+      </label>
+      <label class="legend-row">
+        <span class="legend-label"><i class="poi-dot" style="background:#8e44c9"></i>Liquor store</span>
+        <span class="switch"><input type="checkbox" data-poi-toggle="liquor" checked aria-label="Toggle liquor stores"><span></span></span>
+      </label>
+    </div>
+    <div class="legend-group">
       <span class="legend-title">Map visibility</span>
       <label class="legend-row">
         <span class="legend-label"><i style="background:var(--access)"></i>Access road</span>
@@ -3915,25 +4060,6 @@
       <label class="legend-row">
         <span class="legend-label"><i style="background:var(--unserviced)"></i>Restricted access</span>
         <span class="switch"><input type="checkbox" data-layer-toggle="restricted" checked aria-label="Toggle restricted access roads"><span></span></span>
-      </label>
-    </div>
-    <div class="legend-group">
-      <span class="legend-title">Rider services</span>
-      <label class="legend-row">
-        <span class="legend-label"><i class="poi-dot" style="background:#e8730c"></i>Fuel</span>
-        <span class="switch"><input type="checkbox" data-poi-toggle="fuel" checked aria-label="Toggle fuel stations"><span></span></span>
-      </label>
-      <label class="legend-row">
-        <span class="legend-label"><i class="poi-dot" style="background:#8a5a2b"></i>Lodging</span>
-        <span class="switch"><input type="checkbox" data-poi-toggle="lodging" checked aria-label="Toggle lodging"><span></span></span>
-      </label>
-      <label class="legend-row">
-        <span class="legend-label"><i class="poi-dot" style="background:#2f9e44"></i>Campground</span>
-        <span class="switch"><input type="checkbox" data-poi-toggle="campground" checked aria-label="Toggle campgrounds"><span></span></span>
-      </label>
-      <label class="legend-row">
-        <span class="legend-label"><i class="poi-dot" style="background:#8e44c9"></i>Liquor store</span>
-        <span class="switch"><input type="checkbox" data-poi-toggle="liquor" checked aria-label="Toggle liquor stores"><span></span></span>
       </label>
     </div>
     <div class="legend-group">
