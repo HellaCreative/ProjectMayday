@@ -1320,7 +1320,7 @@
     .account-sheet [hidden] { display: none !important; }
     .group-sheet {
       width: min(90vw, 560px);
-      max-height: min(50dvh, 520px);
+      max-height: min(75dvh, 720px);
       padding: 16px;
       overflow: hidden;
     }
@@ -1514,6 +1514,13 @@
     body.group-details-open .stack > *,
     body.group-details-open .status-dock,
     body.group-details-open .follow-chip { display: none !important; }
+    body.groups-open .stack > :not(#recenterBtn),
+    body.groups-open .status-dock,
+    body.groups-open .follow-chip { display: none !important; }
+    body.groups-open .stack #recenterBtn {
+      display: grid;
+      pointer-events: auto;
+    }
     @media (max-width: 520px) {
       .group-sheet { width: 90vw; }
       .group-tab { padding: 0 4px; font-size: 0.6rem; }
@@ -9017,6 +9024,7 @@
       groupSheet.setAttribute("aria-hidden", open ? "false" : "true");
       groupBtn?.setAttribute("aria-expanded", open ? "true" : "false");
       groupBtn?.classList.toggle("active", open);
+      document.body.classList.toggle("groups-open", open);
       if (!open) setGroupPanel("list");
     }
     window.addEventListener("resize", () => {
