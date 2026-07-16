@@ -1265,8 +1265,18 @@
     .group-sheet { right: 58px; }
     .account-title { font-size: 0.82rem; font-weight: 750; color: var(--text); }
     .account-subtitle { margin-top: 3px; color: var(--muted); font-size: 0.64rem; line-height: 1.35; }
-    .account-form { display: grid; gap: 7px; margin-top: 12px; }
-    .account-code-form { display: grid; gap: 7px; margin-top: 12px; }
+    .account-form { display: grid; gap: 10px; margin-top: 12px; }
+    .account-form > #accountSendCode {
+      width: 100%; min-height: 42px; padding: 0 14px;
+      border: 1px solid var(--accent); border-radius: 8px;
+      background: var(--accent); color: #fff;
+      font: 700 0.72rem var(--sans); cursor: pointer;
+    }
+    .account-form > #accountSendCode:hover { filter: brightness(0.96); }
+    .account-code-form {
+      display: grid; gap: 10px; margin-top: 16px; padding-top: 14px;
+      border-top: 1px solid var(--line);
+    }
     .account-form input, .group-form input {
       min-height: 36px;
       width: 100%;
@@ -1278,9 +1288,9 @@
       font: 0.72rem var(--sans);
     }
     .account-code-input { letter-spacing: 0.22em; text-align: center; font: 700 1rem var(--mono); }
-    .account-actions, .group-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .account-actions, .group-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
     .account-actions button, .group-actions button, .account-signout {
-      min-height: 34px;
+      min-height: 42px;
       border: 1px solid var(--line);
       border-radius: 8px;
       background: var(--panel-2);
@@ -2223,7 +2233,7 @@
     <div class="account-form" id="accountForm">
       <input id="accountDisplayName" type="text" maxlength="60" autocomplete="name" placeholder="Display name (optional)" aria-label="Display name (optional)" />
       <input id="accountEmail" type="email" autocomplete="email" placeholder="Email" aria-label="Email" />
-      <button class="primary" id="accountSendCode" type="button">Send email code</button>
+      <button class="primary" id="accountSendCode" type="button">Send verification code</button>
     </div>
     <div class="account-code-form" id="accountCodeForm" hidden>
       <div class="account-subtitle">Enter the six-digit code we sent to your email.</div>
