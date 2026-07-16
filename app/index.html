@@ -2433,6 +2433,17 @@
     .route-sheet-handle-bar { background: var(--p2-sheet); }
     .route-sheet-handle::after { background: rgba(28, 25, 23, 0.18); }
     .route-card.is-collapsed { max-height: var(--p2-sheet-collapsed); }
+    /* Keep the collapsed From here sheet visually consistent with Plan a
+       route: the handle is part of the drawer header, not an expanded-only
+       affordance. */
+    .route-card.is-collapsed .route-sheet-handle-bar { display: block; }
+    .route-card.is-collapsed .route-sheet-handle {
+      min-height: 36px;
+      padding: 10px 0 8px;
+    }
+    .route-card.is-collapsed .route-drawer-compact {
+      padding-top: 4px;
+    }
     .route-card.is-expanded { max-height: var(--p2-sheet-max); }
     .route-card.is-expanded .route-drawer-scroll { height: auto; max-height: none; }
     .route-mode.active, .route-mode[aria-selected="true"] { background: var(--p2-orange); color: #fff; }
