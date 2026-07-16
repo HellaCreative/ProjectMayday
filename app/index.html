@@ -182,6 +182,20 @@
     body.planner-expanded .stack {
       bottom: max(calc(var(--sheet-max) + 28px), calc(env(safe-area-inset-bottom) + 220px));
     }
+    /* Route creation owns the lower-right interaction space. Keep the map
+       readable and leave only the recenter control above the planner drawer. */
+    body.planner-open .stack {
+      gap: 0;
+    }
+    body.planner-open .stack > :not(#recenterBtn),
+    body.planner-open .follow-chip,
+    body.planner-open .status-dock {
+      display: none !important;
+    }
+    body.planner-open .stack #recenterBtn {
+      display: grid;
+      pointer-events: auto;
+    }
     .btn.view-mode {
       font-family: var(--mono);
       font-size: 0.7rem;
