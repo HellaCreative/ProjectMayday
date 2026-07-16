@@ -2665,6 +2665,34 @@
     .legend:not(.collapsed) { transform: translate(-50%, 0); }
     .legend.collapsed { transform: translate(-50%, 100%); }
 
+    /* Sheets are full-bleed surfaces; their working content aligns with the
+       persistent navigation column. */
+    .route-card,
+    .account-sheet,
+    .legend {
+      left: 0;
+      right: 0;
+      width: 100%;
+      max-width: none;
+    }
+    .route-card { transform: none; }
+    .route-drawer-scroll {
+      width: var(--p2-shell-w);
+      max-width: var(--p2-shell-w);
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .account-sheet,
+    .legend {
+      padding-left: max(12px, calc((100% - var(--p2-shell-w)) / 2));
+      padding-right: max(12px, calc((100% - var(--p2-shell-w)) / 2));
+    }
+    .account-sheet { transform: translateY(16px); }
+    .account-sheet.open { transform: translateY(0); }
+    .legend { transform: translateY(16px); }
+    .legend:not(.collapsed) { transform: translateY(0); }
+    .legend.collapsed { transform: translateY(100%); }
+
     .pip {
       z-index: 49;
       bottom: calc(var(--p2-dock-h) + var(--p2-locate-gap));
@@ -2768,7 +2796,7 @@
     }
     .account-profile-form > #accountSaveProfile { background: var(--p2-orange); border-color: var(--p2-orange); }
 
-    .group-sheet { width: var(--p2-shell-w); max-width: var(--p2-shell-w); }
+    .group-sheet { width: 100%; max-width: none; }
     .group-sheet-close { display: none !important; }
     .group-sheet-body { min-height: 0; overflow: hidden; }
     .group-tabs { position: sticky; top: 0; z-index: 2; }
@@ -2835,7 +2863,7 @@
       .route-card,
       .account-sheet,
       .legend,
-      .group-sheet { width: var(--p2-shell-w); max-width: var(--p2-shell-w); }
+      .group-sheet { width: 100%; max-width: none; }
     }
   </style>
 </head>
