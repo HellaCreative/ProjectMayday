@@ -47,6 +47,20 @@
     return db.auth.getUser();
   }
 
+  async function updateDisplayName(displayName) {
+    const db = await init();
+    const name = String(displayName || "").trim().slice(0, 60);
+    const { data, error } = await db.auth.updateUser({ data: { display_name: name } });
+    if (error) throw error;
+    if (!data?.user?.id) throw new Error("Your profile could not be updated.");
+    const { error: profileError } = await db.from("profiles").upsert(
+      { id: data.user.id, display_name: name, updated_at: new Date().toISOString() },
+      { onConflict: "id" }
+    );
+    if (profileError) throw profileError;
+    return data.user;
+  }
+
   async function onAuthStateChange(callback) {
     const db = await init();
     return db.auth.onAuthStateChange(callback);
@@ -122,5 +136,5 @@
     currentGroupChannel = null;
   }
 
-  global.DirtSupabase = { init, sendEmailCode, verifyEmailCode, signOut, session, user, onAuthStateChange, createGroup, listGroups, joinGroup, listMembers, savePresence, saveAlert, openGroupChannel, closeGroupChannel };
+  global.DirtSupabase = { init, sendEmailCode, verifyEmailCode, signOut, session, user, updateDisplayName, onAuthStateChange, createGroup, listGroups, joinGroup, listMembers, savePresence, saveAlert, openGroupChannel, closeGroupChannel };
 })(window);

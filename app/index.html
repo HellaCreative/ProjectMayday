@@ -1277,7 +1277,10 @@
       display: grid; gap: 10px; margin-top: 16px; padding-top: 14px;
       border-top: 1px solid var(--line);
     }
-    .account-form input, .group-form input {
+    .account-profile-form { display: grid; gap: 8px; margin-top: 14px; }
+    .account-field-label { color: var(--muted); font-size: 0.62rem; font-weight: 700; }
+    .account-readonly { padding: 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2); color: var(--muted); font: 0.72rem var(--sans); }
+    .account-form input, .account-profile-form input, .group-form input {
       min-height: 36px;
       width: 100%;
       padding: 7px 9px;
@@ -1289,7 +1292,8 @@
     }
     .account-code-input { letter-spacing: 0.22em; text-align: center; font: 700 1rem var(--mono); }
     .account-actions, .group-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-    .account-actions button, .group-actions button, .account-signout {
+    .account-code-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .account-actions button, .account-code-actions button, .group-actions button, .account-signout {
       min-height: 42px;
       border: 1px solid var(--line);
       border-radius: 8px;
@@ -1298,9 +1302,9 @@
       font: 700 0.66rem var(--sans);
       cursor: pointer;
     }
-    .account-actions button.primary, .group-actions button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .account-actions button.primary, .account-code-actions button.primary, .group-actions button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .account-code-actions button:disabled { opacity: 0.55; cursor: not-allowed; }
     .account-signout { width: 100%; margin-top: 8px; }
-    .account-open-groups { width: 100%; min-height: 34px; margin-top: 10px; border: 1px solid var(--accent); border-radius: 8px; background: var(--accent); color: #fff; font: 700 0.66rem var(--sans); cursor: pointer; }
     .account-identity { padding: 8px 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2); color: var(--text); font: 0.68rem/1.35 var(--sans); }
     .account-status { min-height: 18px; margin-top: 8px; color: var(--muted); font: 0.62rem/1.35 var(--mono); }
     .account-status.error { color: var(--danger); }
@@ -2229,24 +2233,30 @@
 
   <section class="account-sheet" id="accountSheet" aria-label="Rider account" aria-hidden="true">
     <div class="account-title" id="accountTitle">Rider account</div>
-    <div class="account-subtitle" id="accountSubtitle">Enter your email and we’ll send you a one-time code. New riders are created automatically.</div>
+    <div class="account-subtitle" id="accountSubtitle">Enter your email to receive a one-time code.</div>
     <div class="account-form" id="accountForm">
-      <input id="accountDisplayName" type="text" maxlength="60" autocomplete="name" placeholder="Display name (optional)" aria-label="Display name (optional)" />
       <input id="accountEmail" type="email" autocomplete="email" placeholder="Email" aria-label="Email" />
       <button class="primary" id="accountSendCode" type="button">Send verification code</button>
     </div>
     <div class="account-code-form" id="accountCodeForm" hidden>
       <div class="account-subtitle">Enter the one-time code we sent to your email.</div>
       <input id="accountCode" class="account-code-input" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="10" placeholder="Enter code" aria-label="Email verification code" />
-      <div class="account-actions">
-        <button class="primary" id="accountVerifyCode" type="button">Verify code</button>
+      <button class="primary" id="accountVerifyCode" type="button">Verify code</button>
+      <div class="account-code-actions">
+        <button id="accountResendCode" type="button" disabled>Resend code <span id="accountResendTimer"></span></button>
         <button id="accountUseDifferentEmail" type="button">Use different email</button>
       </div>
     </div>
     <div class="account-status" id="accountStatus" role="status"></div>
     <div id="accountAuthed" hidden>
-      <div class="account-identity" id="accountIdentity"></div>
-      <button class="account-open-groups" id="accountOpenGroups" type="button">Open riding groups</button>
+      <div class="account-subtitle">Your rider profile is saved to this account.</div>
+      <div class="account-profile-form">
+        <label class="account-field-label" for="accountDisplayName">Display name</label>
+        <input id="accountDisplayName" type="text" maxlength="60" autocomplete="name" placeholder="Choose a display name" aria-label="Display name" />
+        <div class="account-field-label">Email</div>
+        <div class="account-readonly" id="accountIdentity"></div>
+        <button class="primary" id="accountSaveProfile" type="button">Save changes</button>
+      </div>
       <button class="account-signout" id="accountSignOut" type="button">Sign out</button>
     </div>
   </section>
@@ -2750,6 +2760,20 @@
     return db.auth.getUser();
   }
 
+  async function updateDisplayName(displayName) {
+    const db = await init();
+    const name = String(displayName || "").trim().slice(0, 60);
+    const { data, error } = await db.auth.updateUser({ data: { display_name: name } });
+    if (error) throw error;
+    if (!data?.user?.id) throw new Error("Your profile could not be updated.");
+    const { error: profileError } = await db.from("profiles").upsert(
+      { id: data.user.id, display_name: name, updated_at: new Date().toISOString() },
+      { onConflict: "id" }
+    );
+    if (profileError) throw profileError;
+    return data.user;
+  }
+
   async function onAuthStateChange(callback) {
     const db = await init();
     return db.auth.onAuthStateChange(callback);
@@ -2825,7 +2849,7 @@
     currentGroupChannel = null;
   }
 
-  global.DirtSupabase = { init, sendEmailCode, verifyEmailCode, signOut, session, user, onAuthStateChange, createGroup, listGroups, joinGroup, listMembers, savePresence, saveAlert, openGroupChannel, closeGroupChannel };
+  global.DirtSupabase = { init, sendEmailCode, verifyEmailCode, signOut, session, user, updateDisplayName, onAuthStateChange, createGroup, listGroups, joinGroup, listMembers, savePresence, saveAlert, openGroupChannel, closeGroupChannel };
 })(window);
   </script>
   <script>
@@ -3115,6 +3139,8 @@
     let accountReadyPromise = null;
     let groupsReadyPromise = null;
     let pendingOtpEmail = "";
+    let otpResendTimer = null;
+    let otpResendUntil = 0;
     // Multi-stage navigation context. null = single-stage / not multi-stage nav.
     let navContext = null; // { stages:[{start,end,route}], index, total, name, awaitingNext:bool }
     const stageMarkers = []; // real MapLibre markers for stage endpoints (draggable in edit mode)
@@ -7714,6 +7740,32 @@
       }
     }
 
+    function stopOtpResendCooldown() {
+      if (otpResendTimer) window.clearInterval(otpResendTimer);
+      otpResendTimer = null;
+      otpResendUntil = 0;
+      updateOtpResendUi();
+    }
+
+    function updateOtpResendUi() {
+      const button = document.getElementById("accountResendCode");
+      const timer = document.getElementById("accountResendTimer");
+      const remaining = Math.max(0, otpResendUntil - Date.now());
+      if (button) button.disabled = !pendingOtpEmail || remaining > 0;
+      if (timer) timer.textContent = remaining > 0 ? " (" + Math.ceil(remaining / 1000) + "s)" : "";
+      if (!remaining && otpResendTimer) {
+        window.clearInterval(otpResendTimer);
+        otpResendTimer = null;
+      }
+    }
+
+    function startOtpResendCooldown() {
+      if (otpResendTimer) window.clearInterval(otpResendTimer);
+      otpResendUntil = Date.now() + 60000;
+      updateOtpResendUi();
+      otpResendTimer = window.setInterval(updateOtpResendUi, 250);
+    }
+
     function syncAccountUi() {
       const form = document.getElementById("accountForm");
       const codeForm = document.getElementById("accountCodeForm");
@@ -7726,15 +7778,20 @@
       if (form) form.hidden = !!currentAuthUser || !!pendingOtpEmail;
       if (codeForm) codeForm.hidden = !!currentAuthUser || !pendingOtpEmail;
       if (authed) authed.hidden = !currentAuthUser;
-      if (title) title.textContent = currentAuthUser ? (currentAuthUser.user_metadata?.display_name || currentAuthUser.email || "Rider account") : "Rider account";
+      if (title) title.textContent = currentAuthUser ? "Your rider profile" : pendingOtpEmail ? "Check your email" : "Sign in to DIRT. MAYDAY.";
       if (subtitle) subtitle.textContent = currentAuthUser
-        ? "Your account is ready. Open riding groups separately when you want to ride with others."
+        ? "Your profile details are saved to this rider account."
         : pendingOtpEmail
           ? "Code sent to " + pendingOtpEmail
-          : "Enter your email and we’ll send you a one-time code. New riders are created automatically.";
-      if (identity) identity.textContent = currentAuthUser ? (currentAuthUser.email || "Signed-in rider") : "";
+          : "Enter your email to receive a one-time code.";
+      if (identity) identity.textContent = currentAuthUser ? (currentAuthUser.email || "") : "";
+      const displayName = document.getElementById("accountDisplayName");
+      if (displayName && currentAuthUser && document.activeElement !== displayName) {
+        displayName.value = currentAuthUser.user_metadata?.display_name || "";
+      }
       if (groupAuthed) groupAuthed.hidden = !currentAuthUser;
       if (groupNotice) groupNotice.hidden = !!currentAuthUser;
+      updateOtpResendUi();
     }
 
     function renderGroupList() {
@@ -7894,6 +7951,7 @@
       if (!currentAuthUser) {
         groupsReadyPromise = null;
         pendingOtpEmail = "";
+        stopOtpResendCooldown();
         const code = document.getElementById("accountCode");
         if (code) code.value = "";
       }
@@ -7919,18 +7977,30 @@
     }
 
     async function accountSendCode() {
-      const displayName = document.getElementById("accountDisplayName")?.value.trim();
       const email = document.getElementById("accountEmail")?.value.trim();
       if (!email || !email.includes("@")) { accountStatus("Enter a valid email address.", "error"); return; }
       try {
         accountStatus("Sending your code…");
-        const result = await DirtSupabase.sendEmailCode(email, displayName);
+        const result = await DirtSupabase.sendEmailCode(email);
         if (result.error) throw result.error;
         pendingOtpEmail = email;
+        startOtpResendCooldown();
         syncAccountUi();
         document.getElementById("accountCode")?.focus();
         accountStatus("We sent a one-time code to " + email + ".");
       } catch (err) { accountStatus(err.message || "Could not send your code.", "error"); }
+    }
+
+    async function accountResendCode() {
+      const email = pendingOtpEmail;
+      if (!email || otpResendUntil > Date.now()) return;
+      try {
+        accountStatus("Sending another code…");
+        const result = await DirtSupabase.sendEmailCode(email);
+        if (result.error) throw result.error;
+        startOtpResendCooldown();
+        accountStatus("A new code was sent to " + email + ".");
+      } catch (err) { accountStatus(err.message || "Could not resend your code.", "error"); }
     }
 
     async function accountVerifyCode() {
@@ -7942,18 +8012,32 @@
         const result = await DirtSupabase.verifyEmailCode(email, token);
         if (result.error) throw result.error;
         pendingOtpEmail = "";
+        stopOtpResendCooldown();
         await refreshAuthState(result.data.user || null);
-        accountStatus("You’re signed in.");
+        accountStatus("");
       } catch (err) { accountStatus(err.message || "That code could not be verified.", "error"); }
     }
 
     function accountUseDifferentEmail() {
       pendingOtpEmail = "";
+      stopOtpResendCooldown();
       const code = document.getElementById("accountCode");
       if (code) code.value = "";
       syncAccountUi();
       document.getElementById("accountEmail")?.focus();
       accountStatus("");
+    }
+
+    async function accountSaveProfile() {
+      const input = document.getElementById("accountDisplayName");
+      const name = input?.value.trim() || "";
+      if (!name) { accountStatus("Enter a display name first.", "error"); input?.focus(); return; }
+      try {
+        accountStatus("Saving profile…");
+        const user = await DirtSupabase.updateDisplayName(name);
+        await refreshAuthState(user);
+        accountStatus("Profile saved.");
+      } catch (err) { accountStatus(err.message || "Could not save your profile.", "error"); }
     }
 
     async function createRidingGroup() {
@@ -8421,16 +8505,13 @@
       if (open) await ensureGroupsReady();
     });
     document.getElementById("accountSendCode")?.addEventListener("click", accountSendCode);
+    document.getElementById("accountResendCode")?.addEventListener("click", accountResendCode);
     document.getElementById("accountVerifyCode")?.addEventListener("click", accountVerifyCode);
     document.getElementById("accountUseDifferentEmail")?.addEventListener("click", accountUseDifferentEmail);
     document.getElementById("accountCode")?.addEventListener("keydown", (event) => {
       if (event.key === "Enter") { event.preventDefault(); accountVerifyCode(); }
     });
-    document.getElementById("accountOpenGroups")?.addEventListener("click", async () => {
-      setAccountSheetOpen(false);
-      setGroupSheetOpen(true);
-      await ensureGroupsReady();
-    });
+    document.getElementById("accountSaveProfile")?.addEventListener("click", accountSaveProfile);
     document.getElementById("accountSignOut")?.addEventListener("click", async () => {
       try { await DirtSupabase.signOut(); await refreshAuthState(null); setGroupSheetOpen(false); accountStatus("Signed out."); }
       catch (err) { accountStatus(err.message || "Could not sign out.", "error"); }
