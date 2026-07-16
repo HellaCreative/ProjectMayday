@@ -1318,6 +1318,95 @@
       transition-delay: 0s;
     }
     .account-sheet [hidden] { display: none !important; }
+    .group-sheet {
+      width: min(90vw, 560px);
+      max-height: min(50dvh, 520px);
+      padding: 16px;
+      overflow: hidden;
+    }
+    .group-sheet.open { display: flex; flex-direction: column; }
+    .group-sheet > #groupAuthed { display: flex; flex: 1 1 auto; min-height: 0; flex-direction: column; }
+    .group-sheet-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      position: relative;
+      z-index: 1;
+    }
+    .group-sheet-close,
+    .group-back,
+    .group-remove {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel-2);
+      color: var(--text);
+      font: 700 0.64rem var(--sans);
+      cursor: pointer;
+    }
+    .group-sheet-close {
+      width: 30px;
+      height: 30px;
+      padding: 0;
+      font-size: 1.1rem;
+      line-height: 1;
+    }
+    .group-sheet-body {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      margin-top: 14px;
+    }
+    .group-tabs {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 4px;
+      padding: 4px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--panel-2);
+      flex: 0 0 auto;
+    }
+    .group-tab {
+      min-height: 34px;
+      padding: 0 8px;
+      border: 0;
+      border-radius: 7px;
+      background: transparent;
+      color: var(--muted);
+      font: 700 0.65rem var(--sans);
+      cursor: pointer;
+    }
+    .group-tab.active {
+      background: var(--text);
+      color: #fff;
+    }
+    .group-panel,
+    .group-details {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow-y: auto;
+      padding-top: 14px;
+      scrollbar-width: thin;
+    }
+    .group-panel-heading,
+    .group-details-title-row,
+    .group-details-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .group-count {
+      min-width: 24px;
+      height: 24px;
+      padding: 0 6px;
+      border-radius: 999px;
+      background: var(--text);
+      color: #fff;
+      text-align: center;
+      font: 700 0.62rem/24px var(--mono);
+    }
     .account-title { font-size: 0.82rem; font-weight: 750; color: var(--text); }
     .account-subtitle { margin-top: 3px; color: var(--muted); font-size: 0.64rem; line-height: 1.35; }
     .account-form { display: grid; gap: 10px; margin-top: 12px; }
@@ -1377,10 +1466,21 @@
     .account-status { min-height: 18px; margin-top: 8px; color: var(--muted); font: 0.62rem/1.35 var(--mono); }
     .account-status.error { color: var(--danger); }
     .account-divider { height: 1px; margin: 12px 0; background: var(--line); }
-    .group-title { font-size: 0.68rem; font-weight: 750; color: var(--text); }
-    .group-form { display: grid; gap: 7px; margin-top: 8px; }
-    .group-list { display: grid; gap: 5px; margin-top: 8px; }
-    .group-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 7px 8px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+    .group-title { font-size: 0.74rem; font-weight: 750; color: var(--text); }
+    .group-form { display: grid; gap: 8px; margin-top: 16px; max-width: 360px; }
+    .group-primary-action,
+    .group-share-action {
+      min-height: 40px;
+      border: 1px solid var(--accent);
+      border-radius: 8px;
+      background: var(--accent);
+      color: #fff;
+      font: 700 0.7rem var(--sans);
+      cursor: pointer;
+    }
+    .group-share-action.active { background: var(--text); border-color: var(--text); }
+    .group-list { display: grid; gap: 6px; margin-top: 12px; }
+    .group-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 9px; background: #fff; }
     .group-row.deleted { background: var(--panel-2); }
     .group-row-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
     .group-row button { border: 0; background: transparent; color: var(--accent); font: 700 0.62rem var(--sans); cursor: pointer; }
@@ -1388,7 +1488,18 @@
     .group-deleted { margin-top: 2px; color: #b42318; font: 700 0.56rem var(--sans); }
     .group-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.68rem; font-weight: 700; }
     .group-code { margin-top: 2px; color: var(--muted); font: 0.56rem var(--mono); }
-    .group-stats { margin-top: 2px; color: var(--muted); font: 0.56rem var(--mono); }
+    .group-stats { margin-top: 3px; color: var(--muted); font: 0.56rem var(--mono); }
+    .group-details-kicker { color: var(--muted); font: 700 0.56rem var(--mono); text-transform: uppercase; letter-spacing: 0.08em; }
+    .group-back { min-height: 28px; padding: 0 8px; }
+    .group-details-title-row { align-items: center; margin-top: 12px; }
+    .group-remove { min-height: 28px; padding: 0 9px; color: var(--danger); }
+    .group-summary-card { display: grid; grid-template-columns: 1.25fr 0.8fr 0.9fr; gap: 8px; margin-top: 12px; padding: 10px; border: 1px solid var(--line); border-radius: 9px; background: var(--panel-2); }
+    .group-summary-card div { min-width: 0; }
+    .group-summary-card span { display: block; color: var(--muted); font: 0.54rem var(--mono); }
+    .group-summary-card strong { display: block; margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); font: 700 0.68rem var(--sans); }
+    .group-section { display: grid; gap: 6px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+    .group-section-title { color: var(--text); font: 700 0.66rem var(--sans); }
+    .group-status-select { min-height: 38px; width: 100%; padding: 0 9px; border: 1px solid var(--line); border-radius: 8px; background: #fff; color: var(--text); font: 0.72rem var(--sans); }
     .group-live { display: none; margin-top: 9px; padding-top: 9px; border-top: 1px solid var(--line); }
     .group-live.open { display: block; }
     .group-participant-summary { margin-top: 8px; color: var(--muted); font: 0.58rem/1.35 var(--mono); }
@@ -1400,6 +1511,14 @@
     .group-live-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 7px; }
     .group-live-row button { min-height: 30px; padding: 0 8px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel-2); color: var(--text); font: 700 0.62rem var(--sans); cursor: pointer; }
     .group-live-row button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+    body.group-details-open .stack > *,
+    body.group-details-open .status-dock,
+    body.group-details-open .follow-chip { display: none !important; }
+    @media (max-width: 520px) {
+      .group-sheet { width: 90vw; }
+      .group-tab { padding: 0 4px; font-size: 0.6rem; }
+      .group-summary-card { grid-template-columns: 1fr 1fr 1fr; }
+    }
 
     .export-sheet {
       position: absolute;
@@ -2354,33 +2473,92 @@
   </section>
 
   <section class="account-sheet group-sheet" id="groupSheet" aria-label="Riding groups" aria-hidden="true">
-    <div class="account-title">Riding groups</div>
-    <div class="account-subtitle" id="groupAuthNotice">Sign in first to create a group, join a group, or share your location.</div>
+    <div class="group-sheet-head">
+      <div>
+        <div class="account-title">Riding groups</div>
+        <div class="account-subtitle" id="groupAuthNotice">Sign in first to create a group, join a group, or share your location.</div>
+      </div>
+      <button class="group-sheet-close" id="groupSheetClose" type="button" aria-label="Close riding groups">×</button>
+    </div>
     <div id="groupAuthed" hidden>
-      <div class="account-divider"></div>
-      <div class="group-form">
-        <input id="groupNameInput" type="text" maxlength="80" placeholder="New group name" aria-label="New group name" />
-        <div class="group-actions">
-          <button class="primary" id="groupCreateBtn" type="button">Create group</button>
-          <button id="groupJoinBtn" type="button">Join by code</button>
+      <div class="group-sheet-body">
+        <div class="group-tabs" role="tablist" aria-label="Riding groups sections">
+          <button class="group-tab active" type="button" role="tab" aria-selected="true" data-group-tab="list">My groups</button>
+          <button class="group-tab" type="button" role="tab" aria-selected="false" data-group-tab="create">New group</button>
+          <button class="group-tab" type="button" role="tab" aria-selected="false" data-group-tab="join">Join a group</button>
         </div>
-        <input id="groupInviteInput" type="text" minlength="6" maxlength="6" pattern="[a-z0-9]{6}" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="6-character code" aria-label="6-character invite code" />
-      </div>
-      <div class="group-list" id="groupList"></div>
-      <div class="group-live" id="groupLive">
-        <div class="group-title" id="groupLiveTitle">Live group</div>
-        <div class="account-subtitle" id="groupLiveMeta">Share only when you choose to.</div>
-        <div class="group-participant-summary" id="groupParticipantSummary"></div>
-        <div class="group-participant-list" id="groupParticipantList"></div>
-        <div class="group-live-row">
-          <button id="groupShareBtn" type="button">Share my location</button>
-          <button data-rider-status="available" type="button">Available</button>
-          <button data-rider-status="breakdown" type="button">Breakdown</button>
-          <button data-rider-status="injured" type="button">Injured</button>
-          <button data-rider-status="stuck" type="button">Stuck</button>
+
+        <div class="group-panel" id="groupPanelList" data-group-panel="list">
+          <div class="group-panel-heading">
+            <div>
+              <div class="group-title">Your groups</div>
+              <div class="account-subtitle">Open a group to see its riders and sharing status.</div>
+            </div>
+            <span class="group-count" id="groupCount">0</span>
+          </div>
+          <div class="group-list" id="groupList"></div>
         </div>
+
+        <div class="group-panel" id="groupPanelCreate" data-group-panel="create" hidden>
+          <div class="group-title">Create a new group</div>
+          <div class="account-subtitle">Start a ride group and share its invite code with your riders.</div>
+          <div class="group-form">
+            <label class="account-field-label" for="groupNameInput">Group name</label>
+            <input id="groupNameInput" type="text" maxlength="80" placeholder="e.g. Saturday backroads" aria-label="New group name" />
+            <button class="group-primary-action" id="groupCreateBtn" type="button">Create group</button>
+          </div>
+        </div>
+
+        <div class="group-panel" id="groupPanelJoin" data-group-panel="join" hidden>
+          <div class="group-title">Join a group</div>
+          <div class="account-subtitle">Enter the six-character invite code from the group owner.</div>
+          <div class="group-form">
+            <label class="account-field-label" for="groupInviteInput">Invite code</label>
+            <input id="groupInviteInput" type="text" minlength="6" maxlength="6" pattern="[a-z0-9]{6}" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="e.g. 4kq7mz" aria-label="6-character invite code" />
+            <button class="group-primary-action" id="groupJoinBtn" type="button">Join group</button>
+          </div>
+        </div>
+
+        <div class="group-details" id="groupDetails" hidden>
+          <div class="group-details-head">
+            <button class="group-back" id="groupBackBtn" type="button" aria-label="Back to my groups">← <span>My groups</span></button>
+            <span class="group-details-kicker">Selected group</span>
+          </div>
+          <div class="group-details-title-row">
+            <div>
+              <div class="group-title" id="groupLiveTitle">Live group</div>
+              <div class="account-subtitle" id="groupLiveMeta">Share only when you choose to.</div>
+            </div>
+            <button class="group-remove" id="groupRemoveSelected" type="button">Leave</button>
+          </div>
+          <div class="group-summary-card">
+            <div><span>Invite code</span><strong id="groupInviteCodeValue">—</strong></div>
+            <div><span>Members</span><strong id="groupMemberCountValue">0</strong></div>
+            <div><span>Sharing now</span><strong id="groupLiveCountValue">0</strong></div>
+          </div>
+          <div class="group-section">
+            <div class="group-section-title">Riders</div>
+            <div class="group-participant-list" id="groupParticipantList"></div>
+            <div class="group-participant-summary" id="groupParticipantSummary"></div>
+          </div>
+          <div class="group-section group-sharing-section">
+            <div class="group-section-title">Share location</div>
+            <div class="account-subtitle">Let this group see your live position while the app is open.</div>
+            <button id="groupShareBtn" class="group-share-action" type="button">Start sharing</button>
+          </div>
+          <div class="group-section">
+            <label class="group-section-title" for="groupStatusSelect">Status</label>
+            <div class="account-subtitle">Shown beside your name on the group map.</div>
+            <select id="groupStatusSelect" class="group-status-select" aria-label="Rider status">
+              <option value="available">Available</option>
+              <option value="breakdown">Breakdown</option>
+              <option value="injured">Injured</option>
+              <option value="stuck">Stuck</option>
+            </select>
+          </div>
+        </div>
+        <div class="account-status" id="groupStatus" role="status"></div>
       </div>
-      <div class="account-status" id="groupStatus" role="status"></div>
     </div>
   </section>
 
@@ -3266,6 +3444,7 @@
     let groupStatus = "available";
     let lastGroupPublishAt = 0;
     let groupRouteTarget = null;
+    let groupPanel = "list";
     let accountReadyPromise = null;
     let groupsReadyPromise = null;
     let pendingOtpEmail = "";
@@ -4553,6 +4732,23 @@
           "circle-color": ["match", ["get", "status"], "breakdown", "#dc6803", "injured", "#c1122f", "stuck", "#7c3aed", "#0354a6"],
           "circle-stroke-width": 2,
           "circle-stroke-color": "#ffffff"
+        }
+      });
+      map.addLayer({
+        id: "group-rider-status-icons",
+        type: "symbol",
+        source: "groupRiders",
+        layout: {
+          "text-field": ["match", ["get", "status"], "breakdown", "!", "injured", "+", "stuck", "×", "✓"],
+          "text-size": 8,
+          "text-font": ["Open Sans Bold"],
+          "text-allow-overlap": true,
+          "text-ignore-placement": true
+        },
+        paint: {
+          "text-color": "#ffffff",
+          "text-halo-color": ["match", ["get", "status"], "breakdown", "#dc6803", "injured", "#c1122f", "stuck", "#7c3aed", "#0354a6"],
+          "text-halo-width": 0.6
         }
       });
       map.addLayer({
@@ -7960,7 +8156,9 @@
 
     function renderGroupList() {
       const list = document.getElementById("groupList");
+      const count = document.getElementById("groupCount");
       if (!list) return;
+      if (count) count.textContent = String(ridingGroups.length);
       if (!ridingGroups.length) {
         list.innerHTML = '<div class="account-subtitle">No groups yet. Create one or join with an invite code.</div>';
         return;
@@ -7975,12 +8173,59 @@
           '<div><div class="group-name">' + escapeHtml(group.name) + '</div>' +
           (deleted ? '<div class="group-deleted">Deleted by group owner</div>' : '<div class="group-code">Code: ' + escapeHtml(group.invite_code || "") + '</div><div class="group-stats">' + memberCount + ' members · ' + liveCount + ' sharing</div>') + '</div>' +
           '<div class="group-row-actions">' +
-          (deleted ? '' : '<button type="button" data-select-group="' + group.id + '">' + (selectedRidingGroup?.id === group.id ? "Selected" : "Open") + '</button>') +
+          (deleted ? '' : '<button type="button" data-select-group="' + group.id + '">Open</button>') +
           '<button type="button" data-remove-group="' + group.id + '">' + actionLabel + '</button>' +
-          '</div>' +
+        '</div>' +
         '</div>'
         );
       }).join("");
+    }
+
+    function setGroupPanel(panel) {
+      groupPanel = panel;
+      const details = document.getElementById("groupDetails");
+      const isDetails = panel === "details";
+      document.querySelectorAll("[data-group-panel]").forEach((element) => {
+        element.hidden = isDetails || element.dataset.groupPanel !== panel;
+      });
+      document.querySelectorAll("[data-group-tab]").forEach((button) => {
+        const active = !isDetails && button.dataset.groupTab === panel;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-selected", active ? "true" : "false");
+      });
+      if (details) details.hidden = !isDetails;
+      document.body.classList.toggle("group-details-open", isDetails);
+    }
+
+    function syncSelectedGroupDetails() {
+      const group = selectedRidingGroup;
+      const invite = document.getElementById("groupInviteCodeValue");
+      const members = document.getElementById("groupMemberCountValue");
+      const live = document.getElementById("groupLiveCountValue");
+      const remove = document.getElementById("groupRemoveSelected");
+      if (!group) {
+        if (invite) invite.textContent = "—";
+        if (members) members.textContent = "0";
+        if (live) live.textContent = "0";
+        if (remove) remove.hidden = true;
+        return;
+      }
+      const memberCount = Number.isFinite(Number(group.member_count)) ? Number(group.member_count) : selectedGroupMembers.length;
+      const liveCount = groupRiders.size + (groupSharing ? 1 : 0);
+      if (invite) invite.textContent = group.invite_code || "—";
+      if (members) members.textContent = String(memberCount);
+      if (live) live.textContent = String(liveCount);
+      if (remove) {
+        remove.hidden = false;
+        remove.textContent = group.deleted_at ? "Remove" : group.role === "owner" ? "Delete" : "Leave";
+      }
+      const share = document.getElementById("groupShareBtn");
+      if (share) {
+        share.textContent = groupSharing ? "Stop sharing" : "Start sharing";
+        share.classList.toggle("active", groupSharing);
+      }
+      const status = document.getElementById("groupStatusSelect");
+      if (status) status.value = groupStatus;
     }
 
     function renderGroupParticipants() {
@@ -8002,6 +8247,7 @@
         const live = member.user_id === currentAuthUser?.id ? groupSharing : groupRiders.has(member.user_id);
         return '<div class="group-participant"><span class="group-participant-dot' + (live ? ' live' : '') + '" aria-hidden="true"></span><span>' + escapeHtml(name) + (member.role === "owner" ? ' <span class="group-participant-state">owner</span>' : '') + '</span><span class="group-participant-state">' + (live ? 'live' : 'offline') + '</span></div>';
       }).join("");
+      syncSelectedGroupDetails();
     }
 
     function syncSelectedGroupStats() {
@@ -8010,6 +8256,7 @@
       if (group) group.live_count = groupRiders.size + (groupSharing ? 1 : 0);
       renderGroupList();
       renderGroupParticipants();
+      syncSelectedGroupDetails();
     }
 
     function groupPresencePayload() {
@@ -8119,6 +8366,8 @@
       if (live) live.classList.add("open");
       if (title) title.textContent = group.name;
       if (meta) meta.textContent = "Invite code " + (group.invite_code || "") + " · sharing is off";
+      syncSelectedGroupDetails();
+      setGroupPanel("details");
       renderGroupList();
       if (group.deleted_at) {
         if (meta) meta.textContent = "Deleted by group owner · remove it from your list";
@@ -8154,6 +8403,8 @@
           document.getElementById("groupLive")?.classList.remove("open");
           renderGroupParticipants();
           refreshGroupRiderLayer();
+          syncSelectedGroupDetails();
+          setGroupPanel("list");
         }
         ridingGroups = await DirtSupabase.listGroups(currentAuthUser.id);
         renderGroupList();
@@ -8195,6 +8446,7 @@
         stopOtpResendCooldown();
         const code = document.getElementById("accountCode");
         if (code) code.value = "";
+        setGroupPanel("list");
       }
     }
 
@@ -8307,7 +8559,7 @@
       if (!selectedRidingGroup || !currentAuthUser) return;
       groupSharing = !groupSharing;
       const button = document.getElementById("groupShareBtn");
-      if (button) { button.textContent = groupSharing ? "Stop sharing location" : "Share my location"; button.classList.toggle("active", groupSharing); }
+      if (button) { button.textContent = groupSharing ? "Stop sharing" : "Start sharing"; button.classList.toggle("active", groupSharing); }
       if (!groupSharing) {
         await DirtSupabase.closeGroupChannel().catch(() => {});
         groupChannel = null;
@@ -8320,17 +8572,21 @@
         accountStatus("Live location sharing is on for “" + selectedRidingGroup.name + "”.");
       }
       syncSelectedGroupStats();
+      syncSelectedGroupDetails();
     }
 
     async function setGroupRiderStatus(status) {
+      if (!["available", "breakdown", "injured", "stuck"].includes(status)) return;
       groupStatus = status;
-      document.querySelectorAll("[data-rider-status]").forEach((button) => button.classList.toggle("active", button.dataset.riderStatus === status));
+      const select = document.getElementById("groupStatusSelect");
+      if (select) select.value = status;
       if (!currentAuthUser || !selectedRidingGroup) return;
       if (groupSharing) await publishGroupLocation(true);
       if (["breakdown", "injured", "stuck"].includes(status)) {
         await DirtSupabase.saveAlert({ group_id: selectedRidingGroup.id, user_id: currentAuthUser.id, status, latitude: hasRiderLocation() ? rider.lat : null, longitude: hasRiderLocation() ? rider.lng : null }).catch((err) => accountStatus(err.message || "Could not send alert.", "error"));
       }
       accountStatus(status === "available" ? "Rider status cleared." : "Group alerted: " + status + ".");
+      syncSelectedGroupDetails();
     }
 
     function handleGroupRiderClick(event) {
@@ -8761,6 +9017,7 @@
       groupSheet.setAttribute("aria-hidden", open ? "false" : "true");
       groupBtn?.setAttribute("aria-expanded", open ? "true" : "false");
       groupBtn?.classList.toggle("active", open);
+      if (!open) setGroupPanel("list");
     }
     window.addEventListener("resize", () => {
       if (accountSheet?.classList.contains("open")) positionAccountSheet(accountSheet, accountBtn);
@@ -8780,6 +9037,14 @@
       setGroupSheetOpen(open);
       if (open) await ensureGroupsReady();
     });
+    document.getElementById("groupSheetClose")?.addEventListener("click", () => setGroupSheetOpen(false));
+    document.querySelectorAll("[data-group-tab]").forEach((button) => button.addEventListener("click", () => {
+      setGroupPanel(button.dataset.groupTab);
+    }));
+    document.getElementById("groupBackBtn")?.addEventListener("click", () => setGroupPanel("list"));
+    document.getElementById("groupRemoveSelected")?.addEventListener("click", () => {
+      if (selectedRidingGroup) removeRidingGroup(selectedRidingGroup);
+    });
     document.getElementById("accountSendCode")?.addEventListener("click", accountSendCode);
     document.getElementById("accountResendCode")?.addEventListener("click", accountResendCode);
     document.getElementById("accountVerifyCode")?.addEventListener("click", accountVerifyCode);
@@ -8798,7 +9063,7 @@
       event.target.value = event.target.value.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 6);
     });
     document.getElementById("groupShareBtn")?.addEventListener("click", toggleGroupSharing);
-    document.querySelectorAll("[data-rider-status]").forEach((button) => button.addEventListener("click", () => setGroupRiderStatus(button.dataset.riderStatus)));
+    document.getElementById("groupStatusSelect")?.addEventListener("change", (event) => setGroupRiderStatus(event.target.value));
     document.getElementById("groupList")?.addEventListener("click", (event) => {
       const removeButton = event.target.closest("[data-remove-group]");
       if (removeButton) {
