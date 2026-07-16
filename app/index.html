@@ -1327,7 +1327,11 @@
     .group-form { display: grid; gap: 7px; margin-top: 8px; }
     .group-list { display: grid; gap: 5px; margin-top: 8px; }
     .group-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 7px 8px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+    .group-row.deleted { background: var(--panel-2); }
+    .group-row-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
     .group-row button { border: 0; background: transparent; color: var(--accent); font: 700 0.62rem var(--sans); cursor: pointer; }
+    .group-row button[data-remove-group] { color: var(--muted); }
+    .group-deleted { margin-top: 2px; color: #b42318; font: 700 0.56rem var(--sans); }
     .group-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.68rem; font-weight: 700; }
     .group-code { margin-top: 2px; color: var(--muted); font: 0.56rem var(--mono); }
     .group-live { display: none; margin-top: 9px; padding-top: 9px; border-top: 1px solid var(--line); }
@@ -2807,7 +2811,7 @@
 
   async function listGroups(userId) {
     const db = await init();
-    const { data, error } = await db.from("group_members").select("role, groups(id,name,owner_id,invite_code,created_at)").eq("user_id", userId);
+    const { data, error } = await db.from("group_members").select("role, groups(id,name,owner_id,invite_code,created_at,deleted_at)").eq("user_id", userId);
     if (error) throw error;
     return (data || []).map((row) => Object.assign({}, row.groups, { role: row.role }));
   }
@@ -2816,11 +2820,23 @@
     const db = await init();
     const code = String(inviteCode || "").trim().toLowerCase();
     if (!/^[a-z0-9]{6}$/.test(code)) throw new Error("Invite codes are six lowercase letters or numbers.");
-    const { data: group, error } = await db.from("groups").select("id,name,owner_id,invite_code,created_at").ilike("invite_code", code).single();
+    const { data, error } = await db.rpc("join_group_by_invite_code", { p_invite_code: code });
     if (error) throw error;
-    const { error: memberError } = await db.from("group_members").upsert({ group_id: group.id, user_id: userId, role: "member" }, { onConflict: "group_id,user_id" });
-    if (memberError) throw memberError;
+    const group = Array.isArray(data) ? data[0] : data;
+    if (!group) throw new Error("No active riding group was found for that code.");
     return group;
+  }
+
+  async function deleteGroup(groupId) {
+    const db = await init();
+    const { error } = await db.rpc("delete_group", { p_group_id: groupId });
+    if (error) throw error;
+  }
+
+  async function leaveGroup(groupId) {
+    const db = await init();
+    const { error } = await db.rpc("leave_group", { p_group_id: groupId });
+    if (error) throw error;
   }
 
   async function listMembers(groupId) {
@@ -2865,7 +2881,7 @@
     currentGroupChannel = null;
   }
 
-  global.DirtSupabase = { init, sendEmailCode, verifyEmailCode, signOut, session, user, updateDisplayName, onAuthStateChange, createGroup, listGroups, joinGroup, listMembers, savePresence, saveAlert, openGroupChannel, closeGroupChannel };
+  global.DirtSupabase = { init, sendEmailCode, verifyEmailCode, signOut, session, user, updateDisplayName, onAuthStateChange, createGroup, listGroups, joinGroup, deleteGroup, leaveGroup, listMembers, savePresence, saveAlert, openGroupChannel, closeGroupChannel };
 })(window);
   </script>
   <script>
@@ -7817,13 +7833,20 @@
         list.innerHTML = '<div class="account-subtitle">No groups yet. Create one or join with an invite code.</div>';
         return;
       }
-      list.innerHTML = ridingGroups.map((group) => (
-        '<div class="group-row">' +
+      list.innerHTML = ridingGroups.map((group) => {
+        const deleted = !!group.deleted_at;
+        const actionLabel = deleted ? "Remove" : group.role === "owner" ? "Delete" : "Leave";
+        return (
+        '<div class="group-row' + (deleted ? ' deleted' : '') + '">' +
           '<div><div class="group-name">' + escapeHtml(group.name) + '</div>' +
-          '<div class="group-code">Code: ' + escapeHtml(group.invite_code || "") + '</div></div>' +
-          '<button type="button" data-select-group="' + group.id + '">' + (selectedRidingGroup?.id === group.id ? "Selected" : "Open") + '</button>' +
+          (deleted ? '<div class="group-deleted">Deleted by group owner</div>' : '<div class="group-code">Code: ' + escapeHtml(group.invite_code || "") + '</div>') + '</div>' +
+          '<div class="group-row-actions">' +
+          (deleted ? '' : '<button type="button" data-select-group="' + group.id + '">' + (selectedRidingGroup?.id === group.id ? "Selected" : "Open") + '</button>') +
+          '<button type="button" data-remove-group="' + group.id + '">' + actionLabel + '</button>' +
+          '</div>' +
         '</div>'
-      )).join("");
+        );
+      }).join("");
     }
 
     function groupPresencePayload() {
@@ -7930,12 +7953,41 @@
       if (title) title.textContent = group.name;
       if (meta) meta.textContent = "Invite code " + (group.invite_code || "") + " · sharing is off";
       renderGroupList();
+      if (group.deleted_at) {
+        if (meta) meta.textContent = "Deleted by group owner · remove it from your list";
+        return;
+      }
       try {
         groupChannel = await DirtSupabase.openGroupChannel(group.id, currentAuthUser.id, { presence: applyGroupPresence, location: applyGroupLocation });
         if (meta) meta.textContent = "Invite code " + (group.invite_code || "") + " · live channel connected";
         if (groupSharing) await publishGroupLocation(true);
       } catch (err) {
         accountStatus("Group channel unavailable · " + (err.message || "try again"), "error");
+      }
+    }
+
+    async function removeRidingGroup(group) {
+      if (!group || !currentAuthUser) return;
+      const deleted = !!group.deleted_at;
+      const owner = group.role === "owner" && !deleted;
+      const prompt = deleted ? "Remove this deleted group from your list?" : owner ? "Delete this riding group for everyone?" : "Leave this riding group?";
+      if (!window.confirm(prompt)) return;
+      try {
+        if (owner) await DirtSupabase.deleteGroup(group.id);
+        else await DirtSupabase.leaveGroup(group.id);
+        if (selectedRidingGroup?.id === group.id) {
+          await DirtSupabase.closeGroupChannel().catch(() => {});
+          selectedRidingGroup = null;
+          groupChannel = null;
+          groupRiders.clear();
+          document.getElementById("groupLive")?.classList.remove("open");
+          refreshGroupRiderLayer();
+        }
+        ridingGroups = await DirtSupabase.listGroups(currentAuthUser.id);
+        renderGroupList();
+        accountStatus(deleted ? "Deleted group removed." : owner ? "Group deleted for all members." : "You left the group.");
+      } catch (err) {
+        accountStatus(err.message || "Could not update the group.", "error");
       }
     }
 
@@ -8540,6 +8592,12 @@
     document.getElementById("groupShareBtn")?.addEventListener("click", toggleGroupSharing);
     document.querySelectorAll("[data-rider-status]").forEach((button) => button.addEventListener("click", () => setGroupRiderStatus(button.dataset.riderStatus)));
     document.getElementById("groupList")?.addEventListener("click", (event) => {
+      const removeButton = event.target.closest("[data-remove-group]");
+      if (removeButton) {
+        const group = ridingGroups.find((row) => row.id === removeButton.dataset.removeGroup);
+        if (group) removeRidingGroup(group);
+        return;
+      }
       const button = event.target.closest("[data-select-group]");
       if (!button) return;
       const group = ridingGroups.find((row) => row.id === button.dataset.selectGroup);

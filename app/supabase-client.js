@@ -80,7 +80,7 @@
 
   async function listGroups(userId) {
     const db = await init();
-    const { data, error } = await db.from("group_members").select("role, groups(id,name,owner_id,invite_code,created_at)").eq("user_id", userId);
+    const { data, error } = await db.from("group_members").select("role, groups(id,name,owner_id,invite_code,created_at,deleted_at)").eq("user_id", userId);
     if (error) throw error;
     return (data || []).map((row) => Object.assign({}, row.groups, { role: row.role }));
   }
@@ -89,11 +89,23 @@
     const db = await init();
     const code = String(inviteCode || "").trim().toLowerCase();
     if (!/^[a-z0-9]{6}$/.test(code)) throw new Error("Invite codes are six lowercase letters or numbers.");
-    const { data: group, error } = await db.from("groups").select("id,name,owner_id,invite_code,created_at").ilike("invite_code", code).single();
+    const { data, error } = await db.rpc("join_group_by_invite_code", { p_invite_code: code });
     if (error) throw error;
-    const { error: memberError } = await db.from("group_members").upsert({ group_id: group.id, user_id: userId, role: "member" }, { onConflict: "group_id,user_id" });
-    if (memberError) throw memberError;
+    const group = Array.isArray(data) ? data[0] : data;
+    if (!group) throw new Error("No active riding group was found for that code.");
     return group;
+  }
+
+  async function deleteGroup(groupId) {
+    const db = await init();
+    const { error } = await db.rpc("delete_group", { p_group_id: groupId });
+    if (error) throw error;
+  }
+
+  async function leaveGroup(groupId) {
+    const db = await init();
+    const { error } = await db.rpc("leave_group", { p_group_id: groupId });
+    if (error) throw error;
   }
 
   async function listMembers(groupId) {
@@ -138,5 +150,5 @@
     currentGroupChannel = null;
   }
 
-  global.DirtSupabase = { init, sendEmailCode, verifyEmailCode, signOut, session, user, updateDisplayName, onAuthStateChange, createGroup, listGroups, joinGroup, listMembers, savePresence, saveAlert, openGroupChannel, closeGroupChannel };
+  global.DirtSupabase = { init, sendEmailCode, verifyEmailCode, signOut, session, user, updateDisplayName, onAuthStateChange, createGroup, listGroups, joinGroup, deleteGroup, leaveGroup, listMembers, savePresence, saveAlert, openGroupChannel, closeGroupChannel };
 })(window);
