@@ -6,9 +6,6 @@
   <meta name="theme-color" content="#f7f9fb" />
   <title>DIRT. MAYDAY.</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23f7f9fb'/%3E%3Cpath d='M12 42h40' stroke='%230a66c2' stroke-width='7' stroke-linecap='round'/%3E%3Cpath d='M16 24h32' stroke='%23162433' stroke-width='7' stroke-linecap='round'/%3E%3C/svg%3E" />
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@450;500;600;700;800&family=IBM+Plex+Mono:wght@500;600;700&display=swap" />
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
   <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
   <script src="https://unpkg.com/dexie@4.0.11/dist/dexie.min.js"></script>
@@ -36,8 +33,32 @@
       --chrome-border: rgba(255, 255, 255, 0.12);
       --chrome-shadow: 0 4px 14px rgba(16, 24, 40, 0.28);
       --panel-shadow: 0 10px 30px rgba(16, 24, 40, 0.14);
-      --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
-      --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI", Helvetica, Arial, sans-serif;
+      /* Apple HIG: SF Pro system UI + SF Mono for technical meta */
+      --font-ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI", system-ui, sans-serif;
+      --font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      --sans: var(--font-ui);
+      --mono: var(--font-mono);
+      /*
+        Semantic text styles — Apple Dynamic Type “Large” defaults.
+        Sizes in rem (@16px root). Do not invent one-off sizes; map UI to these.
+        Caption 2 (11pt) is the minimum readable UI size.
+      */
+      --text-title1: 1.75rem;      /* 28pt */
+      --text-title2: 1.375rem;     /* 22pt */
+      --text-title3: 1.25rem;      /* 20pt */
+      --text-headline: 1.0625rem;  /* 17pt semibold */
+      --text-body: 1.0625rem;      /* 17pt */
+      --text-callout: 1rem;        /* 16pt */
+      --text-subhead: 0.9375rem;   /* 15pt */
+      --text-footnote: 0.8125rem;  /* 13pt */
+      --text-caption1: 0.75rem;    /* 12pt */
+      --text-caption2: 0.6875rem;  /* 11pt — floor */
+      --text-title-tracking: -0.022em;
+      --text-body-tracking: -0.01em;
+      --text-caption-tracking: 0.006em;
+      --text-title-leading: 1.2;
+      --text-body-leading: 1.35;
+      --text-caption-leading: 1.25;
       --radius: 12px;
       --radius-sm: 9px;
       --brand-dot: #dc6803;
@@ -49,7 +70,17 @@
     }
 
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--sans); overflow: hidden; }
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font-ui);
+      font-size: 100%;
+      line-height: var(--text-body-leading);
+      letter-spacing: var(--text-body-tracking);
+      -webkit-text-size-adjust: 100%;
+      overflow: hidden;
+    }
     #map { position: absolute; inset: 0; }
 
     .topbar {
@@ -1511,6 +1542,76 @@
     .group-participant-dot { width: 7px; height: 7px; flex: 0 0 7px; border-radius: 50%; background: #a6adb5; }
     .group-participant-dot.live { background: #20a464; box-shadow: 0 0 0 2px rgba(32, 164, 100, 0.14); }
     .group-participant-state { margin-left: auto; color: var(--muted); font: 0.54rem var(--mono); }
+    .group-participant-state.distress { color: #c1122f; font-weight: 700; }
+    .group-alert-stack {
+      position: absolute;
+      top: calc(12px + env(safe-area-inset-top, 0px));
+      left: 12px;
+      right: 12px;
+      z-index: 28;
+      display: grid;
+      gap: 8px;
+      pointer-events: none;
+      max-width: min(420px, calc(100vw - 24px));
+      margin: 0 auto;
+    }
+    .group-alert {
+      pointer-events: auto;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      align-items: start;
+      padding: 12px 12px 12px 14px;
+      border-radius: 12px;
+      border: 1px solid rgba(193, 18, 47, 0.35);
+      background: rgba(255, 248, 248, 0.96);
+      box-shadow: 0 8px 24px rgba(16, 24, 40, 0.16);
+      cursor: pointer;
+      text-align: left;
+      font-family: var(--font-ui);
+    }
+    .group-alert[data-status="breakdown"] {
+      border-color: rgba(220, 104, 3, 0.4);
+      background: rgba(255, 250, 244, 0.96);
+    }
+    .group-alert[data-status="stuck"] {
+      border-color: rgba(124, 58, 237, 0.35);
+      background: rgba(248, 245, 255, 0.96);
+    }
+    .group-alert-copy { display: grid; gap: 2px; min-width: 0; }
+    .group-alert-title {
+      font-size: var(--text-callout);
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: var(--text-body-tracking);
+    }
+    .group-alert-sub {
+      font-size: var(--text-footnote);
+      color: var(--muted);
+      line-height: var(--text-body-leading);
+    }
+    .group-alert-dismiss {
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      font-size: 1.1rem;
+      line-height: 1;
+      padding: 2px 4px;
+      cursor: pointer;
+    }
+    .popup .status-pill {
+      display: inline-block;
+      margin-top: 2px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: var(--text-caption1);
+      font-weight: 700;
+      color: #fff;
+      background: #0354a6;
+    }
+    .popup .status-pill.breakdown { background: #dc6803; }
+    .popup .status-pill.injured { background: #c1122f; }
+    .popup .status-pill.stuck { background: #7c3aed; }
     .group-live-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 7px; }
     .group-live-row button { min-height: 30px; padding: 0 8px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel-2); color: var(--text); font: 700 0.62rem var(--sans); cursor: pointer; }
     .group-live-row button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
@@ -2249,10 +2350,10 @@
       border: 0 !important;
       border-radius: 0 !important;
       box-shadow: none !important;
-      font-family: var(--mono) !important;
-      font-size: 0.5rem !important;
-      letter-spacing: 0.04em !important;
-      text-transform: uppercase !important;
+      font-family: var(--font-mono) !important;
+      font-size: var(--text-caption2) !important;
+      letter-spacing: var(--text-caption-tracking) !important;
+      text-transform: none !important;
       padding: 0 12px !important;
       margin: 0 !important;
       max-width: min(92vw, 640px) !important;
@@ -2305,8 +2406,8 @@
       --p2-danger: #dc2626;
       --p2-ok: #16a34a;
       --p2-warn: #d97706;
-      --p2-sans: "Barlow", "Avenir Next", "Segoe UI", sans-serif;
-      --p2-mono: "IBM Plex Mono", "SF Mono", ui-monospace, monospace;
+      --p2-sans: var(--font-ui);
+      --p2-mono: var(--font-mono);
       --p2-r: 8px;
       --p2-r-nav-btn: 4px;
       --p2-ctrl: 36px;
@@ -2342,8 +2443,8 @@
       --ctrl: var(--p2-ctrl);
     }
 
-    html, body { font-family: var(--p2-sans); color: var(--p2-sheet-ink); }
-    button, input, select { font-family: var(--p2-sans); }
+    html, body { font-family: var(--font-ui); color: var(--p2-sheet-ink); }
+    button, input, select { font-family: var(--font-ui); }
     .topbar {
       top: var(--p2-top-pad);
       left: 10px;
@@ -2359,7 +2460,10 @@
       background: var(--p2-chrome);
       box-shadow: var(--p2-shadow-soft);
     }
-    .brand-dirt { font-size: 1.08rem; letter-spacing: -0.03em; }
+    .brand-dirt {
+      font-size: var(--text-headline);
+      letter-spacing: var(--text-title-tracking);
+    }
     .brand-by { color: var(--p2-ink-faint); }
     .topbar-right { display: none; }
 
@@ -2586,7 +2690,12 @@
     body.navigating .nav-hud-divider { display: block; align-self: center; height: 58%; background: rgba(250,250,249,.18); }
     body.navigating .nav-hud { max-width: none; border-radius: 0; box-shadow: none; margin-left: 0; min-width: 0; }
     body.navigating .nav-cue-card { background: transparent; padding: 12px 14px; }
-    body.navigating .nav-cue-main { font-size: 1.28rem; }
+    body.navigating .nav-cue-main {
+      font-size: var(--text-title3);
+      font-weight: 700;
+      letter-spacing: var(--text-title-tracking);
+      line-height: var(--text-title-leading);
+    }
     body.navigating .topbar-right { display: none; }
     .nav-hud-toggle {
       width: 34px;
@@ -2703,10 +2812,11 @@
     .legend-head-title,
     .route-finder-title,
     #groupLiveTitle {
-      font-size: 1.35rem;
-      line-height: 1.08;
-      font-weight: 800;
-      letter-spacing: -0.015em;
+      font-family: var(--font-ui);
+      font-size: var(--text-title2);
+      line-height: var(--text-title-leading);
+      font-weight: 700;
+      letter-spacing: var(--text-title-tracking);
     }
     .route-finder-title {
       flex: 0 0 auto;
@@ -2783,7 +2893,9 @@
       border-radius: var(--p2-r);
       background: transparent;
       color: var(--p2-orange-deep);
-      font: 700 0.68rem var(--p2-sans);
+      font-family: var(--font-ui);
+      font-size: var(--text-footnote);
+      font-weight: 600;
       cursor: pointer;
     }
     .account-profile-form { margin-top: 14px; }
@@ -2829,7 +2941,7 @@
     .group-row .group-stats,
     .group-row .group-code { color: var(--p2-warn); }
 
-    .legend-head-title { font-size: 1.35rem; }
+    .legend-head-title { font-size: var(--text-title2); }
     .legend-group + .legend-group { border-top-color: rgba(28, 25, 23, 0.16); }
 
     body.app-sheet-open .stack {
@@ -2864,6 +2976,418 @@
       .account-sheet,
       .legend,
       .group-sheet { width: 100%; max-width: none; }
+    }
+
+    /* ——— Apple HIG typography normalization ———
+       Collapse ~30 one-off sizes into semantic text styles.
+       Floor: Caption 2 (11pt). Mono only for codes / stats / technical meta. */
+    .brand-dirt {
+      font-family: var(--font-ui);
+      font-size: var(--text-headline);
+      font-weight: 800;
+      letter-spacing: var(--text-title-tracking);
+      line-height: 1.1;
+    }
+    .brand-by {
+      font-family: var(--font-ui);
+      font-size: var(--text-caption2);
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      line-height: var(--text-caption-leading);
+    }
+
+    .account-title:not(.key-title) {
+      font-size: var(--text-title3);
+      font-weight: 700;
+      letter-spacing: var(--text-title-tracking);
+      line-height: var(--text-title-leading);
+    }
+    .account-subtitle,
+    .account-lede,
+    .group-sheet-head .account-subtitle,
+    .legend-sub,
+    .route-compact-summary,
+    .access-warn-copy,
+    .poi-pop-body,
+    .gpx-help {
+      font-family: var(--font-ui);
+      font-size: var(--text-subhead);
+      font-weight: 400;
+      letter-spacing: var(--text-body-tracking);
+      line-height: var(--text-body-leading);
+    }
+    .account-field-label,
+    .legend-group-title,
+    .section-label,
+    .group-section-title,
+    .poi-pop-cat,
+    .poi-pop-src {
+      font-family: var(--font-ui);
+      font-size: var(--text-footnote);
+      font-weight: 600;
+      letter-spacing: var(--text-body-tracking);
+      line-height: var(--text-caption-leading);
+      text-transform: none;
+    }
+    .account-display-name,
+    .account-profile-email .account-readonly,
+    .account-readonly {
+      font-family: var(--font-ui);
+      font-size: var(--text-headline);
+      font-weight: 600;
+      letter-spacing: var(--text-body-tracking);
+      line-height: var(--text-title-leading);
+    }
+    .account-edit,
+    .account-code-actions button,
+    .account-signout,
+    .group-back,
+    .group-remove,
+    .saved-action,
+    .track-editor-actions button {
+      font-family: var(--font-ui);
+      font-size: var(--text-footnote);
+      font-weight: 600;
+      letter-spacing: var(--text-body-tracking);
+    }
+    .account-form input,
+    .account-profile-form input,
+    .group-form input,
+    .account-code-input,
+    .group-status-select,
+    select,
+    input[type="text"],
+    input[type="email"] {
+      font-family: var(--font-ui);
+      font-size: var(--text-body);
+      font-weight: 400;
+      letter-spacing: var(--text-body-tracking);
+      line-height: var(--text-body-leading);
+    }
+    .account-code-input {
+      font-family: var(--font-mono);
+      font-size: var(--text-title3);
+      font-weight: 600;
+      letter-spacing: 0.2em;
+    }
+    .account-form > #accountSendCode,
+    .account-code-form > #accountVerifyCode,
+    .account-profile-form > #accountSaveProfile,
+    .group-primary-action,
+    .group-share-action,
+    .route-compact-export,
+    .route-compact-nav,
+    .route-actions button,
+    .route-nav,
+    .btn.primary {
+      font-family: var(--font-ui);
+      font-size: var(--text-callout);
+      font-weight: 600;
+      letter-spacing: var(--text-body-tracking);
+    }
+
+    .legend-label,
+    .legend-row,
+    .group-name,
+    .group-participant,
+    .rider,
+    .stage-title,
+    .saved-name {
+      font-family: var(--font-ui);
+      font-size: var(--text-callout);
+      font-weight: 600;
+      letter-spacing: var(--text-body-tracking);
+      line-height: var(--text-body-leading);
+    }
+    .group-tab,
+    .route-tabs .route-mode,
+    .route-pref,
+    .route-mode {
+      font-family: var(--font-ui);
+      font-size: var(--text-subhead);
+      font-weight: 600;
+      letter-spacing: var(--text-body-tracking);
+    }
+    .group-row .group-code,
+    .group-row .group-stats,
+    .group-summary-card span,
+    .stage-sub,
+    .saved-meta,
+    .saved-draft-tag,
+    .route-stats,
+    .route-status .route-stats,
+    .route-compact-summary .route-stats,
+    .track-editor-meta,
+    .roadbook-meta,
+    .roadbook-tag,
+    .status,
+    .meta,
+    .route-debug,
+    .popup .k,
+    .access-warn-metric,
+    .route-access-warn,
+    .access-warn-collapsed,
+    .route-warn {
+      font-family: var(--font-mono);
+      font-size: var(--text-caption1);
+      font-weight: 500;
+      letter-spacing: var(--text-caption-tracking);
+      line-height: var(--text-caption-leading);
+      text-transform: none;
+    }
+    .group-summary-card strong {
+      font-family: var(--font-ui);
+      font-size: var(--text-headline);
+      font-weight: 700;
+      letter-spacing: var(--text-body-tracking);
+    }
+    .group-row button,
+    .stage-add,
+    .planner-saved-link {
+      font-family: var(--font-ui);
+      font-size: var(--text-footnote);
+      font-weight: 600;
+    }
+
+    .route-compact-pref,
+    .route-profile-select,
+    select[aria-label*="profile" i],
+    select[aria-label*="Profile" i] {
+      font-family: var(--font-ui);
+      font-size: var(--text-subhead);
+      font-weight: 600;
+    }
+    .route-compact-summary .route-value,
+    .route-status .route-value {
+      font-family: var(--font-mono);
+      font-size: var(--text-title3);
+      font-weight: 700;
+      letter-spacing: var(--text-title-tracking);
+      line-height: var(--text-title-leading);
+    }
+
+    body.navigating .nav-stage-line,
+    body.navigating .nav-cue-dist {
+      font-family: var(--font-mono);
+      font-size: var(--text-caption1);
+      font-weight: 600;
+      letter-spacing: var(--text-caption-tracking);
+      line-height: var(--text-caption-leading);
+    }
+    body.navigating .nav-cue-main {
+      font-family: var(--font-ui);
+      font-size: var(--text-title3);
+      font-weight: 700;
+      letter-spacing: var(--text-title-tracking);
+      line-height: var(--text-title-leading);
+    }
+    body.navigating .nav-cue-sub {
+      font-family: var(--font-ui);
+      font-size: var(--text-footnote);
+      font-weight: 500;
+      letter-spacing: var(--text-body-tracking);
+      line-height: var(--text-body-leading);
+    }
+    .nav-report,
+    .nav-stop,
+    .nav-hud-toggle {
+      font-family: var(--font-ui);
+      font-size: var(--text-caption1);
+      font-weight: 600;
+      letter-spacing: var(--text-caption-tracking);
+    }
+
+    .stack .btn,
+    .btn.mini,
+    .btn.cue-mode {
+      font-family: var(--font-ui);
+      font-size: var(--text-caption1);
+      font-weight: 600;
+      letter-spacing: var(--text-caption-tracking);
+    }
+    .btn.cue-mode .cue-mode-top {
+      font-family: var(--font-mono);
+      font-size: var(--text-caption2);
+      font-weight: 600;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+    .btn.cue-mode .cue-mode-main {
+      font-family: var(--font-mono);
+      font-size: var(--text-caption1);
+      font-weight: 700;
+    }
+
+    .poi-pop-title {
+      font-family: var(--font-ui);
+      font-size: var(--text-headline);
+      font-weight: 700;
+      letter-spacing: var(--text-body-tracking);
+      line-height: var(--text-title-leading);
+    }
+    .poi-pop-row,
+    .poi-pop-link {
+      font-family: var(--font-ui);
+      font-size: var(--text-footnote);
+      line-height: var(--text-body-leading);
+    }
+    .follow-chip {
+      font-family: var(--font-ui);
+      font-size: var(--text-footnote);
+      font-weight: 600;
+    }
+    .stage-marker {
+      font-family: var(--font-mono);
+      font-size: var(--text-caption1);
+      font-weight: 700;
+    }
+
+    /* Floor: nothing readable stays below Caption 2 */
+    .status,
+    .meta,
+    .brand-by,
+    .btn.cue-mode .cue-mode-top {
+      font-size: max(var(--text-caption2), 0.6875rem);
+    }
+
+    /* Shared sheet contract: every persistent sheet has one fixed
+       orientation header and one independently scrolling content area. */
+    .route-card,
+    .account-sheet,
+    .group-sheet,
+    .legend {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .sheet-handle-bar {
+      flex: 0 0 auto;
+      min-height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--p2-sheet);
+    }
+
+    .sheet-handle {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      min-height: 36px;
+      padding: 10px 0 8px;
+      border: 0;
+      background: transparent;
+      color: var(--p2-sheet-ink-soft);
+      cursor: pointer;
+      touch-action: pan-y;
+    }
+
+    .sheet-handle::after {
+      content: "";
+      width: 40px;
+      height: 4px;
+      border-radius: 999px;
+      background: rgba(28, 25, 23, 0.22);
+    }
+
+    .sheet-handle:focus-visible {
+      outline: 2px solid var(--p2-blue);
+      outline-offset: -2px;
+    }
+
+    .sheet-header {
+      flex: 0 0 auto;
+      width: var(--p2-shell-w);
+      max-width: var(--p2-shell-w);
+      margin: 0 auto;
+      padding: 4px 0 12px;
+      background: var(--p2-sheet);
+      color: var(--p2-sheet-ink);
+      position: relative;
+      z-index: 3;
+    }
+
+    .sheet-subtitle {
+      margin-top: 4px;
+      color: var(--p2-sheet-ink-soft);
+      font-family: var(--font-ui);
+      font-size: var(--text-subhead);
+      font-weight: 400;
+      line-height: var(--text-body-leading);
+      letter-spacing: var(--text-body-tracking);
+    }
+
+    .sheet-scroll {
+      flex: 1 1 auto;
+      min-height: 0;
+      width: var(--p2-shell-w);
+      max-width: var(--p2-shell-w);
+      margin: 0 auto;
+      overflow-y: auto;
+      scrollbar-gutter: stable;
+      scrollbar-width: thin;
+    }
+
+    .route-card .route-sheet-handle-bar {
+      flex: 0 0 auto;
+    }
+
+    .route-finder-header {
+      padding-top: 4px;
+      padding-bottom: 12px;
+    }
+
+    .route-finder-header .route-finder-title {
+      margin: 0;
+    }
+
+    .route-card .route-drawer-scroll {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow-y: auto;
+    }
+
+    .account-sheet > .sheet-scroll {
+      padding-bottom: calc(var(--p2-dock-h) + 8px);
+    }
+
+    .account-sheet .account-form,
+    .account-sheet .account-code-form {
+      margin-top: 12px;
+    }
+
+    .group-sheet .group-sheet-head {
+      flex: 0 0 auto;
+      width: var(--p2-shell-w);
+      max-width: var(--p2-shell-w);
+      margin: 0 auto;
+      padding: 4px 0 12px;
+    }
+
+    .group-sheet > #groupAuthed {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow: hidden;
+    }
+
+    .group-sheet .group-sheet-body {
+      height: 100%;
+      margin-top: 0;
+    }
+
+    .legend .legend-head {
+      margin: 0 auto;
+      padding: 4px 0 12px;
+    }
+
+    .legend .legend-close {
+      display: none;
+    }
+
+    .legend-scroll {
+      padding-bottom: calc(var(--p2-dock-h) + 8px);
     }
   </style>
 </head>
@@ -2934,8 +3458,11 @@
         aria-expanded="false"
       ></button>
     </div>
+    <div class="sheet-header route-finder-header">
+      <div class="route-finder-title key-title">Route Finder</div>
+      <div class="sheet-subtitle">Build a route from here or plan multiple stages.</div>
+    </div>
     <div class="route-drawer-scroll" id="routeDrawerScroll">
-    <div class="route-finder-title key-title">Route Finder</div>
     <div class="route-drawer-compact" id="routeDrawerCompact">
       <div class="route-segment route-tabs" role="tablist" aria-label="Route planner tabs">
         <button class="route-mode active" type="button" data-route-mode="here" role="tab" aria-selected="true">From here</button>
@@ -3048,13 +3575,19 @@
   <div class="access-info-tip" id="accessInfoTip" role="tooltip" hidden>Unknown access is not permission. Routes may include closures, private land, seasonal restrictions, or enforcement.</div>
 
   <section class="account-sheet" id="accountSheet" aria-label="Rider account" aria-hidden="true">
-    <div class="account-title key-title" id="accountTitle">Rider account</div>
-    <div class="account-subtitle" id="accountSubtitle">Enter your email to receive a one-time code.</div>
-    <div class="account-form" id="accountForm">
+    <div class="sheet-handle-bar">
+      <button class="sheet-handle" id="accountSheetHandle" type="button" aria-label="Close profile"></button>
+    </div>
+    <div class="sheet-header">
+      <div class="account-title key-title" id="accountTitle">Rider account</div>
+      <div class="account-subtitle" id="accountSubtitle">Enter your email to receive a one-time code.</div>
+    </div>
+    <div class="sheet-scroll" id="accountSheetScroll">
+      <div class="account-form" id="accountForm">
       <input id="accountEmail" type="email" autocomplete="email" placeholder="Email" aria-label="Email" />
       <button class="primary" id="accountSendCode" type="button">Send verification code</button>
-    </div>
-    <div class="account-code-form" id="accountCodeForm" hidden>
+      </div>
+      <div class="account-code-form" id="accountCodeForm" hidden>
       <div class="account-subtitle">Enter the one-time code we sent to your email.</div>
       <input id="accountCode" class="account-code-input" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="10" placeholder="Enter code" aria-label="Email verification code" />
       <button class="primary" id="accountVerifyCode" type="button">Verify code</button>
@@ -3062,10 +3595,9 @@
         <button id="accountResendCode" type="button" disabled>Resend code <span id="accountResendTimer"></span></button>
         <button id="accountUseDifferentEmail" type="button">Use different email</button>
       </div>
-    </div>
-    <div class="account-status" id="accountStatus" role="status"></div>
-    <div id="accountAuthed" hidden>
-      <div class="account-subtitle">Your rider profile is saved to this account.</div>
+      </div>
+      <div class="account-status" id="accountStatus" role="status"></div>
+      <div id="accountAuthed" hidden>
       <div class="account-profile-view" id="accountProfileView">
         <div class="account-field-label">Display name</div>
         <div class="account-display-name" id="accountDisplayNameText"></div>
@@ -3081,11 +3613,15 @@
         <strong class="account-readonly" id="accountIdentity"></strong>
       </div>
       <button class="account-signout" id="accountSignOut" type="button">Sign out</button>
+      </div>
     </div>
   </section>
 
   <section class="account-sheet group-sheet" id="groupSheet" aria-label="Riding groups" aria-hidden="true">
-    <div class="group-sheet-head">
+    <div class="sheet-handle-bar">
+      <button class="sheet-handle" id="groupSheetHandle" type="button" aria-label="Close riding groups"></button>
+    </div>
+    <div class="sheet-header group-sheet-head">
       <div>
         <div class="account-title key-title">Riding groups</div>
         <div class="account-subtitle" id="groupAuthNotice">Sign in first to create a group, join a group, or share your location.</div>
@@ -3154,12 +3690,12 @@
           </div>
           <div class="group-section group-sharing-section">
             <div class="group-section-title">Share location</div>
-            <div class="account-subtitle">Let this group see your live position while the app is open.</div>
+            <div class="account-subtitle">While sharing is on, every group you’re in can see your live position — and you can see theirs.</div>
             <button id="groupShareBtn" class="group-share-action" type="button">Start sharing</button>
           </div>
           <div class="group-section">
             <label class="group-section-title" for="groupStatusSelect">Status</label>
-            <div class="account-subtitle">Shown beside your name on the group map.</div>
+            <div class="account-subtitle">Shown as a word beside your name on the group map.</div>
             <select id="groupStatusSelect" class="group-status-select" aria-label="Rider status">
               <option value="available">Available</option>
               <option value="breakdown">Breakdown</option>
@@ -3249,10 +3785,14 @@
   </div>
 
   <div class="legend collapsed" id="legend">
-    <div class="legend-head">
-      <span class="legend-head-title">Layers</span>
-      <button class="legend-close" id="legendClose" type="button" title="Close layers" aria-label="Close layers">✕</button>
+    <div class="sheet-handle-bar">
+      <button class="sheet-handle" id="legendSheetHandle" type="button" aria-label="Close layers"></button>
     </div>
+    <div class="sheet-header legend-head">
+      <div class="legend-head-title">Layers</div>
+      <div class="sheet-subtitle">Control map layers and rider services.</div>
+    </div>
+    <div class="sheet-scroll legend-scroll">
     <div class="legend-group">
       <span class="legend-title">Map visibility</span>
       <label class="legend-row">
@@ -3318,6 +3858,7 @@
         <span class="switch"><input type="checkbox" data-source-toggle="nsGov" checked aria-label="Toggle Nova Scotia government source"><span></span></span>
       </label>
     </div>
+    </div>
   </div>
 
   <div class="export-sheet" id="accessWarnSheet" aria-hidden="true">
@@ -3372,6 +3913,8 @@
     <button class="btn primary" id="recenterBtn" title="Follow my location" aria-label="Follow my location">◎</button>
   </div>
 
+  <div class="group-alert-stack" id="groupAlertStack" aria-live="assertive"></div>
+
   <div class="status-dock" id="statusDock" aria-live="polite">
     <div class="status" id="status"></div>
     <div class="meta" id="dataMeta"></div>
@@ -3384,6 +3927,7 @@
 
   <script src="../routing/lib/roadbook-curves.js"></script>
   <script src="../routing/lib/stages.js"></script>
+  <script src="group-sharing.js"></script>
   <script>
 (function (global) {
   "use strict";
@@ -3598,7 +4142,6 @@
   "use strict";
 
   let client = null;
-  let currentGroupChannel = null;
 
   async function init() {
     if (client) return client;
@@ -3741,29 +4284,54 @@
     return db.from("rider_alerts").insert(payload).select().single();
   }
 
+  const groupChannelById = new Map();
+
   async function openGroupChannel(groupId, userId, handlers) {
     const db = await init();
-    if (currentGroupChannel) await db.removeChannel(currentGroupChannel);
+    if (groupChannelById.has(groupId)) {
+      await db.removeChannel(groupChannelById.get(groupId));
+      groupChannelById.delete(groupId);
+    }
     const channel = db.channel("group:" + groupId, { config: { private: true, presence: { key: userId } } });
     channel
       .on("presence", { event: "sync" }, () => handlers?.presence?.(channel.presenceState()))
       .on("presence", { event: "join" }, () => handlers?.presence?.(channel.presenceState()))
       .on("presence", { event: "leave" }, () => handlers?.presence?.(channel.presenceState()))
-      .on("broadcast", { event: "location" }, ({ payload }) => handlers?.location?.(payload));
+      .on("broadcast", { event: "location" }, ({ payload }) => handlers?.location?.(payload))
+      .on("broadcast", { event: "alert" }, ({ payload }) => handlers?.alert?.(payload))
+      .on("broadcast", { event: "sharing_off" }, ({ payload }) => handlers?.sharingOff?.(payload));
     const status = await new Promise((resolve, reject) => {
       channel.subscribe((value) => {
         if (value === "SUBSCRIBED") resolve(value);
         if (value === "CHANNEL_ERROR" || value === "TIMED_OUT") reject(new Error("Could not connect to the group channel."));
       });
     });
-    currentGroupChannel = channel;
-    return { status, track: (payload) => channel.track(payload), sendLocation: (payload) => channel.send({ type: "broadcast", event: "location", payload }) };
+    groupChannelById.set(groupId, channel);
+    return {
+      groupId,
+      status,
+      track: (payload) => channel.track(payload),
+      untrack: () => channel.untrack(),
+      presenceState: () => channel.presenceState(),
+      sendLocation: (payload) => channel.send({ type: "broadcast", event: "location", payload }),
+      sendAlert: (payload) => channel.send({ type: "broadcast", event: "alert", payload }),
+      sendSharingOff: (payload) => channel.send({ type: "broadcast", event: "sharing_off", payload })
+    };
   }
 
-  async function closeGroupChannel() {
-    if (!client || !currentGroupChannel) return;
-    await client.removeChannel(currentGroupChannel);
-    currentGroupChannel = null;
+  async function closeGroupChannel(groupId) {
+    if (!client) return;
+    if (groupId) {
+      const channel = groupChannelById.get(groupId);
+      if (!channel) return;
+      await client.removeChannel(channel);
+      groupChannelById.delete(groupId);
+      return;
+    }
+    for (const channel of groupChannelById.values()) {
+      await client.removeChannel(channel);
+    }
+    groupChannelById.clear();
   }
 
   global.DirtSupabase = { init, sendEmailCode, verifyEmailCode, signOut, session, user, updateDisplayName, onAuthStateChange, createGroup, listGroups, joinGroup, deleteGroup, leaveGroup, listMembers, savePresence, saveAlert, openGroupChannel, closeGroupChannel };
@@ -4046,11 +4614,12 @@
     let importedTrackDraft = null;
     const importedTrackMarkers = [];
     const groupRiders = new Map();
+    const groupChannelHandles = new Map();
+    let groupAlerts = [];
     let currentAuthUser = null;
     let ridingGroups = [];
     let selectedRidingGroup = null;
     let selectedGroupMembers = [];
-    let groupChannel = null;
     let groupSharing = false;
     let groupStatus = "available";
     let lastGroupPublishAt = 0;
@@ -4455,16 +5024,21 @@
     }
 
     function groupRiderFeatureCollection() {
+      const GS = window.DirtGroupSharing;
       return {
         type: "FeatureCollection",
         features: Array.from(groupRiders.values()).filter((entry) => Number.isFinite(entry.lng) && Number.isFinite(entry.lat)).map((entry) => ({
           type: "Feature",
           geometry: { type: "Point", coordinates: [entry.lng, entry.lat] },
-          properties: {
+          properties: GS ? GS.riderFeatureProperties(entry) : {
             userId: entry.userId,
             displayName: entry.displayName || "Rider",
             status: entry.status || "available",
-            lastSeenAt: entry.lastSeenAt || null
+            labelLine: (entry.displayName || "Rider") + " · " + (entry.status || "available"),
+            groupId: entry.groupId || null,
+            groupName: entry.groupName || null,
+            lastSeenAt: entry.lastSeenAt || null,
+            heading: Number.isFinite(entry.heading) ? entry.heading : -1
           }
         }))
       };
@@ -5365,10 +5939,36 @@
         }
       });
       map.addLayer({
+        id: "group-rider-heading",
+        type: "symbol",
+        source: "groupRiders",
+        filter: [">=", ["get", "heading"], 0],
+        layout: {
+          "text-field": "▲",
+          "text-size": 11,
+          "text-rotate": ["get", "heading"],
+          "text-rotation-alignment": "map",
+          "text-allow-overlap": true,
+          "text-ignore-placement": true,
+          "text-offset": [0, -1.35]
+        },
+        paint: {
+          "text-color": ["match", ["get", "status"], "breakdown", "#dc6803", "injured", "#c1122f", "stuck", "#7c3aed", "#0354a6"],
+          "text-halo-color": "#ffffff",
+          "text-halo-width": 1.2
+        }
+      });
+      map.addLayer({
         id: "group-rider-labels",
         type: "symbol",
         source: "groupRiders",
-        layout: { "text-field": ["get", "displayName"], "text-size": 11, "text-offset": [0, 1.4], "text-anchor": "top", "text-allow-overlap": true },
+        layout: {
+          "text-field": ["get", "labelLine"],
+          "text-size": 11,
+          "text-offset": [0, 1.45],
+          "text-anchor": "top",
+          "text-allow-overlap": true
+        },
         paint: { "text-color": "#172433", "text-halo-color": "#ffffff", "text-halo-width": 1.5 }
       });
       map.addSource("routeDraft", {
@@ -8843,7 +9443,7 @@
         return;
       }
       const memberCount = Number.isFinite(Number(group.member_count)) ? Number(group.member_count) : selectedGroupMembers.length;
-      const liveCount = groupRiders.size + (groupSharing ? 1 : 0);
+      const liveCount = countLiveForGroup(group.id);
       if (invite) invite.textContent = group.invite_code || "—";
       if (members) members.textContent = String(memberCount);
       if (live) live.textContent = String(liveCount);
@@ -8860,9 +9460,23 @@
       if (status) status.value = groupStatus;
     }
 
+    function countLiveForGroup(groupId) {
+      let count = 0;
+      for (const entry of groupRiders.values()) {
+        if (entry.groupId === groupId) count += 1;
+      }
+      if (groupSharing && selectedRidingGroup?.id === groupId) count += 1;
+      else if (groupSharing && ridingGroups.some((g) => g.id === groupId && !g.deleted_at)) {
+        // Sharing publishes to every active membership — count self once per group card.
+        count += 1;
+      }
+      return count;
+    }
+
     function renderGroupParticipants() {
       const summary = document.getElementById("groupParticipantSummary");
       const list = document.getElementById("groupParticipantList");
+      const GS = window.DirtGroupSharing;
       if (!summary || !list) return;
       const members = Array.isArray(selectedGroupMembers) ? selectedGroupMembers : [];
       const liveMembers = members.filter((member) => member.user_id === currentAuthUser?.id ? groupSharing : groupRiders.has(member.user_id));
@@ -8877,23 +9491,73 @@
           ? (currentAuthUser.user_metadata?.display_name || currentAuthUser.email?.split("@")[0] || "You")
           : (profile?.display_name || "Rider");
         const live = member.user_id === currentAuthUser?.id ? groupSharing : groupRiders.has(member.user_id);
-        return '<div class="group-participant"><span class="group-participant-dot' + (live ? ' live' : '') + '" aria-hidden="true"></span><span>' + escapeHtml(name) + (member.role === "owner" ? ' <span class="group-participant-state">owner</span>' : '') + '</span><span class="group-participant-state">' + (live ? 'live' : 'offline') + '</span></div>';
+        const peer = groupRiders.get(member.user_id);
+        const selfStatus = member.user_id === currentAuthUser?.id ? groupStatus : null;
+        const status = selfStatus || peer?.status || null;
+        const statusText = live && status && GS ? GS.statusLabel(status) : (live ? "live" : "offline");
+        const distress = live && status && GS && GS.isDistressStatus(status);
+        return '<div class="group-participant"><span class="group-participant-dot' + (live ? ' live' : '') + '" aria-hidden="true"></span><span>' + escapeHtml(name) + (member.role === "owner" ? ' <span class="group-participant-state">owner</span>' : '') + '</span><span class="group-participant-state' + (distress ? ' distress' : '') + '">' + escapeHtml(statusText) + '</span></div>';
       }).join("");
       syncSelectedGroupDetails();
     }
 
     function syncSelectedGroupStats() {
-      if (!selectedRidingGroup) return;
-      const group = ridingGroups.find((item) => item.id === selectedRidingGroup.id);
-      if (group) group.live_count = groupRiders.size + (groupSharing ? 1 : 0);
+      for (const group of ridingGroups) {
+        if (group.deleted_at) continue;
+        group.live_count = countLiveForGroup(group.id);
+      }
       renderGroupList();
       renderGroupParticipants();
       syncSelectedGroupDetails();
     }
 
-    function groupPresencePayload() {
-      if (!currentAuthUser || !selectedRidingGroup || !groupSharing || !hasRiderLocation()) return null;
-      return {
+    function replaceGroupRiders(nextMap) {
+      groupRiders.clear();
+      for (const [userId, entry] of nextMap) groupRiders.set(userId, entry);
+    }
+
+    function renderGroupAlerts() {
+      const stack = document.getElementById("groupAlertStack");
+      if (!stack) return;
+      if (!groupAlerts.length) {
+        stack.innerHTML = "";
+        return;
+      }
+      stack.innerHTML = groupAlerts.map((alert) => (
+        '<div class="group-alert" data-status="' + escapeHtml(alert.status) + '" data-alert-id="' + escapeHtml(alert.id) + '" role="button" tabindex="0">' +
+          '<div class="group-alert-copy">' +
+            '<div class="group-alert-title">' + escapeHtml(alert.displayName) + ' · ' + escapeHtml(alert.statusText) + '</div>' +
+            '<div class="group-alert-sub">' + escapeHtml(alert.groupName || "Group") + ' · tap to go to last known location</div>' +
+          '</div>' +
+          '<button class="group-alert-dismiss" type="button" data-dismiss-alert="' + escapeHtml(alert.id) + '" aria-label="Dismiss alert">×</button>' +
+        '</div>'
+      )).join("");
+    }
+
+    function focusGroupAlert(alert) {
+      if (!alert || !Number.isFinite(alert.lng) || !Number.isFinite(alert.lat) || !map) return;
+      map.flyTo({ center: [alert.lng, alert.lat], zoom: Math.max(map.getZoom(), 13.5), essential: true });
+    }
+
+    function ingestGroupAlert(payload) {
+      const GS = window.DirtGroupSharing;
+      if (!GS || !groupSharing) return;
+      if (payload?.userId && payload.userId === currentAuthUser?.id) return;
+      const record = GS.createAlertRecord(payload);
+      if (!record) return;
+      groupAlerts = GS.upsertAlert(groupAlerts, record);
+      renderGroupAlerts();
+    }
+
+    async function publishGroupLocation(force) {
+      if (!groupSharing || !currentAuthUser || !hasRiderLocation()) return;
+      if (!groupChannelHandles.size) return;
+      const GS = window.DirtGroupSharing;
+      const interval = GS ? GS.publishIntervalMs(groupStatus) : 15000;
+      const now = Date.now();
+      if (!force && now - lastGroupPublishAt < interval) return;
+      lastGroupPublishAt = now;
+      const basePayload = {
         userId: currentAuthUser.id,
         displayName: currentAuthUser.user_metadata?.display_name || currentAuthUser.email?.split("@")[0] || "Rider",
         lng: rider.lng,
@@ -8903,22 +9567,20 @@
         status: groupStatus,
         lastSeenAt: new Date().toISOString()
       };
-    }
-
-    async function publishGroupLocation(force) {
-      const payload = groupPresencePayload();
-      if (!payload || !groupChannel) return;
-      const now = Date.now();
-      if (!force && now - lastGroupPublishAt < 15000) return;
-      lastGroupPublishAt = now;
       if (!navigator.onLine) {
-        try { localStorage.setItem("dirt_group_pending_presence_v1", JSON.stringify(payload)); } catch (_) { /* storage may be unavailable */ }
+        try { localStorage.setItem("dirt_group_pending_presence_v1", JSON.stringify(basePayload)); } catch (_) { /* storage may be unavailable */ }
         accountStatus("Offline · last location will publish when reconnected.");
         return;
       }
       try {
-        await groupChannel.track(payload);
-        await groupChannel.sendLocation(payload);
+        for (const group of ridingGroups) {
+          if (group.deleted_at) continue;
+          const handle = groupChannelHandles.get(group.id);
+          if (!handle) continue;
+          const payload = Object.assign({}, basePayload, { groupId: group.id, groupName: group.name || "Group" });
+          await handle.track(payload);
+          await handle.sendLocation(payload);
+        }
         if (force || now - lastGroupPublishAt < 1000) {
           await DirtSupabase.savePresence({
             user_id: currentAuthUser.id,
@@ -8929,11 +9591,11 @@
             heading: rider.heading,
             speed_mps: rider.speed,
             accuracy_m: rider.accuracy,
-            last_seen_at: payload.lastSeenAt
+            last_seen_at: basePayload.lastSeenAt
           });
         }
       } catch (err) {
-        try { localStorage.setItem("dirt_group_pending_presence_v1", JSON.stringify(payload)); } catch (_) { /* storage may be unavailable */ }
+        try { localStorage.setItem("dirt_group_pending_presence_v1", JSON.stringify(basePayload)); } catch (_) { /* storage may be unavailable */ }
         accountStatus("Live sharing reconnecting · " + (err.message || "connection issue"), "error");
       }
     }
@@ -8954,9 +9616,9 @@
     }
 
     async function reconnectGroupSharing() {
-      if (!currentAuthUser || !selectedRidingGroup || !groupSharing || !navigator.onLine) return;
+      if (!currentAuthUser || !groupSharing || !navigator.onLine) return;
       try {
-        await selectRidingGroup(selectedRidingGroup);
+        await ensureAllGroupChannels();
         const pending = localStorage.getItem("dirt_group_pending_presence_v1");
         if (pending) localStorage.removeItem("dirt_group_pending_presence_v1");
         await publishGroupLocation(true);
@@ -8966,38 +9628,81 @@
       }
     }
 
-    function applyGroupPresence(state) {
-      groupRiders.clear();
-      for (const [userId, values] of Object.entries(state || {})) {
-        const entry = Array.isArray(values) ? values[values.length - 1] : values;
-        if (!entry || userId === currentAuthUser?.id) continue;
-        groupRiders.set(userId, Object.assign({}, entry, { userId }));
-      }
+    function applyGroupPresence(group, state) {
+      if (!groupSharing) return;
+      const GS = window.DirtGroupSharing;
+      if (!GS) return;
+      const next = GS.mergePresenceKeepLastKnown(groupRiders, state, currentAuthUser?.id, {
+        groupId: group.id,
+        groupName: group.name || "Group"
+      });
+      replaceGroupRiders(next);
       refreshGroupRiderLayer();
       syncSelectedGroupStats();
     }
 
     function applyGroupLocation(payload) {
-      if (!payload || payload.userId === currentAuthUser?.id || !Number.isFinite(payload.lat) || !Number.isFinite(payload.lng)) return;
-      groupRiders.set(payload.userId, payload);
+      if (!groupSharing) return;
+      const GS = window.DirtGroupSharing;
+      if (!GS) return;
+      const next = GS.applyLocationUpdate(groupRiders, payload, currentAuthUser?.id);
+      replaceGroupRiders(next);
       refreshGroupRiderLayer();
       syncSelectedGroupStats();
     }
 
+    function applyGroupSharingOff(payload) {
+      const GS = window.DirtGroupSharing;
+      if (!GS || !payload?.userId) return;
+      if (payload.userId === currentAuthUser?.id) return;
+      replaceGroupRiders(GS.applySharingOff(groupRiders, payload.userId));
+      refreshGroupRiderLayer();
+      syncSelectedGroupStats();
+    }
+
+    function groupChannelHandlers(group) {
+      return {
+        presence: (state) => applyGroupPresence(group, state),
+        location: applyGroupLocation,
+        alert: ingestGroupAlert,
+        sharingOff: applyGroupSharingOff
+      };
+    }
+
+    async function ensureGroupChannel(group) {
+      if (!group || group.deleted_at || !currentAuthUser) return null;
+      if (groupChannelHandles.has(group.id)) return groupChannelHandles.get(group.id);
+      const handle = await DirtSupabase.openGroupChannel(group.id, currentAuthUser.id, groupChannelHandlers(group));
+      groupChannelHandles.set(group.id, handle);
+      return handle;
+    }
+
+    async function ensureAllGroupChannels() {
+      if (!currentAuthUser) return;
+      const activeIds = new Set(ridingGroups.filter((g) => !g.deleted_at).map((g) => g.id));
+      for (const groupId of Array.from(groupChannelHandles.keys())) {
+        if (!activeIds.has(groupId)) {
+          await DirtSupabase.closeGroupChannel(groupId).catch(() => {});
+          groupChannelHandles.delete(groupId);
+        }
+      }
+      for (const group of ridingGroups) {
+        if (group.deleted_at) continue;
+        try { await ensureGroupChannel(group); }
+        catch (err) { console.warn("Group channel unavailable", group.id, err); }
+      }
+    }
+
     async function selectRidingGroup(group) {
       if (!group) return;
-      await DirtSupabase.closeGroupChannel().catch(() => {});
-      groupChannel = null;
       selectedRidingGroup = group;
       selectedGroupMembers = [];
-      groupRiders.clear();
-      refreshGroupRiderLayer();
       const live = document.getElementById("groupLive");
       const title = document.getElementById("groupLiveTitle");
       const meta = document.getElementById("groupLiveMeta");
       if (live) live.classList.add("open");
       if (title) title.textContent = group.name;
-      if (meta) meta.textContent = "Invite code " + (group.invite_code || "") + " · sharing is off";
+      if (meta) meta.textContent = "Invite code " + (group.invite_code || "") + (groupSharing ? " · sharing on" : " · sharing is off");
       syncSelectedGroupDetails();
       setGroupPanel("details");
       renderGroupList();
@@ -9008,8 +9713,8 @@
       try {
         selectedGroupMembers = await DirtSupabase.listMembers(group.id);
         renderGroupParticipants();
-        groupChannel = await DirtSupabase.openGroupChannel(group.id, currentAuthUser.id, { presence: applyGroupPresence, location: applyGroupLocation });
-        if (meta) meta.textContent = "Invite code " + (group.invite_code || "") + " · live channel connected";
+        await ensureAllGroupChannels();
+        if (meta) meta.textContent = "Invite code " + (group.invite_code || "") + (groupSharing ? " · sharing on · live" : " · live channel ready");
         renderGroupParticipants();
         if (groupSharing) await publishGroupLocation(true);
       } catch (err) {
@@ -9026,19 +9731,18 @@
       try {
         if (owner) await DirtSupabase.deleteGroup(group.id);
         else await DirtSupabase.leaveGroup(group.id);
+        await DirtSupabase.closeGroupChannel(group.id).catch(() => {});
+        groupChannelHandles.delete(group.id);
         if (selectedRidingGroup?.id === group.id) {
-          await DirtSupabase.closeGroupChannel().catch(() => {});
           selectedRidingGroup = null;
           selectedGroupMembers = [];
-          groupChannel = null;
-          groupRiders.clear();
           document.getElementById("groupLive")?.classList.remove("open");
           renderGroupParticipants();
-          refreshGroupRiderLayer();
           syncSelectedGroupDetails();
           setGroupPanel("list");
         }
         ridingGroups = await DirtSupabase.listGroups(currentAuthUser.id);
+        await ensureAllGroupChannels();
         renderGroupList();
         accountStatus(deleted ? "Deleted group removed." : owner ? "Group deleted for all members." : "You left the group.");
       } catch (err) {
@@ -9051,8 +9755,10 @@
       try {
         ridingGroups = await DirtSupabase.listGroups(currentAuthUser.id);
         renderGroupList();
+        await ensureAllGroupChannels();
         const selected = ridingGroups.find((group) => group.id === selectedRidingGroup?.id) || ridingGroups[0];
         if (selected) await selectRidingGroup(selected);
+        if (groupSharing) await publishGroupLocation(true);
       } catch (err) {
         accountStatus("Could not load groups · " + (err.message || "error"), "error");
       }
@@ -9062,12 +9768,14 @@
       currentAuthUser = user || null;
       if (!currentAuthUser) {
         await DirtSupabase.closeGroupChannel().catch(() => {});
-        groupChannel = null;
+        groupChannelHandles.clear();
         selectedRidingGroup = null;
         selectedGroupMembers = [];
         ridingGroups = [];
         groupSharing = false;
         groupRiders.clear();
+        groupAlerts = [];
+        renderGroupAlerts();
         refreshGroupRiderLayer();
       }
       syncAccountUi();
@@ -9174,6 +9882,7 @@
         document.getElementById("groupNameInput").value = "";
         ridingGroups = await DirtSupabase.listGroups(currentAuthUser.id);
         const created = ridingGroups.find((item) => item.id === group.id) || Object.assign({}, group, { role: "owner", member_count: 1, live_count: 0 });
+        await ensureAllGroupChannels();
         await selectRidingGroup(created);
         renderGroupList();
         accountStatus("Group created. Share its invite code with your riders.");
@@ -9184,7 +9893,15 @@
     async function joinRidingGroup() {
       const code = document.getElementById("groupInviteInput")?.value.trim();
       if (!code || !currentAuthUser) { accountStatus("Enter an invite code first.", "error"); return; }
-      try { const group = await DirtSupabase.joinGroup(code, currentAuthUser.id); document.getElementById("groupInviteInput").value = ""; ridingGroups = await DirtSupabase.listGroups(currentAuthUser.id); await selectRidingGroup(group); renderGroupList(); accountStatus("Joined “" + group.name + "”."); }
+      try {
+        const group = await DirtSupabase.joinGroup(code, currentAuthUser.id);
+        document.getElementById("groupInviteInput").value = "";
+        ridingGroups = await DirtSupabase.listGroups(currentAuthUser.id);
+        await ensureAllGroupChannels();
+        await selectRidingGroup(group);
+        renderGroupList();
+        accountStatus("Joined “" + group.name + "”.");
+      }
       catch (err) { accountStatus(err.message || "Could not join group.", "error"); }
     }
 
@@ -9194,15 +9911,30 @@
       const button = document.getElementById("groupShareBtn");
       if (button) { button.textContent = groupSharing ? "Stop sharing" : "Start sharing"; button.classList.toggle("active", groupSharing); }
       if (!groupSharing) {
-        await DirtSupabase.closeGroupChannel().catch(() => {});
-        groupChannel = null;
+        const offPayload = {
+          userId: currentAuthUser.id,
+          sharing: false,
+          lastSeenAt: new Date().toISOString()
+        };
+        for (const handle of groupChannelHandles.values()) {
+          try {
+            await handle.sendSharingOff(offPayload);
+            await handle.untrack();
+          } catch (_) { /* channel may already be down */ }
+        }
         groupRiders.clear();
+        refreshGroupRiderLayer();
         await DirtSupabase.savePresence({ user_id: currentAuthUser.id, sharing_enabled: false, status: "offline", last_seen_at: new Date().toISOString() }).catch(() => {});
         accountStatus("Location sharing stopped.");
       } else {
-        if (!groupChannel) await selectRidingGroup(selectedRidingGroup);
+        await ensureAllGroupChannels();
+        for (const group of ridingGroups) {
+          if (group.deleted_at) continue;
+          const handle = groupChannelHandles.get(group.id);
+          if (handle?.presenceState) applyGroupPresence(group, handle.presenceState());
+        }
         await publishGroupLocation(true);
-        accountStatus("Live location sharing is on for “" + selectedRidingGroup.name + "”.");
+        accountStatus("Live location sharing is on across your groups.");
       }
       syncSelectedGroupStats();
       syncSelectedGroupDetails();
@@ -9216,10 +9948,35 @@
       if (!currentAuthUser || !selectedRidingGroup) return;
       if (groupSharing) await publishGroupLocation(true);
       if (["breakdown", "injured", "stuck"].includes(status)) {
-        await DirtSupabase.saveAlert({ group_id: selectedRidingGroup.id, user_id: currentAuthUser.id, status, latitude: hasRiderLocation() ? rider.lat : null, longitude: hasRiderLocation() ? rider.lng : null }).catch((err) => accountStatus(err.message || "Could not send alert.", "error"));
+        const alertPayload = {
+          alertId: currentAuthUser.id + ":" + status + ":" + Date.now(),
+          userId: currentAuthUser.id,
+          displayName: currentAuthUser.user_metadata?.display_name || currentAuthUser.email?.split("@")[0] || "Rider",
+          status,
+          groupId: selectedRidingGroup.id,
+          groupName: selectedRidingGroup.name || "Group",
+          lng: hasRiderLocation() ? rider.lng : null,
+          lat: hasRiderLocation() ? rider.lat : null,
+          createdAt: new Date().toISOString()
+        };
+        for (const group of ridingGroups) {
+          if (group.deleted_at) continue;
+          const handle = groupChannelHandles.get(group.id);
+          if (!handle) continue;
+          const payload = Object.assign({}, alertPayload, { groupId: group.id, groupName: group.name || "Group" });
+          try { await handle.sendAlert(payload); } catch (_) { /* best-effort broadcast */ }
+        }
+        await DirtSupabase.saveAlert({
+          group_id: selectedRidingGroup.id,
+          user_id: currentAuthUser.id,
+          status,
+          latitude: hasRiderLocation() ? rider.lat : null,
+          longitude: hasRiderLocation() ? rider.lng : null
+        }).catch((err) => accountStatus(err.message || "Could not send alert.", "error"));
       }
       accountStatus(status === "available" ? "Rider status cleared." : "Group alerted: " + status + ".");
       syncSelectedGroupDetails();
+      renderGroupParticipants();
     }
 
     function handleGroupRiderClick(event) {
@@ -9227,9 +9984,18 @@
       const features = map.queryRenderedFeatures(event.point, { layers: ["group-rider-core", "group-rider-halo"] });
       if (!features.length) return false;
       const feature = features[0];
-      const p = feature.properties || {};
-      groupRouteTarget = { lng: event.lngLat.lng, lat: event.lngLat.lat, userId: p.userId, displayName: p.displayName || "Rider" };
-      popupBody.innerHTML = '<div class="k">Rider</div><div class="v">' + escapeHtml(p.displayName || "Rider") + '</div><div class="k">Status</div><div class="v">' + escapeHtml(p.status || "available") + '</div><div class="k">Last seen</div><div class="v">' + escapeHtml(p.lastSeenAt ? new Date(p.lastSeenAt).toLocaleTimeString() : "just now") + '</div><button class="saved-action primary" data-route-to-rider="1" type="button">Route to this rider</button>';
+      const GS = window.DirtGroupSharing;
+      const target = GS ? GS.routeTargetFromFeature(feature) : null;
+      if (!target) return false;
+      groupRouteTarget = target;
+      const model = GS.buildGroupRiderPopupModel(target);
+      const lastSeen = target.lastSeenAt ? new Date(target.lastSeenAt).toLocaleTimeString() : "just now";
+      popupBody.innerHTML =
+        '<div class="k">Rider</div><div class="v">' + escapeHtml(model.displayName) + '</div>' +
+        '<div class="k">Group</div><div class="v">' + escapeHtml(model.groupName) + '</div>' +
+        '<div class="k">Status</div><div class="v"><span class="status-pill ' + escapeHtml(model.status) + '">' + escapeHtml(model.statusText) + '</span></div>' +
+        '<div class="k">Last seen</div><div class="v">' + escapeHtml(lastSeen) + '</div>' +
+        '<button class="saved-action primary" data-route-to-rider="1" type="button">' + escapeHtml(model.ctaLabel) + '</button>';
       popupEl.style.left = Math.max(12, Math.min(event.point.x - 130, window.innerWidth - 272)) + "px";
       popupEl.style.top = Math.max(80, event.point.y - 150) + "px";
       popupEl.classList.add("visible");
@@ -9469,7 +10235,7 @@
         routeSheetHandle.setAttribute("aria-expanded", state === "expanded" ? "true" : "false");
         routeSheetHandle.setAttribute(
           "aria-label",
-          state === "expanded" ? "Collapse route planner" : "Expand route planner"
+          "Close route planner"
         );
       }
       if (!opts || !opts.silent) {
@@ -9555,7 +10321,7 @@
         try { routeSheetHandle.releasePointerCapture(event.pointerId); } catch (_) { /* ignore */ }
         drawerDrag = null;
         if (wasClick) {
-          togglePlannerExpandedCollapsed();
+          setPlannerDrawerState("closed");
           return;
         }
         if (plannerTab === "here") return;
@@ -9568,7 +10334,7 @@
       routeSheetHandle.addEventListener("keydown", (event) => {
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
-          togglePlannerExpandedCollapsed();
+          setPlannerDrawerState("closed");
         }
       });
     }
@@ -9732,6 +10498,9 @@
       setGroupSheetOpen(open);
       if (open) await ensureGroupsReady();
     });
+    document.getElementById("accountSheetHandle")?.addEventListener("click", () => setAccountSheetOpen(false));
+    document.getElementById("groupSheetHandle")?.addEventListener("click", () => setGroupSheetOpen(false));
+    document.getElementById("legendSheetHandle")?.addEventListener("click", () => setLegendOpen(false));
     document.getElementById("groupSheetClose")?.addEventListener("click", () => setGroupSheetOpen(false));
     document.querySelectorAll("[data-group-tab]").forEach((button) => button.addEventListener("click", () => {
       setGroupPanel(button.dataset.groupTab);
@@ -9760,6 +10529,20 @@
     });
     document.getElementById("groupShareBtn")?.addEventListener("click", toggleGroupSharing);
     document.getElementById("groupStatusSelect")?.addEventListener("change", (event) => setGroupRiderStatus(event.target.value));
+    document.getElementById("groupAlertStack")?.addEventListener("click", (event) => {
+      const dismiss = event.target.closest("[data-dismiss-alert]");
+      if (dismiss) {
+        event.stopPropagation();
+        const GS = window.DirtGroupSharing;
+        groupAlerts = GS ? GS.dismissAlert(groupAlerts, dismiss.getAttribute("data-dismiss-alert")) : groupAlerts.filter((row) => row.id !== dismiss.getAttribute("data-dismiss-alert"));
+        renderGroupAlerts();
+        return;
+      }
+      const card = event.target.closest("[data-alert-id]");
+      if (!card) return;
+      const alert = groupAlerts.find((row) => row.id === card.getAttribute("data-alert-id"));
+      if (alert) focusGroupAlert(alert);
+    });
     document.getElementById("groupList")?.addEventListener("click", (event) => {
       const removeButton = event.target.closest("[data-remove-group]");
       if (removeButton) {
