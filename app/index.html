@@ -6,6 +6,9 @@
   <meta name="theme-color" content="#f7f9fb" />
   <title>DIRT. MAYDAY.</title>
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23f7f9fb'/%3E%3Cpath d='M12 42h40' stroke='%230a66c2' stroke-width='7' stroke-linecap='round'/%3E%3Cpath d='M16 24h32' stroke='%23162433' stroke-width='7' stroke-linecap='round'/%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow:wght@450;500;600;700;800&family=IBM+Plex+Mono:wght@500;600;700&display=swap" />
   <link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css" />
   <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
   <script src="https://unpkg.com/dexie@4.0.11/dist/dexie.min.js"></script>
@@ -2277,6 +2280,324 @@
         width: min(296px, calc(100vw - 24px));
       }
     }
+
+    /* Phase 3 chrome integration. The basemap, routing, auth, and data
+       layers remain unchanged; these rules bring the live shell in line with
+       the locked Phase 2 visual contract. */
+    :root {
+      --p2-chrome: #1c1917;
+      --p2-chrome-2: #292524;
+      --p2-chrome-3: #3f3a36;
+      --p2-card: #4a4540;
+      --p2-card-active: #524d47;
+      --p2-sheet: #f3efe9;
+      --p2-sheet-2: #ebe6df;
+      --p2-sheet-ink: #1c1917;
+      --p2-sheet-ink-soft: #57534e;
+      --p2-sheet-ink-faint: #78716c;
+      --p2-sheet-line: rgba(28, 25, 23, 0.1);
+      --p2-ink: #fafaf9;
+      --p2-ink-soft: rgba(250, 250, 249, 0.72);
+      --p2-ink-faint: rgba(250, 250, 249, 0.45);
+      --p2-orange: #e8790c;
+      --p2-orange-deep: #c2410c;
+      --p2-blue: #0b6bcb;
+      --p2-danger: #dc2626;
+      --p2-ok: #16a34a;
+      --p2-warn: #d97706;
+      --p2-sans: "Barlow", "Avenir Next", "Segoe UI", sans-serif;
+      --p2-mono: "IBM Plex Mono", "SF Mono", ui-monospace, monospace;
+      --p2-r: 8px;
+      --p2-r-nav-btn: 4px;
+      --p2-ctrl: 36px;
+      --p2-top-pad: max(54px, env(safe-area-inset-top));
+      --p2-bottom-pad: max(10px, env(safe-area-inset-bottom));
+      --p2-dock-h: calc(52px + var(--p2-bottom-pad) + 12px);
+      --p2-sheet-max: 50%;
+      --p2-sheet-collapsed: min(48%, 320px);
+      --p2-sheet-mid: 62%;
+      --p2-sheet-tall: 75%;
+      --p2-locate-gap: 24px;
+      --p2-scroll-gutter: 12px;
+      --p2-shadow: 0 8px 24px rgba(12, 10, 9, 0.28);
+      --p2-shadow-soft: 0 3px 12px rgba(12, 10, 9, 0.2);
+      --chrome: var(--p2-chrome);
+      --chrome-border: rgba(250, 250, 249, 0.1);
+      --chrome-shadow: var(--p2-shadow-soft);
+      --panel: var(--p2-sheet);
+      --panel-2: var(--p2-sheet-2);
+      --line: var(--p2-sheet-line);
+      --text: var(--p2-sheet-ink);
+      --muted: var(--p2-sheet-ink-soft);
+      --accent: var(--p2-blue);
+      --route: var(--p2-orange);
+      --route-dark: var(--p2-chrome);
+      --navy: var(--p2-chrome);
+      --danger: var(--p2-danger);
+      --brand-dot: var(--p2-orange);
+      --sans: var(--p2-sans);
+      --mono: var(--p2-mono);
+      --radius: var(--p2-r);
+      --radius-sm: var(--p2-r);
+      --ctrl: var(--p2-ctrl);
+    }
+
+    html, body { font-family: var(--p2-sans); color: var(--p2-sheet-ink); }
+    button, input, select { font-family: var(--p2-sans); }
+    .topbar {
+      top: var(--p2-top-pad);
+      left: 10px;
+      right: 10px;
+      gap: 0;
+    }
+    .topbar-left { gap: 0; }
+    .brand {
+      min-height: var(--p2-brand-h, 42px);
+      padding: 8px 12px;
+      border: 0;
+      border-radius: var(--p2-r);
+      background: var(--p2-chrome);
+      box-shadow: var(--p2-shadow-soft);
+    }
+    .brand-dirt { font-size: 1.08rem; letter-spacing: -0.03em; }
+    .brand-by { color: var(--p2-ink-faint); }
+    .topbar-right { display: none; }
+
+    .bottom-dock {
+      position: fixed;
+      left: 10px;
+      right: 10px;
+      bottom: calc(var(--p2-bottom-pad) + 8px);
+      z-index: 50;
+      display: flex;
+      justify-content: center;
+      pointer-events: none;
+    }
+    .bottom-nav {
+      pointer-events: auto;
+      display: flex;
+      align-items: center;
+      gap: 2px;
+      width: 100%;
+      max-width: 340px;
+      padding: 4px;
+      border-radius: var(--p2-r);
+      background: var(--p2-chrome);
+      box-shadow: var(--p2-shadow);
+    }
+    .nav-btn {
+      flex: 1 1 0;
+      height: 40px;
+      border: 0;
+      border-radius: var(--p2-r-nav-btn);
+      background: transparent;
+      color: var(--p2-ink-soft);
+      display: grid;
+      place-items: center;
+      cursor: pointer;
+    }
+    .nav-btn:hover, .nav-btn:focus-visible { color: var(--p2-ink); background: var(--p2-chrome-3); }
+    .nav-btn.active, .nav-btn.is-active, .nav-btn[aria-expanded="true"] { background: var(--p2-orange); color: #fff; }
+    .nav-btn svg { width: 17px; height: 17px; }
+    .route-export-float { display: none !important; }
+
+    .stack {
+      right: 10px;
+      bottom: calc(var(--p2-dock-h) + var(--p2-locate-gap));
+      gap: 16px;
+      z-index: 28;
+    }
+    .stack .btn { width: var(--p2-ctrl); min-width: var(--p2-ctrl); height: var(--p2-ctrl); border-radius: var(--p2-r); }
+    .stack .btn.cue-mode { height: var(--p2-ctrl); }
+    .stack .btn.primary, .stack .btn.view-mode.on, .stack .btn.cue-mode.on { background: var(--p2-blue); }
+    body.planner-collapsed .stack { bottom: calc(var(--p2-sheet-collapsed) + var(--p2-locate-gap)); }
+    body.planner-expanded .stack { bottom: calc(var(--p2-sheet-max) + var(--p2-locate-gap)); }
+    body.legend-open .stack { bottom: calc(var(--p2-sheet-mid) + var(--p2-locate-gap)); }
+    body.account-open .stack { bottom: calc(var(--p2-sheet-max) + var(--p2-locate-gap)); }
+    body.groups-open .stack { bottom: calc(var(--p2-sheet-tall) + var(--p2-locate-gap)); }
+    body.app-sheet-open .stack > :not(#recenterBtn),
+    body.app-sheet-open .follow-chip,
+    body.app-sheet-open .status-dock { display: none !important; }
+    body.app-sheet-open .stack #recenterBtn { display: grid; }
+
+    .route-card,
+    .account-sheet,
+    .legend {
+      background: var(--p2-sheet);
+      color: var(--p2-sheet-ink);
+      border-color: var(--p2-sheet-line);
+      box-shadow: 0 -10px 28px rgba(28, 25, 23, 0.14);
+      border-radius: var(--p2-r) var(--p2-r) 0 0;
+    }
+    .route-card { z-index: 26; padding-bottom: calc(var(--p2-dock-h) + 4px); }
+    .route-sheet-handle-bar { background: var(--p2-sheet); }
+    .route-sheet-handle::after { background: rgba(28, 25, 23, 0.18); }
+    .route-card.is-collapsed { max-height: var(--p2-sheet-collapsed); }
+    .route-card.is-expanded { max-height: var(--p2-sheet-max); }
+    .route-card.is-expanded .route-drawer-scroll { height: auto; max-height: none; }
+    .route-mode.active, .route-mode[aria-selected="true"] { background: var(--p2-orange); color: #fff; }
+    .route-compact-actions button, .route-actions button, .route-nav { border-radius: var(--p2-r); }
+    .route-compact-export { background: var(--p2-blue) !important; }
+    .route-compact-nav { background: var(--p2-orange) !important; }
+    .route-compact-pref { border-radius: var(--p2-r); background-color: #fff; }
+
+    .account-sheet {
+      top: auto;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      width: 100%;
+      max-width: none;
+      height: auto;
+      max-height: var(--p2-sheet-max);
+      padding: 24px 12px calc(var(--p2-dock-h) + 8px);
+      overflow-x: hidden;
+      overflow-y: auto;
+      border-left: 0;
+      border-right: 0;
+      border-bottom: 0;
+      border-radius: var(--p2-r) var(--p2-r) 0 0;
+      transform: translateY(16px);
+      transform-origin: bottom center;
+      transition: opacity 160ms ease, transform 180ms cubic-bezier(.2,.8,.2,1), visibility 0s linear 180ms;
+      scrollbar-gutter: stable;
+      scrollbar-width: thin;
+    }
+    .account-sheet::before {
+      top: 10px;
+      left: 50%;
+      width: 36px;
+      height: 3px;
+      border: 0;
+      border-radius: 999px;
+      background: rgba(28, 25, 23, 0.18);
+      transform: translateX(-50%);
+    }
+    .account-sheet.open { transform: translateY(0); }
+    .group-sheet {
+      height: var(--p2-sheet-tall);
+      max-height: var(--p2-sheet-tall);
+      padding: 24px 12px calc(var(--p2-dock-h) + 8px);
+    }
+    .group-sheet-body { margin-top: 12px; }
+    .group-panel, .group-details { padding-right: var(--p2-scroll-gutter); scrollbar-gutter: stable; }
+    .group-sheet-head { flex: 0 0 auto; }
+    .group-sheet-close, .group-back, .group-remove { background: transparent; border-radius: var(--p2-r); }
+    .group-tabs { border-radius: var(--p2-r); background: var(--p2-sheet-2); }
+    .group-tab { border-radius: var(--p2-r); }
+    .group-tab.active { background: var(--p2-chrome); }
+    .group-row, .group-participant, .group-summary-card { border-radius: var(--p2-r); }
+    .group-row { background: var(--p2-card); color: var(--p2-ink); border-color: rgba(250,250,249,.06); }
+    .group-row .group-name, .group-row .group-code, .group-row .group-stats { color: var(--p2-ink); }
+    .group-row .group-code, .group-row .group-stats { color: #fbbf24; }
+    .group-row button { color: #fbbf24; }
+    .group-summary-card { background: transparent; }
+    .group-summary-card strong { color: var(--p2-sheet-ink); }
+    .group-primary-action, .group-share-action { background: var(--p2-orange); border-color: var(--p2-orange); border-radius: var(--p2-r); }
+    .group-share-action.active { background: var(--p2-chrome); border-color: var(--p2-chrome); }
+    .account-form input, .account-profile-form input, .group-form input, .account-code-input, .group-status-select {
+      background: #fff;
+      border: 1px solid rgba(28, 25, 23, 0.18);
+      box-shadow: inset 0 1px 2px rgba(28, 25, 23, 0.04);
+      border-radius: var(--p2-r);
+    }
+    .account-form > #accountSendCode, .account-code-form > #accountVerifyCode, .account-profile-form > #accountSaveProfile {
+      background: var(--p2-orange);
+      border-color: var(--p2-orange);
+      border-radius: var(--p2-r);
+    }
+    .account-code-actions button, .account-signout { border-radius: var(--p2-r); background: transparent; }
+    .legend {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      top: auto;
+      z-index: 26;
+      width: 100%;
+      max-width: none;
+      height: var(--p2-sheet-mid);
+      max-height: var(--p2-sheet-mid);
+      padding: 24px 12px calc(var(--p2-dock-h) + 8px);
+      border-left: 0;
+      border-right: 0;
+      border-bottom: 0;
+      border-radius: var(--p2-r) var(--p2-r) 0 0;
+      overflow-x: hidden;
+      overflow-y: auto;
+      scrollbar-gutter: stable;
+      scrollbar-width: thin;
+      transform: translateY(16px);
+      opacity: 0;
+      transition: transform 180ms ease, opacity 160ms ease;
+    }
+    .legend:not(.collapsed) { transform: translateY(0); opacity: 1; }
+    .legend.collapsed { transform: translateY(100%); opacity: 0; }
+    .legend::before {
+      content: "";
+      position: absolute;
+      top: 10px;
+      left: 50%;
+      width: 36px;
+      height: 3px;
+      border-radius: 999px;
+      background: rgba(28, 25, 23, 0.18);
+      transform: translateX(-50%);
+    }
+    .legend-head { margin-bottom: 12px; }
+    .legend-head-title { font-size: 1rem; }
+    .legend-close { border-radius: var(--p2-r); }
+    .legend-group + .legend-group { margin-top: 16px; padding-top: 16px; border-top: 1px solid rgba(28,25,23,.18); }
+    .legend-row { min-height: 40px; border-bottom-color: rgba(28,25,23,.1); }
+    .legend i { width: 18px; height: 4px; }
+    .legend i.poi-dot { width: 12px; height: 12px; }
+
+    .status-dock { bottom: calc(var(--p2-dock-h) + 10px); }
+
+    /* Active navigation stays distinct from the persistent bottom dock. */
+    body.navigating .topbar {
+      top: var(--p2-top-pad);
+      left: 10px;
+      right: 10px;
+      display: grid;
+      grid-template-columns: auto 1px minmax(0, 1fr) auto;
+      align-items: stretch;
+      min-height: 78px;
+      background: var(--p2-chrome);
+      border-radius: var(--p2-r);
+      overflow: hidden;
+      box-shadow: var(--p2-shadow);
+      pointer-events: auto;
+    }
+    body.navigating .topbar-left { display: flex; align-items: center; }
+    body.navigating .brand { border-radius: 0; box-shadow: none; min-height: 100%; justify-content: center; }
+    .nav-hud-divider { display: none; }
+    body.navigating .nav-hud-divider { display: block; align-self: center; height: 58%; background: rgba(250,250,249,.18); }
+    body.navigating .nav-hud { max-width: none; border-radius: 0; box-shadow: none; margin-left: 0; min-width: 0; }
+    body.navigating .nav-cue-card { background: transparent; padding: 12px 14px; }
+    body.navigating .nav-cue-main { font-size: 1.28rem; }
+    body.navigating .topbar-right { display: none; }
+    .nav-hud-toggle {
+      width: 34px;
+      border: 0;
+      border-left: 1px solid rgba(250,250,249,.12);
+      background: var(--p2-chrome-2);
+      color: var(--p2-ink-soft);
+      cursor: pointer;
+      display: none;
+      place-items: center;
+    }
+    body.navigating .nav-hud-toggle { display: grid; }
+    .nav-hud-toggle svg { width: 17px; height: 17px; transition: transform 180ms ease; }
+    body.navigating.hud-collapsed .topbar { right: auto; width: 104px; min-height: 50px; height: 50px; grid-template-columns: 1fr 34px; }
+    body.navigating.hud-collapsed .nav-hud,
+    body.navigating.hud-collapsed .nav-hud-divider { display: none; }
+    body.navigating.hud-collapsed .brand { padding: 6px 10px; }
+    body.navigating.hud-collapsed .nav-hud-toggle svg { transform: rotate(180deg); }
+
+    @media (max-width: 520px) {
+      .group-sheet { width: 100%; }
+    }
   </style>
 </head>
 <body>
@@ -2288,14 +2609,8 @@
         <span class="brand-dirt">DIRT<span>.</span></span>
         <span class="brand-by">MAYDAY</span>
       </a>
-      <button class="btn mini" id="legendBtn" title="Map layers" aria-label="Toggle map layers" aria-expanded="false">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true">
-          <line x1="4" y1="7" x2="20" y2="7"></line>
-          <line x1="4" y1="12" x2="20" y2="12"></line>
-          <line x1="4" y1="17" x2="14" y2="17"></line>
-        </svg>
-      </button>
     </div>
+    <div class="nav-hud-divider" aria-hidden="true"></div>
     <div class="nav-hud" id="navHud" aria-live="polite">
       <div class="nav-cue-card">
         <div class="nav-stage-line" id="navStageLine" hidden></div>
@@ -2309,21 +2624,32 @@
       </button>
       <button class="nav-stop" id="navStopBtn" type="button" title="End navigation">End</button>
     </div>
+    <button class="nav-hud-toggle" id="navHudToggle" type="button" title="Hide turn-by-turn" aria-label="Hide turn-by-turn" aria-controls="navHud" aria-expanded="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 6.5L9 12l5.5 5.5" /></svg>
+    </button>
     <div class="topbar-right">
-      <button class="btn mini" id="accountBtn" title="Account and riding group" aria-label="Account and riding group" aria-expanded="false">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="3.2"/><path d="M5.5 20c.7-3.2 2.9-5 6.5-5s5.8 1.8 6.5 5"/></svg>
-      </button>
-      <button class="btn mini" id="groupBtn" title="Riding groups" aria-label="Riding groups" aria-expanded="false">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M3.5 20c.6-3.1 2.4-5 5.5-5s4.9 1.9 5.5 5"/><path d="M15 5.5a3 3 0 0 1 0 5.8M17 15c2 .5 3.2 2.1 3.5 5"/></svg>
-      </button>
-      <button class="btn route-toggle" id="routeToggleBtn" title="Route planner" aria-label="Toggle route planner" aria-expanded="false">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="12" r="2.5"/><path d="M8 7l8 4M8 17l8-4"/></svg>
-      </button>
       <button class="route-export-float" id="routeExportFloat" type="button" title="Export this route as GPX" aria-label="Export route as GPX" hidden>
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
         Export GPX
       </button>
     </div>
+  </div>
+
+  <div class="bottom-dock" id="bottomDock">
+    <nav class="bottom-nav" aria-label="Primary">
+      <button class="nav-btn" id="legendBtn" title="Map layers" aria-label="Toggle map layers" aria-expanded="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" aria-hidden="true"><path d="M4 8l8-4 8 4-8 4-8-4z"/><path d="M4 12l8 4 8-4"/><path d="M4 16l8 4 8-4"/></svg>
+      </button>
+      <button class="nav-btn" id="accountBtn" title="Rider profile" aria-label="Rider profile" aria-expanded="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="3.2"/><path d="M5.5 20c.7-3.2 2.9-5 6.5-5s5.8 1.8 6.5 5"/></svg>
+      </button>
+      <button class="nav-btn" id="groupBtn" title="Riding groups" aria-label="Riding groups" aria-expanded="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M3.5 20c.6-3.1 2.4-5 5.5-5s4.9 1.9 5.5 5"/><path d="M15 5.5a3 3 0 0 1 0 5.8M17 15c2 .5 3.2 2.1 3.5 5"/></svg>
+      </button>
+      <button class="nav-btn" id="routeToggleBtn" title="Route planner" aria-label="Toggle route planner" aria-expanded="false">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="12" r="2.5"/><path d="M8 7l8 4M8 17l8-4"/></svg>
+      </button>
+    </nav>
   </div>
 
   <div class="route-card closed" id="routeCard" data-drawer="closed">
@@ -3551,6 +3877,7 @@
     const navCueMain = document.getElementById("navCueMain");
     const navCueSub = document.getElementById("navCueSub");
     const navStopBtn = document.getElementById("navStopBtn");
+    const navHudToggle = document.getElementById("navHudToggle");
     const followChip = document.getElementById("followChip");
     const pipEl = document.getElementById("pip");
     const pipGrip = document.getElementById("pipGrip");
@@ -7636,6 +7963,7 @@
       navManeuvers = buildNavManeuvers(coords);
       lastSpokenCueKey = "";
       document.body.classList.add("navigating");
+      document.body.classList.remove("hud-collapsed");
       navHud.classList.add("visible");
       updateNavStageHud();
       setRouteCardOpen(false);
@@ -7685,6 +8013,7 @@
       navAlignHits = 0;
       navEverAligned = false;
       document.body.classList.remove("navigating");
+      document.body.classList.remove("hud-collapsed");
       navHud.classList.remove("visible");
       navContext = null;
       if (navStageLine) navStageLine.hidden = true;
@@ -8748,13 +9077,17 @@
 
     function setLegendOpen(open) {
       if (!legendEl) return;
+      if (open) {
+        setAccountSheetOpen(false);
+        setGroupSheetOpen(false);
+        setPlannerDrawerState("closed");
+      }
       legendEl.classList.toggle("collapsed", !open);
+      document.body.classList.toggle("legend-open", open);
+      document.body.classList.toggle("app-sheet-open", open);
       if (legendBtn) {
         legendBtn.setAttribute("aria-expanded", open ? "true" : "false");
         legendBtn.classList.toggle("is-active", open);
-      }
-      if (open) {
-        setRouteCardOpen(false);
       }
     }
 
@@ -8794,6 +9127,7 @@
       document.body.classList.toggle("planner-open", state !== "closed");
       document.body.classList.toggle("planner-collapsed", state === "collapsed");
       document.body.classList.toggle("planner-expanded", state === "expanded");
+      document.body.classList.toggle("app-sheet-open", state !== "closed" || document.body.classList.contains("legend-open") || document.body.classList.contains("account-open") || document.body.classList.contains("groups-open"));
       const open = state !== "closed";
       if (routeToggleBtn) routeToggleBtn.setAttribute("aria-expanded", open ? "true" : "false");
       if (routeSheetHandle) {
@@ -8815,6 +9149,7 @@
       document.body.classList.toggle("planner-open", open);
       document.body.classList.toggle("planner-collapsed", plannerDrawerState === "collapsed");
       document.body.classList.toggle("planner-expanded", plannerDrawerState === "expanded");
+      document.body.classList.toggle("app-sheet-open", open || document.body.classList.contains("legend-open") || document.body.classList.contains("account-open") || document.body.classList.contains("groups-open"));
     }
 
     function setPlannerDrawerState(next) {
@@ -8840,6 +9175,9 @@
     }
 
     routeToggleBtn.addEventListener("click", () => {
+      setLegendOpen(false);
+      setAccountSheetOpen(false);
+      setGroupSheetOpen(false);
       if (plannerDrawerState === "closed") {
         setRouteMode("here");
         setPlannerDrawerState("collapsed");
@@ -9001,13 +9339,9 @@
     const accountSheet = document.getElementById("accountSheet");
     const groupBtn = document.getElementById("groupBtn");
     const groupSheet = document.getElementById("groupSheet");
-    function positionAccountSheet(sheet, trigger) {
-      if (!sheet) return;
-      const width = Math.min(250, Math.max(0, window.innerWidth - 24));
-      const left = (window.innerWidth - width) / 2;
-      const center = trigger?.getBoundingClientRect().left + trigger?.getBoundingClientRect().width / 2;
-      const anchor = Number.isFinite(center) ? ((center - left) / width) * 100 : 50;
-      sheet.style.setProperty("--sheet-anchor", Math.max(12, Math.min(88, anchor)) + "%");
+    function positionAccountSheet() {
+      // Account and group surfaces are bottom sheets in the Phase 3 chrome.
+      // Keep the function as a compatibility no-op for the existing callers.
     }
     function setAccountSheetOpen(open) {
       if (!accountSheet) return;
@@ -9016,6 +9350,8 @@
       accountSheet.setAttribute("aria-hidden", open ? "false" : "true");
       accountBtn?.setAttribute("aria-expanded", open ? "true" : "false");
       accountBtn?.classList.toggle("active", open);
+      document.body.classList.toggle("account-open", open);
+      document.body.classList.toggle("app-sheet-open", open || document.body.classList.contains("legend-open") || document.body.classList.contains("groups-open") || document.body.classList.contains("planner-open"));
     }
     function setGroupSheetOpen(open) {
       if (!groupSheet) return;
@@ -9025,6 +9361,7 @@
       groupBtn?.setAttribute("aria-expanded", open ? "true" : "false");
       groupBtn?.classList.toggle("active", open);
       document.body.classList.toggle("groups-open", open);
+      document.body.classList.toggle("app-sheet-open", open || document.body.classList.contains("legend-open") || document.body.classList.contains("account-open") || document.body.classList.contains("planner-open"));
       if (!open) setGroupPanel("list");
     }
     window.addEventListener("resize", () => {
@@ -9034,6 +9371,7 @@
     if (accountBtn && accountSheet) {
       accountBtn.addEventListener("click", async () => {
         const open = !accountSheet.classList.contains("open");
+        setLegendOpen(false);
         setGroupSheetOpen(false);
         setAccountSheetOpen(open);
         if (open) await ensureAccountReady();
@@ -9041,6 +9379,7 @@
     }
     groupBtn?.addEventListener("click", async () => {
       const open = !groupSheet?.classList.contains("open");
+      setLegendOpen(false);
       setAccountSheetOpen(false);
       setGroupSheetOpen(open);
       if (open) await ensureGroupsReady();
@@ -9169,6 +9508,13 @@
     compassBtn.addEventListener("click", resetNorthUp);
     routeNavBtn.addEventListener("click", toggleNavigation);
     navStopBtn.addEventListener("click", stopNavigation);
+    navHudToggle?.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const collapsed = document.body.classList.toggle("hud-collapsed");
+      navHudToggle.setAttribute("aria-expanded", collapsed ? "false" : "true");
+      navHudToggle.setAttribute("aria-label", collapsed ? "Show turn-by-turn" : "Hide turn-by-turn");
+      navHudToggle.title = collapsed ? "Show turn-by-turn" : "Hide turn-by-turn";
+    });
     pipGrip.addEventListener("pointerdown", (event) => {
       if (event.button != null && event.button !== 0) return;
       event.preventDefault();
