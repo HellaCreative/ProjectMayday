@@ -2609,6 +2609,213 @@
     @media (max-width: 520px) {
       .group-sheet { width: 100%; }
     }
+
+    /* Phase 3 fidelity pass: one dock-width shell, one active nav item, and
+       task-first sheets. These rules intentionally sit last so legacy chrome
+       cannot override the current visual system. */
+    :root { --p2-shell-w: min(340px, calc(100vw - 20px)); }
+    .bottom-dock {
+      left: 50%;
+      right: auto;
+      width: var(--p2-shell-w);
+      transform: translateX(-50%);
+    }
+    .bottom-nav { width: 100%; max-width: none; }
+    #legendBtn.is-active,
+    .nav-btn.active,
+    .nav-btn.is-active,
+    .nav-btn[aria-expanded="true"] { background: var(--p2-orange); color: #fff; }
+
+    .route-card,
+    .account-sheet,
+    .legend {
+      left: 50%;
+      right: auto;
+      width: var(--p2-shell-w);
+      max-width: var(--p2-shell-w);
+    }
+    .route-card { transform: translateX(-50%); }
+    .account-sheet {
+      transform: translate(-50%, 16px);
+      padding-left: 14px;
+      padding-right: 14px;
+    }
+    .account-sheet.open { transform: translate(-50%, 0); }
+    .legend {
+      transform: translate(-50%, 16px);
+      padding-left: 14px;
+      padding-right: 14px;
+    }
+    .legend:not(.collapsed) { transform: translate(-50%, 0); }
+    .legend.collapsed { transform: translate(-50%, 100%); }
+
+    .key-title,
+    .account-title.key-title,
+    .legend-head-title,
+    .route-finder-title,
+    #groupLiveTitle {
+      font-size: 1.35rem;
+      line-height: 1.08;
+      font-weight: 800;
+      letter-spacing: -0.015em;
+    }
+    .route-finder-title {
+      flex: 0 0 auto;
+      margin: 0 0 8px;
+      color: var(--p2-sheet-ink);
+    }
+    .route-card.is-collapsed .route-finder-title { margin-top: 0; }
+    .route-tabs {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      background: var(--p2-sheet-2);
+      border-color: rgba(28, 25, 23, 0.14);
+      border-radius: var(--p2-r);
+    }
+    .route-tabs .route-mode {
+      min-height: 34px;
+      border-radius: 6px;
+      color: var(--p2-sheet-ink-soft);
+    }
+    .route-tabs .route-mode.active,
+    .route-tabs .route-mode[aria-selected="true"] {
+      background: var(--p2-chrome);
+      color: #fff;
+    }
+    .route-card.is-expanded .route-drawer-scroll {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      overflow: hidden;
+    }
+    .route-card.is-expanded .route-drawer-full {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow-y: auto;
+      scrollbar-gutter: stable;
+      padding-right: var(--p2-scroll-gutter);
+    }
+    .route-card.is-collapsed .route-drawer-scroll { overflow-y: auto; }
+    .route-preferences {
+      background: var(--p2-sheet-2);
+      border-color: rgba(28, 25, 23, 0.12);
+      border-radius: var(--p2-r);
+    }
+    .route-pref.active,
+    .route-pref[aria-selected="true"] {
+      background: var(--p2-chrome);
+      color: #fff;
+    }
+
+    .account-profile-view {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 6px 10px;
+      align-items: center;
+      margin-top: 14px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid var(--p2-sheet-line);
+    }
+    .account-profile-view .account-field-label { grid-column: 1 / -1; }
+    .account-display-name {
+      min-width: 0;
+      color: var(--p2-sheet-ink);
+      font-size: 1rem;
+      font-weight: 750;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .account-edit {
+      min-height: 30px;
+      padding: 0 10px;
+      border: 1px solid var(--p2-orange);
+      border-radius: var(--p2-r);
+      background: transparent;
+      color: var(--p2-orange-deep);
+      font: 700 0.68rem var(--p2-sans);
+      cursor: pointer;
+    }
+    .account-profile-form { margin-top: 14px; }
+    .account-profile-email { margin-top: 14px; }
+    .account-profile-email .account-readonly {
+      display: block;
+      margin-top: 5px;
+      color: var(--p2-sheet-ink);
+      font-weight: 750;
+    }
+    .account-profile-form > #accountSaveProfile { background: var(--p2-orange); border-color: var(--p2-orange); }
+
+    .group-sheet { width: var(--p2-shell-w); max-width: var(--p2-shell-w); }
+    .group-sheet-close { display: none !important; }
+    .group-sheet-body { min-height: 0; overflow: hidden; }
+    .group-tabs { position: sticky; top: 0; z-index: 2; }
+    .group-panel { min-height: 0; overflow-y: auto; scrollbar-gutter: stable; }
+    #groupDetails:not([hidden]) {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      overflow: hidden;
+    }
+    #groupDetails .group-details-head,
+    #groupDetails .group-details-title-row,
+    #groupDetails .group-summary-card,
+    #groupDetails .group-sharing-section,
+    #groupDetails > .group-section:last-of-type,
+    #groupDetails > .account-status { flex: 0 0 auto; }
+    #groupDetails > .group-section:has(#groupParticipantList) {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      overflow: hidden;
+    }
+    #groupDetails #groupParticipantList {
+      flex: 1 1 auto;
+      min-height: 72px;
+      max-height: none;
+      overflow-y: auto;
+      scrollbar-gutter: stable;
+    }
+    .group-row .group-stats,
+    .group-row .group-code { color: var(--p2-warn); }
+
+    .legend-head-title { font-size: 1.35rem; }
+    .legend-group + .legend-group { border-top-color: rgba(28, 25, 23, 0.16); }
+
+    body.app-sheet-open .stack {
+      bottom: var(--locate-bottom, calc(var(--p2-dock-h) + var(--p2-locate-gap))) !important;
+    }
+    body.app-sheet-open .stack #recenterBtn { margin-bottom: 0; }
+
+    body.navigating.hud-collapsed .topbar {
+      grid-template-columns: minmax(0, 1fr) 0 minmax(0, 0) 34px;
+      overflow: hidden;
+    }
+    body.navigating.hud-collapsed .nav-hud {
+      min-width: 0;
+      max-width: 0;
+      width: 0;
+      opacity: 0;
+      overflow: hidden;
+      pointer-events: none;
+      padding: 0;
+      transition: max-width 180ms ease, opacity 140ms ease;
+    }
+    body.navigating.hud-collapsed .nav-hud-divider {
+      width: 0;
+      min-width: 0;
+      opacity: 0;
+      overflow: hidden;
+      transition: opacity 140ms ease;
+    }
+
+    @media (min-width: 521px) {
+      .route-card,
+      .account-sheet,
+      .legend,
+      .group-sheet { width: var(--p2-shell-w); max-width: var(--p2-shell-w); }
+    }
   </style>
 </head>
 <body>
@@ -2675,6 +2882,7 @@
       ></button>
     </div>
     <div class="route-drawer-scroll" id="routeDrawerScroll">
+    <div class="route-finder-title key-title">Route Finder</div>
     <div class="route-drawer-compact" id="routeDrawerCompact">
       <div class="route-segment route-tabs" role="tablist" aria-label="Route planner tabs">
         <button class="route-mode active" type="button" data-route-mode="here" role="tab" aria-selected="true">From here</button>
@@ -2787,7 +2995,7 @@
   <div class="access-info-tip" id="accessInfoTip" role="tooltip" hidden>Unknown access is not permission. Routes may include closures, private land, seasonal restrictions, or enforcement.</div>
 
   <section class="account-sheet" id="accountSheet" aria-label="Rider account" aria-hidden="true">
-    <div class="account-title" id="accountTitle">Rider account</div>
+    <div class="account-title key-title" id="accountTitle">Rider account</div>
     <div class="account-subtitle" id="accountSubtitle">Enter your email to receive a one-time code.</div>
     <div class="account-form" id="accountForm">
       <input id="accountEmail" type="email" autocomplete="email" placeholder="Email" aria-label="Email" />
@@ -2805,12 +3013,19 @@
     <div class="account-status" id="accountStatus" role="status"></div>
     <div id="accountAuthed" hidden>
       <div class="account-subtitle">Your rider profile is saved to this account.</div>
-      <div class="account-profile-form">
+      <div class="account-profile-view" id="accountProfileView">
+        <div class="account-field-label">Display name</div>
+        <div class="account-display-name" id="accountDisplayNameText"></div>
+        <button class="account-edit" id="accountEditProfile" type="button">Edit</button>
+      </div>
+      <div class="account-profile-form" id="accountProfileEdit" hidden>
         <label class="account-field-label" for="accountDisplayName">Display name</label>
         <input id="accountDisplayName" type="text" maxlength="60" autocomplete="name" placeholder="Choose a display name" aria-label="Display name" />
-        <div class="account-field-label">Email</div>
-        <div class="account-readonly" id="accountIdentity"></div>
         <button class="primary" id="accountSaveProfile" type="button">Save changes</button>
+      </div>
+      <div class="account-profile-email">
+        <div class="account-field-label">Email</div>
+        <strong class="account-readonly" id="accountIdentity"></strong>
       </div>
       <button class="account-signout" id="accountSignOut" type="button">Sign out</button>
     </div>
@@ -2819,10 +3034,9 @@
   <section class="account-sheet group-sheet" id="groupSheet" aria-label="Riding groups" aria-hidden="true">
     <div class="group-sheet-head">
       <div>
-        <div class="account-title">Riding groups</div>
+        <div class="account-title key-title">Riding groups</div>
         <div class="account-subtitle" id="groupAuthNotice">Sign in first to create a group, join a group, or share your location.</div>
       </div>
-      <button class="group-sheet-close" id="groupSheetClose" type="button" aria-label="Close riding groups">×</button>
     </div>
     <div id="groupAuthed" hidden>
       <div class="group-sheet-body">
@@ -2870,7 +3084,7 @@
           </div>
           <div class="group-details-title-row">
             <div>
-              <div class="group-title" id="groupLiveTitle">Live group</div>
+              <div class="group-title key-title" id="groupLiveTitle">Live group</div>
               <div class="account-subtitle" id="groupLiveMeta">Share only when you choose to.</div>
             </div>
             <button class="group-remove" id="groupRemoveSelected" type="button">Leave</button>
@@ -3792,6 +4006,7 @@
     let accountReadyPromise = null;
     let groupsReadyPromise = null;
     let pendingOtpEmail = "";
+    let accountProfileEditing = false;
     let otpResendTimer = null;
     let otpResendUntil = 0;
     // Multi-stage navigation context. null = single-stage / not multi-stage nav.
@@ -8482,9 +8697,13 @@
       const identity = document.getElementById("accountIdentity");
       const groupAuthed = document.getElementById("groupAuthed");
       const groupNotice = document.getElementById("groupAuthNotice");
+      const profileView = document.getElementById("accountProfileView");
+      const profileEdit = document.getElementById("accountProfileEdit");
+      const displayNameText = document.getElementById("accountDisplayNameText");
       if (form) form.hidden = !!currentAuthUser || !!pendingOtpEmail;
       if (codeForm) codeForm.hidden = !!currentAuthUser || !pendingOtpEmail;
       if (authed) authed.hidden = !currentAuthUser;
+      if (!currentAuthUser) accountProfileEditing = false;
       if (title) title.textContent = currentAuthUser ? "Your rider profile" : pendingOtpEmail ? "Check your email" : "Sign in to DIRT. MAYDAY.";
       if (subtitle) subtitle.textContent = currentAuthUser
         ? "Your profile details are saved to this rider account."
@@ -8496,9 +8715,18 @@
       if (displayName && currentAuthUser && document.activeElement !== displayName) {
         displayName.value = currentAuthUser.user_metadata?.display_name || "";
       }
+      if (displayNameText) displayNameText.textContent = currentAuthUser?.user_metadata?.display_name || "Add a display name";
+      if (profileView) profileView.hidden = !currentAuthUser || accountProfileEditing;
+      if (profileEdit) profileEdit.hidden = !currentAuthUser || !accountProfileEditing;
       if (groupAuthed) groupAuthed.hidden = !currentAuthUser;
       if (groupNotice) groupNotice.hidden = !!currentAuthUser;
       updateOtpResendUi();
+    }
+
+    function setAccountProfileEditing(editing) {
+      accountProfileEditing = !!editing && !!currentAuthUser;
+      syncAccountUi();
+      if (accountProfileEditing) document.getElementById("accountDisplayName")?.focus();
     }
 
     function renderGroupList() {
@@ -8875,6 +9103,7 @@
       try {
         accountStatus("Saving profile…");
         const user = await DirtSupabase.updateDisplayName(name);
+        accountProfileEditing = false;
         await refreshAuthState(user);
         accountStatus("Profile saved.");
       } catch (err) { accountStatus(err.message || "Could not save your profile.", "error"); }
@@ -9100,6 +9329,44 @@
         legendBtn.setAttribute("aria-expanded", open ? "true" : "false");
         legendBtn.classList.toggle("is-active", open);
       }
+      syncBottomNavState();
+      requestAnimationFrame(syncLocateClearance);
+    }
+
+    function syncBottomNavState() {
+      const body = document.body;
+      const states = {
+        legendBtn: body.classList.contains("legend-open"),
+        accountBtn: body.classList.contains("account-open"),
+        groupBtn: body.classList.contains("groups-open"),
+        routeToggleBtn: body.classList.contains("planner-open")
+      };
+      Object.entries(states).forEach(([id, active]) => {
+        const button = document.getElementById(id);
+        if (!button) return;
+        button.classList.toggle("active", active);
+        button.classList.toggle("is-active", active);
+        button.setAttribute("aria-pressed", active ? "true" : "false");
+      });
+    }
+
+    function syncLocateClearance() {
+      const candidates = [
+        document.getElementById("routeCard"),
+        document.getElementById("accountSheet"),
+        document.getElementById("groupSheet"),
+        document.getElementById("legend")
+      ];
+      const visible = candidates
+        .filter((element) => element && !element.hidden && getComputedStyle(element).display !== "none")
+        .map((element) => element.getBoundingClientRect())
+        .filter((rect) => rect.height > 0 && rect.bottom > 0)
+        .sort((a, b) => a.top - b.top)[0];
+      if (!visible) {
+        document.body.style.removeProperty("--locate-bottom");
+        return;
+      }
+      document.body.style.setProperty("--locate-bottom", Math.max(24, Math.ceil(window.innerHeight - visible.top + 24)) + "px");
     }
 
     legendBtn.addEventListener("click", (event) => {
@@ -9151,6 +9418,8 @@
       if (!opts || !opts.silent) {
         // no-op hook for callers that may want side effects later
       }
+      syncBottomNavState();
+      requestAnimationFrame(syncLocateClearance);
     }
 
     function syncRouteChrome() {
@@ -9161,6 +9430,8 @@
       document.body.classList.toggle("planner-collapsed", plannerDrawerState === "collapsed");
       document.body.classList.toggle("planner-expanded", plannerDrawerState === "expanded");
       document.body.classList.toggle("app-sheet-open", open || document.body.classList.contains("legend-open") || document.body.classList.contains("account-open") || document.body.classList.contains("groups-open"));
+      syncBottomNavState();
+      requestAnimationFrame(syncLocateClearance);
     }
 
     function setPlannerDrawerState(next) {
@@ -9363,6 +9634,8 @@
       accountBtn?.classList.toggle("active", open);
       document.body.classList.toggle("account-open", open);
       document.body.classList.toggle("app-sheet-open", open || document.body.classList.contains("legend-open") || document.body.classList.contains("groups-open") || document.body.classList.contains("planner-open"));
+      syncBottomNavState();
+      requestAnimationFrame(syncLocateClearance);
     }
     function setGroupSheetOpen(open) {
       if (!groupSheet) return;
@@ -9374,10 +9647,13 @@
       document.body.classList.toggle("groups-open", open);
       document.body.classList.toggle("app-sheet-open", open || document.body.classList.contains("legend-open") || document.body.classList.contains("account-open") || document.body.classList.contains("planner-open"));
       if (!open) setGroupPanel("list");
+      syncBottomNavState();
+      requestAnimationFrame(syncLocateClearance);
     }
     window.addEventListener("resize", () => {
       if (accountSheet?.classList.contains("open")) positionAccountSheet(accountSheet, accountBtn);
       if (groupSheet?.classList.contains("open")) positionAccountSheet(groupSheet, groupBtn);
+      syncLocateClearance();
     });
     if (accountBtn && accountSheet) {
       accountBtn.addEventListener("click", async () => {
@@ -9411,6 +9687,7 @@
       if (event.key === "Enter") { event.preventDefault(); accountVerifyCode(); }
     });
     document.getElementById("accountSaveProfile")?.addEventListener("click", accountSaveProfile);
+    document.getElementById("accountEditProfile")?.addEventListener("click", () => setAccountProfileEditing(true));
     document.getElementById("accountSignOut")?.addEventListener("click", async () => {
       try { await DirtSupabase.signOut(); await refreshAuthState(null); setGroupSheetOpen(false); accountStatus("Signed out."); }
       catch (err) { accountStatus(err.message || "Could not sign out.", "error"); }
