@@ -2236,8 +2236,8 @@
       <button class="primary" id="accountSendCode" type="button">Send verification code</button>
     </div>
     <div class="account-code-form" id="accountCodeForm" hidden>
-      <div class="account-subtitle">Enter the six-digit code we sent to your email.</div>
-      <input id="accountCode" class="account-code-input" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="6-digit code" aria-label="Email verification code" />
+      <div class="account-subtitle">Enter the one-time code we sent to your email.</div>
+      <input id="accountCode" class="account-code-input" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="10" placeholder="Enter code" aria-label="Email verification code" />
       <div class="account-actions">
         <button class="primary" id="accountVerifyCode" type="button">Verify code</button>
         <button id="accountUseDifferentEmail" type="button">Use different email</button>
@@ -7929,14 +7929,14 @@
         pendingOtpEmail = email;
         syncAccountUi();
         document.getElementById("accountCode")?.focus();
-        accountStatus("We sent a six-digit code to " + email + ".");
+        accountStatus("We sent a one-time code to " + email + ".");
       } catch (err) { accountStatus(err.message || "Could not send your code.", "error"); }
     }
 
     async function accountVerifyCode() {
       const email = pendingOtpEmail || document.getElementById("accountEmail")?.value.trim();
       const token = document.getElementById("accountCode")?.value.trim();
-      if (!email || !/^\d{6}$/.test(token || "")) { accountStatus("Enter the six-digit code from your email.", "error"); return; }
+      if (!email || !/^\d{6,10}$/.test(token || "")) { accountStatus("Enter the code from your email.", "error"); return; }
       try {
         accountStatus("Verifying code…");
         const result = await DirtSupabase.verifyEmailCode(email, token);
