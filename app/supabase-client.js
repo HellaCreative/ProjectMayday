@@ -87,7 +87,9 @@
 
   async function joinGroup(inviteCode, userId) {
     const db = await init();
-    const { data: group, error } = await db.from("groups").select("id,name,owner_id,invite_code,created_at").eq("invite_code", String(inviteCode || "").trim().toUpperCase()).single();
+    const code = String(inviteCode || "").trim().toLowerCase();
+    if (!/^[a-z0-9]{6}$/.test(code)) throw new Error("Invite codes are six lowercase letters or numbers.");
+    const { data: group, error } = await db.from("groups").select("id,name,owner_id,invite_code,created_at").ilike("invite_code", code).single();
     if (error) throw error;
     const { error: memberError } = await db.from("group_members").upsert({ group_id: group.id, user_id: userId, role: "member" }, { onConflict: "group_id,user_id" });
     if (memberError) throw memberError;

@@ -2286,7 +2286,7 @@
           <button class="primary" id="groupCreateBtn" type="button">Create group</button>
           <button id="groupJoinBtn" type="button">Join by code</button>
         </div>
-        <input id="groupInviteInput" type="text" maxlength="20" placeholder="Invite code" aria-label="Invite code" />
+        <input id="groupInviteInput" type="text" minlength="6" maxlength="6" pattern="[a-z0-9]{6}" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="6-character code" aria-label="6-character invite code" />
       </div>
       <div class="group-list" id="groupList"></div>
       <div class="group-live" id="groupLive">
@@ -2814,7 +2814,9 @@
 
   async function joinGroup(inviteCode, userId) {
     const db = await init();
-    const { data: group, error } = await db.from("groups").select("id,name,owner_id,invite_code,created_at").eq("invite_code", String(inviteCode || "").trim().toUpperCase()).single();
+    const code = String(inviteCode || "").trim().toLowerCase();
+    if (!/^[a-z0-9]{6}$/.test(code)) throw new Error("Invite codes are six lowercase letters or numbers.");
+    const { data: group, error } = await db.from("groups").select("id,name,owner_id,invite_code,created_at").ilike("invite_code", code).single();
     if (error) throw error;
     const { error: memberError } = await db.from("group_members").upsert({ group_id: group.id, user_id: userId, role: "member" }, { onConflict: "group_id,user_id" });
     if (memberError) throw memberError;
@@ -8532,6 +8534,9 @@
     });
     document.getElementById("groupCreateBtn")?.addEventListener("click", createRidingGroup);
     document.getElementById("groupJoinBtn")?.addEventListener("click", joinRidingGroup);
+    document.getElementById("groupInviteInput")?.addEventListener("input", (event) => {
+      event.target.value = event.target.value.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 6);
+    });
     document.getElementById("groupShareBtn")?.addEventListener("click", toggleGroupSharing);
     document.querySelectorAll("[data-rider-status]").forEach((button) => button.addEventListener("click", () => setGroupRiderStatus(button.dataset.riderStatus)));
     document.getElementById("groupList")?.addEventListener("click", (event) => {
