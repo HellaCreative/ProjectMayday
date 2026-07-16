@@ -1262,6 +1262,7 @@
       backdrop-filter: blur(16px);
     }
     .account-sheet.open { display: block; }
+    .account-sheet [hidden] { display: none !important; }
     .group-sheet { right: 58px; }
     .account-title { font-size: 0.82rem; font-weight: 750; color: var(--text); }
     .account-subtitle { margin-top: 3px; color: var(--muted); font-size: 0.64rem; line-height: 1.35; }
@@ -1277,9 +1278,21 @@
       display: grid; gap: 10px; margin-top: 16px; padding-top: 14px;
       border-top: 1px solid var(--line);
     }
+    .account-code-form > #accountVerifyCode {
+      width: 100%; min-height: 46px; padding: 0 14px;
+      border: 1px solid var(--accent); border-radius: 8px;
+      background: var(--accent); color: #fff;
+      font: 700 0.76rem var(--sans); cursor: pointer;
+    }
+    .account-code-form > #accountVerifyCode:hover { filter: brightness(0.96); }
     .account-profile-form { display: grid; gap: 8px; margin-top: 14px; }
     .account-field-label { color: var(--muted); font-size: 0.62rem; font-weight: 700; }
     .account-readonly { padding: 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2); color: var(--muted); font: 0.72rem var(--sans); }
+    .account-profile-form > #accountSaveProfile {
+      width: 100%; min-height: 42px; border: 1px solid var(--accent); border-radius: 8px;
+      background: var(--accent); color: #fff; font: 700 0.72rem var(--sans); cursor: pointer;
+    }
+    .account-profile-form > #accountSaveProfile:hover { filter: brightness(0.96); }
     .account-form input, .account-profile-form input, .group-form input {
       min-height: 36px;
       width: 100%;
@@ -1292,7 +1305,7 @@
     }
     .account-code-input { letter-spacing: 0.22em; text-align: center; font: 700 1rem var(--mono); }
     .account-actions, .group-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-    .account-code-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .account-code-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
     .account-actions button, .account-code-actions button, .group-actions button, .account-signout {
       min-height: 42px;
       border: 1px solid var(--line);
@@ -1304,6 +1317,7 @@
     }
     .account-actions button.primary, .account-code-actions button.primary, .group-actions button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
     .account-code-actions button:disabled { opacity: 0.55; cursor: not-allowed; }
+    .account-code-actions button { min-height: 32px; padding: 0 8px; font-size: 0.6rem; }
     .account-signout { width: 100%; margin-top: 8px; }
     .account-identity { padding: 8px 9px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2); color: var(--text); font: 0.68rem/1.35 var(--sans); }
     .account-status { min-height: 18px; margin-top: 8px; color: var(--muted); font: 0.62rem/1.35 var(--mono); }
