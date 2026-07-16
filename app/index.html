@@ -2613,14 +2613,23 @@
     /* Phase 3 fidelity pass: one dock-width shell, one active nav item, and
        task-first sheets. These rules intentionally sit last so legacy chrome
        cannot override the current visual system. */
-    :root { --p2-shell-w: min(340px, calc(100vw - 20px)); }
+    :root {
+      --p2-shell-w: min(388px, calc(100vw - 24px));
+      --p2-dock-h: calc(64px + var(--p2-bottom-pad) + 12px);
+    }
     .bottom-dock {
       left: 50%;
       right: auto;
       width: var(--p2-shell-w);
       transform: translateX(-50%);
     }
-    .bottom-nav { width: 100%; max-width: none; }
+    .bottom-nav {
+      width: 100%;
+      max-width: none;
+      gap: 4px;
+      padding: 10px 12px;
+    }
+    .nav-btn { height: 44px; }
     #legendBtn.is-active,
     .nav-btn.active,
     .nav-btn.is-active,
@@ -2648,6 +2657,11 @@
     }
     .legend:not(.collapsed) { transform: translate(-50%, 0); }
     .legend.collapsed { transform: translate(-50%, 100%); }
+
+    .pip {
+      z-index: 49;
+      bottom: calc(var(--p2-dock-h) + var(--p2-locate-gap));
+    }
 
     .key-title,
     .account-title.key-title,
@@ -2855,16 +2869,16 @@
 
   <div class="bottom-dock" id="bottomDock">
     <nav class="bottom-nav" aria-label="Primary">
-      <button class="nav-btn" id="legendBtn" title="Map layers" aria-label="Toggle map layers" aria-expanded="false">
+      <button class="nav-btn" id="legendBtn" title="Layers" aria-label="Layers" aria-expanded="false">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" aria-hidden="true"><path d="M4 8l8-4 8 4-8 4-8-4z"/><path d="M4 12l8 4 8-4"/><path d="M4 16l8 4 8-4"/></svg>
       </button>
-      <button class="nav-btn" id="accountBtn" title="Rider profile" aria-label="Rider profile" aria-expanded="false">
+      <button class="nav-btn" id="accountBtn" title="Profile" aria-label="Profile" aria-expanded="false">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="3.2"/><path d="M5.5 20c.7-3.2 2.9-5 6.5-5s5.8 1.8 6.5 5"/></svg>
       </button>
-      <button class="nav-btn" id="groupBtn" title="Riding groups" aria-label="Riding groups" aria-expanded="false">
+      <button class="nav-btn" id="groupBtn" title="Group" aria-label="Group" aria-expanded="false">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M3.5 20c.6-3.1 2.4-5 5.5-5s4.9 1.9 5.5 5"/><path d="M15 5.5a3 3 0 0 1 0 5.8M17 15c2 .5 3.2 2.1 3.5 5"/></svg>
       </button>
-      <button class="nav-btn" id="routeToggleBtn" title="Route planner" aria-label="Toggle route planner" aria-expanded="false">
+      <button class="nav-btn" id="routeToggleBtn" title="Route" aria-label="Route" aria-expanded="false">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="12" r="2.5"/><path d="M8 7l8 4M8 17l8-4"/></svg>
       </button>
     </nav>
@@ -8127,7 +8141,11 @@
       const safeTop = (window.visualViewport?.offsetTop || 0) + pad;
       const safeLeft = pad;
       const maxLeft = window.innerWidth - pipEl.offsetWidth - pad;
-      const maxTop = window.innerHeight - pipEl.offsetHeight - pad;
+      const dock = document.getElementById("bottomDock")?.getBoundingClientRect();
+      const dockClearance = dock && dock.height > 0
+        ? window.innerHeight - dock.top + 16
+        : 16;
+      const maxTop = window.innerHeight - pipEl.offsetHeight - dockClearance;
       return {
         left: Math.max(safeLeft, Math.min(left, maxLeft)),
         top: Math.max(safeTop, Math.min(top, Math.max(safeTop, maxTop)))
@@ -9654,6 +9672,10 @@
       if (accountSheet?.classList.contains("open")) positionAccountSheet(accountSheet, accountBtn);
       if (groupSheet?.classList.contains("open")) positionAccountSheet(groupSheet, groupBtn);
       syncLocateClearance();
+      if (pipEl?.classList.contains("placed")) {
+        const rect = pipEl.getBoundingClientRect();
+        placePipAt(rect.left, rect.top);
+      }
     });
     if (accountBtn && accountSheet) {
       accountBtn.addEventListener("click", async () => {
