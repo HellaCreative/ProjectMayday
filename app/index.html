@@ -2988,14 +2988,14 @@
     #groupDetails .group-details-head,
     #groupDetails .group-details-title-row,
     #groupDetails .group-summary-card,
-    #groupDetails .group-sharing-section,
-    #groupDetails > .group-section:last-of-type,
+    #groupDetails .group-controls-row,
     #groupDetails > .account-status { flex: 0 0 auto; }
-    #groupDetails > .group-section:has(#groupParticipantList) {
+    #groupDetails > .group-section-riders {
       display: flex;
       flex-direction: column;
       min-height: 0;
       overflow: hidden;
+      flex: 1 1 auto;
     }
     #groupDetails #groupParticipantList {
       flex: 1 1 auto;
@@ -4220,6 +4220,11 @@
     .group-sheet.open,
     .legend:not(.collapsed) {
       transform: translateX(-50%) !important;
+      overflow-x: hidden;
+      overflow-y: hidden;
+    }
+    .account-sheet.open {
+      overflow: visible;
     }
     .legend.collapsed {
       transform: translate(-50%, 110%) !important;
@@ -4424,6 +4429,345 @@
         width: var(--fig-shell-w) !important;
         max-width: var(--fig-shell-w) !important;
       }
+    }
+
+    /* ——— Figma accuracy pass 2 (screenshot deltas) ——— */
+    .sheet-header,
+    .route-finder-header,
+    .group-sheet-head,
+    .legend-head,
+    .sheet-scroll,
+    .legend-scroll,
+    .group-sheet .group-sheet-head,
+    .account-sheet > .sheet-scroll,
+    .group-sheet .group-sheet-body {
+      width: 100% !important;
+      max-width: 100% !important;
+      margin-left: 0 !important;
+      margin-right: 0 !important;
+      box-sizing: border-box;
+    }
+
+    .legend-head,
+    .sheet-header.legend-head,
+    .account-sheet > .sheet-header,
+    .group-sheet-head,
+    .route-finder-header {
+      display: flex !important;
+      flex-direction: column !important;
+      align-items: flex-start !important;
+      justify-content: flex-start !important;
+      gap: 0 !important;
+    }
+
+    .sheet-scroll,
+    .legend-scroll,
+    .group-panel,
+    .group-details,
+    .account-sheet > .sheet-scroll,
+    #groupDetails #groupParticipantList {
+      padding-bottom: 12px !important;
+    }
+
+    .account-profile-view {
+      width: 100%;
+      box-sizing: border-box;
+      overflow: visible;
+      grid-template-columns: minmax(0, 1fr) auto !important;
+    }
+    .account-edit {
+      flex-shrink: 0;
+      white-space: nowrap;
+      min-width: 46px;
+      color: #c2410c !important;
+      border-color: var(--fig-orange) !important;
+    }
+    .account-readonly,
+    #accountIdentity.account-readonly,
+    .account-profile-email .account-readonly {
+      background: #ebe6df !important;
+      border: 1px solid rgba(28, 25, 23, 0.1) !important;
+      color: var(--fig-ink) !important;
+      font-family: var(--font-ui) !important;
+      font-size: 17px !important;
+      font-weight: 600 !important;
+      line-height: 1.2 !important;
+    }
+    .account-display-name {
+      font-size: 17px !important;
+      font-weight: 600 !important;
+    }
+    .account-status {
+      font-family: var(--font-ui) !important;
+      font-size: 12px !important;
+      line-height: 1.35 !important;
+      color: var(--fig-ink-soft) !important;
+    }
+    .account-status.error { color: #dc2626 !important; }
+    .account-code-form {
+      border-top: 0 !important;
+      padding-top: 0 !important;
+      margin-top: 8px !important;
+    }
+    .account-code-actions button {
+      background: var(--fig-sheet-2) !important;
+      border: 1px solid rgba(28, 25, 23, 0.1) !important;
+      color: var(--fig-ink) !important;
+      font-family: var(--font-ui) !important;
+      font-size: 12px !important;
+      font-weight: 600 !important;
+    }
+    .account-signout {
+      background: transparent !important;
+      border: 1px solid rgba(28, 25, 23, 0.1) !important;
+      color: var(--fig-ink) !important;
+      font-size: 13px !important;
+      font-weight: 600 !important;
+    }
+
+    body.account-open .account-sheet {
+      height: auto !important;
+      max-height: min(336px, calc(100dvh - var(--fig-dock-h) - 20px)) !important;
+    }
+    body.account-open .account-sheet:has(#accountForm:not([hidden])) {
+      max-height: min(215px, 38vh) !important;
+    }
+    body.account-open .account-sheet:has(#accountCodeForm:not([hidden])) {
+      max-height: min(300px, 44vh) !important;
+    }
+    body.legend-open .legend:not(.collapsed) {
+      height: auto !important;
+      max-height: calc(100dvh - var(--fig-dock-h) - 20px) !important;
+    }
+    body.groups-open .group-sheet {
+      height: min(508px, calc(100dvh - var(--fig-dock-h) - 16px)) !important;
+      max-height: min(594px, calc(100dvh - var(--fig-dock-h) - 12px)) !important;
+    }
+
+    .legend-title {
+      opacity: 0.54 !important;
+      letter-spacing: 0.115px !important;
+      margin-bottom: 6px !important;
+    }
+    .legend-group + .legend-group {
+      margin-top: 16px !important;
+      padding-top: 17px !important;
+      border-top: 1px solid rgba(28, 25, 23, 0.16) !important;
+    }
+
+    .group-tabs {
+      background: transparent !important;
+      border: 1px solid rgba(0, 0, 0, 0.12) !important;
+      border-radius: 8px !important;
+      padding: 8px !important;
+      gap: 10px !important;
+      display: flex !important;
+    }
+    .group-tab {
+      flex: 1 1 0;
+      min-width: 0;
+      min-height: 0 !important;
+      padding: 8px 6px !important;
+      border-radius: 4px !important;
+      background: rgba(255, 255, 255, 0.16) !important;
+      color: var(--fig-ink) !important;
+      font-size: 12px !important;
+      font-weight: 600 !important;
+    }
+    .group-tab.active {
+      background: var(--fig-chrome) !important;
+      color: #fff !important;
+    }
+
+    .group-sheet .account-title.key-title {
+      font-size: 22px !important;
+      line-height: 1.2 !important;
+    }
+    .group-panel-heading .group-title,
+    #groupLiveTitle {
+      font-size: 14px !important;
+      font-weight: 700 !important;
+      line-height: 1.2 !important;
+    }
+    .group-panel-heading .account-subtitle,
+    #groupLiveMeta {
+      font-size: 8px !important;
+      line-height: 1.35 !important;
+    }
+    .group-count {
+      background: var(--fig-chrome) !important;
+      font-family: var(--font-mono) !important;
+      font-size: 10px !important;
+    }
+
+    .group-list { gap: 10px !important; margin-top: 4px !important; }
+    .group-row {
+      display: flex !important;
+      flex-direction: column !important;
+      align-items: stretch !important;
+      justify-content: flex-start !important;
+      gap: 2px !important;
+      width: 100%;
+      padding: 10px 11px !important;
+      border: 1px solid #fafaf9 !important;
+      border-radius: 8px !important;
+      background: #e5e0db !important;
+      color: var(--fig-ink) !important;
+      cursor: pointer;
+      text-align: left;
+      font: inherit;
+    }
+    .group-row .group-name {
+      font-size: 13px !important;
+      font-weight: 600 !important;
+      color: var(--fig-ink) !important;
+    }
+    .group-row-meta {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 8px;
+      width: 100%;
+    }
+    .group-row .group-stats,
+    .group-row .group-code {
+      margin: 0 !important;
+      font-family: var(--font-mono) !important;
+      font-size: 12px !important;
+      line-height: 1.25 !important;
+      color: #d97706 !important;
+    }
+    .group-row-actions { display: none !important; }
+    .group-row.deleted .group-row-actions {
+      display: flex !important;
+      margin-top: 6px;
+      justify-content: flex-end;
+    }
+    .group-row.deleted .group-row-actions button {
+      color: var(--fig-ink-soft) !important;
+      font-size: 12px !important;
+    }
+
+    .group-back {
+      border: 1px solid rgba(28, 25, 23, 0.1) !important;
+      border-radius: 8px !important;
+      background: transparent !important;
+      min-height: 28px !important;
+      padding: 6px 9px !important;
+      font-size: 13px !important;
+      font-weight: 600 !important;
+      color: var(--fig-ink) !important;
+    }
+    .group-remove {
+      border: 1px solid rgba(28, 25, 23, 0.1) !important;
+      border-radius: 8px !important;
+      background: transparent !important;
+      color: #dc2626 !important;
+      min-height: 28px !important;
+      padding: 6px 10px !important;
+      font-size: 13px !important;
+      font-weight: 600 !important;
+    }
+    .group-details-kicker {
+      font-size: 9px !important;
+      letter-spacing: 0.08em !important;
+      color: var(--fig-ink-soft) !important;
+    }
+    .group-summary-card {
+      display: grid !important;
+      grid-template-columns: 1fr 1fr 1fr !important;
+      gap: 11px !important;
+      margin-top: 10px !important;
+      padding: 0 !important;
+      border: 0 !important;
+      background: transparent !important;
+    }
+    .group-summary-card > div {
+      min-width: 0;
+      padding: 8px !important;
+      border: 1px solid rgba(0, 0, 0, 0.39) !important;
+      border-radius: 8px !important;
+      background: transparent !important;
+    }
+    .group-summary-card span {
+      display: block;
+      font-family: var(--font-ui) !important;
+      font-size: 10px !important;
+      font-weight: 510 !important;
+      color: var(--fig-ink-soft) !important;
+    }
+    .group-summary-card strong {
+      display: block;
+      margin-top: 3px !important;
+      font-family: var(--font-ui) !important;
+      font-size: 16px !important;
+      font-weight: 700 !important;
+      color: var(--fig-ink) !important;
+    }
+    #groupLiveCountValue { color: #d22730 !important; }
+
+    .group-controls-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 9px;
+      margin-top: 10px;
+      width: 100%;
+    }
+    .group-controls-row .group-section {
+      margin-top: 0 !important;
+      padding-top: 10px !important;
+      border-top: 1px solid rgba(28, 25, 23, 0.1) !important;
+      gap: 6px !important;
+      align-content: start;
+    }
+    .group-controls-row .group-section-title { display: none; }
+    .group-controls-row .group-share-action {
+      width: 100%;
+      min-height: 34px !important;
+      font-size: 12px !important;
+      padding: 5px 12px !important;
+    }
+    .group-controls-row .group-status-select {
+      width: 100%;
+      min-height: 34px !important;
+      font-size: 12px !important;
+      font-weight: 600 !important;
+      background: #fff !important;
+      border: 1px solid rgba(28, 25, 23, 0.12) !important;
+    }
+    .group-controls-row .account-subtitle {
+      font-size: 8px !important;
+      text-align: center;
+      margin: 0 !important;
+    }
+    .group-section-riders {
+      margin-top: 12px !important;
+      padding-top: 0 !important;
+      border-top: 0 !important;
+    }
+    .group-section-riders .group-section-title {
+      font-size: 13px !important;
+      color: var(--fig-ink) !important;
+      padding-bottom: 8px;
+      border-bottom: 1px solid rgba(0, 0, 0, 0.17);
+      margin-bottom: 8px;
+      opacity: 1 !important;
+    }
+    .group-participant-list { gap: 10px !important; max-height: none !important; }
+    .group-participant {
+      padding: 6px 8px !important;
+      border-radius: 8px !important;
+      font-size: 16px !important;
+      font-weight: 600 !important;
+      color: var(--fig-ink) !important;
+    }
+    .group-participant-state {
+      font-size: 8.6px !important;
+      color: var(--fig-ink-soft) !important;
+    }
+    .group-participant-summary {
+      font-family: var(--font-ui) !important;
+      font-size: 11px !important;
     }
   </style>
 </head>
@@ -4745,25 +5089,26 @@
             <div><span>Members</span><strong id="groupMemberCountValue">0</strong></div>
             <div><span>Sharing now</span><strong id="groupLiveCountValue">0</strong></div>
           </div>
-          <div class="group-section">
+          <div class="group-controls-row">
+            <div class="group-section group-sharing-section">
+              <button id="groupShareBtn" class="group-share-action" type="button">Start sharing</button>
+              <div class="account-subtitle">While sharing is on, every group you’re in can see your live position — and you can see theirs.</div>
+            </div>
+            <div class="group-section">
+              <label class="group-section-title" for="groupStatusSelect">Status</label>
+              <select id="groupStatusSelect" class="group-status-select" aria-label="Rider status">
+                <option value="available">Available</option>
+                <option value="breakdown">Breakdown</option>
+                <option value="injured">Injured</option>
+                <option value="stuck">Stuck</option>
+              </select>
+              <div class="account-subtitle">Shown as a word beside your name on the group map.</div>
+            </div>
+          </div>
+          <div class="group-section group-section-riders">
             <div class="group-section-title">Riders</div>
             <div class="group-participant-list" id="groupParticipantList"></div>
             <div class="group-participant-summary" id="groupParticipantSummary"></div>
-          </div>
-          <div class="group-section group-sharing-section">
-            <div class="group-section-title">Share location</div>
-            <div class="account-subtitle">While sharing is on, every group you’re in can see your live position — and you can see theirs.</div>
-            <button id="groupShareBtn" class="group-share-action" type="button">Start sharing</button>
-          </div>
-          <div class="group-section">
-            <label class="group-section-title" for="groupStatusSelect">Status</label>
-            <div class="account-subtitle">Shown as a word beside your name on the group map.</div>
-            <select id="groupStatusSelect" class="group-status-select" aria-label="Rider status">
-              <option value="available">Available</option>
-              <option value="breakdown">Breakdown</option>
-              <option value="injured">Injured</option>
-              <option value="stuck">Stuck</option>
-            </select>
           </div>
         </div>
         <div class="account-status" id="groupStatus" role="status"></div>
@@ -4856,7 +5201,7 @@
     </div>
     <div class="sheet-scroll legend-scroll">
     <div class="legend-group">
-      <span class="legend-title">Rider services</span>
+      <span class="legend-title">Rider Services</span>
       <label class="legend-row">
         <span class="legend-label"><i class="poi-dot" style="background:#e8730c"></i>Fuel</span>
         <span class="switch"><input type="checkbox" data-poi-toggle="fuel" checked aria-label="Toggle fuel stations"><span></span></span>
@@ -4875,7 +5220,7 @@
       </label>
     </div>
     <div class="legend-group">
-      <span class="legend-title">Map visibility</span>
+      <span class="legend-title">Map Visibility</span>
       <label class="legend-row">
         <span class="legend-label"><i style="background:var(--access)"></i>Access road</span>
         <span class="switch"><input type="checkbox" data-layer-toggle="access" checked aria-label="Toggle access roads"><span></span></span>
@@ -4902,7 +5247,7 @@
       </label>
     </div>
     <div class="legend-group">
-      <span class="legend-title">Data sources</span>
+      <span class="legend-title">Data Sources</span>
       <!-- OSM Overpass source disabled for NSTDB-only POC.
       <label class="legend-row">
         <span class="legend-label"><i style="background:var(--text)"></i>OSM Overpass</span>
@@ -10628,8 +10973,13 @@
       popupEl.classList.add("visible");
     }
 
-    function accountStatus(text, kind) {
-      for (const id of ["accountStatus", "groupStatus"]) {
+    function accountStatus(text, kind, scope) {
+      const targets = scope === "group"
+        ? ["groupStatus"]
+        : scope === "account"
+          ? ["accountStatus"]
+          : ["accountStatus", "groupStatus"];
+      for (const id of targets) {
         const el = document.getElementById(id);
         if (el) { el.textContent = text || ""; el.className = "account-status" + (kind === "error" ? " error" : ""); }
       }
@@ -10717,11 +11067,17 @@
         const memberCount = Number.isFinite(Number(group.member_count)) ? Number(group.member_count) : 0;
         const liveCount = Number.isFinite(Number(group.live_count)) ? Number(group.live_count) : 0;
         return (
-        '<div class="group-row' + (deleted ? ' deleted' : '') + '">' +
-          '<div><div class="group-name">' + escapeHtml(group.name) + '</div>' +
-          (deleted ? '<div class="group-deleted">Deleted by group owner</div>' : '<div class="group-code">Code: ' + escapeHtml(group.invite_code || "") + '</div><div class="group-stats">' + memberCount + ' members · ' + liveCount + ' sharing</div>') + '</div>' +
+        '<div class="group-row' + (deleted ? ' deleted' : '') + '"' +
+          (deleted ? '' : ' data-select-group="' + group.id + '" role="button" tabindex="0"') +
+          '>' +
+          '<div class="group-name">' + escapeHtml(group.name) + '</div>' +
+          (deleted
+            ? '<div class="group-deleted">Deleted by group owner</div>'
+            : '<div class="group-row-meta">' +
+                '<div class="group-stats">' + memberCount + ' members · ' + liveCount + ' sharing</div>' +
+                '<div class="group-code">Code: ' + escapeHtml(group.invite_code || "") + '</div>' +
+              '</div>') +
           '<div class="group-row-actions">' +
-          (deleted ? '' : '<button type="button" data-select-group="' + group.id + '">Open</button>') +
           '<button type="button" data-remove-group="' + group.id + '">' + actionLabel + '</button>' +
         '</div>' +
         '</div>'
@@ -10918,7 +11274,7 @@
     async function ensureGroupsReady() {
       const ready = await ensureAccountReady();
       if (!ready || !currentAuthUser) {
-        accountStatus("Sign in with your email before opening riding groups.", "error");
+        accountStatus("Sign in with your email before opening riding groups.", "error", "group");
         return false;
       }
       if (groupsReadyPromise) return groupsReadyPromise;
@@ -11932,7 +12288,10 @@
         setLegendOpen(false);
         setGroupSheetOpen(false);
         setAccountSheetOpen(open);
-        if (open) await ensureAccountReady();
+        if (open) {
+          accountStatus("", null, "account");
+          await ensureAccountReady();
+        }
       });
     }
     groupBtn?.addEventListener("click", async () => {
