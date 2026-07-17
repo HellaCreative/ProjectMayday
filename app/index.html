@@ -3737,14 +3737,23 @@
     body.planner-open.planner-tab-saved .route-card.is-collapsed .route-drawer-full {
       overflow: hidden;
     }
-    body.planner-open .route-workspace-head {
-      position: relative;
+    body.planner-open .route-workspace-head { display: none !important; }
+    .route-finder-heading-row {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      min-height: 38px;
-      gap: 8px;
-      padding: 4px 0 2px;
+      gap: 10px;
+      width: 100%;
+    }
+    .route-finder-heading-row .route-finder-title {
+      margin: 0;
+      min-width: 0;
+    }
+    .route-finder-actions {
+      position: relative;
+      flex: 0 0 auto;
+      display: flex;
+      align-items: center;
     }
     .route-workspace-title {
       color: var(--p2-sheet-ink);
@@ -3777,7 +3786,7 @@
     .route-services-popover {
       position: absolute;
       right: 0;
-      bottom: calc(100% + 8px);
+      top: calc(100% + 8px);
       width: min(220px, calc(100vw - 32px));
       padding: 10px;
       border: 1px solid var(--p2-sheet-line);
@@ -4455,9 +4464,27 @@
     .route-finder-header {
       display: flex !important;
       flex-direction: column !important;
-      align-items: flex-start !important;
-      justify-content: flex-start !important;
+      align-items: stretch !important;
       gap: 0 !important;
+    }
+    .route-finder-heading-row {
+      display: flex !important;
+      align-items: center !important;
+      justify-content: space-between !important;
+      gap: 10px;
+      width: 100%;
+    }
+    .route-services-btn {
+      background: var(--fig-sheet-2) !important;
+      border: 1px solid rgba(28, 25, 23, 0.14) !important;
+      color: var(--fig-ink) !important;
+      border-radius: var(--fig-r) !important;
+      font-size: 12px !important;
+      font-weight: 600 !important;
+    }
+    .route-services-btn[aria-expanded="true"] {
+      background: var(--fig-chrome) !important;
+      color: #fff !important;
     }
 
     .sheet-scroll,
@@ -4828,23 +4855,6 @@
   </div>
 
   <div class="route-card closed" id="routeCard" data-drawer="closed">
-    <div class="route-workspace-head">
-      <span class="route-workspace-title">Route</span>
-      <div class="route-workspace-actions">
-        <button class="route-services-btn" id="routeServicesBtn" type="button" aria-expanded="false" aria-controls="routeServicesPopover">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h18"/><path d="M6 7h12"/><path d="M6 17h12"/><circle cx="9" cy="7" r="2"/><circle cx="15" cy="12" r="2"/><circle cx="10" cy="17" r="2"/></svg>
-          <span>Services</span>
-        </button>
-        <button class="route-workspace-close" id="routeWorkspaceClose" type="button" aria-label="Close route workspace" title="Close route workspace">×</button>
-      </div>
-      <div class="route-services-popover" id="routeServicesPopover" hidden>
-        <div class="route-services-title">Rider services</div>
-        <label class="route-service-row"><span><i style="background:#e8730c"></i>Fuel</span><span class="switch"><input type="checkbox" data-poi-toggle="fuel" checked aria-label="Show fuel stations"><span></span></span></label>
-        <label class="route-service-row"><span><i style="background:#2f9e44"></i>Campgrounds</span><span class="switch"><input type="checkbox" data-poi-toggle="campground" checked aria-label="Show campgrounds"><span></span></span></label>
-        <label class="route-service-row"><span><i style="background:#8a5a2b"></i>Lodging</span><span class="switch"><input type="checkbox" data-poi-toggle="lodging" checked aria-label="Show lodging"><span></span></span></label>
-        <label class="route-service-row"><span><i style="background:#8e44c9"></i>Liquor stores</span><span class="switch"><input type="checkbox" data-poi-toggle="liquor" checked aria-label="Show liquor stores"><span></span></span></label>
-      </div>
-    </div>
     <div class="route-sheet-handle-bar">
       <button
         class="route-sheet-handle"
@@ -4856,7 +4866,22 @@
       ></button>
     </div>
     <div class="sheet-header route-finder-header">
-      <div class="route-finder-title key-title">Route finder</div>
+      <div class="route-finder-heading-row">
+        <div class="route-finder-title key-title">Route finder</div>
+        <div class="route-finder-actions">
+          <button class="route-services-btn" id="routeServicesBtn" type="button" aria-expanded="false" aria-controls="routeServicesPopover">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h18"/><path d="M6 7h12"/><path d="M6 17h12"/><circle cx="9" cy="7" r="2"/><circle cx="15" cy="12" r="2"/><circle cx="10" cy="17" r="2"/></svg>
+            <span>Services</span>
+          </button>
+          <div class="route-services-popover" id="routeServicesPopover" hidden>
+            <div class="route-services-title">Rider services</div>
+            <label class="route-service-row"><span><i style="background:#e8730c"></i>Fuel</span><span class="switch"><input type="checkbox" data-poi-toggle="fuel" checked aria-label="Show fuel stations"><span></span></span></label>
+            <label class="route-service-row"><span><i style="background:#2f9e44"></i>Campgrounds</span><span class="switch"><input type="checkbox" data-poi-toggle="campground" checked aria-label="Show campgrounds"><span></span></span></label>
+            <label class="route-service-row"><span><i style="background:#8a5a2b"></i>Lodging</span><span class="switch"><input type="checkbox" data-poi-toggle="lodging" checked aria-label="Show lodging"><span></span></span></label>
+            <label class="route-service-row"><span><i style="background:#8e44c9"></i>Liquor stores</span><span class="switch"><input type="checkbox" data-poi-toggle="liquor" checked aria-label="Show liquor stores"><span></span></span></label>
+          </div>
+        </div>
+      </div>
       <div class="sheet-subtitle">Build your route, start the adventure</div>
     </div>
     <div class="route-drawer-scroll" id="routeDrawerScroll">
