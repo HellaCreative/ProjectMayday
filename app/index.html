@@ -6717,6 +6717,7 @@
     const routePanelHere = document.getElementById("routePanelHere");
     const routePanelPlan = document.getElementById("routePanelPlan");
     const routePanelSaved = document.getElementById("routePanelSaved");
+    const stageStageStrip = document.getElementById("stageStageStrip");
     const stageListEl = document.getElementById("stageList");
     const stageTripSummaryEl = document.getElementById("stageTripSummary");
     const stagePlanWarn = document.getElementById("stagePlanWarn");
@@ -9010,6 +9011,21 @@
       if (stageSaveBtn) {
         stageSaveBtn.disabled = !planTrip.stages.some((s) => RS.stageHasBothPoints(s));
       }
+      revealActiveStageCard();
+    }
+
+    function revealActiveStageCard() {
+      if (!stageStageStrip || plannerTab !== "plan") return;
+      requestAnimationFrame(() => {
+        const active = stageStageStrip.querySelector(".stage-row.is-active");
+        if (!active) return;
+        const stripRect = stageStageStrip.getBoundingClientRect();
+        const cardRect = active.getBoundingClientRect();
+        const visible = cardRect.left >= stripRect.left && cardRect.right <= stripRect.right;
+        if (!visible) {
+          active.scrollIntoView({ behavior: "auto", block: "nearest", inline: "center" });
+        }
+      });
     }
 
     function setStageProfile(stageId, profile) {
