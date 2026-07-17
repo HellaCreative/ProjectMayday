@@ -2505,6 +2505,58 @@
     body.planner-collapsed .pip { bottom: calc(var(--p2-dock-h) + 224px) !important; }
     body.planner-tab-plan.planner-collapsed .stack,
     body.planner-tab-plan.planner-collapsed .pip { bottom: calc(var(--p2-dock-h) + 252px) !important; }
+
+    .saved-sheet-header {
+      display: none;
+    }
+    body.planner-tab-saved .route-finder-header,
+    body.planner-tab-saved #routeFullModeTabs {
+      display: none !important;
+    }
+    body.planner-tab-saved .saved-sheet-header {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      flex: 0 0 auto;
+    }
+    .saved-sheet-title {
+      color: #1c1917;
+      font-size: 20px;
+      font-weight: 750;
+      line-height: 1.1;
+    }
+    .saved-sheet-subtitle {
+      color: #57534e;
+      font-size: 12px;
+      line-height: 1.3;
+    }
+    .saved-sheet-mode-tabs {
+      display: flex !important;
+      align-items: stretch;
+      gap: 2px;
+      min-height: 36px;
+      padding: 3px;
+      background: #ebe6df;
+      border: 1px solid rgba(28, 25, 23, 0.1);
+      border-radius: 8px;
+    }
+    .saved-sheet-mode-tabs .route-mode {
+      flex: 1 1 0;
+      min-width: 0;
+      min-height: 30px !important;
+      padding: 5px 6px !important;
+      border: 0 !important;
+      border-radius: 6px !important;
+      background: transparent !important;
+      color: #57534e !important;
+      font-size: 12px !important;
+      font-weight: 650;
+      white-space: nowrap;
+    }
+    .saved-sheet-mode-tabs .route-mode.active {
+      background: #1c1917 !important;
+      color: #ffffff !important;
+    }
     @media (max-width: 380px) {
       body.navigating .nav-cue-sub {
         display: none;
@@ -5673,6 +5725,45 @@
     body.planner-collapsed .pip { bottom: calc(var(--p2-dock-h) + 224px) !important; }
     body.planner-tab-plan.planner-collapsed .stack,
     body.planner-tab-plan.planner-collapsed .pip { bottom: calc(var(--p2-dock-h) + 252px) !important; }
+
+    /* Saved routes keeps a visible escape hatch back to the working planner. */
+    body.planner-tab-saved .route-finder-header,
+    body.planner-tab-saved #routeFullModeTabs {
+      display: none !important;
+    }
+    body.planner-tab-saved .saved-sheet-header {
+      display: flex !important;
+      flex-direction: column !important;
+      gap: 6px !important;
+      flex: 0 0 auto !important;
+    }
+    body.planner-tab-saved .saved-sheet-mode-tabs {
+      display: flex !important;
+      align-items: stretch !important;
+      gap: 2px !important;
+      min-height: 36px !important;
+      padding: 3px !important;
+      background: #ebe6df !important;
+      border: 1px solid rgba(28, 25, 23, 0.1) !important;
+      border-radius: 8px !important;
+    }
+    body.planner-tab-saved .saved-sheet-mode-tabs .route-mode {
+      flex: 1 1 0 !important;
+      min-width: 0 !important;
+      min-height: 30px !important;
+      padding: 5px 6px !important;
+      border: 0 !important;
+      border-radius: 6px !important;
+      background: transparent !important;
+      color: #57534e !important;
+      font-size: 12px !important;
+      font-weight: 650 !important;
+      white-space: nowrap !important;
+    }
+    body.planner-tab-saved .saved-sheet-mode-tabs .route-mode.active {
+      background: #1c1917 !important;
+      color: #ffffff !important;
+    }
   </style>
 </head>
 <body>
@@ -5774,7 +5865,7 @@
         <div class="route-segment route-tabs" role="tablist" aria-label="Route planner tabs">
           <button class="route-mode active" type="button" data-route-mode="here" role="tab" aria-selected="true">From here</button>
           <button class="route-mode" type="button" data-route-mode="plan" role="tab" aria-selected="false">Plan a route</button>
-          <button class="route-mode" type="button" data-route-mode="saved" role="tab" aria-selected="false">Saved route</button>
+          <button class="route-mode" type="button" data-route-mode="saved" role="tab" aria-selected="false">Saved</button>
         </div>
         <p class="route-tab-hint" id="routeTabHintCompact">Build your route from your current position</p>
       </div>
@@ -5813,11 +5904,20 @@
       </div>
     </div>
     <div class="route-drawer-full" id="routeDrawerFull">
-      <div class="route-mode-block">
+      <div class="saved-sheet-header" id="savedSheetHeader">
+        <div class="saved-sheet-title">Saved routes</div>
+        <div class="saved-sheet-subtitle">Open a saved route or import a GPX track</div>
+        <div class="route-segment route-tabs saved-sheet-mode-tabs" role="tablist" aria-label="Route planner tabs">
+          <button class="route-mode" type="button" data-route-mode="here" role="tab" aria-selected="false">From here</button>
+          <button class="route-mode" type="button" data-route-mode="plan" role="tab" aria-selected="false">Plan route</button>
+          <button class="route-mode active" type="button" data-route-mode="saved" role="tab" aria-selected="true">Saved</button>
+        </div>
+      </div>
+      <div class="route-mode-block" id="routeFullModeTabs">
         <div class="route-segment route-tabs" role="tablist" aria-label="Route planner tabs">
           <button class="route-mode active" type="button" data-route-mode="here" role="tab" aria-selected="true">From here</button>
           <button class="route-mode" type="button" data-route-mode="plan" role="tab" aria-selected="false">Plan a route</button>
-          <button class="route-mode" type="button" data-route-mode="saved" role="tab" aria-selected="false">Saved route</button>
+          <button class="route-mode" type="button" data-route-mode="saved" role="tab" aria-selected="false">Saved</button>
         </div>
         <p class="route-tab-hint" id="routeTabHintFull">Build your route from your current position</p>
       </div>
@@ -6936,6 +7036,7 @@
     // plannerTab: here | plan | saved. routeMode stays here|plan for the legacy
     // single-destination path so From-here behaviour is byte-for-byte unchanged.
     let plannerTab = "here";
+    let savedReturnTab = "plan";
     let planTrip = RouteStages.createTrip({
       profile: routePreference,
       accessPolicy: { motorizedPermissive: true, motorizedUnknown: allowUnknownAccess }
@@ -11704,6 +11805,9 @@
 
     function setRouteMode(nextTab) {
       if (navigating) stopNavigation();
+      if (nextTab === "saved" && plannerTab !== "saved") {
+        savedReturnTab = plannerTab === "here" || plannerTab === "plan" ? plannerTab : "plan";
+      }
       plannerTab = nextTab === "plan" || nextTab === "saved" ? nextTab : "here";
       // routeMode drives the legacy single-destination path (From here only).
       if (plannerTab === "here") routeMode = "here";
@@ -11762,6 +11866,10 @@
         setPlannerDrawerState(plannerTab === "saved" ? "expanded" : "collapsed");
       }
       syncRouteBarHeader();
+    }
+
+    function returnFromSavedSheet() {
+      setRouteMode(savedReturnTab === "here" ? "here" : "plan");
     }
 
     function setRoutePreference(nextPreference) {
@@ -11927,7 +12035,7 @@
       hidePopup();
       const clicked = pointFromLngLat(e.lngLat);
       if (plannerTab === "saved") {
-        setStatus("Switch to Plan route to place points", "ok", "route");
+        returnFromSavedSheet();
         return;
       }
       if (plannerTab === "plan") {
@@ -13160,11 +13268,17 @@
         try { routeSheetHandle.releasePointerCapture(event.pointerId); } catch (_) { /* ignore */ }
         drawerDrag = null;
         if (wasClick) {
-          setPlannerDrawerState("closed");
+          if (plannerTab === "saved") returnFromSavedSheet();
+          else setPlannerDrawerState("closed");
           return;
         }
         if (plannerTab === "here") return;
         if (!vertical) return;
+        if (plannerTab === "saved") {
+          if (dy >= DRAWER_SWIPE_PX) returnFromSavedSheet();
+          else if (dy <= -DRAWER_SWIPE_PX) setPlannerDrawerState("expanded");
+          return;
+        }
         if (dy <= -DRAWER_SWIPE_PX) setPlannerDrawerState("expanded");
         else if (dy >= DRAWER_SWIPE_PX) setPlannerDrawerState("collapsed");
       }
