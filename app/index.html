@@ -5281,6 +5281,87 @@
         margin-top: 0 !important;
       }
     }
+
+    /* Claude route reference: map-first stage strip.
+       Profiles remain discrete choices; there is intentionally no continuous
+       dirt-to-pavement slider. The selected card is the progressive-disclosure
+       surface for its existing profile, access, and route details. */
+    .stage-stage-strip {
+      display: flex;
+      align-items: stretch;
+      gap: 8px;
+      width: 100%;
+      overflow-x: auto;
+      overflow-y: hidden;
+      padding: 2px 1px 5px;
+      scroll-snap-type: x proximity;
+      scrollbar-width: thin;
+      -webkit-overflow-scrolling: touch;
+    }
+    .stage-stage-strip > .stage-list {
+      display: contents !important;
+    }
+    .stage-stage-strip > .stage-list > .stage-row,
+    .stage-stage-strip > .stage-add {
+      flex: 0 0 min(76vw, 248px);
+      scroll-snap-align: start;
+    }
+    .stage-stage-strip > .stage-add {
+      align-self: stretch;
+      min-height: 74px !important;
+      border: 1px dashed rgba(28, 25, 23, 0.26) !important;
+      background: var(--fig-sheet-2) !important;
+    }
+    .stage-stage-strip > .stage-list > .stage-row {
+      min-height: 74px;
+    }
+    .stage-stage-strip > .stage-list > .stage-row:not(.is-active) {
+      cursor: pointer;
+    }
+    .stage-stage-strip > .stage-list > .stage-row:not(.is-active) .route-preferences,
+    .stage-stage-strip > .stage-list > .stage-row:not(.is-active) .route-access-row {
+      display: none !important;
+    }
+    .stage-stage-strip > .stage-list > .stage-row:not(.is-active) .stage-row-actions {
+      opacity: 0.7;
+    }
+    .stage-stage-strip + .stage-plan-actions {
+      min-height: 0;
+      margin: 0 !important;
+    }
+    .stage-stage-strip + .stage-plan-actions .stage-edit-toggle {
+      display: none !important;
+    }
+    body.planner-tab-plan .route-drawer-scroll {
+      overflow-x: hidden;
+    }
+    @media (max-width: 520px) {
+      .stage-stage-strip {
+        margin-inline: -2px;
+        width: calc(100% + 4px);
+        padding-bottom: 4px;
+      }
+      .stage-stage-strip > .stage-list > .stage-row,
+      .stage-stage-strip > .stage-add {
+        flex-basis: min(74vw, 236px);
+      }
+      .stage-stage-strip > .stage-list > .stage-row {
+        padding: 8px !important;
+        gap: 7px !important;
+      }
+      .stage-stage-strip > .stage-list > .stage-row .stage-row-actions {
+        gap: 3px;
+      }
+      .stage-stage-strip > .stage-list > .stage-row .stage-text-btn {
+        min-height: 26px;
+        padding-inline: 8px;
+        font-size: 10px;
+      }
+      .stage-stage-strip > .stage-add {
+        min-height: 74px !important;
+        font-size: 12px !important;
+      }
+    }
   </style>
 </head>
 <body>
@@ -5445,9 +5526,11 @@
       <!-- Multi-stage plan -->
       <div class="route-panel" id="routePanelPlan" hidden>
         <div class="stage-trip-summary" id="stageTripSummary" aria-live="polite" hidden></div>
-        <div class="stage-list" id="stageList" role="list"></div>
-        <div class="stage-plan-actions">
+        <div class="stage-stage-strip" id="stageStageStrip">
+          <div class="stage-list" id="stageList" role="list"></div>
           <button class="stage-add" id="stageAddBtn" type="button">+ Add stage</button>
+        </div>
+        <div class="stage-plan-actions">
           <button class="stage-edit-toggle" id="stageEditToggle" type="button" hidden>Edit stage</button>
         </div>
         <div class="route-warn" id="stagePlanWarn" role="status"></div>
