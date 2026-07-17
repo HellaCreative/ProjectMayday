@@ -5130,6 +5130,157 @@
       font-size: 12px !important;
       color: var(--fig-ink-soft) !important;
     }
+
+    /* Final mobile density pass.
+       Keep the route actions readable without letting one CTA consume the
+       drawer, and keep group navigation outside the scrolling content. */
+    @media (max-width: 520px) {
+      :root {
+        --fig-ctrl: 48px;
+        --p2-locate-gap: 16px;
+      }
+
+      .bottom-nav {
+        gap: 4px !important;
+        padding: 6px !important;
+      }
+      .nav-btn {
+        height: 52px !important;
+        min-height: 52px !important;
+        grid-template-rows: 24px auto !important;
+        gap: 2px !important;
+        padding: 4px !important;
+      }
+      .nav-btn svg {
+        width: 22px !important;
+        height: 22px !important;
+      }
+
+      body.planner-open .route-card {
+        padding: 0 12px 8px !important;
+      }
+      body.planner-open .route-card.is-collapsed {
+        height: min(300px, 42vh) !important;
+        max-height: min(300px, 42vh) !important;
+      }
+      body.planner-open .route-card.is-expanded,
+      body.planner-tab-plan .route-card,
+      body.planner-tab-saved .route-card {
+        height: min(410px, 54vh) !important;
+        max-height: min(410px, 54vh) !important;
+      }
+      body.planner-open .route-sheet-handle-bar {
+        min-height: 20px !important;
+        height: 20px !important;
+      }
+      body.planner-open .route-sheet-handle {
+        min-height: 20px !important;
+        padding: 6px 0 4px !important;
+      }
+      body.planner-open .route-drawer-scroll {
+        padding-bottom: 4px !important;
+      }
+      body.planner-open .route-mode-block {
+        gap: 6px !important;
+        padding: 6px !important;
+      }
+      body.planner-open .route-tabs .route-mode {
+        min-height: 32px !important;
+        padding: 6px 3px !important;
+        font-size: 12px !important;
+      }
+      body.planner-open .route-pref-card {
+        gap: 6px !important;
+        padding: 8px !important;
+      }
+      body.planner-open .route-pref-card .route-preferences {
+        gap: 4px !important;
+      }
+      body.planner-open .route-pref {
+        min-height: 30px !important;
+        font-size: 11px !important;
+      }
+      body.planner-open .route-actions {
+        gap: 6px !important;
+        margin-top: 6px !important;
+      }
+      body.planner-open .route-actions button,
+      body.planner-open .route-actions .route-export,
+      body.planner-open .route-actions .stage-save {
+        height: 40px !important;
+        min-height: 40px !important;
+        padding: 0 8px !important;
+        font-size: 12px !important;
+        line-height: 1.1 !important;
+      }
+      body.planner-open .route-actions .route-nav,
+      body.planner-open .route-actions #routeNavBtn {
+        height: 42px !important;
+        min-height: 42px !important;
+        font-size: 13px !important;
+      }
+      body.planner-open .route-compact-actions {
+        gap: 6px !important;
+      }
+      body.planner-open .route-compact-actions button {
+        height: 38px !important;
+        min-height: 38px !important;
+        padding: 0 8px !important;
+        font-size: 12px !important;
+      }
+      body.planner-open .route-compact-nav {
+        height: 40px !important;
+        min-height: 40px !important;
+        margin-top: 4px !important;
+        font-size: 13px !important;
+      }
+
+      /* The tab strip is fixed sheet chrome. Only the selected panel scrolls,
+         so its styling and position survive long group lists/details. */
+      .group-sheet .group-sheet-body {
+        display: flex !important;
+        flex: 1 1 auto !important;
+        min-height: 0 !important;
+        overflow: hidden !important;
+        padding-bottom: 0 !important;
+      }
+      .group-sheet .group-tabs {
+        position: relative !important;
+        top: auto !important;
+        z-index: 4 !important;
+        flex: 0 0 auto !important;
+        margin: 0 0 8px !important;
+        padding: 5px !important;
+        background: var(--fig-sheet-2) !important;
+      }
+      .group-sheet .group-panel,
+      .group-sheet .group-details {
+        flex: 1 1 auto !important;
+        min-height: 0 !important;
+        overflow-x: hidden !important;
+        overflow-y: auto !important;
+        padding: 4px 0 12px !important;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-gutter: stable;
+      }
+      .group-sheet #groupDetails:not([hidden]) {
+        display: block !important;
+      }
+      .group-sheet .group-details-head {
+        align-items: center !important;
+        min-height: 34px;
+        margin: 0 0 8px !important;
+        padding: 0 0 8px !important;
+        border-bottom: 1px solid rgba(28, 25, 23, 0.12);
+      }
+      .group-sheet .group-details-kicker {
+        margin-left: auto;
+        white-space: nowrap;
+      }
+      .group-sheet .group-details-title-row {
+        margin-top: 0 !important;
+      }
+    }
   </style>
 </head>
 <body>
