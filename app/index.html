@@ -3846,6 +3846,585 @@
       body.planner-open .pip { bottom: calc(min(300px, 40vh) + var(--p2-locate-gap)); }
       body.planner-open .stack { bottom: calc(min(300px, 40vh) + var(--p2-locate-gap)); }
     }
+
+    /* ——— Figma `clean` visual fidelity layer (SoT) ———
+       Pins chrome/sheets/dock to the Figma file. Behavior unchanged. */
+    :root {
+      --fig-chrome: #1c1917;
+      --fig-chrome-2: #2c2723;
+      --fig-sheet: #f3efe9;
+      --fig-sheet-2: #ebe6df;
+      --fig-ink: #1c1917;
+      --fig-ink-soft: #57534e;
+      --fig-ink-faint: #78716c;
+      --fig-orange: #e8790c;
+      --fig-blue: #0b6bcb;
+      --fig-nav-lime: #a1cb0b;
+      --fig-r: 8px;
+      --fig-r-nav: 4px;
+      --fig-ctrl: 56px;
+      --fig-dock-pad: 8px;
+      --fig-shell-w: min(384px, calc(100vw - 24px));
+      --fig-sheet-w: min(368px, calc(100vw - 26px));
+      --fig-dock-h: calc(72px + max(8px, env(safe-area-inset-bottom)));
+      --fig-sheet-gap: 8px;
+      --p2-chrome: var(--fig-chrome);
+      --p2-sheet: var(--fig-sheet);
+      --p2-sheet-2: var(--fig-sheet-2);
+      --p2-orange: var(--fig-orange);
+      --p2-blue: var(--fig-blue);
+      --p2-r: var(--fig-r);
+      --p2-r-nav-btn: var(--fig-r-nav);
+      --p2-ctrl: var(--fig-ctrl);
+      --ctrl: var(--fig-ctrl);
+      --p2-dock-h: var(--fig-dock-h);
+      --p2-shell-w: var(--fig-shell-w);
+      --p2-sheet-max: 50%;
+      --p2-sheet-account: 58%;
+      --p2-sheet-layers: 62%;
+      --p2-sheet-tall: 72%;
+      --p2-locate-gap: 24px;
+    }
+
+    /* Dock always visible — undo planner-hides-dock experiment */
+    body.planner-open .bottom-nav {
+      display: flex !important;
+    }
+    body.planner-open .route-card {
+      left: 50% !important;
+      right: auto !important;
+      bottom: var(--fig-dock-h) !important;
+      width: var(--fig-sheet-w) !important;
+      max-width: var(--fig-sheet-w) !important;
+      height: auto !important;
+      max-height: calc(100dvh - var(--fig-dock-h) - 24px) !important;
+      padding: 0 16px 12px !important;
+      transform: translateX(-50%) !important;
+      border: 0 !important;
+      border-top: 1px solid rgba(28, 25, 23, 0.1) !important;
+      border-radius: var(--fig-r) var(--fig-r) 0 0 !important;
+      box-shadow: 0 -10px 28px rgba(28, 25, 23, 0.14) !important;
+      overflow: hidden !important;
+      z-index: 40 !important;
+      background: var(--fig-sheet) !important;
+    }
+    body.planner-open .route-card.is-collapsed {
+      height: min(376px, 48vh) !important;
+      max-height: min(376px, 48vh) !important;
+    }
+    body.planner-open .route-card.is-expanded {
+      height: min(455px, 58vh) !important;
+      max-height: min(560px, 68vh) !important;
+      display: flex !important;
+      flex-direction: column !important;
+    }
+    body.planner-open .route-finder-header,
+    body.planner-open .route-sheet-handle-bar,
+    body.planner-open .route-card.is-expanded .route-sheet-handle-bar,
+    body.planner-open .route-card.is-collapsed .route-sheet-handle-bar {
+      display: flex !important;
+    }
+    body.planner-open .route-sheet-handle-bar {
+      min-height: 16px;
+      justify-content: center;
+      align-items: center;
+      background: var(--fig-sheet);
+    }
+    body.planner-open .pip,
+    body.planner-open .stack {
+      bottom: calc(var(--fig-dock-h) + var(--p2-locate-gap)) !important;
+    }
+    body.planner-open.planner-collapsed .stack,
+    body.planner-open.planner-collapsed .pip {
+      bottom: calc(min(376px, 48vh) + var(--fig-dock-h) + var(--p2-locate-gap) - 8px) !important;
+    }
+    body.planner-open.planner-expanded .stack,
+    body.planner-open.planner-expanded .pip {
+      bottom: calc(min(455px, 58vh) + var(--fig-dock-h) + var(--p2-locate-gap) - 8px) !important;
+    }
+
+    /* Plan / Saved always use the full drawer content (tabs + stages / list). */
+    body.planner-tab-plan .route-drawer-compact,
+    body.planner-tab-saved .route-drawer-compact {
+      display: none !important;
+    }
+    body.planner-tab-plan .route-drawer-full,
+    body.planner-tab-saved .route-drawer-full {
+      display: flex !important;
+      flex-direction: column;
+      gap: 8px;
+      min-height: 0;
+      flex: 1;
+    }
+    body.planner-tab-plan .route-card,
+    body.planner-tab-saved .route-card {
+      height: min(455px, 58vh) !important;
+      max-height: min(560px, 68vh) !important;
+    }
+
+    .route-tab-hint {
+      margin: 0;
+      font-size: 10px;
+      font-weight: 400;
+      color: var(--fig-ink-soft);
+      letter-spacing: -0.01em;
+      line-height: 1.3;
+    }
+    .route-tabs {
+      display: flex !important;
+      flex-direction: row !important;
+      align-items: stretch;
+      width: 100%;
+    }
+    .route-tabs .route-mode {
+      flex: 1 1 0;
+      min-width: 0;
+      padding: 8px 4px !important;
+      font-size: 12px !important;
+      white-space: nowrap;
+    }
+    @media (min-width: 360px) {
+      .route-tabs .route-mode { font-size: 13px !important; }
+    }
+    .route-preferences-compact {
+      margin-top: 2px;
+    }
+    .route-compact-summary {
+      font-size: 13px !important;
+      color: var(--fig-ink) !important;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px 24px;
+      padding: 4px 0 2px;
+    }
+    .route-compact-summary strong {
+      font-weight: 700;
+    }
+    .route-compact-actions {
+      display: grid !important;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      width: 100%;
+    }
+    .route-compact-nav {
+      width: 100% !important;
+      margin-top: 6px;
+    }
+    .route-actions {
+      display: grid !important;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      width: 100%;
+      margin-top: 8px !important;
+    }
+    .route-actions .route-nav,
+    .route-actions #routeNavBtn {
+      grid-column: 1 / -1;
+    }
+    .route-actions .route-export,
+    .route-actions .stage-save {
+      min-height: 36px !important;
+      font-size: 11.5px !important;
+    }
+    .stage-add {
+      width: 100%;
+      min-height: 40px !important;
+      border: 1px solid rgba(28, 25, 23, 0.14) !important;
+      border-radius: 4px !important;
+      background: var(--fig-sheet-2) !important;
+      color: var(--fig-ink) !important;
+      font-size: 13px !important;
+      font-weight: 700 !important;
+      text-transform: none !important;
+    }
+
+    body.account-open .account-sheet {
+      height: auto !important;
+      max-height: min(58vh, 520px) !important;
+    }
+    body.account-open .account-sheet:has(#accountForm:not([hidden])) {
+      max-height: min(240px, 40vh) !important;
+    }
+    body.groups-open .group-sheet {
+      height: min(62vh, 560px) !important;
+      max-height: min(72vh, 640px) !important;
+    }
+    body.legend-open .legend:not(.collapsed) {
+      height: min(62vh, 540px) !important;
+      max-height: min(68vh, 580px) !important;
+    }
+
+    body.navigating .nav-report {
+      background: var(--fig-orange) !important;
+      color: #fff !important;
+      width: 52px;
+      border: 0;
+      border-left: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 0 !important;
+      gap: 2px;
+      font-size: 12px !important;
+      font-weight: 600;
+    }
+    body.navigating .nav-stop {
+      background: #dc2626 !important;
+      color: #fff !important;
+      width: 52px;
+      border-radius: 0 !important;
+      font-size: 12px !important;
+      font-weight: 600;
+    }
+    body.navigating .nav-cue-sub {
+      color: rgba(220, 104, 3, 0.95) !important;
+    }
+    body.navigating .pip {
+      border: 2px solid #fff !important;
+      border-radius: var(--fig-r) !important;
+      background: var(--fig-sheet) !important;
+      box-shadow: 0 12px 28px rgba(22, 36, 51, 0.28);
+    }
+
+    .sheet-scroll,
+    .legend-scroll,
+    .group-sheet-body,
+    .route-drawer-scroll {
+      padding-bottom: 8px !important;
+    }
+
+    .bottom-dock {
+      left: 50% !important;
+      right: auto !important;
+      width: var(--fig-shell-w) !important;
+      transform: translateX(-50%);
+      bottom: max(8px, env(safe-area-inset-bottom)) !important;
+      z-index: 50 !important;
+    }
+    .bottom-nav {
+      width: 100% !important;
+      max-width: none !important;
+      padding: var(--fig-dock-pad) !important;
+      gap: 4px !important;
+      border-radius: var(--fig-r) !important;
+      background: var(--fig-chrome) !important;
+      box-shadow: 0 8px 24px rgba(12, 10, 9, 0.28);
+    }
+    .nav-btn {
+      flex: 1 1 0;
+      height: auto !important;
+      min-height: 56px !important;
+      padding: 4px !important;
+      gap: 4px !important;
+      border-radius: var(--fig-r-nav) !important;
+      background: var(--fig-chrome-2) !important;
+      color: rgba(250, 250, 249, 0.72) !important;
+      grid-template-rows: 24px auto !important;
+      font-family: var(--font-ui) !important;
+      font-size: 10px !important;
+      font-weight: 510 !important;
+      letter-spacing: 0.072px !important;
+      text-transform: none !important;
+    }
+    .nav-btn svg {
+      width: 24px !important;
+      height: 24px !important;
+      color: var(--fig-orange) !important;
+      stroke: currentColor;
+    }
+    .nav-btn.active,
+    .nav-btn.is-active,
+    .nav-btn[aria-expanded="true"],
+    #legendBtn.is-active {
+      background: var(--fig-orange) !important;
+      color: #fff !important;
+      border: 1px solid rgba(255, 255, 255, 0.5);
+    }
+    .nav-btn.active svg,
+    .nav-btn.is-active svg,
+    .nav-btn[aria-expanded="true"] svg,
+    #legendBtn.is-active svg {
+      color: #fff !important;
+    }
+
+    .brand {
+      border-radius: var(--fig-r) !important;
+      background: var(--fig-chrome) !important;
+      min-height: 42px;
+      padding: 8px 12px !important;
+    }
+    .brand-dirt {
+      font-size: 16.3px !important;
+      font-weight: 900 !important;
+      letter-spacing: -0.02em;
+      color: #fff !important;
+    }
+    .brand-dirt span { color: var(--fig-orange) !important; }
+    .brand-by {
+      font-size: 11px !important;
+      font-weight: 600 !important;
+      letter-spacing: 0.08em !important;
+      text-transform: uppercase !important;
+      color: rgba(250, 250, 249, 0.45) !important;
+    }
+
+    .stack {
+      right: 10px !important;
+      gap: 24px !important;
+    }
+    .stack .btn,
+    .stack .btn.mini,
+    .stack .btn.view-mode,
+    .stack .btn.cue-mode,
+    .stack .btn.primary,
+    .stack .btn.compass-btn,
+    .stack .btn.report-vis {
+      width: var(--fig-ctrl) !important;
+      min-width: var(--fig-ctrl) !important;
+      height: var(--fig-ctrl) !important;
+      min-height: var(--fig-ctrl) !important;
+      padding: 5px !important;
+      border-radius: var(--fig-r) !important;
+      background: var(--fig-chrome) !important;
+      border: 1px solid rgba(250, 250, 249, 0.1) !important;
+      color: #fff !important;
+      box-shadow: 0 3px 6px rgba(12, 10, 9, 0.2);
+    }
+    .stack .btn.primary {
+      background: var(--fig-blue) !important;
+      border-color: transparent !important;
+    }
+
+    .route-card,
+    .account-sheet,
+    .group-sheet,
+    .legend {
+      background: var(--fig-sheet) !important;
+      color: var(--fig-ink) !important;
+      border-radius: var(--fig-r) var(--fig-r) 0 0 !important;
+    }
+    .account-sheet,
+    .group-sheet,
+    .legend:not(.collapsed) {
+      left: 50% !important;
+      right: auto !important;
+      width: var(--fig-sheet-w) !important;
+      max-width: var(--fig-sheet-w) !important;
+      transform: translateX(-50%) !important;
+      bottom: var(--fig-dock-h) !important;
+      padding-left: 16px !important;
+      padding-right: 16px !important;
+      padding-top: 0 !important;
+      padding-bottom: 12px !important;
+      box-shadow: 0 -10px 28px rgba(28, 25, 23, 0.14) !important;
+      z-index: 40 !important;
+    }
+    .account-sheet.open,
+    .group-sheet.open,
+    .legend:not(.collapsed) {
+      transform: translateX(-50%) !important;
+    }
+    .legend.collapsed {
+      transform: translate(-50%, 110%) !important;
+    }
+
+    .sheet-handle-bar,
+    .route-sheet-handle-bar {
+      min-height: 16px !important;
+      height: 16px;
+      background: var(--fig-sheet) !important;
+    }
+    .sheet-handle,
+    .route-sheet-handle {
+      min-height: 16px !important;
+      padding: 6px 0 !important;
+    }
+    .sheet-handle::after,
+    .route-sheet-handle::after {
+      width: 40px !important;
+      height: 4px !important;
+      background: rgba(28, 25, 23, 0.22) !important;
+    }
+    .sheet-header,
+    .route-finder-header,
+    .group-sheet-head,
+    .legend-head {
+      border-bottom: 1px solid rgba(0, 0, 0, 0.4);
+      padding-bottom: 10px !important;
+      margin-bottom: 8px;
+      background: var(--fig-sheet);
+    }
+    .key-title,
+    .account-title.key-title,
+    .legend-head-title,
+    .route-finder-title,
+    #groupLiveTitle {
+      font-size: 22px !important;
+      font-weight: 700 !important;
+      letter-spacing: -0.022em !important;
+      line-height: 1.2 !important;
+      text-transform: none !important;
+      color: var(--fig-ink) !important;
+    }
+    .sheet-subtitle,
+    .account-subtitle,
+    .legend .sheet-subtitle {
+      font-size: 10px !important;
+      font-weight: 400 !important;
+      color: var(--fig-ink-soft) !important;
+      letter-spacing: -0.01em;
+      text-transform: none !important;
+    }
+
+    .legend-title,
+    .group-section-title,
+    .account-field-label {
+      font-size: 12px !important;
+      font-weight: 700 !important;
+      color: var(--fig-ink-soft) !important;
+      text-transform: none !important;
+      letter-spacing: 0.01em !important;
+      opacity: 0.85;
+    }
+    .legend-row {
+      min-height: 32px;
+      padding: 4px 0 !important;
+      border-bottom: 1px solid rgba(28, 25, 23, 0.1);
+    }
+    .legend-label {
+      font-size: 11px !important;
+      font-weight: 600 !important;
+      color: var(--fig-ink) !important;
+    }
+    .switch span {
+      background: rgba(28, 25, 23, 0.18);
+    }
+    .switch input:checked + span {
+      background: var(--fig-orange) !important;
+    }
+
+    .group-tabs,
+    .route-tabs {
+      background: var(--fig-sheet-2) !important;
+      border: 1px solid rgba(28, 25, 23, 0.14) !important;
+      border-radius: var(--fig-r) !important;
+      padding: 5px !important;
+      gap: 8px !important;
+    }
+    .group-tab,
+    .route-tabs .route-mode {
+      min-height: 34px !important;
+      border-radius: 6px !important;
+      background: #fff !important;
+      color: var(--fig-ink-soft) !important;
+      font-size: 13px !important;
+      font-weight: 600 !important;
+      text-transform: none !important;
+    }
+    .group-tab.active,
+    .route-tabs .route-mode.active,
+    .route-tabs .route-mode[aria-selected="true"] {
+      background: var(--fig-chrome) !important;
+      color: #fff !important;
+    }
+    .route-preferences {
+      background: var(--fig-sheet-2) !important;
+      border: 1px solid rgba(28, 25, 23, 0.14) !important;
+      border-radius: 4px !important;
+      padding: 9px !important;
+      gap: 8px !important;
+    }
+    .route-pref {
+      border-radius: 4px !important;
+      background: #fff !important;
+      color: var(--fig-ink-soft) !important;
+      font-size: 11px !important;
+      font-weight: 600 !important;
+      min-height: 28px !important;
+      text-transform: none !important;
+    }
+    .route-pref.active,
+    .route-pref[aria-selected="true"] {
+      background: var(--fig-chrome) !important;
+      color: #fff !important;
+    }
+
+    .route-compact-export,
+    .route-export,
+    .route-compact-save,
+    #stageSaveBtn {
+      background: var(--fig-blue) !important;
+      border-color: var(--fig-blue) !important;
+      color: #fff !important;
+      border-radius: var(--fig-r) !important;
+      font-weight: 700 !important;
+      text-transform: none !important;
+    }
+    .route-compact-nav,
+    .route-nav,
+    #routeNavBtn {
+      background: var(--fig-nav-lime) !important;
+      border-color: var(--fig-nav-lime) !important;
+      color: var(--fig-ink) !important;
+      border-radius: var(--fig-r) !important;
+      font-weight: 700 !important;
+      font-size: 15px !important;
+      min-height: 45px !important;
+      text-transform: none !important;
+    }
+    .planner-saved-link { display: none !important; }
+    .account-form > #accountSendCode,
+    .account-code-form > #accountVerifyCode,
+    .account-profile-form > #accountSaveProfile,
+    .group-primary-action,
+    .group-share-action {
+      background: var(--fig-orange) !important;
+      border-color: var(--fig-orange) !important;
+      color: #fff !important;
+      border-radius: var(--fig-r) !important;
+      min-height: 46px !important;
+      font-weight: 700 !important;
+      font-size: 15px !important;
+      text-transform: none !important;
+    }
+    .account-form input,
+    .account-code-input,
+    .account-profile-form input,
+    .group-form input {
+      border: 1px solid rgba(28, 25, 23, 0.18) !important;
+      border-radius: var(--fig-r) !important;
+      background: #fff !important;
+      min-height: 44px !important;
+      font-size: 16px !important;
+    }
+    .planner-saved-link { display: none !important; }
+
+    body.navigating .topbar {
+      align-items: stretch;
+    }
+    body.navigating .brand,
+    body.navigating .nav-hud {
+      background: var(--fig-chrome);
+      border-radius: var(--fig-r);
+    }
+    body.navigating .nav-report,
+    body.navigating .nav-stop {
+      border-radius: var(--fig-r-nav);
+      font-size: 11px;
+      text-transform: none;
+    }
+    body.navigating .nav-stop {
+      background: #c1122f;
+      color: #fff;
+    }
+
+    @media (min-width: 720px) {
+      .bottom-dock,
+      .route-card,
+      .account-sheet,
+      .group-sheet,
+      .legend:not(.collapsed) {
+        width: var(--fig-shell-w) !important;
+        max-width: var(--fig-shell-w) !important;
+      }
+    }
   </style>
 </head>
 <body>
@@ -3933,23 +4512,28 @@
       ></button>
     </div>
     <div class="sheet-header route-finder-header">
-      <div class="route-finder-title key-title">Route Finder</div>
-      <div class="sheet-subtitle">Build a route from here or plan multiple stages.</div>
+      <div class="route-finder-title key-title">Route finder</div>
+      <div class="sheet-subtitle">Build your route, start the adventure</div>
     </div>
     <div class="route-drawer-scroll" id="routeDrawerScroll">
     <div class="route-drawer-compact" id="routeDrawerCompact">
       <div class="route-segment route-tabs" role="tablist" aria-label="Route planner tabs">
         <button class="route-mode active" type="button" data-route-mode="here" role="tab" aria-selected="true">From here</button>
         <button class="route-mode" type="button" data-route-mode="plan" role="tab" aria-selected="false">Plan a route</button>
+        <button class="route-mode" type="button" data-route-mode="saved" role="tab" aria-selected="false">Saved route</button>
       </div>
-      <div class="route-compact-top">
-        <select class="route-compact-pref" id="routeCompactPref" aria-label="Route profile">
-          <option value="direct">Direct</option>
-          <option value="balanced" selected>Balanced</option>
-          <option value="dirt">Dirt</option>
-          <option value="cleanest">Cleanest</option>
-        </select>
-        <div class="route-compact-summary" id="routeCompactSummary">No route<strong>Tap map to plan</strong></div>
+      <p class="route-tab-hint" id="routeTabHintCompact">Build your route from your current position</p>
+      <select class="route-compact-pref" id="routeCompactPref" aria-label="Route profile" hidden>
+        <option value="direct">Direct</option>
+        <option value="balanced" selected>Balanced</option>
+        <option value="dirt">Dirt</option>
+        <option value="cleanest">Cleanest</option>
+      </select>
+      <div class="route-preferences route-preferences-compact" role="tablist" aria-label="Route preference">
+        <button class="route-pref" type="button" data-route-pref="direct" role="tab" aria-selected="false">Direct</button>
+        <button class="route-pref active" type="button" data-route-pref="balanced" role="tab" aria-selected="true">Balanced</button>
+        <button class="route-pref" type="button" data-route-pref="dirt" role="tab" aria-selected="false">Dirt</button>
+        <button class="route-pref" type="button" data-route-pref="cleanest" role="tab" aria-selected="false">Cleanest</button>
       </div>
       <div class="route-access route-access-compact" id="routeAccessCompact">
         <div class="route-access-row">
@@ -3960,16 +4544,20 @@
           <label class="switch"><input type="checkbox" id="unknownAccessToggle" aria-label="Allow unknown access"><span></span></label>
         </div>
       </div>
+      <div class="route-compact-summary" id="routeCompactSummary">No route<strong>Tap map to plan</strong></div>
       <div class="route-compact-actions">
         <button class="route-compact-export" id="routeCompactExport" type="button" title="Export this route as GPX">Export GPX</button>
-        <button class="route-compact-nav" id="routeCompactNav" type="button" title="Start turn-by-turn navigation">Start navigation</button>
+        <button class="route-compact-save" id="routeCompactSave" type="button" title="Save this route">Save route</button>
       </div>
+      <button class="route-compact-nav" id="routeCompactNav" type="button" title="Start turn-by-turn navigation">Start navigation</button>
     </div>
     <div class="route-drawer-full" id="routeDrawerFull">
       <div class="route-segment route-tabs" role="tablist" aria-label="Route planner tabs">
         <button class="route-mode active" type="button" data-route-mode="here" role="tab" aria-selected="true">From here</button>
-        <button class="route-mode" type="button" data-route-mode="plan" role="tab" aria-selected="false">Plan route</button>
+        <button class="route-mode" type="button" data-route-mode="plan" role="tab" aria-selected="false">Plan a route</button>
+        <button class="route-mode" type="button" data-route-mode="saved" role="tab" aria-selected="false">Saved route</button>
       </div>
+      <p class="route-tab-hint" id="routeTabHintFull">Build your route from your current position</p>
 
       <!-- Shared trip settings (From here + Plan route) -->
       <div class="route-shared" id="routeSharedSettings">
@@ -4007,7 +4595,6 @@
           <button class="stage-edit-toggle" id="stageEditToggle" type="button" hidden>Edit stage</button>
         </div>
         <div class="route-warn" id="stagePlanWarn" role="status"></div>
-        <button class="stage-save" id="stageSaveBtn" type="button">Save route</button>
         <button class="planner-saved-link" id="plannerSavedBtn" type="button">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
           Saved routes
@@ -4038,6 +4625,7 @@
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
           Export GPX
         </button>
+        <button class="stage-save" id="stageSaveBtn" type="button">Save route</button>
         <button class="route-nav" id="routeNavBtn" type="button" title="Start turn-by-turn navigation">Start navigation</button>
       </div>
       <div class="route-debug" id="routeDebug"></div>
@@ -4053,7 +4641,7 @@
       <button class="sheet-handle" id="accountSheetHandle" type="button" aria-label="Close profile"></button>
     </div>
     <div class="sheet-header">
-      <div class="account-title key-title" id="accountTitle">Rider account</div>
+      <div class="account-title key-title" id="accountTitle">Sign in to DIRT. MAYDAY.</div>
       <div class="account-subtitle" id="accountSubtitle">Enter your email to receive a one-time code.</div>
     </div>
     <div class="sheet-scroll" id="accountSheetScroll">
@@ -4106,7 +4694,7 @@
         <div class="group-tabs" role="tablist" aria-label="Riding groups sections">
           <button class="group-tab active" type="button" role="tab" aria-selected="true" data-group-tab="list">My groups</button>
           <button class="group-tab" type="button" role="tab" aria-selected="false" data-group-tab="create">New group</button>
-          <button class="group-tab" type="button" role="tab" aria-selected="false" data-group-tab="join">Join a group</button>
+          <button class="group-tab" type="button" role="tab" aria-selected="false" data-group-tab="join">Join group</button>
         </div>
 
         <div class="group-panel" id="groupPanelList" data-group-panel="list">
@@ -4131,7 +4719,7 @@
         </div>
 
         <div class="group-panel" id="groupPanelJoin" data-group-panel="join" hidden>
-          <div class="group-title">Join a group</div>
+          <div class="group-title">Join group</div>
           <div class="account-subtitle">Enter the six-character invite code from the group owner.</div>
           <div class="group-form">
             <label class="account-field-label" for="groupInviteInput">Invite code</label>
@@ -8687,6 +9275,8 @@
       routeNavBtn.classList.toggle("active", navigating);
       routeNavBtn.disabled = !canExport && !navigating;
       if (routeCompactExport) routeCompactExport.disabled = !canExport;
+      const routeCompactSave = document.getElementById("routeCompactSave");
+      if (routeCompactSave) routeCompactSave.disabled = !canExport;
       if (routeCompactNav) {
         routeCompactNav.textContent = navigating ? "End navigation" : "Start navigation";
         routeCompactNav.disabled = !canExport && !navigating;
@@ -9761,6 +10351,16 @@
       document.body.classList.toggle("planner-tab-saved", plannerTab === "saved");
       document.body.classList.toggle("planner-tab-plan", plannerTab === "plan");
 
+      const tabHint = plannerTab === "plan"
+        ? "Use multiple waypoints to build the ultimate adventure"
+        : plannerTab === "saved"
+          ? "Open a saved route or import a GPX track"
+          : "Build your route from your current position";
+      const hintCompact = document.getElementById("routeTabHintCompact");
+      const hintFull = document.getElementById("routeTabHintFull");
+      if (hintCompact) hintCompact.textContent = tabHint;
+      if (hintFull) hintFull.textContent = tabHint;
+
       if (plannerTab === "plan") {
         viewedSavedRouteId = null;
         syncPlanActiveRoute();
@@ -9775,7 +10375,7 @@
       renderStageMarkers();
       refreshRouteDraft();
       if (typeof setPlannerDrawerState === "function" && plannerDrawerState !== "closed") {
-        setPlannerDrawerState("collapsed");
+        setPlannerDrawerState(plannerTab === "here" ? "collapsed" : "expanded");
       }
     }
 
@@ -11190,6 +11790,8 @@
       });
     }
     if (routeCompactExport) routeCompactExport.addEventListener("click", () => openExportNameSheet());
+    const routeCompactSave = document.getElementById("routeCompactSave");
+    if (routeCompactSave) routeCompactSave.addEventListener("click", openSaveSheet);
     if (routeCompactNav) routeCompactNav.addEventListener("click", () => toggleNavigation());
     function handleRouteExportClick() {
       openExportNameSheet();
