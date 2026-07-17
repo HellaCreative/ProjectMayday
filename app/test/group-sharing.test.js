@@ -85,6 +85,16 @@ run("routeTargetFromFeature uses geometry not click point", () => {
   assert.strictEqual(model.statusText, "Stuck");
 });
 
+run("routeTargetFromFeature uses true coordinates for a fanned rider marker", () => {
+  const target = G.routeTargetFromFeature({
+    type: "Feature",
+    geometry: { type: "Point", coordinates: [-63.2001, 45.3001] },
+    properties: { routeLng: "-63.2", routeLat: "45.3", displayName: "Sam" }
+  });
+  assert.strictEqual(target.lng, -63.2);
+  assert.strictEqual(target.lat, 45.3);
+});
+
 run("alerts upsert and dismiss", () => {
   const record = G.createAlertRecord({
     userId: "u1",

@@ -5248,28 +5248,49 @@
 
     function groupRiderFeatureCollection() {
       const GS = window.DirtGroupSharing;
+      const buckets = new Map();
+      for (const entry of groupRiders.values()) {
+        const lng = Number(entry.lng);
+        const lat = Number(entry.lat);
+        if (!Number.isFinite(lng) || !Number.isFinite(lat)) continue;
+        // Riders standing together need separate visual targets so their names
+        // and status markers remain inspectable on a touch screen.
+        const key = Math.round(lng * 10000) + ":" + Math.round(lat * 10000);
+        if (!buckets.has(key)) buckets.set(key, []);
+        buckets.get(key).push({ entry, lng, lat });
+      }
       return {
         type: "FeatureCollection",
-        features: Array.from(groupRiders.values()).reduce((features, entry) => {
-          const lng = Number(entry.lng);
-          const lat = Number(entry.lat);
-          if (!Number.isFinite(lng) || !Number.isFinite(lat)) return features;
-          features.push({
+        features: Array.from(buckets.values()).flatMap((bucket) => bucket.map((item, index) => {
+          const { entry, lng, lat } = item;
+          const stackCount = bucket.length;
+          const angle = stackCount > 1 ? (-Math.PI / 2) + (index * Math.PI * 2 / stackCount) : -Math.PI / 2;
+          const radiusMeters = stackCount > 1 ? 14 : 0;
+          const latOffset = radiusMeters ? radiusMeters * Math.sin(angle) / 111320 : 0;
+          const lngOffset = radiusMeters ? radiusMeters * Math.cos(angle) / (111320 * Math.max(0.2, Math.cos(lat * Math.PI / 180))) : 0;
+          const displayLng = lng + lngOffset;
+          const displayLat = lat + latOffset;
+          const properties = GS ? GS.riderFeatureProperties(Object.assign({}, entry, { lng, lat })) : {
+            userId: entry.userId,
+            displayName: entry.displayName || "Rider",
+            status: entry.status || "available",
+            labelLine: (entry.displayName || "Rider") + " · " + (entry.status || "available"),
+            groupId: entry.groupId || null,
+            groupName: entry.groupName || null,
+            lastSeenAt: entry.lastSeenAt || null,
+            heading: Number.isFinite(entry.heading) ? entry.heading : -1
+          };
+          return {
             type: "Feature",
-            geometry: { type: "Point", coordinates: [lng, lat] },
-            properties: GS ? GS.riderFeatureProperties(Object.assign({}, entry, { lng, lat })) : {
-              userId: entry.userId,
-              displayName: entry.displayName || "Rider",
-              status: entry.status || "available",
-              labelLine: (entry.displayName || "Rider") + " · " + (entry.status || "available"),
-              groupId: entry.groupId || null,
-              groupName: entry.groupName || null,
-              lastSeenAt: entry.lastSeenAt || null,
-              heading: Number.isFinite(entry.heading) ? entry.heading : -1
-            }
-          });
-          return features;
-        }, [])
+            geometry: { type: "Point", coordinates: [displayLng, displayLat] },
+            properties: Object.assign({}, properties, {
+              routeLng: lng,
+              routeLat: lat,
+              stackIndex: index,
+              stackCount
+            })
+          };
+        }))
       };
     }
 
@@ -6318,7 +6339,22 @@
           "circle-stroke-color": "#ffffff"
         }
       });
+      ensureGroupRidersOnTop();
       refreshRouteDraft();
+    }
+
+    function ensureGroupRidersOnTop() {
+      const layers = [
+        "group-rider-halo",
+        "group-rider-core",
+        "group-rider-status-icons",
+        "group-rider-heading",
+        "group-rider-labels"
+      ];
+      for (const layerId of layers) {
+        if (!map.getLayer(layerId)) continue;
+        try { map.moveLayer(layerId); } catch (_) { /* style may be settling */ }
+      }
     }
 
     function ensureRiderOnTop() {

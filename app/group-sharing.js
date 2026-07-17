@@ -119,10 +119,13 @@
     if (!feature || !feature.geometry || feature.geometry.type !== "Point") return null;
     const coords = feature.geometry.coordinates;
     if (!Array.isArray(coords) || coords.length < 2) return null;
-    const lng = Number(coords[0]);
-    const lat = Number(coords[1]);
+    const properties = feature.properties || {};
+    const sourceLng = normalizeCoordinate(properties.routeLng);
+    const sourceLat = normalizeCoordinate(properties.routeLat);
+    const lng = sourceLng == null ? Number(coords[0]) : sourceLng;
+    const lat = sourceLat == null ? Number(coords[1]) : sourceLat;
     if (!Number.isFinite(lng) || !Number.isFinite(lat)) return null;
-    const p = feature.properties || {};
+    const p = properties;
     return {
       lng,
       lat,
