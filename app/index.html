@@ -2286,7 +2286,7 @@
 
     .popup {
       position: absolute;
-      z-index: 30;
+      z-index: 70;
       width: min(300px, calc(100vw - 24px));
       background: var(--panel);
       border: 1px solid var(--line);
@@ -4451,11 +4451,12 @@
     if (membershipError) throw membershipError;
     const userIds = [...new Set((memberships || []).map((row) => row.user_id).filter(Boolean))];
     const { data: presence, error: presenceError } = userIds.length
-      ? await db.from("rider_presence").select("user_id,sharing_enabled,last_seen_at").in("user_id", userIds)
+      ? await db.from("rider_presence").select("user_id,sharing_enabled,latitude,longitude,last_seen_at").in("user_id", userIds)
       : { data: [], error: null };
     if (presenceError) throw presenceError;
     const liveByUser = new Map((presence || []).filter((row) => {
       if (row.sharing_enabled !== true) return false;
+      if (!Number.isFinite(Number(row.latitude)) || !Number.isFinite(Number(row.longitude))) return false;
       if (!row.last_seen_at) return true;
       const lastSeen = Date.parse(row.last_seen_at);
       return Number.isNaN(lastSeen) || Date.now() - lastSeen < 120000;
@@ -4500,6 +4501,17 @@
   async function savePresence(payload) {
     const db = await init();
     return db.from("rider_presence").upsert(payload, { onConflict: "user_id" });
+  }
+
+  async function listPresence(userIds) {
+    const ids = [...new Set((userIds || []).filter(Boolean))];
+    if (!ids.length) return [];
+    const db = await init();
+    const { data, error } = await db.from("rider_presence")
+      .select("user_id,sharing_enabled,status,latitude,longitude,heading,speed_mps,accuracy_m,last_seen_at")
+      .in("user_id", ids);
+    if (error) throw error;
+    return data || [];
   }
 
   async function saveAlert(payload) {
@@ -4557,7 +4569,7 @@
     groupChannelById.clear();
   }
 
-  global.DirtSupabase = { init, sendEmailCode, verifyEmailCode, signOut, session, user, updateDisplayName, onAuthStateChange, createGroup, listGroups, joinGroup, deleteGroup, leaveGroup, listMembers, savePresence, saveAlert, openGroupChannel, closeGroupChannel };
+  global.DirtSupabase = { init, sendEmailCode, verifyEmailCode, signOut, session, user, updateDisplayName, onAuthStateChange, createGroup, listGroups, joinGroup, deleteGroup, leaveGroup, listMembers, listPresence, savePresence, saveAlert, openGroupChannel, closeGroupChannel };
 })(window);
   </script>
   <script>
@@ -4847,6 +4859,8 @@
     let groupStatus = "available";
     let lastGroupPublishAt = 0;
     let groupRouteTarget = null;
+    let groupPresencePollTimer = null;
+    let groupPresenceReconcilePromise = null;
     let groupPanel = "list";
     let accountReadyPromise = null;
     let groupsReadyPromise = null;
@@ -5265,7 +5279,9 @@
           const { entry, lng, lat } = item;
           const stackCount = bucket.length;
           const angle = stackCount > 1 ? (-Math.PI / 2) + (index * Math.PI * 2 / stackCount) : -Math.PI / 2;
-          const radiusMeters = stackCount > 1 ? 14 : 0;
+          // A small geographic fan keeps co-located riders distinct at the
+          // normal riding zoom while preserving their true route coordinates.
+          const radiusMeters = stackCount > 1 ? Math.max(36, stackCount * 18) : 0;
           const latOffset = radiusMeters ? radiusMeters * Math.sin(angle) / 111320 : 0;
           const lngOffset = radiusMeters ? radiusMeters * Math.cos(angle) / (111320 * Math.max(0.2, Math.cos(lat * Math.PI / 180))) : 0;
           const displayLng = lng + lngOffset;
@@ -9808,7 +9824,7 @@
 
     function ingestGroupAlert(payload) {
       const GS = window.DirtGroupSharing;
-      if (!GS || !groupSharing) return;
+      if (!GS) return;
       if (payload?.userId && payload.userId === currentAuthUser?.id) return;
       const record = GS.createAlertRecord(payload);
       if (!record) return;
@@ -9896,7 +9912,6 @@
     }
 
     function applyGroupPresence(group, state) {
-      if (!groupSharing) return;
       const GS = window.DirtGroupSharing;
       if (!GS) {
         console.error("DirtGroupSharing missing — peer locations cannot render");
@@ -9912,7 +9927,6 @@
     }
 
     function applyGroupLocation(payload) {
-      if (!groupSharing) return;
       const GS = window.DirtGroupSharing;
       if (!GS) {
         console.error("DirtGroupSharing missing — peer locations cannot render");
@@ -9942,6 +9956,54 @@
       };
     }
 
+    async function reconcileGroupPresence(group) {
+      if (!group || group.deleted_at || !currentAuthUser || !window.DirtGroupSharing) return;
+      const members = selectedRidingGroup?.id === group.id && selectedGroupMembers.length
+        ? selectedGroupMembers
+        : await DirtSupabase.listMembers(group.id);
+      const userIds = members.map((member) => member.user_id).filter(Boolean);
+      const names = Object.fromEntries(members.map((member) => {
+        const profile = Array.isArray(member.profiles) ? member.profiles[0] : member.profiles;
+        return [member.user_id, profile?.display_name || "Rider"];
+      }));
+      const rows = await DirtSupabase.listPresence(userIds);
+      const next = window.DirtGroupSharing.mergeDatabasePresence(groupRiders, rows, names, currentAuthUser.id, {
+        groupId: group.id,
+        groupName: group.name || "Group"
+      });
+      replaceGroupRiders(next);
+      refreshGroupRiderLayer();
+      syncSelectedGroupStats();
+    }
+
+    async function reconcileAllGroupPresence() {
+      if (groupPresenceReconcilePromise) return groupPresenceReconcilePromise;
+      groupPresenceReconcilePromise = (async () => {
+        for (const group of ridingGroups) {
+          if (group.deleted_at) continue;
+          try {
+            await reconcileGroupPresence(group);
+          } catch (err) {
+            console.warn("Group presence reconciliation failed", group.id, err);
+          }
+        }
+      })();
+      try {
+        await groupPresenceReconcilePromise;
+      } finally {
+        groupPresenceReconcilePromise = null;
+      }
+    }
+
+    function startGroupPresenceReconciliation() {
+      if (groupPresencePollTimer) clearInterval(groupPresencePollTimer);
+      groupPresencePollTimer = null;
+      if (!currentAuthUser) return;
+      groupPresencePollTimer = setInterval(() => {
+        reconcileAllGroupPresence().catch(() => {});
+      }, 15000);
+    }
+
     async function ensureGroupChannel(group) {
       if (!group || group.deleted_at || !currentAuthUser) return null;
       if (groupChannelHandles.has(group.id)) return groupChannelHandles.get(group.id);
@@ -9964,6 +10026,8 @@
         try { await ensureGroupChannel(group); }
         catch (err) { console.warn("Group channel unavailable", group.id, err); }
       }
+      startGroupPresenceReconciliation();
+      await reconcileAllGroupPresence();
     }
 
     async function selectRidingGroup(group) {
@@ -10040,6 +10104,9 @@
     async function refreshAuthState(user) {
       currentAuthUser = user || null;
       if (!currentAuthUser) {
+        if (groupPresencePollTimer) clearInterval(groupPresencePollTimer);
+        groupPresencePollTimer = null;
+        groupPresenceReconcilePromise = null;
         await DirtSupabase.closeGroupChannel().catch(() => {});
         groupChannelHandles.clear();
         selectedRidingGroup = null;
@@ -10184,7 +10251,12 @@
         accountStatus("Group sharing library failed to load. Refresh and try again.", "error");
         return;
       }
-      groupSharing = !groupSharing;
+      const nextSharing = !groupSharing;
+      if (nextSharing && !hasRiderLocation()) {
+        accountStatus("Turn on location access before sharing your position.", "error");
+        return;
+      }
+      groupSharing = nextSharing;
       const button = document.getElementById("groupShareBtn");
       if (button) { button.textContent = groupSharing ? "Stop sharing" : "Start sharing"; button.classList.toggle("active", groupSharing); }
       if (!groupSharing) {
@@ -10378,10 +10450,12 @@
     updateCompass();
 
     map.on("click", (e) => {
+      // Group riders are the most important map targets. Resolve them before
+      // nearby POIs or reports can consume the same tap.
+      if (handleGroupRiderClick(e)) return;
       // Rider reports + POI inspection work in every mode and never place a route point.
       if (handleReportClick(e)) return;
       if (handlePoiClick(e)) return;
-      if (handleGroupRiderClick(e)) return;
       if (navigating) {
         if (!navSimEnabled) return;
         // Virtual driveway / join tests: tap places the rider with a heading

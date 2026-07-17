@@ -60,6 +60,31 @@ run("presence requires usable coordinates and normalizes numeric strings", () =>
   assert.strictEqual(updated.get("string-coordinates").lat, 45.35);
 });
 
+run("database presence hydrates a peer without requiring local sharing", () => {
+  const next = G.mergeDatabasePresence(new Map(), [{
+    user_id: "peer",
+    sharing_enabled: true,
+    status: "available",
+    latitude: "45.3",
+    longitude: "-63.2",
+    last_seen_at: "2026-07-17T12:00:00.000Z"
+  }], { peer: "Sam" }, "me", { groupId: "g1", groupName: "Crew" });
+  assert.strictEqual(next.get("peer").lng, -63.2);
+  assert.strictEqual(next.get("peer").lat, 45.3);
+  assert.strictEqual(next.get("peer").displayName, "Sam");
+  assert.strictEqual(next.get("peer").labelLine, "Sam - Available");
+});
+
+run("database presence excludes sharing rows without coordinates and removes stopped peers", () => {
+  const existing = new Map([["peer", { userId: "peer", lng: -63.2, lat: 45.3 }]]);
+  const next = G.mergeDatabasePresence(existing, [
+    { user_id: "no-location", sharing_enabled: true, latitude: null, longitude: null },
+    { user_id: "peer", sharing_enabled: false, latitude: -63.2, longitude: 45.3 }
+  ], {}, "me", { groupId: "g1" });
+  assert.ok(!next.has("no-location"));
+  assert.ok(!next.has("peer"));
+});
+
 run("applySharingOff removes only explicit stop", () => {
   const existing = new Map([
     ["a", { userId: "a", lng: 1, lat: 2 }],

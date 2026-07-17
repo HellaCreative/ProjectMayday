@@ -108,6 +108,43 @@
     return next;
   }
 
+  function mergeDatabasePresence(existingEntries, rows, displayNames, selfUserId, meta) {
+    const next = new Map(existingEntries instanceof Map ? existingEntries : []);
+    const names = displayNames || {};
+    const groupId = meta && meta.groupId != null ? meta.groupId : null;
+    const groupName = meta && meta.groupName != null ? meta.groupName : null;
+    for (const row of rows || []) {
+      const userId = row && row.user_id;
+      if (!userId || userId === selfUserId) continue;
+      if (row.sharing_enabled !== true) {
+        const previous = next.get(userId);
+        if (!previous || !groupId || !previous.groupId || previous.groupId === groupId) next.delete(userId);
+        continue;
+      }
+      const lng = normalizeCoordinate(row.longitude);
+      const lat = normalizeCoordinate(row.latitude);
+      if (lng == null || lat == null) continue;
+      const previous = next.get(userId) || {};
+      const displayName = names[userId] || previous.displayName || "Rider";
+      const status = row.status || previous.status || "available";
+      next.set(userId, Object.assign({}, previous, {
+        userId,
+        lng,
+        lat,
+        heading: normalizeHeading(row.heading != null ? row.heading : previous.heading),
+        speed: row.speed_mps != null ? Number(row.speed_mps) : previous.speed,
+        accuracy: row.accuracy_m != null ? Number(row.accuracy_m) : previous.accuracy,
+        status,
+        displayName,
+        labelLine: formatRiderMapLabel(displayName, status),
+        lastSeenAt: row.last_seen_at || previous.lastSeenAt || null,
+        groupId: groupId || previous.groupId || null,
+        groupName: groupName || previous.groupName || null
+      }));
+    }
+    return next;
+  }
+
   /** Explicit stop-sharing from the rider who owns the pin — only they can remove it. */
   function applySharingOff(existingEntries, userId) {
     const next = new Map(existingEntries instanceof Map ? existingEntries : []);
@@ -210,6 +247,7 @@
     normalizeHeading,
     mergePresenceKeepLastKnown,
     applyLocationUpdate,
+    mergeDatabasePresence,
     applySharingOff,
     routeTargetFromFeature,
     buildGroupRiderPopupModel,
