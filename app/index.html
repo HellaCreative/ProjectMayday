@@ -1545,15 +1545,14 @@
     .group-participant-state.distress { color: #c1122f; font-weight: 700; }
     .group-alert-stack {
       position: absolute;
-      top: calc(12px + env(safe-area-inset-top, 0px));
+      top: calc(76px + env(safe-area-inset-top, 0px));
       left: 12px;
-      right: 12px;
-      z-index: 28;
+      right: auto;
+      z-index: 35;
       display: grid;
       gap: 8px;
       pointer-events: none;
-      max-width: min(420px, calc(100vw - 24px));
-      margin: 0 auto;
+      width: min(300px, calc(100vw - 24px));
     }
     .group-alert {
       pointer-events: auto;
@@ -1571,9 +1570,12 @@
       font-family: var(--font-ui);
     }
     .group-alert[data-status="breakdown"] {
-      border-color: rgba(220, 104, 3, 0.4);
-      background: rgba(255, 250, 244, 0.96);
+      border-color: #dc6803;
+      background: #dc6803;
+      color: #fff;
     }
+    .group-alert[data-status="breakdown"] .group-alert-title,
+    .group-alert[data-status="breakdown"] .group-alert-sub { color: #fff; }
     .group-alert[data-status="stuck"] {
       border-color: rgba(124, 58, 237, 0.35);
       background: rgba(248, 245, 255, 0.96);
@@ -10231,9 +10233,8 @@
         '<div class="group-alert" data-status="' + escapeHtml(alert.status) + '" data-alert-id="' + escapeHtml(alert.id) + '" role="button" tabindex="0">' +
           '<div class="group-alert-copy">' +
             '<div class="group-alert-title">' + escapeHtml(alert.displayName) + ' · ' + escapeHtml(alert.statusText) + '</div>' +
-            '<div class="group-alert-sub">' + escapeHtml(alert.groupName || "Group") + ' · tap to go to last known location</div>' +
+            '<div class="group-alert-sub">' + escapeHtml(alert.groupName || "Group") + ' · tap to view last known location</div>' +
           '</div>' +
-          '<button class="group-alert-dismiss" type="button" data-dismiss-alert="' + escapeHtml(alert.id) + '" aria-label="Dismiss alert">×</button>' +
         '</div>'
       )).join("");
     }
@@ -10354,11 +10355,23 @@
         console.error("DirtGroupSharing missing — peer locations cannot render");
         return;
       }
+      const previous = payload?.userId ? groupRiders.get(payload.userId) : null;
       const next = GS.applyLocationUpdate(groupRiders, payload, currentAuthUser?.id);
       replaceGroupRiders(next);
       refreshGroupRiderLayer();
       fitSelectedGroupRidersOnce();
       syncSelectedGroupStats();
+      // The location broadcast is the reliable status-bearing stream. If the
+      // separate alert broadcast is lost, create the same persistent alert
+      // when a rider transitions into a distress status here.
+      if (
+        payload?.userId &&
+        payload.userId !== currentAuthUser?.id &&
+        GS.isDistressStatus(payload.status) &&
+        previous?.status !== payload.status
+      ) {
+        ingestGroupAlert(payload);
+      }
     }
 
     function applyGroupSharingOff(payload) {
@@ -11360,7 +11373,12 @@
       const card = event.target.closest("[data-alert-id]");
       if (!card) return;
       const alert = groupAlerts.find((row) => row.id === card.getAttribute("data-alert-id"));
-      if (alert) focusGroupAlert(alert);
+      if (alert) {
+        focusGroupAlert(alert);
+        const GS = window.DirtGroupSharing;
+        groupAlerts = GS ? GS.dismissAlert(groupAlerts, alert.id) : groupAlerts.filter((row) => row.id !== alert.id);
+        renderGroupAlerts();
+      }
     });
     document.getElementById("groupList")?.addEventListener("click", (event) => {
       const removeButton = event.target.closest("[data-remove-group]");
