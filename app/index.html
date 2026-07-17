@@ -3612,6 +3612,172 @@
     .route-card.is-expanded #routePanelPlan .stage-list {
       min-height: 48px;
     }
+
+    /* Route is an active map tool, so it replaces the bottom dock instead of
+       becoming another full-height document sheet. The existing route state
+       and panels remain intact; only their presentation changes here. */
+    body.planner-open .bottom-nav { display: none; }
+    body.planner-open .route-card {
+      left: 50%;
+      right: auto;
+      bottom: calc(var(--p2-bottom-pad) + 8px);
+      width: var(--p2-shell-w);
+      max-width: var(--p2-shell-w);
+      height: auto;
+      max-height: min(320px, 38vh);
+      padding: 0 10px 10px;
+      transform: translateX(-50%);
+      border: 1px solid var(--p2-sheet-line);
+      border-radius: var(--p2-r);
+      box-shadow: var(--p2-shadow);
+      overflow: visible;
+      z-index: 52;
+    }
+    body.planner-open .route-finder-header,
+    body.planner-open .route-sheet-handle-bar { display: none; }
+    body.planner-open .route-drawer-scroll {
+      width: 100%;
+      max-width: none;
+      height: auto;
+      max-height: none;
+      overflow: hidden;
+      padding: 0;
+    }
+    body.planner-open .route-card.is-collapsed .route-drawer-compact {
+      display: flex;
+      padding-top: 0;
+    }
+    body.planner-open.planner-tab-plan .route-card.is-collapsed .route-drawer-compact,
+    body.planner-open.planner-tab-saved .route-card.is-collapsed .route-drawer-compact { display: none; }
+    body.planner-open.planner-tab-plan .route-card.is-collapsed .route-drawer-full,
+    body.planner-open.planner-tab-saved .route-card.is-collapsed .route-drawer-full {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      overflow: hidden;
+    }
+    body.planner-open .route-card.is-expanded { height: auto; max-height: min(320px, 38vh); }
+    body.planner-open .route-card.is-expanded .route-drawer-full {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      overflow: hidden;
+    }
+    body.planner-open .route-card.is-expanded .route-drawer-compact { display: none; }
+    body.planner-open .route-card.is-expanded .route-drawer-full,
+    body.planner-open.planner-tab-plan .route-card.is-collapsed .route-drawer-full,
+    body.planner-open.planner-tab-saved .route-card.is-collapsed .route-drawer-full {
+      overflow: hidden;
+    }
+    body.planner-open .route-workspace-head {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 38px;
+      gap: 8px;
+      padding: 4px 0 2px;
+    }
+    .route-workspace-title {
+      color: var(--p2-sheet-ink);
+      font: 700 var(--text-callout)/1 var(--font-ui);
+    }
+    .route-workspace-actions { display: flex; align-items: center; gap: 6px; }
+    .route-services-btn,
+    .route-workspace-close {
+      min-height: 30px;
+      border: 1px solid var(--p2-sheet-line);
+      border-radius: var(--p2-r);
+      background: var(--p2-sheet-2);
+      color: var(--p2-sheet-ink);
+      font: 600 var(--text-footnote)/1 var(--font-ui);
+      cursor: pointer;
+    }
+    .route-services-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 0 9px;
+    }
+    .route-services-btn[aria-expanded="true"] { background: var(--p2-chrome); color: #fff; }
+    .route-workspace-close {
+      width: 30px;
+      padding: 0;
+      font-size: 1.2rem;
+      line-height: 1;
+    }
+    .route-services-popover {
+      position: absolute;
+      right: 0;
+      bottom: calc(100% + 8px);
+      width: min(220px, calc(100vw - 32px));
+      padding: 10px;
+      border: 1px solid var(--p2-sheet-line);
+      border-radius: var(--p2-r);
+      background: var(--p2-sheet);
+      box-shadow: var(--p2-shadow);
+      color: var(--p2-sheet-ink);
+      z-index: 70;
+    }
+    .route-services-popover[hidden] { display: none; }
+    .route-services-title {
+      margin-bottom: 4px;
+      color: var(--p2-sheet-ink-soft);
+      font: 600 var(--text-footnote)/1.2 var(--font-ui);
+    }
+    .route-service-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 36px;
+      gap: 10px;
+      color: var(--p2-sheet-ink);
+      font: 600 var(--text-footnote)/1.2 var(--font-ui);
+      cursor: pointer;
+    }
+    .route-service-row > span:first-child { display: inline-flex; align-items: center; gap: 8px; }
+    .route-service-row i { width: 10px; height: 10px; border-radius: 50%; box-shadow: 0 0 0 2px #fff; }
+    .route-service-row .switch { flex: 0 0 auto; }
+    .poi-pop-route {
+      width: 100%;
+      min-height: 34px;
+      margin-top: 9px;
+      border: 0;
+      border-radius: var(--p2-r);
+      background: var(--p2-orange);
+      color: #fff;
+      font: 600 var(--text-footnote)/1 var(--font-ui);
+      cursor: pointer;
+    }
+    .poi-pop-route:focus-visible { outline: 2px solid var(--p2-blue); outline-offset: 2px; }
+    body.planner-open .route-tabs { margin-top: 0; }
+    body.planner-open .route-card.is-collapsed .route-drawer-full,
+    body.planner-open .route-card.is-expanded .route-drawer-full { padding: 0; }
+    body.planner-open .route-card #routePanelPlan,
+    body.planner-open .route-card #routePanelSaved { min-height: 0; }
+    body.planner-open .route-card #routePanelPlan { display: flex; flex-direction: column; gap: 6px; }
+    body.planner-open .route-card #routePanelPlan .stage-list {
+      min-height: 38px;
+      max-height: 112px;
+      overflow-y: auto;
+      scrollbar-gutter: stable;
+    }
+    body.planner-open .route-card #routePanelSaved .saved-list {
+      max-height: 112px;
+      overflow-y: auto;
+      scrollbar-gutter: stable;
+    }
+    body.planner-open .route-card .route-actions { margin-top: 6px; }
+    body.planner-open .pip {
+      z-index: 75;
+      bottom: calc(min(320px, 38vh) + var(--p2-locate-gap));
+    }
+    body.planner-open .stack { bottom: calc(min(320px, 38vh) + var(--p2-locate-gap)); }
+    @media (max-width: 520px) {
+      body.planner-open .route-card { max-height: min(300px, 40vh); }
+      body.planner-open .pip { bottom: calc(min(300px, 40vh) + var(--p2-locate-gap)); }
+      body.planner-open .stack { bottom: calc(min(300px, 40vh) + var(--p2-locate-gap)); }
+    }
   </style>
 </head>
 <body>
@@ -3671,6 +3837,23 @@
   </div>
 
   <div class="route-card closed" id="routeCard" data-drawer="closed">
+    <div class="route-workspace-head">
+      <span class="route-workspace-title">Route</span>
+      <div class="route-workspace-actions">
+        <button class="route-services-btn" id="routeServicesBtn" type="button" aria-expanded="false" aria-controls="routeServicesPopover">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h18"/><path d="M6 7h12"/><path d="M6 17h12"/><circle cx="9" cy="7" r="2"/><circle cx="15" cy="12" r="2"/><circle cx="10" cy="17" r="2"/></svg>
+          <span>Services</span>
+        </button>
+        <button class="route-workspace-close" id="routeWorkspaceClose" type="button" aria-label="Close route workspace" title="Close route workspace">×</button>
+      </div>
+      <div class="route-services-popover" id="routeServicesPopover" hidden>
+        <div class="route-services-title">Rider services</div>
+        <label class="route-service-row"><span><i style="background:#e8730c"></i>Fuel</span><span class="switch"><input type="checkbox" data-poi-toggle="fuel" checked aria-label="Show fuel stations"><span></span></span></label>
+        <label class="route-service-row"><span><i style="background:#2f9e44"></i>Campgrounds</span><span class="switch"><input type="checkbox" data-poi-toggle="campground" checked aria-label="Show campgrounds"><span></span></span></label>
+        <label class="route-service-row"><span><i style="background:#8a5a2b"></i>Lodging</span><span class="switch"><input type="checkbox" data-poi-toggle="lodging" checked aria-label="Show lodging"><span></span></span></label>
+        <label class="route-service-row"><span><i style="background:#8e44c9"></i>Liquor stores</span><span class="switch"><input type="checkbox" data-poi-toggle="liquor" checked aria-label="Show liquor stores"><span></span></span></label>
+      </div>
+    </div>
     <div class="route-sheet-handle-bar">
       <button
         class="route-sheet-handle"
@@ -4797,6 +4980,7 @@
     const poiEnabled = { fuel: true, lodging: true, campground: true, liquor: true };
     let poiRefreshTimer = null;
     let poiPopup = null;
+    let poiRouteTarget = null;
     let poiIconsReady = false;
     (function loadPoiPrefs() {
       try {
@@ -4916,6 +5100,9 @@
     const routeCompactExport = document.getElementById("routeCompactExport");
     const routeCompactNav = document.getElementById("routeCompactNav");
     const routeSheetHandle = document.getElementById("routeSheetHandle");
+    const routeServicesBtn = document.getElementById("routeServicesBtn");
+    const routeServicesPopover = document.getElementById("routeServicesPopover");
+    const routeWorkspaceClose = document.getElementById("routeWorkspaceClose");
     const routeClear = document.getElementById("routeClear");
     const routeActions = document.getElementById("routeActions");
     const routeExport = document.getElementById("routeExport");
@@ -5834,6 +6021,12 @@
       const p = feat.properties || {};
       const cfg = POI_CATEGORIES[p.category] || {};
       const coords = feat.geometry.coordinates.slice();
+      poiRouteTarget = {
+        lng: Number(coords[0]),
+        lat: Number(coords[1]),
+        name: p.name || cfg.label || "Point of interest",
+        category: p.category || "poi"
+      };
       const rows = [];
       if (p.address) rows.push(poiRowHtml("Address", p.address));
       if (p.openingHours) rows.push(poiRowHtml("Hours", p.openingHours));
@@ -5852,6 +6045,9 @@
           '<div class="poi-pop-name">' + escapeHtml(name) + '</div>' +
           (rows.length ? '<dl class="poi-pop-rows">' + rows.join("") + '</dl>' : '') +
           (website ? '<div class="poi-pop-link">' + website + '</div>' : '') +
+          '<button class="poi-pop-route" data-poi-route="1" type="button">' +
+            (plannerTab === "plan" ? "Use as waypoint" : "Route to this") +
+          '</button>' +
           '<div class="poi-pop-src">Source: OpenStreetMap</div>' +
         '</div>';
       if (poiPopup) poiPopup.remove();
@@ -5887,6 +6083,40 @@
       }
       openPoiPopup(feat);
       return true;
+    }
+
+    function usePoiAsWaypoint() {
+      const target = poiRouteTarget;
+      if (!target || !Number.isFinite(target.lng) || !Number.isFinite(target.lat)) return;
+      const point = { lng: target.lng, lat: target.lat };
+      hidePopup();
+      if (plannerTab === "plan") {
+        const active = getActiveStage();
+        if (!active) return;
+        if (active.start && active.end) {
+          setStatus("Select an incomplete stage or add a stage before using this waypoint", "ok", "route");
+          setPlannerDrawerState("collapsed");
+          return;
+        }
+        setPlannerDrawerState("collapsed");
+        if (!active.start) {
+          setStagePoint(active.id, "start", point);
+          setStatus("Stage " + (RS.findStageIndex(planTrip, active.id) + 1) + " · waypoint set as A · tap point B", "ok", "route");
+          afterStageEdit(active.id, false);
+        } else {
+          setStagePoint(active.id, "end", point);
+          afterStageEdit(active.id, true);
+        }
+        return;
+      }
+      setRouteMode("here");
+      setPlannerDrawerState("collapsed");
+      if (!hasRiderLocation()) {
+        setStatus("Your location is needed to route to this service", "error", "route");
+        return;
+      }
+      destination = point;
+      calculateRoute();
     }
 
     function updateDataMeta() {
@@ -9365,7 +9595,7 @@
       renderStageMarkers();
       refreshRouteDraft();
       if (typeof setPlannerDrawerState === "function" && plannerDrawerState !== "closed") {
-        setPlannerDrawerState(plannerTab === "plan" ? "expanded" : "collapsed");
+        setPlannerDrawerState("collapsed");
       }
     }
 
@@ -10377,7 +10607,7 @@
         routeMessage = "";
         routeMode = "here";
         refreshRouteDraft();
-        setPlannerDrawerState("expanded");
+        setPlannerDrawerState("collapsed");
         setStatus("Route to “" + groupRouteTarget.displayName + "” ready", "ok", "route");
       } catch (err) { setStatus("Could not route to rider · " + (err.message || "no route"), "error", "route"); }
     }
@@ -10633,8 +10863,15 @@
     }
 
     function setRouteCardOpen(open) {
-      // Compat: open → expanded drawer; close → fully hidden (route preserved).
-      setPlannerDrawerState(open ? "expanded" : "closed");
+      // Route results stay in the compact workspace; callers retain the
+      // legacy open/close contract without reopening the old large sheet.
+      setPlannerDrawerState(open ? "collapsed" : "closed");
+    }
+
+    function setRouteServicesOpen(open) {
+      if (!routeServicesPopover || !routeServicesBtn) return;
+      routeServicesPopover.hidden = !open;
+      routeServicesBtn.setAttribute("aria-expanded", open ? "true" : "false");
     }
 
     function togglePlannerExpandedCollapsed() {
@@ -10648,10 +10885,32 @@
       setAccountSheetOpen(false);
       setGroupSheetOpen(false);
       if (plannerDrawerState === "closed") {
-        setRouteMode("here");
         setPlannerDrawerState("collapsed");
+      } else {
+        setRouteServicesOpen(false);
+        setPlannerDrawerState("closed");
       }
-      else setPlannerDrawerState("closed");
+    });
+    routeWorkspaceClose?.addEventListener("click", (event) => {
+      event.stopPropagation();
+      setRouteServicesOpen(false);
+      setPlannerDrawerState("closed");
+    });
+    routeServicesBtn?.addEventListener("click", (event) => {
+      event.stopPropagation();
+      setRouteServicesOpen(routeServicesPopover?.hidden !== false);
+    });
+    routeServicesPopover?.addEventListener("click", (event) => event.stopPropagation());
+    document.addEventListener("click", (event) => {
+      if (!routeServicesPopover || routeServicesPopover.hidden) return;
+      if (routeServicesBtn?.contains(event.target) || routeServicesPopover.contains(event.target)) return;
+      setRouteServicesOpen(false);
+    });
+    document.addEventListener("click", (event) => {
+      const poiButton = event.target.closest?.("[data-poi-route]");
+      if (!poiButton || !poiButton.closest(".poi-pop")) return;
+      event.stopPropagation();
+      usePoiAsWaypoint();
     });
 
     if (routeSheetHandle) {
@@ -10924,6 +11183,8 @@
     });
     window.addEventListener("online", () => { reconnectGroupSharing().catch(() => {}); });
     popupBody?.addEventListener("click", (event) => {
+      const poiButton = event.target.closest("[data-poi-route]");
+      if (poiButton) { event.stopPropagation(); usePoiAsWaypoint(); return; }
       const routeButton = event.target.closest("[data-route-to-rider]");
       if (routeButton) { event.stopPropagation(); hidePopup(); routeToGroupRider(); }
     });
