@@ -5045,6 +5045,7 @@
     let groupStatus = "available";
     let lastGroupPublishAt = 0;
     let groupRouteTarget = null;
+    let groupMapFitGroupId = null;
     let groupPresencePollTimer = null;
     let groupPresenceReconcilePromise = null;
     let groupPanel = "list";
@@ -5502,6 +5503,28 @@
     function refreshGroupRiderLayer() {
       if (map.getSource("groupRiders")) map.getSource("groupRiders").setData(groupRiderFeatureCollection());
       ensureGroupRidersOnTop();
+    }
+
+    function fitSelectedGroupRidersOnce() {
+      const group = selectedRidingGroup;
+      if (!group || group.deleted_at || groupMapFitGroupId === group.id || !map) return;
+      const points = [];
+      if (hasRiderLocation()) points.push([rider.lng, rider.lat]);
+      let hasPeer = false;
+      for (const entry of groupRiders.values()) {
+        if (entry.groupId && entry.groupId !== group.id) continue;
+        const lng = Number(entry.lng);
+        const lat = Number(entry.lat);
+        if (Number.isFinite(lng) && Number.isFinite(lat)) points.push([lng, lat]);
+        if (Number.isFinite(lng) && Number.isFinite(lat)) hasPeer = true;
+      }
+      if (!points.length || (!hasPeer && hasRiderLocation())) return;
+      groupMapFitGroupId = group.id;
+      if (points.length === 1) {
+        map.easeTo({ center: points[0], zoom: Math.max(map.getZoom(), 13.5), duration: 450, essential: true });
+        return;
+      }
+      fitToCoords(points);
     }
 
     function locationUnavailableMessage(err) {
@@ -6408,7 +6431,7 @@
         type: "circle",
         source: "groupRiders",
         paint: {
-          "circle-radius": 13,
+          "circle-radius": 16,
           "circle-color": ["match", ["get", "status"], "breakdown", "#dc6803", "injured", "#c1122f", "stuck", "#7c3aed", "#0354a6"],
           "circle-opacity": 0.22,
           "circle-blur": 0.3
@@ -6419,7 +6442,7 @@
         type: "circle",
         source: "groupRiders",
         paint: {
-          "circle-radius": 7,
+          "circle-radius": 9,
           "circle-color": ["match", ["get", "status"], "breakdown", "#dc6803", "injured", "#c1122f", "stuck", "#7c3aed", "#0354a6"],
           "circle-stroke-width": 2,
           "circle-stroke-color": "#ffffff"
@@ -6468,7 +6491,7 @@
         source: "groupRiders",
         layout: {
           "text-field": ["get", "labelLine"],
-          "text-size": 11,
+          "text-size": 12,
           "text-offset": [0, 1.45],
           "text-anchor": "top",
           "text-allow-overlap": true
@@ -10160,6 +10183,7 @@
       });
       replaceGroupRiders(next);
       refreshGroupRiderLayer();
+      fitSelectedGroupRidersOnce();
       syncSelectedGroupStats();
     }
 
@@ -10172,6 +10196,7 @@
       const next = GS.applyLocationUpdate(groupRiders, payload, currentAuthUser?.id);
       replaceGroupRiders(next);
       refreshGroupRiderLayer();
+      fitSelectedGroupRidersOnce();
       syncSelectedGroupStats();
     }
 
@@ -10210,6 +10235,7 @@
       });
       replaceGroupRiders(next);
       refreshGroupRiderLayer();
+      fitSelectedGroupRidersOnce();
       syncSelectedGroupStats();
     }
 
@@ -10270,6 +10296,7 @@
     async function selectRidingGroup(group) {
       if (!group) return;
       selectedRidingGroup = group;
+      groupMapFitGroupId = null;
       selectedGroupMembers = [];
       const live = document.getElementById("groupLive");
       const title = document.getElementById("groupLiveTitle");
@@ -10348,6 +10375,7 @@
         groupChannelHandles.clear();
         selectedRidingGroup = null;
         selectedGroupMembers = [];
+        groupMapFitGroupId = null;
         ridingGroups = [];
         groupSharing = false;
         groupRiders.clear();
@@ -11126,7 +11154,14 @@
       setLegendOpen(false);
       setAccountSheetOpen(false);
       setGroupSheetOpen(open);
-      if (open) await ensureGroupsReady();
+      if (open) {
+        groupMapFitGroupId = null;
+        const ready = await ensureGroupsReady();
+        if (ready) {
+          await reconcileAllGroupPresence();
+          fitSelectedGroupRidersOnce();
+        }
+      }
     });
     document.getElementById("accountSheetHandle")?.addEventListener("click", () => setAccountSheetOpen(false));
     document.getElementById("groupSheetHandle")?.addEventListener("click", () => setGroupSheetOpen(false));
