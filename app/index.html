@@ -10569,6 +10569,13 @@
       }
       syncAccountUi();
       renderGroupList();
+      // Receiving group presence is independent of publishing our own
+      // location. Start the group channels as soon as an authenticated rider
+      // session exists so shared riders and distress alerts work even when the
+      // Groups sheet has never been opened and sharing is switched off.
+      if (currentAuthUser && !groupsReadyPromise) {
+        groupsReadyPromise = loadRidingGroups();
+      }
       if (!currentAuthUser) {
         groupsReadyPromise = null;
         pendingOtpEmail = "";
