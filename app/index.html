@@ -5296,6 +5296,7 @@
 
     function refreshGroupRiderLayer() {
       if (map.getSource("groupRiders")) map.getSource("groupRiders").setData(groupRiderFeatureCollection());
+      ensureGroupRidersOnTop();
     }
 
     function locationUnavailableMessage(err) {
@@ -6363,6 +6364,7 @@
         map.moveLayer("rider-halo");
         map.moveLayer("rider-core");
       } catch (_) { /* style may not be ready */ }
+      ensureGroupRidersOnTop();
     }
 
     function setRider(lng, lat, meta = {}) {
@@ -10256,7 +10258,20 @@
 
     function handleGroupRiderClick(event) {
       if (!map.getLayer("group-rider-core")) return false;
-      const features = map.queryRenderedFeatures(event.point, { layers: ["group-rider-core", "group-rider-halo"] });
+      const hitRadius = 24;
+      const box = [
+        [event.point.x - hitRadius, event.point.y - hitRadius],
+        [event.point.x + hitRadius, event.point.y + hitRadius]
+      ];
+      const hitLayers = [
+        "group-rider-core",
+        "group-rider-halo",
+        "group-rider-status-icons",
+        "group-rider-heading",
+        "group-rider-labels"
+      ].filter((layerId) => map.getLayer(layerId));
+      let features = map.queryRenderedFeatures(box, { layers: hitLayers });
+      if (!features.length) features = map.queryRenderedFeatures(event.point, { layers: hitLayers });
       if (!features.length) return false;
       const feature = features[0];
       const GS = window.DirtGroupSharing;
