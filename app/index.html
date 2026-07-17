@@ -851,7 +851,7 @@
     .route-shared { margin-top: 0; }
     body.planner-tab-saved .route-shared { display: none; }
     body.planner-tab-saved .route-actions { display: none !important; }
-    body.planner-tab-plan .route-shared .route-preferences { display: none; }
+    body.planner-tab-plan .route-shared { display: none !important; }
 
     /* Consolidated collapsible unknown-access warning */
     .access-warn-panel {
@@ -4796,6 +4796,340 @@
       font-family: var(--font-ui) !important;
       font-size: 11px !important;
     }
+
+    /* ——— Figma accuracy pass 3 (Route finder internals) ——— */
+    .route-mode-block {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      width: 100%;
+      padding: 8px;
+      border: 1px solid rgba(28, 25, 23, 0.14);
+      border-radius: var(--fig-r);
+      background: var(--fig-sheet-2);
+      box-sizing: border-box;
+    }
+    .route-mode-block .route-tabs {
+      background: transparent !important;
+      border: 0 !important;
+      padding: 0 !important;
+      gap: 6px !important;
+    }
+    .route-mode-block .route-tab-hint {
+      margin: 0;
+      padding: 0 2px;
+      font-size: 10px !important;
+      font-weight: 400 !important;
+      color: var(--fig-ink-soft) !important;
+      letter-spacing: -0.01em;
+      line-height: 1.3;
+    }
+    .route-pref-card {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      width: 100%;
+      padding: 10px;
+      border: 1px solid rgba(28, 25, 23, 0.14);
+      border-radius: var(--fig-r);
+      background: #fff;
+      box-sizing: border-box;
+    }
+    .route-pref-card .route-preferences {
+      margin: 0 !important;
+      background: transparent !important;
+      border: 0 !important;
+      padding: 0 !important;
+      gap: 6px !important;
+    }
+    .route-pref-card .route-access,
+    .route-pref-card .route-access-compact {
+      margin: 0 !important;
+      padding: 0 !important;
+      border: 0 !important;
+    }
+    .route-pref-card .route-access-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 28px;
+    }
+    .route-pref-card .route-access-label {
+      flex: 1;
+      font-size: 12px !important;
+      font-weight: 600 !important;
+      color: var(--fig-ink) !important;
+    }
+    .route-metric-row {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px 10px;
+      width: 100%;
+      padding: 8px 10px;
+      border-radius: 4px;
+      background: var(--fig-sheet-2);
+      border: 1px solid rgba(28, 25, 23, 0.08);
+      box-sizing: border-box;
+      font-family: var(--font-ui) !important;
+      font-size: 11px !important;
+      font-weight: 600 !important;
+      color: var(--fig-ink) !important;
+      line-height: 1.2;
+    }
+    .route-metric-row .route-metric {
+      white-space: nowrap;
+    }
+    .route-metric-row.is-empty,
+    .route-metric-row.is-hint {
+      justify-content: flex-start;
+      font-weight: 500 !important;
+      color: var(--fig-ink-soft) !important;
+    }
+    .route-metric-row.is-hint strong {
+      display: inline;
+      margin-left: 0.35em;
+      font-weight: 700;
+      color: var(--fig-ink);
+    }
+    .route-compact-summary,
+    .route-pref-card .route-status,
+    .route-pref-card .route-readout,
+    .route-here-metrics .route-status {
+      margin: 0 !important;
+      padding: 0 !important;
+      border: 0 !important;
+      background: transparent !important;
+      display: block !important;
+      font-size: inherit !important;
+    }
+    .route-here-metrics {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      width: 100%;
+    }
+    .route-here-metrics .route-warn:empty { display: none; }
+
+    body.planner-open .route-drawer-compact,
+    body.planner-open .route-drawer-full {
+      gap: 10px !important;
+    }
+    body.planner-tab-plan #stageTripSummary,
+    body.planner-tab-plan #stageEditToggle,
+    body.planner-tab-plan .planner-saved-link {
+      display: none !important;
+    }
+    body.planner-tab-saved .route-saved-extras {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      margin-top: 8px;
+      opacity: 0.72;
+    }
+    body.planner-tab-saved .route-saved-extras .stage-save,
+    body.planner-tab-saved .route-saved-extras .gpx-import-btn {
+      min-height: 34px !important;
+      font-size: 12px !important;
+      font-weight: 600 !important;
+      text-transform: none !important;
+      background: var(--fig-sheet-2) !important;
+      color: var(--fig-ink) !important;
+      border: 1px solid rgba(28, 25, 23, 0.12) !important;
+      border-radius: 4px !important;
+    }
+    body.planner-tab-saved .gpx-tools {
+      display: flex !important;
+      flex-direction: column;
+      gap: 4px;
+      margin: 0 !important;
+    }
+    body.planner-tab-saved .gpx-help {
+      font-size: 10px !important;
+      color: var(--fig-ink-soft) !important;
+    }
+
+    .stage-list { gap: 8px !important; }
+    .stage-row {
+      display: flex !important;
+      flex-direction: column !important;
+      align-items: stretch !important;
+      gap: 10px !important;
+      padding: 10px !important;
+      border: 1px solid rgba(28, 25, 23, 0.14) !important;
+      border-radius: var(--fig-r) !important;
+      background: #fff !important;
+      box-shadow: none !important;
+      cursor: pointer;
+    }
+    .stage-row.is-active,
+    .stage-row.is-editing {
+      border-color: rgba(28, 25, 23, 0.22) !important;
+      box-shadow: none !important;
+      background: #fff !important;
+    }
+    .stage-row-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      width: 100%;
+    }
+    .stage-row-title {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 0;
+    }
+    .stage-row-title .stage-title {
+      font-size: 13px !important;
+      font-weight: 700 !important;
+      color: var(--fig-ink) !important;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .stage-row-title .stage-profile-label {
+      font-size: 11px !important;
+      font-weight: 500 !important;
+      color: var(--fig-ink-soft) !important;
+    }
+    .stage-row-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex: 0 0 auto;
+    }
+    .stage-text-btn {
+      min-height: 28px;
+      padding: 0 10px;
+      border-radius: 4px;
+      border: 1px solid rgba(28, 25, 23, 0.12);
+      background: var(--fig-sheet-2);
+      color: var(--fig-ink);
+      font-family: var(--font-ui);
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .stage-text-btn.is-editing {
+      background: var(--fig-chrome);
+      border-color: var(--fig-chrome);
+      color: #fff;
+    }
+    .stage-text-btn.danger {
+      background: #f3d6d8;
+      border-color: #e8b4b8;
+      color: #9f1239;
+    }
+    .stage-text-btn:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
+    .stage-row .route-preferences {
+      background: transparent !important;
+      border: 0 !important;
+      padding: 0 !important;
+      gap: 6px !important;
+    }
+    .stage-row .route-access-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .stage-row .route-access-label {
+      flex: 1;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--fig-ink);
+    }
+    .stage-plan-actions {
+      margin-top: 2px;
+    }
+    .stage-add {
+      width: 100%;
+      min-height: 40px !important;
+      border: 1px solid rgba(28, 25, 23, 0.14) !important;
+      border-radius: 4px !important;
+      background: #fff !important;
+      color: var(--fig-ink) !important;
+      font-size: 13px !important;
+      font-weight: 700 !important;
+      text-transform: none !important;
+    }
+
+    .saved-list { gap: 0 !important; }
+    .saved-row {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding: 12px 2px !important;
+      border: 0 !important;
+      border-bottom: 1px solid rgba(28, 25, 23, 0.12) !important;
+      border-radius: 0 !important;
+      background: transparent !important;
+    }
+    .saved-row:last-child { border-bottom: 0 !important; }
+    .saved-row-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+      width: 100%;
+    }
+    .saved-row-copy {
+      min-width: 0;
+      flex: 1;
+    }
+    .saved-name {
+      font-size: 13px !important;
+      font-weight: 700 !important;
+      color: var(--fig-ink) !important;
+      white-space: normal !important;
+    }
+    .saved-sub {
+      margin-top: 2px;
+      font-size: 11px !important;
+      font-weight: 500 !important;
+      color: var(--fig-ink-soft) !important;
+    }
+    .saved-view-btn {
+      flex: 0 0 auto;
+      min-height: 32px;
+      min-width: 64px;
+      padding: 0 14px;
+      border: 0;
+      border-radius: 4px;
+      background: var(--fig-orange) !important;
+      color: #fff !important;
+      font-family: var(--font-ui);
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .saved-row-more {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .saved-row-more .saved-action {
+      min-height: 28px !important;
+      padding: 0 8px !important;
+      font-size: 11px !important;
+      font-weight: 600 !important;
+      background: transparent !important;
+      border: 0 !important;
+      color: var(--fig-ink-soft) !important;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+    .saved-row-more .saved-action.danger { color: #9f1239 !important; }
+    .saved-empty {
+      padding: 16px 8px !important;
+      font-size: 12px !important;
+      color: var(--fig-ink-soft) !important;
+    }
   </style>
 </head>
 <body>
@@ -4886,34 +5220,38 @@
     </div>
     <div class="route-drawer-scroll" id="routeDrawerScroll">
     <div class="route-drawer-compact" id="routeDrawerCompact">
-      <div class="route-segment route-tabs" role="tablist" aria-label="Route planner tabs">
-        <button class="route-mode active" type="button" data-route-mode="here" role="tab" aria-selected="true">From here</button>
-        <button class="route-mode" type="button" data-route-mode="plan" role="tab" aria-selected="false">Plan a route</button>
-        <button class="route-mode" type="button" data-route-mode="saved" role="tab" aria-selected="false">Saved route</button>
+      <div class="route-mode-block">
+        <div class="route-segment route-tabs" role="tablist" aria-label="Route planner tabs">
+          <button class="route-mode active" type="button" data-route-mode="here" role="tab" aria-selected="true">From here</button>
+          <button class="route-mode" type="button" data-route-mode="plan" role="tab" aria-selected="false">Plan a route</button>
+          <button class="route-mode" type="button" data-route-mode="saved" role="tab" aria-selected="false">Saved route</button>
+        </div>
+        <p class="route-tab-hint" id="routeTabHintCompact">Build your route from your current position</p>
       </div>
-      <p class="route-tab-hint" id="routeTabHintCompact">Build your route from your current position</p>
       <select class="route-compact-pref" id="routeCompactPref" aria-label="Route profile" hidden>
         <option value="direct">Direct</option>
         <option value="balanced" selected>Balanced</option>
         <option value="dirt">Dirt</option>
         <option value="cleanest">Cleanest</option>
       </select>
-      <div class="route-preferences route-preferences-compact" role="tablist" aria-label="Route preference">
-        <button class="route-pref" type="button" data-route-pref="direct" role="tab" aria-selected="false">Direct</button>
-        <button class="route-pref active" type="button" data-route-pref="balanced" role="tab" aria-selected="true">Balanced</button>
-        <button class="route-pref" type="button" data-route-pref="dirt" role="tab" aria-selected="false">Dirt</button>
-        <button class="route-pref" type="button" data-route-pref="cleanest" role="tab" aria-selected="false">Cleanest</button>
-      </div>
-      <div class="route-access route-access-compact" id="routeAccessCompact">
-        <div class="route-access-row">
-          <span class="route-access-label">Allow unknown access</span>
-          <button class="access-info-btn" id="accessInfoBtn" type="button" aria-label="What allowing unknown access means" aria-describedby="accessInfoTip" aria-expanded="false">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-          </button>
-          <label class="switch"><input type="checkbox" id="unknownAccessToggle" aria-label="Allow unknown access"><span></span></label>
+      <div class="route-pref-card" id="routePrefCardCompact">
+        <div class="route-preferences route-preferences-compact" role="tablist" aria-label="Route preference">
+          <button class="route-pref" type="button" data-route-pref="direct" role="tab" aria-selected="false">Direct</button>
+          <button class="route-pref active" type="button" data-route-pref="balanced" role="tab" aria-selected="true">Balanced</button>
+          <button class="route-pref" type="button" data-route-pref="dirt" role="tab" aria-selected="false">Dirt</button>
+          <button class="route-pref" type="button" data-route-pref="cleanest" role="tab" aria-selected="false">Cleanest</button>
         </div>
+        <div class="route-access route-access-compact" id="routeAccessCompact">
+          <div class="route-access-row">
+            <span class="route-access-label">Allow unknown access</span>
+            <button class="access-info-btn" id="accessInfoBtn" type="button" aria-label="What allowing unknown access means" aria-describedby="accessInfoTip" aria-expanded="false">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+            </button>
+            <label class="switch"><input type="checkbox" id="unknownAccessToggle" aria-label="Allow unknown access"><span></span></label>
+          </div>
+        </div>
+        <div class="route-compact-summary" id="routeCompactSummary">No route<strong>Tap map to plan</strong></div>
       </div>
-      <div class="route-compact-summary" id="routeCompactSummary">No route<strong>Tap map to plan</strong></div>
       <div class="route-compact-actions">
         <button class="route-compact-export" id="routeCompactExport" type="button" title="Export this route as GPX">Export GPX</button>
         <button class="route-compact-save" id="routeCompactSave" type="button" title="Save this route">Save route</button>
@@ -4921,15 +5259,17 @@
       <button class="route-compact-nav" id="routeCompactNav" type="button" title="Start turn-by-turn navigation">Start navigation</button>
     </div>
     <div class="route-drawer-full" id="routeDrawerFull">
-      <div class="route-segment route-tabs" role="tablist" aria-label="Route planner tabs">
-        <button class="route-mode active" type="button" data-route-mode="here" role="tab" aria-selected="true">From here</button>
-        <button class="route-mode" type="button" data-route-mode="plan" role="tab" aria-selected="false">Plan a route</button>
-        <button class="route-mode" type="button" data-route-mode="saved" role="tab" aria-selected="false">Saved route</button>
+      <div class="route-mode-block">
+        <div class="route-segment route-tabs" role="tablist" aria-label="Route planner tabs">
+          <button class="route-mode active" type="button" data-route-mode="here" role="tab" aria-selected="true">From here</button>
+          <button class="route-mode" type="button" data-route-mode="plan" role="tab" aria-selected="false">Plan a route</button>
+          <button class="route-mode" type="button" data-route-mode="saved" role="tab" aria-selected="false">Saved route</button>
+        </div>
+        <p class="route-tab-hint" id="routeTabHintFull">Build your route from your current position</p>
       </div>
-      <p class="route-tab-hint" id="routeTabHintFull">Build your route from your current position</p>
 
-      <!-- Shared trip settings (From here + Plan route) -->
-      <div class="route-shared" id="routeSharedSettings">
+      <!-- Shared trip settings (From here) -->
+      <div class="route-shared route-pref-card" id="routeSharedSettings">
         <div class="route-preferences" role="tablist" aria-label="Route preference">
           <button class="route-pref" type="button" data-route-pref="direct" role="tab" aria-selected="false">Direct</button>
           <button class="route-pref active" type="button" data-route-pref="balanced" role="tab" aria-selected="true">Balanced</button>
@@ -4945,19 +5285,15 @@
             <label class="switch"><input type="checkbox" id="unknownAccessTogglePlan" aria-label="Allow unknown access"><span></span></label>
           </div>
         </div>
-      </div>
-
-      <!-- From here + single-destination readout -->
-      <div class="route-panel" id="routePanelHere">
-        <div class="route-readout">
+        <div class="route-panel route-here-metrics" id="routePanelHere">
           <div class="route-status" id="routeStatus">Tap destination<strong>No route set</strong></div>
+          <div class="route-warn" id="routeWarn" role="status"></div>
         </div>
-        <div class="route-warn" id="routeWarn" role="status"></div>
       </div>
 
       <!-- Multi-stage plan -->
       <div class="route-panel" id="routePanelPlan" hidden>
-        <div class="stage-trip-summary" id="stageTripSummary" aria-live="polite"></div>
+        <div class="stage-trip-summary" id="stageTripSummary" aria-live="polite" hidden></div>
         <div class="stage-list" id="stageList" role="list"></div>
         <div class="stage-plan-actions">
           <button class="stage-add" id="stageAddBtn" type="button">+ Add stage</button>
@@ -4973,10 +5309,12 @@
       <!-- Saved routes / Route Book -->
       <div class="route-panel" id="routePanelSaved" hidden>
         <div class="saved-list" id="savedList" role="list"></div>
-        <button class="stage-save" id="savedCreateBtn" type="button">Create new route</button>
-        <div class="gpx-tools">
-          <button class="gpx-import-btn" id="gpxImportBtn" type="button">Import GPX track</button>
-          <span class="gpx-help">Edit and export tracks from Gaia, Garmin, or another app.</span>
+        <div class="route-saved-extras">
+          <button class="stage-save" id="savedCreateBtn" type="button">Create new route</button>
+          <div class="gpx-tools">
+            <button class="gpx-import-btn" id="gpxImportBtn" type="button">Import GPX track</button>
+            <span class="gpx-help">Edit and export tracks from Gaia, Garmin, or another app.</span>
+          </div>
         </div>
         <input id="gpxFileInput" type="file" accept=".gpx,application/gpx+xml" hidden />
         <div class="track-editor" id="trackEditor" aria-live="polite">
@@ -8308,29 +8646,77 @@
     }
 
     // ---- Stage list + summary rendering ----
-    function stageStatusMarkup(stage) {
+    function formatKmLabel(distanceKm) {
+      if (distanceKm == null || !Number.isFinite(distanceKm)) return "—";
+      if (distanceKm >= 100) return Math.round(distanceKm) + " km";
+      if (distanceKm >= 10) return distanceKm.toFixed(0) + " km";
+      return distanceKm.toFixed(1) + " km";
+    }
+
+    function routeMetricRowHtml(opts) {
+      const o = opts || {};
+      if (o.hintHtml) {
+        return '<div class="route-metric-row is-hint">' + o.hintHtml + "</div>";
+      }
+      const hasRoute = o.distanceKm != null && Number.isFinite(o.distanceKm);
+      if (!hasRoute) {
+        return '<div class="route-metric-row is-empty">' + (o.emptyText || "Place points to build this route") + "</div>";
+      }
+      const minLabel = o.movingSeconds
+        ? "< " + Math.round(o.movingSeconds / 60) + " min"
+        : "—";
+      const dirtLabel = o.dirtPercent != null ? o.dirtPercent + "% Dirt" : "—";
+      const pavedLabel = o.pavedPercent != null ? o.pavedPercent + "% Paved" : "—";
+      return (
+        '<div class="route-metric-row" role="group" aria-label="Route stats">' +
+          '<span class="route-metric">' + formatKmLabel(o.distanceKm) + "</span>" +
+          '<span class="route-metric">' + minLabel + "</span>" +
+          '<span class="route-metric">' + dirtLabel + "</span>" +
+          '<span class="route-metric">' + pavedLabel + "</span>" +
+        "</div>"
+      );
+    }
+
+    function stageMetricsHtml(stage) {
       const status = RS.computeStageStatus(stage);
       if (status === RS.STAGE_STATUS.DRAFT) {
-        const need = !stage.start ? "tap A" : "tap B";
-        return '<span class="stage-status-draft">Draft · ' + need + "</span>";
+        const need = !stage.start ? "Tap point A" : "Tap point B";
+        return routeMetricRowHtml({ emptyText: "Draft · " + need });
       }
-      if (status === RS.STAGE_STATUS.LOADING) return '<span class="stage-status-loading">Routing…</span>';
+      if (status === RS.STAGE_STATUS.LOADING) {
+        return routeMetricRowHtml({ emptyText: "Routing…" });
+      }
       if (status === RS.STAGE_STATUS.FAILED) {
-        return '<span class="stage-status-failed">Failed · ' + escapeHtml(stage.error || "no route") + "</span>";
+        return routeMetricRowHtml({ emptyText: "Failed · " + (stage.error || "no route") });
       }
       if (status === RS.STAGE_STATUS.COMPLETE && stage.route) {
-        const km = (stage.route.distanceMeters || 0) / 1000;
-        const mins = stage.route.estimatedMovingSeconds
-          ? Math.round(stage.route.estimatedMovingSeconds / 60) + " min"
-          : null;
         const b = RS.routeBreakdown(stage.route);
-        const dirtPct = RS.weightedPercent(b.dirtMeters, b.distanceMeters);
-        return '<span class="stage-status-complete">' +
-          km.toFixed(km >= 10 ? 1 : 2) + " km" +
-          (mins ? " · " + mins : "") +
-          " · " + dirtPct + "% dirt</span>";
+        return routeMetricRowHtml({
+          distanceKm: (stage.route.distanceMeters || 0) / 1000,
+          movingSeconds: stage.route.estimatedMovingSeconds,
+          dirtPercent: RS.weightedPercent(b.dirtMeters, b.distanceMeters),
+          pavedPercent: RS.weightedPercent((b.surface && b.surface.paved) || 0, b.distanceMeters)
+        });
       }
-      return "Ready · not routed";
+      return routeMetricRowHtml({ emptyText: "Ready · not routed" });
+    }
+
+    function stageProfilePillsHtml(stage, index) {
+      const current = stage.profile || "balanced";
+      const profiles = ["direct", "balanced", "dirt", "cleanest"];
+      return (
+        '<div class="route-preferences stage-preferences" role="tablist" aria-label="Stage ' + (index + 1) + ' route preference">' +
+        profiles.map((profile) => {
+          const active = profile === current;
+          const label = profile.charAt(0).toUpperCase() + profile.slice(1);
+          return (
+            '<button class="route-pref' + (active ? " active" : "") + '" type="button" role="tab" aria-selected="' +
+            (active ? "true" : "false") + '" data-stage-id="' + stage.id + '" data-stage-pref="' + profile + '">' +
+            label + "</button>"
+          );
+        }).join("") +
+        "</div>"
+      );
     }
 
     function renderStageList() {
@@ -8339,36 +8725,53 @@
       stageListEl.innerHTML = stages.map((stage, i) => {
         const active = stage.id === activeStageId;
         const editing = stage.id === editingStageId;
-        const aLabel = stage.start ? "A set" : "A —";
-        const bLabel = stage.end ? "B set" : "B —";
+        const expanded = active;
+        const profile = stage.profile || "balanced";
+        const profileLabel = profile.charAt(0).toUpperCase() + profile.slice(1);
+        const stageLabel = "Stage " + String(i + 1).padStart(2, "0");
+        const canEdit = RS.stageHasBothPoints(stage) && !navigating;
+        let body = "";
+        if (expanded) {
+          body =
+            stageProfilePillsHtml(stage, i) +
+            '<div class="route-access-row">' +
+              '<span class="route-access-label">Allow unknown access</span>' +
+              '<button class="access-info-btn" type="button" data-access-info="stage" aria-label="What allowing unknown access means" aria-describedby="accessInfoTip" aria-expanded="false">' +
+                '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>' +
+              "</button>" +
+              '<label class="switch"><input type="checkbox" data-stage-access aria-label="Allow unknown access"' +
+                (allowUnknownAccess ? " checked" : "") + "><span></span></label>" +
+            "</div>" +
+            stageMetricsHtml(stage);
+        } else {
+          body = stageMetricsHtml(stage);
+        }
         return (
           '<div class="stage-row' + (active ? " is-active" : "") + (editing ? " is-editing" : "") +
             '" role="listitem" data-stage-id="' + stage.id + '">' +
-            '<span class="stage-badge">' + (i + 1) + "</span>" +
-            '<span class="stage-main">' +
-              '<span class="stage-title">Stage ' + (i + 1) + " · " + aLabel + " → " + bLabel + "</span>" +
-              '<span class="stage-sub">' + stageStatusMarkup(stage) + "</span>" +
-            "</span>" +
-            '<span class="stage-controls">' +
-              '<select class="stage-profile-select" data-stage-profile="' + stage.id + '" aria-label="Stage ' + (i + 1) + ' route profile">' +
-                '<option value="direct"' + ((stage.profile || "balanced") === "direct" ? " selected" : "") + '>Direct</option>' +
-                '<option value="balanced"' + ((stage.profile || "balanced") === "balanced" ? " selected" : "") + '>Balanced</option>' +
-                '<option value="dirt"' + ((stage.profile || "balanced") === "dirt" ? " selected" : "") + '>Dirt</option>' +
-                '<option value="cleanest"' + ((stage.profile || "balanced") === "cleanest" ? " selected" : "") + '>Cleanest</option>' +
-              '</select>' +
-              '<button class="stage-icon-btn" data-stage-move="up" data-stage-id="' + stage.id + '" title="Move up" aria-label="Move stage up"' + (i === 0 ? " disabled" : "") + ">↑</button>" +
-              '<button class="stage-icon-btn" data-stage-move="down" data-stage-id="' + stage.id + '" title="Move down" aria-label="Move stage down"' + (i === stages.length - 1 ? " disabled" : "") + ">↓</button>" +
-              '<button class="stage-icon-btn" data-stage-delete="' + stage.id + '" title="Delete stage" aria-label="Delete stage"' + (stages.length <= 1 ? " disabled" : "") + ">×</button>" +
-            "</span>" +
+            '<div class="stage-row-head">' +
+              '<div class="stage-row-title">' +
+                '<span class="stage-title">' + stageLabel + "</span>" +
+                (expanded ? "" : '<span class="stage-profile-label">' + profileLabel + "</span>") +
+              "</div>" +
+              '<div class="stage-row-actions">' +
+                '<button class="stage-text-btn' + (editing ? " is-editing" : "") + '" type="button" data-stage-edit="' + stage.id + '"' +
+                  (canEdit ? "" : " disabled") + ">" + (editing ? "Done" : "Edit") + "</button>" +
+                '<button class="stage-text-btn danger" type="button" data-stage-delete="' + stage.id + '"' +
+                  (stages.length <= 1 ? " disabled" : "") + ">Delete</button>" +
+              "</div>" +
+            "</div>" +
+            body +
           "</div>"
         );
       }).join("");
       if (stageEditToggle) {
         const active = getActiveStage();
         const canEdit = active && RS.stageHasBothPoints(active) && !navigating;
-        stageEditToggle.hidden = !canEdit;
+        stageEditToggle.hidden = true;
         stageEditToggle.classList.toggle("is-editing", editingStageId === activeStageId);
         stageEditToggle.textContent = editingStageId === activeStageId ? "Done editing" : "Edit stage";
+        stageEditToggle.disabled = !canEdit;
       }
       if (stageSaveBtn) {
         stageSaveBtn.disabled = !planTrip.stages.some((s) => RS.stageHasBothPoints(s));
@@ -8748,48 +9151,50 @@
       savedListEl.innerHTML = savedRoutes.map((r) => {
         if (r.kind === "imported-track") {
           const km = (Number(r.distanceMeters) || 0) / 1000;
-          const updated = r.updatedAt ? new Date(r.updatedAt).toLocaleDateString() : "";
           return (
             '<div class="saved-row" data-saved-id="' + r.id + '">' +
-              '<div class="saved-row-head">' +
-                '<span class="saved-name">' + escapeHtml(r.name || "Imported GPX track") + "</span>" +
-                '<span class="saved-draft-tag">GPX</span>' +
+              '<div class="saved-row-top">' +
+                '<div class="saved-row-copy">' +
+                  '<div class="saved-name">' + escapeHtml(r.name || "Imported GPX track") + "</div>" +
+                  '<div class="saved-sub">Imported track · ' + (r.pointCount || 0) + " points</div>" +
+                "</div>" +
+                '<button class="saved-view-btn" type="button" data-saved-view="' + r.id + '">View</button>' +
               "</div>" +
-              '<div class="saved-meta">Imported track · ' + (r.pointCount || 0) + " points · " +
-                km.toFixed(km >= 10 ? 1 : 2) + " km" + (updated ? " · " + updated : "") +
-              "</div>" +
-              '<div class="saved-actions">' +
-                '<button class="saved-action" data-saved-view="' + r.id + '">View on map</button>' +
-                '<button class="saved-action primary" data-saved-edit-track="' + r.id + '">Edit track</button>' +
-                '<button class="saved-action" data-saved-export-track="' + r.id + '">Export GPX</button>' +
-                '<button class="saved-action danger" data-saved-delete="' + r.id + '">Delete</button>' +
+              routeMetricRowHtml({ distanceKm: km > 0 ? km : null, emptyText: "Imported GPX track" }) +
+              '<div class="saved-row-more">' +
+                '<button class="saved-action" type="button" data-saved-edit-track="' + r.id + '">Edit</button>' +
+                '<button class="saved-action" type="button" data-saved-export-track="' + r.id + '">Export</button>' +
+                '<button class="saved-action danger" type="button" data-saved-delete="' + r.id + '">Delete</button>' +
               "</div>" +
             "</div>"
           );
         }
         const agg = r.aggregate || {};
         const km = (agg.totalDistanceMeters || 0) / 1000;
-        const dirt = agg.percentages ? agg.percentages.dirtPercent : 0;
-        const updated = r.updatedAt ? new Date(r.updatedAt).toLocaleDateString() : "";
+        const dirt = agg.percentages ? agg.percentages.dirtPercent : null;
+        const paved = agg.percentages ? agg.percentages.pavedPercent : null;
+        const stageCount = r.stageCount || (r.stages && r.stages.length) || 1;
+        const sub = (r.isDraft ? "Draft · " : "") + stageCount + (stageCount === 1 ? " stage" : " stages");
         return (
           '<div class="saved-row" data-saved-id="' + r.id + '">' +
-            '<div class="saved-row-head">' +
-              '<span class="saved-name">' + escapeHtml(r.name || "Untitled route") + "</span>" +
-              (r.isDraft ? '<span class="saved-draft-tag">DRAFT</span>' : "") +
+            '<div class="saved-row-top">' +
+              '<div class="saved-row-copy">' +
+                '<div class="saved-name">' + escapeHtml(r.name || "Untitled route") + "</div>" +
+                '<div class="saved-sub">' + escapeHtml(sub) + "</div>" +
+              "</div>" +
+              '<button class="saved-view-btn" type="button" data-saved-view="' + r.id + '">View</button>' +
             "</div>" +
-            '<div class="saved-meta">' +
-              (r.stageCount || 1) + (r.stageCount === 1 ? " stage" : " stages") +
-              " · " + km.toFixed(km >= 10 ? 1 : 2) + " km" +
-              " · " + RS.secondsToLabel(agg.totalMovingSeconds) +
-              " · " + (dirt || 0) + "% dirt" +
-              (updated ? " · " + updated : "") +
-              " · saved on this device" +
-            "</div>" +
-            '<div class="saved-actions">' +
-              '<button class="saved-action" data-saved-view="' + r.id + '">View on map</button>' +
-              '<button class="saved-action primary" data-saved-apply="' + r.id + '">Apply route</button>' +
-              '<button class="saved-action" data-saved-duplicate="' + r.id + '">Duplicate</button>' +
-              '<button class="saved-action danger" data-saved-delete="' + r.id + '">Delete</button>' +
+            routeMetricRowHtml({
+              distanceKm: km > 0 ? km : null,
+              movingSeconds: agg.totalMovingSeconds,
+              dirtPercent: dirt,
+              pavedPercent: paved,
+              emptyText: "No route stats yet"
+            }) +
+            '<div class="saved-row-more">' +
+              '<button class="saved-action" type="button" data-saved-apply="' + r.id + '">Apply</button>' +
+              '<button class="saved-action" type="button" data-saved-duplicate="' + r.id + '">Duplicate</button>' +
+              '<button class="saved-action danger" type="button" data-saved-delete="' + r.id + '">Delete</button>' +
             "</div>" +
           "</div>"
         );
@@ -10610,21 +11015,12 @@
       if (activeRoute) {
         const dirtPct = activeRoute.distanceKm ? Math.round((activeRoute.dirtKm / activeRoute.distanceKm) * 100) : 0;
         const pavedPct = activeRoute.distanceKm ? Math.round(((activeRoute.byClass.paved || 0) / activeRoute.distanceKm) * 100) : 0;
-        const unknownPct = activeRoute.unknownAccessPercent || 0;
-        const mins = activeRoute.estimatedMovingSeconds
-          ? Math.round(activeRoute.estimatedMovingSeconds / 60) + " min"
-          : null;
-        const profile = routePreference.charAt(0).toUpperCase() + routePreference.slice(1);
-        setRouteStatusHtml(
-          profile + " route<strong>" +
-          activeRoute.distanceKm.toFixed(activeRoute.distanceKm >= 10 ? 1 : 2) +
-          " km" + (mins ? " · ~" + mins : "") +
-          "</strong><span class=\"route-stats\">" +
-          dirtPct + "% dirt" +
-          (pavedPct ? " · " + pavedPct + "% paved" : "") +
-          (unknownPct ? " · " + unknownPct + "% unknown access" : "") +
-          "</span>"
-        );
+        setRouteStatusHtml(routeMetricRowHtml({
+          distanceKm: activeRoute.distanceKm,
+          movingSeconds: activeRoute.estimatedMovingSeconds,
+          dirtPercent: dirtPct,
+          pavedPercent: pavedPct
+        }));
         // Unknown-access warning lives ONLY in the consolidated panel now; the
         // planner strip keeps non-unknown safety/failure messages only.
         const warnText = (activeRoute.warnings || [])
@@ -10645,26 +11041,28 @@
       setRouteWarn("");
       if (start && destination) {
         const km = haversineKm(start, destination);
-        setRouteStatusHtml("Straight line<strong>" + km.toFixed(km >= 10 ? 1 : 2) + " km</strong>");
+        setRouteStatusHtml(routeMetricRowHtml({
+          hintHtml: "Straight line<strong>" + km.toFixed(km >= 10 ? 1 : 2) + " km</strong>"
+        }));
         return;
       }
       if (routeMode === "here") {
         if (!hasRiderLocation()) {
           if (locationProbeState === "pending") {
-            setRouteStatusHtml("From here<strong>Finding your location…</strong>");
+            setRouteStatusHtml(routeMetricRowHtml({ hintHtml: "From here<strong>Finding your location…</strong>" }));
           } else {
-            setRouteStatusHtml("Location unavailable<strong>Switch to Plan route</strong>");
+            setRouteStatusHtml(routeMetricRowHtml({ hintHtml: "Location unavailable<strong>Switch to Plan a route</strong>" }));
           }
           return;
         }
-        setRouteStatusHtml("From here<strong>Tap a destination</strong>");
+        setRouteStatusHtml(routeMetricRowHtml({ hintHtml: "From here<strong>Tap a destination</strong>" }));
         return;
       }
       if (!plannedStart) {
-        setRouteStatusHtml("Plan route<strong>Tap point A</strong>");
+        setRouteStatusHtml(routeMetricRowHtml({ hintHtml: "Plan a route<strong>Tap point A</strong>" }));
         return;
       }
-      setRouteStatusHtml("Plan route<strong>Tap point B</strong>");
+      setRouteStatusHtml(routeMetricRowHtml({ hintHtml: "Plan a route<strong>Tap point B</strong>" }));
     }
 
     function refreshRouteDraft() {
@@ -12219,16 +12617,51 @@
     if (trackEditorSave) trackEditorSave.addEventListener("click", saveImportedTrackEdits);
     if (stageListEl) {
       stageListEl.addEventListener("change", (event) => {
+        const accessToggle = event.target.closest("[data-stage-access]");
+        if (accessToggle) {
+          event.stopPropagation();
+          onUnknownAccessChange({ target: accessToggle });
+          return;
+        }
         const profileSelect = event.target.closest("[data-stage-profile]");
         if (!profileSelect) return;
         event.stopPropagation();
         setStageProfile(profileSelect.dataset.stageProfile, profileSelect.value);
       });
       stageListEl.addEventListener("click", (event) => {
-        const moveBtn = event.target.closest("[data-stage-move]");
-        if (moveBtn) {
+        const infoBtn = event.target.closest("[data-access-info]");
+        if (infoBtn) {
           event.stopPropagation();
-          movePlanStage(moveBtn.dataset.stageId, moveBtn.dataset.stageMove === "up" ? -1 : 1);
+          if (accessInfoOpen && accessInfoAnchor === infoBtn) hideAccessTip();
+          else showAccessTip(infoBtn);
+          return;
+        }
+        const prefBtn = event.target.closest("[data-stage-pref]");
+        if (prefBtn) {
+          event.stopPropagation();
+          setActiveStage(prefBtn.dataset.stageId);
+          setStageProfile(prefBtn.dataset.stageId, prefBtn.dataset.stagePref);
+          return;
+        }
+        const editBtn = event.target.closest("[data-stage-edit]");
+        if (editBtn) {
+          event.stopPropagation();
+          const stageId = editBtn.dataset.stageEdit;
+          const idx = RS.findStageIndex(planTrip, stageId);
+          if (idx < 0) return;
+          const stage = planTrip.stages[idx];
+          if (!RS.stageHasBothPoints(stage) || navigating) return;
+          activeStageId = stageId;
+          editingStageId = editingStageId === stageId ? null : stageId;
+          setStatus(
+            editingStageId
+              ? "Editing Stage " + (idx + 1) + " · drag A/B markers"
+              : "Edit committed",
+            "ok",
+            "route"
+          );
+          renderStageList();
+          renderStageMarkers();
           return;
         }
         const delBtn = event.target.closest("[data-stage-delete]");
@@ -12237,7 +12670,14 @@
           deletePlanStage(delBtn.dataset.stageDelete);
           return;
         }
-        const row = event.target.closest("[data-stage-id]");
+        const moveBtn = event.target.closest("[data-stage-move]");
+        if (moveBtn) {
+          event.stopPropagation();
+          movePlanStage(moveBtn.dataset.stageId, moveBtn.dataset.stageMove === "up" ? -1 : 1);
+          return;
+        }
+        if (event.target.closest("button, label, input, select, a")) return;
+        const row = event.target.closest(".stage-row[data-stage-id]");
         if (row) setActiveStage(row.dataset.stageId);
       });
     }
@@ -12626,6 +13066,9 @@
     function syncUnknownAccessUi() {
       if (unknownAccessToggle) unknownAccessToggle.checked = allowUnknownAccess;
       if (unknownAccessTogglePlan) unknownAccessTogglePlan.checked = allowUnknownAccess;
+      document.querySelectorAll("[data-stage-access]").forEach((input) => {
+        input.checked = allowUnknownAccess;
+      });
       renderAccessWarning();
     }
 
@@ -12714,6 +13157,11 @@
       // Keep switches visually pending until acknowledgement resolves.
       if (wantsEnabled && unknownAccessToggle) unknownAccessToggle.checked = false;
       if (wantsEnabled && unknownAccessTogglePlan) unknownAccessTogglePlan.checked = false;
+      if (wantsEnabled) {
+        document.querySelectorAll("[data-stage-access]").forEach((input) => {
+          input.checked = false;
+        });
+      }
       await applyUnknownAccessToggle(wantsEnabled);
     }
     if (unknownAccessToggle) unknownAccessToggle.addEventListener("change", onUnknownAccessChange);
@@ -12749,6 +13197,9 @@
       accessInfoTip.hidden = false;
       accessInfoOpen = true;
       accessInfoButtons.forEach((item) => item.setAttribute("aria-expanded", item === accessInfoAnchor ? "true" : "false"));
+      if (accessInfoAnchor && accessInfoAnchor.setAttribute) {
+        accessInfoAnchor.setAttribute("aria-expanded", "true");
+      }
       positionAccessTip(accessInfoAnchor);
     }
     function hideAccessTip() {
@@ -12756,6 +13207,9 @@
       accessInfoTip.hidden = true;
       accessInfoOpen = false;
       accessInfoButtons.forEach((item) => item.setAttribute("aria-expanded", "false"));
+      document.querySelectorAll(".access-info-btn[aria-expanded='true']").forEach((item) => {
+        item.setAttribute("aria-expanded", "false");
+      });
     }
     if (accessInfoButtons.length && accessInfoTip) {
       accessInfoButtons.forEach((button) => {
