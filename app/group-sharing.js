@@ -47,6 +47,12 @@
     return wrapped;
   }
 
+  function normalizeCoordinate(value) {
+    if (value == null || (typeof value === "string" && value.trim() === "")) return null;
+    const n = Number(value);
+    return Number.isFinite(n) ? n : null;
+  }
+
   /**
    * Merge a presence snapshot into last-known riders.
    * Never removes riders who dropped off presence (crash / offline) — only upserts.
@@ -60,8 +66,12 @@
       const entry = Array.isArray(values) ? values[values.length - 1] : values;
       if (!entry) continue;
       const prev = next.get(userId) || {};
-      const lng = Number.isFinite(entry.lng) ? entry.lng : prev.lng;
-      const lat = Number.isFinite(entry.lat) ? entry.lat : prev.lat;
+      const lng = normalizeCoordinate(entry.lng) ?? normalizeCoordinate(prev.lng);
+      const lat = normalizeCoordinate(entry.lat) ?? normalizeCoordinate(prev.lat);
+      if (lng == null || lat == null) {
+        if (prev.userId) next.delete(userId);
+        continue;
+      }
       next.set(userId, Object.assign({}, prev, entry, {
         userId,
         lng,
@@ -80,12 +90,16 @@
   function applyLocationUpdate(existingEntries, payload, selfUserId) {
     const next = new Map(existingEntries instanceof Map ? existingEntries : []);
     if (!payload || !payload.userId || payload.userId === selfUserId) return next;
-    if (!Number.isFinite(payload.lat) || !Number.isFinite(payload.lng)) return next;
+    const lng = normalizeCoordinate(payload.lng);
+    const lat = normalizeCoordinate(payload.lat);
+    if (lng == null || lat == null) return next;
     const prev = next.get(payload.userId) || {};
     const status = payload.status || prev.status || "available";
     const displayName = payload.displayName || prev.displayName || "Rider";
     next.set(payload.userId, Object.assign({}, prev, payload, {
       userId: payload.userId,
+      lng,
+      lat,
       status,
       displayName,
       labelLine: formatRiderMapLabel(displayName, status),

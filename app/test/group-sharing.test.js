@@ -41,6 +41,25 @@ run("mergePresenceKeepLastKnown upserts without clearing absent riders", () => {
   assert.strictEqual(next.get("live-user").labelLine, "Sam - Available");
 });
 
+run("presence requires usable coordinates and normalizes numeric strings", () => {
+  const next = G.mergePresenceKeepLastKnown(new Map(), {
+    "string-coordinates": [{ userId: "string-coordinates", lng: "-63.2", lat: "45.3", displayName: "Sam" }],
+    "no-location": [{ userId: "no-location", displayName: "No GPS" }]
+  }, "me", { groupId: "g1" });
+  assert.strictEqual(next.get("string-coordinates").lng, -63.2);
+  assert.strictEqual(next.get("string-coordinates").lat, 45.3);
+  assert.ok(!next.has("no-location"), "locationless presence must not appear as a map-live rider");
+
+  const updated = G.applyLocationUpdate(new Map(), {
+    userId: "string-coordinates",
+    lng: "-63.25",
+    lat: "45.35",
+    displayName: "Sam"
+  }, "me");
+  assert.strictEqual(updated.get("string-coordinates").lng, -63.25);
+  assert.strictEqual(updated.get("string-coordinates").lat, 45.35);
+});
+
 run("applySharingOff removes only explicit stop", () => {
   const existing = new Map([
     ["a", { userId: "a", lng: 1, lat: 2 }],

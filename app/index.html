@@ -5250,20 +5250,26 @@
       const GS = window.DirtGroupSharing;
       return {
         type: "FeatureCollection",
-        features: Array.from(groupRiders.values()).filter((entry) => Number.isFinite(entry.lng) && Number.isFinite(entry.lat)).map((entry) => ({
-          type: "Feature",
-          geometry: { type: "Point", coordinates: [entry.lng, entry.lat] },
-          properties: GS ? GS.riderFeatureProperties(entry) : {
-            userId: entry.userId,
-            displayName: entry.displayName || "Rider",
-            status: entry.status || "available",
-            labelLine: (entry.displayName || "Rider") + " · " + (entry.status || "available"),
-            groupId: entry.groupId || null,
-            groupName: entry.groupName || null,
-            lastSeenAt: entry.lastSeenAt || null,
-            heading: Number.isFinite(entry.heading) ? entry.heading : -1
-          }
-        }))
+        features: Array.from(groupRiders.values()).reduce((features, entry) => {
+          const lng = Number(entry.lng);
+          const lat = Number(entry.lat);
+          if (!Number.isFinite(lng) || !Number.isFinite(lat)) return features;
+          features.push({
+            type: "Feature",
+            geometry: { type: "Point", coordinates: [lng, lat] },
+            properties: GS ? GS.riderFeatureProperties(Object.assign({}, entry, { lng, lat })) : {
+              userId: entry.userId,
+              displayName: entry.displayName || "Rider",
+              status: entry.status || "available",
+              labelLine: (entry.displayName || "Rider") + " · " + (entry.status || "available"),
+              groupId: entry.groupId || null,
+              groupName: entry.groupName || null,
+              lastSeenAt: entry.lastSeenAt || null,
+              heading: Number.isFinite(entry.heading) ? entry.heading : -1
+            }
+          });
+          return features;
+        }, [])
       };
     }
 
