@@ -1645,6 +1645,16 @@
       background: rgba(22, 36, 51, 0.38);
     }
     .export-sheet.open { display: flex; }
+    /* Unknown-access acknowledgement is a true decision modal, not a bottom
+       sheet. Keep the route planner visible behind it while centering the
+       decision surface in the viewport. */
+    #accessWarnSheet {
+      align-items: center;
+      padding: 24px;
+    }
+    #accessWarnSheet .export-sheet-card {
+      width: min(380px, calc(100vw - 48px));
+    }
     .export-sheet-card {
       width: min(420px, 100%);
       background: var(--panel);
