@@ -12715,6 +12715,7 @@
     }
     function setAccountSheetOpen(open) {
       if (!accountSheet) return;
+      if (open) setPlannerDrawerState("closed");
       if (open) positionAccountSheet(accountSheet, accountBtn);
       accountSheet.classList.toggle("open", open);
       accountSheet.setAttribute("aria-hidden", open ? "false" : "true");
@@ -12727,6 +12728,7 @@
     }
     function setGroupSheetOpen(open) {
       if (!groupSheet) return;
+      if (open) setPlannerDrawerState("closed");
       if (open) positionAccountSheet(groupSheet, groupBtn);
       groupSheet.classList.toggle("open", open);
       groupSheet.setAttribute("aria-hidden", open ? "false" : "true");
