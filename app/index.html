@@ -3635,6 +3635,8 @@
     }
     body.planner-open .route-finder-header,
     body.planner-open .route-sheet-handle-bar { display: none; }
+    body.planner-open .route-card.is-collapsed .route-sheet-handle-bar,
+    body.planner-open .route-card.is-expanded .route-sheet-handle-bar { display: none !important; }
     body.planner-open .route-drawer-scroll {
       width: 100%;
       max-width: none;
@@ -6088,7 +6090,12 @@
     function usePoiAsWaypoint() {
       const target = poiRouteTarget;
       if (!target || !Number.isFinite(target.lng) || !Number.isFinite(target.lat)) return;
+      poiRouteTarget = null;
       const point = { lng: target.lng, lat: target.lat };
+      if (poiPopup) {
+        poiPopup.remove();
+        poiPopup = null;
+      }
       hidePopup();
       if (plannerTab === "plan") {
         const active = getActiveStage();
