@@ -2311,6 +2311,60 @@
       width: 32px; height: 32px; border: 0; background: transparent;
       color: var(--muted); font-size: 1.1rem; cursor: pointer;
     }
+    /* Group riders are DOM markers rather than canvas-only symbols. This keeps
+       the name and tap target reliable on touch devices and when riders share
+       the same coordinates. */
+    .group-rider-map-marker {
+      position: relative;
+      width: 0;
+      height: 0;
+      border: 0;
+      padding: 0;
+      background: transparent;
+      color: var(--text);
+      font-family: var(--sans);
+      cursor: pointer;
+      pointer-events: auto;
+      z-index: 20;
+    }
+    .group-rider-map-marker .group-rider-marker-dot {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 22px;
+      height: 22px;
+      transform: translate(-50%, -50%);
+      border: 2px solid #fff;
+      border-radius: 50%;
+      box-shadow: 0 2px 8px rgba(16, 24, 40, 0.35), 0 0 0 4px rgba(255,255,255,.35);
+    }
+    .group-rider-map-marker .group-rider-marker-copy {
+      position: absolute;
+      left: 12px;
+      top: 15px;
+      display: grid;
+      gap: 1px;
+      min-width: max-content;
+      padding: 3px 6px;
+      border: 1px solid rgba(255,255,255,.9);
+      border-radius: 6px;
+      background: rgba(255,255,255,.94);
+      box-shadow: 0 2px 8px rgba(16, 24, 40, 0.2);
+      text-align: left;
+      pointer-events: none;
+    }
+    .group-rider-map-marker .group-rider-marker-name {
+      font-size: 12px;
+      line-height: 1.1;
+      font-weight: 750;
+      white-space: nowrap;
+    }
+    .group-rider-map-marker .group-rider-marker-status {
+      color: var(--muted);
+      font-size: 10px;
+      line-height: 1.1;
+      white-space: nowrap;
+    }
 
     .maplibregl-ctrl-bottom-right {
       right: 12px !important;
@@ -5035,6 +5089,7 @@
     let importedTrackDraft = null;
     const importedTrackMarkers = [];
     const groupRiders = new Map();
+    const groupRiderMarkers = new Map();
     const groupChannelHandles = new Map();
     let groupAlerts = [];
     let currentAuthUser = null;
@@ -5502,7 +5557,78 @@
 
     function refreshGroupRiderLayer() {
       if (map.getSource("groupRiders")) map.getSource("groupRiders").setData(groupRiderFeatureCollection());
+      refreshGroupRiderMarkers();
       ensureGroupRidersOnTop();
+    }
+
+    function groupRiderStatusColor(status) {
+      return ({ breakdown: "#dc6803", injured: "#c1122f", stuck: "#7c3aed" })[String(status || "").toLowerCase()] || "#0354a6";
+    }
+
+    function updateGroupRiderMarkerElement(element, feature) {
+      const properties = feature.properties || {};
+      element.__groupRiderFeature = feature;
+      const status = String(properties.status || "available").toLowerCase();
+      const color = groupRiderStatusColor(status);
+      const name = String(properties.displayName || "Rider");
+      const statusLabel = String(properties.statusLabel || status || "Available");
+      const dot = element.querySelector(".group-rider-marker-dot");
+      const nameEl = element.querySelector(".group-rider-marker-name");
+      const statusEl = element.querySelector(".group-rider-marker-status");
+      if (dot) dot.style.background = color;
+      if (nameEl) nameEl.textContent = name;
+      if (statusEl) statusEl.textContent = statusLabel;
+      element.setAttribute("aria-label", name + ", " + statusLabel + ". Tap for rider details.");
+      element.title = name + " · " + statusLabel;
+    }
+
+    function createGroupRiderMarker(feature) {
+      const element = document.createElement("button");
+      element.type = "button";
+      element.className = "group-rider-map-marker";
+      element.innerHTML = '<span class="group-rider-marker-dot" aria-hidden="true"></span><span class="group-rider-marker-copy"><span class="group-rider-marker-name"></span><span class="group-rider-marker-status"></span></span>';
+      updateGroupRiderMarkerElement(element, feature);
+      element.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const target = window.DirtGroupSharing?.routeTargetFromFeature(element.__groupRiderFeature);
+        if (!target || !map) return;
+        const coords = element.__groupRiderFeature.geometry.coordinates;
+        const point = map.project(coords);
+        const rect = map.getContainer().getBoundingClientRect();
+        showGroupRiderPopup(target, { x: point.x + rect.left, y: point.y + rect.top });
+      });
+      return element;
+    }
+
+    function refreshGroupRiderMarkers() {
+      if (!map || typeof maplibregl === "undefined" || typeof maplibregl.Marker !== "function") return;
+      const features = groupRiderFeatureCollection().features;
+      const activeIds = new Set();
+      for (const feature of features) {
+        const userId = feature.properties?.userId;
+        if (!userId) continue;
+        activeIds.add(userId);
+        const coords = feature.geometry.coordinates;
+        let record = groupRiderMarkers.get(userId);
+        if (!record) {
+          const element = createGroupRiderMarker(feature);
+          const marker = new maplibregl.Marker({ element, anchor: "center" })
+            .setLngLat(coords)
+            .addTo(map);
+          record = { marker, element, feature };
+          groupRiderMarkers.set(userId, record);
+        } else {
+          record.feature = feature;
+          updateGroupRiderMarkerElement(record.element, feature);
+          record.marker.setLngLat(coords);
+        }
+      }
+      for (const [userId, record] of groupRiderMarkers) {
+        if (activeIds.has(userId)) continue;
+        record.marker.remove();
+        groupRiderMarkers.delete(userId);
+      }
     }
 
     function fitSelectedGroupRidersOnce() {
@@ -6498,6 +6624,18 @@
         },
         paint: { "text-color": "#172433", "text-halo-color": "#ffffff", "text-halo-width": 1.5 }
       });
+      // Keep the GeoJSON source available for diagnostics and fallback data,
+      // but use explicit DOM markers for the visible/clickable rider affordance.
+      // Canvas symbols are not a dependable touch target on the live map.
+      for (const layerId of [
+        "group-rider-halo",
+        "group-rider-core",
+        "group-rider-status-icons",
+        "group-rider-heading",
+        "group-rider-labels"
+      ]) {
+        map.setLayoutProperty(layerId, "visibility", "none");
+      }
       map.addSource("routeDraft", {
         type: "geojson",
         data: routeFeatureCollection()
@@ -9830,6 +9968,29 @@
 
     function hidePopup() { popupEl.classList.remove("visible"); }
 
+    function showGroupRiderPopup(target, point) {
+      const GS = window.DirtGroupSharing;
+      if (!target || !GS) return;
+      groupRouteTarget = target;
+      const model = GS.buildGroupRiderPopupModel(target);
+      const lastSeen = target.lastSeenAt ? new Date(target.lastSeenAt).toLocaleTimeString() : "just now";
+      popupBody.innerHTML =
+        '<div class="k">Rider</div><div class="v">' + escapeHtml(model.displayName) + '</div>' +
+        '<div class="k">Group</div><div class="v">' + escapeHtml(model.groupName) + '</div>' +
+        '<div class="k">Status</div><div class="v"><span class="status-pill ' + escapeHtml(model.status) + '">' + escapeHtml(model.statusText) + '</span></div>' +
+        '<div class="k">Last seen</div><div class="v">' + escapeHtml(lastSeen) + '</div>' +
+        '<button class="saved-action primary" data-route-to-rider="1" type="button">' + escapeHtml(model.ctaLabel) + '</button>';
+      const pad = 12;
+      const w = Math.min(300, window.innerWidth - 24);
+      let left = Number(point?.x) - w / 2;
+      left = Math.max(pad, Math.min(left, window.innerWidth - w - pad));
+      let top = Number(point?.y) - 180;
+      if (top < pad + 70) top = Number(point?.y) + 18;
+      popupEl.style.left = left + "px";
+      popupEl.style.top = top + "px";
+      popupEl.classList.add("visible");
+    }
+
     function showPopup(feature, point) {
       const p = feature.properties || {};
       const surfaceKey = p.surfaceClass || p.trackClass || "gravel";
@@ -10594,6 +10755,8 @@
     }
 
     function handleGroupRiderClick(event) {
+      // Primary rider interaction is handled by the explicit DOM marker. Keep
+      // the rendered-feature path as a compatibility fallback for old styles.
       if (!map.getLayer("group-rider-core")) return false;
       const hitRadius = 24;
       const box = [
@@ -10614,18 +10777,8 @@
       const GS = window.DirtGroupSharing;
       const target = GS ? GS.routeTargetFromFeature(feature) : null;
       if (!target) return false;
-      groupRouteTarget = target;
-      const model = GS.buildGroupRiderPopupModel(target);
-      const lastSeen = target.lastSeenAt ? new Date(target.lastSeenAt).toLocaleTimeString() : "just now";
-      popupBody.innerHTML =
-        '<div class="k">Rider</div><div class="v">' + escapeHtml(model.displayName) + '</div>' +
-        '<div class="k">Group</div><div class="v">' + escapeHtml(model.groupName) + '</div>' +
-        '<div class="k">Status</div><div class="v"><span class="status-pill ' + escapeHtml(model.status) + '">' + escapeHtml(model.statusText) + '</span></div>' +
-        '<div class="k">Last seen</div><div class="v">' + escapeHtml(lastSeen) + '</div>' +
-        '<button class="saved-action primary" data-route-to-rider="1" type="button">' + escapeHtml(model.ctaLabel) + '</button>';
-      popupEl.style.left = Math.max(12, Math.min(event.point.x - 130, window.innerWidth - 272)) + "px";
-      popupEl.style.top = Math.max(80, event.point.y - 150) + "px";
-      popupEl.classList.add("visible");
+      const rect = map.getContainer().getBoundingClientRect();
+      showGroupRiderPopup(target, { x: event.point.x + rect.left, y: event.point.y + rect.top });
       return true;
     }
 
@@ -10650,6 +10803,7 @@
     map.on("load", async () => {
       tuneShortbreadContrast();
       ensureLayers();
+      refreshGroupRiderLayer();
       ensurePoiLayers();
       ensureRiderOnTop();
 
