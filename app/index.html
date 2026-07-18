@@ -5982,8 +5982,9 @@
         <div class="route-compact-summary" id="routeCompactSummary">No route<strong>Tap map to plan</strong></div>
       </div>
       <div class="route-bar-plan-panel" id="routeBarPlanPanel" hidden>
-        <div class="route-bar-stage-list" id="routeBarStageList" role="list" aria-label="Route stages"></div>
-        <button class="route-bar-add-stage" id="routeBarAddStage" type="button">+ Tap map to add a stage</button>
+        <div class="route-bar-stage-list" id="routeBarStageList" role="list" aria-label="Route stages">
+          <button class="route-bar-add-stage" id="routeBarAddStage" type="button">+ Tap map to add a stage</button>
+        </div>
       </div>
       <div class="route-compact-actions">
         <button class="route-compact-save" id="routeCompactSave" type="button" title="Save this route">Save route</button>
@@ -9549,9 +9550,11 @@
           "</div>"
         );
       }).join("");
-      [stageListEl, routeBarStageList].filter(Boolean).forEach((target) => {
-        target.innerHTML = markup;
-      });
+      if (stageListEl) stageListEl.innerHTML = markup;
+      if (routeBarStageList) {
+        routeBarStageList.querySelectorAll(".stage-row").forEach((row) => row.remove());
+        routeBarStageList.insertAdjacentHTML("afterbegin", markup);
+      }
       if (stageEditToggle) {
         const active = getActiveStage();
         const canEdit = active && RS.stageHasBothPoints(active) && !navigating;
