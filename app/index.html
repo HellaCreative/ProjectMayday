@@ -5770,6 +5770,88 @@
     body.planner-tab-saved #routeBarPlanPanel {
       display: none !important;
     }
+
+    /* Claude-style compact stage cards: dark, legible, and glanceable on the
+       map-first Plan route bar. The full planner keeps its existing editor. */
+    body.planner-open.planner-tab-plan .route-bar-stage-list .stage-row,
+    body.planner-open.planner-tab-plan .route-bar-stage-list .stage-row.is-active,
+    body.planner-open.planner-tab-plan .route-bar-stage-list .stage-row.is-editing {
+      background: #4a4540 !important;
+      color: #fafaf9 !important;
+      border-color: rgba(250, 250, 249, 0.14) !important;
+      box-shadow: none !important;
+    }
+    body.planner-open.planner-tab-plan .route-bar-stage-list .stage-row.is-active {
+      border-color: #0b70c9 !important;
+      box-shadow: 0 0 0 1px #0b70c9 inset !important;
+    }
+    body.planner-open.planner-tab-plan .route-bar-stage-list .stage-title {
+      display: flex !important;
+      align-items: center;
+      gap: 6px;
+      color: #fafaf9 !important;
+      font-size: 11px !important;
+      line-height: 1.15 !important;
+    }
+    body.planner-open.planner-tab-plan .route-bar-stage-list .stage-number-badge {
+      display: inline-grid;
+      place-items: center;
+      flex: 0 0 21px;
+      width: 21px;
+      height: 21px;
+      border-radius: 7px;
+      background: #e8790c;
+      color: #ffffff;
+      font: 800 11px/1 var(--p2-mono);
+    }
+    body.planner-open.planner-tab-plan .route-bar-stage-list .stage-label-text {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    body.planner-open.planner-tab-plan .route-bar-stage-list .stage-profile-label {
+      margin-top: 4px !important;
+      color: rgba(250, 250, 249, 0.72) !important;
+      font-size: 9px !important;
+    }
+    body.planner-open.planner-tab-plan .route-bar-stage-list .route-metric-row {
+      gap: 4px !important;
+      color: rgba(250, 250, 249, 0.82) !important;
+      font-size: 9px !important;
+    }
+    body.planner-open.planner-tab-plan .route-bar-stage-list .route-metric-row.is-empty {
+      color: #f2c99c !important;
+      font-size: 9px !important;
+    }
+    body.planner-open.planner-tab-plan .route-bar-stage-list .stage-mix-bar {
+      display: flex;
+      width: 100%;
+      height: 4px;
+      margin: auto 0 1px;
+      overflow: hidden;
+      border-radius: 99px;
+      background: rgba(250, 250, 249, 0.18);
+    }
+    body.planner-open.planner-tab-plan .route-bar-stage-list .stage-mix-bar span {
+      display: block;
+      height: 100%;
+    }
+    body.planner-open.planner-tab-plan .route-bar-stage-list .stage-mix-dirt { background: #e8790c; }
+    body.planner-open.planner-tab-plan .route-bar-stage-list .stage-mix-paved { background: #8b8a86; }
+    body.planner-open.planner-tab-plan .route-bar-stage-list .stage-mix-bar.is-empty span {
+      width: 34% !important;
+      background: #e8790c;
+      opacity: 0.65;
+    }
+    body.planner-open.planner-tab-plan .route-bar-stage-list .stage-row > .stage-row-head {
+      flex: 0 0 auto;
+    }
+    .saved-row-more .saved-action.primary {
+      background: var(--fig-blue, #0b70c9) !important;
+      color: #ffffff !important;
+      border-color: var(--fig-blue, #0b70c9) !important;
+    }
   </style>
 </head>
 <body>
@@ -9387,6 +9469,22 @@
       return routeMetricRowHtml({ emptyText: "Ready · not routed" });
     }
 
+    function stageMixBarHtml(stage) {
+      if (RS.computeStageStatus(stage) !== RS.STAGE_STATUS.COMPLETE || !stage.route) {
+        return '<div class="stage-mix-bar is-empty" aria-hidden="true"><span></span></div>';
+      }
+      const breakdown = RS.routeBreakdown(stage.route);
+      const distance = Number(breakdown.distanceMeters || stage.route.distanceMeters || 0);
+      if (!distance) return '<div class="stage-mix-bar is-empty" aria-hidden="true"><span></span></div>';
+      const dirt = Math.max(0, Math.min(100, Math.round(((breakdown.dirtMeters || 0) / distance) * 100)));
+      return (
+        '<div class="stage-mix-bar" aria-label="Stage surface mix" title="' + dirt + '% dirt · ' + (100 - dirt) + '% paved">' +
+          '<span class="stage-mix-dirt" style="width:' + dirt + '%"></span>' +
+          '<span class="stage-mix-paved" style="width:' + (100 - dirt) + '%"></span>' +
+        '</div>'
+      );
+    }
+
     function stageProfilePillsHtml(stage, index) {
       const current = stage.profile || "balanced";
       const profiles = ["direct", "balanced", "dirt", "cleanest"];
@@ -9428,17 +9526,17 @@
               '<label class="switch"><input type="checkbox" data-stage-access aria-label="Allow unknown access"' +
                 (allowUnknownAccess ? " checked" : "") + "><span></span></label>" +
             "</div>" +
-            stageMetricsHtml(stage);
+            stageMixBarHtml(stage) + stageMetricsHtml(stage);
         } else {
-          body = stageMetricsHtml(stage);
+          body = stageMixBarHtml(stage) + stageMetricsHtml(stage);
         }
         return (
           '<div class="stage-row' + (active ? " is-active" : "") + (editing ? " is-editing" : "") +
             '" role="listitem" data-stage-id="' + stage.id + '">' +
             '<div class="stage-row-head">' +
               '<div class="stage-row-title">' +
-                '<span class="stage-title">' + stageLabel + "</span>" +
-                (expanded ? "" : '<span class="stage-profile-label">' + profileLabel + "</span>") +
+                '<span class="stage-title"><span class="stage-number-badge">' + (i + 1) + '</span><span class="stage-label-text">' + stageLabel + "</span></span>" +
+                '<span class="stage-profile-label">' + profileLabel + "</span>" +
               "</div>" +
               '<div class="stage-row-actions">' +
                 '<button class="stage-text-btn' + (editing ? " is-editing" : "") + '" type="button" data-stage-edit="' + stage.id + '"' +
@@ -9712,10 +9810,62 @@
       viewedImportedTrackId = null;
       editingImportedTrackId = null;
       importedTrackDraft = null;
+      if (!navigating && activeRoute && activeRoute.kind === "imported-track") {
+        activeRoute = null;
+      }
       if (trackEditor) trackEditor.classList.remove("open");
       if (map.getSource("importedTrack")) {
         map.getSource("importedTrack").setData({ type: "FeatureCollection", features: [] });
       }
+      syncRouteExportUi();
+    }
+
+    function importedTrackToActiveRoute(record) {
+      const points = importedTrackPoints(record);
+      if (points.length < 2) return null;
+      const coordinates = points.map((point) => [Number(point.lon), Number(point.lat)])
+        .filter((point) => Number.isFinite(point[0]) && Number.isFinite(point[1]));
+      if (coordinates.length < 2) return null;
+      const distanceKm = (Number(record.distanceMeters) || DirtGpx.summarize({ name: record.name, points }).distanceMeters || 0) / 1000;
+      return {
+        kind: "imported-track",
+        routeId: record.id,
+        name: record.name || "Imported GPX track",
+        coordinates,
+        segments: [{
+          trackClass: "imported",
+          accessClass: "unknown",
+          edgeId: null,
+          coords: coordinates,
+          distanceKm
+        }],
+        distanceKm,
+        dirtKm: 0,
+        byClass: { imported: distanceKm },
+        byAccess: {},
+        unknownAccessKm: 0,
+        unknownAccessPercent: 0,
+        accessPolicy: currentAccessPolicy(),
+        warnings: [],
+        estimatedMovingSeconds: null,
+        importedTrack: true
+      };
+    }
+
+    function startImportedTrackNavigation(record) {
+      const route = importedTrackToActiveRoute(record);
+      if (!route) {
+        setStatus("This imported track needs at least two valid points", "error", "route");
+        return;
+      }
+      activeRoute = route;
+      showImportedTrack(record, false);
+      syncRouteExportUi();
+      setStatus("Starting navigation on “" + (record.name || "imported track") + "”", "ok", "route");
+      startNavigation().catch((err) => {
+        console.error(err);
+        setStatus("Could not start navigation · " + (err.message || "location is required"), "error", "route");
+      });
     }
 
     function showImportedTrack(record, editing) {
@@ -9866,6 +10016,7 @@
               "</div>" +
               routeMetricRowHtml({ distanceKm: km > 0 ? km : null, emptyText: "Imported GPX track" }) +
               '<div class="saved-row-more">' +
+                '<button class="saved-action primary" type="button" data-saved-nav-track="' + r.id + '">Start navigation</button>' +
                 '<button class="saved-action" type="button" data-saved-edit-track="' + r.id + '">Edit</button>' +
                 '<button class="saved-action" type="button" data-saved-export-track="' + r.id + '">Export</button>' +
                 '<button class="saved-action danger" type="button" data-saved-delete="' + r.id + '">Delete</button>' +
@@ -11857,6 +12008,7 @@
 
       if (plannerTab === "plan") {
         viewedSavedRouteId = null;
+        clearImportedTrackView();
         syncPlanActiveRoute();
         renderStageList();
       } else if (plannerTab === "saved") {
@@ -13442,6 +13594,12 @@
       savedListEl.addEventListener("click", (event) => {
         const view = event.target.closest("[data-saved-view]");
         if (view) { viewSavedRoute(view.dataset.savedView); return; }
+        const navTrack = event.target.closest("[data-saved-nav-track]");
+        if (navTrack) {
+          const record = savedRoutes.find((row) => row.id === navTrack.dataset.savedNavTrack);
+          if (record) startImportedTrackNavigation(record);
+          return;
+        }
         const apply = event.target.closest("[data-saved-apply]");
         if (apply) { applySavedRoute(apply.dataset.savedApply); return; }
         const editTrack = event.target.closest("[data-saved-edit-track]");
