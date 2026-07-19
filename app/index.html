@@ -1543,6 +1543,57 @@
     .group-participant-dot.live { background: #20a464; box-shadow: 0 0 0 2px rgba(32, 164, 100, 0.14); }
     .group-participant-state { margin-left: auto; color: var(--muted); font: 0.54rem var(--mono); }
     .group-participant-state.distress { color: #c1122f; font-weight: 700; }
+    .sharing-popover {
+      position: fixed;
+      top: 50%;
+      right: calc(var(--fig-ctrl, 56px) + 28px);
+      z-index: 46;
+      width: min(280px, calc(100vw - 96px));
+      padding: 14px;
+      border: 1px solid rgba(28, 25, 23, 0.14);
+      border-radius: 14px;
+      background: var(--fig-sheet, #f8f6f1);
+      color: var(--fig-ink, #1c1917);
+      box-shadow: 0 14px 34px rgba(12, 10, 9, 0.22);
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transform: translateX(16px);
+      transition: opacity 160ms ease, transform 160ms ease, visibility 0s linear 160ms;
+    }
+    .sharing-popover.open {
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+      transform: translateX(0);
+      transition-delay: 0s;
+    }
+    .sharing-popover-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+    .sharing-popover h2 { margin: 0; font: 750 0.9rem/1.15 var(--sans); }
+    .sharing-popover-head p { margin: 4px 0 0; color: var(--muted); font: 0.62rem/1.35 var(--sans); }
+    .sharing-popover-close {
+      width: 28px;
+      height: 28px;
+      flex: 0 0 28px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: transparent;
+      color: var(--text);
+      font-size: 1.1rem;
+      line-height: 1;
+      cursor: pointer;
+    }
+    .sharing-popover-field { display: grid; gap: 6px; margin-top: 12px; color: var(--text); font: 700 0.64rem var(--sans); }
+    .sharing-popover .group-status-select { min-height: 38px; font-size: 0.68rem; }
+    .sharing-popover-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+    .sharing-action { min-height: 40px; padding: 0 9px; border: 1px solid transparent; border-radius: 9px; color: #fff; font: 700 0.64rem var(--sans); cursor: pointer; }
+    .sharing-action-start { background: var(--fig-orange, #e8790c); }
+    .sharing-action-stop { background: var(--fig-chrome, #1c1917); }
+    .sharing-action:disabled { opacity: 0.42; cursor: not-allowed; }
+    .sharing-popover-status { min-height: 16px; margin: 10px 0 0; color: var(--muted); font: 0.58rem/1.35 var(--mono); }
+    @media (max-width: 520px) {
+      .sharing-popover { right: 78px; width: min(264px, calc(100vw - 90px)); }
+    }
     .group-alert-stack {
       position: absolute;
       top: calc(76px + env(safe-area-inset-top, 0px));
@@ -6498,6 +6549,13 @@
         <span class="switch"><input type="checkbox" data-source-toggle="nsGov" checked aria-label="Toggle Nova Scotia government source"><span></span></span>
       </label>
     </div>
+    <div class="legend-group">
+      <span class="legend-title">Route Data</span>
+      <label class="legend-row" title="Show all route lines in the current map area">
+        <span class="legend-label"><i style="background:var(--track)"></i>Show route lines</span>
+        <span class="switch"><input type="checkbox" data-network-toggle="viewport" aria-label="Show all route lines in the current map area"><span></span></span>
+      </label>
+    </div>
     </div>
   </div>
 
@@ -6547,11 +6605,35 @@
         <circle cx="12" cy="12" r="1.4" fill="currentColor"/>
       </svg>
     </button>
-    <button class="btn report-vis" id="reportVisBtn" type="button" title="Show or hide rider reports" aria-label="Toggle rider report visibility" aria-pressed="false">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>
+    <button class="btn report-vis" id="reportVisBtn" type="button" title="Group sharing" aria-label="Open group sharing controls" aria-expanded="false">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="3.2"/><path d="M5.5 20c.8-3.5 3-5.2 6.5-5.2s5.7 1.7 6.5 5.2"/><path d="M19 5.5v4"/><path d="M17 7.5h4"/></svg>
     </button>
     <button class="btn primary" id="recenterBtn" title="Follow my location" aria-label="Follow my location">◎</button>
   </div>
+
+  <section class="sharing-popover" id="sharingPopover" aria-hidden="true" aria-labelledby="sharingPopoverTitle" hidden>
+    <div class="sharing-popover-head">
+      <div>
+        <h2 id="sharingPopoverTitle">Group sharing</h2>
+        <p id="sharingPopoverContext">Choose a group in Group first.</p>
+      </div>
+      <button class="sharing-popover-close" id="sharingPopoverClose" type="button" aria-label="Close group sharing">×</button>
+    </div>
+    <label class="sharing-popover-field" for="quickGroupStatusSelect">
+      Status
+      <select id="quickGroupStatusSelect" class="group-status-select" aria-label="Group sharing status">
+        <option value="available">Available</option>
+        <option value="breakdown">Breakdown</option>
+        <option value="injured">Injured</option>
+        <option value="stuck">Stuck</option>
+      </select>
+    </label>
+    <div class="sharing-popover-actions">
+      <button class="sharing-action sharing-action-start" id="quickStartSharing" type="button">Start sharing</button>
+      <button class="sharing-action sharing-action-stop" id="quickStopSharing" type="button">Stop sharing</button>
+    </div>
+    <p class="sharing-popover-status" id="sharingPopoverStatus" aria-live="polite"></p>
+  </section>
 
   <div class="group-alert-stack" id="groupAlertStack" aria-live="assertive"></div>
 
@@ -7024,12 +7106,14 @@
     // Detail/nav shows a moving rider corridor. Overview may show a bounded
     // route-context corridor near the map focus — never the full A–B envelope.
     const CONTEXT_DETAIL_MIN_ZOOM = 12.5;
-    const CONTEXT_CORRIDOR_KM_DETAIL = 1.5;
+    const CONTEXT_CORRIDOR_KM_DETAIL = 3.0;
     const CONTEXT_CORRIDOR_KM_OVERVIEW = 2.0;
     const CONTEXT_MAX_FEATURES = 1600;
     const CONTEXT_MAX_CHUNKS = 6;
+    const CONTEXT_FULL_MAX_FEATURES = 5000;
+    const CONTEXT_FULL_MAX_CHUNKS = 8;
     const CONTEXT_CHUNK_PAD_DEG = 0.025;
-    const CONTEXT_ROUTE_ARM_KM_DETAIL = 6;
+    const CONTEXT_ROUTE_ARM_KM_DETAIL = 10;
     const CONTEXT_ROUTE_ARM_KM_OVERVIEW = 20;
     const CONTEXT_ROUTE_SAMPLE_STEP_KM = 3;
     const CONTEXT_MAX_ANCHORS = 8;
@@ -7119,6 +7203,15 @@
     let unknownAccessAcknowledged = false;
     let accessWarnResolver = null;
     const sourceEnabled = { nsGov: true };
+    let showAllNetworkData = false;
+
+    function contextMaxFeatures() {
+      return showAllNetworkData ? CONTEXT_FULL_MAX_FEATURES : CONTEXT_MAX_FEATURES;
+    }
+
+    function contextMaxChunks() {
+      return showAllNetworkData ? CONTEXT_FULL_MAX_CHUNKS : CONTEXT_MAX_CHUNKS;
+    }
 
     function currentAccessPolicy() {
       return {
@@ -7598,7 +7691,7 @@
 
     function enforceChunkMemoryCap(focus, keepIds) {
       const keep = keepIds || new Set();
-      if (chunkFeaturesById.size <= CONTEXT_MAX_CHUNKS && !keep.size) return;
+      if (chunkFeaturesById.size <= contextMaxChunks() && !keep.size) return;
       const ranked = [];
       for (const id of loadedChunkIds) {
         if (keep.has(id)) continue;
@@ -7607,21 +7700,21 @@
         ranked.push({ id, dist: distanceKmCoords(focus, center) });
       }
       ranked.sort((a, b) => b.dist - a.dist);
-      while (chunkFeaturesById.size > CONTEXT_MAX_CHUNKS && ranked.length) {
+      while (chunkFeaturesById.size > contextMaxChunks() && ranked.length) {
         const drop = ranked.shift();
         loadedChunkIds.delete(drop.id);
         chunkFeaturesById.delete(drop.id);
         chunkPromises.delete(drop.id);
       }
       // Drop any leftovers not in keep when over cap.
-      if (chunkFeaturesById.size > CONTEXT_MAX_CHUNKS) {
+      if (chunkFeaturesById.size > contextMaxChunks()) {
         const extras = [];
         for (const id of loadedChunkIds) {
           if (keep.has(id)) continue;
           extras.push(id);
         }
         for (const id of extras) {
-          if (chunkFeaturesById.size <= CONTEXT_MAX_CHUNKS) break;
+          if (chunkFeaturesById.size <= contextMaxChunks()) break;
           loadedChunkIds.delete(id);
           chunkFeaturesById.delete(id);
           chunkPromises.delete(id);
@@ -7635,7 +7728,7 @@
         .filter((chunk) => bboxIntersects(chunk.bbox, bbox))
         .map((chunk) => ({ chunk, dist: distanceKmCoords(focus, chunkCenter(chunk)) }))
         .sort((a, b) => a.dist - b.dist)
-        .slice(0, CONTEXT_MAX_CHUNKS);
+        .slice(0, contextMaxChunks());
       const keepIds = new Set(candidates.map((c) => c.chunk.id));
       // Evict anything outside this window before loading more.
       for (const id of Array.from(loadedChunkIds)) {
@@ -7925,7 +8018,9 @@
       const originAlong = alongAt[near.index];
       const minAlong = originAlong - armKm;
       const maxAlong = originAlong + armKm;
-      const anchors = [];
+      // Keep the nearest route coordinate even when the 3 km sampling step
+      // would otherwise skip the exact point under the rider or map focus.
+      const anchors = [coords[near.index]];
       let lastKeep = -Infinity;
       for (let i = 0; i < coords.length; i += 1) {
         if (alongAt[i] < minAlong || alongAt[i] > maxAlong) continue;
@@ -7956,6 +8051,16 @@
         maxLat = Math.max(maxLat, c[1]);
       }
       return [minLng - padDeg, minLat - padDeg, maxLng + padDeg, maxLat + padDeg];
+    }
+
+    function currentMapBbox(padDeg = CONTEXT_CHUNK_PAD_DEG) {
+      const bounds = map.getBounds();
+      return [
+        bounds.getWest() - padDeg,
+        bounds.getSouth() - padDeg,
+        bounds.getEast() + padDeg,
+        bounds.getNorth() + padDeg
+      ];
     }
 
     function featureMidCoord(feature) {
@@ -7998,7 +8103,7 @@
       }
       scored.sort((a, b) => (a.dist - b.dist) || (b.pri - a.pri));
       const out = [];
-      for (let i = 0; i < scored.length && out.length < CONTEXT_MAX_FEATURES; i += 1) {
+      for (let i = 0; i < scored.length && out.length < contextMaxFeatures(); i += 1) {
         out.push(scored[i].feature);
       }
       return out;
@@ -8030,9 +8135,10 @@
       const routeCoords = activeRouteCoordinates();
       const hasRoute = !!activeRoute;
 
-      // Overview without a route: basemap only. Overview with a route: bounded
-      // focus arm corridor — never the full Halifax–Yarmouth envelope.
-      if (!detail && !hasRoute) {
+      // Overview without a route is normally base-map only. The explicit
+      // Route Data switch opts into a bounded current-viewport network view;
+      // it never loads the whole province into the browser.
+      if (!showAllNetworkData && !detail && !hasRoute) {
         if (nsGovDisplayFeatures.length) publishNsGovDisplay([]);
         else updateDataMeta();
         if (chunkFeaturesById.size || loadedChunkIds.size) {
@@ -8054,18 +8160,20 @@
       try {
         const focus = contextFocusPoint();
         const armKm = contextRouteArmKm();
-        const corridorKm = contextCorridorKm();
+        const corridorKm = showAllNetworkData ? Infinity : contextCorridorKm();
         let anchors = [];
-        if (hasRoute && routeCoords.length >= 2) {
+        if (!showAllNetworkData && hasRoute && routeCoords.length >= 2) {
           anchors = sampleRouteAnchorsAroundFocus(focus, armKm);
-        } else if (hasRoute) {
+        } else if (!showAllNetworkData && hasRoute) {
           // Degenerate geometry: still bound context to A/B / focus, not province.
           const start = activeStart();
           if (start) anchors.push([start.lng, start.lat]);
           if (destination) anchors.push([destination.lng, destination.lat]);
         }
         const points = [focus].concat(anchors);
-        const bbox = bboxFromPoints(points, CONTEXT_CHUNK_PAD_DEG);
+        const bbox = showAllNetworkData
+          ? currentMapBbox()
+          : bboxFromPoints(points, CONTEXT_CHUNK_PAD_DEG);
         const loadResult = await loadChunksNearFocus(bbox, focus, label);
         const selected = selectCorridorFeatures(focus, anchors, corridorKm);
         publishNsGovDisplay(selected);
@@ -8480,8 +8588,8 @@
       }
       dataMeta.textContent =
         nsGovDisplayFeatures.length.toLocaleString() + " painted · ≤" +
-        CONTEXT_MAX_FEATURES.toLocaleString() + " · " +
-        chunkFeaturesById.size + "/" + CONTEXT_MAX_CHUNKS + " chunks · " +
+        contextMaxFeatures().toLocaleString() + " · " +
+        chunkFeaturesById.size + "/" + contextMaxChunks() + " chunks · " +
         (detail ? "detail" : "overview") + " corridor · NSTDB";
     }
 
@@ -13215,6 +13323,7 @@
       }
       syncSelectedGroupStats();
       syncSelectedGroupDetails();
+      syncQuickSharingUi();
     }
 
     async function setGroupRiderStatus(status) {
@@ -13254,6 +13363,7 @@
       accountStatus(status === "available" ? "Rider status cleared." : "Group alerted: " + status + ".");
       syncSelectedGroupDetails();
       renderGroupParticipants();
+      syncQuickSharingUi();
     }
 
     function handleGroupRiderClick(event) {
@@ -13363,6 +13473,7 @@
     });
     map.on("zoomend", () => {
       userZooming = false;
+      loadViewportChunks();
     });
     map.on("rotate", updateCompass);
     map.on("pitch", updateCompass);
@@ -14179,6 +14290,13 @@
         applyLayerVisibility();
       });
     });
+    document.querySelectorAll("[data-network-toggle]").forEach((input) => {
+      input.checked = showAllNetworkData;
+      input.addEventListener("change", () => {
+        showAllNetworkData = input.checked;
+        refreshContextNetwork({ label: "route data", announce: false });
+      });
+    });
     const unknownAccessToggle = document.getElementById("unknownAccessToggle");
     const unknownAccessTogglePlan = document.getElementById("unknownAccessTogglePlan");
     const unknownAccessHint = document.getElementById("unknownAccessHint");
@@ -14490,6 +14608,72 @@
     const recoveryConfirmCancel = document.getElementById("recoveryConfirmCancel");
     const recoveryConfirmApply = document.getElementById("recoveryConfirmApply");
     const reportVisBtn = document.getElementById("reportVisBtn");
+    const sharingPopover = document.getElementById("sharingPopover");
+    const sharingPopoverClose = document.getElementById("sharingPopoverClose");
+    const sharingPopoverContext = document.getElementById("sharingPopoverContext");
+    const sharingPopoverStatus = document.getElementById("sharingPopoverStatus");
+    const quickGroupStatusSelect = document.getElementById("quickGroupStatusSelect");
+    const quickStartSharing = document.getElementById("quickStartSharing");
+    const quickStopSharing = document.getElementById("quickStopSharing");
+
+    function syncQuickSharingUi(message) {
+      if (!sharingPopover) return;
+      const group = selectedRidingGroup;
+      const ready = !!currentAuthUser && !!group && !group.deleted_at;
+      if (sharingPopoverContext) {
+        sharingPopoverContext.textContent = !currentAuthUser
+          ? "Sign in to share your location."
+          : !group
+            ? "Open Group and choose a riding group first."
+            : "Sharing to “" + (group.name || "your group") + "”.";
+      }
+      if (quickGroupStatusSelect) {
+        quickGroupStatusSelect.value = groupStatus;
+        quickGroupStatusSelect.disabled = !ready;
+      }
+      if (quickStartSharing) quickStartSharing.disabled = !ready || groupSharing;
+      if (quickStopSharing) quickStopSharing.disabled = !ready || !groupSharing;
+      if (sharingPopoverStatus) {
+        sharingPopoverStatus.textContent = message || (ready
+          ? groupSharing ? "Sharing is live." : "Sharing is off."
+          : "");
+      }
+    }
+
+    function setQuickSharingOpen(open) {
+      if (!sharingPopover || !reportVisBtn) return;
+      if (open) {
+        sharingPopover.hidden = false;
+        sharingPopover.setAttribute("aria-hidden", "false");
+        reportVisBtn.setAttribute("aria-expanded", "true");
+        const rect = reportVisBtn.getBoundingClientRect();
+        const height = Math.min(290, window.innerHeight - 24);
+        const top = Math.max(12, Math.min(window.innerHeight - height - 12, rect.top + rect.height / 2 - height / 2));
+        sharingPopover.style.top = top + "px";
+        syncQuickSharingUi();
+        requestAnimationFrame(() => sharingPopover.classList.add("open"));
+      } else {
+        sharingPopover.classList.remove("open");
+        sharingPopover.setAttribute("aria-hidden", "true");
+        reportVisBtn.setAttribute("aria-expanded", "false");
+        sharingPopover.hidden = true;
+      }
+    }
+
+    async function runQuickSharing(action) {
+      const ready = !!currentAuthUser && !!selectedRidingGroup && !selectedRidingGroup.deleted_at;
+      if (!ready) {
+        syncQuickSharingUi("Open Group and choose a riding group first.");
+        return;
+      }
+      try {
+        if (action === "start" && !groupSharing) await toggleGroupSharing();
+        if (action === "stop" && groupSharing) await toggleGroupSharing();
+        syncQuickSharingUi();
+      } catch (err) {
+        syncQuickSharingUi(err.message || "Could not update sharing.");
+      }
+    }
 
     function reportNewId() {
       return "rpt-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 7);
@@ -15184,13 +15368,30 @@
     if (reportVisBtn) {
       reportVisBtn.addEventListener("click", (e) => {
         e.stopPropagation();
-        reportsForced = !reportsForced;
-        reportVisBtn.classList.toggle("is-active", reportsForced);
-        reportVisBtn.setAttribute("aria-pressed", reportsForced ? "true" : "false");
-        refreshReportLayer();
-        setStatus(reportsForced ? "Rider reports shown" : "Rider reports follow zoom / route", "ok");
+        const isOpen = sharingPopover?.classList.contains("open");
+        setQuickSharingOpen(!isOpen);
       });
     }
+    sharingPopoverClose?.addEventListener("click", (event) => {
+      event.stopPropagation();
+      setQuickSharingOpen(false);
+    });
+    quickGroupStatusSelect?.addEventListener("change", (event) => {
+      setGroupRiderStatus(event.target.value).then(() => syncQuickSharingUi()).catch((err) => {
+        syncQuickSharingUi(err.message || "Could not update status.");
+      });
+    });
+    quickStartSharing?.addEventListener("click", (event) => {
+      event.stopPropagation();
+      runQuickSharing("start");
+    });
+    quickStopSharing?.addEventListener("click", (event) => {
+      event.stopPropagation();
+      runQuickSharing("stop");
+    });
+    window.addEventListener("resize", () => {
+      if (sharingPopover?.classList.contains("open")) setQuickSharingOpen(true);
+    });
 
     map.on("load", () => {
       initIncidentLayers();
