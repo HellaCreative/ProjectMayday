@@ -74,6 +74,7 @@
       id: newId("stage"),
       name: null,
       profile: "balanced",
+      accessPolicy: normalizeAccessPolicy(overrides && overrides.accessPolicy),
       start: null,
       end: null,
       route: null,
@@ -112,9 +113,17 @@
       if (overrides.profile) trip.profile = overrides.profile;
       if (overrides.createdAt) trip.createdAt = overrides.createdAt;
       if (overrides.updatedAt) trip.updatedAt = overrides.updatedAt;
-      if (Array.isArray(overrides.stages)) trip.stages = overrides.stages.map((s) => createStage(s));
+      if (Array.isArray(overrides.stages)) {
+        trip.stages = overrides.stages.map((s) => {
+          const stage = createStage(s);
+          // Older saved routes only had a trip-level policy. Rehydrate that
+          // policy onto each stage without losing the new per-stage contract.
+          if (!s || s.accessPolicy == null) stage.accessPolicy = normalizeAccessPolicy(trip.accessPolicy);
+          return stage;
+        });
+      }
     }
-    if (!trip.stages.length) trip.stages.push(createStage());
+    if (!trip.stages.length) trip.stages.push(createStage({ accessPolicy: trip.accessPolicy }));
     return trip;
   }
 
@@ -207,7 +216,10 @@
 
   function addStage(trip, overrides) {
     const linkedStart = defaultNextStart(trip);
-    const stage = createStage(Object.assign({ start: linkedStart }, overrides || {}));
+    const stage = createStage(Object.assign(
+      { start: linkedStart, accessPolicy: normalizeAccessPolicy(trip && trip.accessPolicy) },
+      overrides || {}
+    ));
     trip.stages.push(stage);
     trip.updatedAt = nowIso();
     return stage;
@@ -477,6 +489,7 @@
       id: stage.id,
       name: stage.name || null,
       profile: stage.profile || trip.profile || "balanced",
+      accessPolicy: normalizeAccessPolicy(stage.accessPolicy || trip.accessPolicy),
       index,
       start: normalizePoint(stage.start),
       end: normalizePoint(stage.end),
@@ -526,6 +539,7 @@
         id: s.id,
         name: s.name,
         profile: s.profile || record.profile || "balanced",
+        accessPolicy: s.accessPolicy != null ? s.accessPolicy : record.accessPolicy,
         start: s.start,
         end: s.end,
         route: s.route ? Object.assign({ status: "complete" }, s.route) : null

@@ -151,6 +151,15 @@ check("linked continuity: appended stage start defaults to previous end", () => 
   assert.ok(S.samePoint(stage2.start, pt(1, 1)), "new stage A = previous B");
 });
 
+check("stage access policy is independent per stage", () => {
+  const trip = S.createTrip({ accessPolicy: { motorizedUnknown: false } });
+  const stage1 = trip.stages[0];
+  const stage2 = S.addStage(trip);
+  stage1.accessPolicy.motorizedUnknown = true;
+  assert.strictEqual(stage1.accessPolicy.motorizedUnknown, true);
+  assert.strictEqual(stage2.accessPolicy.motorizedUnknown, false);
+});
+
 check("dedupeWarnings collapses by code", () => {
   const deduped = S.dedupeWarnings([
     { code: "unknown_access_enabled", message: "a" },
@@ -214,8 +223,8 @@ check("tokens are independent per stage", () => {
 check("saved route serialize -> deserialize round trip", () => {
   const trip = S.createTrip({ profile: "dirt", name: "Test Loop" });
   trip.stages = [
-    S.createStage({ start: pt(-63.3, 44.7), end: pt(-63.1, 44.8), route: fakeRoute([{ surface: "gravel", distanceMeters: 2000, seconds: 120 }]) }),
-    S.createStage({ start: pt(-63.1, 44.8), end: pt(-63.0, 44.9), route: fakeRoute([{ surface: "track", distanceMeters: 1500, seconds: 90 }]) })
+    S.createStage({ accessPolicy: { motorizedUnknown: true }, start: pt(-63.3, 44.7), end: pt(-63.1, 44.8), route: fakeRoute([{ surface: "gravel", distanceMeters: 2000, seconds: 120 }]) }),
+    S.createStage({ accessPolicy: { motorizedUnknown: false }, start: pt(-63.1, 44.8), end: pt(-63.0, 44.9), route: fakeRoute([{ surface: "track", distanceMeters: 1500, seconds: 90 }]) })
   ];
   trip.accessPolicy = { motorizedPermissive: true, motorizedUnknown: true };
 
@@ -233,8 +242,28 @@ check("saved route serialize -> deserialize round trip", () => {
   assert.strictEqual(rehydrated.stages.length, 2);
   assert.strictEqual(rehydrated.profile, "dirt");
   assert.strictEqual(rehydrated.accessPolicy.motorizedUnknown, true);
+  assert.strictEqual(rehydrated.stages[0].accessPolicy.motorizedUnknown, true);
+  assert.strictEqual(rehydrated.stages[1].accessPolicy.motorizedUnknown, false);
   assert.ok(S.samePoint(rehydrated.stages[0].start, pt(-63.3, 44.7)));
   assert.strictEqual(S.computeStageStatus(rehydrated.stages[0]), S.STAGE_STATUS.COMPLETE);
+});
+
+check("legacy saved trip policy rehydrates onto stages", () => {
+  const record = {
+    schemaVersion: S.SAVED_ROUTE_SCHEMA_VERSION,
+    id: "legacy-route",
+    name: "Legacy",
+    profile: "balanced",
+    accessPolicy: { motorizedPermissive: true, motorizedUnknown: true },
+    stages: [{
+      id: "legacy-stage",
+      start: pt(0, 0),
+      end: pt(1, 0),
+      route: fakeRoute([{ surface: "gravel", distanceMeters: 1000 }])
+    }]
+  };
+  const trip = S.deserializeSavedRoute(record);
+  assert.strictEqual(trip.stages[0].accessPolicy.motorizedUnknown, true);
 });
 
 check("incomplete trip serializes as a draft", () => {

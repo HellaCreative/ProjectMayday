@@ -9331,6 +9331,18 @@
     // ======================================================================
     const RS = window.RouteStages;
 
+    function stageAccessPolicy(stage) {
+      const policy = stage && stage.accessPolicy;
+      return {
+        motorizedPermissive: policy?.motorizedPermissive !== false,
+        motorizedUnknown: !!policy?.motorizedUnknown
+      };
+    }
+
+    function stageAllowsUnknownAccess(stage) {
+      return stageAccessPolicy(stage).motorizedUnknown;
+    }
+
     function stageTrackFeatures(stages) {
       const features = [];
       stages.forEach((stage, si) => {
@@ -9464,7 +9476,7 @@
             '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>' +
           '</button>' +
           '<label class="switch"><input type="checkbox" data-stage-access aria-label="Allow unknown access"' +
-            (allowUnknownAccess ? " checked" : "") + '><span></span></label>' +
+            (stageAllowsUnknownAccess(stage) ? " checked" : "") + ' data-stage-id="' + stage.id + '"><span></span></label>' +
         '</div>' +
         '<div class="route-stage-editor-actions">' +
           '<button class="route-stage-editor-edit" type="button" data-stage-edit-compact="' + stage.id + '"' +
@@ -9575,6 +9587,7 @@
       if (!RS.stageHasBothPoints(stage)) return; // never route a draft
       const token = stageTracker.issue(stageId);
       const stageProfile = stage.profile || routePreference;
+      const stagePolicy = stageAccessPolicy(stage);
       planTrip.stages[idx] = RS.transitionStage(stage, "route-start", { requestToken: token });
       planAggregate = RS.aggregateTrip(planTrip);
       renderStageList();
@@ -9591,7 +9604,7 @@
               { lat: stage.end.lat, lon: stage.end.lng, label: "B" }
             ],
             vehicle: "dual-sport-motorcycle",
-            accessPolicy: currentAccessPolicy(),
+            accessPolicy: stagePolicy,
             options: { matchLimitMeters: 250 }
           })
         });
@@ -9719,7 +9732,10 @@
         byAccess: {},
         unknownAccessKm: (agg.unknownAccessMeters || 0) / 1000,
         unknownAccessPercent: agg.percentages.unknownAccessPercent || 0,
-        accessPolicy: currentAccessPolicy(),
+        accessPolicy: {
+          motorizedPermissive: true,
+          motorizedUnknown: completes.some((s) => stageAllowsUnknownAccess(s))
+        },
         warnings: agg.warnings || [],
         estimatedMovingSeconds: movingSec,
         multiStage: planTrip.stages.length > 1,
@@ -9838,7 +9854,7 @@
                 '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>' +
               "</button>" +
               '<label class="switch"><input type="checkbox" data-stage-access aria-label="Allow unknown access"' +
-                (allowUnknownAccess ? " checked" : "") + "><span></span></label>" +
+                (stageAllowsUnknownAccess(stage) ? " checked" : "") + ' data-stage-id="' + stage.id + '"><span></span></label>' +
             "</div>" +
             stageMixBarHtml(stage) + stageMetricsHtml(stage);
         } else {
@@ -9907,6 +9923,28 @@
       planTrip.stages[idx] = stage;
       planTrip.updatedAt = new Date().toISOString();
       if (RS.stageHasBothPoints(stage)) routeStage(stageId);
+      else afterStageUpdate();
+    }
+
+    async function setStageAccess(stageId, wantsEnabled) {
+      const idx = RS.findStageIndex(planTrip, stageId);
+      if (idx < 0) return;
+      const stage = planTrip.stages[idx];
+      if (wantsEnabled) {
+        const accepted = await requestUnknownAccessAck();
+        if (!accepted) {
+          renderStageList();
+          renderRouteBarStageEditor();
+          return;
+        }
+      }
+      const next = RS.transitionStage(stage, "invalidate");
+      next.accessPolicy = Object.assign({}, stageAccessPolicy(stage), {
+        motorizedUnknown: !!wantsEnabled
+      });
+      planTrip.stages[idx] = next;
+      planTrip.updatedAt = new Date().toISOString();
+      if (RS.stageHasBothPoints(next)) routeStage(stageId);
       else afterStageUpdate();
     }
 
@@ -10405,10 +10443,11 @@
       activeStageId = planTrip.stages[0].id;
       editingStageId = null;
       viewedSavedRouteId = null;
-      // Sync UI-level policy + profile to the loaded trip.
+      // Keep From Here's global access setting independent from stage policies.
+      // The saved trip and each stage retain their own access configuration.
       routePreference = planTrip.profile || "balanced";
-      allowUnknownAccess = !!(planTrip.accessPolicy && planTrip.accessPolicy.motorizedUnknown);
-      unknownAccessAcknowledged = allowUnknownAccess;
+      allowUnknownAccess = false;
+      unknownAccessAcknowledged = false;
       if (typeof syncUnknownAccessUi === "function") syncUnknownAccessUi();
       document.querySelectorAll("[data-route-pref]").forEach((b) => {
         const active = b.dataset.routePref === routePreference;
@@ -10460,7 +10499,7 @@
     function createNewRouteDraft() {
       planTrip = RS.createTrip({
         profile: routePreference,
-        accessPolicy: { motorizedPermissive: true, motorizedUnknown: allowUnknownAccess }
+        accessPolicy: { motorizedPermissive: true, motorizedUnknown: false }
       });
       planTrip.stages[0].profile = routePreference;
       activeStageId = planTrip.stages[0].id;
@@ -13836,7 +13875,7 @@
         const accessToggle = event.target.closest("[data-stage-access]");
         if (accessToggle) {
           event.stopPropagation();
-          onUnknownAccessChange({ target: accessToggle });
+          setStageAccess(accessToggle.dataset.stageId, accessToggle.checked);
           return;
         }
         const profileSelect = event.target.closest("[data-stage-profile]");
@@ -13921,7 +13960,7 @@
         const accessToggle = event.target.closest("[data-stage-access]");
         if (!accessToggle) return;
         event.stopPropagation();
-        onUnknownAccessChange({ target: accessToggle });
+        setStageAccess(accessToggle.dataset.stageId, accessToggle.checked);
       });
       routeBarStageEditor.addEventListener("click", (event) => {
         const close = event.target.closest("[data-stage-editor-close]");
@@ -14354,9 +14393,6 @@
     function syncUnknownAccessUi() {
       if (unknownAccessToggle) unknownAccessToggle.checked = allowUnknownAccess;
       if (unknownAccessTogglePlan) unknownAccessTogglePlan.checked = allowUnknownAccess;
-      document.querySelectorAll("[data-stage-access]").forEach((input) => {
-        input.checked = allowUnknownAccess;
-      });
       renderAccessWarning();
     }
 
@@ -14403,8 +14439,6 @@
         allowUnknownAccess = false;
         unknownAccessAcknowledged = false;
       }
-      // Keep the plan trip's policy in lockstep so saved routes record it.
-      planTrip.accessPolicy = { motorizedPermissive: true, motorizedUnknown: allowUnknownAccess };
       syncUnknownAccessUi();
       invalidateRoutingGraph();
       setStatus(
@@ -14445,11 +14479,6 @@
       // Keep switches visually pending until acknowledgement resolves.
       if (wantsEnabled && unknownAccessToggle) unknownAccessToggle.checked = false;
       if (wantsEnabled && unknownAccessTogglePlan) unknownAccessTogglePlan.checked = false;
-      if (wantsEnabled) {
-        document.querySelectorAll("[data-stage-access]").forEach((input) => {
-          input.checked = false;
-        });
-      }
       await applyUnknownAccessToggle(wantsEnabled);
     }
     if (unknownAccessToggle) unknownAccessToggle.addEventListener("change", onUnknownAccessChange);
