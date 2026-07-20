@@ -2937,6 +2937,7 @@
     body.legend-open .stack { bottom: calc(var(--p2-sheet-mid) + var(--p2-locate-gap)); }
     body.account-open .stack { bottom: calc(var(--p2-sheet-max) + var(--p2-locate-gap)); }
     body.groups-open .stack { bottom: calc(var(--p2-sheet-tall) + var(--p2-locate-gap)); }
+    body.groups-unauth-open .stack { bottom: calc(var(--p2-sheet-collapsed) + var(--p2-locate-gap)); }
     body.app-sheet-open .stack > :not(#recenterBtn),
     body.app-sheet-open .follow-chip,
     body.app-sheet-open .status-dock { display: none !important; }
@@ -3011,6 +3012,18 @@
       height: var(--p2-sheet-tall);
       max-height: var(--p2-sheet-tall);
       padding: 24px 12px calc(var(--p2-dock-h) + 8px);
+    }
+    /* Signed-out groups only contain the title and sign-in message. Keep that
+       state content-sized so an empty management surface does not occupy the
+       map. Authenticated groups retain the full-height scrolling workspace. */
+    .group-sheet.group-sheet-unauthenticated {
+      height: auto;
+      max-height: none;
+      min-height: 0;
+      padding-bottom: 12px;
+    }
+    .group-sheet.group-sheet-unauthenticated .group-sheet-head {
+      padding-bottom: 4px;
     }
     .group-sheet-body { margin-top: 12px; }
     .group-panel, .group-details { padding-right: var(--p2-scroll-gutter); scrollbar-gutter: stable; }
@@ -4950,6 +4963,12 @@
     body.groups-open .group-sheet {
       height: min(508px, calc(100dvh - var(--fig-dock-h) - 16px)) !important;
       max-height: min(594px, calc(100dvh - var(--fig-dock-h) - 12px)) !important;
+    }
+    body.groups-open .group-sheet.group-sheet-unauthenticated {
+      height: auto !important;
+      max-height: none !important;
+      min-height: 0 !important;
+      padding-bottom: 12px !important;
     }
 
     .legend-title {
@@ -12747,7 +12766,17 @@
       if (profileEdit) profileEdit.hidden = !currentAuthUser || !accountProfileEditing;
       if (groupAuthed) groupAuthed.hidden = !currentAuthUser;
       if (groupNotice) groupNotice.hidden = !!currentAuthUser;
+      syncGroupSheetSizing();
       updateOtpResendUi();
+    }
+
+    function syncGroupSheetSizing() {
+      const sheet = document.getElementById("groupSheet");
+      const authed = document.getElementById("groupAuthed");
+      if (!sheet || !authed) return;
+      const unauthenticated = !!authed.hidden;
+      sheet.classList.toggle("group-sheet-unauthenticated", unauthenticated);
+      document.body.classList.toggle("groups-unauth-open", unauthenticated && sheet.classList.contains("open"));
     }
 
     function setAccountProfileEditing(editing) {
@@ -14108,6 +14137,7 @@
       groupBtn?.setAttribute("aria-expanded", open ? "true" : "false");
       groupBtn?.classList.toggle("active", open);
       document.body.classList.toggle("groups-open", open);
+      syncGroupSheetSizing();
       document.body.classList.toggle("app-sheet-open", open || document.body.classList.contains("legend-open") || document.body.classList.contains("account-open") || document.body.classList.contains("planner-open"));
       if (!open) setGroupPanel("list");
       syncBottomNavState();
