@@ -15531,6 +15531,42 @@
     map.on("moveend", refreshReportLayer);
     map.on("zoomend", refreshReportLayer);
 
+    // A browser refresh must always return to the map-first shell. Do not let
+    // a transient sheet or navigation class suppress the base map controls.
+    function resetTransientChromeAtBoot() {
+      document.body.classList.remove(
+        "app-sheet-open",
+        "legend-open",
+        "account-open",
+        "groups-open",
+        "group-details-open",
+        "planner-open",
+        "planner-collapsed",
+        "planner-expanded",
+        "planner-tab-plan",
+        "planner-tab-saved",
+        "navigating",
+        "roadbook-open",
+        "hud-collapsed"
+      );
+      if (legendEl) legendEl.classList.add("collapsed");
+      if (routeCard) {
+        routeCard.classList.add("closed");
+        routeCard.classList.remove("is-collapsed", "is-expanded");
+        routeCard.dataset.drawer = "closed";
+      }
+      accountSheet?.classList.remove("open");
+      groupSheet?.classList.remove("open");
+      if (sharingPopover) {
+        sharingPopover.classList.remove("open");
+        sharingPopover.hidden = true;
+      }
+      syncBottomNavState();
+      requestAnimationFrame(syncLocateClearance);
+    }
+
+    resetTransientChromeAtBoot();
+
     // Restore the persisted auth session during app boot, rather than waiting
     // for the rider to open Profile or Groups after a refresh. This keeps the
     // quick sharing control truthful on first interaction.
