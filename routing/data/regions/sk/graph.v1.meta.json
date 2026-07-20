@@ -1,0 +1,75 @@
+{
+  "generatedAt": "2026-07-20T22:24:35.588Z",
+  "schemaVersion": "canada-regional-1",
+  "regionId": "sk",
+  "province": "SK",
+  "bbox": [
+    -110.05416,
+    48.99886,
+    -101.3619,
+    59.62366
+  ],
+  "nodeCount": 219343,
+  "edgeCount": 298182,
+  "componentCount": 20,
+  "boundaryNodeCount": 2816,
+  "accessCounts": {
+    "motorized_permissive": 298171,
+    "motorized_unknown": 11
+  },
+  "surfaceCounts": {
+    "paved": 90341,
+    "gravel": 207813,
+    "access": 11,
+    "unknown": 17
+  },
+  "sourceCounts": {
+    "National Road Network": 298182
+  },
+  "jsonBytes": 106100741,
+  "gzBytes": 21857344,
+  "lineage": {
+    "nrn": {
+      "adapter": "nrn",
+      "featureCount": 299124,
+      "excludedByReason": {},
+      "classification": {
+        "surface": {
+          "paved": 90793,
+          "gravel": 208303,
+          "resource": 11,
+          "unknown": 17
+        },
+        "access": {
+          "motorized_permissive": 299113,
+          "motorized_unknown": 11
+        },
+        "structure": {
+          "none": 296264,
+          "bridge": 2857,
+          "tunnel": 3
+        },
+        "roadTrack": {
+          "freeway": 20221,
+          "collector": 146109,
+          "local": 93756,
+          "service": 341,
+          "ramp": 1094,
+          "resource": 37545,
+          "unknown": 42,
+          "arterial": 16
+        },
+        "excluded": {}
+      }
+    },
+    "provincial": null
+  },
+  "conflation": {
+    "stats": {
+      "backboneKept": 299124,
+      "supplementAdded": 0,
+      "supplementDuplicateSkipped": 0
+    },
+    "freeSpaceConnectors": 0
+  }
+}

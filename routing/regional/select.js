@@ -2,6 +2,7 @@
 
 const fs = require("fs");
 const path = require("path");
+const { regionsForRoute } = require("./merge");
 
 const REGIONS_DIR = path.join(__dirname, "..", "data", "regions");
 const LEGACY_GRAPH = path.join(__dirname, "..", "data", "ns-graph.v1.json.gz");
@@ -100,18 +101,23 @@ function graphPathForRegion(regionId) {
   return remoteGraphUrl(regionId);
 }
 
+function regionPackAvailable(regionId) {
+  const local = localGraphPath(regionId);
+  if (fs.existsSync(local)) return true;
+  // Remote packs are assumed deployable once built; caller may still fetch-fail.
+  return true;
+}
+
 /**
- * Resolve which graph a route request should load.
- * On Vercel the graph files are CDN static assets (not in the function bundle),
- * so we return https URLs when local files are absent.
+ * Resolve which graph(s) a route request should load.
+ * Multi-province routes expand to the corridor of adjacent regions and merge
+ * via boundary-node matching (no free-space connectors).
  */
 function resolveGraphRequest(body = {}) {
-  // Temporary production guard: the conflated regional graph is larger and can
-  // OOM Hobby isolates on cold start. Prefer the proven legacy NS graph for the
-  // live API unless ROUTING_USE_REGIONAL=1. Local fixture runs still use
-  // defaultGraphPath() which prefers the regional pack when present on disk.
+  // NS-only production guard: keep live NS routes on the proven legacy pack
+  // unless ROUTING_USE_REGIONAL=1. Other provinces always use regional packs.
   const forceRegional = process.env.ROUTING_USE_REGIONAL === "1";
-  const forceLegacy = process.env.ROUTING_PREFER_LEGACY === "1" || !forceRegional;
+  const preferLegacyNs = process.env.ROUTING_PREFER_LEGACY === "1" || !forceRegional;
 
   if (body.regionId) {
     const id = String(body.regionId).toLowerCase();
@@ -119,40 +125,59 @@ function resolveGraphRequest(body = {}) {
       ok: true,
       regionIds: [id],
       graphPath: graphPathForRegion(id),
+      graphPaths: [graphPathForRegion(id)],
       mode: "explicit"
     };
   }
 
-  const regions = selectRegionsForLocations(body.locations);
-  const regionId = regions[0] || "ns";
+  const hitRegions = selectRegionsForLocations(body.locations);
+  if (!hitRegions.length) {
+    return {
+      ok: false,
+      error: "region_unknown",
+      message: "Could not map route locations to a Canadian province or territory.",
+      regionIds: []
+    };
+  }
 
-  // Legacy production path must win before cross-region rejection so NS
-  // fixture/prod routes stay online while regional packs are promoted.
-  if (forceLegacy && (regionId === "ns" || regions.length === 0 || regions.every((r) => r === "ns"))) {
+  // Single-region NS → legacy production unless regional promoted.
+  if (hitRegions.length === 1 && hitRegions[0] === "ns" && preferLegacyNs) {
     return {
       ok: true,
       regionIds: ["ns"],
       graphPath: graphPathForRegion("__legacy_ns__"),
+      graphPaths: [graphPathForRegion("__legacy_ns__")],
       mode: "legacy-production"
     };
   }
 
-  if (regions.length > 1) {
+  const corridor = regionsForRoute(hitRegions);
+  const missing = corridor.filter((id) => !fs.existsSync(localGraphPath(id)) && !remoteGraphUrl(id));
+  // Always allow remote URLs; check local for offline messaging only.
+  const unavailableLocal = corridor.filter((id) => !fs.existsSync(localGraphPath(id)));
+
+  if (corridor.length === 1) {
+    const regionId = corridor[0];
     return {
-      ok: false,
-      error: "cross_region_unsupported",
-      message:
-        "Cross-province routing requires adjacent regional graphs with boundary nodes. Regions: " +
-        regions.join(","),
-      regionIds: regions
+      ok: true,
+      regionIds: [regionId],
+      graphPath: graphPathForRegion(regionId),
+      graphPaths: [graphPathForRegion(regionId)],
+      mode: fs.existsSync(localGraphPath(regionId)) ? "regional-local" : "regional-remote"
     };
   }
 
   return {
     ok: true,
-    regionIds: [regionId],
-    graphPath: graphPathForRegion(regionId),
-    mode: fs.existsSync(localGraphPath(regionId)) ? "regional-local" : "regional-remote"
+    regionIds: corridor,
+    graphPath: null,
+    graphPaths: corridor.map(graphPathForRegion),
+    mode: unavailableLocal.length ? "multi-regional-remote" : "multi-regional-local",
+    hitRegions,
+    missingLocal: unavailableLocal,
+    note: missing.length
+      ? "Some corridor regions lack packs: " + missing.join(",")
+      : undefined
   };
 }
 
@@ -166,5 +191,7 @@ module.exports = {
   graphPathForRegion,
   remoteGraphUrl,
   resolveGraphRequest,
-  publicBaseUrl
+  publicBaseUrl,
+  primaryRegionForPoint,
+  regionPackAvailable
 };

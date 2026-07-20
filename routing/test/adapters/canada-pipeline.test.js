@@ -307,6 +307,13 @@ check("Halifax–Yarmouth uses legacy production graph by default", () => {
   assert.strictEqual(result.mode, "legacy-production");
 });
 
+check("Halifax to Vancouver corridor includes NB and western provinces", () => {
+  const { regionsForRoute, shortestRegionPath } = require("../../regional/merge");
+  assert.deepStrictEqual(shortestRegionPath("ns", "bc"), ["ns","nb","qc","on","mb","sk","ab","bc"]);
+  assert.ok(regionsForRoute(["ns","bc"]).includes("nb"));
+  assert.ok(regionsForRoute(["ns","bc"]).includes("on"));
+});
+
 check("all canonical enum tables are non-empty", () => {
   assert.ok(Object.keys(SURFACE_CLASS).length >= 6);
   assert.ok(Object.keys(ACCESS_CLASS).length >= 4);

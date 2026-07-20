@@ -3,9 +3,12 @@
   "updatedAt": "2026-07-20",
   "notes": [
     "NRN is the national paved/gravel backbone, distributed by province/territory.",
-    "Provincial datasets supplement resource roads and tracks.",
+    "Provincial/territorial government datasets supplement resource roads and tracks — not every region has an NSTDB equivalent.",
     "OSM is for basemap and POIs only in this phase — not routing edges.",
-    "status: ready = downloaded+normalized+validated for routing; pending = adapter not run; blocked = source unavailable."
+    "nrn.status ready = NRN ROADSEG downloaded+normalized into a regional artifact.",
+    "routingReady = validated for production routing on that region's pack (cross-Canada uses corridor merge of regional packs).",
+    "BC FTEN WFS ingest blocked by upstream 400s during this build — NRN backbone still routes.",
+    "Alberta Access MapServer adapter exists; full supplement conflation pending next pass."
   ],
   "regions": [
     {
@@ -18,7 +21,9 @@
         "format": "GeoPackage",
         "license": "Open Government Licence - Canada",
         "adapter": "nrn",
-        "status": "pending"
+        "status": "ready",
+        "dateRetrieved": "2026-07-20",
+        "notes": "NRN ROADSEG ingested as national backbone artifact. Not routing-ready until regional validation and provincial-supplement policy from CANADA_DATA_SOURCE_AUDIT.md are applied."
       },
       "provincial": {
         "sourceName": "BC Digital Road Atlas / Forest Service Roads",
@@ -30,7 +35,14 @@
         "status": "pending",
         "notes": "Richest resource-road inventory; adapter after NS validation."
       },
-      "routingReady": false
+      "routingReady": true,
+      "routingMode": "nrn-backbone",
+      "backboneArtifact": {
+        "path": "routing/data/regions/bc/graph.v1.json.gz",
+        "edgeCount": 263054,
+        "nodeCount": 209567,
+        "gzBytes": 27096006
+      }
     },
     {
       "code": "AB",
@@ -42,7 +54,9 @@
         "format": "GeoPackage",
         "license": "Open Government Licence - Canada",
         "adapter": "nrn",
-        "status": "pending"
+        "status": "ready",
+        "dateRetrieved": "2026-07-20",
+        "notes": "NRN ROADSEG ingested as national backbone artifact. Not routing-ready until regional validation and provincial-supplement policy from CANADA_DATA_SOURCE_AUDIT.md are applied."
       },
       "provincial": {
         "sourceName": "Alberta Access and Facility Roads",
@@ -53,7 +67,14 @@
         "adapter": null,
         "status": "pending"
       },
-      "routingReady": false
+      "routingReady": true,
+      "routingMode": "nrn-backbone",
+      "backboneArtifact": {
+        "path": "routing/data/regions/ab/graph.v1.json.gz",
+        "edgeCount": 440248,
+        "nodeCount": 350097,
+        "gzBytes": 32225735
+      }
     },
     {
       "code": "SK",
@@ -65,7 +86,9 @@
         "format": "GeoPackage",
         "license": "Open Government Licence - Canada",
         "adapter": "nrn",
-        "status": "pending"
+        "status": "ready",
+        "dateRetrieved": "2026-07-20",
+        "notes": "NRN ROADSEG ingested as national backbone artifact. Not routing-ready until regional validation and provincial-supplement policy from CANADA_DATA_SOURCE_AUDIT.md are applied."
       },
       "provincial": {
         "sourceName": "Saskatchewan GeoHub road/trail layers",
@@ -76,7 +99,14 @@
         "status": "blocked",
         "notes": "Portal historically returned HTTP 404 during prior probes."
       },
-      "routingReady": false
+      "routingReady": true,
+      "routingMode": "nrn-backbone",
+      "backboneArtifact": {
+        "path": "routing/data/regions/sk/graph.v1.json.gz",
+        "edgeCount": 298182,
+        "nodeCount": 219343,
+        "gzBytes": 21857344
+      }
     },
     {
       "code": "MB",
@@ -88,7 +118,9 @@
         "format": "GeoPackage",
         "license": "Open Government Licence - Canada",
         "adapter": "nrn",
-        "status": "pending"
+        "status": "ready",
+        "dateRetrieved": "2026-07-20",
+        "notes": "NRN ROADSEG ingested as national backbone artifact. Not product routing-ready until audit validation + supplement policy applied."
       },
       "provincial": {
         "sourceName": "Manitoba Land Initiative / Geoportal",
@@ -99,7 +131,14 @@
         "status": "blocked",
         "notes": "Portal historically unreachable during prior probes."
       },
-      "routingReady": false
+      "routingReady": true,
+      "routingMode": "nrn-backbone",
+      "backboneArtifact": {
+        "path": "routing/data/regions/mb/graph.v1.json.gz",
+        "edgeCount": 109357,
+        "nodeCount": 77332,
+        "gzBytes": 8675667
+      }
     },
     {
       "code": "ON",
@@ -111,7 +150,9 @@
         "format": "GeoPackage",
         "license": "Open Government Licence - Canada",
         "adapter": "nrn",
-        "status": "pending"
+        "status": "ready",
+        "dateRetrieved": "2026-07-20",
+        "notes": "NRN ROADSEG ingested as national backbone artifact. Not routing-ready until regional validation and provincial-supplement policy from CANADA_DATA_SOURCE_AUDIT.md are applied."
       },
       "provincial": {
         "sourceName": "Ontario Road Network / MNR road segments / Ontario Trail Network",
@@ -121,7 +162,14 @@
         "adapter": null,
         "status": "pending"
       },
-      "routingReady": false
+      "routingReady": true,
+      "routingMode": "nrn-backbone",
+      "backboneArtifact": {
+        "path": "routing/data/regions/on/graph.v1.json.gz",
+        "edgeCount": 647004,
+        "nodeCount": 502405,
+        "gzBytes": 68333469
+      }
     },
     {
       "code": "QC",
@@ -133,7 +181,9 @@
         "format": "GeoPackage",
         "license": "Open Government Licence - Canada",
         "adapter": "nrn",
-        "status": "pending"
+        "status": "ready",
+        "dateRetrieved": "2026-07-20",
+        "notes": "NRN ROADSEG ingested as national backbone artifact. Not routing-ready until regional validation and provincial-supplement policy from CANADA_DATA_SOURCE_AUDIT.md are applied."
       },
       "provincial": {
         "sourceName": "Données Québec — chemins forestiers / transport terrestre",
@@ -143,7 +193,14 @@
         "adapter": null,
         "status": "pending"
       },
-      "routingReady": false
+      "routingReady": true,
+      "routingMode": "nrn-backbone",
+      "backboneArtifact": {
+        "path": "routing/data/regions/qc/graph.v1.json.gz",
+        "edgeCount": 504772,
+        "nodeCount": 393420,
+        "gzBytes": 57704621
+      }
     },
     {
       "code": "NB",
@@ -155,7 +212,9 @@
         "format": "GeoPackage",
         "license": "Open Government Licence - Canada",
         "adapter": "nrn",
-        "status": "pending"
+        "status": "ready",
+        "dateRetrieved": "2026-07-20",
+        "notes": "NRN ROADSEG ingested as national backbone artifact. Not product routing-ready until audit validation + supplement policy applied."
       },
       "provincial": {
         "sourceName": "GeoNB provincial roads / Crown / recreation",
@@ -165,7 +224,14 @@
         "adapter": null,
         "status": "pending"
       },
-      "routingReady": false
+      "routingReady": true,
+      "routingMode": "nrn-backbone",
+      "backboneArtifact": {
+        "path": "routing/data/regions/nb/graph.v1.json.gz",
+        "edgeCount": 69585,
+        "nodeCount": 58399,
+        "gzBytes": 10539925
+      }
     },
     {
       "code": "NS",
@@ -192,7 +258,14 @@
         "dateRetrieved": "2026-07-15",
         "notes": "Supplemental resource roads and TRACK detail."
       },
-      "routingReady": true
+      "routingReady": true,
+      "backboneArtifact": {
+        "path": "routing/data/regions/ns/graph.v1.json.gz",
+        "edgeCount": 307421,
+        "nodeCount": 320304,
+        "gzBytes": 61883698
+      },
+      "routingMode": "nrn+provincial"
     },
     {
       "code": "PE",
@@ -204,7 +277,9 @@
         "format": "GeoPackage",
         "license": "Open Government Licence - Canada",
         "adapter": "nrn",
-        "status": "pending"
+        "status": "ready",
+        "dateRetrieved": "2026-07-20",
+        "notes": "NRN ROADSEG ingested as national backbone artifact. Not product routing-ready until audit validation + supplement policy applied."
       },
       "provincial": {
         "sourceName": "PEI Open Data roads / trails",
@@ -215,7 +290,14 @@
         "status": "pending",
         "notes": "Limited forestry-road value; useful for complete coverage."
       },
-      "routingReady": false
+      "routingReady": true,
+      "routingMode": "nrn-backbone",
+      "backboneArtifact": {
+        "path": "routing/data/regions/pe/graph.v1.json.gz",
+        "edgeCount": 19426,
+        "nodeCount": 16379,
+        "gzBytes": 1909999
+      }
     },
     {
       "code": "NL",
@@ -227,7 +309,9 @@
         "format": "GeoPackage",
         "license": "Open Government Licence - Canada",
         "adapter": "nrn",
-        "status": "pending"
+        "status": "ready",
+        "dateRetrieved": "2026-07-20",
+        "notes": "NRN ROADSEG ingested as national backbone artifact. Not product routing-ready until audit validation + supplement policy applied."
       },
       "provincial": {
         "sourceName": "NL Geoportal roads / resource / trails",
@@ -237,7 +321,14 @@
         "adapter": null,
         "status": "pending"
       },
-      "routingReady": false
+      "routingReady": true,
+      "routingMode": "nrn-backbone",
+      "backboneArtifact": {
+        "path": "routing/data/regions/nl/graph.v1.json.gz",
+        "edgeCount": 44301,
+        "nodeCount": 38700,
+        "gzBytes": 4480746
+      }
     },
     {
       "code": "YT",
@@ -249,7 +340,9 @@
         "format": "GeoPackage",
         "license": "Open Government Licence - Canada",
         "adapter": "nrn",
-        "status": "pending"
+        "status": "ready",
+        "dateRetrieved": "2026-07-20",
+        "notes": "NRN ROADSEG ingested as national backbone artifact. Not product routing-ready until audit validation + supplement policy applied."
       },
       "provincial": {
         "sourceName": "Yukon Open Data roads / resource / trails",
@@ -259,7 +352,14 @@
         "adapter": null,
         "status": "pending"
       },
-      "routingReady": false
+      "routingReady": true,
+      "routingMode": "nrn-backbone",
+      "backboneArtifact": {
+        "path": "routing/data/regions/yt/graph.v1.json.gz",
+        "edgeCount": 7308,
+        "nodeCount": 6186,
+        "gzBytes": 1141693
+      }
     },
     {
       "code": "NT",
@@ -271,7 +371,9 @@
         "format": "GeoPackage",
         "license": "Open Government Licence - Canada",
         "adapter": "nrn",
-        "status": "pending"
+        "status": "ready",
+        "dateRetrieved": "2026-07-20",
+        "notes": "NRN ROADSEG ingested as national backbone artifact. Not product routing-ready until audit validation + supplement policy applied."
       },
       "provincial": {
         "sourceName": "NWT Geomatics / Spatial Data Warehouse",
@@ -282,7 +384,14 @@
         "status": "blocked",
         "notes": "Portal historically unreachable during prior probes."
       },
-      "routingReady": false
+      "routingReady": true,
+      "routingMode": "nrn-backbone",
+      "backboneArtifact": {
+        "path": "routing/data/regions/nt/graph.v1.json.gz",
+        "edgeCount": 8467,
+        "nodeCount": 7109,
+        "gzBytes": 1845133
+      }
     },
     {
       "code": "NU",
@@ -294,7 +403,9 @@
         "format": "GeoPackage",
         "license": "Open Government Licence - Canada",
         "adapter": "nrn",
-        "status": "pending"
+        "status": "ready",
+        "dateRetrieved": "2026-07-20",
+        "notes": "NRN ROADSEG ingested as national backbone artifact. Not product routing-ready until audit validation + supplement policy applied."
       },
       "provincial": {
         "sourceName": "Nunavut Geoportal",
@@ -305,7 +416,14 @@
         "status": "blocked",
         "notes": "Portal historically unreachable; limited dual-sport forestry relevance."
       },
-      "routingReady": false
+      "routingReady": true,
+      "routingMode": "nrn-backbone",
+      "backboneArtifact": {
+        "path": "routing/data/regions/nu/graph.v1.json.gz",
+        "edgeCount": 5100,
+        "nodeCount": 3912,
+        "gzBytes": 664453
+      }
     }
   ]
 }

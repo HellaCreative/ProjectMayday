@@ -1,0 +1,69 @@
+{
+  "generatedAt": "2026-07-20T22:26:30.078Z",
+  "schemaVersion": "canada-regional-1",
+  "regionId": "ab",
+  "province": "AB",
+  "bbox": [
+    -120.00139,
+    48.99743,
+    -110.00469,
+    59.99956
+  ],
+  "nodeCount": 350097,
+  "edgeCount": 440248,
+  "componentCount": 19,
+  "boundaryNodeCount": 2383,
+  "accessCounts": {
+    "motorized_permissive": 440248
+  },
+  "surfaceCounts": {
+    "paved": 269448,
+    "gravel": 170800
+  },
+  "sourceCounts": {
+    "National Road Network": 440248
+  },
+  "jsonBytes": 172144905,
+  "gzBytes": 32225735,
+  "lineage": {
+    "nrn": {
+      "adapter": "nrn",
+      "featureCount": 443593,
+      "excludedByReason": {},
+      "classification": {
+        "surface": {
+          "paved": 271519,
+          "gravel": 172074
+        },
+        "access": {
+          "motorized_permissive": 443593
+        },
+        "structure": {
+          "none": 436042,
+          "bridge": 7515,
+          "tunnel": 36
+        },
+        "roadTrack": {
+          "resource": 46188,
+          "freeway": 7514,
+          "collector": 170670,
+          "service": 1136,
+          "local": 175886,
+          "arterial": 28920,
+          "ramp": 13129,
+          "unknown": 150
+        },
+        "excluded": {}
+      }
+    },
+    "provincial": null
+  },
+  "conflation": {
+    "stats": {
+      "backboneKept": 443593,
+      "supplementAdded": 0,
+      "supplementDuplicateSkipped": 0
+    },
+    "freeSpaceConnectors": 0
+  }
+}

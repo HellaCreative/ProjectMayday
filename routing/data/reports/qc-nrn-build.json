@@ -1,0 +1,127 @@
+{
+  "generatedAt": "2026-07-20T22:29:02.886Z",
+  "region": "QC",
+  "nrn": {
+    "adapter": "nrn",
+    "province": "QC",
+    "sourceName": "National Road Network (NRCan)",
+    "sourceUrl": "https://open.canada.ca/data/en/dataset/3d282116-e556-400c-9306-ca1a3cada77f",
+    "downloadUrl": "https://geo.statcan.gc.ca/nrn_rrn/qc/nrn_rrn_qc_GPKG.zip",
+    "license": "Open Government Licence - Canada",
+    "sourceDatasetVersion": "NRN_QC_10_0_ROADSEG",
+    "dateRetrieved": "2026-07-20T22:28:43.730Z",
+    "status": "ok",
+    "notes": [
+      "NRN is the national paved/gravel road backbone.",
+      "Access is motorized_permissive for conventional inventory roads; resource/recreation with unknown pavement stay motorized_unknown.",
+      "Missing pavement status is surface unknown — never invented as paved."
+    ],
+    "knownLimitations": [
+      "Does not encode motorcycle-specific legality.",
+      "Resource/recreation coverage varies by province provider."
+    ],
+    "featureCount": 504826,
+    "excludedCount": 0,
+    "excludedByReason": {},
+    "classification": {
+      "surface": {
+        "unknown": 500084,
+        "resource": 4742
+      },
+      "access": {
+        "motorized_permissive": 500084,
+        "motorized_unknown": 4742
+      },
+      "structure": {
+        "none": 493747,
+        "bridge": 10988,
+        "tunnel": 91
+      },
+      "roadTrack": {
+        "local": 358231,
+        "collector": 59620,
+        "resource": 4742,
+        "arterial": 19014,
+        "freeway": 50559,
+        "ramp": 8810,
+        "service": 3643,
+        "unknown": 207
+      },
+      "excluded": {}
+    },
+    "topology": null,
+    "generatedAt": "2026-07-20T22:28:43.731Z"
+  },
+  "graph": {
+    "generatedAt": "2026-07-20T22:28:45.237Z",
+    "schemaVersion": "canada-regional-1",
+    "regionId": "qc",
+    "province": "QC",
+    "bbox": [
+      -79.54404,
+      44.99147,
+      -57.10746,
+      62.42787
+    ],
+    "nodeCount": 393420,
+    "edgeCount": 504772,
+    "componentCount": 48,
+    "boundaryNodeCount": 4766,
+    "accessCounts": {
+      "motorized_permissive": 500030,
+      "motorized_unknown": 4742
+    },
+    "surfaceCounts": {
+      "unknown": 500030,
+      "access": 4742
+    },
+    "sourceCounts": {
+      "National Road Network": 504772
+    },
+    "jsonBytes": 259334044,
+    "gzBytes": 57704621,
+    "lineage": {
+      "nrn": {
+        "adapter": "nrn",
+        "featureCount": 504826,
+        "excludedByReason": {},
+        "classification": {
+          "surface": {
+            "unknown": 500084,
+            "resource": 4742
+          },
+          "access": {
+            "motorized_permissive": 500084,
+            "motorized_unknown": 4742
+          },
+          "structure": {
+            "none": 493747,
+            "bridge": 10988,
+            "tunnel": 91
+          },
+          "roadTrack": {
+            "local": 358231,
+            "collector": 59620,
+            "resource": 4742,
+            "arterial": 19014,
+            "freeway": 50559,
+            "ramp": 8810,
+            "service": 3643,
+            "unknown": 207
+          },
+          "excluded": {}
+        }
+      },
+      "provincial": null
+    },
+    "conflation": {
+      "stats": {
+        "backboneKept": 504826,
+        "supplementAdded": 0,
+        "supplementDuplicateSkipped": 0
+      },
+      "freeSpaceConnectors": 0
+    }
+  },
+  "freeSpaceConnectors": 0
+}

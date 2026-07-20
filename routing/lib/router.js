@@ -1,6 +1,6 @@
 "use strict";
 
-const { loadGraph, loadGraphAsync } = require("./graph");
+const { loadGraph, loadGraphAsync, loadGraphsForRequest } = require("./graph");
 const { resolveGraphRequest } = require("../regional/select");
 
 const DEFAULT_MATCH_METERS = 250;
@@ -285,7 +285,20 @@ async function routeRequest(body = {}) {
     };
   }
 
-  const runtime = await loadGraphAsync(graphResolution.graphPath);
+  let runtime;
+  try {
+    runtime = await loadGraphsForRequest(graphResolution, {
+      locations: body.locations || [],
+      corridorBufferMeters: body.options && body.options.corridorBufferMeters
+    });
+  } catch (err) {
+    return {
+      status: "error",
+      error: "graph_load_failed",
+      message: err && err.message ? err.message : String(err),
+      regionIds: graphResolution.regionIds || []
+    };
+  }
   const enums = runtime.enums;
   const profile = String(body.profile || "balanced").toLowerCase();
   if (!["direct", "balanced", "dirt", "cleanest"].includes(profile)) {
@@ -492,6 +505,7 @@ async function routeRequest(body = {}) {
       fallback: null,
       regionIds: graphResolution.regionIds,
       graphMode: graphResolution.mode,
+      merge: runtime.mergeReport || null,
       graph: {
         edgeCount: runtime.data.edgeCount,
         nodeCount: runtime.data.nodeCount,

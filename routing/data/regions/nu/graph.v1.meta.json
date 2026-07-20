@@ -1,0 +1,66 @@
+{
+  "generatedAt": "2026-07-20T22:19:12.093Z",
+  "schemaVersion": "canada-regional-1",
+  "regionId": "nu",
+  "province": "NU",
+  "bbox": [
+    -115.24504,
+    56.52557,
+    -63.78717,
+    76.43435
+  ],
+  "nodeCount": 3912,
+  "edgeCount": 5100,
+  "componentCount": 63,
+  "boundaryNodeCount": 91,
+  "accessCounts": {
+    "motorized_permissive": 5100
+  },
+  "surfaceCounts": {
+    "paved": 236,
+    "gravel": 4580,
+    "unknown": 284
+  },
+  "sourceCounts": {
+    "National Road Network": 5100
+  },
+  "jsonBytes": 3133522,
+  "gzBytes": 664453,
+  "lineage": {
+    "nrn": {
+      "adapter": "nrn",
+      "featureCount": 5137,
+      "excludedByReason": {},
+      "classification": {
+        "surface": {
+          "paved": 236,
+          "gravel": 4616,
+          "unknown": 285
+        },
+        "access": {
+          "motorized_permissive": 5137
+        },
+        "structure": {
+          "none": 5113,
+          "bridge": 24
+        },
+        "roadTrack": {
+          "collector": 135,
+          "local": 282,
+          "service": 67,
+          "unknown": 4653
+        },
+        "excluded": {}
+      }
+    },
+    "provincial": null
+  },
+  "conflation": {
+    "stats": {
+      "backboneKept": 5137,
+      "supplementAdded": 0,
+      "supplementDuplicateSkipped": 0
+    },
+    "freeSpaceConnectors": 0
+  }
+}

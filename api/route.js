@@ -40,6 +40,7 @@ module.exports = async function handler(req, res) {
 };
 
 module.exports.config = {
-  maxDuration: 60,
-  includeFiles: ["routing/lib/**", "routing/regional/**", "routing/schema/**"]
+  maxDuration: 300,
+  memory: 3008,
+  includeFiles: ["routing/lib/**", "routing/regional/**", "routing/schema/**", "routing/data/regions/**"]
 };

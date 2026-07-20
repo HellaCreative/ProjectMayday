@@ -5,6 +5,8 @@ const path = require("path");
 const zlib = require("zlib");
 const https = require("https");
 const http = require("http");
+const { mergeRegionalGraphs, corridorLocationsForRoute } = require("../regional/merge");
+const { clipGraphToCorridor } = require("../regional/corridor");
 
 const DEFAULT_LEGACY_GRAPH_PATH = path.join(__dirname, "..", "data", "ns-graph.v1.json.gz");
 const DEFAULT_REGIONAL_NS_PATH = path.join(__dirname, "..", "data", "regions", "ns", "graph.v1.json.gz");
@@ -158,6 +160,83 @@ function loadGraph(graphPath) {
   return loadGraphSync(graphPath);
 }
 
+async function readGraphData(graphPath) {
+  if (graphPath.startsWith("http://") || graphPath.startsWith("https://")) {
+    const buf = await fetchBuffer(graphPath);
+    return inflateGraphBuffer(buf);
+  }
+  if (!fs.existsSync(graphPath)) {
+    throw new Error("Routing graph not found at " + graphPath);
+  }
+  return inflateGraphBuffer(fs.readFileSync(graphPath));
+}
+
+/**
+ * Load one or more regional graphs. Multiple packs are merged on boundary nodes.
+ * Long corridors are clipped to the route envelope to control memory.
+ */
+async function loadGraphsForRequest(resolution, options = {}) {
+  const paths =
+    resolution.graphPaths && resolution.graphPaths.length
+      ? resolution.graphPaths
+      : resolution.graphPath
+        ? [resolution.graphPath]
+        : [];
+  if (!paths.length) {
+    throw new Error("No graph paths in resolution");
+  }
+
+  const locations = options.locations || [];
+  const corridorLocations = corridorLocationsForRoute(locations);
+  const multi = paths.length > 1;
+  // Wider buffer for dirt profiles; tighter for long cleanest/direct hauls.
+  const bufferMeters = Number(options.corridorBufferMeters) || (paths.length >= 4 ? 220000 : 150000);
+  const cacheKey = paths.join("|") + (multi ? `|c${bufferMeters}` : "");
+  if (cached && cached.path === cacheKey) return cached.runtime;
+  if (loadingPromise && loadingPromise.path === cacheKey) return loadingPromise.promise;
+
+  const promise = (async () => {
+    const started = Date.now();
+    if (paths.length === 1) {
+      const data = await readGraphData(paths[0]);
+      return materializeRuntime(cacheKey, data, started);
+    }
+    const graphs = [];
+    const hit = new Set((resolution.hitRegions || []).map((r) => String(r).toLowerCase()));
+    for (const p of paths) {
+      let g = await readGraphData(p);
+      const regionId = String(g.regionId || path.basename(path.dirname(p)) || "").toLowerCase();
+      // Do not spine-filter mid provinces — that severs NRN border connectivity.
+      // Corridor clip (with southern anchors) is enough to bound memory.
+      if (corridorLocations.length >= 2) {
+        const isEndpoint = hit.has(regionId);
+        const buf = isEndpoint ? Math.max(bufferMeters, 200000) : bufferMeters;
+        g = clipGraphToCorridor(g, corridorLocations, buf);
+      }
+      if (!g.edges || g.edges.length < 1) continue;
+      g.regionId = regionId;
+      graphs.push(g);
+    }
+    if (!graphs.length) {
+      throw new Error("Corridor clip removed all edges — widen corridorBufferMeters");
+    }
+    const merged = mergeRegionalGraphs(graphs);
+    if (!merged.report.boundaryMatches && paths.length > 1) {
+      merged.report.warning = "no_boundary_matches";
+    }
+    const runtime = materializeRuntime(cacheKey, merged.graph, started);
+    runtime.mergeReport = merged.report;
+    return runtime;
+  })();
+
+  loadingPromise = { path: cacheKey, promise };
+  try {
+    return await promise;
+  } finally {
+    if (loadingPromise && loadingPromise.promise === promise) loadingPromise = null;
+  }
+}
+
 function clearGraphCache() {
   cached = null;
   loadingPromise = null;
@@ -167,6 +246,7 @@ module.exports = {
   loadGraph,
   loadGraphSync,
   loadGraphAsync,
+  loadGraphsForRequest,
   clearGraphCache,
   defaultGraphPath,
   DEFAULT_GRAPH_PATH,

@@ -30,21 +30,26 @@ Riders never see source switches. The map paints a single corridor network.
 `routing/registry/sources.json` lists all 13 provinces/territories with NRN +
 provincial supplemental status.
 
-## Build Nova Scotia regional graph
+## Build regional graphs (all provinces)
 
 ```bash
-# Requires: curl, unzip, ogr2ogr, node
-# 1) Download NRN NS GeoPackage → data-raw/nrn/ns/nrn-roadseg.geojsonseq
-# 2) Ensure app/data/ns-gov-chunks exist (NSTDB pack)
+# Requires: curl, unzip, GDAL/ogr2ogr, node
+# One province/territory at a time (deletes raw zip/seq after pack):
+./scripts/ingest-nrn-region.sh pe
+./scripts/ingest-nrn-region.sh bc   # etc.
+
+# Nova Scotia with NSTDB supplement (existing):
 node scripts/build-ns-regional-graph.js
+
+# Optional provincial supplements (BC FTEN / Alberta Access):
+node scripts/build-region-with-supplement.js ab
 ```
 
-Outputs:
+Cross-province routes (e.g. Halifax → Vancouver) merge corridor regional packs
+with southern highway anchors and border-node stitching (no free-space connectors).
 
-- `routing/data/regions/ns/graph.v1.json.gz`
-- `routing/data/regions/ns/graph.v1.meta.json`
-- `routing/data/reports/ns-nrn-nstdb-build.json`
-- `routing/data/reports/ns-graph-comparison.json`
+NS-only production requests still default to the legacy NS graph unless
+`ROUTING_USE_REGIONAL=1`.
 
 ## Tests
 

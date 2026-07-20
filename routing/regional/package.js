@@ -166,6 +166,7 @@ function buildRegionalGraph(options = {}) {
       s: surfaceCode,
       t: structureCode,
       ac: accessCode,
+      rt: feature.roadTrackClass || "unknown",
       c: feature.componentId != null ? Number(feature.componentId) : -1,
       conf: feature.sourceConfidence || "medium",
       seasonal: !!feature.seasonal,
