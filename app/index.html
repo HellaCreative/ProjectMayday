@@ -7953,7 +7953,7 @@
       if (hasRiderLocation()) points.push([rider.lng, rider.lat]);
       let hasPeer = false;
       for (const entry of groupRiders.values()) {
-        if (entry.groupId && entry.groupId !== group.id) continue;
+        if (entry.groupId !== group.id) continue;
         const lng = Number(entry.lng);
         const lat = Number(entry.lat);
         if (Number.isFinite(lng) && Number.isFinite(lat)) points.push([lng, lat]);
@@ -11336,8 +11336,8 @@
       if (locked) {
         headingUp = true;
         ensureGeoWatch();
-        // Recenter after a pan keeps the rider's current zoom level.
-        syncFollowCamera(true);
+        // Recenter always restores the rider's street-level detail framing.
+        syncFollowCamera(true, { resetZoom: true });
       }
     }
 
