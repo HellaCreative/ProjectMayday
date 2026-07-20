@@ -9,9 +9,10 @@ const REGIONAL_NS = path.join(REGIONS_DIR, "ns", "graph.v1.json.gz");
 
 /** Approximate province bboxes for region selection (W,S,E,N). */
 const REGION_BBOX = {
+  // Keep Maritimes bboxes tight — Halifax (-63.57) must not hit NB.
   ns: [-66.6, 43.3, -59.5, 47.2],
   pe: [-64.6, 45.8, -61.9, 47.2],
-  nb: [-69.3, 44.4, -63.5, 48.2],
+  nb: [-69.3, 44.5, -63.8, 48.2],
   nl: [-67.9, 46.5, -52.5, 60.5],
   qc: [-79.8, 44.9, -57.0, 62.7],
   on: [-95.2, 41.6, -74.3, 56.9],
@@ -23,6 +24,25 @@ const REGION_BBOX = {
   nt: [-136.5, 60.0, -102.0, 78.8],
   nu: [-120.9, 51.6, -60.9, 83.2]
 };
+
+function bboxArea(bbox) {
+  return Math.max(0, bbox[2] - bbox[0]) * Math.max(0, bbox[3] - bbox[1]);
+}
+
+/** When a point sits in overlapping province bboxes, prefer the smallest. */
+function primaryRegionForPoint(lon, lat) {
+  let best = null;
+  let bestArea = Infinity;
+  for (const [id, bbox] of Object.entries(REGION_BBOX)) {
+    if (!pointInBbox(lon, lat, bbox)) continue;
+    const area = bboxArea(bbox);
+    if (area < bestArea) {
+      bestArea = area;
+      best = id;
+    }
+  }
+  return best;
+}
 
 function publicBaseUrl() {
   if (process.env.ROUTING_PUBLIC_BASE) return process.env.ROUTING_PUBLIC_BASE.replace(/\/$/, "");
@@ -57,9 +77,8 @@ function selectRegionsForLocations(locations) {
   const points = locationsToPoints(locations);
   const hit = new Set();
   for (const p of points) {
-    for (const [id, bbox] of Object.entries(REGION_BBOX)) {
-      if (pointInBbox(p.lon, p.lat, bbox)) hit.add(id);
-    }
+    const id = primaryRegionForPoint(p.lon, p.lat);
+    if (id) hit.add(id);
   }
   return [...hit].sort();
 }
@@ -105,6 +124,19 @@ function resolveGraphRequest(body = {}) {
   }
 
   const regions = selectRegionsForLocations(body.locations);
+  const regionId = regions[0] || "ns";
+
+  // Legacy production path must win before cross-region rejection so NS
+  // fixture/prod routes stay online while regional packs are promoted.
+  if (forceLegacy && (regionId === "ns" || regions.length === 0 || regions.every((r) => r === "ns"))) {
+    return {
+      ok: true,
+      regionIds: ["ns"],
+      graphPath: graphPathForRegion("__legacy_ns__"),
+      mode: "legacy-production"
+    };
+  }
+
   if (regions.length > 1) {
     return {
       ok: false,
@@ -113,16 +145,6 @@ function resolveGraphRequest(body = {}) {
         "Cross-province routing requires adjacent regional graphs with boundary nodes. Regions: " +
         regions.join(","),
       regionIds: regions
-    };
-  }
-
-  let regionId = regions[0] || "ns";
-  if (forceLegacy && (regionId === "ns" || !regions.length)) {
-    return {
-      ok: true,
-      regionIds: ["ns"],
-      graphPath: graphPathForRegion("__legacy_ns__"),
-      mode: "legacy-production"
     };
   }
 

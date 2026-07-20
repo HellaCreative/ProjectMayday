@@ -276,6 +276,14 @@ check("region selection hits Nova Scotia for Halifax points", () => {
   assert.ok(Array.isArray(regions));
 });
 
+check("Halifax and Yarmouth resolve to Nova Scotia only", () => {
+  const regions = selectRegionsForLocations([
+    { lat: 44.6488, lon: -63.575 },
+    { lat: 43.8361, lon: -66.1209 }
+  ]);
+  assert.deepStrictEqual(regions, ["ns"]);
+});
+
 check("resolveGraphRequest defaults to legacy production mode", () => {
   const result = resolveGraphRequest({
     locations: [
@@ -284,12 +292,19 @@ check("resolveGraphRequest defaults to legacy production mode", () => {
     ]
   });
   assert.strictEqual(result.ok, true);
-  assert.ok(
-    result.mode === "legacy-production" ||
-      result.mode === "regional-local" ||
-      result.mode === "legacy" ||
-      result.regionIds.includes("ns")
-  );
+  assert.strictEqual(result.mode, "legacy-production");
+  assert.deepStrictEqual(result.regionIds, ["ns"]);
+});
+
+check("Halifax–Yarmouth uses legacy production graph by default", () => {
+  const result = resolveGraphRequest({
+    locations: [
+      { lat: 44.6488, lon: -63.575 },
+      { lat: 43.8361, lon: -66.1209 }
+    ]
+  });
+  assert.strictEqual(result.ok, true);
+  assert.strictEqual(result.mode, "legacy-production");
 });
 
 check("all canonical enum tables are non-empty", () => {
