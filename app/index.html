@@ -14747,6 +14747,10 @@
     function setQuickSharingOpen(open) {
       if (!sharingPopover || !reportVisBtn) return;
       if (open) {
+        setLegendOpen(false);
+        setAccountSheetOpen(false);
+        setGroupSheetOpen(false);
+        setPlannerDrawerState("closed");
         sharingPopover.hidden = false;
         sharingPopover.setAttribute("aria-hidden", "false");
         reportVisBtn.setAttribute("aria-expanded", "true");
