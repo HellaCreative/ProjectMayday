@@ -7406,6 +7406,7 @@
     let lastGroupPublishAt = 0;
     let groupRouteTarget = null;
     let groupMapFitGroupId = null;
+    let groupCameraFitRequested = false;
     let groupPresencePollTimer = null;
     let groupPresenceReconcilePromise = null;
     let groupPanel = "list";
@@ -7947,7 +7948,7 @@
 
     function fitSelectedGroupRidersOnce() {
       const group = selectedRidingGroup;
-      if (!group || group.deleted_at || groupMapFitGroupId === group.id || !map) return;
+      if (!groupCameraFitRequested || !group || group.deleted_at || groupMapFitGroupId === group.id || !map) return;
       const points = [];
       if (hasRiderLocation()) points.push([rider.lng, rider.lat]);
       let hasPeer = false;
@@ -7959,6 +7960,7 @@
         if (Number.isFinite(lng) && Number.isFinite(lat)) hasPeer = true;
       }
       if (!points.length || (!hasPeer && hasRiderLocation())) return;
+      groupCameraFitRequested = false;
       groupMapFitGroupId = group.id;
       if (points.length === 1) {
         map.easeTo({ center: points[0], zoom: Math.max(map.getZoom(), 13.5), duration: 450, essential: true });
@@ -13237,6 +13239,7 @@
         selectedRidingGroup = null;
         selectedGroupMembers = [];
         groupMapFitGroupId = null;
+        groupCameraFitRequested = false;
         ridingGroups = [];
         groupSharing = false;
         groupRiders.clear();
@@ -13540,7 +13543,7 @@
               speed: pos.coords.speed || 0,
               accuracy: pos.coords.accuracy
             });
-            map.flyTo({ center: [rider.lng, rider.lat], zoom: 11.5 });
+            map.jumpTo({ center: [rider.lng, rider.lat], zoom: DEFAULT_DETAIL_ZOOM, bearing: 0, pitch: 0 });
           },
           (err) => {
             markLocationUnavailable(err);
@@ -14157,11 +14160,14 @@
       setGroupSheetOpen(open);
       if (open) {
         groupMapFitGroupId = null;
+        groupCameraFitRequested = true;
         const ready = await ensureGroupsReady();
         if (ready) {
           await reconcileAllGroupPresence();
           fitSelectedGroupRidersOnce();
         }
+      } else {
+        groupCameraFitRequested = false;
       }
     });
     document.getElementById("accountSheetHandle")?.addEventListener("click", () => setAccountSheetOpen(false));
