@@ -226,6 +226,10 @@ const CORRIDOR_ANCHORS = [
   { lon: -123.121, lat: 49.283 } // Vancouver
 ];
 
+function nearlySamePoint(a, b, eps = 0.05) {
+  return Math.abs(a.lon - b.lon) < eps && Math.abs(a.lat - b.lat) < eps;
+}
+
 function corridorLocationsForRoute(locations) {
   const pts = (locations || [])
     .map((loc) => {
@@ -242,12 +246,13 @@ function corridorLocationsForRoute(locations) {
   // Only inject national anchors for long east-west hauls.
   if (maxLon - minLon < 15) return pts;
 
-  const anchors = CORRIDOR_ANCHORS.filter((a) => a.lon >= minLon - 1 && a.lon <= maxLon + 1);
   const start = pts[0];
   const end = pts[pts.length - 1];
   const westToEast = start.lon < end.lon;
-  const ordered = anchors.slice().sort((a, b) => (westToEast ? a.lon - b.lon : b.lon - a.lon));
-  return [start, ...ordered, end];
+  const anchors = CORRIDOR_ANCHORS.filter((a) => a.lon >= minLon - 1 && a.lon <= maxLon + 1)
+    .filter((a) => !nearlySamePoint(a, start) && !nearlySamePoint(a, end))
+    .sort((a, b) => (westToEast ? a.lon - b.lon : b.lon - a.lon));
+  return [start, ...anchors, end];
 }
 
 module.exports = {

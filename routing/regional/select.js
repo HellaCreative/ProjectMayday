@@ -30,19 +30,31 @@ function bboxArea(bbox) {
   return Math.max(0, bbox[2] - bbox[0]) * Math.max(0, bbox[3] - bbox[1]);
 }
 
-/** When a point sits in overlapping province bboxes, prefer the smallest. */
+/**
+ * When a point sits in overlapping province bboxes, prefer the smallest —
+ * except AB/BC, whose rectangular bboxes intentionally overlap. Alberta's
+ * west edge is ~120°W north of 54°N (meridian) but follows the continental
+ * divide (~114–116°W) farther south. Smallest-bbox would always pick AB and
+ * mis-assign Kelowna/Okanagan as Alberta.
+ */
 function primaryRegionForPoint(lon, lat) {
-  let best = null;
-  let bestArea = Infinity;
+  const hits = [];
   for (const [id, bbox] of Object.entries(REGION_BBOX)) {
     if (!pointInBbox(lon, lat, bbox)) continue;
-    const area = bboxArea(bbox);
-    if (area < bestArea) {
-      bestArea = area;
-      best = id;
-    }
+    hits.push({ id, area: bboxArea(bbox) });
   }
-  return best;
+  if (!hits.length) return null;
+
+  const ids = new Set(hits.map((h) => h.id));
+  if (ids.has("ab") && ids.has("bc")) {
+    // North of ~54°N the border is the 120th meridian.
+    if (lat >= 54) return lon < -120 ? "bc" : "ab";
+    // South: continental divide. Lake Louise AB ≈ -116.2; Golden BC ≈ -117.0.
+    return lon < -116.4 ? "bc" : "ab";
+  }
+
+  hits.sort((a, b) => a.area - b.area);
+  return hits[0].id;
 }
 
 function publicBaseUrl() {
@@ -153,20 +165,37 @@ function resolveGraphRequest(body = {}) {
 
   const corridor = regionsForRoute(hitRegions);
   const longhaulPath = path.join(REGIONS_DIR, "canada-longhaul", "graph.v1.json.gz");
-  const useLonghaul =
+  // Local longhaul pack is for developer machines with enough RAM. On Vercel the
+  // isolate uses chained regional hops so each request only loads 1–2 provinces.
+  const onVercel = !!(process.env.VERCEL || process.env.VERCEL_ENV);
+  if (
+    !onVercel &&
     corridor.length >= 4 &&
-    (fs.existsSync(longhaulPath) || true) &&
-    !body.disableLonghaul;
-
-  if (useLonghaul && corridor.includes("ns") && corridor.includes("bc")) {
+    fs.existsSync(longhaulPath) &&
+    !body.disableLonghaul &&
+    corridor.includes("ns") &&
+    corridor.includes("bc")
+  ) {
     return {
       ok: true,
       regionIds: corridor,
-      graphPath: graphPathForRegion("canada-longhaul"),
-      graphPaths: [graphPathForRegion("canada-longhaul")],
-      mode: fs.existsSync(longhaulPath) ? "canada-longhaul-local" : "canada-longhaul-remote",
+      graphPath: longhaulPath,
+      graphPaths: [longhaulPath],
+      mode: "canada-longhaul-local",
       hitRegions,
       note: "Using prebuilt thinned Canada long-haul corridor pack"
+    };
+  }
+
+  if (corridor.length >= 4 && !body.disableChain) {
+    return {
+      ok: true,
+      regionIds: corridor,
+      graphPath: null,
+      graphPaths: [],
+      mode: "canada-chain",
+      hitRegions,
+      chain: true
     };
   }
 

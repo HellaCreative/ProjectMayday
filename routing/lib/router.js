@@ -1,7 +1,8 @@
 "use strict";
 
-const { loadGraph, loadGraphAsync, loadGraphsForRequest } = require("./graph");
+const { loadGraph, loadGraphAsync, loadGraphsForRequest, clearGraphCache } = require("./graph");
 const { resolveGraphRequest } = require("../regional/select");
+const { corridorLocationsForRoute } = require("../regional/merge");
 
 const DEFAULT_MATCH_METERS = 250;
 const EARTH_M = 6371000;
@@ -285,6 +286,10 @@ async function routeRequest(body = {}) {
     };
   }
 
+  if (graphResolution.mode === "canada-chain") {
+    return routeCanadaChain(body, graphResolution);
+  }
+
   let runtime;
   try {
     runtime = await loadGraphsForRequest(graphResolution, {
@@ -299,6 +304,82 @@ async function routeRequest(body = {}) {
       regionIds: graphResolution.regionIds || []
     };
   }
+  return routeOnRuntime(body, graphResolution, runtime);
+}
+
+async function routeCanadaChain(body, graphResolution) {
+  const waypoints = corridorLocationsForRoute(body.locations || []);
+  if (waypoints.length < 2) {
+    return {
+      status: "error",
+      error: "chain_failed",
+      message: "Could not build long-haul waypoint chain"
+    };
+  }
+
+  const parts = [];
+  let totalMeters = 0;
+  const warnings = [];
+  for (let i = 0; i < waypoints.length - 1; i += 1) {
+    clearGraphCache();
+    const hop = await routeRequest({
+      ...body,
+      locations: [waypoints[i], waypoints[i + 1]],
+      disableChain: true,
+      disableLonghaul: true,
+      options: {
+        ...(body.options || {}),
+        matchLimitMeters: Math.min(500, Number((body.options || {}).matchLimitMeters) || 500)
+      }
+    });
+    if (hop.status !== "complete") {
+      return {
+        status: hop.status || "failed",
+        error: hop.error || "chain_hop_failed",
+        message:
+          (hop.message || "Long-haul hop failed") +
+          ` (hop ${i + 1}/${waypoints.length - 1})`,
+        regionIds: graphResolution.regionIds,
+        hopIndex: i,
+        hop
+      };
+    }
+    parts.push(hop);
+    totalMeters += hop.distanceMeters || 0;
+    if (Array.isArray(hop.warnings)) warnings.push(...hop.warnings);
+  }
+
+  const geometry = [];
+  const segments = [];
+  for (let i = 0; i < parts.length; i += 1) {
+    const g = parts[i].geometry || [];
+    const start = i === 0 ? 0 : 1; // avoid duplicate joint coordinates
+    for (let j = start; j < g.length; j += 1) geometry.push(g[j]);
+    for (const seg of parts[i].segments || []) segments.push(seg);
+  }
+
+  return {
+    status: "complete",
+    profile: String(body.profile || "balanced").toLowerCase(),
+    distanceMeters: totalMeters,
+    geometry,
+    segments,
+    warnings,
+    stats: {
+      hops: parts.length,
+      hopKm: parts.map((p) => Math.round((p.distanceMeters || 0) / 1000))
+    },
+    debug: {
+      engine: "dirt-node-astar-chain",
+      graphMode: "canada-chain",
+      regionIds: graphResolution.regionIds,
+      waypoints: waypoints.length,
+      fallback: null
+    }
+  };
+}
+
+async function routeOnRuntime(body, graphResolution, runtime) {
   const enums = runtime.enums;
   const profile = String(body.profile || "balanced").toLowerCase();
   if (!["direct", "balanced", "dirt", "cleanest"].includes(profile)) {

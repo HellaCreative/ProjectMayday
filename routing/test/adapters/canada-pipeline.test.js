@@ -284,6 +284,19 @@ check("Halifax and Yarmouth resolve to Nova Scotia only", () => {
   assert.deepStrictEqual(regions, ["ns"]);
 });
 
+check("Kelowna resolves to BC not Alberta despite bbox overlap", () => {
+  const { primaryRegionForPoint } = require("../../regional/select");
+  assert.strictEqual(primaryRegionForPoint(-119.496, 49.888), "bc");
+  assert.strictEqual(primaryRegionForPoint(-114.071, 51.045), "ab");
+  assert.deepStrictEqual(
+    selectRegionsForLocations([
+      { lat: 51.045, lon: -114.071 },
+      { lat: 49.888, lon: -119.496 }
+    ]),
+    ["ab", "bc"]
+  );
+});
+
 check("resolveGraphRequest defaults to legacy production mode", () => {
   const result = resolveGraphRequest({
     locations: [
