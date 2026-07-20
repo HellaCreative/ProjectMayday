@@ -2564,6 +2564,8 @@
     .saved-sheet-header {
       display: none;
     }
+    .saved-sheet-title,
+    .saved-sheet-subtitle { display: none !important; }
     body.planner-tab-saved .route-finder-header,
     body.planner-tab-saved #routeFullModeTabs {
       display: none !important;
@@ -4326,6 +4328,35 @@
       letter-spacing: -0.01em;
       line-height: 1.3;
     }
+    /* The map prompt owns the instruction for the active route action. Keep
+       the drawer focused on controls and stages instead of repeating it. */
+    body.planner-open .route-tab-hint { display: none !important; }
+    .route-map-toast {
+      position: fixed;
+      top: max(84px, calc(env(safe-area-inset-top) + 72px));
+      left: 50%;
+      z-index: 34;
+      width: max-content;
+      max-width: calc(100vw - 32px);
+      padding: 8px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 999px;
+      background: rgba(28, 25, 23, 0.94);
+      color: #fff;
+      box-shadow: 0 6px 18px rgba(12, 10, 9, 0.2);
+      font: 600 12px/1.2 var(--font-ui);
+      letter-spacing: -0.01em;
+      text-align: center;
+      pointer-events: none;
+      opacity: 0;
+      transform: translate(-50%, -6px);
+      transition: opacity 150ms ease, transform 150ms ease;
+    }
+    .route-map-toast.visible {
+      opacity: 1;
+      transform: translate(-50%, 0);
+    }
+    .route-map-toast[hidden] { display: none; }
     .route-tabs {
       display: flex !important;
       flex-direction: row !important;
@@ -6121,13 +6152,6 @@
     </div>
     <div class="route-drawer-scroll" id="routeDrawerScroll">
     <div class="route-drawer-compact" id="routeDrawerCompact">
-      <div class="route-bar-header" aria-live="polite">
-        <div class="route-bar-kicker" id="routeBarKicker">FROM HERE</div>
-        <div class="route-bar-meta" id="routeBarMeta">Tap the map to begin</div>
-        <button class="route-bar-expand" id="routeBarExpand" type="button" title="Open route details" aria-label="Open route details">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6" /></svg>
-        </button>
-      </div>
       <div class="route-mode-block">
         <div class="route-segment route-tabs" role="tablist" aria-label="Route planner tabs">
           <button class="route-mode active" type="button" data-route-mode="here" role="tab" aria-selected="true">From here</button>
@@ -6264,6 +6288,8 @@
     </div>
     </div>
   </div>
+
+  <div class="route-map-toast" id="routeMapToast" role="status" aria-live="polite" hidden></div>
 
   <!-- Unknown-access info popover (body-level so it never clips inside the drawer). -->
   <div class="access-info-tip" id="accessInfoTip" role="tooltip" hidden>Unknown access is not permission. Routes may include closures, private land, seasonal restrictions, or enforcement.</div>
@@ -7437,6 +7463,7 @@
     const routeBarKicker = document.getElementById("routeBarKicker");
     const routeBarMeta = document.getElementById("routeBarMeta");
     const routeBarExpand = document.getElementById("routeBarExpand");
+    const routeMapToast = document.getElementById("routeMapToast");
     const routeBarPlanPanel = document.getElementById("routeBarPlanPanel");
     const routeBarStageEditor = document.getElementById("routeBarStageEditor");
     const routeBarStageList = document.getElementById("routeBarStageList");
@@ -12305,6 +12332,31 @@
       }
     }
 
+    function syncRouteMapToast() {
+      if (!routeMapToast) return;
+      let message = "";
+      const plannerOpen = plannerDrawerState !== "closed" && !navigating;
+      if (plannerOpen && plannerTab === "here") {
+        if (activeRoute) {
+          message = "";
+        } else if (hasRiderLocation()) {
+          message = "Tap map to choose a destination";
+        } else if (locationProbeState === "pending") {
+          message = "Finding your location…";
+        } else {
+          message = "Switch to Plan a route to choose a start";
+        }
+      } else if (plannerOpen && plannerTab === "plan") {
+        const active = getActiveStage();
+        if (!active || !active.start) message = "Tap map to place point A";
+        else if (!active.end) message = "Tap map to place point B";
+        else message = "Tap map to add another stage";
+      }
+      routeMapToast.textContent = message;
+      routeMapToast.hidden = !message;
+      routeMapToast.classList.toggle("visible", !!message);
+    }
+
     function clearRoute() {
       if (navigating) stopNavigation();
       routeJobId += 1;
@@ -13693,6 +13745,7 @@
       document.body.classList.toggle("planner-collapsed", plannerDrawerState === "collapsed");
       document.body.classList.toggle("planner-expanded", plannerDrawerState === "expanded");
       document.body.classList.toggle("app-sheet-open", open || document.body.classList.contains("legend-open") || document.body.classList.contains("account-open") || document.body.classList.contains("groups-open"));
+      syncRouteMapToast();
       syncBottomNavState();
       requestAnimationFrame(syncLocateClearance);
     }
