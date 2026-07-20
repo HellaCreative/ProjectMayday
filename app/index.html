@@ -13783,6 +13783,7 @@
     }
 
     routeToggleBtn.addEventListener("click", () => {
+      setQuickSharingOpen(false);
       setLegendOpen(false);
       setAccountSheetOpen(false);
       setGroupSheetOpen(false);
@@ -14095,6 +14096,8 @@
       if (!accountSheet) return;
       if (open) {
         setQuickSharingOpen(false);
+        setLegendOpen(false);
+        setGroupSheetOpen(false);
         setPlannerDrawerState("closed");
       }
       if (open) positionAccountSheet(accountSheet, accountBtn);
@@ -14111,6 +14114,8 @@
       if (!groupSheet) return;
       if (open) {
         setQuickSharingOpen(false);
+        setLegendOpen(false);
+        setAccountSheetOpen(false);
         setPlannerDrawerState("closed");
       }
       if (open) positionAccountSheet(groupSheet, groupBtn);
