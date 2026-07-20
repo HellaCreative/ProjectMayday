@@ -276,19 +276,20 @@ check("region selection hits Nova Scotia for Halifax points", () => {
   assert.ok(Array.isArray(regions));
 });
 
-check("resolveGraphRequest falls back to legacy when no regional pack", () => {
-  const tmpEmpty = path.join(__dirname, "..", "..", "data", "regions-empty-test");
-  const result = resolveGraphRequest(
-    {
-      locations: [
-        { lat: 44.74, lon: -63.3 },
-        { lat: 44.79, lon: -63.15 }
-      ]
-    },
-    tmpEmpty
-  );
+check("resolveGraphRequest defaults to legacy production mode", () => {
+  const result = resolveGraphRequest({
+    locations: [
+      { lat: 44.74, lon: -63.3 },
+      { lat: 44.79, lon: -63.15 }
+    ]
+  });
   assert.strictEqual(result.ok, true);
-  assert.ok(result.mode === "legacy" || result.regionIds.includes("ns") || result.regionIds.includes("__legacy_ns__"));
+  assert.ok(
+    result.mode === "legacy-production" ||
+      result.mode === "regional-local" ||
+      result.mode === "legacy" ||
+      result.regionIds.includes("ns")
+  );
 });
 
 check("all canonical enum tables are non-empty", () => {

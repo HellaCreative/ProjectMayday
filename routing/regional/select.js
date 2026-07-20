@@ -5,6 +5,7 @@ const path = require("path");
 
 const REGIONS_DIR = path.join(__dirname, "..", "data", "regions");
 const LEGACY_GRAPH = path.join(__dirname, "..", "data", "ns-graph.v1.json.gz");
+const REGIONAL_NS = path.join(REGIONS_DIR, "ns", "graph.v1.json.gz");
 
 /** Approximate province bboxes for region selection (W,S,E,N). */
 const REGION_BBOX = {
@@ -22,6 +23,12 @@ const REGION_BBOX = {
   nt: [-136.5, 60.0, -102.0, 78.8],
   nu: [-120.9, 51.6, -60.9, 83.2]
 };
+
+function publicBaseUrl() {
+  if (process.env.ROUTING_PUBLIC_BASE) return process.env.ROUTING_PUBLIC_BASE.replace(/\/$/, "");
+  if (process.env.VERCEL_URL) return "https://" + process.env.VERCEL_URL.replace(/^https?:\/\//, "");
+  return "https://dirt-mayday.vercel.app";
+}
 
 function pointInBbox(lon, lat, bbox) {
   return lon >= bbox[0] && lon <= bbox[2] && lat >= bbox[1] && lat <= bbox[3];
@@ -46,58 +53,58 @@ function listAvailableRegions(regionsDir = REGIONS_DIR) {
     .sort();
 }
 
-function selectRegionsForLocations(locations, regionsDir = REGIONS_DIR) {
+function selectRegionsForLocations(locations) {
   const points = locationsToPoints(locations);
-  const available = new Set(listAvailableRegions(regionsDir));
   const hit = new Set();
-
   for (const p of points) {
     for (const [id, bbox] of Object.entries(REGION_BBOX)) {
-      if (available.has(id) && pointInBbox(p.lon, p.lat, bbox)) hit.add(id);
+      if (pointInBbox(p.lon, p.lat, bbox)) hit.add(id);
     }
-  }
-
-  // Fallback: legacy single NS graph when regional packs are absent.
-  if (!hit.size) {
-    if (available.has("ns")) return ["ns"];
-    if (fs.existsSync(LEGACY_GRAPH)) return ["__legacy_ns__"];
-    return [];
   }
   return [...hit].sort();
 }
 
-function graphPathForRegion(regionId, regionsDir = REGIONS_DIR) {
+function localGraphPath(regionId) {
   if (regionId === "__legacy_ns__") return LEGACY_GRAPH;
-  return path.join(regionsDir, regionId, "graph.v1.json.gz");
+  return path.join(REGIONS_DIR, regionId, "graph.v1.json.gz");
+}
+
+function remoteGraphUrl(regionId) {
+  const base = publicBaseUrl();
+  if (regionId === "__legacy_ns__") return base + "/routing/data/ns-graph.v1.json.gz";
+  return base + "/routing/data/regions/" + regionId + "/graph.v1.json.gz";
+}
+
+function graphPathForRegion(regionId) {
+  const local = localGraphPath(regionId);
+  if (fs.existsSync(local)) return local;
+  return remoteGraphUrl(regionId);
 }
 
 /**
- * Resolve which graph file(s) a route request should load.
- * Cross-region multi-graph merge is reserved for a later boundary-node phase;
- * for now we require a single matching region or legacy NS.
+ * Resolve which graph a route request should load.
+ * On Vercel the graph files are CDN static assets (not in the function bundle),
+ * so we return https URLs when local files are absent.
  */
-function resolveGraphRequest(body = {}, regionsDir = REGIONS_DIR) {
+function resolveGraphRequest(body = {}) {
+  // Temporary production guard: the conflated regional graph is larger and can
+  // OOM Hobby isolates on cold start. Prefer the proven legacy NS graph for the
+  // live API unless ROUTING_USE_REGIONAL=1. Local fixture runs still use
+  // defaultGraphPath() which prefers the regional pack when present on disk.
+  const forceRegional = process.env.ROUTING_USE_REGIONAL === "1";
+  const forceLegacy = process.env.ROUTING_PREFER_LEGACY === "1" || !forceRegional;
+
   if (body.regionId) {
     const id = String(body.regionId).toLowerCase();
-    const p = graphPathForRegion(id, regionsDir);
-    if (fs.existsSync(p) || id === "__legacy_ns__") {
-      return { ok: true, regionIds: [id], graphPath: p, mode: "explicit" };
-    }
     return {
-      ok: false,
-      error: "region_unavailable",
-      message: "Requested region graph is not available: " + id
+      ok: true,
+      regionIds: [id],
+      graphPath: graphPathForRegion(id),
+      mode: "explicit"
     };
   }
 
-  const regions = selectRegionsForLocations(body.locations, regionsDir);
-  if (!regions.length) {
-    return {
-      ok: false,
-      error: "no_region_graph",
-      message: "No verified regional routing graph covers the requested locations."
-    };
-  }
+  const regions = selectRegionsForLocations(body.locations);
   if (regions.length > 1) {
     return {
       ok: false,
@@ -108,12 +115,22 @@ function resolveGraphRequest(body = {}, regionsDir = REGIONS_DIR) {
       regionIds: regions
     };
   }
-  const regionId = regions[0];
+
+  let regionId = regions[0] || "ns";
+  if (forceLegacy && (regionId === "ns" || !regions.length)) {
+    return {
+      ok: true,
+      regionIds: ["ns"],
+      graphPath: graphPathForRegion("__legacy_ns__"),
+      mode: "legacy-production"
+    };
+  }
+
   return {
     ok: true,
     regionIds: [regionId],
-    graphPath: graphPathForRegion(regionId, regionsDir),
-    mode: regionId === "__legacy_ns__" ? "legacy" : "regional"
+    graphPath: graphPathForRegion(regionId),
+    mode: fs.existsSync(localGraphPath(regionId)) ? "regional-local" : "regional-remote"
   };
 }
 
@@ -121,8 +138,11 @@ module.exports = {
   REGION_BBOX,
   REGIONS_DIR,
   LEGACY_GRAPH,
+  REGIONAL_NS,
   listAvailableRegions,
   selectRegionsForLocations,
   graphPathForRegion,
-  resolveGraphRequest
+  remoteGraphUrl,
+  resolveGraphRequest,
+  publicBaseUrl
 };

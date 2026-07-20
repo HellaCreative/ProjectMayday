@@ -11,6 +11,9 @@ const DEFAULT_REGIONAL_NS_PATH = path.join(__dirname, "..", "data", "regions", "
 
 function defaultGraphPath() {
   if (process.env.ROUTING_GRAPH_PATH) return process.env.ROUTING_GRAPH_PATH;
+  // Local/dev + fixture preference: regional pack when present on disk.
+  // Serverless API uses resolveGraphRequest (legacy by default until regional
+  // is explicitly promoted with ROUTING_USE_REGIONAL=1).
   if (fs.existsSync(DEFAULT_REGIONAL_NS_PATH)) return DEFAULT_REGIONAL_NS_PATH;
   return DEFAULT_LEGACY_GRAPH_PATH;
 }
@@ -75,9 +78,8 @@ async function loadGraphAsync(graphPath = defaultGraphPath()) {
       data = inflateGraphBuffer(fs.readFileSync(graphPath));
     } else {
       // On Vercel Hobby, prefer the static asset so the function bundle stays small.
-      const base = process.env.VERCEL_URL ? ("https://" + process.env.VERCEL_URL) : "";
-      const remote = process.env.ROUTING_GRAPH_URL ||
-        (base + "/routing/data/regions/ns/graph.v1.json.gz");
+      const base = process.env.VERCEL_URL ? ("https://" + process.env.VERCEL_URL) : "https://dirt-mayday.vercel.app";
+      const remote = process.env.ROUTING_GRAPH_URL || (base + "/routing/data/ns-graph.v1.json.gz");
       if (!remote.startsWith("http")) {
         throw new Error("Routing graph not found at " + graphPath);
       }
