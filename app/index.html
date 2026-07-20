@@ -4372,7 +4372,41 @@
       opacity: 1;
       transform: translate(-50%, 0);
     }
-    .route-map-toast[hidden] { display: none; }
+    .route-map-toast.routing,
+    .route-map-toast.complete,
+    .route-map-toast.error {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+    }
+    .route-map-toast.routing::before {
+      content: "";
+      width: 9px;
+      height: 9px;
+      flex: 0 0 9px;
+      border: 2px solid rgba(255, 255, 255, 0.38);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: route-toast-spin 800ms linear infinite;
+    }
+    .route-map-toast.complete {
+      background: #176b43;
+    }
+    .route-map-toast.complete::before {
+      content: "✓";
+      font-size: 13px;
+      line-height: 1;
+    }
+    .route-map-toast.error {
+      background: #9f263f;
+    }
+    @keyframes route-toast-spin {
+      to { transform: rotate(360deg); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .route-map-toast.routing::before { animation: none; }
+    }
+    .route-map-toast[hidden] { display: none !important; }
     .route-tabs {
       display: flex !important;
       flex-direction: row !important;
@@ -7367,6 +7401,11 @@
     let routingGraphPromise = null;
     let activeRoute = null;
     let routeMessage = "";
+    let routeToastState = "idle";
+    let routeToastMessage = "";
+    let routeToastTimer = null;
+    let routeToastRequestId = 0;
+    const routeToastRequests = new Set();
     let lastNetworkRouteReason = "";
     let routeDebug = null;
     let routeJobId = 0;
@@ -9657,6 +9696,7 @@
       const token = stageTracker.issue(stageId);
       const stageProfile = stage.profile || routePreference;
       const stagePolicy = stageAccessPolicy(stage);
+      const toastRequestId = beginRouteToast("Plotting a route…");
       planTrip.stages[idx] = RS.transitionStage(stage, "route-start", { requestToken: token });
       planAggregate = RS.aggregateTrip(planTrip);
       renderStageList();
@@ -9679,24 +9719,37 @@
         });
         const api = await res.json();
         // Stale-guard: a newer edit/request for this stage supersedes us.
-        if (!stageTracker.isCurrent(stageId, token)) return;
+        if (!stageTracker.isCurrent(stageId, token)) {
+          finishRouteToast(toastRequestId, "stale");
+          return;
+        }
         const cur = RS.findStageIndex(planTrip, stageId);
-        if (cur < 0) return;
+        if (cur < 0) {
+          finishRouteToast(toastRequestId, "stale");
+          return;
+        }
         if (api.status !== "complete") {
+          const errorMessage = api.message || api.error || "No route";
           planTrip.stages[cur] = RS.transitionStage(planTrip.stages[cur], "route-failed", {
-            error: api.message || api.error || "No route"
+            error: errorMessage
           });
+          finishRouteToast(toastRequestId, "error", "Route unavailable");
         } else {
           planTrip.stages[cur] = RS.transitionStage(planTrip.stages[cur], "route-success", { route: api });
+          finishRouteToast(toastRequestId, "complete");
         }
       } catch (err) {
-        if (!stageTracker.isCurrent(stageId, token)) return;
+        if (!stageTracker.isCurrent(stageId, token)) {
+          finishRouteToast(toastRequestId, "stale");
+          return;
+        }
         const cur = RS.findStageIndex(planTrip, stageId);
         if (cur >= 0) {
           planTrip.stages[cur] = RS.transitionStage(planTrip.stages[cur], "route-failed", {
             error: (err && err.message) || "Routing failed"
           });
         }
+        finishRouteToast(toastRequestId, "error", "Routing failed");
       }
       afterStageUpdate();
     }
@@ -12374,7 +12427,9 @@
       if (!routeMapToast) return;
       let message = "";
       const plannerOpen = plannerDrawerState !== "closed" && !navigating;
-      if (plannerOpen && plannerTab === "here") {
+      if (plannerOpen && (routeToastState === "routing" || routeToastState === "complete" || routeToastState === "error")) {
+        message = routeToastMessage;
+      } else if (plannerOpen && plannerTab === "here") {
         if (activeRoute) {
           message = "";
         } else if (hasRiderLocation()) {
@@ -12393,11 +12448,70 @@
       routeMapToast.textContent = message;
       routeMapToast.hidden = !message;
       routeMapToast.classList.toggle("visible", !!message);
+      routeMapToast.classList.toggle("routing", !!message && routeToastState === "routing");
+      routeMapToast.classList.toggle("complete", !!message && routeToastState === "complete");
+      routeMapToast.classList.toggle("error", !!message && routeToastState === "error");
+    }
+
+    function resetRouteToast() {
+      routeToastRequests.clear();
+      routeToastState = "idle";
+      routeToastMessage = "";
+      if (routeToastTimer) {
+        clearTimeout(routeToastTimer);
+        routeToastTimer = null;
+      }
+      syncRouteMapToast();
+    }
+
+    function beginRouteToast(message) {
+      const requestId = ++routeToastRequestId;
+      routeToastRequests.add(requestId);
+      routeToastState = "routing";
+      routeToastMessage = message || "Plotting a course…";
+      if (routeToastTimer) {
+        clearTimeout(routeToastTimer);
+        routeToastTimer = null;
+      }
+      syncRouteMapToast();
+      return requestId;
+    }
+
+    function finishRouteToast(requestId, outcome, message) {
+      if (!routeToastRequests.delete(requestId)) return;
+      if (routeToastRequests.size) {
+        routeToastState = "routing";
+        routeToastMessage = "Plotting a course…";
+        syncRouteMapToast();
+        return;
+      }
+      if (outcome === "complete") {
+        routeToastState = "complete";
+        routeToastMessage = message || "Route complete";
+        syncRouteMapToast();
+        routeToastTimer = setTimeout(() => {
+          routeToastTimer = null;
+          routeToastState = "idle";
+          routeToastMessage = "";
+          syncRouteMapToast();
+        }, 1600);
+        return;
+      }
+      if (outcome === "error") {
+        routeToastState = "error";
+        routeToastMessage = message || "Route unavailable";
+        syncRouteMapToast();
+        return;
+      }
+      routeToastState = "idle";
+      routeToastMessage = "";
+      syncRouteMapToast();
     }
 
     function clearRoute() {
       if (navigating) stopNavigation();
       routeJobId += 1;
+      resetRouteToast();
       plannedStart = null;
       destination = null;
       activeRoute = null;
@@ -12412,6 +12526,7 @@
 
     function setRouteMode(nextTab) {
       if (navigating) stopNavigation();
+      resetRouteToast();
       if (nextTab === "saved" && plannerTab !== "saved") {
         savedReturnTab = plannerTab === "here" || plannerTab === "plan" ? plannerTab : "plan";
       }
@@ -12563,6 +12678,7 @@
         }
       }
       const jobId = ++routeJobId;
+      const toastRequestId = beginRouteToast("Plotting a course…");
       activeRoute = null;
       routeDebug = null;
       lastNetworkRouteReason = "";
@@ -12586,7 +12702,10 @@
           })
         });
         const api = await res.json();
-        if (jobId !== routeJobId) return;
+        if (jobId !== routeJobId) {
+          finishRouteToast(toastRequestId, "stale");
+          return;
+        }
 
         routeDebug = mapApiDebugToRouteDebug(api);
 
@@ -12596,6 +12715,7 @@
           activeRoute = null;
           setStatus(lastNetworkRouteReason, "error", "route");
           setRouteCardOpen(true);
+          finishRouteToast(toastRequestId, "error", "Route unavailable");
           refreshRouteDraft();
           return;
         }
@@ -12609,6 +12729,7 @@
         }
         activeRoute = networkRoute;
         routeMessage = "";
+        finishRouteToast(toastRequestId, "complete");
         const warnText = (api.warnings || []).map((w) => w.message || w.code).filter(Boolean).join(" · ");
         const showWarn = Boolean(
           warnText &&
@@ -12629,13 +12750,17 @@
         refreshContextNetwork({ announce: false }).catch(() => {});
       } catch (err) {
         console.error(err);
-        if (jobId !== routeJobId) return;
+        if (jobId !== routeJobId) {
+          finishRouteToast(toastRequestId, "stale");
+          return;
+        }
         activeRoute = null;
         routeDebug = null;
         lastNetworkRouteReason = err.message || "Try again";
         routeMessage = "Routing failed<strong>" + lastNetworkRouteReason + "</strong>";
         setStatus(lastNetworkRouteReason, "error", "route");
         setRouteCardOpen(true);
+        finishRouteToast(toastRequestId, "error", "Routing failed");
         refreshRouteDraft();
       }
     }
