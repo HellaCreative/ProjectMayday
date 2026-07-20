@@ -1,20 +1,14 @@
 #!/usr/bin/env node
 /**
- * Phase 2A — Pack Nova Scotia NSTDB road lines into an eligible production
- * overlay with surface / structure / access separation and a topology report.
+ * Phase 2A — Pack Nova Scotia NSTDB road lines into display chunks.
  *
- * Production pack rules (PHASE-2-BUILD-GUIDE.md):
- * - Exclude No Vehicular Traffic, TRAIL features, railways, ferries, driveways,
- *   service artifacts, and empty geometry.
- * - Ramps are kept as motorized_permissive paved edges (needed for highway
- *   continuity). They paint with the paved surface layer.
- * - TRACK (resource/indefinite linework) is NOT the same as TRAIL:
- *   TRAIL = excluded non-motorized recreation. TRACK = packed as surface
- *   "track" with access motorized_unknown until verified.
- * - surfaceClass and structureType are separate fields.
- * - Every edge has accessClass, source provenance, and a stable edgeId.
- * - Split only at exact shared vertices (no proximity stitching).
- * - Raw archive written outside app/data for audit; not loaded by the client.
+ * Classification rules now live in the shared adapter:
+ *   routing/adapters/ns-nstdb.js  (classifyNstdbDescription)
+ *
+ * This script remains the Socrata download + chunk writer for map corridor paint.
+ * Routing graphs are built via:
+ *   node scripts/build-ns-regional-graph.js
+ * which runs the NSTDB adapter against these chunks and conflates with NRN.
  *
  * Env:
  *   NS_GOV_BBOX="W,S,E,N"   optional clip

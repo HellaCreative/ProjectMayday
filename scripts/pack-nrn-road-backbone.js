@@ -1,6 +1,12 @@
 #!/usr/bin/env node
 /**
- * Pack NRN resource/recreation road segments into a lightweight DIRT gravel overlay.
+ * Legacy NRN gravel-only overlay packer (display-era).
+ *
+ * Prefer the Canada routing adapter for authoritative backbone ingestion:
+ *   routing/adapters/nrn.js
+ *   scripts/build-ns-regional-graph.js
+ *
+ * This script is retained for historical gravel overlay builds only.
  */
 const fs = require("fs");
 const path = require("path");

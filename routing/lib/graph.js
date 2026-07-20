@@ -6,7 +6,16 @@ const zlib = require("zlib");
 const https = require("https");
 const http = require("http");
 
-const DEFAULT_GRAPH_PATH = path.join(__dirname, "..", "data", "ns-graph.v1.json.gz");
+const DEFAULT_LEGACY_GRAPH_PATH = path.join(__dirname, "..", "data", "ns-graph.v1.json.gz");
+const DEFAULT_REGIONAL_NS_PATH = path.join(__dirname, "..", "data", "regions", "ns", "graph.v1.json.gz");
+
+function defaultGraphPath() {
+  if (process.env.ROUTING_GRAPH_PATH) return process.env.ROUTING_GRAPH_PATH;
+  if (fs.existsSync(DEFAULT_REGIONAL_NS_PATH)) return DEFAULT_REGIONAL_NS_PATH;
+  return DEFAULT_LEGACY_GRAPH_PATH;
+}
+
+const DEFAULT_GRAPH_PATH = defaultGraphPath();
 
 let cached = null;
 let loadingPromise = null;
@@ -39,7 +48,7 @@ function inflateGraphBuffer(buf) {
   return JSON.parse(buf.toString("utf8"));
 }
 
-function loadGraphSync(graphPath = process.env.ROUTING_GRAPH_PATH || DEFAULT_GRAPH_PATH) {
+function loadGraphSync(graphPath = defaultGraphPath()) {
   if (cached && cached.path === graphPath) return cached.runtime;
 
   const started = Date.now();
@@ -52,11 +61,11 @@ function loadGraphSync(graphPath = process.env.ROUTING_GRAPH_PATH || DEFAULT_GRA
   return materializeRuntime(graphPath, data, started);
 }
 
-async function loadGraphAsync(graphPath = process.env.ROUTING_GRAPH_PATH || DEFAULT_GRAPH_PATH) {
+async function loadGraphAsync(graphPath = defaultGraphPath()) {
   if (cached && cached.path === graphPath) return cached.runtime;
-  if (loadingPromise) return loadingPromise;
+  if (loadingPromise && loadingPromise.path === graphPath) return loadingPromise.promise;
 
-  loadingPromise = (async () => {
+  const promise = (async () => {
     const started = Date.now();
     let data;
     if (graphPath.startsWith("http://") || graphPath.startsWith("https://")) {
@@ -67,7 +76,8 @@ async function loadGraphAsync(graphPath = process.env.ROUTING_GRAPH_PATH || DEFA
     } else {
       // On Vercel Hobby, prefer the static asset so the function bundle stays small.
       const base = process.env.VERCEL_URL ? ("https://" + process.env.VERCEL_URL) : "";
-      const remote = process.env.ROUTING_GRAPH_URL || (base + "/routing/data/ns-graph.v1.json.gz");
+      const remote = process.env.ROUTING_GRAPH_URL ||
+        (base + "/routing/data/regions/ns/graph.v1.json.gz");
       if (!remote.startsWith("http")) {
         throw new Error("Routing graph not found at " + graphPath);
       }
@@ -78,10 +88,12 @@ async function loadGraphAsync(graphPath = process.env.ROUTING_GRAPH_PATH || DEFA
     return materializeRuntime(graphPath, data, started);
   })();
 
+  loadingPromise = { path: graphPath, promise };
+
   try {
-    return await loadingPromise;
+    return await promise;
   } finally {
-    loadingPromise = null;
+    if (loadingPromise && loadingPromise.promise === promise) loadingPromise = null;
   }
 }
 
@@ -154,5 +166,8 @@ module.exports = {
   loadGraphSync,
   loadGraphAsync,
   clearGraphCache,
-  DEFAULT_GRAPH_PATH
+  defaultGraphPath,
+  DEFAULT_GRAPH_PATH,
+  DEFAULT_LEGACY_GRAPH_PATH,
+  DEFAULT_REGIONAL_NS_PATH
 };

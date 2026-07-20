@@ -6564,25 +6564,6 @@
       </label>
     </div>
     <div class="legend-group">
-      <span class="legend-title">Data Sources</span>
-      <!-- OSM Overpass source disabled for NSTDB-only POC.
-      <label class="legend-row">
-        <span class="legend-label"><i style="background:var(--text)"></i>OSM Overpass</span>
-        <span class="switch"><input type="checkbox" data-source-toggle="osm" checked aria-label="Toggle OSM Overpass source"><span></span></span>
-      </label>
-      -->
-      <!-- NRN gravel source disabled for NSTDB-only POC.
-      <label class="legend-row">
-        <span class="legend-label"><i style="background:var(--text)"></i>NRN gravel</span>
-        <span class="switch"><input type="checkbox" data-source-toggle="nrn" aria-label="Toggle National Road Network gravel source"><span></span></span>
-      </label>
-      -->
-      <label class="legend-row">
-        <span class="legend-label"><i style="background:var(--text)"></i>NS Government</span>
-        <span class="switch"><input type="checkbox" data-source-toggle="nsGov" checked aria-label="Toggle Nova Scotia government source"><span></span></span>
-      </label>
-    </div>
-    <div class="legend-group">
       <span class="legend-title">Route Data</span>
       <label class="legend-row" title="Show all route lines in the current map area">
         <span class="legend-label"><i style="background:var(--track)"></i>Show route lines</span>
@@ -7209,7 +7190,7 @@
       ...Object.values(ACCESS_LAYERS).map((type) => type.layer)
     ];
     const NS_GOV_LAYER_IDS = TRAIL_LAYER_IDS.slice();
-    const SOURCE_LAYER_MAP = { nsGov: NS_GOV_LAYER_IDS };
+    const SOURCE_LAYER_MAP = { routeNetwork: NS_GOV_LAYER_IDS, nsGov: NS_GOV_LAYER_IDS };
     const layerEnabled = {
       access: true,
       gravel: true,
@@ -7234,7 +7215,7 @@
     let allowUnknownAccess = false;
     let unknownAccessAcknowledged = false;
     let accessWarnResolver = null;
-    const sourceEnabled = { nsGov: true };
+    const sourceEnabled = { nsGov: true, routeNetwork: true };
     let showAllNetworkData = false;
 
     function contextMaxFeatures() {
@@ -14396,16 +14377,10 @@
         refreshPoiLayer();
       });
     });
-    document.querySelectorAll("[data-source-toggle]").forEach((input) => {
-      input.addEventListener("change", async () => {
-        sourceEnabled[input.dataset.sourceToggle] = input.checked;
-        if (input.dataset.sourceToggle === "nsGov") {
-          // Visibility of the NSTDB source never loads the full province pack.
-          refreshContextNetwork({ announce: false });
-        }
-        applyLayerVisibility();
-      });
-    });
+    // Source switches are product-internal only. Riders never toggle NRN/NSTDB/OSM.
+    // Corridor paint always uses the canonical route-network chunks.
+    sourceEnabled.nsGov = true;
+    sourceEnabled.routeNetwork = true;
     document.querySelectorAll("[data-network-toggle]").forEach((input) => {
       input.checked = showAllNetworkData;
       input.addEventListener("change", () => {

@@ -1,6 +1,7 @@
 "use strict";
 
 const { loadGraph, loadGraphAsync } = require("./graph");
+const { resolveGraphRequest } = require("../regional/select");
 
 const DEFAULT_MATCH_METERS = 250;
 const EARTH_M = 6371000;
@@ -274,7 +275,17 @@ function normalizePolicy(input) {
 }
 
 async function routeRequest(body = {}) {
-  const runtime = await loadGraphAsync();
+  const graphResolution = resolveGraphRequest(body);
+  if (!graphResolution.ok) {
+    return {
+      status: "error",
+      error: graphResolution.error,
+      message: graphResolution.message,
+      regionIds: graphResolution.regionIds || []
+    };
+  }
+
+  const runtime = await loadGraphAsync(graphResolution.graphPath);
   const enums = runtime.enums;
   const profile = String(body.profile || "balanced").toLowerCase();
   if (!["direct", "balanced", "dirt", "cleanest"].includes(profile)) {
@@ -479,10 +490,15 @@ async function routeRequest(body = {}) {
       avoidedEdgeIds: Array.from(avoidEdgeIds),
       engine: "dirt-node-astar",
       fallback: null,
+      regionIds: graphResolution.regionIds,
+      graphMode: graphResolution.mode,
       graph: {
         edgeCount: runtime.data.edgeCount,
         nodeCount: runtime.data.nodeCount,
-        loadMs: runtime.loadMs
+        loadMs: runtime.loadMs,
+        regionId: runtime.data.regionId || null,
+        province: runtime.data.province || null,
+        schemaVersion: runtime.data.schemaVersion || null
       }
     }
   };

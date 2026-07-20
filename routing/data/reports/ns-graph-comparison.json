@@ -1,0 +1,22 @@
+{
+  "generatedAt": "2026-07-20T22:03:50.295Z",
+  "legacy": {
+    "path": "routing/data/ns-graph.v1.json.gz",
+    "gzBytes": 53501268
+  },
+  "regional": {
+    "path": "routing/data/regions/ns/graph.v1.json.gz",
+    "gzBytes": 61883698,
+    "edgeCount": 307421,
+    "nodeCount": 320304,
+    "sourceCounts": {
+      "National Road Network": 119447,
+      "Nova Scotia Topographic DataBase Roads, Trails and Rails": 187974
+    }
+  },
+  "notes": [
+    "Regional graph uses NRN backbone + NSTDB supplement.",
+    "Fixture suite must pass against the active production graph path.",
+    "No free-space connectors were introduced."
+  ]
+}

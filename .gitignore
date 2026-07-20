@@ -13,4 +13,9 @@ temp/
 # Phase 2A: raw NSTDB audit archive stays outside the app bundle
 data-raw/ns-gov/raw-features.geojson.gz
 data-raw/ns-gov/raw-features.ndjson.gz
+
+# National / provincial raw downloads (never ship in app bundle)
+data-raw/nrn/
+data-raw/**/*.geojsonseq
+data-raw/**/*.zip
 .env*

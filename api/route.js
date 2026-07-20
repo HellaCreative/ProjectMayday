@@ -16,7 +16,7 @@ module.exports = async function handler(req, res) {
       ok: true,
       service: "dirt-route",
       engine: "dirt-node-astar",
-      note: "Valhalla deferred: custom NSTDB attributes + no persistent Valhalla host. One Node offline-graph engine via this endpoint."
+      note: "Regional offline graphs: NRN national backbone + provincial supplements. OSM is basemap/POI only."
     });
   }
 
@@ -41,5 +41,5 @@ module.exports = async function handler(req, res) {
 
 module.exports.config = {
   maxDuration: 60,
-  includeFiles: ["routing/lib/**"]
+  includeFiles: ["routing/lib/**", "routing/regional/**", "routing/schema/**"]
 };

@@ -1,0 +1,110 @@
+{
+  "generatedAt": "2026-07-20T22:03:09.451Z",
+  "schemaVersion": "canada-regional-1",
+  "regionId": "ns",
+  "province": "NS",
+  "bbox": [
+    -66.39264,
+    43.39308,
+    -59.67685,
+    47.22319
+  ],
+  "nodeCount": 320304,
+  "edgeCount": 307421,
+  "componentCount": 36375,
+  "boundaryNodeCount": 399,
+  "accessCounts": {
+    "motorized_permissive": 123511,
+    "motorized_unknown": 183280,
+    "motorized_restricted": 630
+  },
+  "surfaceCounts": {
+    "paved": 63944,
+    "unknown": 11063,
+    "access": 46289,
+    "gravel": 34023,
+    "track": 152102
+  },
+  "sourceCounts": {
+    "National Road Network": 119447,
+    "Nova Scotia Topographic DataBase Roads, Trails and Rails": 187974
+  },
+  "jsonBytes": 299114872,
+  "gzBytes": 61883698,
+  "lineage": {
+    "nrn": {
+      "adapter": "nrn",
+      "featureCount": 119846,
+      "excludedByReason": {},
+      "classification": {
+        "surface": {
+          "unknown": 87967,
+          "resource": 31879
+        },
+        "access": {
+          "motorized_permissive": 87967,
+          "motorized_unknown": 31879
+        },
+        "structure": {
+          "none": 115437,
+          "bridge": 4345,
+          "tunnel": 64
+        },
+        "roadTrack": {
+          "local": 68736,
+          "ramp": 1479,
+          "resource": 31879,
+          "arterial": 7557,
+          "service": 324,
+          "collector": 6910,
+          "freeway": 2883,
+          "unknown": 78
+        },
+        "excluded": {}
+      }
+    },
+    "nstdb": {
+      "adapter": "ns-nstdb",
+      "featureCount": 301635,
+      "excludedByReason": {},
+      "classification": {
+        "surface": {
+          "track": 156576,
+          "paved": 69104,
+          "gravel": 37911,
+          "resource": 38042,
+          "unknown": 2
+        },
+        "access": {
+          "motorized_unknown": 156070,
+          "motorized_permissive": 144729,
+          "motorized_restricted": 836
+        },
+        "structure": {
+          "none": 296205,
+          "bridge": 5323,
+          "tunnel": 107
+        },
+        "roadTrack": {
+          "track": 156576,
+          "local": 107015,
+          "resource": 38042,
+          "unknown": 2
+        },
+        "excluded": {}
+      }
+    }
+  },
+  "conflation": {
+    "featureCount": 308526,
+    "stats": {
+      "backboneKept": 119846,
+      "supplementAdded": 188680,
+      "supplementDuplicateSkipped": 112955,
+      "supplementConventionalSkipped": 0,
+      "backboneSurfaceEnriched": 76888,
+      "conflicts": 0
+    },
+    "freeSpaceConnectors": 0
+  }
+}

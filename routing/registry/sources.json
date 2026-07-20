@@ -1,0 +1,311 @@
+{
+  "schemaVersion": "canada-source-registry-1",
+  "updatedAt": "2026-07-20",
+  "notes": [
+    "NRN is the national paved/gravel backbone, distributed by province/territory.",
+    "Provincial datasets supplement resource roads and tracks.",
+    "OSM is for basemap and POIs only in this phase — not routing edges.",
+    "status: ready = downloaded+normalized+validated for routing; pending = adapter not run; blocked = source unavailable."
+  ],
+  "regions": [
+    {
+      "code": "BC",
+      "name": "British Columbia",
+      "nrn": {
+        "sourceName": "National Road Network — British Columbia",
+        "catalogueUrl": "https://open.canada.ca/data/en/dataset/3d282116-e556-400c-9306-ca1a3cada77f",
+        "downloadUrl": "https://geo.statcan.gc.ca/nrn_rrn/bc/nrn_rrn_bc_GPKG.zip",
+        "format": "GeoPackage",
+        "license": "Open Government Licence - Canada",
+        "adapter": "nrn",
+        "status": "pending"
+      },
+      "provincial": {
+        "sourceName": "BC Digital Road Atlas / Forest Service Roads",
+        "catalogueUrl": "https://catalogue.data.gov.bc.ca",
+        "infoUrl": "https://www2.gov.bc.ca/gov/content/data/geographic-data-services/topographic-data/roads",
+        "format": "multiple",
+        "license": "Open Government Licence - British Columbia",
+        "adapter": null,
+        "status": "pending",
+        "notes": "Richest resource-road inventory; adapter after NS validation."
+      },
+      "routingReady": false
+    },
+    {
+      "code": "AB",
+      "name": "Alberta",
+      "nrn": {
+        "sourceName": "National Road Network — Alberta",
+        "catalogueUrl": "https://open.canada.ca/data/en/dataset/3d282116-e556-400c-9306-ca1a3cada77f",
+        "downloadUrl": "https://geo.statcan.gc.ca/nrn_rrn/ab/nrn_rrn_ab_GPKG.zip",
+        "format": "GeoPackage",
+        "license": "Open Government Licence - Canada",
+        "adapter": "nrn",
+        "status": "pending"
+      },
+      "provincial": {
+        "sourceName": "Alberta Access and Facility Roads",
+        "catalogueUrl": "https://open.alberta.ca/opendata/gda-ce523e2b-a368-440d-b87c-e662dc8b0aea",
+        "infoUrl": "https://www.alberta.ca/provincial-geospatial-centre",
+        "format": "ArcGIS / download",
+        "license": "Open Government Licence - Alberta",
+        "adapter": null,
+        "status": "pending"
+      },
+      "routingReady": false
+    },
+    {
+      "code": "SK",
+      "name": "Saskatchewan",
+      "nrn": {
+        "sourceName": "National Road Network — Saskatchewan",
+        "catalogueUrl": "https://open.canada.ca/data/en/dataset/3d282116-e556-400c-9306-ca1a3cada77f",
+        "downloadUrl": "https://geo.statcan.gc.ca/nrn_rrn/sk/nrn_rrn_sk_GPKG.zip",
+        "format": "GeoPackage",
+        "license": "Open Government Licence - Canada",
+        "adapter": "nrn",
+        "status": "pending"
+      },
+      "provincial": {
+        "sourceName": "Saskatchewan GeoHub road/trail layers",
+        "catalogueUrl": "https://www.saskatchewan.ca/geohub",
+        "format": "ArcGIS REST / GeoPackage",
+        "license": "unknown — verify before ingest",
+        "adapter": null,
+        "status": "blocked",
+        "notes": "Portal historically returned HTTP 404 during prior probes."
+      },
+      "routingReady": false
+    },
+    {
+      "code": "MB",
+      "name": "Manitoba",
+      "nrn": {
+        "sourceName": "National Road Network — Manitoba",
+        "catalogueUrl": "https://open.canada.ca/data/en/dataset/3d282116-e556-400c-9306-ca1a3cada77f",
+        "downloadUrl": "https://geo.statcan.gc.ca/nrn_rrn/mb/nrn_rrn_mb_GPKG.zip",
+        "format": "GeoPackage",
+        "license": "Open Government Licence - Canada",
+        "adapter": "nrn",
+        "status": "pending"
+      },
+      "provincial": {
+        "sourceName": "Manitoba Land Initiative / Geoportal",
+        "catalogueUrl": "https://mli2.gov.mb.ca",
+        "format": "GIS download",
+        "license": "verify before ingest",
+        "adapter": null,
+        "status": "blocked",
+        "notes": "Portal historically unreachable during prior probes."
+      },
+      "routingReady": false
+    },
+    {
+      "code": "ON",
+      "name": "Ontario",
+      "nrn": {
+        "sourceName": "National Road Network — Ontario",
+        "catalogueUrl": "https://open.canada.ca/data/en/dataset/3d282116-e556-400c-9306-ca1a3cada77f",
+        "downloadUrl": "https://geo.statcan.gc.ca/nrn_rrn/on/nrn_rrn_on_GPKG.zip",
+        "format": "GeoPackage",
+        "license": "Open Government Licence - Canada",
+        "adapter": "nrn",
+        "status": "pending"
+      },
+      "provincial": {
+        "sourceName": "Ontario Road Network / MNR road segments / Ontario Trail Network",
+        "catalogueUrl": "https://geohub.lio.gov.on.ca",
+        "format": "Shapefile / FGDB",
+        "license": "Open Government Licence - Ontario",
+        "adapter": null,
+        "status": "pending"
+      },
+      "routingReady": false
+    },
+    {
+      "code": "QC",
+      "name": "Quebec",
+      "nrn": {
+        "sourceName": "National Road Network — Quebec",
+        "catalogueUrl": "https://open.canada.ca/data/en/dataset/3d282116-e556-400c-9306-ca1a3cada77f",
+        "downloadUrl": "https://geo.statcan.gc.ca/nrn_rrn/qc/nrn_rrn_qc_GPKG.zip",
+        "format": "GeoPackage",
+        "license": "Open Government Licence - Canada",
+        "adapter": "nrn",
+        "status": "pending"
+      },
+      "provincial": {
+        "sourceName": "Données Québec — chemins forestiers / transport terrestre",
+        "catalogueUrl": "https://www.donneesquebec.ca",
+        "format": "CKAN / download",
+        "license": "Creative Commons / Quebec open licence — verify per dataset",
+        "adapter": null,
+        "status": "pending"
+      },
+      "routingReady": false
+    },
+    {
+      "code": "NB",
+      "name": "New Brunswick",
+      "nrn": {
+        "sourceName": "National Road Network — New Brunswick",
+        "catalogueUrl": "https://open.canada.ca/data/en/dataset/3d282116-e556-400c-9306-ca1a3cada77f",
+        "downloadUrl": "https://geo.statcan.gc.ca/nrn_rrn/nb/nrn_rrn_nb_GPKG.zip",
+        "format": "GeoPackage",
+        "license": "Open Government Licence - Canada",
+        "adapter": "nrn",
+        "status": "pending"
+      },
+      "provincial": {
+        "sourceName": "GeoNB provincial roads / Crown / recreation",
+        "catalogueUrl": "https://geonb.snb.ca",
+        "format": "GIS services",
+        "license": "verify before ingest",
+        "adapter": null,
+        "status": "pending"
+      },
+      "routingReady": false
+    },
+    {
+      "code": "NS",
+      "name": "Nova Scotia",
+      "nrn": {
+        "sourceName": "National Road Network — Nova Scotia",
+        "catalogueUrl": "https://open.canada.ca/data/en/dataset/3d282116-e556-400c-9306-ca1a3cada77f",
+        "downloadUrl": "https://geo.statcan.gc.ca/nrn_rrn/ns/nrn_rrn_ns_GPKG.zip",
+        "format": "GeoPackage",
+        "license": "Open Government Licence - Canada",
+        "adapter": "nrn",
+        "status": "ready",
+        "dateRetrieved": "2026-07-20",
+        "notes": "Full ROADSEG ingested as national backbone."
+      },
+      "provincial": {
+        "sourceName": "Nova Scotia Topographic DataBase Roads, Trails and Rails",
+        "catalogueUrl": "https://data.novascotia.ca/Roads-Driving-and-Transport/Nova-Scotia-Topographic-DataBase-Roads-Trails-and-/a6gf-w68e",
+        "downloadUrl": "https://data.novascotia.ca/resource/a6gf-w68e.json",
+        "format": "Socrata JSON / GeoJSON",
+        "license": "Open Government Licence - Nova Scotia",
+        "adapter": "ns-nstdb",
+        "status": "ready",
+        "dateRetrieved": "2026-07-15",
+        "notes": "Supplemental resource roads and TRACK detail."
+      },
+      "routingReady": true
+    },
+    {
+      "code": "PE",
+      "name": "Prince Edward Island",
+      "nrn": {
+        "sourceName": "National Road Network — Prince Edward Island",
+        "catalogueUrl": "https://open.canada.ca/data/en/dataset/3d282116-e556-400c-9306-ca1a3cada77f",
+        "downloadUrl": "https://geo.statcan.gc.ca/nrn_rrn/pe/nrn_rrn_pe_GPKG.zip",
+        "format": "GeoPackage",
+        "license": "Open Government Licence - Canada",
+        "adapter": "nrn",
+        "status": "pending"
+      },
+      "provincial": {
+        "sourceName": "PEI Open Data roads / trails",
+        "catalogueUrl": "https://data.princeedwardisland.ca",
+        "format": "open data download",
+        "license": "verify before ingest",
+        "adapter": null,
+        "status": "pending",
+        "notes": "Limited forestry-road value; useful for complete coverage."
+      },
+      "routingReady": false
+    },
+    {
+      "code": "NL",
+      "name": "Newfoundland and Labrador",
+      "nrn": {
+        "sourceName": "National Road Network — Newfoundland and Labrador",
+        "catalogueUrl": "https://open.canada.ca/data/en/dataset/3d282116-e556-400c-9306-ca1a3cada77f",
+        "downloadUrl": "https://geo.statcan.gc.ca/nrn_rrn/nl/nrn_rrn_nl_GPKG.zip",
+        "format": "GeoPackage",
+        "license": "Open Government Licence - Canada",
+        "adapter": "nrn",
+        "status": "pending"
+      },
+      "provincial": {
+        "sourceName": "NL Geoportal roads / resource / trails",
+        "catalogueUrl": "https://www.gov.nl.ca/ecc/maps",
+        "format": "GIS portal",
+        "license": "verify before ingest",
+        "adapter": null,
+        "status": "pending"
+      },
+      "routingReady": false
+    },
+    {
+      "code": "YT",
+      "name": "Yukon",
+      "nrn": {
+        "sourceName": "National Road Network — Yukon",
+        "catalogueUrl": "https://open.canada.ca/data/en/dataset/3d282116-e556-400c-9306-ca1a3cada77f",
+        "downloadUrl": "https://geo.statcan.gc.ca/nrn_rrn/yt/nrn_rrn_yt_GPKG.zip",
+        "format": "GeoPackage",
+        "license": "Open Government Licence - Canada",
+        "adapter": "nrn",
+        "status": "pending"
+      },
+      "provincial": {
+        "sourceName": "Yukon Open Data roads / resource / trails",
+        "catalogueUrl": "https://open.yukon.ca",
+        "format": "open data",
+        "license": "Open Government Licence - Yukon",
+        "adapter": null,
+        "status": "pending"
+      },
+      "routingReady": false
+    },
+    {
+      "code": "NT",
+      "name": "Northwest Territories",
+      "nrn": {
+        "sourceName": "National Road Network — Northwest Territories",
+        "catalogueUrl": "https://open.canada.ca/data/en/dataset/3d282116-e556-400c-9306-ca1a3cada77f",
+        "downloadUrl": "https://geo.statcan.gc.ca/nrn_rrn/nt/nrn_rrn_nt_GPKG.zip",
+        "format": "GeoPackage",
+        "license": "Open Government Licence - Canada",
+        "adapter": "nrn",
+        "status": "pending"
+      },
+      "provincial": {
+        "sourceName": "NWT Geomatics / Spatial Data Warehouse",
+        "catalogueUrl": "https://www.nwtgeomatics.ca",
+        "format": "GIS",
+        "license": "verify before ingest",
+        "adapter": null,
+        "status": "blocked",
+        "notes": "Portal historically unreachable during prior probes."
+      },
+      "routingReady": false
+    },
+    {
+      "code": "NU",
+      "name": "Nunavut",
+      "nrn": {
+        "sourceName": "National Road Network — Nunavut",
+        "catalogueUrl": "https://open.canada.ca/data/en/dataset/3d282116-e556-400c-9306-ca1a3cada77f",
+        "downloadUrl": "https://geo.statcan.gc.ca/nrn_rrn/nu/nrn_rrn_nu_GPKG.zip",
+        "format": "GeoPackage",
+        "license": "Open Government Licence - Canada",
+        "adapter": "nrn",
+        "status": "pending"
+      },
+      "provincial": {
+        "sourceName": "Nunavut Geoportal",
+        "catalogueUrl": "https://nunavutgeoportal.ca",
+        "format": "GIS portal",
+        "license": "verify before ingest",
+        "adapter": null,
+        "status": "blocked",
+        "notes": "Portal historically unreachable; limited dual-sport forestry relevance."
+      },
+      "routingReady": false
+    }
+  ]
+}
