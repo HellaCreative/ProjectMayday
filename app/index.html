@@ -1547,7 +1547,9 @@
       position: fixed;
       top: 50%;
       right: calc(var(--fig-ctrl, 56px) + 28px);
-      z-index: 46;
+      /* The quick sharing control is an anchored overlay, so it must remain
+         above the persistent navigation and any open sheet. */
+      z-index: 120;
       width: min(280px, calc(100vw - 96px));
       padding: 14px;
       border: 1px solid rgba(28, 25, 23, 0.14);
@@ -1685,15 +1687,16 @@
     }
 
     .export-sheet {
-      position: absolute;
+      position: fixed;
       inset: 0;
-      z-index: 40;
+      z-index: 200;
       display: none;
-      align-items: flex-end;
+      align-items: center;
       justify-content: center;
-      padding: 16px;
-      padding-bottom: max(16px, env(safe-area-inset-bottom));
-      background: rgba(22, 36, 51, 0.38);
+      padding: max(24px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom));
+      background: rgba(15, 23, 42, 0.52);
+      backdrop-filter: blur(2px);
+      -webkit-backdrop-filter: blur(2px);
     }
     .export-sheet.open { display: flex; }
     /* Unknown-access acknowledgement is a true decision modal, not a bottom
@@ -1776,15 +1779,16 @@
 
     /* ---- Route incident recovery ---- */
     .report-sheet {
-      position: absolute;
+      position: fixed;
       inset: 0;
-      z-index: 45;
+      z-index: 200;
       display: none;
-      align-items: flex-end;
+      align-items: center;
       justify-content: center;
-      padding: 16px;
-      padding-bottom: max(16px, env(safe-area-inset-bottom));
-      background: rgba(22, 36, 51, 0.42);
+      padding: max(24px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom));
+      background: rgba(15, 23, 42, 0.52);
+      backdrop-filter: blur(2px);
+      -webkit-backdrop-filter: blur(2px);
     }
     .report-sheet.open { display: flex; }
     .report-sheet-card {
