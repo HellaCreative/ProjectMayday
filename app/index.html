@@ -1587,8 +1587,11 @@
     }
     .sharing-popover-field { display: grid; gap: 6px; margin-top: 12px; color: var(--text); font: 700 0.64rem var(--sans); }
     .sharing-popover .group-status-select { min-height: 38px; font-size: 0.68rem; }
-    .sharing-popover-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 12px; }
+    .sharing-popover-control-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(104px, 0.9fr); gap: 8px; align-items: end; margin-top: 12px; }
+    .sharing-popover-status-control { display: grid; gap: 6px; min-width: 0; color: var(--text); font: 700 0.64rem var(--sans); }
+    .sharing-popover-status-control .group-status-select { min-height: 44px; font-size: 0.68rem; }
     .sharing-action { min-height: 40px; padding: 0 9px; border: 1px solid transparent; border-radius: 9px; color: #fff; font: 700 0.64rem var(--sans); cursor: pointer; }
+    .sharing-action-toggle { background: var(--fig-orange, #e8790c); }
     .sharing-action-start { background: var(--fig-orange, #e8790c); }
     .sharing-action-stop { background: var(--fig-chrome, #1c1917); }
     .sharing-action:disabled { opacity: 0.42; cursor: not-allowed; }
@@ -6649,18 +6652,17 @@
       </div>
       <button class="sharing-popover-close" id="sharingPopoverClose" type="button" aria-label="Close group sharing">×</button>
     </div>
-    <label class="sharing-popover-field" for="quickGroupStatusSelect">
-      Status
-      <select id="quickGroupStatusSelect" class="group-status-select" aria-label="Group sharing status">
-        <option value="available">Available</option>
-        <option value="breakdown">Breakdown</option>
-        <option value="injured">Injured</option>
-        <option value="stuck">Stuck</option>
-      </select>
-    </label>
-    <div class="sharing-popover-actions">
-      <button class="sharing-action sharing-action-start" id="quickStartSharing" type="button">Start sharing</button>
-      <button class="sharing-action sharing-action-stop" id="quickStopSharing" type="button">Stop sharing</button>
+    <div class="sharing-popover-control-row">
+      <label class="sharing-popover-status-control" for="quickGroupStatusSelect">
+        Status
+        <select id="quickGroupStatusSelect" class="group-status-select" aria-label="Group sharing status">
+          <option value="available">Available</option>
+          <option value="breakdown">Breakdown</option>
+          <option value="injured">Injured</option>
+          <option value="stuck">Stuck</option>
+        </select>
+      </label>
+      <button class="sharing-action sharing-action-toggle" id="quickSharingToggle" type="button">Start sharing</button>
     </div>
     <p class="sharing-popover-status" id="sharingPopoverStatus" aria-live="polite"></p>
   </section>
@@ -13632,6 +13634,7 @@
     function setLegendOpen(open) {
       if (!legendEl) return;
       if (open) {
+        setQuickSharingOpen(false);
         setAccountSheetOpen(false);
         setGroupSheetOpen(false);
         setPlannerDrawerState("closed");
@@ -14090,7 +14093,10 @@
     }
     function setAccountSheetOpen(open) {
       if (!accountSheet) return;
-      if (open) setPlannerDrawerState("closed");
+      if (open) {
+        setQuickSharingOpen(false);
+        setPlannerDrawerState("closed");
+      }
       if (open) positionAccountSheet(accountSheet, accountBtn);
       accountSheet.classList.toggle("open", open);
       accountSheet.setAttribute("aria-hidden", open ? "false" : "true");
@@ -14103,7 +14109,10 @@
     }
     function setGroupSheetOpen(open) {
       if (!groupSheet) return;
-      if (open) setPlannerDrawerState("closed");
+      if (open) {
+        setQuickSharingOpen(false);
+        setPlannerDrawerState("closed");
+      }
       if (open) positionAccountSheet(groupSheet, groupBtn);
       groupSheet.classList.toggle("open", open);
       groupSheet.setAttribute("aria-hidden", open ? "false" : "true");
@@ -14699,16 +14708,16 @@
     const sharingPopoverContext = document.getElementById("sharingPopoverContext");
     const sharingPopoverStatus = document.getElementById("sharingPopoverStatus");
     const quickGroupStatusSelect = document.getElementById("quickGroupStatusSelect");
-    const quickStartSharing = document.getElementById("quickStartSharing");
-    const quickStopSharing = document.getElementById("quickStopSharing");
+    const quickSharingToggle = document.getElementById("quickSharingToggle");
 
     function syncQuickSharingUi(message) {
       if (!sharingPopover) return;
       const group = selectedRidingGroup;
       const ready = !!currentAuthUser && !!group && !group.deleted_at;
+      const signedIn = !!currentAuthUser;
       if (sharingPopoverContext) {
-        sharingPopoverContext.textContent = !currentAuthUser
-          ? "Sign in to share your location."
+        sharingPopoverContext.textContent = !signedIn
+          ? "Log in to set your status or share your location."
           : !group
             ? "Open Group and choose a riding group first."
             : "Sharing to “" + (group.name || "your group") + "”.";
@@ -14717,8 +14726,12 @@
         quickGroupStatusSelect.value = groupStatus;
         quickGroupStatusSelect.disabled = !ready;
       }
-      if (quickStartSharing) quickStartSharing.disabled = !ready || groupSharing;
-      if (quickStopSharing) quickStopSharing.disabled = !ready || !groupSharing;
+      if (quickSharingToggle) {
+        quickSharingToggle.disabled = false;
+        quickSharingToggle.textContent = !signedIn ? "Open profile" : !group ? "Choose group" : groupSharing ? "Stop sharing" : "Start sharing";
+        quickSharingToggle.classList.toggle("sharing-action-stop", ready && groupSharing);
+        quickSharingToggle.classList.toggle("sharing-action-start", ready && !groupSharing);
+      }
       if (sharingPopoverStatus) {
         sharingPopoverStatus.textContent = message || (ready
           ? groupSharing ? "Sharing is live." : "Sharing is off."
@@ -14748,13 +14761,24 @@
 
     async function runQuickSharing(action) {
       const ready = !!currentAuthUser && !!selectedRidingGroup && !selectedRidingGroup.deleted_at;
+      if (action === "open-profile") {
+        setQuickSharingOpen(false);
+        setAccountSheetOpen(true);
+        await ensureAccountReady();
+        return;
+      }
+      if (action === "open-groups") {
+        setQuickSharingOpen(false);
+        setGroupSheetOpen(true);
+        await ensureGroupsReady();
+        return;
+      }
       if (!ready) {
-        syncQuickSharingUi("Open Group and choose a riding group first.");
+        syncQuickSharingUi(!currentAuthUser ? "Log in to set your status or share your location." : "Open Group and choose a riding group first.");
         return;
       }
       try {
-        if (action === "start" && !groupSharing) await toggleGroupSharing();
-        if (action === "stop" && groupSharing) await toggleGroupSharing();
+        if (action === "toggle") await toggleGroupSharing();
         syncQuickSharingUi();
       } catch (err) {
         syncQuickSharingUi(err.message || "Could not update sharing.");
@@ -15452,10 +15476,18 @@
       });
     }
     if (reportVisBtn) {
-      reportVisBtn.addEventListener("click", (e) => {
+      reportVisBtn.addEventListener("click", async (e) => {
         e.stopPropagation();
         const isOpen = sharingPopover?.classList.contains("open");
-        setQuickSharingOpen(!isOpen);
+        if (isOpen) {
+          setQuickSharingOpen(false);
+          return;
+        }
+        // Hydrate the persisted Supabase session before deciding whether the
+        // rider needs to sign in. Refreshing the map must not make an existing
+        // rider appear signed out until Profile is opened.
+        await ensureAccountReady();
+        setQuickSharingOpen(true);
       });
     }
     sharingPopoverClose?.addEventListener("click", (event) => {
@@ -15467,13 +15499,11 @@
         syncQuickSharingUi(err.message || "Could not update status.");
       });
     });
-    quickStartSharing?.addEventListener("click", (event) => {
+    quickSharingToggle?.addEventListener("click", (event) => {
       event.stopPropagation();
-      runQuickSharing("start");
-    });
-    quickStopSharing?.addEventListener("click", (event) => {
-      event.stopPropagation();
-      runQuickSharing("stop");
+      if (!currentAuthUser) runQuickSharing("open-profile");
+      else if (!selectedRidingGroup || selectedRidingGroup.deleted_at) runQuickSharing("open-groups");
+      else runQuickSharing("toggle");
     });
     window.addEventListener("resize", () => {
       if (sharingPopover?.classList.contains("open")) setQuickSharingOpen(true);
@@ -15485,6 +15515,11 @@
     });
     map.on("moveend", refreshReportLayer);
     map.on("zoomend", refreshReportLayer);
+
+    // Restore the persisted auth session during app boot, rather than waiting
+    // for the rider to open Profile or Groups after a refresh. This keeps the
+    // quick sharing control truthful on first interaction.
+    ensureAccountReady().catch(() => {});
   </script>
 </body>
 </html>
