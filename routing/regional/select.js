@@ -152,7 +152,24 @@ function resolveGraphRequest(body = {}) {
   }
 
   const corridor = regionsForRoute(hitRegions);
-  const missing = corridor.filter((id) => !fs.existsSync(localGraphPath(id)) && !remoteGraphUrl(id));
+  const longhaulPath = path.join(REGIONS_DIR, "canada-longhaul", "graph.v1.json.gz");
+  const useLonghaul =
+    corridor.length >= 4 &&
+    (fs.existsSync(longhaulPath) || true) &&
+    !body.disableLonghaul;
+
+  if (useLonghaul && corridor.includes("ns") && corridor.includes("bc")) {
+    return {
+      ok: true,
+      regionIds: corridor,
+      graphPath: graphPathForRegion("canada-longhaul"),
+      graphPaths: [graphPathForRegion("canada-longhaul")],
+      mode: fs.existsSync(longhaulPath) ? "canada-longhaul-local" : "canada-longhaul-remote",
+      hitRegions,
+      note: "Using prebuilt thinned Canada long-haul corridor pack"
+    };
+  }
+
   // Always allow remote URLs; check local for offline messaging only.
   const unavailableLocal = corridor.filter((id) => !fs.existsSync(localGraphPath(id)));
 
@@ -174,10 +191,7 @@ function resolveGraphRequest(body = {}) {
     graphPaths: corridor.map(graphPathForRegion),
     mode: unavailableLocal.length ? "multi-regional-remote" : "multi-regional-local",
     hitRegions,
-    missingLocal: unavailableLocal,
-    note: missing.length
-      ? "Some corridor regions lack packs: " + missing.join(",")
-      : undefined
+    missingLocal: unavailableLocal
   };
 }
 

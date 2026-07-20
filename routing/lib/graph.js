@@ -6,7 +6,7 @@ const zlib = require("zlib");
 const https = require("https");
 const http = require("http");
 const { mergeRegionalGraphs, corridorLocationsForRoute } = require("../regional/merge");
-const { clipGraphToCorridor } = require("../regional/corridor");
+const { clipGraphToCorridor, extractHighwayGraph } = require("../regional/corridor");
 
 const DEFAULT_LEGACY_GRAPH_PATH = path.join(__dirname, "..", "data", "ns-graph.v1.json.gz");
 const DEFAULT_REGIONAL_NS_PATH = path.join(__dirname, "..", "data", "regions", "ns", "graph.v1.json.gz");
@@ -203,13 +203,17 @@ async function loadGraphsForRequest(resolution, options = {}) {
     }
     const graphs = [];
     const hit = new Set((resolution.hitRegions || []).map((r) => String(r).toLowerCase()));
+    const longHaul = paths.length >= 4;
     for (const p of paths) {
       let g = await readGraphData(p);
       const regionId = String(g.regionId || path.basename(path.dirname(p)) || "").toLowerCase();
-      // Do not spine-filter mid provinces — that severs NRN border connectivity.
-      // Corridor clip (with southern anchors) is enough to bound memory.
+      const isEndpoint = hit.has(regionId);
+      // Long-haul: drop track edges in mid provinces to reduce memory; keep
+      // endpoints fuller for local access. Never invent free-space connectors.
+      if (longHaul && !isEndpoint) {
+        g = extractHighwayGraph(g);
+      }
       if (corridorLocations.length >= 2) {
-        const isEndpoint = hit.has(regionId);
         const buf = isEndpoint ? Math.max(bufferMeters, 200000) : bufferMeters;
         g = clipGraphToCorridor(g, corridorLocations, buf);
       }

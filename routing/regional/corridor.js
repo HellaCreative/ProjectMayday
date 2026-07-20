@@ -151,9 +151,9 @@ function isSpineEdge(edge, graphBbox = null) {
 }
 
 function extractHighwayGraph(graph) {
-  // Keep paved/gravel inventory only — drops tracks/resource unknowns that
-  // explode graph size while preserving national road connectivity.
-  const keepEdges = (graph.edges || []).filter((e) => e.s === 0 || e.s === 1);
+  // Drop track-class edges only. Keep paved/gravel/unknown/access so provinces
+  // whose NRN pavement is mostly Unknown (e.g. QC) stay connected.
+  const keepEdges = (graph.edges || []).filter((e) => e.s !== 3);
   const used = new Set();
   for (const e of keepEdges) {
     used.add(e.a);
