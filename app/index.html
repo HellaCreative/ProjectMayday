@@ -9020,6 +9020,10 @@
           ],
           "line-width": 7,
           "line-opacity": 0.98
+        },
+        layout: {
+          "line-cap": "round",
+          "line-join": "round"
         }
       });
       map.addLayer({
@@ -9032,6 +9036,10 @@
           "line-width": 3,
           "line-opacity": 0.72,
           "line-dasharray": [1.2, 1.1]
+        },
+        layout: {
+          "line-cap": "round",
+          "line-join": "round"
         }
       });
       map.addLayer({
@@ -9306,9 +9314,36 @@
       setStatus("Saved as “" + name + "” · " + filename, "ok");
     }
 
+    function routeDisplaySegments(segments) {
+      const merged = [];
+      for (const segment of segments || []) {
+        const sourceCoords = segment?.geometry || segment?.coords || [];
+        const coords = [];
+        for (const point of sourceCoords) {
+          if (!Array.isArray(point) || point.length < 2) continue;
+          const previous = coords[coords.length - 1];
+          if (!previous || previous[0] !== point[0] || previous[1] !== point[1]) {
+            coords.push(point);
+          }
+        }
+        if (coords.length < 2) continue;
+        const trackClass = segment.surfaceClass || segment.trackClass || "connector";
+        const previous = merged[merged.length - 1];
+        const previousEnd = previous?.coords?.[previous.coords.length - 1];
+        const sameEndpoint = previousEnd && previousEnd[0] === coords[0][0] && previousEnd[1] === coords[0][1];
+        if (previous && previous.trackClass === trackClass && sameEndpoint) {
+          previous.coords.push(...coords.slice(1));
+          continue;
+        }
+        merged.push({ trackClass, coords: coords.slice() });
+      }
+      return merged;
+    }
+
     function routeFeatureCollection() {
-      // Plan tab renders every stage's own geometry as a separate segment/feature
-      // (no merge across gaps). Endpoints are real MapLibre markers, not circles.
+      // Consolidate adjacent same-surface graph edges before rendering. The
+      // routing graph keeps edge-level detail for costing/debugging; the map
+      // should show continuous colored runs rather than thousands of tiles.
       if (plannerTab === "plan") return planFeatureCollection();
       // Saved "View on map" also paints stage geometry without touching the draft.
       if (plannerTab === "saved") {
@@ -9320,7 +9355,7 @@
         const segments = activeRoute.segments?.length
           ? activeRoute.segments
           : [{ coords: activeRoute.coordinates, trackClass: "connector" }];
-        for (const segment of segments) {
+        for (const segment of routeDisplaySegments(segments)) {
           features.push({
             type: "Feature",
             geometry: {
@@ -9384,9 +9419,8 @@
         if (RS.computeStageStatus(stage) !== RS.STAGE_STATUS.COMPLETE || !stage.route) return;
         const segments = stage.route.segments || [];
         if (segments.length) {
-          for (const seg of segments) {
-            const coords = seg.geometry || seg.coords || [];
-            if (coords.length < 2) continue;
+          for (const seg of routeDisplaySegments(segments)) {
+            const coords = seg.coords;
             features.push({
               type: "Feature",
               geometry: { type: "LineString", coordinates: coords },
