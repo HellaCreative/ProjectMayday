@@ -119,6 +119,8 @@ function clipGraphToCorridor(graph, locations, bufferMeters = 120000) {
 }
 
 const SPINE_ROAD_TRACK = new Set(["freeway", "arterial", "collector"]);
+// Include collector — AB Yellowhead (Hwy 16) and similar are often collector in NRN.
+const LONGHAUL_ROAD_TRACK = new Set(["freeway", "arterial", "ramp", "collector"]);
 
 function nearBboxEdge(coord, bbox, padFrac = 0.04) {
   if (!bbox || !coord) return false;
@@ -150,10 +152,56 @@ function isSpineEdge(edge, graphBbox = null) {
   return (surface === 0 || surface === 1) && meters >= 800;
 }
 
+/** Stricter spine for Vercel longhaul packs — named highway classes only. */
+function isLonghaulSpineEdge(edge, graphBbox = null, { hasRoadClass = true } = {}) {
+  const surface = edge.s;
+  const meters = Number(edge.m) || 0;
+  const g = edge.g || [];
+  const onBorder =
+    graphBbox &&
+    g.length >= 2 &&
+    (nearBboxEdge(g[0], graphBbox) || nearBboxEdge(g[g.length - 1], graphBbox));
+
+  if (hasRoadClass) {
+    const rt = String(edge.rt || "");
+    if (LONGHAUL_ROAD_TRACK.has(rt)) return true;
+    if (onBorder && surface !== 3 && meters >= 150) return true;
+    return false;
+  }
+
+  // NS/NB (and similar) packs store no road class — keep non-track longer edges.
+  if (surface === 3) return false;
+  if (onBorder && meters >= 100) return true;
+  return (surface === 0 || surface === 1 || surface === 4 || surface === 2) && meters >= 350;
+}
+
 function extractHighwayGraph(graph) {
   // Drop track-class edges only. Keep paved/gravel/unknown/access so provinces
   // whose NRN pavement is mostly Unknown (e.g. QC) stay connected.
   const keepEdges = (graph.edges || []).filter((e) => e.s !== 3);
+  return compactGraph(graph, keepEdges, "highway");
+}
+
+/**
+ * National / long-haul spine: freeway/arterial/collector (+ border connectors).
+ * Small enough to fetch on Vercel Hobby without OOM.
+ */
+function extractSpineGraph(graph) {
+  const bbox = graph.bbox || null;
+  const keepEdges = (graph.edges || []).filter((e) => isSpineEdge(e, bbox));
+  return compactGraph(graph, keepEdges, "spine");
+}
+
+function extractLonghaulSpineGraph(graph) {
+  const bbox = graph.bbox || null;
+  const hasRoadClass = (graph.edges || []).some((e) => e.rt);
+  const keepEdges = (graph.edges || []).filter((e) =>
+    isLonghaulSpineEdge(e, bbox, { hasRoadClass })
+  );
+  return compactGraph(graph, keepEdges, "longhaul-spine");
+}
+
+function compactGraph(graph, keepEdges, roleSuffix) {
   const used = new Set();
   for (const e of keepEdges) {
     used.add(e.a);
@@ -169,7 +217,7 @@ function extractHighwayGraph(graph) {
     ...e,
     a: remap.get(e.a),
     b: remap.get(e.b),
-    role: e.role || "highway"
+    role: e.role || roleSuffix
   }));
   const boundaryNodes = [];
   for (const oldId of graph.boundaryNodes || []) {
@@ -177,7 +225,7 @@ function extractHighwayGraph(graph) {
   }
   return {
     ...graph,
-    regionId: (graph.regionId || "region") + ":highway",
+    regionId: (graph.regionId || "region") + ":" + roleSuffix,
     nodeCount: nodes.length,
     edgeCount: edges.length,
     boundaryNodes,
@@ -190,7 +238,10 @@ function extractHighwayGraph(graph) {
 module.exports = {
   clipGraphToCorridor,
   extractHighwayGraph,
+  extractSpineGraph,
+  extractLonghaulSpineGraph,
   isSpineEdge,
+  isLonghaulSpineEdge,
   corridorPolyline,
   haversineMeters
 };

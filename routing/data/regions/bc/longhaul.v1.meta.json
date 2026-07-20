@@ -1,0 +1,21 @@
+{
+  "regionId": "bc",
+  "schemaVersion": "longhaul-region-1",
+  "edgeCount": 59031,
+  "nodeCount": 54119,
+  "gzBytes": 4108445,
+  "inflatedBytes": 22583419,
+  "path": "routing/data/regions/bc/longhaul.v1.json.gz",
+  "lineage": {
+    "purpose": "canada-chain hop pack (NRN spine + southern corridor)",
+    "source": "regions/bc/graph.v1.json.gz",
+    "hasRoadClass": true,
+    "spine": true,
+    "highwayNoTrack": false,
+    "corridorBufferMeters": 200000,
+    "thinnedGeometry": true,
+    "inputEdgeCount": 263054,
+    "spineEdgeCount": 70200,
+    "outputEdgeCount": 59031
+  }
+}

@@ -208,12 +208,18 @@ async function loadGraphsForRequest(resolution, options = {}) {
       let g = await readGraphData(p);
       const regionId = String(g.regionId || path.basename(path.dirname(p)) || "").toLowerCase();
       const isEndpoint = hit.has(regionId);
+      const alreadyLonghaul =
+        resolution.longhaulPacks ||
+        String(g.schemaVersion || "").startsWith("longhaul") ||
+        /longhaul\.v1\.json\.gz$/.test(String(p));
       // Long-haul: drop track edges in mid provinces to reduce memory; keep
       // endpoints fuller for local access. Never invent free-space connectors.
-      if (longHaul && !isEndpoint) {
+      // Prebuilt longhaul packs are already spine/corridor thinned — don't
+      // re-filter (NS/NB have no road class; length filters shatter them).
+      if (!alreadyLonghaul && longHaul && !isEndpoint) {
         g = extractHighwayGraph(g);
       }
-      if (corridorLocations.length >= 2) {
+      if (!alreadyLonghaul && corridorLocations.length >= 2) {
         const buf = isEndpoint ? Math.max(bufferMeters, 200000) : bufferMeters;
         g = clipGraphToCorridor(g, corridorLocations, buf);
       }

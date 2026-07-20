@@ -96,21 +96,33 @@ function selectRegionsForLocations(locations) {
   return [...hit].sort();
 }
 
-function localGraphPath(regionId) {
+function localGraphPath(regionId, { longhaul = false } = {}) {
   if (regionId === "__legacy_ns__") return LEGACY_GRAPH;
+  if (longhaul) {
+    return path.join(REGIONS_DIR, regionId, "longhaul.v1.json.gz");
+  }
   return path.join(REGIONS_DIR, regionId, "graph.v1.json.gz");
 }
 
-function remoteGraphUrl(regionId) {
+function remoteGraphUrl(regionId, { longhaul = false } = {}) {
   const base = publicBaseUrl();
   if (regionId === "__legacy_ns__") return base + "/routing/data/ns-graph.v1.json.gz";
+  if (longhaul) {
+    return base + "/routing/data/regions/" + regionId + "/longhaul.v1.json.gz";
+  }
   return base + "/routing/data/regions/" + regionId + "/graph.v1.json.gz";
 }
 
-function graphPathForRegion(regionId) {
-  const local = localGraphPath(regionId);
+function graphPathForRegion(regionId, opts = {}) {
+  const local = localGraphPath(regionId, opts);
   if (fs.existsSync(local)) return local;
-  return remoteGraphUrl(regionId);
+  // On disk missing: still point at remote longhaul/full URL when requested.
+  if (opts.longhaul) {
+    const fullLocal = localGraphPath(regionId, { longhaul: false });
+    // Prefer remote longhaul; callers on Vercel fetch from CDN after deploy.
+    return remoteGraphUrl(regionId, { longhaul: true });
+  }
+  return remoteGraphUrl(regionId, opts);
 }
 
 function regionPackAvailable(regionId) {
@@ -168,6 +180,7 @@ function resolveGraphRequest(body = {}) {
   // Local longhaul pack is for developer machines with enough RAM. On Vercel the
   // isolate uses chained regional hops so each request only loads 1–2 provinces.
   const onVercel = !!(process.env.VERCEL || process.env.VERCEL_ENV);
+
   if (
     !onVercel &&
     corridor.length >= 4 &&
@@ -199,17 +212,31 @@ function resolveGraphRequest(body = {}) {
     };
   }
 
-  // Always allow remote URLs; check local for offline messaging only.
-  const unavailableLocal = corridor.filter((id) => !fs.existsSync(localGraphPath(id)));
+  // Chain hops + Vercel multi-province use thinned longhaul packs (~10–40MB
+  // inflated) instead of full regional graphs (up to ~300MB) that OOM Hobby.
+  const useLonghaulPacks =
+    !!body.preferLonghaulPacks || (onVercel && corridor.length >= 2);
+  const pathOpts = useLonghaulPacks ? { longhaul: true } : {};
+
+  const unavailableLocal = corridor.filter(
+    (id) => !fs.existsSync(localGraphPath(id, pathOpts))
+  );
 
   if (corridor.length === 1) {
     const regionId = corridor[0];
+    const opts = body.preferLonghaulPacks ? { longhaul: true } : {};
     return {
       ok: true,
       regionIds: [regionId],
-      graphPath: graphPathForRegion(regionId),
-      graphPaths: [graphPathForRegion(regionId)],
-      mode: fs.existsSync(localGraphPath(regionId)) ? "regional-local" : "regional-remote"
+      graphPath: graphPathForRegion(regionId, opts),
+      graphPaths: [graphPathForRegion(regionId, opts)],
+      mode: fs.existsSync(localGraphPath(regionId, opts))
+        ? opts.longhaul
+          ? "longhaul-local"
+          : "regional-local"
+        : opts.longhaul
+          ? "longhaul-remote"
+          : "regional-remote"
     };
   }
 
@@ -217,10 +244,17 @@ function resolveGraphRequest(body = {}) {
     ok: true,
     regionIds: corridor,
     graphPath: null,
-    graphPaths: corridor.map(graphPathForRegion),
-    mode: unavailableLocal.length ? "multi-regional-remote" : "multi-regional-local",
+    graphPaths: corridor.map((id) => graphPathForRegion(id, pathOpts)),
+    mode: pathOpts.longhaul
+      ? unavailableLocal.length
+        ? "multi-longhaul-remote"
+        : "multi-longhaul-local"
+      : unavailableLocal.length
+        ? "multi-regional-remote"
+        : "multi-regional-local",
     hitRegions,
-    missingLocal: unavailableLocal
+    missingLocal: unavailableLocal,
+    longhaulPacks: !!pathOpts.longhaul
   };
 }
 

@@ -216,6 +216,8 @@ const CORRIDOR_ANCHORS = [
   { lon: -73.567, lat: 45.502 }, // Montreal
   { lon: -75.697, lat: 45.421 }, // Ottawa
   { lon: -79.383, lat: 43.653 }, // Toronto
+  { lon: -81.0, lat: 46.49 }, // Sudbury — keeps ON highway north of Georgian Bay
+  { lon: -84.35, lat: 46.52 }, // Sault Ste. Marie
   { lon: -89.247, lat: 48.38 }, // Thunder Bay
   { lon: -97.138, lat: 49.895 }, // Winnipeg
   { lon: -104.618, lat: 50.445 }, // Regina

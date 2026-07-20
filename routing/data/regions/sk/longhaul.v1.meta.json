@@ -1,0 +1,21 @@
+{
+  "regionId": "sk",
+  "schemaVersion": "longhaul-region-1",
+  "edgeCount": 264714,
+  "nodeCount": 193180,
+  "gzBytes": 17992259,
+  "inflatedBytes": 90694423,
+  "path": "routing/data/regions/sk/longhaul.v1.json.gz",
+  "lineage": {
+    "purpose": "canada-chain hop pack (NRN spine + southern corridor)",
+    "source": "regions/sk/graph.v1.json.gz",
+    "hasRoadClass": false,
+    "spine": false,
+    "highwayNoTrack": true,
+    "corridorBufferMeters": 200000,
+    "thinnedGeometry": true,
+    "inputEdgeCount": 298182,
+    "spineEdgeCount": 298182,
+    "outputEdgeCount": 264714
+  }
+}

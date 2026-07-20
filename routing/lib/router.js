@@ -327,6 +327,7 @@ async function routeCanadaChain(body, graphResolution) {
       locations: [waypoints[i], waypoints[i + 1]],
       disableChain: true,
       disableLonghaul: true,
+      preferLonghaulPacks: true,
       options: {
         ...(body.options || {}),
         matchLimitMeters: Math.min(500, Number((body.options || {}).matchLimitMeters) || 500)
