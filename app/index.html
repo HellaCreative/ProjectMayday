@@ -7363,21 +7363,15 @@
        and separate them without spending another row of vertical space. */
     #routeBarStageEditor .stage-editor-settings-grid {
       display: grid !important;
-      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+      grid-template-columns: minmax(0, 1fr) 1px minmax(0, 1fr) !important;
       align-items: stretch !important;
-      column-gap: 32px !important;
-      position: relative !important;
+      column-gap: 16px !important;
     }
-    #routeBarStageEditor .stage-editor-settings-grid::after {
-      content: "";
-      position: absolute;
-      top: 0;
-      bottom: 0;
-      left: 50%;
+    #routeBarStageEditor .stage-editor-settings-divider {
       width: 1px;
+      min-height: 61px;
+      align-self: stretch;
       background: #b8bbc1;
-      transform: translateX(-.5px);
-      pointer-events: none;
     }
     #routeBarStageEditor .stage-editor-settings-grid > .route-setting-field {
       min-width: 0 !important;
@@ -7412,10 +7406,10 @@
     }
     /* Compact stage cards are summaries only. The editor above is the sole
        owner of profile and access controls, including legacy render paths. */
-    #routeBarStageList .route-settings-grid,
-    #routeBarStageList .route-stage-settings,
-    #routeBarStageList [data-stage-profile],
-    #routeBarStageList [data-stage-access] {
+    .stage-row .route-settings-grid,
+    .stage-row .route-stage-settings,
+    .stage-row [data-stage-profile],
+    .stage-row [data-stage-access] {
       display: none !important;
     }
     body.planner-open .route-bar-stage-list::-webkit-scrollbar,
@@ -11055,6 +11049,7 @@
             '<span class="route-setting-label">Surface type</span>' +
             '<select class="route-surface-select" data-stage-profile="' + stage.id + '" aria-label="Stage surface type">' + profileOptions + '</select>' +
           '</label>' +
+          '<div class="stage-editor-settings-divider" aria-hidden="true"></div>' +
           '<div class="route-setting-field route-stage-editor-access">' +
             '<div class="route-setting-heading">' +
               '<span class="route-setting-label">Allow unknown access</span>' +
@@ -11532,6 +11527,9 @@
         routeBarStageList.querySelectorAll(".stage-row, .stage-draft-prompt").forEach((row) => row.remove());
         routeBarStageList.insertAdjacentHTML("afterbegin", stageMarkup);
       }
+      [stageListEl, routeBarStageList].filter(Boolean).forEach((list) => {
+        list.querySelectorAll(".stage-row .route-settings-grid, .stage-row .route-stage-settings").forEach((settings) => settings.remove());
+      });
       if (routeBarAddStage) {
         routeBarAddStage.hidden = false;
         const nextAction = routedStages.length
