@@ -262,20 +262,19 @@ function isNrnSrc(src) {
 /**
  * Live mental model for Vercel longhaul packs:
  *   OSM + NRN = road fabric (ordinary driveable roads). Always permissive for OSM.
- *   Provincial/gov forest = capillary *between* that fabric — omitted from longhaul;
- *   riders enable those via unknown-access on full regional packs.
+ *   Provincial/gov forest = capillary *between* that fabric — omitted from longhaul.
  *
  * Modes:
- *   dense    — all NRN non-track + all OSM (NS/NB-sized).
- *   corridor — NRN spine + hub bulbs; OSM roadish corridor-wide + all OSM near hubs (QC).
+ *   maritime — NRN non-track + OSM highways corridor-wide; all fabric near city hubs.
+ *   corridor — NRN spine + all fabric near hubs (QC-sized; keeps village snaps).
  *
- * Always ends with largest-connected-component trim so unwelled OSM islands
- * cannot steal snaps and cause disconnected_components failures.
+ * Relabels connected-component ids after extract (does NOT drop edges). Dropping via
+ * LCC removed Saint-Raymond / Moncton local coverage and broke From-here snaps.
  */
 function extractRoadFabricLonghaulGraph(graph, options = {}) {
-  const mode = options.mode === "corridor" ? "corridor" : "dense";
+  const mode = options.mode === "corridor" ? "corridor" : "maritime";
   const hubLocations = options.hubLocations || [];
-  const hubBufferMeters = Number(options.hubBufferMeters) || 35000;
+  const hubBufferMeters = Number(options.hubBufferMeters) || 40000;
   const bbox = graph.bbox || null;
   const hasRoadClass = (graph.edges || []).some((e) => e.rt);
   const hubs = corridorPolyline(hubLocations);
@@ -297,10 +296,11 @@ function extractRoadFabricLonghaulGraph(graph, options = {}) {
 
     if (nrn) {
       if (e.s === 3) continue;
-      if (mode === "dense") {
+      if (mode === "maritime") {
         keepEdges.push(e);
         continue;
       }
+      // corridor: spine everywhere + locals near hubs
       if (isLonghaulSpineEdge(e, bbox, { hasRoadClass }) || nearHub(e)) {
         keepEdges.push(e);
       }
@@ -309,23 +309,74 @@ function extractRoadFabricLonghaulGraph(graph, options = {}) {
 
     // OSM fabric — normalize legacy unknown access to permissive.
     const edge = e.ac === 2 ? { ...e, ac: 1 } : e;
-    if (mode === "dense") {
-      keepEdges.push(edge);
+    const rt = String(e.rt || "");
+    if (mode === "maritime") {
+      // Highways keep intercity connectivity; hubs keep basemap locals for snaps.
+      if (LONGHAUL_ROAD_TRACK.has(rt) || nearHub(e)) keepEdges.push(edge);
       continue;
     }
-    const rt = String(e.rt || "");
-    if (nearHub(e) || FABRIC_OSM_ROADISH.has(rt)) {
+    // corridor QC: all OSM near hubs; highway-class OSM along the spine corridor
+    if (nearHub(e) || LONGHAUL_ROAD_TRACK.has(rt)) {
       keepEdges.push(edge);
     }
   }
 
   const compacted = compactGraph(graph, keepEdges, "road-fabric-longhaul");
-  return keepLargestComponent(compacted);
+  return relabelComponents(compacted);
+}
+
+/**
+ * Recompute edge.c from the extracted adjacency. Keeps every edge.
+ * Stale component ids from the full regional pack caused false
+ * disconnected_components after thinning.
+ */
+function relabelComponents(graph) {
+  const nodeCount = (graph.nodes || []).length;
+  const edges = graph.edges || [];
+  if (!nodeCount || !edges.length) return graph;
+
+  const parent = new Int32Array(nodeCount);
+  for (let i = 0; i < nodeCount; i += 1) parent[i] = i;
+  function find(x) {
+    while (parent[x] !== x) {
+      parent[x] = parent[parent[x]];
+      x = parent[x];
+    }
+    return x;
+  }
+  function uni(a, b) {
+    const ra = find(a);
+    const rb = find(b);
+    if (ra !== rb) parent[rb] = ra;
+  }
+
+  for (const e of edges) {
+    if (e.a == null || e.b == null) continue;
+    if (e.a < 0 || e.b < 0 || e.a >= nodeCount || e.b >= nodeCount) continue;
+    uni(e.a, e.b);
+  }
+
+  const rootToId = new Map();
+  let next = 0;
+  for (const e of edges) {
+    const r = find(e.a);
+    if (!rootToId.has(r)) {
+      rootToId.set(r, next);
+      next += 1;
+    }
+    e.c = rootToId.get(r);
+  }
+  graph.componentCount = next;
+  graph.meta = {
+    ...(graph.meta || {}),
+    componentRelabel: { components: next, edges: edges.length }
+  };
+  return graph;
 }
 
 /**
  * Drop edges not in the largest connected component and rewrite edge.c.
- * Prevents snap-to-orphan after multi-source fabric extracts without endpoint welding.
+ * Prefer relabelComponents for fabric packs — LCC removes local OSM/NRN coverage.
  */
 function keepLargestComponent(graph) {
   const nodeCount = (graph.nodes || []).length;
@@ -369,7 +420,6 @@ function keepLargestComponent(graph) {
 
   const keepEdges = edges.filter((e) => find(e.a) === giantRoot && find(e.b) === giantRoot);
   const out = compactGraph(graph, keepEdges, "lcc");
-  // Single component after trim — label every edge c=0 for router early-out.
   for (const e of out.edges) e.c = 0;
   out.componentCount = 1;
   out.meta = {
@@ -382,7 +432,6 @@ function keepLargestComponent(graph) {
       giantNodeCount: giantSize
     }
   };
-  // Fix regionId double-suffix from second compact
   out.regionId = String(graph.regionId || "region").replace(/:lcc$/, "") + ":lcc";
   return out;
 }
@@ -430,6 +479,7 @@ module.exports = {
   extractMaritimeLonghaulGraph,
   extractRoadFabricLonghaulGraph,
   keepLargestComponent,
+  relabelComponents,
   isSpineEdge,
   isLonghaulSpineEdge,
   corridorPolyline,

@@ -53,6 +53,17 @@ function primaryRegionForPoint(lon, lat) {
     return lon < -116.4 ? "bc" : "ab";
   }
 
+  // ON bbox is smaller than QC and extends into the Laurentians west of
+  // Montreal. Smallest-bbox then mis-labels Mont-Tremblant as Ontario and
+  // forces canada-chain for ordinary in-QC From-here routes.
+  if (ids.has("on") && ids.has("qc")) {
+    // Laurentian plateau / Labelle / Tremblant (north of Montreal).
+    if (lat >= 45.9) return "qc";
+    // Montreal & east of the Hawkesbury pinch stay Quebec.
+    if (lon >= -74.5) return "qc";
+    return "on";
+  }
+
   hits.sort((a, b) => a.area - b.area);
   return hits[0].id;
 }
@@ -205,12 +216,20 @@ function resolveGraphRequest(body = {}) {
     };
   }
 
-  // On Vercel, chain any multi-province route (NS→QC is 3 regions). Merging
-  // several longhaul packs in one isolate still OOMs / returns no_route when
-  // boundary stitching fails. Locally keep the old ≥4 threshold so short
-  // 2–3 province merges remain available for debugging.
+  // On Vercel, chain multi-province routes. Skip chaining when every endpoint
+  // resolves to the same primary province — in-QC From-here must not hop via
+  // Ontario/Ottawa just because bboxes overlap.
+  const uniquePrimary = [
+    ...new Set(
+      locationsToPoints(body.locations || [])
+        .map((p) => primaryRegionForPoint(p.lon, p.lat))
+        .filter(Boolean)
+    )
+  ];
+  const sameProvince = uniquePrimary.length === 1;
   const useCanadaChain =
     !body.disableChain &&
+    !sameProvince &&
     corridor.length >= 2 &&
     (onVercel || corridor.length >= 4);
   if (useCanadaChain) {

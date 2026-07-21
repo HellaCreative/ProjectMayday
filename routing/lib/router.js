@@ -197,13 +197,40 @@ function edgeCandidateIndexes(runtime, lng, lat, radiusMeters) {
   return out;
 }
 
-function matchPoint(runtime, location, policy, matchMeters, avoidEdgeIds) {
+function giantComponentId(runtime) {
+  if (runtime._giantComponentId != null) return runtime._giantComponentId;
+  const edges = runtime.data && runtime.data.edges;
+  if (!edges || !edges.length) {
+    runtime._giantComponentId = 0;
+    return 0;
+  }
+  const counts = new Map();
+  for (const e of edges) {
+    const c = e.c;
+    if (c == null || c < 0) continue;
+    counts.set(c, (counts.get(c) || 0) + 1);
+  }
+  let best = 0;
+  let bestN = -1;
+  for (const [c, n] of counts) {
+    if (n > bestN) {
+      bestN = n;
+      best = c;
+    }
+  }
+  runtime._giantComponentId = best;
+  return best;
+}
+
+function matchPoint(runtime, location, policy, matchMeters, avoidEdgeIds, preferComponentId = null) {
   const enums = runtime.enums;
   const point = [Number(location.lon ?? location.lng), Number(location.lat)];
   if (!Number.isFinite(point[0]) || !Number.isFinite(point[1])) {
     return { ok: false, reason: "invalid_location" };
   }
   const avoid = avoidEdgeIds instanceof Set ? avoidEdgeIds : null;
+  const preferId = Number.isFinite(preferComponentId) ? preferComponentId : null;
+  const giantId = runtime.format === "v2" ? null : giantComponentId(runtime);
   const candidates = edgeCandidateIndexes(runtime, point[0], point[1], matchMeters);
   const isV2 = runtime.format === "v2";
   let best = null;
@@ -247,7 +274,27 @@ function matchPoint(runtime, location, policy, matchMeters, avoidEdgeIds) {
       const b = coords[i];
       const segM = haversineMeters(a, b);
       const projected = projectOnSegment(point, a, b);
-      if (!best || projected.distanceM < best.distanceM) {
+      // Hard prefer an explicit component (end rematch). Soft-prefer the giant
+      // component so unwelled OSM islands near basemap clicks do not steal snaps.
+      let componentPenalty = 0;
+      if (
+        preferId != null &&
+        componentId != null &&
+        componentId >= 0 &&
+        componentId !== preferId
+      ) {
+        componentPenalty = 1e6;
+      } else if (
+        preferId == null &&
+        giantId != null &&
+        componentId != null &&
+        componentId >= 0 &&
+        componentId !== giantId
+      ) {
+        componentPenalty = 120;
+      }
+      const score = projected.distanceM + componentPenalty;
+      if (!best || score < best.score) {
         best = {
           ok: true,
           edgeIndex: index,
@@ -257,6 +304,7 @@ function matchPoint(runtime, location, policy, matchMeters, avoidEdgeIds) {
           structureType: enums.STRUCTURE_NAME[structureCode],
           componentId,
           distanceM: projected.distanceM,
+          score,
           coord: projected.coord,
           segmentIndex: i - 1,
           distanceAlongM: along + segM * projected.t,
@@ -539,9 +587,9 @@ async function routeOnRuntime(body, graphResolution, runtime) {
   const policy = normalizePolicy(body.accessPolicy);
   const options = body.options || {};
   const matchMeters = Number(options.matchLimitMeters);
-  // Default 250 m. Explicit overrides allowed only within a small hard cap —
-  // never the old zoom-dependent 2–6 km browser snap.
-  const HARD_MATCH_CAP_M = 500;
+  // Default 250 m on dense/legacy packs. Longhaul / Vercel packs are thinned —
+  // hub roads can sit ~300–500 m from a basemap click (e.g. Saint-Raymond).
+  const HARD_MATCH_CAP_M = 750;
   if (Number.isFinite(matchMeters) && matchMeters > HARD_MATCH_CAP_M) {
     return {
       status: "error",
@@ -549,9 +597,17 @@ async function routeOnRuntime(body, graphResolution, runtime) {
       message: "matchLimitMeters may not exceed " + HARD_MATCH_CAP_M
     };
   }
+  const onVercel = !!(process.env.VERCEL || process.env.VERCEL_ENV);
+  const longhaulGraph =
+    onVercel ||
+    !!(graphResolution &&
+      (graphResolution.longhaulPacks ||
+        String(graphResolution.mode || "").includes("longhaul") ||
+        String(graphResolution.mode || "").includes("canada-chain")));
+  const defaultMatch = longhaulGraph ? 500 : DEFAULT_MATCH_METERS;
   const limit = Number.isFinite(matchMeters) && matchMeters > 0
     ? matchMeters
-    : DEFAULT_MATCH_METERS;
+    : defaultMatch;
 
   // Optional server-enforced avoidance (route incident recovery). Edge IDs are
   // excluded from snapping AND from graph traversal. This is never a browser
@@ -565,7 +621,30 @@ async function routeOnRuntime(body, graphResolution, runtime) {
   const start = locations[0];
   const end = locations[locations.length - 1];
   const startMatch = matchPoint(runtime, start, policy, limit, avoidEdgeIds);
-  const endMatch = matchPoint(runtime, end, policy, limit, avoidEdgeIds);
+  let endMatch = matchPoint(runtime, end, policy, limit, avoidEdgeIds);
+  // If end snapped onto a different component (common with unwelled OSM islands),
+  // retry preferring the start component so From-here basemap clicks stay routable.
+  if (
+    startMatch.ok &&
+    endMatch.ok &&
+    startMatch.componentId != null &&
+    endMatch.componentId != null &&
+    startMatch.componentId >= 0 &&
+    endMatch.componentId >= 0 &&
+    startMatch.componentId !== endMatch.componentId
+  ) {
+    const endSame = matchPoint(
+      runtime,
+      end,
+      policy,
+      limit,
+      avoidEdgeIds,
+      startMatch.componentId
+    );
+    if (endSame.ok && endSame.componentId === startMatch.componentId) {
+      endMatch = endSame;
+    }
+  }
 
   if (!startMatch.ok || !endMatch.ok) {
     return {

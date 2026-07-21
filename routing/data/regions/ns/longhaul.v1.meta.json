@@ -1,22 +1,23 @@
 {
   "regionId": "ns",
   "schemaVersion": "longhaul-region-1",
-  "edgeCount": 101807,
-  "nodeCount": 90015,
-  "gzBytes": 7997162,
-  "inflatedBytes": 41340531,
+  "edgeCount": 126088,
+  "nodeCount": 132429,
+  "gzBytes": 9609317,
+  "inflatedBytes": 50123405,
   "path": "routing/data/regions/ns/longhaul.v1.json.gz",
   "lineage": {
-    "purpose": "canada-chain hop pack (OSM+NRN road fabric; no provincial capillary)",
+    "purpose": "canada-chain hop pack (OSM+NRN road fabric; hub bulbs; no provincial)",
     "mentalModel": "osm-nrn-fabric",
     "source": "regions/ns/graph.v1.json.gz",
     "hasRoadClass": true,
     "hasOsm": true,
-    "extractMode": "fabric-dense",
+    "extractMode": "fabric-maritime",
+    "hubCount": 4,
     "corridorBufferMeters": 200000,
     "thinnedGeometry": true,
     "inputEdgeCount": 378141,
-    "spineEdgeCount": 125648,
-    "outputEdgeCount": 101807
+    "spineEdgeCount": 150212,
+    "outputEdgeCount": 126088
   }
 }

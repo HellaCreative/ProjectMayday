@@ -8,8 +8,8 @@
  *   OSM + NRN = road fabric (driveable basemap roads). Provincial capillary
  *   stays out of these packs — enable via unknown-access on full regional graphs.
  *
- * Full regional graphs inflate to 100–300MB+ and OOM Hobby isolates; these
- * corridor-clipped fabric packs stay small enough to fetch + merge 1–2 at a time.
+ * Hub bulbs keep village/city basemap snaps (Saint-Raymond, Moncton, etc.)
+ * without shipping full provincial graphs.
  */
 const fs = require("fs");
 const path = require("path");
@@ -20,7 +20,7 @@ const {
   extractHighwayGraph,
   extractLonghaulSpineGraph,
   extractRoadFabricLonghaulGraph,
-  keepLargestComponent
+  relabelComponents
 } = require("../routing/regional/corridor");
 
 const ROOT = path.join(__dirname, "..");
@@ -49,6 +49,32 @@ function load(code) {
   return g;
 }
 
+const HUBS = {
+  qc: [
+    { lon: -71.208, lat: 46.813 }, // Quebec City
+    { lon: -71.30, lat: 46.95 }, // Lac-Beauport
+    { lon: -71.833, lat: 46.899 }, // Saint-Raymond
+    { lon: -73.567, lat: 45.502 }, // Montreal
+    { lon: -74.28, lat: 46.05 }, // Sainte-Agathe
+    { lon: -74.60, lat: 46.12 }, // Mont-Tremblant
+    { lon: -68.65, lat: 47.55 } // Dégelis / NB approach
+  ],
+  nb: [
+    { lon: -64.778, lat: 46.088 }, // Moncton
+    { lon: -66.643, lat: 45.963 }, // Fredericton
+    { lon: -66.059, lat: 45.273 }, // Saint John
+    { lon: -67.583, lat: 47.376 } // Edmundston / QC approach
+  ],
+  ns: [
+    { lon: -63.575, lat: 44.649 }, // Halifax
+    { lon: -63.28, lat: 45.365 }, // Truro
+    { lon: -61.39, lat: 46.14 }, // Sydney area
+    { lon: -64.52, lat: 44.98 } // Bridgewater / South Shore
+  ],
+  pe: [{ lon: -63.126, lat: 46.238 }],
+  nl: [{ lon: -52.712, lat: 47.561 }]
+};
+
 function main() {
   const corridor = corridorLocationsForRoute([
     { lat: 44.6488, lon: -63.575 },
@@ -62,34 +88,24 @@ function main() {
     const hasRoadClass = (g.edges || []).some((e) => e.rt);
     const hasOsm = (g.edges || []).some((e) => /openstreetmap/i.test(String(e.src || "")));
 
-    // Provinces with OSM fabric in the regional pack use road-fabric longhaul.
-    // QC = corridor mode (size). NS/NB = dense fabric when OSM present; else NRN-only dense.
     const corridorFabric = new Set(["qc"]);
-    const denseFabric = new Set(["ns", "nb", "pe", "nl"]);
-    const atlanticHubsByCode = {
-      qc: [
-        { lon: -71.208, lat: 46.813 }, // Quebec City
-        { lon: -71.30, lat: 46.95 }, // Lac-Beauport
-        { lon: -73.567, lat: 45.502 }, // Montreal
-        { lon: -74.28, lat: 46.05 }, // Sainte-Agathe / Laurentians
-        { lon: -74.60, lat: 46.12 }, // Mont-Tremblant
-        { lon: -68.65, lat: 47.55 } // Dégelis / NB approach
-      ],
-      pe: [{ lon: -63.126, lat: 46.238 }],
-      nl: [{ lon: -52.712, lat: 47.561 }]
-    };
+    const maritimeFabric = new Set(["ns", "nb", "pe", "nl"]);
 
     let extractMode = "spine";
     if (corridorFabric.has(code)) {
       extractMode = "fabric-corridor";
       g = extractRoadFabricLonghaulGraph(g, {
         mode: "corridor",
-        hubLocations: atlanticHubsByCode[code] || [],
-        hubBufferMeters: code === "qc" ? 35000 : 35000
+        hubLocations: HUBS[code] || [],
+        hubBufferMeters: 50000
       });
-    } else if (denseFabric.has(code) || hasOsm) {
-      extractMode = "fabric-dense";
-      g = extractRoadFabricLonghaulGraph(g, { mode: "dense" });
+    } else if (maritimeFabric.has(code) || hasOsm) {
+      extractMode = "fabric-maritime";
+      g = extractRoadFabricLonghaulGraph(g, {
+        mode: "maritime",
+        hubLocations: HUBS[code] || [],
+        hubBufferMeters: 35000
+      });
     } else if (!hasRoadClass) {
       extractMode = "highway-no-track";
       g = extractHighwayGraph(g);
@@ -100,9 +116,9 @@ function main() {
 
     const afterSpine = g.edgeCount;
     g = clipGraphToCorridor(g, corridor, BUFFER_M);
-    // Corridor clip can detach fringe islands — keep the routable giant only.
     if (String(extractMode).startsWith("fabric")) {
-      g = keepLargestComponent(g);
+      // Corridor clip can leave stale component labels — refresh only.
+      g = relabelComponents(g);
     }
     for (const e of g.edges) e.g = thinGeometry(e.g, 6);
     g.edgeCount = g.edges.length;
@@ -110,12 +126,13 @@ function main() {
     g.province = String(code).toUpperCase();
     g.schemaVersion = "longhaul-region-1";
     g.lineage = {
-      purpose: "canada-chain hop pack (OSM+NRN road fabric; no provincial capillary)",
+      purpose: "canada-chain hop pack (OSM+NRN road fabric; hub bulbs; no provincial)",
       mentalModel: "osm-nrn-fabric",
       source: `regions/${code}/graph.v1.json.gz`,
       hasRoadClass,
       hasOsm,
       extractMode,
+      hubCount: (HUBS[code] || []).length,
       corridorBufferMeters: BUFFER_M,
       thinnedGeometry: true,
       inputEdgeCount: before,
@@ -126,8 +143,7 @@ function main() {
     const outDir = path.join(REGIONS, code);
     const json = JSON.stringify(g);
     const gz = zlib.gzipSync(Buffer.from(json, "utf8"), { level: 9 });
-    const graphPath = path.join(outDir, "longhaul.v1.json.gz");
-    fs.writeFileSync(graphPath, gz);
+    fs.writeFileSync(path.join(outDir, "longhaul.v1.json.gz"), gz);
     const meta = {
       regionId: code,
       schemaVersion: g.schemaVersion,
