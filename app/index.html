@@ -6996,8 +6996,83 @@
     body.planner-open .route-card.is-expanded .route-mode-block .route-tabs,
     body.planner-open .route-card.is-expanded .saved-sheet-mode-tabs {
       box-sizing: border-box;
-      padding: 8px !important;
+      padding: 4px !important;
       background: #e9eaed !important;
+    }
+    body.planner-open .route-card.is-expanded .route-tabs .route-mode,
+    body.planner-open .route-card.is-expanded .saved-sheet-mode-tabs .route-mode {
+      font-size: 11px !important;
+    }
+    .route-settings-grid {
+      display: grid !important;
+      grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr) !important;
+      align-items: end !important;
+      gap: 10px !important;
+      width: 100% !important;
+    }
+    .route-setting-field {
+      display: flex !important;
+      flex-direction: column !important;
+      align-items: stretch !important;
+      gap: 5px !important;
+      min-width: 0 !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      border: 0 !important;
+    }
+    .route-setting-label {
+      color: var(--fig-ink, #1c1917) !important;
+      font: 700 9.5px/1.2 var(--font-ui) !important;
+      letter-spacing: 0 !important;
+    }
+    .route-setting-heading {
+      display: flex !important;
+      align-items: center !important;
+      justify-content: flex-start !important;
+      gap: 4px !important;
+      min-height: 22px !important;
+    }
+    .route-setting-heading .access-info-btn {
+      flex: 0 0 20px !important;
+      width: 20px !important;
+      height: 20px !important;
+      min-width: 20px !important;
+      padding: 0 !important;
+    }
+    .route-surface-select {
+      width: 100% !important;
+      min-width: 0 !important;
+      height: 34px !important;
+      min-height: 34px !important;
+      margin: 0 !important;
+      padding: 0 28px 0 10px !important;
+      border: 1px solid rgba(28, 25, 23, 0.16) !important;
+      border-radius: 7px !important;
+      background-color: #ffffff !important;
+      color: var(--fig-ink, #1c1917) !important;
+      font: 700 10px/1 var(--font-ui) !important;
+    }
+    .route-setting-toggle {
+      display: flex !important;
+      align-items: center !important;
+      justify-content: flex-start !important;
+      gap: 8px !important;
+      min-height: 34px !important;
+      color: var(--fig-ink-soft, #57534e) !important;
+      font: 600 9.5px/1 var(--font-ui) !important;
+    }
+    .route-setting-toggle .switch {
+      margin: 0 !important;
+    }
+    .route-stage-settings {
+      margin: 0 !important;
+    }
+    .route-stage-editor-access {
+      display: flex !important;
+      flex-direction: column !important;
+      align-items: stretch !important;
+      gap: 5px !important;
+      min-height: 0 !important;
     }
     body.planner-open .route-card.is-expanded .route-tab-hint {
       display: none !important;
@@ -7261,26 +7336,28 @@
         </div>
         <p class="route-tab-hint" id="routeTabHintCompact">Build your route from your current position</p>
       </div>
-      <select class="route-compact-pref" id="routeCompactPref" aria-label="Route profile" hidden>
-        <option value="direct">Direct</option>
-        <option value="balanced" selected>Balanced</option>
-        <option value="dirt">Dirt</option>
-        <option value="cleanest">Cleanest</option>
-      </select>
       <div class="route-pref-card" id="routePrefCardCompact">
-        <div class="route-preferences route-preferences-compact" role="tablist" aria-label="Route preference">
-          <button class="route-pref" type="button" data-route-pref="direct" role="tab" aria-selected="false">Direct</button>
-          <button class="route-pref active" type="button" data-route-pref="balanced" role="tab" aria-selected="true">Balanced</button>
-          <button class="route-pref" type="button" data-route-pref="dirt" role="tab" aria-selected="false">Dirt</button>
-          <button class="route-pref" type="button" data-route-pref="cleanest" role="tab" aria-selected="false">Clean</button>
-        </div>
-        <div class="route-access route-access-compact" id="routeAccessCompact">
-          <div class="route-access-row">
-            <span class="route-access-label">Allow unknown access</span>
-            <button class="access-info-btn" id="accessInfoBtn" type="button" aria-label="What allowing unknown access means" aria-describedby="accessInfoTip" aria-expanded="false">
-              <i data-lucide="info" aria-hidden="true"></i>
-            </button>
-            <label class="switch"><input type="checkbox" id="unknownAccessToggle" aria-label="Allow unknown access"><span></span></label>
+        <div class="route-settings-grid">
+          <label class="route-setting-field">
+            <span class="route-setting-label">Surface type</span>
+            <select class="route-surface-select" id="routeCompactPref" data-route-pref-select aria-label="Surface type">
+              <option value="direct">Direct</option>
+              <option value="balanced" selected>Balanced</option>
+              <option value="dirt">Dirt</option>
+              <option value="cleanest">Clean</option>
+            </select>
+          </label>
+          <div class="route-setting-field route-access route-access-compact" id="routeAccessCompact">
+            <div class="route-setting-heading">
+              <span class="route-setting-label">Allow unknown access</span>
+              <button class="access-info-btn" id="accessInfoBtn" type="button" aria-label="What allowing unknown access means" aria-describedby="accessInfoTip" aria-expanded="false">
+                <i data-lucide="info" aria-hidden="true"></i>
+              </button>
+            </div>
+            <div class="route-setting-toggle">
+              <span>Allow</span>
+              <label class="switch"><input type="checkbox" id="unknownAccessToggle" aria-label="Allow unknown access"><span></span></label>
+            </div>
           </div>
         </div>
         <div class="route-compact-summary" id="routeCompactSummary">No route<strong>Tap map to plan</strong></div>
@@ -7318,19 +7395,27 @@
 
       <!-- Shared trip settings (From here) -->
       <div class="route-shared route-pref-card" id="routeSharedSettings">
-        <div class="route-preferences" role="tablist" aria-label="Route preference">
-          <button class="route-pref" type="button" data-route-pref="direct" role="tab" aria-selected="false">Direct</button>
-          <button class="route-pref active" type="button" data-route-pref="balanced" role="tab" aria-selected="true">Balanced</button>
-          <button class="route-pref" type="button" data-route-pref="dirt" role="tab" aria-selected="false">Dirt</button>
-          <button class="route-pref" type="button" data-route-pref="cleanest" role="tab" aria-selected="false">Clean</button>
-        </div>
-        <div class="route-access" id="routeAccess">
-          <div class="route-access-row">
-            <span class="route-access-label">Allow unknown access</span>
-            <button class="access-info-btn" id="accessInfoBtnPlan" type="button" aria-label="What allowing unknown access means" aria-describedby="accessInfoTip" aria-expanded="false">
-              <i data-lucide="info" aria-hidden="true"></i>
-            </button>
-            <label class="switch"><input type="checkbox" id="unknownAccessTogglePlan" aria-label="Allow unknown access"><span></span></label>
+        <div class="route-settings-grid">
+          <label class="route-setting-field">
+            <span class="route-setting-label">Surface type</span>
+            <select class="route-surface-select" data-route-pref-select aria-label="Surface type">
+              <option value="direct">Direct</option>
+              <option value="balanced" selected>Balanced</option>
+              <option value="dirt">Dirt</option>
+              <option value="cleanest">Clean</option>
+            </select>
+          </label>
+          <div class="route-setting-field route-access" id="routeAccess">
+            <div class="route-setting-heading">
+              <span class="route-setting-label">Allow unknown access</span>
+              <button class="access-info-btn" id="accessInfoBtnPlan" type="button" aria-label="What allowing unknown access means" aria-describedby="accessInfoTip" aria-expanded="false">
+                <i data-lucide="info" aria-hidden="true"></i>
+              </button>
+            </div>
+            <div class="route-setting-toggle">
+              <span>Allow</span>
+              <label class="switch"><input type="checkbox" id="unknownAccessTogglePlan" aria-label="Allow unknown access"><span></span></label>
+            </div>
           </div>
         </div>
         <div class="route-panel route-here-metrics" id="routePanelHere">
@@ -10676,11 +10761,9 @@
           (stage.route.estimatedMovingSeconds ? RS.secondsToLabel(stage.route.estimatedMovingSeconds) + " · " : "") +
           profileLabel.toLowerCase();
       }
-      const profiles = ["direct", "balanced", "dirt", "cleanest"].map((value) => {
+      const profileOptions = ["direct", "balanced", "dirt", "cleanest"].map((value) => {
         const label = value === "cleanest" ? "Clean" : value.charAt(0).toUpperCase() + value.slice(1);
-        return '<button class="route-stage-editor-pref' + (value === profile ? " active" : "") +
-          '" type="button" data-stage-id="' + stage.id + '" data-stage-pref="' + value + '"' +
-          ' aria-pressed="' + (value === profile ? "true" : "false") + '">' + label + "</button>";
+        return '<option value="' + value + '"' + (value === profile ? " selected" : "") + '>' + label + '</option>';
       }).join("");
       routeBarStageEditor.innerHTML =
         '<div class="route-stage-editor-head">' +
@@ -10691,14 +10774,23 @@
           '<button class="route-stage-editor-close" type="button" data-stage-editor-close aria-label="Close stage details"><i data-lucide="x" aria-hidden="true"></i></button>' +
         '</div>' +
         '<div class="route-stage-editor-meta">' + meta + '</div>' +
-        '<div class="route-stage-editor-prefs" role="group" aria-label="Stage route preference">' + profiles + '</div>' +
-        '<div class="route-stage-editor-access">' +
-          '<span>Allow unknown access</span>' +
-          '<button class="access-info-btn" type="button" data-access-info="stage-compact" aria-label="What allowing unknown access means" aria-describedby="accessInfoTip" aria-expanded="false">' +
-            '<i data-lucide="info" aria-hidden="true"></i>' +
-          '</button>' +
-          '<label class="switch"><input type="checkbox" data-stage-access aria-label="Allow unknown access"' +
-            (stageAllowsUnknownAccess(stage) ? " checked" : "") + ' data-stage-id="' + stage.id + '"><span></span></label>' +
+        '<div class="route-settings-grid route-stage-settings">' +
+          '<label class="route-setting-field">' +
+            '<span class="route-setting-label">Surface type</span>' +
+            '<select class="route-surface-select" data-stage-profile="' + stage.id + '" aria-label="Stage surface type">' + profileOptions + '</select>' +
+          '</label>' +
+          '<div class="route-setting-field route-stage-editor-access">' +
+            '<div class="route-setting-heading">' +
+              '<span class="route-setting-label">Allow unknown access</span>' +
+              '<button class="access-info-btn" type="button" data-access-info="stage-compact" aria-label="What allowing unknown access means" aria-describedby="accessInfoTip" aria-expanded="false">' +
+                '<i data-lucide="info" aria-hidden="true"></i>' +
+              '</button>' +
+            '</div>' +
+            '<div class="route-setting-toggle"><span>Allow</span>' +
+              '<label class="switch"><input type="checkbox" data-stage-access aria-label="Allow unknown access"' +
+                (stageAllowsUnknownAccess(stage) ? " checked" : "") + ' data-stage-id="' + stage.id + '"><span></span></label>' +
+            '</div>' +
+          '</div>' +
         '</div>' +
         '<div class="route-stage-editor-actions">' +
           '<button class="route-stage-editor-remove" type="button" data-stage-delete="' + stage.id + '"' +
@@ -11133,17 +11225,14 @@
       const current = stage.profile || "balanced";
       const profiles = ["direct", "balanced", "dirt", "cleanest"];
       return (
-        '<div class="route-preferences stage-preferences" role="tablist" aria-label="Stage ' + (index + 1) + ' route preference">' +
+        '<label class="route-setting-field">' +
+        '<span class="route-setting-label">Surface type</span>' +
+        '<select class="route-surface-select" data-stage-profile="' + stage.id + '" aria-label="Stage ' + (index + 1) + ' surface type">' +
         profiles.map((profile) => {
-          const active = profile === current;
           const label = profile === "cleanest" ? "Clean" : profile.charAt(0).toUpperCase() + profile.slice(1);
-          return (
-            '<button class="route-pref' + (active ? " active" : "") + '" type="button" role="tab" aria-selected="' +
-            (active ? "true" : "false") + '" data-stage-id="' + stage.id + '" data-stage-pref="' + profile + '">' +
-            label + "</button>"
-          );
+          return '<option value="' + profile + '"' + (profile === current ? " selected" : "") + '>' + label + '</option>';
         }).join("") +
-        "</div>"
+        "</select></label>"
       );
     }
 
@@ -11161,14 +11250,20 @@
         let body = "";
         if (expanded) {
           body =
-            stageProfilePillsHtml(stage, i) +
-            '<div class="route-access-row">' +
-              '<span class="route-access-label">Allow unknown access</span>' +
-              '<button class="access-info-btn" type="button" data-access-info="stage" aria-label="What allowing unknown access means" aria-describedby="accessInfoTip" aria-expanded="false">' +
-                '<i data-lucide="info" aria-hidden="true"></i>' +
-              "</button>" +
-              '<label class="switch"><input type="checkbox" data-stage-access aria-label="Allow unknown access"' +
-                (stageAllowsUnknownAccess(stage) ? " checked" : "") + ' data-stage-id="' + stage.id + '"><span></span></label>' +
+            '<div class="route-settings-grid route-stage-settings">' +
+              stageProfilePillsHtml(stage, i) +
+              '<div class="route-setting-field">' +
+                '<div class="route-setting-heading">' +
+                  '<span class="route-setting-label">Allow unknown access</span>' +
+                  '<button class="access-info-btn" type="button" data-access-info="stage" aria-label="What allowing unknown access means" aria-describedby="accessInfoTip" aria-expanded="false">' +
+                    '<i data-lucide="info" aria-hidden="true"></i>' +
+                  "</button>" +
+                '</div>' +
+                '<div class="route-setting-toggle"><span>Allow</span>' +
+                  '<label class="switch"><input type="checkbox" data-stage-access aria-label="Allow unknown access"' +
+                    (stageAllowsUnknownAccess(stage) ? " checked" : "") + ' data-stage-id="' + stage.id + '"><span></span></label>' +
+                '</div>' +
+              '</div>' +
             "</div>" +
             stageMixBarHtml(stage) + stageMetricsHtml(stage);
         } else {
@@ -11801,6 +11896,9 @@
         const active = b.dataset.routePref === routePreference;
         b.classList.toggle("active", active);
         b.setAttribute("aria-selected", active ? "true" : "false");
+      });
+      document.querySelectorAll("[data-route-pref-select]").forEach((select) => {
+        select.value = routePreference;
       });
       setRouteMode("plan");
       planAggregate = RS.aggregateTrip(planTrip);
@@ -13663,7 +13761,9 @@
       renderAccessWarning();
       if (DEBUG_UI) renderRouteDebug();
       else if (routeDebugEl) routeDebugEl.innerHTML = "";
-      if (routeCompactPref) routeCompactPref.value = routePreference;
+      document.querySelectorAll("[data-route-pref-select]").forEach((select) => {
+        select.value = routePreference;
+      });
       if (plannerTab === "plan") { updatePlanStatus(); return; }
       if (plannerTab === "saved") { setRouteStatusHtml(savedCompactSummaryHtml()); return; }
       const start = activeStart();
@@ -13936,6 +14036,9 @@
     function setRoutePreference(nextPreference) {
       routePreference = nextPreference;
       planTrip.profile = nextPreference;
+      document.querySelectorAll("[data-route-pref-select]").forEach((select) => {
+        select.value = routePreference;
+      });
       document.querySelectorAll("[data-route-pref]").forEach((button) => {
         const active = button.dataset.routePref === routePreference;
         button.classList.toggle("active", active);
@@ -15323,7 +15426,9 @@
     }
 
     function syncRouteChrome() {
-      if (routeCompactPref) routeCompactPref.value = routePreference;
+      document.querySelectorAll("[data-route-pref-select]").forEach((select) => {
+        select.value = routePreference;
+      });
       syncRouteBarHeader();
       const open = plannerDrawerState !== "closed";
       if (routeToggleBtn) routeToggleBtn.setAttribute("aria-expanded", open ? "true" : "false");
@@ -15504,6 +15609,10 @@
     document.querySelectorAll("[data-route-pref]").forEach((button) => {
       button.addEventListener("click", () => setRoutePreference(button.dataset.routePref));
     });
+    document.querySelectorAll("[data-route-pref-select]").forEach((select) => {
+      if (select === routeCompactPref) return;
+      select.addEventListener("change", () => setRoutePreference(select.value));
+    });
 
     // ---- Multi-stage + saved routes wiring ----
     if (stageAddBtn) stageAddBtn.addEventListener("click", addPlanStage);
@@ -15584,9 +15693,16 @@
     if (routeBarStageEditor) {
       routeBarStageEditor.addEventListener("change", (event) => {
         const accessToggle = event.target.closest("[data-stage-access]");
-        if (!accessToggle) return;
+        if (accessToggle) {
+          event.stopPropagation();
+          setStageAccess(accessToggle.dataset.stageId, accessToggle.checked);
+          return;
+        }
+        const profileSelect = event.target.closest("[data-stage-profile]");
+        if (!profileSelect) return;
         event.stopPropagation();
-        setStageAccess(accessToggle.dataset.stageId, accessToggle.checked);
+        setActiveStage(profileSelect.dataset.stageProfile);
+        setStageProfile(profileSelect.dataset.stageProfile, profileSelect.value);
       });
       routeBarStageEditor.addEventListener("click", (event) => {
         const close = event.target.closest("[data-stage-editor-close]");
