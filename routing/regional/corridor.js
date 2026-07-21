@@ -265,18 +265,16 @@ function isNrnSrc(src) {
  *   Provincial/gov forest = capillary *between* that fabric — omitted from longhaul.
  *
  * Modes:
- *   maritime — NRN non-track + OSM highways corridor-wide; all fabric near city hubs.
- *   corridor — NRN spine + all fabric near hubs (QC-sized; keeps village snaps).
+ *   maritime — NRN non-track + OSM highways; all OSM fabric near city hubs.
+ *   corridor — same keep rules (NRN non-track everywhere); QC relies on corridor
+ *              clip for size. OSM still hub/highway-limited.
  *
  * Relabels connected-component ids after extract (does NOT drop edges). Dropping via
  * LCC removed Saint-Raymond / Moncton local coverage and broke From-here snaps.
  */
 function extractRoadFabricLonghaulGraph(graph, options = {}) {
-  const mode = options.mode === "corridor" ? "corridor" : "maritime";
   const hubLocations = options.hubLocations || [];
   const hubBufferMeters = Number(options.hubBufferMeters) || 40000;
-  const bbox = graph.bbox || null;
-  const hasRoadClass = (graph.edges || []).some((e) => e.rt);
   const hubs = corridorPolyline(hubLocations);
 
   function nearHub(edge) {
@@ -296,29 +294,17 @@ function extractRoadFabricLonghaulGraph(graph, options = {}) {
 
     if (nrn) {
       if (e.s === 3) continue;
-      if (mode === "maritime") {
-        keepEdges.push(e);
-        continue;
-      }
-      // corridor: spine everywhere + locals near hubs
-      if (isLonghaulSpineEdge(e, bbox, { hasRoadClass }) || nearHub(e)) {
-        keepEdges.push(e);
-      }
+      // Keep all NRN non-track (corridor-clipped later). OSM stays
+      // hub/highway-limited so QC does not re-shatter into islands.
+      keepEdges.push(e);
       continue;
     }
 
     // OSM fabric — normalize legacy unknown access to permissive.
     const edge = e.ac === 2 ? { ...e, ac: 1 } : e;
     const rt = String(e.rt || "");
-    if (mode === "maritime") {
-      // Highways keep intercity connectivity; hubs keep basemap locals for snaps.
-      if (LONGHAUL_ROAD_TRACK.has(rt) || nearHub(e)) keepEdges.push(edge);
-      continue;
-    }
-    // corridor QC: all OSM near hubs; highway-class OSM along the spine corridor
-    if (nearHub(e) || LONGHAUL_ROAD_TRACK.has(rt)) {
-      keepEdges.push(edge);
-    }
+    // Highways keep intercity connectivity; hubs keep basemap locals for snaps.
+    if (LONGHAUL_ROAD_TRACK.has(rt) || nearHub(e)) keepEdges.push(edge);
   }
 
   const compacted = compactGraph(graph, keepEdges, "road-fabric-longhaul");

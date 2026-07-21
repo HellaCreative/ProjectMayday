@@ -55,8 +55,15 @@ const HUBS = {
     { lon: -71.30, lat: 46.95 }, // Lac-Beauport
     { lon: -71.833, lat: 46.899 }, // Saint-Raymond
     { lon: -73.567, lat: 45.502 }, // Montreal
+    { lon: -73.75, lat: 45.58 }, // Laval
     { lon: -74.28, lat: 46.05 }, // Sainte-Agathe
     { lon: -74.60, lat: 46.12 }, // Mont-Tremblant
+    { lon: -72.543, lat: 46.343 }, // Trois-Rivières
+    { lon: -71.93, lat: 45.40 }, // Sherbrooke
+    { lon: -72.15, lat: 45.65 }, // Drummondville
+    { lon: -75.71, lat: 45.43 }, // Gatineau
+    { lon: -71.15, lat: 48.42 }, // Saguenay
+    { lon: -70.33, lat: 47.38 }, // Rivière-du-Loup
     { lon: -68.65, lat: 47.55 } // Dégelis / NB approach
   ],
   nb: [
