@@ -8627,7 +8627,7 @@
         setPlannerDrawerState("collapsed");
         if (!active.start) {
           setStagePoint(active.id, "start", point);
-          setStatus("Stage " + (RS.findStageIndex(planTrip, active.id) + 1) + " · waypoint set as A · tap point B", "ok", "route");
+          setStatus("Starting point set · tap the map to add another stage", "ok", "route");
           afterStageEdit(active.id, false);
         } else {
           setStagePoint(active.id, "end", point);
@@ -9549,10 +9549,10 @@
       const status = RS.computeStageStatus(stage);
       const profile = stage.profile || "balanced";
       const profileLabel = profile === "cleanest" ? "Clean" : profile.charAt(0).toUpperCase() + profile.slice(1);
-      const fromLabel = stage.start ? "A" : "Start";
-      const toLabel = stage.end ? "B" : stage.start ? "Destination" : "Point A";
-      let meta = "Tap the map to place point A";
-      if (stage.start && !stage.end) meta = "Draft · tap the map to place point B";
+      const fromLabel = stage.start ? "Waypoint " + (index + 1) : "Start";
+      const toLabel = stage.end ? "Waypoint " + (index + 2) : stage.start ? "Next waypoint" : "Starting point";
+      let meta = "Tap the map to place the starting point";
+      if (stage.start && !stage.end) meta = "Draft · tap the map to add another stage";
       else if (status === RS.STAGE_STATUS.LOADING) meta = "Routing…";
       else if (status === RS.STAGE_STATUS.FAILED) meta = "Route failed · adjust the points and try again";
       else if (status === RS.STAGE_STATUS.COMPLETE && stage.route) {
@@ -9567,7 +9567,7 @@
           '" type="button" data-stage-id="' + stage.id + '" data-stage-pref="' + value + '"' +
           ' aria-pressed="' + (value === profile ? "true" : "false") + '">' + label + "</button>";
       }).join("");
-      const canEdit = RS.stageHasBothPoints(stage) && !navigating;
+      const canEdit = Boolean(stage.start) && !navigating;
       routeBarStageEditor.innerHTML =
         '<div class="route-stage-editor-head">' +
           '<div class="route-stage-editor-title">' +
@@ -9588,7 +9588,7 @@
         '</div>' +
         '<div class="route-stage-editor-actions">' +
           '<button class="route-stage-editor-edit" type="button" data-stage-edit-compact="' + stage.id + '"' +
-            (canEdit ? "" : " disabled") + '>' + (editingStageId === stage.id ? "Done editing points" : "Adjust points") + '</button>' +
+            (canEdit ? "" : " disabled") + '>' + (editingStageId === stage.id ? "Done" : "Move waypoint") + '</button>' +
           '<button class="route-stage-editor-remove" type="button" data-stage-delete="' + stage.id + '"' +
             (planTrip.stages.length <= 1 ? " disabled" : "") + '>Remove stage</button>' +
         '</div>';
@@ -9602,7 +9602,9 @@
         compactStageId = null;
         renderStageList();
         renderStageMarkers();
-        setStatus("Stage " + (draftIndex + 1) + " ready · tap the map", "ok", "route");
+        setStatus(draftIndex === 0 && !planTrip.stages[draftIndex].start
+          ? "Tap the map to place the starting point"
+          : "Tap the map to add another stage", "ok", "route");
         return;
       }
       addPlanStage();
@@ -9616,7 +9618,7 @@
       if (!stage.start) {
         stage = RS.transitionStage(stage, "set-start", { point: clicked });
         planTrip.stages[idx] = stage;
-        setStatus("Stage " + (idx + 1) + " · tap point B", "ok", "route");
+        setStatus("Starting point set · tap the map to add another stage", "ok", "route");
         afterStageEdit(stage.id, false);
         return;
       }
@@ -9635,7 +9637,7 @@
         renderStageMarkers();
         updatePlanStatus();
         syncRouteBarHeader();
-        setStatus("Stage " + (idx + 1) + " routed · tap the map for the next waypoint", "ok", "route");
+        setStatus("Stage " + (idx + 1) + " routed · tap the map to add another stage", "ok", "route");
         return;
       }
       // A completed stage should never trap the user in an inactive state.
@@ -9643,7 +9645,7 @@
       const next = RS.addStage(planTrip, { profile: stage.profile || routePreference });
       activeStageId = next.id;
       afterStageUpdate();
-      setStatus("Stage " + (idx + 2) + " ready · tap the map", "ok", "route");
+      setStatus("Tap the map to add another stage", "ok", "route");
     }
 
     // Refresh model-derived state after a stage's points/route change.
@@ -9900,7 +9902,7 @@
     function stageMetricsHtml(stage) {
       const status = RS.computeStageStatus(stage);
       if (status === RS.STAGE_STATUS.DRAFT) {
-        const need = !stage.start ? "Tap point A" : "Tap point B";
+        const need = !stage.start ? "Tap starting point" : "Tap map to add another stage";
         return routeMetricRowHtml({ emptyText: "Draft · " + need });
       }
       if (status === RS.STAGE_STATUS.LOADING) {
@@ -9965,7 +9967,7 @@
         const profile = stage.profile || "balanced";
         const profileLabel = profile === "cleanest" ? "Clean" : profile.charAt(0).toUpperCase() + profile.slice(1);
         const stageLabel = "Stage " + String(i + 1).padStart(2, "0");
-        const canEdit = RS.stageHasBothPoints(stage) && !navigating;
+        const canEdit = Boolean(stage.start) && !navigating;
         let body = "";
         if (expanded) {
           body =
@@ -10120,7 +10122,6 @@
 
     function stageMarkerPoints() {
       const stages = planTrip.stages;
-      const single = stages.length === 1;
       const points = [];
       stages.forEach((stage, i) => {
         if (stage.start) {
@@ -10131,7 +10132,7 @@
           } else {
             points.push({
               lng: stage.start.lng, lat: stage.start.lat,
-              label: single ? "A" : String(i + 1),
+              label: String(i + 1),
               role: "start", stageId: stage.id, which: "start"
             });
           }
@@ -10140,7 +10141,7 @@
           const isLast = i === stages.length - 1;
           points.push({
             lng: stage.end.lng, lat: stage.end.lat,
-            label: single ? "B" : (isLast ? "B" : String(i + 2)),
+            label: String(i + 2),
             role: isLast ? "destination" : "boundary", stageId: stage.id, which: "end"
           });
         }
@@ -10205,11 +10206,11 @@
 
     function toggleEditStage() {
       const active = getActiveStage();
-      if (!active || !RS.stageHasBothPoints(active)) return;
+      if (!active || !active.start) return;
       if (navigating) return; // no drag during navigation
       editingStageId = editingStageId === active.id ? null : active.id;
       setStatus(
-        editingStageId ? "Editing Stage " + (RS.findStageIndex(planTrip, active.id) + 1) + " · drag A/B markers" : "Edit committed",
+        editingStageId ? "Moving Stage " + (RS.findStageIndex(planTrip, active.id) + 1) + " · drag its waypoint" : "Edit committed",
         "ok", "route"
       );
       renderStageList();
@@ -12391,11 +12392,20 @@
         setRouteStatusHtml(routeMetricRowHtml({ hintHtml: "From here<strong>Tap a destination</strong>" }));
         return;
       }
-      if (!plannedStart) {
-        setRouteStatusHtml(routeMetricRowHtml({ hintHtml: "Plan a route<strong>Tap point A</strong>" }));
+      if (plannerTab === "plan") {
+        const active = getActiveStage();
+        setRouteStatusHtml(routeMetricRowHtml({
+          hintHtml: active && active.start
+            ? "Plan a route<strong>Tap map to add another stage</strong>"
+            : "Plan a route<strong>Tap map to place the starting point</strong>"
+        }));
         return;
       }
-      setRouteStatusHtml(routeMetricRowHtml({ hintHtml: "Plan a route<strong>Tap point B</strong>" }));
+      if (!plannedStart) {
+        setRouteStatusHtml(routeMetricRowHtml({ hintHtml: "Plan a route<strong>Tap map to place the starting point</strong>" }));
+        return;
+      }
+      setRouteStatusHtml(routeMetricRowHtml({ hintHtml: "Plan a route<strong>Tap map to add another stage</strong>" }));
     }
 
     function refreshRouteDraft() {
@@ -12441,8 +12451,8 @@
         }
       } else if (plannerOpen && plannerTab === "plan") {
         const active = getActiveStage();
-        if (!active || !active.start) message = "Tap map to place point A";
-        else if (!active.end) message = "Tap map to place point B";
+        if (!active || !active.start) message = "Tap map to place the starting point";
+        else if (!active.end) message = "Tap map to add another stage";
         else message = "Tap map to add another stage";
       }
       routeMapToast.textContent = message;
@@ -14138,12 +14148,12 @@
           const idx = RS.findStageIndex(planTrip, stageId);
           if (idx < 0) return;
           const stage = planTrip.stages[idx];
-          if (!RS.stageHasBothPoints(stage) || navigating) return;
+          if (!stage.start || navigating) return;
           activeStageId = stageId;
           editingStageId = editingStageId === stageId ? null : stageId;
           setStatus(
             editingStageId
-              ? "Editing Stage " + (idx + 1) + " · drag A/B markers"
+              ? "Moving Stage " + (idx + 1) + " · drag its waypoint"
               : "Edit committed",
             "ok",
             "route"
