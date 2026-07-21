@@ -10066,7 +10066,7 @@
               "</div>" +
               '<div class="stage-row-actions">' +
                 '<button class="stage-text-btn danger" type="button" data-stage-delete="' + stage.id + '"' +
-                  (routedStages.length <= 1 ? " disabled" : "") + ">Delete</button>" +
+                  (planTrip.stages.length <= 1 ? " disabled" : "") + ">Delete</button>" +
               "</div>" +
             "</div>" +
             body +
@@ -10081,7 +10081,7 @@
           : "");
       if (stageListEl) stageListEl.innerHTML = stageMarkup;
       if (routeBarStageList) {
-        routeBarStageList.querySelectorAll(".stage-row").forEach((row) => row.remove());
+        routeBarStageList.querySelectorAll(".stage-row, .stage-draft-prompt").forEach((row) => row.remove());
         routeBarStageList.insertAdjacentHTML("afterbegin", stageMarkup);
       }
       if (stageEditToggle) {
@@ -12522,7 +12522,8 @@
       if (plannerTab === "plan") {
         const agg = planAggregate || RS.aggregateTrip(planTrip);
         const km = agg.totalDistanceMeters ? (agg.totalDistanceMeters / 1000).toFixed(1) + " km" : "Draft";
-        routeBarMeta.textContent = planTrip.stages.length + (planTrip.stages.length === 1 ? " stage" : " stages") + " · " + km;
+        const stageCount = planTrip.stages.filter((stage) => RS.stageHasBothPoints(stage)).length;
+        routeBarMeta.textContent = stageCount + (stageCount === 1 ? " stage" : " stages") + " · " + km;
       } else if (plannerTab === "saved") {
         routeBarMeta.textContent = savedRoutes.length + (savedRoutes.length === 1 ? " saved route" : " saved routes");
       } else if (activeRoute && activeRoute.distanceKm != null) {
