@@ -9567,7 +9567,6 @@
           '" type="button" data-stage-id="' + stage.id + '" data-stage-pref="' + value + '"' +
           ' aria-pressed="' + (value === profile ? "true" : "false") + '">' + label + "</button>";
       }).join("");
-      const canEdit = Boolean(stage.start) && !navigating;
       routeBarStageEditor.innerHTML =
         '<div class="route-stage-editor-head">' +
           '<div class="route-stage-editor-title">' +
@@ -9587,8 +9586,6 @@
             (stageAllowsUnknownAccess(stage) ? " checked" : "") + ' data-stage-id="' + stage.id + '"><span></span></label>' +
         '</div>' +
         '<div class="route-stage-editor-actions">' +
-          '<button class="route-stage-editor-edit" type="button" data-stage-edit-compact="' + stage.id + '"' +
-            (canEdit ? "" : " disabled") + '>' + (editingStageId === stage.id ? "Done" : "Move waypoint") + '</button>' +
           '<button class="route-stage-editor-remove" type="button" data-stage-delete="' + stage.id + '"' +
             (planTrip.stages.length <= 1 ? " disabled" : "") + '>Remove stage</button>' +
         '</div>';
@@ -9737,8 +9734,12 @@
           });
           finishRouteToast(toastRequestId, "error", "Route unavailable");
         } else {
-          planTrip.stages[cur] = RS.transitionStage(planTrip.stages[cur], "route-success", { route: api });
+          const rerouteNextStageId = applyRoutedBoundary(stageId, api);
           finishRouteToast(toastRequestId, "complete");
+          if (rerouteNextStageId) {
+            // Give the boundary update one render before replacing the next leg.
+            setTimeout(() => routeStage(rerouteNextStageId), 0);
+          }
         }
       } catch (err) {
         if (!stageTracker.isCurrent(stageId, token)) {
@@ -9754,6 +9755,48 @@
         finishRouteToast(toastRequestId, "error", "Routing failed");
       }
       afterStageUpdate();
+    }
+
+    function routeGeometryEndpoints(api) {
+      const geometry = Array.isArray(api?.geometry) ? api.geometry : [];
+      if (geometry.length < 2) return null;
+      const start = geometry[0];
+      const end = geometry[geometry.length - 1];
+      if (!Array.isArray(start) || !Array.isArray(end)) return null;
+      const values = [start[0], start[1], end[0], end[1]].map(Number);
+      if (values.some((value) => !Number.isFinite(value))) return null;
+      return {
+        start: { lng: values[0], lat: values[1] },
+        end: { lng: values[2], lat: values[3] }
+      };
+    }
+
+    // A completed leg owns the exact graph endpoint used by the routing
+    // service. Pass that endpoint to the next leg so a trip cannot render two
+    // independently snapped roads with a gap between them. No free-space
+    // connector is ever inserted.
+    function applyRoutedBoundary(stageId, api) {
+      const idx = RS.findStageIndex(planTrip, stageId);
+      if (idx < 0) return null;
+      const endpoints = routeGeometryEndpoints(api);
+      const current = planTrip.stages[idx];
+      let routedStage = current;
+      const next = planTrip.stages[idx + 1];
+      let rerouteNextStageId = null;
+
+      if (endpoints?.end && current.end && !RS.samePoint(current.end, endpoints.end)) {
+        routedStage = RS.transitionStage(routedStage, "set-end", { point: endpoints.end });
+      }
+
+      if (next && endpoints?.end && next.start && !RS.samePoint(next.start, endpoints.end)) {
+        stageTracker.cancel(next.id);
+        const nextStage = RS.transitionStage(next, "set-start", { point: endpoints.end });
+        planTrip.stages[idx + 1] = nextStage;
+        if (nextStage.end) rerouteNextStageId = nextStage.id;
+      }
+
+      planTrip.stages[idx] = RS.transitionStage(routedStage, "route-success", { route: api });
+      return rerouteNextStageId;
     }
 
     function recalcAllStages() {
@@ -9967,7 +10010,6 @@
         const profile = stage.profile || "balanced";
         const profileLabel = profile === "cleanest" ? "Clean" : profile.charAt(0).toUpperCase() + profile.slice(1);
         const stageLabel = "Stage " + String(i + 1).padStart(2, "0");
-        const canEdit = Boolean(stage.start) && !navigating;
         let body = "";
         if (expanded) {
           body =
@@ -9993,8 +10035,6 @@
                 '<span class="stage-profile-label">' + profileLabel + "</span>" +
               "</div>" +
               '<div class="stage-row-actions">' +
-                '<button class="stage-text-btn' + (editing ? " is-editing" : "") + '" type="button" data-stage-edit="' + stage.id + '"' +
-                  (canEdit ? "" : " disabled") + ">" + (editing ? "Done" : "Edit") + "</button>" +
                 '<button class="stage-text-btn danger" type="button" data-stage-delete="' + stage.id + '"' +
                   (stages.length <= 1 ? " disabled" : "") + ">Delete</button>" +
               "</div>" +
@@ -10166,11 +10206,29 @@
       if (draggable) el.classList.add("is-editing");
       const marker = new maplibregl.Marker({ element: el, draggable });
       marker.setLngLat([p.lng, p.lat]).addTo(map);
-      // Tapping a marker selects its stage (and never places a new point).
+      // The marker itself is the edit affordance. Tap once to arm dragging;
+      // stage cards remain for selection and per-stage route preferences.
       el.addEventListener("click", (event) => {
         event.stopPropagation();
-        setActiveStage(p.stageId);
+        if (navigating) return;
+        const stageId = p.alsoStageId || p.stageId;
+        const stageIndex = RS.findStageIndex(planTrip, stageId);
+        if (stageIndex < 0) return;
+        activeStageId = stageId;
+        editingStageId = editingStageId === stageId ? null : stageId;
+        setStatus(
+          editingStageId
+            ? "Waypoint " + p.label + " selected · drag to move"
+            : "Waypoint " + p.label + " selected",
+          "ok",
+          "route"
+        );
+        renderStageList();
+        renderStageMarkers();
       });
+      el.setAttribute("role", "button");
+      el.setAttribute("tabindex", "0");
+      el.setAttribute("aria-label", "Waypoint " + p.label);
       if (draggable) {
         marker.on("dragend", () => handleMarkerDragEnd(p, marker));
       }
@@ -14141,27 +14199,6 @@
           setStageProfile(prefBtn.dataset.stageId, prefBtn.dataset.stagePref);
           return;
         }
-        const editBtn = event.target.closest("[data-stage-edit]");
-        if (editBtn) {
-          event.stopPropagation();
-          const stageId = editBtn.dataset.stageEdit;
-          const idx = RS.findStageIndex(planTrip, stageId);
-          if (idx < 0) return;
-          const stage = planTrip.stages[idx];
-          if (!stage.start || navigating) return;
-          activeStageId = stageId;
-          editingStageId = editingStageId === stageId ? null : stageId;
-          setStatus(
-            editingStageId
-              ? "Moving Stage " + (idx + 1) + " · drag its waypoint"
-              : "Edit committed",
-            "ok",
-            "route"
-          );
-          renderStageList();
-          renderStageMarkers();
-          return;
-        }
         const delBtn = event.target.closest("[data-stage-delete]");
         if (delBtn) {
           event.stopPropagation();
@@ -14220,13 +14257,6 @@
           event.stopPropagation();
           setActiveStage(pref.dataset.stageId);
           setStageProfile(pref.dataset.stageId, pref.dataset.stagePref);
-          return;
-        }
-        const edit = event.target.closest("[data-stage-edit-compact]");
-        if (edit) {
-          event.stopPropagation();
-          setActiveStage(edit.dataset.stageEditCompact);
-          toggleEditStage();
           return;
         }
         const remove = event.target.closest("[data-stage-delete]");
