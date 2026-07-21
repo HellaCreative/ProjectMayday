@@ -178,6 +178,41 @@ check("cannot delete the last remaining stage", () => {
   assert.strictEqual(trip.stages.length, 1);
 });
 
+check("deleting the final routed stage removes its destination and resets the draft", () => {
+  const trip = S.createTrip();
+  trip.stages = [
+    S.createStage({ start: pt(0, 0), end: pt(1, 0), route: fakeRoute([{ surface: "gravel", distanceMeters: 1000 }]) }),
+    S.createStage({ start: pt(1, 0), end: pt(2, 0), route: fakeRoute([{ surface: "gravel", distanceMeters: 1000 }]) }),
+    S.createStage({ start: pt(2, 0) })
+  ];
+  const removedId = trip.stages[1].id;
+  const result = S.removeStageWaypoint(trip, removedId);
+  assert.ok(result);
+  assert.strictEqual(trip.stages.length, 2);
+  assert.ok(S.samePoint(trip.stages[0].end, pt(1, 0)), "waypoint 2 remains");
+  assert.ok(S.samePoint(trip.stages[1].start, pt(1, 0)), "draft returns to waypoint 2");
+  assert.strictEqual(trip.stages[1].end, null, "deleted destination is gone");
+});
+
+check("deleting a middle stage reconnects the next destination into one chain", () => {
+  const trip = S.createTrip();
+  trip.stages = [
+    S.createStage({ start: pt(0, 0), end: pt(1, 0), route: fakeRoute([{ surface: "gravel", distanceMeters: 1000 }]) }),
+    S.createStage({ start: pt(1, 0), end: pt(2, 0), route: fakeRoute([{ surface: "gravel", distanceMeters: 1000 }]) }),
+    S.createStage({ start: pt(2, 0), end: pt(3, 0), route: fakeRoute([{ surface: "paved", distanceMeters: 1000 }]) }),
+    S.createStage({ start: pt(3, 0) })
+  ];
+  const removedId = trip.stages[1].id;
+  const nextId = trip.stages[2].id;
+  const result = S.removeStageWaypoint(trip, removedId);
+  assert.ok(result.affectedStageIds.includes(nextId));
+  assert.strictEqual(trip.stages.length, 3);
+  assert.ok(S.samePoint(trip.stages[1].start, pt(1, 0)), "next leg starts at the previous waypoint");
+  assert.ok(S.samePoint(trip.stages[1].end, pt(3, 0)), "next destination remains");
+  assert.strictEqual(trip.stages[1].route, null, "reconnected leg must be rerouted");
+  assert.ok(S.samePoint(trip.stages[2].start, pt(3, 0)), "trailing draft remains linked");
+});
+
 check("reorder preserves stage data and results", () => {
   const trip = S.createTrip();
   trip.stages = [

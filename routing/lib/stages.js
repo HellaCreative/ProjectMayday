@@ -234,6 +234,60 @@
     return true;
   }
 
+  /**
+   * Remove a routed leg by removing its destination waypoint, then reconnect
+   * the following leg to the removed leg's start. The planner is a waypoint
+   * chain, so stages must never retain independent copies of a shared point.
+   *
+   * W1->W2, W2->W3, W3->W4 becomes W1->W2, W2->W4 when stage 2 is removed.
+   * Removing the final routed stage keeps the trailing draft and moves its
+   * start back to the preceding waypoint.
+   */
+  function removeStageWaypoint(trip, stageId) {
+    if (!trip || !Array.isArray(trip.stages) || trip.stages.length <= 1) return null;
+    const idx = trip.stages.findIndex((s) => s.id === stageId);
+    if (idx === -1) return null;
+    const removed = trip.stages[idx];
+    if (!stageHasBothPoints(removed)) return null;
+
+    const affectedStageIds = [];
+    const next = trip.stages[idx + 1] || null;
+    if (next) {
+      trip.stages[idx + 1] = transitionStage(next, "set-start", { point: removed.start });
+      affectedStageIds.push(next.id);
+    }
+
+    trip.stages.splice(idx, 1);
+
+    // Repair every downstream shared endpoint. This also heals malformed
+    // legacy drafts without inventing a connection across free space.
+    for (let i = Math.max(1, idx); i < trip.stages.length; i += 1) {
+      const previousEnd = normalizePoint(trip.stages[i - 1].end);
+      if (!previousEnd || samePoint(trip.stages[i].start, previousEnd)) continue;
+      trip.stages[i] = transitionStage(trip.stages[i], "set-start", { point: previousEnd });
+      if (!affectedStageIds.includes(trip.stages[i].id)) affectedStageIds.push(trip.stages[i].id);
+    }
+
+    // Older saved plans may not have a trailing draft. Restore one so the
+    // next long press extends the chain from its actual final waypoint.
+    const last = trip.stages[trip.stages.length - 1];
+    if (last && stageHasBothPoints(last)) {
+      const draft = addStage(trip, {
+        profile: last.profile,
+        accessPolicy: last.accessPolicy
+      });
+      affectedStageIds.push(draft.id);
+    } else {
+      trip.updatedAt = nowIso();
+    }
+
+    return {
+      removedStageId: removed.id,
+      removedWaypoint: normalizePoint(removed.end),
+      affectedStageIds
+    };
+  }
+
   function moveStage(trip, fromIndex, toIndex) {
     if (!trip) return false;
     const n = trip.stages.length;
@@ -594,6 +648,7 @@
     defaultNextStart,
     addStage,
     removeStage,
+    removeStageWaypoint,
     moveStage,
     findStageIndex,
     routeBreakdown,

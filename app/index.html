@@ -6264,7 +6264,7 @@
       <div class="route-bar-plan-panel" id="routeBarPlanPanel" hidden>
         <div class="route-bar-stage-editor" id="routeBarStageEditor" hidden aria-live="polite"></div>
         <div class="route-bar-stage-list" id="routeBarStageList" role="list" aria-label="Route stages">
-          <button class="route-bar-add-stage" id="routeBarAddStage" type="button">+ Tap map to add a stage</button>
+          <button class="route-bar-add-stage" id="routeBarAddStage" type="button">+ Press and hold map to add a stage</button>
         </div>
       </div>
       <div class="route-compact-actions">
@@ -7443,6 +7443,7 @@
     planTrip.stages[0].profile = routePreference;
     let activeStageId = planTrip.stages[0].id;
     let editingStageId = null;
+    let selectedWaypointIndex = null;
     let compactStageId = null;
     const stageTracker = RouteStages.createRequestTracker();
     let planAggregate = RouteStages.aggregateTrip(planTrip);
@@ -8648,7 +8649,7 @@
         setPlannerDrawerState("collapsed");
         if (!active.start) {
           setStagePoint(active.id, "start", point);
-          setStatus("Starting point set · tap the map to add another stage", "ok", "route");
+          setStatus("Starting point set · press and hold the map to create Stage 1", "ok", "route");
           afterStageEdit(active.id, false);
         } else {
           setStagePoint(active.id, "end", point);
@@ -9549,6 +9550,7 @@
     function setActiveStage(stageId) {
       if (RS.findStageIndex(planTrip, stageId) < 0) return;
       activeStageId = stageId;
+      selectedWaypointIndex = null;
       renderStageList();
       renderStageMarkers();
     }
@@ -9572,8 +9574,8 @@
       const profileLabel = profile === "cleanest" ? "Clean" : profile.charAt(0).toUpperCase() + profile.slice(1);
       const fromLabel = stage.start ? "Waypoint " + (index + 1) : "Start";
       const toLabel = stage.end ? "Waypoint " + (index + 2) : stage.start ? "Next waypoint" : "Starting point";
-      let meta = "Tap the map to place the starting point";
-      if (stage.start && !stage.end) meta = "Draft · tap the map to add another stage";
+      let meta = "Press and hold the map to place the starting point";
+      if (stage.start && !stage.end) meta = "Draft · press and hold the map to add another stage";
       else if (status === RS.STAGE_STATUS.LOADING) meta = "Routing…";
       else if (status === RS.STAGE_STATUS.FAILED) meta = "Route failed · adjust the points and try again";
       else if (status === RS.STAGE_STATUS.COMPLETE && stage.route) {
@@ -9621,8 +9623,8 @@
         renderStageList();
         renderStageMarkers();
         setStatus(draftIndex === 0 && !planTrip.stages[draftIndex].start
-          ? "Tap the map to place the starting point"
-          : "Tap the map to add another stage", "ok", "route");
+          ? "Press and hold the map to place the starting point"
+          : "Press and hold the map to add another stage", "ok", "route");
         return;
       }
       addPlanStage();
@@ -9630,6 +9632,7 @@
 
     function handlePlanStageClick(clicked) {
       compactStageId = null;
+      selectedWaypointIndex = null;
       // Map taps always belong to the unfinished leg, never to whichever
       // completed stage card happens to be selected in the scroller.
       let idx = planTrip.stages.findIndex((candidate) => !RS.stageHasBothPoints(candidate));
@@ -9644,7 +9647,7 @@
       if (!stage.start) {
         stage = RS.transitionStage(stage, "set-start", { point: clicked });
         planTrip.stages[idx] = stage;
-        setStatus("Starting point set · tap the map to add another stage", "ok", "route");
+        setStatus("Starting point set · press and hold the map to create Stage 1", "ok", "route");
         afterStageEdit(stage.id, false);
         return;
       }
@@ -9663,7 +9666,7 @@
         renderStageMarkers();
         updatePlanStatus();
         syncRouteBarHeader();
-        setStatus("Stage " + (idx + 1) + " routed · tap the map to add another stage", "ok", "route");
+        setStatus("Stage " + (idx + 1) + " routed · press and hold the map to add another stage", "ok", "route");
         return;
       }
       // This branch is retained for malformed legacy state. Normal map taps
@@ -9671,7 +9674,7 @@
       const next = RS.addStage(planTrip, { profile: stage.profile || routePreference });
       activeStageId = next.id;
       afterStageUpdate();
-      setStatus("Tap the map to add another stage", "ok", "route");
+      setStatus("Press and hold the map to add another stage", "ok", "route");
     }
 
     // Refresh model-derived state after a stage's points/route change.
@@ -9690,6 +9693,7 @@
       const stage = RS.addStage(planTrip, { profile: previous?.profile || routePreference });
       activeStageId = stage.id;
       editingStageId = null;
+      selectedWaypointIndex = null;
       planAggregate = RS.aggregateTrip(planTrip);
       renderStageList();
       renderStageMarkers();
@@ -9698,13 +9702,23 @@
 
     function deletePlanStage(stageId) {
       if (planTrip.stages.length <= 1) return;
-      const wasActive = stageId === activeStageId;
+      const index = RS.findStageIndex(planTrip, stageId);
+      if (index < 0) return;
       if (compactStageId === stageId) compactStageId = null;
       stageTracker.cancel(stageId);
-      RS.removeStage(planTrip, stageId);
-      if (wasActive) activeStageId = planTrip.stages[Math.max(0, planTrip.stages.length - 1)].id;
-      if (editingStageId === stageId) editingStageId = null;
+      const result = RS.removeStageWaypoint(planTrip, stageId);
+      if (!result) return;
+      for (const affectedId of result.affectedStageIds) stageTracker.cancel(affectedId);
+      const nextIndex = Math.min(index, planTrip.stages.length - 1);
+      activeStageId = planTrip.stages[Math.max(0, nextIndex)].id;
+      editingStageId = null;
+      selectedWaypointIndex = null;
       afterStageEdit(activeStageId, false);
+      for (const affectedId of result.affectedStageIds) {
+        const affectedIndex = RS.findStageIndex(planTrip, affectedId);
+        if (affectedIndex >= 0 && RS.stageHasBothPoints(planTrip.stages[affectedIndex])) routeStage(affectedId);
+      }
+      setStatus("Stage removed · neighboring waypoints reconnected", "ok", "route");
     }
 
     function movePlanStage(stageId, delta) {
@@ -9974,7 +9988,7 @@
     function stageMetricsHtml(stage) {
       const status = RS.computeStageStatus(stage);
       if (status === RS.STAGE_STATUS.DRAFT) {
-        const need = !stage.start ? "Tap starting point" : "Tap map to add another stage";
+        const need = !stage.start ? "Press and hold for starting point" : "Press and hold to add another stage";
         return routeMetricRowHtml({ emptyText: "Draft · " + need });
       }
       if (status === RS.STAGE_STATUS.LOADING) {
@@ -10082,10 +10096,10 @@
       }
       if (routeBarAddStage) {
         const nextAction = routedStages.length
-          ? "Tap map to create another stage"
+          ? "Press and hold map to create another stage"
           : (draftStage && draftStage.start
-            ? "Tap map to create stage 1"
-            : "Tap map to place starting point");
+            ? "Press and hold map to create stage 1"
+            : "Press and hold map to place starting point");
         routeBarAddStage.textContent = nextAction;
         routeBarAddStage.setAttribute("aria-label", nextAction);
       }
@@ -10174,7 +10188,7 @@
       const completeLabel = agg.complete
         ? "Trip complete"
         : (hasStartingPoint && agg.requiredStageCount === 0)
-          ? "Starting point set · tap the map to create stage 1"
+          ? "Starting point set · press and hold the map to create stage 1"
         : (agg.completedStageCount === 0 && agg.requiredStageCount === 0)
           ? "Add your first stage · 0/0 stages"
           : "Trip incomplete · " + agg.completedStageCount + "/" + agg.requiredStageCount + " stages";
@@ -10207,32 +10221,25 @@
     }
 
     function stageMarkerPoints() {
-      const stages = planTrip.stages;
       const points = [];
-      stages.forEach((stage, i) => {
-        if (stage.start) {
-          const prev = points[points.length - 1];
-          if (prev && RS.samePoint({ lng: prev.lng, lat: prev.lat }, stage.start)) {
-            prev.alsoStageId = stage.id;
-            prev.alsoWhich = "start";
-          } else {
-            points.push({
-              lng: stage.start.lng, lat: stage.start.lat,
-              label: String(i + 1),
-              role: "start", stageId: stage.id, which: "start"
-            });
-          }
+      const appendPoint = (point, ref) => {
+        if (!point) return;
+        const previous = points[points.length - 1];
+        if (previous && RS.samePoint(previous, point)) {
+          previous.refs.push(ref);
+          return;
         }
-        if (stage.end) {
-          const isLast = i === stages.length - 1;
-          points.push({
-            lng: stage.end.lng, lat: stage.end.lat,
-            label: String(i + 2),
-            role: isLast ? "destination" : "boundary", stageId: stage.id, which: "end"
-          });
-        }
+        points.push({ lng: point.lng, lat: point.lat, refs: [ref] });
+      };
+      planTrip.stages.forEach((stage) => {
+        appendPoint(stage.start, { stageId: stage.id, which: "start" });
+        appendPoint(stage.end, { stageId: stage.id, which: "end" });
       });
-      return points;
+      return points.map((point, index) => Object.assign(point, {
+        index,
+        label: String(index + 1),
+        role: index === 0 ? "start" : (index === points.length - 1 ? "destination" : "boundary")
+      }));
     }
 
     function renderStageMarkers() {
@@ -10246,9 +10253,7 @@
       const el = document.createElement("div");
       el.className = "stage-marker" + (p.role === "start" ? " is-start" : "");
       el.textContent = p.label;
-      const involvesEdit =
-        editingStageId && (p.stageId === editingStageId || p.alsoStageId === editingStageId);
-      const draggable = !!involvesEdit && !navigating;
+      const draggable = selectedWaypointIndex === p.index && !navigating;
       if (draggable) el.classList.add("is-editing");
       const marker = new maplibregl.Marker({ element: el, draggable });
       marker.setLngLat([p.lng, p.lat]).addTo(map);
@@ -10257,24 +10262,28 @@
       el.addEventListener("click", (event) => {
         event.stopPropagation();
         if (navigating) return;
-        const stageId = p.alsoStageId || p.stageId;
+        const incoming = p.refs.find((ref) => ref.which === "end");
+        const outgoing = p.refs.find((ref) => ref.which === "start");
+        const stageId = (incoming || outgoing || {}).stageId;
         const stageIndex = RS.findStageIndex(planTrip, stageId);
         if (stageIndex < 0) return;
         activeStageId = stageId;
-        editingStageId = editingStageId === stageId ? null : stageId;
-        setStatus(
-          editingStageId
-            ? "Waypoint " + p.label + " selected · drag to move"
-            : "Waypoint " + p.label + " selected",
-          "ok",
-          "route"
-        );
+        editingStageId = stageId;
+        selectedWaypointIndex = p.index;
+        compactStageId = stageId;
+        map.easeTo({ center: [p.lng, p.lat], zoom: Math.max(map.getZoom(), 14.5), duration: 500 });
+        setStatus("Waypoint " + p.label + " selected · drag marker to move", "ok", "route");
         renderStageList();
         renderStageMarkers();
       });
       el.setAttribute("role", "button");
       el.setAttribute("tabindex", "0");
       el.setAttribute("aria-label", "Waypoint " + p.label);
+      el.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" && event.key !== " ") return;
+        event.preventDefault();
+        el.click();
+      });
       if (draggable) {
         marker.on("dragend", () => handleMarkerDragEnd(p, marker));
       }
@@ -10295,17 +10304,18 @@
     function handleMarkerDragEnd(p, marker) {
       const ll = marker.getLngLat();
       const np = { lng: ll.lng, lat: ll.lat };
-      setStagePoint(p.stageId, p.which, np);
-      // Linked endpoint: the shared boundary updates the adjacent stage too.
-      if (p.alsoStageId) setStagePoint(p.alsoStageId, p.alsoWhich, np);
+      const affectedStageIds = new Set();
+      for (const ref of p.refs) {
+        setStagePoint(ref.stageId, ref.which, np);
+        affectedStageIds.add(ref.stageId);
+      }
       planAggregate = RS.aggregateTrip(planTrip);
       renderStageList();
       renderStageMarkers();
       syncPlanActiveRoute();
       refreshRouteDraft();
       // Recalculate the affected stage(s); stale tokens protect older responses.
-      routeStage(p.stageId);
-      if (p.alsoStageId) routeStage(p.alsoStageId);
+      for (const stageId of affectedStageIds) routeStage(stageId);
     }
 
     function toggleEditStage() {
@@ -10669,6 +10679,7 @@
       }
       activeStageId = planTrip.stages[0].id;
       editingStageId = null;
+      selectedWaypointIndex = null;
       viewedSavedRouteId = null;
       // Keep From Here's global access setting independent from stage policies.
       // The saved trip and each stage retain their own access configuration.
@@ -10731,6 +10742,7 @@
       planTrip.stages[0].profile = routePreference;
       activeStageId = planTrip.stages[0].id;
       editingStageId = null;
+      selectedWaypointIndex = null;
       planAggregate = RS.aggregateTrip(planTrip);
       setRouteMode("plan");
       setStatus("New route · place Stage 1 points", "ok", "route");
@@ -12500,16 +12512,16 @@
         const active = getActiveStage();
         setRouteStatusHtml(routeMetricRowHtml({
           hintHtml: active && active.start
-            ? "Plan a route<strong>Tap map to add another stage</strong>"
-            : "Plan a route<strong>Tap map to place the starting point</strong>"
+            ? "Plan a route<strong>Press and hold map to add another stage</strong>"
+            : "Plan a route<strong>Press and hold map to place the starting point</strong>"
         }));
         return;
       }
       if (!plannedStart) {
-        setRouteStatusHtml(routeMetricRowHtml({ hintHtml: "Plan a route<strong>Tap map to place the starting point</strong>" }));
+        setRouteStatusHtml(routeMetricRowHtml({ hintHtml: "Plan a route<strong>Press and hold map to place the starting point</strong>" }));
         return;
       }
-      setRouteStatusHtml(routeMetricRowHtml({ hintHtml: "Plan a route<strong>Tap map to add another stage</strong>" }));
+      setRouteStatusHtml(routeMetricRowHtml({ hintHtml: "Plan a route<strong>Press and hold map to add another stage</strong>" }));
     }
 
     function refreshRouteDraft() {
@@ -12556,9 +12568,9 @@
         }
       } else if (plannerOpen && plannerTab === "plan") {
         const active = getActiveStage();
-        if (!active || !active.start) message = "Tap map to place the starting point";
-        else if (!active.end) message = "Tap map to add another stage";
-        else message = "Tap map to add another stage";
+        if (!active || !active.start) message = "Press and hold map to place the starting point";
+        else if (!active.end) message = "Press and hold map to add another stage";
+        else message = "Press and hold map to add another stage";
       }
       routeMapToast.textContent = message;
       routeMapToast.hidden = !message;
@@ -12651,6 +12663,7 @@
       else if (plannerTab === "plan") routeMode = "plan";
       // Leaving edit mode whenever the tab changes.
       editingStageId = null;
+      selectedWaypointIndex = null;
       compactStageId = null;
 
       if (plannerTab === "here") {
@@ -12888,7 +12901,8 @@
         return;
       }
       if (plannerTab === "plan") {
-        handlePlanStageClick(clicked);
+        setStatus("Press and hold the map to place a waypoint", "ok", "route");
+        syncRouteMapToast();
         return;
       }
       if (routeMode === "here") {
@@ -13842,16 +13856,19 @@
 
     // Pan breaks follow-lock (Google Maps style); recenter chip brings it back.
     map.on("dragstart", () => {
+      cancelPlanPointPress();
       if (suppressFollowBreak) return;
       if (followLocked) setFollowLocked(false);
     });
     // Manual map rotate leaves north-up until follow/recenter restores heading-up.
     map.on("rotatestart", () => {
+      cancelPlanPointPress();
       if (suppressFollowBreak) return;
       headingUp = false;
     });
     // Pinch/scroll zoom must not be overwritten by follow camera ticks.
     map.on("zoomstart", () => {
+      cancelPlanPointPress();
       if (suppressFollowBreak) return;
       userZooming = true;
     });
@@ -13865,7 +13882,64 @@
     syncCueModeBtn();
     updateCompass();
 
+    const PLAN_POINT_HOLD_MS = 550;
+    const PLAN_POINT_MOVE_PX = 12;
+    const planPressPointers = new Set();
+    let planPointPress = null;
+    let suppressPlanMapClickUntil = 0;
+
+    function planPointPlacementEnabled() {
+      return plannerTab === "plan" && plannerDrawerState !== "closed" && !navigating;
+    }
+
+    function cancelPlanPointPress() {
+      if (!planPointPress) return;
+      clearTimeout(planPointPress.timer);
+      planPointPress = null;
+    }
+
+    const mapCanvas = map.getCanvas();
+    mapCanvas.addEventListener("pointerdown", (event) => {
+      planPressPointers.add(event.pointerId);
+      if (!planPointPlacementEnabled() || planPressPointers.size > 1 || (event.button != null && event.button !== 0)) {
+        cancelPlanPointPress();
+        return;
+      }
+      cancelPlanPointPress();
+      const press = {
+        pointerId: event.pointerId,
+        clientX: event.clientX,
+        clientY: event.clientY,
+        timer: null
+      };
+      press.timer = setTimeout(() => {
+        if (planPointPress !== press || !planPointPlacementEnabled() || planPressPointers.size !== 1) return;
+        const rect = mapCanvas.getBoundingClientRect();
+        const lngLat = map.unproject([press.clientX - rect.left, press.clientY - rect.top]);
+        planPointPress = null;
+        suppressPlanMapClickUntil = Date.now() + 900;
+        handlePlanStageClick(pointFromLngLat(lngLat));
+      }, PLAN_POINT_HOLD_MS);
+      planPointPress = press;
+    }, { passive: true });
+    mapCanvas.addEventListener("pointermove", (event) => {
+      if (!planPointPress || event.pointerId !== planPointPress.pointerId) return;
+      const dx = event.clientX - planPointPress.clientX;
+      const dy = event.clientY - planPointPress.clientY;
+      if (Math.hypot(dx, dy) > PLAN_POINT_MOVE_PX) cancelPlanPointPress();
+    }, { passive: true });
+    ["pointerup", "pointercancel", "pointerleave"].forEach((type) => {
+      mapCanvas.addEventListener(type, (event) => {
+        planPressPointers.delete(event.pointerId);
+        if (planPointPress && event.pointerId === planPointPress.pointerId) cancelPlanPointPress();
+      }, { passive: true });
+    });
+    mapCanvas.addEventListener("contextmenu", (event) => {
+      if (planPointPlacementEnabled()) event.preventDefault();
+    });
+
     map.on("click", (e) => {
+      if (Date.now() < suppressPlanMapClickUntil) return;
       // Group riders are the most important map targets. Resolve them before
       // nearby POIs or reports can consume the same tap.
       if (handleGroupRiderClick(e)) return;
