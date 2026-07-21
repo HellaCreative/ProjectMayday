@@ -7359,6 +7359,29 @@
       color: #656a72 !important;
       font-size: 9px !important;
     }
+    /* The stage editor is map-first: keep its two controls in equal columns
+       and separate them without spending another row of vertical space. */
+    body.planner-open.planner-tab-plan .route-bar-stage-editor .route-stage-settings {
+      display: grid !important;
+      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+      align-items: stretch !important;
+      gap: 0 !important;
+    }
+    body.planner-open.planner-tab-plan .route-bar-stage-editor .route-stage-settings > .route-setting-field {
+      min-width: 0 !important;
+      padding: 0 14px 0 0 !important;
+    }
+    body.planner-open.planner-tab-plan .route-bar-stage-editor .route-stage-settings > .route-stage-editor-access {
+      justify-content: space-between !important;
+      padding: 0 0 0 14px !important;
+      border-left: 1px solid #c9cbd0 !important;
+    }
+    body.planner-open.planner-tab-plan .route-bar-stage-editor .route-stage-settings .route-setting-heading {
+      min-height: 22px !important;
+    }
+    body.planner-open.planner-tab-plan .route-bar-stage-editor .route-stage-settings .route-setting-toggle {
+      min-height: 34px !important;
+    }
     body.planner-open .route-compact-summary,
     body.planner-open .stage-trip-summary,
     body.planner-open .route-status {
