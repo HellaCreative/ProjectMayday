@@ -1726,6 +1726,7 @@
       background: #d7d2cb;
       color: #4b4640;
     }
+
     @media (prefers-reduced-motion: reduce) {
       .cue-popover { transition: none; }
     }
@@ -6792,12 +6793,192 @@
     .route-stage-editor-close svg,
     .nav-stop svg { width: 17px; height: 17px; }
 
+    /* Authoritative route-sheet geometry. This deliberately follows every
+       legacy planner rule so all three modes share one mobile contract. */
+    body.planner-open .route-card,
+    body.planner-open .route-card.is-collapsed,
+    body.planner-open .route-card.is-expanded {
+      left: 0 !important;
+      right: 0 !important;
+      bottom: calc(var(--p2-dock-h) + 10px) !important;
+      width: 100% !important;
+      max-width: none !important;
+      height: auto !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      transform: none !important;
+      overflow: hidden !important;
+      border-radius: 16px !important;
+      background: rgba(255,255,255,.98) !important;
+    }
+    body.planner-open .route-card.is-expanded { max-height: min(70vh, 620px) !important; }
+    body.planner-open .route-card.is-collapsed { max-height: 64px !important; }
+    body.planner-open .route-card .route-sheet-handle-bar,
+    body.planner-open .route-card.is-collapsed .route-sheet-handle-bar,
+    body.planner-open .route-card.is-expanded .route-sheet-handle-bar {
+      display: block !important;
+      flex: 0 0 20px !important;
+      height: 20px !important;
+      padding: 0 !important;
+      background: rgba(255,255,255,.98) !important;
+      border: 0 !important;
+    }
+    body.planner-open .route-card .route-sheet-handle {
+      display: block !important;
+      width: 100% !important;
+      height: 20px !important;
+      min-height: 20px !important;
+      padding: 0 !important;
+      background: transparent !important;
+      border: 0 !important;
+    }
+    body.planner-open .route-card .route-sheet-handle::after {
+      content: "";
+      display: block;
+      width: 40px !important;
+      height: 4px !important;
+      margin: 7px auto 0 !important;
+      border-radius: 999px;
+      background: #b7b9bd !important;
+    }
+    body.planner-open .route-card .route-finder-header { display: none !important; }
+    body.planner-open .route-card .route-drawer-scroll {
+      width: 100% !important;
+      height: auto !important;
+      min-height: 0 !important;
+      max-height: calc(min(70vh, 620px) - 20px) !important;
+      padding: 0 0 10px !important;
+      overflow: hidden !important;
+    }
+    body.planner-open .route-card.is-expanded .route-drawer-compact {
+      display: flex !important;
+      width: min(440px, calc(100% - 20px)) !important;
+      margin: 0 auto !important;
+      padding: 0 !important;
+      flex-direction: column !important;
+      gap: 8px !important;
+    }
+    body.planner-open .route-card.is-expanded .route-drawer-full { display: none !important; }
+    body.planner-open.planner-tab-saved .route-card.is-expanded .route-drawer-compact { display: none !important; }
+    body.planner-open.planner-tab-saved .route-card.is-expanded .route-drawer-full {
+      display: flex !important;
+      width: 100% !important;
+      min-height: 0 !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      flex-direction: column !important;
+      gap: 0 !important;
+    }
+    body.planner-open .route-card.is-collapsed .route-drawer-scroll,
+    body.planner-open .route-card.is-collapsed .route-drawer-compact {
+      display: flex !important;
+      width: 100% !important;
+      height: 44px !important;
+      min-height: 44px !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      overflow: hidden !important;
+    }
+    body.planner-open .route-card.is-collapsed .route-drawer-compact {
+      align-items: center !important;
+      justify-content: center !important;
+    }
+    body.planner-open .route-card.is-collapsed .route-mode-block {
+      display: block !important;
+      width: min(440px, calc(100% - 20px)) !important;
+      margin: 0 auto !important;
+    }
+    body.planner-open .route-card.is-collapsed .route-tabs {
+      display: flex !important;
+      width: 100% !important;
+      margin: 0 !important;
+    }
+    body.planner-open .route-card.is-collapsed .route-tab-hint,
+    body.planner-open .route-card.is-collapsed .route-pref-card,
+    body.planner-open .route-card.is-collapsed .route-bar-plan-panel,
+    body.planner-open .route-card.is-collapsed .route-compact-actions,
+    body.planner-open .route-card.is-collapsed .route-drawer-full { display: none !important; }
+    body.planner-open.planner-tab-saved .saved-sheet-header {
+      display: block !important;
+      width: min(440px, calc(100% - 20px)) !important;
+      margin: 0 auto !important;
+      padding: 0 !important;
+    }
+    body.planner-open.planner-tab-saved .saved-sheet-title,
+    body.planner-open.planner-tab-saved .saved-sheet-subtitle { display: none !important; }
+    body.planner-open.planner-tab-saved #routePanelSaved {
+      display: flex !important;
+      width: min(440px, calc(100% - 20px)) !important;
+      min-height: 0 !important;
+      max-height: calc(min(70vh, 620px) - 66px) !important;
+      margin: 8px auto 0 !important;
+      padding: 0 !important;
+      flex-direction: column !important;
+      overflow: hidden !important;
+    }
+    body.planner-open.planner-tab-saved #routePanelSaved .saved-list {
+      display: flex !important;
+      flex: 0 1 auto !important;
+      min-height: 0 !important;
+      max-height: 400px !important;
+      padding: 0 2px !important;
+      overflow-x: hidden !important;
+      overflow-y: auto !important;
+      overscroll-behavior: contain;
+      scrollbar-width: thin;
+    }
+    body.planner-open.planner-tab-saved .route-saved-extras {
+      position: sticky;
+      bottom: 0;
+      z-index: 2;
+      flex: 0 0 auto !important;
+      gap: 5px !important;
+      margin: 8px 0 0 !important;
+      padding: 8px 2px 0 !important;
+      opacity: 1 !important;
+      background: rgba(255,255,255,.99) !important;
+      border-top: 1px solid var(--line) !important;
+    }
+    body.planner-open.planner-tab-saved .route-saved-extras .stage-save,
+    body.planner-open.planner-tab-saved .route-saved-extras .gpx-import-btn {
+      min-height: 36px !important;
+      height: 36px !important;
+      border-radius: 8px !important;
+      font-size: 10px !important;
+      font-weight: 750 !important;
+    }
+    body.planner-open.planner-tab-saved .gpx-help {
+      display: block;
+      padding: 0 4px 2px;
+      font-size: 8px !important;
+      line-height: 1.25 !important;
+      text-align: center;
+    }
+    .saved-row { gap: 6px !important; padding: 8px 2px !important; min-height: 0 !important; }
+    .saved-row-top { align-items: center !important; }
+    .saved-name { font-size: 10.5px !important; line-height: 1.2 !important; }
+    .saved-sub { font-size: 7.5px !important; line-height: 1.25 !important; }
+    .saved-row .route-metric-row {
+      display: grid !important;
+      grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+      gap: 4px !important;
+      padding: 5px 7px !important;
+      font-size: 7.5px !important;
+      text-align: center;
+    }
+    body.planner-collapsed .stack,
+    body.planner-collapsed .pip,
+    body.planner-tab-plan.planner-collapsed .stack,
+    body.planner-tab-plan.planner-collapsed .pip {
+      bottom: calc(var(--p2-dock-h) + 84px) !important;
+    }
+
     @media (max-height: 730px) {
       .account-sheet, .group-sheet, .legend { max-height: 58vh !important; }
       .account-sheet > .sheet-scroll, .group-sheet-body, .legend-scroll {
         max-height: calc(58vh - 58px) !important;
       }
-      body.planner-open .route-card.is-collapsed { padding-block: 7px !important; }
+      body.planner-open .route-card.is-collapsed { padding: 0 !important; }
       .route-compact-actions button { min-height: 38px !important; height: 38px !important; }
     }
     @media (prefers-reduced-motion: reduce) {
@@ -11345,14 +11526,16 @@
                   '<div class="saved-name">' + escapeHtml(r.name || "Imported GPX track") + "</div>" +
                   '<div class="saved-sub">Imported track · ' + (r.pointCount || 0) + " points</div>" +
                 "</div>" +
-                '<button class="saved-view-btn" type="button" data-saved-view="' + r.id + '">View</button>' +
+                '<div class="saved-row-utility">' +
+                  '<button class="saved-icon-action" type="button" data-saved-export-track="' + r.id + '" title="Export GPX" aria-label="Export GPX"><i data-lucide="download" aria-hidden="true"></i></button>' +
+                  '<button class="saved-icon-action danger" type="button" data-saved-delete="' + r.id + '" title="Delete track" aria-label="Delete track"><i data-lucide="trash-2" aria-hidden="true"></i></button>' +
+                "</div>" +
               "</div>" +
               routeMetricRowHtml({ distanceKm: km > 0 ? km : null, emptyText: "Imported GPX track" }) +
-              '<div class="saved-row-more">' +
-                '<button class="saved-action primary" type="button" data-saved-nav-track="' + r.id + '">Start navigation</button>' +
+              '<div class="saved-row-actions">' +
+                '<button class="saved-action" type="button" data-saved-view="' + r.id + '">View</button>' +
                 '<button class="saved-action" type="button" data-saved-edit-track="' + r.id + '">Edit</button>' +
-                '<button class="saved-action" type="button" data-saved-export-track="' + r.id + '">Export</button>' +
-                '<button class="saved-action danger" type="button" data-saved-delete="' + r.id + '">Delete</button>' +
+                '<button class="saved-action primary" type="button" data-saved-nav-track="' + r.id + '">Start ride</button>' +
               "</div>" +
             "</div>"
           );
@@ -11370,7 +11553,10 @@
                 '<div class="saved-name">' + escapeHtml(r.name || "Untitled route") + "</div>" +
                 '<div class="saved-sub">' + escapeHtml(sub) + "</div>" +
               "</div>" +
-              '<button class="saved-view-btn" type="button" data-saved-view="' + r.id + '">View</button>' +
+              '<div class="saved-row-utility">' +
+                '<button class="saved-icon-action" type="button" data-saved-duplicate="' + r.id + '" title="Duplicate route" aria-label="Duplicate route"><i data-lucide="copy" aria-hidden="true"></i></button>' +
+                '<button class="saved-icon-action danger" type="button" data-saved-delete="' + r.id + '" title="Delete route" aria-label="Delete route"><i data-lucide="trash-2" aria-hidden="true"></i></button>' +
+              "</div>" +
             "</div>" +
             routeMetricRowHtml({
               distanceKm: km > 0 ? km : null,
@@ -11379,14 +11565,15 @@
               pavedPercent: paved,
               emptyText: "No route stats yet"
             }) +
-            '<div class="saved-row-more">' +
-              '<button class="saved-action" type="button" data-saved-apply="' + r.id + '">Apply</button>' +
-              '<button class="saved-action" type="button" data-saved-duplicate="' + r.id + '">Duplicate</button>' +
-              '<button class="saved-action danger" type="button" data-saved-delete="' + r.id + '">Delete</button>' +
+            '<div class="saved-row-actions">' +
+              '<button class="saved-action" type="button" data-saved-view="' + r.id + '">View</button>' +
+              '<button class="saved-action" type="button" data-saved-edit-route="' + r.id + '">Edit</button>' +
+              '<button class="saved-action primary" type="button" data-saved-start-route="' + r.id + '">Start ride</button>' +
             "</div>" +
           "</div>"
         );
       }).join("");
+      window.renderDirtIcons?.();
       setRouteStatusHtml(savedCompactSummaryHtml());
     }
 
@@ -11409,14 +11596,14 @@
       setStatus("Viewing “" + (record.name || "route") + "” · Apply to edit", "ok", "route");
     }
 
-    function applySavedRoute(id) {
+    function applySavedRoute(id, options) {
       const record = savedRoutes.find((r) => r.id === id);
-      if (!record) return;
+      if (!record) return false;
       try {
         planTrip = RS.deserializeSavedRoute(record);
       } catch (err) {
         setStatus("Could not open saved route · " + (err.message || "error"), "error", "route");
-        return;
+        return false;
       }
       activeStageId = planTrip.stages[0].id;
       editingStageId = null;
@@ -11441,8 +11628,20 @@
       updatePlanStatus();
       const coords = [];
       for (const s of planTrip.stages) if (s.route && s.route.geometry) for (const c of s.route.geometry) coords.push(c);
-      fitToCoords(coords);
-      setStatus("Loaded “" + (record.name || "route") + "” into the planner", "ok", "route");
+      if (!options || options.fit !== false) fitToCoords(coords);
+      if (!options || options.announce !== false) {
+        setStatus("Loaded “" + (record.name || "route") + "” into the planner", "ok", "route");
+      }
+      return true;
+    }
+
+    function startSavedRoute(id) {
+      if (!applySavedRoute(id, { fit: false, announce: false })) return;
+      if (!startMultiStageNav()) return;
+      startNavigation().catch((err) => {
+        console.error(err);
+        setStatus("Could not start saved route · " + (err.message || "location is required"), "error", "route");
+      });
     }
 
     async function duplicateSavedRoute(id) {
@@ -13543,7 +13742,7 @@
       renderStageMarkers();
       refreshRouteDraft();
       if (typeof setPlannerDrawerState === "function" && plannerDrawerState !== "closed") {
-        setPlannerDrawerState(plannerTab === "saved" ? "expanded" : "collapsed");
+        setPlannerDrawerState("expanded");
       }
       syncRouteBarHeader();
     }
@@ -13725,7 +13924,7 @@
       hidePopup();
       const clicked = pointFromLngLat(e.lngLat);
       if (plannerTab === "saved") {
-        returnFromSavedSheet();
+        setPlannerDrawerState("collapsed");
         return;
       }
       if (plannerTab === "plan") {
@@ -14919,7 +15118,7 @@
         routeSheetHandle.setAttribute("aria-expanded", state === "expanded" ? "true" : "false");
         routeSheetHandle.setAttribute(
           "aria-label",
-          "Close route planner"
+          state === "expanded" ? "Minimize route planner" : "Expand route planner"
         );
       }
       if (!opts || !opts.silent) {
@@ -14956,9 +15155,13 @@
     }
 
     function setRouteCardOpen(open) {
-      // Route results stay in the compact workspace; callers retain the
-      // legacy open/close contract without reopening the old large sheet.
-      setPlannerDrawerState(open ? "collapsed" : "closed");
+      if (!open) {
+        setPlannerDrawerState("closed");
+        return;
+      }
+      // Preserve a rider's deliberate minimized state while routing. Opening
+      // from a closed state reveals the controls; route completion does not.
+      setPlannerDrawerState(plannerDrawerState === "closed" ? "expanded" : plannerDrawerState);
     }
 
     function setRouteServicesOpen(open) {
@@ -14968,7 +15171,6 @@
     }
 
     function togglePlannerExpandedCollapsed() {
-      if (plannerTab === "here") return;
       if (plannerDrawerState === "expanded") setPlannerDrawerState("collapsed");
       else if (plannerDrawerState === "collapsed") setPlannerDrawerState("expanded");
     }
@@ -14979,7 +15181,7 @@
       setAccountSheetOpen(false);
       setGroupSheetOpen(false);
       if (plannerDrawerState === "closed") {
-        setPlannerDrawerState("collapsed");
+        setPlannerDrawerState("expanded");
       } else {
         setRouteServicesOpen(false);
         setPlannerDrawerState("closed");
@@ -15038,17 +15240,10 @@
         try { routeSheetHandle.releasePointerCapture(event.pointerId); } catch (_) { /* ignore */ }
         drawerDrag = null;
         if (wasClick) {
-          if (plannerTab === "saved") returnFromSavedSheet();
-          else setPlannerDrawerState("closed");
+          togglePlannerExpandedCollapsed();
           return;
         }
-        if (plannerTab === "here") return;
         if (!vertical) return;
-        if (plannerTab === "saved") {
-          if (dy >= DRAWER_SWIPE_PX) returnFromSavedSheet();
-          else if (dy <= -DRAWER_SWIPE_PX) setPlannerDrawerState("expanded");
-          return;
-        }
         if (dy <= -DRAWER_SWIPE_PX) setPlannerDrawerState("expanded");
         else if (dy >= DRAWER_SWIPE_PX) setPlannerDrawerState("collapsed");
       }
@@ -15057,7 +15252,7 @@
       routeSheetHandle.addEventListener("keydown", (event) => {
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
-          setPlannerDrawerState("closed");
+          togglePlannerExpandedCollapsed();
         }
       });
     }
@@ -15104,7 +15299,13 @@
       if (event.target === exportSheet) closeExportNameSheet();
     });
     document.querySelectorAll("[data-route-mode]").forEach((button) => {
-      button.addEventListener("click", () => setRouteMode(button.dataset.routeMode));
+      button.addEventListener("click", () => {
+        if (button.dataset.routeMode === plannerTab) {
+          if (plannerDrawerState === "collapsed") setPlannerDrawerState("expanded");
+          return;
+        }
+        setRouteMode(button.dataset.routeMode);
+      });
     });
     document.querySelectorAll("[data-route-pref]").forEach((button) => {
       button.addEventListener("click", () => setRoutePreference(button.dataset.routePref));
@@ -15229,6 +15430,10 @@
         }
         const apply = event.target.closest("[data-saved-apply]");
         if (apply) { applySavedRoute(apply.dataset.savedApply); return; }
+        const editRoute = event.target.closest("[data-saved-edit-route]");
+        if (editRoute) { applySavedRoute(editRoute.dataset.savedEditRoute); return; }
+        const startRoute = event.target.closest("[data-saved-start-route]");
+        if (startRoute) { startSavedRoute(startRoute.dataset.savedStartRoute); return; }
         const editTrack = event.target.closest("[data-saved-edit-track]");
         if (editTrack) {
           const record = savedRoutes.find((row) => row.id === editTrack.dataset.savedEditTrack);
