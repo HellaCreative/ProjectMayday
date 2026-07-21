@@ -200,7 +200,15 @@ function resolveGraphRequest(body = {}) {
     };
   }
 
-  if (corridor.length >= 4 && !body.disableChain) {
+  // On Vercel, chain any multi-province route (NS→QC is 3 regions). Merging
+  // several longhaul packs in one isolate still OOMs / returns no_route when
+  // boundary stitching fails. Locally keep the old ≥4 threshold so short
+  // 2–3 province merges remain available for debugging.
+  const useCanadaChain =
+    !body.disableChain &&
+    corridor.length >= 2 &&
+    (onVercel || corridor.length >= 4);
+  if (useCanadaChain) {
     return {
       ok: true,
       regionIds: corridor,
@@ -212,10 +220,9 @@ function resolveGraphRequest(body = {}) {
     };
   }
 
-  // Chain hops + Vercel multi-province use thinned longhaul packs (~10–40MB
-  // inflated) instead of full regional graphs (up to ~300MB) that OOM Hobby.
-  const useLonghaulPacks =
-    !!body.preferLonghaulPacks || (onVercel && corridor.length >= 2);
+  // Hobby isolates cannot inflate QC/ON full packs (~400MB+ JSON). Always use
+  // thinned longhaul packs on Vercel, including single-province requests.
+  const useLonghaulPacks = !!body.preferLonghaulPacks || onVercel;
   const pathOpts = useLonghaulPacks ? { longhaul: true } : {};
 
   const unavailableLocal = corridor.filter(
@@ -224,7 +231,7 @@ function resolveGraphRequest(body = {}) {
 
   if (corridor.length === 1) {
     const regionId = corridor[0];
-    const opts = body.preferLonghaulPacks ? { longhaul: true } : {};
+    const opts = useLonghaulPacks ? { longhaul: true } : {};
     return {
       ok: true,
       regionIds: [regionId],

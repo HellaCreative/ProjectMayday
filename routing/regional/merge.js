@@ -245,8 +245,11 @@ function corridorLocationsForRoute(locations) {
 
   const minLon = Math.min(...pts.map((p) => p.lon));
   const maxLon = Math.max(...pts.map((p) => p.lon));
-  // Only inject national anchors for long east-west hauls.
-  if (maxLon - minLon < 15) return pts;
+  // Inject southern corridor anchors for any inter-province haul that spans
+  // enough longitude to cross a border hub (NS→QC ≈ 7–8°). The old 15° gate
+  // only fired for true coast-to-coast routes and left Atlantic multi-province
+  // requests as one merged hop that often returned no_route.
+  if (maxLon - minLon < 5) return pts;
 
   const start = pts[0];
   const end = pts[pts.length - 1];
