@@ -93,7 +93,8 @@ async function coldWarm(name, locs, profile) {
 }
 
 async function main() {
-  const flag = process.env.ROUTING_CHAIN_CACHE === "1" ? "on" : "off";
+  const { chainCacheEnabled } = require("../routing/lib/graph");
+  const flag = chainCacheEnabled() ? "on" : "off";
   console.log(JSON.stringify({ env: "local-node", node: process.version, ROUTING_CHAIN_CACHE: flag }, null, 2));
 
   const results = {};

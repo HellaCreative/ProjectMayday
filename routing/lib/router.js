@@ -99,17 +99,27 @@ class MinHeap {
   }
 }
 
-/** Stage 1a / 1b flags (ROUTING-PERFORMANCE-REV-2.1). All default off. */
+/**
+ * Env flag helper. defaultOn=true after median-of-three re-bench for Stage 0/1a/1b.
+ * Explicit 0/false/off disables. ROUTING_ELLIPSE_DIRT stays default off.
+ */
+function envFlagEnabled(name, defaultOn) {
+  const v = process.env[name];
+  if (v === "0" || v === "false" || v === "off") return false;
+  if (v === "1" || v === "true" || v === "on") return true;
+  return !!defaultOn;
+}
+
 function bidirAstarEnabled() {
-  return process.env.ROUTING_BIDIR_ASTAR === "1";
+  return envFlagEnabled("ROUTING_BIDIR_ASTAR", true);
 }
 
 function ellipsePruneEnabled() {
-  return process.env.ROUTING_ELLIPSE_PRUNE === "1";
+  return envFlagEnabled("ROUTING_ELLIPSE_PRUNE", true);
 }
 
 function ellipseDirtEnabled() {
-  return process.env.ROUTING_ELLIPSE_DIRT === "1";
+  return envFlagEnabled("ROUTING_ELLIPSE_DIRT", false);
 }
 
 /**

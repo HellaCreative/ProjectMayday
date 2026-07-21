@@ -37,8 +37,15 @@ const cacheStats = {
   inflateMs: 0
 };
 
+/**
+ * Stage 0 chain pack retention. Default on after median-of-three re-bench.
+ * Explicit ROUTING_CHAIN_CACHE=0 disables.
+ */
 function chainCacheEnabled() {
-  return process.env.ROUTING_CHAIN_CACHE === "1";
+  const v = process.env.ROUTING_CHAIN_CACHE;
+  if (v === "0" || v === "false" || v === "off") return false;
+  if (v === "1" || v === "true" || v === "on") return true;
+  return true;
 }
 
 function resetCacheStats() {

@@ -52,7 +52,7 @@ Notes:
 
 ### Stage 0 verdict
 
-Stage 0 accepted: parity on equality surface, policy matches rev 2.1, instrumentation shows inflate/load cut roughly in half on NS-BC, e2e cold improved ~15% locally. Flag remains default **off** until product decides to flip after this audit.
+Stage 0 accepted: parity on equality surface, policy matches rev 2.1, instrumentation shows inflate/load cut roughly in half on NS-BC, e2e cold improved ~15% locally. Default later flipped on after median-of-three (see bottom of this audit).
 
 ---
 
@@ -109,4 +109,22 @@ Search-only vs baseline: bidir+ellipse about 23% faster. Combined with Stage 0 c
 
 ### Stage 1 verdict
 
-Stage 1a and 1b accepted behind flags (still default off). Fixtures pass both ways. Cost parity holds (≤ / identical on measured pairs). Defaults flip only after product decision on this audit.
+Stage 1a and 1b accepted behind flags. Fixtures pass both ways. Cost parity holds (≤ / identical on measured pairs).
+
+---
+
+## Default flip (2026-07-21 median-of-three)
+
+Protocol: three paired runs each for porters (balanced), Halifax-Yarmouth (cleanest), NS-BC (cleanest). Candidate = `ROUTING_CHAIN_CACHE` + `ROUTING_BIDIR_ASTAR` + `ROUTING_ELLIPSE_PRUNE` on. `ROUTING_ELLIPSE_DIRT` left off.
+
+| Suite | costOk | distOk | off search median | on search median | off e2e median | on e2e median |
+| --- | --- | --- | ---: | ---: | ---: | ---: |
+| porters-balanced | true | true | 22 | 27 | 3142 | 2615 |
+| hfx-yar-cleanest | true | true | 173 | 125 | 3023 | 2537 |
+| ns-bc-cleanest | true | true | 2606 | 2523 | 23030 | 18019 |
+
+NS-BC hopKm identical (15 hops, same per-hop km). Equality-surface byte match is exact on in-region suites; NS-BC shows equal-cost geometry variance (geomLen 31174 vs 31167, +1 segment) which Stage 1 explicitly allows. Pack loads on NS-BC candidate: 8 loads / 14 hits; inflateMs median roughly 3.9s vs ~9.8s off.
+
+**Defaults flipped on:** `ROUTING_CHAIN_CACHE`, `ROUTING_BIDIR_ASTAR`, `ROUTING_ELLIPSE_PRUNE` (unset = on; set `0` to disable).
+
+**Remains default off:** `ROUTING_ELLIPSE_DIRT` (waits for fixture evidence on bowing corridors such as Superior).
