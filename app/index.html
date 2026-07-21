@@ -7365,16 +7365,31 @@
       display: grid !important;
       grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
       align-items: stretch !important;
-      gap: 0 !important;
+      column-gap: 32px !important;
+      position: relative !important;
+    }
+    #routeBarStageEditor .stage-editor-settings-grid::after {
+      content: "";
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 50%;
+      width: 1px;
+      background: #b8bbc1;
+      transform: translateX(-.5px);
+      pointer-events: none;
     }
     #routeBarStageEditor .stage-editor-settings-grid > .route-setting-field {
       min-width: 0 !important;
-      padding: 0 14px 0 0 !important;
+      padding: 0 !important;
     }
     #routeBarStageEditor .stage-editor-settings-grid > .route-stage-editor-access {
-      justify-content: space-between !important;
-      padding: 0 0 0 14px !important;
-      border-left: 1px solid #c9cbd0 !important;
+      display: grid !important;
+      grid-template-rows: 22px 34px !important;
+      align-content: start !important;
+      gap: 5px !important;
+      padding: 0 !important;
+      border: 0 !important;
     }
     #routeBarStageEditor .stage-editor-settings-grid .route-setting-heading {
       min-height: 22px !important;
@@ -7394,6 +7409,14 @@
     body.planner-open .stage-list {
       gap: 6px !important;
       scrollbar-width: none;
+    }
+    /* Compact stage cards are summaries only. The editor above is the sole
+       owner of profile and access controls, including legacy render paths. */
+    #routeBarStageList .route-settings-grid,
+    #routeBarStageList .route-stage-settings,
+    #routeBarStageList [data-stage-profile],
+    #routeBarStageList [data-stage-access] {
+      display: none !important;
     }
     body.planner-open .route-bar-stage-list::-webkit-scrollbar,
     body.planner-open .stage-list::-webkit-scrollbar { display: none; }
