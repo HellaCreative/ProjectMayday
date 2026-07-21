@@ -5749,6 +5749,27 @@
     .stage-stage-strip > .stage-list > .stage-row {
       min-height: 74px;
     }
+    .stage-draft-prompt {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 40px;
+      padding: 10px 12px;
+      border: 1px dashed rgba(28, 25, 23, 0.26);
+      border-radius: 6px;
+      background: var(--fig-sheet-2);
+      color: var(--fig-ink-muted);
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.25;
+      text-align: center;
+    }
+    .stage-stage-strip > .stage-list > .stage-draft-prompt {
+      flex: 0 0 min(76vw, 248px);
+      min-height: 74px;
+      border-radius: 8px;
+      font-size: 13px;
+    }
     .stage-stage-strip > .stage-list > .stage-row:not(.is-active) {
       cursor: pointer;
     }
@@ -9541,7 +9562,7 @@
       if (!routeBarStageEditor) return;
       const index = compactStageId ? RS.findStageIndex(planTrip, compactStageId) : -1;
       const stage = index >= 0 ? planTrip.stages[index] : null;
-      if (plannerTab !== "plan" || !stage) {
+      if (plannerTab !== "plan" || !stage || !RS.stageHasBothPoints(stage)) {
         routeBarStageEditor.hidden = true;
         routeBarStageEditor.innerHTML = "";
         return;
@@ -9609,8 +9630,16 @@
 
     function handlePlanStageClick(clicked) {
       compactStageId = null;
-      const idx = RS.findStageIndex(planTrip, activeStageId);
+      // Map taps always belong to the unfinished leg, never to whichever
+      // completed stage card happens to be selected in the scroller.
+      let idx = planTrip.stages.findIndex((candidate) => !RS.stageHasBothPoints(candidate));
+      if (idx < 0) {
+        const previous = planTrip.stages[planTrip.stages.length - 1];
+        const next = RS.addStage(planTrip, { profile: previous?.profile || routePreference });
+        idx = RS.findStageIndex(planTrip, next.id);
+      }
       if (idx < 0) return;
+      activeStageId = planTrip.stages[idx].id;
       let stage = planTrip.stages[idx];
       if (!stage.start) {
         stage = RS.transitionStage(stage, "set-start", { point: clicked });
@@ -9637,8 +9666,8 @@
         setStatus("Stage " + (idx + 1) + " routed · tap the map to add another stage", "ok", "route");
         return;
       }
-      // A completed stage should never trap the user in an inactive state.
-      // Continue from its endpoint when a legacy draft was not created.
+      // This branch is retained for malformed legacy state. Normal map taps
+      // always target the unfinished leg selected above.
       const next = RS.addStage(planTrip, { profile: stage.profile || routePreference });
       activeStageId = next.id;
       afterStageUpdate();
@@ -10003,7 +10032,8 @@
     function renderStageList() {
       if (!stageListEl && !routeBarStageList) return;
       const stages = planTrip.stages;
-      const markup = stages.map((stage, i) => {
+      const routedStages = stages.filter((stage) => RS.stageHasBothPoints(stage));
+      const markup = routedStages.map((stage, i) => {
         const active = stage.id === activeStageId;
         const editing = stage.id === editingStageId;
         const expanded = active;
@@ -10036,17 +10066,23 @@
               "</div>" +
               '<div class="stage-row-actions">' +
                 '<button class="stage-text-btn danger" type="button" data-stage-delete="' + stage.id + '"' +
-                  (stages.length <= 1 ? " disabled" : "") + ">Delete</button>" +
+                  (routedStages.length <= 1 ? " disabled" : "") + ">Delete</button>" +
               "</div>" +
             "</div>" +
             body +
           "</div>"
         );
       }).join("");
-      if (stageListEl) stageListEl.innerHTML = markup;
+      const draftStage = stages.find((stage) => !RS.stageHasBothPoints(stage));
+      const stageMarkup = routedStages.length
+        ? markup
+        : (draftStage && draftStage.start
+          ? '<div class="stage-draft-prompt" role="status">Starting point set · tap the map to create stage 1</div>'
+          : "");
+      if (stageListEl) stageListEl.innerHTML = stageMarkup;
       if (routeBarStageList) {
         routeBarStageList.querySelectorAll(".stage-row").forEach((row) => row.remove());
-        routeBarStageList.insertAdjacentHTML("afterbegin", markup);
+        routeBarStageList.insertAdjacentHTML("afterbegin", stageMarkup);
       }
       if (stageEditToggle) {
         const active = getActiveStage();
@@ -10116,7 +10152,9 @@
       planAggregate = RS.aggregateTrip(planTrip);
       const agg = planAggregate;
       const activeIdx = RS.findStageIndex(planTrip, activeStageId);
-      const stageCount = planTrip.stages.length;
+      // A stage is a travel leg between two waypoints. A draft containing
+      // only the next waypoint is not a stage and must not be counted here.
+      const stageCount = planTrip.stages.filter((stage) => RS.stageHasBothPoints(stage)).length;
       // Trip-wide vs selected-stage distinction.
       let summary = "";
       if (agg.completedStageCount > 0) {
@@ -10127,8 +10165,11 @@
           (agg.percentages.unknownAccessPercent ? " · " + agg.percentages.unknownAccessPercent + "% unknown" : "") +
           "</span>";
       }
+      const hasStartingPoint = planTrip.stages.some((stage) => stage.start && !RS.stageHasBothPoints(stage));
       const completeLabel = agg.complete
         ? "Trip complete"
+        : (hasStartingPoint && agg.requiredStageCount === 0)
+          ? "Starting point set · tap the map to create stage 1"
         : (agg.completedStageCount === 0 && agg.requiredStageCount === 0)
           ? "Add your first stage · 0/0 stages"
           : "Trip incomplete · " + agg.completedStageCount + "/" + agg.requiredStageCount + " stages";
