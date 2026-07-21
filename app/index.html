@@ -10760,8 +10760,9 @@
               { lat: stage.end.lat, lon: stage.end.lng, label: "B" }
             ],
             vehicle: "dual-sport-motorcycle",
-            accessPolicy: stagePolicy,
-            options: { matchLimitMeters: 250 }
+            accessPolicy: stagePolicy
+            // Do not force matchLimitMeters — server uses 500 m on thinned
+            // longhaul packs (QC) and 250 m on dense legacy/NS packs.
           })
         });
         const raw = await res.text();
@@ -13945,8 +13946,8 @@
               { lat: destination.lat, lon: destination.lng, label: "B" }
             ],
             vehicle: "dual-sport-motorcycle",
-            accessPolicy: currentAccessPolicy(),
-            options: { matchLimitMeters: 250 }
+            accessPolicy: currentAccessPolicy()
+            // Do not force matchLimitMeters — server picks pack-aware snap radius.
           })
         });
         const raw = await res.text();
@@ -16560,7 +16561,7 @@
           ],
           vehicle: "dual-sport-motorcycle",
           accessPolicy: currentAccessPolicy(),
-          options: { matchLimitMeters: 250, avoidEdgeIds: avoidEdgeIds || [] }
+          options: { avoidEdgeIds: avoidEdgeIds || [] }
         })
       });
       return res.json();
