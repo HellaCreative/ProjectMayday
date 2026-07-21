@@ -7397,7 +7397,14 @@
     }
     body.planner-open .route-bar-stage-list::-webkit-scrollbar,
     body.planner-open .stage-list::-webkit-scrollbar { display: none; }
-    body.planner-open.planner-tab-plan .route-bar-stage-list .stage-row,
+    body.planner-open.planner-tab-plan .route-bar-stage-list .stage-row {
+      min-height: 66px !important;
+      border: 1px solid rgba(250, 250, 249, .14) !important;
+      border-radius: 9px !important;
+      background: #4a4540 !important;
+      color: #fafaf9 !important;
+      box-shadow: none !important;
+    }
     body.planner-open .stage-stage-strip > .stage-list > .stage-row {
       min-height: 66px !important;
       border: 1px solid rgba(22, 24, 28, .12) !important;
