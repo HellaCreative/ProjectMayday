@@ -10074,15 +10074,20 @@
         );
       }).join("");
       const draftStage = stages.find((stage) => !RS.stageHasBothPoints(stage));
-      const stageMarkup = routedStages.length
-        ? markup
-        : (draftStage && draftStage.start
-          ? '<div class="stage-draft-prompt" role="status">Starting point set · tap the map to create stage 1</div>'
-          : "");
+      const stageMarkup = markup;
       if (stageListEl) stageListEl.innerHTML = stageMarkup;
       if (routeBarStageList) {
         routeBarStageList.querySelectorAll(".stage-row, .stage-draft-prompt").forEach((row) => row.remove());
         routeBarStageList.insertAdjacentHTML("afterbegin", stageMarkup);
+      }
+      if (routeBarAddStage) {
+        const nextAction = routedStages.length
+          ? "Tap map to create another stage"
+          : (draftStage && draftStage.start
+            ? "Tap map to create stage 1"
+            : "Tap map to place starting point");
+        routeBarAddStage.textContent = nextAction;
+        routeBarAddStage.setAttribute("aria-label", nextAction);
       }
       if (stageEditToggle) {
         const active = getActiveStage();
