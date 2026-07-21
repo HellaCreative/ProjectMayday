@@ -14,7 +14,8 @@ const {
   clipGraphToCorridor,
   extractHighwayGraph,
   extractLonghaulSpineGraph,
-  extractAtlanticLonghaulGraph
+  extractAtlanticLonghaulGraph,
+  extractMaritimeLonghaulGraph
 } = require("../routing/regional/corridor");
 
 const ROOT = path.join(__dirname, "..");
@@ -54,29 +55,29 @@ function main() {
     let g = load(code);
     const before = g.edgeCount || (g.edges || []).length;
     const hasRoadClass = (g.edges || []).some((e) => e.rt);
-    // Atlantic: spine + hub locals (Vercel in-province). West: spine only.
-    const atlantic = new Set(["ns", "nb", "qc", "pe", "nl"]);
-    const useAtlantic = atlantic.has(code);
-    const useHighway = !hasRoadClass && !useAtlantic;
+    // QC: spine + hub bulbs. NS/NB: NRN + OSM highways only (no forest islands).
+    const atlanticHubs = new Set(["qc", "pe", "nl"]);
+    const maritime = new Set(["ns", "nb"]);
+    const useAtlanticHubs = atlanticHubs.has(code);
+    const useMaritime = maritime.has(code);
+    const useHighway = !hasRoadClass && !useAtlanticHubs && !useMaritime;
     const atlanticHubsByCode = {
-      ns: [{ lon: -63.575, lat: 44.6488 }],
-      nb: [
-        { lon: -66.643, lat: 45.963 },
-        { lon: -64.8, lat: 46.1 } // Amherst / NS border approach
-      ],
       qc: [
         { lon: -71.208, lat: 46.813 }, // Quebec City
         { lon: -71.30, lat: 46.95 }, // Lac-Beauport
-        { lon: -73.567, lat: 45.502 } // Montreal
+        { lon: -73.567, lat: 45.502 }, // Montreal
+        { lon: -68.65, lat: 47.55 } // Dégelis / NB approach
       ],
       pe: [{ lon: -63.126, lat: 46.238 }],
       nl: [{ lon: -52.712, lat: 47.561 }]
     };
-    g = useAtlantic
+    g = useAtlanticHubs
       ? extractAtlanticLonghaulGraph(g, atlanticHubsByCode[code] || [], code === "qc" ? 28000 : 35000)
-      : useHighway
-        ? extractHighwayGraph(g)
-        : extractLonghaulSpineGraph(g);
+      : useMaritime
+        ? extractMaritimeLonghaulGraph(g)
+        : useHighway
+          ? extractHighwayGraph(g)
+          : extractLonghaulSpineGraph(g);
     const afterSpine = g.edgeCount;
     g = clipGraphToCorridor(g, corridor, BUFFER_M);
     for (const e of g.edges) e.g = thinGeometry(e.g, 6);
@@ -88,8 +89,9 @@ function main() {
       purpose: "canada-chain hop pack (NRN spine + southern corridor)",
       source: `regions/${code}/graph.v1.json.gz`,
       hasRoadClass,
-      spine: !useAtlantic && !useHighway,
-      atlanticLonghaul: useAtlantic,
+      spine: !useAtlanticHubs && !useMaritime && !useHighway,
+      atlanticLonghaul: useAtlanticHubs,
+      maritimeLonghaul: useMaritime,
       highwayNoTrack: useHighway,
       corridorBufferMeters: BUFFER_M,
       thinnedGeometry: true,

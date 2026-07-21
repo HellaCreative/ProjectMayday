@@ -211,7 +211,8 @@ function regionsForRoute(regionIds) {
  */
 const CORRIDOR_ANCHORS = [
   { lon: -63.575, lat: 44.6488 }, // Halifax
-  { lon: -66.643, lat: 45.963 }, // Moncton
+  { lon: -64.800, lat: 46.099 }, // Moncton (was wrongly Fredericton)
+  { lon: -66.643, lat: 45.963 }, // Fredericton
   { lon: -71.208, lat: 46.813 }, // Quebec City
   { lon: -73.567, lat: 45.502 }, // Montreal
   { lon: -75.697, lat: 45.421 }, // Ottawa

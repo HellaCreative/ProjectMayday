@@ -165,6 +165,9 @@ function isLonghaulSpineEdge(edge, graphBbox = null, { hasRoadClass = true } = {
   if (hasRoadClass) {
     const rt = String(edge.rt || "");
     if (LONGHAUL_ROAD_TRACK.has(rt)) return true;
+    // Mixed packs (NRN + OSM): NRN often has no rt. Keep paved/gravel/unknown
+    // unclassed edges so provincial spines stay connected after OSM ingest.
+    if (!rt && surface !== 2 && surface !== 3) return true;
     if (onBorder && surface !== 3 && meters >= 150) return true;
     return false;
   }
@@ -199,6 +202,21 @@ function extractLonghaulSpineGraph(graph) {
     isLonghaulSpineEdge(e, bbox, { hasRoadClass })
   );
   return compactGraph(graph, keepEdges, "longhaul-spine");
+}
+
+/**
+ * Maritime Vercel pack: NRN non-track + OSM freeway/arterial/collector/ramp.
+ * Drops provincial forest capillaries and OSM local islands that shatter
+ * nearest-node / snap connectivity between cities.
+ */
+function extractMaritimeLonghaulGraph(graph) {
+  const keepEdges = (graph.edges || []).filter((e) => {
+    const src = String(e.src || "");
+    if (/national road network/i.test(src)) return e.s !== 3;
+    const rt = String(e.rt || "");
+    return LONGHAUL_ROAD_TRACK.has(rt);
+  });
+  return compactGraph(graph, keepEdges, "maritime-longhaul");
 }
 
 /**
@@ -262,6 +280,7 @@ module.exports = {
   extractSpineGraph,
   extractLonghaulSpineGraph,
   extractAtlanticLonghaulGraph,
+  extractMaritimeLonghaulGraph,
   isSpineEdge,
   isLonghaulSpineEdge,
   corridorPolyline,
