@@ -45,8 +45,9 @@ node scripts/build-region-with-supplement.js nb
 node scripts/build-region-with-supplement.js qc
 node scripts/build-region-with-supplement.js ns
 
-# Vercel longhaul fabric packs (NS/NB/QC):
-node scripts/build-longhaul-region-packs.js ns nb qc
+# Vercel longhaul fabric packs (NS/NB + QC quadrants):
+node scripts/build-longhaul-region-packs.js ns nb
+node scripts/build-qc-quadrant-packs.js
 ```
 
 ## Registry

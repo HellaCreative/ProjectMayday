@@ -473,8 +473,26 @@ function compactGraph(graph, keepEdges, roleSuffix) {
   };
 }
 
+/**
+ * Keep edges that touch bbox [W,S,E,N]. Used to carve QC into quadrant packs.
+ */
+function clipGraphToBbox(graph, bbox) {
+  if (!bbox || bbox.length < 4) return graph;
+  const [w, s, e, n] = bbox;
+  const keepEdges = (graph.edges || []).filter((edge) => {
+    const g = edge.g || [];
+    if (!g.length) return false;
+    for (const p of g) {
+      if (p[0] >= w && p[0] <= e && p[1] >= s && p[1] <= n) return true;
+    }
+    return false;
+  });
+  return compactGraph(graph, keepEdges, "bbox");
+}
+
 module.exports = {
   clipGraphToCorridor,
+  clipGraphToBbox,
   extractHighwayGraph,
   extractSpineGraph,
   extractLonghaulSpineGraph,

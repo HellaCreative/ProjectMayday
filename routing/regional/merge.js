@@ -158,12 +158,16 @@ const REGION_NEIGHBOURS = {
   ab: ["bc", "sk", "nt"],
   sk: ["ab", "mb", "nt"],
   mb: ["sk", "on", "nu"],
-  on: ["mb", "qc"],
-  qc: ["on", "nb", "nl"],
-  nb: ["qc", "ns"],
+  on: ["mb", "qc-west"],
+  // QC quadrants: river ↔ west ↔ north. Monolithic qc kept as alias for tests.
+  qc: ["on", "nb", "nl", "qc-west", "qc-sl", "qc-north"],
+  "qc-west": ["on", "qc-sl", "qc-north"],
+  "qc-sl": ["nb", "nl", "qc-west", "qc-north"],
+  "qc-north": ["qc-sl", "qc-west"],
+  nb: ["qc-sl", "ns"],
   ns: ["nb"],
   pe: [],
-  nl: ["qc"],
+  nl: ["qc-sl"],
   yt: ["bc", "nt"],
   nt: ["yt", "bc", "ab", "sk", "nu"],
   nu: ["nt", "mb"]
@@ -217,6 +221,9 @@ const CORRIDOR_ANCHORS = [
   { lon: -68.65, lat: 47.55 }, // Dégelis (QC approach)
   { lon: -69.542, lat: 47.837 }, // Rivière-du-Loup
   { lon: -71.208, lat: 46.813 }, // Quebec City
+  // Stitch points on real fabric (snap-tested) so MTL↔Québec chains without OOM merge.
+  { lon: -72.349, lat: 46.353 }, // A-40 east of Trois-Rivières (qc-sl)
+  { lon: -72.701, lat: 46.300 }, // local west of Trois-Rivières (qc-west)
   { lon: -73.567, lat: 45.502 }, // Montreal
   { lon: -75.697, lat: 45.421 }, // Ottawa
   { lon: -79.383, lat: 43.653 }, // Toronto
@@ -271,7 +278,9 @@ function corridorLocationsForRoute(locations) {
   // the old 5° gate skipped anchors, forcing one merged NB+QC hop that OOMs /
   // times out on Vercel Hobby when the QC pack is inflated.
   // Gate on distance OR longitude so Atlantic cross-border city pairs split.
-  if (span < 3 && distKm < 280) return pts;
+  // Gate on distance OR longitude so Atlantic / in-QC cross-quadrant city pairs split.
+  // Montréal↔Québec is ~250 km / ~2.4° — must inject the TR stitch anchors.
+  if (span < 3 && distKm < 200) return pts;
 
   const westToEast = start.lon < end.lon;
   const anchors = CORRIDOR_ANCHORS.filter((a) => a.lon >= minLon - 0.5 && a.lon <= maxLon + 0.5)

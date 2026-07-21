@@ -15,6 +15,11 @@ const REGION_BBOX = {
   pe: [-64.6, 45.8, -61.9, 47.2],
   nb: [-69.3, 44.5, -63.8, 48.2],
   nl: [-67.9, 46.5, -52.5, 60.5],
+  // Quebec split into Hobby-safe longhaul quadrants (overlapping for merge).
+  // Parent "qc" kept for full-graph tooling; primaryRegion prefers quadrants.
+  "qc-west": [-79.8, 44.9, -72.2, 48.0],
+  "qc-sl": [-73.0, 44.9, -64.0, 48.6],
+  "qc-north": [-79.8, 47.5, -57.0, 62.7],
   qc: [-79.8, 44.9, -57.0, 62.7],
   on: [-95.2, 41.6, -74.3, 56.9],
   mb: [-102.1, 48.9, -88.9, 60.1],
@@ -25,6 +30,10 @@ const REGION_BBOX = {
   nt: [-136.5, 60.0, -102.0, 78.8],
   nu: [-120.9, 51.6, -60.9, 83.2]
 };
+
+function isQcRegion(id) {
+  return id === "qc" || String(id || "").startsWith("qc-");
+}
 
 function bboxArea(bbox) {
   return Math.max(0, bbox[2] - bbox[0]) * Math.max(0, bbox[3] - bbox[1]);
@@ -53,28 +62,47 @@ function primaryRegionForPoint(lon, lat) {
     return lon < -116.4 ? "bc" : "ab";
   }
 
-  // ON bbox is smaller than QC and extends into the Laurentians west of
-  // Montreal. Smallest-bbox then mis-labels Mont-Tremblant as Ontario and
-  // forces canada-chain for ordinary in-QC From-here routes.
-  if (ids.has("on") && ids.has("qc")) {
-    // Laurentian plateau / Labelle / Tremblant (north of Montreal).
-    if (lat >= 45.9) return "qc";
-    // Montreal & east of the Hawkesbury pinch stay Quebec.
-    if (lon >= -74.5) return "qc";
+  // ON vs Quebec (any quadrant). Laurentian plateau stays QC-west.
+  const qcHit = [...ids].find((id) => isQcRegion(id));
+  if (ids.has("on") && qcHit) {
+    if (lat >= 45.9) return pickQcQuadrant(lon, lat, ids);
+    if (lon >= -74.5) return pickQcQuadrant(lon, lat, ids);
+    // Gatineau / Outaouais (north of Ottawa River) — not Ontario.
+    if (lat >= 45.4 && lon >= -76.2 && ids.has("qc-west")) return "qc-west";
     return "on";
   }
 
-  // NB bbox covers Témiscouata / Dégelis (QC). Without this, Dégelis resolves
-  // as NB, border hops load only the NB pack, and QC-side anchors fail to snap.
-  if (ids.has("nb") && ids.has("qc")) {
-    // West of the Edmundston pinch → Quebec (Dégelis, Rivière-du-Loup, …).
-    if (lon <= -68.45) return "qc";
-    if (lat >= 47.7 && lon <= -68.2) return "qc";
+  // NB vs Quebec river corridor (Dégelis / Témiscouata).
+  if (ids.has("nb") && qcHit) {
+    if (lon <= -68.45) return pickQcQuadrant(lon, lat, ids);
+    if (lat >= 47.7 && lon <= -68.2) return pickQcQuadrant(lon, lat, ids);
     return "nb";
+  }
+
+  // Inside Quebec: never return monolithic "qc" when a quadrant also hits —
+  // longhaul packs live under qc-sl / qc-west / qc-north.
+  if (qcHit) {
+    const q = pickQcQuadrant(lon, lat, ids);
+    if (q) return q;
   }
 
   hits.sort((a, b) => a.area - b.area);
   return hits[0].id;
+}
+
+/**
+ * Prefer north above the southern corridor; otherwise west of ~-72.4° (Montréal /
+ * Laurentians / Outaouais) vs St. Lawrence river pack.
+ */
+function pickQcQuadrant(lon, lat, ids) {
+  const has = (id) => ids.has(id);
+  if (lat >= 48.15 && has("qc-north")) return "qc-north";
+  if (lon <= -72.4 && has("qc-west")) return "qc-west";
+  if (has("qc-sl")) return "qc-sl";
+  if (has("qc-west")) return "qc-west";
+  if (has("qc-north")) return "qc-north";
+  if (has("qc")) return "qc";
+  return null;
 }
 
 function publicBaseUrl() {
@@ -121,6 +149,10 @@ function localGraphPath(regionId, { longhaul = false } = {}) {
   if (longhaul) {
     return path.join(REGIONS_DIR, regionId, "longhaul.v1.json.gz");
   }
+  // Quadrant IDs are longhaul-only; full in-province graph stays under qc/.
+  if (String(regionId).startsWith("qc-")) {
+    return path.join(REGIONS_DIR, "qc", "graph.v1.json.gz");
+  }
   return path.join(REGIONS_DIR, regionId, "graph.v1.json.gz");
 }
 
@@ -129,6 +161,9 @@ function remoteGraphUrl(regionId, { longhaul = false } = {}) {
   if (regionId === "__legacy_ns__") return base + "/routing/data/ns-graph.v1.json.gz";
   if (longhaul) {
     return base + "/routing/data/regions/" + regionId + "/longhaul.v1.json.gz";
+  }
+  if (String(regionId).startsWith("qc-")) {
+    return base + "/routing/data/regions/qc/graph.v1.json.gz";
   }
   return base + "/routing/data/regions/" + regionId + "/graph.v1.json.gz";
 }

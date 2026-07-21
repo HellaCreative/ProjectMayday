@@ -322,7 +322,17 @@ check("Halifax–Yarmouth uses legacy production graph by default", () => {
 
 check("Halifax to Vancouver corridor includes NB and western provinces", () => {
   const { regionsForRoute, shortestRegionPath } = require("../../regional/merge");
-  assert.deepStrictEqual(shortestRegionPath("ns", "bc"), ["ns","nb","qc","on","mb","sk","ab","bc"]);
+  assert.deepStrictEqual(shortestRegionPath("ns", "bc"), [
+    "ns",
+    "nb",
+    "qc-sl",
+    "qc-west",
+    "on",
+    "mb",
+    "sk",
+    "ab",
+    "bc"
+  ]);
   assert.ok(regionsForRoute(["ns","bc"]).includes("nb"));
   assert.ok(regionsForRoute(["ns","bc"]).includes("on"));
 });
