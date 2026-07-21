@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-21T15:51:30.000Z",
+  "generatedAt": "2026-07-21T21:11:39.576Z",
   "schemaVersion": "canada-regional-1",
   "regionId": "qc",
   "province": "QC",
@@ -7,58 +7,79 @@
     -79.87101,
     44.91697,
     -57,
-    62.42787
+    62.42786
   ],
-  "nodeCount": 1052383,
-  "edgeCount": 924631,
-  "sourceCounts": {
-    "National Road Network": 504772,
-    "OpenStreetMap": 379859,
-    "Qu\u00e9bec Chemins Multiusages (AQr\u00e9seau+)": 40000
-  },
+  "nodeCount": 827870,
+  "edgeCount": 585713,
+  "componentCount": 268935,
+  "boundaryNodeCount": 25190,
   "accessCounts": {
-    "1": 731490,
-    "2": 193141
+    "motorized_permissive": 585713
   },
   "surfaceCounts": {
-    "0": 208075,
-    "4": 403317,
-    "2": 306542,
-    "1": 6697
+    "paved": 256078,
+    "unknown": 57830,
+    "gravel": 7020,
+    "access": 264785
   },
-  "jsonBytes": 448748248,
-  "gzBytes": 97922873,
+  "sourceCounts": {
+    "OpenStreetMap": 585713
+  },
+  "jsonBytes": 291818655,
+  "gzBytes": 61435578,
   "lineage": {
     "nrn": {
-      "adapter": "nrn-from-pack",
-      "featureCount": 884631
+      "adapter": null,
+      "featureCount": 0,
+      "omitted": "osm-only"
     },
-    "osm": null,
-    "provincial": {
-      "adapter": "qc-multiusage",
-      "featureCount": 944719,
-      "excludedByReason": {},
+    "osm": {
+      "adapter": "osm-roads",
+      "featureCount": 591955,
+      "role": "sole-fabric",
+      "added": 591955,
+      "duplicateSkipped": 0,
       "classification": {
         "surface": {
-          "resource": 944719
+          "paved": 259362,
+          "unknown": 58670,
+          "gravel": 7105,
+          "resource": 266818
         },
         "access": {
-          "motorized_unknown": 944719
+          "motorized_permissive": 591955
         },
         "structure": {
-          "none": 944719
+          "none": 577893,
+          "tunnel": 745,
+          "bridge": 13317
         },
         "roadTrack": {
-          "resource": 944719
+          "local": 320663,
+          "service": 123178,
+          "collector": 2088,
+          "track": 51265,
+          "arterial": 1841,
+          "resource": 92375,
+          "freeway": 545
         },
         "excluded": {}
+      },
+      "excludedByReason": {
+        "access_denied": 142050,
+        "abandoned": 54,
+        "no_usable_geometry": 7
       }
     },
-    "deployNote": "Production pack: all NRN+OSM + 40000 provincial (Lac Normand\u2013biased). Full uncapped at graph.v1.full.json.gz (Node JSON string limit)."
+    "provincial": {
+      "adapter": null,
+      "featureCount": 0,
+      "excludedByReason": {},
+      "classification": {}
+    }
   },
-  "deployCap": {
-    "provincialKept": 40000,
-    "provincialTotal": 900339,
-    "fullPack": "graph.v1.full.json.gz"
+  "conflation": {
+    "stats": null,
+    "freeSpaceConnectors": 0
   }
 }

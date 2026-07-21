@@ -1,87 +1,86 @@
 {
-  "generatedAt": "2026-07-21T15:43:47.538Z",
+  "generatedAt": "2026-07-21T21:11:59.828Z",
   "region": "QC",
   "stack": [
-    "nrn",
-    "provincial"
+    "osm-only"
   ],
   "nrn": {
-    "adapter": "nrn-from-pack",
-    "featureCount": 884631
+    "adapter": null,
+    "featureCount": 0
   },
-  "osm": null,
-  "osmConflation": null,
-  "provincial": {
-    "adapter": "qc-multiusage",
+  "osm": {
+    "adapter": "osm-roads",
     "province": "QC",
-    "sourceName": "Québec Chemins Multiusages (AQréseau+)",
-    "sourceUrl": "https://mrnf.gouv.qc.ca/repertoire-geographique/adresses-quebec-reseaux-transport/",
-    "downloadUrl": "https://servicescarto.mrnf.gouv.qc.ca/pes/rest/services/Territoire/AQreseauPlus_WMS/MapServer/37",
-    "license": "Licence Creative Commons CC-BY 4.0 / données ouvertes Québec",
-    "sourceDatasetVersion": "AQreseauPlus/37",
-    "dateRetrieved": "2026-07-21T15:42:02.671Z",
+    "sourceName": "OpenStreetMap",
+    "sourceUrl": "https://download.geofabrik.de/north-america/canada/quebec-latest.osm.pbf",
+    "downloadUrl": "https://download.geofabrik.de/north-america/canada/quebec-latest.osm.pbf",
+    "license": "OpenStreetMap contributors (ODbL)",
+    "sourceDatasetVersion": "geofabrik:quebec",
+    "dateRetrieved": "2026-07-21T21:11:37.670Z",
     "status": "ok",
     "notes": [
-      "Forest multi-use roads. Access defaults to motorized_unknown — never invented as permissive."
+      "OSM gap-fill for conventional motorized roads unmatched by NRN.",
+      "Excluded foot/bike-only, private/no, abandoned, and non-motorized paths.",
+      "track/service without clear surface default to motorized_unknown."
     ],
     "knownLimitations": [
-      "Condition of multiusage roads is not field-verified in source.",
-      "Does not assert motorcycle legality."
+      "OSM tagging quality varies; not a legal access assertion.",
+      "Does not replace NRN identity — conflation dedupes against NRN first."
     ],
-    "featureCount": 944719,
-    "scannedCount": 944719,
-    "excludedCount": 0,
-    "excludedByReason": {},
+    "featureCount": 591955,
+    "scannedCount": 734066,
+    "excludedCount": 142111,
+    "excludedByReason": {
+      "access_denied": 142050,
+      "abandoned": 54,
+      "no_usable_geometry": 7
+    },
     "classification": {
       "surface": {
-        "resource": 944719
+        "paved": 259362,
+        "unknown": 58670,
+        "gravel": 7105,
+        "resource": 266818
       },
       "access": {
-        "motorized_unknown": 944719
+        "motorized_permissive": 591955
       },
       "structure": {
-        "none": 944719
+        "none": 577893,
+        "tunnel": 745,
+        "bridge": 13317
       },
       "roadTrack": {
-        "resource": 944719
+        "local": 320663,
+        "service": 123178,
+        "collector": 2088,
+        "track": 51265,
+        "arterial": 1841,
+        "resource": 92375,
+        "freeway": 545
       },
       "excluded": {}
     },
     "topology": null,
-    "generatedAt": "2026-07-21T15:42:02.680Z"
+    "generatedAt": "2026-07-21T21:11:37.671Z"
+  },
+  "osmConflation": null,
+  "provincial": {
+    "adapter": null,
+    "featureCount": 0,
+    "excludedByReason": {},
+    "classification": {}
   },
   "conflation": {
-    "province": "QC",
-    "generatedAt": "2026-07-21T15:42:18.707Z",
-    "precedence": {
-      "backbone": "NRN owns national road identity and conventional-road attributes",
-      "osmGapFill": "OpenStreetMap adds unmatched motorized paved/gravel/road geometry after NRN; never replaces NRN identity",
-      "supplement": "Provincial data adds resource/track detail and unmatched local connectivity",
-      "surfaceEnrichment": "Provincial or OSM paved/gravel may enrich NRN edges whose pavement status is unknown",
-      "freeSpace": "No free-space connectors"
-    },
-    "stats": {
-      "backboneKept": 884631,
-      "supplementAdded": 902262,
-      "supplementDuplicateSkipped": 42457,
-      "supplementConventionalSkipped": 0,
-      "backboneSurfaceEnriched": 18726,
-      "conflicts": 0
-    },
-    "skipReasons": {
-      "duplicate_of_backbone": 42457,
-      "backbone_surface_enriched": 18726
-    },
-    "featureCount": 1786893,
     "freeSpaceConnectors": 0,
-    "notes": [
-      "No free-space connectors were created.",
-      "Duplicates detected by midpoint proximity + bearing + endpoint proximity.",
-      "Genuine dead ends remain dead ends — no proximity stitching of endpoints."
-    ]
+    "stats": {
+      "backboneKept": 591955,
+      "supplementAdded": 0,
+      "supplementDuplicateSkipped": 0
+    }
   },
   "graph": {
-    "generatedAt": "2026-07-21T15:42:30.073Z",
+    "generatedAt": "2026-07-21T21:11:39.576Z",
     "schemaVersion": "canada-regional-1",
     "regionId": "qc",
     "province": "QC",
@@ -89,54 +88,75 @@
       -79.87101,
       44.91697,
       -57,
-      62.42787
+      62.42786
     ],
-    "nodeCount": 1867470,
-    "edgeCount": 1784970,
-    "componentCount": 263443,
-    "boundaryNodeCount": 25865,
+    "nodeCount": 827870,
+    "edgeCount": 585713,
+    "componentCount": 268935,
+    "boundaryNodeCount": 25190,
     "accessCounts": {
-      "motorized_permissive": 731490,
-      "motorized_unknown": 1053480
+      "motorized_permissive": 585713
     },
     "surfaceCounts": {
-      "paved": 208075,
-      "unknown": 403317,
-      "access": 1166881,
-      "gravel": 6697
+      "paved": 256078,
+      "unknown": 57830,
+      "gravel": 7020,
+      "access": 264785
     },
     "sourceCounts": {
-      "National Road Network": 504772,
-      "OpenStreetMap": 379859,
-      "Québec Chemins Multiusages (AQréseau+)": 900339
+      "OpenStreetMap": 585713
     },
-    "jsonBytes": 1060477567,
-    "gzBytes": 242600175,
+    "jsonBytes": 291818655,
+    "gzBytes": 61435578,
     "lineage": {
       "nrn": {
-        "adapter": "nrn-from-pack",
-        "featureCount": 884631
+        "adapter": null,
+        "featureCount": 0,
+        "omitted": "osm-only"
       },
-      "osm": null,
-      "provincial": {
-        "adapter": "qc-multiusage",
-        "featureCount": 944719,
-        "excludedByReason": {},
+      "osm": {
+        "adapter": "osm-roads",
+        "featureCount": 591955,
+        "role": "sole-fabric",
+        "added": 591955,
+        "duplicateSkipped": 0,
         "classification": {
           "surface": {
-            "resource": 944719
+            "paved": 259362,
+            "unknown": 58670,
+            "gravel": 7105,
+            "resource": 266818
           },
           "access": {
-            "motorized_unknown": 944719
+            "motorized_permissive": 591955
           },
           "structure": {
-            "none": 944719
+            "none": 577893,
+            "tunnel": 745,
+            "bridge": 13317
           },
           "roadTrack": {
-            "resource": 944719
+            "local": 320663,
+            "service": 123178,
+            "collector": 2088,
+            "track": 51265,
+            "arterial": 1841,
+            "resource": 92375,
+            "freeway": 545
           },
           "excluded": {}
+        },
+        "excludedByReason": {
+          "access_denied": 142050,
+          "abandoned": 54,
+          "no_usable_geometry": 7
         }
+      },
+      "provincial": {
+        "adapter": null,
+        "featureCount": 0,
+        "excludedByReason": {},
+        "classification": {}
       }
     },
     "conflation": {

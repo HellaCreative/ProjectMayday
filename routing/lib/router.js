@@ -274,8 +274,9 @@ function matchPoint(runtime, location, policy, matchMeters, avoidEdgeIds, prefer
       const b = coords[i];
       const segM = haversineMeters(a, b);
       const projected = projectOnSegment(point, a, b);
-      // Hard prefer an explicit component (end rematch). Soft-prefer the giant
-      // component so unwelled OSM islands near basemap clicks do not steal snaps.
+      // Hard prefer an explicit component (end rematch). Prefer the giant
+      // component within the snap radius so OSM driveway/island clicks do not
+      // steal snaps from the routable network (critical for OSM-only QC packs).
       let componentPenalty = 0;
       if (
         preferId != null &&
@@ -291,7 +292,7 @@ function matchPoint(runtime, location, policy, matchMeters, avoidEdgeIds, prefer
         componentId >= 0 &&
         componentId !== giantId
       ) {
-        componentPenalty = 120;
+        componentPenalty = Math.max(400, matchMeters);
       }
       const score = projected.distanceM + componentPenalty;
       if (!best || score < best.score) {

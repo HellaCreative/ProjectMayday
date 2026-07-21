@@ -265,23 +265,19 @@ function isNrnSrc(src) {
  *   Provincial/gov forest = capillary *between* that fabric — omitted from longhaul.
  *
  * Modes:
- *   maritime / hub — NRN spine (freeway/arterial/collector/ramp) everywhere;
- *                     NRN locals + OSM fabric only near city hubs. Required for QC
- *                     so Hobby isolates can inflate the pack without OOM.
- *   corridor / dense — all NRN non-track + OSM hub/highway. Too large for QC on
- *                     Vercel Hobby; keep for small provinces if ever needed.
- *
- * Relabels connected-component ids after extract (does NOT drop edges). Dropping via
- * LCC removed Saint-Raymond / Moncton local coverage and broke From-here snaps.
+ *   osm / osm-only — Quebec: drop NRN entirely; keep all OSM motorized fabric in
+ *                    the pack bbox. NRN locals in QC are too sparse/wrong for dirt.
+ *   maritime / hub — NRN + OSM (Maritimes / legacy). Hub limits OSM bulbs.
+ *   corridor / dense — all NRN non-track + OSM hub/highway.
  */
 function extractRoadFabricLonghaulGraph(graph, options = {}) {
   const hubLocations = options.hubLocations || [];
   const hubBufferMeters = Number(options.hubBufferMeters) || 40000;
   const hubs = corridorPolyline(hubLocations);
   const mode = String(options.mode || "hub").toLowerCase();
-  // Small provinces (maritime) can keep all NRN non-track. QC must use hub mode
-  // or Hobby OOMs while JSON.parse'ing ~250MB of locals.
-  const denseNrn = mode === "corridor" || mode === "dense" || mode === "maritime";
+  const osmOnly = mode === "osm" || mode === "osm-only";
+  // Small provinces (maritime) can keep all NRN non-track.
+  const denseNrn = !osmOnly && (mode === "corridor" || mode === "dense" || mode === "maritime");
 
   function nearHub(edge) {
     if (!hubs.length) return false;
@@ -297,6 +293,14 @@ function extractRoadFabricLonghaulGraph(graph, options = {}) {
     const osm = isOpenStreetMapSrc(src);
     const nrn = isNrnSrc(src);
     if (!osm && !nrn) continue; // drop provincial capillary
+
+    if (osmOnly) {
+      if (!osm) continue;
+      // Full OSM motorized fabric inside the quadrant bbox (already highway-filtered
+      // at ingest). Normalize unknown access → permissive for dual-sport routing.
+      keepEdges.push(e.ac === 2 ? { ...e, ac: 1 } : e);
+      continue;
+    }
 
     if (nrn) {
       if (e.s === 3) continue;

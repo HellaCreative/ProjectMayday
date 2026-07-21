@@ -198,19 +198,19 @@
         "notes": " Supplemental adapter ingested."
       },
       "routingReady": true,
-      "routingMode": "nrn+osm+provincial",
+      "routingMode": "osm-only",
       "backboneArtifact": {
         "path": "routing/data/regions/qc/graph.v1.json.gz",
-        "edgeCount": 1784970,
-        "nodeCount": 1867470,
-        "gzBytes": 242600175
+        "edgeCount": 585713,
+        "nodeCount": 827870,
+        "gzBytes": 61435578
       },
       "osm": {
         "adapter": "osm-roads",
-        "role": "road-fabric",
+        "role": "sole-fabric",
         "status": "ready",
         "featureCount": 591955,
-        "added": 384717,
+        "added": 591955,
         "license": "OpenStreetMap contributors (ODbL)",
         "dateRetrieved": "2026-07-21"
       }

@@ -1,27 +1,27 @@
 {
   "regionId": "qc-north",
   "schemaVersion": "longhaul-region-1",
-  "edgeCount": 11821,
-  "nodeCount": 12635,
-  "gzBytes": 845181,
-  "inflatedBytes": 4670096,
+  "edgeCount": 43900,
+  "nodeCount": 57744,
+  "gzBytes": 2987041,
+  "inflatedBytes": 15601584,
   "path": "routing/data/regions/qc-north/longhaul.v1.json.gz",
   "lineage": {
-    "purpose": "canada-chain QC quadrant pack (Hobby-safe dense fabric)",
-    "mentalModel": "osm-nrn-fabric-quadrant",
+    "purpose": "canada-chain QC quadrant pack (OSM-only; no NRN)",
+    "mentalModel": "osm-fabric-quadrant",
     "source": "regions/qc/graph.v1.json.gz",
-    "extractMode": "longhaul-spine",
+    "extractMode": "fabric-osm-only",
+    "dropNrn": true,
     "bbox": [
       -79.8,
       48.7,
       -57,
       62.7
     ],
-    "hubCount": 3,
-    "hubBufferMeters": 35000,
-    "inputEdgeCount": 924631,
-    "bboxEdgeCount": 71362,
-    "outputEdgeCount": 11821,
+    "hubCount": 2,
+    "inputEdgeCount": 585713,
+    "bboxEdgeCount": 43900,
+    "outputEdgeCount": 43900,
     "thinnedGeometry": true
   }
 }

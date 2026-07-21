@@ -138,29 +138,47 @@ async function main() {
     );
   }
   const suppMod = SUPPLEMENTS[code]();
-  console.log(`[${code}] Loading NRN backbone…`);
-  const nrn = await loadNrnFeatures(code);
-  console.log(`[${code}] NRN features:`, nrn.features.length);
 
-  let backbone = nrn.features;
+  let backbone = [];
+  let nrn = { features: [], report: { adapter: null, featureCount: 0 } };
   let osmReport = null;
   let osmConflation = null;
-  if (!skipOsm) {
-    console.log(`[${code}] Loading OSM road fabric…`);
+
+  if (osmOnly) {
+    // True OSM-only fabric (Quebec): no NRN backbone. OSM ways share native
+    // endpoints so the graph stays connected — filtering NRN out of a conflated
+    // pack shatters components because OSM was snapped onto NRN nodes.
+    console.log(`[${code}] --osm-only: loading OSM fabric as sole backbone (no NRN)…`);
     const osm = await loadOsmFabric(code);
-    if (osm && osm.features.length) {
-      console.log(`[${code}] OSM fabric candidates:`, osm.features.length);
-      osmConflation = conflateRegion({
-        backbone,
-        supplement: osm.features,
-        province: code.toUpperCase()
-      });
-      backbone = osmConflation.features;
-      osmReport = osm.report;
-      console.log(`[${code}] After OSM fabric:`, osmConflation.report.stats);
+    if (!osm || !osm.features.length) {
+      throw new Error(`[${code}] --osm-only requires data-raw/osm-roads/${OSM_SLUG[code]}/roads.geojsonseq`);
     }
+    backbone = osm.features;
+    osmReport = osm.report;
+    console.log(`[${code}] OSM fabric features:`, backbone.length);
   } else {
-    console.log(`[${code}] Skipping OSM (--skip-osm); keeping NRN+OSM already on pack if present`);
+    console.log(`[${code}] Loading NRN backbone…`);
+    nrn = await loadNrnFeatures(code);
+    console.log(`[${code}] NRN features:`, nrn.features.length);
+    backbone = nrn.features;
+
+    if (!skipOsm) {
+      console.log(`[${code}] Loading OSM road fabric…`);
+      const osm = await loadOsmFabric(code);
+      if (osm && osm.features.length) {
+        console.log(`[${code}] OSM fabric candidates:`, osm.features.length);
+        osmConflation = conflateRegion({
+          backbone,
+          supplement: osm.features,
+          province: code.toUpperCase()
+        });
+        backbone = osmConflation.features;
+        osmReport = osm.report;
+        console.log(`[${code}] After OSM fabric:`, osmConflation.report.stats);
+      }
+    } else {
+      console.log(`[${code}] Skipping OSM (--skip-osm); keeping NRN+OSM already on pack if present`);
+    }
   }
 
   let supp = { features: [], report: { adapter: null, featureCount: 0, excludedByReason: {}, classification: {} } };
@@ -192,7 +210,7 @@ async function main() {
     });
     console.log(`[${code}] After provincial:`, conflated.features.length, conflated.report.stats);
   } else {
-    console.log(`[${code}] --osm-only: writing NRN+OSM pack without provincial`);
+    console.log(`[${code}] --osm-only: skipping provincial capillary`);
   }
 
   const graph = buildRegionalGraph({
@@ -200,12 +218,15 @@ async function main() {
     province: code.toUpperCase(),
     regionId: code,
     lineage: {
-      nrn: { adapter: nrn.report.adapter, featureCount: nrn.report.featureCount },
+      nrn: osmOnly
+        ? { adapter: null, featureCount: 0, omitted: "osm-only" }
+        : { adapter: nrn.report.adapter, featureCount: nrn.report.featureCount },
       osm: osmReport
         ? {
             adapter: osmReport.adapter,
             featureCount: osmReport.featureCount,
-            added: osmConflation ? osmConflation.report.stats.supplementAdded : 0,
+            role: osmOnly ? "sole-fabric" : "gap-fill",
+            added: osmConflation ? osmConflation.report.stats.supplementAdded : osmOnly ? osmReport.featureCount : 0,
             duplicateSkipped: osmConflation ? osmConflation.report.stats.supplementDuplicateSkipped : 0,
             classification: osmReport.classification,
             excludedByReason: osmReport.excludedByReason
@@ -236,7 +257,9 @@ async function main() {
       {
         generatedAt: new Date().toISOString(),
         region: code.toUpperCase(),
-        stack: ["nrn", osmReport ? "osm-gap-fill" : null, "provincial"].filter(Boolean),
+        stack: osmOnly
+          ? ["osm-only"]
+          : ["nrn", osmReport ? "osm-gap-fill" : null, "provincial"].filter(Boolean),
         nrn: { adapter: nrn.report.adapter, featureCount: nrn.report.featureCount },
         osm: osmReport,
         osmConflation: osmConflation ? osmConflation.report : null,
@@ -263,10 +286,10 @@ async function main() {
       if (osmReport) {
         row.osm = {
           adapter: "osm-roads",
-          role: "gap-fill",
+          role: osmOnly ? "sole-fabric" : "gap-fill",
           status: "ready",
           featureCount: osmReport.featureCount,
-          added: osmConflation ? osmConflation.report.stats.supplementAdded : 0,
+          added: osmConflation ? osmConflation.report.stats.supplementAdded : osmOnly ? osmReport.featureCount : 0,
           license: "OpenStreetMap contributors (ODbL)",
           dateRetrieved: new Date().toISOString().slice(0, 10)
         };
@@ -275,13 +298,15 @@ async function main() {
       }
       const hasOsm = !!(osmReport || (row.osm && row.osm.status === "ready"));
       const hasProvincial = !!(supp.report && supp.report.adapter);
-      row.routingMode = hasOsm
-        ? hasProvincial
-          ? "nrn+osm+provincial"
-          : "nrn+osm"
-        : hasProvincial
-          ? "nrn+provincial"
-          : "nrn-backbone";
+      row.routingMode = osmOnly
+        ? "osm-only"
+        : hasOsm
+          ? hasProvincial
+            ? "nrn+osm+provincial"
+            : "nrn+osm"
+          : hasProvincial
+            ? "nrn+provincial"
+            : "nrn-backbone";
       row.routingReady = (conflated.report.freeSpaceConnectors || 0) === 0;
       row.backboneArtifact = {
         path: `routing/data/regions/${code}/graph.v1.json.gz`,
