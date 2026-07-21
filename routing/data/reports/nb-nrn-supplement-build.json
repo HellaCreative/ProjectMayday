@@ -1,0 +1,150 @@
+{
+  "generatedAt": "2026-07-21T06:50:40.972Z",
+  "region": "NB",
+  "nrn": {
+    "adapter": "nrn-from-pack",
+    "featureCount": 69585
+  },
+  "provincial": {
+    "adapter": "nb-forest-roads",
+    "province": "NB",
+    "sourceName": "New Brunswick Forest Roads (DNR-ED)",
+    "sourceUrl": "https://hub.arcgis.com/datasets/NBDNR::forestry-roads-chemins-forestiers/about",
+    "downloadUrl": "https://gis-erd-der.gnb.ca/server/rest/services/OpenData/ForestRoads/FeatureServer",
+    "license": "Open Government Licence - New Brunswick",
+    "sourceDatasetVersion": "gnb-forest-roads-featureserver",
+    "dateRetrieved": "2026-07-21T06:50:31.781Z",
+    "status": "ok",
+    "notes": [
+      "Service describes roads not maintained by DTI whose primary purpose is forest-resource access.",
+      "Live layer attributes are sparse (OBJECTID/GLOBALID/length). All kept edges map to surface=resource, access=motorized_unknown."
+    ],
+    "knownLimitations": [
+      "Does not assert motorcycle legality.",
+      "No ATV/snowmobile singletrack (federation / permission-gated sources excluded)."
+    ],
+    "featureCount": 184389,
+    "scannedCount": 184374,
+    "excludedCount": 59,
+    "excludedByReason": {
+      "no_usable_geometry": 59
+    },
+    "classification": {
+      "surface": {
+        "resource": 184389
+      },
+      "access": {
+        "motorized_unknown": 184389
+      },
+      "structure": {
+        "none": 184389
+      },
+      "roadTrack": {
+        "resource": 184389
+      },
+      "excluded": {}
+    },
+    "topology": null,
+    "generatedAt": "2026-07-21T06:50:31.789Z"
+  },
+  "conflation": {
+    "province": "NB",
+    "generatedAt": "2026-07-21T06:50:32.928Z",
+    "precedence": {
+      "backbone": "NRN owns national road identity and conventional-road attributes",
+      "supplement": "Provincial data adds resource/track detail and unmatched local connectivity",
+      "surfaceEnrichment": "Provincial paved/gravel may enrich NRN edges whose pavement status is unknown",
+      "osm": "OSM not added as routing edges in this phase"
+    },
+    "stats": {
+      "backboneKept": 69585,
+      "supplementAdded": 181466,
+      "supplementDuplicateSkipped": 2923,
+      "supplementConventionalSkipped": 0,
+      "backboneSurfaceEnriched": 0,
+      "conflicts": 0
+    },
+    "skipReasons": {
+      "duplicate_of_backbone": 2923
+    },
+    "featureCount": 251051,
+    "freeSpaceConnectors": 0,
+    "notes": [
+      "No free-space connectors were created.",
+      "Duplicates detected by midpoint proximity + bearing + endpoint proximity.",
+      "Genuine dead ends remain dead ends — no proximity stitching of endpoints."
+    ]
+  },
+  "graph": {
+    "generatedAt": "2026-07-21T06:50:33.696Z",
+    "schemaVersion": "canada-regional-1",
+    "regionId": "nb",
+    "province": "NB",
+    "bbox": [
+      -69.04453,
+      44.59843,
+      -63.75493,
+      48.07176
+    ],
+    "nodeCount": 247606,
+    "edgeCount": 250876,
+    "componentCount": 16651,
+    "boundaryNodeCount": 634,
+    "accessCounts": {
+      "motorized_permissive": 69585,
+      "motorized_unknown": 181291
+    },
+    "surfaceCounts": {
+      "paved": 55405,
+      "gravel": 14163,
+      "unknown": 17,
+      "access": 181291
+    },
+    "sourceCounts": {
+      "National Road Network": 69585,
+      "New Brunswick Forest Roads (DNR-ED)": 181291
+    },
+    "jsonBytes": 155058911,
+    "gzBytes": 33682369,
+    "lineage": {
+      "nrn": {
+        "adapter": "nrn-from-pack",
+        "featureCount": 69585
+      },
+      "provincial": {
+        "adapter": "nb-forest-roads",
+        "featureCount": 184389,
+        "excludedByReason": {
+          "no_usable_geometry": 59
+        },
+        "classification": {
+          "surface": {
+            "resource": 184389
+          },
+          "access": {
+            "motorized_unknown": 184389
+          },
+          "structure": {
+            "none": 184389
+          },
+          "roadTrack": {
+            "resource": 184389
+          },
+          "excluded": {}
+        }
+      }
+    },
+    "conflation": {
+      "stats": {
+        "backboneKept": 69585,
+        "supplementAdded": 181466,
+        "supplementDuplicateSkipped": 2923,
+        "supplementConventionalSkipped": 0,
+        "backboneSurfaceEnriched": 0,
+        "conflicts": 0
+      },
+      "freeSpaceConnectors": 0
+    }
+  },
+  "freeSpaceConnectors": 0
+}

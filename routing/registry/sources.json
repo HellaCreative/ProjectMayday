@@ -225,16 +225,18 @@
         "catalogueUrl": "https://geonb.snb.ca",
         "format": "GIS services",
         "license": "verify before ingest",
-        "adapter": null,
-        "status": "pending"
+        "adapter": "nb-forest-roads",
+        "status": "ready",
+        "dateRetrieved": "2026-07-21",
+        "notes": " Supplemental adapter ingested."
       },
       "routingReady": true,
-      "routingMode": "nrn-backbone",
+      "routingMode": "nrn+provincial",
       "backboneArtifact": {
         "path": "routing/data/regions/nb/graph.v1.json.gz",
-        "edgeCount": 69585,
-        "nodeCount": 58399,
-        "gzBytes": 10539925
+        "edgeCount": 250876,
+        "nodeCount": 247606,
+        "gzBytes": 33682369
       }
     },
     {

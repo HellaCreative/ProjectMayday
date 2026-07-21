@@ -374,6 +374,42 @@
       letter-spacing: 0.01em;
       text-transform: none;
     }
+    /* Nested drawer inside Layers — Map Visibility can tuck away without losing toggles. */
+    .legend-drawer-toggle {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      width: 100%;
+      margin: 0 0 0;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: inherit;
+      font: inherit;
+      cursor: pointer;
+      text-align: left;
+    }
+    .legend-drawer-toggle .legend-title {
+      margin-bottom: 0;
+    }
+    .legend-drawer-chevron {
+      flex: 0 0 auto;
+      width: 1.1em;
+      height: 1.1em;
+      opacity: 0.55;
+      transition: transform 160ms ease;
+    }
+    .legend-drawer:not(.is-collapsed) .legend-drawer-chevron {
+      transform: rotate(180deg);
+    }
+    .legend-drawer.is-collapsed .legend-drawer-body {
+      display: none;
+    }
+    .legend-drawer:not(.is-collapsed) .legend-drawer-body {
+      display: block;
+      margin-top: 8px;
+    }
     .legend-row {
       display: flex;
       align-items: center;
@@ -6610,8 +6646,14 @@
         <span class="switch"><input type="checkbox" data-poi-toggle="liquor" checked aria-label="Toggle liquor stores"><span></span></span>
       </label>
     </div>
-    <div class="legend-group">
-      <span class="legend-title">Map Visibility</span>
+    <div class="legend-group legend-drawer is-collapsed" id="mapVisibilityDrawer" data-legend-drawer="map-visibility">
+      <button class="legend-drawer-toggle" type="button" id="mapVisibilityDrawerToggle" aria-expanded="false" aria-controls="mapVisibilityDrawerBody">
+        <span class="legend-title">Map Visibility</span>
+        <svg class="legend-drawer-chevron" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+          <path d="M4 6.5 8 10.5 12 6.5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </button>
+      <div class="legend-drawer-body" id="mapVisibilityDrawerBody">
       <label class="legend-row">
         <span class="legend-label"><i style="background:var(--access)"></i>Access road</span>
         <span class="switch"><input type="checkbox" data-layer-toggle="access" checked aria-label="Toggle access roads"><span></span></span>
@@ -6636,12 +6678,17 @@
         <span class="legend-label"><i style="background:var(--unserviced)"></i>Restricted access</span>
         <span class="switch"><input type="checkbox" data-layer-toggle="restricted" checked aria-label="Toggle restricted access roads"><span></span></span>
       </label>
+      </div>
     </div>
     <div class="legend-group">
       <span class="legend-title">Route Data</span>
-      <label class="legend-row" title="Show all route lines in the current map area">
-        <span class="legend-label"><i style="background:var(--track)"></i>Show route lines</span>
-        <span class="switch"><input type="checkbox" data-network-toggle="viewport" aria-label="Show all route lines in the current map area"><span></span></span>
+      <label class="legend-row" title="Inspect Nova Scotia route lines in the current map area (product-internal)">
+        <span class="legend-label"><i style="background:var(--track)"></i>Show NS route lines</span>
+        <span class="switch"><input type="checkbox" data-network-toggle="NS" aria-label="Show NS route lines"><span></span></span>
+      </label>
+      <label class="legend-row" title="Inspect New Brunswick route lines in the current map area (product-internal)">
+        <span class="legend-label"><i style="background:var(--track)"></i>Show NB route lines</span>
+        <span class="switch"><input type="checkbox" data-network-toggle="NB" aria-label="Show NB route lines"><span></span></span>
       </label>
     </div>
     </div>
@@ -7180,8 +7227,24 @@
     // NRN gravel disabled for NSTDB-only POC.
     // const BUNDLED_NRN_URL = "/app/data/nrn-road-backbone.geojson.gz";
     // const BUNDLED_NRN_META_URL = "/app/data/nrn-road-backbone.meta.json";
-    const NS_GOV_MANIFEST_URL = "/app/data/ns-gov-roads.manifest.json";
-    const NS_GOV_CHUNK_BASE = "/app/data/ns-gov-chunks/";
+    // Per-province display packs for Layers "Route Data" inspection toggles.
+    // Corridor paint (toggle off) always uses NS. Show-all uses the selected province.
+    const NETWORK_PROVINCE_OVERLAYS = {
+      NS: {
+        code: "NS",
+        label: "Nova Scotia",
+        manifestUrl: "/app/data/ns-gov-roads.manifest.json",
+        chunkBase: "/app/data/ns-gov-chunks/",
+        cachePrefix: "ns-gov"
+      },
+      NB: {
+        code: "NB",
+        label: "New Brunswick",
+        manifestUrl: "/app/data/nb-gov-roads.manifest.json",
+        chunkBase: "/app/data/nb-gov-chunks/",
+        cachePrefix: "nb-gov"
+      }
+    };
     const SHORTBREAD_STYLE_URL = "/app/data/shortbread-style.json";
 
     // Visible overlays only (map visibility). Schema still uses surfaceClass=track
@@ -7214,8 +7277,10 @@
     const POI_MANIFEST_URL = "/app/data/poi/poi.manifest.json";
     const POI_CHUNK_BASE = "/app/data/poi/chunks/";
     // Below MIN: suppress entirely (no fetch). MIN..DETAIL: clustered. DETAIL+: individual.
+    // Tuned 2026-07-21: DETAIL 12.5→11.5 so category icons appear sooner; icon-size
+    // stops raised so fuel/tent/lodging/liquor glyphs are legible at first appearance.
     const POI_MIN_ZOOM = 8.5;
-    const POI_DETAIL_ZOOM = 12.5;
+    const POI_DETAIL_ZOOM = 11.5;
     const POI_MAX_CHUNKS = 14;
     const POI_CORRIDOR_KM = 4;
     const POI_REFRESH_DEBOUNCE_MS = 350;
@@ -7290,7 +7355,17 @@
     let unknownAccessAcknowledged = false;
     let accessWarnResolver = null;
     const sourceEnabled = { nsGov: true, routeNetwork: true };
+    // Product-internal: which province's display pack to paint in show-all mode.
+    // null = corridor-only (still loads NS for route context). Mutually exclusive toggles.
+    let networkOverlayProvince = null;
     let showAllNetworkData = false;
+
+    function activeNetworkOverlay() {
+      if (networkOverlayProvince && NETWORK_PROVINCE_OVERLAYS[networkOverlayProvince]) {
+        return NETWORK_PROVINCE_OVERLAYS[networkOverlayProvince];
+      }
+      return NETWORK_PROVINCE_OVERLAYS.NS;
+    }
 
     function contextMaxFeatures() {
       return showAllNetworkData ? CONTEXT_FULL_MAX_FEATURES : CONTEXT_MAX_FEATURES;
@@ -7384,6 +7459,14 @@
     const chunkPromises = new Map();
     /** In-memory chunk store for the current corridor window only (not province-wide). */
     const chunkFeaturesById = new Map();
+
+    function clearNetworkChunkState() {
+      chunkFeaturesById.clear();
+      loadedChunkIds.clear();
+      chunkPromises.clear();
+      nsGovManifest = null;
+      nsGovManifestPromise = null;
+    }
 
     // Rider Services POI state (parallel to the NSTDB context loader, display only).
     let poiManifest = null;
@@ -7702,9 +7785,10 @@
 
     async function ensureManifest() {
       if (nsGovManifest) return nsGovManifest;
+      const overlay = activeNetworkOverlay();
       if (!nsGovManifestPromise) {
-        nsGovManifestPromise = fetch(NS_GOV_MANIFEST_URL).then((res) => {
-          if (!res.ok) throw new Error("HTTP " + res.status + " for manifest");
+        nsGovManifestPromise = fetch(overlay.manifestUrl).then((res) => {
+          if (!res.ok) throw new Error("HTTP " + res.status + " for " + overlay.code + " manifest");
           return res.json();
         });
       }
@@ -7738,14 +7822,15 @@
     }
 
     async function loadChunk(chunk, buildStamp) {
-      const cacheId = "chunk:" + chunk.id;
+      const overlay = activeNetworkOverlay();
+      const cacheId = overlay.cachePrefix + ":chunk:" + chunk.id;
       try {
         const cached = await db.chunks.get(cacheId);
         if (cached && cached.buildStamp === buildStamp && cached.features) {
           return cached.features;
         }
       } catch (_) { /* cache miss or unavailable */ }
-      const features = (await fetchGzipJson(NS_GOV_CHUNK_BASE + chunk.file)).features || [];
+      const features = (await fetchGzipJson(overlay.chunkBase + chunk.file)).features || [];
       try {
         await db.chunks.put({ id: cacheId, buildStamp, features, cachedAt: Date.now() });
       } catch (err) {
@@ -8532,7 +8617,7 @@
         filter: ["!", ["has", "point_count"]],
         paint: {
           "circle-color": colorMatch,
-          "circle-radius": ["interpolate", ["linear"], ["zoom"], 11, 6, 14, 9, 16, 11],
+          "circle-radius": ["interpolate", ["linear"], ["zoom"], 10.5, 7, 14, 10, 16, 12],
           // Subtle contrasting white halo keeps markers legible in daylight.
           "circle-stroke-color": "#ffffff",
           "circle-stroke-width": 2.2
@@ -8545,7 +8630,7 @@
         filter: ["!", ["has", "point_count"]],
         layout: {
           "icon-image": ["concat", "poi-icon-", ["get", "category"]],
-          "icon-size": ["interpolate", ["linear"], ["zoom"], 11, 0.42, 16, 0.6],
+          "icon-size": ["interpolate", ["linear"], ["zoom"], 10.5, 0.52, 16, 0.72],
           "icon-allow-overlap": true,
           "icon-ignore-placement": true
         }
@@ -14727,14 +14812,47 @@
         refreshPoiLayer();
       });
     });
+    // Map Visibility is a nested drawer inside Layers — toggles stay; section can tuck away.
+    (function wireMapVisibilityDrawer() {
+      const drawer = document.getElementById("mapVisibilityDrawer");
+      const toggle = document.getElementById("mapVisibilityDrawerToggle");
+      if (!drawer || !toggle) return;
+      const PREF_KEY = "dirt.layers.mapVisibilityOpen.v1";
+      try {
+        if (localStorage.getItem(PREF_KEY) === "1") {
+          drawer.classList.remove("is-collapsed");
+          toggle.setAttribute("aria-expanded", "true");
+        }
+      } catch (_) { /* ignore */ }
+      toggle.addEventListener("click", () => {
+        const open = drawer.classList.toggle("is-collapsed") === false;
+        toggle.setAttribute("aria-expanded", open ? "true" : "false");
+        try {
+          localStorage.setItem(PREF_KEY, open ? "1" : "0");
+        } catch (_) { /* ignore */ }
+      });
+    })();
     // Source switches are product-internal only. Riders never toggle NRN/NSTDB/OSM.
-    // Corridor paint always uses the canonical route-network chunks.
+    // Corridor paint always uses the canonical route-network chunks (NS default).
+    // Per-province show-all toggles reuse the same paint path with that province's pack.
     sourceEnabled.nsGov = true;
     sourceEnabled.routeNetwork = true;
     document.querySelectorAll("[data-network-toggle]").forEach((input) => {
-      input.checked = showAllNetworkData;
+      const code = input.dataset.networkToggle;
+      input.checked = networkOverlayProvince === code;
       input.addEventListener("change", () => {
-        showAllNetworkData = input.checked;
+        if (input.checked) {
+          document.querySelectorAll("[data-network-toggle]").forEach((other) => {
+            if (other !== input) other.checked = false;
+          });
+          if (networkOverlayProvince !== code) clearNetworkChunkState();
+          networkOverlayProvince = code;
+          showAllNetworkData = true;
+        } else if (networkOverlayProvince === code) {
+          networkOverlayProvince = null;
+          showAllNetworkData = false;
+          clearNetworkChunkState();
+        }
         refreshContextNetwork({ label: "route data", announce: false });
       });
     });

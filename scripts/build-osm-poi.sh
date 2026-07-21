@@ -5,6 +5,10 @@
 # against a Geofabrik extract, then emits small grid-chunked JSON the browser
 # fetches by viewport / route corridor.
 #
+# For all Canadian provinces, prefer:
+#   bash scripts/build-osm-poi-canada.sh
+#   POI_REGIONS="nova-scotia new-brunswick" bash scripts/build-osm-poi-canada.sh
+#
 # Run from repo root. Requires: curl, osmium-tool, node.
 set -euo pipefail
 
@@ -39,7 +43,9 @@ osmium export poi-candidates.osm.pbf \
   -o poi-candidates.geojsonseq --overwrite
 
 echo "Normalizing and packing chunks..."
-node "$ROOT/scripts/pack-osm-poi.js" "$TMP/poi-candidates.geojsonseq" "$OUT_DIR" "$PBF_URL"
+SLUG="$(basename "$PBF_URL" | sed -E 's/-latest\.osm\.pbf$//')"
+POI_REGION_LABEL="${POI_REGION_LABEL:-$SLUG}" \
+  node "$ROOT/scripts/pack-osm-poi.js" "$TMP/poi-candidates.geojsonseq" "$OUT_DIR" "$PBF_URL"
 
 echo "Done:"
 ls -lh "$OUT_DIR"/poi.manifest.json

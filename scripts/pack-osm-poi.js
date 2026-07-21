@@ -35,6 +35,8 @@ const sourceUrl =
   "https://download.geofabrik.de/north-america/canada/nova-scotia-latest.osm.pbf";
 const CHUNK_DEG = Number(process.env.POI_CHUNK_DEG || 0.5);
 const CHUNK_DIR = "chunks";
+const REGION_LABEL = process.env.POI_REGION_LABEL || "Nova Scotia";
+const SOURCES_FILE = process.env.POI_SOURCES_FILE || "";
 
 if (!inputPath) {
   console.error("Usage: node scripts/pack-osm-poi.js <input.geojsonseq> [outDir] [sourceUrl]");
@@ -229,9 +231,12 @@ const manifest = {
   schemaVersion: "poi-1",
   dataset: "Rider Services POIs",
   source: sourceUrl,
+  sources: SOURCES_FILE && fs.existsSync(SOURCES_FILE)
+    ? JSON.parse(fs.readFileSync(SOURCES_FILE, "utf8"))
+    : [{ slug: "nova-scotia", url: sourceUrl }],
   license: "OpenStreetMap contributors (ODbL)",
   attribution: "© OpenStreetMap contributors",
-  region: "Nova Scotia",
+  region: REGION_LABEL,
   chunkDeg: CHUNK_DEG,
   chunkDir: CHUNK_DIR,
   categories: {

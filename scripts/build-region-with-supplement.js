@@ -19,6 +19,7 @@ const REGISTRY = path.join(ROOT, "routing", "registry", "sources.json");
 
 const SUPPLEMENTS = {
   ns: () => require("../routing/adapters/ns-nstdb"),
+  nb: () => require("../routing/adapters/nb-forest-roads"),
   bc: () => require("../routing/adapters/bc-ften"),
   ab: () => require("../routing/adapters/ab-access"),
   on: () => require("../routing/adapters/on-mnrf"),
@@ -88,7 +89,7 @@ async function loadNrnFeatures(code) {
 async function main() {
   const code = String(process.argv[2] || "").toLowerCase();
   if (!code || !SUPPLEMENTS[code]) {
-    throw new Error("Usage: build-region-with-supplement.js <ns|bc|ab|on|qc>");
+    throw new Error("Usage: build-region-with-supplement.js <ns|nb|bc|ab|on|qc>");
   }
   const suppMod = SUPPLEMENTS[code]();
   console.log(`[${code}] Loading NRN backbone…`);
@@ -96,7 +97,7 @@ async function main() {
   console.log(`[${code}] NRN features:`, nrn.features.length);
 
   console.log(`[${code}] Running provincial supplement ${suppMod.name}…`);
-  const maxByCode = { ab: 250000, bc: 200000, on: 350000, qc: 250000, ns: 500000 };
+  const maxByCode = { ab: 250000, bc: 200000, on: 350000, qc: 250000, ns: 500000, nb: 200000 };
   const supp = await suppMod.run({
     maxFeatures: maxByCode[code] || 250000,
     pageSize: code === "bc" ? 500 : 1000
