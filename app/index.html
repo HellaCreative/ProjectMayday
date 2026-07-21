@@ -13,6 +13,7 @@
   <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
   <script src="https://unpkg.com/dexie@4.0.11/dist/dexie.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://unpkg.com/lucide@0.468.0/dist/umd/lucide.min.js" defer></script>
   <style>
     :root {
       --bg: #f7f9fb;
@@ -6763,6 +6764,34 @@
       color: #16181c !important;
     }
 
+    /* Claude mobile prototype icon language. Existing control IDs and event
+       handlers remain untouched; only their visual vocabulary changes. */
+    .nav-btn svg { width: 19px !important; height: 19px !important; stroke-width: 2.25; }
+    .stack .btn svg { width: 20px; height: 20px; stroke-width: 2.25; }
+    #recenterBtn svg { width: 23px; height: 23px; stroke-width: 2.4; }
+    #compassRose { width: 21px; height: 21px; }
+    .follow-chip svg { width: 16px; height: 16px; stroke-width: 2.4; }
+    .route-services-btn svg,
+    .route-export-float svg,
+    .access-info-btn svg { width: 15px; height: 15px; }
+    .route-service-row .service-icon,
+    .legend-label .service-icon {
+      width: 16px !important;
+      height: 16px !important;
+      flex: 0 0 16px;
+      border-radius: 0 !important;
+      box-shadow: none !important;
+      stroke-width: 2.2;
+    }
+    .service-icon-fuel { color: #ff7a00; }
+    .service-icon-lodging { color: #8a5a2b; }
+    .service-icon-campground { color: #178f61; }
+    .service-icon-liquor { color: #8e44c9; }
+    .sharing-popover-close svg,
+    .popup .close svg,
+    .route-stage-editor-close svg,
+    .nav-stop svg { width: 17px; height: 17px; }
+
     @media (max-height: 730px) {
       .account-sheet, .group-sheet, .legend { max-height: 58vh !important; }
       .account-sheet > .sheet-scroll, .group-sheet-body, .legend-scroll {
@@ -6800,17 +6829,17 @@
         <div class="nav-cue-sub" id="navCueSub">Follow the orange line</div>
       </div>
       <button class="nav-report" id="navReportBtn" type="button" title="Report a closure or hazard" aria-label="Report a route incident">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>
+        <i data-lucide="triangle-alert" aria-hidden="true"></i>
         <span>Report</span>
       </button>
-      <button class="nav-stop" id="navStopBtn" type="button" title="End navigation">End</button>
+      <button class="nav-stop" id="navStopBtn" type="button" title="End navigation" aria-label="End navigation"><i data-lucide="x" aria-hidden="true"></i></button>
     </div>
     <button class="nav-hud-toggle" id="navHudToggle" type="button" title="Hide turn-by-turn" aria-label="Hide turn-by-turn" aria-controls="navHud" aria-expanded="true">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.5 6.5L9 12l5.5 5.5" /></svg>
+      <i data-lucide="chevron-left" aria-hidden="true"></i>
     </button>
     <div class="topbar-right">
       <button class="route-export-float" id="routeExportFloat" type="button" title="Export this route as GPX" aria-label="Export route as GPX" hidden>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+        <i data-lucide="download" aria-hidden="true"></i>
         Export GPX
       </button>
     </div>
@@ -6819,19 +6848,19 @@
   <div class="bottom-dock" id="bottomDock">
     <nav class="bottom-nav" aria-label="Primary">
       <button class="nav-btn" id="legendBtn" title="Layers" aria-label="Layers" aria-expanded="false">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" aria-hidden="true"><path d="M4 8l8-4 8 4-8 4-8-4z"/><path d="M4 12l8 4 8-4"/><path d="M4 16l8 4 8-4"/></svg>
+        <i data-lucide="layers-3" aria-hidden="true"></i>
         <span>Layers</span>
       </button>
       <button class="nav-btn" id="accountBtn" title="Profile" aria-label="Profile" aria-expanded="false">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="3.2"/><path d="M5.5 20c.7-3.2 2.9-5 6.5-5s5.8 1.8 6.5 5"/></svg>
+        <i data-lucide="user-round" aria-hidden="true"></i>
         <span>Profile</span>
       </button>
       <button class="nav-btn" id="groupBtn" title="Group" aria-label="Group" aria-expanded="false">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M3.5 20c.6-3.1 2.4-5 5.5-5s4.9 1.9 5.5 5"/><path d="M15 5.5a3 3 0 0 1 0 5.8M17 15c2 .5 3.2 2.1 3.5 5"/></svg>
+        <i data-lucide="users-round" aria-hidden="true"></i>
         <span>Group</span>
       </button>
       <button class="nav-btn" id="routeToggleBtn" title="Route" aria-label="Route" aria-expanded="false">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="12" r="2.5"/><path d="M8 7l8 4M8 17l8-4"/></svg>
+        <i data-lucide="route" aria-hidden="true"></i>
         <span>Route</span>
       </button>
     </nav>
@@ -6853,15 +6882,15 @@
         <div class="route-finder-title key-title">Route finder</div>
         <div class="route-finder-actions">
           <button class="route-services-btn" id="routeServicesBtn" type="button" aria-expanded="false" aria-controls="routeServicesPopover">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h18"/><path d="M6 7h12"/><path d="M6 17h12"/><circle cx="9" cy="7" r="2"/><circle cx="15" cy="12" r="2"/><circle cx="10" cy="17" r="2"/></svg>
+            <i data-lucide="sliders-horizontal" aria-hidden="true"></i>
             <span>Services</span>
           </button>
           <div class="route-services-popover" id="routeServicesPopover" hidden>
             <div class="route-services-title">Rider services</div>
-            <label class="route-service-row"><span><i style="background:#e8730c"></i>Fuel</span><span class="switch"><input type="checkbox" data-poi-toggle="fuel" checked aria-label="Show fuel stations"><span></span></span></label>
-            <label class="route-service-row"><span><i style="background:#2f9e44"></i>Campgrounds</span><span class="switch"><input type="checkbox" data-poi-toggle="campground" checked aria-label="Show campgrounds"><span></span></span></label>
-            <label class="route-service-row"><span><i style="background:#8a5a2b"></i>Lodging</span><span class="switch"><input type="checkbox" data-poi-toggle="lodging" checked aria-label="Show lodging"><span></span></span></label>
-            <label class="route-service-row"><span><i style="background:#8e44c9"></i>Liquor stores</span><span class="switch"><input type="checkbox" data-poi-toggle="liquor" checked aria-label="Show liquor stores"><span></span></span></label>
+            <label class="route-service-row"><span><i class="service-icon service-icon-fuel" data-lucide="fuel" aria-hidden="true"></i>Fuel</span><span class="switch"><input type="checkbox" data-poi-toggle="fuel" checked aria-label="Show fuel stations"><span></span></span></label>
+            <label class="route-service-row"><span><i class="service-icon service-icon-campground" data-lucide="tent-tree" aria-hidden="true"></i>Campgrounds</span><span class="switch"><input type="checkbox" data-poi-toggle="campground" checked aria-label="Show campgrounds"><span></span></span></label>
+            <label class="route-service-row"><span><i class="service-icon service-icon-lodging" data-lucide="bed-double" aria-hidden="true"></i>Lodging</span><span class="switch"><input type="checkbox" data-poi-toggle="lodging" checked aria-label="Show lodging"><span></span></span></label>
+            <label class="route-service-row"><span><i class="service-icon service-icon-liquor" data-lucide="martini" aria-hidden="true"></i>Liquor stores</span><span class="switch"><input type="checkbox" data-poi-toggle="liquor" checked aria-label="Show liquor stores"><span></span></span></label>
           </div>
         </div>
       </div>
@@ -6894,7 +6923,7 @@
           <div class="route-access-row">
             <span class="route-access-label">Allow unknown access</span>
             <button class="access-info-btn" id="accessInfoBtn" type="button" aria-label="What allowing unknown access means" aria-describedby="accessInfoTip" aria-expanded="false">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+              <i data-lucide="info" aria-hidden="true"></i>
             </button>
             <label class="switch"><input type="checkbox" id="unknownAccessToggle" aria-label="Allow unknown access"><span></span></label>
           </div>
@@ -6944,7 +6973,7 @@
           <div class="route-access-row">
             <span class="route-access-label">Allow unknown access</span>
             <button class="access-info-btn" id="accessInfoBtnPlan" type="button" aria-label="What allowing unknown access means" aria-describedby="accessInfoTip" aria-expanded="false">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+              <i data-lucide="info" aria-hidden="true"></i>
             </button>
             <label class="switch"><input type="checkbox" id="unknownAccessTogglePlan" aria-label="Allow unknown access"><span></span></label>
           </div>
@@ -6967,7 +6996,7 @@
         </div>
         <div class="route-warn" id="stagePlanWarn" role="status"></div>
         <button class="planner-saved-link" id="plannerSavedBtn" type="button">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+          <i data-lucide="bookmark" aria-hidden="true"></i>
           Saved routes
         </button>
       </div>
@@ -6995,7 +7024,7 @@
 
       <div class="route-actions" id="routeActions">
         <button class="route-export" id="routeExport" type="button" title="Export this route as GPX for OsmAnd, Gaia GPS, and other apps" aria-label="Export route as GPX">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>
+          <i data-lucide="download" aria-hidden="true"></i>
           Export GPX
         </button>
         <button class="stage-save" id="stageSaveBtn" type="button">Save route</button>
@@ -7234,28 +7263,26 @@
     <div class="legend-group">
       <span class="legend-title">Rider Services</span>
       <label class="legend-row">
-        <span class="legend-label"><i class="poi-dot" style="background:#e8730c"></i>Fuel</span>
+        <span class="legend-label"><i class="service-icon service-icon-fuel" data-lucide="fuel" aria-hidden="true"></i>Fuel</span>
         <span class="switch"><input type="checkbox" data-poi-toggle="fuel" checked aria-label="Toggle fuel stations"><span></span></span>
       </label>
       <label class="legend-row">
-        <span class="legend-label"><i class="poi-dot" style="background:#8a5a2b"></i>Lodging</span>
+        <span class="legend-label"><i class="service-icon service-icon-lodging" data-lucide="bed-double" aria-hidden="true"></i>Lodging</span>
         <span class="switch"><input type="checkbox" data-poi-toggle="lodging" checked aria-label="Toggle lodging"><span></span></span>
       </label>
       <label class="legend-row">
-        <span class="legend-label"><i class="poi-dot" style="background:#2f9e44"></i>Campground</span>
+        <span class="legend-label"><i class="service-icon service-icon-campground" data-lucide="tent-tree" aria-hidden="true"></i>Campground</span>
         <span class="switch"><input type="checkbox" data-poi-toggle="campground" checked aria-label="Toggle campgrounds"><span></span></span>
       </label>
       <label class="legend-row">
-        <span class="legend-label"><i class="poi-dot" style="background:#8e44c9"></i>Liquor store</span>
+        <span class="legend-label"><i class="service-icon service-icon-liquor" data-lucide="martini" aria-hidden="true"></i>Liquor store</span>
         <span class="switch"><input type="checkbox" data-poi-toggle="liquor" checked aria-label="Toggle liquor stores"><span></span></span>
       </label>
     </div>
     <div class="legend-group legend-drawer is-collapsed" id="mapVisibilityDrawer" data-legend-drawer="map-visibility">
       <button class="legend-drawer-toggle" type="button" id="mapVisibilityDrawerToggle" aria-expanded="false" aria-controls="mapVisibilityDrawerBody">
         <span class="legend-title">Map Visibility</span>
-        <svg class="legend-drawer-chevron" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-          <path d="M4 6.5 8 10.5 12 6.5" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round"/>
-        </svg>
+        <i class="legend-drawer-chevron" data-lucide="chevron-down" aria-hidden="true"></i>
       </button>
       <div class="legend-drawer-body" id="mapVisibilityDrawerBody">
       <label class="legend-row">
@@ -7317,19 +7344,12 @@
   </div>
 
   <button class="follow-chip" id="followChip" type="button" title="Recenter on your location">
-    <span aria-hidden="true">◎</span> Recenter
+    <i data-lucide="locate-fixed" aria-hidden="true"></i> Recenter
   </button>
 
   <div class="pip" id="pip" aria-hidden="true" role="button" tabindex="0" title="Tap to switch views" aria-label="Picture in picture map. Tap to switch views">
     <button class="pip-grip" id="pipGrip" type="button" title="Drag to move" aria-label="Drag picture in picture">
-      <svg width="14" height="14" viewBox="0 0 14 14" aria-hidden="true">
-        <circle cx="4" cy="3" r="1.35" fill="currentColor"/>
-        <circle cx="10" cy="3" r="1.35" fill="currentColor"/>
-        <circle cx="4" cy="7" r="1.35" fill="currentColor"/>
-        <circle cx="10" cy="7" r="1.35" fill="currentColor"/>
-        <circle cx="4" cy="11" r="1.35" fill="currentColor"/>
-        <circle cx="10" cy="11" r="1.35" fill="currentColor"/>
-      </svg>
+      <i data-lucide="grip-vertical" aria-hidden="true"></i>
     </button>
     <div id="pipMap"></div>
   </div>
@@ -7342,17 +7362,12 @@
       <span class="cue-audio-state" id="cueAudioIndicator">AUDIO ON</span>
     </button>
     <button class="btn compass-btn" id="compassBtn" type="button" title="Reset map north" aria-label="Compass, reset north">
-      <svg class="compass-rose" id="compassRose" viewBox="0 0 24 24" aria-hidden="true">
-        <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.35"/>
-        <path d="M12 3.5 L14.2 12 L12 10.6 L9.8 12 Z" fill="#c1122f"/>
-        <path d="M12 20.5 L9.8 12 L12 13.4 L14.2 12 Z" fill="currentColor" opacity="0.55"/>
-        <circle cx="12" cy="12" r="1.4" fill="currentColor"/>
-      </svg>
+      <i class="compass-rose" id="compassRose" data-lucide="compass" aria-hidden="true"></i>
     </button>
     <button class="btn report-vis" id="reportVisBtn" type="button" title="Group sharing" aria-label="Open group sharing controls" aria-expanded="false">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="3.2"/><path d="M5.5 20c.8-3.5 3-5.2 6.5-5.2s5.7 1.7 6.5 5.2"/><path d="M19 5.5v4"/><path d="M17 7.5h4"/></svg>
+      <i data-lucide="user-round-check" aria-hidden="true"></i>
     </button>
-    <button class="btn primary" id="recenterBtn" title="Follow my location" aria-label="Follow my location">◎</button>
+    <button class="btn primary" id="recenterBtn" title="Follow my location" aria-label="Follow my location"><i data-lucide="locate-fixed" aria-hidden="true"></i></button>
   </div>
 
   <section class="cue-popover" id="cuePopover" role="dialog" aria-label="Navigation cue settings" aria-hidden="true" hidden>
@@ -7373,7 +7388,7 @@
         <h2 id="sharingPopoverTitle">Group sharing</h2>
         <p id="sharingPopoverContext">Choose a group in Group first.</p>
       </div>
-      <button class="sharing-popover-close" id="sharingPopoverClose" type="button" aria-label="Close group sharing">×</button>
+      <button class="sharing-popover-close" id="sharingPopoverClose" type="button" aria-label="Close group sharing"><i data-lucide="x" aria-hidden="true"></i></button>
     </div>
     <div class="sharing-popover-control-row">
       <label class="sharing-popover-status-control" for="quickGroupStatusSelect">
@@ -7398,7 +7413,7 @@
   </div>
 
   <div class="popup" id="popup">
-    <button class="close" id="popupClose" aria-label="Close">×</button>
+    <button class="close" id="popupClose" aria-label="Close"><i data-lucide="x" aria-hidden="true"></i></button>
     <div id="popupBody"></div>
   </div>
 
@@ -8160,6 +8175,7 @@
     let planAggregate = RouteStages.aggregateTrip(planTrip);
     let savedRoutes = [];
     let savedRoutesLoaded = false;
+    let pendingSaveTrip = null;
     let viewedSavedRouteId = null; // saved route shown on map (view-only)
     let viewedImportedTrackId = null;
     let editingImportedTrackId = null;
@@ -10320,14 +10336,14 @@
             '<span class="stage-number-badge">' + (index + 1) + '</span>' +
             '<span>Stage ' + String(index + 1).padStart(2, "0") + ' <b>' + fromLabel + ' → ' + toLabel + '</b></span>' +
           '</div>' +
-          '<button class="route-stage-editor-close" type="button" data-stage-editor-close aria-label="Close stage details">×</button>' +
+          '<button class="route-stage-editor-close" type="button" data-stage-editor-close aria-label="Close stage details"><i data-lucide="x" aria-hidden="true"></i></button>' +
         '</div>' +
         '<div class="route-stage-editor-meta">' + meta + '</div>' +
         '<div class="route-stage-editor-prefs" role="group" aria-label="Stage route preference">' + profiles + '</div>' +
         '<div class="route-stage-editor-access">' +
           '<span>Allow unknown access</span>' +
           '<button class="access-info-btn" type="button" data-access-info="stage-compact" aria-label="What allowing unknown access means" aria-describedby="accessInfoTip" aria-expanded="false">' +
-            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>' +
+            '<i data-lucide="info" aria-hidden="true"></i>' +
           '</button>' +
           '<label class="switch"><input type="checkbox" data-stage-access aria-label="Allow unknown access"' +
             (stageAllowsUnknownAccess(stage) ? " checked" : "") + ' data-stage-id="' + stage.id + '"><span></span></label>' +
@@ -10337,6 +10353,7 @@
             (planTrip.stages.length <= 1 ? " disabled" : "") + '>Remove stage</button>' +
         '</div>';
       routeBarStageEditor.hidden = false;
+      window.renderDirtIcons?.();
     }
 
     function focusNextPlanStage() {
@@ -10785,7 +10802,7 @@
             '<div class="route-access-row">' +
               '<span class="route-access-label">Allow unknown access</span>' +
               '<button class="access-info-btn" type="button" data-access-info="stage" aria-label="What allowing unknown access means" aria-describedby="accessInfoTip" aria-expanded="false">' +
-                '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>' +
+                '<i data-lucide="info" aria-hidden="true"></i>' +
               "</button>" +
               '<label class="switch"><input type="checkbox" data-stage-access aria-label="Allow unknown access"' +
                 (stageAllowsUnknownAccess(stage) ? " checked" : "") + ' data-stage-id="' + stage.id + '"><span></span></label>' +
@@ -10840,6 +10857,7 @@
       }
       revealActiveStageCard();
       renderRouteBarStageEditor();
+      window.renderDirtIcons?.();
     }
 
     function revealActiveStageCard() {
@@ -11472,14 +11490,50 @@
     }
 
     // ---- Save sheet ----
+    function activeRouteAsSavedTrip() {
+      const start = activeStart();
+      if (!activeRoute || !start || !destination) return null;
+      const geometry = activeRouteCoordinates();
+      if (geometry.length < 2) return null;
+      const route = Object.assign({}, activeRoute, {
+        status: "complete",
+        geometry,
+        distanceMeters: Math.round((Number(activeRoute.distanceKm) || 0) * 1000),
+        segments: (activeRoute.segments || []).map((segment) => Object.assign({}, segment, {
+          surfaceClass: segment.surfaceClass || segment.trackClass || "unknown",
+          geometry: segment.geometry || segment.coords || [],
+          distanceMeters: Math.round(Number(segment.distanceMeters != null
+            ? segment.distanceMeters
+            : (Number(segment.distanceKm) || 0) * 1000))
+        }))
+      });
+      return RS.createTrip({
+        profile: routePreference,
+        accessPolicy: currentAccessPolicy(),
+        stages: [{
+          profile: routePreference,
+          accessPolicy: currentAccessPolicy(),
+          start,
+          end: destination,
+          route
+        }]
+      });
+    }
+
+    function routeTripForSave() {
+      if (plannerTab === "plan") return planTrip;
+      return activeRouteAsSavedTrip();
+    }
+
     function openSaveSheet() {
       if (!saveRouteSheet) return;
-      const agg = RS.aggregateTrip(planTrip);
-      if (!planTrip.stages.some((s) => RS.stageHasBothPoints(s))) {
-        setStatus("Place at least one stage before saving", "error", "route");
+      pendingSaveTrip = routeTripForSave();
+      if (!pendingSaveTrip || !pendingSaveTrip.stages.some((s) => RS.stageHasBothPoints(s))) {
+        setStatus(plannerTab === "plan" ? "Place at least one stage before saving" : "Create a route before saving", "error", "route");
         return;
       }
-      saveRouteInput.value = planTrip.name || routeExportDefaultName();
+      const agg = RS.aggregateTrip(pendingSaveTrip);
+      saveRouteInput.value = pendingSaveTrip.name || routeExportDefaultName();
       if (saveRouteHint) {
         saveRouteHint.textContent = agg.complete
           ? "Saved to this device."
@@ -11494,6 +11548,7 @@
       if (!saveRouteSheet) return;
       saveRouteSheet.classList.remove("open");
       saveRouteSheet.setAttribute("aria-hidden", "true");
+      pendingSaveTrip = null;
     }
 
     async function confirmSaveRoute() {
@@ -11503,11 +11558,17 @@
         saveRouteInput.focus();
         return;
       }
-      planTrip.name = name;
-      const record = RS.serializeSavedRoute(planTrip, { name });
+      const trip = pendingSaveTrip || routeTripForSave();
+      if (!trip) {
+        if (saveRouteHint) saveRouteHint.textContent = "That route is no longer available. Close this window and try again.";
+        return;
+      }
+      trip.name = name;
+      const record = RS.serializeSavedRoute(trip, { name });
       try {
         await savedDb.routes.put(record);
-        planTrip.id = record.id;
+        trip.id = record.id;
+        if (plannerTab === "plan") planTrip.id = record.id;
         savedRoutesLoaded = false;
         await loadSavedRoutes();
         closeSaveSheet();
@@ -16732,6 +16793,12 @@
     // for the rider to open Profile or Groups after a refresh. This keeps the
     // quick sharing control truthful on first interaction.
     ensureAccountReady().catch(() => {});
+  </script>
+  <script>
+    window.renderDirtIcons = function () {
+      if (window.lucide) window.lucide.createIcons();
+    };
+    window.addEventListener("DOMContentLoaded", window.renderDirtIcons, { once: true });
   </script>
 </body>
 </html>
