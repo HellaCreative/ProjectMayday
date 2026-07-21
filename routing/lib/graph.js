@@ -7,6 +7,17 @@ const https = require("https");
 const http = require("http");
 const { mergeRegionalGraphs, corridorLocationsForRoute } = require("../regional/merge");
 const { clipGraphToCorridor, extractHighwayGraph } = require("../regional/corridor");
+const {
+  packsV2Enabled,
+  v2PathsForV1Path,
+  decodeGraphV2,
+  decodeGeometryV1,
+  unpackSurface,
+  unpackAccess,
+  unpackStructure,
+  unpackConfidence,
+  unpackSeasonal
+} = require("./pack-v2");
 
 const DEFAULT_LEGACY_GRAPH_PATH = path.join(__dirname, "..", "data", "ns-graph.v1.json.gz");
 const DEFAULT_REGIONAL_NS_PATH = path.join(__dirname, "..", "data", "regions", "ns", "graph.v1.json.gz");
@@ -92,6 +103,99 @@ function putCached(key, runtime) {
   lruPut(packCache, key, { runtime });
 }
 
+function v2FilesExist(v1Path) {
+  const paths = v2PathsForV1Path(v1Path);
+  return fs.existsSync(paths.graph) && fs.existsSync(paths.geom);
+}
+
+/**
+ * Build spatial grid from geometry sidecar (snap only; not used in relax).
+ */
+function buildEdgeGridFromGeom(geom, edgeCount) {
+  const GRID = 0.01;
+  const edgeGrid = new Map();
+  const { offsets, coords } = geom;
+  for (let index = 0; index < edgeCount; index += 1) {
+    const start = offsets[index];
+    const end = offsets[index + 1];
+    if (end <= start) continue;
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (let i = start; i < end; i += 2) {
+      const x = coords[i];
+      const y = coords[i + 1];
+      if (x < minX) minX = x;
+      if (y < minY) minY = y;
+      if (x > maxX) maxX = x;
+      if (y > maxY) maxY = y;
+    }
+    if (!Number.isFinite(minX)) continue;
+    const x0 = Math.floor(minX / GRID);
+    const y0 = Math.floor(minY / GRID);
+    const x1 = Math.floor(maxX / GRID);
+    const y1 = Math.floor(maxY / GRID);
+    for (let x = x0; x <= x1; x += 1) {
+      for (let y = y0; y <= y1; y += 1) {
+        const key = x + ":" + y;
+        let bucket = edgeGrid.get(key);
+        if (!bucket) {
+          bucket = [];
+          edgeGrid.set(key, bucket);
+        }
+        bucket.push(index);
+      }
+    }
+  }
+  return { edgeGrid, GRID };
+}
+
+function materializeRuntimeV2(cacheKey, pack, geom, started) {
+  const { edgeGrid, GRID } = buildEdgeGridFromGeom(geom, pack.undirectedEdgeCount);
+  const loadMs = Date.now() - started;
+
+  // Search uses findPathV2 (CSR). matchPoint reads pack/geom directly.
+  const runtime = {
+    format: "v2",
+    path: cacheKey,
+    pack,
+    geom,
+    adjacency: null,
+    edgeGrid,
+    GRID,
+    loadMs,
+    enums: pack.enums,
+    data: {
+      nodeCount: pack.nodeCount,
+      edgeCount: pack.undirectedEdgeCount,
+      edges: null,
+      enums: pack.enums,
+      regionId: pack.regionId,
+      province: pack.province,
+      schemaVersion: pack.schemaVersion
+    }
+  };
+  putCached(cacheKey, runtime);
+  return runtime;
+}
+
+function loadV2RuntimeSync(v1Path, started) {
+  const paths = v2PathsForV1Path(v1Path);
+  // Read into freshly allocated buffers (byteOffset 0) so typed views align.
+  const graphRaw = fs.readFileSync(paths.graph);
+  const geomRaw = fs.readFileSync(paths.geom);
+  const graphBuf = Buffer.alloc(graphRaw.length);
+  const geomBuf = Buffer.alloc(geomRaw.length);
+  graphRaw.copy(graphBuf);
+  geomRaw.copy(geomBuf);
+  const pack = decodeGraphV2(graphBuf);
+  const geom = decodeGeometryV1(geomBuf);
+  cacheStats.loads += 1;
+  cacheStats.inflateMs += Date.now() - started;
+  return materializeRuntimeV2(v1Path, pack, geom, started);
+}
+
 function fetchBuffer(url) {
   return new Promise((resolve, reject) => {
     const lib = url.startsWith("https") ? https : http;
@@ -131,6 +235,9 @@ function loadGraphSync(graphPath = defaultGraphPath()) {
   if (graphPath.startsWith("http://") || graphPath.startsWith("https://")) {
     throw new Error("Use loadGraphAsync for remote graph URLs");
   }
+  if (packsV2Enabled() && v2FilesExist(graphPath)) {
+    return loadV2RuntimeSync(graphPath, started);
+  }
   const dataCached = lruGet(dataCache, graphPath);
   let data;
   if (dataCached) {
@@ -158,6 +265,9 @@ async function loadGraphAsync(graphPath = defaultGraphPath()) {
     const started = Date.now();
     let data;
     let materializePath = graphPath;
+    if (packsV2Enabled() && !graphPath.startsWith("http") && v2FilesExist(graphPath)) {
+      return loadV2RuntimeSync(graphPath, started);
+    }
     if (graphPath.startsWith("http://") || graphPath.startsWith("https://")) {
       const buf = await fetchBuffer(graphPath);
       data = inflateGraphBuffer(buf);
@@ -174,6 +284,8 @@ async function loadGraphAsync(graphPath = defaultGraphPath()) {
       data = inflateGraphBuffer(buf);
       materializePath = remote;
     }
+    cacheStats.loads += 1;
+    cacheStats.inflateMs += Date.now() - started;
     return materializeRuntime(materializePath, data, started);
   })();
 
@@ -303,11 +415,18 @@ async function loadGraphsForRequest(resolution, options = {}) {
         if (cacheKey !== paths[0]) putCached(cacheKey, singleHit);
         return singleHit;
       }
+      if (packsV2Enabled() && !paths[0].startsWith("http") && v2FilesExist(paths[0])) {
+        const runtime = loadV2RuntimeSync(paths[0], started);
+        if (cacheKey !== paths[0]) putCached(cacheKey, runtime);
+        return runtime;
+      }
       const data = await readGraphData(paths[0]);
       const runtime = materializeRuntime(paths[0], data, started);
       if (cacheKey !== paths[0]) putCached(cacheKey, runtime);
       return runtime;
     }
+    // Multi-pack merge still uses graph.v1 JSON (clip/merge need polylines on edges).
+    // Stage 2 v2 path is single-pack only until merge is ported.
     const graphs = [];
     const hitRegions = new Set((resolution.hitRegions || []).map((r) => String(r).toLowerCase()));
     const longHaul = paths.length >= 4;
@@ -369,6 +488,7 @@ module.exports = {
   resetCacheStats,
   getCacheStats,
   chainCacheEnabled,
+  packsV2Enabled,
   defaultGraphPath,
   DEFAULT_GRAPH_PATH,
   DEFAULT_LEGACY_GRAPH_PATH,

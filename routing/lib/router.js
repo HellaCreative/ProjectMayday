@@ -3,6 +3,20 @@
 const { loadGraph, loadGraphAsync, loadGraphsForRequest, clearGraphCache, resetCacheStats, getCacheStats, chainCacheEnabled } = require("./graph");
 const { resolveGraphRequest } = require("../regional/select");
 const { corridorLocationsForRoute } = require("../regional/merge");
+const {
+  surfaceMultiplier: profileSurfaceMultiplier,
+  classSpeedKmh: profileClassSpeedKmh,
+  maxSurfaceMultiplier,
+  costPerKmView
+} = require("./profile-costs");
+const {
+  unpackSurface,
+  unpackAccess,
+  unpackStructure,
+  unpackConfidence,
+  unpackSeasonal
+} = require("./pack-v2");
+const { findPathV2 } = require("./find-path-v2");
 
 const DEFAULT_MATCH_METERS = 250;
 const EARTH_M = 6371000;
@@ -41,21 +55,14 @@ function accessAllowed(accessCode, policy, enums) {
 }
 
 function surfaceMultiplier(surfaceCode, profile, enums) {
-  const name = enums.SURFACE_NAME[surfaceCode] || "unknown";
-  const tables = {
-    direct: { paved: 1, gravel: 1, access: 1, track: 1, unknown: 1.02 },
-    balanced: { paved: 1.85, gravel: 0.9, access: 0.82, track: 0.75, unknown: 0.95 },
-    dirt: { paved: 6.5, gravel: 0.72, access: 0.58, track: 0.48, unknown: 0.7 },
-    cleanest: { paved: 0.85, gravel: 1.55, access: 1.8, track: 2.4, unknown: 1.9 }
-  };
-  const table = tables[profile] || tables.balanced;
-  return table[name] != null ? table[name] : 1;
+  // Prefer central Stage 2c tables; enums kept for call-site compatibility.
+  void enums;
+  return profileSurfaceMultiplier(surfaceCode, profile);
 }
 
 function classSpeedKmh(surfaceCode, enums) {
-  const name = enums.SURFACE_NAME[surfaceCode] || "unknown";
-  const speeds = { paved: 70, gravel: 45, access: 35, track: 25, unknown: 30 };
-  return speeds[name] || 30;
+  void enums;
+  return profileClassSpeedKmh(surfaceCode);
 }
 
 class MinHeap {
@@ -133,17 +140,6 @@ const ELLIPSE_FACTORS = {
   dirt: 2.2
 };
 
-function maxSurfaceMultiplier(profile) {
-  const tables = {
-    direct: { paved: 1, gravel: 1, access: 1, track: 1, unknown: 1.02 },
-    balanced: { paved: 1.85, gravel: 0.9, access: 0.82, track: 0.75, unknown: 0.95 },
-    dirt: { paved: 6.5, gravel: 0.72, access: 0.58, track: 0.48, unknown: 0.7 },
-    cleanest: { paved: 0.85, gravel: 1.55, access: 1.8, track: 2.4, unknown: 1.9 }
-  };
-  const table = tables[profile] || tables.balanced;
-  return Math.max(...Object.values(table));
-}
-
 function ellipseAttemptsForProfile(profile) {
   if (!ellipsePruneEnabled()) {
     return [{ factor: Infinity, label: "unpruned", escalation: "none" }];
@@ -165,7 +161,8 @@ function flipEdge(edge) {
     ...edge,
     a: edge.b,
     b: edge.a,
-    coords: [...edge.coords].reverse()
+    forward: edge.forward === false,
+    coords: edge.coords ? [...edge.coords].reverse() : null
   };
 }
 
@@ -198,14 +195,42 @@ function matchPoint(runtime, location, policy, matchMeters, avoidEdgeIds) {
   }
   const avoid = avoidEdgeIds instanceof Set ? avoidEdgeIds : null;
   const candidates = edgeCandidateIndexes(runtime, point[0], point[1], matchMeters);
+  const isV2 = runtime.format === "v2";
   let best = null;
   for (const index of candidates) {
-    const edge = runtime.data.edges[index];
-    if (!accessAllowed(edge.ac, policy, enums)) continue;
-    // Never snap onto a reported/avoided edge — the recovery route must start
-    // from an eligible verified edge, not the closure the rider reported.
-    if (avoid && avoid.has(String(edge.i))) continue;
-    const coords = edge.g;
+    let accessCode;
+    let surfaceCode;
+    let structureCode;
+    let edgeId;
+    let componentId;
+    let edgeMeters;
+    let coords;
+    if (isV2) {
+      const attr = runtime.pack.edgeAttrs[index];
+      accessCode = unpackAccess(attr);
+      surfaceCode = unpackSurface(attr);
+      structureCode = unpackStructure(attr);
+      edgeId = runtime.pack.edgeId(index);
+      componentId = -1;
+      edgeMeters = runtime.pack.edgeMeters[index];
+      // Geometry sidecar: snap only (not used in relax).
+      coords = runtime.geom.polyline(index);
+    } else {
+      const edge = runtime.data.edges[index];
+      if (!accessAllowed(edge.ac, policy, enums)) continue;
+      if (avoid && avoid.has(String(edge.i))) continue;
+      accessCode = edge.ac;
+      surfaceCode = edge.s;
+      structureCode = edge.t;
+      edgeId = edge.i;
+      componentId = edge.c;
+      edgeMeters = edge.m;
+      coords = edge.g;
+    }
+    if (isV2) {
+      if (!accessAllowed(accessCode, policy, enums)) continue;
+      if (avoid && avoid.has(String(edgeId))) continue;
+    }
     let along = 0;
     for (let i = 1; i < coords.length; i += 1) {
       const a = coords[i - 1];
@@ -216,16 +241,16 @@ function matchPoint(runtime, location, policy, matchMeters, avoidEdgeIds) {
         best = {
           ok: true,
           edgeIndex: index,
-          edgeId: edge.i,
-          accessClass: enums.ACCESS_NAME[edge.ac],
-          surfaceClass: enums.SURFACE_NAME[edge.s],
-          structureType: enums.STRUCTURE_NAME[edge.t],
-          componentId: edge.c,
+          edgeId,
+          accessClass: enums.ACCESS_NAME[accessCode],
+          surfaceClass: enums.SURFACE_NAME[surfaceCode],
+          structureType: enums.STRUCTURE_NAME[structureCode],
+          componentId,
           distanceM: projected.distanceM,
           coord: projected.coord,
           segmentIndex: i - 1,
           distanceAlongM: along + segM * projected.t,
-          edgeMeters: edge.m
+          edgeMeters
         };
       }
       along += segM;
@@ -708,11 +733,22 @@ async function routeOnRuntime(body, graphResolution, runtime) {
 }
 
 function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds) {
+  if (runtime.format === "v2") {
+    return findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds);
+  }
   const { data, adjacency, enums } = runtime;
   const edges = data.edges;
   const avoid = avoidEdgeIds instanceof Set ? avoidEdgeIds : null;
+  const geom = runtime.geom || null;
 
-  // Virtual nodes: start = n, end = n+1
+  function resolveEdgeCoords(edge) {
+    if (edge.coords && edge.coords.length) return edge.coords;
+    if (edge._ei == null) return [];
+    const forward = edge.forward !== false;
+    if (geom) return geom.polylineMaybeReversed(edge._ei, forward);
+    const raw = edges[edge._ei].g || [];
+    return forward ? raw : raw.slice().reverse();
+  }
   const n = data.nodeCount;
   const startNode = n;
   const endNode = n + 1;
@@ -729,17 +765,26 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds) 
         ...meta,
         a: b,
         b: a,
-        coords: [...meta.coords].reverse()
+        forward: false,
+        coords: meta.coords ? meta.coords.slice().reverse() : null
       }
     });
   }
 
+  function edgePolyline(edgeIndex) {
+    if (geom) return geom.polyline(edgeIndex);
+    return edges[edgeIndex].g;
+  }
+
   function attach(node, match) {
     const edge = edges[match.edgeIndex];
-    const toA = coordsFromAToMatch(edge, match);
-    const toB = coordsFromMatchToB(edge, match);
-    const mA = lineMeters(toA);
-    const mB = lineMeters(toB);
+    const full = edgePolyline(match.edgeIndex);
+    const edgeView = { ...edge, g: full, _ei: match.edgeIndex };
+    const toA = coordsFromAToMatch(edgeView, match);
+    const toB = coordsFromMatchToB(edgeView, match);
+    // Use match distanceAlong for costs so float32 sidecar geom cannot drift profileCost.
+    const mA = Math.max(0, Number(match.distanceAlongM) || lineMeters(toA));
+    const mB = Math.max(0, (Number(match.edgeMeters) || edge.m) - mA);
     addVirt(node, edge.a, {
       a: node,
       b: edge.a,
@@ -756,7 +801,8 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds) 
       confidence: edge.conf,
       seasonal: edge.seasonal,
       virtual: true,
-      accessLeg: true
+      accessLeg: true,
+      forward: true
     });
     addVirt(node, edge.b, {
       a: node,
@@ -774,7 +820,8 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds) 
       confidence: edge.conf,
       seasonal: edge.seasonal,
       virtual: true,
-      accessLeg: true
+      accessLeg: true,
+      forward: true
     });
   }
 
@@ -782,7 +829,8 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds) 
   attach(endNode, endMatch);
   if (startMatch.edgeIndex === endMatch.edgeIndex) {
     const edge = edges[startMatch.edgeIndex];
-    const coords = coordsBetweenMatches(edge, startMatch, endMatch);
+    const edgeView = { ...edge, g: edgePolyline(startMatch.edgeIndex), _ei: startMatch.edgeIndex };
+    const coords = coordsBetweenMatches(edgeView, startMatch, endMatch);
     addVirt(startNode, endNode, {
       a: startNode,
       b: endNode,
@@ -799,12 +847,14 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds) 
       confidence: edge.conf,
       seasonal: edge.seasonal,
       virtual: true,
-      accessLeg: false
+      accessLeg: false,
+      forward: true
     });
   }
 
   // Packed edges are undirected in adjacency. Reverse relaxation uses the same
   // profile cost as forward (rev 2.1). One-way direction is not packed yet.
+  // Stage 2: do not copy/reverse polylines here; only numeric cost fields.
   function neighbors(node) {
     const out = [];
     if (node < n) {
@@ -819,7 +869,6 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds) 
           edge: {
             a: node,
             b: other,
-            coords: forward ? edge.g : [...edge.g].reverse(),
             meters: edge.m,
             surface: edge.s,
             access: edge.ac,
@@ -832,7 +881,10 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds) 
             confidence: edge.conf,
             seasonal: edge.seasonal,
             virtual: false,
-            accessLeg: false
+            accessLeg: false,
+            forward,
+            _ei: idx,
+            coords: null
           }
         });
       }
@@ -841,12 +893,30 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds) 
     return out;
   }
 
+  function resolveEdgeCoords(edge) {
+    if (edge.coords && edge.coords.length) return edge.coords;
+    if (edge._ei == null) return [];
+    const forward = edge.forward !== false;
+    if (geom) return geom.polylineMaybeReversed(edge._ei, forward);
+    const raw = edges[edge._ei].g || [];
+    return forward ? raw : raw.slice().reverse();
+  }
+
   const nodeCoord = new Array(total);
-  for (let i = 0; i < n; i += 1) {
-    const idxs = adjacency[i];
-    if (!idxs || !idxs.length) continue;
-    const edge = edges[idxs[0]];
-    nodeCoord[i] = edge.a === i ? edge.g[0] : edge.g[edge.g.length - 1];
+  if (runtime.pack && runtime.pack.nodeCoords) {
+    const nc = runtime.pack.nodeCoords;
+    for (let i = 0; i < n; i += 1) {
+      nodeCoord[i] = [nc[i * 2], nc[i * 2 + 1]];
+    }
+  } else {
+    for (let i = 0; i < n; i += 1) {
+      const idxs = adjacency[i];
+      if (!idxs || !idxs.length) continue;
+      const edge = edges[idxs[0]];
+      const g = edge.g || (geom ? geom.polyline(idxs[0]) : null);
+      if (!g || !g.length) continue;
+      nodeCoord[i] = edge.a === i ? g[0] : g[g.length - 1];
+    }
   }
   nodeCoord[startNode] = startMatch.coord;
   nodeCoord[endNode] = endMatch.coord;
@@ -884,7 +954,8 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds) 
     };
 
     for (const edge of used) {
-      for (const c of edge.coords) {
+      const coords = resolveEdgeCoords(edge);
+      for (const c of coords) {
         const last = geometry[geometry.length - 1];
         if (last && last[0] === c[0] && last[1] === c[1]) continue;
         geometry.push(c);
@@ -912,7 +983,7 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds) 
         distanceMeters: Math.round(meters),
         componentId: edge.componentId,
         accessLeg: !!edge.accessLeg,
-        geometry: edge.coords
+        geometry: coords
       });
     }
 

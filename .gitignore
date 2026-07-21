@@ -19,3 +19,13 @@ data-raw/nrn/
 data-raw/**/*.geojsonseq
 data-raw/**/*.zip
 .env*
+
+# Stage 2 binary routing packs (generate with scripts/build-graph-v2.js)
+**/graph.v2.bin
+**/geometry.v1.bin
+**/longhaul.v2.bin
+**/longhaul.geometry.v1.bin
+**/ns-graph.v2.bin
+**/ns-geometry.v1.bin
+**/ns-graph.geometry.v1.bin
+
