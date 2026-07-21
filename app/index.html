@@ -7069,9 +7069,10 @@
     }
     .route-stage-editor-access {
       display: flex !important;
-      flex-direction: column !important;
-      align-items: stretch !important;
-      gap: 5px !important;
+      flex-direction: row !important;
+      align-items: center !important;
+      justify-content: flex-start !important;
+      gap: 12px !important;
       min-height: 0 !important;
     }
     body.planner-open .route-card.is-expanded .route-tab-hint {
@@ -7359,37 +7360,41 @@
       color: #656a72 !important;
       font-size: 9px !important;
     }
-    /* The stage editor is map-first: keep its two controls in equal columns
-       and separate them without spending another row of vertical space. */
-    #routeBarStageEditor .stage-editor-settings-grid {
+    /* Prototype stage editor: header, profile subtabs, access row, remove. */
+    #routeBarStageEditor .route-stage-editor-prefs {
       display: grid !important;
-      grid-template-columns: minmax(0, 1fr) 1px minmax(0, 1fr) !important;
-      align-items: stretch !important;
-      column-gap: 16px !important;
+      grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+      gap: 3px !important;
+      padding: 3px !important;
+      border-radius: 9px !important;
+      background: #e9eaed !important;
     }
-    #routeBarStageEditor .stage-editor-settings-divider {
-      width: 1px;
-      min-height: 61px;
-      align-self: stretch;
-      background: #b8bbc1;
-    }
-    #routeBarStageEditor .stage-editor-settings-grid > .route-setting-field {
+    #routeBarStageEditor .route-stage-editor-pref {
       min-width: 0 !important;
-      padding: 0 !important;
-    }
-    #routeBarStageEditor .stage-editor-settings-grid > .route-stage-editor-access {
-      display: grid !important;
-      grid-template-rows: 22px 34px !important;
-      align-content: start !important;
-      gap: 5px !important;
-      padding: 0 !important;
+      min-height: 36px !important;
+      padding: 0 4px !important;
       border: 0 !important;
+      border-radius: 7px !important;
+      background: transparent !important;
+      color: #656a72 !important;
+      font-size: 10px !important;
+      font-weight: 750 !important;
     }
-    #routeBarStageEditor .stage-editor-settings-grid .route-setting-heading {
-      min-height: 22px !important;
+    #routeBarStageEditor .route-stage-editor-pref.active {
+      background: #16181c !important;
+      color: #fff !important;
     }
-    #routeBarStageEditor .stage-editor-settings-grid .route-setting-toggle {
-      min-height: 34px !important;
+    #routeBarStageEditor .route-stage-editor-access {
+      display: flex !important;
+      min-height: 38px !important;
+      align-items: center !important;
+      justify-content: flex-start !important;
+      gap: 12px !important;
+      padding: 0 2px !important;
+      border: 0 !important;
+      color: #16181c !important;
+      font-size: 10px !important;
+      font-weight: 750 !important;
     }
     body.planner-open .route-compact-summary,
     body.planner-open .stage-trip-summary,
@@ -11016,53 +11021,27 @@
         routeBarStageEditor.innerHTML = "";
         return;
       }
-      const status = RS.computeStageStatus(stage);
       const profile = stage.profile || "balanced";
-      const profileLabel = profile === "cleanest" ? "Clean" : profile.charAt(0).toUpperCase() + profile.slice(1);
-      const fromLabel = stage.start ? "Waypoint " + (index + 1) : "Start";
-      const toLabel = stage.end ? "Waypoint " + (index + 2) : stage.start ? "Next waypoint" : "Starting point";
-      let meta = "Press and hold the map to place the starting point";
-      if (stage.start && !stage.end) meta = "Draft · press and hold the map to add another stage";
-      else if (status === RS.STAGE_STATUS.LOADING) meta = "Routing…";
-      else if (status === RS.STAGE_STATUS.FAILED) meta = "Route failed · adjust the points and try again";
-      else if (status === RS.STAGE_STATUS.COMPLETE && stage.route) {
-        const distanceKm = (stage.route.distanceMeters || 0) / 1000;
-        meta = formatKmLabel(distanceKm) + " · " +
-          (stage.route.estimatedMovingSeconds ? RS.secondsToLabel(stage.route.estimatedMovingSeconds) + " · " : "") +
-          profileLabel.toLowerCase();
-      }
-      const profileOptions = ["direct", "balanced", "dirt", "cleanest"].map((value) => {
+      const profileButtons = ["direct", "balanced", "dirt", "cleanest"].map((value) => {
         const label = value === "cleanest" ? "Clean" : value.charAt(0).toUpperCase() + value.slice(1);
-        return '<option value="' + value + '"' + (value === profile ? " selected" : "") + '>' + label + '</option>';
+        return '<button class="route-stage-editor-pref' + (value === profile ? " active" : "") +
+          '" type="button" data-stage-pref="' + value + '" data-stage-id="' + stage.id +
+          '" aria-pressed="' + (value === profile ? "true" : "false") + '">' + label + '</button>';
       }).join("");
       routeBarStageEditor.innerHTML =
         '<div class="route-stage-editor-head">' +
           '<div class="route-stage-editor-title">' +
             '<span class="stage-number-badge">' + (index + 1) + '</span>' +
-            '<span>Stage ' + String(index + 1).padStart(2, "0") + ' <b>' + fromLabel + ' → ' + toLabel + '</b></span>' +
+            '<span>Stage ' + String(index + 1).padStart(2, "0") + '</span>' +
           '</div>' +
           '<button class="route-stage-editor-close" type="button" data-stage-editor-close aria-label="Close stage details"><i data-lucide="x" aria-hidden="true"></i></button>' +
         '</div>' +
-        '<div class="route-stage-editor-meta">' + meta + '</div>' +
-        '<div class="route-settings-grid route-stage-settings stage-editor-settings-grid">' +
-          '<label class="route-setting-field">' +
-            '<span class="route-setting-label">Surface type</span>' +
-            '<select class="route-surface-select" data-stage-profile="' + stage.id + '" aria-label="Stage surface type">' + profileOptions + '</select>' +
-          '</label>' +
-          '<div class="stage-editor-settings-divider" aria-hidden="true"></div>' +
-          '<div class="route-setting-field route-stage-editor-access">' +
-            '<div class="route-setting-heading">' +
-              '<span class="route-setting-label">Allow unknown access</span>' +
-              '<button class="access-info-btn" type="button" data-access-info="stage-compact" aria-label="What allowing unknown access means" aria-describedby="accessInfoTip" aria-expanded="false">' +
-                '<i data-lucide="info" aria-hidden="true"></i>' +
-              '</button>' +
-            '</div>' +
-            '<div class="route-setting-toggle"><span>Allow</span>' +
-              '<label class="switch"><input type="checkbox" data-stage-access aria-label="Allow unknown access"' +
-                (stageAllowsUnknownAccess(stage) ? " checked" : "") + ' data-stage-id="' + stage.id + '"><span></span></label>' +
-            '</div>' +
-          '</div>' +
-        '</div>' +
+        '<div class="route-stage-editor-prefs" role="group" aria-label="Stage route profile">' + profileButtons + '</div>' +
+        '<label class="route-stage-editor-access">' +
+          '<span>Allow unknown access</span>' +
+          '<span class="switch"><input type="checkbox" data-stage-access aria-label="Allow unknown access"' +
+            (stageAllowsUnknownAccess(stage) ? " checked" : "") + ' data-stage-id="' + stage.id + '"><span></span></span>' +
+        '</label>' +
         '<div class="route-stage-editor-actions">' +
           '<button class="route-stage-editor-remove" type="button" data-stage-delete="' + stage.id + '"' +
             (planTrip.stages.length <= 1 ? " disabled" : "") + '>Remove stage</button>' +
