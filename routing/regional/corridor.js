@@ -201,6 +201,27 @@ function extractLonghaulSpineGraph(graph) {
   return compactGraph(graph, keepEdges, "longhaul-spine");
 }
 
+/**
+ * Atlantic Vercel pack: spine everywhere + non-track edges near hub cities.
+ * Hub bulbs reconnect village meshes (e.g. Lac-Beauport) without shipping
+ * the full provincial capillary graph.
+ */
+function extractAtlanticLonghaulGraph(graph, hubLocations = [], hubBufferMeters = 45000) {
+  const bbox = graph.bbox || null;
+  const hasRoadClass = (graph.edges || []).some((e) => e.rt);
+  const hubs = corridorPolyline(hubLocations);
+  const keepEdges = (graph.edges || []).filter((e) => {
+    if (isLonghaulSpineEdge(e, bbox, { hasRoadClass })) return true;
+    if (e.s === 3) return false; // drop tracks
+    if (!hubs.length) return false;
+    const g = e.g || [];
+    if (!g.length) return false;
+    const samples = [g[0], g[Math.floor(g.length / 2)], g[g.length - 1]];
+    return samples.some((p) => hubs.some((h) => haversineMeters(p, h) <= hubBufferMeters));
+  });
+  return compactGraph(graph, keepEdges, "atlantic-longhaul");
+}
+
 function compactGraph(graph, keepEdges, roleSuffix) {
   const used = new Set();
   for (const e of keepEdges) {
@@ -240,6 +261,7 @@ module.exports = {
   extractHighwayGraph,
   extractSpineGraph,
   extractLonghaulSpineGraph,
+  extractAtlanticLonghaulGraph,
   isSpineEdge,
   isLonghaulSpineEdge,
   corridorPolyline,
