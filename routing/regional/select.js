@@ -64,6 +64,15 @@ function primaryRegionForPoint(lon, lat) {
     return "on";
   }
 
+  // NB bbox covers Témiscouata / Dégelis (QC). Without this, Dégelis resolves
+  // as NB, border hops load only the NB pack, and QC-side anchors fail to snap.
+  if (ids.has("nb") && ids.has("qc")) {
+    // West of the Edmundston pinch → Quebec (Dégelis, Rivière-du-Loup, …).
+    if (lon <= -68.45) return "qc";
+    if (lat >= 47.7 && lon <= -68.2) return "qc";
+    return "nb";
+  }
+
   hits.sort((a, b) => a.area - b.area);
   return hits[0].id;
 }

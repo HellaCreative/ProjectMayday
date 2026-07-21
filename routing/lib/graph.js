@@ -445,8 +445,15 @@ async function loadGraphsForRequest(resolution, options = {}) {
       if (!alreadyLonghaul && longHaul && !isEndpoint) {
         g = extractHighwayGraph(g);
       }
-      if (!alreadyLonghaul && corridorLocations.length >= 2) {
-        const buf = isEndpoint ? Math.max(bufferMeters, 200000) : bufferMeters;
+      // Clip mid-province full packs AND multi-pack longhaul merges to the hop
+      // corridor. Skipping longhaul clip forced Vercel to inflate entire QC
+      // (~250MB) alongside NB on every border hop → 300s timeouts.
+      if (corridorLocations.length >= 2 && (multi || !alreadyLonghaul)) {
+        const buf = alreadyLonghaul
+          ? Math.min(Math.max(bufferMeters, 120000), 180000)
+          : isEndpoint
+            ? Math.max(bufferMeters, 200000)
+            : bufferMeters;
         g = clipGraphToCorridor(g, corridorLocations, buf);
       }
       if (!g.edges || g.edges.length < 1) continue;

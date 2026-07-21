@@ -211,8 +211,11 @@ function regionsForRoute(regionIds) {
  */
 const CORRIDOR_ANCHORS = [
   { lon: -63.575, lat: 44.6488 }, // Halifax
-  { lon: -64.800, lat: 46.099 }, // Moncton (was wrongly Fredericton)
+  { lon: -64.800, lat: 46.099 }, // Moncton
   { lon: -66.643, lat: 45.963 }, // Fredericton
+  { lon: -68.325, lat: 47.373 }, // Edmundston (NB side of QC border)
+  { lon: -68.65, lat: 47.55 }, // Dégelis (QC approach)
+  { lon: -69.542, lat: 47.837 }, // Rivière-du-Loup
   { lon: -71.208, lat: 46.813 }, // Quebec City
   { lon: -73.567, lat: 45.502 }, // Montreal
   { lon: -75.697, lat: 45.421 }, // Ottawa
@@ -229,8 +232,20 @@ const CORRIDOR_ANCHORS = [
   { lon: -123.121, lat: 49.283 } // Vancouver
 ];
 
-function nearlySamePoint(a, b, eps = 0.05) {
+function nearlySamePoint(a, b, eps = 0.08) {
   return Math.abs(a.lon - b.lon) < eps && Math.abs(a.lat - b.lat) < eps;
+}
+
+function haversineKm(a, b) {
+  const toRad = (d) => (d * Math.PI) / 180;
+  const R = 6371;
+  const dLat = toRad(b.lat - a.lat);
+  const dLon = toRad(b.lon - a.lon);
+  const lat1 = toRad(a.lat);
+  const lat2 = toRad(b.lat);
+  const x =
+    Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
 }
 
 function corridorLocationsForRoute(locations) {
@@ -244,19 +259,27 @@ function corridorLocationsForRoute(locations) {
     .filter(Boolean);
   if (pts.length < 2) return pts;
 
-  const minLon = Math.min(...pts.map((p) => p.lon));
-  const maxLon = Math.max(...pts.map((p) => p.lon));
-  // Inject southern corridor anchors for any inter-province haul that spans
-  // enough longitude to cross a border hub (NS→QC ≈ 7–8°). The old 15° gate
-  // only fired for true coast-to-coast routes and left Atlantic multi-province
-  // requests as one merged hop that often returned no_route.
-  if (maxLon - minLon < 5) return pts;
-
   const start = pts[0];
   const end = pts[pts.length - 1];
+  const minLon = Math.min(...pts.map((p) => p.lon));
+  const maxLon = Math.max(...pts.map((p) => p.lon));
+  const span = maxLon - minLon;
+  const distKm = haversineKm(start, end);
+
+  // Inject southern corridor anchors for inter-province hauls.
+  // NB→QC (Fredericton→Quebec City) is ~570 km but only ~4.6° of longitude —
+  // the old 5° gate skipped anchors, forcing one merged NB+QC hop that OOMs /
+  // times out on Vercel Hobby when the QC pack is inflated.
+  // Gate on distance OR longitude so Atlantic cross-border city pairs split.
+  if (span < 3 && distKm < 280) return pts;
+
   const westToEast = start.lon < end.lon;
-  const anchors = CORRIDOR_ANCHORS.filter((a) => a.lon >= minLon - 1 && a.lon <= maxLon + 1)
+  const anchors = CORRIDOR_ANCHORS.filter((a) => a.lon >= minLon - 0.5 && a.lon <= maxLon + 0.5)
     .filter((a) => !nearlySamePoint(a, start) && !nearlySamePoint(a, end))
+    // Keep anchors that lie between the endpoints along the travel axis.
+    .filter((a) =>
+      westToEast ? a.lon > start.lon && a.lon < end.lon : a.lon < start.lon && a.lon > end.lon
+    )
     .sort((a, b) => (westToEast ? a.lon - b.lon : b.lon - a.lon));
   return [start, ...anchors, end];
 }
