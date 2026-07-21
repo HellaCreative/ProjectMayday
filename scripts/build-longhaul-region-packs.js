@@ -95,11 +95,20 @@ function main() {
     const hasRoadClass = (g.edges || []).some((e) => e.rt);
     const hasOsm = (g.edges || []).some((e) => /openstreetmap/i.test(String(e.src || "")));
 
-    const corridorFabric = new Set(["qc"]);
+    const corridorFabric = new Set([]); // dense NRN-everywhere — too large for QC on Hobby
+    const hubFabric = new Set(["qc", "on"]); // spine + hub bulbs
     const maritimeFabric = new Set(["ns", "nb", "pe", "nl"]);
 
     let extractMode = "spine";
-    if (corridorFabric.has(code)) {
+    if (hubFabric.has(code)) {
+      extractMode = "fabric-hub";
+      g = extractRoadFabricLonghaulGraph(g, {
+        mode: "hub",
+        hubLocations: HUBS[code] || [],
+        // Wider bulbs so Saint-Raymond / Laurentians / border towns still snap.
+        hubBufferMeters: code === "qc" ? 28000 : 45000
+      });
+    } else if (corridorFabric.has(code)) {
       extractMode = "fabric-corridor";
       g = extractRoadFabricLonghaulGraph(g, {
         mode: "corridor",

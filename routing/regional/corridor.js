@@ -265,9 +265,11 @@ function isNrnSrc(src) {
  *   Provincial/gov forest = capillary *between* that fabric — omitted from longhaul.
  *
  * Modes:
- *   maritime — NRN non-track + OSM highways; all OSM fabric near city hubs.
- *   corridor — same keep rules (NRN non-track everywhere); QC relies on corridor
- *              clip for size. OSM still hub/highway-limited.
+ *   maritime / hub — NRN spine (freeway/arterial/collector/ramp) everywhere;
+ *                     NRN locals + OSM fabric only near city hubs. Required for QC
+ *                     so Hobby isolates can inflate the pack without OOM.
+ *   corridor / dense — all NRN non-track + OSM hub/highway. Too large for QC on
+ *                     Vercel Hobby; keep for small provinces if ever needed.
  *
  * Relabels connected-component ids after extract (does NOT drop edges). Dropping via
  * LCC removed Saint-Raymond / Moncton local coverage and broke From-here snaps.
@@ -276,6 +278,10 @@ function extractRoadFabricLonghaulGraph(graph, options = {}) {
   const hubLocations = options.hubLocations || [];
   const hubBufferMeters = Number(options.hubBufferMeters) || 40000;
   const hubs = corridorPolyline(hubLocations);
+  const mode = String(options.mode || "hub").toLowerCase();
+  // Small provinces (maritime) can keep all NRN non-track. QC must use hub mode
+  // or Hobby OOMs while JSON.parse'ing ~250MB of locals.
+  const denseNrn = mode === "corridor" || mode === "dense" || mode === "maritime";
 
   function nearHub(edge) {
     if (!hubs.length) return false;
@@ -294,9 +300,20 @@ function extractRoadFabricLonghaulGraph(graph, options = {}) {
 
     if (nrn) {
       if (e.s === 3) continue;
-      // Keep all NRN non-track (corridor-clipped later). OSM stays
-      // hub/highway-limited so QC does not re-shatter into islands.
-      keepEdges.push(e);
+      if (denseNrn) {
+        // All NRN non-track (size controlled by province + corridor clip).
+        keepEdges.push(e);
+        continue;
+      }
+      // Hub mode: spine everywhere, locals only near hubs (QC-safe for Hobby).
+      // Skip resource roads in longhaul — capillary/dirt fidelity is a later pass.
+      const rt = String(e.rt || "");
+      if (LONGHAUL_ROAD_TRACK.has(rt)) {
+        keepEdges.push(e);
+        continue;
+      }
+      if (rt === "resource") continue;
+      if (nearHub(e)) keepEdges.push(e);
       continue;
     }
 

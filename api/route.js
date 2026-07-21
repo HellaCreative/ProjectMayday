@@ -41,8 +41,8 @@ module.exports = async function handler(req, res) {
 
 module.exports.config = {
   maxDuration: 300,
-  // QC longhaul inflate peaks near ~2GB RSS before corridor clip; 2048 OOMs on NB↔QC.
-  memory: 3008,
+  // Hobby personal accounts cap at 2048 MB — stay under via hub-thinned QC packs.
+  memory: 2048,
   includeFiles: [
     "routing/lib/**",
     "routing/regional/**",
