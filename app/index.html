@@ -6983,6 +6983,88 @@
       text-align: center;
     }
 
+    /* Route planner density correction. The map toast owns empty-state
+       guidance; Plan preferences live only inside the selected stage. */
+    body.planner-open .route-card.is-expanded .route-drawer-compact {
+      width: min(440px, calc(100% - 16px)) !important;
+      gap: 8px !important;
+    }
+    body.planner-open .route-card.is-expanded .route-mode-block {
+      gap: 0 !important;
+      padding: 8px !important;
+    }
+    body.planner-open .route-card.is-expanded .route-tab-hint {
+      display: none !important;
+    }
+    body.planner-open .route-card.is-expanded .route-compact-actions {
+      display: grid !important;
+      grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+      gap: 6px !important;
+    }
+    body.planner-open .route-card.is-expanded .route-compact-actions button {
+      min-width: 0 !important;
+      min-height: 38px !important;
+      height: 38px !important;
+      padding: 0 5px !important;
+      font-size: 9.5px !important;
+      white-space: nowrap;
+    }
+    body.planner-open:not(.planner-tab-plan):not(.planner-tab-saved):not(.has-route) #routeCompactSummary {
+      display: none !important;
+    }
+    body.planner-open.planner-tab-plan #routePrefCardCompact {
+      display: none !important;
+    }
+    body.planner-open.planner-tab-plan #routeBarPlanPanel {
+      margin: 0 !important;
+    }
+    body.planner-open.planner-tab-plan .route-bar-add-stage[hidden] {
+      display: none !important;
+    }
+    body.planner-open.planner-tab-saved .saved-sheet-header,
+    body.planner-open.planner-tab-saved #routePanelSaved {
+      width: min(440px, calc(100% - 16px)) !important;
+    }
+    .saved-row-actions {
+      display: grid !important;
+      grid-template-columns: repeat(3, minmax(0, max-content)) !important;
+      gap: 6px !important;
+      justify-content: start;
+    }
+    .saved-row-actions .saved-action {
+      min-width: 0 !important;
+      min-height: 32px !important;
+      height: 32px !important;
+      margin: 0 !important;
+      padding: 0 10px !important;
+      border: 1px solid var(--line) !important;
+      border-radius: 8px !important;
+      background: #fff !important;
+      color: var(--fig-ink) !important;
+      font-size: 9.5px !important;
+      font-weight: 750 !important;
+      text-decoration: none !important;
+    }
+    .saved-row-actions .saved-action.primary {
+      background: var(--fig-orange) !important;
+      border-color: var(--fig-orange) !important;
+      color: #16181c !important;
+    }
+    .saved-row-utility {
+      display: flex;
+      gap: 4px;
+    }
+    .saved-icon-action {
+      width: 30px !important;
+      height: 30px !important;
+      min-height: 30px !important;
+      padding: 0 !important;
+    }
+    .saved-icon-action svg {
+      width: 15px !important;
+      height: 15px !important;
+    }
+
     /* Group sheets size to their current task. Up to five rider rows remain visible;
        additional riders scroll inside the roster instead of stretching the
        whole sheet or leaving a large blank tail beneath short groups. */
@@ -11111,6 +11193,7 @@
         routeBarStageList.insertAdjacentHTML("afterbegin", stageMarkup);
       }
       if (routeBarAddStage) {
+        routeBarAddStage.hidden = routedStages.length === 0;
         const nextAction = routedStages.length
           ? "Press and hold map to create another stage"
           : (draftStage && draftStage.start
@@ -11648,7 +11731,6 @@
                 '<div class="saved-sub">' + escapeHtml(sub) + "</div>" +
               "</div>" +
               '<div class="saved-row-utility">' +
-                '<button class="saved-icon-action" type="button" data-saved-duplicate="' + r.id + '" title="Duplicate route" aria-label="Duplicate route"><i data-lucide="copy" aria-hidden="true"></i></button>' +
                 '<button class="saved-icon-action danger" type="button" data-saved-delete="' + r.id + '" title="Delete route" aria-label="Delete route"><i data-lucide="trash-2" aria-hidden="true"></i></button>' +
               "</div>" +
             "</div>" +
