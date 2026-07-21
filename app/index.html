@@ -265,6 +265,16 @@
       font-size: 0.7rem;
       letter-spacing: 0.04em;
     }
+    .btn.cue-mode .cue-audio-state {
+      display: block;
+      margin-top: 2px;
+      font-family: var(--mono);
+      font-size: 0.42rem;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      opacity: 0.72;
+      white-space: nowrap;
+    }
     .btn.cue-mode.on {
       background: var(--accent);
       color: #ffffff;
@@ -1634,6 +1644,86 @@
     .sharing-popover-status { min-height: 16px; margin: 10px 0 0; color: var(--muted); font: 0.58rem/1.35 var(--mono); }
     @media (max-width: 520px) {
       .sharing-popover { right: 78px; width: min(264px, calc(100vw - 90px)); }
+    }
+    .cue-popover {
+      position: fixed;
+      right: calc(var(--fig-ctrl, 56px) + 28px);
+      z-index: 120;
+      width: min(224px, calc(100vw - 96px));
+      padding: 10px;
+      border: 1px solid rgba(28, 25, 23, 0.14);
+      border-radius: 12px;
+      background: var(--fig-sheet, #f8f6f1);
+      color: var(--fig-ink, #1c1917);
+      box-shadow: 0 14px 34px rgba(12, 10, 9, 0.22);
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transform: translateX(14px);
+      transition: opacity 150ms ease, transform 150ms ease, visibility 0s linear 150ms;
+    }
+    .cue-popover.open {
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+      transform: translateX(0);
+      transition-delay: 0s;
+    }
+    .cue-popover-modes {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 4px;
+      padding: 4px;
+      border: 1px solid rgba(28, 25, 23, 0.1);
+      border-radius: 9px;
+      background: #ebe6df;
+    }
+    .cue-popover-option {
+      min-height: 38px;
+      padding: 0 5px;
+      border: 0;
+      border-radius: 7px;
+      background: transparent;
+      color: var(--fig-ink, #1c1917);
+      font: 700 0.64rem var(--sans);
+      cursor: pointer;
+    }
+    .cue-popover-option.active,
+    .cue-popover-option[aria-checked="true"] {
+      background: var(--fig-chrome, #1c1917);
+      color: #fff;
+    }
+    .cue-audio-toggle {
+      width: 100%;
+      min-height: 42px;
+      margin-top: 8px;
+      padding: 0 10px;
+      border: 1px solid rgba(28, 25, 23, 0.12);
+      border-radius: 9px;
+      background: #fff;
+      color: var(--fig-ink, #1c1917);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      font: 700 0.68rem var(--sans);
+      cursor: pointer;
+    }
+    .cue-audio-toggle-state {
+      min-width: 42px;
+      padding: 5px 7px;
+      border-radius: 999px;
+      background: var(--fig-blue, #0b70c9);
+      color: #fff;
+      font: 700 0.58rem var(--mono);
+      text-align: center;
+    }
+    .cue-audio-toggle[aria-pressed="false"] .cue-audio-toggle-state {
+      background: #d7d2cb;
+      color: #4b4640;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .cue-popover { transition: none; }
     }
     .group-alert-stack {
       position: absolute;
@@ -6732,9 +6822,10 @@
 
   <div class="stack">
     <button class="btn view-mode" id="viewModeBtn" type="button" title="Toggle 3D tilt" aria-label="Toggle 3D view" aria-pressed="false">3D</button>
-    <button class="btn cue-mode" id="cueModeBtn" type="button" title="Cue mode: all bends or junctions only" aria-label="Toggle navigation cue mode">
+    <button class="btn cue-mode" id="cueModeBtn" type="button" title="Navigation cues" aria-label="Navigation cues: all, audio on" aria-haspopup="dialog" aria-controls="cuePopover" aria-expanded="false">
       <span class="cue-mode-top">Cues</span>
       <span class="cue-mode-main" id="cueModeLabel">ALL</span>
+      <span class="cue-audio-state" id="cueAudioIndicator">AUDIO ON</span>
     </button>
     <button class="btn compass-btn" id="compassBtn" type="button" title="Reset map north" aria-label="Compass, reset north">
       <svg class="compass-rose" id="compassRose" viewBox="0 0 24 24" aria-hidden="true">
@@ -6749,6 +6840,18 @@
     </button>
     <button class="btn primary" id="recenterBtn" title="Follow my location" aria-label="Follow my location">◎</button>
   </div>
+
+  <section class="cue-popover" id="cuePopover" role="dialog" aria-label="Navigation cue settings" aria-hidden="true" hidden>
+    <div class="cue-popover-modes" role="radiogroup" aria-label="Cue type">
+      <button class="cue-popover-option" type="button" role="radio" data-cue-mode="bends" aria-checked="true">All</button>
+      <button class="cue-popover-option" type="button" role="radio" data-cue-mode="junctions" aria-checked="false">Junction</button>
+      <button class="cue-popover-option" type="button" role="radio" data-cue-mode="rally" aria-checked="false">Rally</button>
+    </div>
+    <button class="cue-audio-toggle" id="cueAudioToggle" type="button" aria-pressed="true">
+      <span>Audio</span>
+      <span class="cue-audio-toggle-state" id="cueAudioToggleState">ON</span>
+    </button>
+  </section>
 
   <section class="sharing-popover" id="sharingPopover" aria-hidden="true" aria-labelledby="sharingPopoverTitle" hidden>
     <div class="sharing-popover-head">
@@ -7585,9 +7688,16 @@
     let suppressFollowBreak = false;
     let navigating = false;
     let navManeuvers = [];
-    // "bends" = every meaningful curve (bush / fast riding);
-    // "junctions" = only true network junctions (rally tulip style).
+    // "bends" = roadbook curves + junctions, "junctions" = network decisions,
+    // and "rally" = geometry-derived roadbook curves only.
     let cueMode = "bends";
+    let cueAudioEnabled = true;
+    try {
+      cueMode = ["bends", "junctions", "rally"].includes(localStorage.getItem("dirt_cue_mode_v1"))
+        ? localStorage.getItem("dirt_cue_mode_v1")
+        : "bends";
+      cueAudioEnabled = localStorage.getItem("dirt_cue_audio_v1") !== "off";
+    } catch (_) { /* storage may be unavailable */ }
     let lastSpokenCueKey = "";
     let lastAlongKm = null;
     let wrongWayHits = 0;
@@ -7684,6 +7794,10 @@
     const viewModeBtn = document.getElementById("viewModeBtn");
     const cueModeBtn = document.getElementById("cueModeBtn");
     const cueModeLabel = document.getElementById("cueModeLabel");
+    const cueAudioIndicator = document.getElementById("cueAudioIndicator");
+    const cuePopover = document.getElementById("cuePopover");
+    const cueAudioToggle = document.getElementById("cueAudioToggle");
+    const cueAudioToggleState = document.getElementById("cueAudioToggleState");
     const compassBtn = document.getElementById("compassBtn");
     const compassRose = document.getElementById("compassRose");
     const recenterBtn = document.getElementById("recenterBtn");
@@ -11987,6 +12101,11 @@
         return junctions.concat([arrive]);
       }
 
+      if (cueMode === "rally") {
+        const curves = buildRoadbookCurveManeuvers(coords);
+        return curves.concat([arrive]);
+      }
+
       // ALL: geometry roadbook curves + junctions, merged cleanly.
       const RB = window.RoadbookCurves;
       const curves = buildRoadbookCurveManeuvers(coords);
@@ -11998,17 +12117,25 @@
     }
 
     function syncCueModeBtn() {
-      const isJunctions = cueMode === "junctions";
-      cueModeLabel.textContent = isJunctions ? "JCT" : "ALL";
-      cueModeBtn.title = isJunctions
-        ? "Cue mode: junctions only. Tap for all bends + junctions."
-        : "Cue mode: all bends + junctions. Tap for junctions only.";
+      const labels = { bends: "ALL", junctions: "JCT", rally: "RALLY" };
+      const spokenLabels = { bends: "all", junctions: "junction", rally: "rally" };
+      cueModeLabel.textContent = labels[cueMode] || "ALL";
+      cueAudioIndicator.textContent = cueAudioEnabled ? "AUDIO ON" : "AUDIO OFF";
+      cueModeBtn.title = "Navigation cues: " + (spokenLabels[cueMode] || "all") + ", audio " + (cueAudioEnabled ? "on" : "off");
       cueModeBtn.setAttribute("aria-label", cueModeBtn.title);
-      cueModeBtn.classList.toggle("on", isJunctions);
+      cueModeBtn.classList.toggle("on", cuePopover?.classList.contains("open"));
+      document.querySelectorAll("[data-cue-mode]").forEach((button) => {
+        const active = button.dataset.cueMode === cueMode;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-checked", active ? "true" : "false");
+      });
+      cueAudioToggle?.setAttribute("aria-pressed", cueAudioEnabled ? "true" : "false");
+      if (cueAudioToggleState) cueAudioToggleState.textContent = cueAudioEnabled ? "ON" : "OFF";
     }
 
     function setCueMode(next) {
-      cueMode = next === "junctions" ? "junctions" : "bends";
+      cueMode = ["bends", "junctions", "rally"].includes(next) ? next : "bends";
+      try { localStorage.setItem("dirt_cue_mode_v1", cueMode); } catch (_) { /* storage may be unavailable */ }
       syncCueModeBtn();
       if (activeRoute && activeRouteCoordinates().length >= 2) {
         navManeuvers = buildNavManeuvers(activeRouteCoordinates());
@@ -12018,17 +12145,48 @@
       setStatus(
         cueMode === "junctions"
           ? "Cues: junctions only"
-          : "Cues: all bends + junctions",
+          : cueMode === "rally"
+            ? "Cues: rally curves only"
+            : "Cues: all curves + junctions",
         "ok"
       );
     }
 
-    function toggleCueMode() {
-      setCueMode(cueMode === "junctions" ? "bends" : "junctions");
+    function setCueAudioEnabled(enabled) {
+      cueAudioEnabled = !!enabled;
+      try { localStorage.setItem("dirt_cue_audio_v1", cueAudioEnabled ? "on" : "off"); } catch (_) { /* storage may be unavailable */ }
+      if (!cueAudioEnabled && window.speechSynthesis) window.speechSynthesis.cancel();
+      if (cueAudioEnabled) lastSpokenCueKey = "";
+      syncCueModeBtn();
+      setStatus("Cue audio " + (cueAudioEnabled ? "on" : "off"), "ok");
+    }
+
+    function setCuePopoverOpen(open) {
+      if (!cuePopover || !cueModeBtn) return;
+      if (open) {
+        setQuickSharingOpen(false);
+        cuePopover.hidden = false;
+        cuePopover.setAttribute("aria-hidden", "false");
+        cueModeBtn.setAttribute("aria-expanded", "true");
+        const rect = cueModeBtn.getBoundingClientRect();
+        const height = 106;
+        const top = Math.max(12, Math.min(window.innerHeight - height - 12, rect.top + rect.height / 2 - height / 2));
+        cuePopover.style.top = top + "px";
+        requestAnimationFrame(() => {
+          cuePopover.classList.add("open");
+          syncCueModeBtn();
+        });
+      } else {
+        cuePopover.classList.remove("open");
+        cuePopover.setAttribute("aria-hidden", "true");
+        cueModeBtn.setAttribute("aria-expanded", "false");
+        cuePopover.hidden = true;
+        syncCueModeBtn();
+      }
     }
 
     function speakCue(text, key) {
-      if (!navigating || !window.speechSynthesis) return;
+      if (!navigating || !cueAudioEnabled || !window.speechSynthesis) return;
       if (key && key === lastSpokenCueKey) return;
       lastSpokenCueKey = key || text;
       window.speechSynthesis.cancel();
@@ -14090,6 +14248,7 @@
     function setLegendOpen(open) {
       if (!legendEl) return;
       if (open) {
+        setCuePopoverOpen(false);
         setQuickSharingOpen(false);
         setAccountSheetOpen(false);
         setGroupSheetOpen(false);
@@ -14211,6 +14370,7 @@
 
     function setPlannerDrawerState(next) {
       if (next === "expanded" || next === "collapsed") {
+        setCuePopoverOpen(false);
         if (legendEl && !legendEl.classList.contains("collapsed")) {
           legendEl.classList.add("collapsed");
           if (legendBtn) legendBtn.setAttribute("aria-expanded", "false");
@@ -14523,6 +14683,7 @@
     function setAccountSheetOpen(open) {
       if (!accountSheet) return;
       if (open) {
+        setCuePopoverOpen(false);
         setQuickSharingOpen(false);
         setLegendOpen(false);
         setGroupSheetOpen(false);
@@ -14541,6 +14702,7 @@
     function setGroupSheetOpen(open) {
       if (!groupSheet) return;
       if (open) {
+        setCuePopoverOpen(false);
         setQuickSharingOpen(false);
         setLegendOpen(false);
         setAccountSheetOpen(false);
@@ -14741,7 +14903,31 @@
     recenterBtn.addEventListener("click", activateFollowFromControl);
     followChip.addEventListener("click", activateFollowFromControl);
     viewModeBtn.addEventListener("click", () => setView3d(!view3d));
-    cueModeBtn.addEventListener("click", toggleCueMode);
+    cueModeBtn.addEventListener("click", (event) => {
+      event.stopPropagation();
+      setCuePopoverOpen(!cuePopover?.classList.contains("open"));
+    });
+    cuePopover?.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const modeButton = event.target.closest("[data-cue-mode]");
+      if (modeButton) setCueMode(modeButton.dataset.cueMode);
+    });
+    cueAudioToggle?.addEventListener("click", (event) => {
+      event.stopPropagation();
+      setCueAudioEnabled(!cueAudioEnabled);
+    });
+    document.addEventListener("click", (event) => {
+      if (!cuePopover?.classList.contains("open")) return;
+      if (cueModeBtn.contains(event.target) || cuePopover.contains(event.target)) return;
+      setCuePopoverOpen(false);
+    });
+    window.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && cuePopover?.classList.contains("open")) setCuePopoverOpen(false);
+    });
+    window.addEventListener("resize", () => {
+      if (cuePopover?.classList.contains("open")) setCuePopoverOpen(true);
+    });
+    syncCueModeBtn();
     compassBtn.addEventListener("click", resetNorthUp);
     routeNavBtn.addEventListener("click", toggleNavigation);
     navStopBtn.addEventListener("click", stopNavigation);
@@ -15206,6 +15392,7 @@
     function setQuickSharingOpen(open) {
       if (!sharingPopover || !reportVisBtn) return;
       if (open) {
+        setCuePopoverOpen(false);
         setLegendOpen(false);
         setAccountSheetOpen(false);
         setGroupSheetOpen(false);
@@ -16014,6 +16201,13 @@
         sharingPopover.classList.remove("open");
         sharingPopover.hidden = true;
       }
+      if (cuePopover) {
+        cuePopover.classList.remove("open");
+        cuePopover.hidden = true;
+        cuePopover.setAttribute("aria-hidden", "true");
+      }
+      cueModeBtn?.setAttribute("aria-expanded", "false");
+      syncCueModeBtn();
       syncBottomNavState();
       requestAnimationFrame(syncLocateClearance);
     }
