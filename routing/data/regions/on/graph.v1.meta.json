@@ -1,70 +1,76 @@
 {
-  "generatedAt": "2026-07-20T22:30:35.917Z",
+  "generatedAt": "2026-07-21T00:48:15.404Z",
   "schemaVersion": "canada-regional-1",
   "regionId": "on",
   "province": "ON",
   "bbox": [
-    -95.15343,
+    -95.1547,
     41.73724,
     -74.34386,
     56.08281
   ],
-  "nodeCount": 502405,
-  "edgeCount": 647004,
-  "componentCount": 64,
-  "boundaryNodeCount": 1219,
+  "nodeCount": 809468,
+  "edgeCount": 931478,
+  "componentCount": 41159,
+  "boundaryNodeCount": 1664,
   "accessCounts": {
-    "motorized_permissive": 647004
+    "motorized_permissive": 647004,
+    "motorized_unknown": 284474
   },
   "surfaceCounts": {
-    "gravel": 146519,
-    "paved": 500482,
-    "unknown": 3
+    "gravel": 424610,
+    "paved": 506337,
+    "unknown": 3,
+    "access": 528
   },
   "sourceCounts": {
-    "National Road Network": 647004
+    "National Road Network": 647004,
+    "Ontario MNRF Road Segments": 284474
   },
-  "jsonBytes": 315616061,
-  "gzBytes": 68333469,
+  "jsonBytes": 369047809,
+  "gzBytes": 77008055,
   "lineage": {
     "nrn": {
-      "adapter": "nrn",
-      "featureCount": 651662,
-      "excludedByReason": {},
+      "adapter": "nrn-from-pack",
+      "featureCount": 647004
+    },
+    "provincial": {
+      "adapter": "on-mnrf-roads",
+      "featureCount": 0,
+      "excludedByReason": {
+        "restricted_or_closed": 9111,
+        "no_usable_geometry": 734
+      },
       "classification": {
         "surface": {
-          "gravel": 147344,
-          "paved": 504315,
-          "unknown": 3
+          "gravel": 302971,
+          "paved": 7811,
+          "resource": 719
         },
         "access": {
-          "motorized_permissive": 651662
+          "motorized_unknown": 311501
         },
         "structure": {
-          "none": 635661,
-          "bridge": 15817,
-          "tunnel": 184
+          "none": 311501
         },
         "roadTrack": {
-          "resource": 45681,
-          "local": 427140,
-          "arterial": 96835,
-          "freeway": 19413,
-          "service": 767,
-          "unknown": 795,
-          "collector": 53480,
-          "ramp": 7551
+          "resource": 303690,
+          "local": 7811
         },
         "excluded": {}
       }
     },
-    "provincial": null
+    "thinnedGeometry": true,
+    "thinnedMaxPts": 8
   },
   "conflation": {
     "stats": {
-      "backboneKept": 651662,
-      "supplementAdded": 0,
-      "supplementDuplicateSkipped": 0
+      "backboneKept": 647004,
+      "supplementAdded": 286638,
+      "supplementDuplicateSkipped": 24863,
+      "supplementConventionalSkipped": 0,
+      "backboneSurfaceEnriched": 0,
+      "conflicts": 0
     },
     "freeSpaceConnectors": 0
   }

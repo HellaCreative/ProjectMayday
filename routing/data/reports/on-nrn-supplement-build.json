@@ -1,0 +1,157 @@
+{
+  "generatedAt": "2026-07-21T00:49:00.894Z",
+  "region": "ON",
+  "nrn": {
+    "adapter": "nrn-from-pack",
+    "featureCount": 647004
+  },
+  "provincial": {
+    "adapter": "on-mnrf-roads",
+    "province": "ON",
+    "sourceName": "Ontario MNRF Road Segments",
+    "sourceUrl": "https://geohub.lio.gov.on.ca/datasets/lio::mnr-road-segments/explore",
+    "downloadUrl": "https://ws.lioservices.lrc.gov.on.ca/arcgis2/rest/services/LIO_OPEN_DATA/LIO_Open09/MapServer/18",
+    "license": "Open Government Licence - Ontario",
+    "sourceDatasetVersion": "LIO_Open09/18",
+    "dateRetrieved": "2026-07-21T00:48:05.460Z",
+    "status": "ok",
+    "notes": [
+      "Supplemental MNR resource/recreation roads. Access defaults to motorized_unknown."
+    ],
+    "knownLimitations": [
+      "Includes some ORN-sourced conventional roads; freeways are skipped.",
+      "Does not assert motorcycle legality."
+    ],
+    "featureCount": 0,
+    "excludedCount": 9845,
+    "excludedByReason": {
+      "restricted_or_closed": 9111,
+      "no_usable_geometry": 734
+    },
+    "classification": {
+      "surface": {
+        "gravel": 302971,
+        "paved": 7811,
+        "resource": 719
+      },
+      "access": {
+        "motorized_unknown": 311501
+      },
+      "structure": {
+        "none": 311501
+      },
+      "roadTrack": {
+        "resource": 303690,
+        "local": 7811
+      },
+      "excluded": {}
+    },
+    "topology": null,
+    "generatedAt": "2026-07-21T00:48:05.472Z"
+  },
+  "conflation": {
+    "province": "ON",
+    "generatedAt": "2026-07-21T00:48:11.299Z",
+    "precedence": {
+      "backbone": "NRN owns national road identity and conventional-road attributes",
+      "supplement": "Provincial data adds resource/track detail and unmatched local connectivity",
+      "surfaceEnrichment": "Provincial paved/gravel may enrich NRN edges whose pavement status is unknown",
+      "osm": "OSM not added as routing edges in this phase"
+    },
+    "stats": {
+      "backboneKept": 647004,
+      "supplementAdded": 286638,
+      "supplementDuplicateSkipped": 24863,
+      "supplementConventionalSkipped": 0,
+      "backboneSurfaceEnriched": 0,
+      "conflicts": 0
+    },
+    "skipReasons": {
+      "duplicate_of_backbone": 24863
+    },
+    "featureCount": 933642,
+    "freeSpaceConnectors": 0,
+    "notes": [
+      "No free-space connectors were created.",
+      "Duplicates detected by midpoint proximity + bearing + endpoint proximity.",
+      "Genuine dead ends remain dead ends — no proximity stitching of endpoints."
+    ]
+  },
+  "graph": {
+    "generatedAt": "2026-07-21T00:48:15.404Z",
+    "schemaVersion": "canada-regional-1",
+    "regionId": "on",
+    "province": "ON",
+    "bbox": [
+      -95.1547,
+      41.73724,
+      -74.34386,
+      56.08281
+    ],
+    "nodeCount": 809468,
+    "edgeCount": 931478,
+    "componentCount": 41159,
+    "boundaryNodeCount": 1664,
+    "accessCounts": {
+      "motorized_permissive": 647004,
+      "motorized_unknown": 284474
+    },
+    "surfaceCounts": {
+      "gravel": 424610,
+      "paved": 506337,
+      "unknown": 3,
+      "access": 528
+    },
+    "sourceCounts": {
+      "National Road Network": 647004,
+      "Ontario MNRF Road Segments": 284474
+    },
+    "jsonBytes": 509594298,
+    "gzBytes": 110476070,
+    "lineage": {
+      "nrn": {
+        "adapter": "nrn-from-pack",
+        "featureCount": 647004
+      },
+      "provincial": {
+        "adapter": "on-mnrf-roads",
+        "featureCount": 0,
+        "excludedByReason": {
+          "restricted_or_closed": 9111,
+          "no_usable_geometry": 734
+        },
+        "classification": {
+          "surface": {
+            "gravel": 302971,
+            "paved": 7811,
+            "resource": 719
+          },
+          "access": {
+            "motorized_unknown": 311501
+          },
+          "structure": {
+            "none": 311501
+          },
+          "roadTrack": {
+            "resource": 303690,
+            "local": 7811
+          },
+          "excluded": {}
+        }
+      }
+    },
+    "conflation": {
+      "featureCount": 933642,
+      "stats": {
+        "backboneKept": 647004,
+        "supplementAdded": 286638,
+        "supplementDuplicateSkipped": 24863,
+        "supplementConventionalSkipped": 0,
+        "backboneSurfaceEnriched": 0,
+        "conflicts": 0
+      },
+      "freeSpaceConnectors": 0
+    }
+  },
+  "freeSpaceConnectors": 0
+}

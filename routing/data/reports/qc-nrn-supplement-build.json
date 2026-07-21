@@ -1,0 +1,144 @@
+{
+  "generatedAt": "2026-07-21T01:15:53.973Z",
+  "region": "QC",
+  "nrn": {
+    "adapter": "nrn-from-pack",
+    "featureCount": 504772
+  },
+  "provincial": {
+    "adapter": "qc-multiusage",
+    "province": "QC",
+    "sourceName": "Québec Chemins Multiusages (AQréseau+)",
+    "sourceUrl": "https://mrnf.gouv.qc.ca/repertoire-geographique/adresses-quebec-reseaux-transport/",
+    "downloadUrl": "https://servicescarto.mrnf.gouv.qc.ca/pes/rest/services/Territoire/AQreseauPlus_WMS/MapServer/37",
+    "license": "Licence Creative Commons CC-BY 4.0 / données ouvertes Québec",
+    "sourceDatasetVersion": "AQreseauPlus/37",
+    "dateRetrieved": "2026-07-21T01:15:23.344Z",
+    "status": "ok",
+    "notes": [
+      "Forest multi-use roads. Access defaults to motorized_unknown — never invented as permissive."
+    ],
+    "knownLimitations": [
+      "Condition of multiusage roads is not field-verified in source.",
+      "Does not assert motorcycle legality."
+    ],
+    "featureCount": 250000,
+    "scannedCount": 250000,
+    "excludedCount": 0,
+    "excludedByReason": {},
+    "classification": {
+      "surface": {
+        "resource": 250000
+      },
+      "access": {
+        "motorized_unknown": 250000
+      },
+      "structure": {
+        "none": 250000
+      },
+      "roadTrack": {
+        "resource": 250000
+      },
+      "excluded": {}
+    },
+    "topology": null,
+    "generatedAt": "2026-07-21T01:15:23.346Z"
+  },
+  "conflation": {
+    "province": "QC",
+    "generatedAt": "2026-07-21T01:15:28.567Z",
+    "precedence": {
+      "backbone": "NRN owns national road identity and conventional-road attributes",
+      "supplement": "Provincial data adds resource/track detail and unmatched local connectivity",
+      "surfaceEnrichment": "Provincial paved/gravel may enrich NRN edges whose pavement status is unknown",
+      "osm": "OSM not added as routing edges in this phase"
+    },
+    "stats": {
+      "backboneKept": 504772,
+      "supplementAdded": 248685,
+      "supplementDuplicateSkipped": 1315,
+      "supplementConventionalSkipped": 0,
+      "backboneSurfaceEnriched": 75,
+      "conflicts": 0
+    },
+    "skipReasons": {
+      "duplicate_of_backbone": 1315,
+      "backbone_surface_enriched": 75
+    },
+    "featureCount": 753457,
+    "freeSpaceConnectors": 0,
+    "notes": [
+      "No free-space connectors were created.",
+      "Duplicates detected by midpoint proximity + bearing + endpoint proximity.",
+      "Genuine dead ends remain dead ends — no proximity stitching of endpoints."
+    ]
+  },
+  "graph": {
+    "generatedAt": "2026-07-21T01:15:31.704Z",
+    "schemaVersion": "canada-regional-1",
+    "regionId": "qc",
+    "province": "QC",
+    "bbox": [
+      -79.54404,
+      44.99147,
+      -57.10746,
+      62.42787
+    ],
+    "nodeCount": 630158,
+    "edgeCount": 753123,
+    "componentCount": 6799,
+    "boundaryNodeCount": 4904,
+    "accessCounts": {
+      "motorized_permissive": 500030,
+      "motorized_unknown": 253093
+    },
+    "surfaceCounts": {
+      "unknown": 499955,
+      "access": 253168
+    },
+    "sourceCounts": {
+      "National Road Network": 504772,
+      "Québec Chemins Multiusages (AQréseau+)": 248351
+    },
+    "jsonBytes": 436706866,
+    "gzBytes": 100415644,
+    "lineage": {
+      "nrn": {
+        "adapter": "nrn-from-pack",
+        "featureCount": 504772
+      },
+      "provincial": {
+        "adapter": "qc-multiusage",
+        "featureCount": 250000,
+        "excludedByReason": {},
+        "classification": {
+          "surface": {
+            "resource": 250000
+          },
+          "access": {
+            "motorized_unknown": 250000
+          },
+          "structure": {
+            "none": 250000
+          },
+          "roadTrack": {
+            "resource": 250000
+          },
+          "excluded": {}
+        }
+      }
+    },
+    "conflation": {
+      "stats": {
+        "backboneKept": 504772,
+        "supplementAdded": 248685,
+        "supplementDuplicateSkipped": 1315,
+        "supplementConventionalSkipped": 0,
+        "backboneSurfaceEnriched": 75,
+        "conflicts": 0
+      },
+      "freeSpaceConnectors": 0
+    }
+  },
+  "freeSpaceConnectors": 0
+}

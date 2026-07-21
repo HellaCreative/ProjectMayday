@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-20T22:28:45.237Z",
+  "generatedAt": "2026-07-21T01:15:31.704Z",
   "schemaVersion": "canada-regional-1",
   "regionId": "qc",
   "province": "QC",
@@ -9,62 +9,59 @@
     -57.10746,
     62.42787
   ],
-  "nodeCount": 393420,
-  "edgeCount": 504772,
-  "componentCount": 48,
-  "boundaryNodeCount": 4766,
+  "nodeCount": 630158,
+  "edgeCount": 753123,
+  "componentCount": 6799,
+  "boundaryNodeCount": 4904,
   "accessCounts": {
     "motorized_permissive": 500030,
-    "motorized_unknown": 4742
+    "motorized_unknown": 253093
   },
   "surfaceCounts": {
-    "unknown": 500030,
-    "access": 4742
+    "unknown": 499955,
+    "access": 253168
   },
   "sourceCounts": {
-    "National Road Network": 504772
+    "National Road Network": 504772,
+    "Québec Chemins Multiusages (AQréseau+)": 248351
   },
-  "jsonBytes": 259334044,
-  "gzBytes": 57704621,
+  "jsonBytes": 319758557,
+  "gzBytes": 70020919,
   "lineage": {
     "nrn": {
-      "adapter": "nrn",
-      "featureCount": 504826,
+      "adapter": "nrn-from-pack",
+      "featureCount": 504772
+    },
+    "provincial": {
+      "adapter": "qc-multiusage",
+      "featureCount": 250000,
       "excludedByReason": {},
       "classification": {
         "surface": {
-          "unknown": 500084,
-          "resource": 4742
+          "resource": 250000
         },
         "access": {
-          "motorized_permissive": 500084,
-          "motorized_unknown": 4742
+          "motorized_unknown": 250000
         },
         "structure": {
-          "none": 493747,
-          "bridge": 10988,
-          "tunnel": 91
+          "none": 250000
         },
         "roadTrack": {
-          "local": 358231,
-          "collector": 59620,
-          "resource": 4742,
-          "arterial": 19014,
-          "freeway": 50559,
-          "ramp": 8810,
-          "service": 3643,
-          "unknown": 207
+          "resource": 250000
         },
         "excluded": {}
       }
     },
-    "provincial": null
+    "thinnedGeometry": true
   },
   "conflation": {
     "stats": {
-      "backboneKept": 504826,
-      "supplementAdded": 0,
-      "supplementDuplicateSkipped": 0
+      "backboneKept": 504772,
+      "supplementAdded": 248685,
+      "supplementDuplicateSkipped": 1315,
+      "supplementConventionalSkipped": 0,
+      "backboneSurfaceEnriched": 75,
+      "conflicts": 0
     },
     "freeSpaceConnectors": 0
   }

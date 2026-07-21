@@ -1,68 +1,71 @@
 {
-  "generatedAt": "2026-07-20T22:26:30.078Z",
+  "generatedAt": "2026-07-21T00:19:19.665Z",
   "schemaVersion": "canada-regional-1",
   "regionId": "ab",
   "province": "AB",
   "bbox": [
-    -120.00139,
-    48.99743,
-    -110.00469,
-    59.99956
+    -120.01708,
+    48.99275,
+    -109.99084,
+    60.00059
   ],
-  "nodeCount": 350097,
-  "edgeCount": 440248,
-  "componentCount": 19,
-  "boundaryNodeCount": 2383,
+  "nodeCount": 791331,
+  "edgeCount": 686458,
+  "componentCount": 195680,
+  "boundaryNodeCount": 14555,
   "accessCounts": {
-    "motorized_permissive": 440248
+    "motorized_permissive": 440248,
+    "motorized_unknown": 246210
   },
   "surfaceCounts": {
     "paved": 269448,
-    "gravel": 170800
+    "gravel": 170800,
+    "track": 245800,
+    "access": 410
   },
   "sourceCounts": {
-    "National Road Network": 440248
+    "National Road Network": 440248,
+    "Alberta Access and Facility Roads": 246210
   },
-  "jsonBytes": 172144905,
-  "gzBytes": 32225735,
+  "jsonBytes": 268197096,
+  "gzBytes": 48747812,
   "lineage": {
     "nrn": {
-      "adapter": "nrn",
-      "featureCount": 443593,
+      "adapter": "nrn-from-pack",
+      "featureCount": 440248
+    },
+    "provincial": {
+      "adapter": "ab-access-roads",
+      "featureCount": 0,
       "excludedByReason": {},
       "classification": {
         "surface": {
-          "paved": 271519,
-          "gravel": 172074
+          "track": 249585,
+          "resource": 415
         },
         "access": {
-          "motorized_permissive": 443593
+          "motorized_unknown": 250000
         },
         "structure": {
-          "none": 436042,
-          "bridge": 7515,
-          "tunnel": 36
+          "none": 250000
         },
         "roadTrack": {
-          "resource": 46188,
-          "freeway": 7514,
-          "collector": 170670,
-          "service": 1136,
-          "local": 175886,
-          "arterial": 28920,
-          "ramp": 13129,
-          "unknown": 150
+          "track": 249585,
+          "resource": 415
         },
         "excluded": {}
       }
-    },
-    "provincial": null
+    }
   },
   "conflation": {
+    "featureCount": 686537,
     "stats": {
-      "backboneKept": 443593,
-      "supplementAdded": 0,
-      "supplementDuplicateSkipped": 0
+      "backboneKept": 440248,
+      "supplementAdded": 246289,
+      "supplementDuplicateSkipped": 3711,
+      "supplementConventionalSkipped": 0,
+      "backboneSurfaceEnriched": 0,
+      "conflicts": 0
     },
     "freeSpaceConnectors": 0
   }

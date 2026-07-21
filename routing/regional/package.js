@@ -234,11 +234,51 @@ function buildRegionalGraph(options = {}) {
 
 function writeRegionalGraph(graph, outDir) {
   fs.mkdirSync(outDir, { recursive: true });
-  const json = JSON.stringify(graph);
-  const gz = zlib.gzipSync(Buffer.from(json), { level: 9 });
   const graphPath = path.join(outDir, "graph.v1.json.gz");
   const metaPath = path.join(outDir, "graph.v1.meta.json");
-  fs.writeFileSync(graphPath, gz);
+  const tmpJson = path.join(outDir, "graph.v1.json.tmp");
+
+  // Chunked write avoids JSON.stringify string-length limits on large packs.
+  const fd = fs.openSync(tmpJson, "w");
+  function ws(s) {
+    fs.writeSync(fd, s);
+  }
+  ws("{");
+  const scalars = { ...graph };
+  const nodes = scalars.nodes;
+  const edges = scalars.edges;
+  delete scalars.nodes;
+  delete scalars.edges;
+  for (const k of Object.keys(scalars)) {
+    ws(JSON.stringify(k) + ":" + JSON.stringify(scalars[k]) + ",");
+  }
+  ws('"nodes":[');
+  for (let i = 0; i < nodes.length; i += 1) {
+    if (i) ws(",");
+    ws(JSON.stringify(nodes[i]));
+  }
+  ws('],"edges":[');
+  for (let i = 0; i < edges.length; i += 1) {
+    if (i) ws(",");
+    ws(JSON.stringify(edges[i]));
+  }
+  ws("]}");
+  fs.closeSync(fd);
+
+  const jsonBytes = fs.statSync(tmpJson).size;
+  const { spawnSync } = require("child_process");
+  const z = spawnSync("gzip", ["-c", "-6", tmpJson], {
+    maxBuffer: 1024 * 1024 * 1024
+  });
+  if (z.error || z.status !== 0) {
+    const buf = zlib.gzipSync(fs.readFileSync(tmpJson), { level: 6 });
+    fs.writeFileSync(graphPath, buf);
+  } else {
+    fs.writeFileSync(graphPath, z.stdout);
+  }
+  fs.unlinkSync(tmpJson);
+  const gzBytes = fs.statSync(graphPath).size;
+
   const meta = {
     generatedAt: graph.generatedAt,
     schemaVersion: graph.schemaVersion,
@@ -252,14 +292,13 @@ function writeRegionalGraph(graph, outDir) {
     accessCounts: graph.accessCounts,
     surfaceCounts: graph.surfaceCounts,
     sourceCounts: graph.sourceCounts,
-    jsonBytes: Buffer.byteLength(json),
-    gzBytes: gz.length,
+    jsonBytes,
+    gzBytes,
     lineage: graph.lineage,
     conflation: graph.conflation
       ? {
-          featureCount: graph.conflation.featureCount,
-          stats: graph.conflation.stats,
-          freeSpaceConnectors: graph.conflation.freeSpaceConnectors
+          stats: graph.conflation.stats || null,
+          freeSpaceConnectors: graph.conflation.freeSpaceConnectors || 0
         }
       : null
   };

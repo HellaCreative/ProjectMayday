@@ -1,8 +1,7 @@
 "use strict";
 
-const { execFile } = require("child_process");
-const { promisify } = require("util");
-const execFileAsync = promisify(execFile);
+const https = require("https");
+const http = require("http");
 const crypto = require("crypto");
 const { createNormalizedEdge } = require("../schema/edge");
 const {
@@ -15,36 +14,53 @@ const {
 const { bump, makeReport, emptyCounts } = require("./contract");
 
 const name = "bc-ften-roads";
-const TYPE_NAME = "pub:WHSE_FOREST_TENURE.FTEN_ROAD_SECTION_LINES_SVW";
-const WFS = "https://openmaps.gov.bc.ca/geo/pub/wfs";
+const TYPE_NAME = "WHSE_FOREST_TENURE.FTEN_ROAD_SECTION_LINES_SVW";
+// /geo/pub/wfs with typeNames returns HTTP 400; /geo/pub/ows + typeName works.
+const WFS = "https://openmaps.gov.bc.ca/geo/pub/ows";
+
+function fetchJson(url) {
+  return new Promise((resolve, reject) => {
+    const lib = url.startsWith("https") ? https : http;
+    const req = lib.get(url, (res) => {
+      if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        fetchJson(res.headers.location).then(resolve, reject);
+        return;
+      }
+      const chunks = [];
+      res.on("data", (c) => chunks.push(c));
+      res.on("end", () => {
+        const text = Buffer.concat(chunks).toString("utf8");
+        if (res.statusCode !== 200 || text.trimStart().startsWith("<")) {
+          reject(new Error("BC WFS HTTP " + res.statusCode + ": " + text.slice(0, 240)));
+          return;
+        }
+        try {
+          resolve(JSON.parse(text));
+        } catch (err) {
+          reject(err);
+        }
+      });
+      res.on("error", reject);
+    });
+    req.setTimeout(120000, () => {
+      req.destroy(new Error("BC WFS timeout"));
+    });
+    req.on("error", reject);
+  });
+}
 
 async function fetchPage(pageSize, startIndex) {
-  const args = [
-    "-sS",
-    "-G",
-    WFS,
-    "-d",
-    "service=WFS",
-    "-d",
-    "version=2.0.0",
-    "-d",
-    "request=GetFeature",
-    "-d",
-    `typeNames=${TYPE_NAME}`,
-    "-d",
-    "outputFormat=application/json",
-    "-d",
-    "srsName=EPSG:4326",
-    "-d",
-    `count=${pageSize}`,
-    "-d",
-    `startIndex=${startIndex}`
-  ];
-  const { stdout } = await execFileAsync("curl", args, {
-    encoding: "buffer",
-    maxBuffer: 64 * 1024 * 1024
-  });
-  return JSON.parse(stdout.toString("utf8"));
+  const u = new URL(WFS);
+  u.searchParams.set("service", "WFS");
+  u.searchParams.set("version", "2.0.0");
+  u.searchParams.set("request", "GetFeature");
+  u.searchParams.set("typeName", TYPE_NAME);
+  u.searchParams.set("outputFormat", "json");
+  u.searchParams.set("srsName", "EPSG:4326");
+  u.searchParams.set("count", String(pageSize));
+  u.searchParams.set("sortBy", "ROAD_SECTION_ID");
+  if (startIndex > 0) u.searchParams.set("startIndex", String(startIndex));
+  return fetchJson(u.toString());
 }
 
 function roundCoord(c) {
@@ -111,8 +127,12 @@ async function run(options = {}) {
       scanned += 1;
       if (features.length >= maxFeatures) break;
       const props = row.properties || {};
-      const text = JSON.stringify(props).toLowerCase();
-      if (/deactivat|abandon|closed|retire/.test(text)) {
+      const life = String(props.LIFE_CYCLE_STATUS_CODE || props.FILE_STATUS_CODE || "").toUpperCase();
+      if (life === "RETIRED" || life === "DEACTIVATED" || life === "CANCELLED") {
+        bump(excludedByReason, "deactivated_or_closed");
+        continue;
+      }
+      if (props.RETIREMENT_DATE) {
         bump(excludedByReason, "deactivated_or_closed");
         continue;
       }
@@ -145,7 +165,7 @@ async function run(options = {}) {
             accessClass: ACCESS_CLASS.motorized_unknown,
             structureType: STRUCTURE_TYPE.none,
             sourceConfidence: SOURCE_CONFIDENCE.medium,
-            roadName: props.ROAD_NAME || props.MAP_LABEL || null,
+            roadName: props.ROAD_SECTION_NAME || props.ROAD_NAME || props.MAP_LABEL || null,
             direction: "both",
             seasonal: false,
             distanceMeters: lineMeters(coords),

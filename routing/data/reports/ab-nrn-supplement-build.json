@@ -1,0 +1,149 @@
+{
+  "generatedAt": "2026-07-21T00:19:32.709Z",
+  "region": "AB",
+  "nrn": {
+    "adapter": "nrn-from-pack",
+    "featureCount": 440248
+  },
+  "provincial": {
+    "adapter": "ab-access-roads",
+    "province": "AB",
+    "sourceName": "Alberta Access and Facility Roads",
+    "sourceUrl": "https://www.alberta.ca/provincial-geospatial-centre",
+    "downloadUrl": "https://geospatial.alberta.ca/titan/rest/services/utility/access/MapServer",
+    "license": "Open Government Licence - Alberta",
+    "sourceDatasetVersion": "alberta-titan-access",
+    "dateRetrieved": "2026-07-21T00:19:15.256Z",
+    "status": "ok",
+    "notes": [
+      "Supplemental resource/access roads. Access defaults to motorized_unknown — never invented as permissive."
+    ],
+    "knownLimitations": [
+      "Attribute schemas vary by MapServer layer; closed/private cues are best-effort.",
+      "Does not assert motorcycle legality."
+    ],
+    "featureCount": 0,
+    "excludedCount": 0,
+    "excludedByReason": {},
+    "classification": {
+      "surface": {
+        "track": 249585,
+        "resource": 415
+      },
+      "access": {
+        "motorized_unknown": 250000
+      },
+      "structure": {
+        "none": 250000
+      },
+      "roadTrack": {
+        "track": 249585,
+        "resource": 415
+      },
+      "excluded": {}
+    },
+    "topology": null,
+    "generatedAt": "2026-07-21T00:19:15.266Z"
+  },
+  "conflation": {
+    "province": "AB",
+    "generatedAt": "2026-07-21T00:19:18.088Z",
+    "precedence": {
+      "backbone": "NRN owns national road identity and conventional-road attributes",
+      "supplement": "Provincial data adds resource/track detail and unmatched local connectivity",
+      "surfaceEnrichment": "Provincial paved/gravel may enrich NRN edges whose pavement status is unknown",
+      "osm": "OSM not added as routing edges in this phase"
+    },
+    "stats": {
+      "backboneKept": 440248,
+      "supplementAdded": 246289,
+      "supplementDuplicateSkipped": 3711,
+      "supplementConventionalSkipped": 0,
+      "backboneSurfaceEnriched": 0,
+      "conflicts": 0
+    },
+    "skipReasons": {
+      "duplicate_of_backbone": 3711
+    },
+    "featureCount": 686537,
+    "freeSpaceConnectors": 0,
+    "notes": [
+      "No free-space connectors were created.",
+      "Duplicates detected by midpoint proximity + bearing + endpoint proximity.",
+      "Genuine dead ends remain dead ends — no proximity stitching of endpoints."
+    ]
+  },
+  "graph": {
+    "generatedAt": "2026-07-21T00:19:19.665Z",
+    "schemaVersion": "canada-regional-1",
+    "regionId": "ab",
+    "province": "AB",
+    "bbox": [
+      -120.01708,
+      48.99275,
+      -109.99084,
+      60.00059
+    ],
+    "nodeCount": 791331,
+    "edgeCount": 686458,
+    "componentCount": 195680,
+    "boundaryNodeCount": 14555,
+    "accessCounts": {
+      "motorized_permissive": 440248,
+      "motorized_unknown": 246210
+    },
+    "surfaceCounts": {
+      "paved": 269448,
+      "gravel": 170800,
+      "track": 245800,
+      "access": 410
+    },
+    "sourceCounts": {
+      "National Road Network": 440248,
+      "Alberta Access and Facility Roads": 246210
+    },
+    "jsonBytes": 268197096,
+    "gzBytes": 48747812,
+    "lineage": {
+      "nrn": {
+        "adapter": "nrn-from-pack",
+        "featureCount": 440248
+      },
+      "provincial": {
+        "adapter": "ab-access-roads",
+        "featureCount": 0,
+        "excludedByReason": {},
+        "classification": {
+          "surface": {
+            "track": 249585,
+            "resource": 415
+          },
+          "access": {
+            "motorized_unknown": 250000
+          },
+          "structure": {
+            "none": 250000
+          },
+          "roadTrack": {
+            "track": 249585,
+            "resource": 415
+          },
+          "excluded": {}
+        }
+      }
+    },
+    "conflation": {
+      "featureCount": 686537,
+      "stats": {
+        "backboneKept": 440248,
+        "supplementAdded": 246289,
+        "supplementDuplicateSkipped": 3711,
+        "supplementConventionalSkipped": 0,
+        "backboneSurfaceEnriched": 0,
+        "conflicts": 0
+      },
+      "freeSpaceConnectors": 0
+    }
+  },
+  "freeSpaceConnectors": 0
+}

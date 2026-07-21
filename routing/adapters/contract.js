@@ -38,7 +38,13 @@ function makeReport(partial) {
     status: partial.status || "ok",
     notes: partial.notes || [],
     knownLimitations: partial.knownLimitations || [],
-    featureCount: Array.isArray(partial.features) ? partial.features.length : 0,
+    featureCount:
+      partial.featureCount != null
+        ? Number(partial.featureCount)
+        : Array.isArray(partial.features)
+          ? partial.features.length
+          : 0,
+    scannedCount: partial.scannedCount != null ? Number(partial.scannedCount) : null,
     excludedCount: 0,
     excludedByReason: partial.excludedByReason || {},
     classification: partial.classification || emptyCounts(),
