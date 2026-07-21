@@ -135,9 +135,11 @@ function conflateRegion(options = {}) {
       generatedAt: new Date().toISOString(),
       precedence: {
         backbone: "NRN owns national road identity and conventional-road attributes",
+        osmGapFill:
+          "OpenStreetMap adds unmatched motorized paved/gravel/road geometry after NRN; never replaces NRN identity",
         supplement: "Provincial data adds resource/track detail and unmatched local connectivity",
-        surfaceEnrichment: "Provincial paved/gravel may enrich NRN edges whose pavement status is unknown",
-        osm: "OSM not added as routing edges in this phase"
+        surfaceEnrichment: "Provincial or OSM paved/gravel may enrich NRN edges whose pavement status is unknown",
+        freeSpace: "No free-space connectors"
       },
       stats,
       skipReasons: reasons,

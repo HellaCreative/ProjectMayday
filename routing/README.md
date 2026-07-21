@@ -4,11 +4,12 @@ Offline regional graphs + Node A* via `POST /api/route`.
 
 ## Architecture
 
-1. **OSM** — basemap tiles + rider-service POIs only (not routing edges).
-2. **NRN** — national paved/gravel road backbone (per province GeoPackage).
-3. **Provincial datasets** — resource roads / tracks / access detail (NS = NSTDB).
-4. **Conflation** — NRN owns road identity; provincial data supplements unmatched
-   resource/track detail and may enrich NRN edges whose pavement status is unknown.
+1. **OSM** — basemap tiles + rider-service POIs; also **gap-fill routing edges**
+   (motorized highways unmatched by NRN) for proven provinces (NB, QC).
+2. **NRN** — national paved/gravel road backbone (per province GeoPackage); owns identity.
+3. **Provincial datasets** — resource roads / tracks / access detail (NS = NSTDB,
+   NB = Forest Roads, QC = chemins multiusages, …); default `motorized_unknown`.
+4. **Conflation** — NRN → OSM gap-fill → provincial. No free-space connectors.
 5. **Regional packages** — `routing/data/regions/<id>/graph.v1.json.gz` (never one
    Canada-wide browser graph).
 
@@ -23,7 +24,18 @@ Riders never see source switches. The map paints a single corridor network.
 
 - `routing/adapters/contract.js` — shared report contract
 - `routing/adapters/nrn.js` — National Road Network
+- `routing/adapters/osm-roads.js` — OSM motorized gap-fill (Geofabrik)
 - `routing/adapters/ns-nstdb.js` — Nova Scotia NSTDB
+- `routing/adapters/nb-forest-roads.js` — New Brunswick Forest Roads
+- `routing/adapters/qc-multiusage.js` — Québec chemins multiusages
+
+```bash
+# OSM gap-fill extract (once per province), then rebuild:
+bash scripts/extract-osm-roads.sh new-brunswick
+bash scripts/extract-osm-roads.sh quebec
+node scripts/build-region-with-supplement.js nb
+node scripts/build-region-with-supplement.js qc
+```
 
 ## Registry
 

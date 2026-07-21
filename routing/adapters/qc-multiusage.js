@@ -22,28 +22,80 @@ const SERVICE =
   "https://servicescarto.mrnf.gouv.qc.ca/pes/rest/services/Territoire/AQreseauPlus_WMS/MapServer";
 const LAYER_ID = 37; // Chemin Multiusage — Oui
 
-function fetchJson(url) {
+function fetchJsonOnce(url, timeoutMs = 90000) {
   return new Promise((resolve, reject) => {
     const lib = url.startsWith("https") ? https : http;
-    lib
-      .get(url, (res) => {
-        if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-          fetchJson(res.headers.location).then(resolve, reject);
-          return;
+    let settled = false;
+    const fail = (err) => {
+      if (settled) return;
+      settled = true;
+      reject(err instanceof Error ? err : new Error(String(err)));
+    };
+    const ok = (val) => {
+      if (settled) return;
+      settled = true;
+      resolve(val);
+    };
+    const timer = setTimeout(() => {
+      fail(new Error(`timeout after ${timeoutMs}ms`));
+      try {
+        req.destroy();
+      } catch (_) {
+        /* ignore */
+      }
+    }, timeoutMs);
+    const req = lib.get(url, (res) => {
+      res.setTimeout(timeoutMs, () => {
+        fail(new Error(`response timeout after ${timeoutMs}ms`));
+        res.destroy();
+      });
+      if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        clearTimeout(timer);
+        res.resume();
+        fetchJsonOnce(res.headers.location, timeoutMs).then(ok, fail);
+        return;
+      }
+      if (res.statusCode && res.statusCode >= 400) {
+        clearTimeout(timer);
+        res.resume();
+        fail(new Error(`HTTP ${res.statusCode} for ${url.slice(0, 120)}`));
+        return;
+      }
+      const chunks = [];
+      res.on("data", (c) => chunks.push(c));
+      res.on("end", () => {
+        clearTimeout(timer);
+        try {
+          ok(JSON.parse(Buffer.concat(chunks).toString("utf8")));
+        } catch (err) {
+          fail(err);
         }
-        const chunks = [];
-        res.on("data", (c) => chunks.push(c));
-        res.on("end", () => {
-          try {
-            resolve(JSON.parse(Buffer.concat(chunks).toString("utf8")));
-          } catch (err) {
-            reject(err);
-          }
-        });
-        res.on("error", reject);
-      })
-      .on("error", reject);
+      });
+      res.on("error", (err) => {
+        clearTimeout(timer);
+        fail(err);
+      });
+    });
+    req.on("error", (err) => {
+      clearTimeout(timer);
+      fail(err);
+    });
   });
+}
+
+async function fetchJson(url, attempts = 5) {
+  let lastErr;
+  for (let i = 1; i <= attempts; i += 1) {
+    try {
+      return await fetchJsonOnce(url);
+    } catch (err) {
+      lastErr = err;
+      const wait = Math.min(30000, 1000 * 2 ** (i - 1));
+      console.warn(`[qc-multiusage] fetch retry ${i}/${attempts}: ${err.message}; wait ${wait}ms`);
+      await new Promise((r) => setTimeout(r, wait));
+    }
+  }
+  throw lastErr;
 }
 
 function roundCoord(c) {
@@ -139,13 +191,14 @@ async function query(offset, pageSize) {
 }
 
 async function run(options = {}) {
-  const pageSize = options.pageSize || 1000;
+  const pageSize = options.pageSize || 2000;
   const maxFeatures = options.maxFeatures || Infinity;
   const classification = emptyCounts();
   const excludedByReason = {};
   const features = [];
   let scanned = 0;
-  let offset = 0;
+  let offset = Number(options.startOffset) || 0;
+  if (offset > 0) console.log(`[qc-multiusage] resuming at offset=${offset}`);
 
   for (;;) {
     const page = await query(offset, pageSize);
@@ -207,7 +260,9 @@ async function run(options = {}) {
     if (features.length >= maxFeatures) break;
     if (rows.length < pageSize) break;
     offset += rows.length;
-    if (offset > 800000) break;
+    if (offset % 50000 < pageSize) {
+      console.log(`[qc-multiusage] fetched offset=${offset} kept=${features.length}`);
+    }
   }
 
   const report = makeReport({

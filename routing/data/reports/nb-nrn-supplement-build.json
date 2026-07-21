@@ -1,9 +1,101 @@
 {
-  "generatedAt": "2026-07-21T06:50:40.972Z",
+  "generatedAt": "2026-07-21T13:14:38.071Z",
   "region": "NB",
+  "stack": [
+    "nrn",
+    "osm-gap-fill",
+    "provincial"
+  ],
   "nrn": {
     "adapter": "nrn-from-pack",
     "featureCount": 69585
+  },
+  "osm": {
+    "adapter": "osm-roads",
+    "province": "NB",
+    "sourceName": "OpenStreetMap",
+    "sourceUrl": "https://download.geofabrik.de/north-america/canada/new-brunswick-latest.osm.pbf",
+    "downloadUrl": "https://download.geofabrik.de/north-america/canada/new-brunswick-latest.osm.pbf",
+    "license": "OpenStreetMap contributors (ODbL)",
+    "sourceDatasetVersion": "geofabrik:new-brunswick",
+    "dateRetrieved": "2026-07-21T13:09:00.739Z",
+    "status": "ok",
+    "notes": [
+      "OSM gap-fill for conventional motorized roads unmatched by NRN.",
+      "Excluded foot/bike-only, private/no, abandoned, and non-motorized paths.",
+      "track/service without clear surface default to motorized_unknown."
+    ],
+    "knownLimitations": [
+      "OSM tagging quality varies; not a legal access assertion.",
+      "Does not replace NRN identity — conflation dedupes against NRN first."
+    ],
+    "featureCount": 80646,
+    "scannedCount": 98378,
+    "excludedCount": 17732,
+    "excludedByReason": {
+      "access_denied": 17614,
+      "abandoned": 117,
+      "no_usable_geometry": 1
+    },
+    "classification": {
+      "surface": {
+        "paved": 29922,
+        "unknown": 8282,
+        "resource": 41577,
+        "gravel": 865
+      },
+      "access": {
+        "motorized_permissive": 52552,
+        "motorized_unknown": 28094
+      },
+      "structure": {
+        "none": 77819,
+        "bridge": 2780,
+        "tunnel": 47
+      },
+      "roadTrack": {
+        "arterial": 1059,
+        "local": 36159,
+        "service": 21336,
+        "track": 6758,
+        "freeway": 1094,
+        "collector": 757,
+        "resource": 13483
+      },
+      "excluded": {}
+    },
+    "topology": null,
+    "generatedAt": "2026-07-21T13:09:00.740Z"
+  },
+  "osmConflation": {
+    "province": "NB",
+    "generatedAt": "2026-07-21T13:09:01.535Z",
+    "precedence": {
+      "backbone": "NRN owns national road identity and conventional-road attributes",
+      "osmGapFill": "OpenStreetMap adds unmatched motorized paved/gravel/road geometry after NRN; never replaces NRN identity",
+      "supplement": "Provincial data adds resource/track detail and unmatched local connectivity",
+      "surfaceEnrichment": "Provincial or OSM paved/gravel may enrich NRN edges whose pavement status is unknown",
+      "freeSpace": "No free-space connectors"
+    },
+    "stats": {
+      "backboneKept": 69585,
+      "supplementAdded": 56182,
+      "supplementDuplicateSkipped": 24464,
+      "supplementConventionalSkipped": 0,
+      "backboneSurfaceEnriched": 56,
+      "conflicts": 0
+    },
+    "skipReasons": {
+      "duplicate_of_backbone": 24464,
+      "backbone_surface_enriched": 56
+    },
+    "featureCount": 125767,
+    "freeSpaceConnectors": 0,
+    "notes": [
+      "No free-space connectors were created.",
+      "Duplicates detected by midpoint proximity + bearing + endpoint proximity.",
+      "Genuine dead ends remain dead ends — no proximity stitching of endpoints."
+    ]
   },
   "provincial": {
     "adapter": "nb-forest-roads",
@@ -13,7 +105,7 @@
     "downloadUrl": "https://gis-erd-der.gnb.ca/server/rest/services/OpenData/ForestRoads/FeatureServer",
     "license": "Open Government Licence - New Brunswick",
     "sourceDatasetVersion": "gnb-forest-roads-featureserver",
-    "dateRetrieved": "2026-07-21T06:50:31.781Z",
+    "dateRetrieved": "2026-07-21T13:14:26.468Z",
     "status": "ok",
     "notes": [
       "Service describes roads not maintained by DTI whose primary purpose is forest-resource access.",
@@ -45,29 +137,31 @@
       "excluded": {}
     },
     "topology": null,
-    "generatedAt": "2026-07-21T06:50:31.789Z"
+    "generatedAt": "2026-07-21T13:14:26.469Z"
   },
   "conflation": {
     "province": "NB",
-    "generatedAt": "2026-07-21T06:50:32.928Z",
+    "generatedAt": "2026-07-21T13:14:27.861Z",
     "precedence": {
       "backbone": "NRN owns national road identity and conventional-road attributes",
+      "osmGapFill": "OpenStreetMap adds unmatched motorized paved/gravel/road geometry after NRN; never replaces NRN identity",
       "supplement": "Provincial data adds resource/track detail and unmatched local connectivity",
-      "surfaceEnrichment": "Provincial paved/gravel may enrich NRN edges whose pavement status is unknown",
-      "osm": "OSM not added as routing edges in this phase"
+      "surfaceEnrichment": "Provincial or OSM paved/gravel may enrich NRN edges whose pavement status is unknown",
+      "freeSpace": "No free-space connectors"
     },
     "stats": {
-      "backboneKept": 69585,
-      "supplementAdded": 181466,
-      "supplementDuplicateSkipped": 2923,
+      "backboneKept": 125767,
+      "supplementAdded": 179794,
+      "supplementDuplicateSkipped": 4595,
       "supplementConventionalSkipped": 0,
-      "backboneSurfaceEnriched": 0,
+      "backboneSurfaceEnriched": 73,
       "conflicts": 0
     },
     "skipReasons": {
-      "duplicate_of_backbone": 2923
+      "duplicate_of_backbone": 4595,
+      "backbone_surface_enriched": 73
     },
-    "featureCount": 251051,
+    "featureCount": 305561,
     "freeSpaceConnectors": 0,
     "notes": [
       "No free-space connectors were created.",
@@ -76,40 +170,79 @@
     ]
   },
   "graph": {
-    "generatedAt": "2026-07-21T06:50:33.696Z",
+    "generatedAt": "2026-07-21T13:14:29.254Z",
     "schemaVersion": "canada-regional-1",
     "regionId": "nb",
     "province": "NB",
     "bbox": [
-      -69.04453,
-      44.59843,
-      -63.75493,
-      48.07176
+      -69.07862,
+      44.59818,
+      -63.74004,
+      48.07265
     ],
-    "nodeCount": 247606,
-    "edgeCount": 250876,
-    "componentCount": 16651,
-    "boundaryNodeCount": 634,
+    "nodeCount": 336933,
+    "edgeCount": 304928,
+    "componentCount": 51650,
+    "boundaryNodeCount": 1898,
     "accessCounts": {
-      "motorized_permissive": 69585,
-      "motorized_unknown": 181291
+      "motorized_permissive": 102343,
+      "motorized_unknown": 202585
     },
     "surfaceCounts": {
-      "paved": 55405,
-      "gravel": 14163,
-      "unknown": 17,
-      "access": 181291
+      "paved": 72255,
+      "gravel": 14869,
+      "unknown": 4353,
+      "access": 213451
     },
     "sourceCounts": {
       "National Road Network": 69585,
-      "New Brunswick Forest Roads (DNR-ED)": 181291
+      "OpenStreetMap": 55719,
+      "New Brunswick Forest Roads (DNR-ED)": 179624
     },
-    "jsonBytes": 155058911,
-    "gzBytes": 33682369,
+    "jsonBytes": 184082142,
+    "gzBytes": 39984919,
     "lineage": {
       "nrn": {
         "adapter": "nrn-from-pack",
         "featureCount": 69585
+      },
+      "osm": {
+        "adapter": "osm-roads",
+        "featureCount": 80646,
+        "added": 56182,
+        "duplicateSkipped": 24464,
+        "classification": {
+          "surface": {
+            "paved": 29922,
+            "unknown": 8282,
+            "resource": 41577,
+            "gravel": 865
+          },
+          "access": {
+            "motorized_permissive": 52552,
+            "motorized_unknown": 28094
+          },
+          "structure": {
+            "none": 77819,
+            "bridge": 2780,
+            "tunnel": 47
+          },
+          "roadTrack": {
+            "arterial": 1059,
+            "local": 36159,
+            "service": 21336,
+            "track": 6758,
+            "freeway": 1094,
+            "collector": 757,
+            "resource": 13483
+          },
+          "excluded": {}
+        },
+        "excludedByReason": {
+          "access_denied": 17614,
+          "abandoned": 117,
+          "no_usable_geometry": 1
+        }
       },
       "provincial": {
         "adapter": "nb-forest-roads",
@@ -135,14 +268,7 @@
       }
     },
     "conflation": {
-      "stats": {
-        "backboneKept": 69585,
-        "supplementAdded": 181466,
-        "supplementDuplicateSkipped": 2923,
-        "supplementConventionalSkipped": 0,
-        "backboneSurfaceEnriched": 0,
-        "conflicts": 0
-      },
+      "stats": null,
       "freeSpaceConnectors": 0
     }
   },

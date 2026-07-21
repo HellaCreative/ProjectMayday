@@ -163,8 +163,23 @@ Mutually exclusive. Corridor mode (both off) still uses NS display pack for rout
 
 ## Blocked / deferred
 
-1. **Quebec full rebuild** — soft-cap lifted; first uncapped job aborted (loaded supplemented graph as NRN). Restarted with NRN-only filter (~504k backbone); still pulling ~945k multiusage features. Re-pack QC display + push after complete.
+1. **Quebec uncapped pack vs Node JSON limit** — Full 3-tier QC (~1.78M edges, ~1.0GB inflate, ~231MB gz) builds successfully as `graph.v1.full.json.gz` (gitignored). Node `JSON.parse` cannot load strings &gt; ~512MB, so **production** `graph.v1.json.gz` is NRN+OSM + 40k Lac Normand–biased provincial edges (~925k edges, ~98MB gz). Next: streaming inflate or graph.v2 for uncapped QC.
 2. **Routing / pack format / search / nav cues / basemap** — not modified (per constraints).
 3. **Trailforks / AllTrails / Backroad / Wikiloc** — not used.
 4. **Manitoba** — still unverified per spec; confirm portal before ingest.
 5. **Large artifacts** — provincial graphs/chunks are build outputs; push when user needs production review.
+
+---
+
+## Part 3 — OSM gap-fill proof (NB + QC) — 2026-07-21
+
+Stack locked: **NRN identity → OSM motorized gap-fill → provincial capillary**. Exclude foot/bike-only, private/no, abandoned, pure path without motor tags.
+
+| Province | Deploy pack | Sources (deploy) | Notes |
+|----------|-------------|------------------|-------|
+| NB | ~305k edges / ~38MB gz | NRN 70k + OSM 56k + Forest Roads 180k | Full 3-tier; longhaul rebuilt |
+| QC | ~925k edges / ~98MB gz | NRN 505k + OSM 380k + Multiusage 40k | Full uncapped local; deploy capped for Node |
+
+**Lac Normand:** on uncapped pack, nearest edge ~111m (provincial / `motorized_unknown`). Enable unknown-access toggle; pin on/near road.
+
+**Build tooling:** `routing/adapters/osm-roads.js`, `scripts/extract-osm-roads.sh`, 3-tier `build-region-with-supplement.js` (`--osm-only` / `--skip-osm`). QC MapServer fetch: timeouts + retries (source stalls).

@@ -29,3 +29,6 @@ data-raw/**/*.zip
 **/ns-geometry.v1.bin
 **/ns-graph.geometry.v1.bin
 
+# Uncapped regional graphs that exceed Node JSON string limits (local research only)
+**/graph.v1.full.json.gz
+

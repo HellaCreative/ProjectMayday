@@ -18,7 +18,10 @@ const {
 
 const ROOT = path.join(__dirname, "..");
 const REGIONS = path.join(ROOT, "routing", "data", "regions");
-const CODES = ["ns", "nb", "qc", "on", "mb", "sk", "ab", "bc"];
+const CODES_DEFAULT = ["ns", "nb", "qc", "on", "mb", "sk", "ab", "bc"];
+const CODES = process.argv.slice(2).filter((a) => !a.startsWith("--")).length
+  ? process.argv.slice(2).filter((a) => !a.startsWith("--")).map((c) => c.toLowerCase())
+  : CODES_DEFAULT;
 const BUFFER_M = 200000;
 
 function thinGeometry(coords, maxPts = 6) {

@@ -1,68 +1,64 @@
 {
-  "generatedAt": "2026-07-21T01:15:31.704Z",
+  "generatedAt": "2026-07-21T15:51:30.000Z",
   "schemaVersion": "canada-regional-1",
   "regionId": "qc",
   "province": "QC",
   "bbox": [
-    -79.54404,
-    44.99147,
-    -57.10746,
+    -79.87101,
+    44.91697,
+    -57,
     62.42787
   ],
-  "nodeCount": 630158,
-  "edgeCount": 753123,
-  "componentCount": 6799,
-  "boundaryNodeCount": 4904,
-  "accessCounts": {
-    "motorized_permissive": 500030,
-    "motorized_unknown": 253093
-  },
-  "surfaceCounts": {
-    "unknown": 499955,
-    "access": 253168
-  },
+  "nodeCount": 1052383,
+  "edgeCount": 924631,
   "sourceCounts": {
     "National Road Network": 504772,
-    "Québec Chemins Multiusages (AQréseau+)": 248351
+    "OpenStreetMap": 379859,
+    "Qu\u00e9bec Chemins Multiusages (AQr\u00e9seau+)": 40000
   },
-  "jsonBytes": 319758557,
-  "gzBytes": 70020919,
+  "accessCounts": {
+    "1": 731490,
+    "2": 193141
+  },
+  "surfaceCounts": {
+    "0": 208075,
+    "4": 403317,
+    "2": 306542,
+    "1": 6697
+  },
+  "jsonBytes": 448748248,
+  "gzBytes": 97922873,
   "lineage": {
     "nrn": {
       "adapter": "nrn-from-pack",
-      "featureCount": 504772
+      "featureCount": 884631
     },
+    "osm": null,
     "provincial": {
       "adapter": "qc-multiusage",
-      "featureCount": 250000,
+      "featureCount": 944719,
       "excludedByReason": {},
       "classification": {
         "surface": {
-          "resource": 250000
+          "resource": 944719
         },
         "access": {
-          "motorized_unknown": 250000
+          "motorized_unknown": 944719
         },
         "structure": {
-          "none": 250000
+          "none": 944719
         },
         "roadTrack": {
-          "resource": 250000
+          "resource": 944719
         },
         "excluded": {}
       }
     },
-    "thinnedGeometry": true
+    "deployNote": "Production pack: all NRN+OSM + 40000 provincial (Lac Normand\u2013biased). Full uncapped at graph.v1.full.json.gz (Node JSON string limit)."
   },
-  "conflation": {
-    "stats": {
-      "backboneKept": 504772,
-      "supplementAdded": 248685,
-      "supplementDuplicateSkipped": 1315,
-      "supplementConventionalSkipped": 0,
-      "backboneSurfaceEnriched": 75,
-      "conflicts": 0
-    },
-    "freeSpaceConnectors": 0
+  "deployCap": {
+    "provincialKept": 40000,
+    "provincialTotal": 900339,
+    "fullPack": "graph.v1.full.json.gz"
   }
 }

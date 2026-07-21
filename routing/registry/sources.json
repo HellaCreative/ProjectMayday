@@ -198,12 +198,21 @@
         "notes": " Supplemental adapter ingested."
       },
       "routingReady": true,
-      "routingMode": "nrn+provincial",
+      "routingMode": "nrn+osm+provincial",
       "backboneArtifact": {
         "path": "routing/data/regions/qc/graph.v1.json.gz",
-        "edgeCount": 753123,
-        "nodeCount": 630158,
-        "gzBytes": 100415644
+        "edgeCount": 1784970,
+        "nodeCount": 1867470,
+        "gzBytes": 242600175
+      },
+      "osm": {
+        "adapter": "osm-roads",
+        "role": "gap-fill",
+        "status": "ready",
+        "featureCount": 591955,
+        "added": 384717,
+        "license": "OpenStreetMap contributors (ODbL)",
+        "dateRetrieved": "2026-07-21"
       }
     },
     {
@@ -231,12 +240,21 @@
         "notes": " Supplemental adapter ingested."
       },
       "routingReady": true,
-      "routingMode": "nrn+provincial",
+      "routingMode": "nrn+osm+provincial",
       "backboneArtifact": {
         "path": "routing/data/regions/nb/graph.v1.json.gz",
-        "edgeCount": 250876,
-        "nodeCount": 247606,
-        "gzBytes": 33682369
+        "edgeCount": 304928,
+        "nodeCount": 336933,
+        "gzBytes": 39984919
+      },
+      "osm": {
+        "adapter": "osm-roads",
+        "role": "gap-fill",
+        "status": "ready",
+        "featureCount": 80646,
+        "added": 56182,
+        "license": "OpenStreetMap contributors (ODbL)",
+        "dateRetrieved": "2026-07-21"
       }
     },
     {
