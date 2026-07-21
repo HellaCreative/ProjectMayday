@@ -3,9 +3,9 @@
   "trailingSlash": false,
   "functions": {
     "api/route.js": {
-      "memory": 2048,
+      "memory": 3008,
       "maxDuration": 300,
-      "includeFiles": "routing/{lib,regional,schema}/**"
+      "includeFiles": "routing/{lib,regional,schema}/**,routing/data/regions/{ns,nb,qc}/longhaul.v1.json.gz"
     }
   },
   "headers": [

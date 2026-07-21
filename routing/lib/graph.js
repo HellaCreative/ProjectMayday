@@ -49,13 +49,16 @@ const cacheStats = {
 };
 
 /**
- * Stage 0 chain pack retention. Default on after median-of-three re-bench.
- * Explicit ROUTING_CHAIN_CACHE=0 disables.
+ * Stage 0 chain pack retention. Default on locally after median-of-three re-bench.
+ * On Vercel, default off so a prior hop cannot keep a large runtime while the
+ * next hop inflates QC longhaul (Hobby 2048 MB ceiling).
+ * Explicit ROUTING_CHAIN_CACHE=0/1 overrides.
  */
 function chainCacheEnabled() {
   const v = process.env.ROUTING_CHAIN_CACHE;
   if (v === "0" || v === "false" || v === "off") return false;
   if (v === "1" || v === "true" || v === "on") return true;
+  if (process.env.VERCEL || process.env.VERCEL_ENV) return false;
   return true;
 }
 
@@ -217,9 +220,11 @@ function fetchBuffer(url) {
 }
 
 function inflateGraphBuffer(buf) {
-  // Accept gzip bytes or raw JSON.
+  // Accept gzip bytes or raw JSON. Parse from Buffer when possible so we do not
+  // keep an extra UTF-8 string copy beside the object graph.
   if (buf.length >= 2 && buf[0] === 0x1f && buf[1] === 0x8b) {
-    return JSON.parse(zlib.gunzipSync(buf).toString("utf8"));
+    const raw = zlib.gunzipSync(buf);
+    return JSON.parse(raw.toString("utf8"));
   }
   return JSON.parse(buf.toString("utf8"));
 }
@@ -354,8 +359,33 @@ function loadGraph(graphPath) {
   return loadGraphSync(graphPath);
 }
 
-async function readGraphData(graphPath) {
-  const cached = lruGet(dataCache, graphPath);
+function isLonghaulGraphPath(graphPath) {
+  return /longhaul\.v1\.json\.gz$/i.test(String(graphPath || ""));
+}
+
+/**
+ * Inflated longhaul JSON is ~250MB for QC. Caching it beside a clipped runtime
+ * is what OOMs Vercel Hobby (2048 MB) on NB↔QC border hops.
+ */
+function shouldRetainInflatedData(graphPath) {
+  if (process.env.VERCEL || process.env.VERCEL_ENV) return false;
+  if (isLonghaulGraphPath(graphPath)) return false;
+  return true;
+}
+
+function corridorCacheSuffix(locations, bufferMeters) {
+  if (!locations || locations.length < 2) return "";
+  const parts = locations.map((p) => {
+    const lon = Number(p.lon != null ? p.lon : p.lng);
+    const lat = Number(p.lat);
+    return lon.toFixed(2) + "," + lat.toFixed(2);
+  });
+  return `|c${bufferMeters}|${parts.join(";")}`;
+}
+
+async function readGraphData(graphPath, options = {}) {
+  const retain = options.retain != null ? !!options.retain : shouldRetainInflatedData(graphPath);
+  const cached = retain ? lruGet(dataCache, graphPath) : null;
   if (cached) {
     cacheStats.hits += 1;
     return cached.data;
@@ -372,7 +402,7 @@ async function readGraphData(graphPath) {
   }
   cacheStats.loads += 1;
   cacheStats.inflateMs += Date.now() - started;
-  lruPut(dataCache, graphPath, { data });
+  if (retain) lruPut(dataCache, graphPath, { data });
   return data;
 }
 
@@ -394,9 +424,20 @@ async function loadGraphsForRequest(resolution, options = {}) {
   const locations = options.locations || [];
   const corridorLocations = corridorLocationsForRoute(locations);
   const multi = paths.length > 1;
-  // Wider buffer for dirt profiles; tighter for long cleanest/direct hauls.
-  const bufferMeters = Number(options.corridorBufferMeters) || (paths.length >= 4 ? 220000 : 150000);
-  const cacheKey = paths.join("|") + (multi ? `|c${bufferMeters}` : "");
+  const onVercel = !!(process.env.VERCEL || process.env.VERCEL_ENV);
+  const anyLonghaul =
+    !!resolution.longhaulPacks || paths.some((p) => isLonghaulGraphPath(p));
+  // Wider buffer for dirt profiles; tighter for longhaul / Vercel so QC packs
+  // do not keep a province-wide band in memory after clip.
+  let bufferMeters = Number(options.corridorBufferMeters);
+  if (!Number.isFinite(bufferMeters) || bufferMeters <= 0) {
+    if (paths.length >= 4) bufferMeters = 220000;
+    else if (anyLonghaul || onVercel) bufferMeters = 120000;
+    else bufferMeters = 150000;
+  }
+  const willClip = corridorLocations.length >= 2;
+  const cacheKey =
+    paths.join("|") + (willClip ? corridorCacheSuffix(corridorLocations, bufferMeters) : "");
 
   const hit = touchCached(cacheKey);
   if (hit) {
@@ -408,21 +449,29 @@ async function loadGraphsForRequest(resolution, options = {}) {
   const promise = (async () => {
     const started = Date.now();
     if (paths.length === 1) {
-      // Prefer per-path cache so chain hops sharing a province hit LRU.
-      const singleHit = touchCached(paths[0]);
-      if (singleHit) {
-        cacheStats.hits += 1;
-        if (cacheKey !== paths[0]) putCached(cacheKey, singleHit);
-        return singleHit;
+      // Unclipped single-pack only: share LRU across hops. Clipped hops must
+      // not reuse a province-wide runtime (QC longhaul is ~675k edges).
+      if (!willClip) {
+        const singleHit = touchCached(paths[0]);
+        if (singleHit) {
+          cacheStats.hits += 1;
+          if (cacheKey !== paths[0]) putCached(cacheKey, singleHit);
+          return singleHit;
+        }
+        if (packsV2Enabled() && !paths[0].startsWith("http") && v2FilesExist(paths[0])) {
+          const runtime = loadV2RuntimeSync(paths[0], started);
+          if (cacheKey !== paths[0]) putCached(cacheKey, runtime);
+          return runtime;
+        }
       }
-      if (packsV2Enabled() && !paths[0].startsWith("http") && v2FilesExist(paths[0])) {
-        const runtime = loadV2RuntimeSync(paths[0], started);
-        if (cacheKey !== paths[0]) putCached(cacheKey, runtime);
-        return runtime;
+      let data = await readGraphData(paths[0], { retain: !willClip && shouldRetainInflatedData(paths[0]) });
+      if (willClip) {
+        data = clipGraphToCorridor(data, corridorLocations, bufferMeters);
+        if (!data.edges || data.edges.length < 1) {
+          throw new Error("Corridor clip removed all edges; widen corridorBufferMeters");
+        }
       }
-      const data = await readGraphData(paths[0]);
-      const runtime = materializeRuntime(paths[0], data, started);
-      if (cacheKey !== paths[0]) putCached(cacheKey, runtime);
+      const runtime = materializeRuntime(cacheKey, data, started);
       return runtime;
     }
     // Multi-pack merge still uses graph.v1 JSON (clip/merge need polylines on edges).
@@ -431,13 +480,15 @@ async function loadGraphsForRequest(resolution, options = {}) {
     const hitRegions = new Set((resolution.hitRegions || []).map((r) => String(r).toLowerCase()));
     const longHaul = paths.length >= 4;
     for (const p of paths) {
-      let g = await readGraphData(p);
+      // Never retain full inflated longhaul JSON across the multi-pack loop —
+      // QC alone peaks near the Hobby RSS ceiling before clip.
+      let g = await readGraphData(p, { retain: false });
       const regionId = String(g.regionId || path.basename(path.dirname(p)) || "").toLowerCase();
       const isEndpoint = hitRegions.has(regionId);
       const alreadyLonghaul =
         resolution.longhaulPacks ||
         String(g.schemaVersion || "").startsWith("longhaul") ||
-        /longhaul\.v1\.json\.gz$/.test(String(p));
+        isLonghaulGraphPath(p);
       // Long-haul: drop track edges in mid provinces to reduce memory; keep
       // endpoints fuller for local access. Never invent free-space connectors.
       // Prebuilt longhaul packs are already spine/corridor thinned; do not
@@ -445,12 +496,12 @@ async function loadGraphsForRequest(resolution, options = {}) {
       if (!alreadyLonghaul && longHaul && !isEndpoint) {
         g = extractHighwayGraph(g);
       }
-      // Clip mid-province full packs AND multi-pack longhaul merges to the hop
-      // corridor. Skipping longhaul clip forced Vercel to inflate entire QC
-      // (~250MB) alongside NB on every border hop → 300s timeouts.
-      if (corridorLocations.length >= 2 && (multi || !alreadyLonghaul)) {
+      // Always corridor-clip multi-pack loads (including longhaul). Skipping
+      // longhaul clip forced Vercel to hold entire QC (~250MB JSON / ~1.5GB RSS)
+      // beside NB → FUNCTION_INVOCATION_FAILED on Hobby.
+      if (corridorLocations.length >= 2) {
         const buf = alreadyLonghaul
-          ? Math.min(Math.max(bufferMeters, 120000), 180000)
+          ? Math.min(Math.max(bufferMeters, 100000), 140000)
           : isEndpoint
             ? Math.max(bufferMeters, 200000)
             : bufferMeters;

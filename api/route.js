@@ -41,6 +41,14 @@ module.exports = async function handler(req, res) {
 
 module.exports.config = {
   maxDuration: 300,
-  memory: 2048,
-  includeFiles: ["routing/lib/**", "routing/regional/**", "routing/schema/**"]
+  // QC longhaul inflate peaks near ~2GB RSS before corridor clip; 2048 OOMs on NB↔QC.
+  memory: 3008,
+  includeFiles: [
+    "routing/lib/**",
+    "routing/regional/**",
+    "routing/schema/**",
+    "routing/data/regions/ns/longhaul.v1.json.gz",
+    "routing/data/regions/nb/longhaul.v1.json.gz",
+    "routing/data/regions/qc/longhaul.v1.json.gz"
+  ]
 };
