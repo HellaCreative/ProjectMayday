@@ -6972,6 +6972,96 @@
       font-size: 7.5px !important;
       text-align: center;
     }
+
+    /* A completed From here route minimizes to useful route context, not an
+       empty tab strip. The handle and active tab still expand the full sheet. */
+    html body.planner-open.planner-collapsed:not(.planner-tab-plan):not(.planner-tab-saved)
+      .route-card.is-collapsed.has-route-summary {
+      max-height: 96px !important;
+    }
+    html body.planner-open.planner-collapsed:not(.planner-tab-plan):not(.planner-tab-saved)
+      .route-card.is-collapsed.has-route-summary .route-drawer-scroll,
+    html body.planner-open.planner-collapsed:not(.planner-tab-plan):not(.planner-tab-saved)
+      .route-card.is-collapsed.has-route-summary .route-drawer-compact {
+      height: 76px !important;
+      min-height: 76px !important;
+    }
+    html body.planner-open.planner-collapsed:not(.planner-tab-plan):not(.planner-tab-saved)
+      .route-card.is-collapsed.has-route-summary .route-drawer-compact {
+      flex-direction: column !important;
+      align-items: stretch !important;
+    }
+    html body.planner-open.planner-collapsed:not(.planner-tab-plan):not(.planner-tab-saved)
+      .route-card.is-collapsed.has-route-summary #routeDrawerCompact > #routePrefCardCompact {
+      display: block !important;
+      flex: 0 0 32px !important;
+      width: min(440px, calc(100% - 20px)) !important;
+      height: 32px !important;
+      margin: 0 auto !important;
+      padding: 0 !important;
+      overflow: hidden !important;
+      border: 0 !important;
+      background: transparent !important;
+    }
+    html body.planner-open.planner-collapsed:not(.planner-tab-plan):not(.planner-tab-saved)
+      .route-card.is-collapsed.has-route-summary #routePrefCardCompact > :not(#routeCompactSummary) {
+      display: none !important;
+    }
+    html body.planner-open.planner-collapsed:not(.planner-tab-plan):not(.planner-tab-saved)
+      .route-card.is-collapsed.has-route-summary #routeCompactSummary {
+      display: block !important;
+      height: 30px !important;
+      margin: 0 !important;
+      padding: 3px 0 0 !important;
+      overflow: hidden !important;
+    }
+    html body.planner-open.planner-collapsed:not(.planner-tab-plan):not(.planner-tab-saved)
+      .route-card.is-collapsed.has-route-summary #routeCompactSummary .route-metric-row {
+      min-height: 27px !important;
+      padding: 5px 8px !important;
+      border-radius: 7px !important;
+      font-size: 8.5px !important;
+    }
+    html body.planner-collapsed.planner-has-route-summary .stack,
+    html body.planner-collapsed.planner-has-route-summary .pip {
+      bottom: calc(var(--p2-dock-h) + 116px) !important;
+    }
+
+    /* Group sheets size to their current task. Four rider rows remain visible;
+       additional riders scroll inside the roster instead of stretching the
+       whole sheet or leaving a large blank tail beneath short groups. */
+    html body.groups-open .group-sheet.open {
+      height: auto !important;
+      min-height: 0 !important;
+      max-height: min(72vh, 640px) !important;
+    }
+    html body.groups-open .group-sheet.open > #groupAuthed,
+    html body.groups-open .group-sheet.open .group-sheet-body,
+    html body.groups-open .group-sheet.open .group-panel,
+    html body.groups-open .group-sheet.open .group-details {
+      flex: 0 1 auto !important;
+      min-height: 0 !important;
+    }
+    html body.groups-open .group-sheet.open .group-sheet-body {
+      overflow: hidden !important;
+    }
+    html body.groups-open .group-sheet.open .group-panel,
+    html body.groups-open .group-sheet.open .group-details {
+      max-height: calc(min(72vh, 640px) - 118px) !important;
+      overflow-x: hidden !important;
+      overflow-y: auto !important;
+    }
+    html body.groups-open.group-details-open .group-sheet.open #groupDetails {
+      overflow: visible !important;
+    }
+    html body.groups-open.group-details-open .group-sheet.open .group-participant-list {
+      max-height: 167px !important;
+      overflow-x: hidden !important;
+      overflow-y: auto !important;
+      overscroll-behavior: contain;
+      scrollbar-width: thin;
+      -webkit-overflow-scrolling: touch;
+    }
     body.planner-collapsed .stack,
     body.planner-collapsed .pip,
     body.planner-tab-plan.planner-collapsed .stack,
@@ -15162,6 +15252,10 @@
       if (routeCompactPref) routeCompactPref.value = routePreference;
       syncRouteBarHeader();
       const open = plannerDrawerState !== "closed";
+      if (routeCard) {
+        routeCard.classList.toggle("has-route-summary", plannerTab === "here" && !!activeRoute);
+      }
+      document.body.classList.toggle("planner-has-route-summary", plannerTab === "here" && !!activeRoute);
       if (routeToggleBtn) routeToggleBtn.setAttribute("aria-expanded", open ? "true" : "false");
       document.body.classList.toggle("planner-open", open);
       document.body.classList.toggle("planner-collapsed", plannerDrawerState === "collapsed");
