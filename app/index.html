@@ -7238,6 +7238,229 @@
         transition-duration: .01ms !important;
       }
     }
+
+    /* Prototype-aligned Routes UI. Keep the production route model and
+       controls, but give all three route modes one compact visual contract. */
+    body.planner-open .route-card,
+    body.planner-open .route-card.is-expanded {
+      border: 1px solid rgba(22, 24, 28, .1) !important;
+      border-radius: 14px !important;
+      background: rgba(247, 247, 248, .98) !important;
+      box-shadow: 0 14px 38px rgba(22, 24, 28, .2) !important;
+    }
+    body.planner-open .route-card .route-sheet-handle-bar,
+    body.planner-open .route-card .route-sheet-handle {
+      background: transparent !important;
+    }
+    body.planner-open .route-card.is-expanded .route-drawer-compact,
+    body.planner-open.planner-tab-saved #routePanelSaved,
+    body.planner-open.planner-tab-saved .saved-sheet-header {
+      width: min(440px, calc(100% - 20px)) !important;
+    }
+    body.planner-open .route-card.is-expanded .route-drawer-compact {
+      gap: 7px !important;
+    }
+    body.planner-open .route-mode-block {
+      margin: 0 !important;
+    }
+    body.planner-open .route-tabs,
+    body.planner-open .saved-sheet-mode-tabs {
+      padding: 3px !important;
+      gap: 3px !important;
+      border: 0 !important;
+      border-radius: 9px !important;
+      background: #e9eaed !important;
+    }
+    body.planner-open .route-tabs .route-mode,
+    body.planner-open .saved-sheet-mode-tabs .route-mode {
+      min-height: 34px !important;
+      height: 34px !important;
+      border-radius: 7px !important;
+      font-size: 10px !important;
+      font-weight: 750 !important;
+    }
+    body.planner-open .route-tabs .route-mode.active,
+    body.planner-open .route-tabs .route-mode[aria-selected="true"],
+    body.planner-open .saved-sheet-mode-tabs .route-mode.active {
+      background: #16181c !important;
+      color: #fff !important;
+      box-shadow: 0 1px 2px rgba(22, 24, 28, .18) !important;
+    }
+    body.planner-open .route-settings-grid {
+      display: flex !important;
+      flex-direction: column !important;
+      align-items: stretch !important;
+      gap: 8px !important;
+    }
+    body.planner-open .route-profile-field {
+      min-width: 0 !important;
+    }
+    body.planner-open .route-setting-label {
+      margin: 0 0 5px !important;
+      padding: 0 !important;
+      color: #5f646c !important;
+      font-size: 9px !important;
+      font-weight: 750 !important;
+      text-transform: uppercase !important;
+      letter-spacing: .045em !important;
+    }
+    body.planner-open .route-preferences {
+      display: grid !important;
+      grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+      gap: 3px !important;
+      margin: 0 !important;
+      padding: 3px !important;
+      border: 0 !important;
+      border-radius: 9px !important;
+      background: #e9eaed !important;
+    }
+    body.planner-open .route-pref {
+      min-width: 0 !important;
+      min-height: 34px !important;
+      height: 34px !important;
+      padding: 0 4px !important;
+      border: 0 !important;
+      border-radius: 7px !important;
+      background: transparent !important;
+      color: #656a72 !important;
+      font-size: 10px !important;
+      font-weight: 750 !important;
+      box-shadow: none !important;
+    }
+    body.planner-open .route-pref.active,
+    body.planner-open .route-pref[aria-selected="true"] {
+      background: #16181c !important;
+      color: #fff !important;
+    }
+    body.planner-open .route-access,
+    body.planner-open .route-access-compact {
+      display: flex !important;
+      min-height: 38px !important;
+      flex-direction: row !important;
+      align-items: center !important;
+      justify-content: space-between !important;
+      gap: 10px !important;
+      padding: 0 2px !important;
+    }
+    body.planner-open .route-setting-heading {
+      min-height: 0 !important;
+    }
+    body.planner-open .route-access .route-setting-label,
+    body.planner-open .route-access-compact .route-setting-label {
+      margin: 0 !important;
+      color: #30343a !important;
+      font-size: 10px !important;
+      text-transform: none !important;
+      letter-spacing: 0 !important;
+    }
+    body.planner-open .route-setting-toggle {
+      min-height: 34px !important;
+      gap: 7px !important;
+      color: #656a72 !important;
+      font-size: 9px !important;
+    }
+    body.planner-open .route-compact-summary,
+    body.planner-open .stage-trip-summary,
+    body.planner-open .route-status {
+      border: 0 !important;
+      border-radius: 8px !important;
+      background: #ebecef !important;
+      box-shadow: none !important;
+    }
+    body.planner-open .route-bar-stage-list,
+    body.planner-open .stage-list {
+      gap: 6px !important;
+      scrollbar-width: none;
+    }
+    body.planner-open .route-bar-stage-list::-webkit-scrollbar,
+    body.planner-open .stage-list::-webkit-scrollbar { display: none; }
+    body.planner-open.planner-tab-plan .route-bar-stage-list .stage-row,
+    body.planner-open .stage-stage-strip > .stage-list > .stage-row {
+      min-height: 66px !important;
+      border: 1px solid rgba(22, 24, 28, .12) !important;
+      border-radius: 9px !important;
+      background: #fff !important;
+      color: #16181c !important;
+      box-shadow: none !important;
+    }
+    body.planner-open.planner-tab-plan .route-bar-stage-list .stage-row.is-active,
+    body.planner-open .stage-stage-strip > .stage-list > .stage-row.is-active {
+      border-color: #ff7a00 !important;
+      box-shadow: inset 0 0 0 1px #ff7a00 !important;
+    }
+    body.planner-open .route-bar-add-stage,
+    body.planner-open .stage-add {
+      min-height: 66px !important;
+      border: 1px dashed rgba(22, 24, 28, .24) !important;
+      border-radius: 9px !important;
+      background: rgba(255, 255, 255, .58) !important;
+      color: #575c64 !important;
+      font-size: 10px !important;
+      font-weight: 700 !important;
+    }
+    body.planner-open .route-compact-actions,
+    body.planner-open .route-actions {
+      display: grid !important;
+      grid-template-columns: 1fr 1fr 1.15fr !important;
+      gap: 6px !important;
+    }
+    body.planner-open .route-compact-actions button,
+    body.planner-open .route-actions button {
+      min-width: 0 !important;
+      min-height: 40px !important;
+      height: 40px !important;
+      padding: 0 6px !important;
+      border-radius: 8px !important;
+      font-size: 10px !important;
+      font-weight: 800 !important;
+      white-space: nowrap !important;
+    }
+    body.planner-open .route-compact-save,
+    body.planner-open #stageSaveBtn {
+      border-color: #ff7a00 !important;
+      background: #ff7a00 !important;
+      color: #17191d !important;
+    }
+    body.planner-open .route-compact-export,
+    body.planner-open .route-export {
+      border: 1px solid rgba(22, 24, 28, .16) !important;
+      background: #fff !important;
+      color: #272b31 !important;
+    }
+    body.planner-open .route-compact-nav,
+    body.planner-open .route-nav,
+    body.planner-open #routeNavBtn {
+      border-color: #16181c !important;
+      background: #16181c !important;
+      color: #fff !important;
+    }
+    body.planner-open.planner-tab-saved .saved-list {
+      gap: 6px !important;
+    }
+    body.planner-open .saved-row {
+      padding: 8px !important;
+      border: 1px solid rgba(22, 24, 28, .12) !important;
+      border-radius: 9px !important;
+      background: #fff !important;
+    }
+    body.planner-open .saved-row-actions .saved-action {
+      border-radius: 8px !important;
+      background: #fff !important;
+    }
+    body.planner-open .saved-row-actions .saved-action.primary {
+      border-color: #16181c !important;
+      background: #16181c !important;
+      color: #fff !important;
+    }
+    body.planner-open.planner-tab-saved .route-saved-extras {
+      background: rgba(247, 247, 248, .99) !important;
+    }
+    body.planner-open button:focus-visible,
+    body.planner-open select:focus-visible,
+    body.planner-open input:focus-visible {
+      outline: 3px solid rgba(255, 122, 0, .45) !important;
+      outline-offset: 2px !important;
+    }
   </style>
 </head>
 <body>
@@ -7338,15 +7561,15 @@
       </div>
       <div class="route-pref-card" id="routePrefCardCompact">
         <div class="route-settings-grid">
-          <label class="route-setting-field">
-            <span class="route-setting-label">Surface type</span>
-            <select class="route-surface-select" id="routeCompactPref" data-route-pref-select aria-label="Surface type">
-              <option value="direct">Direct</option>
-              <option value="balanced" selected>Balanced</option>
-              <option value="dirt">Dirt</option>
-              <option value="cleanest">Clean</option>
-            </select>
-          </label>
+          <fieldset class="route-setting-field route-profile-field">
+            <legend class="route-setting-label">Route profile</legend>
+            <div class="route-preferences" role="radiogroup" aria-label="Route profile">
+              <button class="route-pref" type="button" data-route-pref="direct" role="radio" aria-checked="false">Direct</button>
+              <button class="route-pref active" type="button" data-route-pref="balanced" role="radio" aria-checked="true">Balanced</button>
+              <button class="route-pref" type="button" data-route-pref="dirt" role="radio" aria-checked="false">Dirt</button>
+              <button class="route-pref" type="button" data-route-pref="cleanest" role="radio" aria-checked="false">Clean</button>
+            </div>
+          </fieldset>
           <div class="route-setting-field route-access route-access-compact" id="routeAccessCompact">
             <div class="route-setting-heading">
               <span class="route-setting-label">Allow unknown access</span>
@@ -7396,15 +7619,15 @@
       <!-- Shared trip settings (From here) -->
       <div class="route-shared route-pref-card" id="routeSharedSettings">
         <div class="route-settings-grid">
-          <label class="route-setting-field">
-            <span class="route-setting-label">Surface type</span>
-            <select class="route-surface-select" data-route-pref-select aria-label="Surface type">
-              <option value="direct">Direct</option>
-              <option value="balanced" selected>Balanced</option>
-              <option value="dirt">Dirt</option>
-              <option value="cleanest">Clean</option>
-            </select>
-          </label>
+          <fieldset class="route-setting-field route-profile-field">
+            <legend class="route-setting-label">Route profile</legend>
+            <div class="route-preferences" role="radiogroup" aria-label="Route profile">
+              <button class="route-pref" type="button" data-route-pref="direct" role="radio" aria-checked="false">Direct</button>
+              <button class="route-pref active" type="button" data-route-pref="balanced" role="radio" aria-checked="true">Balanced</button>
+              <button class="route-pref" type="button" data-route-pref="dirt" role="radio" aria-checked="false">Dirt</button>
+              <button class="route-pref" type="button" data-route-pref="cleanest" role="radio" aria-checked="false">Clean</button>
+            </div>
+          </fieldset>
           <div class="route-setting-field route-access" id="routeAccess">
             <div class="route-setting-heading">
               <span class="route-setting-label">Allow unknown access</span>
@@ -11896,6 +12119,7 @@
         const active = b.dataset.routePref === routePreference;
         b.classList.toggle("active", active);
         b.setAttribute("aria-selected", active ? "true" : "false");
+        b.setAttribute("aria-checked", active ? "true" : "false");
       });
       document.querySelectorAll("[data-route-pref-select]").forEach((select) => {
         select.value = routePreference;
@@ -14043,6 +14267,7 @@
         const active = button.dataset.routePref === routePreference;
         button.classList.toggle("active", active);
         button.setAttribute("aria-selected", active ? "true" : "false");
+        button.setAttribute("aria-checked", active ? "true" : "false");
       });
       if (plannerTab === "plan") {
         const active = getActiveStage();
