@@ -7219,7 +7219,7 @@
   <div class="route-map-toast" id="routeMapToast" role="status" aria-live="polite" hidden></div>
 
   <!-- Unknown-access info popover (body-level so it never clips inside the drawer). -->
-  <div class="access-info-tip" id="accessInfoTip" role="tooltip" hidden>Unknown access is not permission. Routes may include closures, private land, seasonal restrictions, or enforcement.</div>
+  <div class="access-info-tip" id="accessInfoTip" role="tooltip" hidden>Unknown access is for provincial/gov forest roads where motorcycle legality is not asserted. Ordinary OSM basemap roads stay routable without this toggle. Routes may still include closures, private land, seasonal restrictions, or enforcement.</div>
 
   <section class="account-sheet" id="accountSheet" aria-label="Rider account" aria-hidden="true">
     <div class="sheet-handle-bar">
@@ -8220,8 +8220,12 @@
       if (!p.accessClass) {
         if (p.trackClass === "unserviced") p.accessClass = "motorized_restricted";
         else if (p.trackClass === "single") p.accessClass = "motorized_excluded";
-        else if (p.trackClass === "track") p.accessClass = "motorized_unknown";
-        else p.accessClass = "motorized_permissive";
+        else if (
+          p.trackClass === "track" &&
+          !/openstreetmap/i.test(String(p.source || ""))
+        ) {
+          p.accessClass = "motorized_unknown";
+        } else p.accessClass = "motorized_permissive";
       }
       if (!p.source) p.source = "ns-gov";
       if (!p.confidence) p.confidence = p.surfaceConfidence || "medium";
@@ -10681,7 +10685,17 @@
             options: { matchLimitMeters: 250 }
           })
         });
-        const api = await res.json();
+        const raw = await res.text();
+        let api;
+        try {
+          api = JSON.parse(raw);
+        } catch (_) {
+          throw new Error(
+            res.ok
+              ? "Bad route response"
+              : ("Routing server error (" + res.status + ")")
+          );
+        }
         // Stale-guard: a newer edit/request for this stage supersedes us.
         if (!stageTracker.isCurrent(stageId, token)) {
           finishRouteToast(toastRequestId, "stale");
@@ -13856,7 +13870,17 @@
             options: { matchLimitMeters: 250 }
           })
         });
-        const api = await res.json();
+        const raw = await res.text();
+        let api;
+        try {
+          api = JSON.parse(raw);
+        } catch (_) {
+          throw new Error(
+            res.ok
+              ? "Bad route response"
+              : ("Routing server error (" + res.status + ")")
+          );
+        }
         if (jobId !== routeJobId) {
           finishRouteToast(toastRequestId, "stale");
           return;
@@ -15905,7 +15929,7 @@
       if (unknownAccessAcknowledged) return Promise.resolve(true);
       if (!accessWarnSheet) {
         unknownAccessAcknowledged = window.confirm(
-          "Unknown access is not permission. Routes may use unverified branch lines (NSTDB TRACK) and may expose you to closures, private land, seasonal restrictions, or enforcement. Continue?"
+          "Unknown access covers provincial/gov forest roads where legality is not asserted — not ordinary OSM basemap roads. Continue? Routes may still hit closures, private land, seasonal restrictions, or enforcement."
         );
         return Promise.resolve(unknownAccessAcknowledged);
       }

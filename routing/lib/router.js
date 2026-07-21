@@ -45,7 +45,17 @@ function projectOnSegment(point, a, b) {
   return { coord, t, distanceM: haversineMeters(point, coord) };
 }
 
-function accessAllowed(accessCode, policy, enums) {
+function isOpenStreetMapEdge(edge) {
+  return !!(edge && /openstreetmap/i.test(String(edge.src || edge.source || "")));
+}
+
+function accessAllowed(accessCode, policy, enums, edge) {
+  // Product rule: OSM basemap roads are always routable when included.
+  // Surface/class still drive visuals and costing; access gating is for
+  // provincial capillary / unknown-legality only.
+  if (isOpenStreetMapEdge(edge)) {
+    return policy.motorizedPermissive !== false;
+  }
   const name = enums.ACCESS_NAME[accessCode];
   if (name === "motorized_restricted" || name === "motorized_excluded") return false;
   if (name === "motorized_unknown") return !!policy.motorizedUnknown;
@@ -217,7 +227,7 @@ function matchPoint(runtime, location, policy, matchMeters, avoidEdgeIds) {
       coords = runtime.geom.polyline(index);
     } else {
       const edge = runtime.data.edges[index];
-      if (!accessAllowed(edge.ac, policy, enums)) continue;
+      if (!accessAllowed(edge.ac, policy, enums, edge)) continue;
       if (avoid && avoid.has(String(edge.i))) continue;
       accessCode = edge.ac;
       surfaceCode = edge.s;
@@ -860,7 +870,7 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds) 
     if (node < n) {
       for (const idx of adjacency[node]) {
         const edge = edges[idx];
-        if (!accessAllowed(edge.ac, policy, enums)) continue;
+        if (!accessAllowed(edge.ac, policy, enums, edge)) continue;
         if (avoid && avoid.has(String(edge.i))) continue;
         const other = edge.a === node ? edge.b : edge.a;
         const forward = edge.a === node;

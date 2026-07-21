@@ -66,6 +66,8 @@ function main() {
         { lon: -71.208, lat: 46.813 }, // Quebec City
         { lon: -71.30, lat: 46.95 }, // Lac-Beauport
         { lon: -73.567, lat: 45.502 }, // Montreal
+        { lon: -74.28, lat: 46.05 }, // Sainte-Agathe / Laurentians
+        { lon: -74.60, lat: 46.12 }, // Mont-Tremblant
         { lon: -68.65, lat: 47.55 } // Dégelis / NB approach
       ],
       pe: [{ lon: -63.126, lat: 46.238 }],

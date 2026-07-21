@@ -14,7 +14,18 @@ const {
 } = require("./pack-v2");
 const { surfaceMultiplier, classSpeedKmh, costPerKmView } = require("./profile-costs");
 
-function accessAllowed(accessCode, policy, enums) {
+function isOpenStreetMapSource(source) {
+  return /openstreetmap/i.test(String(source || ""));
+}
+
+function accessAllowed(accessCode, policy, enums, edgeOrSource) {
+  const source =
+    typeof edgeOrSource === "string"
+      ? edgeOrSource
+      : edgeOrSource && (edgeOrSource.src || edgeOrSource.source);
+  if (isOpenStreetMapSource(source)) {
+    return policy.motorizedPermissive !== false;
+  }
   const name = enums.ACCESS_NAME[accessCode];
   if (name === "motorized_restricted" || name === "motorized_excluded") return false;
   if (name === "motorized_unknown") return !!policy.motorizedUnknown;

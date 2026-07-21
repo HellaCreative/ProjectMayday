@@ -170,8 +170,11 @@ function classify(props) {
   } else if (hw === "track" || hw === "service") {
     surfaceClass = SURFACE_CLASS.resource;
     roadTrackClass = hw === "track" ? ROAD_TRACK_CLASS.track : ROAD_TRACK_CLASS.service;
-    accessClass = ACCESS_CLASS.motorized_unknown;
-    confidence = SOURCE_CONFIDENCE.low;
+    // Included OSM ways are always motorized_permissive. Surface/class still
+    // carry dirt vs service for display and costing — access unknown is reserved
+    // for provincial capillary where legality is not asserted.
+    accessClass = ACCESS_CLASS.motorized_permissive;
+    confidence = SOURCE_CONFIDENCE.medium;
   } else if (/motorway|trunk|primary|secondary/.test(hw)) {
     surfaceClass = SURFACE_CLASS.paved;
     roadTrackClass =
