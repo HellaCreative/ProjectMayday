@@ -2,16 +2,23 @@
 
 Offline regional graphs + Node A* via `POST /api/route`.
 
-## Architecture
+## Mental model (live)
 
-1. **OSM** — basemap tiles + rider-service POIs; also **gap-fill routing edges**
-   (motorized highways unmatched by NRN) for proven provinces (NB, QC).
-2. **NRN** — national paved/gravel road backbone (per province GeoPackage); owns identity.
-3. **Provincial datasets** — resource roads / tracks / access detail (NS = NSTDB,
-   NB = Forest Roads, QC = chemins multiusages, …); default `motorized_unknown`.
-4. **Conflation** — NRN → OSM gap-fill → provincial. No free-space connectors.
-5. **Regional packages** — `routing/data/regions/<id>/graph.v1.json.gz` (never one
-   Canada-wide browser graph).
+1. **OSM road fabric** — essentially all driveable roads on the basemap (paved,
+   gravel, dirt, service). Included in the routing graph as
+   `motorized_permissive`. Surface/class drive visuals and costing, **not** the
+   unknown-access toggle. Shortbread tiles remain display-only; the graph is a
+   separate Geofabrik extract of motorized highways.
+2. **NRN** — Canadian national identity / backbone where it overlaps OSM. Owns
+   identity in conflation; must not block yellow OSM roads.
+3. **Provincial capillary** — gov forest / resource layers that fill *between*
+   OSM roads (NB Forest Roads, QC chemins multiusages, NSTDB, …). Default
+   `motorized_unknown`; gated by “Allow unknown access.”
+4. **Conflation** — NRN → OSM fabric → provincial capillary. No free-space
+   connectors.
+5. **Regional packages** — `routing/data/regions/<id>/graph.v1.json.gz`.
+   Vercel longhaul packs ship **OSM+NRN fabric only** (no provincial) so
+   ordinary basemap roads snap and route with unknown off.
 
 Riders never see source switches. The map paints a single corridor network.
 
@@ -24,17 +31,22 @@ Riders never see source switches. The map paints a single corridor network.
 
 - `routing/adapters/contract.js` — shared report contract
 - `routing/adapters/nrn.js` — National Road Network
-- `routing/adapters/osm-roads.js` — OSM motorized gap-fill (Geofabrik)
+- `routing/adapters/osm-roads.js` — OSM motorized road fabric (Geofabrik)
 - `routing/adapters/ns-nstdb.js` — Nova Scotia NSTDB
 - `routing/adapters/nb-forest-roads.js` — New Brunswick Forest Roads
 - `routing/adapters/qc-multiusage.js` — Québec chemins multiusages
 
 ```bash
-# OSM gap-fill extract (once per province), then rebuild:
+# OSM fabric extract (once per province), then rebuild:
 bash scripts/extract-osm-roads.sh new-brunswick
 bash scripts/extract-osm-roads.sh quebec
+bash scripts/extract-osm-roads.sh nova-scotia
 node scripts/build-region-with-supplement.js nb
 node scripts/build-region-with-supplement.js qc
+node scripts/build-region-with-supplement.js ns
+
+# Vercel longhaul fabric packs (NS/NB/QC):
+node scripts/build-longhaul-region-packs.js ns nb qc
 ```
 
 ## Registry

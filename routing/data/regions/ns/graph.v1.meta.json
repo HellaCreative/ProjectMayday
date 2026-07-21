@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-20T22:03:09.451Z",
+  "generatedAt": "2026-07-21T18:09:47.307Z",
   "schemaVersion": "canada-regional-1",
   "regionId": "ns",
   "province": "NS",
@@ -9,61 +9,72 @@
     -59.67685,
     47.22319
   ],
-  "nodeCount": 320304,
-  "edgeCount": 307421,
-  "componentCount": 36375,
-  "boundaryNodeCount": 399,
+  "nodeCount": 429158,
+  "edgeCount": 378141,
+  "componentCount": 75722,
+  "boundaryNodeCount": 550,
   "accessCounts": {
-    "motorized_permissive": 123511,
-    "motorized_unknown": 183280,
-    "motorized_restricted": 630
+    "motorized_permissive": 196542,
+    "motorized_unknown": 180981,
+    "motorized_restricted": 618
   },
   "surfaceCounts": {
-    "paved": 63944,
-    "unknown": 11063,
-    "access": 46289,
-    "gravel": 34023,
-    "track": 152102
+    "paved": 85736,
+    "unknown": 10212,
+    "access": 109463,
+    "gravel": 22931,
+    "track": 149799
   },
   "sourceCounts": {
     "National Road Network": 119447,
-    "Nova Scotia Topographic DataBase Roads, Trails and Rails": 187974
+    "OpenStreetMap": 74941,
+    "Nova Scotia Topographic DataBase Roads, Trails and Rails": 183753
   },
-  "jsonBytes": 299114872,
-  "gzBytes": 61883698,
+  "jsonBytes": 351097960,
+  "gzBytes": 73063565,
   "lineage": {
     "nrn": {
       "adapter": "nrn",
-      "featureCount": 119846,
-      "excludedByReason": {},
+      "featureCount": 119846
+    },
+    "osm": {
+      "adapter": "osm-roads",
+      "featureCount": 134812,
+      "added": 75472,
+      "duplicateSkipped": 59340,
       "classification": {
         "surface": {
-          "unknown": 87967,
-          "resource": 31879
+          "paved": 51187,
+          "unknown": 3235,
+          "gravel": 1364,
+          "resource": 79026
         },
         "access": {
-          "motorized_permissive": 87967,
-          "motorized_unknown": 31879
+          "motorized_permissive": 134812
         },
         "structure": {
-          "none": 115437,
-          "bridge": 4345,
-          "tunnel": 64
+          "none": 129768,
+          "bridge": 4943,
+          "tunnel": 101
         },
         "roadTrack": {
-          "local": 68736,
-          "ramp": 1479,
-          "resource": 31879,
-          "arterial": 7557,
-          "service": 324,
-          "collector": 6910,
-          "freeway": 2883,
-          "unknown": 78
+          "local": 55447,
+          "freeway": 100,
+          "resource": 50247,
+          "service": 23707,
+          "track": 5072,
+          "arterial": 149,
+          "collector": 90
         },
         "excluded": {}
+      },
+      "excludedByReason": {
+        "access_denied": 2551,
+        "no_usable_geometry": 1,
+        "abandoned": 1
       }
     },
-    "nstdb": {
+    "provincial": {
       "adapter": "ns-nstdb",
       "featureCount": 301635,
       "excludedByReason": {},
@@ -96,15 +107,7 @@
     }
   },
   "conflation": {
-    "featureCount": 308526,
-    "stats": {
-      "backboneKept": 119846,
-      "supplementAdded": 188680,
-      "supplementDuplicateSkipped": 112955,
-      "supplementConventionalSkipped": 0,
-      "backboneSurfaceEnriched": 76888,
-      "conflicts": 0
-    },
+    "stats": null,
     "freeSpaceConnectors": 0
   }
 }

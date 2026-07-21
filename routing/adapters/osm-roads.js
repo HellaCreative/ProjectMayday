@@ -2,9 +2,12 @@
 "use strict";
 
 /**
- * OSM road gap-fill — conventional motorized roads from Geofabrik extracts.
- * Conflation role: after NRN, before provincial capillary. NRN still owns identity;
- * OSM only adds unmatched paved/gravel/road geometry. Not a wholesale NRN replace.
+ * OSM road fabric — motorized roads from Geofabrik extracts.
+ *
+ * Product role: the driveable basemap network (paved/gravel/dirt/service).
+ * Always motorized_permissive when included. Surface/class = visuals + costing.
+ * Conflation: after NRN (NRN keeps identity on overlaps), before provincial
+ * capillary that fills *between* OSM roads. Not a wholesale NRN replace.
  *
  * Excluded: foot/bike-only, private/no, abandoned, pure path without motor tags.
  * Licence: OpenStreetMap contributors (ODbL).

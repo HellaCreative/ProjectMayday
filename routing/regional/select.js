@@ -145,12 +145,17 @@ function resolveGraphRequest(body = {}) {
 
   if (body.regionId) {
     const id = String(body.regionId).toLowerCase();
+    const onVercel = !!(process.env.VERCEL || process.env.VERCEL_ENV);
+    const opts =
+      onVercel || body.preferLonghaulPacks
+        ? { longhaul: true }
+        : {};
     return {
       ok: true,
       regionIds: [id],
-      graphPath: graphPathForRegion(id),
-      graphPaths: [graphPathForRegion(id)],
-      mode: "explicit"
+      graphPath: graphPathForRegion(id, opts),
+      graphPaths: [graphPathForRegion(id, opts)],
+      mode: opts.longhaul ? "explicit-longhaul" : "explicit"
     };
   }
 

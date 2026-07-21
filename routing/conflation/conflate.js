@@ -1,8 +1,11 @@
 "use strict";
 
 /**
- * Controlled conflation: NRN owns national road identity; provincial data supplements
- * resource/track detail. No free-space connectors. No blind overlay of duplicates.
+ * Controlled conflation (live mental model):
+ *   NRN owns national road identity on overlaps.
+ *   OSM adds unmatched driveable fabric (basemap roads).
+ *   Provincial data is capillary between OSM roads (resource/forest detail).
+ * No free-space connectors. No blind overlay of duplicates.
  */
 
 const { bump } = require("../adapters/contract");
@@ -135,9 +138,10 @@ function conflateRegion(options = {}) {
       generatedAt: new Date().toISOString(),
       precedence: {
         backbone: "NRN owns national road identity and conventional-road attributes",
-        osmGapFill:
-          "OpenStreetMap adds unmatched motorized paved/gravel/road geometry after NRN; never replaces NRN identity",
-        supplement: "Provincial data adds resource/track detail and unmatched local connectivity",
+        osmFabric:
+          "OpenStreetMap is the driveable road fabric (unmatched motorized ways after NRN); always permissive; never replaces NRN identity",
+        supplement:
+          "Provincial capillary fills between OSM roads (forest/resource); default motorized_unknown",
         surfaceEnrichment: "Provincial or OSM paved/gravel may enrich NRN edges whose pavement status is unknown",
         freeSpace: "No free-space connectors"
       },

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Extract motorized OSM road ways from a Geofabrik provincial PBF for gap-fill.
+# Extract motorized OSM road ways from a Geofabrik provincial PBF (road fabric).
 #
 # Usage:
 #   bash scripts/extract-osm-roads.sh new-brunswick

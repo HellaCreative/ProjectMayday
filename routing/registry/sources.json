@@ -207,7 +207,7 @@
       },
       "osm": {
         "adapter": "osm-roads",
-        "role": "gap-fill",
+        "role": "road-fabric",
         "status": "ready",
         "featureCount": 591955,
         "added": 384717,
@@ -249,7 +249,7 @@
       },
       "osm": {
         "adapter": "osm-roads",
-        "role": "gap-fill",
+        "role": "road-fabric",
         "status": "ready",
         "featureCount": 80646,
         "added": 56182,
@@ -279,17 +279,26 @@
         "license": "Open Government Licence - Nova Scotia",
         "adapter": "ns-nstdb",
         "status": "ready",
-        "dateRetrieved": "2026-07-15",
+        "dateRetrieved": "2026-07-21",
         "notes": "Supplemental resource roads and TRACK detail."
       },
       "routingReady": true,
       "backboneArtifact": {
         "path": "routing/data/regions/ns/graph.v1.json.gz",
-        "edgeCount": 307421,
-        "nodeCount": 320304,
-        "gzBytes": 61883698
+        "edgeCount": 378141,
+        "nodeCount": 429158,
+        "gzBytes": 73063565
       },
-      "routingMode": "nrn+provincial"
+      "routingMode": "nrn+osm+provincial",
+      "osm": {
+        "adapter": "osm-roads",
+        "role": "road-fabric",
+        "status": "ready",
+        "featureCount": 134812,
+        "added": 75472,
+        "license": "OpenStreetMap contributors (ODbL)",
+        "dateRetrieved": "2026-07-21"
+      }
     },
     {
       "code": "PE",

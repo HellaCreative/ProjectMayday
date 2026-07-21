@@ -3,8 +3,13 @@
 
 /**
  * Build thinned per-province longhaul packs for Vercel canada-chain hops.
- * Full regional graphs inflate to 100–300MB and OOM Hobby isolates; these
- * corridor-clipped packs stay small enough to fetch + merge 1–2 at a time.
+ *
+ * Live mental model:
+ *   OSM + NRN = road fabric (driveable basemap roads). Provincial capillary
+ *   stays out of these packs — enable via unknown-access on full regional graphs.
+ *
+ * Full regional graphs inflate to 100–300MB+ and OOM Hobby isolates; these
+ * corridor-clipped fabric packs stay small enough to fetch + merge 1–2 at a time.
  */
 const fs = require("fs");
 const path = require("path");
@@ -14,8 +19,8 @@ const {
   clipGraphToCorridor,
   extractHighwayGraph,
   extractLonghaulSpineGraph,
-  extractAtlanticLonghaulGraph,
-  extractMaritimeLonghaulGraph
+  extractRoadFabricLonghaulGraph,
+  keepLargestComponent
 } = require("../routing/regional/corridor");
 
 const ROOT = path.join(__dirname, "..");
@@ -55,12 +60,12 @@ function main() {
     let g = load(code);
     const before = g.edgeCount || (g.edges || []).length;
     const hasRoadClass = (g.edges || []).some((e) => e.rt);
-    // QC: spine + hub bulbs. NS/NB: NRN + OSM highways only (no forest islands).
-    const atlanticHubs = new Set(["qc", "pe", "nl"]);
-    const maritime = new Set(["ns", "nb"]);
-    const useAtlanticHubs = atlanticHubs.has(code);
-    const useMaritime = maritime.has(code);
-    const useHighway = !hasRoadClass && !useAtlanticHubs && !useMaritime;
+    const hasOsm = (g.edges || []).some((e) => /openstreetmap/i.test(String(e.src || "")));
+
+    // Provinces with OSM fabric in the regional pack use road-fabric longhaul.
+    // QC = corridor mode (size). NS/NB = dense fabric when OSM present; else NRN-only dense.
+    const corridorFabric = new Set(["qc"]);
+    const denseFabric = new Set(["ns", "nb", "pe", "nl"]);
     const atlanticHubsByCode = {
       qc: [
         { lon: -71.208, lat: 46.813 }, // Quebec City
@@ -73,28 +78,44 @@ function main() {
       pe: [{ lon: -63.126, lat: 46.238 }],
       nl: [{ lon: -52.712, lat: 47.561 }]
     };
-    g = useAtlanticHubs
-      ? extractAtlanticLonghaulGraph(g, atlanticHubsByCode[code] || [], code === "qc" ? 28000 : 35000)
-      : useMaritime
-        ? extractMaritimeLonghaulGraph(g)
-        : useHighway
-          ? extractHighwayGraph(g)
-          : extractLonghaulSpineGraph(g);
+
+    let extractMode = "spine";
+    if (corridorFabric.has(code)) {
+      extractMode = "fabric-corridor";
+      g = extractRoadFabricLonghaulGraph(g, {
+        mode: "corridor",
+        hubLocations: atlanticHubsByCode[code] || [],
+        hubBufferMeters: code === "qc" ? 35000 : 35000
+      });
+    } else if (denseFabric.has(code) || hasOsm) {
+      extractMode = "fabric-dense";
+      g = extractRoadFabricLonghaulGraph(g, { mode: "dense" });
+    } else if (!hasRoadClass) {
+      extractMode = "highway-no-track";
+      g = extractHighwayGraph(g);
+    } else {
+      extractMode = "longhaul-spine";
+      g = extractLonghaulSpineGraph(g);
+    }
+
     const afterSpine = g.edgeCount;
     g = clipGraphToCorridor(g, corridor, BUFFER_M);
+    // Corridor clip can detach fringe islands — keep the routable giant only.
+    if (String(extractMode).startsWith("fabric")) {
+      g = keepLargestComponent(g);
+    }
     for (const e of g.edges) e.g = thinGeometry(e.g, 6);
     g.edgeCount = g.edges.length;
     g.regionId = code;
     g.province = String(code).toUpperCase();
     g.schemaVersion = "longhaul-region-1";
     g.lineage = {
-      purpose: "canada-chain hop pack (NRN spine + southern corridor)",
+      purpose: "canada-chain hop pack (OSM+NRN road fabric; no provincial capillary)",
+      mentalModel: "osm-nrn-fabric",
       source: `regions/${code}/graph.v1.json.gz`,
       hasRoadClass,
-      spine: !useAtlanticHubs && !useMaritime && !useHighway,
-      atlanticLonghaul: useAtlanticHubs,
-      maritimeLonghaul: useMaritime,
-      highwayNoTrack: useHighway,
+      hasOsm,
+      extractMode,
       corridorBufferMeters: BUFFER_M,
       thinnedGeometry: true,
       inputEdgeCount: before,
@@ -103,7 +124,6 @@ function main() {
     };
 
     const outDir = path.join(REGIONS, code);
-    // writeRegionalGraph always writes graph.v1.json.gz — write custom name.
     const json = JSON.stringify(g);
     const gz = zlib.gzipSync(Buffer.from(json, "utf8"), { level: 9 });
     const graphPath = path.join(outDir, "longhaul.v1.json.gz");
@@ -123,10 +143,12 @@ function main() {
       code,
       "edges",
       before,
-      "→spine",
+      "→extract",
       afterSpine,
       "→pack",
       g.edgeCount,
+      "mode",
+      extractMode,
       "gzMB",
       (gz.length / 1e6).toFixed(2),
       "inflMB",

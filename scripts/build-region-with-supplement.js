@@ -2,8 +2,8 @@
 "use strict";
 
 /**
- * Rebuild a regional graph:
- *   NRN backbone → OSM gap-fill (optional) → provincial supplement
+ * Rebuild a regional graph (live mental model):
+ *   NRN backbone → OSM road fabric (optional) → provincial capillary
  * Usage: node scripts/build-region-with-supplement.js <code>
  * Requires existing NRN regional pack OR NRN geojsonseq at data-raw/nrn/<code>/
  * Optional OSM roads geojsonseq at data-raw/osm-roads/<geofabrik-slug>/roads.geojsonseq
@@ -29,7 +29,7 @@ const SUPPLEMENTS = {
   qc: () => require("../routing/adapters/qc-multiusage")
 };
 
-/** Geofabrik canada/* slug for OSM gap-fill extracts. */
+/** Geofabrik canada/* slug for OSM road-fabric extracts. */
 const OSM_SLUG = {
   nb: "new-brunswick",
   qc: "quebec",
@@ -110,12 +110,12 @@ async function loadNrnFeatures(code) {
   };
 }
 
-async function loadOsmGapFill(code) {
+async function loadOsmFabric(code) {
   const slug = OSM_SLUG[code];
   if (!slug) return null;
   const seq = path.join(ROOT, "data-raw", "osm-roads", slug, "roads.geojsonseq");
   if (!fs.existsSync(seq)) {
-    console.log(`[${code}] No OSM gap-fill extract at ${seq} — skipping OSM tier`);
+    console.log(`[${code}] No OSM fabric extract at ${seq} — skipping OSM tier`);
     return null;
   }
   return osmRoads.run({
@@ -146,10 +146,10 @@ async function main() {
   let osmReport = null;
   let osmConflation = null;
   if (!skipOsm) {
-    console.log(`[${code}] Loading OSM gap-fill…`);
-    const osm = await loadOsmGapFill(code);
+    console.log(`[${code}] Loading OSM road fabric…`);
+    const osm = await loadOsmFabric(code);
     if (osm && osm.features.length) {
-      console.log(`[${code}] OSM gap-fill candidates:`, osm.features.length);
+      console.log(`[${code}] OSM fabric candidates:`, osm.features.length);
       osmConflation = conflateRegion({
         backbone,
         supplement: osm.features,
@@ -157,7 +157,7 @@ async function main() {
       });
       backbone = osmConflation.features;
       osmReport = osm.report;
-      console.log(`[${code}] After OSM gap-fill:`, osmConflation.report.stats);
+      console.log(`[${code}] After OSM fabric:`, osmConflation.report.stats);
     }
   } else {
     console.log(`[${code}] Skipping OSM (--skip-osm); keeping NRN+OSM already on pack if present`);
