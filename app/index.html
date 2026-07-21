@@ -11444,21 +11444,6 @@
       );
     }
 
-    function stageProfilePillsHtml(stage, index) {
-      const current = stage.profile || "balanced";
-      const profiles = ["direct", "balanced", "dirt", "cleanest"];
-      return (
-        '<label class="route-setting-field">' +
-        '<span class="route-setting-label">Surface type</span>' +
-        '<select class="route-surface-select" data-stage-profile="' + stage.id + '" aria-label="Stage ' + (index + 1) + ' surface type">' +
-        profiles.map((profile) => {
-          const label = profile === "cleanest" ? "Clean" : profile.charAt(0).toUpperCase() + profile.slice(1);
-          return '<option value="' + profile + '"' + (profile === current ? " selected" : "") + '>' + label + '</option>';
-        }).join("") +
-        "</select></label>"
-      );
-    }
-
     function renderStageList() {
       if (!stageListEl && !routeBarStageList) return;
       const stages = planTrip.stages;
@@ -11466,32 +11451,10 @@
       const markup = routedStages.map((stage, i) => {
         const active = stage.id === activeStageId;
         const editing = stage.id === editingStageId;
-        const expanded = active;
         const profile = stage.profile || "balanced";
         const profileLabel = profile === "cleanest" ? "Clean" : profile.charAt(0).toUpperCase() + profile.slice(1);
         const stageLabel = "Stage " + String(i + 1).padStart(2, "0");
-        let body = "";
-        if (expanded) {
-          body =
-            '<div class="route-settings-grid route-stage-settings">' +
-              stageProfilePillsHtml(stage, i) +
-              '<div class="route-setting-field">' +
-                '<div class="route-setting-heading">' +
-                  '<span class="route-setting-label">Allow unknown access</span>' +
-                  '<button class="access-info-btn" type="button" data-access-info="stage" aria-label="What allowing unknown access means" aria-describedby="accessInfoTip" aria-expanded="false">' +
-                    '<i data-lucide="info" aria-hidden="true"></i>' +
-                  "</button>" +
-                '</div>' +
-                '<div class="route-setting-toggle"><span>Allow</span>' +
-                  '<label class="switch"><input type="checkbox" data-stage-access aria-label="Allow unknown access"' +
-                    (stageAllowsUnknownAccess(stage) ? " checked" : "") + ' data-stage-id="' + stage.id + '"><span></span></label>' +
-                '</div>' +
-              '</div>' +
-            "</div>" +
-            stageMixBarHtml(stage) + stageMetricsHtml(stage);
-        } else {
-          body = stageMixBarHtml(stage) + stageMetricsHtml(stage);
-        }
+        const body = stageMixBarHtml(stage) + stageMetricsHtml(stage);
         return (
           '<div class="stage-row' + (active ? " is-active" : "") + (editing ? " is-editing" : "") +
             '" role="listitem" data-stage-id="' + stage.id + '">' +
