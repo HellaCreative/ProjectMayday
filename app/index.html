@@ -7361,25 +7361,25 @@
     }
     /* The stage editor is map-first: keep its two controls in equal columns
        and separate them without spending another row of vertical space. */
-    body.planner-open.planner-tab-plan .route-bar-stage-editor .route-stage-settings {
+    #routeBarStageEditor .stage-editor-settings-grid {
       display: grid !important;
       grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
       align-items: stretch !important;
       gap: 0 !important;
     }
-    body.planner-open.planner-tab-plan .route-bar-stage-editor .route-stage-settings > .route-setting-field {
+    #routeBarStageEditor .stage-editor-settings-grid > .route-setting-field {
       min-width: 0 !important;
       padding: 0 14px 0 0 !important;
     }
-    body.planner-open.planner-tab-plan .route-bar-stage-editor .route-stage-settings > .route-stage-editor-access {
+    #routeBarStageEditor .stage-editor-settings-grid > .route-stage-editor-access {
       justify-content: space-between !important;
       padding: 0 0 0 14px !important;
       border-left: 1px solid #c9cbd0 !important;
     }
-    body.planner-open.planner-tab-plan .route-bar-stage-editor .route-stage-settings .route-setting-heading {
+    #routeBarStageEditor .stage-editor-settings-grid .route-setting-heading {
       min-height: 22px !important;
     }
-    body.planner-open.planner-tab-plan .route-bar-stage-editor .route-stage-settings .route-setting-toggle {
+    #routeBarStageEditor .stage-editor-settings-grid .route-setting-toggle {
       min-height: 34px !important;
     }
     body.planner-open .route-compact-summary,
@@ -11027,7 +11027,7 @@
           '<button class="route-stage-editor-close" type="button" data-stage-editor-close aria-label="Close stage details"><i data-lucide="x" aria-hidden="true"></i></button>' +
         '</div>' +
         '<div class="route-stage-editor-meta">' + meta + '</div>' +
-        '<div class="route-settings-grid route-stage-settings">' +
+        '<div class="route-settings-grid route-stage-settings stage-editor-settings-grid">' +
           '<label class="route-setting-field">' +
             '<span class="route-setting-label">Surface type</span>' +
             '<select class="route-surface-select" data-stage-profile="' + stage.id + '" aria-label="Stage surface type">' + profileOptions + '</select>' +
