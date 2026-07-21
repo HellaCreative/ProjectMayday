@@ -53,7 +53,14 @@ async function loadNrnFeatures(code) {
   const surfaceName = graph.enums.SURFACE_NAME;
   const accessName = graph.enums.ACCESS_NAME;
   const structureName = graph.enums.STRUCTURE_NAME;
-  const features = graph.edges.map((e) =>
+  // If this pack already includes a provincial supplement, only keep NRN edges
+  // as backbone so re-runs do not double-ingest resource roads.
+  const backboneEdges = (graph.edges || []).filter((e) => {
+    const src = String(e.src || "");
+    if (!src) return true;
+    return /national road network|^nrn\b/i.test(src);
+  });
+  const features = backboneEdges.map((e) =>
     createNormalizedEdge({
       edgeId: e.i,
       lineageId: e.lin || e.i,
@@ -81,7 +88,13 @@ async function loadNrnFeatures(code) {
       adapter: "nrn-from-pack",
       featureCount: features.length,
       excludedByReason: {},
-      classification: {}
+      classification: {},
+      notes:
+        backboneEdges.length !== (graph.edges || []).length
+          ? [
+              `Filtered ${(graph.edges || []).length - backboneEdges.length} non-NRN edges from existing regional pack before re-supplement.`
+            ]
+          : []
     }
   };
 }
@@ -97,10 +110,11 @@ async function main() {
   console.log(`[${code}] NRN features:`, nrn.features.length);
 
   console.log(`[${code}] Running provincial supplement ${suppMod.name}…`);
-  const maxByCode = { ab: 250000, bc: 200000, on: 350000, qc: 250000, ns: 500000, nb: 200000 };
+  // Soft caps only for exploratory builds. QC live layer ~945k — do not truncate.
+  const maxByCode = { ab: 250000, bc: 200000, on: 350000, qc: Infinity, ns: 500000, nb: Infinity };
   const supp = await suppMod.run({
-    maxFeatures: maxByCode[code] || 250000,
-    pageSize: code === "bc" ? 500 : 1000
+    maxFeatures: maxByCode[code] != null ? maxByCode[code] : 250000,
+    pageSize: code === "bc" ? 500 : 2000
   });
   console.log(`[${code}] Supplement features:`, supp.features.length);
 

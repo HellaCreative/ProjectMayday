@@ -113,14 +113,16 @@ Secondary supplement (recreation/trail): **Recreation Sites and Trails BC**.
 
 Fits the existing conflation architecture (`routing/adapters/`, `routing/registry/sources.json`). Each province becomes a new adapter alongside `nrn` and `ns-nstdb`.
 
-Suggested order (richest and cleanest first):
-1. New Brunswick — Forest Roads. Clean ESRI REST, direct NSTDB analog, smallest province, best first proof.
-2. Ontario — MNRF Road Segments. Clean ESRI REST, dedupe against NRN.
-3. Alberta — Access Roads + Trails/Cutlines. Clean ESRI REST, richest attributes, adds a true trail layer.
-4. British Columbia — FTEN + Recreation Sites and Trails. Densest data, but WMS/WFS adapter is new work.
-5. Quebec — chemins forestiers / infrastructures. Sheet-based GDB, enumeration + merge needed.
-6. Saskatchewan — Resource/Recreation class only. Careful NRN de-duplication.
-7. Manitoba — MLI. Unverified; confirm portal and delivery method before committing effort.
+Suggested order (user-directed after NB proof; richest caveats noted inline):
+1. New Brunswick — Forest Roads. Done.
+2. Quebec — chemins multiusages (AQréseau+ MapServer). Sheet-based GDB remains a secondary option; live MapServer layer 37 is the current adapter path (~945k features — do not soft-cap).
+3. Ontario — MNRF Road Segments. Clean ESRI REST, dedupe against NRN.
+4. Manitoba — MLI. Unverified; confirm portal and delivery method before committing effort.
+5. Saskatchewan — Resource/Recreation class only. Careful NRN de-duplication.
+6. Alberta — Access Roads + Trails/Cutlines. Clean ESRI REST, richest attributes, adds a true trail layer.
+7. British Columbia — FTEN + Recreation Sites and Trails. Densest data, but WMS/WFS adapter is new work.
+
+Deferred research (not build queue): PE, NL, NT, YT (and NU if relevant).
 
 Per-province adapter checklist:
 - Confirm the service is live (query `?f=json` on the layer).

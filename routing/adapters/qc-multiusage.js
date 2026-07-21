@@ -87,11 +87,19 @@ function pathsFromGeometry(geometry) {
 }
 
 function classifyAttrs(attrs) {
-  const notes = String(attrs.Notes || attrs.Gestion || attrs.Stat_Pont || "").toLowerCase();
-  if (/fermé|ferme|closed|abandon|priv[eé]|interdit/.test(notes)) {
+  // Notes is usually a province-wide legal disclaimer (mentions "privées", etc.).
+  // Do not treat that disclaimer as per-feature access. Use Gestion / Stat_Pont / short Notes.
+  const gestion = String(attrs.Gestion || "").toLowerCase();
+  const statPont = String(attrs.Stat_Pont || "").toLowerCase();
+  const notesRaw = String(attrs.Notes || "");
+  const notes = notesRaw.length > 0 && notesRaw.length < 160 ? notesRaw.toLowerCase() : "";
+  const accessBlob = [gestion, statPont, notes].join(" ");
+  if (/fermé|ferme|closed|abandon|interdit/.test(accessBlob)) {
     return { ok: false, reason: "restricted_or_closed" };
   }
-  const caract = String(attrs.CaractRte || attrs.Cls_CheFor || attrs.Che_Multi || "").toLowerCase();
+  const caract = String(
+    attrs.CaractRte || attrs.Cls_CheFor || attrs.ClsRte || attrs.Che_Multi || ""
+  ).toLowerCase();
   let surfaceClass = SURFACE_CLASS.resource;
   let roadTrackClass = ROAD_TRACK_CLASS.resource;
   if (/pav[eé]|asphalte|b[eé]ton/.test(caract)) {
@@ -102,6 +110,10 @@ function classifyAttrs(attrs) {
   } else if (/sentier|piste|track/.test(caract)) {
     surfaceClass = SURFACE_CLASS.track;
     roadTrackClass = ROAD_TRACK_CLASS.track;
+  } else if (caract === "nf" || caract === "oui") {
+    // Cls_CheFor NF and Che_Multi OUI are forest multi-use markers, not pavement.
+    surfaceClass = SURFACE_CLASS.resource;
+    roadTrackClass = ROAD_TRACK_CLASS.resource;
   }
   return {
     ok: true,

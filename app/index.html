@@ -6690,6 +6690,10 @@
         <span class="legend-label"><i style="background:var(--track)"></i>Show NB route lines</span>
         <span class="switch"><input type="checkbox" data-network-toggle="NB" aria-label="Show NB route lines"><span></span></span>
       </label>
+      <label class="legend-row" title="Inspect Quebec chemins multiusages in the current map area (product-internal)">
+        <span class="legend-label"><i style="background:var(--track)"></i>Show QC route lines</span>
+        <span class="switch"><input type="checkbox" data-network-toggle="QC" aria-label="Show QC route lines"><span></span></span>
+      </label>
     </div>
     </div>
   </div>
@@ -7243,6 +7247,13 @@
         manifestUrl: "/app/data/nb-gov-roads.manifest.json",
         chunkBase: "/app/data/nb-gov-chunks/",
         cachePrefix: "nb-gov"
+      },
+      QC: {
+        code: "QC",
+        label: "Quebec",
+        manifestUrl: "/app/data/qc-gov-roads.manifest.json",
+        chunkBase: "/app/data/qc-gov-chunks/",
+        cachePrefix: "qc-gov"
       }
     };
     const SHORTBREAD_STYLE_URL = "/app/data/shortbread-style.json";

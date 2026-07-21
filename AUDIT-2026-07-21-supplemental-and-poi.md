@@ -101,10 +101,37 @@ Mutually exclusive. Corridor mode (both off) still uses NS display pack for rout
 
 ---
 
+## Product decision (2026-07-21)
+
+- **Allow unknown access stands as-is.** Provincial forest/resource supplements (e.g. NB Forest Roads) do not assert motorcycle legality; keep them `motorized_unknown` and gated by the existing toggle. Do not invent permissive acceptance from sparse government sources.
+
+## Build order (user-directed, after NB)
+
+1. Quebec  
+2. Ontario  
+3. Manitoba  
+4. Saskatchewan  
+5. Alberta  
+6. British Columbia  
+
+## Deferred — research only (not in build queue yet)
+
+Capture for a later investigation pass (parallel research agent):
+
+| Code | Jurisdiction | Why deferred |
+|------|----------------|--------------|
+| PE | Prince Edward Island | Not in Supplemental Services.md primary list; NRN may already be dense; need PE-specific resource/trail sources |
+| NL | Newfoundland and Labrador | Same — research forest/resource/winter roads and trails |
+| NT | Northwest Territories | Same — winter roads / territorial network |
+| YT | Yukon | Same — resource/territorial roads |
+| NU | Nunavut | Optional note only if obvious open data appears |
+
+Research findings append under **Deferred Atlantic & Territories research** when the parallel session returns.
+
 ## Blocked / deferred
 
-1. **Part 1 next provinces** — intentionally not started until NB end-to-end is accepted.
+1. **Quebec ingest cap** — live AQréseau+ layer 37 (`Oui [250K - 1]`) reports **~944,719** features; build script capped QC at **250,000** (`scripts/build-region-with-supplement.js` `maxByCode.qc`). Must lift cap and rebuild for full coverage before treating QC as complete.
 2. **Routing / pack format / search / nav cues / basemap** — not modified (per constraints).
 3. **Trailforks / AllTrails / Backroad / Wikiloc** — not used.
-4. **Manitoba** — still unverified per spec; do not ingest until live confirmation.
-5. **Large artifacts** — `nb-gov-chunks/`, Canada `poi/`, `routing/data/regions/nb/graph.v1.json.gz` are build outputs; commit only if explicitly requested.
+4. **Manitoba** — still unverified per spec; confirm portal before ingest.
+5. **Large artifacts** — provincial graphs/chunks are build outputs; push when user needs production review.
