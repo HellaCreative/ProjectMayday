@@ -11193,12 +11193,12 @@
         routeBarStageList.insertAdjacentHTML("afterbegin", stageMarkup);
       }
       if (routeBarAddStage) {
-        routeBarAddStage.hidden = routedStages.length === 0;
+        routeBarAddStage.hidden = false;
         const nextAction = routedStages.length
-          ? "Press and hold map to create another stage"
+          ? "+ Long press map to add another stage"
           : (draftStage && draftStage.start
-            ? "Press and hold map to create stage 1"
-            : "Press and hold map to place starting point");
+            ? "+ Long press map to create stage 1"
+            : "+ Long press map to set a starting point");
         routeBarAddStage.textContent = nextAction;
         routeBarAddStage.setAttribute("aria-label", nextAction);
       }
