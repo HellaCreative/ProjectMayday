@@ -6798,13 +6798,13 @@
     body.planner-open .route-card,
     body.planner-open .route-card.is-collapsed,
     body.planner-open .route-card.is-expanded {
-      left: 0 !important;
-      right: 0 !important;
+      left: 10px !important;
+      right: 10px !important;
       bottom: calc(var(--p2-dock-h) + 10px) !important;
-      width: 100% !important;
-      max-width: none !important;
+      width: auto !important;
+      max-width: 440px !important;
       height: auto !important;
-      margin: 0 !important;
+      margin: 0 auto !important;
       padding: 0 !important;
       transform: none !important;
       overflow: hidden !important;
@@ -6890,14 +6890,24 @@
       display: block !important;
       flex: 0 0 44px !important;
       height: 44px !important;
-      width: min(440px, calc(100% - 20px)) !important;
+      width: min(180px, calc(100% - 20px)) !important;
       margin: 0 auto !important;
       overflow: hidden !important;
     }
     body.planner-open .route-card.is-collapsed .route-tabs {
-      display: flex !important;
+      display: block !important;
       width: 100% !important;
       margin: 0 !important;
+    }
+    body.planner-open .route-card.is-collapsed .route-mode:not(.active) {
+      display: none !important;
+    }
+    body.planner-open .route-card.is-collapsed .route-mode.active {
+      display: flex !important;
+      width: 100% !important;
+      min-height: 38px !important;
+      align-items: center !important;
+      justify-content: center !important;
     }
     body.planner-open .route-card.is-collapsed .route-tab-hint,
     body.planner-open .route-card.is-collapsed .route-pref-card,
@@ -6973,61 +6983,7 @@
       text-align: center;
     }
 
-    /* A completed From here route minimizes to useful route context, not an
-       empty tab strip. The handle and active tab still expand the full sheet. */
-    html body.planner-open.planner-collapsed:not(.planner-tab-plan):not(.planner-tab-saved)
-      .route-card.is-collapsed.has-route-summary {
-      max-height: 96px !important;
-    }
-    html body.planner-open.planner-collapsed:not(.planner-tab-plan):not(.planner-tab-saved)
-      .route-card.is-collapsed.has-route-summary .route-drawer-scroll,
-    html body.planner-open.planner-collapsed:not(.planner-tab-plan):not(.planner-tab-saved)
-      .route-card.is-collapsed.has-route-summary .route-drawer-compact {
-      height: 76px !important;
-      min-height: 76px !important;
-    }
-    html body.planner-open.planner-collapsed:not(.planner-tab-plan):not(.planner-tab-saved)
-      .route-card.is-collapsed.has-route-summary .route-drawer-compact {
-      flex-direction: column !important;
-      align-items: stretch !important;
-    }
-    html body.planner-open.planner-collapsed:not(.planner-tab-plan):not(.planner-tab-saved)
-      .route-card.is-collapsed.has-route-summary #routeDrawerCompact > #routePrefCardCompact {
-      display: block !important;
-      flex: 0 0 32px !important;
-      width: min(440px, calc(100% - 20px)) !important;
-      height: 32px !important;
-      margin: 0 auto !important;
-      padding: 0 !important;
-      overflow: hidden !important;
-      border: 0 !important;
-      background: transparent !important;
-    }
-    html body.planner-open.planner-collapsed:not(.planner-tab-plan):not(.planner-tab-saved)
-      .route-card.is-collapsed.has-route-summary #routePrefCardCompact > :not(#routeCompactSummary) {
-      display: none !important;
-    }
-    html body.planner-open.planner-collapsed:not(.planner-tab-plan):not(.planner-tab-saved)
-      .route-card.is-collapsed.has-route-summary #routeCompactSummary {
-      display: block !important;
-      height: 30px !important;
-      margin: 0 !important;
-      padding: 3px 0 0 !important;
-      overflow: hidden !important;
-    }
-    html body.planner-open.planner-collapsed:not(.planner-tab-plan):not(.planner-tab-saved)
-      .route-card.is-collapsed.has-route-summary #routeCompactSummary .route-metric-row {
-      min-height: 27px !important;
-      padding: 5px 8px !important;
-      border-radius: 7px !important;
-      font-size: 8.5px !important;
-    }
-    html body.planner-collapsed.planner-has-route-summary .stack,
-    html body.planner-collapsed.planner-has-route-summary .pip {
-      bottom: calc(var(--p2-dock-h) + 116px) !important;
-    }
-
-    /* Group sheets size to their current task. Four rider rows remain visible;
+    /* Group sheets size to their current task. Up to five rider rows remain visible;
        additional riders scroll inside the roster instead of stretching the
        whole sheet or leaving a large blank tail beneath short groups. */
     html body.groups-open .group-sheet.open {
@@ -7045,6 +7001,32 @@
     html body.groups-open .group-sheet.open .group-sheet-body {
       overflow: hidden !important;
     }
+    .group-sheet-heading-row {
+      display: flex;
+      width: 100%;
+      min-width: 0;
+      align-items: center;
+      gap: 8px;
+    }
+    .group-sheet-heading-copy {
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+    .group-header-back {
+      flex: 0 0 32px !important;
+      width: 32px !important;
+      height: 32px !important;
+      min-height: 32px !important;
+      padding: 0 !important;
+      border: 0 !important;
+      background: transparent !important;
+      font-size: 30px !important;
+      line-height: 1 !important;
+    }
+    .group-header-remove {
+      flex: 0 0 auto;
+      margin-left: auto;
+    }
     html body.groups-open .group-sheet.open .group-panel,
     html body.groups-open .group-sheet.open .group-details {
       max-height: calc(min(72vh, 640px) - 118px) !important;
@@ -7052,15 +7034,23 @@
       overflow-y: auto !important;
     }
     html body.groups-open.group-details-open .group-sheet.open #groupDetails {
-      overflow: visible !important;
+      display: flex !important;
+      flex-direction: column !important;
+      overflow: hidden !important;
+    }
+    html body.groups-open.group-details-open .group-sheet.open .group-tabs {
+      display: none !important;
     }
     html body.groups-open.group-details-open .group-sheet.open .group-participant-list {
-      max-height: 167px !important;
+      max-height: 210px !important;
       overflow-x: hidden !important;
       overflow-y: auto !important;
       overscroll-behavior: contain;
       scrollbar-width: thin;
       -webkit-overflow-scrolling: touch;
+    }
+    html body.groups-open.group-details-open .group-participant-summary {
+      display: none !important;
     }
     body.planner-collapsed .stack,
     body.planner-collapsed .pip,
@@ -7365,9 +7355,13 @@
       <button class="sheet-handle" id="groupSheetHandle" type="button" aria-label="Close riding groups"></button>
     </div>
     <div class="sheet-header group-sheet-head">
-      <div>
-        <div class="account-title key-title">Riding groups</div>
-        <div class="account-subtitle" id="groupAuthNotice">Sign in first to create a group, join a group, or share your location.</div>
+      <div class="group-sheet-heading-row">
+        <button class="group-back group-header-back" id="groupBackBtn" type="button" aria-label="Back to riding groups" hidden><span aria-hidden="true">&lsaquo;</span></button>
+        <div class="group-sheet-heading-copy">
+          <div class="account-title key-title" id="groupLiveTitle">Riding groups</div>
+          <div class="account-subtitle" id="groupAuthNotice">Sign in first to create a group, join a group, or share your location.</div>
+        </div>
+        <button class="group-remove group-header-remove" id="groupRemoveSelected" type="button" hidden>Leave</button>
       </div>
     </div>
     <div id="groupAuthed" hidden>
@@ -7410,17 +7404,6 @@
         </div>
 
         <div class="group-details" id="groupDetails" hidden>
-          <div class="group-details-head">
-            <button class="group-back" id="groupBackBtn" type="button" aria-label="Back to my groups">← <span>My groups</span></button>
-            <span class="group-details-kicker">Selected group</span>
-          </div>
-          <div class="group-details-title-row">
-            <div>
-              <div class="group-title key-title" id="groupLiveTitle">Live group</div>
-              <div class="account-subtitle" id="groupLiveMeta">Share only when you choose to.</div>
-            </div>
-            <button class="group-remove" id="groupRemoveSelected" type="button">Leave</button>
-          </div>
           <div class="group-summary-card">
             <div><span>Invite code</span><strong id="groupInviteCodeValue">—</strong></div>
             <div><span>Members</span><strong id="groupMemberCountValue">0</strong></div>
@@ -14257,6 +14240,10 @@
       groupPanel = panel;
       const details = document.getElementById("groupDetails");
       const isDetails = panel === "details";
+      const title = document.getElementById("groupLiveTitle");
+      const notice = document.getElementById("groupAuthNotice");
+      const back = document.getElementById("groupBackBtn");
+      const remove = document.getElementById("groupRemoveSelected");
       document.querySelectorAll("[data-group-panel]").forEach((element) => {
         element.hidden = isDetails || element.dataset.groupPanel !== panel;
       });
@@ -14266,6 +14253,10 @@
         button.setAttribute("aria-selected", active ? "true" : "false");
       });
       if (details) details.hidden = !isDetails;
+      if (title) title.textContent = isDetails && selectedRidingGroup ? selectedRidingGroup.name : "Riding groups";
+      if (notice) notice.hidden = isDetails || !!currentAuthUser;
+      if (back) back.hidden = !isDetails;
+      if (remove) remove.hidden = !isDetails || !selectedRidingGroup;
       document.body.classList.toggle("group-details-open", isDetails);
     }
 
@@ -14288,7 +14279,7 @@
       if (members) members.textContent = String(memberCount);
       if (live) live.textContent = String(liveCount);
       if (remove) {
-        remove.hidden = false;
+        remove.hidden = groupPanel !== "details";
         remove.textContent = group.deleted_at ? "Remove" : group.role === "owner" ? "Delete" : "Leave";
       }
       const share = document.getElementById("groupShareBtn");
@@ -14607,23 +14598,17 @@
       groupMapFitGroupId = null;
       selectedGroupMembers = [];
       const live = document.getElementById("groupLive");
-      const title = document.getElementById("groupLiveTitle");
-      const meta = document.getElementById("groupLiveMeta");
       if (live) live.classList.add("open");
-      if (title) title.textContent = group.name;
-      if (meta) meta.textContent = "Invite code " + (group.invite_code || "") + (groupSharing ? " · sharing on" : " · sharing is off");
       syncSelectedGroupDetails();
       setGroupPanel("details");
       renderGroupList();
       if (group.deleted_at) {
-        if (meta) meta.textContent = "Deleted by group owner · remove it from your list";
         return;
       }
       try {
         selectedGroupMembers = await DirtSupabase.listMembers(group.id);
         renderGroupParticipants();
         await ensureAllGroupChannels();
-        if (meta) meta.textContent = "Invite code " + (group.invite_code || "") + (groupSharing ? " · sharing on · live" : " · live channel ready");
         renderGroupParticipants();
         if (groupSharing) await publishGroupLocation(true);
       } catch (err) {
@@ -15252,10 +15237,6 @@
       if (routeCompactPref) routeCompactPref.value = routePreference;
       syncRouteBarHeader();
       const open = plannerDrawerState !== "closed";
-      if (routeCard) {
-        routeCard.classList.toggle("has-route-summary", plannerTab === "here" && !!activeRoute);
-      }
-      document.body.classList.toggle("planner-has-route-summary", plannerTab === "here" && !!activeRoute);
       if (routeToggleBtn) routeToggleBtn.setAttribute("aria-expanded", open ? "true" : "false");
       document.body.classList.toggle("planner-open", open);
       document.body.classList.toggle("planner-collapsed", plannerDrawerState === "collapsed");
