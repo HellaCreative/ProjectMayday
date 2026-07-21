@@ -48,7 +48,8 @@ const QUADRANTS = {
     ]
   },
   "qc-sl": {
-    bbox: [-73.0, 44.9, -64.0, 48.6],
+    // Includes Saguenay — real rider destination, not "far north".
+    bbox: [-73.0, 44.9, -64.0, 49.2],
     mode: "maritime",
     hubBufferMeters: 40000,
     hubs: [
@@ -61,17 +62,19 @@ const QUADRANTS = {
       { lon: -72.543, lat: 46.343 }, // Trois-Rivières
       { lon: -71.93, lat: 45.40 }, // Sherbrooke
       { lon: -72.15, lat: 45.65 }, // Drummondville
-      { lon: -72.8, lat: 46.05 } // Louiseville stitch toward west pack
+      { lon: -72.8, lat: 46.05 }, // Louiseville stitch toward west pack
+      { lon: -71.15, lat: 48.42 } // Saguenay
     ]
   },
   "qc-north": {
-    bbox: [-79.8, 47.5, -57.0, 62.7],
+    // Far north / Côte-Nord — sparse spine; few riders.
+    bbox: [-79.8, 48.7, -57.0, 62.7],
     mode: "spine",
     hubBufferMeters: 35000,
     hubs: [
-      { lon: -71.15, lat: 48.42 }, // Saguenay
-      { lon: -68.15, lat: 48.85 }, // Baie-Comeau approach
-      { lon: -66.38, lat: 50.22 } // Sept-Îles approach
+      { lon: -68.15, lat: 49.22 }, // Baie-Comeau
+      { lon: -66.38, lat: 50.22 }, // Sept-Îles
+      { lon: -74.0, lat: 53.0 } // northern spine sample
     ]
   }
 };

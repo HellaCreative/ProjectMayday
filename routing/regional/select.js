@@ -18,8 +18,8 @@ const REGION_BBOX = {
   // Quebec split into Hobby-safe longhaul quadrants (overlapping for merge).
   // Parent "qc" kept for full-graph tooling; primaryRegion prefers quadrants.
   "qc-west": [-79.8, 44.9, -72.2, 48.0],
-  "qc-sl": [-73.0, 44.9, -64.0, 48.6],
-  "qc-north": [-79.8, 47.5, -57.0, 62.7],
+  "qc-sl": [-73.0, 44.9, -64.0, 49.2],
+  "qc-north": [-79.8, 48.7, -57.0, 62.7],
   qc: [-79.8, 44.9, -57.0, 62.7],
   on: [-95.2, 41.6, -74.3, 56.9],
   mb: [-102.1, 48.9, -88.9, 60.1],
@@ -91,12 +91,13 @@ function primaryRegionForPoint(lon, lat) {
 }
 
 /**
- * Prefer north above the southern corridor; otherwise west of ~-72.4° (Montréal /
- * Laurentians / Outaouais) vs St. Lawrence river pack.
+ * Prefer north only for true far-north (Côte-Nord / Nord-du-Québec).
+ * Saguenay (~48.4°) stays on the river pack — riders actually go there.
+ * Otherwise west of ~-72.4° (Montréal / Laurentians / Outaouais) vs St. Lawrence.
  */
 function pickQcQuadrant(lon, lat, ids) {
   const has = (id) => ids.has(id);
-  if (lat >= 48.15 && has("qc-north")) return "qc-north";
+  if (lat >= 48.9 && has("qc-north")) return "qc-north";
   if (lon <= -72.4 && has("qc-west")) return "qc-west";
   if (has("qc-sl")) return "qc-sl";
   if (has("qc-west")) return "qc-west";
