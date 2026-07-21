@@ -6881,12 +6881,18 @@
     }
     body.planner-open .route-card.is-collapsed .route-drawer-compact {
       align-items: center !important;
-      justify-content: center !important;
+      justify-content: flex-start !important;
+    }
+    html body.planner-open.planner-collapsed .route-card.is-collapsed #routeDrawerCompact > :not(.route-mode-block) {
+      display: none !important;
     }
     body.planner-open .route-card.is-collapsed .route-mode-block {
       display: block !important;
+      flex: 0 0 44px !important;
+      height: 44px !important;
       width: min(440px, calc(100% - 20px)) !important;
       margin: 0 auto !important;
+      overflow: hidden !important;
     }
     body.planner-open .route-card.is-collapsed .route-tabs {
       display: flex !important;
