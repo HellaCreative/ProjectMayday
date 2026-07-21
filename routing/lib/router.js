@@ -1,6 +1,6 @@
 "use strict";
 
-const { loadGraph, loadGraphAsync, loadGraphsForRequest, clearGraphCache } = require("./graph");
+const { loadGraph, loadGraphAsync, loadGraphsForRequest, clearGraphCache, resetCacheStats, getCacheStats, chainCacheEnabled } = require("./graph");
 const { resolveGraphRequest } = require("../regional/select");
 const { corridorLocationsForRoute } = require("../regional/merge");
 
@@ -64,6 +64,9 @@ class MinHeap {
     this.items.push(item);
     this.bubbleUp(this.items.length - 1);
   }
+  peek() {
+    return this.items.length ? this.items[0] : null;
+  }
   pop() {
     if (!this.items.length) return null;
     const top = this.items[0];
@@ -94,6 +97,66 @@ class MinHeap {
       i = smallest;
     }
   }
+}
+
+/** Stage 1a / 1b flags (ROUTING-PERFORMANCE-REV-2.1). All default off. */
+function bidirAstarEnabled() {
+  return process.env.ROUTING_BIDIR_ASTAR === "1";
+}
+
+function ellipsePruneEnabled() {
+  return process.env.ROUTING_ELLIPSE_PRUNE === "1";
+}
+
+function ellipseDirtEnabled() {
+  return process.env.ROUTING_ELLIPSE_DIRT === "1";
+}
+
+/**
+ * Ellipse detour factors by profile. `direct` stays surface-neutral in costing;
+ * tight ellipse is its corridor bias. Dirt stays unpruned unless ELLIPSE_DIRT=1.
+ */
+const ELLIPSE_FACTORS = {
+  direct: 1.2,
+  cleanest: 1.4,
+  balanced: 1.5,
+  dirt: 2.2
+};
+
+function maxSurfaceMultiplier(profile) {
+  const tables = {
+    direct: { paved: 1, gravel: 1, access: 1, track: 1, unknown: 1.02 },
+    balanced: { paved: 1.85, gravel: 0.9, access: 0.82, track: 0.75, unknown: 0.95 },
+    dirt: { paved: 6.5, gravel: 0.72, access: 0.58, track: 0.48, unknown: 0.7 },
+    cleanest: { paved: 0.85, gravel: 1.55, access: 1.8, track: 2.4, unknown: 1.9 }
+  };
+  const table = tables[profile] || tables.balanced;
+  return Math.max(...Object.values(table));
+}
+
+function ellipseAttemptsForProfile(profile) {
+  if (!ellipsePruneEnabled()) {
+    return [{ factor: Infinity, label: "unpruned", escalation: "none" }];
+  }
+  if (profile === "dirt" && !ellipseDirtEnabled()) {
+    return [{ factor: Infinity, label: "dirt-unpruned", escalation: "dirt_disabled" }];
+  }
+  const base = ELLIPSE_FACTORS[profile] != null ? ELLIPSE_FACTORS[profile] : 1.5;
+  return [
+    { factor: base, label: "ellipse-" + base, escalation: "initial" },
+    { factor: base * 1.25, label: "ellipse-widen-1", escalation: "widen" },
+    { factor: base * 1.6, label: "ellipse-widen-2", escalation: "widen" },
+    { factor: Infinity, label: "unpruned-fallback", escalation: "fallback" }
+  ];
+}
+
+function flipEdge(edge) {
+  return {
+    ...edge,
+    a: edge.b,
+    b: edge.a,
+    coords: [...edge.coords].reverse()
+  };
 }
 
 function edgeCandidateIndexes(runtime, lng, lat, radiusMeters) {
@@ -317,11 +380,22 @@ async function routeCanadaChain(body, graphResolution) {
     };
   }
 
+  const useChainCache = chainCacheEnabled();
+  resetCacheStats();
+  if (!useChainCache) {
+    clearGraphCache();
+  }
+
   const parts = [];
   let totalMeters = 0;
   const warnings = [];
+  let searchMsTotal = 0;
+  const hopCacheSnapshots = [];
+
   for (let i = 0; i < waypoints.length - 1; i += 1) {
-    clearGraphCache();
+    if (!useChainCache) {
+      clearGraphCache();
+    }
     const hop = await routeRequest({
       ...body,
       locations: [waypoints[i], waypoints[i + 1]],
@@ -348,6 +422,14 @@ async function routeCanadaChain(body, graphResolution) {
     parts.push(hop);
     totalMeters += hop.distanceMeters || 0;
     if (Array.isArray(hop.warnings)) warnings.push(...hop.warnings);
+    if (hop.debug && Number.isFinite(hop.debug.searchMs)) {
+      searchMsTotal += hop.debug.searchMs;
+    }
+    hopCacheSnapshots.push({
+      hop: i + 1,
+      loadMs: hop.debug && hop.debug.graph ? hop.debug.graph.loadMs : null,
+      searchMs: hop.debug ? hop.debug.searchMs : null
+    });
   }
 
   const geometry = [];
@@ -359,6 +441,7 @@ async function routeCanadaChain(body, graphResolution) {
     for (const seg of parts[i].segments || []) segments.push(seg);
   }
 
+  const cache = getCacheStats();
   return {
     status: "complete",
     profile: String(body.profile || "balanced").toLowerCase(),
@@ -368,14 +451,22 @@ async function routeCanadaChain(body, graphResolution) {
     warnings,
     stats: {
       hops: parts.length,
-      hopKm: parts.map((p) => Math.round((p.distanceMeters || 0) / 1000))
+      hopKm: parts.map((p) => Math.round((p.distanceMeters || 0) / 1000)),
+      searchMs: searchMsTotal,
+      packLoads: cache.loads,
+      packCacheHits: cache.hits,
+      inflateMs: cache.inflateMs
     },
     debug: {
       engine: "dirt-node-astar-chain",
       graphMode: "canada-chain",
       regionIds: graphResolution.regionIds,
       waypoints: waypoints.length,
-      fallback: null
+      fallback: null,
+      chainCacheEnabled: useChainCache,
+      cache,
+      hopTimings: hopCacheSnapshots,
+      searchMs: searchMsTotal
     }
   };
 }
@@ -493,7 +584,9 @@ async function routeOnRuntime(body, graphResolution, runtime) {
     };
   }
 
+  const searchStarted = Date.now();
   const path = findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds);
+  const searchMs = Date.now() - searchStarted;
   if (!path) {
     return {
       status: "failed",
@@ -515,6 +608,7 @@ async function routeOnRuntime(body, graphResolution, runtime) {
         componentId: startMatch.componentId,
         matchLimitMeters: limit,
         avoidedEdgeIds: Array.from(avoidEdgeIds),
+        searchMs,
         fallback: null
       },
       maneuvers: [],
@@ -583,7 +677,10 @@ async function routeOnRuntime(body, graphResolution, runtime) {
       componentId: startMatch.componentId,
       matchLimitMeters: limit,
       avoidedEdgeIds: Array.from(avoidEdgeIds),
-      engine: "dirt-node-astar",
+      engine: path.searchMeta && path.searchMeta.bidir ? "dirt-node-bidir-astar" : "dirt-node-astar",
+      searchMs,
+      profileCost: path.profileCost,
+      searchMeta: path.searchMeta || null,
       fallback: null,
       regionIds: graphResolution.regionIds,
       graphMode: graphResolution.mode,
@@ -696,14 +793,14 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds) 
     });
   }
 
+  // Packed edges are undirected in adjacency. Reverse relaxation uses the same
+  // profile cost as forward (rev 2.1). One-way direction is not packed yet.
   function neighbors(node) {
     const out = [];
     if (node < n) {
       for (const idx of adjacency[node]) {
         const edge = edges[idx];
         if (!accessAllowed(edge.ac, policy, enums)) continue;
-        // Server-enforced incident avoidance: the reported edge is removed from
-        // the traversable graph, so the alternate cannot use it.
         if (avoid && avoid.has(String(edge.i))) continue;
         const other = edge.a === node ? edge.b : edge.a;
         const forward = edge.a === node;
@@ -734,108 +831,280 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds) 
     return out;
   }
 
-  const dist = new Float64Array(total);
-  dist.fill(Infinity);
-  const prevNode = new Int32Array(total);
-  prevNode.fill(-1);
-  const prevEdge = new Array(total);
-  const heap = new MinHeap();
-  dist[startNode] = 0;
-  heap.push({ node: startNode, cost: 0 });
+  const nodeCoord = new Array(total);
+  for (let i = 0; i < n; i += 1) {
+    const idxs = adjacency[i];
+    if (!idxs || !idxs.length) continue;
+    const edge = edges[idxs[0]];
+    nodeCoord[i] = edge.a === i ? edge.g[0] : edge.g[edge.g.length - 1];
+  }
+  nodeCoord[startNode] = startMatch.coord;
+  nodeCoord[endNode] = endMatch.coord;
 
-  while (heap.items.length) {
-    const cur = heap.pop();
-    if (!cur || cur.cost !== dist[cur.node]) continue;
-    if (cur.node === endNode) break;
-    for (const next of neighbors(cur.node)) {
-      // Access legs are scored as pure distance (no surface preference) and reported.
-      const mult = next.edge.accessLeg
-        ? 1
-        : surfaceMultiplier(next.edge.surface, profile, enums);
-      const cost = cur.cost + (next.edge.meters / 1000) * mult;
-      if (cost < dist[next.to]) {
-        dist[next.to] = cost;
-        prevNode[next.to] = cur.node;
-        prevEdge[next.to] = next.edge;
-        heap.push({ node: next.to, cost });
+  const startLL = startMatch.coord;
+  const endLL = endMatch.coord;
+  const abMeters = haversineMeters(startLL, endLL);
+  const maxMult = maxSurfaceMultiplier(profile);
+  const useBidir = bidirAstarEnabled();
+
+  function insideEllipse(node, factor) {
+    if (!Number.isFinite(factor) || factor === Infinity) return true;
+    const ll = nodeCoord[node];
+    if (!ll) return true;
+    return haversineMeters(startLL, ll) + haversineMeters(ll, endLL) <= factor * abMeters * 1.0000001;
+  }
+
+  function edgeStepCost(edge) {
+    const mult = edge.accessLeg ? 1 : surfaceMultiplier(edge.surface, profile, enums);
+    return (edge.meters / 1000) * mult;
+  }
+
+  function materializeUsed(used, searchMeta) {
+    const geometry = [];
+    const segments = [];
+    let distanceMeters = 0;
+    let unknownAccessMeters = 0;
+    let movingSeconds = 0;
+    let profileCost = 0;
+    const bySurfaceM = { paved: 0, gravel: 0, access: 0, track: 0, unknown: 0, single: 0 };
+    const byAccessM = {
+      motorized_verified: 0,
+      motorized_permissive: 0,
+      motorized_unknown: 0
+    };
+
+    for (const edge of used) {
+      for (const c of edge.coords) {
+        const last = geometry[geometry.length - 1];
+        if (last && last[0] === c[0] && last[1] === c[1]) continue;
+        geometry.push(c);
+      }
+      const meters = edge.meters;
+      distanceMeters += meters;
+      profileCost += edgeStepCost(edge);
+      const surfaceName = enums.SURFACE_NAME[edge.surface] || "unknown";
+      const accessName = enums.ACCESS_NAME[edge.access] || "motorized_unknown";
+      bySurfaceM[surfaceName] = (bySurfaceM[surfaceName] || 0) + meters;
+      if (byAccessM[accessName] != null) byAccessM[accessName] += meters;
+      if (accessName === "motorized_unknown") unknownAccessMeters += meters;
+      movingSeconds += (meters / 1000) / classSpeedKmh(edge.surface, enums) * 3600;
+
+      segments.push({
+        edgeId: edge.edgeId,
+        surfaceClass: surfaceName,
+        structureType: enums.STRUCTURE_NAME[edge.structure] || "none",
+        accessClass: accessName,
+        source: edge.source,
+        sourceRecordId: edge.sourceRecordId,
+        sourceDescription: edge.sourceDescription,
+        confidence: edge.confidence,
+        seasonal: !!edge.seasonal,
+        distanceMeters: Math.round(meters),
+        componentId: edge.componentId,
+        accessLeg: !!edge.accessLeg,
+        geometry: edge.coords
+      });
+    }
+
+    const pct = (m) => (distanceMeters > 0 ? Math.round((m / distanceMeters) * 100) : 0);
+    return {
+      geometry,
+      segments,
+      distanceMeters,
+      unknownAccessMeters,
+      movingSeconds,
+      profileCost,
+      searchMeta,
+      stats: {
+        pavedPercent: pct(bySurfaceM.paved || 0),
+        gravelPercent: pct(bySurfaceM.gravel || 0),
+        accessPercent: pct(bySurfaceM.access || 0),
+        trackPercent: pct(bySurfaceM.track || 0),
+        singlePercent: 0,
+        unknownSurfacePercent: pct(bySurfaceM.unknown || 0),
+        unknownAccessPercent: pct(unknownAccessMeters),
+        permissiveAccessPercent: pct(byAccessM.motorized_permissive || 0),
+        verifiedAccessPercent: pct(byAccessM.motorized_verified || 0)
+      }
+    };
+  }
+
+  function searchUnidirectional(ellipseFactor) {
+    const dist = new Float64Array(total);
+    dist.fill(Infinity);
+    const prevNode = new Int32Array(total);
+    prevNode.fill(-1);
+    const prevEdge = new Array(total);
+    const heap = new MinHeap();
+    dist[startNode] = 0;
+    // Default path stays Dijkstra (heap key = g). Heuristic is Stage 1a bidir only.
+    heap.push({ node: startNode, cost: 0 });
+
+    while (heap.items.length) {
+      const cur = heap.pop();
+      if (!cur || cur.cost !== dist[cur.node]) continue;
+      if (cur.node === endNode) break;
+      if (!insideEllipse(cur.node, ellipseFactor)) continue;
+      for (const next of neighbors(cur.node)) {
+        if (!insideEllipse(next.to, ellipseFactor)) continue;
+        const cost = cur.cost + edgeStepCost(next.edge);
+        if (cost < dist[next.to]) {
+          dist[next.to] = cost;
+          prevNode[next.to] = cur.node;
+          prevEdge[next.to] = next.edge;
+          heap.push({ node: next.to, cost });
+        }
       }
     }
-  }
 
-  if (!Number.isFinite(dist[endNode])) return null;
-
-  const used = [];
-  for (let node = endNode; node !== startNode;) {
-    const edge = prevEdge[node];
-    if (!edge) return null;
-    used.push(edge);
-    node = prevNode[node];
-  }
-  used.reverse();
-
-  const geometry = [];
-  const segments = [];
-  let distanceMeters = 0;
-  let unknownAccessMeters = 0;
-  let movingSeconds = 0;
-  const bySurfaceM = { paved: 0, gravel: 0, access: 0, track: 0, unknown: 0, single: 0 };
-  const byAccessM = {
-    motorized_verified: 0,
-    motorized_permissive: 0,
-    motorized_unknown: 0
-  };
-
-  for (const edge of used) {
-    for (const c of edge.coords) {
-      const last = geometry[geometry.length - 1];
-      if (last && last[0] === c[0] && last[1] === c[1]) continue;
-      geometry.push(c);
+    if (!Number.isFinite(dist[endNode])) return null;
+    const used = [];
+    for (let node = endNode; node !== startNode;) {
+      const edge = prevEdge[node];
+      if (!edge) return null;
+      used.push(edge);
+      node = prevNode[node];
     }
-    const meters = edge.meters;
-    distanceMeters += meters;
-    const surfaceName = enums.SURFACE_NAME[edge.surface] || "unknown";
-    const accessName = enums.ACCESS_NAME[edge.access] || "motorized_unknown";
-    bySurfaceM[surfaceName] = (bySurfaceM[surfaceName] || 0) + meters;
-    if (byAccessM[accessName] != null) byAccessM[accessName] += meters;
-    if (accessName === "motorized_unknown") unknownAccessMeters += meters;
-    movingSeconds += (meters / 1000) / classSpeedKmh(edge.surface, enums) * 3600;
-
-    segments.push({
-      edgeId: edge.edgeId,
-      surfaceClass: surfaceName,
-      structureType: enums.STRUCTURE_NAME[edge.structure] || "none",
-      accessClass: accessName,
-      source: edge.source,
-      sourceRecordId: edge.sourceRecordId,
-      sourceDescription: edge.sourceDescription,
-      confidence: edge.confidence,
-      seasonal: !!edge.seasonal,
-      distanceMeters: Math.round(meters),
-      componentId: edge.componentId,
-      accessLeg: !!edge.accessLeg,
-      geometry: edge.coords
-    });
+    used.reverse();
+    return { used, profileCost: dist[endNode] };
   }
 
-  const pct = (m) => (distanceMeters > 0 ? Math.round((m / distanceMeters) * 100) : 0);
-  return {
-    geometry,
-    segments,
-    distanceMeters,
-    unknownAccessMeters,
-    movingSeconds,
-    stats: {
-      pavedPercent: pct(bySurfaceM.paved || 0),
-      gravelPercent: pct(bySurfaceM.gravel || 0),
-      accessPercent: pct(bySurfaceM.access || 0),
-      trackPercent: pct(bySurfaceM.track || 0),
-      singlePercent: 0,
-      unknownSurfacePercent: pct(bySurfaceM.unknown || 0),
-      unknownAccessPercent: pct(unknownAccessMeters),
-      permissiveAccessPercent: pct(byAccessM.motorized_permissive || 0),
-      verifiedAccessPercent: pct(byAccessM.motorized_verified || 0)
+  /**
+   * Bidirectional A*: forward from start, reverse from end.
+   * Do not stop at first frontier contact. Terminate only when the best known
+   * meeting cost is provably minimal (peekFwd.g + peekRev.g >= mu).
+   * Undirected edges: reverse uses the same profile cost as forward.
+   */
+  function searchBidirectional(ellipseFactor) {
+    const distF = new Float64Array(total);
+    const distR = new Float64Array(total);
+    distF.fill(Infinity);
+    distR.fill(Infinity);
+    const prevF = new Int32Array(total);
+    const prevR = new Int32Array(total);
+    prevF.fill(-1);
+    prevR.fill(-1);
+    const edgeF = new Array(total);
+    const edgeR = new Array(total);
+    const closedF = new Uint8Array(total);
+    const closedR = new Uint8Array(total);
+    const heapF = new MinHeap();
+    const heapR = new MinHeap();
+
+    distF[startNode] = 0;
+    distR[endNode] = 0;
+    // Heap ordered by g (bidirectional Dijkstra). Correct mu termination requires
+    // peek().g to be the true frontier minimum g; f-ordering breaks that.
+    heapF.push({ node: startNode, g: 0, cost: 0 });
+    heapR.push({ node: endNode, g: 0, cost: 0 });
+
+    let mu = Infinity;
+    let meet = -1;
+
+    function considerMeet(node) {
+      if (!Number.isFinite(distF[node]) || !Number.isFinite(distR[node])) return;
+      const totalCost = distF[node] + distR[node];
+      if (totalCost < mu) {
+        mu = totalCost;
+        meet = node;
+      }
     }
-  };
+
+    function relaxSide(forward) {
+      const heap = forward ? heapF : heapR;
+      const dist = forward ? distF : distR;
+      const prev = forward ? prevF : prevR;
+      const prevEdgeArr = forward ? edgeF : edgeR;
+      const closed = forward ? closedF : closedR;
+
+      const cur = heap.pop();
+      if (!cur || cur.g !== dist[cur.node]) return;
+      if (closed[cur.node]) return;
+      closed[cur.node] = 1;
+      considerMeet(cur.node);
+
+      if (!insideEllipse(cur.node, ellipseFactor)) return;
+
+      for (const next of neighbors(cur.node)) {
+        if (!insideEllipse(next.to, ellipseFactor)) continue;
+        const g = cur.g + edgeStepCost(next.edge);
+        if (g < dist[next.to]) {
+          dist[next.to] = g;
+          prev[next.to] = cur.node;
+          prevEdgeArr[next.to] = next.edge;
+          heap.push({ node: next.to, g, cost: g });
+          considerMeet(next.to);
+        }
+      }
+    }
+
+    while (heapF.items.length && heapR.items.length) {
+      const topF = heapF.peek();
+      const topR = heapR.peek();
+      if (!topF || !topR) break;
+      if (Number.isFinite(mu) && topF.g + topR.g >= mu) break;
+
+      if (heapF.items.length <= heapR.items.length) relaxSide(true);
+      else relaxSide(false);
+    }
+
+    // Final scan in case a better meeting node was only partially settled.
+    for (let i = 0; i < total; i += 1) considerMeet(i);
+
+    if (!Number.isFinite(mu) || meet < 0) return null;
+
+    const used = [];
+    for (let node = meet; node !== startNode;) {
+      const edge = edgeF[node];
+      if (!edge) return null;
+      used.push(edge);
+      node = prevF[node];
+    }
+    used.reverse();
+
+    for (let node = meet; node !== endNode;) {
+      const edge = edgeR[node];
+      if (!edge) return null;
+      used.push(flipEdge(edge));
+      node = prevR[node];
+    }
+
+    return { used, profileCost: mu };
+  }
+
+  const attempts = ellipseAttemptsForProfile(profile);
+  let chosen = null;
+  let chosenAttempt = null;
+  const sanityBaseKm = Math.max(abMeters / 1000, 0.001);
+
+  for (const attempt of attempts) {
+    const raw = useBidir
+      ? searchBidirectional(attempt.factor)
+      : searchUnidirectional(attempt.factor);
+    if (!raw) continue;
+
+    const sanity =
+      Number.isFinite(attempt.factor) && attempt.factor !== Infinity
+        ? attempt.factor * sanityBaseKm * maxMult * 2.5
+        : Infinity;
+    if (Number.isFinite(sanity) && raw.profileCost > sanity) {
+      continue;
+    }
+
+    chosen = raw;
+    chosenAttempt = attempt;
+    break;
+  }
+
+  if (!chosen) return null;
+
+  return materializeUsed(chosen.used, {
+    bidir: useBidir,
+    ellipseFactor: chosenAttempt.factor,
+    ellipseLabel: chosenAttempt.label,
+    ellipseEscalation: chosenAttempt.escalation,
+    profileCost: chosen.profileCost
+  });
 }
 
 module.exports = {

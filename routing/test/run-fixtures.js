@@ -67,7 +67,10 @@ await check("halifax-yarmouth cleanest unified graph", async () => {
   assertComplete(r, "hfx-yar");
   assert.ok(r.distanceMeters > 200000, "long route distance");
   assert.ok((r.stats.pavedPercent || 0) >= 50, "cleanest prefers pavement");
-  assert.strictEqual(r.debug.engine, "dirt-node-astar");
+  assert.ok(
+    r.debug.engine === "dirt-node-astar" || r.debug.engine === "dirt-node-bidir-astar",
+    "engine is dirt node search"
+  );
 });
 
 await check("dirt profile reports pavement when used", async () => {

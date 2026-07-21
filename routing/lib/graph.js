@@ -11,6 +11,9 @@ const { clipGraphToCorridor, extractHighwayGraph } = require("../regional/corrid
 const DEFAULT_LEGACY_GRAPH_PATH = path.join(__dirname, "..", "data", "ns-graph.v1.json.gz");
 const DEFAULT_REGIONAL_NS_PATH = path.join(__dirname, "..", "data", "regions", "ns", "graph.v1.json.gz");
 
+/** Stage 0: LRU cap of inflated packs per isolate (ROUTING-PERFORMANCE-REV-2.1). */
+const MAX_CACHED_PACKS = 3;
+
 function defaultGraphPath() {
   if (process.env.ROUTING_GRAPH_PATH) return process.env.ROUTING_GRAPH_PATH;
   // Local/dev + fixture preference: regional pack when present on disk.
@@ -22,8 +25,65 @@ function defaultGraphPath() {
 
 const DEFAULT_GRAPH_PATH = defaultGraphPath();
 
-let cached = null;
+/** @type {Map<string, { runtime: object }>} insertion order = LRU (oldest first) */
+const packCache = new Map();
+/** @type {Map<string, { data: object }>} inflated JSON before adjacency build */
+const dataCache = new Map();
 let loadingPromise = null;
+
+const cacheStats = {
+  loads: 0,
+  hits: 0,
+  inflateMs: 0
+};
+
+function chainCacheEnabled() {
+  return process.env.ROUTING_CHAIN_CACHE === "1";
+}
+
+function resetCacheStats() {
+  cacheStats.loads = 0;
+  cacheStats.hits = 0;
+  cacheStats.inflateMs = 0;
+}
+
+function getCacheStats() {
+  return {
+    loads: cacheStats.loads,
+    hits: cacheStats.hits,
+    inflateMs: cacheStats.inflateMs,
+    cachedPacks: packCache.size,
+    cachedDataPacks: dataCache.size,
+    maxCachedPacks: MAX_CACHED_PACKS,
+    chainCacheEnabled: chainCacheEnabled()
+  };
+}
+
+function lruGet(map, key) {
+  if (!map.has(key)) return null;
+  const entry = map.get(key);
+  map.delete(key);
+  map.set(key, entry);
+  return entry;
+}
+
+function lruPut(map, key, entry) {
+  if (map.has(key)) map.delete(key);
+  map.set(key, entry);
+  while (map.size > MAX_CACHED_PACKS) {
+    const oldest = map.keys().next().value;
+    map.delete(oldest);
+  }
+}
+
+function touchCached(key) {
+  const entry = lruGet(packCache, key);
+  return entry ? entry.runtime : null;
+}
+
+function putCached(key, runtime) {
+  lruPut(packCache, key, { runtime });
+}
 
 function fetchBuffer(url) {
   return new Promise((resolve, reject) => {
@@ -54,25 +114,43 @@ function inflateGraphBuffer(buf) {
 }
 
 function loadGraphSync(graphPath = defaultGraphPath()) {
-  if (cached && cached.path === graphPath) return cached.runtime;
+  const hit = touchCached(graphPath);
+  if (hit) {
+    cacheStats.hits += 1;
+    return hit;
+  }
 
   const started = Date.now();
-  let data;
   if (graphPath.startsWith("http://") || graphPath.startsWith("https://")) {
     throw new Error("Use loadGraphAsync for remote graph URLs");
   }
-  const raw = fs.readFileSync(graphPath);
-  data = inflateGraphBuffer(raw);
+  const dataCached = lruGet(dataCache, graphPath);
+  let data;
+  if (dataCached) {
+    cacheStats.hits += 1;
+    data = dataCached.data;
+  } else {
+    const raw = fs.readFileSync(graphPath);
+    data = inflateGraphBuffer(raw);
+    cacheStats.loads += 1;
+    cacheStats.inflateMs += Date.now() - started;
+    lruPut(dataCache, graphPath, { data });
+  }
   return materializeRuntime(graphPath, data, started);
 }
 
 async function loadGraphAsync(graphPath = defaultGraphPath()) {
-  if (cached && cached.path === graphPath) return cached.runtime;
+  const hit = touchCached(graphPath);
+  if (hit) {
+    cacheStats.hits += 1;
+    return hit;
+  }
   if (loadingPromise && loadingPromise.path === graphPath) return loadingPromise.promise;
 
   const promise = (async () => {
     const started = Date.now();
     let data;
+    let materializePath = graphPath;
     if (graphPath.startsWith("http://") || graphPath.startsWith("https://")) {
       const buf = await fetchBuffer(graphPath);
       data = inflateGraphBuffer(buf);
@@ -87,9 +165,9 @@ async function loadGraphAsync(graphPath = defaultGraphPath()) {
       }
       const buf = await fetchBuffer(remote);
       data = inflateGraphBuffer(buf);
-      return materializeRuntime(remote, data, started);
+      materializePath = remote;
     }
-    return materializeRuntime(graphPath, data, started);
+    return materializeRuntime(materializePath, data, started);
   })();
 
   loadingPromise = { path: graphPath, promise };
@@ -102,7 +180,6 @@ async function loadGraphAsync(graphPath = defaultGraphPath()) {
 }
 
 function materializeRuntime(graphPath, data, started) {
-
   const adjacency = Array.from({ length: data.nodeCount }, () => []);
   for (let index = 0; index < data.edges.length; index += 1) {
     const edge = data.edges[index];
@@ -113,9 +190,6 @@ function materializeRuntime(graphPath, data, started) {
   // Spatial grid for snap matching (approx 0.01 deg ~ 1 km)
   const GRID = 0.01;
   const edgeGrid = new Map();
-  function cellKey(x, y) {
-    return Math.floor(x / GRID) + ":" + Math.floor(y / GRID);
-  }
   function addToGrid(index, coords) {
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     for (const c of coords) {
@@ -142,16 +216,17 @@ function materializeRuntime(graphPath, data, started) {
   }
   data.edges.forEach((edge, index) => addToGrid(index, edge.g));
 
+  const loadMs = Date.now() - started;
   const runtime = {
     path: graphPath,
     data,
     adjacency,
     edgeGrid,
     GRID,
-    loadMs: Date.now() - started,
+    loadMs,
     enums: data.enums
   };
-  cached = { path: graphPath, runtime };
+  putCached(graphPath, runtime);
   return runtime;
 }
 
@@ -161,14 +236,25 @@ function loadGraph(graphPath) {
 }
 
 async function readGraphData(graphPath) {
+  const cached = lruGet(dataCache, graphPath);
+  if (cached) {
+    cacheStats.hits += 1;
+    return cached.data;
+  }
+  const started = Date.now();
+  let data;
   if (graphPath.startsWith("http://") || graphPath.startsWith("https://")) {
     const buf = await fetchBuffer(graphPath);
-    return inflateGraphBuffer(buf);
-  }
-  if (!fs.existsSync(graphPath)) {
+    data = inflateGraphBuffer(buf);
+  } else if (!fs.existsSync(graphPath)) {
     throw new Error("Routing graph not found at " + graphPath);
+  } else {
+    data = inflateGraphBuffer(fs.readFileSync(graphPath));
   }
-  return inflateGraphBuffer(fs.readFileSync(graphPath));
+  cacheStats.loads += 1;
+  cacheStats.inflateMs += Date.now() - started;
+  lruPut(dataCache, graphPath, { data });
+  return data;
 }
 
 /**
@@ -192,29 +278,43 @@ async function loadGraphsForRequest(resolution, options = {}) {
   // Wider buffer for dirt profiles; tighter for long cleanest/direct hauls.
   const bufferMeters = Number(options.corridorBufferMeters) || (paths.length >= 4 ? 220000 : 150000);
   const cacheKey = paths.join("|") + (multi ? `|c${bufferMeters}` : "");
-  if (cached && cached.path === cacheKey) return cached.runtime;
+
+  const hit = touchCached(cacheKey);
+  if (hit) {
+    cacheStats.hits += 1;
+    return hit;
+  }
   if (loadingPromise && loadingPromise.path === cacheKey) return loadingPromise.promise;
 
   const promise = (async () => {
     const started = Date.now();
     if (paths.length === 1) {
+      // Prefer per-path cache so chain hops sharing a province hit LRU.
+      const singleHit = touchCached(paths[0]);
+      if (singleHit) {
+        cacheStats.hits += 1;
+        if (cacheKey !== paths[0]) putCached(cacheKey, singleHit);
+        return singleHit;
+      }
       const data = await readGraphData(paths[0]);
-      return materializeRuntime(cacheKey, data, started);
+      const runtime = materializeRuntime(paths[0], data, started);
+      if (cacheKey !== paths[0]) putCached(cacheKey, runtime);
+      return runtime;
     }
     const graphs = [];
-    const hit = new Set((resolution.hitRegions || []).map((r) => String(r).toLowerCase()));
+    const hitRegions = new Set((resolution.hitRegions || []).map((r) => String(r).toLowerCase()));
     const longHaul = paths.length >= 4;
     for (const p of paths) {
       let g = await readGraphData(p);
       const regionId = String(g.regionId || path.basename(path.dirname(p)) || "").toLowerCase();
-      const isEndpoint = hit.has(regionId);
+      const isEndpoint = hitRegions.has(regionId);
       const alreadyLonghaul =
         resolution.longhaulPacks ||
         String(g.schemaVersion || "").startsWith("longhaul") ||
         /longhaul\.v1\.json\.gz$/.test(String(p));
       // Long-haul: drop track edges in mid provinces to reduce memory; keep
       // endpoints fuller for local access. Never invent free-space connectors.
-      // Prebuilt longhaul packs are already spine/corridor thinned — don't
+      // Prebuilt longhaul packs are already spine/corridor thinned; do not
       // re-filter (NS/NB have no road class; length filters shatter them).
       if (!alreadyLonghaul && longHaul && !isEndpoint) {
         g = extractHighwayGraph(g);
@@ -228,7 +328,7 @@ async function loadGraphsForRequest(resolution, options = {}) {
       graphs.push(g);
     }
     if (!graphs.length) {
-      throw new Error("Corridor clip removed all edges — widen corridorBufferMeters");
+      throw new Error("Corridor clip removed all edges; widen corridorBufferMeters");
     }
     const merged = mergeRegionalGraphs(graphs);
     if (!merged.report.boundaryMatches && paths.length > 1) {
@@ -248,7 +348,8 @@ async function loadGraphsForRequest(resolution, options = {}) {
 }
 
 function clearGraphCache() {
-  cached = null;
+  packCache.clear();
+  dataCache.clear();
   loadingPromise = null;
 }
 
@@ -258,8 +359,12 @@ module.exports = {
   loadGraphAsync,
   loadGraphsForRequest,
   clearGraphCache,
+  resetCacheStats,
+  getCacheStats,
+  chainCacheEnabled,
   defaultGraphPath,
   DEFAULT_GRAPH_PATH,
   DEFAULT_LEGACY_GRAPH_PATH,
-  DEFAULT_REGIONAL_NS_PATH
+  DEFAULT_REGIONAL_NS_PATH,
+  MAX_CACHED_PACKS
 };
