@@ -980,7 +980,8 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds) 
   }
 
   /**
-   * Bidirectional A*: forward from start, reverse from end.
+   * Bidirectional Dijkstra (flag name ROUTING_BIDIR_ASTAR retained).
+   * Forward from start, reverse from end. Heap ordered by g.
    * Do not stop at first frontier contact. Terminate only when the best known
    * meeting cost is provably minimal (peekFwd.g + peekRev.g >= mu).
    * Undirected edges: reverse uses the same profile cost as forward.

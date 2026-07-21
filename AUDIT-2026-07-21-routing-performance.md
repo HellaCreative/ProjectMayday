@@ -56,14 +56,14 @@ Stage 0 accepted: parity on equality surface, policy matches rev 2.1, instrument
 
 ---
 
-## Stage 1a: bidirectional A*
+## Stage 1a: bidirectional Dijkstra
 
 ### Implementation
 
-- Flag: `ROUTING_BIDIR_ASTAR=1` (default off).
-- Dual-frontier Dijkstra (heap ordered by g). Stop only when `peekFwd.g + peekRev.g >= mu` (best meeting cost). Do not stop on first frontier contact.
+- Flag: `ROUTING_BIDIR_ASTAR=1` (env name retained; implementation is bidirectional Dijkstra).
+- Dual-frontier Dijkstra (heap ordered by g, no heuristic). Stop only when `peekFwd.g + peekRev.g >= mu` (best meeting cost). Do not stop on first frontier contact.
 - Undirected edges: reverse relaxation uses the same profile cost as forward.
-- Engine debug label when on: `dirt-node-bidir-astar`.
+- Engine debug label when on: `dirt-node-bidir-astar` (legacy name; search is g-ordered Dijkstra).
 
 ### Parity (cost ≤ under same profile)
 
