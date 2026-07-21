@@ -320,12 +320,15 @@
         "notes": "NRN ROADSEG ingested as national backbone artifact. Not product routing-ready until audit validation + supplement policy applied."
       },
       "provincial": {
-        "sourceName": "NL Geoportal roads / resource / trails",
-        "catalogueUrl": "https://www.gov.nl.ca/ecc/maps",
-        "format": "GIS portal",
-        "license": "verify before ingest",
+        "sourceName": "FFA Resource Roads (Newfoundland + Labrador)",
+        "catalogueUrl": "https://geohub-gnl.hub.arcgis.com",
+        "downloadUrl": "https://services8.arcgis.com/aCyQID5qQcyrJMm2/arcgis/rest/services/FFA_ResourceRoads_NF/FeatureServer/2",
+        "format": "ArcGIS FeatureServer (NF layer 2 + LB layer 0)",
+        "license": "Open Government Licence - Newfoundland and Labrador",
         "adapter": null,
-        "status": "pending"
+        "status": "verified",
+        "dateRetrieved": "2026-07-21",
+        "notes": "Live REST verified. NF ~12.4k / LB ~1.0k. ROAD_ACCESS coded; surface often null. Phase-1 candidate after main provincial queue. Use NF layer 2 not 0."
       },
       "routingReady": true,
       "routingMode": "nrn-backbone",
@@ -351,12 +354,15 @@
         "notes": "NRN ROADSEG ingested as national backbone artifact. Not product routing-ready until audit validation + supplement policy applied."
       },
       "provincial": {
-        "sourceName": "Yukon Open Data roads / resource / trails",
-        "catalogueUrl": "https://open.yukon.ca",
-        "format": "open data",
+        "sourceName": "Yukon Forest Resource Roads 50k (+ optional YRN Resource/Rec)",
+        "catalogueUrl": "https://open.yukon.ca/data/forestry-resource-roads-50k",
+        "downloadUrl": "https://mapservices.gov.yk.ca/arcgis/rest/services/GeoYukon/GY_Forestry/MapServer/39",
+        "format": "ArcGIS MapServer",
         "license": "Open Government Licence - Yukon",
         "adapter": null,
-        "status": "pending"
+        "status": "verified",
+        "dateRetrieved": "2026-07-21",
+        "notes": "Live REST verified (~556 FRR features). Incomplete by design; optional YRN Resource/Recreation+Winter filter. Phase-1 candidate."
       },
       "routingReady": true,
       "routingMode": "nrn-backbone",
@@ -382,13 +388,15 @@
         "notes": "NRN ROADSEG ingested as national backbone artifact. Not product routing-ready until audit validation + supplement policy applied."
       },
       "provincial": {
-        "sourceName": "NWT Geomatics / Spatial Data Warehouse",
-        "catalogueUrl": "https://www.nwtgeomatics.ca",
-        "format": "GIS",
-        "license": "verify before ingest",
+        "sourceName": "GNWT Transportation_LCC Roads",
+        "catalogueUrl": "https://www.geomatics.gov.nt.ca",
+        "downloadUrl": "https://www.apps.geomatics.gov.nt.ca/arcgis/rest/services/GNWT/Transportation_LCC/MapServer/3",
+        "format": "ArcGIS MapServer",
+        "license": "Open Government Licence - Northwest Territories",
         "adapter": null,
-        "status": "blocked",
-        "notes": "Portal historically unreachable during prior probes."
+        "status": "verified",
+        "dateRetrieved": "2026-07-21",
+        "notes": "Old nwtgeomatics.ca portal is dead. Live Transportation_LCC layer 3 (~11k). Filter ROADTYPE Resource/Recreation, Winter, Trails only — do not ingest highways wholesale. Phase-1 after main provincial queue."
       },
       "routingReady": true,
       "routingMode": "nrn-backbone",

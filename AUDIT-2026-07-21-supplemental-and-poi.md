@@ -116,21 +116,54 @@ Mutually exclusive. Corridor mode (both off) still uses NS display pack for rout
 
 ## Deferred — research only (not in build queue yet)
 
-Capture for a later investigation pass (parallel research agent):
+| Code | Jurisdiction | Phase-1 soon? | Status |
+|------|----------------|---------------|--------|
+| PE | Prince Edward Island | Defer | Weak resource-road value |
+| NL | Newfoundland and Labrador | **Yes** | VERIFIED — FFA Resource Roads |
+| NT | Northwest Territories | **Yes (after main queue)** | VERIFIED — Transportation_LCC (old portal dead) |
+| YT | Yukon | **Yes** | VERIFIED — Forest Resource Roads 50k |
+| NU | Nunavut | Defer | No territorial road portal found |
 
-| Code | Jurisdiction | Why deferred |
-|------|----------------|--------------|
-| PE | Prince Edward Island | Not in Supplemental Services.md primary list; NRN may already be dense; need PE-specific resource/trail sources |
-| NL | Newfoundland and Labrador | Same — research forest/resource/winter roads and trails |
-| NT | Northwest Territories | Same — winter roads / territorial network |
-| YT | Yukon | Same — resource/territorial roads |
-| NU | Nunavut | Optional note only if obvious open data appears |
+### Deferred Atlantic & Territories research
 
-Research findings append under **Deferred Atlantic & Territories research** when the parallel session returns.
+*Research pass 2026-07-21 via [Deferred provinces research](322836cf-b815-4cd4-8df1-54796f9f0dbb). Government open data only.*
+
+#### PE — Defer
+- Portals live: data.princeedwardisland.ca, gis.princeedwardisland.ca
+- `road_centerline` FeatureServer/0 (~16.9k): NAME/OWNERSHIP/ROAD_STATU only — sparse, likely NRN overlap
+- Confederation Trail: motor-free summer; not a resource-road supplement
+- Licence: confirm OGL-PE vs GIS EULA before any ingest
+
+#### NL — Phase-1 soon (best Atlantic after NB)
+- **NF Resource Roads:** `https://services8.arcgis.com/aCyQID5qQcyrJMm2/arcgis/rest/services/FFA_ResourceRoads_NF/FeatureServer/2` (~12.4k) — use layer **2**
+- **LB Resource Roads:** `…/FFA_ResourceRoads_LB/FeatureServer/0` (~1.0k)
+- Fields: ROAD_ACCESS (coded Open/Limited/ATV/…), ROAD_CLASS, ROAD_SURFACE (often null)
+- Licence: Open Government Licence – Newfoundland and Labrador
+- Hub: geohub-gnl.hub.arcgis.com
+
+#### NT — Phase-1 after main provincial queue; fix registry URL
+- Old `nwtgeomatics.ca` **BLOCKED** (DNS)
+- Use `https://www.geomatics.gov.nt.ca` + REST `https://www.apps.geomatics.gov.nt.ca/arcgis/rest/services/GNWT/Transportation_LCC/MapServer`
+- Layer 3 Roads (~11k): filter ROADTYPE Resource/Recreation, Winter, Trails — do not ingest highways wholesale (NRN overlap)
+- Licence: Open Government Licence – Northwest Territories
+
+#### YT — Phase-1 soon (small, clean)
+- **Forestry Resource Roads 50k:** `https://mapservices.gov.yk.ca/arcgis/rest/services/GeoYukon/GY_Forestry/MapServer/39` (~556) — ROAD_CLASS / tenure; incomplete by design
+- Optional filter: Yukon Road Network Resource/Recreation + Winter (MapServer/60)
+- Defer bulk trails/cutlines
+- Licence: Open Government Licence – Yukon (catalogue)
+
+#### NU — Defer / BLOCKED
+- nunavutgeoportal.ca DNS fail; NRN only; no capillary supplement found
+
+#### Cross-cutting
+1. Update NT registry stub off nwtgeomatics.ca
+2. NL access coding is the richest of this set; surface often null → keep `motorized_unknown` stance
+3. Still exclude Trailforks / AllTrails / Backroad / Wikiloc
 
 ## Blocked / deferred
 
-1. **Quebec ingest cap** — live AQréseau+ layer 37 (`Oui [250K - 1]`) reports **~944,719** features; build script capped QC at **250,000** (`scripts/build-region-with-supplement.js` `maxByCode.qc`). Must lift cap and rebuild for full coverage before treating QC as complete.
+1. **Quebec full rebuild** — soft-cap lifted; first uncapped job aborted (loaded supplemented graph as NRN). Restarted with NRN-only filter (~504k backbone); still pulling ~945k multiusage features. Re-pack QC display + push after complete.
 2. **Routing / pack format / search / nav cues / basemap** — not modified (per constraints).
 3. **Trailforks / AllTrails / Backroad / Wikiloc** — not used.
 4. **Manitoba** — still unverified per spec; confirm portal before ingest.
