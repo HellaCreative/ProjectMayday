@@ -317,7 +317,7 @@
         "adapter": "nrn",
         "status": "ready",
         "dateRetrieved": "2026-07-20",
-        "notes": "NRN ROADSEG ingested as national backbone artifact. Not product routing-ready until audit validation + supplement policy applied."
+        "notes": "NRN omitted from routing fabric (OSM-only). NRN ROADSEG ingested as national backbone artifact. Not product routing-ready until audit validation + supplement policy applied."
       },
       "provincial": {
         "sourceName": "PEI Open Data roads / trails",
@@ -325,16 +325,25 @@
         "format": "open data download",
         "license": "verify before ingest",
         "adapter": null,
-        "status": "pending",
-        "notes": "Limited forestry-road value; useful for complete coverage."
+        "status": "deferred",
+        "notes": "No shippable capillary: Confederation Trail motor-free; road_centerline sparse/NRN-overlap. OSM-only like QC."
       },
       "routingReady": true,
-      "routingMode": "nrn-backbone",
+      "routingMode": "osm-only",
       "backboneArtifact": {
         "path": "routing/data/regions/pe/graph.v1.json.gz",
-        "edgeCount": 19426,
-        "nodeCount": 16379,
-        "gzBytes": 1909999
+        "edgeCount": 21792,
+        "nodeCount": 31543,
+        "gzBytes": 1750878
+      },
+      "osm": {
+        "adapter": "osm-roads",
+        "role": "sole-fabric",
+        "status": "ready",
+        "featureCount": 22158,
+        "added": 22158,
+        "license": "OpenStreetMap contributors (ODbL)",
+        "dateRetrieved": "2026-07-22"
       }
     },
     {

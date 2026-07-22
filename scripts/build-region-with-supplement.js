@@ -11,8 +11,10 @@
  *   OSM road fabric → provincial capillary — no NRN
  *   Use: node scripts/build-region-with-supplement.js ns|nb --osm-plus-provincial
  *
- * Quebec:
+ * Quebec / Prince Edward Island:
  *   OSM-only (no NRN, no provincial): --osm-only
+ *   PE has no shippable capillary (Confederation Trail is motor-free;
+ *   open-data road_centerline is sparse / NRN-overlap).
  *
  * Requires OSM roads geojsonseq at data-raw/osm-roads/<geofabrik-slug>/
  * (and NRN seq/pack unless --osm-only / --osm-plus-provincial).
@@ -43,6 +45,7 @@ const OSM_SLUG = {
   nb: "new-brunswick",
   qc: "quebec",
   ns: "nova-scotia",
+  pe: "prince-edward-island",
   on: "ontario",
   ab: "alberta",
   bc: "british-columbia"
@@ -143,16 +146,28 @@ async function main() {
   // OSM fabric + provincial capillary, no NRN (NS = NSTDB; NB = Forest Roads).
   const osmPlusProvincial = args.includes("--osm-plus-provincial");
   const skipOsm = args.includes("--skip-osm");
-  if (!code || !SUPPLEMENTS[code]) {
+  const known = new Set([...Object.keys(SUPPLEMENTS), ...Object.keys(OSM_SLUG)]);
+  if (!code || !known.has(code)) {
     throw new Error(
-      "Usage: build-region-with-supplement.js <ns|nb|bc|ab|on|qc> [--osm-only|--osm-plus-provincial] [--skip-osm]"
+      "Usage: build-region-with-supplement.js <ns|nb|bc|ab|on|qc|pe> [--osm-only|--osm-plus-provincial] [--skip-osm]"
     );
   }
   if (osmOnly && osmPlusProvincial) {
     throw new Error("Choose only one of --osm-only or --osm-plus-provincial");
   }
+  if (osmOnly && !OSM_SLUG[code]) {
+    throw new Error(`[${code}] --osm-only requires an OSM_SLUG entry`);
+  }
+  if (osmPlusProvincial && !SUPPLEMENTS[code]) {
+    throw new Error(`[${code}] --osm-plus-provincial requires a provincial adapter`);
+  }
+  if (!osmOnly && !SUPPLEMENTS[code]) {
+    throw new Error(
+      `[${code}] has no provincial adapter — use --osm-only (PE/QC pattern)`
+    );
+  }
   const dropNrn = osmOnly || osmPlusProvincial;
-  const suppMod = SUPPLEMENTS[code]();
+  const suppMod = SUPPLEMENTS[code] ? SUPPLEMENTS[code]() : null;
 
   let backbone = [];
   let nrn = { features: [], report: { adapter: null, featureCount: 0 } };
@@ -212,7 +227,7 @@ async function main() {
     }
   };
 
-  if (!osmOnly) {
+  if (!osmOnly && suppMod) {
     console.log(`[${code}] Running provincial supplement ${suppMod.name}…`);
     const maxByCode = { ab: 250000, bc: 200000, on: 350000, qc: Infinity, ns: 500000, nb: Infinity };
     supp = await suppMod.run({
@@ -332,11 +347,21 @@ async function main() {
         row.osm.status = row.osm.status || "ready";
       }
       if (dropNrn && row.nrn) {
-        row.nrn.notes =
-          (osmPlusProvincial
+        const omitNote = osmPlusProvincial
+          ? code === "ns"
             ? "NRN omitted from NS routing fabric (OSM + NSTDB only)."
-            : "NRN omitted from routing fabric (OSM-only).") +
+            : "NRN omitted from routing fabric (OSM + provincial only)."
+          : "NRN omitted from routing fabric (OSM-only).";
+        row.nrn.notes =
+          omitNote +
           (row.nrn.notes && !/omitted from/i.test(row.nrn.notes) ? " " + row.nrn.notes : "");
+      }
+      if (osmOnly && row.provincial) {
+        row.provincial.status = row.provincial.status || "deferred";
+        row.provincial.notes =
+          code === "pe"
+            ? "No shippable capillary: Confederation Trail motor-free; road_centerline sparse/NRN-overlap. OSM-only like QC."
+            : row.provincial.notes || "Provincial capillary not in shipping stack.";
       }
       const hasOsm = !!(osmReport || (row.osm && row.osm.status === "ready"));
       const hasProvincial = !!(supp.report && supp.report.adapter);

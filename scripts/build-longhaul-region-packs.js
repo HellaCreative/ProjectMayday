@@ -5,7 +5,7 @@
  * Build thinned per-province longhaul packs for Vercel canada-chain hops.
  *
  * Province fabrics:
- *   QC — OSM-only (no NRN)
+ *   QC / PE — OSM-only (no NRN). PE has no shippable provincial capillary.
  *   NS — OSM + NSTDB (no NRN); provincial capillary stays in the pack so Allow
  *        unknown can use purple TRACK. NRN highway spine is dropped.
  *   NB — OSM + Forest Roads (no NRN); provincial kept like NS so NS↔NB Allow
@@ -74,7 +74,8 @@ const HUBS = {
     { lon: -66.643, lat: 45.963 }, // Fredericton
     { lon: -66.059, lat: 45.273 }, // Saint John
     { lon: -67.583, lat: 47.376 }, // Edmundston / QC approach
-    { lon: -64.21, lat: 45.83 } // Amherst NS / NB border approach
+    { lon: -64.21, lat: 45.83 }, // Amherst NS / NB border approach
+    { lon: -63.81, lat: 46.16 } // Cape Jourimain / Confederation Bridge approach
   ],
   ns: [
     { lon: -63.575, lat: 44.649 }, // Halifax
@@ -83,7 +84,13 @@ const HUBS = {
     { lon: -64.52, lat: 44.98 }, // Bridgewater / South Shore
     { lon: -64.21, lat: 45.83 } // Amherst / NB border approach
   ],
-  pe: [{ lon: -63.126, lat: 46.238 }],
+  pe: [
+    { lon: -63.126, lat: 46.238 }, // Charlottetown
+    { lon: -63.79, lat: 46.395 }, // Summerside
+    { lon: -63.70, lat: 46.25 }, // Borden-Carleton / bridge
+    { lon: -62.98, lat: 46.42 }, // Souris approach / east
+    { lon: -64.0, lat: 46.8 } // Tignish / north tip approach
+  ],
   nl: [{ lon: -52.712, lat: 47.561 }]
 };
 
@@ -102,8 +109,8 @@ function main() {
 
     const corridorFabric = new Set([]); // dense NRN-everywhere — too large for Hobby
     const hubFabric = new Set(["on"]); // spine + hub bulbs (QC is OSM-only below)
-    const maritimeFabric = new Set(["pe", "nl"]); // NS/NB are osm-provincial below
-    const osmProvince = new Set(["qc"]); // full OSM fabric; no NRN; one pack per province
+    const maritimeFabric = new Set(["nl"]); // PE is osm-only below; NS/NB osm-provincial
+    const osmProvince = new Set(["qc", "pe"]); // full OSM fabric; no NRN; one pack per province
     const osmProvincialProvince = new Set(["ns", "nb"]); // OSM + provincial; no NRN
 
     let extractMode = "spine";

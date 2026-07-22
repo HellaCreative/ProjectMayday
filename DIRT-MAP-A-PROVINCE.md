@@ -25,7 +25,7 @@ NS is the reference build. Every next province copies the *model*, not the NS fi
 
 1. **NS adventure fabric = OSM + NSTDB/STDB. No NRN.** Locked in registry, build scripts, longhaul meta, and `GET /api/route` note.
 2. **NB adventure fabric = OSM + Forest Roads. No NRN.** Same `--osm-plus-provincial` / keep-provincial longhaul pattern as NS (capillary quality: see assessment).
-3. **QC = OSM-only today.** No NRN in the routing pack. Provincial chemins adapter exists but is **not** in the live QC stack (`--osm-only`).
+3. **QC / PE = OSM-only today.** No NRN in the routing pack. QC provincial chemins adapter exists but is **not** in the live QC stack (`--osm-only`). PE has no shippable capillary (see assessment).
 4. **Elsewhere:** many packs still ship **NRN (+ OSM gap-fill) ± provincial**. That is **current shipping state**, not the end state. Intent is to graduate provinces toward OSM fabric + provincial capillary (NS pattern), keeping NRN only where inter-province identity or size still forces it.
 
 ### Honest current state vs intent
@@ -35,8 +35,9 @@ NS is the reference build. Every next province copies the *model*, not the NS fi
 | **NS** | OSM + NSTDB; longhaul keeps provincial; `dropNrn: true` | Done — gold reference |
 | **NB** | OSM + NB Forest Roads; longhaul keeps provincial; `dropNrn: true` | Done — same pattern as NS (capillary weaker than NSTDB on class/surface — see assessment) |
 | **QC** | OSM-only longhaul + regional | Add QC capillary later if it earns its place; still no NRN |
+| **PE** | OSM-only longhaul + regional; NB↔PE via Confederation Bridge | Done for MVP — no provincial capillary to hunt unless a better layer appears |
 | **ON / AB / BC** | Registry: NRN+provincial (adapters ready) | Validate OSM-as-fabric path; don’t assume NRN forever |
-| **SK / MB / PE / NL / YT / NT / NU** | Mostly NRN backbone artifacts | Need OSM extract + capillary candidate before “gold” |
+| **SK / MB / NL / YT / NT / NU** | Mostly NRN backbone artifacts | Need OSM extract + capillary candidate before “gold” |
 
 **Doc/code drift to watch:** older comments and `routing/conflation/conflate.js` still say “NRN owns national identity.” Prefer this doc + `routing/registry/sources.json` notes + `scripts/build-ns-regional-graph.js` / `--osm-plus-provincial` when they conflict. README still documents NRN ingest as the default path for many provinces — true for *shipping*, not for *gold intent*.
 
@@ -87,6 +88,7 @@ Capillary candidate exists?
 | **NS** | NSTDB / STDB | **Gold — OSM+provincial** | Topology + TRACK unknown + surface/class rich; longhaul keeps purple |
 | **NB** | Forest Roads (DNR-ED FeatureServer) | **Ship OSM+provincial (best-effort)** | Connectivity + unknown access + gap-fill OK; **surface/class weak** (all `resource` / sparse attrs). Keep provincial on longhaul so NS↔NB Allow works. Not NSTDB-quality on paint/cost signal — don’t pretend it is |
 | **QC** | chemins multiusages (adapter ready) | **OSM-only today** | Capillary not locked into shipping stack yet |
+| **PE** | none shippable | **OSM-only** | OSM coverage is the fabric (~22k edges). Confederation Trail is motor-free summer — not a resource-road supplement. `road_centerline` sparse / NRN-overlap. NB↔PE via Confederation Bridge (legal road; both OSM extracts include trunk halves; merge matches mid-bridge nodes). |
 
 ---
 
@@ -117,22 +119,23 @@ node scripts/build-ns-regional-graph.js
 node scripts/build-region-with-supplement.js ns --osm-plus-provincial
 node scripts/build-region-with-supplement.js nb --osm-plus-provincial
 
-# 3) QC shipping stack
+# 3) QC / PE shipping stack (OSM-only)
 node scripts/build-region-with-supplement.js qc --osm-only
+node scripts/build-region-with-supplement.js pe --osm-only
 
 # 4) Default (legacy) stack where NRN still in play
 node scripts/build-region-with-supplement.js on   # NRN → OSM → provincial
 
 # 5) What Vercel ships (thinned longhaul)
-node scripts/build-longhaul-region-packs.js ns nb qc
+node scripts/build-longhaul-region-packs.js ns nb qc pe
 ```
 
 **Outputs**
 
 - Full regional: `routing/data/regions/<id>/graph.v1.json.gz` + `.meta.json`
-- Longhaul: `routing/data/regions/<id>/longhaul.v1.json.gz` — NS/NB = full OSM+provincial thinned geometry (purple kept); QC = OSM-only; others often OSM+NRN with provincial dropped for size
+- Longhaul: `routing/data/regions/<id>/longhaul.v1.json.gz` — NS/NB = full OSM+provincial thinned geometry (purple kept); QC/PE = OSM-only; others often OSM+NRN with provincial dropped for size
 - Registry: `routing/registry/sources.json` — per-province status, adapters, `routingMode`
-- API truth: `GET /api/route` → `NS: OSM+NSTDB (no NRN). NB: OSM+Forest Roads (no NRN). QC: OSM-only…`
+- API truth: `GET /api/route` → `NS: OSM+NSTDB (no NRN). NB: OSM+Forest Roads (no NRN). QC/PE: OSM-only…`
 
 Riders never pick a source. The map paints one network. Shortbread tiles remain display-only; the graph is a separate extract.
 
@@ -163,6 +166,7 @@ Fix a small set of origin→destination pairs that prove fabric, not UI.
 | **NS** | **Myra corridor** (and existing fixtures: Porters–Musquodoboit, Halifax–Yarmouth) | Clean ≈ pavement; Allow off ignores purple; Allow on opens capillary for Direct/Dirt/Balanced; Dirt dirt% ≫ Clean |
 | **QC** | City↔region pairs on OSM fabric | Completes without NRN; islands handled by snap/rematch |
 | **NB** | In-province forest OD + **NS↔NB** (e.g. Amherst area → Moncton / Saint John) | Allow on uses unknown capillary; Balanced Allow off/on completes; adventure stays [A,B] (no Halifax city chain) |
+| **PE** | Summerside→Charlottetown + **NB↔PE** Moncton→Charlottetown (Confederation Bridge) | Clean ≈ pavement via bridge; Direct/Dirt/Balanced complete; no illegal gap-span; adventure skips Charlottetown/Summerside cores |
 | **Next province** | One highway OD + one dirt-corridor OD that needs capillary | Run [Province data assessment](#province-data-assessment); OSM alone fails or is silly; OSM+provincial succeeds with Allow |
 
 Every smoke OD should assert: complete status, rough length band, dirt%/paved% direction vs profile, and whether unknown-access meters appear only when Allow is on (and never as the Clean story).

@@ -7,6 +7,7 @@
  */
 
 const MATCH_METERS = 1500;
+const { relabelComponents } = require("./corridor");
 
 function haversineMeters(a, b) {
   const toRad = (deg) => (deg * Math.PI) / 180;
@@ -113,8 +114,11 @@ function mergeRegionalGraphs(graphs) {
     }
   }
 
-  // Recompute simple component ids lightly (router uses adjacency more than c).
-  const graph = {
+  // Recompute edge.c after cross-region node joins. Stale per-province
+  // component ids collide (both packs use c=0/1) and make the router think
+  // start/end share a component when the merged adjacency is still split —
+  // or miss a real join (NB↔PE Confederation Bridge).
+  const graph = relabelComponents({
     version: 1,
     schemaVersion: "canada-merged-1",
     regionId: regionIds.join("+"),
@@ -133,7 +137,7 @@ function mergeRegionalGraphs(graphs) {
     lineage: { mergedRegions: regionIds },
     nodes,
     edges
-  };
+  });
 
   return {
     graph,
@@ -142,7 +146,8 @@ function mergeRegionalGraphs(graphs) {
       boundaryMatches,
       boundaryCandidates,
       matchLimitMeters: MATCH_METERS,
-      freeSpaceConnectors: 0
+      freeSpaceConnectors: 0,
+      componentCount: graph.componentCount
     }
   };
 }
@@ -165,9 +170,10 @@ const REGION_NEIGHBOURS = {
   "qc-west": ["on", "qc", "qc-sl", "qc-north"],
   "qc-sl": ["nb", "nl", "qc", "qc-west", "qc-north"],
   "qc-north": ["qc", "qc-sl", "qc-west"],
-  nb: ["qc", "ns"],
+  // Confederation Bridge is a legal road link (not ferry) — NB↔PE must chain.
+  nb: ["qc", "ns", "pe"],
   ns: ["nb"],
-  pe: [],
+  pe: ["nb"],
   nl: ["qc"],
   yt: ["bc", "nt"],
   nt: ["yt", "bc", "ab", "sk", "nu"],
@@ -222,6 +228,8 @@ function regionsForRoute(regionIds) {
  */
 const CLEAN_CORRIDOR_ANCHORS = [
   { lon: -64.800, lat: 46.099 }, // Moncton — TCH isthmus (Clean only)
+  { lon: -63.75, lat: 46.21 }, // Confederation Bridge (Clean NB↔PE)
+  { lon: -63.126, lat: 46.238 }, // Charlottetown
   { lon: -66.643, lat: 45.963 }, // Fredericton
   { lon: -68.325, lat: 47.373 }, // Edmundston
   { lon: -68.65, lat: 47.55 }, // Dégelis
@@ -257,7 +265,10 @@ const ADVENTURE_URBAN_AVOID = [
   { minLat: 45.952, maxLat: 45.978, minLon: -66.665, maxLon: -66.618, nudgeLat: 0.18 }, // Fredericton downtown
   { minLat: 45.2, maxLat: 45.35, minLon: -66.2, maxLon: -65.95, nudgeLat: 0.18 }, // Saint John
   { minLat: 47.3, maxLat: 47.45, minLon: -68.45, maxLon: -68.2, nudgeLat: 0.2 }, // Edmundston
-  { minLat: 46.75, maxLat: 46.9, minLon: -71.35, maxLon: -71.1, nudgeLat: 0.2 } // Québec City core
+  { minLat: 46.75, maxLat: 46.9, minLon: -71.35, maxLon: -71.1, nudgeLat: 0.2 }, // Québec City core
+  // PE cores — surgical so adventure can skirt, not tour downtown one-ways.
+  { minLat: 46.228, maxLat: 46.248, minLon: -63.145, maxLon: -63.11, nudgeLat: 0.12 }, // Charlottetown downtown
+  { minLat: 46.385, maxLat: 46.405, minLon: -63.81, maxLon: -63.77, nudgeLat: 0.1 } // Summerside core
 ];
 
 function pointInAdventureUrbanCore(lon, lat) {
@@ -314,6 +325,7 @@ function nudgeOffUrbanCore(p) {
  */
 const ADVENTURE_CONNECTIVITY_CLIP = [
   { lon: -64.35, lat: 45.92 }, // Tantramar / isthmus — not Halifax metro
+  { lon: -63.75, lat: 46.21 }, // Confederation Bridge mid — NB↔PE fabric keeper
   { lon: -68.2, lat: 47.35 }, // NB–QC approach (north of Edmundston downtown core box)
   { lon: -70.9, lat: 46.75 }, // St. Lawrence south shore approach
   { lon: -72.5, lat: 46.2 }, // Mauricie / TR south

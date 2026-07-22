@@ -322,6 +322,30 @@ check("Fredericton urban avoid is downtown-tight, not metro-wide", () => {
   assert.strictEqual(pointInAdventureUrbanCore(-66.58, 45.92), false, "Lincoln / east approach");
 });
 
+check("Charlottetown and Summerside urban avoid are downtown-tight", () => {
+  const { pointInAdventureUrbanCore } = require("../../regional/merge");
+  assert.strictEqual(pointInAdventureUrbanCore(-63.126, 46.238), true, "Charlottetown downtown");
+  assert.strictEqual(pointInAdventureUrbanCore(-63.79, 46.395), true, "Summerside core");
+  assert.strictEqual(pointInAdventureUrbanCore(-63.70, 46.25), false, "Borden / bridge approach");
+  assert.strictEqual(pointInAdventureUrbanCore(-63.81, 46.16), false, "Cape Jourimain NB");
+});
+
+check("NB vs PE primary region keeps Sackville NB and Borden PE", () => {
+  const { primaryRegionForPoint } = require("../../regional/select");
+  assert.strictEqual(primaryRegionForPoint(-64.37, 45.9), "nb", "Sackville");
+  assert.strictEqual(primaryRegionForPoint(-63.81, 46.16), "nb", "Cape Jourimain");
+  assert.strictEqual(primaryRegionForPoint(-63.70, 46.25), "pe", "Borden-Carleton");
+  assert.strictEqual(primaryRegionForPoint(-63.126, 46.238), "pe", "Charlottetown");
+});
+
+check("NB↔PE corridor includes Confederation Bridge neighbour link", () => {
+  const { regionsForRoute, shortestRegionPath } = require("../../regional/merge");
+  assert.deepStrictEqual(shortestRegionPath("nb", "pe"), ["nb", "pe"]);
+  assert.deepStrictEqual(shortestRegionPath("ns", "pe"), ["ns", "nb", "pe"]);
+  assert.ok(regionsForRoute(["nb", "pe"]).includes("nb"));
+  assert.ok(regionsForRoute(["nb", "pe"]).includes("pe"));
+});
+
 check("region selection hits Nova Scotia for Halifax points", () => {
   const regions = selectRegionsForLocations([
     { lat: 44.65, lon: -63.58 },

@@ -15,7 +15,7 @@
     "extractMode": "fabric-osm-provincial",
     "dropNrn": true,
     "keepProvincial": true,
-    "hubCount": 5,
+    "hubCount": 6,
     "corridorBufferMeters": null,
     "thinnedGeometry": true,
     "inputEdgeCount": 258738,

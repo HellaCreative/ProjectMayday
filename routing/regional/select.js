@@ -78,9 +78,30 @@ function primaryRegionForPoint(lon, lat) {
 
   // NS vs NB — Tantramar / Missaguash. Must run before NB↔QC: Quebec's
   // rectangular bbox covers the Maritimes and would steal Amherst as NB.
+  // NS's bbox also covers PE + Cape Jourimain — never claim those as NS.
+  if (ids.has("ns") && ids.has("nb") && ids.has("pe")) {
+    // Three-way: Tantramar south of ~46°N; Northumberland / bridge north.
+    if (lat < 46.0) return lon >= -64.27 ? "ns" : "nb";
+    if (lon >= -63.75) return "pe";
+    return "nb"; // Cape Jourimain / Port Elgin mainland
+  }
+  if (ids.has("ns") && ids.has("pe") && !ids.has("nb")) {
+    // NS rectangle covers the island; PE wins.
+    return "pe";
+  }
   if (ids.has("ns") && ids.has("nb")) {
     // Roughly east of the interprovincial line stays Nova Scotia.
     if (lon >= -64.27) return "ns";
+    return "nb";
+  }
+
+  // NB vs PE — Northumberland Strait / Confederation Bridge.
+  // PE bbox overlaps eastern NB (Sackville / Cape Tormentine); smallest-bbox
+  // would steal mainland points as PE.
+  if (ids.has("nb") && ids.has("pe")) {
+    // Island / PE side of bridge midpoint (~-63.75). Mainland + Cape Jourimain → NB.
+    if (lat < 46.0) return "nb";
+    if (lon >= -63.75) return "pe";
     return "nb";
   }
 

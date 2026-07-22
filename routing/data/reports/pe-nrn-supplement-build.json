@@ -1,0 +1,172 @@
+{
+  "generatedAt": "2026-07-22T15:57:39.854Z",
+  "region": "PE",
+  "stack": [
+    "osm-only"
+  ],
+  "nrn": {
+    "adapter": null,
+    "featureCount": 0,
+    "omitted": "osm-only"
+  },
+  "osm": {
+    "adapter": "osm-roads",
+    "province": "PE",
+    "sourceName": "OpenStreetMap",
+    "sourceUrl": "https://download.geofabrik.de/north-america/canada/prince-edward-island-latest.osm.pbf",
+    "downloadUrl": "https://download.geofabrik.de/north-america/canada/prince-edward-island-latest.osm.pbf",
+    "license": "OpenStreetMap contributors (ODbL)",
+    "sourceDatasetVersion": "geofabrik:prince-edward-island",
+    "dateRetrieved": "2026-07-22T15:57:39.275Z",
+    "status": "ok",
+    "notes": [
+      "OSM gap-fill for conventional motorized roads unmatched by NRN.",
+      "Excluded foot/bike-only, private/no, abandoned, and non-motorized paths.",
+      "track/service without clear surface default to motorized_unknown."
+    ],
+    "knownLimitations": [
+      "OSM tagging quality varies; not a legal access assertion.",
+      "Does not replace NRN identity — conflation dedupes against NRN first."
+    ],
+    "featureCount": 22158,
+    "scannedCount": 22317,
+    "excludedCount": 159,
+    "excludedByReason": {
+      "access_denied": 159
+    },
+    "classification": {
+      "surface": {
+        "paved": 7095,
+        "unknown": 1702,
+        "resource": 12298,
+        "gravel": 1063
+      },
+      "access": {
+        "motorized_permissive": 22158
+      },
+      "structure": {
+        "none": 21915,
+        "bridge": 240,
+        "tunnel": 3
+      },
+      "roadTrack": {
+        "local": 2760,
+        "service": 14187,
+        "arterial": 853,
+        "collector": 681,
+        "ramp": 151,
+        "resource": 3078,
+        "track": 422,
+        "freeway": 26
+      },
+      "excluded": {}
+    },
+    "topology": null,
+    "generatedAt": "2026-07-22T15:57:39.276Z"
+  },
+  "osmConflation": null,
+  "provincial": {
+    "adapter": null,
+    "featureCount": 0,
+    "excludedByReason": {},
+    "classification": {}
+  },
+  "conflation": {
+    "freeSpaceConnectors": 0,
+    "stats": {
+      "backboneKept": 22158,
+      "supplementAdded": 0,
+      "supplementDuplicateSkipped": 0
+    }
+  },
+  "graph": {
+    "generatedAt": "2026-07-22T15:57:39.361Z",
+    "schemaVersion": "canada-regional-1",
+    "regionId": "pe",
+    "province": "PE",
+    "bbox": [
+      -64.41242,
+      45.94984,
+      -61.97146,
+      47.05837
+    ],
+    "nodeCount": 31543,
+    "edgeCount": 21792,
+    "componentCount": 10473,
+    "boundaryNodeCount": 312,
+    "accessCounts": {
+      "motorized_permissive": 21792
+    },
+    "surfaceCounts": {
+      "paved": 6975,
+      "unknown": 1639,
+      "access": 12149,
+      "gravel": 1029
+    },
+    "sourceCounts": {
+      "OpenStreetMap": 21792
+    },
+    "jsonBytes": 8919964,
+    "gzBytes": 1750878,
+    "lineage": {
+      "nrn": {
+        "adapter": null,
+        "featureCount": 0,
+        "omitted": "osm-only"
+      },
+      "osm": {
+        "adapter": "osm-roads",
+        "featureCount": 22158,
+        "role": "sole-fabric",
+        "added": 22158,
+        "duplicateSkipped": 0,
+        "classification": {
+          "surface": {
+            "paved": 7095,
+            "unknown": 1702,
+            "resource": 12298,
+            "gravel": 1063
+          },
+          "access": {
+            "motorized_permissive": 22158
+          },
+          "structure": {
+            "none": 21915,
+            "bridge": 240,
+            "tunnel": 3
+          },
+          "roadTrack": {
+            "local": 2760,
+            "service": 14187,
+            "arterial": 853,
+            "collector": 681,
+            "ramp": 151,
+            "resource": 3078,
+            "track": 422,
+            "freeway": 26
+          },
+          "excluded": {}
+        },
+        "excludedByReason": {
+          "access_denied": 159
+        }
+      },
+      "provincial": {
+        "adapter": null,
+        "featureCount": 0,
+        "excludedByReason": {},
+        "classification": {}
+      },
+      "endpointSnap": {
+        "meters": 18,
+        "snappedEndpoints": 0,
+        "note": "Provincial capillary endpoints within snap meters reuse existing fabric nodes (survey near-miss joins). No free-space edges."
+      }
+    },
+    "conflation": {
+      "stats": null,
+      "freeSpaceConnectors": 0
+    }
+  },
+  "freeSpaceConnectors": 0
+}

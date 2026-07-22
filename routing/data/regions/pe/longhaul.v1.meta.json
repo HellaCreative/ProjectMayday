@@ -1,0 +1,24 @@
+{
+  "regionId": "pe",
+  "schemaVersion": "longhaul-region-1",
+  "edgeCount": 21792,
+  "nodeCount": 31413,
+  "gzBytes": 1283413,
+  "inflatedBytes": 7741662,
+  "path": "routing/data/regions/pe/longhaul.v1.json.gz",
+  "lineage": {
+    "purpose": "canada-chain / in-province pack (OSM-only; no NRN)",
+    "mentalModel": "osm-fabric-province",
+    "source": "regions/pe/graph.v1.json.gz",
+    "hasRoadClass": true,
+    "hasOsm": true,
+    "extractMode": "fabric-osm-only",
+    "dropNrn": true,
+    "hubCount": 5,
+    "corridorBufferMeters": null,
+    "thinnedGeometry": true,
+    "inputEdgeCount": 21792,
+    "spineEdgeCount": 21792,
+    "outputEdgeCount": 21792
+  }
+}
