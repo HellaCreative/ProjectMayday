@@ -7134,6 +7134,13 @@
       outline: 3px solid rgba(255, 122, 0, .45) !important;
       outline-offset: 2px !important;
     }
+    /* Keep every primary app sheet visually attached to the persistent dock. */
+    body.legend-open .legend:not(.collapsed),
+    body.account-open .account-sheet.open,
+    body.groups-open .group-sheet.open {
+      bottom: calc(var(--p2-dock-h) + 8px) !important;
+      border-radius: 14px !important;
+    }
   </style>
 </head>
 <body>
