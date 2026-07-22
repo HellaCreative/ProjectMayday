@@ -1,50 +1,50 @@
 "use strict";
 
 /**
- * Profile surface (+ light road-class) weight tables (Stage 2c).
+ * Profile surface (+ road-class) weight tables (Stage 2c).
  * Neutral edge facts live in the pack; costs are derived here at load or relax.
  * Tuning a profile never rebuilds packs.
  *
- * Same app, different jobs per stage:
- *   Clean / Cleanest → cleanest — Google/Apple mode: fastest practical A→B on
- *                       pavement/highway. Highway is fine. Dirt only if forced.
- *   Dirt             → dirt     — find dirt between pavement; maximize adventure
- *   Balanced         → balanced — ~50/50 dual-sport journey (not Google, not forest)
- *   Direct           → direct   — crow-flies cut through territory; prefer dirt
- *                       when it shortens the line (not cleanest-highway)
+ * Mental model — dirt is the default fabric except Clean:
+ *   Clean / Cleanest → cleanest — Google/Apple: pavement/highway default.
+ *                       Dirt only as a last stitch when forced.
+ *   Dirt             → dirt     — maximize purple NSTDB + OSM dirt/gravel/track;
+ *                       pavement only when forced.
+ *   Balanced         → balanced — dirt-leaning dual-sport mix (not highway-default).
+ *   Direct           → direct   — crow-flies cut on dirt fabric (purple + OSM dirt);
+ *                       minimal pavement; length still matters.
  *
  * Packed surface codes: paved=0 gravel=1 access=2 (resource) track=3 unknown=4.
- * Road-class (`rt` on v1 edges) biases cleanest toward freeway/arterial among
- * paved options. v2 packs omit `rt` — surface weights alone still prefer shortest
- * paved path (highway-ish when the graph allows).
+ * Road-class (`rt` on v1 edges): cleanest prefers freeway/arterial; non-cleanest
+ * pay hard for freeway/arterial so the engine cannot keep a highway spine and
+ * only nibble dirt spurs.
  */
 
 const PROFILE_SURFACE_WEIGHTS = Object.freeze({
-  // Crow-flies shortcut: length dominates; mild dirt discount when it cuts.
+  // Crow-flies on dirt fabric: length dominates among dirt/unknown/track,
+  // but pavement is expensive enough that highway is never the default spine.
   direct: Object.freeze({
-    paved: 1.12,
-    gravel: 0.92,
-    access: 0.88,
-    track: 0.85,
-    unknown: 0.95
+    paved: 4.2,
+    gravel: 0.82,
+    access: 0.66,
+    track: 0.55,
+    unknown: 0.7
   }),
-  // Dual-sport mix — enough adventure pull to leave the highway corridor,
-  // not enough to become a dirt clone. Target mid paved/dirt on dirt-rich NS.
+  // Dirt-leaning dual-sport — leave the highway corridor, not a dirt clone.
   balanced: Object.freeze({
-    paved: 1.45,
-    gravel: 0.94,
-    access: 0.86,
-    track: 0.8,
-    unknown: 0.96
+    paved: 2.8,
+    gravel: 0.86,
+    access: 0.72,
+    track: 0.62,
+    unknown: 0.78
   }),
   // Maximize undeveloped/gravel/track/resource; pavement only when forced.
-  // Stronger track/access pull so Dirt leaves the NRN corridor for NSTDB/OSM fabric.
   dirt: Object.freeze({
     paved: 12.0,
-    gravel: 0.64,
-    access: 0.42,
-    track: 0.3,
-    unknown: 0.52
+    gravel: 0.6,
+    access: 0.4,
+    track: 0.28,
+    unknown: 0.48
   }),
   // Google/Apple: shortest practical pavement. Do not punish highway.
   cleanest: Object.freeze({
@@ -57,9 +57,25 @@ const PROFILE_SURFACE_WEIGHTS = Object.freeze({
 });
 
 /**
- * Road-track multipliers. Only cleanest differentiates (prefer freeway/arterial).
- * Other profiles stay 1.0 — surface tables already express their journey intent.
+ * Road-track multipliers.
+ * Cleanest: prefer freeway/arterial among paved options.
+ * Non-cleanest: punish freeway/arterial/collector so dirt fabric wins over
+ * "highway spine + dirt snacks"; mild discount for resource/track class.
  */
+const ADVENTURE_ROAD_CLASS_WEIGHTS = Object.freeze({
+  freeway: 2.8,
+  arterial: 2.15,
+  collector: 1.45,
+  ramp: 2.4,
+  local: 1.06,
+  service: 1.12,
+  resource: 0.88,
+  recreation: 0.86,
+  track: 0.82,
+  double_track: 0.82,
+  unknown: 1.0
+});
+
 const PROFILE_ROAD_CLASS_WEIGHTS = Object.freeze({
   cleanest: Object.freeze({
     freeway: 0.82,
@@ -73,7 +89,10 @@ const PROFILE_ROAD_CLASS_WEIGHTS = Object.freeze({
     track: 1.0,
     double_track: 1.0,
     unknown: 1.0
-  })
+  }),
+  direct: ADVENTURE_ROAD_CLASS_WEIGHTS,
+  balanced: ADVENTURE_ROAD_CLASS_WEIGHTS,
+  dirt: ADVENTURE_ROAD_CLASS_WEIGHTS
 });
 
 const SURFACE_SPEED_KMH = Object.freeze({

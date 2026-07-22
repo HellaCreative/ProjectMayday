@@ -152,14 +152,15 @@ function ellipseDirtEnabled() {
 /**
  * Ellipse detour factors by profile.
  *   cleanest — tight Google-style pavement corridor
- *   direct   — tight crow-flies; dirt preference is in surface costs
+ *   direct   — crow-flies on dirt fabric; wide enough for NSTDB/OSM cuts
+ *              off the highway chord (not so tight it forces the paved spine)
  *   balanced — wider for dual-sport mix
  *   dirt     — widest adventure room; stays unpruned unless ROUTING_ELLIPSE_DIRT=1
  */
 const ELLIPSE_FACTORS = {
   cleanest: 1.25,
-  direct: 1.12,
-  balanced: 1.65,
+  direct: 1.4,
+  balanced: 1.75,
   dirt: 2.6
 };
 
@@ -255,7 +256,7 @@ function preferGiantComponentSnap(runtime) {
   return schema.startsWith("longhaul");
 }
 
-function matchPoint(runtime, location, policy, matchMeters, avoidEdgeIds, preferComponentId = null) {
+function matchPoint(runtime, location, policy, matchMeters, avoidEdgeIds, preferComponentId = null, profile = null) {
   const enums = runtime.enums;
   const point = [Number(location.lon ?? location.lng), Number(location.lat)];
   if (!Number.isFinite(point[0]) || !Number.isFinite(point[1])) {
@@ -265,6 +266,12 @@ function matchPoint(runtime, location, policy, matchMeters, avoidEdgeIds, prefer
   const preferId = Number.isFinite(preferComponentId) ? preferComponentId : null;
   const longhaulBias = preferGiantComponentSnap(runtime);
   const giantId = runtime.format === "v2" ? null : giantComponentId(runtime);
+  // Soft surface bias on top of two-pass giant snap (full packs) / longhaul bias.
+  // Non-cleanest: prefer nearby dirt/track/access so pins do not start on pavement
+  // when a dirt edge is almost as close. Cleanest: slight paved preference.
+  const prof = profile ? String(profile).toLowerCase() : null;
+  const preferAdventureSnap = prof && prof !== "cleanest";
+  const preferPavedSnap = prof === "cleanest";
   const candidates = edgeCandidateIndexes(runtime, point[0], point[1], matchMeters);
   const isV2 = runtime.format === "v2";
   let bestAny = null;
@@ -329,7 +336,14 @@ function matchPoint(runtime, location, policy, matchMeters, avoidEdgeIds, prefer
       ) {
         componentPenalty = Math.max(400, matchMeters);
       }
-      const score = projected.distanceM + componentPenalty;
+      const surfaceName = enums.SURFACE_NAME[surfaceCode] || "unknown";
+      let surfaceBias = 0;
+      if (preferAdventureSnap && surfaceName !== "paved") {
+        surfaceBias = -55;
+      } else if (preferPavedSnap && surfaceName === "paved") {
+        surfaceBias = -25;
+      }
+      const score = projected.distanceM + componentPenalty + surfaceBias;
       const candidate = {
         ok: true,
         edgeIndex: index,
@@ -352,7 +366,7 @@ function matchPoint(runtime, location, policy, matchMeters, avoidEdgeIds, prefer
         giantId != null &&
         componentId === giantId &&
         projected.distanceM <= matchMeters &&
-        (!bestGiant || projected.distanceM < bestGiant.distanceM)
+        (!bestGiant || score < bestGiant.score)
       ) {
         bestGiant = candidate;
       }
@@ -716,8 +730,8 @@ async function routeOnRuntime(body, graphResolution, runtime) {
 
   const start = locations[0];
   const end = locations[locations.length - 1];
-  let startMatch = matchPoint(runtime, start, policy, limit, avoidEdgeIds);
-  let endMatch = matchPoint(runtime, end, policy, limit, avoidEdgeIds);
+  let startMatch = matchPoint(runtime, start, policy, limit, avoidEdgeIds, null, profile);
+  let endMatch = matchPoint(runtime, end, policy, limit, avoidEdgeIds, null, profile);
   // Reconcile disconnected snaps.
   // Longhaul: rematch end onto start (QC OSM islands).
   // Full packs: rematch the nongiant endpoint onto the giant so a purple
@@ -739,7 +753,8 @@ async function routeOnRuntime(body, graphResolution, runtime) {
         policy,
         limit,
         avoidEdgeIds,
-        startMatch.componentId
+        startMatch.componentId,
+        profile
       );
       if (endSame.ok && endSame.componentId === startMatch.componentId) {
         endMatch = endSame;
@@ -753,7 +768,8 @@ async function routeOnRuntime(body, graphResolution, runtime) {
           policy,
           limit,
           avoidEdgeIds,
-          giantId
+          giantId,
+          profile
         );
         if (startOnGiant.ok && startOnGiant.componentId === giantId) {
           startMatch = startOnGiant;
@@ -765,7 +781,8 @@ async function routeOnRuntime(body, graphResolution, runtime) {
           policy,
           limit,
           avoidEdgeIds,
-          giantId
+          giantId,
+          profile
         );
         if (endOnGiant.ok && endOnGiant.componentId === giantId) {
           endMatch = endOnGiant;
@@ -1145,6 +1162,139 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds) 
   const maxMult = maxSurfaceMultiplier(profile);
   const useBidir = bidirAstarEnabled();
 
+  // Soft-stitch motorized_unknown islands (NSTDB / provincial capillary) when
+  // Allow is on. Conflation leaves purple fabric as near-touching components;
+  // without stitches Direct/Dirt keep a paved spine and only nibble dirt spurs.
+  // Stitch island→giant AND island→island so capillary can form a through cut.
+  // Gaps are real meters (access legs), not free-space teleports.
+  // Cleanest stays on the giant pavement fabric — no stitches.
+  let softStitchCount = 0;
+  if (policy.motorizedUnknown && profile !== "cleanest" && !geom) {
+    const STITCH_M = 100;
+    const padDeg = Math.max(0.04, (abMeters / 111320) * 0.35);
+    const minLon = Math.min(startLL[0], endLL[0]) - padDeg;
+    const maxLon = Math.max(startLL[0], endLL[0]) + padDeg;
+    const minLat = Math.min(startLL[1], endLL[1]) - padDeg;
+    const maxLat = Math.max(startLL[1], endLL[1]) + padDeg;
+    const CELL = 0.0005; // ~55 m
+    const giantGrid = new Map();
+    const islandGrid = new Map();
+    function gridKey(lon, lat) {
+      return Math.floor(lon / CELL) + ":" + Math.floor(lat / CELL);
+    }
+    function remember(grid, node) {
+      const ll = nodeCoord[node];
+      if (!ll) return;
+      if (ll[0] < minLon || ll[0] > maxLon || ll[1] < minLat || ll[1] > maxLat) return;
+      const key = gridKey(ll[0], ll[1]);
+      let bucket = grid.get(key);
+      if (!bucket) {
+        bucket = [];
+        grid.set(key, bucket);
+      }
+      bucket.push(node);
+    }
+    const islandNodes = new Set();
+    const nodeComponent = new Map();
+    for (let i = 0; i < edges.length; i += 1) {
+      const edge = edges[i];
+      const mid = edge.g && edge.g[Math.floor(edge.g.length / 2)];
+      if (
+        mid &&
+        (mid[0] < minLon || mid[0] > maxLon || mid[1] < minLat || mid[1] > maxLat)
+      ) {
+        continue;
+      }
+      if (edge.c === 0) {
+        remember(giantGrid, edge.a);
+        remember(giantGrid, edge.b);
+        nodeComponent.set(edge.a, 0);
+        nodeComponent.set(edge.b, 0);
+        continue;
+      }
+      if (!accessAllowed(edge.ac, policy, enums, edge)) continue;
+      const accessName = enums.ACCESS_NAME[edge.ac] || "";
+      if (accessName !== "motorized_unknown") continue;
+      islandNodes.add(edge.a);
+      islandNodes.add(edge.b);
+      remember(islandGrid, edge.a);
+      remember(islandGrid, edge.b);
+      if (!nodeComponent.has(edge.a)) nodeComponent.set(edge.a, edge.c);
+      if (!nodeComponent.has(edge.b)) nodeComponent.set(edge.b, edge.c);
+    }
+    const stitchSeen = new Set();
+    function nearestInGrid(grid, ll, excludeNode, requireDifferentComponent) {
+      if (!ll) return null;
+      const cx = Math.floor(ll[0] / CELL);
+      const cy = Math.floor(ll[1] / CELL);
+      const excludeComp = nodeComponent.get(excludeNode);
+      let best = null;
+      let bestD = STITCH_M + 1;
+      for (let dx = -2; dx <= 2; dx += 1) {
+        for (let dy = -2; dy <= 2; dy += 1) {
+          const bucket = grid.get(cx + dx + ":" + (cy + dy));
+          if (!bucket) continue;
+          for (const gn of bucket) {
+            if (gn === excludeNode) continue;
+            if (
+              requireDifferentComponent &&
+              excludeComp != null &&
+              nodeComponent.get(gn) === excludeComp
+            ) {
+              continue;
+            }
+            const gl = nodeCoord[gn];
+            if (!gl) continue;
+            const d = haversineMeters(ll, gl);
+            if (d < bestD && d > 0.5) {
+              bestD = d;
+              best = gn;
+            }
+          }
+        }
+      }
+      return best != null && bestD <= STITCH_M ? { node: best, meters: bestD } : null;
+    }
+    function addStitch(aNode, bNode, meters) {
+      const a = Math.min(aNode, bNode);
+      const b = Math.max(aNode, bNode);
+      const key = a + ":" + b;
+      if (stitchSeen.has(key)) return;
+      stitchSeen.add(key);
+      const ga = nodeCoord[aNode];
+      const gb = nodeCoord[bNode];
+      addVirt(aNode, bNode, {
+        a: aNode,
+        b: bNode,
+        coords: ga && gb ? [ga, gb] : null,
+        meters: Math.max(1, meters),
+        surface: 3,
+        access: 2,
+        structure: 0,
+        roadTrack: "track",
+        edgeId: "soft-stitch-" + key,
+        componentId: -1,
+        source: "soft-stitch",
+        sourceDescription: "Near-touch capillary stitch",
+        sourceRecordId: key,
+        confidence: "low",
+        seasonal: false,
+        virtual: true,
+        accessLeg: true,
+        forward: true
+      });
+      softStitchCount += 1;
+    }
+    for (const islandNode of islandNodes) {
+      const ll = nodeCoord[islandNode];
+      if (!ll) continue;
+      const toGiant = nearestInGrid(giantGrid, ll, islandNode, false);
+      if (toGiant) addStitch(islandNode, toGiant.node, toGiant.meters);
+      const toIsland = nearestInGrid(islandGrid, ll, islandNode, true);
+      if (toIsland) addStitch(islandNode, toIsland.node, toIsland.meters);
+    }
+  }
+
   function insideEllipse(node, factor) {
     if (!Number.isFinite(factor) || factor === Infinity) return true;
     const ll = nodeCoord[node];
@@ -1157,15 +1307,21 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds) 
     const surfaceMult = surfaceMultiplier(edge.surface, profile, enums);
     const classMult = roadClassMultiplier(edge.roadTrack, profile);
     let cost = (edge.meters / 1000) * surfaceMult * classMult;
-    // When the rider opts into unknown access, Dirt/Direct should prefer NSTDB
-    // / provincial capillary (motorized_unknown) over staying on paved NRN.
-    if (
-      policy.motorizedUnknown &&
-      (profile === "dirt" || profile === "direct")
-    ) {
+    // When the rider opts into unknown access, non-cleanest profiles should
+    // prefer NSTDB / provincial capillary (motorized_unknown) over paved NRN.
+    if (policy.motorizedUnknown && profile !== "cleanest") {
       const accessName = enums.ACCESS_NAME[edge.access] || "";
       if (accessName === "motorized_unknown") {
-        cost *= profile === "dirt" ? 0.62 : 0.82;
+        if (profile === "dirt") cost *= 0.55;
+        else if (profile === "direct") cost *= 0.62;
+        else cost *= 0.78; // balanced
+      }
+      // Extra pull onto purple NSTDB / provincial ids when Allow is on.
+      const id = String(edge.edgeId || "");
+      if (id.startsWith("ns-") || /nstdb|Topographic/i.test(String(edge.source || ""))) {
+        if (profile === "dirt") cost *= 0.72;
+        else if (profile === "direct") cost *= 0.78;
+        else cost *= 0.88;
       }
     }
     return cost;
@@ -1408,7 +1564,8 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds) 
     ellipseFactor: chosenAttempt.factor,
     ellipseLabel: chosenAttempt.label,
     ellipseEscalation: chosenAttempt.escalation,
-    profileCost: chosen.profileCost
+    profileCost: chosen.profileCost,
+    softStitchCount
   });
 }
 

@@ -226,13 +226,18 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
         if (avoid && avoid.has(pack.edgeId(ei))) continue;
         const surface = unpackSurface(attr);
         let step = (edgeMeters[ei] / 1000) * costView[surface];
-        if (
-          policy.motorizedUnknown &&
-          (profile === "dirt" || profile === "direct")
-        ) {
+        if (policy.motorizedUnknown && profile !== "cleanest") {
           const accessName = enums.ACCESS_NAME[access] || "";
           if (accessName === "motorized_unknown") {
-            step *= profile === "dirt" ? 0.62 : 0.82;
+            if (profile === "dirt") step *= 0.55;
+            else if (profile === "direct") step *= 0.62;
+            else step *= 0.78; // balanced
+          }
+          const id = pack.edgeId(ei);
+          if (String(id).startsWith("ns-")) {
+            if (profile === "dirt") step *= 0.72;
+            else if (profile === "direct") step *= 0.78;
+            else step *= 0.88;
           }
         }
         const cost = cur.cost + step;
