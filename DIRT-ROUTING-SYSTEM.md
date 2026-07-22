@@ -39,11 +39,19 @@ UI names ↔ engine ids: Cleanest → `cleanest`, Direct → `direct`, Balanced 
 | Profile | Law | Dirt / paved intent | Purple (Allow on) |
 | --- | --- | --- | --- |
 | **Cleanest** | Google-fast pavement/highway. Dirt only as a last stitch when forced. | ~100% paved when topology allows | **Never** — immune to Allow |
-| **Direct** | Crow-flies cut on the **dirt fabric**. Length matters. Minimal pavement. **Not** max-dirt wander. | Dirt-biased corridor, short | More purple when Allow on |
-| **Balanced** | Dual-sport mix. Not Direct, not Dirt-max. | ~50/50 dirt/paved target | Some purple when useful |
-| **Dirt** | Maximize dirt. Longer OK. Pavement only when forced. | As close to 100% dirt as topology allows | Heavy purple when Allow on |
+| **Direct** | Crow-flies cut on the **dirt fabric**. **Minimize path length first**; mild dirt preference only among near-equal options. **No dirt-tourism spur** near B — once on the paved approach, go straight to destination. Not a max-dirt objective. | Dirt-biased corridor, short | More purple when Allow on (without lengthening) |
+| **Balanced** | Dual-sport mix. Not Direct, not Dirt-max. Target ~40–60% dirt when Allow + fabric allow. | ~50/50 dirt/paved target | Some purple when useful |
+| **Dirt** | Maximize dirt / minimize pavement. Longer OK. Still avoid pointless destination loops that don’t add net dirt corridor. | As close to 100% dirt as topology allows | Heavy purple when Allow on |
 
 **Direct ≠ Dirt.** Direct is the short dirt cut; Dirt is the long dirt max. If they look the same in the field, costing is broken — not the law.
+
+### Adventure avoids major cities (unless staged)
+
+**Product law:** Direct / Balanced / Dirt must **not** beeline through major urban cores (Halifax, Moncton, Fredericton, Edmundston, Québec, Montreal, …) just because longhaul pack stitching used those cities as chain hubs.
+
+- **Cleanest** may use highway city/spine corridors (Google-fast A→B).
+- **Adventure** connects packs along the A→B chord / border geometry — no injected city waypoints. If the rider stages through a city explicitly, that pin is honored.
+- Engine: `corridorLocationsForRoute(..., { profile })` in `routing/regional/merge.js`.
 
 ---
 

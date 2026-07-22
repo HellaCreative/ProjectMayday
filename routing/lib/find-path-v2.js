@@ -229,15 +229,15 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
         if (policy.motorizedUnknown && profile !== "cleanest") {
           const accessName = enums.ACCESS_NAME[access] || "";
           if (accessName === "motorized_unknown") {
-            if (profile === "dirt") step *= 0.55;
-            else if (profile === "direct") step *= 0.62;
-            else step *= 0.78; // balanced
+            if (profile === "dirt") step *= 0.5;
+            else if (profile === "direct") step *= 0.78;
+            else step *= 0.9; // balanced
           }
           const id = pack.edgeId(ei);
           if (String(id).startsWith("ns-")) {
-            if (profile === "dirt") step *= 0.72;
-            else if (profile === "direct") step *= 0.78;
-            else step *= 0.88;
+            if (profile === "dirt") step *= 0.68;
+            else if (profile === "direct") step *= 0.86;
+            else step *= 0.94;
           }
         }
         const cost = cur.cost + step;

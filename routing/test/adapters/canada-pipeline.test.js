@@ -399,8 +399,45 @@ check("NB→QC still injects corridor anchors for chain hops", () => {
     { lat: 45.963, lon: -66.643 }, // Fredericton
     { lat: 46.813, lon: -71.208 } // Quebec City
   ];
-  const corridor = corridorLocationsForRoute(locs);
-  assert.ok(corridor.length > 2, "cross-province should keep spine anchors");
+  // Cleanest may use highway spine; adventure must not.
+  const clean = corridorLocationsForRoute(locs, { profile: "cleanest" });
+  assert.ok(clean.length > 2, "Clean cross-province should keep spine anchors");
+  const adventure = corridorLocationsForRoute(locs, { profile: "balanced" });
+  assert.strictEqual(adventure.length, 2, "adventure must not inject city hubs");
+});
+
+check("New Glasgow→Saint John adventure must not force city hubs", () => {
+  const { corridorLocationsForRoute } = require("../../regional/merge");
+  const locs = [
+    { lat: 45.59, lon: -62.65 }, // New Glasgow
+    { lat: 45.27, lon: -66.06 } // Saint John
+  ];
+  const adventure = corridorLocationsForRoute(locs, { profile: "balanced" });
+  assert.strictEqual(adventure.length, 2, "adventure A→B only");
+  assert.ok(
+    !adventure.some((p) => Math.abs(p.lat - 44.6488) < 0.15),
+    "no Halifax"
+  );
+  assert.ok(
+    !adventure.some((p) => Math.abs(p.lat - 46.099) < 0.05 && Math.abs(p.lon + 64.8) < 0.05),
+    "no Moncton hub"
+  );
+  const clean = corridorLocationsForRoute(locs, { profile: "cleanest" });
+  assert.ok(
+    !clean.some((p) => Math.abs(p.lat - 44.6488) < 0.08 && Math.abs(p.lon + 63.575) < 0.08),
+    "Halifax must not be a Clean chain waypoint either"
+  );
+});
+
+check("New Glasgow→Mirabel adventure skips Montreal metro hub", () => {
+  const { corridorLocationsForRoute } = require("../../regional/merge");
+  const locs = [
+    { lat: 45.59, lon: -62.65 },
+    { lat: 45.68, lon: -74.04 }
+  ];
+  const adventure = corridorLocationsForRoute(locs, { profile: "dirt" });
+  assert.strictEqual(adventure.length, 2);
+  assert.ok(!adventure.some((p) => Math.abs(p.lon + 73.567) < 0.15 && Math.abs(p.lat - 45.5) < 0.15));
 });
 
 check("all canonical enum tables are non-empty", () => {

@@ -422,7 +422,10 @@ async function loadGraphsForRequest(resolution, options = {}) {
   }
 
   const locations = options.locations || [];
-  const corridorLocations = corridorLocationsForRoute(locations);
+  const corridorLocations = corridorLocationsForRoute(locations, {
+    profile: options.profile,
+    forClip: true
+  });
   const multi = paths.length > 1;
   const onVercel = !!(process.env.VERCEL || process.env.VERCEL_ENV);
   const anyLonghaul =

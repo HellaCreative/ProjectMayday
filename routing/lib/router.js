@@ -159,8 +159,12 @@ function ellipseDirtEnabled() {
  */
 const ELLIPSE_FACTORS = {
   cleanest: 1.25,
-  direct: 1.4,
-  balanced: 1.75,
+  // Crow-flies Direct: tight enough to kill north-of-B dirt tourism spurs
+  // (Myra→Fall River spur sat at ~1.33× chord) while still allowing NSTDB cuts.
+  direct: 1.28,
+  // Balanced needs room to leave Direct’s line, but not Dirt’s far loops
+  // (Myra north spur tip ~1.30× chord — keep under that).
+  balanced: 1.25,
   dirt: 2.6
 };
 
@@ -256,7 +260,16 @@ function preferGiantComponentSnap(runtime) {
   return schema.startsWith("longhaul");
 }
 
-function matchPoint(runtime, location, policy, matchMeters, avoidEdgeIds, preferComponentId = null, profile = null) {
+function matchPoint(
+  runtime,
+  location,
+  policy,
+  matchMeters,
+  avoidEdgeIds,
+  preferComponentId = null,
+  profile = null,
+  snapRole = "any"
+) {
   const enums = runtime.enums;
   const point = [Number(location.lon ?? location.lng), Number(location.lat)];
   if (!Number.isFinite(point[0]) || !Number.isFinite(point[1])) {
@@ -267,11 +280,14 @@ function matchPoint(runtime, location, policy, matchMeters, avoidEdgeIds, prefer
   const longhaulBias = preferGiantComponentSnap(runtime);
   const giantId = runtime.format === "v2" ? null : giantComponentId(runtime);
   // Soft surface bias on top of two-pass giant snap (full packs) / longhaul bias.
-  // Non-cleanest: prefer nearby dirt/track/access so pins do not start on pavement
-  // when a dirt edge is almost as close. Cleanest: slight paved preference.
+  // Start only: prefer nearby dirt/track/access so pins do not start on pavement
+  // when a dirt edge is almost as close. End snaps stay distance-first — adventure
+  // dirt bias at B caused paved-approach → dirt-spur U-turns past the destination.
+  // Cleanest: slight paved preference on both ends.
   const prof = profile ? String(profile).toLowerCase() : null;
-  const preferAdventureSnap = prof && prof !== "cleanest";
-  const preferPavedSnap = prof === "cleanest";
+  const role = snapRole === "start" || snapRole === "end" ? snapRole : "any";
+  const preferAdventureSnap = prof && prof !== "cleanest" && role !== "end";
+  const preferPavedSnap = prof === "cleanest" || role === "end";
   const candidates = edgeCandidateIndexes(runtime, point[0], point[1], matchMeters);
   const isV2 = runtime.format === "v2";
   let bestAny = null;
@@ -338,10 +354,11 @@ function matchPoint(runtime, location, policy, matchMeters, avoidEdgeIds, prefer
       }
       const surfaceName = enums.SURFACE_NAME[surfaceCode] || "unknown";
       let surfaceBias = 0;
+      // Tie-break only — never steal a snap that is substantially closer.
       if (preferAdventureSnap && surfaceName !== "paved") {
-        surfaceBias = -55;
+        surfaceBias = -22;
       } else if (preferPavedSnap && surfaceName === "paved") {
-        surfaceBias = -25;
+        surfaceBias = -30;
       }
       const score = projected.distanceM + componentPenalty + surfaceBias;
       const candidate = {
@@ -434,6 +451,36 @@ function lineMeters(coords) {
   return total;
 }
 
+/**
+ * If the path got within `closeM` of the destination then wandered away before
+ * finishing, truncate at the closest approach and pin the final coordinate to
+ * the end match. Fixes Clean/adventure U-turns past B from wrong end-edge entry.
+ */
+function trimDestinationOvershoot(geometry, endLL, closeM = 100, wanderM = 160) {
+  if (!geometry || geometry.length < 5 || !endLL) return geometry;
+  let bestI = 0;
+  let bestD = Infinity;
+  for (let i = 0; i < geometry.length; i += 1) {
+    const d = haversineMeters(geometry[i], endLL);
+    if (d < bestD) {
+      bestD = d;
+      bestI = i;
+    }
+  }
+  if (bestD > closeM) return geometry;
+  let after = 0;
+  for (let i = bestI + 1; i < geometry.length; i += 1) {
+    after += haversineMeters(geometry[i - 1], geometry[i]);
+  }
+  if (after < wanderM) return geometry;
+  const trimmed = geometry.slice(0, bestI + 1);
+  const last = trimmed[trimmed.length - 1];
+  if (!last || last[0] !== endLL[0] || last[1] !== endLL[1]) {
+    trimmed.push([endLL[0], endLL[1]]);
+  }
+  return trimmed;
+}
+
 function buildManeuvers(geometry) {
   if (!geometry || geometry.length < 3) {
     return [{
@@ -516,7 +563,8 @@ async function routeRequest(body = {}) {
   try {
     runtime = await loadGraphsForRequest(graphResolution, {
       locations: body.locations || [],
-      corridorBufferMeters: body.options && body.options.corridorBufferMeters
+      corridorBufferMeters: body.options && body.options.corridorBufferMeters,
+      profile: body.profile
     });
   } catch (err) {
     return {
@@ -530,7 +578,9 @@ async function routeRequest(body = {}) {
 }
 
 async function routeCanadaChain(body, graphResolution) {
-  const waypoints = corridorLocationsForRoute(body.locations || []);
+  const profile = body.profile || "balanced";
+  // Adventure: [A, B] only — never city hubs. Cleanest: highway spine anchors.
+  const waypoints = corridorLocationsForRoute(body.locations || [], { profile });
   if (waypoints.length < 2) {
     return {
       status: "error",
@@ -733,8 +783,8 @@ async function routeOnRuntime(body, graphResolution, runtime) {
 
   const start = locations[0];
   const end = locations[locations.length - 1];
-  let startMatch = matchPoint(runtime, start, policy, limit, avoidEdgeIds, null, profile);
-  let endMatch = matchPoint(runtime, end, policy, limit, avoidEdgeIds, null, profile);
+  let startMatch = matchPoint(runtime, start, policy, limit, avoidEdgeIds, null, profile, "start");
+  let endMatch = matchPoint(runtime, end, policy, limit, avoidEdgeIds, null, profile, "end");
   // Reconcile disconnected snaps.
   // Longhaul: rematch end onto start (QC OSM islands).
   // Full packs: rematch the nongiant endpoint onto the giant so a purple
@@ -757,7 +807,8 @@ async function routeOnRuntime(body, graphResolution, runtime) {
         limit,
         avoidEdgeIds,
         startMatch.componentId,
-        profile
+        profile,
+        "end"
       );
       if (endSame.ok && endSame.componentId === startMatch.componentId) {
         endMatch = endSame;
@@ -772,7 +823,8 @@ async function routeOnRuntime(body, graphResolution, runtime) {
           limit,
           avoidEdgeIds,
           giantId,
-          profile
+          profile,
+          "start"
         );
         if (startOnGiant.ok && startOnGiant.componentId === giantId) {
           startMatch = startOnGiant;
@@ -785,7 +837,8 @@ async function routeOnRuntime(body, graphResolution, runtime) {
           limit,
           avoidEdgeIds,
           giantId,
-          profile
+          profile,
+          "end"
         );
         if (endOnGiant.ok && endOnGiant.componentId === giantId) {
           endMatch = endOnGiant;
@@ -1305,26 +1358,67 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds) 
     return haversineMeters(startLL, ll) + haversineMeters(ll, endLL) <= factor * abMeters * 1.0000001;
   }
 
-  function edgeStepCost(edge) {
-    if (edge.accessLeg) return edge.meters / 1000;
+  function edgeStepCost(edge, fromNode, toNode) {
+    if (edge.accessLeg) {
+      // Soft-stitch / pin access: real meters, but Direct still pays for
+      // walking away from the goal near B (no free dirt-tourism connectors).
+      let accessCost = edge.meters / 1000;
+      if (
+        fromNode != null &&
+        toNode != null &&
+        nodeCoord[fromNode] &&
+        nodeCoord[toNode] &&
+        profile !== "cleanest"
+      ) {
+        const dFrom = haversineMeters(nodeCoord[fromNode], endLL);
+        const dTo = haversineMeters(nodeCoord[toNode], endLL);
+        const away = dTo - dFrom;
+        if (away > 60 && dFrom < Math.max(3500, abMeters * 0.3)) {
+          const w = profile === "direct" ? 10 : profile === "balanced" ? 3.5 : 1.2;
+          accessCost += (away / 1000) * w;
+        }
+      }
+      return accessCost;
+    }
     const surfaceMult = surfaceMultiplier(edge.surface, profile, enums);
     const classMult = roadClassMultiplier(edge.roadTrack, profile);
     let cost = (edge.meters / 1000) * surfaceMult * classMult;
     // When the rider opts into unknown access, non-cleanest profiles should
     // prefer NSTDB / provincial capillary (motorized_unknown) over paved NRN.
+    // Direct: mild pull only — length still wins (no dirt% objective).
+    // Balanced: moderate. Dirt: strong.
     if (policy.motorizedUnknown && profile !== "cleanest") {
       const accessName = enums.ACCESS_NAME[edge.access] || "";
       if (accessName === "motorized_unknown") {
-        if (profile === "dirt") cost *= 0.55;
-        else if (profile === "direct") cost *= 0.62;
-        else cost *= 0.78; // balanced
+        if (profile === "dirt") cost *= 0.5;
+        else if (profile === "direct") cost *= 0.78;
+        else cost *= 0.84; // balanced — mix, not max-purple
       }
       // Extra pull onto purple NSTDB / provincial ids when Allow is on.
       const id = String(edge.edgeId || "");
       if (id.startsWith("ns-") || /nstdb|Topographic/i.test(String(edge.source || ""))) {
-        if (profile === "dirt") cost *= 0.72;
-        else if (profile === "direct") cost *= 0.78;
-        else cost *= 0.88;
+        if (profile === "dirt") cost *= 0.68;
+        else if (profile === "direct") cost *= 0.86;
+        else cost *= 0.9;
+      }
+    }
+    // Approach-to-goal: penalize edges that increase distance to B when already
+    // near the destination. Stops Direct/Balanced dirt-tourism spurs and Clean
+    // overshoot U-turns past the pin.
+    if (fromNode != null && toNode != null && nodeCoord[fromNode] && nodeCoord[toNode]) {
+      const dFrom = haversineMeters(nodeCoord[fromNode], endLL);
+      const dTo = haversineMeters(nodeCoord[toNode], endLL);
+      const away = dTo - dFrom;
+      if (away > 50) {
+        const nearGoal = dFrom < Math.max(2800, abMeters * 0.28);
+        if (nearGoal || profile === "direct") {
+          let w = 0;
+          if (profile === "cleanest") w = nearGoal ? 5 : 0;
+          else if (profile === "direct") w = nearGoal ? 9 : 3.5;
+          else if (profile === "balanced") w = nearGoal ? 4 : 2.2;
+          else w = nearGoal ? 1.4 : 0.35; // dirt: allow wander, kill pure destination loops
+          if (w > 0) cost += (away / 1000) * w;
+        }
       }
     }
     return cost;
@@ -1353,7 +1447,7 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds) 
       }
       const meters = edge.meters;
       distanceMeters += meters;
-      profileCost += edgeStepCost(edge);
+      profileCost += edgeStepCost(edge, null, null);
       const surfaceName = enums.SURFACE_NAME[edge.surface] || "unknown";
       const accessName = enums.ACCESS_NAME[edge.access] || "motorized_unknown";
       bySurfaceM[surfaceName] = (bySurfaceM[surfaceName] || 0) + meters;
@@ -1376,6 +1470,15 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds) 
         accessLeg: !!edge.accessLeg,
         geometry: coords
       });
+    }
+
+    const trimmedGeom = trimDestinationOvershoot(geometry, endLL);
+    if (trimmedGeom !== geometry && trimmedGeom.length < geometry.length) {
+      // Geometry-only safety trim when search still overshoots; keep segment
+      // honesty for stats but report path length from trimmed line.
+      distanceMeters = lineMeters(trimmedGeom);
+      geometry.length = 0;
+      for (const c of trimmedGeom) geometry.push(c);
     }
 
     // Dirt share = same adventure set the map paints blue/gray/purple.
@@ -1410,7 +1513,7 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds) 
       if (!insideEllipse(cur.node, ellipseFactor)) continue;
       for (const next of neighbors(cur.node)) {
         if (!insideEllipse(next.to, ellipseFactor)) continue;
-        const cost = cur.cost + edgeStepCost(next.edge);
+        const cost = cur.cost + edgeStepCost(next.edge, cur.node, next.to);
         if (cost < dist[next.to]) {
           dist[next.to] = cost;
           prevNode[next.to] = cur.node;
@@ -1491,7 +1594,7 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds) 
 
       for (const next of neighbors(cur.node)) {
         if (!insideEllipse(next.to, ellipseFactor)) continue;
-        const g = cur.g + edgeStepCost(next.edge);
+        const g = cur.g + edgeStepCost(next.edge, cur.node, next.to);
         if (g < dist[next.to]) {
           dist[next.to] = g;
           prev[next.to] = cur.node;

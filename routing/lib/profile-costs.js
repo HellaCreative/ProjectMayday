@@ -9,10 +9,12 @@
  *   Clean / Cleanest → cleanest — Google/Apple: pavement/highway default.
  *                       Dirt only as a last stitch when forced.
  *   Dirt             → dirt     — maximize purple NSTDB + OSM dirt/gravel/track;
- *                       pavement only when forced.
- *   Balanced         → balanced — dirt-leaning dual-sport mix (not highway-default).
- *   Direct           → direct   — crow-flies cut on dirt fabric (purple + OSM dirt);
- *                       minimal pavement; length still matters.
+ *                       pavement only when forced. Longer OK; no destination loops.
+ *   Balanced         → balanced — ~40–60% dirt target when Allow + fabric allow;
+ *                       not Direct clone, not Dirt-max.
+ *   Direct           → direct   — crow-flies length first on dirt fabric;
+ *                       mild dirt preference only among near-equal options.
+ *                       No “increase dirt%” objective; no dirt-tourism spur near B.
  *
  * Packed surface codes: paved=0 gravel=1 access=2 (resource) track=3 unknown=4.
  * Road-class (`rt` on v1 edges): cleanest prefers freeway/arterial; non-cleanest
@@ -21,30 +23,31 @@
  */
 
 const PROFILE_SURFACE_WEIGHTS = Object.freeze({
-  // Crow-flies on dirt fabric: length dominates among dirt/unknown/track,
-  // but pavement is expensive enough that highway is never the default spine.
+  // Length dominates. Mild dirt preference among near-equal options only.
+  // Still dirt-fabric default (not highway spine) — ellipse + goal penalty
+  // kill tourism spurs near B, not these weights.
   direct: Object.freeze({
-    paved: 4.2,
-    gravel: 0.82,
-    access: 0.66,
-    track: 0.55,
-    unknown: 0.7
+    paved: 2.35,
+    gravel: 0.88,
+    access: 0.78,
+    track: 0.68,
+    unknown: 0.8
   }),
-  // Dirt-leaning dual-sport — leave the highway corridor, not a dirt clone.
+  // Dual-sport mix — punish pure-highway and dirt-max; aim ~50/50 when fabric allows.
   balanced: Object.freeze({
-    paved: 2.8,
-    gravel: 0.86,
-    access: 0.72,
-    track: 0.62,
-    unknown: 0.78
+    paved: 1.85,
+    gravel: 0.95,
+    access: 0.9,
+    track: 0.85,
+    unknown: 0.98
   }),
   // Maximize undeveloped/gravel/track/resource; pavement only when forced.
   dirt: Object.freeze({
-    paved: 12.0,
-    gravel: 0.6,
-    access: 0.4,
-    track: 0.28,
-    unknown: 0.48
+    paved: 14.0,
+    gravel: 0.55,
+    access: 0.35,
+    track: 0.24,
+    unknown: 0.4
   }),
   // Google/Apple: shortest practical pavement. Do not punish highway.
   cleanest: Object.freeze({
@@ -61,6 +64,8 @@ const PROFILE_SURFACE_WEIGHTS = Object.freeze({
  * Cleanest: prefer freeway/arterial among paved options.
  * Non-cleanest: punish freeway/arterial/collector so dirt fabric wins over
  * "highway spine + dirt snacks"; mild discount for resource/track class.
+ * Direct uses a softer highway penalty so last-mile paved approach can beat
+ * a dirt tourism spur when length would grow.
  */
 const ADVENTURE_ROAD_CLASS_WEIGHTS = Object.freeze({
   freeway: 2.8,
@@ -73,6 +78,34 @@ const ADVENTURE_ROAD_CLASS_WEIGHTS = Object.freeze({
   recreation: 0.86,
   track: 0.82,
   double_track: 0.82,
+  unknown: 1.0
+});
+
+const DIRECT_ROAD_CLASS_WEIGHTS = Object.freeze({
+  freeway: 2.1,
+  arterial: 1.7,
+  collector: 1.25,
+  ramp: 1.9,
+  local: 1.02,
+  service: 1.06,
+  resource: 0.92,
+  recreation: 0.9,
+  track: 0.88,
+  double_track: 0.88,
+  unknown: 1.0
+});
+
+const BALANCED_ROAD_CLASS_WEIGHTS = Object.freeze({
+  freeway: 2.4,
+  arterial: 1.85,
+  collector: 1.25,
+  ramp: 2.1,
+  local: 1.0,
+  service: 1.05,
+  resource: 0.92,
+  recreation: 0.9,
+  track: 0.88,
+  double_track: 0.88,
   unknown: 1.0
 });
 
@@ -90,8 +123,8 @@ const PROFILE_ROAD_CLASS_WEIGHTS = Object.freeze({
     double_track: 1.0,
     unknown: 1.0
   }),
-  direct: ADVENTURE_ROAD_CLASS_WEIGHTS,
-  balanced: ADVENTURE_ROAD_CLASS_WEIGHTS,
+  direct: DIRECT_ROAD_CLASS_WEIGHTS,
+  balanced: BALANCED_ROAD_CLASS_WEIGHTS,
   dirt: ADVENTURE_ROAD_CLASS_WEIGHTS
 });
 

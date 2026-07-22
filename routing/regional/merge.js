@@ -211,24 +211,28 @@ function regionsForRoute(regionIds) {
 }
 
 /**
- * Waypoints that keep long east-west routes on the populated southern corridor
- * instead of a great-circle through remote northern bush.
+ * Corridor waypoints for canada-chain hops and pack clipping.
+ *
+ * Product law:
+ * - **cleanest** — highway city/spine hubs OK (Google-fast A→B).
+ * - **direct / balanced / dirt** — NEVER inject city hubs (Halifax, Moncton,
+ *   Fredericton, Edmundston, Québec, Montreal, …). Sample the A→B chord so
+ *   packs clip/chain without forcing urban sightseeing beelines. User-staged
+ *   midpoints in `locations` are kept as-is.
  */
-const CORRIDOR_ANCHORS = [
-  { lon: -63.575, lat: 44.6488 }, // Halifax
-  { lon: -64.800, lat: 46.099 }, // Moncton
+const CLEAN_CORRIDOR_ANCHORS = [
+  { lon: -64.800, lat: 46.099 }, // Moncton — TCH isthmus (Clean only)
   { lon: -66.643, lat: 45.963 }, // Fredericton
-  { lon: -68.325, lat: 47.373 }, // Edmundston (NB side of QC border)
-  { lon: -68.65, lat: 47.55 }, // Dégelis (QC approach)
+  { lon: -68.325, lat: 47.373 }, // Edmundston
+  { lon: -68.65, lat: 47.55 }, // Dégelis
   { lon: -69.542, lat: 47.837 }, // Rivière-du-Loup
   { lon: -71.208, lat: 46.813 }, // Quebec City
-  // Stitch points on real fabric (snap-tested) so MTL↔Québec chains without OOM merge.
-  { lon: -72.349, lat: 46.353 }, // A-40 east of Trois-Rivières (qc-sl)
-  { lon: -72.701, lat: 46.300 }, // local west of Trois-Rivières (qc-west)
-  { lon: -73.567, lat: 45.502 }, // Montreal
+  { lon: -72.349, lat: 46.353 }, // A-40 east of Trois-Rivières
+  { lon: -72.701, lat: 46.300 }, // west of Trois-Rivières
+  { lon: -73.80, lat: 45.60 }, // Laval north ring (not island core)
   { lon: -75.697, lat: 45.421 }, // Ottawa
   { lon: -79.383, lat: 43.653 }, // Toronto
-  { lon: -81.0, lat: 46.49 }, // Sudbury — keeps ON highway north of Georgian Bay
+  { lon: -81.0, lat: 46.49 }, // Sudbury
   { lon: -84.35, lat: 46.52 }, // Sault Ste. Marie
   { lon: -89.247, lat: 48.38 }, // Thunder Bay
   { lon: -97.138, lat: 49.895 }, // Winnipeg
@@ -239,6 +243,19 @@ const CORRIDOR_ANCHORS = [
   { lon: -119.496, lat: 49.888 }, // Kelowna
   { lon: -123.121, lat: 49.283 } // Vancouver
 ];
+
+/** Major urban cores adventure chord samples must not land inside. */
+const ADVENTURE_URBAN_AVOID = [
+  { minLat: 44.55, maxLat: 44.78, minLon: -63.75, maxLon: -63.4, nudgeLat: 0.4 }, // Halifax
+  { minLat: 45.4, maxLat: 45.72, minLon: -73.98, maxLon: -73.4, nudgeLat: 0.28 }, // Montreal island
+  { minLat: 43.55, maxLat: 43.85, minLon: -79.55, maxLon: -79.15, nudgeLat: 0.35 }, // Toronto
+  { minLat: 45.85, maxLat: 46.2, minLon: -64.95, maxLon: -64.55, nudgeLat: 0.2 }, // Moncton core
+  { minLat: 45.88, maxLat: 46.05, minLon: -66.75, maxLon: -66.5, nudgeLat: 0.2 }, // Fredericton
+  { minLat: 47.3, maxLat: 47.45, minLon: -68.45, maxLon: -68.2, nudgeLat: 0.2 }, // Edmundston
+  { minLat: 46.75, maxLat: 46.9, minLon: -71.35, maxLon: -71.1, nudgeLat: 0.2 } // Québec City core
+];
+
+const ADVENTURE_HOP_KM = 320;
 
 function nearlySamePoint(a, b, eps = 0.08) {
   return Math.abs(a.lon - b.lon) < eps && Math.abs(a.lat - b.lat) < eps;
@@ -256,7 +273,78 @@ function haversineKm(a, b) {
   return 2 * R * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
 }
 
-function corridorLocationsForRoute(locations) {
+function lerpPoint(a, b, t) {
+  return {
+    lon: a.lon + (b.lon - a.lon) * t,
+    lat: a.lat + (b.lat - a.lat) * t
+  };
+}
+
+function nudgeOffUrbanCore(p) {
+  let lat = p.lat;
+  let lon = p.lon;
+  for (const box of ADVENTURE_URBAN_AVOID) {
+    if (lat >= box.minLat && lat <= box.maxLat && lon >= box.minLon && lon <= box.maxLon) {
+      lat = box.maxLat + box.nudgeLat;
+    }
+  }
+  return { lon, lat };
+}
+
+/**
+ * Adventure long-haul: do not force city visits as routed hops.
+ * Clip guides may include border/isthmus fabric keepers so NS↔NB↔QC stays
+ * connected after corridor clip (Edmundston-area fabric is ~47.3°N while the
+ * NG→Mirabel chord sits ~45.6°N — chord-only clip deleted the only NB–QC join).
+ */
+const ADVENTURE_CONNECTIVITY_CLIP = [
+  { lon: -64.35, lat: 45.92 }, // Tantramar / isthmus — not Halifax metro
+  { lon: -68.2, lat: 47.35 }, // NB–QC approach (north of Edmundston downtown core box)
+  { lon: -70.9, lat: 46.75 }, // St. Lawrence south shore approach
+  { lon: -72.5, lat: 46.2 }, // Mauricie / TR south
+  { lon: -73.9, lat: 45.65 } // north of Montreal island
+];
+
+function adventureCorridorPoints(start, end, distKm, forClip) {
+  if (!forClip) return [start, end];
+  const westToEast = start.lon < end.lon;
+  const minLon = Math.min(start.lon, end.lon);
+  const maxLon = Math.max(start.lon, end.lon);
+  const pts = [start, end];
+  if (distKm >= ADVENTURE_HOP_KM * 1.15) {
+    const hops = Math.max(1, Math.round(distKm / ADVENTURE_HOP_KM));
+    for (let i = 1; i < hops; i += 1) {
+      pts.push(nudgeOffUrbanCore(lerpPoint(start, end, i / hops)));
+    }
+  }
+  for (const p of ADVENTURE_CONNECTIVITY_CLIP) {
+    if (p.lon >= minLon - 0.4 && p.lon <= maxLon + 0.4) {
+      pts.push(nudgeOffUrbanCore(p));
+    }
+  }
+  const dedup = [];
+  for (const p of pts.sort((a, b) => (westToEast ? a.lon - b.lon : b.lon - a.lon))) {
+    const last = dedup[dedup.length - 1];
+    if (last && nearlySamePoint(last, p, 0.15)) continue;
+    dedup.push(p);
+  }
+  if (!nearlySamePoint(dedup[0], start, 0.02)) dedup.unshift(start);
+  if (!nearlySamePoint(dedup[dedup.length - 1], end, 0.02)) dedup.push(end);
+  return dedup;
+}
+
+function isCleanProfile(profile) {
+  const p = String(profile || "").toLowerCase();
+  return p === "cleanest" || p === "clean";
+}
+
+/**
+ * @param {object[]} locations route pins (user stages preserved)
+ * @param {{ profile?: string, forClip?: boolean }} [options]
+ *   profile — cleanest gets highway hubs; adventure never does.
+ *   forClip — adventure may add chord samples to widen pack clip (not as routed hops).
+ */
+function corridorLocationsForRoute(locations, options = {}) {
   const pts = (locations || [])
     .map((loc) => {
       const lon = Number(loc.lon != null ? loc.lon : loc.lng);
@@ -267,23 +355,19 @@ function corridorLocationsForRoute(locations) {
     .filter(Boolean);
   if (pts.length < 2) return pts;
 
+  // Explicit user stages (3+ pins): never replace with engineered hubs.
+  if (pts.length >= 3) return pts;
+
   const start = pts[0];
   const end = pts[pts.length - 1];
-  const minLon = Math.min(...pts.map((p) => p.lon));
-  const maxLon = Math.max(...pts.map((p) => p.lon));
+  const minLon = Math.min(start.lon, end.lon);
+  const maxLon = Math.max(start.lon, end.lon);
   const span = maxLon - minLon;
   const distKm = haversineKm(start, end);
 
-  // Inject southern corridor anchors for inter-province hauls.
-  // NB→QC (Fredericton→Quebec City) is ~570 km but only ~4.6° of longitude —
-  // the old 5° gate skipped anchors, forcing one merged NB+QC hop that OOMs /
-  // times out on Vercel Hobby when the QC pack is inflated.
-  // Gate on distance OR longitude so Atlantic cross-border city pairs split.
-  // In-QC only (Beauce→Outaouais, Montréal↔Québec): do NOT inject the
-  // St. Lawrence spine. Lazy-require select to avoid a circular load cycle.
   const { primaryRegionForPoint, provinceFamily } = require("./select");
   const families = new Set(
-    pts
+    [start, end]
       .map((p) => primaryRegionForPoint(p.lon, p.lat))
       .filter(Boolean)
       .map(provinceFamily)
@@ -291,10 +375,15 @@ function corridorLocationsForRoute(locations) {
   if (families.size === 1 && families.has("qc")) return pts;
   if (span < 3 && distKm < 200) return pts;
 
+  // Adventure: no city hub chain. Routed hops stay [A, B]; clip may sample chord.
+  if (!isCleanProfile(options.profile)) {
+    return adventureCorridorPoints(start, end, distKm, !!options.forClip);
+  }
+
+  // Cleanest: highway spine hubs for fast Google-shaped longhaul.
   const westToEast = start.lon < end.lon;
-  const anchors = CORRIDOR_ANCHORS.filter((a) => a.lon >= minLon - 0.5 && a.lon <= maxLon + 0.5)
+  const anchors = CLEAN_CORRIDOR_ANCHORS.filter((a) => a.lon >= minLon - 0.5 && a.lon <= maxLon + 0.5)
     .filter((a) => !nearlySamePoint(a, start) && !nearlySamePoint(a, end))
-    // Keep anchors that lie between the endpoints along the travel axis.
     .filter((a) =>
       westToEast ? a.lon > start.lon && a.lon < end.lon : a.lon < start.lon && a.lon > end.lon
     )
