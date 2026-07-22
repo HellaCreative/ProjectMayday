@@ -7507,6 +7507,19 @@
       background: #147a56 !important;
       color: #fff !important;
     }
+    /* Keep the three Route actions on one shared iPhone grid baseline. */
+    html body.planner-open .route-compact-actions,
+    html body.planner-open .route-actions {
+      align-items: stretch !important;
+    }
+    html body.planner-open .route-compact-actions > button,
+    html body.planner-open .route-actions > button {
+      box-sizing: border-box !important;
+      align-self: stretch !important;
+      height: 40px !important;
+      min-height: 40px !important;
+      margin: 0 !important;
+    }
   </style>
 </head>
 <body>
