@@ -7271,6 +7271,38 @@
       color: #fff !important;
       box-shadow: var(--chrome-shadow) !important;
     }
+    /* Route actions keep one semantic color system in every planner mode. */
+    body.planner-open .route-compact-save,
+    body.planner-open #stageSaveBtn,
+    body.planner-open #saveRouteConfirm {
+      border-color: #16181c !important;
+      background: #16181c !important;
+      color: #fff !important;
+    }
+    body.planner-open .route-compact-export,
+    body.planner-open .route-export,
+    body.planner-open #routeExportFloat {
+      border-color: #686d75 !important;
+      background: #686d75 !important;
+      color: #fff !important;
+    }
+    body.planner-open .route-compact-nav,
+    body.planner-open .route-nav,
+    body.planner-open #routeNavBtn {
+      border-color: #9fd47c !important;
+      background: #9fd47c !important;
+      color: #16181c !important;
+    }
+    body.planner-open .route-compact-save:disabled,
+    body.planner-open #stageSaveBtn:disabled,
+    body.planner-open .route-compact-export:disabled,
+    body.planner-open .route-export:disabled,
+    body.planner-open .route-compact-nav:disabled,
+    body.planner-open .route-nav:disabled,
+    body.planner-open #routeNavBtn:disabled {
+      opacity: 1 !important;
+      cursor: not-allowed !important;
+    }
   </style>
 </head>
 <body>
