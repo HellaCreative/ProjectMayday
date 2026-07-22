@@ -2,6 +2,7 @@
 "use strict";
 
 const assert = require("assert");
+const fs = require("fs");
 const path = require("path");
 const { classifyNrnProps, featureToEdges } = require("../../adapters/nrn");
 const { classifyNstdbDescription, packedFeatureToEdge } = require("../../adapters/ns-nstdb");
@@ -16,15 +17,32 @@ const { resolveGraphRequest, selectRegionsForLocations } = require("../../region
 const { buildRegionalGraph } = require("../../regional/package");
 
 let passed = 0;
+const pending = [];
 function check(name, fn) {
+  let result;
   try {
-    fn();
-    passed += 1;
-    console.log("PASS", name);
+    result = fn();
   } catch (err) {
     console.error("FAIL", name, err.message);
     process.exitCode = 1;
+    return;
   }
+  if (result && typeof result.then === "function") {
+    pending.push(
+      result
+        .then(() => {
+          passed += 1;
+          console.log("PASS", name);
+        })
+        .catch((err) => {
+          console.error("FAIL", name, err && err.message ? err.message : err);
+          process.exitCode = 1;
+        })
+    );
+    return;
+  }
+  passed += 1;
+  console.log("PASS", name);
 }
 
 check("NRN paved maps to paved + permissive", () => {
@@ -346,6 +364,53 @@ check("NB↔PE corridor includes Confederation Bridge neighbour link", () => {
   assert.ok(regionsForRoute(["nb", "pe"]).includes("pe"));
 });
 
+check("PE longhaul Summerside↔Charlottetown stays on connected fabric", async () => {
+  const pePack = path.join(__dirname, "../../data/regions/pe/longhaul.v1.json.gz");
+  if (!fs.existsSync(pePack)) {
+    console.log("skip PE OD smoke — pe longhaul pack missing");
+    return;
+  }
+  const prev = process.env.VERCEL;
+  process.env.VERCEL = "1";
+  try {
+    const { routeRequest } = require("../../lib/router");
+    const sum = { lon: -63.79, lat: 46.395 };
+    const char = { lon: -63.126, lat: 46.238 };
+    const mon = { lon: -64.778, lat: 46.087 };
+    for (const profile of ["cleanest", "dirt"]) {
+      const onIsland = await routeRequest({
+        profile,
+        locations: [sum, char]
+      });
+      assert.strictEqual(
+        onIsland.status,
+        "complete",
+        `Summerside→Charlottetown ${profile}: ${onIsland.error || ""} ${onIsland.message || ""}`
+      );
+      assert.ok(
+        (onIsland.distanceMeters || 0) > 40000,
+        `Summerside→Charlottetown ${profile} too short`
+      );
+      const bridge = await routeRequest({
+        profile,
+        locations: [mon, char]
+      });
+      assert.strictEqual(
+        bridge.status,
+        "complete",
+        `Moncton→Charlottetown ${profile}: ${bridge.error || ""} ${bridge.message || ""}`
+      );
+      assert.ok(
+        (bridge.distanceMeters || 0) > 100000,
+        `Moncton→Charlottetown ${profile} too short`
+      );
+    }
+  } finally {
+    if (prev == null) delete process.env.VERCEL;
+    else process.env.VERCEL = prev;
+  }
+});
+
 check("region selection hits Nova Scotia for Halifax points", () => {
   const regions = selectRegionsForLocations([
     { lat: 44.65, lon: -63.58 },
@@ -551,4 +616,6 @@ check("all canonical enum tables are non-empty", () => {
   assert.ok(Object.keys(STRUCTURE_TYPE).length >= 5);
 });
 
-console.log(passed + " adapter/conflation checks finished");
+Promise.all(pending).then(() => {
+  console.log(passed + " adapter/conflation checks finished");
+});
