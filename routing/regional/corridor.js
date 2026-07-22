@@ -261,12 +261,13 @@ function isNrnSrc(src) {
 
 /**
  * Live mental model for Vercel longhaul packs:
- *   OSM + NRN = road fabric (ordinary driveable roads). Always permissive for OSM.
- *   Provincial/gov forest = capillary *between* that fabric — omitted from longhaul.
+ *   Default (NB etc.): OSM + NRN road fabric; provincial capillary omitted.
+ *   Quebec: OSM-only (drop NRN).
+ *   Nova Scotia (locked): OSM + NSTDB provincial capillary; drop NRN.
  *
  * Modes:
- *   osm / osm-only — Quebec: drop NRN entirely; keep all OSM motorized fabric in
- *                    the pack bbox. NRN locals in QC are too sparse/wrong for dirt.
+ *   osm / osm-only — Quebec: drop NRN; keep all OSM motorized fabric.
+ *   osm-provincial / osm+nstdb — NS: drop NRN; keep OSM + provincial (NSTDB).
  *   maritime / hub — NRN + OSM (Maritimes / legacy). Hub limits OSM bulbs.
  *   corridor / dense — all NRN non-track + OSM hub/highway.
  */
@@ -276,8 +277,14 @@ function extractRoadFabricLonghaulGraph(graph, options = {}) {
   const hubs = corridorPolyline(hubLocations);
   const mode = String(options.mode || "hub").toLowerCase();
   const osmOnly = mode === "osm" || mode === "osm-only";
+  const osmProvincial =
+    mode === "osm-provincial" ||
+    mode === "osm+provincial" ||
+    mode === "osm+nstdb" ||
+    mode === "osm-nstdb";
   // Small provinces (maritime) can keep all NRN non-track.
-  const denseNrn = !osmOnly && (mode === "corridor" || mode === "dense" || mode === "maritime");
+  const denseNrn =
+    !osmOnly && !osmProvincial && (mode === "corridor" || mode === "dense" || mode === "maritime");
 
   function nearHub(edge) {
     if (!hubs.length) return false;
@@ -292,7 +299,7 @@ function extractRoadFabricLonghaulGraph(graph, options = {}) {
     const src = e.src || "";
     const osm = isOpenStreetMapSrc(src);
     const nrn = isNrnSrc(src);
-    if (!osm && !nrn) continue; // drop provincial capillary
+    const provincial = !osm && !nrn;
 
     if (osmOnly) {
       if (!osm) continue;
@@ -301,6 +308,19 @@ function extractRoadFabricLonghaulGraph(graph, options = {}) {
       keepEdges.push(e.ac === 2 ? { ...e, ac: 1 } : e);
       continue;
     }
+
+    if (osmProvincial) {
+      // NS locked fabric: OSM + NSTDB. Never keep NRN highway spine.
+      if (nrn) continue;
+      if (osm) {
+        keepEdges.push(e.ac === 2 ? { ...e, ac: 1 } : e);
+        continue;
+      }
+      if (provincial) keepEdges.push(e);
+      continue;
+    }
+
+    if (!osm && !nrn) continue; // drop provincial capillary (default longhaul)
 
     if (nrn) {
       if (e.s === 3) continue;

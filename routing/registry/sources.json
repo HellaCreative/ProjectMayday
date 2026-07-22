@@ -2,10 +2,13 @@
   "schemaVersion": "canada-source-registry-1",
   "updatedAt": "2026-07-22",
   "notes": [
-    "NRN is the national paved/gravel backbone, distributed by province/territory.",
+    "Province fabric is product-locked per region — do not assume NRN everywhere.",
+    "NS locked fabric: OSM road fabric + NSTDB (STDB) capillary. No NRN.",
+    "QC locked fabric: OSM-only. No NRN.",
+    "Elsewhere NRN may still act as national paved/gravel identity where it overlaps OSM.",
     "Provincial supplements conflated where adapters are ready: NS NSTDB, AB Access, ON MNRF, QC chemins multiusages, BC FTEN (when ingest completes).",
     "OSM motorized highways are the road fabric (motorized_permissive). Shortbread tiles remain display-only; POIs are a separate pack.",
-    "Cross-Canada longhaul packs remain highway/corridor thinned; full regional packs hold dirt/resource detail for in-province routing."
+    "Cross-Canada longhaul packs: NS = OSM+NSTDB; QC = OSM-only; others thinned OSM+NRN (provincial omitted for size)."
   ],
   "regions": [
     {
@@ -269,7 +272,7 @@
         "adapter": "nrn",
         "status": "ready",
         "dateRetrieved": "2026-07-20",
-        "notes": "Full ROADSEG ingested as national backbone."
+        "notes": "NRN omitted from NS routing fabric (OSM + NSTDB only). Full ROADSEG ingested as national backbone."
       },
       "provincial": {
         "sourceName": "Nova Scotia Topographic DataBase Roads, Trails and Rails",
@@ -285,17 +288,17 @@
       "routingReady": true,
       "backboneArtifact": {
         "path": "routing/data/regions/ns/graph.v1.json.gz",
-        "edgeCount": 378141,
-        "nodeCount": 429158,
-        "gzBytes": 73098602
+        "edgeCount": 373346,
+        "nodeCount": 410903,
+        "gzBytes": 66392696
       },
-      "routingMode": "nrn+osm+provincial",
+      "routingMode": "osm+provincial",
       "osm": {
         "adapter": "osm-roads",
-        "role": "gap-fill",
+        "role": "sole-fabric",
         "status": "ready",
         "featureCount": 134812,
-        "added": 75472,
+        "added": 134812,
         "license": "OpenStreetMap contributors (ODbL)",
         "dateRetrieved": "2026-07-22"
       }

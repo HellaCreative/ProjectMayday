@@ -16,7 +16,7 @@ module.exports = async function handler(req, res) {
       ok: true,
       service: "dirt-route",
       engine: "dirt-node-astar",
-      note: "Regional offline graphs: NRN + OSM road fabric (permissive) + provincial capillary (unknown-gated). Shortbread tiles remain display-only."
+      note: "NS: OSM+NSTDB (no NRN). QC: OSM-only. Other longhaul: OSM+NRN fabric; provincial capillary unknown-gated on full packs."
     });
   }
 

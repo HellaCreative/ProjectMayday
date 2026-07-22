@@ -4,12 +4,13 @@
 /**
  * Build thinned per-province longhaul packs for Vercel canada-chain hops.
  *
- * Live mental model:
- *   OSM + NRN = road fabric (driveable basemap roads). Provincial capillary
- *   stays out of these packs — enable via unknown-access on full regional graphs.
+ * Province fabrics:
+ *   QC — OSM-only (no NRN)
+ *   NS — OSM + NSTDB (no NRN); provincial capillary stays in the pack so Allow
+ *        unknown can use purple TRACK. NRN highway spine is dropped.
+ *   NB (+ others) — OSM + NRN fabric; provincial capillary omitted (size)
  *
- * Hub bulbs keep village/city basemap snaps (Saint-Raymond, Moncton, etc.)
- * without shipping full provincial graphs.
+ * Hub bulbs keep village/city basemap snaps without shipping every full pack.
  */
 const fs = require("fs");
 const path = require("path");
@@ -97,11 +98,19 @@ function main() {
 
     const corridorFabric = new Set([]); // dense NRN-everywhere — too large for Hobby
     const hubFabric = new Set(["on"]); // spine + hub bulbs (QC is OSM-only below)
-    const maritimeFabric = new Set(["ns", "nb", "pe", "nl"]);
+    const maritimeFabric = new Set(["nb", "pe", "nl"]); // NS is osm-provincial below
     const osmProvince = new Set(["qc"]); // full OSM fabric; no NRN; one pack per province
+    const osmProvincialProvince = new Set(["ns"]); // OSM + NSTDB; no NRN
 
     let extractMode = "spine";
-    if (osmProvince.has(code)) {
+    if (osmProvincialProvince.has(code)) {
+      extractMode = "fabric-osm-provincial";
+      g = extractRoadFabricLonghaulGraph(g, {
+        mode: "osm-provincial",
+        hubLocations: HUBS[code] || [],
+        hubBufferMeters: 40000
+      });
+    } else if (osmProvince.has(code)) {
       extractMode = "fabric-osm-only";
       g = extractRoadFabricLonghaulGraph(g, {
         mode: "osm",
@@ -138,9 +147,9 @@ function main() {
     }
 
     const afterSpine = g.edgeCount;
-    // QC OSM-only pack is the full province (Hobby-safe at ~214MB inflated).
+    // QC OSM-only + NS OSM+NSTDB packs are full-province (Hobby-safe after thin).
     // Other packs stay clipped to the national southern corridor.
-    if (code !== "qc") {
+    if (code !== "qc" && code !== "ns") {
       g = clipGraphToCorridor(g, corridor, BUFFER_M);
     }
     if (String(extractMode).startsWith("fabric")) {
@@ -152,18 +161,27 @@ function main() {
     g.regionId = code;
     g.province = String(code).toUpperCase();
     g.schemaVersion = "longhaul-region-1";
+    const nsOsmNstdb = osmProvincialProvince.has(code);
+    const qcOsmOnly = osmProvince.has(code);
     g.lineage = {
-      purpose: osmProvince.has(code)
-        ? "canada-chain / in-province pack (OSM-only; no NRN)"
-        : "canada-chain hop pack (OSM+NRN road fabric; hub bulbs; no provincial)",
-      mentalModel: osmProvince.has(code) ? "osm-fabric-province" : "osm-nrn-fabric",
+      purpose: nsOsmNstdb
+        ? "canada-chain / in-province pack (OSM+NSTDB; no NRN)"
+        : qcOsmOnly
+          ? "canada-chain / in-province pack (OSM-only; no NRN)"
+          : "canada-chain hop pack (OSM+NRN road fabric; hub bulbs; no provincial)",
+      mentalModel: nsOsmNstdb
+        ? "osm-nstdb-fabric"
+        : qcOsmOnly
+          ? "osm-fabric-province"
+          : "osm-nrn-fabric",
       source: `regions/${code}/graph.v1.json.gz`,
       hasRoadClass,
       hasOsm,
       extractMode,
-      dropNrn: osmProvince.has(code) || undefined,
+      dropNrn: nsOsmNstdb || qcOsmOnly || undefined,
+      keepProvincial: nsOsmNstdb || undefined,
       hubCount: (HUBS[code] || []).length,
-      corridorBufferMeters: code === "qc" ? null : BUFFER_M,
+      corridorBufferMeters: code === "qc" || code === "ns" ? null : BUFFER_M,
       thinnedGeometry: true,
       inputEdgeCount: before,
       spineEdgeCount: afterSpine,

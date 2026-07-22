@@ -4,12 +4,11 @@
 /**
  * Nova Scotia regional graph — thin wrapper.
  *
- * Live mental model (do not skip OSM):
- *   NRN backbone → OSM road fabric (motorized_permissive) → NSTDB capillary
+ * Locked product fabric (no NRN):
+ *   OSM road fabric (motorized_permissive) → NSTDB / STDB capillary (unknown-gated)
  *
- * Historically this script built NRN+NSTDB only and silently dropped the OSM
- * basemap fabric. That made Shortbread white roads visible but not routable.
- * Always delegate to the 3-tier builder.
+ * NRN is not part of the NS routing fabric. Quebec made the same call for NRN;
+ * NS keeps provincial NSTDB purple as the dirt capillary between OSM roads.
  */
 const { spawnSync } = require("child_process");
 const path = require("path");
@@ -18,11 +17,15 @@ const ROOT = path.join(__dirname, "..");
 const builder = path.join(__dirname, "build-region-with-supplement.js");
 
 console.log(
-  "build-ns-regional-graph.js → build-region-with-supplement.js ns (NRN+OSM+NSTDB)"
+  "build-ns-regional-graph.js → build-region-with-supplement.js ns --osm-plus-provincial (OSM+NSTDB, no NRN)"
 );
-const result = spawnSync(process.execPath, [builder, "ns"], {
-  cwd: ROOT,
-  stdio: "inherit",
-  env: process.env
-});
+const result = spawnSync(
+  process.execPath,
+  [builder, "ns", "--osm-plus-provincial"],
+  {
+    cwd: ROOT,
+    stdio: "inherit",
+    env: process.env
+  }
+);
 process.exit(result.status == null ? 1 : result.status);

@@ -1,14 +1,14 @@
 {
-  "generatedAt": "2026-07-22T00:32:21.537Z",
+  "generatedAt": "2026-07-22T11:46:13.021Z",
   "region": "NS",
   "stack": [
-    "nrn",
-    "osm-gap-fill",
+    "osm-fabric",
     "provincial"
   ],
   "nrn": {
-    "adapter": "nrn",
-    "featureCount": 119846
+    "adapter": null,
+    "featureCount": 0,
+    "omitted": "osm-fabric"
   },
   "osm": {
     "adapter": "osm-roads",
@@ -18,7 +18,7 @@
     "downloadUrl": "https://download.geofabrik.de/north-america/canada/nova-scotia-latest.osm.pbf",
     "license": "OpenStreetMap contributors (ODbL)",
     "sourceDatasetVersion": "geofabrik:nova-scotia",
-    "dateRetrieved": "2026-07-22T00:31:48.026Z",
+    "dateRetrieved": "2026-07-22T11:45:50.936Z",
     "status": "ok",
     "notes": [
       "OSM gap-fill for conventional motorized roads unmatched by NRN.",
@@ -65,38 +65,9 @@
       "excluded": {}
     },
     "topology": null,
-    "generatedAt": "2026-07-22T00:31:48.026Z"
+    "generatedAt": "2026-07-22T11:45:50.937Z"
   },
-  "osmConflation": {
-    "province": "NS",
-    "generatedAt": "2026-07-22T00:31:49.790Z",
-    "precedence": {
-      "backbone": "NRN owns national road identity and conventional-road attributes",
-      "osmFabric": "OpenStreetMap is the driveable road fabric (unmatched motorized ways after NRN); always permissive; never replaces NRN identity",
-      "supplement": "Provincial capillary fills between OSM roads (forest/resource); default motorized_unknown",
-      "surfaceEnrichment": "Provincial or OSM paved/gravel may enrich NRN edges whose pavement status is unknown",
-      "freeSpace": "No free-space connectors"
-    },
-    "stats": {
-      "backboneKept": 119846,
-      "supplementAdded": 75472,
-      "supplementDuplicateSkipped": 59340,
-      "supplementConventionalSkipped": 0,
-      "backboneSurfaceEnriched": 38100,
-      "conflicts": 0
-    },
-    "skipReasons": {
-      "backbone_surface_enriched": 38100,
-      "duplicate_of_backbone": 59340
-    },
-    "featureCount": 195318,
-    "freeSpaceConnectors": 0,
-    "notes": [
-      "No free-space connectors were created.",
-      "Duplicates detected by midpoint proximity + bearing + endpoint proximity.",
-      "Genuine dead ends remain dead ends — no proximity stitching of endpoints."
-    ]
-  },
+  "osmConflation": null,
   "provincial": {
     "adapter": "ns-nstdb",
     "province": "NS",
@@ -105,7 +76,7 @@
     "downloadUrl": "https://data.novascotia.ca/resource/a6gf-w68e.json",
     "license": "Open Government Licence - Nova Scotia",
     "sourceDatasetVersion": "a6gf-w68e",
-    "dateRetrieved": "2026-07-22T00:31:55.152Z",
+    "dateRetrieved": "2026-07-22T11:45:54.670Z",
     "status": "ok",
     "notes": [
       "Provincial supplement for resource roads, tracks, and local detail NRN may omit.",
@@ -146,11 +117,11 @@
       "excluded": {}
     },
     "topology": null,
-    "generatedAt": "2026-07-22T00:31:55.152Z"
+    "generatedAt": "2026-07-22T11:45:54.670Z"
   },
   "conflation": {
     "province": "NS",
-    "generatedAt": "2026-07-22T00:31:58.000Z",
+    "generatedAt": "2026-07-22T11:45:56.526Z",
     "precedence": {
       "backbone": "NRN owns national road identity and conventional-road attributes",
       "osmFabric": "OpenStreetMap is the driveable road fabric (unmatched motorized ways after NRN); always permissive; never replaces NRN identity",
@@ -159,18 +130,18 @@
       "freeSpace": "No free-space connectors"
     },
     "stats": {
-      "backboneKept": 195318,
-      "supplementAdded": 184453,
-      "supplementDuplicateSkipped": 117182,
+      "backboneKept": 134812,
+      "supplementAdded": 240215,
+      "supplementDuplicateSkipped": 61420,
       "supplementConventionalSkipped": 0,
-      "backboneSurfaceEnriched": 41529,
+      "backboneSurfaceEnriched": 1259,
       "conflicts": 0
     },
     "skipReasons": {
-      "duplicate_of_backbone": 117182,
-      "backbone_surface_enriched": 41529
+      "duplicate_of_backbone": 61420,
+      "backbone_surface_enriched": 1259
     },
-    "featureCount": 379771,
+    "featureCount": 375027,
     "freeSpaceConnectors": 0,
     "notes": [
       "No free-space connectors were created.",
@@ -179,7 +150,7 @@
     ]
   },
   "graph": {
-    "generatedAt": "2026-07-22T00:32:00.245Z",
+    "generatedAt": "2026-07-22T11:45:57.893Z",
     "schemaVersion": "canada-regional-1",
     "regionId": "ns",
     "province": "NS",
@@ -189,40 +160,40 @@
       -59.67685,
       47.22319
     ],
-    "nodeCount": 429158,
-    "edgeCount": 378141,
-    "componentCount": 75722,
-    "boundaryNodeCount": 550,
+    "nodeCount": 410903,
+    "edgeCount": 373346,
+    "componentCount": 66995,
+    "boundaryNodeCount": 494,
     "accessCounts": {
-      "motorized_permissive": 196542,
-      "motorized_unknown": 180981,
-      "motorized_restricted": 618
+      "motorized_permissive": 223201,
+      "motorized_unknown": 149412,
+      "motorized_restricted": 733
     },
     "surfaceCounts": {
-      "paved": 85701,
-      "unknown": 10244,
-      "access": 109463,
-      "gravel": 22934,
-      "track": 149799
+      "paved": 90404,
+      "gravel": 24431,
+      "unknown": 2056,
+      "access": 106570,
+      "track": 149885
     },
     "sourceCounts": {
-      "National Road Network": 119447,
-      "OpenStreetMap": 74941,
-      "Nova Scotia Topographic DataBase Roads, Trails and Rails": 183753
+      "OpenStreetMap": 133977,
+      "Nova Scotia Topographic DataBase Roads, Trails and Rails": 239369
     },
-    "jsonBytes": 351102349,
-    "gzBytes": 73098602,
+    "jsonBytes": 330513469,
+    "gzBytes": 66392696,
     "lineage": {
       "nrn": {
-        "adapter": "nrn",
-        "featureCount": 119846
+        "adapter": null,
+        "featureCount": 0,
+        "omitted": "osm-plus-provincial"
       },
       "osm": {
         "adapter": "osm-roads",
         "featureCount": 134812,
-        "role": "gap-fill",
-        "added": 75472,
-        "duplicateSkipped": 59340,
+        "role": "sole-fabric",
+        "added": 134812,
+        "duplicateSkipped": 0,
         "classification": {
           "surface": {
             "paved": 51097,

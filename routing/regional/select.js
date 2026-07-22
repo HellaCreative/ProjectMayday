@@ -175,7 +175,7 @@ function regionPackAvailable(regionId) {
  * via boundary-node matching (no free-space connectors).
  */
 function resolveGraphRequest(body = {}) {
-  // Prefer the regional NS pack (NRN + OSM fabric + NSTDB). Opt back into the
+  // Prefer the regional NS pack (OSM + NSTDB; no NRN). Opt back into the
   // pre-OSM legacy pack only with ROUTING_PREFER_LEGACY=1. ROUTING_USE_REGIONAL
   // remains accepted as an explicit regional force for older deploy docs.
   const forceLegacyNs = process.env.ROUTING_PREFER_LEGACY === "1";

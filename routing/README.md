@@ -9,16 +9,19 @@ Offline regional graphs + Node A* via `POST /api/route`.
    `motorized_permissive`. Surface/class drive visuals and costing, **not** the
    unknown-access toggle. Shortbread tiles remain display-only; the graph is a
    separate Geofabrik extract of motorized highways.
-2. **NRN** — Canadian national identity / backbone where it overlaps OSM. Owns
-   identity in conflation; must not block yellow OSM roads.
+2. **NRN** — optional national identity for provinces that still use it. **Not**
+   part of the Nova Scotia or Quebec routing fabric (product lock).
 3. **Provincial capillary** — gov forest / resource layers that fill *between*
-   OSM roads (NB Forest Roads, QC chemins multiusages, NSTDB, …). Default
-   `motorized_unknown`; gated by “Allow unknown access.”
-4. **Conflation** — NRN → OSM fabric → provincial capillary. No free-space
-   connectors.
+   OSM roads (NS NSTDB/STDB, NB Forest Roads, …). Default `motorized_unknown`;
+   gated by “Allow unknown access.”
+4. **Conflation** — province-specific:
+   - **NS (locked):** OSM fabric → NSTDB capillary. **No NRN.**
+   - **QC:** OSM-only. **No NRN.**
+   - **Others (default):** NRN → OSM fabric → provincial capillary.
+   No free-space connectors.
 5. **Regional packages** — `routing/data/regions/<id>/graph.v1.json.gz`.
-   Vercel longhaul packs ship **OSM+NRN fabric only** (no provincial) so
-   ordinary basemap roads snap and route with unknown off.
+   Vercel longhaul: NS ships **OSM+NSTDB**; QC ships **OSM-only**; NB ships
+   OSM+NRN fabric (provincial omitted for size).
 
 Riders never see source switches. The map paints a single corridor network.
 
@@ -42,13 +45,13 @@ bash scripts/extract-osm-roads.sh new-brunswick
 bash scripts/extract-osm-roads.sh quebec
 bash scripts/extract-osm-roads.sh nova-scotia
 node scripts/build-region-with-supplement.js nb
-node scripts/build-region-with-supplement.js qc
-node scripts/build-region-with-supplement.js ns
-
-# Vercel longhaul fabric packs (NS/NB + QC OSM-only quadrants):
-node scripts/build-longhaul-region-packs.js ns nb
 node scripts/build-region-with-supplement.js qc --osm-only
-node scripts/build-qc-quadrant-packs.js
+# NS locked fabric: OSM + NSTDB, no NRN
+node scripts/build-ns-regional-graph.js
+# equivalent: node scripts/build-region-with-supplement.js ns --osm-plus-provincial
+
+# Vercel longhaul packs:
+node scripts/build-longhaul-region-packs.js ns nb qc
 ```
 
 ## Registry
@@ -64,7 +67,7 @@ provincial supplemental status.
 ./scripts/ingest-nrn-region.sh pe
 ./scripts/ingest-nrn-region.sh bc   # etc.
 
-# Nova Scotia with NSTDB supplement (existing):
+# Nova Scotia with NSTDB (OSM + NSTDB, no NRN):
 node scripts/build-ns-regional-graph.js
 
 # Optional provincial supplements (BC FTEN / Alberta Access):
@@ -74,9 +77,9 @@ node scripts/build-region-with-supplement.js ab
 Cross-province routes (e.g. Halifax → Vancouver) merge corridor regional packs
 with southern highway anchors and border-node stitching (no free-space connectors).
 
-NS-only requests use the regional pack (NRN+OSM+NSTDB) locally, and the
-thinned OSM+NRN longhaul pack on Vercel. Opt back into the pre-OSM legacy
-graph with `ROUTING_PREFER_LEGACY=1`.
+NS-only requests use the regional OSM+NSTDB pack locally, and the thinned
+OSM+NSTDB longhaul pack on Vercel. Opt back into the pre-OSM legacy graph with
+`ROUTING_PREFER_LEGACY=1`.
 
 ## Tests
 

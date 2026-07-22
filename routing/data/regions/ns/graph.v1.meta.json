@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-22T00:32:00.245Z",
+  "generatedAt": "2026-07-22T11:45:57.893Z",
   "schemaVersion": "canada-regional-1",
   "regionId": "ns",
   "province": "NS",
@@ -9,40 +9,40 @@
     -59.67685,
     47.22319
   ],
-  "nodeCount": 429158,
-  "edgeCount": 378141,
-  "componentCount": 75722,
-  "boundaryNodeCount": 550,
+  "nodeCount": 410903,
+  "edgeCount": 373346,
+  "componentCount": 66995,
+  "boundaryNodeCount": 494,
   "accessCounts": {
-    "motorized_permissive": 196542,
-    "motorized_unknown": 180981,
-    "motorized_restricted": 618
+    "motorized_permissive": 223201,
+    "motorized_unknown": 149412,
+    "motorized_restricted": 733
   },
   "surfaceCounts": {
-    "paved": 85701,
-    "unknown": 10244,
-    "access": 109463,
-    "gravel": 22934,
-    "track": 149799
+    "paved": 90404,
+    "gravel": 24431,
+    "unknown": 2056,
+    "access": 106570,
+    "track": 149885
   },
   "sourceCounts": {
-    "National Road Network": 119447,
-    "OpenStreetMap": 74941,
-    "Nova Scotia Topographic DataBase Roads, Trails and Rails": 183753
+    "OpenStreetMap": 133977,
+    "Nova Scotia Topographic DataBase Roads, Trails and Rails": 239369
   },
-  "jsonBytes": 351102349,
-  "gzBytes": 73098602,
+  "jsonBytes": 330513469,
+  "gzBytes": 66392696,
   "lineage": {
     "nrn": {
-      "adapter": "nrn",
-      "featureCount": 119846
+      "adapter": null,
+      "featureCount": 0,
+      "omitted": "osm-plus-provincial"
     },
     "osm": {
       "adapter": "osm-roads",
       "featureCount": 134812,
-      "role": "gap-fill",
-      "added": 75472,
-      "duplicateSkipped": 59340,
+      "role": "sole-fabric",
+      "added": 134812,
+      "duplicateSkipped": 0,
       "classification": {
         "surface": {
           "paved": 51097,

@@ -8373,6 +8373,39 @@
       return km;
     }
 
+    /** Haversine km along a [lon,lat][] ring — when segment.distanceMeters is missing. */
+    function coordsDistanceKm(coords) {
+      if (!Array.isArray(coords) || coords.length < 2) return 0;
+      let km = 0;
+      for (let i = 1; i < coords.length; i += 1) {
+        const a = coords[i - 1];
+        const b = coords[i];
+        if (!a || !b) continue;
+        km += haversineKm(
+          { lat: a[1], lng: a[0] },
+          { lat: b[1], lng: b[0] }
+        );
+      }
+      return km;
+    }
+
+    /**
+     * Dirt km from painted route segments. Prefer distanceMeters; fall back to
+     * geometry length so gray/blue/purple paint can never report 0% Dirt.
+     */
+    function adventureKmFromSegments(segments) {
+      let km = 0;
+      for (const seg of segments || []) {
+        const trackClass = seg.surfaceClass || seg.trackClass || "unknown";
+        if (!ADVENTURE_SURFACE_CLASSES[trackClass]) continue;
+        let dKm = (Number(seg.distanceMeters) || 0) / 1000;
+        if (!(dKm > 0)) dKm = Number(seg.distanceKm) || 0;
+        if (!(dKm > 0)) dKm = coordsDistanceKm(seg.geometry || seg.coords || []);
+        km += dKm;
+      }
+      return km;
+    }
+
     function normalizeEdgeFeature(feature) {
       const p = feature.properties || (feature.properties = {});
       if (!p.surfaceClass && p.trackClass) p.surfaceClass = p.trackClass;
@@ -10998,7 +11031,10 @@
       // Segment surfaces match map paint (blue/gray/purple). Do not use api.stats
       // alone — canada-chain used to return hop timing with no surface %, which
       // forced 0% Dirt while paved% fell back to byClass.
-      const dirtKm = adventureKmFromByClass(byClass);
+      const dirtKm = Math.max(
+        adventureKmFromByClass(byClass),
+        adventureKmFromSegments(api.segments || segments)
+      );
       const pavedKm = byClass.paved || 0;
       return {
         kind: "service",
@@ -11014,7 +11050,7 @@
         unknownAccessPercent: api.stats?.unknownAccessPercent || 0,
         accessPolicy: api.accessPolicy || currentAccessPolicy(),
         warnings: api.warnings || [],
-        estimatedMovingSeconds: api.estimatedMovingSeconds || null,
+        estimatedMovingSeconds: api.estimatedMovingSeconds || api.estimatedElapsedSeconds || null,
         stageIndex: index != null ? index : null
       };
     }
@@ -11061,7 +11097,11 @@
         coordinates,
         segments,
         distanceKm,
-        dirtKm: adventureKmFromByClass(byClass) || (agg.dirtMeters || 0) / 1000,
+        dirtKm: Math.max(
+          adventureKmFromByClass(byClass),
+          adventureKmFromSegments(segments),
+          (agg.dirtMeters || 0) / 1000
+        ),
         pavedKm: byClass.paved || 0,
         byClass,
         byAccess: {},
@@ -11095,15 +11135,17 @@
       if (!hasRoute) {
         return '<div class="route-metric-row is-empty">' + (o.emptyText || "Place points to build this route") + "</div>";
       }
-      const minLabel = o.movingSeconds
-        ? "< " + Math.round(o.movingSeconds / 60) + " min"
-        : "—";
+      // Second slot is ETA (moving time). Missing seconds used to render a lone
+      // "—" between km and dirt% — look like a bug, not a missing field.
+      const minLabel = o.movingSeconds != null && Number.isFinite(o.movingSeconds) && o.movingSeconds > 0
+        ? "< " + Math.max(1, Math.round(o.movingSeconds / 60)) + " min"
+        : null;
       const dirtLabel = o.dirtPercent != null ? o.dirtPercent + "% Dirt" : "—";
       const pavedLabel = o.pavedPercent != null ? o.pavedPercent + "% Paved" : "—";
       return (
         '<div class="route-metric-row" role="group" aria-label="Route stats">' +
           '<span class="route-metric">' + formatKmLabel(o.distanceKm) + "</span>" +
-          '<span class="route-metric">' + minLabel + "</span>" +
+          (minLabel ? '<span class="route-metric">' + minLabel + "</span>" : "") +
           '<span class="route-metric">' + dirtLabel + "</span>" +
           '<span class="route-metric">' + pavedLabel + "</span>" +
         "</div>"
@@ -13971,28 +14013,41 @@
       const distanceKm = (api.distanceMeters || 0) / 1000;
       const byClass = {};
       const segments = (api.segments || []).map((seg) => {
-        const trackClass = seg.surfaceClass || "unknown";
-        byClass[trackClass] = (byClass[trackClass] || 0) + ((seg.distanceMeters || 0) / 1000);
+        const trackClass = seg.surfaceClass || seg.trackClass || "unknown";
+        let dKm = (Number(seg.distanceMeters) || 0) / 1000;
+        if (!(dKm > 0)) dKm = coordsDistanceKm(seg.geometry || []);
+        byClass[trackClass] = (byClass[trackClass] || 0) + dKm;
         return {
           trackClass,
           accessClass: seg.accessClass,
           edgeId: seg.edgeId,
           coords: seg.geometry || [],
-          distanceKm: (seg.distanceMeters || 0) / 1000
+          distanceKm: dKm
         };
       });
       // Segment surfaces are source of truth (match blue/gray/purple paint).
       // api.stats may omit surface % on canada-chain (hop timing only on prod).
-      const dirtKm = adventureKmFromByClass(byClass);
+      const dirtKm = Math.max(
+        adventureKmFromByClass(byClass),
+        adventureKmFromSegments(segments),
+        api.stats && api.stats.dirtPercent != null && distanceKm
+          ? (Number(api.stats.dirtPercent) / 100) * distanceKm
+          : 0
+      );
       const pavedKm = byClass.paved || 0;
+      // If total km is known but segment meters summed short, prefer total.
+      const segSumKm = Object.values(byClass).reduce((a, b) => a + (Number(b) || 0), 0);
+      const scale = distanceKm > 0 && segSumKm > 0 && Math.abs(distanceKm - segSumKm) / distanceKm > 0.15
+        ? distanceKm / segSumKm
+        : 1;
       return {
         kind: "service",
         routeId: api.routeId || null,
         coordinates: api.geometry || [],
         segments,
         distanceKm,
-        dirtKm,
-        pavedKm,
+        dirtKm: dirtKm * scale,
+        pavedKm: pavedKm * scale,
         byClass,
         byAccess: api.stats || {},
         unknownAccessKm: ((api.stats?.unknownAccessPercent || 0) / 100) * distanceKm,
@@ -14000,7 +14055,7 @@
         accessPolicy: api.accessPolicy || currentAccessPolicy(),
         warnings: api.warnings || [],
         serviceDebug: api.debug || null,
-        estimatedMovingSeconds: api.estimatedMovingSeconds || null,
+        estimatedMovingSeconds: api.estimatedMovingSeconds || api.estimatedElapsedSeconds || null,
         snapStart: api.geometry && api.geometry[0] ? api.geometry[0] : null,
         snapEnd: api.geometry && api.geometry.length ? api.geometry[api.geometry.length - 1] : null
       };
