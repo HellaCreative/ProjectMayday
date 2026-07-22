@@ -225,15 +225,6 @@
     body.planner-open .stack {
       gap: 0;
     }
-    body.planner-open .stack > :not(#recenterBtn),
-    body.planner-open .follow-chip,
-    body.planner-open .status-dock {
-      display: none !important;
-    }
-    body.planner-open .stack #recenterBtn {
-      display: grid;
-      pointer-events: auto;
-    }
     .btn.view-mode {
       font-family: var(--mono);
       font-size: 0.7rem;
@@ -870,23 +861,6 @@
       font-weight: 700;
       margin-top: 1px;
     }
-    .route-status .route-stats {
-      display: block;
-      margin-top: 3px;
-      font-family: var(--mono);
-      font-size: 0.62rem;
-      color: var(--muted);
-    }
-    .route-clear {
-      width: 40px;
-      height: 40px;
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      background: #ffffff;
-      color: var(--text);
-      font-size: 1.15rem;
-      cursor: pointer;
-    }
     /* One line: Export GPX (left) | Start navigation (right, priority width). */
     .route-actions {
       display: none;
@@ -902,67 +876,6 @@
     body.planner-tab-saved .route-shared { display: none; }
     body.planner-tab-saved .route-actions { display: none !important; }
     body.planner-tab-plan .route-shared { display: none !important; }
-
-    /* Consolidated collapsible unknown-access warning */
-    .access-warn-panel {
-      margin-top: 8px;
-      border: 1px solid rgba(193, 18, 47, 0.35);
-      border-radius: 10px;
-      background: rgba(193, 18, 47, 0.06);
-      overflow: hidden;
-    }
-    .access-warn-collapsed {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      width: 100%;
-      min-height: 40px;
-      padding: 0 10px;
-      border: 0;
-      background: transparent;
-      color: #c1122f;
-      font-family: var(--sans);
-      font-size: 0.68rem;
-      font-weight: 700;
-      text-align: left;
-      cursor: pointer;
-    }
-    .access-warn-collapsed-text { flex: 1 1 auto; min-width: 0; }
-    .access-warn-collapsed .access-warn-metric-inline { font-family: var(--mono); font-weight: 600; }
-    .access-warn-chevron { flex: 0 0 auto; opacity: 0.7; }
-    .access-warn-icon { flex: 0 0 auto; color: #c1122f; }
-    .access-warn-expanded { padding: 8px 10px 10px; }
-    .access-warn-head {
-      display: grid;
-      grid-template-columns: auto 1fr auto;
-      gap: 8px;
-      align-items: start;
-    }
-    .access-warn-copy {
-      margin: 0;
-      font-size: 0.66rem;
-      line-height: 1.4;
-      color: #8a0f24;
-      font-weight: 600;
-    }
-    .access-warn-hide {
-      flex: 0 0 auto;
-      width: 24px;
-      height: 24px;
-      border: 0;
-      border-radius: 6px;
-      background: transparent;
-      color: #c1122f;
-      font-size: 1rem;
-      line-height: 1;
-      cursor: pointer;
-    }
-    .access-warn-metric {
-      margin: 6px 0 0;
-      font-family: var(--mono);
-      font-size: 0.62rem;
-      color: #8a0f24;
-    }
 
     /* Stage list */
     .stage-trip-summary {
@@ -1002,21 +915,6 @@
       border-color: var(--navy);
       box-shadow: 0 0 0 1px var(--navy) inset;
     }
-    .stage-badge {
-      flex: 0 0 auto;
-      width: 24px;
-      height: 24px;
-      border-radius: 999px;
-      background: var(--navy);
-      color: #fff;
-      font-family: var(--mono);
-      font-size: 0.7rem;
-      font-weight: 700;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    .stage-main { min-width: 0; }
     .stage-title {
       font-family: var(--sans);
       font-size: 0.72rem;
@@ -1026,47 +924,6 @@
       overflow: hidden;
       text-overflow: ellipsis;
     }
-    .stage-sub {
-      font-family: var(--mono);
-      font-size: 0.6rem;
-      color: var(--muted);
-      margin-top: 1px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    .stage-sub .stage-status-draft { color: #b26a00; }
-    .stage-sub .stage-status-loading { color: var(--accent); }
-    .stage-sub .stage-status-failed { color: #c1122f; }
-    .stage-sub .stage-status-complete { color: #0a7d3c; }
-    .stage-profile-select {
-      min-width: 84px;
-      min-height: 30px;
-      padding: 0 22px 0 7px;
-      border: 1px solid var(--line);
-      border-radius: 7px;
-      background: #fff;
-      color: var(--text);
-      font: 700 0.58rem var(--sans);
-      cursor: pointer;
-    }
-    .stage-controls { display: flex; align-items: center; gap: 2px; flex: 0 0 auto; }
-    .stage-icon-btn {
-      width: 30px;
-      height: 30px;
-      border: 0;
-      border-radius: 7px;
-      background: transparent;
-      color: var(--muted);
-      font-size: 0.9rem;
-      line-height: 1;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    .stage-icon-btn:hover { background: var(--panel-2); color: var(--text); }
-    .stage-icon-btn:disabled { opacity: 0.3; cursor: not-allowed; }
     .stage-plan-actions {
       display: grid;
       grid-template-columns: 1fr auto;
@@ -1265,13 +1122,13 @@
     }
     /* Real MapLibre stage endpoint markers */
     .stage-marker {
-      width: 26px;
-      height: 26px;
-      border-radius: 999px;
-      background: #ffb000;
+      width: 32px;
+      height: 32px;
+      border-radius: 50% 50% 50% 0;
+      background: #ff7900;
       color: #111820;
       border: 3px solid #fff;
-      box-shadow: 0 1px 4px rgba(16,24,40,0.35);
+      box-shadow: 0 2px 6px rgba(16,24,40,0.38);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -1279,11 +1136,16 @@
       font-size: 0.66rem;
       font-weight: 700;
       cursor: pointer;
+      transform: rotate(-45deg);
     }
-    .stage-marker.is-start { background: #111820; color: #fff; }
+    .stage-marker > span {
+      display: block;
+      transform: rotate(45deg);
+    }
+    .stage-marker.is-start { background: #ff7900; color: #111820; }
     .stage-marker.is-editing {
       cursor: grab;
-      box-shadow: 0 0 0 3px rgba(10,102,194,0.55), 0 1px 4px rgba(16,24,40,0.35);
+      box-shadow: 0 0 0 3px rgba(255,121,0,0.3), 0 2px 6px rgba(16,24,40,0.38);
     }
     .stage-marker.is-editing:active { cursor: grabbing; }
     .route-roadbook {
@@ -2219,129 +2081,6 @@
       bottom: max(calc(var(--sheet-max) + 16px), calc(env(safe-area-inset-bottom) + 210px));
     }
 
-    .roadbook-panel {
-      position: absolute;
-      inset: 0;
-      z-index: 36;
-      display: none;
-      flex-direction: column;
-      background: rgba(255, 255, 255, 0.97);
-      color: var(--text);
-      backdrop-filter: blur(16px);
-    }
-    .roadbook-panel.open { display: flex; }
-    body.navigating .roadbook-panel {
-      background: rgba(23, 24, 28, 0.97);
-      color: #ffffff;
-    }
-    .roadbook-head {
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      padding: calc(max(12px, env(safe-area-inset-top)) + 12px) 16px 14px;
-      border-bottom: 1px solid var(--line);
-      flex: 0 0 auto;
-    }
-    body.navigating .roadbook-head { border-bottom-color: rgba(255, 255, 255, 0.1); }
-    .roadbook-back {
-      width: var(--ctrl);
-      height: var(--ctrl);
-      border-radius: var(--radius);
-      border: 1px solid var(--chrome-border);
-      background: var(--chrome);
-      color: #ffffff;
-      display: grid;
-      place-items: center;
-      cursor: pointer;
-      box-shadow: var(--chrome-shadow);
-      flex: 0 0 auto;
-    }
-    .roadbook-titles { min-width: 0; flex: 1; }
-    .roadbook-titles h2 {
-      font-family: var(--sans);
-      font-size: 1.1rem;
-      font-weight: 800;
-      letter-spacing: -0.01em;
-      margin: 0;
-    }
-    .roadbook-meta {
-      margin-top: 2px;
-      font-family: var(--mono);
-      font-size: 0.68rem;
-      color: var(--muted);
-      letter-spacing: 0.02em;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
-    body.navigating .roadbook-meta { color: rgba(255, 255, 255, 0.55); }
-    .roadbook-list {
-      flex: 1 1 auto;
-      overflow: auto;
-      padding: 4px 16px max(28px, env(safe-area-inset-bottom));
-      -webkit-overflow-scrolling: touch;
-    }
-    .roadbook-empty {
-      padding: 28px 8px;
-      color: var(--muted);
-      font-size: 0.9rem;
-      line-height: 1.4;
-    }
-    .roadbook-row {
-      display: flex;
-      gap: 14px;
-      padding: 14px 0;
-      border-bottom: 1px solid rgba(24, 39, 55, 0.1);
-    }
-    body.navigating .roadbook-row { border-bottom-color: rgba(255, 255, 255, 0.08); }
-    .roadbook-cum {
-      width: 52px;
-      flex: 0 0 52px;
-      font-family: var(--mono);
-      font-size: 0.72rem;
-      font-weight: 600;
-      color: var(--muted);
-      padding-top: 2px;
-    }
-    body.navigating .roadbook-cum { color: rgba(255, 255, 255, 0.5); }
-    .roadbook-body { flex: 1; min-width: 0; }
-    .roadbook-title {
-      font-family: var(--sans);
-      font-size: 0.92rem;
-      font-weight: 800;
-      letter-spacing: -0.01em;
-      margin-bottom: 3px;
-    }
-    .roadbook-note {
-      font-size: 0.74rem;
-      line-height: 1.4;
-      color: var(--muted);
-      font-weight: 500;
-    }
-    body.navigating .roadbook-note { color: rgba(255, 255, 255, 0.55); }
-    .roadbook-tag {
-      flex: 0 0 auto;
-      align-self: center;
-      font-family: var(--mono);
-      font-size: 0.58rem;
-      font-weight: 700;
-      letter-spacing: 0.04em;
-      text-transform: uppercase;
-      padding: 5px 8px;
-      border-radius: 7px;
-      background: var(--muted);
-      color: #ffffff;
-      white-space: nowrap;
-    }
-    .roadbook-tag.surface-access { background: var(--access); }
-    .roadbook-tag.surface-gravel { background: var(--gravel); }
-    .roadbook-tag.surface-track { background: var(--track); }
-    .roadbook-tag.surface-paved { background: var(--paved); }
-    .roadbook-tag.surface-bridge { background: var(--bridge); }
-    .roadbook-tag.surface-tunnel { background: var(--tunnel); }
-    .roadbook-tag.kind-arrive { background: var(--danger); }
-    .roadbook-tag.kind-curve { background: var(--route); color: #111; }
-
     .pip {
       display: none;
       position: absolute;
@@ -2438,62 +2177,12 @@
       max-width: min(160px, calc(100vw - 200px));
       opacity: 0.82;
     }
-    body.roadbook-open .topbar,
-    body.roadbook-open .stack,
-    body.roadbook-open .route-card,
-    body.roadbook-open .legend,
-    body.roadbook-open .follow-chip,
-    body.roadbook-open .pip,
-    body.roadbook-open .status-dock {
-      visibility: hidden;
-      pointer-events: none;
-    }
     @media (max-width: 760px) {
       .pip {
         width: 172px;
         height: 172px;
       }
     }
-
-    /* Phase 4 route bar: keep the map as the primary surface. The existing
-       expanded drawer remains available through the chevron for route editing,
-       saved routes, GPX tools, and the full access policy controls. */
-    .route-bar-header {
-      display: grid;
-      grid-template-columns: auto minmax(0, 1fr) auto;
-      align-items: center;
-      gap: 8px;
-      min-height: 34px;
-      padding: 0 2px 2px;
-    }
-    .route-bar-kicker {
-      color: var(--p2-orange-deep);
-      font: 700 9px/1 var(--p2-mono);
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      white-space: nowrap;
-    }
-    .route-bar-meta {
-      min-width: 0;
-      overflow: hidden;
-      color: var(--p2-sheet-ink-soft);
-      font: 600 10px/1.2 var(--p2-mono);
-      text-align: right;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-    .route-bar-expand {
-      display: grid;
-      place-items: center;
-      width: 28px;
-      height: 28px;
-      border: 0;
-      border-radius: 6px;
-      background: var(--p2-chrome-2);
-      color: var(--p2-ink);
-      cursor: pointer;
-    }
-    .route-bar-expand:focus-visible { outline: 2px solid var(--p2-blue); outline-offset: 2px; }
 
     .route-card.is-collapsed {
       left: 10px !important;
@@ -2684,26 +2373,11 @@
     body.planner-tab-plan .route-card.is-collapsed #routePrefCardCompact .route-preferences { display: none !important; }
     body.planner-tab-plan .route-card.is-collapsed #routeCompactSummary { display: none !important; }
     body.planner-tab-plan .route-card.is-collapsed #routeAccessCompact { display: none !important; }
-    body.planner-open .route-card.is-collapsed .route-bar-header { display: grid !important; }
-    body.planner-open .route-card.is-collapsed .route-finder-header { display: none !important; }
-    body.planner-open .stack > :not(#recenterBtn),
-    body.planner-open .follow-chip,
-    body.planner-open .status-dock { display: none !important; }
-    body.planner-open .stack #recenterBtn { display: grid !important; }
-    body.planner-collapsed .stack,
-    body.planner-collapsed .pip { bottom: calc(var(--p2-dock-h) + 224px) !important; }
-    body.planner-tab-plan.planner-collapsed .stack,
-    body.planner-tab-plan.planner-collapsed .pip { bottom: calc(var(--p2-dock-h) + 252px) !important; }
-
     .saved-sheet-header {
       display: none;
     }
     .saved-sheet-title,
     .saved-sheet-subtitle { display: none !important; }
-    body.planner-tab-saved .route-finder-header,
-    body.planner-tab-saved #routeFullModeTabs {
-      display: none !important;
-    }
     body.planner-tab-saved .saved-sheet-header {
       display: flex;
       flex-direction: column;
@@ -4233,7 +3907,6 @@
     body.planner-open.planner-tab-saved .route-card.is-collapsed .route-drawer-full {
       overflow: hidden;
     }
-    body.planner-open .route-workspace-head { display: none !important; }
     .route-finder-heading-row {
       display: flex;
       align-items: center;
@@ -4251,13 +3924,7 @@
       display: flex;
       align-items: center;
     }
-    .route-workspace-title {
-      color: var(--p2-sheet-ink);
-      font: 700 var(--text-callout)/1 var(--font-ui);
-    }
-    .route-workspace-actions { display: flex; align-items: center; gap: 6px; }
-    .route-services-btn,
-    .route-workspace-close {
+    .route-services-btn {
       min-height: 30px;
       border: 1px solid var(--p2-sheet-line);
       border-radius: var(--p2-r);
@@ -4273,12 +3940,6 @@
       padding: 0 9px;
     }
     .route-services-btn[aria-expanded="true"] { background: var(--p2-chrome); color: #fff; }
-    .route-workspace-close {
-      width: 30px;
-      padding: 0;
-      font-size: 1.2rem;
-      line-height: 1;
-    }
     .route-services-popover {
       position: absolute;
       right: 0;
@@ -5673,23 +5334,6 @@
       font-weight: 700;
       cursor: pointer;
     }
-    .saved-row-more {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px;
-    }
-    .saved-row-more .saved-action {
-      min-height: 28px !important;
-      padding: 0 8px !important;
-      font-size: 11px !important;
-      font-weight: 600 !important;
-      background: transparent !important;
-      border: 0 !important;
-      color: var(--fig-ink-soft) !important;
-      text-decoration: underline;
-      text-underline-offset: 2px;
-    }
-    .saved-row-more .saved-action.danger { color: #9f1239 !important; }
     .saved-empty {
       padding: 16px 8px !important;
       font-size: 12px !important;
@@ -6014,7 +5658,10 @@
     body.planner-open .stack > :not(#recenterBtn),
     body.planner-open .follow-chip,
     body.planner-open .status-dock { display: none !important; }
-    body.planner-open .stack #recenterBtn { display: grid !important; }
+    body.planner-open .stack #recenterBtn {
+      display: grid !important;
+      pointer-events: auto;
+    }
     body.planner-collapsed .stack,
     body.planner-collapsed .pip { bottom: calc(var(--p2-dock-h) + 224px) !important; }
     body.planner-tab-plan.planner-collapsed .stack,
@@ -6141,15 +5788,8 @@
     body.planner-open.planner-tab-plan .route-bar-stage-list .stage-row > .stage-row-head {
       flex: 0 0 auto;
     }
-    .saved-row-more .saved-action.primary {
-      background: var(--fig-blue, #0b70c9) !important;
-      color: #ffffff !important;
-      border-color: var(--fig-blue, #0b70c9) !important;
-    }
-
     /* The compact route bar is the single route-planning surface. The old
        chevron opened a redundant second presentation, so the bar stays here. */
-    body.planner-open .route-bar-expand { display: none !important; }
     body.planner-open.planner-tab-plan .route-bar-stage-editor {
       display: flex;
       flex-direction: column;
@@ -7039,19 +6679,6 @@
       min-width: 20px !important;
       padding: 0 !important;
     }
-    .route-surface-select {
-      width: 100% !important;
-      min-width: 0 !important;
-      height: 34px !important;
-      min-height: 34px !important;
-      margin: 0 !important;
-      padding: 0 28px 0 10px !important;
-      border: 1px solid rgba(28, 25, 23, 0.16) !important;
-      border-radius: 7px !important;
-      background-color: #ffffff !important;
-      color: var(--fig-ink, #1c1917) !important;
-      font: 700 10px/1 var(--font-ui) !important;
-    }
     .route-setting-toggle {
       display: flex !important;
       align-items: center !important;
@@ -7062,9 +6689,6 @@
       font: 600 9.5px/1 var(--font-ui) !important;
     }
     .route-setting-toggle .switch {
-      margin: 0 !important;
-    }
-    .route-stage-settings {
       margin: 0 !important;
     }
     .route-stage-editor-access {
@@ -7408,14 +7032,6 @@
     body.planner-open .stage-list {
       gap: 6px !important;
       scrollbar-width: none;
-    }
-    /* Compact stage cards are summaries only. The editor above is the sole
-       owner of profile and access controls, including legacy render paths. */
-    .stage-row .route-settings-grid,
-    .stage-row .route-stage-settings,
-    .stage-row [data-stage-profile],
-    .stage-row [data-stage-access] {
-      display: none !important;
     }
     body.planner-open .route-bar-stage-list::-webkit-scrollbar,
     body.planner-open .stage-list::-webkit-scrollbar { display: none; }
@@ -9955,7 +9571,7 @@
         source: "riderPoi",
         filter: ["has", "point_count"],
         paint: {
-          "circle-color": "rgba(23, 24, 28, 0.92)",
+          "circle-color": "#4a4540",
           "circle-stroke-color": "#ffffff",
           "circle-stroke-width": 2,
           "circle-radius": ["step", ["get", "point_count"], 15, 10, 19, 30, 24]
@@ -11669,10 +11285,13 @@
     function createStageMarker(p) {
       const el = document.createElement("div");
       el.className = "stage-marker" + (p.role === "start" ? " is-start" : "");
-      el.textContent = p.label;
+      const label = document.createElement("span");
+      label.textContent = p.label;
+      el.appendChild(label);
+      el.setAttribute("aria-label", "Waypoint " + p.label);
       const draggable = selectedWaypointIndex === p.index && !navigating;
       if (draggable) el.classList.add("is-editing");
-      const marker = new maplibregl.Marker({ element: el, draggable });
+      const marker = new maplibregl.Marker({ element: el, draggable, anchor: "bottom" });
       marker.setLngLat([p.lng, p.lat]).addTo(map);
       // The marker itself is the edit affordance. Tap once to arm dragging;
       // stage cards remain for selection and per-stage route preferences.
