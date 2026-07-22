@@ -4831,27 +4831,28 @@
     }
 
     .group-tabs {
-      background: transparent !important;
-      border: 1px solid rgba(0, 0, 0, 0.12) !important;
-      border-radius: 8px !important;
-      padding: 8px !important;
-      gap: 10px !important;
+      background: #ff7a00 !important;
+      border: 0 !important;
+      border-radius: 9px !important;
+      padding: 3px !important;
+      gap: 3px !important;
       display: flex !important;
     }
     .group-tab {
       flex: 1 1 0;
       min-width: 0;
-      min-height: 0 !important;
+      min-height: 34px !important;
       padding: 8px 6px !important;
-      border-radius: 4px !important;
-      background: rgba(255, 255, 255, 0.16) !important;
-      color: var(--fig-ink) !important;
+      border-radius: 7px !important;
+      background: transparent !important;
+      color: #f7f9fb !important;
       font-size: 12px !important;
-      font-weight: 600 !important;
+      font-weight: 700 !important;
     }
     .group-tab.active {
-      background: var(--fig-chrome) !important;
+      background: #16181c !important;
       color: #fff !important;
+      box-shadow: 0 1px 2px rgba(22, 24, 28, .18) !important;
     }
 
     .group-sheet .account-title.key-title {
@@ -6001,7 +6002,7 @@
       --chrome-shadow: 0 6px 16px rgba(16, 24, 40, 0.3);
       --panel-shadow: 0 10px 30px rgba(16, 24, 40, 0.16);
       --danger: #d83b42;
-      --success: #16875f;
+      --success: #147a56;
       --warning: #e8a000;
       --info: #2e7fe4;
       --focus-ring: rgba(255, 122, 0, 0.62);
@@ -6227,13 +6228,14 @@
     .account-profile-form > #accountSaveProfile,
     .route-compact-export, .route-export, .stage-save,
     .saved-action.primary, .btn.primary {
-      background: var(--accent) !important;
-      border-color: var(--accent) !important;
-      color: #16181c !important;
+      background: #147a56 !important;
+      border-color: #147a56 !important;
+      color: #fff !important;
     }
-    .route-compact-nav, .route-start, #startNavBtn, #startNavCompact {
-      background: #16181c !important;
-      border-color: #16181c !important;
+    .route-compact-nav, .route-start, #startNavBtn, #startNavCompact,
+    .route-compact-save {
+      background: #147a56 !important;
+      border-color: #147a56 !important;
       color: #fff !important;
     }
 
@@ -6283,9 +6285,9 @@
       min-height: 36px !important;
       padding: 3px !important;
       gap: 2px !important;
-      border: 1px solid rgba(22,24,28,.1) !important;
+      border: 0 !important;
       border-radius: 9px !important;
-      background: #e9eaed !important;
+      background: #ff7a00 !important;
     }
     .route-mode, .route-tabs .route-mode,
     .saved-sheet-mode-tabs .route-mode {
@@ -6295,7 +6297,7 @@
       border: 0 !important;
       border-radius: 7px !important;
       background: transparent !important;
-      color: var(--muted) !important;
+      color: #f7f9fb !important;
       font-size: 9.5px !important;
       font-weight: 700 !important;
     }
@@ -6961,7 +6963,8 @@
       gap: 3px !important;
       border: 0 !important;
       border-radius: 9px !important;
-      background: #e9eaed !important;
+      /* Figma 23:1509 — orange tab track; active pill stays black */
+      background: #ff7a00 !important;
     }
     body.planner-open .route-tabs .route-mode,
     body.planner-open .saved-sheet-mode-tabs .route-mode {
@@ -6970,6 +6973,8 @@
       border-radius: 7px !important;
       font-size: 10px !important;
       font-weight: 750 !important;
+      background: transparent !important;
+      color: #f7f9fb !important;
     }
     body.planner-open .route-tabs .route-mode.active,
     body.planner-open .route-tabs .route-mode[aria-selected="true"],
@@ -7163,22 +7168,14 @@
       white-space: nowrap !important;
     }
     body.planner-open .route-compact-save,
-    body.planner-open #stageSaveBtn {
-      border-color: #ff7a00 !important;
-      background: #ff7a00 !important;
-      color: #17191d !important;
-    }
+    body.planner-open #stageSaveBtn,
     body.planner-open .route-compact-export,
-    body.planner-open .route-export {
-      border: 1px solid rgba(22, 24, 28, .16) !important;
-      background: #fff !important;
-      color: #272b31 !important;
-    }
+    body.planner-open .route-export,
     body.planner-open .route-compact-nav,
     body.planner-open .route-nav,
     body.planner-open #routeNavBtn {
-      border-color: #16181c !important;
-      background: #16181c !important;
+      border-color: #147a56 !important;
+      background: #147a56 !important;
       color: #fff !important;
     }
     body.planner-open.planner-tab-saved .saved-list {
@@ -7271,27 +7268,25 @@
       color: #fff !important;
       box-shadow: var(--chrome-shadow) !important;
     }
-    /* Route actions keep one semantic color system in every planner mode. */
+    /*
+     * Route actions: richer brand-aligned green (was washed #9fd47c).
+     * Save / Export / Start navigation share one CTA green + white type.
+     */
     body.planner-open .route-compact-save,
     body.planner-open #stageSaveBtn,
-    body.planner-open #saveRouteConfirm {
-      border-color: #16181c !important;
-      background: #16181c !important;
-      color: #fff !important;
-    }
+    body.planner-open #saveRouteConfirm,
     body.planner-open .route-compact-export,
     body.planner-open .route-export,
-    body.planner-open #routeExportFloat {
-      border-color: #686d75 !important;
-      background: #686d75 !important;
-      color: #fff !important;
-    }
+    body.planner-open #routeExportFloat,
     body.planner-open .route-compact-nav,
     body.planner-open .route-nav,
-    body.planner-open #routeNavBtn {
-      border-color: #9fd47c !important;
-      background: #9fd47c !important;
-      color: #16181c !important;
+    body.planner-open #routeNavBtn,
+    body.planner-open .route-start,
+    body.planner-open #startNavBtn,
+    body.planner-open #startNavCompact {
+      border-color: #147a56 !important;
+      background: #147a56 !important;
+      color: #fff !important;
     }
     body.planner-open .route-compact-save:disabled,
     body.planner-open #stageSaveBtn:disabled,
@@ -7302,6 +7297,51 @@
     body.planner-open #routeNavBtn:disabled {
       opacity: 1 !important;
       cursor: not-allowed !important;
+    }
+
+    /* Final chrome lock: orange tab tracks + rich green CTAs (beats earlier passes). */
+    html body.planner-open .route-tabs,
+    html body.planner-open .saved-sheet-mode-tabs,
+    html body.planner-open .route-segment {
+      background: #ff7a00 !important;
+      border: 0 !important;
+    }
+    html body.planner-open .route-tabs .route-mode:not(.active):not([aria-selected="true"]),
+    html body.planner-open .saved-sheet-mode-tabs .route-mode:not(.active) {
+      background: transparent !important;
+      color: #f7f9fb !important;
+    }
+    html body.groups-open .group-tabs {
+      background: #ff7a00 !important;
+      border: 0 !important;
+      border-radius: 9px !important;
+      padding: 3px !important;
+      gap: 3px !important;
+    }
+    html body.groups-open .group-tab {
+      background: transparent !important;
+      color: #f7f9fb !important;
+    }
+    html body.groups-open .group-tab.active {
+      background: #16181c !important;
+      color: #fff !important;
+    }
+    html body .route-compact-save,
+    html body .route-compact-export,
+    html body .route-compact-nav,
+    html body .route-export,
+    html body .route-start,
+    html body .route-nav,
+    html body .stage-save,
+    html body #stageSaveBtn,
+    html body #saveRouteConfirm,
+    html body #routeExportFloat,
+    html body #routeNavBtn,
+    html body #startNavBtn,
+    html body #startNavCompact {
+      border-color: #147a56 !important;
+      background: #147a56 !important;
+      color: #fff !important;
     }
   </style>
 </head>
