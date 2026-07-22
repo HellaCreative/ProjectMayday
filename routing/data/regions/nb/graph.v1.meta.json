@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-21T13:14:29.254Z",
+  "generatedAt": "2026-07-22T14:13:53.762Z",
   "schemaVersion": "canada-regional-1",
   "regionId": "nb",
   "province": "NB",
@@ -9,47 +9,47 @@
     -63.74004,
     48.07265
   ],
-  "nodeCount": 336933,
-  "edgeCount": 304928,
-  "componentCount": 51650,
-  "boundaryNodeCount": 1898,
+  "nodeCount": 307826,
+  "edgeCount": 260909,
+  "componentCount": 57440,
+  "boundaryNodeCount": 1976,
   "accessCounts": {
-    "motorized_permissive": 102343,
-    "motorized_unknown": 202585
+    "motorized_permissive": 80095,
+    "motorized_unknown": 180814
   },
   "surfaceCounts": {
-    "paved": 72255,
-    "gravel": 14869,
-    "unknown": 4353,
-    "access": 213451
+    "paved": 28992,
+    "unknown": 8856,
+    "access": 222221,
+    "gravel": 840
   },
   "sourceCounts": {
-    "National Road Network": 69585,
-    "OpenStreetMap": 55719,
-    "New Brunswick Forest Roads (DNR-ED)": 179624
+    "OpenStreetMap": 80095,
+    "New Brunswick Forest Roads (DNR-ED)": 180814
   },
-  "jsonBytes": 184082142,
-  "gzBytes": 39984919,
+  "jsonBytes": 147049753,
+  "gzBytes": 31315092,
   "lineage": {
     "nrn": {
-      "adapter": "nrn-from-pack",
-      "featureCount": 69585
+      "adapter": null,
+      "featureCount": 0,
+      "omitted": "osm-plus-provincial"
     },
     "osm": {
       "adapter": "osm-roads",
       "featureCount": 80646,
-      "added": 56182,
-      "duplicateSkipped": 24464,
+      "role": "sole-fabric",
+      "added": 80646,
+      "duplicateSkipped": 0,
       "classification": {
         "surface": {
-          "paved": 29922,
-          "unknown": 8282,
+          "paved": 29165,
+          "unknown": 9039,
           "resource": 41577,
           "gravel": 865
         },
         "access": {
-          "motorized_permissive": 52552,
-          "motorized_unknown": 28094
+          "motorized_permissive": 80646
         },
         "structure": {
           "none": 77819,
@@ -57,13 +57,14 @@
           "tunnel": 47
         },
         "roadTrack": {
-          "arterial": 1059,
-          "local": 36159,
-          "service": 21336,
-          "track": 6758,
-          "freeway": 1094,
-          "collector": 757,
-          "resource": 13483
+          "arterial": 3529,
+          "local": 20047,
+          "service": 26937,
+          "track": 7777,
+          "collector": 8327,
+          "ramp": 2085,
+          "freeway": 1834,
+          "resource": 10110
         },
         "excluded": {}
       },
@@ -75,22 +76,22 @@
     },
     "provincial": {
       "adapter": "nb-forest-roads",
-      "featureCount": 184389,
+      "featureCount": 184396,
       "excludedByReason": {
         "no_usable_geometry": 59
       },
       "classification": {
         "surface": {
-          "resource": 184389
+          "resource": 184396
         },
         "access": {
-          "motorized_unknown": 184389
+          "motorized_unknown": 184396
         },
         "structure": {
-          "none": 184389
+          "none": 184396
         },
         "roadTrack": {
-          "resource": 184389
+          "resource": 184396
         },
         "excluded": {}
       }

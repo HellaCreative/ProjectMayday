@@ -76,11 +76,20 @@ function primaryRegionForPoint(lon, lat) {
     return "on";
   }
 
-  // NB vs Quebec river corridor (Dégelis / Témiscouata).
-  if (ids.has("nb") && qcHit) {
+  // NS vs NB — Tantramar / Missaguash. Must run before NB↔QC: Quebec's
+  // rectangular bbox covers the Maritimes and would steal Amherst as NB.
+  if (ids.has("ns") && ids.has("nb")) {
+    // Roughly east of the interprovincial line stays Nova Scotia.
+    if (lon >= -64.27) return "ns";
+    return "nb";
+  }
+
+  // NB vs Quebec river corridor (Dégelis / Témiscouata) only — not Maritimes.
+  if (ids.has("nb") && qcHit && !ids.has("ns") && !ids.has("pe")) {
     if (lon <= -68.45) return "qc";
     if (lat >= 47.7 && lon <= -68.2) return "qc";
-    return "nb";
+    // Only claim NB when we're in the Madawaska / Témiscouata pocket.
+    if (lon <= -67.2 && lat >= 47.0) return "nb";
   }
 
   hits.sort((a, b) => a.area - b.area);
@@ -175,8 +184,8 @@ function regionPackAvailable(regionId) {
  * via boundary-node matching (no free-space connectors).
  */
 function resolveGraphRequest(body = {}) {
-  // Prefer the regional NS pack (OSM + NSTDB; no NRN). Opt back into the
-  // pre-OSM legacy pack only with ROUTING_PREFER_LEGACY=1. ROUTING_USE_REGIONAL
+  // Prefer regional packs (NS/NB = OSM+provincial, no NRN). Opt back into the
+  // pre-OSM legacy NS pack only with ROUTING_PREFER_LEGACY=1. ROUTING_USE_REGIONAL
   // remains accepted as an explicit regional force for older deploy docs.
   const forceLegacyNs = process.env.ROUTING_PREFER_LEGACY === "1";
   const forceRegional = process.env.ROUTING_USE_REGIONAL === "1";

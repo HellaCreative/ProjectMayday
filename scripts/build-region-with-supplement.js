@@ -7,9 +7,9 @@
  * Default stack (most provinces):
  *   NRN backbone → OSM road fabric (optional) → provincial capillary
  *
- * Nova Scotia locked product intent:
- *   OSM road fabric → NSTDB (STDB) capillary — no NRN
- *   Use: node scripts/build-region-with-supplement.js ns --osm-plus-provincial
+ * Nova Scotia / New Brunswick locked product intent:
+ *   OSM road fabric → provincial capillary — no NRN
+ *   Use: node scripts/build-region-with-supplement.js ns|nb --osm-plus-provincial
  *
  * Quebec:
  *   OSM-only (no NRN, no provincial): --osm-only
@@ -140,7 +140,7 @@ async function main() {
   const args = process.argv.slice(2);
   const code = String(args.find((a) => !a.startsWith("--")) || "").toLowerCase();
   const osmOnly = args.includes("--osm-only");
-  // OSM fabric + provincial capillary, no NRN (NS product lock: OSM + NSTDB).
+  // OSM fabric + provincial capillary, no NRN (NS = NSTDB; NB = Forest Roads).
   const osmPlusProvincial = args.includes("--osm-plus-provincial");
   const skipOsm = args.includes("--skip-osm");
   if (!code || !SUPPLEMENTS[code]) {

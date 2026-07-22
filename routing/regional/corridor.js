@@ -261,14 +261,15 @@ function isNrnSrc(src) {
 
 /**
  * Live mental model for Vercel longhaul packs:
- *   Default (NB etc.): OSM + NRN road fabric; provincial capillary omitted.
+ *   Default (ON etc.): OSM + NRN road fabric; provincial capillary omitted.
  *   Quebec: OSM-only (drop NRN).
- *   Nova Scotia (locked): OSM + NSTDB provincial capillary; drop NRN.
+ *   Nova Scotia / New Brunswick (locked): OSM + provincial capillary; drop NRN.
+ *     NS = NSTDB; NB = Forest Roads (keep purple so Allow works NS↔NB).
  *
  * Modes:
  *   osm / osm-only — Quebec: drop NRN; keep all OSM motorized fabric.
- *   osm-provincial / osm+nstdb — NS: drop NRN; keep OSM + provincial (NSTDB).
- *   maritime / hub — NRN + OSM (Maritimes / legacy). Hub limits OSM bulbs.
+ *   osm-provincial / osm+nstdb — NS/NB: drop NRN; keep OSM + provincial.
+ *   maritime / hub — NRN + OSM (legacy Maritimes / hub bulbs). Hub limits OSM.
  *   corridor / dense — all NRN non-track + OSM hub/highway.
  */
 function extractRoadFabricLonghaulGraph(graph, options = {}) {
@@ -310,7 +311,7 @@ function extractRoadFabricLonghaulGraph(graph, options = {}) {
     }
 
     if (osmProvincial) {
-      // NS locked fabric: OSM + NSTDB. Never keep NRN highway spine.
+      // NS/NB locked fabric: OSM + provincial. Never keep NRN highway spine.
       if (nrn) continue;
       if (osm) {
         keepEdges.push(e.ac === 2 ? { ...e, ac: 1 } : e);

@@ -8,7 +8,9 @@
  *   QC — OSM-only (no NRN)
  *   NS — OSM + NSTDB (no NRN); provincial capillary stays in the pack so Allow
  *        unknown can use purple TRACK. NRN highway spine is dropped.
- *   NB (+ others) — OSM + NRN fabric; provincial capillary omitted (size)
+ *   NB — OSM + Forest Roads (no NRN); provincial kept like NS so NS↔NB Allow
+ *        works. Capillary is weaker than NSTDB on surface/class (see map doc).
+ *   Others — OSM + NRN fabric; provincial capillary omitted (size)
  *
  * Hub bulbs keep village/city basemap snaps without shipping every full pack.
  */
@@ -71,13 +73,15 @@ const HUBS = {
     { lon: -64.778, lat: 46.088 }, // Moncton
     { lon: -66.643, lat: 45.963 }, // Fredericton
     { lon: -66.059, lat: 45.273 }, // Saint John
-    { lon: -67.583, lat: 47.376 } // Edmundston / QC approach
+    { lon: -67.583, lat: 47.376 }, // Edmundston / QC approach
+    { lon: -64.21, lat: 45.83 } // Amherst NS / NB border approach
   ],
   ns: [
     { lon: -63.575, lat: 44.649 }, // Halifax
     { lon: -63.28, lat: 45.365 }, // Truro
     { lon: -61.39, lat: 46.14 }, // Sydney area
-    { lon: -64.52, lat: 44.98 } // Bridgewater / South Shore
+    { lon: -64.52, lat: 44.98 }, // Bridgewater / South Shore
+    { lon: -64.21, lat: 45.83 } // Amherst / NB border approach
   ],
   pe: [{ lon: -63.126, lat: 46.238 }],
   nl: [{ lon: -52.712, lat: 47.561 }]
@@ -98,9 +102,9 @@ function main() {
 
     const corridorFabric = new Set([]); // dense NRN-everywhere — too large for Hobby
     const hubFabric = new Set(["on"]); // spine + hub bulbs (QC is OSM-only below)
-    const maritimeFabric = new Set(["nb", "pe", "nl"]); // NS is osm-provincial below
+    const maritimeFabric = new Set(["pe", "nl"]); // NS/NB are osm-provincial below
     const osmProvince = new Set(["qc"]); // full OSM fabric; no NRN; one pack per province
-    const osmProvincialProvince = new Set(["ns"]); // OSM + NSTDB; no NRN
+    const osmProvincialProvince = new Set(["ns", "nb"]); // OSM + provincial; no NRN
 
     let extractMode = "spine";
     if (osmProvincialProvince.has(code)) {
@@ -147,9 +151,9 @@ function main() {
     }
 
     const afterSpine = g.edgeCount;
-    // QC OSM-only + NS OSM+NSTDB packs are full-province (Hobby-safe after thin).
+    // QC OSM-only + NS/NB OSM+provincial packs are full-province (Hobby-safe after thin).
     // Other packs stay clipped to the national southern corridor.
-    if (code !== "qc" && code !== "ns") {
+    if (!osmProvince.has(code) && !osmProvincialProvince.has(code)) {
       g = clipGraphToCorridor(g, corridor, BUFFER_M);
     }
     if (String(extractMode).startsWith("fabric")) {
@@ -161,27 +165,32 @@ function main() {
     g.regionId = code;
     g.province = String(code).toUpperCase();
     g.schemaVersion = "longhaul-region-1";
-    const nsOsmNstdb = osmProvincialProvince.has(code);
+    const keepProvincial = osmProvincialProvince.has(code);
     const qcOsmOnly = osmProvince.has(code);
+    const mentalModel = keepProvincial
+      ? code === "ns"
+        ? "osm-nstdb-fabric"
+        : "osm-provincial-fabric"
+      : qcOsmOnly
+        ? "osm-fabric-province"
+        : "osm-nrn-fabric";
     g.lineage = {
-      purpose: nsOsmNstdb
-        ? "canada-chain / in-province pack (OSM+NSTDB; no NRN)"
+      purpose: keepProvincial
+        ? code === "ns"
+          ? "canada-chain / in-province pack (OSM+NSTDB; no NRN)"
+          : "canada-chain / in-province pack (OSM+Forest Roads; no NRN)"
         : qcOsmOnly
           ? "canada-chain / in-province pack (OSM-only; no NRN)"
           : "canada-chain hop pack (OSM+NRN road fabric; hub bulbs; no provincial)",
-      mentalModel: nsOsmNstdb
-        ? "osm-nstdb-fabric"
-        : qcOsmOnly
-          ? "osm-fabric-province"
-          : "osm-nrn-fabric",
+      mentalModel,
       source: `regions/${code}/graph.v1.json.gz`,
       hasRoadClass,
       hasOsm,
       extractMode,
-      dropNrn: nsOsmNstdb || qcOsmOnly || undefined,
-      keepProvincial: nsOsmNstdb || undefined,
+      dropNrn: keepProvincial || qcOsmOnly || undefined,
+      keepProvincial: keepProvincial || undefined,
       hubCount: (HUBS[code] || []).length,
-      corridorBufferMeters: code === "qc" || code === "ns" ? null : BUFFER_M,
+      corridorBufferMeters: keepProvincial || qcOsmOnly ? null : BUFFER_M,
       thinnedGeometry: true,
       inputEdgeCount: before,
       spineEdgeCount: afterSpine,

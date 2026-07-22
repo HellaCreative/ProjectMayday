@@ -4,11 +4,12 @@
   "notes": [
     "Province fabric is product-locked per region — do not assume NRN everywhere.",
     "NS locked fabric: OSM road fabric + NSTDB (STDB) capillary. No NRN.",
+    "NB locked fabric: OSM road fabric + Forest Roads capillary. No NRN. Capillary weaker than NSTDB on surface/class; longhaul keeps provincial for NS↔NB Allow.",
     "QC locked fabric: OSM-only. No NRN.",
     "Elsewhere NRN may still act as national paved/gravel identity where it overlaps OSM.",
-    "Provincial supplements conflated where adapters are ready: NS NSTDB, AB Access, ON MNRF, QC chemins multiusages, BC FTEN (when ingest completes).",
+    "Provincial supplements conflated where adapters are ready: NS NSTDB, NB Forest Roads, AB Access, ON MNRF, QC chemins multiusages, BC FTEN (when ingest completes).",
     "OSM motorized highways are the road fabric (motorized_permissive). Shortbread tiles remain display-only; POIs are a separate pack.",
-    "Cross-Canada longhaul packs: NS = OSM+NSTDB; QC = OSM-only; others thinned OSM+NRN (provincial omitted for size)."
+    "Cross-Canada longhaul packs: NS/NB = OSM+provincial (purple kept); QC = OSM-only; others thinned OSM+NRN (provincial omitted for size)."
   ],
   "regions": [
     {
@@ -230,34 +231,35 @@
         "adapter": "nrn",
         "status": "ready",
         "dateRetrieved": "2026-07-20",
-        "notes": "NRN ROADSEG ingested as national backbone artifact. Not product routing-ready until audit validation + supplement policy applied."
+        "notes": "NRN omitted from NS routing fabric (OSM + NSTDB only)."
       },
       "provincial": {
-        "sourceName": "GeoNB provincial roads / Crown / recreation",
-        "catalogueUrl": "https://geonb.snb.ca",
-        "format": "GIS services",
-        "license": "verify before ingest",
+        "sourceName": "New Brunswick Forest Roads (DNR-ED)",
+        "catalogueUrl": "https://hub.arcgis.com/datasets/NBDNR::forestry-roads-chemins-forestiers/about",
+        "downloadUrl": "https://gis-erd-der.gnb.ca/server/rest/services/OpenData/ForestRoads/FeatureServer",
+        "format": "ArcGIS FeatureServer",
+        "license": "Open Government Licence - New Brunswick",
         "adapter": "nb-forest-roads",
         "status": "ready",
-        "dateRetrieved": "2026-07-21",
-        "notes": " Supplemental adapter ingested."
+        "dateRetrieved": "2026-07-22",
+        "notes": "Capillary: all resource / motorized_unknown. Sparse attrs (no surface/class). Best-effort vs NSTDB — see DIRT-MAP-A-PROVINCE assessment."
       },
       "routingReady": true,
-      "routingMode": "nrn+osm+provincial",
+      "routingMode": "osm+provincial",
       "backboneArtifact": {
         "path": "routing/data/regions/nb/graph.v1.json.gz",
-        "edgeCount": 304928,
-        "nodeCount": 336933,
-        "gzBytes": 39984919
+        "edgeCount": 260909,
+        "nodeCount": 307826,
+        "gzBytes": 31315092
       },
       "osm": {
         "adapter": "osm-roads",
-        "role": "road-fabric",
+        "role": "sole-fabric",
         "status": "ready",
         "featureCount": 80646,
-        "added": 56182,
+        "added": 80646,
         "license": "OpenStreetMap contributors (ODbL)",
-        "dateRetrieved": "2026-07-21"
+        "dateRetrieved": "2026-07-22"
       }
     },
     {

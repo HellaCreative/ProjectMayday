@@ -16,7 +16,7 @@ module.exports = async function handler(req, res) {
       ok: true,
       service: "dirt-route",
       engine: "dirt-node-astar",
-      note: "NS: OSM+NSTDB (no NRN). QC: OSM-only. Other longhaul: OSM+NRN fabric; provincial capillary unknown-gated on full packs."
+      note: "NS: OSM+NSTDB (no NRN). NB: OSM+Forest Roads (no NRN; provincial kept on longhaul). QC: OSM-only. Other longhaul: OSM+NRN fabric; provincial capillary unknown-gated on full packs."
     });
   }
 

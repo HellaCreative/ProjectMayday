@@ -89,8 +89,8 @@ Honest gaps as of this writing:
 1. **Profiles too similar** — mostly addressed on NS gold (Myra + New Glasgow→Yarmouth): Direct crow-flies dirt cut, Balanced ~50/50 when Allow on, Dirt dirt-max, Clean paved. Re-check after weight churn.
 2. **Clean + Allow** — product law = immune; **implemented** in `normalizePolicy` (engine forces `motorizedUnknown` off for `cleanest`). Soft-stitch / adventure snap / Allow cost pull already skip Clean.
 3. **Allow off vs on** — with Allow on, adventure should clearly take more purple; with Allow off, dirt% should come from OSM gravel/track only. If Allow doesn’t move the needle, capillary isn’t in the searchable path (pack, longhaul omit, or stitch).
-4. **Longhaul vs full pack** — Vercel NS keeps NSTDB; NB longhaul drops provincial. Riders testing “Allow on” across provinces may see different purple availability — call it out, don’t gaslight.
-5. **NRN still in non-NS packs** — adventure costing comments still mention “prefer capillary over paved NRN”; NS gold has no NRN. Fabric graduation is unfinished ([map a province](./DIRT-MAP-A-PROVINCE.md)).
+4. **Longhaul vs full pack** — Vercel NS/NB keep provincial capillary; other longhaul packs may drop purple for size. Riders testing “Allow on” across provinces may see different purple availability — call it out, don’t gaslight. Assessment framework: [DIRT-MAP-A-PROVINCE.md](./DIRT-MAP-A-PROVINCE.md#province-data-assessment).
+5. **NRN still in non-NS/NB packs** — adventure costing comments still mention “prefer capillary over paved NRN”; NS/NB gold have no NRN. Fabric graduation is unfinished ([map a province](./DIRT-MAP-A-PROVINCE.md)).
 
 Fixtures exist (Porters balanced, HFX–Yarmouth cleanest, etc.) — they prove completeness more than profile law. Myra profile matrix: `scripts/smoke-myra-profiles.js`.
 
