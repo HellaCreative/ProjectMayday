@@ -2365,19 +2365,22 @@
       font: 600 9px/1.2 var(--p2-mono) !important;
     }
     .route-bar-stage-list .route-metric-row .route-metric:not(:first-child) { display: none; }
-    /* Plan route brown chips: show km + dirt% + paved% (From-here parity). */
+    /* Plan brown chips: km · D:n% · P:n% (Figma 23:1509). */
     body.planner-open.planner-tab-plan .route-bar-stage-list .route-metric-row {
       display: flex !important;
-      flex-wrap: wrap;
-      align-items: baseline;
-      gap: 4px 6px !important;
+      flex-wrap: nowrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 4px !important;
     }
     body.planner-open.planner-tab-plan .route-bar-stage-list .route-metric-row .route-metric {
       display: inline !important;
     }
-    /* Compact chip: keep ETA if present, but prefer surface mix visibility. */
-    body.planner-open.planner-tab-plan .route-bar-stage-list .route-metric-row .route-metric:nth-child(2) {
-      display: none !important;
+    body.planner-open.planner-tab-plan .route-bar-stage-list .route-metric-dirt {
+      color: #3a9dff !important;
+    }
+    body.planner-open.planner-tab-plan .route-bar-stage-list .route-metric-paved {
+      color: #fdb003 !important;
     }
     .route-bar-add-stage {
       flex: 0 0 138px;
@@ -5126,6 +5129,12 @@
     .route-metric-row .route-metric {
       white-space: nowrap;
     }
+    .route-metric-row .route-metric-dirt {
+      color: #3a9dff !important;
+    }
+    .route-metric-row .route-metric-paved {
+      color: #db9c0e !important;
+    }
     .route-metric-row.is-empty,
     .route-metric-row.is-hint {
       justify-content: flex-start;
@@ -5760,8 +5769,8 @@
       width: 21px;
       height: 21px;
       border-radius: 7px;
-      background: #e8790c;
-      color: #ffffff;
+      background: #ff7a00;
+      color: #16181c;
       font: 800 11px/1 var(--p2-mono);
     }
     body.planner-open.planner-tab-plan .route-bar-stage-list .stage-label-text {
@@ -5773,16 +5782,16 @@
     body.planner-open.planner-tab-plan .route-bar-stage-list .stage-profile-label {
       margin-top: 4px !important;
       color: rgba(250, 250, 249, 0.72) !important;
-      font-size: 9px !important;
+      font: 600 7.5px/1.1 var(--p2-mono) !important;
     }
     body.planner-open.planner-tab-plan .route-bar-stage-list .route-metric-row {
       gap: 4px !important;
       color: rgba(250, 250, 249, 0.82) !important;
-      font-size: 9px !important;
+      font: 600 7.5px/1.2 var(--p2-mono) !important;
     }
     body.planner-open.planner-tab-plan .route-bar-stage-list .route-metric-row.is-empty {
       color: #f2c99c !important;
-      font-size: 9px !important;
+      font-size: 7.5px !important;
     }
     body.planner-open.planner-tab-plan .route-bar-stage-list .stage-mix-bar {
       display: flex;
@@ -5816,7 +5825,7 @@
       margin: 0 0 6px;
       padding: 9px;
       border: 1px solid rgba(28, 25, 23, 0.14);
-      border-radius: 8px;
+      border-radius: 9px;
       background: #fff;
       color: #1c1917;
       box-shadow: 0 3px 10px rgba(12, 10, 9, 0.12);
@@ -5829,14 +5838,21 @@
       align-items: center;
       gap: 7px;
     }
-    .route-stage-editor-head { justify-content: space-between; }
+    /* Figma head: badge+Stage | Allow unknown access | chevron */
+    .route-stage-editor-head {
+      justify-content: space-between;
+      gap: 8px;
+      min-height: 38px;
+    }
     .route-stage-editor-title {
       display: flex;
       align-items: center;
       gap: 7px;
+      flex: 0 0 auto;
       min-width: 0;
-      font-size: 12px;
-      font-weight: 750;
+      font-size: 11px;
+      font-weight: 800;
+      color: #1c1917;
     }
     .route-stage-editor-title > span:last-child {
       display: flex;
@@ -5854,19 +5870,21 @@
       width: 22px;
       height: 22px;
       border-radius: 7px;
-      background: #e8790c;
-      color: #fff;
+      background: #ff7a00;
+      color: #16181c;
       font: 800 11px/1 var(--p2-mono);
     }
     .route-stage-editor-close {
+      display: inline-grid;
+      place-items: center;
+      flex: 0 0 30px;
       width: 30px;
       height: 30px;
+      padding: 0;
       border: 1px solid rgba(28, 25, 23, 0.14);
       border-radius: 7px;
       background: #ebe6df;
       color: #1c1917;
-      font-size: 19px;
-      line-height: 1;
       cursor: pointer;
     }
     .route-stage-editor-meta {
@@ -5896,29 +5914,39 @@
       border-color: #1c1917;
     }
     .route-stage-editor-access {
-      min-height: 28px;
-      color: #1c1917;
+      flex: 1 1 auto;
+      justify-content: flex-end;
+      gap: 12px;
+      min-width: 0;
+      min-height: 0;
+      padding: 0 2px;
+      color: #16181c;
       font-size: 10px;
-      font-weight: 650;
+      font-weight: 800;
     }
-    .route-stage-editor-access > span:first-child { flex: 1; }
+    .route-stage-editor-access > span:first-child {
+      flex: 0 1 auto;
+      min-width: 0;
+      line-height: 1.35;
+      text-align: right;
+    }
     .route-stage-editor-access .access-info-btn {
       width: 24px;
       height: 24px;
       padding: 0;
     }
     .route-stage-editor-summary {
-      min-height: 28px;
+      min-height: 36px;
     }
     .route-stage-editor-summary .route-metric-row {
-      min-height: 28px;
-      padding: 6px 8px;
-      border: 1px solid rgba(28, 25, 23, 0.1);
-      border-radius: 7px;
-      background: #f5f2ec;
+      min-height: 36px;
+      padding: 7px 9px;
+      border: 0;
+      border-radius: 8px;
+      background: #ebecef;
       color: #1c1917;
-      font: 650 10px/1.25 var(--p2-mono);
-      gap: 8px;
+      font: 600 11px/1.2 var(--p2-mono);
+      gap: 8px 10px;
     }
     .route-stage-editor-summary .route-metric-row .route-metric {
       display: inline !important;
@@ -5927,7 +5955,7 @@
       color: #78716c;
       font-weight: 600;
     }
-    .route-stage-editor-actions { justify-content: space-between; }
+    .route-stage-editor-actions { justify-content: flex-end; }
     .route-stage-editor-edit,
     .route-stage-editor-remove {
       min-height: 30px;
@@ -7023,7 +7051,7 @@
       color: #656a72 !important;
       font-size: 9px !important;
     }
-    /* Prototype stage editor: header, profile subtabs, access row, remove. */
+    /* Prototype stage editor: header (title + access + close), profile subtabs, stats, remove. */
     #routeBarStageEditor .route-stage-editor-prefs {
       display: grid !important;
       grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
@@ -7049,15 +7077,27 @@
     }
     #routeBarStageEditor .route-stage-editor-access {
       display: flex !important;
-      min-height: 38px !important;
+      flex: 1 1 auto !important;
+      min-height: 0 !important;
       align-items: center !important;
-      justify-content: flex-start !important;
+      justify-content: flex-end !important;
       gap: 12px !important;
       padding: 0 2px !important;
       border: 0 !important;
       color: #16181c !important;
       font-size: 10px !important;
       font-weight: 750 !important;
+    }
+    #routeBarStageEditor .route-stage-editor-summary .route-metric-row {
+      background: #ebecef !important;
+      border: 0 !important;
+      border-radius: 8px !important;
+      min-height: 36px !important;
+      padding: 7px 9px !important;
+      font: 600 11px/1.2 var(--font-mono) !important;
+    }
+    #routeBarStageEditor .route-stage-editor-actions {
+      justify-content: flex-end !important;
     }
     body.planner-open .route-compact-summary,
     body.planner-open .stage-trip-summary,
@@ -10837,14 +10877,14 @@
             '<span class="stage-number-badge">' + (index + 1) + '</span>' +
             '<span>Stage ' + String(index + 1).padStart(2, "0") + '</span>' +
           '</div>' +
-          '<button class="route-stage-editor-close" type="button" data-stage-editor-close aria-label="Close stage details"><i data-lucide="x" aria-hidden="true"></i></button>' +
+          '<label class="route-stage-editor-access">' +
+            '<span>Allow unknown access</span>' +
+            '<span class="switch"><input type="checkbox" data-stage-access aria-label="Allow unknown access"' +
+              (stageAllowsUnknownAccess(stage) ? " checked" : "") + ' data-stage-id="' + stage.id + '"><span></span></span>' +
+          '</label>' +
+          '<button class="route-stage-editor-close" type="button" data-stage-editor-close aria-label="Close stage details"><i data-lucide="chevron-down" aria-hidden="true"></i></button>' +
         '</div>' +
         '<div class="route-stage-editor-prefs" role="group" aria-label="Stage route profile">' + profileButtons + '</div>' +
-        '<label class="route-stage-editor-access">' +
-          '<span>Allow unknown access</span>' +
-          '<span class="switch"><input type="checkbox" data-stage-access aria-label="Allow unknown access"' +
-            (stageAllowsUnknownAccess(stage) ? " checked" : "") + ' data-stage-id="' + stage.id + '"><span></span></span>' +
-        '</label>' +
         '<div class="route-stage-editor-summary">' + stageMetricsHtml(stage) + '</div>' +
         '<div class="route-stage-editor-actions">' +
           '<button class="route-stage-editor-remove" type="button" data-stage-delete="' + stage.id + '"' +
@@ -11233,34 +11273,39 @@
       if (!hasRoute) {
         return '<div class="route-metric-row is-empty">' + (o.emptyText || "Place points to build this route") + "</div>";
       }
-      // Second slot is ETA (moving time). Missing seconds used to render a lone
-      // "—" between km and dirt% — look like a bug, not a missing field.
-      const minLabel = o.movingSeconds != null && Number.isFinite(o.movingSeconds) && o.movingSeconds > 0
+      const compact = !!o.compact;
+      // Full row: km · ETA · % Dirt · % Paved. Chip compact: km · D:n% · P:n%.
+      const minLabel = !compact && o.movingSeconds != null && Number.isFinite(o.movingSeconds) && o.movingSeconds > 0
         ? "< " + Math.max(1, Math.round(o.movingSeconds / 60)) + " min"
         : null;
-      const dirtLabel = o.dirtPercent != null ? o.dirtPercent + "% Dirt" : "—";
-      const pavedLabel = o.pavedPercent != null ? o.pavedPercent + "% Paved" : "—";
+      const dirtLabel = o.dirtPercent != null
+        ? (compact ? "D: " + o.dirtPercent + "%" : o.dirtPercent + "% Dirt")
+        : "—";
+      const pavedLabel = o.pavedPercent != null
+        ? (compact ? "P: " + o.pavedPercent + "%" : o.pavedPercent + "% Paved")
+        : "—";
       return (
-        '<div class="route-metric-row" role="group" aria-label="Route stats">' +
+        '<div class="route-metric-row' + (compact ? " is-compact" : "") + '" role="group" aria-label="Route stats">' +
           '<span class="route-metric">' + formatKmLabel(o.distanceKm) + "</span>" +
           (minLabel ? '<span class="route-metric">' + minLabel + "</span>" : "") +
-          '<span class="route-metric">' + dirtLabel + "</span>" +
-          '<span class="route-metric">' + pavedLabel + "</span>" +
+          '<span class="route-metric route-metric-dirt">' + dirtLabel + "</span>" +
+          '<span class="route-metric route-metric-paved">' + pavedLabel + "</span>" +
         "</div>"
       );
     }
 
-    function stageMetricsHtml(stage) {
+    function stageMetricsHtml(stage, opts) {
+      const o = opts || {};
       const status = RS.computeStageStatus(stage);
       if (status === RS.STAGE_STATUS.DRAFT) {
         const need = !stage.start ? "Press and hold for starting point" : "Press and hold to add another stage";
-        return routeMetricRowHtml({ emptyText: "Draft · " + need });
+        return routeMetricRowHtml({ emptyText: "Draft · " + need, compact: o.compact });
       }
       if (status === RS.STAGE_STATUS.LOADING) {
-        return routeMetricRowHtml({ emptyText: "Routing…" });
+        return routeMetricRowHtml({ emptyText: "Routing…", compact: o.compact });
       }
       if (status === RS.STAGE_STATUS.FAILED) {
-        return routeMetricRowHtml({ emptyText: "Failed · " + (stage.error || "no route") });
+        return routeMetricRowHtml({ emptyText: "Failed · " + (stage.error || "no route"), compact: o.compact });
       }
       if (status === RS.STAGE_STATUS.COMPLETE && stage.route) {
         const b = RS.routeBreakdown(stage.route);
@@ -11268,10 +11313,11 @@
           distanceKm: (stage.route.distanceMeters || 0) / 1000,
           movingSeconds: stage.route.estimatedMovingSeconds,
           dirtPercent: RS.weightedPercent(b.dirtMeters, b.distanceMeters),
-          pavedPercent: RS.weightedPercent((b.surface && b.surface.paved) || 0, b.distanceMeters)
+          pavedPercent: RS.weightedPercent((b.surface && b.surface.paved) || 0, b.distanceMeters),
+          compact: o.compact
         });
       }
-      return routeMetricRowHtml({ emptyText: "Ready · not routed" });
+      return routeMetricRowHtml({ emptyText: "Ready · not routed", compact: o.compact });
     }
 
     function stageMixBarHtml(stage) {
@@ -11300,7 +11346,7 @@
         const profile = stage.profile || "balanced";
         const profileLabel = profile === "cleanest" ? "Clean" : profile.charAt(0).toUpperCase() + profile.slice(1);
         const stageLabel = "Stage " + String(i + 1).padStart(2, "0");
-        const body = stageMixBarHtml(stage) + stageMetricsHtml(stage);
+        const body = stageMixBarHtml(stage) + stageMetricsHtml(stage, { compact: true });
         return (
           '<div class="stage-row' + (active ? " is-active" : "") + (editing ? " is-editing" : "") +
             '" role="listitem" data-stage-id="' + stage.id + '">' +
