@@ -6702,15 +6702,32 @@
       gap: 0 !important;
       padding: 0 !important;
     }
+    /* Figma 23:1509 / 9:1303 — orange segmented track (not grey #e9eaed). */
     body.planner-open .route-card.is-expanded .route-mode-block .route-tabs,
     body.planner-open .route-card.is-expanded .saved-sheet-mode-tabs {
       box-sizing: border-box;
       padding: 4px !important;
-      background: #e9eaed !important;
+      gap: 3px !important;
+      border: 0 !important;
+      border-radius: 9px !important;
+      background: #ff7a00 !important;
     }
     body.planner-open .route-card.is-expanded .route-tabs .route-mode,
     body.planner-open .route-card.is-expanded .saved-sheet-mode-tabs .route-mode {
       font-size: 11px !important;
+      font-weight: 800 !important;
+      background: transparent !important;
+      color: #f7f9fb !important;
+      border: 0 !important;
+      border-radius: 7px !important;
+    }
+    body.planner-open .route-card.is-expanded .route-tabs .route-mode.active,
+    body.planner-open .route-card.is-expanded .route-tabs .route-mode[aria-selected="true"],
+    body.planner-open .route-card.is-expanded .saved-sheet-mode-tabs .route-mode.active {
+      background: #16181c !important;
+      color: #fff !important;
+      border: 1px solid #fff !important;
+      box-shadow: 0 1px 2px rgba(22, 24, 28, .18) !important;
     }
     .route-settings-grid {
       display: grid !important;
@@ -7299,17 +7316,51 @@
       cursor: not-allowed !important;
     }
 
-    /* Final chrome lock: orange tab tracks + rich green CTAs (beats earlier passes). */
+    /*
+     * Final chrome lock (Figma Frame 27 / 23:1509 + Routes From here 9:1303).
+     * Must beat .route-card.is-expanded .route-mode-block .route-tabs (#e9eaed)
+     * and .route-card.is-collapsed .route-tabs (transparent) while the sheet
+     * is open — except the minimized planner-collapsed pill.
+     */
     html body.planner-open .route-tabs,
     html body.planner-open .saved-sheet-mode-tabs,
-    html body.planner-open .route-segment {
+    html body.planner-open .route-segment,
+    html body.planner-open .route-mode-block .route-tabs,
+    html body.planner-open .route-card.is-expanded .route-tabs,
+    html body.planner-open .route-card.is-expanded .route-mode-block .route-tabs,
+    html body.planner-open .route-card.is-expanded .saved-sheet-mode-tabs,
+    html body.planner-open:not(.planner-collapsed) .route-card.is-collapsed .route-tabs {
       background: #ff7a00 !important;
       border: 0 !important;
+      border-radius: 9px !important;
+      padding: 4px !important;
+      gap: 3px !important;
     }
     html body.planner-open .route-tabs .route-mode:not(.active):not([aria-selected="true"]),
-    html body.planner-open .saved-sheet-mode-tabs .route-mode:not(.active) {
+    html body.planner-open .saved-sheet-mode-tabs .route-mode:not(.active),
+    html body.planner-open .route-card.is-expanded .route-tabs .route-mode:not(.active):not([aria-selected="true"]),
+    html body.planner-open .route-card.is-expanded .saved-sheet-mode-tabs .route-mode:not(.active) {
       background: transparent !important;
       color: #f7f9fb !important;
+      border: 0 !important;
+    }
+    html body.planner-open .route-tabs .route-mode.active,
+    html body.planner-open .route-tabs .route-mode[aria-selected="true"],
+    html body.planner-open .saved-sheet-mode-tabs .route-mode.active,
+    html body.planner-open .route-card.is-expanded .route-tabs .route-mode.active,
+    html body.planner-open .route-card.is-expanded .route-tabs .route-mode[aria-selected="true"],
+    html body.planner-open .route-card.is-expanded .saved-sheet-mode-tabs .route-mode.active {
+      background: #16181c !important;
+      color: #fff !important;
+      border: 1px solid #fff !important;
+      border-radius: 7px !important;
+      box-shadow: 0 1px 2px rgba(22, 24, 28, .18) !important;
+    }
+    /* Minimized pill: keep transparent track so only the active chip shows. */
+    html body.planner-open.planner-collapsed .route-card.is-collapsed .route-tabs {
+      background: transparent !important;
+      padding: 0 !important;
+      box-shadow: none !important;
     }
     html body.groups-open .group-tabs {
       background: #ff7a00 !important;
@@ -7325,7 +7376,29 @@
     html body.groups-open .group-tab.active {
       background: #16181c !important;
       color: #fff !important;
+      border: 1px solid #fff !important;
+      box-shadow: 0 1px 2px rgba(22, 24, 28, .18) !important;
     }
+    /* Stage mix + editor stats: dirt blue / paved gold (never brand orange). */
+    html body.planner-open .route-metric-dirt,
+    html body.planner-open .route-metric-row .route-metric-dirt,
+    html body.planner-open.planner-tab-plan .route-bar-stage-list .route-metric-dirt,
+    html body.planner-open #routeBarStageEditor .route-metric-dirt {
+      color: #3a9dff !important;
+    }
+    html body.planner-open .route-metric-paved,
+    html body.planner-open .route-metric-row .route-metric-paved,
+    html body.planner-open.planner-tab-plan .route-bar-stage-list .route-metric-paved,
+    html body.planner-open #routeBarStageEditor .route-metric-paved {
+      color: #fdb003 !important;
+    }
+    html body.planner-open.planner-tab-plan .route-bar-stage-list .stage-mix-dirt {
+      background: #3a9dff !important;
+    }
+    html body.planner-open.planner-tab-plan .route-bar-stage-list .stage-mix-paved {
+      background: #fdb003 !important;
+    }
+    /* CTA trio: rich green + white (product decision over Frame 27 lime/black/grey). */
     html body .route-compact-save,
     html body .route-compact-export,
     html body .route-compact-nav,
@@ -7338,7 +7411,10 @@
     html body #routeExportFloat,
     html body #routeNavBtn,
     html body #startNavBtn,
-    html body #startNavCompact {
+    html body #startNavCompact,
+    html body.planner-open .route-card.is-expanded .route-compact-save,
+    html body.planner-open .route-card.is-expanded .route-compact-export,
+    html body.planner-open .route-card.is-expanded .route-compact-nav {
       border-color: #147a56 !important;
       background: #147a56 !important;
       color: #fff !important;
