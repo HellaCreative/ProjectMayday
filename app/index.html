@@ -5752,8 +5752,8 @@
       box-shadow: none !important;
     }
     body.planner-open.planner-tab-plan .route-bar-stage-list .stage-row.is-active {
-      border-color: #0b70c9 !important;
-      box-shadow: 0 0 0 1px #0b70c9 inset !important;
+      border-color: #fff !important;
+      box-shadow: 0 0 0 1px #fff inset !important;
     }
     body.planner-open.planner-tab-plan .route-bar-stage-list .stage-title {
       display: flex !important;
@@ -5839,11 +5839,15 @@
       align-items: center;
       gap: 7px;
     }
-    /* Figma head: badge+Stage | Allow unknown access | chevron */
+    /* Figma head: badge+Stage | Remove stage | Allow unknown access | chevron */
     .route-stage-editor-head {
       justify-content: space-between;
       gap: 8px;
       min-height: 38px;
+    }
+    .route-stage-editor-head .route-stage-editor-remove {
+      flex: 0 0 auto;
+      white-space: nowrap;
     }
     .route-stage-editor-title {
       display: flex;
@@ -5912,7 +5916,7 @@
     .route-stage-editor-pref.active {
       background: #1c1917;
       color: #fff;
-      border-color: #1c1917;
+      border-color: #fff;
     }
     .route-stage-editor-access {
       flex: 1 1 auto;
@@ -6102,7 +6106,8 @@
     .nav-btn svg { width: 19px !important; height: 19px !important; }
     .nav-btn.active, .nav-btn.is-active, .nav-btn[aria-expanded="true"] {
       background: var(--accent) !important;
-      color: #16181c !important;
+      color: #fff !important;
+      border: 1px solid #fff !important;
     }
 
     /* Common compact sheet language */
@@ -6222,18 +6227,34 @@
       font-size: 10px !important;
       font-weight: 800 !important;
     }
-    .group-primary-action, .group-share-action,
+    /* Account / Groups primaries stay brand orange — green is Start navigation only. */
+    .group-primary-action, .group-share-action:not(.active),
     .account-form > #accountSendCode,
     .account-code-form > #accountVerifyCode,
     .account-profile-form > #accountSaveProfile,
-    .route-compact-export, .route-export, .stage-save,
-    .saved-action.primary, .btn.primary {
-      background: #147a56 !important;
-      border-color: #147a56 !important;
+    .btn.primary {
+      background: #ff7a00 !important;
+      border-color: #ff7a00 !important;
       color: #fff !important;
     }
-    .route-compact-nav, .route-start, #startNavBtn, #startNavCompact,
-    .route-compact-save {
+    .group-share-action.active {
+      background: #16181c !important;
+      border-color: #16181c !important;
+      color: #fff !important;
+    }
+    /* Route CTA matrix: Save black · Export gray · Start green */
+    .route-compact-save, #stageSaveBtn, .stage-save, #saveRouteConfirm {
+      background: #16181c !important;
+      border-color: #16181c !important;
+      color: #fff !important;
+    }
+    .route-compact-export, .route-export, #routeExportFloat {
+      background: #616872 !important;
+      border-color: #616872 !important;
+      color: #fff !important;
+    }
+    .route-compact-nav, .route-start, .route-nav, #routeNavBtn,
+    #startNavBtn, #startNavCompact {
       background: #147a56 !important;
       border-color: #147a56 !important;
       color: #fff !important;
@@ -6329,7 +6350,7 @@
       border: 2px solid transparent !important;
     }
     body.planner-open.planner-tab-plan .route-bar-stage-list .stage-row.is-active {
-      border-color: var(--accent) !important;
+      border-color: #fff !important;
       box-shadow: none !important;
     }
     body.planner-open.planner-tab-plan .route-bar-stage-list .stage-number-badge,
@@ -6344,7 +6365,7 @@
     .route-bar-stage-editor { padding: 8px !important; gap: 7px !important; border-radius: 9px !important; }
     .route-stage-editor-title { font-size: 11px !important; }
     .route-stage-editor-pref { min-height: 32px !important; font-size: 9.5px !important; }
-    .route-stage-editor-pref.active { background: #16181c !important; color: #fff !important; }
+    .route-stage-editor-pref.active { background: #16181c !important; color: #fff !important; border-color: #fff !important; }
     body.planner-open .route-card.is-collapsed .route-compact-actions { gap: 6px !important; }
     body.planner-open .route-card.is-collapsed .route-compact-actions button {
       min-height: 40px !important;
@@ -7118,8 +7139,14 @@
       padding: 7px 9px !important;
       font: 600 11px/1.2 var(--font-mono) !important;
     }
+    #routeBarStageEditor .route-stage-editor-head .route-stage-editor-remove {
+      flex: 0 0 auto !important;
+      min-height: 28px !important;
+      padding: 0 8px !important;
+      white-space: nowrap !important;
+    }
     #routeBarStageEditor .route-stage-editor-actions {
-      justify-content: flex-end !important;
+      display: none !important;
     }
     body.planner-open .route-compact-summary,
     body.planner-open .stage-trip-summary,
@@ -7154,8 +7181,8 @@
     }
     body.planner-open.planner-tab-plan .route-bar-stage-list .stage-row.is-active,
     body.planner-open .stage-stage-strip > .stage-list > .stage-row.is-active {
-      border-color: #ff7a00 !important;
-      box-shadow: inset 0 0 0 1px #ff7a00 !important;
+      border-color: #fff !important;
+      box-shadow: inset 0 0 0 1px #fff !important;
     }
     body.planner-open .route-bar-add-stage,
     body.planner-open .stage-add {
@@ -7186,8 +7213,17 @@
     }
     body.planner-open .route-compact-save,
     body.planner-open #stageSaveBtn,
+    body.planner-open .stage-save {
+      border-color: #16181c !important;
+      background: #16181c !important;
+      color: #fff !important;
+    }
     body.planner-open .route-compact-export,
-    body.planner-open .route-export,
+    body.planner-open .route-export {
+      border-color: #616872 !important;
+      background: #616872 !important;
+      color: #fff !important;
+    }
     body.planner-open .route-compact-nav,
     body.planner-open .route-nav,
     body.planner-open #routeNavBtn {
@@ -7286,15 +7322,24 @@
       box-shadow: var(--chrome-shadow) !important;
     }
     /*
-     * Route actions: richer brand-aligned green (was washed #9fd47c).
-     * Save / Export / Start navigation share one CTA green + white type.
+     * Route CTA matrix (Figma Frame 27):
+     * Save → chrome black · Export → medium gray · Start → rich green only.
      */
     body.planner-open .route-compact-save,
     body.planner-open #stageSaveBtn,
     body.planner-open #saveRouteConfirm,
+    body.planner-open .stage-save {
+      border-color: #16181c !important;
+      background: #16181c !important;
+      color: #fff !important;
+    }
     body.planner-open .route-compact-export,
     body.planner-open .route-export,
-    body.planner-open #routeExportFloat,
+    body.planner-open #routeExportFloat {
+      border-color: #616872 !important;
+      background: #616872 !important;
+      color: #fff !important;
+    }
     body.planner-open .route-compact-nav,
     body.planner-open .route-nav,
     body.planner-open #routeNavBtn,
@@ -7398,22 +7443,65 @@
     html body.planner-open.planner-tab-plan .route-bar-stage-list .stage-mix-paved {
       background: #fdb003 !important;
     }
-    /* CTA trio: rich green + white (product decision over Frame 27 lime/black/grey). */
+    /* Active white stroke: stage chip (never brand orange outline). */
+    html body.planner-open.planner-tab-plan .route-bar-stage-list .stage-row.is-active,
+    html body.planner-open .stage-stage-strip > .stage-list > .stage-row.is-active {
+      border-color: #fff !important;
+      box-shadow: inset 0 0 0 1px #fff !important;
+    }
+    html body .route-stage-editor-pref.active {
+      border-color: #fff !important;
+      background: #16181c !important;
+      color: #fff !important;
+    }
+    /* Dock active: white stroke on orange pill. */
+    html body .nav-btn.active,
+    html body .nav-btn.is-active,
+    html body .nav-btn[aria-expanded="true"],
+    html body #legendBtn.is-active {
+      border: 1px solid #fff !important;
+      color: #fff !important;
+    }
+    /* Account / Groups primaries: brand orange (green exclusive to Start nav). */
+    html body .group-primary-action,
+    html body .group-share-action:not(.active),
+    html body .account-form > #accountSendCode,
+    html body .account-code-form > #accountVerifyCode,
+    html body .account-profile-form > #accountSaveProfile,
+    html body .btn.primary {
+      border-color: #ff7a00 !important;
+      background: #ff7a00 !important;
+      color: #fff !important;
+    }
+    html body .group-share-action.active {
+      border-color: #16181c !important;
+      background: #16181c !important;
+      color: #fff !important;
+    }
+    /* CTA matrix: Save black · Export gray · Start green only. */
     html body .route-compact-save,
-    html body .route-compact-export,
-    html body .route-compact-nav,
-    html body .route-export,
-    html body .route-start,
-    html body .route-nav,
     html body .stage-save,
     html body #stageSaveBtn,
     html body #saveRouteConfirm,
+    html body.planner-open .route-card.is-expanded .route-compact-save {
+      border-color: #16181c !important;
+      background: #16181c !important;
+      color: #fff !important;
+    }
+    html body .route-compact-export,
+    html body .route-export,
     html body #routeExportFloat,
+    html body.planner-open .route-card.is-expanded .route-compact-export {
+      border-color: #616872 !important;
+      background: #616872 !important;
+      color: #fff !important;
+    }
+    html body .route-compact-nav,
+    html body .route-start,
+    html body .route-nav,
     html body #routeNavBtn,
     html body #startNavBtn,
     html body #startNavCompact,
-    html body.planner-open .route-card.is-expanded .route-compact-save,
-    html body.planner-open .route-card.is-expanded .route-compact-export,
     html body.planner-open .route-card.is-expanded .route-compact-nav {
       border-color: #147a56 !important;
       background: #147a56 !important;
@@ -11025,6 +11113,8 @@
             '<span class="stage-number-badge">' + (index + 1) + '</span>' +
             '<span>Stage ' + String(index + 1).padStart(2, "0") + '</span>' +
           '</div>' +
+          '<button class="route-stage-editor-remove" type="button" data-stage-delete="' + stage.id + '"' +
+            (planTrip.stages.length <= 1 ? " disabled" : "") + '>Remove stage</button>' +
           '<label class="route-stage-editor-access">' +
             '<span>Allow unknown access</span>' +
             '<span class="switch"><input type="checkbox" data-stage-access aria-label="Allow unknown access"' +
@@ -11033,11 +11123,7 @@
           '<button class="route-stage-editor-close" type="button" data-stage-editor-close aria-label="Close stage details"><i data-lucide="chevron-down" aria-hidden="true"></i></button>' +
         '</div>' +
         '<div class="route-stage-editor-prefs" role="group" aria-label="Stage route profile">' + profileButtons + '</div>' +
-        '<div class="route-stage-editor-summary">' + stageMetricsHtml(stage) + '</div>' +
-        '<div class="route-stage-editor-actions">' +
-          '<button class="route-stage-editor-remove" type="button" data-stage-delete="' + stage.id + '"' +
-            (planTrip.stages.length <= 1 ? " disabled" : "") + '>Remove stage</button>' +
-        '</div>';
+        '<div class="route-stage-editor-summary">' + stageMetricsHtml(stage) + '</div>';
       routeBarStageEditor.hidden = false;
       window.renderDirtIcons?.();
     }
