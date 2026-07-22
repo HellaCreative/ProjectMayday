@@ -8898,6 +8898,11 @@
     // (junctions stay exact shared vertices, baked in offline). Tolerance grows
     // when zoomed out so a fat phone tap can still latch onto a nearby track.
     const EDGE_GRID_SIZE = 0.01;
+    // Pin drop: snap visual markers onto a nearby painted/basemap road so the
+    // user does not hard-fail for a driveway offset. Server still re-snaps.
+    const PIN_SNAP_MAX_M = 500;
+    const BASEMAP_SNAP_LAYER_RE =
+      /^highway-(motorway|trunk|primary|secondary|tertiary|unclassified|living_street|service|track|driveway)-/;
     function routeMatchToleranceKm() {
       const zoom = map && typeof map.getZoom === "function" ? map.getZoom() : 11;
       if (zoom >= 13) return 0.35;
@@ -11234,18 +11239,19 @@
         idx = RS.findStageIndex(planTrip, next.id);
       }
       if (idx < 0) return;
+      const snapped = snapPlacementPoint(clicked);
       planPlacementToastDismissed = true;
       activeStageId = planTrip.stages[idx].id;
       let stage = planTrip.stages[idx];
       if (!stage.start) {
-        stage = RS.transitionStage(stage, "set-start", { point: clicked });
+        stage = RS.transitionStage(stage, "set-start", { point: snapped });
         planTrip.stages[idx] = stage;
         setStatus("Starting point set · press and hold the map to create Stage 1", "ok", "route");
         afterStageEdit(stage.id, false);
         return;
       }
       if (!stage.end) {
-        stage = RS.transitionStage(stage, "set-end", { point: clicked });
+        stage = RS.transitionStage(stage, "set-end", { point: snapped });
         planTrip.stages[idx] = stage;
         afterStageEdit(stage.id, true);
         // The next long press creates another linked stage on demand. Keeping
@@ -11936,14 +11942,18 @@
       planTrip.stages[idx] = RS.transitionStage(
         planTrip.stages[idx],
         which === "start" ? "set-start" : "set-end",
-        { point }
+        { point: snapPlacementPoint(point) }
       );
       stageTracker.cancel(stageId); // any in-flight response becomes stale
     }
 
     function handleMarkerDragEnd(p, marker) {
       const ll = marker.getLngLat();
-      const np = { lng: ll.lng, lat: ll.lat };
+      const np = snapPlacementPoint({ lng: ll.lng, lat: ll.lat });
+      // Move the marker to the snapped road so the pin matches the route graph.
+      if (Math.abs(np.lng - ll.lng) > 1e-8 || Math.abs(np.lat - ll.lat) > 1e-8) {
+        marker.setLngLat([np.lng, np.lat]);
+      }
       const affectedStageIds = new Set();
       for (const ref of p.refs) {
         setStagePoint(ref.stageId, ref.which, np);
@@ -12673,6 +12683,75 @@
       }
       if (bestPreferred && bestPreferred.distanceKm <= maxDistanceKm) return bestPreferred;
       return best;
+    }
+
+    function bestProjectionOnCoords(point, coords, maxDistanceKm) {
+      if (!coords || coords.length < 2) return null;
+      let best = null;
+      for (let i = 1; i < coords.length; i += 1) {
+        const projected = projectedPointOnSegment(point, coords[i - 1], coords[i]);
+        if (projected.distanceKm > maxDistanceKm) continue;
+        if (!best || projected.distanceKm < best.distanceKm) best = projected;
+      }
+      return best;
+    }
+
+    function considerLineGeometry(point, geometry, maxDistanceKm, best) {
+      if (!geometry) return best;
+      const parts = geometry.type === "MultiLineString"
+        ? geometry.coordinates
+        : (geometry.type === "LineString" ? [geometry.coordinates] : null);
+      if (!parts) return best;
+      for (const coords of parts) {
+        const projected = bestProjectionOnCoords(point, coords, maxDistanceKm);
+        if (!projected) continue;
+        if (!best || projected.distanceKm < best.distanceKm) best = projected;
+      }
+      return best;
+    }
+
+    /** Snap a dropped pin onto a nearby painted/basemap road (existing lines only). */
+    function snapPlacementPoint(point, maxMeters = PIN_SNAP_MAX_M) {
+      if (!point || !Number.isFinite(point.lng) || !Number.isFinite(point.lat)) return point;
+      const maxDistanceKm = Math.max(0.05, (Number(maxMeters) || PIN_SNAP_MAX_M) / 1000);
+      let best = null;
+
+      // 1) Painted NSTDB / overlay features already loaded for the corridor.
+      const painted = nsGovDisplayFeatures || [];
+      for (let i = 0; i < painted.length; i += 1) {
+        const feature = painted[i];
+        if (!feature || !edgeRoutable(feature.properties)) continue;
+        best = considerLineGeometry(point, feature.geometry, maxDistanceKm, best);
+      }
+
+      // 2) Rendered map layers around the drop (overlay + motorized basemap streets).
+      if (map && typeof map.project === "function" && typeof map.queryRenderedFeatures === "function") {
+        try {
+          const px = map.project([point.lng, point.lat]);
+          const pad = Math.max(28, Math.min(120, (maxMeters / 500) * 64));
+          const box = [
+            [px.x - pad, px.y - pad],
+            [px.x + pad, px.y + pad]
+          ];
+          const layerIds = (map.getStyle()?.layers || [])
+            .map((layer) => layer && layer.id)
+            .filter((id) =>
+              id &&
+              (NS_GOV_LAYER_IDS.includes(id) || BASEMAP_SNAP_LAYER_RE.test(id)) &&
+              map.getLayer(id)
+            );
+          if (layerIds.length) {
+            const feats = map.queryRenderedFeatures(box, { layers: layerIds });
+            for (const feature of feats || []) {
+              if (feature.source === "nsGov" && !edgeRoutable(feature.properties)) continue;
+              best = considerLineGeometry(point, feature.geometry, maxDistanceKm, best);
+            }
+          }
+        } catch (_) { /* style may not be ready */ }
+      }
+
+      if (!best || !(best.distanceKm <= maxDistanceKm)) return point;
+      return { lng: best.coord[0], lat: best.coord[1] };
     }
 
     function dedupeLineCoords(coords) {
@@ -14684,7 +14763,7 @@
 
     function handleRouteClick(e) {
       hidePopup();
-      const clicked = pointFromLngLat(e.lngLat);
+      const clicked = snapPlacementPoint(pointFromLngLat(e.lngLat));
       if (plannerTab === "saved") {
         setPlannerDrawerState("collapsed");
         return;

@@ -251,6 +251,15 @@ function giantComponentId(runtime) {
  */
 function preferGiantComponentSnap(runtime) {
   if (!runtime || runtime.format === "v2") return false;
+  // NS/NB/PE longhaul files are province fabric, not thinned QC hubs. Hard
+  // giant bias (+400m) steals driveway snaps onto distant paved islands and
+  // then fails disconnected_components after skip-clip warm reuse.
+  const regionId = String(
+    (runtime.data && (runtime.data.regionId || runtime.data.province)) || ""
+  )
+    .toLowerCase()
+    .replace(/:corridor$/i, "");
+  if (regionId === "ns" || regionId === "nb" || regionId === "pe") return false;
   if (isLonghaulGraphPath(runtime.path)) return true;
   const schema = String(
     (runtime.data && runtime.data.schemaVersion) ||
@@ -350,7 +359,12 @@ function matchPoint(
         componentId >= 0 &&
         componentId !== giantId
       ) {
-        componentPenalty = Math.max(400, matchMeters);
+        // Prefer giant for QC islands, but do not steal a clearly closer local
+        // edge (pin drop / driveway) — that caused hard snap fails when the
+        // giant sat just outside the match radius.
+        if (projected.distanceM > Math.min(180, matchMeters * 0.4)) {
+          componentPenalty = Math.max(400, matchMeters);
+        }
       }
       const surfaceName = enums.SURFACE_NAME[surfaceCode] || "unknown";
       let surfaceBias = 0;
@@ -768,7 +782,7 @@ async function routeOnRuntime(body, graphResolution, runtime) {
         String(graphResolution.mode || "").includes("longhaul") ||
         String(graphResolution.mode || "").includes("canada-chain")));
   const defaultMatch = longhaulGraph ? 500 : DEFAULT_MATCH_METERS;
-  const limit = Number.isFinite(matchMeters) && matchMeters > 0
+  let limit = Number.isFinite(matchMeters) && matchMeters > 0
     ? matchMeters
     : defaultMatch;
 
@@ -785,8 +799,27 @@ async function routeOnRuntime(body, graphResolution, runtime) {
   const end = locations[locations.length - 1];
   let startMatch = matchPoint(runtime, start, policy, limit, avoidEdgeIds, null, profile, "start");
   let endMatch = matchPoint(runtime, end, policy, limit, avoidEdgeIds, null, profile, "end");
+  // Soft expand once within the hard cap: prefer snap-on-place over hard fail
+  // when a road exists a bit beyond the default radius (thinned hubs / fat taps).
+  if (!startMatch.ok && startMatch.nearestMeters != null && startMatch.nearestMeters <= HARD_MATCH_CAP_M && limit < HARD_MATCH_CAP_M) {
+    const expanded = matchPoint(runtime, start, policy, HARD_MATCH_CAP_M, avoidEdgeIds, null, profile, "start");
+    if (expanded.ok) {
+      startMatch = expanded;
+      limit = HARD_MATCH_CAP_M;
+    }
+  }
+  if (!endMatch.ok && endMatch.nearestMeters != null && endMatch.nearestMeters <= HARD_MATCH_CAP_M && limit < HARD_MATCH_CAP_M) {
+    const expanded = matchPoint(runtime, end, policy, HARD_MATCH_CAP_M, avoidEdgeIds, null, profile, "end");
+    if (expanded.ok) {
+      endMatch = expanded;
+      limit = HARD_MATCH_CAP_M;
+    }
+  }
   // Reconcile disconnected snaps.
-  // Longhaul: rematch end onto start (QC OSM islands).
+  // Longhaul / OSM-only: try end→start, then start→end, then both→giant.
+  // PE cities often snap onto tiny service islands inside the match radius
+  // while the highway giant sits ~30–90 m away — end→start alone fails when
+  // start landed on a 2-edge driveway component.
   // Full packs: rematch the nongiant endpoint onto the giant so a purple
   // NSTDB island click still yields a connected route — without the hard
   // +400m bias that stole snaps from connected forest edges in-radius.
@@ -799,6 +832,7 @@ async function routeOnRuntime(body, graphResolution, runtime) {
     endMatch.componentId >= 0 &&
     startMatch.componentId !== endMatch.componentId
   ) {
+    const giantId = giantComponentId(runtime);
     if (preferGiantComponentSnap(runtime)) {
       const endSame = matchPoint(
         runtime,
@@ -812,9 +846,52 @@ async function routeOnRuntime(body, graphResolution, runtime) {
       );
       if (endSame.ok && endSame.componentId === startMatch.componentId) {
         endMatch = endSame;
+      } else {
+        const startSame = matchPoint(
+          runtime,
+          start,
+          policy,
+          limit,
+          avoidEdgeIds,
+          endMatch.componentId,
+          profile,
+          "start"
+        );
+        if (startSame.ok && startSame.componentId === endMatch.componentId) {
+          startMatch = startSame;
+        } else if (giantId != null) {
+          const startOnGiant = matchPoint(
+            runtime,
+            start,
+            policy,
+            limit,
+            avoidEdgeIds,
+            giantId,
+            profile,
+            "start"
+          );
+          const endOnGiant = matchPoint(
+            runtime,
+            end,
+            policy,
+            limit,
+            avoidEdgeIds,
+            giantId,
+            profile,
+            "end"
+          );
+          if (
+            startOnGiant.ok &&
+            endOnGiant.ok &&
+            startOnGiant.componentId === giantId &&
+            endOnGiant.componentId === giantId
+          ) {
+            startMatch = startOnGiant;
+            endMatch = endOnGiant;
+          }
+        }
       }
-    } else {
-      const giantId = giantComponentId(runtime);
+    } else if (giantId != null) {
       if (endMatch.componentId === giantId && startMatch.componentId !== giantId) {
         const startOnGiant = matchPoint(
           runtime,
@@ -841,6 +918,39 @@ async function routeOnRuntime(body, graphResolution, runtime) {
           "end"
         );
         if (endOnGiant.ok && endOnGiant.componentId === giantId) {
+          endMatch = endOnGiant;
+        }
+      } else if (
+        startMatch.componentId !== giantId &&
+        endMatch.componentId !== giantId
+      ) {
+        const startOnGiant = matchPoint(
+          runtime,
+          start,
+          policy,
+          limit,
+          avoidEdgeIds,
+          giantId,
+          profile,
+          "start"
+        );
+        const endOnGiant = matchPoint(
+          runtime,
+          end,
+          policy,
+          limit,
+          avoidEdgeIds,
+          giantId,
+          profile,
+          "end"
+        );
+        if (
+          startOnGiant.ok &&
+          endOnGiant.ok &&
+          startOnGiant.componentId === giantId &&
+          endOnGiant.componentId === giantId
+        ) {
+          startMatch = startOnGiant;
           endMatch = endOnGiant;
         }
       }

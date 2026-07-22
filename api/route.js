@@ -49,6 +49,7 @@ module.exports.config = {
     "routing/schema/**",
     "routing/data/regions/ns/longhaul.v1.json.gz",
     "routing/data/regions/nb/longhaul.v1.json.gz",
-    "routing/data/regions/qc/longhaul.v1.json.gz"
+    "routing/data/regions/qc/longhaul.v1.json.gz",
+    "routing/data/regions/pe/longhaul.v1.json.gz"
   ]
 };

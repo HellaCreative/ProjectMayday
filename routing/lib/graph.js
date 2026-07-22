@@ -383,6 +383,21 @@ function corridorCacheSuffix(locations, bufferMeters) {
   return `|c${bufferMeters}|${parts.join(";")}`;
 }
 
+/**
+ * NS/NB/PE longhaul packs are already province-sized and fit Hobby RAM.
+ * Corridor-clipping them with a 120 km buffer barely shrinks the pack, but
+ * keys the LRU per OD — so every short A→B re-inflates ~100–150 MB JSON
+ * (~2s locally, often ~10–20s on a cold Vercel isolate). Skip clip so one
+ * warm runtime serves all in-province trips. Never skip for QC (too large).
+ */
+function shouldSkipCorridorClip(resolution, paths) {
+  if (!paths || paths.length !== 1) return false;
+  const id = String(
+    (resolution && resolution.regionIds && resolution.regionIds[0]) || ""
+  ).toLowerCase();
+  return id === "ns" || id === "nb" || id === "pe";
+}
+
 async function readGraphData(graphPath, options = {}) {
   const retain = options.retain != null ? !!options.retain : shouldRetainInflatedData(graphPath);
   const cached = retain ? lruGet(dataCache, graphPath) : null;
@@ -438,7 +453,8 @@ async function loadGraphsForRequest(resolution, options = {}) {
     else if (anyLonghaul || onVercel) bufferMeters = 120000;
     else bufferMeters = 150000;
   }
-  const willClip = corridorLocations.length >= 2;
+  const skipClip = shouldSkipCorridorClip(resolution, paths);
+  const willClip = corridorLocations.length >= 2 && !skipClip;
   const cacheKey =
     paths.join("|") + (willClip ? corridorCacheSuffix(corridorLocations, bufferMeters) : "");
 
@@ -551,6 +567,7 @@ module.exports = {
   chainCacheEnabled,
   packsV2Enabled,
   isLonghaulGraphPath,
+  shouldSkipCorridorClip,
   defaultGraphPath,
   DEFAULT_GRAPH_PATH,
   DEFAULT_LEGACY_GRAPH_PATH,

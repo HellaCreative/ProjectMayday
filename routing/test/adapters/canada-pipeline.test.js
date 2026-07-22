@@ -437,6 +437,32 @@ check("Halifax to Vancouver corridor includes NB and western provinces", () => {
   assert.ok(regionsForRoute(["ns","bc"]).includes("on"));
 });
 
+check("maritime single-pack skips corridor clip (warm reuse)", () => {
+  const { shouldSkipCorridorClip } = require("../../lib/graph");
+  assert.strictEqual(
+    shouldSkipCorridorClip({ regionIds: ["ns"] }, ["/tmp/ns/longhaul.v1.json.gz"]),
+    true
+  );
+  assert.strictEqual(
+    shouldSkipCorridorClip({ regionIds: ["nb"] }, ["/tmp/nb/longhaul.v1.json.gz"]),
+    true
+  );
+  assert.strictEqual(
+    shouldSkipCorridorClip({ regionIds: ["pe"] }, ["/tmp/pe/longhaul.v1.json.gz"]),
+    true
+  );
+  assert.strictEqual(
+    shouldSkipCorridorClip({ regionIds: ["qc"] }, ["/tmp/qc/longhaul.v1.json.gz"]),
+    false,
+    "QC must still corridor-clip"
+  );
+  assert.strictEqual(
+    shouldSkipCorridorClip({ regionIds: ["ns", "nb"] }, ["/tmp/ns.gz", "/tmp/nb.gz"]),
+    false,
+    "multi-pack still clips"
+  );
+});
+
 check("in-QC uses single qc longhaul pack (no quadrant chain)", () => {
   const { provinceFamily, resolveGraphRequest: resolve, primaryRegionForPoint } = require("../../regional/select");
   const { corridorLocationsForRoute } = require("../../regional/merge");
