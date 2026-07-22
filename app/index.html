@@ -7146,6 +7146,57 @@
       transition: none !important;
       will-change: auto !important;
     }
+    /* A minimized route sheet is only its active tab; the tab reopens it. */
+    html body.planner-open.planner-collapsed .route-card.is-collapsed {
+      left: 50% !important;
+      right: auto !important;
+      bottom: calc(var(--p2-dock-h) + 8px) !important;
+      width: min(180px, calc(100% - 20px)) !important;
+      max-width: 180px !important;
+      height: 44px !important;
+      min-height: 44px !important;
+      max-height: 44px !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      transform: translateX(-50%) !important;
+      overflow: visible !important;
+      border: 0 !important;
+      border-radius: 0 !important;
+      background: transparent !important;
+      box-shadow: none !important;
+      backdrop-filter: none !important;
+    }
+    html body.planner-open.planner-collapsed .route-card.is-collapsed .route-sheet-handle-bar {
+      display: none !important;
+    }
+    html body.planner-open.planner-collapsed .route-card.is-collapsed .route-drawer-scroll,
+    html body.planner-open.planner-collapsed .route-card.is-collapsed .route-drawer-compact,
+    html body.planner-open.planner-collapsed .route-card.is-collapsed .route-mode-block {
+      width: 100% !important;
+      height: 44px !important;
+      min-height: 44px !important;
+      max-height: 44px !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      overflow: visible !important;
+    }
+    html body.planner-open.planner-collapsed .route-card.is-collapsed .route-tabs {
+      height: 44px !important;
+      padding: 0 !important;
+      border: 0 !important;
+      border-radius: 10px !important;
+      background: transparent !important;
+      box-shadow: none !important;
+    }
+    html body.planner-open.planner-collapsed .route-card.is-collapsed .route-mode.active {
+      height: 44px !important;
+      min-height: 44px !important;
+      border: 1px solid rgba(255, 255, 255, .12) !important;
+      border-radius: 10px !important;
+      background: #16181c !important;
+      color: #fff !important;
+      box-shadow: var(--chrome-shadow) !important;
+    }
   </style>
 </head>
 <body>
