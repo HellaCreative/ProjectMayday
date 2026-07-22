@@ -700,6 +700,44 @@
       opacity: 0.45;
       cursor: not-allowed;
     }
+    /* Outline dismiss for Plan — not a primary CTA (Save/Export/Start). */
+    .route-clear,
+    .route-compact-clear {
+      display: none;
+      width: 100%;
+      min-height: 36px;
+      margin: 0 0 6px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: transparent;
+      color: var(--muted);
+      font-family: var(--sans);
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0;
+      text-transform: none;
+      cursor: pointer;
+      padding: 0 10px;
+    }
+    .route-clear:hover,
+    .route-compact-clear:hover {
+      color: var(--text);
+      background: var(--panel-2);
+    }
+    .route-clear:focus-visible,
+    .route-compact-clear:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+    .route-clear:disabled,
+    .route-compact-clear:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+    }
+    body.planner-tab-plan .route-clear.is-visible,
+    body.planner-tab-plan .route-compact-clear.is-visible {
+      display: block;
+    }
     .route-compact-export {
       background: var(--accent);
       color: #fff;
@@ -7231,6 +7269,22 @@
       background: #147a56 !important;
       color: #fff !important;
     }
+    body.planner-open .route-clear,
+    body.planner-open .route-compact-clear,
+    body.planner-open #routeClearBtn,
+    body.planner-open #routeCompactClear {
+      border: 1px solid rgba(22, 24, 28, 0.22) !important;
+      background: transparent !important;
+      color: #575c64 !important;
+      box-shadow: none !important;
+    }
+    body.planner-open .route-clear:hover,
+    body.planner-open .route-compact-clear:hover,
+    body.planner-open #routeClearBtn:hover,
+    body.planner-open #routeCompactClear:hover {
+      color: #16181c !important;
+      background: rgba(247, 247, 248, 0.96) !important;
+    }
     body.planner-open.planner-tab-saved .saved-list {
       gap: 6px !important;
     }
@@ -7650,6 +7704,7 @@
           <button class="route-bar-add-stage" id="routeBarAddStage" type="button">+ Press and hold map to add a stage</button>
         </div>
       </div>
+      <button class="route-compact-clear" id="routeCompactClear" type="button" title="Clear the planned route" hidden>Clear route</button>
       <div class="route-compact-actions">
         <button class="route-compact-save" id="routeCompactSave" type="button" title="Save this route">Save route</button>
         <button class="route-compact-export" id="routeCompactExport" type="button" title="Export this route as GPX">Export GPX</button>
@@ -7744,6 +7799,7 @@
         </div>
       </div>
 
+      <button class="route-clear" id="routeClearBtn" type="button" title="Clear the planned route" hidden>Clear route</button>
       <div class="route-actions" id="routeActions">
         <button class="route-export" id="routeExport" type="button" title="Export this route as GPX for OsmAnd, Gaia GPS, and other apps" aria-label="Export route as GPX">
           <i data-lucide="download" aria-hidden="true"></i>
@@ -9030,6 +9086,8 @@
     const routeCompactPref = document.getElementById("routeCompactPref");
     const routeCompactExport = document.getElementById("routeCompactExport");
     const routeCompactNav = document.getElementById("routeCompactNav");
+    const routeCompactClear = document.getElementById("routeCompactClear");
+    const routeClearBtn = document.getElementById("routeClearBtn");
     const routeBarKicker = document.getElementById("routeBarKicker");
     const routeBarMeta = document.getElementById("routeBarMeta");
     const routeBarExpand = document.getElementById("routeBarExpand");
@@ -10952,8 +11010,12 @@
       // should show continuous colored runs rather than thousands of tiles.
       if (plannerTab === "plan") return planFeatureCollection();
       // Saved "View on map" also paints stage geometry without touching the draft.
+      // With no saved selection, keep an active Plan route visible (Plan persists
+      // across tabs until explicit Clear).
       if (plannerTab === "saved") {
-        return viewedSavedRouteId ? savedViewFeatureCollection() : { type: "FeatureCollection", features: [] };
+        if (viewedSavedRouteId) return savedViewFeatureCollection();
+        if (planHasMapGeometry()) return planFeatureCollection();
+        return { type: "FeatureCollection", features: [] };
       }
       const start = activeStart();
       const features = [];
@@ -10984,6 +11046,9 @@
           },
           properties: { role: "direct" }
         });
+      } else if (planHasMapGeometry()) {
+        // From here is idle — keep the planned trip on the map until Clear.
+        return planFeatureCollection();
       }
       if (start && (destination || routeMode === "plan")) {
         features.push({
@@ -11392,6 +11457,54 @@
       refreshRouteDraft();
       renderAccessWarning();
       syncRouteExportUi();
+      syncPlanClearUi();
+    }
+
+    function planHasMapGeometry() {
+      return planTrip.stages.some(
+        (s) => RS.computeStageStatus(s) === RS.STAGE_STATUS.COMPLETE && s.route
+      );
+    }
+
+    function planHasClearableContent() {
+      return planTrip.stages.some((s) => !!(s.start || s.end || s.route));
+    }
+
+    function syncPlanClearUi() {
+      const show = plannerTab === "plan" && planHasClearableContent();
+      [routeClearBtn, routeCompactClear].forEach((btn) => {
+        if (!btn) return;
+        btn.hidden = !show;
+        btn.disabled = !show;
+        btn.classList.toggle("is-visible", show);
+      });
+    }
+
+    /** Explicit Plan dismiss — stages, geometry, markers. Tab switches never call this. */
+    function clearPlanRoute() {
+      if (navigating) stopNavigation();
+      for (const stage of planTrip.stages) {
+        try { stageTracker.cancel(stage.id); } catch (_) { /* ignore */ }
+      }
+      resetRouteToast();
+      planTrip = RS.createTrip({
+        profile: routePreference,
+        accessPolicy: { motorizedPermissive: true, motorizedUnknown: false }
+      });
+      planTrip.stages[0].profile = routePreference;
+      planPlacementToastDismissed = false;
+      activeStageId = planTrip.stages[0].id;
+      editingStageId = null;
+      selectedWaypointIndex = null;
+      compactStageId = null;
+      planAggregate = RS.aggregateTrip(planTrip);
+      activeRoute = null;
+      routeMessage = "";
+      routeDebug = null;
+      clearStageMarkers();
+      afterStageUpdate();
+      setStatus("Route cleared · press and hold to place a start", "ok", "route");
+      syncRouteMapToast();
     }
 
     function stageToActiveRoute(stage, index) {
@@ -14309,7 +14422,9 @@
       compactStageId = null;
 
       if (plannerTab === "here") {
-        // Reset the single-destination scratch state (unchanged behaviour).
+        // From here is ephemeral: clear its scratch state on every visit.
+        // Plan trip (stages / geometry) is intentionally NOT cleared here —
+        // only clearPlanRoute() dismisses an active plan.
         clearImportedTrackView();
         routeJobId += 1;
         plannedStart = null;
@@ -14356,6 +14471,7 @@
       }
       renderStageMarkers();
       refreshRouteDraft();
+      syncPlanClearUi();
       if (typeof setPlannerDrawerState === "function" && plannerDrawerState !== "closed") {
         setPlannerDrawerState("expanded");
       }
@@ -15919,6 +16035,8 @@
     const routeCompactSave = document.getElementById("routeCompactSave");
     if (routeCompactSave) routeCompactSave.addEventListener("click", openSaveSheet);
     if (routeCompactNav) routeCompactNav.addEventListener("click", () => toggleNavigation());
+    if (routeCompactClear) routeCompactClear.addEventListener("click", clearPlanRoute);
+    if (routeClearBtn) routeClearBtn.addEventListener("click", clearPlanRoute);
     if (routeBarExpand) routeBarExpand.addEventListener("click", (event) => {
       event.stopPropagation();
       setPlannerDrawerState("expanded");
