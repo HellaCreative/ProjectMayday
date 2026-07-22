@@ -33,15 +33,15 @@ const PROFILE_SURFACE_WEIGHTS = Object.freeze({
     track: 0.68,
     unknown: 0.8
   }),
-  // Dual-sport mix — ~50/50 when Allow + fabric allow. Base table is mild dirt
-  // lean for Allow-off OSM gravel; router applies a Balanced+Allow paved pull so
-  // purple capillary cannot clone Direct’s dirt cut.
+  // Dual-sport mix — ~50/50 when Allow + fabric allow. Dirt-lean base so
+  // highway corridors (NS→NB) are not Direct’s paved cousin; Allow purple
+  // open stays milder than Direct so NS gold does not clone crow-flies dirt.
   balanced: Object.freeze({
-    paved: 1.35,
-    gravel: 1.02,
-    access: 0.98,
-    track: 0.95,
-    unknown: 1.05
+    paved: 1.72,
+    gravel: 0.94,
+    access: 0.9,
+    track: 0.86,
+    unknown: 0.98
   }),
   // Maximize undeveloped/gravel/track/resource; pavement only when forced.
   dirt: Object.freeze({
@@ -62,20 +62,40 @@ const PROFILE_SURFACE_WEIGHTS = Object.freeze({
 });
 
 /**
- * Road-track multipliers.
- * Cleanest: prefer freeway/arterial among paved options.
- * Non-cleanest: punish freeway/arterial/collector so dirt fabric wins over
- * "highway spine + dirt snacks"; mild discount for resource/track class.
- * Direct uses a softer highway penalty so last-mile paved approach can beat
- * a dirt tourism spur when length would grow.
+ * Road-track multipliers — locked OSM Carto categories for DIRT:
+ *   https://wiki.openstreetmap.org/wiki/OpenStreetMap_Carto/Lines
+ *   freeway/ramp ≈ motorway
+ *   arterial     ≈ trunk / primary (upper major)
+ *   collector    ≈ secondary (mid major)
+ *   local        ≈ tertiary / unclassified (lower major)
+ *   service      ≈ residential / living_street / service (city roads)
+ *   track/resource ≈ agricultural/forestry tracks
+ *
+ * Cleanest: upper major OK through cities.
+ * Adventure: prefer lower major + tracks; city roads = connectors only;
+ *            avoid town-center magnets via arterial + urban penalties.
  */
 const ADVENTURE_ROAD_CLASS_WEIGHTS = Object.freeze({
-  freeway: 2.8,
-  arterial: 2.15,
-  collector: 1.45,
+  freeway: 3.4,
+  arterial: 2.85,
+  collector: 1.05,
+  ramp: 3.0,
+  local: 0.88,
+  service: 1.28,
+  resource: 0.8,
+  recreation: 0.78,
+  track: 0.72,
+  double_track: 0.72,
+  unknown: 1.0
+});
+
+const DIRECT_ROAD_CLASS_WEIGHTS = Object.freeze({
+  freeway: 2.7,
+  arterial: 2.25,
+  collector: 1.06,
   ramp: 2.4,
-  local: 1.06,
-  service: 1.12,
+  local: 0.92,
+  service: 1.18,
   resource: 0.88,
   recreation: 0.86,
   track: 0.82,
@@ -83,33 +103,18 @@ const ADVENTURE_ROAD_CLASS_WEIGHTS = Object.freeze({
   unknown: 1.0
 });
 
-const DIRECT_ROAD_CLASS_WEIGHTS = Object.freeze({
-  freeway: 2.1,
-  arterial: 1.7,
-  collector: 1.25,
-  ramp: 1.9,
-  local: 1.02,
-  service: 1.06,
-  resource: 0.92,
-  recreation: 0.9,
-  track: 0.88,
-  double_track: 0.88,
-  unknown: 1.0
-});
-
-// Mid highway spine: enough penalty to leave 100-series for dirt segments,
-// soft enough that paved arterials still interleave for ~50/50 mix.
+// Balanced: leave upper major, ride lower major + tracks toward ~50/50.
 const BALANCED_ROAD_CLASS_WEIGHTS = Object.freeze({
-  freeway: 1.8,
-  arterial: 1.35,
-  collector: 1.1,
-  ramp: 1.6,
-  local: 1.0,
-  service: 1.04,
-  resource: 1.0,
-  recreation: 0.99,
-  track: 0.98,
-  double_track: 0.98,
+  freeway: 2.6,
+  arterial: 2.15,
+  collector: 1.02,
+  ramp: 2.3,
+  local: 0.9,
+  service: 1.22,
+  resource: 0.88,
+  recreation: 0.86,
+  track: 0.84,
+  double_track: 0.84,
   unknown: 1.0
 });
 
@@ -123,7 +128,7 @@ const PROFILE_ROAD_CLASS_WEIGHTS = Object.freeze({
     collector: 0.97,
     ramp: 0.96,
     local: 1.0,
-    service: 1.05,
+    service: 1.08,
     resource: 1.0,
     recreation: 1.0,
     track: 1.0,

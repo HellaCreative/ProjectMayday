@@ -163,15 +163,29 @@ function classify(props) {
   let accessClass = ACCESS_CLASS.motorized_permissive;
   let confidence = SOURCE_CONFIDENCE.medium;
 
-  // Hierarchy first — class is about adventure vs corridor, independent of surface.
+  // Locked Carto categories for DIRT fabric preference
+  // (https://wiki.openstreetmap.org/wiki/OpenStreetMap_Carto/Lines):
+  //   1. Major roads — motorway…unclassified
+  //   2. City roads — residential / living_street / service
+  //   3. Agricultural/forestry — highway=track (tracktype grade1–5 / unknown)
+  // Packed class:
+  //   freeway/ramp ≈ motorway(+link)
+  //   arterial     ≈ trunk / primary (upper major — Clean OK, adventure avoid)
+  //   collector    ≈ secondary (mid major)
+  //   local        ≈ tertiary / unclassified (lower major — adventure preferred)
+  //   service      ≈ residential / living_street / service (city — connector only)
+  //   track        ≈ agricultural/forestry tracks
   if (/motorway/.test(hw)) roadTrackClass = /_link$/.test(hw) ? ROAD_TRACK_CLASS.ramp : ROAD_TRACK_CLASS.freeway;
   else if (/trunk|primary/.test(hw))
     roadTrackClass = /_link$/.test(hw) ? ROAD_TRACK_CLASS.ramp : ROAD_TRACK_CLASS.arterial;
-  else if (/secondary|tertiary/.test(hw))
+  else if (/secondary/.test(hw))
     roadTrackClass = /_link$/.test(hw) ? ROAD_TRACK_CLASS.ramp : ROAD_TRACK_CLASS.collector;
+  else if (/tertiary/.test(hw))
+    roadTrackClass = /_link$/.test(hw) ? ROAD_TRACK_CLASS.ramp : ROAD_TRACK_CLASS.local;
+  else if (hw === "unclassified" || hw === "road") roadTrackClass = ROAD_TRACK_CLASS.local;
   else if (hw === "track") roadTrackClass = ROAD_TRACK_CLASS.track;
-  else if (hw === "service") roadTrackClass = ROAD_TRACK_CLASS.service;
-  else if (/unclassified|residential|living_street|road/.test(hw)) roadTrackClass = ROAD_TRACK_CLASS.local;
+  else if (hw === "service" || hw === "residential" || hw === "living_street")
+    roadTrackClass = ROAD_TRACK_CLASS.service;
 
   if (PAVED_SURFACE.has(surface)) {
     surfaceClass = SURFACE_CLASS.paved;

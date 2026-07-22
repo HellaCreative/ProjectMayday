@@ -11,7 +11,7 @@ const {
   isLonghaulGraphPath
 } = require("./graph");
 const { resolveGraphRequest } = require("../regional/select");
-const { corridorLocationsForRoute } = require("../regional/merge");
+const { corridorLocationsForRoute, pointInAdventureUrbanCore } = require("../regional/merge");
 const {
   surfaceMultiplier: profileSurfaceMultiplier,
   roadClassMultiplier,
@@ -1221,8 +1221,11 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds) 
   // Soft-stitch motorized_unknown islands (NSTDB / provincial capillary) when
   // Allow is on. Conflation leaves purple fabric as near-touching components;
   // without stitches Direct/Dirt keep a paved spine and only nibble dirt spurs.
-  // Stitch island→giant AND island→island so capillary can form a through cut.
-  // Gaps are real meters (access legs), not free-space teleports.
+  //
+  // Hard rule: NEVER span a gap from a dead-end track to another dead-end track
+  // (island↔island tip stitches invented gray connectors / Sackville loops).
+  // Only island → through giant (degree ≥ 2) near-touch joins are allowed.
+  // Gaps remain real meters (access legs), not free-space teleports.
   // Cleanest stays on the giant pavement fabric — no stitches.
   let softStitchCount = 0;
   if (policy.motorizedUnknown && profile !== "cleanest" && !geom) {
@@ -1234,7 +1237,6 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds) 
     const maxLat = Math.max(startLL[1], endLL[1]) + padDeg;
     const CELL = 0.0005; // ~55 m
     const giantGrid = new Map();
-    const islandGrid = new Map();
     function gridKey(lon, lat) {
       return Math.floor(lon / CELL) + ":" + Math.floor(lat / CELL);
     }
@@ -1250,8 +1252,15 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds) 
       }
       bucket.push(node);
     }
+    // Degree among currently searchable edges — dead-end = degree 1.
+    const degree = new Int32Array(n);
+    for (let i = 0; i < edges.length; i += 1) {
+      const edge = edges[i];
+      if (!accessAllowed(edge.ac, policy, enums, edge)) continue;
+      if (edge.a < n) degree[edge.a] += 1;
+      if (edge.b < n) degree[edge.b] += 1;
+    }
     const islandNodes = new Set();
-    const nodeComponent = new Map();
     for (let i = 0; i < edges.length; i += 1) {
       const edge = edges[i];
       const mid = edge.g && edge.g[Math.floor(edge.g.length / 2)];
@@ -1262,10 +1271,9 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds) 
         continue;
       }
       if (edge.c === 0) {
-        remember(giantGrid, edge.a);
-        remember(giantGrid, edge.b);
-        nodeComponent.set(edge.a, 0);
-        nodeComponent.set(edge.b, 0);
+        // Through giant only — never soft-land on a pavement stub tip.
+        if (degree[edge.a] >= 2) remember(giantGrid, edge.a);
+        if (degree[edge.b] >= 2) remember(giantGrid, edge.b);
         continue;
       }
       if (!accessAllowed(edge.ac, policy, enums, edge)) continue;
@@ -1273,34 +1281,31 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds) 
       if (accessName !== "motorized_unknown") continue;
       islandNodes.add(edge.a);
       islandNodes.add(edge.b);
-      remember(islandGrid, edge.a);
-      remember(islandGrid, edge.b);
-      if (!nodeComponent.has(edge.a)) nodeComponent.set(edge.a, edge.c);
-      if (!nodeComponent.has(edge.b)) nodeComponent.set(edge.b, edge.c);
     }
     const stitchSeen = new Set();
-    function nearestInGrid(grid, ll, excludeNode, requireDifferentComponent) {
+    function nearestThroughGiant(ll, excludeNode) {
       if (!ll) return null;
       const cx = Math.floor(ll[0] / CELL);
       const cy = Math.floor(ll[1] / CELL);
-      const excludeComp = nodeComponent.get(excludeNode);
       let best = null;
       let bestD = STITCH_M + 1;
       for (let dx = -2; dx <= 2; dx += 1) {
         for (let dy = -2; dy <= 2; dy += 1) {
-          const bucket = grid.get(cx + dx + ":" + (cy + dy));
+          const bucket = giantGrid.get(cx + dx + ":" + (cy + dy));
           if (!bucket) continue;
           for (const gn of bucket) {
             if (gn === excludeNode) continue;
+            if (degree[gn] < 2) continue;
+            const gl = nodeCoord[gn];
+            if (!gl) continue;
+            // Do not soft-stitch capillary into major town cores (unless pin is there).
             if (
-              requireDifferentComponent &&
-              excludeComp != null &&
-              nodeComponent.get(gn) === excludeComp
+              pointInAdventureUrbanCore(gl[0], gl[1]) &&
+              haversineMeters(gl, startLL) > 2500 &&
+              haversineMeters(gl, endLL) > 2500
             ) {
               continue;
             }
-            const gl = nodeCoord[gn];
-            if (!gl) continue;
             const d = haversineMeters(ll, gl);
             if (d < bestD && d > 0.5) {
               bestD = d;
@@ -1312,6 +1317,8 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds) 
       return best != null && bestD <= STITCH_M ? { node: best, meters: bestD } : null;
     }
     function addStitch(aNode, bNode, meters) {
+      // Hard ban: dead-end ↔ dead-end gap span (any length).
+      if (degree[aNode] <= 1 && degree[bNode] <= 1) return;
       const a = Math.min(aNode, bNode);
       const b = Math.max(aNode, bNode);
       const key = a + ":" + b;
@@ -1337,6 +1344,7 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds) 
         seasonal: false,
         virtual: true,
         accessLeg: true,
+        softStitch: true,
         forward: true
       });
       softStitchCount += 1;
@@ -1344,10 +1352,9 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds) 
     for (const islandNode of islandNodes) {
       const ll = nodeCoord[islandNode];
       if (!ll) continue;
-      const toGiant = nearestInGrid(giantGrid, ll, islandNode, false);
+      const toGiant = nearestThroughGiant(ll, islandNode);
       if (toGiant) addStitch(islandNode, toGiant.node, toGiant.meters);
-      const toIsland = nearestInGrid(islandGrid, ll, islandNode, true);
-      if (toIsland) addStitch(islandNode, toIsland.node, toIsland.meters);
+      // Intentionally no island↔island stitches — those spanned dead-end gaps.
     }
   }
 
@@ -1358,11 +1365,25 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds) 
     return haversineMeters(startLL, ll) + haversineMeters(ll, endLL) <= factor * abMeters * 1.0000001;
   }
 
+  function adventureUrbanMult(ll) {
+    if (!ll || profile === "cleanest") return 1;
+    if (!pointInAdventureUrbanCore(ll[0], ll[1])) return 1;
+    // Waypoint / pin in the core: allow flow through that city.
+    if (haversineMeters(ll, startLL) < 2500 || haversineMeters(ll, endLL) < 2500) return 1;
+    // Strong enough that trunk/primary through Moncton/Fredericton loses to
+    // yellow/white/track detours; finite so unavoidable bridges still work.
+    if (profile === "dirt") return 5.5;
+    if (profile === "balanced") return 4.2;
+    return 3.6; // direct
+  }
+
   function edgeStepCost(edge, fromNode, toNode) {
     if (edge.accessLeg) {
       // Soft-stitch / pin access: real meters, but Direct still pays for
       // walking away from the goal near B (no free dirt-tourism connectors).
-      let accessCost = edge.meters / 1000;
+      // Soft-stitches pay a steep premium so they are connectivity last-resort,
+      // not gray shortcuts across unmapped land.
+      let accessCost = (edge.meters / 1000) * (edge.softStitch ? 12 : 1);
       if (
         fromNode != null &&
         toNode != null &&
@@ -1377,6 +1398,11 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds) 
           const w = profile === "direct" ? 10 : profile === "balanced" ? 3.5 : 1.2;
           accessCost += (away / 1000) * w;
         }
+        const mid = [
+          (nodeCoord[fromNode][0] + nodeCoord[toNode][0]) / 2,
+          (nodeCoord[fromNode][1] + nodeCoord[toNode][1]) / 2
+        ];
+        accessCost *= adventureUrbanMult(mid);
       }
       return accessCost;
     }
@@ -1384,36 +1410,48 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds) 
     const classMult = roadClassMultiplier(edge.roadTrack, profile);
     let cost = (edge.meters / 1000) * surfaceMult * classMult;
     // When the rider opts into unknown access, non-cleanest profiles should
-    // prefer NSTDB / provincial capillary (motorized_unknown) over paved NRN.
+    // prefer NSTDB / provincial capillary (motorized_unknown) over paved spine.
     // Direct: mild pull only — length still wins (no dirt% objective).
-    // Balanced: mild purple open + explicit paved mix pull toward ~50/50.
+    // Balanced: open purple toward ~50/50 without cloning Direct’s crow-flies cut.
     // Dirt: strong.
     if (policy.motorizedUnknown && profile !== "cleanest") {
       const accessName = enums.ACCESS_NAME[edge.access] || "";
       if (accessName === "motorized_unknown") {
         if (profile === "dirt") cost *= 0.5;
         else if (profile === "direct") cost *= 0.78;
-        else cost *= 0.94; // balanced — open purple without owning the mix
+        else cost *= 0.9; // balanced — journey dirt without owning the corridor
       }
       const id = String(edge.edgeId || "");
       if (id.startsWith("ns-") || /nstdb|Topographic/i.test(String(edge.source || ""))) {
         if (profile === "dirt") cost *= 0.68;
         else if (profile === "direct") cost *= 0.86;
-        else cost *= 0.96;
+        else cost *= 0.93;
       }
-      // Balanced+Allow: force journey mix toward paved/dirt parity. Capillary
-      // alone would clone Direct’s dirt cut on long NS fabric.
+      // Balanced+Allow mix: on purple-rich NS fabric, nudge paved into the
+      // journey so dirt% lands ~40–60 instead of cloning Direct. Arterial /
+      // urban penalties still keep highway corridors from becoming Clean-lite.
       if (profile === "balanced") {
         const surfaceName = enums.SURFACE_NAME[edge.surface] || "";
-        if (surfaceName === "paved") cost *= 0.94;
+        if (surfaceName === "paved") cost *= 0.9;
         else if (
           surfaceName === "gravel" ||
           surfaceName === "access" ||
           surfaceName === "track"
         ) {
-          cost *= 1.03;
+          cost *= 1.06;
         }
       }
+    }
+    // Adventure: avoid major city/town cores unless pin is there or unavoidable.
+    if (fromNode != null && toNode != null && nodeCoord[fromNode] && nodeCoord[toNode]) {
+      const mid = [
+        (nodeCoord[fromNode][0] + nodeCoord[toNode][0]) / 2,
+        (nodeCoord[fromNode][1] + nodeCoord[toNode][1]) / 2
+      ];
+      cost *= adventureUrbanMult(mid);
+    } else if (edge.g && edge.g.length) {
+      const mid = edge.g[Math.floor(edge.g.length / 2)];
+      if (mid) cost *= adventureUrbanMult(mid);
     }
     // Approach-to-goal: penalize edges that increase distance to B.
     // Clean: apply for the whole journey so side-road starts prefer forward

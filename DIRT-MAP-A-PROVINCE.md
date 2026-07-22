@@ -148,7 +148,7 @@ Component 0 (or largest) is the driveable “giant,” mostly OSM permissive fab
 
 **Soft-stitch (route time, not pack)**  
 When **Allow is on** and profile is **not Clean**, the router may add short real-meter virtual legs (~≤100 m) island→giant and island→island so Direct/Dirt can cut through purple instead of hugging pavement and nibbling spurs.  
-**Clean never soft-stitches.** Soft-stitch is Allow-only and adventure-only. See [DIRT-ROUTING-SYSTEM.md](./DIRT-ROUTING-SYSTEM.md).
+**Clean never soft-stitches.** Soft-stitch is Allow-only and adventure-only. **Hard ban:** dead-end ↔ dead-end gap spans are never created (no gray connectors between capillary tendrils). Only near-touch joins onto through giant fabric (degree ≥ 2) are allowed. See [DIRT-ROUTING-SYSTEM.md](./DIRT-ROUTING-SYSTEM.md).
 
 Do not “fix” islands by baking free connectors into the pack. Health = giant usable + capillary near-touch rate + soft-stitch success on smoke ODs — not a single connected component count of zero islands.
 

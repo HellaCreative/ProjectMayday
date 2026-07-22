@@ -249,11 +249,24 @@ const ADVENTURE_URBAN_AVOID = [
   { minLat: 44.55, maxLat: 44.78, minLon: -63.75, maxLon: -63.4, nudgeLat: 0.4 }, // Halifax
   { minLat: 45.4, maxLat: 45.72, minLon: -73.98, maxLon: -73.4, nudgeLat: 0.28 }, // Montreal island
   { minLat: 43.55, maxLat: 43.85, minLon: -79.55, maxLon: -79.15, nudgeLat: 0.35 }, // Toronto
-  { minLat: 45.85, maxLat: 46.2, minLon: -64.95, maxLon: -64.55, nudgeLat: 0.2 }, // Moncton core
+  { minLat: 45.85, maxLat: 46.2, minLon: -64.95, maxLon: -64.55, nudgeLat: 0.2 }, // Moncton / Dieppe
+  { minLat: 45.88, maxLat: 46.1, minLon: -64.45, maxLon: -64.28, nudgeLat: 0.15 }, // Sackville NS
+  { minLat: 45.78, maxLat: 45.9, minLon: -64.28, maxLon: -64.12, nudgeLat: 0.12 }, // Amherst
   { minLat: 45.88, maxLat: 46.05, minLon: -66.75, maxLon: -66.5, nudgeLat: 0.2 }, // Fredericton
+  { minLat: 45.2, maxLat: 45.35, minLon: -66.2, maxLon: -65.95, nudgeLat: 0.18 }, // Saint John
   { minLat: 47.3, maxLat: 47.45, minLon: -68.45, maxLon: -68.2, nudgeLat: 0.2 }, // Edmundston
   { minLat: 46.75, maxLat: 46.9, minLon: -71.35, maxLon: -71.1, nudgeLat: 0.2 } // Québec City core
 ];
+
+function pointInAdventureUrbanCore(lon, lat) {
+  if (!Number.isFinite(lon) || !Number.isFinite(lat)) return false;
+  for (const box of ADVENTURE_URBAN_AVOID) {
+    if (lat >= box.minLat && lat <= box.maxLat && lon >= box.minLon && lon <= box.maxLon) {
+      return true;
+    }
+  }
+  return false;
+}
 
 const ADVENTURE_HOP_KM = 320;
 
@@ -396,6 +409,8 @@ module.exports = {
   shortestRegionPath,
   regionsForRoute,
   corridorLocationsForRoute,
+  ADVENTURE_URBAN_AVOID,
+  pointInAdventureUrbanCore,
   REGION_NEIGHBOURS,
   MATCH_METERS
 };

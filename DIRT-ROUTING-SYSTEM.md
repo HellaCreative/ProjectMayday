@@ -47,11 +47,11 @@ UI names ↔ engine ids: Cleanest → `cleanest`, Direct → `direct`, Balanced 
 
 ### Adventure avoids major cities (unless staged)
 
-**Product law:** Direct / Balanced / Dirt must **not** beeline through major urban cores (Halifax, Moncton, Fredericton, Edmundston, Québec, Montreal, …) just because longhaul pack stitching used those cities as chain hubs.
+**Product law:** Direct / Balanced / Dirt must **not** beeline through major urban cores (Halifax, Moncton, Fredericton, Sackville, Edmundston, Québec, Montreal, …) just because longhaul pack stitching used those cities as chain hubs — or because trunk/primary is the cheapest continuous paved spine.
 
 - **Cleanest** may use highway city/spine corridors (Google-fast A→B).
-- **Adventure** connects packs along the A→B chord / border geometry — no injected city waypoints. If the rider stages through a city explicitly, that pin is honored.
-- Engine: `corridorLocationsForRoute(..., { profile })` in `routing/regional/merge.js`.
+- **Adventure** connects packs along the A→B chord / border geometry — no injected city waypoints. Costing also penalizes edges inside known town cores and prefers Carto yellow/white/track over primary/trunk. If the rider stages through a city explicitly, that pin is honored.
+- Engine: `corridorLocationsForRoute(..., { profile })` + `pointInAdventureUrbanCore` in `routing/regional/merge.js`; urban multiplier in `routing/lib/router.js`.
 
 ---
 
@@ -70,15 +70,19 @@ If paint and percentages disagree, fix the aggregator — don’t invent a secon
 
 ## Costing / ellipse / snap / soft-stitch (conceptual)
 
-**Costing** — each edge pays distance × surface weight × road-class weight. Clean prefers major paved progress (arterial/collector/local OK) toward the destination — not freeway-only backtracks. Adventure profiles punish highway spine so the engine can’t “stay on 102 and nibble dirt exits.” Allow on adds a pull onto unknown / NSTDB for non-Clean only. **Balanced+Allow** adds an extra paved↔dirt mix pull so dirt% lands near ~50/50 when fabric can deliver both — not Direct’s crow-flies purple cut, not Dirt-max.
+**Costing** — each edge pays distance × surface weight × road-class weight. Clean prefers upper major roads (motorway/trunk/primary) toward the destination. Adventure prefers **lower major** (secondary/tertiary/unclassified) + **agricultural/forestry tracks**; **city roads** (residential/living_street/service) are connectors only — not town-center magnets. Allow on adds a pull onto unknown / NSTDB for non-Clean only. **Balanced+Allow** opens purple toward ~50/50 when fabric can deliver both — not Direct’s crow-flies purple cut, not Dirt-max, and not a paved-leaning highway cousin of Direct.
+
+Carto line legend (fabric preference scope): [OpenStreetMap Carto/Lines](https://wiki.openstreetmap.org/wiki/OpenStreetMap_Carto/Lines).
+
+Weights change; law doesn’t. Don’t dump every multiplier into product docs — read `profile-costs.js` when tuning.
 
 **Ellipse** — search stays inside a corridor around A→B (tighter for Clean/Direct/Balanced, wider for Dirt). Escalates if no path. Dirt ellipse may stay off by default so Dirt can wander farther. Balanced shares Direct’s tight band so Myra-style north tourism spurs stay out; mix divergence comes from costing, not a wider ellipse.
 
 **Snap** — pins match nearby eligible edges. Clean prefers paved; adventure prefers dirt/track/access. Full packs bias toward the giant component so you don’t start stuck on a purple island with no way home (unless Allow + soft-stitch connects you).
 
-**Soft-stitch** — route-time only, Allow on, non-Clean: short real-meter virtual legs between near-touch components so capillary can form a through cut. Not packed into the graph. Not free teleports. See [fabric doc](./DIRT-MAP-A-PROVINCE.md).
+**Soft-stitch** — route-time only, Allow on, non-Clean: short real-meter virtual legs from capillary islands onto the **through** giant fabric (node degree ≥ 2) so purple can form a usable cut. **Hard ban:** never stitch dead-end ↔ dead-end (no gap-spanning between capillary tendrils — that invented gray connectors). No island↔island tip joins. Soft-stitches pay a steep cost premium and refuse urban-core landings unless a pin is there. Not packed into the graph. Not free teleports. See [fabric doc](./DIRT-MAP-A-PROVINCE.md).
 
-Weights change; law doesn’t. Don’t dump every multiplier into product docs — read `profile-costs.js` when tuning.
+**Adventure city avoid** — Direct / Balanced / Dirt pay a place penalty inside major town cores (Moncton, Fredericton, Sackville, …) and prefer OSM Carto secondary/tertiary/unclassified/track (yellow/white/dirt) over trunk/primary spines. Clean is exempt. Pins inside a core still allow flow through that city.
 
 ---
 

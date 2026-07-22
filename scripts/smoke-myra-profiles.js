@@ -248,12 +248,15 @@ function runAsserts(rows) {
         failures
       );
     }
-    // Must not clone Direct when Dirt actually separates.
+    // Must not clone Direct when Dirt actually separates AND fabric can deliver
+    // a mid mix (Direct already dirt-rich or Balanced opened meaningful unk).
+    // Short paved-leaning ODs may share Direct’s line at low dirt% — that is OK.
     if (
       balOn.dirt != null &&
       directOn.dirt != null &&
       dirtOn.dirt != null &&
-      dirtOn.dirt > directOn.dirt + 8
+      dirtOn.dirt > directOn.dirt + 8 &&
+      ((directOn.dirt || 0) >= 25 || (balOn.unk || 0) > 8)
     ) {
       const sameSpine =
         Math.abs(balOn.km - directOn.km) < 0.4 &&
@@ -332,6 +335,20 @@ function runLongOdAsserts(rows) {
       `long Balanced+Allow must not clone Direct (km ${balOn.km}/${directOn.km}, dirt ${balOn.dirt}/${directOn.dirt})`,
       failures
     );
+    // On paved-leaning corridors Direct may sit below ~50% dirt; Balanced must
+    // not be Direct’s paved cousin (dirt% below Direct when Direct already low).
+    if (
+      balOn.dirt != null &&
+      directOn.dirt != null &&
+      directOn.dirt < 30 &&
+      balOn.dirt + 3 < directOn.dirt
+    ) {
+      assert(
+        false,
+        `long Balanced+Allow dirt% (${balOn.dirt}) should not sit below Direct (${directOn.dirt}) on paved-leaning fabric`,
+        failures
+      );
+    }
   }
 
   if (dirtOn && balOn && dirtOn.status === "complete" && balOn.status === "complete") {
