@@ -7141,6 +7141,11 @@
       bottom: calc(var(--p2-dock-h) + 8px) !important;
       border-radius: 14px !important;
     }
+    /* Render the compact route sheet at its final content height immediately. */
+    body.planner-open .route-card {
+      transition: none !important;
+      will-change: auto !important;
+    }
   </style>
 </head>
 <body>
