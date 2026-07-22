@@ -66,6 +66,38 @@ function nodeKey(c) {
   return c[0].toFixed(5) + "," + c[1].toFixed(5);
 }
 
+function haversineMeters(a, b) {
+  const toRad = (deg) => (deg * Math.PI) / 180;
+  const r = 6371000;
+  const dLat = toRad(b[1] - a[1]);
+  const dLng = toRad(b[0] - a[0]);
+  const lat1 = toRad(a[1]);
+  const lat2 = toRad(b[1]);
+  const x =
+    Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+  return 2 * r * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+}
+
+/**
+ * Reconcile provincial capillary endpoints onto existing fabric nodes when
+ * surveys disagree by a few meters at a real junction. Not a free-space
+ * connector and not island↔island gap spanning — no new edges are invented.
+ */
+const ENDPOINT_SNAP_METERS = 18;
+const SNAP_CELL = 0.0002; // ~22 m
+
+function isCapillaryFeature(feature) {
+  const role = feature.meta && feature.meta.conflationRole;
+  if (role === "supplement") return true;
+  if (role === "backbone") return false;
+  const src = String(feature.sourceName || "");
+  // OSM / NRN are fabric even when tagged resource/track.
+  if (/OpenStreetMap|^NRN\b|National Road/i.test(src)) return false;
+  if (/Forest Roads|NSTDB|Topographic|FTEN|MNRF|Multi-Usage|Access Roads/i.test(src)) return true;
+  const s = feature.surfaceClass;
+  return s === "track" || s === "resource" || s === "access" || s === "double_track";
+}
+
 function bboxOf(nodes) {
   let minX = Infinity;
   let minY = Infinity;
@@ -121,6 +153,8 @@ function buildRegionalGraph(options = {}) {
   const features = options.features || [];
   const province = options.province || "NS";
   const regionId = options.regionId || province.toLowerCase();
+  const snapMeters =
+    options.endpointSnapMeters != null ? Number(options.endpointSnapMeters) : ENDPOINT_SNAP_METERS;
 
   const nodeLookup = new Map();
   const nodes = [];
@@ -128,25 +162,78 @@ function buildRegionalGraph(options = {}) {
   const accessCounts = {};
   const surfaceCounts = {};
   const sourceCounts = {};
+  const snapGrid = new Map();
+  let endpointSnaps = 0;
 
-  function addNode(coord) {
+  function snapCellKey(c) {
+    return Math.floor(c[0] / SNAP_CELL) + ":" + Math.floor(c[1] / SNAP_CELL);
+  }
+
+  function rememberSnapCell(id) {
+    const c = nodes[id];
+    const key = snapCellKey(c);
+    let bucket = snapGrid.get(key);
+    if (!bucket) {
+      bucket = [];
+      snapGrid.set(key, bucket);
+    }
+    bucket.push(id);
+  }
+
+  function addNodeExact(coord) {
     const key = nodeKey(coord);
     let id = nodeLookup.get(key);
     if (id != null) return id;
     id = nodes.length;
     nodeLookup.set(key, id);
     nodes.push([Number(coord[0]), Number(coord[1])]);
+    rememberSnapCell(id);
     return id;
   }
 
-  for (const feature of features) {
+  /** Capillary only: reuse a nearby existing node (usually OSM fabric). */
+  function addNodeSnapped(coord) {
+    const key = nodeKey(coord);
+    const exact = nodeLookup.get(key);
+    if (exact != null) return exact;
+    if (!(snapMeters > 0)) return addNodeExact(coord);
+
+    const ll = [Number(coord[0]), Number(coord[1])];
+    const cx = Math.floor(ll[0] / SNAP_CELL);
+    const cy = Math.floor(ll[1] / SNAP_CELL);
+    let best = null;
+    let bestD = snapMeters + 1;
+    for (let dx = -1; dx <= 1; dx += 1) {
+      for (let dy = -1; dy <= 1; dy += 1) {
+        const bucket = snapGrid.get(cx + dx + ":" + (cy + dy));
+        if (!bucket) continue;
+        for (const id of bucket) {
+          const d = haversineMeters(ll, nodes[id]);
+          if (d < bestD) {
+            bestD = d;
+            best = id;
+          }
+        }
+      }
+    }
+    if (best != null && bestD <= snapMeters) {
+      endpointSnaps += 1;
+      // Alias this rounded key so later exact matches land on the same join.
+      nodeLookup.set(key, best);
+      return best;
+    }
+    return addNodeExact(coord);
+  }
+
+  function addFeatureEdge(feature, snapEndpoints) {
     const policyAccess = accessForPolicy(feature.accessClass);
-    if (policyAccess === "motorized_excluded") continue;
+    if (policyAccess === "motorized_excluded") return;
     const coords = feature.geometry && feature.geometry.coordinates;
-    if (!coords || coords.length < 2) continue;
-    const a = addNode(coords[0]);
-    const b = addNode(coords[coords.length - 1]);
-    if (a === b) continue;
+    if (!coords || coords.length < 2) return;
+    const add = snapEndpoints ? addNodeSnapped : addNodeExact;
+    const a = add(coords[0]);
+    const b = add(coords[coords.length - 1]);
+    if (a === b) return;
 
     const costSurface = surfaceForCosting(feature.surfaceClass);
     const accessCode = ACCESS[policyAccess] != null ? ACCESS[policyAccess] : ACCESS.motorized_unknown;
@@ -179,6 +266,16 @@ function buildRegionalGraph(options = {}) {
     });
   }
 
+  // Fabric first (exact nodes), then capillary with near-miss endpoint snap.
+  const fabric = [];
+  const capillary = [];
+  for (const feature of features) {
+    if (isCapillaryFeature(feature)) capillary.push(feature);
+    else fabric.push(feature);
+  }
+  for (const feature of fabric) addFeatureEdge(feature, false);
+  for (const feature of capillary) addFeatureEdge(feature, true);
+
   const { edgeComponents, componentCount } = computeComponents(nodes.length, edges);
   for (let i = 0; i < edges.length; i += 1) edges[i].c = edgeComponents[i];
 
@@ -207,6 +304,14 @@ function buildRegionalGraph(options = {}) {
     }
   }
 
+  const lineage = options.lineage ? { ...options.lineage } : {};
+  lineage.endpointSnap = {
+    meters: snapMeters,
+    snappedEndpoints: endpointSnaps,
+    note:
+      "Provincial capillary endpoints within snap meters reuse existing fabric nodes (survey near-miss joins). No free-space edges."
+  };
+
   const graph = {
     version: 1,
     schemaVersion: "canada-regional-1",
@@ -223,7 +328,7 @@ function buildRegionalGraph(options = {}) {
     accessCounts,
     surfaceCounts,
     sourceCounts,
-    lineage: options.lineage || null,
+    lineage,
     conflation: options.conflationReport || null,
     nodes,
     edges
@@ -309,6 +414,8 @@ function writeRegionalGraph(graph, outDir) {
 module.exports = {
   buildRegionalGraph,
   writeRegionalGraph,
+  ENDPOINT_SNAP_METERS,
+  isCapillaryFeature,
   SURFACE,
   STRUCTURE,
   ACCESS,

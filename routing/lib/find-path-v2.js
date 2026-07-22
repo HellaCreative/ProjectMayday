@@ -234,7 +234,11 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
             else step *= 0.9; // balanced — journey dirt without owning the corridor
           }
           const id = pack.edgeId(ei);
-          if (String(id).startsWith("ns-")) {
+          if (
+            String(id).startsWith("ns-") ||
+            String(id).startsWith("nb-fr") ||
+            /nstdb|Topographic|Forest Roads/i.test(String(id))
+          ) {
             if (profile === "dirt") step *= 0.68;
             else if (profile === "direct") step *= 0.86;
             else step *= 0.93;

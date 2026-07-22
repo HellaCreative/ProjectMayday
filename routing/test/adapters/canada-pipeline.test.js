@@ -267,6 +267,61 @@ check("regional graph build assigns components and bbox", () => {
   assert.strictEqual(graph.enums.SURFACE_NAME[2], "access");
 });
 
+check("capillary endpoint snap joins near-miss fabric nodes", () => {
+  // ~11 m east of fabric endpoint — same junction, survey disagreement.
+  const fabricEnd = [-66.643, 45.963];
+  const nearMiss = [-66.64286, 45.963];
+  const features = [
+    createNormalizedEdge({
+      edgeId: "osm-1",
+      lineageId: "osm:1",
+      province: "NB",
+      sourceName: "OpenStreetMap",
+      geometry: {
+        type: "LineString",
+        coordinates: [
+          [-66.65, 45.963],
+          fabricEnd
+        ]
+      },
+      surfaceClass: "paved",
+      accessClass: "motorized_permissive",
+      structureType: "none",
+      distanceMeters: 500,
+      meta: { conflationRole: "backbone" }
+    }),
+    createNormalizedEdge({
+      edgeId: "nb-fr-1",
+      lineageId: "nb-fr:1",
+      province: "NB",
+      sourceName: "New Brunswick Forest Roads (DNR-ED)",
+      geometry: {
+        type: "LineString",
+        coordinates: [
+          nearMiss,
+          [-66.63, 45.97]
+        ]
+      },
+      surfaceClass: "resource",
+      accessClass: "motorized_unknown",
+      structureType: "none",
+      distanceMeters: 900,
+      meta: { conflationRole: "supplement" }
+    })
+  ];
+  const graph = buildRegionalGraph({ features, province: "NB", regionId: "nb" });
+  assert.strictEqual(graph.edgeCount, 2);
+  assert.strictEqual(graph.componentCount, 1, "near-miss capillary must join fabric");
+  assert.ok(graph.lineage.endpointSnap.snappedEndpoints >= 1);
+});
+
+check("Fredericton urban avoid is downtown-tight, not metro-wide", () => {
+  const { pointInAdventureUrbanCore } = require("../../regional/merge");
+  assert.strictEqual(pointInAdventureUrbanCore(-66.643, 45.963), true, "downtown core");
+  assert.strictEqual(pointInAdventureUrbanCore(-66.72, 45.88), false, "New Maryland / SW ring");
+  assert.strictEqual(pointInAdventureUrbanCore(-66.58, 45.92), false, "Lincoln / east approach");
+});
+
 check("region selection hits Nova Scotia for Halifax points", () => {
   const regions = selectRegionsForLocations([
     { lat: 44.65, lon: -63.58 },

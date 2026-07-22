@@ -252,7 +252,9 @@ const ADVENTURE_URBAN_AVOID = [
   { minLat: 45.85, maxLat: 46.2, minLon: -64.95, maxLon: -64.55, nudgeLat: 0.2 }, // Moncton / Dieppe
   { minLat: 45.88, maxLat: 46.1, minLon: -64.45, maxLon: -64.28, nudgeLat: 0.15 }, // Sackville NS
   { minLat: 45.78, maxLat: 45.9, minLon: -64.28, maxLon: -64.12, nudgeLat: 0.12 }, // Amherst
-  { minLat: 45.88, maxLat: 46.05, minLon: -66.75, maxLon: -66.5, nudgeLat: 0.2 }, // Fredericton
+  // Downtown peninsula + core bridges only — leave Vanier / south-bank / New
+  // Maryland ring approaches outside so adventure can skirt instead of Queen St.
+  { minLat: 45.952, maxLat: 45.978, minLon: -66.665, maxLon: -66.618, nudgeLat: 0.18 }, // Fredericton downtown
   { minLat: 45.2, maxLat: 45.35, minLon: -66.2, maxLon: -65.95, nudgeLat: 0.18 }, // Saint John
   { minLat: 47.3, maxLat: 47.45, minLon: -68.45, maxLon: -68.2, nudgeLat: 0.2 }, // Edmundston
   { minLat: 46.75, maxLat: 46.9, minLon: -71.35, maxLon: -71.1, nudgeLat: 0.2 } // Québec City core

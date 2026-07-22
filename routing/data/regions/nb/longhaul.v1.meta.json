@@ -1,10 +1,10 @@
 {
   "regionId": "nb",
   "schemaVersion": "longhaul-region-1",
-  "edgeCount": 260909,
-  "nodeCount": 307657,
-  "gzBytes": 17549218,
-  "inflatedBytes": 97032362,
+  "edgeCount": 258738,
+  "nodeCount": 293861,
+  "gzBytes": 17245228,
+  "inflatedBytes": 95676044,
   "path": "routing/data/regions/nb/longhaul.v1.json.gz",
   "lineage": {
     "purpose": "canada-chain / in-province pack (OSM+Forest Roads; no NRN)",
@@ -18,8 +18,8 @@
     "hubCount": 5,
     "corridorBufferMeters": null,
     "thinnedGeometry": true,
-    "inputEdgeCount": 260909,
-    "spineEdgeCount": 260909,
-    "outputEdgeCount": 260909
+    "inputEdgeCount": 258738,
+    "spineEdgeCount": 258738,
+    "outputEdgeCount": 258738
   }
 }

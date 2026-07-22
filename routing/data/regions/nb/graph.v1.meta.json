@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-22T14:13:53.762Z",
+  "generatedAt": "2026-07-22T15:40:45.179Z",
   "schemaVersion": "canada-regional-1",
   "regionId": "nb",
   "province": "NB",
@@ -9,26 +9,26 @@
     -63.74004,
     48.07265
   ],
-  "nodeCount": 307826,
-  "edgeCount": 260909,
-  "componentCount": 57440,
-  "boundaryNodeCount": 1976,
+  "nodeCount": 293902,
+  "edgeCount": 258738,
+  "componentCount": 49180,
+  "boundaryNodeCount": 1831,
   "accessCounts": {
     "motorized_permissive": 80095,
-    "motorized_unknown": 180814
+    "motorized_unknown": 178643
   },
   "surfaceCounts": {
     "paved": 28992,
     "unknown": 8856,
-    "access": 222221,
+    "access": 220050,
     "gravel": 840
   },
   "sourceCounts": {
     "OpenStreetMap": 80095,
-    "New Brunswick Forest Roads (DNR-ED)": 180814
+    "New Brunswick Forest Roads (DNR-ED)": 178643
   },
-  "jsonBytes": 147049753,
-  "gzBytes": 31315092,
+  "jsonBytes": 145688493,
+  "gzBytes": 30928035,
   "lineage": {
     "nrn": {
       "adapter": null,
@@ -95,6 +95,13 @@
         },
         "excluded": {}
       }
+    },
+    "resnapFrom": "2026-07-22T14:13:53.762Z",
+    "resnapAt": "2026-07-22T15:40:43.300Z",
+    "endpointSnap": {
+      "meters": 18,
+      "snappedEndpoints": 13755,
+      "note": "Provincial capillary endpoints within snap meters reuse existing fabric nodes (survey near-miss joins). No free-space edges."
     }
   },
   "conflation": {

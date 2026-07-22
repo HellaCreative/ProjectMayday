@@ -1422,7 +1422,13 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds) 
         else cost *= 0.9; // balanced — journey dirt without owning the corridor
       }
       const id = String(edge.edgeId || "");
-      if (id.startsWith("ns-") || /nstdb|Topographic/i.test(String(edge.source || ""))) {
+      const src = String(edge.source || "");
+      // Provincial capillary parity: NSTDB and NB Forest Roads (not OSM alone).
+      if (
+        id.startsWith("ns-") ||
+        id.startsWith("nb-fr") ||
+        /nstdb|Topographic|Forest Roads/i.test(src)
+      ) {
         if (profile === "dirt") cost *= 0.68;
         else if (profile === "direct") cost *= 0.86;
         else cost *= 0.93;
