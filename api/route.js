@@ -16,7 +16,7 @@ module.exports = async function handler(req, res) {
       ok: true,
       service: "dirt-route",
       engine: "dirt-node-astar",
-      note: "Regional offline graphs: NRN national backbone + provincial supplements. OSM is basemap/POI only."
+      note: "Regional offline graphs: NRN + OSM road fabric (permissive) + provincial capillary (unknown-gated). Shortbread tiles remain display-only."
     });
   }
 
@@ -41,7 +41,7 @@ module.exports = async function handler(req, res) {
 
 module.exports.config = {
   maxDuration: 300,
-  // Hobby personal accounts cap at 2048 MB — QC is split into quadrant packs.
+  // Hobby personal accounts cap at 2048 MB — single OSM-only QC pack fits.
   memory: 2048,
   includeFiles: [
     "routing/lib/**",
@@ -49,8 +49,6 @@ module.exports.config = {
     "routing/schema/**",
     "routing/data/regions/ns/longhaul.v1.json.gz",
     "routing/data/regions/nb/longhaul.v1.json.gz",
-    "routing/data/regions/qc-sl/longhaul.v1.json.gz",
-    "routing/data/regions/qc-west/longhaul.v1.json.gz",
-    "routing/data/regions/qc-north/longhaul.v1.json.gz"
+    "routing/data/regions/qc/longhaul.v1.json.gz"
   ]
 };

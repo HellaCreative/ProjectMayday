@@ -225,7 +225,16 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
         if (!accessAllowed(access, policy, enums)) continue;
         if (avoid && avoid.has(pack.edgeId(ei))) continue;
         const surface = unpackSurface(attr);
-        const step = (edgeMeters[ei] / 1000) * costView[surface];
+        let step = (edgeMeters[ei] / 1000) * costView[surface];
+        if (
+          policy.motorizedUnknown &&
+          (profile === "dirt" || profile === "direct")
+        ) {
+          const accessName = enums.ACCESS_NAME[access] || "";
+          if (accessName === "motorized_unknown") {
+            step *= profile === "dirt" ? 0.62 : 0.82;
+          }
+        }
         const cost = cur.cost + step;
         if (cost < dist[to]) {
           dist[to] = cost;
@@ -342,6 +351,15 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
   }
 
   const pct = (m) => (distanceMeters > 0 ? Math.round((m / distanceMeters) * 100) : 0);
+  // Adventure / dirt share: gravel + access/resource + track + unknown.
+  const dirtMeters =
+    (bySurfaceM.gravel || 0) +
+    (bySurfaceM.access || 0) +
+    (bySurfaceM.resource || 0) +
+    (bySurfaceM.track || 0) +
+    (bySurfaceM.double_track || 0) +
+    (bySurfaceM.unknown || 0) +
+    (bySurfaceM.single || 0);
   return {
     geometry,
     segments,
@@ -360,10 +378,11 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
     stats: {
       pavedPercent: pct(bySurfaceM.paved || 0),
       gravelPercent: pct(bySurfaceM.gravel || 0),
-      accessPercent: pct(bySurfaceM.access || 0),
-      trackPercent: pct(bySurfaceM.track || 0),
-      singlePercent: 0,
+      accessPercent: pct((bySurfaceM.access || 0) + (bySurfaceM.resource || 0)),
+      trackPercent: pct((bySurfaceM.track || 0) + (bySurfaceM.double_track || 0)),
+      singlePercent: pct(bySurfaceM.single || 0),
       unknownSurfacePercent: pct(bySurfaceM.unknown || 0),
+      dirtPercent: pct(dirtMeters),
       unknownAccessPercent: pct(unknownAccessMeters),
       permissiveAccessPercent: pct(byAccessM.motorized_permissive || 0),
       verifiedAccessPercent: pct(byAccessM.motorized_verified || 0)

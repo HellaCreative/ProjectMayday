@@ -5,7 +5,7 @@
     "api/route.js": {
       "memory": 2048,
       "maxDuration": 300,
-      "includeFiles": "routing/{lib,regional,schema}/**,routing/data/regions/{ns,nb,qc-sl,qc-west,qc-north}/longhaul.v1.json.gz"
+      "includeFiles": "routing/{lib,regional,schema}/**,routing/data/regions/{ns,nb,qc}/longhaul.v1.json.gz"
     }
   },
   "headers": [

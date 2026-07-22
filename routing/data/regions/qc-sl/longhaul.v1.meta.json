@@ -3,8 +3,8 @@
   "schemaVersion": "longhaul-region-1",
   "edgeCount": 220638,
   "nodeCount": 319266,
-  "gzBytes": 14232047,
-  "inflatedBytes": 77040397,
+  "gzBytes": 14274403,
+  "inflatedBytes": 77146324,
   "path": "routing/data/regions/qc-sl/longhaul.v1.json.gz",
   "lineage": {
     "purpose": "canada-chain QC quadrant pack (OSM-only; no NRN)",

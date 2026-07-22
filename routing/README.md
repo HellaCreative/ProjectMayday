@@ -74,8 +74,9 @@ node scripts/build-region-with-supplement.js ab
 Cross-province routes (e.g. Halifax → Vancouver) merge corridor regional packs
 with southern highway anchors and border-node stitching (no free-space connectors).
 
-NS-only production requests still default to the legacy NS graph unless
-`ROUTING_USE_REGIONAL=1`.
+NS-only requests use the regional pack (NRN+OSM+NSTDB) locally, and the
+thinned OSM+NRN longhaul pack on Vercel. Opt back into the pre-OSM legacy
+graph with `ROUTING_PREFER_LEGACY=1`.
 
 ## Tests
 

@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-21T21:11:39.576Z",
+  "generatedAt": "2026-07-21T21:51:07.583Z",
   "schemaVersion": "canada-regional-1",
   "regionId": "qc",
   "province": "QC",
@@ -17,16 +17,16 @@
     "motorized_permissive": 585713
   },
   "surfaceCounts": {
-    "paved": 256078,
-    "unknown": 57830,
+    "paved": 254000,
+    "unknown": 59908,
     "gravel": 7020,
     "access": 264785
   },
   "sourceCounts": {
     "OpenStreetMap": 585713
   },
-  "jsonBytes": 291818655,
-  "gzBytes": 61435578,
+  "jsonBytes": 292200791,
+  "gzBytes": 61628282,
   "lineage": {
     "nrn": {
       "adapter": null,
@@ -41,8 +41,8 @@
       "duplicateSkipped": 0,
       "classification": {
         "surface": {
-          "paved": 259362,
-          "unknown": 58670,
+          "paved": 257274,
+          "unknown": 60758,
           "gravel": 7105,
           "resource": 266818
         },
@@ -55,13 +55,14 @@
           "bridge": 13317
         },
         "roadTrack": {
-          "local": 320663,
-          "service": 123178,
-          "collector": 2088,
-          "track": 51265,
-          "arterial": 1841,
-          "resource": 92375,
-          "freeway": 545
+          "freeway": 9531,
+          "ramp": 16830,
+          "arterial": 21083,
+          "collector": 73523,
+          "local": 144125,
+          "service": 216330,
+          "track": 67173,
+          "resource": 43360
         },
         "excluded": {}
       },

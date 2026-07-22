@@ -1,10 +1,20 @@
 "use strict";
 
-const { loadGraph, loadGraphAsync, loadGraphsForRequest, clearGraphCache, resetCacheStats, getCacheStats, chainCacheEnabled } = require("./graph");
+const {
+  loadGraph,
+  loadGraphAsync,
+  loadGraphsForRequest,
+  clearGraphCache,
+  resetCacheStats,
+  getCacheStats,
+  chainCacheEnabled,
+  isLonghaulGraphPath
+} = require("./graph");
 const { resolveGraphRequest } = require("../regional/select");
 const { corridorLocationsForRoute } = require("../regional/merge");
 const {
   surfaceMultiplier: profileSurfaceMultiplier,
+  roadClassMultiplier,
   classSpeedKmh: profileClassSpeedKmh,
   maxSurfaceMultiplier,
   costPerKmView
@@ -140,14 +150,17 @@ function ellipseDirtEnabled() {
 }
 
 /**
- * Ellipse detour factors by profile. `direct` stays surface-neutral in costing;
- * tight ellipse is its corridor bias. Dirt stays unpruned unless ELLIPSE_DIRT=1.
+ * Ellipse detour factors by profile.
+ *   cleanest — tight Google-style pavement corridor
+ *   direct   — tight crow-flies; dirt preference is in surface costs
+ *   balanced — wider for dual-sport mix
+ *   dirt     — widest adventure room; stays unpruned unless ROUTING_ELLIPSE_DIRT=1
  */
 const ELLIPSE_FACTORS = {
-  direct: 1.2,
-  cleanest: 1.4,
-  balanced: 1.5,
-  dirt: 2.2
+  cleanest: 1.25,
+  direct: 1.12,
+  balanced: 1.65,
+  dirt: 2.6
 };
 
 function ellipseAttemptsForProfile(profile) {
@@ -222,6 +235,26 @@ function giantComponentId(runtime) {
   return best;
 }
 
+/**
+ * Giant-component hard bias (+400m) was added for QC longhaul OSM islands.
+ * On full NS packs it stole snaps from nearby NSTDB forest edges and, with
+ * end-rematch, pinned both ends to the paved giant — dirt routes died.
+ *
+ * Full packs: two-pass snap (prefer nearest eligible edge in the giant
+ * component within the match radius; only then fall back to islands).
+ * Longhaul: keep the hard bias + component rematch for QC From-here.
+ */
+function preferGiantComponentSnap(runtime) {
+  if (!runtime || runtime.format === "v2") return false;
+  if (isLonghaulGraphPath(runtime.path)) return true;
+  const schema = String(
+    (runtime.data && runtime.data.schemaVersion) ||
+      (runtime.meta && runtime.meta.schemaVersion) ||
+      ""
+  );
+  return schema.startsWith("longhaul");
+}
+
 function matchPoint(runtime, location, policy, matchMeters, avoidEdgeIds, preferComponentId = null) {
   const enums = runtime.enums;
   const point = [Number(location.lon ?? location.lng), Number(location.lat)];
@@ -230,10 +263,12 @@ function matchPoint(runtime, location, policy, matchMeters, avoidEdgeIds, prefer
   }
   const avoid = avoidEdgeIds instanceof Set ? avoidEdgeIds : null;
   const preferId = Number.isFinite(preferComponentId) ? preferComponentId : null;
+  const longhaulBias = preferGiantComponentSnap(runtime);
   const giantId = runtime.format === "v2" ? null : giantComponentId(runtime);
   const candidates = edgeCandidateIndexes(runtime, point[0], point[1], matchMeters);
   const isV2 = runtime.format === "v2";
-  let best = null;
+  let bestAny = null;
+  let bestGiant = null;
   for (const index of candidates) {
     let accessCode;
     let surfaceCode;
@@ -265,7 +300,7 @@ function matchPoint(runtime, location, policy, matchMeters, avoidEdgeIds, prefer
       coords = edge.g;
     }
     if (isV2) {
-      if (!accessAllowed(accessCode, policy, enums)) continue;
+      if (!accessAllowed(accessCode, policy, enums, null)) continue;
       if (avoid && avoid.has(String(edgeId))) continue;
     }
     let along = 0;
@@ -274,9 +309,8 @@ function matchPoint(runtime, location, policy, matchMeters, avoidEdgeIds, prefer
       const b = coords[i];
       const segM = haversineMeters(a, b);
       const projected = projectOnSegment(point, a, b);
-      // Hard prefer an explicit component (end rematch). Prefer the giant
-      // component within the snap radius so OSM driveway/island clicks do not
-      // steal snaps from the routable network (critical for OSM-only QC packs).
+      // Hard prefer an explicit component (end rematch). Longhaul: hard-penalize
+      // non-giant. Full packs: distance-only here; giant preference is two-pass.
       let componentPenalty = 0;
       if (
         preferId != null &&
@@ -286,6 +320,7 @@ function matchPoint(runtime, location, policy, matchMeters, avoidEdgeIds, prefer
       ) {
         componentPenalty = 1e6;
       } else if (
+        longhaulBias &&
         preferId == null &&
         giantId != null &&
         componentId != null &&
@@ -295,26 +330,39 @@ function matchPoint(runtime, location, policy, matchMeters, avoidEdgeIds, prefer
         componentPenalty = Math.max(400, matchMeters);
       }
       const score = projected.distanceM + componentPenalty;
-      if (!best || score < best.score) {
-        best = {
-          ok: true,
-          edgeIndex: index,
-          edgeId,
-          accessClass: enums.ACCESS_NAME[accessCode],
-          surfaceClass: enums.SURFACE_NAME[surfaceCode],
-          structureType: enums.STRUCTURE_NAME[structureCode],
-          componentId,
-          distanceM: projected.distanceM,
-          score,
-          coord: projected.coord,
-          segmentIndex: i - 1,
-          distanceAlongM: along + segM * projected.t,
-          edgeMeters
-        };
+      const candidate = {
+        ok: true,
+        edgeIndex: index,
+        edgeId,
+        accessClass: enums.ACCESS_NAME[accessCode],
+        surfaceClass: enums.SURFACE_NAME[surfaceCode],
+        structureType: enums.STRUCTURE_NAME[structureCode],
+        componentId,
+        distanceM: projected.distanceM,
+        score,
+        coord: projected.coord,
+        segmentIndex: i - 1,
+        distanceAlongM: along + segM * projected.t,
+        edgeMeters
+      };
+      if (!bestAny || score < bestAny.score) bestAny = candidate;
+      if (
+        !longhaulBias &&
+        preferId == null &&
+        giantId != null &&
+        componentId === giantId &&
+        projected.distanceM <= matchMeters &&
+        (!bestGiant || projected.distanceM < bestGiant.distanceM)
+      ) {
+        bestGiant = candidate;
       }
       along += segM;
     }
   }
+  const best =
+    !longhaulBias && preferId == null && bestGiant && bestGiant.distanceM <= matchMeters
+      ? bestGiant
+      : bestAny;
   if (!best || best.distanceM > matchMeters) {
     return {
       ok: false,
@@ -536,6 +584,9 @@ async function routeCanadaChain(body, graphResolution) {
   }
 
   const cache = getCacheStats();
+  // Surface/access % must come from hop segments — never leave only hop
+  // timing fields here or the client shows 0% Dirt while painting blue/gray.
+  const surfaceStats = aggregateRouteSurfaceStats(segments, totalMeters);
   return {
     status: "complete",
     profile: String(body.profile || "balanced").toLowerCase(),
@@ -544,6 +595,7 @@ async function routeCanadaChain(body, graphResolution) {
     segments,
     warnings,
     stats: {
+      ...surfaceStats,
       hops: parts.length,
       hopKm: parts.map((p) => Math.round((p.distanceMeters || 0) / 1000)),
       searchMs: searchMsTotal,
@@ -563,6 +615,49 @@ async function routeCanadaChain(body, graphResolution) {
       searchMs: searchMsTotal
     }
   };
+}
+
+/** Build paved/dirt/access % from route segments (shared by single-pack + chain). */
+function aggregateRouteSurfaceStats(segments, distanceMeters) {
+  const bySurfaceM = Object.create(null);
+  const byAccessM = Object.create(null);
+  let unknownAccessMeters = 0;
+  for (const seg of segments || []) {
+    const meters = Number(seg.distanceMeters) || 0;
+    if (!(meters > 0)) continue;
+    const surfaceName = seg.surfaceClass || seg.trackClass || "unknown";
+    const accessName = seg.accessClass || "motorized_unknown";
+    bySurfaceM[surfaceName] = (bySurfaceM[surfaceName] || 0) + meters;
+    byAccessM[accessName] = (byAccessM[accessName] || 0) + meters;
+    if (accessName === "motorized_unknown") unknownAccessMeters += meters;
+  }
+  const pct = (m) => (distanceMeters > 0 ? Math.round((m / distanceMeters) * 100) : 0);
+  const dirtMeters = adventureSurfaceMeters(bySurfaceM);
+  return {
+    pavedPercent: pct(bySurfaceM.paved || 0),
+    gravelPercent: pct(bySurfaceM.gravel || 0),
+    accessPercent: pct((bySurfaceM.access || 0) + (bySurfaceM.resource || 0)),
+    trackPercent: pct((bySurfaceM.track || 0) + (bySurfaceM.double_track || 0)),
+    singlePercent: pct(bySurfaceM.single || 0),
+    unknownSurfacePercent: pct(bySurfaceM.unknown || 0),
+    dirtPercent: pct(dirtMeters),
+    unknownAccessPercent: pct(unknownAccessMeters),
+    permissiveAccessPercent: pct(byAccessM.motorized_permissive || 0),
+    verifiedAccessPercent: pct(byAccessM.motorized_verified || 0)
+  };
+}
+
+function adventureSurfaceMeters(bySurfaceM) {
+  const s = bySurfaceM || {};
+  return (
+    (s.gravel || 0) +
+    (s.access || 0) +
+    (s.resource || 0) +
+    (s.track || 0) +
+    (s.double_track || 0) +
+    (s.unknown || 0) +
+    (s.single || 0)
+  );
 }
 
 async function routeOnRuntime(body, graphResolution, runtime) {
@@ -621,10 +716,13 @@ async function routeOnRuntime(body, graphResolution, runtime) {
 
   const start = locations[0];
   const end = locations[locations.length - 1];
-  const startMatch = matchPoint(runtime, start, policy, limit, avoidEdgeIds);
+  let startMatch = matchPoint(runtime, start, policy, limit, avoidEdgeIds);
   let endMatch = matchPoint(runtime, end, policy, limit, avoidEdgeIds);
-  // If end snapped onto a different component (common with unwelled OSM islands),
-  // retry preferring the start component so From-here basemap clicks stay routable.
+  // Reconcile disconnected snaps.
+  // Longhaul: rematch end onto start (QC OSM islands).
+  // Full packs: rematch the nongiant endpoint onto the giant so a purple
+  // NSTDB island click still yields a connected route — without the hard
+  // +400m bias that stole snaps from connected forest edges in-radius.
   if (
     startMatch.ok &&
     endMatch.ok &&
@@ -634,16 +732,45 @@ async function routeOnRuntime(body, graphResolution, runtime) {
     endMatch.componentId >= 0 &&
     startMatch.componentId !== endMatch.componentId
   ) {
-    const endSame = matchPoint(
-      runtime,
-      end,
-      policy,
-      limit,
-      avoidEdgeIds,
-      startMatch.componentId
-    );
-    if (endSame.ok && endSame.componentId === startMatch.componentId) {
-      endMatch = endSame;
+    if (preferGiantComponentSnap(runtime)) {
+      const endSame = matchPoint(
+        runtime,
+        end,
+        policy,
+        limit,
+        avoidEdgeIds,
+        startMatch.componentId
+      );
+      if (endSame.ok && endSame.componentId === startMatch.componentId) {
+        endMatch = endSame;
+      }
+    } else {
+      const giantId = giantComponentId(runtime);
+      if (endMatch.componentId === giantId && startMatch.componentId !== giantId) {
+        const startOnGiant = matchPoint(
+          runtime,
+          start,
+          policy,
+          limit,
+          avoidEdgeIds,
+          giantId
+        );
+        if (startOnGiant.ok && startOnGiant.componentId === giantId) {
+          startMatch = startOnGiant;
+        }
+      } else if (startMatch.componentId === giantId && endMatch.componentId !== giantId) {
+        const endOnGiant = matchPoint(
+          runtime,
+          end,
+          policy,
+          limit,
+          avoidEdgeIds,
+          giantId
+        );
+        if (endOnGiant.ok && endOnGiant.componentId === giantId) {
+          endMatch = endOnGiant;
+        }
+      }
     }
   }
 
@@ -963,6 +1090,7 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds) 
             surface: edge.s,
             access: edge.ac,
             structure: edge.t,
+            roadTrack: edge.rt || "unknown",
             edgeId: edge.i,
             componentId: edge.c,
             source: edge.src,
@@ -1025,8 +1153,22 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds) 
   }
 
   function edgeStepCost(edge) {
-    const mult = edge.accessLeg ? 1 : surfaceMultiplier(edge.surface, profile, enums);
-    return (edge.meters / 1000) * mult;
+    if (edge.accessLeg) return edge.meters / 1000;
+    const surfaceMult = surfaceMultiplier(edge.surface, profile, enums);
+    const classMult = roadClassMultiplier(edge.roadTrack, profile);
+    let cost = (edge.meters / 1000) * surfaceMult * classMult;
+    // When the rider opts into unknown access, Dirt/Direct should prefer NSTDB
+    // / provincial capillary (motorized_unknown) over staying on paved NRN.
+    if (
+      policy.motorizedUnknown &&
+      (profile === "dirt" || profile === "direct")
+    ) {
+      const accessName = enums.ACCESS_NAME[edge.access] || "";
+      if (accessName === "motorized_unknown") {
+        cost *= profile === "dirt" ? 0.62 : 0.82;
+      }
+    }
+    return cost;
   }
 
   function materializeUsed(used, searchMeta) {
@@ -1077,7 +1219,8 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds) 
       });
     }
 
-    const pct = (m) => (distanceMeters > 0 ? Math.round((m / distanceMeters) * 100) : 0);
+    // Dirt share = same adventure set the map paints blue/gray/purple.
+    const stats = aggregateRouteSurfaceStats(segments, distanceMeters);
     return {
       geometry,
       segments,
@@ -1086,17 +1229,7 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds) 
       movingSeconds,
       profileCost,
       searchMeta,
-      stats: {
-        pavedPercent: pct(bySurfaceM.paved || 0),
-        gravelPercent: pct(bySurfaceM.gravel || 0),
-        accessPercent: pct(bySurfaceM.access || 0),
-        trackPercent: pct(bySurfaceM.track || 0),
-        singlePercent: 0,
-        unknownSurfacePercent: pct(bySurfaceM.unknown || 0),
-        unknownAccessPercent: pct(unknownAccessMeters),
-        permissiveAccessPercent: pct(byAccessM.motorized_permissive || 0),
-        verifiedAccessPercent: pct(byAccessM.motorized_verified || 0)
-      }
+      stats
     };
   }
 

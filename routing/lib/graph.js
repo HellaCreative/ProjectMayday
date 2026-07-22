@@ -364,8 +364,8 @@ function isLonghaulGraphPath(graphPath) {
 }
 
 /**
- * Inflated longhaul JSON is ~250MB for QC. Caching it beside a clipped runtime
- * is what OOMs Vercel Hobby (2048 MB) on NB↔QC border hops.
+ * Inflated longhaul JSON is ~214MB for OSM-only QC. Caching it beside a clipped
+ * runtime is what OOMs Vercel Hobby (2048 MB) on NB↔QC border hops.
  */
 function shouldRetainInflatedData(graphPath) {
   if (process.env.VERCEL || process.env.VERCEL_ENV) return false;
@@ -547,6 +547,7 @@ module.exports = {
   getCacheStats,
   chainCacheEnabled,
   packsV2Enabled,
+  isLonghaulGraphPath,
   defaultGraphPath,
   DEFAULT_GRAPH_PATH,
   DEFAULT_LEGACY_GRAPH_PATH,

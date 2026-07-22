@@ -95,18 +95,25 @@ function main() {
     const hasRoadClass = (g.edges || []).some((e) => e.rt);
     const hasOsm = (g.edges || []).some((e) => /openstreetmap/i.test(String(e.src || "")));
 
-    const corridorFabric = new Set([]); // dense NRN-everywhere — too large for QC on Hobby
-    const hubFabric = new Set(["qc", "on"]); // spine + hub bulbs
+    const corridorFabric = new Set([]); // dense NRN-everywhere — too large for Hobby
+    const hubFabric = new Set(["on"]); // spine + hub bulbs (QC is OSM-only below)
     const maritimeFabric = new Set(["ns", "nb", "pe", "nl"]);
+    const osmProvince = new Set(["qc"]); // full OSM fabric; no NRN; one pack per province
 
     let extractMode = "spine";
-    if (hubFabric.has(code)) {
+    if (osmProvince.has(code)) {
+      extractMode = "fabric-osm-only";
+      g = extractRoadFabricLonghaulGraph(g, {
+        mode: "osm",
+        hubLocations: HUBS[code] || [],
+        hubBufferMeters: 40000
+      });
+    } else if (hubFabric.has(code)) {
       extractMode = "fabric-hub";
       g = extractRoadFabricLonghaulGraph(g, {
         mode: "hub",
         hubLocations: HUBS[code] || [],
-        // Wider bulbs so Saint-Raymond / Laurentians / border towns still snap.
-        hubBufferMeters: code === "qc" ? 28000 : 45000
+        hubBufferMeters: 45000
       });
     } else if (corridorFabric.has(code)) {
       extractMode = "fabric-corridor";
@@ -131,7 +138,11 @@ function main() {
     }
 
     const afterSpine = g.edgeCount;
-    g = clipGraphToCorridor(g, corridor, BUFFER_M);
+    // QC OSM-only pack is the full province (Hobby-safe at ~214MB inflated).
+    // Other packs stay clipped to the national southern corridor.
+    if (code !== "qc") {
+      g = clipGraphToCorridor(g, corridor, BUFFER_M);
+    }
     if (String(extractMode).startsWith("fabric")) {
       // Corridor clip can leave stale component labels — refresh only.
       g = relabelComponents(g);
@@ -142,14 +153,17 @@ function main() {
     g.province = String(code).toUpperCase();
     g.schemaVersion = "longhaul-region-1";
     g.lineage = {
-      purpose: "canada-chain hop pack (OSM+NRN road fabric; hub bulbs; no provincial)",
-      mentalModel: "osm-nrn-fabric",
+      purpose: osmProvince.has(code)
+        ? "canada-chain / in-province pack (OSM-only; no NRN)"
+        : "canada-chain hop pack (OSM+NRN road fabric; hub bulbs; no provincial)",
+      mentalModel: osmProvince.has(code) ? "osm-fabric-province" : "osm-nrn-fabric",
       source: `regions/${code}/graph.v1.json.gz`,
       hasRoadClass,
       hasOsm,
       extractMode,
+      dropNrn: osmProvince.has(code) || undefined,
       hubCount: (HUBS[code] || []).length,
-      corridorBufferMeters: BUFFER_M,
+      corridorBufferMeters: code === "qc" ? null : BUFFER_M,
       thinnedGeometry: true,
       inputEdgeCount: before,
       spineEdgeCount: afterSpine,

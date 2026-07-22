@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-21T18:10:12.737Z",
+  "generatedAt": "2026-07-22T00:32:21.537Z",
   "region": "NS",
   "stack": [
     "nrn",
@@ -18,7 +18,7 @@
     "downloadUrl": "https://download.geofabrik.de/north-america/canada/nova-scotia-latest.osm.pbf",
     "license": "OpenStreetMap contributors (ODbL)",
     "sourceDatasetVersion": "geofabrik:nova-scotia",
-    "dateRetrieved": "2026-07-21T18:09:36.944Z",
+    "dateRetrieved": "2026-07-22T00:31:48.026Z",
     "status": "ok",
     "notes": [
       "OSM gap-fill for conventional motorized roads unmatched by NRN.",
@@ -39,8 +39,8 @@
     },
     "classification": {
       "surface": {
-        "paved": 51187,
-        "unknown": 3235,
+        "paved": 51097,
+        "unknown": 3325,
         "gravel": 1364,
         "resource": 79026
       },
@@ -53,22 +53,23 @@
         "tunnel": 101
       },
       "roadTrack": {
-        "local": 55447,
-        "freeway": 100,
-        "resource": 50247,
-        "service": 23707,
-        "track": 5072,
-        "arterial": 149,
-        "collector": 90
+        "local": 24549,
+        "collector": 13404,
+        "service": 36643,
+        "track": 28605,
+        "arterial": 4448,
+        "freeway": 1985,
+        "ramp": 1738,
+        "resource": 23440
       },
       "excluded": {}
     },
     "topology": null,
-    "generatedAt": "2026-07-21T18:09:36.944Z"
+    "generatedAt": "2026-07-22T00:31:48.026Z"
   },
   "osmConflation": {
     "province": "NS",
-    "generatedAt": "2026-07-21T18:09:38.279Z",
+    "generatedAt": "2026-07-22T00:31:49.790Z",
     "precedence": {
       "backbone": "NRN owns national road identity and conventional-road attributes",
       "osmFabric": "OpenStreetMap is the driveable road fabric (unmatched motorized ways after NRN); always permissive; never replaces NRN identity",
@@ -81,11 +82,11 @@
       "supplementAdded": 75472,
       "supplementDuplicateSkipped": 59340,
       "supplementConventionalSkipped": 0,
-      "backboneSurfaceEnriched": 38139,
+      "backboneSurfaceEnriched": 38100,
       "conflicts": 0
     },
     "skipReasons": {
-      "backbone_surface_enriched": 38139,
+      "backbone_surface_enriched": 38100,
       "duplicate_of_backbone": 59340
     },
     "featureCount": 195318,
@@ -104,7 +105,7 @@
     "downloadUrl": "https://data.novascotia.ca/resource/a6gf-w68e.json",
     "license": "Open Government Licence - Nova Scotia",
     "sourceDatasetVersion": "a6gf-w68e",
-    "dateRetrieved": "2026-07-21T18:09:43.043Z",
+    "dateRetrieved": "2026-07-22T00:31:55.152Z",
     "status": "ok",
     "notes": [
       "Provincial supplement for resource roads, tracks, and local detail NRN may omit.",
@@ -145,11 +146,11 @@
       "excluded": {}
     },
     "topology": null,
-    "generatedAt": "2026-07-21T18:09:43.043Z"
+    "generatedAt": "2026-07-22T00:31:55.152Z"
   },
   "conflation": {
     "province": "NS",
-    "generatedAt": "2026-07-21T18:09:45.618Z",
+    "generatedAt": "2026-07-22T00:31:58.000Z",
     "precedence": {
       "backbone": "NRN owns national road identity and conventional-road attributes",
       "osmFabric": "OpenStreetMap is the driveable road fabric (unmatched motorized ways after NRN); always permissive; never replaces NRN identity",
@@ -162,12 +163,12 @@
       "supplementAdded": 184453,
       "supplementDuplicateSkipped": 117182,
       "supplementConventionalSkipped": 0,
-      "backboneSurfaceEnriched": 41488,
+      "backboneSurfaceEnriched": 41529,
       "conflicts": 0
     },
     "skipReasons": {
       "duplicate_of_backbone": 117182,
-      "backbone_surface_enriched": 41488
+      "backbone_surface_enriched": 41529
     },
     "featureCount": 379771,
     "freeSpaceConnectors": 0,
@@ -178,7 +179,7 @@
     ]
   },
   "graph": {
-    "generatedAt": "2026-07-21T18:09:47.307Z",
+    "generatedAt": "2026-07-22T00:32:00.245Z",
     "schemaVersion": "canada-regional-1",
     "regionId": "ns",
     "province": "NS",
@@ -198,10 +199,10 @@
       "motorized_restricted": 618
     },
     "surfaceCounts": {
-      "paved": 85736,
-      "unknown": 10212,
+      "paved": 85701,
+      "unknown": 10244,
       "access": 109463,
-      "gravel": 22931,
+      "gravel": 22934,
       "track": 149799
     },
     "sourceCounts": {
@@ -209,8 +210,8 @@
       "OpenStreetMap": 74941,
       "Nova Scotia Topographic DataBase Roads, Trails and Rails": 183753
     },
-    "jsonBytes": 351097960,
-    "gzBytes": 73063565,
+    "jsonBytes": 351102349,
+    "gzBytes": 73098602,
     "lineage": {
       "nrn": {
         "adapter": "nrn",
@@ -219,12 +220,13 @@
       "osm": {
         "adapter": "osm-roads",
         "featureCount": 134812,
+        "role": "gap-fill",
         "added": 75472,
         "duplicateSkipped": 59340,
         "classification": {
           "surface": {
-            "paved": 51187,
-            "unknown": 3235,
+            "paved": 51097,
+            "unknown": 3325,
             "gravel": 1364,
             "resource": 79026
           },
@@ -237,13 +239,14 @@
             "tunnel": 101
           },
           "roadTrack": {
-            "local": 55447,
-            "freeway": 100,
-            "resource": 50247,
-            "service": 23707,
-            "track": 5072,
-            "arterial": 149,
-            "collector": 90
+            "local": 24549,
+            "collector": 13404,
+            "service": 36643,
+            "track": 28605,
+            "arterial": 4448,
+            "freeway": 1985,
+            "ramp": 1738,
+            "resource": 23440
           },
           "excluded": {}
         },

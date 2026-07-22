@@ -163,34 +163,34 @@ function classify(props) {
   let accessClass = ACCESS_CLASS.motorized_permissive;
   let confidence = SOURCE_CONFIDENCE.medium;
 
+  // Hierarchy first — class is about adventure vs corridor, independent of surface.
+  if (/motorway/.test(hw)) roadTrackClass = /_link$/.test(hw) ? ROAD_TRACK_CLASS.ramp : ROAD_TRACK_CLASS.freeway;
+  else if (/trunk|primary/.test(hw))
+    roadTrackClass = /_link$/.test(hw) ? ROAD_TRACK_CLASS.ramp : ROAD_TRACK_CLASS.arterial;
+  else if (/secondary|tertiary/.test(hw))
+    roadTrackClass = /_link$/.test(hw) ? ROAD_TRACK_CLASS.ramp : ROAD_TRACK_CLASS.collector;
+  else if (hw === "track") roadTrackClass = ROAD_TRACK_CLASS.track;
+  else if (hw === "service") roadTrackClass = ROAD_TRACK_CLASS.service;
+  else if (/unclassified|residential|living_street|road/.test(hw)) roadTrackClass = ROAD_TRACK_CLASS.local;
+
   if (PAVED_SURFACE.has(surface)) {
     surfaceClass = SURFACE_CLASS.paved;
   } else if (GRAVEL_SURFACE.has(surface)) {
     surfaceClass = SURFACE_CLASS.gravel;
   } else if (RESOURCE_SURFACE.has(surface)) {
     surfaceClass = SURFACE_CLASS.resource;
-    roadTrackClass = ROAD_TRACK_CLASS.resource;
+    if (roadTrackClass === ROAD_TRACK_CLASS.local) roadTrackClass = ROAD_TRACK_CLASS.resource;
   } else if (hw === "track" || hw === "service") {
+    // No surface tag: treat as undeveloped for dirt costing.
     surfaceClass = SURFACE_CLASS.resource;
-    roadTrackClass = hw === "track" ? ROAD_TRACK_CLASS.track : ROAD_TRACK_CLASS.service;
-    // Included OSM ways are always motorized_permissive. Surface/class still
-    // carry dirt vs service for display and costing — access unknown is reserved
-    // for provincial capillary where legality is not asserted.
-    accessClass = ACCESS_CLASS.motorized_permissive;
     confidence = SOURCE_CONFIDENCE.medium;
-  } else if (/motorway|trunk|primary|secondary/.test(hw)) {
+  } else if (/motorway|trunk|primary/.test(hw)) {
+    // Only invent paved for true highway hierarchy.
     surfaceClass = SURFACE_CLASS.paved;
-    roadTrackClass =
-      hw.indexOf("motorway") === 0
-        ? ROAD_TRACK_CLASS.freeway
-        : hw.indexOf("trunk") === 0 || hw.indexOf("primary") === 0
-          ? ROAD_TRACK_CLASS.arterial
-          : ROAD_TRACK_CLASS.collector;
-  } else if (/tertiary|unclassified|residential|living_street|road/.test(hw)) {
-    // No surface tag: conventional class stays unknown surface, permissive access
-    // (same stance as NRN conventional without PAVSTATUS).
+  } else {
+    // secondary/tertiary/unclassified/residential/road with no surface tag:
+    // unknown — do not invent asphalt (QC rural often untagged).
     surfaceClass = SURFACE_CLASS.unknown;
-    roadTrackClass = ROAD_TRACK_CLASS.local;
   }
 
   if (tag(props, "bridge") === "yes") {

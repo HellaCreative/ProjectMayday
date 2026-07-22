@@ -15,11 +15,8 @@ const REGION_BBOX = {
   pe: [-64.6, 45.8, -61.9, 47.2],
   nb: [-69.3, 44.5, -63.8, 48.2],
   nl: [-67.9, 46.5, -52.5, 60.5],
-  // Quebec split into Hobby-safe longhaul quadrants (overlapping for merge).
-  // Parent "qc" kept for full-graph tooling; primaryRegion prefers quadrants.
-  "qc-west": [-79.8, 44.9, -72.2, 48.0],
-  "qc-sl": [-73.0, 44.9, -64.0, 49.2],
-  "qc-north": [-79.8, 48.7, -57.0, 62.7],
+  // One province pack (OSM-only longhaul). Legacy qc-* quadrant ids still
+  // map via provinceFamily / isQcRegion for emergency packs and old deploys.
   qc: [-79.8, 44.9, -57.0, 62.7],
   on: [-95.2, 41.6, -74.3, 56.9],
   mb: [-102.1, 48.9, -88.9, 60.1],
@@ -33,6 +30,13 @@ const REGION_BBOX = {
 
 function isQcRegion(id) {
   return id === "qc" || String(id || "").startsWith("qc-");
+}
+
+/** Collapse legacy QC quadrant ids to one province family. */
+function provinceFamily(regionId) {
+  const id = String(regionId || "").toLowerCase();
+  if (isQcRegion(id)) return "qc";
+  return id;
 }
 
 function bboxArea(bbox) {
@@ -62,48 +66,25 @@ function primaryRegionForPoint(lon, lat) {
     return lon < -116.4 ? "bc" : "ab";
   }
 
-  // ON vs Quebec (any quadrant). Laurentian plateau stays QC-west.
+  // ON vs Quebec. Laurentian plateau / Gatineau stay QC.
   const qcHit = [...ids].find((id) => isQcRegion(id));
   if (ids.has("on") && qcHit) {
-    if (lat >= 45.9) return pickQcQuadrant(lon, lat, ids);
-    if (lon >= -74.5) return pickQcQuadrant(lon, lat, ids);
+    if (lat >= 45.9) return "qc";
+    if (lon >= -74.5) return "qc";
     // Gatineau / Outaouais (north of Ottawa River) — not Ontario.
-    if (lat >= 45.4 && lon >= -76.2 && ids.has("qc-west")) return "qc-west";
+    if (lat >= 45.4 && lon >= -76.2) return "qc";
     return "on";
   }
 
   // NB vs Quebec river corridor (Dégelis / Témiscouata).
   if (ids.has("nb") && qcHit) {
-    if (lon <= -68.45) return pickQcQuadrant(lon, lat, ids);
-    if (lat >= 47.7 && lon <= -68.2) return pickQcQuadrant(lon, lat, ids);
+    if (lon <= -68.45) return "qc";
+    if (lat >= 47.7 && lon <= -68.2) return "qc";
     return "nb";
-  }
-
-  // Inside Quebec: never return monolithic "qc" when a quadrant also hits —
-  // longhaul packs live under qc-sl / qc-west / qc-north.
-  if (qcHit) {
-    const q = pickQcQuadrant(lon, lat, ids);
-    if (q) return q;
   }
 
   hits.sort((a, b) => a.area - b.area);
   return hits[0].id;
-}
-
-/**
- * Prefer north only for true far-north (Côte-Nord / Nord-du-Québec).
- * Saguenay (~48.4°) stays on the river pack — riders actually go there.
- * Otherwise west of ~-72.4° (Montréal / Laurentians / Outaouais) vs St. Lawrence.
- */
-function pickQcQuadrant(lon, lat, ids) {
-  const has = (id) => ids.has(id);
-  if (lat >= 48.9 && has("qc-north")) return "qc-north";
-  if (lon <= -72.4 && has("qc-west")) return "qc-west";
-  if (has("qc-sl")) return "qc-sl";
-  if (has("qc-west")) return "qc-west";
-  if (has("qc-north")) return "qc-north";
-  if (has("qc")) return "qc";
-  return null;
 }
 
 function publicBaseUrl() {
@@ -150,8 +131,8 @@ function localGraphPath(regionId, { longhaul = false } = {}) {
   if (longhaul) {
     return path.join(REGIONS_DIR, regionId, "longhaul.v1.json.gz");
   }
-  // Quadrant IDs are longhaul-only; full in-province graph stays under qc/.
-  if (String(regionId).startsWith("qc-")) {
+  // Legacy quadrant IDs: full graph lives under qc/; longhaul under the id if present.
+  if (String(regionId).startsWith("qc-") && !longhaul) {
     return path.join(REGIONS_DIR, "qc", "graph.v1.json.gz");
   }
   return path.join(REGIONS_DIR, regionId, "graph.v1.json.gz");
@@ -194,10 +175,11 @@ function regionPackAvailable(regionId) {
  * via boundary-node matching (no free-space connectors).
  */
 function resolveGraphRequest(body = {}) {
-  // NS-only production guard: keep live NS routes on the proven legacy pack
-  // unless ROUTING_USE_REGIONAL=1. Other provinces always use regional packs.
+  // Prefer the regional NS pack (NRN + OSM fabric + NSTDB). Opt back into the
+  // pre-OSM legacy pack only with ROUTING_PREFER_LEGACY=1. ROUTING_USE_REGIONAL
+  // remains accepted as an explicit regional force for older deploy docs.
+  const forceLegacyNs = process.env.ROUTING_PREFER_LEGACY === "1";
   const forceRegional = process.env.ROUTING_USE_REGIONAL === "1";
-  const preferLegacyNs = process.env.ROUTING_PREFER_LEGACY === "1" || !forceRegional;
 
   if (body.regionId) {
     const id = String(body.regionId).toLowerCase();
@@ -225,8 +207,8 @@ function resolveGraphRequest(body = {}) {
     };
   }
 
-  // Single-region NS → legacy production unless regional promoted.
-  if (hitRegions.length === 1 && hitRegions[0] === "ns" && preferLegacyNs) {
+  // Escape hatch: single-region NS → pre-OSM legacy pack when explicitly requested.
+  if (hitRegions.length === 1 && hitRegions[0] === "ns" && forceLegacyNs && !forceRegional) {
     return {
       ok: true,
       regionIds: ["ns"],
@@ -269,6 +251,7 @@ function resolveGraphRequest(body = {}) {
       locationsToPoints(body.locations || [])
         .map((p) => primaryRegionForPoint(p.lon, p.lat))
         .filter(Boolean)
+        .map(provinceFamily)
     )
   ];
   const sameProvince = uniquePrimary.length === 1;
@@ -346,5 +329,7 @@ module.exports = {
   resolveGraphRequest,
   publicBaseUrl,
   primaryRegionForPoint,
+  provinceFamily,
+  isQcRegion,
   regionPackAvailable
 };

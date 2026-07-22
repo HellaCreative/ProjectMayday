@@ -158,16 +158,17 @@ const REGION_NEIGHBOURS = {
   ab: ["bc", "sk", "nt"],
   sk: ["ab", "mb", "nt"],
   mb: ["sk", "on", "nu"],
-  on: ["mb", "qc-west"],
-  // QC quadrants: river ↔ west ↔ north. Monolithic qc kept as alias for tests.
-  qc: ["on", "nb", "nl", "qc-west", "qc-sl", "qc-north"],
-  "qc-west": ["on", "qc-sl", "qc-north"],
-  "qc-sl": ["nb", "nl", "qc-west", "qc-north"],
-  "qc-north": ["qc-sl", "qc-west"],
-  nb: ["qc-sl", "ns"],
+  on: ["mb", "qc"],
+  // One QC province pack (OSM-only). Legacy qc-* neighbours kept so emergency
+  // quadrant packs still path-find if re-enabled in select.js.
+  qc: ["on", "nb", "nl"],
+  "qc-west": ["on", "qc", "qc-sl", "qc-north"],
+  "qc-sl": ["nb", "nl", "qc", "qc-west", "qc-north"],
+  "qc-north": ["qc", "qc-sl", "qc-west"],
+  nb: ["qc", "ns"],
   ns: ["nb"],
   pe: [],
-  nl: ["qc-sl"],
+  nl: ["qc"],
   yt: ["bc", "nt"],
   nt: ["yt", "bc", "ab", "sk", "nu"],
   nu: ["nt", "mb"]
@@ -278,8 +279,16 @@ function corridorLocationsForRoute(locations) {
   // the old 5° gate skipped anchors, forcing one merged NB+QC hop that OOMs /
   // times out on Vercel Hobby when the QC pack is inflated.
   // Gate on distance OR longitude so Atlantic cross-border city pairs split.
-  // Gate on distance OR longitude so Atlantic / in-QC cross-quadrant city pairs split.
-  // Montréal↔Québec is ~250 km / ~2.4° — must inject the TR stitch anchors.
+  // In-QC only (Beauce→Outaouais, Montréal↔Québec): do NOT inject the
+  // St. Lawrence spine. Lazy-require select to avoid a circular load cycle.
+  const { primaryRegionForPoint, provinceFamily } = require("./select");
+  const families = new Set(
+    pts
+      .map((p) => primaryRegionForPoint(p.lon, p.lat))
+      .filter(Boolean)
+      .map(provinceFamily)
+  );
+  if (families.size === 1 && families.has("qc")) return pts;
   if (span < 3 && distKm < 200) return pts;
 
   const westToEast = start.lon < end.lon;

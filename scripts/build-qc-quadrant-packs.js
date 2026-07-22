@@ -2,7 +2,10 @@
 "use strict";
 
 /**
- * Split Quebec into three Vercel longhaul packs (Hobby-safe).
+ * EMERGENCY ONLY — split Quebec into three Vercel longhaul packs.
+ *
+ * Prefer the single province pack from build-longhaul-region-packs.js (`qc`).
+ * Re-run this only if a measured Hobby OOM returns after packing denser fabric.
  *
  * Quebec uses OSM-only fabric — NRN locals are too sparse/wrong for dirt bias
  * and basemap snaps. NB/NS keep NRN+OSM via build-longhaul-region-packs.js.

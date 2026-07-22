@@ -297,7 +297,7 @@ check("Kelowna resolves to BC not Alberta despite bbox overlap", () => {
   );
 });
 
-check("resolveGraphRequest defaults to legacy production mode", () => {
+check("resolveGraphRequest defaults to regional NS pack (OSM fabric)", () => {
   const result = resolveGraphRequest({
     locations: [
       { lat: 44.74, lon: -63.3 },
@@ -305,11 +305,15 @@ check("resolveGraphRequest defaults to legacy production mode", () => {
     ]
   });
   assert.strictEqual(result.ok, true);
-  assert.strictEqual(result.mode, "legacy-production");
+  assert.notStrictEqual(result.mode, "legacy-production");
+  assert.ok(
+    String(result.mode).includes("regional") || String(result.mode).includes("longhaul"),
+    "expected regional/longhaul NS, got " + result.mode
+  );
   assert.deepStrictEqual(result.regionIds, ["ns"]);
 });
 
-check("Halifax–Yarmouth uses legacy production graph by default", () => {
+check("Halifax–Yarmouth uses regional NS graph by default", () => {
   const result = resolveGraphRequest({
     locations: [
       { lat: 44.6488, lon: -63.575 },
@@ -317,7 +321,25 @@ check("Halifax–Yarmouth uses legacy production graph by default", () => {
     ]
   });
   assert.strictEqual(result.ok, true);
-  assert.strictEqual(result.mode, "legacy-production");
+  assert.notStrictEqual(result.mode, "legacy-production");
+});
+
+check("ROUTING_PREFER_LEGACY restores NS legacy pack", () => {
+  const prev = process.env.ROUTING_PREFER_LEGACY;
+  process.env.ROUTING_PREFER_LEGACY = "1";
+  try {
+    const result = resolveGraphRequest({
+      locations: [
+        { lat: 44.6488, lon: -63.575 },
+        { lat: 43.8361, lon: -66.1209 }
+      ]
+    });
+    assert.strictEqual(result.ok, true);
+    assert.strictEqual(result.mode, "legacy-production");
+  } finally {
+    if (prev == null) delete process.env.ROUTING_PREFER_LEGACY;
+    else process.env.ROUTING_PREFER_LEGACY = prev;
+  }
 });
 
 check("Halifax to Vancouver corridor includes NB and western provinces", () => {
@@ -325,8 +347,7 @@ check("Halifax to Vancouver corridor includes NB and western provinces", () => {
   assert.deepStrictEqual(shortestRegionPath("ns", "bc"), [
     "ns",
     "nb",
-    "qc-sl",
-    "qc-west",
+    "qc",
     "on",
     "mb",
     "sk",
@@ -335,6 +356,51 @@ check("Halifax to Vancouver corridor includes NB and western provinces", () => {
   ]);
   assert.ok(regionsForRoute(["ns","bc"]).includes("nb"));
   assert.ok(regionsForRoute(["ns","bc"]).includes("on"));
+});
+
+check("in-QC uses single qc longhaul pack (no quadrant chain)", () => {
+  const { provinceFamily, resolveGraphRequest: resolve, primaryRegionForPoint } = require("../../regional/select");
+  const { corridorLocationsForRoute } = require("../../regional/merge");
+  assert.strictEqual(provinceFamily("qc-sl"), "qc");
+  assert.strictEqual(provinceFamily("qc-west"), "qc");
+  assert.strictEqual(provinceFamily("nb"), "nb");
+  assert.strictEqual(primaryRegionForPoint(-70.67, 46.12), "qc");
+  assert.strictEqual(primaryRegionForPoint(-74.35, 45.65), "qc");
+
+  const locs = [
+    { lat: 46.12, lon: -70.67 }, // Saint-Georges / Beauce
+    { lat: 45.65, lon: -74.35 } // west of Montréal
+  ];
+  // National spine anchors must not be injected for in-QC hauls.
+  const corridor = corridorLocationsForRoute(locs);
+  assert.strictEqual(corridor.length, 2);
+  assert.ok(!corridor.some((p) => Math.abs(p.lat - 46.813) < 0.05 && Math.abs(p.lon + 71.208) < 0.05));
+
+  const prev = process.env.VERCEL;
+  process.env.VERCEL = "1";
+  try {
+    const result = resolve({ locations: locs });
+    assert.strictEqual(result.ok, true);
+    assert.notStrictEqual(result.mode, "canada-chain");
+    assert.ok(
+      String(result.mode).includes("longhaul"),
+      "expected single qc longhaul, got " + result.mode
+    );
+    assert.deepStrictEqual(result.regionIds, ["qc"]);
+  } finally {
+    if (prev == null) delete process.env.VERCEL;
+    else process.env.VERCEL = prev;
+  }
+});
+
+check("NB→QC still injects corridor anchors for chain hops", () => {
+  const { corridorLocationsForRoute } = require("../../regional/merge");
+  const locs = [
+    { lat: 45.963, lon: -66.643 }, // Fredericton
+    { lat: 46.813, lon: -71.208 } // Quebec City
+  ];
+  const corridor = corridorLocationsForRoute(locs);
+  assert.ok(corridor.length > 2, "cross-province should keep spine anchors");
 });
 
 check("all canonical enum tables are non-empty", () => {

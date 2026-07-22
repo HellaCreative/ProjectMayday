@@ -8349,6 +8349,25 @@
       };
     }
 
+    /** Surfaces painted as adventure (blue/gray/purple) — must match dirt%. */
+    const ADVENTURE_SURFACE_CLASSES = {
+      gravel: true,
+      access: true,
+      resource: true,
+      track: true,
+      double_track: true,
+      unknown: true,
+      single: true
+    };
+
+    function adventureKmFromByClass(byClass) {
+      let km = 0;
+      for (const key of Object.keys(byClass || {})) {
+        if (ADVENTURE_SURFACE_CLASSES[key]) km += Number(byClass[key]) || 0;
+      }
+      return km;
+    }
+
     function normalizeEdgeFeature(feature) {
       const p = feature.properties || (feature.properties = {});
       if (!p.surfaceClass && p.trackClass) p.surfaceClass = p.trackClass;
@@ -10140,10 +10159,12 @@
             "match",
             ["get", "trackClass"],
             "access", "#0a66c2",
+            "resource", "#0a66c2",
             "gravel", "#5d6874",
             "track", "#7c3aed",
+            "double_track", "#7c3aed",
+            "unknown", "#5d6874",
             "paved", "#ffb000",
-            "unknown", "#ffb000",
             "connector", "#d22730",
             "#ffb000"
           ],
@@ -10938,7 +10959,11 @@
           distanceKm: (seg.distanceMeters || 0) / 1000
         };
       });
-      const dirtKm = distanceKm * ((api.stats?.gravelPercent || 0) + (api.stats?.accessPercent || 0) + (api.stats?.trackPercent || 0)) / 100;
+      // Segment surfaces match map paint (blue/gray/purple). Do not use api.stats
+      // alone — canada-chain used to return hop timing with no surface %, which
+      // forced 0% Dirt while paved% fell back to byClass.
+      const dirtKm = adventureKmFromByClass(byClass);
+      const pavedKm = byClass.paved || 0;
       return {
         kind: "service",
         routeId: api.routeId || null,
@@ -10946,6 +10971,7 @@
         segments,
         distanceKm,
         dirtKm,
+        pavedKm,
         byClass,
         byAccess: api.stats || {},
         unknownAccessKm: ((api.stats?.unknownAccessPercent || 0) / 100) * distanceKm,
@@ -10999,7 +11025,8 @@
         coordinates,
         segments,
         distanceKm,
-        dirtKm: (agg.dirtMeters || 0) / 1000,
+        dirtKm: adventureKmFromByClass(byClass) || (agg.dirtMeters || 0) / 1000,
+        pavedKm: byClass.paved || 0,
         byClass,
         byAccess: {},
         unknownAccessKm: (agg.unknownAccessMeters || 0) / 1000,
@@ -13609,7 +13636,10 @@
       }
       if (activeRoute) {
         const dirtPct = activeRoute.distanceKm ? Math.round((activeRoute.dirtKm / activeRoute.distanceKm) * 100) : 0;
-        const pavedPct = activeRoute.distanceKm ? Math.round(((activeRoute.byClass.paved || 0) / activeRoute.distanceKm) * 100) : 0;
+        const pavedBase = activeRoute.pavedKm != null
+          ? activeRoute.pavedKm
+          : (activeRoute.byClass && activeRoute.byClass.paved) || 0;
+        const pavedPct = activeRoute.distanceKm ? Math.round((pavedBase / activeRoute.distanceKm) * 100) : 0;
         setRouteStatusHtml(routeMetricRowHtml({
           distanceKm: activeRoute.distanceKm,
           movingSeconds: activeRoute.estimatedMovingSeconds,
@@ -13915,7 +13945,10 @@
           distanceKm: (seg.distanceMeters || 0) / 1000
         };
       });
-      const dirtKm = distanceKm * ((api.stats?.gravelPercent || 0) + (api.stats?.accessPercent || 0) + (api.stats?.trackPercent || 0)) / 100;
+      // Segment surfaces are source of truth (match blue/gray/purple paint).
+      // api.stats may omit surface % on canada-chain (hop timing only on prod).
+      const dirtKm = adventureKmFromByClass(byClass);
+      const pavedKm = byClass.paved || 0;
       return {
         kind: "service",
         routeId: api.routeId || null,
@@ -13923,6 +13956,7 @@
         segments,
         distanceKm,
         dirtKm,
+        pavedKm,
         byClass,
         byAccess: api.stats || {},
         unknownAccessKm: ((api.stats?.unknownAccessPercent || 0) / 100) * distanceKm,

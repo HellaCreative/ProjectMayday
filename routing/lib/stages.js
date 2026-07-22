@@ -22,7 +22,25 @@
   "use strict";
 
   const SAVED_ROUTE_SCHEMA_VERSION = 1;
-  const SURFACE_KEYS = ["paved", "gravel", "access", "track", "single", "unknown"];
+  const SURFACE_KEYS = [
+    "paved",
+    "gravel",
+    "access",
+    "resource",
+    "track",
+    "double_track",
+    "single",
+    "unknown"
+  ];
+  const ADVENTURE_SURFACE_KEYS = [
+    "gravel",
+    "access",
+    "resource",
+    "track",
+    "double_track",
+    "single",
+    "unknown"
+  ];
   const ACCESS_KEYS = ["motorized_verified", "motorized_permissive", "motorized_unknown"];
   const STAGE_STATUS = {
     DRAFT: "draft", // missing A and/or B — never routed
@@ -356,7 +374,10 @@
       access.motorized_unknown += (Number(st.unknownAccessPercent) || 0) / 100 * distanceMeters;
     }
 
-    const dirtMeters = (surface.gravel || 0) + (surface.access || 0) + (surface.track || 0) + (surface.single || 0);
+    // Adventure share matches route paint (blue/gray/purple): gravel + access/
+    // resource + track + unknown. Never mean-of-stage-percentages.
+    let dirtMeters = 0;
+    for (const key of ADVENTURE_SURFACE_KEYS) dirtMeters += surface[key] || 0;
     return { distanceMeters, movingSeconds, elapsedSeconds, surface, access, dirtMeters };
   }
 

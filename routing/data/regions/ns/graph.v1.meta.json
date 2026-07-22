@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-21T18:09:47.307Z",
+  "generatedAt": "2026-07-22T00:32:00.245Z",
   "schemaVersion": "canada-regional-1",
   "regionId": "ns",
   "province": "NS",
@@ -19,10 +19,10 @@
     "motorized_restricted": 618
   },
   "surfaceCounts": {
-    "paved": 85736,
-    "unknown": 10212,
+    "paved": 85701,
+    "unknown": 10244,
     "access": 109463,
-    "gravel": 22931,
+    "gravel": 22934,
     "track": 149799
   },
   "sourceCounts": {
@@ -30,8 +30,8 @@
     "OpenStreetMap": 74941,
     "Nova Scotia Topographic DataBase Roads, Trails and Rails": 183753
   },
-  "jsonBytes": 351097960,
-  "gzBytes": 73063565,
+  "jsonBytes": 351102349,
+  "gzBytes": 73098602,
   "lineage": {
     "nrn": {
       "adapter": "nrn",
@@ -40,12 +40,13 @@
     "osm": {
       "adapter": "osm-roads",
       "featureCount": 134812,
+      "role": "gap-fill",
       "added": 75472,
       "duplicateSkipped": 59340,
       "classification": {
         "surface": {
-          "paved": 51187,
-          "unknown": 3235,
+          "paved": 51097,
+          "unknown": 3325,
           "gravel": 1364,
           "resource": 79026
         },
@@ -58,13 +59,14 @@
           "tunnel": 101
         },
         "roadTrack": {
-          "local": 55447,
-          "freeway": 100,
-          "resource": 50247,
-          "service": 23707,
-          "track": 5072,
-          "arterial": 149,
-          "collector": 90
+          "local": 24549,
+          "collector": 13404,
+          "service": 36643,
+          "track": 28605,
+          "arterial": 4448,
+          "freeway": 1985,
+          "ramp": 1738,
+          "resource": 23440
         },
         "excluded": {}
       },
