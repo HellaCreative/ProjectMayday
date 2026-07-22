@@ -486,11 +486,14 @@ function buildManeuvers(geometry) {
   return maneuvers;
 }
 
-function normalizePolicy(input) {
+function normalizePolicy(input, profile) {
   const policy = input || {};
+  // Product law: Clean / cleanest is immune to Allow — never open purple
+  // motorized_unknown capillary, even if the UI toggle is on.
+  const isClean = String(profile || "").toLowerCase() === "cleanest";
   return {
     motorizedPermissive: policy.motorizedPermissive !== false,
-    motorizedUnknown: !!policy.motorizedUnknown
+    motorizedUnknown: isClean ? false : !!policy.motorizedUnknown
   };
 }
 
@@ -694,7 +697,7 @@ async function routeOnRuntime(body, graphResolution, runtime) {
     };
   }
 
-  const policy = normalizePolicy(body.accessPolicy);
+  const policy = normalizePolicy(body.accessPolicy, profile);
   const options = body.options || {};
   const matchMeters = Number(options.matchLimitMeters);
   // Default 250 m on dense/legacy packs. Longhaul / Vercel packs are thinned —
