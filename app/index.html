@@ -8911,6 +8911,7 @@
     let routeToastTimer = null;
     let routeToastRequestId = 0;
     const routeToastRequests = new Set();
+    let planPlacementToastDismissed = false;
     let lastNetworkRouteReason = "";
     let routeDebug = null;
     let routeJobId = 0;
@@ -11155,6 +11156,7 @@
         idx = RS.findStageIndex(planTrip, next.id);
       }
       if (idx < 0) return;
+      planPlacementToastDismissed = true;
       activeStageId = planTrip.stages[idx].id;
       let stage = planTrip.stages[idx];
       if (!stage.start) {
@@ -12196,6 +12198,7 @@
       if (!record) return false;
       try {
         planTrip = RS.deserializeSavedRoute(record);
+        planPlacementToastDismissed = true;
       } catch (err) {
         setStatus("Could not open saved route · " + (err.message || "error"), "error", "route");
         return false;
@@ -12279,6 +12282,7 @@
         accessPolicy: { motorizedPermissive: true, motorizedUnknown: false }
       });
       planTrip.stages[0].profile = routePreference;
+      planPlacementToastDismissed = false;
       activeStageId = planTrip.stages[0].id;
       editingStageId = null;
       selectedWaypointIndex = null;
@@ -14197,7 +14201,7 @@
         } else {
           message = "Switch to Plan a route to choose a start";
         }
-      } else if (plannerOpen && plannerTab === "plan") {
+      } else if (plannerOpen && plannerTab === "plan" && !planPlacementToastDismissed) {
         const active = getActiveStage();
         if (!active || !active.start) message = "Press and hold map to place the starting point";
         else if (!active.end) message = "Press and hold map to add another stage";
