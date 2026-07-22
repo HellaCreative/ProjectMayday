@@ -1126,8 +1126,8 @@
       width: 36px;
       height: 44px;
       border: 0;
-      background: center / contain no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 44'%3E%3Cpath d='M18 43C15.5 39.1 4 27.7 4 17.4C4 9.1 10.3 2 18 2s14 7.1 14 15.4C32 27.7 20.5 39.1 18 43Z' fill='%23ff7900' stroke='%23fff' stroke-width='2.5'/%3E%3Ccircle cx='18' cy='17' r='9.5' fill='%23fff'/%3E%3C/svg%3E");
-      color: #111820;
+      background: center / contain no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 44'%3E%3Cpath d='M18 43C15.5 39.1 4 27.7 4 17.4C4 9.1 10.3 2 18 2s14 7.1 14 15.4C32 27.7 20.5 39.1 18 43Z' fill='%23111820' stroke='%23ff7900' stroke-width='1'/%3E%3Ccircle cx='18' cy='17' r='9.5' fill='%23ff7900'/%3E%3C/svg%3E");
+      color: #ffffff;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -1135,16 +1135,22 @@
       font-size: 0.66rem;
       font-weight: 700;
       cursor: pointer;
-      transform: rotate(-45deg);
+      filter: drop-shadow(0 2px 3px rgba(16,24,40,0.38));
     }
     .stage-marker > span {
-      display: block;
-      transform: rotate(45deg);
+      position: absolute;
+      top: 10px;
+      left: 8px;
+      display: grid;
+      place-items: center;
+      width: 20px;
+      height: 14px;
+      line-height: 1;
     }
-    .stage-marker.is-start { background: #ff7900; color: #111820; }
+    .stage-marker.is-start { color: #ffffff; }
     .stage-marker.is-editing {
       cursor: grab;
-      box-shadow: 0 0 0 3px rgba(255,121,0,0.3), 0 2px 6px rgba(16,24,40,0.38);
+      filter: drop-shadow(0 0 3px rgba(255,121,0,0.85)) drop-shadow(0 2px 3px rgba(16,24,40,0.38));
     }
     .stage-marker.is-editing:active { cursor: grabbing; }
     .route-roadbook {
@@ -9578,14 +9584,14 @@
       ctx.bezierCurveTo(25.7, 2, 32, 9.1, 32, 17.4);
       ctx.bezierCurveTo(32, 27.7, 20.5, 39.1, 18, 43);
       ctx.closePath();
-      ctx.fillStyle = "#ff7900";
+      ctx.fillStyle = "#111820";
       ctx.fill();
-      ctx.lineWidth = 2.5;
-      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = "#ff7900";
       ctx.stroke();
       ctx.beginPath();
       ctx.arc(18, 17, 9.5, 0, Math.PI * 2);
-      ctx.fillStyle = "#ffffff";
+      ctx.fillStyle = "#ff7900";
       ctx.fill();
       try { map.addImage(id, ctx.getImageData(0, 0, canvas.width, canvas.height), { pixelRatio }); } catch (_) { /* ignore */ }
       return id;
@@ -10247,7 +10253,7 @@
           "text-ignore-placement": true
         },
         paint: {
-          "text-color": "#111820"
+          "text-color": "#ffffff"
         }
       });
       // Rider sits above the route so the blue dot never hides under the orange line.
