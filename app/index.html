@@ -2365,6 +2365,20 @@
       font: 600 9px/1.2 var(--p2-mono) !important;
     }
     .route-bar-stage-list .route-metric-row .route-metric:not(:first-child) { display: none; }
+    /* Plan route brown chips: show km + dirt% + paved% (From-here parity). */
+    body.planner-open.planner-tab-plan .route-bar-stage-list .route-metric-row {
+      display: flex !important;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 4px 6px !important;
+    }
+    body.planner-open.planner-tab-plan .route-bar-stage-list .route-metric-row .route-metric {
+      display: inline !important;
+    }
+    /* Compact chip: keep ETA if present, but prefer surface mix visibility. */
+    body.planner-open.planner-tab-plan .route-bar-stage-list .route-metric-row .route-metric:nth-child(2) {
+      display: none !important;
+    }
     .route-bar-add-stage {
       flex: 0 0 138px;
       min-height: 70px;
@@ -5892,6 +5906,26 @@
       width: 24px;
       height: 24px;
       padding: 0;
+    }
+    .route-stage-editor-summary {
+      min-height: 28px;
+    }
+    .route-stage-editor-summary .route-metric-row {
+      min-height: 28px;
+      padding: 6px 8px;
+      border: 1px solid rgba(28, 25, 23, 0.1);
+      border-radius: 7px;
+      background: #f5f2ec;
+      color: #1c1917;
+      font: 650 10px/1.25 var(--p2-mono);
+      gap: 8px;
+    }
+    .route-stage-editor-summary .route-metric-row .route-metric {
+      display: inline !important;
+    }
+    .route-stage-editor-summary .route-metric-row.is-empty {
+      color: #78716c;
+      font-weight: 600;
     }
     .route-stage-editor-actions { justify-content: space-between; }
     .route-stage-editor-edit,
@@ -10811,6 +10845,7 @@
           '<span class="switch"><input type="checkbox" data-stage-access aria-label="Allow unknown access"' +
             (stageAllowsUnknownAccess(stage) ? " checked" : "") + ' data-stage-id="' + stage.id + '"><span></span></span>' +
         '</label>' +
+        '<div class="route-stage-editor-summary">' + stageMetricsHtml(stage) + '</div>' +
         '<div class="route-stage-editor-actions">' +
           '<button class="route-stage-editor-remove" type="button" data-stage-delete="' + stage.id + '"' +
             (planTrip.stages.length <= 1 ? " disabled" : "") + '>Remove stage</button>' +

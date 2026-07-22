@@ -2,12 +2,15 @@
 "use strict";
 
 /**
- * Myra A→B profile matrix harness.
+ * Myra A→B profile matrix harness (+ optional long NS OD).
  * Fixed OD × Clean/Direct/Balanced/Dirt × Allow off/on.
  * Asserts Clean stays paved even with Allow on; adventure profiles diverge;
  * Direct has no large lat overshoot past B; Clean/adventure no end U-turn.
+ * Long OD (New Glasgow → Yarmouth) checks Balanced+Allow lands ~40–60 dirt%
+ * and does not clone Direct’s crow-flies purple cut.
  *
  * Run: node --max-old-space-size=4096 scripts/smoke-myra-profiles.js
+ * Skip long: SKIP_LONG_OD=1 node --max-old-space-size=4096 scripts/smoke-myra-profiles.js
  */
 
 const { routeRequest } = require("../routing/lib/router");
@@ -16,8 +19,13 @@ const { routeRequest } = require("../routing/lib/router");
 const MYRA = { lat: 44.746, lon: -63.321, label: "Myra" };
 const FALL_RIVER = { lat: 44.8175, lon: -63.6125, label: "Fall River Hwy2" };
 
+// User Allow-on gold: New Glasgow → SW NS (Yarmouth).
+const NEW_GLASGOW = { lat: 45.5936, lon: -62.6486, label: "New Glasgow" };
+const YARMOUTH = { lat: 43.8375, lon: -66.1174, label: "Yarmouth" };
+
 const PROFILES = ["cleanest", "direct", "balanced", "dirt"];
 const ALLOWS = [false, true];
+const RUN_LONG = process.env.SKIP_LONG_OD !== "1";
 
 function pct(n) {
   return n == null || !Number.isFinite(n) ? "—" : String(Math.round(n));
@@ -86,11 +94,11 @@ function geometryMetrics(geometry, dest) {
   };
 }
 
-async function runOne(profile, allow) {
+async function runOne(profile, allow, origin, dest) {
   const t0 = Date.now();
   const r = await routeRequest({
     profile,
-    locations: [MYRA, FALL_RIVER],
+    locations: [origin, dest],
     vehicle: "dual-sport-motorcycle",
     accessPolicy: {
       motorizedPermissive: true,
@@ -99,7 +107,7 @@ async function runOne(profile, allow) {
     options: { matchLimitMeters: 500 }
   });
   const stats = r.stats || {};
-  const geom = geometryMetrics(r.geometry, FALL_RIVER);
+  const geom = geometryMetrics(r.geometry, dest);
   return {
     profile,
     allow,
@@ -275,6 +283,68 @@ function runAsserts(rows) {
   return failures;
 }
 
+function runLongOdAsserts(rows) {
+  const failures = [];
+  const byKey = new Map();
+  for (const row of rows) byKey.set(row.profile + ":" + row.allow, row);
+
+  const balOn = byKey.get("balanced:true");
+  const directOn = byKey.get("direct:true");
+  const dirtOn = byKey.get("dirt:true");
+  const cleanOn = byKey.get("cleanest:true");
+
+  for (const row of rows) {
+    assert(
+      row.status === "complete",
+      `long ${row.profile} allow=${row.allow} incomplete: ${row.status} ${row.message || ""}`,
+      failures
+    );
+  }
+
+  if (cleanOn && cleanOn.status === "complete") {
+    assert(
+      (cleanOn.dirt == null || cleanOn.dirt < 15) ||
+        (cleanOn.paved != null && cleanOn.paved > 85),
+      `long Clean+Allow should stay paved; got dirt=${cleanOn.dirt} paved=${cleanOn.paved}`,
+      failures
+    );
+    assert(
+      cleanOn.unk == null || cleanOn.unk === 0,
+      `long Clean+Allow must have 0 unk%; got ${cleanOn.unk}`,
+      failures
+    );
+  }
+
+  if (balOn && balOn.status === "complete" && balOn.dirt != null) {
+    assert(
+      balOn.dirt >= 25 && balOn.dirt <= 70,
+      `long Balanced+Allow dirt% should sit ~40–60 (band 25–70); got ${balOn.dirt}`,
+      failures
+    );
+  }
+
+  if (balOn && directOn && balOn.status === "complete" && directOn.status === "complete") {
+    const sameSpine =
+      Math.abs((balOn.km || 0) - (directOn.km || 0)) < 8 &&
+      Math.abs((balOn.dirt || 0) - (directOn.dirt || 0)) < 8;
+    assert(
+      !sameSpine,
+      `long Balanced+Allow must not clone Direct (km ${balOn.km}/${directOn.km}, dirt ${balOn.dirt}/${directOn.dirt})`,
+      failures
+    );
+  }
+
+  if (dirtOn && balOn && dirtOn.status === "complete" && balOn.status === "complete") {
+    assert(
+      dirtOn.dirt == null || balOn.dirt == null || dirtOn.dirt > balOn.dirt + 5,
+      `long Dirt should stay dirt-max vs Balanced (dirt ${dirtOn.dirt} vs ${balOn.dirt})`,
+      failures
+    );
+  }
+
+  return failures;
+}
+
 async function main() {
   console.log("Myra profile matrix");
   console.log(
@@ -286,7 +356,7 @@ async function main() {
   for (const profile of PROFILES) {
     for (const allow of ALLOWS) {
       process.stdout.write(`  ${profile} allow=${allow ? "on " : "off"}… `);
-      const row = await runOne(profile, allow);
+      const row = await runOne(profile, allow, MYRA, FALL_RIVER);
       rows.push(row);
       console.log(
         row.status === "complete"
@@ -330,6 +400,27 @@ async function main() {
   }
 
   const failures = runAsserts(rows);
+
+  if (RUN_LONG) {
+    console.log("");
+    console.log("Long NS OD (New Glasgow → Yarmouth) Allow on");
+    const longRows = [];
+    for (const profile of PROFILES) {
+      process.stdout.write(`  ${profile} allow=on … `);
+      const row = await runOne(profile, true, NEW_GLASGOW, YARMOUTH);
+      longRows.push(row);
+      console.log(
+        row.status === "complete"
+          ? `${km(row.km * 1000)} km  dirt ${pct(row.dirt)}%  paved ${pct(row.paved)}%  unk ${pct(row.unk)}%  (${row.ms}ms)`
+          : `FAIL ${row.status} ${row.message || row.error || ""}`
+      );
+    }
+    failures.push(...runLongOdAsserts(longRows));
+  } else {
+    console.log("");
+    console.log("Long NS OD skipped (SKIP_LONG_OD=1)");
+  }
+
   console.log("");
   if (failures.length) {
     console.error("ASSERT FAIL:");
@@ -337,7 +428,8 @@ async function main() {
     process.exitCode = 1;
   } else {
     console.log(
-      "ASSERT PASS: Clean immune; no end U-turn; Direct no north spur; adventure diverge."
+      "ASSERT PASS: Clean immune; no end U-turn; Direct no north spur; adventure diverge" +
+        (RUN_LONG ? "; long Balanced ~50/50 mix." : ".")
     );
   }
 }

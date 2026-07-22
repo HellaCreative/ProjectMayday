@@ -33,13 +33,15 @@ const PROFILE_SURFACE_WEIGHTS = Object.freeze({
     track: 0.68,
     unknown: 0.8
   }),
-  // Dual-sport mix — punish pure-highway and dirt-max; aim ~50/50 when fabric allows.
+  // Dual-sport mix — ~50/50 when Allow + fabric allow. Base table is mild dirt
+  // lean for Allow-off OSM gravel; router applies a Balanced+Allow paved pull so
+  // purple capillary cannot clone Direct’s dirt cut.
   balanced: Object.freeze({
-    paved: 1.85,
-    gravel: 0.95,
-    access: 0.9,
-    track: 0.85,
-    unknown: 0.98
+    paved: 1.35,
+    gravel: 1.02,
+    access: 0.98,
+    track: 0.95,
+    unknown: 1.05
   }),
   // Maximize undeveloped/gravel/track/resource; pavement only when forced.
   dirt: Object.freeze({
@@ -95,26 +97,31 @@ const DIRECT_ROAD_CLASS_WEIGHTS = Object.freeze({
   unknown: 1.0
 });
 
+// Mid highway spine: enough penalty to leave 100-series for dirt segments,
+// soft enough that paved arterials still interleave for ~50/50 mix.
 const BALANCED_ROAD_CLASS_WEIGHTS = Object.freeze({
-  freeway: 2.4,
-  arterial: 1.85,
-  collector: 1.25,
-  ramp: 2.1,
+  freeway: 1.8,
+  arterial: 1.35,
+  collector: 1.1,
+  ramp: 1.6,
   local: 1.0,
-  service: 1.05,
-  resource: 0.92,
-  recreation: 0.9,
-  track: 0.88,
-  double_track: 0.88,
+  service: 1.04,
+  resource: 1.0,
+  recreation: 0.99,
+  track: 0.98,
+  double_track: 0.98,
   unknown: 1.0
 });
 
 const PROFILE_ROAD_CLASS_WEIGHTS = Object.freeze({
+  // Prefer major paved progress over freeway-only backtrack snacks.
+  // Freeway still slightly favored among equals, but arterial/collector/local
+  // paved in the direction of travel must beat reverse U-turns to the 100-series.
   cleanest: Object.freeze({
-    freeway: 0.82,
-    arterial: 0.9,
-    collector: 0.96,
-    ramp: 0.88,
+    freeway: 0.94,
+    arterial: 0.95,
+    collector: 0.97,
+    ramp: 0.96,
     local: 1.0,
     service: 1.05,
     resource: 1.0,

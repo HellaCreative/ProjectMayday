@@ -231,13 +231,24 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
           if (accessName === "motorized_unknown") {
             if (profile === "dirt") step *= 0.5;
             else if (profile === "direct") step *= 0.78;
-            else step *= 0.9; // balanced
+            else step *= 0.94; // balanced — mix, not purple max
           }
           const id = pack.edgeId(ei);
           if (String(id).startsWith("ns-")) {
             if (profile === "dirt") step *= 0.68;
             else if (profile === "direct") step *= 0.86;
-            else step *= 0.94;
+            else step *= 0.96;
+          }
+          if (profile === "balanced") {
+            const surfaceName = enums.SURFACE_NAME[surface] || "";
+            if (surfaceName === "paved") step *= 0.94;
+            else if (
+              surfaceName === "gravel" ||
+              surfaceName === "access" ||
+              surfaceName === "track"
+            ) {
+              step *= 1.03;
+            }
           }
         }
         const cost = cur.cost + step;

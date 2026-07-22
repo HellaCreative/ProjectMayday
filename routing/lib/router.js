@@ -162,9 +162,9 @@ const ELLIPSE_FACTORS = {
   // Crow-flies Direct: tight enough to kill north-of-B dirt tourism spurs
   // (Myra→Fall River spur sat at ~1.33× chord) while still allowing NSTDB cuts.
   direct: 1.28,
-  // Balanced needs room to leave Direct’s line, but not Dirt’s far loops
-  // (Myra north spur tip ~1.30× chord — keep under that).
-  balanced: 1.25,
+  // Balanced needs room off Direct’s crow-flies cut via cost mix, not a wider
+  // ellipse — Myra north tourism tip sits ~1.30× chord; keep ≤ Direct’s band.
+  balanced: 1.28,
   dirt: 2.6
 };
 
@@ -1386,36 +1386,50 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds) 
     // When the rider opts into unknown access, non-cleanest profiles should
     // prefer NSTDB / provincial capillary (motorized_unknown) over paved NRN.
     // Direct: mild pull only — length still wins (no dirt% objective).
-    // Balanced: moderate. Dirt: strong.
+    // Balanced: mild purple open + explicit paved mix pull toward ~50/50.
+    // Dirt: strong.
     if (policy.motorizedUnknown && profile !== "cleanest") {
       const accessName = enums.ACCESS_NAME[edge.access] || "";
       if (accessName === "motorized_unknown") {
         if (profile === "dirt") cost *= 0.5;
         else if (profile === "direct") cost *= 0.78;
-        else cost *= 0.84; // balanced — mix, not max-purple
+        else cost *= 0.94; // balanced — open purple without owning the mix
       }
-      // Extra pull onto purple NSTDB / provincial ids when Allow is on.
       const id = String(edge.edgeId || "");
       if (id.startsWith("ns-") || /nstdb|Topographic/i.test(String(edge.source || ""))) {
         if (profile === "dirt") cost *= 0.68;
         else if (profile === "direct") cost *= 0.86;
-        else cost *= 0.9;
+        else cost *= 0.96;
+      }
+      // Balanced+Allow: force journey mix toward paved/dirt parity. Capillary
+      // alone would clone Direct’s dirt cut on long NS fabric.
+      if (profile === "balanced") {
+        const surfaceName = enums.SURFACE_NAME[edge.surface] || "";
+        if (surfaceName === "paved") cost *= 0.94;
+        else if (
+          surfaceName === "gravel" ||
+          surfaceName === "access" ||
+          surfaceName === "track"
+        ) {
+          cost *= 1.03;
+        }
       }
     }
-    // Approach-to-goal: penalize edges that increase distance to B when already
-    // near the destination. Stops Direct/Balanced dirt-tourism spurs and Clean
-    // overshoot U-turns past the pin.
+    // Approach-to-goal: penalize edges that increase distance to B.
+    // Clean: apply for the whole journey so side-road starts prefer forward
+    // paved progress over reverse/U-turn snacks onto a distant freeway.
+    // Direct/Balanced: kill dirt-tourism spurs; Dirt: only near B.
     if (fromNode != null && toNode != null && nodeCoord[fromNode] && nodeCoord[toNode]) {
       const dFrom = haversineMeters(nodeCoord[fromNode], endLL);
       const dTo = haversineMeters(nodeCoord[toNode], endLL);
       const away = dTo - dFrom;
       if (away > 50) {
         const nearGoal = dFrom < Math.max(2800, abMeters * 0.28);
-        if (nearGoal || profile === "direct") {
+        if (nearGoal || profile === "direct" || profile === "cleanest" || profile === "balanced") {
           let w = 0;
-          if (profile === "cleanest") w = nearGoal ? 5 : 0;
+          if (profile === "cleanest") w = nearGoal ? 6.5 : 3.2;
           else if (profile === "direct") w = nearGoal ? 9 : 3.5;
-          else if (profile === "balanced") w = nearGoal ? 4 : 2.2;
+          else if (profile === "balanced") w = nearGoal ? 5.5 : 3.2;
           else w = nearGoal ? 1.4 : 0.35; // dirt: allow wander, kill pure destination loops
           if (w > 0) cost += (away / 1000) * w;
         }
