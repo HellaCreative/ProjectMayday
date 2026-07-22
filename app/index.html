@@ -11183,16 +11183,10 @@
         stage = RS.transitionStage(stage, "set-end", { point: clicked });
         planTrip.stages[idx] = stage;
         afterStageEdit(stage.id, true);
-        // A completed leg immediately becomes the next leg's start. This is
-        // the map-first planning gesture: every subsequent tap adds one more
-        // waypoint without requiring a separate "add stage" control.
-        const next = RS.addStage(planTrip, { profile: stage.profile || routePreference });
-        activeStageId = next.id;
+        // The next long press creates another linked stage on demand. Keeping
+        // no empty trailing stage lets a finished route start navigation now.
+        activeStageId = stage.id;
         editingStageId = null;
-        planAggregate = RS.aggregateTrip(planTrip);
-        renderStageList();
-        renderStageMarkers();
-        updatePlanStatus();
         syncRouteBarHeader();
         setStatus("Stage " + (idx + 1) + " routed · press and hold the map to add another stage", "ok", "route");
         return;
