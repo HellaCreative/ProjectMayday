@@ -1122,13 +1122,12 @@
     }
     /* Real MapLibre stage endpoint markers */
     .stage-marker {
-      width: 32px;
-      height: 32px;
-      border-radius: 50% 50% 50% 0;
-      background: #ff7900;
+      position: relative;
+      width: 36px;
+      height: 44px;
+      border: 0;
+      background: center / contain no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 44'%3E%3Cpath d='M18 43C15.5 39.1 4 27.7 4 17.4C4 9.1 10.3 2 18 2s14 7.1 14 15.4C32 27.7 20.5 39.1 18 43Z' fill='%23ff7900' stroke='%23fff' stroke-width='2.5'/%3E%3Ccircle cx='18' cy='17' r='9.5' fill='%23fff'/%3E%3C/svg%3E");
       color: #111820;
-      border: 3px solid #fff;
-      box-shadow: 0 2px 6px rgba(16,24,40,0.38);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -9563,6 +9562,35 @@
       return { imageData: ctx.getImageData(0, 0, dim, dim), pixelRatio: scale };
     }
 
+    function ensureRouteWaypointPinImage() {
+      const id = "route-waypoint-pin";
+      if (map.hasImage && map.hasImage(id)) return id;
+      const pixelRatio = 2;
+      const canvas = document.createElement("canvas");
+      canvas.width = 72;
+      canvas.height = 88;
+      const ctx = canvas.getContext("2d");
+      ctx.scale(pixelRatio, pixelRatio);
+      ctx.beginPath();
+      ctx.moveTo(18, 43);
+      ctx.bezierCurveTo(15.5, 39.1, 4, 27.7, 4, 17.4);
+      ctx.bezierCurveTo(4, 9.1, 10.3, 2, 18, 2);
+      ctx.bezierCurveTo(25.7, 2, 32, 9.1, 32, 17.4);
+      ctx.bezierCurveTo(32, 27.7, 20.5, 39.1, 18, 43);
+      ctx.closePath();
+      ctx.fillStyle = "#ff7900";
+      ctx.fill();
+      ctx.lineWidth = 2.5;
+      ctx.strokeStyle = "#ffffff";
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(18, 17, 9.5, 0, Math.PI * 2);
+      ctx.fillStyle = "#ffffff";
+      ctx.fill();
+      try { map.addImage(id, ctx.getImageData(0, 0, canvas.width, canvas.height), { pixelRatio }); } catch (_) { /* ignore */ }
+      return id;
+    }
+
     function ensurePoiIcons() {
       if (poiIconsReady) return;
       for (const [key, cfg] of Object.entries(POI_CATEGORIES)) {
@@ -9590,7 +9618,7 @@
         source: "riderPoi",
         filter: ["has", "point_count"],
         paint: {
-          "circle-color": "#4a4540",
+          "circle-color": "#b18463",
           "circle-stroke-color": "#ffffff",
           "circle-stroke-width": 2,
           "circle-radius": ["step", ["get", "point_count"], 15, 10, 19, 30, 24]
@@ -10119,6 +10147,7 @@
         type: "geojson",
         data: routeFeatureCollection()
       });
+      ensureRouteWaypointPinImage();
       map.addSource("importedTrack", {
         type: "geojson",
         data: { type: "FeatureCollection", features: [] }
@@ -10194,14 +10223,14 @@
       });
       map.addLayer({
         id: "route-points",
-        type: "circle",
+        type: "symbol",
         source: "routeDraft",
         filter: ["==", ["geometry-type"], "Point"],
-        paint: {
-          "circle-radius": 11,
-          "circle-color": ["case", ["==", ["get", "role"], "start"], "#111820", "#ffb000"],
-          "circle-stroke-color": "#ffffff",
-          "circle-stroke-width": 3
+        layout: {
+          "icon-image": "route-waypoint-pin",
+          "icon-anchor": "bottom",
+          "icon-allow-overlap": true,
+          "icon-ignore-placement": true
         }
       });
       map.addLayer({
@@ -10213,11 +10242,12 @@
           "text-field": ["get", "label"],
           "text-size": 11,
           "text-font": ["Noto Sans Regular"],
+          "text-offset": [0, -2.5],
           "text-allow-overlap": true,
           "text-ignore-placement": true
         },
         paint: {
-          "text-color": ["case", ["==", ["get", "role"], "start"], "#ffffff", "#111820"]
+          "text-color": "#111820"
         }
       });
       // Rider sits above the route so the blue dot never hides under the orange line.
