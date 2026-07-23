@@ -1,7 +1,7 @@
 # How you map a province (DIRT fabric model)
 
 Living product doc. Companion: [DIRT-ROUTING-SYSTEM.md](./DIRT-ROUTING-SYSTEM.md).  
-Updated: 2026-07-22.
+Updated: 2026-07-23.
 
 ## Purpose
 
@@ -34,7 +34,7 @@ NS is the reference build. Every next province copies the *model*, not the NS fi
 | --- | --- | --- |
 | **NS** | OSM + NSTDB; longhaul keeps provincial; `dropNrn: true` | Done — gold reference |
 | **NB** | OSM + NB Forest Roads; longhaul keeps provincial; `dropNrn: true` | Done — same pattern as NS (capillary weaker than NSTDB on class/surface — see assessment) |
-| **QC** | OSM-only longhaul + regional | Add QC capillary later if it earns its place; still no NRN |
+| **QC** | OSM-only longhaul + regional (unsplit `qc`) | Capillary later if chemins earn a place; still no NRN; no quadrant split |
 | **PE** | OSM-only longhaul + regional; NB↔PE via Confederation Bridge | Done for MVP — no provincial capillary to hunt unless a better layer appears |
 | **ON / AB / BC** | Registry: NRN+provincial (adapters ready) | Validate OSM-as-fabric path; don’t assume NRN forever |
 | **SK / MB / NL / YT / NT / NU** | Mostly NRN backbone artifacts | Need OSM extract + capillary candidate before “gold” |
@@ -87,7 +87,7 @@ Capillary candidate exists?
 | --- | --- | --- | --- |
 | **NS** | NSTDB / STDB | **Gold — OSM+provincial** | Topology + TRACK unknown + surface/class rich; longhaul keeps purple |
 | **NB** | Forest Roads (DNR-ED FeatureServer) | **Ship OSM+provincial (best-effort)** | Connectivity + unknown access + gap-fill OK; **surface/class weak** (all `resource` / sparse attrs). Keep provincial on longhaul so NS↔NB Allow works. Not NSTDB-quality on paint/cost signal — don’t pretend it is |
-| **QC** | chemins multiusages (adapter ready) | **OSM-only today** | Capillary not locked into shipping stack yet |
+| **QC** | chemins multiusages (adapter ready) | **OSM-only MVP (shipping)** | Unsplit single `qc` pack; NRN dropped; chemins not in live stack. Southern corridor + NB border + Gatineau/Laurentians usable. Far-north / lake-shore pins beyond ~750 m of OSM still fail snap. Capillary remains a later experiment. |
 | **PE** | none shippable | **OSM-only** | OSM coverage is the fabric (~22k edges). Confederation Trail is motor-free summer — not a resource-road supplement. `road_centerline` sparse / NRN-overlap. NB↔PE via Confederation Bridge (legal road; both OSM extracts include trunk halves; merge matches mid-bridge nodes). |
 
 ---
@@ -164,7 +164,7 @@ Fix a small set of origin→destination pairs that prove fabric, not UI.
 | Province | Smoke OD (examples) | Expect |
 | --- | --- | --- |
 | **NS** | **Myra corridor** (and existing fixtures: Porters–Musquodoboit, Halifax–Yarmouth) | Clean ≈ pavement; Allow off ignores purple; Allow on opens capillary for Direct/Dirt/Balanced; Dirt dirt% ≫ Clean |
-| **QC** | City↔region pairs on OSM fabric | Completes without NRN; islands handled by snap/rematch |
+| **QC** | Beauce↔west Montréal / Laurentians; Gatineau↔Tremblant; Roberval↔Chicoutimi; **NB→Québec City**; NS→QC (via NB chain) | Completes on OSM-only `qc` pack (no NRN, no quadrant chain); in-QC stays provinceFamily qc; Gatineau is QC; adventure skips Montréal/Québec cores; Allow has little effect without capillary |
 | **NB** | In-province forest OD + **NS↔NB** (e.g. Amherst area → Moncton / Saint John) | Allow on uses unknown capillary; Balanced Allow off/on completes; adventure stays [A,B] (no Halifax city chain) |
 | **PE** | Summerside→Charlottetown + **NB↔PE** Moncton→Charlottetown (Confederation Bridge) | Clean ≈ pavement via bridge; Direct/Dirt/Balanced complete; no illegal gap-span; adventure skips Charlottetown/Summerside cores |
 | **Next province** | One highway OD + one dirt-corridor OD that needs capillary | Run [Province data assessment](#province-data-assessment); OSM alone fails or is silly; OSM+provincial succeeds with Allow |

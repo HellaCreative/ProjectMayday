@@ -65,9 +65,12 @@ const HUBS = {
     { lon: -71.93, lat: 45.40 }, // Sherbrooke
     { lon: -72.15, lat: 45.65 }, // Drummondville
     { lon: -75.71, lat: 45.43 }, // Gatineau
-    { lon: -71.15, lat: 48.42 }, // Saguenay
+    { lon: -71.068, lat: 48.428 }, // Chicoutimi / Saguenay downtown (not river)
+    { lon: -72.23, lat: 48.52 }, // Roberval / Lac-Saint-Jean
+    { lon: -71.65, lat: 48.55 }, // Alma
     { lon: -70.33, lat: 47.38 }, // Rivière-du-Loup
-    { lon: -68.65, lat: 47.55 } // Dégelis / NB approach
+    { lon: -68.65, lat: 47.55 }, // Dégelis / NB approach
+    { lon: -70.67, lat: 46.12 } // Saint-Georges / Beauce
   ],
   nb: [
     { lon: -64.778, lat: 46.088 }, // Moncton

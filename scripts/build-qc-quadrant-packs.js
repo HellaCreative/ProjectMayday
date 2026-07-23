@@ -8,7 +8,8 @@
  * Re-run this only if a measured Hobby OOM returns after packing denser fabric.
  *
  * Quebec uses OSM-only fabric — NRN locals are too sparse/wrong for dirt bias
- * and basemap snaps. NB/NS keep NRN+OSM via build-longhaul-region-packs.js.
+ * and basemap snaps. Prefer single `qc` from build-longhaul-region-packs.js.
+ * NS/NB ship OSM+provincial (no NRN) via that same longhaul builder.
  *
  *   qc-sl   — St. Lawrence / river corridor (NB border → Québec → Saguenay)
  *   qc-west — Ontario border / Montréal / Laurentians / Outaouais

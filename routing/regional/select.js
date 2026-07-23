@@ -32,6 +32,18 @@ function isQcRegion(id) {
   return id === "qc" || String(id || "").startsWith("qc-");
 }
 
+/**
+ * Piecewise Ottawa River bank split for overlapping ON/QC bboxes.
+ * South bank ≈ Ontario (Ottawa metro); north bank ≈ Québec (Gatineau / Aylmer).
+ */
+function isNorthOfOttawaRiver(lon, lat) {
+  if (lon < -76.5 || lon > -74.5) return false;
+  if (lon >= -75.55) return lat >= 45.475; // Orleans / east — river farther north
+  if (lon >= -75.75) return lat >= 45.44; // downtown Ottawa / Hull
+  if (lon >= -75.95) return lat >= 45.4; // Aylmer / Britannia
+  return lat >= 45.38; // west toward Quyon
+}
+
 /** Collapse legacy QC quadrant ids to one province family. */
 function provinceFamily(regionId) {
   const id = String(regionId || "").toLowerCase();
@@ -66,13 +78,15 @@ function primaryRegionForPoint(lon, lat) {
     return lon < -116.4 ? "bc" : "ab";
   }
 
-  // ON vs Quebec. Laurentian plateau / Gatineau stay QC.
+  // ON vs Quebec. Laurentians / Gatineau stay QC; Ottawa metro stays ON.
   const qcHit = [...ids].find((id) => isQcRegion(id));
   if (ids.has("on") && qcHit) {
-    if (lat >= 45.9) return "qc";
+    // Montreal side / east of Ottawa River mouth.
     if (lon >= -74.5) return "qc";
-    // Gatineau / Outaouais (north of Ottawa River) — not Ontario.
-    if (lat >= 45.4 && lon >= -76.2) return "qc";
+    // Laurentian / Tremblant plateau (north), but not upper Ottawa Valley ON towns.
+    if (lat >= 45.9 && lon >= -76.0) return "qc";
+    // Gatineau / Outaouais — north bank of Ottawa River only (not Parliament / Orleans).
+    if (isNorthOfOttawaRiver(lon, lat)) return "qc";
     return "on";
   }
 

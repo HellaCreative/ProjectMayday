@@ -801,18 +801,44 @@ async function routeOnRuntime(body, graphResolution, runtime) {
   let endMatch = matchPoint(runtime, end, policy, limit, avoidEdgeIds, null, profile, "end");
   // Soft expand once within the hard cap: prefer snap-on-place over hard fail
   // when a road exists a bit beyond the default radius (thinned hubs / fat taps).
-  if (!startMatch.ok && startMatch.nearestMeters != null && startMatch.nearestMeters <= HARD_MATCH_CAP_M && limit < HARD_MATCH_CAP_M) {
-    const expanded = matchPoint(runtime, start, policy, HARD_MATCH_CAP_M, avoidEdgeIds, null, profile, "start");
-    if (expanded.ok) {
-      startMatch = expanded;
-      limit = HARD_MATCH_CAP_M;
+  // nearestMeters is null when the spatial index finds zero candidates inside
+  // the first radius — still retry at the hard cap (QC hub coords / hinterland).
+  if (!startMatch.ok && limit < HARD_MATCH_CAP_M) {
+    const near = startMatch.nearestMeters;
+    if (near == null || near <= HARD_MATCH_CAP_M) {
+      const expanded = matchPoint(
+        runtime,
+        start,
+        policy,
+        HARD_MATCH_CAP_M,
+        avoidEdgeIds,
+        null,
+        profile,
+        "start"
+      );
+      if (expanded.ok) {
+        startMatch = expanded;
+        limit = HARD_MATCH_CAP_M;
+      }
     }
   }
-  if (!endMatch.ok && endMatch.nearestMeters != null && endMatch.nearestMeters <= HARD_MATCH_CAP_M && limit < HARD_MATCH_CAP_M) {
-    const expanded = matchPoint(runtime, end, policy, HARD_MATCH_CAP_M, avoidEdgeIds, null, profile, "end");
-    if (expanded.ok) {
-      endMatch = expanded;
-      limit = HARD_MATCH_CAP_M;
+  if (!endMatch.ok && limit < HARD_MATCH_CAP_M) {
+    const near = endMatch.nearestMeters;
+    if (near == null || near <= HARD_MATCH_CAP_M) {
+      const expanded = matchPoint(
+        runtime,
+        end,
+        policy,
+        HARD_MATCH_CAP_M,
+        avoidEdgeIds,
+        null,
+        profile,
+        "end"
+      );
+      if (expanded.ok) {
+        endMatch = expanded;
+        limit = HARD_MATCH_CAP_M;
+      }
     }
   }
   // Reconcile disconnected snaps.

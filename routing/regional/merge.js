@@ -266,6 +266,8 @@ const ADVENTURE_URBAN_AVOID = [
   { minLat: 45.2, maxLat: 45.35, minLon: -66.2, maxLon: -65.95, nudgeLat: 0.18 }, // Saint John
   { minLat: 47.3, maxLat: 47.45, minLon: -68.45, maxLon: -68.2, nudgeLat: 0.2 }, // Edmundston
   { minLat: 46.75, maxLat: 46.9, minLon: -71.35, maxLon: -71.1, nudgeLat: 0.2 }, // Québec City core
+  // Gatineau downtown / Hull — leave Chelsea / north ring for adventure skirts.
+  { minLat: 45.42, maxLat: 45.5, minLon: -75.78, maxLon: -75.68, nudgeLat: 0.18 },
   // PE cores — surgical so adventure can skirt, not tour downtown one-ways.
   { minLat: 46.228, maxLat: 46.248, minLon: -63.145, maxLon: -63.11, nudgeLat: 0.12 }, // Charlottetown downtown
   { minLat: 46.385, maxLat: 46.405, minLon: -63.81, maxLon: -63.77, nudgeLat: 0.1 } // Summerside core

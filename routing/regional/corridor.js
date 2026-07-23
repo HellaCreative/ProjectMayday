@@ -304,7 +304,7 @@ function extractRoadFabricLonghaulGraph(graph, options = {}) {
 
     if (osmOnly) {
       if (!osm) continue;
-      // Full OSM motorized fabric inside the quadrant bbox (already highway-filtered
+      // Full OSM motorized fabric for the province (already highway-filtered
       // at ingest). Normalize unknown access → permissive for dual-sport routing.
       keepEdges.push(e.ac === 2 ? { ...e, ac: 1 } : e);
       continue;

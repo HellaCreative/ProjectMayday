@@ -189,7 +189,7 @@
         "adapter": "nrn",
         "status": "ready",
         "dateRetrieved": "2026-07-20",
-        "notes": "NRN ROADSEG ingested as national backbone artifact. Not routing-ready until regional validation and provincial-supplement policy from CANADA_DATA_SOURCE_AUDIT.md are applied."
+        "notes": "NRN omitted from QC routing fabric (OSM-only; chemins capillary not shipping yet). Catalog kept for provenance."
       },
       "provincial": {
         "sourceName": "Données Québec — chemins forestiers / transport terrestre",
@@ -199,7 +199,7 @@
         "adapter": "qc-multiusage",
         "status": "ready",
         "dateRetrieved": "2026-07-21",
-        "notes": " Supplemental adapter ingested."
+        "notes": "Adapter ready; NOT in live QC routing stack (--osm-only). Capillary candidate for a later assessment pass."
       },
       "routingReady": true,
       "routingMode": "osm-only",
@@ -216,7 +216,8 @@
         "featureCount": 591955,
         "added": 591955,
         "license": "OpenStreetMap contributors (ODbL)",
-        "dateRetrieved": "2026-07-21"
+        "dateRetrieved": "2026-07-21",
+        "notes": "Sole QC adventure fabric. Single unsplit qc regional + longhaul packs (no NRN, no quadrants)."
       }
     },
     {

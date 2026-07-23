@@ -384,18 +384,22 @@ function corridorCacheSuffix(locations, bufferMeters) {
 }
 
 /**
- * NS/NB/PE longhaul packs are already province-sized and fit Hobby RAM.
- * Corridor-clipping them with a 120 km buffer barely shrinks the pack, but
- * keys the LRU per OD — so every short A→B re-inflates ~100–150 MB JSON
- * (~2s locally, often ~10–20s on a cold Vercel isolate). Skip clip so one
- * warm runtime serves all in-province trips. Never skip for QC (too large).
+ * NS/NB/PE/QC longhaul packs are already province-sized for Hobby RAM.
+ * Corridor-clipping them with a 120 km buffer barely shrinks maritime packs
+ * and still keys the LRU per OD — so every short A→B re-inflates ~100–214 MB
+ * JSON (~2s locally, often ~10–20s on a cold Vercel isolate). Skip clip so
+ * one warm runtime serves all in-province trips.
+ *
+ * QC OSM-only longhaul is ~214 MB inflated / ~586k edges — still under the
+ * 2048 MB Hobby ceiling for a single-pack load (multi-pack NB↔QC hops still
+ * clip when paths.length > 1).
  */
 function shouldSkipCorridorClip(resolution, paths) {
   if (!paths || paths.length !== 1) return false;
   const id = String(
     (resolution && resolution.regionIds && resolution.regionIds[0]) || ""
   ).toLowerCase();
-  return id === "ns" || id === "nb" || id === "pe";
+  return id === "ns" || id === "nb" || id === "pe" || id === "qc";
 }
 
 async function readGraphData(graphPath, options = {}) {

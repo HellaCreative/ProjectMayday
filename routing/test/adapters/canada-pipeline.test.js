@@ -502,7 +502,7 @@ check("Halifax to Vancouver corridor includes NB and western provinces", () => {
   assert.ok(regionsForRoute(["ns","bc"]).includes("on"));
 });
 
-check("maritime single-pack skips corridor clip (warm reuse)", () => {
+check("maritime/QC single-pack skips corridor clip (warm reuse)", () => {
   const { shouldSkipCorridorClip } = require("../../lib/graph");
   assert.strictEqual(
     shouldSkipCorridorClip({ regionIds: ["ns"] }, ["/tmp/ns/longhaul.v1.json.gz"]),
@@ -518,14 +518,89 @@ check("maritime single-pack skips corridor clip (warm reuse)", () => {
   );
   assert.strictEqual(
     shouldSkipCorridorClip({ regionIds: ["qc"] }, ["/tmp/qc/longhaul.v1.json.gz"]),
-    false,
-    "QC must still corridor-clip"
+    true,
+    "QC OSM-only longhaul skips clip for warm in-province reuse"
   );
   assert.strictEqual(
     shouldSkipCorridorClip({ regionIds: ["ns", "nb"] }, ["/tmp/ns.gz", "/tmp/nb.gz"]),
     false,
     "multi-pack still clips"
   );
+});
+
+check("ON vs QC keeps Ottawa ON and Gatineau QC", () => {
+  const { primaryRegionForPoint } = require("../../regional/select");
+  assert.strictEqual(primaryRegionForPoint(-75.699, 45.425), "on", "Parliament Hill");
+  assert.strictEqual(primaryRegionForPoint(-75.692, 45.429), "on", "ByWard");
+  assert.strictEqual(primaryRegionForPoint(-75.55, 45.47), "on", "Orleans");
+  assert.strictEqual(primaryRegionForPoint(-75.92, 45.31), "on", "Kanata");
+  assert.strictEqual(primaryRegionForPoint(-77.28, 45.9), "on", "Petawawa");
+  assert.strictEqual(primaryRegionForPoint(-75.71, 45.476), "qc", "Hull / Gatineau");
+  assert.strictEqual(primaryRegionForPoint(-75.85, 45.4), "qc", "Aylmer");
+  assert.strictEqual(primaryRegionForPoint(-75.8, 45.5), "qc", "Chelsea");
+  assert.strictEqual(primaryRegionForPoint(-74.6, 46.12), "qc", "Mont-Tremblant");
+  assert.strictEqual(primaryRegionForPoint(-74.0, 45.78), "qc", "Saint-Jérôme");
+});
+
+check("Gatineau downtown is an adventure urban core", () => {
+  const { pointInAdventureUrbanCore } = require("../../regional/merge");
+  assert.strictEqual(pointInAdventureUrbanCore(-75.71, 45.46), true, "Hull core");
+  assert.strictEqual(pointInAdventureUrbanCore(-75.8, 45.5), false, "Chelsea ring");
+});
+
+check("QC longhaul Roberval↔Chicoutimi snaps on connected fabric", async () => {
+  const qcPack = path.join(__dirname, "../../data/regions/qc/longhaul.v1.json.gz");
+  if (!fs.existsSync(qcPack)) {
+    console.log("skip QC OD smoke — qc longhaul pack missing");
+    return;
+  }
+  const prev = process.env.VERCEL;
+  process.env.VERCEL = "1";
+  try {
+    const { routeRequest } = require("../../lib/router");
+    const roberval = { lon: -72.23, lat: 48.52 };
+    const chicoutimi = { lon: -71.068, lat: 48.428 };
+    const beauce = { lon: -70.67, lat: 46.12 };
+    const westMtl = { lon: -74.35, lat: 45.65 };
+    const gatineau = { lon: -75.71, lat: 45.48 };
+    const tremblant = { lon: -74.6, lat: 46.12 };
+
+    const lac = await routeRequest({
+      profile: "cleanest",
+      locations: [roberval, chicoutimi],
+      accessPolicy: { motorizedPermissive: true, motorizedUnknown: false }
+    });
+    assert.strictEqual(lac.status, "complete", lac.error || lac.message || "Roberval→Chicoutimi");
+    assert.ok((lac.distanceMeters || 0) > 50000, "Lac-Saint-Jean corridor length");
+
+    const cross = await routeRequest({
+      profile: "balanced",
+      locations: [beauce, westMtl],
+      accessPolicy: { motorizedPermissive: true, motorizedUnknown: false }
+    });
+    assert.strictEqual(cross.status, "complete", cross.error || cross.message || "Beauce→west MTL");
+    assert.ok(
+      cross.debug &&
+        Array.isArray(cross.debug.regionIds) &&
+        cross.debug.regionIds.length === 1 &&
+        cross.debug.regionIds[0] === "qc",
+      "in-QC stays on qc pack"
+    );
+
+    const outaouais = await routeRequest({
+      profile: "direct",
+      locations: [gatineau, tremblant],
+      accessPolicy: { motorizedPermissive: true, motorizedUnknown: false }
+    });
+    assert.strictEqual(
+      outaouais.status,
+      "complete",
+      outaouais.error || outaouais.message || "Gatineau→Tremblant"
+    );
+  } finally {
+    if (prev == null) delete process.env.VERCEL;
+    else process.env.VERCEL = prev;
+  }
 });
 
 check("in-QC uses single qc longhaul pack (no quadrant chain)", () => {
