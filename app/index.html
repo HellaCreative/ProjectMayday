@@ -102,11 +102,112 @@
 
     .topbar-left {
       display: flex;
-      flex-direction: row;
-      align-items: center;
-      gap: 8px;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 4px;
       pointer-events: auto;
       flex: 0 0 auto;
+    }
+
+    .poc-debug-btn {
+      pointer-events: auto;
+      appearance: none;
+      border: 1px solid rgba(255, 255, 255, 0.28);
+      background: rgba(22, 24, 28, 0.72);
+      color: rgba(255, 255, 255, 0.78);
+      font-family: var(--font-mono, var(--mono), ui-monospace, monospace);
+      font-size: 0.58rem;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      line-height: 1;
+      padding: 5px 8px;
+      border-radius: 8px;
+      cursor: pointer;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      box-shadow: var(--chrome-shadow);
+    }
+    .poc-debug-btn:hover,
+    .poc-debug-btn:focus-visible {
+      color: #fff;
+      border-color: rgba(255, 255, 255, 0.5);
+      outline: none;
+    }
+    .poc-debug-btn[aria-expanded="true"] {
+      color: #fff;
+      border-color: rgba(255, 255, 255, 0.55);
+      background: rgba(22, 24, 28, 0.9);
+    }
+    body.navigating .poc-debug-btn { display: none; }
+
+    .poc-debug-sheet .export-sheet-card {
+      width: min(520px, calc(100vw - 28px));
+      max-height: min(78vh, 640px);
+      display: flex;
+      flex-direction: column;
+      padding: 14px;
+    }
+    .poc-debug-sheet-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+    .poc-debug-sheet-head h2 {
+      margin: 0;
+      font-size: 0.95rem;
+    }
+    .poc-debug-sheet-sub {
+      margin: 0 0 10px;
+      color: var(--muted);
+      font-size: 0.72rem;
+      line-height: 1.35;
+    }
+    .poc-debug-log {
+      flex: 1 1 auto;
+      min-height: 180px;
+      max-height: min(52vh, 420px);
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: rgba(22, 24, 28, 0.04);
+      padding: 10px 12px;
+      margin-bottom: 12px;
+      font-family: var(--font-mono, var(--mono), ui-monospace, monospace);
+      font-size: 0.62rem;
+      line-height: 1.45;
+      color: var(--text);
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .poc-debug-actions {
+      display: grid;
+      grid-template-columns: 1fr 1.2fr;
+      gap: 8px;
+    }
+    .poc-debug-actions button {
+      min-height: 44px;
+      border-radius: 12px;
+      font-family: var(--font-ui, var(--sans));
+      font-size: 0.84rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .poc-debug-close {
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--text);
+    }
+    .poc-debug-copy {
+      border: 1px solid rgba(22, 24, 28, 0.28);
+      background: #16181c;
+      color: #fff;
+    }
+    .poc-debug-copy.is-copied {
+      background: #2f6b3a;
+      border-color: #2f6b3a;
     }
 
     .brand {
@@ -2755,7 +2856,7 @@
       right: 10px;
       gap: 0;
     }
-    .topbar-left { gap: 0; }
+    .topbar-left { gap: 4px; flex-direction: column; align-items: flex-start; }
     .brand {
       min-height: var(--p2-brand-h, 42px);
       padding: 8px 12px;
@@ -7606,6 +7707,7 @@
         <span class="brand-dirt">DIRT<span>.</span></span>
         <span class="brand-by">MAYDAY</span>
       </a>
+      <button class="poc-debug-btn" id="pocDebugBtn" type="button" title="Copy recent routing attempts" aria-haspopup="dialog" aria-controls="pocDebugSheet" aria-expanded="false">Debug</button>
     </div>
     <div class="nav-hud-divider" aria-hidden="true"></div>
     <div class="nav-hud" id="navHud" aria-live="polite">
@@ -7967,6 +8069,20 @@
       </div>
     </div>
   </section>
+
+  <div class="export-sheet poc-debug-sheet" id="pocDebugSheet" aria-hidden="true">
+    <div class="export-sheet-card" role="dialog" aria-modal="true" aria-labelledby="pocDebugTitle">
+      <div class="poc-debug-sheet-head">
+        <h2 id="pocDebugTitle">Routing debug</h2>
+      </div>
+      <p class="poc-debug-sheet-sub">Recent route attempts (newest first). Copy and paste back when routing fails.</p>
+      <pre class="poc-debug-log" id="pocDebugLog" aria-live="polite">No routing attempts yet.</pre>
+      <div class="poc-debug-actions">
+        <button class="poc-debug-close" id="pocDebugClose" type="button">Close</button>
+        <button class="poc-debug-copy" id="pocDebugCopy" type="button">Copy</button>
+      </div>
+    </div>
+  </div>
 
   <div class="export-sheet" id="exportSheet" aria-hidden="true">
     <div class="export-sheet-card" role="dialog" aria-modal="true" aria-labelledby="exportSheetTitle">
@@ -11353,6 +11469,17 @@
       const stageProfile = stage.profile || routePreference;
       const stagePolicy = stageAccessPolicy(stage);
       const toastRequestId = beginRouteToast("Plotting a route…");
+      const debugBase = {
+        mode: "Plan",
+        profile: stageProfile,
+        allowUnknown: !!(stagePolicy && stagePolicy.motorizedUnknown),
+        a: fmtCoordPair(stage.start),
+        b: fmtCoordPair(stage.end),
+        aLabel: stage.start && stage.start.label ? stage.start.label : "A",
+        bLabel: stage.end && stage.end.label ? stage.end.label : "B",
+        stageId: stageId
+      };
+      let debugLogged = false;
       planTrip.stages[idx] = RS.transitionStage(stage, "route-start", { requestToken: token });
       planAggregate = RS.aggregateTrip(planTrip);
       renderStageList();
@@ -11379,6 +11506,13 @@
         try {
           api = JSON.parse(raw);
         } catch (_) {
+          appendPocRouteDebug(Object.assign({}, debugBase, {
+            httpStatus: res.status,
+            ok: false,
+            errorMessage: res.ok ? "Bad route response (non-JSON)" : ("Routing server error (" + res.status + ")"),
+            rawPreview: String(raw || "").slice(0, 400)
+          }));
+          debugLogged = true;
           throw new Error(
             res.ok
               ? "Bad route response"
@@ -11397,11 +11531,24 @@
         }
         if (api.status !== "complete") {
           const errorMessage = api.message || api.error || "No route";
+          appendPocRouteDebug(Object.assign({}, debugBase, extractRouteFailureFields(api), {
+            httpStatus: res.status,
+            ok: false,
+            errorMessage: errorMessage
+          }));
+          debugLogged = true;
           planTrip.stages[cur] = RS.transitionStage(planTrip.stages[cur], "route-failed", {
             error: errorMessage
           });
           finishRouteToast(toastRequestId, "error", "Route unavailable");
         } else {
+          appendPocRouteDebug(Object.assign({}, debugBase, extractRouteFailureFields(api), {
+            httpStatus: res.status,
+            ok: true,
+            errorMessage: null,
+            distanceMeters: api.distanceMeters || null
+          }));
+          debugLogged = true;
           const rerouteNextStageId = applyRoutedBoundary(stageId, api);
           finishRouteToast(toastRequestId, "complete");
           if (rerouteNextStageId) {
@@ -11410,14 +11557,24 @@
           }
         }
       } catch (err) {
+        console.error(err);
         if (!stageTracker.isCurrent(stageId, token)) {
           finishRouteToast(toastRequestId, "stale");
           return;
         }
         const cur = RS.findStageIndex(planTrip, stageId);
+        const msg = (err && err.message) || "Routing failed";
+        if (!debugLogged) {
+          appendPocRouteDebug(Object.assign({}, debugBase, {
+            httpStatus: null,
+            ok: false,
+            errorMessage: msg,
+            consoleError: String((err && err.stack) || msg)
+          }));
+        }
         if (cur >= 0) {
           planTrip.stages[cur] = RS.transitionStage(planTrip.stages[cur], "route-failed", {
-            error: (err && err.message) || "Routing failed"
+            error: msg
           });
         }
         finishRouteToast(toastRequestId, "error", "Routing failed");
@@ -14613,6 +14770,218 @@
     // Phase 2B: all profiles (including Cleanest) call the server route API.
     // The browser does not build or search the province graph for routing.
     const ROUTE_API_URL = "/api/route";
+    const POC_ROUTE_DEBUG_MAX = 25;
+    const POC_ROUTE_DEBUG_KEY = "dirt.poc.routeDebugLog.v1";
+    const pocRouteDebugLog = [];
+
+    function fmtCoordPair(pt) {
+      if (!pt || !Number.isFinite(pt.lat)) return null;
+      const lon = Number.isFinite(pt.lng) ? pt.lng : pt.lon;
+      if (!Number.isFinite(lon)) return null;
+      return Number(pt.lat).toFixed(5) + ", " + Number(lon).toFixed(5);
+    }
+
+    function extractRouteFailureFields(api) {
+      if (!api || typeof api !== "object") return {};
+      const dbg = api.debug && typeof api.debug === "object" ? api.debug : null;
+      const hop = api.hop && typeof api.hop === "object" ? api.hop : null;
+      const hopDbg = hop && hop.debug && typeof hop.debug === "object" ? hop.debug : null;
+      const warnings = Array.isArray(api.warnings) ? api.warnings : [];
+      const codes = warnings.map((w) => w && (w.code || w.message)).filter(Boolean);
+      const fields = {
+        apiStatus: api.status || null,
+        apiError: api.error || null,
+        apiMessage: api.message || null,
+        regionIds: api.regionIds || (dbg && dbg.regionIds) || null,
+        hopIndex: api.hopIndex != null ? api.hopIndex : null,
+        chain: !!(
+          api.hopIndex != null ||
+          api.error === "chain_hop_failed" ||
+          api.error === "chain_failed" ||
+          (dbg && (dbg.graphMode === "canada-chain" || dbg.engine === "dirt-node-astar-chain"))
+        ),
+        graphMode: (dbg && dbg.graphMode) || (api.hopIndex != null ? "canada-chain" : null),
+        engine: dbg && dbg.engine ? dbg.engine : null,
+        matchLimitMeters: dbg && dbg.matchLimitMeters != null ? dbg.matchLimitMeters : null,
+        startMatch: dbg && dbg.startMatch ? dbg.startMatch : null,
+        endMatch: dbg && dbg.endMatch ? dbg.endMatch : null,
+        disconnected: codes.includes("disconnected_components") || api.error === "disconnected_components",
+        matchFailed: codes.includes("match_failed") || api.error === "match_failed",
+        warningCodes: codes.length ? codes : null
+      };
+      if (hop) {
+        fields.hop = {
+          status: hop.status || null,
+          error: hop.error || null,
+          message: hop.message || null,
+          regionIds: hop.regionIds || (hopDbg && hopDbg.regionIds) || null,
+          matchLimitMeters: hopDbg && hopDbg.matchLimitMeters != null ? hopDbg.matchLimitMeters : null,
+          startMatch: hopDbg && hopDbg.startMatch ? hopDbg.startMatch : null,
+          endMatch: hopDbg && hopDbg.endMatch ? hopDbg.endMatch : null,
+          warningCodes: Array.isArray(hop.warnings)
+            ? hop.warnings.map((w) => w && (w.code || w.message)).filter(Boolean)
+            : null
+        };
+      }
+      return fields;
+    }
+
+    function guessRouteFailureHint(entry) {
+      const regions = (entry.regionIds || []).map((r) => String(r).toLowerCase());
+      const hasNs = regions.includes("ns");
+      const hasQc = regions.includes("qc");
+      const hasNb = regions.includes("nb");
+      if (entry.ok) return null;
+      if (entry.matchFailed || (entry.hop && entry.hop.error === "match_failed")) {
+        return "Likely snap/match failure — A or B (or a chain hop endpoint) was outside matchLimitMeters of pack edges.";
+      }
+      if (entry.disconnected || entry.apiError === "disconnected_components" ||
+          (entry.hop && entry.hop.error === "disconnected_components")) {
+        return "Likely disconnected graph components — A and B snapped onto separate networks with no shared intersections (common at thinned longhaul / province seams).";
+      }
+      if (entry.hopIndex != null || entry.apiError === "chain_hop_failed" || entry.chain) {
+        if (hasNs && hasQc) {
+          return "NS→QC uses canada-chain hops (typically NS→NB→QC on Vercel). Failure is usually a middle hop snap, pack seam disconnect, or hop timeout — inspect hopIndex + hop.";
+        }
+        return "canada-chain hop failed — inspect hopIndex and nested hop fields.";
+      }
+      if (hasNs && hasQc) {
+        return "Cross-province NS→QC request — expect canada-chain; check regionIds, hopIndex, and pack match fields.";
+      }
+      if (hasNb && hasQc) {
+        return "NB→QC chain corridor — inspect hop / match / disconnected fields.";
+      }
+      if (entry.httpStatus === 0 || /Failed to fetch|NetworkError|Load failed/i.test(String(entry.errorMessage || ""))) {
+        return "Client/network failure before a usable route JSON body arrived.";
+      }
+      if (entry.httpStatus >= 500) {
+        return "Server/runtime error (often pack load OOM or timeout on longhaul).";
+      }
+      return null;
+    }
+
+    function loadPocRouteDebugLog() {
+      try {
+        const raw = localStorage.getItem(POC_ROUTE_DEBUG_KEY);
+        if (!raw) return;
+        const parsed = JSON.parse(raw);
+        if (!Array.isArray(parsed)) return;
+        for (const item of parsed.slice(0, POC_ROUTE_DEBUG_MAX)) {
+          if (item && typeof item === "object") pocRouteDebugLog.push(item);
+        }
+      } catch (_) { /* ignore */ }
+    }
+
+    function persistPocRouteDebugLog() {
+      try {
+        localStorage.setItem(POC_ROUTE_DEBUG_KEY, JSON.stringify(pocRouteDebugLog));
+      } catch (_) { /* ignore */ }
+    }
+
+    function appendPocRouteDebug(entry) {
+      const row = Object.assign({
+        ts: new Date().toISOString(),
+        mode: null,
+        profile: null,
+        allowUnknown: null,
+        a: null,
+        b: null,
+        aLabel: null,
+        bLabel: null,
+        httpStatus: null,
+        ok: false,
+        errorMessage: null,
+        consoleError: null
+      }, entry || {});
+      const hint = guessRouteFailureHint(row);
+      if (hint) row.likelyCause = hint;
+      pocRouteDebugLog.unshift(row);
+      while (pocRouteDebugLog.length > POC_ROUTE_DEBUG_MAX) pocRouteDebugLog.pop();
+      persistPocRouteDebugLog();
+      if (document.getElementById("pocDebugSheet")?.classList.contains("open")) {
+        renderPocDebugPanel();
+      }
+      return row;
+    }
+
+    function formatPocRouteDebugDump() {
+      if (!pocRouteDebugLog.length) return "DIRT routing debug — no attempts yet.";
+      const lines = [
+        "DIRT. MAYDAY. routing debug dump",
+        "Generated: " + new Date().toISOString(),
+        "Entries (newest first): " + pocRouteDebugLog.length,
+        ""
+      ];
+      pocRouteDebugLog.forEach((entry, i) => {
+        lines.push("--- #" + (i + 1) + " ---");
+        lines.push(JSON.stringify(entry, null, 2));
+        lines.push("");
+      });
+      return lines.join("\n");
+    }
+
+    function renderPocDebugPanel() {
+      const logEl = document.getElementById("pocDebugLog");
+      if (!logEl) return;
+      logEl.textContent = formatPocRouteDebugDump();
+    }
+
+    function openPocDebugSheet() {
+      const sheet = document.getElementById("pocDebugSheet");
+      const btn = document.getElementById("pocDebugBtn");
+      if (!sheet) return;
+      renderPocDebugPanel();
+      sheet.classList.add("open");
+      sheet.setAttribute("aria-hidden", "false");
+      if (btn) btn.setAttribute("aria-expanded", "true");
+    }
+
+    function closePocDebugSheet() {
+      const sheet = document.getElementById("pocDebugSheet");
+      const btn = document.getElementById("pocDebugBtn");
+      if (!sheet) return;
+      sheet.classList.remove("open");
+      sheet.setAttribute("aria-hidden", "true");
+      if (btn) btn.setAttribute("aria-expanded", "false");
+      const copyBtn = document.getElementById("pocDebugCopy");
+      if (copyBtn) {
+        copyBtn.classList.remove("is-copied");
+        copyBtn.textContent = "Copy";
+      }
+    }
+
+    async function copyPocDebugDump() {
+      const text = formatPocRouteDebugDump();
+      const copyBtn = document.getElementById("pocDebugCopy");
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(text);
+        } else {
+          const ta = document.createElement("textarea");
+          ta.value = text;
+          ta.setAttribute("readonly", "");
+          ta.style.position = "fixed";
+          ta.style.left = "-9999px";
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand("copy");
+          document.body.removeChild(ta);
+        }
+        if (copyBtn) {
+          copyBtn.classList.add("is-copied");
+          copyBtn.textContent = "Copied";
+          setTimeout(() => {
+            copyBtn.classList.remove("is-copied");
+            copyBtn.textContent = "Copy";
+          }, 1600);
+        }
+      } catch (err) {
+        console.error("debug copy failed", err);
+        if (copyBtn) copyBtn.textContent = "Copy failed";
+      }
+    }
+
+    loadPocRouteDebugLog();
 
     function mapApiRouteToActiveRoute(api) {
       const distanceKm = (api.distanceMeters || 0) / 1000;
@@ -14686,6 +15055,17 @@
       }
       const jobId = ++routeJobId;
       const toastRequestId = beginRouteToast("Plotting a course…");
+      const accessPolicy = currentAccessPolicy();
+      const debugBase = {
+        mode: plannerTab === "plan" || routeMode === "plan" ? "Plan" : "From here",
+        profile: routePreference,
+        allowUnknown: !!allowUnknownAccess,
+        a: fmtCoordPair(start),
+        b: fmtCoordPair(destination),
+        aLabel: routeMode === "here" ? "Current location" : "A",
+        bLabel: "B"
+      };
+      let debugLogged = false;
       activeRoute = null;
       routeDebug = null;
       lastNetworkRouteReason = "";
@@ -14704,7 +15084,7 @@
               { lat: destination.lat, lon: destination.lng, label: "B" }
             ],
             vehicle: "dual-sport-motorcycle",
-            accessPolicy: currentAccessPolicy()
+            accessPolicy: accessPolicy
             // Do not force matchLimitMeters — server picks pack-aware snap radius.
           })
         });
@@ -14713,6 +15093,13 @@
         try {
           api = JSON.parse(raw);
         } catch (_) {
+          appendPocRouteDebug(Object.assign({}, debugBase, {
+            httpStatus: res.status,
+            ok: false,
+            errorMessage: res.ok ? "Bad route response (non-JSON)" : ("Routing server error (" + res.status + ")"),
+            rawPreview: String(raw || "").slice(0, 400)
+          }));
+          debugLogged = true;
           throw new Error(
             res.ok
               ? "Bad route response"
@@ -14728,6 +15115,12 @@
 
         if (api.status !== "complete") {
           lastNetworkRouteReason = api.message || api.error || "No route";
+          appendPocRouteDebug(Object.assign({}, debugBase, extractRouteFailureFields(api), {
+            httpStatus: res.status,
+            ok: false,
+            errorMessage: lastNetworkRouteReason
+          }));
+          debugLogged = true;
           routeMessage = "No route<strong>" + lastNetworkRouteReason + "</strong>";
           activeRoute = null;
           setStatus(lastNetworkRouteReason, "error", "route");
@@ -14736,6 +15129,14 @@
           refreshRouteDraft();
           return;
         }
+
+        appendPocRouteDebug(Object.assign({}, debugBase, extractRouteFailureFields(api), {
+          httpStatus: res.status,
+          ok: true,
+          errorMessage: null,
+          distanceMeters: api.distanceMeters || null
+        }));
+        debugLogged = true;
 
         const networkRoute = mapApiRouteToActiveRoute(api);
         if (networkRoute.snapEnd) {
@@ -14774,6 +15175,14 @@
         activeRoute = null;
         routeDebug = null;
         lastNetworkRouteReason = err.message || "Try again";
+        if (!debugLogged) {
+          appendPocRouteDebug(Object.assign({}, debugBase, {
+            httpStatus: null,
+            ok: false,
+            errorMessage: lastNetworkRouteReason,
+            consoleError: String((err && err.stack) || lastNetworkRouteReason)
+          }));
+        }
         routeMessage = "Routing failed<strong>" + lastNetworkRouteReason + "</strong>";
         setStatus(lastNetworkRouteReason, "error", "route");
         setRouteCardOpen(true);
@@ -16185,6 +16594,25 @@
     routeExportFloat.addEventListener("click", handleRouteExportClick);
     exportCancel.addEventListener("click", closeExportNameSheet);
     exportConfirm.addEventListener("click", confirmNamedExport);
+
+    (function wirePocDebugUi() {
+      const btn = document.getElementById("pocDebugBtn");
+      const sheet = document.getElementById("pocDebugSheet");
+      const closeBtn = document.getElementById("pocDebugClose");
+      const copyBtn = document.getElementById("pocDebugCopy");
+      if (btn) btn.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        openPocDebugSheet();
+      });
+      if (closeBtn) closeBtn.addEventListener("click", () => closePocDebugSheet());
+      if (copyBtn) copyBtn.addEventListener("click", () => { copyPocDebugDump(); });
+      if (sheet) {
+        sheet.addEventListener("click", (event) => {
+          if (event.target === sheet) closePocDebugSheet();
+        });
+      }
+    })();
     exportNameInput.addEventListener("keydown", (event) => {
       if (event.key === "Enter") {
         event.preventDefault();
@@ -17367,21 +17795,66 @@
     }
 
     async function routeApi(startPt, endPt, avoidEdgeIds) {
-      const res = await fetch(ROUTE_API_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          profile: routePreference,
-          locations: [
-            { lat: startPt.lat, lon: startPt.lng, label: "A" },
-            { lat: endPt.lat, lon: endPt.lng, label: "B" }
-          ],
-          vehicle: "dual-sport-motorcycle",
-          accessPolicy: currentAccessPolicy(),
-          options: { avoidEdgeIds: avoidEdgeIds || [] }
-        })
-      });
-      return res.json();
+      const debugBase = {
+        mode: "Recovery",
+        profile: routePreference,
+        allowUnknown: !!allowUnknownAccess,
+        a: fmtCoordPair(startPt),
+        b: fmtCoordPair(endPt),
+        aLabel: "recovery-A",
+        bLabel: "recovery-B",
+        avoidEdgeIds: avoidEdgeIds || []
+      };
+      let debugLogged = false;
+      try {
+        const res = await fetch(ROUTE_API_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            profile: routePreference,
+            locations: [
+              { lat: startPt.lat, lon: startPt.lng, label: "A" },
+              { lat: endPt.lat, lon: endPt.lng, label: "B" }
+            ],
+            vehicle: "dual-sport-motorcycle",
+            accessPolicy: currentAccessPolicy(),
+            options: { avoidEdgeIds: avoidEdgeIds || [] }
+          })
+        });
+        const raw = await res.text();
+        let api;
+        try {
+          api = JSON.parse(raw);
+        } catch (_) {
+          appendPocRouteDebug(Object.assign({}, debugBase, {
+            httpStatus: res.status,
+            ok: false,
+            errorMessage: res.ok ? "Bad route response (non-JSON)" : ("Routing server error (" + res.status + ")"),
+            rawPreview: String(raw || "").slice(0, 400)
+          }));
+          debugLogged = true;
+          throw new Error(res.ok ? "Bad route response" : ("Routing server error (" + res.status + ")"));
+        }
+        appendPocRouteDebug(Object.assign({}, debugBase, extractRouteFailureFields(api), {
+          httpStatus: res.status,
+          ok: api.status === "complete",
+          errorMessage: api.status === "complete" ? null : (api.message || api.error || "No route"),
+          distanceMeters: api.distanceMeters || null
+        }));
+        debugLogged = true;
+        return api;
+      } catch (err) {
+        console.error(err);
+        if (!debugLogged) {
+          appendPocRouteDebug(Object.assign({}, debugBase, {
+            httpStatus: null,
+            ok: false,
+            errorMessage: (err && err.message) || "Routing failed",
+            consoleError: String((err && err.stack) || (err && err.message) || "Routing failed")
+          }));
+        }
+        throw err;
+      }
     }
 
     // Item 4: Find a way around — server-enforced avoidance, preserves
