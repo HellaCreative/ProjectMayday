@@ -6,7 +6,7 @@
     "NS locked fabric: OSM road fabric + NSTDB (STDB) capillary. No NRN.",
     "NB locked fabric: OSM road fabric + Forest Roads capillary. No NRN. Capillary weaker than NSTDB on surface/class; longhaul keeps provincial for NS↔NB Allow.",
     "QC/PE/ON/MB/SK/AB locked fabric: OSM-only. No NRN. SK stays OSM-only permanently.",
-    "BC Phase 1 in progress (OSM-only). Phase 2 overlays: ON MNR, AB Access, BC FTEN.",
+    "QC/PE/ON/MB/SK/AB/BC locked fabric: OSM-only Phase 1. SK permanent. Phase 2 overlays: ON MNR, AB Access, BC FTEN.",
     "OSM motorized highways are the road fabric (motorized_permissive). Shortbread tiles remain display-only; POIs are a separate pack.",
     "Cross-Canada longhaul packs: NS/NB = OSM+provincial (purple kept); QC/PE/ON/MB/SK/AB/BC = OSM-only; ON/AB/BC longhaul drop service mesh for Hobby RAM."
   ],
@@ -23,7 +23,7 @@
         "adapter": "nrn",
         "status": "ready",
         "dateRetrieved": "2026-07-20",
-        "notes": "NRN ROADSEG ingested as national backbone artifact. Not routing-ready until regional validation and provincial-supplement policy from CANADA_DATA_SOURCE_AUDIT.md are applied."
+        "notes": "NRN omitted from routing fabric (OSM-only)."
       },
       "provincial": {
         "sourceName": "BC Digital Road Atlas / Forest Service Roads",
@@ -33,16 +33,25 @@
         "license": "Open Government Licence - British Columbia",
         "adapter": "bc-ften-roads",
         "status": "ready",
-        "notes": "Richest resource-road inventory; adapter after NS validation.",
+        "notes": "Adapter ready; NOT in live BC stack (Phase 1 OSM-only). Phase 2: FTEN active existing only; exclude pending/retired; tenure alone ≠ public motorcycle access. Avoid Cumulative Effects Integrated Roads.",
         "dateRetrieved": "2026-07-21"
       },
       "routingReady": true,
-      "routingMode": "nrn+provincial",
+      "routingMode": "osm-only",
       "backboneArtifact": {
         "path": "routing/data/regions/bc/graph.v1.json.gz",
-        "edgeCount": 333325,
-        "nodeCount": 343873,
-        "gzBytes": 58962460
+        "edgeCount": 452938,
+        "nodeCount": 632373,
+        "gzBytes": 52422608
+      },
+      "osm": {
+        "adapter": "osm-roads",
+        "role": "sole-fabric",
+        "status": "ready",
+        "featureCount": 456663,
+        "added": 456663,
+        "license": "OpenStreetMap contributors (ODbL)",
+        "dateRetrieved": "2026-07-24"
       }
     },
     {

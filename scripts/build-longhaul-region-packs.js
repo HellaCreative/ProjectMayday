@@ -152,6 +152,20 @@ const HUBS = {
     { lon: -118.8, lat: 55.17 }, // Grande Prairie
     { lon: -113.82, lat: 52.27 } // Red Deer
   ],
+  bc: [
+    { lon: -123.121, lat: 49.283 }, // Vancouver
+    { lon: -123.37, lat: 48.43 }, // Victoria
+    { lon: -122.8, lat: 49.15 }, // Surrey / south Fraser
+    { lon: -122.6, lat: 49.05 }, // Abbotsford / Chilliwack approach
+    { lon: -119.496, lat: 49.888 }, // Kelowna
+    { lon: -119.14, lat: 50.23 }, // Vernon
+    { lon: -120.33, lat: 50.67 }, // Kamloops
+    { lon: -118.2, lat: 50.98 }, // Revelstoke
+    { lon: -116.4, lat: 51.2 }, // Golden / AB divide
+    { lon: -122.8, lat: 53.9 }, // Prince George
+    { lon: -127.5, lat: 50.6 }, // Campbell River / island north
+    { lon: -123.9, lat: 49.15 } // Nanaimo
+  ],
   nl: [{ lon: -52.712, lat: 47.561 }]
 };
 
