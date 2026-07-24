@@ -1259,9 +1259,15 @@
       color: var(--route);
       margin-bottom: 2px;
     }
-    /* Real MapLibre stage endpoint markers */
-    .stage-marker {
-      position: relative;
+    /* Real MapLibre stage endpoint markers.
+       Must stay position:absolute (MapLibre default on .maplibregl-marker).
+       position:relative here used to win the cascade and put markers back in
+       normal flow, so pin 2+ stacked and drifted south of their lng/lat. */
+    .stage-marker,
+    .maplibregl-marker.stage-marker {
+      position: absolute;
+      top: 0;
+      left: 0;
       width: 36px;
       height: 44px;
       border: 0;
@@ -11582,24 +11588,42 @@
       afterStageUpdate();
     }
 
-    function routeGeometryEndpoints(api) {
-      const geometry = Array.isArray(api?.geometry) ? api.geometry : [];
-      if (geometry.length < 2) return null;
-      const start = geometry[0];
-      const end = geometry[geometry.length - 1];
-      if (!Array.isArray(start) || !Array.isArray(end)) return null;
-      const values = [start[0], start[1], end[0], end[1]].map(Number);
-      if (values.some((value) => !Number.isFinite(value))) return null;
-      return {
-        start: { lng: values[0], lat: values[1] },
-        end: { lng: values[2], lat: values[3] }
-      };
+    function coordPairToPoint(coord) {
+      if (!Array.isArray(coord) || coord.length < 2) return null;
+      const lng = Number(coord[0]);
+      const lat = Number(coord[1]);
+      if (!Number.isFinite(lng) || !Number.isFinite(lat)) return null;
+      return { lng, lat };
     }
 
-    // A completed leg owns the exact graph endpoint used by the routing
-    // service. Pass that endpoint to the next leg so a trip cannot render two
-    // independently snapped roads with a gap between them. No free-space
-    // connector is ever inserted.
+    /** Prefer painted segment termini (what the map draws) over trimmed geometry. */
+    function routeGeometryEndpoints(api) {
+      const segments = Array.isArray(api?.segments) ? api.segments : [];
+      let first = null;
+      let last = null;
+      for (const segment of segments) {
+        const coords = segment?.geometry || segment?.coords || [];
+        if (!Array.isArray(coords) || !coords.length) continue;
+        if (!first) first = coords[0];
+        last = coords[coords.length - 1];
+      }
+      if (!first || !last) {
+        const geometry = Array.isArray(api?.geometry) ? api.geometry : [];
+        if (geometry.length < 2) return null;
+        first = geometry[0];
+        last = geometry[geometry.length - 1];
+      }
+      const start = coordPairToPoint(first);
+      const end = coordPairToPoint(last);
+      if (!start || !end) return null;
+      return { start, end };
+    }
+
+    // A completed leg owns the exact graph endpoints used by the routing
+    // service (and painted on the map). Align both A and B to those vertices,
+    // then pass B to the next leg so a trip cannot render two independently
+    // snapped roads with a gap between them. No free-space connector is ever
+    // inserted.
     function applyRoutedBoundary(stageId, api) {
       const idx = RS.findStageIndex(planTrip, stageId);
       if (idx < 0) return null;
@@ -11609,6 +11633,9 @@
       const next = planTrip.stages[idx + 1];
       let rerouteNextStageId = null;
 
+      if (endpoints?.start && current.start && !RS.samePoint(current.start, endpoints.start)) {
+        routedStage = RS.transitionStage(routedStage, "set-start", { point: endpoints.start });
+      }
       if (endpoints?.end && current.end && !RS.samePoint(current.end, endpoints.end)) {
         routedStage = RS.transitionStage(routedStage, "set-end", { point: endpoints.end });
       }
