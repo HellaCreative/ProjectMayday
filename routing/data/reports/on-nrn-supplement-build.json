@@ -1,155 +1,174 @@
 {
-  "generatedAt": "2026-07-21T00:49:00.894Z",
+  "generatedAt": "2026-07-24T19:30:22.122Z",
   "region": "ON",
+  "stack": [
+    "osm-only"
+  ],
   "nrn": {
-    "adapter": "nrn-from-pack",
-    "featureCount": 647004
+    "adapter": null,
+    "featureCount": 0,
+    "omitted": "osm-only"
   },
-  "provincial": {
-    "adapter": "on-mnrf-roads",
+  "osm": {
+    "adapter": "osm-roads",
     "province": "ON",
-    "sourceName": "Ontario MNRF Road Segments",
-    "sourceUrl": "https://geohub.lio.gov.on.ca/datasets/lio::mnr-road-segments/explore",
-    "downloadUrl": "https://ws.lioservices.lrc.gov.on.ca/arcgis2/rest/services/LIO_OPEN_DATA/LIO_Open09/MapServer/18",
-    "license": "Open Government Licence - Ontario",
-    "sourceDatasetVersion": "LIO_Open09/18",
-    "dateRetrieved": "2026-07-21T00:48:05.460Z",
+    "sourceName": "OpenStreetMap",
+    "sourceUrl": "https://download.geofabrik.de/north-america/canada/ontario-latest.osm.pbf",
+    "downloadUrl": "https://download.geofabrik.de/north-america/canada/ontario-latest.osm.pbf",
+    "license": "OpenStreetMap contributors (ODbL)",
+    "sourceDatasetVersion": "geofabrik:ontario",
+    "dateRetrieved": "2026-07-24T19:29:55.040Z",
     "status": "ok",
     "notes": [
-      "Supplemental MNR resource/recreation roads. Access defaults to motorized_unknown."
+      "OSM gap-fill for conventional motorized roads unmatched by NRN.",
+      "Excluded foot/bike-only, private/no, abandoned, and non-motorized paths.",
+      "track/service without clear surface default to motorized_unknown."
     ],
     "knownLimitations": [
-      "Includes some ORN-sourced conventional roads; freeways are skipped.",
-      "Does not assert motorcycle legality."
+      "OSM tagging quality varies; not a legal access assertion.",
+      "Does not replace NRN identity — conflation dedupes against NRN first."
     ],
-    "featureCount": 0,
-    "excludedCount": 9845,
+    "featureCount": 1013718,
+    "scannedCount": 1059057,
+    "excludedCount": 45339,
     "excludedByReason": {
-      "restricted_or_closed": 9111,
-      "no_usable_geometry": 734
+      "access_denied": 45290,
+      "abandoned": 40,
+      "no_usable_geometry": 9
     },
     "classification": {
       "surface": {
-        "gravel": 302971,
-        "paved": 7811,
-        "resource": 719
+        "paved": 453213,
+        "unknown": 99223,
+        "resource": 453951,
+        "gravel": 7331
       },
       "access": {
-        "motorized_unknown": 311501
+        "motorized_permissive": 1013718
       },
       "structure": {
-        "none": 311501
+        "none": 997290,
+        "bridge": 16058,
+        "tunnel": 370
       },
       "roadTrack": {
-        "resource": 303690,
-        "local": 7811
+        "freeway": 7573,
+        "local": 70858,
+        "service": 720100,
+        "collector": 80463,
+        "ramp": 12033,
+        "arterial": 30682,
+        "track": 68569,
+        "resource": 23440
       },
       "excluded": {}
     },
     "topology": null,
-    "generatedAt": "2026-07-21T00:48:05.472Z"
+    "generatedAt": "2026-07-24T19:29:55.051Z"
+  },
+  "osmConflation": null,
+  "provincial": {
+    "adapter": null,
+    "featureCount": 0,
+    "excludedByReason": {},
+    "classification": {}
   },
   "conflation": {
-    "province": "ON",
-    "generatedAt": "2026-07-21T00:48:11.299Z",
-    "precedence": {
-      "backbone": "NRN owns national road identity and conventional-road attributes",
-      "supplement": "Provincial data adds resource/track detail and unmatched local connectivity",
-      "surfaceEnrichment": "Provincial paved/gravel may enrich NRN edges whose pavement status is unknown",
-      "osm": "OSM not added as routing edges in this phase"
-    },
-    "stats": {
-      "backboneKept": 647004,
-      "supplementAdded": 286638,
-      "supplementDuplicateSkipped": 24863,
-      "supplementConventionalSkipped": 0,
-      "backboneSurfaceEnriched": 0,
-      "conflicts": 0
-    },
-    "skipReasons": {
-      "duplicate_of_backbone": 24863
-    },
-    "featureCount": 933642,
     "freeSpaceConnectors": 0,
-    "notes": [
-      "No free-space connectors were created.",
-      "Duplicates detected by midpoint proximity + bearing + endpoint proximity.",
-      "Genuine dead ends remain dead ends — no proximity stitching of endpoints."
-    ]
+    "stats": {
+      "backboneKept": 1013718,
+      "supplementAdded": 0,
+      "supplementDuplicateSkipped": 0
+    }
   },
   "graph": {
-    "generatedAt": "2026-07-21T00:48:15.404Z",
+    "generatedAt": "2026-07-24T19:29:59.900Z",
     "schemaVersion": "canada-regional-1",
     "regionId": "on",
     "province": "ON",
     "bbox": [
-      -95.1547,
-      41.73724,
-      -74.34386,
-      56.08281
+      -95.21914,
+      41.73599,
+      -74.32076,
+      56.13301
     ],
-    "nodeCount": 809468,
-    "edgeCount": 931478,
-    "componentCount": 41159,
-    "boundaryNodeCount": 1664,
+    "nodeCount": 1309968,
+    "edgeCount": 1003519,
+    "componentCount": 383807,
+    "boundaryNodeCount": 7912,
     "accessCounts": {
-      "motorized_permissive": 647004,
-      "motorized_unknown": 284474
+      "motorized_permissive": 1003519
     },
     "surfaceCounts": {
-      "gravel": 424610,
-      "paved": 506337,
-      "unknown": 3,
-      "access": 528
+      "paved": 448344,
+      "unknown": 97778,
+      "access": 450141,
+      "gravel": 7256
     },
     "sourceCounts": {
-      "National Road Network": 647004,
-      "Ontario MNRF Road Segments": 284474
+      "OpenStreetMap": 1003519
     },
-    "jsonBytes": 509594298,
-    "gzBytes": 110476070,
+    "jsonBytes": 413231420,
+    "gzBytes": 81778039,
     "lineage": {
       "nrn": {
-        "adapter": "nrn-from-pack",
-        "featureCount": 647004
-      },
-      "provincial": {
-        "adapter": "on-mnrf-roads",
+        "adapter": null,
         "featureCount": 0,
-        "excludedByReason": {
-          "restricted_or_closed": 9111,
-          "no_usable_geometry": 734
-        },
+        "omitted": "osm-only"
+      },
+      "osm": {
+        "adapter": "osm-roads",
+        "featureCount": 1013718,
+        "role": "sole-fabric",
+        "added": 1013718,
+        "duplicateSkipped": 0,
         "classification": {
           "surface": {
-            "gravel": 302971,
-            "paved": 7811,
-            "resource": 719
+            "paved": 453213,
+            "unknown": 99223,
+            "resource": 453951,
+            "gravel": 7331
           },
           "access": {
-            "motorized_unknown": 311501
+            "motorized_permissive": 1013718
           },
           "structure": {
-            "none": 311501
+            "none": 997290,
+            "bridge": 16058,
+            "tunnel": 370
           },
           "roadTrack": {
-            "resource": 303690,
-            "local": 7811
+            "freeway": 7573,
+            "local": 70858,
+            "service": 720100,
+            "collector": 80463,
+            "ramp": 12033,
+            "arterial": 30682,
+            "track": 68569,
+            "resource": 23440
           },
           "excluded": {}
+        },
+        "excludedByReason": {
+          "access_denied": 45290,
+          "abandoned": 40,
+          "no_usable_geometry": 9
         }
+      },
+      "provincial": {
+        "adapter": null,
+        "featureCount": 0,
+        "excludedByReason": {},
+        "classification": {}
+      },
+      "endpointSnap": {
+        "meters": 18,
+        "snappedEndpoints": 0,
+        "note": "Provincial capillary endpoints within snap meters reuse existing fabric nodes (survey near-miss joins). No free-space edges."
       }
     },
     "conflation": {
-      "featureCount": 933642,
-      "stats": {
-        "backboneKept": 647004,
-        "supplementAdded": 286638,
-        "supplementDuplicateSkipped": 24863,
-        "supplementConventionalSkipped": 0,
-        "backboneSurfaceEnriched": 0,
-        "conflicts": 0
-      },
+      "stats": null,
       "freeSpaceConnectors": 0
     }
   },

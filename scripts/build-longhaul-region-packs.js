@@ -5,12 +5,13 @@
  * Build thinned per-province longhaul packs for Vercel canada-chain hops.
  *
  * Province fabrics:
- *   QC / PE — OSM-only (no NRN). PE has no shippable provincial capillary.
+ *   QC / PE / ON / MB / SK / AB / BC — OSM-only (no NRN) when built that way.
+ *        PE / SK stay OSM-only permanently; ON/AB/BC gain provincial overlays later.
  *   NS — OSM + NSTDB (no NRN); provincial capillary stays in the pack so Allow
  *        unknown can use purple TRACK. NRN highway spine is dropped.
  *   NB — OSM + Forest Roads (no NRN); provincial kept like NS so NS↔NB Allow
  *        works. Capillary is weaker than NSTDB on surface/class (see map doc).
- *   Others — OSM + NRN fabric; provincial capillary omitted (size)
+ *   Others (legacy) — OSM + NRN fabric; provincial capillary omitted (size)
  *
  * Hub bulbs keep village/city basemap snaps without shipping every full pack.
  */
@@ -94,6 +95,28 @@ const HUBS = {
     { lon: -62.98, lat: 46.42 }, // Souris approach / east
     { lon: -64.0, lat: 46.8 } // Tignish / north tip approach
   ],
+  on: [
+    { lon: -75.697, lat: 45.421 }, // Ottawa
+    { lon: -79.383, lat: 43.653 }, // Toronto
+    { lon: -79.25, lat: 43.16 }, // Niagara / St. Catharines
+    { lon: -80.25, lat: 43.55 }, // Kitchener / Waterloo
+    { lon: -81.25, lat: 42.98 }, // London
+    { lon: -82.98, lat: 42.31 }, // Windsor approach
+    { lon: -78.32, lat: 44.3 }, // Peterborough
+    { lon: -77.14, lat: 44.23 }, // Belleville / 401
+    { lon: -76.5, lat: 44.23 }, // Kingston
+    { lon: -74.73, lat: 45.02 }, // Cornwall / QC approach
+    { lon: -74.58, lat: 45.61 }, // Hawkesbury / QC border
+    { lon: -76.5, lat: 45.48 }, // Renfrew / Ottawa Valley
+    { lon: -79.69, lat: 44.39 }, // Barrie / cottage approach
+    { lon: -79.46, lat: 46.31 }, // North Bay
+    { lon: -81.0, lat: 46.49 }, // Sudbury
+    { lon: -84.35, lat: 46.52 }, // Sault Ste. Marie
+    { lon: -89.247, lat: 48.38 }, // Thunder Bay
+    { lon: -94.49, lat: 49.78 }, // Kenora / MB approach
+    { lon: -80.4, lat: 45.35 }, // Parry Sound / 400 corridor
+    { lon: -77.9, lat: 45.03 } // Bancroft / Madawaska
+  ],
   nl: [{ lon: -52.712, lat: 47.561 }]
 };
 
@@ -111,9 +134,10 @@ function main() {
     const hasOsm = (g.edges || []).some((e) => /openstreetmap/i.test(String(e.src || "")));
 
     const corridorFabric = new Set([]); // dense NRN-everywhere — too large for Hobby
-    const hubFabric = new Set(["on"]); // spine + hub bulbs (QC is OSM-only below)
+    const hubFabric = new Set([]); // legacy NRN hub bulbs — west graduated to osmProvince
     const maritimeFabric = new Set(["nl"]); // PE is osm-only below; NS/NB osm-provincial
-    const osmProvince = new Set(["qc", "pe"]); // full OSM fabric; no NRN; one pack per province
+    // Full OSM fabric; no NRN; one pack per province (Phase 1 west + east OSM-only).
+    const osmProvince = new Set(["qc", "pe", "on", "mb", "sk", "ab", "bc"]);
     const osmProvincialProvince = new Set(["ns", "nb"]); // OSM + provincial; no NRN
 
     let extractMode = "spine";
@@ -126,10 +150,14 @@ function main() {
       });
     } else if (osmProvince.has(code)) {
       extractMode = "fabric-osm-only";
+      // ON (and later large west packs): drop remote service mesh so QC|ON
+      // canada-chain hops fit Hobby 2048 MB. PE/QC stay full fabric.
+      const largeOsm = code === "on" || code === "ab" || code === "bc";
       g = extractRoadFabricLonghaulGraph(g, {
         mode: "osm",
         hubLocations: HUBS[code] || [],
-        hubBufferMeters: 40000
+        hubBufferMeters: 40000,
+        dropService: largeOsm
       });
     } else if (hubFabric.has(code)) {
       extractMode = "fabric-hub";

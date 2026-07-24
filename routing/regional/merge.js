@@ -270,7 +270,18 @@ const ADVENTURE_URBAN_AVOID = [
   { minLat: 45.42, maxLat: 45.5, minLon: -75.78, maxLon: -75.68, nudgeLat: 0.18 },
   // PE cores — surgical so adventure can skirt, not tour downtown one-ways.
   { minLat: 46.228, maxLat: 46.248, minLon: -63.145, maxLon: -63.11, nudgeLat: 0.12 }, // Charlottetown downtown
-  { minLat: 46.385, maxLat: 46.405, minLon: -63.81, maxLon: -63.77, nudgeLat: 0.1 } // Summerside core
+  { minLat: 46.385, maxLat: 46.405, minLon: -63.81, maxLon: -63.77, nudgeLat: 0.1 }, // Summerside core
+  // Ontario cores — downtown-tight (not metro-wide) so adventure skirts 401 cores.
+  { minLat: 43.62, maxLat: 43.68, minLon: -79.42, maxLon: -79.35, nudgeLat: 0.22 }, // Toronto downtown / PATH
+  { minLat: 45.41, maxLat: 45.44, minLon: -75.72, maxLon: -75.68, nudgeLat: 0.16 }, // Ottawa Centretown
+  // Prairie / west cores (Phase 1 OSM-only)
+  { minLat: 49.88, maxLat: 49.91, minLon: -97.16, maxLon: -97.12, nudgeLat: 0.14 }, // Winnipeg downtown
+  { minLat: 50.44, maxLat: 50.46, minLon: -104.63, maxLon: -104.6, nudgeLat: 0.12 }, // Regina downtown
+  { minLat: 52.12, maxLat: 52.14, minLon: -106.68, maxLon: -106.65, nudgeLat: 0.12 }, // Saskatoon downtown
+  { minLat: 51.03, maxLat: 51.06, minLon: -114.09, maxLon: -114.05, nudgeLat: 0.16 }, // Calgary downtown
+  { minLat: 53.53, maxLat: 53.55, minLon: -113.51, maxLon: -113.48, nudgeLat: 0.16 }, // Edmonton downtown
+  { minLat: 49.27, maxLat: 49.3, minLon: -123.14, maxLon: -123.1, nudgeLat: 0.14 }, // Vancouver downtown
+  { minLat: 48.42, maxLat: 48.44, minLon: -123.38, maxLon: -123.35, nudgeLat: 0.12 } // Victoria downtown
 ];
 
 function pointInAdventureUrbanCore(lon, lat) {
@@ -331,7 +342,13 @@ const ADVENTURE_CONNECTIVITY_CLIP = [
   { lon: -68.2, lat: 47.35 }, // NB–QC approach (north of Edmundston downtown core box)
   { lon: -70.9, lat: 46.75 }, // St. Lawrence south shore approach
   { lon: -72.5, lat: 46.2 }, // Mauricie / TR south
-  { lon: -73.9, lat: 45.65 } // north of Montreal island
+  { lon: -73.9, lat: 45.65 }, // north of Montreal island
+  { lon: -74.58, lat: 45.61 }, // Hawkesbury — QC↔ON seam keeper
+  { lon: -74.73, lat: 45.02 }, // Cornwall / 401 — QC↔ON southern approach
+  { lon: -94.49, lat: 49.78 }, // Kenora — ON↔MB approach
+  { lon: -101.4, lat: 49.7 }, // MB↔SK southern corridor
+  { lon: -110.0, lat: 49.7 }, // SK↔AB southern corridor
+  { lon: -116.4, lat: 51.2 } // AB↔BC divide approach (Golden / Lake Louise band)
 ];
 
 /**
@@ -339,11 +356,17 @@ const ADVENTURE_CONNECTIVITY_CLIP = [
  * only land/bridge fabric keepers so each hop loads ≤2 packs. Dégelis sits
  * inside QC so the final Laurentians leg is QC-only (Hobby OOM avoidance:
  * a single A→B hop inflated NS+NB+QC ~463MB JSON → FUNCTION_INVOCATION_FAILED).
+ * West seams keep QC|ON, ON|MB, MB|SK, SK|AB, AB|BC as ≤2-pack hops.
  */
 const ADVENTURE_CHAIN_JOINTS = [
   { lon: -64.35, lat: 45.92, between: ["ns", "nb"] }, // Tantramar / isthmus
   { lon: -63.75, lat: 46.21, between: ["nb", "pe"] }, // Confederation Bridge
-  { lon: -68.65, lat: 47.55, between: ["nb", "qc"] } // Dégelis — QC entry
+  { lon: -68.65, lat: 47.55, between: ["nb", "qc"] }, // Dégelis — QC entry
+  { lon: -74.58, lat: 45.61, between: ["qc", "on"] }, // Hawkesbury — ON entry (not Ottawa/Toronto)
+  { lon: -94.49, lat: 49.78, between: ["on", "mb"] }, // Kenora — MB entry (not Winnipeg)
+  { lon: -101.4, lat: 49.7, between: ["mb", "sk"] }, // MB↔SK prairie seam
+  { lon: -110.0, lat: 49.7, between: ["sk", "ab"] }, // SK↔AB prairie seam
+  { lon: -116.4, lat: 51.2, between: ["ab", "bc"] } // AB↔BC divide seam
 ];
 
 function dedupeCorridorPoints(pts, start, end, westToEast) {

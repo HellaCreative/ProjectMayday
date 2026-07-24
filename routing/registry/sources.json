@@ -1,6 +1,6 @@
 {
   "schemaVersion": "canada-source-registry-1",
-  "updatedAt": "2026-07-22",
+  "updatedAt": "2026-07-24",
   "notes": [
     "Province fabric is product-locked per region — do not assume NRN everywhere.",
     "NS locked fabric: OSM road fabric + NSTDB (STDB) capillary. No NRN.",
@@ -156,7 +156,7 @@
         "adapter": "nrn",
         "status": "ready",
         "dateRetrieved": "2026-07-20",
-        "notes": "NRN ROADSEG ingested as national backbone artifact. Not routing-ready until regional validation and provincial-supplement policy from CANADA_DATA_SOURCE_AUDIT.md are applied."
+        "notes": "NRN omitted from routing fabric (OSM-only). NRN ROADSEG ingested as national backbone artifact. Not routing-ready until regional validation and provincial-supplement policy from CANADA_DATA_SOURCE_AUDIT.md are applied."
       },
       "provincial": {
         "sourceName": "Ontario Road Network / MNR road segments / Ontario Trail Network",
@@ -166,15 +166,24 @@
         "adapter": "on-mnrf-roads",
         "status": "ready",
         "dateRetrieved": "2026-07-21",
-        "notes": " Supplemental adapter ingested."
+        "notes": "Adapter ready; NOT in live ON stack (Phase 1 OSM-only). Phase 2: MNR resource-only capillary + barriers warnings; ORN enrichment/QA only — never alternate graph."
       },
       "routingReady": true,
-      "routingMode": "nrn+provincial",
+      "routingMode": "osm-only",
       "backboneArtifact": {
         "path": "routing/data/regions/on/graph.v1.json.gz",
-        "edgeCount": 931478,
-        "nodeCount": 809468,
-        "gzBytes": 110476070
+        "edgeCount": 1003519,
+        "nodeCount": 1309968,
+        "gzBytes": 81778039
+      },
+      "osm": {
+        "adapter": "osm-roads",
+        "role": "sole-fabric",
+        "status": "ready",
+        "featureCount": 1013718,
+        "added": 1013718,
+        "license": "OpenStreetMap contributors (ODbL)",
+        "dateRetrieved": "2026-07-24"
       }
     },
     {

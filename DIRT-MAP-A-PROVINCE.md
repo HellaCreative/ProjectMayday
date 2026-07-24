@@ -1,7 +1,7 @@
 # How you map a province (DIRT fabric model)
 
 Living product doc. Companion: [DIRT-ROUTING-SYSTEM.md](./DIRT-ROUTING-SYSTEM.md).  
-Updated: 2026-07-23.
+Updated: 2026-07-24.
 
 ## Purpose
 
@@ -25,7 +25,7 @@ NS is the reference build. Every next province copies the *model*, not the NS fi
 
 1. **NS adventure fabric = OSM + NSTDB/STDB. No NRN.** Locked in registry, build scripts, longhaul meta, and `GET /api/route` note.
 2. **NB adventure fabric = OSM + Forest Roads. No NRN.** Same `--osm-plus-provincial` / keep-provincial longhaul pattern as NS (capillary quality: see assessment).
-3. **QC / PE = OSM-only today.** No NRN in the routing pack. QC provincial chemins adapter exists but is **not** in the live QC stack (`--osm-only`). PE has no shippable capillary (see assessment).
+3. **QC / PE / ON = OSM-only today.** No NRN in the routing pack. ON MNR adapter exists but is **not** in the live ON stack (`--osm-only`). PE has no shippable capillary (see assessment). West Phase 1 continues MB→SK→AB→BC as OSM-only.
 4. **Elsewhere:** many packs still ship **NRN (+ OSM gap-fill) ± provincial**. That is **current shipping state**, not the end state. Intent is to graduate provinces toward OSM fabric + provincial capillary (NS pattern), keeping NRN only where inter-province identity or size still forces it.
 
 ### Honest current state vs intent
@@ -36,8 +36,10 @@ NS is the reference build. Every next province copies the *model*, not the NS fi
 | **NB** | OSM + NB Forest Roads; longhaul keeps provincial; `dropNrn: true` | Done — same pattern as NS (capillary weaker than NSTDB on class/surface — see assessment) |
 | **QC** | OSM-only longhaul + regional (unsplit `qc`) | Capillary later if chemins earn a place; still no NRN; no quadrant split |
 | **PE** | OSM-only longhaul + regional; NB↔PE via Confederation Bridge | Done for MVP — no provincial capillary to hunt unless a better layer appears |
-| **ON / AB / BC** | Registry: NRN+provincial (adapters ready) | Validate OSM-as-fabric path; don’t assume NRN forever |
-| **SK / MB / NL / YT / NT / NU** | Mostly NRN backbone artifacts | Need OSM extract + capillary candidate before “gold” |
+| **ON** | OSM-only longhaul + regional (service dropped on longhaul for Hobby) | Phase 2 MNR resource overlay; still no NRN |
+| **MB / SK** | Phase 1 OSM-only (in progress) | SK stays OSM-only; MB WMA specialty later |
+| **AB / BC** | Phase 1 OSM-only (in progress) | Phase 2 Access Roads / FTEN overlays |
+| **NL / YT / NT / NU** | Mostly NRN backbone artifacts | Need OSM extract + capillary candidate before “gold” (YT/NT excluded from west build) |
 
 **Doc/code drift to watch:** older comments and `routing/conflation/conflate.js` still say “NRN owns national identity.” Prefer this doc + `routing/registry/sources.json` notes + `scripts/build-ns-regional-graph.js` / `--osm-plus-provincial` when they conflict. README still documents NRN ingest as the default path for many provinces — true for *shipping*, not for *gold intent*.
 
@@ -89,6 +91,11 @@ Capillary candidate exists?
 | **NB** | Forest Roads (DNR-ED FeatureServer) | **Ship OSM+provincial (best-effort)** | Connectivity + unknown access + gap-fill OK; **surface/class weak** (all `resource` / sparse attrs). Keep provincial on longhaul so NS↔NB Allow works. Not NSTDB-quality on paint/cost signal — don’t pretend it is |
 | **QC** | chemins multiusages (adapter ready) | **OSM-only MVP (shipping)** | Unsplit single `qc` pack; NRN dropped; chemins not in live stack. Southern corridor + NB border + Gatineau/Laurentians usable. Far-north / lake-shore pins beyond ~750 m of OSM still fail snap. Capillary remains a later experiment. |
 | **PE** | none shippable | **OSM-only** | OSM coverage is the fabric (~22k edges). Confederation Trail is motor-free summer — not a resource-road supplement. `road_centerline` sparse / NRN-overlap. NB↔PE via Confederation Bridge (legal road; both OSM extracts include trunk halves; merge matches mid-bridge nodes). |
+| **ON** | MNR Road Segments (Phase 2) | **OSM-only MVP (shipping)** | Phase 1: Geofabrik OSM sole fabric; NRN dropped. Longhaul drops remote `service` mesh for Hobby QC\|ON RAM (~293k edges / ~103 MB inflated). Soft rematch + QC↔ON Hawkesbury seam. Phase 2: MNR resource-only overlay (exclude ORN duplicates); barriers as warnings. |
+| **MB** | WMA trails (specialty) | **Phase 1 pending** | OSM-only first; WMA vehicle-compatible trails later as specialty overlay. |
+| **SK** | none (NRN-derived SK Road Network — do not import) | **Phase 1 pending → OSM-only permanent** | Stay OSM-only; SK road network feeds NRN — never alternate graph. |
+| **AB** | Access/Facility Roads (Phase 2) | **Phase 1 pending** | OSM-only first; never auto-route cutlines without legal corroboration. |
+| **BC** | Forest Tenure Road Segments (Phase 2) | **Phase 1 pending** | OSM-only first; active existing tenure only; tenure ≠ public motorcycle access. |
 
 ---
 
@@ -165,6 +172,7 @@ Fix a small set of origin→destination pairs that prove fabric, not UI.
 | --- | --- | --- |
 | **NS** | **Myra corridor** (and existing fixtures: Porters–Musquodoboit, Halifax–Yarmouth) | Clean ≈ pavement; Allow off ignores purple; Allow on opens capillary for Direct/Dirt/Balanced; Dirt dirt% ≫ Clean |
 | **QC** | Beauce↔west Montréal / Laurentians; Gatineau↔Tremblant; Roberval↔Chicoutimi; **NB→Québec City**; NS→QC (via NB chain) | Completes on OSM-only `qc` pack (no NRN, no quadrant chain); in-QC stays provinceFamily qc; Gatineau is QC; adventure skips Montréal/Québec cores; Allow has little effect without capillary |
+| **ON** | Ottawa↔Kingston; Toronto ring↔Barrie; Sudbury↔SSM; **QC→ON** Gatineau↔Ottawa west + Sherbrooke↔Kingston | Completes on OSM-only `on` longhaul (service dropped for size); QC↔ON via Hawkesbury seam; adventure skips Toronto/Ottawa downtown boxes |
 | **NB** | In-province forest OD + **NS↔NB** (e.g. Amherst area → Moncton / Saint John) | Allow on uses unknown capillary; Balanced Allow off/on completes; adventure stays [A,B] (no Halifax city chain) |
 | **PE** | Summerside→Charlottetown + **NB↔PE** Moncton→Charlottetown (Confederation Bridge) | Clean ≈ pavement via bridge; Direct/Dirt/Balanced complete; no illegal gap-span; adventure skips Charlottetown/Summerside cores |
 | **Next province** | One highway OD + one dirt-corridor OD that needs capillary | Run [Province data assessment](#province-data-assessment); OSM alone fails or is silly; OSM+provincial succeeds with Allow |

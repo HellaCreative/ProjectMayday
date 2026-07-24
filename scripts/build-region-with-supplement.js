@@ -47,6 +47,8 @@ const OSM_SLUG = {
   ns: "nova-scotia",
   pe: "prince-edward-island",
   on: "ontario",
+  mb: "manitoba",
+  sk: "saskatchewan",
   ab: "alberta",
   bc: "british-columbia"
 };

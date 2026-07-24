@@ -259,7 +259,9 @@ function preferGiantComponentSnap(runtime) {
   )
     .toLowerCase()
     .replace(/:corridor$/i, "");
-  if (regionId === "ns" || regionId === "nb" || regionId === "pe") return false;
+  if (regionId === "ns" || regionId === "nb" || regionId === "pe" || regionId === "on") {
+    return false;
+  }
   if (isLonghaulGraphPath(runtime.path)) return true;
   const schema = String(
     (runtime.data && runtime.data.schemaVersion) ||

@@ -304,6 +304,12 @@ function extractRoadFabricLonghaulGraph(graph, options = {}) {
 
     if (osmOnly) {
       if (!osm) continue;
+      const rt = String(e.rt || "");
+      // Large OSM provinces (ON/AB/BC): service densifies metros and blows
+      // Hobby RAM on cross-border hops (QC|ON). Drop service from longhaul —
+      // local/collector/track remain for snaps; soft rematch covers driveways.
+      if (options.dropService && rt === "service") continue;
+      if (options.serviceNearHubsOnly && rt === "service" && !nearHub(e)) continue;
       // Full OSM motorized fabric for the province (already highway-filtered
       // at ingest). Normalize unknown access → permissive for dual-sport routing.
       keepEdges.push(e.ac === 2 ? { ...e, ac: 1 } : e);
