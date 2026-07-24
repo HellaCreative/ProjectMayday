@@ -25,7 +25,7 @@ NS is the reference build. Every next province copies the *model*, not the NS fi
 
 1. **NS adventure fabric = OSM + NSTDB/STDB. No NRN.** Locked in registry, build scripts, longhaul meta, and `GET /api/route` note.
 2. **NB adventure fabric = OSM + Forest Roads. No NRN.** Same `--osm-plus-provincial` / keep-provincial longhaul pattern as NS (capillary quality: see assessment).
-3. **QC / PE / ON = OSM-only today.** No NRN in the routing pack. ON MNR adapter exists but is **not** in the live ON stack (`--osm-only`). PE has no shippable capillary (see assessment). West Phase 1 continues MB→SK→AB→BC as OSM-only.
+3. **QC / PE / MB / SK = OSM-only today.** ON/AB/BC ship OSM+provincial overlays (Phase 2). SK permanent OSM-only. No NRN in west adventure packs.
 4. **Elsewhere:** many packs still ship **NRN (+ OSM gap-fill) ± provincial**. That is **current shipping state**, not the end state. Intent is to graduate provinces toward OSM fabric + provincial capillary (NS pattern), keeping NRN only where inter-province identity or size still forces it.
 
 ### Honest current state vs intent
@@ -36,11 +36,11 @@ NS is the reference build. Every next province copies the *model*, not the NS fi
 | **NB** | OSM + NB Forest Roads; longhaul keeps provincial; `dropNrn: true` | Done — same pattern as NS (capillary weaker than NSTDB on class/surface — see assessment) |
 | **QC** | OSM-only longhaul + regional (unsplit `qc`) | Capillary later if chemins earn a place; still no NRN; no quadrant split |
 | **PE** | OSM-only longhaul + regional; NB↔PE via Confederation Bridge | Done for MVP — no provincial capillary to hunt unless a better layer appears |
-| **ON** | OSM-only longhaul + regional (service dropped on longhaul for Hobby) | Phase 2 MNR resource overlay; still no NRN |
-| **MB** | OSM-only longhaul + regional | WMA specialty overlay later |
+| **ON** | OSM+MNR resource longhaul + regional (MNR capped; service dropped on OSM) | Barriers/OTN display later; uncapped MNR hits Node string limit |
+| **MB** | OSM-only longhaul + regional | WMA specialty overlay deferred |
 | **SK** | OSM-only longhaul + regional | Stays OSM-only permanently — no SK Road Network / NRN-derived |
-| **AB** | OSM-only longhaul + regional (service dropped on longhaul) | Phase 2 Access/Facility Roads; no cutline auto-route |
-| **BC** | OSM-only longhaul + regional (service dropped on longhaul) | Phase 2 FTEN overlay (active existing) |
+| **AB** | OSM+Access Roads longhaul + regional (cutlines excluded) | Designated trails need motorized corroboration |
+| **BC** | OSM+FTEN longhaul + regional (active existing; ingest capped) | Recreation/S.58 inventory only; avoid CE Integrated Roads |
 | **NL / YT / NT / NU** | Mostly NRN backbone artifacts | Need OSM extract + capillary candidate before “gold” (YT/NT excluded from west build) |
 
 **Doc/code drift to watch:** older comments and `routing/conflation/conflate.js` still say “NRN owns national identity.” Prefer this doc + `routing/registry/sources.json` notes + `scripts/build-ns-regional-graph.js` / `--osm-plus-provincial` when they conflict. README still documents NRN ingest as the default path for many provinces — true for *shipping*, not for *gold intent*.
@@ -93,11 +93,11 @@ Capillary candidate exists?
 | **NB** | Forest Roads (DNR-ED FeatureServer) | **Ship OSM+provincial (best-effort)** | Connectivity + unknown access + gap-fill OK; **surface/class weak** (all `resource` / sparse attrs). Keep provincial on longhaul so NS↔NB Allow works. Not NSTDB-quality on paint/cost signal — don’t pretend it is |
 | **QC** | chemins multiusages (adapter ready) | **OSM-only MVP (shipping)** | Unsplit single `qc` pack; NRN dropped; chemins not in live stack. Southern corridor + NB border + Gatineau/Laurentians usable. Far-north / lake-shore pins beyond ~750 m of OSM still fail snap. Capillary remains a later experiment. |
 | **PE** | none shippable | **OSM-only** | OSM coverage is the fabric (~22k edges). Confederation Trail is motor-free summer — not a resource-road supplement. `road_centerline` sparse / NRN-overlap. NB↔PE via Confederation Bridge (legal road; both OSM extracts include trunk halves; merge matches mid-bridge nodes). |
-| **ON** | MNR Road Segments (Phase 2) | **OSM-only MVP (shipping)** | Phase 1: Geofabrik OSM sole fabric; NRN dropped. Longhaul drops remote `service` mesh for Hobby QC\|ON RAM (~293k edges / ~103 MB inflated). Soft rematch + QC↔ON Hawkesbury seam. Phase 2: MNR resource-only overlay (exclude ORN duplicates); barriers as warnings. |
-| **MB** | WMA Official Trails (specialty) | **OSM-only MVP (shipping)** | Phase 1 OSM-only (~142k edges). ON↔MB Kenora seam; fixed bbox so MB no longer steals Kenora. WMA vehicle-compatible specialty overlay later — not full NSTDB. |
+| **ON** | MNR Road Segments (Phase 2) | **OSM+MNR resource (shipping)** | Phase 2: MNR resource-only capillary (~112k added, 120k ingest cap for Node/Hobby). ORN conventional skipped. Longhaul keeps purple. Full uncapped MNR+OSM exceeds Node JSON string limit — documented. |
+| **MB** | WMA Official Trails (specialty) | **OSM-only MVP (shipping)** | Phase 1 OSM-only (~142k edges). ON↔MB Kenora seam; fixed bbox so MB no longer steals Kenora. WMA specialty deferred (no adapter this pass). |
 | **SK** | none (NRN-derived SK Road Network — do not import) | **OSM-only (shipping, permanent)** | Rick’s research: SK road network feeds NRN — never import as alternate graph. Phase 1+2 stay OSM-only. |
-| **AB** | Access/Facility Roads (Phase 2) | **OSM-only MVP (shipping)** | Phase 1 OSM-only; longhaul drops service for size. SK↔AB seams at TCH + Kindersley band. Phase 2: Access/Facility gravel match; never auto-route cutlines. |
-| **BC** | Forest Tenure Road Segments (Phase 2) | **OSM-only MVP (shipping)** | Phase 1 OSM-only (~453k regional / ~200k longhaul after service drop). AB↔BC Golden seam. Phase 2: active existing FTEN only; tenure ≠ public motorcycle access. |
+| **AB** | Access/Facility Roads (Phase 2) | **OSM+Access Roads (shipping)** | Phase 2: gravel+other layers (~210k unknown). Cutlines excluded. Allow-on Dirt uses purple. |
+| **BC** | Forest Tenure Road Segments (Phase 2) | **OSM+FTEN (shipping / capped)** | Phase 2: active existing FTEN only; pending/retired filtered. Ingest capped for WFS stability. Tenure ≠ public motorcycle access. |
 
 ---
 

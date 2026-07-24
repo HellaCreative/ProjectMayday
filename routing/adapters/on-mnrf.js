@@ -101,19 +101,28 @@ function classifyAttrs(attrs) {
   }
 
   const nrc = String(attrs.NATIONAL_ROAD_CLASS || "").toLowerCase();
+  // Phase 2 lock: MNR/resource capillary only. Skip ORN-derived conventional
+  // classes — those duplicate OSM fabric and must never become the alternate graph.
+  if (/freeway|expressway|arterial|collector/.test(nrc) && !/resource|recreation/.test(nrc)) {
+    return { ok: false, reason: "orn_or_conventional_skip" };
+  }
+  if (/^local$|local.?road/.test(nrc) && !/resource|recreation/.test(nrc)) {
+    return { ok: false, reason: "orn_or_conventional_skip" };
+  }
+
   let surfaceClass = SURFACE_CLASS.resource;
   let roadTrackClass = ROAD_TRACK_CLASS.resource;
-  if (/freeway|expressway/.test(nrc)) {
-    return { ok: false, reason: "conventional_highway_skip" };
-  }
-  if (/arterial|collector|local/.test(nrc) && !/resource|recreation/.test(nrc)) {
-    surfaceClass = SURFACE_CLASS.paved;
-    roadTrackClass = ROAD_TRACK_CLASS.local;
-  } else if (/resource|recreation/.test(nrc)) {
+  if (/resource|recreation/.test(nrc)) {
     surfaceClass = SURFACE_CLASS.gravel;
     roadTrackClass = ROAD_TRACK_CLASS.resource;
   } else if (/gravel|unpaved/.test(nrc)) {
     surfaceClass = SURFACE_CLASS.gravel;
+  } else if (!nrc || /unknown|other|access/.test(nrc)) {
+    // Sparse MNR attrs — keep as unknown capillary, not paved local.
+    surfaceClass = SURFACE_CLASS.gravel;
+    roadTrackClass = ROAD_TRACK_CLASS.resource;
+  } else {
+    return { ok: false, reason: "orn_or_conventional_skip" };
   }
   return {
     ok: true,

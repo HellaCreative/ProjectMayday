@@ -1,88 +1,101 @@
 {
-  "generatedAt": "2026-07-24T19:47:21.891Z",
+  "generatedAt": "2026-07-24T21:19:12.064Z",
   "region": "BC",
   "stack": [
-    "osm-only"
+    "osm-fabric",
+    "provincial"
   ],
   "nrn": {
     "adapter": null,
     "featureCount": 0,
-    "omitted": "osm-only"
+    "omitted": "osm-fabric"
   },
   "osm": {
-    "adapter": "osm-roads",
+    "adapter": "osm-roads-from-pack",
+    "featureCount": 452938,
+    "excludedByReason": {},
+    "classification": {},
+    "notes": [
+      "Reused 452938 OSM edges from regions/bc/graph.v1.json.gz"
+    ]
+  },
+  "osmConflation": null,
+  "provincial": {
+    "adapter": "bc-ften-roads",
     "province": "BC",
-    "sourceName": "OpenStreetMap",
-    "sourceUrl": "https://download.geofabrik.de/north-america/canada/british-columbia-latest.osm.pbf",
-    "downloadUrl": "https://download.geofabrik.de/north-america/canada/british-columbia-latest.osm.pbf",
-    "license": "OpenStreetMap contributors (ODbL)",
-    "sourceDatasetVersion": "geofabrik:british-columbia",
-    "dateRetrieved": "2026-07-24T19:47:07.363Z",
+    "sourceName": "BC Forest Tenure Road Section Lines",
+    "sourceUrl": "https://catalogue.data.gov.bc.ca/dataset/forest-tenure-road-section-lines",
+    "downloadUrl": "https://openmaps.gov.bc.ca/geo/pub/ows",
+    "license": "Open Government Licence - British Columbia",
+    "sourceDatasetVersion": "FTEN_ROAD_SECTION_LINES_SVW",
+    "dateRetrieved": "2026-07-24T21:18:50.145Z",
     "status": "ok",
     "notes": [
-      "OSM gap-fill for conventional motorized roads unmatched by NRN.",
-      "Excluded foot/bike-only, private/no, abandoned, and non-motorized paths.",
-      "track/service without clear surface default to motorized_unknown."
+      "Supplemental forestry/resource roads. Access is motorized_unknown — never invented as permissive.",
+      "Filter: active/existing only; pending/retired excluded by default."
     ],
     "knownLimitations": [
-      "OSM tagging quality varies; not a legal access assertion.",
-      "Does not replace NRN identity — conflation dedupes against NRN first."
+      "Tenure roads are not a guarantee of public motorcycle access.",
+      "Recreation Lines / Section 58 are inventory + negative access — not auto-routed here.",
+      "Avoid Cumulative Effects Integrated Roads (NRN-like failure mode)."
     ],
-    "featureCount": 456663,
-    "scannedCount": 484995,
-    "excludedCount": 28332,
+    "featureCount": 50000,
+    "scannedCount": 73919,
+    "excludedCount": 24188,
     "excludedByReason": {
-      "access_denied": 28290,
-      "abandoned": 35,
-      "no_usable_geometry": 7
+      "deactivated_or_closed": 23462,
+      "pending_or_proposed": 726
     },
     "classification": {
       "surface": {
-        "paved": 149101,
-        "unknown": 60452,
-        "resource": 226277,
-        "gravel": 20833
+        "resource": 50000
       },
       "access": {
-        "motorized_permissive": 456663
+        "motorized_unknown": 50000
       },
       "structure": {
-        "none": 446830,
-        "bridge": 9520,
-        "tunnel": 313
+        "none": 50000
       },
       "roadTrack": {
-        "local": 42417,
-        "service": 256784,
-        "arterial": 15071,
-        "collector": 20836,
-        "freeway": 2224,
-        "ramp": 8044,
-        "track": 99233,
-        "resource": 12054
+        "resource": 50000
       },
       "excluded": {}
     },
     "topology": null,
-    "generatedAt": "2026-07-24T19:47:07.364Z"
-  },
-  "osmConflation": null,
-  "provincial": {
-    "adapter": null,
-    "featureCount": 0,
-    "excludedByReason": {},
-    "classification": {}
+    "generatedAt": "2026-07-24T21:18:50.146Z"
   },
   "conflation": {
-    "freeSpaceConnectors": 0,
+    "province": "BC",
+    "generatedAt": "2026-07-24T21:18:52.252Z",
+    "precedence": {
+      "backbone": "NRN owns national road identity and conventional-road attributes",
+      "osmFabric": "OpenStreetMap is the driveable road fabric (unmatched motorized ways after NRN); always permissive; never replaces NRN identity",
+      "supplement": "Provincial capillary fills between OSM roads (forest/resource); default motorized_unknown",
+      "surfaceEnrichment": "Provincial or OSM paved/gravel may enrich NRN edges whose pavement status is unknown",
+      "freeSpace": "No free-space connectors"
+    },
     "stats": {
-      "backboneKept": 456663,
-      "supplementAdded": 0,
-      "supplementDuplicateSkipped": 0
-    }
+      "backboneKept": 452938,
+      "supplementAdded": 45221,
+      "supplementDuplicateSkipped": 4779,
+      "supplementConventionalSkipped": 0,
+      "backboneSurfaceEnriched": 33,
+      "conflicts": 0
+    },
+    "skipReasons": {
+      "duplicate_of_backbone": 4779,
+      "backbone_surface_enriched": 33
+    },
+    "featureCount": 498159,
+    "freeSpaceConnectors": 0,
+    "notes": [
+      "No free-space connectors were created.",
+      "Duplicates detected by midpoint proximity + bearing + endpoint proximity.",
+      "Genuine dead ends remain dead ends — no proximity stitching of endpoints."
+    ]
   },
   "graph": {
-    "generatedAt": "2026-07-24T19:47:09.134Z",
+    "generatedAt": "2026-07-24T21:18:55.037Z",
     "schemaVersion": "canada-regional-1",
     "regionId": "bc",
     "province": "BC",
@@ -92,78 +105,67 @@
       -114.13973,
       60.11148
     ],
-    "nodeCount": 632373,
-    "edgeCount": 452938,
-    "componentCount": 201211,
-    "boundaryNodeCount": 20229,
+    "nodeCount": 708632,
+    "edgeCount": 497973,
+    "componentCount": 234855,
+    "boundaryNodeCount": 20315,
     "accessCounts": {
-      "motorized_permissive": 452938
+      "motorized_permissive": 452938,
+      "motorized_unknown": 45035
     },
     "surfaceCounts": {
       "paved": 147445,
-      "unknown": 59745,
-      "access": 224988,
+      "unknown": 59712,
+      "access": 270056,
       "gravel": 20760
     },
     "sourceCounts": {
-      "OpenStreetMap": 452938
+      "OpenStreetMap": 452938,
+      "BC Forest Tenure Road Section Lines": 45035
     },
-    "jsonBytes": 250678617,
-    "gzBytes": 52422608,
+    "jsonBytes": 372583360,
+    "gzBytes": 79354296,
     "lineage": {
       "nrn": {
         "adapter": null,
         "featureCount": 0,
-        "omitted": "osm-only"
+        "omitted": "osm-plus-provincial"
       },
       "osm": {
-        "adapter": "osm-roads",
-        "featureCount": 456663,
+        "adapter": "osm-roads-from-pack",
+        "featureCount": 452938,
         "role": "sole-fabric",
-        "added": 456663,
+        "added": 452938,
         "duplicateSkipped": 0,
-        "classification": {
-          "surface": {
-            "paved": 149101,
-            "unknown": 60452,
-            "resource": 226277,
-            "gravel": 20833
-          },
-          "access": {
-            "motorized_permissive": 456663
-          },
-          "structure": {
-            "none": 446830,
-            "bridge": 9520,
-            "tunnel": 313
-          },
-          "roadTrack": {
-            "local": 42417,
-            "service": 256784,
-            "arterial": 15071,
-            "collector": 20836,
-            "freeway": 2224,
-            "ramp": 8044,
-            "track": 99233,
-            "resource": 12054
-          },
-          "excluded": {}
-        },
-        "excludedByReason": {
-          "access_denied": 28290,
-          "abandoned": 35,
-          "no_usable_geometry": 7
-        }
+        "classification": {},
+        "excludedByReason": {}
       },
       "provincial": {
-        "adapter": null,
-        "featureCount": 0,
-        "excludedByReason": {},
-        "classification": {}
+        "adapter": "bc-ften-roads",
+        "featureCount": 50000,
+        "excludedByReason": {
+          "deactivated_or_closed": 23462,
+          "pending_or_proposed": 726
+        },
+        "classification": {
+          "surface": {
+            "resource": 50000
+          },
+          "access": {
+            "motorized_unknown": 50000
+          },
+          "structure": {
+            "none": 50000
+          },
+          "roadTrack": {
+            "resource": 50000
+          },
+          "excluded": {}
+        }
       },
       "endpointSnap": {
         "meters": 18,
-        "snappedEndpoints": 0,
+        "snappedEndpoints": 8576,
         "note": "Provincial capillary endpoints within snap meters reuse existing fabric nodes (survey near-miss joins). No free-space edges."
       }
     },

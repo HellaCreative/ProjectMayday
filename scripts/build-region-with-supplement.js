@@ -128,17 +128,88 @@ async function loadOsmFabric(code) {
   const slug = OSM_SLUG[code];
   if (!slug) return null;
   const seq = path.join(ROOT, "data-raw", "osm-roads", slug, "roads.geojsonseq");
-  if (!fs.existsSync(seq)) {
-    console.log(`[${code}] No OSM fabric extract at ${seq} — skipping OSM tier`);
+  if (fs.existsSync(seq)) {
+    return osmRoads.run({
+      inputPath: seq,
+      province: code.toUpperCase(),
+      sourceUrl: `https://download.geofabrik.de/north-america/canada/${slug}-latest.osm.pbf`,
+      downloadUrl: `https://download.geofabrik.de/north-america/canada/${slug}-latest.osm.pbf`,
+      datasetVersion: `geofabrik:${slug}`
+    });
+  }
+  // Fallback: rebuild from an existing OSM-only (or OSM+provincial) pack
+  // without re-downloading Geofabrik — used for Phase 2 overlay passes.
+  // Prefer longhaul when regional is missing or too large for Node JSON strings.
+  const candidates = [
+    path.join(ROOT, "routing", "data", "regions", code, "graph.v1.json.gz"),
+    path.join(ROOT, "routing", "data", "regions", code, "longhaul.v1.json.gz")
+  ];
+  let gzPath = null;
+  for (const p of candidates) {
+    if (!fs.existsSync(p)) continue;
+    const st = fs.statSync(p);
+    // Skip multi-hundred-MB gz packs that inflate past Node string limits (~512MB).
+    if (st.size > 90 * 1024 * 1024) {
+      console.log(`[${code}] Skipping oversized pack ${p} (${(st.size / 1e6).toFixed(0)} MB gz)`);
+      continue;
+    }
+    gzPath = p;
+    break;
+  }
+  if (!gzPath) {
+    console.log(`[${code}] No OSM fabric extract at ${seq} and no usable pack — skipping OSM tier`);
     return null;
   }
-  return osmRoads.run({
-    inputPath: seq,
-    province: code.toUpperCase(),
-    sourceUrl: `https://download.geofabrik.de/north-america/canada/${slug}-latest.osm.pbf`,
-    downloadUrl: `https://download.geofabrik.de/north-america/canada/${slug}-latest.osm.pbf`,
-    datasetVersion: `geofabrik:${slug}`
-  });
+  console.log(`[${code}] No geojsonseq; loading OSM edges from existing pack ${gzPath}`);
+  const graph = JSON.parse(zlib.gunzipSync(fs.readFileSync(gzPath)).toString("utf8"));
+  const { createNormalizedEdge } = require("../routing/schema/edge");
+  const {
+    SURFACE_CLASS,
+    ACCESS_CLASS,
+    STRUCTURE_TYPE,
+    ROAD_TRACK_CLASS,
+    SOURCE_CONFIDENCE
+  } = require("../routing/schema/enums");
+  const surfaceName = graph.enums.SURFACE_NAME;
+  const accessName = graph.enums.ACCESS_NAME;
+  const structureName = graph.enums.STRUCTURE_NAME;
+  const osmEdges = (graph.edges || []).filter((e) => /openstreetmap/i.test(String(e.src || "")));
+  if (!osmEdges.length) {
+    console.log(`[${code}] Existing pack has no OSM edges — cannot rebuild fabric`);
+    return null;
+  }
+  const features = osmEdges.map((e) =>
+    createNormalizedEdge({
+      edgeId: e.i,
+      lineageId: e.lin || e.i,
+      province: code.toUpperCase(),
+      sourceName: e.src || "OpenStreetMap",
+      sourceDatasetVersion: "from-regional-pack",
+      sourceFeatureId: e.rid || null,
+      sourceGeometryLineage: "regional-pack",
+      geometry: { type: "LineString", coordinates: e.g },
+      surfaceClass: surfaceName[e.s] || SURFACE_CLASS.unknown,
+      roadTrackClass: e.rt || ROAD_TRACK_CLASS.unknown,
+      accessClass: accessName[e.ac] || ACCESS_CLASS.motorized_permissive,
+      structureType: structureName[e.t] || STRUCTURE_TYPE.none,
+      sourceConfidence: e.conf || SOURCE_CONFIDENCE.medium,
+      roadName: e.desc || null,
+      direction: "both",
+      seasonal: !!e.seasonal,
+      distanceMeters: e.m,
+      meta: { fromPack: true }
+    })
+  );
+  return {
+    features,
+    report: {
+      adapter: "osm-roads-from-pack",
+      featureCount: features.length,
+      excludedByReason: {},
+      classification: {},
+      notes: [`Reused ${features.length} OSM edges from regions/${code}/graph.v1.json.gz`]
+    }
+  };
 }
 
 async function main() {
@@ -231,10 +302,10 @@ async function main() {
 
   if (!osmOnly && suppMod) {
     console.log(`[${code}] Running provincial supplement ${suppMod.name}…`);
-    const maxByCode = { ab: 250000, bc: 200000, on: 350000, qc: Infinity, ns: 500000, nb: Infinity };
+    const maxByCode = { ab: 250000, bc: 50000, on: 120000, qc: Infinity, ns: 500000, nb: Infinity };
     supp = await suppMod.run({
       maxFeatures: maxByCode[code] != null ? maxByCode[code] : 250000,
-      pageSize: code === "bc" ? 500 : 2000
+      pageSize: code === "bc" ? 2000 : 2000
     });
     console.log(`[${code}] Supplement features:`, supp.features.length);
 

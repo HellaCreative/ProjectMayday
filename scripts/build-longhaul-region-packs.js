@@ -185,17 +185,21 @@ function main() {
     const corridorFabric = new Set([]); // dense NRN-everywhere — too large for Hobby
     const hubFabric = new Set([]); // legacy NRN hub bulbs — west graduated to osmProvince
     const maritimeFabric = new Set(["nl"]); // PE is osm-only below; NS/NB osm-provincial
-    // Full OSM fabric; no NRN; one pack per province (Phase 1 west + east OSM-only).
-    const osmProvince = new Set(["qc", "pe", "on", "mb", "sk", "ab", "bc"]);
-    const osmProvincialProvince = new Set(["ns", "nb"]); // OSM + provincial; no NRN
+    // Full OSM fabric; no NRN. PE/QC/MB/SK stay OSM-only; ON/AB/BC move to
+    // osmProvincialProvince once Phase 2 overlays ship.
+    const osmProvince = new Set(["qc", "pe", "mb", "sk"]);
+    // NS/NB gold + Phase 2 west overlays (purple kept on longhaul for Allow).
+    const osmProvincialProvince = new Set(["ns", "nb", "on", "ab", "bc"]);
 
     let extractMode = "spine";
     if (osmProvincialProvince.has(code)) {
       extractMode = "fabric-osm-provincial";
+      const largeOsm = code === "on" || code === "ab" || code === "bc";
       g = extractRoadFabricLonghaulGraph(g, {
         mode: "osm-provincial",
         hubLocations: HUBS[code] || [],
-        hubBufferMeters: 40000
+        hubBufferMeters: 40000,
+        dropService: largeOsm
       });
     } else if (osmProvince.has(code)) {
       extractMode = "fabric-osm-only";
@@ -257,7 +261,9 @@ function main() {
     const mentalModel = keepProvincial
       ? code === "ns"
         ? "osm-nstdb-fabric"
-        : "osm-provincial-fabric"
+        : code === "nb"
+          ? "osm-provincial-fabric"
+          : "osm-provincial-fabric"
       : qcOsmOnly
         ? "osm-fabric-province"
         : "osm-nrn-fabric";
@@ -265,7 +271,15 @@ function main() {
       purpose: keepProvincial
         ? code === "ns"
           ? "canada-chain / in-province pack (OSM+NSTDB; no NRN)"
-          : "canada-chain / in-province pack (OSM+Forest Roads; no NRN)"
+          : code === "nb"
+            ? "canada-chain / in-province pack (OSM+Forest Roads; no NRN)"
+            : code === "on"
+              ? "canada-chain / in-province pack (OSM+MNR resource; no NRN)"
+              : code === "ab"
+                ? "canada-chain / in-province pack (OSM+Access Roads; no NRN)"
+                : code === "bc"
+                  ? "canada-chain / in-province pack (OSM+FTEN; no NRN)"
+                  : "canada-chain / in-province pack (OSM+provincial; no NRN)"
         : qcOsmOnly
           ? "canada-chain / in-province pack (OSM-only; no NRN)"
           : "canada-chain hop pack (OSM+NRN road fabric; hub bulbs; no provincial)",

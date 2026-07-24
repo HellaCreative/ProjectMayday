@@ -3,12 +3,14 @@
   "updatedAt": "2026-07-24",
   "notes": [
     "Province fabric is product-locked per region — do not assume NRN everywhere.",
-    "NS locked fabric: OSM road fabric + NSTDB (STDB) capillary. No NRN.",
-    "NB locked fabric: OSM road fabric + Forest Roads capillary. No NRN. Capillary weaker than NSTDB on surface/class; longhaul keeps provincial for NS↔NB Allow.",
-    "QC/PE/ON/MB/SK/AB locked fabric: OSM-only. No NRN. SK stays OSM-only permanently.",
-    "QC/PE/ON/MB/SK/AB/BC locked fabric: OSM-only Phase 1. SK permanent. Phase 2 overlays: ON MNR, AB Access, BC FTEN.",
-    "OSM motorized highways are the road fabric (motorized_permissive). Shortbread tiles remain display-only; POIs are a separate pack.",
-    "Cross-Canada longhaul packs: NS/NB = OSM+provincial (purple kept); QC/PE/ON/MB/SK/AB/BC = OSM-only; ON/AB/BC longhaul drop service mesh for Hobby RAM."
+    "NS locked fabric: OSM + NSTDB. No NRN.",
+    "NB locked fabric: OSM + Forest Roads. No NRN.",
+    "ON locked fabric: OSM + MNR resource capillary (ORN skipped; ingest capped). No NRN.",
+    "AB locked fabric: OSM + Access/Facility gravel+other (cutlines excluded). No NRN.",
+    "BC locked fabric: OSM + FTEN active existing (pending/retired excluded; ingest capped). No NRN.",
+    "QC/PE/MB/SK: OSM-only. SK permanent (Road Network is NRN-derived — never import).",
+    "Longhaul: NS/NB/ON/AB/BC keep provincial purple; ON/AB/BC drop OSM service mesh for Hobby RAM.",
+    "OSM motorized highways are the road fabric (motorized_permissive). Shortbread tiles remain display-only."
   ],
   "regions": [
     {
@@ -23,7 +25,7 @@
         "adapter": "nrn",
         "status": "ready",
         "dateRetrieved": "2026-07-20",
-        "notes": "NRN omitted from routing fabric (OSM-only)."
+        "notes": "NRN omitted from routing fabric (OSM+FTEN)."
       },
       "provincial": {
         "sourceName": "BC Digital Road Atlas / Forest Service Roads",
@@ -33,23 +35,23 @@
         "license": "Open Government Licence - British Columbia",
         "adapter": "bc-ften-roads",
         "status": "ready",
-        "notes": "Adapter ready; NOT in live BC stack (Phase 1 OSM-only). Phase 2: FTEN active existing only; exclude pending/retired; tenure alone ≠ public motorcycle access. Avoid Cumulative Effects Integrated Roads.",
-        "dateRetrieved": "2026-07-21"
+        "notes": "Phase 2 live: FTEN active existing only; pending/retired filtered. Ingest capped. Tenure ≠ public motorcycle access.",
+        "dateRetrieved": "2026-07-24"
       },
       "routingReady": true,
-      "routingMode": "osm-only",
+      "routingMode": "osm+provincial",
       "backboneArtifact": {
         "path": "routing/data/regions/bc/graph.v1.json.gz",
-        "edgeCount": 452938,
-        "nodeCount": 632373,
-        "gzBytes": 52422608
+        "edgeCount": 497973,
+        "nodeCount": 708632,
+        "gzBytes": 79354296
       },
       "osm": {
         "adapter": "osm-roads",
         "role": "sole-fabric",
         "status": "ready",
-        "featureCount": 456663,
-        "added": 456663,
+        "featureCount": 452938,
+        "added": 452938,
         "license": "OpenStreetMap contributors (ODbL)",
         "dateRetrieved": "2026-07-24"
       }
@@ -66,7 +68,7 @@
         "adapter": "nrn",
         "status": "ready",
         "dateRetrieved": "2026-07-20",
-        "notes": "NRN omitted from routing fabric (OSM-only)."
+        "notes": "NRN omitted from routing fabric (OSM+Access Roads)."
       },
       "provincial": {
         "sourceName": "Alberta Access and Facility Roads",
@@ -76,23 +78,23 @@
         "license": "Open Government Licence - Alberta",
         "adapter": "ab-access-roads",
         "status": "ready",
-        "dateRetrieved": "2026-07-21",
-        "notes": "Adapter ready; NOT in live AB stack (Phase 1 OSM-only). Phase 2: Access/Facility gravel match to OSM; never auto-route cutlines without legal corroboration. Designated trails need motorized corroboration."
+        "dateRetrieved": "2026-07-24",
+        "notes": "Phase 2 live: Access + Other Road (gravel) layers. Cutlines excluded. motorized_unknown — never invented permissive."
       },
       "routingReady": true,
-      "routingMode": "osm-only",
+      "routingMode": "osm+provincial",
       "backboneArtifact": {
         "path": "routing/data/regions/ab/graph.v1.json.gz",
-        "edgeCount": 485198,
-        "nodeCount": 627522,
-        "gzBytes": 37399506
+        "edgeCount": 695531,
+        "nodeCount": 802636,
+        "gzBytes": 52464420
       },
       "osm": {
         "adapter": "osm-roads",
         "role": "sole-fabric",
         "status": "ready",
-        "featureCount": 490111,
-        "added": 490111,
+        "featureCount": 485198,
+        "added": 485198,
         "license": "OpenStreetMap contributors (ODbL)",
         "dateRetrieved": "2026-07-24"
       }
@@ -159,7 +161,7 @@
         "license": "verify before ingest",
         "adapter": null,
         "status": "deferred",
-        "notes": "Phase 1 OSM-only shipping. Phase 2 specialty: WMA Official Trails only where vehicle-compatible and restrictions allow — not full NSTDB."
+        "notes": "Phase 1 OSM-only shipping. WMA Official Trails specialty deferred (no adapter this pass)."
       },
       "routingReady": true,
       "routingMode": "osm-only",
@@ -191,7 +193,7 @@
         "adapter": "nrn",
         "status": "ready",
         "dateRetrieved": "2026-07-20",
-        "notes": "NRN omitted from routing fabric (OSM-only). NRN ROADSEG ingested as national backbone artifact. Not routing-ready until regional validation and provincial-supplement policy from CANADA_DATA_SOURCE_AUDIT.md are applied."
+        "notes": "NRN omitted from routing fabric (OSM+MNR)."
       },
       "provincial": {
         "sourceName": "Ontario Road Network / MNR road segments / Ontario Trail Network",
@@ -200,23 +202,23 @@
         "license": "Open Government Licence - Ontario",
         "adapter": "on-mnrf-roads",
         "status": "ready",
-        "dateRetrieved": "2026-07-21",
-        "notes": "Adapter ready; NOT in live ON stack (Phase 1 OSM-only). Phase 2: MNR resource-only capillary + barriers warnings; ORN enrichment/QA only — never alternate graph."
+        "dateRetrieved": "2026-07-24",
+        "notes": "Phase 2 live: MNR/resource-only capillary (ORN conventional skipped). Ingest capped ~120k for Node/Hobby. Barriers/OTN not auto-routed."
       },
       "routingReady": true,
-      "routingMode": "osm-only",
+      "routingMode": "osm+provincial",
       "backboneArtifact": {
         "path": "routing/data/regions/on/graph.v1.json.gz",
-        "edgeCount": 1003519,
-        "nodeCount": 1309968,
-        "gzBytes": 81778039
+        "edgeCount": 402520,
+        "nodeCount": 407723,
+        "gzBytes": 35216340
       },
       "osm": {
         "adapter": "osm-roads",
         "role": "sole-fabric",
         "status": "ready",
-        "featureCount": 1013718,
-        "added": 1013718,
+        "featureCount": 292562,
+        "added": 292562,
         "license": "OpenStreetMap contributors (ODbL)",
         "dateRetrieved": "2026-07-24"
       }

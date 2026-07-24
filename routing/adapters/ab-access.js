@@ -96,10 +96,14 @@ function classifyAttrs(attrs) {
   if (/closed|decommission|abandoned|private|restricted|no.?motor/i.test(text)) {
     return { ok: false, reason: "restricted_or_closed" };
   }
+  // Cutlines are discovery/QA only — never auto-route without legal corroboration.
+  if (/cutline|cut.?line|seismic/.test(text)) {
+    return { ok: false, reason: "cutline_not_routable" };
+  }
   let surfaceClass = SURFACE_CLASS.resource;
   if (/paved|asphalt|concrete/.test(text)) surfaceClass = SURFACE_CLASS.paved;
   else if (/gravel|unpaved|dirt|earth/.test(text)) surfaceClass = SURFACE_CLASS.gravel;
-  else if (/track|trail|cutline/.test(text)) surfaceClass = SURFACE_CLASS.track;
+  else if (/track|trail/.test(text)) surfaceClass = SURFACE_CLASS.track;
 
   return {
     ok: true,
@@ -129,7 +133,9 @@ async function run(options = {}) {
   const pageSize = options.pageSize || 1000;
   const maxFeatures = options.maxFeatures || Infinity;
   const meta = await fetchJson(`${SERVICE}?f=json`);
-  const preferredLayerIds = options.layerIds || [0, 24, 30]; // Access, Other Road, Cutline
+  // Feature layers only (group layers 0/24 return no geometries).
+  // 23 = Gravel Road (20K), 26 = Other Road. Never 30 Cutline.
+  const preferredLayerIds = options.layerIds || [23, 26];
   const layers = (meta.layers || []).filter(
     (l) => l && preferredLayerIds.includes(l.id)
   );
@@ -197,11 +203,9 @@ async function run(options = {}) {
         }
       }
       if (features.length >= maxFeatures) break;
-      if (rows.length < pageSize || page.exceededTransferLimit === false) {
-        // Continue while exceededTransferLimit or full page.
-        if (rows.length < pageSize) break;
-      }
       offset += rows.length;
+      // Continue only while ArcGIS reports more pages remain.
+      if (page.exceededTransferLimit !== true) break;
       if (offset > 500000) break;
     }
     if (features.length >= maxFeatures) break;

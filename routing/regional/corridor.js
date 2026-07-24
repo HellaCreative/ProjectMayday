@@ -318,8 +318,11 @@ function extractRoadFabricLonghaulGraph(graph, options = {}) {
 
     if (osmProvincial) {
       // NS/NB locked fabric: OSM + provincial. Never keep NRN highway spine.
+      // ON/AB/BC Phase 2: same pattern; dropService thins metro mesh for Hobby.
       if (nrn) continue;
       if (osm) {
+        const rt = String(e.rt || "");
+        if (options.dropService && rt === "service") continue;
         keepEdges.push(e.ac === 2 ? { ...e, ac: 1 } : e);
         continue;
       }

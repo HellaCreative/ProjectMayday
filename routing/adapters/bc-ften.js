@@ -60,7 +60,18 @@ async function fetchPage(pageSize, startIndex) {
   u.searchParams.set("count", String(pageSize));
   u.searchParams.set("sortBy", "ROAD_SECTION_ID");
   if (startIndex > 0) u.searchParams.set("startIndex", String(startIndex));
-  return fetchJson(u.toString());
+  let lastErr = null;
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    try {
+      return await fetchJson(u.toString());
+    } catch (err) {
+      lastErr = err;
+      const wait = 1500 * (attempt + 1);
+      console.error(`[bc-ften] page start=${startIndex} attempt=${attempt + 1} failed: ${err.message}; retry in ${wait}ms`);
+      await new Promise((r) => setTimeout(r, wait));
+    }
+  }
+  throw lastErr;
 }
 
 function roundCoord(c) {
@@ -128,8 +139,18 @@ async function run(options = {}) {
       if (features.length >= maxFeatures) break;
       const props = row.properties || {};
       const life = String(props.LIFE_CYCLE_STATUS_CODE || props.FILE_STATUS_CODE || "").toUpperCase();
-      if (life === "RETIRED" || life === "DEACTIVATED" || life === "CANCELLED") {
-        bump(excludedByReason, "deactivated_or_closed");
+      // Active existing only — pending/retired/proposed stay out of the routing pack.
+      if (
+        life === "RETIRED" ||
+        life === "DEACTIVATED" ||
+        life === "CANCELLED" ||
+        life === "PENDING" ||
+        life === "PROPOSED" ||
+        life === "APPLICATION"
+      ) {
+        bump(excludedByReason, life === "PENDING" || life === "PROPOSED" || life === "APPLICATION"
+          ? "pending_or_proposed"
+          : "deactivated_or_closed");
         continue;
       }
       if (props.RETIREMENT_DATE) {
@@ -195,11 +216,13 @@ async function run(options = {}) {
     classification,
     excludedByReason,
     notes: [
-      "Supplemental forestry/resource roads. Access is motorized_unknown — never invented as permissive."
+      "Supplemental forestry/resource roads. Access is motorized_unknown — never invented as permissive.",
+      "Filter: active/existing only; pending/retired excluded by default."
     ],
     knownLimitations: [
       "Tenure roads are not a guarantee of public motorcycle access.",
-      "DRA demographic roads not yet conflated in this adapter."
+      "Recreation Lines / Section 58 are inventory + negative access — not auto-routed here.",
+      "Avoid Cumulative Effects Integrated Roads (NRN-like failure mode)."
     ]
   });
 
