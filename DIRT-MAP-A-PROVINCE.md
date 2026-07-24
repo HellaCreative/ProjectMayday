@@ -39,7 +39,8 @@ NS is the reference build. Every next province copies the *model*, not the NS fi
 | **ON** | OSM-only longhaul + regional (service dropped on longhaul for Hobby) | Phase 2 MNR resource overlay; still no NRN |
 | **MB** | OSM-only longhaul + regional | WMA specialty overlay later |
 | **SK** | OSM-only longhaul + regional | Stays OSM-only permanently — no SK Road Network / NRN-derived |
-| **AB / BC** | Phase 1 OSM-only (in progress) | Phase 2 Access Roads / FTEN overlays |
+| **AB** | OSM-only longhaul + regional (service dropped on longhaul) | Phase 2 Access/Facility Roads; no cutline auto-route |
+| **BC** | Phase 1 OSM-only (in progress) | Phase 2 FTEN overlay |
 | **NL / YT / NT / NU** | Mostly NRN backbone artifacts | Need OSM extract + capillary candidate before “gold” (YT/NT excluded from west build) |
 
 **Doc/code drift to watch:** older comments and `routing/conflation/conflate.js` still say “NRN owns national identity.” Prefer this doc + `routing/registry/sources.json` notes + `scripts/build-ns-regional-graph.js` / `--osm-plus-provincial` when they conflict. README still documents NRN ingest as the default path for many provinces — true for *shipping*, not for *gold intent*.
@@ -95,7 +96,7 @@ Capillary candidate exists?
 | **ON** | MNR Road Segments (Phase 2) | **OSM-only MVP (shipping)** | Phase 1: Geofabrik OSM sole fabric; NRN dropped. Longhaul drops remote `service` mesh for Hobby QC\|ON RAM (~293k edges / ~103 MB inflated). Soft rematch + QC↔ON Hawkesbury seam. Phase 2: MNR resource-only overlay (exclude ORN duplicates); barriers as warnings. |
 | **MB** | WMA Official Trails (specialty) | **OSM-only MVP (shipping)** | Phase 1 OSM-only (~142k edges). ON↔MB Kenora seam; fixed bbox so MB no longer steals Kenora. WMA vehicle-compatible specialty overlay later — not full NSTDB. |
 | **SK** | none (NRN-derived SK Road Network — do not import) | **OSM-only (shipping, permanent)** | Rick’s research: SK road network feeds NRN — never import as alternate graph. Phase 1+2 stay OSM-only. |
-| **AB** | Access/Facility Roads (Phase 2) | **Phase 1 pending** | OSM-only first; never auto-route cutlines without legal corroboration. |
+| **AB** | Access/Facility Roads (Phase 2) | **OSM-only MVP (shipping)** | Phase 1 OSM-only; longhaul drops service for size. SK↔AB seams at TCH + Kindersley band. Phase 2: Access/Facility gravel match; never auto-route cutlines. |
 | **BC** | Forest Tenure Road Segments (Phase 2) | **Phase 1 pending** | OSM-only first; active existing tenure only; tenure ≠ public motorcycle access. |
 
 ---

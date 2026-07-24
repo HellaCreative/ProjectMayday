@@ -139,6 +139,19 @@ const HUBS = {
     { lon: -110.0, lat: 49.7 }, // AB border approach
     { lon: -104.0, lat: 49.15 } // Estevan / south
   ],
+  ab: [
+    { lon: -114.071, lat: 51.045 }, // Calgary
+    { lon: -113.491, lat: 53.547 }, // Edmonton
+    { lon: -113.0, lat: 53.55 }, // Sherwood Park / east Edmonton
+    { lon: -114.0, lat: 51.2 }, // Airdrie / north Calgary
+    { lon: -112.83, lat: 49.69 }, // Lethbridge
+    { lon: -110.0, lat: 49.7 }, // SK border approach
+    { lon: -116.4, lat: 51.2 }, // BC divide / Lake Louise band
+    { lon: -115.57, lat: 51.18 }, // Banff / Bow Valley
+    { lon: -111.38, lat: 56.73 }, // Fort McMurray approach
+    { lon: -118.8, lat: 55.17 }, // Grande Prairie
+    { lon: -113.82, lat: 52.27 } // Red Deer
+  ],
   nl: [{ lon: -52.712, lat: 47.561 }]
 };
 

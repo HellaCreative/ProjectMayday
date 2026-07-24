@@ -1,147 +1,174 @@
 {
-  "generatedAt": "2026-07-21T00:19:32.709Z",
+  "generatedAt": "2026-07-24T19:42:02.786Z",
   "region": "AB",
+  "stack": [
+    "osm-only"
+  ],
   "nrn": {
-    "adapter": "nrn-from-pack",
-    "featureCount": 440248
+    "adapter": null,
+    "featureCount": 0,
+    "omitted": "osm-only"
   },
-  "provincial": {
-    "adapter": "ab-access-roads",
+  "osm": {
+    "adapter": "osm-roads",
     "province": "AB",
-    "sourceName": "Alberta Access and Facility Roads",
-    "sourceUrl": "https://www.alberta.ca/provincial-geospatial-centre",
-    "downloadUrl": "https://geospatial.alberta.ca/titan/rest/services/utility/access/MapServer",
-    "license": "Open Government Licence - Alberta",
-    "sourceDatasetVersion": "alberta-titan-access",
-    "dateRetrieved": "2026-07-21T00:19:15.256Z",
+    "sourceName": "OpenStreetMap",
+    "sourceUrl": "https://download.geofabrik.de/north-america/canada/alberta-latest.osm.pbf",
+    "downloadUrl": "https://download.geofabrik.de/north-america/canada/alberta-latest.osm.pbf",
+    "license": "OpenStreetMap contributors (ODbL)",
+    "sourceDatasetVersion": "geofabrik:alberta",
+    "dateRetrieved": "2026-07-24T19:41:49.548Z",
     "status": "ok",
     "notes": [
-      "Supplemental resource/access roads. Access defaults to motorized_unknown — never invented as permissive."
+      "OSM gap-fill for conventional motorized roads unmatched by NRN.",
+      "Excluded foot/bike-only, private/no, abandoned, and non-motorized paths.",
+      "track/service without clear surface default to motorized_unknown."
     ],
     "knownLimitations": [
-      "Attribute schemas vary by MapServer layer; closed/private cues are best-effort.",
-      "Does not assert motorcycle legality."
+      "OSM tagging quality varies; not a legal access assertion.",
+      "Does not replace NRN identity — conflation dedupes against NRN first."
     ],
-    "featureCount": 0,
-    "excludedCount": 0,
-    "excludedByReason": {},
+    "featureCount": 490111,
+    "scannedCount": 506232,
+    "excludedCount": 16121,
+    "excludedByReason": {
+      "access_denied": 16108,
+      "abandoned": 12,
+      "no_usable_geometry": 1
+    },
     "classification": {
       "surface": {
-        "track": 249585,
-        "resource": 415
+        "paved": 110283,
+        "unknown": 92831,
+        "resource": 277920,
+        "gravel": 9077
       },
       "access": {
-        "motorized_unknown": 250000
+        "motorized_permissive": 490111
       },
       "structure": {
-        "none": 250000
+        "none": 482166,
+        "bridge": 7679,
+        "tunnel": 266
       },
       "roadTrack": {
-        "track": 249585,
-        "resource": 415
+        "freeway": 2489,
+        "arterial": 10820,
+        "collector": 23373,
+        "ramp": 11606,
+        "service": 256491,
+        "local": 60407,
+        "resource": 112054,
+        "track": 12871
       },
       "excluded": {}
     },
     "topology": null,
-    "generatedAt": "2026-07-21T00:19:15.266Z"
+    "generatedAt": "2026-07-24T19:41:49.549Z"
+  },
+  "osmConflation": null,
+  "provincial": {
+    "adapter": null,
+    "featureCount": 0,
+    "excludedByReason": {},
+    "classification": {}
   },
   "conflation": {
-    "province": "AB",
-    "generatedAt": "2026-07-21T00:19:18.088Z",
-    "precedence": {
-      "backbone": "NRN owns national road identity and conventional-road attributes",
-      "supplement": "Provincial data adds resource/track detail and unmatched local connectivity",
-      "surfaceEnrichment": "Provincial paved/gravel may enrich NRN edges whose pavement status is unknown",
-      "osm": "OSM not added as routing edges in this phase"
-    },
-    "stats": {
-      "backboneKept": 440248,
-      "supplementAdded": 246289,
-      "supplementDuplicateSkipped": 3711,
-      "supplementConventionalSkipped": 0,
-      "backboneSurfaceEnriched": 0,
-      "conflicts": 0
-    },
-    "skipReasons": {
-      "duplicate_of_backbone": 3711
-    },
-    "featureCount": 686537,
     "freeSpaceConnectors": 0,
-    "notes": [
-      "No free-space connectors were created.",
-      "Duplicates detected by midpoint proximity + bearing + endpoint proximity.",
-      "Genuine dead ends remain dead ends — no proximity stitching of endpoints."
-    ]
+    "stats": {
+      "backboneKept": 490111,
+      "supplementAdded": 0,
+      "supplementDuplicateSkipped": 0
+    }
   },
   "graph": {
-    "generatedAt": "2026-07-21T00:19:19.665Z",
+    "generatedAt": "2026-07-24T19:41:51.642Z",
     "schemaVersion": "canada-regional-1",
     "regionId": "ab",
     "province": "AB",
     "bbox": [
-      -120.01708,
-      48.99275,
-      -109.99084,
-      60.00059
+      -120.19092,
+      48.90818,
+      -109.63248,
+      60.06716
     ],
-    "nodeCount": 791331,
-    "edgeCount": 686458,
-    "componentCount": 195680,
-    "boundaryNodeCount": 14555,
+    "nodeCount": 627522,
+    "edgeCount": 485198,
+    "componentCount": 172782,
+    "boundaryNodeCount": 1550,
     "accessCounts": {
-      "motorized_permissive": 440248,
-      "motorized_unknown": 246210
+      "motorized_permissive": 485198
     },
     "surfaceCounts": {
-      "paved": 269448,
-      "gravel": 170800,
-      "track": 245800,
-      "access": 410
+      "paved": 109288,
+      "unknown": 91479,
+      "access": 275474,
+      "gravel": 8957
     },
     "sourceCounts": {
-      "National Road Network": 440248,
-      "Alberta Access and Facility Roads": 246210
+      "OpenStreetMap": 485198
     },
-    "jsonBytes": 268197096,
-    "gzBytes": 48747812,
+    "jsonBytes": 193716040,
+    "gzBytes": 37399506,
     "lineage": {
       "nrn": {
-        "adapter": "nrn-from-pack",
-        "featureCount": 440248
-      },
-      "provincial": {
-        "adapter": "ab-access-roads",
+        "adapter": null,
         "featureCount": 0,
-        "excludedByReason": {},
+        "omitted": "osm-only"
+      },
+      "osm": {
+        "adapter": "osm-roads",
+        "featureCount": 490111,
+        "role": "sole-fabric",
+        "added": 490111,
+        "duplicateSkipped": 0,
         "classification": {
           "surface": {
-            "track": 249585,
-            "resource": 415
+            "paved": 110283,
+            "unknown": 92831,
+            "resource": 277920,
+            "gravel": 9077
           },
           "access": {
-            "motorized_unknown": 250000
+            "motorized_permissive": 490111
           },
           "structure": {
-            "none": 250000
+            "none": 482166,
+            "bridge": 7679,
+            "tunnel": 266
           },
           "roadTrack": {
-            "track": 249585,
-            "resource": 415
+            "freeway": 2489,
+            "arterial": 10820,
+            "collector": 23373,
+            "ramp": 11606,
+            "service": 256491,
+            "local": 60407,
+            "resource": 112054,
+            "track": 12871
           },
           "excluded": {}
+        },
+        "excludedByReason": {
+          "access_denied": 16108,
+          "abandoned": 12,
+          "no_usable_geometry": 1
         }
+      },
+      "provincial": {
+        "adapter": null,
+        "featureCount": 0,
+        "excludedByReason": {},
+        "classification": {}
+      },
+      "endpointSnap": {
+        "meters": 18,
+        "snappedEndpoints": 0,
+        "note": "Provincial capillary endpoints within snap meters reuse existing fabric nodes (survey near-miss joins). No free-space edges."
       }
     },
     "conflation": {
-      "featureCount": 686537,
-      "stats": {
-        "backboneKept": 440248,
-        "supplementAdded": 246289,
-        "supplementDuplicateSkipped": 3711,
-        "supplementConventionalSkipped": 0,
-        "backboneSurfaceEnriched": 0,
-        "conflicts": 0
-      },
+      "stats": null,
       "freeSpaceConnectors": 0
     }
   },

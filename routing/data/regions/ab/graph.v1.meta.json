@@ -1,72 +1,91 @@
 {
-  "generatedAt": "2026-07-21T00:19:19.665Z",
+  "generatedAt": "2026-07-24T19:41:51.642Z",
   "schemaVersion": "canada-regional-1",
   "regionId": "ab",
   "province": "AB",
   "bbox": [
-    -120.01708,
-    48.99275,
-    -109.99084,
-    60.00059
+    -120.19092,
+    48.90818,
+    -109.63248,
+    60.06716
   ],
-  "nodeCount": 791331,
-  "edgeCount": 686458,
-  "componentCount": 195680,
-  "boundaryNodeCount": 14555,
+  "nodeCount": 627522,
+  "edgeCount": 485198,
+  "componentCount": 172782,
+  "boundaryNodeCount": 1550,
   "accessCounts": {
-    "motorized_permissive": 440248,
-    "motorized_unknown": 246210
+    "motorized_permissive": 485198
   },
   "surfaceCounts": {
-    "paved": 269448,
-    "gravel": 170800,
-    "track": 245800,
-    "access": 410
+    "paved": 109288,
+    "unknown": 91479,
+    "access": 275474,
+    "gravel": 8957
   },
   "sourceCounts": {
-    "National Road Network": 440248,
-    "Alberta Access and Facility Roads": 246210
+    "OpenStreetMap": 485198
   },
-  "jsonBytes": 268197096,
-  "gzBytes": 48747812,
+  "jsonBytes": 193716040,
+  "gzBytes": 37399506,
   "lineage": {
     "nrn": {
-      "adapter": "nrn-from-pack",
-      "featureCount": 440248
-    },
-    "provincial": {
-      "adapter": "ab-access-roads",
+      "adapter": null,
       "featureCount": 0,
-      "excludedByReason": {},
+      "omitted": "osm-only"
+    },
+    "osm": {
+      "adapter": "osm-roads",
+      "featureCount": 490111,
+      "role": "sole-fabric",
+      "added": 490111,
+      "duplicateSkipped": 0,
       "classification": {
         "surface": {
-          "track": 249585,
-          "resource": 415
+          "paved": 110283,
+          "unknown": 92831,
+          "resource": 277920,
+          "gravel": 9077
         },
         "access": {
-          "motorized_unknown": 250000
+          "motorized_permissive": 490111
         },
         "structure": {
-          "none": 250000
+          "none": 482166,
+          "bridge": 7679,
+          "tunnel": 266
         },
         "roadTrack": {
-          "track": 249585,
-          "resource": 415
+          "freeway": 2489,
+          "arterial": 10820,
+          "collector": 23373,
+          "ramp": 11606,
+          "service": 256491,
+          "local": 60407,
+          "resource": 112054,
+          "track": 12871
         },
         "excluded": {}
+      },
+      "excludedByReason": {
+        "access_denied": 16108,
+        "abandoned": 12,
+        "no_usable_geometry": 1
       }
+    },
+    "provincial": {
+      "adapter": null,
+      "featureCount": 0,
+      "excludedByReason": {},
+      "classification": {}
+    },
+    "endpointSnap": {
+      "meters": 18,
+      "snappedEndpoints": 0,
+      "note": "Provincial capillary endpoints within snap meters reuse existing fabric nodes (survey near-miss joins). No free-space edges."
     }
   },
   "conflation": {
-    "featureCount": 686537,
-    "stats": {
-      "backboneKept": 440248,
-      "supplementAdded": 246289,
-      "supplementDuplicateSkipped": 3711,
-      "supplementConventionalSkipped": 0,
-      "backboneSurfaceEnriched": 0,
-      "conflicts": 0
-    },
+    "stats": null,
     "freeSpaceConnectors": 0
   }
 }

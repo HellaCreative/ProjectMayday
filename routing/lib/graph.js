@@ -408,7 +408,8 @@ function shouldSkipCorridorClip(resolution, paths) {
     id === "qc" ||
     id === "on" ||
     id === "mb" ||
-    id === "sk"
+    id === "sk" ||
+    id === "ab"
   );
 }
 

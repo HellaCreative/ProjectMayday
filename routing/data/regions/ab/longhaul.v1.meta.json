@@ -1,21 +1,24 @@
 {
   "regionId": "ab",
   "schemaVersion": "longhaul-region-1",
-  "edgeCount": 180875,
-  "nodeCount": 151320,
-  "gzBytes": 11568032,
-  "inflatedBytes": 67980276,
+  "edgeCount": 232676,
+  "nodeCount": 241482,
+  "gzBytes": 14019277,
+  "inflatedBytes": 81399399,
   "path": "routing/data/regions/ab/longhaul.v1.json.gz",
   "lineage": {
-    "purpose": "canada-chain hop pack (NRN spine + southern corridor)",
+    "purpose": "canada-chain / in-province pack (OSM-only; no NRN)",
+    "mentalModel": "osm-fabric-province",
     "source": "regions/ab/graph.v1.json.gz",
     "hasRoadClass": true,
-    "spine": true,
-    "highwayNoTrack": false,
-    "corridorBufferMeters": 200000,
+    "hasOsm": true,
+    "extractMode": "fabric-osm-only",
+    "dropNrn": true,
+    "hubCount": 11,
+    "corridorBufferMeters": null,
     "thinnedGeometry": true,
-    "inputEdgeCount": 440248,
-    "spineEdgeCount": 224356,
-    "outputEdgeCount": 180875
+    "inputEdgeCount": 485198,
+    "spineEdgeCount": 232676,
+    "outputEdgeCount": 232676
   }
 }

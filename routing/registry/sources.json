@@ -5,11 +5,10 @@
     "Province fabric is product-locked per region — do not assume NRN everywhere.",
     "NS locked fabric: OSM road fabric + NSTDB (STDB) capillary. No NRN.",
     "NB locked fabric: OSM road fabric + Forest Roads capillary. No NRN. Capillary weaker than NSTDB on surface/class; longhaul keeps provincial for NS↔NB Allow.",
-    "QC locked fabric: OSM-only. No NRN.",
-    "Elsewhere NRN may still act as national paved/gravel identity where it overlaps OSM.",
-    "Provincial supplements conflated where adapters are ready: NS NSTDB, NB Forest Roads, AB Access, ON MNRF, QC chemins multiusages, BC FTEN (when ingest completes).",
+    "QC/PE/ON/MB/SK/AB locked fabric: OSM-only. No NRN. SK stays OSM-only permanently.",
+    "BC Phase 1 in progress (OSM-only). Phase 2 overlays: ON MNR, AB Access, BC FTEN.",
     "OSM motorized highways are the road fabric (motorized_permissive). Shortbread tiles remain display-only; POIs are a separate pack.",
-    "Cross-Canada longhaul packs: NS/NB = OSM+provincial (purple kept); QC = OSM-only; others thinned OSM+NRN (provincial omitted for size)."
+    "Cross-Canada longhaul packs: NS/NB = OSM+provincial (purple kept); QC/PE/ON/MB/SK/AB/BC = OSM-only; ON/AB/BC longhaul drop service mesh for Hobby RAM."
   ],
   "regions": [
     {
@@ -58,7 +57,7 @@
         "adapter": "nrn",
         "status": "ready",
         "dateRetrieved": "2026-07-20",
-        "notes": "NRN ROADSEG ingested as national backbone artifact. Not routing-ready until regional validation and provincial-supplement policy from CANADA_DATA_SOURCE_AUDIT.md are applied."
+        "notes": "NRN omitted from routing fabric (OSM-only)."
       },
       "provincial": {
         "sourceName": "Alberta Access and Facility Roads",
@@ -69,15 +68,24 @@
         "adapter": "ab-access-roads",
         "status": "ready",
         "dateRetrieved": "2026-07-21",
-        "notes": " Supplemental adapter ingested."
+        "notes": "Adapter ready; NOT in live AB stack (Phase 1 OSM-only). Phase 2: Access/Facility gravel match to OSM; never auto-route cutlines without legal corroboration. Designated trails need motorized corroboration."
       },
       "routingReady": true,
-      "routingMode": "nrn+provincial",
+      "routingMode": "osm-only",
       "backboneArtifact": {
         "path": "routing/data/regions/ab/graph.v1.json.gz",
-        "edgeCount": 686458,
-        "nodeCount": 791331,
-        "gzBytes": 48747812
+        "edgeCount": 485198,
+        "nodeCount": 627522,
+        "gzBytes": 37399506
+      },
+      "osm": {
+        "adapter": "osm-roads",
+        "role": "sole-fabric",
+        "status": "ready",
+        "featureCount": 490111,
+        "added": 490111,
+        "license": "OpenStreetMap contributors (ODbL)",
+        "dateRetrieved": "2026-07-24"
       }
     },
     {
@@ -95,13 +103,13 @@
         "notes": "NRN omitted from routing fabric (OSM-only). NRN ROADSEG ingested as national backbone artifact. Not routing-ready until regional validation and provincial-supplement policy from CANADA_DATA_SOURCE_AUDIT.md are applied."
       },
       "provincial": {
-        "sourceName": "Saskatchewan GeoHub road/trail layers",
+        "sourceName": "Saskatchewan Road Network (NRN-derived — do not import)",
         "catalogueUrl": "https://www.saskatchewan.ca/geohub",
         "format": "ArcGIS REST / GeoPackage",
-        "license": "unknown — verify before ingest",
+        "license": "unknown — do not ingest",
         "adapter": null,
         "status": "blocked",
-        "notes": "Portal historically returned HTTP 404 during prior probes."
+        "notes": "Rick research lock: SK Road Network feeds NRN. Stay OSM-only permanently. Never import as alternate graph."
       },
       "routingReady": true,
       "routingMode": "osm-only",

@@ -348,6 +348,7 @@ const ADVENTURE_CONNECTIVITY_CLIP = [
   { lon: -94.49, lat: 49.78 }, // Kenora — ON↔MB approach
   { lon: -101.4, lat: 49.7 }, // MB↔SK southern corridor
   { lon: -110.0, lat: 49.7 }, // SK↔AB southern corridor
+  { lon: -110.0, lat: 51.4 }, // SK↔AB Kindersley / Hwy 7
   { lon: -116.4, lat: 51.2 } // AB↔BC divide approach (Golden / Lake Louise band)
 ];
 
@@ -365,7 +366,8 @@ const ADVENTURE_CHAIN_JOINTS = [
   { lon: -74.58, lat: 45.61, between: ["qc", "on"] }, // Hawkesbury — ON entry (not Ottawa/Toronto)
   { lon: -94.49, lat: 49.78, between: ["on", "mb"] }, // Kenora — MB entry (not Winnipeg)
   { lon: -101.4, lat: 49.7, between: ["mb", "sk"] }, // MB↔SK prairie seam
-  { lon: -110.0, lat: 49.7, between: ["sk", "ab"] }, // SK↔AB prairie seam
+  { lon: -110.0, lat: 49.7, between: ["sk", "ab"] }, // SK↔AB southern TCH seam
+  { lon: -110.0, lat: 51.4, between: ["sk", "ab"] }, // SK↔AB Kindersley / Hwy 7 band
   { lon: -116.4, lat: 51.2, between: ["ab", "bc"] } // AB↔BC divide seam
 ];
 

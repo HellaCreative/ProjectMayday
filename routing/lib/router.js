@@ -265,7 +265,8 @@ function preferGiantComponentSnap(runtime) {
     regionId === "pe" ||
     regionId === "on" ||
     regionId === "mb" ||
-    regionId === "sk"
+    regionId === "sk" ||
+    regionId === "ab"
   ) {
     return false;
   }
