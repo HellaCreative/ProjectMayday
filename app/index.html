@@ -1493,7 +1493,28 @@
     .group-live.open { display: block; }
     .group-participant-summary { margin-top: 8px; color: var(--muted); font: 0.58rem/1.35 var(--mono); }
     .group-participant-list { display: grid; gap: 4px; margin-top: 7px; max-height: 150px; overflow-y: auto; }
-    .group-participant { display: flex; align-items: center; gap: 7px; padding: 5px 7px; border: 1px solid var(--line); border-radius: 7px; background: #fff; font: 0.62rem var(--sans); }
+    .group-participant {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 5px 7px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: #fff;
+      font: 0.62rem var(--sans);
+      cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+      transition: background 120ms ease, border-color 120ms ease;
+    }
+    .group-participant:hover {
+      background: var(--panel-2, #f4f6f8);
+      border-color: rgba(3, 84, 166, 0.28);
+    }
+    .group-participant:focus-visible {
+      outline: 2px solid var(--accent, #0354a6);
+      outline-offset: 1px;
+    }
     .group-participant-dot { width: 7px; height: 7px; flex: 0 0 7px; border-radius: 50%; background: #a6adb5; }
     .group-participant-dot.live { background: #20a464; box-shadow: 0 0 0 2px rgba(32, 164, 100, 0.14); }
     .group-participant-state { margin-left: auto; color: var(--muted); font: 0.54rem var(--mono); }
@@ -15042,6 +15063,36 @@
       return count;
     }
 
+    function resolveGroupParticipantCoords(userId) {
+      if (!userId) return null;
+      if (userId === currentAuthUser?.id) {
+        if (groupSharing && hasRiderLocation()) return [rider.lng, rider.lat];
+        return null;
+      }
+      const peer = groupRiders.get(userId);
+      if (!peer) return null;
+      const lng = Number(peer.lng);
+      const lat = Number(peer.lat);
+      if (!Number.isFinite(lng) || !Number.isFinite(lat)) return null;
+      return [lng, lat];
+    }
+
+    function focusGroupParticipant(userId) {
+      const coords = resolveGroupParticipantCoords(userId);
+      if (!coords || !map) {
+        accountStatus("No live location for that rider yet.", "error", "group");
+        return;
+      }
+      // Leave follow-lock so the camera stays on the selected rider.
+      if (followLocked) setFollowLocked(false);
+      map.flyTo({
+        center: coords,
+        zoom: Math.max(map.getZoom(), DEFAULT_DETAIL_ZOOM),
+        essential: true
+      });
+      accountStatus("", null, "group");
+    }
+
     function renderGroupParticipants() {
       const summary = document.getElementById("groupParticipantSummary");
       const list = document.getElementById("groupParticipantList");
@@ -15065,7 +15116,8 @@
         const status = selfStatus || peer?.status || null;
         const statusText = live && status && GS ? GS.statusLabel(status) : (live ? "live" : "offline");
         const distress = live && status && GS && GS.isDistressStatus(status);
-        return '<div class="group-participant"><span class="group-participant-dot' + (live ? ' live' : '') + '" aria-hidden="true"></span><span>' + escapeHtml(name) + (member.role === "owner" ? ' <span class="group-participant-state">owner</span>' : '') + '</span><span class="group-participant-state' + (distress ? ' distress' : '') + '">' + escapeHtml(statusText) + '</span></div>';
+        const focusHint = live ? "Tap to show on map" : "Location unavailable";
+        return '<div class="group-participant" role="button" tabindex="0" data-user-id="' + escapeHtml(member.user_id) + '" aria-label="' + escapeHtml(name) + ', ' + escapeHtml(statusText) + '. ' + focusHint + '"><span class="group-participant-dot' + (live ? ' live' : '') + '" aria-hidden="true"></span><span>' + escapeHtml(name) + (member.role === "owner" ? ' <span class="group-participant-state">owner</span>' : '') + '</span><span class="group-participant-state' + (distress ? ' distress' : '') + '">' + escapeHtml(statusText) + '</span></div>';
       }).join("");
       syncSelectedGroupDetails();
     }
@@ -16457,6 +16509,19 @@
       if (!button) return;
       const group = ridingGroups.find((row) => row.id === button.dataset.selectGroup);
       if (group) selectRidingGroup(group);
+    });
+    document.getElementById("groupParticipantList")?.addEventListener("click", (event) => {
+      if (event.target.closest("button, select, a, input, label")) return;
+      const row = event.target.closest(".group-participant[data-user-id]");
+      if (!row) return;
+      focusGroupParticipant(row.getAttribute("data-user-id"));
+    });
+    document.getElementById("groupParticipantList")?.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      const row = event.target.closest(".group-participant[data-user-id]");
+      if (!row || event.target !== row) return;
+      event.preventDefault();
+      focusGroupParticipant(row.getAttribute("data-user-id"));
     });
     window.addEventListener("offline", () => {
       if (groupSharing) accountStatus("Offline · live group sharing paused until connection returns.", "error");
