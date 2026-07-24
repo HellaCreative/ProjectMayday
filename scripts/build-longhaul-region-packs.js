@@ -128,6 +128,17 @@ const HUBS = {
     { lon: -98.9, lat: 51.2 }, // Dauphin
     { lon: -97.85, lat: 53.97 } // Thompson approach
   ],
+  sk: [
+    { lon: -104.618, lat: 50.445 }, // Regina
+    { lon: -106.67, lat: 52.133 }, // Saskatoon
+    { lon: -105.55, lat: 50.4 }, // Moose Jaw
+    { lon: -102.48, lat: 51.22 }, // Yorkton
+    { lon: -108.3, lat: 52.77 }, // North Battleford
+    { lon: -109.17, lat: 51.45 }, // Kindersley / west
+    { lon: -101.4, lat: 49.7 }, // MB border approach
+    { lon: -110.0, lat: 49.7 }, // AB border approach
+    { lon: -104.0, lat: 49.15 } // Estevan / south
+  ],
   nl: [{ lon: -52.712, lat: 47.561 }]
 };
 

@@ -92,7 +92,7 @@
         "adapter": "nrn",
         "status": "ready",
         "dateRetrieved": "2026-07-20",
-        "notes": "NRN ROADSEG ingested as national backbone artifact. Not routing-ready until regional validation and provincial-supplement policy from CANADA_DATA_SOURCE_AUDIT.md are applied."
+        "notes": "NRN omitted from routing fabric (OSM-only). NRN ROADSEG ingested as national backbone artifact. Not routing-ready until regional validation and provincial-supplement policy from CANADA_DATA_SOURCE_AUDIT.md are applied."
       },
       "provincial": {
         "sourceName": "Saskatchewan GeoHub road/trail layers",
@@ -104,12 +104,21 @@
         "notes": "Portal historically returned HTTP 404 during prior probes."
       },
       "routingReady": true,
-      "routingMode": "nrn-backbone",
+      "routingMode": "osm-only",
       "backboneArtifact": {
         "path": "routing/data/regions/sk/graph.v1.json.gz",
-        "edgeCount": 298182,
-        "nodeCount": 219343,
-        "gzBytes": 21857344
+        "edgeCount": 258120,
+        "nodeCount": 291617,
+        "gzBytes": 16958159
+      },
+      "osm": {
+        "adapter": "osm-roads",
+        "role": "sole-fabric",
+        "status": "ready",
+        "featureCount": 259265,
+        "added": 259265,
+        "license": "OpenStreetMap contributors (ODbL)",
+        "dateRetrieved": "2026-07-24"
       }
     },
     {

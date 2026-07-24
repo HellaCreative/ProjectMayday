@@ -401,7 +401,15 @@ function shouldSkipCorridorClip(resolution, paths) {
   const id = String(
     (resolution && resolution.regionIds && resolution.regionIds[0]) || ""
   ).toLowerCase();
-  return id === "ns" || id === "nb" || id === "pe" || id === "qc" || id === "on" || id === "mb";
+  return (
+    id === "ns" ||
+    id === "nb" ||
+    id === "pe" ||
+    id === "qc" ||
+    id === "on" ||
+    id === "mb" ||
+    id === "sk"
+  );
 }
 
 async function readGraphData(graphPath, options = {}) {

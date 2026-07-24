@@ -1,0 +1,174 @@
+{
+  "generatedAt": "2026-07-24T19:39:42.900Z",
+  "region": "SK",
+  "stack": [
+    "osm-only"
+  ],
+  "nrn": {
+    "adapter": null,
+    "featureCount": 0,
+    "omitted": "osm-only"
+  },
+  "osm": {
+    "adapter": "osm-roads",
+    "province": "SK",
+    "sourceName": "OpenStreetMap",
+    "sourceUrl": "https://download.geofabrik.de/north-america/canada/saskatchewan-latest.osm.pbf",
+    "downloadUrl": "https://download.geofabrik.de/north-america/canada/saskatchewan-latest.osm.pbf",
+    "license": "OpenStreetMap contributors (ODbL)",
+    "sourceDatasetVersion": "geofabrik:saskatchewan",
+    "dateRetrieved": "2026-07-24T19:39:36.854Z",
+    "status": "ok",
+    "notes": [
+      "OSM gap-fill for conventional motorized roads unmatched by NRN.",
+      "Excluded foot/bike-only, private/no, abandoned, and non-motorized paths.",
+      "track/service without clear surface default to motorized_unknown."
+    ],
+    "knownLimitations": [
+      "OSM tagging quality varies; not a legal access assertion.",
+      "Does not replace NRN identity — conflation dedupes against NRN first."
+    ],
+    "featureCount": 259265,
+    "scannedCount": 262003,
+    "excludedCount": 2738,
+    "excludedByReason": {
+      "access_denied": 2719,
+      "abandoned": 19
+    },
+    "classification": {
+      "surface": {
+        "paved": 41829,
+        "unknown": 8427,
+        "gravel": 103852,
+        "resource": 105157
+      },
+      "access": {
+        "motorized_permissive": 259265
+      },
+      "structure": {
+        "none": 256456,
+        "bridge": 2792,
+        "tunnel": 17
+      },
+      "roadTrack": {
+        "service": 82371,
+        "collector": 4637,
+        "local": 93004,
+        "arterial": 4810,
+        "ramp": 1524,
+        "freeway": 483,
+        "track": 45257,
+        "resource": 27179
+      },
+      "excluded": {}
+    },
+    "topology": null,
+    "generatedAt": "2026-07-24T19:39:36.855Z"
+  },
+  "osmConflation": null,
+  "provincial": {
+    "adapter": null,
+    "featureCount": 0,
+    "excludedByReason": {},
+    "classification": {}
+  },
+  "conflation": {
+    "freeSpaceConnectors": 0,
+    "stats": {
+      "backboneKept": 259265,
+      "supplementAdded": 0,
+      "supplementDuplicateSkipped": 0
+    }
+  },
+  "graph": {
+    "generatedAt": "2026-07-24T19:39:37.962Z",
+    "schemaVersion": "canada-regional-1",
+    "regionId": "sk",
+    "province": "SK",
+    "bbox": [
+      -110.46808,
+      48.59621,
+      -101.12132,
+      59.63851
+    ],
+    "nodeCount": 291617,
+    "edgeCount": 258120,
+    "componentCount": 56179,
+    "boundaryNodeCount": 393,
+    "accessCounts": {
+      "motorized_permissive": 258120
+    },
+    "surfaceCounts": {
+      "paved": 41502,
+      "unknown": 8270,
+      "gravel": 103582,
+      "access": 104766
+    },
+    "sourceCounts": {
+      "OpenStreetMap": 258120
+    },
+    "jsonBytes": 93640085,
+    "gzBytes": 16958159,
+    "lineage": {
+      "nrn": {
+        "adapter": null,
+        "featureCount": 0,
+        "omitted": "osm-only"
+      },
+      "osm": {
+        "adapter": "osm-roads",
+        "featureCount": 259265,
+        "role": "sole-fabric",
+        "added": 259265,
+        "duplicateSkipped": 0,
+        "classification": {
+          "surface": {
+            "paved": 41829,
+            "unknown": 8427,
+            "gravel": 103852,
+            "resource": 105157
+          },
+          "access": {
+            "motorized_permissive": 259265
+          },
+          "structure": {
+            "none": 256456,
+            "bridge": 2792,
+            "tunnel": 17
+          },
+          "roadTrack": {
+            "service": 82371,
+            "collector": 4637,
+            "local": 93004,
+            "arterial": 4810,
+            "ramp": 1524,
+            "freeway": 483,
+            "track": 45257,
+            "resource": 27179
+          },
+          "excluded": {}
+        },
+        "excludedByReason": {
+          "access_denied": 2719,
+          "abandoned": 19
+        }
+      },
+      "provincial": {
+        "adapter": null,
+        "featureCount": 0,
+        "excludedByReason": {},
+        "classification": {}
+      },
+      "endpointSnap": {
+        "meters": 18,
+        "snappedEndpoints": 0,
+        "note": "Provincial capillary endpoints within snap meters reuse existing fabric nodes (survey near-miss joins). No free-space edges."
+      }
+    },
+    "conflation": {
+      "stats": null,
+      "freeSpaceConnectors": 0
+    }
+  },
+  "freeSpaceConnectors": 0
+}

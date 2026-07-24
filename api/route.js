@@ -16,7 +16,7 @@ module.exports = async function handler(req, res) {
       ok: true,
       service: "dirt-route",
       engine: "dirt-node-astar",
-      note: "NS: OSM+NSTDB (no NRN). NB: OSM+Forest Roads (no NRN; provincial kept on longhaul). QC/PE/ON/MB: OSM-only. West Phase 1 continues SK→AB→BC; provincial overlays later for ON/AB/BC."
+      note: "NS: OSM+NSTDB (no NRN). NB: OSM+Forest Roads (no NRN; provincial kept on longhaul). QC/PE/ON/MB/SK: OSM-only (SK permanent). West Phase 1 continues AB→BC; provincial overlays later for ON/AB/BC."
     });
   }
 
@@ -59,6 +59,7 @@ module.exports.config = {
     "routing/data/regions/qc/longhaul.v1.json.gz",
     "routing/data/regions/pe/longhaul.v1.json.gz",
     "routing/data/regions/on/longhaul.v1.json.gz",
-    "routing/data/regions/mb/longhaul.v1.json.gz"
+    "routing/data/regions/mb/longhaul.v1.json.gz",
+    "routing/data/regions/sk/longhaul.v1.json.gz"
   ]
 };
