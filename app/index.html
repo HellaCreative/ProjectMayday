@@ -14854,8 +14854,13 @@
       if (entry.httpStatus === 0 || /Failed to fetch|NetworkError|Load failed/i.test(String(entry.errorMessage || ""))) {
         return "Client/network failure before a usable route JSON body arrived.";
       }
-      if (entry.httpStatus >= 500) {
-        return "Server/runtime error (often pack load OOM or timeout on longhaul).";
+      if (
+        entry.httpStatus >= 500 ||
+        /FUNCTION_INVOCATION_FAILED|graph_memory_pressure/i.test(
+          String(entry.rawPreview || "") + " " + String(entry.errorMessage || "") + " " + String(entry.apiError || "")
+        )
+      ) {
+        return "Server/runtime error (often pack load OOM or timeout on longhaul). NS→QC should chain NS|NB → NB|QC → QC — a single mega-merge OOMs Hobby.";
       }
       return null;
     }

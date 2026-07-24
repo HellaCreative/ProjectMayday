@@ -454,7 +454,7 @@ async function loadGraphsForRequest(resolution, options = {}) {
   let bufferMeters = Number(options.corridorBufferMeters);
   if (!Number.isFinite(bufferMeters) || bufferMeters <= 0) {
     if (paths.length >= 4) bufferMeters = 220000;
-    else if (anyLonghaul || onVercel) bufferMeters = 120000;
+    else if (anyLonghaul || onVercel) bufferMeters = paths.length > 1 ? 100000 : 120000;
     else bufferMeters = 150000;
   }
   const skipClip = shouldSkipCorridorClip(resolution, paths);
@@ -502,9 +502,31 @@ async function loadGraphsForRequest(resolution, options = {}) {
     const graphs = [];
     const hitRegions = new Set((resolution.hitRegions || []).map((r) => String(r).toLowerCase()));
     const longHaul = paths.length >= 4;
-    for (const p of paths) {
-      // Never retain full inflated longhaul JSON across the multi-pack loop —
-      // QC alone peaks near the Hobby RSS ceiling before clip.
+    // Inflate largest pack first, clip, strip source — peak RSS is one full
+    // pack + prior clipped stubs (QC full beside NB was Hobby OOM).
+    const orderedPaths = paths.slice().sort((a, b) => {
+      const score = (p) => {
+        const id = path.basename(path.dirname(p)).toLowerCase();
+        if (id === "qc") return 3;
+        if (id === "on" || id === "ns") return 2;
+        if (id === "nb") return 1;
+        return 0;
+      };
+      return score(b) - score(a);
+    });
+    for (const p of orderedPaths) {
+      // Soft guard near Hobby's 2048 MB kill — prefer JSON over bare
+      // FUNCTION_INVOCATION_FAILED when a prior hop left RSS elevated.
+      if (
+        onVercel &&
+        graphs.length > 0 &&
+        process.memoryUsage().rss > 1900 * 1024 * 1024
+      ) {
+        throw new Error(
+          "graph_memory_pressure: RSS too high to inflate another province pack; " +
+            "retry or shorten the hop corridor"
+        );
+      }
       let g = await readGraphData(p, { retain: false });
       const regionId = String(g.regionId || path.basename(path.dirname(p)) || "").toLowerCase();
       const isEndpoint = hitRegions.has(regionId);
@@ -523,16 +545,31 @@ async function loadGraphsForRequest(resolution, options = {}) {
       // longhaul clip forced Vercel to hold entire QC (~250MB JSON / ~1.5GB RSS)
       // beside NB → FUNCTION_INVOCATION_FAILED on Hobby.
       if (corridorLocations.length >= 2) {
+        // Multi-pack: keep buffers tight so QC does not retain a province-wide
+        // band on short border hops (Tantramar→Dégelis → ~16k edges @ 100km).
         const buf = alreadyLonghaul
-          ? Math.min(Math.max(bufferMeters, 100000), 140000)
+          ? Math.min(Math.max(bufferMeters, 90000), 110000)
           : isEndpoint
-            ? Math.max(bufferMeters, 200000)
+            ? Math.max(bufferMeters, 160000)
             : bufferMeters;
-        g = clipGraphToCorridor(g, corridorLocations, buf);
+        const clipped = clipGraphToCorridor(g, corridorLocations, buf);
+        // Drop full province arrays so V8 can reclaim before the next inflate.
+        if (g && g !== clipped) {
+          g.nodes = null;
+          g.edges = null;
+        }
+        g = clipped;
       }
       if (!g.edges || g.edges.length < 1) continue;
       g.regionId = regionId;
       graphs.push(g);
+      if (typeof global.gc === "function" && onVercel) {
+        try {
+          global.gc();
+        } catch (_) {
+          /* ignore */
+        }
+      }
     }
     if (!graphs.length) {
       throw new Error("Corridor clip removed all edges; widen corridorBufferMeters");

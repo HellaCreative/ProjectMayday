@@ -528,6 +528,21 @@ check("maritime/QC single-pack skips corridor clip (warm reuse)", () => {
   );
 });
 
+check("adventure NS→QC chain uses border seams not [A,B] mega-hop", () => {
+  const { corridorLocationsForRoute } = require("../../regional/merge");
+  const a = { lon: -63.34025, lat: 44.7649 }; // Porters Lake
+  const b = { lon: -74.59276, lat: 46.1197 }; // Mont Tremblant
+  const plain = corridorLocationsForRoute([a, b], { profile: "balanced" });
+  assert.strictEqual(plain.length, 2, "plain adventure stays [A,B]");
+  const chain = corridorLocationsForRoute([a, b], { profile: "balanced", forChain: true });
+  assert.ok(chain.length >= 3, "forChain inserts province seams, got " + chain.length);
+  // Must include Tantramar-ish + Dégelis-ish; must NOT force Confed Bridge (PE not on path).
+  const lons = chain.map((p) => p.lon);
+  assert.ok(lons.some((lon) => lon > -64.6 && lon < -64.1), "Tantramar seam");
+  assert.ok(lons.some((lon) => lon > -68.9 && lon < -68.4), "Dégelis QC entry");
+  assert.ok(!lons.some((lon) => Math.abs(lon - -63.75) < 0.05), "no PE bridge on NS→QC");
+});
+
 check("ON vs QC keeps Ottawa ON and Gatineau QC", () => {
   const { primaryRegionForPoint } = require("../../regional/select");
   assert.strictEqual(primaryRegionForPoint(-75.699, 45.425), "on", "Parliament Hill");

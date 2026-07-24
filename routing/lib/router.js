@@ -593,8 +593,12 @@ async function routeRequest(body = {}) {
 
 async function routeCanadaChain(body, graphResolution) {
   const profile = body.profile || "balanced";
-  // Adventure: [A, B] only — never city hubs. Cleanest: highway spine anchors.
-  const waypoints = corridorLocationsForRoute(body.locations || [], { profile });
+  // Adventure: province-seam joints (not city hubs) so each hop loads ≤2 packs.
+  // Cleanest: highway spine anchors. Plain [A,B] mega-merges OOM on Hobby.
+  const waypoints = corridorLocationsForRoute(body.locations || [], {
+    profile,
+    forChain: true
+  });
   if (waypoints.length < 2) {
     return {
       status: "error",
@@ -618,6 +622,14 @@ async function routeCanadaChain(body, graphResolution) {
   for (let i = 0; i < waypoints.length - 1; i += 1) {
     if (!useChainCache) {
       clearGraphCache();
+      // Encourage reclaim before the next inflate (QC longhaul ~1.3GB RSS).
+      if (typeof global.gc === "function") {
+        try {
+          global.gc();
+        } catch (_) {
+          /* ignore */
+        }
+      }
     }
     const hop = await routeRequest({
       ...body,

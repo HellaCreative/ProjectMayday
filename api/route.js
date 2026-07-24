@@ -31,10 +31,17 @@ module.exports = async function handler(req, res) {
     return res.status(code).json(result);
   } catch (err) {
     console.error("route failed", err);
-    return res.status(500).json({
+    const message = err && err.message ? err.message : "Routing failed";
+    const memoryPressure = /graph_memory_pressure/i.test(message);
+    return res.status(memoryPressure ? 503 : 500).json({
       status: "error",
-      error: "route_internal_error",
-      message: err && err.message ? err.message : "Routing failed"
+      error: memoryPressure ? "graph_memory_pressure" : "route_internal_error",
+      message,
+      // Helps Debug dumps when the isolate survives long enough to respond.
+      rssMb:
+        typeof process.memoryUsage === "function"
+          ? Math.round(process.memoryUsage().rss / (1024 * 1024))
+          : null
     });
   }
 };

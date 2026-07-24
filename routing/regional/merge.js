@@ -334,6 +334,59 @@ const ADVENTURE_CONNECTIVITY_CLIP = [
   { lon: -73.9, lat: 45.65 } // north of Montreal island
 ];
 
+/**
+ * Province-seam joints for canada-chain hops (adventure). Not city hubs —
+ * only land/bridge fabric keepers so each hop loads ≤2 packs. Dégelis sits
+ * inside QC so the final Laurentians leg is QC-only (Hobby OOM avoidance:
+ * a single A→B hop inflated NS+NB+QC ~463MB JSON → FUNCTION_INVOCATION_FAILED).
+ */
+const ADVENTURE_CHAIN_JOINTS = [
+  { lon: -64.35, lat: 45.92, between: ["ns", "nb"] }, // Tantramar / isthmus
+  { lon: -63.75, lat: 46.21, between: ["nb", "pe"] }, // Confederation Bridge
+  { lon: -68.65, lat: 47.55, between: ["nb", "qc"] } // Dégelis — QC entry
+];
+
+function dedupeCorridorPoints(pts, start, end, westToEast) {
+  const dedup = [];
+  for (const p of pts.sort((a, b) => (westToEast ? a.lon - b.lon : b.lon - a.lon))) {
+    const last = dedup[dedup.length - 1];
+    if (last && nearlySamePoint(last, p, 0.15)) continue;
+    dedup.push(p);
+  }
+  if (!nearlySamePoint(dedup[0], start, 0.02)) dedup.unshift(start);
+  if (!nearlySamePoint(dedup[dedup.length - 1], end, 0.02)) dedup.push(end);
+  return dedup;
+}
+
+/**
+ * Adventure canada-chain waypoints: border seams only (no Halifax/Moncton/…).
+ * Keeps NS→QC as NS|NB → NB|QC → QC instead of one multi-pack mega-hop.
+ */
+function adventureChainWaypoints(start, end) {
+  const { primaryRegionForPoint, provinceFamily } = require("./select");
+  const startFam = provinceFamily(primaryRegionForPoint(start.lon, start.lat));
+  const endFam = provinceFamily(primaryRegionForPoint(end.lon, end.lat));
+  if (!startFam || !endFam || startFam === endFam) return [start, end];
+
+  const regionPath = shortestRegionPath(startFam, endFam) || [];
+  if (regionPath.length < 2) return [start, end];
+  const pathSet = new Set(regionPath);
+  const westToEast = start.lon < end.lon;
+  const minLon = Math.min(start.lon, end.lon);
+  const maxLon = Math.max(start.lon, end.lon);
+
+  const pts = [start, end];
+  for (const j of ADVENTURE_CHAIN_JOINTS) {
+    if (!j.between.every((r) => pathSet.has(r))) continue;
+    if (j.lon < minLon - 0.35 || j.lon > maxLon + 0.35) continue;
+    if (nearlySamePoint(j, start) || nearlySamePoint(j, end)) continue;
+    // Do not nudgeOffUrbanCore — seams are placed on fabric keepers. Sackville /
+    // Amherst avoid boxes would shove Tantramar into the strait (match_failed).
+    pts.push({ lon: j.lon, lat: j.lat });
+  }
+  return dedupeCorridorPoints(pts, start, end, westToEast);
+}
+
 function adventureCorridorPoints(start, end, distKm, forClip) {
   if (!forClip) return [start, end];
   const westToEast = start.lon < end.lon;
@@ -351,15 +404,7 @@ function adventureCorridorPoints(start, end, distKm, forClip) {
       pts.push(nudgeOffUrbanCore(p));
     }
   }
-  const dedup = [];
-  for (const p of pts.sort((a, b) => (westToEast ? a.lon - b.lon : b.lon - a.lon))) {
-    const last = dedup[dedup.length - 1];
-    if (last && nearlySamePoint(last, p, 0.15)) continue;
-    dedup.push(p);
-  }
-  if (!nearlySamePoint(dedup[0], start, 0.02)) dedup.unshift(start);
-  if (!nearlySamePoint(dedup[dedup.length - 1], end, 0.02)) dedup.push(end);
-  return dedup;
+  return dedupeCorridorPoints(pts, start, end, westToEast);
 }
 
 function isCleanProfile(profile) {
@@ -369,9 +414,11 @@ function isCleanProfile(profile) {
 
 /**
  * @param {object[]} locations route pins (user stages preserved)
- * @param {{ profile?: string, forClip?: boolean }} [options]
+ * @param {{ profile?: string, forClip?: boolean, forChain?: boolean }} [options]
  *   profile — cleanest gets highway hubs; adventure never does.
  *   forClip — adventure may add chord samples to widen pack clip (not as routed hops).
+ *   forChain — adventure inserts province-seam joints so canada-chain hops
+ *     load ≤2 packs (avoids Hobby OOM on NS→QC mega-merge).
  */
 function corridorLocationsForRoute(locations, options = {}) {
   const pts = (locations || [])
@@ -404,8 +451,10 @@ function corridorLocationsForRoute(locations, options = {}) {
   if (families.size === 1 && families.has("qc")) return pts;
   if (span < 3 && distKm < 200) return pts;
 
-  // Adventure: no city hub chain. Routed hops stay [A, B]; clip may sample chord.
+  // Adventure: no city hub chain. forChain → border seams; forClip → chord
+  // samples for pack clipping; plain [A,B] otherwise (single-pack / local).
   if (!isCleanProfile(options.profile)) {
+    if (options.forChain) return adventureChainWaypoints(start, end);
     return adventureCorridorPoints(start, end, distKm, !!options.forClip);
   }
 
@@ -425,7 +474,9 @@ module.exports = {
   shortestRegionPath,
   regionsForRoute,
   corridorLocationsForRoute,
+  adventureChainWaypoints,
   ADVENTURE_URBAN_AVOID,
+  ADVENTURE_CHAIN_JOINTS,
   pointInAdventureUrbanCore,
   REGION_NEIGHBOURS,
   MATCH_METERS
