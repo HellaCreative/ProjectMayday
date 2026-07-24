@@ -117,6 +117,17 @@ const HUBS = {
     { lon: -80.4, lat: 45.35 }, // Parry Sound / 400 corridor
     { lon: -77.9, lat: 45.03 } // Bancroft / Madawaska
   ],
+  mb: [
+    { lon: -97.138, lat: 49.895 }, // Winnipeg
+    { lon: -97.94, lat: 49.85 }, // Portage la Prairie
+    { lon: -99.95, lat: 49.85 }, // Brandon
+    { lon: -98.1, lat: 49.5 }, // Winkler / southern corridor
+    { lon: -97.2, lat: 50.2 }, // Selkirk / north of Winnipeg
+    { lon: -94.49, lat: 49.78 }, // Kenora ON / MB approach
+    { lon: -101.3, lat: 49.7 }, // SK border / Virden approach
+    { lon: -98.9, lat: 51.2 }, // Dauphin
+    { lon: -97.85, lat: 53.97 } // Thompson approach
+  ],
   nl: [{ lon: -52.712, lat: 47.561 }]
 };
 

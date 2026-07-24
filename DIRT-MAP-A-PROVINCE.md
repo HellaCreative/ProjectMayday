@@ -37,7 +37,8 @@ NS is the reference build. Every next province copies the *model*, not the NS fi
 | **QC** | OSM-only longhaul + regional (unsplit `qc`) | Capillary later if chemins earn a place; still no NRN; no quadrant split |
 | **PE** | OSM-only longhaul + regional; NB↔PE via Confederation Bridge | Done for MVP — no provincial capillary to hunt unless a better layer appears |
 | **ON** | OSM-only longhaul + regional (service dropped on longhaul for Hobby) | Phase 2 MNR resource overlay; still no NRN |
-| **MB / SK** | Phase 1 OSM-only (in progress) | SK stays OSM-only; MB WMA specialty later |
+| **MB** | OSM-only longhaul + regional | WMA specialty overlay later |
+| **SK** | Phase 1 OSM-only (in progress) | Stays OSM-only permanently |
 | **AB / BC** | Phase 1 OSM-only (in progress) | Phase 2 Access Roads / FTEN overlays |
 | **NL / YT / NT / NU** | Mostly NRN backbone artifacts | Need OSM extract + capillary candidate before “gold” (YT/NT excluded from west build) |
 
@@ -92,7 +93,7 @@ Capillary candidate exists?
 | **QC** | chemins multiusages (adapter ready) | **OSM-only MVP (shipping)** | Unsplit single `qc` pack; NRN dropped; chemins not in live stack. Southern corridor + NB border + Gatineau/Laurentians usable. Far-north / lake-shore pins beyond ~750 m of OSM still fail snap. Capillary remains a later experiment. |
 | **PE** | none shippable | **OSM-only** | OSM coverage is the fabric (~22k edges). Confederation Trail is motor-free summer — not a resource-road supplement. `road_centerline` sparse / NRN-overlap. NB↔PE via Confederation Bridge (legal road; both OSM extracts include trunk halves; merge matches mid-bridge nodes). |
 | **ON** | MNR Road Segments (Phase 2) | **OSM-only MVP (shipping)** | Phase 1: Geofabrik OSM sole fabric; NRN dropped. Longhaul drops remote `service` mesh for Hobby QC\|ON RAM (~293k edges / ~103 MB inflated). Soft rematch + QC↔ON Hawkesbury seam. Phase 2: MNR resource-only overlay (exclude ORN duplicates); barriers as warnings. |
-| **MB** | WMA trails (specialty) | **Phase 1 pending** | OSM-only first; WMA vehicle-compatible trails later as specialty overlay. |
+| **MB** | WMA Official Trails (specialty) | **OSM-only MVP (shipping)** | Phase 1 OSM-only (~142k edges). ON↔MB Kenora seam; fixed bbox so MB no longer steals Kenora. WMA vehicle-compatible specialty overlay later — not full NSTDB. |
 | **SK** | none (NRN-derived SK Road Network — do not import) | **Phase 1 pending → OSM-only permanent** | Stay OSM-only; SK road network feeds NRN — never alternate graph. |
 | **AB** | Access/Facility Roads (Phase 2) | **Phase 1 pending** | OSM-only first; never auto-route cutlines without legal corroboration. |
 | **BC** | Forest Tenure Road Segments (Phase 2) | **Phase 1 pending** | OSM-only first; active existing tenure only; tenure ≠ public motorcycle access. |

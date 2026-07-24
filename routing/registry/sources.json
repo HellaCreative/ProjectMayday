@@ -124,24 +124,33 @@
         "adapter": "nrn",
         "status": "ready",
         "dateRetrieved": "2026-07-20",
-        "notes": "NRN ROADSEG ingested as national backbone artifact. Not product routing-ready until audit validation + supplement policy applied."
+        "notes": "NRN omitted from routing fabric (OSM-only). NRN ROADSEG ingested as national backbone artifact. Not product routing-ready until audit validation + supplement policy applied."
       },
       "provincial": {
-        "sourceName": "Manitoba Land Initiative / Geoportal",
+        "sourceName": "Manitoba WMA Official Trails (specialty)",
         "catalogueUrl": "https://mli2.gov.mb.ca",
         "format": "GIS download",
         "license": "verify before ingest",
         "adapter": null,
-        "status": "blocked",
-        "notes": "Portal historically unreachable during prior probes."
+        "status": "deferred",
+        "notes": "Phase 1 OSM-only shipping. Phase 2 specialty: WMA Official Trails only where vehicle-compatible and restrictions allow — not full NSTDB."
       },
       "routingReady": true,
-      "routingMode": "nrn-backbone",
+      "routingMode": "osm-only",
       "backboneArtifact": {
         "path": "routing/data/regions/mb/graph.v1.json.gz",
-        "edgeCount": 109357,
-        "nodeCount": 77332,
-        "gzBytes": 8675667
+        "edgeCount": 141671,
+        "nodeCount": 191099,
+        "gzBytes": 11272557
+      },
+      "osm": {
+        "adapter": "osm-roads",
+        "role": "sole-fabric",
+        "status": "ready",
+        "featureCount": 142989,
+        "added": 142989,
+        "license": "OpenStreetMap contributors (ODbL)",
+        "dateRetrieved": "2026-07-24"
       }
     },
     {

@@ -19,7 +19,8 @@ const REGION_BBOX = {
   // map via provinceFamily / isQcRegion for emergency packs and old deploys.
   qc: [-79.8, 44.9, -57.0, 62.7],
   on: [-95.2, 41.6, -74.3, 56.9],
-  mb: [-102.1, 48.9, -88.9, 60.1],
+  // East edge ~Ontario border (-95.15); do not cover Kenora (-94.5).
+  mb: [-102.1, 48.9, -95.0, 60.1],
   sk: [-110.1, 48.9, -101.3, 60.1],
   ab: [-120.1, 48.9, -109.9, 60.1],
   bc: [-139.1, 48.2, -114.0, 60.1],
@@ -76,6 +77,21 @@ function primaryRegionForPoint(lon, lat) {
     if (lat >= 54) return lon < -120 ? "bc" : "ab";
     // South: continental divide. Lake Louise AB ≈ -116.2; Golden BC ≈ -117.0.
     return lon < -116.4 ? "bc" : "ab";
+  }
+
+  // ON vs MB — rectangular MB bbox must not steal Kenora / NW Ontario.
+  if (ids.has("on") && ids.has("mb")) {
+    return lon < -95.15 ? "mb" : "on";
+  }
+
+  // MB vs SK — 101.36°W meridian (approx).
+  if (ids.has("mb") && ids.has("sk")) {
+    return lon < -101.36 ? "sk" : "mb";
+  }
+
+  // SK vs AB — 110°W meridian.
+  if (ids.has("sk") && ids.has("ab")) {
+    return lon < -110.0 ? "ab" : "sk";
   }
 
   // ON vs Quebec. Laurentians / Gatineau stay QC; Ottawa metro stays ON.
