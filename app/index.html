@@ -4401,6 +4401,102 @@
       .route-map-toast.routing::before { animation: none; }
     }
     .route-map-toast[hidden] { display: none !important; }
+
+    /* Offline basemap prefetch — obvious during Start Navigation / top-up. */
+    .offline-map-progress {
+      position: fixed;
+      top: max(96px, calc(env(safe-area-inset-top) + 86px));
+      left: 50%;
+      z-index: 61;
+      width: min(360px, calc(100vw - 24px));
+      padding: 10px 12px 11px;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 12px;
+      background: rgba(28, 25, 23, 0.96);
+      color: #fafaf9;
+      box-shadow: 0 8px 24px rgba(12, 10, 9, 0.28);
+      transform: translate(-50%, -8px);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 160ms ease, transform 160ms ease;
+    }
+    body.navigating .offline-map-progress {
+      top: calc(var(--p2-top-pad, max(54px, env(safe-area-inset-top))) + 88px);
+    }
+    body.navigating.hud-collapsed .offline-map-progress {
+      top: calc(var(--p2-top-pad, max(54px, env(safe-area-inset-top))) + 62px);
+    }
+    .offline-map-progress.visible {
+      opacity: 1;
+      transform: translate(-50%, 0);
+    }
+    .offline-map-progress[hidden] { display: none !important; }
+    .offline-map-progress-row {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+    .offline-map-progress-label {
+      flex: 1 1 auto;
+      min-width: 0;
+      font: 700 12px/1.25 var(--font-ui);
+      letter-spacing: -0.01em;
+    }
+    .offline-map-progress-count {
+      flex: 0 0 auto;
+      font: 600 11px/1.2 var(--font-mono);
+      color: rgba(250, 250, 249, 0.72);
+      letter-spacing: 0;
+      white-space: nowrap;
+    }
+    .offline-map-progress-track {
+      height: 8px;
+      border-radius: 999px;
+      background: rgba(250, 250, 249, 0.14);
+      overflow: hidden;
+    }
+    .offline-map-progress-fill {
+      height: 100%;
+      width: 0%;
+      border-radius: inherit;
+      background: var(--p2-orange, #e8790c);
+      transition: width 120ms linear;
+    }
+    .offline-map-progress.indeterminate .offline-map-progress-fill {
+      width: 36% !important;
+      animation: offline-map-indeterminate 1.1s ease-in-out infinite;
+    }
+    .offline-map-progress.complete .offline-map-progress-fill {
+      background: var(--p2-ok, #16a34a);
+    }
+    .offline-map-progress.partial .offline-map-progress-fill {
+      background: var(--p2-warn, #d97706);
+    }
+    .offline-map-progress.ready {
+      padding: 7px 11px 8px;
+    }
+    .offline-map-progress.ready .offline-map-progress-track {
+      height: 4px;
+    }
+    .offline-map-progress.ready .offline-map-progress-label {
+      font-size: 11px;
+      font-weight: 600;
+      color: rgba(250, 250, 249, 0.82);
+    }
+    .offline-map-progress.ready .offline-map-progress-count {
+      display: none;
+    }
+    @keyframes offline-map-indeterminate {
+      0% { transform: translateX(-120%); }
+      100% { transform: translateX(280%); }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .offline-map-progress.indeterminate .offline-map-progress-fill { animation: none; }
+      .offline-map-progress-fill { transition: none; }
+    }
+
     .route-tabs {
       display: flex !important;
       flex-direction: row !important;
@@ -7958,6 +8054,16 @@
 
   <div class="route-map-toast" id="routeMapToast" role="status" aria-live="polite" hidden></div>
 
+  <div class="offline-map-progress" id="offlineMapProgress" role="status" aria-live="polite" hidden>
+    <div class="offline-map-progress-row">
+      <div class="offline-map-progress-label" id="offlineMapProgressLabel">Saving map for offline…</div>
+      <div class="offline-map-progress-count" id="offlineMapProgressCount"></div>
+    </div>
+    <div class="offline-map-progress-track" aria-hidden="true">
+      <div class="offline-map-progress-fill" id="offlineMapProgressFill"></div>
+    </div>
+  </div>
+
   <!-- Unknown-access info popover (body-level so it never clips inside the drawer). -->
   <div class="access-info-tip" id="accessInfoTip" role="tooltip" hidden>Unknown access is for provincial/gov forest roads where motorcycle legality is not asserted. Ordinary OSM basemap roads stay routable without this toggle. Routes may still include closures, private land, seasonal restrictions, or enforcement.</div>
 
@@ -10468,8 +10574,73 @@
     const NAV_TILE_CACHE = "dirt-nav-basemap-v2";
     const NAV_TILE_LIMIT = 1200;
     const NAV_TILE_CONCURRENCY = 4;
-    const navTileRuntime = { active: false, prefetchId: 0, timer: null };
+    const navTileRuntime = { active: false, prefetchId: 0, timer: null, progressHideTimer: null };
     const navMapSession = { key: null };
+    const offlineMapProgressEl = document.getElementById("offlineMapProgress");
+    const offlineMapProgressLabel = document.getElementById("offlineMapProgressLabel");
+    const offlineMapProgressCount = document.getElementById("offlineMapProgressCount");
+    const offlineMapProgressFill = document.getElementById("offlineMapProgressFill");
+
+    function clearOfflineMapProgressTimer() {
+      if (navTileRuntime.progressHideTimer) {
+        clearTimeout(navTileRuntime.progressHideTimer);
+        navTileRuntime.progressHideTimer = null;
+      }
+    }
+
+    function setOfflineMapProgress(state) {
+      if (!offlineMapProgressEl) return;
+      clearOfflineMapProgressTimer();
+      const mode = state?.mode || "hidden";
+      if (mode === "hidden") {
+        offlineMapProgressEl.hidden = true;
+        offlineMapProgressEl.classList.remove("visible", "indeterminate", "complete", "partial", "ready");
+        if (offlineMapProgressFill) offlineMapProgressFill.style.width = "0%";
+        return;
+      }
+
+      const completed = Math.max(0, Number(state.completed) || 0);
+      const total = Math.max(0, Number(state.total) || 0);
+      const knownTotal = total > 0;
+      const pct = knownTotal ? Math.min(100, Math.round((completed / total) * 100)) : 0;
+      const label = state.label || "Saving map for offline…";
+      const countText = state.countText != null
+        ? state.countText
+        : (knownTotal ? (completed + " / " + total) : "");
+
+      offlineMapProgressEl.hidden = false;
+      offlineMapProgressEl.classList.add("visible");
+      offlineMapProgressEl.classList.toggle("indeterminate", mode === "progress" && !knownTotal);
+      offlineMapProgressEl.classList.toggle("complete", mode === "complete" || mode === "ready");
+      offlineMapProgressEl.classList.toggle("partial", mode === "partial");
+      offlineMapProgressEl.classList.toggle("ready", mode === "ready");
+      if (offlineMapProgressLabel) offlineMapProgressLabel.textContent = label;
+      if (offlineMapProgressCount) offlineMapProgressCount.textContent = countText;
+      if (offlineMapProgressFill) {
+        offlineMapProgressFill.style.width = (mode === "progress" && !knownTotal)
+          ? ""
+          : ((mode === "complete" || mode === "ready") ? "100%" : (pct + "%"));
+      }
+
+      if (mode === "complete") {
+        navTileRuntime.progressHideTimer = setTimeout(() => {
+          navTileRuntime.progressHideTimer = null;
+          setOfflineMapProgress({
+            mode: "ready",
+            label: "Map ready · offline",
+            completed: total || completed,
+            total: total || completed,
+            countText: ""
+          });
+        }, 2800);
+      } else if (mode === "partial") {
+        navTileRuntime.progressHideTimer = setTimeout(() => {
+          navTileRuntime.progressHideTimer = null;
+          // Keep partial result visible; settle to a quieter but still honest chip.
+          if (offlineMapProgressEl) offlineMapProgressEl.classList.add("ready");
+        }, 4200);
+      }
+    }
 
     function basemapTileUrl(z, x, y) {
       return "https://vector.openstreetmap.org/shortbread_v1/" + z + "/" + x + "/" + y + ".mvt";
@@ -10559,10 +10730,28 @@
     }
 
     async function prefetchRouteBasemap(coords, options = {}) {
-      if (!("caches" in window)) return { ok: false, reason: "no-cache-api" };
+      if (!("caches" in window)) {
+        setOfflineMapProgress({
+          mode: "partial",
+          label: "Map partly saved · offline cache unavailable",
+          completed: 0,
+          total: 0,
+          countText: ""
+        });
+        return { ok: false, reason: "no-cache-api" };
+      }
       const plan = collectRouteBasemapTiles(coords);
       const tiles = plan.tiles || [];
-      if (!tiles.length) return { ok: true, cached: 0, total: 0 };
+      if (!tiles.length) {
+        setOfflineMapProgress({
+          mode: "complete",
+          label: "Map saved · ready for offline",
+          completed: 0,
+          total: 0,
+          countText: "0 / 0"
+        });
+        return { ok: true, cached: 0, total: 0 };
+      }
       const prefetchId = ++navTileRuntime.prefetchId;
       const cache = await caches.open(NAV_TILE_CACHE);
       let cached = 0;
@@ -10571,6 +10760,16 @@
       let cursor = 0;
       let completed = 0;
       const retainExisting = !!options.retainExisting;
+      const progressLabel = options.topUp
+        ? "Updating offline map…"
+        : "Saving map for offline…";
+
+      setOfflineMapProgress({
+        mode: "progress",
+        label: progressLabel,
+        completed: 0,
+        total: tiles.length
+      });
 
       async function worker() {
         while (cursor < tiles.length && prefetchId === navTileRuntime.prefetchId) {
@@ -10589,6 +10788,14 @@
             failed += 1;
           }
           completed += 1;
+          if (completed === tiles.length || completed % 8 === 0) {
+            setOfflineMapProgress({
+              mode: "progress",
+              label: progressLabel,
+              completed,
+              total: tiles.length
+            });
+          }
           if (options.announce && (completed % 24 === 0 || completed === tiles.length)) {
             setStatus("Saving map for this ride · " + completed + " / " + tiles.length, "ok");
           }
@@ -10613,9 +10820,28 @@
           return cache.delete(request);
         }));
       }
+      const saved = cached + fetched;
+      const incomplete = failed > 0 || plan.truncated;
+      if (incomplete) {
+        setOfflineMapProgress({
+          mode: "partial",
+          label: "Map partly saved · " + saved + "/" + tiles.length + " tiles",
+          completed: saved,
+          total: tiles.length,
+          countText: saved + " / " + tiles.length
+        });
+      } else {
+        setOfflineMapProgress({
+          mode: "complete",
+          label: options.topUp ? "Map updated · ready for offline" : "Map saved · ready for offline",
+          completed: saved,
+          total: tiles.length,
+          countText: saved + " / " + tiles.length
+        });
+      }
       return {
         ok: failed === 0,
-        cached: cached + fetched,
+        cached: saved,
         total: tiles.length,
         fetched,
         failed,
@@ -10632,6 +10858,8 @@
         clearTimeout(navTileRuntime.timer);
         navTileRuntime.timer = null;
       }
+      clearOfflineMapProgressTimer();
+      setOfflineMapProgress({ mode: "hidden" });
       if (!("caches" in window)) return;
       try { await caches.delete(NAV_TILE_CACHE); } catch (_) { /* ignore */ }
     }
@@ -10653,8 +10881,19 @@
       const snapshot = coords.map((coord) => [coord[0], coord[1]]);
       navTileRuntime.timer = setTimeout(() => {
         navTileRuntime.timer = null;
-        prefetchRouteBasemap(snapshot, Object.assign({ retainExisting: true }, options)).catch((err) => {
+        prefetchRouteBasemap(snapshot, Object.assign({
+          retainExisting: true,
+          topUp: true,
+          announce: false
+        }, options)).catch((err) => {
           console.warn("Route map top-up failed", err);
+          setOfflineMapProgress({
+            mode: "partial",
+            label: "Map partly saved · top-up failed",
+            completed: 0,
+            total: 0,
+            countText: ""
+          });
         });
       }, 400);
     }
@@ -14525,6 +14764,13 @@
           : (session.sameSession ? "Navigation on · updating saved map…" : "Saving map for this ride…"),
         "ok"
       );
+      setOfflineMapProgress({
+        mode: "progress",
+        label: session.sameSession ? "Updating offline map…" : "Saving map for offline…",
+        completed: 0,
+        total: 0,
+        countText: "…"
+      });
       ensureRouteCorridorChunks().catch((err) => {
         console.warn("Nav corridor context unavailable", err);
       });
@@ -14537,7 +14783,8 @@
       });
       prefetchRouteBasemap(packCoords, {
         announce: true,
-        retainExisting: session.sameSession
+        retainExisting: session.sameSession,
+        topUp: session.sameSession
       }).then((result) => {
         if (result.reason === "superseded") return;
         const zoomText = result.minZoom != null
@@ -14554,6 +14801,13 @@
         );
       }).catch((err) => {
         console.warn("Route map prefetch failed", err);
+        setOfflineMapProgress({
+          mode: "partial",
+          label: "Map partly saved · download failed",
+          completed: 0,
+          total: 0,
+          countText: ""
+        });
         setStatus("Navigation on · map download incomplete · ride cues still active", "error");
       });
     }
@@ -14574,6 +14828,8 @@
       setPipVisible(false);
       if (window.speechSynthesis) window.speechSynthesis.cancel();
       navTileRuntime.active = false;
+      clearOfflineMapProgressTimer();
+      setOfflineMapProgress({ mode: "hidden" });
       if (!followLocked) {
         view3d = false;
         syncViewModeBtn();
