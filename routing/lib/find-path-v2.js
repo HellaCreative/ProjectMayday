@@ -13,6 +13,7 @@ const {
   unpackSeasonal
 } = require("./pack-v2");
 const { surfaceMultiplier, classSpeedKmh, costPerKmView } = require("./profile-costs");
+const { pruneGeographicLoops } = require("./path-pruning");
 
 function isOpenStreetMapSource(source) {
   return /openstreetmap/i.test(String(source || ""));
@@ -324,6 +325,11 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
     node = parent;
   }
   used.reverse();
+  const pruned =
+    profile === "dirt"
+      ? pruneGeographicLoops(used, (edge) => edge.coords)
+      : { edges: used, prunedLoopCount: 0, prunedMeters: 0 };
+  const routeEdges = pruned.edges;
 
   const geometry = [];
   const segments = [];
@@ -338,7 +344,7 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
     motorized_unknown: 0
   };
 
-  for (const edge of used) {
+  for (const edge of routeEdges) {
     for (const c of edge.coords) {
       const last = geometry[geometry.length - 1];
       if (last && last[0] === c[0] && last[1] === c[1]) continue;
@@ -393,7 +399,9 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
       ellipseFactor: Infinity,
       ellipseLabel: "csr-uni",
       ellipseEscalation: "v2_uni",
-      profileCost: dist[endNode]
+      profileCost: dist[endNode],
+      prunedLoopCount: pruned.prunedLoopCount,
+      prunedLoopMeters: Math.round(pruned.prunedMeters)
     },
     stats: {
       pavedPercent: pct(bySurfaceM.paved || 0),

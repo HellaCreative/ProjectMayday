@@ -12,6 +12,7 @@ const {
 } = require("./graph");
 const { resolveGraphRequest } = require("../regional/select");
 const { corridorLocationsForRoute, pointInAdventureUrbanCore } = require("../regional/merge");
+const { pruneGeographicLoops } = require("./path-pruning");
 const {
   surfaceMultiplier: profileSurfaceMultiplier,
   roadClassMultiplier,
@@ -1749,6 +1750,13 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds) 
   }
 
   function materializeUsed(used, searchMeta) {
+    const pruned =
+      profile === "dirt"
+        ? pruneGeographicLoops(used, resolveEdgeCoords)
+        : { edges: used, prunedLoopCount: 0, prunedMeters: 0 };
+    used = pruned.edges;
+    searchMeta.prunedLoopCount = pruned.prunedLoopCount;
+    searchMeta.prunedLoopMeters = Math.round(pruned.prunedMeters);
     const geometry = [];
     const segments = [];
     let distanceMeters = 0;
