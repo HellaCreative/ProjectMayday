@@ -8333,6 +8333,7 @@
 
   <script src="../routing/lib/roadbook-curves.js"></script>
   <script src="../routing/lib/stages.js"></script>
+  <script src="../routing/lib/offline-tiles.js"></script>
   <script src="../app/group-sharing.js"></script>
   <script>
 (function (global) {
@@ -10440,16 +10441,11 @@
     // OSM Shortbread vector tiles are live by default. During navigation we
     // prefetch the route corridor into Cache Storage and read tiles through
     // an offline:// protocol so the map keeps rendering off-cell.
-    const NAV_TILE_CACHE = "dirt-nav-basemap-v1";
-    const navTileRuntime = { active: false };
+    const NAV_TILE_CACHE = "dirt-nav-basemap-v2";
+    const NAV_TILE_LIMIT = 1200;
+    const NAV_TILE_CONCURRENCY = 4;
+    const navTileRuntime = { active: false, prefetchId: 0, timer: null };
 
-    function lonToTileX(lon, z) {
-      return Math.floor((lon + 180) / 360 * (2 ** z));
-    }
-    function latToTileY(lat, z) {
-      const rad = lat * Math.PI / 180;
-      return Math.floor((1 - Math.log(Math.tan(rad) + 1 / Math.cos(rad)) / Math.PI) / 2 * (2 ** z));
-    }
     function basemapTileUrl(z, x, y) {
       return "https://vector.openstreetmap.org/shortbread_v1/" + z + "/" + x + "/" + y + ".mvt";
     }
@@ -10484,64 +10480,108 @@
     }
 
     function collectRouteBasemapTiles(coords) {
-      const keys = new Set();
-      if (!coords || coords.length < 2) return [];
-      const samples = densifyRouteCoords(coords, 0.35);
-      const levels = [
-        { z: 12, pad: 0, step: 2 },
-        { z: 13, pad: 1, step: 1 },
-        { z: 14, pad: 1, step: 1 }
-      ];
-      for (const level of levels) {
-        for (let i = 0; i < samples.length; i += level.step) {
-          const c = samples[i];
-          const cx = lonToTileX(c[0], level.z);
-          const cy = latToTileY(c[1], level.z);
-          const max = 2 ** level.z;
-          for (let dx = -level.pad; dx <= level.pad; dx += 1) {
-            for (let dy = -level.pad; dy <= level.pad; dy += 1) {
-              const x = cx + dx;
-              const y = cy + dy;
-              if (x < 0 || y < 0 || x >= max || y >= max) continue;
-              keys.add(level.z + "/" + x + "/" + y);
-            }
-          }
-        }
+      if (!globalThis.DirtOfflineTiles) {
+        return { tiles: [], minZoom: 14, maxZoom: 14, truncated: false };
       }
-      return Array.from(keys);
+      return DirtOfflineTiles.collectRouteTiles(coords, {
+        viewport: { width: window.innerWidth, height: window.innerHeight },
+        maxNativeZoom: 14,
+        maxTiles: NAV_TILE_LIMIT,
+        paddingRatio: 0.05
+      });
     }
 
-    async function prefetchRouteBasemap(coords) {
+    function offlineRouteCoordinates(fallbackCoords) {
+      if (!navContext || !Array.isArray(navContext.stages)) return fallbackCoords;
+      const all = [];
+      for (const stage of navContext.stages) {
+        for (const coord of stage?.route?.geometry || []) {
+          const previous = all[all.length - 1];
+          if (!previous || previous[0] !== coord[0] || previous[1] !== coord[1]) all.push(coord);
+        }
+      }
+      return all.length >= 2 ? all : fallbackCoords;
+    }
+
+    async function prefetchRouteBasemap(coords, options = {}) {
       if (!("caches" in window)) return { ok: false, reason: "no-cache-api" };
-      const tiles = collectRouteBasemapTiles(coords).slice(0, 700);
+      const plan = collectRouteBasemapTiles(coords);
+      const tiles = plan.tiles || [];
       if (!tiles.length) return { ok: true, cached: 0, total: 0 };
+      const prefetchId = ++navTileRuntime.prefetchId;
       const cache = await caches.open(NAV_TILE_CACHE);
       let cached = 0;
       let fetched = 0;
-      for (let i = 0; i < tiles.length; i += 1) {
-        const parts = tiles[i].split("/");
-        const url = basemapTileUrl(Number(parts[0]), Number(parts[1]), Number(parts[2]));
-        if (await cache.match(url)) {
-          cached += 1;
-        } else {
+      let failed = 0;
+      let cursor = 0;
+      let completed = 0;
+      const keepUrls = new Set(tiles.map((tile) => basemapTileUrl(tile.z, tile.x, tile.y)));
+
+      async function worker() {
+        while (cursor < tiles.length && prefetchId === navTileRuntime.prefetchId) {
+          const tile = tiles[cursor++];
+          const url = basemapTileUrl(tile.z, tile.x, tile.y);
           try {
-            const res = await fetch(url);
-            if (res.ok) {
+            if (await cache.match(url)) {
+              cached += 1;
+            } else {
+              const res = await fetch(url);
+              if (!res.ok) throw new Error("HTTP " + res.status);
               await cache.put(url, res.clone());
               fetched += 1;
             }
-          } catch (_) { /* keep going; cached tiles still help */ }
-        }
-        if (i % 24 === 0 || i === tiles.length - 1) {
-          setStatus("Saving map for this ride · " + (i + 1) + " / " + tiles.length, "ok");
-          await yieldToBrowser();
+          } catch (_) {
+            failed += 1;
+          }
+          completed += 1;
+          if (options.announce && (completed % 24 === 0 || completed === tiles.length)) {
+            setStatus("Saving map for this ride · " + completed + " / " + tiles.length, "ok");
+          }
         }
       }
-      return { ok: true, cached: cached + fetched, total: tiles.length, fetched };
+
+      await Promise.all(Array.from(
+        { length: Math.min(NAV_TILE_CONCURRENCY, tiles.length) },
+        () => worker()
+      ));
+      if (prefetchId !== navTileRuntime.prefetchId) {
+        return { ok: false, reason: "superseded", cached: cached + fetched, total: tiles.length };
+      }
+
+      // Keep only the latest complete route pack so repeated planning cannot
+      // consume unbounded phone storage. Cache misses remain best-effort.
+      const existing = await cache.keys();
+      await Promise.all(existing.map((request) => {
+        if (keepUrls.has(request.url)) return null;
+        return cache.delete(request);
+      }));
+      return {
+        ok: failed === 0,
+        cached: cached + fetched,
+        total: tiles.length,
+        fetched,
+        failed,
+        minZoom: plan.minZoom,
+        maxZoom: plan.maxZoom,
+        truncated: plan.truncated
+      };
+    }
+
+    function scheduleRouteBasemapPrefetch(coords) {
+      if (!coords || coords.length < 2 || !("caches" in window)) return;
+      if (navTileRuntime.timer) clearTimeout(navTileRuntime.timer);
+      const snapshot = coords.map((coord) => [coord[0], coord[1]]);
+      navTileRuntime.timer = setTimeout(() => {
+        navTileRuntime.timer = null;
+        prefetchRouteBasemap(snapshot).catch((err) => {
+          console.warn("Route map background prefetch failed", err);
+        });
+      }, 700);
     }
 
     async function clearNavBasemapCache() {
       navTileRuntime.active = false;
+      navTileRuntime.prefetchId += 1;
       if (!("caches" in window)) return;
       try { await caches.delete(NAV_TILE_CACHE); } catch (_) { /* ignore */ }
     }
@@ -11662,6 +11702,7 @@
     function afterStageUpdate() {
       planAggregate = RS.aggregateTrip(planTrip);
       syncPlanActiveRoute();
+      scheduleRouteBasemapPrefetch(activeRouteCoordinates());
       renderStageList();
       updatePlanStatus();
       renderStageMarkers();
@@ -12306,6 +12347,7 @@
         return;
       }
       activeRoute = route;
+      scheduleRouteBasemapPrefetch(activeRouteCoordinates());
       showImportedTrack(record, false);
       syncRouteExportUi();
       setStatus("Starting navigation on “" + (record.name || "imported track") + "”", "ok", "route");
@@ -12560,6 +12602,7 @@
       setRouteMode("plan");
       planAggregate = RS.aggregateTrip(planTrip);
       syncPlanActiveRoute();
+      scheduleRouteBasemapPrefetch(activeRouteCoordinates());
       renderStageList();
       renderStageMarkers();
       updatePlanStatus();
@@ -14406,27 +14449,35 @@
           : "Saving map for this ride…",
         "ok"
       );
-      try {
-        await ensureRouteCorridorChunks();
-        // Junction cues may use a tiny corridor graph only — never the province pack.
-        try {
-          await ensureRoutingGraph();
-        } catch (err) {
-          console.warn("Nav corridor graph unavailable for junction cues", err);
-        }
+      const packCoords = offlineRouteCoordinates(coords);
+      ensureRouteCorridorChunks().catch((err) => {
+        console.warn("Nav corridor context unavailable", err);
+      });
+      // Junction cues may use a tiny corridor graph only — never the province pack.
+      ensureRoutingGraph().then(() => {
         navManeuvers = buildNavManeuvers(coords);
-        const result = await prefetchRouteBasemap(coords);
+        updateNavGuidance();
+      }).catch((err) => {
+        console.warn("Nav corridor graph unavailable for junction cues", err);
+      });
+      prefetchRouteBasemap(packCoords, { announce: true }).then((result) => {
+        if (result.reason === "superseded") return;
+        const zoomText = result.minZoom != null
+          ? " · z" + result.minZoom + "–" + result.maxZoom
+          : "";
+        const incomplete = result.failed || result.truncated;
         setStatus(
           (navSimEnabled ? "Sim · " : "") +
-          "Navigation on · map saved (" + (result.cached || 0) + " tiles) · " +
+          "Navigation on · map " + (incomplete ? "partly saved" : "saved") +
+          " (" + (result.cached || 0) + "/" + (result.total || 0) + " tiles)" + zoomText + " · " +
           Math.max(0, navManeuvers.length - 1) + " " +
           (cueMode === "junctions" ? "junction" : "roadbook") + " cues",
-          "ok"
+          incomplete ? "error" : "ok"
         );
-      } catch (err) {
+      }).catch((err) => {
         console.warn("Route map prefetch failed", err);
         setStatus("Navigation on · map download incomplete · ride cues still active", "error");
-      }
+      });
     }
 
     function stopNavigation() {
@@ -14444,7 +14495,7 @@
       if (navStageLine) navStageLine.hidden = true;
       setPipVisible(false);
       if (window.speechSynthesis) window.speechSynthesis.cancel();
-      clearNavBasemapCache().catch(() => {});
+      navTileRuntime.active = false;
       if (!followLocked) {
         view3d = false;
         syncViewModeBtn();
@@ -14462,7 +14513,7 @@
       syncRouteChrome();
       followChip.classList.toggle("visible", !followLocked && geoWatchId != null);
       if (typeof clearIncidentRecoveryUI === "function") clearIncidentRecoveryUI();
-      setStatus("Navigation ended · offline map cleared", "ok");
+      setStatus("Navigation ended · saved route map retained", "ok");
     }
 
     function toggleNavigation() {
@@ -15178,6 +15229,7 @@
           plannedStart = { lng: networkRoute.snapStart[0], lat: networkRoute.snapStart[1] };
         }
         activeRoute = networkRoute;
+        scheduleRouteBasemapPrefetch(activeRouteCoordinates());
         routeMessage = "";
         finishRouteToast(toastRequestId, "complete");
         const warnText = (api.warnings || []).map((w) => w.message || w.code).filter(Boolean).join(" · ");
