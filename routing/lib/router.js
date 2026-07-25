@@ -1517,6 +1517,113 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds) 
     }
   }
 
+  // Permissive junction near-miss repair when Allow is OFF (all profiles).
+  // NS-style packs carry OSM and NSTDB as co-mapped fabrics that only share
+  // node ids where conflation found exact shared vertices. Legal public roads
+  // (OSM unclassified/residential, NSTDB paved/gravel locals) are often left
+  // as dangling tips 0–40 m from the through network. With Allow ON the
+  // motorized_unknown capillary bridges those gaps, but with Allow OFF whole
+  // permissive roads became unreachable → silent no_route (Farm Road,
+  // Heatherton NS). Join permissive dead-end tips to the nearest eligible
+  // node within 40 m. Tip↔tip IS allowed here (unlike the unknown soft-stitch
+  // above): a mapped public road ending metres from another mapped public
+  // road is a junction miss, not a gray connector across unmapped land.
+  // Meters stay real and stitches still pay the last-resort premium.
+  let permStitchCount = 0;
+  if (!policy.motorizedUnknown && !geom) {
+    const JOIN_M = 40;
+    const padDeg = Math.max(0.04, (abMeters / 111320) * 0.35);
+    const minLon = Math.min(startLL[0], endLL[0]) - padDeg;
+    const maxLon = Math.max(startLL[0], endLL[0]) + padDeg;
+    const minLat = Math.min(startLL[1], endLL[1]) - padDeg;
+    const maxLat = Math.max(startLL[1], endLL[1]) + padDeg;
+    const CELL = 0.0005; // ~55 m cells — a one-ring scan covers the 40 m radius
+    const degree = new Int32Array(n);
+    for (let i = 0; i < edges.length; i += 1) {
+      const edge = edges[i];
+      if (!accessAllowed(edge.ac, policy, enums, edge)) continue;
+      if (edge.a < n) degree[edge.a] += 1;
+      if (edge.b < n) degree[edge.b] += 1;
+    }
+    const grid = new Map();
+    const eligibleSeen = new Set();
+    const tips = [];
+    for (let i = 0; i < edges.length; i += 1) {
+      const edge = edges[i];
+      if (!accessAllowed(edge.ac, policy, enums, edge)) continue;
+      for (const nodeId of [edge.a, edge.b]) {
+        if (nodeId >= n || eligibleSeen.has(nodeId)) continue;
+        const ll = nodeCoord[nodeId];
+        if (!ll || ll[0] < minLon || ll[0] > maxLon || ll[1] < minLat || ll[1] > maxLat) continue;
+        eligibleSeen.add(nodeId);
+        const key = Math.floor(ll[0] / CELL) + ":" + Math.floor(ll[1] / CELL);
+        let bucket = grid.get(key);
+        if (!bucket) {
+          bucket = [];
+          grid.set(key, bucket);
+        }
+        bucket.push(nodeId);
+        if (degree[nodeId] === 1) tips.push(nodeId);
+      }
+    }
+    const MAX_PERM_STITCHES = 1500;
+    const permSeen = new Set();
+    for (const tip of tips) {
+      if (permStitchCount >= MAX_PERM_STITCHES) break;
+      const ll = nodeCoord[tip];
+      // Never re-join the tip to its own edge's far endpoint.
+      const direct = new Set();
+      for (const idx of adjacency[tip] || []) {
+        const edge = edges[idx];
+        direct.add(edge.a === tip ? edge.b : edge.a);
+      }
+      const cx = Math.floor(ll[0] / CELL);
+      const cy = Math.floor(ll[1] / CELL);
+      let best = null;
+      let bestD = JOIN_M + 1;
+      for (let dx = -1; dx <= 1; dx += 1) {
+        for (let dy = -1; dy <= 1; dy += 1) {
+          for (const cand of grid.get(cx + dx + ":" + (cy + dy)) || []) {
+            if (cand === tip || direct.has(cand)) continue;
+            const cll = nodeCoord[cand];
+            if (!cll) continue;
+            const d = haversineMeters(ll, cll);
+            if (d < bestD) {
+              bestD = d;
+              best = cand;
+            }
+          }
+        }
+      }
+      if (best == null || bestD > JOIN_M) continue;
+      const key = Math.min(tip, best) + ":" + Math.max(tip, best);
+      if (permSeen.has(key)) continue;
+      permSeen.add(key);
+      addVirt(tip, best, {
+        a: tip,
+        b: best,
+        coords: [ll, nodeCoord[best]],
+        meters: Math.max(1, bestD),
+        surface: 4,
+        access: 1,
+        structure: 0,
+        roadTrack: "local",
+        edgeId: "perm-stitch-" + key,
+        componentId: -1,
+        source: "perm-stitch",
+        sourceDescription: "Mapped-road junction near-miss join",
+        sourceRecordId: key,
+        confidence: "low",
+        seasonal: false,
+        virtual: true,
+        accessLeg: true,
+        softStitch: true,
+        forward: true
+      });
+      permStitchCount += 1;
+    }
+  }
+
   function insideEllipse(node, factor) {
     if (!Number.isFinite(factor) || factor === Infinity) return true;
     const ll = nodeCoord[node];
@@ -1888,7 +1995,8 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds) 
     ellipseLabel: chosenAttempt.label,
     ellipseEscalation: chosenAttempt.escalation,
     profileCost: chosen.profileCost,
-    softStitchCount
+    softStitchCount,
+    permStitchCount
   });
 }
 
