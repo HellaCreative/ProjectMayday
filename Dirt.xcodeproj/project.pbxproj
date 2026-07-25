@@ -7,8 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		2BA100000000000000000001 /* MapLibre in Frameworks */ = {isa = PBXBuildFile; productRef = 2BA200000000000000000001 /* MapLibre */; };
-		2BA100000000000000000002 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 2BA200000000000000000002 /* Supabase */; };
+		2BA101013014F00100000001 /* MapLibre in Frameworks */ = {isa = PBXBuildFile; productRef = 2BA201013014F00100000001 /* MapLibre */; };
+		2BA101013014F00100000002 /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 2BA201013014F00100000002 /* Supabase */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -57,8 +57,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				2BA100000000000000000001 /* MapLibre in Frameworks */,
-				2BA100000000000000000002 /* Supabase in Frameworks */,
+				2BA101013014F00100000001 /* MapLibre in Frameworks */,
+				2BA101013014F00100000002 /* Supabase in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -119,8 +119,8 @@
 			);
 			name = Dirt;
 			packageProductDependencies = (
-				2BA200000000000000000001 /* MapLibre */,
-				2BA200000000000000000002 /* Supabase */,
+				2BA201013014F00100000001 /* MapLibre */,
+				2BA201013014F00100000002 /* Supabase */,
 			);
 			productName = Dirt;
 			productReference = 2B0105553014DE2B00065435 /* Dirt.app */;
@@ -205,8 +205,8 @@
 			mainGroup = 2B01054C3014DE2B00065435;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				2BA300000000000000000001 /* XCRemoteSwiftPackageReference "maplibre-gl-native-distribution" */,
-				2BA300000000000000000002 /* XCRemoteSwiftPackageReference "supabase-swift" */,
+				2BA301013014F00100000001 /* XCRemoteSwiftPackageReference "maplibre-gl-native-distribution" */,
+				2BA301013014F00100000002 /* XCRemoteSwiftPackageReference "supabase-swift" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 2B0105563014DE2B00065435 /* Products */;
@@ -603,7 +603,7 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		2BA300000000000000000001 /* XCRemoteSwiftPackageReference "maplibre-gl-native-distribution" */ = {
+		2BA301013014F00100000001 /* XCRemoteSwiftPackageReference "maplibre-gl-native-distribution" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/maplibre/maplibre-gl-native-distribution";
 			requirement = {
@@ -611,7 +611,7 @@
 				minimumVersion = 6.0.0;
 			};
 		};
-		2BA300000000000000000002 /* XCRemoteSwiftPackageReference "supabase-swift" */ = {
+		2BA301013014F00100000002 /* XCRemoteSwiftPackageReference "supabase-swift" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/supabase/supabase-swift.git";
 			requirement = {
@@ -622,14 +622,14 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		2BA200000000000000000001 /* MapLibre */ = {
+		2BA201013014F00100000001 /* MapLibre */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 2BA300000000000000000001 /* XCRemoteSwiftPackageReference "maplibre-gl-native-distribution" */;
+			package = 2BA301013014F00100000001 /* XCRemoteSwiftPackageReference "maplibre-gl-native-distribution" */;
 			productName = MapLibre;
 		};
-		2BA200000000000000000002 /* Supabase */ = {
+		2BA201013014F00100000002 /* Supabase */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 2BA300000000000000000002 /* XCRemoteSwiftPackageReference "supabase-swift" */;
+			package = 2BA301013014F00100000002 /* XCRemoteSwiftPackageReference "supabase-swift" */;
 			productName = Supabase;
 		};
 /* End XCSwiftPackageProductDependency section */
