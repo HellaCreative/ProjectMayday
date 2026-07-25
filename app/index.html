@@ -1626,6 +1626,19 @@
     .group-participant-dot.live { background: #20a464; box-shadow: 0 0 0 2px rgba(32, 164, 100, 0.14); }
     .group-participant-state { margin-left: auto; color: var(--muted); font: 0.54rem var(--mono); }
     .group-participant-state.distress { color: #c1122f; font-weight: 700; }
+    .group-participant-route {
+      flex: 0 0 auto;
+      margin-left: 6px;
+      min-height: 26px;
+      padding: 4px 8px;
+      border: 1px solid rgba(28, 25, 23, 0.16);
+      border-radius: 4px;
+      background: var(--fig-sheet-2, #f3f1ee);
+      color: var(--fig-ink, #1c1917);
+      font: 700 10px/1 var(--font-ui);
+      letter-spacing: -0.01em;
+    }
+    .group-participant-route:active { background: #e7e4e0; }
     .sharing-popover {
       position: fixed;
       top: 50%;
@@ -4331,7 +4344,8 @@
       position: fixed;
       top: max(84px, calc(env(safe-area-inset-top) + 72px));
       left: 50%;
-      z-index: 34;
+      /* Above group/account sheets (z≈45–49) so routing feedback stays visible. */
+      z-index: 60;
       width: max-content;
       max-width: calc(100vw - 32px);
       padding: 8px 12px;
@@ -10441,10 +10455,21 @@
     // OSM Shortbread vector tiles are live by default. During navigation we
     // prefetch the route corridor into Cache Storage and read tiles through
     // an offline:// protocol so the map keeps rendering off-cell.
+    //
+    // navMapSession rules (route-corridor tiles):
+    // 1. Prefetch ONLY on Start Navigation (never when a From-here / Plan route
+    //    merely completes).
+    // 2. Same session key → KEEP cache and top-up missing tiles.
+    // 3. Mid-trip reroute (impassable / backtrack / recalculate) → KEEP existing
+    //    tiles and prefetch any new corridor; do NOT clear.
+    // 4. CLEAR tiles only when Start Navigation begins on a different route
+    //    identity (new destination / cleared plan + new plan / Clear route then
+    //    new route). Stopping nav UI alone must NOT wipe the map cache.
     const NAV_TILE_CACHE = "dirt-nav-basemap-v2";
     const NAV_TILE_LIMIT = 1200;
     const NAV_TILE_CONCURRENCY = 4;
     const navTileRuntime = { active: false, prefetchId: 0, timer: null };
+    const navMapSession = { key: null };
 
     function basemapTileUrl(z, x, y) {
       return "https://vector.openstreetmap.org/shortbread_v1/" + z + "/" + x + "/" + y + ".mvt";
@@ -10467,7 +10492,7 @@
         try {
           const res = await fetch(realUrl);
           if (!res.ok) throw new Error("HTTP " + res.status);
-          if (navTileRuntime.active) {
+          if (navTileRuntime.active || navMapSession.key) {
             try { await cache.put(realUrl, res.clone()); } catch (_) { /* quota */ }
           }
           return { data: await res.arrayBuffer() };
@@ -10503,6 +10528,36 @@
       return all.length >= 2 ? all : fallbackCoords;
     }
 
+    function roundSessionCoord(value) {
+      return Math.round(Number(value) * 1e5);
+    }
+
+    function navMapSessionKeyFromRoute(coords) {
+      if (plannerTab === "plan" && planTrip && Array.isArray(planTrip.stages) && planTrip.stages.length) {
+        const parts = [];
+        for (const stage of planTrip.stages) {
+          if (stage.start && Number.isFinite(stage.start.lng) && Number.isFinite(stage.start.lat)) {
+            parts.push(roundSessionCoord(stage.start.lng) + "," + roundSessionCoord(stage.start.lat));
+          }
+          if (stage.end && Number.isFinite(stage.end.lng) && Number.isFinite(stage.end.lat)) {
+            parts.push(roundSessionCoord(stage.end.lng) + "," + roundSessionCoord(stage.end.lat));
+          }
+        }
+        if (parts.length >= 2) return "plan:" + parts.join("|");
+      }
+      const pts = (coords && coords.length >= 2) ? coords : activeRouteCoordinates();
+      if (!pts || pts.length < 2) return null;
+      const first = pts[0];
+      const mid = pts[Math.floor(pts.length / 2)];
+      const last = pts[pts.length - 1];
+      return "geom:" + [
+        pts.length,
+        roundSessionCoord(first[0]), roundSessionCoord(first[1]),
+        roundSessionCoord(mid[0]), roundSessionCoord(mid[1]),
+        roundSessionCoord(last[0]), roundSessionCoord(last[1])
+      ].join(":");
+    }
+
     async function prefetchRouteBasemap(coords, options = {}) {
       if (!("caches" in window)) return { ok: false, reason: "no-cache-api" };
       const plan = collectRouteBasemapTiles(coords);
@@ -10515,7 +10570,7 @@
       let failed = 0;
       let cursor = 0;
       let completed = 0;
-      const keepUrls = new Set(tiles.map((tile) => basemapTileUrl(tile.z, tile.x, tile.y)));
+      const retainExisting = !!options.retainExisting;
 
       async function worker() {
         while (cursor < tiles.length && prefetchId === navTileRuntime.prefetchId) {
@@ -10548,13 +10603,16 @@
         return { ok: false, reason: "superseded", cached: cached + fetched, total: tiles.length };
       }
 
-      // Keep only the latest complete route pack so repeated planning cannot
-      // consume unbounded phone storage. Cache misses remain best-effort.
-      const existing = await cache.keys();
-      await Promise.all(existing.map((request) => {
-        if (keepUrls.has(request.url)) return null;
-        return cache.delete(request);
-      }));
+      // New-route sessions may prune to the current corridor. Same-session
+      // top-ups and mid-trip reroutes retain prior corridor tiles.
+      if (!retainExisting) {
+        const keepUrls = new Set(tiles.map((tile) => basemapTileUrl(tile.z, tile.x, tile.y)));
+        const existing = await cache.keys();
+        await Promise.all(existing.map((request) => {
+          if (keepUrls.has(request.url)) return null;
+          return cache.delete(request);
+        }));
+      }
       return {
         ok: failed === 0,
         cached: cached + fetched,
@@ -10563,27 +10621,42 @@
         failed,
         minZoom: plan.minZoom,
         maxZoom: plan.maxZoom,
-        truncated: plan.truncated
+        truncated: plan.truncated,
+        retained: retainExisting
       };
     }
 
-    function scheduleRouteBasemapPrefetch(coords) {
+    async function clearNavBasemapCache() {
+      navTileRuntime.prefetchId += 1;
+      if (navTileRuntime.timer) {
+        clearTimeout(navTileRuntime.timer);
+        navTileRuntime.timer = null;
+      }
+      if (!("caches" in window)) return;
+      try { await caches.delete(NAV_TILE_CACHE); } catch (_) { /* ignore */ }
+    }
+
+    async function beginNavMapSession(coords) {
+      const key = navMapSessionKeyFromRoute(coords);
+      const sameSession = !!(key && navMapSession.key && key === navMapSession.key);
+      if (!sameSession) {
+        await clearNavBasemapCache();
+        navMapSession.key = key;
+      }
+      navTileRuntime.active = true;
+      return { sameSession, key };
+    }
+
+    function topUpNavMapSession(coords, options = {}) {
       if (!coords || coords.length < 2 || !("caches" in window)) return;
       if (navTileRuntime.timer) clearTimeout(navTileRuntime.timer);
       const snapshot = coords.map((coord) => [coord[0], coord[1]]);
       navTileRuntime.timer = setTimeout(() => {
         navTileRuntime.timer = null;
-        prefetchRouteBasemap(snapshot).catch((err) => {
-          console.warn("Route map background prefetch failed", err);
+        prefetchRouteBasemap(snapshot, Object.assign({ retainExisting: true }, options)).catch((err) => {
+          console.warn("Route map top-up failed", err);
         });
-      }, 700);
-    }
-
-    async function clearNavBasemapCache() {
-      navTileRuntime.active = false;
-      navTileRuntime.prefetchId += 1;
-      if (!("caches" in window)) return;
-      try { await caches.delete(NAV_TILE_CACHE); } catch (_) { /* ignore */ }
+      }, 400);
     }
 
     async function ensureRouteCorridorChunks() {
@@ -11702,7 +11775,6 @@
     function afterStageUpdate() {
       planAggregate = RS.aggregateTrip(planTrip);
       syncPlanActiveRoute();
-      scheduleRouteBasemapPrefetch(activeRouteCoordinates());
       renderStageList();
       updatePlanStatus();
       renderStageMarkers();
@@ -12347,7 +12419,6 @@
         return;
       }
       activeRoute = route;
-      scheduleRouteBasemapPrefetch(activeRouteCoordinates());
       showImportedTrack(record, false);
       syncRouteExportUi();
       setStatus("Starting navigation on “" + (record.name || "imported track") + "”", "ok", "route");
@@ -12602,7 +12673,6 @@
       setRouteMode("plan");
       planAggregate = RS.aggregateTrip(planTrip);
       syncPlanActiveRoute();
-      scheduleRouteBasemapPrefetch(activeRouteCoordinates());
       renderStageList();
       renderStageMarkers();
       updatePlanStatus();
@@ -14417,9 +14487,10 @@
       }
       if (!ensureGeoWatch()) return;
       const coords = activeRouteCoordinates();
+      const packCoords = offlineRouteCoordinates(coords);
+      const session = await beginNavMapSession(packCoords);
 
       navigating = true;
-      navTileRuntime.active = true;
       pipSwapped = false;
       view3d = true;
       headingUp = true;
@@ -14442,14 +14513,18 @@
       applyMainDetailCamera(true, { resetZoom: true });
       syncRouteExportUi();
       updateNavGuidance();
-      speakCue("Navigation started. Saving map for this ride.", "nav-start");
+      speakCue(
+        session.sameSession
+          ? "Navigation started. Updating saved map."
+          : "Navigation started. Saving map for this ride.",
+        "nav-start"
+      );
       setStatus(
         navSimEnabled
           ? "Nav sim · tap map to place rider · arrows nudge · saving map…"
-          : "Saving map for this ride…",
+          : (session.sameSession ? "Navigation on · updating saved map…" : "Saving map for this ride…"),
         "ok"
       );
-      const packCoords = offlineRouteCoordinates(coords);
       ensureRouteCorridorChunks().catch((err) => {
         console.warn("Nav corridor context unavailable", err);
       });
@@ -14460,7 +14535,10 @@
       }).catch((err) => {
         console.warn("Nav corridor graph unavailable for junction cues", err);
       });
-      prefetchRouteBasemap(packCoords, { announce: true }).then((result) => {
+      prefetchRouteBasemap(packCoords, {
+        announce: true,
+        retainExisting: session.sameSession
+      }).then((result) => {
         if (result.reason === "superseded") return;
         const zoomText = result.minZoom != null
           ? " · z" + result.minZoom + "–" + result.maxZoom
@@ -14644,7 +14722,10 @@
       if (!routeMapToast) return;
       let message = "";
       const plannerOpen = plannerDrawerState !== "closed" && !navigating;
-      if (plannerOpen && (routeToastState === "routing" || routeToastState === "complete" || routeToastState === "error")) {
+      // Active routing / complete / error toasts always show — even with the
+      // planner closed or during navigation — so member-route and reroute cues
+      // are never silent in production.
+      if (routeToastState === "routing" || routeToastState === "complete" || routeToastState === "error") {
         message = routeToastMessage;
       } else if (plannerOpen && plannerTab === "here") {
         if (activeRoute) {
@@ -15118,7 +15199,7 @@
       };
     }
 
-    async function calculateRoute() {
+    async function calculateRoute(options = {}) {
       const start = activeStart();
       if (!start || !destination) {
         activeRoute = null;
@@ -15137,7 +15218,10 @@
         }
       }
       const jobId = ++routeJobId;
-      const toastRequestId = beginRouteToast("Plotting a course…");
+      const toastRouting = options.toastRouting || "Plotting a course…";
+      const toastComplete = options.toastComplete || "Route complete";
+      const toastError = options.toastError || "Route unavailable";
+      const toastRequestId = beginRouteToast(toastRouting);
       const accessPolicy = currentAccessPolicy();
       const debugBase = {
         mode: plannerTab === "plan" || routeMode === "plan" ? "Plan" : "From here",
@@ -15208,7 +15292,7 @@
           activeRoute = null;
           setStatus(lastNetworkRouteReason, "error", "route");
           setRouteCardOpen(true);
-          finishRouteToast(toastRequestId, "error", "Route unavailable");
+          finishRouteToast(toastRequestId, "error", toastError);
           refreshRouteDraft();
           return;
         }
@@ -15229,9 +15313,8 @@
           plannedStart = { lng: networkRoute.snapStart[0], lat: networkRoute.snapStart[1] };
         }
         activeRoute = networkRoute;
-        scheduleRouteBasemapPrefetch(activeRouteCoordinates());
         routeMessage = "";
-        finishRouteToast(toastRequestId, "complete");
+        finishRouteToast(toastRequestId, "complete", toastComplete);
         const warnText = (api.warnings || []).map((w) => w.message || w.code).filter(Boolean).join(" · ");
         const showWarn = Boolean(
           warnText &&
@@ -15270,7 +15353,7 @@
         routeMessage = "Routing failed<strong>" + lastNetworkRouteReason + "</strong>";
         setStatus(lastNetworkRouteReason, "error", "route");
         setRouteCardOpen(true);
-        finishRouteToast(toastRequestId, "error", "Routing failed");
+        finishRouteToast(toastRequestId, "error", toastError);
         refreshRouteDraft();
       }
     }
@@ -15610,7 +15693,10 @@
         const statusText = live && status && GS ? GS.statusLabel(status) : (live ? "live" : "offline");
         const distress = live && status && GS && GS.isDistressStatus(status);
         const focusHint = live ? "Tap to show on map" : "Location unavailable";
-        return '<div class="group-participant" role="button" tabindex="0" data-user-id="' + escapeHtml(member.user_id) + '" aria-label="' + escapeHtml(name) + ', ' + escapeHtml(statusText) + '. ' + focusHint + '"><span class="group-participant-dot' + (live ? ' live' : '') + '" aria-hidden="true"></span><span>' + escapeHtml(name) + (member.role === "owner" ? ' <span class="group-participant-state">owner</span>' : '') + '</span><span class="group-participant-state' + (distress ? ' distress' : '') + '">' + escapeHtml(statusText) + '</span></div>';
+        const routeBtn = live && member.user_id !== currentAuthUser?.id
+          ? '<button class="group-participant-route" type="button" data-route-to-participant="' + escapeHtml(member.user_id) + '">Route</button>'
+          : "";
+        return '<div class="group-participant" role="button" tabindex="0" data-user-id="' + escapeHtml(member.user_id) + '" aria-label="' + escapeHtml(name) + ', ' + escapeHtml(statusText) + '. ' + focusHint + '"><span class="group-participant-dot' + (live ? ' live' : '') + '" aria-hidden="true"></span><span>' + escapeHtml(name) + (member.role === "owner" ? ' <span class="group-participant-state">owner</span>' : '') + '</span><span class="group-participant-state' + (distress ? ' distress' : '') + '">' + escapeHtml(statusText) + '</span>' + routeBtn + '</div>';
       }).join("");
       syncSelectedGroupDetails();
     }
@@ -16207,31 +16293,67 @@
       return true;
     }
 
-    async function routeToGroupRider() {
-      if (!groupRouteTarget || !hasRiderLocation()) { setStatus("Your location is needed to route to a rider", "error", "route"); return; }
-      const riderName = groupRouteTarget.displayName;
-      // Crack the planner open first — the routing toast only renders there,
-      // so a member tap otherwise looks like a silent no-op while we wait.
-      setPlannerDrawerState("collapsed");
-      const toastId = beginRouteToast("Routing to “" + riderName + "”…");
-      setStatus("Routing to “" + riderName + "”…", "ok", "route");
-      try {
-        const api = await routeApi({ lng: rider.lng, lat: rider.lat }, { lng: groupRouteTarget.lng, lat: groupRouteTarget.lat });
-        if (!api || api.status !== "complete") throw new Error(api?.message || "No route found");
-        setRouteMode("here");
-        plannedStart = { lng: rider.lng, lat: rider.lat };
-        destination = { lng: groupRouteTarget.lng, lat: groupRouteTarget.lat };
-        activeRoute = mapApiRouteToActiveRoute(api);
-        routeMessage = "";
-        routeMode = "here";
-        refreshRouteDraft();
-        setPlannerDrawerState("collapsed");
-        finishRouteToast(toastId, "complete", "Route to “" + riderName + "” ready");
-        setStatus("Route to “" + riderName + "” ready", "ok", "route");
-      } catch (err) {
-        finishRouteToast(toastId, "error", "Could not route to “" + riderName + "” · " + (err.message || "no route"));
-        setStatus("Could not route to rider · " + (err.message || "no route"), "error", "route");
+    async function routeToGroupRider(explicitTarget) {
+      const target = explicitTarget || groupRouteTarget;
+      if (!target || !Number.isFinite(target.lng) || !Number.isFinite(target.lat)) {
+        const toastId = beginRouteToast("No member location to route to");
+        finishRouteToast(toastId, "error", "No member location to route to");
+        setStatus("No member location to route to", "error", "route");
+        accountStatus("No live location for that rider yet.", "error", "group");
+        return;
       }
+      if (!hasRiderLocation()) {
+        const toastId = beginRouteToast("Your location is needed to route to a rider");
+        finishRouteToast(toastId, "error", "Your location is needed to route to a rider");
+        setStatus("Your location is needed to route to a rider", "error", "route");
+        accountStatus("Turn on location to route to a member.", "error", "group");
+        setPlannerDrawerState("collapsed");
+        return;
+      }
+      const riderName = target.displayName || "Rider";
+      groupRouteTarget = target;
+      // Close overlay sheets so the map toast and From-here planner are visible.
+      if (typeof setGroupSheetOpen === "function") setGroupSheetOpen(false);
+      if (typeof setAccountSheetOpen === "function") setAccountSheetOpen(false);
+      hidePopup();
+      // Switch to From here first (resets toast state), then set B and route
+      // with unmistakable member-named feedback.
+      setRouteMode("here");
+      destination = { lng: target.lng, lat: target.lat };
+      setPlannerDrawerState("expanded");
+      try {
+        await calculateRoute({
+          toastRouting: "Routing to “" + riderName + "”…",
+          toastComplete: "Route to “" + riderName + "” ready",
+          toastError: "Could not route to “" + riderName + "”"
+        });
+        if (activeRoute) {
+          setStatus("Route to “" + riderName + "” ready", "ok", "route");
+          accountStatus("Route to “" + riderName + "” ready · Start navigation when set.", "ok", "group");
+        }
+      } catch (err) {
+        const msg = "Could not route to “" + riderName + "” · " + (err.message || "no route");
+        setStatus(msg, "error", "route");
+        accountStatus(msg, "error", "group");
+      }
+    }
+
+    function routeTargetFromGroupMember(userId) {
+      if (!userId || userId === currentAuthUser?.id) return null;
+      const peer = groupRiders.get(userId);
+      if (!peer || !Number.isFinite(peer.lng) || !Number.isFinite(peer.lat)) return null;
+      const member = (selectedGroupMembers || []).find((row) => row.user_id === userId);
+      const profile = member ? (Array.isArray(member.profiles) ? member.profiles[0] : member.profiles) : null;
+      return {
+        lng: peer.lng,
+        lat: peer.lat,
+        userId,
+        displayName: peer.displayName || profile?.display_name || "Rider",
+        status: peer.status || "available",
+        groupId: selectedRidingGroup?.id || peer.groupId || null,
+        groupName: selectedRidingGroup?.name || peer.groupName || "Group",
+        lastSeenAt: peer.lastSeenAt || null
+      };
     }
 
     map.on("load", async () => {
@@ -17032,6 +17154,19 @@
       if (group) selectRidingGroup(group);
     });
     document.getElementById("groupParticipantList")?.addEventListener("click", (event) => {
+      const routeBtn = event.target.closest("[data-route-to-participant]");
+      if (routeBtn) {
+        event.stopPropagation();
+        const target = routeTargetFromGroupMember(routeBtn.getAttribute("data-route-to-participant"));
+        if (!target) {
+          accountStatus("No live location for that rider yet.", "error", "group");
+          const toastId = beginRouteToast("No live location for that rider");
+          finishRouteToast(toastId, "error", "No live location for that rider");
+          return;
+        }
+        routeToGroupRider(target);
+        return;
+      }
       if (event.target.closest("button, select, a, input, label")) return;
       const row = event.target.closest(".group-participant[data-user-id]");
       if (!row) return;
@@ -17863,7 +17998,11 @@
         setStatus("Stage ended from route report", "ok");
         return;
       }
-      setStatus("Finding a verified " + (kind === "backtrack" ? "backtrack" : kind === "return" ? "return" : "detour") + "…", "ok");
+      const toastId = beginRouteToast("Rerouting…");
+      if (navCueMain) navCueMain.textContent = "Rerouting…";
+      if (navCueSub) navCueSub.textContent = "Finding a verified path around the report";
+      if (navCueDist) navCueDist.textContent = "…";
+      setStatus("Rerouting…", "ok");
       let result;
       try {
         if (kind === "around") result = await computeFindAround(report);
@@ -17874,6 +18013,17 @@
         result = { fail: "Recovery failed · " + ((err && err.message) || "error") };
       }
       recoveryState = { report, kind, ...result };
+      if (result && result.fail) {
+        finishRouteToast(toastId, "error", result.fail);
+        if (navCueMain) navCueMain.textContent = "Reroute failed";
+        if (navCueSub) navCueSub.textContent = result.fail;
+        setStatus(result.fail, "error");
+      } else {
+        finishRouteToast(toastId, "complete", "Reroute ready · review to continue");
+        if (navCueMain) navCueMain.textContent = "Reroute ready";
+        if (navCueSub) navCueSub.textContent = "Review the detour, then continue navigation";
+        setStatus("Reroute ready · confirm to continue", "ok");
+      }
       showRecoveryConfirm();
     }
 
@@ -18124,6 +18274,7 @@
       const st = recoveryState;
       if (!st || !st.candidate) return;
       // Only now — after explicit confirmation — do we replace the active route.
+      // Same navMapSession: KEEP existing offline tiles and top-up the new corridor.
       activeRoute = st.candidate;
       const coords = activeRouteCoordinates();
       if (coords.length) {
@@ -18147,7 +18298,17 @@
       ensureRiderOnTop();
       closeRecoveryConfirm();
       closeRecoverySheet();
-      setStatus("Replacement route applied · reported section avoided", "ok");
+      const doneId = beginRouteToast("Reroute complete — continuing");
+      finishRouteToast(doneId, "complete", "Reroute complete — continuing");
+      if (navCueMain) navCueMain.textContent = "Continue navigation";
+      if (navCueSub) navCueSub.textContent = "Reroute complete · follow the updated line";
+      setStatus("Reroute complete — continuing", "ok");
+      speakCue("Reroute complete. Continue navigation.", "reroute-complete");
+      topUpNavMapSession(offlineRouteCoordinates(coords));
+      // Resume live guidance after a brief complete cue.
+      setTimeout(() => {
+        if (navigating) updateNavGuidance();
+      }, 1200);
     }
 
     // ---- Incident preview + report map layer (items 7/8) ----------------
