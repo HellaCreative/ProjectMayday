@@ -4488,6 +4488,51 @@
     .offline-map-progress.ready .offline-map-progress-count {
       display: none;
     }
+    .offline-map-indicator {
+      pointer-events: auto;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 30px;
+      padding: 5px 6px 5px 9px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 8px;
+      background: rgba(28, 25, 23, 0.96);
+      color: #fafaf9;
+      box-shadow: 0 4px 14px rgba(12, 10, 9, 0.22);
+      font: 700 10px/1 var(--font-ui);
+      white-space: nowrap;
+    }
+    .offline-map-indicator[hidden] { display: none !important; }
+    .offline-map-indicator > i {
+      width: 14px;
+      height: 14px;
+      color: var(--p2-ok, #16a34a);
+      stroke-width: 2.25;
+    }
+    .offline-map-indicator-dismiss {
+      display: grid;
+      place-items: center;
+      width: 24px;
+      height: 24px;
+      margin-left: 2px;
+      padding: 0;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      color: rgba(250, 250, 249, 0.72);
+      cursor: pointer;
+    }
+    .offline-map-indicator-dismiss:hover,
+    .offline-map-indicator-dismiss:active {
+      background: rgba(250, 250, 249, 0.1);
+      color: #fafaf9;
+    }
+    .offline-map-indicator-dismiss > i {
+      width: 14px;
+      height: 14px;
+      stroke-width: 2.25;
+    }
     @keyframes offline-map-indeterminate {
       0% { transform: translateX(-120%); }
       100% { transform: translateX(280%); }
@@ -7823,6 +7868,13 @@
         <span class="brand-dirt">DIRT<span>.</span></span>
         <span class="brand-by">MAYDAY</span>
       </a>
+      <div class="offline-map-indicator" id="offlineMapIndicator" role="status" aria-label="Offline map saved" hidden>
+        <i data-lucide="map" aria-hidden="true"></i>
+        <span>Offline map</span>
+        <button class="offline-map-indicator-dismiss" id="offlineMapIndicatorDismiss" type="button" aria-label="Dismiss offline map indicator" title="Dismiss">
+          <i data-lucide="x" aria-hidden="true"></i>
+        </button>
+      </div>
       <button class="poc-debug-btn" id="pocDebugBtn" type="button" title="Copy recent routing attempts" aria-haspopup="dialog" aria-controls="pocDebugSheet" aria-expanded="false">Debug</button>
     </div>
     <div class="nav-hud-divider" aria-hidden="true"></div>
@@ -10580,6 +10632,17 @@
     const offlineMapProgressLabel = document.getElementById("offlineMapProgressLabel");
     const offlineMapProgressCount = document.getElementById("offlineMapProgressCount");
     const offlineMapProgressFill = document.getElementById("offlineMapProgressFill");
+    const offlineMapIndicator = document.getElementById("offlineMapIndicator");
+    const offlineMapIndicatorDismiss = document.getElementById("offlineMapIndicatorDismiss");
+
+    function setOfflineMapIndicator(visible) {
+      if (!offlineMapIndicator) return;
+      offlineMapIndicator.hidden = !visible;
+    }
+
+    offlineMapIndicatorDismiss?.addEventListener("click", () => {
+      setOfflineMapIndicator(false);
+    });
 
     function clearOfflineMapProgressTimer() {
       if (navTileRuntime.progressHideTimer) {
@@ -10596,9 +10659,18 @@
         offlineMapProgressEl.hidden = true;
         offlineMapProgressEl.classList.remove("visible", "indeterminate", "complete", "partial", "ready");
         if (offlineMapProgressFill) offlineMapProgressFill.style.width = "0%";
+        setOfflineMapIndicator(false);
+        return;
+      }
+      if (mode === "ready") {
+        offlineMapProgressEl.hidden = true;
+        offlineMapProgressEl.classList.remove("visible", "indeterminate", "complete", "partial", "ready");
+        if (offlineMapProgressFill) offlineMapProgressFill.style.width = "0%";
+        setOfflineMapIndicator(true);
         return;
       }
 
+      setOfflineMapIndicator(false);
       const completed = Math.max(0, Number(state.completed) || 0);
       const total = Math.max(0, Number(state.total) || 0);
       const knownTotal = total > 0;
@@ -10627,12 +10699,11 @@
           navTileRuntime.progressHideTimer = null;
           setOfflineMapProgress({
             mode: "ready",
-            label: "Map ready · offline",
             completed: total || completed,
             total: total || completed,
             countText: ""
           });
-        }, 2800);
+        }, 1800);
       } else if (mode === "partial") {
         navTileRuntime.progressHideTimer = setTimeout(() => {
           navTileRuntime.progressHideTimer = null;
