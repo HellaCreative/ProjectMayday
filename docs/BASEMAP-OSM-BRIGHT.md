@@ -36,3 +36,13 @@ OpenMapTiles-only concepts with no Shortbread equivalent (or only partial id mat
 - Some niche site outlines keep generic `#cfcdca` casing rather than OMT-specific tints
 
 Original SVWD03 colour snapshot: `app/data/shortbread-style.svwd03-backup.json`.
+
+## Screenshots
+
+| Zoom | Before | After |
+| --- | --- | --- |
+| Regional | `docs/basemap-screenshots/basemap-before-regional.png` | `docs/basemap-screenshots/basemap-after-regional.png` |
+| Rural | — | `docs/basemap-screenshots/basemap-after-rural.png` |
+| Close navigation | — | `docs/basemap-screenshots/basemap-after-close-nav.png` |
+
+Production: https://dirt-mayday.vercel.app/app/
