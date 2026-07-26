@@ -17,6 +17,16 @@ enum RouteProfile: String, Codable, CaseIterable, Identifiable, Sendable {
         case .dirt: "Dirt"
         }
     }
+
+    /// One-line guidance aligned with server costing (adventure avoids highway spine).
+    var guidance: String {
+        switch self {
+        case .cleanest: "Pavement-first · no unknown access"
+        case .direct: "Shortest practical · mixed surfaces"
+        case .balanced: "Adventure bias · still efficient"
+        case .dirt: "Maximize unpaved · avoid highways"
+        }
+    }
 }
 
 struct RouteCoordinate: Codable, Hashable, Sendable {
@@ -103,9 +113,33 @@ struct RouteSegment: Codable, Identifiable, Sendable {
 
     var coordinates: [RouteCoordinate] { geometry ?? coords ?? [] }
 
+    /// Surface key for map paint — prefers surfaceClass, then trackClass (web order).
+    var paintSurfaceKey: String {
+        let raw = (surfaceClass ?? trackClass ?? "connector").lowercased()
+        return raw.isEmpty ? "connector" : raw
+    }
+
     var isDirt: Bool {
-        let kind = (surfaceClass ?? trackClass ?? "").lowercased()
-        return ["gravel", "dirt", "track", "access", "resource", "unknown", "unpaved"].contains(kind)
+        Self.isAdventureSurface(paintSurfaceKey)
+    }
+
+    /// Rider-facing surface name (Mapbox RoadSurface analogue from OSM classes).
+    static func riderFacingSurfaceLabel(_ key: String) -> String {
+        switch key.lowercased() {
+        case "paved": "Paved"
+        case "gravel", "unpaved": "Gravel / unpaved"
+        case "dirt": "Dirt"
+        case "track", "double_track": "Track"
+        case "access", "resource": "Access / resource"
+        case "unknown": "Unknown surface"
+        case "connector": "Connector"
+        default: key.replacingOccurrences(of: "_", with: " ").capitalized
+        }
+    }
+
+    static func isAdventureSurface(_ key: String) -> Bool {
+        ["gravel", "dirt", "track", "double_track", "access", "resource", "unknown", "unpaved"]
+            .contains(key.lowercased())
     }
 }
 

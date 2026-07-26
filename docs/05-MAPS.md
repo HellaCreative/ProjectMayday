@@ -9,26 +9,35 @@ MapLibre Native integration, route paint, markers, location, and offline tile se
 | File | Role |
 | --- | --- |
 | `Dirt/Map/MapLibreMapView.swift` | `UIViewRepresentable` + style layers + gestures |
-| `Dirt/Map/MapState.swift` | Observable map model (route, markers, camera) |
-| `Dirt/Map/OfflineTileManager.swift` | Offline pack prefetch |
-| `Dirt/Networking/AppConfig.swift` | Style URL + idle camera |
-| `Dirt/Location/LocationService.swift` | GPS feed |
-| `Dirt/Features/Layers/LayersSheet.swift` | Legend prefs (overlays not painted yet) |
+| `Dirt/Map/MapState.swift` | Observable map model (route, markers, camera, style) |
+| `Dirt/Map/MapStyleCatalog.swift` | Basemap IDs, Mapbox token, style URL writer |
+| `Dirt/Map/OfflineTileManager.swift` | Offline pack prefetch (active basemap) |
+| `Dirt/Networking/AppConfig.swift` | Shortbread URL + idle camera |
+| `Dirt/Features/Layers/LayersSheet.swift` | Basemap picker + legend prefs |
 
 ---
 
 ## MapLibre integration
 
-- Style URL: `https://dirt-mayday.vercel.app/app/data/shortbread-style.json` (Shortbread / SVWD03; vector tiles from OSM Shortbread as defined by that style).
+- Default style: OSM **Shortbread** at `https://dirt-mayday.vercel.app/app/data/shortbread-style.json` (vector tiles; no Mapbox token).
+- **Swappable basemaps** (`MapStyleCatalog` + Layers → Basemap):
+  | ID | Source | Notes |
+  | --- | --- | --- |
+  | `shortbread` | Production Shortbread JSON | Works offline without Mapbox |
+  | `mapboxOutdoors` | Mapbox Outdoors v12 **raster** tiles | Needs `pk.` token; terrain / trails / land cover |
+  | `mapboxStreets` | Streets v12 raster | Token required |
+  | `mapboxSatellite` | `mapbox.satellite` raster | Token required |
+- MapLibre cannot resolve `mapbox://` URIs, so Mapbox styles are written as local Style Spec JSON using the [Static / Raster Tiles APIs](https://docs.mapbox.com/help/dive-deeper/mapbox-in-maplibre/) (token only in UserDefaults / Info.plist / env — never committed).
+- **Routing is unchanged:** OSM dual-sport graph via `POST /api/route`. Basemap swap is visual only.
 - Idle camera: NS overview `(-63.0, 45.1)` zoom `7.25`.
-- `MLNMapView` via `UIViewRepresentable`; coordinator owns style load, route sync, markers, camera, follow mode.
+- `MLNMapView` via `UIViewRepresentable`; coordinator owns style load / reload (`styleGeneration`), route sync, markers, camera, follow mode.
 - User location: `showsUserLocation` when authorized; nav sets `userTrackingMode = .followWithCourse`.
 - Gestures: tap → `MapState.onTap`; long-press → `onLongPress` (wired to planner in `AppEnvironment`).
 - Logo hidden; attribution bottom-left; compass top-right.
 
-Generation counters (`routeGeneration`, `markerGeneration`) avoid redundant UIKit work.
+Generation counters (`routeGeneration`, `markerGeneration`, `styleGeneration`) avoid redundant UIKit work.
 
-**Not ported:** web’s `tuneShortbreadContrast()` post-load colour tweaks. Native uses the remote style as served.
+**Not ported:** web’s `tuneShortbreadContrast()` post-load colour tweaks. Native uses the remote Shortbread style as served (or Mapbox raster as selected).
 
 ---
 
@@ -38,15 +47,18 @@ Generation counters (`routeGeneration`, `markerGeneration`) avoid redundant UIKi
 
 | Source / layer | Colour | Meaning |
 | --- | --- | --- |
-| `dirt-route-dirt-*` | Brand orange `#ff7a00` | Adventure / dirt segments (`segment.isDirt`) |
-| `dirt-route-paved-*` | Paved line `#303a45` | Paved segments |
-| Both casings | White ~85% opacity | Readability |
+| `dirt-route-access-*` | `#0a66c2` | access / resource |
+| `dirt-route-gravel-*` | `#5d6874` | gravel / unknown / unpaved |
+| `dirt-route-track-*` | `#7c3aed` | track / double_track (branches) |
+| `dirt-route-paved-*` | `#ffb000` | paved (+ default) |
+| `dirt-route-connector-*` | `#d22730` | connector / no-segment fallback |
+| Casings | White ~85% opacity | Readability |
 
-If a response has **no** `segments`, the full geometry is painted as dirt/orange (selected-route treatment).
+Matches live web `route-network` paint (not stats mix `#3a9dff` / `#fdb003`, and not brand orange).
 
-`RouteSegment.isDirt` treats surface/track classes: gravel, dirt, track, access, resource, unknown, unpaved.
+`RouteSegment.paintSurfaceKey` prefers `surfaceClass` then `trackClass`. If a response has **no** `segments`, the full geometry paints as **connector** (web parity).
 
-**UI stats** still use dirt mix `#3a9dff` / paved mix `#fdb003` — those are **not** the map line colours. See [06-UI-DESIGN.md](./06-UI-DESIGN.md).
+`RouteSegment.isDirt` / adventure surfaces still drive dirt% vocabulary; paint is per-class.
 
 ---
 
@@ -70,7 +82,7 @@ Rider callouts enabled; `onRiderTap` hook exists (planner/groups can extend). Gr
 | --- | --- |
 | When-In-Use | App launch (`RootView.task`) |
 | Always | Start nav / Start sharing |
-| Background updates | Nav active or sharing (`allowsBackgroundLocationUpdates`) |
+| Background updates | Nav active or sharing (`allowsBackgroundLocationUpdates`) — requires `UIBackgroundModes` = `location` in merged `Config/Info.plist`. Enabling without that key is a fatal Core Location crash. |
 
 Locate button (top chrome) flies to current fix or re-requests When-In-Use.
 
@@ -88,7 +100,7 @@ Web rules (identity `dirt-nav-basemap-v2` on web) are mirrored in `OfflineTileMa
 | 4 | Clear only when Start Nav on a **different** identity | Removes packs whose context ≠ new identity when `!keepExisting` |
 | — | End nav alone must **not** wipe cache | `endNavigation` does not call pack removal |
 
-Prefetch UI: HUD “Preparing offline tiles” with progress + **Skip**. Hard **45s** cap then proceeds to active nav.
+Navigation becomes active immediately. MapLibre offline packs are **fully disabled** and any leftover packs are purged on launch. MapLibre Native aborts with `std::regex_error` on the `DatabaseFileSource` thread when offline packs enumerate glyph URLs containing `{fontstack}/{range}` (known upstream). Start Navigation no longer creates or resumes packs. iOS ships a bundled Shortbread style with absolute sprite URLs (the remote style’s root-relative sprite caused `NSURLError -1002`).
 
 ### iOS vs web offline quality
 
@@ -97,7 +109,7 @@ Prefetch UI: HUD “Preparing offline tiles” with progress + **Skip**. Hard **
 | Trigger | Start Nav | Start Nav |
 | Geometry | Corridor-oriented tile set (documented web cache) | **Bounding-box tile pyramid** z8–14 + 0.02° pad (`MLNTilePyramidOfflineRegion`) |
 | Cap | ~1200 tiles / concurrency 4 (web) | MapLibre pack progress; 45s wall-clock skip |
-| Style | Same Shortbread host | Same `mapStyleURL` |
+| Style | Same Shortbread host (or active Mapbox raster) | `AppConfig.activeMapStyleURL` |
 
 Documented limit in README and code: **not a true route corridor** — best-effort bbox covering the polyline extents.
 
@@ -105,7 +117,7 @@ Documented limit in README and code: **not a true route corridor** — best-effo
 
 ## Layers / overlays
 
-`LayersSheet` persists Rider Services + Map Visibility toggles via `@AppStorage`.
+`LayersSheet` persists basemap choice, optional Mapbox token, Rider Services + Map Visibility toggles via `@AppStorage`.
 
 **No GeoJSON/POI/NSTDB sources are added to the map yet.** Toggles are preference-only; sheet copy states overlays land in a later build. See [07-FUTURE.md](./07-FUTURE.md).
 
@@ -116,5 +128,5 @@ Documented limit in README and code: **not a true route corridor** — best-effo
 1. Read `MapLibreMapView.swift`, `MapState.swift`, `OfflineTileManager.swift`.
 2. Cross-check session rules with [WEB-SPEC-FOR-IOS.md](./WEB-SPEC-FOR-IOS.md) §6.
 3. For overlay streams, study web `app/index.html` sources — do not invent tile URLs.
-4. **Invariants:** Start-Nav-only prefetch; keep-through-reroute; never clear packs on End alone; dirt map line stays brand orange unless product reopens paint law; production style URL.
+4. **Invariants:** Start-Nav-only prefetch; keep-through-reroute; never clear packs on End alone; selected-route paint stays on web per-surface palette (not stats mix, not brand-orange-only); production style URL.
 5. **Open questions:** true corridor pack vs bbox; port `tuneShortbreadContrast`; MaxOfflinePack size / eviction policy on device.

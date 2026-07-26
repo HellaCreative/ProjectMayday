@@ -35,6 +35,20 @@ enum ActiveSheet: String, Identifiable {
     var id: String { rawValue }
 }
 
+enum NavigationChrome {
+    static func showsDock(for phase: NavigationSession.Phase) -> Bool {
+        phase == .idle
+    }
+
+    static func showsTopLocate(for phase: NavigationSession.Phase) -> Bool {
+        phase == .idle
+    }
+
+    static func showsNavigationLocate(for phase: NavigationSession.Phase) -> Bool {
+        phase == .active
+    }
+}
+
 struct RootView: View {
     @Environment(AppEnvironment.self) private var app
     @State private var activeSheet: ActiveSheet?
@@ -51,6 +65,14 @@ struct RootView: View {
                 topChrome
                 Spacer()
                 if navActive {
+                    if NavigationChrome.showsNavigationLocate(for: app.navigation.phase) {
+                        HStack {
+                            Spacer()
+                            locateButton
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.bottom, 20)
+                    }
                     NavigationHUD()
                         .padding(.horizontal, 12)
                         .padding(.bottom, 8)
@@ -59,8 +81,18 @@ struct RootView: View {
                         .padding(.horizontal, 10)
                         .padding(.bottom, 8)
                 }
-                dock
+                if NavigationChrome.showsDock(for: app.navigation.phase) {
+                    dock
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
             }
+        }
+        .animation(.easeOut(duration: 0.2), value: navActive)
+        .onChange(of: app.planner.presentRouteCard) { _, shouldOpen in
+            guard shouldOpen else { return }
+            activeSheet = nil
+            routeCardOpen = true
+            app.planner.presentRouteCard = false
         }
         .sheet(item: $activeSheet) { sheet in
             switch sheet {
@@ -75,16 +107,25 @@ struct RootView: View {
                     .presentationDetents([.large])
             }
         }
-        .overlay(alignment: .top) {
+        .overlay {
             if let toast = app.planner.toast {
                 ToastView(text: toast)
-                    .padding(.top, 60)
-                    .task {
-                        try? await Task.sleep(for: .seconds(3))
-                        app.planner.toast = nil
+                    .transition(.opacity)
+                    .task(id: toast) {
+                        // Keep "Calculating route" up until routing finishes.
+                        if toast == RoutePlannerModel.calculatingRouteToast {
+                            return
+                        }
+                        try? await Task.sleep(for: .seconds(3.2))
+                        if app.planner.toast == toast {
+                            withAnimation(.easeOut(duration: 0.25)) {
+                                app.planner.toast = nil
+                            }
+                        }
                     }
             }
         }
+        .animation(.easeInOut(duration: 0.2), value: app.planner.toast)
         .task {
             app.location.requestWhenInUse()
             await app.supabase.bootstrap()
@@ -95,24 +136,31 @@ struct RootView: View {
         HStack(alignment: .top) {
             BrandChip()
             Spacer()
-            Button {
-                if let coordinate = app.location.currentCoordinate {
-                    app.mapState.fly(to: coordinate, zoom: 13.5)
-                } else {
-                    app.location.requestWhenInUse()
-                }
-            } label: {
-                Image(systemName: "location.fill")
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundStyle(.white)
-                    .frame(width: 40, height: 40)
-                    .background(DirtTheme.chrome)
-                    .clipShape(Circle())
-                    .overlay(Circle().stroke(DirtTheme.chromeBorder, lineWidth: 1))
+            if NavigationChrome.showsTopLocate(for: app.navigation.phase) {
+                locateButton
             }
         }
         .padding(.horizontal, 12)
         .padding(.top, 6)
+    }
+
+    private var locateButton: some View {
+        Button {
+            if let coordinate = app.location.currentCoordinate {
+                app.mapState.fly(to: coordinate, zoom: 13.5)
+            } else {
+                app.location.requestWhenInUse()
+            }
+        } label: {
+            Image(systemName: "location.fill")
+                .font(.system(size: 15, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: 40, height: 40)
+                .background(DirtTheme.chrome)
+                .clipShape(Circle())
+                .overlay(Circle().stroke(DirtTheme.chromeBorder, lineWidth: 1))
+        }
+        .accessibilityLabel("Locate me")
     }
 
     private var dock: some View {

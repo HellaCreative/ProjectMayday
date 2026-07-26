@@ -20,12 +20,12 @@ Client routing behaviour as implemented, plus the server-side law an agent must 
 
 ## Profiles (UI → API)
 
-| UI chip | `RouteProfile` raw value |
-| --- | --- |
-| Clean | `cleanest` |
-| Direct | `direct` |
-| Balanced | `balanced` (default) |
-| Dirt | `dirt` |
+| UI chip | `RouteProfile` raw value | Guidance (UI) |
+| --- | --- | --- |
+| Clean | `cleanest` | Pavement-first · no unknown access |
+| Direct | `direct` | Shortest practical · mixed surfaces |
+| Balanced | `balanced` (default) | Adventure bias · still efficient |
+| Dirt | `dirt` | Maximize unpaved · avoid highways |
 
 **Allow unknown access** → `accessPolicy.motorizedUnknown`.
 
@@ -79,7 +79,7 @@ Optional web fields (`options.matchLimitMeters`, `avoidEdgeIds`, `corridorBuffer
 
 ### Plan a route
 
-- Tap / long-press appends stage points (`appendPlanPoint`).
+- **Long-press** appends stage points (`appendPlanPoint`). Tap does not place points (web parity).
 - First point opens a stage with start only; second completes A→B and routes; further points chain from previous end.
 - Aggregate distance / dirt% / paved% across stage responses.
 - Maneuvers concatenated with along-route offset for nav.
@@ -100,7 +100,16 @@ CTA matrix in the card: Save (chrome) · Export GPX (`ShareLink`) · Start (nav 
 
 ## Navigation + recalculate
 
-`startNavigation()` → offline prefetch → `NavigationSession.activate`.
+`startNavigation()` activates `NavigationSession` immediately (coordinates + maneuvers + display segments), hides the primary dock, and starts offline prefetch as best-effort background work. Tile caching never gates the Start action.
+
+While active, the HUD shows:
+
+- Turn cues from server `maneuvers` when a turn is within ~250 m.
+- **Surface alerts** (~600 m look-ahead) when the route is about to leave pavement onto gravel/track/access — OSM segment classes standing in for Mapbox `RoadSurface` / route notifications.
+- Current surface label on the cue card footer.
+- Product copy: adventure profiles **do not avoid unpaved** (server costing); Dirt prefers unpaved and penalizes highway spine.
+
+Route completion also toasts the highest-priority `/api/route` `warnings` (`unknown_access_used`, `unavoidable_pavement`, …) or a dirt% heads-up.
 
 Off-route: ≥3 samples > 80 m from nearest vertex → `onRerouteNeeded` (cooldown 20s) → `recalculateFromRider()`:
 

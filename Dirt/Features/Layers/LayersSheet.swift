@@ -1,9 +1,12 @@
 import SwiftUI
 
-/// Layers legend + preference toggles. Preferences persist like the web POC;
-/// the native POI / NSTDB overlay streams land in a later build (documented
-/// gap in README_TESTFLIGHT.md).
+/// Layers legend + basemap picker + preference toggles. Preferences persist like
+/// the web POC; native POI / NSTDB overlays land in a later build.
 struct LayersSheet: View {
+    @Environment(AppEnvironment.self) private var app
+
+    @AppStorage(MapStyleCatalog.preferenceKey) private var styleIDRaw = MapStyleCatalog.preferredDefault.rawValue
+    @AppStorage(MapStyleCatalog.tokenKey) private var mapboxToken = ""
     @AppStorage("dirt.layers.fuel") private var showFuel = false
     @AppStorage("dirt.layers.camp") private var showCampgrounds = false
     @AppStorage("dirt.layers.lodging") private var showLodging = false
@@ -15,9 +18,63 @@ struct LayersSheet: View {
     @AppStorage("dirt.layers.tunnel") private var showTunnel = true
     @AppStorage("dirt.layers.restricted") private var showRestricted = true
 
+    private var selectedStyle: MapStyleID {
+        MapStyleID(rawValue: styleIDRaw) ?? .shortbread
+    }
+
     var body: some View {
         NavigationStack {
             List {
+                Section {
+                    ForEach(MapStyleID.allCases) { style in
+                        Button {
+                            selectStyle(style)
+                        } label: {
+                            HStack(alignment: .top, spacing: 12) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(style.title)
+                                        .font(.dirtUI(14, weight: .bold))
+                                        .foregroundStyle(DirtTheme.ink)
+                                    Text(style.subtitle)
+                                        .font(.dirtUI(11))
+                                        .foregroundStyle(DirtTheme.muted)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                }
+                                Spacer(minLength: 8)
+                                if selectedStyle == style {
+                                    Image(systemName: "checkmark.circle.fill")
+                                        .foregroundStyle(DirtTheme.orange)
+                                }
+                            }
+                        }
+                        .disabled(style.requiresMapboxToken && !MapStyleCatalog.hasMapboxToken)
+                    }
+                } header: {
+                    Text("Basemap")
+                } footer: {
+                    Text("Basemap is visual only. Routes still calculate on OSM dual-sport data via /api/route. Mapbox styles need a public token (pk.…).")
+                        .font(.dirtUI(11))
+                }
+
+                Section("Mapbox token") {
+                    SecureField("pk.eyJ…", text: $mapboxToken)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                        .font(.dirtMono(12))
+                        .onChange(of: mapboxToken) { _, newValue in
+                            MapStyleCatalog.setMapboxAccessToken(newValue)
+                            // Refresh style file if a Mapbox basemap is active.
+                            if selectedStyle.requiresMapboxToken {
+                                app.mapState.applySelectedMapStyle()
+                            }
+                        }
+                    if !MapStyleCatalog.hasMapboxToken {
+                        Text("Paste a Mapbox public token to unlock Outdoors, Streets, and Satellite.")
+                            .font(.dirtUI(11))
+                            .foregroundStyle(DirtTheme.muted)
+                    }
+                }
+
                 Section("Rider services") {
                     Toggle("Fuel", isOn: $showFuel)
                     Toggle("Campgrounds", isOn: $showCampgrounds)
@@ -45,6 +102,16 @@ struct LayersSheet: View {
             .navigationTitle("Layers")
             .navigationBarTitleDisplayMode(.inline)
         }
+    }
+
+    private func selectStyle(_ style: MapStyleID) {
+        if style.requiresMapboxToken {
+            MapStyleCatalog.setMapboxAccessToken(mapboxToken)
+            guard MapStyleCatalog.hasMapboxToken else { return }
+        }
+        styleIDRaw = style.rawValue
+        MapStyleCatalog.selectedID = style
+        app.mapState.applySelectedMapStyle()
     }
 
     private func legendToggle(_ title: String, color: Color, isOn: Binding<Bool>) -> some View {

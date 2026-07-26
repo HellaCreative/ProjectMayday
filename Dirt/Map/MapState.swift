@@ -4,7 +4,12 @@ import Observation
 
 struct RouteDisplaySegment {
     let coordinates: [RouteCoordinate]
-    let isDirt: Bool
+    /// Web `trackClass` / `surfaceClass` key used for selected-route paint.
+    let surfaceKey: String
+
+    var isDirt: Bool {
+        RouteSegment.isAdventureSurface(surfaceKey)
+    }
 }
 
 /// Single source of truth the SwiftUI layer mutates and the MapLibre
@@ -37,10 +42,20 @@ final class MapState {
     private(set) var markers: [Marker] = []
     private(set) var markerGeneration = 0
     private(set) var camera: (id: UUID, command: CameraCommand)?
+    /// Bumps when the basemap style URL changes so MapLibre reloads.
+    private(set) var styleGeneration = 0
+    private(set) var styleURL: URL = MapStyleCatalog.styleURL()
     var followUser = false
     var onTap: ((CLLocationCoordinate2D) -> Void)?
     var onLongPress: ((CLLocationCoordinate2D) -> Void)?
     var onRiderTap: ((String) -> Void)?
+
+    func applySelectedMapStyle() {
+        let next = MapStyleCatalog.styleURL()
+        guard next != styleURL else { return }
+        styleURL = next
+        styleGeneration += 1
+    }
 
     func setRoute(_ segments: [RouteDisplaySegment]) {
         routeSegments = segments
@@ -68,39 +83,40 @@ final class MapState {
         camera = (UUID(), .fit(coordinates))
     }
 
-    /// Consolidates per-edge segments into continuous dirt/paved runs, the way
-    /// the web POC merges adjacent same-surface edges before painting.
+    /// Consolidates per-edge segments into continuous same-surface runs, the way
+    /// the web POC merges adjacent edges before painting (`routeDisplaySegments`).
     static func displaySegments(from responses: [RouteResponse]) -> [RouteDisplaySegment] {
         var result: [RouteDisplaySegment] = []
         for response in responses {
             let segments = response.segments ?? []
             var currentCoords: [RouteCoordinate] = []
-            var currentDirt: Bool?
+            var currentKey: String?
             func flush() {
-                if currentCoords.count > 1, let dirt = currentDirt {
-                    result.append(RouteDisplaySegment(coordinates: currentCoords, isDirt: dirt))
+                if currentCoords.count > 1, let key = currentKey {
+                    result.append(RouteDisplaySegment(coordinates: currentCoords, surfaceKey: key))
                 }
                 currentCoords = []
-                currentDirt = nil
+                currentKey = nil
             }
             if segments.isEmpty {
                 let coords = response.coordinates
                 if coords.count > 1 {
-                    // No per-edge surface data — paint the selected route in brand orange.
-                    result.append(RouteDisplaySegment(coordinates: coords, isDirt: true))
+                    // Web fallback with no edge geometry: trackClass "connector".
+                    result.append(RouteDisplaySegment(coordinates: coords, surfaceKey: "connector"))
                 }
                 continue
             }
             for segment in segments {
                 let coords = segment.coordinates
                 guard !coords.isEmpty else { continue }
-                if currentDirt == segment.isDirt {
+                let key = segment.paintSurfaceKey
+                if currentKey == key {
                     for coordinate in coords where coordinate != currentCoords.last {
                         currentCoords.append(coordinate)
                     }
                 } else {
                     flush()
-                    currentDirt = segment.isDirt
+                    currentKey = key
                     currentCoords = coords
                 }
             }

@@ -64,4 +64,43 @@ struct DirtTests {
         #expect(xml.contains("lat=\"44.64\" lon=\"-63.57\""))
         #expect(xml.contains("<trkseg>"))
     }
+
+    @Test func navigationChromeHidesDockAsSoonAsStartBegins() {
+        #expect(NavigationChrome.showsDock(for: .idle))
+        #expect(!NavigationChrome.showsDock(for: .prefetching))
+        #expect(!NavigationChrome.showsDock(for: .active))
+        #expect(NavigationChrome.showsTopLocate(for: .idle))
+        #expect(!NavigationChrome.showsTopLocate(for: .active))
+        #expect(NavigationChrome.showsNavigationLocate(for: .active))
+    }
+
+    @Test func offlinePrefetchRejectsLocalStyleFiles() {
+        #expect(!OfflineTileManager.offlinePacksEnabled)
+        let localStyle = URL(fileURLWithPath: "/tmp/dirt-mapbox-style.json")
+        #expect(!OfflineTileManager.supportsPrefetch(styleURL: localStyle))
+        #expect(!OfflineTileManager.supportsPrefetch(
+            styleURL: URL(string: "https://dirt-mayday.vercel.app/app/data/shortbread-style.json")!
+        ))
+    }
+
+    @Test func backgroundLocationRequiresInfoPlistMode() {
+        #expect(!LocationBackgroundPolicy.shouldEnable(
+            requested: true,
+            hasLocationBackgroundMode: false
+        ))
+        #expect(LocationBackgroundPolicy.shouldEnable(
+            requested: true,
+            hasLocationBackgroundMode: true
+        ))
+        #expect(!LocationBackgroundPolicy.shouldEnable(
+            requested: false,
+            hasLocationBackgroundMode: true
+        ))
+    }
+
+    @Test func fromHereTapShouldPaintDestinationBeforeRouteReturns() {
+        // Contract: destination marker paint must not wait on /api/route.
+        #expect(RoutePlannerModel.paintsDestinationImmediatelyOnFromHereTap)
+        #expect(RoutePlannerModel.calculatingRouteToast == "Calculating route")
+    }
 }

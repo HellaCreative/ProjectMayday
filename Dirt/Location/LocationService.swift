@@ -1,6 +1,19 @@
 import CoreLocation
 import Observation
 
+/// Gates `allowsBackgroundLocationUpdates`. Enabling it without
+/// `UIBackgroundModes` containing `location` is a fatal Core Location crash.
+enum LocationBackgroundPolicy {
+    static var bundleHasLocationBackgroundMode: Bool {
+        let modes = Bundle.main.object(forInfoDictionaryKey: "UIBackgroundModes") as? [String] ?? []
+        return modes.contains("location")
+    }
+
+    static func shouldEnable(requested: Bool, hasLocationBackgroundMode: Bool) -> Bool {
+        requested && hasLocationBackgroundMode
+    }
+}
+
 @Observable
 final class LocationService: NSObject, CLLocationManagerDelegate {
     private let manager = CLLocationManager()
@@ -46,12 +59,16 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
         manager.stopUpdatingLocation()
     }
 
-    /// Background updates require the `location` UIBackgroundMode (declared in
-    /// the target's generated Info.plist).
+    /// Background updates require the `location` UIBackgroundMode. Enabling
+    /// without that key is a fatal Core Location exception.
     func setBackgroundUpdates(_ enabled: Bool) {
         guard isAuthorized else { return }
-        manager.allowsBackgroundLocationUpdates = enabled
-        manager.showsBackgroundLocationIndicator = enabled
+        let allow = LocationBackgroundPolicy.shouldEnable(
+            requested: enabled,
+            hasLocationBackgroundMode: LocationBackgroundPolicy.bundleHasLocationBackgroundMode
+        )
+        manager.allowsBackgroundLocationUpdates = allow
+        manager.showsBackgroundLocationIndicator = allow
     }
 
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {

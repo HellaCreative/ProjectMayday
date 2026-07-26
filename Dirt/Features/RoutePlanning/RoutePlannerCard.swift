@@ -70,14 +70,19 @@ struct RoutePlannerCard: View {
     }
 
     private var profileRow: some View {
-        HStack(spacing: 6) {
-            ForEach(RouteProfile.allCases) { profile in
-                Button(profile.title) {
-                    planner.profile = profile
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
+                ForEach(RouteProfile.allCases) { profile in
+                    Button(profile.title) {
+                        planner.profile = profile
+                    }
+                    .buttonStyle(DirtChipStyle(isActive: planner.profile == profile))
                 }
-                .buttonStyle(DirtChipStyle(isActive: planner.profile == profile))
+                Spacer()
             }
-            Spacer()
+            Text(planner.profile.guidance)
+                .font(.dirtUI(11))
+                .foregroundStyle(DirtTheme.muted)
         }
     }
 
@@ -126,7 +131,7 @@ struct RoutePlannerCard: View {
                             .font(.dirtMono(11, weight: .semibold))
                             .foregroundStyle(DirtTheme.dirtMix)
                     } else {
-                        Text(stage.end == nil ? "Tap the map to set the stage end" : "Waiting…")
+                        Text(stage.end == nil ? "Press and hold to set the stage end" : "Waiting…")
                             .font(.dirtUI(11))
                             .foregroundStyle(DirtTheme.muted)
                     }
@@ -154,7 +159,7 @@ struct RoutePlannerCard: View {
             } else if !planner.hasRoute {
                 Text(planner.mode == .fromHere
                      ? "Tap the map to set your destination. Your GPS position is A."
-                     : "Tap the map to drop stage points. Long-press adds a stage.")
+                     : "Press and hold the map to place stage points.")
                     .font(.dirtUI(12))
                     .foregroundStyle(DirtTheme.muted)
                     .multilineTextAlignment(.center)
@@ -216,9 +221,11 @@ struct RoutePlannerCard: View {
                         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 }
             }
-            Button("Start") {
+            Button {
                 isOpen = false
                 planner.startNavigation()
+            } label: {
+                Label("Start", systemImage: "location.north.fill")
             }
             .buttonStyle(DirtCTAStyle(fill: DirtTheme.navGreen))
         }

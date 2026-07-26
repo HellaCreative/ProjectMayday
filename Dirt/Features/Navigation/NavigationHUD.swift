@@ -63,6 +63,11 @@ struct NavigationHUD: View {
                     .font(.dirtMono(11, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.7))
                 Spacer()
+                if let surface = nav.currentSurfaceLabel {
+                    Text(surface)
+                        .font(.dirtMono(11, weight: .semibold))
+                        .foregroundStyle(DirtTheme.orange.opacity(0.95))
+                }
                 if let eta = nav.etaSeconds {
                     Text("~" + formatDuration(eta))
                         .font(.dirtMono(11, weight: .semibold))
@@ -78,9 +83,17 @@ struct NavigationHUD: View {
 
     private var controlRow: some View {
         HStack(spacing: 8) {
-            Button("Report") { showReport = true }
+            Button {
+                showReport = true
+            } label: {
+                Label("Report", systemImage: "exclamationmark.triangle")
+            }
                 .buttonStyle(DirtCTAStyle(fill: DirtTheme.chrome))
-            Button("End navigation") { app.planner.endNavigation() }
+            Button {
+                app.planner.endNavigation()
+            } label: {
+                Label("End navigation", systemImage: "xmark.circle")
+            }
                 .buttonStyle(DirtCTAStyle(fill: DirtTheme.navGreen))
         }
         .confirmationDialog("Report a condition", isPresented: $showReport, titleVisibility: .visible) {

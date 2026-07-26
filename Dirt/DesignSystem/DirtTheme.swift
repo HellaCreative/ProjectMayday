@@ -27,9 +27,38 @@ enum DirtTheme {
     static let navGreen = Color(dirtHex: 0x147A56)
     static let exportGray = Color(dirtHex: 0x616872)
     static let danger = Color(dirtHex: 0xD83B42)
+    /// Dirt % text + mix bar (stats only — not map line colour).
     static let dirtMix = Color(dirtHex: 0x3A9DFF)
+    /// Paved % text + mix bar (stats only — not map line colour).
     static let pavedMix = Color(dirtHex: 0xFDB003)
+    /// Layers legend / basemap paved overlay (not selected-route paint).
     static let pavedLine = Color(dirtHex: 0x303A45)
+
+    // Selected-route map paint — matches live web `route-network` match expression
+    // (app/index.html). Stats colours (#3a9dff / #fdb003) are intentionally separate.
+    static let routeAccess = Color(dirtHex: 0x0A66C2)
+    static let routeGravel = Color(dirtHex: 0x5D6874)
+    static let routeTrack = Color(dirtHex: 0x7C3AED)
+    static let routePaved = Color(dirtHex: 0xFFB000)
+    static let routeConnector = Color(dirtHex: 0xD22730)
+
+    /// Paint bucket for a graph surface/track class (web `trackClass` match).
+    static func routePaintColor(for surfaceKey: String) -> Color {
+        switch surfaceKey.lowercased() {
+        case "access", "resource":
+            return routeAccess
+        case "gravel", "unknown", "unpaved", "dirt":
+            return routeGravel
+        case "track", "double_track":
+            return routeTrack
+        case "connector":
+            return routeConnector
+        case "paved":
+            return routePaved
+        default:
+            return routePaved
+        }
+    }
 }
 
 extension Font {
@@ -81,9 +110,17 @@ struct DirtChipStyle: ButtonStyle {
 struct BrandChip: View {
     var body: some View {
         HStack(spacing: 6) {
-            (Text("DIRT").italic().fontWeight(.black) + Text(".").italic().fontWeight(.black).foregroundColor(DirtTheme.orange))
-                .font(.dirtUI(16, weight: .black))
-                .foregroundStyle(.white)
+            HStack(spacing: 0) {
+                Text("DIRT")
+                    .italic()
+                    .fontWeight(.black)
+                    .foregroundStyle(.white)
+                Text(".")
+                    .italic()
+                    .fontWeight(.black)
+                    .foregroundStyle(DirtTheme.orange)
+            }
+            .font(.dirtUI(16, weight: .black))
             Text("MAYDAY")
                 .font(.dirtMono(9, weight: .semibold))
                 .tracking(2.4)

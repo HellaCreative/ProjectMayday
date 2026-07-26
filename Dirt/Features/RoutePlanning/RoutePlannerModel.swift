@@ -48,6 +48,8 @@ final class RoutePlannerModel {
     private(set) var isRouting = false
     var errorMessage: String?
     var toast: String?
+    /// RootView watches this to open the route planner when a From here pin is dropped.
+    var presentRouteCard = false
     private var routeIdentity: String?
     private var lastNavigationIdentity: String?
 
@@ -140,26 +142,42 @@ final class RoutePlannerModel {
 
     // MARK: - Map interaction
 
+    /// From here drops pin B as soon as the rider taps — before `/api/route` returns.
+    static let paintsDestinationImmediatelyOnFromHereTap = true
+    static let calculatingRouteToast = "Calculating route"
+
     func handleMapTap(_ coordinate: CLLocationCoordinate2D) {
         let point = RouteCoordinate(longitude: coordinate.longitude, latitude: coordinate.latitude)
         switch mode {
         case .fromHere:
-            destination = point
-            destinationName = nil
-            Task { await routeFromHere() }
+            beginFromHereDestination(point)
         case .plan:
-            appendPlanPoint(point)
+            // Web parity: Plan placement is long-press only. Tap inspects / no-ops.
+            break
         case .saved:
             break
         }
     }
 
     func handleMapLongPress(_ coordinate: CLLocationCoordinate2D) {
-        guard mode == .plan else {
-            handleMapTap(coordinate)
-            return
+        let point = RouteCoordinate(longitude: coordinate.longitude, latitude: coordinate.latitude)
+        switch mode {
+        case .plan:
+            appendPlanPoint(point)
+        case .fromHere:
+            beginFromHereDestination(point)
+        case .saved:
+            break
         }
-        appendPlanPoint(RouteCoordinate(longitude: coordinate.longitude, latitude: coordinate.latitude))
+    }
+
+    private func beginFromHereDestination(_ point: RouteCoordinate) {
+        destination = point
+        destinationName = nil
+        presentRouteCard = true
+        toast = Self.calculatingRouteToast
+        refreshMap()
+        Task { await routeFromHere() }
     }
 
     private func appendPlanPoint(_ point: RouteCoordinate) {
@@ -183,11 +201,13 @@ final class RoutePlannerModel {
     func routeFromHere() async {
         guard let origin = locationService.currentCoordinate else {
             errorMessage = "Waiting for GPS — allow location access to route from here."
+            if toast == Self.calculatingRouteToast { toast = nil }
             return
         }
         guard let destination else { return }
         isRouting = true
         errorMessage = nil
+        if toast == nil { toast = Self.calculatingRouteToast }
         defer { isRouting = false }
         do {
             let request = RouteRequest(
@@ -203,9 +223,11 @@ final class RoutePlannerModel {
             routeIdentity = "here:\(destination.latitude),\(destination.longitude):\(profile.rawValue)"
             refreshMap()
             mapState.fit(response.coordinates)
+            presentRouteWarnings(from: [response])
         } catch {
             fromHereResponse = nil
             errorMessage = error.localizedDescription
+            toast = nil
             refreshMap()
         }
     }
@@ -239,6 +261,7 @@ final class RoutePlannerModel {
             refreshMap()
             let coords = allCoordinates
             if !coords.isEmpty { mapState.fit(coords) }
+            presentRouteWarnings(from: activeResponses)
         } catch {
             guard stages.indices.contains(index) else { return }
             stages[index].response = nil
@@ -289,11 +312,14 @@ final class RoutePlannerModel {
                 fromHereResponse = response
                 mode = .fromHere
                 destination = target
-                navigation.replaceRoute(coordinates: response.coordinates, maneuvers: response.maneuvers ?? [])
+                let display = MapState.displaySegments(from: [response])
+                navigation.replaceRoute(
+                    coordinates: response.coordinates,
+                    maneuvers: response.maneuvers ?? [],
+                    segments: display
+                )
                 refreshMap()
-                if let identity = routeIdentity {
-                    offline.startPrefetch(identity: identity, coordinates: response.coordinates, keepExisting: true) {}
-                }
+                presentRouteWarnings(from: [response])
             } catch {
                 toast = "No verified alternate route found. Backtrack to the last verified junction or end this stage."
             }
@@ -436,22 +462,22 @@ final class RoutePlannerModel {
         guard hasRoute else { return }
         let coords = allCoordinates
         guard coords.count > 1 else { return }
-        let identity = routeIdentity ?? "route"
-        // Web session rule 4: clear old tiles only when the route identity changed.
-        let keepExisting = identity == lastNavigationIdentity
-        lastNavigationIdentity = identity
+        lastNavigationIdentity = routeIdentity ?? "route"
 
         locationService.requestAlways()
         locationService.setBackgroundUpdates(true)
         locationService.startUpdates()
 
-        navigation.beginPrefetch()
         let maneuvers = allManeuvers
-        offline.startPrefetch(identity: identity, coordinates: coords, keepExisting: keepExisting) { [weak self] in
-            guard let self, self.navigation.phase == .prefetching else { return }
-            self.navigation.activate(coordinates: coords, maneuvers: maneuvers)
-            self.mapState.followUser = true
-        }
+        let displaySegments = MapState.displaySegments(from: activeResponses)
+        // Activate immediately. Do not call MapLibre offline packs — they abort
+        // the process (DatabaseFileSource / std::regex_error) with our style.
+        navigation.activate(
+            coordinates: coords,
+            maneuvers: maneuvers,
+            segments: displaySegments
+        )
+        mapState.followUser = true
     }
 
     func skipPrefetch() {
@@ -470,7 +496,34 @@ final class RoutePlannerModel {
         mode = .fromHere
         destination = RouteCoordinate(longitude: longitude, latitude: latitude)
         destinationName = name
-        toast = "Routing to \(name)"
+        presentRouteCard = true
+        toast = Self.calculatingRouteToast
+        refreshMap()
         Task { await routeFromHere() }
+    }
+
+    /// Surfaces the most actionable `/api/route` warning (unpaved / unknown / pavement).
+    private func presentRouteWarnings(from responses: [RouteResponse]) {
+        let codesPriority = [
+            "unknown_access_used",
+            "unavoidable_pavement",
+            "unknown_access_enabled",
+            "avoided_edges"
+        ]
+        let warnings = responses.flatMap { $0.warnings ?? [] }
+        for code in codesPriority {
+            if let match = warnings.first(where: { $0.code == code }),
+               let message = match.message, !message.isEmpty {
+                toast = message
+                return
+            }
+        }
+        let dirt = aggregateDirtPercent
+        if dirt >= 25 {
+            toast = "\(dirt)% unpaved / adventure surface on this route — stay alert for surface changes."
+        } else {
+            let km = totalMeters / 1000
+            toast = String(format: "Route ready · %.1f km · %d%% dirt", km, dirt)
+        }
     }
 }

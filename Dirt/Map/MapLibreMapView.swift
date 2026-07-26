@@ -1,18 +1,59 @@
 import MapLibre
 import SwiftUI
 
-/// MapLibre Native wrapper: Shortbread basemap (same style URL as the web POC),
-/// dirt/paved route paint, A/B/stage markers, rider pins, and user tracking.
+/// MapLibre Native wrapper: swappable basemap (OSM Shortbread or Mapbox classic
+/// raster styles), per-surface route paint (web `route-network` colours),
+/// A/B/stage markers, rider pins, and user tracking.
 struct MapLibreMapView: UIViewRepresentable {
     let state: MapState
     let location: LocationService
+
+    /// Paint buckets matching live web `route-network` line-color match.
+    enum RoutePaintBucket: String, CaseIterable {
+        case access
+        case gravel
+        case track
+        case paved
+        case connector
+
+        var sourceID: String { "dirt-route-\(rawValue)" }
+        var casingID: String { "\(sourceID)-casing" }
+        var lineID: String { "\(sourceID)-line" }
+
+        var color: Color {
+            switch self {
+            case .access: DirtTheme.routeAccess
+            case .gravel: DirtTheme.routeGravel
+            case .track: DirtTheme.routeTrack
+            case .paved: DirtTheme.routePaved
+            case .connector: DirtTheme.routeConnector
+            }
+        }
+
+        static func bucket(for surfaceKey: String) -> RoutePaintBucket {
+            switch surfaceKey.lowercased() {
+            case "access", "resource":
+                return .access
+            case "gravel", "unknown", "unpaved", "dirt":
+                return .gravel
+            case "track", "double_track":
+                return .track
+            case "connector":
+                return .connector
+            case "paved":
+                return .paved
+            default:
+                return .paved
+            }
+        }
+    }
 
     func makeCoordinator() -> Coordinator {
         Coordinator(state: state)
     }
 
     func makeUIView(context: Context) -> MLNMapView {
-        let mapView = MLNMapView(frame: .zero, styleURL: AppConfig.mapStyleURL)
+        let mapView = MLNMapView(frame: .zero, styleURL: state.styleURL)
         mapView.delegate = context.coordinator
         mapView.setCenter(AppConfig.overviewCenter, zoomLevel: AppConfig.overviewZoom, animated: false)
         mapView.logoView.isHidden = true
@@ -41,6 +82,7 @@ struct MapLibreMapView: UIViewRepresentable {
     final class Coordinator: NSObject, MLNMapViewDelegate {
         private let state: MapState
         private var styleLoaded = false
+        private var appliedStyleGeneration = -1
         private var appliedRouteGeneration = -1
         private var appliedMarkerGeneration = -1
         private var appliedCameraID: UUID?
@@ -63,41 +105,36 @@ struct MapLibreMapView: UIViewRepresentable {
         }
 
         private func addRouteLayers(to style: MLNStyle) {
-            guard style.source(withIdentifier: "dirt-route-paved") == nil else { return }
-            let pavedSource = MLNShapeSource(identifier: "dirt-route-paved", shape: nil, options: nil)
-            let dirtSource = MLNShapeSource(identifier: "dirt-route-dirt", shape: nil, options: nil)
-            style.addSource(pavedSource)
-            style.addSource(dirtSource)
+            guard style.source(withIdentifier: RoutePaintBucket.access.sourceID) == nil else { return }
 
-            func casing(_ id: String, source: MLNShapeSource) -> MLNLineStyleLayer {
-                let layer = MLNLineStyleLayer(identifier: id, source: source)
-                layer.lineColor = NSExpression(forConstantValue: UIColor.white)
-                layer.lineWidth = NSExpression(forConstantValue: 8)
-                layer.lineOpacity = NSExpression(forConstantValue: 0.85)
-                layer.lineCap = NSExpression(forConstantValue: "round")
-                layer.lineJoin = NSExpression(forConstantValue: "round")
-                return layer
+            for bucket in RoutePaintBucket.allCases {
+                let source = MLNShapeSource(identifier: bucket.sourceID, shape: nil, options: nil)
+                style.addSource(source)
+
+                let casing = MLNLineStyleLayer(identifier: bucket.casingID, source: source)
+                casing.lineColor = NSExpression(forConstantValue: UIColor.white)
+                casing.lineWidth = NSExpression(forConstantValue: 9)
+                casing.lineOpacity = NSExpression(forConstantValue: 0.85)
+                casing.lineCap = NSExpression(forConstantValue: "round")
+                casing.lineJoin = NSExpression(forConstantValue: "round")
+
+                let line = MLNLineStyleLayer(identifier: bucket.lineID, source: source)
+                line.lineColor = NSExpression(forConstantValue: UIColor(bucket.color))
+                line.lineWidth = NSExpression(forConstantValue: 7)
+                line.lineOpacity = NSExpression(forConstantValue: 0.98)
+                line.lineCap = NSExpression(forConstantValue: "round")
+                line.lineJoin = NSExpression(forConstantValue: "round")
+
+                style.addLayer(casing)
+                style.addLayer(line)
             }
-
-            func line(_ id: String, source: MLNShapeSource, color: UIColor) -> MLNLineStyleLayer {
-                let layer = MLNLineStyleLayer(identifier: id, source: source)
-                layer.lineColor = NSExpression(forConstantValue: color)
-                layer.lineWidth = NSExpression(forConstantValue: 5)
-                layer.lineCap = NSExpression(forConstantValue: "round")
-                layer.lineJoin = NSExpression(forConstantValue: "round")
-                return layer
-            }
-
-            style.addLayer(casing("dirt-route-paved-casing", source: pavedSource))
-            style.addLayer(casing("dirt-route-dirt-casing", source: dirtSource))
-            style.addLayer(line("dirt-route-paved-line", source: pavedSource, color: UIColor(DirtTheme.pavedLine)))
-            style.addLayer(line("dirt-route-dirt-line", source: dirtSource, color: UIColor(DirtTheme.orange)))
         }
 
         // MARK: Sync
 
         func sync(mapView: MLNMapView) {
             self.mapView = mapView
+            syncStyle(mapView: mapView)
             syncFollow(mapView: mapView)
             syncCamera(mapView: mapView)
             syncMarkers(mapView: mapView)
@@ -105,13 +142,21 @@ struct MapLibreMapView: UIViewRepresentable {
             syncRoute(style: style)
         }
 
+        private func syncStyle(mapView: MLNMapView) {
+            guard appliedStyleGeneration != state.styleGeneration else { return }
+            appliedStyleGeneration = state.styleGeneration
+            styleLoaded = false
+            appliedRouteGeneration = -1
+            mapView.styleURL = state.styleURL
+        }
+
         private func syncRoute(style: MLNStyle) {
             guard appliedRouteGeneration != state.routeGeneration else { return }
             appliedRouteGeneration = state.routeGeneration
-            let dirt = polylines(for: state.routeSegments.filter(\.isDirt))
-            let paved = polylines(for: state.routeSegments.filter { !$0.isDirt })
-            (style.source(withIdentifier: "dirt-route-dirt") as? MLNShapeSource)?.shape = dirt
-            (style.source(withIdentifier: "dirt-route-paved") as? MLNShapeSource)?.shape = paved
+            for bucket in RoutePaintBucket.allCases {
+                let segments = state.routeSegments.filter { RoutePaintBucket.bucket(for: $0.surfaceKey) == bucket }
+                (style.source(withIdentifier: bucket.sourceID) as? MLNShapeSource)?.shape = polylines(for: segments)
+            }
         }
 
         private func polylines(for segments: [RouteDisplaySegment]) -> MLNShapeCollectionFeature {

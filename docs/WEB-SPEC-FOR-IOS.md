@@ -228,7 +228,7 @@ Also ship: Save route (black), Export GPX (share sheet), Allow unknown ack dialo
 
 Web applies `tuneShortbreadContrast()` after load (stronger water/forest/road colors). Overlay NSTDB/POI chunks are separate GeoJSON sources, not Shortbread.
 
-**Selected route:** brand orange `#ff7a00` line on top of basemap.
+**Selected route:** per-surface colours matching live web `route-network` (access `#0a66c2`, gravel `#5d6874`, track `#7c3aed`, paved `#ffb000`, connector `#d22730`). Brand orange is chrome/CTA/destination pin — not the route stroke. Stats mix `#3a9dff` / `#fdb003` stay UI-only.
 
 ### Offline tile session rules (nav corridor)
 

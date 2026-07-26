@@ -8,7 +8,7 @@ Native chrome tokens and interaction patterns, aligned to the web DIRT Enduro lo
 
 | Token | Hex / value | Role |
 | --- | --- | --- |
-| `orange` | `#ff7a00` | Accent, active dock pill, auth/group primary CTAs, destination marker, **dirt route line** |
+| `orange` | `#ff7a00` | Accent, active dock pill, auth/group primary CTAs, destination marker |
 | `orangeHover` / `orangePressed` | `#e56a00` / `#c25400` | Defined; limited use today |
 | `chrome` | `#16181c` | Dock, brand chip, Save CTA, Stop sharing, nav HUD chrome |
 | `chromeBorder` | white 12% | Dock / chip / HUD outlines |
@@ -19,7 +19,8 @@ Native chrome tokens and interaction patterns, aligned to the web DIRT Enduro lo
 | `danger` | `#d83b42` | Errors / clear route / destructive |
 | `dirtMix` | `#3a9dff` | Dirt **% stats** + mix bar |
 | `pavedMix` | `#fdb003` | Paved **% stats** + mix bar |
-| `pavedLine` | `#303a45` | Paved **map** segments |
+| `pavedLine` | `#303a45` | Layers/basemap paved overlay (not selected route) |
+| `routeAccess` / `routeGravel` / `routeTrack` / `routePaved` / `routeConnector` | `#0a66c2` / `#5d6874` / `#7c3aed` / `#ffb000` / `#d22730` | Selected-route map paint (web `route-network`) |
 
 Layers legend colours (access/gravel/branches/bridge/tunnel/restricted) are inlined in `LayersSheet` to match the web legend hexes.
 
@@ -116,7 +117,7 @@ Planner handle capsule collapses the card (`isOpen = false`).
 | Route card | Native card vs web DOM planner chrome (layout close, not pixel-identical) |
 | Sheets | System SwiftUI sheets vs custom web drawers |
 | Debug sheet | Not shipped |
-| Map dirt line | Orange (selected-route), same as web selected route — not blue mix |
+| Map dirt line | Per-surface web palette (access `#0a66c2`, gravel `#5d6874`, track `#7c3aed`, paved `#ffb000`, connector `#d22730`) — not brand orange; stats mix stays `#3a9dff` / `#fdb003` |
 | Forced light mode | `preferredColorScheme(.light)` |
 
 ---
