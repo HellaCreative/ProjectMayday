@@ -44,11 +44,21 @@ final class GroupsViewModel {
 
     private var shareTask: Task<Void, Never>?
     private var pollTask: Task<Void, Never>?
+    /// Group whose live peers stay on the map after the sheet closes (HTML keeps
+    /// markers while the group channel is active).
+    private var mapTrackedGroupID: String?
 
     init(supabase: SupabaseService, location: LocationService, mapState: MapState) {
         self.supabase = supabase
         self.location = location
         self.mapState = mapState
+    }
+
+    /// Resolves a map rider annotation id (`rider:<userID>`) to the roster row.
+    func member(forRiderMarkerID markerID: String) -> GroupMemberRow? {
+        guard markerID.hasPrefix("rider:") else { return nil }
+        let userID = String(markerID.dropFirst("rider:".count))
+        return members.first { $0.userID == userID }
     }
 
     private var client: SupabaseClient {
@@ -208,7 +218,8 @@ final class GroupsViewModel {
     func leaveGroup(_ group: GroupSummary) async {
         do {
             try await client.rpc("leave_group", params: ["p_group_id": group.id]).execute()
-            closeDetail()
+            stopMapTracking()
+            selectedGroup = nil
             await refreshGroups()
         } catch {
             errorMessage = "You could not leave this group right now."
@@ -218,7 +229,8 @@ final class GroupsViewModel {
     func deleteGroup(_ group: GroupSummary) async {
         do {
             try await client.rpc("delete_group", params: ["p_group_id": group.id]).execute()
-            closeDetail()
+            stopMapTracking()
+            selectedGroup = nil
             await refreshGroups()
         } catch {
             errorMessage = "The group could not be deleted."
@@ -229,18 +241,36 @@ final class GroupsViewModel {
 
     func openDetail(_ group: GroupSummary) {
         selectedGroup = group
-        members = []
+        mapTrackedGroupID = group.id
+        startPresencePolling(groupID: group.id)
+    }
+
+    func closeDetail() {
+        selectedGroup = nil
+        // Keep polling + pins for the last opened group so peers stay visible
+        // on the map while riding (HTML parity). Leave/delete clears tracking.
+        if let mapTrackedGroupID {
+            startPresencePolling(groupID: mapTrackedGroupID)
+        } else {
+            members = []
+            pollTask?.cancel()
+            pollTask = nil
+            clearRiderMarkers()
+        }
+    }
+
+    private func startPresencePolling(groupID: String) {
         pollTask?.cancel()
         pollTask = Task { [weak self] in
-            while let self, !Task.isCancelled, self.selectedGroup?.id == group.id {
-                await self.refreshMembers(groupID: group.id)
+            while let self, !Task.isCancelled, self.mapTrackedGroupID == groupID {
+                await self.refreshMembers(groupID: groupID)
                 try? await Task.sleep(for: .seconds(10))
             }
         }
     }
 
-    func closeDetail() {
-        selectedGroup = nil
+    private func stopMapTracking() {
+        mapTrackedGroupID = nil
         members = []
         pollTask?.cancel()
         pollTask = nil
@@ -263,21 +293,60 @@ final class GroupsViewModel {
                 .execute()
                 .value
             let presenceByUser = Dictionary(uniqueKeysWithValues: presence.map { ($0.user_id, $0) })
+            let namesByUser = await fetchDisplayNames(for: userIDs)
             members = rows.map { row in
                 let p = presenceByUser[row.user_id]
+                let nested = row.profiles?.display_name
+                let fetched = namesByUser[row.user_id]
                 return GroupMemberRow(
                     userID: row.user_id,
                     role: row.role,
-                    displayName: row.profiles?.display_name ?? "Rider",
+                    displayName: Self.resolvedDisplayName(nested ?? fetched),
                     isLive: p?.isLive ?? false,
                     latitude: p?.latitude,
                     longitude: p?.longitude,
-                    status: p?.status
+                    status: {
+                        let raw = p?.status?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                        return raw.isEmpty ? "available" : raw
+                    }()
                 )
             }
             paintLiveRiders()
         } catch {
             // Keep the last roster; polling retries shortly.
+        }
+    }
+
+    /// Prefer a real screen name; never paint a blank chip.
+    private static func resolvedDisplayName(_ raw: String?) -> String {
+        let trimmed = raw?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? "Rider" : trimmed
+    }
+
+    private struct ProfileNameRow: Decodable {
+        let id: String
+        let display_name: String?
+    }
+
+    /// Direct profiles lookup — nested `profiles(display_name)` on group_members
+    /// can come back empty under RLS / embed shape quirks.
+    private func fetchDisplayNames(for userIDs: [String]) async -> [String: String] {
+        guard !userIDs.isEmpty else { return [:] }
+        do {
+            let rows: [ProfileNameRow] = try await client
+                .from("profiles")
+                .select("id,display_name")
+                .in("id", values: userIDs)
+                .execute()
+                .value
+            var map: [String: String] = [:]
+            for row in rows {
+                let name = row.display_name?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+                if !name.isEmpty { map[row.id] = name }
+            }
+            return map
+        } catch {
+            return [:]
         }
     }
 
@@ -292,9 +361,10 @@ final class GroupsViewModel {
                 id: "rider:\(member.userID)",
                 latitude: lat,
                 longitude: lon,
-                label: String(member.displayName.prefix(1)).uppercased(),
+                label: member.displayName,
                 kind: .rider,
-                subtitle: member.displayName
+                subtitle: member.displayName,
+                status: member.status ?? "available"
             )
         }
         // Preserve route A/B markers already drawn by the planner; only swap rider pins.

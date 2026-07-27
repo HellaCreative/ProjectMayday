@@ -1,3 +1,4 @@
+import Combine
 import SwiftUI
 
 enum DockTab: String, CaseIterable, Identifiable {
@@ -19,10 +20,10 @@ enum DockTab: String, CaseIterable, Identifiable {
 
     var icon: String {
         switch self {
-        case .layers: "square.3.layers.3d.down.right"
+        case .layers: "square.3.layers.3d"
         case .profile: "person.crop.circle"
-        case .group: "person.2.fill"
-        case .route: "arrow.triangle.turn.up.right.diamond.fill"
+        case .group: "person.3"
+        case .route: "point.topleft.down.to.point.bottomright.curvepath"
         }
     }
 }
@@ -40,21 +41,28 @@ enum NavigationChrome {
         phase == .idle
     }
 
-    static func showsTopLocate(for phase: NavigationSession.Phase) -> Bool {
-        phase == .idle
-    }
-
-    static func showsNavigationLocate(for phase: NavigationSession.Phase) -> Bool {
-        phase == .active
+    /// Web `.stack` stays visible; only the recenter control remains when the
+    /// route planner owns the lower-right (compact stack).
+    static func mapStackCompact(routeCardOpen: Bool, phase: NavigationSession.Phase) -> Bool {
+        routeCardOpen && phase == .idle
     }
 }
 
 struct RootView: View {
     @Environment(AppEnvironment.self) private var app
+    @Environment(\.scenePhase) private var scenePhase
     @State private var activeSheet: ActiveSheet?
     @State private var routeCardOpen = false
 
+    private let usageTicker = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+
     private var navActive: Bool { app.navigation.phase != .idle }
+
+    /// StoreKit entitlement, or pre-release / Debug tester unlock (no fake receipt).
+    private var effectiveSubscribed: Bool {
+        app.subscription.isSubscribed
+            || (BuildChannel.showsTesterUnlock && app.debugBypassSubscription)
+    }
 
     var body: some View {
         ZStack(alignment: .bottom) {
@@ -63,29 +71,50 @@ struct RootView: View {
 
             VStack(spacing: 0) {
                 topChrome
-                Spacer()
-                if navActive {
-                    if NavigationChrome.showsNavigationLocate(for: app.navigation.phase) {
-                        HStack {
-                            Spacer()
-                            locateButton
-                        }
-                        .padding(.horizontal, 12)
-                        .padding(.bottom, 20)
+                Spacer(minLength: 0)
+
+                if navActive, !app.mapState.followUser {
+                    FollowChip {
+                        app.mapState.recenterOnUser(at: app.location.currentCoordinate)
                     }
-                    NavigationHUD()
-                        .padding(.horizontal, 12)
-                        .padding(.bottom, 8)
+                    .padding(.bottom, 10)
+                    .transition(.opacity.combined(with: .scale(scale: 0.9)))
+                }
+
+                // Stack sits in the same column as sheets/dock so the Figma
+                // 24pt clearance above the planner (or dock) is structural —
+                // not a guessed absolute bottom inset.
+                HStack(alignment: .bottom) {
+                    if app.navigation.phase == .active {
+                        NavigationPipView()
+                            .padding(.leading, 12)
+                            .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                    }
+                    Spacer()
+                    MapControlStack(
+                        compact: NavigationChrome.mapStackCompact(
+                            routeCardOpen: routeCardOpen,
+                            phase: app.navigation.phase
+                        )
+                    )
+                    .padding(.trailing, 12)
+                }
+                .padding(.bottom, 24)
+
+                if navActive {
+                    // Equal 8pt inset on left / right / bottom (into home-indicator zone).
+                    NavBottomPanel()
+                        .padding(8)
+                        .ignoresSafeArea(edges: .bottom)
                 } else if routeCardOpen {
                     RoutePlannerCard(isOpen: $routeCardOpen)
-                        .padding(.horizontal, 10)
-                        .padding(.bottom, 8)
                 }
                 if NavigationChrome.showsDock(for: app.navigation.phase) {
                     dock
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
+            .animation(.easeInOut(duration: 0.2), value: app.mapState.followUser)
         }
         .animation(.easeOut(duration: 0.2), value: navActive)
         .onChange(of: app.planner.presentRouteCard) { _, shouldOpen in
@@ -99,12 +128,18 @@ struct RootView: View {
             case .layers:
                 LayersSheet()
                     .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
+                    .presentationCornerRadius(22)
             case .profile:
                 ProfileSheet()
                     .presentationDetents([.medium, .large])
+                    .presentationDragIndicator(.visible)
+                    .presentationCornerRadius(22)
             case .group:
                 GroupsSheet(onClose: { activeSheet = nil })
                     .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
+                    .presentationCornerRadius(22)
             }
         }
         .overlay {
@@ -126,43 +161,112 @@ struct RootView: View {
             }
         }
         .animation(.easeInOut(duration: 0.2), value: app.planner.toast)
+        .overlay {
+            if app.incidents.isPresented {
+                IncidentFlowOverlay()
+            }
+        }
+        .animation(.easeInOut(duration: 0.25), value: app.incidents.isPresented)
+        .overlay {
+            if let presentation = app.trial.presentation {
+                PaywallView(
+                    presentation: presentation,
+                    onClose: { app.trial.dismissSoft() },
+                    onSubscribed: { app.trial.markSubscribed() }
+                )
+                .transition(.opacity)
+            }
+        }
+        .animation(.easeInOut(duration: 0.25), value: app.trial.presentation)
+        // POI tap → routing action sheet (web POC "Route to this" / "Use as waypoint")
+        .confirmationDialog(
+            app.mapState.selectedPOI.map { poi in
+                var parts = [poi.displayName]
+                if let brand = poi.brand, !brand.isEmpty, brand != poi.displayName {
+                    parts.append(brand)
+                }
+                if let address = poi.address, !address.isEmpty {
+                    parts.append(address)
+                }
+                // Always show category so a blank OSM name still reads clearly.
+                if poi.name == nil || poi.name?.isEmpty == true {
+                    parts = [poi.categoryLabel]
+                } else if poi.displayName.caseInsensitiveCompare(poi.categoryLabel) != .orderedSame {
+                    parts.append(poi.categoryLabel)
+                }
+                return parts.joined(separator: " · ")
+            } ?? "",
+            isPresented: Binding(
+                get: { app.mapState.selectedPOI != nil },
+                set: { if !$0 { app.mapState.selectedPOI = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            if let poi = app.mapState.selectedPOI {
+                Button("Route to this") {
+                    app.planner.routeToCoordinate(
+                        name: poi.displayName,
+                        latitude: poi.latitude,
+                        longitude: poi.longitude
+                    )
+                    app.mapState.selectedPOI = nil
+                    routeCardOpen = true
+                }
+                if app.planner.mode == .plan {
+                    Button("Add as waypoint") {
+                        app.planner.addPlanWaypoint(
+                            latitude: poi.latitude,
+                            longitude: poi.longitude
+                        )
+                        app.mapState.selectedPOI = nil
+                    }
+                }
+                Button("Cancel", role: .cancel) {
+                    app.mapState.selectedPOI = nil
+                }
+            }
+        }
+        .onReceive(usageTicker) { _ in
+            app.trial.isSubscribed = effectiveSubscribed
+            if scenePhase == .active {
+                app.trial.tick(canPresent: !navActive)
+            }
+        }
         .task {
             app.location.requestWhenInUse()
             await app.supabase.bootstrap()
+            if app.groups.groups.isEmpty {
+                await app.groups.refreshGroups()
+            }
+            app.trial.isSubscribed = effectiveSubscribed
+            if !navActive { app.trial.evaluate() }
         }
     }
 
     private var topChrome: some View {
-        HStack(alignment: .top) {
-            BrandChip()
-            Spacer()
-            if NavigationChrome.showsTopLocate(for: app.navigation.phase) {
-                locateButton
+        Group {
+            if navActive {
+                // 24pt gaps: logo · full-width cue · speed (3-digit stable width).
+                HStack(alignment: .center, spacing: 24) {
+                    BrandChip()
+                    NavCueCard()
+                        .frame(maxWidth: .infinity)
+                    NavSpeedPill()
+                }
+                .transition(.opacity.combined(with: .move(edge: .top)))
+            } else {
+                HStack(alignment: .top) {
+                    BrandChip()
+                    Spacer()
+                }
             }
         }
         .padding(.horizontal, 12)
         .padding(.top, 6)
     }
 
-    private var locateButton: some View {
-        Button {
-            if let coordinate = app.location.currentCoordinate {
-                app.mapState.fly(to: coordinate, zoom: 13.5)
-            } else {
-                app.location.requestWhenInUse()
-            }
-        } label: {
-            Image(systemName: "location.fill")
-                .font(.system(size: 15, weight: .bold))
-                .foregroundStyle(.white)
-                .frame(width: 40, height: 40)
-                .background(DirtTheme.chrome)
-                .clipShape(Circle())
-                .overlay(Circle().stroke(DirtTheme.chromeBorder, lineWidth: 1))
-        }
-        .accessibilityLabel("Locate me")
-    }
-
+    /// Full-bleed bottom dock (Figma): 12pt top corners only, chrome extends
+    /// under the home indicator. The large bottom curve is the device screen.
     private var dock: some View {
         HStack(spacing: 6) {
             ForEach(DockTab.allCases) { tab in
@@ -171,11 +275,18 @@ struct RootView: View {
         }
         .padding(.horizontal, 10)
         .padding(.top, 8)
-        .padding(.bottom, 4)
+        .padding(.bottom, 8)
         .frame(maxWidth: .infinity)
-        .background(DirtTheme.chrome.ignoresSafeArea(edges: .bottom))
-        .overlay(alignment: .top) {
-            Rectangle().fill(DirtTheme.chromeBorder).frame(height: 1)
+        .background {
+            UnevenRoundedRectangle(
+                topLeadingRadius: 12,
+                bottomLeadingRadius: 0,
+                bottomTrailingRadius: 0,
+                topTrailingRadius: 12,
+                style: .continuous
+            )
+            .fill(DirtTheme.chrome)
+            .ignoresSafeArea(edges: .bottom)
         }
     }
 

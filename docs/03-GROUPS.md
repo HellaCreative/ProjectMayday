@@ -65,9 +65,9 @@ ISO8601 parsing accepts fractional seconds (`ISO8601DateFormatterBox`).
 | Stop sharing | Upsert `sharing_enabled: false`, `status: offline` |
 | Status while sharing | `available` \| `breakdown` \| `injured` \| `stuck` (picker) |
 | Roster poll | While detail open, refresh members + presence every **10s** |
-| Map pins | Live peers (not self) as green rider markers; preserves A/B markers |
+| Map pins | Live peers (not self): status-colored dot + **name/status chip**; pins keep updating after sheet close while that group is tracked |
 | Focus peer | Scope button flies map to peer, closes sheet |
-| Route to member | `planner.routeToMember` → From here to peer coords; toast; closes sheet |
+| Route to member | Sheet **or tap peer pin on map** → `planner.routeToMember` → From here to peer coords; toast |
 | Close sheet | `onDisappear` → `closeDetail()` (web parity: reset to list) |
 
 Presence upsert payload fields: `user_id`, `sharing_enabled`, `status`, `latitude`, `longitude`, `heading`, `speed_mps`, `accuracy_m`, `last_seen_at`.

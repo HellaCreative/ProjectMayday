@@ -16,6 +16,12 @@ final class SupabaseService {
 
     var isSignedIn: Bool { userID != nil }
 
+    /// Signed in but has not chosen a screen name yet — routes to the screen
+    /// name setup step before the map loads.
+    var needsDisplayName: Bool {
+        isSignedIn && displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
     func bootstrap() async {
         guard client == nil else { return }
         do {
@@ -29,13 +35,23 @@ final class SupabaseService {
                 bootstrapError = "Supabase is not configured for this deployment."
                 return
             }
-            let client = SupabaseClient(supabaseURL: url, supabaseKey: config.publishableKey)
+            let client = SupabaseClient(
+                supabaseURL: url,
+                supabaseKey: config.publishableKey,
+                options: SupabaseClientOptions(
+                    auth: .init(emitLocalSessionAsInitialSession: true)
+                )
+            )
             self.client = client
-            if let session = try? await client.auth.session {
+            if let session = try? await client.auth.session, !session.isExpired {
                 apply(session: session)
             }
             Task {
                 for await change in client.auth.authStateChanges {
+                    // Local cache can emit an expired session first; ignore until refresh.
+                    if let session = change.session, session.isExpired {
+                        continue
+                    }
                     apply(session: change.session)
                 }
             }
@@ -72,6 +88,31 @@ final class SupabaseService {
     func verifyEmailCode(email: String, code: String) async throws {
         guard let client else { throw SupabaseServiceError.notReady }
         try await client.auth.verifyOTP(email: email, token: code, type: .email)
+    }
+
+    // MARK: - Sign in with Apple
+
+    /// Exchanges an Apple identity token for a Supabase session.
+    /// Requires the Apple provider to be enabled in the Supabase dashboard
+    /// (Authentication → Providers → Apple) with `com.mayday.dirt` as an
+    /// allowed client ID. `rawNonce` is the un-hashed nonce; Apple was given
+    /// its SHA-256, and Supabase verifies the raw value against the token.
+    func signInWithApple(idToken: String, rawNonce: String, fullName: PersonNameComponents?) async throws {
+        guard let client else { throw SupabaseServiceError.notReady }
+        let session = try await client.auth.signInWithIdToken(
+            credentials: .init(provider: .apple, idToken: idToken, nonce: rawNonce)
+        )
+        apply(session: session)
+
+        // Apple only returns the name on the very first authorization — capture
+        // it as a starting screen name if the account has none yet.
+        if displayName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, let fullName {
+            let candidate = PersonNameComponentsFormatter.localizedString(from: fullName, style: .default)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if !candidate.isEmpty {
+                try? await updateDisplayName(candidate)
+            }
+        }
     }
 
     func signOut() async throws {

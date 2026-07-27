@@ -82,13 +82,26 @@ struct AccessPolicy: Codable, Sendable {
     let motorizedUnknown: Bool
 }
 
+/// Optional per-request routing options. `avoidEdgeIds` is server-enforced
+/// (route incident recovery) — requests without it are byte-for-byte identical
+/// to the legacy shape, matching the web POC contract.
+struct RouteRequestOptions: Codable, Sendable {
+    let avoidEdgeIds: [String]
+}
+
 struct RouteRequest: Codable, Sendable {
     let profile: RouteProfile
     let locations: [RouteLocation]
     let vehicle: String
     let accessPolicy: AccessPolicy
+    let options: RouteRequestOptions?
 
-    init(profile: RouteProfile, locations: [RouteLocation], allowUnknown: Bool) {
+    init(
+        profile: RouteProfile,
+        locations: [RouteLocation],
+        allowUnknown: Bool,
+        avoidEdgeIds: [String] = []
+    ) {
         self.profile = profile
         self.locations = locations
         vehicle = "dual-sport-motorcycle"
@@ -96,6 +109,7 @@ struct RouteRequest: Codable, Sendable {
             motorizedPermissive: true,
             motorizedUnknown: profile == .cleanest ? false : allowUnknown
         )
+        options = avoidEdgeIds.isEmpty ? nil : RouteRequestOptions(avoidEdgeIds: avoidEdgeIds)
     }
 }
 
@@ -106,9 +120,12 @@ struct RouteSegment: Codable, Identifiable, Sendable {
     let distanceMeters: Double?
     let geometry: [RouteCoordinate]?
     let coords: [RouteCoordinate]?
+    /// Authoritative network edge ID (e.g. `ns-gov-…`) — used by incident
+    /// reports so "Find a way around" can avoid this edge server-side.
+    let edgeId: String?
 
     enum CodingKeys: String, CodingKey {
-        case surfaceClass, trackClass, distanceMeters, geometry, coords
+        case surfaceClass, trackClass, distanceMeters, geometry, coords, edgeId
     }
 
     var coordinates: [RouteCoordinate] { geometry ?? coords ?? [] }
@@ -152,11 +169,50 @@ struct RouteManeuver: Codable, Identifiable, Sendable {
     let id = UUID()
     let instruction: String?
     let type: String?
+    /// Web roadbook kind (`curve` / `junction`) when the backend or client enricher provides it.
+    let kind: String?
+    let side: String?
+    let number: Int?
+    let degrees: Double?
     let distanceMeters: Double?
     let alongMeters: Double?
 
     enum CodingKeys: String, CodingKey {
-        case instruction, type, distanceMeters, alongMeters
+        case instruction, type, kind, side, number, degrees, distanceMeters, alongMeters
+    }
+
+    init(
+        instruction: String?,
+        type: String?,
+        kind: String? = nil,
+        side: String? = nil,
+        number: Int? = nil,
+        degrees: Double? = nil,
+        distanceMeters: Double?,
+        alongMeters: Double?
+    ) {
+        self.instruction = instruction
+        self.type = type
+        self.kind = kind
+        self.side = side
+        self.number = number
+        self.degrees = degrees
+        self.distanceMeters = distanceMeters
+        self.alongMeters = alongMeters
+    }
+
+    /// Copies a maneuver with a shifted along-route distance (multi-stage plans).
+    func shiftingAlong(by offset: Double) -> RouteManeuver {
+        RouteManeuver(
+            instruction: instruction,
+            type: type,
+            kind: kind,
+            side: side,
+            number: number,
+            degrees: degrees,
+            distanceMeters: distanceMeters,
+            alongMeters: (alongMeters ?? 0) + offset
+        )
     }
 }
 

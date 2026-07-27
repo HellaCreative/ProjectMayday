@@ -47,6 +47,44 @@ struct DirtTests {
         #expect(response.segments?.first?.surfaceClass == "gravel")
     }
 
+    @Test func gpxParserReadsTrackPoints() throws {
+        let xml = """
+        <?xml version="1.0" encoding="UTF-8"?>
+        <gpx version="1.1" creator="test" xmlns="http://www.topografix.com/GPX/1/1">
+          <metadata><name>Test Ride</name></metadata>
+          <trk>
+            <name>Loop</name>
+            <trkseg>
+              <trkpt lat="44.64" lon="-63.57"/>
+              <trkpt lat="44.67" lon="-63.61"/>
+            </trkseg>
+          </trk>
+        </gpx>
+        """
+        let parsed = try GPXParser.parse(data: Data(xml.utf8))
+        #expect(parsed.name == "Loop")
+        #expect(parsed.pointCount == 2)
+        #expect(parsed.coordinates.count == 2)
+        #expect(parsed.coordinates[0].latitude == 44.64)
+        #expect(parsed.coordinates[0].longitude == -63.57)
+        #expect(parsed.distanceMeters > 0)
+    }
+
+    @Test func gpxParserFallsBackToRoutePoints() throws {
+        let xml = """
+        <?xml version="1.0"?>
+        <gpx version="1.1">
+          <rte><name>Day route</name>
+            <rtept lat="45.0" lon="-64.0"/>
+            <rtept lat="45.1" lon="-64.1"/>
+          </rte>
+        </gpx>
+        """
+        let parsed = try GPXParser.parse(data: Data(xml.utf8), fallbackName: "fallback")
+        #expect(parsed.name == "Day route")
+        #expect(parsed.coordinates.count == 2)
+    }
+
     @Test func gpxExporterProducesTrackPoints() {
         let route = SavedRoute(
             name: "Saturday Loop",
@@ -69,9 +107,50 @@ struct DirtTests {
         #expect(NavigationChrome.showsDock(for: .idle))
         #expect(!NavigationChrome.showsDock(for: .prefetching))
         #expect(!NavigationChrome.showsDock(for: .active))
-        #expect(NavigationChrome.showsTopLocate(for: .idle))
-        #expect(!NavigationChrome.showsTopLocate(for: .active))
-        #expect(NavigationChrome.showsNavigationLocate(for: .active))
+        #expect(NavigationChrome.mapStackCompact(routeCardOpen: true, phase: .idle))
+        #expect(!NavigationChrome.mapStackCompact(routeCardOpen: false, phase: .idle))
+        #expect(!NavigationChrome.mapStackCompact(routeCardOpen: true, phase: .active))
+    }
+
+    @Test func cueModeFiltersBendAndJunctionManeuvers() {
+        let bend = RouteManeuver(
+            instruction: "3 RIGHT",
+            type: "bend",
+            kind: nil,
+            side: "right",
+            number: 3,
+            degrees: 55,
+            distanceMeters: 0,
+            alongMeters: 100
+        )
+        let sharp = RouteManeuver(
+            instruction: "5 LEFT",
+            type: "bend",
+            kind: nil,
+            side: "left",
+            number: 5,
+            degrees: 110,
+            distanceMeters: 0,
+            alongMeters: 200
+        )
+        let junction = RouteManeuver(
+            instruction: "Turn left",
+            type: "turn",
+            kind: "junction",
+            side: "left",
+            number: nil,
+            degrees: nil,
+            distanceMeters: 0,
+            alongMeters: 300
+        )
+
+        #expect(bend.matches(cueMode: .all))
+        #expect(bend.matches(cueMode: .rally))
+        #expect(!bend.matches(cueMode: .junctions))
+
+        #expect(sharp.matches(cueMode: .junctions))
+        #expect(junction.matches(cueMode: .junctions))
+        #expect(!junction.matches(cueMode: .rally))
     }
 
     @Test func offlinePrefetchRejectsLocalStyleFiles() {
@@ -102,5 +181,36 @@ struct DirtTests {
         // Contract: destination marker paint must not wait on /api/route.
         #expect(RoutePlannerModel.paintsDestinationImmediatelyOnFromHereTap)
         #expect(RoutePlannerModel.calculatingRouteToast == "Calculating route")
+    }
+
+    @Test func poiDedupeCollapsesNearbyUnnamedCampgrounds() {
+        let a = POIFeature(
+            id: "1", category: "campground",
+            latitude: 44.6865, longitude: -63.2908,
+            name: nil, address: nil, brand: nil,
+            openingHours: nil, phone: nil, website: nil
+        )
+        let b = POIFeature(
+            id: "2", category: "campground",
+            latitude: 44.6867, longitude: -63.2908,
+            name: nil, address: nil, brand: nil,
+            openingHours: nil, phone: nil, website: nil
+        )
+        let far = POIFeature(
+            id: "3", category: "campground",
+            latitude: 44.75, longitude: -63.29,
+            name: "Other Park", address: nil, brand: nil,
+            openingHours: nil, phone: nil, website: nil
+        )
+        let fuel = POIFeature(
+            id: "4", category: "fuel",
+            latitude: 44.6865, longitude: -63.2908,
+            name: "Esso", address: nil, brand: nil,
+            openingHours: nil, phone: nil, website: nil
+        )
+        let merged = POIDeduper.collapseNearby([a, b, far, fuel])
+        #expect(merged.count == 3)
+        #expect(merged.filter { $0.category == "campground" }.count == 2)
+        #expect(merged.contains { $0.category == "fuel" })
     }
 }

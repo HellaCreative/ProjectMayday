@@ -1,6 +1,6 @@
 # DIRT iOS — UI & Design
 
-Native chrome tokens and interaction patterns, aligned to the web DIRT Enduro lock. Spec: [WEB-SPEC-FOR-IOS.md](./WEB-SPEC-FOR-IOS.md) §1–2. Source of truth in code: `Dirt/DesignSystem/DirtTheme.swift`.
+Native chrome tokens and interaction patterns, aligned to the web DIRT Enduro lock **plus the Figma screens page** (`DIRT.` file, node `40:977` — Map Idle, planner states, navigation, Layers/Profile/Groups). Spec: [WEB-SPEC-FOR-IOS.md](./WEB-SPEC-FOR-IOS.md) §1–2. Source of truth in code: `Dirt/DesignSystem/DirtTheme.swift`.
 
 ---
 
@@ -14,7 +14,7 @@ Native chrome tokens and interaction patterns, aligned to the web DIRT Enduro lo
 | `chromeBorder` | white 12% | Dock / chip / HUD outlines |
 | `ink` / `muted` | `#16181c` / `#616872` | Body / secondary |
 | `sheet` / `wash` | white 97% / `#f1f2f4` | Sheets + chip idle fill |
-| `navGreen` | `#147a56` | **Start / End navigation only** (+ live rider dots) |
+| `navGreen` | `#147a56` | **Start navigation only** (+ live rider dots / LIVE badges) |
 | `exportGray` | `#616872` | Export GPX |
 | `danger` | `#d83b42` | Errors / clear route / destructive |
 | `dirtMix` | `#3a9dff` | Dirt **% stats** + mix bar |
@@ -37,7 +37,23 @@ Web uses Archivo + Martian Mono. iOS stand-ins in `DirtTheme`:
 
 Density cues: dock labels ~9.5pt heavy + tracking; primary CTAs ~12pt heavy uppercase; invite codes / metrics use mono.
 
-Brand chip: italic black `DIRT` + orange `.` · mono `MAYDAY` wide tracking (`BrandChip`).
+## Map control stack (web `.stack` parity)
+
+Right-edge chrome above the dock / nav HUD:
+
+| Control | Behavior |
+| --- | --- |
+| **3D / 2D** | Toggles basemap pitch (`45°` idle / `55°` while following) |
+| **Cues** | Popover: All / Junction / Rally + Audio on/off (`dirt_cue_mode_v1`, `dirt_cue_audio_v1`) |
+| **Compass** | Rose tracks map bearing; tap resets north-up |
+| **Rider status** | Quick group sharing + Available / Breakdown / Injured / Stuck |
+| **Recenter** | Follow my location (course-up); orange while follow is locked **or while the nav Recenter chip is up** (either control re-locks follow) |
+
+When the route planner card is open, only **Recenter** remains (same as web `planner-open`).
+
+Idle map top-left holds the brand chip. During navigation the top row is **DIRT.** · turn cue (+ distance) · dark speed pill. Recenter lives on the right control stack.
+
+Brand chip: italic black `DIRT` + orange `.` only (`BrandChip`) — MAYDAY is no longer in the wordmark.
 
 No bundled custom fonts in the target today.
 
@@ -45,15 +61,14 @@ No bundled custom fonts in the target today.
 
 ## Bottom dock
 
-`RootView` dock:
+`RootView` dock (Figma restyle):
 
-- Chrome background, full width, safe-area aware.
+- **Floating rounded bar** — chrome fill, 26pt continuous radius, `chromeBorder` stroke, shadow, 8pt horizontal inset above the home indicator (no longer full-bleed).
 - Four equal tabs: Layers · Profile · Group · Route.
 - **Only one tool open at a time** (opening one closes the others) — web parity.
 - Active: orange fill + **1px white stroke** (`DirtTheme.orange` + white overlay stroke).
 - Route toggles an in-chrome planner card (not a `.sheet`); Layers/Profile/Group use SwiftUI sheets.
-
-Locate control sits in top chrome (circle, chrome fill), not in the dock.
+- Hidden while navigating.
 
 ---
 
@@ -63,11 +78,26 @@ Locate control sits in top chrome (circle, chrome fill), not in the dock.
 | --- | --- |
 | Layers / Profile | `.sheet` medium+large detents |
 | Groups | `.sheet` large |
-| Route planner | Floating card above dock (`DirtTheme.sheet`, 18pt radius, shadow) |
-| Nav HUD | Floating chrome cards above dock while `navigation.phase != .idle` |
+| Route planner | Floating card above dock (`DirtTheme.sheet`, 22pt radius, shadow) |
+| Nav chrome | Split top/bottom (see below) while `navigation.phase != .idle` |
+| Incident flow | `IncidentFlowOverlay` — scrim + bottom card (report → recovery → confirm) |
 | Toasts | Top capsule via `planner.toast` |
 
-Planner handle capsule collapses the card (`isOpen = false`).
+### Route planner card (Figma redesign)
+
+- **Orange tab bar** (From here / Plan a route / Saved) with white active pill.
+- Mode chips Clean / Direct / Balanced / Dirt (active orange). In Plan they edit the selected stage; otherwise the default for new stages.
+- **Stage rows**: orange number badge · white km box · blue `% dirt` box · per-stage Allow-unknown mini toggle, with the stage's mode label above the row. >3 stages scrolls.
+- Stat chips (KM / %DIRT / %PAVED on `wash`) + blue/yellow mix bar.
+- Icon CTAs: SAVE (chrome) · EXPORT GPX (gray) · START (green, play) · red "Clear All" text.
+- Helper-text empty states (From-here tap guide, Plan first-pin guide).
+- Handle tap **minimizes** to a single orange-outlined tab pill (Figma minimized state); dock Route closes the card entirely.
+
+### Navigation chrome (Figma `50:5240`)
+
+- **Top row**: `DIRT.` brand · centered `NavCueCard` (arrow + maneuver label + **distance to turn**) · dark chrome `NavSpeedPill` (`100` / `km`).
+- **Bottom**: inset `NavBottomPanel` (~8pt from sides/bottom) — chrome card with **top radius 16 / bottom radius 29**. Header: surface label + compact **REPORT** (amber/`pavedMix`, ink type) and **END NAVIGATION** (danger). Below: three bordered stat boxes (`km to go` / `travel time` / `elevation:m`).
+- **Recenter chip**: orange "Recenter" capsule when the rider pans away; stack recenter also re-locks course-up follow.
 
 ---
 
@@ -75,12 +105,14 @@ Planner handle capsule collapses the card (`isOpen = false`).
 
 | Action | Fill | Notes |
 | --- | --- | --- |
-| Save route | Chrome black `#16181c` | |
-| Export GPX | Gray `#616872` | |
-| Start navigation | Green `#147a56` | Only Start (and End navigation) |
-| Auth / Create group / Join / Start sharing | Orange `#ff7a00` | Never green |
-| Stop sharing | Chrome | |
-| Clear route | Text / danger colour | Not a filled CTA |
+| Save route | Chrome black `#16181c` | With save icon |
+| Export GPX | Gray `#616872` | With doc icon |
+| Start navigation | Green `#147a56` | With play icon — the only green CTA |
+| End navigation | Danger `#d83b42` | Capsule with x icon (Figma redesign — was green) |
+| Report (nav) | Chrome capsule | Opens incident flow |
+| Auth / Create group / Join / Start sharing / Save name / Start trial | Orange `#ff7a00` | Never green |
+| Sign out / Stop sharing | Chrome | |
+| Clear All | Text / danger colour | Not a filled CTA |
 
 `DirtCTAStyle` + `DirtChipStyle` encode pressed opacity and active white stroke on chips.
 

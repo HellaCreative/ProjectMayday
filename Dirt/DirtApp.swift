@@ -17,9 +17,15 @@ struct DirtApp: App {
 
     var body: some Scene {
         WindowGroup {
-            RootView()
+            AppGateView()
                 .environment(appEnvironment)
                 .preferredColorScheme(.light)
+                .onOpenURL { url in
+                    guard url.pathExtension.lowercased() == "gpx" else { return }
+                    let context = sharedModelContainer.mainContext
+                    appEnvironment.planner.importGPX(from: url, context: context)
+                    appEnvironment.planner.presentRouteCard = true
+                }
         }
         .modelContainer(sharedModelContainer)
     }

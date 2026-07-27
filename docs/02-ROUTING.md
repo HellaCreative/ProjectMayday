@@ -65,7 +65,7 @@ Rules:
 
 Errors surface as `RoutingError.server(message)` from `message` / `error` fields.
 
-Optional web fields (`options.matchLimitMeters`, `avoidEdgeIds`, `corridorBufferMeters`) are **not** sent by iOS today.
+iOS now sends `options.avoidEdgeIds` (server-enforced avoidance) when the incident recovery flow requests a detour; requests without avoidance omit `options` entirely and stay byte-for-byte identical to the legacy shape (covered by `routeRequestUsesCanonicalBackendShape`). Other optional web fields (`options.matchLimitMeters`, `corridorBufferMeters`) are still not sent. `RouteSegment` also decodes `edgeId` so reports can be matched to a network edge.
 
 ---
 
@@ -84,7 +84,7 @@ Optional web fields (`options.matchLimitMeters`, `avoidEdgeIds`, `corridorBuffer
 - Aggregate distance / dirt% / paved% across stage responses.
 - Maneuvers concatenated with along-route offset for nav.
 
-**Gap vs web:** `Stage` stores a `profile`, but the UI exposes **one global profile row**. Changing profile rewrites every stage’s profile and re-routes all completed stages. There is no independent per-stage profile picker in the card.
+**Per-stage policy (Figma redesign):** each `Stage` owns a `profile` **and** an `allowUnknown` flag. The mode chips edit the selected stage (tap a stage row to select it) or the default for new stages; each stage row has its own Allow-unknown toggle behind the access acknowledgement. The global profile/allow values only seed new stages — changing them never rewrites existing stages.
 
 ### Saved
 
@@ -118,7 +118,17 @@ Off-route: ≥3 samples > 80 m from nearest vertex → `onRerouteNeeded` (cooldo
 - Offline tiles kept (`keepExisting: true`).
 - **Side effect:** sets `mode = .fromHere` and replaces `fromHereResponse` — a multi-stage plan collapses to a single A→B during mid-trip recalculate.
 
-Incident **Report** in the HUD is a local toast only — no `avoidEdgeIds` recalculate, no `rider_alerts` write.
+### Incident report + recovery (web ROUTE-INCIDENT-RECOVERY parity)
+
+The nav **REPORT** pill opens `IncidentFlowOverlay` (`RouteIncidents.swift`):
+
+1. **Report what's ahead** — six one-tap categories (access closed / gate / flooded / blocked / unsafe / other). Stored device-local (`dirt_reports_v1`, 14-day freshness), matched to the nearest routed `edgeId` within 150 m when available. Shared persistence is still blocked (no durable store) — reports never claim to sync.
+2. **Report logged** — recovery actions, none of which touch the route without confirmation:
+   - *Find a way around* — rider → preserved destination with `options.avoidEdgeIds=[reported edge]` (server-enforced), same profile + access policy.
+   - *Backtrack* — the existing verified polyline reversed to the last junction maneuver behind the rider. Never a straight line.
+   - *Return to nearest verified network* — rider → nearest point on the active route line.
+   - *End stage* — ends navigation.
+3. **Replace route?** — preview (distance / dirt% / what was avoided) with *Keep current route* / *Apply route*. Failures show the web copy: "No verified alternate route found. Backtrack to the last verified junction or end this stage."
 
 ---
 
@@ -142,11 +152,11 @@ Incident **Report** in the HUD is a local toast only — no `avoidEdgeIds` recal
 
 | Gap | Notes |
 | --- | --- |
-| Per-stage profile UI | Model field exists; UI is global only |
 | GPX import | Missing |
-| avoid-edge / shared incidents | Not wired |
+| Shared incident sync | Blocked on a durable store (web parity) — reports are device-local |
+| Downstream rejoin labeling | Detours replace the route; automatic rejoin-point detection not implemented (allowed by spec §7) |
 | Debug sheet of last N route attempts | Web only |
-| Optional route options | Not sent |
+| `options.matchLimitMeters` / `corridorBufferMeters` | Not sent |
 
 ---
 

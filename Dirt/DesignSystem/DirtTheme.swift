@@ -23,6 +23,10 @@ enum DirtTheme {
     static let muted = Color(dirtHex: 0x616872)
     static let sheet = Color.white.opacity(0.97)
     static let wash = Color(dirtHex: 0xF1F2F4)
+    /// Nav HUD primary text on chrome (Figma `--panel/2`).
+    static let panelText = Color(dirtHex: 0xEEF3F7)
+    /// Nav HUD metric values on chrome (Figma `--bg`).
+    static let panelValue = Color(dirtHex: 0xF7F9FB)
     /// Green exclusive to Start / End navigation CTAs.
     static let navGreen = Color(dirtHex: 0x147A56)
     static let exportGray = Color(dirtHex: 0x616872)
@@ -108,28 +112,28 @@ struct DirtChipStyle: ButtonStyle {
 }
 
 struct BrandChip: View {
+    /// Wordmark only — `DIRT.` (orange period). MAYDAY no longer sits in the chip.
     var body: some View {
-        HStack(spacing: 6) {
-            HStack(spacing: 0) {
-                Text("DIRT")
-                    .italic()
-                    .fontWeight(.black)
-                    .foregroundStyle(.white)
-                Text(".")
-                    .italic()
-                    .fontWeight(.black)
-                    .foregroundStyle(DirtTheme.orange)
-            }
-            .font(.dirtUI(16, weight: .black))
-            Text("MAYDAY")
-                .font(.dirtMono(9, weight: .semibold))
-                .tracking(2.4)
-                .foregroundStyle(.white.opacity(0.72))
+        HStack(spacing: 0) {
+            Text("DIRT")
+                .italic()
+                .fontWeight(.black)
+                .foregroundStyle(.white)
+            Text(".")
+                .italic()
+                .fontWeight(.black)
+                .foregroundStyle(DirtTheme.orange)
         }
+        .font(.dirtUI(16, weight: .black))
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
+        .frame(minHeight: 42)
         .background(DirtTheme.chrome)
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(DirtTheme.chromeBorder, lineWidth: 1))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(DirtTheme.chromeBorder, lineWidth: 1)
+        )
+        .accessibilityLabel("DIRT")
     }
 }

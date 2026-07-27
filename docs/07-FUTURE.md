@@ -4,6 +4,24 @@ Work explicitly out of v1 scope, plus a practical App Store path. Do not treat t
 
 ---
 
+## Audit hardening backlog (2026-07-27)
+
+From the Codex iOS audit. **#2 stale routes** and **#5 failed-manifest retry** were implemented in-session; the rest stay here until prioritized.
+
+| Priority | Item | Notes | Status |
+| --- | --- | --- | --- |
+| High | Stale `/api/route` responses can overwrite newer intent | Request generation + stage-id apply; ignore mismatched replies | **Done** |
+| High | Failed POI / network manifest `Task` sticks for the session | Clear task on failure so a later refresh retries | **Done** |
+| High | Release builds include tester auth + subscription bypass | `BuildChannel.allowPreReleaseTesterUnlock` — intentional for TestFlight; set `false` (or Store-only config) before public App Store freeze | Open |
+| High | Live sharing can publish `(0,0)` before GPS is ready | `GroupsViewModel.publishPresence` — wait for a valid fix; don’t write Gulf-of-Guinea junk | Open |
+| High | Gzip decode uses a fixed 8× output ceiling | `Data.gunzipped()` — grow buffer / stream; current packs may be fine until blank provinces appear | Open |
+| Medium | `IPHONEOS_DEPLOYMENT_TARGET = 26.5` | Likely Xcode default inheritance — lower to the real minimum OS before store if reach matters | Open |
+| Medium | Inconsistent HTTP response validation | Shared client: require `200..<300`, size limits, better diagnostics for supabase-config / manifests / chunks | Open |
+| Medium | Thin tests around critical state machines | Highest ROI: stale-route ordering, stage delete during route, presence coords, manifest retry, StoreKit/trial transitions | Open |
+| Low | `GPXParser` unused `var track` | Change to `let` | Open |
+
+---
+
 ## Near-term product gaps (still “app” scope)
 
 | Item | Today | Direction |
@@ -26,7 +44,7 @@ Work explicitly out of v1 scope, plus a practical App Store path. Do not treat t
 | **Live Activities** | Nav ETA / next cue on Lock Screen Dynamic Island — natural fit once TBT is stable |
 | **Apple Watch** | Glanceable cue + distance; complication later |
 | **CarPlay** | Navigation app entitlement + map template — significant certification work |
-| **Voice (AVSpeech)** | Web has optional cue audio flag; iOS has no speech yet |
+| **Voice (AVSpeech)** | Cue audio toggle ships with the map stack (`dirt_cue_audio_v1`); refine phrasing / ducking later |
 | **Haptics** | Turn proximity / off-route pulses |
 | **Background audio session** | Only if voice ships |
 

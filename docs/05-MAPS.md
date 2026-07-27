@@ -9,25 +9,27 @@ MapLibre Native integration, route paint, markers, location, and offline tile se
 | File | Role |
 | --- | --- |
 | `Dirt/Map/MapLibreMapView.swift` | `UIViewRepresentable` + style layers + gestures |
-| `Dirt/Map/MapState.swift` | Observable map model (route, markers, camera, style) |
-| `Dirt/Map/MapStyleCatalog.swift` | Basemap IDs, Mapbox token, style URL writer |
+| `Dirt/Map/MapState.swift` | Observable map model (route, markers, camera, style, overlays) |
+| `Dirt/Map/MapStyleCatalog.swift` | Basemap IDs, style URL writer |
 | `Dirt/Map/OfflineTileManager.swift` | Offline pack prefetch (active basemap) |
+| `Dirt/Map/POIManager.swift` | Rider Services POI chunk loader (Vercel CDN → MapState) |
+| `Dirt/Map/NetworkOverlayManager.swift` | Province network overlay chunk loader (NS/NB/QC → MapState) |
+| `Dirt/Map/GeoJSON+Utils.swift` | `Data.gunzipped()` gzip decompression; `LayerPrefsSnapshot` |
 | `Dirt/Networking/AppConfig.swift` | Shortbread URL + idle camera |
-| `Dirt/Features/Layers/LayersSheet.swift` | Basemap picker + legend prefs |
+| `Dirt/Features/Layers/LayersSheet.swift` | Basemap picker + all overlay toggles |
 
 ---
 
 ## MapLibre integration
 
-- Default style: OSM **Shortbread** at `https://dirt-mayday.vercel.app/app/data/shortbread-style.json` (vector tiles; no Mapbox token).
+- Default style: OSM **Shortbread** (bundled `shortbread-style.json`) — high-contrast paint tuned for sunlight readability, derived from web `tuneShortbreadContrast()`.
 - **Swappable basemaps** (`MapStyleCatalog` + Layers → Basemap):
   | ID | Source | Notes |
   | --- | --- | --- |
-  | `shortbread` | Production Shortbread JSON | Works offline without Mapbox |
-  | `mapboxOutdoors` | Mapbox Outdoors v12 **raster** tiles | Needs `pk.` token; terrain / trails / land cover |
-  | `mapboxStreets` | Streets v12 raster | Token required |
-  | `mapboxSatellite` | `mapbox.satellite` raster | Token required |
-- MapLibre cannot resolve `mapbox://` URIs, so Mapbox styles are written as local Style Spec JSON using the [Static / Raster Tiles APIs](https://docs.mapbox.com/help/dive-deeper/mapbox-in-maplibre/) (token only in UserDefaults / Info.plist / env — never committed).
+  | `shortbread` | Bundled Shortbread JSON | High-contrast OSM vector; works offline; no billing |
+  | `esriSatellite` | Esri World Imagery raster tiles | No token required; aerial imagery via ArcGIS Online |
+- Esri style is written to a cache-directory JSON at selection time (same raster-spec pattern as the old Mapbox path). Tile URL: `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}` (Esri uses `{z}/{y}/{x}` order).
+- No Mapbox token required or expected. `MapStyleCatalog.tokenKey` and `hasMapboxToken` have been removed.
 - **Routing is unchanged:** OSM dual-sport graph via `POST /api/route`. Basemap swap is visual only.
 - Idle camera: NS overview `(-63.0, 45.1)` zoom `7.25`.
 - `MLNMapView` via `UIViewRepresentable`; coordinator owns style load / reload (`styleGeneration`), route sync, markers, camera, follow mode.
@@ -35,9 +37,11 @@ MapLibre Native integration, route paint, markers, location, and offline tile se
 - Gestures: tap → `MapState.onTap`; long-press → `onLongPress` (wired to planner in `AppEnvironment`).
 - Logo hidden; attribution bottom-left; compass top-right.
 
-Generation counters (`routeGeneration`, `markerGeneration`, `styleGeneration`) avoid redundant UIKit work.
+Generation counters (`routeGeneration`, `markerGeneration`, `styleGeneration`, `poiDataGeneration`, `networkDataGeneration`, `layerPrefsGeneration`) avoid redundant UIKit work.
 
-**Not ported:** web’s `tuneShortbreadContrast()` post-load colour tweaks. Native uses the remote Shortbread style as served (or Mapbox raster as selected).
+`MapState` also exposes `mapCenter: CLLocationCoordinate2D` and `mapZoom: Double` (updated by the Coordinator on `regionDidChangeAnimated`) so `@Observable`-observing managers can react to viewport changes without needing a direct callback.
+
+**Ported:** web’s `tuneShortbreadContrast()` logic is baked into `shortbread-style.json` paint properties (background, water fills/lines, forest, park/vegetation, residential, commercial, industrial, farmland, cemetery, school, sand — 57 layers). No runtime post-load patching needed.
 
 ---
 
@@ -117,16 +121,53 @@ Documented limit in README and code: **not a true route corridor** — best-effo
 
 ## Layers / overlays
 
-`LayersSheet` persists basemap choice, optional Mapbox token, Rider Services + Map Visibility toggles via `@AppStorage`.
+`LayersSheet` persists basemap choice, Rider Services, and Route data (NS/NB/QC lens) via `@AppStorage`.  
+Toggle changes bump `app.mapState.layerPrefsGeneration` so managers refresh. Map visibility surface-class toggles were removed — network classes always paint when loaded.
 
-**No GeoJSON/POI/NSTDB sources are added to the map yet.** Toggles are preference-only; sheet copy states overlays land in a later build. See [07-FUTURE.md](./07-FUTURE.md).
+### Rider Services POIs
+
+`POIManager` (owned by `AppEnvironment`) observes `mapState.mapCenter`, `mapState.mapZoom`, and `mapState.layerPrefsGeneration` via `withObservationTracking`.
+
+| | |
+|---|---|
+| **Data source** | `https://dirt-mayday.vercel.app/app/data/poi/poi.manifest.json` + `…/chunks/{id}.json.gz` |
+| **Chunk format** | `{id, category, lat, lon, name, address, brand, openingHours, phone, website}` |
+| **Trigger** | Map viewport change or layer pref change (350 ms debounce) |
+| **Min zoom** | 8.5 (below: source cleared) |
+| **Chunk cap** | 14 nearest to map center (web `POI_MAX_CHUNKS`) |
+| **MapLibre** | Source `dirt-poi` (GeoJSON); 4 `MLNCircleStyleLayer` (one per category) |
+| **Colors** | fuel #e8730c, campground #2f9e44, lodging #8a5a2b, liquor #8e44c9 |
+| **Tap** | Coordinator `handleTap` → `queryRenderedFeatures` on poi layers → `mapState.onPOITap` → `mapState.selectedPOI` → `RootView confirmationDialog` |
+| **Routing** | "Route to this" → `planner.routeToCoordinate`; "Add as waypoint" → `planner.addPlanWaypoint` |
+
+### Province network overlays (NS / NB / QC)
+
+`NetworkOverlayManager` mirrors the web corridor + viewport-lens loader.
+
+| | |
+|---|---|
+| **Data sources** | `…/ns-gov-roads.manifest.json` + `…/ns-gov-chunks/{id}.geojson.gz` (same for NB/QC) |
+| **Chunk format** | GeoJSON FeatureCollection, properties: `edgeId, surfaceClass, accessClass, structureType, province` |
+| **Corridor mode** | Toggle off: NS lines within 2–3 km of map focus + route anchors when a route exists, or at zoom ≥ 12.5 |
+| **Lens mode** | Show NS/NB/QC route lines (one at a time): viewport paint for that province |
+| **Chunk / feature caps** | Corridor 6 / 1600; lens 8 / 5000 |
+| **MapLibre source** | `dirt-network` (GeoJSON) |
+| **Layers** | `dirt-net-access` (blue), `dirt-net-gravel` (gray), `dirt-net-track` (purple), `dirt-net-restricted` (red dashed), `dirt-net-bridge` (teal), `dirt-net-tunnel` (brown dashed) — always visible when loaded |
+
+### Layer insertion order
+
+```
+dirt-net-access / gravel / track / restricted / bridge / tunnel   ← below route
+dirt-route-{bucket}-casing / line                                  ← route
+dirt-poi-{category}                                                ← above route
+```
 
 ---
 
 ## Starting a new agent on this area
 
-1. Read `MapLibreMapView.swift`, `MapState.swift`, `OfflineTileManager.swift`.
+1. Read `MapLibreMapView.swift`, `MapState.swift`, `POIManager.swift`, `NetworkOverlayManager.swift`, `GeoJSON+Utils.swift`.
 2. Cross-check session rules with [WEB-SPEC-FOR-IOS.md](./WEB-SPEC-FOR-IOS.md) §6.
-3. For overlay streams, study web `app/index.html` sources — do not invent tile URLs.
+3. For overlay streams, study web `app/index.html` sources — do not invent tile URLs; CDN at `https://dirt-mayday.vercel.app/app/data/`.
 4. **Invariants:** Start-Nav-only prefetch; keep-through-reroute; never clear packs on End alone; selected-route paint stays on web per-surface palette (not stats mix, not brand-orange-only); production style URL.
-5. **Open questions:** true corridor pack vs bbox; port `tuneShortbreadContrast`; MaxOfflinePack size / eviction policy on device.
+5. **Open questions:** true corridor pack vs bbox; MaxOfflinePack size / eviction policy on device; POI clustering for dense areas.

@@ -1,22 +1,20 @@
 import SwiftUI
 
-/// Layers legend + basemap picker + preference toggles. Preferences persist like
-/// the web POC; native POI / NSTDB overlays land in a later build.
+/// Layers legend + basemap picker + preference toggles.
+/// @AppStorage prefs persist to UserDefaults.  Any toggle change bumps
+/// `app.mapState.layerPrefsGeneration`, which wakes the Coordinator to
+/// apply updated visibility to the live MapLibre style.
 struct LayersSheet: View {
     @Environment(AppEnvironment.self) private var app
 
-    @AppStorage(MapStyleCatalog.preferenceKey) private var styleIDRaw = MapStyleCatalog.preferredDefault.rawValue
-    @AppStorage(MapStyleCatalog.tokenKey) private var mapboxToken = ""
+    @AppStorage(MapStyleCatalog.preferenceKey) private var styleIDRaw = MapStyleID.shortbread.rawValue
     @AppStorage("dirt.layers.fuel") private var showFuel = false
     @AppStorage("dirt.layers.camp") private var showCampgrounds = false
     @AppStorage("dirt.layers.lodging") private var showLodging = false
     @AppStorage("dirt.layers.liquor") private var showLiquor = false
-    @AppStorage("dirt.layers.access") private var showAccess = true
-    @AppStorage("dirt.layers.gravel") private var showGravel = true
-    @AppStorage("dirt.layers.branches") private var showBranches = true
-    @AppStorage("dirt.layers.bridge") private var showBridge = true
-    @AppStorage("dirt.layers.tunnel") private var showTunnel = true
-    @AppStorage("dirt.layers.restricted") private var showRestricted = true
+    @AppStorage("dirt.layers.network.ns") private var showNSLines = false
+    @AppStorage("dirt.layers.network.nb") private var showNBLines = false
+    @AppStorage("dirt.layers.network.qc") private var showQCLines = false
 
     private var selectedStyle: MapStyleID {
         MapStyleID(rawValue: styleIDRaw) ?? .shortbread
@@ -25,6 +23,27 @@ struct LayersSheet: View {
     var body: some View {
         NavigationStack {
             List {
+
+                Section("Rider services") {
+                    serviceToggle("Fuel", icon: "fuelpump.fill", isOn: $showFuel)
+                    serviceToggle("Campgrounds", icon: "tent.fill", isOn: $showCampgrounds)
+                    serviceToggle("Lodging", icon: "bed.double.fill", isOn: $showLodging)
+                    serviceToggle("Liquor", icon: "wineglass.fill", isOn: $showLiquor)
+                }
+                .tint(DirtTheme.orange)
+
+                Section {
+                    Toggle("Show NS route lines", isOn: $showNSLines)
+                    Toggle("Show NB route lines", isOn: $showNBLines)
+                    Toggle("Show QC route lines", isOn: $showQCLines)
+                } header: {
+                    Text("Route data")
+                } footer: {
+                    Text("Viewport lens for provincial secondary networks (NS TDB, NB, QC). One province at a time. When off, purple/blue lines still appear as a corridor around an active route so you can manually route around trouble.")
+                        .font(.dirtUI(11))
+                }
+                .tint(DirtTheme.orange)
+
                 Section {
                     ForEach(MapStyleID.allCases) { style in
                         Button {
@@ -47,79 +66,50 @@ struct LayersSheet: View {
                                 }
                             }
                         }
-                        .disabled(style.requiresMapboxToken && !MapStyleCatalog.hasMapboxToken)
                     }
                 } header: {
                     Text("Basemap")
                 } footer: {
-                    Text("Basemap is visual only. Routes still calculate on OSM dual-sport data via /api/route. Mapbox styles need a public token (pk.…).")
+                    Text("Basemap is visual only. Routes still calculate on OSM dual-sport data via /api/route.")
                         .font(.dirtUI(11))
-                }
-
-                Section("Mapbox token") {
-                    SecureField("pk.eyJ…", text: $mapboxToken)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                        .font(.dirtMono(12))
-                        .onChange(of: mapboxToken) { _, newValue in
-                            MapStyleCatalog.setMapboxAccessToken(newValue)
-                            // Refresh style file if a Mapbox basemap is active.
-                            if selectedStyle.requiresMapboxToken {
-                                app.mapState.applySelectedMapStyle()
-                            }
-                        }
-                    if !MapStyleCatalog.hasMapboxToken {
-                        Text("Paste a Mapbox public token to unlock Outdoors, Streets, and Satellite.")
-                            .font(.dirtUI(11))
-                            .foregroundStyle(DirtTheme.muted)
-                    }
-                }
-
-                Section("Rider services") {
-                    Toggle("Fuel", isOn: $showFuel)
-                    Toggle("Campgrounds", isOn: $showCampgrounds)
-                    Toggle("Lodging", isOn: $showLodging)
-                    Toggle("Liquor", isOn: $showLiquor)
-                }
-                .tint(DirtTheme.orange)
-
-                Section("Map visibility") {
-                    legendToggle("Access roads", color: Color(dirtHex: 0x0A66C2), isOn: $showAccess)
-                    legendToggle("Gravel", color: Color(dirtHex: 0x5D6874), isOn: $showGravel)
-                    legendToggle("Branches / track", color: Color(dirtHex: 0x7C3AED), isOn: $showBranches)
-                    legendToggle("Bridges", color: Color(dirtHex: 0x16875F), isOn: $showBridge)
-                    legendToggle("Tunnels", color: Color(dirtHex: 0x94572B), isOn: $showTunnel)
-                    legendToggle("Restricted", color: Color(dirtHex: 0xD22730), isOn: $showRestricted)
-                }
-                .tint(DirtTheme.orange)
-
-                Section {
-                    Text("Rider Services pins and provincial road overlays stream in on a coming build. Your choices here are already saved.")
-                        .font(.dirtUI(12))
-                        .foregroundStyle(DirtTheme.muted)
                 }
             }
             .navigationTitle("Layers")
             .navigationBarTitleDisplayMode(.inline)
+            .onChange(of: showFuel)        { _, _ in app.mapState.bumpLayerPrefs() }
+            .onChange(of: showCampgrounds) { _, _ in app.mapState.bumpLayerPrefs() }
+            .onChange(of: showLodging)     { _, _ in app.mapState.bumpLayerPrefs() }
+            .onChange(of: showLiquor)      { _, _ in app.mapState.bumpLayerPrefs() }
+            .onChange(of: showNSLines) { _, on in
+                if on { showNBLines = false; showQCLines = false }
+                app.mapState.bumpLayerPrefs()
+            }
+            .onChange(of: showNBLines) { _, on in
+                if on { showNSLines = false; showQCLines = false }
+                app.mapState.bumpLayerPrefs()
+            }
+            .onChange(of: showQCLines) { _, on in
+                if on { showNSLines = false; showNBLines = false }
+                app.mapState.bumpLayerPrefs()
+            }
+        }
+    }
+
+    private func serviceToggle(_ title: String, icon: String, isOn: Binding<Bool>) -> some View {
+        Toggle(isOn: isOn) {
+            HStack(spacing: 10) {
+                Image(systemName: icon)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(DirtTheme.ink)
+                    .frame(width: 22)
+                Text(title)
+            }
         }
     }
 
     private func selectStyle(_ style: MapStyleID) {
-        if style.requiresMapboxToken {
-            MapStyleCatalog.setMapboxAccessToken(mapboxToken)
-            guard MapStyleCatalog.hasMapboxToken else { return }
-        }
         styleIDRaw = style.rawValue
         MapStyleCatalog.selectedID = style
         app.mapState.applySelectedMapStyle()
-    }
-
-    private func legendToggle(_ title: String, color: Color, isOn: Binding<Bool>) -> some View {
-        Toggle(isOn: isOn) {
-            HStack(spacing: 10) {
-                Capsule().fill(color).frame(width: 22, height: 5)
-                Text(title)
-            }
-        }
     }
 }
