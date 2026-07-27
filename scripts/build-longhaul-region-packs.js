@@ -35,15 +35,49 @@ const CODES = process.argv.slice(2).filter((a) => !a.startsWith("--")).length
   : CODES_DEFAULT;
 const BUFFER_M = 200000;
 
-function thinGeometry(coords, maxPts = 6) {
-  if (!coords || coords.length <= maxPts) return coords;
+function haversineMeters(a, b) {
+  const R = 6371000;
+  const toR = Math.PI / 180;
+  const dLat = (b[1] - a[1]) * toR;
+  const dLon = (b[0] - a[0]) * toR;
+  const lat1 = a[1] * toR;
+  const lat2 = b[1] * toR;
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+/**
+ * Keep shape points along the road at ~maxSpacingM so painted routes follow
+ * the basemap instead of cutting chords through terrain.
+ *
+ * The previous maxPts=6 uniform subsample collapsed gentle curves into
+ * multi-hundred-metre straight segments (Meaghers Grant-style triangles).
+ */
+function thinGeometry(coords, maxSpacingM = 35, maxPts = 80) {
+  if (!coords || coords.length <= 2) return coords;
   const out = [coords[0]];
-  const step = (coords.length - 1) / (maxPts - 1);
-  for (let i = 1; i < maxPts - 1; i += 1) {
-    out.push(coords[Math.round(i * step)]);
+  let sinceKeep = 0;
+  for (let i = 1; i < coords.length - 1; i += 1) {
+    sinceKeep += haversineMeters(coords[i - 1], coords[i]);
+    if (sinceKeep >= maxSpacingM) {
+      out.push(coords[i]);
+      sinceKeep = 0;
+    }
   }
-  out.push(coords[coords.length - 1]);
-  return out;
+  const last = coords[coords.length - 1];
+  const prev = out[out.length - 1];
+  if (prev[0] !== last[0] || prev[1] !== last[1]) out.push(last);
+
+  if (out.length <= maxPts) return out;
+  const kept = [out[0]];
+  const step = (out.length - 1) / (maxPts - 1);
+  for (let i = 1; i < maxPts - 1; i += 1) {
+    kept.push(out[Math.round(i * step)]);
+  }
+  kept.push(out[out.length - 1]);
+  return kept;
 }
 
 function load(code) {
@@ -251,7 +285,7 @@ function main() {
       // Corridor clip can leave stale component labels — refresh only.
       g = relabelComponents(g);
     }
-    for (const e of g.edges) e.g = thinGeometry(e.g, 6);
+    for (const e of g.edges) e.g = thinGeometry(e.g, 35, 80);
     g.edgeCount = g.edges.length;
     g.regionId = code;
     g.province = String(code).toUpperCase();
@@ -293,6 +327,8 @@ function main() {
       hubCount: (HUBS[code] || []).length,
       corridorBufferMeters: keepProvincial || qcOsmOnly ? null : BUFFER_M,
       thinnedGeometry: true,
+      thinSpacingMeters: 35,
+      thinMaxPts: 80,
       inputEdgeCount: before,
       spineEdgeCount: afterSpine,
       outputEdgeCount: g.edgeCount

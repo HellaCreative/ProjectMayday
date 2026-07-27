@@ -325,10 +325,8 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
     node = parent;
   }
   used.reverse();
-  const pruned =
-    profile === "dirt"
-      ? pruneGeographicLoops(used, (edge) => edge.coords)
-      : { edges: used, prunedLoopCount: 0, prunedMeters: 0 };
+  // All profiles: remove geographic loops / out-and-backs after search.
+  const pruned = pruneGeographicLoops(used, (edge) => edge.coords);
   const routeEdges = pruned.edges;
 
   const geometry = [];

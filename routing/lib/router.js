@@ -1750,10 +1750,11 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds) 
   }
 
   function materializeUsed(used, searchMeta) {
-    const pruned =
-      profile === "dirt"
-        ? pruneGeographicLoops(used, resolveEdgeCoords)
-        : { edges: used, prunedLoopCount: 0, prunedMeters: 0 };
+    // Strip geographic out-and-backs / house loops for every profile. A
+    // motorcycle turnaround on a dead spur is bad in Direct and Dirt alike —
+    // Dirt still prefers adventure surface during search; pruning only removes
+    // non-advancing loops after the path is chosen.
+    const pruned = pruneGeographicLoops(used, resolveEdgeCoords);
     used = pruned.edges;
     searchMeta.prunedLoopCount = pruned.prunedLoopCount;
     searchMeta.prunedLoopMeters = Math.round(pruned.prunedMeters);

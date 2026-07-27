@@ -3,8 +3,8 @@
   "schemaVersion": "longhaul-region-1",
   "edgeCount": 21792,
   "nodeCount": 31413,
-  "gzBytes": 1283413,
-  "inflatedBytes": 7741662,
+  "gzBytes": 1388898,
+  "inflatedBytes": 8061473,
   "path": "routing/data/regions/pe/longhaul.v1.json.gz",
   "lineage": {
     "purpose": "canada-chain / in-province pack (OSM-only; no NRN)",

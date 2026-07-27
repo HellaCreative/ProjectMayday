@@ -3,8 +3,8 @@
   "schemaVersion": "longhaul-region-1",
   "edgeCount": 244589,
   "nodeCount": 347984,
-  "gzBytes": 17121583,
-  "inflatedBytes": 91785877,
+  "gzBytes": 31667686,
+  "inflatedBytes": 145085540,
   "path": "routing/data/regions/bc/longhaul.v1.json.gz",
   "lineage": {
     "purpose": "canada-chain / in-province pack (OSM+FTEN; no NRN)",

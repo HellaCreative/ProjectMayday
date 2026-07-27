@@ -58,6 +58,24 @@ test("leaves a simple forward-progress path unchanged", () => {
   assert.equal(result.prunedMeters, 0);
 });
 
+test("removes a residential house-loop that rejoins the through road", () => {
+  // Direct-style tendril: leave the main road, circle a block, rejoin, continue.
+  const used = [
+    edge("main-in", [[0, 0], [1, 0]], 100),
+    edge("loop-n", [[1, 0], [1, 0.001]], 110),
+    edge("loop-e", [[1, 0.001], [1.001, 0.001]], 110),
+    edge("loop-s", [[1.001, 0.001], [1.001, 0]], 110),
+    edge("loop-w", [[1.001, 0], [1, 0]], 110),
+    edge("main-out", [[1, 0], [2, 0]], 100)
+  ];
+
+  const result = pruneGeographicLoops(used, (item) => item.coords);
+
+  assert.deepEqual(result.edges.map((item) => item.edgeId), ["main-in", "main-out"]);
+  assert.ok(result.prunedLoopCount >= 1);
+  assert.ok(result.prunedMeters > 0);
+});
+
 test("closes a rounded duplicate without creating a geometry gap", () => {
   const used = [
     edge("approach", [[0, 0], [1.0000001, 0]]),
@@ -71,4 +89,37 @@ test("closes a rounded duplicate without creating a geometry gap", () => {
   const approachEnd = result.edges[0].coords.at(-1);
   const continueStart = result.edges[1].coords[0];
   assert.deepEqual(continueStart, approachEnd);
+});
+
+test("removes a dual-fabric near-miss triangle that exact keys would miss", () => {
+  // Same physical junction, two fabrics offset by ~8–12 m — the painted path
+  // goes out on the road curve, then returns via a straight chord (or parallel
+  // representation) before making the real turn. Exact precision-6 keys miss it.
+  const before = [-63.122, 44.982];
+  const junction = [-63.12, 44.985];
+  const alongRoad = [-63.118, 44.988];
+  const furtherUp = [-63.115, 44.991];
+  const nearJunction = [-63.12005, 44.98508]; // ~10 m from junction (cell boundary)
+  const used = [
+    edge("pre", [before, junction], 350),
+    edge("approach", [junction, alongRoad], 400),
+    edge("overshoot", [alongRoad, furtherUp], 450),
+    edge("chord-return", [furtherUp, nearJunction], 700),
+    edge("real-turn", [nearJunction, [-63.125, 44.986]], 400)
+  ];
+
+  const exact = pruneGeographicLoops(used, (item) => item.coords, { exactOnly: true });
+  assert.equal(exact.prunedLoopCount, 0, "exact keys must miss the near-miss");
+
+  const result = pruneGeographicLoops(used, (item) => item.coords, {
+    cellMeters: 20,
+    matchMeters: 25
+  });
+  assert.ok(result.prunedLoopCount >= 1, "proximity cells must erase the triangle");
+  assert.ok(result.prunedMeters > 0);
+  const ids = result.edges.map((item) => item.edgeId);
+  assert.ok(ids.includes("pre"), "through progress before the junction stays");
+  assert.ok(ids.includes("real-turn"), "the real turn after rejoin stays");
+  assert.ok(!ids.includes("chord-return"), "chord return must be removed");
+  assert.ok(!ids.includes("overshoot"), "overshoot arm must be removed");
 });
