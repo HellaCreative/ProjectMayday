@@ -39,11 +39,11 @@ UI names ↔ engine ids: Cleanest → `cleanest`, Direct → `direct`, Balanced 
 | Profile | Law | Dirt / paved intent | Purple (Allow on) |
 | --- | --- | --- | --- |
 | **Cleanest** | Google-fast pavement/highway. Dirt only as a last stitch when forced. | ~100% paved when topology allows | **Never** — immune to Allow |
-| **Direct** | Crow-flies cut on the **dirt fabric**. **Minimize path length first**; mild dirt preference only among near-equal options. **No dirt-tourism spur** near B — once on the paved approach, go straight to destination. Not a max-dirt objective. | Dirt-biased corridor, short | More purple when Allow on (without lengthening) |
-| **Balanced** | Dual-sport mix. Not Direct, not Dirt-max. **When Allow on and fabric allows, journey mix is forced toward ~50/50 paved/dirt** (soft band ~40–60% dirt; harness 25–70). Costing applies a Balanced-only paved mix pull so purple capillary cannot own the corridor. | ~50/50 dirt/paved target | Some purple when useful — not Direct’s purple max cut |
-| **Dirt** | Maximize dirt / minimize pavement. Longer OK. Still avoid pointless destination loops that don’t add net dirt corridor. | As close to 100% dirt as topology allows | Heavy purple when Allow on |
+| **Direct** | Crow-flies cut on the **adventure fabric**. **Minimize path length first**; mild dirt preference only among near-equal options. **No dirt-tourism spur** near B. Avoids highways/towns unless staged. | Shortest adventure cut; **lower dirt% than Balanced** | Mild purple when Allow on (without lengthening) |
+| **Balanced** | Dual-sport mix. May **meander** off Direct’s crow-flies cut to pick up dirt. Avoids highways/towns unless staged. Soft band ~35–50% dirt when fabric allows. | **Higher dirt% than Direct**, lower than Dirt | Useful purple toward mix — not Dirt-max |
+| **Dirt** | Maximize dirt / minimize pavement. Longer OK. Still avoid pointless destination loops. Avoids highways/towns unless staged. | As close to 100% dirt as topology allows | Heavy purple when Allow on |
 
-**Direct ≠ Dirt.** Direct is the short dirt cut; Dirt is the long dirt max. If they look the same in the field, costing is broken — not the law.
+**Direct ≠ Dirt.** Direct is the short adventure cut; Dirt is the long dirt max. **Direct must not out-dirt Balanced** — if it does, costing is inverted.
 
 ### Adventure avoids major cities (unless staged)
 
@@ -76,7 +76,7 @@ Carto line legend (fabric preference scope): [OpenStreetMap Carto/Lines](https:/
 
 Weights change; law doesn’t. Don’t dump every multiplier into product docs — read `profile-costs.js` when tuning.
 
-**Ellipse** — search stays inside a corridor around A→B (tighter for Clean/Direct/Balanced, wider for Dirt). Escalates if no path. Dirt ellipse may stay off by default so Dirt can wander farther. Balanced shares Direct’s tight band so Myra-style north tourism spurs stay out; mix divergence comes from costing, not a wider ellipse.
+**Ellipse** — search stays inside a corridor around A→B. Clean/Direct stay tight (crow-flies). Balanced is wider so it can leave Direct’s cut for dirt. Dirt is widest (may stay unpruned unless `ROUTING_ELLIPSE_DIRT=1`). Escalates if no path.
 
 **Snap** — pins match nearby eligible edges. Clean prefers paved; adventure prefers dirt/track/access. Full packs bias toward the giant component so you don’t start stuck on a purple island with no way home (unless Allow + soft-stitch connects you).
 

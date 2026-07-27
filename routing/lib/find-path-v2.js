@@ -231,8 +231,8 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
           const accessName = enums.ACCESS_NAME[access] || "";
           if (accessName === "motorized_unknown") {
             if (profile === "dirt") step *= 0.5;
-            else if (profile === "direct") step *= 0.78;
-            else step *= 0.9; // balanced — journey dirt without owning the corridor
+            else if (profile === "balanced") step *= 0.72;
+            else if (profile === "direct") step *= 0.92;
           }
           const id = pack.edgeId(ei);
           if (
@@ -241,19 +241,8 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
             /nstdb|Topographic|Forest Roads/i.test(String(id))
           ) {
             if (profile === "dirt") step *= 0.68;
-            else if (profile === "direct") step *= 0.86;
-            else step *= 0.93;
-          }
-          if (profile === "balanced") {
-            const surfaceName = enums.SURFACE_NAME[surface] || "";
-            if (surfaceName === "paved") step *= 0.9;
-            else if (
-              surfaceName === "gravel" ||
-              surfaceName === "access" ||
-              surfaceName === "track"
-            ) {
-              step *= 1.06;
-            }
+            else if (profile === "balanced") step *= 0.78;
+            else if (profile === "direct") step *= 0.95;
           }
         }
         const cost = cur.cost + step;

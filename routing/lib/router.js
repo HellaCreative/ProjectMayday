@@ -160,12 +160,10 @@ function ellipseDirtEnabled() {
  */
 const ELLIPSE_FACTORS = {
   cleanest: 1.25,
-  // Crow-flies Direct: tight enough to kill north-of-B dirt tourism spurs
-  // (Myra→Fall River spur sat at ~1.33× chord) while still allowing NSTDB cuts.
-  direct: 1.28,
-  // Balanced needs room off Direct’s crow-flies cut via cost mix, not a wider
-  // ellipse — Myra north tourism tip sits ~1.30× chord; keep ≤ Direct’s band.
-  balanced: 1.28,
+  // Crow-flies Direct: tight band — length wins; mild dirt only among equals.
+  direct: 1.22,
+  // Balanced may leave Direct’s cut to pick up dirt corridors.
+  balanced: 1.55,
   dirt: 2.6
 };
 
@@ -1639,9 +1637,10 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds) 
     if (haversineMeters(ll, startLL) < 2500 || haversineMeters(ll, endLL) < 2500) return 1;
     // Strong enough that trunk/primary through Moncton/Fredericton loses to
     // yellow/white/track detours; finite so unavoidable bridges still work.
+    // Adventure profiles all avoid towns; Dirt/Balanced harder than Direct.
     if (profile === "dirt") return 5.5;
-    if (profile === "balanced") return 4.2;
-    return 3.6; // direct
+    if (profile === "balanced") return 4.8;
+    return 4.4; // direct
   }
 
   function edgeStepCost(edge, fromNode, toNode) {
@@ -1678,15 +1677,15 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds) 
     let cost = (edge.meters / 1000) * surfaceMult * classMult;
     // When the rider opts into unknown access, non-cleanest profiles should
     // prefer NSTDB / provincial capillary (motorized_unknown) over paved spine.
-    // Direct: mild pull only — length still wins (no dirt% objective).
-    // Balanced: open purple toward ~50/50 without cloning Direct’s crow-flies cut.
+    // Direct: mild pull only — length still wins.
+    // Balanced: open purple toward dual-sport mix (stronger than Direct).
     // Dirt: strong.
     if (policy.motorizedUnknown && profile !== "cleanest") {
       const accessName = enums.ACCESS_NAME[edge.access] || "";
       if (accessName === "motorized_unknown") {
         if (profile === "dirt") cost *= 0.5;
-        else if (profile === "direct") cost *= 0.78;
-        else cost *= 0.9; // balanced — journey dirt without owning the corridor
+        else if (profile === "balanced") cost *= 0.72;
+        else if (profile === "direct") cost *= 0.92;
       }
       const id = String(edge.edgeId || "");
       const src = String(edge.source || "");
@@ -1697,22 +1696,8 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds) 
         /nstdb|Topographic|Forest Roads/i.test(src)
       ) {
         if (profile === "dirt") cost *= 0.68;
-        else if (profile === "direct") cost *= 0.86;
-        else cost *= 0.93;
-      }
-      // Balanced+Allow mix: on purple-rich NS fabric, nudge paved into the
-      // journey so dirt% lands ~40–60 instead of cloning Direct. Arterial /
-      // urban penalties still keep highway corridors from becoming Clean-lite.
-      if (profile === "balanced") {
-        const surfaceName = enums.SURFACE_NAME[edge.surface] || "";
-        if (surfaceName === "paved") cost *= 0.9;
-        else if (
-          surfaceName === "gravel" ||
-          surfaceName === "access" ||
-          surfaceName === "track"
-        ) {
-          cost *= 1.06;
-        }
+        else if (profile === "balanced") cost *= 0.78;
+        else if (profile === "direct") cost *= 0.95;
       }
     }
     // Adventure: avoid major city/town cores unless pin is there or unavoidable.
