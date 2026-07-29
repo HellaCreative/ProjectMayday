@@ -34,7 +34,7 @@ const REGISTRY = path.join(ROOT, "routing", "registry", "sources.json");
 const SUPPLEMENTS = {
   ns: () => require("../routing/adapters/ns-nstdb"),
   nb: () => require("../routing/adapters/nb-forest-roads"),
-  bc: () => require("../routing/adapters/bc-ften"),
+  bc: () => require("../routing/adapters/bc-dra"),
   ab: () => require("../routing/adapters/ab-access"),
   on: () => require("../routing/adapters/on-mnrf"),
   qc: () => require("../routing/adapters/qc-multiusage")
@@ -281,7 +281,7 @@ function loadProvincialFromGraph(code, sourceMatch) {
 const PROVINCIAL_SOURCE_MATCH = {
   ns: /NSTDB|STDB|Nova Scotia/i,
   nb: /Forest Roads|NB Forest|New Brunswick Forest/i,
-  bc: /BC Forest Tenure|FTEN/i,
+  bc: /Digital Road Atlas|BC Digital Road Atlas|\bDRA\b/i,
   ab: /Alberta Access|Facility Roads/i,
   on: /Ontario MNRF|MNRF/i,
   qc: /chemins multiusages|aqr[eé]seau/i
@@ -377,7 +377,7 @@ async function main() {
 
   if (!osmOnly && suppMod) {
     console.log(`[${code}] Running provincial supplement ${suppMod.name}…`);
-    const maxByCode = { ab: 250000, bc: 50000, on: 120000, qc: Infinity, ns: 500000, nb: Infinity };
+    const maxByCode = { ab: 250000, bc: 220000, on: 120000, qc: Infinity, ns: 500000, nb: Infinity };
     try {
       supp = await suppMod.run({
         maxFeatures: maxByCode[code] != null ? maxByCode[code] : 250000,

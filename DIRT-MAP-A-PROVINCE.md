@@ -97,7 +97,7 @@ Capillary candidate exists?
 | **MB** | WMA Official Trails (specialty) | **OSM-only MVP (shipping)** | Phase 1 OSM-only (~142k edges). ON↔MB Kenora seam; fixed bbox so MB no longer steals Kenora. WMA specialty deferred (no adapter this pass). |
 | **SK** | none (NRN-derived SK Road Network — do not import) | **OSM-only (shipping, permanent)** | Rick’s research: SK road network feeds NRN — never import as alternate graph. Phase 1+2 stay OSM-only. |
 | **AB** | Access/Facility Roads (Phase 2) | **OSM+Access Roads (shipping)** | Phase 2: gravel+other layers (~210k unknown). Cutlines excluded. Allow-on Dirt uses purple. |
-| **BC** | Forest Tenure Road Segments (Phase 2) | **OSM+FTEN (shipping / capped)** | Phase 2: active existing FTEN only; pending/retired filtered. Ingest capped for WFS stability. Tenure ≠ public motorcycle access. |
+| **BC** | Digital Road Atlas resource/trail/recreation | **OSM+DRA (shipping / capped)** | Capillary is DRA `ROAD_CLASS` resource + trail + recreation (~220k ingest; trail/recreation preferred). FTEN retired as pack capillary. Tenure ≠ public motorcycle access still applies to any residual FTEN display. |
 
 ---
 

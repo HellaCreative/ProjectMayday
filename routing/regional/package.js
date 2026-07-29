@@ -93,7 +93,7 @@ function isCapillaryFeature(feature) {
   const src = String(feature.sourceName || "");
   // OSM / NRN are fabric even when tagged resource/track.
   if (/OpenStreetMap|^NRN\b|National Road/i.test(src)) return false;
-  if (/Forest Roads|NSTDB|Topographic|FTEN|MNRF|Multi-Usage|Access Roads/i.test(src)) return true;
+  if (/Forest Roads|NSTDB|Topographic|FTEN|MNRF|Multi-Usage|Access Roads|Digital Road Atlas|\bDRA\b/i.test(src)) return true;
   const s = feature.surfaceClass;
   return s === "track" || s === "resource" || s === "access" || s === "double_track";
 }

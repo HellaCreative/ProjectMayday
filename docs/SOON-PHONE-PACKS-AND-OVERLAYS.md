@@ -17,7 +17,7 @@ Tester focus this sprint: **NS, ON, BC, AB**.
 | Manitoba (`mb`) | **Live** | OSM-only (~9 + ~9 MB) |
 | Saskatchewan (`sk`) | **Live** | OSM-only (~16 + ~12 MB) |
 | Alberta (`ab`) | **Live** | Fresh OSM + Access Roads (~45 + ~39 MB) |
-| British Columbia (`bc`) | **Live** | Fresh OSM + FTEN (~34 + ~91 MB) |
+| British Columbia (`bc`) | **Live** | OSM + **DRA** resource/trail/recreation (~44 + ~104 MB); FTEN retired as capillary |
 | Newfoundland and Labrador (`nl`) | **Live** | OSM-only (~6 + ~8 MB) |
 | Yukon (`yt`) | Soon | North — no Geofabrik extract this pass |
 | Northwest Territories (`nt`) | Soon | North |
@@ -37,7 +37,7 @@ iOS `NetworkOverlayManager` currently wires **NS / NB / QC** chunk manifests onl
 | NB | `app/data/nb-gov-*` | Yes | Live |
 | QC | `app/data/qc-gov-*` | Yes | Live |
 | ON | `app/data/on-gov-*` | Yes | **Live** — MNRF capillary (~110k) |
-| BC | `app/data/bc-gov-*` | Yes | **Live** — FTEN capillary (~45k) |
+| BC | `app/data/bc-gov-*` | Yes | **Live** — DRA capillary (~208k display) |
 | AB | `app/data/ab-gov-*` | Yes | **Live** — Access Roads (~210k) |
 | PE / MB / SK / NL / territories | No | No | Soon |
 

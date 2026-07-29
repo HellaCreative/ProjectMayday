@@ -23,11 +23,11 @@ const PROVINCES = {
     regionId: "bc",
     outBase: "bc-gov-roads",
     chunkDir: "bc-gov-chunks",
-    sourceMatch: /BC Forest Tenure|FTEN/i,
-    sourceLabel: "BC Forest Tenure Road Section Lines",
+    sourceMatch: /Digital Road Atlas|BC Digital Road Atlas|\bDRA\b/i,
+    sourceLabel: "BC Digital Road Atlas (resource / trail / recreation)",
     license: "Open Government Licence - British Columbia",
     regionName: "British Columbia",
-    adapter: "bc-ften",
+    adapter: "bc-dra",
     chunkDeg: 0.5
   },
   ab: {
