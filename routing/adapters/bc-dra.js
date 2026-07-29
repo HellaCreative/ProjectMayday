@@ -3,8 +3,9 @@
 /**
  * British Columbia Digital Road Atlas (DRA) — capillary supplement.
  *
- * Only ROAD_CLASS in (resource, recreation, trail). Highways / local / arterial
- * stay on OSM fabric. Access is motorized_unknown (Allow unknown gate).
+ * Only ROAD_CLASS in (resource, trail). Recreation (often MTB/hike) stays out.
+ * Highways / local / arterial stay on OSM fabric. Access is motorized_unknown
+ * (Allow unknown gate).
  *
  * Prefers a local GeoJSONSeq extract under data-raw/bc-dra/; otherwise pages
  * openmaps.gov.bc.ca WFS. Build helper can materialize the seq from the public GDB.
@@ -30,8 +31,8 @@ const TYPE_NAME = "WHSE_BASEMAPPING.DRA_DGTL_ROAD_ATLAS_MPAR_SP";
 const WFS = "https://openmaps.gov.bc.ca/geo/pub/ows";
 const CATALOGUE =
   "https://catalogue.data.gov.bc.ca/dataset/digital-road-atlas-dra-master-partially-attributed-roads";
-const CAPILLARY_CLASSES = new Set(["resource", "recreation", "trail"]);
-const CQL = "ROAD_CLASS IN ('resource','recreation','trail')";
+const CAPILLARY_CLASSES = new Set(["resource", "trail"]);
+const CQL = "ROAD_CLASS IN ('resource','trail')";
 
 const ROOT = path.join(__dirname, "..", "..");
 const DEFAULT_SEQ = path.join(ROOT, "data-raw", "bc-dra", "capillary.geojsonseq");
@@ -170,9 +171,6 @@ function classify(rawProps) {
   if (roadClass === "trail") {
     surfaceClass = SURFACE_CLASS.track;
     roadTrackClass = ROAD_TRACK_CLASS.track;
-  } else if (roadClass === "recreation") {
-    surfaceClass = SURFACE_CLASS.resource;
-    roadTrackClass = ROAD_TRACK_CLASS.recreation;
   }
 
   if (/paved|asphalt|concrete|seal/.test(surfaceRaw)) {
@@ -200,10 +198,9 @@ function classify(rawProps) {
 
 function edgePriority(props) {
   const roadClass = String(props.ROAD_CLASS || "").toLowerCase();
-  // Prefer trail + recreation when soft-capping large extracts.
+  // Prefer trail when soft-capping; then resource roads.
   if (roadClass === "trail") return 0;
-  if (roadClass === "recreation") return 1;
-  return 2;
+  return 1;
 }
 
 function featureFromRow(row, scanned) {
@@ -262,7 +259,7 @@ async function loadFromGeoJSONSeq(seqPath, maxFeatures) {
     crlfDelay: Infinity
   });
 
-  const buckets = [[], [], []]; // trail, recreation, resource
+  const buckets = [[], []]; // trail, resource
   for await (const line of rl) {
     const trimmed = line.trim();
     if (!trimmed) continue;
@@ -284,8 +281,8 @@ async function loadFromGeoJSONSeq(seqPath, maxFeatures) {
       bump(classification.access, edge.accessClass);
       bump(classification.structure, edge.structureType);
       bump(classification.roadTrack, edge.roadTrackClass);
-      const p = edge.meta && edge.meta.edgePriority != null ? edge.meta.edgePriority : 2;
-      buckets[Math.min(2, Math.max(0, p))].push(edge);
+      const p = edge.meta && edge.meta.edgePriority != null ? edge.meta.edgePriority : 1;
+      buckets[Math.min(1, Math.max(0, p))].push(edge);
     }
   }
 
@@ -367,13 +364,13 @@ async function run(options = {}) {
     classification: loaded.classification,
     excludedByReason: loaded.excludedByReason,
     notes: [
-      "Capillary only: ROAD_CLASS resource / recreation / trail.",
+      "Capillary only: ROAD_CLASS resource + trail (recreation excluded — often MTB/hike).",
       "Access is motorized_unknown — gated by Allow unknown.",
       "Highways and urban local/arterial stay on OSM fabric."
     ],
     knownLimitations: [
-      "Trail class may include non-motorized recreation — Allow unknown stays the legality gate.",
-      "Soft-capped extracts prefer trail + recreation before resource when maxFeatures binds."
+      "Trail class can still include non-motorized paths — Allow unknown stays the legality gate.",
+      "Soft-capped extracts prefer trail before resource when maxFeatures binds."
     ]
   });
 

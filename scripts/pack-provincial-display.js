@@ -24,7 +24,7 @@ const PROVINCES = {
     outBase: "bc-gov-roads",
     chunkDir: "bc-gov-chunks",
     sourceMatch: /Digital Road Atlas|BC Digital Road Atlas|\bDRA\b/i,
-    sourceLabel: "BC Digital Road Atlas (resource / trail / recreation)",
+    sourceLabel: "BC Digital Road Atlas (resource / trail)",
     license: "Open Government Licence - British Columbia",
     regionName: "British Columbia",
     adapter: "bc-dra",

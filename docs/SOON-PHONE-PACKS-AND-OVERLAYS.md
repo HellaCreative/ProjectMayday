@@ -17,7 +17,7 @@ Tester focus this sprint: **NS, ON, BC, AB**.
 | Manitoba (`mb`) | **Live** | OSM-only (~9 + ~9 MB) |
 | Saskatchewan (`sk`) | **Live** | OSM-only (~16 + ~12 MB) |
 | Alberta (`ab`) | **Live** | Fresh OSM + Access Roads (~45 + ~39 MB) |
-| British Columbia (`bc`) | **Live** | OSM + **DRA** resource/trail/recreation (~44 + ~104 MB); FTEN retired as capillary |
+| British Columbia (`bc`) | **Live** | OSM + **DRA** resource/trail (~44 + ~104 MB); recreation excluded |
 | Newfoundland and Labrador (`nl`) | **Live** | OSM-only (~6 + ~8 MB) |
 | Yukon (`yt`) | Soon | North — no Geofabrik extract this pass |
 | Northwest Territories (`nt`) | Soon | North |
