@@ -9,19 +9,19 @@ Tester focus this sprint: **NS, ON, BC, AB**.
 
 | Region | Phone pack on CDN | Notes |
 | --- | --- | --- |
-| Nova Scotia (`ns`) | **Live** | ~21 MB graph + ~81 MB geometry |
-| Ontario (`on`) | **Live** | ~25 MB graph + ~29 MB geometry (fresh OSM rebuild pending this wave) |
-| British Columbia (`bc`) | **Live** | Rebuilt Jul 29 from fresh Geofabrik OSM + FTEN (~34 / ~91 MB) |
-| Alberta (`ab`) | **Live** | Rebuilt Jul 29 from fresh Geofabrik OSM + Access Roads (~45 / ~39 MB) |
-| New Brunswick (`nb`) | **Live** | Fresh OSM + Forest Roads (~17 / ~21 MB) |
-| Prince Edward Island (`pe`) | **Live** | OSM-only (~1.5 / ~1.4 MB) |
-| Québec (`qc`) | Soon | Large; publish after tester wave |
-| Manitoba (`mb`) | Soon | |
-| Saskatchewan (`sk`) | Soon | |
-| Newfoundland and Labrador (`nl`) | Soon | |
-| Yukon (`yt`) | Soon | |
-| Northwest Territories (`nt`) | Soon | |
-| Nunavut (`nu`) | Soon | |
+| Nova Scotia (`ns`) | **Live** | ~21 + ~81 MB |
+| New Brunswick (`nb`) | **Live** | Fresh OSM + Forest Roads (~17 + ~21 MB) |
+| Prince Edward Island (`pe`) | **Live** | OSM-only (~1.5 + ~1.4 MB) |
+| Québec (`qc`) | **Live** | OSM-only (~39 + ~58 MB) |
+| Ontario (`on`) | **Live** | Fresh OSM + MNRF (~73 + ~83 MB) |
+| Manitoba (`mb`) | **Live** | OSM-only (~9 + ~9 MB) |
+| Saskatchewan (`sk`) | **Live** | OSM-only (~16 + ~12 MB) |
+| Alberta (`ab`) | **Live** | Fresh OSM + Access Roads (~45 + ~39 MB) |
+| British Columbia (`bc`) | **Live** | Fresh OSM + FTEN (~34 + ~91 MB) |
+| Newfoundland and Labrador (`nl`) | **Live** | OSM-only (~6 + ~8 MB) |
+| Yukon (`yt`) | Soon | North — no Geofabrik extract this pass |
+| Northwest Territories (`nt`) | Soon | North |
+| Nunavut (`nu`) | Soon | North |
 | United States (all states) | Soon | Catalog only; no packs |
 
 CDN: `https://dirt-mayday.vercel.app/app/data/packs/v1/manifest.json`  
