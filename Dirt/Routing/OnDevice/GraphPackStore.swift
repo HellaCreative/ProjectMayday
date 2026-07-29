@@ -94,9 +94,14 @@ final class GraphPackStore {
 
     var canRouteOnDevice: Bool { activePack != nil }
 
+    @ObservationIgnored private var lastCatalogRefreshAt: Date?
+
     func refreshCatalog() async {
         isRefreshingCatalog = true
-        defer { isRefreshingCatalog = false }
+        defer {
+            isRefreshingCatalog = false
+            lastCatalogRefreshAt = Date()
+        }
         do {
             let (data, response) = try await session.data(from: AppConfig.packManifestURL)
             if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
@@ -127,6 +132,14 @@ final class GraphPackStore {
             applyCatalog(published: publishedIds, sizes: [:])
             refreshInstalledFromDisk()
         }
+    }
+
+    /// Avoid hammering the CDN on every Start Nav tap.
+    func refreshCatalogIfStale(staleSeconds: TimeInterval = 300) async {
+        if let last = lastCatalogRefreshAt, Date().timeIntervalSince(last) < staleSeconds {
+            return
+        }
+        await refreshCatalog()
     }
 
     /// Regions suggested from GPS and/or active route geometry.
@@ -247,7 +260,8 @@ final class GraphPackStore {
     /// Start Nav / mid-ride: activate an installed pack covering the corridor; download if missing.
     func prepareForNavigation(coordinates: [CLLocationCoordinate2D], keepExisting: Bool) {
         task?.cancel()
-        let regions = Self.regionIds(covering: coordinates)
+        // Prefer primary provinces (Kelowna → bc), not raw overlapping bboxes (ab+bc).
+        let regions = Self.preferredRegionOrder(for: coordinates)
         let preferred = regions.first { isInstalled($0) } ?? regions.first
 
         if keepExisting,
@@ -398,7 +412,7 @@ final class GraphPackStore {
             .init(id: "mb", title: "Manitoba", subtitle: "Prairie / shield", approxBytes: 19_000_000, install: .unavailable, country: .canada),
             .init(id: "sk", title: "Saskatchewan", subtitle: "Prairie", approxBytes: 29_000_000, install: .unavailable, country: .canada),
             .init(id: "ab", title: "Alberta", subtitle: "Fresh OSM + Access Roads", approxBytes: 85_000_000, install: .unavailable, country: .canada),
-            .init(id: "bc", title: "British Columbia", subtitle: "Fresh OSM + FTEN · mountains & coast", approxBytes: 124_000_000, install: .unavailable, country: .canada),
+            .init(id: "bc", title: "British Columbia", subtitle: "OSM + DRA resource/trail · mountains & coast", approxBytes: 148_000_000, install: .unavailable, country: .canada),
             .init(id: "nl", title: "Newfoundland and Labrador", subtitle: "Atlantic", approxBytes: 13_000_000, install: .unavailable, country: .canada),
             .init(id: "yt", title: "Yukon", subtitle: "North", approxBytes: 3_000_000, install: .unavailable, country: .canada),
             .init(id: "nt", title: "Northwest Territories", subtitle: "North", approxBytes: 3_000_000, install: .unavailable, country: .canada),
@@ -525,22 +539,20 @@ final class GraphPackStore {
     }
 
     private func ensureActivePack(for coordinates: [CLLocationCoordinate2D]) {
-        let needed = Self.regionIds(covering: coordinates)
-        if let pack = activePack,
-           let id = pack.regionId?.lowercased(),
-           needed.isEmpty || needed.contains(id) {
-            if pack.geometry == nil, isInstalled(id) {
-                // Graph-only install from an older build — top up road shapes when online.
-                maybeTopUpGeometry(regionId: id)
+        let needed = Self.preferredRegionOrder(for: coordinates)
+        // Always prefer the primary province for these pins (bc before ab in Okanagan).
+        if let preferred = needed.first(where: { isInstalled($0) }) {
+            if activePack?.regionId?.lowercased() == preferred {
+                if activePack?.geometry == nil {
+                    maybeTopUpGeometry(regionId: preferred)
+                }
+                return
             }
-            return
-        }
-        for id in needed where isInstalled(id) {
-            if let pack = loadPackFromDisk(regionId: id) {
+            if let pack = loadPackFromDisk(regionId: preferred) {
                 activePack = pack
-                loadedRegionIds = Array(Set(loadedRegionIds + [id]))
+                loadedRegionIds = Array(Set(loadedRegionIds + [preferred]))
                 if pack.geometry == nil {
-                    maybeTopUpGeometry(regionId: id)
+                    maybeTopUpGeometry(regionId: preferred)
                 }
                 return
             }
@@ -551,6 +563,15 @@ final class GraphPackStore {
                 maybeTopUpGeometry(regionId: any)
             }
         }
+    }
+
+    /// Primary regions for each pin, then any extra bbox hits (cross-border corridors).
+    private static func preferredRegionOrder(for coordinates: [CLLocationCoordinate2D]) -> [String] {
+        var ordered = regionIds(containingAny: coordinates)
+        for id in regionIds(covering: coordinates) where !ordered.contains(id) {
+            ordered.append(id)
+        }
+        return ordered
     }
 
     /// Quietly fetch geometry.v1 if the graph is installed but shapes are missing.
@@ -707,6 +728,7 @@ final class GraphPackStore {
     }
 
     /// Bounding-box → region ids we support (corridor / nav prep).
+    /// AB/BC rectangles intentionally overlap (continental divide ≠ 120°W south of 54°N).
     static func regionIds(covering coordinates: [CLLocationCoordinate2D]) -> [String] {
         guard !coordinates.isEmpty else { return [] }
         let lats = coordinates.map(\.latitude)
@@ -719,6 +741,7 @@ final class GraphPackStore {
         if maxLat >= 43.3, minLat <= 47.2, maxLon >= -66.6, minLon <= -59.5 { ids.append("ns") }
         if maxLat >= 44.2, minLat <= 48.2, maxLon >= -69.3, minLon <= -63.5 { ids.append("nb") }
         if maxLat >= 45.8, minLat <= 47.2, maxLon >= -64.5, minLon <= -61.9 { ids.append("pe") }
+        if maxLat >= 46.5, minLat <= 60.5, maxLon >= -67.9, minLon <= -52.5 { ids.append("nl") }
         if maxLat >= 44.8, minLat <= 50.5, maxLon >= -74.8, minLon <= -63.5 { ids.append("qc") }
         if maxLat >= 41.5, minLat <= 57.0, maxLon >= -95.2, minLon <= -74.3 { ids.append("on") }
         if maxLat >= 48.8, minLat <= 60.0, maxLon >= -102.1, minLon <= -88.9 { ids.append("mb") }
@@ -729,8 +752,7 @@ final class GraphPackStore {
     }
 
     /// Union of per-point **primary** regions (planning pins).
-    /// Overlapping bbox hits (NS∩NB∩QC) resolve to the smallest/home province so
-    /// a Halifax pin does not falsely demand New Brunswick + Québec packs.
+    /// Overlapping bbox hits resolve via `primaryRegionId` (web `select.js` parity).
     static func regionIds(containingAny coordinates: [CLLocationCoordinate2D]) -> [String] {
         var ordered: [String] = []
         for coordinate in coordinates {
@@ -740,11 +762,35 @@ final class GraphPackStore {
         return ordered
     }
 
-    /// Prefer compact provinces when a coordinate sits in overlapping bboxes.
+    /// Prefer the correct province when a coordinate sits in overlapping bboxes.
+    /// Mirrors `routing/regional/select.js` `primaryRegionForPoint` — especially AB/BC,
+    /// where Alberta’s smaller bbox must not steal Kelowna / the Okanagan / Kootenays.
     static func primaryRegionId(containing coordinate: CLLocationCoordinate2D) -> String? {
-        let hits = regionIds(covering: [coordinate])
+        let hits = Set(regionIds(covering: [coordinate]))
         guard !hits.isEmpty else { return nil }
-        let priority = ["pe", "ns", "nb", "nl", "yt", "nt", "nu", "qc", "mb", "sk", "ab", "bc", "on"]
+        let lon = coordinate.longitude
+        let lat = coordinate.latitude
+
+        // AB vs BC — rectangles overlap on purpose. North of ~54°N the border is
+        // 120°W; south it follows the continental divide (~114–116°W).
+        if hits.contains("ab"), hits.contains("bc") {
+            if lat >= 54 { return lon < -120 ? "bc" : "ab" }
+            // Lake Louise AB ≈ -116.2; Golden BC ≈ -117.0.
+            return lon < -116.4 ? "bc" : "ab"
+        }
+
+        if hits.contains("on"), hits.contains("mb") {
+            return lon < -95.15 ? "mb" : "on"
+        }
+        if hits.contains("mb"), hits.contains("sk") {
+            return lon < -101.36 ? "sk" : "mb"
+        }
+        if hits.contains("sk"), hits.contains("ab") {
+            return lon < -110.0 ? "ab" : "sk"
+        }
+
+        // Compact provinces first when Maritimes / QC rectangles overlap.
+        let priority = ["pe", "ns", "nb", "nl", "yt", "nt", "nu", "qc", "mb", "sk", "bc", "ab", "on"]
         return priority.first(where: { hits.contains($0) }) ?? hits.first
     }
 
