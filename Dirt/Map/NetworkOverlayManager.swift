@@ -11,7 +11,7 @@ struct NetworkLineFeature: Sendable {
     let surfaceClass: String     // "access" | "gravel" | "track" | "paved" | "unknown"
     let accessClass: String      // "motorized_permissive" | "motorized_restricted" | "motorized_unknown"
     let structureType: String    // "bridge" | "tunnel" | "none" | ""
-    let province: String         // "NS" | "NB" | "QC"
+    let province: String         // "NS" | "NB" | "QC" | "ON" | "BC" | "AB"
 }
 
 // MARK: - Constants (HTML app/index.html CONTEXT_* parity)
@@ -21,6 +21,9 @@ private enum NetC {
     static let detailMinZoom = 12.5
     static let corridorKmDetail = 3.0
     static let corridorKmOverview = 2.0
+    /// Province lens (Show NS/NB/QC/ON/BC/AB): circular radius around map center — not a
+    /// rectangular viewport dump, and never the whole province.
+    static let lensKm = 20.0
     static let routeArmKmDetail = 10.0
     static let routeArmKmOverview = 20.0
     static let routeSampleStepKm = 3.0
@@ -38,22 +41,21 @@ private enum NetC {
         let chunkBase: String
     }
 
-    static let overlays: [String: Overlay] = [
-        "NS": Overlay(
-            province: "NS",
-            manifestURL: URL(string: "https://dirt-mayday.vercel.app/app/data/ns-gov-roads.manifest.json")!,
-            chunkBase: "https://dirt-mayday.vercel.app/app/data/ns-gov-chunks/"
-        ),
-        "NB": Overlay(
-            province: "NB",
-            manifestURL: URL(string: "https://dirt-mayday.vercel.app/app/data/nb-gov-roads.manifest.json")!,
-            chunkBase: "https://dirt-mayday.vercel.app/app/data/nb-gov-chunks/"
-        ),
-        "QC": Overlay(
-            province: "QC",
-            manifestURL: URL(string: "https://dirt-mayday.vercel.app/app/data/qc-gov-roads.manifest.json")!,
-            chunkBase: "https://dirt-mayday.vercel.app/app/data/qc-gov-chunks/"
+    private static func overlay(_ code: String, slug: String) -> Overlay {
+        Overlay(
+            province: code,
+            manifestURL: URL(string: "https://dirt-mayday.vercel.app/app/data/\(slug)-gov-roads.manifest.json")!,
+            chunkBase: "https://dirt-mayday.vercel.app/app/data/\(slug)-gov-chunks/"
         )
+    }
+
+    static let overlays: [String: Overlay] = [
+        "NS": overlay("NS", slug: "ns"),
+        "NB": overlay("NB", slug: "nb"),
+        "QC": overlay("QC", slug: "qc"),
+        "ON": overlay("ON", slug: "on"),
+        "BC": overlay("BC", slug: "bc"),
+        "AB": overlay("AB", slug: "ab")
     ]
 }
 
@@ -61,11 +63,13 @@ private enum NetC {
 
 /// Loads provincial road-network GeoJSON chunks from the production Vercel CDN.
 ///
-/// HTML parity (`app/index.html` refreshContextNetwork):
-/// - **Lens** (Show NS/NB/QC route lines on): viewport paint for that province.
-/// - **Corridor** (toggle off + active route, or detail zoom ≥ 12.5): NS purple/blue
-///   lines within 2–3 km of the map focus and route anchors — so riders can see
-///   alternatives when they hit a washout / barrier on the planned route.
+/// Product law (`refreshContextNetwork` / Layers Route data):
+/// - **Lens** (Show province on): ~20 km **circle** centered on the map view —
+///   a bounded preview of that province’s secondary network, never the whole province.
+/// - **Corridor** (always when an active route exists, or detail zoom ≥ 12.5):
+///   purple/blue lines for the province under the map focus (fallback NS) within
+///   2–3 km of focus and route anchors. Lens on/off does not suppress the corridor;
+///   lens features are merged with it.
 @MainActor
 final class NetworkOverlayManager {
     private let mapState: MapState
@@ -123,35 +127,37 @@ final class NetworkOverlayManager {
         }
 
         let focus = RouteCoordinate(longitude: center.longitude, latitude: center.latitude)
-        let showAll = lensCode != nil
-        let provinceCode = lensCode ?? "NS"  // corridor always uses NS (HTML product law)
+        let showLens = lensCode != nil
+        let wantCorridor = hasRoute || detailZoom
+        // Corridor uses the province under the map center when no lens is on.
+        let inferred = GraphPackStore.primaryRegionId(
+            containing: CLLocationCoordinate2D(latitude: center.latitude, longitude: center.longitude)
+        )?.uppercased()
+        let provinceCode = lensCode ?? inferred ?? "NS"
         guard let overlay = NetC.overlays[provinceCode] else {
             mapState.updateNetworkFeatures([])
             return
         }
 
-        let corridorKm = showAll
-            ? Double.infinity
-            : (detailZoom ? NetC.corridorKmDetail : NetC.corridorKmOverview)
+        let corridorKm = detailZoom ? NetC.corridorKmDetail : NetC.corridorKmOverview
         let armKm = detailZoom ? NetC.routeArmKmDetail : NetC.routeArmKmOverview
-        let maxChunks = showAll ? NetC.maxChunksLens : NetC.maxChunksCorridor
-        let maxFeatures = showAll ? NetC.maxFeaturesLens : NetC.maxFeaturesCorridor
+        let maxChunks = showLens ? NetC.maxChunksLens : NetC.maxChunksCorridor
+        let maxFeatures = showLens ? NetC.maxFeaturesLens : NetC.maxFeaturesCorridor
 
+        // Route corridor anchors whenever a route exists — lens on/off does not
+        // suppress the along-road secondary paint.
         var anchors: [RouteCoordinate] = []
-        if !showAll && hasRoute {
+        if hasRoute {
             anchors = sampleRouteAnchors(around: focus, route: routeCoords, armKm: armKm)
         }
 
-        let bbox: _BBox
-        if showAll {
-            // Approximate viewport from zoom (~ mercator degrees of lon span).
-            let halfSpan = 180.0 / pow(2.0, zoom) * 1.4
-            bbox = _BBox(
-                minLon: center.longitude - halfSpan - NetC.chunkPadDeg,
-                minLat: center.latitude - halfSpan * 0.75 - NetC.chunkPadDeg,
-                maxLon: center.longitude + halfSpan + NetC.chunkPadDeg,
-                maxLat: center.latitude + halfSpan * 0.75 + NetC.chunkPadDeg
-            )
+        var bbox: _BBox
+        if showLens {
+            bbox = bboxFromCircle(center: center, radiusKm: NetC.lensKm, padDeg: NetC.chunkPadDeg)
+            if wantCorridor {
+                let corridorBox = bboxFrom(points: [focus] + anchors, padDeg: NetC.chunkPadDeg)
+                bbox = union(bbox, corridorBox)
+            }
         } else {
             var points = [focus] + anchors
             if points.isEmpty { points = [focus] }
@@ -180,17 +186,26 @@ final class NetworkOverlayManager {
                 rawPool.append(contentsOf: chunkCaches[provinceCode]?[chunk.id] ?? [])
             }
 
-            let selected: [_NetFeature]
-            if showAll {
-                selected = Array(rawPool.prefix(maxFeatures))
-            } else {
+            var selected: [_NetFeature] = []
+            if showLens {
+                // Circular lens centered on the screen / map focus.
                 selected = selectCorridorFeatures(
+                    pool: rawPool,
+                    focus: focus,
+                    anchors: [],
+                    corridorKm: NetC.lensKm,
+                    maxFeatures: maxFeatures
+                )
+            }
+            if wantCorridor {
+                let corridor = selectCorridorFeatures(
                     pool: rawPool,
                     focus: focus,
                     anchors: anchors,
                     corridorKm: corridorKm,
                     maxFeatures: maxFeatures
                 )
+                selected = mergeNetworkFeatures(selected, corridor, maxFeatures: maxFeatures)
             }
 
             let painted = selected.map { raw in
@@ -379,6 +394,50 @@ final class NetworkOverlayManager {
             maxLon: maxLon + padDeg,
             maxLat: maxLat + padDeg
         )
+    }
+
+    /// Axis-aligned bbox that fully contains a circle of `radiusKm` around `center`.
+    private func bboxFromCircle(
+        center: CLLocationCoordinate2D,
+        radiusKm: Double,
+        padDeg: Double
+    ) -> _BBox {
+        let latPad = radiusKm / 111.32
+        let lonPad = radiusKm / (111.32 * max(0.2, cos(center.latitude * .pi / 180)))
+        return _BBox(
+            minLon: center.longitude - lonPad - padDeg,
+            minLat: center.latitude - latPad - padDeg,
+            maxLon: center.longitude + lonPad + padDeg,
+            maxLat: center.latitude + latPad + padDeg
+        )
+    }
+
+    private func union(_ a: _BBox, _ b: _BBox) -> _BBox {
+        _BBox(
+            minLon: min(a.minLon, b.minLon),
+            minLat: min(a.minLat, b.minLat),
+            maxLon: max(a.maxLon, b.maxLon),
+            maxLat: max(a.maxLat, b.maxLat)
+        )
+    }
+
+    /// Deduplicate by edgeId; prefer earlier entries (lens/corridor already distance-sorted).
+    private func mergeNetworkFeatures(
+        _ a: [_NetFeature],
+        _ b: [_NetFeature],
+        maxFeatures: Int
+    ) -> [_NetFeature] {
+        var seen = Set<String>()
+        var out: [_NetFeature] = []
+        out.reserveCapacity(min(a.count + b.count, maxFeatures))
+        for feature in a + b {
+            let id = feature.properties.edgeId
+            if seen.contains(id) { continue }
+            seen.insert(id)
+            out.append(feature)
+            if out.count >= maxFeatures { break }
+        }
+        return out
     }
 
     private func bboxIntersects(_ bbox: [Double], _ b: _BBox) -> Bool {

@@ -54,6 +54,9 @@ struct LayerPrefsSnapshot {
     let showNSLines: Bool
     let showNBLines: Bool
     let showQCLines: Bool
+    let showONLines: Bool
+    let showBCLines: Bool
+    let showABLines: Bool
 
     init() {
         let ud = UserDefaults.standard
@@ -64,16 +67,24 @@ struct LayerPrefsSnapshot {
         showNSLines     = ud.bool(forKey: "dirt.layers.network.ns")
         showNBLines     = ud.bool(forKey: "dirt.layers.network.nb")
         showQCLines     = ud.bool(forKey: "dirt.layers.network.qc")
+        showONLines     = ud.bool(forKey: "dirt.layers.network.on")
+        showBCLines     = ud.bool(forKey: "dirt.layers.network.bc")
+        showABLines     = ud.bool(forKey: "dirt.layers.network.ab")
     }
 
     var anyPOIEnabled: Bool { showFuel || showCampgrounds || showLodging || showLiquor }
-    var anyProvinceEnabled: Bool { showNSLines || showNBLines || showQCLines }
+    var anyProvinceEnabled: Bool {
+        showNSLines || showNBLines || showQCLines || showONLines || showBCLines || showABLines
+    }
 
     /// Selected province for viewport-lens mode (HTML mutual exclusion). Nil = corridor-only.
     var lensProvince: String? {
         if showNSLines { return "NS" }
         if showNBLines { return "NB" }
         if showQCLines { return "QC" }
+        if showONLines { return "ON" }
+        if showBCLines { return "BC" }
+        if showABLines { return "AB" }
         return nil
     }
 

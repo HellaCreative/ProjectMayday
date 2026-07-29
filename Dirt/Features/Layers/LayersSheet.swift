@@ -7,7 +7,7 @@ import SwiftUI
 struct LayersSheet: View {
     @Environment(AppEnvironment.self) private var app
 
-    @AppStorage(MapStyleCatalog.preferenceKey) private var styleIDRaw = MapStyleID.shortbread.rawValue
+    @AppStorage(MapStyleCatalog.preferenceKey) private var styleIDRaw = MapStyleID.shortbreadRich.rawValue
     @AppStorage("dirt.layers.fuel") private var showFuel = false
     @AppStorage("dirt.layers.camp") private var showCampgrounds = false
     @AppStorage("dirt.layers.lodging") private var showLodging = false
@@ -15,9 +15,12 @@ struct LayersSheet: View {
     @AppStorage("dirt.layers.network.ns") private var showNSLines = false
     @AppStorage("dirt.layers.network.nb") private var showNBLines = false
     @AppStorage("dirt.layers.network.qc") private var showQCLines = false
+    @AppStorage("dirt.layers.network.on") private var showONLines = false
+    @AppStorage("dirt.layers.network.bc") private var showBCLines = false
+    @AppStorage("dirt.layers.network.ab") private var showABLines = false
 
     private var selectedStyle: MapStyleID {
-        MapStyleID(rawValue: styleIDRaw) ?? .shortbread
+        MapStyleID(rawValue: styleIDRaw) ?? .shortbreadRich
     }
 
     var body: some View {
@@ -36,10 +39,13 @@ struct LayersSheet: View {
                     Toggle("Show NS route lines", isOn: $showNSLines)
                     Toggle("Show NB route lines", isOn: $showNBLines)
                     Toggle("Show QC route lines", isOn: $showQCLines)
+                    Toggle("Show ON route lines", isOn: $showONLines)
+                    Toggle("Show BC route lines", isOn: $showBCLines)
+                    Toggle("Show AB route lines", isOn: $showABLines)
                 } header: {
                     Text("Route data")
                 } footer: {
-                    Text("Viewport lens for provincial secondary networks (NS TDB, NB, QC). One province at a time. When off, purple/blue lines still appear as a corridor around an active route so you can manually route around trouble.")
+                    Text("Lens paints ~20 km of secondary network around the map. Purple/blue = provincial capillary (Allow Unknown for most west roads).")
                         .font(.dirtUI(11))
                 }
                 .tint(DirtTheme.orange)
@@ -81,18 +87,41 @@ struct LayersSheet: View {
             .onChange(of: showLodging)     { _, _ in app.mapState.bumpLayerPrefs() }
             .onChange(of: showLiquor)      { _, _ in app.mapState.bumpLayerPrefs() }
             .onChange(of: showNSLines) { _, on in
-                if on { showNBLines = false; showQCLines = false }
+                if on { clearOtherLenses(except: .ns) }
                 app.mapState.bumpLayerPrefs()
             }
             .onChange(of: showNBLines) { _, on in
-                if on { showNSLines = false; showQCLines = false }
+                if on { clearOtherLenses(except: .nb) }
                 app.mapState.bumpLayerPrefs()
             }
             .onChange(of: showQCLines) { _, on in
-                if on { showNSLines = false; showNBLines = false }
+                if on { clearOtherLenses(except: .qc) }
+                app.mapState.bumpLayerPrefs()
+            }
+            .onChange(of: showONLines) { _, on in
+                if on { clearOtherLenses(except: .on) }
+                app.mapState.bumpLayerPrefs()
+            }
+            .onChange(of: showBCLines) { _, on in
+                if on { clearOtherLenses(except: .bc) }
+                app.mapState.bumpLayerPrefs()
+            }
+            .onChange(of: showABLines) { _, on in
+                if on { clearOtherLenses(except: .ab) }
                 app.mapState.bumpLayerPrefs()
             }
         }
+    }
+
+    private enum LensProvince { case ns, nb, qc, on, bc, ab }
+
+    private func clearOtherLenses(except keep: LensProvince) {
+        if keep != .ns { showNSLines = false }
+        if keep != .nb { showNBLines = false }
+        if keep != .qc { showQCLines = false }
+        if keep != .on { showONLines = false }
+        if keep != .bc { showBCLines = false }
+        if keep != .ab { showABLines = false }
     }
 
     private func serviceToggle(_ title: String, icon: String, isOn: Binding<Bool>) -> some View {
