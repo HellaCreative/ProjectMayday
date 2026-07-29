@@ -50,7 +50,8 @@ const OSM_SLUG = {
   mb: "manitoba",
   sk: "saskatchewan",
   ab: "alberta",
-  bc: "british-columbia"
+  bc: "british-columbia",
+  nl: "newfoundland-and-labrador"
 };
 
 async function loadNrnFeatures(code) {
@@ -212,6 +213,80 @@ async function loadOsmFabric(code) {
   };
 }
 
+/** Reuse provincial capillary already on a regional graph (live adapter offline / 0 hits). */
+function loadProvincialFromGraph(code, sourceMatch) {
+  const candidates = [
+    path.join(ROOT, "routing", "data", "regions", code, "longhaul.v1.json.gz"),
+    path.join(ROOT, "routing", "data", "regions", code, "graph.v1.json.gz")
+  ];
+  const { createNormalizedEdge } = require("../routing/schema/edge");
+  const {
+    SURFACE_CLASS,
+    ACCESS_CLASS,
+    STRUCTURE_TYPE,
+    ROAD_TRACK_CLASS,
+    SOURCE_CONFIDENCE
+  } = require("../routing/schema/enums");
+
+  for (const pick of candidates) {
+    if (!fs.existsSync(pick)) continue;
+    let graph;
+    try {
+      graph = JSON.parse(zlib.gunzipSync(fs.readFileSync(pick)).toString("utf8"));
+    } catch (err) {
+      console.warn(`[${code}] Could not read ${pick}:`, err.message);
+      continue;
+    }
+    const surfaceName = graph.enums.SURFACE_NAME;
+    const accessName = graph.enums.ACCESS_NAME;
+    const structureName = graph.enums.STRUCTURE_NAME;
+    const edges = (graph.edges || []).filter((e) => sourceMatch.test(String(e.src || "")));
+    if (!edges.length) continue;
+    const features = edges.map((e) =>
+      createNormalizedEdge({
+        edgeId: e.i,
+        lineageId: e.lin || e.i,
+        province: code.toUpperCase(),
+        sourceName: e.src,
+        sourceDatasetVersion: "from-regional-pack",
+        sourceFeatureId: e.rid || null,
+        sourceGeometryLineage: "regional-pack",
+        geometry: { type: "LineString", coordinates: e.g },
+        surfaceClass: surfaceName[e.s] || SURFACE_CLASS.resource,
+        roadTrackClass: e.rt || ROAD_TRACK_CLASS.resource,
+        accessClass: accessName[e.ac] || ACCESS_CLASS.motorized_unknown,
+        structureType: structureName[e.t] || STRUCTURE_TYPE.none,
+        sourceConfidence: e.conf || SOURCE_CONFIDENCE.medium,
+        roadName: e.desc || null,
+        direction: "both",
+        seasonal: !!e.seasonal,
+        distanceMeters: e.m,
+        meta: { fromPack: true }
+      })
+    );
+    return {
+      features,
+      report: {
+        adapter: `${code}-provincial-from-pack`,
+        featureCount: features.length,
+        excludedByReason: {},
+        classification: {},
+        notes: [`Reused ${features.length} provincial edges from ${path.basename(pick)}`]
+      }
+    };
+  }
+  return null;
+}
+
+const PROVINCIAL_SOURCE_MATCH = {
+  ns: /NSTDB|STDB|Nova Scotia/i,
+  nb: /Forest Roads|NB Forest|New Brunswick Forest/i,
+  bc: /BC Forest Tenure|FTEN/i,
+  ab: /Alberta Access|Facility Roads/i,
+  on: /Ontario MNRF|MNRF/i,
+  qc: /chemins multiusages|aqr[eé]seau/i
+};
+
 async function main() {
   const args = process.argv.slice(2);
   const code = String(args.find((a) => !a.startsWith("--")) || "").toLowerCase();
@@ -303,10 +378,22 @@ async function main() {
   if (!osmOnly && suppMod) {
     console.log(`[${code}] Running provincial supplement ${suppMod.name}…`);
     const maxByCode = { ab: 250000, bc: 50000, on: 120000, qc: Infinity, ns: 500000, nb: Infinity };
-    supp = await suppMod.run({
-      maxFeatures: maxByCode[code] != null ? maxByCode[code] : 250000,
-      pageSize: code === "bc" ? 2000 : 2000
-    });
+    try {
+      supp = await suppMod.run({
+        maxFeatures: maxByCode[code] != null ? maxByCode[code] : 250000,
+        pageSize: code === "bc" ? 2000 : 2000
+      });
+    } catch (err) {
+      console.warn(`[${code}] Live provincial adapter failed:`, err.message);
+      supp = { features: [], report: { adapter: suppMod.name, featureCount: 0, excludedByReason: {}, classification: {} } };
+    }
+    if (!supp.features.length && PROVINCIAL_SOURCE_MATCH[code]) {
+      const fromGraph = loadProvincialFromGraph(code, PROVINCIAL_SOURCE_MATCH[code]);
+      if (fromGraph && fromGraph.features.length) {
+        console.log(`[${code}] Falling back to provincial edges on existing graph (${fromGraph.features.length})`);
+        supp = fromGraph;
+      }
+    }
     console.log(`[${code}] Supplement features:`, supp.features.length);
 
     conflated = conflateRegion({

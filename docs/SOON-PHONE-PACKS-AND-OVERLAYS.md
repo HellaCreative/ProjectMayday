@@ -9,12 +9,12 @@ Tester focus this sprint: **NS, ON, BC, AB**.
 
 | Region | Phone pack on CDN | Notes |
 | --- | --- | --- |
-| Nova Scotia (`ns`) | **Live** | ~20 MB graph + ~77 MB geometry |
-| Ontario (`on`) | **Live** | ~25 MB graph + ~29 MB geometry |
-| British Columbia (`bc`) | **Live** | ~34 MB graph + ~91 MB geometry |
-| Alberta (`ab`) | **Live** | ~45 MB graph + ~39 MB geometry |
-| New Brunswick (`nb`) | Soon | Server longhaul exists; phone pack not published |
-| Prince Edward Island (`pe`) | Soon | Server longhaul exists |
+| Nova Scotia (`ns`) | **Live** | ~21 MB graph + ~81 MB geometry |
+| Ontario (`on`) | **Live** | ~25 MB graph + ~29 MB geometry (fresh OSM rebuild pending this wave) |
+| British Columbia (`bc`) | **Live** | Rebuilt Jul 29 from fresh Geofabrik OSM + FTEN (~34 / ~91 MB) |
+| Alberta (`ab`) | **Live** | Rebuilt Jul 29 from fresh Geofabrik OSM + Access Roads (~45 / ~39 MB) |
+| New Brunswick (`nb`) | **Live** | Fresh OSM + Forest Roads (~17 / ~21 MB) |
+| Prince Edward Island (`pe`) | **Live** | OSM-only (~1.5 / ~1.4 MB) |
 | Québec (`qc`) | Soon | Large; publish after tester wave |
 | Manitoba (`mb`) | Soon | |
 | Saskatchewan (`sk`) | Soon | |
@@ -36,9 +36,9 @@ iOS `NetworkOverlayManager` currently wires **NS / NB / QC** chunk manifests onl
 | NS | `app/data/ns-gov-*` | Yes | Live |
 | NB | `app/data/nb-gov-*` | Yes | Live |
 | QC | `app/data/qc-gov-*` | Yes | Live |
-| ON | `app/data/on-gov-*` | Yes | **Ready** — MNRF capillary (~110k); needs Vercel deploy |
-| BC | `app/data/bc-gov-*` | Yes | **Ready** — FTEN capillary (~45k); needs Vercel deploy |
-| AB | `app/data/ab-gov-*` | Yes | **Ready** — Access Roads (~210k); needs Vercel deploy |
+| ON | `app/data/on-gov-*` | Yes | **Live** — MNRF capillary (~110k) |
+| BC | `app/data/bc-gov-*` | Yes | **Live** — FTEN capillary (~45k) |
+| AB | `app/data/ab-gov-*` | Yes | **Live** — Access Roads (~210k) |
 | PE / MB / SK / NL / territories | No | No | Soon |
 
 When Mayday ships `*-gov-chunks` + manifest for ON/BC/AB, add entries to `NetC.overlays` and Layers toggles.

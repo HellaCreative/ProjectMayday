@@ -1,0 +1,100 @@
+{
+  "schemaVersion": "pack-manifest.v1",
+  "packFormat": "graph.v2",
+  "geometryFormat": "geometry.v1",
+  "version": "v1",
+  "generatedAt": "2026-07-29T14:07:57.215Z",
+  "basePath": "/app/data/packs/v1",
+  "regions": [
+    {
+      "id": "ns",
+      "files": [
+        {
+          "name": "graph.v2.bin",
+          "bytes": 20513846,
+          "sha256": "f6284d85f9ff60a5f50f86b40814867ddd809cabc6101c9bcad6456bc8523eb6"
+        },
+        {
+          "name": "geometry.v1.bin",
+          "bytes": 80795256,
+          "sha256": "5eadccfdda67e46a2e9456e5c58214527da65e015c7f31872dd62e94f8fb381c"
+        }
+      ]
+    },
+    {
+      "id": "pe",
+      "files": [
+        {
+          "name": "graph.v2.bin",
+          "bytes": 1470139,
+          "sha256": "5f21d33173749991accba8e88086466cb13f7fb3473f4e0c707fb35150022cd3"
+        },
+        {
+          "name": "geometry.v1.bin",
+          "bytes": 1423344,
+          "sha256": "564d3014b9fecda077175e946d7bcf2fb1cf504b2409e0437a69f02697f9efc0"
+        }
+      ]
+    },
+    {
+      "id": "nb",
+      "files": [
+        {
+          "name": "graph.v2.bin",
+          "bytes": 16787673,
+          "sha256": "f59ee9da9c14f64450f4b09cb85229e14e51a686078449a54cabb1936ee0d52d"
+        },
+        {
+          "name": "geometry.v1.bin",
+          "bytes": 20882172,
+          "sha256": "1da4cf325f574f5221c6804319e024049a6eba5579c64471db156248a7ca1d80"
+        }
+      ]
+    },
+    {
+      "id": "bc",
+      "files": [
+        {
+          "name": "graph.v2.bin",
+          "bytes": 33549122,
+          "sha256": "5897ffbe380625e93826c11fc8dfa0e050e076d46f2133f82d375c74e24122a0"
+        },
+        {
+          "name": "geometry.v1.bin",
+          "bytes": 90616932,
+          "sha256": "de3c384b3f52fede8581e19a5769de1218ee199f0604294e26070e171df0397b"
+        }
+      ]
+    },
+    {
+      "id": "ab",
+      "files": [
+        {
+          "name": "graph.v2.bin",
+          "bytes": 45074356,
+          "sha256": "fdb6e25e034d8af94e11fca526caad154898802f317146bbdfc33983088f1b1b"
+        },
+        {
+          "name": "geometry.v1.bin",
+          "bytes": 39435312,
+          "sha256": "08bc740439bf535b38ac20afb183980057430d691977703e9181c381b24cecb3"
+        }
+      ]
+    },
+    {
+      "id": "on",
+      "files": [
+        {
+          "name": "graph.v2.bin",
+          "bytes": 25459443,
+          "sha256": "07a58a9954ba580fb84b0656e956adf258627829c26f4f96eebb9ad7dc6186c2"
+        },
+        {
+          "name": "geometry.v1.bin",
+          "bytes": 28746012,
+          "sha256": "da3d0902e5baba74195efa65a15ca9e63a9ca56e55d447723ecca0c8526beaa6"
+        }
+      ]
+    }
+  ]
+}
