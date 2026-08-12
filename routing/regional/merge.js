@@ -349,7 +349,8 @@ const ADVENTURE_CONNECTIVITY_CLIP = [
   { lon: -101.4, lat: 49.7 }, // MB↔SK southern corridor
   { lon: -110.0, lat: 49.7 }, // SK↔AB southern corridor
   { lon: -110.0, lat: 51.4 }, // SK↔AB Kindersley / Hwy 7
-  { lon: -116.4, lat: 51.2 } // AB↔BC divide approach (Golden / Lake Louise band)
+  // AB↔BC Hwy 1 band (seed only — canada-chain snaps onto live longhaul fabric).
+  { lon: -116.3, lat: 51.45 }
 ];
 
 /**
@@ -358,6 +359,10 @@ const ADVENTURE_CONNECTIVITY_CLIP = [
  * inside QC so the final Laurentians leg is QC-only (Hobby OOM avoidance:
  * a single A→B hop inflated NS+NB+QC ~463MB JSON → FUNCTION_INVOCATION_FAILED).
  * West seams keep QC|ON, ON|MB, MB|SK, SK|AB, AB|BC as ≤2-pack hops.
+ *
+ * Seeds are approximate — routeCanadaChain resolves each intermediate onto
+ * the loaded longhaul fabric before hop routing (pack updates must not break
+ * hops via stale lat/lon alone).
  */
 const ADVENTURE_CHAIN_JOINTS = [
   { lon: -64.35, lat: 45.92, between: ["ns", "nb"] }, // Tantramar / isthmus
@@ -368,7 +373,8 @@ const ADVENTURE_CHAIN_JOINTS = [
   { lon: -101.4, lat: 49.7, between: ["mb", "sk"] }, // MB↔SK prairie seam
   { lon: -110.0, lat: 49.7, between: ["sk", "ab"] }, // SK↔AB southern TCH seam
   { lon: -110.0, lat: 51.4, between: ["sk", "ab"] }, // SK↔AB Kindersley / Hwy 7 band
-  { lon: -116.4, lat: 51.2, between: ["ab", "bc"] } // AB↔BC divide seam
+  // AB↔BC Hwy 1 / Lake Louise band — dual-pack OSM keeper seed (not Freeway invent).
+  { lon: -116.3, lat: 51.45, between: ["ab", "bc"] }
 ];
 
 function dedupeCorridorPoints(pts, start, end, westToEast) {
@@ -407,7 +413,13 @@ function adventureChainWaypoints(start, end) {
     if (nearlySamePoint(j, start) || nearlySamePoint(j, end)) continue;
     // Do not nudgeOffUrbanCore — seams are placed on fabric keepers. Sackville /
     // Amherst avoid boxes would shove Tantramar into the strait (match_failed).
-    pts.push({ lon: j.lon, lat: j.lat });
+    // Keep between/role so canada-chain can snap against the right longhaul packs.
+    pts.push({
+      lon: j.lon,
+      lat: j.lat,
+      role: "seam",
+      between: j.between.slice()
+    });
   }
   return dedupeCorridorPoints(pts, start, end, westToEast);
 }
@@ -491,6 +503,13 @@ function corridorLocationsForRoute(locations, options = {}) {
       westToEast ? a.lon > start.lon && a.lon < end.lon : a.lon < start.lon && a.lon > end.lon
     )
     .sort((a, b) => (westToEast ? a.lon - b.lon : b.lon - a.lon));
+  if (options.forChain) {
+    return [
+      start,
+      ...anchors.map((a) => ({ lon: a.lon, lat: a.lat, role: "spine" })),
+      end
+    ];
+  }
   return [start, ...anchors, end];
 }
 

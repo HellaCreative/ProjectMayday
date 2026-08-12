@@ -541,6 +541,71 @@ check("adventure NS→QC chain uses border seams not [A,B] mega-hop", () => {
   assert.ok(lons.some((lon) => lon > -64.6 && lon < -64.1), "Tantramar seam");
   assert.ok(lons.some((lon) => lon > -68.9 && lon < -68.4), "Dégelis QC entry");
   assert.ok(!lons.some((lon) => Math.abs(lon - -63.75) < 0.05), "no PE bridge on NS→QC");
+  const seams = chain.filter((p) => p.role === "seam");
+  assert.ok(seams.length >= 2, "seams keep role metadata");
+  assert.ok(
+    seams.every((p) => Array.isArray(p.between) && p.between.length === 2),
+    "seams keep between province metadata"
+  );
+});
+
+check("BC→AB chain seam keeps between metadata for snap", () => {
+  const { corridorLocationsForRoute } = require("../../regional/merge");
+  const a = { lon: -122.8029, lat: 49.0253 }; // White Rock
+  const b = { lon: -112.8451, lat: 49.6956 }; // Lethbridge area
+  const chain = corridorLocationsForRoute([a, b], { profile: "balanced", forChain: true });
+  assert.ok(chain.length >= 3, "BC→AB inserts AB↔BC seam");
+  const seam = chain.find((p) => p.role === "seam");
+  assert.ok(seam, "seam role present");
+  assert.deepStrictEqual(seam.between, ["ab", "bc"]);
+  // Seed is Hwy 1 / Lake Louise band (snap resolver is source of truth).
+  assert.ok(seam.lon > -117 && seam.lon < -115.5, "AB↔BC seam lon");
+  assert.ok(seam.lat > 50.8 && seam.lat < 52, "AB↔BC seam lat");
+});
+
+check("canada-chain snaps intermediate seam onto longhaul fabric", async () => {
+  const abPack = path.join(__dirname, "../../data/regions/ab/longhaul.v1.json.gz");
+  const bcPack = path.join(__dirname, "../../data/regions/bc/longhaul.v1.json.gz");
+  if (!fs.existsSync(abPack) || !fs.existsSync(bcPack)) {
+    console.log("skip seam snap — ab/bc longhaul packs missing");
+    return;
+  }
+  const { resolveChainSeamWaypoints, SEAM_SNAP_RADIUS_M } = require("../../lib/router");
+  const { clearGraphCache } = require("../../lib/graph");
+  // Deliberately off-fabric seed (old hard-coded joint) — must snap onto a road.
+  const waypoints = [
+    { lon: -122.8029, lat: 49.0253 },
+    { lon: -116.4, lat: 51.2, role: "seam", between: ["ab", "bc"] },
+    { lon: -112.8451, lat: 49.6956 }
+  ];
+  try {
+    const resolved = await resolveChainSeamWaypoints(waypoints, {
+      profile: "balanced",
+      accessPolicy: { motorizedPermissive: true, motorizedUnknown: true }
+    });
+    assert.strictEqual(resolved.ok, true, resolved.message || resolved.error);
+    assert.strictEqual(resolved.waypoints[0].lon, waypoints[0].lon, "start pin untouched");
+    assert.strictEqual(resolved.waypoints[2].lat, waypoints[2].lat, "end pin untouched");
+    const mid = resolved.waypoints[1];
+    assert.strictEqual(mid.seamSnapped, true);
+    assert.ok(resolved.snaps && resolved.snaps[0], "snap debug present");
+    assert.ok(
+      resolved.snaps[0].seedDistanceM <= SEAM_SNAP_RADIUS_M,
+      "snap within seam radius"
+    );
+    assert.ok(
+      Number.isFinite(mid.lon) && Number.isFinite(mid.lat),
+      "snapped lon/lat"
+    );
+    assert.ok(
+      Math.abs(mid.lon - waypoints[1].lon) > 1e-5 ||
+        Math.abs(mid.lat - waypoints[1].lat) > 1e-5 ||
+        resolved.snaps[0].seedDistanceM === 0,
+      "off-fabric seed was projected onto fabric"
+    );
+  } finally {
+    clearGraphCache();
+  }
 });
 
 check("ON vs QC keeps Ottawa ON and Gatineau QC", () => {

@@ -469,7 +469,11 @@ async function loadGraphsForRequest(resolution, options = {}) {
     else if (anyLonghaul || onVercel) bufferMeters = paths.length > 1 ? 100000 : 120000;
     else bufferMeters = 150000;
   }
-  const skipClip = shouldSkipCorridorClip(resolution, paths);
+  // Seam snap probes pass forceCorridorClip so province-wide warm-reuse skip
+  // does not inflate full AB/BC longhaul just to project one joint.
+  const skipClip = options.forceCorridorClip
+    ? false
+    : shouldSkipCorridorClip(resolution, paths);
   const willClip = corridorLocations.length >= 2 && !skipClip;
   const cacheKey =
     paths.join("|") + (willClip ? corridorCacheSuffix(corridorLocations, bufferMeters) : "");
