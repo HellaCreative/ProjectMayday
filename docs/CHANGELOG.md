@@ -6,6 +6,21 @@ Living log for agent handoffs (backend / packs / live `/api/route`). Prefer this
 
 ---
 
+## 2026-08-12 — Canada↔US live routing via R2 (no state pack download)
+
+### Problem
+Province→US (e.g. BC→WA) failed online while BC↔AB worked. Production `remoteGraphUrl` still pointed at **Vercel** static paths (`/routing/data/regions/{id}/longhaul…`). BC/AB happened to 200 there; **WA 404**. Separately, BC’s bbox reaches 48.2°N so northern WA pins were stolen as `bc`, and `REGION_NEIGHBOURS` had no CA↔US links.
+
+### Fix
+- Live graphs load from **Cloudflare R2** (`graphCdnBaseUrl`) — same bucket as phone packs. No map packs on Vercel.
+- US state bboxes in `REGION_BBOX` + 49th-parallel primary rules (BC/WA, AB/MT, …).
+- CA↔US adjacency + Peace Arch / Sumas / Coutts / … seam seeds (seam snap remains source of truth).
+
+### Deploy
+API code only to `dirt-mayday` Vercel. Packs stay on R2 (no pack republish required for this).
+
+---
+
 ## 2026-08-12 — Durable canada-chain seam snap (pack-resilient)
 
 ### Problem
@@ -26,4 +41,3 @@ Cross-province `canada-chain` hops failed with `match_failed` when hard-coded `A
 
 ### Deploy
 Push to `main` (Vercel `dirt-mayday`) so `/api/route` picks up `router.js`.
-

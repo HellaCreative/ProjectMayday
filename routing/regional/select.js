@@ -8,7 +8,60 @@ const REGIONS_DIR = path.join(__dirname, "..", "data", "regions");
 const LEGACY_GRAPH = path.join(__dirname, "..", "data", "ns-graph.v1.json.gz");
 const REGIONAL_NS = path.join(REGIONS_DIR, "ns", "graph.v1.json.gz");
 
-/** Approximate province bboxes for region selection (W,S,E,N). */
+const US_STATE_BBOX = {
+  ak: [-180.0, 51.6, -130.0, 71.4],
+  al: [-88.5, 30.2, -84.9, 35.0],
+  ar: [-94.6, 33.0, -89.7, 36.5],
+  az: [-114.8, 31.3, -109.0, 37.0],
+  ca: [-124.4, 32.5, -114.1, 42.0],
+  co: [-109.1, 37.0, -102.0, 41.0],
+  ct: [-73.7, 41.0, -71.8, 42.1],
+  de: [-75.8, 38.5, -75.0, 39.8],
+  fl: [-87.6, 25.1, -80.0, 31.0],
+  ga: [-85.6, 30.4, -80.9, 35.0],
+  hi: [-159.8, 18.9, -154.8, 22.2],
+  ia: [-96.6, 40.4, -90.1, 43.5],
+  id: [-117.2, 42.0, -111.0, 49.0],
+  il: [-91.5, 37.0, -87.5, 42.5],
+  in: [-88.1, 37.8, -84.8, 41.8],
+  ks: [-102.1, 37.0, -94.6, 40.0],
+  ky: [-89.4, 36.5, -82.0, 39.1],
+  la: [-94.0, 29.0, -89.0, 33.0],
+  ma: [-73.5, 41.5, -69.9, 42.9],
+  md: [-79.5, 37.9, -75.0, 39.7],
+  me: [-71.1, 43.1, -67.0, 47.5],
+  mi: [-90.4, 41.7, -82.4, 48.2],
+  mn: [-97.2, 43.5, -89.6, 49.4],
+  mo: [-95.8, 36.0, -89.1, 40.6],
+  ms: [-91.6, 30.2, -88.1, 35.0],
+  mt: [-116.0, 44.4, -104.0, 49.0],
+  nc: [-84.3, 33.8, -75.7, 36.6],
+  nd: [-104.0, 45.9, -96.6, 49.0],
+  ne: [-104.1, 40.0, -95.3, 43.0],
+  nh: [-72.5, 42.7, -70.7, 45.3],
+  nj: [-75.6, 39.0, -73.9, 41.4],
+  nm: [-109.0, 31.3, -103.0, 37.0],
+  nv: [-120.0, 35.0, -114.0, 42.0],
+  ny: [-79.8, 40.5, -72.1, 45.0],
+  oh: [-84.8, 38.4, -80.5, 42.0],
+  ok: [-103.0, 33.6, -94.4, 37.0],
+  or: [-124.6, 42.0, -116.5, 46.3],
+  pa: [-80.5, 39.7, -74.7, 42.3],
+  ri: [-71.9, 41.3, -71.1, 42.0],
+  sc: [-83.3, 32.0, -78.5, 35.2],
+  sd: [-104.1, 42.5, -96.4, 45.9],
+  tn: [-90.3, 35.0, -81.7, 36.7],
+  tx: [-106.6, 25.9, -93.5, 36.5],
+  ut: [-114.0, 37.0, -109.0, 42.0],
+  va: [-83.7, 36.5, -75.2, 39.5],
+  vt: [-73.4, 42.7, -71.5, 45.0],
+  wa: [-124.7, 45.5, -116.9, 49.0],
+  wi: [-92.9, 42.5, -87.0, 47.0],
+  wv: [-82.6, 37.2, -77.7, 40.6],
+  wy: [-111.1, 41.0, -104.1, 45.0]
+};
+
+/** Approximate province/state bboxes for region selection (W,S,E,N). */
 const REGION_BBOX = {
   // Keep Maritimes bboxes tight — Halifax (-63.57) must not hit NB.
   ns: [-66.6, 43.3, -59.5, 47.2],
@@ -26,7 +79,8 @@ const REGION_BBOX = {
   bc: [-139.1, 48.2, -114.0, 60.1],
   yt: [-141.1, 59.8, -123.8, 69.7],
   nt: [-136.5, 60.0, -102.0, 78.8],
-  nu: [-120.9, 51.6, -60.9, 83.2]
+  nu: [-120.9, 51.6, -60.9, 83.2],
+  ...US_STATE_BBOX
 };
 
 function isQcRegion(id) {
@@ -79,9 +133,32 @@ function primaryRegionForPoint(lon, lat) {
     return lon < -116.4 ? "bc" : "ab";
   }
 
+  // Canada↔US — BC/AB/SK/MB rectangles intentionally overlap northern US states.
+  // Prefer the 49th parallel (and Pigeon River for ON/MN) over smallest-bbox.
+  if (ids.has("bc") && ids.has("wa")) return lat >= 49.0 ? "bc" : "wa";
+  if (ids.has("bc") && ids.has("id")) return lat >= 49.0 ? "bc" : "id";
+  if (ids.has("ab") && ids.has("mt")) return lat >= 49.0 ? "ab" : "mt";
+  if (ids.has("sk") && ids.has("mt")) return lat >= 49.0 ? "sk" : "mt";
+  if (ids.has("sk") && ids.has("nd")) return lat >= 49.0 ? "sk" : "nd";
+  if (ids.has("mb") && ids.has("nd")) return lat >= 49.0 ? "mb" : "nd";
+  if (ids.has("mb") && ids.has("mn")) return lat >= 49.0 ? "mb" : "mn";
+  if (ids.has("nb") && ids.has("me")) {
+    // Roughly east of the international boundary near Calais / St. Stephen.
+    return lon <= -67.78 ? "me" : "nb";
+  }
+
   // ON vs MB — rectangular MB bbox must not steal Kenora / NW Ontario.
   if (ids.has("on") && ids.has("mb")) {
     return lon < -95.15 ? "mb" : "on";
+  }
+
+  // ON vs MN — MN's NE rectangle covers Thunder Bay / Pigeon River north shore
+  // (Ontario). Real MN Arrowhead tops out ~48.0°N near Grand Portage; north of
+  // that at Lake Superior longitudes is ON. Without this, smallest-bbox picks mn
+  // and live snap fails (no MN edges; ON arterial sits ~40 m away).
+  if (ids.has("on") && ids.has("mn")) {
+    if (lat >= 48.05 && lon >= -91.5) return "on";
+    return "mn";
   }
 
   // MB vs SK — 101.36°W meridian (approx).
@@ -153,6 +230,19 @@ function publicBaseUrl() {
   return "https://dirt-mayday.vercel.app";
 }
 
+/**
+ * CDN for live-routing graph JSON (longhaul / full v1).
+ * Phone packs (graph.v2.bin) already live on R2 — live `/api/route` must use the
+ * same bucket, not Vercel includeFiles. Override with ROUTING_GRAPH_CDN_BASE.
+ */
+function graphCdnBaseUrl() {
+  const raw =
+    process.env.ROUTING_GRAPH_CDN_BASE ||
+    process.env.R2_PUBLIC_BASE ||
+    "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev";
+  return String(raw).replace(/\/$/, "");
+}
+
 function pointInBbox(lon, lat, bbox) {
   return lon >= bbox[0] && lon <= bbox[2] && lat >= bbox[1] && lat <= bbox[3];
 }
@@ -199,24 +289,25 @@ function localGraphPath(regionId, { longhaul = false } = {}) {
 }
 
 function remoteGraphUrl(regionId, { longhaul = false } = {}) {
-  const base = publicBaseUrl();
-  if (regionId === "__legacy_ns__") return base + "/routing/data/ns-graph.v1.json.gz";
+  const base = graphCdnBaseUrl();
+  if (regionId === "__legacy_ns__") {
+    return base + "/ns/graph.v1.json.gz";
+  }
   if (longhaul) {
-    return base + "/routing/data/regions/" + regionId + "/longhaul.v1.json.gz";
+    return base + "/" + regionId + "/longhaul.v1.json.gz";
   }
   if (String(regionId).startsWith("qc-")) {
-    return base + "/routing/data/regions/qc/graph.v1.json.gz";
+    return base + "/qc/graph.v1.json.gz";
   }
-  return base + "/routing/data/regions/" + regionId + "/graph.v1.json.gz";
+  return base + "/" + regionId + "/graph.v1.json.gz";
 }
 
 function graphPathForRegion(regionId, opts = {}) {
   const local = localGraphPath(regionId, opts);
   if (fs.existsSync(local)) return local;
-  // On disk missing: still point at remote longhaul/full URL when requested.
+  // Prefer CDN longhaul; if callers asked for longhaul and only full v1 exists
+  // remotely, still return the longhaul URL — fetch layer may fall back.
   if (opts.longhaul) {
-    const fullLocal = localGraphPath(regionId, { longhaul: false });
-    // Prefer remote longhaul; callers on Vercel fetch from CDN after deploy.
     return remoteGraphUrl(regionId, { longhaul: true });
   }
   return remoteGraphUrl(regionId, opts);
@@ -262,7 +353,7 @@ function resolveGraphRequest(body = {}) {
     return {
       ok: false,
       error: "region_unknown",
-      message: "Could not map route locations to a Canadian province or territory.",
+      message: "Could not map route locations to a known province or state.",
       regionIds: []
     };
   }
@@ -386,6 +477,7 @@ module.exports = {
   selectRegionsForLocations,
   graphPathForRegion,
   remoteGraphUrl,
+  graphCdnBaseUrl,
   resolveGraphRequest,
   publicBaseUrl,
   primaryRegionForPoint,

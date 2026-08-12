@@ -201,21 +201,49 @@ function loadV2RuntimeSync(v1Path, started) {
 
 function fetchBuffer(url) {
   return new Promise((resolve, reject) => {
-    const lib = url.startsWith("https") ? https : http;
-    lib.get(url, (res) => {
-      if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-        fetchBuffer(res.headers.location).then(resolve, reject);
-        return;
-      }
-      if (res.statusCode !== 200) {
-        reject(new Error("Graph fetch HTTP " + res.statusCode + " for " + url));
-        return;
-      }
-      const chunks = [];
-      res.on("data", (c) => chunks.push(c));
-      res.on("end", () => resolve(Buffer.concat(chunks)));
-      res.on("error", reject);
-    }).on("error", reject);
+    let parsed;
+    try {
+      parsed = new URL(url);
+    } catch (err) {
+      reject(new Error("Invalid graph URL: " + url));
+      return;
+    }
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      reject(new Error("Invalid graph URL protocol: " + url));
+      return;
+    }
+    const lib = parsed.protocol === "https:" ? https : http;
+    lib
+      .get(url, (res) => {
+        if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+          let next = res.headers.location;
+          try {
+            next = new URL(next, url).href;
+          } catch (_) {
+            reject(new Error("Graph fetch redirect to invalid URL from " + url));
+            return;
+          }
+          fetchBuffer(next).then(resolve, reject);
+          return;
+        }
+        if (res.statusCode !== 200) {
+          reject(
+            new Error(
+              "Graph pack missing on CDN (HTTP " +
+                res.statusCode +
+                ") for " +
+                url +
+                ". Publish longhaul.v1.json.gz (or graph.v1.json.gz) to R2 via scripts/publish-live-graphs-cdn.js."
+            )
+          );
+          return;
+        }
+        const chunks = [];
+        res.on("data", (c) => chunks.push(c));
+        res.on("end", () => resolve(Buffer.concat(chunks)));
+        res.on("error", reject);
+      })
+      .on("error", reject);
   });
 }
 
@@ -279,9 +307,14 @@ async function loadGraphAsync(graphPath = defaultGraphPath()) {
     } else if (fs.existsSync(graphPath)) {
       data = inflateGraphBuffer(fs.readFileSync(graphPath));
     } else {
-      // On Vercel Hobby, prefer the static asset so the function bundle stays small.
-      const base = process.env.VERCEL_URL ? ("https://" + process.env.VERCEL_URL) : "https://dirt-mayday.vercel.app";
-      const remote = process.env.ROUTING_GRAPH_URL || (base + "/routing/data/ns-graph.v1.json.gz");
+      // Legacy single-graph fallback — R2 only, never Vercel static paths.
+      const cdn =
+        process.env.ROUTING_GRAPH_CDN_BASE ||
+        process.env.R2_PUBLIC_BASE ||
+        "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev";
+      const remote =
+        process.env.ROUTING_GRAPH_URL ||
+        String(cdn).replace(/\/$/, "") + "/ns/longhaul.v1.json.gz";
       if (!remote.startsWith("http")) {
         throw new Error("Routing graph not found at " + graphPath);
       }
@@ -424,8 +457,19 @@ async function readGraphData(graphPath, options = {}) {
   const started = Date.now();
   let data;
   if (graphPath.startsWith("http://") || graphPath.startsWith("https://")) {
-    const buf = await fetchBuffer(graphPath);
-    data = inflateGraphBuffer(buf);
+    try {
+      const buf = await fetchBuffer(graphPath);
+      data = inflateGraphBuffer(buf);
+    } catch (err) {
+      // Longhaul missing on CDN → fall back to full regional v1 on the same host.
+      const fallback = String(graphPath).replace(/\/longhaul\.v1\.json\.gz$/i, "/graph.v1.json.gz");
+      if (fallback !== graphPath) {
+        const buf = await fetchBuffer(fallback);
+        data = inflateGraphBuffer(buf);
+      } else {
+        throw err;
+      }
+    }
   } else if (!fs.existsSync(graphPath)) {
     throw new Error("Routing graph not found at " + graphPath);
   } else {

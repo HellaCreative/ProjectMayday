@@ -159,25 +159,76 @@ function mergeRegionalGraphs(graphs) {
 const REGION_NEIGHBOURS = {
   // Land / contiguous borders only. Ferry-dependent links are omitted until
   // NRN ferry connection layers are ingested as routable edges.
-  bc: ["ab", "yt", "nt"],
-  ab: ["bc", "sk", "nt"],
-  sk: ["ab", "mb", "nt"],
-  mb: ["sk", "on", "nu"],
-  on: ["mb", "qc"],
+  bc: ["ab", "yt", "nt", "wa", "id", "ak"],
+  ab: ["bc", "sk", "nt", "mt"],
+  sk: ["ab", "mb", "nt", "mt", "nd"],
+  mb: ["sk", "on", "nu", "nd", "mn"],
+  on: ["mb", "qc", "mn", "mi", "ny"],
   // One QC province pack (OSM-only). Legacy qc-* neighbours kept so emergency
   // quadrant packs still path-find if re-enabled in select.js.
-  qc: ["on", "nb", "nl"],
+  qc: ["on", "nb", "nl", "ny", "vt", "nh", "me"],
   "qc-west": ["on", "qc", "qc-sl", "qc-north"],
   "qc-sl": ["nb", "nl", "qc", "qc-west", "qc-north"],
   "qc-north": ["qc", "qc-sl", "qc-west"],
   // Confederation Bridge is a legal road link (not ferry) — NB↔PE must chain.
-  nb: ["qc", "ns", "pe"],
+  nb: ["qc", "ns", "pe", "me"],
   ns: ["nb"],
   pe: ["nb"],
   nl: ["qc"],
-  yt: ["bc", "nt"],
+  yt: ["bc", "nt", "ak"],
   nt: ["yt", "bc", "ab", "sk", "nu"],
-  nu: ["nt", "mb"]
+  nu: ["nt", "mb"],
+  // Contiguous US (only borders Dirt publishes longhaul for need full graphs;
+  // extra links keep corridor expansion honest when packs land later).
+  wa: ["bc", "or", "id"],
+  or: ["wa", "id", "ca", "nv"],
+  id: ["bc", "wa", "or", "mt", "nv", "ut", "wy"],
+  mt: ["ab", "id", "wy", "nd", "sd", "sk"],
+  nd: ["mt", "sd", "mn", "mb", "sk"],
+  mn: ["nd", "sd", "ia", "wi", "mi", "mb", "on"],
+  mi: ["mn", "wi", "il", "in", "oh", "on"],
+  ny: ["pa", "nj", "ct", "ma", "vt", "on", "qc"],
+  vt: ["ny", "nh", "ma", "qc"],
+  nh: ["vt", "me", "ma", "qc"],
+  me: ["nh", "nb", "qc"],
+  ak: ["bc", "yt"],
+  ca: ["or", "nv", "az"],
+  nv: ["or", "id", "ut", "az", "ca"],
+  ut: ["id", "wy", "co", "az", "nv"],
+  wy: ["id", "mt", "sd", "ne", "co", "ut"],
+  sd: ["mt", "nd", "mn", "ia", "ne", "wy"],
+  az: ["ca", "nv", "ut", "co", "nm"],
+  co: ["ut", "wy", "ne", "ks", "ok", "nm", "az"],
+  nm: ["az", "co", "ok", "tx"],
+  ne: ["wy", "sd", "ia", "mo", "ks", "co"],
+  ks: ["ne", "mo", "ok", "co"],
+  ok: ["ks", "mo", "ar", "tx", "nm", "co"],
+  tx: ["nm", "ok", "ar", "la"],
+  ia: ["sd", "mn", "wi", "il", "mo", "ne"],
+  mo: ["ne", "ia", "il", "ky", "tn", "ar", "ok", "ks"],
+  ar: ["mo", "tn", "ms", "la", "tx", "ok"],
+  la: ["tx", "ar", "ms"],
+  wi: ["mn", "mi", "il", "ia"],
+  il: ["ia", "wi", "in", "ky", "mo", "mi"],
+  in: ["il", "mi", "oh", "ky"],
+  oh: ["mi", "pa", "wv", "ky", "in"],
+  pa: ["ny", "nj", "de", "md", "wv", "oh"],
+  nj: ["ny", "pa", "de"],
+  de: ["pa", "nj", "md"],
+  md: ["pa", "de", "va", "wv"],
+  va: ["md", "wv", "ky", "tn", "nc"],
+  wv: ["oh", "pa", "md", "va", "ky"],
+  ky: ["il", "in", "oh", "wv", "va", "tn", "mo"],
+  tn: ["ky", "va", "nc", "ga", "al", "ms", "ar", "mo"],
+  nc: ["va", "tn", "ga", "sc"],
+  sc: ["nc", "ga"],
+  ga: ["tn", "nc", "sc", "fl", "al"],
+  fl: ["ga", "al"],
+  al: ["tn", "ga", "fl", "ms"],
+  ms: ["tn", "al", "la", "ar"],
+  ct: ["ny", "ma", "ri"],
+  ma: ["ny", "vt", "nh", "ri", "ct"],
+  ri: ["ct", "ma"]
 };
 
 function shortestRegionPath(from, to) {
@@ -350,7 +401,11 @@ const ADVENTURE_CONNECTIVITY_CLIP = [
   { lon: -110.0, lat: 49.7 }, // SK↔AB southern corridor
   { lon: -110.0, lat: 51.4 }, // SK↔AB Kindersley / Hwy 7
   // AB↔BC Hwy 1 band (seed only — canada-chain snaps onto live longhaul fabric).
-  { lon: -116.3, lat: 51.45 }
+  { lon: -116.3, lat: 51.45 },
+  { lon: -122.757, lat: 49.002 }, // Peace Arch BC↔WA
+  { lon: -122.265, lat: 49.002 }, // Sumas BC↔WA
+  { lon: -111.96, lat: 49.0 }, // Coutts AB↔MT
+  { lon: -67.78, lat: 45.19 } // Calais NB↔ME
 ];
 
 /**
@@ -374,7 +429,15 @@ const ADVENTURE_CHAIN_JOINTS = [
   { lon: -110.0, lat: 49.7, between: ["sk", "ab"] }, // SK↔AB southern TCH seam
   { lon: -110.0, lat: 51.4, between: ["sk", "ab"] }, // SK↔AB Kindersley / Hwy 7 band
   // AB↔BC Hwy 1 / Lake Louise band — dual-pack OSM keeper seed (not Freeway invent).
-  { lon: -116.3, lat: 51.45, between: ["ab", "bc"] }
+  { lon: -116.3, lat: 51.45, between: ["ab", "bc"] },
+  // Canada↔US land crossings (seeds only — seam snap projects onto longhaul fabric).
+  { lon: -122.757, lat: 49.002, between: ["bc", "wa"] }, // Peace Arch / Hwy 99
+  { lon: -122.265, lat: 49.002, between: ["bc", "wa"] }, // Sumas / Huntingdon
+  { lon: -117.037, lat: 49.0, between: ["bc", "id"] }, // Porthill / Rykerts
+  { lon: -111.96, lat: 49.0, between: ["ab", "mt"] }, // Coutts / Sweetgrass
+  { lon: -101.45, lat: 49.0, between: ["mb", "nd"] }, // Internationals Peace Garden approach
+  { lon: -89.59, lat: 48.0, between: ["on", "mn"] }, // Pigeon River
+  { lon: -67.78, lat: 45.19, between: ["nb", "me"] } // Calais / St. Stephen
 ];
 
 function dedupeCorridorPoints(pts, start, end, westToEast) {
