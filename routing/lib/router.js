@@ -601,11 +601,275 @@ async function routeRequest(body = {}) {
   return routeOnRuntime(body, graphResolution, runtime);
 }
 
+/** Generous radius for snapping engineered chain seams onto live longhaul fabric. */
+const SEAM_SNAP_RADIUS_M = 12000;
+/** After seam snap, hop match for seam pins only (user pins keep the normal cap). */
+const SEAM_HOP_MATCH_M = 600;
+
+function isChainSeamLocation(loc) {
+  if (!loc || typeof loc !== "object") return false;
+  if (loc.seamSnapped) return true;
+  const role = String(loc.role || "");
+  return role === "seam" || role === "spine";
+}
+
+function inferSeamRegionIds(waypoints, index) {
+  const wp = waypoints[index] || {};
+  if (Array.isArray(wp.between) && wp.between.length) {
+    return [...new Set(wp.between.map((r) => String(r).toLowerCase()))];
+  }
+  const { primaryRegionForPoint, provinceFamily } = require("../regional/select");
+  const famOf = (p) => {
+    if (!p) return null;
+    const lon = Number(p.lon != null ? p.lon : p.lng);
+    const lat = Number(p.lat);
+    if (!Number.isFinite(lon) || !Number.isFinite(lat)) return null;
+    return provinceFamily(primaryRegionForPoint(lon, lat));
+  };
+  // Spine hubs are in-province TCH cities — one pack is enough.
+  if (String(wp.role || "") === "spine") {
+    const self = famOf(wp);
+    return self ? [self] : [];
+  }
+  const regions = new Set();
+  for (const p of [waypoints[index - 1], wp, waypoints[index + 1]]) {
+    const fam = famOf(p);
+    if (fam) regions.add(fam);
+  }
+  return [...regions];
+}
+
+async function loadSeamRegionRuntime(regionId, seed) {
+  const lon = Number(seed.lon != null ? seed.lon : seed.lng);
+  const lat = Number(seed.lat);
+  const locations = [
+    { lon, lat },
+    { lon: lon + 0.01, lat }
+  ];
+  const resolution = resolveGraphRequest({
+    regionId: String(regionId).toLowerCase(),
+    preferLonghaulPacks: true,
+    locations
+  });
+  if (!resolution.ok) {
+    throw new Error(resolution.message || resolution.error || "seam_region_resolve_failed");
+  }
+  return loadGraphsForRequest(resolution, {
+    locations,
+    profile: "balanced",
+    // Tight bulb around the seed — never warm-reuse the full province pack.
+    forceCorridorClip: true,
+    corridorBufferMeters: Math.max(SEAM_SNAP_RADIUS_M + 3000, 15000)
+  });
+}
+
+function releaseSeamProbeMemory() {
+  // Seam probes must not leave province-wide longhaul runtimes resident —
+  // Hobby RSS then trips graph_memory_pressure on the first real hop merge.
+  clearGraphCache();
+  if (typeof global.gc === "function") {
+    try {
+      global.gc();
+    } catch (_) {
+      /* ignore */
+    }
+  }
+}
+
+/**
+ * Snap one engineered chain waypoint onto an existing longhaul edge.
+ * Never invents free-space connectors — only projects onto eligible fabric.
+ */
+async function snapSeamWaypoint(seed, regionIds, profile) {
+  const preferPaved =
+    String(profile || "").toLowerCase() === "cleanest" || String(seed.role || "") === "spine";
+  const snapProfile = preferPaved ? "cleanest" : String(profile || "balanced").toLowerCase();
+  const snapRole = preferPaved ? "end" : "any";
+  // Seam seeds are not user pins — allow unknown capillary when adventure profiles need it.
+  const policy = {
+    motorizedPermissive: true,
+    motorizedUnknown: snapProfile === "cleanest" ? false : true
+  };
+
+  const candidates = [];
+  let nearestMeters = null;
+
+  try {
+    for (const regionId of regionIds) {
+      let runtime;
+      try {
+        runtime = await loadSeamRegionRuntime(regionId, seed);
+      } catch (_) {
+        releaseSeamProbeMemory();
+        continue;
+      }
+      const match = matchPoint(
+        runtime,
+        seed,
+        policy,
+        SEAM_SNAP_RADIUS_M,
+        null,
+        null,
+        snapProfile,
+        snapRole
+      );
+      // Drop the province-wide runtime before the next probe / hop.
+      releaseSeamProbeMemory();
+      if (!match.ok) {
+        if (match.nearestMeters != null) {
+          if (nearestMeters == null || match.nearestMeters < nearestMeters) {
+            nearestMeters = match.nearestMeters;
+          }
+        }
+        continue;
+      }
+      candidates.push({
+        regionId,
+        match: {
+          ...match,
+          // Detach from runtime-owned arrays.
+          coord: [match.coord[0], match.coord[1]]
+        }
+      });
+    }
+
+    if (!candidates.length) {
+      return { ok: false, nearestMeters, regionIds };
+    }
+
+    let best = null;
+    for (const cand of candidates) {
+      const coord = { lon: cand.match.coord[0], lat: cand.match.coord[1] };
+      let dualCount = 1;
+      let otherNear = 0;
+      for (const regionId of regionIds) {
+        if (regionId === cand.regionId) continue;
+        let runtime;
+        try {
+          runtime = await loadSeamRegionRuntime(regionId, coord);
+        } catch (_) {
+          releaseSeamProbeMemory();
+          continue;
+        }
+        const other = matchPoint(
+          runtime,
+          coord,
+          policy,
+          SEAM_SNAP_RADIUS_M,
+          null,
+          null,
+          snapProfile,
+          snapRole
+        );
+        releaseSeamProbeMemory();
+        if (other.ok) {
+          dualCount += 1;
+          otherNear = Math.max(otherNear, other.distanceM);
+        }
+      }
+      const pavedBonus = cand.match.surfaceClass === "paved" ? -150 : 0;
+      const needDual = Math.min(2, regionIds.length);
+      const dualBonus = dualCount >= needDual ? -2000 : 0;
+      const score = cand.match.distanceM + otherNear * 0.25 + pavedBonus + dualBonus;
+      if (!best || score < best.score) {
+        best = {
+          score,
+          lon: coord.lon,
+          lat: coord.lat,
+          seedDistanceM: cand.match.distanceM,
+          surfaceClass: cand.match.surfaceClass,
+          regionId: cand.regionId,
+          dualCount
+        };
+      }
+    }
+
+    return {
+      ok: true,
+      lon: best.lon,
+      lat: best.lat,
+      seedDistanceM: Math.round(best.seedDistanceM),
+      surfaceClass: best.surfaceClass,
+      regionId: best.regionId,
+      dualCount: best.dualCount,
+      regionIds
+    };
+  } finally {
+    releaseSeamProbeMemory();
+  }
+}
+
+/**
+ * Resolve every intermediate canada-chain waypoint onto live longhaul fabric.
+ * User start/end pins are left untouched.
+ */
+async function resolveChainSeamWaypoints(waypoints, body = {}) {
+  const profile = String(body.profile || "balanced").toLowerCase();
+  const out = (waypoints || []).map((w) => ({ ...w }));
+  const snaps = [];
+
+  for (let i = 1; i < out.length - 1; i += 1) {
+    const seed = out[i];
+    if (!isChainSeamLocation(seed) && seed.role == null && !seed.between) {
+      // Engineered intermediates from corridor helpers always carry role/between
+      // after merge.js update; still treat bare mids as seams for older callers.
+    }
+    const regionIds = inferSeamRegionIds(out, i);
+    if (!regionIds.length) {
+      return {
+        ok: false,
+        error: "seam_snap_failed",
+        message: "Could not resolve provinces for chain seam",
+        seamIndex: i,
+        nearestMeters: null,
+        seed: { lon: seed.lon, lat: seed.lat }
+      };
+    }
+
+    const snapped = await snapSeamWaypoint(seed, regionIds, profile);
+    if (!snapped.ok) {
+      return {
+        ok: false,
+        error: "seam_snap_failed",
+        message:
+          "Chain seam could not snap onto road fabric within " + SEAM_SNAP_RADIUS_M + " m",
+        seamIndex: i,
+        nearestMeters: snapped.nearestMeters,
+        seed: {
+          lon: seed.lon,
+          lat: seed.lat,
+          between: seed.between || regionIds
+        },
+        regionIds
+      };
+    }
+
+    out[i] = {
+      lon: snapped.lon,
+      lat: snapped.lat,
+      role: seed.role || "seam",
+      between: Array.isArray(seed.between) ? seed.between.slice() : regionIds.slice(),
+      seamSnapped: true
+    };
+    snaps.push({
+      index: i,
+      from: { lon: seed.lon, lat: seed.lat },
+      to: { lon: snapped.lon, lat: snapped.lat },
+      seedDistanceM: snapped.seedDistanceM,
+      surfaceClass: snapped.surfaceClass,
+      regionId: snapped.regionId,
+      dualCount: snapped.dualCount
+    });
+  }
+
+  return { ok: true, waypoints: out, snaps };
+}
+
 async function routeCanadaChain(body, graphResolution) {
   const profile = body.profile || "balanced";
   // Adventure: province-seam joints (not city hubs) so each hop loads ≤2 packs.
   // Cleanest: highway spine anchors. Plain [A,B] mega-merges OOM on Hobby.
-  const waypoints = corridorLocationsForRoute(body.locations || [], {
+  let waypoints = corridorLocationsForRoute(body.locations || [], {
     profile,
     forChain: true
   });
@@ -622,6 +886,24 @@ async function routeCanadaChain(body, graphResolution) {
   if (!useChainCache) {
     clearGraphCache();
   }
+
+  // Pack-resilient seam snap: hard-coded joint seeds can land kilometres off
+  // thinned longhaul fabric after province rebuilds. Snap intermediates only.
+  const seamResolved = await resolveChainSeamWaypoints(waypoints, body);
+  if (!seamResolved.ok) {
+    return {
+      status: "error",
+      error: seamResolved.error || "seam_snap_failed",
+      message: seamResolved.message || "Chain seam snap failed",
+      regionIds: graphResolution.regionIds,
+      seamIndex: seamResolved.seamIndex,
+      nearestMeters: seamResolved.nearestMeters,
+      seed: seamResolved.seed
+    };
+  }
+  waypoints = seamResolved.waypoints;
+  // Seam probes inflate full province packs; reclaim before hop merges.
+  releaseSeamProbeMemory();
 
   const parts = [];
   let totalMeters = 0;
@@ -649,7 +931,9 @@ async function routeCanadaChain(body, graphResolution) {
       preferLonghaulPacks: true,
       options: {
         ...(body.options || {}),
-        matchLimitMeters: Math.min(500, Number((body.options || {}).matchLimitMeters) || 500)
+        // User pin match stays ≤500 by default; seam endpoints may use 600 after snap.
+        matchLimitMeters: Math.min(500, Number((body.options || {}).matchLimitMeters) || 500),
+        chainSeamHop: true
       }
     });
     if (hop.status !== "complete") {
@@ -661,7 +945,8 @@ async function routeCanadaChain(body, graphResolution) {
           ` (hop ${i + 1}/${waypoints.length - 1})`,
         regionIds: graphResolution.regionIds,
         hopIndex: i,
-        hop
+        hop,
+        seamSnaps: seamResolved.snaps
       };
     }
     parts.push(hop);
@@ -711,6 +996,7 @@ async function routeCanadaChain(body, graphResolution) {
       graphMode: "canada-chain",
       regionIds: graphResolution.regionIds,
       waypoints: waypoints.length,
+      seamSnaps: seamResolved.snaps,
       fallback: null,
       chainCacheEnabled: useChainCache,
       cache,
@@ -819,13 +1105,33 @@ async function routeOnRuntime(body, graphResolution, runtime) {
 
   const start = locations[0];
   const end = locations[locations.length - 1];
-  let startMatch = matchPoint(runtime, start, policy, limit, avoidEdgeIds, null, profile, "start");
-  let endMatch = matchPoint(runtime, end, policy, limit, avoidEdgeIds, null, profile, "end");
+  // Canada-chain seam pins (already snapped onto fabric) may use a slightly
+  // larger per-endpoint match than user pins — still ≤ HARD_MATCH_CAP_M.
+  const chainSeamHop = !!options.chainSeamHop;
+  const startLimit =
+    chainSeamHop && isChainSeamLocation(start)
+      ? Math.min(HARD_MATCH_CAP_M, Math.max(limit, SEAM_HOP_MATCH_M))
+      : limit;
+  const endLimit =
+    chainSeamHop && isChainSeamLocation(end)
+      ? Math.min(HARD_MATCH_CAP_M, Math.max(limit, SEAM_HOP_MATCH_M))
+      : limit;
+  let startMatch = matchPoint(
+    runtime,
+    start,
+    policy,
+    startLimit,
+    avoidEdgeIds,
+    null,
+    profile,
+    "start"
+  );
+  let endMatch = matchPoint(runtime, end, policy, endLimit, avoidEdgeIds, null, profile, "end");
   // Soft expand once within the hard cap: prefer snap-on-place over hard fail
   // when a road exists a bit beyond the default radius (thinned hubs / fat taps).
   // nearestMeters is null when the spatial index finds zero candidates inside
   // the first radius — still retry at the hard cap (QC hub coords / hinterland).
-  if (!startMatch.ok && limit < HARD_MATCH_CAP_M) {
+  if (!startMatch.ok && startLimit < HARD_MATCH_CAP_M) {
     const near = startMatch.nearestMeters;
     if (near == null || near <= HARD_MATCH_CAP_M) {
       const expanded = matchPoint(
@@ -844,7 +1150,7 @@ async function routeOnRuntime(body, graphResolution, runtime) {
       }
     }
   }
-  if (!endMatch.ok && limit < HARD_MATCH_CAP_M) {
+  if (!endMatch.ok && endLimit < HARD_MATCH_CAP_M) {
     const near = endMatch.nearestMeters;
     if (near == null || near <= HARD_MATCH_CAP_M) {
       const expanded = matchPoint(
@@ -1998,7 +2304,10 @@ module.exports = {
   routeRequest,
   loadGraph,
   DEFAULT_MATCH_METERS,
+  SEAM_SNAP_RADIUS_M,
   matchPoint,
   normalizePolicy,
-  accessAllowed
+  accessAllowed,
+  resolveChainSeamWaypoints,
+  snapSeamWaypoint
 };
