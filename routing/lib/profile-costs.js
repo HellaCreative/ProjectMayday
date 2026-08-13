@@ -19,6 +19,13 @@
  * Packed surface codes: paved=0 gravel=1 access=2 (resource) track=3 unknown=4.
  * Road-class (`rt` on v1 edges): cleanest prefers freeway/arterial; non-cleanest
  * pay hard for freeway/arterial so adventure never keeps a highway spine.
+ *
+ * SoT: Dirt/Routing/OnDevice/OnDeviceProfileCosts.swift (phone). Dirt surface
+ * values here already include iOS `dirtUnpavedMult` so live API matches.
+ *
+ * Copy this file to Mayday `routing/lib/profile-costs.js` and deploy `/api/route`
+ * whenever the tables change. Live and the phone pack are one fabric; costs
+ * must ship on both engines. See scripts/pack-fabric/scripts/ship-routing.js.
  */
 
 const PROFILE_SURFACE_WEIGHTS = Object.freeze({
@@ -26,27 +33,30 @@ const PROFILE_SURFACE_WEIGHTS = Object.freeze({
   // Must stay WEAKER than Balanced — otherwise Direct out-dirts Balanced.
   direct: Object.freeze({
     paved: 1.18,
-    gravel: 0.97,
-    access: 0.94,
+    gravel: 0.96,
+    access: 0.93,
     track: 0.9,
     unknown: 0.95
   }),
   // Dual-sport mix — stronger dirt pull + wider ellipse (router) so the
   // journey can leave Direct’s crow-flies cut for gravel/track corridors.
   balanced: Object.freeze({
-    paved: 2.55,
-    gravel: 0.82,
-    access: 0.72,
-    track: 0.64,
-    unknown: 0.78
+    paved: 4.2,
+    gravel: 0.72,
+    access: 0.58,
+    track: 0.48,
+    unknown: 0.68
   }),
-  // Maximize undeveloped/gravel/track/resource; pavement only when forced.
+  // Maximize tagged gravel/track/resource. Untagged yellow/white OSM roads
+  // cost as paved (they paint paved). Includes iOS dirtUnpavedMult
+  // (gravel 0.58, access 0.38, track 0.28, unknown 0.55).
+  // Paved 16× (not 36×): short paved connectors onto FSRs still work.
   dirt: Object.freeze({
-    paved: 14.0,
-    gravel: 0.55,
-    access: 0.35,
-    track: 0.24,
-    unknown: 0.4
+    paved: 16.0,
+    gravel: 0.1624,
+    access: 0.0456,
+    track: 0.0168,
+    unknown: 0.154
   }),
   // Google/Apple: shortest practical pavement. Do not punish highway.
   cleanest: Object.freeze({
@@ -72,45 +82,45 @@ const PROFILE_SURFACE_WEIGHTS = Object.freeze({
  * Adventure: avoid freeway/arterial + town cores; prefer lower major + tracks.
  */
 const ADVENTURE_ROAD_CLASS_WEIGHTS = Object.freeze({
-  freeway: 4.6,
-  arterial: 3.6,
-  collector: 1.05,
-  ramp: 4.2,
-  local: 0.88,
-  service: 1.35,
-  resource: 0.8,
-  recreation: 0.78,
-  track: 0.72,
-  double_track: 0.72,
-  unknown: 1.0
+  freeway: 14.0,
+  arterial: 9.5,
+  collector: 2.4,
+  ramp: 12.0,
+  local: 0.78,
+  service: 1.4,
+  resource: 0.4,
+  recreation: 0.38,
+  track: 0.3,
+  double_track: 0.3,
+  unknown: 0.95
 });
 
 const DIRECT_ROAD_CLASS_WEIGHTS = Object.freeze({
-  freeway: 4.2,
-  arterial: 3.3,
+  freeway: 1.55,
+  arterial: 1.35,
   collector: 1.06,
-  ramp: 3.8,
-  local: 0.92,
-  service: 1.28,
-  resource: 0.9,
-  recreation: 0.88,
-  track: 0.86,
-  double_track: 0.86,
+  ramp: 1.45,
+  local: 0.95,
+  service: 1.12,
+  resource: 0.92,
+  recreation: 0.9,
+  track: 0.88,
+  double_track: 0.88,
   unknown: 1.0
 });
 
 // Balanced: leave upper major harder than Direct so dirt corridors win more often.
 const BALANCED_ROAD_CLASS_WEIGHTS = Object.freeze({
-  freeway: 4.5,
-  arterial: 3.5,
-  collector: 1.02,
-  ramp: 4.1,
-  local: 0.9,
-  service: 1.32,
-  resource: 0.85,
-  recreation: 0.82,
-  track: 0.8,
-  double_track: 0.8,
+  freeway: 5.6,
+  arterial: 4.2,
+  collector: 1.1,
+  ramp: 5.0,
+  local: 0.86,
+  service: 1.28,
+  resource: 0.76,
+  recreation: 0.74,
+  track: 0.7,
+  double_track: 0.7,
   unknown: 1.0
 });
 
@@ -153,9 +163,28 @@ const SURFACE_CODE_NAME = Object.freeze({
   4: "unknown"
 });
 
-function surfaceMultiplier(surfaceCode, profile) {
+function paintsAsPavedRoadClass(road) {
+  return (
+    road === "freeway" ||
+    road === "arterial" ||
+    road === "ramp" ||
+    road === "collector" ||
+    road === "local" ||
+    road === "service"
+  );
+}
+
+function surfaceMultiplier(surfaceCode, profile, _regionId, roadTrackClass) {
   const name = SURFACE_CODE_NAME[surfaceCode] || "unknown";
   const table = PROFILE_SURFACE_WEIGHTS[profile] || PROFILE_SURFACE_WEIGHTS.balanced;
+  // Untagged OSM highway paints paved — cost it as paved or Dirt≈Balanced.
+  if (
+    (profile === "dirt" || profile === "balanced") &&
+    name === "unknown" &&
+    paintsAsPavedRoadClass(roadTrackClass)
+  ) {
+    return table.paved != null ? table.paved : 1;
+  }
   return table[name] != null ? table[name] : 1;
 }
 
@@ -196,6 +225,7 @@ module.exports = {
   PROFILE_ROAD_CLASS_WEIGHTS,
   SURFACE_SPEED_KMH,
   SURFACE_CODE_NAME,
+  paintsAsPavedRoadClass,
   surfaceMultiplier,
   roadClassMultiplier,
   classSpeedKmh,

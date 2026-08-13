@@ -288,29 +288,22 @@ function localGraphPath(regionId, { longhaul = false } = {}) {
   return path.join(REGIONS_DIR, regionId, "graph.v1.json.gz");
 }
 
-function remoteGraphUrl(regionId, { longhaul = false } = {}) {
+function remoteGraphUrl(regionId, _opts = {}) {
+  const id = String(regionId || "").toLowerCase();
   const base = graphCdnBaseUrl();
-  if (regionId === "__legacy_ns__") {
-    return base + "/ns/graph.v1.json.gz";
+  if (id === "__legacy_ns__") {
+    return base + "/ns/graph.v2.bin";
   }
-  if (longhaul) {
-    return base + "/" + regionId + "/longhaul.v1.json.gz";
-  }
-  if (String(regionId).startsWith("qc-")) {
-    return base + "/qc/graph.v1.json.gz";
-  }
-  return base + "/" + regionId + "/graph.v1.json.gz";
+  // Phone PACKS and live /api/route are the same R2 object.
+  return base + "/" + id + "/graph.v2.bin";
 }
 
-function graphPathForRegion(regionId, opts = {}) {
-  const local = localGraphPath(regionId, opts);
-  if (fs.existsSync(local)) return local;
-  // Prefer CDN longhaul; if callers asked for longhaul and only full v1 exists
-  // remotely, still return the longhaul URL — fetch layer may fall back.
-  if (opts.longhaul) {
-    return remoteGraphUrl(regionId, { longhaul: true });
-  }
-  return remoteGraphUrl(regionId, opts);
+function graphPathForRegion(regionId, _opts = {}) {
+  const id = String(regionId || "").toLowerCase();
+  if (id === "__legacy_ns__") return LEGACY_GRAPH;
+  const localV2 = path.join(REGIONS_DIR, id, "graph.v2.bin");
+  if (fs.existsSync(localV2)) return localV2;
+  return remoteGraphUrl(id);
 }
 
 function regionPackAvailable(regionId) {
@@ -334,17 +327,13 @@ function resolveGraphRequest(body = {}) {
 
   if (body.regionId) {
     const id = String(body.regionId).toLowerCase();
-    const onVercel = !!(process.env.VERCEL || process.env.VERCEL_ENV);
-    const opts =
-      onVercel || body.preferLonghaulPacks
-        ? { longhaul: true }
-        : {};
+    const graphPath = graphPathForRegion(id);
     return {
       ok: true,
       regionIds: [id],
-      graphPath: graphPathForRegion(id, opts),
-      graphPaths: [graphPathForRegion(id, opts)],
-      mode: opts.longhaul ? "explicit-longhaul" : "explicit"
+      graphPath,
+      graphPaths: [graphPath],
+      mode: "explicit-phone-pack"
     };
   }
 
@@ -423,9 +412,9 @@ function resolveGraphRequest(body = {}) {
     };
   }
 
-  // Hobby isolates cannot inflate QC/ON full packs (~400MB+ JSON). Always use
-  // thinned longhaul packs on Vercel, including single-province requests.
-  const useLonghaulPacks = !!body.preferLonghaulPacks || onVercel;
+  // Phone pack is SoT for live and download. Longhaul JSON is a thinned
+  // highway extract — it is not the Dirt fabric.
+  const useLonghaulPacks = false;
   const pathOpts = useLonghaulPacks ? { longhaul: true } : {};
 
   const unavailableLocal = corridor.filter(

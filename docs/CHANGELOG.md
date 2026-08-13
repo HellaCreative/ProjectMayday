@@ -2,7 +2,15 @@
 
 Living log for agent handoffs (backend / packs / live `/api/route`). Prefer this over chat archaeology.
 
-**Last updated:** 2026-08-12
+**Last updated:** 2026-08-13
+
+---
+
+## 2026-08-13 — Live IS the phone pack
+
+`/api/route` loads R2 `{id}/graph.v2.bin` — the same object PACKS downloads. Vercel / `preferLonghaulPacks` cannot select `longhaul.v1.json.gz`. Cost tables copy from Dirt `profile-costs.js`. Test: `node routing/test/live-phone-pack.test.js`.
+
+---
 
 ---
 

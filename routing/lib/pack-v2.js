@@ -7,7 +7,8 @@
  * geometry.v1: polylines only. Loaded for snap match + path reconstruction; never during relax.
  *
  * Bit widths (amends addendum 2-bit access/structure): enums need 3 bits each.
- *   surface 3 | access 3 | structure 3 | confidence 2 | seasonal 1  (in u16)
+ *   surface 3 | access 3 | structure 3 | confidence 2 | seasonal 1 | roadClass 4  (in u16)
+ * Phone packs pack roadClass in bits 12–15. Live must unpack them — same file as PACKS.
  */
 
 const zlib = require("zlib");
@@ -20,6 +21,34 @@ const GRAPH_VERSION = 2;
 const GEOM_VERSION = 1;
 
 const CONF_CODE = { high: 0, medium: 1, low: 2 };
+
+const ROAD_CLASS_CODE = Object.freeze({
+  unknown: 0,
+  freeway: 1,
+  arterial: 2,
+  collector: 3,
+  local: 4,
+  service: 5,
+  resource: 6,
+  recreation: 7,
+  track: 8,
+  double_track: 9,
+  ramp: 10
+});
+
+const ROAD_CLASS_NAME = Object.freeze({
+  0: "unknown",
+  1: "freeway",
+  2: "arterial",
+  3: "collector",
+  4: "local",
+  5: "service",
+  6: "resource",
+  7: "recreation",
+  8: "track",
+  9: "double_track",
+  10: "ramp"
+});
 
 function packsV2Enabled() {
   const v = process.env.ROUTING_PACKS_V2;
@@ -34,7 +63,16 @@ function packAttrs(edge) {
   const structure = Number(edge.t) & 7;
   const conf = CONF_CODE[edge.conf] != null ? CONF_CODE[edge.conf] : 1;
   const seasonal = edge.seasonal ? 1 : 0;
-  return (surface) | (access << 3) | (structure << 6) | ((conf & 3) << 9) | (seasonal << 11);
+  const rtKey = String(edge.rt || edge.roadTrackClass || "unknown").toLowerCase();
+  const roadClass = ROAD_CLASS_CODE[rtKey] != null ? ROAD_CLASS_CODE[rtKey] : 0;
+  return (
+    surface |
+    (access << 3) |
+    (structure << 6) |
+    ((conf & 3) << 9) |
+    (seasonal << 11) |
+    ((roadClass & 15) << 12)
+  );
 }
 
 function unpackSurface(attr) {
@@ -45,6 +83,9 @@ function unpackAccess(attr) {
 }
 function unpackStructure(attr) {
   return (attr >> 6) & 7;
+}
+function unpackRoadClass(attr) {
+  return (attr >> 12) & 15;
 }
 function unpackConfidence(attr) {
   const c = (attr >> 9) & 3;
@@ -411,6 +452,12 @@ function decodeGeometryV1(buffer) {
 }
 
 function v2PathsForV1Path(graphPath) {
+  if (/graph\.v2\.bin$/i.test(graphPath)) {
+    return {
+      graph: graphPath,
+      geom: String(graphPath).replace(/graph\.v2\.bin$/i, "geometry.v1.bin")
+    };
+  }
   // regions/ns/graph.v1.json.gz -> graph.v2.bin + geometry.v1.bin
   // regions/ns/longhaul.v1.json.gz -> longhaul.v2.bin + longhaul.geometry.v1.bin
   // ns-graph.v1.json.gz -> ns-graph.v2.bin + ns-graph.geometry.v1.bin
@@ -474,8 +521,11 @@ module.exports = {
   unpackSurface,
   unpackAccess,
   unpackStructure,
+  unpackRoadClass,
   unpackConfidence,
   unpackSeasonal,
+  ROAD_CLASS_CODE,
+  ROAD_CLASS_NAME,
   encodeFromV1,
   decodeGraphV2,
   decodeGeometryV1,
