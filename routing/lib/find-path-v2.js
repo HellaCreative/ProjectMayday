@@ -10,9 +10,11 @@ const {
   unpackAccess,
   unpackStructure,
   unpackConfidence,
-  unpackSeasonal
+  unpackSeasonal,
+  unpackRoadClass,
+  ROAD_CLASS_NAME
 } = require("./pack-v2");
-const { surfaceMultiplier, classSpeedKmh, costPerKmView } = require("./profile-costs");
+const { surfaceMultiplier, classSpeedKmh, roadClassMultiplier } = require("./profile-costs");
 const { pruneGeographicLoops } = require("./path-pruning");
 
 function isOpenStreetMapSource(source) {
@@ -137,7 +139,6 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
   const startNode = n;
   const endNode = n + 1;
   const total = n + 2;
-  const costView = costPerKmView(profile);
   const {
     nodeOffsets,
     edgeTargets,
@@ -226,7 +227,11 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
         if (!accessAllowed(access, policy, enums)) continue;
         if (avoid && avoid.has(pack.edgeId(ei))) continue;
         const surface = unpackSurface(attr);
-        let step = (edgeMeters[ei] / 1000) * costView[surface];
+        const roadName = ROAD_CLASS_NAME[unpackRoadClass(attr)] || "unknown";
+        let step =
+          (edgeMeters[ei] / 1000) *
+          surfaceMultiplier(surface, profile, null, roadName) *
+          roadClassMultiplier(roadName, profile);
         if (policy.motorizedUnknown && profile !== "cleanest") {
           const accessName = enums.ACCESS_NAME[access] || "";
           if (accessName === "motorized_unknown") {

@@ -183,6 +183,32 @@ function materializeRuntimeV2(cacheKey, pack, geom, started) {
   return runtime;
 }
 
+function isPhonePackV2Path(graphPath) {
+  return /graph\.v2\.bin$/i.test(String(graphPath || ""));
+}
+
+async function loadV2RuntimeAsync(graphPath, started) {
+  const paths = v2PathsForV1Path(graphPath);
+  let graphRaw;
+  let geomRaw;
+  if (String(graphPath).startsWith("http://") || String(graphPath).startsWith("https://")) {
+    graphRaw = await fetchBuffer(paths.graph);
+    geomRaw = await fetchBuffer(paths.geom);
+  } else {
+    graphRaw = fs.readFileSync(paths.graph);
+    geomRaw = fs.readFileSync(paths.geom);
+  }
+  const graphBuf = Buffer.alloc(graphRaw.length);
+  const geomBuf = Buffer.alloc(geomRaw.length);
+  graphRaw.copy(graphBuf);
+  geomRaw.copy(geomBuf);
+  const pack = decodeGraphV2(graphBuf);
+  const geom = decodeGeometryV1(geomBuf);
+  cacheStats.loads += 1;
+  cacheStats.inflateMs += Date.now() - started;
+  return materializeRuntimeV2(graphPath, pack, geom, started);
+}
+
 function loadV2RuntimeSync(v1Path, started) {
   const paths = v2PathsForV1Path(v1Path);
   // Read into freshly allocated buffers (byteOffset 0) so typed views align.
@@ -298,8 +324,8 @@ async function loadGraphAsync(graphPath = defaultGraphPath()) {
     const started = Date.now();
     let data;
     let materializePath = graphPath;
-    if (packsV2Enabled() && !graphPath.startsWith("http") && v2FilesExist(graphPath)) {
-      return loadV2RuntimeSync(graphPath, started);
+    if (isPhonePackV2Path(graphPath) || (packsV2Enabled() && !graphPath.startsWith("http") && v2FilesExist(graphPath))) {
+      return loadV2RuntimeAsync(graphPath, started);
     }
     if (graphPath.startsWith("http://") || graphPath.startsWith("https://")) {
       const buf = await fetchBuffer(graphPath);
@@ -431,6 +457,7 @@ function corridorCacheSuffix(locations, bufferMeters) {
  */
 function shouldSkipCorridorClip(resolution, paths) {
   if (!paths || paths.length !== 1) return false;
+  if (isPhonePackV2Path(paths[0])) return true;
   const id = String(
     (resolution && resolution.regionIds && resolution.regionIds[0]) || ""
   ).toLowerCase();
@@ -541,8 +568,13 @@ async function loadGraphsForRequest(resolution, options = {}) {
           if (cacheKey !== paths[0]) putCached(cacheKey, singleHit);
           return singleHit;
         }
-        if (packsV2Enabled() && !paths[0].startsWith("http") && v2FilesExist(paths[0])) {
-          const runtime = loadV2RuntimeSync(paths[0], started);
+        if (
+          isPhonePackV2Path(paths[0]) ||
+          (packsV2Enabled() && !paths[0].startsWith("http") && v2FilesExist(paths[0]))
+        ) {
+          const runtime = isPhonePackV2Path(paths[0])
+            ? await loadV2RuntimeAsync(paths[0], started)
+            : loadV2RuntimeSync(paths[0], started);
           if (cacheKey !== paths[0]) putCached(cacheKey, runtime);
           return runtime;
         }
