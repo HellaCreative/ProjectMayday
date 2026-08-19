@@ -13,7 +13,7 @@ const VARIETY_MARGIN = 0.08;
 const VARIETY_SLOTS = 3;
 const BALANCED_DIRT_LO = 0.45;
 const BALANCED_DIRT_HI = 0.55;
-const BALANCED_BUCKETS = 8;
+const BALANCED_BUCKETS = 20;
 const EARTH_RADIUS_M = 6371000;
 
 const METRO_CORE_WALL = [
@@ -53,10 +53,32 @@ function varietyHash(seed, node, ei) {
   return x >>> 0;
 }
 
-function dirtBucket(dirtMeters, shortestMeters) {
-  const span = Math.max((shortestMeters || 0) * 0.12, 8000);
-  const b = Math.floor(dirtMeters / span);
+function dirtBucket(dirtMeters, pathMeters) {
+  if (!(pathMeters > 1)) return 0;
+  const r = Math.min(1, Math.max(0, dirtMeters / pathMeters));
+  const b = Math.floor(r * BALANCED_BUCKETS);
   return Math.min(BALANCED_BUCKETS - 1, Math.max(0, b));
+}
+
+function pickBalancedEnd(cands, seed) {
+  if (!cands.length) return -1;
+  const ratio = (x) => (x.len > 0 ? x.dirt / x.len : 0);
+  const inBand = cands.filter((x) => {
+    const r = ratio(x);
+    return r >= BALANCED_DIRT_LO && r <= BALANCED_DIRT_HI;
+  });
+  const pool = inBand.length ? inBand : cands;
+  pool.sort((a, b) => {
+    const da = Math.abs(ratio(a) - 0.5);
+    const db = Math.abs(ratio(b) - 0.5);
+    if (Math.abs(da - db) > 0.005) return da - db;
+    if (Math.abs(a.len - b.len) > 50) return a.len - b.len;
+    const ha = varietyHash(seed, a.lab, 0);
+    const hb = varietyHash(seed, b.lab, 0);
+    if (ha !== hb) return ha - hb;
+    return a.len - b.len;
+  });
+  return pool[0].lab;
 }
 
 function considerRelax(newCost, oldCost, newEi, oldEi, node, seed, variety, slotsUsed, newIsDirt, oldIsDirt) {
@@ -145,10 +167,10 @@ function outsideCorridor(point, startLL, endLL, widthMeters) {
   return Math.abs(crossTrackMeters(point, startLL, endLL)) > widthMeters;
 }
 
-function hopBlocked(toLL, startLL, endLL, cityWall, corridorM) {
+function hopBlocked(toLL, startLL, endLL, cityWall) {
   if (!toLL) return false;
   if (cityWall && metroBlocks(toLL[0], toLL[1], startLL, endLL)) return true;
-  return outsideCorridor(toLL, startLL, endLL, corridorM);
+  return false;
 }
 
 function maxCrossTrackMeters(coords, startLL, endLL) {
@@ -161,13 +183,18 @@ function maxCrossTrackMeters(coords, startLL, endLL) {
   return best;
 }
 
-function annotateCorridorMeta(result, startLL, endLL, profile) {
+function annotateCorridorMeta(result, startLL, endLL, profile, shortestMeters) {
   if (!result) return result;
   const cap = corridorMetersForProfile(profile);
   const maxXT = maxCrossTrackMeters(result.geometry || [], startLL, endLL);
   result.searchMeta = result.searchMeta || {};
   result.searchMeta.corridorMeters = cap;
   result.searchMeta.maxCrossTrackMeters = Math.round(maxXT);
+  if (Number.isFinite(shortestMeters) && shortestMeters > 0) {
+    result.searchMeta.shortestMeters = Math.round(shortestMeters);
+    result.searchMeta.extraUsedMeters = Math.round(result.distanceMeters - shortestMeters);
+    result.searchMeta.extraBudgetMeters = cap;
+  }
   return result;
 }
 
@@ -213,6 +240,7 @@ module.exports = {
   metroBlocks,
   varietyHash,
   dirtBucket,
+  pickBalancedEnd,
   considerRelax,
   applyRelax,
   shouldPush,

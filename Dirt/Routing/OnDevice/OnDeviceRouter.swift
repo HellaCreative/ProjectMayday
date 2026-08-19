@@ -175,12 +175,6 @@ nonisolated struct OnDeviceRouter {
                 if cityWall, UrbanCore.blocks(point: toLL, start: from, end: toward) {
                     continue
                 }
-                if HopSearchPolicy.outsideCorridor(
-                    point: toLL, start: from, end: toward,
-                    widthMeters: HopSearchPolicy.corridorMeters(for: profile)
-                ) {
-                    continue
-                }
                 let newCost = cur.cost + Double(pack.edgeMeters[ei])
                 if newCost > maxMeters { continue }
                 if newCost < dist[toNode] {
@@ -338,55 +332,65 @@ nonisolated struct OnDeviceRouter {
 
         var ctx = HopSearchContext.forProfile(profile, seed: sessionSeed)
 
-        // Direct: min pavement inside a 15 km A→B corridor — not a % stretch cap.
-        if profile == .direct {
-            ctx.costMode = .pavement
-            ctx.variety = true
-            return annotateCorridor(runProfile(ctx), from: from, to: to, profile: profile)
-        }
-
-        if profile == .balanced {
+        if let extra = HopSearchPolicy.corridorMeters(for: profile) {
             var shortCtx = ctx
             shortCtx.costMode = .distance
             shortCtx.variety = false
+            shortCtx.maxPathMeters = nil
             let shortest = runProfile(shortCtx)
             guard case .success(let short) = shortest else {
-                return annotateCorridor(shortest, from: from, to: to, profile: profile)
+                return annotateCorridor(shortest, from: from, to: to, profile: profile, shortestMeters: nil)
             }
-            var mixCtx = ctx
-            mixCtx.costMode = .balancedResource
-            mixCtx.shortestMeters = short.distanceMeters
-            // Compute prune only — corridor (40 km) is the geographic safety ceiling.
-            mixCtx.maxPathMeters = short.distanceMeters * HopSearchPolicy.balancedStretch
-            mixCtx.variety = true
-            switch runProfile(mixCtx) {
-            case .success(var mix):
-                mix.debugNote =
-                    "balanced resource dirt%=\(mix.dirtPercent) stretch="
-                    + String(format: "%.2f", short.distanceMeters > 0 ? mix.distanceMeters / short.distanceMeters : 1)
-                return annotateCorridor(.success(mix), from: from, to: to, profile: profile)
+            var hunt = ctx
+            hunt.shortestMeters = short.distanceMeters
+            hunt.maxPathMeters = short.distanceMeters + extra
+            switch profile {
+            case .direct:
+                hunt.costMode = .pavement
+                hunt.variety = true
+            case .dirt:
+                hunt.costMode = .profile
+                hunt.variety = true
+            case .balanced:
+                hunt.costMode = .balancedResource
+                hunt.variety = false
+            case .cleanest:
+                break
+            }
+            switch runProfile(hunt) {
+            case .success(let hit):
+                return annotateCorridor(.success(hit), from: from, to: to, profile: profile, shortestMeters: short.distanceMeters)
             case .failure:
-                return annotateCorridor(shortest, from: from, to: to, profile: profile)
+                return annotateCorridor(shortest, from: from, to: to, profile: profile, shortestMeters: short.distanceMeters)
             }
         }
 
-        return annotateCorridor(runProfile(ctx), from: from, to: to, profile: profile)
+        return annotateCorridor(runProfile(ctx), from: from, to: to, profile: profile, shortestMeters: nil)
     }
 
     private func annotateCorridor(
         _ result: Swift.Result<Result, Failure>,
         from: CLLocationCoordinate2D,
         to: CLLocationCoordinate2D,
-        profile: RouteProfile
+        profile: RouteProfile,
+        shortestMeters: Double?
     ) -> Swift.Result<Result, Failure> {
         guard case .success(var route) = result else { return result }
-        let maxXT = HopSearchPolicy.maxCrossTrackMeters(
-            coordinates: route.coordinates, start: from, end: to
-        )
-        let cap = HopSearchPolicy.corridorMeters(for: profile)
-        let capTxt = cap.map { "\(Int($0 / 1000))km" } ?? "none"
-        let note = "maxXT=\(Int(maxXT))m cap=\(capTxt)"
-        route.debugNote = route.debugNote.isEmpty ? note : route.debugNote + " " + note
+        let extraCap = HopSearchPolicy.corridorMeters(for: profile)
+        if let short = shortestMeters, let cap = extraCap {
+            let used = max(0, route.distanceMeters - short)
+            let note = String(
+                format: "shortest=%.0fm extraUsed=%.0fm extraCap=%.0fm dirt%%=%d",
+                short, used, cap, route.dirtPercent
+            )
+            route.debugNote = route.debugNote.isEmpty ? note : route.debugNote + " " + note
+        } else {
+            let maxXT = HopSearchPolicy.maxCrossTrackMeters(
+                coordinates: route.coordinates, start: from, end: to
+            )
+            let note = "maxXT=\(Int(maxXT))m cap=none"
+            route.debugNote = route.debugNote.isEmpty ? note : route.debugNote + " " + note
+        }
         return .success(route)
     }
 
@@ -1131,7 +1135,7 @@ nonisolated struct OnDeviceRouter {
                     if newMeters > cap { continue }
                     let addDirt = edgeIsDirt(ei) ? edgeM : 0
                     let newDirt = dirtSoFar + addDirt
-                    let b = HopSearchPolicy.dirtBucket(dirtMeters: newDirt, shortestMeters: shortest)
+                    let b = HopSearchPolicy.dirtBucket(dirtMeters: newDirt, pathMeters: newMeters)
                     let toLab = lab(toNode, b)
                     var action = HopSearchPolicy.considerRelax(
                         newCost: newMeters,
@@ -1167,11 +1171,11 @@ nonisolated struct OnDeviceRouter {
                     let v = virt[item.id]
                     let newMeters = cur.cost + v.meters
                     if newMeters > cap { continue }
-                    if ctx.cityWall || ctx.corridorMeters != nil, item.to < n {
+                    if ctx.cityWall, item.to < n {
                         let toLL = coordinate(forNode: item.to)
                         if hopBlocked(toLL, from: from, to: to, ctx: ctx) { continue }
                     }
-                    let b = HopSearchPolicy.dirtBucket(dirtMeters: dirtSoFar, shortestMeters: shortest)
+                    let b = HopSearchPolicy.dirtBucket(dirtMeters: dirtSoFar, pathMeters: newMeters)
                     let toLab = lab(item.to, b)
                     if newMeters < dist[toLab] {
                         dist[toLab] = newMeters
@@ -1186,37 +1190,17 @@ nonisolated struct OnDeviceRouter {
             }
         }
 
-        var bestLab = -1
-        var bestLen = Double.infinity
-        var bestRatioDelta = Double.infinity
-        var inBand: [(lab: Int, len: Double, dirt: Double)] = []
+        var labelsAtEnd: [(lab: Int, len: Double, dirt: Double)] = []
         for b in 0..<B {
             let endLab = lab(endVirt, b)
             let len = dist[endLab]
             guard len.isFinite, len > 0 else { continue }
-            let ratio = dirtAt[endLab] / len
-            if ratio >= HopSearchPolicy.balancedDirtLo, ratio <= HopSearchPolicy.balancedDirtHi {
-                inBand.append((endLab, len, dirtAt[endLab]))
-            }
-            let delta = abs(ratio - 0.50)
-            if delta < bestRatioDelta || (abs(delta - bestRatioDelta) < 1e-6 && len < bestLen) {
-                bestRatioDelta = delta
-                bestLen = len
-                bestLab = endLab
-            }
+            labelsAtEnd.append((endLab, len, dirtAt[endLab]))
         }
-        if !inBand.isEmpty {
-            let minLen = inBand.map(\.len).min() ?? bestLen
-            let near = inBand.filter { $0.len <= minLen * (1 + HopSearchPolicy.varietyMargin) }
-            let chosen = near.max { a, b in
-                let ha = HopSearchPolicy.hash(ctx.sessionSeed, nid(a.lab), a.lab)
-                let hb = HopSearchPolicy.hash(ctx.sessionSeed, nid(b.lab), b.lab)
-                if ha != hb { return ha > hb }
-                return a.dirt < b.dirt
-            }
-            if let chosen { bestLab = chosen.lab }
+        guard let bestLab = HopSearchPolicy.pickBalancedEnd(labels: labelsAtEnd, seed: ctx.sessionSeed),
+              dist[bestLab].isFinite else {
+            return .failure(.noPath)
         }
-        guard bestLab >= 0, dist[bestLab].isFinite else { return .failure(.noPath) }
 
         var legs: [Leg] = []
         var label = bestLab
@@ -2336,9 +2320,7 @@ nonisolated struct OnDeviceRouter {
         ctx: HopSearchContext
     ) -> Bool {
         if ctx.cityWall, UrbanCore.blocks(point: point, start: from, end: to) { return true }
-        return HopSearchPolicy.outsideCorridor(
-            point: point, start: from, end: to, widthMeters: ctx.corridorMeters
-        )
+        return false
     }
 
     private func hopCostStep(

@@ -33,14 +33,11 @@ const {
   shouldPush,
   createsCycle,
   isDirtSurface,
-  varietyHash,
   hopBlocked,
   annotateCorridorMeta,
   corridorMetersForProfile,
+  pickBalancedEnd,
   VARIETY_SLOTS,
-  BALANCED_STRETCH,
-  BALANCED_DIRT_LO,
-  BALANCED_DIRT_HI,
   BALANCED_BUCKETS,
   dirtBucket
 } = require("./hop-search");
@@ -174,35 +171,28 @@ function coordsBetweenMatches(coords, startMatch, endMatch) {
 function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds, pavedBias, searchOpts) {
   searchOpts = searchOpts || {};
   const sessionSeed = Number(searchOpts.sessionSeed) || 0;
-  if (profile === "direct" && !searchOpts.costMode) {
-    return findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds, pavedBias, {
-      costMode: "pavement",
-      sessionSeed,
-      variety: true
-    });
-  }
-  if (profile === "balanced" && !searchOpts.costMode) {
+  const extra = corridorMetersForProfile(profile);
+  if (!searchOpts.costMode && extra != null) {
     const shortest = findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds, pavedBias, {
       costMode: "distance",
       sessionSeed,
       variety: false
     });
     if (!shortest) return null;
-    const mix = findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds, pavedBias, {
-      costMode: "balancedResource",
-      maxPathMeters: shortest.distanceMeters * BALANCED_STRETCH,
+    const huntOpts = {
+      costMode: profile === "direct" ? "pavement" : profile === "balanced" ? "balancedResource" : "profile",
+      maxPathMeters: shortest.distanceMeters + extra,
       shortestMeters: shortest.distanceMeters,
       sessionSeed,
-      variety: true
-    });
-    if (mix) {
-      mix.searchMeta = mix.searchMeta || {};
-      mix.searchMeta.balancedResource = true;
-      mix.searchMeta.lengthStretch =
-        shortest.distanceMeters > 0 ? mix.distanceMeters / shortest.distanceMeters : 1;
-      return mix;
+      variety: profile !== "balanced"
+    };
+    const hunt = findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds, pavedBias, huntOpts);
+    const out = hunt || shortest;
+    if (hunt && profile === "balanced") {
+      out.searchMeta = out.searchMeta || {};
+      out.searchMeta.balancedResource = true;
     }
-    return shortest;
+    return annotateCorridorMeta(out, startMatch.coord, endMatch.coord, profile, shortest.distanceMeters);
   }
 
   const pack = runtime.pack;
@@ -389,7 +379,7 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
         if (!accessAllowed(access, policy, enums)) continue;
         if (avoid && avoid.has(pack.edgeId(ei))) continue;
         const toLL = nodeLL(to);
-        if (hopBlocked(toLL, startLL, endLL, cityWall, corridorM)) continue;
+        if (hopBlocked(toLL, startLL, endLL, cityWall)) continue;
         const edgeM = edgeMeters[ei];
         const newMeters = pathMeters[cur.node] + edgeM;
         if (newMeters > maxPathMeters) continue;
@@ -483,7 +473,7 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
         const item = vlist[vi];
         const v = virt[item.id];
         const toLL = nodeLL(item.to);
-        if (hopBlocked(toLL, startLL, endLL, cityWall, corridorM)) continue;
+        if (hopBlocked(toLL, startLL, endLL, cityWall)) continue;
         const newMeters = pathMeters[cur.node] + v.meters;
         if (newMeters > maxPathMeters) continue;
         let step = v.meters / 1000;
@@ -728,7 +718,7 @@ function searchBalancedResource(ctx) {
         if (!accessAllowed(access, policy, enums)) continue;
         if (avoid && avoid.has(pack.edgeId(ei))) continue;
         const toLL = nodeLL(to);
-        if (hopBlocked(toLL, startLL, endLL, cityWall, corridorM)) continue;
+        if (hopBlocked(toLL, startLL, endLL, cityWall)) continue;
         const edgeM = edgeMeters[ei];
         const newMeters = cur.cost + edgeM;
         if (newMeters > maxPathMeters) continue;
@@ -737,7 +727,7 @@ function searchBalancedResource(ctx) {
         const surfaceName = enums.SURFACE_NAME[surface] || "unknown";
         const addDirt = isDirtSurface(surfaceName, road) ? edgeM : 0;
         const newDirt = dirtSoFar + addDirt;
-        const b = dirtBucket(newDirt, shortestMeters);
+        const b = dirtBucket(newDirt, newMeters);
         const toLab = lab(to, b);
         let action = considerRelax(
           newMeters,
@@ -771,10 +761,10 @@ function searchBalancedResource(ctx) {
         const item = vlist[vi];
         const v = virt[item.id];
         const toLL = nodeLL(item.to);
-        if (hopBlocked(toLL, startLL, endLL, cityWall, corridorM)) continue;
+        if (hopBlocked(toLL, startLL, endLL, cityWall)) continue;
         const newMeters = cur.cost + v.meters;
         if (newMeters > maxPathMeters) continue;
-        const b = dirtBucket(dirtSoFar, shortestMeters);
+        const b = dirtBucket(dirtSoFar, newMeters);
         const toLab = lab(item.to, b);
         if (newMeters < dist[toLab]) {
           dist[toLab] = newMeters;
@@ -789,39 +779,14 @@ function searchBalancedResource(ctx) {
     }
   }
 
-  let bestLab = -1;
-  let bestLen = Infinity;
-  let bestDelta = Infinity;
-  const inBand = [];
+  const cands = [];
   for (let b = 0; b < B; b += 1) {
     const endLab = lab(endNode, b);
     const len = dist[endLab];
     if (!Number.isFinite(len) || len <= 0) continue;
-    const ratio = dirtAt[endLab] / len;
-    if (ratio >= BALANCED_DIRT_LO && ratio <= BALANCED_DIRT_HI) {
-      inBand.push({ lab: endLab, len, dirt: dirtAt[endLab] });
-    }
-    const delta = Math.abs(ratio - 0.5);
-    if (delta < bestDelta || (Math.abs(delta - bestDelta) < 1e-6 && len < bestLen)) {
-      bestDelta = delta;
-      bestLen = len;
-      bestLab = endLab;
-    }
+    cands.push({ lab: endLab, len, dirt: dirtAt[endLab] });
   }
-  if (inBand.length) {
-    const minLen = Math.min.apply(
-      null,
-      inBand.map((x) => x.len)
-    );
-    const near = inBand.filter((x) => x.len <= minLen * (1 + 0.08));
-    near.sort((a, c) => {
-      const ha = varietyHash(sessionSeed, nid(a.lab), a.lab);
-      const hb = varietyHash(sessionSeed, nid(c.lab), c.lab);
-      if (ha !== hb) return ha - hb;
-      return c.dirt - a.dirt;
-    });
-    bestLab = near[0].lab;
-  }
+  const bestLab = pickBalancedEnd(cands, sessionSeed);
   if (bestLab < 0 || !Number.isFinite(dist[bestLab])) return null;
 
   const used = [];

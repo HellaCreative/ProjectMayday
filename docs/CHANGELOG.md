@@ -14,7 +14,21 @@ The product of a fuel-on plan is a hop chain **A → F₁ → … → B**, built
 
 Hard constraints on Dirt / Balanced / Direct: metro-core **wall** (Vancouver is metro-wide, not downtown-tiny), no backtracking the edge just ridden. Clean is exempt from the wall.
 
-Per-profile search is now a real target: Dirt keeps weight-table adventure inside a **50 km** A→B corridor; Direct is min-pavement inside a **15 km** corridor (stretch-factor superseded — trail networks are a physical size, not a % of trip length); Balanced is resource-constrained 45–55% dirt with a **40 km** safety ceiling only. Session seed picks among near-equal corridors (8% window, max 3 slots per node).
+Per-profile search is now a real target: Dirt keeps weight-table adventure with up to **50 km extra** over the graph shortest path; Direct is min-pavement within **15 km extra**; Balanced is resource-constrained 45–55% dirt with a **40 km extra** safety ceiling. Session seed picks among near-equal corridors (8% window, max 3 slots per node).
+
+Phone and live share the same constraints (`UrbanCore.swift` / `hop-search.js`). Pack binaries unchanged; ship `--live` for search code.
+
+---
+
+## 2026-08-19 — Corridor is extra km over shortest ride, not great-circle XT
+
+A fixed band around the A→B crow-flies line misses mountain gates (Pemberton, Hope) that the shortest *road* already uses. Direct/Dirt/Balanced now budget 15/50/40 km of extra distance over that shortest graph path. Shortest itself is always eligible. Clean unchanged.
+
+---
+
+## 2026-08-19 — Balanced ratio buckets are dirt%, not dirt-metres
+
+8 meter-span buckets were coarser than the 10-point 45–55% band and kept the shortest (hence highest-ratio) path per bin, so Merritt→Enderby landed at 65%. 20 ratio buckets + dest pick closer-to-50% (in-band first). Variety steal is off during the resource expansion so reconstruct matches the label.
 
 Phone and live share the same constraints (`UrbanCore.swift` / `hop-search.js`). Pack binaries unchanged; ship `--live` for search code.
 

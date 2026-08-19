@@ -105,21 +105,29 @@ struct HopSearchPolicyTests {
         #expect(HopSearchPolicy.corridorMeters(for: .dirt) == 50_000)
         #expect(HopSearchPolicy.corridorMeters(for: .balanced) == 40_000)
         #expect(HopSearchPolicy.corridorMeters(for: .cleanest) == nil)
+        #expect(HopSearchPolicy.extraBudget(shortestMeters: 100_000, for: .direct) == 115_000)
+        #expect(HopSearchPolicy.extraBudget(shortestMeters: 100_000, for: .cleanest) == nil)
     }
 
-    @Test func directCorridorRejects16kmOffAnEastWestLine() {
-        let a = CLLocationCoordinate2D(latitude: 50, longitude: -123)
-        let b = CLLocationCoordinate2D(latitude: 50, longitude: -120)
-        let midLon = -121.5
-        // Latitude metres ≠ cross-track: A→B at constant lat is not a great circle.
-        let inside = CLLocationCoordinate2D(latitude: 50 + 12_000 / 111_320, longitude: midLon)
-        let outside = CLLocationCoordinate2D(latitude: 50 + 20_000 / 111_320, longitude: midLon)
-        #expect(abs(GeoMath.crossTrackMeters(point: inside, lineFrom: a, to: b)) < 15_000)
-        #expect(abs(GeoMath.crossTrackMeters(point: outside, lineFrom: a, to: b)) > 15_000)
-        #expect(!HopSearchPolicy.outsideCorridor(point: inside, start: a, end: b, widthMeters: 15_000))
-        #expect(HopSearchPolicy.outsideCorridor(point: outside, start: a, end: b, widthMeters: 15_000))
-        #expect(!HopSearchPolicy.outsideCorridor(point: outside, start: a, end: b, widthMeters: 50_000))
-        #expect(!HopSearchPolicy.outsideCorridor(point: a, start: a, end: b, widthMeters: 15_000))
+    @Test func ratioBucketsSplitTheTenPointBand() {
+        let len = 200_000.0
+        let b45 = HopSearchPolicy.dirtBucket(dirtMeters: 90_000, pathMeters: len)
+        let b50 = HopSearchPolicy.dirtBucket(dirtMeters: 100_000, pathMeters: len)
+        let b55 = HopSearchPolicy.dirtBucket(dirtMeters: 110_000, pathMeters: len)
+        let b65 = HopSearchPolicy.dirtBucket(dirtMeters: 130_000, pathMeters: len)
+        #expect(b50 == 10)
+        #expect(b45 != b55)
+        #expect(b50 != b65)
+        #expect(b45 < b50 && b50 < b55)
+    }
+
+    @Test func pickBalancedEndPrefersInBandCloserToFifty() {
+        let labels: [(lab: Int, len: Double, dirt: Double)] = [
+            (1, 200_000, 130_000), // 65%
+            (2, 210_000, 105_000), // 50%
+            (3, 205_000, 80_000)   // 39%
+        ]
+        #expect(HopSearchPolicy.pickBalancedEnd(labels: labels, seed: 1) == 2)
     }
 
     @Test func cleanHasNoCorridorConstraint() {

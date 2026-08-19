@@ -7,8 +7,7 @@ nonisolated enum HopSearchPolicy {
     static let directStretch: Double = 1.20
     /// Balanced: compute prune only (resource labels). Corridor is the geographic ceiling.
     static let balancedStretch: Double = 1.40
-    /// Hard lateral cap from the A→B great circle (metres). Trail networks
-    /// are a physical size — not a percentage of trip length.
+    /// Extra metres over the graph shortest path (not a great-circle band).
     static let directCorridorMeters: Double = 15_000
     static let dirtCorridorMeters: Double = 50_000
     /// Safety ceiling only — Balanced shaping is the 45–55% dirt ratio.
@@ -20,7 +19,8 @@ nonisolated enum HopSearchPolicy {
     static let varietySlots: Int = 3
     static let balancedDirtLo: Double = 0.45
     static let balancedDirtHi: Double = 0.55
-    static let balancedBuckets: Int = 8
+    /// Ratio buckets (5% each). Meter-span buckets were coarser than the 10-point band.
+    static let balancedBuckets: Int = 20
     /// Fuel: prefer a pump around this fraction of tank on the hop.
     static let fuelPreferTank: Double = 0.82
     static let fuelMinTank: Double = 0.40
@@ -50,10 +50,37 @@ nonisolated enum HopSearchPolicy {
         return x
     }
 
-    static func dirtBucket(dirtMeters: Double, shortestMeters: Double) -> Int {
-        let span = max(shortestMeters * 0.12, 8_000)
-        let b = Int(dirtMeters / span)
+    /// Bucket by running dirt ratio so a longer same-dirt path is not dominated
+    /// by a shorter dirtier one in the same meter-span bin.
+    static func dirtBucket(dirtMeters: Double, pathMeters: Double) -> Int {
+        guard pathMeters > 1 else { return 0 }
+        let r = min(1, max(0, dirtMeters / pathMeters))
+        let b = Int(r * Double(balancedBuckets))
         return min(balancedBuckets - 1, max(0, b))
+    }
+
+    /// Among dest labels, prefer in-band 45–55%; inside that (or overall if none)
+    /// pick closer to 50%, then shorter, then session seed.
+    static func pickBalancedEnd(
+        labels: [(lab: Int, len: Double, dirt: Double)],
+        seed: UInt64
+    ) -> Int? {
+        guard !labels.isEmpty else { return nil }
+        func ratio(_ x: (lab: Int, len: Double, dirt: Double)) -> Double {
+            x.len > 0 ? x.dirt / x.len : 0
+        }
+        let inBand = labels.filter {
+            let r = ratio($0)
+            return r >= balancedDirtLo && r <= balancedDirtHi
+        }
+        let pool = inBand.isEmpty ? labels : inBand
+        return pool.min { a, b in
+            let da = abs(ratio(a) - 0.5)
+            let db = abs(ratio(b) - 0.5)
+            if abs(da - db) > 0.005 { return da < db }
+            if abs(a.len - b.len) > 50 { return a.len < b.len }
+            return hash(seed, a.lab, 0) < hash(seed, b.lab, 0)
+        }?.lab
     }
 
     enum RelaxAction: Equatable {
@@ -151,15 +178,9 @@ nonisolated enum HopSearchPolicy {
         }
     }
 
-    /// True when `point` is farther from the A→B great circle than `widthMeters`.
-    static func outsideCorridor(
-        point: CLLocationCoordinate2D,
-        start: CLLocationCoordinate2D,
-        end: CLLocationCoordinate2D,
-        widthMeters: Double?
-    ) -> Bool {
-        guard let width = widthMeters, width > 0 else { return false }
-        return abs(GeoMath.crossTrackMeters(point: point, lineFrom: start, to: end)) > width
+    static func extraBudget(shortestMeters: Double, for profile: RouteProfile) -> Double? {
+        guard let extra = corridorMeters(for: profile) else { return nil }
+        return shortestMeters + extra
     }
 
     static func maxCrossTrackMeters(
