@@ -126,6 +126,10 @@ nonisolated enum HopSearchPolicy {
         }
     }
 
+    static func shouldPush(_ action: RelaxAction) -> Bool {
+        action == .acceptReset || action == .acceptImprove
+    }
+
     static func createsCycle(prev: [Int], from: Int, through node: Int) -> Bool {
         var n = from
         var hops = 0
