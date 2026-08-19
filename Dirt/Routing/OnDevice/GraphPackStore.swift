@@ -367,14 +367,16 @@ final class GraphPackStore {
         to: CLLocationCoordinate2D,
         profile: RouteProfile,
         allowUnknown: Bool,
-        avoidEdgeIds: [String] = []
+        avoidEdgeIds: [String] = [],
+        sessionSeed: UInt64 = 0
     ) async -> OnDeviceRouter.Result? {
         switch await routeOnDeviceDetailed(
             from: from,
             to: to,
             profile: profile,
             allowUnknown: allowUnknown,
-            avoidEdgeIds: avoidEdgeIds
+            avoidEdgeIds: avoidEdgeIds,
+            sessionSeed: sessionSeed
         ) {
         case .success(let result): return result
         case .failure: return nil
@@ -386,7 +388,8 @@ final class GraphPackStore {
         to: CLLocationCoordinate2D,
         profile: RouteProfile,
         allowUnknown: Bool,
-        avoidEdgeIds: [String] = []
+        avoidEdgeIds: [String] = [],
+        sessionSeed: UInt64 = 0
     ) async -> Result<OnDeviceRouter.Result, OnDeviceRouter.Failure> {
         let fromId = Self.primaryRegionId(containing: from)
         let toId = Self.primaryRegionId(containing: to)
@@ -400,7 +403,8 @@ final class GraphPackStore {
                 right: toId,
                 profile: profile,
                 allowUnknown: allowUnknown,
-                avoidEdgeIds: avoidEdgeIds
+                avoidEdgeIds: avoidEdgeIds,
+                sessionSeed: sessionSeed
             )
         }
         return await routeOnDeviceInRegion(
@@ -409,7 +413,8 @@ final class GraphPackStore {
             regionId: nil,
             profile: profile,
             allowUnknown: allowUnknown,
-            avoidEdgeIds: avoidEdgeIds
+            avoidEdgeIds: avoidEdgeIds,
+            sessionSeed: sessionSeed
         )
     }
 
@@ -423,7 +428,8 @@ final class GraphPackStore {
         right: String,
         profile: RouteProfile,
         allowUnknown: Bool,
-        avoidEdgeIds: [String]
+        avoidEdgeIds: [String],
+        sessionSeed: UInt64
     ) async -> Result<OnDeviceRouter.Result, OnDeviceRouter.Failure> {
         let seeds = CrossPackSeam.candidates(from: from, to: to, left: left, right: right)
         var lastFailure: OnDeviceRouter.Failure = .noPath
@@ -450,7 +456,8 @@ final class GraphPackStore {
 
             let hop1 = await routeOnDeviceInRegion(
                 from: from, to: leftSeam, regionId: left,
-                profile: profile, allowUnknown: allowUnknown, avoidEdgeIds: avoidEdgeIds
+                profile: profile, allowUnknown: allowUnknown, avoidEdgeIds: avoidEdgeIds,
+                sessionSeed: sessionSeed
             )
             guard case .success(let first) = hop1, first.coordinates.count > 1 else {
                 if case .failure(let reason) = hop1 { lastFailure = reason }
@@ -459,7 +466,8 @@ final class GraphPackStore {
 
             let hop2 = await routeOnDeviceInRegion(
                 from: rightSeam, to: to, regionId: right,
-                profile: profile, allowUnknown: allowUnknown, avoidEdgeIds: avoidEdgeIds
+                profile: profile, allowUnknown: allowUnknown, avoidEdgeIds: avoidEdgeIds,
+                sessionSeed: sessionSeed
             )
             guard case .success(let second) = hop2, second.coordinates.count > 1 else {
                 if case .failure(let reason) = hop2 { lastFailure = reason }
@@ -481,7 +489,8 @@ final class GraphPackStore {
         regionId: String?,
         profile: RouteProfile,
         allowUnknown: Bool,
-        avoidEdgeIds: [String]
+        avoidEdgeIds: [String],
+        sessionSeed: UInt64
     ) async -> Result<OnDeviceRouter.Result, OnDeviceRouter.Failure> {
         if let regionId {
             await activateInstalledPack(regionId: regionId)
@@ -495,13 +504,54 @@ final class GraphPackStore {
         let end = to
         let routeProfile = profile
         let allow = allowUnknown
+        let seed = sessionSeed
         return await Task.detached(priority: .userInitiated) {
-            OnDeviceRouter(pack: packRef).routeDetailed(
+            var router = OnDeviceRouter(pack: packRef)
+            router.sessionSeed = seed
+            return router.routeDetailed(
                 from: start,
                 to: end,
                 profile: routeProfile,
                 allowUnknown: allow,
-                avoidEdgeIds: avoid
+                avoidEdgeIds: avoid,
+                sessionSeed: seed
+            )
+        }.value
+    }
+
+    func shortestGraphMeters(
+        from: CLLocationCoordinate2D,
+        to: CLLocationCoordinate2D,
+        maxMeters: Double,
+        profile: RouteProfile,
+        allowUnknown: Bool
+    ) async -> Double? {
+        await ensureActivePackAsync(for: [from, to])
+        guard let pack = activePack else { return nil }
+        let packRef = pack
+        return await Task.detached(priority: .userInitiated) {
+            OnDeviceRouter(pack: packRef).shortestGraphMeters(
+                from: from, to: to, maxMeters: maxMeters,
+                profile: profile, allowUnknown: allowUnknown
+            )
+        }.value
+    }
+
+    func reachableFuelMeters(
+        from: CLLocationCoordinate2D,
+        toward: CLLocationCoordinate2D,
+        pumps: [POIFeature],
+        maxMeters: Double,
+        profile: RouteProfile,
+        allowUnknown: Bool
+    ) async -> [String: Double] {
+        await ensureActivePackAsync(for: [from, toward])
+        guard let pack = activePack else { return [:] }
+        let packRef = pack
+        return await Task.detached(priority: .userInitiated) {
+            OnDeviceRouter(pack: packRef).reachableGraphMeters(
+                from: from, toward: toward, pumps: pumps, maxMeters: maxMeters,
+                profile: profile, allowUnknown: allowUnknown
             )
         }.value
     }

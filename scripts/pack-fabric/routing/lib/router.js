@@ -1445,7 +1445,8 @@ async function routeOnRuntime(body, graphResolution, runtime) {
   }
 
   const searchStarted = Date.now();
-  let path = findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds);
+  const searchOpts = { sessionSeed: Number(options.sessionSeed) || 0 };
+  let path = findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds, searchOpts);
   // Balanced + Allow ON: unknown dirt usually wins under normal surface weights and
   // blows past ~50/50. Also search Allow OFF (own snaps) and keep whichever mix is
   // closer to half dirt — even if that means discarding unknown entirely.
@@ -1461,7 +1462,7 @@ async function routeOnRuntime(body, graphResolution, runtime) {
     let pathVerified = null;
     if (startVerified.ok && endVerified.ok) {
       pathVerified = findPath(
-        runtime, startVerified, endVerified, profile, policyVerified, avoidEdgeIds
+        runtime, startVerified, endVerified, profile, policyVerified, avoidEdgeIds, searchOpts
       );
     }
     const picked = pickCloserToBalancedMix(pathVerified, path);
@@ -1586,9 +1587,9 @@ async function routeOnRuntime(body, graphResolution, runtime) {
   };
 }
 
-function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds) {
+function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds, searchOpts) {
   if (runtime.format === "v2") {
-    return findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds);
+    return findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds, undefined, searchOpts);
   }
   const { data, adjacency, enums } = runtime;
   const edges = data.edges;

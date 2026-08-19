@@ -85,7 +85,13 @@ struct AccessPolicy: Codable, Sendable {
 /// Optional per-request routing options. `avoidEdgeIds` is honored on-device
 /// (route incident recovery). Requests without it omit `options`.
 struct RouteRequestOptions: Codable, Sendable {
-    let avoidEdgeIds: [String]
+    var avoidEdgeIds: [String]?
+    var sessionSeed: UInt64?
+
+    init(avoidEdgeIds: [String] = [], sessionSeed: UInt64? = nil) {
+        self.avoidEdgeIds = avoidEdgeIds.isEmpty ? nil : avoidEdgeIds
+        self.sessionSeed = sessionSeed
+    }
 }
 
 struct RouteRequest: Codable, Sendable {
@@ -99,7 +105,8 @@ struct RouteRequest: Codable, Sendable {
         profile: RouteProfile,
         locations: [RouteLocation],
         allowUnknown: Bool,
-        avoidEdgeIds: [String] = []
+        avoidEdgeIds: [String] = [],
+        sessionSeed: UInt64 = 0
     ) {
         self.profile = profile
         self.locations = locations
@@ -108,7 +115,12 @@ struct RouteRequest: Codable, Sendable {
             motorizedPermissive: true,
             motorizedUnknown: profile == .cleanest ? false : allowUnknown
         )
-        options = avoidEdgeIds.isEmpty ? nil : RouteRequestOptions(avoidEdgeIds: avoidEdgeIds)
+        let seed = sessionSeed == 0 ? nil : sessionSeed
+        if avoidEdgeIds.isEmpty, seed == nil {
+            options = nil
+        } else {
+            options = RouteRequestOptions(avoidEdgeIds: avoidEdgeIds, sessionSeed: seed)
+        }
     }
 }
 

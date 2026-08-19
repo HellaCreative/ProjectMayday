@@ -19,6 +19,25 @@ nonisolated enum GeoMath {
             .distance(from: CLLocation(latitude: b.latitude, longitude: b.longitude))
     }
 
+    static func meters(_ a: CLLocationCoordinate2D, _ b: CLLocationCoordinate2D) -> Double {
+        CLLocation(latitude: a.latitude, longitude: a.longitude)
+            .distance(from: CLLocation(latitude: b.latitude, longitude: b.longitude))
+    }
+
+    /// Signed meters along A→B: projection of A→P onto A→B.
+    /// Positive = toward B; negative = behind A / the wrong way.
+    static func progressAlongAB(
+        from a: RouteCoordinate,
+        to b: RouteCoordinate,
+        point p: RouteCoordinate
+    ) -> Double {
+        let ab = meters(a, b)
+        guard ab > 1 else { return 0 }
+        let ap = meters(a, p)
+        let pb = meters(p, b)
+        return (ap * ap + ab * ab - pb * pb) / (2 * ab)
+    }
+
     static func interpolate(_ a: RouteCoordinate, _ b: RouteCoordinate, fraction: Double) -> RouteCoordinate {
         let t = min(1, max(0, fraction))
         return RouteCoordinate(

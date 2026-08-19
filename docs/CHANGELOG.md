@@ -6,6 +6,26 @@ Living log for agent handoffs. Prefer this over chat archaeology.
 
 ---
 
+## 2026-08-19 — Itinerary routing rebuild (in progress, BC validation)
+
+Branch `feature/routing-itinerary-rebuild`. Restore point: `ef0b812` on `rescue/2026-08-19`.
+
+The product of a fuel-on plan is a hop chain **A → F₁ → … → B**, built from graph reach + progress toward B — not one Dijkstra then pumps on that line. Each hop is its own constrained search.
+
+Hard constraints on Dirt / Balanced / Direct: metro-core **wall** (Vancouver is metro-wide, not downtown-tiny), no backtracking the edge just ridden. Clean is exempt from the wall.
+
+Per-profile search is now a real target: Dirt keeps weight-table adventure inside a **50 km** A→B corridor; Direct is min-pavement inside a **15 km** corridor (stretch-factor superseded — trail networks are a physical size, not a % of trip length); Balanced is resource-constrained 45–55% dirt with a **40 km** safety ceiling only. Session seed picks among near-equal corridors.
+
+Phone and live share the same constraints (`UrbanCore.swift` / `hop-search.js`). Pack binaries unchanged; ship `--live` for search code.
+
+---
+
+## 2026-08-19 — Corridor width replaces Direct/Dirt stretch-factor
+
+Direct 15 km / Dirt 50 km / Balanced 40 km (safety ceiling) hard cross-track bands from the hop A→B great circle. Clean unconstrained. Nodes outside the band are ineligible, not taxed. Balanced 45–55% ratio still does the shaping; if the 40 km ceiling binds often, the ratio search needs attention.
+
+---
+
 ## 2026-08-19 — One workspace; Vercel is API-only
 
 Develop only in `/Users/richardsmith/SandBox01/MAYDAYiOS/Dirt` (`rescue/2026-08-19`). Packs + live API are `scripts/pack-fabric/` (adapters, schema, conflation, `api/route`, ship scripts). Packs stay on R2. Production `api/route` must not bundle graphs.

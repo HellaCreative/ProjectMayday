@@ -27,6 +27,19 @@ const {
   directCrossTrackExtra
 } = require("./profile-costs");
 const { pruneGeographicLoops } = require("./path-pruning");
+const {
+  shouldRelax,
+  isDirtSurface,
+  varietyHash,
+  hopBlocked,
+  annotateCorridorMeta,
+  corridorMetersForProfile,
+  BALANCED_STRETCH,
+  BALANCED_DIRT_LO,
+  BALANCED_DIRT_HI,
+  BALANCED_BUCKETS,
+  dirtBucket
+} = require("./hop-search");
 
 function haversineMeters(a, b) {
   const R = 6371000;
@@ -154,7 +167,40 @@ function coordsBetweenMatches(coords, startMatch, endMatch) {
   return coordsBetweenMatches(coords, endMatch, startMatch).reverse();
 }
 
-function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds, pavedBias) {
+function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds, pavedBias, searchOpts) {
+  searchOpts = searchOpts || {};
+  const sessionSeed = Number(searchOpts.sessionSeed) || 0;
+  if (profile === "direct" && !searchOpts.costMode) {
+    return findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds, pavedBias, {
+      costMode: "pavement",
+      sessionSeed,
+      variety: true
+    });
+  }
+  if (profile === "balanced" && !searchOpts.costMode) {
+    const shortest = findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds, pavedBias, {
+      costMode: "distance",
+      sessionSeed,
+      variety: false
+    });
+    if (!shortest) return null;
+    const mix = findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds, pavedBias, {
+      costMode: "balancedResource",
+      maxPathMeters: shortest.distanceMeters * BALANCED_STRETCH,
+      shortestMeters: shortest.distanceMeters,
+      sessionSeed,
+      variety: true
+    });
+    if (mix) {
+      mix.searchMeta = mix.searchMeta || {};
+      mix.searchMeta.balancedResource = true;
+      mix.searchMeta.lengthStretch =
+        shortest.distanceMeters > 0 ? mix.distanceMeters / shortest.distanceMeters : 1;
+      return mix;
+    }
+    return shortest;
+  }
+
   const pack = runtime.pack;
   const geom = runtime.geom;
   const enums = runtime.enums;
@@ -259,16 +305,62 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
   linkVirt(vEndB);
   if (vBetween >= 0) linkVirt(vBetween);
 
+  const costMode = searchOpts.costMode || "profile";
+  const maxPathMeters = Number.isFinite(Number(searchOpts.maxPathMeters))
+    ? Number(searchOpts.maxPathMeters)
+    : Infinity;
+  const varietyOn = searchOpts.variety !== false && profile !== "cleanest";
+  const cityWall = profile !== "cleanest";
+  const corridorM = Number.isFinite(Number(searchOpts.corridorMeters))
+    ? Number(searchOpts.corridorMeters)
+    : corridorMetersForProfile(profile);
+  const applyAwayXt = costMode === "profile" && profile !== "cleanest";
+  const applySoftCorridor = applyAwayXt && !(corridorM > 0);
+
+  if (costMode === "balancedResource") {
+    return searchBalancedResource({
+      pack,
+      geom,
+      enums,
+      n,
+      startNode,
+      endNode,
+      total,
+      virt,
+      virtAdj,
+      nodeOffsets,
+      edgeTargets,
+      edgeUndirectedIndex,
+      edgeAttrs,
+      edgeMeters,
+      edgeFrom,
+      nodeCoords,
+      startLL,
+      endLL,
+      policy,
+      avoid,
+      profile,
+      sessionSeed,
+      maxPathMeters,
+      shortestMeters: Number(searchOpts.shortestMeters) || 1,
+      cityWall,
+      corridorM,
+      varietyOn
+    });
+  }
+
   const dist = new Float64Array(total);
   dist.fill(Infinity);
   const prev = new Int32Array(total);
   prev.fill(-1);
-  // prevKind: 0 = graph undirected ei in prevData; 1 = virt id in prevData; high bit of prevData unused
   const prevKind = new Uint8Array(total);
   const prevData = new Int32Array(total);
   const prevForward = new Uint8Array(total);
+  const pathMeters = new Float64Array(total);
+  pathMeters.fill(Infinity);
   const heap = new MinHeap();
   dist[startNode] = 0;
+  pathMeters[startNode] = 0;
   heap.push({ node: startNode, cost: 0 });
 
   while (heap.items.length) {
@@ -282,48 +374,77 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
       for (let i = start; i < end; i += 1) {
         const to = edgeTargets[i];
         const ei = edgeUndirectedIndex[i];
+        if (prevKind[cur.node] === 0 && prevData[cur.node] === ei) continue;
         const attr = edgeAttrs[ei];
         const access = unpackAccess(attr);
         if (!accessAllowed(access, policy, enums)) continue;
         if (avoid && avoid.has(pack.edgeId(ei))) continue;
+        const toLL = nodeLL(to);
+        if (hopBlocked(toLL, startLL, endLL, cityWall, corridorM)) continue;
+        const edgeM = edgeMeters[ei];
+        const newMeters = pathMeters[cur.node] + edgeM;
+        if (newMeters > maxPathMeters) continue;
         const surface = unpackSurface(attr);
         const road = ROAD_CLASS_NAME[unpackRoadClass(attr)] || "unknown";
-        let step = (edgeMeters[ei] / 1000) * costView[surface] * roadClassMultiplier(road, profile);
-        const toLL = nodeLL(to);
-        if (toLL) {
-          step *= majorHighwayAvoidMult(
-            profile,
-            road,
-            haversineMeters(toLL, startLL),
-            haversineMeters(toLL, endLL),
-            startOnMajorHighway,
-            endOnMajorHighway
-          );
-          step *= cleanCityStreetMult(profile, road, haversineMeters(toLL, endLL));
+        const surfaceName = enums.SURFACE_NAME[surface] || "unknown";
+        let step;
+        if (costMode === "distance") {
+          step = edgeM / 1000;
+        } else if (costMode === "pavement") {
+          const dirt = isDirtSurface(surfaceName, road);
+          step = dirt ? (edgeM / 1000) * 0.02 : edgeM / 1000;
+          if (toLL) {
+            step *= majorHighwayAvoidMult(
+              profile,
+              road,
+              haversineMeters(toLL, startLL),
+              haversineMeters(toLL, endLL),
+              startOnMajorHighway,
+              endOnMajorHighway
+            );
+          }
         } else {
-          step *= majorHighwayAvoidMult(profile, road, 1e9, 1e9, false, false);
-        }
-        if (policy.motorizedUnknown && profile !== "cleanest") {
-          const accessName = enums.ACCESS_NAME[access] || "";
-          if (accessName === "motorized_unknown") {
-            if (profile === "dirt" || profile === "direct") step *= 0.5;
+          step = (edgeM / 1000) * costView[surface] * roadClassMultiplier(road, profile);
+          if (toLL) {
+            step *= majorHighwayAvoidMult(
+              profile,
+              road,
+              haversineMeters(toLL, startLL),
+              haversineMeters(toLL, endLL),
+              startOnMajorHighway,
+              endOnMajorHighway
+            );
+            step *= cleanCityStreetMult(profile, road, haversineMeters(toLL, endLL));
+          } else {
+            step *= majorHighwayAvoidMult(profile, road, 1e9, 1e9, false, false);
           }
-          const id = pack.edgeId(ei);
-          if (
-            String(id).startsWith("ns-") ||
-            String(id).startsWith("nb-fr") ||
-            /nstdb|Topographic|Forest Roads/i.test(String(id))
-          ) {
-            if (profile === "dirt" || profile === "direct") step *= 0.68;
+          if (policy.motorizedUnknown && profile !== "cleanest") {
+            const accessName = enums.ACCESS_NAME[access] || "";
+            if (accessName === "motorized_unknown") {
+              if (profile === "dirt" || profile === "direct") step *= 0.5;
+            }
+            const id = pack.edgeId(ei);
+            if (
+              String(id).startsWith("ns-") ||
+              String(id).startsWith("nb-fr") ||
+              /nstdb|Topographic|Forest Roads/i.test(String(id))
+            ) {
+              if (profile === "dirt" || profile === "direct") step *= 0.68;
+            }
           }
-        }
-        step += awayExtra(cur.node, to);
-        if (toLL) {
-          step += directCrossTrackExtra(profile, toLL, startLL, endLL, edgeMeters[ei]);
+          if (applyAwayXt) {
+            step += awayExtra(cur.node, to);
+            if (toLL && applySoftCorridor) {
+              step += directCrossTrackExtra(profile, toLL, startLL, endLL, edgeM);
+            }
+          }
         }
         const cost = cur.cost + step;
-        if (cost < dist[to]) {
+        if (
+          shouldRelax(cost, dist[to], ei, prevData[to], to, sessionSeed, varietyOn)
+        ) {
           dist[to] = cost;
+          pathMeters[to] = newMeters;
           prev[to] = cur.node;
           prevKind[to] = 0;
           prevData[to] = ei;
@@ -338,13 +459,18 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
       for (let vi = 0; vi < vlist.length; vi += 1) {
         const item = vlist[vi];
         const v = virt[item.id];
+        const toLL = nodeLL(item.to);
+        if (hopBlocked(toLL, startLL, endLL, cityWall, corridorM)) continue;
+        const newMeters = pathMeters[cur.node] + v.meters;
+        if (newMeters > maxPathMeters) continue;
         let step = v.meters / 1000;
-        if (profile !== "cleanest") {
+        if (applyAwayXt) {
           step += awayExtra(cur.node, item.to);
         }
         const cost = cur.cost + step;
-        if (cost < dist[item.to]) {
+        if (shouldRelax(cost, dist[item.to], v.ei, prevData[item.to], item.to, sessionSeed, varietyOn)) {
           dist[item.to] = cost;
+          pathMeters[item.to] = newMeters;
           prev[item.to] = cur.node;
           prevKind[item.to] = 1;
           prevData[item.to] = item.id;
@@ -452,7 +578,7 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
     (bySurfaceM.double_track || 0) +
     (bySurfaceM.unknown || 0) +
     (bySurfaceM.single || 0);
-  return {
+  const csrResult = {
     geometry,
     segments,
     distanceMeters,
@@ -482,6 +608,283 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
       verifiedAccessPercent: pct(byAccessM.motorized_verified || 0)
     }
   };
+  return annotateCorridorMeta(csrResult, startLL, endLL, profile);
+}
+
+function searchBalancedResource(ctx) {
+  const {
+    pack,
+    geom,
+    enums,
+    n,
+    startNode,
+    endNode,
+    virt,
+    virtAdj,
+    nodeOffsets,
+    edgeTargets,
+    edgeUndirectedIndex,
+    edgeAttrs,
+    edgeMeters,
+    edgeFrom,
+    startLL,
+    endLL,
+    policy,
+    avoid,
+    profile,
+    sessionSeed,
+    maxPathMeters,
+    shortestMeters,
+    cityWall,
+    corridorM,
+    varietyOn
+  } = ctx;
+  const B = BALANCED_BUCKETS;
+  const labels = (n + 2) * B;
+  const lab = (node, b) => node * B + b;
+  const nid = (label) => Math.floor(label / B);
+  const dist = new Float64Array(labels);
+  dist.fill(Infinity);
+  const dirtAt = new Float64Array(labels);
+  const prev = new Int32Array(labels);
+  prev.fill(-1);
+  const prevKind = new Uint8Array(labels);
+  const prevData = new Int32Array(labels);
+  const prevForward = new Uint8Array(labels);
+  const heap = new MinHeap();
+  const startLab = lab(startNode, 0);
+  dist[startLab] = 0;
+  heap.push({ node: startLab, cost: 0 });
+  let pops = 0;
+
+  function nodeLL(node) {
+    if (node === startNode) return startLL;
+    if (node === endNode) return endLL;
+    if (node >= 0 && node < n && ctx.nodeCoords) {
+      return [ctx.nodeCoords[node * 2], ctx.nodeCoords[node * 2 + 1]];
+    }
+    return null;
+  }
+
+  while (heap.items.length) {
+    pops += 1;
+    if (pops > 8000000) break;
+    const cur = heap.pop();
+    if (!cur || cur.cost !== dist[cur.node]) continue;
+    if (cur.cost > maxPathMeters) continue;
+    const node = nid(cur.node);
+    const dirtSoFar = dirtAt[cur.node];
+    if (node < n) {
+      const start = nodeOffsets[node];
+      const end = nodeOffsets[node + 1];
+      for (let i = start; i < end; i += 1) {
+        const to = edgeTargets[i];
+        const ei = edgeUndirectedIndex[i];
+        if (prevKind[cur.node] === 0 && prevData[cur.node] === ei) continue;
+        const attr = edgeAttrs[ei];
+        const access = unpackAccess(attr);
+        if (!accessAllowed(access, policy, enums)) continue;
+        if (avoid && avoid.has(pack.edgeId(ei))) continue;
+        const toLL = nodeLL(to);
+        if (hopBlocked(toLL, startLL, endLL, cityWall, corridorM)) continue;
+        const edgeM = edgeMeters[ei];
+        const newMeters = cur.cost + edgeM;
+        if (newMeters > maxPathMeters) continue;
+        const surface = unpackSurface(attr);
+        const road = ROAD_CLASS_NAME[unpackRoadClass(attr)] || "unknown";
+        const surfaceName = enums.SURFACE_NAME[surface] || "unknown";
+        const addDirt = isDirtSurface(surfaceName, road) ? edgeM : 0;
+        const newDirt = dirtSoFar + addDirt;
+        const b = dirtBucket(newDirt, shortestMeters);
+        const toLab = lab(to, b);
+        if (shouldRelax(newMeters, dist[toLab], ei, prevData[toLab], to, sessionSeed, varietyOn)) {
+          dist[toLab] = newMeters;
+          dirtAt[toLab] = newDirt;
+          prev[toLab] = cur.node;
+          prevKind[toLab] = 0;
+          prevData[toLab] = ei;
+          prevForward[toLab] = edgeFrom[ei] === node ? 1 : 0;
+          heap.push({ node: toLab, cost: newMeters });
+        }
+      }
+    }
+    const vlist = virtAdj.get(node);
+    if (vlist) {
+      for (let vi = 0; vi < vlist.length; vi += 1) {
+        const item = vlist[vi];
+        const v = virt[item.id];
+        const toLL = nodeLL(item.to);
+        if (hopBlocked(toLL, startLL, endLL, cityWall, corridorM)) continue;
+        const newMeters = cur.cost + v.meters;
+        if (newMeters > maxPathMeters) continue;
+        const b = dirtBucket(dirtSoFar, shortestMeters);
+        const toLab = lab(item.to, b);
+        if (newMeters < dist[toLab]) {
+          dist[toLab] = newMeters;
+          dirtAt[toLab] = dirtSoFar;
+          prev[toLab] = cur.node;
+          prevKind[toLab] = 1;
+          prevData[toLab] = item.id;
+          prevForward[toLab] = item.forward ? 1 : 0;
+          heap.push({ node: toLab, cost: newMeters });
+        }
+      }
+    }
+  }
+
+  let bestLab = -1;
+  let bestLen = Infinity;
+  let bestDelta = Infinity;
+  const inBand = [];
+  for (let b = 0; b < B; b += 1) {
+    const endLab = lab(endNode, b);
+    const len = dist[endLab];
+    if (!Number.isFinite(len) || len <= 0) continue;
+    const ratio = dirtAt[endLab] / len;
+    if (ratio >= BALANCED_DIRT_LO && ratio <= BALANCED_DIRT_HI) {
+      inBand.push({ lab: endLab, len, dirt: dirtAt[endLab] });
+    }
+    const delta = Math.abs(ratio - 0.5);
+    if (delta < bestDelta || (Math.abs(delta - bestDelta) < 1e-6 && len < bestLen)) {
+      bestDelta = delta;
+      bestLen = len;
+      bestLab = endLab;
+    }
+  }
+  if (inBand.length) {
+    const minLen = Math.min.apply(
+      null,
+      inBand.map((x) => x.len)
+    );
+    const near = inBand.filter((x) => x.len <= minLen * (1 + 0.08));
+    near.sort((a, c) => {
+      const ha = varietyHash(sessionSeed, nid(a.lab), a.lab);
+      const hb = varietyHash(sessionSeed, nid(c.lab), c.lab);
+      if (ha !== hb) return ha - hb;
+      return c.dirt - a.dirt;
+    });
+    bestLab = near[0].lab;
+  }
+  if (bestLab < 0 || !Number.isFinite(dist[bestLab])) return null;
+
+  const used = [];
+  for (let label = bestLab; nid(label) !== startNode; ) {
+    const parent = prev[label];
+    if (parent < 0) return null;
+    if (prevKind[label] === 1) {
+      const v = virt[prevData[label]];
+      const forward = prevForward[label] === 1;
+      used.push({
+        coords: forward ? v.coords : v.coords.slice().reverse(),
+        meters: v.meters,
+        surface: unpackSurface(edgeAttrs[v.ei]),
+        access: unpackAccess(edgeAttrs[v.ei]),
+        structure: unpackStructure(edgeAttrs[v.ei]),
+        edgeId: pack.edgeId(v.ei),
+        accessLeg: v.accessLeg,
+        confidence: unpackConfidence(edgeAttrs[v.ei]),
+        seasonal: unpackSeasonal(edgeAttrs[v.ei])
+      });
+    } else {
+      const ei = prevData[label];
+      const forward = prevForward[label] === 1;
+      used.push({
+        coords: geom.polylineMaybeReversed(ei, forward),
+        meters: edgeMeters[ei],
+        surface: unpackSurface(edgeAttrs[ei]),
+        access: unpackAccess(edgeAttrs[ei]),
+        structure: unpackStructure(edgeAttrs[ei]),
+        edgeId: pack.edgeId(ei),
+        accessLeg: false,
+        confidence: unpackConfidence(edgeAttrs[ei]),
+        seasonal: unpackSeasonal(edgeAttrs[ei])
+      });
+    }
+    label = parent;
+  }
+  used.reverse();
+  const pruned = pruneGeographicLoops(used, (edge) => edge.coords);
+  const routeEdges = pruned.edges;
+  const geometry = [];
+  const segments = [];
+  let distanceMeters = 0;
+  let unknownAccessMeters = 0;
+  let movingSeconds = 0;
+  const bySurfaceM = { paved: 0, gravel: 0, access: 0, track: 0, unknown: 0, single: 0 };
+  const byAccessM = {
+    motorized_verified: 0,
+    motorized_permissive: 0,
+    motorized_unknown: 0
+  };
+  for (const edge of routeEdges) {
+    for (const c of edge.coords) {
+      const last = geometry[geometry.length - 1];
+      if (last && last[0] === c[0] && last[1] === c[1]) continue;
+      geometry.push(c);
+    }
+    distanceMeters += edge.meters;
+    const surfaceName = enums.SURFACE_NAME[edge.surface] || "unknown";
+    const accessName = enums.ACCESS_NAME[edge.access] || "motorized_unknown";
+    bySurfaceM[surfaceName] = (bySurfaceM[surfaceName] || 0) + edge.meters;
+    if (byAccessM[accessName] != null) byAccessM[accessName] += edge.meters;
+    if (accessName === "motorized_unknown") unknownAccessMeters += edge.meters;
+    movingSeconds += ((edge.meters / 1000) / classSpeedKmh(edge.surface)) * 3600;
+    segments.push({
+      edgeId: edge.edgeId,
+      surfaceClass: surfaceName,
+      structureType: enums.STRUCTURE_NAME[edge.structure] || "none",
+      accessClass: accessName,
+      source: null,
+      sourceRecordId: null,
+      sourceDescription: null,
+      confidence: edge.confidence,
+      seasonal: !!edge.seasonal,
+      distanceMeters: Math.round(edge.meters),
+      componentId: -1,
+      accessLeg: !!edge.accessLeg,
+      geometry: edge.coords
+    });
+  }
+  const pct = (m) => (distanceMeters > 0 ? Math.round((m / distanceMeters) * 100) : 0);
+  const dirtMeters =
+    (bySurfaceM.gravel || 0) +
+    (bySurfaceM.access || 0) +
+    (bySurfaceM.resource || 0) +
+    (bySurfaceM.track || 0) +
+    (bySurfaceM.double_track || 0) +
+    (bySurfaceM.unknown || 0) +
+    (bySurfaceM.single || 0);
+  const mixResult = {
+    geometry,
+    segments,
+    distanceMeters,
+    unknownAccessMeters,
+    movingSeconds,
+    profileCost: dist[bestLab],
+    searchMeta: {
+      bidir: false,
+      packFormat: "v2",
+      ellipseFactor: Infinity,
+      ellipseLabel: "balanced-resource",
+      balancedResource: true,
+      dirtPercent: pct(dirtMeters),
+      prunedLoopCount: pruned.prunedLoopCount,
+      prunedLoopMeters: Math.round(pruned.prunedMeters)
+    },
+    stats: {
+      pavedPercent: pct(bySurfaceM.paved || 0),
+      gravelPercent: pct(bySurfaceM.gravel || 0),
+      accessPercent: pct((bySurfaceM.access || 0) + (bySurfaceM.resource || 0)),
+      trackPercent: pct((bySurfaceM.track || 0) + (bySurfaceM.double_track || 0)),
+      singlePercent: pct(bySurfaceM.single || 0),
+      unknownSurfacePercent: pct(bySurfaceM.unknown || 0),
+      dirtPercent: pct(dirtMeters),
+      unknownAccessPercent: pct(unknownAccessMeters),
+      permissiveAccessPercent: pct(byAccessM.motorized_permissive || 0),
+      verifiedAccessPercent: pct(byAccessM.motorized_verified || 0)
+    }
+  };
+  return annotateCorridorMeta(mixResult, startLL, endLL, profile);
 }
 
 module.exports = { findPathV2 };

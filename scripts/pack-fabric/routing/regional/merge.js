@@ -281,7 +281,7 @@ const CLEAN_CORRIDOR_ANCHORS = [
 const ADVENTURE_URBAN_AVOID = [
   { minLat: 44.55, maxLat: 44.78, minLon: -63.75, maxLon: -63.4, nudgeLat: 0.4 }, // Halifax
   { minLat: 45.4, maxLat: 45.72, minLon: -73.98, maxLon: -73.4, nudgeLat: 0.28 }, // Montreal island
-  { minLat: 43.55, maxLat: 43.85, minLon: -79.55, maxLon: -79.15, nudgeLat: 0.35 }, // Toronto
+  { minLat: 43.55, maxLat: 43.85, minLon: -79.64, maxLon: -79.12, nudgeLat: 0.35 }, // Toronto metro
   { minLat: 45.85, maxLat: 46.2, minLon: -64.95, maxLon: -64.55, nudgeLat: 0.2 }, // Moncton / Dieppe
   { minLat: 45.88, maxLat: 46.1, minLon: -64.45, maxLon: -64.28, nudgeLat: 0.15 }, // Sackville NS
   { minLat: 45.78, maxLat: 45.9, minLon: -64.28, maxLon: -64.12, nudgeLat: 0.12 }, // Amherst
@@ -303,9 +303,9 @@ const ADVENTURE_URBAN_AVOID = [
   { minLat: 49.88, maxLat: 49.91, minLon: -97.16, maxLon: -97.12, nudgeLat: 0.14 }, // Winnipeg downtown
   { minLat: 50.44, maxLat: 50.46, minLon: -104.63, maxLon: -104.6, nudgeLat: 0.12 }, // Regina downtown
   { minLat: 52.12, maxLat: 52.14, minLon: -106.68, maxLon: -106.65, nudgeLat: 0.12 }, // Saskatoon downtown
-  { minLat: 51.03, maxLat: 51.06, minLon: -114.09, maxLon: -114.05, nudgeLat: 0.16 }, // Calgary downtown
+  { minLat: 51.03, maxLat: 51.18, minLon: -114.28, maxLon: -113.90, nudgeLat: 0.16 }, // Calgary metro
   { minLat: 53.53, maxLat: 53.55, minLon: -113.51, maxLon: -113.48, nudgeLat: 0.16 }, // Edmonton downtown
-  { minLat: 49.27, maxLat: 49.3, minLon: -123.14, maxLon: -123.1, nudgeLat: 0.14 }, // Vancouver downtown
+  { minLat: 49.00, maxLat: 49.42, minLon: -123.32, maxLon: -122.70, nudgeLat: 0.20 }, // Vancouver metro
   { minLat: 48.42, maxLat: 48.44, minLon: -123.38, maxLon: -123.35, nudgeLat: 0.12 } // Victoria downtown
 ];
 
