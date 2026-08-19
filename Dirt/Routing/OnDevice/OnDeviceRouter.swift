@@ -901,29 +901,28 @@ nonisolated struct OnDeviceRouter {
                     let cost = cur.cost + step
                     let newDirt = edgeIsDirt(ei)
                     let oldDirt = prevKind[toNode] == 0 ? edgeIsDirt(prevData[toNode]) : false
-                    if HopSearchPolicy.apply(
-                        HopSearchPolicy.considerRelax(
-                            newCost: cost,
-                            oldCost: dist[toNode],
-                            newEi: ei,
-                            oldEi: prevData[toNode],
-                            node: toNode,
-                            newIsDirt: newDirt,
-                            oldIsDirt: oldDirt,
-                            seed: ctx.sessionSeed,
-                            variety: ctx.variety,
-                            slotsUsed: Int(slots[toNode])
-                        ),
-                        slots: &slots,
-                        at: toNode
-                    ) {
-                        dist[toNode] = cost
-                        pathMeters[toNode] = newMeters
+                    let action = HopSearchPolicy.considerRelax(
+                        newCost: cost,
+                        oldCost: dist[toNode],
+                        newEi: ei,
+                        oldEi: prevData[toNode],
+                        node: toNode,
+                        newIsDirt: newDirt,
+                        oldIsDirt: oldDirt,
+                        seed: ctx.sessionSeed,
+                        variety: ctx.variety,
+                        slotsUsed: Int(slots[toNode])
+                    )
+                    if HopSearchPolicy.apply(action, slots: &slots, at: toNode) {
                         prev[toNode] = cur.node
                         prevKind[toNode] = 0
                         prevData[toNode] = ei
                         prevForward[toNode] = true
-                        heap.push(node: toNode, cost: cost)
+                        if HopSearchPolicy.shouldPush(action) {
+                            dist[toNode] = cost
+                            pathMeters[toNode] = newMeters
+                            heap.push(node: toNode, cost: cost)
+                        }
                     }
                 }
             }
@@ -956,29 +955,28 @@ nonisolated struct OnDeviceRouter {
                         step += awayExtra(fromNode: cur.node, toNode: item.to)
                     }
                     let cost = cur.cost + step
-                    if HopSearchPolicy.apply(
-                        HopSearchPolicy.considerRelax(
-                            newCost: cost,
-                            oldCost: dist[item.to],
-                            newEi: v.ei,
-                            oldEi: prevData[item.to],
-                            node: item.to,
-                            newIsDirt: false,
-                            oldIsDirt: false,
-                            seed: ctx.sessionSeed,
-                            variety: ctx.variety,
-                            slotsUsed: Int(slots[item.to])
-                        ),
-                        slots: &slots,
-                        at: item.to
-                    ) {
-                        dist[item.to] = cost
-                        pathMeters[item.to] = newMeters
+                    let action = HopSearchPolicy.considerRelax(
+                        newCost: cost,
+                        oldCost: dist[item.to],
+                        newEi: v.ei,
+                        oldEi: prevData[item.to],
+                        node: item.to,
+                        newIsDirt: false,
+                        oldIsDirt: false,
+                        seed: ctx.sessionSeed,
+                        variety: ctx.variety,
+                        slotsUsed: Int(slots[item.to])
+                    )
+                    if HopSearchPolicy.apply(action, slots: &slots, at: item.to) {
                         prev[item.to] = cur.node
                         prevKind[item.to] = 1
                         prevData[item.to] = item.id
                         prevForward[item.to] = item.forward
-                        heap.push(node: item.to, cost: cost)
+                        if HopSearchPolicy.shouldPush(action) {
+                            dist[item.to] = cost
+                            pathMeters[item.to] = newMeters
+                            heap.push(node: item.to, cost: cost)
+                        }
                     }
                 }
             }
@@ -1126,29 +1124,28 @@ nonisolated struct OnDeviceRouter {
                     let newDirt = dirtSoFar + addDirt
                     let b = HopSearchPolicy.dirtBucket(dirtMeters: newDirt, shortestMeters: shortest)
                     let toLab = lab(toNode, b)
-                    if HopSearchPolicy.apply(
-                        HopSearchPolicy.considerRelax(
-                            newCost: newMeters,
-                            oldCost: dist[toLab],
-                            newEi: ei,
-                            oldEi: prevData[toLab],
-                            node: toNode,
-                            newIsDirt: addDirt > 0,
-                            oldIsDirt: dirtAt[toLab] > (dist[toLab].isFinite ? dist[toLab] * 0.4 : 0),
-                            seed: ctx.sessionSeed,
-                            variety: ctx.variety,
-                            slotsUsed: Int(slots[toLab])
-                        ),
-                        slots: &slots,
-                        at: toLab
-                    ) {
-                        dist[toLab] = newMeters
-                        dirtAt[toLab] = newDirt
+                    let action = HopSearchPolicy.considerRelax(
+                        newCost: newMeters,
+                        oldCost: dist[toLab],
+                        newEi: ei,
+                        oldEi: prevData[toLab],
+                        node: toNode,
+                        newIsDirt: addDirt > 0,
+                        oldIsDirt: dirtAt[toLab] > (dist[toLab].isFinite ? dist[toLab] * 0.4 : 0),
+                        seed: ctx.sessionSeed,
+                        variety: ctx.variety,
+                        slotsUsed: Int(slots[toLab])
+                    )
+                    if HopSearchPolicy.apply(action, slots: &slots, at: toLab) {
                         prev[toLab] = cur.node
                         prevKind[toLab] = 0
                         prevData[toLab] = ei
                         prevForward[toLab] = true
-                        heap.push(node: toLab, cost: newMeters)
+                        if HopSearchPolicy.shouldPush(action) {
+                            dist[toLab] = newMeters
+                            dirtAt[toLab] = newDirt
+                            heap.push(node: toLab, cost: newMeters)
+                        }
                     }
                 }
             }

@@ -58,15 +58,18 @@ nonisolated enum HopSearchPolicy {
 
     enum RelaxAction: Equatable {
         case reject
-        /// Clearly better (or first visit). Reset the per-node slot count.
+        /// Clearly better (or first visit). Reset slots; update dist and push.
         case acceptReset
-        /// Inside the variety window. Increment the per-node slot count.
-        case acceptSlot
+        /// Inside the window and cheaper. Count a slot; update dist and push.
+        case acceptImprove
+        /// Inside the window, not cheaper, seed prefers it. Record prev only —
+        /// do not push. Re-expanding worse costs is what 500'd live.
+        case stealPred
     }
 
     /// Among costs within `varietyMargin` of the incumbent, pick by session seed.
-    /// Slightly worse costs are eligible — that is the variety window — but each
-    /// node may only keep `varietySlots` of them so the heap cannot explode.
+    /// Slightly worse costs can steal the recorded predecessor (variety) but are
+    /// not re-expanded. Each node may only do `varietySlots` window takes.
     static func considerRelax(
         newCost: Double,
         oldCost: Double,
@@ -84,11 +87,30 @@ nonisolated enum HopSearchPolicy {
         if newCost < oldCost * (1 - varietyMargin) { return .acceptReset }
         if newCost > oldCost * (1 + varietyMargin) { return .reject }
         if slotsUsed >= varietySlots { return .reject }
+        if !prefersNew(
+            newCost: newCost, oldCost: oldCost, newEi: newEi, oldEi: oldEi,
+            node: node, newIsDirt: newIsDirt, oldIsDirt: oldIsDirt, seed: seed
+        ) {
+            return .reject
+        }
+        return newCost < oldCost ? .acceptImprove : .stealPred
+    }
+
+    static func prefersNew(
+        newCost: Double,
+        oldCost: Double,
+        newEi: Int,
+        oldEi: Int,
+        node: Int,
+        newIsDirt: Bool,
+        oldIsDirt: Bool,
+        seed: UInt64
+    ) -> Bool {
         let hn = hash(seed, node, newEi)
         let ho = hash(seed, node, oldEi)
-        if hn != ho { return hn < ho ? .acceptSlot : .reject }
-        if newIsDirt != oldIsDirt { return newIsDirt ? .acceptSlot : .reject }
-        return newCost < oldCost ? .acceptSlot : .reject
+        if hn != ho { return hn < ho }
+        if newIsDirt != oldIsDirt { return newIsDirt }
+        return newCost < oldCost
     }
 
     static func apply(_ action: RelaxAction, slots: inout [UInt8], at index: Int) -> Bool {
@@ -98,10 +120,14 @@ nonisolated enum HopSearchPolicy {
         case .acceptReset:
             slots[index] = 1
             return true
-        case .acceptSlot:
+        case .acceptImprove, .stealPred:
             if slots[index] < 255 { slots[index] += 1 }
             return true
         }
+    }
+
+    static func shouldPush(_ action: RelaxAction) -> Bool {
+        action == .acceptReset || action == .acceptImprove
     }
 
     static func corridorMeters(for profile: RouteProfile) -> Double? {

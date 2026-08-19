@@ -22,7 +22,7 @@ Phone and live share the same constraints (`UrbanCore.swift` / `hop-search.js`).
 
 ## 2026-08-19 — Variety window restored, heap capped
 
-Deploy 1's 8% worse-cost relax exploded the heap (HTTP 500). Tightening to "never worse" stopped the crash but also stopped cross-session variety. Near-equal (≤8% worse) is eligible again; each node keeps at most **3** of those labels. Strictly better costs still always win and reset the count.
+Deploy 1's 8% worse-cost relax exploded the heap (HTTP 500). Tightening to "never worse" stopped the crash but also stopped cross-session variety. Near-equal (≤8% worse) is eligible again; each node keeps at most **3** of those labels. Worse costs may steal the recorded predecessor (cross-session variety) but are **not** re-expanded — re-pushing them is what 500'd live. Strictly better costs still always win and reset the count.
 
 ---
 

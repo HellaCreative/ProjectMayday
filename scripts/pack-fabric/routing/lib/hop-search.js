@@ -67,9 +67,12 @@ function considerRelax(newCost, oldCost, newEi, oldEi, node, seed, variety, slot
   if ((slotsUsed | 0) >= VARIETY_SLOTS) return "reject";
   const hn = varietyHash(seed, node, newEi);
   const ho = varietyHash(seed, node, oldEi);
-  if (hn !== ho) return hn < ho ? "slot" : "reject";
-  if (!!newIsDirt !== !!oldIsDirt) return newIsDirt ? "slot" : "reject";
-  return newCost < oldCost ? "slot" : "reject";
+  let preferNew;
+  if (hn !== ho) preferNew = hn < ho;
+  else if (!!newIsDirt !== !!oldIsDirt) preferNew = !!newIsDirt;
+  else preferNew = newCost < oldCost;
+  if (!preferNew) return "reject";
+  return newCost < oldCost ? "improve" : "steal";
 }
 
 function applyRelax(action, slots, index) {
@@ -80,6 +83,10 @@ function applyRelax(action, slots, index) {
   }
   slots[index] = (slots[index] | 0) + 1;
   return true;
+}
+
+function shouldPush(action) {
+  return action === "reset" || action === "improve";
 }
 
 function corridorMetersForProfile(profile) {
@@ -196,6 +203,7 @@ module.exports = {
   dirtBucket,
   considerRelax,
   applyRelax,
+  shouldPush,
   isDirtSurface,
   corridorMetersForProfile,
   crossTrackMeters,

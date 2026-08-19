@@ -30,6 +30,7 @@ const { pruneGeographicLoops } = require("./path-pruning");
 const {
   considerRelax,
   applyRelax,
+  shouldPush,
   isDirtSurface,
   varietyHash,
   hopBlocked,
@@ -461,13 +462,15 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
           false
         );
         if (applyRelax(action, slots, to)) {
-          dist[to] = cost;
-          pathMeters[to] = newMeters;
           prev[to] = cur.node;
           prevKind[to] = 0;
           prevData[to] = ei;
           prevForward[to] = edgeFrom[ei] === cur.node ? 1 : 0;
-          heap.push({ node: to, cost });
+          if (shouldPush(action)) {
+            dist[to] = cost;
+            pathMeters[to] = newMeters;
+            heap.push({ node: to, cost });
+          }
         }
       }
     }
@@ -499,13 +502,15 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
           false
         );
         if (applyRelax(action, slots, item.to)) {
-          dist[item.to] = cost;
-          pathMeters[item.to] = newMeters;
           prev[item.to] = cur.node;
           prevKind[item.to] = 1;
           prevData[item.to] = item.id;
           prevForward[item.to] = item.forward ? 1 : 0;
-          heap.push({ node: item.to, cost });
+          if (shouldPush(action)) {
+            dist[item.to] = cost;
+            pathMeters[item.to] = newMeters;
+            heap.push({ node: item.to, cost });
+          }
         }
       }
     }
@@ -741,13 +746,15 @@ function searchBalancedResource(ctx) {
           dirtAt[toLab] > (Number.isFinite(dist[toLab]) ? dist[toLab] * 0.4 : 0)
         );
         if (applyRelax(action, slots, toLab)) {
-          dist[toLab] = newMeters;
-          dirtAt[toLab] = newDirt;
           prev[toLab] = cur.node;
           prevKind[toLab] = 0;
           prevData[toLab] = ei;
           prevForward[toLab] = edgeFrom[ei] === node ? 1 : 0;
-          heap.push({ node: toLab, cost: newMeters });
+          if (shouldPush(action)) {
+            dist[toLab] = newMeters;
+            dirtAt[toLab] = newDirt;
+            heap.push({ node: toLab, cost: newMeters });
+          }
         }
       }
     }

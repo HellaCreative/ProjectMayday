@@ -62,7 +62,10 @@ struct HopSearchPolicyTests {
                 newCost: 108, oldCost: 100, newEi: preferredNew, oldEi: preferredOld,
                 node: node, newIsDirt: false, oldIsDirt: false, seed: seed,
                 variety: true, slotsUsed: 1
-            ) == .acceptSlot
+            ) == .stealPred
+        )
+        #expect(
+            !HopSearchPolicy.shouldPush(.stealPred)
         )
         #expect(
             HopSearchPolicy.considerRelax(
