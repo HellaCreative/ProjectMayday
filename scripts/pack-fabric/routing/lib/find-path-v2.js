@@ -31,6 +31,7 @@ const {
   considerRelax,
   applyRelax,
   shouldPush,
+  createsCycle,
   isDirtSurface,
   varietyHash,
   hopBlocked,
@@ -461,6 +462,7 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
           dirt,
           false
         );
+        if (action === "steal" && createsCycle(prev, cur.node, to)) action = "reject";
         if (applyRelax(action, slots, to)) {
           prev[to] = cur.node;
           prevKind[to] = 0;
@@ -501,6 +503,7 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
           false,
           false
         );
+        if (action === "steal" && createsCycle(prev, cur.node, item.to)) action = "reject";
         if (applyRelax(action, slots, item.to)) {
           prev[item.to] = cur.node;
           prevKind[item.to] = 1;
@@ -519,7 +522,10 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
   if (!Number.isFinite(dist[endNode])) return null;
 
   const used = [];
+  let hops = 0;
   for (let node = endNode; node !== startNode; ) {
+    hops += 1;
+    if (hops > total + 4) return null;
     const parent = prev[node];
     if (parent < 0) return null;
     if (prevKind[node] === 1) {
@@ -745,6 +751,7 @@ function searchBalancedResource(ctx) {
           addDirt > 0,
           dirtAt[toLab] > (Number.isFinite(dist[toLab]) ? dist[toLab] * 0.4 : 0)
         );
+        if (action === "steal" && createsCycle(prev, cur.node, toLab)) action = "reject";
         if (applyRelax(action, slots, toLab)) {
           prev[toLab] = cur.node;
           prevKind[toLab] = 0;
@@ -818,7 +825,10 @@ function searchBalancedResource(ctx) {
   if (bestLab < 0 || !Number.isFinite(dist[bestLab])) return null;
 
   const used = [];
+  let hops = 0;
   for (let label = bestLab; nid(label) !== startNode; ) {
+    hops += 1;
+    if (hops > labels + 4) return null;
     const parent = prev[label];
     if (parent < 0) return null;
     if (prevKind[label] === 1) {

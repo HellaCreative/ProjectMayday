@@ -901,7 +901,7 @@ nonisolated struct OnDeviceRouter {
                     let cost = cur.cost + step
                     let newDirt = edgeIsDirt(ei)
                     let oldDirt = prevKind[toNode] == 0 ? edgeIsDirt(prevData[toNode]) : false
-                    let action = HopSearchPolicy.considerRelax(
+                    var action = HopSearchPolicy.considerRelax(
                         newCost: cost,
                         oldCost: dist[toNode],
                         newEi: ei,
@@ -913,6 +913,9 @@ nonisolated struct OnDeviceRouter {
                         variety: ctx.variety,
                         slotsUsed: Int(slots[toNode])
                     )
+                    if action == .stealPred, HopSearchPolicy.createsCycle(prev: prev, from: cur.node, through: toNode) {
+                        action = .reject
+                    }
                     if HopSearchPolicy.apply(action, slots: &slots, at: toNode) {
                         prev[toNode] = cur.node
                         prevKind[toNode] = 0
@@ -955,7 +958,7 @@ nonisolated struct OnDeviceRouter {
                         step += awayExtra(fromNode: cur.node, toNode: item.to)
                     }
                     let cost = cur.cost + step
-                    let action = HopSearchPolicy.considerRelax(
+                    var action = HopSearchPolicy.considerRelax(
                         newCost: cost,
                         oldCost: dist[item.to],
                         newEi: v.ei,
@@ -967,6 +970,9 @@ nonisolated struct OnDeviceRouter {
                         variety: ctx.variety,
                         slotsUsed: Int(slots[item.to])
                     )
+                    if action == .stealPred, HopSearchPolicy.createsCycle(prev: prev, from: cur.node, through: item.to) {
+                        action = .reject
+                    }
                     if HopSearchPolicy.apply(action, slots: &slots, at: item.to) {
                         prev[item.to] = cur.node
                         prevKind[item.to] = 1
@@ -986,7 +992,10 @@ nonisolated struct OnDeviceRouter {
 
         var legs: [Leg] = []
         var node = endVirt
+        var hops = 0
         while node != startVirt {
+            hops += 1
+            if hops > total + 4 { return .failure(.noPath) }
             let parent = prev[node]
             guard parent >= 0 else { return .failure(.noPath) }
             if prevKind[node] == 1 {
@@ -1124,7 +1133,7 @@ nonisolated struct OnDeviceRouter {
                     let newDirt = dirtSoFar + addDirt
                     let b = HopSearchPolicy.dirtBucket(dirtMeters: newDirt, shortestMeters: shortest)
                     let toLab = lab(toNode, b)
-                    let action = HopSearchPolicy.considerRelax(
+                    var action = HopSearchPolicy.considerRelax(
                         newCost: newMeters,
                         oldCost: dist[toLab],
                         newEi: ei,
@@ -1136,6 +1145,9 @@ nonisolated struct OnDeviceRouter {
                         variety: ctx.variety,
                         slotsUsed: Int(slots[toLab])
                     )
+                    if action == .stealPred, HopSearchPolicy.createsCycle(prev: prev, from: cur.node, through: toLab) {
+                        action = .reject
+                    }
                     if HopSearchPolicy.apply(action, slots: &slots, at: toLab) {
                         prev[toLab] = cur.node
                         prevKind[toLab] = 0
@@ -1208,7 +1220,10 @@ nonisolated struct OnDeviceRouter {
 
         var legs: [Leg] = []
         var label = bestLab
+        var hops = 0
         while nid(label) != startVirt {
+            hops += 1
+            if hops > labels + 4 { return .failure(.noPath) }
             let parent = prev[label]
             guard parent >= 0 else { return .failure(.noPath) }
             if prevKind[label] == 1 {

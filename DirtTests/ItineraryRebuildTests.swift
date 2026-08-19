@@ -83,6 +83,14 @@ struct HopSearchPolicyTests {
         )
     }
 
+    @Test func stealPredCycleIsDetected() {
+        var prev = [Int](repeating: -1, count: 4)
+        prev[1] = 0
+        prev[2] = 1
+        #expect(HopSearchPolicy.createsCycle(prev: prev, from: 2, through: 0))
+        #expect(!HopSearchPolicy.createsCycle(prev: prev, from: 0, through: 2))
+    }
+
     @Test func varietyOffNeverAcceptsWorse() {
         #expect(
             HopSearchPolicy.considerRelax(

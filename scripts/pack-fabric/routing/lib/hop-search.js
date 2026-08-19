@@ -89,6 +89,18 @@ function shouldPush(action) {
   return action === "reset" || action === "improve";
 }
 
+function createsCycle(prev, from, through) {
+  let n = from;
+  let hops = 0;
+  const cap = (prev.length || 0) + 2;
+  while (n >= 0 && hops < cap) {
+    if (n === through) return true;
+    n = prev[n];
+    hops += 1;
+  }
+  return hops >= cap;
+}
+
 function corridorMetersForProfile(profile) {
   if (profile === "direct") return DIRECT_CORRIDOR_M;
   if (profile === "dirt") return DIRT_CORRIDOR_M;
@@ -204,6 +216,7 @@ module.exports = {
   considerRelax,
   applyRelax,
   shouldPush,
+  createsCycle,
   isDirtSurface,
   corridorMetersForProfile,
   crossTrackMeters,

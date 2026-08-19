@@ -126,8 +126,16 @@ nonisolated enum HopSearchPolicy {
         }
     }
 
-    static func shouldPush(_ action: RelaxAction) -> Bool {
-        action == .acceptReset || action == .acceptImprove
+    static func createsCycle(prev: [Int], from: Int, through node: Int) -> Bool {
+        var n = from
+        var hops = 0
+        let cap = prev.count + 2
+        while n >= 0, hops < cap {
+            if n == node { return true }
+            n = prev[n]
+            hops += 1
+        }
+        return hops >= cap
     }
 
     static func corridorMeters(for profile: RouteProfile) -> Double? {
