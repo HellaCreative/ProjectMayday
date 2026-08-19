@@ -450,7 +450,7 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
         }
         const cost = cur.cost + step;
         const dirt = isDirtSurface(surfaceName, road);
-        const action = considerRelax(
+        let action = considerRelax(
           cost,
           dist[to],
           ei,
@@ -491,7 +491,7 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
           step += awayExtra(cur.node, item.to);
         }
         const cost = cur.cost + step;
-        const action = considerRelax(
+        let action = considerRelax(
           cost,
           dist[item.to],
           v.ei,
@@ -739,7 +739,7 @@ function searchBalancedResource(ctx) {
         const newDirt = dirtSoFar + addDirt;
         const b = dirtBucket(newDirt, shortestMeters);
         const toLab = lab(to, b);
-        const action = considerRelax(
+        let action = considerRelax(
           newMeters,
           dist[toLab],
           ei,
