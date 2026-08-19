@@ -13,8 +13,11 @@ nonisolated enum HopSearchPolicy {
     static let dirtCorridorMeters: Double = 50_000
     /// Safety ceiling only — Balanced shaping is the 45–55% dirt ratio.
     static let balancedCorridorMeters: Double = 40_000
-    /// Choice set: paths within this fraction of the incumbent score.
+    /// Choice set: paths within this fraction of the incumbent score (5–10% band).
     static let varietyMargin: Double = 0.08
+    /// Max near-equal labels expanded per node. Bounds heap growth when the
+    /// window allows a slightly worse cost (the deploy-1 crash was unbounded).
+    static let varietySlots: Int = 3
     static let balancedDirtLo: Double = 0.45
     static let balancedDirtHi: Double = 0.55
     static let balancedBuckets: Int = 8
@@ -53,9 +56,18 @@ nonisolated enum HopSearchPolicy {
         return min(balancedBuckets - 1, max(0, b))
     }
 
-    /// Among costs within `varietyMargin` of the incumbent, pick by session seed;
-    /// never accept a clearly worse cost (that breaks Dijkstra and explodes the heap).
-    static func shouldRelax(
+    enum RelaxAction: Equatable {
+        case reject
+        /// Clearly better (or first visit). Reset the per-node slot count.
+        case acceptReset
+        /// Inside the variety window. Increment the per-node slot count.
+        case acceptSlot
+    }
+
+    /// Among costs within `varietyMargin` of the incumbent, pick by session seed.
+    /// Slightly worse costs are eligible — that is the variety window — but each
+    /// node may only keep `varietySlots` of them so the heap cannot explode.
+    static func considerRelax(
         newCost: Double,
         oldCost: Double,
         newEi: Int,
@@ -64,17 +76,32 @@ nonisolated enum HopSearchPolicy {
         newIsDirt: Bool,
         oldIsDirt: Bool,
         seed: UInt64,
-        variety: Bool
-    ) -> Bool {
-        if !oldCost.isFinite { return true }
-        if newCost > oldCost { return false }
-        if !variety { return newCost < oldCost }
-        if newCost < oldCost * (1 - varietyMargin) { return true }
+        variety: Bool,
+        slotsUsed: Int
+    ) -> RelaxAction {
+        if !oldCost.isFinite { return .acceptReset }
+        if !variety { return newCost < oldCost ? .acceptReset : .reject }
+        if newCost < oldCost * (1 - varietyMargin) { return .acceptReset }
+        if newCost > oldCost * (1 + varietyMargin) { return .reject }
+        if slotsUsed >= varietySlots { return .reject }
         let hn = hash(seed, node, newEi)
         let ho = hash(seed, node, oldEi)
-        if hn != ho { return hn < ho }
-        if newIsDirt != oldIsDirt { return newIsDirt }
-        return newCost < oldCost
+        if hn != ho { return hn < ho ? .acceptSlot : .reject }
+        if newIsDirt != oldIsDirt { return newIsDirt ? .acceptSlot : .reject }
+        return newCost < oldCost ? .acceptSlot : .reject
+    }
+
+    static func apply(_ action: RelaxAction, slots: inout [UInt8], at index: Int) -> Bool {
+        switch action {
+        case .reject:
+            return false
+        case .acceptReset:
+            slots[index] = 1
+            return true
+        case .acceptSlot:
+            if slots[index] < 255 { slots[index] += 1 }
+            return true
+        }
     }
 
     static func corridorMeters(for profile: RouteProfile) -> Double? {

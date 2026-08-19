@@ -10,6 +10,7 @@ const DIRECT_CORRIDOR_M = 15000;
 const DIRT_CORRIDOR_M = 50000;
 const BALANCED_CORRIDOR_M = 40000;
 const VARIETY_MARGIN = 0.08;
+const VARIETY_SLOTS = 3;
 const BALANCED_DIRT_LO = 0.45;
 const BALANCED_DIRT_HI = 0.55;
 const BALANCED_BUCKETS = 8;
@@ -58,15 +59,27 @@ function dirtBucket(dirtMeters, shortestMeters) {
   return Math.min(BALANCED_BUCKETS - 1, Math.max(0, b));
 }
 
-function shouldRelax(newCost, oldCost, newEi, oldEi, node, seed, variety) {
-  if (!Number.isFinite(oldCost)) return true;
-  if (newCost > oldCost) return false;
-  if (!variety) return newCost < oldCost;
-  if (newCost < oldCost * (1 - VARIETY_MARGIN)) return true;
+function considerRelax(newCost, oldCost, newEi, oldEi, node, seed, variety, slotsUsed, newIsDirt, oldIsDirt) {
+  if (!Number.isFinite(oldCost)) return "reset";
+  if (!variety) return newCost < oldCost ? "reset" : "reject";
+  if (newCost < oldCost * (1 - VARIETY_MARGIN)) return "reset";
+  if (newCost > oldCost * (1 + VARIETY_MARGIN)) return "reject";
+  if ((slotsUsed | 0) >= VARIETY_SLOTS) return "reject";
   const hn = varietyHash(seed, node, newEi);
   const ho = varietyHash(seed, node, oldEi);
-  if (hn !== ho) return hn < ho;
-  return newCost < oldCost;
+  if (hn !== ho) return hn < ho ? "slot" : "reject";
+  if (!!newIsDirt !== !!oldIsDirt) return newIsDirt ? "slot" : "reject";
+  return newCost < oldCost ? "slot" : "reject";
+}
+
+function applyRelax(action, slots, index) {
+  if (action === "reject") return false;
+  if (action === "reset") {
+    slots[index] = 1;
+    return true;
+  }
+  slots[index] = (slots[index] | 0) + 1;
+  return true;
 }
 
 function corridorMetersForProfile(profile) {
@@ -173,6 +186,7 @@ module.exports = {
   DIRT_CORRIDOR_M,
   BALANCED_CORRIDOR_M,
   VARIETY_MARGIN,
+  VARIETY_SLOTS,
   BALANCED_DIRT_LO,
   BALANCED_DIRT_HI,
   BALANCED_BUCKETS,
@@ -180,7 +194,8 @@ module.exports = {
   metroBlocks,
   varietyHash,
   dirtBucket,
-  shouldRelax,
+  considerRelax,
+  applyRelax,
   isDirtSurface,
   corridorMetersForProfile,
   crossTrackMeters,

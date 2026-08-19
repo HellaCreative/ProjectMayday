@@ -33,10 +33,59 @@ struct HopSearchPolicyTests {
 
     @Test func clearlyBetterCostAlwaysRelaxes() {
         #expect(
-            HopSearchPolicy.shouldRelax(
+            HopSearchPolicy.considerRelax(
                 newCost: 80, oldCost: 100, newEi: 1, oldEi: 2, node: 9,
-                newIsDirt: false, oldIsDirt: true, seed: 1, variety: true
-            )
+                newIsDirt: false, oldIsDirt: true, seed: 1, variety: true, slotsUsed: 3
+            ) == .acceptReset
+        )
+    }
+
+    @Test func nearEqualWorseUsesSlotsUntilCap() {
+        let seed: UInt64 = 1
+        let node = 9
+        var preferredNew = 1
+        var preferredOld = 2
+        var found = false
+        for a in 1..<40 where !found {
+            for b in 1..<40 where a != b {
+                if HopSearchPolicy.hash(seed, node, a) < HopSearchPolicy.hash(seed, node, b) {
+                    preferredNew = a
+                    preferredOld = b
+                    found = true
+                    break
+                }
+            }
+        }
+        #expect(found)
+        #expect(
+            HopSearchPolicy.considerRelax(
+                newCost: 108, oldCost: 100, newEi: preferredNew, oldEi: preferredOld,
+                node: node, newIsDirt: false, oldIsDirt: false, seed: seed,
+                variety: true, slotsUsed: 1
+            ) == .acceptSlot
+        )
+        #expect(
+            HopSearchPolicy.considerRelax(
+                newCost: 108, oldCost: 100, newEi: preferredNew, oldEi: preferredOld,
+                node: node, newIsDirt: false, oldIsDirt: false, seed: seed,
+                variety: true, slotsUsed: HopSearchPolicy.varietySlots
+            ) == .reject
+        )
+        #expect(
+            HopSearchPolicy.considerRelax(
+                newCost: 108, oldCost: 100, newEi: preferredOld, oldEi: preferredNew,
+                node: node, newIsDirt: false, oldIsDirt: false, seed: seed,
+                variety: true, slotsUsed: 1
+            ) == .reject
+        )
+    }
+
+    @Test func varietyOffNeverAcceptsWorse() {
+        #expect(
+            HopSearchPolicy.considerRelax(
+                newCost: 108, oldCost: 100, newEi: 1, oldEi: 2, node: 9,
+                newIsDirt: true, oldIsDirt: false, seed: 1, variety: false, slotsUsed: 0
+            ) == .reject
         )
     }
 

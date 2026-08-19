@@ -822,6 +822,7 @@ nonisolated struct OnDeviceRouter {
         var prevData = [Int](repeating: -1, count: total)
         var prevForward = [Bool](repeating: true, count: total)
         var pathMeters = [Double](repeating: .infinity, count: total)
+        var slots = [UInt8](repeating: 0, count: total)
         var heap = MinHeap()
 
         dist[startVirt] = 0
@@ -830,9 +831,13 @@ nonisolated struct OnDeviceRouter {
 
         let applyAway = ctx.costMode == .profile && profile != .cleanest
         let applySoftCorridor = applyAway && ctx.corridorMeters == nil
+        var pops = 0
+        let popCap = min(8_000_000, total * (HopSearchPolicy.varietySlots + 2) * 8)
 
         while let cur = heap.pop() {
             if cur.cost != dist[cur.node] { continue }
+            pops += 1
+            if pops > popCap { break }
             if cur.node == endVirt { break }
 
             if cur.node < n {
@@ -896,16 +901,21 @@ nonisolated struct OnDeviceRouter {
                     let cost = cur.cost + step
                     let newDirt = edgeIsDirt(ei)
                     let oldDirt = prevKind[toNode] == 0 ? edgeIsDirt(prevData[toNode]) : false
-                    if HopSearchPolicy.shouldRelax(
-                        newCost: cost,
-                        oldCost: dist[toNode],
-                        newEi: ei,
-                        oldEi: prevData[toNode],
-                        node: toNode,
-                        newIsDirt: newDirt,
-                        oldIsDirt: oldDirt,
-                        seed: ctx.sessionSeed,
-                        variety: ctx.variety
+                    if HopSearchPolicy.apply(
+                        HopSearchPolicy.considerRelax(
+                            newCost: cost,
+                            oldCost: dist[toNode],
+                            newEi: ei,
+                            oldEi: prevData[toNode],
+                            node: toNode,
+                            newIsDirt: newDirt,
+                            oldIsDirt: oldDirt,
+                            seed: ctx.sessionSeed,
+                            variety: ctx.variety,
+                            slotsUsed: Int(slots[toNode])
+                        ),
+                        slots: &slots,
+                        at: toNode
                     ) {
                         dist[toNode] = cost
                         pathMeters[toNode] = newMeters
@@ -946,16 +956,21 @@ nonisolated struct OnDeviceRouter {
                         step += awayExtra(fromNode: cur.node, toNode: item.to)
                     }
                     let cost = cur.cost + step
-                    if HopSearchPolicy.shouldRelax(
-                        newCost: cost,
-                        oldCost: dist[item.to],
-                        newEi: v.ei,
-                        oldEi: prevData[item.to],
-                        node: item.to,
-                        newIsDirt: false,
-                        oldIsDirt: false,
-                        seed: ctx.sessionSeed,
-                        variety: ctx.variety
+                    if HopSearchPolicy.apply(
+                        HopSearchPolicy.considerRelax(
+                            newCost: cost,
+                            oldCost: dist[item.to],
+                            newEi: v.ei,
+                            oldEi: prevData[item.to],
+                            node: item.to,
+                            newIsDirt: false,
+                            oldIsDirt: false,
+                            seed: ctx.sessionSeed,
+                            variety: ctx.variety,
+                            slotsUsed: Int(slots[item.to])
+                        ),
+                        slots: &slots,
+                        at: item.to
                     ) {
                         dist[item.to] = cost
                         pathMeters[item.to] = newMeters
@@ -1066,6 +1081,7 @@ nonisolated struct OnDeviceRouter {
         var prevKind = [UInt8](repeating: 0, count: labels)
         var prevData = [Int](repeating: -1, count: labels)
         var prevForward = [Bool](repeating: true, count: labels)
+        var slots = [UInt8](repeating: 0, count: labels)
         var heap = MinHeap()
 
         let startLab = lab(startVirt, 0)
@@ -1110,16 +1126,21 @@ nonisolated struct OnDeviceRouter {
                     let newDirt = dirtSoFar + addDirt
                     let b = HopSearchPolicy.dirtBucket(dirtMeters: newDirt, shortestMeters: shortest)
                     let toLab = lab(toNode, b)
-                    if HopSearchPolicy.shouldRelax(
-                        newCost: newMeters,
-                        oldCost: dist[toLab],
-                        newEi: ei,
-                        oldEi: prevData[toLab],
-                        node: toNode,
-                        newIsDirt: addDirt > 0,
-                        oldIsDirt: dirtAt[toLab] > (dist[toLab].isFinite ? dist[toLab] * 0.4 : 0),
-                        seed: ctx.sessionSeed,
-                        variety: ctx.variety
+                    if HopSearchPolicy.apply(
+                        HopSearchPolicy.considerRelax(
+                            newCost: newMeters,
+                            oldCost: dist[toLab],
+                            newEi: ei,
+                            oldEi: prevData[toLab],
+                            node: toNode,
+                            newIsDirt: addDirt > 0,
+                            oldIsDirt: dirtAt[toLab] > (dist[toLab].isFinite ? dist[toLab] * 0.4 : 0),
+                            seed: ctx.sessionSeed,
+                            variety: ctx.variety,
+                            slotsUsed: Int(slots[toLab])
+                        ),
+                        slots: &slots,
+                        at: toLab
                     ) {
                         dist[toLab] = newMeters
                         dirtAt[toLab] = newDirt

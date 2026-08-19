@@ -14,9 +14,15 @@ The product of a fuel-on plan is a hop chain **A → F₁ → … → B**, built
 
 Hard constraints on Dirt / Balanced / Direct: metro-core **wall** (Vancouver is metro-wide, not downtown-tiny), no backtracking the edge just ridden. Clean is exempt from the wall.
 
-Per-profile search is now a real target: Dirt keeps weight-table adventure inside a **50 km** A→B corridor; Direct is min-pavement inside a **15 km** corridor (stretch-factor superseded — trail networks are a physical size, not a % of trip length); Balanced is resource-constrained 45–55% dirt with a **40 km** safety ceiling only. Session seed picks among near-equal corridors.
+Per-profile search is now a real target: Dirt keeps weight-table adventure inside a **50 km** A→B corridor; Direct is min-pavement inside a **15 km** corridor (stretch-factor superseded — trail networks are a physical size, not a % of trip length); Balanced is resource-constrained 45–55% dirt with a **40 km** safety ceiling only. Session seed picks among near-equal corridors (8% window, max 3 slots per node).
 
 Phone and live share the same constraints (`UrbanCore.swift` / `hop-search.js`). Pack binaries unchanged; ship `--live` for search code.
+
+---
+
+## 2026-08-19 — Variety window restored, heap capped
+
+Deploy 1's 8% worse-cost relax exploded the heap (HTTP 500). Tightening to "never worse" stopped the crash but also stopped cross-session variety. Near-equal (≤8% worse) is eligible again; each node keeps at most **3** of those labels. Strictly better costs still always win and reset the count.
 
 ---
 

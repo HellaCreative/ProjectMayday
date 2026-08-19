@@ -28,12 +28,14 @@ const {
 } = require("./profile-costs");
 const { pruneGeographicLoops } = require("./path-pruning");
 const {
-  shouldRelax,
+  considerRelax,
+  applyRelax,
   isDirtSurface,
   varietyHash,
   hopBlocked,
   annotateCorridorMeta,
   corridorMetersForProfile,
+  VARIETY_SLOTS,
   BALANCED_STRETCH,
   BALANCED_DIRT_LO,
   BALANCED_DIRT_HI,
@@ -358,14 +360,19 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
   const prevForward = new Uint8Array(total);
   const pathMeters = new Float64Array(total);
   pathMeters.fill(Infinity);
+  const slots = new Uint8Array(total);
   const heap = new MinHeap();
   dist[startNode] = 0;
   pathMeters[startNode] = 0;
   heap.push({ node: startNode, cost: 0 });
+  let pops = 0;
+  const popCap = Math.min(8_000_000, total * (VARIETY_SLOTS + 2) * 8);
 
   while (heap.items.length) {
     const cur = heap.pop();
     if (!cur || cur.cost !== dist[cur.node]) continue;
+    pops += 1;
+    if (pops > popCap) break;
     if (cur.node === endNode) break;
 
     if (cur.node < n) {
@@ -440,9 +447,20 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
           }
         }
         const cost = cur.cost + step;
-        if (
-          shouldRelax(cost, dist[to], ei, prevData[to], to, sessionSeed, varietyOn)
-        ) {
+        const dirt = isDirtSurface(surfaceName, road);
+        const action = considerRelax(
+          cost,
+          dist[to],
+          ei,
+          prevData[to],
+          to,
+          sessionSeed,
+          varietyOn,
+          slots[to],
+          dirt,
+          false
+        );
+        if (applyRelax(action, slots, to)) {
           dist[to] = cost;
           pathMeters[to] = newMeters;
           prev[to] = cur.node;
@@ -468,7 +486,19 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
           step += awayExtra(cur.node, item.to);
         }
         const cost = cur.cost + step;
-        if (shouldRelax(cost, dist[item.to], v.ei, prevData[item.to], item.to, sessionSeed, varietyOn)) {
+        const action = considerRelax(
+          cost,
+          dist[item.to],
+          v.ei,
+          prevData[item.to],
+          item.to,
+          sessionSeed,
+          varietyOn,
+          slots[item.to],
+          false,
+          false
+        );
+        if (applyRelax(action, slots, item.to)) {
           dist[item.to] = cost;
           pathMeters[item.to] = newMeters;
           prev[item.to] = cur.node;
@@ -651,6 +681,7 @@ function searchBalancedResource(ctx) {
   const prevKind = new Uint8Array(labels);
   const prevData = new Int32Array(labels);
   const prevForward = new Uint8Array(labels);
+  const slots = new Uint8Array(labels);
   const heap = new MinHeap();
   const startLab = lab(startNode, 0);
   dist[startLab] = 0;
@@ -697,7 +728,19 @@ function searchBalancedResource(ctx) {
         const newDirt = dirtSoFar + addDirt;
         const b = dirtBucket(newDirt, shortestMeters);
         const toLab = lab(to, b);
-        if (shouldRelax(newMeters, dist[toLab], ei, prevData[toLab], to, sessionSeed, varietyOn)) {
+        const action = considerRelax(
+          newMeters,
+          dist[toLab],
+          ei,
+          prevData[toLab],
+          to,
+          sessionSeed,
+          varietyOn,
+          slots[toLab],
+          addDirt > 0,
+          dirtAt[toLab] > (Number.isFinite(dist[toLab]) ? dist[toLab] * 0.4 : 0)
+        );
+        if (applyRelax(action, slots, toLab)) {
           dist[toLab] = newMeters;
           dirtAt[toLab] = newDirt;
           prev[toLab] = cur.node;
