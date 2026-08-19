@@ -96,11 +96,13 @@ private enum POIC {
     static let refreshDelay = UInt64(350_000_000)
 }
 
-/// Loads Rider Services POIs from OSM Overpass for the current viewport.
-/// Fuel goes through `FuelPOIFilter` (bulk / cardlock / truck-only / closed).
+/// Loads Rider Services POIs. Fuel comes from the installed pack (`fuel.v1.json`).
+/// Camp / lodging / liquor still use OSM Overpass for the current viewport.
+/// Fuel goes through `FuelPOIFilter` at pack build time (bulk / cardlock / truck-only / closed).
 @MainActor
 final class POIManager {
     private let mapState: MapState
+    private let graphPacks: GraphPackStore
     private var debounceTask: Task<Void, Never>?
     private let session: URLSession = {
         let cfg = URLSessionConfiguration.default
@@ -110,64 +112,21 @@ final class POIManager {
         return URLSession(configuration: cfg)
     }()
 
-    init(mapState: MapState) {
+    init(mapState: MapState, graphPacks: GraphPackStore) {
         self.mapState = mapState
+        self.graphPacks = graphPacks
         armObservation()
     }
 
-    /// Fuel stations in the A→B geographic box — towns on the way, not pumps
-    /// on the dirt meander. Planner cancellation must not kill this fetch.
+    /// Fuel stations in the A→B geographic box from the downloaded pack.
+    /// Never hits Overpass — that is pack-build work, not route-planning work.
     func fuelCandidates(from start: RouteCoordinate, to end: RouteCoordinate) async -> [POIFeature] {
-        let padDeg = 40_000.0 / 111_000.0
-        let full = _BBox(
-            minLon: min(start.longitude, end.longitude) - padDeg,
-            minLat: min(start.latitude, end.latitude) - padDeg,
-            maxLon: max(start.longitude, end.longitude) + padDeg,
-            maxLat: max(start.latitude, end.latitude) + padDeg
-        )
-        let boxes = Self.splitBBox(full, maxSpanDeg: 2.4)
+        let packed = graphPacks.fuelStations(from: start, to: end)
+        let collapsed = POIDeduper.collapseNearby(packed)
         RoutingDebugLog.shared.event(
-            "fuel search A-B boxes=\(boxes.count) A=\(start.latitude),\(start.longitude) B=\(end.latitude),\(end.longitude)"
+            "fuel search packed=\(packed.count) usable=\(collapsed.count) source=pack"
         )
-        let raw: [_OSMElement] = await Task.detached(priority: .userInitiated) {
-            var all: [_OSMElement] = []
-            let cfg = URLSessionConfiguration.ephemeral
-            cfg.timeoutIntervalForRequest = 12
-            cfg.timeoutIntervalForResource = 15
-            cfg.waitsForConnectivity = false
-            cfg.httpAdditionalHeaders = ["User-Agent": "DIRT-iOS/1.0 (dual-sport navigator)"]
-            let session = URLSession(configuration: cfg)
-            defer { session.finishTasksAndInvalidate() }
-            for bbox in boxes {
-                var got: [_OSMElement]?
-                for url in OverpassEndpoints.urls {
-                    do {
-                        got = try await POIManager.fetchFuelOSM(bbox: bbox, session: session, url: url)
-                        break
-                    } catch {
-                        continue
-                    }
-                }
-                if let got {
-                    all.append(contentsOf: got)
-                }
-            }
-            return all
-        }.value
-        let collapsed = POIDeduper.collapseNearby(raw.compactMap { feature(from: $0, prefs: nil, fuelOnly: true) })
-        RoutingDebugLog.shared.event("fuel search A-B raw=\(raw.count) usable=\(collapsed.count)")
         return collapsed
-    }
-
-    /// Consecutive vertices covering about `targetSpanMeters` of the polyline.
-    private static func splitBBox(_ box: _BBox, maxSpanDeg: Double) -> [_BBox] {
-        let lonSpan = box.maxLon - box.minLon
-        if lonSpan <= maxSpanDeg { return [box] }
-        let mid = (box.minLon + box.maxLon) / 2
-        return [
-            _BBox(minLon: box.minLon, minLat: box.minLat, maxLon: mid, maxLat: box.maxLat),
-            _BBox(minLon: mid, minLat: box.minLat, maxLon: box.maxLon, maxLat: box.maxLat)
-        ]
     }
 
     private func armObservation() {
@@ -212,20 +171,29 @@ final class POIManager {
             maxLon: center.longitude + padDeg,
             maxLat: center.latitude + padDeg
         )
-        do {
-            let raw = try await fetchOSM(bbox: bbox)
-            let features = raw.compactMap { feature(from: $0, prefs: prefs, fuelOnly: false) }
-            mapState.updatePOIFeatures(POIDeduper.collapseNearby(features))
-        } catch {
-            // Keep last paint when Overpass is unreachable.
+        var features: [POIFeature] = []
+        if prefs.showFuel {
+            features.append(contentsOf: graphPacks.fuelStations(
+                minLat: bbox.minLat, maxLat: bbox.maxLat,
+                minLon: bbox.minLon, maxLon: bbox.maxLon
+            ))
         }
+        let needOverpass = prefs.showCampgrounds || prefs.showLodging || prefs.showLiquor
+        if needOverpass {
+            do {
+                let raw = try await fetchOSM(bbox: bbox)
+                features.append(contentsOf: raw.compactMap { feature(from: $0, prefs: prefs, fuelOnly: false) })
+            } catch {
+                // Keep last paint when Overpass is unreachable.
+            }
+        }
+        mapState.updatePOIFeatures(POIDeduper.collapseNearby(features))
     }
 
     private func fetchOSM(bbox: _BBox) async throws -> [_OSMElement] {
         let query = """
         [out:json][timeout:25];
         (
-          nwr["amenity"="fuel"](\(bbox.minLat),\(bbox.minLon),\(bbox.maxLat),\(bbox.maxLon));
           nwr["tourism"~"^(hotel|motel|hostel|guest_house|chalet)$"](\(bbox.minLat),\(bbox.minLon),\(bbox.maxLat),\(bbox.maxLon));
           nwr["tourism"~"^(camp_site|caravan_site)$"](\(bbox.minLat),\(bbox.minLon),\(bbox.maxLat),\(bbox.maxLon));
           nwr["shop"="alcohol"](\(bbox.minLat),\(bbox.minLon),\(bbox.maxLat),\(bbox.maxLon));
@@ -241,30 +209,10 @@ final class POIManager {
         return try JSONDecoder().decode(_OSMResponse.self, from: data).elements
     }
 
-    nonisolated private static func fetchFuelOSM(
-        bbox: _BBox,
-        session: URLSession,
-        url: URL
-    ) async throws -> [_OSMElement] {
-        let query = """
-        [out:json][timeout:12];
-        nwr["amenity"="fuel"](\(bbox.minLat),\(bbox.minLon),\(bbox.maxLat),\(bbox.maxLon));
-        out center tags;
-        """
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.timeoutInterval = 12
-        request.setValue("application/x-www-form-urlencoded; charset=utf-8", forHTTPHeaderField: "Content-Type")
-        let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? query
-        request.httpBody = "data=\(encoded)".data(using: .utf8)
-        let (data, _) = try await session.data(for: request)
-        return try JSONDecoder().decode(_OSMResponse.self, from: data).elements
-    }
-
     private func feature(from el: _OSMElement, prefs: LayerPrefsSnapshot?, fuelOnly: Bool) -> POIFeature? {
         let tags = el.tags ?? [:]
         guard let category = category(for: tags) else { return nil }
-        if fuelOnly, category != "fuel" { return nil }
+        if category == "fuel" { return nil }
         if let prefs, !prefs.isPOIEnabled(category: category) { return nil }
         let lat = el.lat ?? el.center?.lat
         let lon = el.lon ?? el.center?.lon
@@ -305,14 +253,6 @@ final class POIManager {
         default: return nil
         }
     }
-}
-
-nonisolated private enum OverpassEndpoints {
-    static let urls: [URL] = [
-        URL(string: "https://overpass-api.de/api/interpreter")!,
-        URL(string: "https://overpass.kumi.systems/api/interpreter")!,
-        URL(string: "https://overpass.openstreetmap.fr/api/interpreter")!
-    ]
 }
 
 nonisolated private struct _BBox: Sendable {

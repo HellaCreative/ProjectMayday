@@ -36,10 +36,12 @@ const {
   hopBlocked,
   annotateCorridorMeta,
   corridorMetersForProfile,
-  pickBalancedEnd,
+  pickResourceEnd,
   VARIETY_SLOTS,
   BALANCED_BUCKETS,
-  dirtBucket
+  dirtBucket,
+  PASS2_TIME_MS,
+  PASS2_POP_CAP
 } = require("./hop-search");
 
 function haversineMeters(a, b) {
@@ -168,6 +170,107 @@ function coordsBetweenMatches(coords, startMatch, endMatch) {
   return coordsBetweenMatches(coords, endMatch, startMatch).reverse();
 }
 
+function exceedsLengthSlack(newMeters, toNode, slackToDest, cap) {
+  if (newMeters > cap) return true;
+  if (!slackToDest) return false;
+  const rem = slackToDest[toNode];
+  if (!Number.isFinite(rem)) return true;
+  return newMeters + rem > cap + 1;
+}
+
+function fillShortestMeters(args) {
+  const {
+    n,
+    total,
+    nodeOffsets,
+    edgeTargets,
+    edgeUndirectedIndex,
+    edgeAttrs,
+    edgeMeters,
+    pack,
+    policy,
+    enums,
+    avoid,
+    virt,
+    virtAdj,
+    startLL,
+    endLL,
+    cityWall,
+    origin,
+    capMeters,
+    nodeLL
+  } = args;
+  const dist = new Float64Array(total);
+  dist.fill(Infinity);
+  const heap = new MinHeap();
+  // The pack CSR contains directed arcs. Build its transpose so these are true
+  // node -> destination lower bounds; using destination's outgoing arcs can
+  // over-prune valid routes at one-way roads.
+  const arcCount = edgeTargets.length;
+  const incomingCounts = new Uint32Array(n);
+  for (let i = 0; i < arcCount; i += 1) {
+    const target = edgeTargets[i];
+    if (target < n) incomingCounts[target] += 1;
+  }
+  const incomingOffsets = new Uint32Array(n + 1);
+  for (let node = 0; node < n; node += 1) incomingOffsets[node + 1] = incomingOffsets[node] + incomingCounts[node];
+  const incomingSources = new Uint32Array(arcCount);
+  const incomingEdges = new Uint32Array(arcCount);
+  const cursors = incomingOffsets.slice(0, n);
+  for (let source = 0; source < n; source += 1) {
+    for (let i = nodeOffsets[source]; i < nodeOffsets[source + 1]; i += 1) {
+      const target = edgeTargets[i];
+      if (target >= n) continue;
+      const slot = cursors[target]++;
+      incomingSources[slot] = source;
+      incomingEdges[slot] = edgeUndirectedIndex[i];
+    }
+  }
+  dist[origin] = 0;
+  heap.push({ node: origin, cost: 0 });
+  while (heap.items.length) {
+    const cur = heap.pop();
+    if (!cur || cur.cost !== dist[cur.node]) continue;
+    if (cur.cost > capMeters) continue;
+    if (cur.node < n) {
+      const start = incomingOffsets[cur.node];
+      const end = incomingOffsets[cur.node + 1];
+      for (let i = start; i < end; i += 1) {
+        const to = incomingSources[i];
+        const ei = incomingEdges[i];
+        const attr = edgeAttrs[ei];
+        const access = unpackAccess(attr);
+        if (!accessAllowed(access, policy, enums)) continue;
+        if (avoid && avoid.has(pack.edgeId(ei))) continue;
+        const toLL = nodeLL(to);
+        if (hopBlocked(toLL, startLL, endLL, cityWall)) continue;
+        const cand = cur.cost + edgeMeters[ei];
+        if (cand > capMeters) continue;
+        if (cand < dist[to]) {
+          dist[to] = cand;
+          heap.push({ node: to, cost: cand });
+        }
+      }
+    }
+    const vlist = virtAdj.get(cur.node);
+    if (vlist) {
+      for (let vi = 0; vi < vlist.length; vi += 1) {
+        const item = vlist[vi];
+        const v = virt[item.id];
+        const toLL = nodeLL(item.to);
+        if (hopBlocked(toLL, startLL, endLL, cityWall)) continue;
+        const cand = cur.cost + v.meters;
+        if (cand > capMeters) continue;
+        if (cand < dist[item.to]) {
+          dist[item.to] = cand;
+          heap.push({ node: item.to, cost: cand });
+        }
+      }
+    }
+  }
+  return dist;
+}
+
 function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds, pavedBias, searchOpts) {
   searchOpts = searchOpts || {};
   const sessionSeed = Number(searchOpts.sessionSeed) || 0;
@@ -180,15 +283,23 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
     });
     if (!shortest) return null;
     const huntOpts = {
-      costMode: profile === "direct" ? "pavement" : profile === "balanced" ? "balancedResource" : "profile",
+      costMode: profile === "direct" || profile === "balanced" ? "balancedResource" : "profile",
       maxPathMeters: shortest.distanceMeters + extra,
       shortestMeters: shortest.distanceMeters,
       sessionSeed,
-      variety: profile !== "balanced"
+      variety: false
     };
     const hunt = findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds, pavedBias, huntOpts);
-    const out = hunt || shortest;
-    if (hunt && profile === "balanced") {
+    if (!hunt) {
+      shortest.searchMeta = shortest.searchMeta || {};
+      shortest.searchMeta.timedOut = true;
+      shortest.searchMeta.pass2Outcome = "noPath";
+      shortest.searchMeta.extraUsedMeters = 0;
+      shortest.searchMeta.extraBudgetMeters = extra;
+      return annotateCorridorMeta(shortest, startMatch.coord, endMatch.coord, profile, shortest.distanceMeters);
+    }
+    const out = hunt;
+    if (profile === "balanced") {
       out.searchMeta = out.searchMeta || {};
       out.searchMeta.balancedResource = true;
     }
@@ -310,6 +421,30 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
     : corridorMetersForProfile(profile);
   const applyAwayXt = costMode === "profile" && profile !== "cleanest";
   const applySoftCorridor = applyAwayXt && !(corridorM > 0);
+  const isHunt = Number.isFinite(maxPathMeters);
+  const slackToDest = isHunt
+    ? fillShortestMeters({
+        n,
+        total,
+        nodeOffsets,
+        edgeTargets,
+        edgeUndirectedIndex,
+        edgeAttrs,
+        edgeMeters,
+        pack,
+        policy,
+        enums,
+        avoid,
+        virt,
+        virtAdj,
+        startLL,
+        endLL,
+        cityWall,
+        origin: endNode,
+        capMeters: maxPathMeters,
+        nodeLL
+      })
+    : null;
 
   if (costMode === "balancedResource") {
     return searchBalancedResource({
@@ -339,7 +474,8 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
       shortestMeters: Number(searchOpts.shortestMeters) || 1,
       cityWall,
       corridorM,
-      varietyOn
+      varietyOn,
+      slackToDest
     });
   }
 
@@ -358,13 +494,22 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
   pathMeters[startNode] = 0;
   heap.push({ node: startNode, cost: 0 });
   let pops = 0;
-  const popCap = Math.min(8_000_000, total * (VARIETY_SLOTS + 2) * 8);
+  let abort = "completed";
+  const popCap = isHunt ? PASS2_POP_CAP : Math.min(8_000_000, total * (VARIETY_SLOTS + 2) * 8);
+  const deadline = isHunt ? Date.now() + PASS2_TIME_MS : 0;
 
   while (heap.items.length) {
     const cur = heap.pop();
     if (!cur || cur.cost !== dist[cur.node]) continue;
     pops += 1;
-    if (pops > popCap) break;
+    if (pops > popCap) {
+      abort = "popCap";
+      break;
+    }
+    if (deadline && (pops & 255) === 0 && Date.now() > deadline) {
+      abort = "timeCap";
+      break;
+    }
     if (cur.node === endNode) break;
 
     if (cur.node < n) {
@@ -382,7 +527,7 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
         if (hopBlocked(toLL, startLL, endLL, cityWall)) continue;
         const edgeM = edgeMeters[ei];
         const newMeters = pathMeters[cur.node] + edgeM;
-        if (newMeters > maxPathMeters) continue;
+        if (exceedsLengthSlack(newMeters, to, slackToDest, maxPathMeters)) continue;
         const surface = unpackSurface(attr);
         const road = ROAD_CLASS_NAME[unpackRoadClass(attr)] || "unknown";
         const surfaceName = enums.SURFACE_NAME[surface] || "unknown";
@@ -475,7 +620,7 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
         const toLL = nodeLL(item.to);
         if (hopBlocked(toLL, startLL, endLL, cityWall)) continue;
         const newMeters = pathMeters[cur.node] + v.meters;
-        if (newMeters > maxPathMeters) continue;
+        if (exceedsLengthSlack(newMeters, item.to, slackToDest, maxPathMeters)) continue;
         let step = v.meters / 1000;
         if (applyAwayXt) {
           step += awayExtra(cur.node, item.to);
@@ -624,7 +769,10 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
       ellipseEscalation: "v2_uni",
       profileCost: dist[endNode],
       prunedLoopCount: pruned.prunedLoopCount,
-      prunedLoopMeters: Math.round(pruned.prunedMeters)
+      prunedLoopMeters: Math.round(pruned.prunedMeters),
+      pops,
+      timedOut: abort === "timeCap" || abort === "popCap",
+      pass2Outcome: abort
     },
     stats: {
       pavedPercent: pct(bySurfaceM.paved || 0),
@@ -668,7 +816,8 @@ function searchBalancedResource(ctx) {
     shortestMeters,
     cityWall,
     corridorM,
-    varietyOn
+    varietyOn,
+    slackToDest
   } = ctx;
   const B = BALANCED_BUCKETS;
   const labels = (n + 2) * B;
@@ -688,6 +837,10 @@ function searchBalancedResource(ctx) {
   dist[startLab] = 0;
   heap.push({ node: startLab, cost: 0 });
   let pops = 0;
+  let abort = "completed";
+  const isHunt = Number.isFinite(maxPathMeters);
+  const popCap = isHunt ? PASS2_POP_CAP : 8_000_000;
+  const deadline = isHunt ? Date.now() + PASS2_TIME_MS : 0;
 
   function nodeLL(node) {
     if (node === startNode) return startLL;
@@ -700,7 +853,14 @@ function searchBalancedResource(ctx) {
 
   while (heap.items.length) {
     pops += 1;
-    if (pops > 8000000) break;
+    if (pops > popCap) {
+      abort = "popCap";
+      break;
+    }
+    if (deadline && (pops & 255) === 0 && Date.now() > deadline) {
+      abort = "timeCap";
+      break;
+    }
     const cur = heap.pop();
     if (!cur || cur.cost !== dist[cur.node]) continue;
     if (cur.cost > maxPathMeters) continue;
@@ -721,7 +881,7 @@ function searchBalancedResource(ctx) {
         if (hopBlocked(toLL, startLL, endLL, cityWall)) continue;
         const edgeM = edgeMeters[ei];
         const newMeters = cur.cost + edgeM;
-        if (newMeters > maxPathMeters) continue;
+        if (exceedsLengthSlack(newMeters, to, slackToDest, maxPathMeters)) continue;
         const surface = unpackSurface(attr);
         const road = ROAD_CLASS_NAME[unpackRoadClass(attr)] || "unknown";
         const surfaceName = enums.SURFACE_NAME[surface] || "unknown";
@@ -763,7 +923,7 @@ function searchBalancedResource(ctx) {
         const toLL = nodeLL(item.to);
         if (hopBlocked(toLL, startLL, endLL, cityWall)) continue;
         const newMeters = cur.cost + v.meters;
-        if (newMeters > maxPathMeters) continue;
+        if (exceedsLengthSlack(newMeters, item.to, slackToDest, maxPathMeters)) continue;
         const b = dirtBucket(dirtSoFar, newMeters);
         const toLab = lab(item.to, b);
         if (newMeters < dist[toLab]) {
@@ -786,7 +946,7 @@ function searchBalancedResource(ctx) {
     if (!Number.isFinite(len) || len <= 0) continue;
     cands.push({ lab: endLab, len, dirt: dirtAt[endLab] });
   }
-  const bestLab = pickBalancedEnd(cands, sessionSeed);
+  const bestLab = pickResourceEnd(cands, profile, sessionSeed);
   if (bestLab < 0 || !Number.isFinite(dist[bestLab])) return null;
 
   const used = [];
@@ -894,7 +1054,10 @@ function searchBalancedResource(ctx) {
       balancedResource: true,
       dirtPercent: pct(dirtMeters),
       prunedLoopCount: pruned.prunedLoopCount,
-      prunedLoopMeters: Math.round(pruned.prunedMeters)
+      prunedLoopMeters: Math.round(pruned.prunedMeters),
+      pops,
+      timedOut: abort === "timeCap" || abort === "popCap",
+      pass2Outcome: abort
     },
     stats: {
       pavedPercent: pct(bySurfaceM.paved || 0),

@@ -6,6 +6,16 @@ Living log for agent handoffs. Prefer this over chat archaeology.
 
 ---
 
+## 2026-08-19 — Pass-2 slack, packed fuel, itinerary backtrack
+
+Long hops were spending ~2 min in pass 2, hitting an 8M pop cap, and silently returning the shortest path (`extraUsed=0`). Pass 2 now prunes with reverse shortest-to-dest slack (`g + dist(n,B) ≤ L+extra`), caps at 400k pops / 18s, and writes `searchMeta.timedOut` + `pass2=…` on the result so a fallback is never invisible. Variety steal is off during the hunt (it was multiplying work on 700–900 edge hops).
+
+Fuel for planning is pack-only: `extract-osm-fuel.sh` → `pack-region-fuel.js` → `fuel.v1.json` beside `graph.v2.bin`. On-device fuel search no longer calls Overpass. Phone top-ups the sidecar if the graph is already installed. Camp/lodging/liquor viewport pins still use Overpass and must not block a route.
+
+Itinerary hop building backtracks on a miss (skip that pump, try the next-best from the previous stop) instead of treating the remaining 450 km as one unfueled hop.
+
+---
+
 ## 2026-08-19 — Itinerary routing rebuild (in progress, BC validation)
 
 Branch `feature/routing-itinerary-rebuild`. Restore point: `ef0b812` on `rescue/2026-08-19`.

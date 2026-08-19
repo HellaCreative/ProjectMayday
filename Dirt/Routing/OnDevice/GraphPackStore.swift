@@ -49,6 +49,8 @@ final class GraphPackStore {
     private(set) var regions: [RegionInfo] = GraphPackStore.catalogSeed
     private(set) var lastManifestVersion: String = "v1"
     private(set) var isRefreshingCatalog = false
+    /// Fuel stations loaded from installed `fuel.v1.json` sidecars.
+    private var packedFuelByRegion: [String: [POIFeature]] = [:]
 
     /// When online near a border, quietly fetch the next published region.
     var autoDownloadNextRegion: Bool {
@@ -289,6 +291,7 @@ final class GraphPackStore {
         quietDownloadIds.remove(id)
         let dir = regionDir(regionId: id)
         try? FileManager.default.removeItem(at: dir)
+        packedFuelByRegion.removeValue(forKey: id)
         if activePack?.regionId?.lowercased() == id {
             activePack = nil
             loadedRegionIds.removeAll { $0.lowercased() == id }
@@ -794,7 +797,8 @@ final class GraphPackStore {
 
     private static let phonePackFileNames: Set<String> = [
         "graph.v2.bin",
-        "geometry.v1.bin"
+        "geometry.v1.bin",
+        "fuel.v1.json"
     ]
 
     private func geometryFileURL(regionId: String) -> URL {
@@ -812,6 +816,76 @@ final class GraphPackStore {
             if fm.fileExists(atPath: sibling.path) { return sibling }
         }
         return regionDir(regionId: id).appendingPathComponent("geometry.v1.bin")
+    }
+
+    private func fuelFileURL(regionId: String) -> URL {
+        let id = regionId.lowercased()
+        let fm = FileManager.default
+        let primary = regionDir(regionId: id).appendingPathComponent("fuel.v1.json")
+        if fm.fileExists(atPath: primary.path) { return primary }
+        if let graph = findGraphFileURL(regionId: id) {
+            let sibling = graph.deletingLastPathComponent().appendingPathComponent("fuel.v1.json")
+            if fm.fileExists(atPath: sibling.path) { return sibling }
+        }
+        return primary
+    }
+
+    /// Fuel stations from installed pack sidecars in the A→B box. Offline.
+    func fuelStations(from start: RouteCoordinate, to end: RouteCoordinate) -> [POIFeature] {
+        let padDeg = 40_000.0 / 111_000.0
+        return fuelStations(
+            minLat: min(start.latitude, end.latitude) - padDeg,
+            maxLat: max(start.latitude, end.latitude) + padDeg,
+            minLon: min(start.longitude, end.longitude) - padDeg,
+            maxLon: max(start.longitude, end.longitude) + padDeg
+        )
+    }
+
+    func fuelStations(
+        minLat: Double,
+        maxLat: Double,
+        minLon: Double,
+        maxLon: Double
+    ) -> [POIFeature] {
+        let coords = [
+            CLLocationCoordinate2D(latitude: minLat, longitude: minLon),
+            CLLocationCoordinate2D(latitude: maxLat, longitude: maxLon)
+        ]
+        var ids = Self.regionIds(covering: coords)
+        for id in Self.regionIds(containingAny: coords) where !ids.contains(id) {
+            ids.append(id)
+        }
+        if ids.isEmpty, let active = activePack?.regionId?.lowercased() {
+            ids = [active]
+        }
+        var out: [POIFeature] = []
+        for id in ids {
+            for station in loadedFuel(regionId: id) {
+                if station.latitude >= minLat, station.latitude <= maxLat,
+                   station.longitude >= minLon, station.longitude <= maxLon {
+                    out.append(station)
+                }
+            }
+        }
+        return out
+    }
+
+    private func loadedFuel(regionId: String) -> [POIFeature] {
+        let id = regionId.lowercased()
+        if let cached = packedFuelByRegion[id] { return cached }
+        let url = fuelFileURL(regionId: id)
+        let stations = Self.decodeFuelFile(url)
+        packedFuelByRegion[id] = stations
+        if !FileManager.default.fileExists(atPath: url.path) {
+            maybeTopUpFuel(regionId: id)
+        }
+        return stations
+    }
+
+    nonisolated private static func decodeFuelFile(_ url: URL) -> [POIFeature] {
+        guard FileManager.default.fileExists(atPath: url.path),
+              let data = try? Data(contentsOf: url) else { return [] }
+        return PackedFuel.decode(data)
     }
 
     /// Decode pack binaries. Safe to call from a background task.
@@ -847,6 +921,7 @@ final class GraphPackStore {
             if activePack?.geometry == nil {
                 maybeTopUpGeometry(regionId: preferred)
             }
+            maybeTopUpFuel(regionId: preferred)
             return
         }
 
@@ -863,6 +938,7 @@ final class GraphPackStore {
         if pack.geometry == nil {
             maybeTopUpGeometry(regionId: preferred)
         }
+        maybeTopUpFuel(regionId: preferred)
     }
 
     /// Primary regions for each pin, then any extra bbox hits (cross-border corridors).
@@ -884,6 +960,21 @@ final class GraphPackStore {
             await self?.downloadNamedFile(regionId: id, fileName: "geometry.v1.bin")
             self?.downloadTasks["\(id)-geom"] = nil
             await self?.activateInstalledPack(regionId: id)
+        }
+    }
+
+    /// Quietly fetch fuel.v1 if the graph is installed but stations are missing.
+    private func maybeTopUpFuel(regionId: String) {
+        let id = regionId.lowercased()
+        let fuelPath = fuelFileURL(regionId: id).path
+        guard !FileManager.default.fileExists(atPath: fuelPath) else { return }
+        guard downloadTasks["\(id)-fuel"] == nil else { return }
+        downloadTasks["\(id)-fuel"] = Task { [weak self] in
+            await self?.downloadNamedFile(regionId: id, fileName: "fuel.v1.json")
+            self?.downloadTasks["\(id)-fuel"] = nil
+            if let self {
+                self.packedFuelByRegion[id] = Self.decodeFuelFile(self.fuelFileURL(regionId: id))
+            }
         }
     }
 
@@ -998,6 +1089,7 @@ final class GraphPackStore {
             }
 
             setInstall(regionId, .installed)
+            packedFuelByRegion.removeValue(forKey: regionId)
             await activateInstalledPack(regionId: regionId)
             if asNavigationPrep {
                 progress = 1

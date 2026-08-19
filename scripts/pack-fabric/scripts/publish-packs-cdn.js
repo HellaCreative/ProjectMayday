@@ -31,7 +31,7 @@ const REGIONS = path.join(ROOT, "routing", "data", "regions");
 const VERSION = process.env.PACK_CDN_VERSION || "v1";
 const OUT = path.join(ROOT, "app", "data", "packs", VERSION);
 
-const PHONE_FILE_NAMES = ["graph.v2.bin", "geometry.v1.bin"];
+const PHONE_FILE_NAMES = ["graph.v2.bin", "geometry.v1.bin", "fuel.v1.json"];
 const LONGHAUL_FILE_NAMES = ["longhaul.v2.bin", "longhaul.geometry.v1.bin"];
 
 function sha256File(filePath) {

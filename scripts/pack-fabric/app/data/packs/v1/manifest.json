@@ -93,6 +93,11 @@
           "name": "geometry.v1.bin",
           "bytes": 72269056,
           "sha256": "ffe8a454bf6d27f7728b50f20e49ca65938f1f571c563755d36f9b0b4b5b5af2"
+        },
+        {
+          "name": "fuel.v1.json",
+          "bytes": 427970,
+          "sha256": "f6ae834e58a90533a769ec44687bbe7edec65f7702d3b536fa6d57167d7927c9"
         }
       ]
     },

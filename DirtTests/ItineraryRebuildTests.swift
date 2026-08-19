@@ -100,6 +100,12 @@ struct HopSearchPolicyTests {
         )
     }
 
+    @Test func pass2CapsAreTightEnoughForLongHaul() {
+        #expect(HopSearchPolicy.pass2TimeCapSeconds == 18)
+        #expect(HopSearchPolicy.pass2PopCap == 400_000)
+        #expect(HopSearchPolicy.pass2PopCap < 8_000_000)
+    }
+
     @Test func corridorWidthsMatchSpec() {
         #expect(HopSearchPolicy.corridorMeters(for: .direct) == 15_000)
         #expect(HopSearchPolicy.corridorMeters(for: .dirt) == 50_000)
@@ -127,7 +133,8 @@ struct HopSearchPolicyTests {
             (2, 210_000, 105_000), // 50%
             (3, 205_000, 80_000)   // 39%
         ]
-        #expect(HopSearchPolicy.pickBalancedEnd(labels: labels, seed: 1) == 2)
+        #expect(HopSearchPolicy.pickResourceEnd(labels: labels, profile: .balanced, seed: 1) == 2)
+        #expect(HopSearchPolicy.pickResourceEnd(labels: labels, profile: .direct, seed: 1) == 1)
     }
 
     @Test func cleanHasNoCorridorConstraint() {
@@ -166,6 +173,28 @@ struct FuelItineraryTests {
         #expect(pick?.id == "osm:along")
     }
 
+    @Test func rankedSkipsExcludedAndOffersNextBest() {
+        let start = RouteCoordinate(longitude: -123.2, latitude: 50.0)
+        let end = RouteCoordinate(longitude: -119.7, latitude: 50.0)
+        let farther = GeoMath.interpolate(start, end, fraction: 0.55)
+        let nearer = GeoMath.interpolate(start, end, fraction: 0.35)
+        let fuels = [
+            poi("far", farther),
+            poi("near", nearer)
+        ]
+        let reach = ["osm:far": 160_000.0, "osm:near": 100_000.0]
+        let ranked = FuelItinerary.rankedProgressFuel(
+            fuels: fuels, from: start, to: end, reachableMeters: reach,
+            tankMeters: 200_000, sessionSeed: 1
+        )
+        #expect(ranked.map(\.id).first == "osm:far")
+        let next = FuelItinerary.rankedProgressFuel(
+            fuels: fuels, from: start, to: end, reachableMeters: reach,
+            tankMeters: 200_000, sessionSeed: 1, excluding: ["osm:far"]
+        )
+        #expect(next.map(\.id) == ["osm:near"])
+    }
+
     @Test func progressAlongABIsPositiveTowardB() {
         let a = RouteCoordinate(longitude: -123, latitude: 50)
         let b = RouteCoordinate(longitude: -120, latitude: 50)
@@ -173,5 +202,26 @@ struct FuelItineraryTests {
         let behind = RouteCoordinate(longitude: -124, latitude: 50)
         #expect(GeoMath.progressAlongAB(from: a, to: b, point: mid) > 50_000)
         #expect(GeoMath.progressAlongAB(from: a, to: b, point: behind) < 0)
+    }
+
+    @Test func packedFuelDecodesStations() {
+        let json = """
+        {"schema":"fuel.v1","regionId":"bc","stations":[
+          {"id":"osm:n1","lat":49.7,"lon":-123.1,"name":"Chevron","brand":"Chevron"}
+        ]}
+        """
+        let stations = PackedFuel.decode(Data(json.utf8))
+        #expect(stations.count == 1)
+        #expect(stations[0].id == "osm:n1")
+        #expect(stations[0].category == "fuel")
+        #expect(stations[0].name == "Chevron")
+    }
+
+    private func poi(_ id: String, _ at: RouteCoordinate) -> POIFeature {
+        POIFeature(
+            id: "osm:\(id)", category: "fuel", latitude: at.latitude,
+            longitude: at.longitude, name: id, address: nil, brand: nil,
+            openingHours: nil, phone: nil, website: nil
+        )
     }
 }

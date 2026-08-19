@@ -14,6 +14,8 @@ const VARIETY_SLOTS = 3;
 const BALANCED_DIRT_LO = 0.45;
 const BALANCED_DIRT_HI = 0.55;
 const BALANCED_BUCKETS = 20;
+const PASS2_TIME_MS = 18000;
+const PASS2_POP_CAP = 400000;
 const EARTH_RADIUS_M = 6371000;
 
 const METRO_CORE_WALL = [
@@ -60,9 +62,18 @@ function dirtBucket(dirtMeters, pathMeters) {
   return Math.min(BALANCED_BUCKETS - 1, Math.max(0, b));
 }
 
-function pickBalancedEnd(cands, seed) {
+function pickResourceEnd(cands, profile, seed) {
   if (!cands.length) return -1;
   const ratio = (x) => (x.len > 0 ? x.dirt / x.len : 0);
+  if (profile === "direct") {
+    cands.sort((a, b) => {
+      const dr = ratio(b) - ratio(a);
+      if (Math.abs(dr) > 0.005) return dr;
+      if (Math.abs(a.len - b.len) > 50) return a.len - b.len;
+      return varietyHash(seed, a.lab, 0) - varietyHash(seed, b.lab, 0);
+    });
+    return cands[0].lab;
+  }
   const inBand = cands.filter((x) => {
     const r = ratio(x);
     return r >= BALANCED_DIRT_LO && r <= BALANCED_DIRT_HI;
@@ -195,6 +206,9 @@ function annotateCorridorMeta(result, startLL, endLL, profile, shortestMeters) {
     result.searchMeta.extraUsedMeters = Math.round(result.distanceMeters - shortestMeters);
     result.searchMeta.extraBudgetMeters = cap;
   }
+  if (result.searchMeta.timedOut) {
+    result.searchMeta.pass2Outcome = result.searchMeta.pass2Outcome || "timedOut";
+  }
   return result;
 }
 
@@ -236,11 +250,13 @@ module.exports = {
   BALANCED_DIRT_LO,
   BALANCED_DIRT_HI,
   BALANCED_BUCKETS,
+  PASS2_TIME_MS,
+  PASS2_POP_CAP,
   METRO_CORE_WALL,
   metroBlocks,
   varietyHash,
   dirtBucket,
-  pickBalancedEnd,
+  pickResourceEnd,
   considerRelax,
   applyRelax,
   shouldPush,

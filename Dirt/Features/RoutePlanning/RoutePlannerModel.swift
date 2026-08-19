@@ -1818,11 +1818,14 @@ final class RoutePlannerModel {
         RoutingDebugLog.shared.event("fuel itinerary candidates=\(fuels.count)")
 
         var waypoints: [RouteCoordinate] = [start]
+        var waypointFuelIds: [String] = []
         var current = start
+        var skipped = Set<String>()
         var hops = 0
+        var attempts = 0
         var warned = false
-        while hops < 12 {
-            hops += 1
+        while hops < 12, attempts < 36 {
+            attempts += 1
             let curCL = CLLocationCoordinate2D(latitude: current.latitude, longitude: current.longitude)
             let rem = await graphPacks.shortestGraphMeters(
                 from: curCL, to: endCL,
@@ -1838,14 +1841,16 @@ final class RoutePlannerModel {
                 maxMeters: tank * HopSearchPolicy.fuelMaxTank,
                 profile: profile, allowUnknown: allow
             )
-            if let pick = FuelItinerary.pickProgressFuel(
+            let ranked = FuelItinerary.rankedProgressFuel(
                 fuels: fuels,
                 from: current,
                 to: end,
                 reachableMeters: reach,
                 tankMeters: tank,
-                sessionSeed: planningSessionSeed
-            ) {
+                sessionSeed: planningSessionSeed,
+                excluding: skipped.union(Set(waypointFuelIds))
+            )
+            if let pick = ranked.first {
                 let gas = RouteCoordinate(longitude: pick.longitude, latitude: pick.latitude)
                 if GeoMath.meters(current, gas) < 800 || GeoMath.meters(gas, end) < 800 {
                     waypoints.append(end)
@@ -1855,9 +1860,22 @@ final class RoutePlannerModel {
                     "fuel itinerary F\(waypoints.count) \(pick.latitude),\(pick.longitude) name=\(pick.name ?? "-") graph=\(Int(reach[pick.id] ?? 0))m"
                 )
                 waypoints.append(gas)
+                waypointFuelIds.append(pick.id)
                 current = gas
+                hops += 1
             } else {
-                if rem == nil || (rem ?? .infinity) > tank {
+                let remainingTooFar = rem == nil || (rem ?? .infinity) > tank
+                if !waypointFuelIds.isEmpty, remainingTooFar {
+                    let droppedId = waypointFuelIds.removeLast()
+                    waypoints.removeLast()
+                    skipped.insert(droppedId)
+                    current = waypoints.last ?? start
+                    RoutingDebugLog.shared.event(
+                        "fuel itinerary miss — backtrack skip=\(droppedId) retry from \(current.latitude),\(current.longitude)"
+                    )
+                    continue
+                }
+                if remainingTooFar {
                     warned = true
                     RoutingDebugLog.shared.event(
                         "fuel itinerary miss — no pump in tank from \(current.latitude),\(current.longitude)"

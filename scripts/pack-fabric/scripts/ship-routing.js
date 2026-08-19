@@ -9,19 +9,21 @@
  *   node scripts/pack-fabric/scripts/ship-routing.js --live
  *   node scripts/pack-fabric/scripts/ship-routing.js --pack bc --live --assert
  *
- * --pack  uploads graph.v2.bin + geometry.v1.bin to R2 dirt-packs/{id}/
+ * --pack  uploads graph.v2.bin + geometry.v1.bin (+ fuel.v1.json if present) to R2 dirt-packs/{id}/
  * --live  deploys /api/route from this pack-fabric tree (not another repo)
  * --assert  curls production; fails if the graph is still the longhaul extract
  */
 
 const fs = require("fs");
 const path = require("path");
+const crypto = require("crypto");
 const { spawnSync } = require("child_process");
 
 const DIRT = path.resolve(__dirname, "../../..");
 const FABRIC = path.join(DIRT, "scripts/pack-fabric");
 const PACKS = path.join(FABRIC, "app/data/packs/v1");
 const PHONE_FILES = ["graph.v2.bin", "geometry.v1.bin"];
+const OPTIONAL_PHONE_FILES = ["fuel.v1.json"];
 
 function die(msg) {
   console.error(msg);
@@ -48,19 +50,51 @@ function parseArgs(argv) {
   };
 }
 
+function sha256File(filePath) {
+  return crypto.createHash("sha256").update(fs.readFileSync(filePath)).digest("hex");
+}
+
 function putR2(regionId, fileName) {
   const src = path.join(PACKS, regionId, fileName);
   if (!fs.existsSync(src)) die("missing " + src + " — build the phone pack first");
   const key = "dirt-packs/" + regionId + "/" + fileName;
-  console.log("PUT", key, Math.round(fs.statSync(src).size / 1e6) + "MB");
+  const mb = fs.statSync(src).size / 1e6;
+  console.log("PUT", key, mb >= 1 ? Math.round(mb) + "MB" : Math.round(mb * 1000) + "KB");
   run("npx", ["wrangler", "r2", "object", "put", key, "--file=" + src, "--remote"], {
     cwd: FABRIC
   });
 }
 
+function mergeFuelIntoManifest(ids) {
+  const manifestPath = path.join(PACKS, "manifest.json");
+  if (!fs.existsSync(manifestPath)) return;
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+  let changed = false;
+  for (const id of ids) {
+    const src = path.join(PACKS, id, "fuel.v1.json");
+    if (!fs.existsSync(src)) continue;
+    const region = (manifest.regions || []).find((r) => r.id === id);
+    if (!region) continue;
+    const st = fs.statSync(src);
+    region.files = (region.files || []).filter((f) => f.name !== "fuel.v1.json");
+    region.files.push({ name: "fuel.v1.json", bytes: st.size, sha256: sha256File(src) });
+    changed = true;
+  }
+  if (changed) {
+    fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + "\n");
+    console.log("manifest merged fuel.v1.json for", ids.join(","));
+  }
+}
+
 function shipPack(ids) {
+  mergeFuelIntoManifest(ids);
   for (const id of ids) {
     for (const name of PHONE_FILES) putR2(id, name);
+    for (const name of OPTIONAL_PHONE_FILES) {
+      const src = path.join(PACKS, id, name);
+      if (fs.existsSync(src)) putR2(id, name);
+      else console.warn("skip", id + "/" + name, "(not built — extract-osm-fuel + pack-region-fuel)");
+    }
   }
   const manifest = path.join(PACKS, "manifest.json");
   if (fs.existsSync(manifest)) {

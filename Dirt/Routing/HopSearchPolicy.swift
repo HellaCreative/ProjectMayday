@@ -27,6 +27,10 @@ nonisolated enum HopSearchPolicy {
     static let fuelMaxTank: Double = 0.95
     /// Finish to B rather than stuffing a pump on the doorstep.
     static let fuelSkipIfWithin: Double = 1.15
+    /// Pass 2 (profile / pavement / balanced) must finish well under a minute.
+    /// Long hops were hitting the 8M pop cap (~2 min) and silently returning shortest.
+    static let pass2TimeCapSeconds: Double = 18
+    static let pass2PopCap: Int = 400_000
 
     enum CostMode: Sendable {
         /// Existing profile weight tables (Dirt, Clean).
@@ -61,13 +65,23 @@ nonisolated enum HopSearchPolicy {
 
     /// Among dest labels, prefer in-band 45–55%; inside that (or overall if none)
     /// pick closer to 50%, then shorter, then session seed.
-    static func pickBalancedEnd(
+    static func pickResourceEnd(
         labels: [(lab: Int, len: Double, dirt: Double)],
+        profile: RouteProfile,
         seed: UInt64
     ) -> Int? {
         guard !labels.isEmpty else { return nil }
         func ratio(_ x: (lab: Int, len: Double, dirt: Double)) -> Double {
             x.len > 0 ? x.dirt / x.len : 0
+        }
+        if profile == .direct {
+            return labels.min { a, b in
+                let ra = ratio(a)
+                let rb = ratio(b)
+                if abs(ra - rb) > 0.005 { return ra > rb }
+                if abs(a.len - b.len) > 50 { return a.len < b.len }
+                return hash(seed, a.lab, 0) < hash(seed, b.lab, 0)
+            }?.lab
         }
         let inBand = labels.filter {
             let r = ratio($0)

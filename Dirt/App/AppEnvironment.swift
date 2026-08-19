@@ -21,7 +21,7 @@ final class AppEnvironment {
     let groups: GroupsViewModel
     let incidents: IncidentRecoveryModel
     let rideIntelligence: RideIntelligenceService
-    /// Rider Services POIs from OSM Overpass.
+    /// Rider Services: fuel from the installed pack; other POIs from Overpass.
     let poiManager: POIManager
     /// Provincial road overlay from the installed graph pack.
     let networkOverlayManager: NetworkOverlayManager
@@ -105,7 +105,7 @@ final class AppEnvironment {
         groups.onToast = { [planner] message in
             planner.toast = message
         }
-        poiManager             = POIManager(mapState: mapState)
+        poiManager             = POIManager(mapState: mapState, graphPacks: graphPacks)
         networkOverlayManager  = NetworkOverlayManager(mapState: mapState, graphPacks: graphPacks)
         routingGraphDebug      = RoutingGraphDebugManager(mapState: mapState, graphPacks: graphPacks)
         bcOSMHierarchy         = BCOSMHierarchyOverlay(mapState: mapState)

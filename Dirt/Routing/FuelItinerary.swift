@@ -13,11 +13,28 @@ nonisolated enum FuelItinerary {
         to: RouteCoordinate,
         reachableMeters: [String: Double],
         tankMeters: Double,
-        sessionSeed: UInt64
+        sessionSeed: UInt64,
+        excluding: Set<String> = []
     ) -> POIFeature? {
-        guard tankMeters > 0, !fuels.isEmpty else { return nil }
+        rankedProgressFuel(
+            fuels: fuels, from: from, to: to, reachableMeters: reachableMeters,
+            tankMeters: tankMeters, sessionSeed: sessionSeed, excluding: excluding
+        ).first
+    }
+
+    /// Ranked pumps toward B. Tank-band first, then more progress, then seed.
+    static func rankedProgressFuel(
+        fuels: [POIFeature],
+        from: RouteCoordinate,
+        to: RouteCoordinate,
+        reachableMeters: [String: Double],
+        tankMeters: Double,
+        sessionSeed: UInt64,
+        excluding: Set<String> = []
+    ) -> [POIFeature] {
+        guard tankMeters > 0, !fuels.isEmpty else { return [] }
         let ab = GeoMath.meters(from, to)
-        guard ab > 8_000 else { return nil }
+        guard ab > 8_000 else { return [] }
 
         struct Cand {
             var fuel: POIFeature
@@ -27,6 +44,7 @@ nonisolated enum FuelItinerary {
         var cands: [Cand] = []
         cands.reserveCapacity(fuels.count)
         for fuel in fuels {
+            if excluding.contains(fuel.id) { continue }
             guard let graph = reachableMeters[fuel.id], graph.isFinite, graph > 8_000 else { continue }
             guard graph <= tankMeters * HopSearchPolicy.fuelMaxTank else { continue }
             let at = RouteCoordinate(longitude: fuel.longitude, latitude: fuel.latitude)
@@ -41,7 +59,7 @@ nonisolated enum FuelItinerary {
             guard xt < 40_000 || xt < progress * 0.35 else { continue }
             cands.append(Cand(fuel: fuel, graphMeters: graph, progress: progress))
         }
-        guard !cands.isEmpty else { return nil }
+        guard !cands.isEmpty else { return [] }
 
         let prefer = tankMeters * HopSearchPolicy.fuelPreferTank
         let band = cands.filter {
@@ -49,17 +67,15 @@ nonisolated enum FuelItinerary {
                 && $0.graphMeters <= tankMeters * HopSearchPolicy.fuelMaxTank
         }
         let pool = band.isEmpty ? cands : band
-        let bestProgress = pool.map(\.progress).max() ?? 0
-        let nearBest = pool.filter { $0.progress >= bestProgress * (1 - HopSearchPolicy.varietyMargin) }
-        let scored = (nearBest.isEmpty ? pool : nearBest).sorted { a, b in
-            let ha = HopSearchPolicy.hash(sessionSeed, Int(a.progress), Int(a.graphMeters))
-            let hb = HopSearchPolicy.hash(sessionSeed, Int(b.progress), Int(b.graphMeters))
-            if ha != hb { return ha < hb }
+        return pool.sorted { a, b in
+            if abs(a.progress - b.progress) > 2_000 { return a.progress > b.progress }
             let da = abs(a.graphMeters - prefer)
             let db = abs(b.graphMeters - prefer)
             if abs(da - db) > 1 { return da < db }
+            let ha = HopSearchPolicy.hash(sessionSeed, Int(a.progress), Int(a.graphMeters))
+            let hb = HopSearchPolicy.hash(sessionSeed, Int(b.progress), Int(b.graphMeters))
+            if ha != hb { return ha < hb }
             return a.progress > b.progress
-        }
-        return scored.first?.fuel
+        }.map(\.fuel)
     }
 }

@@ -35,7 +35,7 @@ enum AppConfig {
             .appendingPathComponent(fileName)
     }
 
-    /// OSM Overpass for Rider Services POIs (fuel / camp / lodging / liquor).
+    /// OSM Overpass for viewport camp / lodging / liquor pins. Fuel is pack-only.
     static let overpassURL = URL(string: "https://overpass-api.de/api/interpreter")!
 
     /// Absolute last-resort map center only when GPS has never delivered a fix

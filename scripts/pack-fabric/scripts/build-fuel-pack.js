@@ -119,6 +119,7 @@ const dropped = {
   noGeom: 0
 };
 let kept = 0;
+const allPois = [];
 
 for (const f of features) {
   const p = f.properties || {};
@@ -185,6 +186,17 @@ for (const f of features) {
     chunks.set(key, chunk);
   }
   chunk.pois.push(poi);
+  allPois.push({
+    id: poi.id,
+    lat: poi.lat,
+    lon: poi.lon,
+    name: poi.name,
+    brand: poi.brand,
+    address: poi.address,
+    openingHours: poi.openingHours,
+    phone: poi.phone,
+    website: poi.website
+  });
   kept++;
 }
 
@@ -235,6 +247,22 @@ const manifest = {
 
 fs.mkdirSync(outDir, { recursive: true });
 fs.writeFileSync(path.join(outDir, "fuel.manifest.json"), JSON.stringify(manifest, null, 2) + "\n");
+
+const v1Out = process.env.FUEL_V1_OUT;
+if (v1Out) {
+  const regionId = process.env.FUEL_REGION_ID || "";
+  const payload = {
+    schema: "fuel.v1",
+    regionId,
+    generatedAt: manifest.generatedAt,
+    source: "openstreetmap",
+    license: manifest.license,
+    stations: allPois
+  };
+  fs.mkdirSync(path.dirname(v1Out), { recursive: true });
+  fs.writeFileSync(v1Out, JSON.stringify(payload));
+  console.log("  fuel.v1: " + v1Out + " (" + allPois.length + " stations, " + Math.round(fs.statSync(v1Out).size / 1024) + " KB)");
+}
 
 console.log("Fuel pack complete");
 console.log("  kept:    " + kept);
