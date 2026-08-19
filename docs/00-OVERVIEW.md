@@ -4,8 +4,10 @@ Native SwiftUI client for the DIRT dual-sport navigator. No staging.
 
 | | |
 | --- | --- |
-| iOS repo | `/Users/richardsmith/SandBox01/MAYDAYiOS/Dirt` |
-| Local branch | `main` |
+| **Develop here** | `/Users/richardsmith/SandBox01/MAYDAYiOS/Dirt` |
+| Working branch | `rescue/2026-08-19` |
+| Agent primer | [../AGENTS.md](../AGENTS.md) |
+| Packs + live API | `scripts/pack-fabric/` |
 
 DIRT helps dual-sport riders plot A→B routes with surface-mix control (Clean / Direct / Balanced / Dirt + Allow unknown), navigate the line, save/export GPX, and optionally ride with a signed-in group.
 
@@ -24,6 +26,7 @@ MapLibre Native renders the map. Routing prefers on-device `graph.v2` packs from
 
 | Doc | Scope |
 | --- | --- |
+| [../AGENTS.md](../AGENTS.md) | New-agent primer (Vercel vs R2, branch) |
 | [00-OVERVIEW.md](./00-OVERVIEW.md) | This file |
 | [01-STACK.md](./01-STACK.md) | Swift stack, SPM, structure, signing |
 | [02-ROUTING.md](./02-ROUTING.md) | Client models, on-device packs, profiles |
@@ -42,3 +45,4 @@ MapLibre Native renders the map. Routing prefers on-device `graph.v2` packs from
 - Rider Services POIs from OSM, with motorcycle fuel filter
 - Network overlay paints the installed pack, not a second CDN
 - dirtmoto.app is the marketing / legal site (not a map client)
+- **One workspace:** this iOS repo, including `scripts/pack-fabric/`.

@@ -12,11 +12,10 @@ struct ProfileSheet: View {
     @State private var showManageSubscriptions = false
     @State private var showPaywall = false
     @State private var testerToolsOpen = false
-    @State private var crossProvinceBusy = false
-    @State private var crossProvinceStatus: String?
-    @State private var crossProvinceReportURL: URL?
-    @State private var showCrossProvinceShare = false
-    @State private var crossProvinceTask: Task<Void, Never>?
+    @State private var routeDebugBusy = false
+    @State private var routeDebugStatus: String?
+    @State private var routeDebugReportURL: URL?
+    @State private var showRouteDebugShare = false
     @AppStorage(FuelRangePrefs.key) private var fuelRangeKm = 0.0
     @AppStorage(KeepAwakePrefs.key) private var keepAwakeWhileUsing = false
     @Environment(\.scenePhase) private var scenePhase
@@ -84,8 +83,8 @@ struct ProfileSheet: View {
             .presentationBackground(DirtTheme.sheetMaterial)
         }
         .task { await subscription.refresh() }
-        .sheet(isPresented: $showCrossProvinceShare) {
-            if let url = crossProvinceReportURL {
+        .sheet(isPresented: $showRouteDebugShare) {
+            if let url = routeDebugReportURL {
                 ProfileShareSheet(items: [url])
             }
         }
@@ -419,59 +418,52 @@ struct ProfileSheet: View {
                 }
             }
 
-            crossProvinceDiagnosticsCard
+            routeSessionDiagnosticsCard
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private var crossProvinceDiagnosticsCard: some View {
+    private var routeSessionDiagnosticsCard: some View {
         VStack(alignment: .leading, spacing: DirtSpace.inner) {
-            Text("Diagnostics")
+            Text("Routing debug")
                 .font(DirtType.sectionLabel)
                 .tracking(1.1)
                 .foregroundStyle(DirtTheme.muted)
                 .textCase(.uppercase)
 
-            Text("Writes a note on on-device pack limits for routes that cross a province line. Does not change your planned route.")
+            Text("Share the last routing attempts (pins, profile, Allow, on-device vs live, km, dirt%). Send that file when a line looks wrong.")
                 .font(DirtType.helper)
                 .foregroundStyle(DirtTheme.muted)
                 .fixedSize(horizontal: false, vertical: true)
 
             Button {
-                runCrossProvinceDebug()
+                shareRouteDebug()
             } label: {
-                HStack(spacing: DirtSpace.inner) {
-                    if crossProvinceBusy {
-                        ProgressView()
-                            .controlSize(.small)
-                    }
-                    Text(crossProvinceBusy ? "Running cross-province debug…" : "Run cross-province route debug")
-                        .font(.dirtUI(13, weight: .semibold))
-                }
-                .frame(maxWidth: .infinity, minHeight: DirtHit.min, alignment: .leading)
-                .contentShape(Rectangle())
+                Text(routeDebugBusy ? "Preparing…" : "Share routing session…")
+                    .font(.dirtUI(13, weight: .semibold))
+                    .frame(maxWidth: .infinity, minHeight: DirtHit.min, alignment: .leading)
+                    .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .foregroundStyle(crossProvinceBusy ? DirtTheme.muted : DirtTheme.orange)
-            .disabled(crossProvinceBusy)
+            .foregroundStyle(DirtTheme.orange)
+            .disabled(routeDebugBusy)
 
-            if let crossProvinceStatus {
-                Text(crossProvinceStatus)
+            Button("Copy routing log") {
+                RoutingDebugLog.shared.copyToPasteboard()
+                app.planner.toast = "Routing log copied"
+            }
+            .font(.dirtUI(13, weight: .semibold))
+            .foregroundStyle(DirtTheme.orange)
+            .frame(maxWidth: .infinity, minHeight: DirtHit.min, alignment: .leading)
+            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+
+            if let routeDebugStatus {
+                Text(routeDebugStatus)
                     .font(DirtType.helper)
                     .foregroundStyle(DirtTheme.ink)
                     .fixedSize(horizontal: false, vertical: true)
                     .textSelection(.enabled)
-            }
-
-            if crossProvinceReportURL != nil, !crossProvinceBusy {
-                Button("Share report…") {
-                    showCrossProvinceShare = true
-                }
-                .font(.dirtUI(13, weight: .semibold))
-                .foregroundStyle(DirtTheme.orange)
-                .frame(maxWidth: .infinity, minHeight: DirtHit.min, alignment: .leading)
-                .contentShape(Rectangle())
-                .buttonStyle(.plain)
             }
         }
         .padding(DirtSpace.row)
@@ -483,40 +475,20 @@ struct ProfileSheet: View {
         )
     }
 
-    private func runCrossProvinceDebug() {
-        crossProvinceTask?.cancel()
-        crossProvinceBusy = true
-        crossProvinceStatus = "Writing pack-limit report…"
-        crossProvinceReportURL = nil
-        showCrossProvinceShare = false
-
-        crossProvinceTask = Task {
-            do {
-                let outcome = try await CrossProvinceRouteDebug.run { step in
-                    Task { @MainActor in
-                        crossProvinceStatus = "Running… \(step)"
-                    }
-                }
-                guard !Task.isCancelled else { return }
-                await MainActor.run {
-                    crossProvinceBusy = false
-                    crossProvinceReportURL = outcome.reportURL
-                    crossProvinceStatus =
-                        "Done · \(outcome.passCount) pass / \(outcome.failCount) fail\n"
-                        + "\(outcome.interpretation)\n"
-                        + outcome.reportURL.path
-                    showCrossProvinceShare = true
-                    app.planner.toast = "Cross-province report ready to share"
-                }
-            } catch {
-                guard !Task.isCancelled else { return }
-                await MainActor.run {
-                    crossProvinceBusy = false
-                    crossProvinceStatus = "Failed · \(error.localizedDescription)"
-                    app.planner.toast = "Cross-province debug failed"
-                }
-            }
+    private func shareRouteDebug() {
+        routeDebugBusy = true
+        routeDebugStatus = nil
+        do {
+            let url = try RoutingDebugLog.shared.writeShareFile()
+            routeDebugReportURL = url
+            routeDebugStatus = url.lastPathComponent
+            showRouteDebugShare = true
+            app.planner.toast = "Routing debug ready to share"
+        } catch {
+            routeDebugStatus = error.localizedDescription
+            app.planner.toast = "Couldn’t write routing debug"
         }
+        routeDebugBusy = false
     }
 
     private func testerRow(_ title: String, tint: Color, action: @escaping () -> Void) -> some View {

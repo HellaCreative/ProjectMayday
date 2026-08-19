@@ -446,6 +446,11 @@ struct RootView: View {
         return ZStack(alignment: .bottom) {
             VStack(spacing: 0) {
                 topChrome
+                if BuildChannel.debugRoutingGraphOverlay, app.mapState.showRoutingGraphDebug {
+                    routingGraphDebugHUD
+                        .padding(.horizontal, 12)
+                        .padding(.top, 8)
+                }
                 Spacer(minLength: 0)
 
                 if navActive,
@@ -509,6 +514,9 @@ struct RootView: View {
             if showsDock, routeCardOpen, activeSheet == nil, !navActive {
                 HStack(alignment: .bottom, spacing: 10) {
                     offlinePacksButton
+                    if BuildChannel.debugRoutingGraphOverlay {
+                        routingGraphDebugButton
+                    }
                     Spacer(minLength: 0)
                     mapControlStack
                 }
@@ -763,6 +771,9 @@ struct RootView: View {
         // Packs on the sheet-adjacent edge; fit + recenter on the far open-map edge.
         let controls = HStack(spacing: 10) {
             offlinePacksButton
+            if BuildChannel.debugRoutingGraphOverlay {
+                routingGraphDebugButton
+            }
             Spacer(minLength: 8)
             if app.planner.canFocusEntirePlannedRoute {
                 landscapeFitPlanButton
@@ -847,6 +858,32 @@ struct RootView: View {
             )
         }
         .accessibilityLabel("Offline map packs")
+    }
+
+    private var routingGraphDebugButton: some View {
+        Button {
+            app.mapState.showRoutingGraphDebug.toggle()
+            if !app.mapState.showRoutingGraphDebug {
+                app.mapState.debugGraphHit = nil
+            }
+        } label: {
+            VStack(spacing: 2) {
+                Image(systemName: "point.3.connected.trianglepath.dotted")
+                    .font(.system(size: 16, weight: .bold))
+                Text("GRAPH")
+                    .font(.dirtMono(7, weight: .bold))
+                    .tracking(0.5)
+            }
+            .foregroundStyle(app.mapState.showRoutingGraphDebug ? DirtTheme.onOrange : .white)
+            .frame(width: 50, height: 50)
+            .background(app.mapState.showRoutingGraphDebug ? DirtTheme.orange : DirtTheme.chrome)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(DirtTheme.chromeBorder, lineWidth: 1)
+            )
+        }
+        .accessibilityLabel("Debug routing graph overlay")
     }
 
     private func syncLandscapeMapInsets(dockLeading: Bool, sheetWidth: CGFloat) {
@@ -1048,6 +1085,31 @@ struct RootView: View {
         }
         .padding(.horizontal, 12)
         .padding(.top, 6)
+    }
+
+    private var routingGraphDebugHUD: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(app.mapState.debugGraphStatus ?? "DEBUG routing graph")
+                .font(.dirtMono(11, weight: .semibold))
+                .foregroundStyle(.white)
+            Text("Green = permissive · amber = unknown/Allow · orange = restricted · red = excluded. OSM highway tag is not in the pack — road class shown on tap. Viewport-capped.")
+                .font(.dirtMono(10))
+                .foregroundStyle(.white.opacity(0.72))
+            if let hit = app.mapState.debugGraphHit {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("tap \(hit.edgeId)")
+                    Text("access \(hit.accessClass)")
+                    Text("roadClass \(hit.roadClass)  ·  highway (not packed)")
+                    Text("source \(hit.source)")
+                }
+                .font(.dirtMono(11, weight: .medium))
+                .foregroundStyle(DirtTheme.onOrange)
+            }
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(DirtTheme.chrome.opacity(0.92))
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
     /// Floating dark-glass bar inside the safe area: the map runs past it on every side,

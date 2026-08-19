@@ -18,23 +18,109 @@ struct OnDeviceProfileCostsTests {
             profile: .balanced, surfaceCode: 3, roadClassCode: 8
         )
         #expect(dirtPaved > balancedPaved)
-        #expect(dirtPaved / balancedPaved < 6)
+        #expect(dirtPaved / balancedPaved < 15)
         #expect(dirtTrack < balancedTrack)
         #expect(dirtPaved / dirtTrack > 20)
     }
 
-    @Test func directHighwayStaysNearCleanNotDirt() {
-        let directFreeway = OnDeviceProfileCosts.edgeCostPerKm(
-            profile: .direct, surfaceCode: 0, roadClassCode: 1
+    @Test func directPrefersDirtOnTheLineNotDirtHuntPrices() {
+        let directPaved = OnDeviceProfileCosts.edgeCostPerKm(
+            profile: .direct, surfaceCode: 0, roadClassCode: 4
         )
-        let cleanFreeway = OnDeviceProfileCosts.edgeCostPerKm(
-            profile: .cleanest, surfaceCode: 0, roadClassCode: 1
+        let dirtPaved = OnDeviceProfileCosts.edgeCostPerKm(
+            profile: .dirt, surfaceCode: 0, roadClassCode: 4
         )
-        let dirtFreeway = OnDeviceProfileCosts.edgeCostPerKm(
-            profile: .dirt, surfaceCode: 0, roadClassCode: 1
+        let directTrack = OnDeviceProfileCosts.edgeCostPerKm(
+            profile: .direct, surfaceCode: 3, roadClassCode: 8
         )
-        #expect(abs(directFreeway - cleanFreeway) < abs(directFreeway - dirtFreeway))
-        #expect(dirtFreeway > directFreeway * 4)
+        let dirtTrack = OnDeviceProfileCosts.edgeCostPerKm(
+            profile: .dirt, surfaceCode: 3, roadClassCode: 8
+        )
+        let directAway = OnDeviceProfileCosts.approachAwayExtra(
+            profile: .direct,
+            dFromMeters: 200_000,
+            dToMeters: 210_000,
+            abMeters: 400_000
+        )
+        let dirtAway = OnDeviceProfileCosts.approachAwayExtra(
+            profile: .dirt,
+            dFromMeters: 200_000,
+            dToMeters: 210_000,
+            abMeters: 400_000
+        )
+        #expect(directPaved < dirtPaved / 3)
+        #expect(directTrack > dirtTrack * 8)
+        #expect(directPaved / directTrack > 1.1)
+        #expect(directPaved / directTrack < 4)
+        #expect(directAway > dirtAway * 3)
+    }
+
+    @Test func corridorCrossTrackTaxesOffLineArcsForAdventureProfiles() {
+        let a = CLLocationCoordinate2D(latitude: 49.73269, longitude: -123.13511)
+        let b = CLLocationCoordinate2D(latitude: 50.46739, longitude: -119.14172)
+        let onLine = CLLocationCoordinate2D(latitude: 50.1, longitude: -121.14)
+        let farNorth = CLLocationCoordinate2D(latitude: 51.4, longitude: -121.14)
+        let near = OnDeviceProfileCosts.corridorCrossTrackExtra(
+            profile: .direct, point: onLine, lineFrom: a, lineTo: b, edgeMeters: 1000
+        )
+        let farDirect = OnDeviceProfileCosts.corridorCrossTrackExtra(
+            profile: .direct, point: farNorth, lineFrom: a, lineTo: b, edgeMeters: 1000
+        )
+        let farBalanced = OnDeviceProfileCosts.corridorCrossTrackExtra(
+            profile: .balanced, point: farNorth, lineFrom: a, lineTo: b, edgeMeters: 1000
+        )
+        let farDirt = OnDeviceProfileCosts.corridorCrossTrackExtra(
+            profile: .dirt, point: farNorth, lineFrom: a, lineTo: b, edgeMeters: 1000
+        )
+        let farClean = OnDeviceProfileCosts.corridorCrossTrackExtra(
+            profile: .cleanest, point: farNorth, lineFrom: a, lineTo: b, edgeMeters: 1000
+        )
+        #expect(farDirect > near * 8)
+        #expect(farDirect > farBalanced)
+        #expect(farBalanced > farDirt)
+        #expect(farDirt > 8)
+        #expect(farClean == 0)
+        let xt = abs(GeoMath.crossTrackMeters(point: farNorth, lineFrom: a, to: b))
+        #expect(xt > 40_000)
+    }
+
+    @Test func balancedPavedBiasCheapensPavementOnly() {
+        let paved = OnDeviceProfileCosts.edgeCostPerKm(
+            profile: .balanced, surfaceCode: 0, roadClassCode: 4, pavedBias: 1
+        )
+        let cheaperPaved = OnDeviceProfileCosts.edgeCostPerKm(
+            profile: .balanced, surfaceCode: 0, roadClassCode: 4, pavedBias: 0.7
+        )
+        let track = OnDeviceProfileCosts.edgeCostPerKm(
+            profile: .balanced, surfaceCode: 3, roadClassCode: 8, pavedBias: 1
+        )
+        let trackBiased = OnDeviceProfileCosts.edgeCostPerKm(
+            profile: .balanced, surfaceCode: 3, roadClassCode: 8, pavedBias: 0.7
+        )
+        #expect(cheaperPaved < paved)
+        #expect(abs(cheaperPaved / paved - 0.7) < 0.001)
+        #expect(trackBiased == track)
+    }
+
+    @Test func cleanCityGridIsCostlierUntilNearB() {
+        let far = OnDeviceProfileCosts.cleanCityStreetMult(
+            profile: .cleanest,
+            roadClassCode: 4, // local
+            distanceToDestinationMeters: 20_000
+        )
+        let near = OnDeviceProfileCosts.cleanCityStreetMult(
+            profile: .cleanest,
+            roadClassCode: 4,
+            distanceToDestinationMeters: 800
+        )
+        let dirtIgnores = OnDeviceProfileCosts.cleanCityStreetMult(
+            profile: .dirt,
+            roadClassCode: 4,
+            distanceToDestinationMeters: 20_000
+        )
+        #expect(far > 2)
+        #expect(near == 1)
+        #expect(dirtIgnores == 1)
     }
 
     @Test func untaggedHighwayPaintsAsPavedNotDirt() {
@@ -76,7 +162,7 @@ struct OnDeviceProfileCostsTests {
         #expect(unknownLocal == pavedLocal)
     }
 
-    @Test func dirtAwayPenaltyIsSoftUntilTheLastTwelveKm() {
+    @Test func dirtAwayPenaltyIsSoftUntilTheLastCoupleKm() {
         let mid = OnDeviceProfileCosts.approachAwayExtra(
             profile: .dirt,
             dFromMeters: 200_000,
@@ -85,8 +171,14 @@ struct OnDeviceProfileCostsTests {
         )
         let near = OnDeviceProfileCosts.approachAwayExtra(
             profile: .dirt,
-            dFromMeters: 4_000,
-            dToMeters: 14_000,
+            dFromMeters: 800,
+            dToMeters: 10_800,
+            abMeters: 400_000
+        )
+        let stillHuntingAtTenKm = OnDeviceProfileCosts.approachAwayExtra(
+            profile: .dirt,
+            dFromMeters: 10_000,
+            dToMeters: 20_000,
             abMeters: 400_000
         )
         let balancedMid = OnDeviceProfileCosts.approachAwayExtra(
@@ -95,9 +187,50 @@ struct OnDeviceProfileCostsTests {
             dToMeters: 210_000,
             abMeters: 400_000
         )
-        #expect(mid < 1.0)
+        #expect(mid < 20)
+        #expect(stillHuntingAtTenKm < 20)
         #expect(near > mid)
+        #expect(near < 25)
         #expect(mid < balancedMid)
+    }
+
+    @Test func majorHighwaysStayAvoidedUntilNearAPinnedHighway() {
+        let cleanFar = OnDeviceProfileCosts.majorHighwayAvoidMult(
+            profile: .cleanest,
+            roadClassCode: 1,
+            metersFromStart: 80_000,
+            metersToDestination: 80_000,
+            startOnMajorHighway: false,
+            endOnMajorHighway: true
+        )
+        let cleanNearB = OnDeviceProfileCosts.majorHighwayAvoidMult(
+            profile: .cleanest,
+            roadClassCode: 1,
+            metersFromStart: 80_000,
+            metersToDestination: 800,
+            startOnMajorHighway: false,
+            endOnMajorHighway: true
+        )
+        let cleanNearBButPinOffHighway = OnDeviceProfileCosts.majorHighwayAvoidMult(
+            profile: .cleanest,
+            roadClassCode: 1,
+            metersFromStart: 80_000,
+            metersToDestination: 800,
+            startOnMajorHighway: false,
+            endOnMajorHighway: false
+        )
+        let localFar = OnDeviceProfileCosts.majorHighwayAvoidMult(
+            profile: .cleanest,
+            roadClassCode: 4,
+            metersFromStart: 80_000,
+            metersToDestination: 80_000,
+            startOnMajorHighway: false,
+            endOnMajorHighway: true
+        )
+        #expect(cleanFar > 10)
+        #expect(cleanNearB == 1)
+        #expect(cleanNearBButPinOffHighway > 10)
+        #expect(localFar == 1)
     }
 
     @Test func dirtLateJoinIsMilderThanBalancedWasRelativeToPavedTax() {

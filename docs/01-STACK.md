@@ -101,7 +101,7 @@ Map tap / long-press callbacks are wired into the planner at init. `DirtApp` inj
 
 ### 1. Workspace / path disconnect
 
-iOS lives under `MAYDAYiOS/Dirt`. Always confirm the open project path before editing.
+**Develop only in** `/Users/richardsmith/SandBox01/MAYDAYiOS/Dirt`. Open `Dirt.xcodeproj`. Packs and live `/api/route` are `scripts/pack-fabric/`. Confirm the open project path before any change.
 
 ### 2. Xcode GUI scheme + SPM resolution (`e98f6d4`)
 
@@ -122,7 +122,7 @@ Archive ≠ distributable IPA. Automatic signing without an App Store profile bl
 
 ## Starting a new agent on this area
 
-1. Read `Dirt/Networking/AppConfig.swift`, `Dirt/DirtApp.swift`, `Dirt/App/AppEnvironment.swift`.
+1. Read [../AGENTS.md](../AGENTS.md), then `Dirt/Networking/AppConfig.swift`, `Dirt/DirtApp.swift`, `Dirt/App/AppEnvironment.swift`.
 2. Skim `Dirt.xcodeproj/project.pbxproj` SPM sections + `Package.resolved` for pinned versions.
 3. Read [../README_TESTFLIGHT.md](../README_TESTFLIGHT.md) before touching signing or CI.
 4. **Invariants:** do not add a second backend host; keep deployment target and bundle ID unless Rick asks; preserve shared `Dirt` scheme.

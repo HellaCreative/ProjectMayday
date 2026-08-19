@@ -12,4 +12,13 @@ enum BuildChannel {
     /// Whether onboarding / Profile / paywall tester controls should appear.
     /// Not behind `#if DEBUG` — Release archives must include this for TestFlight.
     static var showsTesterUnlock: Bool { allowPreReleaseTesterUnlock }
+
+    /// Routing-graph debug overlay. Debug builds only — not TestFlight/App Store.
+    static var debugRoutingGraphOverlay: Bool {
+        #if DEBUG
+        true
+        #else
+        false
+        #endif
+    }
 }

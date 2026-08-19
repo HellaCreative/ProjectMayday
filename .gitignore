@@ -8,14 +8,20 @@ xcuserdata/
 scripts/pack-fabric/app/data/packs/**/*.bin
 *.mbtiles
 
-# Local-only machine paths into Mayday — do not snapshot
-scripts/pack-fabric/routing/data/regions
-scripts/pack-fabric/routing/data/reports
+# Local GIS extracts and graph.v1 intermediates
+scripts/pack-fabric/data-raw/
+scripts/pack-fabric/routing/data/regions/**
+!scripts/pack-fabric/routing/data/regions/README.md
+scripts/pack-fabric/routing/data/reports/**
 
-# BC OSM feasibility binaries (built locally; hardlinked into Resources for device runs)
+# BC OSM feasibility binaries
 experiments/bc-osm-only/out/
 experiments/bc-osm-only/*.log
 Dirt/Resources/BC.mbtiles
 
-# OSM fuel extract + packed chunks (built locally from Geofabrik)
+# OSM fuel extract + packed chunks
 data-raw/
+
+# Local deploy caches — account ids, not source
+scripts/pack-fabric/.vercel/
+scripts/pack-fabric/.wrangler/

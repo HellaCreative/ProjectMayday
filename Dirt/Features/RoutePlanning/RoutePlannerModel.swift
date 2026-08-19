@@ -98,6 +98,7 @@ final class RoutePlannerModel {
             let seconds: Double = {
                 if message.localizedCaseInsensitiveContains("PACKS") { return 4.5 }
                 if message.localizedCaseInsensitiveContains("pack ready") { return 3.0 }
+                if message.localizedCaseInsensitiveContains("fuel") { return 4.0 }
                 return 1.0
             }()
             toastDismissTask = Task { @MainActor in
@@ -240,6 +241,8 @@ final class RoutePlannerModel {
     /// True while From here / Plan is still building the full route
     /// (including chained fuel stops). Holds calculating toast + spinner.
     private var isAssemblingRoute = false
+    /// Invalidates in-flight Overpass picks so two fuel jobs cannot split the same station twice.
+    private var fuelAssistGeneration = 0
 
     func handleMapTap(_ coordinate: CLLocationCoordinate2D) {
         guard navigation.phase == .idle else { return }
@@ -531,8 +534,8 @@ final class RoutePlannerModel {
             } else {
                 mapState.fit(response.coordinates)
             }
-            // Hold calculating toast through fuel-chain assembly.
-            toast = Self.calculatingRouteToast
+            isAssemblingRoute = false
+            announceRouteReadyIfComplete()
             await maybeInsertFuelStopForFromHere()
             guard generation == fromHereRouteGeneration else { return }
             isAssemblingRoute = false
@@ -720,30 +723,28 @@ final class RoutePlannerModel {
                 stage.end.map { "\($0.latitude),\($0.longitude)" }
             }.joined(separator: ";")
             refreshMap()
-            // Zoom to this stage’s endpoints so A/B (or stage pins) stay readable —
-            // fitting the full multi-stage polyline often leaves pins tiny.
             if let fitStart = stages[idx].start, let fitEnd = stages[idx].end {
                 mapState.fit([fitStart, fitEnd])
             }
+
+            // Paint + celebrate before fuel. Holding "Calculating route" through
+            // Overpass + extra Dijkstra hops is what hung Fuel-on.
+            announceRouteReadyIfComplete()
 
             let fuelEnabled = includeFuelAssist
                 && FuelRangePrefs.isEnabled
                 && (mode == .plan || mode == .fromHere)
             if fuelEnabled {
-                let startedAssembly = !isAssemblingRoute
-                if startedAssembly {
-                    isAssemblingRoute = true
+                RoutingDebugLog.shared.event("fuel after-route stage[\(idx)] assembling=\(isAssemblingRoute)")
+                let capturedID = stageID
+                let capturedGen = generation
+                let fuelGen = beginFuelAssistJob()
+                Task { @MainActor in
+                    guard fuelGen == fuelAssistGeneration else { return }
+                    guard stages.contains(where: { $0.id == capturedID && $0.routeGeneration == capturedGen })
+                    else { return }
+                    await applyFuelAssistAcrossStages(job: fuelGen)
                 }
-                toast = Self.calculatingRouteToast
-                await maybeInsertFuelStop(forStage: idx)
-                if startedAssembly {
-                    isAssemblingRoute = false
-                    announceRouteReadyIfComplete()
-                }
-            } else if !isAssemblingRoute {
-                announceRouteReadyIfComplete()
-            } else {
-                toast = Self.calculatingRouteToast
             }
         } catch {
             guard let idx = stages.firstIndex(where: { $0.id == stageID }),
@@ -962,9 +963,13 @@ final class RoutePlannerModel {
         for index in stages.indices {
             await routeStage(at: index, includeFuelAssist: false)
         }
-        await applyFuelAssistAcrossStages()
         isAssemblingRoute = false
         announceRouteReadyIfComplete()
+        Task { @MainActor in
+            let job = beginFuelAssistJob()
+            await applyFuelAssistAcrossStages(job: job)
+            announceRouteReadyIfComplete()
+        }
     }
 
     /// Rider-placed waypoints only (A, vias, B) — excludes auto fuel ends.
@@ -1678,23 +1683,34 @@ final class RoutePlannerModel {
         guard mode == .fromHere || mode == .plan else { return }
         guard hasRoute || fromHereResponse != nil || !stages.isEmpty else { return }
 
-        isAssemblingRoute = true
-        toast = Self.calculatingRouteToast
+        RoutingDebugLog.shared.event(
+            "fuel reapply start mode=\(mode) stages=\(stages.count) range=\(Int(FuelRangePrefs.kilometers))km"
+        )
+        toast = "Looking for fuel stops"
+        let job = beginFuelAssistJob()
         Task { @MainActor in
+            guard job == fuelAssistGeneration else { return }
             switch mode {
             case .fromHere:
-                // Full rebuild: GPS→B, then chain as many fuel stops as the tank needs.
-                await rebuildFromHereWithFuelAssist()
+                if fromHereResponse != nil, stages.isEmpty {
+                    RoutingDebugLog.shared.event("fuel reapply from-here insert on existing geometry")
+                    await maybeInsertFuelStopForFromHere()
+                } else {
+                    for index in stages.indices { stages[index].skipFuelAssist = false }
+                    await applyFuelAssistAcrossStages(job: job)
+                }
+                announceRouteReadyIfComplete()
             case .plan:
                 for index in stages.indices {
                     stages[index].skipFuelAssist = false
                 }
-                await applyFuelAssistAcrossStages()
-                isAssemblingRoute = false
+                await applyFuelAssistAcrossStages(job: job)
                 announceRouteReadyIfComplete()
             case .saved:
-                isAssemblingRoute = false
+                break
             }
+            guard job == fuelAssistGeneration else { return }
+            RoutingDebugLog.shared.event("fuel reapply done stages=\(stages.count)")
         }
     }
 
@@ -1713,17 +1729,29 @@ final class RoutePlannerModel {
         await routeFromHere()
     }
 
+    private func beginFuelAssistJob() -> Int {
+        fuelAssistGeneration += 1
+        return fuelAssistGeneration
+    }
+
     /// Walk every stage and keep splitting until each leg fits tank range (or no fuel found).
-    private func applyFuelAssistAcrossStages() async {
+    private func applyFuelAssistAcrossStages(job: Int? = nil) async {
         guard FuelRangePrefs.isEnabled else { return }
+        let job = job ?? fuelAssistGeneration
         var passes = 0
         while passes < 12 {
+            guard job == fuelAssistGeneration else {
+                RoutingDebugLog.shared.event("fuel assemble abort stale job=\(job)")
+                return
+            }
             passes += 1
+            RoutingDebugLog.shared.event("fuel assemble pass=\(passes) stages=\(stages.count)")
             var splitAny = false
             var index = 0
             while index < stages.count {
+                guard job == fuelAssistGeneration else { return }
                 let countBefore = stages.count
-                await maybeInsertFuelStop(forStage: index)
+                await maybeInsertFuelStop(forStage: index, job: job)
                 if stages.count > countBefore {
                     splitAny = true
                     index += 1
@@ -1731,7 +1759,10 @@ final class RoutePlannerModel {
                     index += 1
                 }
             }
-            if !splitAny { break }
+            if !splitAny {
+                RoutingDebugLog.shared.event("fuel assemble idle after pass=\(passes)")
+                break
+            }
         }
     }
 
@@ -1765,9 +1796,10 @@ final class RoutePlannerModel {
         await applyFuelAssistAcrossStages()
     }
 
-    /// When a stage exceeds tank range, split it at a fuel POI along the corridor.
-    private func maybeInsertFuelStop(forStage index: Int) async {
+    /// When a stage exceeds tank range, split it at a fuel POI already beside the line.
+    private func maybeInsertFuelStop(forStage index: Int, job: Int) async {
         let rangeKm = FuelRangePrefs.kilometers
+        guard job == fuelAssistGeneration else { return }
         guard mode == .plan || mode == .fromHere,
               rangeKm > 0,
               stages.indices.contains(index),
@@ -1777,54 +1809,82 @@ final class RoutePlannerModel {
 
         let rangeMeters = rangeKm * 1000
         let stageMeters = response.distanceMeters ?? GeoMath.lineMeters(response.coordinates)
-        guard stageMeters > rangeMeters else { return }
-
-        stages[index].skipFuelAssist = true
+        // Barely over a tank: finish to B rather than stuffing a pump on the doorstep.
+        guard stageMeters > rangeMeters * 1.15 else {
+            RoutingDebugLog.shared.event(
+                "fuel skip stage[\(index)] within range m=\(Int(stageMeters)) tank=\(Int(rangeKm))km"
+            )
+            return
+        }
 
         guard let poiManager else {
             toast = "Fuel assist unavailable"
+            RoutingDebugLog.shared.event("fuel assist skipped — no POI manager")
             return
         }
-        let fuels = await poiManager.fuelCandidates(along: response.coordinates, corridorMeters: 8_000)
-        // Prefer a station near one tank of distance along this leg (strategic fill-up).
-        let preferredAlong = min(rangeMeters * 0.9, stageMeters - 3_000)
-        guard preferredAlong > 2_000, let pick = Self.pickFuelStop(
+        RoutingDebugLog.shared.event(
+            "fuel Overpass start stage[\(index)] m=\(Int(stageMeters)) range=\(Int(rangeKm))km"
+        )
+        guard let start = stages[index].start, let end = stages[index].end else { return }
+        let fuels = await poiManager.fuelCandidates(from: start, to: end)
+        guard job == fuelAssistGeneration else {
+            RoutingDebugLog.shared.event("fuel pick abort stale job=\(job)")
+            return
+        }
+        guard stages.indices.contains(index),
+              !stages[index].skipFuelAssist,
+              stages[index].response != nil
+        else { return }
+        RoutingDebugLog.shared.event(
+            "fuel assist stage[\(index)] m=\(Int(stageMeters)) range=\(Int(rangeKm))km candidates=\(fuels.count)"
+        )
+        let pick = Self.pickFuelStop(
             fuels: fuels,
             along: response.coordinates,
-            preferredAlongMeters: preferredAlong,
-            maxCorridorMeters: 8_000
-        ) else {
-            if !isAssemblingRoute {
-                toast = "No fuel stop found along this stage"
-            }
+            rangeMeters: rangeMeters
+        )
+        guard let pick else {
+            RoutingDebugLog.shared.event(
+                "fuel pick miss stage[\(index)] candidates=\(fuels.count)"
+            )
+            toast = fuels.isEmpty
+                ? "No fuel stations found between A and B"
+                : "No fuel stop on this line within one tank"
             return
         }
+
+        RoutingDebugLog.shared.event(
+            "fuel pick stage[\(index)] \(pick.latitude),\(pick.longitude) name=\(pick.name ?? "-") "
+                + "on-route"
+        )
+        stages[index].skipFuelAssist = true
 
         let gas = RouteCoordinate(longitude: pick.longitude, latitude: pick.latitude)
         UserDefaults.standard.set(true, forKey: "dirt.layers.fuel")
         mapState.bumpLayerPrefs()
 
-        splitStage(at: index, via: gas, viaIsFuel: true)
-        if isAssemblingRoute {
-            toast = Self.calculatingRouteToast
-        } else {
-            let stopCount = stages.filter(\.endsAtFuelStop).count
-            toast = stopCount > 1
-                ? "Fuel stops updated · \(pick.displayName)"
-                : "Fuel stop added · \(pick.displayName)"
+        guard splitStage(at: index, via: gas, viaIsFuel: true) else {
+            stages[index].skipFuelAssist = false
+            return
         }
-        await routeStage(at: index)
+        RoutingDebugLog.shared.event("fuel split stage[\(index)] → stages=\(stages.count); re-routing hops")
+        await routeStage(at: index, includeFuelAssist: false)
         if stages.indices.contains(index + 1) {
-            await routeStage(at: index + 1)
+            await routeStage(at: index + 1, includeFuelAssist: false)
         }
+        RoutingDebugLog.shared.event("fuel hops routed after split at [\(index)]")
     }
 
     /// Splits stage `index` (A→B) into A→via and via→B. Caller re-routes.
-    private func splitStage(at index: Int, via: RouteCoordinate, viaIsFuel: Bool = false) {
+    private func splitStage(at index: Int, via: RouteCoordinate, viaIsFuel: Bool = false) -> Bool {
         guard stages.indices.contains(index),
               let start = stages[index].start,
               let end = stages[index].end
-        else { return }
+        else { return false }
+        if GeoMath.meters(start, via) < 800 || GeoMath.meters(via, end) < 800 {
+            RoutingDebugLog.shared.event("fuel split skipped — via on top of A or B")
+            return false
+        }
 
         let profile = stages[index].profile
         let allow = stages[index].allowUnknown
@@ -1843,40 +1903,43 @@ final class RoutePlannerModel {
         stages.remove(at: index)
         stages.insert(contentsOf: [first, second], at: index)
         refreshMap()
+        return true
     }
 
-    /// Prefer a fuel POI near `preferredAlongMeters` on the corridor; else nearest overall.
+    /// Station beside the already-drawn line, ~0.8 tank along it.
+    /// Not the nearest pump to a crow-flies point (that is the 50 km spur).
     static func pickFuelStop(
         fuels: [POIFeature],
         along coordinates: [RouteCoordinate],
-        preferredAlongMeters: Double,
-        maxCorridorMeters: Double
+        rangeMeters: Double
     ) -> POIFeature? {
-        guard !fuels.isEmpty, coordinates.count >= 2 else { return nil }
+        guard !fuels.isEmpty, rangeMeters > 0, coordinates.count >= 2 else { return nil }
         let cumulative = GeoMath.cumulativeMeters(coordinates)
-        var scored: [(poi: POIFeature, corridor: Double, along: Double)] = []
-        for fuel in fuels {
-            let location = CLLocation(latitude: fuel.latitude, longitude: fuel.longitude)
-            guard let proj = GeoMath.nearestProjection(to: location, in: coordinates, cumulative: cumulative),
-                  proj.offMeters <= maxCorridorMeters
-            else { continue }
-            // Skip stations at the very start/end of the stage.
-            if proj.alongMeters < 2_000 || proj.alongMeters > (cumulative.last ?? 0) - 1_000 {
-                continue
-            }
-            scored.append((fuel, proj.offMeters, proj.alongMeters))
-        }
-        guard !scored.isEmpty else { return nil }
+        guard let total = cumulative.last, total > rangeMeters * 1.15 else { return nil }
+        let preferredAlong = min(rangeMeters * 0.82, total - 45_000)
+        guard preferredAlong > 8_000 else { return nil }
+        let alongLo = rangeMeters * 0.40
+        let alongHi = min(rangeMeters * 0.95, total - 40_000)
+        guard alongHi > alongLo else { return nil }
 
-        let bandLow = preferredAlongMeters * 0.45
-        let bandHigh = preferredAlongMeters * 1.05
-        let inBand = scored.filter { $0.along >= bandLow && $0.along <= bandHigh }
-        let pool = inBand.isEmpty ? scored : inBand
-        return pool.min(by: {
-            let da = abs($0.along - preferredAlongMeters) + $0.corridor * 0.5
-            let db = abs($1.along - preferredAlongMeters) + $1.corridor * 0.5
-            return da < db
-        })?.poi
+        func best(inCorridor corridor: Double) -> POIFeature? {
+            var winner: POIFeature?
+            var bestScore = Double.greatestFiniteMagnitude
+            for fuel in fuels {
+                let location = CLLocation(latitude: fuel.latitude, longitude: fuel.longitude)
+                guard let proj = GeoMath.nearestProjection(
+                    to: location, in: coordinates, cumulative: cumulative
+                ), proj.offMeters <= corridor else { continue }
+                guard proj.alongMeters >= alongLo, proj.alongMeters <= alongHi else { continue }
+                let score = abs(proj.alongMeters - preferredAlong) + proj.offMeters * 2
+                if score < bestScore {
+                    bestScore = score
+                    winner = fuel
+                }
+            }
+            return winner
+        }
+        return best(inCorridor: 12_000) ?? best(inCorridor: 22_000)
     }
 
     /// One-shot fit of the current planned polyline into the open map
@@ -2200,7 +2263,9 @@ final class RoutePlannerModel {
                     let ms = Int(Date().timeIntervalSince(routeStarted) * 1000)
                     RoutingDebugLog.shared.routeResult(
                         "on-device ok edges≈\(local.edgeIds.count) m=\(Int(local.distanceMeters)) "
+                            + "dirt%=\(local.dirtPercent) paved%=\(local.pavedPercent) "
                             + "unk%=\(local.unknownAccessPercent) ms=\(ms)"
+                            + (local.debugNote.isEmpty ? "" : " \(local.debugNote)")
                     )
                     return makeOnDeviceRouteResponse(local)
                 case .success:
@@ -2279,6 +2344,7 @@ final class RoutePlannerModel {
                 let unk = response.stats?.unknownAccessPercent ?? 0
                 RoutingDebugLog.shared.routeResult(
                     "live ok status=\(response.status) m=\(Int(response.distanceMeters ?? 0)) "
+                        + "dirt%=\(response.dirtPercent) paved%=\(response.pavedPercent) "
                         + "unk%=\(unk) ms=\(ms)"
                 )
                 return response
@@ -2886,12 +2952,7 @@ final class RoutePlannerModel {
     /// Brief success confirmation after routing — dirt/paved detail lives in the stats row.
     /// Never celebrate while stages are still assembling or any hop failed (confetti bug).
     private func announceRouteReadyIfComplete() {
-        guard !isAssemblingRoute else {
-            toast = Self.calculatingRouteToast
-            return
-        }
         guard routePlanIsCompleteSuccess else {
-            // Calculating never auto-dismisses — clear it when we're done but not celebratory.
             if toast == Self.calculatingRouteToast {
                 toast = nil
             }

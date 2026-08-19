@@ -32,12 +32,15 @@ const OSM_GEOM = path.resolve(
   __dirname,
   "../../scripts/pack-fabric/app/data/packs/v1/bc/geometry.v1.bin"
 );
-const DRA_SEQ =
-  "/Users/richardsmith/Documents/Mayday/data-raw/bc-dra/capillary.geojsonseq";
-const FTEN_PACK_GRAPH =
-  "/Users/richardsmith/Documents/Mayday/routing/data/regions/bc.pre-osm-adventure/graph.v2.bin";
-const FTEN_PACK_GEOM =
-  "/Users/richardsmith/Documents/Mayday/routing/data/regions/bc.pre-osm-adventure/geometry.v1.bin";
+const DRA_SEQ = path.resolve(__dirname, "../../scripts/pack-fabric/data-raw/bc-dra/capillary.geojsonseq");
+const FTEN_PACK_GRAPH = path.resolve(
+  __dirname,
+  "../../scripts/pack-fabric/data-raw/bc-ften-pack/graph.v2.bin"
+);
+const FTEN_PACK_GEOM = path.resolve(
+  __dirname,
+  "../../scripts/pack-fabric/data-raw/bc-ften-pack/geometry.v1.bin"
+);
 
 const SURFACE_NAME = ["paved", "gravel", "access", "track", "unknown"];
 const MATCH_M = 50;

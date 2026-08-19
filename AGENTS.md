@@ -1,0 +1,28 @@
+# Dirt — start here
+
+**Develop only in this folder:** `/Users/richardsmith/SandBox01/MAYDAYiOS/Dirt`
+
+Open `Dirt.xcodeproj`. Branch: `rescue/2026-08-19`.
+
+Packs, adapters, live `/api/route`, and ship scripts live here under `scripts/pack-fabric/`. There is no second product repo.
+
+## Bytes
+
+| What | Where |
+| --- | --- |
+| Road packs (every CA province/territory + every US state) | Cloudflare R2 |
+| Catalog | `https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/manifest.json` |
+| Live `POST /api/route` | `https://dirt-mayday.vercel.app/api/route` — fetches those same R2 files |
+| Phone PACKS sheet | Downloads the same files |
+
+Vercel is API code only (`scripts/pack-fabric/api`). Packs never go on Hobby.
+
+**Pack changes must land on R2.** Xcode ships the app, not the road file. A pack that exists only on the laptop was **not** tested on a device.
+
+## Do not
+
+- Point `/api/route` at `longhaul.v1.json.gz`.
+- Auto-download packs to “make live match.”
+- Leave a pack rebuild unpublished.
+
+Read next: [docs/00-OVERVIEW.md](docs/00-OVERVIEW.md), [docs/02-ROUTING.md](docs/02-ROUTING.md), [docs/08-MAP-REFINEMENT.md](docs/08-MAP-REFINEMENT.md).

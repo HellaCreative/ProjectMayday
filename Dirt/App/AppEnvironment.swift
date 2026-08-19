@@ -25,6 +25,7 @@ final class AppEnvironment {
     let poiManager: POIManager
     /// Provincial road overlay from the installed graph pack.
     let networkOverlayManager: NetworkOverlayManager
+    let routingGraphDebug: RoutingGraphDebugManager
     /// Feasibility: local BC.mbtiles OSM hierarchy (visual only).
     let bcOSMHierarchy: BCOSMHierarchyOverlay
 
@@ -106,6 +107,7 @@ final class AppEnvironment {
         }
         poiManager             = POIManager(mapState: mapState)
         networkOverlayManager  = NetworkOverlayManager(mapState: mapState, graphPacks: graphPacks)
+        routingGraphDebug      = RoutingGraphDebugManager(mapState: mapState, graphPacks: graphPacks)
         bcOSMHierarchy         = BCOSMHierarchyOverlay(mapState: mapState)
         // Park BC extra lenses so leftover UserDefaults cannot paint a second
         // classification over OSM Shortbread (highway → track/path).

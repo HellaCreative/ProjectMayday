@@ -26,7 +26,7 @@ Client routing behaviour as implemented. Prefer on-device `graph.v2` + `OnDevice
 | UI chip | `RouteProfile` raw value | Guidance (UI) |
 | --- | --- | --- |
 | Clean | `cleanest` | Pavement-first · no unknown access |
-| Direct | `direct` | Shortest practical · mixed surfaces |
+| Direct | `direct` | Dirt fabric · shortest line · no meander |
 | Balanced | `balanced` (default) | Adventure bias · still efficient |
 | Dirt | `dirt` | Maximize unpaved · avoid highways |
 
@@ -41,7 +41,7 @@ Vehicle is always `"dual-sport-motorcycle"`. `motorizedPermissive` is always `tr
 ## Policy (planning)
 
 1. **Packs cover both pins in one region** → always on-device (even on Wi‑Fi).
-2. **Missing pack / cross-province / pin outside pack** + online → live `/api/route`.
+2. **Missing pack** + online → live `/api/route` (same R2 object). Two adjacent installed packs chain on-device.
 3. **Offline without covering packs** → actionable “download from PACKS” copy.
 
 Pack download is **manual** (PACKS sheet). It is not required to drop a pin or plan while you have cell service. Start Nav does not fetch a routing pack.
@@ -63,7 +63,7 @@ Rules:
 - `options.avoidEdgeIds` is honored on-device when incident recovery asks for a detour.
 - `RouteSegment.edgeId` lets reports match a network edge.
 
-On-device search is one active pack at a time. Cross-province while online uses live canada-chain.
+On-device search is one pack per hop. Two adjacent **installed** packs chain on-device (`CrossPackSeam`). Missing pack + online → live `/api/route` (same R2 files).
 
 Errors surface as `RoutingError.server(message)`.
 
@@ -137,7 +137,7 @@ The nav **REPORT** pill opens `IncidentFlowOverlay` (`RouteIncidents.swift`):
 | Capability | Status |
 | --- | --- |
 | From here A→B | Yes |
-| Plan multi-stage chain | Yes (global profile) |
+| Plan multi-stage chain | Yes (per-stage profile + Allow) |
 | Clean / Direct / Balanced / Dirt | Yes |
 | Allow unknown + Clean immunity | Yes |
 | Aggregate mix bar | Yes |
@@ -179,5 +179,5 @@ Cost tables live in `scripts/pack-fabric/routing/lib/profile-costs.js` and `OnDe
 ## Starting a new agent on this area
 
 1. Read `RoutingModels.swift`, `OnDeviceRouter.swift`, `RoutePlannerModel.swift`, then `NavigationSession.swift`.
-2. **Invariants:** Clean forces Allow off; never gap-span on a client-side sketch; dirt%/paved% vocabulary matches map paint classes.
-3. **Open questions:** per-stage profile UI; should recalculate preserve plan stages?; when to send `avoidEdgeIds`.
+2. **Invariants:** Clean forces Allow off; never gap-span on a client-side sketch; dirt%/paved% vocabulary matches map paint classes. Live and PACKS are the same R2 object.
+3. **Open questions:** should mid-trip recalculate preserve plan stages?

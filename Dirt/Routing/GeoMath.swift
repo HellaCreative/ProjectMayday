@@ -19,6 +19,14 @@ nonisolated enum GeoMath {
             .distance(from: CLLocation(latitude: b.latitude, longitude: b.longitude))
     }
 
+    static func interpolate(_ a: RouteCoordinate, _ b: RouteCoordinate, fraction: Double) -> RouteCoordinate {
+        let t = min(1, max(0, fraction))
+        return RouteCoordinate(
+            longitude: a.longitude + (b.longitude - a.longitude) * t,
+            latitude: a.latitude + (b.latitude - a.latitude) * t
+        )
+    }
+
     static func lineMeters(_ coordinates: [RouteCoordinate]) -> Double {
         guard coordinates.count > 1 else { return 0 }
         var total = 0.0
@@ -151,5 +159,44 @@ nonisolated enum GeoMath {
         }
         guard bestOff < Double.greatestFiniteMagnitude else { return nil }
         return PolylineProjection(offMeters: bestOff, alongMeters: bestAlong, segmentIndex: bestSegment)
+    }
+
+    static let earthRadiusMeters = 6_371_000.0
+
+    /// Central angle between two WGS84 points (radians).
+    static func angularDistanceRadians(_ a: CLLocationCoordinate2D, _ b: CLLocationCoordinate2D) -> Double {
+        let lat1 = a.latitude * .pi / 180
+        let lat2 = b.latitude * .pi / 180
+        let dLat = lat2 - lat1
+        let dLon = (b.longitude - a.longitude) * .pi / 180
+        let h = sin(dLat / 2) * sin(dLat / 2)
+            + cos(lat1) * cos(lat2) * sin(dLon / 2) * sin(dLon / 2)
+        return 2 * asin(min(1, sqrt(h)))
+    }
+
+    /// Initial bearing from `a` to `b` (radians, −π…π).
+    static func initialBearingRadians(_ a: CLLocationCoordinate2D, _ b: CLLocationCoordinate2D) -> Double {
+        let φ1 = a.latitude * .pi / 180
+        let φ2 = b.latitude * .pi / 180
+        let Δλ = (b.longitude - a.longitude) * .pi / 180
+        let y = sin(Δλ) * cos(φ2)
+        let x = cos(φ1) * sin(φ2) - sin(φ1) * cos(φ2) * cos(Δλ)
+        return atan2(y, x)
+    }
+
+    /// Signed perpendicular distance from `point` to the great-circle through A→B.
+    /// Independent of progress toward B — a north-then-east arc pays even when
+    /// distance-to-B is shrinking.
+    static func crossTrackMeters(
+        point: CLLocationCoordinate2D,
+        lineFrom a: CLLocationCoordinate2D,
+        to b: CLLocationCoordinate2D
+    ) -> Double {
+        let ab = angularDistanceRadians(a, b)
+        guard ab > 1e-9 else { return 0 }
+        let δ13 = angularDistanceRadians(a, point)
+        let θ13 = initialBearingRadians(a, point)
+        let θ12 = initialBearingRadians(a, b)
+        return asin(sin(δ13) * sin(θ13 - θ12)) * earthRadiusMeters
     }
 }

@@ -2,7 +2,13 @@
 
 Living log for agent handoffs. Prefer this over chat archaeology.
 
-**Last updated:** 2026-08-13
+**Last updated:** 2026-08-19
+
+---
+
+## 2026-08-19 — One workspace; Vercel is API-only
+
+Develop only in `/Users/richardsmith/SandBox01/MAYDAYiOS/Dirt` (`rescue/2026-08-19`). Packs + live API are `scripts/pack-fabric/` (adapters, schema, conflation, `api/route`, ship scripts). Packs stay on R2. Production `api/route` must not bundle graphs.
 
 ---
 

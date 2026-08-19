@@ -21,8 +21,8 @@ nonisolated enum RouteProfile: String, Codable, CaseIterable, Identifiable, Send
     /// One-line guidance — Clean is nav-like; others optimize ride character.
     var guidance: String {
         switch self {
-        case .cleanest: "Pavement first · Google/Waze-style"
-        case .direct: "Crow-flies to B · pick up dirt when it barely detours"
+        case .cleanest: "Pavement only · skip towns unless B is there"
+        case .direct: "Dirt on the shortest line · no meandering"
         case .balanced: "Dual-sport mix · aim about half dirt / half paved"
         case .dirt: "Adventure ride to B · meander for dirt, not the highway ETA"
         }

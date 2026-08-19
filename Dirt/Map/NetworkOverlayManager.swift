@@ -10,6 +10,7 @@ struct NetworkLineFeature: Sendable {
     let accessClass: String
     let structureType: String
     let province: String
+    let roadClass: String
 }
 
 private enum NetC {
@@ -357,7 +358,8 @@ nonisolated enum PackNetworkOverlay {
                     surfaceClass: surface,
                     accessClass: access,
                     structureType: "none",
-                    province: province
+                    province: province,
+                    roadClass: GraphV2Pack.roadClassName(GraphV2Pack.unpackRoadClass(attr))
                 )
             )
             if out.count >= cap { break }

@@ -126,6 +126,14 @@ final class MapState {
     /// When false, Layers omits `motorized_unknown` (purple Access the router will not use).
     private(set) var networkAllowUnknown = false
 
+    /// DEBUG: paint installed BC routing graph by access class.
+    var showRoutingGraphDebug = false
+    var debugGraphFeatures: [NetworkLineFeature] = []
+    private(set) var debugGraphDataGeneration = 0
+    var debugGraphStatus: String?
+    var debugGraphCapped = false
+    var debugGraphHit: RoutingGraphDebugHit?
+
     /// Localhost XYZ template for BC OSM hierarchy mbtiles (nil = off / missing).
     private(set) var bcOSMTileURLTemplate: String?
     /// Status when the hierarchy toggle is on but tiles cannot load.
@@ -156,6 +164,13 @@ final class MapState {
     func updateNetworkFeatures(_ features: [NetworkLineFeature]) {
         networkFeatures = features
         networkDataGeneration += 1
+    }
+
+    func updateDebugGraphFeatures(_ features: [NetworkLineFeature], status: String?, capped: Bool) {
+        debugGraphFeatures = features
+        debugGraphStatus = status
+        debugGraphCapped = capped
+        debugGraphDataGeneration += 1
     }
 
     func updateBCOSMHierarchy(template: String?, status: String?) {

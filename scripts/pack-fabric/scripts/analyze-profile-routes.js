@@ -90,8 +90,8 @@ function haversine(aLat, aLon, bLat, bLon) {
 
 function surfaceWeight(profile, surfaceCode, roadClassCode) {
   const tables = {
-    direct: [1.18, 0.96, 0.93, 0.9, 0.95],
-    balanced: [4.2, 0.72, 0.58, 0.48, 0.68],
+    direct: [1.42, 0.98, 0.92, 0.88, 0.96],
+    balanced: [1.38, 1.12, 1.05, 1.0, 1.18],
     dirt: [16.0, 0.28, 0.12, 0.06, 0.28],
     cleanest: [1.0, 8.0, 10.0, 14.0, 6.0]
   };
@@ -100,7 +100,7 @@ function surfaceWeight(profile, surfaceCode, roadClassCode) {
   const road = ROAD_CLASS_NAME[roadClassCode] || "unknown";
   // Untagged highway is pavement, not adventure fuel — match rider paint.
   if (
-    (profile === "dirt" || profile === "balanced") &&
+    (profile === "dirt" || profile === "balanced" || profile === "direct") &&
     idx === 4 &&
     (road === "freeway" ||
       road === "arterial" ||
@@ -120,27 +120,19 @@ function roadClassWeight(profile, roadClassCode) {
   const key = ROAD_CLASS_NAME[roadClassCode] || "unknown";
   const tables = {
     cleanest: {
-      freeway: 0.94, arterial: 0.95, collector: 0.97, ramp: 0.96,
-      local: 1.0, service: 1.08, resource: 1.0, recreation: 1.0,
+      freeway: 0.94, arterial: 0.98, collector: 1.18, ramp: 0.96,
+      local: 2.6, service: 3.2, resource: 1.0, recreation: 1.0,
       track: 1.0, double_track: 1.0, unknown: 1.0
     },
     direct: {
-      freeway: VARIANT === "v2" || VARIANT === "v3" ? 1.55 : 4.4,
-      arterial: VARIANT === "v2" || VARIANT === "v3" ? 1.35 : 3.5,
-      collector: VARIANT === "v2" || VARIANT === "v3" ? 1.06 : 1.08,
-      ramp: VARIANT === "v2" || VARIANT === "v3" ? 1.45 : 4.0,
-      local: VARIANT === "v2" || VARIANT === "v3" ? 0.95 : 0.9,
-      service: VARIANT === "v2" || VARIANT === "v3" ? 1.12 : 1.3,
-      resource: VARIANT === "v2" || VARIANT === "v3" ? 0.92 : 0.88,
-      recreation: VARIANT === "v2" || VARIANT === "v3" ? 0.9 : 0.86,
-      track: VARIANT === "v2" || VARIANT === "v3" ? 0.88 : 0.84,
-      double_track: VARIANT === "v2" || VARIANT === "v3" ? 0.88 : 0.84,
-      unknown: 1.0
+      freeway: 1.7, arterial: 1.45, collector: 1.06, ramp: 1.6,
+      local: 0.98, service: 1.12, resource: 0.9, recreation: 0.88,
+      track: 0.9, double_track: 0.9, unknown: 1.0
     },
     balanced: {
-      freeway: 5.6, arterial: 4.2, collector: 1.1, ramp: 5.0,
-      local: 0.86, service: 1.28, resource: 0.76, recreation: 0.74,
-      track: 0.7, double_track: 0.7, unknown: 1.0
+      freeway: 3.2, arterial: 2.4, collector: 1.08, ramp: 2.8,
+      local: 1.0, service: 1.15, resource: 0.92, recreation: 0.9,
+      track: 0.92, double_track: 0.92, unknown: 1.0
     },
     dirt: {
       freeway: 14.0,
@@ -188,8 +180,8 @@ function pavementLateJoinMult(profile, surfaceCode, dTo, abMeters) {
   return 1 + baseExtra * t;
 }
 
-const DIRT_AWAY_MID = Number(process.env.DIRT_AWAY_MID || 0.06);
-const DIRT_NEAR_HORIZON = Number(process.env.DIRT_NEAR_HORIZON || 12000);
+const DIRT_AWAY_MID = Number(process.env.DIRT_AWAY_MID || 1.45);
+const DIRT_NEAR_HORIZON = Number(process.env.DIRT_NEAR_HORIZON || 2500);
 const BAN_PAVED = process.env.BAN_PAVED === "1";
 const VARIANT = process.env.VARIANT || "current";
 
@@ -199,15 +191,15 @@ function approachAwayExtra(profile, dFrom, dTo, abMeters) {
   const kmAway = away / 1000;
   if (profile === "dirt") {
     const mid = kmAway * DIRT_AWAY_MID;
-    const horizon = DIRT_NEAR_HORIZON > 0
-      ? DIRT_NEAR_HORIZON
-      : Math.max(22000, abMeters * 0.75);
+    const horizon = DIRT_NEAR_HORIZON > 0 ? DIRT_NEAR_HORIZON : 2500;
     let near = 0;
     if (dFrom < horizon) {
       const t = 1 - dFrom / horizon;
-      near = kmAway * (0.15 + t * t * 3.2);
+      near = kmAway * (0.12 + t * t * 0.9);
     }
-    return mid + near;
+    const raw = mid + near;
+    const cap = kmAway * 16.0 * 0.12;
+    return Math.min(raw, cap);
   }
   if (profile === "direct") {
     const nearBand = Math.max(3200, abMeters * 0.3);
@@ -215,11 +207,11 @@ function approachAwayExtra(profile, dFrom, dTo, abMeters) {
   }
   if (profile === "balanced") {
     const mid = kmAway * 1.1;
-    const horizon = Math.max(8000, abMeters * 0.4);
+    const horizon = Math.max(4000, abMeters * 0.2);
     let near = 0;
     if (dFrom < horizon) {
       const t = 1 - dFrom / horizon;
-      near = kmAway * (0.4 + t * t * 5.5);
+      near = kmAway * (0.4 + t * t * 2.4);
     }
     return mid + near;
   }

@@ -1,6 +1,6 @@
-# DIRT (Mayday) — iOS TestFlight guide
+# DIRT — iOS TestFlight guide
 
-Fully native SwiftUI app for the DIRT dual-sport navigator.
+Fully native SwiftUI app. **Develop only in** `/Users/richardsmith/SandBox01/MAYDAYiOS/Dirt`.
 
 - Routing: on-device `graph.v2` packs (R2) when installed; live `/api/route` when online without that pack
 - Accounts: Supabase (baked publishable config)

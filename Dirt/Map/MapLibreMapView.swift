@@ -172,6 +172,7 @@ struct MapLibreMapView: UIViewRepresentable {
         private var appliedPoiPrefs   = -1
         private var appliedNetData    = -1
         private var appliedNetPrefs   = -1
+        private var appliedDebugGraph = -1
         private var appliedBCOSMGeneration = -1
         private var appliedBCOSMTemplate: String?
 
@@ -189,6 +190,7 @@ struct MapLibreMapView: UIViewRepresentable {
             // Layer insertion order: network overlays (below) → route → POI (above)
             addNetworkLayers(to: style)
             addBCOSMHierarchyLayers(to: style)
+            addDebugGraphLayers(to: style)
             addRouteLayers(to: style)
             addPOILayers(to: style)
             styleLoaded = true
@@ -196,6 +198,7 @@ struct MapLibreMapView: UIViewRepresentable {
             // Force overlay re-sync after a style reload
             appliedPoiData = -1; appliedPoiPrefs = -1
             appliedNetData = -1; appliedNetPrefs = -1
+            appliedDebugGraph = -1
             appliedBCOSMGeneration = -1
             sync(mapView: mapView)
         }
@@ -270,6 +273,28 @@ struct MapLibreMapView: UIViewRepresentable {
             style.addLayer(tunnel)
             // Network surface classes always paint when features are loaded —
             // Map visibility toggles were removed; corridor/lens control load.
+        }
+
+        private func addDebugGraphLayers(to style: MLNStyle) {
+            guard style.source(withIdentifier: "dirt-debug-graph") == nil else { return }
+            let src = MLNShapeSource(identifier: "dirt-debug-graph", shape: nil, options: nil)
+            style.addSource(src)
+
+            func line(_ id: String, access: String, color: UIColor, dash: Bool = false) {
+                let layer = MLNLineStyleLayer(identifier: id, source: src)
+                layer.predicate = NSPredicate(format: "accessClass == %@", access)
+                layer.lineColor = NSExpression(forConstantValue: color)
+                layer.lineWidth = NSExpression(forConstantValue: 2.4)
+                layer.lineOpacity = NSExpression(forConstantValue: 0.92)
+                if dash {
+                    layer.lineDashPattern = NSExpression(forConstantValue: [1.2, 1.2] as [NSNumber])
+                }
+                style.addLayer(layer)
+            }
+            line("dirt-debug-perm", access: "motorized_permissive", color: UIColor(red: 0.18, green: 0.72, blue: 0.32, alpha: 1))
+            line("dirt-debug-unknown", access: "motorized_unknown", color: UIColor(red: 0.95, green: 0.72, blue: 0.12, alpha: 1))
+            line("dirt-debug-restricted", access: "motorized_restricted", color: UIColor(red: 0.95, green: 0.48, blue: 0.12, alpha: 1), dash: true)
+            line("dirt-debug-excluded", access: "motorized_excluded", color: UIColor(red: 0.86, green: 0.16, blue: 0.18, alpha: 1), dash: true)
         }
 
         // MARK: - BC OSM hierarchy (feasibility mbtiles)
@@ -489,6 +514,7 @@ struct MapLibreMapView: UIViewRepresentable {
             syncRoute(style: style)
             syncPOI(style: style)
             syncNetwork(style: style)
+            syncDebugGraph(style: style)
             syncBCOSMHierarchy(style: style)
         }
 
@@ -586,6 +612,27 @@ struct MapLibreMapView: UIViewRepresentable {
                     MLNShapeCollectionFeature(shapes: lines)
             }
             // Layer visibility is always on; province/corridor gating is in NetworkOverlayManager.
+        }
+
+        private func syncDebugGraph(style: MLNStyle) {
+            guard appliedDebugGraph != state.debugGraphDataGeneration else { return }
+            appliedDebugGraph = state.debugGraphDataGeneration
+            let lines = state.debugGraphFeatures.compactMap { feature -> MLNPolylineFeature? in
+                guard feature.coordinates.count >= 2 else { return nil }
+                var coords = feature.coordinates.map {
+                    CLLocationCoordinate2D(latitude: $0.lat, longitude: $0.lon)
+                }
+                let line = MLNPolylineFeature(coordinates: &coords, count: UInt(coords.count))
+                line.attributes = [
+                    "edgeId": feature.edgeId,
+                    "accessClass": feature.accessClass,
+                    "roadClass": feature.roadClass,
+                    "source": RoutingGraphDebugManager.sourceLabel(edgeId: feature.edgeId)
+                ]
+                return line
+            }
+            (style.source(withIdentifier: "dirt-debug-graph") as? MLNShapeSource)?.shape =
+                MLNShapeCollectionFeature(shapes: lines)
         }
 
         private func syncStyle(mapView: MLNMapView) {
@@ -994,6 +1041,12 @@ struct MapLibreMapView: UIViewRepresentable {
                 return
             }
 
+            if state.showRoutingGraphDebug,
+               let hit = debugGraphFeature(at: pt, in: mapView) {
+                state.debugGraphHit = hit
+                return
+            }
+
             let raw = mapView.convert(pt, toCoordinateFrom: mapView)
             let coordinate = snapToNearestRoad(raw, at: pt, in: mapView) ?? raw
             state.onTap?(coordinate)
@@ -1053,6 +1106,26 @@ struct MapLibreMapView: UIViewRepresentable {
             let raw = mapView.convert(pt, toCoordinateFrom: mapView)
             let coordinate = snapToNearestRoad(raw, at: pt, in: mapView) ?? raw
             state.onLongPress?(coordinate)
+        }
+
+        private func debugGraphFeature(at point: CGPoint, in mapView: MLNMapView) -> RoutingGraphDebugHit? {
+            let ids: Set<String> = [
+                "dirt-debug-perm",
+                "dirt-debug-unknown",
+                "dirt-debug-restricted",
+                "dirt-debug-excluded"
+            ]
+            let box = CGRect(x: point.x - 16, y: point.y - 16, width: 32, height: 32)
+            let hits = mapView.visibleFeatures(in: box, styleLayerIdentifiers: ids)
+            guard let feature = hits.first else { return nil }
+            let attrs = feature.attributes
+            let edgeId = attrs["edgeId"] as? String ?? ""
+            return RoutingGraphDebugHit(
+                edgeId: edgeId,
+                accessClass: attrs["accessClass"] as? String ?? "",
+                roadClass: attrs["roadClass"] as? String ?? "",
+                source: attrs["source"] as? String ?? RoutingGraphDebugManager.sourceLabel(edgeId: edgeId)
+            )
         }
 
         /// Snap a long-press to the nearest motorable road in the basemap

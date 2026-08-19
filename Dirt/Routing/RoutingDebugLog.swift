@@ -83,6 +83,17 @@ final class RoutingDebugLog {
         event("copied to pasteboard (\(entries.count) lines)")
     }
 
+    func writeShareFile() throws -> URL {
+        let stamp = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "")
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("dirt-route-debug-\(stamp).txt")
+        guard let data = text.data(using: .utf8) else {
+            throw NSError(domain: "DirtRoutingDebug", code: 1, userInfo: [NSLocalizedDescriptionKey: "Couldn’t encode log"])
+        }
+        try data.write(to: url)
+        event("wrote share file \(url.lastPathComponent)")
+        return url
+    }
+
     private func iso(_ date: Date) -> String {
         ISO8601DateFormatter().string(from: date)
     }

@@ -454,6 +454,13 @@ function decodeGeometryV1(buffer) {
 }
 
 function v2PathsForV1Path(graphPath) {
+  // Already a phone pack URL or file — do not path.join (breaks https://) or append .v2.bin again.
+  if (/graph\.v2\.bin$/i.test(graphPath)) {
+    return {
+      graph: graphPath,
+      geom: String(graphPath).replace(/graph\.v2\.bin$/i, "geometry.v1.bin")
+    };
+  }
   // regions/ns/graph.v1.json.gz -> graph.v2.bin + geometry.v1.bin
   // regions/ns/longhaul.v1.json.gz -> longhaul.v2.bin + longhaul.geometry.v1.bin
   // ns-graph.v1.json.gz -> ns-graph.v2.bin + ns-graph.geometry.v1.bin

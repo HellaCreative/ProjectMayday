@@ -4,7 +4,7 @@ How Dirt chooses roads, what Layers may paint, how packs are joined, and how
 profiles cost a ride. Phone on-device routing is the source of truth.
 Do not re-open these laws to chase a dirt% number.
 
-**Last confirmed:** 2026-08-13 (OSM core, OSM-only hops, provincial capillary).
+**Last confirmed:** 2026-08-19 (R2 catalog = all CA + US; Vercel = API only; develop in iOS Dirt only).
 **Next confirm:** BC DRA `resource` test under those laws. Nova Scotia stays frozen.
 
 ---
@@ -44,8 +44,8 @@ Dirt is **the ride, not the ETA**.
 
 | Profile | Intent |
 | --- | --- |
-| **Clean** | Google/Waze. Pavement / highway. Allow forced off. |
-| **Direct** | Crow-flies toward B. Dirt only when it barely detours. |
+| **Clean** | Pavement only. Skip town cores and major highways unless A/B (or a stage pin) is on them. Allow forced off. |
+| **Direct** | Same dirt fabric as Dirt. Shortest line to B — no meander. |
 | **Balanced** | Dual-sport mix (~50/50 when fabric allows). |
 | **Dirt** | Meander on tagged gravel / track / resource toward B. Pavement last resort. Untagged yellow/white OSM roads count as paved. |
 
@@ -157,11 +157,16 @@ show; Allow-off remains OSM permissive dirt.
 do not let capillary participate in seams; do not replace OSM with overlay
 geometry; do not load overlay highway→local.
 
-### BC DRA `resource` test (2026-08-13, local pack, not on R2)
+### BC DRA `resource` test (2026-08-13) — **not on R2, so not on the phone**
 
-Packed unpaved DRA `resource` onto the current OSM-only BC graph. 655,926
-features in; 18,370 dropped as OSM duplicates; 258 dropped as conventional
-next to OSM paved. Graph: 1,353,218 nodes, 1,181,019 edges.
+A local experiment packed unpaved DRA `resource` onto OSM BC. That file was
+never published. Xcode / PACKS / live routing still use the R2 OSM pack.
+**Do not treat this as a tested ride.** Pack changes that should be verified
+on device must go to R2.
+
+Measured locally (not device-tested): 655,926 features in; 18,370 dropped as
+OSM duplicates; 258 dropped as conventional next to OSM paved. Graph:
+1,353,218 nodes, 1,181,019 edges.
 
 | | Edges | km |
 | --- | ---: | ---: |
@@ -241,9 +246,10 @@ Locked extras on Dirt / Balanced (iOS Dijkstra):
 - `passableQualityMult` — prefer gravel/track, tax low-confidence and unknown access
 - Untagged freeway/arterial/ramp costs as **paved** (not adventure fuel)
 - `pavementLateJoinMult` — mild extra paved tax while far from B (Dirt 0.35, not 2.8)
-- `approachAwayExtra` — Dirt: soft mid-route, tighten only in the last ~12 km;
-  Direct: strong crow-flies. Direct highway class stays near Clean so Direct
-  does not take Dirt’s mixed corridor.
+- `approachAwayExtra` — Dirt: hunt, clamp only in the last ~2.5 km of B;
+  Direct: same dirt prices, strong crow-flies so it does not meander.
+  Clean: pavement; urban cores + city streets unless the pin is there.
+  All profiles: freeway/arterial/ramp avoided unless a pin snapped onto that highway.
 
 Measured on local `graph.v2.bin` (Allow off, 2026-08-12):
 
@@ -298,7 +304,7 @@ on it.
 
 ### Live seams (canada-chain)
 
-Mayday `routing/regional/merge.js`. One hop per adjacent region pair.
+Leftover live `routing/regional/merge.js` lives in this repo at `scripts/pack-fabric/routing/regional/merge.js`. One hop per adjacent region pair.
 
 **Long borders** (AB–BC, SK–AB, 49th parallel, US states): the seam is where
 **this** A→B line crosses the two region families, then snaps onto the **phone
@@ -328,7 +334,7 @@ uses that province’s `graph.v2.bin` (stitches, Dirt costs, Allow). The seam is
 the A→B chord crossing plus a few border-line retries; each side snaps onto
 **OSM core edges in its own pack** — not DRA / FTEN / Access / MNRF
 capillary (§1a Rule 2). If the join fails, tell the rider to drop a via —
-do **not** send the ride to live longhaul (that is the paved BC spine).
+do **not** send the ride to `longhaul.v1.json.gz`.
 
 If a pack is missing, live is missing-pack only.
 
@@ -350,10 +356,8 @@ A fabric or cost change that is only on the phone, or only on live, is
 3. Phone skips files that already exist — testers **Remove** then **Download**.
 4. Nova Scotia is **frozen** this pass (already good). Do not stitch/republish NS
    unless a seam bug requires it.
-5. Cost tables: `OnDeviceProfileCosts.swift` + pack-fabric `profile-costs.js` +
-   Mayday `routing/lib/profile-costs.js` (then deploy `/api/route`). Same numbers.
-6. Never `vercel --prod` from a dirty Mayday overlay tree. Clean worktree on
-   origin/main. `longhaul.v1.json.gz` is not a routing graph.
+5. Cost tables: `OnDeviceProfileCosts.swift` + `scripts/pack-fabric/routing/lib/profile-costs.js`. Deploy live with `ship-routing.js --live`.
+6. Deploy `/api/route` from `scripts/pack-fabric/` only. `longhaul.v1.json.gz` is not a routing graph.
 7. After ship: `node scripts/pack-fabric/scripts/ship-routing.js --assert`
    (fails if production `schemaVersion` is still `longhaul-region-1`).
 
@@ -366,8 +370,8 @@ A fabric or cost change that is only on the phone, or only on live, is
 | 0 | Nova Scotia | **Skip** — leave as-is |
 | 1 | British Columbia | **Done** 2026-08-12 — OSM-only + 24,427 stitches + honest Layers |
 | 2 | **Alberta** | **Stitched 2026-08-12** — 21,387 joins (694,894 → 716,281). Confirm prairie vs Rockies-west before rolling east. |
-| 3 | SK, MB, ON, QC, NB, PE, NL, territories | Same stitch recipe after AB confirms |
-| 4 | US states | Same OSM + stitch laws when a pack is rebuilt |
+| 3 | SK, MB, ON, QC, NB, PE, NL, territories | Packs **on R2**. Stitch recipe after AB confirms |
+| 4 | US states | Packs **on R2** (manifest 2026-08-12). Same OSM + stitch laws when rebuilt |
 
 Per-region recipe (after AB confirms):
 
@@ -408,7 +412,7 @@ Expect Allow-off dirt% **higher** than BC 37% on prairie hops if OSM
 connects. If Calgary→Edmonton still hugs the QE2 with Allow off, stitches
 didn’t land or the pack wasn’t re-downloaded.
 
-### Cross-province (live until on-device multi-pack)
+### Cross-province (on-device if both packs installed; else live phone pack)
 
 | Hop | Why |
 | --- | --- |
@@ -418,11 +422,10 @@ didn’t land or the pack wasn’t re-downloaded.
 | Seattle WA → Portland OR | Columbia band, not a named pass |
 | Drop a via on Hwy 3 | Forces Crowsnest; 3+ pins skip engineered seams |
 | Lloydminster area SK/AB | Prairie seam, not mountains |
-| Waterton / Chief Mountain | 49th parallel (AB–MT) — live US longhaul |
+| Waterton / Chief Mountain | 49th parallel (AB–MT) |
 
-Profile debug: `CrossProvinceRouteDebug` (White Rock → Lethbridge) still
-hits **longhaul**, not the phone pack. Use it for seam/chain bugs, not for
-dirt% of the installed BC/AB packs.
+Profile debug: `CrossProvinceRouteDebug` (White Rock → Lethbridge) is for
+seam/chain bugs. Live must load R2 `graph.v2.bin`, not `longhaul.v1.json.gz`.
 
 ---
 
@@ -447,10 +450,10 @@ dirt% of the installed BC/AB packs.
 | --- | --- |
 | `scripts/pack-fabric/routing/adapters/osm-roads.js` | OSM include / access / surface |
 | `scripts/pack-fabric/scripts/stitch-adventure-tips.js` | Pack-time permissive tip joins |
-| `scripts/pack-fabric/routing/lib/profile-costs.js` | Live API cost tables |
+| `scripts/pack-fabric/routing/lib/profile-costs.js` | Cost tables (this repo; `--live` deploys them) |
+| `scripts/pack-fabric/routing/regional/merge.js` | Live canada-chain |
 | `Dirt/Routing/OnDevice/OnDeviceProfileCosts.swift` | Phone cost tables (SoT) |
 | `Dirt/Routing/OnDevice/OnDeviceRouter.swift` | Dijkstra + runtime Allow stitch |
 | `Dirt/Map/NetworkOverlayManager.swift` | Honest Layers |
 | `Dirt/Features/Layers/LayersSheet.swift` | Lens copy |
 | `Dirt/Features/RoutePlanning/RoutePlannerModel.swift` | Pack SoT vs live vs cross-province |
-| Mayday `routing/regional/merge.js` | canada-chain seam joints |

@@ -42,6 +42,7 @@ nonisolated struct OnDeviceRouter {
         var dirtPercent: Int
         var pavedPercent: Int
         var unknownAccessPercent: Int
+        var debugNote: String = ""
     }
 
     enum Failure: Error, Equatable, Sendable {
@@ -76,6 +77,8 @@ nonisolated struct OnDeviceRouter {
     static let maxPermissiveStitches: Int = 4000
 
     let pack: GraphV2Pack
+    /// Balanced ratio-seeking: scale paved km cost. Direct/Dirt/Clean stay 1.
+    var pavedBias: Double = 1
 
     /// Meters to the nearest **routable** pack edge within `maxSnapMeters`.
     /// Matches snap policy: unknown tracks are ignored unless `allowUnknown`.
@@ -113,48 +116,10 @@ nonisolated struct OnDeviceRouter {
         allowUnknown: Bool,
         avoidEdgeIds: Set<String> = []
     ) -> Swift.Result<Result, Failure> {
-        // Balanced + Allow ON: unknown dirt is usually cheaper under normal surface
-        // weights, so a single search blows past ~50/50. Run both policies and keep
-        // whichever mix lands closer to half dirt — if that means ignoring unknown
-        // entirely, so be it.
-        if profile == .balanced, allowUnknown {
-            let verified = routeDetailedOnce(
-                from: from, to: to, profile: profile,
-                allowUnknown: false, avoidEdgeIds: avoidEdgeIds
-            )
-            let withUnknown = routeDetailedOnce(
-                from: from, to: to, profile: profile,
-                allowUnknown: true, avoidEdgeIds: avoidEdgeIds
-            )
-            return Self.pickCloserToBalancedMix(verified: verified, withUnknown: withUnknown)
-        }
         return routeDetailedOnce(
             from: from, to: to, profile: profile,
             allowUnknown: allowUnknown, avoidEdgeIds: avoidEdgeIds
         )
-    }
-
-    /// Prefer the result whose dirt% is closer to 50. Ties → shorter, then verified.
-    private static func pickCloserToBalancedMix(
-        verified: Swift.Result<Result, Failure>,
-        withUnknown: Swift.Result<Result, Failure>
-    ) -> Swift.Result<Result, Failure> {
-        switch (verified, withUnknown) {
-        case let (.success(a), .success(b)):
-            let da = abs(a.dirtPercent - 50)
-            let db = abs(b.dirtPercent - 50)
-            if da != db { return .success(da < db ? a : b) }
-            if abs(a.distanceMeters - b.distanceMeters) > 75 {
-                return .success(a.distanceMeters <= b.distanceMeters ? a : b)
-            }
-            return .success(a)
-        case let (.success(a), .failure):
-            return .success(a)
-        case let (.failure, .success(b)):
-            return .success(b)
-        case let (.failure(err), .failure):
-            return .failure(err)
-        }
     }
 
     private func routeDetailedOnce(
@@ -324,6 +289,11 @@ nonisolated struct OnDeviceRouter {
         let roadClass = GraphV2Pack.unpackRoadClass(attr)
         let surfaceName = OnDeviceProfileCosts.surfaceName(code: surface)
         let roadName = GraphV2Pack.roadClassName(roadClass)
+
+        if OnDeviceProfileCosts.isMajorHighway(roadName),
+           snap.distanceMeters < OnDeviceProfileCosts.majorHighwayPinMeters {
+            return snap.distanceMeters
+        }
 
         switch (profile, role) {
         case (.cleanest, _):
@@ -530,6 +500,8 @@ nonisolated struct OnDeviceRouter {
         let edgeMetersEnd = Double(pack.edgeMeters[endEi])
         let endLL = endSnap.projected
         let abMeters = meters(startSnap.projected, endLL)
+        let startOnMajorHighway = snapIsMajorHighwayPin(startSnap)
+        let endOnMajorHighway = snapIsMajorHighwayPin(endSnap)
 
         func awayExtra(fromNode: Int, toNode: Int) -> Double {
             func ll(_ node: Int) -> CLLocationCoordinate2D? {
@@ -680,13 +652,27 @@ nonisolated struct OnDeviceRouter {
                             roadClassCode: roadClass,
                             regionId: pack.regionId,
                             accessCode: access,
-                            confidenceCode: confidence
+                            confidenceCode: confidence,
+                            pavedBias: pavedBias
                         )
                     step *= OnDeviceProfileCosts.pavementLateJoinMult(
                         profile: profile,
                         surfaceCode: surface,
                         distanceToDestinationMeters: meters(coordinate(forNode: toNode), endLL),
                         abMeters: abMeters
+                    )
+                    step *= OnDeviceProfileCosts.cleanCityStreetMult(
+                        profile: profile,
+                        roadClassCode: roadClass,
+                        distanceToDestinationMeters: meters(coordinate(forNode: toNode), endLL)
+                    )
+                    step *= OnDeviceProfileCosts.majorHighwayAvoidMult(
+                        profile: profile,
+                        roadClassCode: roadClass,
+                        metersFromStart: meters(coordinate(forNode: toNode), startSnap.projected),
+                        metersToDestination: meters(coordinate(forNode: toNode), endLL),
+                        startOnMajorHighway: startOnMajorHighway,
+                        endOnMajorHighway: endOnMajorHighway
                     )
 
                     if policyUnknown {
@@ -699,6 +685,23 @@ nonisolated struct OnDeviceRouter {
                     }
 
                     step += awayExtra(fromNode: cur.node, toNode: toNode)
+                    if profile != .cleanest {
+                        let toPt: CLLocationCoordinate2D
+                        if toNode == startVirt {
+                            toPt = startSnap.projected
+                        } else if toNode == endVirt {
+                            toPt = endSnap.projected
+                        } else {
+                            toPt = coordinate(forNode: toNode)
+                        }
+                        step += OnDeviceProfileCosts.corridorCrossTrackExtra(
+                            profile: profile,
+                            point: toPt,
+                            lineFrom: startSnap.projected,
+                            lineTo: endLL,
+                            edgeMeters: Double(pack.edgeMeters[ei])
+                        )
+                    }
                     let cost = cur.cost + step
                     if cost < dist[toNode] {
                         dist[toNode] = cost
@@ -1076,6 +1079,8 @@ nonisolated struct OnDeviceRouter {
         let policyUnknown = allowUnknown && profile != .cleanest
         let endLL = endSnap.projected
         let abMeters = meters(startSnap.projected, endLL)
+        let startOnMajorHighway = snapIsMajorHighwayPin(startSnap)
+        let endOnMajorHighway = snapIsMajorHighwayPin(endSnap)
         let stitches = junctionStitches(
             near: from, and: to, profile: profile,
             allowUnknown: allowUnknown, avoidEdgeIds: avoidEdgeIds
@@ -1114,13 +1119,27 @@ nonisolated struct OnDeviceRouter {
                             roadClassCode: roadClass,
                             regionId: pack.regionId,
                             accessCode: access,
-                            confidenceCode: confidence
+                            confidenceCode: confidence,
+                            pavedBias: pavedBias
                         )
                     step *= OnDeviceProfileCosts.pavementLateJoinMult(
                         profile: profile,
                         surfaceCode: surface,
                         distanceToDestinationMeters: meters(toLL, endLL),
                         abMeters: abMeters
+                    )
+                    step *= OnDeviceProfileCosts.cleanCityStreetMult(
+                        profile: profile,
+                        roadClassCode: roadClass,
+                        distanceToDestinationMeters: meters(toLL, endLL)
+                    )
+                    step *= OnDeviceProfileCosts.majorHighwayAvoidMult(
+                        profile: profile,
+                        roadClassCode: roadClass,
+                        metersFromStart: meters(toLL, startSnap.projected),
+                        metersToDestination: meters(toLL, endLL),
+                        startOnMajorHighway: startOnMajorHighway,
+                        endOnMajorHighway: endOnMajorHighway
                     )
 
                     if policyUnknown {
@@ -1139,6 +1158,13 @@ nonisolated struct OnDeviceRouter {
                         dToMeters: meters(toLL, endLL),
                         abMeters: abMeters,
                         regionId: pack.regionId
+                    )
+                    step += OnDeviceProfileCosts.corridorCrossTrackExtra(
+                        profile: profile,
+                        point: toLL,
+                        lineFrom: startSnap.projected,
+                        lineTo: endLL,
+                        edgeMeters: Double(pack.edgeMeters[ei])
                     )
 
                     let cost = cur.cost + step
@@ -1777,6 +1803,11 @@ nonisolated struct OnDeviceRouter {
         guard ei >= 0, ei < pack.undirectedEdgeCount else { return "motorized_permissive" }
         let name = accessName(GraphV2Pack.unpackAccess(pack.edgeAttrs[ei]))
         return name.isEmpty ? "motorized_permissive" : name
+    }
+
+    private func snapIsMajorHighwayPin(_ snap: EdgeSnap) -> Bool {
+        guard snap.distanceMeters < OnDeviceProfileCosts.majorHighwayPinMeters else { return false }
+        return OnDeviceProfileCosts.isMajorHighway(roadClassNameForEdge(snap.edgeIndex))
     }
 
     private func roadClassNameForEdge(_ ei: Int) -> String {

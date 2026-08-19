@@ -6,12 +6,11 @@
  * Tuning a profile never rebuilds packs.
  *
  * Mental model — dirt is the default fabric except Clean:
- *   Clean / Cleanest → cleanest — Google/Apple: pavement/highway default.
- *                       Dirt only as a last stitch when forced.
- *   Direct           → direct   — crow-flies length first on adventure fabric;
- *                       mild dirt preference only among near-equal options.
- *                       Shorter / lower dirt% than Balanced. No dirt-tourism.
- *   Balanced         → balanced — dual-sport mix (~35–50% dirt when fabric allows);
+ *   Clean / Cleanest → cleanest — pavement only. Avoid town cores unless
+ *                       A/B (or a stage waypoint) sits in that town.
+ *   Direct           → dirt on the crow-flies line. Pavement when a dirt loop
+ *                       would double the ride. Strong away-tax. Not Dirt’s 16× hunt.
+ *   Balanced         → dual-sport mix (~35–50% dirt when fabric allows).
  *                       may meander off the crow-flies cut to pick up dirt.
  *   Dirt             → dirt     — maximize purple NSTDB + OSM dirt/gravel/track;
  *                       pavement only when forced. Longer OK; no destination loops.
@@ -23,29 +22,27 @@
  * SoT: Dirt/Routing/OnDevice/OnDeviceProfileCosts.swift (phone). Dirt surface
  * values here already include iOS `dirtUnpavedMult` so live API matches.
  *
- * Copy this file to Mayday `routing/lib/profile-costs.js` and deploy `/api/route`
- * whenever the tables change. Live and the phone pack are one fabric; costs
- * must ship on both engines. See scripts/pack-fabric/scripts/ship-routing.js.
+ * Deploy `/api/route` with `node scripts/pack-fabric/scripts/ship-routing.js --live`
+ * whenever the tables change. Live and the phone pack are one fabric.
+ * Dirt arrival clamp (last ~2.5 km of B) must match OnDeviceProfileCosts.approachAwayExtra.
  */
 
 const PROFILE_SURFACE_WEIGHTS = Object.freeze({
-  // Length dominates. Mild dirt preference among near-equal options only.
-  // Must stay WEAKER than Balanced — otherwise Direct out-dirts Balanced.
+  // Corridor-bound (cross-track). Dirt cheaper than Balanced on the line.
   direct: Object.freeze({
-    paved: 1.18,
-    gravel: 0.96,
-    access: 0.93,
-    track: 0.9,
-    unknown: 0.95
+    paved: 2.35,
+    gravel: 0.90,
+    access: 0.82,
+    track: 0.70,
+    unknown: 0.92
   }),
-  // Dual-sport mix — stronger dirt pull + wider ellipse (router) so the
-  // journey can leave Direct’s crow-flies cut for gravel/track corridors.
+  // Dual-sport ~50/50. Cross-track stops the Williams Lake hunt.
   balanced: Object.freeze({
-    paved: 4.2,
-    gravel: 0.72,
-    access: 0.58,
-    track: 0.48,
-    unknown: 0.68
+    paved: 1.42,
+    gravel: 0.98,
+    access: 0.92,
+    track: 0.88,
+    unknown: 0.96
   }),
   // Maximize tagged gravel/track/resource. Untagged yellow/white OSM roads
   // cost as paved (they paint paved). Includes iOS dirtUnpavedMult
@@ -78,7 +75,7 @@ const PROFILE_SURFACE_WEIGHTS = Object.freeze({
  *   service      ≈ residential / living_street / service (city roads)
  *   track/resource ≈ agricultural/forestry tracks
  *
- * Cleanest: upper major OK through cities.
+ * Cleanest: highway around towns; local/service is the city grid.
  * Adventure: avoid freeway/arterial + town cores; prefer lower major + tracks.
  */
 const ADVENTURE_ROAD_CLASS_WEIGHTS = Object.freeze({
@@ -96,31 +93,30 @@ const ADVENTURE_ROAD_CLASS_WEIGHTS = Object.freeze({
 });
 
 const DIRECT_ROAD_CLASS_WEIGHTS = Object.freeze({
-  freeway: 1.55,
-  arterial: 1.35,
+  freeway: 1.7,
+  arterial: 1.45,
   collector: 1.06,
-  ramp: 1.45,
-  local: 0.95,
+  ramp: 1.6,
+  local: 0.98,
   service: 1.12,
-  resource: 0.92,
-  recreation: 0.9,
-  track: 0.88,
-  double_track: 0.88,
+  resource: 0.9,
+  recreation: 0.88,
+  track: 0.9,
+  double_track: 0.9,
   unknown: 1.0
 });
 
-// Balanced: leave upper major harder than Direct so dirt corridors win more often.
 const BALANCED_ROAD_CLASS_WEIGHTS = Object.freeze({
-  freeway: 5.6,
-  arterial: 4.2,
-  collector: 1.1,
-  ramp: 5.0,
-  local: 0.86,
-  service: 1.28,
-  resource: 0.76,
-  recreation: 0.74,
-  track: 0.7,
-  double_track: 0.7,
+  freeway: 3.2,
+  arterial: 2.4,
+  collector: 1.08,
+  ramp: 2.8,
+  local: 1.0,
+  service: 1.15,
+  resource: 0.92,
+  recreation: 0.9,
+  track: 0.92,
+  double_track: 0.92,
   unknown: 1.0
 });
 
@@ -130,11 +126,11 @@ const PROFILE_ROAD_CLASS_WEIGHTS = Object.freeze({
   // paved in the direction of travel must beat reverse U-turns to the 100-series.
   cleanest: Object.freeze({
     freeway: 0.94,
-    arterial: 0.95,
-    collector: 0.97,
+    arterial: 0.98,
+    collector: 1.18,
     ramp: 0.96,
-    local: 1.0,
-    service: 1.08,
+    local: 2.6,
+    service: 3.2,
     resource: 1.0,
     recreation: 1.0,
     track: 1.0,
@@ -179,7 +175,7 @@ function surfaceMultiplier(surfaceCode, profile, _regionId, roadTrackClass) {
   const table = PROFILE_SURFACE_WEIGHTS[profile] || PROFILE_SURFACE_WEIGHTS.balanced;
   // Untagged OSM highway paints paved — cost it as paved or Dirt≈Balanced.
   if (
-    (profile === "dirt" || profile === "balanced") &&
+    (profile === "dirt" || profile === "balanced" || profile === "direct") &&
     name === "unknown" &&
     paintsAsPavedRoadClass(roadTrackClass)
   ) {
@@ -200,6 +196,96 @@ function classSpeedKmh(surfaceCode) {
   return SURFACE_SPEED_KMH[name] || 30;
 }
 
+function approachAwayExtraCost(profile, dFromMeters, dToMeters, abMeters, minAwayMeters, _regionId) {
+  const away = dToMeters - dFromMeters;
+  const minAway = minAwayMeters == null ? 50 : minAwayMeters;
+  if (!(away > minAway)) return 0;
+  const dFrom = Math.max(0, dFromMeters);
+  const ab = abMeters > 0 ? abMeters : 0;
+  const kmAway = away / 1000;
+  if (profile === "dirt") {
+    const mid = kmAway * 1.45;
+    const horizon = 2500;
+    let near = 0;
+    if (dFrom < horizon) {
+      const t = 1 - dFrom / horizon;
+      near = kmAway * (0.12 + t * t * 0.9);
+    }
+    const raw = mid + near;
+    const cap = kmAway * 16.0 * 0.12;
+    return Math.min(raw, cap);
+  }
+  if (profile === "direct") {
+    const nearBand = Math.max(3200, ab * 0.3);
+    return kmAway * (dFrom < nearBand ? 12 : 7);
+  }
+  if (profile === "balanced") {
+    const mid = kmAway * 2.2;
+    const horizon = Math.max(4000, ab * 0.2);
+    let near = 0;
+    if (dFrom < horizon) {
+      const t = 1 - dFrom / horizon;
+      near = kmAway * (0.4 + t * t * 2.4);
+    }
+    return mid + near;
+  }
+  const nearBand = Math.max(2800, ab * 0.28);
+  return kmAway * (dFrom < nearBand ? 6.5 : 3.2);
+}
+
+/** Clean: local/service expensive unless the pin is in that town (~2.5 km of B). */
+function cleanCityStreetMult(profile, roadTrackClass, dToMeters) {
+  if (profile !== "cleanest") return 1;
+  if (roadTrackClass !== "local" && roadTrackClass !== "service") return 1;
+  const nearBand = 2500;
+  const dTo = Math.max(0, dToMeters || 0);
+  if (dTo <= nearBand) return 1;
+  const t = Math.min(1, (dTo - nearBand) / 8000);
+  return 1 + 2.4 * t;
+}
+
+const MAJOR_HIGHWAY_PIN_METERS = 18;
+const MAJOR_HIGHWAY_JOIN_METERS = 6000;
+
+function isMajorHighwayClass(road) {
+  return road === "freeway" || road === "arterial" || road === "ramp";
+}
+
+function pinMatchesMajorHighway(match) {
+  if (!match || !isMajorHighwayClass(match.roadTrack)) return false;
+  return Number(match.distanceM) < MAJOR_HIGHWAY_PIN_METERS;
+}
+
+/** Avoid motorways except the last/first ~6 km when that pin sits on one. */
+function majorHighwayAvoidMult(
+  profile,
+  roadTrackClass,
+  metersFromStart,
+  metersToDestination,
+  startOnMajorHighway,
+  endOnMajorHighway
+) {
+  if (!isMajorHighwayClass(roadTrackClass)) return 1;
+  const join = MAJOR_HIGHWAY_JOIN_METERS;
+  const nearPinnedHighway =
+    (endOnMajorHighway && metersToDestination < join) ||
+    (startOnMajorHighway && metersFromStart < join);
+  const current = roadClassMultiplier(roadTrackClass, profile);
+  if (nearPinnedHighway) {
+    if (profile === "cleanest") return 1;
+    const target = 2.0;
+    if (current <= target) return 1;
+    return target / current;
+  }
+  const target = 12.0;
+  if (current >= target) return 1;
+  return target / current;
+}
+
+function isBcDirt(_profile, _regionId) {
+  return false;
+}
+
 function maxSurfaceMultiplier(profile) {
   const table = PROFILE_SURFACE_WEIGHTS[profile] || PROFILE_SURFACE_WEIGHTS.balanced;
   const surfaceMax = Math.max(...Object.values(table));
@@ -212,12 +298,56 @@ function maxSurfaceMultiplier(profile) {
  * Build a Float64Array length 5 (surface codes 0..4) for fast relax.
  * Road-class bias is applied separately when `rt` is available (v1).
  */
-function costPerKmView(profile) {
+function costPerKmView(profile, _regionId, pavedBias) {
   const view = new Float64Array(5);
+  const bias = pavedBias == null || !(pavedBias > 0) ? 1 : pavedBias;
   for (let code = 0; code < 5; code += 1) {
     view[code] = surfaceMultiplier(code, profile);
+    if (code === 0 && bias !== 1) view[code] *= bias;
   }
   return view;
+}
+
+const EARTH_RADIUS_M = 6371000;
+
+function angularDistanceRadians(a, b) {
+  const toR = Math.PI / 180;
+  const lat1 = a[1] * toR;
+  const lat2 = b[1] * toR;
+  const dLat = lat2 - lat1;
+  const dLon = (b[0] - a[0]) * toR;
+  const h =
+    Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon / 2) ** 2;
+  return 2 * Math.asin(Math.min(1, Math.sqrt(h)));
+}
+
+function initialBearingRadians(a, b) {
+  const toR = Math.PI / 180;
+  const φ1 = a[1] * toR;
+  const φ2 = b[1] * toR;
+  const Δλ = (b[0] - a[0]) * toR;
+  const y = Math.sin(Δλ) * Math.cos(φ2);
+  const x = Math.cos(φ1) * Math.sin(φ2) - Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
+  return Math.atan2(y, x);
+}
+
+function crossTrackMeters(point, a, b) {
+  const ab = angularDistanceRadians(a, b);
+  if (!(ab > 1e-9)) return 0;
+  const d13 = angularDistanceRadians(a, point);
+  const t13 = initialBearingRadians(a, point);
+  const t12 = initialBearingRadians(a, b);
+  return Math.asin(Math.sin(d13) * Math.sin(t13 - t12)) * EARTH_RADIUS_M;
+}
+
+/** Corridor off-line tax. Direct strongest, then Balanced, then Dirt. */
+function directCrossTrackExtra(profile, point, lineFrom, lineTo, edgeMeters) {
+  if (!(edgeMeters > 0) || !point || !lineFrom || !lineTo) return 0;
+  const k =
+    profile === "direct" ? 0.018 : profile === "balanced" ? 0.014 : profile === "dirt" ? 0.005 : 0;
+  if (!k) return 0;
+  const xtKm = Math.abs(crossTrackMeters(point, lineFrom, lineTo)) / 1000;
+  return (edgeMeters / 1000) * xtKm * xtKm * k;
 }
 
 module.exports = {
@@ -230,5 +360,13 @@ module.exports = {
   roadClassMultiplier,
   classSpeedKmh,
   maxSurfaceMultiplier,
-  costPerKmView
+  approachAwayExtraCost,
+  cleanCityStreetMult,
+  isMajorHighwayClass,
+  pinMatchesMajorHighway,
+  majorHighwayAvoidMult,
+  isBcDirt,
+  costPerKmView,
+  crossTrackMeters,
+  directCrossTrackExtra
 };

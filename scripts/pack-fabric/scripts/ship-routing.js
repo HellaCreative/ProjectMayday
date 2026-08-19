@@ -9,11 +9,9 @@
  *   node scripts/pack-fabric/scripts/ship-routing.js --live
  *   node scripts/pack-fabric/scripts/ship-routing.js --pack bc --live --assert
  *
- * --pack  uploads Dirt graph.v2.bin + geometry.v1.bin to R2 dirt-packs/{id}/
- *         That object is PACKS download AND live /api/route.
- * --live  copies phone cost tables into Mayday and deploys /api/route.
- *         Refuses Documents/Mayday when overlay chunks are dirty.
- * --assert  curls production; fails if the graph is still the longhaul extract.
+ * --pack  uploads graph.v2.bin + geometry.v1.bin to R2 dirt-packs/{id}/
+ * --live  deploys /api/route from this pack-fabric tree (not another repo)
+ * --assert  curls production; fails if the graph is still the longhaul extract
  */
 
 const fs = require("fs");
@@ -21,9 +19,8 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 
 const DIRT = path.resolve(__dirname, "../../..");
-const MAYDAY = process.env.MAYDAY_ROOT || "/Users/richardsmith/Documents/Mayday";
-const PACKS = path.join(DIRT, "scripts/pack-fabric/app/data/packs/v1");
-const COSTS_SRC = path.join(DIRT, "scripts/pack-fabric/routing/lib/profile-costs.js");
+const FABRIC = path.join(DIRT, "scripts/pack-fabric");
+const PACKS = path.join(FABRIC, "app/data/packs/v1");
 const PHONE_FILES = ["graph.v2.bin", "geometry.v1.bin"];
 
 function die(msg) {
@@ -51,65 +48,33 @@ function parseArgs(argv) {
   };
 }
 
-function overlayChunkCount(root) {
-  const dir = path.join(root, "app/data/bc-gov-chunks");
-  if (!fs.existsSync(dir)) return 0;
-  const st = spawnSync("git", ["-C", root, "status", "--porcelain", "app/data/bc-gov-chunks"], {
-    encoding: "utf8"
-  });
-  if (st.status !== 0) return 0;
-  return (st.stdout || "").split("\n").filter(Boolean).length;
-}
-
 function putR2(regionId, fileName) {
   const src = path.join(PACKS, regionId, fileName);
   if (!fs.existsSync(src)) die("missing " + src + " — build the phone pack first");
   const key = "dirt-packs/" + regionId + "/" + fileName;
   console.log("PUT", key, Math.round(fs.statSync(src).size / 1e6) + "MB");
   run("npx", ["wrangler", "r2", "object", "put", key, "--file=" + src, "--remote"], {
-    cwd: MAYDAY
+    cwd: FABRIC
   });
 }
 
 function shipPack(ids) {
-  if (!fs.existsSync(MAYDAY)) die("MAYDAY_ROOT not found: " + MAYDAY);
   for (const id of ids) {
     for (const name of PHONE_FILES) putR2(id, name);
   }
   const manifest = path.join(PACKS, "manifest.json");
   if (fs.existsSync(manifest)) {
     console.log("PUT dirt-packs/manifest.json (merge on the bucket — this replaces the object)");
-    run(
-      "npx",
-      ["wrangler", "r2", "object", "put", "dirt-packs/manifest.json", "--file=" + manifest, "--remote"],
-      { cwd: MAYDAY }
-    );
+    run("npx", ["wrangler", "r2", "object", "put", "dirt-packs/manifest.json", "--file=" + manifest, "--remote"], {
+      cwd: FABRIC
+    });
   }
   console.log("pack published — live /api/route and PACKS download now share those bytes");
 }
 
 function shipLive() {
-  if (!fs.existsSync(MAYDAY)) die("MAYDAY_ROOT not found: " + MAYDAY);
-  const dirtyChunks = overlayChunkCount(MAYDAY);
-  if (dirtyChunks > 20) {
-    die(
-      "Refuse to vercel --prod from " +
-        MAYDAY +
-        " (" +
-        dirtyChunks +
-        " dirty overlay chunks). Use a clean worktree on origin/main:\n" +
-        "  git -C " +
-        MAYDAY +
-        " worktree add /tmp/mayday-ship origin/main\n" +
-        "  MAYDAY_ROOT=/tmp/mayday-ship node scripts/pack-fabric/scripts/ship-routing.js --live"
-    );
-  }
-  const dest = path.join(MAYDAY, "routing/lib/profile-costs.js");
-  if (!fs.existsSync(dest)) die("Mayday profile-costs missing: " + dest);
-  fs.copyFileSync(COSTS_SRC, dest);
-  console.log("copied", COSTS_SRC, "→", dest);
-  console.log("deploying /api/route from", MAYDAY);
-  run("npx", ["vercel", "--prod", "--yes"], { cwd: MAYDAY });
+  console.log("deploying /api/route from", FABRIC);
+  run("npx", ["vercel", "--prod", "--yes"], { cwd: FABRIC });
 }
 
 function shipAssert() {

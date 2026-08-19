@@ -1,21 +1,21 @@
-# On-device routing (Phase C)
+# On-device routing
 
-Prefetch `graph.v2` packs at Start Navigation; mid-ride recalc prefers
-the phone when a pack is loaded.
+Riders download `graph.v2` + `geometry.v1` from PACKS (R2). Mid-ride recalc
+uses the phone when that pack is installed.
 
 | File | Role |
 | --- | --- |
 | `GraphPackStore.swift` | Manifest + download + cache |
 | `GraphV2Pack.swift` | Binary CSR decode (parity with `pack-v2.js`) |
 | `OnDeviceProfileCosts.swift` | Same surface weights as `profile-costs.js` |
-| `OnDeviceRouter.swift` | Dijkstra + nearest-node snap |
+| `OnDeviceRouter.swift` | Dijkstra + snap |
+| `CrossPackSeam.swift` | Two adjacent installed packs |
 
-**Wired for offline mid-ride:** automatic recalculate, Report → Find a way around, Report → Return to network. Backtrack is local geometry (always offline). End stage is local.
+Live `/api/route` works without a pack (same R2 files). Auto-download next
+region is off unless the rider turns it on. Start Nav does **not** fetch a
+routing pack.
 
-**Offline packs UI:** Route sheet → **PACKS** (left of recenter) → download province brains for no-signal rides. Live routing works without a pack. Auto-download next region is off unless you turn it on.
+**Limits:** nearest-node snap; one pack per hop; two adjacent installed packs
+chain on-device. Missing pack + online → live.
 
-**CDN:** `AppConfig.packCDNBaseURL` (Cloudflare R2 `manifest.json`).
-
-**Limits (honest):** nearest-node snap (not full edge snap); single active region pack at a time for search; geometry sidecar not required for search. Cross-province / missing-pack hops use live `/api/route` while online — phone pack stitch is not built.
-
-See [09-STACK-ECONOMICS.md](../../../docs/09-STACK-ECONOMICS.md).
+See [../../../../AGENTS.md](../../../../AGENTS.md) and [docs/02-ROUTING.md](../../../../docs/02-ROUTING.md).

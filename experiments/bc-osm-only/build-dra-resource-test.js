@@ -9,7 +9,8 @@
  *   DRA resource is additive dirt only (no highway→local, no paved, no trail).
  *   Drop duplicates within 28 m of OSM; no free-space connectors.
  *   Capillary endpoints snap onto OSM nodes (~18 m). Access = unknown.
- *   Does not publish to R2.
+ *   Publish to R2 when you want the phone to ride it:
+ *   node scripts/pack-fabric/scripts/ship-routing.js --pack bc
  *
  * Usage:
  *   NODE_OPTIONS=--max-old-space-size=12288 \
@@ -22,10 +23,10 @@ const readline = require("readline");
 const crypto = require("crypto");
 
 const DIRT = path.resolve(__dirname, "../..");
-const MAYDAY = "/Users/richardsmith/Documents/Mayday";
-const OSM_GRAPH = path.join(DIRT, "scripts/pack-fabric/app/data/packs/v1/bc/graph.v2.bin");
-const OSM_GEOM = path.join(DIRT, "scripts/pack-fabric/app/data/packs/v1/bc/geometry.v1.bin");
-const DRA_SEQ = path.join(MAYDAY, "data-raw/bc-dra/capillary.geojsonseq");
+const FABRIC = path.join(DIRT, "scripts/pack-fabric");
+const OSM_GRAPH = path.join(FABRIC, "app/data/packs/v1/bc/graph.v2.bin");
+const OSM_GEOM = path.join(FABRIC, "app/data/packs/v1/bc/geometry.v1.bin");
+const DRA_SEQ = path.join(FABRIC, "data-raw/bc-dra/capillary.geojsonseq");
 const OUT_DIR = path.join(__dirname, "out/dra-resource");
 
 const {
@@ -38,9 +39,9 @@ const {
   ROAD_CLASS_NAME,
   writePacksFromV1
 } = require(path.join(DIRT, "scripts/pack-fabric/routing/lib/pack-v2"));
-const { createNormalizedEdge } = require(path.join(MAYDAY, "routing/schema/edge"));
-const { conflateRegion } = require(path.join(MAYDAY, "routing/conflation/conflate"));
-const { buildRegionalGraph } = require(path.join(MAYDAY, "routing/regional/package"));
+const { createNormalizedEdge } = require(path.join(FABRIC, "routing/schema/edge"));
+const { conflateRegion } = require(path.join(FABRIC, "routing/conflation/conflate"));
+const { buildRegionalGraph } = require(path.join(FABRIC, "routing/regional/package"));
 
 const SURFACE_NAME = ["paved", "gravel", "access", "track", "unknown"];
 const ACCESS_NAME = [

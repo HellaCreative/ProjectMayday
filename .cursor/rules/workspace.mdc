@@ -1,0 +1,10 @@
+---
+description: Dirt is developed only in this iOS repo.
+alwaysApply: true
+---
+
+# One workspace
+
+Product, pack-fabric, and live `/api/route` live here: `/Users/richardsmith/SandBox01/MAYDAYiOS/Dirt`.
+
+Do not open another folder to build Dirt.

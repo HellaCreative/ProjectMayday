@@ -14,9 +14,9 @@ const https = require("https");
 const http = require("http");
 
 const DIRT = path.resolve(__dirname, "../../..");
-const MAYDAY = process.env.MAYDAY_ROOT || "/Users/richardsmith/Documents/Mayday";
+const FABRIC = path.join(DIRT, "scripts/pack-fabric");
 const LIVE_URL = process.env.LIVE_ROUTE_URL || "https://dirt-mayday.vercel.app/api/route";
-const PACK = path.join(DIRT, "scripts/pack-fabric/app/data/packs/v1/bc/graph.v2.bin");
+const PACK = path.join(FABRIC, "app/data/packs/v1/bc/graph.v2.bin");
 
 function fail(msg) {
   console.error("LOCKSTEP FAIL:", msg);
@@ -91,7 +91,7 @@ function postJson(url, payload) {
 }
 
 async function main() {
-  const selectPath = path.join(MAYDAY, "routing/regional/select.js");
+  const selectPath = path.join(FABRIC, "routing/regional/select.js");
   if (fs.existsSync(selectPath)) {
     const src = fs.readFileSync(selectPath, "utf8");
     if (/useLonghaulPacks\s*=\s*!!/.test(src) || /useLonghaulPacks\s*=\s*onVercel/.test(src)) {
@@ -100,26 +100,14 @@ async function main() {
     if (!/graph\.v2\.bin/.test(src)) {
       fail(selectPath + " does not mention graph.v2.bin");
     }
-    console.log("ok mayday select.js points at graph.v2.bin");
+    console.log("ok select.js points at graph.v2.bin");
   } else {
-    console.log("skip mayday select.js (MAYDAY_ROOT missing)");
+    fail("missing " + selectPath);
   }
 
-  const costsDirt = path.join(DIRT, "scripts/pack-fabric/routing/lib/profile-costs.js");
-  const costsMayday = path.join(MAYDAY, "routing/lib/profile-costs.js");
-  if (fs.existsSync(costsDirt) && fs.existsSync(costsMayday)) {
-    const dirt = require(costsDirt);
-    const live = require(costsMayday);
-    const d = dirt.PROFILE_SURFACE_WEIGHTS.dirt.paved;
-    const l = live.PROFILE_SURFACE_WEIGHTS.dirt.paved;
-    if (d !== l) {
-      console.warn(
-        "warn Dirt paved cost " + d + " vs Mayday checkout " + l + " — copy profile-costs.js and --live"
-      );
-    } else {
-      console.log("ok cost tables dirt.paved =", d);
-    }
-  }
+  const costsPath = path.join(FABRIC, "routing/lib/profile-costs.js");
+  const dirt = require(costsPath);
+  console.log("ok cost tables dirt.paved =", dirt.PROFILE_SURFACE_WEIGHTS.dirt.paved);
 
   const r2 = "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/bc/graph.v2.bin";
   const head = await request(r2, "HEAD");

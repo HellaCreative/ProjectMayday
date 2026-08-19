@@ -1,6 +1,6 @@
 # DIRT iOS — Maps
 
-MapLibre Native integration, route paint, markers, location, and offline tile session rules. Spec: the iOS docs §6.
+MapLibre Native integration, route paint, markers, location, and offline tile session rules.
 
 ---
 
@@ -13,7 +13,7 @@ MapLibre Native integration, route paint, markers, location, and offline tile se
 | `Dirt/Map/MapStyleCatalog.swift` | Basemap IDs, style URL writer |
 | `Dirt/Map/OfflineTileManager.swift` | Offline pack prefetch (active basemap) |
 | `Dirt/Map/POIManager.swift` | Rider Services POIs from OSM Overpass → MapState |
-| `Dirt/Map/NetworkOverlayManager.swift` | Province network overlay chunk loader (NS/NB/QC → MapState) |
+| `Dirt/Map/NetworkOverlayManager.swift` | Paints nearby edges from the installed graph pack |
 | `Dirt/Map/GeoJSON+Utils.swift` | `Data.gunzipped()` gzip decompression; `LayerPrefsSnapshot` |
 | `Dirt/Networking/AppConfig.swift` | Shortbread URL + idle camera |
 | `Dirt/Features/Layers/LayersSheet.swift` | Basemap picker + all overlay toggles |
@@ -22,16 +22,15 @@ MapLibre Native integration, route paint, markers, location, and offline tile se
 
 ## MapLibre integration
 
-- Default style: OSM **Shortbread** (bundled `shortbread-style.json`) — high-contrast paint tuned for sunlight readability.
+- Default style: OSM **Shortbread** (bundled `shortbread-style.json`).
 - **Swappable basemaps** (`MapStyleCatalog` + Layers → Basemap):
   | ID | Source | Notes |
   | --- | --- | --- |
-  | `shortbread` | Bundled Shortbread JSON | High-contrast OSM vector; works offline; no billing |
-  | `esriSatellite` | Esri World Imagery raster tiles | No token required; aerial imagery via ArcGIS Online |
-- Esri style is written to a cache-directory JSON at selection time (same raster-spec pattern as the old Mapbox path). Tile URL: `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}` (Esri uses `{z}/{y}/{x}` order).
-- No Mapbox token required or expected. `MapStyleCatalog.tokenKey` and `hasMapboxToken` have been removed.
-- **Routing is unchanged:** OSM dual-sport graph via on-device packs. Basemap swap is visual only.
-- Idle camera: NS overview `(-63.0, 45.1)` zoom `7.25`.
+  | `shortbread` | Bundled Shortbread JSON | Standard · high-contrast OSM vector |
+  | `shortbreadRich` | Intended richer JSON | Default in UI; **`shortbread-rich-style.json` is not in the repo** — falls back to Standard |
+- No Mapbox token. Retired Esri satellite maps to Rich.
+- **Routing is unchanged:** OSM dual-sport graph via on-device / live packs. Basemap swap is visual only.
+- Idle camera: continental US overview `(39.5, -98.0)` zoom `3.5` — do not flash Nova Scotia at launch.
 - `MLNMapView` via `UIViewRepresentable`; coordinator owns style load / reload (`styleGeneration`), route sync, markers, camera, follow mode.
 - User location: `showsUserLocation` when authorized; nav sets `userTrackingMode = .followWithCourse`.
 - Gestures: tap → `MapState.onTap`; long-press → `onLongPress` (wired to planner in `AppEnvironment`).
@@ -121,8 +120,8 @@ Documented limit in README and code: **not a true route corridor** — best-effo
 
 ## Layers / overlays
 
-`LayersSheet` persists basemap choice, Rider Services, and Route data (NS/NB/QC lens) via `@AppStorage`.  
-Toggle changes bump `app.mapState.layerPrefsGeneration` so managers refresh. Map visibility surface-class toggles were removed — network classes always paint when loaded.
+`LayersSheet` persists basemap choice, Rider Services, and network lens via `@AppStorage`.  
+BC network lens is parked (`if false` in Layers). Overlay paint is the installed pack.
 
 ### Rider Services POIs
 
@@ -138,9 +137,9 @@ Toggle changes bump `app.mapState.layerPrefsGeneration` so managers refresh. Map
 | **Tap** | Coordinator `handleTap` → `queryRenderedFeatures` on poi layers → `mapState.onPOITap` → `mapState.selectedPOI` → `RootView confirmationDialog` |
 | **Routing** | "Route to this" → `planner.routeToCoordinate`; "Add as waypoint" → `planner.addPlanWaypoint` |
 
-### Province network overlays (NS / NB / QC)
+### Province network overlays
 
-`NetworkOverlayManager` paints nearby edges from the installed graph pack. Honest Layers: when Allow is off, `motorized_unknown` / `motorized_excluded` are omitted so the lens matches what the router can use. Laws: [08-MAP-REFINEMENT.md](./08-MAP-REFINEMENT.md).
+`NetworkOverlayManager` paints nearby edges from the **installed graph pack**. Honest Layers: when Allow is off, `motorized_unknown` / `motorized_excluded` are omitted. Laws: [08-MAP-REFINEMENT.md](./08-MAP-REFINEMENT.md).
 
 | | |
 |---|---|
@@ -164,7 +163,6 @@ dirt-poi-{category}                                                ← above rou
 ## Starting a new agent on this area
 
 1. Read `MapLibreMapView.swift`, `MapState.swift`, `POIManager.swift`, `NetworkOverlayManager.swift`, `GeoJSON+Utils.swift`.
-2. Cross-check session rules with the iOS docs §6.
-3. Overlays paint the installed graph pack. POIs come from OSM Overpass.
-4. **Invariants:** Start-Nav-only prefetch; keep-through-reroute; never clear packs on End alone; selected-route paint stays on the per-surface palette (not stats mix, not brand-orange-only); bundled style.
-5. **Open questions:** true corridor pack vs bbox; MaxOfflinePack size / eviction policy on device; POI clustering for dense areas.
+2. Overlays paint the installed graph pack. POIs come from OSM Overpass.
+3. **Invariants:** Start-Nav-only tile prefetch; keep-through-reroute; never clear tiles on End alone; selected-route paint stays on the per-surface palette; bundled style. Do not flash NS at launch.
+4. **Open questions:** true corridor tiles vs bbox; Rich style JSON; BC lens re-enable.

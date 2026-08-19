@@ -32,8 +32,6 @@ From the Codex iOS audit. **#2 stale routes** and **#5 failed-manifest retry** w
 | Shared incidents | Local HUD toast | `rider_alerts` insert + peer display; optional `avoidEdgeIds` recalculate |
 | Corridor offline tiles | BBox pyramid z8–14 | True corridor / budgeted tile set closer to a true corridor |
 | GPX import | Export only | GPX import |
-| Per-stage profile UI | Global profile only | Optional chips per stage ([02-ROUTING.md](./02-ROUTING.md)) |
-| Western-province overlay growth | Installed graph pack paint | Ship more province packs on R2 |
 
 ---
 
@@ -60,7 +58,7 @@ Shipped. `GraphPackStore` + `OnDeviceRouter` on R2 `graph.v2` packs. Costing mus
 
 ## Packs / performance (later)
 
-Pack streaming, cross-province stitch, and longhaul purple policy live in this repo’s pack-fabric + R2 publish path. Locked laws: [08-MAP-REFINEMENT.md](./08-MAP-REFINEMENT.md). On-device multi-pack (AB↔BC when both downloaded) is captured there, not shipped.
+Pack streaming lives in **this** repo: `scripts/pack-fabric/` → R2. Locked laws: [08-MAP-REFINEMENT.md](./08-MAP-REFINEMENT.md). Two adjacent installed packs already chain on-device.
 
 ---
 
@@ -111,8 +109,8 @@ Operational path also in [../README_TESTFLIGHT.md](../README_TESTFLIGHT.md).
 
 ## Starting a new agent on this area
 
-1. Read [00-OVERVIEW.md](./00-OVERVIEW.md) + README gaps before proposing greenfield features.
+1. Read [../AGENTS.md](../AGENTS.md) then [00-OVERVIEW.md](./00-OVERVIEW.md). Work only in this iOS repo.
 2. Confirm the feature is absent in code (search `Dirt/`) — do not re-document invented work as done.
 3. For overlays/realtime/incidents, read the iOS code in `Dirt/`.
-4. **Invariants:** native SwiftUI only; no second backend; Clean⊥Allow; green CTA law; ChatGPT outlines are reference-only.
+4. **Invariants:** native SwiftUI only; no second backend; Clean⊥Allow; green CTA law.
 5. **Open questions:** Rick’s priority between realtime vs overlays; ASC privacy policy URL; whether Live Activities are wanted before public TestFlight.

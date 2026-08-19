@@ -5,29 +5,32 @@ alwaysApply: true
 
 # Live and PACKS are one fabric
 
-There is **one** routing file per region: R2 `dirt-packs/{id}/graph.v2.bin` + `geometry.v1.bin`.
+There is **one** routing file per region: R2 `dirt-packs/{id}/graph.v2.bin` + `geometry.v1.bin`. Catalog lists all CA provinces/territories and all US states.
 
 - iOS PACKS downloads that object.
-- Live `POST /api/route` loads **that same object**.
+- Live `POST /api/route` loads **that same object** from R2.
 - Downloaded vs cellular is delivery, not a second road network.
-- `longhaul.v1.json.gz` is a thinned highway extract. It is **not** Dirt. Do not point `/api/route` at it.
+- **If we change a pack, it goes to R2, or we did not test it.** Xcode ships the app, not the road file.
+- Vercel Hobby is the API only (`scripts/pack-fabric/api`). Never `includeFiles` pack binaries or `longhaul.v1.json.gz`.
+- `longhaul.v1.json.gz` is a thinned highway extract. It is **not** Dirt.
 
 ## When you change routing
 
-| Change | Ship both |
+| Change | Ship |
 | --- | --- |
-| OSM / stitches / capillary / pack rebuild | Publish `graph.v2.bin` + `geometry.v1.bin` to R2 (that **is** live and download). Then `node scripts/pack-fabric/scripts/ship-routing.js --assert`. |
-| Cost tables / Allow / search | Update `OnDeviceProfileCosts.swift` **and** `scripts/pack-fabric/routing/lib/profile-costs.js` **and** copy that JS into Mayday `routing/lib/profile-costs.js`, then deploy `/api/route`. Pack binaries unchanged. |
-| Live graph loader (`select.js`, `graph.js`) | Commit + deploy Mayday from a **clean** tree. Never `vercel --prod` from `Documents/Mayday` when overlay chunks are dirty. |
+| OSM / stitches / capillary / pack rebuild | Publish `graph.v2.bin` + `geometry.v1.bin` to R2. Then `node scripts/pack-fabric/scripts/ship-routing.js --assert`. |
+| Cost tables / Allow / search | Update `OnDeviceProfileCosts.swift` **and** `scripts/pack-fabric/routing/lib/profile-costs.js`, then `node scripts/pack-fabric/scripts/ship-routing.js --live`. Pack binaries unchanged. |
+| Live graph loader (`select.js`, `graph.js`) | Edit files in `scripts/pack-fabric/routing/`, then `--live`. |
 
 A routing change that is only on the phone, or only on live, is **not shipped**.
 
 ## Do not
 
-- Auto-download packs to “make live match.” Live must already be the pack.
-- Deploy Mayday from a dirty overlay tree (uploads hundreds of MB, easy to miss the three routing files).
+- Auto-download packs to “make live match.”
+- Leave a pack rebuild only on the laptop.
 - Leave `useLonghaulPacks = onVercel` or `preferLonghaulPacks: true` on a path that chooses the graph file.
 - Publish a second “live extract.”
+- Wire `bc-ften.js` into SUPPLEMENTS.
 
 ## Commands
 
@@ -37,4 +40,4 @@ node scripts/pack-fabric/scripts/ship-routing.js --pack bc
 node scripts/pack-fabric/scripts/ship-routing.js --live
 ```
 
-Mayday lives at `/Users/richardsmith/Documents/Mayday`. Production API: `https://dirt-mayday.vercel.app/api/route`.
+Workspace: `/Users/richardsmith/SandBox01/MAYDAYiOS/Dirt`. API: `https://dirt-mayday.vercel.app/api/route`.

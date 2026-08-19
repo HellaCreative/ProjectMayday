@@ -1,13 +1,17 @@
+import CoreLocation
 import Foundation
 
 /// Shared surface + road-class weight tables with pack-fabric `routing/lib/profile-costs.js`.
 /// Profile intent (the dial — there is no separate Wander control):
-///   Clean    → pavement / highway first (ETA)
-///   Direct   → crow-flies toward B; dirt only when it barely detours
+///   Clean    → pavement only. Avoid town cores and major highways unless A/B is there.
+///   Direct   → dirt on the crow-flies line. No hunt. Pavement OK when dirt loops.
 ///   Balanced → dual-sport mix (~50/50 when fabric allows)
 ///   Dirt     → adventure ride: progress generally toward B, meander for yellow/white/blue
 ///              dirt; pavement only when forced. Allow Unknown stays OFF unless the rider
 ///              opts in (legal risk) — purple Access is gated by that toggle.
+///   All profiles skip freeway / arterial / ramp except to join a pin that
+///   actually sits on that highway (last/first ~6 km). A 401 destination does
+///   not unlock motorways from Barrie.
 /// Opted out of `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` for `Task.detached` search.
 nonisolated enum OnDeviceProfileCosts {
     /// Packed surface codes: paved=0 gravel=1 access=2 track=3 unknown=4.
@@ -41,11 +45,13 @@ nonisolated enum OnDeviceProfileCosts {
         let table: [Double]
         switch profile {
         case .direct:
-            // Length first. Mild dirt preference among near-equal options only.
-            table = [1.18, 0.96, 0.93, 0.90, 0.95] // paved gravel access track unknown
+            // Corridor-bound (cross-track). Dirt cheaper than Balanced so the
+            // line is still a dirt ride, not a 50/50 highway mix.
+            table = [2.35, 0.90, 0.82, 0.70, 0.92]
         case .balanced:
-            // Dual-sport: leave crow-flies pavement for track corridors (~50/50 pull).
-            table = [4.2, 0.72, 0.58, 0.48, 0.68]
+            // Dual-sport ~50/50. Cross-track keeps it on the A→B corridor;
+            // without that it hunts like Dirt.
+            table = [1.42, 0.98, 0.92, 0.88, 0.96]
         case .dirt:
             // Adventure: tagged gravel/track/resource. Untagged yellow/white OSM
             // roads paint paved — cost them as paved or Dirt and Balanced both
@@ -58,7 +64,8 @@ nonisolated enum OnDeviceProfileCosts {
         let idx = min(max(surfaceCode, 0), table.count - 1)
         let road = GraphV2Pack.roadClassName(roadClassCode)
         // Untagged highway is pavement, not adventure fuel — match rider paint.
-        if idx == 4, paintsAsPavedRoadClass(road), profile == .dirt || profile == .balanced {
+        if idx == 4, paintsAsPavedRoadClass(road),
+           profile == .dirt || profile == .balanced || profile == .direct {
             return table[0]
         }
         var w = table[idx]
@@ -83,24 +90,24 @@ nonisolated enum OnDeviceProfileCosts {
         let table: [String: Double]
         switch profile {
         case .cleanest:
+            // Highway around towns. Local/service is the city grid — extra tax
+            // in `cleanCityStreetMult` eases only near A/B.
             table = [
-                "freeway": 0.94, "arterial": 0.95, "collector": 0.97, "ramp": 0.96,
-                "local": 1.0, "service": 1.08, "resource": 1.0, "recreation": 1.0,
+                "freeway": 0.94, "arterial": 0.98, "collector": 1.18, "ramp": 0.96,
+                "local": 2.6, "service": 3.2, "resource": 1.0, "recreation": 1.0,
                 "track": 1.0, "double_track": 1.0, "unknown": 1.0
             ]
         case .direct:
-            // Crow-flies. Highway penalties must stay close to Clean — 4.4× freeway
-            // made Direct take the same 178 km mixed corridor as Dirt (Hope→Princeton).
             table = [
-                "freeway": 1.55, "arterial": 1.35, "collector": 1.06, "ramp": 1.45,
-                "local": 0.95, "service": 1.12, "resource": 0.92, "recreation": 0.9,
-                "track": 0.88, "double_track": 0.88, "unknown": 1.0
+                "freeway": 1.7, "arterial": 1.45, "collector": 1.06, "ramp": 1.6,
+                "local": 0.98, "service": 1.12, "resource": 0.90, "recreation": 0.88,
+                "track": 0.90, "double_track": 0.90, "unknown": 1.0
             ]
         case .balanced:
             table = [
-                "freeway": 5.6, "arterial": 4.2, "collector": 1.1, "ramp": 5.0,
-                "local": 0.86, "service": 1.28, "resource": 0.76, "recreation": 0.74,
-                "track": 0.7, "double_track": 0.7, "unknown": 1.0
+                "freeway": 3.2, "arterial": 2.4, "collector": 1.08, "ramp": 2.8,
+                "local": 1.0, "service": 1.15, "resource": 0.92, "recreation": 0.90,
+                "track": 0.92, "double_track": 0.92, "unknown": 1.0
             ]
         case .dirt:
             // Highway-class tax carries the spine hate. Collector (OSM secondary)
@@ -115,15 +122,17 @@ nonisolated enum OnDeviceProfileCosts {
     }
 
     /// Combined km cost for one undirected edge (surface × road class × passable quality).
+    /// `pavedBias` is Balanced ratio-seeking only (1 = table as written).
     static func edgeCostPerKm(
         profile: RouteProfile,
         surfaceCode: Int,
         roadClassCode: Int,
         regionId: String? = nil,
         accessCode: Int = 1,
-        confidenceCode: Int = 1
+        confidenceCode: Int = 1,
+        pavedBias: Double = 1
     ) -> Double {
-        surfaceWeight(
+        var w = surfaceWeight(
                 profile: profile,
                 surfaceCode: surfaceCode,
                 regionId: regionId,
@@ -137,6 +146,10 @@ nonisolated enum OnDeviceProfileCosts {
                 accessCode: accessCode,
                 confidenceCode: confidenceCode
             )
+        if surfaceCode == 0, pavedBias != 1, pavedBias > 0 {
+            w *= pavedBias
+        }
+        return w
     }
 
     /// Prefer physically passable dirt (gravel/track, medium+ confidence, permissive)
@@ -158,18 +171,18 @@ nonisolated enum OnDeviceProfileCosts {
         // Confidence: 0 high, 1 medium, 2 low
         switch confidenceCode {
         case 0: m *= 0.90
-        case 2: m *= profile == .dirt ? 1.25 : 1.22
+        case 2: m *= profile == .balanced ? 1.22 : 1.25
         default: break
         }
         let access = accessName(accessCode)
         // Unknown access is only reachable when Allow is ON — still prefer verified/permissive.
         if access == "motorized_unknown" {
-            m *= profile == .dirt ? 1.35 : 1.15
+            m *= profile == .balanced ? 1.15 : 1.35
         }
         let surface = surfaceName(code: surfaceCode)
         let road = GraphV2Pack.roadClassName(roadClassCode)
         if surface == "gravel", road == "track" || road == "double_track" || road == "resource" || road == "local" {
-            m *= profile == .dirt ? 0.72 : 0.9
+            m *= profile == .balanced ? 0.9 : 0.72
         }
         return m
     }
@@ -209,10 +222,64 @@ nonisolated enum OnDeviceProfileCosts {
         return 1 + baseExtra * t
     }
 
+    /// Clean: city grid (local / service) is expensive unless the pin is in that town.
+    /// A stage waypoint as B is the pin — that city is allowed.
+    static func cleanCityStreetMult(
+        profile: RouteProfile,
+        roadClassCode: Int,
+        distanceToDestinationMeters: Double
+    ) -> Double {
+        guard profile == .cleanest else { return 1 }
+        let road = GraphV2Pack.roadClassName(roadClassCode)
+        guard road == "local" || road == "service" else { return 1 }
+        let nearBand = 2_500.0
+        let dTo = max(0, distanceToDestinationMeters)
+        guard dTo > nearBand else { return 1 }
+        let t = min(1, (dTo - nearBand) / 8_000.0)
+        return 1 + 2.4 * t
+    }
+
+    static func isMajorHighway(_ road: String) -> Bool {
+        road == "freeway" || road == "arterial" || road == "ramp"
+    }
+
+    /// Pin counts as “on a major highway” only when the tap is on that carriageway.
+    static let majorHighwayPinMeters = 18.0
+    /// How close to A/B we may use a major highway to reach a pin that sits on one.
+    static let majorHighwayJoinMeters = 6_000.0
+
+    /// Major highways stay expensive except to enter/leave a pin on that class.
+    static func majorHighwayAvoidMult(
+        profile: RouteProfile,
+        roadClassCode: Int,
+        metersFromStart: Double,
+        metersToDestination: Double,
+        startOnMajorHighway: Bool,
+        endOnMajorHighway: Bool
+    ) -> Double {
+        let road = GraphV2Pack.roadClassName(roadClassCode)
+        guard isMajorHighway(road) else { return 1 }
+        let join = majorHighwayJoinMeters
+        let nearPinnedHighway =
+            (endOnMajorHighway && metersToDestination < join)
+            || (startOnMajorHighway && metersFromStart < join)
+        let current = roadClassWeight(profile: profile, roadClassCode: roadClassCode)
+        if nearPinnedHighway {
+            if profile == .cleanest { return 1 }
+            let target = 2.0
+            if current <= target { return 1 }
+            return target / current
+        }
+        let target = 12.0
+        if current >= target { return 1 }
+        return target / current
+    }
+
     /// Extra cost for meters walked *away* from B.
-    /// Dirt: adventure meander OK (NW/E/NE zig-zag toward B). Only soft progress
-    /// pressure — this is NOT Clean/Direct ETA routing.
-    /// Direct: strong crow-flies. Balanced: medium. Clean: pavement toward B.
+    /// Dirt: hunt dirt for the ride. A/B are endpoints. Only a small *arrival*
+    /// clamp in the last ~2.5 km of B so the line does not orbit the pin.
+    /// Direct: same dirt prices, strong crow-flies (no meander).
+    /// Balanced: medium mix. Clean: pavement toward B, skip towns unless the pin is there.
     static func approachAwayExtra(
         profile: RouteProfile,
         dFromMeters: Double,
@@ -230,28 +297,32 @@ nonisolated enum OnDeviceProfileCosts {
 
         switch profile {
         case .dirt:
-            // Soft mid-route: lateral adventure is the product. "Near B" is the
-            // last ~12 km — a 0.75×AB horizon made most of a long ride "near"
-            // and collapsed Dirt onto Balanced.
-            let mid = kmAway * 0.06
-            let horizon = 12_000.0
+            // Hunt dirt, but still pay to walk away from B — 0.4 still allowed a
+            // province-scale loop when track was nearly free.
+            let mid = kmAway * 1.45
+            // Arrival only — not a 12 km hunt ban. Short A→B hops must still hunt.
+            let horizon = 2_500.0
             var near = 0.0
             if dFrom < horizon {
                 let t = 1 - dFrom / horizon
-                near = kmAway * (0.15 + t * t * 3.2)
+                near = kmAway * (0.12 + t * t * 0.9)
             }
-            return mid + near
+            let raw = mid + near
+            // Track is ~0.017/km; paved is 16/km. Away must not invert that.
+            let cap = kmAway * 16.0 * 0.12
+            return min(raw, cap)
         case .direct:
+            // Progress-toward-B only. Corridor bound is `corridorCrossTrackExtra`.
             let nearBand = max(3200.0, ab * 0.3)
-            let w = dFrom < nearBand ? 10.0 : 4.2
+            let w = dFrom < nearBand ? 12.0 : 7.0
             return kmAway * w
         case .balanced:
-            let mid = kmAway * 1.1
-            let horizon = max(8000.0, ab * 0.4)
+            let mid = kmAway * 2.2
+            let horizon = max(4_000.0, ab * 0.2)
             var near = 0.0
             if dFrom < horizon {
                 let t = 1 - dFrom / horizon
-                near = kmAway * (0.4 + t * t * 5.5)
+                near = kmAway * (0.4 + t * t * 2.4)
             }
             return mid + near
         case .cleanest:
@@ -259,6 +330,46 @@ nonisolated enum OnDeviceProfileCosts {
             let w = dFrom < nearBand ? 6.5 : 3.2
             return kmAway * w
         }
+    }
+
+    /// Quadratic penalty on perpendicular distance to the A→B great-circle.
+    /// A wide arc that still gets closer to B never trips `approachAwayExtra`.
+    /// Direct strongest, Balanced enough to stop a Williams Lake hunt, Dirt
+    /// allows nearby valleys but not a 200 km north detour.
+    static func corridorCrossTrackExtra(
+        profile: RouteProfile,
+        point: CLLocationCoordinate2D,
+        lineFrom: CLLocationCoordinate2D,
+        lineTo: CLLocationCoordinate2D,
+        edgeMeters: Double
+    ) -> Double {
+        guard edgeMeters > 0 else { return 0 }
+        let k: Double
+        switch profile {
+        case .direct: k = 0.018
+        case .balanced: k = 0.014
+        case .dirt: k = 0.005
+        case .cleanest: return 0
+        }
+        let xtKm = abs(GeoMath.crossTrackMeters(point: point, lineFrom: lineFrom, to: lineTo)) / 1000.0
+        let km = edgeMeters / 1000.0
+        return km * xtKm * xtKm * k
+    }
+
+    static func directCrossTrackExtra(
+        profile: RouteProfile,
+        point: CLLocationCoordinate2D,
+        lineFrom: CLLocationCoordinate2D,
+        lineTo: CLLocationCoordinate2D,
+        edgeMeters: Double
+    ) -> Double {
+        corridorCrossTrackExtra(
+            profile: profile,
+            point: point,
+            lineFrom: lineFrom,
+            lineTo: lineTo,
+            edgeMeters: edgeMeters
+        )
     }
 
     /// Adventure meters share — OSM highway stack is pavement when untagged.
