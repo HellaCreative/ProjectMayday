@@ -2,88 +2,43 @@ import CoreLocation
 import Foundation
 import Observation
 
-// MARK: - Network feature model
-
 struct NetworkLineFeature: Sendable {
     struct Point: Sendable { let lat: Double; let lon: Double }
     let edgeId: String
     let coordinates: [Point]
-    let surfaceClass: String     // "access" | "gravel" | "track" | "paved" | "unknown"
-    let accessClass: String      // "motorized_permissive" | "motorized_restricted" | "motorized_unknown"
-    let structureType: String    // "bridge" | "tunnel" | "none" | ""
-    let province: String         // "NS" | "NB" | "QC" | "ON" | "BC" | "AB"
+    let surfaceClass: String
+    let accessClass: String
+    let structureType: String
+    let province: String
 }
 
-// MARK: - Constants (HTML app/index.html CONTEXT_* parity)
-
 private enum NetC {
-    /// Detail zoom for corridor-around-focus without an explicit province lens.
     static let detailMinZoom = 12.5
     static let corridorKmDetail = 3.0
     static let corridorKmOverview = 2.0
-    /// Province lens (Show NS/NB/QC/ON/BC/AB): circular radius around map center — not a
-    /// rectangular viewport dump, and never the whole province.
     static let lensKm = 20.0
     static let routeArmKmDetail = 10.0
     static let routeArmKmOverview = 20.0
     static let routeSampleStepKm = 3.0
     static let maxAnchors = 8
     static let chunkPadDeg = 0.025
-    static let maxChunksCorridor = 6
-    static let maxChunksLens = 8
     static let maxFeaturesCorridor = 1600
     static let maxFeaturesLens = 5000
-    static let refreshDelay = UInt64(450_000_000)  // 450 ms
-
-    struct Overlay: Sendable {
-        let province: String
-        let manifestURL: URL
-        let chunkBase: String
-    }
-
-    private static func overlay(_ code: String, slug: String) -> Overlay {
-        Overlay(
-            province: code,
-            manifestURL: URL(string: "https://dirt-mayday.vercel.app/app/data/\(slug)-gov-roads.manifest.json")!,
-            chunkBase: "https://dirt-mayday.vercel.app/app/data/\(slug)-gov-chunks/"
-        )
-    }
-
-    static let overlays: [String: Overlay] = [
-        "NS": overlay("NS", slug: "ns"),
-        "NB": overlay("NB", slug: "nb"),
-        "QC": overlay("QC", slug: "qc"),
-        "ON": overlay("ON", slug: "on"),
-        "BC": overlay("BC", slug: "bc"),
-        "AB": overlay("AB", slug: "ab")
-    ]
+    static let refreshDelay = UInt64(450_000_000)
 }
 
-// MARK: - NetworkOverlayManager
-
-/// Loads provincial road-network GeoJSON chunks from the production Vercel CDN.
-///
-/// Product law (`refreshContextNetwork` / Layers Route data):
-/// - **Lens** (Show province on): ~20 km **circle** centered on the map view —
-///   a bounded preview of that province’s secondary network, never the whole province.
-/// - **Corridor** (always when an active route exists, or detail zoom ≥ 12.5):
-///   purple/blue lines for the province under the map focus (fallback NS) within
-///   2–3 km of focus and route anchors. Lens on/off does not suppress the corridor;
-///   lens features are merged with it.
+/// Paints nearby edges from the installed on-device graph pack.
 @MainActor
 final class NetworkOverlayManager {
     private let mapState: MapState
-    private var manifests:    [String: _NetManifest] = [:]
-    private var manifestTasks:[String: Task<_NetManifest, Error>] = [:]
-    private var chunkCaches:  [String: [String: [_NetFeature]]] = [:]  // [province: [chunkId: features]]
+    private let graphPacks: GraphPackStore
     private var debounceTask: Task<Void, Never>?
 
-    init(mapState: MapState) {
+    init(mapState: MapState, graphPacks: GraphPackStore) {
         self.mapState = mapState
+        self.graphPacks = graphPacks
         armObservation()
     }
-
-    // MARK: - Observation loop
 
     private func armObservation() {
         withObservationTracking {
@@ -92,6 +47,7 @@ final class NetworkOverlayManager {
             _ = mapState.mapZoom
             _ = mapState.layerPrefsGeneration
             _ = mapState.routeGeneration
+            _ = mapState.networkAllowUnknown
         } onChange: {
             Task { @MainActor [weak self] in
                 self?.scheduleRefresh()
@@ -109,8 +65,6 @@ final class NetworkOverlayManager {
         }
     }
 
-    // MARK: - Refresh
-
     private func performRefresh() async {
         let zoom = mapState.mapZoom
         let center = mapState.mapCenter
@@ -120,7 +74,11 @@ final class NetworkOverlayManager {
         let detailZoom = zoom >= NetC.detailMinZoom
         let lensCode = prefs.lensProvince
 
-        // Overview without a route and without a province lens → base map only.
+        if prefs.showBCOSMHierarchy {
+            mapState.updateNetworkFeatures([])
+            return
+        }
+
         if lensCode == nil && !detailZoom && !hasRoute {
             mapState.updateNetworkFeatures([])
             return
@@ -129,23 +87,15 @@ final class NetworkOverlayManager {
         let focus = RouteCoordinate(longitude: center.longitude, latitude: center.latitude)
         let showLens = lensCode != nil
         let wantCorridor = hasRoute || detailZoom
-        // Corridor uses the province under the map center when no lens is on.
         let inferred = GraphPackStore.primaryRegionId(
             containing: CLLocationCoordinate2D(latitude: center.latitude, longitude: center.longitude)
         )?.uppercased()
         let provinceCode = lensCode ?? inferred ?? "NS"
-        guard let overlay = NetC.overlays[provinceCode] else {
-            mapState.updateNetworkFeatures([])
-            return
-        }
 
         let corridorKm = detailZoom ? NetC.corridorKmDetail : NetC.corridorKmOverview
         let armKm = detailZoom ? NetC.routeArmKmDetail : NetC.routeArmKmOverview
-        let maxChunks = showLens ? NetC.maxChunksLens : NetC.maxChunksCorridor
         let maxFeatures = showLens ? NetC.maxFeaturesLens : NetC.maxFeaturesCorridor
 
-        // Route corridor anchors whenever a route exists — lens on/off does not
-        // suppress the along-road secondary paint.
         var anchors: [RouteCoordinate] = []
         if hasRoute {
             anchors = sampleRouteAnchors(around: focus, route: routeCoords, armKm: armKm)
@@ -155,8 +105,7 @@ final class NetworkOverlayManager {
         if showLens {
             bbox = bboxFromCircle(center: center, radiusKm: NetC.lensKm, padDeg: NetC.chunkPadDeg)
             if wantCorridor {
-                let corridorBox = bboxFrom(points: [focus] + anchors, padDeg: NetC.chunkPadDeg)
-                bbox = union(bbox, corridorBox)
+                bbox = union(bbox, bboxFrom(points: [focus] + anchors, padDeg: NetC.chunkPadDeg))
             }
         } else {
             var points = [focus] + anchors
@@ -164,67 +113,52 @@ final class NetworkOverlayManager {
             bbox = bboxFrom(points: points, padDeg: NetC.chunkPadDeg)
         }
 
-        // Evict other provinces when in corridor or single-lens mode.
-        for code in NetC.overlays.keys where code != provinceCode {
-            chunkCaches[code] = nil
+        guard let pack = graphPacks.packIfInstalled(provinceCode) else {
+            mapState.updateNetworkFeatures([])
+            return
         }
 
-        do {
-            let manifest = try await ensureManifest(code: provinceCode, overlay: overlay)
-            let nearChunks = manifest.chunks
-                .filter { bboxIntersects($0.bbox, bbox) }
-                .sorted { distSq($0.bbox, center) < distSq($1.bbox, center) }
-                .prefix(maxChunks)
+        let minLon = bbox.minLon, minLat = bbox.minLat, maxLon = bbox.maxLon, maxLat = bbox.maxLat
+        let pool = await Task.detached(priority: .userInitiated) {
+            PackNetworkOverlay.features(
+                from: pack,
+                minLon: minLon,
+                minLat: minLat,
+                maxLon: maxLon,
+                maxLat: maxLat,
+                province: provinceCode,
+                cap: maxFeatures * 3
+            )
+        }.value
 
-            await loadChunks(Array(nearChunks), overlay: overlay, province: provinceCode)
-
-            let keepIds = Set(nearChunks.map(\.id))
-            chunkCaches[provinceCode] = chunkCaches[provinceCode]?.filter { keepIds.contains($0.key) }
-
-            var rawPool: [_NetFeature] = []
-            for chunk in nearChunks {
-                rawPool.append(contentsOf: chunkCaches[provinceCode]?[chunk.id] ?? [])
-            }
-
-            var selected: [_NetFeature] = []
-            if showLens {
-                // Circular lens centered on the screen / map focus.
-                selected = selectCorridorFeatures(
-                    pool: rawPool,
-                    focus: focus,
-                    anchors: [],
-                    corridorKm: NetC.lensKm,
-                    maxFeatures: maxFeatures
-                )
-            }
-            if wantCorridor {
-                let corridor = selectCorridorFeatures(
-                    pool: rawPool,
-                    focus: focus,
-                    anchors: anchors,
-                    corridorKm: corridorKm,
-                    maxFeatures: maxFeatures
-                )
-                selected = mergeNetworkFeatures(selected, corridor, maxFeatures: maxFeatures)
-            }
-
-            let painted = selected.map { raw in
-                NetworkLineFeature(
-                    edgeId: raw.properties.edgeId,
-                    coordinates: raw.geometry.coordinates.map { .init(lat: $0[1], lon: $0[0]) },
-                    surfaceClass: raw.properties.surfaceClass,
-                    accessClass: raw.properties.accessClass,
-                    structureType: raw.properties.structureType ?? "none",
-                    province: provinceCode
-                )
-            }
-            mapState.updateNetworkFeatures(painted)
-        } catch {
-            // Keep prior paint on transient failures.
+        var selected: [NetworkLineFeature] = []
+        if showLens {
+            selected = selectCorridorFeatures(
+                pool: pool,
+                focus: focus,
+                anchors: [],
+                corridorKm: NetC.lensKm,
+                maxFeatures: maxFeatures
+            )
         }
+        if wantCorridor {
+            let corridor = selectCorridorFeatures(
+                pool: pool,
+                focus: focus,
+                anchors: anchors,
+                corridorKm: corridorKm,
+                maxFeatures: maxFeatures
+            )
+            selected = mergeNetworkFeatures(selected, corridor, maxFeatures: maxFeatures)
+        }
+        if !mapState.networkAllowUnknown {
+            selected = selected.filter { feature in
+                feature.accessClass != "motorized_unknown"
+                    && feature.accessClass != "motorized_excluded"
+            }
+        }
+        mapState.updateNetworkFeatures(selected)
     }
-
-    // MARK: - Corridor selection (HTML selectCorridorFeatures / sampleRouteAnchors)
 
     private func sampleRouteAnchors(
         around focus: RouteCoordinate,
@@ -263,16 +197,14 @@ final class NetworkOverlayManager {
     }
 
     private func selectCorridorFeatures(
-        pool: [_NetFeature],
+        pool: [NetworkLineFeature],
         focus: RouteCoordinate,
         anchors: [RouteCoordinate],
         corridorKm: Double,
         maxFeatures: Int
-    ) -> [_NetFeature] {
+    ) -> [NetworkLineFeature] {
         let refs = [focus] + anchors
-        var scored: [(feature: _NetFeature, dist: Double, pri: Int)] = []
-        scored.reserveCapacity(min(pool.count, maxFeatures * 2))
-
+        var scored: [(feature: NetworkLineFeature, dist: Double, pri: Int)] = []
         for feature in pool {
             guard let mid = featureMid(feature) else { continue }
             var best = Double.greatestFiniteMagnitude
@@ -284,96 +216,29 @@ final class NetworkOverlayManager {
             if best > corridorKm { continue }
             scored.append((feature, best, surfacePriority(feature)))
         }
-
         scored.sort {
             if $0.dist != $1.dist { return $0.dist < $1.dist }
             return $0.pri > $1.pri
         }
-        return scored.prefix(maxFeatures).map(\.feature)
+        return Array(scored.prefix(maxFeatures).map(\.feature))
     }
 
-    private func featureMid(_ feature: _NetFeature) -> RouteCoordinate? {
-        let coords = feature.geometry.coordinates
-        guard !coords.isEmpty else { return nil }
-        let mid = coords[coords.count / 2]
-        guard mid.count >= 2 else { return nil }
-        return RouteCoordinate(longitude: mid[0], latitude: mid[1])
+    private func featureMid(_ feature: NetworkLineFeature) -> RouteCoordinate? {
+        guard !feature.coordinates.isEmpty else { return nil }
+        let mid = feature.coordinates[feature.coordinates.count / 2]
+        return RouteCoordinate(longitude: mid.lon, latitude: mid.lat)
     }
 
-    private func surfacePriority(_ feature: _NetFeature) -> Int {
-        let s = feature.properties.surfaceClass
-        if s == "track" { return 4 }
-        if s == "access" { return 3 }
-        if s == "gravel" { return 2 }
-        if feature.properties.structureType == "bridge" { return 3 }
-        if feature.properties.structureType == "tunnel" { return 3 }
-        if feature.properties.accessClass == "motorized_restricted" { return 1 }
-        return 0
-    }
-
-    // MARK: - Manifest / chunks
-
-    private func ensureManifest(code: String, overlay: NetC.Overlay) async throws -> _NetManifest {
-        if let cached = manifests[code] { return cached }
-        if let existing = manifestTasks[code] {
-            do {
-                let result = try await existing.value
-                manifests[code] = result
-                return result
-            } catch {
-                // Failed task must not stick for the session — allow a later refresh to retry.
-                manifestTasks[code] = nil
-                throw error
-            }
-        }
-        let task = Task<_NetManifest, Error> {
-            let (data, _) = try await URLSession.shared.data(from: overlay.manifestURL)
-            return try JSONDecoder().decode(_NetManifest.self, from: data)
-        }
-        manifestTasks[code] = task
-        do {
-            let result = try await task.value
-            manifests[code] = result
-            manifestTasks[code] = nil
-            return result
-        } catch {
-            manifestTasks[code] = nil
-            throw error
+    private func surfacePriority(_ feature: NetworkLineFeature) -> Int {
+        switch feature.surfaceClass {
+        case "track": return 4
+        case "access": return 3
+        case "gravel": return 2
+        default:
+            if feature.accessClass == "motorized_restricted" { return 1 }
+            return 0
         }
     }
-
-    private func loadChunks(_ chunks: [_NetChunk], overlay: NetC.Overlay, province: String) async {
-        var cache = chunkCaches[province] ?? [:]
-        await withTaskGroup(of: (String, [_NetFeature])?.self) { group in
-            for chunk in chunks where cache[chunk.id] == nil {
-                group.addTask { [weak self] in
-                    await self?.fetchChunk(chunk, overlay: overlay)
-                }
-            }
-            for await result in group {
-                if let (id, features) = result {
-                    cache[id] = features
-                }
-            }
-        }
-        chunkCaches[province] = cache
-    }
-
-    private func fetchChunk(_ chunk: _NetChunk, overlay: NetC.Overlay) async -> (String, [_NetFeature])? {
-        guard let url = URL(string: overlay.chunkBase + chunk.file) else { return nil }
-        do {
-            let (data, _) = try await URLSession.shared.data(from: url)
-            let features: [_NetFeature] = try await Task.detached(priority: .background) {
-                let raw = try data.gunzipped()
-                return try JSONDecoder().decode(_GeoJSONCollection.self, from: raw).features
-            }.value
-            return (chunk.id, features)
-        } catch {
-            return nil
-        }
-    }
-
-    // MARK: - Geometry helpers
 
     private struct _BBox { let minLon, minLat, maxLon, maxLat: Double }
 
@@ -396,7 +261,6 @@ final class NetworkOverlayManager {
         )
     }
 
-    /// Axis-aligned bbox that fully contains a circle of `radiusKm` around `center`.
     private func bboxFromCircle(
         center: CLLocationCoordinate2D,
         radiusKm: Double,
@@ -421,70 +285,100 @@ final class NetworkOverlayManager {
         )
     }
 
-    /// Deduplicate by edgeId; prefer earlier entries (lens/corridor already distance-sorted).
     private func mergeNetworkFeatures(
-        _ a: [_NetFeature],
-        _ b: [_NetFeature],
+        _ a: [NetworkLineFeature],
+        _ b: [NetworkLineFeature],
         maxFeatures: Int
-    ) -> [_NetFeature] {
+    ) -> [NetworkLineFeature] {
         var seen = Set<String>()
-        var out: [_NetFeature] = []
-        out.reserveCapacity(min(a.count + b.count, maxFeatures))
+        var out: [NetworkLineFeature] = []
         for feature in a + b {
-            let id = feature.properties.edgeId
-            if seen.contains(id) { continue }
-            seen.insert(id)
+            if seen.contains(feature.edgeId) { continue }
+            seen.insert(feature.edgeId)
             out.append(feature)
             if out.count >= maxFeatures { break }
         }
         return out
     }
+}
 
-    private func bboxIntersects(_ bbox: [Double], _ b: _BBox) -> Bool {
-        guard bbox.count >= 4 else { return false }
-        return bbox[0] <= b.maxLon && bbox[2] >= b.minLon &&
-               bbox[1] <= b.maxLat && bbox[3] >= b.minLat
+nonisolated enum PackNetworkOverlay {
+    static func features(
+        from pack: GraphV2Pack,
+        minLon: Double,
+        minLat: Double,
+        maxLon: Double,
+        maxLat: Double,
+        province: String,
+        cap: Int
+    ) -> [NetworkLineFeature] {
+        var out: [NetworkLineFeature] = []
+        out.reserveCapacity(min(cap, 512))
+        let from = pack.edgeFrom
+        let to = pack.edgeTo
+        for ei in 0..<pack.undirectedEdgeCount {
+            var hit = false
+            if let from, let to, ei < from.count, ei < to.count {
+                hit = nodeIn(pack, Int(from[ei]), minLon, minLat, maxLon, maxLat)
+                    || nodeIn(pack, Int(to[ei]), minLon, minLat, maxLon, maxLat)
+            } else if let geom = pack.geometry {
+                let line = geom.polyline(edgeIndex: ei)
+                if let p = line.first {
+                    hit = p.longitude >= minLon && p.longitude <= maxLon
+                        && p.latitude >= minLat && p.latitude <= maxLat
+                }
+            }
+            guard hit else { continue }
+            let coords: [NetworkLineFeature.Point]
+            if let geom = pack.geometry {
+                let line = geom.polyline(edgeIndex: ei)
+                coords = line.map { NetworkLineFeature.Point(lat: $0.latitude, lon: $0.longitude) }
+            } else if let from, let to, ei < from.count, ei < to.count,
+                      let a = nodeCoord(pack, Int(from[ei])),
+                      let b = nodeCoord(pack, Int(to[ei])) {
+                coords = [
+                    NetworkLineFeature.Point(lat: a.latitude, lon: a.longitude),
+                    NetworkLineFeature.Point(lat: b.latitude, lon: b.longitude)
+                ]
+            } else {
+                continue
+            }
+            guard coords.count >= 2 else { continue }
+            let attr = pack.edgeAttrs[ei]
+            let surface = OnDeviceProfileCosts.surfaceName(code: GraphV2Pack.unpackSurface(attr))
+            let accessCode = GraphV2Pack.unpackAccess(attr)
+            let access = (accessCode >= 0 && accessCode < pack.accessNames.count)
+                ? pack.accessNames[accessCode]
+                : "motorized_permissive"
+            out.append(
+                NetworkLineFeature(
+                    edgeId: pack.edgeId(ei),
+                    coordinates: coords,
+                    surfaceClass: surface,
+                    accessClass: access,
+                    structureType: "none",
+                    province: province
+                )
+            )
+            if out.count >= cap { break }
+        }
+        return out
     }
 
-    private func distSq(_ bbox: [Double], _ center: CLLocationCoordinate2D) -> Double {
-        guard bbox.count >= 4 else { return .greatestFiniteMagnitude }
-        let cx = (bbox[0] + bbox[2]) / 2, cy = (bbox[1] + bbox[3]) / 2
-        return (cx - center.longitude) * (cx - center.longitude) +
-               (cy - center.latitude)  * (cy - center.latitude)
+    private static func nodeIn(
+        _ pack: GraphV2Pack, _ i: Int,
+        _ minLon: Double, _ minLat: Double, _ maxLon: Double, _ maxLat: Double
+    ) -> Bool {
+        guard let c = nodeCoord(pack, i) else { return false }
+        return c.longitude >= minLon && c.longitude <= maxLon
+            && c.latitude >= minLat && c.latitude <= maxLat
     }
-}
 
-// MARK: - Decodable models
-// `nonisolated` — default MainActor isolation would make Decodable unusable in Task.detached.
-
-nonisolated private struct _NetManifest: Decodable, Sendable {
-    let generatedAt: String
-    let chunkDir: String?
-    let chunks: [_NetChunk]
-}
-
-nonisolated private struct _NetChunk: Decodable, Sendable {
-    let id: String
-    let file: String
-    let bbox: [Double]
-}
-
-nonisolated private struct _GeoJSONCollection: Decodable, Sendable {
-    let features: [_NetFeature]
-}
-
-nonisolated private struct _NetFeature: Decodable, Sendable {
-    let geometry: _LineGeometry
-    let properties: _NetProps
-}
-
-nonisolated private struct _LineGeometry: Decodable, Sendable {
-    let coordinates: [[Double]]   // [[lon, lat], ...]
-}
-
-nonisolated private struct _NetProps: Decodable, Sendable {
-    let edgeId: String
-    let surfaceClass: String
-    let accessClass: String
-    let structureType: String?
+    private static func nodeCoord(_ pack: GraphV2Pack, _ i: Int) -> CLLocationCoordinate2D? {
+        guard i >= 0, i < pack.nodeCount else { return nil }
+        return CLLocationCoordinate2D(
+            latitude: Double(pack.nodeCoords[i * 2 + 1]),
+            longitude: Double(pack.nodeCoords[i * 2])
+        )
+    }
 }

@@ -1,0 +1,82 @@
+{
+  "generatedAt": "2026-08-13T18:47:40.087Z",
+  "matchMeters": 50,
+  "sampleMeters": 25,
+  "thresholdPct": 10,
+  "osm": {
+    "pack": "/Users/richardsmith/SandBox01/MAYDAYiOS/Dirt/scripts/pack-fabric/app/data/packs/v1/bc/graph.v2.bin",
+    "edges": 556132,
+    "dirtEdges": 201472,
+    "dirtKm": 182377.9,
+    "dirtVertices": 5395181,
+    "byRoad": {
+      "track": 160092,
+      "resource": 36462,
+      "local": 4918
+    },
+    "bySurface": {
+      "access": 180795,
+      "gravel": 20677
+    }
+  },
+  "dra": {
+    "source": "BC Digital Road Atlas (RD_CLASS resource + trail, unpaved only)",
+    "file": "/Users/richardsmith/Documents/Mayday/data-raw/bc-dra/capillary.geojsonseq",
+    "features": 737904,
+    "skipped": 16237,
+    "skipReasons": {
+      "not_forestry_or_trail": 4522,
+      "paved_surface": 11715
+    },
+    "km": 356658.7,
+    "vertices": 5642863,
+    "uniqueKm": 259411,
+    "overlapKm": 76751.2,
+    "uniqueVertices": 4549390,
+    "overlapVertices": 1093473,
+    "byClass": {
+      "resource": {
+        "features": 655926,
+        "km": 319337.3300752317,
+        "uniqueKm": 233458.46494324267
+      },
+      "trail": {
+        "features": 81978,
+        "km": 37321.400043079266,
+        "uniqueKm": 25952.580764463914
+      }
+    },
+    "verdict": {
+      "vertexLiftPct": 84.3,
+      "kmLiftPct": 142.2,
+      "pass10": true,
+      "recommend": "consider"
+    }
+  },
+  "ften": {
+    "source": "BC Forest Tenure Road Section Lines (active only)",
+    "loadedFrom": "pack-pre-osm-adventure",
+    "features": 172028,
+    "skipped": 0,
+    "skipReasons": {},
+    "km": 206102.9,
+    "vertices": 2449139,
+    "uniqueKm": 141713.1,
+    "overlapKm": 48526.4,
+    "uniqueVertices": 1884439,
+    "overlapVertices": 564700,
+    "byClass": {
+      "ften_resource": {
+        "features": 172028,
+        "km": 206102.89291419627,
+        "uniqueKm": 141713.14771280525
+      }
+    },
+    "verdict": {
+      "vertexLiftPct": 34.9,
+      "kmLiftPct": 77.7,
+      "pass10": true,
+      "recommend": "consider"
+    }
+  }
+}

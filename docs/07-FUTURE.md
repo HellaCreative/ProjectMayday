@@ -10,13 +10,13 @@ From the Codex iOS audit. **#2 stale routes** and **#5 failed-manifest retry** w
 
 | Priority | Item | Notes | Status |
 | --- | --- | --- | --- |
-| High | Stale `/api/route` responses can overwrite newer intent | Request generation + stage-id apply; ignore mismatched replies | **Done** |
+| High | Stale on-device routing responses can overwrite newer intent | Request generation + stage-id apply; ignore mismatched replies | **Done** |
 | High | Failed POI / network manifest `Task` sticks for the session | Clear task on failure so a later refresh retries | **Done** |
 | High | Release builds include tester auth + subscription bypass | `BuildChannel.allowPreReleaseTesterUnlock` — intentional for TestFlight; set `false` (or Store-only config) before public App Store freeze | Open |
 | High | Live sharing can publish `(0,0)` before GPS is ready | `GroupsViewModel.publishPresence` — wait for a valid fix; don’t write Gulf-of-Guinea junk | Open |
 | High | Gzip decode uses a fixed 8× output ceiling | `Data.gunzipped()` — grow buffer / stream; current packs may be fine until blank provinces appear | Open |
 | Medium | `IPHONEOS_DEPLOYMENT_TARGET = 26.5` | Likely Xcode default inheritance — lower to the real minimum OS before store if reach matters | Open |
-| Medium | Inconsistent HTTP response validation | Shared client: require `200..<300`, size limits, better diagnostics for supabase-config / manifests / chunks | Open |
+| Medium | Inconsistent HTTP response validation | Shared client: require `200..<300`, size limits, better diagnostics for R2 manifests / Overpass / pack chunks | Open |
 | Medium | Thin tests around critical state machines | Highest ROI: stale-route ordering, stage delete during route, presence coords, manifest retry, StoreKit/trial transitions | Open |
 | Low | `GPXParser` unused `var track` | Change to `let` | Open |
 
@@ -26,14 +26,14 @@ From the Codex iOS audit. **#2 stale routes** and **#5 failed-manifest retry** w
 
 | Item | Today | Direction |
 | --- | --- | --- |
-| POI / Rider Services overlays | Toggles only (`LayersSheet`) | Stream GeoJSON/pins like web; respect `@AppStorage` prefs |
-| NSTDB / provincial road overlays | Toggles only | Same — MapLibre sources/layers per province packs on web |
+| POI / Rider Services overlays | Overpass + fuel filter | Keep respecting `@AppStorage` prefs; existence confirmation later |
+| NSTDB / provincial road overlays | Toggles only | Same — MapLibre sources/layers per installed province pack |
 | Supabase Realtime | `rider_presence` poll 10s | Private `group:{id}` channel + broadcast ([03-GROUPS.md](./03-GROUPS.md)) |
 | Shared incidents | Local HUD toast | `rider_alerts` insert + peer display; optional `avoidEdgeIds` recalculate |
-| Corridor offline tiles | BBox pyramid z8–14 | True corridor / budgeted tile set closer to web |
-| GPX import | Export only | Parity with web Saved import |
+| Corridor offline tiles | BBox pyramid z8–14 | True corridor / budgeted tile set closer to a true corridor |
+| GPX import | Export only | GPX import |
 | Per-stage profile UI | Global profile only | Optional chips per stage ([02-ROUTING.md](./02-ROUTING.md)) |
-| Western-province overlay growth | Relies on server packs | Follow Mayday fabric onboarding; client just consumes overlays/API |
+| Western-province overlay growth | Installed graph pack paint | Ship more province packs on R2 |
 
 ---
 
@@ -52,21 +52,15 @@ None of these exist in the current target capabilities beyond location backgroun
 
 ---
 
-## Offline routing on device
+## On-device routing
 
-Server remains SoT (`POST /api/route` on Vercel packs). A portable on-device core is a **research** item only:
-
-- Would need a shippable graph subset + costing parity with `profile-costs.js`
-- Must preserve Clean⊥Allow, no gap-spanning, dirt% law
-- Not started on iOS; do not stub a second divergent router
-
-Prefer better offline **tiles** and resilient HTTP before on-device A*.
+Shipped. `GraphPackStore` + `OnDeviceRouter` on R2 `graph.v2` packs. Costing must stay in lockstep with `pack-fabric/routing/lib/profile-costs.js`.
 
 ---
 
-## Backend / performance (later)
+## Packs / performance (later)
 
-Persistent / non-Vercel routing hosts, pack streaming, and longhaul purple policy are **Mayday server** concerns. iOS agents should not stand up parallel infrastructure. Track Mayday docs (`DIRT-ROUTING-SYSTEM.md`, performance audits) when routes fail in western provinces.
+Pack streaming, cross-province stitch, and longhaul purple policy live in this repo’s pack-fabric + R2 publish path. Locked laws: [08-MAP-REFINEMENT.md](./08-MAP-REFINEMENT.md). On-device multi-pack (AB↔BC when both downloaded) is captured there, not shipped.
 
 ---
 
@@ -107,10 +101,10 @@ Operational path also in [../README_TESTFLIGHT.md](../README_TESTFLIGHT.md).
 
 | Non-goal | Why |
 | --- | --- |
-| Capacitor / WKWebView shell | Locked native decision ([00-OVERVIEW.md](./00-OVERVIEW.md)) |
-| Staging backend | POC has production only |
+| Non-native map shell | Locked native SwiftUI + MapLibre ([00-OVERVIEW.md](./00-OVERVIEW.md)) |
+| Staging backend | Production hosts only |
 | Replacing MapLibre with Apple MapKit | Shortbread + overlay model is the product map |
-| Inventing features from ChatGPT outlines | Outlines are reference-only; code + WEB-SPEC win |
+| Inventing features from ChatGPT outlines | Outlines are reference-only; code in this repo wins |
 | Shipping CarPlay in the first store binary | Entitlements and review cost outweigh v1 learning |
 
 ---
@@ -119,6 +113,6 @@ Operational path also in [../README_TESTFLIGHT.md](../README_TESTFLIGHT.md).
 
 1. Read [00-OVERVIEW.md](./00-OVERVIEW.md) + README gaps before proposing greenfield features.
 2. Confirm the feature is absent in code (search `Dirt/`) — do not re-document invented work as done.
-3. For overlays/realtime/incidents, read web implementation in Mayday + [WEB-SPEC-FOR-IOS.md](./WEB-SPEC-FOR-IOS.md).
-4. **Invariants:** no Capacitor; no second backend; Clean⊥Allow; green CTA law; ChatGPT outlines are reference-only.
+3. For overlays/realtime/incidents, read the iOS code in `Dirt/`.
+4. **Invariants:** native SwiftUI only; no second backend; Clean⊥Allow; green CTA law; ChatGPT outlines are reference-only.
 5. **Open questions:** Rick’s priority between realtime vs overlays; ASC privacy policy URL; whether Live Activities are wanted before public TestFlight.

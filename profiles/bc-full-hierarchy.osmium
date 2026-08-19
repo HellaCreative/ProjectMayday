@@ -1,0 +1,10 @@
+# Osmium tags-filter expression for DIRT BC OSM-only feasibility.
+# Full highway hierarchy for dual-sport evaluation.
+# FOOTWAY excluded (Rick 2026-08-11): keep path/cycleway/track for ATV / dual-sport resolution.
+#
+# Usage:
+#   osmium tags-filter british-columbia-latest.osm.pbf \
+#     -e profiles/bc-full-hierarchy.osmium \
+#     -o out/british-columbia-highways.osm.pbf --overwrite
+
+w/highway=motorway,motorway_link,trunk,trunk_link,primary,primary_link,secondary,secondary_link,tertiary,tertiary_link,unclassified,residential,living_street,road,service,track,path,cycleway

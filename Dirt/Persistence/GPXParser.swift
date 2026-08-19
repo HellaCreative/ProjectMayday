@@ -8,7 +8,7 @@ extension UTType {
     }
 }
 
-/// Parses GPX 1.x track and route files — parity with web `DirtGpx.parseGpx` / `summarize`.
+/// Parses GPX 1.x track and route files.
 enum GPXParser {
     struct ParsedTrack: Sendable {
         let name: String
@@ -183,7 +183,7 @@ enum GPXParser {
                 }
                 currentSegment = []
             case "trk":
-                if var track = currentTrack, !track.segments.isEmpty {
+                if let track = currentTrack, !track.segments.isEmpty {
                     tracks.append(track)
                 }
                 currentTrack = nil

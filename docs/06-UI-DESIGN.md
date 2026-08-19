@@ -1,6 +1,6 @@
 # DIRT iOS — UI & Design
 
-Native chrome tokens and interaction patterns, aligned to the web DIRT Enduro lock **plus the Figma screens page** (`DIRT.` file, node `40:977` — Map Idle, planner states, navigation, Layers/Profile/Groups). Spec: [WEB-SPEC-FOR-IOS.md](./WEB-SPEC-FOR-IOS.md) §1–2. Source of truth in code: `Dirt/DesignSystem/DirtTheme.swift`.
+Native chrome tokens and interaction patterns, aligned to the Figma screens page (`DIRT.` file, node `40:977` — Map Idle, planner states, navigation, Layers/Profile/Groups). Source of truth in code: `Dirt/DesignSystem/DirtTheme.swift`.
 
 ---
 
@@ -20,9 +20,9 @@ Native chrome tokens and interaction patterns, aligned to the web DIRT Enduro lo
 | `dirtMix` | `#3a9dff` | Dirt **% stats** + mix bar |
 | `pavedMix` | `#fdb003` | Paved **% stats** + mix bar |
 | `pavedLine` | `#303a45` | Layers/basemap paved overlay (not selected route) |
-| `routeAccess` / `routeGravel` / `routeTrack` / `routePaved` / `routeConnector` | `#0a66c2` / `#5d6874` / `#7c3aed` / `#ffb000` / `#d22730` | Selected-route map paint (web `route-network`) |
+| `routeAccess` / `routeGravel` / `routeTrack` / `routePaved` / `routeConnector` | `#0a66c2` / `#5d6874` / `#7c3aed` / `#ffb000` / `#d22730` | Selected-route map paint |
 
-Layers legend colours (access/gravel/branches/bridge/tunnel/restricted) are inlined in `LayersSheet` to match the web legend hexes.
+Layers legend colours (access/gravel/branches/bridge/tunnel/restricted) are inlined in `LayersSheet`.
 
 ---
 
@@ -37,7 +37,7 @@ Web uses Archivo + Martian Mono. iOS stand-ins in `DirtTheme`:
 
 Density cues: dock labels ~9.5pt heavy + tracking; primary CTAs ~12pt heavy uppercase; invite codes / metrics use mono.
 
-## Map control stack (web `.stack` parity)
+## Map control stack
 
 Right-edge chrome above the dock / nav HUD:
 
@@ -49,7 +49,7 @@ Right-edge chrome above the dock / nav HUD:
 | **Rider status** | Quick group sharing + Available / Breakdown / Injured / Stuck |
 | **Recenter** | Follow my location (course-up); orange while follow is locked **or while the nav Recenter chip is up** (either control re-locks follow) |
 
-When the route planner card is open, only **Recenter** remains (same as web `planner-open`).
+When the route planner card is open, only **Recenter** remains.
 
 Idle map top-left holds the brand chip. During navigation the top row is **DIRT.** · turn cue (+ distance) · dark speed pill. Recenter lives on the right control stack.
 
@@ -65,7 +65,7 @@ No bundled custom fonts in the target today.
 
 - **Floating rounded bar** — chrome fill, 26pt continuous radius, `chromeBorder` stroke, shadow, 8pt horizontal inset above the home indicator (no longer full-bleed).
 - Four equal tabs: Layers · Profile · Group · Route.
-- **Only one tool open at a time** (opening one closes the others) — web parity.
+- **Only one tool open at a time** (opening one closes the others).
 - Active: orange fill + **1px white stroke** (`DirtTheme.orange` + white overlay stroke).
 - Route toggles an in-chrome planner card (not a `.sheet`); Layers/Profile/Group use SwiftUI sheets.
 - Hidden while navigating.
@@ -128,7 +128,7 @@ No bundled custom fonts in the target today.
 
 ---
 
-## Matches web
+## Locked chrome
 
 - Token hexes for orange / chrome / nav green / mix colours / danger.
 - Dock mutual exclusion + active orange pill + white stroke.
@@ -144,12 +144,12 @@ No bundled custom fonts in the target today.
 | Topic | Divergence |
 | --- | --- |
 | Fonts | System stand-ins; Archivo/Martian not bundled |
-| Shortbread contrast tune | Web post-processes style; iOS does not |
+| Shortbread contrast tune | Contrast is baked into `shortbread-style.json` |
 | Layers | Prefs only — no streamed overlays/POIs |
-| Route card | Native card vs web DOM planner chrome (layout close, not pixel-identical) |
-| Sheets | System SwiftUI sheets vs custom web drawers |
+| Route card | Native planner card |
+| Sheets | System SwiftUI sheets |
 | Debug sheet | Not shipped |
-| Map dirt line | Per-surface web palette (access `#0a66c2`, gravel `#5d6874`, track `#7c3aed`, paved `#ffb000`, connector `#d22730`) — not brand orange; stats mix stays `#3a9dff` / `#fdb003` |
+| Map dirt line | Per-surface palette (access `#0a66c2`, gravel `#5d6874`, track `#7c3aed`, paved `#ffb000`, connector `#d22730`) — not brand orange; stats mix stays `#3a9dff` / `#fdb003` |
 | Forced light mode | `preferredColorScheme(.light)` |
 
 ---
@@ -157,6 +157,6 @@ No bundled custom fonts in the target today.
 ## Starting a new agent on this area
 
 1. Read `DirtTheme.swift` and `RootView.swift` before changing chrome.
-2. Skim [WEB-SPEC-FOR-IOS.md](./WEB-SPEC-FOR-IOS.md) §1–2 for locked hexes.
+2. Skim the iOS docs §1–2 for locked hexes.
 3. **Invariants:** green only for Start/End nav; Save black / Export gray; active dock white stroke; one dock tool at a time; don’t invent a second orange or “success green” for auth.
-4. **Open questions:** bundle Archivo/Martian fonts?; dark mode ever, or stay daylight-forced?; pixel audit against web screenshots after TestFlight.
+4. **Open questions:** bundle Archivo/Martian fonts?; dark mode ever, or stay daylight-forced?; pixel audit after TestFlight.

@@ -1,16 +1,18 @@
 import Foundation
 
 /// External links surfaced in Profile + the paywall.
-///
-/// NOTE: `dirtmoto.app` is a placeholder domain. Swap these for the real DIRT
-/// marketing site, privacy policy, and terms once the domain is registered —
-/// the App Store subscription review requires reachable privacy + terms URLs.
+/// Canonical marketing + legal host: https://dirtmoto.app
+/// Trailing slashes match the live Astro routes (non-slash 301s to slash).
 enum LegalLinks {
-    static let website = URL(string: "https://dirtmoto.app")!
-    static let privacyPolicy = URL(string: "https://dirtmoto.app/privacy")!
-    static let termsOfUse = URL(string: "https://dirtmoto.app/terms")!
+    static let website = URL(string: "https://dirtmoto.app/")!
+    static let privacyPolicy = URL(string: "https://dirtmoto.app/privacy/")!
+    static let termsOfUse = URL(string: "https://dirtmoto.app/terms/")!
+    static let eula = URL(string: "https://dirtmoto.app/eula/")!
+    static let dataUse = URL(string: "https://dirtmoto.app/data/")!
+    static let gdpr = URL(string: "https://dirtmoto.app/gdpr/")!
+    static let support = URL(string: "https://dirtmoto.app/support/")!
+    static let subscriptions = URL(string: "https://dirtmoto.app/subscriptions/")!
 
-    /// Apple's standard hosted EULA. Acceptable for App Store review when you
-    /// have not published your own terms yet.
+    /// Apple's standard hosted EULA — fallback only. Prefer `eula` (hosted on dirtmoto.app).
     static let appleStandardEULA = URL(string: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/")!
 }

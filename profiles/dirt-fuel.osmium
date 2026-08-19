@@ -1,0 +1,10 @@
+# Osmium tags-filter for DIRT motorcycle fuel POIs.
+# Retail filling stations only. Lifecycle-prefixed closures without amenity=fuel
+# never match. Commercial/bulk/closed cuts happen in pack-fabric/poi/fuel-filter.js.
+#
+# Usage:
+#   osmium tags-filter <extract>.osm.pbf -e profiles/dirt-fuel.osmium \
+#     -o out/fuel-candidates.osm.pbf --overwrite
+
+n/amenity=fuel
+w/amenity=fuel

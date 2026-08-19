@@ -1,7 +1,7 @@
 import CoreLocation
 import Foundation
 
-enum RouteProfile: String, Codable, CaseIterable, Identifiable, Sendable {
+nonisolated enum RouteProfile: String, Codable, CaseIterable, Identifiable, Sendable {
     case cleanest
     case direct
     case balanced
@@ -18,18 +18,18 @@ enum RouteProfile: String, Codable, CaseIterable, Identifiable, Sendable {
         }
     }
 
-    /// One-line guidance aligned with server costing (adventure avoids highway spine).
+    /// One-line guidance — Clean is nav-like; others optimize ride character.
     var guidance: String {
         switch self {
-        case .cleanest: "Pavement-first · no unknown access"
-        case .direct: "Shortest practical · mixed surfaces"
-        case .balanced: "Adventure bias · still efficient"
-        case .dirt: "Maximize unpaved · avoid highways"
+        case .cleanest: "Pavement first · Google/Waze-style"
+        case .direct: "Crow-flies to B · pick up dirt when it barely detours"
+        case .balanced: "Dual-sport mix · aim about half dirt / half paved"
+        case .dirt: "Adventure ride to B · meander for dirt, not the highway ETA"
         }
     }
 }
 
-struct RouteCoordinate: Codable, Hashable, Sendable {
+nonisolated struct RouteCoordinate: Codable, Hashable, Sendable {
     let longitude: Double
     let latitude: Double
 
@@ -82,9 +82,8 @@ struct AccessPolicy: Codable, Sendable {
     let motorizedUnknown: Bool
 }
 
-/// Optional per-request routing options. `avoidEdgeIds` is server-enforced
-/// (route incident recovery) — requests without it are byte-for-byte identical
-/// to the legacy shape, matching the web POC contract.
+/// Optional per-request routing options. `avoidEdgeIds` is honored on-device
+/// (route incident recovery). Requests without it omit `options`.
 struct RouteRequestOptions: Codable, Sendable {
     let avoidEdgeIds: [String]
 }
@@ -121,19 +120,44 @@ struct RouteSegment: Codable, Identifiable, Sendable {
     let geometry: [RouteCoordinate]?
     let coords: [RouteCoordinate]?
     /// Authoritative network edge ID (e.g. `ns-gov-…`) — used by incident
-    /// reports so "Find a way around" can avoid this edge server-side.
+    /// reports so "Find a way around" can avoid this edge on-device.
     let edgeId: String?
 
     enum CodingKeys: String, CodingKey {
         case surfaceClass, trackClass, distanceMeters, geometry, coords, edgeId
     }
 
+    init(
+        surfaceClass: String?,
+        trackClass: String?,
+        distanceMeters: Double?,
+        geometry: [RouteCoordinate]?,
+        coords: [RouteCoordinate]?,
+        edgeId: String?
+    ) {
+        self.surfaceClass = surfaceClass
+        self.trackClass = trackClass
+        self.distanceMeters = distanceMeters
+        self.geometry = geometry
+        self.coords = coords
+        self.edgeId = edgeId
+    }
+
     var coordinates: [RouteCoordinate] { geometry ?? coords ?? [] }
 
-    /// Surface key for map paint — prefers surfaceClass, then trackClass (web order).
+    /// Surface key for map paint — prefers surfaceClass, then trackClass.
+    /// `unknown` on an OSM road class is remapped to paved by the on-device
+    /// builder before it lands here.
     var paintSurfaceKey: String {
         let raw = (surfaceClass ?? trackClass ?? "connector").lowercased()
-        return raw.isEmpty ? "connector" : raw
+        let key = raw.isEmpty ? "connector" : raw
+        if key == "unknown" {
+            return OnDeviceProfileCosts.riderPaintSurface(
+                surfaceName: key,
+                roadClassName: (trackClass ?? "").lowercased()
+            )
+        }
+        return key
     }
 
     var isDirt: Bool {
@@ -155,17 +179,46 @@ struct RouteSegment: Codable, Identifiable, Sendable {
     }
 
     static func isAdventureSurface(_ key: String) -> Bool {
-        ["gravel", "dirt", "track", "double_track", "access", "resource", "unknown", "unpaved"]
-            .contains(key.lowercased())
+        OnDeviceProfileCosts.isAdventureSurface(key)
     }
 }
 
 struct RouteStats: Codable, Sendable {
     let dirtPercent: Int?
     let pavedPercent: Int?
+    /// Share of route distance on `motorized_unknown` (Allow-gated purple).
+    let unknownAccessPercent: Int?
+
+    init(
+        dirtPercent: Int? = nil,
+        pavedPercent: Int? = nil,
+        unknownAccessPercent: Int? = nil
+    ) {
+        self.dirtPercent = dirtPercent
+        self.pavedPercent = pavedPercent
+        self.unknownAccessPercent = unknownAccessPercent
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case dirtPercent, pavedPercent, unknownAccessPercent
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        dirtPercent = try c.decodeIfPresent(Int.self, forKey: .dirtPercent)
+        pavedPercent = try c.decodeIfPresent(Int.self, forKey: .pavedPercent)
+        unknownAccessPercent = try c.decodeIfPresent(Int.self, forKey: .unknownAccessPercent)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encodeIfPresent(dirtPercent, forKey: .dirtPercent)
+        try c.encodeIfPresent(pavedPercent, forKey: .pavedPercent)
+        try c.encodeIfPresent(unknownAccessPercent, forKey: .unknownAccessPercent)
+    }
 }
 
-struct RouteManeuver: Codable, Identifiable, Sendable {
+nonisolated struct RouteManeuver: Codable, Identifiable, Sendable {
     let id = UUID()
     let instruction: String?
     let type: String?
@@ -253,12 +306,16 @@ enum RoutingError: LocalizedError {
     case invalidEndpoints
     case server(String)
     case invalidResponse
+    /// From here: GPS (or start) is farther than the snap radius from any eligible edge.
+    case offGraphStart
 
     var errorDescription: String? {
         switch self {
         case .invalidEndpoints: "Choose a valid start and destination."
         case .server(let message): message
         case .invalidResponse: "The routing service returned an unreadable response."
+        case .offGraphStart:
+            "Your start (GPS) isn’t close enough to a mapped road. Tap the nearest road to set A — B stays put."
         }
     }
 }

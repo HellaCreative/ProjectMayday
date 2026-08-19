@@ -1,47 +1,109 @@
 import SwiftUI
 
-/// Right-edge map chrome matching the web `.stack`:
-/// 3D · Cues · Compass · Rider status · Recenter.
+/// Map chrome stack:
+/// Route overview (nav) · 3D/2D · Cues · Compass · Status · Recenter.
+/// Planning (compact): fit whole route (when polyline exists) · Recenter.
+/// (Layers stay on the dock — not during navigation.)
+/// Portrait = vertical trailing stack; landscape primary = horizontal bottom strip.
 struct MapControlStack: View {
     @Environment(AppEnvironment.self) private var app
     var compact: Bool = false
+    /// Figma landscape-primary: controls run across the bottom of the open map.
+    var horizontal: Bool = false
 
     @State private var cuesOpen = false
     @State private var sharingOpen = false
 
     private let statuses = ["available", "breakdown", "injured", "stuck"]
 
+    private var showsNavigationOverviewButton: Bool {
+        // Same window as the old PiP: active ride (prefetch has no coords yet).
+        app.navigation.phase == .active && app.navigation.coordinates.count > 1
+    }
+
+    private var navigationOverviewActive: Bool {
+        app.mapState.navigationCameraMode == .overview
+    }
+
     var body: some View {
-        VStack(alignment: .trailing, spacing: compact ? 0 : 10) {
-            if !compact {
-                viewModeButton
-                cuesButton
-                compassButton
-                riderStatusButton
-            }
-            // Plan mode: fit-whole-route sits left of recenter (same row).
-            if app.planner.canFocusEntirePlannedRoute {
-                HStack(spacing: 10) {
-                    fitPlannedRouteButton
-                    recenterButton
+        Group {
+            if horizontal {
+                HStack(spacing: compact ? 0 : 10) {
+                    controlButtons
                 }
             } else {
-                recenterButton
+                VStack(alignment: .trailing, spacing: compact ? 0 : 10) {
+                    controlButtons
+                }
             }
         }
-        .overlay(alignment: .trailing) {
+        .overlay(alignment: horizontal ? .top : .trailing) {
             if cuesOpen {
                 cuesPopover
-                    .offset(x: -58, y: -36)
+                    .offset(x: horizontal ? 0 : -58, y: horizontal ? -96 : -36)
             }
             if sharingOpen {
                 sharingPopover
-                    .offset(x: -58, y: 40)
+                    .offset(x: horizontal ? 0 : -58, y: horizontal ? -150 : 40)
             }
         }
     }
 
+    @ViewBuilder
+    private var controlButtons: some View {
+        if !compact {
+            if showsNavigationOverviewButton {
+                navigationOverviewButton
+            }
+            viewModeButton
+            cuesButton
+            compassButton
+            riderStatusButton
+        }
+        if app.planner.canFocusEntirePlannedRoute {
+            if horizontal {
+                fitPlannedRouteButton
+                recenterButton
+            } else {
+                HStack(spacing: 10) {
+                    fitPlannedRouteButton
+                    recenterButton
+                }
+            }
+        } else {
+            recenterButton
+        }
+    }
+
     // MARK: - Buttons
+
+    private var navigationOverviewButton: some View {
+        Button {
+            closePopovers()
+            let enteringOverview = app.mapState.navigationCameraMode == .detail
+            app.mapState.toggleNavigationCameraMode(
+                routeCoordinates: app.navigation.coordinates,
+                userCoordinate: app.location.currentCoordinate
+            )
+            app.planner.toast = enteringOverview ? "Route overview" : "Navigation detail"
+        } label: {
+            Image(systemName: "point.topleft.down.to.point.bottomright.curvepath")
+                .font(.system(size: 17, weight: .bold))
+                .foregroundStyle(.white)
+                .frame(width: 50, height: 50)
+                .background(navigationOverviewActive ? DirtTheme.orange : DirtTheme.chrome)
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(DirtTheme.chromeBorder, lineWidth: 1)
+                )
+        }
+        .accessibilityLabel(
+            navigationOverviewActive
+                ? "Switch to navigation detail view"
+                : "Switch to full route overview"
+        )
+    }
 
     private var viewModeButton: some View {
         Button {
@@ -266,7 +328,10 @@ struct MapControlStack: View {
                     Text("Status")
                         .font(.dirtUI(10, weight: .bold))
                         .foregroundStyle(DirtTheme.ink)
-                    Picker("Status", selection: $groups.status) {
+                    Picker("Status", selection: Binding(
+                        get: { groups.status },
+                        set: { groups.setStatus($0) }
+                    )) {
                         ForEach(statuses, id: \.self) { Text($0.capitalized).tag($0) }
                     }
                     .pickerStyle(.menu)

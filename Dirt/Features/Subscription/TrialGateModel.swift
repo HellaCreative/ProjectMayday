@@ -1,128 +1,200 @@
 import Foundation
 import Observation
+import Security
 
-/// How a trial prompt should be presented.
+/// Soft paywall trigger — what the rider was trying to do when the wall came up.
+enum PaywallReason: Equatable {
+    case save
+    case export
+    case start
+}
+
+/// How a paywall should be presented. Soft (dismissible) is the live path —
+/// `hard` remains for the full-screen shell in `PaywallView` but is unused by the gate.
 enum TrialPresentation: Equatable {
-    /// Dismissible nudge (X in the corner).
     case soft
-    /// Blocking gate — the only way forward is to start the trial.
     case hard
 }
 
-/// Drives the delayed-trial paywall.
+/// Freemium gate for DIRT PRO.
 ///
-/// Escalation (measured in cumulative *map foreground* seconds, persisted
-/// on-device):
-/// 1. **90s** → soft prompt (dismissible)
-/// 2. **next launch, or +5 min after the 1st** → soft prompt (dismissible)
-/// 3. **3rd exposure (≈+5 min after the 2nd) or 15 min cumulative — whichever
-///    first** → hard gate (no X)
+/// - **Plan forever** — no clock, no map-time ladder.
+/// - **Save / Export** — soft paywall on tap until subscribed.
+/// - **Start** — two free ride tests per install, then soft paywall on every Start.
 ///
-/// A live subscription clears everything and stops all prompting.
+/// Free-start count lives in the Keychain so deleting the app does not reset it.
 @Observable
 @MainActor
 final class TrialGateModel {
-    private enum Key {
-        static let seconds = "dirt_trial_map_seconds_v1"
-        static let exposures = "dirt_trial_exposures_v1"
-        static let lastExposure = "dirt_trial_last_exposure_seconds_v1"
+    /// Full rides a non-subscriber may start before Start itself is gated.
+    static let freeStartAllowance = 2
+
+    private enum KeychainKey {
+        static let freeStartsUsed = "dirt.paywall.freeStartsUsed.v1"
     }
 
-    // Thresholds (seconds of cumulative map use).
-    private let firstPromptAt: Double = 90
-    private let followUpGap: Double = 300      // +5 min between prompts
-    private let hardCumulative: Double = 900   // 15 min absolute ceiling
-
-    private let defaults = UserDefaults.standard
-
-    private(set) var mapSeconds: Double
-    private(set) var exposures: Int
-    private var lastExposureSeconds: Double
-
-    /// A fresh launch qualifies the user for the 2nd nudge once they've already
-    /// seen the first one.
-    private var launchPromptPending: Bool
+    private(set) var freeStartsUsed: Int
+    private(set) var presentation: TrialPresentation?
+    /// Why the wall is up — used for toast on dismiss and to resume after subscribe.
+    private(set) var pendingReason: PaywallReason?
 
     var isSubscribed = false {
         didSet {
             if isSubscribed { presentation = nil }
+            // `pendingReason` survives until `takePendingReason()` so Save / Export /
+            // Start can resume after a successful subscribe.
         }
     }
 
-    /// Non-nil when the paywall should be on screen.
-    private(set) var presentation: TrialPresentation?
+    var freeStartsRemaining: Int {
+        max(0, Self.freeStartAllowance - freeStartsUsed)
+    }
+
+    var canStartNavigation: Bool {
+        isSubscribed || freeStartsUsed < Self.freeStartAllowance
+    }
 
     init() {
-        let storedExposures = defaults.integer(forKey: Key.exposures)
-        mapSeconds = defaults.double(forKey: Key.seconds)
-        exposures = storedExposures
-        lastExposureSeconds = defaults.double(forKey: Key.lastExposure)
-        launchPromptPending = storedExposures == 1
+        freeStartsUsed = KeychainInt.load(KeychainKey.freeStartsUsed) ?? 0
+        // Scrub the old map-time ladder so leftover defaults don't confuse testers.
+        Self.scrubLegacyDefaults()
     }
 
-    /// Called once per second while the map is foreground and visible.
-    /// `canPresent` is false during active navigation so the gate never
-    /// interrupts a live ride (time still accrues; the prompt waits for idle).
-    func tick(canPresent: Bool = true) {
-        guard !isSubscribed, presentation == nil else { return }
-        mapSeconds += 1
-        defaults.set(mapSeconds, forKey: Key.seconds)
-        if canPresent { evaluate() }
+    // MARK: - Feature checks
+
+    /// Returns `true` when Save may proceed. Otherwise presents the soft wall.
+    @discardableResult
+    func requestSave() -> Bool {
+        gate(.save)
     }
 
-    /// Re-check without advancing the clock (e.g. right after the map appears,
-    /// to fire a pending next-launch nudge).
-    func evaluate() {
-        guard !isSubscribed, presentation == nil else { return }
-        let secs = mapSeconds
-
-        if secs >= hardCumulative {
-            present(.hard)
-            return
-        }
-
-        switch exposures {
-        case 0:
-            if secs >= firstPromptAt { present(.soft) }
-        case 1:
-            if launchPromptPending || secs >= lastExposureSeconds + followUpGap {
-                present(.soft)
-            }
-        default:
-            if secs >= lastExposureSeconds + followUpGap { present(.hard) }
-        }
+    /// Returns `true` when Export may proceed. Otherwise presents the soft wall.
+    @discardableResult
+    func requestExport() -> Bool {
+        gate(.export)
     }
 
-    /// Dismiss a soft prompt (hard gates ignore this).
+    /// Returns `true` when Start may proceed (subscriber, or free tastes left).
+    /// Does **not** consume a free start — that happens when the ride actually begins.
+    @discardableResult
+    func requestStart() -> Bool {
+        guard !isSubscribed else { return true }
+        if freeStartsUsed < Self.freeStartAllowance { return true }
+        presentSoft(for: .start)
+        return false
+    }
+
+    /// Call once when navigation leaves prep and the live ride begins.
+    /// No-op for subscribers and once the allowance is already spent.
+    func consumeFreeStartIfNeeded() {
+        guard !isSubscribed, freeStartsUsed < Self.freeStartAllowance else { return }
+        freeStartsUsed += 1
+        KeychainInt.save(freeStartsUsed, for: KeychainKey.freeStartsUsed)
+    }
+
+    // MARK: - Presentation
+
     func dismissSoft() {
         guard presentation == .soft else { return }
         presentation = nil
+        // Leave `pendingReason` long enough for the sheet's onDismiss toast, then clear.
     }
 
-    /// Trial started / subscription active — stand down permanently.
+    /// Toast copy after the rider closes the wall without subscribing.
+    func dismissMessage() -> String? {
+        defer { pendingReason = nil }
+        switch pendingReason {
+        case .save: return "Subscribe to save routes"
+        case .export: return "Subscribe to export GPX"
+        case .start: return "Subscribe to start navigation"
+        case nil: return nil
+        }
+    }
+
+    /// Action to resume after a successful subscribe, if any.
+    func takePendingReason() -> PaywallReason? {
+        let reason = pendingReason
+        pendingReason = nil
+        presentation = nil
+        return reason
+    }
+
     func markSubscribed() {
         isSubscribed = true
         presentation = nil
     }
 
-    private func present(_ kind: TrialPresentation) {
-        presentation = kind
-        exposures += 1
-        lastExposureSeconds = mapSeconds
-        launchPromptPending = false
-        defaults.set(exposures, forKey: Key.exposures)
-        defaults.set(lastExposureSeconds, forKey: Key.lastExposure)
+    /// Profile tester control — restores both free Starts and clears any open wall.
+    func resetForTesting() {
+        freeStartsUsed = 0
+        KeychainInt.save(0, for: KeychainKey.freeStartsUsed)
+        presentation = nil
+        pendingReason = nil
+        Self.scrubLegacyDefaults()
     }
 
-    /// Wipes the usage clock so the escalation can be re-tested from scratch.
-    func resetForTesting() {
-        mapSeconds = 0
-        exposures = 0
-        lastExposureSeconds = 0
-        launchPromptPending = false
-        presentation = nil
-        defaults.removeObject(forKey: Key.seconds)
-        defaults.removeObject(forKey: Key.exposures)
-        defaults.removeObject(forKey: Key.lastExposure)
+    // MARK: - Private
+
+    private func gate(_ reason: PaywallReason) -> Bool {
+        guard !isSubscribed else { return true }
+        presentSoft(for: reason)
+        return false
+    }
+
+    private func presentSoft(for reason: PaywallReason) {
+        guard presentation == nil else { return }
+        pendingReason = reason
+        presentation = .soft
+    }
+
+    private static func scrubLegacyDefaults() {
+        let defaults = UserDefaults.standard
+        for key in [
+            "dirt_trial_map_seconds_v1",
+            "dirt_trial_exposures_v1",
+            "dirt_trial_last_exposure_seconds_v1",
+            "dirt_trial_tour_held_seconds_v1",
+        ] {
+            defaults.removeObject(forKey: key)
+        }
+    }
+}
+
+// MARK: - Keychain Int
+
+/// Tiny Keychain wrapper for a single Int. Survives app delete + reinstall on iOS,
+/// which is the whole point of parking the free-start counter here instead of
+/// UserDefaults.
+private enum KeychainInt {
+    static func load(_ account: String) -> Int? {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: account,
+            kSecAttrService as String: Bundle.main.bundleIdentifier ?? "com.mayday.dirt",
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne,
+        ]
+        var item: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &item)
+        guard status == errSecSuccess, let data = item as? Data,
+              let raw = String(data: data, encoding: .utf8),
+              let value = Int(raw)
+        else { return nil }
+        return value
+    }
+
+    static func save(_ value: Int, for account: String) {
+        let data = Data(String(value).utf8)
+        let service = Bundle.main.bundleIdentifier ?? "com.mayday.dirt"
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: account,
+            kSecAttrService as String: service,
+        ]
+        SecItemDelete(query as CFDictionary)
+        var add = query
+        add[kSecValueData as String] = data
+        add[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
+        SecItemAdd(add as CFDictionary, nil)
     }
 }

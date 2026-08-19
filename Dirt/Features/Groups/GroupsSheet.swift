@@ -11,7 +11,12 @@ struct GroupsSheet: View {
     private var groups: GroupsViewModel { app.groups }
 
     var body: some View {
-        NavigationStack {
+        VStack(spacing: 0) {
+            DirtSheetHeader(
+                title: groups.selectedGroup?.name ?? "Groups",
+                onBack: groups.selectedGroup == nil ? nil : { groups.closeDetail() }
+            )
+
             Group {
                 if !app.supabase.isSignedIn {
                     signInPrompt
@@ -21,15 +26,6 @@ struct GroupsSheet: View {
                     groupList
                 }
             }
-            .navigationTitle(groups.selectedGroup?.name ?? "Groups")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                if groups.selectedGroup != nil {
-                    ToolbarItem(placement: .topBarLeading) {
-                        Button("Back") { groups.closeDetail() }
-                    }
-                }
-            }
         }
         .task {
             if app.supabase.isSignedIn {
@@ -37,69 +33,119 @@ struct GroupsSheet: View {
             }
         }
         .onDisappear {
-            // Web parity: closing the sheet resets to the list panel.
+            // Closing the sheet resets to the list panel.
             groups.closeDetail()
         }
     }
 
+    /// The rest of DIRT works signed out. Groups can't: riders have to be findable by
+    /// each other, which needs an account. So the ask happens here, with the button in
+    /// reach — sending riders off to Profile to hunt for it was the old behaviour.
     private var signInPrompt: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: DirtSpace.inner) {
             Image(systemName: "person.2.fill")
-                .font(.system(size: 34))
+                .font(.system(size: 32, weight: .semibold))
                 .foregroundStyle(DirtTheme.muted)
-            Text("Riding groups need an account")
-                .font(.dirtUI(15, weight: .bold))
-            Text("Sign in from the Profile tab, then create or join a group to ride together.")
-                .font(.dirtUI(12))
+            Text("Groups need an account")
+                .font(DirtType.rowTitle)
+                .fontWeight(.bold)
+                .foregroundStyle(DirtTheme.ink)
+            Text("Sign in so your riders can find you. The rest of DIRT works signed out.")
+                .font(DirtType.helper)
                 .foregroundStyle(DirtTheme.muted)
                 .multilineTextAlignment(.center)
-                .padding(.horizontal, 30)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, DirtSpace.section)
+
+            AppleSignInButton { result in
+                guard case let .success(credential) = result else { return }
+                Task {
+                    try? await app.supabase.signInWithApple(
+                        idToken: credential.idToken,
+                        rawNonce: credential.rawNonce,
+                        fullName: credential.fullName
+                    )
+                    await groups.refreshGroups()
+                }
+            }
+            .frame(minHeight: DirtHit.control)
+            .padding(.horizontal, DirtSpace.section)
+            .padding(.top, DirtSpace.tight)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, DirtSpace.section)
+        .background(
+            GeometryReader { geo in
+                Color.clear.preference(key: DockSheetContentHeightKey.self, value: geo.size.height)
+            }
+        )
     }
 
     private var groupList: some View {
         ScrollView {
-            VStack(spacing: 8) {
-                if groups.groups.isEmpty && !groups.isLoading {
-                    Text("No groups yet — create one or join with an invite code.")
-                        .font(.dirtUI(12))
+            VStack(spacing: DirtSpace.inner) {
+                Text("Share an invite code. Start sharing to put live positions on the map.")
+                    .font(DirtType.helper)
+                    .foregroundStyle(DirtTheme.muted)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                if groups.isLoading && groups.groups.isEmpty {
+                    ProgressView()
+                        .tint(DirtTheme.orange)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, DirtSpace.group)
+                } else if groups.groups.isEmpty {
+                    Text("No groups yet")
+                        .font(DirtType.rowTitle)
                         .foregroundStyle(DirtTheme.muted)
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 22)
-                        .background(DirtTheme.wash)
-                        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .padding(.vertical, DirtSpace.group)
+                        .background(DirtTheme.rowFill, in: RoundedRectangle(cornerRadius: DirtRadius.card, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: DirtRadius.card, style: .continuous)
+                                .stroke(DirtTheme.hairline, lineWidth: 1)
+                        )
+                } else {
+                    ForEach(groups.groups) { group in
+                        groupCard(group)
+                    }
                 }
 
-                ForEach(groups.groups) { group in
-                    groupCard(group)
-                }
+                HStack(spacing: DirtSpace.inner) {
+                    Button {
+                        showCreateDialog = true
+                    } label: {
+                        Label("Create", systemImage: "person.2.badge.plus.fill")
+                    }
+                    .buttonStyle(DirtCTAStyle.brand())
 
-                Button {
-                    showCreateDialog = true
-                } label: {
-                    groupCTALabel("CREATE GROUP", icon: "person.2.badge.plus.fill")
+                    Button {
+                        showJoinDialog = true
+                    } label: {
+                        Label("Join", systemImage: "arrow.right.square.fill")
+                    }
+                    .buttonStyle(DirtCTAStyle(fill: DirtTheme.chrome))
                 }
-                .padding(.top, 8)
-
-                Button {
-                    showJoinDialog = true
-                } label: {
-                    groupCTALabel("JOIN WITH CODE", icon: "arrow.right.square.fill")
-                }
+                .padding(.top, DirtSpace.tight)
 
                 if let error = groups.errorMessage {
                     Text(error)
-                        .font(.dirtUI(12, weight: .semibold))
+                        .font(DirtType.helper)
+                        .fontWeight(.semibold)
                         .foregroundStyle(DirtTheme.danger)
-                        .padding(.top, 4)
                 }
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 10)
-            .padding(.bottom, 20)
+            .padding(.horizontal, DirtSpace.group)
+            .padding(.top, DirtSpace.inner)
+            .padding(.bottom, DirtSpace.group)
+            .background(
+                GeometryReader { geo in
+                    Color.clear.preference(key: DockSheetContentHeightKey.self, value: geo.size.height)
+                }
+            )
         }
-        .background(DirtTheme.sheet)
+        .scrollEdgeEffectStyle(.soft, for: .top)
+        .scrollEdgeEffectStyle(.soft, for: .bottom)
         .refreshable { await groups.refreshGroups() }
         .alert("Create a group", isPresented: $showCreateDialog) {
             TextField("Group name", text: $newGroupName)
@@ -129,61 +175,52 @@ struct GroupsSheet: View {
         Button {
             groups.openDetail(group)
         } label: {
-            HStack(spacing: 10) {
-                VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: DirtSpace.inner) {
+                VStack(alignment: .leading, spacing: DirtSpace.hairGap) {
                     Text(group.name)
-                        .font(.dirtUI(15, weight: .bold))
+                        .font(DirtType.rowTitle)
+                        .fontWeight(.bold)
                         .foregroundStyle(DirtTheme.ink)
                     Text(groupMeta(group))
-                        .font(.dirtMono(11, weight: .semibold))
+                        .font(DirtType.metricInline)
                         .foregroundStyle(DirtTheme.muted)
                 }
-                Spacer()
+                Spacer(minLength: DirtSpace.tight)
                 if group.liveCount > 0 {
-                    HStack(spacing: 5) {
+                    HStack(spacing: DirtSpace.tight) {
                         Circle().fill(DirtTheme.navGreen).frame(width: 7, height: 7)
-                        Text("\(group.liveCount) LIVE")
-                            .font(.dirtMono(9.5, weight: .bold))
+                        Text("\(group.liveCount) live")
+                            .font(DirtType.chip)
+                            .fontWeight(.bold)
                             .foregroundStyle(DirtTheme.navGreen)
                     }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(DirtTheme.navGreen.opacity(0.12))
-                    .clipShape(Capsule())
+                    .padding(.horizontal, DirtSpace.inner)
+                    .padding(.vertical, DirtSpace.tight)
+                    .background(DirtTheme.navGreen.opacity(0.12), in: Capsule())
                 }
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(DirtTheme.muted)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 12)
-            .background(.white)
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .padding(.horizontal, DirtSpace.row)
+            .frame(minHeight: DirtHit.control)
+            .background(DirtTheme.rowFill, in: RoundedRectangle(cornerRadius: DirtRadius.card, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(.black.opacity(0.08), lineWidth: 1)
+                RoundedRectangle(cornerRadius: DirtRadius.card, style: .continuous)
+                    .stroke(DirtTheme.hairline, lineWidth: 1)
             )
+            .contentShape(RoundedRectangle(cornerRadius: DirtRadius.card, style: .continuous))
         }
+        .buttonStyle(.plain)
+        .accessibilityHint("Opens group details")
     }
 
     private func groupMeta(_ group: GroupSummary) -> String {
         var meta = "\(group.memberCount) members"
         if let code = group.inviteCode, !code.isEmpty {
-            meta += " · code \(code.lowercased())"
+            meta += " · \(code.lowercased())"
         }
         return meta
-    }
-
-    private func groupCTALabel(_ title: String, icon: String) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: icon)
-                .font(.system(size: 14, weight: .bold))
-            Text(title)
-                .font(.dirtUI(13, weight: .heavy))
-                .tracking(0.8)
-        }
-        .foregroundStyle(.white)
-        .frame(maxWidth: .infinity)
-        .frame(height: 50)
-        .background(DirtTheme.orange)
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 }
 
@@ -200,68 +237,62 @@ struct GroupDetailView: View {
         List {
             if let invite = group.inviteCode {
                 Section("Invite code") {
-                    HStack {
+                    HStack(spacing: DirtSpace.inner) {
                         Text(invite)
-                            .font(.dirtMono(22, weight: .bold))
-                            .tracking(4)
-                        Spacer()
+                            .font(DirtType.metric)
+                            .tracking(3)
+                            .textCase(.uppercase)
+                            .foregroundStyle(DirtTheme.ink)
+                        Spacer(minLength: 0)
                         Button {
                             UIPasteboard.general.string = invite
                             app.planner.toast = "Invite code copied"
                         } label: {
                             Image(systemName: "doc.on.doc")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(DirtTheme.orange)
+                                .frame(width: DirtHit.min, height: DirtHit.min)
+                                .contentShape(Rectangle())
                         }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Copy invite code")
                     }
                 }
+                .listRowBackground(DirtTheme.rowFill)
             }
 
             Section("Live sharing") {
                 if groups.isSharing {
-                    Picker("Status", selection: $groups.status) {
+                    Picker("Status", selection: Binding(
+                        get: { groups.status },
+                        set: { groups.setStatus($0) }
+                    )) {
                         ForEach(statuses, id: \.self) { Text($0.capitalized).tag($0) }
                     }
+                    .font(DirtType.rowTitle)
                     Button("Stop sharing") { groups.stopSharing() }
                         .buttonStyle(DirtCTAStyle(fill: DirtTheme.chrome))
                         .listRowBackground(Color.clear)
                 } else {
-                    Button("Start sharing my position") { groups.startSharing() }
-                        .buttonStyle(DirtCTAStyle(fill: DirtTheme.orange))
+                    Button("Start sharing") { groups.startSharing() }
+                        .buttonStyle(DirtCTAStyle.brand())
                         .listRowBackground(Color.clear)
                 }
             }
+            .listRowBackground(DirtTheme.rowFill)
 
             Section("Riders") {
-                ForEach(groups.members) { member in
-                    HStack(spacing: 10) {
-                        Circle()
-                            .fill(member.isLive ? DirtTheme.navGreen : DirtTheme.muted.opacity(0.4))
-                            .frame(width: 9, height: 9)
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(member.displayName)
-                                .font(.dirtUI(13, weight: .bold))
-                            Text(member.role + (member.status.map { " · \($0)" } ?? ""))
-                                .font(.dirtUI(11))
-                                .foregroundStyle(DirtTheme.muted)
-                        }
-                        Spacer()
-                        if member.isLive, let lat = member.latitude, let lon = member.longitude,
-                           member.userID != app.supabase.userID {
-                            Button("Route") {
-                                app.planner.routeToMember(name: member.displayName, latitude: lat, longitude: lon)
-                                onClose()
-                            }
-                            .buttonStyle(DirtChipStyle(isActive: true))
-                            Button {
-                                app.mapState.fly(to: RouteCoordinate(longitude: lon, latitude: lat), zoom: 13)
-                                onClose()
-                            } label: {
-                                Image(systemName: "scope")
-                                    .foregroundStyle(DirtTheme.ink)
-                            }
-                        }
+                if groups.members.isEmpty {
+                    Text("No riders yet")
+                        .font(DirtType.helper)
+                        .foregroundStyle(DirtTheme.muted)
+                } else {
+                    ForEach(groups.members) { member in
+                        riderRow(member)
                     }
                 }
             }
+            .listRowBackground(DirtTheme.rowFill)
 
             Section {
                 if group.role == "owner" {
@@ -274,6 +305,52 @@ struct GroupDetailView: View {
                     }
                 }
             }
+            .listRowBackground(DirtTheme.rowFill)
         }
+        // Detail needs the full sheet — report a large height so adaptive panel opens to max.
+        .preference(key: DockSheetContentHeightKey.self, value: 10_000)
+        .scrollEdgeEffectStyle(.soft, for: .top)
+        .scrollEdgeEffectStyle(.soft, for: .bottom)
+    }
+
+    private func riderRow(_ member: GroupMemberRow) -> some View {
+        HStack(spacing: DirtSpace.inner) {
+            Circle()
+                .fill(member.isLive ? DirtTheme.navGreen : DirtTheme.muted.opacity(0.4))
+                .frame(width: 9, height: 9)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: DirtSpace.hairGap) {
+                Text(member.displayName)
+                    .font(DirtType.rowTitle)
+                    .fontWeight(.bold)
+                    .foregroundStyle(DirtTheme.ink)
+                Text(member.role.capitalized + (member.status.map { " · \($0.capitalized)" } ?? ""))
+                    .font(DirtType.helper)
+                    .foregroundStyle(DirtTheme.muted)
+            }
+            Spacer(minLength: DirtSpace.tight)
+            if member.isLive, let lat = member.latitude, let lon = member.longitude,
+               member.userID != app.supabase.userID {
+                Button("Details") {
+                    groups.selectPeer(member)
+                }
+                .buttonStyle(DirtChipStyle(isActive: true))
+
+                Button {
+                    app.mapState.fly(to: RouteCoordinate(longitude: lon, latitude: lat), zoom: 13)
+                    onClose()
+                } label: {
+                    Image(systemName: "scope")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(DirtTheme.ink)
+                        .frame(width: DirtHit.min, height: DirtHit.min)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Show on map")
+            }
+        }
+        .frame(minHeight: DirtHit.min)
+        .accessibilityElement(children: .combine)
     }
 }

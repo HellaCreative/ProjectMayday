@@ -1,3 +1,4 @@
+import CoreLocation
 import Foundation
 import Observation
 
@@ -6,10 +7,12 @@ import Observation
 @Observable
 final class AppEnvironment {
     let location = LocationService()
-    let routing = RoutingClient()
     let supabase = SupabaseService()
     let mapState = MapState()
     let offline = OfflineTileManager()
+    let graphPacks = GraphPackStore()
+    let network = NetworkPathMonitor()
+    let routing = RoutingClient()
     let navigation = NavigationSession()
     let cueSettings = NavigationCueSettings()
     let subscription = SubscriptionService()
@@ -17,37 +20,36 @@ final class AppEnvironment {
     let planner: RoutePlannerModel
     let groups: GroupsViewModel
     let incidents: IncidentRecoveryModel
-    /// Loads Rider Services POIs from the Vercel CDN near the map viewport.
+    let rideIntelligence: RideIntelligenceService
+    /// Rider Services POIs from OSM Overpass.
     let poiManager: POIManager
-    /// Loads provincial road-network overlays (NS/NB/QC) near the viewport.
+    /// Provincial road overlay from the installed graph pack.
     let networkOverlayManager: NetworkOverlayManager
+    /// Feasibility: local BC.mbtiles OSM hierarchy (visual only).
+    let bcOSMHierarchy: BCOSMHierarchyOverlay
+
+    /// Pending opt-in contribute sheet after End navigation.
+    var pendingTrackContribution: RideContributionCandidate?
 
     private enum TesterKey {
         static let bypassAuth = "dirt_debug_bypass_auth_v1"
         static let bypassSubscription = "dirt_debug_bypass_subscription_v1"
     }
 
-    /// Skip Sign in with Apple so map chrome can be tested while the Supabase
-    /// Apple provider is unfinished. Persists across launches. Gated by
-    /// `BuildChannel.showsTesterUnlock` (Debug always; Release while the
-    /// pre-release flag is on).
+    /// Skip Sign in with Apple for pre-release map testing. Persists across launches.
     var debugBypassAuth: Bool {
         didSet { UserDefaults.standard.set(debugBypassAuth, forKey: TesterKey.bypassAuth) }
     }
 
-    /// Treat the rider as subscribed so the delayed trial paywall never
-    /// appears. Persists across launches. Does not fake a StoreKit receipt.
+    /// Treat the rider as subscribed so Save / Export / Start gates never fire.
     var debugBypassSubscription: Bool {
         didSet {
             UserDefaults.standard.set(debugBypassSubscription, forKey: TesterKey.bypassSubscription)
-            if debugBypassSubscription {
-                trial.markSubscribed()
-            }
+            syncTrialEntitlement()
         }
     }
 
     /// One-tap unlock used on the onboarding screen: map + no paywall.
-    /// Groups / live sharing still need a real Apple → Supabase session.
     func unlockAsTester() {
         guard BuildChannel.showsTesterUnlock else { return }
         debugBypassAuth = true
@@ -56,10 +58,17 @@ final class AppEnvironment {
         trial.markSubscribed()
     }
 
+    func syncTrialEntitlement() {
+        let entitled = subscription.isSubscribed
+            || (BuildChannel.showsTesterUnlock && debugBypassSubscription)
+        if entitled {
+            trial.markSubscribed()
+        } else {
+            trial.isSubscribed = false
+        }
+    }
+
     init() {
-        // Only honor persisted unlocks while the channel still allows them —
-        // flipping `allowPreReleaseTesterUnlock` to false clears the gate on
-        // the next launch without a reinstall.
         let storedAuth = UserDefaults.standard.bool(forKey: TesterKey.bypassAuth)
         let storedSub = UserDefaults.standard.bool(forKey: TesterKey.bypassSubscription)
         if BuildChannel.showsTesterUnlock {
@@ -77,16 +86,53 @@ final class AppEnvironment {
             locationService: location,
             mapState: mapState,
             navigation: navigation,
-            offline: offline
+            offline: offline,
+            graphPacks: graphPacks,
+            network: network,
+            poiManager: nil
         )
         groups = GroupsViewModel(supabase: supabase, location: location, mapState: mapState)
-        incidents = IncidentRecoveryModel(planner: planner, locationService: location, routing: routing)
+        rideIntelligence = RideIntelligenceService(supabase: supabase)
+        incidents = IncidentRecoveryModel(
+            planner: planner,
+            locationService: location,
+            network: network,
+            groups: groups,
+            rideIntelligence: rideIntelligence,
+            graphPackVersion: { [graphPacks] in graphPacks.lastManifestVersion }
+        )
+        groups.onToast = { [planner] message in
+            planner.toast = message
+        }
         poiManager             = POIManager(mapState: mapState)
-        networkOverlayManager  = NetworkOverlayManager(mapState: mapState)
+        networkOverlayManager  = NetworkOverlayManager(mapState: mapState, graphPacks: graphPacks)
+        bcOSMHierarchy         = BCOSMHierarchyOverlay(mapState: mapState)
+        // Park BC extra lenses so leftover UserDefaults cannot paint a second
+        // classification over OSM Shortbread (highway → track/path).
+        UserDefaults.standard.set(false, forKey: "dirt.layers.network.bc")
+        UserDefaults.standard.set(false, forKey: BCOSMHierarchyOverlay.prefsKey)
+        mapState.bumpLayerPrefs()
+        bcOSMHierarchy.applyPrefs()
+        planner.attachPOIManager(poiManager)
+        offline.mapState = mapState
 
         navigation.cueMode = cueSettings.mode
-        navigation.onCueAnnounced = { [cueSettings] text, meters in
-            cueSettings.speakCueIfNeeded(text, distanceMeters: meters)
+        navigation.onCueAnnounced = { [cueSettings] text, announceKey in
+            Task { @MainActor in
+                cueSettings.speakCueIfNeeded(text, announceKey: announceKey)
+            }
+        }
+        planner.onNavigationEnded = { [weak self] candidate in
+            Task { @MainActor in
+                guard let self else { return }
+                self.cueSettings.stopSpeaking()
+                await self.rideIntelligence.flushPendingIncidents()
+                guard let candidate else { return }
+                // Prompt when preference on, or first time with a meaningful ride.
+                if TrackContributePrefs.isEnabled || !TrackContributePrefs.hasBeenAsked {
+                    self.pendingTrackContribution = candidate
+                }
+            }
         }
 
         mapState.onTap = { [planner] coordinate in
@@ -101,27 +147,48 @@ final class AppEnvironment {
         }
         mapState.onRiderTap = { [weak self] markerID in
             guard let self else { return }
-            guard let member = self.groups.member(forRiderMarkerID: markerID),
-                  let lat = member.latitude,
-                  let lon = member.longitude else { return }
-            self.planner.routeToMember(
-                name: member.displayName,
-                latitude: lat,
-                longitude: lon
-            )
+            if markerID.hasPrefix("alert:") {
+                let alertID = String(markerID.dropFirst("alert:".count))
+                if let alert = self.groups.peerAlerts.first(where: { $0.id == alertID }) {
+                    self.groups.focusPeerAlert(alert)
+                    return
+                }
+            }
+            // Details first — never drop a From here pin here.
+            self.groups.selectPeer(fromRiderMarkerID: markerID)
         }
         mapState.onPlannerPinDragEnd = { [planner] markerID, coordinate in
             planner.moveWaypoint(markerID: markerID, to: coordinate)
         }
 
+        // Frame the map on the rider as soon as GPS (or a cached fix) arrives.
+        let priorLocationHandler = location.onLocation
+        location.onLocation = { [mapState, graphPacks] locationFix in
+            priorLocationHandler?(locationFix)
+            mapState.consumeInitialUserLocation(locationFix.coordinate)
+            Task {
+                await graphPacks.warmupActivePack(near: locationFix.coordinate)
+            }
+        }
+        if let seed = location.lastLocation?.coordinate {
+            mapState.consumeInitialUserLocation(seed)
+            Task {
+                await graphPacks.warmupActivePack(near: seed)
+            }
+        }
+
         if debugBypassSubscription {
-            trial.markSubscribed()
+            syncTrialEntitlement()
         }
     }
 
     func setCueMode(_ mode: NavigationCueMode) {
         cueSettings.mode = mode
         navigation.cueMode = mode
+        navigation.rebuildCuesForCurrentMode()
+        if let location = location.lastLocation {
+            navigation.update(with: location)
+        }
     }
 
     func setCueAudioEnabled(_ enabled: Bool) {

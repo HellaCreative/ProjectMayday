@@ -1,58 +1,61 @@
 import SwiftUI
+import UIKit
 
-/// Top-level router: bootstrap → Sign in with Apple → screen name → map.
-/// The map (`RootView`) is never shown until there is an authenticated account
-/// with a screen name.
+/// Top-level router: splash → intro slides → map. Nothing in front of the map is
+/// gated on having an account.
+///
+/// This used to put Sign in with Apple between the splash and the intro, which meant
+/// a fresh install went splash → sign-in and the intro never ran at all. Riders now
+/// reach the map, the coach tour and the trial window signed out; sign-in is asked for
+/// where it is actually needed — Groups — and offered in Profile.
+///
+/// The intro replays on every cold launch (Skip is always available) so returning
+/// riders keep meeting the pitch. Once through, the coach tour takes over on the map;
+/// that one runs once and is remembered.
 struct AppGateView: View {
     @Environment(AppEnvironment.self) private var app
     @State private var didBootstrap = false
+    @State private var splashFinished = false
+    /// Per-launch, deliberately not seeded from `OnboardingPrefs` — see type comment.
+    @State private var introDone = false
 
-    private var authed: Bool {
-        (BuildChannel.showsTesterUnlock && app.debugBypassAuth) || app.supabase.isSignedIn
-    }
-
-    private var needsName: Bool {
-        if BuildChannel.showsTesterUnlock, app.debugBypassAuth { return false }
-        return app.supabase.needsDisplayName
+    /// Hold the splash until the throttle blips finish *and* bootstrap lands, so a
+    /// fast launch never cuts the animation and a slow one never dead-ends on it.
+    private var showsSplash: Bool {
+        !splashFinished || !didBootstrap
     }
 
     var body: some View {
         Group {
-            if !didBootstrap {
-                SplashView()
-            } else if !authed {
-                OnboardingView()
-                    .transition(.opacity)
-            } else if needsName {
-                DisplayNameSetupView()
-                    .transition(.opacity)
+            if showsSplash {
+                AnimatedSplashView { splashFinished = true }
+            } else if !introDone {
+                IntroCarouselView(
+                    isReturning: OnboardingPrefs.introComplete,
+                    onFinished: finishIntro
+                )
+                .transition(.opacity)
             } else {
                 RootView()
                     .transition(.opacity)
             }
         }
-        .animation(.easeInOut(duration: 0.35), value: didBootstrap)
-        .animation(.easeInOut(duration: 0.35), value: authed)
-        .animation(.easeInOut(duration: 0.35), value: needsName)
+        .animation(gateAnimation, value: showsSplash)
+        .animation(gateAnimation, value: introDone)
         .task {
             await app.supabase.bootstrap()
             didBootstrap = true
         }
     }
-}
 
-private struct SplashView: View {
-    var body: some View {
-        ZStack {
-            Color(dirtHex: 0x0B0C0E).ignoresSafeArea()
-            VStack(spacing: 18) {
-                HStack(spacing: 0) {
-                    Text("DIRT").italic().fontWeight(.black).foregroundStyle(.white)
-                    Text(".").italic().fontWeight(.black).foregroundStyle(DirtTheme.orange)
-                }
-                .font(.system(size: 40, weight: .black))
-                ProgressView().tint(.white.opacity(0.7))
-            }
-        }
+    /// No paywall here any more. The rider gets the coach tour and five real minutes
+    /// on the map first; the trial ladder starts its own clock from there.
+    private func finishIntro() {
+        OnboardingPrefs.markIntroComplete()
+        introDone = true
+    }
+
+    private var gateAnimation: Animation? {
+        UIAccessibility.isReduceMotionEnabled ? nil : .easeInOut(duration: 0.35)
     }
 }

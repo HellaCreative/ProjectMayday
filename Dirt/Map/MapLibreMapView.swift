@@ -3,13 +3,13 @@ import QuartzCore
 import SwiftUI
 
 /// MapLibre Native wrapper: swappable basemap (OSM Shortbread or Mapbox classic
-/// raster styles), per-surface route paint (web `route-network` colours),
+/// raster styles), per-surface route paint,
 /// A/B/stage markers, rider pins, and user tracking.
 struct MapLibreMapView: UIViewRepresentable {
     let state: MapState
     let location: LocationService
 
-    /// Paint buckets matching live web `route-network` line-color match.
+    /// Paint buckets per-surface route colors.
     enum RoutePaintBucket: String, CaseIterable {
         case access
         case gravel
@@ -35,13 +35,13 @@ struct MapLibreMapView: UIViewRepresentable {
             switch surfaceKey.lowercased() {
             case "access", "resource":
                 return .access
-            case "gravel", "unknown", "unpaved", "dirt":
+            case "gravel", "unpaved", "dirt":
                 return .gravel
             case "track", "double_track":
                 return .track
             case "connector":
                 return .connector
-            case "paved":
+            case "paved", "unknown":
                 return .paved
             default:
                 return .paved
@@ -56,11 +56,25 @@ struct MapLibreMapView: UIViewRepresentable {
     func makeUIView(context: Context) -> MLNMapView {
         let mapView = MLNMapView(frame: .zero, styleURL: state.styleURL)
         mapView.delegate = context.coordinator
-        mapView.automaticallyAdjustsContentInset = true
-        mapView.setCenter(AppConfig.overviewCenter, zoomLevel: AppConfig.overviewZoom, animated: false)
+        // We own contentInset (landscape drawer + nav look-ahead). Auto-adjust
+        // fights those values and can yank the camera while following.
+        // Prefer MLNMapView.automaticallyAdjustsContentInset over the deprecated
+        // UIViewController.automaticallyAdjustsScrollViewInsets path in MapLibre.
+        mapView.automaticallyAdjustsContentInset = false
+        mapView.locationManager = DirtMapLocationManager()
+        let launch = location.lastLocation?.coordinate
+        if let launch, CLLocationCoordinate2DIsValid(launch) {
+            mapView.setCenter(launch, zoomLevel: AppConfig.userLaunchZoom, animated: false)
+            // Seeded from cached GPS / last ride — don't wait for another fix to frame.
+            DispatchQueue.main.async { [state] in
+                state.consumeInitialUserLocation(launch)
+            }
+        } else {
+            mapView.setCenter(AppConfig.overviewCenter, zoomLevel: AppConfig.overviewZoom, animated: false)
+        }
         mapView.logoView.isHidden = true
         mapView.attributionButtonPosition = .bottomLeft
-        // Custom compass lives in MapControlStack (web parity).
+        // Custom compass lives in MapControlStack.
         mapView.compassView.isHidden = true
         mapView.compassViewPosition = .topRight
 
@@ -75,10 +89,16 @@ struct MapLibreMapView: UIViewRepresentable {
         let longPress = UILongPressGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleLongPress(_:)))
         mapView.addGestureRecognizer(longPress)
 
+        // Re-assert after attach — hosting VCs can fight the first assignment.
+        DispatchQueue.main.async { [weak mapView] in
+            mapView?.automaticallyAdjustsContentInset = false
+        }
+
         return mapView
     }
 
     func updateUIView(_ mapView: MLNMapView, context: Context) {
+        mapView.automaticallyAdjustsContentInset = false
         mapView.showsUserLocation = location.isAuthorized
         context.coordinator.sync(mapView: mapView)
     }
@@ -138,6 +158,7 @@ struct MapLibreMapView: UIViewRepresentable {
         private var appliedRouteGeneration = -1
         private var appliedMarkerGeneration = -1
         private var appliedPinSelectionGeneration = -1
+        private var appliedNavigatingLock: Bool?
         private var appliedCameraID: UUID?
         private var followApplied: MapState.FollowMode?
         private var followGenerationApplied = -1
@@ -151,6 +172,8 @@ struct MapLibreMapView: UIViewRepresentable {
         private var appliedPoiPrefs   = -1
         private var appliedNetData    = -1
         private var appliedNetPrefs   = -1
+        private var appliedBCOSMGeneration = -1
+        private var appliedBCOSMTemplate: String?
 
         init(state: MapState) {
             self.state = state
@@ -160,8 +183,12 @@ struct MapLibreMapView: UIViewRepresentable {
 
         func mapView(_ mapView: MLNMapView, didFinishLoading style: MLNStyle) {
             self.mapView = mapView
+            // Dual-sport nav: highway number shields (“NS 104 TCH”) crowd the
+            // trail at mid zooms — hide them; keep ordinary street name labels.
+            Self.hideHighwayShieldLabels(in: style)
             // Layer insertion order: network overlays (below) → route → POI (above)
             addNetworkLayers(to: style)
+            addBCOSMHierarchyLayers(to: style)
             addRouteLayers(to: style)
             addPOILayers(to: style)
             styleLoaded = true
@@ -169,7 +196,20 @@ struct MapLibreMapView: UIViewRepresentable {
             // Force overlay re-sync after a style reload
             appliedPoiData = -1; appliedPoiPrefs = -1
             appliedNetData = -1; appliedNetPrefs = -1
+            appliedBCOSMGeneration = -1
             sync(mapView: mapView)
+        }
+
+        /// Shortbread `label-shield-*` + junction ref chips — visual chrome only.
+        private static func hideHighwayShieldLabels(in style: MLNStyle) {
+            for layer in style.layers {
+                let id = layer.identifier.lowercased()
+                let isShield = id.contains("label-shield") || id.contains("shield-")
+                let isJunctionRef = id.contains("motorway_junction") && id.contains("ref")
+                if isShield || isJunctionRef {
+                    layer.isVisible = false
+                }
+            }
         }
 
         // MARK: - Network overlay layers
@@ -230,6 +270,126 @@ struct MapLibreMapView: UIViewRepresentable {
             style.addLayer(tunnel)
             // Network surface classes always paint when features are loaded —
             // Map visibility toggles were removed; corridor/lens control load.
+        }
+
+        // MARK: - BC OSM hierarchy (feasibility mbtiles)
+
+        private enum BCOSMLayer {
+            static let sourceID = "bc-osm-hierarchy"
+            static let pavedID = "bc-osm-paved"
+            static let localID = "bc-osm-local"
+            static let trackID = "bc-osm-track"
+            static let pathID = "bc-osm-path"
+            static let allIDs = [pavedID, localID, trackID, pathID]
+        }
+
+        private func addBCOSMHierarchyLayers(to style: MLNStyle) {
+            // Source is added in syncBCOSMHierarchy when a tile template is live.
+            // Layers are created once the source exists.
+            _ = style
+        }
+
+        private func ensureBCOSMLayers(on style: MLNStyle, sourceID: String) {
+            guard style.layer(withIdentifier: BCOSMLayer.pavedID) == nil else { return }
+
+            func lineLayer(_ id: String, predicate: NSPredicate, color: UIColor, width: CGFloat) -> MLNLineStyleLayer {
+                let layer = MLNLineStyleLayer(identifier: id, source: style.source(withIdentifier: sourceID)!)
+                // Must match tippecanoe `-l dirt_roads` in scripts/build-bc-tiles.sh
+                // (and MBTilesVectorProxy tileJSON vector_layers id).
+                layer.sourceLayerIdentifier = "dirt_roads"
+                layer.predicate = predicate
+                layer.lineColor = NSExpression(forConstantValue: color)
+                layer.lineWidth = NSExpression(forConstantValue: width)
+                layer.lineOpacity = NSExpression(forConstantValue: 0.9)
+                layer.lineCap = NSExpression(forConstantValue: "round")
+                layer.lineJoin = NSExpression(forConstantValue: "round")
+                return layer
+            }
+
+            let paved = lineLayer(
+                BCOSMLayer.pavedID,
+                predicate: NSPredicate(format: "highway IN %@", [
+                    "motorway", "motorway_link", "trunk", "trunk_link",
+                    "primary", "primary_link", "secondary", "secondary_link",
+                    "tertiary", "tertiary_link"
+                ]),
+                color: UIColor(red: 0.20, green: 0.24, blue: 0.28, alpha: 1),
+                width: 2.2
+            )
+            let local = lineLayer(
+                BCOSMLayer.localID,
+                predicate: NSPredicate(format: "highway IN %@", [
+                    "unclassified", "residential", "living_street", "service", "road"
+                ]),
+                color: UIColor(red: 0.45, green: 0.50, blue: 0.55, alpha: 1),
+                width: 1.6
+            )
+            let track = lineLayer(
+                BCOSMLayer.trackID,
+                predicate: NSPredicate(format: "highway == %@", "track"),
+                color: UIColor(red: 0.486, green: 0.227, blue: 0.929, alpha: 1),
+                width: 2.0
+            )
+            let path = lineLayer(
+                BCOSMLayer.pathID,
+                predicate: NSPredicate(format: "highway IN %@", ["path", "cycleway"]),
+                color: UIColor(red: 0.90, green: 0.45, blue: 0.12, alpha: 1),
+                width: 1.4
+            )
+            path.lineDashPattern = NSExpression(forConstantValue: [1.5, 1.2] as [NSNumber])
+
+            // Insert under route layers when present.
+            if let routeBottom = style.layer(withIdentifier: RoutePaintBucket.access.casingID) {
+                style.insertLayer(paved, below: routeBottom)
+                style.insertLayer(local, below: routeBottom)
+                style.insertLayer(track, below: routeBottom)
+                style.insertLayer(path, below: routeBottom)
+            } else {
+                style.addLayer(paved)
+                style.addLayer(local)
+                style.addLayer(track)
+                style.addLayer(path)
+            }
+        }
+
+        private func syncBCOSMHierarchy(style: MLNStyle) {
+            let gen = state.bcOSMOverlayGeneration
+            let prefs = LayerPrefsSnapshot()
+            let template = state.bcOSMTileURLTemplate
+            let want = prefs.showBCOSMHierarchy && template != nil
+            guard gen != appliedBCOSMGeneration || template != appliedBCOSMTemplate else {
+                for id in BCOSMLayer.allIDs {
+                    style.layer(withIdentifier: id)?.isVisible = want
+                }
+                return
+            }
+            appliedBCOSMGeneration = gen
+            appliedBCOSMTemplate = template
+
+            for id in BCOSMLayer.allIDs {
+                if let layer = style.layer(withIdentifier: id) {
+                    style.removeLayer(layer)
+                }
+            }
+            if let existing = style.source(withIdentifier: BCOSMLayer.sourceID) {
+                style.removeSource(existing)
+            }
+
+            guard want, let template else { return }
+
+            let source = MLNVectorTileSource(
+                identifier: BCOSMLayer.sourceID,
+                tileURLTemplates: [template],
+                options: [
+                    .minimumZoomLevel: 4,
+                    .maximumZoomLevel: 14
+                ]
+            )
+            style.addSource(source)
+            ensureBCOSMLayers(on: style, sourceID: BCOSMLayer.sourceID)
+            for id in BCOSMLayer.allIDs {
+                style.layer(withIdentifier: id)?.isVisible = true
+            }
         }
 
         // MARK: - POI layers (drawn above route layers)
@@ -294,14 +454,15 @@ struct MapLibreMapView: UIViewRepresentable {
 
                 let casing = MLNLineStyleLayer(identifier: bucket.casingID, source: source)
                 casing.lineColor = NSExpression(forConstantValue: UIColor.white)
-                casing.lineWidth = NSExpression(forConstantValue: 9)
+                // +1px over prior 9/7 so the route reads clearly wider than basemap roads.
+                casing.lineWidth = NSExpression(forConstantValue: 10)
                 casing.lineOpacity = NSExpression(forConstantValue: 0.85)
                 casing.lineCap = NSExpression(forConstantValue: "round")
                 casing.lineJoin = NSExpression(forConstantValue: "round")
 
                 let line = MLNLineStyleLayer(identifier: bucket.lineID, source: source)
                 line.lineColor = NSExpression(forConstantValue: UIColor(bucket.color))
-                line.lineWidth = NSExpression(forConstantValue: 7)
+                line.lineWidth = NSExpression(forConstantValue: 8)
                 line.lineOpacity = NSExpression(forConstantValue: 0.98)
                 line.lineCap = NSExpression(forConstantValue: "round")
                 line.lineJoin = NSExpression(forConstantValue: "round")
@@ -315,6 +476,7 @@ struct MapLibreMapView: UIViewRepresentable {
 
         func sync(mapView: MLNMapView) {
             self.mapView = mapView
+            applyContentInsets(on: mapView)
             syncStyle(mapView: mapView)
             // Explicit camera (fit / fly) before follow — otherwise the follow
             // zoom-lock can immediately undo a Zoom-to-Route after recenter.
@@ -322,10 +484,35 @@ struct MapLibreMapView: UIViewRepresentable {
             syncFollow(mapView: mapView)
             syncMarkers(mapView: mapView)
             syncPinSelection(mapView: mapView)
+            syncPinEditLock(mapView: mapView)
             guard styleLoaded, let style = mapView.style else { return }
             syncRoute(style: style)
             syncPOI(style: style)
             syncNetwork(style: style)
+            syncBCOSMHierarchy(style: style)
+        }
+
+        /// MapLibre recenters immediately when contentInset changes — only write
+        /// when the inset actually moved, or course-up follow looks like a flick.
+        private func applyContentInsets(on mapView: MLNMapView) {
+            var insets = state.overlayContentInsets
+            if state.isNavigating,
+               state.navigationCameraMode == .detail,
+               state.followMode != .off,
+               mapView.bounds.height > 1 {
+                let bias = (mapView.bounds.height * MapState.navigationFollowTopInsetFraction)
+                    .rounded(.toNearestOrAwayFromZero)
+                insets.top += bias
+            }
+            let current = mapView.contentInset
+            let changed =
+                abs(current.top - insets.top) > 0.5
+                || abs(current.left - insets.left) > 0.5
+                || abs(current.bottom - insets.bottom) > 0.5
+                || abs(current.right - insets.right) > 0.5
+            guard changed else { return }
+            // animated:false still updates immediately; avoid completion churn.
+            mapView.contentInset = insets
         }
 
         // MARK: - POI sync
@@ -437,13 +624,16 @@ struct MapLibreMapView: UIViewRepresentable {
                 annotation.label = marker.label
                 annotation.kind = marker.kind
                 annotation.status = marker.status
+                annotation.isLocked = marker.isLocked
                 annotation.title = marker.subtitle ?? marker.label
                 return annotation
             }
             mapView.addAnnotations(annotations)
             // Force selection chrome to re-apply after annotation rebuild.
             appliedPinSelectionGeneration = -1
+            appliedNavigatingLock = nil
             syncPinSelection(mapView: mapView)
+            syncPinEditLock(mapView: mapView)
         }
 
         private func syncPinSelection(mapView: MLNMapView) {
@@ -451,7 +641,7 @@ struct MapLibreMapView: UIViewRepresentable {
             appliedPinSelectionGeneration = state.pinSelectionGeneration
             let selectedID = state.selectedPlannerPinID
             for annotation in annotations {
-                guard annotation.kind != .rider,
+                guard !annotation.kind.isGroupOverlay,
                       let view = mapView.view(for: annotation) as? DirtPlannerPinView else { continue }
                 view.applySelectionChrome(annotation.markerID == selectedID, animated: true)
             }
@@ -459,6 +649,29 @@ struct MapLibreMapView: UIViewRepresentable {
             if let selectedID,
                let annotation = annotations.first(where: { $0.markerID == selectedID }) {
                 mapView.selectAnnotation(annotation, animated: false, completionHandler: nil)
+            }
+        }
+
+        /// When Start Nav locks editing, clear drag callbacks on already-built pin views.
+        private func syncPinEditLock(mapView: MLNMapView) {
+            let locked = state.isNavigating
+            guard appliedNavigatingLock != locked else { return }
+            appliedNavigatingLock = locked
+            for annotation in annotations {
+                guard !annotation.kind.isGroupOverlay,
+                      let view = mapView.view(for: annotation) as? DirtPlannerPinView else { continue }
+                if locked || annotation.isLocked {
+                    view.onDragBegan = nil
+                    view.onDragEnded = nil
+                    view.applySelectionChrome(false, animated: false)
+                } else {
+                    view.onDragBegan = { [weak self] markerID in
+                        self?.state.selectPlannerPin(markerID)
+                    }
+                    view.onDragEnded = { [weak self] markerID, coordinate in
+                        self?.state.onPlannerPinDragEnd?(markerID, coordinate)
+                    }
+                }
             }
         }
 
@@ -473,17 +686,13 @@ struct MapLibreMapView: UIViewRepresentable {
             }
             switch camera.command {
             case let .center(latitude, longitude, zoom):
-                // If follow is engaging on this same sync turn, skip the animated
-                // setCenter — syncFollow will move the camera once.
-                if state.followMode != .off {
-                    applyPitch(on: mapView, animated: false)
-                    break
-                }
+                // Instant snap — never animate center while (re)engaging follow.
+                // An animated setCenter raced follow and produced zoom-then-scroll.
                 mapView.setCenter(
                     CLLocationCoordinate2D(latitude: latitude, longitude: longitude),
                     zoomLevel: zoom,
                     direction: mapView.direction,
-                    animated: true
+                    animated: false
                 )
                 applyPitch(on: mapView, animated: false)
             case let .fit(coordinates):
@@ -495,16 +704,37 @@ struct MapLibreMapView: UIViewRepresentable {
                     bounds.ne.latitude = max(bounds.ne.latitude, coordinate.latitude)
                     bounds.ne.longitude = max(bounds.ne.longitude, coordinate.longitude)
                 }
-                let insets = UIEdgeInsets(top: 100, left: 48, bottom: 320, right: 48)
+                // Portrait used a huge bottom inset for the tall nav panel — that
+                // collapses the visible map to nothing in landscape and breaks PiP overview.
+                // Planning: sheet / drawer already live in `contentInset` via
+                // `overlayContentInsets` — only add soft chrome so the line clears
+                // brand + Packs/fit/recenter chips (do not double-count the sheet).
+                let landscape = mapView.bounds.width > mapView.bounds.height
+                let insets: UIEdgeInsets
+                if state.isNavigating, landscape {
+                    insets = UIEdgeInsets(top: 96, left: 160, bottom: 28, right: 80)
+                } else if state.isNavigating {
+                    insets = UIEdgeInsets(top: 100, left: 48, bottom: 280, right: 48)
+                } else {
+                    let overlay = state.overlayContentInsets
+                    let sheetOpen =
+                        overlay.bottom > 1 || overlay.left > 1 || overlay.right > 1
+                    // No sheet: clear the portrait dock. Sheet open: clear control chips.
+                    let bottomChrome: CGFloat = sheetOpen ? 64 : 120
+                    insets = UIEdgeInsets(top: 88, left: 40, bottom: bottomChrome, right: 40)
+                }
                 mapView.setVisibleCoordinateBounds(bounds, edgePadding: insets, animated: true, completionHandler: nil)
                 applyPitch(on: mapView, animated: false)
             case .applyViewMode:
                 applyPitch(on: mapView, animated: true)
             case .resetNorth:
-                let camera = mapView.camera
-                camera.heading = 0
-                camera.pitch = state.desiredPitch
-                mapView.setCamera(camera, withDuration: 0.5, animationTimingFunction: CAMediaTimingFunction(name: .easeInEaseOut))
+                // Drop any course-up tracking first — otherwise MapLibre restores
+                // travel heading and the compass looks like a no-op (with a jog).
+                mapView.userTrackingMode = .none
+                // Use setDirection — mutating camera.heading via setCamera also
+                // twitches pitch/center.
+                let animate = state.followMode == .off
+                mapView.setDirection(0, animated: animate)
                 state.mapBearing = 0
             }
         }
@@ -527,31 +757,43 @@ struct MapLibreMapView: UIViewRepresentable {
         private func syncFollow(mapView: MLNMapView) {
             let needsReapply = followApplied != state.followMode
                 || followGenerationApplied != state.followGeneration
-            guard needsReapply else {
-                // Keep detail zoom locked while following so dual-sport cues stay readable.
-                if state.followMode != .off,
-                   state.navigationCameraMode == .detail,
-                   abs(mapView.zoomLevel - state.followZoom) > 0.35 {
-                    suppressFollowBreak(for: 1.2)
-                    mapView.setZoomLevel(state.followZoom, animated: false)
-                }
-                return
-            }
+            guard needsReapply else { return }
             followApplied = state.followMode
             followGenerationApplied = state.followGeneration
+            // Only suppress *programmatic* follow-breaks while we snap/engage.
+            // User pan/pinch must still unlock immediately (see regionWillChange).
             suppressFollowBreak(for: 1.5)
             switch state.followMode {
             case .off:
                 mapView.userTrackingMode = .none
             case .northUp:
-                // Zoom first (instant), then one tracking animation to the user.
-                mapView.setZoomLevel(state.followZoom, animated: false)
-                mapView.setUserTrackingMode(.follow, animated: true, completionHandler: nil)
+                snapToUserForFollow(mapView: mapView)
+                // No chase animation — camera already at user from snap / recenter.
+                mapView.setUserTrackingMode(.follow, animated: false, completionHandler: nil)
             case .courseUp:
-                mapView.setZoomLevel(state.followZoom, animated: false)
-                mapView.setUserTrackingMode(.followWithCourse, animated: true, completionHandler: nil)
+                snapToUserForFollow(mapView: mapView)
+                mapView.setUserTrackingMode(.followWithCourse, animated: false, completionHandler: nil)
             }
             applyPitch(on: mapView, animated: false)
+        }
+
+        /// Put user under the crosshair at `followZoom` before enabling tracking.
+        /// Never `setZoomLevel` alone first — that zooms wherever the map is looking,
+        /// then tracking scrolls the puck across the screen.
+        private func snapToUserForFollow(mapView: MLNMapView) {
+            let zoom = state.followZoom
+            // northUp must force bearing 0 — preserving direction here used to
+            // undo compass "reset north" right after syncCamera ran.
+            let direction: CLLocationDirection =
+                state.followMode == .northUp ? 0 : mapView.direction
+            if let user = mapView.userLocation?.coordinate,
+               CLLocationCoordinate2DIsValid(user) {
+                mapView.setCenter(user, zoomLevel: zoom, direction: direction, animated: false)
+            } else if abs(mapView.zoomLevel - zoom) > 0.35 {
+                mapView.setZoomLevel(zoom, animated: false)
+            } else if state.followMode == .northUp, abs(mapView.direction) > 0.5 {
+                mapView.setDirection(0, animated: false)
+            }
         }
 
         private func suppressFollowBreak(for seconds: TimeInterval) {
@@ -575,7 +817,38 @@ struct MapLibreMapView: UIViewRepresentable {
             regionWillChangeWith reason: MLNCameraChangeReason,
             animated: Bool
         ) {
+            handleCameraChangeReason(reason)
+        }
+
+        func mapView(_ mapView: MLNMapView, regionIsChangingWith reason: MLNCameraChangeReason) {
+            handleCameraChangeReason(reason)
+        }
+
+        func mapView(
+            _ mapView: MLNMapView,
+            regionDidChangeWith reason: MLNCameraChangeReason,
+            animated: Bool
+        ) {
+            handleCameraChangeReason(reason)
+            let bearing = mapView.direction
+            if abs(bearing - state.mapBearing) > 0.4 {
+                state.mapBearing = bearing
+            }
+            state.mapCenter = mapView.camera.centerCoordinate
+            state.mapZoom = mapView.zoomLevel
+        }
+
+        /// MapLibre clears tracking on user gesture — keep `followMode` in sync so
+        /// `syncFollow` does not immediately re-lock course-up.
+        func mapView(_ mapView: MLNMapView, didChange mode: MLNUserTrackingMode, animated: Bool) {
+            guard mode == .none, state.followMode != .off else { return }
+            // Ignore tracking resets that fire while we are programmatically engaging follow.
             if let until = suppressFollowBreakUntil, Date() < until { return }
+            state.breakFollowFromGesture()
+            followApplied = .off
+        }
+
+        private func handleCameraChangeReason(_ reason: MLNCameraChangeReason) {
             let gestureBits: MLNCameraChangeReason = [
                 .gesturePan,
                 .gesturePinch,
@@ -585,9 +858,13 @@ struct MapLibreMapView: UIViewRepresentable {
                 .gestureTilt,
                 .gestureOneFingerZoom
             ]
+            // User gestures always release follow — even during the post-recenter
+            // suppress window (that window only shields programmatic setCenter/zoom).
             if !reason.isDisjoint(with: gestureBits) {
                 state.breakFollowFromGesture()
+                return
             }
+            if let until = suppressFollowBreakUntil, Date() < until { return }
         }
 
         // MARK: Annotations
@@ -602,7 +879,7 @@ struct MapLibreMapView: UIViewRepresentable {
                 return view
             }
             guard let dirtAnnotation = annotation as? DirtAnnotation else { return nil }
-            if dirtAnnotation.kind == .rider {
+            if dirtAnnotation.kind.isGroupOverlay {
                 let reuseID = "dirt-rider-marker"
                 let view = mapView.dequeueReusableAnnotationView(withIdentifier: reuseID) as? DirtRiderMarkerView
                     ?? DirtRiderMarkerView(reuseIdentifier: reuseID)
@@ -618,7 +895,7 @@ struct MapLibreMapView: UIViewRepresentable {
             // requires a long-press, which feels like the map is stealing the gesture.
             view.isDraggable = false
             view.hostMapView = mapView
-            if state.isNavigating {
+            if state.isNavigating || dirtAnnotation.isLocked {
                 view.onDragBegan = nil
                 view.onDragEnded = nil
             } else {
@@ -633,13 +910,13 @@ struct MapLibreMapView: UIViewRepresentable {
         }
 
         func mapView(_ mapView: MLNMapView, annotationCanShowCallout annotation: MLNAnnotation) -> Bool {
-            // Rider tap routes immediately; name is already on the pin.
+            // Rider tap opens the peer details sheet; name is already on the pin.
             false
         }
 
         func mapView(_ mapView: MLNMapView, didSelect annotation: MLNAnnotation) {
             guard let dirtAnnotation = annotation as? DirtAnnotation else { return }
-            if dirtAnnotation.kind == .rider {
+            if dirtAnnotation.kind.isGroupOverlay {
                 state.onRiderTap?(dirtAnnotation.markerID)
                 mapView.deselectAnnotation(annotation, animated: false)
                 return
@@ -651,7 +928,7 @@ struct MapLibreMapView: UIViewRepresentable {
 
         func mapView(_ mapView: MLNMapView, didDeselect annotation: MLNAnnotation) {
             guard let dirtAnnotation = annotation as? DirtAnnotation,
-                  dirtAnnotation.kind != .rider,
+                  !dirtAnnotation.kind.isGroupOverlay,
                   state.selectedPlannerPinID == dirtAnnotation.markerID else { return }
             // Keep selection until the rider picks another pin, moves it, or clears.
             // MapLibre deselects on map pan; restore selection chrome via generation.
@@ -666,7 +943,8 @@ struct MapLibreMapView: UIViewRepresentable {
         ) {
             guard !state.isNavigating,
                   let dirtAnnotation = annotation as? DirtAnnotation,
-                  dirtAnnotation.kind != .rider else { return }
+                  !dirtAnnotation.kind.isGroupOverlay,
+                  !dirtAnnotation.isLocked else { return }
             if newState == .starting || newState == .dragging {
                 state.selectPlannerPin(dirtAnnotation.markerID)
             }
@@ -681,18 +959,32 @@ struct MapLibreMapView: UIViewRepresentable {
             guard gesture.state == .ended, let mapView else { return }
             let pt = gesture.location(in: mapView)
 
+            // Group rider / name badge wins — open peer details, never From here.
+            if let rider = groupOverlayAnnotation(at: pt, in: mapView) {
+                mapView.selectAnnotation(rider, animated: false, completionHandler: nil)
+                return
+            }
+
             // Planner pin wins over map tap — select / don't drop a new waypoint.
+            // During prep / active ride: never select or relocate pins (Report → Reroute only).
             if let pin = plannerAnnotation(at: pt, in: mapView) {
+                guard !state.isNavigating else { return }
                 mapView.selectAnnotation(pin, animated: true, completionHandler: nil)
                 state.selectPlannerPin(pin.markerID)
                 return
             }
 
-            // Selected pin + tap map → relocate (discoverable when route fails).
-            if let selectedID = state.selectedPlannerPinID, !state.isNavigating {
-                let coordinate = mapView.convert(pt, toCoordinateFrom: mapView)
-                state.onPlannerPinDragEnd?(selectedID, coordinate)
-                return
+            // Selected pin + tap map → relocate (Plan / Saved). From here relocates
+            // B via long-press with road snap — never by dragging or short-tap.
+            if let selectedID = state.selectedPlannerPinID,
+               !state.isNavigating,
+               !state.fromHereLongPressRelocatesDestination {
+                let locked = annotations.first(where: { $0.markerID == selectedID })?.isLocked == true
+                if !locked {
+                    let coordinate = mapView.convert(pt, toCoordinateFrom: mapView)
+                    state.onPlannerPinDragEnd?(selectedID, coordinate)
+                    return
+                }
             }
 
             // POI wins over pin-drop: generous hit box so a near-miss still
@@ -702,15 +994,38 @@ struct MapLibreMapView: UIViewRepresentable {
                 return
             }
 
-            let coordinate = mapView.convert(pt, toCoordinateFrom: mapView)
+            let raw = mapView.convert(pt, toCoordinateFrom: mapView)
+            let coordinate = snapToNearestRoad(raw, at: pt, in: mapView) ?? raw
             state.onTap?(coordinate)
+        }
+
+        private func groupOverlayAnnotation(at point: CGPoint, in mapView: MLNMapView) -> DirtAnnotation? {
+            let hitRadius: CGFloat = 44
+            var best: DirtAnnotation?
+            var bestDist = CGFloat.greatestFiniteMagnitude
+            for annotation in annotations where annotation.kind.isGroupOverlay {
+                let pinPoint = mapView.convert(annotation.coordinate, toPointTo: mapView)
+                // Dot is at the coordinate; name chip sits down/right of it.
+                let chipCenter = CGPoint(x: pinPoint.x + 28, y: pinPoint.y + 18)
+                let candidates = [pinPoint, chipCenter]
+                for center in candidates {
+                    let dx = center.x - point.x
+                    let dy = center.y - point.y
+                    let dist = sqrt(dx * dx + dy * dy)
+                    if dist <= hitRadius && dist < bestDist {
+                        bestDist = dist
+                        best = annotation
+                    }
+                }
+            }
+            return best
         }
 
         private func plannerAnnotation(at point: CGPoint, in mapView: MLNMapView) -> DirtAnnotation? {
             let hitRadius: CGFloat = 28
             var best: DirtAnnotation?
             var bestDist = CGFloat.greatestFiniteMagnitude
-            for annotation in annotations where annotation.kind != .rider {
+            for annotation in annotations where !annotation.kind.isGroupOverlay {
                 let pinPoint = mapView.convert(annotation.coordinate, toPointTo: mapView)
                 // Account for teardrop centerOffset (tip at coordinate, body above).
                 let bodyCenter = CGPoint(x: pinPoint.x, y: pinPoint.y - DirtPlannerPinView.pinHeight / 2)
@@ -727,14 +1042,103 @@ struct MapLibreMapView: UIViewRepresentable {
 
         @objc func handleLongPress(_ gesture: UILongPressGestureRecognizer) {
             guard gesture.state == .began, let mapView else { return }
+            // Prep / active ride: map is inspect-only — no new waypoints.
+            guard !state.isNavigating else { return }
             let pt = gesture.location(in: mapView)
             // Same rule for plan waypoints: don't place on top of a POI.
             if let poi = poiFeature(at: pt, in: mapView, hitRadius: 32) {
                 state.onPOITap?(poi)
                 return
             }
-            let coordinate = mapView.convert(pt, toCoordinateFrom: mapView)
+            let raw = mapView.convert(pt, toCoordinateFrom: mapView)
+            let coordinate = snapToNearestRoad(raw, at: pt, in: mapView) ?? raw
             state.onLongPress?(coordinate)
+        }
+
+        /// Snap a long-press to the nearest motorable road in the basemap
+        /// (highway line layers). Generous hit box so placement feels magnetic.
+        private func snapToNearestRoad(
+            _ coordinate: CLLocationCoordinate2D,
+            at point: CGPoint,
+            in mapView: MLNMapView
+        ) -> CLLocationCoordinate2D? {
+            guard let style = mapView.style else { return nil }
+            let roadIDs = Self.motorableRoadLayerIDs(in: style)
+            guard !roadIDs.isEmpty else { return nil }
+
+            // ~90pt search radius ≈ serious snap at dual-sport zooms.
+            let hitRadius: CGFloat = 90
+            let box = CGRect(
+                x: point.x - hitRadius,
+                y: point.y - hitRadius,
+                width: hitRadius * 2,
+                height: hitRadius * 2
+            )
+            let hits = mapView.visibleFeatures(in: box, styleLayerIdentifiers: roadIDs)
+            let probe = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
+
+            var best: (coordinate: RouteCoordinate, meters: Double)?
+            for feature in hits {
+                let polylines = Self.polylines(from: feature)
+                for line in polylines where line.count >= 2 {
+                    if let nearest = GeoMath.nearestPointOnPolyline(probe, in: line, maxMeters: 2_500) {
+                        if best == nil || nearest.meters < best!.meters {
+                            best = nearest
+                        }
+                    }
+                }
+            }
+            guard let best else { return nil }
+            return best.coordinate.locationCoordinate
+        }
+
+        private static func motorableRoadLayerIDs(in style: MLNStyle) -> Set<String> {
+            let prefer = [
+                "motorway", "trunk", "primary", "secondary", "tertiary",
+                "unclassified", "residential", "living_street", "service", "track"
+            ]
+            let skip = ["footway", "path", "steps", "cycleway", "bridleway", "pedestrian", "raceway"]
+            var ids = Set<String>()
+            for layer in style.layers {
+                let id = layer.identifier.lowercased()
+                guard id.contains("highway") || id.contains("street") else { continue }
+                if skip.contains(where: { id.contains($0) }) { continue }
+                if prefer.contains(where: { id.contains($0) }) {
+                    ids.insert(layer.identifier)
+                }
+            }
+            // Fallback: any highway line layer if filters were too strict.
+            if ids.isEmpty {
+                for layer in style.layers where layer is MLNLineStyleLayer {
+                    let id = layer.identifier.lowercased()
+                    if id.contains("highway") { ids.insert(layer.identifier) }
+                }
+            }
+            return ids
+        }
+
+        private static func polylines(from feature: MLNFeature) -> [[RouteCoordinate]] {
+            if let line = feature as? MLNPolyline {
+                return [coords(from: line)]
+            }
+            if let multi = feature as? MLNMultiPolyline {
+                return multi.polylines.map { coords(from: $0) }
+            }
+            // Shape-source features often arrive as MLNPolylineFeature.
+            if let lineFeature = feature as? MLNPolylineFeature {
+                return [coords(from: lineFeature)]
+            }
+            return []
+        }
+
+        private static func coords(from polyline: MLNPolyline) -> [RouteCoordinate] {
+            let count = Int(polyline.pointCount)
+            guard count > 0 else { return [] }
+            let ptr = polyline.coordinates
+            return (0..<count).map { i in
+                let c = ptr[i]
+                return RouteCoordinate(longitude: c.longitude, latitude: c.latitude)
+            }
         }
 
         private func poiFeature(at point: CGPoint, in mapView: MLNMapView, hitRadius: CGFloat) -> POIFeature? {
@@ -769,9 +1173,10 @@ final class DirtAnnotation: MLNPointAnnotation {
     var label = ""
     var kind: MapState.MarkerKind = .start
     var status: String?
+    var isLocked = false
 }
 
-/// HTML-parity teardrop stage pin: dark body + orange circle + white number,
+/// Teardrop stage pin: dark body + orange circle + white number,
 /// bottom-anchored so the pin tip sits on the map coordinate.
 final class DirtPlannerPinView: MLNAnnotationView {
     static let pinWidth: CGFloat = 36
@@ -805,7 +1210,7 @@ final class DirtPlannerPinView: MLNAnnotationView {
         layer.shadowRadius = 3
         layer.shadowOffset = CGSize(width: 0, height: 2)
 
-        // Teardrop body — translates the HTML SVG path 1:1 (viewBox 0 0 36 44).
+        // Teardrop body (viewBox 0 0 36 44).
         bodyLayer.path = tearDropPath().cgPath
         bodyLayer.lineWidth = 1
         layer.addSublayer(bodyLayer)
@@ -836,7 +1241,7 @@ final class DirtPlannerPinView: MLNAnnotationView {
 
     func configure(for annotation: DirtAnnotation) {
         labelView.text = annotation.label
-        // All planner pins: dark #111820 body + orange circle (HTML parity).
+        // All planner pins: dark #111820 body + orange circle.
         bodyLayer.fillColor = UIColor(red: 17/255, green: 24/255, blue: 32/255, alpha: 1).cgColor
         bodyLayer.strokeColor = UIColor(DirtTheme.orange).cgColor
         circleLayer.fillColor = UIColor(DirtTheme.orange).cgColor
@@ -890,12 +1295,13 @@ final class DirtPlannerPinView: MLNAnnotationView {
 
     @objc private func handlePinPan(_ gesture: UIPanGestureRecognizer) {
         guard let mapView = hostMapView,
-              let dirtAnnotation = annotation as? DirtAnnotation else { return }
+              let dirtAnnotation = annotation as? DirtAnnotation,
+              // Nil during prep / navigation — let map pan/zoom win; never move pins.
+              onDragEnded != nil else { return }
 
         switch gesture.state {
         case .began:
             guard hostMapView != nil else { return }
-            // Don't drag while navigating — coordinator also sets callbacks only in idle.
             isCustomDragging = true
             savedMapScrollEnabled = mapView.isScrollEnabled
             savedMapRotateEnabled = mapView.isRotateEnabled
@@ -942,7 +1348,7 @@ final class DirtPlannerPinView: MLNAnnotationView {
 
     /// SVG path M18 43 C15.5 39.1 4 27.7 4 17.4 C4 9.1 10.3 2 18 2
     ///   S32 9.1 32 17.4 C32 27.7 20.5 39.1 18 43 Z  (absolute, derived from
-    ///   the HTML index.html .stage-marker background SVG).
+    ///   the stage-marker SVG).
     private func tearDropPath() -> UIBezierPath {
         let path = UIBezierPath()
         path.move(to: CGPoint(x: 18, y: 43))
@@ -982,7 +1388,7 @@ extension DirtPlannerPinView: UIGestureRecognizerDelegate {
     }
 }
 
-/// HTML-parity group rider pin: status-colored dot + name/status chip.
+/// Group rider pin: status-colored dot + name/status chip.
 /// Frame-based layout — Auto Layout inside `MLNAnnotationView` often collapses
 /// label intrinsic size to zero (blank white chip).
 final class DirtRiderMarkerView: MLNAnnotationView {
@@ -995,6 +1401,8 @@ final class DirtRiderMarkerView: MLNAnnotationView {
         super.init(reuseIdentifier: reuseIdentifier)
         scalesWithViewingDistance = false
         clipsToBounds = false
+        isEnabled = true
+        isUserInteractionEnabled = true
 
         dot.layer.cornerRadius = 11
         dot.layer.borderWidth = 2
@@ -1071,6 +1479,12 @@ final class DirtRiderMarkerView: MLNAnnotationView {
 
         // Anchor the map coordinate at the center of the status dot.
         centerOffset = CGVector(dx: boundsWidth / 2 - 11, dy: boundsHeight / 2 - 11)
+    }
+
+    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+        // Expand hit area to cover the name/status chip, not just the 22pt dot.
+        let padded = bounds.insetBy(dx: -8, dy: -8)
+        return padded.contains(point) || chip.frame.insetBy(dx: -6, dy: -6).contains(point)
     }
 
     private static func color(for status: String) -> UIColor {

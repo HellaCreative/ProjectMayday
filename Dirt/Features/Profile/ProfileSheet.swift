@@ -1,11 +1,9 @@
 import AuthenticationServices
 import StoreKit
 import SwiftUI
+import UIKit
 
-/// Profile, redesigned to the Figma screens page: centered title, tracked
-/// signed-in line, name field with orange SAVE NAME, then the pieces the mock
-/// left implicit but the Apple-account flow requires — DIRT PRO subscription
-/// management, legal links, and a black SIGN OUT.
+/// Account, Pro, ride prefs, and legal — hosted in `DockSheetPanel`.
 struct ProfileSheet: View {
     @Environment(AppEnvironment.self) private var app
     @State private var displayName = ""
@@ -13,76 +11,63 @@ struct ProfileSheet: View {
     @State private var message: String?
     @State private var showManageSubscriptions = false
     @State private var showPaywall = false
+    @State private var testerToolsOpen = false
+    @State private var crossProvinceBusy = false
+    @State private var crossProvinceStatus: String?
+    @State private var crossProvinceReportURL: URL?
+    @State private var showCrossProvinceShare = false
+    @State private var crossProvinceTask: Task<Void, Never>?
+    @AppStorage(FuelRangePrefs.key) private var fuelRangeKm = 0.0
+    @AppStorage(KeepAwakePrefs.key) private var keepAwakeWhileUsing = false
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var profileFuelDebounce: Task<Void, Never>?
 
     private var supabase: SupabaseService { app.supabase }
     private var subscription: SubscriptionService { app.subscription }
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 14) {
-                header
+        VStack(spacing: 0) {
+            DirtSheetHeader(title: "Profile")
 
-                if supabase.isSignedIn {
-                    nameField
-                    saveNameButton
-                } else {
-                    signInBlock
-                }
+            ScrollView {
+                VStack(spacing: DirtSpace.group) {
+                    accountSection
+                    proCard
+                    ridePrefsSection
+                    aboutRows
 
-                proCard
-                aboutRows
-
-                if supabase.isSignedIn {
-                    signOutButton
-                }
-
-                if let message {
-                    Text(message)
-                        .font(.dirtUI(12, weight: .semibold))
-                        .foregroundStyle(DirtTheme.danger)
-                }
-                if let bootstrapError = supabase.bootstrapError {
-                    Text(bootstrapError)
-                        .font(.dirtUI(11))
-                        .foregroundStyle(DirtTheme.danger)
-                }
-
-                if BuildChannel.showsTesterUnlock {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("TESTER")
-                            .font(.dirtMono(10, weight: .bold))
-                            .tracking(1.2)
-                            .foregroundStyle(DirtTheme.muted)
-                        Toggle("Bypass Apple sign-in", isOn: Binding(
-                            get: { app.debugBypassAuth },
-                            set: { app.debugBypassAuth = $0 }
-                        ))
-                        .font(.dirtUI(13, weight: .semibold))
-                        Toggle("Bypass trial / subscription", isOn: Binding(
-                            get: { app.debugBypassSubscription },
-                            set: { app.debugBypassSubscription = $0 }
-                        ))
-                        .font(.dirtUI(13, weight: .semibold))
-                        .tint(DirtTheme.orange)
-                        Button("Reset trial usage clock") {
-                            app.trial.resetForTesting()
-                            app.planner.toast = "Trial clock reset"
+                    if supabase.isSignedIn {
+                        Button {
+                            Task { try? await supabase.signOut() }
+                        } label: {
+                            Label("Sign out", systemImage: "rectangle.portrait.and.arrow.right")
                         }
-                        .font(.dirtUI(12, weight: .semibold))
-                        .foregroundStyle(DirtTheme.muted)
+                        .buttonStyle(DirtCTAStyle(fill: DirtTheme.chrome))
                     }
-                    .padding(14)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(DirtTheme.wash)
-                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                    .padding(.top, 6)
+
+                    if let message {
+                        Text(message)
+                            .font(DirtType.helper)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(DirtTheme.danger)
+                    }
+                    if let bootstrapError = supabase.bootstrapError {
+                        Text(bootstrapError)
+                            .font(DirtType.helper)
+                            .foregroundStyle(DirtTheme.danger)
+                    }
+
+                    if BuildChannel.showsTesterUnlock {
+                        testerFooter
+                    }
                 }
+                .padding(.horizontal, DirtSpace.group)
+                .padding(.top, DirtSpace.tight)
+                .padding(.bottom, DirtSpace.section)
             }
-            .padding(.horizontal, 18)
-            .padding(.top, 18)
-            .padding(.bottom, 24)
+            .scrollEdgeEffectStyle(.soft, for: .top)
+            .scrollEdgeEffectStyle(.soft, for: .bottom)
         }
-        .background(DirtTheme.sheet)
         .onAppear { displayName = supabase.displayName }
         .manageSubscriptionsSheet(isPresented: $showManageSubscriptions)
         .sheet(isPresented: $showPaywall) {
@@ -94,27 +79,74 @@ struct ProfileSheet: View {
                     showPaywall = false
                 }
             )
-            .presentationBackground(.clear)
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
+            .presentationBackground(DirtTheme.sheetMaterial)
         }
         .task { await subscription.refresh() }
+        .sheet(isPresented: $showCrossProvinceShare) {
+            if let url = crossProvinceReportURL {
+                ProfileShareSheet(items: [url])
+            }
+        }
     }
 
-    // MARK: - Header
+    // MARK: - Account
 
-    private var header: some View {
-        VStack(spacing: 6) {
-            Text("Profile")
-                .font(.dirtUI(20, weight: .heavy))
-                .foregroundStyle(DirtTheme.ink)
+    private var accountSection: some View {
+        VStack(alignment: .leading, spacing: DirtSpace.inner) {
             Text(signedInLine)
-                .font(.dirtMono(10, weight: .bold))
-                .tracking(1.4)
+                .font(DirtType.sectionLabel)
+                .tracking(1.1)
                 .foregroundStyle(DirtTheme.muted)
                 .textCase(.uppercase)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
+                .frame(maxWidth: .infinity)
+
+            if supabase.isSignedIn {
+                TextField("Screen name", text: $displayName)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .font(DirtType.rowTitle)
+                    .foregroundStyle(DirtTheme.ink)
+                    .padding(.horizontal, DirtSpace.row)
+                    .frame(minHeight: DirtHit.control)
+                    .background(DirtTheme.rowFill, in: RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous)
+                            .stroke(DirtTheme.hairline, lineWidth: 1)
+                    )
+
+                Button {
+                    Task {
+                        busy = true
+                        defer { busy = false }
+                        do {
+                            try await supabase.updateDisplayName(displayName)
+                            message = nil
+                            app.planner.toast = "Profile updated"
+                        } catch {
+                            message = "Couldn’t update your name. Try again."
+                        }
+                    }
+                } label: {
+                    Label("Save name", systemImage: "square.and.arrow.down")
+                }
+                .buttonStyle(DirtCTAStyle.brand(isLoading: busy))
+                .disabled(busy || displayName.trimmingCharacters(in: .whitespaces).isEmpty)
+            } else {
+                AppleSignInButton { result in
+                    if case let .success(credential) = result {
+                        Task {
+                            try? await supabase.signInWithApple(
+                                idToken: credential.idToken,
+                                rawNonce: credential.rawNonce,
+                                fullName: credential.fullName
+                            )
+                        }
+                    }
+                }
+            }
         }
-        .frame(maxWidth: .infinity)
     }
 
     private var signedInLine: String {
@@ -125,80 +157,22 @@ struct ProfileSheet: View {
         return "Signed in with Apple"
     }
 
-    // MARK: - Screen name
-
-    private var nameField: some View {
-        TextField("Screen name", text: $displayName)
-            .textInputAutocapitalization(.never)
-            .autocorrectionDisabled()
-            .font(.dirtUI(15, weight: .semibold))
-            .foregroundStyle(DirtTheme.ink)
-            .padding(.horizontal, 14)
-            .frame(height: 48)
-            .background(DirtTheme.wash)
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-    }
-
-    private var saveNameButton: some View {
-        Button {
-            Task {
-                busy = true
-                defer { busy = false }
-                do {
-                    try await supabase.updateDisplayName(displayName)
-                    message = nil
-                    app.planner.toast = "Profile updated"
-                } catch {
-                    message = "Your profile could not be updated."
-                }
-            }
-        } label: {
-            bigCTALabel("SAVE NAME", icon: "square.and.arrow.down", fill: DirtTheme.orange)
-        }
-        .disabled(busy || displayName.trimmingCharacters(in: .whitespaces).isEmpty)
-        .opacity(busy ? 0.6 : 1)
-    }
-
-    private var signOutButton: some View {
-        Button {
-            Task { try? await supabase.signOut() }
-        } label: {
-            bigCTALabel("SIGN OUT", icon: "rectangle.portrait.and.arrow.right", fill: DirtTheme.chrome)
-        }
-    }
-
-    // MARK: - Sign in fallback (map already gates on auth)
-
-    private var signInBlock: some View {
-        AppleSignInButton { result in
-            if case let .success(credential) = result {
-                Task {
-                    try? await supabase.signInWithApple(
-                        idToken: credential.idToken,
-                        rawNonce: credential.rawNonce,
-                        fullName: credential.fullName
-                    )
-                }
-            }
-        }
-    }
-
     // MARK: - DIRT PRO
 
     private var proCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: DirtSpace.inner) {
             HStack {
                 Text("DIRT PRO")
-                    .font(.dirtMono(11, weight: .bold))
-                    .tracking(1.2)
-                    .foregroundStyle(.white.opacity(0.7))
+                    .font(DirtType.sectionLabel)
+                    .tracking(1.1)
+                    .foregroundStyle(.white.opacity(0.72))
                 Spacer()
-                Text(subscription.isSubscribed ? "ACTIVE" : "NOT SUBSCRIBED")
-                    .font(.dirtMono(9, weight: .bold))
-                    .tracking(0.8)
-                    .foregroundStyle(subscription.isSubscribed ? .white : .white.opacity(0.8))
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 5)
+                Text(subscription.isSubscribed ? "Active" : "Not subscribed")
+                    .font(DirtType.chip)
+                    .fontWeight(.bold)
+                    .foregroundStyle(subscription.isSubscribed ? .white : .white.opacity(0.85))
+                    .padding(.horizontal, DirtSpace.inner)
+                    .padding(.vertical, DirtSpace.tight)
                     .background(subscription.isSubscribed ? DirtTheme.navGreen : .white.opacity(0.12))
                     .clipShape(Capsule())
             }
@@ -207,27 +181,24 @@ struct ProfileSheet: View {
                 Button {
                     showManageSubscriptions = true
                 } label: {
-                    Text("MANAGE SUBSCRIPTION")
-                        .font(.dirtUI(12, weight: .heavy))
+                    Text("Manage")
+                        .font(DirtType.cta)
                         .tracking(0.6)
                         .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 44)
-                        .background(.white.opacity(0.12))
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .frame(maxWidth: .infinity, minHeight: DirtHit.min)
+                        .background(.white.opacity(0.12), in: RoundedRectangle(cornerRadius: DirtRadius.chip, style: .continuous))
                 }
             } else {
                 Button {
                     showPaywall = true
                 } label: {
-                    Text("START 7-DAY FREE TRIAL")
-                        .font(.dirtUI(12, weight: .heavy))
+                    Text("Start free trial")
+                        .font(DirtType.cta)
+                        .textCase(.uppercase)
                         .tracking(0.6)
-                        .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 44)
-                        .background(DirtTheme.orange)
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .foregroundStyle(DirtTheme.onOrange)
+                        .frame(maxWidth: .infinity, minHeight: DirtHit.min)
+                        .background(DirtTheme.orange, in: RoundedRectangle(cornerRadius: DirtRadius.chip, style: .continuous))
                 }
             }
 
@@ -237,19 +208,119 @@ struct ProfileSheet: View {
                     app.planner.toast = subscription.isSubscribed ? "Subscription restored" : "No purchases found"
                 }
             }
-            .font(.dirtUI(11, weight: .semibold))
-            .foregroundStyle(.white.opacity(0.6))
-            .frame(maxWidth: .infinity)
+            .font(DirtType.helper)
+            .fontWeight(.semibold)
+            .foregroundStyle(.white.opacity(0.65))
+            .frame(maxWidth: .infinity, minHeight: DirtHit.min)
+            .contentShape(Rectangle())
         }
-        .padding(16)
-        .background(DirtTheme.chrome)
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .padding(DirtSpace.row)
+        .background(DirtTheme.chrome, in: RoundedRectangle(cornerRadius: DirtRadius.sheet - 6, style: .continuous))
+    }
+
+    // MARK: - Ride prefs
+
+    private var ridePrefsSection: some View {
+        VStack(spacing: DirtSpace.inner) {
+            fuelRangeCard
+            displayPrefsCard
+        }
+    }
+
+    private var fuelRangeCard: some View {
+        VStack(alignment: .leading, spacing: DirtSpace.inner) {
+            DirtSectionLabel(title: "Fuel range")
+            Toggle(
+                "Auto fuel stops while routing",
+                isOn: Binding(
+                    get: { fuelRangeKm > 0 },
+                    set: { on in
+                        fuelRangeKm = on ? max(FuelRangePrefs.suggestedDefaultKm, FuelRangePrefs.minimumKm) : 0
+                    }
+                )
+            )
+            .font(DirtType.rowTitle)
+            .tint(DirtTheme.orange)
+            if fuelRangeKm > 0 {
+                HStack(spacing: DirtSpace.inner) {
+                    Text("\(Int(fuelRangeKm)) km")
+                        .font(DirtType.metricInline)
+                        .foregroundStyle(DirtTheme.ink)
+                        .frame(minWidth: 56, alignment: .leading)
+                    Slider(
+                        value: $fuelRangeKm,
+                        in: FuelRangePrefs.minimumKm...FuelRangePrefs.maximumKm,
+                        step: 10
+                    )
+                    .tint(DirtTheme.orange)
+                    .accessibilityLabel("Kilometers per tank")
+                }
+            }
+        }
+        .padding(DirtSpace.row)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(DirtTheme.rowFill, in: RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous)
+                .stroke(DirtTheme.hairline, lineWidth: 1)
+        )
+        .onChange(of: fuelRangeKm) { _, newValue in
+            profileFuelDebounce?.cancel()
+            guard newValue > 0 else { return }
+            profileFuelDebounce = Task {
+                try? await Task.sleep(for: .seconds(2.5))
+                guard !Task.isCancelled else { return }
+                app.planner.reapplyFuelAssist()
+            }
+        }
+    }
+
+    private var displayPrefsCard: some View {
+        VStack(alignment: .leading, spacing: DirtSpace.inner) {
+            DirtSectionLabel(title: "Display")
+            Toggle("Keep device awake while using this app", isOn: $keepAwakeWhileUsing)
+                .font(DirtType.rowTitle)
+                .tint(DirtTheme.orange)
+            Text("Stops auto-lock while Dirt is open. Navigation keeps the screen on either way.")
+                .font(DirtType.helper)
+                .foregroundStyle(DirtTheme.muted)
+                .fixedSize(horizontal: false, vertical: true)
+            Toggle(
+                "Ask to contribute rides",
+                isOn: Binding(
+                    get: { TrackContributePrefs.isEnabled },
+                    set: {
+                        TrackContributePrefs.isEnabled = $0
+                        TrackContributePrefs.hasBeenAsked = true
+                    }
+                )
+            )
+            .font(DirtType.rowTitle)
+            .tint(DirtTheme.orange)
+            Text("After End navigation, optionally upload road segment ids (not GPS) to improve packs.")
+                .font(DirtType.helper)
+                .foregroundStyle(DirtTheme.muted)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(DirtSpace.row)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(DirtTheme.rowFill, in: RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous)
+                .stroke(DirtTheme.hairline, lineWidth: 1)
+        )
+        .onChange(of: keepAwakeWhileUsing) { _, _ in
+            KeepAwakePrefs.sync(
+                sceneActive: scenePhase == .active,
+                navigating: app.navigation.phase != .idle
+            )
+        }
     }
 
     // MARK: - About / legal
 
     private var aboutRows: some View {
-        VStack(spacing: 6) {
+        VStack(spacing: DirtSpace.tight) {
             Link(destination: LegalLinks.website) {
                 linkRow("Visit dirtmoto.app", systemImage: "globe")
             }
@@ -259,47 +330,212 @@ struct ProfileSheet: View {
             Link(destination: LegalLinks.termsOfUse) {
                 linkRow("Terms of use", systemImage: "doc.text.fill")
             }
+            Link(destination: LegalLinks.eula) {
+                linkRow("EULA", systemImage: "signature")
+            }
+            Link(destination: LegalLinks.subscriptions) {
+                linkRow("Subscriptions", systemImage: "creditcard.fill")
+            }
+            Link(destination: LegalLinks.support) {
+                linkRow("Support", systemImage: "questionmark.circle.fill")
+            }
         }
     }
 
     private func linkRow(_ title: String, systemImage: String) -> some View {
-        HStack {
+        HStack(spacing: DirtSpace.inner) {
             Image(systemName: systemImage)
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundStyle(DirtTheme.orange)
                 .frame(width: 24)
             Text(title)
-                .font(.dirtUI(14, weight: .semibold))
+                .font(DirtType.rowTitle)
                 .foregroundStyle(DirtTheme.ink)
             Spacer()
             Image(systemName: "arrow.up.right")
                 .font(.system(size: 11, weight: .bold))
                 .foregroundStyle(DirtTheme.muted)
         }
-        .padding(.horizontal, 14)
-        .frame(height: 46)
-        .background(.white)
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .padding(.horizontal, DirtSpace.row)
+        .frame(minHeight: DirtHit.min)
+        .background(DirtTheme.rowFill, in: RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(.black.opacity(0.07), lineWidth: 1)
+            RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous)
+                .stroke(DirtTheme.hairline, lineWidth: 1)
         )
     }
 
-    // MARK: - Pieces
+    // MARK: - Tester
 
-    private func bigCTALabel(_ title: String, icon: String, fill: Color) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: icon)
-                .font(.system(size: 14, weight: .bold))
-            Text(title)
-                .font(.dirtUI(13, weight: .heavy))
-                .tracking(0.8)
+    /// Collapsed and de-emphasised at the very bottom of Profile: on a tester build
+    /// everything above this line should look exactly like production.
+    private var testerFooter: some View {
+        VStack(spacing: 2) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) { testerToolsOpen.toggle() }
+            } label: {
+                Text("Tester")
+                    .font(.dirtUI(11, weight: .semibold))
+                    .tracking(0.6)
+                    .foregroundStyle(DirtTheme.muted.opacity(testerToolsOpen ? 0.9 : 0.45))
+                    .frame(maxWidth: .infinity, minHeight: 34)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Tester tools")
+            .accessibilityHint(testerToolsOpen ? "Hides tester tools" : "Shows tester tools")
+
+            if testerToolsOpen {
+                testerTools
+                    .transition(.opacity)
+            }
         }
-        .foregroundStyle(.white)
-        .frame(maxWidth: .infinity)
-        .frame(height: 50)
-        .background(fill)
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .padding(.top, DirtSpace.section)
     }
+
+    private var testerTools: some View {
+        VStack(alignment: .leading, spacing: DirtSpace.tight) {
+            VStack(alignment: .leading, spacing: 0) {
+                testerRow(
+                    app.debugBypassSubscription ? "Paywall skipped — turn back on" : "Skip as tester",
+                    tint: app.debugBypassSubscription ? DirtTheme.orange : DirtTheme.muted
+                ) {
+                    app.debugBypassSubscription.toggle()
+                    app.planner.toast = app.debugBypassSubscription
+                        ? "Paywall skipped until reinstall"
+                        : "Paywall armed"
+                }
+
+                testerRow("Replay first run", tint: DirtTheme.muted) {
+                    OnboardingPrefs.resetAll()
+                    app.trial.resetForTesting()
+                    app.debugBypassSubscription = false
+                    app.planner.toast = "Relaunch to replay the tour"
+                }
+
+                testerRow("Reset free Starts", tint: DirtTheme.muted) {
+                    app.trial.resetForTesting()
+                    app.planner.toast = "Two free Starts restored"
+                }
+            }
+
+            crossProvinceDiagnosticsCard
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var crossProvinceDiagnosticsCard: some View {
+        VStack(alignment: .leading, spacing: DirtSpace.inner) {
+            Text("Diagnostics")
+                .font(DirtType.sectionLabel)
+                .tracking(1.1)
+                .foregroundStyle(DirtTheme.muted)
+                .textCase(.uppercase)
+
+            Text("Writes a note on on-device pack limits for routes that cross a province line. Does not change your planned route.")
+                .font(DirtType.helper)
+                .foregroundStyle(DirtTheme.muted)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Button {
+                runCrossProvinceDebug()
+            } label: {
+                HStack(spacing: DirtSpace.inner) {
+                    if crossProvinceBusy {
+                        ProgressView()
+                            .controlSize(.small)
+                    }
+                    Text(crossProvinceBusy ? "Running cross-province debug…" : "Run cross-province route debug")
+                        .font(.dirtUI(13, weight: .semibold))
+                }
+                .frame(maxWidth: .infinity, minHeight: DirtHit.min, alignment: .leading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(crossProvinceBusy ? DirtTheme.muted : DirtTheme.orange)
+            .disabled(crossProvinceBusy)
+
+            if let crossProvinceStatus {
+                Text(crossProvinceStatus)
+                    .font(DirtType.helper)
+                    .foregroundStyle(DirtTheme.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
+            }
+
+            if crossProvinceReportURL != nil, !crossProvinceBusy {
+                Button("Share report…") {
+                    showCrossProvinceShare = true
+                }
+                .font(.dirtUI(13, weight: .semibold))
+                .foregroundStyle(DirtTheme.orange)
+                .frame(maxWidth: .infinity, minHeight: DirtHit.min, alignment: .leading)
+                .contentShape(Rectangle())
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(DirtSpace.row)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(DirtTheme.rowFill, in: RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous)
+                .stroke(DirtTheme.hairline, lineWidth: 1)
+        )
+    }
+
+    private func runCrossProvinceDebug() {
+        crossProvinceTask?.cancel()
+        crossProvinceBusy = true
+        crossProvinceStatus = "Writing pack-limit report…"
+        crossProvinceReportURL = nil
+        showCrossProvinceShare = false
+
+        crossProvinceTask = Task {
+            do {
+                let outcome = try await CrossProvinceRouteDebug.run { step in
+                    Task { @MainActor in
+                        crossProvinceStatus = "Running… \(step)"
+                    }
+                }
+                guard !Task.isCancelled else { return }
+                await MainActor.run {
+                    crossProvinceBusy = false
+                    crossProvinceReportURL = outcome.reportURL
+                    crossProvinceStatus =
+                        "Done · \(outcome.passCount) pass / \(outcome.failCount) fail\n"
+                        + "\(outcome.interpretation)\n"
+                        + outcome.reportURL.path
+                    showCrossProvinceShare = true
+                    app.planner.toast = "Cross-province report ready to share"
+                }
+            } catch {
+                guard !Task.isCancelled else { return }
+                await MainActor.run {
+                    crossProvinceBusy = false
+                    crossProvinceStatus = "Failed · \(error.localizedDescription)"
+                    app.planner.toast = "Cross-province debug failed"
+                }
+            }
+        }
+    }
+
+    private func testerRow(_ title: String, tint: Color, action: @escaping () -> Void) -> some View {
+        Button(title, action: action)
+            .font(.dirtUI(13, weight: .semibold))
+            .foregroundStyle(tint)
+            .frame(maxWidth: .infinity, minHeight: DirtHit.min, alignment: .leading)
+            .contentShape(Rectangle())
+            .buttonStyle(.plain)
+    }
+}
+
+/// Share sheet for diagnostic report files (AirDrop / Messages / Files).
+private struct ProfileShareSheet: UIViewControllerRepresentable {
+    let items: [Any]
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: items, applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }

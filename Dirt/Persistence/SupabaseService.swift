@@ -2,10 +2,8 @@ import Foundation
 import Observation
 import Supabase
 
-/// Wraps the Supabase Swift SDK against the same project the web POC uses.
-/// The client is created from the public `/api/supabase-config` endpoint so no
-/// key ships in the binary beyond what production already exposes. Sessions
-/// are persisted by the SDK's default secure (Keychain) storage.
+/// Supabase Swift SDK for Apple sign-in, profiles, and groups.
+/// Publishable key is the public anon key. Sessions live in Keychain.
 @Observable
 final class SupabaseService {
     private(set) var client: SupabaseClient?
@@ -24,39 +22,24 @@ final class SupabaseService {
 
     func bootstrap() async {
         guard client == nil else { return }
-        do {
-            let (data, _) = try await URLSession.shared.data(from: AppConfig.supabaseConfigURL)
-            struct RemoteConfig: Decodable {
-                let url: String
-                let publishableKey: String
-            }
-            let config = try JSONDecoder().decode(RemoteConfig.self, from: data)
-            guard let url = URL(string: config.url), !config.publishableKey.isEmpty else {
-                bootstrapError = "Supabase is not configured for this deployment."
-                return
-            }
-            let client = SupabaseClient(
-                supabaseURL: url,
-                supabaseKey: config.publishableKey,
-                options: SupabaseClientOptions(
-                    auth: .init(emitLocalSessionAsInitialSession: true)
-                )
+        let client = SupabaseClient(
+            supabaseURL: AppConfig.supabaseURL,
+            supabaseKey: AppConfig.supabasePublishableKey,
+            options: SupabaseClientOptions(
+                auth: .init(emitLocalSessionAsInitialSession: true)
             )
-            self.client = client
-            if let session = try? await client.auth.session, !session.isExpired {
-                apply(session: session)
-            }
-            Task {
-                for await change in client.auth.authStateChanges {
-                    // Local cache can emit an expired session first; ignore until refresh.
-                    if let session = change.session, session.isExpired {
-                        continue
-                    }
-                    apply(session: change.session)
+        )
+        self.client = client
+        if let session = try? await client.auth.session, !session.isExpired {
+            apply(session: session)
+        }
+        Task {
+            for await change in client.auth.authStateChanges {
+                if let session = change.session, session.isExpired {
+                    continue
                 }
+                apply(session: change.session)
             }
-        } catch {
-            bootstrapError = "Could not reach the DIRT account service."
         }
     }
 
@@ -74,7 +57,7 @@ final class SupabaseService {
         }
     }
 
-    // MARK: - Auth (email OTP, matching web)
+    // MARK: - Auth (email OTP, unused on iOS UI)
 
     func sendEmailCode(email: String, displayName: String) async throws {
         guard let client else { throw SupabaseServiceError.notReady }

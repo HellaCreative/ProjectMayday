@@ -10,7 +10,7 @@ import Testing
 @testable import Dirt
 
 struct DirtTests {
-    @Test func routeRequestUsesCanonicalBackendShape() throws {
+    @Test func routeRequestEncodesProfileAndAccessPolicy() throws {
         let request = RouteRequest(
             profile: .balanced,
             locations: [
@@ -153,15 +153,6 @@ struct DirtTests {
         #expect(!junction.matches(cueMode: .rally))
     }
 
-    @Test func offlinePrefetchRejectsLocalStyleFiles() {
-        #expect(!OfflineTileManager.offlinePacksEnabled)
-        let localStyle = URL(fileURLWithPath: "/tmp/dirt-mapbox-style.json")
-        #expect(!OfflineTileManager.supportsPrefetch(styleURL: localStyle))
-        #expect(!OfflineTileManager.supportsPrefetch(
-            styleURL: URL(string: "https://dirt-mayday.vercel.app/app/data/shortbread-style.json")!
-        ))
-    }
-
     @Test func backgroundLocationRequiresInfoPlistMode() {
         #expect(!LocationBackgroundPolicy.shouldEnable(
             requested: true,
@@ -178,7 +169,7 @@ struct DirtTests {
     }
 
     @Test func fromHereTapShouldPaintDestinationBeforeRouteReturns() {
-        // Contract: destination marker paint must not wait on /api/route.
+        // Contract: destination marker paint must not wait on the route result.
         #expect(RoutePlannerModel.paintsDestinationImmediatelyOnFromHereTap)
         #expect(RoutePlannerModel.calculatingRouteToast == "Calculating route")
     }

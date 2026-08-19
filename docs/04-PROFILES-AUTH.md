@@ -1,6 +1,6 @@
 # DIRT iOS — Profiles & Auth
 
-**Sign in with Apple is the only account path on iOS**, and it is a hard gate — the map never loads until there is an authenticated account with a screen name. A delayed 7-day trial paywall escalates on top of the map after signed-in usage. Spec: [WEB-SPEC-FOR-IOS.md](./WEB-SPEC-FOR-IOS.md) §4 Auth. Groups depend on this: [03-GROUPS.md](./03-GROUPS.md).
+**Sign in with Apple is the only account path on iOS**, and it is a hard gate — the map never loads until there is an authenticated account with a screen name. A delayed 7-day trial paywall escalates on top of the map after signed-in usage. Groups depend on this: [03-GROUPS.md](./03-GROUPS.md).
 
 > The email-OTP methods still live in `SupabaseService` (`sendEmailCode` / `verifyEmailCode`) as a backend fallback, but there is **no OTP UI** on iOS. All user-facing sign-in is Apple-only.
 
@@ -44,17 +44,11 @@ bootstrap (SplashView)
 
 On launch, `SupabaseService.bootstrap()`:
 
-1. `GET https://dirt-mayday.vercel.app/api/supabase-config`
-2. Expects `{ url, publishableKey }`
-3. Builds `SupabaseClient(supabaseURL:key:)`
-4. Loads existing `client.auth.session` if present
-5. Subscribes to `authStateChanges` and mirrors into `userID` / `email` / `displayName`
+1. Builds `SupabaseClient` from `AppConfig.supabaseURL` + `AppConfig.supabasePublishableKey`
+2. Loads existing `client.auth.session` if present
+3. Subscribes to `authStateChanges` and mirrors into `userID` / `email` / `displayName`
 
-No anon/publishable key is baked into the binary beyond what production already exposes via that endpoint.
-
-Default project URL (web repo / spec): `https://iiiguqknqxoumlmppzfw.supabase.co` — always prefer the config endpoint over hardcoding.
-
-`bootstrapError` surfaces in the Profile sheet if config fetch fails.
+The publishable key is the public anon key. It belongs in the client.
 
 ---
 
@@ -120,25 +114,25 @@ Name persist: `auth.update(user: data display_name)` then upsert `profiles { id,
 
 ---
 
-## Built vs web parity gaps
+## Current auth surface
 
-| Item | iOS | Web |
-| --- | --- | --- |
-| Sign in with Apple (gate before map) | Yes | No (web is email OTP) |
-| Email OTP UI | Removed (service methods retained) | Yes |
-| Session restore | Yes (SDK) | Yes |
-| Display name → auth metadata + `profiles` | Yes | Yes |
-| Sign out | Yes | Yes |
-| 7-day trial + StoreKit subscription | Yes | No |
-| Manage subscription / legal links | Yes | Partial |
-| Account deletion | No | No |
+| Item | iOS |
+| --- | --- |
+| Sign in with Apple (gate before map) | Yes |
+| Email OTP UI | Removed (service methods retained) |
+| Session restore | Yes (SDK) |
+| Display name → auth metadata + `profiles` | Yes |
+| Sign out | Yes |
+| 7-day trial + StoreKit subscription | Yes |
+| Manage subscription / legal links | Yes |
+| Account deletion | No |
 
 ---
 
 ## Starting a new agent on this area
 
 1. Read `AppGateView.swift`, `SupabaseService.swift`, then `ProfileSheet.swift` and the `Features/Subscription/` trio.
-2. Confirm profile upsert shape against [WEB-SPEC-FOR-IOS.md](./WEB-SPEC-FOR-IOS.md) §4.
-3. **Invariants:** fetch config from production endpoint; never ship a service-role key; the map stays gated behind Apple auth + screen name; the trial gate never interrupts active navigation; usage clock is on-device only; product IDs are `com.mayday.dirt.pro.{monthly,yearly}`.
+2. Confirm profile upsert writes `display_name` on the user and `profiles` row.
+3. **Invariants:** never ship a service-role key; the map stays gated behind Apple auth + screen name; the trial gate never interrupts active navigation; usage clock is on-device only; product IDs are `com.mayday.dirt.pro.{monthly,yearly}`.
 4. **External setup still required (not code):** enable Apple provider in Supabase; create the two subscription products in App Store Connect with a 7-day free-trial intro offer; register the real `dirtmoto.app` domain + reachable privacy/terms URLs before App Store review.
 5. **Open questions:** account deletion for App Store review; whether to show trial vs paid distinctly in Profile status.

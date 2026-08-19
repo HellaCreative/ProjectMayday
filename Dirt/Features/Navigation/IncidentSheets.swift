@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Report → recovery → confirm flow, presented over the map during navigation.
-/// Web parity: bottom sheets that never place route points and never replace
+/// Bottom sheets that never place route points and never replace
 /// the route without explicit confirmation.
 struct IncidentFlowOverlay: View {
     @Environment(AppEnvironment.self) private var app

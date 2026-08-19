@@ -10,12 +10,12 @@ Current native stack, project wiring, and the build/signing issues that already 
 | --- | --- | --- |
 | Language / UI | Swift + SwiftUI | `@Observable` composition; light colour scheme forced in `DirtApp` |
 | Map | MapLibre Native **6.28.0** (SPM) | `UIViewRepresentable` → `MLNMapView` |
-| Backend auth / DB | Supabase Swift **2.53.0** | Client built from remote config; Keychain session by SDK default |
+| Backend auth / DB | Supabase Swift **2.53.0** | Baked publishable config; Keychain session by SDK default |
 | Local routes | SwiftData | `SavedRoute` model only |
 | Location | Core Location | When-In-Use + Always escalate; `UIBackgroundModes = location` |
-| Networking | `URLSession` | Route POST + supabase-config GET |
+| Networking | `URLSession` | Live `/api/route` + R2 pack CDN + OSM Overpass + Supabase |
 
-No third-party nav SDK. No Capacitor. No WebView.
+No third-party nav SDK. MapLibre Native + SwiftUI.
 
 ---
 
@@ -25,11 +25,11 @@ Defined in `Dirt/Networking/AppConfig.swift`:
 
 | Constant | URL |
 | --- | --- |
-| `baseURL` | `https://dirt-mayday.vercel.app` |
-| `routeURL` | `…/api/route` |
-| `supabaseConfigURL` | `…/api/supabase-config` |
-| `mapStyleURL` | `…/app/data/shortbread-style.json` |
-| Idle camera | lat `45.1`, lon `-63.0`, zoom `7.25` |
+| `routeURL` | `https://dirt-mayday.vercel.app/api/route` (live routing API) |
+| `supabaseURL` | `https://iiiguqknqxoumlmppzfw.supabase.co` |
+| `packCDNBaseURL` | Cloudflare R2 `pub-eb539dc7777942b889388ebb4b701697.r2.dev` |
+| `overpassURL` | `https://overpass-api.de/api/interpreter` |
+| `mapStyleURL` | bundled `shortbread-style.json` |
 
 There is **no staging**. Do not introduce alternate hosts without an explicit product decision.
 
@@ -44,7 +44,7 @@ DirtTests/              # unit tests (bundle com.mayday.dirt.tests)
 DirtUITests/            # UI tests (bundle com.mayday.dirt.uitests)
 ExportOptions.plist     # app-store-connect export, team 34XM6B4G7A
 build/                  # gitignored; local archive lives here
-docs/                   # handoffs + WEB-SPEC
+docs/                   # iOS handoffs
 README_TESTFLIGHT.md
 ```
 
@@ -80,7 +80,7 @@ CLI recipes: [../README_TESTFLIGHT.md](../README_TESTFLIGHT.md).
 
 `Dirt/App/AppEnvironment.swift` owns:
 
-`LocationService` · `RoutingClient` · `SupabaseService` · `MapState` · `OfflineTileManager` · `NavigationSession` · `RoutePlannerModel` · `GroupsViewModel`
+`LocationService` · `OnDeviceRouter` · `GraphPackStore` · `SupabaseService` · `MapState` · `OfflineTileManager` · `NavigationSession` · `RoutePlannerModel` · `GroupsViewModel`
 
 Map tap / long-press callbacks are wired into the planner at init. `DirtApp` injects the environment and a SwiftData `ModelContainer` for `SavedRoute`.
 
@@ -93,7 +93,7 @@ Map tap / long-press callbacks are wired into the planner at init. `DirtApp` inj
 | `xcodebuild` simulator + generic device | Clean builds with SPM resolved from CLI |
 | Archive | Succeeded → `build/Dirt.xcarchive` |
 | Feature surface | Full dock + planner + nav + auth + groups shipped in `e2e790d` |
-| Backend reuse | Zero new servers; same `/api/route` + Supabase project as web |
+| Packs + auth | R2 graph packs + Supabase |
 
 ---
 
@@ -101,7 +101,7 @@ Map tap / long-press callbacks are wired into the planner at init. `DirtApp` inj
 
 ### 1. Workspace / path disconnect
 
-iOS lives under `MAYDAYiOS/Dirt`, not inside the Mayday web repo. Agents that stay rooted in Mayday will write docs or “fixes” in the wrong tree. Always confirm the open project path before editing.
+iOS lives under `MAYDAYiOS/Dirt`. Always confirm the open project path before editing.
 
 ### 2. Xcode GUI scheme + SPM resolution (`e98f6d4`)
 
@@ -125,5 +125,5 @@ Archive ≠ distributable IPA. Automatic signing without an App Store profile bl
 1. Read `Dirt/Networking/AppConfig.swift`, `Dirt/DirtApp.swift`, `Dirt/App/AppEnvironment.swift`.
 2. Skim `Dirt.xcodeproj/project.pbxproj` SPM sections + `Package.resolved` for pinned versions.
 3. Read [../README_TESTFLIGHT.md](../README_TESTFLIGHT.md) before touching signing or CI.
-4. **Invariants:** do not add a second backend host; do not reintroduce WebView/Capacitor; keep deployment target and bundle ID unless Rick asks; preserve shared `Dirt` scheme.
+4. **Invariants:** do not add a second backend host; keep deployment target and bundle ID unless Rick asks; preserve shared `Dirt` scheme.
 5. **Open questions:** whether to commit DerivedData-free CI scripts; ASC API key placement for non-interactive uploads.

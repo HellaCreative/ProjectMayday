@@ -11,7 +11,9 @@ struct PolylineProjection {
     let segmentIndex: Int
 }
 
-enum GeoMath {
+/// Pure geometry helpers — opted out of `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`
+/// so nav cues / on-device routing can call these off the main actor.
+nonisolated enum GeoMath {
     static func meters(_ a: RouteCoordinate, _ b: RouteCoordinate) -> Double {
         CLLocation(latitude: a.latitude, longitude: a.longitude)
             .distance(from: CLLocation(latitude: b.latitude, longitude: b.longitude))

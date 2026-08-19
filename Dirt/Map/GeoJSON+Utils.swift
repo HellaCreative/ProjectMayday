@@ -57,6 +57,8 @@ struct LayerPrefsSnapshot {
     let showONLines: Bool
     let showBCLines: Bool
     let showABLines: Bool
+    /// Local BC OSM full-hierarchy mbtiles (experiment), not the gov CDN lens.
+    let showBCOSMHierarchy: Bool
 
     init() {
         let ud = UserDefaults.standard
@@ -70,6 +72,7 @@ struct LayerPrefsSnapshot {
         showONLines     = ud.bool(forKey: "dirt.layers.network.on")
         showBCLines     = ud.bool(forKey: "dirt.layers.network.bc")
         showABLines     = ud.bool(forKey: "dirt.layers.network.ab")
+        showBCOSMHierarchy = ud.bool(forKey: BCOSMHierarchyOverlay.prefsKey)
     }
 
     var anyPOIEnabled: Bool { showFuel || showCampgrounds || showLodging || showLiquor }
@@ -77,7 +80,7 @@ struct LayerPrefsSnapshot {
         showNSLines || showNBLines || showQCLines || showONLines || showBCLines || showABLines
     }
 
-    /// Selected province for viewport-lens mode (HTML mutual exclusion). Nil = corridor-only.
+    /// Selected province for viewport-lens mode (one province at a time). Nil = corridor-only.
     var lensProvince: String? {
         if showNSLines { return "NS" }
         if showNBLines { return "NB" }

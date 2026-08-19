@@ -38,7 +38,7 @@ final class GraphPackStore {
     }
 
     private enum Prefs {
-        static let autoNext = "dirt.packs.autoDownloadNextRegion"
+        static let autoNext = "dirt.packs.autoDownloadNextRegion.v2"
         static let installed = "dirt.packs.installedRegionIds"
     }
 
@@ -85,7 +85,7 @@ final class GraphPackStore {
     var isQuietDownloadInFlight: Bool { !quietDownloadIds.isEmpty }
 
     init() {
-        autoDownloadNextRegion = UserDefaults.standard.object(forKey: Prefs.autoNext) as? Bool ?? true
+        autoDownloadNextRegion = UserDefaults.standard.object(forKey: Prefs.autoNext) as? Bool ?? false
         refreshInstalledFromDisk()
         Task { await refreshCatalog() }
     }
@@ -165,8 +165,29 @@ final class GraphPackStore {
         return needed.filter { publishedIds.contains($0) && !isInstalled($0) }
     }
 
+    /// Decoded pack for an installed region (active pack if it matches).
+    func packIfInstalled(_ regionId: String) -> GraphV2Pack? {
+        let id = regionId.lowercased()
+        if activePack?.regionId?.lowercased() == id { return activePack }
+        guard let graphURL = findGraphFileURL(regionId: id) else { return nil }
+        return Self.decodePack(
+            regionId: id,
+            graphURL: graphURL,
+            geometryURL: geometryFileURL(regionId: id)
+        )
+    }
+
     func isInstalled(_ regionId: String) -> Bool {
-        FileManager.default.fileExists(atPath: graphFileURL(regionId: regionId).path)
+        let id = regionId.lowercased()
+        if findGraphFileURL(regionId: id) != nil { return true }
+        // In-memory pack still counts while a manifest version folder is mid-migrate.
+        if activePack?.regionId?.lowercased() == id { return true }
+        return loadedRegionIds.contains { $0.lowercased() == id }
+    }
+
+    /// Absolute path of the on-disk graph when present (any manifest version folder).
+    func installedGraphPath(regionId: String) -> String? {
+        findGraphFileURL(regionId: regionId.lowercased())?.path
     }
 
     func isPublished(_ regionId: String) -> Bool {
@@ -189,7 +210,7 @@ final class GraphPackStore {
         }
     }
 
-    /// Rider-facing offline planning copy when live `/api/route` is unavailable.
+    /// Rider-facing copy when the needed pack is missing or the pins do not connect.
     func offlinePlanningMessage(for coordinates: [CLLocationCoordinate2D]) -> String {
         let needed = Self.regionIds(containingAny: coordinates)
         let installed = installedTitles()
@@ -204,12 +225,12 @@ final class GraphPackStore {
         }()
 
         if needed.isEmpty {
-            return "You’re offline and this pin isn’t in a known pack region. \(installedClause) Open PACKS on Wi‑Fi to download where you ride — or reconnect for live routing."
+            return "This pin isn’t in a known pack region. \(installedClause) Open PACKS on Wi‑Fi and download where you ride."
         }
 
         let missing = needed.filter { !isInstalled($0) }
         if missing.isEmpty {
-            return "You’re offline and on-device routing couldn’t connect those pins. \(installedClause) Try pins closer to roads, or reconnect for live routing."
+            return "On-device routing couldn’t connect those pins. \(installedClause) Try pins closer to roads."
         }
 
         let missingTitles = missing.map { displayTitle(forRegionId: $0) }
@@ -221,9 +242,9 @@ final class GraphPackStore {
             return "\(missingList) isn’t on this phone. \(installedClause) Connect to the internet and download \(missingList) from PACKS — or keep your pin inside a downloaded region."
         }
         if publishedMissing.isEmpty, !unpublishedMissing.isEmpty {
-            return "\(missingList) isn’t published for offline packs yet. \(installedClause) Plan inside a downloaded region offline, or reconnect for live routing."
+            return "\(missingList) isn’t published for offline packs yet. \(installedClause) Plan inside a downloaded region."
         }
-        return "Need \(missingList) for that pin. \(installedClause) Open PACKS when you have internet to download what’s published — or reconnect for live routing."
+        return "Need \(missingList) for that pin. \(installedClause) Open PACKS when you have internet to download what’s published."
     }
 
     func downloadRegion(_ regionId: String, quiet: Bool = false) {
@@ -242,6 +263,25 @@ final class GraphPackStore {
         }
     }
 
+    /// Fetch the Cloudflare R2 pack if missing, then wait. Same file PACKS installs.
+    /// Live Vercel is not a second fabric.
+    func ensureInstalled(_ regionId: String) async {
+        let id = regionId.lowercased()
+        if isInstalled(id) { return }
+        guard publishedIds.contains(id) else { return }
+        if let existing = downloadTasks[id] {
+            await existing.value
+            return
+        }
+        setInstall(id, .downloading(0.02))
+        let task = Task { [weak self] in
+            await self?.performDownload(regionId: id, asNavigationPrep: false, quiet: false)
+            self?.downloadTasks[id] = nil
+        }
+        downloadTasks[id] = task
+        await task.value
+    }
+
     func deleteRegion(_ regionId: String) {
         let id = regionId.lowercased()
         downloadTasks[id]?.cancel()
@@ -257,7 +297,8 @@ final class GraphPackStore {
         refreshInstalledFromDisk()
     }
 
-    /// Start Nav / mid-ride: activate an installed pack covering the corridor; download if missing.
+    /// Start Nav: activate an installed pack covering the corridor.
+    /// Missing packs are skipped — download from PACKS when you expect no signal.
     func prepareForNavigation(coordinates: [CLLocationCoordinate2D], keepExisting: Bool) {
         task?.cancel()
         // Prefer primary provinces (Kelowna → bc), not raw overlapping bboxes (ab+bc).
@@ -273,33 +314,34 @@ final class GraphPackStore {
             return
         }
 
-        if let preferred, isInstalled(preferred), let pack = loadPackFromDisk(regionId: preferred) {
-            activePack = pack
-            loadedRegionIds = [preferred]
-            phase = .ready
-            progress = 1
-            // Optionally prefetch neighbors when online + toggle on (caller may trigger).
+        if let preferred, isInstalled(preferred) {
+            if activePack?.regionId?.lowercased() == preferred {
+                phase = .ready
+                progress = 1
+                return
+            }
+            phase = .downloading
+            progress = 0
+            let region = preferred
+            task = Task { [weak self] in
+                guard let self else { return }
+                await self.ensureActivePackAsync(for: coordinates)
+                if self.activePack?.regionId?.lowercased() == region {
+                    self.phase = .ready
+                    self.progress = 1
+                } else if self.isInstalled(region) {
+                    // Coordinates may prefer a neighbor; still mark ready if pack activated.
+                    self.phase = self.activePack != nil ? .ready : .failed("Could not load \(region) pack")
+                    self.progress = 1
+                }
+            }
             return
         }
 
         let missing = missingPublishedRegions(for: coordinates)
-        guard let first = missing.first ?? preferred else {
-            phase = .skipped("No pack region for this corridor yet")
-            progress = 1
-            return
-        }
-
-        if !publishedIds.contains(first) {
-            phase = .skipped("No pack published for \(first)")
-            progress = 1
-            return
-        }
-
-        phase = .downloading
-        progress = 0
-        task = Task { [weak self] in
-            await self?.performDownload(regionId: first, asNavigationPrep: true)
-        }
+        let title = (missing.first ?? preferred).map { displayTitle(forRegionId: $0) } ?? "this region"
+        phase = .skipped("Download \(title) from PACKS for offline detours")
+        progress = 1
     }
 
     func cancel() {
@@ -326,8 +368,8 @@ final class GraphPackStore {
         profile: RouteProfile,
         allowUnknown: Bool,
         avoidEdgeIds: [String] = []
-    ) -> OnDeviceRouter.Result? {
-        switch routeOnDeviceDetailed(
+    ) async -> OnDeviceRouter.Result? {
+        switch await routeOnDeviceDetailed(
             from: from,
             to: to,
             profile: profile,
@@ -345,35 +387,200 @@ final class GraphPackStore {
         profile: RouteProfile,
         allowUnknown: Bool,
         avoidEdgeIds: [String] = []
-    ) -> Result<OnDeviceRouter.Result, OnDeviceRouter.Failure> {
-        ensureActivePack(for: [from, to])
-        guard let pack = activePack else { return .failure(.noPath) }
-        return OnDeviceRouter(pack: pack).routeDetailed(
+    ) async -> Result<OnDeviceRouter.Result, OnDeviceRouter.Failure> {
+        let fromId = Self.primaryRegionId(containing: from)
+        let toId = Self.primaryRegionId(containing: to)
+        if let fromId, let toId, fromId != toId,
+           isInstalled(fromId), isInstalled(toId),
+           Self.packsShareABorder(fromId, toId) {
+            return await routeOnDeviceChained(
+                from: from,
+                to: to,
+                left: fromId,
+                right: toId,
+                profile: profile,
+                allowUnknown: allowUnknown,
+                avoidEdgeIds: avoidEdgeIds
+            )
+        }
+        return await routeOnDeviceInRegion(
             from: from,
             to: to,
+            regionId: nil,
             profile: profile,
             allowUnknown: allowUnknown,
-            avoidEdgeIds: Set(avoidEdgeIds)
+            avoidEdgeIds: avoidEdgeIds
         )
     }
 
+    /// Two-pack hop: phone fabric on each side (stitches, tracks, Allow).
+    /// Each seed snaps independently onto both packs so the join can sit on
+    /// the last BC road and the first AB road instead of one shared coordinate.
+    private func routeOnDeviceChained(
+        from: CLLocationCoordinate2D,
+        to: CLLocationCoordinate2D,
+        left: String,
+        right: String,
+        profile: RouteProfile,
+        allowUnknown: Bool,
+        avoidEdgeIds: [String]
+    ) async -> Result<OnDeviceRouter.Result, OnDeviceRouter.Failure> {
+        let seeds = CrossPackSeam.candidates(from: from, to: to, left: left, right: right)
+        var lastFailure: OnDeviceRouter.Failure = .noPath
+        for seed in seeds {
+            await activateInstalledPack(regionId: left)
+            guard let leftPack = activePack else { return .failure(.noPath) }
+            let leftSeam = await Task.detached(priority: .userInitiated) {
+                OnDeviceRouter(pack: leftPack).nearestRoadCoordinate(
+                    to: seed, allowUnknown: false, profile: .direct, osmCoreOnly: true
+                ) ?? seed
+            }.value
+
+            await activateInstalledPack(regionId: right)
+            guard let rightPack = activePack else { return .failure(.noPath) }
+            let rightSeam = await Task.detached(priority: .userInitiated) {
+                OnDeviceRouter(pack: rightPack).nearestRoadCoordinate(
+                    to: seed, allowUnknown: false, profile: .direct, osmCoreOnly: true
+                ) ?? seed
+            }.value
+
+            let gap = CLLocation(latitude: leftSeam.latitude, longitude: leftSeam.longitude)
+                .distance(from: CLLocation(latitude: rightSeam.latitude, longitude: rightSeam.longitude))
+            if gap > 25_000 { continue }
+
+            let hop1 = await routeOnDeviceInRegion(
+                from: from, to: leftSeam, regionId: left,
+                profile: profile, allowUnknown: allowUnknown, avoidEdgeIds: avoidEdgeIds
+            )
+            guard case .success(let first) = hop1, first.coordinates.count > 1 else {
+                if case .failure(let reason) = hop1 { lastFailure = reason }
+                continue
+            }
+
+            let hop2 = await routeOnDeviceInRegion(
+                from: rightSeam, to: to, regionId: right,
+                profile: profile, allowUnknown: allowUnknown, avoidEdgeIds: avoidEdgeIds
+            )
+            guard case .success(let second) = hop2, second.coordinates.count > 1 else {
+                if case .failure(let reason) = hop2 { lastFailure = reason }
+                continue
+            }
+
+            guard let merged = OnDeviceRouter.Result.concatenating([first, second]) else {
+                lastFailure = .noPath
+                continue
+            }
+            return .success(merged)
+        }
+        return .failure(lastFailure)
+    }
+
+    private func routeOnDeviceInRegion(
+        from: CLLocationCoordinate2D,
+        to: CLLocationCoordinate2D,
+        regionId: String?,
+        profile: RouteProfile,
+        allowUnknown: Bool,
+        avoidEdgeIds: [String]
+    ) async -> Result<OnDeviceRouter.Result, OnDeviceRouter.Failure> {
+        if let regionId {
+            await activateInstalledPack(regionId: regionId)
+        } else {
+            await ensureActivePackAsync(for: [from, to])
+        }
+        guard let pack = activePack else { return .failure(.noPath) }
+        let avoid = Set(avoidEdgeIds)
+        let packRef = pack
+        let start = from
+        let end = to
+        let routeProfile = profile
+        let allow = allowUnknown
+        return await Task.detached(priority: .userInitiated) {
+            OnDeviceRouter(pack: packRef).routeDetailed(
+                from: start,
+                to: end,
+                profile: routeProfile,
+                allowUnknown: allow,
+                avoidEdgeIds: avoid
+            )
+        }.value
+    }
+
+    /// Canada land/bridge neighbours, plus bbox-touch for US / Canada–US.
+    static func packsShareABorder(_ left: String, _ right: String) -> Bool {
+        let a = left.lowercased()
+        let b = right.lowercased()
+        if a == b { return true }
+        let canada: [String: [String]] = [
+            "bc": ["ab", "yt", "nt"],
+            "ab": ["bc", "sk", "nt"],
+            "sk": ["ab", "mb", "nt"],
+            "mb": ["sk", "on", "nu"],
+            "on": ["mb", "qc"],
+            "qc": ["on", "nb", "nl"],
+            "nb": ["qc", "ns", "pe"],
+            "ns": ["nb"],
+            "pe": ["nb"],
+            "nl": ["qc"],
+            "yt": ["bc", "nt"],
+            "nt": ["yt", "bc", "ab", "sk", "nu"],
+            "nu": ["nt", "mb"]
+        ]
+        if canada[a]?.contains(b) == true { return true }
+        if usStateBounds[a] != nil || usStateBounds[b] != nil {
+            guard let boxA = bbox(forRegionId: a), let boxB = bbox(forRegionId: b) else {
+                return false
+            }
+            let pad = 0.15
+            return !(boxA.2 + pad < boxB.0 || boxB.2 + pad < boxA.0
+                || boxA.3 + pad < boxB.1 || boxB.3 + pad < boxA.1)
+        }
+        return false
+    }
+
+    /// Distance to nearest **routable** pack road, or nil if none within snap radius.
+    /// Unknown tracks are skipped unless `allowUnknown` (same policy as route snap).
+    /// Runs off MainActor so BC’s large packs cannot freeze toast paint / map gestures.
+    func distanceToNearestRoad(
+        from coordinate: CLLocationCoordinate2D,
+        allowUnknown: Bool = false,
+        profile: RouteProfile = .balanced
+    ) async -> Double? {
+        await ensureActivePackAsync(for: [coordinate])
+        guard let pack = activePack else { return nil }
+        let packRef = pack
+        let allow = allowUnknown
+        let routeProfile = profile
+        let point = coordinate
+        return await Task.detached(priority: .userInitiated) {
+            OnDeviceRouter(pack: packRef).distanceToNearestRoad(
+                from: point,
+                allowUnknown: allow,
+                profile: routeProfile
+            )
+        }.value
+    }
+
+    /// Prefetch the installed pack covering this coordinate so the first pin
+    /// does not pay decode latency on the routing critical path.
+    func warmupActivePack(near coordinate: CLLocationCoordinate2D) async {
+        await ensureActivePackAsync(for: [coordinate])
+    }
+
     /// When online, fetch missing `geometry.v1` for installed regions before paint.
+    /// Missing sidecars top up in the background — do not block Allow / profile reroutes
+    /// on a second Cloudflare pull. Chord paint is enough until shapes land.
     func ensureRoadShapes(for coordinates: [CLLocationCoordinate2D]) async {
         let ids = Set(Self.regionIds(containingAny: coordinates).filter { isInstalled($0) })
         for id in ids {
             let geomPath = geometryFileURL(regionId: id).path
             if FileManager.default.fileExists(atPath: geomPath) {
-                if activePack?.regionId?.lowercased() == id, activePack?.geometry == nil,
-                   let pack = loadPackFromDisk(regionId: id) {
-                    activePack = pack
+                if activePack?.regionId?.lowercased() == id, activePack?.geometry == nil {
+                    await activateInstalledPack(regionId: id)
                 }
                 continue
             }
-            await downloadNamedFile(regionId: id, fileName: "geometry.v1.bin")
-            if let pack = loadPackFromDisk(regionId: id) {
-                activePack = pack
-                if !loadedRegionIds.contains(id) { loadedRegionIds.append(id) }
-            }
+            maybeTopUpGeometry(regionId: id)
         }
     }
 
@@ -412,33 +619,33 @@ final class GraphPackStore {
             .init(id: "mb", title: "Manitoba", subtitle: "Prairie / shield", approxBytes: 19_000_000, install: .unavailable, country: .canada),
             .init(id: "sk", title: "Saskatchewan", subtitle: "Prairie", approxBytes: 29_000_000, install: .unavailable, country: .canada),
             .init(id: "ab", title: "Alberta", subtitle: "Fresh OSM + Access Roads", approxBytes: 85_000_000, install: .unavailable, country: .canada),
-            .init(id: "bc", title: "British Columbia", subtitle: "OSM + DRA resource/trail · mountains & coast", approxBytes: 148_000_000, install: .unavailable, country: .canada),
-            .init(id: "nl", title: "Newfoundland and Labrador", subtitle: "Atlantic", approxBytes: 13_000_000, install: .unavailable, country: .canada),
+            .init(id: "bc", title: "British Columbia", subtitle: "OSM highway → ATV/track · mountains & coast", approxBytes: 148_000_000, install: .unavailable, country: .canada),
+            .init(id: "nl", title: "Newfoundland and Labrador", subtitle: "OSM + FFA Resource Roads", approxBytes: 22_385_478, install: .unavailable, country: .canada),
             .init(id: "yt", title: "Yukon", subtitle: "North", approxBytes: 3_000_000, install: .unavailable, country: .canada),
             .init(id: "nt", title: "Northwest Territories", subtitle: "North", approxBytes: 3_000_000, install: .unavailable, country: .canada),
             .init(id: "nu", title: "Nunavut", subtitle: "North", approxBytes: 2_000_000, install: .unavailable, country: .canada)
         ]
-        let us: [(String, String)] = [
-            ("al", "Alabama"), ("ak", "Alaska"), ("az", "Arizona"), ("ar", "Arkansas"),
-            ("ca", "California"), ("co", "Colorado"), ("ct", "Connecticut"), ("de", "Delaware"),
-            ("fl", "Florida"), ("ga", "Georgia"), ("hi", "Hawaii"), ("id", "Idaho"),
-            ("il", "Illinois"), ("in", "Indiana"), ("ia", "Iowa"), ("ks", "Kansas"),
-            ("ky", "Kentucky"), ("la", "Louisiana"), ("me", "Maine"), ("md", "Maryland"),
-            ("ma", "Massachusetts"), ("mi", "Michigan"), ("mn", "Minnesota"), ("ms", "Mississippi"),
-            ("mo", "Missouri"), ("mt", "Montana"), ("ne", "Nebraska"), ("nv", "Nevada"),
-            ("nh", "New Hampshire"), ("nj", "New Jersey"), ("nm", "New Mexico"), ("ny", "New York"),
-            ("nc", "North Carolina"), ("nd", "North Dakota"), ("oh", "Ohio"), ("ok", "Oklahoma"),
-            ("or", "Oregon"), ("pa", "Pennsylvania"), ("ri", "Rhode Island"), ("sc", "South Carolina"),
-            ("sd", "South Dakota"), ("tn", "Tennessee"), ("tx", "Texas"), ("ut", "Utah"),
-            ("vt", "Vermont"), ("va", "Virginia"), ("wa", "Washington"), ("wv", "West Virginia"),
-            ("wi", "Wisconsin"), ("wy", "Wyoming")
+        let us: [(String, String, Int64)] = [
+            ("al", "Alabama", 99252068), ("ak", "Alaska", 15983907), ("az", "Arizona", 121010897), ("ar", "Arkansas", 69446135),
+            ("ca", "California", 244199538), ("co", "Colorado", 114113249), ("ct", "Connecticut", 52608872), ("de", "Delaware", 13537231),
+            ("fl", "Florida", 120762739), ("ga", "Georgia", 167294463), ("hi", "Hawaii", 10873477), ("id", "Idaho", 72786166),
+            ("il", "Illinois", 151287100), ("in", "Indiana", 116302988), ("ia", "Iowa", 55837212), ("ks", "Kansas", 67554405),
+            ("ky", "Kentucky", 100264936), ("la", "Louisiana", 62109940), ("me", "Maine", 39266092), ("md", "Maryland", 83840404),
+            ("ma", "Massachusetts", 90608647), ("mi", "Michigan", 157694424), ("mn", "Minnesota", 91067488), ("ms", "Mississippi", 56275764),
+            ("mo", "Missouri", 128190467), ("mt", "Montana", 55927395), ("ne", "Nebraska", 43248777), ("nv", "Nevada", 68412194),
+            ("nh", "New Hampshire", 36822888), ("nj", "New Jersey", 79525284), ("nm", "New Mexico", 63689894), ("ny", "New York", 150764306),
+            ("nc", "North Carolina", 60514508), ("nd", "North Dakota", 41562516), ("oh", "Ohio", 75789992), ("ok", "Oklahoma", 84001469),
+            ("or", "Oregon", 116478694), ("pa", "Pennsylvania", 96295912), ("ri", "Rhode Island", 12129227), ("sc", "South Carolina", 89943638),
+            ("sd", "South Dakota", 28660212), ("tn", "Tennessee", 111948468), ("tx", "Texas", 215225269), ("ut", "Utah", 66130822),
+            ("vt", "Vermont", 21195470), ("va", "Virginia", 176209640), ("wa", "Washington", 137352437), ("wv", "West Virginia", 45884796),
+            ("wi", "Wisconsin", 109146683), ("wy", "Wyoming", 43861302)
         ]
-        for (id, title) in us {
+        for (id, title, bytes) in us {
             rows.append(.init(
                 id: id,
                 title: title,
-                subtitle: "United States · coming later",
-                approxBytes: 20_000_000,
+                subtitle: "OSM · United States",
+                approxBytes: bytes,
                 install: .unavailable,
                 country: .unitedStates
             ))
@@ -479,9 +686,7 @@ final class GraphPackStore {
             }
             return copy
         }
-        if activePack == nil, let first = loadedRegionIds.first {
-            activePack = loadPackFromDisk(regionId: first)
-        }
+        // Packs decode off MainActor via `ensureActivePackAsync` when routing starts.
     }
 
     private func setInstall(_ id: String, _ state: InstallState) {
@@ -500,14 +705,41 @@ final class GraphPackStore {
     }
 
     private func graphFileURL(regionId: String) -> URL {
-        // Prefer current manifest version folder; also accept legacy v1 path.
-        let primary = regionDir(regionId: regionId).appendingPathComponent("graph.v2.bin")
-        if FileManager.default.fileExists(atPath: primary.path) { return primary }
+        if let found = findGraphFileURL(regionId: regionId) { return found }
+        // Destination for a fresh download into the current manifest version.
+        return regionDir(regionId: regionId).appendingPathComponent("graph.v2.bin")
+    }
+
+    /// Locate `graph.v2.bin` across manifest version folders. A catalog refresh that
+    /// bumps `lastManifestVersion` must not pretend the pack vanished.
+    private func findGraphFileURL(regionId: String) -> URL? {
+        let id = regionId.lowercased()
+        let fm = FileManager.default
+        let primary = regionDir(regionId: id).appendingPathComponent("graph.v2.bin")
+        if fm.fileExists(atPath: primary.path) { return primary }
+
         let legacy = cacheRoot
             .appendingPathComponent("v1", isDirectory: true)
-            .appendingPathComponent(regionId.lowercased(), isDirectory: true)
+            .appendingPathComponent(id, isDirectory: true)
             .appendingPathComponent("graph.v2.bin")
-        return legacy
+        if fm.fileExists(atPath: legacy.path) { return legacy }
+
+        guard let versions = try? fm.contentsOfDirectory(
+            at: cacheRoot,
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: [.skipsHiddenFiles]
+        ) else { return nil }
+
+        for versionURL in versions {
+            var isDir: ObjCBool = false
+            guard fm.fileExists(atPath: versionURL.path, isDirectory: &isDir), isDir.boolValue
+            else { continue }
+            let candidate = versionURL
+                .appendingPathComponent(id, isDirectory: true)
+                .appendingPathComponent("graph.v2.bin")
+            if fm.fileExists(atPath: candidate.path) { return candidate }
+        }
+        return nil
     }
 
     private static let phonePackFileNames: Set<String> = [
@@ -516,52 +748,70 @@ final class GraphPackStore {
     ]
 
     private func geometryFileURL(regionId: String) -> URL {
-        let primary = regionDir(regionId: regionId).appendingPathComponent("geometry.v1.bin")
-        if FileManager.default.fileExists(atPath: primary.path) { return primary }
-        return cacheRoot
+        let id = regionId.lowercased()
+        let fm = FileManager.default
+        let primary = regionDir(regionId: id).appendingPathComponent("geometry.v1.bin")
+        if fm.fileExists(atPath: primary.path) { return primary }
+        let legacy = cacheRoot
             .appendingPathComponent("v1", isDirectory: true)
-            .appendingPathComponent(regionId.lowercased(), isDirectory: true)
+            .appendingPathComponent(id, isDirectory: true)
             .appendingPathComponent("geometry.v1.bin")
+        if fm.fileExists(atPath: legacy.path) { return legacy }
+        if let graph = findGraphFileURL(regionId: id) {
+            let sibling = graph.deletingLastPathComponent().appendingPathComponent("geometry.v1.bin")
+            if fm.fileExists(atPath: sibling.path) { return sibling }
+        }
+        return regionDir(regionId: id).appendingPathComponent("geometry.v1.bin")
     }
 
-    private func loadPackFromDisk(regionId: String) -> GraphV2Pack? {
-        let url = graphFileURL(regionId: regionId)
-        guard let data = try? Data(contentsOf: url, options: [.mappedIfSafe]),
+    /// Decode pack binaries. Safe to call from a background task.
+    nonisolated private static func decodePack(
+        regionId: String,
+        graphURL: URL,
+        geometryURL: URL
+    ) -> GraphV2Pack? {
+        guard let data = try? Data(contentsOf: graphURL, options: [.mappedIfSafe]),
               let pack = try? GraphV2Pack(data: data) else { return nil }
         if pack.regionId == nil { pack.regionId = regionId }
-        let geomURL = geometryFileURL(regionId: regionId)
-        if FileManager.default.fileExists(atPath: geomURL.path),
-           let geomData = try? Data(contentsOf: geomURL, options: [.mappedIfSafe]),
+        if FileManager.default.fileExists(atPath: geometryURL.path),
+           let geomData = try? Data(contentsOf: geometryURL, options: [.mappedIfSafe]),
            let geom = try? GeometryV1Pack(data: geomData) {
             pack.geometry = geom
         }
         return pack
     }
 
-    private func ensureActivePack(for coordinates: [CLLocationCoordinate2D]) {
+    /// Load / switch the active pack off MainActor so toast + map gestures stay live.
+    private func ensureActivePackAsync(for coordinates: [CLLocationCoordinate2D]) async {
         let needed = Self.preferredRegionOrder(for: coordinates)
-        // Always prefer the primary province for these pins (bc before ab in Okanagan).
-        if let preferred = needed.first(where: { isInstalled($0) }) {
-            if activePack?.regionId?.lowercased() == preferred {
-                if activePack?.geometry == nil {
-                    maybeTopUpGeometry(regionId: preferred)
-                }
-                return
+        let preferred = needed.first(where: { isInstalled($0) }) ?? loadedRegionIds.first
+        guard let preferred else { return }
+        await activateInstalledPack(regionId: preferred)
+    }
+
+    private func activateInstalledPack(regionId: String) async {
+        let preferred = regionId.lowercased()
+        guard isInstalled(preferred) else { return }
+
+        if activePack?.regionId?.lowercased() == preferred {
+            if activePack?.geometry == nil {
+                maybeTopUpGeometry(regionId: preferred)
             }
-            if let pack = loadPackFromDisk(regionId: preferred) {
-                activePack = pack
-                loadedRegionIds = Array(Set(loadedRegionIds + [preferred]))
-                if pack.geometry == nil {
-                    maybeTopUpGeometry(regionId: preferred)
-                }
-                return
-            }
+            return
         }
-        if let any = loadedRegionIds.first, let pack = loadPackFromDisk(regionId: any) {
-            activePack = pack
-            if pack.geometry == nil {
-                maybeTopUpGeometry(regionId: any)
-            }
+
+        let graphURL = graphFileURL(regionId: preferred)
+        let geometryURL = geometryFileURL(regionId: preferred)
+        // Let SwiftUI paint “Calculating route” before we touch disk.
+        await Task.yield()
+        let pack = await Task.detached(priority: .userInitiated) {
+            Self.decodePack(regionId: preferred, graphURL: graphURL, geometryURL: geometryURL)
+        }.value
+        guard let pack else { return }
+        activePack = pack
+        loadedRegionIds = Array(Set(loadedRegionIds + [preferred]))
+        if pack.geometry == nil {
+            maybeTopUpGeometry(regionId: preferred)
         }
     }
 
@@ -583,9 +833,7 @@ final class GraphPackStore {
         downloadTasks["\(id)-geom"] = Task { [weak self] in
             await self?.downloadNamedFile(regionId: id, fileName: "geometry.v1.bin")
             self?.downloadTasks["\(id)-geom"] = nil
-            if let pack = self?.loadPackFromDisk(regionId: id) {
-                self?.activePack = pack
-            }
+            await self?.activateInstalledPack(regionId: id)
         }
     }
 
@@ -700,12 +948,7 @@ final class GraphPackStore {
             }
 
             setInstall(regionId, .installed)
-            if let pack = loadPackFromDisk(regionId: regionId) {
-                activePack = pack
-                if !loadedRegionIds.contains(regionId) {
-                    loadedRegionIds.append(regionId)
-                }
-            }
+            await activateInstalledPack(regionId: regionId)
             if asNavigationPrep {
                 progress = 1
                 phase = .ready
@@ -728,7 +971,8 @@ final class GraphPackStore {
     }
 
     /// Bounding-box → region ids we support (corridor / nav prep).
-    /// AB/BC rectangles intentionally overlap (continental divide ≠ 120°W south of 54°N).
+    /// Keep Maritimes rectangles aligned with `routing/regional/select.js` REGION_BBOX
+    /// (Halifax must not be NB; Moncton must not be NS).
     static func regionIds(covering coordinates: [CLLocationCoordinate2D]) -> [String] {
         guard !coordinates.isEmpty else { return [] }
         let lats = coordinates.map(\.latitude)
@@ -738,21 +982,31 @@ final class GraphPackStore {
         else { return [] }
 
         var ids: [String] = []
+        // W,S,E,N — match select.js REGION_BBOX.
         if maxLat >= 43.3, minLat <= 47.2, maxLon >= -66.6, minLon <= -59.5 { ids.append("ns") }
-        if maxLat >= 44.2, minLat <= 48.2, maxLon >= -69.3, minLon <= -63.5 { ids.append("nb") }
-        if maxLat >= 45.8, minLat <= 47.2, maxLon >= -64.5, minLon <= -61.9 { ids.append("pe") }
+        if maxLat >= 44.5, minLat <= 48.2, maxLon >= -69.3, minLon <= -63.8 { ids.append("nb") }
+        if maxLat >= 45.8, minLat <= 47.2, maxLon >= -64.6, minLon <= -61.9 { ids.append("pe") }
         if maxLat >= 46.5, minLat <= 60.5, maxLon >= -67.9, minLon <= -52.5 { ids.append("nl") }
-        if maxLat >= 44.8, minLat <= 50.5, maxLon >= -74.8, minLon <= -63.5 { ids.append("qc") }
-        if maxLat >= 41.5, minLat <= 57.0, maxLon >= -95.2, minLon <= -74.3 { ids.append("on") }
-        if maxLat >= 48.8, minLat <= 60.0, maxLon >= -102.1, minLon <= -88.9 { ids.append("mb") }
-        if maxLat >= 48.9, minLat <= 60.0, maxLon >= -110.1, minLon <= -101.3 { ids.append("sk") }
-        if maxLat >= 48.9, minLat <= 60.0, maxLon >= -120.1, minLon <= -109.9 { ids.append("ab") }
+        if maxLat >= 44.9, minLat <= 62.7, maxLon >= -79.8, minLon <= -57.0 { ids.append("qc") }
+        if maxLat >= 41.6, minLat <= 56.9, maxLon >= -95.2, minLon <= -74.3 { ids.append("on") }
+        if maxLat >= 48.9, minLat <= 60.1, maxLon >= -102.1, minLon <= -95.0 { ids.append("mb") }
+        if maxLat >= 48.9, minLat <= 60.1, maxLon >= -110.1, minLon <= -101.3 { ids.append("sk") }
+        if maxLat >= 48.9, minLat <= 60.1, maxLon >= -120.1, minLon <= -109.9 { ids.append("ab") }
         if maxLat >= 48.2, minLat <= 60.1, maxLon >= -139.1, minLon <= -114.0 { ids.append("bc") }
+        if maxLat >= 59.8, minLat <= 69.7, maxLon >= -141.1, minLon <= -123.8 { ids.append("yt") }
+        if maxLat >= 60.0, minLat <= 78.8, maxLon >= -136.5, minLon <= -102.0 { ids.append("nt") }
+        if maxLat >= 51.6, minLat <= 83.2, maxLon >= -120.9, minLon <= -60.9 { ids.append("nu") }
+        for (id, bounds) in usStateBounds {
+            let (west, south, east, north) = bounds
+            if maxLat >= south, minLat <= north, maxLon >= west, minLon <= east {
+                ids.append(id)
+            }
+        }
         return ids
     }
 
     /// Union of per-point **primary** regions (planning pins).
-    /// Overlapping bbox hits resolve via `primaryRegionId` (web `select.js` parity).
+    /// Overlapping bbox hits resolve via `primaryRegionId`.
     static func regionIds(containingAny coordinates: [CLLocationCoordinate2D]) -> [String] {
         var ordered: [String] = []
         for coordinate in coordinates {
@@ -762,9 +1016,8 @@ final class GraphPackStore {
         return ordered
     }
 
-    /// Prefer the correct province when a coordinate sits in overlapping bboxes.
-    /// Mirrors `routing/regional/select.js` `primaryRegionForPoint` — especially AB/BC,
-    /// where Alberta’s smaller bbox must not steal Kelowna / the Okanagan / Kootenays.
+    /// Prefer the correct province/state when a coordinate sits in overlapping bboxes.
+    /// Mirrors `routing/regional/select.js` `primaryRegionForPoint`.
     static func primaryRegionId(containing coordinate: CLLocationCoordinate2D) -> String? {
         let hits = Set(regionIds(covering: [coordinate]))
         guard !hits.isEmpty else { return nil }
@@ -779,8 +1032,47 @@ final class GraphPackStore {
             return lon < -116.4 ? "bc" : "ab"
         }
 
+        // Canada↔US — BC/AB rectangles overlap northern US; prefer the 49th parallel.
+        if hits.contains("bc"), hits.contains("wa") { return lat >= 49.0 ? "bc" : "wa" }
+        if hits.contains("bc"), hits.contains("id") { return lat >= 49.0 ? "bc" : "id" }
+        if hits.contains("ab"), hits.contains("mt") { return lat >= 49.0 ? "ab" : "mt" }
+        if hits.contains("sk"), hits.contains("mt") { return lat >= 49.0 ? "sk" : "mt" }
+        if hits.contains("sk"), hits.contains("nd") { return lat >= 49.0 ? "sk" : "nd" }
+        if hits.contains("mb"), hits.contains("nd") { return lat >= 49.0 ? "mb" : "nd" }
+        if hits.contains("mb"), hits.contains("mn") { return lat >= 49.0 ? "mb" : "mn" }
+        if hits.contains("nb"), hits.contains("me") {
+            return lon <= -67.78 ? "me" : "nb"
+        }
+
+        // QC↔US — 45th for NY/VT/NH; Maine's rectangle must not steal Beauce.
+        if hits.contains("qc"), hits.contains("ny") { return lat >= 45.01 ? "qc" : "ny" }
+        if hits.contains("qc"), hits.contains("vt") { return lat >= 45.01 ? "qc" : "vt" }
+        if hits.contains("qc"), hits.contains("nh") { return lat >= 45.01 ? "qc" : "nh" }
+        if hits.contains("qc"), hits.contains("me") {
+            if lon <= -70.55 { return "qc" }
+            if lat >= 47.35, lon <= -69.05 { return "qc" }
+            return "me"
+        }
+
+        // ON↔US — Niagara / St. Lawrence / Detroit River (pack id, not a scenic funnel).
+        if hits.contains("on"), hits.contains("ny") {
+            if lat < 43.9, lon > -79.12 { return "ny" }
+            if lat < 44.3, lon > -76.5 { return "ny" }
+            return "on"
+        }
+        if hits.contains("on"), hits.contains("mi") {
+            if lat < 42.55 { return lon <= -83.045 ? "mi" : "on" }
+            if lat < 43.2 { return lon <= -82.42 ? "mi" : "on" }
+            return "on"
+        }
+
         if hits.contains("on"), hits.contains("mb") {
             return lon < -95.15 ? "mb" : "on"
+        }
+        // ON vs MN — MN's NE rectangle covers Thunder Bay / north of Pigeon River (ON).
+        if hits.contains("on"), hits.contains("mn") {
+            if lat >= 48.05, lon >= -91.5 { return "on" }
+            return "mn"
         }
         if hits.contains("mb"), hits.contains("sk") {
             return lon < -101.36 ? "sk" : "mb"
@@ -789,10 +1081,168 @@ final class GraphPackStore {
             return lon < -110.0 ? "ab" : "sk"
         }
 
-        // Compact provinces first when Maritimes / QC rectangles overlap.
-        let priority = ["pe", "ns", "nb", "nl", "yt", "nt", "nu", "qc", "mb", "sk", "bc", "ab", "on"]
-        return priority.first(where: { hits.contains($0) }) ?? hits.first
+        // ON vs Quebec — Ottawa River bank split (select.js parity).
+        if hits.contains("on"), hits.contains("qc") {
+            if lon >= -74.5 { return "qc" }
+            if lat >= 45.9, lon >= -76.0 { return "qc" }
+            if isNorthOfOttawaRiver(lon: lon, lat: lat) { return "qc" }
+            return "on"
+        }
+
+        // NS vs NB — Tantramar / Missaguash. Must run before NB↔QC: Quebec’s
+        // rectangular bbox covers the Maritimes and would steal Amherst as NB.
+        // NS’s bbox also covers PE + Cape Jourimain — never claim those as NS.
+        if hits.contains("ns"), hits.contains("nb"), hits.contains("pe") {
+            if lat < 46.0 { return lon >= -64.27 ? "ns" : "nb" }
+            if lon >= -63.75 { return "pe" }
+            return "nb"
+        }
+        if hits.contains("ns"), hits.contains("pe"), !hits.contains("nb") {
+            return "pe"
+        }
+        if hits.contains("ns"), hits.contains("nb") {
+            // Roughly east of the interprovincial line stays Nova Scotia.
+            if lon >= -64.27 { return "ns" }
+            return "nb"
+        }
+
+        // NB vs PE — Northumberland Strait / Confederation Bridge.
+        if hits.contains("nb"), hits.contains("pe") {
+            if lat < 46.0 { return "nb" }
+            if lon >= -63.75 { return "pe" }
+            return "nb"
+        }
+
+        // NB vs Quebec river corridor (Dégelis / Témiscouata) only — not Maritimes.
+        if hits.contains("nb"), hits.contains("qc"), !hits.contains("ns"), !hits.contains("pe") {
+            if lon <= -68.45 { return "qc" }
+            if lat >= 47.7, lon <= -68.2 { return "qc" }
+            if lon <= -67.2, lat >= 47.0 { return "nb" }
+        }
+
+        // Overlapping US rectangles: pick the state the point sits deeper inside
+        // (WA/OR Columbia, CA/OR 42nd). Not a named mountain pass.
+        let usHits = hits.filter { usStateBounds[$0] != nil }
+        if usHits.count >= 2 {
+            return usHits.max(by: {
+                bboxInteriorScore(lon: lon, lat: lat, regionId: $0) < bboxInteriorScore(lon: lon, lat: lat, regionId: $1)
+            })
+        }
+
+        // Smallest overlapping bbox wins (ME↔NB, remaining Canada overlaps).
+        // Do not use a fixed "compact province" priority — that stole Moncton as NS and Bangor as NB.
+        let areas: [(String, Double)] = hits.map { id in
+            (id, bboxArea(forRegionId: id))
+        }
+        return areas.min(by: { $0.1 < $1.1 })?.0
     }
+
+    private static func isNorthOfOttawaRiver(lon: Double, lat: Double) -> Bool {
+        if lon < -76.5 || lon > -74.5 { return false }
+        if lon >= -75.55 { return lat >= 45.475 }
+        if lon >= -75.75 { return lat >= 45.44 }
+        if lon >= -75.95 { return lat >= 45.4 }
+        return lat >= 45.38
+    }
+
+    private static func bboxInteriorScore(lon: Double, lat: Double, regionId: String) -> Double {
+        guard let b = usStateBounds[regionId] else { return -Double.greatestFiniteMagnitude }
+        let (west, south, east, north) = b
+        return min(lon - west, east - lon, lat - south, north - lat)
+    }
+
+    private static func bbox(forRegionId id: String) -> (Double, Double, Double, Double)? {
+        switch id {
+        case "ns": return (-66.6, 43.3, -59.5, 47.2)
+        case "nb": return (-69.3, 44.5, -63.8, 48.2)
+        case "pe": return (-64.6, 45.8, -61.9, 47.2)
+        case "nl": return (-67.9, 46.5, -52.5, 60.5)
+        case "qc": return (-79.8, 44.9, -57.0, 62.7)
+        case "on": return (-95.2, 41.6, -74.3, 56.9)
+        case "mb": return (-102.1, 48.9, -95.0, 60.1)
+        case "sk": return (-110.1, 48.9, -101.3, 60.1)
+        case "ab": return (-120.1, 48.9, -109.9, 60.1)
+        case "bc": return (-139.1, 48.2, -114.0, 60.1)
+        case "yt": return (-141.1, 59.8, -123.8, 69.7)
+        case "nt": return (-136.5, 60.0, -102.0, 78.8)
+        case "nu": return (-120.9, 51.6, -60.9, 83.2)
+        default: return usStateBounds[id]
+        }
+    }
+
+    private static func bboxArea(forRegionId id: String) -> Double {
+        switch id {
+        case "ns": return (-59.5 - -66.6) * (47.2 - 43.3)
+        case "nb": return (-63.8 - -69.3) * (48.2 - 44.5)
+        case "pe": return (-61.9 - -64.6) * (47.2 - 45.8)
+        case "nl": return (-52.5 - -67.9) * (60.5 - 46.5)
+        case "qc": return (-57.0 - -79.8) * (62.7 - 44.9)
+        case "on": return (-74.3 - -95.2) * (56.9 - 41.6)
+        case "mb": return (-95.0 - -102.1) * (60.1 - 48.9)
+        case "sk": return (-101.3 - -110.1) * (60.1 - 48.9)
+        case "ab": return (-109.9 - -120.1) * (60.1 - 48.9)
+        case "bc": return (-114.0 - -139.1) * (60.1 - 48.2)
+        case "yt": return (-123.8 - -141.1) * (69.7 - 59.8)
+        case "nt": return (-102.0 - -136.5) * (78.8 - 60.0)
+        case "nu": return (-60.9 - -120.9) * (83.2 - 51.6)
+        default:
+            guard let b = usStateBounds[id] else { return Double.greatestFiniteMagnitude }
+            return (b.2 - b.0) * (b.3 - b.1)
+        }
+    }
+
+    private static let usStateBounds: [String: (Double, Double, Double, Double)] = [
+        "ak": (-180.0, 51.6, -130.0, 71.4),
+        "al": (-88.5, 30.2, -84.9, 35.0),
+        "ar": (-94.6, 33.0, -89.7, 36.5),
+        "az": (-114.8, 31.3, -109.0, 37.0),
+        "ca": (-124.4, 32.5, -114.1, 42.0),
+        "co": (-109.1, 37.0, -102.0, 41.0),
+        "ct": (-73.7, 41.0, -71.8, 42.1),
+        "de": (-75.8, 38.5, -75.0, 39.8),
+        "fl": (-87.6, 25.1, -80.0, 31.0),
+        "ga": (-85.6, 30.4, -80.9, 35.0),
+        "hi": (-159.8, 18.9, -154.8, 22.2),
+        "ia": (-96.6, 40.4, -90.1, 43.5),
+        "id": (-117.2, 42.0, -111.0, 49.0),
+        "il": (-91.5, 37.0, -87.5, 42.5),
+        "in": (-88.1, 37.8, -84.8, 41.8),
+        "ks": (-102.1, 37.0, -94.6, 40.0),
+        "ky": (-89.4, 36.5, -82.0, 39.1),
+        "la": (-94.0, 29.0, -89.0, 33.0),
+        "ma": (-73.5, 41.5, -69.9, 42.9),
+        "md": (-79.5, 37.9, -75.0, 39.7),
+        "me": (-71.1, 43.1, -67.0, 47.5),
+        "mi": (-90.4, 41.7, -82.4, 48.2),
+        "mn": (-97.2, 43.5, -89.6, 49.4),
+        "mo": (-95.8, 36.0, -89.1, 40.6),
+        "ms": (-91.6, 30.2, -88.1, 35.0),
+        "mt": (-116.0, 44.4, -104.0, 49.0),
+        "nc": (-84.3, 33.8, -75.7, 36.6),
+        "nd": (-104.0, 45.9, -96.6, 49.0),
+        "ne": (-104.1, 40.0, -95.3, 43.0),
+        "nh": (-72.5, 42.7, -70.7, 45.3),
+        "nj": (-75.6, 39.0, -73.9, 41.4),
+        "nm": (-109.0, 31.3, -103.0, 37.0),
+        "nv": (-120.0, 35.0, -114.0, 42.0),
+        "ny": (-79.8, 40.5, -72.1, 45.0),
+        "oh": (-84.8, 38.4, -80.5, 42.0),
+        "ok": (-103.0, 33.6, -94.4, 37.0),
+        "or": (-124.6, 42.0, -116.5, 46.3),
+        "pa": (-80.5, 39.7, -74.7, 42.3),
+        "ri": (-71.9, 41.3, -71.1, 42.0),
+        "sc": (-83.3, 32.0, -78.5, 35.2),
+        "sd": (-104.1, 42.5, -96.4, 45.9),
+        "tn": (-90.3, 35.0, -81.7, 36.7),
+        "tx": (-106.6, 25.9, -93.5, 36.5),
+        "ut": (-114.0, 37.0, -109.0, 42.0),
+        "va": (-83.7, 36.5, -75.2, 39.5),
+        "vt": (-73.4, 42.7, -71.5, 45.0),
+        "wa": (-124.7, 45.5, -116.9, 49.0),
+        "wi": (-92.9, 42.5, -87.0, 47.0),
+        "wv": (-82.6, 37.2, -77.7, 40.6),
+        "wy": (-111.1, 41.0, -104.1, 45.0)
+    ]
 
     /// Clear copy when a pack covers the pin but nearest-road snap / path failed.
     func onDeviceRouteFailureMessage(
@@ -808,15 +1258,15 @@ final class GraphPackStore {
         }()
         switch reason {
         case .cannotSnapStart:
-            return "Couldn’t lock onto a road at your GPS fix in \(regionClause). Move to a clearer spot, or drop Plan pins on the road."
+            return "Your start isn’t close enough to a mapped road in \(regionClause) (limit \(Int(OnDeviceRouter.preferredMatchMeters)) m). Move closer or drop A on the road — B stays put."
         case .cannotSnapEnd:
-            return "Couldn’t snap that pin to a road in \(regionClause). Nudge it onto the roadway centerline and try again."
+            return "Point B isn’t close enough to a mapped road in \(regionClause) (limit \(Int(OnDeviceRouter.preferredMatchMeters)) m). Nudge B onto the roadway centerline."
         case .identicalEnds:
-            return "Start and finish locked to the same junction. Move the pin farther along the road."
+            return "Start and finish locked to the same junction. Move B farther along the road."
         case .noPath:
-            return "No on-device path between those points in \(regionClause). Try another profile or turn on Allow unknown — live routing isn’t used when this pack covers the pins."
+            return "No on-device path between those points in \(regionClause). The pack roads near A and B don’t connect under this profile — try Balanced, nudge B onto a through-road, or turn on Allow unknown."
         case .none:
-            return "Couldn’t build an on-device route in \(regionClause). Nudge pins onto the roadway."
+            return "Couldn’t build an on-device route in \(regionClause). Check which end is off the roadway and nudge that pin."
         }
     }
 }

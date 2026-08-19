@@ -16,16 +16,16 @@ Tester focus this sprint: **NS, ON, BC, AB**.
 | Ontario (`on`) | **Live** | Fresh OSM + MNRF (~73 + ~83 MB) |
 | Manitoba (`mb`) | **Live** | OSM-only (~9 + ~9 MB) |
 | Saskatchewan (`sk`) | **Live** | OSM-only (~16 + ~12 MB) |
-| Alberta (`ab`) | **Live** | Fresh OSM + Access Roads (~45 + ~39 MB) |
-| British Columbia (`bc`) | **Live** | Fresh OSM + FTEN (~34 + ~91 MB) |
+| Alberta (`ab`) | **Live** | OSM + Access Roads + 21,387 permissive tip stitches (2026-08-12) |
+| British Columbia (`bc`) | **Live** | OSM-only + 24,427 permissive tip stitches (2026-08-12) |
 | Newfoundland and Labrador (`nl`) | **Live** | OSM-only (~6 + ~8 MB) |
 | Yukon (`yt`) | Soon | North — no Geofabrik extract this pass |
 | Northwest Territories (`nt`) | Soon | North |
 | Nunavut (`nu`) | Soon | North |
 | United States (all states) | Soon | Catalog only; no packs |
 
-CDN: `https://dirt-mayday.vercel.app/app/data/packs/v1/manifest.json`  
-Publish: `node scripts/publish-packs-cdn.js <ids…>` then Vercel deploy (geometry allowed).
+CDN: R2 `AppConfig.packCDNBaseURL` (`dirt-packs` / `manifest.json`).  
+Publish: pack-fabric `publish-packs-cdn.js` + wrangler R2.
 
 ## Province network overlays (map purple/blue secondary network)
 
@@ -37,11 +37,11 @@ iOS `NetworkOverlayManager` currently wires **NS / NB / QC** chunk manifests onl
 | NB | `app/data/nb-gov-*` | Yes | Live |
 | QC | `app/data/qc-gov-*` | Yes | Live |
 | ON | `app/data/on-gov-*` | Yes | **Live** — MNRF capillary (~110k) |
-| BC | `app/data/bc-gov-*` | Yes | **Live** — FTEN capillary (~45k) |
+| BC | `app/data/bc-gov-*` | Yes | **Live** — gov display overlay (routing fabric is OSM + DRA + FTEN) |
 | AB | `app/data/ab-gov-*` | Yes | **Live** — Access Roads (~210k) |
 | PE / MB / SK / NL / territories | No | No | Soon |
 
-When Mayday ships `*-gov-chunks` + manifest for ON/BC/AB, add entries to `NetC.overlays` and Layers toggles.
+Overlays now paint the installed graph pack. Separate gov-chunk CDNs are gone.
 
 ## Related product Soons (not packs)
 
@@ -49,7 +49,7 @@ When Mayday ships `*-gov-chunks` + manifest for ON/BC/AB, add entries to `NetC.o
 | --- | --- |
 | Soft-stitch snap parity | **Done** — virtual endpoints + same-edge along-edge + soft-stitch stubs |
 | On-device geographic loop prune | **Done** — `OnDevicePathPruning.swift` (find-path-v2 parity) |
-| Auto-download next region (field harden) | **Done** — quiet one-at-a-time while nav; End Nav cancel; pack-ready toast |
+| Auto-download next region (field harden) | **Opt-in, default off** — quiet one-at-a-time while nav if enabled; End Nav cancel |
 | Mid-trip Plan: active-leg-only recalc | **Done** — preserve later stages; avoid only on active hop |
 | Cloud `rider_alerts` + peer HUD | **Done** — distress + HUD Report → production insert; peer map/HUD |
 | Groups Supabase Realtime | **Done** — private `group:{id}` presence + broadcast; poll fallback |

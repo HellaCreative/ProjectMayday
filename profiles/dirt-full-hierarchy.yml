@@ -1,0 +1,37 @@
+# DIRT full-hierarchy vector tile schema (intent).
+#
+# Production tippecanoe build (scripts/build-bc-tiles.sh) is used instead of
+# stock Planetiler/OpenMapTiles — OMT collapses highway=* into a small class
+# enum and drops tracktype / motor_vehicle / atv / etc. That would fake incompleteness.
+#
+# Tippecanoe layer: dirt_roads
+# Attributes forwarded from normalized GeoJSONSeq:
+#   highway, surface, tracktype, mtb:scale, access, motor_vehicle, atv, ohv,
+#   maxwidth, width, trail_visibility, smoothness, name, ref, data_confidence
+#
+# Zoom: default z4–z14 (override BC_TILE_MINZOOM / BC_TILE_MAXZOOM).
+# Footway: excluded from this feasibility run (see profiles/bc-full-hierarchy.osmium).
+
+layer: dirt_roads
+source: experiments/bc-osm-only/out/british-columbia-highways.normalized.geojsonseq
+minzoom: 4
+maxzoom: 14
+attributes:
+  - highway
+  - surface
+  - tracktype
+  - mtb:scale
+  - access
+  - motor_vehicle
+  - atv
+  - ohv
+  - maxwidth
+  - width
+  - trail_visibility
+  - smoothness
+  - name
+  - ref
+  - data_confidence
+notes:
+  - tippecanoe preserves feature properties; Planetiler profile reserved for future productization
+  - Geofabrik british-columbia extract is provincial boundary, not a bbox

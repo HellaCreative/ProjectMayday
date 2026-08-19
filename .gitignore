@@ -3,3 +3,19 @@ build/
 DerivedData/
 *.xcuserstate
 xcuserdata/
+
+# Pack binaries live on Cloudflare R2 — never commit them to git
+scripts/pack-fabric/app/data/packs/**/*.bin
+*.mbtiles
+
+# Local-only machine paths into Mayday — do not snapshot
+scripts/pack-fabric/routing/data/regions
+scripts/pack-fabric/routing/data/reports
+
+# BC OSM feasibility binaries (built locally; hardlinked into Resources for device runs)
+experiments/bc-osm-only/out/
+experiments/bc-osm-only/*.log
+Dirt/Resources/BC.mbtiles
+
+# OSM fuel extract + packed chunks (built locally from Geofabrik)
+data-raw/

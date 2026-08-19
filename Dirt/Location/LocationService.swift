@@ -14,6 +14,7 @@ enum LocationBackgroundPolicy {
     }
 }
 
+@MainActor
 @Observable
 final class LocationService: NSObject, CLLocationManagerDelegate {
     private let manager = CLLocationManager()
@@ -22,12 +23,42 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
     private(set) var lastLocation: CLLocation?
     var onLocation: ((CLLocation) -> Void)?
 
+    private enum Prefs {
+        static let lastLatitude = "dirt.lastUserLatitude"
+        static let lastLongitude = "dirt.lastUserLongitude"
+    }
+
     override init() {
         super.init()
         manager.delegate = self
         manager.desiredAccuracy = kCLLocationAccuracyBest
         manager.activityType = .otherNavigation
         manager.distanceFilter = 5
+        seedLastKnownLocation()
+    }
+
+    /// Prefer Core Location’s cached fix, then the last persisted coordinate.
+    private func seedLastKnownLocation() {
+        if let system = manager.location, CLLocationCoordinate2DIsValid(system.coordinate) {
+            lastLocation = system
+            persistLastCoordinate(system.coordinate)
+            return
+        }
+        let defaults = UserDefaults.standard
+        let lat = defaults.double(forKey: Prefs.lastLatitude)
+        let lon = defaults.double(forKey: Prefs.lastLongitude)
+        guard defaults.object(forKey: Prefs.lastLatitude) != nil,
+              defaults.object(forKey: Prefs.lastLongitude) != nil else { return }
+        let coordinate = CLLocationCoordinate2D(latitude: lat, longitude: lon)
+        guard CLLocationCoordinate2DIsValid(coordinate) else { return }
+        lastLocation = CLLocation(latitude: lat, longitude: lon)
+    }
+
+    private func persistLastCoordinate(_ coordinate: CLLocationCoordinate2D) {
+        guard CLLocationCoordinate2DIsValid(coordinate) else { return }
+        let defaults = UserDefaults.standard
+        defaults.set(coordinate.latitude, forKey: Prefs.lastLatitude)
+        defaults.set(coordinate.longitude, forKey: Prefs.lastLongitude)
     }
 
     var isAuthorized: Bool {
@@ -71,20 +102,28 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
         manager.showsBackgroundLocationIndicator = allow
     }
 
-    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
-        authorization = manager.authorizationStatus
-        if isAuthorized {
-            manager.startUpdatingLocation()
+    nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        let status = manager.authorizationStatus
+        Task { @MainActor in
+            self.authorization = status
+            if self.isAuthorized {
+                self.manager.startUpdatingLocation()
+            }
         }
     }
 
-    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+    nonisolated func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let latest = locations.last else { return }
-        lastLocation = latest
-        onLocation?(latest)
+        // Core Location can deliver off the main actor — hop before touching
+        // @Observable nav / cue state (avoids unsafeForcedSync warnings).
+        Task { @MainActor in
+            self.lastLocation = latest
+            self.persistLastCoordinate(latest.coordinate)
+            self.onLocation?(latest)
+        }
     }
 
-    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+    nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
         // GPS hiccups are routine while riding; keep the last known fix.
     }
 }

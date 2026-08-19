@@ -3,9 +3,9 @@ import Foundation
 import Observation
 import SwiftUI
 
-// MARK: - Report model (web parity: ROUTE-INCIDENT-RECOVERY.md)
+// MARK: - Report model
 
-/// One-tap report categories. Colors mirror the web report sheet exactly.
+/// One-tap report categories.
 enum RouteIncidentCategory: String, Codable, CaseIterable, Identifiable {
     case accessClosed = "access_closed"
     case gateSeasonal = "gate_seasonal"
@@ -18,11 +18,11 @@ enum RouteIncidentCategory: String, Codable, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .accessClosed: "Access closed / no trespassing"
-        case .gateSeasonal: "Gate or seasonal closure"
-        case .flooded: "Flooded or impassable crossing"
+        case .accessClosed: "Access closed"
+        case .gateSeasonal: "Gate / seasonal"
+        case .flooded: "Flooded crossing"
         case .blocked: "Blocked route"
-        case .unsafe: "Unsafe condition"
+        case .unsafe: "Unsafe"
         case .other: "Other"
         }
     }
@@ -39,8 +39,7 @@ enum RouteIncidentCategory: String, Codable, CaseIterable, Identifiable {
     }
 }
 
-/// Rider report, kept separate from the authoritative network. Local-only —
-/// shared persistence is blocked until a durable store exists (web parity).
+/// Rider report. Always stored locally; cloud-synced to `route_incidents` when signed in.
 struct RouteIncidentReport: Codable, Identifiable {
     let id: UUID
     let category: RouteIncidentCategory
@@ -51,7 +50,7 @@ struct RouteIncidentReport: Codable, Identifiable {
     let expiresAt: Date
     var status: String
 
-    static let defaultTTL: TimeInterval = 14 * 24 * 3600 // matches web freshness default
+    static let defaultTTL: TimeInterval = 14 * 24 * 3600 // 14-day freshness default
 
     init(category: RouteIncidentCategory, latitude: Double, longitude: Double, edgeId: String?) {
         id = UUID()
@@ -65,7 +64,7 @@ struct RouteIncidentReport: Codable, Identifiable {
     }
 }
 
-/// Device-local report store (`dirt_reports_v1`, same key family as web).
+/// Device-local report store (`dirt_reports_v1`).
 /// Reports never mutate the NSTDB network — avoidance is per-request only.
 enum RouteIncidentStore {
     private static let key = "dirt_reports_v1"
@@ -90,10 +89,11 @@ enum RouteIncidentStore {
 
 /// Drives the report → recovery → confirm flow during navigation.
 ///
-/// Hard rules (web parity):
+/// Hard rules:
 /// - Never silently reroute; every replacement requires explicit confirmation.
-/// - Never draw a free-space connector — recovery routes come from `/api/route`
-///   or from the existing verified route geometry (backtrack).
+/// - Never draw a free-space connector — recovery routes come from on-device
+///   packs (when Start Nav locked them), or from existing
+///   verified route geometry (backtrack).
 @Observable
 @MainActor
 final class IncidentRecoveryModel {
@@ -119,18 +119,18 @@ final class IncidentRecoveryModel {
 
         var title: String {
             switch self {
-            case .around: "Find a way around"
+            case .around: "Way around"
             case .backtrack: "Backtrack"
-            case .returnToNetwork: "Return to nearest verified network"
+            case .returnToNetwork: "Nearest verified network"
             case .endStage: "End stage"
             }
         }
 
         var subtitle: String {
             switch self {
-            case .around: "Verified detour avoiding the report"
-            case .backtrack: "Return along your route to the last junction"
-            case .returnToNetwork: "Route back to the verified network"
+            case .around: "Detour that avoids the report"
+            case .backtrack: "Back along your route to the last junction"
+            case .returnToNetwork: "Route to the nearest verified network"
             case .endStage: "Stop navigation for this stage"
             }
         }
@@ -158,12 +158,34 @@ final class IncidentRecoveryModel {
 
     private unowned let planner: RoutePlannerModel
     private let locationService: LocationService
-    private let routing: RoutingClient
+    private let network: NetworkPathMonitor
+    private weak var groups: GroupsViewModel?
+    private weak var rideIntelligence: RideIntelligenceService?
+    private var graphPackVersion: (() -> String?)?
 
-    init(planner: RoutePlannerModel, locationService: LocationService, routing: RoutingClient) {
+    init(
+        planner: RoutePlannerModel,
+        locationService: LocationService,
+        network: NetworkPathMonitor,
+        groups: GroupsViewModel? = nil,
+        rideIntelligence: RideIntelligenceService? = nil,
+        graphPackVersion: (() -> String?)? = nil
+    ) {
         self.planner = planner
         self.locationService = locationService
-        self.routing = routing
+        self.network = network
+        self.groups = groups
+        self.rideIntelligence = rideIntelligence
+        self.graphPackVersion = graphPackVersion
+    }
+
+    func attachGroups(_ groups: GroupsViewModel) {
+        self.groups = groups
+    }
+
+    func attachRideIntelligence(_ service: RideIntelligenceService, packVersion: @escaping () -> String?) {
+        rideIntelligence = service
+        graphPackVersion = packVersion
     }
 
     var isPresented: Bool { step != .hidden }
@@ -180,8 +202,8 @@ final class IncidentRecoveryModel {
         failureMessage = nil
     }
 
-    /// Category tapped → log locally, then offer recovery actions.
-    /// Uses the GPS fix; never invents a location (web rule).
+    /// Category tapped → log locally, optionally share to `rider_alerts`, then offer recovery.
+    /// Uses the GPS fix; never invents a location.
     func submitReport(_ category: RouteIncidentCategory) {
         guard let position = locationService.currentCoordinate else {
             failureMessage = "No GPS fix — cannot place the report."
@@ -197,6 +219,27 @@ final class IncidentRecoveryModel {
         activeReport = report
         failureMessage = nil
         step = .actions
+
+        let region = GraphPackStore.regionIds(
+            containingAny: [
+                CLLocationCoordinate2D(latitude: position.latitude, longitude: position.longitude)
+            ]
+        ).first
+        rideIntelligence?.enqueueAndFlush(
+            report,
+            regionCode: region,
+            packVersion: graphPackVersion?()
+        )
+
+        if let groups {
+            Task {
+                await groups.publishRouteReportAlert(
+                    category: category,
+                    latitude: position.latitude,
+                    longitude: position.longitude
+                )
+            }
+        }
     }
 
     func choose(_ action: RecoveryAction) {
@@ -220,10 +263,18 @@ final class IncidentRecoveryModel {
                 failureMessage = "Not far enough along the route to backtrack."
             }
         case .around:
-            step = .working("Finding a verified way around…")
+            step = .working(
+                planner.hasOnDeviceRoutingPack && !network.isOnline
+                    ? "Finding a detour on-device…"
+                    : "Finding a verified way around…"
+            )
             Task { await findWayAround() }
         case .returnToNetwork:
-            step = .working("Routing back to the verified network…")
+            step = .working(
+                planner.hasOnDeviceRoutingPack && !network.isOnline
+                    ? "Routing back on-device…"
+                    : "Routing back to the verified network…"
+            )
             Task { await routeBackToNetwork() }
         }
     }
@@ -232,7 +283,10 @@ final class IncidentRecoveryModel {
         guard let preview else { return }
         switch preview.kind {
         case let .response(response):
-            planner.applyRecoveryRoute(response)
+            let near = activeReport.map {
+                RouteCoordinate(longitude: $0.longitude, latitude: $0.latitude)
+            }
+            planner.applyRecoveryRoute(response, near: near)
         case let .backtrack(coordinates, _):
             planner.applyBacktrack(coordinates: coordinates)
         }
@@ -252,59 +306,82 @@ final class IncidentRecoveryModel {
             fail(Self.noAlternateMessage)
             return
         }
+        let reportPoint = activeReport.map {
+            RouteCoordinate(longitude: $0.longitude, latitude: $0.latitude)
+        }
         var avoid: [String] = []
         if let edge = activeReport?.edgeId { avoid.append(edge) }
-        let request = RouteRequest(
-            profile: planner.profile,
-            locations: [
-                RouteLocation(latitude: rider.latitude, longitude: rider.longitude, label: "A"),
-                RouteLocation(latitude: destination.latitude, longitude: destination.longitude, label: "B")
-            ],
-            allowUnknown: planner.allowUnknown,
-            avoidEdgeIds: avoid
-        )
+        let policy = planner.activeStageRoutingPolicy(near: reportPoint ?? rider)
         do {
-            let response = try await routing.route(request)
+            let response = try await planner.routeWhileNavigating(
+                from: rider,
+                to: destination,
+                avoidEdgeIds: avoid,
+                profile: policy.profile,
+                allowUnknown: policy.allowUnknown
+            )
             let km = (response.distanceMeters ?? 0) / 1000
-            let avoidedNote = avoid.isEmpty
-                ? "The reported location could not be matched to a network edge — review the line before applying."
-                : "The reported section is excluded server-side."
+            let stageNote = planner.shouldPreserveStagesForRecovery
+                ? " Active stage only — later stages kept."
+                : ""
+            let avoidedNote: String
+            if avoid.isEmpty {
+                avoidedNote = "The reported location could not be matched to a network edge — review the line before applying."
+            } else {
+                avoidedNote = "Detour computed on-device; reported section excluded."
+            }
             preview = Preview(
                 kind: .response(response),
-                headline: "Verified detour found",
-                detail: String(format: "%.1f km · %d%% dirt to your destination. %@", km, response.dirtPercent, avoidedNote)
+                headline: "On-device detour found",
+                detail: String(
+                    format: "%.1f km · %d%% dirt to stage end.%@ %@",
+                    km,
+                    response.dirtPercent,
+                    stageNote,
+                    avoidedNote
+                )
             )
             step = .confirm
         } catch {
-            fail(Self.noAlternateMessage)
+            fail(error.localizedDescription.isEmpty ? Self.noAlternateMessage : error.localizedDescription)
         }
     }
 
     private func routeBackToNetwork() async {
-        guard let rider = locationService.currentCoordinate,
-              let target = planner.nearestRoutePoint(to: rider) else {
+        guard let rider = locationService.currentCoordinate else {
             fail("No verified escape route found from here.")
             return
         }
-        let request = RouteRequest(
-            profile: planner.profile,
-            locations: [
-                RouteLocation(latitude: rider.latitude, longitude: rider.longitude, label: "A"),
-                RouteLocation(latitude: target.latitude, longitude: target.longitude, label: "B")
-            ],
-            allowUnknown: planner.allowUnknown
-        )
+        var avoid: [String] = []
+        if let edge = activeReport?.edgeId { avoid.append(edge) }
+        let reportPoint = activeReport.map {
+            RouteCoordinate(longitude: $0.longitude, latitude: $0.latitude)
+        }
+        guard let target = planner.nearestRoutePoint(to: reportPoint ?? rider, avoidEdgeIds: avoid) else {
+            fail("No verified escape route found from here.")
+            return
+        }
+        let policy = planner.activeStageRoutingPolicy(near: reportPoint ?? rider)
         do {
-            let response = try await routing.route(request)
+            let response = try await planner.routeWhileNavigating(
+                from: rider,
+                to: target,
+                avoidEdgeIds: avoid,
+                profile: policy.profile,
+                allowUnknown: policy.allowUnknown
+            )
             let km = (response.distanceMeters ?? 0) / 1000
+            let stageNote = planner.shouldPreserveStagesForRecovery
+                ? " Later stages kept."
+                : ""
             preview = Preview(
                 kind: .response(response),
-                headline: "Route back to the verified network",
-                detail: String(format: "%.1f km on verified network back to your route.", km)
+                headline: "On-device path back to your route",
+                detail: String(format: "%.1f km back to your route.%@", km, stageNote)
             )
             step = .confirm
         } catch {
-            fail("No verified escape route found from here.")
+            fail(error.localizedDescription.isEmpty ? "No verified escape route found from here." : error.localizedDescription)
         }
     }
 

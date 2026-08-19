@@ -1,13 +1,12 @@
 # DIRT (Mayday) — iOS TestFlight guide
 
-Fully native SwiftUI app for the DIRT dual-sport navigator. Talks to the same
-production backend as the web POC — **no staging**:
+Fully native SwiftUI app for the DIRT dual-sport navigator.
 
-- Routing: `POST https://dirt-mayday.vercel.app/api/route`
-- Supabase config: `GET https://dirt-mayday.vercel.app/api/supabase-config`
-- Map style: `https://dirt-mayday.vercel.app/app/data/shortbread-style.json`
+- Routing: on-device `graph.v2` packs (R2) when installed; live `/api/route` when online without that pack
+- Accounts: Supabase (baked publishable config)
+- Map style: bundled Shortbread JSON + local sprites
 
-No Capacitor, no WKWebView shell. MapLibre Native + Supabase Swift via SPM.
+MapLibre Native + Supabase Swift via SPM.
 
 ## App identity (App Store Connect)
 
@@ -142,14 +141,9 @@ ASC prerequisites before the first upload succeeds:
 | Layers legend + persisted toggles | Shipped (overlay streams deferred) |
 | Design tokens / CTA matrix | Shipped |
 
-## Known gaps vs the web POC (v1)
+## Known v1 gaps
 
-- Rider Services POI pins and NSTDB provincial overlays: legend + persisted
-  toggles ship; the streamed GeoJSON overlays are a follow-up.
-- Group live positions use `rider_presence` polling (10s) rather than the
-  Supabase realtime broadcast channel; roster + map pins + route-to-member work.
-- Offline nav tiles use a MapLibre bounding-box pyramid (z8–14), not a true
-  route corridor — best-effort, with a 45s cap so ride start never blocks.
-- Incident reports are local acknowledgements only (no shared datastore, same
-  as the web POC's server limits); avoid-edge recalculate is not yet wired.
+- Group live positions use `rider_presence` polling (10s), not a realtime channel.
+- Offline nav tiles use a bounding-box pyramid (z8–14), 45s cap.
+- Incident reports are device-local.
 - Voice cues, haptics, Live Activities, CarPlay, and Watch are out of scope for v1.

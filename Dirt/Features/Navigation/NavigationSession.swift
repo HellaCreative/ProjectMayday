@@ -2,9 +2,10 @@ import CoreLocation
 import Foundation
 import Observation
 
-/// Turn-by-turn session: follows the rider along the routed polyline, surfaces
-/// the next cue, upcoming surface changes (Mapbox RoadSurface-style), and asks
-/// for a recalculation when the rider leaves the line.
+/// Turn-by-turn session: follows the rider along the routed polyline, speaks
+/// junction / rally cues only, shows surface changes visually (no voice), and
+/// asks for a recalculation when the rider leaves the line.
+@MainActor
 @Observable
 final class NavigationSession {
     enum Phase {
@@ -16,8 +17,12 @@ final class NavigationSession {
     private(set) var phase: Phase = .idle
     private(set) var coordinates: [RouteCoordinate] = []
     private(set) var maneuvers: [RouteManeuver] = []
-    /// Along-route surface runs built from `/api/route` segments (OSM fabric).
+    /// Along-route surface runs built from route segments.
     private(set) var surfaceRuns: [SurfaceRun] = []
+    /// Network edge spans for ride-intelligence contribution (no stitch IDs).
+    private var edgeSpans: [RideEdgeSequence.Span] = []
+    /// Ordered unique edge ids entered this session (survives mid-ride recalculate).
+    private(set) var riddenEdgeIds: [String] = []
     private var cumulative: [Double] = []
     private(set) var totalMeters: Double = 0
     private(set) var remainingMeters: Double = 0
@@ -34,12 +39,15 @@ final class NavigationSession {
     private(set) var currentSurfaceLabel: String?
     private(set) var upcomingSurfaceAlert: String?
     private(set) var offRoute = false
+    /// Cumulative uphill meters this session (for HUD climb, not absolute altitude).
+    private(set) var climbMeters: Double = 0
     /// Live speed (m/s) from the last GPS fix — used for ETA when moving.
     private var lastSpeedMPS: Double = 0
-    /// Web cue filter (`dirt_cue_mode_v1`).
+    private var lastAltitudeMeters: Double?
+    /// Cue filter (`dirt_cue_mode_v1`).
     var cueMode: NavigationCueMode = .all
-    /// Optional speech hook wired by AppEnvironment.
-    var onCueAnnounced: ((String, Double?) -> Void)?
+    /// Optional speech hook: (spoken text, stable announce key).
+    var onCueAnnounced: ((String, String) -> Void)?
     private var offRouteStrikes = 0
     private var lastRerouteRequest: Date?
     private var lastSurfaceAlertKey: String?
@@ -99,10 +107,19 @@ final class NavigationSession {
         coordinates: [RouteCoordinate],
         maneuvers: [RouteManeuver],
         segments: [RouteDisplaySegment] = [],
-        stageEndMeters: [Double] = []
+        stageEndMeters: [Double] = [],
+        networkSegments: [RouteSegment] = []
     ) {
+        let continuing = phase == .active
         self.coordinates = coordinates
-        self.maneuvers = maneuvers.sorted { ($0.alongMeters ?? 0) < ($1.alongMeters ?? 0) }
+        // Always rebuild from geometry. On-device /
+        // saved routes ship maneuvers: nil — without this the HUD stays on
+        // "Follow the route" for the whole ride.
+        let built = NavCueBuilder.build(coordinates: coordinates, cueMode: cueMode)
+        self.maneuvers = (built.isEmpty
+            ? RouteManeuver.enrichForVoiceCues(maneuvers)
+            : built)
+            .sorted { ($0.alongMeters ?? 0) < ($1.alongMeters ?? 0) }
         cumulative = GeoMath.cumulativeMeters(coordinates)
         totalMeters = cumulative.last ?? 0
         remainingMeters = totalMeters
@@ -111,16 +128,34 @@ final class NavigationSession {
             ? (totalMeters > 0 ? [totalMeters] : [])
             : stageEndMeters
         surfaceRuns = Self.buildSurfaceRuns(segments: segments, totalMeters: totalMeters)
+        edgeSpans = RideEdgeSequence.spans(from: networkSegments)
+        if !continuing {
+            riddenEdgeIds = []
+            startedAt = Date()
+        }
         offRoute = false
         offRouteStrikes = 0
         lastSurfaceAlertKey = nil
+        lastAnnouncedCue = nil
+        climbMeters = 0
+        lastAltitudeMeters = nil
         currentCue = "Follow the route"
         currentCueMeters = nil
         currentManeuver = nil
         currentSurfaceLabel = surfaceRuns.first?.label
         upcomingSurfaceAlert = nil
-        if phase != .active { startedAt = Date() }
         phase = .active
+    }
+
+    /// Cue mode changed mid-ride — rebuild geometry cues and clear speech dedupe.
+    func rebuildCuesForCurrentMode() {
+        guard phase == .active, coordinates.count > 1 else { return }
+        maneuvers = NavCueBuilder.build(coordinates: coordinates, cueMode: cueMode)
+            .sorted { ($0.alongMeters ?? 0) < ($1.alongMeters ?? 0) }
+        lastAnnouncedCue = nil
+        currentCue = "Follow the route"
+        currentCueMeters = nil
+        currentManeuver = nil
     }
 
     /// Replaces the line mid-trip (recalculate). Offline tiles are kept.
@@ -128,14 +163,16 @@ final class NavigationSession {
         coordinates: [RouteCoordinate],
         maneuvers: [RouteManeuver],
         segments: [RouteDisplaySegment] = [],
-        stageEndMeters: [Double] = []
+        stageEndMeters: [Double] = [],
+        networkSegments: [RouteSegment] = []
     ) {
         guard phase == .active else { return }
         activate(
             coordinates: coordinates,
             maneuvers: maneuvers,
             segments: segments,
-            stageEndMeters: stageEndMeters.isEmpty ? self.stageEndMeters : stageEndMeters
+            stageEndMeters: stageEndMeters.isEmpty ? self.stageEndMeters : stageEndMeters,
+            networkSegments: networkSegments
         )
         currentCue = "Route recalculated"
     }
@@ -145,17 +182,31 @@ final class NavigationSession {
         if location.speed >= 0 {
             lastSpeedMPS = location.speed
         }
+        // Accumulate uphill only — ignore noisy verticals and downhill.
+        if location.verticalAccuracy >= 0, location.verticalAccuracy < 30 {
+            let alt = location.altitude
+            if let previous = lastAltitudeMeters {
+                let delta = alt - previous
+                if delta > 0.5 { climbMeters += delta }
+            }
+            lastAltitudeMeters = alt
+        }
         // Project onto the nearest segment (not just the nearest vertex).
         // Vertex-only distance triggers false off-route alerts mid-segment:
         // a rider on a curved road can sit 80+ m from the nearest vertex while
-        // riding directly on the surface. HTML POC uses the same segment-projection
-        // approach (projectPointOnRoute / NAV_ON_ROUTE_KM = 50 m).
+        // riding directly on the surface. Same segment-projection
+        // approach (`nearestProjection` / 50 m on-route).
         guard let proj = GeoMath.nearestProjection(to: location, in: coordinates, cumulative: cumulative) else { return }
 
         traveledMeters = proj.alongMeters
         remainingMeters = max(0, totalMeters - traveledMeters)
+        RideEdgeSequence.appendRidden(
+            into: &riddenEdgeIds,
+            spans: edgeSpans,
+            traveledMeters: traveledMeters
+        )
 
-        // 50 m threshold matches the HTML POC (NAV_ON_ROUTE_KM = 0.05 km).
+        // 50 m on-route threshold.
         // Three consecutive misses required before declaring off-route so GPS
         // scatter and brief shadows don't trigger unnecessary reroutes.
         if proj.offMeters > 50 {
@@ -188,17 +239,10 @@ final class NavigationSession {
             return max(0, along - traveledMeters)
         }
 
-        // Prefer turn cues when a maneuver is close; otherwise promote surface alerts
-        // (Mapbox-style unpaved notifications from OSM segment classes).
-        if let next = nextManeuver, let metersToTurn, metersToTurn < 250 {
-            currentCue = next.displayLabel(cueMode: cueMode)
-            currentCueMeters = metersToTurn
-            currentManeuver = next
-        } else if let alert = upcomingSurfaceAlert {
-            currentCue = alert
-            currentCueMeters = nil
-            currentManeuver = nil
-        } else if let next = nextManeuver, let metersToTurn {
+        // Top cue card + voice are turn-by-turn only. Surface stays on the bottom
+        // chrome (`currentSurfaceLabel` / `upcomingSurfaceAlert`) — never steal the
+        // maneuver channel when the next junction is still far away.
+        if let next = nextManeuver, let metersToTurn {
             currentCue = next.displayLabel(cueMode: cueMode)
             currentCueMeters = metersToTurn
             currentManeuver = next
@@ -217,31 +261,21 @@ final class NavigationSession {
             currentManeuver = nil
         }
 
-        announceCueIfNeeded()
+        announceCueIfNeeded(nextManeuver: nextManeuver, metersToTurn: metersToTurn)
     }
 
-    private func announceCueIfNeeded() {
+    private func announceCueIfNeeded(nextManeuver: RouteManeuver?, metersToTurn: Double?) {
         guard phase == .active else { return }
-        // Distance bands match HTML speak cadence (now / near / mid).
-        let band: Int
-        if let meters = currentCueMeters {
-            if meters < 40 { band = 0 }
-            else if meters < 120 { band = 1 }
-            else if meters < 250 { band = 2 }
-            else { band = 3 }
-        } else {
-            band = -1
-        }
-        let spoken: String
-        if let man = currentManeuver {
-            spoken = man.spokenLabel(cueMode: cueMode, meters: currentCueMeters)
-        } else {
-            spoken = currentCue
-        }
-        let key = "\(spoken)|\(band)"
+        guard let man = nextManeuver, let meters = metersToTurn else { return }
+
+        let band = NavigationCueBand.band(forMeters: meters)
+        guard band.shouldSpeak else { return }
+
+        let spoken = man.spokenLabel(cueMode: cueMode, meters: meters)
+        let key = "\(man.announceIdentity)-\(band.rawValue)"
         guard key != lastAnnouncedCue else { return }
         lastAnnouncedCue = key
-        onCueAnnounced?(spoken, currentCueMeters)
+        onCueAnnounced?(spoken, key)
     }
 
     func end() {
@@ -249,6 +283,8 @@ final class NavigationSession {
         coordinates = []
         maneuvers = []
         surfaceRuns = []
+        edgeSpans = []
+        riddenEdgeIds = []
         cumulative = []
         stageEndMeters = []
         totalMeters = 0
@@ -262,6 +298,8 @@ final class NavigationSession {
         upcomingSurfaceAlert = nil
         lastSurfaceAlertKey = nil
         lastAnnouncedCue = nil
+        climbMeters = 0
+        lastAltitudeMeters = nil
         startedAt = nil
         lastSpeedMPS = 0
     }
