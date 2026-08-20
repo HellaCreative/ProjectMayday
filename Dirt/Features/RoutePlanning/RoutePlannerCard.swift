@@ -34,7 +34,13 @@ struct RoutePlannerCard: View {
     /// route you just opened *and* the whole list you opened it from at the same time.
     @State private var savedLibraryOpen = false
     @AppStorage(FuelRangePrefs.key) private var fuelRangeKm = 0.0
+    @AppStorage(FuelRangePrefs.reservePercentKey) private var fuelReservePercent = FuelRangePrefs.suggestedReservePercent
     @State private var fuelAssistDebounce: Task<Void, Never>?
+    /// Fuel plans open as a compact safety summary so the map remains useful.
+    @State private var fuelLegsExpanded = false
+    /// A completed plan keeps range controls to one row until the rider edits them.
+    /// Legs and range are mutually exclusive disclosures so neither can bury the map.
+    @State private var fuelRangeEditorExpanded = false
 
     private var planner: RoutePlannerModel { app.planner }
 
@@ -154,6 +160,8 @@ struct RoutePlannerCard: View {
         planner.clearRoute()
         selectedStage = nil
         fromHereChipsOpen = false
+        fuelLegsExpanded = false
+        fuelRangeEditorExpanded = false
     }
 
     // MARK: - Portrait shell
@@ -314,50 +322,59 @@ struct RoutePlannerCard: View {
 
     @ViewBuilder private var fromHereContent: some View {
         if planner.hasRoute {
-            StageCard(
-                number: 1,
-                profileTitle: planner.profile.title,
-                isActive: fromHereChipsOpen,
-                onToggle: {
-                    withAnimation(.easeInOut(duration: 0.18)) { fromHereChipsOpen.toggle() }
-                },
-                headline: {
-                    stageMetrics(
-                        km: planner.totalMeters / 1000,
-                        dirtPercent: planner.aggregateDirtPercent
-                    )
-                },
-                detail: {
-                    VStack(alignment: .leading, spacing: DirtSpace.inner) {
-                        profileSegments(active: planner.profile) { profile in
-                            planner.profile = profile
-                            withAnimation(.easeInOut(duration: 0.18)) { fromHereChipsOpen = false }
-                        }
-                        profileGuidanceLine(planner.profile)
-                        allowUnknownControl(
-                            binding: Binding(
-                                get: { planner.allowUnknown },
-                                set: { on in
-                                    if on {
-                                        unknownAckStage = nil
-                                        showUnknownAck = true
-                                    } else {
-                                        planner.allowUnknown = false
-                                    }
-                                }
-                            ),
-                            disabled: planner.profile == .cleanest,
-                            profile: planner.profile
+            if planner.hasFuelAssistedPlan {
+                fuelPlanSummary
+                if fuelLegsExpanded { stageList }
+            } else {
+                StageCard(
+                    number: 1,
+                    profileTitle: planner.profile.title,
+                    isActive: fromHereChipsOpen,
+                    onToggle: {
+                        withAnimation(.easeInOut(duration: 0.18)) { fromHereChipsOpen.toggle() }
+                    },
+                    headline: {
+                        stageMetrics(
+                            km: planner.totalMeters / 1000,
+                            dirtPercent: planner.aggregateDirtPercent
                         )
+                    },
+                    detail: {
+                        VStack(alignment: .leading, spacing: DirtSpace.inner) {
+                            profileSegments(active: planner.profile) { profile in
+                                planner.profile = profile
+                                withAnimation(.easeInOut(duration: 0.18)) { fromHereChipsOpen = false }
+                            }
+                            profileGuidanceLine(planner.profile)
+                            allowUnknownControl(
+                                binding: Binding(
+                                    get: { planner.allowUnknown },
+                                    set: { on in
+                                        if on {
+                                            unknownAckStage = nil
+                                            showUnknownAck = true
+                                        } else {
+                                            planner.allowUnknown = false
+                                        }
+                                    }
+                                ),
+                                disabled: planner.profile == .cleanest,
+                                profile: planner.profile
+                            )
+                        }
                     }
-                }
-            )
+                )
+            }
 
             routingStatus
             fuelRangeControl
-            statsRow
+            if !fuelLegsExpanded {
+                statsRow
+            }
             ctaRow
-            clearAllButton
+            if !fuelLegsExpanded {
+                clearAllButton
+            }
         } else {
             fromHereProfileHeader
             if fromHereChipsOpen {
@@ -402,7 +419,7 @@ struct RoutePlannerCard: View {
         routingStatus
         if !planner.isRouting {
             if planner.fromHereNeedsStartPin {
-                helperBox("Tap a mapped road near you for A. B stays where you put it.")
+                helperBox("Tap a mapped road near you for point 1. Point 2 stays where you put it.")
             } else if planner.errorMessage != nil {
                 helperBox(fromHereRecoveryHint)
                 if planner.destination != nil {
@@ -423,26 +440,26 @@ struct RoutePlannerCard: View {
                     .buttonStyle(.plain)
                 }
             } else {
-                helperBox("Tap to drop B, or long-press a road to place/move B (snaps to the nearest road).")
+                helperBox("Tap to drop point 2, or long-press a road to place/move point 2 (snaps to the nearest road).")
             }
         }
     }
 
     private var fromHereRecoveryHint: String {
         let msg = (planner.errorMessage ?? "").lowercased()
-        if msg.contains("point b") || msg.contains("nudge b") {
-            return "Long-press a road to move B onto the centerline, then try again."
+        if msg.contains("point b") || msg.contains("point 2") || msg.contains("nudge b") {
+            return "Long-press a road to move point 2 onto the centerline, then try again."
         }
         if msg.contains("snap") || msg.contains("nudge") || msg.contains("centerline") || msg.contains("roadway") {
-            return "Long-press a road to move B onto the centerline, then try again."
+            return "Long-press a road to move point 2 onto the centerline, then try again."
         }
         if msg.contains("same junction") || msg.contains("farther along") {
-            return "Move B farther along the road, then try again."
+            return "Move point 2 farther along the road, then try again."
         }
-        if msg.contains("mapped road") || msg.contains("set a") || msg.contains("set your start") || msg.contains("your start") {
-            return "Tap a mapped road near you for A. B stays where you put it."
+        if msg.contains("mapped road") || msg.contains("set a") || msg.contains("set point 1") || msg.contains("set your start") || msg.contains("your start") {
+            return "Tap a mapped road near you for point 1. Point 2 stays where you put it."
         }
-        return "Try another profile (tap Balanced), turn on Allow unknown, or long-press to move B."
+        return "Try another profile (tap Balanced), turn on Allow unknown, or long-press to move point 2."
     }
 
     // MARK: - Plan
@@ -452,47 +469,113 @@ struct RoutePlannerCard: View {
         // until the first stage exists so empty Plan stays clean.
         if planner.stages.isEmpty {
             VStack(spacing: 8) {
-                helperBox("Long-press the map for A, then again for B to build your first stage.")
+                helperBox("Long-press the map for point 1, then again for point 2 to build your first leg.")
                 GPXImportButton(continueAsPlan: true)
             }
         } else {
-            stageList
+            if planner.hasFuelAssistedPlan {
+                fuelPlanSummary
+                if fuelLegsExpanded { stageList }
+            } else {
+                stageList
+            }
         }
 
         routingStatus
 
-        if planner.hasRoute {
+        if !planner.stages.isEmpty {
+            // Keep the switch reachable after fuel planning fails. Hiding this
+            // control with `hasRoute == false` trapped the rider in the error.
             fuelRangeControl
-            statsRow
+        }
+
+        if planner.hasRoute {
+            if !fuelLegsExpanded {
+                statsRow
+            }
             ctaRow
-            clearAllButton
+            if !fuelLegsExpanded {
+                clearAllButton
+            }
         } else if !planner.stages.isEmpty {
             clearAllButton
         }
     }
 
+    private var compactFuelRangeControl: Bool {
+        planner.hasFuelAssistedPlan && !fuelRangeEditorExpanded
+    }
+
     private var fuelRangeControl: some View {
         VStack(alignment: .leading, spacing: 6) {
-            HStack {
+            HStack(spacing: DirtSpace.tight) {
                 Text("Fuel range")
                     .font(.dirtUI(14, weight: .bold))
                     .foregroundStyle(DirtTheme.muted)
+
+                if compactFuelRangeControl, fuelRangeKm > 0 {
+                    Text("\(Int(fuelRangeKm)) km · \(Int(fuelReservePercent))% reserve")
+                        .font(DirtType.metricInline)
+                        .foregroundStyle(DirtTheme.ink)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                }
+
                 Spacer()
+
+                if planner.hasFuelAssistedPlan, fuelRangeKm > 0 {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.18)) {
+                            if !fuelRangeEditorExpanded {
+                                fuelLegsExpanded = false
+                            }
+                            fuelRangeEditorExpanded.toggle()
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text(fuelRangeEditorExpanded ? "Done" : "Edit")
+                            Image(systemName: "slider.horizontal.3")
+                                .font(.system(size: 11, weight: .bold))
+                        }
+                        .font(DirtType.chip)
+                        .fontWeight(.bold)
+                        .foregroundStyle(DirtTheme.orange)
+                        .frame(minHeight: DirtHit.min)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(fuelRangeEditorExpanded ? "Close fuel range controls" : "Edit fuel range")
+                }
+
                 Toggle(
                     "",
                     isOn: Binding(
                         get: { fuelRangeKm > 0 },
                         set: { on in
-                            fuelRangeKm = on ? max(FuelRangePrefs.suggestedDefaultKm, FuelRangePrefs.minimumKm) : 0
-                            // Toggle can re-run sooner than the slider settle delay.
-                            scheduleFuelAssistReapply(fuelRangeKm, delaySeconds: on ? 0.4 : 0)
+                            if on {
+                                let restoredRange = FuelRangePrefs.lastEnabledKilometers
+                                fuelRangeKm = restoredRange
+                                let usable = Int(FuelRangePrefs.usableKilometers(
+                                    for: restoredRange,
+                                    reservePercent: fuelReservePercent
+                                ).rounded())
+                                planner.toast = "Fuel planning: \(usable) km usable range"
+                                // Toggle can re-run sooner than the slider settle delay.
+                                scheduleFuelAssistReapply(restoredRange, delaySeconds: 0.4)
+                            } else {
+                                fuelAssistDebounce?.cancel()
+                                FuelRangePrefs.lastEnabledKilometers = fuelRangeKm
+                                fuelRangeKm = 0
+                                planner.disableFuelAssistAndRestoreRoute()
+                            }
                         }
                     )
                 )
                 .labelsHidden()
                 .tint(DirtTheme.orange)
             }
-            if fuelRangeKm > 0 {
+            .frame(minHeight: DirtHit.min)
+
+            if fuelRangeKm > 0, !compactFuelRangeControl {
                 HStack(spacing: 10) {
                     Text("\(Int(fuelRangeKm)) km")
                         .font(.dirtMono(13, weight: .bold))
@@ -505,39 +588,168 @@ struct RoutePlannerCard: View {
                     ) { editing in
                         if editing {
                             fuelAssistDebounce?.cancel()
+                            planner.cancelFuelAssistForRangeEdit()
+                            RoutingDebugLog.shared.event(
+                                "ui fuel slider begin range=\(Int(fuelRangeKm))km"
+                            )
                         } else {
-                            // Wait until the thumb is up and settled before re-routing.
-                            scheduleFuelAssistReapply(fuelRangeKm, delaySeconds: 2.5)
+                            FuelRangePrefs.lastEnabledKilometers = fuelRangeKm
+                            // Give the rider a full two seconds after the final
+                            // movement before any route work starts.
+                            scheduleFuelAssistReapply(fuelRangeKm, delaySeconds: 2.0)
                         }
                     }
                     .tint(DirtTheme.orange)
+                    Menu {
+                        ForEach([0, 5, 10, 15, 20, 25, 30], id: \.self) { percent in
+                            Button("\(percent)%") { fuelReservePercent = Double(percent) }
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text("\(Int(fuelReservePercent))% reserve")
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 8, weight: .bold))
+                        }
+                        .font(DirtType.chip)
+                        .fontWeight(.bold)
+                        .foregroundStyle(DirtTheme.ink)
+                        .padding(.horizontal, 10)
+                        .frame(minHeight: 32)
+                        .background(DirtTheme.wash, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                    }
+                    .accessibilityLabel("Fuel safety reserve")
+                    .accessibilityValue("\(Int(fuelReservePercent)) percent")
                 }
-                Text("Legs longer than one tank get fuel stops. Fuel pins reseat when you move A, vias, or B.")
-                    .font(DirtType.helper)
-                    .foregroundStyle(DirtTheme.muted)
             }
         }
-        .padding(10)
+        .padding(.horizontal, DirtSpace.inner)
+        .padding(.vertical, compactFuelRangeControl ? 0 : DirtSpace.inner)
         .background(DirtTheme.rowFill, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .stroke(DirtTheme.hairline, lineWidth: 1)
         )
+        .onChange(of: fuelRangeKm) { oldValue, newValue in
+            // Slider release callbacks can be lost when a route-sheet update
+            // lands during the drag. Debouncing every real movement guarantees
+            // one recalculation two seconds after the last value change.
+            guard oldValue > 0, newValue > 0, oldValue != newValue else { return }
+            FuelRangePrefs.lastEnabledKilometers = newValue
+            scheduleFuelAssistReapply(newValue, delaySeconds: 2.0)
+        }
+        .onChange(of: fuelReservePercent) { _, newValue in
+            FuelRangePrefs.reservePercent = newValue
+            guard fuelRangeKm > 0 else { return }
+            scheduleFuelAssistReapply(fuelRangeKm, delaySeconds: 0.4)
+        }
+    }
+
+    /// Compact completion/safety state. The detailed legs are one deliberate tap
+    /// away, rather than permanently consuming the map with a five-row list.
+    private var fuelPlanSummary: some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.18)) {
+                    let openingLegs = !fuelLegsExpanded
+                    fuelLegsExpanded.toggle()
+                    selectedStage = nil
+                    if openingLegs {
+                        fuelRangeEditorExpanded = false
+                    }
+                }
+            } label: {
+                HStack(spacing: DirtSpace.tight) {
+                    Image(systemName: "fuelpump.fill")
+                        .foregroundStyle(DirtTheme.orange)
+                    Text(fuelLegsExpanded ? "Fuel plan legs" : "Fuel ready")
+                        .font(DirtType.rowTitle)
+                        .fontWeight(.bold)
+                        .foregroundStyle(DirtTheme.ink)
+                    if !fuelLegsExpanded {
+                        Text("\(planner.stages.count) legs · \(planner.fuelStopCount) stops")
+                            .font(DirtType.helper)
+                            .foregroundStyle(DirtTheme.muted)
+                            .lineLimit(1)
+                    }
+                    Spacer(minLength: 0)
+                    Text(fuelLegsExpanded ? "Done" : "Legs")
+                        .font(DirtType.chip)
+                        .fontWeight(.bold)
+                        .foregroundStyle(DirtTheme.orange)
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 9, weight: .black))
+                        .foregroundStyle(DirtTheme.orange)
+                        .rotationEffect(.degrees(fuelLegsExpanded ? 180 : 0))
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            if !fuelLegsExpanded {
+                if planner.longestFuelLegMeters > 0 {
+                    HStack(spacing: 5) {
+                        Text("Longest \(String(format: "%.1f", planner.longestFuelLegMeters / 1000)) km")
+                        Text("·")
+                        Text("\(String(format: "%.1f", planner.fuelReserveMarginKm)) km reserve")
+                        Text("·")
+                        Text("\(Int(planner.fuelUsableRangeKm.rounded())) km usable")
+                    }
+                    .font(.dirtMono(10.5, weight: .semibold))
+                    .foregroundStyle(DirtTheme.ink)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.72)
+                }
+
+                if planner.fuelSurfaceNoticeCount > 0 {
+                    Label(
+                        "\(planner.fuelSurfaceNoticeCount) leg\(planner.fuelSurfaceNoticeCount == 1 ? "" : "s") could not fully meet the selected surface target. Open the legs for details.",
+                        systemImage: "exclamationmark.triangle.fill"
+                    )
+                    .font(DirtType.helper)
+                    .foregroundStyle(DirtTheme.orange)
+                    .fixedSize(horizontal: false, vertical: true)
+                }
+
+                if let notice = planner.fuelPlanNotice, !notice.isEmpty {
+                    Label(notice, systemImage: "info.circle.fill")
+                        .font(DirtType.helper)
+                        .foregroundStyle(DirtTheme.ink)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .padding(.horizontal, DirtSpace.inner)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(DirtTheme.rowFill, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(DirtTheme.hairline, lineWidth: 1)
+        )
+        .accessibilityElement(children: .contain)
     }
 
     /// Debounced re-assist after fuel range changes. Slider uses a long settle
     /// delay so dragging doesn’t spam the router.
     private func scheduleFuelAssistReapply(_ km: Double, delaySeconds: Double) {
         fuelAssistDebounce?.cancel()
+        RoutingDebugLog.shared.event(
+            "ui fuel range selected=\(Int(km))km recalcIn=\(String(format: "%.1f", delaySeconds))s"
+        )
         guard km > 0, delaySeconds > 0 else {
             if km <= 0 { return }
-            planner.reapplyFuelAssist()
+            FuelRangePrefs.kilometers = km
+            FuelRangePrefs.lastEnabledKilometers = km
+            planner.reapplyFuelAssist(rangeKm: km)
             return
         }
-        fuelAssistDebounce = Task {
+        fuelAssistDebounce = Task { @MainActor in
             try? await Task.sleep(for: .seconds(delaySeconds))
             guard !Task.isCancelled else { return }
-            planner.reapplyFuelAssist()
+            FuelRangePrefs.kilometers = km
+            FuelRangePrefs.lastEnabledKilometers = km
+            RoutingDebugLog.shared.event("ui fuel recalculation fired range=\(Int(km))km")
+            planner.reapplyFuelAssist(rangeKm: km)
         }
     }
 
@@ -671,7 +883,9 @@ struct RoutePlannerCard: View {
     @ViewBuilder private var stageList: some View {
         // Collapsed stages are one row each, so 180pt shows three. Grow the band only
         // while a stage is open, so the map keeps its space the rest of the time.
-        let bandHeight: CGFloat = selectedStage == nil ? 180 : 280
+        let bandHeight: CGFloat = planner.hasFuelAssistedPlan
+            ? (selectedStage == nil ? 170 : 230)
+            : (selectedStage == nil ? 180 : 280)
         if planner.stages.count > 3 {
             ScrollViewReader { proxy in
                 ScrollView {
@@ -710,8 +924,20 @@ struct RoutePlannerCard: View {
     private var stageListContent: some View {
         VStack(alignment: .leading, spacing: 10) {
             ForEach(Array(planner.stages.enumerated()), id: \.element.id) { index, stage in
-                stageBlock(index: index, stage: stage)
-                    .id(stage.id)
+                SwipeRevealDelete(
+                    isEnabled: planner.canDeleteStage(at: index),
+                    accessibilityLabel: "Delete leg \(index + 1)",
+                    onDelete: {
+                        withAnimation(.easeInOut(duration: 0.18)) {
+                            selectedStage = nil
+                            planner.deleteStage(at: index)
+                        }
+                    },
+                    content: {
+                        stageBlock(index: index, stage: stage)
+                    }
+                )
+                .id(stage.id)
             }
         }
         .padding(.vertical, 2)
@@ -726,19 +952,23 @@ struct RoutePlannerCard: View {
             profileTitle: stage.profile.title,
             isActive: isActive,
             onToggle: { toggleStageSelection(index) },
-            headline: { stageHeadline(stage) },
+            headline: { stageHeadline(stage, at: index) },
             detail: {
                 VStack(alignment: .leading, spacing: DirtSpace.inner) {
+                    if let notice = planner.profileAvailabilityNotice(at: index) {
+                        Label(notice, systemImage: "exclamationmark.triangle.fill")
+                            .font(DirtType.helper)
+                            .foregroundStyle(DirtTheme.orange)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                     profileSegments(active: stage.profile) { profile in
                         planner.setStageProfile(profile, at: index)
                         withAnimation(.easeInOut(duration: 0.18)) { selectedStage = nil }
                     }
-                    profileGuidanceLine(stage.profile)
-                    // Destructive far left, the switch far right — nothing to mis-tap between
-                    // them. Top-aligned so the trash sits level with the toggle, not adrift
-                    // in the middle when the disabled-for-Clean helper line appears.
-                    HStack(alignment: .top, spacing: DirtSpace.tight) {
-                        deleteStageButton(index: index)
+                    if stage.fuelGroupID != nil {
+                        compactAllowUnknownControl(stage: stage, index: index)
+                    } else {
+                        profileGuidanceLine(stage.profile)
                         allowUnknownControl(
                             binding: Binding(
                                 get: { stage.allowUnknown },
@@ -755,13 +985,29 @@ struct RoutePlannerCard: View {
                             profile: stage.profile
                         )
                     }
+                    if stage.error != nil, stage.profile != .cleanest {
+                        Button {
+                            planner.setStageProfile(.cleanest, at: index)
+                        } label: {
+                            Label(
+                                "Use Clean for this leg",
+                                systemImage: "arrow.triangle.2.circlepath"
+                            )
+                            .font(DirtType.chip)
+                            .fontWeight(.bold)
+                            .foregroundStyle(DirtTheme.orange)
+                            .frame(maxWidth: .infinity, minHeight: DirtHit.min)
+                            .background(DirtTheme.wash, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
             }
         )
     }
 
     /// Left side of a stage row: metrics once routed, state text before that.
-    @ViewBuilder private func stageHeadline(_ stage: RoutePlannerModel.Stage) -> some View {
+    @ViewBuilder private func stageHeadline(_ stage: RoutePlannerModel.Stage, at index: Int) -> some View {
         if stage.isRouting {
             HStack(spacing: DirtSpace.tight) {
                 ProgressView().controlSize(.mini)
@@ -775,10 +1021,28 @@ struct RoutePlannerCard: View {
                 .foregroundStyle(DirtTheme.danger)
                 .lineLimit(2)
         } else if let response = stage.response {
-            stageMetrics(
-                km: (response.distanceMeters ?? 0) / 1000,
-                dirtPercent: response.dirtPercent
-            )
+            VStack(alignment: .leading, spacing: 1) {
+                Text(planner.stageEndpointTitle(at: index))
+                    .font(.dirtUI(10.5, weight: .bold))
+                    .foregroundStyle(DirtTheme.ink)
+                    .lineLimit(1)
+                stageMetrics(
+                    km: (response.distanceMeters ?? 0) / 1000,
+                    dirtPercent: response.dirtPercent
+                )
+                if let margin = planner.fuelMarginText(at: index) {
+                    HStack(spacing: 4) {
+                        Text(margin)
+                        if planner.profileAvailabilityNotice(at: index) != nil {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundStyle(DirtTheme.orange)
+                        }
+                    }
+                    .font(.dirtUI(9.5, weight: .semibold))
+                    .foregroundStyle(DirtTheme.muted)
+                    .lineLimit(1)
+                }
+            }
         } else {
             Text(stage.end == nil ? "Hold the map to set the end" : "Waiting for route…")
                 .font(DirtType.helper)
@@ -889,34 +1153,44 @@ struct RoutePlannerCard: View {
             .padding(.horizontal, 2)
     }
 
-    /// Icon-only by design: the trash glyph is unambiguous, and the action already sits
-    /// behind expanding the stage. The label survives for VoiceOver.
-    private func deleteStageButton(index: Int) -> some View {
-        Button {
-            withAnimation(.easeInOut(duration: 0.18)) {
-                selectedStage = nil
-                planner.deleteStage(at: index)
-            }
-        } label: {
-            Image(systemName: "trash.fill")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(DirtTheme.danger)
-                // Fixed square: a flexible height here claims every spare point in the
-                // sheet and inflates the whole stage card.
-                .frame(width: DirtHit.min, height: DirtHit.min)
-                .background(DirtTheme.danger.opacity(0.12))
-                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .stroke(DirtTheme.danger.opacity(0.35), lineWidth: 1)
+    /// Lives in the expanded profile band — not on the dense stage metrics row.
+    /// Fuel-leg details stay to two compact control rows: profile and access.
+    /// The full legal explanation was already acknowledged when Allow was enabled.
+    private func compactAllowUnknownControl(
+        stage: RoutePlannerModel.Stage,
+        index: Int
+    ) -> some View {
+        HStack(spacing: DirtSpace.tight) {
+            Text(stage.profile == .cleanest ? "Unknown access off for Clean" : "Allow unknown access")
+                .font(DirtType.helper)
+                .foregroundStyle(DirtTheme.ink)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+            Spacer(minLength: 0)
+            Toggle(
+                "",
+                isOn: Binding(
+                    get: { stage.allowUnknown },
+                    set: { on in
+                        if on {
+                            unknownAckStage = index
+                            showUnknownAck = true
+                        } else {
+                            planner.setStageAllowUnknown(false, at: index)
+                        }
+                    }
                 )
-                .contentShape(Rectangle())
+            )
+            .labelsHidden()
+            .tint(DirtTheme.orange)
+            .disabled(stage.profile == .cleanest)
+            .opacity(stage.profile == .cleanest ? 0.4 : 1)
         }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Delete stage \(index + 1)")
+        .padding(.horizontal, DirtSpace.inner)
+        .frame(maxWidth: .infinity, minHeight: DirtHit.min)
+        .background(DirtTheme.wash, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
     }
 
-    /// Lives in the expanded profile band — not on the dense stage metrics row.
     private func allowUnknownControl(
         binding: Binding<Bool>,
         disabled: Bool,
@@ -956,7 +1230,23 @@ struct RoutePlannerCard: View {
     }
 
     @ViewBuilder private var routingStatus: some View {
-        if planner.isRouting {
+        if let fuelStatus = planner.fuelPlanningStatus {
+            HStack(spacing: 8) {
+                ProgressView()
+                    .controlSize(.small)
+                    .tint(DirtTheme.orange)
+                Image(systemName: "fuelpump.fill")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(DirtTheme.orange)
+                Text(fuelStatus)
+                    .font(.dirtUI(12, weight: .semibold))
+                    .foregroundStyle(DirtTheme.ink)
+                    .contentTransition(.numericText())
+                Spacer(minLength: 0)
+            }
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(fuelStatus)
+        } else if planner.isRouting {
             HStack(spacing: 8) {
                 ProgressView().controlSize(.small)
                 Text("Finding your route…")
@@ -1230,28 +1520,27 @@ private struct StageCard<Headline: View, Detail: View>: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Button(action: onToggle) {
-                HStack(spacing: DirtSpace.tight) {
-                    Text("\(number)")
-                        .font(.dirtMono(14, weight: .bold))
-                        .foregroundStyle(isActive ? DirtTheme.onOrange : .white)
-                        .frame(width: 24, height: 24)
-                        .background(isActive ? DirtTheme.orange : DirtTheme.chrome)
-                        .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+            HStack(spacing: DirtSpace.tight) {
+                Text("\(number)")
+                    .font(.dirtMono(14, weight: .bold))
+                    .foregroundStyle(isActive ? DirtTheme.onOrange : .white)
+                    .frame(width: 24, height: 24)
+                    .background(isActive ? DirtTheme.orange : DirtTheme.chrome)
+                    .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
 
-                    headline()
+                headline()
 
-                    Spacer(minLength: DirtSpace.tight)
+                Spacer(minLength: DirtSpace.tight)
 
+                Button(action: onToggle) {
                     profileTag
                 }
-                .padding(.horizontal, DirtSpace.inner)
-                .frame(maxWidth: .infinity, minHeight: DirtHit.control)
-                .contentShape(Rectangle())
+                .buttonStyle(.plain)
+                .accessibilityLabel("\(profileTitle) route options for leg \(number)")
+                .accessibilityHint(isActive ? "Hides leg options" : "Shows leg options")
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Stage \(number), \(profileTitle)")
-            .accessibilityHint(isActive ? "Hides stage options" : "Shows stage options")
+            .padding(.horizontal, DirtSpace.inner)
+            .frame(maxWidth: .infinity, minHeight: DirtHit.control)
 
             if isActive {
                 Rectangle()
@@ -1289,6 +1578,67 @@ private struct StageCard<Headline: View, Detail: View>: View {
                     lineWidth: 1
                 )
         )
+    }
+}
+
+/// `swipeActions` only receives native row behavior inside a List. Route rows
+/// intentionally live in the compact planner stack, so this supplies the same
+/// deliberate left-swipe reveal without turning the whole row into a button.
+private struct SwipeRevealDelete<Content: View>: View {
+    let isEnabled: Bool
+    let accessibilityLabel: String
+    let onDelete: () -> Void
+    @ViewBuilder let content: () -> Content
+
+    @State private var offset: CGFloat = 0
+    private let actionWidth: CGFloat = 88
+
+    var body: some View {
+        ZStack(alignment: .trailing) {
+            if isEnabled {
+                Button(role: .destructive) {
+                    offset = 0
+                    onDelete()
+                } label: {
+                    VStack(spacing: 3) {
+                        Image(systemName: "trash.fill")
+                            .font(.system(size: 13, weight: .bold))
+                        Text("Delete")
+                            .font(DirtType.chip)
+                            .fontWeight(.bold)
+                    }
+                    .foregroundStyle(.white)
+                    .frame(width: actionWidth)
+                    .frame(height: DirtHit.control)
+                    .background(DirtTheme.danger)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(accessibilityLabel)
+            }
+
+            content()
+                .offset(x: offset)
+                .simultaneousGesture(
+                    DragGesture(minimumDistance: 12)
+                        .onChanged { value in
+                            guard isEnabled,
+                                  abs(value.translation.width) > abs(value.translation.height)
+                            else { return }
+                            offset = min(0, max(-actionWidth, value.translation.width))
+                        }
+                        .onEnded { value in
+                            guard isEnabled,
+                                  abs(value.translation.width) > abs(value.translation.height)
+                            else { return }
+                            withAnimation(.easeOut(duration: 0.18)) {
+                                offset = value.translation.width < -actionWidth * 0.42
+                                    ? -actionWidth
+                                    : 0
+                            }
+                        }
+                )
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 }
 

@@ -45,9 +45,9 @@ nonisolated enum OnDeviceProfileCosts {
         let table: [Double]
         switch profile {
         case .direct:
-            // Corridor-bound (cross-track). Dirt cheaper than Balanced so the
-            // line is still a dirt ride, not a 50/50 highway mix.
-            table = [2.35, 0.90, 0.82, 0.70, 0.92]
+            // Geometry first. Surface is a mild tie-break between roads that
+            // make similar progress near the A→B line.
+            table = [1.15, 1.00, 0.95, 0.90, 1.00]
         case .balanced:
             // Dual-sport ~50/50. Cross-track keeps it on the A→B corridor;
             // without that it hunts like Dirt.
@@ -59,13 +59,12 @@ nonisolated enum OnDeviceProfileCosts {
             // paved connector onto an FSR.
             table = [16.0, 0.28, 0.12, 0.06, 0.28]
         case .cleanest:
-            table = [1.0, 8.0, 10.0, 14.0, 6.0]
+            table = [1.0, 60.0, 80.0, 100.0, 12.0]
         }
         let idx = min(max(surfaceCode, 0), table.count - 1)
         let road = GraphV2Pack.roadClassName(roadClassCode)
         // Untagged highway is pavement, not adventure fuel — match rider paint.
-        if idx == 4, paintsAsPavedRoadClass(road),
-           profile == .dirt || profile == .balanced || profile == .direct {
+        if idx == 4, paintsAsPavedRoadClass(road) {
             return table[0]
         }
         var w = table[idx]
@@ -376,7 +375,11 @@ nonisolated enum OnDeviceProfileCosts {
     /// Track / resource / gravel stay dirt. `unknown` on a road class is paved.
     static func isAdventureSurface(_ name: String) -> Bool {
         switch name {
-        case "gravel", "access", "resource", "track", "double_track", "single", "unpaved", "dirt":
+        // `unknown` only reaches here after riderPaintSurface has already
+        // remapped untagged highway/local/service classes to paved. What remains
+        // is an untagged track/resource edge, which the live engine counts as
+        // dirt. Keep phone and live route selection/statistics identical.
+        case "gravel", "access", "resource", "track", "double_track", "single", "unpaved", "dirt", "unknown":
             return true
         default:
             return false
@@ -397,6 +400,24 @@ nonisolated enum OnDeviceProfileCosts {
             }
         }
         return surfaceName
+    }
+
+    /// Selected-route paint keeps two independent OSM facts separate:
+    /// surface material and confidence that motorcycles may use the way.
+    /// Unknown motor access wins visually; otherwise an untagged track/path
+    /// remains an adventure surface instead of being shown as black pavement.
+    static func selectedRoutePaintKey(
+        surfaceName: String,
+        roadClassName: String,
+        accessName: String
+    ) -> String {
+        if accessName == "motorized_unknown" {
+            return "unknown_access"
+        }
+        return riderPaintSurface(
+            surfaceName: surfaceName,
+            roadClassName: roadClassName
+        )
     }
 
     static func isAdventureRoadClass(_ code: Int) -> Bool {

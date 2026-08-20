@@ -17,6 +17,7 @@ struct ProfileSheet: View {
     @State private var routeDebugReportURL: URL?
     @State private var showRouteDebugShare = false
     @AppStorage(FuelRangePrefs.key) private var fuelRangeKm = 0.0
+    @AppStorage(FuelRangePrefs.reservePercentKey) private var fuelReservePercent = FuelRangePrefs.suggestedReservePercent
     @AppStorage(KeepAwakePrefs.key) private var keepAwakeWhileUsing = false
     @Environment(\.scenePhase) private var scenePhase
     @State private var profileFuelDebounce: Task<Void, Never>?
@@ -254,6 +255,25 @@ struct ProfileSheet: View {
                     .tint(DirtTheme.orange)
                     .accessibilityLabel("Kilometers per tank")
                 }
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Safety reserve")
+                            .font(DirtType.rowTitle)
+                            .foregroundStyle(DirtTheme.ink)
+                        Text("Plans stops within \(Int(FuelRangePrefs.usableKilometers(for: fuelRangeKm, reservePercent: fuelReservePercent).rounded())) km usable range")
+                            .font(DirtType.helper)
+                            .foregroundStyle(DirtTheme.muted)
+                    }
+                    Spacer(minLength: 0)
+                    Menu("\(Int(fuelReservePercent))%") {
+                        ForEach([0, 5, 10, 15, 20, 25, 30], id: \.self) { percent in
+                            Button("\(percent)%") { fuelReservePercent = Double(percent) }
+                        }
+                    }
+                    .font(DirtType.chip)
+                    .fontWeight(.bold)
+                    .foregroundStyle(DirtTheme.orange)
+                }
             }
         }
         .padding(DirtSpace.row)
@@ -268,6 +288,16 @@ struct ProfileSheet: View {
             guard newValue > 0 else { return }
             profileFuelDebounce = Task {
                 try? await Task.sleep(for: .seconds(2.5))
+                guard !Task.isCancelled else { return }
+                app.planner.reapplyFuelAssist()
+            }
+        }
+        .onChange(of: fuelReservePercent) { _, newValue in
+            FuelRangePrefs.reservePercent = newValue
+            profileFuelDebounce?.cancel()
+            guard fuelRangeKm > 0 else { return }
+            profileFuelDebounce = Task {
+                try? await Task.sleep(for: .seconds(0.5))
                 guard !Task.isCancelled else { return }
                 app.planner.reapplyFuelAssist()
             }
@@ -425,13 +455,13 @@ struct ProfileSheet: View {
 
     private var routeSessionDiagnosticsCard: some View {
         VStack(alignment: .leading, spacing: DirtSpace.inner) {
-            Text("Routing debug")
+            Text("App debug")
                 .font(DirtType.sectionLabel)
                 .tracking(1.1)
                 .foregroundStyle(DirtTheme.muted)
                 .textCase(.uppercase)
 
-            Text("Share the last routing attempts (pins, profile, Allow, on-device vs live, km, dirt%). Send that file when a line looks wrong.")
+            Text("Share the current app session: network changes, map loading, fuel controls, routing, navigation, and other field-test failures.")
                 .font(DirtType.helper)
                 .foregroundStyle(DirtTheme.muted)
                 .fixedSize(horizontal: false, vertical: true)
@@ -439,7 +469,7 @@ struct ProfileSheet: View {
             Button {
                 shareRouteDebug()
             } label: {
-                Text(routeDebugBusy ? "Preparing…" : "Share routing session…")
+                Text(routeDebugBusy ? "Preparing…" : "Share app session…")
                     .font(.dirtUI(13, weight: .semibold))
                     .frame(maxWidth: .infinity, minHeight: DirtHit.min, alignment: .leading)
                     .contentShape(Rectangle())
@@ -448,9 +478,9 @@ struct ProfileSheet: View {
             .foregroundStyle(DirtTheme.orange)
             .disabled(routeDebugBusy)
 
-            Button("Copy routing log") {
+            Button("Copy app log") {
                 RoutingDebugLog.shared.copyToPasteboard()
-                app.planner.toast = "Routing log copied"
+                app.planner.toast = "App log copied"
             }
             .font(.dirtUI(13, weight: .semibold))
             .foregroundStyle(DirtTheme.orange)
@@ -483,10 +513,10 @@ struct ProfileSheet: View {
             routeDebugReportURL = url
             routeDebugStatus = url.lastPathComponent
             showRouteDebugShare = true
-            app.planner.toast = "Routing debug ready to share"
+            app.planner.toast = "App debug ready to share"
         } catch {
             routeDebugStatus = error.localizedDescription
-            app.planner.toast = "Couldn’t write routing debug"
+            app.planner.toast = "Couldn’t write app debug"
         }
         routeDebugBusy = false
     }

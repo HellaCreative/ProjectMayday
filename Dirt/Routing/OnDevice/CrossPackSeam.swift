@@ -1,136 +1,49 @@
 import CoreLocation
 import Foundation
 
-/// Seed for joining two installed region packs. Mirrors Mayday
-/// `dynamicSeamForPair`: chord × region split, plus bottleneck-only doors.
-/// Not a named mountain-pass list — different A→B lines get different seeds.
+/// Selects build-proven OSM seam anchors embedded in `graph.v2.bin`.
+/// The pack builder—not the phone—proves that both regions contain the same
+/// OSM way and exact vertex. Runtime only ranks those real crossings by the
+/// rider's A→B alignment.
 enum CrossPackSeam {
-    /// Isthmus / bridge / Madawaska — the only legal road, not scenery.
-    private static let bottlenecks: [(Set<String>, CLLocationCoordinate2D)] = [
-        (["ns", "nb"], CLLocationCoordinate2D(latitude: 45.92, longitude: -64.35)),
-        (["nb", "pe"], CLLocationCoordinate2D(latitude: 46.21, longitude: -63.75)),
-        (["nb", "qc"], CLLocationCoordinate2D(latitude: 47.55, longitude: -68.65))
-    ]
-
-    static func seed(
-        from: CLLocationCoordinate2D,
-        to: CLLocationCoordinate2D,
-        left: String,
-        right: String
-    ) -> CLLocationCoordinate2D {
-        candidates(from: from, to: to, left: left, right: right).first
-            ?? lerp(from, to, 0.5)
-    }
-
-    /// Chord crossing first, then a few points along the shared border so a
-    /// missed snap does not fall through to live longhaul. Not a scenic pass list.
-    /// Snaps must land on OSM core edges only — provincial capillary (DRA / FTEN /
-    /// Access / MNRF) is same-region dirt, not a hop stack.
     static func candidates(
         from: CLLocationCoordinate2D,
         to: CLLocationCoordinate2D,
-        left: String,
-        right: String
-    ) -> [CLLocationCoordinate2D] {
-        let a = left.lowercased()
-        let b = right.lowercased()
-        let pair: Set<String> = [a, b]
-        if let door = bottlenecks.first(where: { $0.0 == pair }) {
-            return [door.1]
-        }
-
-        let chord = chordCrossing(from: from, to: to, left: a, right: b)
-        let extras = borderLineSamples(left: a, right: b)
-            .sorted {
-                hypot($0.latitude - chord.latitude, $0.longitude - chord.longitude)
-                    < hypot($1.latitude - chord.latitude, $1.longitude - chord.longitude)
-            }
-        var out: [CLLocationCoordinate2D] = [chord]
-        var seen = Set<String>([key(chord)])
-        for p in extras.prefix(4) {
-            if seen.insert(key(p)).inserted { out.append(p) }
-        }
-        return out
-    }
-
-    private static func key(_ p: CLLocationCoordinate2D) -> String {
-        String(format: "%.3f,%.3f", p.latitude, p.longitude)
-    }
-
-    private static func chordCrossing(
-        from: CLLocationCoordinate2D,
-        to: CLLocationCoordinate2D,
-        left: String,
-        right: String
-    ) -> CLLocationCoordinate2D {
-        let samples = 48
-        var prev = from
-        var prevFam = GraphPackStore.primaryRegionId(containing: from)
-        for i in 1...samples {
-            let t = Double(i) / Double(samples)
-            let p = lerp(from, to, t)
-            let fam = GraphPackStore.primaryRegionId(containing: p)
-            if let prevFam, let fam, prevFam != fam,
-               (prevFam == left && fam == right) || (prevFam == right && fam == left) {
-                return refineCrossing(prev, p)
-            }
-            if fam != nil {
-                prevFam = fam
-                prev = p
-            }
-        }
-        return lerp(from, to, 0.5)
-    }
-
-    /// Connectivity samples along the legal split — not named mountain passes.
-    private static func borderLineSamples(left: String, right: String) -> [CLLocationCoordinate2D] {
-        let pair: Set<String> = [left, right]
-        if pair == ["bc", "ab"] {
-            let lats = [49.05, 49.35, 49.63, 50.05, 50.62, 51.30, 52.20, 53.20, 54.50]
-            return lats.map { lat in
-                CLLocationCoordinate2D(
-                    latitude: lat,
-                    longitude: lat >= 54 ? -120.0 : -116.4
+        anchors: [GraphV2Pack.CrossPackSeamAnchor],
+        urbanCores: [UrbanCore.Box]
+    ) -> [GraphV2Pack.CrossPackSeamAnchor] {
+        anchors
+            .filter { $0.gapMeters <= 2 && !$0.osmWayId.isEmpty }
+            .filter {
+                !UrbanCore.isNear(
+                    CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude),
+                    boxes: urbanCores
                 )
             }
-        }
-        if pair == ["bc", "wa"] {
-            return [-123.3, -122.2, -121.0, -119.5, -118.2, -117.3].map { lon in
-                CLLocationCoordinate2D(latitude: 49.002, longitude: lon)
+            .sorted {
+                distanceToChord($0, from: from, to: to)
+                    < distanceToChord($1, from: from, to: to)
             }
-        }
-        if pair == ["ab", "mt"] {
-            return [-114.1, -113.0, -111.8, -110.5].map { lon in
-                CLLocationCoordinate2D(latitude: 49.002, longitude: lon)
-            }
-        }
-        return []
     }
 
-    private static func lerp(
-        _ a: CLLocationCoordinate2D,
-        _ b: CLLocationCoordinate2D,
-        _ t: Double
-    ) -> CLLocationCoordinate2D {
-        CLLocationCoordinate2D(
-            latitude: a.latitude + (b.latitude - a.latitude) * t,
-            longitude: a.longitude + (b.longitude - a.longitude) * t
-        )
-    }
-
-    private static func refineCrossing(
-        _ a: CLLocationCoordinate2D,
-        _ b: CLLocationCoordinate2D
-    ) -> CLLocationCoordinate2D {
-        var lo = a
-        var hi = b
-        for _ in 0..<14 {
-            let mid = lerp(lo, hi, 0.5)
-            let fam = GraphPackStore.primaryRegionId(containing: mid)
-            let loFam = GraphPackStore.primaryRegionId(containing: lo)
-            if fam == loFam { lo = mid } else { hi = mid }
-        }
-        return lerp(lo, hi, 0.5)
+    private static func distanceToChord(
+        _ anchor: GraphV2Pack.CrossPackSeamAnchor,
+        from: CLLocationCoordinate2D,
+        to: CLLocationCoordinate2D
+    ) -> Double {
+        let midLat = (from.latitude + to.latitude + anchor.latitude) / 3 * .pi / 180
+        let scaleX = cos(midLat)
+        let ax = from.longitude * scaleX
+        let ay = from.latitude
+        let bx = to.longitude * scaleX
+        let by = to.latitude
+        let px = anchor.longitude * scaleX
+        let py = anchor.latitude
+        let dx = bx - ax
+        let dy = by - ay
+        let lengthSquared = dx * dx + dy * dy
+        let t = lengthSquared > 0 ? max(0, min(1, ((px - ax) * dx + (py - ay) * dy) / lengthSquared)) : 0
+        return hypot(px - (ax + t * dx), py - (ay + t * dy))
     }
 }
 
@@ -181,7 +94,12 @@ extension OnDeviceRouter.Result {
             legs: legs,
             dirtPercent: Int((dirtMeters / meters * 100).rounded()),
             pavedPercent: Int((pavedMeters / meters * 100).rounded()),
-            unknownAccessPercent: Int((unknownMeters / meters * 100).rounded())
+            unknownAccessPercent: Int((unknownMeters / meters * 100).rounded()),
+            searchMeta: OnDeviceRouter.SearchMeta(
+                urbanCoreFallbackUsed: hops.contains { $0.searchMeta.urbanCoreFallbackUsed },
+                cleanUnpavedFallbackUsed: hops.contains { $0.searchMeta.cleanUnpavedFallbackUsed },
+                settlementFallbackUsed: hops.contains { $0.searchMeta.settlementFallbackUsed }
+            )
         )
     }
 }

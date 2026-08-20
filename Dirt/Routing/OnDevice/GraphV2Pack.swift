@@ -4,6 +4,16 @@ import Foundation
 /// Opted out of `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` so decode + Dijkstra
 /// can run on `Task.detached` without freezing the map.
 nonisolated final class GraphV2Pack: @unchecked Sendable {
+    struct CrossPackSeamAnchor: Sendable {
+        let neighborRegionId: String
+        let longitude: Double
+        let latitude: Double
+        let osmWayId: String
+        let localEdgeId: String
+        let remoteEdgeId: String
+        let gapMeters: Double
+    }
+
     static let magic: UInt32 = 0x3247_3244
     static let version: UInt16 = 2
 
@@ -20,6 +30,9 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
     let edgeTo: [Int32]?
     let nodeCoords: [Float] // lon,lat pairs
     let accessNames: [String]
+    let crossPackSeams: [String: [CrossPackSeamAnchor]]
+    let urbanCores: [UrbanCore.Box]
+    let settlements: [UrbanCore.Box]
     private let idOffsets: [Int32]
     private let idBlob: Data
 
@@ -74,10 +87,66 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
             accessNames = ["motorized_permissive", "motorized_verified", "motorized_unknown", "motorized_restricted", "motorized_excluded"]
         }
 
+        var decodedSeams: [String: [CrossPackSeamAnchor]] = [:]
+        var decodedUrbanCores: [UrbanCore.Box] = []
+        var decodedSettlements: [UrbanCore.Box] = []
         if let metaData = data.subdata(in: offMeta..<data.count) as Data?,
            let meta = try? JSONSerialization.jsonObject(with: metaData) as? [String: Any] {
             regionId = meta["regionId"] as? String ?? meta["province"] as? String
+            if let neighbors = meta["crossPackSeams"] as? [String: Any] {
+                for (rawNeighbor, rawRows) in neighbors {
+                    guard let rows = rawRows as? [[String: Any]] else { continue }
+                    let neighbor = rawNeighbor.lowercased()
+                    decodedSeams[neighbor] = rows.compactMap { row in
+                        guard let coordinate = row["coordinate"] as? [Any], coordinate.count >= 2,
+                              let lon = coordinate[0] as? NSNumber,
+                              let lat = coordinate[1] as? NSNumber else { return nil }
+                        return CrossPackSeamAnchor(
+                            neighborRegionId: neighbor,
+                            longitude: lon.doubleValue,
+                            latitude: lat.doubleValue,
+                            osmWayId: String(describing: row["osmWayId"] ?? ""),
+                            localEdgeId: String(describing: row["localEdgeId"] ?? ""),
+                            remoteEdgeId: String(describing: row["remoteEdgeId"] ?? ""),
+                            gapMeters: (row["gapMeters"] as? NSNumber)?.doubleValue ?? .infinity
+                        )
+                    }
+                }
+            }
+            if let rows = meta["urbanCores"] as? [[String: Any]] {
+                decodedUrbanCores = rows.compactMap { row in
+                    guard let minLat = row["minLat"] as? NSNumber,
+                          let maxLat = row["maxLat"] as? NSNumber,
+                          let minLon = row["minLon"] as? NSNumber,
+                          let maxLon = row["maxLon"] as? NSNumber else { return nil }
+                    return UrbanCore.Box(
+                        minLat: minLat.doubleValue,
+                        maxLat: maxLat.doubleValue,
+                        minLon: minLon.doubleValue,
+                        maxLon: maxLon.doubleValue,
+                        name: String(describing: row["name"] ?? "urban-core")
+                    )
+                }
+            }
+            if let rows = meta["settlements"] as? [[String: Any]] {
+                decodedSettlements = rows.compactMap { row in
+                    guard let minLat = row["minLat"] as? NSNumber,
+                          let maxLat = row["maxLat"] as? NSNumber,
+                          let minLon = row["minLon"] as? NSNumber,
+                          let maxLon = row["maxLon"] as? NSNumber else { return nil }
+                    return UrbanCore.Box(
+                        minLat: minLat.doubleValue,
+                        maxLat: maxLat.doubleValue,
+                        minLon: minLon.doubleValue,
+                        maxLon: maxLon.doubleValue,
+                        name: String(describing: row["name"] ?? "settlement")
+                    )
+                }
+            }
         }
+        crossPackSeams = decodedSeams
+        urbanCores = decodedUrbanCores
+        settlements = decodedSettlements
     }
 
     func edgeId(_ ei: Int) -> String {

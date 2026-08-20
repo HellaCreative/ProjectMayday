@@ -7,9 +7,10 @@
  * Default stack (most provinces):
  *   NRN backbone → OSM road fabric (optional) → provincial capillary
  *
- * Nova Scotia / New Brunswick locked product intent:
- *   OSM road fabric → provincial capillary — no NRN
- *   Use: node scripts/build-region-with-supplement.js ns|nb --osm-plus-provincial
+ * Foundational product intent (including Nova Scotia):
+ *   OSM road fabric only. NRN and provincial overlays remain available for a
+ *   later, separately measured experiment but never enter the OSM baseline.
+ *   Use: node scripts/build-region-with-supplement.js <region> --osm-only
  *
  * Quebec / Prince Edward Island:
  *   OSM-only (no NRN, no provincial): --osm-only
@@ -30,6 +31,7 @@ const { buildRegionalGraph, writeRegionalGraph } = require("../routing/regional/
 
 const ROOT = path.join(__dirname, "..");
 const REGISTRY = path.join(ROOT, "routing", "registry", "sources.json");
+const OSM_ROADS_ROOT = process.env.OSM_ROADS_ROOT || path.join(ROOT, "data-raw", "osm-roads");
 
 const SUPPLEMENTS = {
   ns: () => require("../routing/adapters/ns-nstdb"),
@@ -40,18 +42,19 @@ const SUPPLEMENTS = {
   qc: () => require("../routing/adapters/qc-multiusage")
 };
 
-/** Geofabrik canada/* slug for OSM road-fabric extracts. */
-const OSM_SLUG = {
-  nb: "new-brunswick",
-  qc: "quebec",
-  ns: "nova-scotia",
-  pe: "prince-edward-island",
-  on: "ontario",
-  mb: "manitoba",
-  sk: "saskatchewan",
-  ab: "alberta",
-  bc: "british-columbia",
-  nl: "newfoundland-and-labrador"
+/** Geofabrik source for OSM road-fabric extracts. */
+const OSM_REGION = {
+  nb: { slug: "new-brunswick", country: "canada" },
+  qc: { slug: "quebec", country: "canada" },
+  ns: { slug: "nova-scotia", country: "canada" },
+  pe: { slug: "prince-edward-island", country: "canada" },
+  on: { slug: "ontario", country: "canada" },
+  mb: { slug: "manitoba", country: "canada" },
+  sk: { slug: "saskatchewan", country: "canada" },
+  ab: { slug: "alberta", country: "canada" },
+  bc: { slug: "british-columbia", country: "canada" },
+  nl: { slug: "newfoundland-and-labrador", country: "canada" },
+  wa: { slug: "washington", country: "us" }
 };
 
 async function loadNrnFeatures(code) {
@@ -126,15 +129,16 @@ async function loadNrnFeatures(code) {
 }
 
 async function loadOsmFabric(code) {
-  const slug = OSM_SLUG[code];
-  if (!slug) return null;
-  const seq = path.join(ROOT, "data-raw", "osm-roads", slug, "roads.geojsonseq");
+  const source = OSM_REGION[code];
+  if (!source) return null;
+  const { slug, country } = source;
+  const seq = path.join(OSM_ROADS_ROOT, slug, "roads.geojsonseq");
   if (fs.existsSync(seq)) {
     return osmRoads.run({
       inputPath: seq,
       province: code.toUpperCase(),
-      sourceUrl: `https://download.geofabrik.de/north-america/canada/${slug}-latest.osm.pbf`,
-      downloadUrl: `https://download.geofabrik.de/north-america/canada/${slug}-latest.osm.pbf`,
+      sourceUrl: `https://download.geofabrik.de/north-america/${country}/${slug}-latest.osm.pbf`,
+      downloadUrl: `https://download.geofabrik.de/north-america/${country}/${slug}-latest.osm.pbf`,
       datasetVersion: `geofabrik:${slug}`
     });
   }
@@ -291,20 +295,21 @@ async function main() {
   const args = process.argv.slice(2);
   const code = String(args.find((a) => !a.startsWith("--")) || "").toLowerCase();
   const osmOnly = args.includes("--osm-only");
-  // OSM fabric + provincial capillary, no NRN (NS = NSTDB; NB = Forest Roads).
+  // Optional experimental overlay mode. Foundational packs use --osm-only;
+  // NS NSTDB and NB Forest Roads remain retained but inactive in that mode.
   const osmPlusProvincial = args.includes("--osm-plus-provincial");
   const skipOsm = args.includes("--skip-osm");
-  const known = new Set([...Object.keys(SUPPLEMENTS), ...Object.keys(OSM_SLUG)]);
+  const known = new Set([...Object.keys(SUPPLEMENTS), ...Object.keys(OSM_REGION)]);
   if (!code || !known.has(code)) {
     throw new Error(
-      "Usage: build-region-with-supplement.js <ns|nb|bc|ab|on|qc|pe> [--osm-only|--osm-plus-provincial] [--skip-osm]"
+      "Usage: build-region-with-supplement.js <region> [--osm-only|--osm-plus-provincial] [--skip-osm]"
     );
   }
   if (osmOnly && osmPlusProvincial) {
     throw new Error("Choose only one of --osm-only or --osm-plus-provincial");
   }
-  if (osmOnly && !OSM_SLUG[code]) {
-    throw new Error(`[${code}] --osm-only requires an OSM_SLUG entry`);
+  if (osmOnly && !OSM_REGION[code]) {
+    throw new Error(`[${code}] --osm-only requires an OSM_REGION entry`);
   }
   if (osmPlusProvincial && !SUPPLEMENTS[code]) {
     throw new Error(`[${code}] --osm-plus-provincial requires a provincial adapter`);
@@ -331,7 +336,7 @@ async function main() {
     const osm = await loadOsmFabric(code);
     if (!osm || !osm.features.length) {
       throw new Error(
-        `[${code}] ${label} requires data-raw/osm-roads/${OSM_SLUG[code]}/roads.geojsonseq`
+        `[${code}] ${label} requires ${path.join(OSM_ROADS_ROOT, OSM_REGION[code].slug, "roads.geojsonseq")}`
       );
     }
     backbone = osm.features;
@@ -507,21 +512,20 @@ async function main() {
         row.osm.status = row.osm.status || "ready";
       }
       if (dropNrn && row.nrn) {
+        row.nrn.status = "deferred";
         const omitNote = osmPlusProvincial
-          ? code === "ns"
-            ? "NRN omitted from NS routing fabric (OSM + NSTDB only)."
-            : "NRN omitted from routing fabric (OSM + provincial only)."
+          ? "NRN omitted from experimental OSM + provincial routing fabric."
           : "NRN omitted from routing fabric (OSM-only).";
         row.nrn.notes =
           omitNote +
           (row.nrn.notes && !/omitted from/i.test(row.nrn.notes) ? " " + row.nrn.notes : "");
       }
       if (osmOnly && row.provincial) {
-        row.provincial.status = row.provincial.status || "deferred";
+        row.provincial.status = "deferred";
         row.provincial.notes =
           code === "pe"
             ? "No shippable capillary: Confederation Trail motor-free; road_centerline sparse/NRN-overlap. OSM-only like QC."
-            : row.provincial.notes || "Provincial capillary not in shipping stack.";
+            : "Inactive during the foundational OSM-only phase. Adapter/data are retained for later controlled evaluation and are not in this pack.";
       }
       const hasOsm = !!(osmReport || (row.osm && row.osm.status === "ready"));
       const hasProvincial = !!(supp.report && supp.report.adapter);

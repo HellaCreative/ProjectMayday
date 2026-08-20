@@ -3,11 +3,18 @@ import Foundation
 
 /// DIRT iOS endpoints.
 /// Road fabric: Cloudflare R2 `dirt-packs` (`graph.v2.bin`) for PACKS download
-/// and on-device routing. Live `/api/route` is the default while online if that
-/// pack isn’t on the phone. Map tiles are OSM Shortbread. Accounts are Supabase.
+/// and on-device navigation recovery. Live `/api/route` is always the planning
+/// source of truth while online, regardless of installed packs. Map tiles are
+/// OSM Shortbread. Accounts are Supabase.
 enum AppConfig {
     static let baseURL = URL(string: "https://dirt-mayday.vercel.app")!
     static let routeURL = URL(string: "https://dirt-mayday.vercel.app/api/route")!
+    /// Candidate-aware packed fuel for live planning. The server resolves the
+    /// same regional source override as `/api/route`.
+    static let liveFuelURL = URL(string: "https://dirt-mayday.vercel.app/api/fuel")!
+    /// One bounded graph pass per committed fuel waypoint. This returns an
+    /// ordered pump chain; final ride legs still come from `/api/route`.
+    static let liveFuelChainURL = URL(string: "https://dirt-mayday.vercel.app/api/fuel-chain")!
 
     /// Public Supabase project (anon key is meant for clients).
     static let supabaseURL = URL(string: "https://iiiguqknqxoumlmppzfw.supabase.co")!

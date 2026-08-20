@@ -16,7 +16,7 @@ module.exports = async function handler(req, res) {
       ok: true,
       service: "dirt-route",
       engine: "dirt-node-astar",
-      note: "NS: OSM+NSTDB. NB: OSM+Forest Roads. NL: OSM+FFA Resource Roads. ON: OSM+MNR resource (capped). AB: OSM+Access Roads. BC: OSM+DRA resource/trail (capped). QC/PE/MB/SK: OSM-only (SK permanent). No NRN in adventure packs."
+      note: "BC foundational pack is OSM-only; DRA/FTEN are inactive. Other regional stacks remain recorded in routing/registry/sources.json."
     });
   }
 

@@ -17,21 +17,49 @@ const BALANCED_BUCKETS = 20;
 const PASS2_TIME_MS = 18000;
 const PASS2_POP_CAP = 400000;
 const EARTH_RADIUS_M = 6371000;
+const MAX_PROGRESS_REGRESSION_M = Object.freeze({
+  direct: 5000,
+  balanced: 10000,
+  dirt: 15000
+});
+// Dirt works back from 100%, but a kilometre of pavement cannot justify an
+// effectively unlimited dirt excursion. These are exchange rates, not a
+// shortest-path objective: extra dirt is welcome when it replaces meaningful
+// pavement or creates a coherent adventure chain.
+const DIRT_RIDE_PAVED_PER_KM = Number(process.env.DIRT_RIDE_PAVED_PER_KM || 150);
+const DIRT_RIDE_GRAVEL_PER_KM = Number(process.env.DIRT_RIDE_GRAVEL_PER_KM || 0.7);
+const DIRT_RIDE_RESOURCE_PER_KM = Number(process.env.DIRT_RIDE_RESOURCE_PER_KM || 0.5);
+const DIRT_RIDE_UNKNOWN_TRACK_PER_KM = Number(process.env.DIRT_RIDE_UNKNOWN_TRACK_PER_KM || 0.9);
+const DIRT_RIDE_XT_SCALE = Number(process.env.DIRT_RIDE_XT_SCALE || 1);
+const DIRT_RIDE_AWAY_SCALE = Number(process.env.DIRT_RIDE_AWAY_SCALE || 10);
+const SETTLEMENT_FALLBACK_MULTIPLIER = Number(process.env.SETTLEMENT_FALLBACK_MULTIPLIER || 4);
 
 const METRO_CORE_WALL = [
   { minLat: 49.0, maxLat: 49.42, minLon: -123.32, maxLon: -122.7, name: "vancouver" },
+  { minLat: 49.0, maxLat: 49.14, minLon: -122.45, maxLon: -122.15, name: "abbotsford" },
+  { minLat: 49.08, maxLat: 49.2, minLon: -122.05, maxLon: -121.85, name: "chilliwack" },
   { minLat: 48.4, maxLat: 48.52, minLon: -123.45, maxLon: -123.3, name: "victoria" },
+  { minLat: 49.8, maxLat: 50.0, minLon: -119.65, maxLon: -119.3, name: "kelowna" },
+  { minLat: 50.62, maxLat: 50.75, minLon: -120.5, maxLon: -120.15, name: "kamloops" },
+  { minLat: 53.82, maxLat: 54.0, minLon: -122.85, maxLon: -122.65, name: "prince-george" },
+  { minLat: 44.55, maxLat: 44.78, minLon: -63.75, maxLon: -63.4, name: "halifax" },
+  { minLat: 45.85, maxLat: 46.2, minLon: -64.95, maxLon: -64.55, name: "moncton" },
+  { minLat: 45.2, maxLat: 45.35, minLon: -66.2, maxLon: -65.95, name: "saint-john" },
+  { minLat: 45.9, maxLat: 46.05, minLon: -66.75, maxLon: -66.55, name: "fredericton" },
+  { minLat: 46.75, maxLat: 46.9, minLon: -71.35, maxLon: -71.1, name: "quebec-city" },
   { minLat: 50.85, maxLat: 51.22, minLon: -114.32, maxLon: -113.85, name: "calgary" },
   { minLat: 53.4, maxLat: 53.7, minLon: -113.72, maxLon: -113.28, name: "edmonton" },
   { minLat: 43.58, maxLat: 43.85, minLon: -79.64, maxLon: -79.12, name: "toronto" },
   { minLat: 45.38, maxLat: 45.72, minLon: -73.98, maxLon: -73.48, name: "montreal" },
   { minLat: 45.32, maxLat: 45.48, minLon: -75.85, maxLon: -75.62, name: "ottawa" },
-  { minLat: 49.8, maxLat: 50.0, minLon: -97.3, maxLon: -96.95, name: "winnipeg" }
+  { minLat: 49.8, maxLat: 50.0, minLon: -97.3, maxLon: -96.95, name: "winnipeg" },
+  { minLat: 50.38, maxLat: 50.52, minLon: -104.75, maxLon: -104.5, name: "regina" },
+  { minLat: 52.05, maxLat: 52.22, minLon: -106.8, maxLon: -106.55, name: "saskatoon" }
 ];
 
-function boxContaining(lon, lat) {
+function boxContaining(lon, lat, boxes = METRO_CORE_WALL) {
   if (!Number.isFinite(lon) || !Number.isFinite(lat)) return null;
-  for (const box of METRO_CORE_WALL) {
+  for (const box of boxes) {
     if (lat >= box.minLat && lat <= box.maxLat && lon >= box.minLon && lon <= box.maxLon) {
       return box;
     }
@@ -39,12 +67,69 @@ function boxContaining(lon, lat) {
   return null;
 }
 
-function metroBlocks(lon, lat, startLL, endLL) {
-  const box = boxContaining(lon, lat);
+function metroBlocks(lon, lat, startLL, endLL, boxes = METRO_CORE_WALL) {
+  const box = boxContaining(lon, lat, boxes);
   if (!box) return false;
-  if (startLL && boxContaining(startLL[0], startLL[1]) === box) return false;
-  if (endLL && boxContaining(endLL[0], endLL[1]) === box) return false;
+  if (startLL && boxContaining(startLL[0], startLL[1], boxes) === box) return false;
+  if (endLL && boxContaining(endLL[0], endLL[1], boxes) === box) return false;
   return true;
+}
+
+function segmentIntersectsBox(a, b, box) {
+  if (!a || !b || !box) return false;
+  const dx = b[0] - a[0];
+  const dy = b[1] - a[1];
+  let lo = 0;
+  let hi = 1;
+  const tests = [
+    [-dx, a[0] - box.minLon],
+    [dx, box.maxLon - a[0]],
+    [-dy, a[1] - box.minLat],
+    [dy, box.maxLat - a[1]]
+  ];
+  for (const [p, q] of tests) {
+    if (p === 0) {
+      if (q < 0) return false;
+      continue;
+    }
+    const r = q / p;
+    if (p < 0) lo = Math.max(lo, r);
+    else hi = Math.min(hi, r);
+    if (lo > hi) return false;
+  }
+  return true;
+}
+
+function metroEdgeBlocks(fromLL, toLL, startLL, endLL, boxes = METRO_CORE_WALL) {
+  if (!fromLL || !toLL) return false;
+  for (const box of boxes || []) {
+    if (
+      (startLL && boxContaining(startLL[0], startLL[1], [box])) ||
+      (endLL && boxContaining(endLL[0], endLL[1], [box]))
+    ) continue;
+    if (segmentIntersectsBox(fromLL, toLL, box)) return true;
+  }
+  return false;
+}
+
+/**
+ * A relaxed wall is still expensive. This makes the last-resort search cross
+ * the smallest necessary urban section instead of treating every city as open.
+ */
+function urbanCoreFallbackMultiplier(lon, lat, startLL, endLL, boxes = METRO_CORE_WALL) {
+  return metroBlocks(lon, lat, startLL, endLL, boxes) ? 120 : 1;
+}
+
+/** Smaller OSM place=city|town boxes receive scored avoidance. */
+function settlementBlocks(lon, lat, startLL, endLL, boxes = []) {
+  return metroBlocks(lon, lat, startLL, endLL, boxes);
+}
+
+/** Town travel remains far more expensive than ordinary routing fabric. */
+function settlementFallbackMultiplier(lon, lat, startLL, endLL, boxes = []) {
+  return settlementBlocks(lon, lat, startLL, endLL, boxes)
+    ? SETTLEMENT_FALLBACK_MULTIPLIER
+    : 1;
 }
 
 function varietyHash(seed, node, ei) {
@@ -65,10 +150,13 @@ function dirtBucket(dirtMeters, pathMeters) {
 function pickResourceEnd(cands, profile, seed) {
   if (!cands.length) return -1;
   const ratio = (x) => (x.len > 0 ? x.dirt / x.len : 0);
-  if (profile === "direct") {
+  if (profile === "direct" || profile === "dirt") {
     cands.sort((a, b) => {
       const dr = ratio(b) - ratio(a);
       if (Math.abs(dr) > 0.005) return dr;
+      const pavedA = a.len - a.dirt;
+      const pavedB = b.len - b.dirt;
+      if (Math.abs(pavedA - pavedB) > 50) return pavedA - pavedB;
       if (Math.abs(a.len - b.len) > 50) return a.len - b.len;
       return varietyHash(seed, a.lab, 0) - varietyHash(seed, b.lab, 0);
     });
@@ -83,6 +171,9 @@ function pickResourceEnd(cands, profile, seed) {
     const da = Math.abs(ratio(a) - 0.5);
     const db = Math.abs(ratio(b) - 0.5);
     if (Math.abs(da - db) > 0.005) return da - db;
+    if (Number.isFinite(a.score) && Number.isFinite(b.score) && Math.abs(a.score - b.score) > 50) {
+      return a.score - b.score;
+    }
     if (Math.abs(a.len - b.len) > 50) return a.len - b.len;
     const ha = varietyHash(seed, a.lab, 0);
     const hb = varietyHash(seed, b.lab, 0);
@@ -178,9 +269,34 @@ function outsideCorridor(point, startLL, endLL, widthMeters) {
   return Math.abs(crossTrackMeters(point, startLL, endLL)) > widthMeters;
 }
 
-function hopBlocked(toLL, startLL, endLL, cityWall) {
+/** Along-route progress without constructing a shortest/reference path. */
+function projectedProgressMeters(point, startLL, endLL) {
+  if (!point || !startLL || !endLL) return 0;
+  const ab = angularDistanceRadians(startLL, endLL) * EARTH_RADIUS_M;
+  if (!(ab > 1)) return 0;
+  const ap = angularDistanceRadians(startLL, point) * EARTH_RADIUS_M;
+  const pb = angularDistanceRadians(point, endLL) * EARTH_RADIUS_M;
+  return (ap * ap + ab * ab - pb * pb) / (2 * ab);
+}
+
+function maxProgressRegressionMeters(profile) {
+  return MAX_PROGRESS_REGRESSION_M[profile] || Infinity;
+}
+
+/**
+ * Corridor width grants lateral room; it must never grant permission to ride
+ * farther away from B. Only the final connectivity proof may remove the
+ * forward-progress guard.
+ */
+function progressRegressionForAttempt(profile, corridorMeters) {
+  return Number.isFinite(corridorMeters)
+    ? maxProgressRegressionMeters(profile)
+    : Infinity;
+}
+
+function hopBlocked(toLL, startLL, endLL, cityWall, boxes = METRO_CORE_WALL) {
   if (!toLL) return false;
-  if (cityWall && metroBlocks(toLL[0], toLL[1], startLL, endLL)) return true;
+  if (cityWall && metroBlocks(toLL[0], toLL[1], startLL, endLL, boxes)) return true;
   return false;
 }
 
@@ -194,6 +310,50 @@ function maxCrossTrackMeters(coords, startLL, endLL) {
   return best;
 }
 
+function routeShapeMetrics(coords, startLL, endLL) {
+  if (!Array.isArray(coords) || coords.length < 2) {
+    return { routeMeters: 0, backwardMeters: 0, lateralMeters: 0, p95CrossTrackMeters: 0 };
+  }
+  let routeMeters = 0;
+  let backwardMeters = 0;
+  let lateralMeters = 0;
+  const crossTrackWeighted = [];
+  for (let i = 1; i < coords.length; i += 1) {
+    const a = coords[i - 1];
+    const b = coords[i];
+    const meters = angularDistanceRadians(a, b) * EARTH_RADIUS_M;
+    if (!(meters > 0)) continue;
+    routeMeters += meters;
+    const progressA = projectedProgressMeters(a, startLL, endLL);
+    const progressB = projectedProgressMeters(b, startLL, endLL);
+    const delta = progressB - progressA;
+    if (delta < 0) backwardMeters += meters;
+    const along = Math.min(meters, Math.abs(delta));
+    lateralMeters += Math.sqrt(Math.max(0, meters * meters - along * along));
+    crossTrackWeighted.push({
+      meters,
+      crossTrack: Math.abs(crossTrackMeters(b, startLL, endLL))
+    });
+  }
+  crossTrackWeighted.sort((a, b) => a.crossTrack - b.crossTrack);
+  const target = routeMeters * 0.95;
+  let walked = 0;
+  let p95CrossTrackMeters = 0;
+  for (const item of crossTrackWeighted) {
+    walked += item.meters;
+    p95CrossTrackMeters = item.crossTrack;
+    if (walked >= target) break;
+  }
+  return {
+    routeMeters: Math.round(routeMeters),
+    backwardMeters: Math.round(backwardMeters),
+    backwardPercent: routeMeters > 0 ? Math.round(backwardMeters / routeMeters * 1000) / 10 : 0,
+    lateralMeters: Math.round(lateralMeters),
+    lateralPercent: routeMeters > 0 ? Math.round(lateralMeters / routeMeters * 1000) / 10 : 0,
+    p95CrossTrackMeters: Math.round(p95CrossTrackMeters)
+  };
+}
+
 function annotateCorridorMeta(result, startLL, endLL, profile, shortestMeters) {
   if (!result) return result;
   const cap = corridorMetersForProfile(profile);
@@ -201,6 +361,7 @@ function annotateCorridorMeta(result, startLL, endLL, profile, shortestMeters) {
   result.searchMeta = result.searchMeta || {};
   result.searchMeta.corridorMeters = cap;
   result.searchMeta.maxCrossTrackMeters = Math.round(maxXT);
+  result.searchMeta.routeShape = routeShapeMetrics(result.geometry || [], startLL, endLL);
   if (Number.isFinite(shortestMeters) && shortestMeters > 0) {
     result.searchMeta.shortestMeters = Math.round(shortestMeters);
     result.searchMeta.extraUsedMeters = Math.round(result.distanceMeters - shortestMeters);
@@ -239,6 +400,21 @@ function isDirtSurface(surfaceName, roadClassName) {
   );
 }
 
+function dirtRideCostPerKm(surfaceName, roadClassName, confidence) {
+  if (!isDirtSurface(surfaceName, roadClassName)) return DIRT_RIDE_PAVED_PER_KM;
+  let cost;
+  if (surfaceName === "gravel") cost = DIRT_RIDE_GRAVEL_PER_KM;
+  else if (surfaceName === "access" || surfaceName === "resource" || surfaceName === "track") {
+    cost = DIRT_RIDE_RESOURCE_PER_KM;
+  } else {
+    cost = DIRT_RIDE_UNKNOWN_TRACK_PER_KM;
+  }
+  // Untagged/low-confidence tracks remain useful, but explicit gravel/resource
+  // should beat them when both make a similarly coherent ride.
+  if (confidence === "low") cost *= 1.2;
+  return cost;
+}
+
 module.exports = {
   DIRECT_STRETCH,
   BALANCED_STRETCH,
@@ -254,6 +430,12 @@ module.exports = {
   PASS2_POP_CAP,
   METRO_CORE_WALL,
   metroBlocks,
+  segmentIntersectsBox,
+  metroEdgeBlocks,
+  urbanCoreFallbackMultiplier,
+  settlementBlocks,
+  settlementFallbackMultiplier,
+  SETTLEMENT_FALLBACK_MULTIPLIER,
   varietyHash,
   dirtBucket,
   pickResourceEnd,
@@ -262,10 +444,21 @@ module.exports = {
   shouldPush,
   createsCycle,
   isDirtSurface,
+  dirtRideCostPerKm,
+  DIRT_RIDE_PAVED_PER_KM,
+  DIRT_RIDE_GRAVEL_PER_KM,
+  DIRT_RIDE_RESOURCE_PER_KM,
+  DIRT_RIDE_UNKNOWN_TRACK_PER_KM,
+  DIRT_RIDE_XT_SCALE,
+  DIRT_RIDE_AWAY_SCALE,
   corridorMetersForProfile,
   crossTrackMeters,
   outsideCorridor,
+  projectedProgressMeters,
+  maxProgressRegressionMeters,
+  progressRegressionForAttempt,
   hopBlocked,
   maxCrossTrackMeters,
+  routeShapeMetrics,
   annotateCorridorMeta
 };

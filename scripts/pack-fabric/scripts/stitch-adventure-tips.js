@@ -15,7 +15,11 @@
 const fs = require("fs");
 const path = require("path");
 const zlib = require("zlib");
-const { writePacksFromV1, v2PathsForV1Path } = require("../routing/lib/pack-v2");
+const {
+  writePacksFromV1,
+  v2PathsForV1Path,
+  applyMetadataSidecars
+} = require("../routing/lib/pack-v2");
 
 const JOIN_M = Number(process.env.STITCH_JOIN_M || 150);
 const ADVENTURE_RT = new Set([
@@ -43,12 +47,90 @@ function enumIndex(list, name, fallback) {
   return i >= 0 ? i : fallback;
 }
 
-function inflateGraph(filePath) {
-  const raw = fs.readFileSync(filePath);
-  if (raw.length >= 2 && raw[0] === 0x1f && raw[1] === 0x8b) {
-    return JSON.parse(zlib.gunzipSync(raw).toString("utf8"));
+async function streamTopLevelArray(filePath, marker, onValue) {
+  const source = fs.createReadStream(filePath).pipe(zlib.createGunzip());
+  source.setEncoding("utf8");
+  let search = "";
+  let found = false;
+  let value = "";
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  let done = false;
+  for await (const chunk of source) {
+    let text = chunk;
+    if (!found) {
+      search += text;
+      const at = search.indexOf(marker);
+      if (at < 0) {
+        search = search.slice(-Math.max(marker.length, 64));
+        continue;
+      }
+      text = search.slice(at + marker.length);
+      search = "";
+      found = true;
+    }
+    for (let i = 0; i < text.length; i += 1) {
+      const ch = text[i];
+      if (depth === 0) {
+        if (ch === "]") { done = true; break; }
+        if (ch !== "[" && ch !== "{") continue;
+        value = ch;
+        depth = 1;
+        inString = false;
+        escaped = false;
+        continue;
+      }
+      value += ch;
+      if (inString) {
+        if (escaped) escaped = false;
+        else if (ch === "\\") escaped = true;
+        else if (ch === '"') inString = false;
+        continue;
+      }
+      if (ch === '"') { inString = true; continue; }
+      if (ch === "[" || ch === "{") depth += 1;
+      else if (ch === "]" || ch === "}") depth -= 1;
+      if (depth === 0) {
+        onValue(JSON.parse(value));
+        value = "";
+      }
+    }
+    if (done) break;
   }
-  return JSON.parse(raw.toString("utf8"));
+  if (!found || !done) throw new Error(`Could not stream ${marker} from ${filePath}`);
+}
+
+async function inflateGraph(filePath) {
+  const metaPath = filePath.replace(/graph\.v1\.json\.gz$/i, "graph.v1.meta.json");
+  const meta = fs.existsSync(metaPath) ? JSON.parse(fs.readFileSync(metaPath, "utf8")) : {};
+  const {
+    SURFACE,
+    STRUCTURE,
+    ACCESS,
+    ACCESS_NAME,
+    SURFACE_NAME,
+    STRUCTURE_NAME
+  } = require("../routing/regional/package");
+  const nodes = [];
+  const edges = [];
+  await streamTopLevelArray(filePath, '"nodes":[', (node) => nodes.push(node));
+  await streamTopLevelArray(filePath, '"edges":[', (edge) => edges.push(edge));
+  return {
+    version: 1,
+    schemaVersion: meta.schemaVersion || "canada-regional-1",
+    regionId: meta.regionId || null,
+    province: meta.province || null,
+    generatedAt: meta.generatedAt || null,
+    bbox: meta.bbox || null,
+    enums: { SURFACE, STRUCTURE, ACCESS, ACCESS_NAME, SURFACE_NAME, STRUCTURE_NAME },
+    nodeCount: nodes.length,
+    edgeCount: edges.length,
+    componentCount: meta.componentCount || 0,
+    nodes,
+    edges,
+    lineage: meta.lineage || {}
+  };
 }
 
 function nodeLonLat(data, nodeCoords, i) {
@@ -208,7 +290,7 @@ function stitchAdventureTips(data, joinM = JOIN_M) {
   };
 }
 
-function main() {
+async function main() {
   const args = process.argv.slice(2);
   const packV2 = args.includes("--pack-v2");
   const file = args.find((a) => !a.startsWith("--"));
@@ -218,12 +300,13 @@ function main() {
   }
   const abs = path.resolve(file);
   console.log(`inflate ${abs}`);
-  const data = inflateGraph(abs);
+  const data = await inflateGraph(abs);
   const started = Date.now();
   const stats = stitchAdventureTips(data, JOIN_M);
   console.log(JSON.stringify({ ...stats, stitchMs: Date.now() - started }));
 
   if (packV2) {
+    applyMetadataSidecars(data, abs);
     const paths = v2PathsForV1Path(abs);
     const meta = writePacksFromV1(data, paths.graph, paths.geom);
     console.log(JSON.stringify({ packed: true, ...meta, outGraph: paths.graph, outGeom: paths.geom }));
@@ -244,7 +327,10 @@ function main() {
 }
 
 if (require.main === module) {
-  main();
+  main().catch((error) => {
+    console.error(error && error.stack ? error.stack : error);
+    process.exit(1);
+  });
 }
 
 module.exports = { stitchAdventureTips, JOIN_M };

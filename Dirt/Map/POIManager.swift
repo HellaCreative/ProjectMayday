@@ -96,13 +96,26 @@ private enum POIC {
     static let refreshDelay = UInt64(350_000_000)
 }
 
-/// Loads Rider Services POIs. Fuel comes from the installed pack (`fuel.v1.json`).
+/// Loads Rider Services POIs. Online planning fuel comes from the same live
+/// candidate as `/api/route`; offline fuel comes from the installed pack.
 /// Camp / lodging / liquor still use OSM Overpass for the current viewport.
 /// Fuel goes through `FuelPOIFilter` at pack build time (bulk / cardlock / truck-only / closed).
 @MainActor
 final class POIManager {
+    enum FuelSourceError: LocalizedError {
+        case liveUnavailable
+
+        var errorDescription: String? {
+            switch self {
+            case .liveUnavailable:
+                "Live fuel data is unavailable. Check your connection and try again."
+            }
+        }
+    }
+
     private let mapState: MapState
     private let graphPacks: GraphPackStore
+    private let network: NetworkPathMonitor
     private var debounceTask: Task<Void, Never>?
     private let session: URLSession = {
         let cfg = URLSessionConfiguration.default
@@ -112,21 +125,92 @@ final class POIManager {
         return URLSession(configuration: cfg)
     }()
 
-    init(mapState: MapState, graphPacks: GraphPackStore) {
+    init(mapState: MapState, graphPacks: GraphPackStore, network: NetworkPathMonitor) {
         self.mapState = mapState
         self.graphPacks = graphPacks
+        self.network = network
         armObservation()
     }
 
-    /// Fuel stations in the A→B geographic box from the downloaded pack.
-    /// Never hits Overpass — that is pack-build work, not route-planning work.
-    func fuelCandidates(from start: RouteCoordinate, to end: RouteCoordinate) async -> [POIFeature] {
+    /// Fuel stations in the A→B geographic box. Live planning deliberately
+    /// asks the candidate-aware API exclusively. Offline planning uses the
+    /// installed sidecar exclusively. Neither path uses Overpass.
+    func fuelCandidates(
+        from start: RouteCoordinate,
+        to end: RouteCoordinate,
+        preferLive: Bool
+    ) async throws -> [POIFeature] {
+        if preferLive {
+            let live = try await liveFuelCandidates(
+                from: start,
+                to: end,
+                padDegrees: 150_000.0 / 111_000.0
+            )
+            let collapsed = POIDeduper.collapseNearby(live)
+            RoutingDebugLog.shared.event(
+                "fuel search packed=\(live.count) usable=\(collapsed.count) source=live-pack"
+            )
+            return collapsed
+        }
         let packed = graphPacks.fuelStations(from: start, to: end)
         let collapsed = POIDeduper.collapseNearby(packed)
         RoutingDebugLog.shared.event(
-            "fuel search packed=\(packed.count) usable=\(collapsed.count) source=pack"
+            "fuel search packed=\(packed.count) usable=\(collapsed.count) source=installed-pack"
         )
         return collapsed
+    }
+
+    private func liveFuelCandidates(
+        from start: RouteCoordinate,
+        to end: RouteCoordinate,
+        padDegrees: Double
+    ) async throws -> [POIFeature] {
+        struct Request: Encodable {
+            let locations: [RouteLocation]
+        }
+        var request = URLRequest(url: AppConfig.liveFuelURL)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 30
+        request.httpBody = try? JSONEncoder().encode(Request(locations: [
+            RouteLocation(latitude: start.latitude, longitude: start.longitude, label: "A"),
+            RouteLocation(latitude: end.latitude, longitude: end.longitude, label: "B")
+        ]))
+        do {
+            let (data, response) = try await session.data(for: request)
+            guard let http = response as? HTTPURLResponse,
+                  (200..<300).contains(http.statusCode)
+            else {
+                RoutingDebugLog.shared.event("fuel live source rejected")
+                throw FuelSourceError.liveUnavailable
+            }
+            let all = PackedFuel.decode(data)
+            // Match the installed-pack prefilter. It is intentionally generous:
+            // adventure routes can sit far outside their straight A→B box.
+            return all.filter {
+                $0.latitude >= min(start.latitude, end.latitude) - padDegrees
+                    && $0.latitude <= max(start.latitude, end.latitude) + padDegrees
+                    && $0.longitude >= min(start.longitude, end.longitude) - padDegrees
+                    && $0.longitude <= max(start.longitude, end.longitude) + padDegrees
+            }
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch let error as URLError where error.code == .cancelled {
+            // Pin dragging deliberately cancels the stale planning job. It is
+            // not a live-service outage and must not become a red fuel error.
+            throw CancellationError()
+        } catch let error as NSError
+            where error.domain == NSURLErrorDomain && error.code == NSURLErrorCancelled {
+            // URLSession occasionally bridges cancellation as NSError rather
+            // than URLError. Treat both representations identically.
+            throw CancellationError()
+        } catch {
+            RoutingDebugLog.shared.event(
+                "fuel live source failed: \(error.localizedDescription)"
+            )
+            if error is FuelSourceError { throw error }
+            throw FuelSourceError.liveUnavailable
+        }
     }
 
     private func armObservation() {
@@ -135,6 +219,7 @@ final class POIManager {
             _ = mapState.mapCenter.longitude
             _ = mapState.mapZoom
             _ = mapState.layerPrefsGeneration
+            _ = network.isOnline
         } onChange: {
             Task { @MainActor [weak self] in
                 self?.scheduleRefresh()
@@ -173,10 +258,35 @@ final class POIManager {
         )
         var features: [POIFeature] = []
         if prefs.showFuel {
-            features.append(contentsOf: graphPacks.fuelStations(
-                minLat: bbox.minLat, maxLat: bbox.maxLat,
-                minLon: bbox.minLon, maxLon: bbox.maxLon
-            ))
+            if network.isOnline {
+                let from = RouteCoordinate(longitude: bbox.minLon, latitude: bbox.minLat)
+                let to = RouteCoordinate(longitude: bbox.maxLon, latitude: bbox.maxLat)
+                do {
+                    let live = try await liveFuelCandidates(
+                        from: from,
+                        to: to,
+                        padDegrees: 0
+                    )
+                    features.append(contentsOf: live)
+                    RoutingDebugLog.shared.event(
+                        "fuel viewport packed=\(live.count) source=live-pack"
+                    )
+                } catch is CancellationError {
+                    return
+                } catch {
+                    // Online means live-only. Do not paint stale downloaded fuel.
+                    RoutingDebugLog.shared.event("fuel viewport live source unavailable")
+                }
+            } else {
+                let installed = graphPacks.fuelStations(
+                    minLat: bbox.minLat, maxLat: bbox.maxLat,
+                    minLon: bbox.minLon, maxLon: bbox.maxLon
+                )
+                features.append(contentsOf: installed)
+                RoutingDebugLog.shared.event(
+                    "fuel viewport packed=\(installed.count) source=installed-pack"
+                )
+            }
         }
         let needOverpass = prefs.showCampgrounds || prefs.showLodging || prefs.showLiquor
         if needOverpass {

@@ -28,13 +28,15 @@
  */
 
 const PROFILE_SURFACE_WEIGHTS = Object.freeze({
-  // Corridor-bound (cross-track). Dirt cheaper than Balanced on the line.
+  // Direct is geometry-first: surface is only a tie-break between similarly
+  // aligned roads. A large paved penalty made it behave like a narrower Dirt
+  // mode and spend hundreds of kilometres collecting off-line gravel.
   direct: Object.freeze({
-    paved: 2.35,
-    gravel: 0.90,
-    access: 0.82,
-    track: 0.70,
-    unknown: 0.92
+    paved: 1.15,
+    gravel: 1.00,
+    access: 0.95,
+    track: 0.90,
+    unknown: 1.00
   }),
   // Dual-sport ~50/50. Cross-track stops the Williams Lake hunt.
   balanced: Object.freeze({
@@ -58,10 +60,10 @@ const PROFILE_SURFACE_WEIGHTS = Object.freeze({
   // Google/Apple: shortest practical pavement. Do not punish highway.
   cleanest: Object.freeze({
     paved: 1.0,
-    gravel: 8.0,
-    access: 10.0,
-    track: 14.0,
-    unknown: 6.0
+    gravel: 60.0,
+    access: 80.0,
+    track: 100.0,
+    unknown: 12.0
   })
 });
 
@@ -175,7 +177,6 @@ function surfaceMultiplier(surfaceCode, profile, _regionId, roadTrackClass) {
   const table = PROFILE_SURFACE_WEIGHTS[profile] || PROFILE_SURFACE_WEIGHTS.balanced;
   // Untagged OSM highway paints paved — cost it as paved or Dirt≈Balanced.
   if (
-    (profile === "dirt" || profile === "balanced" || profile === "direct") &&
     name === "unknown" &&
     paintsAsPavedRoadClass(roadTrackClass)
   ) {

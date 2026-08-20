@@ -1,15 +1,15 @@
 {
   "schemaVersion": "canada-source-registry-1",
-  "updatedAt": "2026-08-19",
+  "updatedAt": "2026-08-20",
   "notes": [
     "Province fabric is product-locked per region — do not assume NRN everywhere.",
-    "NS locked fabric: OSM + NSTDB. No NRN.",
-    "NB locked fabric: OSM + Forest Roads. No NRN.",
+    "NS foundational fabric: OSM-only. NSTDB and NRN are retained but inactive until the OSM product is approved.",
+    "NB foundational fabric: OSM-only. Forest Roads and NRN are retained but inactive until the OSM product is approved.",
     "ON locked fabric: OSM + MNR resource capillary (ORN skipped; ingest capped). No NRN.",
-    "AB locked fabric: OSM + Access/Facility gravel+other (cutlines excluded). No NRN.",
-    "BC locked fabric: OSM + FTEN active existing (pending/retired excluded; ingest capped). No NRN.",
+    "AB foundational fabric: OSM-only. Alberta Access/Facility data is retained but inactive until the OSM product is approved.",
+    "BC foundational fabric: OSM-only. DRA and FTEN are retained but inactive until the OSM product is approved.",
     "QC/PE/MB/SK: OSM-only. SK permanent (Road Network is NRN-derived — never import).",
-    "Longhaul: NS/NB/ON/AB/BC keep provincial purple; ON/AB/BC drop OSM service mesh for Hobby RAM.",
+    "WA foundational fabric: OSM-only, built with the same normalization and release gates as Canada.",
     "OSM motorized highways are the road fabric (motorized_permissive). Shortbread tiles remain display-only."
   ],
   "regions": [
@@ -23,7 +23,7 @@
         "format": "GeoPackage",
         "license": "Open Government Licence - Canada",
         "adapter": "nrn",
-        "status": "ready",
+        "status": "deferred",
         "dateRetrieved": "2026-07-20",
         "notes": "NRN omitted from routing fabric (OSM-only)."
       },
@@ -34,26 +34,26 @@
         "format": "multiple",
         "license": "Open Government Licence - British Columbia",
         "adapter": "bc-dra-roads",
-        "status": "ready",
-        "notes": "Phase 2 live: FTEN active existing only; pending/retired filtered. Ingest capped. Tenure ≠ public motorcycle access.",
+        "status": "deferred",
+        "notes": "Inactive during the foundational OSM-only phase. DRA and FTEN adapters/data are retained for later evaluation; neither is in the BC pack.",
         "dateRetrieved": "2026-08-05"
       },
       "routingReady": true,
       "routingMode": "osm-only",
       "backboneArtifact": {
         "path": "routing/data/regions/bc/graph.v1.json.gz",
-        "edgeCount": 920821,
-        "nodeCount": 794640,
-        "gzBytes": 71542220
+        "edgeCount": 910528,
+        "nodeCount": 787447,
+        "gzBytes": 71225014
       },
       "osm": {
         "adapter": "osm-roads",
         "role": "sole-fabric",
         "status": "ready",
-        "featureCount": 535649,
-        "added": 535649,
+        "featureCount": 531042,
+        "added": 531042,
         "license": "OpenStreetMap contributors (ODbL)",
-        "dateRetrieved": "2026-08-19"
+        "dateRetrieved": "2026-08-20"
       }
     },
     {
@@ -66,9 +66,9 @@
         "format": "GeoPackage",
         "license": "Open Government Licence - Canada",
         "adapter": "nrn",
-        "status": "ready",
+        "status": "deferred",
         "dateRetrieved": "2026-07-20",
-        "notes": "NRN omitted from routing fabric (OSM + provincial only)."
+        "notes": "NRN omitted from routing fabric (OSM-only)."
       },
       "provincial": {
         "sourceName": "Alberta Access and Facility Roads",
@@ -77,26 +77,55 @@
         "format": "ArcGIS / download",
         "license": "Open Government Licence - Alberta",
         "adapter": "ab-access-roads",
-        "status": "ready",
+        "status": "deferred",
         "dateRetrieved": "2026-08-05",
-        "notes": "Phase 2 live: Access + Other Road (gravel) layers. Cutlines excluded. motorized_unknown — never invented permissive."
+        "notes": "Inactive during the foundational OSM-only phase. The adapter and source are retained for later evaluation; neither is in the Alberta pack."
       },
       "routingReady": true,
-      "routingMode": "osm+provincial",
+      "routingMode": "osm-only",
       "backboneArtifact": {
         "path": "routing/data/regions/ab/graph.v1.json.gz",
-        "edgeCount": 694894,
-        "nodeCount": 818240,
-        "gzBytes": 52521232
+        "edgeCount": 956740,
+        "nodeCount": 765453,
+        "gzBytes": 51299652
       },
       "osm": {
         "adapter": "osm-roads",
         "role": "sole-fabric",
         "status": "ready",
-        "featureCount": 485547,
-        "added": 485547,
+        "featureCount": 539905,
+        "added": 539905,
         "license": "OpenStreetMap contributors (ODbL)",
-        "dateRetrieved": "2026-08-05"
+        "dateRetrieved": "2026-08-20"
+      }
+    },
+    {
+      "code": "WA",
+      "name": "Washington",
+      "provincial": {
+        "sourceName": "Washington secondary road sources",
+        "format": "deferred",
+        "license": "verify before ingest",
+        "adapter": null,
+        "status": "deferred",
+        "notes": "No secondary state source is active during the foundational OSM-only phase."
+      },
+      "routingReady": true,
+      "routingMode": "osm-only",
+      "backboneArtifact": {
+        "path": "routing/data/regions/wa/graph.v1.json.gz",
+        "edgeCount": 1719403,
+        "nodeCount": 1465235,
+        "gzBytes": 105231532
+      },
+      "osm": {
+        "adapter": "osm-roads",
+        "role": "sole-fabric",
+        "status": "ready",
+        "featureCount": 889124,
+        "added": 889124,
+        "license": "OpenStreetMap contributors (ODbL)",
+        "dateRetrieved": "2026-08-20"
       }
     },
     {
@@ -318,9 +347,9 @@
         "format": "GeoPackage",
         "license": "Open Government Licence - Canada",
         "adapter": "nrn",
-        "status": "ready",
+        "status": "deferred",
         "dateRetrieved": "2026-07-20",
-        "notes": "NRN omitted from NS routing fabric (OSM + NSTDB only)."
+        "notes": "NRN omitted from routing fabric (OSM-only)."
       },
       "provincial": {
         "sourceName": "Nova Scotia Topographic DataBase Roads, Trails and Rails",
@@ -329,26 +358,26 @@
         "format": "Socrata JSON / GeoJSON",
         "license": "Open Government Licence - Nova Scotia",
         "adapter": "ns-nstdb",
-        "status": "ready",
+        "status": "deferred",
         "dateRetrieved": "2026-08-05",
-        "notes": "Supplemental resource roads and TRACK detail."
+        "notes": "Inactive during the foundational OSM-only phase. NSTDB adapter/data are retained for later evaluation and are not in the NS pack."
       },
       "routingReady": true,
       "backboneArtifact": {
         "path": "routing/data/regions/ns/graph.v1.json.gz",
-        "edgeCount": 351923,
-        "nodeCount": 373150,
-        "gzBytes": 64231788
+        "edgeCount": 211931,
+        "nodeCount": 193747,
+        "gzBytes": 20584038
       },
-      "routingMode": "osm+provincial",
+      "routingMode": "osm-only",
       "osm": {
         "adapter": "osm-roads",
         "role": "sole-fabric",
         "status": "ready",
-        "featureCount": 134812,
-        "added": 134812,
+        "featureCount": 141021,
+        "added": 141021,
         "license": "OpenStreetMap contributors (ODbL)",
-        "dateRetrieved": "2026-08-05"
+        "dateRetrieved": "2026-08-20"
       }
     },
     {

@@ -300,51 +300,71 @@ final class GraphPackStore {
         refreshInstalledFromDisk()
     }
 
-    /// Start Nav: activate an installed pack covering the corridor.
-    /// Missing packs are skipped — download from PACKS when you expect no signal.
+    /// Start Nav: download every published province/state pack touched by the
+    /// route, then activate the first one. Planning remains live while online;
+    /// these bytes exist only for offline navigation recovery.
     func prepareForNavigation(coordinates: [CLLocationCoordinate2D], keepExisting: Bool) {
         task?.cancel()
-        // Prefer primary provinces (Kelowna → bc), not raw overlapping bboxes (ab+bc).
-        let regions = Self.preferredRegionOrder(for: coordinates)
-        let preferred = regions.first { isInstalled($0) } ?? regions.first
+        _ = keepExisting // Disk packs and corridor tiles are reused automatically.
+        phase = .downloading
+        progress = 0.02
+        task = Task { [weak self] in
+            guard let self else { return }
+            // Refresh first so a newly promoted pack is downloaded on the same
+            // Start tap rather than being mislabeled unavailable from stale state.
+            await self.refreshCatalogIfStale(staleSeconds: 0)
+            guard !Task.isCancelled else { return }
 
-        if keepExisting,
-           let pack = activePack,
-           let id = pack.regionId?.lowercased(),
-           regions.contains(id) || regions.isEmpty {
-            phase = .ready
-            progress = 1
-            return
-        }
-
-        if let preferred, isInstalled(preferred) {
-            if activePack?.regionId?.lowercased() == preferred {
-                phase = .ready
-                progress = 1
+            // Primary region for every route coordinate follows the actual ride
+            // and avoids coarse whole-bounding-box false positives.
+            var needed = Self.regionIds(containingAny: coordinates)
+            if needed.isEmpty {
+                needed = Self.regionIds(covering: coordinates)
+            }
+            guard !needed.isEmpty else {
+                self.phase = .skipped("No offline routing region covers this route")
+                self.progress = 1
                 return
             }
-            phase = .downloading
-            progress = 0
-            let region = preferred
-            task = Task { [weak self] in
-                guard let self else { return }
-                await self.ensureActivePackAsync(for: coordinates)
-                if self.activePack?.regionId?.lowercased() == region {
-                    self.phase = .ready
-                    self.progress = 1
-                } else if self.isInstalled(region) {
-                    // Coordinates may prefer a neighbor; still mark ready if pack activated.
-                    self.phase = self.activePack != nil ? .ready : .failed("Could not load \(region) pack")
-                    self.progress = 1
-                }
+            let published = needed.filter { self.publishedIds.contains($0) }
+            let unpublished = needed.filter { !self.publishedIds.contains($0) }
+            guard !published.isEmpty else {
+                let names = needed.map { self.displayTitle(forRegionId: $0) }.joined(separator: ", ")
+                self.phase = .skipped("No offline routing pack is published yet for \(names)")
+                self.progress = 1
+                return
             }
-            return
-        }
 
-        let missing = missingPublishedRegions(for: coordinates)
-        let title = (missing.first ?? preferred).map { displayTitle(forRegionId: $0) } ?? "this region"
-        phase = .skipped("Download \(title) from PACKS for offline detours")
-        progress = 1
+            let missing = published.filter { !self.isInstalled($0) }
+            for (offset, id) in missing.enumerated() {
+                guard !Task.isCancelled else { return }
+                // Run inside the prep task so Cancel genuinely cancels this download.
+                await self.performDownload(regionId: id, asNavigationPrep: false, quiet: false)
+                guard !Task.isCancelled else { return }
+                guard self.isInstalled(id) else {
+                    self.phase = .failed("Couldn’t download the \(self.displayTitle(forRegionId: id)) routing pack. Check your connection and try again.")
+                    self.progress = 1
+                    return
+                }
+                self.progress = 0.05 + 0.85 * Double(offset + 1) / Double(max(missing.count, 1))
+            }
+
+            await self.ensureActivePackAsync(for: coordinates)
+            guard !Task.isCancelled else { return }
+            guard self.activePack != nil else {
+                self.phase = .failed("The downloaded routing pack could not be opened.")
+                self.progress = 1
+                return
+            }
+
+            self.progress = 1
+            if unpublished.isEmpty {
+                self.phase = .ready
+            } else {
+                let names = unpublished.map { self.displayTitle(forRegionId: $0) }.joined(separator: ", ")
+                self.phase = .skipped("No offline routing pack is published yet for \(names)")
+            }
+        }
     }
 
     func cancel() {
@@ -371,7 +391,8 @@ final class GraphPackStore {
         profile: RouteProfile,
         allowUnknown: Bool,
         avoidEdgeIds: [String] = [],
-        sessionSeed: UInt64 = 0
+        sessionSeed: UInt64 = 0,
+        maxRouteMeters: Double? = nil
     ) async -> OnDeviceRouter.Result? {
         switch await routeOnDeviceDetailed(
             from: from,
@@ -379,7 +400,8 @@ final class GraphPackStore {
             profile: profile,
             allowUnknown: allowUnknown,
             avoidEdgeIds: avoidEdgeIds,
-            sessionSeed: sessionSeed
+            sessionSeed: sessionSeed,
+            maxRouteMeters: maxRouteMeters
         ) {
         case .success(let result): return result
         case .failure: return nil
@@ -392,7 +414,8 @@ final class GraphPackStore {
         profile: RouteProfile,
         allowUnknown: Bool,
         avoidEdgeIds: [String] = [],
-        sessionSeed: UInt64 = 0
+        sessionSeed: UInt64 = 0,
+        maxRouteMeters: Double? = nil
     ) async -> Result<OnDeviceRouter.Result, OnDeviceRouter.Failure> {
         let fromId = Self.primaryRegionId(containing: from)
         let toId = Self.primaryRegionId(containing: to)
@@ -407,7 +430,8 @@ final class GraphPackStore {
                 profile: profile,
                 allowUnknown: allowUnknown,
                 avoidEdgeIds: avoidEdgeIds,
-                sessionSeed: sessionSeed
+                sessionSeed: sessionSeed,
+                maxRouteMeters: maxRouteMeters
             )
         }
         return await routeOnDeviceInRegion(
@@ -417,7 +441,8 @@ final class GraphPackStore {
             profile: profile,
             allowUnknown: allowUnknown,
             avoidEdgeIds: avoidEdgeIds,
-            sessionSeed: sessionSeed
+            sessionSeed: sessionSeed,
+            maxRouteMeters: maxRouteMeters
         )
     }
 
@@ -432,35 +457,38 @@ final class GraphPackStore {
         profile: RouteProfile,
         allowUnknown: Bool,
         avoidEdgeIds: [String],
-        sessionSeed: UInt64
+        sessionSeed: UInt64,
+        maxRouteMeters: Double?
     ) async -> Result<OnDeviceRouter.Result, OnDeviceRouter.Failure> {
-        let seeds = CrossPackSeam.candidates(from: from, to: to, left: left, right: right)
+        await activateInstalledPack(regionId: left)
+        guard let leftPack = activePack else { return .failure(.noPath) }
+        let anchors = CrossPackSeam.candidates(
+            from: from,
+            to: to,
+            anchors: leftPack.crossPackSeams[right.lowercased()] ?? [],
+            urbanCores: leftPack.urbanCores
+        )
+        guard !anchors.isEmpty else { return .failure(.noPath) }
         var lastFailure: OnDeviceRouter.Failure = .noPath
-        for seed in seeds {
-            await activateInstalledPack(regionId: left)
-            guard let leftPack = activePack else { return .failure(.noPath) }
-            let leftSeam = await Task.detached(priority: .userInitiated) {
-                OnDeviceRouter(pack: leftPack).nearestRoadCoordinate(
-                    to: seed, allowUnknown: false, profile: .direct, osmCoreOnly: true
-                ) ?? seed
-            }.value
-
+        for anchor in anchors {
             await activateInstalledPack(regionId: right)
             guard let rightPack = activePack else { return .failure(.noPath) }
-            let rightSeam = await Task.detached(priority: .userInitiated) {
-                OnDeviceRouter(pack: rightPack).nearestRoadCoordinate(
-                    to: seed, allowUnknown: false, profile: .direct, osmCoreOnly: true
-                ) ?? seed
-            }.value
-
-            let gap = CLLocation(latitude: leftSeam.latitude, longitude: leftSeam.longitude)
-                .distance(from: CLLocation(latitude: rightSeam.latitude, longitude: rightSeam.longitude))
-            if gap > 25_000 { continue }
+            guard let reverse = rightPack.crossPackSeams[left.lowercased()]?.first(where: {
+                $0.osmWayId == anchor.osmWayId
+                    && abs($0.latitude - anchor.latitude) < 0.00002
+                    && abs($0.longitude - anchor.longitude) < 0.00002
+                    && $0.gapMeters <= 2
+            }) else { continue }
+            let seam = CLLocationCoordinate2D(
+                latitude: (anchor.latitude + reverse.latitude) / 2,
+                longitude: (anchor.longitude + reverse.longitude) / 2
+            )
 
             let hop1 = await routeOnDeviceInRegion(
-                from: from, to: leftSeam, regionId: left,
+                from: from, to: seam, regionId: left,
                 profile: profile, allowUnknown: allowUnknown, avoidEdgeIds: avoidEdgeIds,
-                sessionSeed: sessionSeed
+                sessionSeed: sessionSeed,
+                maxRouteMeters: maxRouteMeters
             )
             guard case .success(let first) = hop1, first.coordinates.count > 1 else {
                 if case .failure(let reason) = hop1 { lastFailure = reason }
@@ -468,9 +496,10 @@ final class GraphPackStore {
             }
 
             let hop2 = await routeOnDeviceInRegion(
-                from: rightSeam, to: to, regionId: right,
+                from: seam, to: to, regionId: right,
                 profile: profile, allowUnknown: allowUnknown, avoidEdgeIds: avoidEdgeIds,
-                sessionSeed: sessionSeed
+                sessionSeed: sessionSeed,
+                maxRouteMeters: maxRouteMeters.map { max(0, $0 - first.distanceMeters) }
             )
             guard case .success(let second) = hop2, second.coordinates.count > 1 else {
                 if case .failure(let reason) = hop2 { lastFailure = reason }
@@ -493,7 +522,8 @@ final class GraphPackStore {
         profile: RouteProfile,
         allowUnknown: Bool,
         avoidEdgeIds: [String],
-        sessionSeed: UInt64
+        sessionSeed: UInt64,
+        maxRouteMeters: Double? = nil
     ) async -> Result<OnDeviceRouter.Result, OnDeviceRouter.Failure> {
         if let regionId {
             await activateInstalledPack(regionId: regionId)
@@ -517,7 +547,8 @@ final class GraphPackStore {
                 profile: routeProfile,
                 allowUnknown: allow,
                 avoidEdgeIds: avoid,
-                sessionSeed: seed
+                sessionSeed: seed,
+                maxRouteMeters: maxRouteMeters
             )
         }.value
     }
@@ -832,7 +863,10 @@ final class GraphPackStore {
 
     /// Fuel stations from installed pack sidecars in the A→B box. Offline.
     func fuelStations(from start: RouteCoordinate, to end: RouteCoordinate) -> [POIFeature] {
-        let padDeg = 40_000.0 / 111_000.0
+        // This is only a cheap prefilter. The graph search below proves actual
+        // reachability. Mountain road corridors can sit far outside a straight
+        // A→B box, so a 40 km pad was deleting valid onward pumps.
+        let padDeg = 150_000.0 / 111_000.0
         return fuelStations(
             minLat: min(start.latitude, end.latitude) - padDeg,
             maxLat: max(start.latitude, end.latitude) + padDeg,
@@ -1166,6 +1200,18 @@ final class GraphPackStore {
         let lon = coordinate.longitude
         let lat = coordinate.latitude
 
+        // Resolve the international border before overlapping Canadian
+        // province rectangles. Southern BC is also inside AB's coarse bbox.
+        if lat < 49.0 {
+            if hits.contains("bc"), hits.contains("wa") { return "wa" }
+            if hits.contains("bc"), hits.contains("id") { return "id" }
+            if hits.contains("ab"), hits.contains("mt") { return "mt" }
+            if hits.contains("sk"), hits.contains("mt") { return "mt" }
+            if hits.contains("sk"), hits.contains("nd") { return "nd" }
+            if hits.contains("mb"), hits.contains("nd") { return "nd" }
+            if hits.contains("mb"), hits.contains("mn") { return "mn" }
+        }
+
         // AB vs BC — rectangles overlap on purpose. North of ~54°N the border is
         // 120°W; south it follows the continental divide (~114–116°W).
         if hits.contains("ab"), hits.contains("bc") {
@@ -1407,6 +1453,8 @@ final class GraphPackStore {
             return "Start and finish locked to the same junction. Move B farther along the road."
         case .noPath:
             return "No on-device path between those points in \(regionClause). The pack roads near A and B don’t connect under this profile — try Balanced, nudge B onto a through-road, or turn on Allow unknown."
+        case .searchLimit(let limit):
+            return "The on-device route search reached its \(limit) safety limit in \(regionClause). Try a shorter stage or add an intermediate waypoint."
         case .none:
             return "Couldn’t build an on-device route in \(regionClause). Check which end is off the roadway and nudge that pin."
         }

@@ -81,8 +81,9 @@ enum DirtTheme {
     /// Layers legend / basemap paved overlay (not selected-route paint).
     static let pavedLine = Color(dirtHex: 0x303A45)
 
-    // Selected-route map paint — three buckets only:
-    // purple = Allow-unknown access, warm brand orange = dirt, near-black = paved.
+    // Selected-route map paint:
+    // purple = Allow-unknown motor access, warm brand orange = adventure
+    // surface, near-black = explicit/inferred paved.
     static let routeAccess = Color(dirtHex: 0x6D36C9)
     static let routeGravel = Color(dirtHex: 0xDC6803)
     static let routeTrack = Color(dirtHex: 0xDC6803)
@@ -97,9 +98,9 @@ enum DirtTheme {
     /// Paint bucket for a graph surface/track class.
     static func routePaintColor(for surfaceKey: String) -> Color {
         switch surfaceKey.lowercased() {
-        case "access", "resource", "connector":
+        case "unknown_access", "connector":
             return routeAccess
-        case "gravel", "unknown", "unpaved", "dirt", "track", "double_track":
+        case "access", "resource", "gravel", "unknown", "unpaved", "dirt", "track", "double_track":
             return routeGravel
         case "paved":
             return routePaved

@@ -22,7 +22,7 @@ nonisolated enum RouteProfile: String, Codable, CaseIterable, Identifiable, Send
     var guidance: String {
         switch self {
         case .cleanest: "Pavement only · skip towns unless B is there"
-        case .direct: "Dirt on the shortest line · no meandering"
+        case .direct: "Follow the A→B line · take dirt when it stays direct"
         case .balanced: "Dual-sport mix · aim about half dirt / half paved"
         case .dirt: "Adventure ride to B · meander for dirt, not the highway ETA"
         }
@@ -87,10 +87,16 @@ struct AccessPolicy: Codable, Sendable {
 struct RouteRequestOptions: Codable, Sendable {
     var avoidEdgeIds: [String]?
     var sessionSeed: UInt64?
+    var maxPathMeters: Double?
 
-    init(avoidEdgeIds: [String] = [], sessionSeed: UInt64? = nil) {
+    init(
+        avoidEdgeIds: [String] = [],
+        sessionSeed: UInt64? = nil,
+        maxPathMeters: Double? = nil
+    ) {
         self.avoidEdgeIds = avoidEdgeIds.isEmpty ? nil : avoidEdgeIds
         self.sessionSeed = sessionSeed
+        self.maxPathMeters = maxPathMeters
     }
 }
 
@@ -106,7 +112,8 @@ struct RouteRequest: Codable, Sendable {
         locations: [RouteLocation],
         allowUnknown: Bool,
         avoidEdgeIds: [String] = [],
-        sessionSeed: UInt64 = 0
+        sessionSeed: UInt64 = 0,
+        maxPathMeters: Double? = nil
     ) {
         self.profile = profile
         self.locations = locations
@@ -116,18 +123,114 @@ struct RouteRequest: Codable, Sendable {
             motorizedUnknown: profile == .cleanest ? false : allowUnknown
         )
         let seed = sessionSeed == 0 ? nil : sessionSeed
-        if avoidEdgeIds.isEmpty, seed == nil {
+        if avoidEdgeIds.isEmpty, seed == nil, maxPathMeters == nil {
             options = nil
         } else {
-            options = RouteRequestOptions(avoidEdgeIds: avoidEdgeIds, sessionSeed: seed)
+            options = RouteRequestOptions(
+                avoidEdgeIds: avoidEdgeIds,
+                sessionSeed: seed,
+                maxPathMeters: maxPathMeters
+            )
         }
     }
+}
+
+/// One live request that discovers the ordered graph-reachable pump chain.
+/// It does not generate a disposable point-1-to-point-2 route and then alter
+/// it. The selected waypoints are subsequently routed as final ride legs.
+struct FuelChainConstraint: Codable, Sendable {
+    let usableRangeMeters: Double
+    let firstLegMaxMeters: Double
+    let requireFuelStopBeforeEnd: Bool
+}
+
+struct FuelChainRequest: Codable, Sendable {
+    let profile: RouteProfile
+    let locations: [RouteLocation]
+    let vehicle: String
+    let accessPolicy: AccessPolicy
+    let options: RouteRequestOptions?
+    let fuel: FuelChainConstraint
+
+    init(
+        profile: RouteProfile,
+        from start: RouteCoordinate,
+        to end: RouteCoordinate,
+        allowUnknown: Bool,
+        usableRangeMeters: Double,
+        firstLegMaxMeters: Double,
+        requireFuelStopBeforeEnd: Bool,
+        avoidEdgeIds: [String] = []
+    ) {
+        self.profile = profile
+        locations = [
+            RouteLocation(latitude: start.latitude, longitude: start.longitude, label: "Point 1"),
+            RouteLocation(latitude: end.latitude, longitude: end.longitude, label: "Point 2")
+        ]
+        vehicle = "dual-sport-motorcycle"
+        accessPolicy = AccessPolicy(
+            motorizedPermissive: true,
+            motorizedUnknown: profile == .cleanest ? false : allowUnknown
+        )
+        options = avoidEdgeIds.isEmpty ? nil : RouteRequestOptions(avoidEdgeIds: avoidEdgeIds)
+        fuel = FuelChainConstraint(
+            usableRangeMeters: usableRangeMeters,
+            firstLegMaxMeters: firstLegMaxMeters,
+            requireFuelStopBeforeEnd: requireFuelStopBeforeEnd
+        )
+    }
+}
+
+struct FuelChainStop: Codable, Sendable {
+    let id: String
+    let latitude: Double
+    let longitude: Double
+    let name: String?
+    let brand: String?
+    let address: String?
+    let graphMeters: Double?
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, brand, address, graphMeters
+        case latitude = "lat"
+        case longitude = "lon"
+    }
+
+    var coordinate: RouteCoordinate {
+        RouteCoordinate(longitude: longitude, latitude: latitude)
+    }
+
+    var displayName: String {
+        let raw = name ?? brand ?? "Fuel stop"
+        return raw.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Fuel stop" : raw
+    }
+}
+
+struct FuelChainDiagnostics: Codable, Sendable {
+    let strategy: String?
+    let states: Int?
+    let dijkstraPops: Int?
+    let matchedFuel: Int?
+    let elapsedMs: Int?
+}
+
+struct FuelChainResponse: Codable, Sendable {
+    let status: String
+    let error: String?
+    let message: String?
+    let regionIds: [String]?
+    let stops: [FuelChainStop]?
+    let graphMeters: [Double]?
+    let diagnostics: FuelChainDiagnostics?
+
+    var isComplete: Bool { status == "complete" }
 }
 
 struct RouteSegment: Codable, Identifiable, Sendable {
     let id = UUID()
     let surfaceClass: String?
     let trackClass: String?
+    let accessClass: String?
     let distanceMeters: Double?
     let geometry: [RouteCoordinate]?
     let coords: [RouteCoordinate]?
@@ -136,12 +239,13 @@ struct RouteSegment: Codable, Identifiable, Sendable {
     let edgeId: String?
 
     enum CodingKeys: String, CodingKey {
-        case surfaceClass, trackClass, distanceMeters, geometry, coords, edgeId
+        case surfaceClass, trackClass, accessClass, distanceMeters, geometry, coords, edgeId
     }
 
     init(
         surfaceClass: String?,
         trackClass: String?,
+        accessClass: String? = nil,
         distanceMeters: Double?,
         geometry: [RouteCoordinate]?,
         coords: [RouteCoordinate]?,
@@ -149,6 +253,7 @@ struct RouteSegment: Codable, Identifiable, Sendable {
     ) {
         self.surfaceClass = surfaceClass
         self.trackClass = trackClass
+        self.accessClass = accessClass
         self.distanceMeters = distanceMeters
         self.geometry = geometry
         self.coords = coords
@@ -170,6 +275,18 @@ struct RouteSegment: Codable, Identifiable, Sendable {
             )
         }
         return key
+    }
+
+    /// Map paint key that preserves unknown motorized access independently of
+    /// surface. Purple means access is unproven; it never means "paved".
+    var selectedRoutePaintKey: String {
+        OnDeviceProfileCosts.selectedRoutePaintKey(
+            surfaceName: (surfaceClass ?? "unknown").lowercased(),
+            roadClassName: (trackClass ?? "unknown").lowercased(),
+            // Older saved/API segments predate accessClass; preserve their
+            // surface paint rather than inventing an unknown-access warning.
+            accessName: (accessClass ?? "motorized_permissive").lowercased()
+        )
     }
 
     var isDirt: Bool {
@@ -228,6 +345,29 @@ struct RouteStats: Codable, Sendable {
         try c.encodeIfPresent(pavedPercent, forKey: .pavedPercent)
         try c.encodeIfPresent(unknownAccessPercent, forKey: .unknownAccessPercent)
     }
+}
+
+struct RouteResponseSearchMeta: Codable, Sendable {
+    let pass2Outcome: String?
+    let pops: Int?
+    let timedOut: Bool?
+    let rideObjective: String?
+    let corridorMeters: Double?
+    let maxCrossTrackMeters: Double?
+    let corridorWidened: Bool?
+    let shortestMeters: Double?
+    let extraUsedMeters: Double?
+    let extraBudgetMeters: Double?
+    let urbanCoreFallbackUsed: Bool?
+    let cleanUnpavedFallbackUsed: Bool?
+    let settlementFallbackUsed: Bool?
+}
+
+struct RouteResponseDebug: Codable, Sendable {
+    let routingRevision: String?
+    let graphMode: String?
+    let searchMeta: RouteResponseSearchMeta?
+    let fallback: String?
 }
 
 nonisolated struct RouteManeuver: Codable, Identifiable, Sendable {
@@ -300,9 +440,10 @@ struct RouteResponse: Codable, Sendable {
     let warnings: [RouteWarning]?
     let dirtPercentValue: Int?
     let pavedPercentValue: Int?
+    var debug: RouteResponseDebug? = nil
 
     enum CodingKeys: String, CodingKey {
-        case status, error, message, distanceMeters, geometry, segments, stats, maneuvers, warnings
+        case status, error, message, distanceMeters, geometry, segments, stats, maneuvers, warnings, debug
         case estimatedMovingSeconds, estimatedElapsedSeconds
         case dirtPercentValue = "dirtPercent"
         case pavedPercentValue = "pavedPercent"

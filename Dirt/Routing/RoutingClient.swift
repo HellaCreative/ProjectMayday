@@ -58,4 +58,43 @@ final class RoutingClient {
         }
         return response
     }
+
+    /// Discovers point 1 → F1 → … → point 2 in one graph operation. Only the
+    /// returned final legs are subsequently routed, so candidate count can no
+    /// longer multiply complete Dirt searches.
+    func fuelChain(
+        _ request: FuelChainRequest,
+        timeout: TimeInterval = 30
+    ) async throws -> FuelChainResponse {
+        guard request.locations.count >= 2 else { throw RoutingError.invalidEndpoints }
+        var urlRequest = URLRequest(url: AppConfig.liveFuelChainURL)
+        urlRequest.httpMethod = "POST"
+        urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        urlRequest.httpBody = try JSONEncoder().encode(request)
+        urlRequest.timeoutInterval = timeout
+
+        let (data, urlResponse) = try await session.data(for: urlRequest)
+        let http = urlResponse as? HTTPURLResponse
+        guard let response = try? JSONDecoder().decode(FuelChainResponse.self, from: data) else {
+            let status = http?.statusCode ?? 0
+            let snippet = String(data: data.prefix(240), encoding: .utf8)?
+                .replacingOccurrences(of: "\n", with: " ") ?? "<non-utf8 \(data.count)b>"
+            Task { @MainActor in
+                RoutingDebugLog.shared.event(
+                    "fuel chain decode fail http=\(status) body=\(snippet)"
+                )
+            }
+            throw RoutingError.server("Fuel planning server error (\(status)).")
+        }
+        guard response.isComplete else {
+            let message = response.message ?? response.error ?? "Fuel chain unavailable."
+            Task { @MainActor in
+                RoutingDebugLog.shared.event(
+                    "fuel chain incomplete http=\(http?.statusCode ?? 0) code=\(response.error ?? "-") msg=\(message)"
+                )
+            }
+            throw RoutingError.server(message)
+        }
+        return response
+    }
 }

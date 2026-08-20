@@ -15,6 +15,7 @@
  * Usage:
  *   node scripts/publish-packs-cdn.js              # ns only (merge into existing manifest)
  *   node scripts/publish-packs-cdn.js ns nb
+ *   node scripts/publish-packs-cdn.js bc --local-only
  *   node scripts/publish-packs-cdn.js on --replace-manifest   # dangerous: drops other regions
  *   PACK_CDN_VERSION=v1 node scripts/publish-packs-cdn.js --all-longhaul
  *
@@ -62,9 +63,12 @@ function stageRegion(regionId, fileNames) {
   const files = [];
   for (const name of fileNames) {
     const src = path.join(srcDir, name);
-    if (!fs.existsSync(src)) continue;
     const dest = path.join(destDir, name);
-    fs.copyFileSync(src, dest);
+    if (fs.existsSync(src)) {
+      fs.copyFileSync(src, dest);
+    } else if (!fs.existsSync(dest)) {
+      continue;
+    }
     const st = fs.statSync(dest);
     files.push({
       name,
@@ -162,7 +166,11 @@ function main() {
   console.log("publish packs", VERSION, regionIds.join(","), merge ? "merge-manifest" : "REPLACE-manifest");
   const staged = regionIds.map((id) => stageRegion(id, fileNames));
   const manifest = writeManifest(staged, { merge });
-  syncR2();
+  if (argv.includes("--local-only")) {
+    console.log("R2/S3 sync skipped (--local-only)");
+  } else {
+    syncR2();
+  }
   console.log(
     JSON.stringify(
       {

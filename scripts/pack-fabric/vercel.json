@@ -6,6 +6,16 @@
       "memory": 2048,
       "maxDuration": 300,
       "includeFiles": "routing/{lib,regional,schema}/**"
+    },
+    "api/fuel.js": {
+      "memory": 1024,
+      "maxDuration": 30,
+      "includeFiles": "routing/{lib,regional}/**"
+    },
+    "api/fuel-chain.js": {
+      "memory": 2048,
+      "maxDuration": 60,
+      "includeFiles": "routing/{lib,regional,schema}/**"
     }
   },
   "headers": [

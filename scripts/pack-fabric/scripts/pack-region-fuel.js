@@ -29,7 +29,8 @@ const OSM_SLUG = {
   nl: "newfoundland-and-labrador",
   yt: "yukon",
   nt: "northwest-territories",
-  nu: "nunavut"
+  nu: "nunavut",
+  wa: "washington"
 };
 
 const id = String(process.argv[2] || "").toLowerCase();
@@ -41,7 +42,11 @@ if (!id || !OSM_SLUG[id]) {
 const seq = path.join(DIRT, "data-raw/osm-fuel", OSM_SLUG[id], "fuel.geojsonseq");
 if (!fs.existsSync(seq)) {
   console.error("missing " + seq);
-  console.error("Run: bash scripts/pack-fabric/scripts/extract-osm-fuel.sh " + OSM_SLUG[id]);
+  console.error(
+    "Run: bash scripts/pack-fabric/scripts/extract-osm-fuel.sh " +
+      OSM_SLUG[id] +
+      (id === "wa" ? " us" : " canada")
+  );
   process.exit(1);
 }
 

@@ -36,6 +36,8 @@ const {
   ROAD_CLASS_NAME
 } = require("./pack-v2");
 const { findPathV2 } = require("./find-path-v2");
+const { isDirtSurface } = require("./hop-search");
+const crossPackTopology = require("../schema/cross-pack-topology.v1.json");
 
 const DEFAULT_MATCH_METERS = 250;
 const EARTH_M = 6371000;
@@ -48,6 +50,25 @@ function haversineMeters(a, b) {
   const lat2 = toRad(b[1]);
   const x = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
   return 2 * EARTH_M * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+}
+
+function coordinateInUrbanBoxes(coordinate, boxes) {
+  if (!Array.isArray(coordinate) || coordinate.length < 2) return false;
+  return (boxes || []).some((box) =>
+    coordinate[1] >= box.minLat && coordinate[1] <= box.maxLat &&
+    coordinate[0] >= box.minLon && coordinate[0] <= box.maxLon
+  );
+}
+
+function coordinateNearUrbanBoxes(coordinate, boxes, clearanceMeters = 5000) {
+  if (!Array.isArray(coordinate) || coordinate.length < 2) return false;
+  return (boxes || []).some((box) => {
+    const nearest = [
+      Math.max(Number(box.minLon), Math.min(Number(box.maxLon), coordinate[0])),
+      Math.max(Number(box.minLat), Math.min(Number(box.maxLat), coordinate[1]))
+    ];
+    return haversineMeters(coordinate, nearest) < clearanceMeters;
+  });
 }
 
 function projectOnSegment(point, a, b) {
@@ -64,17 +85,10 @@ function projectOnSegment(point, a, b) {
   return { coord, t, distanceM: haversineMeters(point, coord) };
 }
 
-function isOpenStreetMapEdge(edge) {
-  return !!(edge && /openstreetmap/i.test(String(edge.src || edge.source || "")));
-}
-
 function accessAllowed(accessCode, policy, enums, edge) {
-  // Product rule: OSM basemap roads are always routable when included.
-  // Surface/class still drive visuals and costing; access gating is for
-  // provincial capillary / unknown-legality only.
-  if (isOpenStreetMapEdge(edge)) {
-    return policy.motorizedPermissive !== false;
-  }
+  // Access class, not dataset name, is authoritative. OSM path/cycleway edges
+  // with uncertain motorcycle legality must remain behind Allow Unknown.
+  void edge;
   const name = enums.ACCESS_NAME[accessCode];
   if (name === "motorized_restricted" || name === "motorized_excluded") return false;
   if (name === "motorized_unknown") return !!policy.motorizedUnknown;
@@ -262,8 +276,9 @@ function giantComponentId(runtime) {
 
 /**
  * Giant-component hard bias (+400m) was added for QC longhaul OSM islands.
- * On full NS packs it stole snaps from nearby NSTDB forest edges and, with
- * end-rematch, pinned both ends to the paved giant — dirt routes died.
+ * On earlier full NS overlay packs it stole snaps from nearby NSTDB forest
+ * edges and, with end-rematch, pinned both ends to the paved giant. The
+ * foundational NS pack is OSM-only; keep the guard for older installed packs.
  *
  * Full packs: two-pass snap (prefer nearest eligible edge in the giant
  * component within the match radius; only then fall back to islands).
@@ -595,6 +610,154 @@ function normalizePolicy(input, profile) {
   };
 }
 
+function debugGraphBbox(body) {
+  const raw = body && body.bbox;
+  const minLon = Number(raw && raw.minLon);
+  const minLat = Number(raw && raw.minLat);
+  const maxLon = Number(raw && raw.maxLon);
+  const maxLat = Number(raw && raw.maxLat);
+  if (
+    !Number.isFinite(minLon) || !Number.isFinite(minLat) ||
+    !Number.isFinite(maxLon) || !Number.isFinite(maxLat) ||
+    minLon >= maxLon || minLat >= maxLat
+  ) {
+    return null;
+  }
+  // This is a viewport diagnostic, never a province export.
+  if (maxLon - minLon > 3 || maxLat - minLat > 3) return null;
+  return { minLon, minLat, maxLon, maxLat };
+}
+
+function debugPolylineIntersects(coords, bbox) {
+  if (!coords || coords.length < 2) return false;
+  let minLon = Infinity;
+  let minLat = Infinity;
+  let maxLon = -Infinity;
+  let maxLat = -Infinity;
+  for (const point of coords) {
+    const lon = Number(point && point[0]);
+    const lat = Number(point && point[1]);
+    if (!Number.isFinite(lon) || !Number.isFinite(lat)) continue;
+    if (lon < minLon) minLon = lon;
+    if (lat < minLat) minLat = lat;
+    if (lon > maxLon) maxLon = lon;
+    if (lat > maxLat) maxLat = lat;
+  }
+  return !(
+    maxLon < bbox.minLon || minLon > bbox.maxLon ||
+    maxLat < bbox.minLat || minLat > bbox.maxLat
+  );
+}
+
+function debugPolyline(coords) {
+  if (!coords || coords.length <= 64) return coords || [];
+  const step = Math.ceil(coords.length / 64);
+  const out = [];
+  for (let i = 0; i < coords.length; i += step) out.push(coords[i]);
+  const last = coords[coords.length - 1];
+  if (out[out.length - 1] !== last) out.push(last);
+  return out;
+}
+
+function debugGraphResponse(body, graphResolution, runtime) {
+  const bbox = debugGraphBbox(body);
+  if (!bbox) {
+    return {
+      status: "error",
+      error: "invalid_debug_bbox",
+      message: "Provide a valid viewport bbox no larger than 3 degrees."
+    };
+  }
+  const requestedCap = Number(body.cap);
+  const cap = Math.max(250, Math.min(4000, Number.isFinite(requestedCap) ? requestedCap : 3500));
+  const indices = new Set();
+  const grid = runtime.edgeGrid;
+  const gridSize = runtime.GRID;
+  if (grid && Number.isFinite(gridSize) && gridSize > 0) {
+    const x0 = Math.floor(bbox.minLon / gridSize);
+    const y0 = Math.floor(bbox.minLat / gridSize);
+    const x1 = Math.floor(bbox.maxLon / gridSize);
+    const y1 = Math.floor(bbox.maxLat / gridSize);
+    for (let x = x0; x <= x1; x += 1) {
+      for (let y = y0; y <= y1; y += 1) {
+        const bucket = grid.get(x + ":" + y);
+        if (bucket) for (const index of bucket) indices.add(index);
+      }
+    }
+  }
+
+  const features = [];
+  const enums = runtime.enums || {};
+  const v2 = runtime.format === "v2";
+  const candidateIndices = grid
+    ? Array.from(indices)
+    : Array.from({ length: runtime.data.edgeCount || 0 }, (_, index) => index);
+  if (v2 && runtime.pack.edgeFrom && runtime.pack.edgeTo) {
+    const centerLon = (bbox.minLon + bbox.maxLon) / 2;
+    const centerLat = (bbox.minLat + bbox.maxLat) / 2;
+    const nodeCoords = runtime.pack.nodeCoords;
+    const score = (index) => {
+      const a = runtime.pack.edgeFrom[index];
+      const b = runtime.pack.edgeTo[index];
+      const lon = (nodeCoords[a * 2] + nodeCoords[b * 2]) / 2;
+      const lat = (nodeCoords[a * 2 + 1] + nodeCoords[b * 2 + 1]) / 2;
+      const dx = (lon - centerLon) * Math.cos(centerLat * Math.PI / 180);
+      const dy = lat - centerLat;
+      return dx * dx + dy * dy;
+    };
+    candidateIndices.sort((a, b) => score(a) - score(b));
+  }
+  let matchingCount = 0;
+  for (const index of candidateIndices) {
+    let coords;
+    let edgeId;
+    let surfaceCode;
+    let accessCode;
+    let structureCode;
+    let roadClass;
+    if (v2) {
+      coords = runtime.geom.polyline(index);
+      const attr = runtime.pack.edgeAttrs[index];
+      edgeId = runtime.pack.edgeId(index);
+      surfaceCode = unpackSurface(attr);
+      accessCode = unpackAccess(attr);
+      structureCode = unpackStructure(attr);
+      roadClass = ROAD_CLASS_NAME[unpackRoadClass(attr)] || "unknown";
+    } else {
+      const edge = runtime.data.edges[index];
+      if (!edge) continue;
+      coords = edge.g || [];
+      edgeId = String(edge.i || index);
+      surfaceCode = edge.s;
+      accessCode = edge.ac;
+      structureCode = edge.t;
+      roadClass = String(edge.rt || "unknown");
+    }
+    if (!debugPolylineIntersects(coords, bbox)) continue;
+    matchingCount += 1;
+    if (features.length >= cap) continue;
+    features.push({
+      edgeId,
+      coordinates: debugPolyline(coords),
+      surfaceClass: (enums.SURFACE_NAME || [])[surfaceCode] || "unknown",
+      accessClass: (enums.ACCESS_NAME || [])[accessCode] || "motorized_permissive",
+      structureType: (enums.STRUCTURE_NAME || [])[structureCode] || "none",
+      roadClass
+    });
+  }
+  return {
+    status: "complete",
+    action: "debug_graph",
+    routingRevision: "ride-objectives-v4",
+    source: "live-pack",
+    regionIds: graphResolution.regionIds,
+    features,
+    capped: matchingCount > cap,
+    matchingCount,
+    cap
+  };
+}
+
 async function routeRequest(body = {}) {
   const graphResolution = resolveGraphRequest(body);
   if (!graphResolution.ok) {
@@ -624,6 +787,9 @@ async function routeRequest(body = {}) {
       message: err && err.message ? err.message : String(err),
       regionIds: graphResolution.regionIds || []
     };
+  }
+  if (body.action === "debug_graph") {
+    return debugGraphResponse(body, graphResolution, runtime);
   }
   return routeOnRuntime(body, graphResolution, runtime);
 }
@@ -709,6 +875,18 @@ function releaseSeamProbeMemory() {
  * Never invents free-space connectors — only projects onto eligible fabric.
  */
 async function snapSeamWaypoint(seed, regionIds, profile) {
+  const topology = await topologySeamWaypoint(seed, regionIds);
+  if (topology.ok) return topology;
+  // Rebuilt target packs must never fall back to a sampled border snap. Other
+  // legacy pairs retain the old resolver only until their next deliberate rebuild.
+  const targetPair = new Set(regionIds.map((id) => String(id).toLowerCase()));
+  if (
+    targetPair.size === 2 &&
+    targetPair.has("bc") &&
+    (targetPair.has("ab") || targetPair.has("wa"))
+  ) {
+    return topology;
+  }
   const preferPaved =
     String(profile || "").toLowerCase() === "cleanest" || String(seed.role || "") === "spine";
   const snapProfile = preferPaved ? "cleanest" : String(profile || "balanced").toLowerCase();
@@ -828,6 +1006,140 @@ async function snapSeamWaypoint(seed, regionIds, profile) {
 }
 
 /**
+ * Resolve a seam only when both phone/live packs prove the same OSM way and
+ * exact OSM vertex. The approximate chain waypoint is used for ranking only.
+ */
+/**
+ * Select a topology-authored seam from the deployment index. This avoids four
+ * full R2 graph downloads before a cross-region fuel plan can even begin.
+ */
+function topologySeamFromIndex(seed, regionIds, index = crossPackTopology) {
+  const ids = [...new Set((regionIds || []).map((id) => String(id).toLowerCase()))];
+  if (ids.length !== 2) {
+    return { ok: false, authoritative: false, reason: "seam_pair_required", regionIds: ids };
+  }
+  const records = (index && index.regions) || {};
+  const left = records[ids[0]];
+  const right = records[ids[1]];
+  const leftRows = left && left.neighbors && left.neighbors[ids[1]];
+  const rightRows = right && right.neighbors && right.neighbors[ids[0]];
+  if (!Array.isArray(leftRows) || !Array.isArray(rightRows)) {
+    return { ok: false, authoritative: false, reason: "seam_pair_not_indexed", regionIds: ids };
+  }
+
+  const rightKeys = new Set(
+    rightRows
+      .filter((row) => Number(row.gapMeters) <= 2 && Array.isArray(row.coordinate))
+      .map((row) => `${row.osmWayId}|${Number(row.coordinate[0]).toFixed(5)}|${Number(row.coordinate[1]).toFixed(5)}`)
+  );
+  const seedCoord = [Number(seed.lon != null ? seed.lon : seed.lng), Number(seed.lat)];
+  const shared = leftRows
+    .filter((row) => Number(row.gapMeters) <= 2 && Array.isArray(row.coordinate))
+    .filter((row) => rightKeys.has(
+      `${row.osmWayId}|${Number(row.coordinate[0]).toFixed(5)}|${Number(row.coordinate[1]).toFixed(5)}`
+    ))
+    .filter((row) => !coordinateNearUrbanBoxes(row.coordinate, left.urbanCores || []))
+    .filter((row) => !coordinateNearUrbanBoxes(row.coordinate, right.urbanCores || []))
+    .sort((a, b) => haversineMeters(seedCoord, a.coordinate) - haversineMeters(seedCoord, b.coordinate));
+  if (!shared.length) {
+    return {
+      ok: false,
+      authoritative: true,
+      reason: "no_non_urban_shared_osm_seam",
+      nearestMeters: null,
+      regionIds: ids
+    };
+  }
+  const best = shared[0];
+  return {
+    ok: true,
+    authoritative: true,
+    lon: Number(best.coordinate[0]),
+    lat: Number(best.coordinate[1]),
+    seedDistanceM: Math.round(haversineMeters(seedCoord, best.coordinate)),
+    surfaceClass: "pack-proven",
+    regionId: ids[0],
+    dualCount: 2,
+    osmWayId: String(best.osmWayId),
+    seamMethod: "same-osm-way-and-vertex-index",
+    regionIds: ids
+  };
+}
+
+async function topologySeamWaypoint(seed, regionIds) {
+  const ids = [...new Set((regionIds || []).map((id) => String(id).toLowerCase()))];
+  if (ids.length !== 2) return { ok: false, reason: "seam_pair_required", regionIds: ids };
+  const indexed = topologySeamFromIndex(seed, ids);
+  if (indexed.authoritative) return indexed;
+  const rowsByRegion = new Map();
+  const coresByRegion = new Map();
+  try {
+    for (const id of ids) {
+      let runtime;
+      try {
+        runtime = await loadSeamRegionRuntime(id, seed);
+      } catch (_) {
+        releaseSeamProbeMemory();
+        return { ok: false, reason: "seam_pack_load_failed", regionIds: ids };
+      }
+      const meta = runtime.pack && runtime.pack.meta ? runtime.pack.meta : runtime.meta || {};
+      const neighbor = ids.find((other) => other !== id);
+      const rows = Array.isArray((meta.crossPackSeams || {})[neighbor])
+        ? meta.crossPackSeams[neighbor]
+        : [];
+      rowsByRegion.set(id, rows.map((row) => ({ ...row })));
+      coresByRegion.set(
+        id,
+        Array.isArray(meta.urbanCores) ? meta.urbanCores.map((box) => ({ ...box })) : []
+      );
+      releaseSeamProbeMemory();
+    }
+
+    const left = rowsByRegion.get(ids[0]) || [];
+    const right = rowsByRegion.get(ids[1]) || [];
+    const rightKeys = new Set(
+      right
+        .filter((row) => Number(row.gapMeters) <= 2)
+        .map((row) => `${row.osmWayId}|${Number(row.coordinate && row.coordinate[0]).toFixed(5)}|${Number(row.coordinate && row.coordinate[1]).toFixed(5)}`)
+    );
+    const seedCoord = [Number(seed.lon != null ? seed.lon : seed.lng), Number(seed.lat)];
+    const shared = left
+      .filter((row) => Number(row.gapMeters) <= 2 && Array.isArray(row.coordinate))
+      .filter((row) =>
+        rightKeys.has(
+          `${row.osmWayId}|${Number(row.coordinate[0]).toFixed(5)}|${Number(row.coordinate[1]).toFixed(5)}`
+        )
+      )
+      // A chain seam is an implementation detail, not the rider's B pin. If it
+      // sits inside an urban core, endpoint exemption would silently open that
+      // core to the whole hop. Only topology-proven seams outside both packs'
+      // urban walls may become intermediate waypoints.
+      .filter((row) => ids.every((id) => {
+        return !coordinateNearUrbanBoxes(row.coordinate, coresByRegion.get(id));
+      }))
+      .sort((a, b) => haversineMeters(seedCoord, a.coordinate) - haversineMeters(seedCoord, b.coordinate));
+    if (!shared.length) {
+      return { ok: false, reason: "no_non_urban_shared_osm_seam", nearestMeters: null, regionIds: ids };
+    }
+    const best = shared[0];
+    return {
+      ok: true,
+      lon: Number(best.coordinate[0]),
+      lat: Number(best.coordinate[1]),
+      seedDistanceM: Math.round(haversineMeters(seedCoord, best.coordinate)),
+      surfaceClass: "pack-proven",
+      regionId: ids[0],
+      dualCount: 2,
+      osmWayId: String(best.osmWayId),
+      seamMethod: "same-osm-way-and-vertex",
+      regionIds: ids
+    };
+  } finally {
+    releaseSeamProbeMemory();
+  }
+}
+
+/**
  * Resolve every intermediate canada-chain waypoint onto live longhaul fabric.
  * User start/end pins are left untouched.
  */
@@ -886,17 +1198,26 @@ async function resolveChainSeamWaypoints(waypoints, body = {}) {
       seedDistanceM: snapped.seedDistanceM,
       surfaceClass: snapped.surfaceClass,
       regionId: snapped.regionId,
-      dualCount: snapped.dualCount
+      dualCount: snapped.dualCount,
+      osmWayId: snapped.osmWayId || null,
+      seamMethod: snapped.seamMethod || "legacy-sampled-snap"
     });
   }
 
   return { ok: true, waypoints: out, snaps };
 }
 
+/** A hard leg ceiling is cumulative across every regional chain hop. */
+function remainingChainPathCap(options, completedMeters) {
+  const requested = Number((options || {}).maxPathMeters);
+  if (!Number.isFinite(requested)) return null;
+  return requested - Math.max(0, Number(completedMeters) || 0);
+}
+
 async function routeCanadaChain(body, graphResolution) {
   const profile = body.profile || "balanced";
-  // Adventure: province-seam joints (not city hubs) so each hop loads ≤2 packs.
-  // Cleanest: highway spine anchors. Plain [A,B] mega-merges OOM on Hobby.
+  // Every profile uses neutral province-seam joints (never city hubs) so each
+  // hop loads ≤2 packs without manufacturing an urban-core endpoint exemption.
   let waypoints = corridorLocationsForRoute(body.locations || [], {
     profile,
     forChain: true
@@ -967,6 +1288,17 @@ async function routeCanadaChain(body, graphResolution) {
     );
     const hopRegion =
       i === waypoints.length - 2 ? endFam || startFam : startFam || endFam;
+    const requestedPathCap = Number((body.options || {}).maxPathMeters);
+    const remainingPathCap = remainingChainPathCap(body.options, totalMeters);
+    if (remainingPathCap != null && remainingPathCap <= 0) {
+      return {
+        status: "failed",
+        error: "max_path_exceeded",
+        message: "The regional route chain exceeds the fuel-leg distance limit.",
+        regionIds: graphResolution.regionIds,
+        hopIndex: i
+      };
+    }
     const hop = await routeRequest({
       ...body,
       locations: [hopStart, hopEnd],
@@ -976,6 +1308,9 @@ async function routeCanadaChain(body, graphResolution) {
       regionId: hopRegion || undefined,
       options: {
         ...(body.options || {}),
+        // A fuel-leg ceiling applies to the complete cross-region leg, not
+        // independently to every province hop.
+        maxPathMeters: remainingPathCap == null ? (body.options || {}).maxPathMeters : remainingPathCap,
         matchLimitMeters: Math.min(500, Number((body.options || {}).matchLimitMeters) || 500),
         chainSeamHop: true
       }
@@ -995,6 +1330,15 @@ async function routeCanadaChain(body, graphResolution) {
     }
     parts.push(hop);
     totalMeters += hop.distanceMeters || 0;
+    if (Number.isFinite(requestedPathCap) && totalMeters > requestedPathCap + 1) {
+      return {
+        status: "failed",
+        error: "max_path_exceeded",
+        message: "The regional route chain exceeds the fuel-leg distance limit.",
+        regionIds: graphResolution.regionIds,
+        hopIndex: i
+      };
+    }
     if (Array.isArray(hop.warnings)) warnings.push(...hop.warnings);
     if (hop.debug && Number.isFinite(hop.debug.searchMs)) {
       searchMsTotal += hop.debug.searchMs;
@@ -1019,6 +1363,37 @@ async function routeCanadaChain(body, graphResolution) {
   // Surface/access % must come from hop segments — never leave only hop
   // timing fields here or the client shows 0% Dirt while painting blue/gray.
   const surfaceStats = aggregateRouteSurfaceStats(segments, totalMeters);
+  const hopSearches = parts.map((part, index) => ({
+    hop: index + 1,
+    routingRevision: part.debug && part.debug.routingRevision || null,
+    searchMeta: part.debug && part.debug.searchMeta || null,
+    fallback: part.debug && part.debug.fallback || null,
+    distanceMeters: part.distanceMeters || 0,
+    dirtPercent: part.stats && part.stats.dirtPercent
+  }));
+  const hopMetas = hopSearches.map((row) => row.searchMeta).filter(Boolean);
+  const chainSearchMeta = {
+    pass2Outcome: hopMetas.some((meta) => meta.timedOut)
+      ? (hopMetas.find((meta) => meta.timedOut).pass2Outcome || "timeCap")
+      : "completed",
+    pops: hopMetas.reduce((sum, meta) => sum + (Number(meta.pops) || 0), 0),
+    timedOut: hopMetas.some((meta) => meta.timedOut === true),
+    rideObjective:
+      profile === "dirt" ? "earned-dirt-detour" :
+      profile === "balanced" ? "surface-balance" :
+      profile === "direct" ? "crow-flies-adventure" : "clean-pavement",
+    corridorMeters: hopMetas.reduce((max, meta) =>
+      Math.max(max, Number(meta.corridorMeters) || 0), 0
+    ) || null,
+    maxCrossTrackMeters: hopMetas.reduce((max, meta) =>
+      Math.max(max, Number(meta.maxCrossTrackMeters) || 0), 0
+    ) || null,
+    corridorWidened: hopMetas.some((meta) => meta.corridorWidened === true),
+    urbanCoreFallbackUsed: hopMetas.some((meta) => meta.urbanCoreFallbackUsed === true),
+    cleanUnpavedFallbackUsed: hopMetas.some((meta) => meta.cleanUnpavedFallbackUsed === true),
+    settlementFallbackUsed: hopMetas.some((meta) => meta.settlementFallbackUsed === true),
+    hopSearches
+  };
   return {
     status: "complete",
     profile: String(body.profile || "balanced").toLowerCase(),
@@ -1036,12 +1411,16 @@ async function routeCanadaChain(body, graphResolution) {
       inflateMs: cache.inflateMs
     },
     debug: {
+      routingRevision: "ride-objectives-v8-dirt-envelope-settlements",
       engine: "dirt-node-astar-chain",
       graphMode: "canada-chain",
+      searchMeta: chainSearchMeta,
       regionIds: graphResolution.regionIds,
       waypoints: waypoints.length,
       seamSnaps: seamResolved.snaps,
-      fallback: null,
+      fallback: chainSearchMeta.urbanCoreFallbackUsed
+        ? "urban_core_last_resort"
+        : chainSearchMeta.settlementFallbackUsed ? "settlement_last_resort" : null,
       chainCacheEnabled: useChainCache,
       cache,
       hopTimings: hopCacheSnapshots,
@@ -1055,19 +1434,23 @@ function aggregateRouteSurfaceStats(segments, distanceMeters) {
   const bySurfaceM = Object.create(null);
   const byAccessM = Object.create(null);
   let unknownAccessMeters = 0;
+  let dirtMeters = 0;
+  let pavedMeters = 0;
   for (const seg of segments || []) {
     const meters = Number(seg.distanceMeters) || 0;
     if (!(meters > 0)) continue;
     const surfaceName = seg.surfaceClass || seg.trackClass || "unknown";
+    const roadClassName = seg.trackClass || seg.roadClass || "unknown";
     const accessName = seg.accessClass || "motorized_unknown";
     bySurfaceM[surfaceName] = (bySurfaceM[surfaceName] || 0) + meters;
+    if (isDirtSurface(surfaceName, roadClassName)) dirtMeters += meters;
+    else pavedMeters += meters;
     byAccessM[accessName] = (byAccessM[accessName] || 0) + meters;
     if (accessName === "motorized_unknown") unknownAccessMeters += meters;
   }
   const pct = (m) => (distanceMeters > 0 ? Math.round((m / distanceMeters) * 100) : 0);
-  const dirtMeters = adventureSurfaceMeters(bySurfaceM);
   return {
-    pavedPercent: pct(bySurfaceM.paved || 0),
+    pavedPercent: pct(pavedMeters),
     gravelPercent: pct(bySurfaceM.gravel || 0),
     accessPercent: pct((bySurfaceM.access || 0) + (bySurfaceM.resource || 0)),
     trackPercent: pct((bySurfaceM.track || 0) + (bySurfaceM.double_track || 0)),
@@ -1446,7 +1829,136 @@ async function routeOnRuntime(body, graphResolution, runtime) {
 
   const searchStarted = Date.now();
   const searchOpts = { sessionSeed: Number(options.sessionSeed) || 0 };
-  let path = findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds, searchOpts);
+  if (Number.isFinite(Number(options.maxPathMeters))) {
+    searchOpts.maxPathMeters = Number(options.maxPathMeters);
+  }
+  let path = null;
+  let urbanCoreFallbackUsed = false;
+  let cleanUnpavedFallbackUsed = false;
+  let settlementFallbackUsed = false;
+  let cleanSearchOutcome = null;
+  if (profile === "cleanest") {
+    const cleanFind = (extra) => {
+      const diagnostics = {};
+      const found = findPath(
+        runtime, startMatch, endMatch, profile, policy, avoidEdgeIds,
+        Object.assign({}, searchOpts, extra || {}, { diagnostics })
+      );
+      return {
+        path: found,
+        outcome: found ? "completed" : (diagnostics.outcome || "noPath")
+      };
+    };
+    // Clean first proves whether a paved, wall-respecting route exists.
+    let attempt = cleanFind({ pavedOnly: true });
+    path = attempt.path;
+    cleanSearchOutcome = attempt.outcome;
+    // Explicitly tagged dirt is a last resort, never a competitive Clean edge.
+    // Reaching a search cap is not proof that every route is exhausted.
+    if (!path && cleanSearchOutcome === "noPath") {
+      attempt = cleanFind({});
+      path = attempt.path;
+      cleanSearchOutcome = attempt.outcome;
+      cleanUnpavedFallbackUsed = !!path;
+      if (path) {
+        path.searchMeta = path.searchMeta || {};
+        path.searchMeta.cleanUnpavedFallbackUsed = true;
+      }
+    }
+    // Smaller OSM cities/towns are a separate avoidance layer. Relax them only
+    // after both paved and any-surface searches prove that avoidance cannot
+    // reach B; major urban cores remain hard walls.
+    if (!path && cleanSearchOutcome === "noPath") {
+      attempt = cleanFind({
+        pavedOnly: true,
+        settlementWall: false,
+        settlementFallback: true
+      });
+      path = attempt.path;
+      cleanSearchOutcome = attempt.outcome;
+      settlementFallbackUsed = !!path;
+      if (!path && cleanSearchOutcome === "noPath") {
+        attempt = cleanFind({ settlementWall: false, settlementFallback: true });
+        path = attempt.path;
+        cleanSearchOutcome = attempt.outcome;
+        cleanUnpavedFallbackUsed = !!path;
+        settlementFallbackUsed = !!path;
+      }
+      if (path) {
+        path.searchMeta = path.searchMeta || {};
+        path.searchMeta.settlementFallbackUsed = true;
+        if (cleanUnpavedFallbackUsed) path.searchMeta.cleanUnpavedFallbackUsed = true;
+      }
+    }
+  } else {
+    const diagnostics = {};
+    path = findPath(
+      runtime, startMatch, endMatch, profile, policy, avoidEdgeIds,
+      Object.assign({}, searchOpts, { diagnostics })
+    );
+    // A city wall may sever the only mountain-valley or border connection.
+    // Only a proved no-path result (never a timeout/pop cap) may relax it, and
+    // the relaxed search still charges the prohibitive urban-core multiplier.
+    if (!path && diagnostics.outcome === "noPath") {
+      const relaxedDiagnostics = {};
+      path = findPath(
+        runtime, startMatch, endMatch, profile, policy, avoidEdgeIds,
+        Object.assign({}, searchOpts, {
+          cityWall: false,
+          urbanCoreFallback: true,
+          diagnostics: relaxedDiagnostics
+        })
+      );
+      if (path) {
+        urbanCoreFallbackUsed = true;
+        path.searchMeta = path.searchMeta || {};
+        path.searchMeta.urbanCoreFallbackUsed = true;
+      }
+    }
+  }
+  // Urban cores are walls for every normal search. Clean gets an escape hatch
+  // only after neither paved nor unpaved wall-respecting fabric can reach B.
+  if (!path && profile === "cleanest" && cleanSearchOutcome === "noPath") {
+    const cleanFindRelaxed = (extra) => {
+      const diagnostics = {};
+      const found = findPath(
+        runtime, startMatch, endMatch, profile, policy, avoidEdgeIds,
+        Object.assign({}, searchOpts, extra, { diagnostics })
+      );
+      return {
+        path: found,
+        outcome: found ? "completed" : (diagnostics.outcome || "noPath")
+      };
+    };
+    let attempt = cleanFindRelaxed({
+        cityWall: false,
+        pavedOnly: true,
+        urbanCoreFallback: true,
+        settlementWall: false,
+        settlementFallback: true
+    });
+    path = attempt.path;
+    cleanSearchOutcome = attempt.outcome;
+    if (!path && cleanSearchOutcome === "noPath") {
+      attempt = cleanFindRelaxed({
+        cityWall: false,
+        urbanCoreFallback: true,
+        settlementWall: false,
+        settlementFallback: true
+      });
+      path = attempt.path;
+      cleanSearchOutcome = attempt.outcome;
+      cleanUnpavedFallbackUsed = !!path;
+    }
+    if (path) {
+      urbanCoreFallbackUsed = true;
+      settlementFallbackUsed = true;
+      path.searchMeta = path.searchMeta || {};
+      path.searchMeta.urbanCoreFallbackUsed = true;
+      if (cleanUnpavedFallbackUsed) path.searchMeta.cleanUnpavedFallbackUsed = true;
+      path.searchMeta.settlementFallbackUsed = true;
+    }
+  }
   // Balanced + Allow ON: unknown dirt usually wins under normal surface weights and
   // blows past ~50/50. Also search Allow OFF (own snaps) and keep whichever mix is
   // closer to half dirt — even if that means discarding unknown entirely.
@@ -1477,15 +1989,21 @@ async function routeOnRuntime(body, graphResolution, runtime) {
   }
   const searchMs = Date.now() - searchStarted;
   if (!path) {
+    const searchIncomplete = profile === "cleanest"
+      && (cleanSearchOutcome === "timeCap" || cleanSearchOutcome === "popCap");
     return {
       status: "failed",
       profile,
       accessPolicy: policy,
       error: "no_route",
-      message: "No route on the eligible graph",
+      message: searchIncomplete
+        ? "Clean search reached its safety limit before proving whether a route exists"
+        : "No route on the eligible graph",
       warnings: [{
-        code: "no_route",
-        message: "Eligible edges do not connect start to destination under the current access policy."
+        code: searchIncomplete ? "search_limit" : "no_route",
+        message: searchIncomplete
+          ? "The urban-core wall stayed in force because the search did not prove that every wall-respecting option was exhausted. Try again or add an intermediate waypoint."
+          : "Eligible edges do not connect start to destination under the current access policy."
       }],
       debug: {
         startMatchedEdge: startMatch.edgeId,
@@ -1498,7 +2016,8 @@ async function routeOnRuntime(body, graphResolution, runtime) {
         matchLimitMeters: limit,
         avoidedEdgeIds: Array.from(avoidEdgeIds),
         searchMs,
-        fallback: null
+        fallback: null,
+        searchOutcome: cleanSearchOutcome
       },
       maneuvers: [],
       segments: [],
@@ -1524,6 +2043,24 @@ async function routeOnRuntime(body, graphResolution, runtime) {
     warnings.push({
       code: "unavoidable_pavement",
       message: path.stats.pavedPercent + "% of this dirt-preference route is paved connector distance."
+    });
+  }
+  if (urbanCoreFallbackUsed) {
+    warnings.push({
+      code: "urban_core_fallback",
+      message: "No route could reach the destination while keeping every urban core as a wall. This Clean route uses an urban crossing only as a last resort."
+    });
+  }
+  if (cleanUnpavedFallbackUsed) {
+    warnings.push({
+      code: "clean_unpaved_fallback",
+      message: "No fully paved route could reach the destination while respecting the current routing walls. Clean used tagged unpaved road only as a last resort."
+    });
+  }
+  if (settlementFallbackUsed || (path.searchMeta && path.searchMeta.settlementFallbackUsed)) {
+    warnings.push({
+      code: "settlement_fallback",
+      message: "This route could not avoid every mapped town without losing its routing objective. Town travel remains strongly penalized and is used only where the alternatives are worse."
     });
   }
   if (startMatch.distanceM > 1 || endMatch.distanceM > 1) {
@@ -1557,6 +2094,7 @@ async function routeOnRuntime(body, graphResolution, runtime) {
     maneuvers: buildManeuvers(path.geometry),
     warnings,
     debug: {
+      routingRevision: "ride-objectives-v8-dirt-envelope-settlements",
       startMatchedEdge: startMatch.edgeId,
       endMatchedEdge: endMatch.edgeId,
       startAccessMeters: Math.round(startMatch.distanceM),
@@ -1571,7 +2109,7 @@ async function routeOnRuntime(body, graphResolution, runtime) {
       profileCost: path.profileCost,
       searchMeta: path.searchMeta || null,
       balancedMixChoice,
-      fallback: null,
+      fallback: urbanCoreFallbackUsed ? "urban_core_last_resort" : null,
       regionIds: graphResolution.regionIds,
       graphMode: graphResolution.mode,
       merge: runtime.mergeReport || null,
@@ -1931,7 +2469,7 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds, 
   }
 
   // Permissive junction near-miss repair when Allow is OFF (all profiles).
-  // NS-style packs carry OSM and NSTDB as co-mapped fabrics that only share
+  // Legacy NS-style overlay packs carry OSM and NSTDB as co-mapped fabrics that only share
   // node ids where conflation found exact shared vertices. Legal public roads
   // (OSM unclassified/residential, NSTDB paved/gravel locals) are often left
   // as dangling tips 0–40 m from the through network. With Allow ON the
@@ -2209,6 +2747,7 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds, 
       segments.push({
         edgeId: edge.edgeId,
         surfaceClass: surfaceName,
+        trackClass: edge.roadTrack || "unknown",
         structureType: enums.STRUCTURE_NAME[edge.structure] || "none",
         accessClass: accessName,
         source: edge.source,
@@ -2436,5 +2975,9 @@ module.exports = {
   normalizePolicy,
   accessAllowed,
   resolveChainSeamWaypoints,
-  snapSeamWaypoint
+  snapSeamWaypoint,
+  coordinateInUrbanBoxes,
+  coordinateNearUrbanBoxes,
+  remainingChainPathCap,
+  topologySeamFromIndex
 };

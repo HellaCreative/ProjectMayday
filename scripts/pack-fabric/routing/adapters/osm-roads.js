@@ -67,7 +67,16 @@ const PAVED_SURFACE = new Set([
   "paving_stones",
   "sett",
   "cobblestone",
+  "unhewn_cobblestone",
+  "brick",
+  "bricks",
+  "chipseal",
+  "sealcoat",
   "metal",
+  "metal_grid",
+  "steel",
+  "boardwalk",
+  "rubber",
   "wood"
 ]);
 
@@ -77,7 +86,8 @@ const GRAVEL_SURFACE = new Set([
   "compacted",
   "pebblestone",
   "stone",
-  "chipseal"
+  "loose_gravel",
+  "crushed_stone"
 ]);
 
 const RESOURCE_SURFACE = new Set([
@@ -88,7 +98,42 @@ const RESOURCE_SURFACE = new Set([
   "sand",
   "grass",
   "unpaved",
-  "woodchips"
+  "woodchips",
+  "bare_rock",
+  "rock",
+  "clay",
+  "soil",
+  "natural",
+  "stones",
+  "shale"
+]);
+
+const ACCESS_ALLOWED = new Set(["yes", "designated", "permissive", "official"]);
+const ACCESS_DENIED = new Set([
+  "no",
+  "private",
+  "agricultural",
+  "forestry",
+  "delivery",
+  "customers",
+  "permit",
+  "emergency",
+  "employees",
+  "restricted",
+  "military",
+  "residents",
+  "psv",
+  "foot",
+  "construction",
+  "closed",
+  "destination"
+]);
+const ACCESS_UNKNOWN = new Set([
+  "unknown",
+  "conditional",
+  "discouraged",
+  "seasonal",
+  "tidal"
 ]);
 
 function roundCoord(c) {
@@ -132,17 +177,18 @@ function tag(props, key) {
   return String(v).toLowerCase().trim();
 }
 
-function isDenied(props) {
-  const access = tag(props, "access");
-  const motor = tag(props, "motor_vehicle") || tag(props, "motorcar") || tag(props, "motorcycle");
-  const vehicle = tag(props, "vehicle");
-  for (const v of [access, motor, vehicle]) {
-    if (v === "no" || v === "private" || v === "agricultural" || v === "forestry") {
-      // forestry/agricultural alone on a track can still be dual-sport relevant —
-      // only hard-deny explicit no/private here; forestry handled softer below.
-      if (v === "no" || v === "private") return "access_denied";
-    }
+/** OSM access precedence: motorcycle > motor_vehicle > vehicle > access. */
+function effectiveMotorcycleAccess(props) {
+  for (const key of ["motorcycle", "motor_vehicle", "vehicle", "access"]) {
+    const value = tag(props, key);
+    if (value) return { key, value };
   }
+  return { key: null, value: "" };
+}
+
+function isDenied(props) {
+  const effective = effectiveMotorcycleAccess(props);
+  if (ACCESS_DENIED.has(effective.value)) return "access_restricted";
   if (tag(props, "abandoned") === "yes" || tag(props, "disused") === "yes") return "abandoned";
   if (tag(props, "highway") === "abandoned") return "abandoned";
   // Always drop pedestrian foot infrastructure (not dual-sport).
@@ -151,6 +197,29 @@ function isDenied(props) {
     return "foot_bike_only";
   }
   return null;
+}
+
+/**
+ * Normalize an explicit OSM surface value without letting road type overwrite it.
+ * Mixed or unrecognized values remain unknown; guessing here corrupts both route
+ * scoring and the percentage shown to the rider.
+ */
+function explicitSurfaceClass(surface) {
+  if (!surface) return null;
+  const tokens = String(surface)
+    .toLowerCase()
+    .split(/[;,]/)
+    .map((value) => value.trim())
+    .filter(Boolean);
+  if (!tokens.length) return null;
+  const classes = new Set();
+  for (const value of tokens) {
+    if (PAVED_SURFACE.has(value)) classes.add(SURFACE_CLASS.paved);
+    else if (GRAVEL_SURFACE.has(value)) classes.add(SURFACE_CLASS.gravel);
+    else if (RESOURCE_SURFACE.has(value)) classes.add(SURFACE_CLASS.resource);
+    else return SURFACE_CLASS.unknown;
+  }
+  return classes.size === 1 ? classes.values().next().value : SURFACE_CLASS.unknown;
 }
 
 function classify(props, options = {}) {
@@ -169,6 +238,7 @@ function classify(props, options = {}) {
   let roadTrackClass = ROAD_TRACK_CLASS.local;
   let accessClass = ACCESS_CLASS.motorized_permissive;
   let confidence = SOURCE_CONFIDENCE.medium;
+  const effectiveAccess = effectiveMotorcycleAccess(props);
 
   // Locked Carto categories for DIRT fabric preference
   // (https://wiki.openstreetmap.org/wiki/OpenStreetMap_Carto/Lines):
@@ -194,10 +264,12 @@ function classify(props, options = {}) {
   else if (hw === "service" || hw === "residential" || hw === "living_street")
     roadTrackClass = ROAD_TRACK_CLASS.service;
 
-  if (hw === "path" || hw === "cycleway") {
+  if (ACCESS_UNKNOWN.has(effectiveAccess.value)) {
+    accessClass = ACCESS_CLASS.motorized_unknown;
+    confidence = SOURCE_CONFIDENCE.low;
+  } else if (hw === "path" || hw === "cycleway") {
     // Dual-sport candidate — unknown legality until motor tags say yes.
-    const motor = tag(props, "motor_vehicle") || tag(props, "motorcar") || tag(props, "motorcycle");
-    if (/yes|designated|permissive|destination/.test(motor)) {
+    if (ACCESS_ALLOWED.has(effectiveAccess.value)) {
       accessClass = ACCESS_CLASS.motorized_permissive;
     } else {
       accessClass = ACCESS_CLASS.motorized_unknown;
@@ -205,23 +277,21 @@ function classify(props, options = {}) {
     }
   }
 
-  if (PAVED_SURFACE.has(surface)) {
-    surfaceClass = SURFACE_CLASS.paved;
-  } else if (GRAVEL_SURFACE.has(surface)) {
-    surfaceClass = SURFACE_CLASS.gravel;
-  } else if (RESOURCE_SURFACE.has(surface)) {
-    surfaceClass = SURFACE_CLASS.resource;
-    if (roadTrackClass === ROAD_TRACK_CLASS.local) roadTrackClass = ROAD_TRACK_CLASS.resource;
-  } else if (hw === "track" || hw === "service" || hw === "path" || hw === "cycleway") {
-    // No surface tag: treat as undeveloped for dirt costing.
-    surfaceClass = SURFACE_CLASS.resource;
-    confidence = confidence === SOURCE_CONFIDENCE.low ? confidence : SOURCE_CONFIDENCE.medium;
+  const explicitSurface = explicitSurfaceClass(surface);
+  if (explicitSurface) {
+    surfaceClass = explicitSurface;
+    if (explicitSurface === SURFACE_CLASS.resource && roadTrackClass === ROAD_TRACK_CLASS.local) {
+      roadTrackClass = ROAD_TRACK_CLASS.resource;
+    }
   } else if (/motorway|trunk|primary|secondary|tertiary/.test(hw)) {
-    // OSM highway stack: untagged secondary/tertiary is a road, not dirt.
+    // Conventional OSM road default. Untagged minor/service/track ways remain
+    // unknown; roadTrackClass can guide search without inventing their surface.
     surfaceClass = SURFACE_CLASS.paved;
+    confidence = SOURCE_CONFIDENCE.low;
   } else {
-    // unclassified / residential / road with no surface tag.
+    // unclassified / residential / service / track / path with no surface tag.
     surfaceClass = SURFACE_CLASS.unknown;
+    confidence = SOURCE_CONFIDENCE.low;
   }
 
   if (tag(props, "bridge") === "yes") {
@@ -355,6 +425,8 @@ async function run(options = {}) {
           meta: {
             highway: tag(props, "highway"),
             surface: tag(props, "surface") || null,
+            tracktype: tag(props, "tracktype") || null,
+            service: tag(props, "service") || null,
             layer: tag(props, "layer") || null,
             level: tag(props, "level") || null,
             gapFill: true
@@ -380,7 +452,9 @@ async function run(options = {}) {
     notes: [
       "OSM fabric for conventional motorized roads plus dual-sport path/cycleway/track.",
       "Excluded footway/pedestrian/steps, private/no, and abandoned ways.",
-      "path/cycleway default to motorized_unknown; track/service without surface → resource."
+      "path/cycleway default to motorized_unknown unless an effective motorcycle access tag allows them.",
+      "Missing surface stays unknown on service/track/path/cycleway; road class guides search without inventing material.",
+      "OSM motorcycle access precedence is motorcycle > motor_vehicle > vehicle > access."
     ],
     knownLimitations: [
       "OSM tagging quality varies; not a legal access assertion.",
@@ -395,5 +469,7 @@ module.exports = {
   name,
   run,
   classify,
+  explicitSurfaceClass,
+  effectiveMotorcycleAccess,
   INCLUDE_HIGHWAY
 };

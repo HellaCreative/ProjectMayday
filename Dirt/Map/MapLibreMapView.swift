@@ -33,15 +33,15 @@ struct MapLibreMapView: UIViewRepresentable {
 
         static func bucket(for surfaceKey: String) -> RoutePaintBucket {
             switch surfaceKey.lowercased() {
-            case "access", "resource":
+            case "unknown_access":
                 return .access
-            case "gravel", "unpaved", "dirt":
+            case "access", "resource", "gravel", "unpaved", "dirt":
                 return .gravel
-            case "track", "double_track":
+            case "track", "double_track", "unknown":
                 return .track
             case "connector":
                 return .connector
-            case "paved", "unknown":
+            case "paved":
                 return .paved
             default:
                 return .paved
@@ -184,6 +184,9 @@ struct MapLibreMapView: UIViewRepresentable {
 
         func mapView(_ mapView: MLNMapView, didFinishLoading style: MLNStyle) {
             self.mapView = mapView
+            RoutingDebugLog.shared.event(
+                "map style loaded url=\(mapView.styleURL?.absoluteString ?? "unknown")"
+            )
             // Dual-sport nav: highway number shields (“NS 104 TCH”) crowd the
             // trail at mid zooms — hide them; keep ordinary street name labels.
             Self.hideHighwayShieldLabels(in: style)
@@ -201,6 +204,13 @@ struct MapLibreMapView: UIViewRepresentable {
             appliedDebugGraph = -1
             appliedBCOSMGeneration = -1
             sync(mapView: mapView)
+        }
+
+        func mapViewDidFailLoadingMap(_ mapView: MLNMapView, withError error: Error) {
+            let ns = error as NSError
+            RoutingDebugLog.shared.event(
+                "map load failed domain=\(ns.domain) code=\(ns.code) message=\(error.localizedDescription) style=\(mapView.styleURL?.absoluteString ?? "unknown")"
+            )
         }
 
         /// Shortbread `label-shield-*` + junction ref chips — visual chrome only.
@@ -625,6 +635,7 @@ struct MapLibreMapView: UIViewRepresentable {
                 let line = MLNPolylineFeature(coordinates: &coords, count: UInt(coords.count))
                 line.attributes = [
                     "edgeId": feature.edgeId,
+                    "surfaceClass": feature.surfaceClass,
                     "accessClass": feature.accessClass,
                     "roadClass": feature.roadClass,
                     "source": RoutingGraphDebugManager.sourceLabel(edgeId: feature.edgeId)
@@ -957,8 +968,10 @@ struct MapLibreMapView: UIViewRepresentable {
         }
 
         func mapView(_ mapView: MLNMapView, annotationCanShowCallout annotation: MLNAnnotation) -> Bool {
-            // Rider tap opens the peer details sheet; name is already on the pin.
-            false
+            // Fuel pins expose the packed station name on tap. Other planner
+            // pins use direct selection/drag behavior and need no callout.
+            guard let dirtAnnotation = annotation as? DirtAnnotation else { return false }
+            return dirtAnnotation.kind == .fuel
         }
 
         func mapView(_ mapView: MLNMapView, didSelect annotation: MLNAnnotation) {
@@ -1048,8 +1061,26 @@ struct MapLibreMapView: UIViewRepresentable {
             }
 
             let raw = mapView.convert(pt, toCoordinateFrom: mapView)
+            if routeFeatureExists(at: pt, in: mapView) {
+                state.onRouteTap?(raw)
+                return
+            }
             let coordinate = snapToNearestRoad(raw, at: pt, in: mapView) ?? raw
             state.onTap?(coordinate)
+        }
+
+        /// The route casing is intentionally wider than the visible line, giving
+        /// route editing a forgiving touch target without stealing nearby map taps.
+        private func routeFeatureExists(at point: CGPoint, in mapView: MLNMapView) -> Bool {
+            let hitRadius: CGFloat = 14
+            let box = CGRect(
+                x: point.x - hitRadius,
+                y: point.y - hitRadius,
+                width: hitRadius * 2,
+                height: hitRadius * 2
+            )
+            let ids = Set(RoutePaintBucket.allCases.flatMap { [$0.casingID, $0.lineID] })
+            return !mapView.visibleFeatures(in: box, styleLayerIdentifiers: ids).isEmpty
         }
 
         private func groupOverlayAnnotation(at point: CGPoint, in mapView: MLNMapView) -> DirtAnnotation? {
@@ -1122,6 +1153,7 @@ struct MapLibreMapView: UIViewRepresentable {
             let edgeId = attrs["edgeId"] as? String ?? ""
             return RoutingGraphDebugHit(
                 edgeId: edgeId,
+                surfaceClass: attrs["surfaceClass"] as? String ?? "",
                 accessClass: attrs["accessClass"] as? String ?? "",
                 roadClass: attrs["roadClass"] as? String ?? "",
                 source: attrs["source"] as? String ?? RoutingGraphDebugManager.sourceLabel(edgeId: edgeId)
@@ -1258,6 +1290,7 @@ final class DirtPlannerPinView: MLNAnnotationView {
     private let bodyLayer = CAShapeLayer()
     private let circleLayer = CAShapeLayer()
     private let labelView = UILabel()
+    private var baseScale: CGFloat = 1
     private var isCustomDragging = false
     private var savedMapScrollEnabled = true
     private var savedMapRotateEnabled = true
@@ -1313,7 +1346,16 @@ final class DirtPlannerPinView: MLNAnnotationView {
     required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
 
     func configure(for annotation: DirtAnnotation) {
+        if isCustomDragging { restoreMapGestures(reason: "pinReconfigured") }
         labelView.text = annotation.label
+        baseScale = annotation.kind == .fuel ? 0.82 : 1
+        centerOffset = CGVector(dx: 0, dy: -(Self.pinHeight * baseScale / 2))
+        transform = CGAffineTransform(scaleX: baseScale, y: baseScale)
+        isAccessibilityElement = true
+        let title = annotation.title ?? annotation.label
+        accessibilityLabel = annotation.kind == .fuel
+            ? "Fuel stop \(annotation.label), \(title)"
+            : "Route pin \(annotation.label)"
         // All planner pins: dark #111820 body + orange circle.
         bodyLayer.fillColor = UIColor(red: 17/255, green: 24/255, blue: 32/255, alpha: 1).cgColor
         bodyLayer.strokeColor = UIColor(DirtTheme.orange).cgColor
@@ -1324,8 +1366,8 @@ final class DirtPlannerPinView: MLNAnnotationView {
     func applySelectionChrome(_ selected: Bool, animated: Bool) {
         let changes = {
             self.transform = selected
-                ? CGAffineTransform(scaleX: 1.18, y: 1.18)
-                : .identity
+                ? CGAffineTransform(scaleX: self.baseScale * 1.18, y: self.baseScale * 1.18)
+                : CGAffineTransform(scaleX: self.baseScale, y: self.baseScale)
             self.bodyLayer.lineWidth = selected ? 2.5 : 1
             self.bodyLayer.strokeColor = UIColor(DirtTheme.orange).cgColor
             self.layer.shadowOpacity = selected ? 0.55 : 0.38
@@ -1367,6 +1409,24 @@ final class DirtPlannerPinView: MLNAnnotationView {
     }
 
     @objc private func handlePinPan(_ gesture: UIPanGestureRecognizer) {
+        // Terminal events must always release MapLibre, even when a state update
+        // removed the annotation/callback while the finger was still down.
+        if gesture.state == .ended || gesture.state == .cancelled || gesture.state == .failed {
+            let mapView = hostMapView
+            let dirtAnnotation = annotation as? DirtAnnotation
+            if isCustomDragging, let mapView, let dirtAnnotation {
+                movePin(with: gesture, on: mapView, annotation: dirtAnnotation)
+            }
+            let shouldNotify = gesture.state == .ended && isCustomDragging
+            let markerID = dirtAnnotation?.markerID
+            let coordinate = dirtAnnotation?.coordinate
+            restoreMapGestures(reason: "pinDrag\(gesture.state.rawValue)")
+            if shouldNotify, let markerID, let coordinate {
+                onDragEnded?(markerID, coordinate)
+            }
+            return
+        }
+
         guard let mapView = hostMapView,
               let dirtAnnotation = annotation as? DirtAnnotation,
               // Nil during prep / navigation — let map pan/zoom win; never move pins.
@@ -1388,19 +1448,26 @@ final class DirtPlannerPinView: MLNAnnotationView {
             guard isCustomDragging else { return }
             movePin(with: gesture, on: mapView, annotation: dirtAnnotation)
 
-        case .ended, .cancelled, .failed:
-            guard isCustomDragging else { return }
-            movePin(with: gesture, on: mapView, annotation: dirtAnnotation)
-            isCustomDragging = false
-            mapView.isScrollEnabled = savedMapScrollEnabled
-            mapView.isRotateEnabled = savedMapRotateEnabled
-            if gesture.state == .ended {
-                onDragEnded?(dirtAnnotation.markerID, dirtAnnotation.coordinate)
-            }
-
         default:
             break
         }
+    }
+
+    private func restoreMapGestures(reason: String) {
+        guard isCustomDragging else { return }
+        isCustomDragging = false
+        if let mapView = hostMapView {
+            mapView.isScrollEnabled = savedMapScrollEnabled
+            mapView.isRotateEnabled = savedMapRotateEnabled
+        }
+        RoutingDebugLog.shared.event(
+            "map gesture lock released reason=\(reason) scroll=\(savedMapScrollEnabled ? 1 : 0) rotate=\(savedMapRotateEnabled ? 1 : 0)"
+        )
+    }
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        if window == nil { restoreMapGestures(reason: "pinRemovedFromWindow") }
     }
 
     private func movePin(

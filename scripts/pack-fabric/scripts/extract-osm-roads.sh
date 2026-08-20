@@ -2,32 +2,33 @@
 # Extract motorized OSM road ways from a Geofabrik provincial PBF (road fabric).
 #
 # Usage:
-#   bash scripts/extract-osm-roads.sh new-brunswick
-#   bash scripts/extract-osm-roads.sh quebec
+#   bash scripts/extract-osm-roads.sh new-brunswick canada
+#   bash scripts/extract-osm-roads.sh washington us
 #
 # Writes: data-raw/osm-roads/<slug>/roads.geojsonseq
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 SLUG="${1:-}"
+COUNTRY="${2:-canada}"
 if [ -z "$SLUG" ]; then
-  echo "Usage: extract-osm-roads.sh <geofabrik-slug>" >&2
+  echo "Usage: extract-osm-roads.sh <geofabrik-slug> [canada|us]" >&2
   exit 1
 fi
 
-BASE_URL="https://download.geofabrik.de/north-america/canada"
+case "$COUNTRY" in
+  canada|us) ;;
+  *) echo "Country must be canada or us" >&2; exit 1 ;;
+esac
+BASE_URL="https://download.geofabrik.de/north-america/$COUNTRY"
 CACHE_ROOT="${OSM_PBF_CACHE:-${TMPDIR:-/tmp}/dirt-osm-poi-build/regions}"
-OUT_DIR="$ROOT/data-raw/osm-roads/$SLUG"
+OUT_ROOT="${OSM_ROADS_OUT_ROOT:-$ROOT/data-raw/osm-roads}"
+OUT_DIR="$OUT_ROOT/$SLUG"
 mkdir -p "$OUT_DIR"
 
 PBF="$CACHE_ROOT/$SLUG/source.osm.pbf"
-if [ ! -f "$PBF" ]; then
-  mkdir -p "$CACHE_ROOT/$SLUG"
-  echo "Downloading $BASE_URL/${SLUG}-latest.osm.pbf"
-  curl -L --fail -o "$PBF" "$BASE_URL/${SLUG}-latest.osm.pbf"
-else
-  echo "Reusing cached PBF: $PBF"
-fi
+bash "$SCRIPT_DIR/ensure-current-osm-pbf.sh" "$BASE_URL" "$SLUG" "$PBF"
 
 # Dual-sport fabric: highways → track/path/cycleway. Exclude footway/pedestrian/steps
 # (those never enter this filter). Adapter also hard-drops foot infrastructure.

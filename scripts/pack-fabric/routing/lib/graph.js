@@ -169,6 +169,7 @@ function materializeRuntimeV2(cacheKey, pack, geom, started) {
     GRID,
     loadMs,
     enums: pack.enums,
+    meta: pack.meta,
     data: {
       nodeCount: pack.nodeCount,
       edgeCount: pack.undirectedEdgeCount,

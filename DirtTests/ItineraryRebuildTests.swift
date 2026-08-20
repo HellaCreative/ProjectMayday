@@ -4,7 +4,7 @@ import Testing
 @testable import Dirt
 
 struct UrbanCoreTests {
-    @Test func vancouverMetroBlocksDowntownNotSquamish() {
+    @Test func recognizedCoreBlocksThroughTravelButNotNearbyRuralTravel() {
         let downtown = CLLocationCoordinate2D(latitude: 49.282, longitude: -123.121)
         let squamish = CLLocationCoordinate2D(latitude: 49.701, longitude: -123.155)
         let kelowna = CLLocationCoordinate2D(latitude: 49.888, longitude: -119.496)
@@ -19,6 +19,14 @@ struct UrbanCoreTests {
         let kelowna = CLLocationCoordinate2D(latitude: 49.888, longitude: -119.496)
         #expect(!UrbanCore.blocks(point: downtown, start: downtown, end: kelowna))
         #expect(UrbanCore.blocks(point: downtown, start: kelowna, end: kelowna))
+    }
+
+    @Test func relaxedCoreRemainsProhibitivelyExpensiveExceptForEndpointCore() {
+        let downtown = CLLocationCoordinate2D(latitude: 49.282, longitude: -123.121)
+        let squamish = CLLocationCoordinate2D(latitude: 49.701, longitude: -123.155)
+        let kelowna = CLLocationCoordinate2D(latitude: 49.888, longitude: -119.496)
+        #expect(UrbanCore.fallbackMultiplier(point: downtown, start: squamish, end: kelowna) == 120)
+        #expect(UrbanCore.fallbackMultiplier(point: downtown, start: downtown, end: kelowna) == 1)
     }
 }
 
@@ -104,6 +112,7 @@ struct HopSearchPolicyTests {
         #expect(HopSearchPolicy.pass2TimeCapSeconds == 18)
         #expect(HopSearchPolicy.pass2PopCap == 400_000)
         #expect(HopSearchPolicy.pass2PopCap < 8_000_000)
+        #expect(HopSearchPolicy.fuelMaxTank == 1.0)
     }
 
     @Test func corridorWidthsMatchSpec() {
@@ -135,12 +144,15 @@ struct HopSearchPolicyTests {
         ]
         #expect(HopSearchPolicy.pickResourceEnd(labels: labels, profile: .balanced, seed: 1) == 2)
         #expect(HopSearchPolicy.pickResourceEnd(labels: labels, profile: .direct, seed: 1) == 1)
+        #expect(HopSearchPolicy.pickResourceEnd(labels: labels, profile: .dirt, seed: 1) == 1)
     }
 
-    @Test func cleanHasNoCorridorConstraint() {
+    @Test func everyProfileUsesTheUrbanCoreWallByDefault() {
         var ctx = HopSearchContext.forProfile(.cleanest, seed: 1)
         #expect(ctx.corridorMeters == nil)
-        #expect(ctx.cityWall == false)
+        #expect(ctx.cityWall == true)
+        #expect(ctx.pavedOnly == false)
+        #expect(ctx.urbanCoreFallback == false)
         ctx = HopSearchContext.forProfile(.direct, seed: 1)
         #expect(ctx.corridorMeters == 15_000)
         #expect(ctx.cityWall == true)
@@ -195,6 +207,22 @@ struct FuelItineraryTests {
         #expect(next.map(\.id) == ["osm:near"])
     }
 
+    @Test func rankedKeepsShortRangeFallbackAndOffAxisPump() {
+        let start = RouteCoordinate(longitude: -123.2, latitude: 50.0)
+        let end = RouteCoordinate(longitude: -119.7, latitude: 50.0)
+        let preferred = GeoMath.interpolate(start, end, fraction: 0.55)
+        let mountainDetour = RouteCoordinate(longitude: -122.4, latitude: 51.0)
+        let fuels = [poi("preferred", preferred), poi("detour", mountainDetour)]
+        let reach = ["osm:preferred": 160_000.0, "osm:detour": 60_000.0]
+
+        let ranked = FuelItinerary.rankedProgressFuel(
+            fuels: fuels, from: start, to: end, reachableMeters: reach,
+            tankMeters: 200_000, sessionSeed: 1
+        )
+
+        #expect(ranked.map(\.id) == ["osm:preferred", "osm:detour"])
+    }
+
     @Test func progressAlongABIsPositiveTowardB() {
         let a = RouteCoordinate(longitude: -123, latitude: 50)
         let b = RouteCoordinate(longitude: -120, latitude: 50)
@@ -202,6 +230,61 @@ struct FuelItineraryTests {
         let behind = RouteCoordinate(longitude: -124, latitude: 50)
         #expect(GeoMath.progressAlongAB(from: a, to: b, point: mid) > 50_000)
         #expect(GeoMath.progressAlongAB(from: a, to: b, point: behind) < 0)
+    }
+
+    @Test func approximateReachRejectsAnythingBeyondTank() {
+        let start = RouteCoordinate(longitude: -123, latitude: 50)
+        let near = RouteCoordinate(longitude: -122, latitude: 50)
+        let far = RouteCoordinate(longitude: -119, latitude: 50)
+        let result = FuelItinerary.approximateReachableMeters(
+            fuels: [poi("near", near), poi("far", far)],
+            from: start,
+            tankMeters: 200_000
+        )
+        #expect(result["osm:near"] != nil)
+        #expect(result["osm:far"] == nil)
+    }
+
+    @Test func liveCorridorRankingUsesAlongRouteProgress() {
+        let start = RouteCoordinate(longitude: -123, latitude: 50)
+        let end = RouteCoordinate(longitude: -119, latitude: 50)
+        let early = GeoMath.interpolate(start, end, fraction: 0.25)
+        let preferred = GeoMath.interpolate(start, end, fraction: 0.55)
+        let tooFarOff = RouteCoordinate(longitude: preferred.longitude, latitude: 51)
+        let ranked = FuelItinerary.rankedRouteCorridorFuel(
+            fuels: [poi("early", early), poi("preferred", preferred), poi("off", tooFarOff)],
+            from: start,
+            routeCoordinates: [start, end],
+            tankMeters: 200_000,
+            sessionSeed: 1
+        )
+        #expect(ranked.first?.id == "osm:preferred")
+        #expect(!ranked.map(\.id).contains("osm:off"))
+    }
+
+    @Test func liveCandidateOrderKeepsProgressFallbackAfterBadCorridorPump() {
+        let at = RouteCoordinate(longitude: -122, latitude: 50)
+        let isolated = poi("isolated", at)
+        let lillooet = poi("lillooet", RouteCoordinate(longitude: -121.93, latitude: 50.70))
+        let merged = FuelItinerary.mergedCandidateOrder(
+            primary: [isolated],
+            fallback: [isolated, lillooet]
+        )
+        #expect(merged.map(\.id) == ["osm:isolated", "osm:lillooet"])
+    }
+
+    @Test func routeSuffixStartsNearCurrentPump() {
+        let route = [
+            RouteCoordinate(longitude: -123, latitude: 50),
+            RouteCoordinate(longitude: -122, latitude: 50),
+            RouteCoordinate(longitude: -121, latitude: 50),
+            RouteCoordinate(longitude: -120, latitude: 50)
+        ]
+        let current = RouteCoordinate(longitude: -121.9, latitude: 50.01)
+        let suffix = FuelItinerary.routeSuffix(from: current, routeCoordinates: route)
+        #expect(suffix.first == current)
+        #expect(suffix.last == route.last)
+        #expect(suffix.count == 3)
     }
 
     @Test func packedFuelDecodesStations() {

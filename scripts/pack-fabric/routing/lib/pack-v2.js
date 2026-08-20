@@ -253,6 +253,9 @@ function encodeFromV1(data) {
       province: data.province || null,
       bbox: data.bbox || null,
       componentCount: data.componentCount || 0,
+      crossPackSeams: data.crossPackSeams || null,
+      urbanCores: data.urbanCores || null,
+      settlements: data.settlements || null,
       sourceFormat: "graph.v1"
     }),
     "utf8"
@@ -504,9 +507,65 @@ function inflateMaybeGzip(buf) {
   return JSON.parse(buf.toString("utf8"));
 }
 
+function boxIntersectsPackBbox(box, bbox) {
+  if (!box || !Array.isArray(bbox) || bbox.length < 4) return false;
+  const [minLon, minLat, maxLon, maxLat] = bbox.map(Number);
+  return !(
+    Number(box.maxLon) < minLon || Number(box.minLon) > maxLon ||
+    Number(box.maxLat) < minLat || Number(box.minLat) > maxLat
+  );
+}
+
+function mergeUniqueBoxes(base, additions) {
+  const out = Array.isArray(base) ? base.slice() : [];
+  const seen = new Set(out.map((box) =>
+    `${box.name || ""}|${box.minLat}|${box.maxLat}|${box.minLon}|${box.maxLon}`
+  ));
+  for (const box of additions || []) {
+    const key = `${box.name || ""}|${box.minLat}|${box.maxLat}|${box.minLon}|${box.maxLon}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(box);
+  }
+  return out;
+}
+
+function applyMetadataSidecars(data, sourcePath, opts = {}) {
+  const sourceDir = path.dirname(sourcePath);
+  const seamPath = opts.seamPath || path.join(sourceDir, "cross-pack-seams.v1.json");
+  const urbanPath = opts.urbanPath || path.join(sourceDir, "urban-cores.v1.json");
+  if (fs.existsSync(seamPath)) {
+    const sidecar = JSON.parse(fs.readFileSync(seamPath, "utf8"));
+    data.crossPackSeams = sidecar.neighbors || sidecar.crossPackSeams || null;
+  }
+  if (fs.existsSync(urbanPath)) {
+    const sidecar = JSON.parse(fs.readFileSync(urbanPath, "utf8"));
+    data.urbanCores = sidecar.cores || sidecar.urbanCores || null;
+    data.settlements = sidecar.settlements || null;
+  }
+  // Regional OSM extracts intentionally overlap around borders. A hop routed
+  // on one pack can therefore travel briefly inside its neighbour. Carry the
+  // neighbour's overlapping avoidance boxes too, or that overlap becomes an
+  // urban-policy blind spot (and an intermediate seam can route through it).
+  const neighbors = Object.keys(data.crossPackSeams || {});
+  for (const neighbor of neighbors) {
+    const neighborPath = path.join(sourceDir, "..", neighbor, "urban-cores.v1.json");
+    if (!fs.existsSync(neighborPath)) continue;
+    const sidecar = JSON.parse(fs.readFileSync(neighborPath, "utf8"));
+    const adjacentCores = (sidecar.cores || sidecar.urbanCores || [])
+      .filter((box) => boxIntersectsPackBbox(box, data.bbox));
+    const adjacentSettlements = (sidecar.settlements || [])
+      .filter((box) => boxIntersectsPackBbox(box, data.bbox));
+    data.urbanCores = mergeUniqueBoxes(data.urbanCores, adjacentCores);
+    data.settlements = mergeUniqueBoxes(data.settlements, adjacentSettlements);
+  }
+  return data;
+}
+
 function convertV1FileToV2(v1Path, opts = {}) {
   const raw = fs.readFileSync(v1Path);
   const data = inflateMaybeGzip(raw);
+  applyMetadataSidecars(data, v1Path, opts);
   const paths = v2PathsForV1Path(v1Path);
   const outGraph = opts.graphPath || paths.graph;
   const outGeom = opts.geomPath || paths.geom;
@@ -534,5 +593,7 @@ module.exports = {
   decodeGeometryV1,
   v2PathsForV1Path,
   writePacksFromV1,
+  applyMetadataSidecars,
+  boxIntersectsPackBbox,
   convertV1FileToV2
 };

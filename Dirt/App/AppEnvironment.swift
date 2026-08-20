@@ -25,6 +25,7 @@ final class AppEnvironment {
     let poiManager: POIManager
     /// Provincial road overlay from the installed graph pack.
     let networkOverlayManager: NetworkOverlayManager
+    /// Temporary viewport diagnostic: live graph first, installed pack offline.
     let routingGraphDebug: RoutingGraphDebugManager
     /// Feasibility: local BC.mbtiles OSM hierarchy (visual only).
     let bcOSMHierarchy: BCOSMHierarchyOverlay
@@ -105,9 +106,17 @@ final class AppEnvironment {
         groups.onToast = { [planner] message in
             planner.toast = message
         }
-        poiManager             = POIManager(mapState: mapState, graphPacks: graphPacks)
+        poiManager             = POIManager(
+            mapState: mapState,
+            graphPacks: graphPacks,
+            network: network
+        )
         networkOverlayManager  = NetworkOverlayManager(mapState: mapState, graphPacks: graphPacks)
-        routingGraphDebug      = RoutingGraphDebugManager(mapState: mapState, graphPacks: graphPacks)
+        routingGraphDebug      = RoutingGraphDebugManager(
+            mapState: mapState,
+            graphPacks: graphPacks,
+            network: network
+        )
         bcOSMHierarchy         = BCOSMHierarchyOverlay(mapState: mapState)
         // Park BC extra lenses so leftover UserDefaults cannot paint a second
         // classification over OSM Shortbread (highway → track/path).
@@ -139,6 +148,9 @@ final class AppEnvironment {
 
         mapState.onTap = { [planner] coordinate in
             planner.handleMapTap(coordinate)
+        }
+        mapState.onRouteTap = { [planner] coordinate in
+            planner.handleRouteTap(coordinate)
         }
         mapState.onLongPress = { [planner] coordinate in
             planner.handleMapLongPress(coordinate)

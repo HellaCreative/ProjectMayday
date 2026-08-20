@@ -263,8 +263,8 @@ function isNrnSrc(src) {
  * Live mental model for Vercel longhaul packs:
  *   Default (ON etc.): OSM + NRN road fabric; provincial capillary omitted.
  *   Quebec: OSM-only (drop NRN).
- *   Nova Scotia / New Brunswick (locked): OSM + provincial capillary; drop NRN.
- *     NS = NSTDB; NB = Forest Roads (keep purple so Allow works NS↔NB).
+ *   Foundational NS/NB packs: OSM-only. Provincial overlay modes remain for
+ *     later controlled comparisons but are not part of the shipping baseline.
  *
  * Modes:
  *   osm / osm-only — Quebec: drop NRN; keep all OSM motorized fabric.

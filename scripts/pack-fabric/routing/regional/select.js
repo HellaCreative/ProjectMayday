@@ -134,6 +134,16 @@ function primaryRegionForPoint(lon, lat) {
   if (!hits.length) return null;
 
   const ids = new Set(hits.map((h) => h.id));
+  // Resolve the international border before overlapping Canadian province
+  // rectangles. Southern BC also falls inside AB's coarse bbox; if AB/BC wins
+  // first, a Washington pin is misclassified as BC.
+  if (ids.has("bc") && ids.has("wa") && lat < 49.0) return "wa";
+  if (ids.has("bc") && ids.has("id") && lat < 49.0) return "id";
+  if (ids.has("ab") && ids.has("mt") && lat < 49.0) return "mt";
+  if (ids.has("sk") && ids.has("mt") && lat < 49.0) return "mt";
+  if (ids.has("sk") && ids.has("nd") && lat < 49.0) return "nd";
+  if (ids.has("mb") && ids.has("nd") && lat < 49.0) return "nd";
+  if (ids.has("mb") && ids.has("mn") && lat < 49.0) return "mn";
   if (ids.has("ab") && ids.has("bc")) {
     // North of ~54°N the border is the 120th meridian.
     if (lat >= 54) return lon < -120 ? "bc" : "ab";
@@ -282,6 +292,25 @@ function graphCdnBaseUrl() {
   return String(raw).replace(/\/$/, "");
 }
 
+/**
+ * A live candidate may override one region without changing the approved
+ * download manifest or every other region. The value is deployment-scoped:
+ *   R2_REGION_BASE_OVERRIDES='{"ns":"https://.../candidates/ns-20260820"}'
+ */
+function graphCdnBaseUrlForRegion(regionId) {
+  const id = String(regionId || "").toLowerCase();
+  const raw = process.env.R2_REGION_BASE_OVERRIDES;
+  if (raw) {
+    try {
+      const overrides = JSON.parse(raw);
+      if (overrides && overrides[id]) return String(overrides[id]).replace(/\/$/, "");
+    } catch (error) {
+      throw new Error("Invalid R2_REGION_BASE_OVERRIDES JSON: " + error.message);
+    }
+  }
+  return graphCdnBaseUrl();
+}
+
 function pointInBbox(lon, lat, bbox) {
   return lon >= bbox[0] && lon <= bbox[2] && lat >= bbox[1] && lat <= bbox[3];
 }
@@ -330,11 +359,11 @@ function localGraphPath(regionId, { longhaul = false } = {}) {
 function remoteGraphUrl(regionId, _opts = {}) {
   const id = String(regionId || "").toLowerCase();
   if (id === "__legacy_ns__") {
-    return graphCdnBaseUrl() + "/ns/graph.v2.bin";
+    return graphCdnBaseUrlForRegion("ns") + "/ns/graph.v2.bin";
   }
   // Phone PACKS and live /api/route are the same object. There is no second
   // "live extract." Publishing graph.v2.bin updates both.
-  return graphCdnBaseUrl() + "/" + id + "/graph.v2.bin";
+  return graphCdnBaseUrlForRegion(id) + "/" + id + "/graph.v2.bin";
 }
 
 function graphPathForRegion(regionId, _opts = {}) {
@@ -422,9 +451,12 @@ function resolveGraphRequest(body = {}) {
     };
   }
 
-  // On Vercel, chain multi-province routes. Skip chaining when every endpoint
-  // resolves to the same primary province — in-QC From-here must not hop via
-  // Ontario/Ottawa just because bboxes overlap.
+  // Always chain genuine multi-region routes. This keeps local, preview, and
+  // production routing on the same topology-authored seam path and prevents the
+  // legacy graph merger from manufacturing a connection between nearby but
+  // disconnected border nodes. Skip chaining when every endpoint resolves to
+  // the same primary region — in-QC From-here must not hop via Ontario/Ottawa
+  // just because bboxes overlap.
   const uniquePrimary = [
     ...new Set(
       locationsToPoints(body.locations || [])
@@ -437,8 +469,7 @@ function resolveGraphRequest(body = {}) {
   const useCanadaChain =
     !body.disableChain &&
     !sameProvince &&
-    corridor.length >= 2 &&
-    (onVercel || corridor.length >= 4);
+    corridor.length >= 2;
   if (useCanadaChain) {
     return {
       ok: true,
@@ -507,6 +538,7 @@ module.exports = {
   graphPathForRegion,
   remoteGraphUrl,
   graphCdnBaseUrl,
+  graphCdnBaseUrlForRegion,
   resolveGraphRequest,
   publicBaseUrl,
   primaryRegionForPoint,

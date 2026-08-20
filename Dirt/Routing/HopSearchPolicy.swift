@@ -24,22 +24,29 @@ nonisolated enum HopSearchPolicy {
     /// Fuel: prefer a pump around this fraction of tank on the hop.
     static let fuelPreferTank: Double = 0.82
     static let fuelMinTank: Double = 0.40
-    static let fuelMaxTank: Double = 0.95
-    /// Finish to B rather than stuffing a pump on the doorstep.
-    static let fuelSkipIfWithin: Double = 1.15
+    /// The rider-entered range is already the safety limit; do not silently shave 5%.
+    static let fuelMaxTank: Double = 1.0
+    /// Finish to B only when the destination is inside the configured tank range.
+    static let fuelSkipIfWithin: Double = 1.0
     /// Pass 2 (profile / pavement / balanced) must finish well under a minute.
     /// Long hops were hitting the 8M pop cap (~2 min) and silently returning shortest.
     static let pass2TimeCapSeconds: Double = 18
     static let pass2PopCap: Int = 400_000
+    static let dirtCandidateTimeCapSeconds: Double = 7
+    static let dirtCandidatePopCap: Int = 200_000
+    static let dirtRidePavedPerKm: Double = 150
+    static let dirtRideGravelPerKm: Double = 0.7
+    static let dirtRideResourcePerKm: Double = 0.5
+    static let dirtRideUnknownTrackPerKm: Double = 0.9
 
     enum CostMode: Sendable {
-        /// Existing profile weight tables (Dirt, Clean).
+        /// Existing profile weight tables (Clean and legacy/fallback searches).
         case profile
         /// Physical meters — shortest path / fuel reach.
         case distance
         /// Minimize pavement meters (Direct pass 2).
         case pavement
-        /// Length cost + dirt resource labels (Balanced).
+        /// Length cost + dirt resource labels (Direct, Balanced, Dirt).
         case balancedResource
     }
 
@@ -74,11 +81,14 @@ nonisolated enum HopSearchPolicy {
         func ratio(_ x: (lab: Int, len: Double, dirt: Double)) -> Double {
             x.len > 0 ? x.dirt / x.len : 0
         }
-        if profile == .direct {
+        if profile == .direct || profile == .dirt {
             return labels.min { a, b in
                 let ra = ratio(a)
                 let rb = ratio(b)
                 if abs(ra - rb) > 0.005 { return ra > rb }
+                let pavedA = a.len - a.dirt
+                let pavedB = b.len - b.dirt
+                if abs(pavedA - pavedB) > 50 { return pavedA < pavedB }
                 if abs(a.len - b.len) > 50 { return a.len < b.len }
                 return hash(seed, a.lab, 0) < hash(seed, b.lab, 0)
             }?.lab
@@ -214,9 +224,22 @@ nonisolated struct HopSearchContext: Sendable {
     var maxPathMeters: Double?
     var shortestMeters: Double?
     var cityWall: Bool
+    /// Clean's first search admits only edges that paint as paved.
+    var pavedOnly: Bool
+    /// Emergency Clean search: keep the wall geometrically passable but make
+    /// every metre inside it prohibitively expensive.
+    var urbanCoreFallback: Bool
+    /// Smaller OSM city/town avoidance. Normal searches use a strong scored
+    /// penalty; the wall flag exists only for explicit diagnostic comparisons.
+    var settlementWall: Bool
+    var settlementFallback: Bool
     var noBacktrack: Bool
     var variety: Bool
     var corridorMeters: Double?
+    var hardCorridor: Bool
+    var boundedSearch: Bool
+    var timeCapSeconds: Double?
+    var popCap: Int?
 
     static func forProfile(_ profile: RouteProfile, seed: UInt64) -> HopSearchContext {
         HopSearchContext(
@@ -224,10 +247,18 @@ nonisolated struct HopSearchContext: Sendable {
             costMode: .profile,
             maxPathMeters: nil,
             shortestMeters: nil,
-            cityWall: profile != .cleanest,
+            cityWall: true,
+            pavedOnly: false,
+            urbanCoreFallback: false,
+            settlementWall: false,
+            settlementFallback: true,
             noBacktrack: true,
             variety: profile != .cleanest,
-            corridorMeters: HopSearchPolicy.corridorMeters(for: profile)
+            corridorMeters: HopSearchPolicy.corridorMeters(for: profile),
+            hardCorridor: false,
+            boundedSearch: false,
+            timeCapSeconds: nil,
+            popCap: nil
         )
     }
 }

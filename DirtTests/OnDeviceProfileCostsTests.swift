@@ -142,7 +142,34 @@ struct OnDeviceProfileCostsTests {
         #expect(gravel == "gravel")
         #expect(!OnDeviceProfileCosts.isAdventureSurface(arterial))
         #expect(OnDeviceProfileCosts.isAdventureSurface("gravel"))
-        #expect(!OnDeviceProfileCosts.isAdventureSurface("unknown"))
+        #expect(OnDeviceProfileCosts.isAdventureSurface(track))
+    }
+
+    @Test func selectedRoutePaintSeparatesSurfaceFromMotorAccess() {
+        let unknownAccessTrail = OnDeviceProfileCosts.selectedRoutePaintKey(
+            surfaceName: "unknown",
+            roadClassName: "track",
+            accessName: "motorized_unknown"
+        )
+        let permissiveUntaggedTrack = OnDeviceProfileCosts.selectedRoutePaintKey(
+            surfaceName: "unknown",
+            roadClassName: "track",
+            accessName: "motorized_permissive"
+        )
+        let permissiveResourceRoad = OnDeviceProfileCosts.selectedRoutePaintKey(
+            surfaceName: "access",
+            roadClassName: "resource",
+            accessName: "motorized_permissive"
+        )
+        let permissiveUntaggedLocal = OnDeviceProfileCosts.selectedRoutePaintKey(
+            surfaceName: "unknown",
+            roadClassName: "local",
+            accessName: "motorized_permissive"
+        )
+        #expect(unknownAccessTrail == "unknown_access")
+        #expect(permissiveUntaggedTrack == "unknown")
+        #expect(permissiveResourceRoad == "access")
+        #expect(permissiveUntaggedLocal == "paved")
     }
 
     @Test func untaggedHighwayCostsAsPavedOnDirt() {
@@ -254,22 +281,67 @@ struct OnDeviceProfileCostsTests {
 
 @MainActor
 struct CrossPackSeamTests {
-    @Test func vancouverCalgarySeamSitsOnTheDivide() {
-        let vancouver = CLLocationCoordinate2D(latitude: 49.28, longitude: -123.12)
-        let calgary = CLLocationCoordinate2D(latitude: 51.05, longitude: -114.07)
-        let seed = CrossPackSeam.seed(from: vancouver, to: calgary, left: "bc", right: "ab")
-        #expect(abs(seed.longitude - (-116.4)) < 0.35)
-        #expect(seed.latitude > 49.5)
-        #expect(seed.latitude < 51.2)
+    private func anchor(
+        neighbor: String = "ab",
+        longitude: Double,
+        latitude: Double,
+        way: String = "42",
+        gap: Double = 0
+    ) -> GraphV2Pack.CrossPackSeamAnchor {
+        .init(
+            neighborRegionId: neighbor,
+            longitude: longitude,
+            latitude: latitude,
+            osmWayId: way,
+            localEdgeId: "left",
+            remoteEdgeId: "right",
+            gapMeters: gap
+        )
     }
 
-    @Test func bcAbCandidatesIncludeChordAndBorderSamples() {
+    @Test func ranksPackAuthoredSeamsByABChord() throws {
         let vancouver = CLLocationCoordinate2D(latitude: 49.28, longitude: -123.12)
         let calgary = CLLocationCoordinate2D(latitude: 51.05, longitude: -114.07)
-        let seeds = CrossPackSeam.candidates(from: vancouver, to: calgary, left: "bc", right: "ab")
-        #expect(seeds.count >= 2)
-        #expect(seeds.count <= 5)
+        let nearChord = anchor(longitude: -116.35, latitude: 50.80)
+        let farNorth = anchor(longitude: -120.0, latitude: 57.0)
+        let ranked = CrossPackSeam.candidates(
+            from: vancouver,
+            to: calgary,
+            anchors: [farNorth, nearChord],
+            urbanCores: []
+        )
+        #expect(try #require(ranked.first).osmWayId == nearChord.osmWayId)
+        #expect(try #require(ranked.first).longitude == nearChord.longitude)
+    }
+
+    @Test func rejectsUnprovenOrGappedSeams() {
+        let from = CLLocationCoordinate2D(latitude: 49.2, longitude: -119.5)
+        let to = CLLocationCoordinate2D(latitude: 48.9, longitude: -119.2)
+        let good = anchor(neighbor: "wa", longitude: -119.4, latitude: 49.0)
+        let missingWay = anchor(neighbor: "wa", longitude: -119.3, latitude: 49.0, way: "")
+        let gapped = anchor(neighbor: "wa", longitude: -119.2, latitude: 49.0, gap: 2.1)
+        let seams = CrossPackSeam.candidates(
+            from: from,
+            to: to,
+            anchors: [missingWay, gapped, good],
+            urbanCores: []
+        )
+        #expect(seams.count == 1)
+        #expect(seams.first?.longitude == good.longitude)
         #expect(GraphPackStore.packsShareABorder("bc", "ab"))
+        #expect(GraphPackStore.packsShareABorder("bc", "wa"))
+    }
+
+    @Test func southernBorderCoordinatesResolveToWashingtonBeforeBCOrAlberta() {
+        let oroville = CLLocationCoordinate2D(latitude: 48.94, longitude: -119.44)
+        #expect(GraphPackStore.primaryRegionId(containing: oroville) == "wa")
+    }
+
+    @Test func eitherSideOf49thResolvesToItsOwnPack() {
+        let bc = CLLocationCoordinate2D(latitude: 49.01, longitude: -119.44)
+        let wa = CLLocationCoordinate2D(latitude: 48.99, longitude: -119.44)
+        #expect(GraphPackStore.primaryRegionId(containing: bc) == "bc")
+        #expect(GraphPackStore.primaryRegionId(containing: wa) == "wa")
     }
 
     @Test func concatenatingAddsDirtAndPavedMeters() throws {

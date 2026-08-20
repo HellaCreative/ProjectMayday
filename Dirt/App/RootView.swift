@@ -387,9 +387,11 @@ struct RootView: View {
             .onAppear {
                 UIDevice.current.beginGeneratingDeviceOrientationNotifications()
                 refreshLandscapeEdgeTicket()
+                RoutingDebugLog.shared.event("app root appeared")
             }
             .onDisappear {
                 UIDevice.current.endGeneratingDeviceOrientationNotifications()
+                RoutingDebugLog.shared.event("app root disappeared")
             }
             .onReceive(NotificationCenter.default.publisher(
                 for: UIDevice.orientationDidChangeNotification
@@ -404,6 +406,17 @@ struct RootView: View {
                 for: UIScene.didActivateNotification
             )) { _ in
                 refreshLandscapeEdgeTicket()
+                RoutingDebugLog.shared.event("lifecycle scene active")
+            }
+            .onReceive(NotificationCenter.default.publisher(
+                for: UIScene.didEnterBackgroundNotification
+            )) { _ in
+                RoutingDebugLog.shared.event("lifecycle scene background")
+            }
+            .onReceive(NotificationCenter.default.publisher(
+                for: UIApplication.didReceiveMemoryWarningNotification
+            )) { _ in
+                RoutingDebugLog.shared.event("system memory warning")
             }
             .onChange(of: isLandscape) { _, _ in
                 refreshLandscapeEdgeTicket()
@@ -1098,6 +1111,7 @@ struct RootView: View {
             if let hit = app.mapState.debugGraphHit {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("tap \(hit.edgeId)")
+                    Text("surface \(hit.surfaceClass)")
                     Text("access \(hit.accessClass)")
                     Text("roadClass \(hit.roadClass)  ·  highway (not packed)")
                     Text("source \(hit.source)")

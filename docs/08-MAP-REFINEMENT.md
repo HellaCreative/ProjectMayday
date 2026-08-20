@@ -44,8 +44,8 @@ Dirt is **the ride, not the ETA**.
 
 | Profile | Intent |
 | --- | --- |
-| **Clean** | Pavement only. Skip town cores and major highways unless A/B (or a stage pin) is on them. Allow forced off. |
-| **Direct** | Same dirt fabric as Dirt. Shortest line to B — no meander. |
+| **Clean** | Pavement first. Every recognized urban core is a wall unless A/B is inside it. Before crossing one, permit rural tagged dirt while keeping every wall intact. Relax a wall only after both searches prove no route exists; never on timeout. Label the fallback. Avoid major highways. Allow forced off. |
+| **Direct** | Same dirt fabric as Dirt. Follow the A→B crow-flies line with a narrow corridor and minimal lateral journey. |
 | **Balanced** | Dual-sport mix (~50/50 when fabric allows). |
 | **Dirt** | Meander on tagged gravel / track / resource toward B. Pavement last resort. Untagged yellow/white OSM roads count as paved. |
 
@@ -76,11 +76,18 @@ abandoned / disused.
 | path / cycleway with motor tag yes/designated/permissive/destination | `motorized_permissive` |
 | path / cycleway otherwise | `motorized_unknown` (Allow-gated) |
 
-**Surface honesty:** motorway / trunk / primary / secondary / tertiary with
-no `surface` tag invent `paved` (OSM highway class). Untagged
-unclassified / residential stay `unknown` in the pack; the phone paints
-those road classes as paved so asphalt snippets do not show as dirt in
-nav. Track / path / cycleway / service with no surface → `resource`.
+**Surface honesty:** explicit OSM `surface` wins. Motorway / trunk / primary /
+secondary / tertiary with no `surface` retain the conventional paved default.
+Untagged unclassified / residential / service / track / path / cycleway stay
+`unknown` in the pack. Their separate road class may guide route selection,
+but normalization never invents a known dirt surface. Rider paint treats
+unknown conventional road classes as paved so asphalt snippets do not show as
+dirt in navigation.
+
+**Access precedence:** `motorcycle` overrides `motor_vehicle`, which overrides
+`vehicle`, which overrides `access`. Known private/customers/delivery/forestry/
+agricultural/destination restrictions are not through-routing fabric. An OSM
+source label never bypasses the packed access class or the Allow Unknown gate.
 
 **Packed road class (Carto → pack):**
 
@@ -248,7 +255,8 @@ Locked extras on Dirt / Balanced (iOS Dijkstra):
 - `pavementLateJoinMult` — mild extra paved tax while far from B (Dirt 0.35, not 2.8)
 - `approachAwayExtra` — Dirt: hunt, clamp only in the last ~2.5 km of B;
   Direct: same dirt prices, strong crow-flies so it does not meander.
-  Clean: pavement; urban cores + city streets unless the pin is there.
+  Clean: pavement; urban cores are walls unless the pin is there. Rural dirt is
+  preferable to an unrelated urban crossing.
   All profiles: freeway/arterial/ramp avoided unless a pin snapped onto that highway.
 
 Measured on local `graph.v2.bin` (Allow off, 2026-08-12):

@@ -8,14 +8,6 @@ struct OfflineMapPrepOverlay: View {
     private var graphPacks: GraphPackStore { app.graphPacks }
     private var planner: RoutePlannerModel { app.planner }
 
-    /// Maps ready and routing pack finished (ready or skipped — never block ride on missing CDN).
-    private var packsSettled: Bool {
-        switch graphPacks.phase {
-        case .idle, .ready, .skipped, .failed: true
-        case .downloading: false
-        }
-    }
-
     @State private var readyPulse = false
 
     var body: some View {
@@ -45,10 +37,13 @@ struct OfflineMapPrepOverlay: View {
             case .downloading(let completed, let total):
                 downloadingContent(completed: completed, total: total)
             case .ready(let cached, let total):
-                if packsSettled {
-                    readyContent(cached: cached, total: total)
-                } else {
+                switch graphPacks.phase {
+                case .downloading:
                     graphPackDownloadingContent()
+                case .failed(let message):
+                    graphPackFailedContent(message)
+                default:
+                    readyContent(cached: cached, total: total)
                 }
             case .failed(let message):
                 failedContent(message)
@@ -207,6 +202,44 @@ struct OfflineMapPrepOverlay: View {
         }
     }
 
+    private func graphPackFailedContent(_ message: String) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("Routing pack didn’t download")
+                .font(.dirtUI(22, weight: .bold))
+                .foregroundStyle(DirtTheme.ink)
+            Text(message)
+                .font(.dirtUI(14))
+                .foregroundStyle(DirtTheme.muted)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Button {
+                planner.startNavigation()
+            } label: {
+                Text("TRY AGAIN")
+                    .font(.dirtUI(14, weight: .heavy))
+                    .tracking(0.5)
+                    .foregroundStyle(DirtTheme.onOrange)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 48)
+                    .background(DirtTheme.orange)
+                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            }
+
+            Button {
+                planner.beginRideAfterOfflineReady()
+            } label: {
+                Text("Ride without offline rerouting")
+                    .font(.dirtUI(13, weight: .semibold))
+                    .foregroundStyle(DirtTheme.danger)
+                    .frame(maxWidth: .infinity, minHeight: DirtHit.min)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            cancelButton()
+        }
+    }
+
     /// Cancel shows up in four prep states. The target spans the card width so a
     /// gloved thumb at the trailhead isn't hunting for 13 pt of text.
     private func cancelButton(alignment: Alignment = .leading, topPadding: CGFloat = 0) -> some View {
@@ -230,10 +263,14 @@ struct OfflineMapPrepOverlay: View {
             Text("On-device routing pack ready.")
                 .font(.dirtUI(12, weight: .semibold))
                 .foregroundStyle(DirtTheme.navGreen)
-        case .skipped, .failed:
-            Text("No routing pack on this phone yet — download one from PACKS.")
+        case .skipped:
+            Text("A routing pack for part of this ride is not published yet.")
                 .font(.dirtUI(12))
                 .foregroundStyle(DirtTheme.muted)
+        case .failed:
+            Text("Offline routing pack download failed.")
+                .font(.dirtUI(12))
+                .foregroundStyle(DirtTheme.danger)
         default:
             EmptyView()
         }
@@ -246,6 +283,6 @@ struct OfflineMapPrepOverlay: View {
         if !graphPacks.loadedRegionIds.isEmpty {
             return "Province packs on this phone will handle offline detours. Basemap for this ride is locked in."
         }
-        return "No bar? Basemap is on your phone. For bush detours, download a province pack from PACKS on the Route screen (Wi‑Fi best)."
+        return "The corridor basemap is saved. Any published routing packs were downloaded automatically; an unpublished region may still require a live connection for rerouting."
     }
 }

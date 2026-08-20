@@ -25,8 +25,8 @@ Client routing behaviour as implemented. Prefer on-device `graph.v2` + `OnDevice
 
 | UI chip | `RouteProfile` raw value | Guidance (UI) |
 | --- | --- | --- |
-| Clean | `cleanest` | Pavement-first · no unknown access |
-| Direct | `direct` | Dirt fabric · shortest line · no meander |
+| Clean | `cleanest` | Pavement-first · urban cores are walls · no unknown access |
+| Direct | `direct` | Dirt fabric · follow the A→B line · minimal lateral journey |
 | Balanced | `balanced` (default) | Adventure bias · still efficient |
 | Dirt | `dirt` | Maximize unpaved · avoid highways |
 
@@ -40,13 +40,51 @@ Vehicle is always `"dual-sport-motorcycle"`. `motorizedPermissive` is always `tr
 
 ## Policy (planning)
 
-1. **Packs cover both pins in one region** → always on-device (even on Wi‑Fi).
-2. **Missing pack** + online → live `/api/route` (same R2 object). Two adjacent installed packs chain on-device.
+1. **Online planning** → live `/api/route` (same R2 object the phone downloads).
+2. **Offline with covering packs** → on-device; two adjacent installed packs can chain.
 3. **Offline without covering packs** → actionable “download from PACKS” copy.
 
 Pack download is **manual** (PACKS sheet). It is not required to drop a pin or plan while you have cell service. Start Nav does not fetch a routing pack.
 
 Live without a pack **must** search the same `graph.v2.bin` PACKS would install. If you rebuild a pack or retune costs, ship both (`scripts/pack-fabric/scripts/ship-routing.js`). Do not leave live on `longhaul.v1.json.gz`.
+
+### Urban-core wall
+
+Every normal profile search treats each recognized urban core as a hard wall. A
+stage may use a core when A or B is inside that same core. Clean first seeks a
+paved route outside the walls, then permits a rural unpaved connector while the
+walls remain intact. Only after both searches prove no route exists may Clean
+cross a core. A timeout never relaxes the wall. That last-resort result carries
+`urban_core_fallback` in warnings and
+`debug.fallback=urban_core_last_resort`. Live and on-device implementations
+must remain in lockstep (`hop-search.js` / `UrbanCore.swift`).
+
+Every qualifying OSM city and every major town is a hard urban-core wall. The
+shared pack rule currently qualifies cities at 20,000 people and towns at
+50,000; a city with missing population is treated conservatively as a core.
+Smaller cities/towns use a separate scored avoidance penalty. That makes a comparable
+wilderness alternative win without severing rural graph connectivity when the
+only through-road crosses town. A route that still crosses a smaller town is labeled
+`settlement_fallback`.
+
+Pack overlap does not weaken this policy. Each pack carries overlapping core and
+settlement boxes from adjacent packs, intermediate seams keep 5 km of urban
+clearance, and edge-segment intersection checks prevent long OSM edges from
+crossing a core between two outside graph nodes.
+
+### Corridor selection
+
+Corridors are geographic search envelopes, not route-length budgets. Direct and
+Balanced widen only when topology requires it. Dirt compares coherent candidates
+inside 50, 100, 150, and 200 km envelopes, works back from 100% dirt, and uses less
+pavement then less backward/lateral movement when dirt yield is effectively tied.
+Shortest distance is not a selection input for Dirt, Balanced, or Direct.
+
+Widening is lateral permission only. It never multiplies the amount of travel
+away from the next pin. Live finite-corridor searches hold fixed forward-progress
+guards (Direct 5 km, Balanced 10 km, Dirt 15 km); only the final unbounded
+connectivity proof may relax them. This lets Dirt meander across useful side
+roads without choosing a loop whose first job is to head in the wrong direction.
 
 ---
 
@@ -80,11 +118,41 @@ Errors surface as `RoutingError.server(message)`.
 ### Plan a route
 
 - **Long-press** appends stage points (`appendPlanPoint`). Tap does not place points .
+- Tapping the painted route inserts a shaping waypoint into that stage; the new
+  pin can be dragged and only the affected primary itinerary is rebuilt.
 - First point opens a stage with start only; second completes A→B and routes; further points chain from previous end.
 - Aggregate distance / dirt% / paved% across stage responses.
 - Maneuvers concatenated with along-route offset for nav.
 
 **Per-stage policy (Figma redesign):** each `Stage` owns a `profile` **and** an `allowUnknown` flag. The mode chips edit the selected stage (tap a stage row to select it) or the default for new stages; each stage row has its own Allow-unknown toggle behind the access acknowledgement. The global profile/allow values only seed new stages — changing them never rewrites existing stages.
+
+### Fuel continuity through waypoints
+
+Fuel range is cumulative across the complete rider itinerary. A shaping pin or
+ordinary A→via→B boundary does **not** refill the motorcycle. Only A and an
+actual packed, route-connected fuel stop reset the tank budget.
+
+Fuel-aware routing is a **forward construction**, never a repair pass over a
+disposable A→B route:
+
+1. Online, `/api/fuel-chain` runs one bounded physical-distance Dijkstra from
+   the current point and finds every packed pump reachable on eligible graph
+   edges within the current usable tank.
+2. It ranks only geographically forward pumps, uses bounded graph look-ahead
+   to reject dead ends, commits the next pump, and repeats from that pump.
+3. The phone then calls `/api/route` only for the committed final legs and
+   reveals point 1 → F1 → … → point 2 in order. Candidate count must never
+   multiply full Dirt searches.
+4. Dirt and Balanced reserve shortest-network headroom inside the hard tank
+   ceiling so their final legs can use that distance for adventure routing.
+5. Offline, the installed pack performs the equivalent graph reachability
+   operation locally.
+
+No generated route between the rider's waypoints is treated as something fuel
+planning must preserve. A pump becomes the next waypoint; the following ride
+starts from that pump and continues toward the rider's next point. Intentional
+cancellation during pin dragging is silent and is never reported as a live
+fuel-service outage.
 
 ### Saved
 
@@ -129,6 +197,13 @@ The nav **REPORT** pill opens `IncidentFlowOverlay` (`RouteIncidents.swift`):
    - *Return to nearest verified network* — rider → nearest point on the active route line.
    - *End stage* — ends navigation.
 3. **Replace route?** — preview (distance / dirt% / what was avoided) with *Keep current route* / *Apply route*. Failures show: "No verified alternate route found. Backtrack to the last verified junction or end this stage."
+
+This rider-observation layer complements rather than weakens the OSM pack. A
+mapped road can still be gated, flooded, seasonally closed, washed out, or
+incorrectly tagged in the field. The incident is queued locally when offline,
+the matched edge is excluded from the on-device search, and the rider approves
+the replacement before navigation changes. Region acceptance therefore tests
+both honest OSM eligibility and an offline report → avoid-edge → detour flow.
 
 ---
 

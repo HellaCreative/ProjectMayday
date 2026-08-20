@@ -16,7 +16,8 @@ const http = require("http");
 const DIRT = path.resolve(__dirname, "../../..");
 const FABRIC = path.join(DIRT, "scripts/pack-fabric");
 const LIVE_URL = process.env.LIVE_ROUTE_URL || "https://dirt-mayday.vercel.app/api/route";
-const PACK = path.join(FABRIC, "app/data/packs/v1/bc/graph.v2.bin");
+const PACKS = path.join(FABRIC, "app/data/packs/v1");
+const REGION_IDS = ["bc", "ab", "wa"];
 
 function fail(msg) {
   console.error("LOCKSTEP FAIL:", msg);
@@ -109,25 +110,21 @@ async function main() {
   const dirt = require(costsPath);
   console.log("ok cost tables dirt.paved =", dirt.PROFILE_SURFACE_WEIGHTS.dirt.paved);
 
-  const r2 = "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/bc/graph.v2.bin";
-  const head = await request(r2, "HEAD");
-  if (head.status !== 200) fail("R2 pack missing HTTP " + head.status + " " + r2);
-  const r2Bytes = Number(head.headers["content-length"] || 0);
-  if (fs.existsSync(PACK)) {
-    const localBytes = fs.statSync(PACK).size;
-    if (r2Bytes && Math.abs(localBytes - r2Bytes) > 64) {
-      console.warn(
-        "warn local bc/graph.v2.bin",
-        localBytes,
-        "bytes vs R2",
-        r2Bytes,
-        "— publish if you meant to ship a pack rebuild"
-      );
-    } else {
-      console.log("ok R2 bc/graph.v2.bin matches local", localBytes, "bytes");
+  const publicBase = "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev";
+  for (const regionId of REGION_IDS) {
+    for (const fileName of ["graph.v2.bin", "geometry.v1.bin", "fuel.v1.json"]) {
+      const remote = `${publicBase}/${regionId}/${fileName}`;
+      const head = await request(remote, "HEAD");
+      if (head.status !== 200) fail(`R2 pack missing HTTP ${head.status} ${remote}`);
+      const remoteBytes = Number(head.headers["content-length"] || 0);
+      const local = path.join(PACKS, regionId, fileName);
+      if (!fs.existsSync(local)) fail("missing local staged file " + local);
+      const localBytes = fs.statSync(local).size;
+      if (remoteBytes !== localBytes) {
+        fail(`${regionId}/${fileName} local=${localBytes} R2=${remoteBytes}`);
+      }
+      console.log(`ok R2 ${regionId}/${fileName} matches local ${localBytes} bytes`);
     }
-  } else {
-    console.log("ok R2 bc/graph.v2.bin HTTP 200", r2Bytes, "bytes");
   }
 
   const route = await postJson(LIVE_URL, {

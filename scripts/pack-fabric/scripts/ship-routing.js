@@ -8,10 +8,17 @@
  *   node scripts/pack-fabric/scripts/ship-routing.js --pack bc
  *   node scripts/pack-fabric/scripts/ship-routing.js --live
  *   node scripts/pack-fabric/scripts/ship-routing.js --pack bc --live --assert
+ *   node scripts/pack-fabric/scripts/ship-routing.js --candidate ns-20260820 --pack ns --live
+ *   node scripts/pack-fabric/scripts/ship-routing.js --promote ns-20260820 --pack ns --live
  *
  * --pack  uploads graph.v2.bin + geometry.v1.bin (+ fuel.v1.json if present) to R2 dirt-packs/{id}/
  * --live  deploys /api/route from this pack-fabric tree (not another repo)
  * --assert  curls production; fails if the graph is still the longhaul extract
+ * --candidate uploads immutable candidate objects and deploys only the named
+ *             regions from that prefix. It does not touch the download manifest.
+ * --promote verifies the candidate record, copies the same local checksums to
+ *           stable pack keys, updates the approved manifest, and removes the
+ *           candidate override on the next live deployment.
  */
 
 const fs = require("fs");
@@ -24,6 +31,9 @@ const FABRIC = path.join(DIRT, "scripts/pack-fabric");
 const PACKS = path.join(FABRIC, "app/data/packs/v1");
 const PHONE_FILES = ["graph.v2.bin", "geometry.v1.bin"];
 const OPTIONAL_PHONE_FILES = ["fuel.v1.json"];
+const ALL_PHONE_FILES = PHONE_FILES.concat(OPTIONAL_PHONE_FILES);
+const RELEASES = path.join(FABRIC, "routing/data/releases");
+const PUBLIC_R2_BASE = process.env.R2_PUBLIC_BASE || "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev";
 
 function die(msg) {
   console.error(msg);
@@ -41,12 +51,30 @@ function run(cmd, args, opts) {
 
 function parseArgs(argv) {
   const flags = new Set(argv.filter((a) => a.startsWith("--")));
-  const ids = argv.filter((a) => !a.startsWith("-")).map((s) => s.toLowerCase());
+  const ids = [];
+  let candidate = null;
+  let promote = null;
+  for (let i = 0; i < argv.length; i += 1) {
+    const value = argv[i];
+    if (value === "--candidate" || value === "--promote") {
+      const releaseId = argv[i + 1];
+      if (!releaseId || releaseId.startsWith("--")) die(value + " requires a release id");
+      if (!/^[a-z0-9][a-z0-9._-]{2,80}$/i.test(releaseId)) die("invalid release id " + releaseId);
+      if (value === "--candidate") candidate = releaseId;
+      else promote = releaseId;
+      i += 1;
+      continue;
+    }
+    if (!value.startsWith("-")) ids.push(value.toLowerCase());
+  }
+  if (candidate && promote) die("choose --candidate or --promote, not both");
   return {
     pack: flags.has("--pack"),
     live: flags.has("--live"),
     assert: flags.has("--assert"),
-    ids: ids.length ? ids : flags.has("--pack") ? ["bc"] : []
+    ids: ids.length ? ids : flags.has("--pack") ? ["bc"] : [],
+    candidate,
+    promote
   };
 }
 
@@ -54,15 +82,98 @@ function sha256File(filePath) {
   return crypto.createHash("sha256").update(fs.readFileSync(filePath)).digest("hex");
 }
 
-function putR2(regionId, fileName) {
+function putR2(regionId, fileName, prefix = "") {
   const src = path.join(PACKS, regionId, fileName);
   if (!fs.existsSync(src)) die("missing " + src + " — build the phone pack first");
-  const key = "dirt-packs/" + regionId + "/" + fileName;
+  const key = "dirt-packs/" + (prefix ? prefix.replace(/^\/+|\/+$/g, "") + "/" : "") + regionId + "/" + fileName;
   const mb = fs.statSync(src).size / 1e6;
   console.log("PUT", key, mb >= 1 ? Math.round(mb) + "MB" : Math.round(mb * 1000) + "KB");
   run("npx", ["wrangler", "r2", "object", "put", key, "--file=" + src, "--remote"], {
     cwd: FABRIC
   });
+}
+
+function releasePath(releaseId) {
+  return path.join(RELEASES, releaseId + ".json");
+}
+
+function packRecord(regionId) {
+  const files = [];
+  for (const name of ALL_PHONE_FILES) {
+    const file = path.join(PACKS, regionId, name);
+    if (!fs.existsSync(file)) {
+      if (PHONE_FILES.includes(name)) die("missing " + file);
+      continue;
+    }
+    const stat = fs.statSync(file);
+    files.push({ name, bytes: stat.size, sha256: sha256File(file) });
+  }
+  return { id: regionId, files };
+}
+
+function writeCandidateRecord(releaseId, ids) {
+  fs.mkdirSync(RELEASES, { recursive: true });
+  const record = {
+    schemaVersion: "dirt-pack-release.v1",
+    releaseId,
+    status: "live-candidate",
+    createdAt: new Date().toISOString(),
+    publicBase: PUBLIC_R2_BASE.replace(/\/$/, "") + "/candidates/" + releaseId,
+    regions: ids.map(packRecord)
+  };
+  const file = releasePath(releaseId);
+  if (fs.existsSync(file)) {
+    const existing = JSON.parse(fs.readFileSync(file, "utf8"));
+    const comparable = (value) => JSON.stringify((value.regions || []).map((region) => ({
+      id: region.id,
+      files: region.files
+    })));
+    if (comparable(existing) !== comparable(record)) {
+      die("release id " + releaseId + " already exists with different checksums; choose a new id");
+    }
+    return existing;
+  }
+  fs.writeFileSync(file, JSON.stringify(record, null, 2) + "\n");
+  return record;
+}
+
+function readCandidateRecord(releaseId) {
+  const file = releasePath(releaseId);
+  if (!fs.existsSync(file)) die("missing candidate release record " + file);
+  return JSON.parse(fs.readFileSync(file, "utf8"));
+}
+
+function verifyCandidateRecord(releaseId, ids) {
+  const record = readCandidateRecord(releaseId);
+  for (const id of ids) {
+    const recorded = (record.regions || []).find((region) => region.id === id);
+    if (!recorded) die(releaseId + " does not contain region " + id);
+    const current = packRecord(id);
+    for (const file of recorded.files || []) {
+      const local = current.files.find((row) => row.name === file.name);
+      if (!local || local.bytes !== file.bytes || local.sha256 !== file.sha256) {
+        die(`${releaseId}/${id}/${file.name} no longer matches the tested candidate`);
+      }
+    }
+  }
+  return record;
+}
+
+function uploadCandidate(releaseId, ids) {
+  const prefix = "candidates/" + releaseId;
+  const record = writeCandidateRecord(releaseId, ids);
+  for (const id of ids) {
+    for (const name of ALL_PHONE_FILES) {
+      const file = path.join(PACKS, id, name);
+      if (fs.existsSync(file)) putR2(id, name, prefix);
+    }
+  }
+  const recordFile = releasePath(releaseId);
+  run("npx", ["wrangler", "r2", "object", "put", `dirt-packs/${prefix}/release.json`, "--file=" + recordFile, "--remote"], {
+    cwd: FABRIC
+  });
+  console.log("candidate uploaded without changing the approved download manifest", record.publicBase);
+  return record;
 }
 
 function mergeFuelIntoManifest(ids) {
@@ -106,9 +217,13 @@ function shipPack(ids) {
   console.log("pack published — live /api/route and PACKS download now share those bytes");
 }
 
-function shipLive() {
+function shipLive(regionBaseOverrides) {
   console.log("deploying /api/route from", FABRIC);
-  run("npx", ["vercel", "--prod", "--yes"], { cwd: FABRIC });
+  const args = ["vercel", "--prod", "--yes"];
+  if (regionBaseOverrides && Object.keys(regionBaseOverrides).length) {
+    args.push("--env", "R2_REGION_BASE_OVERRIDES=" + JSON.stringify(regionBaseOverrides));
+  }
+  run("npx", args, { cwd: FABRIC });
 }
 
 function shipAssert() {
@@ -125,12 +240,32 @@ function main() {
   node scripts/pack-fabric/scripts/ship-routing.js --assert
   node scripts/pack-fabric/scripts/ship-routing.js --pack bc
   node scripts/pack-fabric/scripts/ship-routing.js --live
-  node scripts/pack-fabric/scripts/ship-routing.js --pack bc --live --assert`);
+  node scripts/pack-fabric/scripts/ship-routing.js --pack bc --live --assert
+  node scripts/pack-fabric/scripts/ship-routing.js --candidate ns-20260820 --pack ns --live
+  node scripts/pack-fabric/scripts/ship-routing.js --promote ns-20260820 --pack ns --live`);
     process.exit(argv.includes("--help") ? 0 : 1);
   }
   const opts = parseArgs(argv);
-  if (opts.pack) shipPack(opts.ids);
-  if (opts.live) shipLive();
+  if ((opts.candidate || opts.promote) && !opts.ids.length) {
+    const existing = readCandidateRecord(opts.candidate || opts.promote);
+    opts.ids = (existing.regions || []).map((region) => region.id);
+  }
+  if ((opts.candidate || opts.promote) && !opts.ids.length) {
+    die("candidate/promote requires at least one region");
+  }
+  let liveOverrides = null;
+  if (opts.candidate) {
+    const record = opts.pack
+      ? uploadCandidate(opts.candidate, opts.ids)
+      : verifyCandidateRecord(opts.candidate, opts.ids);
+    liveOverrides = Object.fromEntries(opts.ids.map((id) => [id, record.publicBase]));
+  } else if (opts.promote) {
+    verifyCandidateRecord(opts.promote, opts.ids);
+    if (opts.pack) shipPack(opts.ids);
+  } else if (opts.pack) {
+    shipPack(opts.ids);
+  }
+  if (opts.live) shipLive(liveOverrides);
   if (opts.assert) shipAssert();
 }
 

@@ -2,22 +2,34 @@ import CoreLocation
 import Foundation
 import UIKit
 
-/// Ring-buffer of routing / pack decisions for field debugging.
-/// Copy from Profile → TESTER while investigating wrong-province / freeze bugs.
+/// Ring-buffer for field debugging across the whole app. Routing remains the
+/// most detailed category, but network, map, lifecycle, fuel-control and memory
+/// events share the same timeline so failures can be correlated.
 @MainActor
 final class RoutingDebugLog {
     static let shared = RoutingDebugLog()
 
-    private let maxEntries = 200
+    private let maxEntries = 1_200
     private var entries: [String] = []
     private let startedAt = Date()
 
     var isEnabled: Bool = true
 
     var text: String {
+        let bundle = Bundle.main
+        let version = bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
+        let build = bundle.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?"
+        let device = UIDevice.current
+        let memoryMB = ProcessInfo.processInfo.physicalMemory / 1_048_576
         let header = [
-            "DIRT routing debug log",
+            "DIRT app diagnostic log",
             "started \(iso(startedAt))",
+            "exported \(iso(Date()))",
+            "app \(version) (\(build))",
+            "device \(device.model) · iOS \(device.systemVersion) · memory \(memoryMB)MB",
+            "locale \(Locale.current.identifier) · timezone \(TimeZone.current.identifier)",
+            "fuel enabled=\(FuelRangePrefs.isEnabled ? 1 : 0) range=\(Int(FuelRangePrefs.kilometers))km last=\(Int(FuelRangePrefs.lastEnabledKilometers))km",
+            "scope app,lifecycle,network,map,routing,fuel,navigation,groups",
             "entries \(entries.count)",
             "---"
         ].joined(separator: "\n")
@@ -37,7 +49,7 @@ final class RoutingDebugLog {
             entries.removeFirst(entries.count - maxEntries)
         }
         #if DEBUG
-        print("[DirtRoute]", message)
+        print("[DirtDebug]", message)
         #endif
     }
 
@@ -85,7 +97,7 @@ final class RoutingDebugLog {
 
     func writeShareFile() throws -> URL {
         let stamp = ISO8601DateFormatter().string(from: Date()).replacingOccurrences(of: ":", with: "")
-        let url = FileManager.default.temporaryDirectory.appendingPathComponent("dirt-route-debug-\(stamp).txt")
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("dirt-app-debug-\(stamp).txt")
         guard let data = text.data(using: .utf8) else {
             throw NSError(domain: "DirtRoutingDebug", code: 1, userInfo: [NSLocalizedDescriptionKey: "Couldn’t encode log"])
         }

@@ -5,7 +5,7 @@ import UIKit
 
 struct RouteDisplaySegment {
     let coordinates: [RouteCoordinate]
-    /// Packed `trackClass` / `surfaceClass` key used for selected-route paint.
+    /// Surface/access-aware key used for selected-route paint.
     let surfaceKey: String
 
     var isDirt: Bool {
@@ -20,6 +20,7 @@ final class MapState {
     enum MarkerKind {
         case start
         case stage
+        case fuel
         case destination
         case rider
         /// Unresolved peer `rider_alerts` pin when the rider is not live-sharing.
@@ -238,6 +239,8 @@ final class MapState {
         case overview
     }
     var onTap: ((CLLocationCoordinate2D) -> Void)?
+    /// A deliberate tap on the painted route, separate from an ordinary map tap.
+    var onRouteTap: ((CLLocationCoordinate2D) -> Void)?
     var onLongPress: ((CLLocationCoordinate2D) -> Void)?
     var onRiderTap: ((String) -> Void)?
     /// Called when the user drags a planner pin and releases it.
@@ -438,7 +441,7 @@ final class MapState {
             for segment in segments {
                 let coords = segment.coordinates
                 guard !coords.isEmpty else { continue }
-                let key = segment.paintSurfaceKey
+                let key = segment.selectedRoutePaintKey
                 if currentKey == key {
                     for coordinate in coords where coordinate != currentCoords.last {
                         currentCoords.append(coordinate)

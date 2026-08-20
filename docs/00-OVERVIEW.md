@@ -20,7 +20,7 @@ TestFlight / signing steps live in [../README_TESTFLIGHT.md](../README_TESTFLIGH
 - Turn-by-turn HUD that survives lock screen / interruptions
 - App Store / TestFlight distribution and OS permissions UX
 
-MapLibre Native renders the map. Routing prefers on-device `graph.v2` packs from Cloudflare R2 when installed; live `POST /api/route` covers pins outside those packs (and cross-province hops). Accounts and groups are Supabase. POIs come from OSM Overpass.
+MapLibre Native renders the map. Online planning uses live `POST /api/route` as the source of truth; offline planning and navigation recovery use installed `graph.v2` packs from Cloudflare R2. Both engines consume the same published pack bytes. Accounts and groups are Supabase. Route-planning fuel comes from the packed OSM fuel sidecar; non-routing POIs may use Overpass.
 
 ## Doc index
 
@@ -36,6 +36,7 @@ MapLibre Native renders the map. Routing prefers on-device `graph.v2` packs from
 | [06-UI-DESIGN.md](./06-UI-DESIGN.md) | Tokens, dock, CTAs |
 | [07-FUTURE.md](./07-FUTURE.md) | Deferred work + App Store checklist |
 | [08-MAP-REFINEMENT.md](./08-MAP-REFINEMENT.md) | OSM / Layers / stitches / costs / seams (locked) |
+| [09-OSM-PACK-QUALITY-STANDARD.md](./09-OSM-PACK-QUALITY-STANDARD.md) | Repeatable province/state OSM build, audit, acceptance, and release gate |
 | [../README_TESTFLIGHT.md](../README_TESTFLIGHT.md) | Device / archive / TestFlight ops |
 
 ## Locked decisions

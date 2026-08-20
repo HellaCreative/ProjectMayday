@@ -244,38 +244,11 @@ function regionsForRoute(regionIds) {
 /**
  * Corridor waypoints for canada-chain hops and pack clipping.
  *
- * Product law:
- * - **cleanest** — highway city/spine hubs OK (Google-fast A→B).
- * - **direct / balanced / dirt** — NEVER inject city hubs (Halifax, Moncton,
- *   Fredericton, Edmundston, Québec, Montreal, …). Sample the A→B chord so
- *   packs clip/chain without forcing urban sightseeing beelines. User-staged
- *   midpoints in `locations` are kept as-is.
+ * Product law: no profile may inject city hubs. Long-haul routing uses neutral
+ * province seams and chord samples so pack clipping/chaining never turns an
+ * urban core into an artificial A/B exemption. User-staged midpoints in
+ * `locations` are kept as-is.
  */
-const CLEAN_CORRIDOR_ANCHORS = [
-  { lon: -64.800, lat: 46.099 }, // Moncton — TCH isthmus (Clean only)
-  { lon: -63.75, lat: 46.21 }, // Confederation Bridge (Clean NB↔PE)
-  { lon: -63.126, lat: 46.238 }, // Charlottetown
-  { lon: -66.643, lat: 45.963 }, // Fredericton
-  { lon: -68.325, lat: 47.373 }, // Edmundston
-  { lon: -68.65, lat: 47.55 }, // Dégelis
-  { lon: -69.542, lat: 47.837 }, // Rivière-du-Loup
-  { lon: -71.208, lat: 46.813 }, // Quebec City
-  { lon: -72.349, lat: 46.353 }, // A-40 east of Trois-Rivières
-  { lon: -72.701, lat: 46.300 }, // west of Trois-Rivières
-  { lon: -73.80, lat: 45.60 }, // Laval north ring (not island core)
-  { lon: -75.697, lat: 45.421 }, // Ottawa
-  { lon: -79.383, lat: 43.653 }, // Toronto
-  { lon: -81.0, lat: 46.49 }, // Sudbury
-  { lon: -84.35, lat: 46.52 }, // Sault Ste. Marie
-  { lon: -89.247, lat: 48.38 }, // Thunder Bay
-  { lon: -97.138, lat: 49.895 }, // Winnipeg
-  { lon: -104.618, lat: 50.445 }, // Regina
-  { lon: -106.67, lat: 52.133 }, // Saskatoon
-  { lon: -113.491, lat: 53.547 }, // Edmonton
-  { lon: -114.071, lat: 51.045 }, // Calgary
-  { lon: -119.496, lat: 49.888 }, // Kelowna
-  { lon: -123.121, lat: 49.283 } // Vancouver
-];
 
 /** Major urban cores adventure chord samples must not land inside. */
 const ADVENTURE_URBAN_AVOID = [
@@ -392,67 +365,6 @@ function dedupeCorridorPoints(pts, start, end, westToEast, nearEps = 0.15) {
   if (!nearlySamePoint(dedup[0], start, 0.02)) dedup.unshift(start);
   if (!nearlySamePoint(dedup[dedup.length - 1], end, 0.02)) dedup.push(end);
   return dedup;
-}
-
-/**
- * Province-family hop count along the canada-chain graph (inclusive).
- * NS→NB = 2, NS→QC = 3, NS→ON = 4.
- */
-function provincePathLength(start, end) {
-  const { primaryRegionForPoint, provinceFamily } = require("./select");
-  const a = provinceFamily(primaryRegionForPoint(start.lon, start.lat));
-  const b = provinceFamily(primaryRegionForPoint(end.lon, end.lat));
-  if (!a || !b) return 0;
-  if (a === b) return 1;
-  const path = shortestRegionPath(a, b);
-  return path ? path.length : 0;
-}
-
-/**
- * Long multi-province adventure (4+ provinces, e.g. NS→Thunder Bay): use the
- * Clean highway spine for chain waypoints so middle hops stay on connected
- * TCH fabric. End hops still run the rider's dirt/balanced profile.
- * Shorter chains (NS→NB, NS→QC) keep adventure border seams + full dirt.
- */
-function shouldUseTwoSpeedChain(start, end) {
-  return provincePathLength(start, end) >= 4;
-}
-
-/** Sparse TCH hubs for two-speed (avoid 15+ hops × CDN inflate). */
-const TWO_SPEED_SPINE_ANCHORS = [
-  { lon: -64.8, lat: 46.099 }, // Moncton
-  { lon: -68.65, lat: 47.55 }, // Dégelis
-  { lon: -71.208, lat: 46.813 }, // Quebec City
-  { lon: -75.697, lat: 45.421 }, // Ottawa
-  { lon: -81.0, lat: 46.49 }, // Sudbury
-  // Skip Sault Ste. Marie — ON longhaul snaps it onto a disconnected island;
-  // Sudbury→Thunder Bay stays on the giant highway component (~1000 km hop).
-  { lon: -89.247, lat: 48.38 }, // Thunder Bay
-  { lon: -97.138, lat: 49.895 }, // Winnipeg
-  { lon: -106.67, lat: 52.133 }, // Saskatoon
-  { lon: -114.071, lat: 51.045 }, // Calgary
-  { lon: -123.121, lat: 49.283 } // Vancouver
-];
-
-function twoSpeedChainWaypoints(start, end) {
-  const westToEast = start.lon < end.lon;
-  const minLon = Math.min(start.lon, end.lon);
-  const maxLon = Math.max(start.lon, end.lon);
-  // Pad past the pin so destination-city hubs (Thunder Bay -89.25 vs pin -89.10)
-  // stay in the chain; last hop is then hub→pin (~15 km), not SSM→pin.
-  const anchors = TWO_SPEED_SPINE_ANCHORS.filter((a) => a.lon >= minLon - 0.6 && a.lon <= maxLon + 0.6)
-    .filter((a) => !nearlySamePoint(a, start, 0.12) && !nearlySamePoint(a, end, 0.12))
-    .sort((a, b) => (westToEast ? a.lon - b.lon : b.lon - a.lon));
-  // Never lon-sort the user pin with hubs — a pin slightly east of Thunder Bay
-  // sorts before the hub and creates an SSM→pin disconnected mega-hop.
-  const mid = [];
-  for (const a of anchors) {
-    const last = mid[mid.length - 1];
-    if (last && nearlySamePoint(last, a, 0.05)) continue;
-    // role=spine: routeCanadaChain snaps onto longhaul fabric before hop routing.
-    mid.push({ lon: a.lon, lat: a.lat, role: "spine" });
-  }
-  return [start, ...mid, end];
 }
 
 /**
@@ -607,7 +519,7 @@ function dynamicSeamForPair(left, right, start, end) {
       ((prevFam === a && fam === b) || (prevFam === b && fam === a))
     ) {
       const seed = refineCrossing(prevPt, p);
-      if (seed && !nearlySamePoint(seed, start) && !nearlySamePoint(seed, end)) {
+      if (seed && !nearlySamePoint(seed, start, 0.000001) && !nearlySamePoint(seed, end, 0.000001)) {
         return { lon: seed.lon, lat: seed.lat, role: "seam", between: [a, b].sort() };
       }
     }
@@ -619,14 +531,11 @@ function dynamicSeamForPair(left, right, start, end) {
 
   const seed = bboxClipSeam(a, b, start, end);
   if (!seed) return null;
-  if (nearlySamePoint(seed, start) || nearlySamePoint(seed, end)) return null;
+  if (nearlySamePoint(seed, start, 0.000001) || nearlySamePoint(seed, end, 0.000001)) return null;
   return { lon: seed.lon, lat: seed.lat, role: "seam", between: [a, b].sort() };
 }
 
 function adventureChainWaypoints(start, end) {
-  if (shouldUseTwoSpeedChain(start, end)) {
-    return twoSpeedChainWaypoints(start, end);
-  }
   const { primaryRegionForPoint, provinceFamily } = require("./select");
   const startFam = provinceFamily(primaryRegionForPoint(start.lon, start.lat));
   const endFam = provinceFamily(primaryRegionForPoint(end.lon, end.lat));
@@ -634,15 +543,16 @@ function adventureChainWaypoints(start, end) {
 
   const regionPath = shortestRegionPath(startFam, endFam) || [];
   if (regionPath.length < 2) return [start, end];
-  const westToEast = start.lon < end.lon;
-
-  const pts = [start, end];
+  const pts = [start];
   for (let i = 0; i < regionPath.length - 1; i += 1) {
     const seam = dynamicSeamForPair(regionPath[i], regionPath[i + 1], start, end);
     if (!seam) continue;
     pts.push(seam);
   }
-  return dedupeCorridorPoints(pts, start, end, westToEast);
+  pts.push(end);
+  return pts.filter((point, index) =>
+    index === 0 || !nearlySamePoint(point, pts[index - 1], 0.000001)
+  );
 }
 
 function adventureCorridorPoints(start, end, distKm, forClip) {
@@ -665,17 +575,12 @@ function adventureCorridorPoints(start, end, distKm, forClip) {
   return dedupeCorridorPoints(pts, start, end, westToEast);
 }
 
-function isCleanProfile(profile) {
-  const p = String(profile || "").toLowerCase();
-  return p === "cleanest" || p === "clean";
-}
-
 /**
  * @param {object[]} locations route pins (user stages preserved)
  * @param {{ profile?: string, forClip?: boolean, forChain?: boolean }} [options]
- *   profile — cleanest gets highway hubs; adventure never does.
- *   forClip — adventure may add chord samples to widen pack clip (not as routed hops).
- *   forChain — adventure inserts province-seam joints so canada-chain hops
+ *   profile — affects each routed hop, never the engineered seam geometry.
+ *   forClip — may add chord samples to widen pack clip (not as routed hops).
+ *   forChain — inserts province-seam joints so canada-chain hops
  *     load ≤2 packs (avoids Hobby OOM on NS→QC mega-merge).
  */
 function corridorLocationsForRoute(locations, options = {}) {
@@ -711,29 +616,10 @@ function corridorLocationsForRoute(locations, options = {}) {
   // (Vancouver→Seattle is ~190 km but still needs the 49th).
   if (families.size <= 1 && span < 3 && distKm < 200) return pts;
 
-  // Adventure: no city hub chain. forChain → border seams; forClip → chord
-  // samples for pack clipping; plain [A,B] otherwise (single-pack / local).
-  if (!isCleanProfile(options.profile)) {
-    if (options.forChain) return adventureChainWaypoints(start, end);
-    return adventureCorridorPoints(start, end, distKm, !!options.forClip);
-  }
-
-  // Cleanest: highway spine hubs for fast Google-shaped longhaul.
-  const westToEast = start.lon < end.lon;
-  const anchors = CLEAN_CORRIDOR_ANCHORS.filter((a) => a.lon >= minLon - 0.5 && a.lon <= maxLon + 0.5)
-    .filter((a) => !nearlySamePoint(a, start) && !nearlySamePoint(a, end))
-    .filter((a) =>
-      westToEast ? a.lon > start.lon && a.lon < end.lon : a.lon < start.lon && a.lon > end.lon
-    )
-    .sort((a, b) => (westToEast ? a.lon - b.lon : b.lon - a.lon));
-  if (options.forChain) {
-    return [
-      start,
-      ...anchors.map((a) => ({ lon: a.lon, lat: a.lat, role: "spine" })),
-      end
-    ];
-  }
-  return [start, ...anchors, end];
+  // No profile receives city waypoints. The profile objective is evaluated by
+  // the router inside each neutral geographic hop.
+  if (options.forChain) return adventureChainWaypoints(start, end);
+  return adventureCorridorPoints(start, end, distKm, !!options.forClip);
 }
 
 module.exports = {
@@ -742,9 +628,6 @@ module.exports = {
   regionsForRoute,
   corridorLocationsForRoute,
   adventureChainWaypoints,
-  shouldUseTwoSpeedChain,
-  twoSpeedChainWaypoints,
-  provincePathLength,
   ADVENTURE_URBAN_AVOID,
   ADVENTURE_CHAIN_JOINTS,
   dynamicSeamForPair,

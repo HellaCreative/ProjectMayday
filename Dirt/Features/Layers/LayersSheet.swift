@@ -110,7 +110,7 @@ struct LayersSheet: View {
         Section {
             legendRow(color: DirtTheme.routeGravel, title: "Dirt", detail: "Gravel, track, dual-sport")
             legendRow(color: DirtTheme.routePaved, title: "Paved", detail: "Highway and sealed road")
-            legendRow(color: DirtTheme.routeAccess, title: "Access", detail: "Unproven path · Allow unknown only")
+            legendRow(color: DirtTheme.routeAccess, title: "Unknown access", detail: "Motorcycle permission unproven · Allow unknown only")
         } header: {
             Text("Route paint")
         }
