@@ -111,6 +111,11 @@ function fallbackReasonFor(path, fallbackUsed, searchOutcome) {
   return null;
 }
 
+function isLowDirtRoute(profile, path, threshold = 70) {
+  const dirtPercent = Number(path && path.stats && path.stats.dirtPercent);
+  return profile === "dirt" && Number.isFinite(dirtPercent) && dirtPercent < threshold;
+}
+
 function projectOnSegment(point, a, b) {
   const [px, py] = point;
   const [ax, ay] = a;
@@ -1464,7 +1469,7 @@ async function routeCanadaChain(body, graphResolution) {
       inflateMs: cache.inflateMs
     },
     debug: {
-      routingRevision: "ride-objectives-v8-dirt-envelope-settlements",
+      routingRevision: "ride-objectives-v9-settlement-gated",
       engine: "dirt-node-astar-chain",
       graphMode: "canada-chain",
       searchMeta: chainSearchMeta,
@@ -1946,9 +1951,16 @@ async function routeOnRuntime(body, graphResolution, runtime) {
     }
   } else {
     const diagnostics = {};
+    const adventureSearchOpts = Object.assign({}, searchOpts, {
+      // A settlement relaxation is a fallback, not a normal scoring mode.
+      // findPathV2 may relax it only after every bounded attempt proves noPath.
+      settlementWall: true,
+      settlementFallback: false,
+      diagnostics
+    });
     path = findPath(
       runtime, startMatch, endMatch, profile, policy, avoidEdgeIds,
-      Object.assign({}, searchOpts, { diagnostics })
+      adventureSearchOpts
     );
     primarySearchOutcome = path ? "completed" : (diagnostics.outcome || "noPath");
     // A city wall may sever the only mountain-valley or border connection.
@@ -1961,6 +1973,8 @@ async function routeOnRuntime(body, graphResolution, runtime) {
         Object.assign({}, searchOpts, {
           cityWall: false,
           urbanCoreFallback: true,
+          settlementWall: true,
+          settlementFallback: false,
           diagnostics: relaxedDiagnostics
         })
       );
@@ -2151,7 +2165,7 @@ async function routeOnRuntime(body, graphResolution, runtime) {
   const selectedMeters = Number(path.distanceMeters);
   const fallbackReason = fallbackReasonFor(
     path,
-    urbanCoreFallbackUsed,
+    urbanCoreFallbackUsed || settlementFallbackUsed || !!(path.searchMeta && path.searchMeta.settlementFallbackUsed),
     cleanSearchOutcome || primarySearchOutcome
   );
   const corridorClippedDirtMeters = clippedDirtMeters(
@@ -2161,11 +2175,13 @@ async function routeOnRuntime(body, graphResolution, runtime) {
     Number.isFinite(selectedCorridor) ? selectedCorridor : 0,
     policy
   );
+  const lowDirt = isLowDirtRoute(profile, path);
 
   return {
     status: "complete",
     routeId: "route-" + Date.now().toString(36),
     profile,
+    lowDirt,
     vehicle: body.vehicle || "dual-sport-motorcycle",
     accessPolicy: policy,
     geometry: path.geometry,
@@ -2177,7 +2193,7 @@ async function routeOnRuntime(body, graphResolution, runtime) {
     maneuvers: buildManeuvers(path.geometry),
     warnings,
     debug: {
-      routingRevision: "ride-objectives-v8-dirt-envelope-settlements",
+      routingRevision: "ride-objectives-v9-settlement-gated",
       startMatchedEdge: startMatch.edgeId,
       endMatchedEdge: endMatch.edgeId,
       startAccessMeters: Math.round(startMatch.distanceM),
@@ -2203,6 +2219,7 @@ async function routeOnRuntime(body, graphResolution, runtime) {
       corridor: Number.isFinite(selectedCorridor) ? selectedCorridor : null,
       settlementFallback: !!(settlementFallbackUsed || (path.searchMeta && path.searchMeta.settlementFallbackUsed)),
       fallbackReason,
+      lowDirt,
       preFallbackDirtPct: urbanCoreFallbackUsed
         ? null
         : (Number.isFinite(selectedDirtPct) ? selectedDirtPct : null),
@@ -3082,5 +3099,6 @@ module.exports = {
   remainingChainPathCap,
   topologySeamFromIndex,
   fallbackReasonFor,
-  clippedDirtMeters
+  clippedDirtMeters,
+  isLowDirtRoute
 };
