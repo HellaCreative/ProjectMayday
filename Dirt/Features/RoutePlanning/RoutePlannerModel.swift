@@ -452,6 +452,7 @@ final class RoutePlannerModel {
         isAssemblingRoute = true
         fuelPlanningStatus = FuelRangePrefs.isEnabled ? "Planning fuel legs…" : nil
         toast = Self.calculatingRouteToast
+        refreshMap()
         buildTask = Task { @MainActor [weak self] in
             guard let self else { return }
             let result = await self.itineraryBuilder.build(
@@ -563,7 +564,11 @@ final class RoutePlannerModel {
     /// A short tap directly on a painted Plan route inserts a rider waypoint
     /// into that exact leg. The new pin is selected immediately so it can be
     /// dragged to shape the ride; fuel stops are then safely re-seated around it.
-    func handleRouteTap(_ coordinate: CLLocationCoordinate2D) {
+    func handleRouteTap(
+        _ coordinate: CLLocationCoordinate2D,
+        riderLegID: UUID? = nil,
+        source: String = "tap"
+    ) {
         guard navigation.phase == .idle,
               mode == .plan,
               !isRouting,
@@ -574,6 +579,7 @@ final class RoutePlannerModel {
         let probe = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
         var nearest: (index: Int, point: RouteCoordinate, meters: Double)?
         for (index, stage) in stages.enumerated() {
+            if let riderLegID, stage.riderLegID != riderLegID { continue }
             guard let response = stage.response,
                   let hit = GeoMath.nearestPointOnPolyline(
                     probe,
@@ -586,9 +592,9 @@ final class RoutePlannerModel {
             }
         }
         guard let nearest else { return }
-        let riderLegID = stages[nearest.index].riderLegID
-        apply(.insert(afterLegID: riderLegID, coordinate: nearest.point), source: "tap")
-        guard let insertedIndex = itinerary.legs.firstIndex(where: { $0.id == riderLegID }),
+        let resolvedRiderLegID = stages[nearest.index].riderLegID
+        apply(.insert(afterLegID: resolvedRiderLegID, coordinate: nearest.point), source: source)
+        guard let insertedIndex = itinerary.legs.firstIndex(where: { $0.id == resolvedRiderLegID }),
               itinerary.waypoints.indices.contains(insertedIndex + 1)
         else { return }
         mapState.selectPlannerPin("wp:\(itinerary.waypoints[insertedIndex + 1].id.uuidString)")
@@ -1290,7 +1296,14 @@ final class RoutePlannerModel {
 
     func refreshMap() {
         syncNetworkAccessPolicy()
-        mapState.setRoute(MapState.displaySegments(from: activeResponses))
+        let displayLegIDs: [UUID?]
+        if mode == .fromHere || mode == .plan {
+            displayLegIDs = (built?.legs ?? []).map { Optional($0.riderLegID) }
+        } else {
+            displayLegIDs = []
+        }
+        mapState.isRouteBuilding = isRouting || fuelPlanningStatus != nil
+        mapState.setRoute(MapState.displaySegments(from: activeResponses, riderLegIDs: displayLegIDs))
         var markers: [MapState.Marker] = []
         switch mode {
         case .fromHere:

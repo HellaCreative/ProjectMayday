@@ -149,8 +149,8 @@ final class AppEnvironment {
         mapState.onTap = { [planner] coordinate in
             planner.handleMapTap(coordinate)
         }
-        mapState.onRouteTap = { [planner] coordinate in
-            planner.handleRouteTap(coordinate)
+        mapState.onRouteTap = { [planner] riderLegID, coordinate, source in
+            planner.handleRouteTap(coordinate, riderLegID: riderLegID, source: source)
         }
         mapState.onLongPress = { [planner] coordinate in
             planner.handleMapLongPress(coordinate)

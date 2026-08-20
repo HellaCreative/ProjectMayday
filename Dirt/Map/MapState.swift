@@ -10,6 +10,8 @@ struct RouteDisplaySegment {
     /// Planner stage that produced this paint run. Diagnostic in Phase 0 and
     /// later carried into the canonical rider-leg feature identity.
     var stageIndex: Int? = nil
+    /// Canonical rider leg represented by this paint run. Fuel sub-legs share it.
+    var riderLegID: UUID? = nil
 
     var isDirt: Bool {
         RouteSegment.isAdventureSurface(surfaceKey)
@@ -243,7 +245,7 @@ final class MapState {
     }
     var onTap: ((CLLocationCoordinate2D) -> Void)?
     /// A deliberate tap on the painted route, separate from an ordinary map tap.
-    var onRouteTap: ((CLLocationCoordinate2D) -> Void)?
+    var onRouteTap: ((UUID, CLLocationCoordinate2D, String) -> Void)?
     var onLongPress: ((CLLocationCoordinate2D) -> Void)?
     var onRiderTap: ((String) -> Void)?
     /// Called when the user drags a planner pin and releases it.
@@ -257,6 +259,8 @@ final class MapState {
             pinSelectionGeneration += 1
         }
     }
+    /// Gesture resolution reads this synchronously so route edits are never queued mid-build.
+    var isRouteBuilding = false
     private(set) var pinSelectionGeneration = 0
 
     func selectPlannerPin(_ markerID: String?) {
@@ -420,9 +424,13 @@ final class MapState {
 
     /// Consolidates per-edge segments into continuous same-surface runs, the way
     /// adjacent same-surface edges are merged before painting.
-    static func displaySegments(from responses: [RouteResponse]) -> [RouteDisplaySegment] {
+    static func displaySegments(
+        from responses: [RouteResponse],
+        riderLegIDs: [UUID?] = []
+    ) -> [RouteDisplaySegment] {
         var result: [RouteDisplaySegment] = []
         for (stageIndex, response) in responses.enumerated() {
+            let riderLegID = riderLegIDs.indices.contains(stageIndex) ? riderLegIDs[stageIndex] : nil
             let segments = response.segments ?? []
             var currentCoords: [RouteCoordinate] = []
             var currentKey: String?
@@ -432,7 +440,8 @@ final class MapState {
                         RouteDisplaySegment(
                             coordinates: currentCoords,
                             surfaceKey: key,
-                            stageIndex: stageIndex
+                            stageIndex: stageIndex,
+                            riderLegID: riderLegID
                         )
                     )
                 }
@@ -447,7 +456,8 @@ final class MapState {
                         RouteDisplaySegment(
                             coordinates: coords,
                             surfaceKey: "connector",
-                            stageIndex: stageIndex
+                            stageIndex: stageIndex,
+                            riderLegID: riderLegID
                         )
                     )
                 }

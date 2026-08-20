@@ -88,6 +88,7 @@ struct MapLibreMapView: UIViewRepresentable {
 
         let longPress = UILongPressGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleLongPress(_:)))
         mapView.addGestureRecognizer(longPress)
+        tap.require(toFail: longPress)
 
         // Re-assert after attach — hosting VCs can fight the first assignment.
         DispatchQueue.main.async { [weak mapView] in
@@ -667,9 +668,10 @@ struct MapLibreMapView: UIViewRepresentable {
             let lines = segments.map { segment -> MLNPolylineFeature in
                 var coordinates = segment.coordinates.map(\.locationCoordinate)
                 let line = MLNPolylineFeature(coordinates: &coordinates, count: UInt(coordinates.count))
-                if let stageIndex = segment.stageIndex {
-                    line.attributes = ["stageIndex": stageIndex]
-                }
+                var attributes: [String: Any] = [:]
+                if let stageIndex = segment.stageIndex { attributes["stageIndex"] = stageIndex }
+                if let riderLegID = segment.riderLegID { attributes["riderLegID"] = riderLegID.uuidString }
+                line.attributes = attributes
                 return line
             }
             return MLNShapeCollectionFeature(shapes: lines)
@@ -1019,6 +1021,35 @@ struct MapLibreMapView: UIViewRepresentable {
 
         // MARK: Gestures
 
+        private enum TouchResolution {
+            case pin(DirtAnnotation)
+            case route(UUID)
+            case map
+        }
+
+        private func resolveTouch(_ point: CGPoint, in mapView: MLNMapView) -> TouchResolution {
+            if let pin = plannerAnnotation(at: point, in: mapView) { return .pin(pin) }
+            if let riderLegID = routeRiderLegID(at: point, in: mapView) { return .route(riderLegID) }
+            return .map
+        }
+
+        private func logTouch(_ resolution: TouchResolution, gesture: String? = nil) {
+            let suffix = gesture.map { " gesture=\($0)" } ?? ""
+            switch resolution {
+            case .pin(let pin):
+                let kind = pin.kind == .fuel ? "fuel" : "waypoint"
+                RoutingDebugLog.shared.event(
+                    "map tap result=pin markerID=\(pin.markerID) kind=\(kind)\(suffix)"
+                )
+            case .route(let riderLegID):
+                RoutingDebugLog.shared.event(
+                    "map tap result=route riderLegID=\(riderLegID.uuidString)\(suffix)"
+                )
+            case .map:
+                RoutingDebugLog.shared.event("map tap result=map\(suffix)")
+            }
+        }
+
         @objc func handleTap(_ gesture: UITapGestureRecognizer) {
             guard gesture.state == .ended, let mapView else { return }
             let pt = gesture.location(in: mapView)
@@ -1029,11 +1060,12 @@ struct MapLibreMapView: UIViewRepresentable {
                 return
             }
 
-            // Planner pin wins over map tap — select / don't drop a new waypoint.
-            // During prep / active ride: never select or relocate pins (Report → Reroute only).
-            if let pin = plannerAnnotation(at: pt, in: mapView) {
-                RoutingDebugLog.shared.event("map tap result=pin markerID=\(pin.markerID)")
-                guard !state.isNavigating else { return }
+            let resolution = resolveTouch(pt, in: mapView)
+
+            // Planner pin wins over route and map. Fuel selects for its info card,
+            // but remains locked against every relocation path.
+            if case .pin(let pin) = resolution {
+                logTouch(resolution)
                 mapView.selectAnnotation(pin, animated: true, completionHandler: nil)
                 state.selectPlannerPin(pin.markerID)
                 return
@@ -1041,12 +1073,13 @@ struct MapLibreMapView: UIViewRepresentable {
 
             // Selected pin + tap map → relocate (Plan / Saved). From here relocates
             // B via long-press with road snap — never by dragging or short-tap.
-            if let selectedID = state.selectedPlannerPinID,
+            if case .map = resolution,
+               let selectedID = state.selectedPlannerPinID,
                !state.isNavigating,
                !state.fromHereLongPressRelocatesDestination {
                 let locked = annotations.first(where: { $0.markerID == selectedID })?.isLocked == true
                 if !locked {
-                    RoutingDebugLog.shared.event("map tap result=map")
+                    logTouch(.map)
                     let coordinate = mapView.convert(pt, toCoordinateFrom: mapView)
                     state.onPlannerPinDragEnd?(selectedID, coordinate)
                     return
@@ -1067,19 +1100,23 @@ struct MapLibreMapView: UIViewRepresentable {
             }
 
             let raw = mapView.convert(pt, toCoordinateFrom: mapView)
-            if let stageIndex = routeStageIndex(at: pt, in: mapView) {
-                RoutingDebugLog.shared.event("map tap result=route stageIndex=\(stageIndex)")
-                state.onRouteTap?(raw)
+            if case .route(let riderLegID) = resolution {
+                if state.isRouteBuilding {
+                    RoutingDebugLog.shared.event("map tap result=route ignored reason=building")
+                    return
+                }
+                logTouch(resolution)
+                state.onRouteTap?(riderLegID, raw, "tap")
                 return
             }
-            RoutingDebugLog.shared.event("map tap result=map")
+            logTouch(.map)
             let coordinate = snapToNearestRoad(raw, at: pt, in: mapView) ?? raw
             state.onTap?(coordinate)
         }
 
         /// The route casing is intentionally wider than the visible line, giving
         /// route editing a forgiving touch target without stealing nearby map taps.
-        private func routeStageIndex(at point: CGPoint, in mapView: MLNMapView) -> Int? {
+        private func routeRiderLegID(at point: CGPoint, in mapView: MLNMapView) -> UUID? {
             let hitRadius: CGFloat = 14
             let box = CGRect(
                 x: point.x - hitRadius,
@@ -1089,16 +1126,12 @@ struct MapLibreMapView: UIViewRepresentable {
             )
             let ids = Set(RoutePaintBucket.allCases.flatMap { [$0.casingID, $0.lineID] })
             let features = mapView.visibleFeatures(in: box, styleLayerIdentifiers: ids)
-            guard !features.isEmpty else { return nil }
             for feature in features {
-                if let number = feature.attribute(forKey: "stageIndex") as? NSNumber {
-                    return number.intValue
-                }
-                if let index = feature.attribute(forKey: "stageIndex") as? Int {
-                    return index
-                }
+                guard let raw = feature.attribute(forKey: "riderLegID") as? String,
+                      let riderLegID = UUID(uuidString: raw) else { continue }
+                return riderLegID
             }
-            return -1
+            return nil
         }
 
         private func groupOverlayAnnotation(at point: CGPoint, in mapView: MLNMapView) -> DirtAnnotation? {
@@ -1124,17 +1157,27 @@ struct MapLibreMapView: UIViewRepresentable {
         }
 
         private func plannerAnnotation(at point: CGPoint, in mapView: MLNMapView) -> DirtAnnotation? {
-            let hitRadius: CGFloat = 28
             var best: DirtAnnotation?
             var bestDist = CGFloat.greatestFiniteMagnitude
             for annotation in annotations where !annotation.kind.isGroupOverlay {
                 let pinPoint = mapView.convert(annotation.coordinate, toPointTo: mapView)
-                // Account for teardrop centerOffset (tip at coordinate, body above).
-                let bodyCenter = CGPoint(x: pinPoint.x, y: pinPoint.y - DirtPlannerPinView.pinHeight / 2)
-                let dx = bodyCenter.x - point.x
-                let dy = bodyCenter.y - point.y
+                // The annotation coordinate is the tip. The view frame covers the
+                // full body and tip and already reflects the selected scale.
+                let selectedScale: CGFloat = annotation.markerID == state.selectedPlannerPinID ? 1.18 : 1
+                let kindScale: CGFloat = annotation.kind == .fuel ? 0.82 : 1
+                let scale = selectedScale * kindScale
+                let fallbackFrame = CGRect(
+                    x: pinPoint.x - DirtPlannerPinView.pinWidth * scale / 2,
+                    y: pinPoint.y - DirtPlannerPinView.pinHeight * scale,
+                    width: DirtPlannerPinView.pinWidth * scale,
+                    height: DirtPlannerPinView.pinHeight * scale
+                )
+                let frame = mapView.view(for: annotation)?.frame ?? fallbackFrame
+                guard frame.insetBy(dx: -12, dy: -12).contains(point) else { continue }
+                let dx = pinPoint.x - point.x
+                let dy = pinPoint.y - point.y
                 let dist = sqrt(dx * dx + dy * dy)
-                if dist <= hitRadius && dist < bestDist {
+                if dist < bestDist {
                     bestDist = dist
                     best = annotation
                 }
@@ -1147,6 +1190,25 @@ struct MapLibreMapView: UIViewRepresentable {
             // Prep / active ride: map is inspect-only — no new waypoints.
             guard !state.isNavigating else { return }
             let pt = gesture.location(in: mapView)
+            let resolution = resolveTouch(pt, in: mapView)
+            switch resolution {
+            case .pin(let pin):
+                logTouch(resolution, gesture: "longPress")
+                mapView.selectAnnotation(pin, animated: true, completionHandler: nil)
+                state.selectPlannerPin(pin.markerID)
+                return
+            case .route(let riderLegID):
+                if state.isRouteBuilding {
+                    RoutingDebugLog.shared.event("map tap result=route ignored reason=building")
+                    return
+                }
+                logTouch(resolution, gesture: "longPress")
+                let raw = mapView.convert(pt, toCoordinateFrom: mapView)
+                state.onRouteTap?(riderLegID, raw, "longPress")
+                return
+            case .map:
+                break
+            }
             // Same rule for plan waypoints: don't place on top of a POI.
             if let poi = poiFeature(at: pt, in: mapView, hitRadius: 32) {
                 state.onPOITap?(poi)
@@ -1154,6 +1216,7 @@ struct MapLibreMapView: UIViewRepresentable {
             }
             let raw = mapView.convert(pt, toCoordinateFrom: mapView)
             let coordinate = snapToNearestRoad(raw, at: pt, in: mapView) ?? raw
+            logTouch(.map, gesture: "longPress")
             state.onLongPress?(coordinate)
         }
 
@@ -1309,6 +1372,7 @@ final class DirtPlannerPinView: MLNAnnotationView {
     private let circleLayer = CAShapeLayer()
     private let labelView = UILabel()
     private var baseScale: CGFloat = 1
+    private var isSelectedForEditing = false
     private var isCustomDragging = false
     private var savedMapScrollEnabled = true
     private var savedMapRotateEnabled = true
@@ -1382,6 +1446,7 @@ final class DirtPlannerPinView: MLNAnnotationView {
 
     /// Selected = lifted + thicker orange rim so "ready to move" is obvious.
     func applySelectionChrome(_ selected: Bool, animated: Bool) {
+        isSelectedForEditing = selected
         let changes = {
             self.transform = selected
                 ? CGAffineTransform(scaleX: self.baseScale * 1.18, y: self.baseScale * 1.18)
@@ -1440,22 +1505,29 @@ final class DirtPlannerPinView: MLNAnnotationView {
             let coordinate = dirtAnnotation?.coordinate
             restoreMapGestures(reason: "pinDrag\(gesture.state.rawValue)")
             if shouldNotify, let markerID, let coordinate {
+                RoutingDebugLog.shared.event("map pinPan end markerID=\(markerID)")
                 onDragEnded?(markerID, coordinate)
             }
             return
         }
 
         guard let mapView = hostMapView,
-              let dirtAnnotation = annotation as? DirtAnnotation,
-              // Nil during prep / navigation — let map pan/zoom win; never move pins.
-              onDragEnded != nil else { return }
+              let dirtAnnotation = annotation as? DirtAnnotation else { return }
+
+        if gesture.state == .began, dirtAnnotation.kind == .fuel {
+            RoutingDebugLog.shared.event(
+                "map pinPan refused markerID=\(dirtAnnotation.markerID) reason=fuel"
+            )
+            return
+        }
+
+        // Nil during prep / navigation — let map pan/zoom win; never move pins.
+        guard onDragEnded != nil else { return }
 
         switch gesture.state {
         case .began:
-            guard hostMapView != nil else { return }
-            RoutingDebugLog.shared.event(
-                "map pinPan begin markerID=\(dirtAnnotation.markerID) isFuel=\(dirtAnnotation.kind == .fuel)"
-            )
+            guard isSelectedForEditing else { return }
+            RoutingDebugLog.shared.event("map pinPan begin markerID=\(dirtAnnotation.markerID)")
             isCustomDragging = true
             savedMapScrollEnabled = mapView.isScrollEnabled
             savedMapRotateEnabled = mapView.isRotateEnabled
