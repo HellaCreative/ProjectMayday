@@ -6,8 +6,23 @@ const {
   coordinateInUrbanBoxes,
   coordinateNearUrbanBoxes,
   remainingChainPathCap,
-  topologySeamFromIndex
+  topologySeamFromIndex,
+  echoLegId
 } = require("./router");
+const { echoLegId: echoFuelLegId } = require("../../api/fuel-chain");
+
+test("route seam echoes canonical legId at response and geometry level", () => {
+  const result = echoLegId({ status: "complete", geometry: [[-63, 45], [-62, 46]] }, "leg-2");
+  assert.equal(result.legId, "leg-2");
+  assert.equal(result.geometryProperties.legId, "leg-2");
+});
+
+test("fuel-chain API echoes canonical legId without changing its result", () => {
+  const original = { status: "complete", stops: [] };
+  const result = echoFuelLegId(original, "leg-2");
+  assert.equal(result.legId, "leg-2");
+  assert.equal(original.legId, undefined);
+});
 
 test("an intermediate seam inside an urban core is rejected", () => {
   const abbotsford = { minLat: 49.0, maxLat: 49.14, minLon: -122.45, maxLon: -122.15 };

@@ -2,6 +2,11 @@
 
 const { fuelChainRequest } = require("../routing/lib/fuel-chain.js");
 
+function echoLegId(result, legId) {
+  if (legId == null || legId === "" || !result || typeof result !== "object") return result;
+  return { ...result, legId };
+}
+
 module.exports = async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
@@ -22,7 +27,7 @@ module.exports = async function handler(req, res) {
 
   try {
     const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
-    const result = await fuelChainRequest(body);
+    const result = echoLegId(await fuelChainRequest(body), body.legId);
     const status = result.status === "complete" ? 200 : (result.status === "error" ? 400 : 422);
     return res.status(status).json(result);
   } catch (error) {
@@ -39,3 +44,4 @@ module.exports.config = {
   maxDuration: 60,
   memory: 2048
 };
+module.exports.echoLegId = echoLegId;

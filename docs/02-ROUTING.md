@@ -2,6 +2,9 @@
 
 Client routing behaviour as implemented. Prefer on-device `graph.v2` + `OnDeviceRouter` when packs cover the pins; otherwise live `POST AppConfig.routeURL` via `RoutingClient`.
 
+The canonical waypoint, derived fuel-stop, rebuild-boundary, and replay contracts
+are defined in [`10-ITINERARY-MODEL.md`](10-ITINERARY-MODEL.md).
+
 ---
 
 ## Key files
@@ -14,7 +17,8 @@ Client routing behaviour as implemented. Prefer on-device `graph.v2` + `OnDevice
 | `Dirt/Routing/OnDevice/GraphPackStore.swift` | R2 manifest, download, installed packs |
 | `Dirt/Routing/RoutingModels.swift` | Profiles, request/response Codable |
 | `Dirt/Routing/GeoMath.swift` | Distance / nearest vertex |
-| `Dirt/Features/RoutePlanning/RoutePlannerModel.swift` | Modes, stages, save, nav start, recalculate |
+| `Dirt/Features/RoutePlanning/RoutePlannerModel.swift` | Canonical itinerary orchestration, save, nav start, recalculate |
+| `Dirt/Features/RoutePlanning/Itinerary/` | Rider intent, reducer, builder, routing-source abstraction |
 | `Dirt/Features/RoutePlanning/RoutePlannerCard.swift` | UI |
 | `Dirt/Features/Navigation/NavigationSession.swift` | TBT + off-route trigger |
 | `Dirt/Persistence/SavedRoute.swift` | SwiftData + GPX export |

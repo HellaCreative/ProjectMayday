@@ -881,26 +881,28 @@ struct RoutePlannerCard: View {
     }
 
     @ViewBuilder private var stageList: some View {
-        // Collapsed stages are one row each, so 180pt shows three. Grow the band only
-        // while a stage is open, so the map keeps its space the rest of the time.
+        // Native List owns horizontal gesture arbitration: a left swipe reveals
+        // Delete without opening the profile disclosure or moving the map.
         let bandHeight: CGFloat = planner.hasFuelAssistedPlan
             ? (selectedStage == nil ? 170 : 230)
             : (selectedStage == nil ? 180 : 280)
-        if planner.stages.count > 3 {
-            ScrollViewReader { proxy in
-                ScrollView {
-                    stageListContent
-                }
-                .frame(maxHeight: bandHeight)
-                .scrollBounceBehavior(.basedOnSize)
-                .scrollIndicators(.visible)
-                // The stage you just added is the one you care about; older ones scroll up.
-                .onAppear { scrollToNewestStage(proxy, animated: false) }
-                .onChange(of: planner.stages.count) { scrollToNewestStage(proxy, animated: true) }
-                .onChange(of: selectedStage) { revealSelectedStage(proxy) }
+        let collapsedHeight = min(
+            bandHeight,
+            max(56, CGFloat(max(1, planner.stages.count)) * 62)
+        )
+        ScrollViewReader { proxy in
+            List {
+                stageListContent
             }
-        } else {
-            stageListContent
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .listRowSpacing(10)
+            .frame(height: selectedStage == nil ? collapsedHeight : bandHeight)
+            .scrollBounceBehavior(.basedOnSize)
+            .scrollIndicators(.visible)
+            .onAppear { scrollToNewestStage(proxy, animated: false) }
+            .onChange(of: planner.stages.count) { scrollToNewestStage(proxy, animated: true) }
+            .onChange(of: selectedStage) { revealSelectedStage(proxy) }
         }
     }
 
@@ -921,26 +923,37 @@ struct RoutePlannerCard: View {
         }
     }
 
-    private var stageListContent: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            ForEach(Array(planner.stages.enumerated()), id: \.element.id) { index, stage in
-                SwipeRevealDelete(
-                    isEnabled: planner.canDeleteStage(at: index),
-                    accessibilityLabel: "Delete leg \(index + 1)",
-                    onDelete: {
+    @ViewBuilder private var stageListContent: some View {
+        ForEach(Array(planner.itinerary.legs.enumerated()), id: \.element.id) { riderLegIndex, riderLeg in
+            let childStages = Array(planner.stages.enumerated()).filter {
+                $0.element.riderLegID == riderLeg.id
+            }
+            VStack(alignment: .leading, spacing: 10) {
+                ForEach(childStages, id: \.element.id) { stageIndex, stage in
+                    stageBlock(index: stageIndex, stage: stage)
+                        .id(stage.id)
+                }
+            }
+            .listRowInsets(EdgeInsets())
+            .listRowSeparator(.hidden)
+            .listRowBackground(Color.clear)
+            .id(riderLeg.id)
+            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                if planner.itinerary.legs.count > 1,
+                   planner.itinerary.waypoints.indices.contains(riderLegIndex + 1) {
+                    Button(role: .destructive) {
+                        let waypointID = planner.itinerary.waypoints[riderLegIndex + 1].id
                         withAnimation(.easeInOut(duration: 0.18)) {
                             selectedStage = nil
-                            planner.deleteStage(at: index)
+                            planner.apply(.delete(waypointID: waypointID), source: "swipe")
                         }
-                    },
-                    content: {
-                        stageBlock(index: index, stage: stage)
+                    } label: {
+                        Label("Delete", systemImage: "trash.fill")
                     }
-                )
-                .id(stage.id)
+                    .accessibilityLabel("Delete leg \(riderLegIndex + 1)")
+                }
             }
         }
-        .padding(.vertical, 2)
     }
 
     /// One self-contained stage: metrics + profile control on a single tappable row,
@@ -965,26 +978,22 @@ struct RoutePlannerCard: View {
                         planner.setStageProfile(profile, at: index)
                         withAnimation(.easeInOut(duration: 0.18)) { selectedStage = nil }
                     }
-                    if stage.fuelGroupID != nil {
-                        compactAllowUnknownControl(stage: stage, index: index)
-                    } else {
-                        profileGuidanceLine(stage.profile)
-                        allowUnknownControl(
-                            binding: Binding(
-                                get: { stage.allowUnknown },
-                                set: { on in
-                                    if on {
-                                        unknownAckStage = index
-                                        showUnknownAck = true
-                                    } else {
-                                        planner.setStageAllowUnknown(false, at: index)
-                                    }
+                    profileGuidanceLine(stage.profile)
+                    allowUnknownControl(
+                        binding: Binding(
+                            get: { stage.allowUnknown },
+                            set: { on in
+                                if on {
+                                    unknownAckStage = index
+                                    showUnknownAck = true
+                                } else {
+                                    planner.setStageAllowUnknown(false, at: index)
                                 }
-                            ),
-                            disabled: stage.profile == .cleanest,
-                            profile: stage.profile
-                        )
-                    }
+                            }
+                        ),
+                        disabled: stage.profile == .cleanest,
+                        profile: stage.profile
+                    )
                     if stage.error != nil, stage.profile != .cleanest {
                         Button {
                             planner.setStageProfile(.cleanest, at: index)

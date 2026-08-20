@@ -758,7 +758,7 @@ function debugGraphResponse(body, graphResolution, runtime) {
   };
 }
 
-async function routeRequest(body = {}) {
+async function routeRequestCore(body = {}) {
   const graphResolution = resolveGraphRequest(body);
   if (!graphResolution.ok) {
     return {
@@ -792,6 +792,19 @@ async function routeRequest(body = {}) {
     return debugGraphResponse(body, graphResolution, runtime);
   }
   return routeOnRuntime(body, graphResolution, runtime);
+}
+
+function echoLegId(result, legId) {
+  if (legId == null || legId === "" || !result || typeof result !== "object") return result;
+  const echoed = { ...result, legId };
+  if (Array.isArray(result.geometry)) {
+    echoed.geometryProperties = { ...(result.geometryProperties || {}), legId };
+  }
+  return echoed;
+}
+
+async function routeRequest(body = {}) {
+  return echoLegId(await routeRequestCore(body), body.legId);
 }
 
 /** Generous radius for snapping engineered chain seams onto live longhaul fabric. */
@@ -2968,6 +2981,7 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds, 
 
 module.exports = {
   routeRequest,
+  echoLegId,
   loadGraph,
   DEFAULT_MATCH_METERS,
   SEAM_SNAP_RADIUS_M,
