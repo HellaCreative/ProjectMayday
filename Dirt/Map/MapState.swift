@@ -7,6 +7,9 @@ struct RouteDisplaySegment {
     let coordinates: [RouteCoordinate]
     /// Surface/access-aware key used for selected-route paint.
     let surfaceKey: String
+    /// Planner stage that produced this paint run. Diagnostic in Phase 0 and
+    /// later carried into the canonical rider-leg feature identity.
+    var stageIndex: Int? = nil
 
     var isDirt: Bool {
         RouteSegment.isAdventureSurface(surfaceKey)
@@ -419,13 +422,19 @@ final class MapState {
     /// adjacent same-surface edges are merged before painting.
     static func displaySegments(from responses: [RouteResponse]) -> [RouteDisplaySegment] {
         var result: [RouteDisplaySegment] = []
-        for response in responses {
+        for (stageIndex, response) in responses.enumerated() {
             let segments = response.segments ?? []
             var currentCoords: [RouteCoordinate] = []
             var currentKey: String?
             func flush() {
                 if currentCoords.count > 1, let key = currentKey {
-                    result.append(RouteDisplaySegment(coordinates: currentCoords, surfaceKey: key))
+                    result.append(
+                        RouteDisplaySegment(
+                            coordinates: currentCoords,
+                            surfaceKey: key,
+                            stageIndex: stageIndex
+                        )
+                    )
                 }
                 currentCoords = []
                 currentKey = nil
@@ -434,7 +443,13 @@ final class MapState {
                 let coords = response.coordinates
                 if coords.count > 1 {
                     // No edge geometry: paint as connector.
-                    result.append(RouteDisplaySegment(coordinates: coords, surfaceKey: "connector"))
+                    result.append(
+                        RouteDisplaySegment(
+                            coordinates: coords,
+                            surfaceKey: "connector",
+                            stageIndex: stageIndex
+                        )
+                    )
                 }
                 continue
             }

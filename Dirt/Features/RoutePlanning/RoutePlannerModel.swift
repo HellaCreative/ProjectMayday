@@ -42,6 +42,19 @@ final class RoutePlannerModel {
         var fuelGroupID: UUID?
         /// Hard route-length ceiling for an auto fuel leg.
         var maxRouteMeters: Double? = nil
+
+        mutating func setEndsAtFuelStop(
+            _ newValue: Bool,
+            site: StaticString = #function,
+            line: UInt = #line
+        ) {
+            let previous = endsAtFuelStop
+            endsAtFuelStop = newValue
+            guard previous != newValue else { return }
+            RoutingDebugLog.shared.event(
+                "stage fuelflag changed id=\(id.uuidString) from=\(previous) to=\(newValue) site=\(site):\(line)"
+            )
+        }
     }
 
     var mode: Mode = .fromHere {
@@ -79,7 +92,13 @@ final class RoutePlannerModel {
     private(set) var fromHereStartOverride: RouteCoordinate?
 
     // Plan stages
-    private(set) var stages: [Stage] = []
+    private(set) var stages: [Stage] = [] {
+        didSet {
+            RoutingDebugLog.shared.event(
+                "stages mutated count=\(stages.count) fuelEnds=\(stages.filter(\.endsAtFuelStop).count) site=\(#function)"
+            )
+        }
+    }
 
     /// When true, `profile` / `allowUnknown` didSet skips `reroute()`.
     @ObservationIgnored private var suppressPlannerReroute = false
@@ -2747,7 +2766,7 @@ final class RoutePlannerModel {
                 allowUnknown: allow
             )
             hop.skipFuelAssist = true
-            hop.endsAtFuelStop = i < waypoints.count - 2
+            hop.setEndsAtFuelStop(i < waypoints.count - 2)
             hop.fuelGroupID = fuelGroupID
             if hop.endsAtFuelStop {
                 let endPoint = waypoints[i + 1]
@@ -2857,7 +2876,7 @@ final class RoutePlannerModel {
                 allowUnknown: allowUnknown
             )
             hop.skipFuelAssist = true
-            hop.endsAtFuelStop = legIndex < stops.count
+            hop.setEndsAtFuelStop(legIndex < stops.count)
             hop.fuelGroupID = fuelGroupID
             hop.maxRouteMeters = legIndex == 0 ? firstHopCapMeters : tankMeters
             if hop.endsAtFuelStop {
@@ -2942,14 +2961,14 @@ final class RoutePlannerModel {
             start: start, end: via, profile: profile, allowUnknown: allow
         )
         first.skipFuelAssist = true
-        first.endsAtFuelStop = viaIsFuel
+        first.setEndsAtFuelStop(viaIsFuel)
         first.fuelGroupID = original.fuelGroupID
         first.maxRouteMeters = original.maxRouteMeters
         var second = Stage(
             start: via, end: end, profile: profile, allowUnknown: allow
         )
         second.skipFuelAssist = true
-        second.endsAtFuelStop = original.endsAtFuelStop
+        second.setEndsAtFuelStop(original.endsAtFuelStop)
         second.fuelStopID = original.fuelStopID
         second.fuelStopName = original.fuelStopName
         second.fuelGroupID = original.fuelGroupID
