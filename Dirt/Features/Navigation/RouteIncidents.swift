@@ -311,6 +311,9 @@ final class IncidentRecoveryModel {
         }
         var avoid: [String] = []
         if let edge = activeReport?.edgeId { avoid.append(edge) }
+        if !avoid.isEmpty {
+            planner.apply(.markImpassable(edgeIDs: Set(avoid)), source: "reroute")
+        }
         let policy = planner.activeStageRoutingPolicy(near: reportPoint ?? rider)
         do {
             let response = try await planner.routeWhileNavigating(
@@ -354,6 +357,9 @@ final class IncidentRecoveryModel {
         }
         var avoid: [String] = []
         if let edge = activeReport?.edgeId { avoid.append(edge) }
+        if !avoid.isEmpty {
+            planner.apply(.markImpassable(edgeIDs: Set(avoid)), source: "reroute")
+        }
         let reportPoint = activeReport.map {
             RouteCoordinate(longitude: $0.longitude, latitude: $0.latitude)
         }

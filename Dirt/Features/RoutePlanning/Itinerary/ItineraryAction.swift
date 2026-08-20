@@ -14,4 +14,5 @@ nonisolated enum ItineraryAction: Equatable, Codable, Sendable {
         allowUnknown: Bool
     )
     case clear
+    case rebuild
 }

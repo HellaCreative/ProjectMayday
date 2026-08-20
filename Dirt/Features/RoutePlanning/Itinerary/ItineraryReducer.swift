@@ -164,6 +164,15 @@ nonisolated func reduce(
             impassableEdgeIDs: [],
             rebuildFrom: nil
         )
+
+    case .rebuild:
+        guard !itinerary.legs.isEmpty else { return unchanged(itinerary) }
+        return changed(
+            itinerary,
+            waypoints: itinerary.waypoints,
+            legs: itinerary.legs,
+            rebuildFrom: 0
+        )
     }
 }
 

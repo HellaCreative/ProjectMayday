@@ -20,40 +20,43 @@ final class RoutePlannerModel {
     }
 
     struct Stage: Identifiable {
-        let id = UUID()
-        var start: RouteCoordinate?
-        var end: RouteCoordinate?
-        var profile: RouteProfile
-        var allowUnknown = false
-        var response: RouteResponse?
-        var isRouting = false
-        var error: String?
-        /// Bumped on each on-device routing for this stage; stale responses are ignored.
-        var routeGeneration = 0
-        /// When true, Plan fuel-assist will not split this stage again.
-        var skipFuelAssist = false
-        /// End pin is an auto fuel stop (From here / Plan assist). Locked on From here.
-        var endsAtFuelStop = false
-        /// Packed OSM station carried into the map pin and route-sheet leg label.
-        var fuelStopID: String?
-        var fuelStopName: String?
-        /// Every auto-generated hop from one rider-created stage shares a group.
-        /// The group supports range-level rebuilds; leg profile/access edits stay local.
-        var fuelGroupID: UUID?
-        /// Hard route-length ceiling for an auto fuel leg.
-        var maxRouteMeters: Double? = nil
+        let id: String
+        let riderLegID: UUID
+        let start: RouteCoordinate?
+        let end: RouteCoordinate?
+        let profile: RouteProfile
+        let allowUnknown: Bool
+        let response: RouteResponse?
+        let isRouting: Bool
+        let error: String?
+        let endsAtFuelStop: Bool
+        let fuelStopID: String?
+        let fuelStopName: String?
+        let fuelGroupID: UUID?
+        let maxRouteMeters: Double?
 
-        mutating func setEndsAtFuelStop(
-            _ newValue: Bool,
-            site: StaticString = #function,
-            line: UInt = #line
+        init(
+            builtLeg: BuiltLeg,
+            riderLeg: RiderLeg,
+            status: LegStatus,
+            isFuelExpanded: Bool
         ) {
-            let previous = endsAtFuelStop
-            endsAtFuelStop = newValue
-            guard previous != newValue else { return }
-            RoutingDebugLog.shared.event(
-                "stage fuelflag changed id=\(id.uuidString) from=\(previous) to=\(newValue) site=\(site):\(line)"
-            )
+            riderLegID = riderLeg.id
+            start = builtLeg.fromCoordinate
+            end = builtLeg.toCoordinate
+            profile = riderLeg.profile
+            allowUnknown = riderLeg.allowUnknown
+            response = builtLeg.response
+            if case .pending = status { isRouting = true } else { isRouting = false }
+            if case .failed(let message) = status { error = message } else { error = nil }
+            endsAtFuelStop = builtLeg.endsAtFuelStop != nil
+            fuelStopID = builtLeg.endsAtFuelStop?.stationID
+            fuelStopName = builtLeg.endsAtFuelStop?.name
+            fuelGroupID = isFuelExpanded ? riderLeg.id : nil
+            maxRouteMeters = nil
+            let suffix = builtLeg.endsAtFuelStop?.stationID
+                ?? "\(builtLeg.toCoordinate.latitude),\(builtLeg.toCoordinate.longitude)"
+            id = "\(riderLeg.id.uuidString):\(suffix)"
         }
     }
 
@@ -91,11 +94,20 @@ final class RoutePlannerModel {
     /// Mapped-road start replacing GPS until Clear route.
     private(set) var fromHereStartOverride: RouteCoordinate?
 
-    // Plan stages
-    private(set) var stages: [Stage] = [] {
-        didSet {
-            RoutingDebugLog.shared.event(
-                "stages mutated count=\(stages.count) fuelEnds=\(stages.filter(\.endsAtFuelStop).count) site=\(#function)"
+    // Canonical rider intent and its disposable routed projection.
+    private(set) var itinerary = RiderItinerary()
+    private(set) var built: BuiltItinerary?
+    var stages: [Stage] {
+        guard let built else { return [] }
+        let riderLegs = Dictionary(uniqueKeysWithValues: itinerary.legs.map { ($0.id, $0) })
+        let counts = Dictionary(grouping: built.legs, by: \.riderLegID).mapValues(\.count)
+        return built.legs.compactMap { builtLeg in
+            guard let riderLeg = riderLegs[builtLeg.riderLegID] else { return nil }
+            return Stage(
+                builtLeg: builtLeg,
+                riderLeg: riderLeg,
+                status: built.riderLegStatus[riderLeg.id] ?? .pending,
+                isFuelExpanded: (counts[riderLeg.id] ?? 0) > 1
             )
         }
     }
@@ -104,13 +116,14 @@ final class RoutePlannerModel {
     @ObservationIgnored private var suppressPlannerReroute = false
     /// Coalesce profile / Allow toggles so we don't fire 6 parallel Dijkstras.
     @ObservationIgnored private var rerouteCoalesceTask: Task<Void, Never>?
-    /// Debounce plan pin moves / rapid long-presses before rebuilding stages.
-    @ObservationIgnored private var planRebuildDebounceTask: Task<Void, Never>?
-    /// Debounce newly placed plan hops (long-press 1→2→3).
-    @ObservationIgnored private var planStageDebounceTask: Task<Void, Never>?
-    @ObservationIgnored private var pendingPlanStageIndices: Set<Int> = []
+    @ObservationIgnored private var buildTask: Task<Void, Never>?
+    @ObservationIgnored private var moveDebounceTask: Task<Void, Never>?
+    @ObservationIgnored private var pendingMove: (waypointID: UUID, coordinate: RouteCoordinate, source: String)?
+    @ObservationIgnored private(set) var canonicalBuildStartCount = 0
+    @ObservationIgnored private(set) var lastCanonicalBuildFromLegIndex: Int?
     /// Debounce From here point-2/point-1 retaps while the rider is adjusting the pin.
     @ObservationIgnored private var fromHereRouteDebounceTask: Task<Void, Never>?
+    @ObservationIgnored private var fromHereIntentGeneration = 0
 
     private(set) var isRouting = false
     var errorMessage: String?
@@ -152,10 +165,6 @@ final class RoutePlannerModel {
     /// so that saving an edited route writes back to it instead of forking a second copy.
     private(set) var savedRouteOrigin: SavedRouteOrigin?
     private var lastNavigationIdentity: String?
-    /// Invalidates in-flight From here / Saved routes when the rider changes intent.
-    private var fromHereRouteGeneration = 0
-    /// Invalidates an in-flight From here route when the rider cancels / changes destination.
-
     private let routing: RoutingClient
     private let locationService: LocationService
     private let mapState: MapState
@@ -163,6 +172,8 @@ final class RoutePlannerModel {
     private let offline: OfflineTileManager
     private let graphPacks: GraphPackStore
     private let network: NetworkPathMonitor
+    private let itineraryBuilder: ItineraryBuilder
+    private let routingSourcePolicy: RoutingSourcePolicy
     private weak var poiManager: POIManager?
     /// Wired by AppEnvironment — restore Music volume after End Navigation.
     /// Fires after nav teardown. Argument is a contribute candidate when enough
@@ -177,7 +188,9 @@ final class RoutePlannerModel {
         offline: OfflineTileManager,
         graphPacks: GraphPackStore,
         network: NetworkPathMonitor,
-        poiManager: POIManager? = nil
+        poiManager: POIManager? = nil,
+        routingSourcePolicy: RoutingSourcePolicy? = nil,
+        itineraryBuilder: ItineraryBuilder? = nil
     ) {
         self.routing = routing
         self.locationService = locationService
@@ -187,6 +200,21 @@ final class RoutePlannerModel {
         self.graphPacks = graphPacks
         self.network = network
         self.poiManager = poiManager
+        self.itineraryBuilder = itineraryBuilder ?? ItineraryBuilder()
+        if let routingSourcePolicy {
+            self.routingSourcePolicy = routingSourcePolicy
+        } else {
+            let cache = RouteResponseCache()
+            let live = LiveRoutingSource(
+                client: routing,
+                cache: cache,
+                packRevision: { [graphPacks] in graphPacks.lastManifestVersion }
+            )
+            let pack = PackRoutingSource(packs: graphPacks, cache: cache)
+            self.routingSourcePolicy = RoutingSourcePolicy(
+                network: network, packs: graphPacks, live: live, pack: pack
+            )
+        }
 
         navigation.onRerouteNeeded = { [weak self] in
             guard let self else { return }
@@ -212,14 +240,10 @@ final class RoutePlannerModel {
 
     var activeResponses: [RouteResponse] {
         switch mode {
-        case .fromHere:
-            // Fuel assist may promote a From here hop into stages (A→fuel→B).
-            if !stages.isEmpty { return stages.compactMap(\.response) }
-            return fromHereResponse.map { [$0] } ?? []
+        case .fromHere, .plan:
+            return built?.legs.map(\.response) ?? []
         case .saved:
             return fromHereResponse.map { [$0] } ?? []
-        case .plan:
-            return stages.compactMap(\.response)
         }
     }
 
@@ -268,6 +292,7 @@ final class RoutePlannerModel {
 
     func stageEndpointTitle(at index: Int) -> String {
         guard stages.indices.contains(index) else { return "Leg \(index + 1)" }
+        let stage = stages[index]
         let startName: String
         if index > 0, stages[index - 1].endsAtFuelStop {
             if let prior = stages[index - 1].fuelStopName, !prior.isEmpty {
@@ -277,7 +302,8 @@ final class RoutePlannerModel {
                 startName = "Fuel stop \(fuelOrdinal)"
             }
         } else {
-            let ordinal = 1 + stages.prefix(index).filter { !$0.endsAtFuelStop }.count
+            let ordinal = itinerary.waypoints.firstIndex(where: { $0.id == itinerary.legs.first(where: { $0.id == stage.riderLegID })?.from })
+                .map { $0 + 1 } ?? 1
             startName = "Point \(ordinal)"
         }
         let endName: String
@@ -287,7 +313,8 @@ final class RoutePlannerModel {
             let fuelOrdinal = stages.prefix(index + 1).filter(\.endsAtFuelStop).count
             endName = "Fuel stop \(fuelOrdinal)"
         } else {
-            let ordinal = 1 + stages.prefix(index + 1).filter { !$0.endsAtFuelStop }.count
+            let ordinal = itinerary.waypoints.firstIndex(where: { $0.id == itinerary.legs.first(where: { $0.id == stage.riderLegID })?.to })
+                .map { $0 + 1 } ?? (index + 2)
             endName = "Point \(ordinal)"
         }
         return "\(startName) → \(endName)"
@@ -356,6 +383,152 @@ final class RoutePlannerModel {
 
     // MARK: - Map interaction
 
+    /// The only mutation door for rider-owned route intent.
+    func apply(_ action: ItineraryAction, source: String) {
+        if case .move(let waypointID, let coordinate) = action {
+            pendingMove = (waypointID, coordinate, source)
+            moveDebounceTask?.cancel()
+            moveDebounceTask = Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .milliseconds(420))
+                guard !Task.isCancelled,
+                      let self,
+                      let pending = self.pendingMove,
+                      pending.waypointID == waypointID
+                else { return }
+                self.pendingMove = nil
+                self.applyImmediately(
+                    .move(waypointID: pending.waypointID, to: pending.coordinate),
+                    source: pending.source
+                )
+            }
+            return
+        }
+        moveDebounceTask?.cancel()
+        pendingMove = nil
+        applyImmediately(action, source: source)
+    }
+
+    private func applyImmediately(_ action: ItineraryAction, source: String) {
+        let before = itinerary
+        let change = reduce(before, action)
+        guard change.itinerary != before else { return }
+        itinerary = change.itinerary
+        RoutingDebugLog.shared.event(
+            ItineraryLog.line(action: action, before: before, after: itinerary, source: source)
+        )
+        buildTask?.cancel()
+        itineraryBuilder.setCurrentGeneration(itinerary.generation)
+
+        // Navigation recovery already owns the rider-position → active-leg-end
+        // request. Record the blocked edges canonically, preserve the visible
+        // itinerary, and let applyRecoveryRoute commit that current-position leg.
+        if case .markImpassable = action, navigation.phase == .active {
+            if let current = built {
+                built = BuiltItinerary(
+                    generation: itinerary.generation,
+                    legs: current.legs,
+                    riderLegStatus: current.riderLegStatus
+                )
+            }
+            isRouting = false
+            refreshMap()
+            return
+        }
+
+        guard let fromLeg = change.rebuildFromLegIndex else {
+            built = BuiltItinerary.empty(for: itinerary)
+            isRouting = false
+            refreshMap()
+            return
+        }
+        startCanonicalBuild(from: fromLeg, reuse: built)
+    }
+
+    private func startCanonicalBuild(from legIndex: Int, reuse: BuiltItinerary?) {
+        let requested = itinerary
+        canonicalBuildStartCount += 1
+        lastCanonicalBuildFromLegIndex = legIndex
+        isRouting = true
+        isAssemblingRoute = true
+        fuelPlanningStatus = FuelRangePrefs.isEnabled ? "Planning fuel legs…" : nil
+        toast = Self.calculatingRouteToast
+        buildTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            let result = await self.itineraryBuilder.build(
+                requested,
+                from: legIndex,
+                reuse: reuse,
+                fuel: FuelRangePrefs.snapshot,
+                source: self.routingSourcePolicy
+            ) { [weak self] progress in
+                guard let self, self.itinerary.generation == progress.generation else { return }
+                self.built = progress
+                self.refreshMap()
+            }
+            guard !Task.isCancelled, self.itinerary.generation == result.generation else { return }
+            self.built = result
+            self.isRouting = false
+            self.isAssemblingRoute = false
+            self.fuelPlanningStatus = nil
+            self.errorMessage = result.riderLegStatus.values.compactMap {
+                if case .failed(let message) = $0 { return message }
+                return nil
+            }.first
+            if self.errorMessage == nil {
+                self.routeIdentity = "plan:" + self.itinerary.waypoints.dropFirst().map {
+                    "\($0.coordinate.latitude),\($0.coordinate.longitude)"
+                }.joined(separator: ";")
+                self.announceRouteReadyIfComplete()
+            } else if self.toast == Self.calculatingRouteToast {
+                self.toast = nil
+            }
+            self.refreshMap()
+        }
+    }
+
+    private func seedCanonicalBuild(
+        coordinates: [RouteCoordinate],
+        profile: RouteProfile,
+        allowUnknown: Bool,
+        responses: [RouteResponse]
+    ) {
+        let before = itinerary
+        itinerary = reduce(
+            before,
+            .replaceAll(waypoints: coordinates, profile: profile, allowUnknown: allowUnknown)
+        ).itinerary
+        var legs: [BuiltLeg] = []
+        for index in responses.indices where itinerary.legs.indices.contains(index) {
+            legs.append(BuiltLeg(
+                riderLegID: itinerary.legs[index].id,
+                fromCoordinate: itinerary.waypoints[index].coordinate,
+                toCoordinate: itinerary.waypoints[index + 1].coordinate,
+                endsAtFuelStop: nil,
+                response: responses[index],
+                fuelUsedOnArrivalMeters: responses[index].distanceMeters ?? 0
+            ))
+        }
+        built = BuiltItinerary(
+            generation: itinerary.generation,
+            legs: legs,
+            riderLegStatus: Dictionary(uniqueKeysWithValues: itinerary.legs.map { riderLeg in
+                (riderLeg.id, legs.contains(where: { $0.riderLegID == riderLeg.id }) ? .built : .pending)
+            })
+        )
+        RoutingDebugLog.shared.event(
+            ItineraryLog.line(
+                action: .replaceAll(waypoints: coordinates, profile: profile, allowUnknown: allowUnknown),
+                before: before,
+                after: itinerary,
+                source: "seed"
+            )
+        )
+    }
+
+    func waitForCanonicalBuildForTesting() async {
+        await buildTask?.value
+    }
+
     /// From here drops point 2 as soon as the rider taps — before on-device routing returns.
     static let paintsDestinationImmediatelyOnFromHereTap = true
     static let calculatingRouteToast = "Calculating route"
@@ -364,8 +537,6 @@ final class RoutePlannerModel {
     /// True while From here / Plan is still building the full route
     /// (including chained fuel stops). Holds calculating toast + spinner.
     private var isAssemblingRoute = false
-    /// Invalidates in-flight Overpass picks so two fuel jobs cannot split the same station twice.
-    private var fuelAssistGeneration = 0
     /// Stable within this app process; a fresh launch can pick a different near-equal corridor.
     let planningSessionSeed: UInt64 = UInt64.random(in: 1...9_007_199_254_740_991)
 
@@ -414,16 +585,16 @@ final class RoutePlannerModel {
                 nearest = (index, hit.coordinate, hit.meters)
             }
         }
-        guard let nearest, splitStage(at: nearest.index, via: nearest.point) else { return }
-
-        mapState.selectPlannerPin(stageMarkerID(stages[nearest.index]))
+        guard let nearest else { return }
+        let riderLegID = stages[nearest.index].riderLegID
+        apply(.insert(afterLegID: riderLegID, coordinate: nearest.point), source: "tap")
+        guard let insertedIndex = itinerary.legs.firstIndex(where: { $0.id == riderLegID }),
+              itinerary.waypoints.indices.contains(insertedIndex + 1)
+        else { return }
+        mapState.selectPlannerPin("wp:\(itinerary.waypoints[insertedIndex + 1].id.uuidString)")
         toast = "Waypoint added — drag it to shape this leg"
         RoutingDebugLog.shared.event(
             "ui route waypoint inserted stage=\(nearest.index) offset=\(Int(nearest.meters))m"
-        )
-        schedulePlanRebuild(
-            delayNanoseconds: 900_000_000,
-            showCalculatingImmediately: false
         )
     }
 
@@ -442,7 +613,9 @@ final class RoutePlannerModel {
     }
 
     private func beginFromHereDestination(_ point: RouteCoordinate) {
-        stages = []
+        buildTask?.cancel()
+        built = nil
+        itinerary = RiderItinerary()
         fromHereResponse = nil
         // New intent — this is not the library route that may have been on the map.
         savedRouteOrigin = nil
@@ -462,7 +635,9 @@ final class RoutePlannerModel {
     /// Off-graph GPS recovery: place or move point 1 on a mapped road, then route point 1→2.
     private func beginFromHereStartOverride(_ point: RouteCoordinate) {
         guard destination != nil else { return }
-        stages = []
+        buildTask?.cancel()
+        built = nil
+        itinerary = RiderItinerary()
         fromHereResponse = nil
         fromHereStartOverride = point
         fromHereNeedsStartPin = false
@@ -487,139 +662,19 @@ final class RoutePlannerModel {
     }
 
     private func appendPlanPoint(_ point: RouteCoordinate) {
-        // New stages always open as Dirt; rider changes per-stage after.
-        let stageProfile: RouteProfile = .dirt
-        if stages.isEmpty {
-            stages.append(Stage(
-                start: point,
-                profile: stageProfile,
-                allowUnknown: false
-            ))
-            refreshMap()
-            return
-        }
-        if stages[stages.count - 1].end == nil {
-            stages[stages.count - 1].end = point
-        } else {
-            let previousEnd = stages[stages.count - 1].end
-            stages.append(Stage(
-                start: previousEnd,
-                end: point,
-                profile: stageProfile,
-                allowUnknown: false
-            ))
-        }
-        let index = stages.count - 1
-        stages[index].response = nil
-        stages[index].error = nil
-        toast = Self.calculatingRouteToast
-        refreshMap()
-        schedulePlanStageRoute(at: index)
-    }
-
-    /// Debounce a single new plan hop so rapid long-presses don't stack Dijkstras.
-    private func schedulePlanStageRoute(at index: Int) {
-        pendingPlanStageIndices.insert(index)
-        planStageDebounceTask?.cancel()
-        planStageDebounceTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 380_000_000)
-            guard !Task.isCancelled else { return }
-            let indices = pendingPlanStageIndices.sorted()
-            pendingPlanStageIndices.removeAll()
-            for i in indices {
-                guard stages.indices.contains(i), stages[i].end != nil else { continue }
-                await routeStage(at: i)
-            }
-        }
+        apply(.append(coordinate: point), source: "longPress")
     }
 
     /// Per-stage surface mode (each stage is its own on-device routing request).
     func setStageProfile(_ newProfile: RouteProfile, at index: Int) {
-        guard stages.indices.contains(index), stages[index].profile != newProfile else { return }
-        if stages[index].fuelGroupID != nil, FuelRangePrefs.isEnabled {
-            let allow = newProfile == .cleanest ? false : stages[index].allowUnknown
-            Task {
-                await rerouteFuelLeg(
-                    at: index,
-                    requestedProfile: newProfile,
-                    requestedAllowUnknown: allow
-                )
-            }
-            return
-        }
-        stages[index].profile = newProfile
-        if newProfile == .cleanest { stages[index].allowUnknown = false }
-        syncNetworkAccessPolicy()
-        if stages[index].end != nil {
-            Task { await routeStage(at: index) }
-        }
+        guard stages.indices.contains(index) else { return }
+        apply(.setProfile(legID: stages[index].riderLegID, newProfile), source: "card")
     }
 
     /// Per-stage unknown-access policy.
     func setStageAllowUnknown(_ allow: Bool, at index: Int) {
-        guard stages.indices.contains(index), stages[index].allowUnknown != allow else { return }
-        if stages[index].fuelGroupID != nil, FuelRangePrefs.isEnabled {
-            let requestedProfile = stages[index].profile
-            Task {
-                await rerouteFuelLeg(
-                    at: index,
-                    requestedProfile: requestedProfile,
-                    requestedAllowUnknown: allow
-                )
-            }
-            return
-        }
-        stages[index].allowUnknown = allow
-        syncNetworkAccessPolicy()
-        if stages[index].end != nil {
-            Task { await routeStage(at: index) }
-        }
-    }
-
-    /// Profile and access edits inside an expanded fuel leg are deliberately
-    /// local. The selected stations remain fixed and only that one A→pump or
-    /// pump→B hop is searched. A failed replacement restores the working leg.
-    private func rerouteFuelLeg(
-        at index: Int,
-        requestedProfile: RouteProfile,
-        requestedAllowUnknown: Bool
-    ) async {
-        guard stages.indices.contains(index),
-              stages[index].fuelGroupID != nil,
-              stages[index].start != nil,
-              stages[index].end != nil
-        else { return }
-
-        let original = stages[index]
-        let stageID = original.id
-        let legName = stageEndpointTitle(at: index)
-        stages[index].profile = requestedProfile
-        stages[index].allowUnknown = requestedProfile == .cleanest ? false : requestedAllowUnknown
-        fuelPlanNotice = nil
-        toast = "Updating \(legName)"
-        refreshMap()
-
-        await routeStage(at: index, includeFuelAssist: false)
-
-        guard let currentIndex = stages.firstIndex(where: { $0.id == stageID }),
-              stages[currentIndex].profile == requestedProfile,
-              stages[currentIndex].allowUnknown == (requestedProfile == .cleanest ? false : requestedAllowUnknown)
-        else { return }
-        if stages[currentIndex].response != nil, stages[currentIndex].error == nil {
-            fuelPlanNotice = "\(legName) updated to \(requestedProfile.title). Other fuel legs were unchanged."
-            toast = "Fuel leg updated"
-            refreshMap()
-            return
-        }
-
-        stages[currentIndex] = original
-        errorMessage = nil
-        fuelPlanNotice = "\(requestedProfile.title) could not connect \(legName). The working \(original.profile.title) leg was kept; other legs were unchanged."
-        toast = "Kept the working fuel leg"
-        RoutingDebugLog.shared.event(
-            "fuel single-leg reroute failed requested=\(requestedProfile.rawValue) kept=\(original.profile.rawValue) leg=\(legName)"
-        )
-        refreshMap()
+        guard stages.indices.contains(index) else { return }
+        apply(.setAllowUnknown(legID: stages[index].riderLegID, allow), source: "card")
     }
 
     static func fuelProfileFailureMessage(
@@ -639,46 +694,18 @@ final class RoutePlannerModel {
     /// promote a generated pump into the route destination.
     func deleteStage(at index: Int) {
         guard canDeleteStage(at: index) else { return }
+        guard stages.indices.contains(index),
+              let legIndex = itinerary.legs.firstIndex(where: { $0.id == stages[index].riderLegID })
+        else { return }
         mapState.selectPlannerPin(nil)
-        errorMessage = nil
-
-        let primaryIndex = stages.prefix(index + 1).filter { !$0.endsAtFuelStop }.count - 1
-        var primary = collapsedPrimaryPlanStages()
-        guard primary.indices.contains(primaryIndex) else { return }
-
-        _ = beginFuelAssistJob()
-        invalidateInFlightRoutes()
-
-        if primary.count == 1 {
-            stages = []
-            routeIdentity = nil
-            refreshMap()
-            return
-        }
-
-        if primaryIndex < primary.count - 1 {
-            primary[primaryIndex + 1].start = primary[primaryIndex].start
-            primary[primaryIndex + 1].response = nil
-            primary[primaryIndex + 1].error = nil
-        }
-
-        primary.remove(at: primaryIndex)
-        stages = primary
-
-        routeIdentity = "plan:" + stages.compactMap { stage in
-            stage.end.map { "\($0.latitude),\($0.longitude)" }
-        }.joined(separator: ";")
-
-        refreshMap()
-        RoutingDebugLog.shared.event(
-            "ui rider leg deleted expanded=\(index) primary=\(primaryIndex) remaining=\(stages.count)"
-        )
-        schedulePlanRebuild(delayNanoseconds: 120_000_000)
+        apply(.delete(waypointID: itinerary.waypoints[legIndex + 1].id), source: "card")
     }
 
     // MARK: - Routing
 
     func routeFromHere() async {
+        fromHereIntentGeneration += 1
+        let intentGeneration = fromHereIntentGeneration
         let origin = fromHereStartOverride ?? locationService.currentCoordinate
         guard let origin else {
             errorMessage = "Waiting for GPS — allow location access to route from here."
@@ -687,33 +714,6 @@ final class RoutePlannerModel {
         }
         guard let requestedDest = destination else { return }
         let requestedStart = fromHereStartOverride
-
-        // Fuel assist promotes From here into `stages` (A→fuel→B). Profile /
-        // Allow Unknown / destination retaps must drop that chain first —
-        // otherwise `activeResponses` keeps painting stale stage geometry while
-        // this method only rewrites `fromHereResponse` (line looks frozen).
-        if mode == .fromHere, !stages.isEmpty {
-            for index in stages.indices {
-                stages[index].routeGeneration += 1
-                stages[index].isRouting = false
-            }
-            stages = []
-        }
-
-        fromHereRouteGeneration += 1
-        let generation = fromHereRouteGeneration
-        let requestedProfile = profile
-        let requestedAllow = allowUnknown
-        let requestedMode = mode
-
-        isRouting = true
-        errorMessage = nil
-        if toast == nil { toast = Self.calculatingRouteToast }
-        defer {
-            if generation == fromHereRouteGeneration {
-                isRouting = stages.contains(where: \.isRouting)
-            }
-        }
 
         // GPS / camp far from any pack edge → ask for a road tap for A.
         // Within preferredMatchMeters we soft-stitch onto the road and route.
@@ -724,11 +724,14 @@ final class RoutePlannerModel {
                 await graphPacks.ensureRoadShapes(for: [cl])
                 let distance = await graphPacks.distanceToNearestRoad(
                     from: cl,
-                    allowUnknown: requestedAllow,
-                    profile: requestedProfile
+                    allowUnknown: allowUnknown,
+                    profile: profile
                 )
+                guard intentGeneration == fromHereIntentGeneration,
+                      destination == requestedDest,
+                      fromHereStartOverride == requestedStart
+                else { return }
                 if distance == nil || distance! > OnDeviceRouter.preferredMatchMeters {
-                    guard generation == fromHereRouteGeneration else { return }
                     isAssemblingRoute = false
                     fromHereResponse = nil
                     let meters = distance.map { Int($0.rounded()) }
@@ -740,131 +743,18 @@ final class RoutePlannerModel {
             }
         }
 
-        do {
-            if FuelRangePrefs.isEnabled, FuelRangePrefs.kilometers > 0 {
-                stages = [Stage(
-                    start: origin,
-                    end: requestedDest,
-                    profile: requestedProfile,
-                    allowUnknown: requestedAllow
-                )]
-                fromHereResponse = nil
-                refreshMap()
-                let job = beginFuelAssistJob()
-                // Fuel is an ordered waypoint constraint, not a detour off a
-                // finished route. Build forward: start → fuel → destination.
-                // Each fuel stop therefore becomes the next routing origin
-                // instead of a spur that returns to an earlier random ride.
-                await expandStageIntoFuelItinerary(at: 0, job: job)
-                guard generation == fromHereRouteGeneration,
-                      mode == requestedMode,
-                      profile == requestedProfile,
-                      allowUnknown == requestedAllow,
-                      destinationMatches(requestedDest),
-                      coordinateMatches(fromHereStartOverride, requestedStart)
-                else { return }
-                fromHereNeedsStartPin = false
-                if let last = stages.last?.end {
-                    destination = last
-                }
-                let finalDest = destination ?? requestedDest
-                routeIdentity = "here:\(finalDest.latitude),\(finalDest.longitude):\(requestedProfile.rawValue)"
-                refreshMap()
-                if let last = stages.last?.end {
-                    mapState.fit([origin, last])
-                }
-                isAssemblingRoute = false
-                if let last = stages.last {
-                    mapState.selectPlannerPin(stageMarkerID(last))
-                } else {
-                    mapState.selectPlannerPin("dest")
-                }
-                announceRouteReadyIfComplete()
-                return
-            }
-
-            let response = try await routeForPlanning(
-                from: origin,
-                to: requestedDest,
-                profile: requestedProfile,
-                allowUnknown: requestedAllow
-            )
-            // Drop stale replies — rapid retap / profile / mode / clear can outrun search.
-            guard generation == fromHereRouteGeneration,
-                  mode == requestedMode,
-                  profile == requestedProfile,
-                  allowUnknown == requestedAllow,
-                  destinationMatches(requestedDest),
-                  coordinateMatches(fromHereStartOverride, requestedStart)
-            else { return }
-
-            fromHereResponse = response
-            fromHereNeedsStartPin = false
-            // Move pins to geometry endpoints after the pack snaps to the road.
-            // so markers sit on the road, not at the raw tap coordinate.
-            // GPS From-here keeps the puck as A — do not sticky-override onto a
-            // pack edge (that forced Allow-unknown snaps and false “tap A” recovery).
-            if fromHereStartOverride != nil, let snappedStart = response.coordinates.first {
-                fromHereStartOverride = snappedStart
-            }
-            if let snappedEnd = response.coordinates.last {
-                destination = snappedEnd
-            }
-            let finalDest = destination ?? requestedDest
-            routeIdentity = "here:\(finalDest.latitude),\(finalDest.longitude):\(requestedProfile.rawValue)"
-            refreshMap()
-            if let first = response.coordinates.first, let last = response.coordinates.last {
-                mapState.fit([first, last])
-            } else {
-                mapState.fit(response.coordinates)
-            }
-            isAssemblingRoute = false
-            announceRouteReadyIfComplete()
-            guard generation == fromHereRouteGeneration else { return }
-            isAssemblingRoute = false
-            // Select B so it’s obvious; relocate is long-press only (pin is locked).
-            if let last = stages.last {
-                mapState.selectPlannerPin(stageMarkerID(last))
-            } else {
-                mapState.selectPlannerPin("dest")
-            }
-            announceRouteReadyIfComplete()
-        } catch is CancellationError {
-            // A newer drag, profile, or fuel job superseded this request.
-            // Keep the current route visible; the replacement owns the UI.
-            return
-        } catch let error as NSError
-            where error.domain == NSURLErrorDomain && error.code == NSURLErrorCancelled {
-            return
-        } catch {
-            guard generation == fromHereRouteGeneration else { return }
-            isAssemblingRoute = false
-            fromHereResponse = nil
-            RoutingDebugLog.shared.routeFailure(error, context: "fromHere")
-            mapState.unlockAfterRouteFailure()
-            if await shouldEnterFromHereStartRecovery(
-                error: error,
-                usingGPSStart: usingGPSStart,
-                origin: origin
-            ) {
-                let cl = CLLocationCoordinate2D(latitude: origin.latitude, longitude: origin.longitude)
-                await graphPacks.ensureRoadShapes(for: [cl])
-                let meters = await graphPacks.distanceToNearestRoad(
-                    from: cl,
-                    allowUnknown: allowUnknown,
-                    profile: profile
-                ).map { Int($0.rounded()) }
-                enterFromHereNeedsStartPin(startMeters: meters)
-                RoutingDebugLog.shared.event(
-                    "recovery needsStartPin meters=\(meters.map(String.init) ?? "nil")"
-                )
-            } else {
-                fromHereNeedsStartPin = false
-                errorMessage = error.localizedDescription
-            }
-            toast = nil
-            refreshMap()
-        }
+        fromHereResponse = nil
+        fromHereNeedsStartPin = false
+        errorMessage = nil
+        apply(
+            .replaceAll(
+                waypoints: [origin, requestedDest],
+                profile: profile,
+                allowUnknown: allowUnknown
+            ),
+            source: "fromHere"
+        )
+        mapState.fit([origin, requestedDest])
     }
 
     private static let offGraphStartMessage =
@@ -915,6 +805,21 @@ final class RoutePlannerModel {
         return false
     }
 
+    private static func installedPacksCover(
+        ends: [CLLocationCoordinate2D],
+        store: GraphPackStore
+    ) -> Bool {
+        let needed = GraphPackStore.regionIds(containingAny: ends)
+        if !needed.isEmpty, needed.allSatisfy({ store.isInstalled($0) }) {
+            return true
+        }
+        let primaries = ends.compactMap { GraphPackStore.primaryRegionId(containing: $0) }
+        guard let first = primaries.first, primaries.allSatisfy({ $0 == first }) else {
+            return false
+        }
+        return store.isInstalled(first)
+    }
+
     /// Try Again: clear sticky A override and re-route GPS → B.
     func retryFromHere() {
         fromHereNeedsStartPin = false
@@ -955,124 +860,6 @@ final class RoutePlannerModel {
             || msg.contains("eligible edges do not connect")
     }
 
-    /// URLSession cancellation can arrive bridged as NSError, particularly
-    /// when a pin drag supersedes a live-pack request. That is normal control
-    /// flow, never a rider-facing routing failure.
-    private static func isRequestCancellation(_ error: Error) -> Bool {
-        if error is CancellationError { return true }
-        let nsError = error as NSError
-        return nsError.domain == NSURLErrorDomain && nsError.code == NSURLErrorCancelled
-    }
-
-    func routeStage(at index: Int, includeFuelAssist: Bool = true) async {
-        guard stages.indices.contains(index),
-              let start = stages[index].start,
-              let end = stages[index].end else { return }
-
-        let fuelUpFront = includeFuelAssist
-            && FuelRangePrefs.isEnabled
-            && (mode == .plan || mode == .fromHere)
-            && !stages[index].skipFuelAssist
-        if fuelUpFront {
-            let job = beginFuelAssistJob()
-            if mode == .plan {
-                // A shaping waypoint is not a petrol station. Plan the entire
-                // rider itinerary so the tank budget carries through ordinary
-                // A→via→B boundaries instead of resetting at every pin.
-                await rebuildPrimaryPlanThenFuelAssist(job: job)
-            } else {
-                await expandStageIntoFuelItinerary(at: index, job: job)
-            }
-            return
-        }
-
-        let stageID = stages[index].id
-        stages[index].routeGeneration += 1
-        let generation = stages[index].routeGeneration
-        let requestedProfile = stages[index].profile
-        let requestedAllow = stages[index].allowUnknown
-        let requestedMaxRouteMeters = stages[index].maxRouteMeters
-        let requestedLegName = stageEndpointTitle(at: index)
-
-        stages[index].isRouting = true
-        stages[index].error = nil
-        isRouting = true
-        errorMessage = nil
-        defer {
-            if let idx = stages.firstIndex(where: { $0.id == stageID }),
-               stages[idx].routeGeneration == generation {
-                stages[idx].isRouting = false
-            }
-            isRouting = stages.contains(where: \.isRouting)
-        }
-        do {
-            let response = try await routeForPlanning(
-                from: start,
-                to: end,
-                profile: requestedProfile,
-                allowUnknown: requestedAllow,
-                maxRouteMeters: requestedMaxRouteMeters
-            )
-            // Resolve by stable stage id — index may have shifted (delete / reorder).
-            guard let idx = stages.firstIndex(where: { $0.id == stageID }),
-                  stages[idx].routeGeneration == generation,
-                  stages[idx].profile == requestedProfile,
-                  stages[idx].allowUnknown == requestedAllow,
-                  stages[idx].maxRouteMeters == requestedMaxRouteMeters,
-                  coordinateMatches(stages[idx].start, start),
-                  coordinateMatches(stages[idx].end, end)
-            else { return }
-
-            // Snap stage pins to geometry endpoints so markers sit on the road
-            // after waypoints snap to the nearest graph edge.
-            if let snappedStart = response.coordinates.first {
-                stages[idx].start = snappedStart
-            }
-            if let snappedEnd = response.coordinates.last {
-                stages[idx].end = snappedEnd
-                // Keep adjacent stage boundary in sync.
-                if stages.indices.contains(idx + 1) {
-                    stages[idx + 1].start = snappedEnd
-                }
-            }
-            stages[idx].response = response
-            stages[idx].error = nil
-            // Prior leg failures leave a sticky banner; clear unless another stage is still broken.
-            errorMessage = stages.first(where: { $0.error != nil })?.error
-            routeIdentity = "plan:" + stages.compactMap { stage in
-                stage.end.map { "\($0.latitude),\($0.longitude)" }
-            }.joined(separator: ";")
-            refreshMap()
-            if let fitStart = stages[idx].start, let fitEnd = stages[idx].end {
-                mapState.fit([fitStart, fitEnd])
-            }
-
-            announceRouteReadyIfComplete()
-        } catch let error where Self.isRequestCancellation(error) {
-            // A newer pin position or route choice owns the replacement work.
-            return
-        } catch {
-            let displayError = await explainedStageRouteFailure(
-                error,
-                from: start,
-                to: end,
-                legName: requestedLegName,
-                requestedProfile: requestedProfile,
-                requestedAllowUnknown: requestedAllow,
-                maxRouteMeters: requestedMaxRouteMeters
-            )
-            guard let idx = stages.firstIndex(where: { $0.id == stageID }),
-                  stages[idx].routeGeneration == generation else { return }
-            stages[idx].response = nil
-            stages[idx].error = displayError
-            errorMessage = displayError
-            toast = nil
-            RoutingDebugLog.shared.routeFailure(error, context: "stage[\(idx)]")
-            mapState.unlockAfterRouteFailure()
-            refreshMap()
-        }
-    }
-
     // Superseded by canonical ordering; see docs/itinerary-refactor. Server-side backtrack penalty is the replacement.
     /// Keep a newly shaped leg from tracing the existing itinerary backwards.
     /// A Plan route is a journey, so a fresh leg should form a new continuation
@@ -1108,40 +895,6 @@ final class RoutePlannerModel {
         return result
     }
 
-    private func explainedStageRouteFailure(
-        _ error: Error,
-        from: RouteCoordinate,
-        to: RouteCoordinate,
-        legName: String,
-        requestedProfile: RouteProfile,
-        requestedAllowUnknown: Bool,
-        maxRouteMeters: Double?
-    ) async -> String {
-        guard requestedProfile != .cleanest, Self.isNoRouteFailure(error) else {
-            return error.localizedDescription
-        }
-        let cleanConnects: Bool
-        do {
-            _ = try await routeForPlanning(
-                from: from,
-                to: to,
-                profile: .cleanest,
-                allowUnknown: false,
-                maxRouteMeters: maxRouteMeters
-            )
-            cleanConnects = true
-        } catch {
-            cleanConnects = false
-        }
-        return Self.profileRouteFailureMessage(
-            requestedProfile: requestedProfile,
-            legName: legName,
-            maxRouteMeters: maxRouteMeters,
-            cleanConnects: cleanConnects,
-            allowUnknown: requestedAllowUnknown
-        )
-    }
-
     static func profileRouteFailureMessage(
         requestedProfile: RouteProfile,
         legName: String,
@@ -1159,30 +912,14 @@ final class RoutePlannerModel {
         return "Neither \(requestedProfile.title) nor Clean can connect \(legName)\(limit) on the eligible OSM network. Move a pin, increase usable range, or add a different fuel stop.\(unknownHint)"
     }
 
-    private func destinationMatches(_ requested: RouteCoordinate) -> Bool {
-        guard let current = destination else { return false }
-        return coordinateMatches(current, requested)
-    }
-
-    private func coordinateMatches(_ a: RouteCoordinate?, _ b: RouteCoordinate?) -> Bool {
-        guard let a, let b else { return a == nil && b == nil }
-        return abs(a.latitude - b.latitude) < 1e-7
-            && abs(a.longitude - b.longitude) < 1e-7
-    }
-
     /// Invalidate every in-flight planner route (clear / mode convert / wipe).
     private func invalidateInFlightRoutes(cancelPlanRebuildTask: Bool = true) {
-        fromHereRouteGeneration += 1
+        fromHereIntentGeneration += 1
         fromHereRouteDebounceTask?.cancel()
-        if cancelPlanRebuildTask {
-            planRebuildDebounceTask?.cancel()
-        }
-        planStageDebounceTask?.cancel()
-        pendingPlanStageIndices.removeAll()
-        for index in stages.indices {
-            stages[index].routeGeneration += 1
-            stages[index].isRouting = false
-        }
+        buildTask?.cancel()
+        moveDebounceTask?.cancel()
+        pendingMove = nil
+        itineraryBuilder.cancelCurrentBuild()
         isRouting = false
     }
 
@@ -1195,15 +932,11 @@ final class RoutePlannerModel {
             guard !Task.isCancelled else { return }
             switch capturedMode {
             case .fromHere:
-                if !stages.isEmpty {
-                    await rebuildFromHereWithFuelAssist()
-                } else if destination != nil {
-                    await routeFromHere()
-                }
-            case .saved:
                 if destination != nil {
                     await routeFromHere()
                 }
+            case .saved:
+                break
             case .plan:
                 break
             }
@@ -1253,9 +986,14 @@ final class RoutePlannerModel {
                     to: target,
                     networkOnline: networkOnline
                 )
-                fromHereResponse = response
                 mode = .fromHere
                 destination = target
+                seedCanonicalBuild(
+                    coordinates: [rider, target],
+                    profile: profile,
+                    allowUnknown: allowUnknown,
+                    responses: [response]
+                )
                 let display = MapState.displaySegments(from: [response])
                 navigation.replaceRoute(
                     coordinates: response.coordinates,
@@ -1294,6 +1032,7 @@ final class RoutePlannerModel {
             // Saved overview: B is movable; A is the stored track start (display only).
             guard markerID == "dest" else { return }
             destination = snapped
+            mode = .fromHere
             refreshMap()
             Task { await routeFromHere() }
         case .plan:
@@ -1302,186 +1041,14 @@ final class RoutePlannerModel {
     }
 
     private func movePlanStyleWaypoint(markerID: String, snapped: RouteCoordinate) {
-        if markerID == "s0" {
-            guard !stages.isEmpty else { return }
-            stages[0].start = snapped
-            stages[0].response = nil
-        } else if let index = stages.firstIndex(where: { stageMarkerID($0) == markerID }) {
-            // Fuel pins are locked — only primary waypoints move.
-            if stages[index].endsAtFuelStop {
-                return
-            }
-            stages[index].end = snapped
-            stages[index].response = nil
-            if stages.indices.contains(index + 1) {
-                stages[index + 1].start = snapped
-                stages[index + 1].response = nil
-            }
-        } else {
-            return
-        }
-
-        // Collapse auto fuel stops, re-route primary hops, then re-seat fuel.
-        // Debounce: dragging/nudging pins was firing rebuilds immediately.
+        guard markerID.hasPrefix("wp:"),
+              let waypointID = UUID(uuidString: String(markerID.dropFirst(3))),
+              itinerary.waypoints.contains(where: { $0.id == waypointID })
+        else { return }
         mapState.selectPlannerPin(nil)
-        schedulePlanRebuild()
+        apply(.move(waypointID: waypointID, to: snapped), source: "drag")
     }
 
-    private func schedulePlanRebuild(
-        delayNanoseconds: UInt64 = 420_000_000,
-        showCalculatingImmediately: Bool = true
-    ) {
-        planRebuildDebounceTask?.cancel()
-        if showCalculatingImmediately { toast = Self.calculatingRouteToast }
-        planRebuildDebounceTask = Task { @MainActor in
-            try? await Task.sleep(nanoseconds: delayNanoseconds)
-            guard !Task.isCancelled else { return }
-            toast = Self.calculatingRouteToast
-            await rebuildPrimaryPlanThenFuelAssist()
-        }
-    }
-
-    /// Drop F-pins, keep rider-placed A / vias / B, re-route, then re-apply fuel.
-    private func rebuildPrimaryPlanThenFuelAssist(
-        rangeKm requestedRangeKm: Double? = nil,
-        job existingFuelJob: Int? = nil
-    ) async {
-        let rebuilt = collapsedPrimaryPlanStages()
-        guard !rebuilt.isEmpty else {
-            refreshMap()
-            return
-        }
-        // This method can run inside `planRebuildDebounceTask`. Cancelling that
-        // task here cancelled its own live fuel request and surfaced a false
-        // “live fuel unavailable” error after every shaping-pin move.
-        invalidateInFlightRoutes(cancelPlanRebuildTask: false)
-        stages = rebuilt
-        refreshMap()
-        isAssemblingRoute = true
-        toast = Self.calculatingRouteToast
-        if FuelRangePrefs.isEnabled {
-            let job = existingFuelJob ?? beginFuelAssistJob()
-            // Fuel stops define a fresh, forward itinerary. Do not first lock
-            // each rider leg to a random full-distance route and then force a
-            // pump spur to return to it.
-            for index in stages.indices {
-                stages[index].response = nil
-                stages[index].error = nil
-            }
-            // Fuel pins are committed only if the entire chain succeeds; a
-            // later failure must never leave partial F pins behind.
-            let primaryBaseline = stages
-            let rangeKm = requestedRangeKm ?? FuelRangePrefs.kilometers
-            let tankMeters = FuelRangePrefs.usableKilometers(for: rangeKm) * 1_000
-            RoutingDebugLog.shared.event(
-                "fuel primary itinerary stages=\(primaryBaseline.count) usable=\(Int(tankMeters))m"
-            )
-            var usedSinceFuelMeters = 0.0
-            var i = 0
-            while i < stages.count {
-                guard job == fuelAssistGeneration, !Task.isCancelled else { return }
-                let before = stages.count
-                let currentMeters = stages[i].response?.distanceMeters ?? 0
-                let nextPrimaryMeters = stages[(i + 1)...].first(where: {
-                    !$0.endsAtFuelStop
-                })?.response?.distanceMeters
-                let arrivalUse = usedSinceFuelMeters + currentMeters
-                // If this leg consumes essentially the whole tank and another
-                // rider leg follows, refuel before the waypoint. Otherwise the
-                // next leg would begin with an impossible near-empty tank.
-                let refuelBeforeWaypoint = nextPrimaryMeters != nil
-                    && arrivalUse <= tankMeters + 1
-                    && arrivalUse + (nextPrimaryMeters ?? 0) > tankMeters
-                    && arrivalUse >= tankMeters * HopSearchPolicy.fuelPreferTank
-                await expandStageIntoFuelItinerary(
-                    at: i,
-                    job: job,
-                    rangeKm: requestedRangeKm,
-                    startingFuelUsedMeters: usedSinceFuelMeters,
-                    requireFuelStopBeforeEnd: refuelBeforeWaypoint
-                )
-                guard job == fuelAssistGeneration, !Task.isCancelled else { return }
-                let blockCount = max(1, stages.count - before + 1)
-                let blockEnd = min(stages.count, i + blockCount)
-                let block = Array(stages[i..<blockEnd])
-                guard block.allSatisfy({ $0.response != nil && $0.error == nil }) else {
-                    let failure = stages[i...].first(where: { $0.error != nil })?.error
-                    stages = primaryBaseline
-                    if stages.indices.contains(i) {
-                        stages[i].error = failure ?? "Fuel planning could not complete this itinerary."
-                    }
-                    errorMessage = failure
-                    isAssemblingRoute = false
-                    refreshMap()
-                    return
-                }
-                if let lastFuelOffset = block.lastIndex(where: \.endsAtFuelStop) {
-                    usedSinceFuelMeters = block[(lastFuelOffset + 1)...].reduce(0) {
-                        $0 + ($1.response?.distanceMeters ?? 0)
-                    }
-                } else {
-                    usedSinceFuelMeters += block.reduce(0) {
-                        $0 + ($1.response?.distanceMeters ?? 0)
-                    }
-                }
-                RoutingDebugLog.shared.event(
-                    "fuel carried past waypoint used=\(Int(usedSinceFuelMeters))m tank=\(Int(tankMeters))m"
-                )
-                i += blockCount
-            }
-        } else {
-            for index in stages.indices {
-                await routeStage(at: index, includeFuelAssist: false)
-            }
-        }
-        isAssemblingRoute = false
-        refreshMap()
-        announceRouteReadyIfComplete()
-    }
-
-    /// Collapse only auto-generated fuel hops. Rider-created stage boundaries
-    /// retain their own profile and Allow setting when tank range changes.
-    private func collapsedPrimaryPlanStages() -> [Stage] {
-        guard let firstStart = stages.first?.start else { return [] }
-        var start = firstStart
-        var result: [Stage] = []
-        for stage in stages {
-            guard let end = stage.end else { continue }
-            if stage.endsAtFuelStop { continue }
-            var collapsed = Stage(
-                start: start,
-                end: end,
-                profile: stage.profile,
-                allowUnknown: stage.allowUnknown
-            )
-            if coordinateMatches(stage.start, start) {
-                collapsed.response = stage.response
-            }
-            result.append(collapsed)
-            start = end
-        }
-        return result
-    }
-
-    /// Rider-placed waypoints only (A, vias, B) — excludes auto fuel ends.
-    private func primaryPlanWaypoints() -> [RouteCoordinate] {
-        guard !stages.isEmpty else { return [] }
-        var points: [RouteCoordinate] = []
-        if let start = stages[0].start {
-            points.append(start)
-        }
-        for stage in stages {
-            guard let end = stage.end else { continue }
-            if !stage.endsAtFuelStop {
-                points.append(end)
-            }
-        }
-        if let last = stages.last?.end,
-           points.last.map({ !coordinateMatches($0, last) }) ?? true {
-            points.append(last)
-        }
-        return points
-    }
 
     /// Snaps `point` to the nearest position on the active route polyline
     /// within `maxMeters`.  Returns the raw point unchanged when no route is
@@ -1503,7 +1070,8 @@ final class RoutePlannerModel {
     func routeToCoordinate(name: String?, latitude: Double, longitude: Double) {
         let point = RouteCoordinate(longitude: longitude, latitude: latitude)
         mode = .fromHere
-        stages = []
+        itinerary = RiderItinerary()
+        built = nil
         fromHereResponse = nil
         destination = point
         destinationName = name
@@ -1527,12 +1095,12 @@ final class RoutePlannerModel {
 
     /// From here has a pin and/or a calculated route worth confirming before leaving.
     var hasFromHereDraft: Bool {
-        destination != nil || fromHereResponse != nil
+        destination != nil || !itinerary.waypoints.isEmpty
     }
 
     /// Plan has at least one waypoint worth confirming before leaving.
     var hasPlanDraft: Bool {
-        !stages.isEmpty
+        !itinerary.waypoints.isEmpty
     }
 
 
@@ -1546,7 +1114,8 @@ final class RoutePlannerModel {
         fromHereResponse = nil
         fromHereNeedsStartPin = false
         fromHereStartOverride = nil
-        stages = []
+        itinerary = RiderItinerary()
+        built = nil
         fuelPlanningStatus = nil
         fuelPreviewStops = []
         errorMessage = nil
@@ -1564,46 +1133,11 @@ final class RoutePlannerModel {
 
     /// From here → Plan: keep GPS→B (or geometry) as stage 1.
     func switchToPlanKeepingFromHere() {
-        // Do not let a From-here fuel search keep probing stations after the
-        // rider has changed intent to Plan. The newly chosen plan owns any
-        // later fuel work.
-        _ = beginFuelAssistJob()
-        invalidateInFlightRoutes()
-
-        // A fuel-assisted From here route already contains a complete A→F…→B
-        // itinerary. Keep it instead of making the same live requests again.
-        if !stages.isEmpty {
-            let finalEnd = stages.last?.end
-            destination = nil
-            destinationName = nil
-            fromHereResponse = nil
-            fromHereNeedsStartPin = false
-            fromHereStartOverride = nil
-            errorMessage = nil
-            mode = .plan
-            // From-here leaves B selected because it is locked in that mode.
-            // Plan uses an unselected route tap to create a shaping waypoint;
-            // carrying B's selection across would move B instead.
-            mapState.selectPlannerPin(nil)
-            routeIdentity = "plan:" + stages.compactMap { stage in
-                stage.end.map { "\($0.latitude),\($0.longitude)" }
-            }.joined(separator: ";")
-            refreshMap()
-            if let start = stages.first?.start, let finalEnd {
-                mapState.fit([start, finalEnd])
-            }
-            toast = "Fuel plan kept"
-            RoutingDebugLog.shared.event("ui fromHere→plan preserved fuel hops=\(stages.count)")
+        guard itinerary.waypoints.count == 2 else {
+            switchToPlanClearing()
             return
         }
-
-        let end = destination ?? fromHereResponse?.coordinates.last
-        let start = fromHereResponse?.coordinates.first
-            ?? fromHereStartOverride
-            ?? locationService.currentCoordinate
-        let keptResponse = fromHereResponse
-        let keptProfile = profile
-        let keptAllow = allowUnknown
+        let endpoints = itinerary.waypoints.map(\.coordinate)
 
         destination = nil
         destinationName = nil
@@ -1611,30 +1145,12 @@ final class RoutePlannerModel {
         fromHereNeedsStartPin = false
         fromHereStartOverride = nil
         errorMessage = nil
-        stages = []
-
         mode = .plan
         mapState.selectPlannerPin(nil)
-
-        guard let start, let end else {
-            refreshMap()
-            return
-        }
-        var stage = Stage(
-            start: start,
-            end: end,
-            profile: keptProfile,
-            allowUnknown: keptAllow
-        )
-        stage.response = keptResponse
-        stages = [stage]
-        if keptResponse == nil {
-            Task { await routeStage(at: 0) }
-        } else {
-            routeIdentity = "plan:\(end.latitude),\(end.longitude)"
-        }
+        routeIdentity = "plan:\(endpoints[1].latitude),\(endpoints[1].longitude)"
         refreshMap()
-        mapState.fit([start, end])
+        mapState.fit(endpoints)
+        RoutingDebugLog.shared.event("ui fromHere→plan itinerary=[2 waypoints] reusedBuild=true")
     }
 
     /// Saved (imported / opened track) → Plan: keep the track as stage 1 (A→B
@@ -1657,19 +1173,15 @@ final class RoutePlannerModel {
         destinationName = nil
         fromHereResponse = nil
         errorMessage = nil
-        stages = []
-
         // savedRouteOrigin is deliberately kept: edits made from here save back to the
         // library record the rider opened, rather than forking a near-identical copy.
         mode = .plan
-        var stage = Stage(
-            start: start,
-            end: end,
+        seedCanonicalBuild(
+            coordinates: [start, end],
             profile: keptProfile,
-            allowUnknown: keptAllow
+            allowUnknown: keptAllow,
+            responses: [response]
         )
-        stage.response = response
-        stages = [stage]
         routeIdentity = "plan:\(end.latitude),\(end.longitude)"
         presentRouteCard = true
         toast = name.map { "Planning from “\($0)”" } ?? "Planning from track"
@@ -1690,7 +1202,8 @@ final class RoutePlannerModel {
         fromHereResponse = nil
         fromHereNeedsStartPin = false
         fromHereStartOverride = nil
-        stages = []
+        itinerary = RiderItinerary()
+        built = nil
         errorMessage = nil
         routeIdentity = nil
         savedRouteOrigin = nil
@@ -1701,14 +1214,13 @@ final class RoutePlannerModel {
 
     /// Plan → From here: use the last plan pin as From here destination B.
     func switchToFromHereUsingLastPin() {
-        let lastPin = stages.last?.end
-            ?? stages.last?.response?.coordinates.last
-            ?? stages.last?.start
-        let keptProfile = stages.last?.profile ?? profile
-        let keptAllow = stages.last?.allowUnknown ?? false
+        let lastPin = itinerary.waypoints.last?.coordinate
+        let keptProfile = itinerary.legs.last?.profile ?? profile
+        let keptAllow = itinerary.legs.last?.allowUnknown ?? false
 
         invalidateInFlightRoutes()
-        stages = []
+        itinerary = RiderItinerary()
+        built = nil
         errorMessage = nil
         routeIdentity = nil
         savedRouteOrigin = nil
@@ -1732,7 +1244,8 @@ final class RoutePlannerModel {
     /// Plan → From here: discard the plan and open empty From here.
     func switchToFromHereClearing() {
         invalidateInFlightRoutes()
-        stages = []
+        itinerary = RiderItinerary()
+        built = nil
         destination = nil
         destinationName = nil
         fromHereResponse = nil
@@ -1781,63 +1294,7 @@ final class RoutePlannerModel {
         var markers: [MapState.Marker] = []
         switch mode {
         case .fromHere:
-            if !stages.isEmpty {
-                var fuelOrdinal = 0
-                for (index, stage) in stages.enumerated() {
-                    if let start = stage.start, index == 0 {
-                        markers.append(
-                            MapState.Marker(
-                                id: "s0",
-                                latitude: start.latitude,
-                                longitude: start.longitude,
-                                label: "1",
-                                kind: .start,
-                                isLocked: true
-                            )
-                        )
-                    }
-                    if let end = stage.end {
-                        // Do not present a provisional fuel chain as committed.
-                        // Preview pumps remain visible while it is being checked;
-                        // actual F pins appear together after the whole chain wins.
-                        if stage.endsAtFuelStop && isAssemblingRoute { continue }
-                        let isLast = index == stages.count - 1
-                        let label: String
-                        if stage.endsAtFuelStop {
-                            fuelOrdinal += 1
-                            label = "F\(fuelOrdinal)"
-                        } else if isLast {
-                            label = "2"
-                        } else {
-                            label = "\(index + 2)"
-                        }
-                        markers.append(
-                            MapState.Marker(
-                                id: stageMarkerID(stage),
-                                latitude: end.latitude,
-                                longitude: end.longitude,
-                                label: label,
-                                kind: isLast ? .destination : (stage.endsAtFuelStop ? .fuel : .stage),
-                                subtitle: stage.fuelStopName,
-                                // From here: long-press relocates B — no pin dragging.
-                                isLocked: true
-                            )
-                        )
-                    }
-                }
-            } else if let destination {
-                if let start = fromHereResponse?.coordinates.first ?? fromHereStartOverride {
-                    markers.append(
-                        MapState.Marker(
-                            id: "s0",
-                            latitude: start.latitude,
-                            longitude: start.longitude,
-                            label: "1",
-                            kind: .start,
-                            isLocked: true
-                        )
-                    )
-                }
+            if itinerary.waypoints.isEmpty, let destination {
                 markers.append(
                     MapState.Marker(
                         id: "dest",
@@ -1848,6 +1305,8 @@ final class RoutePlannerModel {
                         isLocked: true
                     )
                 )
+            } else {
+                markers.append(contentsOf: canonicalMarkers(riderPinsLocked: true))
             }
         case .saved:
             // Show both endpoints so a loaded route has visible first + second pins.
@@ -1874,38 +1333,7 @@ final class RoutePlannerModel {
                 )
             }
         case .plan:
-            var fuelOrdinal = 0
-            var waypointOrdinal = 1
-            for (index, stage) in stages.enumerated() {
-                if let start = stage.start, index == 0 {
-                markers.append(MapState.Marker(id: "s0", latitude: start.latitude, longitude: start.longitude, label: "1", kind: .start))
-                }
-                if let end = stage.end {
-                    if stage.endsAtFuelStop && isAssemblingRoute { continue }
-                    let isLast = index == stages.count - 1
-                    let label: String
-                    if stage.endsAtFuelStop {
-                        fuelOrdinal += 1
-                        label = "F\(fuelOrdinal)"
-                    } else {
-                        // Plan is one ordered waypoint sequence. Its labels
-                        // always match stage order, including the final point.
-                        waypointOrdinal += 1
-                        label = "\(waypointOrdinal)"
-                    }
-                    markers.append(
-                        MapState.Marker(
-                            id: stageMarkerID(stage),
-                            latitude: end.latitude,
-                            longitude: end.longitude,
-                            label: label,
-                            kind: isLast ? .destination : (stage.endsAtFuelStop ? .fuel : .stage),
-                            subtitle: stage.fuelStopName,
-                            isLocked: stage.endsAtFuelStop
-                        )
-                    )
-                }
-            }
+            markers.append(contentsOf: canonicalMarkers(riderPinsLocked: false))
         }
         if fuelPlanningStatus != nil {
             for (index, stop) in fuelPreviewStops.enumerated() {
@@ -1924,6 +1352,36 @@ final class RoutePlannerModel {
         }
         let riders = mapState.markers.filter { $0.kind.isGroupOverlay }
         mapState.setMarkers(markers + riders)
+    }
+
+    private func canonicalMarkers(riderPinsLocked: Bool) -> [MapState.Marker] {
+        var markers = itinerary.waypoints.enumerated().map { index, waypoint in
+            MapState.Marker(
+                id: "wp:\(waypoint.id.uuidString)",
+                latitude: waypoint.coordinate.latitude,
+                longitude: waypoint.coordinate.longitude,
+                label: "\(index + 1)",
+                kind: index == 0 ? .start : (index == itinerary.waypoints.count - 1 ? .destination : .stage),
+                isLocked: riderPinsLocked
+            )
+        }
+        var fuelOrdinal = 0
+        for (index, leg) in (built?.legs ?? []).enumerated() {
+            guard let stop = leg.endsAtFuelStop else { continue }
+            fuelOrdinal += 1
+            markers.append(
+                MapState.Marker(
+                    id: "fuel:\(leg.riderLegID.uuidString):\(index)",
+                    latitude: stop.coordinate.latitude,
+                    longitude: stop.coordinate.longitude,
+                    label: "F\(fuelOrdinal)",
+                    kind: .fuel,
+                    subtitle: stop.name,
+                    isLocked: true
+                )
+            )
+        }
+        return markers
     }
 
     // MARK: - Save / export
@@ -2079,7 +1537,8 @@ final class RoutePlannerModel {
         destination = nil
         destinationName = nil
         fromHereResponse = nil
-        stages = []
+        itinerary = RiderItinerary()
+        built = nil
         // importGPX saves this track as its own record right after seeding the plan.
         savedRouteOrigin = nil
 
@@ -2092,14 +1551,12 @@ final class RoutePlannerModel {
             segmentPolylines: track.segments
         )
         mode = .plan
-        var stage = Stage(
-            start: start,
-            end: end,
+        seedCanonicalBuild(
+            coordinates: [start, end],
             profile: profile,
-            allowUnknown: allowUnknown
+            allowUnknown: allowUnknown,
+            responses: [response]
         )
-        stage.response = response
-        stages = [stage]
         routeIdentity = "plan:\(end.latitude),\(end.longitude)"
         presentRouteCard = true
         refreshMap()
@@ -2256,36 +1713,21 @@ final class RoutePlannerModel {
         let rangeKm = requestedRangeKm ?? FuelRangePrefs.kilometers
         guard rangeKm > 0 else { return }
         guard mode == .fromHere || mode == .plan else { return }
-        guard hasRoute || fromHereResponse != nil || !stages.isEmpty else { return }
+        guard itinerary.legs.count > 0 else { return }
         FuelRangePrefs.kilometers = rangeKm
         FuelRangePrefs.lastEnabledKilometers = rangeKm
         fuelPlanNotice = nil
 
-        RoutingDebugLog.shared.event(
-            "fuel reapply start mode=\(mode) stages=\(stages.count) range=\(Int(rangeKm))km"
-        )
+        RoutingDebugLog.shared.event("fuel reapply start mode=\(mode) legs=\(itinerary.legs.count) range=\(Int(rangeKm))km")
         toast = "Looking for fuel stops"
-        let job = beginFuelAssistJob()
-        planRebuildDebounceTask?.cancel()
-        Task { @MainActor in
-            guard job == fuelAssistGeneration else { return }
-            switch mode {
-            case .fromHere:
-                await rebuildFromHereWithFuelAssist()
-            case .plan:
-                await rebuildPrimaryPlanThenFuelAssist(rangeKm: rangeKm, job: job)
-            case .saved:
-                break
-            }
-            guard job == fuelAssistGeneration else { return }
-            RoutingDebugLog.shared.event("fuel reapply done stages=\(stages.count)")
-        }
+        apply(.rebuild, source: "fuel")
     }
 
     /// Invalidates an in-flight itinerary as soon as the rider grabs the fuel
     /// slider. The released value starts exactly one replacement job.
     func cancelFuelAssistForRangeEdit() {
-        _ = beginFuelAssistJob()
+        buildTask?.cancel()
+        itineraryBuilder.cancelCurrentBuild()
         isAssemblingRoute = false
         fuelPlanningStatus = nil
         fuelPreviewStops = []
@@ -2299,663 +1741,13 @@ final class RoutePlannerModel {
     /// Collapses auto fuel hops back to rider waypoints and immediately restores
     /// an ordinary A→B route, instead of leaving the switch hidden behind error UI.
     func disableFuelAssistAndRestoreRoute() {
-        _ = beginFuelAssistJob()
         fuelPlanningStatus = nil
         fuelPreviewStops = []
         errorMessage = nil
         toast = Self.calculatingRouteToast
-        for index in stages.indices {
-            stages[index].error = nil
-            stages[index].skipFuelAssist = true
-        }
-
-        Task { @MainActor in
-            switch mode {
-            case .fromHere:
-                await routeFromHere()
-            case .plan:
-                await rebuildPrimaryPlanThenFuelAssist()
-            case .saved:
-                break
-            }
-        }
+        apply(.rebuild, source: "fuel")
     }
 
-    /// From here: wipe any fuel chain, re-route start→B, then insert fuel stops.
-    private func rebuildFromHereWithFuelAssist() async {
-        guard mode == .fromHere else { return }
-        let dest = destination ?? stages.last?.end ?? fromHereResponse?.coordinates.last
-        guard let dest else { return }
-        stages = []
-        fromHereResponse = nil
-        destination = dest
-        isAssemblingRoute = true
-        toast = Self.calculatingRouteToast
-        mapState.selectPlannerPin(nil)
-        refreshMap()
-        await routeFromHere()
-    }
-
-    private func beginFuelAssistJob() -> Int {
-        fuelAssistGeneration += 1
-        return fuelAssistGeneration
-    }
-
-    /// Build A → F₁ → … → B from graph reach + progress, then route each hop.
-    /// Never draws a full A→B line first and sprinkles pumps on it.
-    private func expandStageIntoFuelItinerary(
-        at index: Int,
-        job: Int,
-        rangeKm requestedRangeKm: Double? = nil,
-        startingFuelUsedMeters: Double = 0,
-        requireFuelStopBeforeEnd: Bool = false
-    ) async {
-        guard job == fuelAssistGeneration else { return }
-        guard stages.indices.contains(index),
-              let start = stages[index].start,
-              let end = stages[index].end
-        else { return }
-        fuelPlanningStatus = "Finding a connected fuel chain…"
-        fuelPreviewStops = []
-        refreshMap()
-        defer {
-            if job == fuelAssistGeneration {
-                fuelPlanningStatus = nil
-                fuelPreviewStops = []
-                refreshMap()
-            }
-        }
-        let rangeKm = requestedRangeKm ?? FuelRangePrefs.kilometers
-        let profile = stages[index].profile
-        let allow = stages[index].allowUnknown
-        stages[index].error = nil
-        errorMessage = nil
-        guard rangeKm > 0 else {
-            stages[index].skipFuelAssist = true
-            await routeStage(at: index, includeFuelAssist: false)
-            return
-        }
-        let usableRangeKm = FuelRangePrefs.usableKilometers(for: rangeKm)
-        let tank = usableRangeKm * 1000
-        let firstHopCap = max(0, tank - max(0, startingFuelUsedMeters))
-        let startCL = CLLocationCoordinate2D(latitude: start.latitude, longitude: start.longitude)
-        let endCL = CLLocationCoordinate2D(latitude: end.latitude, longitude: end.longitude)
-        let localFuelGraphAvailable = !network.isOnline && Self.installedPacksCover(
-            ends: [startCL, endCL], store: graphPacks
-        )
-
-        if localFuelGraphAvailable,
-           let startRegion = GraphPackStore.primaryRegionId(containing: startCL),
-           let endRegion = GraphPackStore.primaryRegionId(containing: endCL),
-           startRegion != endRegion {
-            let message = "Fuel assist currently needs each stage to stay inside one regional pack. Add a waypoint near the \(startRegion.uppercased())–\(endRegion.uppercased()) boundary."
-            stages[index].response = nil
-            stages[index].error = message
-            errorMessage = message
-            toast = message
-            isAssemblingRoute = false
-            RoutingDebugLog.shared.event(
-                "fuel itinerary stopped — cross-pack stage \(startRegion)->\(endRegion)"
-            )
-            mapState.unlockAfterRouteFailure()
-            refreshMap()
-            return
-        }
-
-        // Online, same-region fuel planning is one bounded graph operation.
-        // It returns only the ordered pumps; we then build and reveal the final
-        // ride linearly as point 1 → F1 → … → point 2. No disposable full route
-        // is generated and no candidate pump triggers its own route search.
-        if network.isOnline {
-            do {
-                try await buildLiveFuelChain(
-                    at: index,
-                    job: job,
-                    start: start,
-                    end: end,
-                    profile: profile,
-                    allowUnknown: allow,
-                    tankMeters: tank,
-                    firstHopCapMeters: firstHopCap,
-                    requireFuelStopBeforeEnd: requireFuelStopBeforeEnd
-                )
-            } catch is CancellationError {
-                return
-            } catch let error as NSError
-                where error.domain == NSURLErrorDomain && error.code == NSURLErrorCancelled {
-                return
-            } catch {
-                guard job == fuelAssistGeneration, stages.indices.contains(index) else { return }
-                let message = error.localizedDescription
-                stages[index].response = nil
-                stages[index].error = message
-                errorMessage = message
-                toast = message
-                isAssemblingRoute = false
-                RoutingDebugLog.shared.event("fuel forward planner failed — \(message)")
-                mapState.unlockAfterRouteFailure()
-                refreshMap()
-            }
-            return
-        }
-
-        let remaining = localFuelGraphAvailable
-            ? await graphPacks.shortestGraphMeters(
-                from: startCL, to: endCL,
-                maxMeters: firstHopCap * HopSearchPolicy.fuelSkipIfWithin,
-                profile: profile, allowUnknown: allow
-            )
-            : nil
-        if let remaining,
-           remaining <= firstHopCap * HopSearchPolicy.fuelSkipIfWithin,
-           !requireFuelStopBeforeEnd {
-            RoutingDebugLog.shared.event(
-                "fuel itinerary hop within tank m=\(Int(remaining)) tank=\(Int(rangeKm))km"
-            )
-            stages[index].skipFuelAssist = true
-            await routeStage(at: index, includeFuelAssist: false)
-            return
-        }
-
-        guard let poiManager else {
-            toast = "Fuel assist unavailable"
-            RoutingDebugLog.shared.event("fuel itinerary skipped — no POI manager")
-            stages[index].skipFuelAssist = true
-            await routeStage(at: index, includeFuelAssist: false)
-            return
-        }
-
-        RoutingDebugLog.shared.event(
-            "fuel itinerary start stage[\(index)] tank=\(Int(rangeKm))km remaining=\(remaining.map { String(Int($0)) } ?? "nil")"
-        )
-        let fuels: [POIFeature]
-        do {
-            fuels = try await poiManager.fuelCandidates(
-                from: start,
-                to: end,
-                preferLive: network.isOnline
-            )
-        } catch is CancellationError {
-            // A newer pin position superseded this job. Keep the last complete
-            // route visible; the replacement rebuild owns the UI status.
-            return
-        } catch {
-            guard job == fuelAssistGeneration, stages.indices.contains(index) else { return }
-            let message = error.localizedDescription
-            stages[index].error = message
-            errorMessage = message
-            toast = message
-            isAssemblingRoute = false
-            RoutingDebugLog.shared.event("fuel itinerary source failed — \(message)")
-            mapState.unlockAfterRouteFailure()
-            refreshMap()
-            return
-        }
-        guard job == fuelAssistGeneration else { return }
-        RoutingDebugLog.shared.event("fuel itinerary candidates=\(fuels.count)")
-
-        // Search complete pump chains. The old loop remembered a rejected pump
-        // globally, so backtracking from F2 could accidentally ban a pump that
-        // was valid after a different F1. Each branch now owns its visited set.
-        var searchStates = 0
-        let maxSearchStates = 48
-        let maxFuelStops = 12
-        let fuelSearchDeadline = Date().addingTimeInterval(25)
-        var verifiedLiveLegs: [String: RouteResponse] = [:]
-
-        func liveLegKey(_ a: RouteCoordinate, _ b: RouteCoordinate) -> String {
-            String(format: "%.6f,%.6f>%.6f,%.6f", a.latitude, a.longitude, b.latitude, b.longitude)
-        }
-
-        // A corridor request within one tank is already a verified final leg.
-        // Reusing it avoids the duplicate A→B request visible in short-route logs.
-        if !localFuelGraphAvailable,
-           let corridor = stages[index].response,
-           let meters = corridor.distanceMeters,
-           meters <= tank + 1 {
-            verifiedLiveLegs[liveLegKey(start, end)] = corridor
-        }
-
-        func verifiedLiveLeg(
-            from a: RouteCoordinate,
-            to b: RouteCoordinate,
-            capMeters: Double
-        ) async -> RouteResponse? {
-            let key = liveLegKey(a, b)
-            if let cached = verifiedLiveLegs[key],
-               let meters = cached.distanceMeters,
-               meters <= capMeters + 1 {
-                return cached
-            }
-            guard network.isOnline else { return nil }
-            do {
-                let response = try await routeForPlanning(
-                    from: a,
-                    to: b,
-                    profile: profile,
-                    allowUnknown: allow,
-                    maxRouteMeters: capMeters
-                )
-                guard let meters = response.distanceMeters, meters <= capMeters + 1 else {
-                    RoutingDebugLog.shared.event(
-                        "fuel live reject over-range m=\(Int(response.distanceMeters ?? 0)) cap=\(Int(capMeters))"
-                    )
-                    return nil
-                }
-                verifiedLiveLegs[key] = response
-                return response
-            } catch {
-                RoutingDebugLog.shared.event(
-                    "fuel live reject \(a.latitude),\(a.longitude)->\(b.latitude),\(b.longitude): \(error.localizedDescription)"
-                )
-                return nil
-            }
-        }
-
-        func findFuelChain(
-            from current: RouteCoordinate,
-            visited: Set<String>,
-            depth: Int,
-            previewPath: [RouteCoordinate]
-        ) async -> [RouteCoordinate]? {
-            guard job == fuelAssistGeneration,
-                  depth <= maxFuelStops,
-                  searchStates < maxSearchStates,
-                  Date() < fuelSearchDeadline
-            else { return nil }
-            searchStates += 1
-            let hopCap = depth == 0 ? firstHopCap : tank
-            guard hopCap > 0 else { return nil }
-
-            fuelPlanningStatus = depth == 0
-                ? "Mapping your first fuel leg…"
-                : "Mapping onward from fuel stop \(depth)…"
-            refreshMap()
-
-            let curCL = CLLocationCoordinate2D(
-                latitude: current.latitude, longitude: current.longitude
-            )
-            let rem: Double?
-            // Crow-flies distance is a safe lower bound. If it already exceeds
-            // one tank, avoid a guaranteed-to-fail live route request.
-            if GeoMath.meters(current, end) > hopCap {
-                rem = nil
-            } else if localFuelGraphAvailable {
-                rem = await graphPacks.shortestGraphMeters(
-                    from: curCL, to: endCL,
-                    maxMeters: hopCap,
-                    profile: profile, allowUnknown: allow
-                )
-            } else {
-                if let response = await verifiedLiveLeg(
-                    from: current,
-                    to: end,
-                    capMeters: hopCap
-                ) {
-                    rem = response.distanceMeters
-                } else {
-                    rem = nil
-                }
-            }
-            guard job == fuelAssistGeneration else { return nil }
-            if let rem,
-               rem <= hopCap,
-               !(depth == 0 && requireFuelStopBeforeEnd) {
-                fuelPlanningStatus = depth == 0
-                    ? "Route fits within one tank"
-                    : "Connecting the final leg…"
-                if depth > 0 { mapState.fit([current, end]) }
-                RoutingDebugLog.shared.event(
-                    "fuel itinerary finish depth=\(depth) remaining=\(Int(rem))m"
-                )
-                return [end]
-            }
-            guard depth < maxFuelStops else { return nil }
-
-            let reach: [String: Double]
-            let ranked: [POIFeature]
-            if localFuelGraphAvailable {
-                reach = await graphPacks.reachableFuelMeters(
-                    from: curCL, toward: endCL, pumps: fuels,
-                    maxMeters: hopCap * HopSearchPolicy.fuelMaxTank,
-                    profile: profile, allowUnknown: allow
-                )
-                ranked = FuelItinerary.rankedProgressFuel(
-                    fuels: fuels,
-                    from: current,
-                    to: end,
-                    reachableMeters: reach,
-                    tankMeters: hopCap,
-                    sessionSeed: planningSessionSeed,
-                    excluding: visited
-                )
-            } else {
-                reach = FuelItinerary.approximateReachableMeters(
-                    fuels: fuels,
-                    from: current,
-                    tankMeters: hopCap * HopSearchPolicy.fuelMaxTank,
-                    excluding: visited
-                )
-                let progressRanked = FuelItinerary.rankedProgressFuel(
-                    fuels: fuels,
-                    from: current,
-                    to: end,
-                    reachableMeters: reach,
-                    tankMeters: hopCap,
-                    sessionSeed: planningSessionSeed,
-                    excluding: visited
-                )
-                // The next pump is chosen for forward progress toward the
-                // rider's next waypoint—not for proximity to a discarded,
-                // randomly generated route geometry.
-                ranked = progressRanked
-            }
-            guard job == fuelAssistGeneration else { return nil }
-            RoutingDebugLog.shared.event(
-                "fuel reach depth=\(depth) from=\(current.latitude),\(current.longitude) candidates=\(fuels.count) reachable=\(reach.count) cap=\(Int(hopCap * HopSearchPolicy.fuelMaxTank))m"
-            )
-            let branchLimit = localFuelGraphAvailable ? 16 : 18
-            for pick in ranked.prefix(branchLimit) {
-                guard searchStates < maxSearchStates else { break }
-                let gas = RouteCoordinate(longitude: pick.longitude, latitude: pick.latitude)
-                guard GeoMath.meters(current, gas) >= 800,
-                      GeoMath.meters(gas, end) >= 800
-                else { continue }
-                RoutingDebugLog.shared.event(
-                    "fuel itinerary try depth=\(depth + 1) id=\(pick.id) name=\(pick.name ?? "-") graph=\(Int(reach[pick.id] ?? 0))m"
-                )
-                fuelPlanningStatus = "Checking fuel stop \(depth + 1)…"
-                if !localFuelGraphAvailable {
-                    let verified = await verifiedLiveLeg(
-                        from: current,
-                        to: gas,
-                        capMeters: hopCap
-                    )
-                    // Mode switch, slider move, or waypoint drag superseded
-                    // this search. Stop immediately instead of cycling every
-                    // remaining pump after URLSession reports cancellation.
-                    guard job == fuelAssistGeneration else { return nil }
-                    guard verified != nil else { continue }
-                }
-                fuelPreviewStops = previewPath + [gas]
-                refreshMap()
-                mapState.fit([current, gas])
-                await Task.yield()
-                var nextVisited = visited
-                nextVisited.insert(pick.id)
-                if let tail = await findFuelChain(
-                    from: gas,
-                    visited: nextVisited,
-                    depth: depth + 1,
-                    previewPath: previewPath + [gas]
-                ) {
-                    return [gas] + tail
-                }
-                fuelPreviewStops = previewPath
-                refreshMap()
-                RoutingDebugLog.shared.event(
-                    "fuel itinerary backtrack depth=\(depth + 1) skip=\(pick.id)"
-                )
-            }
-            return nil
-        }
-
-        guard let chain = await findFuelChain(
-            from: start,
-            visited: Set<String>(),
-            depth: 0,
-            previewPath: []
-        ),
-              job == fuelAssistGeneration,
-              chain.last.map({ coordinateMatches($0, end) }) == true
-        else {
-            guard job == fuelAssistGeneration, stages.indices.contains(index) else { return }
-            let reserve = Int(FuelRangePrefs.reservePercent.rounded())
-            let message = fuels.isEmpty
-                ? (network.isOnline
-                    ? "No live packed fuel stations were found for this stage."
-                    : "No downloaded fuel stations were found for this stage.")
-                : "No route-connected fuel chain fits \(Int(usableRangeKm.rounded())) km usable range (\(Int(rangeKm)) km tank with \(reserve)% reserve). Increase the range, reduce the reserve, change profile, or add a fuel stop manually."
-            stages[index].error = message
-            errorMessage = message
-            toast = message
-            isAssemblingRoute = false
-            RoutingDebugLog.shared.event(
-                "fuel itinerary failed states=\(searchStates) limited=\(searchStates >= maxSearchStates || Date() >= fuelSearchDeadline ? 1 : 0) — destination not appended"
-            )
-            mapState.unlockAfterRouteFailure()
-            refreshMap()
-            return
-        }
-        let waypoints = [start] + chain
-
-        UserDefaults.standard.set(true, forKey: "dirt.layers.fuel")
-        mapState.bumpLayerPrefs()
-
-        let fuelGroupID = stages[index].fuelGroupID ?? UUID()
-        var rebuilt: [Stage] = []
-        for i in 0..<(waypoints.count - 1) {
-            var hop = Stage(
-                start: waypoints[i],
-                end: waypoints[i + 1],
-                profile: profile,
-                allowUnknown: allow
-            )
-            hop.skipFuelAssist = true
-            hop.setEndsAtFuelStop(i < waypoints.count - 2)
-            hop.fuelGroupID = fuelGroupID
-            if hop.endsAtFuelStop {
-                let endPoint = waypoints[i + 1]
-                if let station = fuels.first(where: {
-                    coordinateMatches(
-                        RouteCoordinate(longitude: $0.longitude, latitude: $0.latitude),
-                        endPoint
-                    )
-                }) {
-                    hop.fuelStopID = station.id
-                    hop.fuelStopName = station.displayName
-                } else {
-                    hop.fuelStopName = "Fuel stop \(i + 1)"
-                }
-            }
-            hop.maxRouteMeters = i == 0 ? firstHopCap : tank
-            if !localFuelGraphAvailable {
-                hop.response = verifiedLiveLegs[liveLegKey(waypoints[i], waypoints[i + 1])]
-            }
-            rebuilt.append(hop)
-        }
-        guard job == fuelAssistGeneration, stages.indices.contains(index), !rebuilt.isEmpty else { return }
-        fuelPreviewStops = []
-        stages.remove(at: index)
-        RoutingDebugLog.shared.event("fuel itinerary hops=\(rebuilt.count)")
-        isAssemblingRoute = true
-        for i in 0..<rebuilt.count {
-            let hopIndex = index + i
-            guard job == fuelAssistGeneration else { return }
-            stages.insert(rebuilt[i], at: hopIndex)
-            fuelPlanningStatus = "Building leg \(i + 1) of \(rebuilt.count)…"
-            refreshMap()
-            if let hopStart = rebuilt[i].start, let hopEnd = rebuilt[i].end {
-                mapState.fit([hopStart, hopEnd])
-            }
-            if !UIAccessibility.isReduceMotionEnabled, rebuilt[i].response != nil {
-                try? await Task.sleep(for: .milliseconds(140))
-            } else {
-                await Task.yield()
-            }
-            guard stages.indices.contains(hopIndex) else { return }
-            if stages[hopIndex].response == nil {
-                await routeStage(at: hopIndex, includeFuelAssist: false)
-            }
-        }
-        isAssemblingRoute = false
-        fuelPlanNotice = nil
-        refreshMap()
-        announceRouteReadyIfComplete()
-    }
-
-    /// Online fuel construction has two deliberately separate phases:
-    /// 1. one graph pass chooses the reachable forward pumps;
-    /// 2. only those final legs are routed and revealed in order.
-    /// This keeps candidate count out of the expensive route-search budget and
-    /// restores the rider-visible point → pump → pump → destination build.
-    private func buildLiveFuelChain(
-        at index: Int,
-        job: Int,
-        start: RouteCoordinate,
-        end: RouteCoordinate,
-        profile: RouteProfile,
-        allowUnknown: Bool,
-        tankMeters: Double,
-        firstHopCapMeters: Double,
-        requireFuelStopBeforeEnd: Bool
-    ) async throws {
-        fuelPlanningStatus = "Finding every reachable pump in this tank…"
-        refreshMap()
-        let request = FuelChainRequest(
-            profile: profile,
-            from: start,
-            to: end,
-            allowUnknown: allowUnknown,
-            usableRangeMeters: tankMeters,
-            firstLegMaxMeters: firstHopCapMeters,
-            requireFuelStopBeforeEnd: requireFuelStopBeforeEnd
-        )
-        let response = try await routing.fuelChain(request)
-        guard job == fuelAssistGeneration, stages.indices.contains(index) else {
-            throw CancellationError()
-        }
-
-        let stops = response.stops ?? []
-        let diagnostics = response.diagnostics
-        RoutingDebugLog.shared.event(
-            "fuel forward chain stops=\(stops.count) states=\(diagnostics?.states ?? 0) " +
-            "pops=\(diagnostics?.dijkstraPops ?? 0) planMs=\(diagnostics?.elapsedMs ?? 0)"
-        )
-
-        let waypoints = [start] + stops.map(\.coordinate) + [end]
-        guard waypoints.count >= 2 else {
-            throw RoutingError.invalidResponse
-        }
-
-        UserDefaults.standard.set(true, forKey: "dirt.layers.fuel")
-        mapState.bumpLayerPrefs()
-
-        let fuelGroupID = stages[index].fuelGroupID ?? UUID()
-        var rebuilt: [Stage] = []
-        rebuilt.reserveCapacity(waypoints.count - 1)
-        for legIndex in 0..<(waypoints.count - 1) {
-            var hop = Stage(
-                start: waypoints[legIndex],
-                end: waypoints[legIndex + 1],
-                profile: profile,
-                allowUnknown: allowUnknown
-            )
-            hop.skipFuelAssist = true
-            hop.setEndsAtFuelStop(legIndex < stops.count)
-            hop.fuelGroupID = fuelGroupID
-            hop.maxRouteMeters = legIndex == 0 ? firstHopCapMeters : tankMeters
-            if hop.endsAtFuelStop {
-                let station = stops[legIndex]
-                hop.fuelStopID = station.id
-                hop.fuelStopName = station.displayName
-            }
-            rebuilt.append(hop)
-        }
-
-        guard job == fuelAssistGeneration, stages.indices.contains(index) else {
-            throw CancellationError()
-        }
-        stages.remove(at: index)
-        isAssemblingRoute = true
-
-        for legIndex in rebuilt.indices {
-            guard job == fuelAssistGeneration else { throw CancellationError() }
-            let stageIndex = index + legIndex
-            let hop = rebuilt[legIndex]
-            stages.insert(hop, at: stageIndex)
-            if hop.endsAtFuelStop {
-                fuelPlanningStatus = "Building leg \(legIndex + 1) to fuel stop \(legIndex + 1)…"
-            } else {
-                fuelPlanningStatus = "Building the final leg to point 2…"
-            }
-            refreshMap()
-            if let hopStart = hop.start, let hopEnd = hop.end {
-                mapState.fit([hopStart, hopEnd])
-            }
-            await routeStage(at: stageIndex, includeFuelAssist: false)
-            guard job == fuelAssistGeneration else { throw CancellationError() }
-            guard stages.indices.contains(stageIndex),
-                  stages[stageIndex].response != nil,
-                  stages[stageIndex].error == nil
-            else {
-                isAssemblingRoute = false
-                let message = stages.indices.contains(stageIndex)
-                    ? (stages[stageIndex].error ?? "A selected fuel leg could not be routed.")
-                    : "A selected fuel leg could not be routed."
-                errorMessage = message
-                toast = message
-                RoutingDebugLog.shared.event(
-                    "fuel committed leg failed leg=\(legIndex + 1)/\(rebuilt.count) msg=\(message)"
-                )
-                mapState.unlockAfterRouteFailure()
-                refreshMap()
-                return
-            }
-            // Let the completed line and pump land visibly before starting the
-            // next final leg. This is progress, not a decorative fake delay.
-            if !UIAccessibility.isReduceMotionEnabled {
-                try? await Task.sleep(for: .milliseconds(180))
-            } else {
-                await Task.yield()
-            }
-        }
-
-        isAssemblingRoute = false
-        fuelPlanNotice = nil
-        refreshMap()
-        announceRouteReadyIfComplete()
-    }
-
-    /// Splits stage `index` (A→B) into A→via and via→B. Caller re-routes.
-    private func splitStage(at index: Int, via: RouteCoordinate, viaIsFuel: Bool = false) -> Bool {
-        guard stages.indices.contains(index),
-              let start = stages[index].start,
-              let end = stages[index].end
-        else { return false }
-        if GeoMath.meters(start, via) < 800 || GeoMath.meters(via, end) < 800 {
-            RoutingDebugLog.shared.event("fuel split skipped — via on top of A or B")
-            return false
-        }
-
-        let original = stages[index]
-        let profile = original.profile
-        let allow = original.allowUnknown
-        stages[index].routeGeneration += 1
-
-        var first = Stage(
-            start: start, end: via, profile: profile, allowUnknown: allow
-        )
-        first.skipFuelAssist = true
-        first.setEndsAtFuelStop(viaIsFuel)
-        first.fuelGroupID = original.fuelGroupID
-        first.maxRouteMeters = original.maxRouteMeters
-        var second = Stage(
-            start: via, end: end, profile: profile, allowUnknown: allow
-        )
-        second.skipFuelAssist = true
-        second.setEndsAtFuelStop(original.endsAtFuelStop)
-        second.fuelStopID = original.fuelStopID
-        second.fuelStopName = original.fuelStopName
-        second.fuelGroupID = original.fuelGroupID
-        second.maxRouteMeters = original.maxRouteMeters
-        // Second leg may still be long — allow another fuel assist after it routes.
-
-        stages.remove(at: index)
-        stages.insert(contentsOf: [first, second], at: index)
-        refreshMap()
-        return true
-    }
 
     /// Station beside the already-drawn line, ~0.8 tank along it.
     /// Not the nearest pump to a crow-flies point (that is the 50 km spur).
@@ -3274,398 +2066,6 @@ final class RoutePlannerModel {
     /// even if an offline pack happens to be installed. Packs are used here
     /// only without connectivity; navigation recovery has its own local-first
     /// path in `routeWhileNavigating`.
-    private func routeForPlanning(
-        from: RouteCoordinate,
-        to: RouteCoordinate,
-        profile: RouteProfile,
-        allowUnknown: Bool,
-        maxRouteMeters: Double? = nil,
-        avoidEdgeIds: [String] = []
-    ) async throws -> RouteResponse {
-        let fromCL = CLLocationCoordinate2D(latitude: from.latitude, longitude: from.longitude)
-        let toCL = CLLocationCoordinate2D(latitude: to.latitude, longitude: to.longitude)
-        let ends = [fromCL, toCL]
-        let needed = GraphPackStore.regionIds(containingAny: ends)
-        let packsCoverEnds = Self.installedPacksCover(ends: ends, store: graphPacks)
-        // One pack = one graph. Two adjacent installed packs chain on-device.
-        let singleRegion = needed.count <= 1
-
-        let routeStarted = Date()
-        RoutingDebugLog.shared.routeAttempt(
-            mode: String(describing: mode),
-            from: (from.latitude, from.longitude),
-            to: (to.latitude, to.longitude),
-            profile: profile.rawValue,
-            allowUnknown: allowUnknown
-        )
-        RoutingDebugLog.shared.event(
-            "policy packsCover=\(packsCoverEnds) singleRegion=\(singleRegion) "
-                + "installed=[\(needed.filter { graphPacks.isInstalled($0) }.joined(separator: ","))] "
-                + "path=\(needed.first.flatMap { graphPacks.installedGraphPath(regionId: $0) } ?? "nil") "
-                + "manifest=\(graphPacks.lastManifestVersion) "
-                + "online=\(network.isOnline)"
-        )
-
-        if packsCoverEnds, !network.isOnline {
-            await graphPacks.ensureRoadShapes(for: ends)
-            let primary = await attemptOnDeviceRoute(
-                from: fromCL,
-                to: toCL,
-                profile: profile,
-                allowUnknown: allowUnknown,
-                maxRouteMeters: maxRouteMeters,
-                avoidEdgeIds: avoidEdgeIds
-            )
-            if singleRegion {
-                switch primary {
-                case .success(let local) where local.coordinates.count > 1:
-                    let ms = Int(Date().timeIntervalSince(routeStarted) * 1000)
-                    RoutingDebugLog.shared.routeResult(
-                        "on-device ok edges≈\(local.edgeIds.count) m=\(Int(local.distanceMeters)) "
-                            + "dirt%=\(local.dirtPercent) paved%=\(local.pavedPercent) "
-                            + "unk%=\(local.unknownAccessPercent) ms=\(ms)"
-                            + (local.debugNote.isEmpty ? "" : " \(local.debugNote)")
-                    )
-                    return makeOnDeviceRouteResponse(local)
-                case .success:
-                    RoutingDebugLog.shared.routeResult("on-device empty geometry → noPath")
-                    throw RoutingError.server(
-                        graphPacks.onDeviceRouteFailureMessage(for: ends, reason: .noPath)
-                    )
-                case .failure(let reason):
-                    RoutingDebugLog.shared.routeResult("on-device failure \(reason)")
-                    // Offline, the installed same-province pack is authoritative.
-                    let recovery = await recoverOnDeviceFailure(
-                        reason: reason,
-                        from: fromCL,
-                        to: toCL,
-                        ends: ends,
-                        profile: profile,
-                        allowUnknown: allowUnknown
-                    )
-                    switch recovery {
-                    case .routed(let local):
-                        return makeOnDeviceRouteResponse(local)
-                    case .liveFallback:
-                        throw RoutingError.server(
-                            graphPacks.onDeviceRouteFailureMessage(for: ends, reason: reason)
-                        )
-                    case .failed(let error):
-                        throw error
-                    }
-                }
-            } else if case .success(let local) = primary, local.coordinates.count > 1 {
-                let ms = Int(Date().timeIntervalSince(routeStarted) * 1000)
-                RoutingDebugLog.shared.routeResult(
-                    "on-device chain ok edges≈\(local.edgeIds.count) m=\(Int(local.distanceMeters)) "
-                        + "unk%=\(local.unknownAccessPercent) ms=\(ms)"
-                )
-                return makeOnDeviceRouteResponse(local)
-            } else {
-                RoutingDebugLog.shared.routeResult("on-device chain missed — no live fallback")
-                throw RoutingError.server(
-                    "Couldn't join \(Self.regionClause(for: ends, store: graphPacks)) on the downloaded packs. Drop a via near the border, or keep both pins in one pack."
-                )
-            }
-        } else if !packsCoverEnds, singleRegion, network.isOnline {
-            // Primary says NS but pack has no eligible edge at B (Amherst / border gaps).
-            // Still try live — basemap snap ≠ pack coverage.
-            let endDist = await graphPacks.distanceToNearestRoad(
-                from: toCL, allowUnknown: allowUnknown, profile: profile
-            )
-            let endDistUnknown = await graphPacks.distanceToNearestRoad(
-                from: toCL, allowUnknown: true, profile: profile
-            )
-            RoutingDebugLog.shared.event(
-                "packsCover=false singleRegion endDist=\(endDist.map { String(format: "%.0f", $0) } ?? "nil") "
-                    + "endDistUnknown=\(endDistUnknown.map { String(format: "%.0f", $0) } ?? "nil")"
-            )
-        }
-
-        if network.isOnline {
-            let liveTimeout = needed.count > 1
-                ? RoutingClient.longHaulTimeout
-                : RoutingClient.defaultTimeout
-            RoutingDebugLog.shared.event(
-                "live /api/route needed=[\(needed.joined(separator: ","))] timeout=\(Int(liveTimeout))s"
-            )
-            let request = RouteRequest(
-                profile: profile,
-                locations: [
-                    RouteLocation(latitude: from.latitude, longitude: from.longitude, label: "A"),
-                    RouteLocation(latitude: to.latitude, longitude: to.longitude, label: "B")
-                ],
-                allowUnknown: allowUnknown,
-                avoidEdgeIds: avoidEdgeIds,
-                sessionSeed: planningSessionSeed,
-                maxPathMeters: maxRouteMeters
-            )
-            do {
-                let response = try await routing.route(request, timeout: liveTimeout)
-                let ms = Int(Date().timeIntervalSince(routeStarted) * 1000)
-                let unk = response.stats?.unknownAccessPercent ?? 0
-                let liveMeta: String
-                if let debug = response.debug {
-                    let search = debug.searchMeta
-                    liveMeta = " rev=\(debug.routingRevision ?? "legacy")"
-                        + " objective=\(search?.rideObjective ?? "legacy")"
-                        + " outcome=\(search?.pass2Outcome ?? "-")"
-                        + " timedOut=\((search?.timedOut ?? false) ? 1 : 0)"
-                        + " pops=\(search?.pops ?? 0)"
-                        + " corridor=\(Int(search?.corridorMeters ?? 0))m"
-                        + " maxXT=\(Int(search?.maxCrossTrackMeters ?? 0))m"
-                        + " widened=\((search?.corridorWidened ?? false) ? 1 : 0)"
-                        + " urbanFallback=\((search?.urbanCoreFallbackUsed ?? false) ? 1 : 0)"
-                        + " settlementFallback=\((search?.settlementFallbackUsed ?? false) ? 1 : 0)"
-                } else {
-                    liveMeta = " rev=legacy"
-                }
-                RoutingDebugLog.shared.routeResult(
-                    "live ok status=\(response.status) m=\(Int(response.distanceMeters ?? 0)) "
-                        + "dirt%=\(response.dirtPercent) paved%=\(response.pavedPercent) "
-                        + "unk%=\(unk) ms=\(ms)" + liveMeta
-                )
-                return response
-            } catch {
-                RoutingDebugLog.shared.routeFailure(error, context: "live")
-                throw rewriteLiveRoutingError(error, needed: needed)
-            }
-        }
-
-        throw RoutingError.server(graphPacks.offlinePlanningMessage(for: ends))
-    }
-
-    private enum OnDeviceRecovery {
-        case routed(OnDeviceRouter.Result)
-        case liveFallback(hint: String)
-        case failed(Error)
-    }
-
-    private func attemptOnDeviceRoute(
-        from: CLLocationCoordinate2D,
-        to: CLLocationCoordinate2D,
-        profile: RouteProfile,
-        allowUnknown: Bool,
-        maxRouteMeters: Double? = nil,
-        avoidEdgeIds: [String] = []
-    ) async -> Result<OnDeviceRouter.Result, OnDeviceRouter.Failure> {
-        await graphPacks.ensureRoadShapes(for: [from, to])
-        return await graphPacks.routeOnDeviceDetailed(
-            from: from,
-            to: to,
-            profile: profile,
-            allowUnknown: allowUnknown,
-            avoidEdgeIds: avoidEdgeIds,
-            sessionSeed: planningSessionSeed,
-            maxRouteMeters: maxRouteMeters
-        )
-    }
-
-    /// Recovery ladder when the primary on-device attempt fails:
-    /// Recovery when the installed home-province pack is SoT (packsCover + single region).
-    /// Capillary retry only surfaces an Allow hint — never silently opens purple.
-    /// Missing-pack and multi-region hops fail above; this ladder only retries the installed pack.
-    private func recoverOnDeviceFailure(
-        reason: OnDeviceRouter.Failure,
-        from: CLLocationCoordinate2D,
-        to: CLLocationCoordinate2D,
-        ends: [CLLocationCoordinate2D],
-        profile: RouteProfile,
-        allowUnknown: Bool
-    ) async -> OnDeviceRecovery {
-        let startDist = await graphPacks.distanceToNearestRoad(
-            from: from, allowUnknown: allowUnknown, profile: profile
-        )
-        let endDist = await graphPacks.distanceToNearestRoad(
-            from: to, allowUnknown: allowUnknown, profile: profile
-        )
-        let startDistUnknown = await graphPacks.distanceToNearestRoad(
-            from: from, allowUnknown: true, profile: profile
-        )
-        let endDistUnknown = await graphPacks.distanceToNearestRoad(
-            from: to, allowUnknown: true, profile: profile
-        )
-        RoutingDebugLog.shared.event(
-            "snapDist start=\(startDist.map { String(format: "%.0f", $0) } ?? "nil")m "
-                + "end=\(endDist.map { String(format: "%.0f", $0) } ?? "nil")m "
-                + "startU=\(startDistUnknown.map { String(format: "%.0f", $0) } ?? "nil")m "
-                + "endU=\(endDistUnknown.map { String(format: "%.0f", $0) } ?? "nil")m "
-                + "active=\(graphPacks.activePack?.regionId ?? "?")"
-        )
-
-        // If Allow is off but unknown capillary would connect, tell the rider — don't cheat.
-        if !allowUnknown, profile != .cleanest,
-           reason == .noPath || reason == .cannotSnapEnd || reason == .cannotSnapStart {
-            let unknownHelpsEnd = (endDist == nil || endDist! > OnDeviceRouter.preferredMatchMeters)
-                && (endDistUnknown.map { $0 <= OnDeviceRouter.preferredMatchMeters } ?? false)
-            let unknownHelpsStart = (startDist == nil || startDist! > OnDeviceRouter.preferredMatchMeters)
-                && (startDistUnknown.map { $0 <= OnDeviceRouter.preferredMatchMeters } ?? false)
-            var capillaryWouldRoute = false
-            if reason == .noPath || unknownHelpsEnd || unknownHelpsStart {
-                switch await attemptOnDeviceRoute(
-                    from: from, to: to, profile: profile, allowUnknown: true
-                ) {
-                case .success(let local) where local.coordinates.count > 1:
-                    capillaryWouldRoute = true
-                    RoutingDebugLog.shared.event(
-                        "on-device would succeed with Allow unknown m=\(Int(local.distanceMeters)) — not auto-applied"
-                    )
-                default:
-                    break
-                }
-            }
-            if capillaryWouldRoute {
-                return .failed(
-                    RoutingError.server(
-                        "No route under Dirt with Allow unknown off — those points need gated forest/track roads. Turn on Allow unknown, or pick another profile / pin."
-                    )
-                )
-            }
-        }
-
-        do {
-            try throwOnDeviceSnapOrPathFailure(
-                reason: reason,
-                ends: ends,
-                startDist: startDist,
-                endDist: endDist
-            )
-            return .failed(RoutingError.server("On-device routing failed."))
-        } catch {
-            return .failed(error)
-        }
-    }
-
-    private func throwOnDeviceSnapOrPathFailure(
-        reason: OnDeviceRouter.Failure,
-        ends: [CLLocationCoordinate2D],
-        startDist: Double?,
-        endDist: Double?
-    ) throws {
-        let limit = Int(OnDeviceRouter.preferredMatchMeters)
-        let region = Self.regionClause(for: ends, store: graphPacks)
-
-        if mode == .fromHere, reason == .cannotSnapStart {
-            throw RoutingError.offGraphStart
-        }
-
-        switch reason {
-        case .cannotSnapStart:
-            if let meters = startDist.map({ Int($0.rounded()) }) {
-                throw RoutingError.server(
-                    "Your start is about \(meters) m from the nearest mapped road in \(region) (limit \(limit) m). Move closer or drop A on the road."
-                )
-            }
-            throw RoutingError.server(
-                graphPacks.onDeviceRouteFailureMessage(for: ends, reason: reason)
-            )
-        case .cannotSnapEnd:
-            if let meters = endDist.map({ Int($0.rounded()) }) {
-                throw RoutingError.server(
-                    "Point B is about \(meters) m from the nearest mapped road in \(region) (limit \(limit) m). Nudge B closer to the roadway."
-                )
-            }
-            throw RoutingError.server(
-                "Point B isn’t on a road in the downloaded \(region) pack. Nudge B onto a pack roadway, or download a bordering pack."
-            )
-        case .noPath:
-            let startFar = startDist == nil || startDist! > OnDeviceRouter.preferredMatchMeters
-            let endFar = endDist == nil || endDist! > OnDeviceRouter.preferredMatchMeters
-            if startFar, !endFar {
-                let meters = startDist.map { Int($0.rounded()) }
-                throw RoutingError.server(
-                    meters.map {
-                        "Your start is about \($0) m from the nearest mapped road (limit \(limit) m). Tap the road to set A — B stays put."
-                    } ?? "Your start isn’t close enough to a mapped road. Tap the road to set A — B stays put."
-                )
-            }
-            if endFar, !startFar {
-                let meters = endDist.map { Int($0.rounded()) }
-                throw RoutingError.server(
-                    meters.map {
-                        "Point B is about \($0) m from the nearest mapped road (limit \(limit) m). Nudge B closer to the roadway."
-                    } ?? "Point B isn’t close enough to a mapped road. Nudge B closer to the roadway."
-                )
-            }
-            if startFar, endFar {
-                let sm = startDist.map { Int($0.rounded()) } ?? -1
-                let em = endDist.map { Int($0.rounded()) } ?? -1
-                throw RoutingError.server(
-                    "Both ends are far from mapped roads (start ~\(sm) m, B ~\(em) m; limit \(limit) m). Move closer or drop pins on the roadway."
-                )
-            }
-            // Snaps OK — fabric/policy disconnect under current Allow + profile.
-            throw RoutingError.server(
-                "No on-device path between those points in \(region) under this profile. Try another profile, turn on Allow unknown if you need forest/track roads, or move a pin."
-            )
-        default:
-            throw RoutingError.server(
-                graphPacks.onDeviceRouteFailureMessage(for: ends, reason: reason)
-            )
-        }
-    }
-
-    /// True when every endpoint’s primary region has an installed pack (or both
-    /// ends share one installed region).
-    private static func installedPacksCover(
-        ends: [CLLocationCoordinate2D],
-        store: GraphPackStore
-    ) -> Bool {
-        let needed = GraphPackStore.regionIds(containingAny: ends)
-        if !needed.isEmpty, needed.allSatisfy({ store.isInstalled($0) }) {
-            return true
-        }
-        // Same downloaded province for rider + pin even if bbox noise differs.
-        let primaries = ends.compactMap { GraphPackStore.primaryRegionId(containing: $0) }
-        guard let first = primaries.first, primaries.allSatisfy({ $0 == first }) else {
-            return false
-        }
-        return store.isInstalled(first)
-    }
-
-    private static func regionClause(
-        for coordinates: [CLLocationCoordinate2D],
-        store: GraphPackStore
-    ) -> String {
-        let needed = GraphPackStore.regionIds(containingAny: coordinates)
-        let titles = needed.map { store.displayTitle(forRegionId: $0) }
-        if titles.isEmpty { return "this area" }
-        if titles.count == 1 { return titles[0] }
-        return titles.joined(separator: " / ")
-    }
-
-    /// Live `/api/route` failures often say "Invalid URL" when a CDN pack is missing.
-    private func rewriteLiveRoutingError(_ error: Error, needed: [String]) -> Error {
-        let msg = error.localizedDescription
-        let lower = msg.lowercased()
-        let titles = needed.map { graphPacks.displayTitle(forRegionId: $0) }.joined(separator: " / ")
-        let nsCode = (error as NSError).code
-        if nsCode == NSURLErrorTimedOut
-            || lower.contains("timed out")
-            || lower.contains("timeout") {
-            return RoutingError.server(
-                "Live cross-country routing is still working (loads several map packs on the server). Wait a bit and try again — long routes can take up to a few minutes."
-            )
-        }
-        if lower.contains("invalid url")
-            || lower.contains("graph pack not on live server")
-            || lower.contains("graph pack missing on cdn")
-            || lower.contains("graph_load_failed")
-            || lower.contains("graph fetch http") {
-            return RoutingError.server(
-                "Live routing can’t load \(titles.isEmpty ? "that region" : titles) from the map CDN right now. Check Wi‑Fi and try again — you shouldn’t need to download a pack just to route online."
-            )
-        }
-        if lower.contains("disconnected networks") || lower.contains("disconnected_components") {
-            return RoutingError.server(
-                "Live routing snapped both ends but they’re on disconnected networks (\(titles)). Often a ferry / bridge gap in the thinned longhaul packs. Try a pin on the mainland approach, turn on Allow unknown, or stage via a bordering region."
-            )
-        }
-        return error
-    }
-
-    /// The destination the active route is preserving (recovery keeps it).
-    /// Single-leg: final B. Multi-stage: **active stage end** (not the whole-trip B).
     var preservedDestination: RouteCoordinate? {
         if shouldPreserveStagesForRecovery,
            let idx = activeStageIndex(near: locationService.currentCoordinate),
@@ -3848,9 +2248,17 @@ final class RoutePlannerModel {
             return
         }
         let target = preservedFinalDestination
-        fromHereResponse = response
         mode = .fromHere
         destination = target
+        if let start = response.coordinates.first,
+           let end = target ?? response.coordinates.last {
+            seedCanonicalBuild(
+                coordinates: [start, end],
+                profile: profile,
+                allowUnknown: allowUnknown,
+                responses: [response]
+            )
+        }
         let display = MapState.displaySegments(from: [response])
         navigation.replaceRoute(
             coordinates: response.coordinates,
@@ -3881,11 +2289,9 @@ final class RoutePlannerModel {
         announce: Bool
     ) async {
         guard stages.indices.contains(index) else { return }
-        let stageID = stages[index].id
+        let riderLegID = stages[index].riderLegID
         let useProfile = stages[index].profile
         let useAllow = stages[index].allowUnknown
-        stages[index].routeGeneration += 1
-        let generation = stages[index].routeGeneration
 
         do {
             let response = try await routeWhileNavigating(
@@ -3896,9 +2302,7 @@ final class RoutePlannerModel {
                 profile: useProfile,
                 allowUnknown: useAllow
             )
-            guard let idx = stages.firstIndex(where: { $0.id == stageID }),
-                  stages[idx].routeGeneration == generation
-            else { return }
+            guard let idx = stages.firstIndex(where: { $0.riderLegID == riderLegID }) else { return }
 
             applyActiveStageResponse(response, at: idx, isReturnToNetwork: false)
             if announce {
@@ -3942,9 +2346,22 @@ final class RoutePlannerModel {
             applied = response
         }
 
-        // Preserve stage start/end pins and profile — only replace geometry.
-        stages[index].response = applied
-        stages[index].error = nil
+        guard let current = built,
+              current.legs.indices.contains(index)
+        else { return }
+        var legs = current.legs
+        let old = legs[index]
+        legs[index] = BuiltLeg(
+            riderLegID: old.riderLegID,
+            fromCoordinate: old.fromCoordinate,
+            toCoordinate: old.toCoordinate,
+            endsAtFuelStop: old.endsAtFuelStop,
+            response: applied,
+            fuelUsedOnArrivalMeters: old.fuelUsedOnArrivalMeters
+        )
+        var statuses = current.riderLegStatus
+        statuses[old.riderLegID] = .built
+        built = BuiltItinerary(generation: current.generation, legs: legs, riderLegStatus: statuses)
 
         recomposeNavigationFromActiveStage(index)
         refreshMap()
@@ -4050,10 +2467,11 @@ final class RoutePlannerModel {
     /// Do **not** require `!isRouting` — announce runs before `defer` clears those flags,
     /// which left "Calculating route" stuck on successful From here / Plan hops.
     private var routePlanIsCompleteSuccess: Bool {
-        if !stages.isEmpty {
-            let hops = stages.filter { $0.end != nil }
-            guard !hops.isEmpty else { return false }
-            return hops.allSatisfy { $0.error == nil && $0.response != nil }
+        if let built, !itinerary.legs.isEmpty {
+            return itinerary.legs.allSatisfy { leg in
+                if case .built = built.riderLegStatus[leg.id] { return true }
+                return false
+            }
         }
         switch mode {
         case .fromHere, .saved:
@@ -4061,12 +2479,6 @@ final class RoutePlannerModel {
         case .plan:
             return false
         }
-    }
-
-    /// Marker IDs must remain stable while stage arrays are inserted, removed,
-    /// or re-seated with fuel hops. Labels are human order; IDs are identity.
-    private func stageMarkerID(_ stage: Stage) -> String {
-        "stage-\(stage.id.uuidString)"
     }
 
     /// Mid-nav / single-leg success toast (caller already verified the response).

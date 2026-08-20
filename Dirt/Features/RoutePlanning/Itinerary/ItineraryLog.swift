@@ -28,6 +28,8 @@ nonisolated enum ItineraryLog {
             return "itinerary action=replaceAll \(generation) before=\(coordinates(before)) after=\(coordinates(after))\(sourceSuffix)"
         case .clear:
             return "itinerary action=clear \(generation)\(sourceSuffix)"
+        case .rebuild:
+            return "itinerary action=rebuild \(generation)\(sourceSuffix)"
         }
     }
 
