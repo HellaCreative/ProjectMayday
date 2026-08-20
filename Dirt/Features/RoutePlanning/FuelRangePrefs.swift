@@ -2,6 +2,31 @@ import Foundation
 
 /// Rider tank range for Plan fuel-assist. `0` disables auto gas waypoints.
 enum FuelRangePrefs {
+    nonisolated struct Snapshot: Equatable, Sendable {
+        let isEnabled: Bool
+        let tankMeters: Double
+        let usableMeters: Double
+        let reservePercent: Double
+
+        init(
+            isEnabled: Bool,
+            tankMeters: Double,
+            usableMeters: Double,
+            reservePercent: Double
+        ) {
+            self.isEnabled = isEnabled
+            self.tankMeters = tankMeters
+            self.usableMeters = usableMeters
+            self.reservePercent = reservePercent
+        }
+
+        static let disabled = Snapshot(
+            isEnabled: false,
+            tankMeters: 0,
+            usableMeters: 0,
+            reservePercent: 0
+        )
+    }
     static let key = "dirt.rider.fuelRangeKm"
     static let lastEnabledKey = "dirt.rider.lastEnabledFuelRangeKm"
     static let reservePercentKey = "dirt.rider.fuelReservePercent"
@@ -30,6 +55,17 @@ enum FuelRangePrefs {
     }
 
     static var isEnabled: Bool { kilometers > 0 }
+
+    static var snapshot: Snapshot {
+        let tankKm = kilometers
+        let reserve = reservePercent
+        return Snapshot(
+            isEnabled: tankKm > 0,
+            tankMeters: tankKm * 1_000,
+            usableMeters: usableKilometers(for: tankKm, reservePercent: reserve) * 1_000,
+            reservePercent: reserve
+        )
+    }
 
     /// Range held back for wind, elevation, closures, and station uncertainty.
     /// The rider enters real tank range; fuel planning uses the remainder.

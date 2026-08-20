@@ -993,7 +993,6 @@ final class RoutePlannerModel {
         let requestedAllow = stages[index].allowUnknown
         let requestedMaxRouteMeters = stages[index].maxRouteMeters
         let requestedLegName = stageEndpointTitle(at: index)
-        let continuityAvoidEdgeIds = stageContinuityAvoidEdgeIds(at: index)
 
         stages[index].isRouting = true
         stages[index].error = nil
@@ -1007,37 +1006,13 @@ final class RoutePlannerModel {
             isRouting = stages.contains(where: \.isRouting)
         }
         do {
-            let response: RouteResponse
-            do {
-                response = try await routeForPlanning(
-                    from: start,
-                    to: end,
-                    profile: requestedProfile,
-                    allowUnknown: requestedAllow,
-                    maxRouteMeters: requestedMaxRouteMeters,
-                    avoidEdgeIds: continuityAvoidEdgeIds
-                )
-            } catch {
-                if Self.isRequestCancellation(error) {
-                    throw CancellationError()
-                }
-                guard !continuityAvoidEdgeIds.isEmpty,
-                      Self.isNoRouteFailure(error)
-                else { throw error }
-                // Backtracking is a fallback, never the first choice. If the
-                // graph has no alternate exit from this waypoint, remove the
-                // continuity wall rather than declaring a false no-route.
-                RoutingDebugLog.shared.event(
-                    "route continuity fallback stage=\(index) — prior-edge wall disconnected"
-                )
-                response = try await routeForPlanning(
-                    from: start,
-                    to: end,
-                    profile: requestedProfile,
-                    allowUnknown: requestedAllow,
-                    maxRouteMeters: requestedMaxRouteMeters
-                )
-            }
+            let response = try await routeForPlanning(
+                from: start,
+                to: end,
+                profile: requestedProfile,
+                allowUnknown: requestedAllow,
+                maxRouteMeters: requestedMaxRouteMeters
+            )
             // Resolve by stable stage id — index may have shifted (delete / reorder).
             guard let idx = stages.firstIndex(where: { $0.id == stageID }),
                   stages[idx].routeGeneration == generation,
@@ -1098,6 +1073,7 @@ final class RoutePlannerModel {
         }
     }
 
+    // Superseded by canonical ordering; see docs/itinerary-refactor. Server-side backtrack penalty is the replacement.
     /// Keep a newly shaped leg from tracing the existing itinerary backwards.
     /// A Plan route is a journey, so a fresh leg should form a new continuation
     /// or loop—not consume the road it just arrived on in reverse. Leave the

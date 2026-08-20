@@ -1,0 +1,381 @@
+import Foundation
+
+@MainActor
+final class ItineraryBuilder {
+    private var currentGeneration: Int?
+
+    func setCurrentGeneration(_ generation: Int) {
+        currentGeneration = generation
+    }
+
+    func cancelCurrentBuild() {
+        currentGeneration = nil
+    }
+
+    func build(
+        _ itinerary: RiderItinerary,
+        from legIndex: Int,
+        reuse: BuiltItinerary?,
+        fuel: FuelRangePrefs.Snapshot,
+        source policy: RoutingSourcePolicy,
+        onProgress: @MainActor (BuiltItinerary) -> Void
+    ) async -> BuiltItinerary {
+        currentGeneration = itinerary.generation
+        let startIndex = min(max(0, legIndex), itinerary.legs.count)
+        let kept = reusableLegs(from: reuse, itinerary: itinerary, before: startIndex)
+        var statuses = Dictionary(
+            uniqueKeysWithValues: itinerary.legs.map { ($0.id, LegStatus.pending) }
+        )
+        for leg in kept { statuses[leg.riderLegID] = .built }
+        var committed = BuiltItinerary(
+            generation: itinerary.generation,
+            legs: kept,
+            riderLegStatus: statuses
+        )
+
+        guard startIndex < itinerary.legs.count else {
+            RoutingDebugLog.shared.event(
+                "build committed gen=\(itinerary.generation) legs=\(kept.count)"
+            )
+            return committed
+        }
+
+        let firstRequest = routeRequest(
+            itinerary: itinerary,
+            legIndex: startIndex,
+            maxPathMeters: nil
+        )
+        let selectedSource = policy.select(for: firstRequest)
+        RoutingDebugLog.shared.event(
+            "build start gen=\(itinerary.generation) fromLeg=\(startIndex) " +
+                "reuseLegs=\(kept.count) source=\(selectedSource.name)"
+        )
+
+        // Distance discovery is intentionally complete before the first fuel
+        // decision. The next rider leg can therefore never be a nil fallback.
+        var baseline: [Int: RouteResponse] = [:]
+        var baselineFailure: (index: Int, message: String)?
+        for index in startIndex..<itinerary.legs.count {
+            do {
+                let response = try await selectedSource.route(routeRequest(
+                    itinerary: itinerary,
+                    legIndex: index,
+                    maxPathMeters: nil
+                ))
+                guard active(itinerary) else {
+                    return dropped(itinerary, committed: committed)
+                }
+                baseline[index] = response
+            } catch is CancellationError {
+                return dropped(itinerary, committed: committed, cancelled: true)
+            } catch {
+                guard active(itinerary) else {
+                    return dropped(itinerary, committed: committed)
+                }
+                baselineFailure = (index, error.localizedDescription)
+                break
+            }
+        }
+
+        var fuelUsed = carriedFuel(from: kept)
+        let lastBuildable = baselineFailure?.index ?? itinerary.legs.count
+        for index in startIndex..<lastBuildable {
+            guard let base = baseline[index] else { break }
+            let riderLeg = itinerary.legs[index]
+            do {
+                let builtLegs = try await buildRiderLeg(
+                    itinerary: itinerary,
+                    index: index,
+                    baseline: base,
+                    allBaseline: baseline,
+                    fuelUsedAtStart: fuelUsed,
+                    fuel: fuel,
+                    source: selectedSource
+                )
+                guard active(itinerary) else {
+                    return dropped(itinerary, committed: committed)
+                }
+                committed = replacing(
+                    riderLegID: riderLeg.id,
+                    with: builtLegs,
+                    in: committed,
+                    status: .built
+                )
+                fuelUsed = builtLegs.last?.fuelUsedOnArrivalMeters ?? fuelUsed
+                let meters = builtLegs.reduce(0) { $0 + ($1.response.distanceMeters ?? 0) }
+                let weightedDirt = builtLegs.reduce(0.0) {
+                    $0 + Double($1.response.dirtPercent) * ($1.response.distanceMeters ?? 0)
+                }
+                let dirt = meters > 0 ? Int((weightedDirt / meters).rounded()) : 0
+                RoutingDebugLog.shared.event(
+                    "build leg riderLeg=\(riderLeg.id) " +
+                        "fuelStops=\(builtLegs.filter { $0.endsAtFuelStop != nil }.count) " +
+                        "meters=\(Int(meters)) dirt%=\(dirt)"
+                )
+                onProgress(committed)
+            } catch is CancellationError {
+                return dropped(itinerary, committed: committed, cancelled: true)
+            } catch {
+                guard active(itinerary) else {
+                    return dropped(itinerary, committed: committed)
+                }
+                let message = error.localizedDescription
+                committed = markingFailed(riderLeg.id, message: message, in: committed)
+                RoutingDebugLog.shared.event(
+                    "build failed riderLeg=\(riderLeg.id) msg=\(message)"
+                )
+                onProgress(committed)
+                return committed
+            }
+        }
+
+        if let failure = baselineFailure {
+            let legID = itinerary.legs[failure.index].id
+            committed = markingFailed(legID, message: failure.message, in: committed)
+            RoutingDebugLog.shared.event(
+                "build failed riderLeg=\(legID) msg=\(failure.message)"
+            )
+            onProgress(committed)
+            return committed
+        }
+
+        RoutingDebugLog.shared.event(
+            "build committed gen=\(itinerary.generation) legs=\(committed.legs.count)"
+        )
+        return committed
+    }
+
+    private func buildRiderLeg(
+        itinerary: RiderItinerary,
+        index: Int,
+        baseline: RouteResponse,
+        allBaseline: [Int: RouteResponse],
+        fuelUsedAtStart: Double,
+        fuel: FuelRangePrefs.Snapshot,
+        source: any RoutingSource
+    ) async throws -> [BuiltLeg] {
+        let riderLeg = itinerary.legs[index]
+        let from = itinerary.waypoints[index].coordinate
+        let to = itinerary.waypoints[index + 1].coordinate
+        let meters = try responseMeters(baseline)
+        guard fuel.isEnabled, fuel.usableMeters > 0 else {
+            return [BuiltLeg(
+                riderLegID: riderLeg.id,
+                fromCoordinate: from,
+                toCoordinate: to,
+                endsAtFuelStop: nil,
+                response: baseline,
+                fuelUsedOnArrivalMeters: fuelUsedAtStart + meters
+            )]
+        }
+
+        let firstCap = max(0, fuel.usableMeters - fuelUsedAtStart)
+        let nextMeters = allBaseline[index + 1]?.distanceMeters
+        let requirePumpBeforeWaypoint: Bool
+        if index + 1 < itinerary.legs.count {
+            guard let nextMeters else {
+                throw RoutingError.invalidResponse
+            }
+            let arrivalWithoutPump = fuelUsedAtStart + meters
+            requirePumpBeforeWaypoint = meters <= firstCap + 1
+                && nextMeters > max(0, fuel.usableMeters - arrivalWithoutPump) + 1
+        } else {
+            requirePumpBeforeWaypoint = false
+        }
+
+        if meters <= firstCap + 1, !requirePumpBeforeWaypoint {
+            let arrival = fuelUsedAtStart + meters
+            RoutingDebugLog.shared.event(
+                "fuel carry riderLeg=\(riderLeg.id) used=\(Int(arrival))"
+            )
+            return [BuiltLeg(
+                riderLegID: riderLeg.id,
+                fromCoordinate: from,
+                toCoordinate: to,
+                endsAtFuelStop: nil,
+                response: baseline,
+                fuelUsedOnArrivalMeters: arrival
+            )]
+        }
+
+        let chain = try await source.fuelChain(FuelChainRequest(
+            profile: riderLeg.profile,
+            from: from,
+            to: to,
+            allowUnknown: riderLeg.allowUnknown,
+            usableRangeMeters: fuel.usableMeters,
+            firstLegMaxMeters: firstCap,
+            requireFuelStopBeforeEnd: requirePumpBeforeWaypoint,
+            avoidEdgeIds: Array(itinerary.impassableEdgeIDs)
+        ))
+        guard active(itinerary) else { throw CancellationError() }
+        let stops = chain.stops ?? []
+        guard !stops.isEmpty else {
+            throw RoutingError.server("No route-connected fuel stop was returned for this leg.")
+        }
+
+        let points = [from] + stops.map(\.coordinate) + [to]
+        var output: [BuiltLeg] = []
+        output.reserveCapacity(points.count - 1)
+        var used = fuelUsedAtStart
+        for subIndex in 0..<(points.count - 1) {
+            let cap = subIndex == 0 ? firstCap : fuel.usableMeters
+            let request = routeRequest(
+                profile: riderLeg.profile,
+                allowUnknown: riderLeg.allowUnknown,
+                from: points[subIndex],
+                to: points[subIndex + 1],
+                avoidEdgeIDs: itinerary.impassableEdgeIDs,
+                maxPathMeters: cap
+            )
+            let response = try await source.route(request)
+            guard active(itinerary) else { throw CancellationError() }
+            let subMeters = try responseMeters(response)
+            guard subMeters <= cap + 1 else {
+                throw RoutingError.server("A selected fuel leg exceeds usable range.")
+            }
+            if subIndex < stops.count {
+                let station = stops[subIndex]
+                let stop = FuelStop(
+                    coordinate: station.coordinate,
+                    stationID: station.id,
+                    name: station.displayName,
+                    afterRiderLegID: riderLeg.id
+                )
+                output.append(BuiltLeg(
+                    riderLegID: riderLeg.id,
+                    fromCoordinate: points[subIndex],
+                    toCoordinate: points[subIndex + 1],
+                    endsAtFuelStop: stop,
+                    response: response,
+                    fuelUsedOnArrivalMeters: 0
+                ))
+                let stationLog = station.id.isEmpty
+                    ? "\(station.latitude),\(station.longitude)"
+                    : station.id
+                RoutingDebugLog.shared.event(
+                    "fuel reset riderLeg=\(riderLeg.id) station=\(stationLog)"
+                )
+                used = 0
+            } else {
+                used += subMeters
+                output.append(BuiltLeg(
+                    riderLegID: riderLeg.id,
+                    fromCoordinate: points[subIndex],
+                    toCoordinate: points[subIndex + 1],
+                    endsAtFuelStop: nil,
+                    response: response,
+                    fuelUsedOnArrivalMeters: used
+                ))
+                RoutingDebugLog.shared.event(
+                    "fuel carry riderLeg=\(riderLeg.id) used=\(Int(used))"
+                )
+            }
+        }
+        return output
+    }
+
+    private func active(_ itinerary: RiderItinerary) -> Bool {
+        !Task.isCancelled && currentGeneration == itinerary.generation
+    }
+
+    private func dropped(
+        _ itinerary: RiderItinerary,
+        committed: BuiltItinerary,
+        cancelled: Bool = false
+    ) -> BuiltItinerary {
+        RoutingDebugLog.shared.event(
+            "build dropped gen=\(itinerary.generation) reason=\(cancelled || Task.isCancelled ? "cancelled" : "stale")"
+        )
+        return committed
+    }
+}
+
+private func reusableLegs(
+    from reuse: BuiltItinerary?,
+    itinerary: RiderItinerary,
+    before legIndex: Int
+) -> [BuiltLeg] {
+    guard let reuse else { return [] }
+    let ids = Set(itinerary.legs.prefix(legIndex).map(\.id))
+    return reuse.legs.filter { ids.contains($0.riderLegID) }
+}
+
+private func carriedFuel(from legs: [BuiltLeg]) -> Double {
+    guard let last = legs.last else { return 0 }
+    return last.endsAtFuelStop == nil ? last.fuelUsedOnArrivalMeters : 0
+}
+
+private func responseMeters(_ response: RouteResponse) throws -> Double {
+    guard response.status == "complete",
+          let meters = response.distanceMeters,
+          meters.isFinite,
+          meters >= 0
+    else { throw RoutingError.invalidResponse }
+    return meters
+}
+
+private func routeRequest(
+    itinerary: RiderItinerary,
+    legIndex: Int,
+    maxPathMeters: Double?
+) -> RouteRequest {
+    let leg = itinerary.legs[legIndex]
+    return routeRequest(
+        profile: leg.profile,
+        allowUnknown: leg.allowUnknown,
+        from: itinerary.waypoints[legIndex].coordinate,
+        to: itinerary.waypoints[legIndex + 1].coordinate,
+        avoidEdgeIDs: itinerary.impassableEdgeIDs,
+        maxPathMeters: maxPathMeters
+    )
+}
+
+private func routeRequest(
+    profile: RouteProfile,
+    allowUnknown: Bool,
+    from: RouteCoordinate,
+    to: RouteCoordinate,
+    avoidEdgeIDs: Set<String>,
+    maxPathMeters: Double?
+) -> RouteRequest {
+    RouteRequest(
+        profile: profile,
+        locations: [
+            RouteLocation(latitude: from.latitude, longitude: from.longitude, label: "Point 1"),
+            RouteLocation(latitude: to.latitude, longitude: to.longitude, label: "Point 2")
+        ],
+        allowUnknown: allowUnknown,
+        avoidEdgeIds: Array(avoidEdgeIDs),
+        maxPathMeters: maxPathMeters
+    )
+}
+
+private func replacing(
+    riderLegID: UUID,
+    with replacement: [BuiltLeg],
+    in built: BuiltItinerary,
+    status: LegStatus
+) -> BuiltItinerary {
+    var statuses = built.riderLegStatus
+    statuses[riderLegID] = status
+    return BuiltItinerary(
+        generation: built.generation,
+        legs: built.legs.filter { $0.riderLegID != riderLegID } + replacement,
+        riderLegStatus: statuses
+    )
+}
+
+private func markingFailed(
+    _ riderLegID: UUID,
+    message: String,
+    in built: BuiltItinerary
+) -> BuiltItinerary {
+    var statuses = built.riderLegStatus
+    statuses[riderLegID] = .failed(message)
+    return BuiltItinerary(
+        generation: built.generation,
+        legs: built.legs,
+        riderLegStatus: statuses
+    )
+}
