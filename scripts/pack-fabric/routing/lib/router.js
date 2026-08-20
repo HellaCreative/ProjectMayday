@@ -36,7 +36,7 @@ const {
   ROAD_CLASS_NAME
 } = require("./pack-v2");
 const { findPathV2 } = require("./find-path-v2");
-const { isDirtSurface } = require("./hop-search");
+const { isDirtSurface, outsideCorridor } = require("./hop-search");
 const crossPackTopology = require("../schema/cross-pack-topology.v1.json");
 
 const DEFAULT_MATCH_METERS = 250;
@@ -69,6 +69,46 @@ function coordinateNearUrbanBoxes(coordinate, boxes, clearanceMeters = 5000) {
     ];
     return haversineMeters(coordinate, nearest) < clearanceMeters;
   });
+}
+
+function clippedDirtMeters(runtime, startLL, endLL, corridorMeters, policy) {
+  if (!runtime || runtime.format !== "v2" || !(corridorMeters > 0)) return 0;
+  const { pack, enums } = runtime;
+  const midLat = (startLL[1] + endLL[1]) / 2;
+  const latPad = corridorMeters / 111320;
+  const lonPad = corridorMeters / (111320 * Math.max(0.2, Math.cos(midLat * Math.PI / 180)));
+  const minLon = Math.min(startLL[0], endLL[0]) - lonPad;
+  const maxLon = Math.max(startLL[0], endLL[0]) + lonPad;
+  const minLat = Math.min(startLL[1], endLL[1]) - latPad;
+  const maxLat = Math.max(startLL[1], endLL[1]) + latPad;
+  let meters = 0;
+  for (let i = 0; i < pack.undirectedEdgeCount; i += 1) {
+    const attr = pack.edgeAttrs[i];
+    if (!accessAllowed(unpackAccess(attr), policy, enums)) continue;
+    const surface = enums.SURFACE_NAME[unpackSurface(attr)] || "unknown";
+    const road = ROAD_CLASS_NAME[unpackRoadClass(attr)] || "unknown";
+    if (!isDirtSurface(surface, road)) continue;
+    const a = pack.edgeFrom[i] * 2;
+    const b = pack.edgeTo[i] * 2;
+    const point = [
+      (pack.nodeCoords[a] + pack.nodeCoords[b]) / 2,
+      (pack.nodeCoords[a + 1] + pack.nodeCoords[b + 1]) / 2
+    ];
+    if (point[0] < minLon || point[0] > maxLon || point[1] < minLat || point[1] > maxLat) continue;
+    if (outsideCorridor(point, startLL, endLL, corridorMeters)) meters += pack.edgeMeters[i];
+  }
+  return Math.round(meters);
+}
+
+function fallbackReasonFor(path, fallbackUsed, searchOutcome) {
+  if (fallbackUsed) return "no_route";
+  if (searchOutcome === "timeCap" || searchOutcome === "popCap") return "timeout";
+  const candidates = path && path.searchMeta && path.searchMeta.corridorCandidates;
+  if (
+    path && path.searchMeta && path.searchMeta.corridorMeters == null &&
+    Array.isArray(candidates) && candidates.some((row) => row.corridorMeters != null && row.outcome === "noPath")
+  ) return "corridor_exhausted";
+  return null;
 }
 
 function projectOnSegment(point, a, b) {
@@ -1850,6 +1890,7 @@ async function routeOnRuntime(body, graphResolution, runtime) {
   let cleanUnpavedFallbackUsed = false;
   let settlementFallbackUsed = false;
   let cleanSearchOutcome = null;
+  let primarySearchOutcome = null;
   if (profile === "cleanest") {
     const cleanFind = (extra) => {
       const diagnostics = {};
@@ -1909,6 +1950,7 @@ async function routeOnRuntime(body, graphResolution, runtime) {
       runtime, startMatch, endMatch, profile, policy, avoidEdgeIds,
       Object.assign({}, searchOpts, { diagnostics })
     );
+    primarySearchOutcome = path ? "completed" : (diagnostics.outcome || "noPath");
     // A city wall may sever the only mountain-valley or border connection.
     // Only a proved no-path result (never a timeout/pop cap) may relax it, and
     // the relaxed search still charges the prohibitive urban-core multiplier.
@@ -2002,8 +2044,8 @@ async function routeOnRuntime(body, graphResolution, runtime) {
   }
   const searchMs = Date.now() - searchStarted;
   if (!path) {
-    const searchIncomplete = profile === "cleanest"
-      && (cleanSearchOutcome === "timeCap" || cleanSearchOutcome === "popCap");
+    const failedOutcome = cleanSearchOutcome || primarySearchOutcome;
+    const searchIncomplete = failedOutcome === "timeCap" || failedOutcome === "popCap";
     return {
       status: "failed",
       profile,
@@ -2030,7 +2072,19 @@ async function routeOnRuntime(body, graphResolution, runtime) {
         avoidedEdgeIds: Array.from(avoidEdgeIds),
         searchMs,
         fallback: null,
-        searchOutcome: cleanSearchOutcome
+        searchOutcome: failedOutcome,
+        objective:
+          profile === "dirt" ? "earned-dirt-detour" :
+          profile === "balanced" ? "surface-balance" :
+          profile === "direct" ? "crow-flies-adventure" : "clean-pavement",
+        outcome: failedOutcome || "noPath",
+        pops: 0,
+        corridor: null,
+        settlementFallback: false,
+        fallbackReason: searchIncomplete ? "timeout" : "no_route",
+        preFallbackDirtPct: null,
+        preFallbackMeters: null,
+        corridorClippedDirtMeters: 0
       },
       maneuvers: [],
       segments: [],
@@ -2092,6 +2146,22 @@ async function routeOnRuntime(body, graphResolution, runtime) {
     });
   }
 
+  const selectedCorridor = Number(path.searchMeta && path.searchMeta.corridorMeters);
+  const selectedDirtPct = Number(path.stats && path.stats.dirtPercent);
+  const selectedMeters = Number(path.distanceMeters);
+  const fallbackReason = fallbackReasonFor(
+    path,
+    urbanCoreFallbackUsed,
+    cleanSearchOutcome || primarySearchOutcome
+  );
+  const corridorClippedDirtMeters = clippedDirtMeters(
+    runtime,
+    startMatch.coord,
+    endMatch.coord,
+    Number.isFinite(selectedCorridor) ? selectedCorridor : 0,
+    policy
+  );
+
   return {
     status: "complete",
     routeId: "route-" + Date.now().toString(36),
@@ -2123,6 +2193,23 @@ async function routeOnRuntime(body, graphResolution, runtime) {
       searchMeta: path.searchMeta || null,
       balancedMixChoice,
       fallback: urbanCoreFallbackUsed ? "urban_core_last_resort" : null,
+      objective: path.searchMeta && path.searchMeta.rideObjective || (
+        profile === "dirt" ? "earned-dirt-detour" :
+        profile === "balanced" ? "surface-balance" :
+        profile === "direct" ? "crow-flies-adventure" : "clean-pavement"
+      ),
+      outcome: "completed",
+      pops: Number(path.searchMeta && path.searchMeta.pops) || 0,
+      corridor: Number.isFinite(selectedCorridor) ? selectedCorridor : null,
+      settlementFallback: !!(settlementFallbackUsed || (path.searchMeta && path.searchMeta.settlementFallbackUsed)),
+      fallbackReason,
+      preFallbackDirtPct: urbanCoreFallbackUsed
+        ? null
+        : (Number.isFinite(selectedDirtPct) ? selectedDirtPct : null),
+      preFallbackMeters: urbanCoreFallbackUsed
+        ? null
+        : (Number.isFinite(selectedMeters) ? Math.round(selectedMeters) : null),
+      corridorClippedDirtMeters,
       regionIds: graphResolution.regionIds,
       graphMode: graphResolution.mode,
       merge: runtime.mergeReport || null,
@@ -2993,5 +3080,7 @@ module.exports = {
   coordinateInUrbanBoxes,
   coordinateNearUrbanBoxes,
   remainingChainPathCap,
-  topologySeamFromIndex
+  topologySeamFromIndex,
+  fallbackReasonFor,
+  clippedDirtMeters
 };
