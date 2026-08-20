@@ -46,5 +46,9 @@ the fuel-end flag before the canonical itinerary replaces this representation.
 
 ## Device evidence
 
-Pending the human Phase 0 reproduction log. Add the identified culprit here in
-one sentence before Phase 1; do not fix it in Phase 0.
+The fuel-before-waypoint decision is always false on rebuild:
+`rebuildPrimaryPlanThenFuelAssist` reads `nextPrimaryMeters` from
+`stages[i+1].response?.distanceMeters` after it has just set every `response = nil`.
+
+Long-press on the route bypasses `handleTap` and appends a waypoint instead of
+inserting: no `map tap result=` line fired and a third pin was appended.
