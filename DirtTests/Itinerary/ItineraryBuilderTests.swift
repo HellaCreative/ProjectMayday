@@ -115,6 +115,37 @@ struct ItineraryBuilderTests {
         #expect(source.routeRequests.count == 1)
     }
 
+    @Test func changingSecondLegProfileReusesFirstBuiltLegExactly() async throws {
+        let points = [point(0), point(1), point(2)]
+        let source = FakeRoutingSource(name: "live")
+        source.distances[key(points[0], points[1])] = 100_000
+        source.distances[key(points[1], points[2])] = 120_000
+        let firstItinerary = makeItinerary(points)
+        let builder = ItineraryBuilder()
+        let first = await builder.build(
+            firstItinerary, from: 0, reuse: nil, fuel: .disabled,
+            source: .fixed(source), onProgress: { _ in }
+        )
+        let secondLegID = try #require(firstItinerary.legs.last?.id)
+        let change = reduce(
+            firstItinerary,
+            .setProfile(legID: secondLegID, .cleanest)
+        )
+        let rebuildIndex = try #require(change.rebuildFromLegIndex)
+        source.routeRequests.removeAll()
+
+        let second = await builder.build(
+            change.itinerary, from: rebuildIndex, reuse: first, fuel: .disabled,
+            source: .fixed(source), onProgress: { _ in }
+        )
+
+        #expect(rebuildIndex == 1)
+        #expect(second.legs.first == first.legs.first)
+        #expect(source.routeRequests.count == 1)
+        #expect(source.routeRequests.first?.profile == .cleanest)
+        #expect(source.routeRequests.first?.accessPolicy.motorizedUnknown == false)
+    }
+
     @Test func failureKeepsEarlierBuiltLegAndLeavesLaterPending() async {
         let points = [point(0), point(1), point(2), point(3)]
         let source = FakeRoutingSource(name: "live")

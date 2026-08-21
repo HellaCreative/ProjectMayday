@@ -107,6 +107,46 @@ struct RiderItineraryTests {
         #expect(markedAgain.generation == marked.generation)
     }
 
+    @Test func setProfileForOneLegRebuildsFromThatLeg() throws {
+        let initial = itinerary([point(0), point(1), point(2)])
+        let secondLegID = try #require(initial.legs.last?.id)
+
+        let change = reduce(initial, .setProfile(legID: secondLegID, .dirt))
+
+        #expect(change.rebuildFromLegIndex == 1)
+        #expect(change.itinerary.legs[0] == initial.legs[0])
+        #expect(change.itinerary.legs[1].profile == .dirt)
+    }
+
+    @Test func setProfileForAllLegsRebuildsFromFirstLeg() {
+        let initial = itinerary([point(0), point(1), point(2)])
+
+        let change = reduce(initial, .setProfile(legID: nil, .dirt))
+
+        #expect(change.rebuildFromLegIndex == 0)
+        #expect(change.itinerary.legs.allSatisfy { $0.profile == .dirt })
+    }
+
+    @Test func setAllowUnknownForOneLegRebuildsFromThatLeg() throws {
+        let initial = itinerary([point(0), point(1), point(2)], profile: .dirt)
+        let secondLegID = try #require(initial.legs.last?.id)
+
+        let change = reduce(initial, .setAllowUnknown(legID: secondLegID, true))
+
+        #expect(change.rebuildFromLegIndex == 1)
+        #expect(change.itinerary.legs[0] == initial.legs[0])
+        #expect(change.itinerary.legs[1].allowUnknown)
+    }
+
+    @Test func setAllowUnknownForAllLegsRebuildsFromFirstLeg() {
+        let initial = itinerary([point(0), point(1), point(2)], profile: .dirt)
+
+        let change = reduce(initial, .setAllowUnknown(legID: nil, true))
+
+        #expect(change.rebuildFromLegIndex == 0)
+        #expect(change.itinerary.legs.allSatisfy { $0.allowUnknown })
+    }
+
     @Test func randomActionSequencesPreserveEveryInvariant() {
         var random = TestRandom(seed: 0xD1_47)
         for _ in 0..<100 {
