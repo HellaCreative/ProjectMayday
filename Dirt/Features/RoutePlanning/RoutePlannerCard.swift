@@ -888,7 +888,7 @@ struct RoutePlannerCard: View {
             : (selectedStage == nil ? 180 : 280)
         let collapsedHeight = min(
             bandHeight,
-            max(56, CGFloat(max(1, planner.stages.count)) * 62)
+            max(56, CGFloat(max(1, planner.itinerary.legs.count)) * 62)
         )
         ScrollViewReader { proxy in
             List {
@@ -900,9 +900,23 @@ struct RoutePlannerCard: View {
             .frame(height: selectedStage == nil ? collapsedHeight : bandHeight)
             .scrollBounceBehavior(.basedOnSize)
             .scrollIndicators(.visible)
-            .onAppear { scrollToNewestStage(proxy, animated: false) }
-            .onChange(of: planner.stages.count) { scrollToNewestStage(proxy, animated: true) }
-            .onChange(of: selectedStage) { revealSelectedStage(proxy) }
+            .onAppear {
+                if let last = planner.itinerary.legs.last?.id {
+                    proxy.scrollTo(last, anchor: .bottom)
+                }
+            }
+            .onChange(of: planner.itinerary.legs.count) {
+                guard let last = planner.itinerary.legs.last?.id else { return }
+                withAnimation(.easeOut(duration: 0.25)) {
+                    proxy.scrollTo(last, anchor: .bottom)
+                }
+            }
+            .onChange(of: selectedStage) {
+                guard let index = selectedStage, planner.stages.indices.contains(index) else { return }
+                withAnimation(.easeOut(duration: 0.25)) {
+                    proxy.scrollTo(planner.stages[index].riderLegID, anchor: .bottom)
+                }
+            }
         }
     }
 
@@ -924,33 +938,137 @@ struct RoutePlannerCard: View {
     }
 
     @ViewBuilder private var stageListContent: some View {
-        ForEach(Array(planner.itinerary.legs.enumerated()), id: \.element.id) { riderLegIndex, riderLeg in
+        let riderLegs = StageCard<EmptyView, EmptyView>.riderLegRows(in: planner.itinerary)
+        ForEach(Array(riderLegs.enumerated()), id: \.element.id) { riderLegIndex, riderLeg in
             let childStages = Array(planner.stages.enumerated()).filter {
                 $0.element.riderLegID == riderLeg.id
             }
-            VStack(alignment: .leading, spacing: 10) {
-                ForEach(childStages, id: \.element.id) { stageIndex, stage in
-                    stageBlock(index: stageIndex, stage: stage)
-                        .id(stage.id)
+            if let firstChild = childStages.first {
+                let stageIndex = firstChild.offset
+                let stage = firstChild.element
+                let routedChildren = childStages.compactMap { $0.element.response }
+                let meters = routedChildren.reduce(0.0) { $0 + ($1.distanceMeters ?? 0) }
+                let dirtMeters = routedChildren.reduce(0.0) {
+                    $0 + ($1.distanceMeters ?? 0) * Double($1.dirtPercent) / 100
                 }
-            }
-            .listRowInsets(EdgeInsets())
-            .listRowSeparator(.hidden)
-            .listRowBackground(Color.clear)
-            .id(riderLeg.id)
-            .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                if planner.itinerary.legs.count > 1,
-                   planner.itinerary.waypoints.indices.contains(riderLegIndex + 1) {
-                    Button(role: .destructive) {
-                        let waypointID = planner.itinerary.waypoints[riderLegIndex + 1].id
-                        withAnimation(.easeInOut(duration: 0.18)) {
-                            selectedStage = nil
-                            planner.apply(.delete(waypointID: waypointID), source: "swipe")
+                let dirtPercent = meters > 0 ? Int((dirtMeters / meters * 100).rounded()) : 0
+                let viaSubtitle = StageCard<EmptyView, EmptyView>.viaSubtitle(
+                    for: childStages.map(\.element)
+                )
+                let tightestFuelStage = childStages.max {
+                    ($0.element.response?.distanceMeters ?? 0) < ($1.element.response?.distanceMeters ?? 0)
+                }
+                let isActive = selectedStage == stageIndex
+
+                StageCard(
+                    number: riderLegIndex + 1,
+                    profileTitle: riderLeg.profile.title,
+                    isActive: isActive,
+                    onToggle: { toggleStageSelection(stageIndex) },
+                    endpointTitle: planner.stageEndpointTitle(at: stageIndex),
+                    viaSubtitle: viaSubtitle,
+                    headline: {
+                        if stage.isRouting {
+                            HStack(spacing: DirtSpace.tight) {
+                                ProgressView().controlSize(.mini)
+                                Text("Routing…")
+                                    .font(DirtType.helper)
+                                    .foregroundStyle(DirtTheme.muted)
+                            }
+                        } else if let error = stage.error {
+                            Text(error)
+                                .font(DirtType.helper)
+                                .foregroundStyle(DirtTheme.danger)
+                                .lineLimit(2)
+                        } else if !routedChildren.isEmpty {
+                            VStack(alignment: .leading, spacing: 1) {
+                                stageMetrics(km: meters / 1000, dirtPercent: dirtPercent)
+                                if let marginStage = tightestFuelStage,
+                                   let margin = planner.fuelMarginText(at: marginStage.offset) {
+                                    HStack(spacing: 4) {
+                                        Text(margin)
+                                        if planner.profileAvailabilityNotice(at: stageIndex) != nil {
+                                            Image(systemName: "exclamationmark.triangle.fill")
+                                                .foregroundStyle(DirtTheme.orange)
+                                        }
+                                    }
+                                    .font(.dirtUI(9.5, weight: .semibold))
+                                    .foregroundStyle(DirtTheme.muted)
+                                    .lineLimit(1)
+                                }
+                            }
+                        } else {
+                            Text(stage.end == nil ? "Hold the map to set the end" : "Waiting for route…")
+                                .font(DirtType.helper)
+                                .foregroundStyle(DirtTheme.muted)
+                                .lineLimit(2)
                         }
-                    } label: {
-                        Label("Delete", systemImage: "trash.fill")
+                    },
+                    detail: {
+                        VStack(alignment: .leading, spacing: DirtSpace.inner) {
+                            if let notice = planner.profileAvailabilityNotice(at: stageIndex) {
+                                Label(notice, systemImage: "exclamationmark.triangle.fill")
+                                    .font(DirtType.helper)
+                                    .foregroundStyle(DirtTheme.orange)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            profileSegments(active: riderLeg.profile) { profile in
+                                planner.setStageProfile(profile, at: stageIndex)
+                                withAnimation(.easeInOut(duration: 0.18)) { selectedStage = nil }
+                            }
+                            profileGuidanceLine(riderLeg.profile)
+                            allowUnknownControl(
+                                binding: Binding(
+                                    get: { riderLeg.allowUnknown },
+                                    set: { on in
+                                        if on {
+                                            unknownAckStage = stageIndex
+                                            showUnknownAck = true
+                                        } else {
+                                            planner.setStageAllowUnknown(false, at: stageIndex)
+                                        }
+                                    }
+                                ),
+                                disabled: riderLeg.profile == .cleanest,
+                                profile: riderLeg.profile
+                            )
+                            if stage.error != nil, riderLeg.profile != .cleanest {
+                                Button {
+                                    planner.setStageProfile(.cleanest, at: stageIndex)
+                                } label: {
+                                    Label(
+                                        "Use Clean for this leg",
+                                        systemImage: "arrow.triangle.2.circlepath"
+                                    )
+                                    .font(DirtType.chip)
+                                    .fontWeight(.bold)
+                                    .foregroundStyle(DirtTheme.orange)
+                                    .frame(maxWidth: .infinity, minHeight: DirtHit.min)
+                                    .background(DirtTheme.wash, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
                     }
-                    .accessibilityLabel("Delete leg \(riderLegIndex + 1)")
+                )
+                .id(riderLeg.id)
+                .listRowInsets(EdgeInsets())
+                .listRowSeparator(.hidden)
+                .listRowBackground(Color.clear)
+                .swipeActions(edge: .trailing, allowsFullSwipe: true) {
+                    if planner.itinerary.legs.count > 1,
+                       planner.itinerary.waypoints.indices.contains(riderLegIndex + 1) {
+                        Button(role: .destructive) {
+                            let waypointID = planner.itinerary.waypoints[riderLegIndex + 1].id
+                            withAnimation(.easeInOut(duration: 0.18)) {
+                                selectedStage = nil
+                                planner.apply(.delete(waypointID: waypointID), source: "swipe")
+                            }
+                        } label: {
+                            Label("Delete", systemImage: "trash.fill")
+                        }
+                        .accessibilityLabel("Delete leg \(riderLegIndex + 1)")
+                    }
                 }
             }
         }
@@ -1515,13 +1633,30 @@ struct GPXImportButton: View {
 /// One stage as a single self-contained card. The always-visible row carries the number,
 /// the metrics, and the current profile; options reveal inside the same border, so the
 /// profile never reads as a detached eyebrow and collapsed stages cost one row each.
-private struct StageCard<Headline: View, Detail: View>: View {
+struct StageCard<Headline: View, Detail: View>: View {
     let number: Int
     let profileTitle: String
     let isActive: Bool
     let onToggle: () -> Void
+    var endpointTitle: String? = nil
+    var viaSubtitle: String? = nil
     @ViewBuilder var headline: () -> Headline
     @ViewBuilder var detail: () -> Detail
+
+    static func riderLegRows(in itinerary: RiderItinerary) -> [RiderLeg] {
+        itinerary.legs
+    }
+
+    static func viaSubtitle(for stages: [RoutePlannerModel.Stage]) -> String? {
+        var ordinal = 0
+        let names = stages.compactMap { stage -> String? in
+            guard stage.endsAtFuelStop else { return nil }
+            ordinal += 1
+            if let name = stage.fuelStopName, !name.isEmpty { return name }
+            return "Fuel stop \(ordinal)"
+        }
+        return names.isEmpty ? nil : "via \(names.joined(separator: ", "))"
+    }
 
     private var shape: RoundedRectangle {
         RoundedRectangle(cornerRadius: 8, style: .continuous)
@@ -1537,7 +1672,23 @@ private struct StageCard<Headline: View, Detail: View>: View {
                     .background(isActive ? DirtTheme.orange : DirtTheme.chrome)
                     .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
 
-                headline()
+                if let endpointTitle {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(endpointTitle)
+                            .font(.dirtUI(10.5, weight: .bold))
+                            .foregroundStyle(DirtTheme.ink)
+                            .lineLimit(1)
+                        if let viaSubtitle {
+                            Text(viaSubtitle)
+                                .font(.dirtUI(9.5, weight: .semibold))
+                                .foregroundStyle(DirtTheme.muted)
+                                .lineLimit(1)
+                        }
+                        headline()
+                    }
+                } else {
+                    headline()
+                }
 
                 Spacer(minLength: DirtSpace.tight)
 

@@ -293,31 +293,9 @@ final class RoutePlannerModel {
     func stageEndpointTitle(at index: Int) -> String {
         guard stages.indices.contains(index) else { return "Leg \(index + 1)" }
         let stage = stages[index]
-        let startName: String
-        if index > 0, stages[index - 1].endsAtFuelStop {
-            if let prior = stages[index - 1].fuelStopName, !prior.isEmpty {
-                startName = prior
-            } else {
-                let fuelOrdinal = stages.prefix(index).filter(\.endsAtFuelStop).count
-                startName = "Fuel stop \(fuelOrdinal)"
-            }
-        } else {
-            let ordinal = itinerary.waypoints.firstIndex(where: { $0.id == itinerary.legs.first(where: { $0.id == stage.riderLegID })?.from })
-                .map { $0 + 1 } ?? 1
-            startName = "Point \(ordinal)"
-        }
-        let endName: String
-        if let fuel = stages[index].fuelStopName, !fuel.isEmpty {
-            endName = fuel
-        } else if stages[index].endsAtFuelStop {
-            let fuelOrdinal = stages.prefix(index + 1).filter(\.endsAtFuelStop).count
-            endName = "Fuel stop \(fuelOrdinal)"
-        } else {
-            let ordinal = itinerary.waypoints.firstIndex(where: { $0.id == itinerary.legs.first(where: { $0.id == stage.riderLegID })?.to })
-                .map { $0 + 1 } ?? (index + 2)
-            endName = "Point \(ordinal)"
-        }
-        return "\(startName) → \(endName)"
+        guard let riderLegIndex = itinerary.legs.firstIndex(where: { $0.id == stage.riderLegID })
+        else { return "Leg \(index + 1)" }
+        return "Point \(riderLegIndex + 1) → Point \(riderLegIndex + 2)"
     }
 
     /// Automatic pump hops are derived safety stops. The final non-fuel hop in

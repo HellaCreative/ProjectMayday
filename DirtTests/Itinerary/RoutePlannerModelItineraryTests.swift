@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 import Testing
 @testable import Dirt
 
@@ -158,7 +159,7 @@ struct RoutePlannerModelItineraryTests {
         #expect(model.canonicalBuildStartCount == 1)
     }
 
-    @Test func legacyLegLabelsRemainByteIdentical() async throws {
+    @Test func riderLegLabelsIgnoreGeneratedFuelStops() async throws {
         let prefs = FuelPrefsRestore()
         defer { prefs.restore() }
         FuelRangePrefs.kilometers = 250
@@ -182,9 +183,41 @@ struct RoutePlannerModelItineraryTests {
         await model.waitForCanonicalBuildForTesting()
 
         #expect(model.stages.count == 3)
-        #expect(model.stageEndpointTitle(at: 0) == "Point 1 → Shell Antigonish")
-        #expect(model.stageEndpointTitle(at: 1) == "Shell Antigonish → Point 2")
+        #expect(model.stageEndpointTitle(at: 0) == "Point 1 → Point 2")
+        #expect(model.stageEndpointTitle(at: 1) == "Point 1 → Point 2")
         #expect(model.stageEndpointTitle(at: 2) == "Point 2 → Point 3")
+    }
+
+    @Test func twoWaypointFuelItineraryRendersOneRiderLegRow() async throws {
+        let prefs = FuelPrefsRestore()
+        defer { prefs.restore() }
+        FuelRangePrefs.kilometers = 250
+        FuelRangePrefs.reservePercent = 5
+
+        let first = point(0)
+        let pump = point(0.25)
+        let second = point(0.5)
+        let source = PlannerFakeRoutingSource()
+        source.distanceOverrides[key(first, second)] = 300_000
+        source.distanceOverrides[key(first, pump)] = 150_000
+        source.distanceOverrides[key(pump, second)] = 150_000
+        source.fuelStops = [fuelStop("shell-antigonish", name: "Shell Antigonish", at: pump)]
+        let model = makeModel(source: source)
+        model.apply(
+            .replaceAll(waypoints: [first, second], profile: .dirt, allowUnknown: false),
+            source: "seed"
+        )
+        await model.waitForCanonicalBuildForTesting()
+
+        #expect(model.stages.count == 2)
+        let rows = StageCard<EmptyView, EmptyView>.riderLegRows(in: model.itinerary)
+        #expect(rows.count == 1)
+        #expect(
+            StageCard<EmptyView, EmptyView>.viaSubtitle(for: model.stages)
+                == "via Shell Antigonish"
+        )
+        #expect(model.stageEndpointTitle(at: 0) == "Point 1 → Point 2")
+        #expect(model.stageEndpointTitle(at: 1) == "Point 1 → Point 2")
     }
 }
 
