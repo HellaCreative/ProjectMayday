@@ -354,6 +354,65 @@
           "maximumDirtBackwardPercent": 40
         }
       ]
+    },
+    "on": {
+      "fuelMinimum": 2500,
+      "routes": [
+        {
+          "id": "long-windsor-ottawa",
+          "from": {
+            "lat": 42.3149,
+            "lon": -83.0364,
+            "label": "Windsor"
+          },
+          "to": {
+            "lat": 45.4215,
+            "lon": -75.6972,
+            "label": "Ottawa"
+          },
+          "minimumDirtPercent": 40,
+          "minimumDirtAllowUnknownPercent": 50,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 10,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "urban-hamilton-oshawa",
+          "from": {
+            "lat": 43.2557,
+            "lon": -79.8711,
+            "label": "Hamilton"
+          },
+          "to": {
+            "lat": 43.8971,
+            "lon": -78.8658,
+            "label": "Oshawa"
+          },
+          "minimumDirtPercent": 20,
+          "minimumDirtAllowUnknownPercent": 30,
+          "balancedTolerance": 25,
+          "maximumCleanDirtPercent": 15,
+          "maximumDirtBackwardPercent": 45
+        },
+        {
+          "id": "short-bancroft-maynooth",
+          "from": {
+            "lat": 45.057,
+            "lon": -77.857,
+            "label": "Bancroft"
+          },
+          "to": {
+            "lat": 45.232,
+            "lon": -77.938,
+            "label": "Maynooth"
+          },
+          "minimumDirtPercent": 50,
+          "minimumDirtAllowUnknownPercent": 60,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 8,
+          "maximumDirtBackwardPercent": 40
+        }
+      ]
     }
   }
 }
