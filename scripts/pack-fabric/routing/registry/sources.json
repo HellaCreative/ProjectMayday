@@ -138,7 +138,7 @@
         "format": "GeoPackage",
         "license": "Open Government Licence - Canada",
         "adapter": "nrn",
-        "status": "ready",
+        "status": "deferred",
         "dateRetrieved": "2026-07-20",
         "notes": "NRN omitted from routing fabric (OSM-only)."
       },
@@ -148,25 +148,25 @@
         "format": "ArcGIS REST / GeoPackage",
         "license": "unknown — do not ingest",
         "adapter": null,
-        "status": "blocked",
-        "notes": "Rick research lock: SK Road Network feeds NRN. Stay OSM-only permanently. Never import as alternate graph."
+        "status": "deferred",
+        "notes": "Inactive during the foundational OSM-only phase. Adapter/data are retained for later controlled evaluation and are not in this pack."
       },
       "routingReady": true,
       "routingMode": "osm-only",
       "backboneArtifact": {
         "path": "routing/data/regions/sk/graph.v1.json.gz",
-        "edgeCount": 258536,
-        "nodeCount": 292368,
-        "gzBytes": 16992832
+        "edgeCount": 427625,
+        "nodeCount": 330280,
+        "gzBytes": 20696255
       },
       "osm": {
         "adapter": "osm-roads",
         "role": "sole-fabric",
         "status": "ready",
-        "featureCount": 259683,
-        "added": 259683,
+        "featureCount": 269782,
+        "added": 269782,
         "license": "OpenStreetMap contributors (ODbL)",
-        "dateRetrieved": "2026-07-29"
+        "dateRetrieved": "2026-08-21"
       }
     },
     {

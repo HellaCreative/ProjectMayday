@@ -1,6 +1,6 @@
 {
   "schemaVersion": "cross-pack-topology.v1",
-  "generatedAt": "2026-08-21T10:00:06.078Z",
+  "generatedAt": "2026-08-21T10:05:58.427Z",
   "regions": {
     "ab": {
       "neighbors": {
@@ -1539,6 +1539,1544 @@
             "remoteSurface": 4,
             "localRoadClass": "track",
             "remoteRoadClass": "track",
+            "gapMeters": 0
+          }
+        ],
+        "sk": [
+          {
+            "coordinate": [
+              -110.02527,
+              49.17929
+            ],
+            "osmWayId": "32415785",
+            "localEdgeId": "osm-3d62fb697bce",
+            "remoteEdgeId": "osm-e0d3e5c93114",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 2,
+            "remoteSurface": 2,
+            "localRoadClass": "resource",
+            "remoteRoadClass": "resource",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -109.9713,
+              56.29621
+            ],
+            "osmWayId": "317014875",
+            "localEdgeId": "osm-8f7fdc6afc2c",
+            "remoteEdgeId": "osm-67cd6f1fc5ce",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 1,
+            "remoteSurface": 1,
+            "localRoadClass": "collector",
+            "remoteRoadClass": "collector",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.05323,
+              52.73979
+            ],
+            "osmWayId": "16726161",
+            "localEdgeId": "osm-f735f982a1fb-s5",
+            "remoteEdgeId": "osm-d828acd51876-s1",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 0,
+            "remoteSurface": 0,
+            "localRoadClass": "arterial",
+            "remoteRoadClass": "arterial",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.00851,
+              50.97216
+            ],
+            "osmWayId": "65583476",
+            "localEdgeId": "osm-007f4ab4abf6-s1",
+            "remoteEdgeId": "osm-2277cc708812",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 0,
+            "remoteSurface": 0,
+            "localRoadClass": "collector",
+            "remoteRoadClass": "collector",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.01841,
+              54.41392
+            ],
+            "osmWayId": "427144831",
+            "localEdgeId": "osm-d095bed482ed",
+            "remoteEdgeId": "osm-2d518a708cc0",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 1,
+            "remoteSurface": 1,
+            "localRoadClass": "local",
+            "remoteRoadClass": "local",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.10103,
+              51.85496
+            ],
+            "osmWayId": "65537582",
+            "localEdgeId": "osm-7de491e1689c-s14",
+            "remoteEdgeId": "osm-e6f3d33c1f5a",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 0,
+            "remoteSurface": 0,
+            "localRoadClass": "arterial",
+            "remoteRoadClass": "arterial",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.00142,
+              53.57648
+            ],
+            "osmWayId": "165472461",
+            "localEdgeId": "osm-697004490b55-s2",
+            "remoteEdgeId": "osm-ff0208f47ee3-s2",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 0,
+            "remoteSurface": 0,
+            "localRoadClass": "arterial",
+            "remoteRoadClass": "arterial",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -109.6831,
+              49.97044
+            ],
+            "osmWayId": "209686968",
+            "localEdgeId": "osm-8843fe529f8d-s0",
+            "remoteEdgeId": "osm-0bc9001c794e-s0",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 0,
+            "remoteSurface": 0,
+            "localRoadClass": "arterial",
+            "remoteRoadClass": "arterial",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.09657,
+              50.4264
+            ],
+            "osmWayId": "32439648",
+            "localEdgeId": "osm-c3d3b39081c3-s0",
+            "remoteEdgeId": "osm-ac5f1d33702b",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 1,
+            "remoteSurface": 1,
+            "localRoadClass": "collector",
+            "remoteRoadClass": "collector",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -109.96528,
+              51.41639
+            ],
+            "osmWayId": "255282117",
+            "localEdgeId": "osm-2e8ece04048d",
+            "remoteEdgeId": "osm-28fccbb21e5f-s0",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 2,
+            "remoteSurface": 2,
+            "localRoadClass": "resource",
+            "remoteRoadClass": "resource",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -109.9786,
+              52.28906
+            ],
+            "osmWayId": "255271380",
+            "localEdgeId": "osm-a63ed8ebc1a6",
+            "remoteEdgeId": "osm-c155409fcd15",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 2,
+            "remoteSurface": 2,
+            "localRoadClass": "resource",
+            "remoteRoadClass": "resource",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.12536,
+              53.16161
+            ],
+            "osmWayId": "334669477",
+            "localEdgeId": "osm-db84453f080e-s0",
+            "remoteEdgeId": "osm-e544d4bca01f",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 0,
+            "remoteSurface": 0,
+            "localRoadClass": "collector",
+            "remoteRoadClass": "collector",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.14036,
+              49.58219
+            ],
+            "osmWayId": "333513255",
+            "localEdgeId": "osm-37fb3f956f29-s0",
+            "remoteEdgeId": "osm-7a3ad26265c1-s0",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 2,
+            "remoteSurface": 2,
+            "localRoadClass": "resource",
+            "remoteRoadClass": "resource",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -109.71885,
+              53.33837
+            ],
+            "osmWayId": "165456041",
+            "localEdgeId": "osm-9ade05e9774b",
+            "remoteEdgeId": "osm-41018c7ba740-s0",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 0,
+            "remoteSurface": 0,
+            "localRoadClass": "local",
+            "remoteRoadClass": "local",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -109.63248,
+              52.84204
+            ],
+            "osmWayId": "331007854",
+            "localEdgeId": "osm-de423c4744be",
+            "remoteEdgeId": "osm-ea2cb1ce23ee-s0",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 0,
+            "remoteSurface": 0,
+            "localRoadClass": "arterial",
+            "remoteRoadClass": "arterial",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.45563,
+              56.25719
+            ],
+            "osmWayId": "30187708",
+            "localEdgeId": "osm-7c49fb3ab101",
+            "remoteEdgeId": "osm-0ec5796e9402",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 4,
+            "remoteSurface": 4,
+            "localRoadClass": "local",
+            "remoteRoadClass": "local",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.46808,
+              52.00071
+            ],
+            "osmWayId": "65537582",
+            "localEdgeId": "osm-7de491e1689c-s0",
+            "remoteEdgeId": "osm-e6f3d33c1f5a",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 0,
+            "remoteSurface": 0,
+            "localRoadClass": "arterial",
+            "remoteRoadClass": "arterial",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -109.99259,
+              53.84559
+            ],
+            "osmWayId": "438504946",
+            "localEdgeId": "osm-79083cb82444",
+            "remoteEdgeId": "osm-35b5b372385a-s8",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 4,
+            "remoteSurface": 4,
+            "localRoadClass": "local",
+            "remoteRoadClass": "local",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -109.99998,
+              50.68842
+            ],
+            "osmWayId": "255097882",
+            "localEdgeId": "osm-7cd1cdfa7d49-s0",
+            "remoteEdgeId": "osm-94fce65ed622",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 2,
+            "remoteSurface": 2,
+            "localRoadClass": "resource",
+            "remoteRoadClass": "resource",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.00507,
+              49.81496
+            ],
+            "osmWayId": "255608437",
+            "localEdgeId": "osm-11e7f9bb28ad",
+            "remoteEdgeId": "osm-d34e616767e9",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 4,
+            "remoteSurface": 4,
+            "localRoadClass": "track",
+            "remoteRoadClass": "track",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -109.96791,
+              52.51791
+            ],
+            "osmWayId": "71867142",
+            "localEdgeId": "osm-eb208df56dc2-s1",
+            "remoteEdgeId": "osm-50c23715f1b3-s1",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 0,
+            "remoteSurface": 0,
+            "localRoadClass": "arterial",
+            "remoteRoadClass": "arterial",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -109.95932,
+              52.95819
+            ],
+            "osmWayId": "165477807",
+            "localEdgeId": "osm-b601bda2792c",
+            "remoteEdgeId": "osm-8fb267da0f3f-s5",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 1,
+            "remoteSurface": 1,
+            "localRoadClass": "local",
+            "remoteRoadClass": "local",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -109.87769,
+              50.25186
+            ],
+            "osmWayId": "379589696",
+            "localEdgeId": "osm-7195f1c3e024",
+            "remoteEdgeId": "osm-ed473ba6f59f-s0",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 1,
+            "remoteSurface": 1,
+            "localRoadClass": "collector",
+            "remoteRoadClass": "collector",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.09787,
+              51.21191
+            ],
+            "osmWayId": "32407535",
+            "localEdgeId": "osm-d287479de050-s1",
+            "remoteEdgeId": "osm-96b501285e23",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 2,
+            "remoteSurface": 2,
+            "localRoadClass": "resource",
+            "remoteRoadClass": "resource",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -109.64683,
+              53.6281
+            ],
+            "osmWayId": "165472477",
+            "localEdgeId": "osm-75aedd8a118b",
+            "remoteEdgeId": "osm-474b1e12d0d6-s0",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 1,
+            "remoteSurface": 1,
+            "localRoadClass": "local",
+            "remoteRoadClass": "local",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110,
+              51.64889
+            ],
+            "osmWayId": "255276281",
+            "localEdgeId": "osm-99114da2d84a",
+            "remoteEdgeId": "osm-e910f63dacc0",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 4,
+            "remoteSurface": 4,
+            "localRoadClass": "local",
+            "remoteRoadClass": "local",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.2797,
+              50.25165
+            ],
+            "osmWayId": "32411635",
+            "localEdgeId": "osm-87d7b2116c5e-s0",
+            "remoteEdgeId": "osm-765b06d52129",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 1,
+            "remoteSurface": 1,
+            "localRoadClass": "collector",
+            "remoteRoadClass": "collector",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.10005,
+              52.114
+            ],
+            "osmWayId": "32366624",
+            "localEdgeId": "osm-7b1f97ad37bb-s2",
+            "remoteEdgeId": "osm-668e5f7fcccc",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 2,
+            "remoteSurface": 2,
+            "localRoadClass": "resource",
+            "remoteRoadClass": "resource",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.02988,
+              53.36578
+            ],
+            "osmWayId": "32373018",
+            "localEdgeId": "osm-1fb6cfe6005f",
+            "remoteEdgeId": "osm-fae74739c29e",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 0,
+            "remoteSurface": 0,
+            "localRoadClass": "local",
+            "remoteRoadClass": "local",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -109.78413,
+              53.10338
+            ],
+            "osmWayId": "165423948",
+            "localEdgeId": "osm-068f8b186a0f",
+            "remoteEdgeId": "osm-8c51d62e4578-s0",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 1,
+            "remoteSurface": 1,
+            "localRoadClass": "local",
+            "remoteRoadClass": "local",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.24485,
+              52.36117
+            ],
+            "osmWayId": "307061046",
+            "localEdgeId": "osm-d87dc6b81f06-s0",
+            "remoteEdgeId": "osm-858d82a100a9",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 0,
+            "remoteSurface": 0,
+            "localRoadClass": "arterial",
+            "remoteRoadClass": "arterial",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.00431,
+              49.98724
+            ],
+            "osmWayId": "219940291",
+            "localEdgeId": "osm-9d7e643c4e81-s2",
+            "remoteEdgeId": "osm-b48e30994ec7-s2",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 4,
+            "remoteSurface": 4,
+            "localRoadClass": "local",
+            "remoteRoadClass": "local",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -109.75,
+              49.80564
+            ],
+            "osmWayId": "196358008",
+            "localEdgeId": "osm-0ba8c1ec4544",
+            "remoteEdgeId": "osm-652bc70b58b8-s0",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 1,
+            "remoteSurface": 1,
+            "localRoadClass": "local",
+            "remoteRoadClass": "local",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -109.77753,
+              54.3347
+            ],
+            "osmWayId": "252346351",
+            "localEdgeId": "osm-1891bb22b459",
+            "remoteEdgeId": "osm-be71a07c7850-s0",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 0,
+            "remoteSurface": 0,
+            "localRoadClass": "arterial",
+            "remoteRoadClass": "arterial",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.25233,
+              49.2243
+            ],
+            "osmWayId": "32435448",
+            "localEdgeId": "osm-3a205b3d3a24-s0",
+            "remoteEdgeId": "osm-00663a36dc81-s0",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 2,
+            "remoteSurface": 2,
+            "localRoadClass": "arterial",
+            "remoteRoadClass": "arterial",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.03529,
+              49.32878
+            ],
+            "osmWayId": "32410339",
+            "localEdgeId": "osm-1c6441c6fa01",
+            "remoteEdgeId": "osm-80083829a758",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 2,
+            "remoteSurface": 2,
+            "localRoadClass": "resource",
+            "remoteRoadClass": "resource",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -109.95786,
+              49.67079
+            ],
+            "osmWayId": "255608440",
+            "localEdgeId": "osm-945daf6d20b9",
+            "remoteEdgeId": "osm-7683bbd6e7ea-s1",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 4,
+            "remoteSurface": 4,
+            "localRoadClass": "local",
+            "remoteRoadClass": "local",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.19252,
+              51.39336
+            ],
+            "osmWayId": "80565423",
+            "localEdgeId": "osm-41f158b66b22-s0",
+            "remoteEdgeId": "osm-13c1f8b69451",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 0,
+            "remoteSurface": 0,
+            "localRoadClass": "arterial",
+            "remoteRoadClass": "arterial",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110,
+              54.27307
+            ],
+            "osmWayId": "398638958",
+            "localEdgeId": "osm-4a4a494d49d2",
+            "remoteEdgeId": "osm-f585c0e4c84b",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 1,
+            "remoteSurface": 1,
+            "localRoadClass": "local",
+            "remoteRoadClass": "local",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -109.87768,
+              50.42667
+            ],
+            "osmWayId": "255165578",
+            "localEdgeId": "osm-dbe22aaa43cb",
+            "remoteEdgeId": "osm-42144cab0dfb-s0",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 0,
+            "remoteSurface": 0,
+            "localRoadClass": "collector",
+            "remoteRoadClass": "collector",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.21423,
+              51.09591
+            ],
+            "osmWayId": "32407673",
+            "localEdgeId": "osm-bb624013cc8a-s7",
+            "remoteEdgeId": "osm-e5baa4d961b7",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 2,
+            "remoteSurface": 2,
+            "localRoadClass": "resource",
+            "remoteRoadClass": "resource",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.21126,
+              56.26905
+            ],
+            "osmWayId": "30187708",
+            "localEdgeId": "osm-7c49fb3ab101",
+            "remoteEdgeId": "osm-0ec5796e9402",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 4,
+            "remoteSurface": 4,
+            "localRoadClass": "local",
+            "remoteRoadClass": "local",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.0103,
+              53.70908
+            ],
+            "osmWayId": "32368764",
+            "localEdgeId": "osm-1f739550ebd8",
+            "remoteEdgeId": "osm-553826dec163",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 2,
+            "remoteSurface": 2,
+            "localRoadClass": "resource",
+            "remoteRoadClass": "resource",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.20506,
+              49.78607
+            ],
+            "osmWayId": "32407482",
+            "localEdgeId": "osm-901286774bbd-s0",
+            "remoteEdgeId": "osm-499a3ec61b4a",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 2,
+            "remoteSurface": 2,
+            "localRoadClass": "collector",
+            "remoteRoadClass": "collector",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -109.8492,
+              52.84596
+            ],
+            "osmWayId": "331007854",
+            "localEdgeId": "osm-de423c4744be",
+            "remoteEdgeId": "osm-ea2cb1ce23ee-s16",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 0,
+            "remoteSurface": 0,
+            "localRoadClass": "arterial",
+            "remoteRoadClass": "arterial",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.07429,
+              50.25163
+            ],
+            "osmWayId": "32411635",
+            "localEdgeId": "osm-87d7b2116c5e-s8",
+            "remoteEdgeId": "osm-765b06d52129",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 1,
+            "remoteSurface": 1,
+            "localRoadClass": "collector",
+            "remoteRoadClass": "collector",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -109.99843,
+              51.10326
+            ],
+            "osmWayId": "255283800",
+            "localEdgeId": "osm-449c81e1c150",
+            "remoteEdgeId": "osm-4d9aed6be3ab",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 2,
+            "remoteSurface": 2,
+            "localRoadClass": "resource",
+            "remoteRoadClass": "resource",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.25448,
+              51.9352
+            ],
+            "osmWayId": "65537582",
+            "localEdgeId": "osm-7de491e1689c-s7",
+            "remoteEdgeId": "osm-e6f3d33c1f5a",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 0,
+            "remoteSurface": 0,
+            "localRoadClass": "arterial",
+            "remoteRoadClass": "arterial",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.03905,
+              52.40493
+            ],
+            "osmWayId": "32365169",
+            "localEdgeId": "osm-0707734b70af-s2",
+            "remoteEdgeId": "osm-18677be6fd5f",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 2,
+            "remoteSurface": 2,
+            "localRoadClass": "resource",
+            "remoteRoadClass": "resource",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -109.99184,
+              53.07426
+            ],
+            "osmWayId": "41496000",
+            "localEdgeId": "osm-b8a70cae142a",
+            "remoteEdgeId": "osm-0e3f900bc45b-s1",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 1,
+            "remoteSurface": 1,
+            "localRoadClass": "local",
+            "remoteRoadClass": "local",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.02841,
+              51.53254
+            ],
+            "osmWayId": "32421701",
+            "localEdgeId": "osm-fa54f85e9648",
+            "remoteEdgeId": "osm-07869a748f05",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 2,
+            "remoteSurface": 2,
+            "localRoadClass": "resource",
+            "remoteRoadClass": "resource",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.0263,
+              50.80483
+            ],
+            "osmWayId": "32438068",
+            "localEdgeId": "osm-ab26958b1816",
+            "remoteEdgeId": "osm-a393508520f9",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 2,
+            "remoteSurface": 2,
+            "localRoadClass": "resource",
+            "remoteRoadClass": "resource",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -109.99486,
+              53.2489
+            ],
+            "osmWayId": "1226808238",
+            "localEdgeId": "osm-759fb6dbad03",
+            "remoteEdgeId": "osm-0b3408616e91-s0",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 0,
+            "remoteSurface": 0,
+            "localRoadClass": "collector",
+            "remoteRoadClass": "collector",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.05287,
+              52.62379
+            ],
+            "osmWayId": "16726161",
+            "localEdgeId": "osm-f735f982a1fb-s12",
+            "remoteEdgeId": "osm-d828acd51876-s2",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 0,
+            "remoteSurface": 0,
+            "localRoadClass": "arterial",
+            "remoteRoadClass": "arterial",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -109.86414,
+              53.42437
+            ],
+            "osmWayId": "165453027",
+            "localEdgeId": "osm-137d98d0b8da",
+            "remoteEdgeId": "osm-a925bbb5567e-s10",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 0,
+            "remoteSurface": 0,
+            "localRoadClass": "local",
+            "remoteRoadClass": "local",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.16757,
+              52.25942
+            ],
+            "osmWayId": "32360292",
+            "localEdgeId": "osm-d176dd12eb11-s8",
+            "remoteEdgeId": "osm-67aaca7d230b",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 2,
+            "remoteSurface": 2,
+            "localRoadClass": "resource",
+            "remoteRoadClass": "resource",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -109.98871,
+              51.2998
+            ],
+            "osmWayId": "255282100",
+            "localEdgeId": "osm-4d036550fe62",
+            "remoteEdgeId": "osm-2b1b94520fae",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 1,
+            "remoteSurface": 1,
+            "localRoadClass": "local",
+            "remoteRoadClass": "local",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -109.84561,
+              53.63542
+            ],
+            "osmWayId": "165472477",
+            "localEdgeId": "osm-75aedd8a118b",
+            "remoteEdgeId": "osm-474b1e12d0d6-s7",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 1,
+            "remoteSurface": 1,
+            "localRoadClass": "local",
+            "remoteRoadClass": "local",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110,
+              51.76529
+            ],
+            "osmWayId": "255173564",
+            "localEdgeId": "osm-9e75a564f52d",
+            "remoteEdgeId": "osm-3840d6ada9fa",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 4,
+            "remoteSurface": 4,
+            "localRoadClass": "local",
+            "remoteRoadClass": "local",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110,
+              50.5139
+            ],
+            "osmWayId": "32419039",
+            "localEdgeId": "osm-60c3ca70cc1a",
+            "remoteEdgeId": "osm-788dae921110",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 2,
+            "remoteSurface": 2,
+            "localRoadClass": "resource",
+            "remoteRoadClass": "resource",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -109.93102,
+              52.11443
+            ],
+            "osmWayId": "255264938",
+            "localEdgeId": "osm-9a3745028893",
+            "remoteEdgeId": "osm-e77bc00c5457-s0",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 1,
+            "remoteSurface": 1,
+            "localRoadClass": "local",
+            "remoteRoadClass": "local",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.01933,
+              52.85722
+            ],
+            "osmWayId": "177382998",
+            "localEdgeId": "osm-6cbfe2da4ce6-s30",
+            "remoteEdgeId": "osm-65da284293fb-s23",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 0,
+            "remoteSurface": 0,
+            "localRoadClass": "arterial",
+            "remoteRoadClass": "arterial",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110,
+              50.33915
+            ],
+            "osmWayId": "1027285758",
+            "localEdgeId": "osm-2817df39c4ff-s3",
+            "remoteEdgeId": "osm-bfd9756ec862",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 1,
+            "remoteSurface": 1,
+            "localRoadClass": "local",
+            "remoteRoadClass": "local",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.16283,
+              53.42438
+            ],
+            "osmWayId": "32367709",
+            "localEdgeId": "osm-833f8747ca7b-s7",
+            "remoteEdgeId": "osm-9d1274e9e208",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 2,
+            "remoteSurface": 2,
+            "localRoadClass": "resource",
+            "remoteRoadClass": "resource",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -109.83579,
+              49.96247
+            ],
+            "osmWayId": "209686968",
+            "localEdgeId": "osm-8843fe529f8d-s0",
+            "remoteEdgeId": "osm-0bc9001c794e-s8",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 0,
+            "remoteSurface": 0,
+            "localRoadClass": "arterial",
+            "remoteRoadClass": "arterial",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.0055,
+              53.47799
+            ],
+            "osmWayId": "32374421",
+            "localEdgeId": "osm-f25488b32e8d",
+            "remoteEdgeId": "osm-7a10ed2841fc",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 2,
+            "remoteSurface": 2,
+            "localRoadClass": "resource",
+            "remoteRoadClass": "resource",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110,
+              49.55319
+            ],
+            "osmWayId": "333513255",
+            "localEdgeId": "osm-37fb3f956f29-s2",
+            "remoteEdgeId": "osm-7a3ad26265c1-s1",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 2,
+            "remoteSurface": 2,
+            "localRoadClass": "resource",
+            "remoteRoadClass": "resource",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.16059,
+              53.07437
+            ],
+            "osmWayId": "32376409",
+            "localEdgeId": "osm-65811a013081-s7",
+            "remoteEdgeId": "osm-08eecef025d0",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 2,
+            "remoteSurface": 2,
+            "localRoadClass": "resource",
+            "remoteRoadClass": "resource",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -109.88752,
+              53.33637
+            ],
+            "osmWayId": "165456041",
+            "localEdgeId": "osm-9ade05e9774b",
+            "remoteEdgeId": "osm-41018c7ba740-s8",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 0,
+            "remoteSurface": 0,
+            "localRoadClass": "local",
+            "remoteRoadClass": "local",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -109.86815,
+              53.54086
+            ],
+            "osmWayId": "166377403",
+            "localEdgeId": "osm-f44e9db4c5b9",
+            "remoteEdgeId": "osm-1bd72802644f-s0",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 1,
+            "remoteSurface": 1,
+            "localRoadClass": "local",
+            "remoteRoadClass": "local",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.00003,
+              49.90176
+            ],
+            "osmWayId": "72839032",
+            "localEdgeId": "osm-762afc4279f9-s4",
+            "remoteEdgeId": "osm-6ec6ea7b2a2c-s4",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 4,
+            "remoteSurface": 4,
+            "localRoadClass": "local",
+            "remoteRoadClass": "local",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -109.9854,
+              53.16156
+            ],
+            "osmWayId": "165429957",
+            "localEdgeId": "osm-55da6e88f83b",
+            "remoteEdgeId": "osm-c79d8a01f87c",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 1,
+            "remoteSurface": 1,
+            "localRoadClass": "local",
+            "remoteRoadClass": "local",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -109.92089,
+              54.33967
+            ],
+            "osmWayId": "252346351",
+            "localEdgeId": "osm-1891bb22b459",
+            "remoteEdgeId": "osm-be71a07c7850-s6",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 0,
+            "remoteSurface": 0,
+            "localRoadClass": "arterial",
+            "remoteRoadClass": "arterial",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -109.92282,
+              52.75476
+            ],
+            "osmWayId": "32368456",
+            "localEdgeId": "osm-5c673dccd427-s10",
+            "remoteEdgeId": "osm-f9fdd13e5267-s4",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 2,
+            "remoteSurface": 2,
+            "localRoadClass": "resource",
+            "remoteRoadClass": "resource",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -109.88976,
+              49.78581
+            ],
+            "osmWayId": "196358008",
+            "localEdgeId": "osm-0ba8c1ec4544",
+            "remoteEdgeId": "osm-652bc70b58b8-s6",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 1,
+            "remoteSurface": 1,
+            "localRoadClass": "local",
+            "remoteRoadClass": "local",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.06634,
+              51.36971
+            ],
+            "osmWayId": "398816228",
+            "localEdgeId": "osm-93114c499f3c-s1",
+            "remoteEdgeId": "osm-5c5fbf384535",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 2,
+            "remoteSurface": 2,
+            "localRoadClass": "resource",
+            "remoteRoadClass": "resource",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.00727,
+              49.25423
+            ],
+            "osmWayId": "32410339",
+            "localEdgeId": "osm-1c6441c6fa01",
+            "remoteEdgeId": "osm-80083829a758",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 2,
+            "remoteSurface": 2,
+            "localRoadClass": "resource",
+            "remoteRoadClass": "resource",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.17314,
+              52.75599
+            ],
+            "osmWayId": "32368456",
+            "localEdgeId": "osm-5c673dccd427-s0",
+            "remoteEdgeId": "osm-f9fdd13e5267-s0",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 2,
+            "remoteSurface": 2,
+            "localRoadClass": "resource",
+            "remoteRoadClass": "resource",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.02743,
+              49.74224
+            ],
+            "osmWayId": "32410018",
+            "localEdgeId": "osm-68b13e1ffa02",
+            "remoteEdgeId": "osm-f84c33615847",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 2,
+            "remoteSurface": 2,
+            "localRoadClass": "resource",
+            "remoteRoadClass": "resource",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -109.98084,
+              51.21241
+            ],
+            "osmWayId": "255283563",
+            "localEdgeId": "osm-b08cfb0658f2",
+            "remoteEdgeId": "osm-f26bcb07f70e",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 1,
+            "remoteSurface": 1,
+            "localRoadClass": "local",
+            "remoteRoadClass": "local",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.35964,
+              51.9715
+            ],
+            "osmWayId": "65537582",
+            "localEdgeId": "osm-7de491e1689c-s4",
+            "remoteEdgeId": "osm-e6f3d33c1f5a",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 0,
+            "remoteSurface": 0,
+            "localRoadClass": "arterial",
+            "remoteRoadClass": "arterial",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.14783,
+              49.21287
+            ],
+            "osmWayId": "32435448",
+            "localEdgeId": "osm-3a205b3d3a24-s0",
+            "remoteEdgeId": "osm-00663a36dc81-s0",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 2,
+            "remoteSurface": 2,
+            "localRoadClass": "arterial",
+            "remoteRoadClass": "arterial",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.0973,
+              50.65944
+            ],
+            "osmWayId": "23632694",
+            "localEdgeId": "osm-5a8114bdaa14-s0",
+            "remoteEdgeId": "osm-20e5feb8ae2f",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 0,
+            "remoteSurface": 0,
+            "localRoadClass": "collector",
+            "remoteRoadClass": "collector",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.09097,
+              56.26559
+            ],
+            "osmWayId": "30187708",
+            "localEdgeId": "osm-7c49fb3ab101",
+            "remoteEdgeId": "osm-0ec5796e9402",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 4,
+            "remoteSurface": 4,
+            "localRoadClass": "local",
+            "remoteRoadClass": "local",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -109.99236,
+              50.42669
+            ],
+            "osmWayId": "255165578",
+            "localEdgeId": "osm-dbe22aaa43cb",
+            "remoteEdgeId": "osm-42144cab0dfb-s6",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 0,
+            "remoteSurface": 0,
+            "localRoadClass": "collector",
+            "remoteRoadClass": "collector",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.10909,
+              51.09587
+            ],
+            "osmWayId": "32407673",
+            "localEdgeId": "osm-bb624013cc8a-s3",
+            "remoteEdgeId": "osm-e5baa4d961b7",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 2,
+            "remoteSurface": 2,
+            "localRoadClass": "resource",
+            "remoteRoadClass": "resource",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -109.75372,
+              53.42448
+            ],
+            "osmWayId": "165453027",
+            "localEdgeId": "osm-137d98d0b8da",
+            "remoteEdgeId": "osm-a925bbb5567e-s15",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 0,
+            "remoteSurface": 0,
+            "localRoadClass": "local",
+            "remoteRoadClass": "local",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.17703,
+              50.25168
+            ],
+            "osmWayId": "32411635",
+            "localEdgeId": "osm-87d7b2116c5e-s4",
+            "remoteEdgeId": "osm-765b06d52129",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 1,
+            "remoteSurface": 1,
+            "localRoadClass": "collector",
+            "remoteRoadClass": "collector",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110,
+              51.87424
+            ],
+            "osmWayId": "16078928",
+            "localEdgeId": "osm-2aeb71b6febb-s0",
+            "remoteEdgeId": "osm-bf365bdbd259-s0",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 1,
+            "remoteSurface": 1,
+            "localRoadClass": "local",
+            "remoteRoadClass": "local",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -109.9964,
+              53.64496
+            ],
+            "osmWayId": "221503072",
+            "localEdgeId": "osm-8799225d980d",
+            "remoteEdgeId": "osm-c84c24a20a6c",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 1,
+            "remoteSurface": 1,
+            "localRoadClass": "local",
+            "remoteRoadClass": "local",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.03672,
+              52.34166
+            ],
+            "osmWayId": "32360130",
+            "localEdgeId": "osm-629e4d8e260e",
+            "remoteEdgeId": "osm-35c78fb896f9",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 2,
+            "remoteSurface": 2,
+            "localRoadClass": "resource",
+            "remoteRoadClass": "resource",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.09605,
+              49.78607
+            ],
+            "osmWayId": "32407482",
+            "localEdgeId": "osm-901286774bbd-s4",
+            "remoteEdgeId": "osm-499a3ec61b4a",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 2,
+            "remoteSurface": 2,
+            "localRoadClass": "collector",
+            "remoteRoadClass": "collector",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.0294,
+              53.01621
+            ],
+            "osmWayId": "177382998",
+            "localEdgeId": "osm-6cbfe2da4ce6-s22",
+            "remoteEdgeId": "osm-65da284293fb-s21",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 0,
+            "remoteSurface": 0,
+            "localRoadClass": "arterial",
+            "remoteRoadClass": "arterial",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.16837,
+              51.90333
+            ],
+            "osmWayId": "65537582",
+            "localEdgeId": "osm-7de491e1689c-s12",
+            "remoteEdgeId": "osm-e6f3d33c1f5a",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 0,
+            "remoteSurface": 0,
+            "localRoadClass": "arterial",
+            "remoteRoadClass": "arterial",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.05188,
+              51.44522
+            ],
+            "osmWayId": "32409399",
+            "localEdgeId": "osm-1224b614b468",
+            "remoteEdgeId": "osm-ef77a0c0665b",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 2,
+            "remoteSurface": 2,
+            "localRoadClass": "resource",
+            "remoteRoadClass": "resource",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.3191,
+              56.25645
+            ],
+            "osmWayId": "30187708",
+            "localEdgeId": "osm-7c49fb3ab101",
+            "remoteEdgeId": "osm-0ec5796e9402",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 4,
+            "remoteSurface": 4,
+            "localRoadClass": "local",
+            "remoteRoadClass": "local",
             "gapMeters": 0
           }
         ]
@@ -5142,6 +6680,1594 @@
           "population": 20499,
           "radiusKm": 3.5,
           "sourceId": "51969524"
+        }
+      ]
+    },
+    "sk": {
+      "neighbors": {
+        "ab": [
+          {
+            "coordinate": [
+              -110.02527,
+              49.17929
+            ],
+            "osmWayId": "32415785",
+            "localEdgeId": "osm-e0d3e5c93114",
+            "remoteEdgeId": "osm-3d62fb697bce",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 2,
+            "remoteSurface": 2,
+            "localRoadClass": "resource",
+            "remoteRoadClass": "resource",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -109.9713,
+              56.29621
+            ],
+            "osmWayId": "317014875",
+            "localEdgeId": "osm-67cd6f1fc5ce",
+            "remoteEdgeId": "osm-8f7fdc6afc2c",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 1,
+            "remoteSurface": 1,
+            "localRoadClass": "collector",
+            "remoteRoadClass": "collector",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.05323,
+              52.73979
+            ],
+            "osmWayId": "16726161",
+            "localEdgeId": "osm-d828acd51876-s1",
+            "remoteEdgeId": "osm-f735f982a1fb-s5",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 0,
+            "remoteSurface": 0,
+            "localRoadClass": "arterial",
+            "remoteRoadClass": "arterial",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.00851,
+              50.97216
+            ],
+            "osmWayId": "65583476",
+            "localEdgeId": "osm-2277cc708812",
+            "remoteEdgeId": "osm-007f4ab4abf6-s1",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 0,
+            "remoteSurface": 0,
+            "localRoadClass": "collector",
+            "remoteRoadClass": "collector",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.01841,
+              54.41392
+            ],
+            "osmWayId": "427144831",
+            "localEdgeId": "osm-2d518a708cc0",
+            "remoteEdgeId": "osm-d095bed482ed",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 1,
+            "remoteSurface": 1,
+            "localRoadClass": "local",
+            "remoteRoadClass": "local",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.10103,
+              51.85496
+            ],
+            "osmWayId": "65537582",
+            "localEdgeId": "osm-e6f3d33c1f5a",
+            "remoteEdgeId": "osm-7de491e1689c-s14",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 0,
+            "remoteSurface": 0,
+            "localRoadClass": "arterial",
+            "remoteRoadClass": "arterial",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.00142,
+              53.57648
+            ],
+            "osmWayId": "165472461",
+            "localEdgeId": "osm-ff0208f47ee3-s2",
+            "remoteEdgeId": "osm-697004490b55-s2",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 0,
+            "remoteSurface": 0,
+            "localRoadClass": "arterial",
+            "remoteRoadClass": "arterial",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -109.6831,
+              49.97044
+            ],
+            "osmWayId": "209686968",
+            "localEdgeId": "osm-0bc9001c794e-s0",
+            "remoteEdgeId": "osm-8843fe529f8d-s0",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 0,
+            "remoteSurface": 0,
+            "localRoadClass": "arterial",
+            "remoteRoadClass": "arterial",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.09657,
+              50.4264
+            ],
+            "osmWayId": "32439648",
+            "localEdgeId": "osm-ac5f1d33702b",
+            "remoteEdgeId": "osm-c3d3b39081c3-s0",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 1,
+            "remoteSurface": 1,
+            "localRoadClass": "collector",
+            "remoteRoadClass": "collector",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -109.96528,
+              51.41639
+            ],
+            "osmWayId": "255282117",
+            "localEdgeId": "osm-28fccbb21e5f-s0",
+            "remoteEdgeId": "osm-2e8ece04048d",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 2,
+            "remoteSurface": 2,
+            "localRoadClass": "resource",
+            "remoteRoadClass": "resource",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -109.9786,
+              52.28906
+            ],
+            "osmWayId": "255271380",
+            "localEdgeId": "osm-c155409fcd15",
+            "remoteEdgeId": "osm-a63ed8ebc1a6",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 2,
+            "remoteSurface": 2,
+            "localRoadClass": "resource",
+            "remoteRoadClass": "resource",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.12536,
+              53.16161
+            ],
+            "osmWayId": "334669477",
+            "localEdgeId": "osm-e544d4bca01f",
+            "remoteEdgeId": "osm-db84453f080e-s0",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 0,
+            "remoteSurface": 0,
+            "localRoadClass": "collector",
+            "remoteRoadClass": "collector",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.14036,
+              49.58219
+            ],
+            "osmWayId": "333513255",
+            "localEdgeId": "osm-7a3ad26265c1-s0",
+            "remoteEdgeId": "osm-37fb3f956f29-s0",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 2,
+            "remoteSurface": 2,
+            "localRoadClass": "resource",
+            "remoteRoadClass": "resource",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -109.71885,
+              53.33837
+            ],
+            "osmWayId": "165456041",
+            "localEdgeId": "osm-41018c7ba740-s0",
+            "remoteEdgeId": "osm-9ade05e9774b",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 0,
+            "remoteSurface": 0,
+            "localRoadClass": "local",
+            "remoteRoadClass": "local",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -109.63248,
+              52.84204
+            ],
+            "osmWayId": "331007854",
+            "localEdgeId": "osm-ea2cb1ce23ee-s0",
+            "remoteEdgeId": "osm-de423c4744be",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 0,
+            "remoteSurface": 0,
+            "localRoadClass": "arterial",
+            "remoteRoadClass": "arterial",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.45563,
+              56.25719
+            ],
+            "osmWayId": "30187708",
+            "localEdgeId": "osm-0ec5796e9402",
+            "remoteEdgeId": "osm-7c49fb3ab101",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 4,
+            "remoteSurface": 4,
+            "localRoadClass": "local",
+            "remoteRoadClass": "local",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.46808,
+              52.00071
+            ],
+            "osmWayId": "65537582",
+            "localEdgeId": "osm-e6f3d33c1f5a",
+            "remoteEdgeId": "osm-7de491e1689c-s0",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 0,
+            "remoteSurface": 0,
+            "localRoadClass": "arterial",
+            "remoteRoadClass": "arterial",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -109.99259,
+              53.84559
+            ],
+            "osmWayId": "438504946",
+            "localEdgeId": "osm-35b5b372385a-s8",
+            "remoteEdgeId": "osm-79083cb82444",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 4,
+            "remoteSurface": 4,
+            "localRoadClass": "local",
+            "remoteRoadClass": "local",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -109.99998,
+              50.68842
+            ],
+            "osmWayId": "255097882",
+            "localEdgeId": "osm-94fce65ed622",
+            "remoteEdgeId": "osm-7cd1cdfa7d49-s0",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 2,
+            "remoteSurface": 2,
+            "localRoadClass": "resource",
+            "remoteRoadClass": "resource",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.00507,
+              49.81496
+            ],
+            "osmWayId": "255608437",
+            "localEdgeId": "osm-d34e616767e9",
+            "remoteEdgeId": "osm-11e7f9bb28ad",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 4,
+            "remoteSurface": 4,
+            "localRoadClass": "track",
+            "remoteRoadClass": "track",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -109.96791,
+              52.51791
+            ],
+            "osmWayId": "71867142",
+            "localEdgeId": "osm-50c23715f1b3-s1",
+            "remoteEdgeId": "osm-eb208df56dc2-s1",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 0,
+            "remoteSurface": 0,
+            "localRoadClass": "arterial",
+            "remoteRoadClass": "arterial",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -109.95932,
+              52.95819
+            ],
+            "osmWayId": "165477807",
+            "localEdgeId": "osm-8fb267da0f3f-s5",
+            "remoteEdgeId": "osm-b601bda2792c",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 1,
+            "remoteSurface": 1,
+            "localRoadClass": "local",
+            "remoteRoadClass": "local",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -109.87769,
+              50.25186
+            ],
+            "osmWayId": "379589696",
+            "localEdgeId": "osm-ed473ba6f59f-s0",
+            "remoteEdgeId": "osm-7195f1c3e024",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 1,
+            "remoteSurface": 1,
+            "localRoadClass": "collector",
+            "remoteRoadClass": "collector",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.09787,
+              51.21191
+            ],
+            "osmWayId": "32407535",
+            "localEdgeId": "osm-96b501285e23",
+            "remoteEdgeId": "osm-d287479de050-s1",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 2,
+            "remoteSurface": 2,
+            "localRoadClass": "resource",
+            "remoteRoadClass": "resource",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -109.64683,
+              53.6281
+            ],
+            "osmWayId": "165472477",
+            "localEdgeId": "osm-474b1e12d0d6-s0",
+            "remoteEdgeId": "osm-75aedd8a118b",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 1,
+            "remoteSurface": 1,
+            "localRoadClass": "local",
+            "remoteRoadClass": "local",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110,
+              51.64889
+            ],
+            "osmWayId": "255276281",
+            "localEdgeId": "osm-e910f63dacc0",
+            "remoteEdgeId": "osm-99114da2d84a",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 4,
+            "remoteSurface": 4,
+            "localRoadClass": "local",
+            "remoteRoadClass": "local",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.2797,
+              50.25165
+            ],
+            "osmWayId": "32411635",
+            "localEdgeId": "osm-765b06d52129",
+            "remoteEdgeId": "osm-87d7b2116c5e-s0",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 1,
+            "remoteSurface": 1,
+            "localRoadClass": "collector",
+            "remoteRoadClass": "collector",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.10005,
+              52.114
+            ],
+            "osmWayId": "32366624",
+            "localEdgeId": "osm-668e5f7fcccc",
+            "remoteEdgeId": "osm-7b1f97ad37bb-s2",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 2,
+            "remoteSurface": 2,
+            "localRoadClass": "resource",
+            "remoteRoadClass": "resource",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.02988,
+              53.36578
+            ],
+            "osmWayId": "32373018",
+            "localEdgeId": "osm-fae74739c29e",
+            "remoteEdgeId": "osm-1fb6cfe6005f",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 0,
+            "remoteSurface": 0,
+            "localRoadClass": "local",
+            "remoteRoadClass": "local",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -109.78413,
+              53.10338
+            ],
+            "osmWayId": "165423948",
+            "localEdgeId": "osm-8c51d62e4578-s0",
+            "remoteEdgeId": "osm-068f8b186a0f",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 1,
+            "remoteSurface": 1,
+            "localRoadClass": "local",
+            "remoteRoadClass": "local",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.24485,
+              52.36117
+            ],
+            "osmWayId": "307061046",
+            "localEdgeId": "osm-858d82a100a9",
+            "remoteEdgeId": "osm-d87dc6b81f06-s0",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 0,
+            "remoteSurface": 0,
+            "localRoadClass": "arterial",
+            "remoteRoadClass": "arterial",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.00431,
+              49.98724
+            ],
+            "osmWayId": "219940291",
+            "localEdgeId": "osm-b48e30994ec7-s2",
+            "remoteEdgeId": "osm-9d7e643c4e81-s2",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 4,
+            "remoteSurface": 4,
+            "localRoadClass": "local",
+            "remoteRoadClass": "local",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -109.75,
+              49.80564
+            ],
+            "osmWayId": "196358008",
+            "localEdgeId": "osm-652bc70b58b8-s0",
+            "remoteEdgeId": "osm-0ba8c1ec4544",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 1,
+            "remoteSurface": 1,
+            "localRoadClass": "local",
+            "remoteRoadClass": "local",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -109.77753,
+              54.3347
+            ],
+            "osmWayId": "252346351",
+            "localEdgeId": "osm-be71a07c7850-s0",
+            "remoteEdgeId": "osm-1891bb22b459",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 0,
+            "remoteSurface": 0,
+            "localRoadClass": "arterial",
+            "remoteRoadClass": "arterial",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.25233,
+              49.2243
+            ],
+            "osmWayId": "32435448",
+            "localEdgeId": "osm-00663a36dc81-s0",
+            "remoteEdgeId": "osm-3a205b3d3a24-s0",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 2,
+            "remoteSurface": 2,
+            "localRoadClass": "arterial",
+            "remoteRoadClass": "arterial",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.03529,
+              49.32878
+            ],
+            "osmWayId": "32410339",
+            "localEdgeId": "osm-80083829a758",
+            "remoteEdgeId": "osm-1c6441c6fa01",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 2,
+            "remoteSurface": 2,
+            "localRoadClass": "resource",
+            "remoteRoadClass": "resource",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -109.95786,
+              49.67079
+            ],
+            "osmWayId": "255608440",
+            "localEdgeId": "osm-7683bbd6e7ea-s1",
+            "remoteEdgeId": "osm-945daf6d20b9",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 4,
+            "remoteSurface": 4,
+            "localRoadClass": "local",
+            "remoteRoadClass": "local",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.19252,
+              51.39336
+            ],
+            "osmWayId": "80565423",
+            "localEdgeId": "osm-13c1f8b69451",
+            "remoteEdgeId": "osm-41f158b66b22-s0",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 0,
+            "remoteSurface": 0,
+            "localRoadClass": "arterial",
+            "remoteRoadClass": "arterial",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110,
+              54.27307
+            ],
+            "osmWayId": "398638958",
+            "localEdgeId": "osm-f585c0e4c84b",
+            "remoteEdgeId": "osm-4a4a494d49d2",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 1,
+            "remoteSurface": 1,
+            "localRoadClass": "local",
+            "remoteRoadClass": "local",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -109.87768,
+              50.42667
+            ],
+            "osmWayId": "255165578",
+            "localEdgeId": "osm-42144cab0dfb-s0",
+            "remoteEdgeId": "osm-dbe22aaa43cb",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 0,
+            "remoteSurface": 0,
+            "localRoadClass": "collector",
+            "remoteRoadClass": "collector",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.21423,
+              51.09591
+            ],
+            "osmWayId": "32407673",
+            "localEdgeId": "osm-e5baa4d961b7",
+            "remoteEdgeId": "osm-bb624013cc8a-s7",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 2,
+            "remoteSurface": 2,
+            "localRoadClass": "resource",
+            "remoteRoadClass": "resource",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.21126,
+              56.26905
+            ],
+            "osmWayId": "30187708",
+            "localEdgeId": "osm-0ec5796e9402",
+            "remoteEdgeId": "osm-7c49fb3ab101",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 4,
+            "remoteSurface": 4,
+            "localRoadClass": "local",
+            "remoteRoadClass": "local",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.0103,
+              53.70908
+            ],
+            "osmWayId": "32368764",
+            "localEdgeId": "osm-553826dec163",
+            "remoteEdgeId": "osm-1f739550ebd8",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 2,
+            "remoteSurface": 2,
+            "localRoadClass": "resource",
+            "remoteRoadClass": "resource",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.20506,
+              49.78607
+            ],
+            "osmWayId": "32407482",
+            "localEdgeId": "osm-499a3ec61b4a",
+            "remoteEdgeId": "osm-901286774bbd-s0",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 2,
+            "remoteSurface": 2,
+            "localRoadClass": "collector",
+            "remoteRoadClass": "collector",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -109.8492,
+              52.84596
+            ],
+            "osmWayId": "331007854",
+            "localEdgeId": "osm-ea2cb1ce23ee-s16",
+            "remoteEdgeId": "osm-de423c4744be",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 0,
+            "remoteSurface": 0,
+            "localRoadClass": "arterial",
+            "remoteRoadClass": "arterial",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.07429,
+              50.25163
+            ],
+            "osmWayId": "32411635",
+            "localEdgeId": "osm-765b06d52129",
+            "remoteEdgeId": "osm-87d7b2116c5e-s8",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 1,
+            "remoteSurface": 1,
+            "localRoadClass": "collector",
+            "remoteRoadClass": "collector",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -109.99843,
+              51.10326
+            ],
+            "osmWayId": "255283800",
+            "localEdgeId": "osm-4d9aed6be3ab",
+            "remoteEdgeId": "osm-449c81e1c150",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 2,
+            "remoteSurface": 2,
+            "localRoadClass": "resource",
+            "remoteRoadClass": "resource",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.25448,
+              51.9352
+            ],
+            "osmWayId": "65537582",
+            "localEdgeId": "osm-e6f3d33c1f5a",
+            "remoteEdgeId": "osm-7de491e1689c-s7",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 0,
+            "remoteSurface": 0,
+            "localRoadClass": "arterial",
+            "remoteRoadClass": "arterial",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.03905,
+              52.40493
+            ],
+            "osmWayId": "32365169",
+            "localEdgeId": "osm-18677be6fd5f",
+            "remoteEdgeId": "osm-0707734b70af-s2",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 2,
+            "remoteSurface": 2,
+            "localRoadClass": "resource",
+            "remoteRoadClass": "resource",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -109.99184,
+              53.07426
+            ],
+            "osmWayId": "41496000",
+            "localEdgeId": "osm-0e3f900bc45b-s1",
+            "remoteEdgeId": "osm-b8a70cae142a",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 1,
+            "remoteSurface": 1,
+            "localRoadClass": "local",
+            "remoteRoadClass": "local",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.02841,
+              51.53254
+            ],
+            "osmWayId": "32421701",
+            "localEdgeId": "osm-07869a748f05",
+            "remoteEdgeId": "osm-fa54f85e9648",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 2,
+            "remoteSurface": 2,
+            "localRoadClass": "resource",
+            "remoteRoadClass": "resource",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.0263,
+              50.80483
+            ],
+            "osmWayId": "32438068",
+            "localEdgeId": "osm-a393508520f9",
+            "remoteEdgeId": "osm-ab26958b1816",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 2,
+            "remoteSurface": 2,
+            "localRoadClass": "resource",
+            "remoteRoadClass": "resource",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -109.99486,
+              53.2489
+            ],
+            "osmWayId": "1226808238",
+            "localEdgeId": "osm-0b3408616e91-s0",
+            "remoteEdgeId": "osm-759fb6dbad03",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 0,
+            "remoteSurface": 0,
+            "localRoadClass": "collector",
+            "remoteRoadClass": "collector",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.05287,
+              52.62379
+            ],
+            "osmWayId": "16726161",
+            "localEdgeId": "osm-d828acd51876-s2",
+            "remoteEdgeId": "osm-f735f982a1fb-s12",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 0,
+            "remoteSurface": 0,
+            "localRoadClass": "arterial",
+            "remoteRoadClass": "arterial",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -109.86414,
+              53.42437
+            ],
+            "osmWayId": "165453027",
+            "localEdgeId": "osm-a925bbb5567e-s10",
+            "remoteEdgeId": "osm-137d98d0b8da",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 0,
+            "remoteSurface": 0,
+            "localRoadClass": "local",
+            "remoteRoadClass": "local",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.16757,
+              52.25942
+            ],
+            "osmWayId": "32360292",
+            "localEdgeId": "osm-67aaca7d230b",
+            "remoteEdgeId": "osm-d176dd12eb11-s8",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 2,
+            "remoteSurface": 2,
+            "localRoadClass": "resource",
+            "remoteRoadClass": "resource",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -109.98871,
+              51.2998
+            ],
+            "osmWayId": "255282100",
+            "localEdgeId": "osm-2b1b94520fae",
+            "remoteEdgeId": "osm-4d036550fe62",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 1,
+            "remoteSurface": 1,
+            "localRoadClass": "local",
+            "remoteRoadClass": "local",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -109.84561,
+              53.63542
+            ],
+            "osmWayId": "165472477",
+            "localEdgeId": "osm-474b1e12d0d6-s7",
+            "remoteEdgeId": "osm-75aedd8a118b",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 1,
+            "remoteSurface": 1,
+            "localRoadClass": "local",
+            "remoteRoadClass": "local",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110,
+              51.76529
+            ],
+            "osmWayId": "255173564",
+            "localEdgeId": "osm-3840d6ada9fa",
+            "remoteEdgeId": "osm-9e75a564f52d",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 4,
+            "remoteSurface": 4,
+            "localRoadClass": "local",
+            "remoteRoadClass": "local",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110,
+              50.5139
+            ],
+            "osmWayId": "32419039",
+            "localEdgeId": "osm-788dae921110",
+            "remoteEdgeId": "osm-60c3ca70cc1a",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 2,
+            "remoteSurface": 2,
+            "localRoadClass": "resource",
+            "remoteRoadClass": "resource",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -109.93102,
+              52.11443
+            ],
+            "osmWayId": "255264938",
+            "localEdgeId": "osm-e77bc00c5457-s0",
+            "remoteEdgeId": "osm-9a3745028893",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 1,
+            "remoteSurface": 1,
+            "localRoadClass": "local",
+            "remoteRoadClass": "local",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.01933,
+              52.85722
+            ],
+            "osmWayId": "177382998",
+            "localEdgeId": "osm-65da284293fb-s23",
+            "remoteEdgeId": "osm-6cbfe2da4ce6-s30",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 0,
+            "remoteSurface": 0,
+            "localRoadClass": "arterial",
+            "remoteRoadClass": "arterial",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110,
+              50.33915
+            ],
+            "osmWayId": "1027285758",
+            "localEdgeId": "osm-bfd9756ec862",
+            "remoteEdgeId": "osm-2817df39c4ff-s3",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 1,
+            "remoteSurface": 1,
+            "localRoadClass": "local",
+            "remoteRoadClass": "local",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.16283,
+              53.42438
+            ],
+            "osmWayId": "32367709",
+            "localEdgeId": "osm-9d1274e9e208",
+            "remoteEdgeId": "osm-833f8747ca7b-s7",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 2,
+            "remoteSurface": 2,
+            "localRoadClass": "resource",
+            "remoteRoadClass": "resource",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -109.83579,
+              49.96247
+            ],
+            "osmWayId": "209686968",
+            "localEdgeId": "osm-0bc9001c794e-s8",
+            "remoteEdgeId": "osm-8843fe529f8d-s0",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 0,
+            "remoteSurface": 0,
+            "localRoadClass": "arterial",
+            "remoteRoadClass": "arterial",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.0055,
+              53.47799
+            ],
+            "osmWayId": "32374421",
+            "localEdgeId": "osm-7a10ed2841fc",
+            "remoteEdgeId": "osm-f25488b32e8d",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 2,
+            "remoteSurface": 2,
+            "localRoadClass": "resource",
+            "remoteRoadClass": "resource",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110,
+              49.55319
+            ],
+            "osmWayId": "333513255",
+            "localEdgeId": "osm-7a3ad26265c1-s1",
+            "remoteEdgeId": "osm-37fb3f956f29-s2",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 2,
+            "remoteSurface": 2,
+            "localRoadClass": "resource",
+            "remoteRoadClass": "resource",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.16059,
+              53.07437
+            ],
+            "osmWayId": "32376409",
+            "localEdgeId": "osm-08eecef025d0",
+            "remoteEdgeId": "osm-65811a013081-s7",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 2,
+            "remoteSurface": 2,
+            "localRoadClass": "resource",
+            "remoteRoadClass": "resource",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -109.88752,
+              53.33637
+            ],
+            "osmWayId": "165456041",
+            "localEdgeId": "osm-41018c7ba740-s8",
+            "remoteEdgeId": "osm-9ade05e9774b",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 0,
+            "remoteSurface": 0,
+            "localRoadClass": "local",
+            "remoteRoadClass": "local",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -109.86815,
+              53.54086
+            ],
+            "osmWayId": "166377403",
+            "localEdgeId": "osm-1bd72802644f-s0",
+            "remoteEdgeId": "osm-f44e9db4c5b9",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 1,
+            "remoteSurface": 1,
+            "localRoadClass": "local",
+            "remoteRoadClass": "local",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.00003,
+              49.90176
+            ],
+            "osmWayId": "72839032",
+            "localEdgeId": "osm-6ec6ea7b2a2c-s4",
+            "remoteEdgeId": "osm-762afc4279f9-s4",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 4,
+            "remoteSurface": 4,
+            "localRoadClass": "local",
+            "remoteRoadClass": "local",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -109.9854,
+              53.16156
+            ],
+            "osmWayId": "165429957",
+            "localEdgeId": "osm-c79d8a01f87c",
+            "remoteEdgeId": "osm-55da6e88f83b",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 1,
+            "remoteSurface": 1,
+            "localRoadClass": "local",
+            "remoteRoadClass": "local",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -109.92089,
+              54.33967
+            ],
+            "osmWayId": "252346351",
+            "localEdgeId": "osm-be71a07c7850-s6",
+            "remoteEdgeId": "osm-1891bb22b459",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 0,
+            "remoteSurface": 0,
+            "localRoadClass": "arterial",
+            "remoteRoadClass": "arterial",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -109.92282,
+              52.75476
+            ],
+            "osmWayId": "32368456",
+            "localEdgeId": "osm-f9fdd13e5267-s4",
+            "remoteEdgeId": "osm-5c673dccd427-s10",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 2,
+            "remoteSurface": 2,
+            "localRoadClass": "resource",
+            "remoteRoadClass": "resource",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -109.88976,
+              49.78581
+            ],
+            "osmWayId": "196358008",
+            "localEdgeId": "osm-652bc70b58b8-s6",
+            "remoteEdgeId": "osm-0ba8c1ec4544",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 1,
+            "remoteSurface": 1,
+            "localRoadClass": "local",
+            "remoteRoadClass": "local",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.06634,
+              51.36971
+            ],
+            "osmWayId": "398816228",
+            "localEdgeId": "osm-5c5fbf384535",
+            "remoteEdgeId": "osm-93114c499f3c-s1",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 2,
+            "remoteSurface": 2,
+            "localRoadClass": "resource",
+            "remoteRoadClass": "resource",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.00727,
+              49.25423
+            ],
+            "osmWayId": "32410339",
+            "localEdgeId": "osm-80083829a758",
+            "remoteEdgeId": "osm-1c6441c6fa01",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 2,
+            "remoteSurface": 2,
+            "localRoadClass": "resource",
+            "remoteRoadClass": "resource",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.17314,
+              52.75599
+            ],
+            "osmWayId": "32368456",
+            "localEdgeId": "osm-f9fdd13e5267-s0",
+            "remoteEdgeId": "osm-5c673dccd427-s0",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 2,
+            "remoteSurface": 2,
+            "localRoadClass": "resource",
+            "remoteRoadClass": "resource",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.02743,
+              49.74224
+            ],
+            "osmWayId": "32410018",
+            "localEdgeId": "osm-f84c33615847",
+            "remoteEdgeId": "osm-68b13e1ffa02",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 2,
+            "remoteSurface": 2,
+            "localRoadClass": "resource",
+            "remoteRoadClass": "resource",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -109.98084,
+              51.21241
+            ],
+            "osmWayId": "255283563",
+            "localEdgeId": "osm-f26bcb07f70e",
+            "remoteEdgeId": "osm-b08cfb0658f2",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 1,
+            "remoteSurface": 1,
+            "localRoadClass": "local",
+            "remoteRoadClass": "local",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.35964,
+              51.9715
+            ],
+            "osmWayId": "65537582",
+            "localEdgeId": "osm-e6f3d33c1f5a",
+            "remoteEdgeId": "osm-7de491e1689c-s4",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 0,
+            "remoteSurface": 0,
+            "localRoadClass": "arterial",
+            "remoteRoadClass": "arterial",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.14783,
+              49.21287
+            ],
+            "osmWayId": "32435448",
+            "localEdgeId": "osm-00663a36dc81-s0",
+            "remoteEdgeId": "osm-3a205b3d3a24-s0",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 2,
+            "remoteSurface": 2,
+            "localRoadClass": "arterial",
+            "remoteRoadClass": "arterial",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.0973,
+              50.65944
+            ],
+            "osmWayId": "23632694",
+            "localEdgeId": "osm-20e5feb8ae2f",
+            "remoteEdgeId": "osm-5a8114bdaa14-s0",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 0,
+            "remoteSurface": 0,
+            "localRoadClass": "collector",
+            "remoteRoadClass": "collector",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.09097,
+              56.26559
+            ],
+            "osmWayId": "30187708",
+            "localEdgeId": "osm-0ec5796e9402",
+            "remoteEdgeId": "osm-7c49fb3ab101",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 4,
+            "remoteSurface": 4,
+            "localRoadClass": "local",
+            "remoteRoadClass": "local",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -109.99236,
+              50.42669
+            ],
+            "osmWayId": "255165578",
+            "localEdgeId": "osm-42144cab0dfb-s6",
+            "remoteEdgeId": "osm-dbe22aaa43cb",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 0,
+            "remoteSurface": 0,
+            "localRoadClass": "collector",
+            "remoteRoadClass": "collector",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.10909,
+              51.09587
+            ],
+            "osmWayId": "32407673",
+            "localEdgeId": "osm-e5baa4d961b7",
+            "remoteEdgeId": "osm-bb624013cc8a-s3",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 2,
+            "remoteSurface": 2,
+            "localRoadClass": "resource",
+            "remoteRoadClass": "resource",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -109.75372,
+              53.42448
+            ],
+            "osmWayId": "165453027",
+            "localEdgeId": "osm-a925bbb5567e-s15",
+            "remoteEdgeId": "osm-137d98d0b8da",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 0,
+            "remoteSurface": 0,
+            "localRoadClass": "local",
+            "remoteRoadClass": "local",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.17703,
+              50.25168
+            ],
+            "osmWayId": "32411635",
+            "localEdgeId": "osm-765b06d52129",
+            "remoteEdgeId": "osm-87d7b2116c5e-s4",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 1,
+            "remoteSurface": 1,
+            "localRoadClass": "collector",
+            "remoteRoadClass": "collector",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110,
+              51.87424
+            ],
+            "osmWayId": "16078928",
+            "localEdgeId": "osm-bf365bdbd259-s0",
+            "remoteEdgeId": "osm-2aeb71b6febb-s0",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 1,
+            "remoteSurface": 1,
+            "localRoadClass": "local",
+            "remoteRoadClass": "local",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -109.9964,
+              53.64496
+            ],
+            "osmWayId": "221503072",
+            "localEdgeId": "osm-c84c24a20a6c",
+            "remoteEdgeId": "osm-8799225d980d",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 1,
+            "remoteSurface": 1,
+            "localRoadClass": "local",
+            "remoteRoadClass": "local",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.03672,
+              52.34166
+            ],
+            "osmWayId": "32360130",
+            "localEdgeId": "osm-35c78fb896f9",
+            "remoteEdgeId": "osm-629e4d8e260e",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 2,
+            "remoteSurface": 2,
+            "localRoadClass": "resource",
+            "remoteRoadClass": "resource",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.09605,
+              49.78607
+            ],
+            "osmWayId": "32407482",
+            "localEdgeId": "osm-499a3ec61b4a",
+            "remoteEdgeId": "osm-901286774bbd-s4",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 2,
+            "remoteSurface": 2,
+            "localRoadClass": "collector",
+            "remoteRoadClass": "collector",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.0294,
+              53.01621
+            ],
+            "osmWayId": "177382998",
+            "localEdgeId": "osm-65da284293fb-s21",
+            "remoteEdgeId": "osm-6cbfe2da4ce6-s22",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 0,
+            "remoteSurface": 0,
+            "localRoadClass": "arterial",
+            "remoteRoadClass": "arterial",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.16837,
+              51.90333
+            ],
+            "osmWayId": "65537582",
+            "localEdgeId": "osm-e6f3d33c1f5a",
+            "remoteEdgeId": "osm-7de491e1689c-s12",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 0,
+            "remoteSurface": 0,
+            "localRoadClass": "arterial",
+            "remoteRoadClass": "arterial",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.05188,
+              51.44522
+            ],
+            "osmWayId": "32409399",
+            "localEdgeId": "osm-ef77a0c0665b",
+            "remoteEdgeId": "osm-1224b614b468",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 2,
+            "remoteSurface": 2,
+            "localRoadClass": "resource",
+            "remoteRoadClass": "resource",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -110.3191,
+              56.25645
+            ],
+            "osmWayId": "30187708",
+            "localEdgeId": "osm-0ec5796e9402",
+            "remoteEdgeId": "osm-7c49fb3ab101",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 4,
+            "remoteSurface": 4,
+            "localRoadClass": "local",
+            "remoteRoadClass": "local",
+            "gapMeters": 0
+          }
+        ]
+      },
+      "urbanCores": [
+        {
+          "minLat": 52.04179,
+          "maxLat": 52.22181,
+          "minLon": -106.8074,
+          "maxLon": -106.51414,
+          "name": "Saskatoon",
+          "place": "city",
+          "population": 246376,
+          "radiusKm": 10,
+          "sourceId": "26621545"
+        },
+        {
+          "minLat": 50.35796,
+          "maxLat": 50.53798,
+          "minLon": -104.75723,
+          "maxLon": -104.47453,
+          "name": "Regina",
+          "place": "city",
+          "population": 215106,
+          "radiusKm": 10,
+          "sourceId": "26726183"
+        },
+        {
+          "minLat": 53.17053,
+          "maxLat": 53.23353,
+          "minLon": -105.80849,
+          "maxLon": -105.7033,
+          "name": "Prince Albert",
+          "place": "city",
+          "population": 35129,
+          "radiusKm": 3.5,
+          "sourceId": "52304593"
+        },
+        {
+          "minLat": 50.36522,
+          "maxLat": 50.42822,
+          "minLon": -105.58509,
+          "maxLon": -105.48625,
+          "name": "Moose Jaw",
+          "place": "city",
+          "population": 33890,
+          "radiusKm": 3.5,
+          "sourceId": "52290380"
         }
       ]
     },

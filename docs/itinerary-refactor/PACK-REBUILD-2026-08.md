@@ -23,7 +23,7 @@ tag: pack-bc-osm-20260821-03
 ```
 
 ```
-region: ab   release-id: ab-osm-20260821-01   geofabrik ts: 2026-08-20T20:20:51Z   pbf sha: 4d8b08d3e48a06fac87376acf21970e89245ea1ec6996a19071ecf21d3a55ebb
+region: ab   release-id: ab-osm-20260821-02   geofabrik ts: 2026-08-20T20:20:51Z   pbf sha: 4d8b08d3e48a06fac87376acf21970e89245ea1ec6996a19071ecf21d3a55ebb
 steps 1–7: ok
 audit contradictions: 0     non-OSM edges: 0
 stitches: 15522  free-space: 0
@@ -31,8 +31,9 @@ largest permissive component: 98.57% of edges
 urban cores: 14 hard / 125 scored
 seams built: bc-ab           seams deferred: ab-sk, ab-mt
 route acceptance: 15/15 — pin note: short dest moved to Bragg Creek→Black Diamond (Longview/Turner Valley off-graph)
-candidate uploaded: https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/candidates/ab-osm-20260821-01   promoted: NO
-tag: pack-ab-osm-20260821-01
+candidate uploaded: https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/candidates/ab-osm-20260821-02   promoted: NO
+tag: pack-ab-osm-20260821-02
+note: -01 superseded after AB–SK seam
 ```
 
 ```
@@ -49,10 +50,26 @@ note: wa-osm-20260821-01 uploaded pre-seam; superseded by -02 after BC–WA seam
 tag: pack-wa-osm-20260821-02
 ```
 
+
+```
+region: sk   release-id: sk-osm-20260821-01   geofabrik ts: 2026-08-20T20:20:51Z   pbf sha: 11f2806d18e11f59d83c62894f4a301650834d2994ea7b20fed274740ff9ecee
+steps 1–7: ok
+audit contradictions: 0     non-OSM edges: 0
+stitches: 8865  free-space: 0
+largest permissive component: 99.45% of edges
+urban cores: 4 hard / 157 scored
+seams built: ab-sk           seams deferred: sk-mb, sk-nt
+route acceptance: 15/15
+candidate uploaded: https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/candidates/sk-osm-20260821-01   promoted: NO
+tag: pack-sk-osm-20260821-01
+note: AB re-cut ab-osm-20260821-02 after AB–SK seam
+```
+
 ## Promote commands (not run)
 
 ```
+node scripts/pack-fabric/scripts/ship-routing.js --promote sk-osm-20260821-01 --pack sk --live --assert
 node scripts/pack-fabric/scripts/ship-routing.js --promote bc-osm-20260821-03 --pack bc --live --assert
-node scripts/pack-fabric/scripts/ship-routing.js --promote ab-osm-20260821-01 --pack ab --live --assert
+node scripts/pack-fabric/scripts/ship-routing.js --promote ab-osm-20260821-02 --pack ab --live --assert
 node scripts/pack-fabric/scripts/ship-routing.js --promote wa-osm-20260821-02 --pack wa --live --assert
 ```
