@@ -531,6 +531,65 @@
           "maximumDirtBackwardPercent": 40
         }
       ]
+    },
+    "pe": {
+      "fuelMinimum": 80,
+      "routes": [
+        {
+          "id": "long-tignish-souris",
+          "from": {
+            "lat": 46.951,
+            "lon": -64.034,
+            "label": "Tignish"
+          },
+          "to": {
+            "lat": 46.355,
+            "lon": -62.254,
+            "label": "Souris"
+          },
+          "minimumDirtPercent": 30,
+          "minimumDirtAllowUnknownPercent": 40,
+          "balancedTolerance": 25,
+          "maximumCleanDirtPercent": 15,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "urban-charlottetown-summerside",
+          "from": {
+            "lat": 46.238,
+            "lon": -63.131,
+            "label": "Charlottetown"
+          },
+          "to": {
+            "lat": 46.395,
+            "lon": -63.79,
+            "label": "Summerside"
+          },
+          "minimumDirtPercent": 20,
+          "minimumDirtAllowUnknownPercent": 30,
+          "balancedTolerance": 25,
+          "maximumCleanDirtPercent": 15,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "short-montague-georgetown",
+          "from": {
+            "lat": 46.167,
+            "lon": -62.65,
+            "label": "Montague"
+          },
+          "to": {
+            "lat": 46.183,
+            "lon": -62.534,
+            "label": "Georgetown"
+          },
+          "minimumDirtPercent": 20,
+          "minimumDirtAllowUnknownPercent": 30,
+          "balancedTolerance": 25,
+          "maximumCleanDirtPercent": 15,
+          "maximumDirtBackwardPercent": 40
+        }
+      ]
     }
   }
 }
