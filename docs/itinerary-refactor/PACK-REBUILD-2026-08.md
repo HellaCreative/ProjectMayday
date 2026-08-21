@@ -80,6 +80,21 @@ tag: pack-mb-osm-20260821-01
 note: SK re-cut sk-osm-20260821-02 after SK–MB seam
 ```
 
+
+```
+region: on   release-id: on-osm-20260821-01   geofabrik ts: 2026-08-20T20:20:51Z   pbf sha: 3791ca7e78ab94931dc761097ab194fd1c5089d58401049975f88d077aed6d93
+steps 1–7: ok
+audit contradictions: 0     non-OSM edges: 0
+stitches: 11791  free-space: 0
+largest permissive component: 97.60% of edges
+urban cores: 52 hard / 271 scored
+seams built: mb-on           seams deferred: on-qc
+route acceptance: 12/15 — red: long-windsor-ottawa/dirt-allow-unknown safety limit; long-windsor-ottawa/balanced timeCap; urban-hamilton-oshawa/balanced timeCap
+candidate uploaded: https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/candidates/on-osm-20260821-01   promoted: NO
+tag: pack-on-osm-20260821-01
+note: MB re-cut mb-osm-20260821-02 after MB–ON seam
+```
+
 ## Promote commands (not run)
 
 ```

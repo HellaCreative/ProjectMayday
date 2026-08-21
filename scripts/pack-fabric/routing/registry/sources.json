@@ -220,9 +220,9 @@
         "format": "GeoPackage",
         "license": "Open Government Licence - Canada",
         "adapter": "nrn",
-        "status": "ready",
+        "status": "deferred",
         "dateRetrieved": "2026-07-20",
-        "notes": "NRN omitted from routing fabric (OSM + provincial only)."
+        "notes": "NRN omitted from routing fabric (OSM-only)."
       },
       "provincial": {
         "sourceName": "Ontario Road Network / MNR road segments / Ontario Trail Network",
@@ -230,26 +230,26 @@
         "format": "Shapefile / FGDB",
         "license": "Open Government Licence - Ontario",
         "adapter": "on-provincial-from-pack",
-        "status": "ready",
+        "status": "deferred",
         "dateRetrieved": "2026-08-05",
-        "notes": "Phase 2 live: MNR/resource-only capillary (ORN conventional skipped). Ingest capped ~120k for Node/Hobby. Barriers/OTN not auto-routed."
+        "notes": "Inactive during the foundational OSM-only phase. Adapter/data are retained for later controlled evaluation and are not in this pack."
       },
       "routingReady": true,
-      "routingMode": "osm+provincial",
+      "routingMode": "osm-only",
       "backboneArtifact": {
         "path": "routing/data/regions/on/graph.v1.json.gz",
-        "edgeCount": 1110288,
-        "nodeCount": 1452088,
-        "gzBytes": 98181408
+        "edgeCount": 1808291,
+        "nodeCount": 1498160,
+        "gzBytes": 102318669
       },
       "osm": {
         "adapter": "osm-roads",
         "role": "sole-fabric",
         "status": "ready",
-        "featureCount": 1004036,
-        "added": 1004036,
+        "featureCount": 1087752,
+        "added": 1087752,
         "license": "OpenStreetMap contributors (ODbL)",
-        "dateRetrieved": "2026-08-05"
+        "dateRetrieved": "2026-08-21"
       }
     },
     {
