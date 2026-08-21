@@ -53,6 +53,49 @@ struct ItineraryBuilderTests {
         #expect(result.legs[1].fuelUsedOnArrivalMeters == 237_500)
     }
 
+    @Test func longRiderLegUsesThreeStopWindowsAndCommitsEveryHop() async throws {
+        let points = [point(0), point(1)]
+        let stops = [point(0.2), point(0.4), point(0.6), point(0.8)]
+        let source = FakeRoutingSource(name: "live")
+        source.distances[key(points[0], points[1])] = 900_000
+        let hopPoints = [points[0]] + stops + [points[1]]
+        for index in 0..<(hopPoints.count - 1) {
+            source.distances[key(hopPoints[index], hopPoints[index + 1])] = 180_000
+        }
+        source.fuelStopResponses = [
+            Array(stops.prefix(3).enumerated()).map { fuelStop("fuel-\($0.offset + 1)", at: $0.element) },
+            [fuelStop("fuel-4", at: stops[3])]
+        ]
+        source.fuelWindowCompleteResponses = [false, true]
+        let itinerary = makeItinerary(points)
+        var progressiveHopCounts: [Int] = []
+
+        let result = await ItineraryBuilder().build(
+            itinerary, from: 0, reuse: nil,
+            fuel: FuelRangePrefs.Snapshot(
+                isEnabled: true, tankMeters: 237_500,
+                usableMeters: 237_500, reservePercent: 0
+            ),
+            source: .fixed(source)
+        ) { progress in
+            progressiveHopCounts.append(progress.legs.count)
+        }
+
+        let plans = source.fuelChainRequests.filter { $0.fuel.probeFirstReachableStation != true }
+        #expect(plans.count == 2)
+        #expect(plans.allSatisfy { $0.fuel.windowMaxStops == 3 })
+        #expect(plans.allSatisfy { $0.fuel.allowPartialWindow == true })
+        #expect(plans.allSatisfy { $0.fuel.windowTimeBudgetMs == 5_800 })
+        #expect(plans[1].locations[0].longitude == stops[2].longitude)
+        #expect(result.legs.count == 5)
+        #expect(result.legs.compactMap(\.endsAtFuelStop?.stationID)
+            == ["fuel-1", "fuel-2", "fuel-3", "fuel-4"])
+        #expect(progressiveHopCounts.contains(1))
+        #expect(progressiveHopCounts.contains(2))
+        #expect(progressiveHopCounts.contains(3))
+        #expect(progressiveHopCounts.contains(4))
+    }
+
     @Test func fuelCarriesAcrossOrdinaryWaypointWithoutExtraStop() async throws {
         let points = [point(0), point(1), point(2)]
         let stop = point(0.75)
@@ -319,6 +362,7 @@ private final class FakeRoutingSource: RoutingSource {
     var distances: [String: Double] = [:]
     var fuelStops: [FuelChainStop] = []
     var fuelStopResponses: [[FuelChainStop]] = []
+    var fuelWindowCompleteResponses: [Bool] = []
     var routeRequests: [RouteRequest] = []
     var fuelChainRequests: [FuelChainRequest] = []
     var waypointFuelStations: [String: FuelChainStop] = [:]
@@ -362,13 +406,17 @@ private final class FakeRoutingSource: RoutingSource {
             )
         }
         let selectedStops = fuelStopResponses.isEmpty ? fuelStops : fuelStopResponses.removeFirst()
+        let windowComplete = fuelWindowCompleteResponses.isEmpty
+            ? true
+            : fuelWindowCompleteResponses.removeFirst()
         return FuelChainResponse(
             status: "complete", error: nil, message: nil, regionIds: ["test"],
             stops: selectedStops, graphMeters: nil,
             diagnostics: FuelChainDiagnostics(
                 strategy: "fake", states: 1, dijkstraPops: 1,
                 matchedFuel: selectedStops.count, elapsedMs: 1
-            )
+            ),
+            windowComplete: windowComplete
         )
     }
 

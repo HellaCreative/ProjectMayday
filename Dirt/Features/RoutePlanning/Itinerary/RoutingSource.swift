@@ -188,7 +188,7 @@ final class PackRoutingSource: RoutingSource {
         var visited = Set(req.fuel.excludedStationIds ?? [])
         var stops: [FuelChainStop] = []
         var graphMeters: [Double] = []
-        let maximumStops = 12
+        let maximumStops = min(12, max(1, req.fuel.windowMaxStops ?? 12))
 
         while stops.count <= maximumStops {
             try Task.checkCancellation()
@@ -218,6 +218,21 @@ final class PackRoutingSource: RoutingSource {
                         strategy: "pack-forward", states: stops.count + 1,
                         dijkstraPops: nil, matchedFuel: stations.count, elapsedMs: nil
                     )
+                )
+            }
+
+            if stops.count >= maximumStops, req.fuel.allowPartialWindow == true {
+                return FuelChainResponse(
+                    status: "complete", error: nil, message: nil,
+                    regionIds: GraphPackStore.regionIds(containingAny: [
+                        start.locationCoordinate, end.locationCoordinate
+                    ]),
+                    stops: stops, graphMeters: graphMeters,
+                    diagnostics: FuelChainDiagnostics(
+                        strategy: "pack-forward-window", states: stops.count,
+                        dijkstraPops: nil, matchedFuel: stations.count, elapsedMs: nil
+                    ),
+                    windowComplete: false
                 )
             }
 

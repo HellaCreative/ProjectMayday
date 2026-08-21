@@ -194,7 +194,16 @@ final class ItineraryBuilder {
                         : nil,
                     waypointFuelReset: waypointFuelStops[itinerary.waypoints[index + 1].id],
                     forceFuelStop: forcedFuelLegs.contains(index),
-                    excludedStationIDs: excludedStationsByLeg[index] ?? []
+                    excludedStationIDs: excludedStationsByLeg[index] ?? [],
+                    onHop: { partial in
+                        committed = replacing(
+                            riderLegID: riderLeg.id,
+                            with: partial,
+                            in: committed,
+                            status: .pending
+                        )
+                        onProgress(committed)
+                    }
                 )
                 guard active(itinerary) else {
                     return dropped(itinerary, committed: committed)
@@ -310,7 +319,8 @@ final class ItineraryBuilder {
         destinationFuelUsedLimitMeters: Double?,
         waypointFuelReset: FuelStop?,
         forceFuelStop: Bool,
-        excludedStationIDs: Set<String>
+        excludedStationIDs: Set<String>,
+        onHop: @MainActor ([BuiltLeg]) -> Void
     ) async throws -> [BuiltLeg] {
         let riderLeg = itinerary.legs[index]
         let from = itinerary.waypoints[index].coordinate
@@ -370,109 +380,143 @@ final class ItineraryBuilder {
             )]
         }
 
-        let chain: FuelChainResponse
-        do {
-            chain = try await source.fuelChain(FuelChainRequest(
-                profile: riderLeg.profile,
-                from: from,
-                to: to,
-                allowUnknown: riderLeg.allowUnknown,
-                usableRangeMeters: fuel.usableMeters,
-                firstLegMaxMeters: firstCap,
-                requireFuelStopBeforeEnd: requirePumpBeforeWaypoint || stopsNeeded > 0,
-                minimumFuelStops: stopsNeeded,
-                destinationFuelUsedLimitMeters: waypointFuelReset == nil
-                    ? destinationFuelUsedLimitMeters
-                    : nil,
-                profileMeters: meters,
-                riderLegId: riderLeg.id.uuidString,
-                avoidEdgeIds: Array(itinerary.impassableEdgeIDs),
-                priorEdgeIds: history.edgeIDs,
-                arrivalEdgeId: history.arrivalEdgeID,
-                backtrackFactor: 4,
-                excludedStationIds: Array(excludedStationIDs)
-            ))
-        } catch {
-            let remaining = max(0, Int((fuel.usableMeters - fuelUsedAtStart) / 1000))
-            throw RoutingError.server("No pump reachable with \(remaining) km remaining")
-        }
-        guard active(itinerary) else { throw CancellationError() }
-        let stops = chain.stops ?? []
-        guard !stops.isEmpty else {
-            throw RoutingError.server("No route-connected fuel stop was returned for this leg.")
-        }
-
-        let points = [from] + stops.map(\.coordinate) + [to]
         var output: [BuiltLeg] = []
-        output.reserveCapacity(points.count - 1)
+        output.reserveCapacity(max(1, stopsNeeded + 1))
         var used = fuelUsedAtStart
         var sublegHistory = history
-        for subIndex in 0..<(points.count - 1) {
-            let cap = subIndex == 0 ? firstCap : fuel.usableMeters
-            let request = routeRequest(
-                profile: riderLeg.profile,
-                allowUnknown: riderLeg.allowUnknown,
-                from: points[subIndex],
-                to: points[subIndex + 1],
-                avoidEdgeIDs: itinerary.impassableEdgeIDs,
-                maxPathMeters: cap,
-                directExtraBudgetMeters: riderLeg.profile == .direct ? 0 : nil,
-                history: sublegHistory
-            )
-            let response = try await source.route(request)
+        var windowStart = from
+        var routedMeters = 0.0
+        var excluded = excludedStationIDs
+        let packRegions = GraphPackStore.regionIds(containingAny: [
+            from.locationCoordinate, to.locationCoordinate
+        ])
+        let usesWindows = meters > 600_000 || packRegions.count > 1
+        var windowIndex = 0
+
+        while true {
+            windowIndex += 1
+            guard windowIndex <= 16 else {
+                throw RoutingError.server("The long-route fuel chain exceeded 16 planning windows.")
+            }
+            let windowFirstCap = max(0, fuel.usableMeters - used)
+            let remainingProfileMeters = max(0, meters - routedMeters)
+            let remainingStops = remainingProfileMeters <= windowFirstCap + 1
+                ? 0
+                : Int(ceil((remainingProfileMeters - windowFirstCap) / fuel.usableMeters))
+            let chain: FuelChainResponse
+            do {
+                chain = try await source.fuelChain(FuelChainRequest(
+                    profile: riderLeg.profile,
+                    from: windowStart,
+                    to: to,
+                    allowUnknown: riderLeg.allowUnknown,
+                    usableRangeMeters: fuel.usableMeters,
+                    firstLegMaxMeters: windowFirstCap,
+                    requireFuelStopBeforeEnd: requirePumpBeforeWaypoint || remainingStops > 0,
+                    minimumFuelStops: remainingStops,
+                    destinationFuelUsedLimitMeters: waypointFuelReset == nil
+                        ? destinationFuelUsedLimitMeters
+                        : nil,
+                    profileMeters: remainingProfileMeters,
+                    riderLegId: riderLeg.id.uuidString,
+                    avoidEdgeIds: Array(itinerary.impassableEdgeIDs),
+                    priorEdgeIds: sublegHistory.edgeIDs,
+                    arrivalEdgeId: sublegHistory.arrivalEdgeID,
+                    backtrackFactor: 4,
+                    excludedStationIds: Array(excluded),
+                    windowMaxStops: usesWindows ? 3 : nil,
+                    allowPartialWindow: usesWindows,
+                    windowTimeBudgetMs: usesWindows ? 5_800 : nil
+                ))
+            } catch {
+                let remaining = max(0, Int((fuel.usableMeters - used) / 1000))
+                throw RoutingError.server("No pump reachable with \(remaining) km remaining")
+            }
             guard active(itinerary) else { throw CancellationError() }
-            let subMeters = try responseMeters(response)
-            sublegHistory.append(response)
-            guard subMeters <= cap + 1 else {
-                throw RoutingError.server("A selected fuel leg exceeds usable range.")
+            let stops = chain.stops ?? []
+            if !chain.reachesDestination, stops.isEmpty {
+                throw RoutingError.server("A fuel window ended without a forward pump.")
             }
-            if subIndex < stops.count {
-                let station = stops[subIndex]
-                let stop = FuelStop(
-                    coordinate: station.coordinate,
-                    stationID: station.id,
-                    name: station.displayName,
-                    afterRiderLegID: riderLeg.id
+            let points = [windowStart] + stops.map(\.coordinate) + (chain.reachesDestination ? [to] : [])
+            for subIndex in 0..<(points.count - 1) {
+                let cap = subIndex == 0 ? windowFirstCap : fuel.usableMeters
+                let request = routeRequest(
+                    profile: riderLeg.profile,
+                    allowUnknown: riderLeg.allowUnknown,
+                    from: points[subIndex],
+                    to: points[subIndex + 1],
+                    avoidEdgeIDs: itinerary.impassableEdgeIDs,
+                    maxPathMeters: cap,
+                    directExtraBudgetMeters: riderLeg.profile == .direct ? 0 : nil,
+                    history: sublegHistory
                 )
-                output.append(BuiltLeg(
-                    riderLegID: riderLeg.id,
-                    fromCoordinate: points[subIndex],
-                    toCoordinate: points[subIndex + 1],
-                    endsAtFuelStop: stop,
-                    response: response,
-                    fuelUsedOnArrivalMeters: 0
-                ))
-                let stationLog = station.id.isEmpty
-                    ? "\(station.latitude),\(station.longitude)"
-                    : station.id
-                RoutingDebugLog.shared.event(
-                    "fuel reset riderLeg=\(riderLeg.id) station=\(stationLog)"
-                )
-                RoutingDebugLog.shared.event(
-                    "fuel station chosen riderLeg=\(riderLeg.id) station=\(stationLog) " +
-                        "dirt%=\(response.dirtPercent) meters=\(Int(subMeters)) " +
-                        "candidates=\(chain.stationCandidates?.count ?? 0)"
-                )
-                used = 0
-            } else {
-                used = waypointFuelReset == nil ? used + subMeters : 0
-                output.append(BuiltLeg(
-                    riderLegID: riderLeg.id,
-                    fromCoordinate: points[subIndex],
-                    toCoordinate: points[subIndex + 1],
-                    endsAtFuelStop: nil,
-                    response: response,
-                    fuelUsedOnArrivalMeters: used
-                ))
-                RoutingDebugLog.shared.event(
-                    "fuel carry riderLeg=\(riderLeg.id) used=\(Int(used))"
-                )
-                if let reset = waypointFuelReset {
-                    RoutingDebugLog.shared.event(
-                        "fuel reset riderLeg=\(riderLeg.id) station=\(reset.stationID ?? "unknown") source=waypoint"
-                    )
+                let response = try await source.route(request)
+                guard active(itinerary) else { throw CancellationError() }
+                let subMeters = try responseMeters(response)
+                sublegHistory.append(response)
+                guard subMeters <= cap + 1 else {
+                    throw RoutingError.server("A selected fuel leg exceeds usable range.")
                 }
+                routedMeters += subMeters
+                if subIndex < stops.count {
+                    let station = stops[subIndex]
+                    let stop = FuelStop(
+                        coordinate: station.coordinate,
+                        stationID: station.id,
+                        name: station.displayName,
+                        afterRiderLegID: riderLeg.id
+                    )
+                    output.append(BuiltLeg(
+                        riderLegID: riderLeg.id,
+                        fromCoordinate: points[subIndex],
+                        toCoordinate: points[subIndex + 1],
+                        endsAtFuelStop: stop,
+                        response: response,
+                        fuelUsedOnArrivalMeters: 0
+                    ))
+                    excluded.insert(station.id)
+                    let stationLog = station.id.isEmpty
+                        ? "\(station.latitude),\(station.longitude)"
+                        : station.id
+                    RoutingDebugLog.shared.event(
+                        "fuel reset riderLeg=\(riderLeg.id) station=\(stationLog)"
+                    )
+                    RoutingDebugLog.shared.event(
+                        "fuel station chosen riderLeg=\(riderLeg.id) station=\(stationLog) " +
+                            "dirt%=\(response.dirtPercent) meters=\(Int(subMeters)) " +
+                            "candidates=\(chain.stationCandidates?.count ?? 0)"
+                    )
+                    used = 0
+                } else {
+                    used = waypointFuelReset == nil ? used + subMeters : 0
+                    output.append(BuiltLeg(
+                        riderLegID: riderLeg.id,
+                        fromCoordinate: points[subIndex],
+                        toCoordinate: points[subIndex + 1],
+                        endsAtFuelStop: nil,
+                        response: response,
+                        fuelUsedOnArrivalMeters: used
+                    ))
+                    RoutingDebugLog.shared.event(
+                        "fuel carry riderLeg=\(riderLeg.id) used=\(Int(used))"
+                    )
+                    if let reset = waypointFuelReset {
+                        RoutingDebugLog.shared.event(
+                            "fuel reset riderLeg=\(riderLeg.id) station=\(reset.stationID ?? "unknown") source=waypoint"
+                        )
+                    }
+                }
+                if usesWindows { onHop(output) }
             }
+            if chain.reachesDestination { break }
+            guard let lastStop = stops.last else {
+                throw RoutingError.server("A fuel window ended without a continuation pump.")
+            }
+            windowStart = lastStop.coordinate
+            RoutingDebugLog.shared.event(
+                "fuel window riderLeg=\(riderLeg.id) window=\(windowIndex) " +
+                    "stops=\(stops.count) committedHops=\(output.count)"
+            )
         }
         return output
     }

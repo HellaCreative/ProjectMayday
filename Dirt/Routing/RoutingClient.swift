@@ -72,7 +72,10 @@ final class RoutingClient {
         urlRequest.httpMethod = "POST"
         urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
         urlRequest.httpBody = try JSONEncoder().encode(request)
-        urlRequest.timeoutInterval = timeout
+        // Long/cross-pack fuel plans are deliberately split into small
+        // windows. A stalled window must fail quickly so the client can retry
+        // or backtrack without waiting for a platform 504.
+        urlRequest.timeoutInterval = request.fuel.windowMaxStops == nil ? timeout : 6
 
         let (data, urlResponse) = try await session.data(for: urlRequest)
         let http = urlResponse as? HTTPURLResponse

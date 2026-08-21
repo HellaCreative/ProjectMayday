@@ -91,6 +91,29 @@ test("fuel chain is constructed forward from graph-reachable pumps", async () =>
   assert.ok(result.graphMeters.every((meters) => meters <= 90_000));
 });
 
+test("long fuel chain returns a resumable window capped at three stops", async () => {
+  const result = await planFuelChainOnRuntime({
+    runtime: lineRuntime(),
+    stations: [station("f1", 1), station("f2", 2), station("f3", 3)],
+    start: { lat: 45, lon: 0 },
+    destination: { lat: 45, lon: 4 },
+    profile: "dirt",
+    accessPolicy: { motorizedPermissive: true, motorizedUnknown: false },
+    usableRangeMeters: 90_000,
+    firstLegMaxMeters: 90_000,
+    minimumFuelStops: 4,
+    maxStops: 3,
+    allowPartialWindow: true,
+    timeBudgetMs: 6_000,
+    routeCandidate: fixtureRouteCandidate
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.windowComplete, false);
+  assert.deepEqual(result.stops.map((row) => row.id), ["f1", "f2", "f3"]);
+  assert.equal(result.graphMeters.length, 3);
+});
+
 test("fuel ranking rejects a geographically backward pump", () => {
   const ranked = rankForwardFuel(
     [

@@ -374,7 +374,9 @@ async function planFuelChainOnRuntime({
   maxStops = 12,
   maxStates = 24,
   probeFirstReachableStation = false,
-  excludedStationIds = []
+  excludedStationIds = [],
+  allowPartialWindow = false,
+  timeBudgetMs = null
 }) {
   const policy = normalizePolicy(rawPolicy, profile);
   const avoid = new Set((avoidEdgeIds || []).map(String));
@@ -413,6 +415,8 @@ async function planFuelChainOnRuntime({
   let effectiveK = Math.max(1, Math.min(6, Number(candidateK) || 6));
   let maxHopMs = 0;
   let firstReachableStationMeters = null;
+  let timeBudgetExceeded = false;
+  const deadline = Number(timeBudgetMs) > 0 ? started + Number(timeBudgetMs) : Infinity;
   const destinationGraph = boundedGraphDistances(
     runtime, targets.destinationMatch, policy, usableRangeMeters,
     avoidEdgeIds, [], null, 1
@@ -568,6 +572,10 @@ async function planFuelChainOnRuntime({
   }
 
   async function search(currentKey, currentLocation, currentMatch, visited, depth, history, arrival) {
+    if (Date.now() >= deadline) {
+      timeBudgetExceeded = true;
+      return null;
+    }
     if (states >= maxStates || depth > maxStops) return null;
     states += 1;
     const cap = depth === 0 ? firstLegMaxMeters : usableRangeMeters;
@@ -610,7 +618,11 @@ async function planFuelChainOnRuntime({
     ) {
       return { stops: [], graphMeters: [reach.destinationMeters] };
     }
-    if (depth >= maxStops) return null;
+    if (depth >= maxStops) {
+      return allowPartialWindow && depth > 0
+        ? { stops: [], graphMeters: [], partial: true }
+        : null;
+    }
 
     const ranked = rankForwardFuel(
       reach.fuel,
@@ -626,6 +638,10 @@ async function planFuelChainOnRuntime({
     // are enough to escape a closed service-road pump without exponential work.
     const evaluated = await evaluatedRoutes(ranked, currentLocation, cap, history, arrival);
     for (const evaluation of evaluated) {
+      if (Date.now() >= deadline) {
+        timeBudgetExceeded = true;
+        break;
+      }
       if (states >= maxStates) break;
       const candidate = evaluation.candidate;
       const id = String(candidate.station.id);
@@ -650,7 +666,8 @@ async function planFuelChainOnRuntime({
           graphMeters: evaluation.meters,
           dirtPercent: evaluation.dirtPct
         }].concat(tail.stops),
-        graphMeters: [evaluation.meters].concat(tail.graphMeters)
+        graphMeters: [evaluation.meters].concat(tail.graphMeters),
+        partial: !!tail.partial
       };
     }
     return null;
@@ -664,8 +681,10 @@ async function planFuelChainOnRuntime({
   if (!chain) {
     return {
       ok: false,
-      error: "no_route_connected_fuel_chain",
-      message: "No forward, route-connected fuel chain fits the usable range.",
+      error: timeBudgetExceeded ? "window_time_budget" : "no_route_connected_fuel_chain",
+      message: timeBudgetExceeded
+        ? "This fuel window exceeded its six-second planning budget."
+        : "No forward, route-connected fuel chain fits the usable range.",
       diagnostics: {
         states,
         dijkstraPops,
@@ -685,6 +704,7 @@ async function planFuelChainOnRuntime({
     graphMeters: chain.graphMeters,
     stationCandidates,
     firstReachableStationMeters,
+    windowComplete: !chain.partial,
     diagnostics: {
       strategy: "forward_graph_reachability",
       states,
@@ -730,8 +750,21 @@ async function planCrossRegionFuelChain(body, selection, fuelOptions, dependenci
   let matchedFuel = 0;
   let maxHopMs = 0;
   const started = Date.now();
+  const windowMaxStops = Math.min(12, Math.max(1, Number(fuelOptions.windowMaxStops) || 12));
+  const allowPartialWindow = !!fuelOptions.allowPartialWindow;
+  const windowDeadline = Number(fuelOptions.windowTimeBudgetMs) > 0
+    ? started + Number(fuelOptions.windowTimeBudgetMs)
+    : Infinity;
 
   for (let i = 0; i < waypoints.length - 1; i += 1) {
+    if (Date.now() >= windowDeadline) {
+      clearGraphCache();
+      return {
+        status: "failed",
+        error: "window_time_budget",
+        message: "This fuel window exceeded its six-second planning budget."
+      };
+    }
     const hopStart = waypoints[i];
     const hopEnd = waypoints[i + 1];
     const startCoord = locationCoordinate(hopStart);
@@ -781,7 +814,13 @@ async function planCrossRegionFuelChain(body, selection, fuelOptions, dependenci
       avoidEdgeIds: ((body.options || {}).avoidEdgeIds || []),
       priorEdgeIds: ((body.options || {}).priorEdgeIds || []),
       arrivalEdgeId: (body.options || {}).arrivalEdgeId || null,
-      backtrackFactor: (body.options || {}).backtrackFactor || 4
+      backtrackFactor: (body.options || {}).backtrackFactor || 4,
+      excludedStationIds: fuelOptions.excludedStationIds || [],
+      maxStops: Math.max(1, windowMaxStops - allStops.length),
+      allowPartialWindow,
+      timeBudgetMs: Number.isFinite(windowDeadline)
+        ? Math.max(1, windowDeadline - Date.now())
+        : null
     });
     if (!planned.ok) {
       clearGraphCache();
@@ -800,6 +839,30 @@ async function planCrossRegionFuelChain(body, selection, fuelOptions, dependenci
     totalPops += Number(planned.diagnostics && planned.diagnostics.dijkstraPops) || 0;
     matchedFuel += Number(planned.diagnostics && planned.diagnostics.matchedFuel) || 0;
     maxHopMs = Math.max(maxHopMs, Number(planned.diagnostics && planned.diagnostics.maxHopMs) || 0);
+    if (
+      allowPartialWindow &&
+      (planned.windowComplete === false || allStops.length >= windowMaxStops)
+    ) {
+      clearGraphCache();
+      return {
+        status: "complete",
+        error: null,
+        message: null,
+        regionIds: selection.regionIds,
+        stops: allStops.slice(0, windowMaxStops),
+        graphMeters: graphMeters.slice(0, windowMaxStops),
+        stationCandidates,
+        windowComplete: false,
+        diagnostics: {
+          strategy: "forward_graph_reachability_across_seams_window",
+          states: totalStates,
+          dijkstraPops: totalPops,
+          matchedFuel,
+          elapsedMs: Date.now() - started,
+          maxHopMs
+        }
+      };
+    }
     if (planned.stops.length) {
       fuelUsedMeters = planned.graphMeters[planned.graphMeters.length - 1] || 0;
     } else {
@@ -831,6 +894,7 @@ async function planCrossRegionFuelChain(body, selection, fuelOptions, dependenci
     stops: allStops,
     graphMeters,
     stationCandidates,
+    windowComplete: true,
     diagnostics: {
       strategy: "forward_graph_reachability_across_seams",
       states: totalStates,
@@ -965,7 +1029,10 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
     arrivalEdgeId: options.arrivalEdgeId || null,
     backtrackFactor: options.backtrackFactor || 4,
     probeFirstReachableStation: !!fuelOptions.probeFirstReachableStation,
-    excludedStationIds: fuelOptions.excludedStationIds || []
+    excludedStationIds: fuelOptions.excludedStationIds || [],
+    maxStops: Math.min(12, Math.max(1, Number(fuelOptions.windowMaxStops) || 12)),
+    allowPartialWindow: !!fuelOptions.allowPartialWindow,
+    timeBudgetMs: Number(fuelOptions.windowTimeBudgetMs) || null
   });
 
   return {
@@ -977,6 +1044,7 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
     graphMeters: planned.graphMeters || [],
     stationCandidates: planned.stationCandidates || [],
     firstReachableStationMeters: planned.firstReachableStationMeters,
+    windowComplete: planned.windowComplete,
     diagnostics: planned.diagnostics || null
   };
 }

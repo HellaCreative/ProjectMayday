@@ -170,6 +170,9 @@ struct FuelChainConstraint: Codable, Sendable {
     let riderLegId: String
     var probeFirstReachableStation: Bool? = nil
     var excludedStationIds: [String]? = nil
+    var windowMaxStops: Int? = nil
+    var allowPartialWindow: Bool? = nil
+    var windowTimeBudgetMs: Int? = nil
 }
 
 struct FuelChainRequest: Codable, Sendable {
@@ -197,7 +200,10 @@ struct FuelChainRequest: Codable, Sendable {
         arrivalEdgeId: String? = nil,
         backtrackFactor: Double? = nil,
         probeFirstReachableStation: Bool = false,
-        excludedStationIds: [String] = []
+        excludedStationIds: [String] = [],
+        windowMaxStops: Int? = nil,
+        allowPartialWindow: Bool = false,
+        windowTimeBudgetMs: Int? = nil
     ) {
         self.profile = profile
         locations = [
@@ -227,7 +233,10 @@ struct FuelChainRequest: Codable, Sendable {
             profileMeters: profileMeters,
             riderLegId: riderLegId,
             probeFirstReachableStation: probeFirstReachableStation ? true : nil,
-            excludedStationIds: excludedStationIds.isEmpty ? nil : excludedStationIds
+            excludedStationIds: excludedStationIds.isEmpty ? nil : excludedStationIds,
+            windowMaxStops: windowMaxStops,
+            allowPartialWindow: allowPartialWindow ? true : nil,
+            windowTimeBudgetMs: windowTimeBudgetMs
         )
     }
 }
@@ -283,8 +292,12 @@ struct FuelChainResponse: Codable, Sendable {
     let diagnostics: FuelChainDiagnostics?
     var stationCandidates: [FuelStationCandidate]? = nil
     var firstReachableStationMeters: Double? = nil
+    /// False means this bounded response ends at its final pump and the client
+    /// must request the next window toward the rider waypoint.
+    var windowComplete: Bool? = nil
 
     var isComplete: Bool { status == "complete" }
+    var reachesDestination: Bool { windowComplete != false }
 }
 
 struct RouteSegment: Codable, Identifiable, Sendable {
