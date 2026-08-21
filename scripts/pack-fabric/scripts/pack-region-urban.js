@@ -125,7 +125,12 @@ async function build(id, requestedSlug) {
   const settlements = [...settlementsByName.values()]
     .filter((row) => !byName.has(row.name.toLowerCase()))
     .sort((a, b) => b.population - a.population || a.name.localeCompare(b.name));
-  if (!cores.length) throw new Error(`${id}: OSM place extract produced no urban cores`);
+  // Territories and sparse extracts can legitimately have zero hard cores
+  // (no city/town above the population threshold). Empty cores[] is valid —
+  // scored settlements may still be present for soft preference.
+  if (!cores.length) {
+    console.warn(`${id}: no hard urban cores (settlements=${settlements.length}); writing empty cores[]`);
+  }
   const output = path.join(FABRIC, "routing", "data", "regions", id, "urban-cores.v1.json");
   fs.mkdirSync(path.dirname(output), { recursive: true });
   fs.writeFileSync(
