@@ -38,6 +38,7 @@ const {
 const { findPathV2 } = require("./find-path-v2");
 const { isDirtSurface, outsideCorridor } = require("./hop-search");
 const crossPackTopology = require("../schema/cross-pack-topology.v1.json");
+const { resolveLocationsByEligibleEdge } = require("../regional/endpoint-resolver");
 
 const DEFAULT_MATCH_METERS = 250;
 const EARTH_M = 6371000;
@@ -835,6 +836,11 @@ function debugGraphResponse(body, graphResolution, runtime) {
 }
 
 async function routeRequestCore(body = {}) {
+  const endpointResolution = await resolveLocationsByEligibleEdge(body);
+  body = endpointResolution.body;
+  if (endpointResolution.resolutions.some((row) => row.probes && row.probes.length > 1)) {
+    console.log("route endpoint resolver " + JSON.stringify(endpointResolution.resolutions));
+  }
   const graphResolution = resolveGraphRequest(body);
   if (!graphResolution.ok) {
     return {
@@ -1364,13 +1370,13 @@ async function routeCanadaChain(body, graphResolution) {
     const hopStart = waypoints[i];
     const hopEnd = waypoints[i + 1];
     const startFam = provinceFamily(
-      primaryRegionForPoint(
+      hopStart.resolvedRegionId || primaryRegionForPoint(
         Number(hopStart.lon != null ? hopStart.lon : hopStart.lng),
         Number(hopStart.lat)
       )
     );
     const endFam = provinceFamily(
-      primaryRegionForPoint(
+      hopEnd.resolvedRegionId || primaryRegionForPoint(
         Number(hopEnd.lon != null ? hopEnd.lon : hopEnd.lng),
         Number(hopEnd.lat)
       )

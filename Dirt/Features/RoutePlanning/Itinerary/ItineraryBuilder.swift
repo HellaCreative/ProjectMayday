@@ -79,9 +79,16 @@ final class ItineraryBuilder {
                 let riderLeg = itinerary.legs[index]
                 let from = itinerary.waypoints[index].coordinate
                 let to = itinerary.waypoints[index + 1].coordinate
-                let likelyLongHaul = fuel.usableMeters > 0
-                    && straightLineMeters(from, to) > fuel.usableMeters * 3
-                var discoveryProfile: RouteProfile = likelyLongHaul ? .cleanest : riderLeg.profile
+                let straightMeters = straightLineMeters(from, to)
+                let endpointRegions = GraphPackStore.regionIds(containingAny: [
+                    from.locationCoordinate, to.locationCoordinate
+                ])
+                let cleanFoundation = fuel.usableMeters > 0 && (
+                    straightMeters > fuel.usableMeters
+                        || straightMeters >= 1_000_000
+                        || endpointRegions.count > 1
+                )
+                var discoveryProfile: RouteProfile = cleanFoundation ? .cleanest : riderLeg.profile
                 var response: RouteResponse
                 if (index < startIndex || (resume != nil && index == startIndex)),
                    let cached = reuse?.riderRoutes[riderLeg.id] ?? reusableRoutes[riderLeg.id] {
@@ -101,7 +108,10 @@ final class ItineraryBuilder {
                     meters: response.distanceMeters ?? 0,
                     usableMeters: fuel.usableMeters
                 )
-                if fuel.usableMeters > 0, discoveredStops > 3, discoveryProfile != .cleanest {
+                // Once a pump is needed, Clean is the fast connectivity
+                // foundation. The rider can then set every visible fuel leg's
+                // own adventure profile without preserving a disposable A→B line.
+                if fuel.usableMeters > 0, discoveredStops > 0, discoveryProfile != .cleanest {
                     discoveryProfile = .cleanest
                     response = try await selectedSource.route(routeRequest(
                         itinerary: itinerary,
@@ -109,16 +119,6 @@ final class ItineraryBuilder {
                         maxPathMeters: nil,
                         history: discoveryHistory,
                         profileOverride: .cleanest
-                    ))
-                } else if likelyLongHaul, discoveredStops <= 3, discoveryProfile == .cleanest,
-                          riderLeg.profile != .cleanest {
-                    discoveryProfile = riderLeg.profile
-                    response = try await selectedSource.route(routeRequest(
-                        itinerary: itinerary,
-                        legIndex: index,
-                        maxPathMeters: nil,
-                        history: discoveryHistory,
-                        profileOverride: riderLeg.profile
                     ))
                 }
                 guard active(itinerary) else {
@@ -129,7 +129,7 @@ final class ItineraryBuilder {
                 if discoveryProfile == .cleanest, riderLeg.profile != .cleanest {
                     RoutingDebugLog.shared.event(
                         "fuel longhaul default riderLeg=\(riderLeg.id) requested=\(riderLeg.profile.rawValue) " +
-                            "sections=clean reason=more_than_3_stops"
+                        "sections=clean reason=\(endpointRegions.count > 1 ? "cross_region" : (straightMeters >= 1_000_000 ? "over_1000km" : "fuel_stop_required"))"
                     )
                 }
                 discoveryHistory.append(response)
@@ -637,24 +637,11 @@ final class ItineraryBuilder {
                     requiredFirstStationId: requiredStationID
                 ))
             } catch {
-                let remaining = max(0, Int((fuel.usableMeters - used) / 1000))
-                let reason = "No pump reachable with \(remaining) km remaining: \(error.localizedDescription)"
-                throw RoutingError.fuelGap(FuelGap(
-                    id: fuelGapID(
-                        riderLegID: riderLeg.id,
-                        gapMeters: remainingProfileMeters,
-                        usableRangeMeters: fuel.usableMeters,
-                        from: windowStart,
-                        to: to
-                    ),
-                    gapMeters: remainingProfileMeters,
-                    overByMeters: max(0, remainingProfileMeters - windowFirstCap),
-                    usableRangeMeters: fuel.usableMeters,
-                    remainingFuelMeters: windowFirstCap,
-                    reason: reason,
-                    fromCoordinate: windowStart,
-                    toCoordinate: to
-                ))
+                // A timeout, transport failure, or server error is not proof
+                // that no pump exists. Preserve the working route and surface
+                // the honest failure; only an explicit `status=gap` response
+                // may offer the rider an auxiliary-fuel acknowledgement.
+                throw error
             }
             guard active(itinerary) else { throw CancellationError() }
             if chain.isFuelUnknown {

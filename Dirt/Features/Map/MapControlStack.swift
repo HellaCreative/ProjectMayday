@@ -8,6 +8,9 @@ import SwiftUI
 struct MapControlStack: View {
     @Environment(AppEnvironment.self) private var app
     var compact: Bool = false
+    /// Group browsing owns its own map actions. North reset is the only shared
+    /// map control in that context.
+    var groupOnly = false
     /// Figma landscape-primary: controls run across the bottom of the open map.
     var horizontal: Bool = false
 
@@ -51,7 +54,7 @@ struct MapControlStack: View {
 
     @ViewBuilder
     private var controlButtons: some View {
-        if !compact {
+        if app.navigation.phase == .active {
             if showsNavigationOverviewButton {
                 navigationOverviewButton
             }
@@ -59,19 +62,24 @@ struct MapControlStack: View {
             cuesButton
             compassButton
             riderStatusButton
-        }
-        if app.planner.canFocusEntirePlannedRoute {
-            if horizontal {
-                fitPlannedRouteButton
-                recenterButton
-            } else {
-                HStack(spacing: 10) {
+            recenterButton
+        } else {
+            // Planning is not navigation: 3D, cues and rider status stay out
+            // until Start. Compass is the one universal map orientation tool.
+            compassButton
+            if !groupOnly, app.planner.canFocusEntirePlannedRoute {
+                if horizontal {
                     fitPlannedRouteButton
                     recenterButton
+                } else {
+                    HStack(spacing: 10) {
+                        fitPlannedRouteButton
+                        recenterButton
+                    }
                 }
+            } else if !groupOnly {
+                recenterButton
             }
-        } else {
-            recenterButton
         }
     }
 

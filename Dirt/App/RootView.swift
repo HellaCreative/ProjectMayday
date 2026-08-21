@@ -1047,6 +1047,7 @@ struct RootView: View {
     private func mapControlStrip(compact: Bool) -> some View {
         MapControlStack(
             compact: compact,
+            groupOnly: activeSheet == .group,
             horizontal: true
         )
     }
@@ -1206,7 +1207,8 @@ struct RootView: View {
             compact: NavigationChrome.mapStackCompact(
                 routeCardOpen: routeCardOpen,
                 phase: app.navigation.phase
-            )
+            ),
+            groupOnly: activeSheet == .group
         )
     }
 

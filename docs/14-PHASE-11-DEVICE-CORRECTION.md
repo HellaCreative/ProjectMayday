@@ -1,7 +1,35 @@
 # DIRT Routing — Phase 11 Device Correction
 
-Status: proposed for rider approval; no implementation started  
+Status: rider-approved; implementation verified locally, production deployment pending
 Evidence: physical From Here and Plan tests on White, 2026-08-21
+
+## Implementation checkpoint — 2026-08-21
+
+Implemented in the current working phase:
+
+- route rows are the flat ordered `BuiltLeg` chain; aggregate rider-leg parent
+  rows and nested fuel-hop rows are removed;
+- fuel stops required by a rider leg use a Clean connectivity foundation, while
+  each visible Point/F section retains its own profile control;
+- selecting a fuel waypoint from the map or its row reveals graph-valid pump
+  alternatives, and selecting an alternative records a fuel-stop override and
+  replans forward;
+- `Clear route` remains reachable with the fuel list expanded;
+- planning chrome is limited to routing tools, route overview/recenter, and the
+  compass; navigation-only 3D, cue, and rider-status controls appear only after
+  navigation starts;
+- overlapping pack rectangles are candidate discovery only. The shared server
+  resolver proves an eligible edge within 500 m in the primary graph, then
+  checks overlapping packs only when the primary cannot snap. The exact NS/PEI
+  overlap reproduction is covered by an automated test;
+- a transport error, timeout, decode error, or server failure is no longer
+  converted into a proven fuel gap; and
+- a failed rider leg remains visible in the route sheet with its original
+  endpoints and failure reason.
+
+No graph, fuel, map, or manifest pack bytes changed. The endpoint correction is
+runtime selection logic and therefore requires the matching routing service
+deployment before White can validate it.
 
 ## What failed
 

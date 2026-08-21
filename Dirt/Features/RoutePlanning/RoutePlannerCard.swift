@@ -552,6 +552,25 @@ struct RoutePlannerCard: View {
             }
             .buttonStyle(.plain)
 
+            if fuelLegsExpanded {
+                Button(role: .destructive) {
+                    if shouldConfirmClear {
+                        showClearConfirm = true
+                    } else {
+                        performClear()
+                    }
+                } label: {
+                    Label("Clear route", systemImage: "trash.fill")
+                        .font(DirtType.chip)
+                        .fontWeight(.bold)
+                        .foregroundStyle(DirtTheme.danger)
+                        .frame(maxWidth: .infinity, minHeight: 34)
+                        .background(DirtTheme.wash, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint("Removes every waypoint, fuel stop and route section")
+            }
+
             if !fuelLegsExpanded {
                 if planner.longestFuelLegMeters > 0 {
                     HStack(spacing: 5) {
@@ -729,9 +748,7 @@ struct RoutePlannerCard: View {
         let bandHeight: CGFloat = planner.hasFuelAssistedPlan
             ? (selectedStage == nil ? 170 : 230)
             : (selectedStage == nil ? 180 : 280)
-        let visibleRows = planner.itinerary.legs.count + (
-            planner.hasFuelAssistedPlan ? planner.stages.count : 0
-        )
+        let visibleRows = planner.stages.count
         let collapsedHeight = min(
             bandHeight,
             max(56, CGFloat(max(1, visibleRows)) * 62)
@@ -784,179 +801,17 @@ struct RoutePlannerCard: View {
     }
 
     @ViewBuilder private var stageListContent: some View {
-        let riderLegs = StageCard<EmptyView, EmptyView>.riderLegRows(in: planner.itinerary)
-        ForEach(Array(riderLegs.enumerated()), id: \.element.id) { riderLegIndex, riderLeg in
-            let childStages = Array(planner.stages.enumerated()).filter {
-                $0.element.riderLegID == riderLeg.id
-            }
-            if let firstChild = childStages.first {
-                let stageIndex = firstChild.offset
-                let stage = firstChild.element
-                let routedChildren = childStages.compactMap { $0.element.response }
-                let meters = routedChildren.reduce(0.0) { $0 + ($1.distanceMeters ?? 0) }
-                let dirtMeters = routedChildren.reduce(0.0) {
-                    $0 + ($1.distanceMeters ?? 0) * Double($1.dirtPercent) / 100
-                }
-                let dirtPercent = meters > 0 ? Int((dirtMeters / meters * 100).rounded()) : 0
-                let viaSubtitle = StageCard<EmptyView, EmptyView>.viaSubtitle(
-                    for: childStages.map(\.element)
-                )
-                let tightestFuelStage = childStages.max {
-                    ($0.element.response?.distanceMeters ?? 0) < ($1.element.response?.distanceMeters ?? 0)
-                }
-                let isActive = selectedStage == stageIndex
-
-                StageCard(
-                    number: riderLegIndex + 1,
-                    profileTitle: riderLeg.profile.title,
-                    isActive: isActive,
-                    onToggle: { toggleStageSelection(stageIndex) },
-                    endpointTitle: planner.stageEndpointTitle(at: stageIndex),
-                    endpointIsFuelStation: planner.stageEndpointIsFuelStation(at: stageIndex),
-                    viaSubtitle: viaSubtitle,
-                    headline: {
-                        if stage.isRouting {
-                            HStack(spacing: DirtSpace.tight) {
-                                ProgressView().controlSize(.mini)
-                                Text("Routing…")
-                                    .font(DirtType.helper)
-                                    .foregroundStyle(DirtTheme.muted)
-                            }
-                        } else if let gap = stage.fuelGap {
-                            Label(gap.message, systemImage: "fuelpump.slash.fill")
-                                .font(DirtType.helper)
-                                .foregroundStyle(DirtTheme.orange)
-                                .lineLimit(3)
-                        } else if let unknown = stage.fuelUnknown {
-                            Label(unknown, systemImage: "questionmark.circle.fill")
-                                .font(DirtType.helper)
-                                .foregroundStyle(DirtTheme.orange)
-                                .lineLimit(3)
-                        } else if let error = stage.error {
-                            Text(error)
-                                .font(DirtType.helper)
-                                .foregroundStyle(DirtTheme.danger)
-                                .lineLimit(2)
-                        } else if !routedChildren.isEmpty {
-                            VStack(alignment: .leading, spacing: 1) {
-                                stageMetrics(km: meters / 1000, dirtPercent: dirtPercent)
-                                if let marginStage = tightestFuelStage,
-                                   let margin = planner.fuelMarginText(at: marginStage.offset) {
-                                    HStack(spacing: 4) {
-                                        Text(margin)
-                                        if planner.profileAvailabilityNotice(at: stageIndex) != nil {
-                                            Image(systemName: "exclamationmark.triangle.fill")
-                                                .foregroundStyle(DirtTheme.orange)
-                                        }
-                                    }
-                                    .font(.dirtUI(9.5, weight: .semibold))
-                                    .foregroundStyle(DirtTheme.muted)
-                                    .lineLimit(1)
-                                }
-                            }
-                        } else {
-                            Text(stage.end == nil ? "Hold the map to set the end" : "Waiting for route…")
-                                .font(DirtType.helper)
-                                .foregroundStyle(DirtTheme.muted)
-                                .lineLimit(2)
-                        }
-                    },
-                    detail: {
-                        VStack(alignment: .leading, spacing: DirtSpace.inner) {
-                            if let notice = planner.profileAvailabilityNotice(at: stageIndex) {
-                                Label(notice, systemImage: "exclamationmark.triangle.fill")
-                                    .font(DirtType.helper)
-                                    .foregroundStyle(DirtTheme.orange)
-                                    .fixedSize(horizontal: false, vertical: true)
-                            }
-                            if let gap = stage.fuelGap {
-                                HStack(spacing: DirtSpace.tight) {
-                                    Button {
-                                        planner.prepareToMoveWaypoint(for: riderLeg.id)
-                                    } label: {
-                                        Label("Move waypoint", systemImage: "mappin.and.ellipse")
-                                            .font(DirtType.chip)
-                                            .fontWeight(.bold)
-                                            .frame(maxWidth: .infinity, minHeight: DirtHit.min)
-                                    }
-                                    .buttonStyle(.plain)
-                                    .foregroundStyle(DirtTheme.ink)
-                                    .background(DirtTheme.wash, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-
-                                    Button {
-                                        planner.acknowledgeFuelGap(gap)
-                                    } label: {
-                                        Label(
-                                            planner.isFuelGapAcknowledged(gap) ? "Carrying fuel" : "I'll carry fuel",
-                                            systemImage: planner.isFuelGapAcknowledged(gap) ? "checkmark.circle.fill" : "fuelpump.fill"
-                                        )
-                                        .font(DirtType.chip)
-                                        .fontWeight(.bold)
-                                        .frame(maxWidth: .infinity, minHeight: DirtHit.min)
-                                    }
-                                    .buttonStyle(.plain)
-                                    .foregroundStyle(DirtTheme.orange)
-                                    .background(DirtTheme.wash, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                                }
-                                if planner.hasFuelStopOverride(for: riderLeg.id) {
-                                    Button {
-                                        planner.revertFuelStopOverrides(for: riderLeg.id)
-                                    } label: {
-                                        Label("Use the planned fuel stops", systemImage: "arrow.uturn.backward.circle")
-                                            .font(DirtType.chip)
-                                            .fontWeight(.bold)
-                                            .frame(maxWidth: .infinity, minHeight: DirtHit.min)
-                                    }
-                                    .buttonStyle(.plain)
-                                    .foregroundStyle(DirtTheme.orange)
-                                    .background(DirtTheme.wash, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                                }
-                            }
-                            profileSegments(active: riderLeg.profile) { profile in
-                                planner.setStageProfile(profile, at: stageIndex)
-                                withAnimation(.easeInOut(duration: 0.18)) { selectedStage = nil }
-                            }
-                            profileGuidanceLine(riderLeg.profile)
-                            allowUnknownControl(
-                                binding: Binding(
-                                    get: { riderLeg.allowUnknown },
-                                    set: { on in
-                                        if on {
-                                            unknownAckStage = stageIndex
-                                            showUnknownAck = true
-                                        } else {
-                                            planner.setStageAllowUnknown(false, at: stageIndex)
-                                        }
-                                    }
-                                ),
-                                disabled: riderLeg.profile == .cleanest,
-                                profile: riderLeg.profile
-                            )
-                            if stage.error != nil, riderLeg.profile != .cleanest {
-                                Button {
-                                    planner.setStageProfile(.cleanest, at: stageIndex)
-                                } label: {
-                                    Label(
-                                        "Use Clean for this leg",
-                                        systemImage: "arrow.triangle.2.circlepath"
-                                    )
-                                    .font(DirtType.chip)
-                                    .fontWeight(.bold)
-                                    .foregroundStyle(DirtTheme.orange)
-                                    .frame(maxWidth: .infinity, minHeight: DirtHit.min)
-                                    .background(DirtTheme.wash, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                    }
-                )
-                .id(riderLeg.id)
+        ForEach(Array(planner.stages.enumerated()), id: \.element.id) { stageIndex, stage in
+            stageBlock(index: stageIndex, stage: stage)
+                .id(stage.id)
                 .listRowInsets(EdgeInsets())
                 .listRowSeparator(.hidden)
                 .listRowBackground(Color.clear)
                 .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                    if planner.itinerary.legs.count > 1,
+                    if planner.canDeleteStage(at: stageIndex),
+                       let riderLegIndex = planner.itinerary.legs.firstIndex(where: {
+                           $0.id == stage.riderLegID
+                       }),
                        planner.itinerary.waypoints.indices.contains(riderLegIndex + 1) {
                         Button(role: .destructive) {
                             let waypointID = planner.itinerary.waypoints[riderLegIndex + 1].id
@@ -967,81 +822,9 @@ struct RoutePlannerCard: View {
                         } label: {
                             Label("Delete", systemImage: "trash.fill")
                         }
-                        .accessibilityLabel("Delete leg \(riderLegIndex + 1)")
+                        .accessibilityLabel("Delete point \(riderLegIndex + 2)")
                     }
                 }
-
-                if childStages.count > 1 {
-                    VStack(alignment: .leading, spacing: 0) {
-                        ForEach(childStages.indices, id: \.self) { hopIndex in
-                            let indexedStage = childStages[hopIndex]
-                            let hop = indexedStage.element
-                            HStack(spacing: DirtSpace.tight) {
-                                VStack(alignment: .leading, spacing: 2) {
-                                    Text(StageCard<EmptyView, EmptyView>.fuelHopTitle(
-                                        riderLegIndex: riderLegIndex,
-                                        hopIndex: hopIndex,
-                                        hopCount: childStages.count
-                                    ))
-                                    .font(.dirtUI(10.5, weight: .bold))
-                                    .foregroundStyle(DirtTheme.ink)
-
-                                    if let response = hop.response {
-                                        Text("\((response.distanceMeters ?? 0) / 1000, specifier: "%.1f") km · \(response.dirtPercent)% dirt")
-                                            .font(DirtType.helper)
-                                            .foregroundStyle(DirtTheme.muted)
-                                            .lineLimit(1)
-                                    }
-                                }
-                                Spacer(minLength: 4)
-                                Menu {
-                                    ForEach(RouteProfile.allCases) { profile in
-                                        Button(profile.title) {
-                                            planner.setFuelHopProfile(
-                                                profile,
-                                                at: indexedStage.offset
-                                            )
-                                        }
-                                    }
-                                } label: {
-                                    HStack(spacing: 3) {
-                                        Text(hop.profile.title)
-                                        Image(systemName: "chevron.down")
-                                            .font(.system(size: 8, weight: .black))
-                                    }
-                                    .font(DirtType.chip)
-                                    .fontWeight(.bold)
-                                    .foregroundStyle(DirtTheme.ink)
-                                    .padding(.horizontal, 8)
-                                    .frame(height: 28)
-                                    .background(DirtTheme.wash)
-                                    .clipShape(RoundedRectangle(cornerRadius: 4))
-                                }
-                                .accessibilityLabel("Profile for fuel hop \(hopIndex + 1)")
-                            }
-                            .padding(.horizontal, DirtSpace.inner)
-                            .frame(minHeight: DirtHit.min)
-
-                            if hopIndex < childStages.count - 1 {
-                                Rectangle()
-                                    .fill(DirtTheme.hairline)
-                                    .frame(height: 1)
-                            }
-                        }
-                    }
-                    .background(
-                        DirtTheme.wash,
-                        in: RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .stroke(DirtTheme.hairline, lineWidth: 1)
-                    )
-                    .listRowInsets(EdgeInsets())
-                    .listRowSeparator(.hidden)
-                    .listRowBackground(Color.clear)
-                }
-            }
         }
     }
 
@@ -1054,6 +837,9 @@ struct RoutePlannerCard: View {
             profileTitle: stage.profile.title,
             isActive: isActive,
             onToggle: { toggleStageSelection(index) },
+            endpointTitle: planner.stageEndpointTitle(at: index),
+            endpointIsFuelStation: planner.stageEndpointIsFuelStation(at: index),
+            viaSubtitle: planner.stageFuelStationSubtitle(at: index),
             headline: { stageHeadline(stage, at: index) },
             detail: {
                 VStack(alignment: .leading, spacing: DirtSpace.inner) {
@@ -1063,8 +849,21 @@ struct RoutePlannerCard: View {
                             .foregroundStyle(DirtTheme.orange)
                             .fixedSize(horizontal: false, vertical: true)
                     }
+                    if stage.endsAtFuelStop, planner.canReplaceFuelStop(at: index) {
+                        Button {
+                            planner.selectFuelWaypoint(at: index)
+                        } label: {
+                            Label("Choose another pump", systemImage: "fuelpump.circle.fill")
+                                .font(DirtType.chip)
+                                .fontWeight(.bold)
+                                .frame(maxWidth: .infinity, minHeight: DirtHit.min)
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(DirtTheme.orange)
+                        .background(DirtTheme.wash, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    }
                     profileSegments(active: stage.profile) { profile in
-                        planner.setStageProfile(profile, at: index)
+                        planner.setFuelHopProfile(profile, at: index)
                         withAnimation(.easeInOut(duration: 0.18)) { selectedStage = nil }
                     }
                     profileGuidanceLine(stage.profile)
@@ -1085,7 +884,7 @@ struct RoutePlannerCard: View {
                     )
                     if stage.error != nil, stage.profile != .cleanest {
                         Button {
-                            planner.setStageProfile(.cleanest, at: index)
+                            planner.setFuelHopProfile(.cleanest, at: index)
                         } label: {
                             Label(
                                 "Use Clean for this leg",
@@ -1559,7 +1358,7 @@ struct RoutePlannerCard: View {
                 performClear()
             }
         } label: {
-            Text("Clear All")
+            Text("Clear route")
                 .font(DirtType.cta)
                 .foregroundStyle(DirtTheme.danger)
                 .padding(.horizontal, 16)
@@ -1575,7 +1374,7 @@ struct RoutePlannerCard: View {
         .buttonStyle(.plain)
         // 16pt below Save / Export / Start; sheet height grows with content.
         .padding(.top, 16)
-        .accessibilityLabel("Clear all")
+        .accessibilityLabel("Clear route")
     }
 }
 

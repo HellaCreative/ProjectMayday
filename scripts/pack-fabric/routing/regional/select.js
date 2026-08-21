@@ -118,6 +118,32 @@ function bboxInteriorScore(lon, lat, bbox) {
   return Math.min(lon - w, e - lon, lat - s, n - lat);
 }
 
+function candidateRegionsForPoint(lon, lat) {
+  const hits = Object.entries(REGION_BBOX)
+    .filter(([, bbox]) => pointInBbox(lon, lat, bbox))
+    .map(([id, bbox]) => ({ id, area: bboxArea(bbox) }));
+  if (!hits.length) return [];
+  const primary = primaryRegionForPoint(lon, lat);
+  hits.sort((a, b) => {
+    if (a.id === primary) return -1;
+    if (b.id === primary) return 1;
+    return a.area - b.area;
+  });
+  return hits.map((hit) => hit.id);
+}
+
+function regionForLocation(location) {
+  const hinted = String(
+    location && (location.resolvedRegionId || location.regionIdHint) || ""
+  ).toLowerCase();
+  if (hinted && REGION_BBOX[hinted]) return hinted;
+  const lon = Number(location && (location.lon != null ? location.lon : location.lng));
+  const lat = Number(location && location.lat);
+  return Number.isFinite(lon) && Number.isFinite(lat)
+    ? primaryRegionForPoint(lon, lat)
+    : null;
+}
+
 /**
  * When a point sits in overlapping province bboxes, prefer the smallest —
  * except AB/BC, whose rectangular bboxes intentionally overlap. Alberta's
@@ -335,10 +361,9 @@ function listAvailableRegions(regionsDir = REGIONS_DIR) {
 }
 
 function selectRegionsForLocations(locations) {
-  const points = locationsToPoints(locations);
   const hit = new Set();
-  for (const p of points) {
-    const id = primaryRegionForPoint(p.lon, p.lat);
+  for (const location of locations || []) {
+    const id = regionForLocation(location);
     if (id) hit.add(id);
   }
   return [...hit].sort();
@@ -459,8 +484,8 @@ function resolveGraphRequest(body = {}) {
   // just because bboxes overlap.
   const uniquePrimary = [
     ...new Set(
-      locationsToPoints(body.locations || [])
-        .map((p) => primaryRegionForPoint(p.lon, p.lat))
+      (body.locations || [])
+        .map(regionForLocation)
         .filter(Boolean)
         .map(provinceFamily)
     )
@@ -542,6 +567,8 @@ module.exports = {
   resolveGraphRequest,
   publicBaseUrl,
   primaryRegionForPoint,
+  candidateRegionsForPoint,
+  regionForLocation,
   provinceFamily,
   isQcRegion,
   regionPackAvailable

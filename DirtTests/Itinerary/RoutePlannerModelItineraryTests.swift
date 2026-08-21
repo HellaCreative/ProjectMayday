@@ -159,7 +159,7 @@ struct RoutePlannerModelItineraryTests {
         #expect(model.canonicalBuildStartCount == 1)
     }
 
-    @Test func riderLegLabelsIgnoreGeneratedFuelStops() async throws {
+    @Test func flatLegLabelsIncludeGeneratedFuelStops() async throws {
         let prefs = FuelPrefsRestore()
         defer { prefs.restore() }
         FuelRangePrefs.kilometers = 250
@@ -183,12 +183,12 @@ struct RoutePlannerModelItineraryTests {
         await model.waitForCanonicalBuildForTesting()
 
         #expect(model.stages.count == 3)
-        #expect(model.stageEndpointTitle(at: 0) == "Point 1 → Point 2")
-        #expect(model.stageEndpointTitle(at: 1) == "Point 1 → Point 2")
+        #expect(model.stageEndpointTitle(at: 0) == "Point 1 → F1")
+        #expect(model.stageEndpointTitle(at: 1) == "F1 → Point 2")
         #expect(model.stageEndpointTitle(at: 2) == "Point 2 → Point 3")
     }
 
-    @Test func twoWaypointFuelItineraryRendersOneRiderLegRow() async throws {
+    @Test func twoWaypointFuelItineraryRendersOnlyItsTwoBuiltLegRows() async throws {
         let prefs = FuelPrefsRestore()
         defer { prefs.restore() }
         FuelRangePrefs.kilometers = 250
@@ -210,24 +210,163 @@ struct RoutePlannerModelItineraryTests {
         await model.waitForCanonicalBuildForTesting()
 
         #expect(model.stages.count == 2)
-        let rows = StageCard<EmptyView, EmptyView>.riderLegRows(in: model.itinerary)
-        #expect(rows.count == 1)
-        #expect(
-            StageCard<EmptyView, EmptyView>.viaSubtitle(for: model.stages)
-                == "via Shell Antigonish"
+        #expect(model.stageEndpointTitle(at: 0) == "Point 1 → F1")
+        #expect(model.stageEndpointTitle(at: 1) == "F1 → Point 2")
+        #expect(model.stageFuelStationSubtitle(at: 0) == "Shell Antigonish")
+        #expect(model.stages.allSatisfy { $0.profile == .cleanest })
+    }
+
+    @Test func twoWaypointTwoStopItineraryRendersExactlyThreeFlatRows() async throws {
+        let prefs = FuelPrefsRestore()
+        defer { prefs.restore() }
+        FuelRangePrefs.kilometers = 220
+        FuelRangePrefs.reservePercent = 5
+
+        let first = point(0)
+        let firstPump = point(0.25)
+        let secondPump = point(0.5)
+        let second = point(0.75)
+        let source = PlannerFakeRoutingSource()
+        source.distanceOverrides[key(first, second)] = 510_000
+        source.distanceOverrides[key(first, firstPump)] = 170_000
+        source.distanceOverrides[key(firstPump, secondPump)] = 170_000
+        source.distanceOverrides[key(secondPump, second)] = 170_000
+        source.fuelStops = [
+            fuelStop("irving", name: "Irving", at: firstPump),
+            fuelStop("caper-gas", name: "Caper Gas", at: secondPump)
+        ]
+        let model = makeModel(source: source)
+        model.apply(
+            .replaceAll(waypoints: [first, second], profile: .dirt, allowUnknown: false),
+            source: "seed"
         )
+        await model.waitForCanonicalBuildForTesting()
+
+        #expect(model.stages.count == 3)
+        #expect(model.stages.map(\.profile) == [.cleanest, .cleanest, .cleanest])
+        #expect(model.stageEndpointTitle(at: 0) == "Point 1 → F1")
+        #expect(model.stageEndpointTitle(at: 1) == "F1 → F2")
+        #expect(model.stageEndpointTitle(at: 2) == "F2 → Point 2")
+    }
+
+    @Test func firstFuelSectionProfileDoesNotEraseDownstreamSectionOverride() async throws {
+        let prefs = FuelPrefsRestore()
+        defer { prefs.restore() }
+        FuelRangePrefs.kilometers = 220
+        FuelRangePrefs.reservePercent = 5
+
+        let first = point(0)
+        let firstPump = point(0.25)
+        let secondPump = point(0.5)
+        let second = point(0.75)
+        let source = PlannerFakeRoutingSource()
+        source.distanceOverrides[key(first, second)] = 510_000
+        source.distanceOverrides[key(first, firstPump)] = 170_000
+        source.distanceOverrides[key(firstPump, secondPump)] = 170_000
+        source.distanceOverrides[key(secondPump, second)] = 170_000
+        source.fuelStops = [
+            fuelStop("irving", name: "Irving", at: firstPump),
+            fuelStop("caper-gas", name: "Caper Gas", at: secondPump)
+        ]
+        let model = makeModel(source: source)
+        model.apply(
+            .replaceAll(waypoints: [first, second], profile: .dirt, allowUnknown: false),
+            source: "seed"
+        )
+        await model.waitForCanonicalBuildForTesting()
+
+        model.setFuelHopProfile(.balanced, at: 1)
+        await model.waitForCanonicalBuildForTesting()
+        model.setFuelHopProfile(.dirt, at: 0)
+        await model.waitForCanonicalBuildForTesting()
+
+        let riderLeg = try #require(model.itinerary.legs.first)
+        #expect(riderLeg.hopOverrides[riderLeg.from.uuidString] == .dirt)
+        #expect(riderLeg.hopOverrides["irving"] == .balanced)
+    }
+
+    @Test func tappingVisibleAlternativePumpReplacesTheFuelWaypoint() async throws {
+        let prefs = FuelPrefsRestore()
+        defer { prefs.restore() }
+        FuelRangePrefs.kilometers = 250
+        FuelRangePrefs.reservePercent = 5
+
+        let first = point(0)
+        let primary = point(0.25)
+        let alternate = point(0.3)
+        let second = point(0.5)
+        let source = PlannerFakeRoutingSource()
+        source.distanceOverrides[key(first, second)] = 300_000
+        source.distanceOverrides[key(first, primary)] = 150_000
+        source.distanceOverrides[key(primary, second)] = 150_000
+        source.distanceOverrides[key(first, alternate)] = 155_000
+        source.distanceOverrides[key(alternate, second)] = 145_000
+        source.fuelStops = [fuelStop("primary", name: "Primary Pump", at: primary)]
+        source.stationCandidates = [
+            FuelStationCandidate(
+                id: "alternate", meters: 155_000, dirtPct: 75,
+                departureId: "start", latitude: alternate.latitude,
+                longitude: alternate.longitude, name: "Alternate Pump", validForward: true
+            )
+        ]
+        let model = makeModel(source: source)
+        model.apply(
+            .replaceAll(waypoints: [first, second], profile: .dirt, allowUnknown: false),
+            source: "seed"
+        )
+        await model.waitForCanonicalBuildForTesting()
+
+        #expect(model.canReplaceFuelStop(at: 0))
+        model.selectFuelWaypoint(at: 0)
+        model.selectFuelTarget(markerID: "fuel-target:alternate")
+        await model.waitForCanonicalBuildForTesting()
+
+        let riderLeg = try #require(model.itinerary.legs.first)
+        #expect(riderLeg.fuelStopOverrides[riderLeg.from.uuidString] == "alternate")
+        #expect(source.fuelChainRequests.last?.fuel.requiredFirstStationId == "alternate")
+        #expect(model.built?.legs.first?.endsAtFuelStop?.stationID == "alternate")
+    }
+
+    @Test func failedRouteKeepsItsRiderLegVisible() async throws {
+        let prefs = FuelPrefsRestore()
+        defer { prefs.restore() }
+        FuelRangePrefs.kilometers = 0
+        let source = PlannerFakeRoutingSource()
+        source.routeError = RoutingError.server("No eligible edge near Point 1")
+        let model = makeModel(source: source)
+        model.apply(
+            .replaceAll(waypoints: [point(0), point(1)], profile: .dirt, allowUnknown: false),
+            source: "seed"
+        )
+        await model.waitForCanonicalBuildForTesting()
+
+        #expect(model.itinerary.waypoints.count == 2)
+        #expect(model.stages.count == 1)
         #expect(model.stageEndpointTitle(at: 0) == "Point 1 → Point 2")
-        #expect(model.stageEndpointTitle(at: 1) == "Point 1 → Point 2")
-        #expect(
-            StageCard<EmptyView, EmptyView>.fuelHopTitle(
-                riderLegIndex: 0, hopIndex: 0, hopCount: 2
-            ) == "Point 1 → F1"
+        #expect(model.stages[0].error == "No eligible edge near Point 1")
+    }
+
+    @Test func fuelServiceFailureIsNotPresentedAsAProvenGap() async throws {
+        let prefs = FuelPrefsRestore()
+        defer { prefs.restore() }
+        FuelRangePrefs.kilometers = 250
+        FuelRangePrefs.reservePercent = 5
+        let start = point(0)
+        let end = point(1)
+        let source = PlannerFakeRoutingSource()
+        source.distanceOverrides[key(start, end)] = 300_000
+        source.fuelChainError = RoutingError.server("Routing service timed out")
+        let model = makeModel(source: source)
+        model.apply(
+            .replaceAll(waypoints: [start, end], profile: .dirt, allowUnknown: false),
+            source: "seed"
         )
-        #expect(
-            StageCard<EmptyView, EmptyView>.fuelHopTitle(
-                riderLegIndex: 0, hopIndex: 1, hopCount: 2
-            ) == "F1 → Point 2"
-        )
+        await model.waitForCanonicalBuildForTesting()
+
+        #expect(model.fuelGaps.isEmpty)
+        #expect(model.unacknowledgedFuelGaps.isEmpty)
+        #expect(model.stages.count == 1)
+        #expect(model.stages[0].error == "Routing service timed out")
     }
 }
 
@@ -274,9 +413,13 @@ private final class PlannerFakeRoutingSource: RoutingSource {
     var fuelChainRequests: [FuelChainRequest] = []
     var distanceOverrides: [String: Double] = [:]
     var fuelStops: [FuelChainStop] = []
+    var stationCandidates: [FuelStationCandidate] = []
+    var routeError: Error?
+    var fuelChainError: Error?
 
     func route(_ req: RouteRequest) async throws -> RouteResponse {
         routeRequests.append(req)
+        if let routeError { throw routeError }
         let endpoints = try requestEndpoints(req)
         let meters = distanceOverrides[key(endpoints.0, endpoints.1)] ?? 100_000
         return RouteResponse(
@@ -292,13 +435,27 @@ private final class PlannerFakeRoutingSource: RoutingSource {
 
     func fuelChain(_ req: FuelChainRequest) async throws -> FuelChainResponse {
         fuelChainRequests.append(req)
+        if let fuelChainError { throw fuelChainError }
+        let selectedStops: [FuelChainStop]
+        if let required = req.fuel.requiredFirstStationId,
+           let candidate = stationCandidates.first(where: { $0.id == required }),
+           let latitude = candidate.latitude,
+           let longitude = candidate.longitude {
+            selectedStops = [FuelChainStop(
+                id: candidate.id, latitude: latitude, longitude: longitude,
+                name: candidate.name, brand: nil, address: nil, graphMeters: candidate.meters
+            )]
+        } else {
+            selectedStops = fuelStops
+        }
         return FuelChainResponse(
             status: "complete", error: nil, message: nil, regionIds: ["test"],
-            stops: fuelStops, graphMeters: nil,
+            stops: selectedStops, graphMeters: nil,
             diagnostics: FuelChainDiagnostics(
                 strategy: "fake", states: 1, dijkstraPops: 1,
-                matchedFuel: fuelStops.count, elapsedMs: 1
-            )
+                matchedFuel: selectedStops.count, elapsedMs: 1
+            ),
+            stationCandidates: stationCandidates
         )
     }
 

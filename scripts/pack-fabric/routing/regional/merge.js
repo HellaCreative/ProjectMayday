@@ -408,6 +408,15 @@ function familyAt(lon, lat) {
   return id ? provinceFamily(id) : null;
 }
 
+function familyForLocation(location) {
+  const { primaryRegionForPoint, provinceFamily } = require("./select");
+  const hinted = String(
+    location && (location.resolvedRegionId || location.regionIdHint) || ""
+  ).toLowerCase();
+  if (hinted) return provinceFamily(hinted);
+  return provinceFamily(primaryRegionForPoint(location.lon, location.lat));
+}
+
 function refineCrossing(a, b) {
   let lo = a;
   let hi = b;
@@ -536,9 +545,8 @@ function dynamicSeamForPair(left, right, start, end) {
 }
 
 function adventureChainWaypoints(start, end) {
-  const { primaryRegionForPoint, provinceFamily } = require("./select");
-  const startFam = provinceFamily(primaryRegionForPoint(start.lon, start.lat));
-  const endFam = provinceFamily(primaryRegionForPoint(end.lon, end.lat));
+  const startFam = familyForLocation(start);
+  const endFam = familyForLocation(end);
   if (!startFam || !endFam || startFam === endFam) return [start, end];
 
   const regionPath = shortestRegionPath(startFam, endFam) || [];
@@ -589,7 +597,11 @@ function corridorLocationsForRoute(locations, options = {}) {
       const lon = Number(loc.lon != null ? loc.lon : loc.lng);
       const lat = Number(loc.lat);
       if (!Number.isFinite(lon) || !Number.isFinite(lat)) return null;
-      return { lon, lat };
+      return {
+        lon,
+        lat,
+        resolvedRegionId: loc.resolvedRegionId || loc.regionIdHint || null
+      };
     })
     .filter(Boolean);
   if (pts.length < 2) return pts;
@@ -604,12 +616,10 @@ function corridorLocationsForRoute(locations, options = {}) {
   const span = maxLon - minLon;
   const distKm = haversineKm(start, end);
 
-  const { primaryRegionForPoint, provinceFamily } = require("./select");
   const families = new Set(
     [start, end]
-      .map((p) => primaryRegionForPoint(p.lon, p.lat))
+      .map(familyForLocation)
       .filter(Boolean)
-      .map(provinceFamily)
   );
   if (families.size === 1 && families.has("qc")) return pts;
   // Short same-region rides skip engineered hops. Cross-region always chains

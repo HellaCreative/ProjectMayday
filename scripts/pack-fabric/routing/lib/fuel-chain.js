@@ -27,6 +27,7 @@ const { corridorLocationsForRoute } = require("../regional/merge");
 const { loadFuelForLocations, loadRegionFuel } = require("./fuel-data");
 const { unpackAccess, unpackSurface } = require("./pack-v2");
 const { projectedProgressMeters, crossTrackMeters } = require("./hop-search");
+const { resolveLocationsByEligibleEdge } = require("../regional/endpoint-resolver");
 
 const HARD_MATCH_METERS = 750;
 const MIN_STOP_SEPARATION_M = 800;
@@ -915,8 +916,12 @@ async function planCrossRegionFuelChain(body, selection, fuelOptions, dependenci
     const hopEnd = waypoints[i + 1];
     const startCoord = locationCoordinate(hopStart);
     const endCoord = locationCoordinate(hopEnd);
-    const startFamily = provinceFamily(primaryRegionForPoint(startCoord[0], startCoord[1]));
-    const endFamily = provinceFamily(primaryRegionForPoint(endCoord[0], endCoord[1]));
+    const startFamily = provinceFamily(
+      hopStart.resolvedRegionId || primaryRegionForPoint(startCoord[0], startCoord[1])
+    );
+    const endFamily = provinceFamily(
+      hopEnd.resolvedRegionId || primaryRegionForPoint(endCoord[0], endCoord[1])
+    );
     const regionId = i === waypoints.length - 2
       ? endFamily || startFamily
       : startFamily || endFamily;
@@ -1077,6 +1082,10 @@ async function planCrossRegionFuelChain(body, selection, fuelOptions, dependenci
 async function fuelChainRequest(body = {}, dependencies = {}) {
   const loadFuel = dependencies.loadFuelForLocations || loadFuelForLocations;
   const loadRuntime = dependencies.loadGraphsForRequest || loadGraphsForRequest;
+  const endpointResolution = await resolveLocationsByEligibleEdge(body, {
+    probeRegion: dependencies.probeRegion
+  });
+  body = endpointResolution.body;
   const selection = resolveGraphRequest(body);
   if (!selection.ok) {
     return {
