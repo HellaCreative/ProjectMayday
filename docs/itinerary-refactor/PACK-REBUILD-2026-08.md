@@ -95,6 +95,21 @@ tag: pack-on-osm-20260821-01
 note: MB re-cut mb-osm-20260821-02 after MB–ON seam
 ```
 
+
+```
+region: qc   release-id: qc-osm-20260821-01   geofabrik ts: 2026-08-20T20:20:51Z   pbf sha: ca15d1709dabcee69eeb4f2bd79cb53a7987bbe05571083def18cb58d3359ec9
+steps 1–7: ok
+audit contradictions: 0     non-OSM edges: 0
+stitches: 12827  free-space: 0
+largest permissive component: 95.62% of edges
+urban cores: 29 hard / 186 scored
+seams built: on-qc           seams deferred: qc-nb, qc-nl
+route acceptance: 8/15 — red: long-gatineau-gaspe dirt/direct no route; dirt-allow-unknown + balanced safety limit; urban-laval-longueuil dirt 0%<15%; dirt-allow-unknown 9%<25%; balanced 0% off 50/50
+candidate uploaded: https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/candidates/qc-osm-20260821-01   promoted: NO
+tag: pack-qc-osm-20260821-01
+note: ON re-cut on-osm-20260821-02 after ON–QC seam
+```
+
 ## Promote commands (not run)
 
 ```

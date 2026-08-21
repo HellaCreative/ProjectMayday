@@ -240,7 +240,7 @@
         "path": "routing/data/regions/on/graph.v1.json.gz",
         "edgeCount": 1808291,
         "nodeCount": 1498160,
-        "gzBytes": 102318669
+        "gzBytes": 102318663
       },
       "osm": {
         "adapter": "osm-roads",
@@ -262,7 +262,7 @@
         "format": "GeoPackage",
         "license": "Open Government Licence - Canada",
         "adapter": "nrn",
-        "status": "ready",
+        "status": "deferred",
         "dateRetrieved": "2026-07-20",
         "notes": "NRN omitted from routing fabric (OSM-only)."
       },
@@ -272,26 +272,26 @@
         "format": "CKAN / download",
         "license": "Creative Commons / Quebec open licence — verify per dataset",
         "adapter": "qc-multiusage",
-        "status": "ready",
+        "status": "deferred",
         "dateRetrieved": "2026-07-21",
-        "notes": "Adapter ready; NOT in live QC routing stack (--osm-only). Capillary candidate for a later assessment pass."
+        "notes": "Inactive during the foundational OSM-only phase. Adapter/data are retained for later controlled evaluation and are not in this pack."
       },
       "routingReady": true,
       "routingMode": "osm-only",
       "backboneArtifact": {
         "path": "routing/data/regions/qc/graph.v1.json.gz",
-        "edgeCount": 586807,
-        "nodeCount": 829222,
-        "gzBytes": 61743048
+        "edgeCount": 1075322,
+        "nodeCount": 901223,
+        "gzBytes": 74865493
       },
       "osm": {
         "adapter": "osm-roads",
         "role": "sole-fabric",
         "status": "ready",
-        "featureCount": 593058,
-        "added": 593058,
+        "featureCount": 606265,
+        "added": 606265,
         "license": "OpenStreetMap contributors (ODbL)",
-        "dateRetrieved": "2026-07-29"
+        "dateRetrieved": "2026-08-21"
       }
     },
     {
