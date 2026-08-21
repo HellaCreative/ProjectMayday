@@ -35,6 +35,41 @@
           "maximumDirtBackwardPercent": 25
         }
       ]
+    },
+    "bc": {
+      "fuelMinimum": 1500,
+      "routes": [
+        {
+          "id": "long-chilliwack-crowsnest",
+          "from": { "lat": 49.162, "lon": -121.951, "label": "Chilliwack" },
+          "to": { "lat": 49.633, "lon": -114.694, "label": "Crowsnest (BC side)" },
+          "minimumDirtPercent": 70,
+          "minimumDirtAllowUnknownPercent": 80,
+          "balancedTolerance": 10,
+          "maximumCleanDirtPercent": 2,
+          "maximumDirtBackwardPercent": 30
+        },
+        {
+          "id": "urban-abbotsford-merritt",
+          "from": { "lat": 49.0504, "lon": -122.3045, "label": "Abbotsford" },
+          "to": { "lat": 50.111, "lon": -120.786, "label": "Merritt" },
+          "minimumDirtPercent": 70,
+          "minimumDirtAllowUnknownPercent": 80,
+          "balancedTolerance": 10,
+          "maximumCleanDirtPercent": 2,
+          "maximumDirtBackwardPercent": 25
+        },
+        {
+          "id": "short-hope-princeton",
+          "from": { "lat": 49.385, "lon": -121.442, "label": "Hope" },
+          "to": { "lat": 49.459, "lon": -120.506, "label": "Princeton" },
+          "minimumDirtPercent": 70,
+          "minimumDirtAllowUnknownPercent": 80,
+          "balancedTolerance": 10,
+          "maximumCleanDirtPercent": 2,
+          "maximumDirtBackwardPercent": 25
+        }
+      ]
     }
   }
 }
