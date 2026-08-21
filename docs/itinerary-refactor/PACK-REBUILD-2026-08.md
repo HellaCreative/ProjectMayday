@@ -168,6 +168,20 @@ tag: pack-yt-osm-20260821-01
 note: BC re-cut bc-osm-20260821-04 after BC–YT seam
 ```
 
+
+```
+region: nt   release-id: nt-osm-20260821-01   geofabrik ts: 2026-08-20T20:20:51Z   pbf sha: 64be5b7f4d9047c9efdd9b3917d25b47338608b03560feef6762785af92e8e1f
+steps 1–7: partial — step 6 pack-region-urban failed (no OSM place cores above thresholds); stitch/binaries completed after graph build; no fuel.v1.json
+audit contradictions: 0     non-OSM edges: 0
+stitches: 367  free-space: 0
+largest permissive component: 76.03% of edges
+urban cores: 0 hard / 0 scored (urban pack failed)
+seams built: (none)           seams deferred: yt-nt (no shared routable OSM vertex); nt-ab/sk/bc as applicable
+route acceptance: 2/15 — many red (fuel floor; long no route; Behchokǫ̀ off-graph; short balanced/clean red)
+candidate uploaded: https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/candidates/nt-osm-20260821-01   promoted: NO
+tag: pack-nt-osm-20260821-01
+```
+
 ## Promote commands (not run)
 
 ```

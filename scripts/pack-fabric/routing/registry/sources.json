@@ -517,9 +517,9 @@
         "format": "GeoPackage",
         "license": "Open Government Licence - Canada",
         "adapter": "nrn",
-        "status": "ready",
+        "status": "deferred",
         "dateRetrieved": "2026-07-20",
-        "notes": "NRN ROADSEG ingested as national backbone artifact. Not product routing-ready until audit validation + supplement policy applied."
+        "notes": "NRN omitted from routing fabric (OSM-only). NRN ROADSEG ingested as national backbone artifact. Not product routing-ready until audit validation + supplement policy applied."
       },
       "provincial": {
         "sourceName": "GNWT Transportation_LCC Roads",
@@ -528,17 +528,26 @@
         "format": "ArcGIS MapServer",
         "license": "Open Government Licence - Northwest Territories",
         "adapter": null,
-        "status": "verified",
+        "status": "deferred",
         "dateRetrieved": "2026-07-21",
-        "notes": "Old nwtgeomatics.ca portal is dead. Live Transportation_LCC layer 3 (~11k). Filter ROADTYPE Resource/Recreation, Winter, Trails only — do not ingest highways wholesale. Phase-1 after main provincial queue."
+        "notes": "Inactive during the foundational OSM-only phase. Adapter/data are retained for later controlled evaluation and are not in this pack."
       },
       "routingReady": true,
-      "routingMode": "nrn-backbone",
+      "routingMode": "osm-only",
       "backboneArtifact": {
         "path": "routing/data/regions/nt/graph.v1.json.gz",
-        "edgeCount": 8467,
-        "nodeCount": 7109,
-        "gzBytes": 1845133
+        "edgeCount": 16894,
+        "nodeCount": 14659,
+        "gzBytes": 1130229
+      },
+      "osm": {
+        "adapter": "osm-roads",
+        "role": "sole-fabric",
+        "status": "ready",
+        "featureCount": 9131,
+        "added": 9131,
+        "license": "OpenStreetMap contributors (ODbL)",
+        "dateRetrieved": "2026-08-21"
       }
     },
     {

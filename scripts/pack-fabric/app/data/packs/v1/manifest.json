@@ -3,7 +3,7 @@
   "packFormat": "graph.v2",
   "geometryFormat": "geometry.v1",
   "version": "v1",
-  "generatedAt": "2026-08-21T10:58:30.754Z",
+  "generatedAt": "2026-08-21T11:02:29.171Z",
   "basePath": "/app/data/packs/v1",
   "regions": [
     {
@@ -611,13 +611,13 @@
       "files": [
         {
           "name": "graph.v2.bin",
-          "bytes": 537658,
-          "sha256": "ccf9cb77900adc5a9a9176f14bfe327ed51de99bd50539cab839ef88eb7d5597"
+          "bytes": 1074543,
+          "sha256": "e34b7ffc73521ae7a297a6b08ffd2e1f695fa11cc76e5ab702b7dc4bb8a29655"
         },
         {
           "name": "geometry.v1.bin",
-          "bytes": 2491136,
-          "sha256": "e58c72180ad617d23c9b6f9fb75a2652b94f0a850550150a885efa778ecb56e2"
+          "bytes": 1002272,
+          "sha256": "e91264981ba4beb708f2e54cecbef302bcc29742f3241888a2e799f6d3b536d2"
         }
       ]
     },
