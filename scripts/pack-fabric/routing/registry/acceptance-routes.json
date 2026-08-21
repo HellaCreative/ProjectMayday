@@ -472,6 +472,65 @@
           "maximumDirtBackwardPercent": 40
         }
       ]
+    },
+    "nb": {
+      "fuelMinimum": 400,
+      "routes": [
+        {
+          "id": "long-edmundston-saint-john",
+          "from": {
+            "lat": 47.373,
+            "lon": -68.325,
+            "label": "Edmundston"
+          },
+          "to": {
+            "lat": 45.273,
+            "lon": -66.063,
+            "label": "Saint John"
+          },
+          "minimumDirtPercent": 40,
+          "minimumDirtAllowUnknownPercent": 50,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 10,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "urban-dieppe-fredericton",
+          "from": {
+            "lat": 46.094,
+            "lon": -64.753,
+            "label": "Dieppe"
+          },
+          "to": {
+            "lat": 45.963,
+            "lon": -66.643,
+            "label": "Fredericton"
+          },
+          "minimumDirtPercent": 30,
+          "minimumDirtAllowUnknownPercent": 40,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 10,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "short-sussex-norton",
+          "from": {
+            "lat": 45.723,
+            "lon": -65.507,
+            "label": "Sussex"
+          },
+          "to": {
+            "lat": 45.639,
+            "lon": -65.696,
+            "label": "Norton"
+          },
+          "minimumDirtPercent": 40,
+          "minimumDirtAllowUnknownPercent": 50,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 8,
+          "maximumDirtBackwardPercent": 40
+        }
+      ]
     }
   }
 }
