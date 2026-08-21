@@ -431,9 +431,9 @@
         "format": "GeoPackage",
         "license": "Open Government Licence - Canada",
         "adapter": "nrn",
-        "status": "ready",
+        "status": "deferred",
         "dateRetrieved": "2026-07-20",
-        "notes": "NRN omitted from routing fabric (OSM + provincial only)."
+        "notes": "NRN omitted from routing fabric (OSM-only)."
       },
       "provincial": {
         "sourceName": "FFA Resource Roads (Newfoundland + Labrador)",
@@ -442,26 +442,26 @@
         "format": "ArcGIS FeatureServer (NF layer 2 + LB layer 0)",
         "license": "Open Government Licence - Newfoundland and Labrador",
         "adapter": "nl-ffa-resource-roads",
-        "status": "ready",
+        "status": "deferred",
         "dateRetrieved": "2026-07-29",
-        "notes": "Live REST verified. NF ~12.4k / LB ~1.0k. ROAD_ACCESS coded; surface often null. Phase-1 candidate after main provincial queue. Use NF layer 2 not 0."
+        "notes": "Inactive during the foundational OSM-only phase. Adapter/data are retained for later controlled evaluation and are not in this pack."
       },
       "routingReady": true,
-      "routingMode": "osm+provincial",
+      "routingMode": "osm-only",
       "backboneArtifact": {
         "path": "routing/data/regions/nl/graph.v1.json.gz",
-        "edgeCount": 93189,
-        "nodeCount": 143652,
-        "gzBytes": 14494084
+        "edgeCount": 160415,
+        "nodeCount": 147631,
+        "gzBytes": 10553694
       },
       "osm": {
         "adapter": "osm-roads",
         "role": "sole-fabric",
         "status": "ready",
-        "featureCount": 81461,
-        "added": 81461,
+        "featureCount": 89635,
+        "added": 89635,
         "license": "OpenStreetMap contributors (ODbL)",
-        "dateRetrieved": "2026-07-29"
+        "dateRetrieved": "2026-08-21"
       }
     },
     {

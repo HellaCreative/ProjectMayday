@@ -139,6 +139,20 @@ candidate uploaded: https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/candidat
 tag: pack-pe-osm-20260821-01
 ```
 
+
+```
+region: nl   release-id: nl-osm-20260821-01   geofabrik ts: 2026-08-20T20:20:51Z   pbf sha: 2eabe993c7e5fec7ee1b328e894ab23935b9f444543878275763a5c6c10a99e8
+steps 1–7: ok
+audit contradictions: 0     non-OSM edges: 0
+stitches: 4741  free-space: 0
+largest permissive component: 89.34% of edges
+urban cores: 3 hard / 343 scored
+seams built: (none)           seams deferred: qc-nl (no shared routable OSM vertex — ferry-only Labrador link)
+route acceptance: 12/15 — red: long-port-aux-basques-st-johns dirt/balanced/direct no route (allow-unknown completes)
+candidate uploaded: https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/candidates/nl-osm-20260821-01   promoted: NO
+tag: pack-nl-osm-20260821-01
+```
+
 ## Promote commands (not run)
 
 ```
