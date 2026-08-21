@@ -12,22 +12,30 @@ const REPO_ROOT = path.resolve(BENCH_DIR, "../../..");
 const FIXTURE_PATH = path.join(BENCH_DIR, "ns-routes.json");
 const RESULTS_DIR = path.join(BENCH_DIR, "results");
 const LATEST_PATH = path.join(RESULTS_DIR, "latest.md");
-const NS_RELEASE_PATH = path.join(
-  REPO_ROOT,
-  "scripts/pack-fabric/routing/data/releases/ns-osm-20260820-01.json"
-);
+const RELEASES_DIR = path.join(REPO_ROOT, "scripts/pack-fabric/routing/data/releases");
 
-// The live Nova Scotia service is intentionally pinned to an immutable
-// candidate while the downloadable pack remains on the last approved build.
-// Reproduce that deployment-scoped override before loading any routing module
-// so graph and fuel resolve to the same bytes the online app uses.
+/**
+ * Prefer the latest promoted NS pack on stable R2 (no candidate override).
+ * If only a live-candidate exists, pin that candidate base like the old
+ * Hobby override path did.
+ */
 function configureLiveNovaScotiaSource() {
   if (process.env.R2_REGION_BASE_OVERRIDES) return;
-  const release = JSON.parse(fs.readFileSync(NS_RELEASE_PATH, "utf8"));
-  if (!release.publicBase || !(release.regions || []).some((region) => region.id === "ns")) {
-    throw new Error("Nova Scotia live release record is incomplete");
+  const rows = fs
+    .readdirSync(RELEASES_DIR)
+    .filter((name) => /^ns-osm-.*\.json$/i.test(name))
+    .map((name) => JSON.parse(fs.readFileSync(path.join(RELEASES_DIR, name), "utf8")))
+    .filter((release) => (release.regions || []).some((region) => region.id === "ns"))
+    .sort((a, b) => String(a.releaseId).localeCompare(String(b.releaseId)));
+  if (!rows.length) throw new Error("No Nova Scotia release records found");
+  const latest = rows[rows.length - 1];
+  if (latest.status === "promoted") {
+    console.log("bench:ns using promoted stable NS pack", latest.releaseId);
+    return;
   }
-  process.env.R2_REGION_BASE_OVERRIDES = JSON.stringify({ ns: release.publicBase });
+  if (!latest.publicBase) throw new Error("Nova Scotia live release record is incomplete");
+  console.log("bench:ns pinning candidate override", latest.releaseId, latest.publicBase);
+  process.env.R2_REGION_BASE_OVERRIDES = JSON.stringify({ ns: latest.publicBase });
 }
 
 configureLiveNovaScotiaSource();
@@ -573,6 +581,13 @@ async function main() {
     });
   }
 
+  const nsReleaseFiles = fs
+    .readdirSync(RELEASES_DIR)
+    .filter((name) => /^ns-osm-.*\.json$/i.test(name))
+    .sort();
+  const nsReleaseRecord = nsReleaseFiles.length
+    ? path.relative(REPO_ROOT, path.join(RELEASES_DIR, nsReleaseFiles[nsReleaseFiles.length - 1]))
+    : null;
   const passed = rows.filter((row) => row.assertions.every((assertion) => assertion.pass)).length;
   const run = {
     schemaVersion: 1,
@@ -582,7 +597,7 @@ async function main() {
     source: {
       region: "ns",
       graphBase: graphCdnBaseUrlForRegion("ns"),
-      releaseRecord: path.relative(REPO_ROOT, NS_RELEASE_PATH)
+      releaseRecord: nsReleaseRecord
     },
     fuel: { tankMeters: 250_000, reservePercent: 5, usableMeters: USABLE_METERS },
     summary: { total: rows.length, passed, failed: rows.length - passed },
