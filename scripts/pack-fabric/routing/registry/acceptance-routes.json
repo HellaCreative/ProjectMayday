@@ -6,8 +6,16 @@
       "routes": [
         {
           "id": "long-yarmouth-sydney",
-          "from": { "lat": 43.8375, "lon": -66.1174, "label": "Yarmouth" },
-          "to": { "lat": 46.1368, "lon": -60.1942, "label": "Sydney" },
+          "from": {
+            "lat": 43.8375,
+            "lon": -66.1174,
+            "label": "Yarmouth"
+          },
+          "to": {
+            "lat": 46.1368,
+            "lon": -60.1942,
+            "label": "Sydney"
+          },
           "minimumDirtPercent": 80,
           "minimumDirtAllowUnknownPercent": 90,
           "balancedTolerance": 5,
@@ -16,8 +24,16 @@
         },
         {
           "id": "urban-halifax-antigonish",
-          "from": { "lat": 44.6488, "lon": -63.5752, "label": "Halifax" },
-          "to": { "lat": 45.621, "lon": -61.9986, "label": "Antigonish" },
+          "from": {
+            "lat": 44.6488,
+            "lon": -63.5752,
+            "label": "Halifax"
+          },
+          "to": {
+            "lat": 45.621,
+            "lon": -61.9986,
+            "label": "Antigonish"
+          },
           "minimumDirtPercent": 80,
           "minimumDirtAllowUnknownPercent": 90,
           "balancedTolerance": 5,
@@ -26,8 +42,16 @@
         },
         {
           "id": "short-truro-new-glasgow",
-          "from": { "lat": 45.3658, "lon": -63.2869, "label": "Truro" },
-          "to": { "lat": 45.589, "lon": -62.645, "label": "New Glasgow" },
+          "from": {
+            "lat": 45.3658,
+            "lon": -63.2869,
+            "label": "Truro"
+          },
+          "to": {
+            "lat": 45.589,
+            "lon": -62.645,
+            "label": "New Glasgow"
+          },
           "minimumDirtPercent": 80,
           "minimumDirtAllowUnknownPercent": 85,
           "balancedTolerance": 5,
@@ -41,8 +65,16 @@
       "routes": [
         {
           "id": "long-chilliwack-crowsnest",
-          "from": { "lat": 49.162, "lon": -121.951, "label": "Chilliwack" },
-          "to": { "lat": 49.633, "lon": -114.694, "label": "Crowsnest (BC side)" },
+          "from": {
+            "lat": 49.162,
+            "lon": -121.951,
+            "label": "Chilliwack"
+          },
+          "to": {
+            "lat": 49.633,
+            "lon": -114.694,
+            "label": "Crowsnest (BC side)"
+          },
           "minimumDirtPercent": 70,
           "minimumDirtAllowUnknownPercent": 80,
           "balancedTolerance": 10,
@@ -51,8 +83,16 @@
         },
         {
           "id": "urban-abbotsford-merritt",
-          "from": { "lat": 49.0504, "lon": -122.3045, "label": "Abbotsford" },
-          "to": { "lat": 50.111, "lon": -120.786, "label": "Merritt" },
+          "from": {
+            "lat": 49.0504,
+            "lon": -122.3045,
+            "label": "Abbotsford"
+          },
+          "to": {
+            "lat": 50.111,
+            "lon": -120.786,
+            "label": "Merritt"
+          },
           "minimumDirtPercent": 70,
           "minimumDirtAllowUnknownPercent": 80,
           "balancedTolerance": 10,
@@ -61,13 +101,80 @@
         },
         {
           "id": "short-hope-princeton",
-          "from": { "lat": 49.385, "lon": -121.442, "label": "Hope" },
-          "to": { "lat": 49.459, "lon": -120.506, "label": "Princeton" },
+          "from": {
+            "lat": 49.385,
+            "lon": -121.442,
+            "label": "Hope"
+          },
+          "to": {
+            "lat": 49.459,
+            "lon": -120.506,
+            "label": "Princeton"
+          },
           "minimumDirtPercent": 70,
           "minimumDirtAllowUnknownPercent": 80,
           "balancedTolerance": 10,
           "maximumCleanDirtPercent": 2,
           "maximumDirtBackwardPercent": 25
+        }
+      ]
+    },
+    "ab": {
+      "fuelMinimum": 2000,
+      "routes": [
+        {
+          "id": "long-calgary-medicine-hat",
+          "from": {
+            "lat": 51.0447,
+            "lon": -114.0719,
+            "label": "Calgary"
+          },
+          "to": {
+            "lat": 50.0405,
+            "lon": -110.6766,
+            "label": "Medicine Hat"
+          },
+          "minimumDirtPercent": 60,
+          "minimumDirtAllowUnknownPercent": 70,
+          "balancedTolerance": 15,
+          "maximumCleanDirtPercent": 5,
+          "maximumDirtBackwardPercent": 35
+        },
+        {
+          "id": "urban-okotoks-airdrie",
+          "from": {
+            "lat": 50.726,
+            "lon": -113.975,
+            "label": "Okotoks"
+          },
+          "to": {
+            "lat": 51.292,
+            "lon": -113.991,
+            "label": "Airdrie"
+          },
+          "minimumDirtPercent": 40,
+          "minimumDirtAllowUnknownPercent": 50,
+          "balancedTolerance": 15,
+          "maximumCleanDirtPercent": 5,
+          "maximumDirtBackwardPercent": 35
+        },
+        {
+          "id": "short-black-diamond-turner-valley",
+          "from": {
+            "lat": 50.688,
+            "lon": -114.321,
+            "label": "Black Diamond"
+          },
+          "to": {
+            "lat": 50.542,
+            "lon": -114.496,
+            "label": "Turner Valley area / Longview"
+          },
+          "minimumDirtPercent": 50,
+          "minimumDirtAllowUnknownPercent": 60,
+          "balancedTolerance": 15,
+          "maximumCleanDirtPercent": 5,
+          "maximumDirtBackwardPercent": 35
         }
       ]
     }
