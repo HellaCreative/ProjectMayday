@@ -89,12 +89,78 @@ const ENDPOINT_SNAP_METERS = 18;
 const SNAP_CELL = 0.0002; // ~22 m
 
 /**
+ * V8 Map/Set max out at 2^24 entries. Large US states (CA, TX, …) can exceed
+ * that for quantized road vertices, so hot maps are sharded by key hash.
+ */
+function hashKey(key) {
+  const s = String(key);
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i += 1) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+function createShardedMap(shardCount = 64) {
+  const shards = Array.from({ length: shardCount }, () => new Map());
+  return {
+    get(key) {
+      return shards[hashKey(key) % shardCount].get(key);
+    },
+    set(key, value) {
+      shards[hashKey(key) % shardCount].set(key, value);
+      return this;
+    },
+    has(key) {
+      return shards[hashKey(key) % shardCount].has(key);
+    },
+    get size() {
+      let n = 0;
+      for (const m of shards) n += m.size;
+      return n;
+    },
+    values() {
+      return (function* () {
+        for (const m of shards) yield* m.values();
+      })();
+    },
+    entries() {
+      return (function* () {
+        for (const m of shards) yield* m.entries();
+      })();
+    },
+    [Symbol.iterator]() {
+      return this.entries();
+    }
+  };
+}
+
+function createShardedSet(shardCount = 64) {
+  const shards = Array.from({ length: shardCount }, () => new Set());
+  return {
+    add(key) {
+      shards[hashKey(key) % shardCount].add(key);
+      return this;
+    },
+    has(key) {
+      return shards[hashKey(key) % shardCount].has(key);
+    },
+    get size() {
+      let n = 0;
+      for (const s of shards) n += s.size;
+      return n;
+    }
+  };
+}
+
+/**
  * Coordinates touched by ≥2 features (endpoint or interior vertex).
  * Those vertices must become graph nodes so T-junctions connect.
  * Does not invent vertices where geometries cross without sharing a point.
  */
 function computeJunctionKeys(features) {
-  const touch = new Map();
+  const touch = createShardedMap();
   for (const feature of features) {
     const coords = feature.geometry && feature.geometry.coordinates;
     if (!coords || coords.length < 2) continue;
@@ -106,7 +172,7 @@ function computeJunctionKeys(features) {
       touch.set(key, (touch.get(key) || 0) + 1);
     }
   }
-  const junctions = new Set();
+  const junctions = createShardedSet();
   for (const [key, count] of touch) {
     if (count >= 2) junctions.add(key);
   }
@@ -208,7 +274,7 @@ function isStructureGrade(grade) {
  * node array (orphans are harmless for routing).
  */
 function mergeGradeAbutments(nodes, nodeGrades, edges) {
-  const byXY = new Map();
+  const byXY = createShardedMap();
   for (let id = 0; id < nodes.length; id += 1) {
     const xy = coordKey5(nodes[id]);
     let bucket = byXY.get(xy);
@@ -309,17 +375,17 @@ function buildRegionalGraph(options = {}) {
   const snapMeters =
     options.endpointSnapMeters != null ? Number(options.endpointSnapMeters) : ENDPOINT_SNAP_METERS;
 
-  const nodeLookup = new Map();
+  const nodeLookup = createShardedMap();
   const nodes = [];
   /** Parallel to nodes[] — grade bucket used when the node was created. */
   const nodeGrades = [];
   /** coordKey5 → set of grade buckets already present at that XY. */
-  const xyBuckets = new Map();
+  const xyBuckets = createShardedMap();
   const edges = [];
   const accessCounts = {};
   const surfaceCounts = {};
   const sourceCounts = {};
-  const snapGrid = new Map();
+  const snapGrid = createShardedMap();
   let endpointSnaps = 0;
   let gradeSeparatedCoincident = 0;
   let endpointSnapRejectedGrade = 0;
