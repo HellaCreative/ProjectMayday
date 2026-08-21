@@ -15,6 +15,11 @@ nonisolated final class GeometryV1Pack: @unchecked Sendable {
     private let coords64: [Double]?
 
     init(data: Data) throws {
+        var data = data
+        if data.count >= 2, data[data.startIndex] == 0x1f,
+           data[data.index(after: data.startIndex)] == 0x8b {
+            data = try data.gunzipped()
+        }
         self.data = data
         guard data.count >= 16 else { throw PackError.truncated }
         let magic: UInt32 = data.readUInt32LE(0)
