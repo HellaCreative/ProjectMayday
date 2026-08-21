@@ -1,7 +1,7 @@
 {
   "schemaVersion": "dirt-pack-release.v1",
   "releaseId": "mb-osm-20260821-02",
-  "status": "live-candidate",
+  "status": "promoted",
   "createdAt": "2026-08-21T10:22:09.604Z",
   "publicBase": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/candidates/mb-osm-20260821-02",
   "regions": [
@@ -25,5 +25,6 @@
         }
       ]
     }
-  ]
+  ],
+  "promotedAt": "2026-08-21T12:27:14.610962Z"
 }

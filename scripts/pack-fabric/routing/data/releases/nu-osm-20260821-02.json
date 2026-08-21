@@ -1,7 +1,7 @@
 {
   "schemaVersion": "dirt-pack-release.v1",
   "releaseId": "nu-osm-20260821-02",
-  "status": "live-candidate",
+  "status": "promoted",
   "createdAt": "2026-08-21T11:20:21.493Z",
   "publicBase": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/candidates/nu-osm-20260821-02",
   "regions": [
@@ -25,5 +25,6 @@
         }
       ]
     }
-  ]
+  ],
+  "promotedAt": "2026-08-21T12:35:34.763000Z"
 }
