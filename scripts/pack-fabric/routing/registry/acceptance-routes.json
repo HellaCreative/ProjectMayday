@@ -767,6 +767,65 @@
           "maximumDirtBackwardPercent": 45
         }
       ]
+    },
+    "nu": {
+      "fuelMinimum": 10,
+      "routes": [
+        {
+          "id": "long-rankin-cambridge",
+          "from": {
+            "lat": 62.81,
+            "lon": -92.088,
+            "label": "Rankin Inlet"
+          },
+          "to": {
+            "lat": 69.117,
+            "lon": -105.053,
+            "label": "Cambridge Bay"
+          },
+          "minimumDirtPercent": 10,
+          "minimumDirtAllowUnknownPercent": 20,
+          "balancedTolerance": 40,
+          "maximumCleanDirtPercent": 50,
+          "maximumDirtBackwardPercent": 50
+        },
+        {
+          "id": "urban-iqaluit-apex",
+          "from": {
+            "lat": 63.746,
+            "lon": -68.517,
+            "label": "Iqaluit"
+          },
+          "to": {
+            "lat": 63.722,
+            "lon": -68.447,
+            "label": "Apex"
+          },
+          "minimumDirtPercent": 10,
+          "minimumDirtAllowUnknownPercent": 20,
+          "balancedTolerance": 40,
+          "maximumCleanDirtPercent": 50,
+          "maximumDirtBackwardPercent": 50
+        },
+        {
+          "id": "short-iqaluit-local",
+          "from": {
+            "lat": 63.746,
+            "lon": -68.517,
+            "label": "Iqaluit"
+          },
+          "to": {
+            "lat": 63.751,
+            "lon": -68.505,
+            "label": "Iqaluit Road"
+          },
+          "minimumDirtPercent": 5,
+          "minimumDirtAllowUnknownPercent": 10,
+          "balancedTolerance": 40,
+          "maximumCleanDirtPercent": 50,
+          "maximumDirtBackwardPercent": 50
+        }
+      ]
     }
   }
 }
