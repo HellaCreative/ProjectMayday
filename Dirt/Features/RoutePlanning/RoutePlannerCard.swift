@@ -886,9 +886,12 @@ struct RoutePlannerCard: View {
         let bandHeight: CGFloat = planner.hasFuelAssistedPlan
             ? (selectedStage == nil ? 170 : 230)
             : (selectedStage == nil ? 180 : 280)
+        let visibleRows = planner.itinerary.legs.count + (
+            planner.hasFuelAssistedPlan ? planner.stages.count : 0
+        )
         let collapsedHeight = min(
             bandHeight,
-            max(56, CGFloat(max(1, planner.itinerary.legs.count)) * 62)
+            max(56, CGFloat(max(1, visibleRows)) * 62)
         )
         ScrollViewReader { proxy in
             List {
@@ -1013,67 +1016,6 @@ struct RoutePlannerCard: View {
                                     .foregroundStyle(DirtTheme.orange)
                                     .fixedSize(horizontal: false, vertical: true)
                             }
-                            if childStages.count > 1 {
-                                VStack(alignment: .leading, spacing: DirtSpace.tight) {
-                                    Text("Fuel hops")
-                                        .font(DirtType.helper)
-                                        .fontWeight(.bold)
-                                        .foregroundStyle(DirtTheme.muted)
-                                    ForEach(childStages.indices, id: \.self) { hopIndex in
-                                        let indexedStage = childStages[hopIndex]
-                                        let hop = indexedStage.element
-                                        HStack(spacing: DirtSpace.tight) {
-                                            Text("Hop \(hopIndex + 1)")
-                                                .font(DirtType.rowTitle)
-                                                .foregroundStyle(DirtTheme.ink)
-                                            if let response = hop.response {
-                                                Text("\((response.distanceMeters ?? 0) / 1000, specifier: "%.1f") km · \(response.dirtPercent)% dirt")
-                                                    .font(DirtType.helper)
-                                                    .foregroundStyle(DirtTheme.muted)
-                                                    .lineLimit(1)
-                                            }
-                                            Spacer(minLength: 4)
-                                            Menu {
-                                                ForEach(RouteProfile.allCases) { profile in
-                                                    Button(profile.title) {
-                                                        planner.setFuelHopProfile(
-                                                            profile,
-                                                            at: indexedStage.offset
-                                                        )
-                                                    }
-                                                }
-                                            } label: {
-                                                HStack(spacing: 3) {
-                                                    Text(hop.profile.title)
-                                                    Image(systemName: "chevron.down")
-                                                        .font(.system(size: 8, weight: .black))
-                                                }
-                                                .font(DirtType.chip)
-                                                .fontWeight(.bold)
-                                                .foregroundStyle(DirtTheme.ink)
-                                                .padding(.horizontal, 8)
-                                                .frame(height: 28)
-                                                .background(DirtTheme.wash)
-                                                .clipShape(RoundedRectangle(cornerRadius: 4))
-                                            }
-                                            .accessibilityLabel(
-                                                "Profile for fuel hop \(hopIndex + 1)"
-                                            )
-                                        }
-                                        .frame(minHeight: DirtHit.min)
-                                        if hopIndex < childStages.count - 1 {
-                                            Rectangle()
-                                                .fill(DirtTheme.hairline)
-                                                .frame(height: 1)
-                                        }
-                                    }
-                                }
-                                .padding(DirtSpace.tight)
-                                .background(
-                                    DirtTheme.wash,
-                                    in: RoundedRectangle(cornerRadius: 6, style: .continuous)
-                                )
-                            }
                             profileSegments(active: riderLeg.profile) { profile in
                                 planner.setStageProfile(profile, at: stageIndex)
                                 withAnimation(.easeInOut(duration: 0.18)) { selectedStage = nil }
@@ -1131,6 +1073,77 @@ struct RoutePlannerCard: View {
                         }
                         .accessibilityLabel("Delete leg \(riderLegIndex + 1)")
                     }
+                }
+
+                if childStages.count > 1 {
+                    VStack(alignment: .leading, spacing: 0) {
+                        ForEach(childStages.indices, id: \.self) { hopIndex in
+                            let indexedStage = childStages[hopIndex]
+                            let hop = indexedStage.element
+                            HStack(spacing: DirtSpace.tight) {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(StageCard<EmptyView, EmptyView>.fuelHopTitle(
+                                        riderLegIndex: riderLegIndex,
+                                        hopIndex: hopIndex,
+                                        hopCount: childStages.count
+                                    ))
+                                    .font(.dirtUI(10.5, weight: .bold))
+                                    .foregroundStyle(DirtTheme.ink)
+
+                                    if let response = hop.response {
+                                        Text("\((response.distanceMeters ?? 0) / 1000, specifier: "%.1f") km · \(response.dirtPercent)% dirt")
+                                            .font(DirtType.helper)
+                                            .foregroundStyle(DirtTheme.muted)
+                                            .lineLimit(1)
+                                    }
+                                }
+                                Spacer(minLength: 4)
+                                Menu {
+                                    ForEach(RouteProfile.allCases) { profile in
+                                        Button(profile.title) {
+                                            planner.setFuelHopProfile(
+                                                profile,
+                                                at: indexedStage.offset
+                                            )
+                                        }
+                                    }
+                                } label: {
+                                    HStack(spacing: 3) {
+                                        Text(hop.profile.title)
+                                        Image(systemName: "chevron.down")
+                                            .font(.system(size: 8, weight: .black))
+                                    }
+                                    .font(DirtType.chip)
+                                    .fontWeight(.bold)
+                                    .foregroundStyle(DirtTheme.ink)
+                                    .padding(.horizontal, 8)
+                                    .frame(height: 28)
+                                    .background(DirtTheme.wash)
+                                    .clipShape(RoundedRectangle(cornerRadius: 4))
+                                }
+                                .accessibilityLabel("Profile for fuel hop \(hopIndex + 1)")
+                            }
+                            .padding(.horizontal, DirtSpace.inner)
+                            .frame(minHeight: DirtHit.min)
+
+                            if hopIndex < childStages.count - 1 {
+                                Rectangle()
+                                    .fill(DirtTheme.hairline)
+                                    .frame(height: 1)
+                            }
+                        }
+                    }
+                    .background(
+                        DirtTheme.wash,
+                        in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .stroke(DirtTheme.hairline, lineWidth: 1)
+                    )
+                    .listRowInsets(EdgeInsets())
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Color.clear)
                 }
             }
         }
@@ -1719,6 +1732,18 @@ struct StageCard<Headline: View, Detail: View>: View {
             return "Fuel stop \(ordinal)"
         }
         return names.isEmpty ? nil : "via \(names.joined(separator: ", "))"
+    }
+
+    static func fuelHopTitle(
+        riderLegIndex: Int,
+        hopIndex: Int,
+        hopCount: Int
+    ) -> String {
+        let from = hopIndex == 0 ? "Point \(riderLegIndex + 1)" : "F\(hopIndex)"
+        let to = hopIndex == hopCount - 1
+            ? "Point \(riderLegIndex + 2)"
+            : "F\(hopIndex + 1)"
+        return "\(from) → \(to)"
     }
 
     private var shape: RoundedRectangle {

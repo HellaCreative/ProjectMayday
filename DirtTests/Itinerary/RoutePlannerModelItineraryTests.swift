@@ -218,6 +218,16 @@ struct RoutePlannerModelItineraryTests {
         )
         #expect(model.stageEndpointTitle(at: 0) == "Point 1 → Point 2")
         #expect(model.stageEndpointTitle(at: 1) == "Point 1 → Point 2")
+        #expect(
+            StageCard<EmptyView, EmptyView>.fuelHopTitle(
+                riderLegIndex: 0, hopIndex: 0, hopCount: 2
+            ) == "Point 1 → F1"
+        )
+        #expect(
+            StageCard<EmptyView, EmptyView>.fuelHopTitle(
+                riderLegIndex: 0, hopIndex: 1, hopCount: 2
+            ) == "F1 → Point 2"
+        )
     }
 }
 

@@ -130,6 +130,31 @@ test("fuel ranking rejects a geographically backward pump", () => {
   assert.deepEqual(ranked.map((row) => row.station.id), ["forward"]);
 });
 
+test("a depleted waypoint may use one nearby non-forward pump before resuming forward travel", async () => {
+  const result = await planFuelChainOnRuntime({
+    runtime: lineRuntime(),
+    stations: [
+      station("recovery", 1.75),
+      station("forward-1", 2.5),
+      station("forward-2", 3.5)
+    ],
+    start: { lat: 45, lon: 2 },
+    destination: { lat: 45, lon: 4 },
+    profile: "dirt",
+    accessPolicy: { motorizedPermissive: true, motorizedUnknown: false },
+    usableRangeMeters: 90_000,
+    firstLegMaxMeters: 30_000,
+    routeCandidate: fixtureRouteCandidate
+  });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(
+    result.stops.map((row) => row.id),
+    ["recovery", "forward-1", "forward-2"]
+  );
+  assert.ok(result.graphMeters.every((meters) => meters <= 90_000));
+});
+
 test("short route does not manufacture a fuel plan", async () => {
   const result = await planFuelChainOnRuntime({
     runtime: lineRuntime(),

@@ -280,7 +280,8 @@ function rankForwardFuel(
   visited,
   profile = "balanced",
   destinationFuelUsedLimitMeters = null,
-  destinationGraphMeters = null
+  destinationGraphMeters = null,
+  allowNearStartRecovery = false
 ) {
   const current = locationCoordinate(currentLocation);
   const destination = locationCoordinate(destinationLocation);
@@ -315,13 +316,25 @@ function rankForwardFuel(
         Math.abs(row.graphMeters - targetUse) * 0.12 +
         ((profile === "dirt" || profile === "balanced") && row.dirtAdjacent ? 25_000 : 0);
       return { ...row, remainingMeters: remaining, progressMeters: progress, score, useful };
-    })
-    .filter((row) => row.useful);
-  const preferred = scored.filter((row) => row.graphMeters <= preferredMax);
-  const overflow = scored.filter((row) => row.graphMeters > preferredMax);
+    });
+  const forward = scored.filter((row) => row.useful);
+  const preferred = forward.filter((row) => row.graphMeters <= preferredMax);
+  const overflow = forward.filter((row) => row.graphMeters > preferredMax);
   const normal = preferred
     .sort((a, b) => b.score - a.score || a.graphMeters - b.graphMeters)
     .concat(overflow.sort((a, b) => b.score - a.score || a.graphMeters - b.graphMeters));
+  if (allowNearStartRecovery && normal.length === 0) {
+    // A rider waypoint does not reset the tank. When its remaining fuel cannot
+    // reach any normally-forward pump, permit one nearby graph-reachable reset
+    // beside or slightly behind it. Existing forward choices always win; after
+    // this recovery refuel the normal forward-progress gate applies again.
+    return scored
+      .filter((row) =>
+        row.graphMeters >= MIN_STOP_SEPARATION_M &&
+        row.remainingMeters >= MIN_STOP_SEPARATION_M
+      )
+      .sort((a, b) => a.graphMeters - b.graphMeters || b.score - a.score);
+  }
   const arrivalLimit = destinationFuelUsedLimitMeters == null
     ? NaN
     : Number(destinationFuelUsedLimitMeters);
@@ -589,7 +602,9 @@ async function planFuelChainOnRuntime({
         const graphFirstReachableStationMeters = firstReachableStationMeters;
         const ranked = rankForwardFuel(
           reach.fuel, currentLocation, destination, cap, visited, profile,
-          null, reach.destinationMeters
+          null,
+          reach.destinationMeters,
+          firstLegMaxMeters + 1 < usableRangeMeters
         );
         const evaluated = await evaluatedRoutes(ranked, currentLocation, cap, history, arrival);
         const evaluatedFirstReachableStationMeters = evaluated.reduce((best, row) =>
@@ -632,7 +647,8 @@ async function planFuelChainOnRuntime({
       visited,
       profile,
       destinationFuelUsedLimitMeters,
-      reach.destinationMeters
+      reach.destinationMeters,
+      depth === 0 && firstLegMaxMeters + 1 < usableRangeMeters
     );
     // This is bounded graph look-ahead, not full route probing. Six branches
     // are enough to escape a closed service-road pump without exponential work.
