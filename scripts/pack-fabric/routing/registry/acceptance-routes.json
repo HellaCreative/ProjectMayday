@@ -885,6 +885,537 @@
           "maximumDirtBackwardPercent": 40
         }
       ]
+    },
+    "mt": {
+      "fuelMinimum": 800,
+      "routes": [
+        {
+          "id": "long-missoula-billings",
+          "from": {
+            "lat": 46.8721,
+            "lon": -114.0944,
+            "label": "Missoula"
+          },
+          "to": {
+            "lat": 45.7833,
+            "lon": -108.5007,
+            "label": "Billings"
+          },
+          "minimumDirtPercent": 45,
+          "minimumDirtAllowUnknownPercent": 50,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 10,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "urban-billings-laurel",
+          "from": {
+            "lat": 45.7833,
+            "lon": -108.5007,
+            "label": "Billings"
+          },
+          "to": {
+            "lat": 45.6691,
+            "lon": -108.7707,
+            "label": "Laurel"
+          },
+          "minimumDirtPercent": 25,
+          "minimumDirtAllowUnknownPercent": 50,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "short-kalispell-whitefish",
+          "from": {
+            "lat": 48.1958,
+            "lon": -114.3129,
+            "label": "Kalispell"
+          },
+          "to": {
+            "lat": 48.4111,
+            "lon": -114.3376,
+            "label": "Whitefish"
+          },
+          "minimumDirtPercent": 35,
+          "minimumDirtAllowUnknownPercent": 50,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 10,
+          "maximumDirtBackwardPercent": 40
+        }
+      ]
+    },
+    "nd": {
+      "fuelMinimum": 600,
+      "routes": [
+        {
+          "id": "long-fargo-williston",
+          "from": {
+            "lat": 46.8772,
+            "lon": -96.7898,
+            "label": "Fargo"
+          },
+          "to": {
+            "lat": 48.147,
+            "lon": -103.618,
+            "label": "Williston"
+          },
+          "minimumDirtPercent": 45,
+          "minimumDirtAllowUnknownPercent": 50,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 10,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "urban-fargo-west-fargo",
+          "from": {
+            "lat": 46.8772,
+            "lon": -96.7898,
+            "label": "Fargo"
+          },
+          "to": {
+            "lat": 46.8772,
+            "lon": -96.8998,
+            "label": "West Fargo"
+          },
+          "minimumDirtPercent": 25,
+          "minimumDirtAllowUnknownPercent": 50,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 10,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "short-bismarck-mandan",
+          "from": {
+            "lat": 46.8083,
+            "lon": -100.7837,
+            "label": "Bismarck"
+          },
+          "to": {
+            "lat": 46.8267,
+            "lon": -100.8896,
+            "label": "Mandan"
+          },
+          "minimumDirtPercent": 35,
+          "minimumDirtAllowUnknownPercent": 50,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 10,
+          "maximumDirtBackwardPercent": 40
+        }
+      ]
+    },
+    "mn": {
+      "fuelMinimum": 700,
+      "routes": [
+        {
+          "id": "long-duluth-rochester",
+          "from": {
+            "lat": 46.7867,
+            "lon": -92.1005,
+            "label": "Duluth"
+          },
+          "to": {
+            "lat": 44.0121,
+            "lon": -92.4802,
+            "label": "Rochester"
+          },
+          "minimumDirtPercent": 40,
+          "minimumDirtAllowUnknownPercent": 50,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 10,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "urban-minneapolis-st-paul",
+          "from": {
+            "lat": 44.9778,
+            "lon": -93.265,
+            "label": "Minneapolis"
+          },
+          "to": {
+            "lat": 44.9537,
+            "lon": -93.09,
+            "label": "St Paul"
+          },
+          "minimumDirtPercent": 25,
+          "minimumDirtAllowUnknownPercent": 50,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 10,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "short-bemidji-walker",
+          "from": {
+            "lat": 47.4736,
+            "lon": -94.8803,
+            "label": "Bemidji"
+          },
+          "to": {
+            "lat": 47.1016,
+            "lon": -94.5869,
+            "label": "Walker"
+          },
+          "minimumDirtPercent": 40,
+          "minimumDirtAllowUnknownPercent": 50,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 10,
+          "maximumDirtBackwardPercent": 40
+        }
+      ]
+    },
+    "mi": {
+      "fuelMinimum": 700,
+      "routes": [
+        {
+          "id": "long-detroit-marquette",
+          "from": {
+            "lat": 42.3314,
+            "lon": -83.0458,
+            "label": "Detroit"
+          },
+          "to": {
+            "lat": 46.5436,
+            "lon": -87.3954,
+            "label": "Marquette"
+          },
+          "minimumDirtPercent": 40,
+          "minimumDirtAllowUnknownPercent": 50,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 10,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "urban-grand-rapids-holland",
+          "from": {
+            "lat": 42.9634,
+            "lon": -85.6681,
+            "label": "Grand Rapids"
+          },
+          "to": {
+            "lat": 42.7875,
+            "lon": -86.1089,
+            "label": "Holland"
+          },
+          "minimumDirtPercent": 25,
+          "minimumDirtAllowUnknownPercent": 50,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 10,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "short-traverse-city-cadillac",
+          "from": {
+            "lat": 44.7631,
+            "lon": -85.6206,
+            "label": "Traverse City"
+          },
+          "to": {
+            "lat": 44.2519,
+            "lon": -85.4012,
+            "label": "Cadillac"
+          },
+          "minimumDirtPercent": 40,
+          "minimumDirtAllowUnknownPercent": 50,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 10,
+          "maximumDirtBackwardPercent": 40
+        }
+      ]
+    },
+    "ny": {
+      "fuelMinimum": 700,
+      "routes": [
+        {
+          "id": "long-buffalo-albany",
+          "from": {
+            "lat": 42.8864,
+            "lon": -78.8784,
+            "label": "Buffalo"
+          },
+          "to": {
+            "lat": 42.6526,
+            "lon": -73.7562,
+            "label": "Albany"
+          },
+          "minimumDirtPercent": 35,
+          "minimumDirtAllowUnknownPercent": 50,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 10,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "urban-syracuse-utica",
+          "from": {
+            "lat": 43.0481,
+            "lon": -76.1474,
+            "label": "Syracuse"
+          },
+          "to": {
+            "lat": 43.1009,
+            "lon": -75.2327,
+            "label": "Utica"
+          },
+          "minimumDirtPercent": 25,
+          "minimumDirtAllowUnknownPercent": 50,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 10,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "short-watertown-ogdensburg",
+          "from": {
+            "lat": 43.9748,
+            "lon": -75.9107,
+            "label": "Watertown"
+          },
+          "to": {
+            "lat": 44.6942,
+            "lon": -75.4863,
+            "label": "Ogdensburg"
+          },
+          "minimumDirtPercent": 40,
+          "minimumDirtAllowUnknownPercent": 50,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 10,
+          "maximumDirtBackwardPercent": 40
+        }
+      ]
+    },
+    "vt": {
+      "fuelMinimum": 400,
+      "routes": [
+        {
+          "id": "long-burlington-brattleboro",
+          "from": {
+            "lat": 44.4759,
+            "lon": -73.2121,
+            "label": "Burlington"
+          },
+          "to": {
+            "lat": 42.8509,
+            "lon": -72.5579,
+            "label": "Brattleboro"
+          },
+          "minimumDirtPercent": 40,
+          "minimumDirtAllowUnknownPercent": 50,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 10,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "urban-burlington-winooski",
+          "from": {
+            "lat": 44.4759,
+            "lon": -73.2121,
+            "label": "Burlington"
+          },
+          "to": {
+            "lat": 44.4914,
+            "lon": -73.1857,
+            "label": "Winooski"
+          },
+          "minimumDirtPercent": 25,
+          "minimumDirtAllowUnknownPercent": 50,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 10,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "short-montpelier-barre",
+          "from": {
+            "lat": 44.2601,
+            "lon": -72.5754,
+            "label": "Montpelier"
+          },
+          "to": {
+            "lat": 44.197,
+            "lon": -72.502,
+            "label": "Barre"
+          },
+          "minimumDirtPercent": 35,
+          "minimumDirtAllowUnknownPercent": 50,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 10,
+          "maximumDirtBackwardPercent": 40
+        }
+      ]
+    },
+    "nh": {
+      "fuelMinimum": 400,
+      "routes": [
+        {
+          "id": "long-concord-berlin",
+          "from": {
+            "lat": 43.2081,
+            "lon": -71.5376,
+            "label": "Concord"
+          },
+          "to": {
+            "lat": 44.4687,
+            "lon": -71.1853,
+            "label": "Berlin"
+          },
+          "minimumDirtPercent": 40,
+          "minimumDirtAllowUnknownPercent": 50,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 10,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "urban-manchester-nashua",
+          "from": {
+            "lat": 42.9956,
+            "lon": -71.4548,
+            "label": "Manchester"
+          },
+          "to": {
+            "lat": 42.7654,
+            "lon": -71.4676,
+            "label": "Nashua"
+          },
+          "minimumDirtPercent": 25,
+          "minimumDirtAllowUnknownPercent": 50,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 10,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "short-keene-peterborough",
+          "from": {
+            "lat": 42.9337,
+            "lon": -72.2781,
+            "label": "Keene"
+          },
+          "to": {
+            "lat": 42.8706,
+            "lon": -71.9517,
+            "label": "Peterborough"
+          },
+          "minimumDirtPercent": 35,
+          "minimumDirtAllowUnknownPercent": 50,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 10,
+          "maximumDirtBackwardPercent": 40
+        }
+      ]
+    },
+    "me": {
+      "fuelMinimum": 500,
+      "routes": [
+        {
+          "id": "long-portland-caribou",
+          "from": {
+            "lat": 43.6591,
+            "lon": -70.2568,
+            "label": "Portland"
+          },
+          "to": {
+            "lat": 46.8606,
+            "lon": -68.012,
+            "label": "Caribou"
+          },
+          "minimumDirtPercent": 40,
+          "minimumDirtAllowUnknownPercent": 50,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 10,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "urban-portland-south-portland",
+          "from": {
+            "lat": 43.6591,
+            "lon": -70.2568,
+            "label": "Portland"
+          },
+          "to": {
+            "lat": 43.6415,
+            "lon": -70.2409,
+            "label": "South Portland"
+          },
+          "minimumDirtPercent": 25,
+          "minimumDirtAllowUnknownPercent": 50,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 10,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "short-bangor-ellsworth",
+          "from": {
+            "lat": 44.8016,
+            "lon": -68.7712,
+            "label": "Bangor"
+          },
+          "to": {
+            "lat": 44.5434,
+            "lon": -68.4195,
+            "label": "Ellsworth"
+          },
+          "minimumDirtPercent": 35,
+          "minimumDirtAllowUnknownPercent": 50,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 10,
+          "maximumDirtBackwardPercent": 40
+        }
+      ]
+    },
+    "or": {
+      "fuelMinimum": 700,
+      "routes": [
+        {
+          "id": "long-portland-burns",
+          "from": {
+            "lat": 45.5152,
+            "lon": -122.6784,
+            "label": "Portland"
+          },
+          "to": {
+            "lat": 43.5863,
+            "lon": -119.0541,
+            "label": "Burns"
+          },
+          "minimumDirtPercent": 40,
+          "minimumDirtAllowUnknownPercent": 50,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 10,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "urban-portland-gresham",
+          "from": {
+            "lat": 45.5152,
+            "lon": -122.6784,
+            "label": "Portland"
+          },
+          "to": {
+            "lat": 45.4982,
+            "lon": -122.4315,
+            "label": "Gresham"
+          },
+          "minimumDirtPercent": 25,
+          "minimumDirtAllowUnknownPercent": 50,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 10,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "short-bend-redmond",
+          "from": {
+            "lat": 44.0582,
+            "lon": -121.3153,
+            "label": "Bend"
+          },
+          "to": {
+            "lat": 44.2726,
+            "lon": -121.1739,
+            "label": "Redmond"
+          },
+          "minimumDirtPercent": 35,
+          "minimumDirtAllowUnknownPercent": 50,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 10,
+          "maximumDirtBackwardPercent": 40
+        }
+      ]
     }
   }
 }
