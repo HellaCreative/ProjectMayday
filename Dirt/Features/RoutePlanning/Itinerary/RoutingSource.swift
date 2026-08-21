@@ -15,12 +15,18 @@ final class RouteResponseCache {
         let to: RouteCoordinate
         let profile: RouteProfile
         let allowUnknown: Bool
+        let priorEdgeIDs: [String]
+        let arrivalEdgeID: String?
+        let backtrackFactor: Double
         let sourceName: String
         let packRevision: String
 
         var description: String {
             "\(from.latitude),\(from.longitude)>\(to.latitude),\(to.longitude)" +
                 "|\(profile.rawValue)|unknown=\(allowUnknown ? 1 : 0)" +
+                "|prior=\(priorEdgeIDs.joined(separator: ","))" +
+                "|arrival=\(arrivalEdgeID ?? "nil")" +
+                "|backtrack=\(backtrackFactor)" +
                 "|\(sourceName)|\(packRevision)"
         }
     }
@@ -110,6 +116,9 @@ final class PackRoutingSource: RoutingSource {
             to: endpoints.1,
             profile: req.profile,
             allowUnknown: req.accessPolicy.motorizedUnknown,
+            priorEdgeIDs: normalizedEdgeIDs(req.options?.priorEdgeIds),
+            arrivalEdgeID: req.options?.arrivalEdgeId,
+            backtrackFactor: req.options?.backtrackFactor ?? 4,
             sourceName: name,
             packRevision: packs.lastManifestVersion
         )
@@ -123,13 +132,19 @@ final class PackRoutingSource: RoutingSource {
             profile: req.profile,
             allowUnknown: req.accessPolicy.motorizedUnknown,
             avoidEdgeIds: req.options?.avoidEdgeIds ?? [],
+            priorEdgeIds: Set(req.options?.priorEdgeIds ?? []),
+            arrivalEdgeId: req.options?.arrivalEdgeId,
+            backtrackFactor: req.options?.backtrackFactor ?? 4,
             sessionSeed: req.options?.sessionSeed ?? 0,
             maxRouteMeters: req.options?.maxPathMeters
         )
         guard case .success(let local) = result, local.coordinates.count > 1 else {
             throw RoutingError.server("No route is available on the installed pack.")
         }
-        let response = RouteResponse(onDevice: local)
+        let response = RouteResponse(
+            onDevice: local,
+            priorEdgeIDs: Set(req.options?.priorEdgeIds ?? [])
+        )
         if req.options?.maxPathMeters == nil { cache.insert(response, for: key) }
         return response
     }
@@ -280,12 +295,19 @@ private func cacheKey(
     return RouteResponseCache.Key(
         from: endpoints.0, to: endpoints.1, profile: request.profile,
         allowUnknown: request.accessPolicy.motorizedUnknown,
+        priorEdgeIDs: normalizedEdgeIDs(request.options?.priorEdgeIds),
+        arrivalEdgeID: request.options?.arrivalEdgeId,
+        backtrackFactor: request.options?.backtrackFactor ?? 4,
         sourceName: sourceName, packRevision: packRevision
     )
 }
 
+private func normalizedEdgeIDs(_ ids: [String]?) -> [String] {
+    Array(Set(ids ?? [])).sorted()
+}
+
 private extension RouteResponse {
-    init(onDevice local: OnDeviceRouter.Result) {
+    init(onDevice local: OnDeviceRouter.Result, priorEdgeIDs: Set<String>) {
         let geometry = local.coordinates.map {
             RouteCoordinate(longitude: $0.longitude, latitude: $0.latitude)
         }
@@ -302,6 +324,12 @@ private extension RouteResponse {
                 edgeId: leg.edgeId.isEmpty ? nil : leg.edgeId
             )
         }
+        let repeatedMeters = local.legs.reduce(0.0) {
+            priorEdgeIDs.contains($1.edgeId) ? $0 + $1.distanceMeters : $0
+        }
+        let repeatedPct = local.distanceMeters > 0
+            ? repeatedMeters / local.distanceMeters * 100
+            : 0
         self.init(
             status: "complete", error: nil, message: nil,
             distanceMeters: local.distanceMeters,
@@ -313,7 +341,10 @@ private extension RouteResponse {
                 unknownAccessPercent: local.unknownAccessPercent
             ),
             maneuvers: nil, warnings: nil,
-            dirtPercentValue: nil, pavedPercentValue: nil
+            dirtPercentValue: nil, pavedPercentValue: nil,
+            backtrackMeters: repeatedMeters,
+            backtrackPct: repeatedPct,
+            backtrackReason: repeatedMeters > 0 ? "dead_end_or_only_connector" : nil
         )
     }
 }

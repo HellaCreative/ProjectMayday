@@ -86,15 +86,24 @@ struct AccessPolicy: Codable, Sendable {
 /// (route incident recovery). Requests without it omit `options`.
 struct RouteRequestOptions: Codable, Sendable {
     var avoidEdgeIds: [String]?
+    var priorEdgeIds: [String]?
+    var arrivalEdgeId: String?
+    var backtrackFactor: Double?
     var sessionSeed: UInt64?
     var maxPathMeters: Double?
 
     init(
         avoidEdgeIds: [String] = [],
+        priorEdgeIds: [String] = [],
+        arrivalEdgeId: String? = nil,
+        backtrackFactor: Double? = nil,
         sessionSeed: UInt64? = nil,
         maxPathMeters: Double? = nil
     ) {
         self.avoidEdgeIds = avoidEdgeIds.isEmpty ? nil : avoidEdgeIds
+        self.priorEdgeIds = priorEdgeIds.isEmpty ? nil : priorEdgeIds
+        self.arrivalEdgeId = arrivalEdgeId
+        self.backtrackFactor = backtrackFactor
         self.sessionSeed = sessionSeed
         self.maxPathMeters = maxPathMeters
     }
@@ -112,6 +121,9 @@ struct RouteRequest: Codable, Sendable {
         locations: [RouteLocation],
         allowUnknown: Bool,
         avoidEdgeIds: [String] = [],
+        priorEdgeIds: [String] = [],
+        arrivalEdgeId: String? = nil,
+        backtrackFactor: Double? = nil,
         sessionSeed: UInt64 = 0,
         maxPathMeters: Double? = nil
     ) {
@@ -123,11 +135,15 @@ struct RouteRequest: Codable, Sendable {
             motorizedUnknown: profile == .cleanest ? false : allowUnknown
         )
         let seed = sessionSeed == 0 ? nil : sessionSeed
-        if avoidEdgeIds.isEmpty, seed == nil, maxPathMeters == nil {
+        if avoidEdgeIds.isEmpty, priorEdgeIds.isEmpty, arrivalEdgeId == nil,
+           backtrackFactor == nil, seed == nil, maxPathMeters == nil {
             options = nil
         } else {
             options = RouteRequestOptions(
                 avoidEdgeIds: avoidEdgeIds,
+                priorEdgeIds: priorEdgeIds,
+                arrivalEdgeId: arrivalEdgeId,
+                backtrackFactor: backtrackFactor,
                 sessionSeed: seed,
                 maxPathMeters: maxPathMeters
             )
@@ -160,7 +176,10 @@ struct FuelChainRequest: Codable, Sendable {
         usableRangeMeters: Double,
         firstLegMaxMeters: Double,
         requireFuelStopBeforeEnd: Bool,
-        avoidEdgeIds: [String] = []
+        avoidEdgeIds: [String] = [],
+        priorEdgeIds: [String] = [],
+        arrivalEdgeId: String? = nil,
+        backtrackFactor: Double? = nil
     ) {
         self.profile = profile
         locations = [
@@ -172,7 +191,15 @@ struct FuelChainRequest: Codable, Sendable {
             motorizedPermissive: true,
             motorizedUnknown: profile == .cleanest ? false : allowUnknown
         )
-        options = avoidEdgeIds.isEmpty ? nil : RouteRequestOptions(avoidEdgeIds: avoidEdgeIds)
+        options = avoidEdgeIds.isEmpty && priorEdgeIds.isEmpty && arrivalEdgeId == nil
+            && backtrackFactor == nil
+            ? nil
+            : RouteRequestOptions(
+                avoidEdgeIds: avoidEdgeIds,
+                priorEdgeIds: priorEdgeIds,
+                arrivalEdgeId: arrivalEdgeId,
+                backtrackFactor: backtrackFactor
+            )
         fuel = FuelChainConstraint(
             usableRangeMeters: usableRangeMeters,
             firstLegMaxMeters: firstLegMaxMeters,
@@ -440,10 +467,14 @@ struct RouteResponse: Codable, Sendable {
     let warnings: [RouteWarning]?
     let dirtPercentValue: Int?
     let pavedPercentValue: Int?
+    var backtrackMeters: Double? = nil
+    var backtrackPct: Double? = nil
+    var backtrackReason: String? = nil
     var debug: RouteResponseDebug? = nil
 
     enum CodingKeys: String, CodingKey {
         case status, error, message, distanceMeters, geometry, segments, stats, maneuvers, warnings, debug
+        case backtrackMeters, backtrackPct, backtrackReason
         case estimatedMovingSeconds, estimatedElapsedSeconds
         case dirtPercentValue = "dirtPercent"
         case pavedPercentValue = "pavedPercent"

@@ -240,6 +240,10 @@ nonisolated struct HopSearchContext: Sendable {
     var boundedSearch: Bool
     var timeCapSeconds: Double?
     var popCap: Int?
+    /// Soft continuity signal from already-built itinerary legs. Never a wall.
+    var priorEdgeIds: Set<String>
+    var arrivalEdgeId: String?
+    var backtrackFactor: Double
 
     static func forProfile(_ profile: RouteProfile, seed: UInt64) -> HopSearchContext {
         HopSearchContext(
@@ -258,7 +262,10 @@ nonisolated struct HopSearchContext: Sendable {
             hardCorridor: false,
             boundedSearch: false,
             timeCapSeconds: nil,
-            popCap: nil
+            popCap: nil,
+            priorEdgeIds: [],
+            arrivalEdgeId: nil,
+            backtrackFactor: 4
         )
     }
 }

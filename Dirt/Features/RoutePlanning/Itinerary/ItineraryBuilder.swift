@@ -54,18 +54,23 @@ final class ItineraryBuilder {
         // Distance discovery is intentionally complete before the first fuel
         // decision. The next rider leg can therefore never be a nil fallback.
         var baseline: [Int: RouteResponse] = [:]
+        var baselineHistory: [Int: EdgeHistory] = [:]
+        var discoveryHistory = EdgeHistory(legs: kept)
         var baselineFailure: (index: Int, message: String)?
         for index in startIndex..<itinerary.legs.count {
             do {
+                baselineHistory[index] = discoveryHistory
                 let response = try await selectedSource.route(routeRequest(
                     itinerary: itinerary,
                     legIndex: index,
-                    maxPathMeters: nil
+                    maxPathMeters: nil,
+                    history: discoveryHistory
                 ))
                 guard active(itinerary) else {
                     return dropped(itinerary, committed: committed)
                 }
                 baseline[index] = response
+                discoveryHistory.append(response)
             } catch is CancellationError {
                 return dropped(itinerary, committed: committed, cancelled: true)
             } catch {
@@ -78,6 +83,7 @@ final class ItineraryBuilder {
         }
 
         var fuelUsed = carriedFuel(from: kept)
+        var finalHistory = EdgeHistory(legs: kept)
         let lastBuildable = baselineFailure?.index ?? itinerary.legs.count
         for index in startIndex..<lastBuildable {
             guard let base = baseline[index] else { break }
@@ -87,10 +93,12 @@ final class ItineraryBuilder {
                     itinerary: itinerary,
                     index: index,
                     baseline: base,
+                    baselineHistory: baselineHistory[index] ?? EdgeHistory(),
                     allBaseline: baseline,
                     fuelUsedAtStart: fuelUsed,
                     fuel: fuel,
-                    source: selectedSource
+                    source: selectedSource,
+                    history: finalHistory
                 )
                 guard active(itinerary) else {
                     return dropped(itinerary, committed: committed)
@@ -102,6 +110,9 @@ final class ItineraryBuilder {
                     status: .built
                 )
                 fuelUsed = builtLegs.last?.fuelUsedOnArrivalMeters ?? fuelUsed
+                let requestPriorCount = finalHistory.edgeIDs.count
+                let requestArrival = finalHistory.arrivalEdgeID ?? "nil"
+                for builtLeg in builtLegs { finalHistory.append(builtLeg.response) }
                 let meters = builtLegs.reduce(0) { $0 + ($1.response.distanceMeters ?? 0) }
                 let weightedDirt = builtLegs.reduce(0.0) {
                     $0 + Double($1.response.dirtPercent) * ($1.response.distanceMeters ?? 0)
@@ -111,6 +122,14 @@ final class ItineraryBuilder {
                     "build leg riderLeg=\(riderLeg.id) " +
                         "fuelStops=\(builtLegs.filter { $0.endsAtFuelStop != nil }.count) " +
                         "meters=\(Int(meters)) dirt%=\(dirt)"
+                )
+                let backtrackMeters = builtLegs.reduce(0.0) {
+                    $0 + ($1.response.backtrackMeters ?? 0)
+                }
+                let backtrackPct = meters > 0 ? backtrackMeters / meters * 100 : 0
+                RoutingDebugLog.shared.event(
+                    "build leg riderLeg=\(riderLeg.id) priorEdges=\(requestPriorCount) " +
+                        "arrivalEdge=\(requestArrival) backtrackPct=\(String(format: "%.1f", backtrackPct))"
                 )
                 onProgress(committed)
             } catch is CancellationError {
@@ -149,23 +168,38 @@ final class ItineraryBuilder {
         itinerary: RiderItinerary,
         index: Int,
         baseline: RouteResponse,
+        baselineHistory: EdgeHistory,
         allBaseline: [Int: RouteResponse],
         fuelUsedAtStart: Double,
         fuel: FuelRangePrefs.Snapshot,
-        source: any RoutingSource
+        source: any RoutingSource,
+        history: EdgeHistory
     ) async throws -> [BuiltLeg] {
         let riderLeg = itinerary.legs[index]
         let from = itinerary.waypoints[index].coordinate
         let to = itinerary.waypoints[index + 1].coordinate
         let meters = try responseMeters(baseline)
         guard fuel.isEnabled, fuel.usableMeters > 0 else {
+            let finalResponse = baselineHistory == history
+                ? baseline
+                : try await source.route(routeRequest(
+                    profile: riderLeg.profile,
+                    allowUnknown: riderLeg.allowUnknown,
+                    from: from,
+                    to: to,
+                    avoidEdgeIDs: itinerary.impassableEdgeIDs,
+                    maxPathMeters: nil,
+                    history: history
+                ))
+            guard active(itinerary) else { throw CancellationError() }
+            let finalMeters = try responseMeters(finalResponse)
             return [BuiltLeg(
                 riderLegID: riderLeg.id,
                 fromCoordinate: from,
                 toCoordinate: to,
                 endsAtFuelStop: nil,
-                response: baseline,
-                fuelUsedOnArrivalMeters: fuelUsedAtStart + meters
+                response: finalResponse,
+                fuelUsedOnArrivalMeters: fuelUsedAtStart + finalMeters
             )]
         }
 
@@ -206,7 +240,10 @@ final class ItineraryBuilder {
             usableRangeMeters: fuel.usableMeters,
             firstLegMaxMeters: firstCap,
             requireFuelStopBeforeEnd: requirePumpBeforeWaypoint,
-            avoidEdgeIds: Array(itinerary.impassableEdgeIDs)
+            avoidEdgeIds: Array(itinerary.impassableEdgeIDs),
+            priorEdgeIds: history.edgeIDs,
+            arrivalEdgeId: history.arrivalEdgeID,
+            backtrackFactor: 4
         ))
         guard active(itinerary) else { throw CancellationError() }
         let stops = chain.stops ?? []
@@ -218,6 +255,7 @@ final class ItineraryBuilder {
         var output: [BuiltLeg] = []
         output.reserveCapacity(points.count - 1)
         var used = fuelUsedAtStart
+        var sublegHistory = history
         for subIndex in 0..<(points.count - 1) {
             let cap = subIndex == 0 ? firstCap : fuel.usableMeters
             let request = routeRequest(
@@ -226,11 +264,13 @@ final class ItineraryBuilder {
                 from: points[subIndex],
                 to: points[subIndex + 1],
                 avoidEdgeIDs: itinerary.impassableEdgeIDs,
-                maxPathMeters: cap
+                maxPathMeters: cap,
+                history: sublegHistory
             )
             let response = try await source.route(request)
             guard active(itinerary) else { throw CancellationError() }
             let subMeters = try responseMeters(response)
+            sublegHistory.append(response)
             guard subMeters <= cap + 1 else {
                 throw RoutingError.server("A selected fuel leg exceeds usable range.")
             }
@@ -318,7 +358,8 @@ private func responseMeters(_ response: RouteResponse) throws -> Double {
 private func routeRequest(
     itinerary: RiderItinerary,
     legIndex: Int,
-    maxPathMeters: Double?
+    maxPathMeters: Double?,
+    history: EdgeHistory = EdgeHistory()
 ) -> RouteRequest {
     let leg = itinerary.legs[legIndex]
     return routeRequest(
@@ -327,7 +368,8 @@ private func routeRequest(
         from: itinerary.waypoints[legIndex].coordinate,
         to: itinerary.waypoints[legIndex + 1].coordinate,
         avoidEdgeIDs: itinerary.impassableEdgeIDs,
-        maxPathMeters: maxPathMeters
+        maxPathMeters: maxPathMeters,
+        history: history
     )
 }
 
@@ -337,7 +379,8 @@ private func routeRequest(
     from: RouteCoordinate,
     to: RouteCoordinate,
     avoidEdgeIDs: Set<String>,
-    maxPathMeters: Double?
+    maxPathMeters: Double?,
+    history: EdgeHistory = EdgeHistory()
 ) -> RouteRequest {
     RouteRequest(
         profile: profile,
@@ -347,8 +390,31 @@ private func routeRequest(
         ],
         allowUnknown: allowUnknown,
         avoidEdgeIds: Array(avoidEdgeIDs),
+        priorEdgeIds: history.edgeIDs,
+        arrivalEdgeId: history.arrivalEdgeID,
+        backtrackFactor: 4,
         maxPathMeters: maxPathMeters
     )
+}
+
+private struct EdgeHistory: Equatable {
+    private(set) var edgeIDs: [String] = []
+    private(set) var arrivalEdgeID: String?
+
+    init() {}
+
+    init(legs: [BuiltLeg]) {
+        for leg in legs { append(leg.response) }
+    }
+
+    mutating func append(_ response: RouteResponse) {
+        var seen = Set(edgeIDs)
+        for segment in response.segments ?? [] {
+            guard let id = segment.edgeId, !id.isEmpty else { continue }
+            if seen.insert(id).inserted { edgeIDs.append(id) }
+            arrivalEdgeID = id
+        }
+    }
 }
 
 private func replacing(

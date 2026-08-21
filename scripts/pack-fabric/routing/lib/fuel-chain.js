@@ -139,28 +139,47 @@ function seedMatchDistances(runtime, match, distances, heap) {
 }
 
 /** Physical graph distance to every node within one usable tank. */
-function boundedGraphDistances(runtime, startMatch, policy, maxMeters, avoidEdgeIds = []) {
+function boundedGraphDistances(
+  runtime,
+  startMatch,
+  policy,
+  maxMeters,
+  avoidEdgeIds = [],
+  priorEdgeIds = [],
+  arrivalEdgeId = null,
+  backtrackFactor = 4
+) {
   const count = nodeCount(runtime);
   const distances = new Float64Array(count);
   distances.fill(Infinity);
+  const scores = new Float64Array(count);
+  scores.fill(Infinity);
   const heap = new MinHeap();
   const avoid = new Set((avoidEdgeIds || []).map(String));
+  const prior = new Set((priorEdgeIds || []).map(String));
+  const arrival = arrivalEdgeId == null ? null : String(arrivalEdgeId);
+  const penalty = (id) => arrival != null && String(id) === arrival
+    ? 12
+    : (prior.has(String(id)) ? Math.max(1, Number(backtrackFactor) || 4) : 1);
   seedMatchDistances(runtime, startMatch, distances, heap);
+  for (const item of heap.items) scores[item.node] = item.cost;
   let pops = 0;
 
   while (heap.items.length) {
     const current = heap.pop();
-    if (!current || current.cost !== distances[current.node]) continue;
-    if (current.cost > maxMeters) break;
+    if (!current || current.cost !== scores[current.node]) continue;
+    if (distances[current.node] > maxMeters) continue;
     pops += 1;
     forEachNeighbor(runtime, current.node, (next, edgeIndex) => {
       const edge = edgeView(runtime, edgeIndex);
       if (avoid.has(edge.id)) return;
       if (!accessAllowed(edge.access, policy, runtime.enums, null)) return;
-      const candidate = current.cost + edge.meters;
-      if (candidate > maxMeters || candidate >= distances[next]) return;
-      distances[next] = candidate;
-      heap.push({ node: next, cost: candidate });
+      const candidateMeters = distances[current.node] + edge.meters;
+      const candidateScore = current.cost + edge.meters * penalty(edge.id);
+      if (candidateMeters > maxMeters || candidateScore >= scores[next]) return;
+      distances[next] = candidateMeters;
+      scores[next] = candidateScore;
+      heap.push({ node: next, cost: candidateScore });
     });
   }
 
@@ -293,6 +312,9 @@ function planFuelChainOnRuntime({
   firstLegMaxMeters,
   requireFuelStopBeforeEnd = false,
   avoidEdgeIds = [],
+  priorEdgeIds = [],
+  arrivalEdgeId = null,
+  backtrackFactor = 4,
   maxStops = 12,
   maxStates = 24
 }) {
@@ -333,7 +355,10 @@ function planFuelChainOnRuntime({
   function reachableFrom(currentKey, currentMatch, capMeters) {
     const memoKey = `${currentKey}:${Math.round(capMeters)}`;
     if (memo.has(memoKey)) return memo.get(memoKey);
-    const graph = boundedGraphDistances(runtime, currentMatch, policy, capMeters, avoidEdgeIds);
+    const graph = boundedGraphDistances(
+      runtime, currentMatch, policy, capMeters, avoidEdgeIds,
+      priorEdgeIds, arrivalEdgeId, backtrackFactor
+    );
     dijkstraPops += graph.pops;
     const destinationMeters = distanceToMatch(
       runtime,
@@ -495,7 +520,10 @@ async function planCrossRegionFuelChain(body, selection, fuelOptions, dependenci
       firstLegMaxMeters: cap,
       // Only an actual pump satisfies this requirement; a seam does not.
       requireFuelStopBeforeEnd: false,
-      avoidEdgeIds: ((body.options || {}).avoidEdgeIds || [])
+      avoidEdgeIds: ((body.options || {}).avoidEdgeIds || []),
+      priorEdgeIds: ((body.options || {}).priorEdgeIds || []),
+      arrivalEdgeId: (body.options || {}).arrivalEdgeId || null,
+      backtrackFactor: (body.options || {}).backtrackFactor || 4
     });
     if (!planned.ok) {
       clearGraphCache();
@@ -618,7 +646,10 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
     usableRangeMeters,
     firstLegMaxMeters,
     requireFuelStopBeforeEnd: !!fuelOptions.requireFuelStopBeforeEnd,
-    avoidEdgeIds: options.avoidEdgeIds || []
+    avoidEdgeIds: options.avoidEdgeIds || [],
+    priorEdgeIds: options.priorEdgeIds || [],
+    arrivalEdgeId: options.arrivalEdgeId || null,
+    backtrackFactor: options.backtrackFactor || 4
   });
 
   return {

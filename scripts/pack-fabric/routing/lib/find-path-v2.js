@@ -397,7 +397,10 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
         progressRegressionMeters: progressRegressionForAttempt(profile, width),
         diagnostics,
         settlementWall: searchOpts.settlementWall === true,
-        settlementFallback: searchOpts.settlementFallback !== false
+        settlementFallback: searchOpts.settlementFallback !== false,
+        priorEdgeIds: searchOpts.priorEdgeIds || [],
+        arrivalEdgeId: searchOpts.arrivalEdgeId == null ? null : searchOpts.arrivalEdgeId,
+        backtrackFactor: searchOpts.backtrackFactor
       };
       if (dirtComparisonWidth) {
         // Three candidates share roughly one old pass-2 budget.
@@ -497,6 +500,17 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
   const geom = runtime.geom;
   const enums = runtime.enums;
   const avoid = avoidEdgeIds instanceof Set ? avoidEdgeIds : null;
+  const prior = new Set((searchOpts.priorEdgeIds || []).map(String));
+  const arrival = searchOpts.arrivalEdgeId == null ? null : String(searchOpts.arrivalEdgeId);
+  const backtrackFactor = Number.isFinite(Number(searchOpts.backtrackFactor))
+    ? Math.max(1, Number(searchOpts.backtrackFactor))
+    : 4;
+  const penalizeBacktrack = (cost, edgeId) => {
+    const id = String(edgeId == null ? "" : edgeId);
+    if (arrival != null && id === arrival) return cost * 12;
+    if (prior.has(id)) return cost * backtrackFactor;
+    return cost;
+  };
   const n = pack.nodeCount;
   const startNode = n;
   const endNode = n + 1;
@@ -693,7 +707,10 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
       hardCorridor,
       progressRegressionMeters: regressionLimit,
       timeCapMs: searchOpts.timeCapMs,
-      popCap: searchOpts.popCap
+      popCap: searchOpts.popCap,
+      prior,
+      arrival,
+      backtrackFactor
     });
   }
 
@@ -833,6 +850,7 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
             toLL[0], toLL[1], startLL, endLL, settlementBoxes
           );
         }
+        step = penalizeBacktrack(step, pack.edgeId(ei));
         const cost = cur.cost + step;
         const dirt = isDirtSurface(surfaceName, road);
         let action = considerRelax(
@@ -902,6 +920,7 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
             toLL[0], toLL[1], startLL, endLL, settlementBoxes
           );
         }
+        step = penalizeBacktrack(step, pack.edgeId(v.ei));
         const cost = cur.cost + step;
         let action = considerRelax(
           cost,
@@ -1113,8 +1132,17 @@ function searchBalancedResource(ctx) {
     hardCorridor,
     progressRegressionMeters,
     timeCapMs,
-    popCap: requestedPopCap
+    popCap: requestedPopCap,
+    prior,
+    arrival,
+    backtrackFactor
   } = ctx;
+  const penalizeBacktrack = (cost, edgeId) => {
+    const id = String(edgeId == null ? "" : edgeId);
+    if (arrival != null && id === arrival) return cost * 12;
+    if (prior && prior.has(id)) return cost * backtrackFactor;
+    return cost;
+  };
   const B = BALANCED_BUCKETS;
   const labels = (n + 2) * B;
   const lab = (node, b) => node * B + b;
@@ -1219,7 +1247,8 @@ function searchBalancedResource(ctx) {
         const settlementMult = settlementFallback && toLL
           ? settlementFallbackMultiplier(toLL[0], toLL[1], startLL, endLL, settlementBoxes)
           : 1;
-        const newScore = cur.searchCost + edgeM * settlementMult;
+        const newScore = cur.searchCost
+          + penalizeBacktrack(edgeM * settlementMult, pack.edgeId(ei));
         let action = considerRelax(
           newScore,
           score[toLab],
@@ -1269,7 +1298,8 @@ function searchBalancedResource(ctx) {
         const settlementMult = settlementFallback && toLL
           ? settlementFallbackMultiplier(toLL[0], toLL[1], startLL, endLL, settlementBoxes)
           : 1;
-        const newScore = cur.searchCost + v.meters * settlementMult;
+        const newScore = cur.searchCost
+          + penalizeBacktrack(v.meters * settlementMult, pack.edgeId(v.ei));
         if (newScore < score[toLab]) {
           dist[toLab] = newMeters;
           score[toLab] = newScore;

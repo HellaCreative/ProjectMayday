@@ -42,6 +42,9 @@ nonisolated struct OnDeviceRouter {
         var dirtPercent: Int
         var pavedPercent: Int
         var unknownAccessPercent: Int
+        var backtrackMeters: Double = 0
+        var backtrackPct: Double = 0
+        var backtrackReason: String? = nil
         var debugNote: String = ""
         var searchMeta: SearchMeta = SearchMeta()
     }
@@ -132,6 +135,9 @@ nonisolated struct OnDeviceRouter {
         profile: RouteProfile,
         allowUnknown: Bool,
         avoidEdgeIds: Set<String> = [],
+        priorEdgeIds: Set<String> = [],
+        arrivalEdgeId: String? = nil,
+        backtrackFactor: Double = 4,
         sessionSeed: UInt64? = nil,
         maxRouteMeters: Double? = nil
     ) -> Result? {
@@ -141,6 +147,9 @@ nonisolated struct OnDeviceRouter {
             profile: profile,
             allowUnknown: allowUnknown,
             avoidEdgeIds: avoidEdgeIds,
+            priorEdgeIds: priorEdgeIds,
+            arrivalEdgeId: arrivalEdgeId,
+            backtrackFactor: backtrackFactor,
             sessionSeed: sessionSeed,
             maxRouteMeters: maxRouteMeters
         ) {
@@ -155,6 +164,9 @@ nonisolated struct OnDeviceRouter {
         profile: RouteProfile,
         allowUnknown: Bool,
         avoidEdgeIds: Set<String> = [],
+        priorEdgeIds: Set<String> = [],
+        arrivalEdgeId: String? = nil,
+        backtrackFactor: Double = 4,
         sessionSeed: UInt64? = nil,
         maxRouteMeters: Double? = nil
     ) -> Swift.Result<Result, Failure> {
@@ -163,6 +175,9 @@ nonisolated struct OnDeviceRouter {
             allowUnknown: allowUnknown, avoidEdgeIds: avoidEdgeIds,
             sessionSeed: sessionSeed ?? self.sessionSeed,
             maxRouteMeters: maxRouteMeters,
+            priorEdgeIds: priorEdgeIds,
+            arrivalEdgeId: arrivalEdgeId,
+            backtrackFactor: backtrackFactor,
             cityWall: true,
             pavedOnly: profile == .cleanest,
             urbanCoreFallback: false,
@@ -176,6 +191,9 @@ nonisolated struct OnDeviceRouter {
                 allowUnknown: allowUnknown, avoidEdgeIds: avoidEdgeIds,
                 sessionSeed: sessionSeed ?? self.sessionSeed,
                 maxRouteMeters: maxRouteMeters,
+                priorEdgeIds: priorEdgeIds,
+                arrivalEdgeId: arrivalEdgeId,
+                backtrackFactor: backtrackFactor,
                 cityWall: true,
                 pavedOnly: false,
                 urbanCoreFallback: false,
@@ -202,6 +220,9 @@ nonisolated struct OnDeviceRouter {
             allowUnknown: allowUnknown, avoidEdgeIds: avoidEdgeIds,
             sessionSeed: sessionSeed ?? self.sessionSeed,
             maxRouteMeters: maxRouteMeters,
+            priorEdgeIds: priorEdgeIds,
+            arrivalEdgeId: arrivalEdgeId,
+            backtrackFactor: backtrackFactor,
             cityWall: true,
             pavedOnly: false,
             urbanCoreFallback: false,
@@ -224,6 +245,9 @@ nonisolated struct OnDeviceRouter {
             allowUnknown: allowUnknown, avoidEdgeIds: avoidEdgeIds,
             sessionSeed: sessionSeed ?? self.sessionSeed,
             maxRouteMeters: maxRouteMeters,
+            priorEdgeIds: priorEdgeIds,
+            arrivalEdgeId: arrivalEdgeId,
+            backtrackFactor: backtrackFactor,
             cityWall: true,
             pavedOnly: true,
             urbanCoreFallback: false,
@@ -245,6 +269,9 @@ nonisolated struct OnDeviceRouter {
             allowUnknown: allowUnknown, avoidEdgeIds: avoidEdgeIds,
             sessionSeed: sessionSeed ?? self.sessionSeed,
             maxRouteMeters: maxRouteMeters,
+            priorEdgeIds: priorEdgeIds,
+            arrivalEdgeId: arrivalEdgeId,
+            backtrackFactor: backtrackFactor,
             cityWall: true,
             pavedOnly: false,
             urbanCoreFallback: false,
@@ -269,6 +296,9 @@ nonisolated struct OnDeviceRouter {
             allowUnknown: allowUnknown, avoidEdgeIds: avoidEdgeIds,
             sessionSeed: sessionSeed ?? self.sessionSeed,
             maxRouteMeters: maxRouteMeters,
+            priorEdgeIds: priorEdgeIds,
+            arrivalEdgeId: arrivalEdgeId,
+            backtrackFactor: backtrackFactor,
             cityWall: false,
             pavedOnly: true,
             urbanCoreFallback: true,
@@ -285,6 +315,9 @@ nonisolated struct OnDeviceRouter {
                 allowUnknown: allowUnknown, avoidEdgeIds: avoidEdgeIds,
                 sessionSeed: sessionSeed ?? self.sessionSeed,
                 maxRouteMeters: maxRouteMeters,
+                priorEdgeIds: priorEdgeIds,
+                arrivalEdgeId: arrivalEdgeId,
+                backtrackFactor: backtrackFactor,
                 cityWall: false,
                 pavedOnly: false,
                 urbanCoreFallback: true,
@@ -449,6 +482,9 @@ nonisolated struct OnDeviceRouter {
         avoidEdgeIds: Set<String>,
         sessionSeed: UInt64,
         maxRouteMeters: Double?,
+        priorEdgeIds: Set<String>,
+        arrivalEdgeId: String?,
+        backtrackFactor: Double,
         cityWall: Bool,
         pavedOnly: Bool,
         urbanCoreFallback: Bool,
@@ -536,6 +572,9 @@ nonisolated struct OnDeviceRouter {
         }
 
         var ctx = HopSearchContext.forProfile(profile, seed: sessionSeed)
+        ctx.priorEdgeIds = priorEdgeIds
+        ctx.arrivalEdgeId = arrivalEdgeId
+        ctx.backtrackFactor = max(1, backtrackFactor)
         ctx.cityWall = cityWall
         ctx.pavedOnly = pavedOnly
         ctx.urbanCoreFallback = urbanCoreFallback
@@ -1354,6 +1393,7 @@ nonisolated struct OnDeviceRouter {
                             )
                         }
                     }
+                    step = backtrackPenalized(step, edgeID: eid, ctx: ctx)
                     let cost = cur.cost + step
                     let newDirt = edgeIsDirt(ei)
                     let oldDirt = prevKind[toNode] == 0 ? edgeIsDirt(prevData[toNode]) : false
@@ -1440,6 +1480,10 @@ nonisolated struct OnDeviceRouter {
                             )
                         }
                     }
+                    let virtualEdgeID = v.junctionStitch
+                        ? v.stitchEdgeId
+                        : (v.ei >= 0 ? pack.edgeId(v.ei) : "")
+                    step = backtrackPenalized(step, edgeID: virtualEdgeID, ctx: ctx)
                     let cost = cur.cost + step
                     var action = HopSearchPolicy.considerRelax(
                         newCost: cost,
@@ -1643,7 +1687,11 @@ nonisolated struct OnDeviceRouter {
                             point: toLL, start: from, end: to, boxes: packSettlements
                         )
                         : 1
-                    let newScore = cur.cost + edgeM * settlementMult
+                    let newScore = cur.cost + backtrackPenalized(
+                        edgeM * settlementMult,
+                        edgeID: pack.edgeId(ei),
+                        ctx: ctx
+                    )
                     var action = HopSearchPolicy.considerRelax(
                         newCost: newScore,
                         oldCost: dist[toLab],
@@ -1700,7 +1748,14 @@ nonisolated struct OnDeviceRouter {
                             point: toLL, start: from, end: to, boxes: packSettlements
                         )
                         : 1
-                    let newScore = cur.cost + v.meters * settlementMult
+                    let virtualEdgeID = v.junctionStitch
+                        ? v.stitchEdgeId
+                        : (v.ei >= 0 ? pack.edgeId(v.ei) : "")
+                    let newScore = cur.cost + backtrackPenalized(
+                        v.meters * settlementMult,
+                        edgeID: virtualEdgeID,
+                        ctx: ctx
+                    )
                     if newScore < dist[toLab] {
                         dist[toLab] = newScore
                         pathMeters[toLab] = newMeters
@@ -2323,6 +2378,7 @@ nonisolated struct OnDeviceRouter {
                         )
                     }
 
+                    step = backtrackPenalized(step, edgeID: eid, ctx: ctx)
                     let cost = cur.cost + step
                     if cost < dist[toNode] {
                         dist[toNode] = cost
@@ -3031,6 +3087,19 @@ nonisolated struct OnDeviceRouter {
             return true
         }
         return false
+    }
+
+    private func backtrackPenalized(
+        _ cost: Double,
+        edgeID: String,
+        ctx: HopSearchContext
+    ) -> Double {
+        guard !edgeID.isEmpty else { return cost }
+        if edgeID == ctx.arrivalEdgeId { return cost * 12 }
+        if ctx.priorEdgeIds.contains(edgeID) {
+            return cost * max(1, ctx.backtrackFactor)
+        }
+        return cost
     }
 
     private func hopCostStep(

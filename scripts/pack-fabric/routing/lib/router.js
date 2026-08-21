@@ -116,6 +116,23 @@ function isLowDirtRoute(profile, path, threshold = 70) {
   return profile === "dirt" && Number.isFinite(dirtPercent) && dirtPercent < threshold;
 }
 
+function backtrackSummary(path, priorEdgeIds) {
+  const prior = priorEdgeIds instanceof Set
+    ? priorEdgeIds
+    : new Set((priorEdgeIds || []).map(String));
+  const meters = ((path && path.segments) || []).reduce((sum, segment) =>
+    prior.has(String(segment.edgeId))
+      ? sum + (Number(segment.distanceMeters) || 0)
+      : sum,
+  0);
+  const total = Number(path && path.distanceMeters) || 0;
+  return {
+    backtrackMeters: Math.round(meters),
+    backtrackPct: total > 0 ? Math.round(meters / total * 1000) / 10 : 0,
+    backtrackReason: meters > 0 ? "dead_end_or_only_connector" : null
+  };
+}
+
 function projectOnSegment(point, a, b) {
   const [px, py] = point;
   const [ax, ay] = a;
@@ -1614,6 +1631,17 @@ async function routeOnRuntime(body, graphResolution, runtime) {
       .filter((id) => id != null)
       .map((id) => String(id))
   );
+  const priorEdgeIds = new Set(
+    (Array.isArray(options.priorEdgeIds) ? options.priorEdgeIds : [])
+      .filter((id) => id != null)
+      .map((id) => String(id))
+  );
+  const arrivalEdgeId = options.arrivalEdgeId == null
+    ? null
+    : String(options.arrivalEdgeId);
+  const backtrackFactor = Number.isFinite(Number(options.backtrackFactor))
+    ? Math.max(1, Number(options.backtrackFactor))
+    : 4;
 
   const start = locations[0];
   const end = locations[locations.length - 1];
@@ -1886,7 +1914,12 @@ async function routeOnRuntime(body, graphResolution, runtime) {
   }
 
   const searchStarted = Date.now();
-  const searchOpts = { sessionSeed: Number(options.sessionSeed) || 0 };
+  const searchOpts = {
+    sessionSeed: Number(options.sessionSeed) || 0,
+    priorEdgeIds: Array.from(priorEdgeIds),
+    arrivalEdgeId,
+    backtrackFactor
+  };
   if (Number.isFinite(Number(options.maxPathMeters))) {
     searchOpts.maxPathMeters = Number(options.maxPathMeters);
   }
@@ -2176,6 +2209,7 @@ async function routeOnRuntime(body, graphResolution, runtime) {
     policy
   );
   const lowDirt = isLowDirtRoute(profile, path);
+  const backtrack = backtrackSummary(path, priorEdgeIds);
 
   return {
     status: "complete",
@@ -2186,6 +2220,7 @@ async function routeOnRuntime(body, graphResolution, runtime) {
     accessPolicy: policy,
     geometry: path.geometry,
     distanceMeters: Math.round(path.distanceMeters),
+    ...backtrack,
     estimatedMovingSeconds: Math.round(path.movingSeconds),
     estimatedElapsedSeconds: Math.round(path.movingSeconds * 1.15),
     stats: path.stats,
@@ -2250,6 +2285,20 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds, 
   const edges = data.edges;
   const avoid = avoidEdgeIds instanceof Set ? avoidEdgeIds : null;
   const geom = runtime.geom || null;
+  const prior = new Set(((searchOpts && searchOpts.priorEdgeIds) || []).map(String));
+  const arrival = searchOpts && searchOpts.arrivalEdgeId != null
+    ? String(searchOpts.arrivalEdgeId)
+    : null;
+  const backtrackFactor = Number.isFinite(Number(searchOpts && searchOpts.backtrackFactor))
+    ? Math.max(1, Number(searchOpts.backtrackFactor))
+    : 4;
+
+  function withBacktrackPenalty(cost, edgeId) {
+    const id = String(edgeId == null ? "" : edgeId);
+    if (arrival != null && id === arrival) return cost * 12;
+    if (prior.has(id)) return cost * backtrackFactor;
+    return cost;
+  }
 
   function resolveEdgeCoords(edge) {
     if (edge.coords && edge.coords.length) return edge.coords;
@@ -2752,7 +2801,7 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds, 
         ];
         accessCost *= urbanAvoidMult(mid);
       }
-      return accessCost;
+      return withBacktrackPenalty(accessCost, edge.edgeId);
     }
     const surfaceMult = surfaceMultiplier(edge.surface, profile, enums);
     const classMult = roadClassMultiplier(edge.roadTrack, profile);
@@ -2819,7 +2868,7 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds, 
       const dTo = haversineMeters(nodeCoord[toNode], endLL);
       cost += approachAwayExtraCost(profile, dFrom, dTo, abMeters, 50, regionId);
     }
-    return cost;
+    return withBacktrackPenalty(cost, edge.edgeId);
   }
 
   function materializeUsed(used, searchMeta) {
@@ -3100,5 +3149,6 @@ module.exports = {
   topologySeamFromIndex,
   fallbackReasonFor,
   clippedDirtMeters,
-  isLowDirtRoute
+  isLowDirtRoute,
+  backtrackSummary
 };

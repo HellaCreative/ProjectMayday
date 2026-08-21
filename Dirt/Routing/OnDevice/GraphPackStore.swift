@@ -391,6 +391,9 @@ final class GraphPackStore {
         profile: RouteProfile,
         allowUnknown: Bool,
         avoidEdgeIds: [String] = [],
+        priorEdgeIds: Set<String> = [],
+        arrivalEdgeId: String? = nil,
+        backtrackFactor: Double = 4,
         sessionSeed: UInt64 = 0,
         maxRouteMeters: Double? = nil
     ) async -> OnDeviceRouter.Result? {
@@ -400,6 +403,9 @@ final class GraphPackStore {
             profile: profile,
             allowUnknown: allowUnknown,
             avoidEdgeIds: avoidEdgeIds,
+            priorEdgeIds: priorEdgeIds,
+            arrivalEdgeId: arrivalEdgeId,
+            backtrackFactor: backtrackFactor,
             sessionSeed: sessionSeed,
             maxRouteMeters: maxRouteMeters
         ) {
@@ -414,6 +420,9 @@ final class GraphPackStore {
         profile: RouteProfile,
         allowUnknown: Bool,
         avoidEdgeIds: [String] = [],
+        priorEdgeIds: Set<String> = [],
+        arrivalEdgeId: String? = nil,
+        backtrackFactor: Double = 4,
         sessionSeed: UInt64 = 0,
         maxRouteMeters: Double? = nil
     ) async -> Result<OnDeviceRouter.Result, OnDeviceRouter.Failure> {
@@ -430,6 +439,9 @@ final class GraphPackStore {
                 profile: profile,
                 allowUnknown: allowUnknown,
                 avoidEdgeIds: avoidEdgeIds,
+                priorEdgeIds: priorEdgeIds,
+                arrivalEdgeId: arrivalEdgeId,
+                backtrackFactor: backtrackFactor,
                 sessionSeed: sessionSeed,
                 maxRouteMeters: maxRouteMeters
             )
@@ -441,6 +453,9 @@ final class GraphPackStore {
             profile: profile,
             allowUnknown: allowUnknown,
             avoidEdgeIds: avoidEdgeIds,
+            priorEdgeIds: priorEdgeIds,
+            arrivalEdgeId: arrivalEdgeId,
+            backtrackFactor: backtrackFactor,
             sessionSeed: sessionSeed,
             maxRouteMeters: maxRouteMeters
         )
@@ -457,6 +472,9 @@ final class GraphPackStore {
         profile: RouteProfile,
         allowUnknown: Bool,
         avoidEdgeIds: [String],
+        priorEdgeIds: Set<String>,
+        arrivalEdgeId: String?,
+        backtrackFactor: Double,
         sessionSeed: UInt64,
         maxRouteMeters: Double?
     ) async -> Result<OnDeviceRouter.Result, OnDeviceRouter.Failure> {
@@ -487,6 +505,9 @@ final class GraphPackStore {
             let hop1 = await routeOnDeviceInRegion(
                 from: from, to: seam, regionId: left,
                 profile: profile, allowUnknown: allowUnknown, avoidEdgeIds: avoidEdgeIds,
+                priorEdgeIds: priorEdgeIds,
+                arrivalEdgeId: arrivalEdgeId,
+                backtrackFactor: backtrackFactor,
                 sessionSeed: sessionSeed,
                 maxRouteMeters: maxRouteMeters
             )
@@ -498,6 +519,9 @@ final class GraphPackStore {
             let hop2 = await routeOnDeviceInRegion(
                 from: seam, to: to, regionId: right,
                 profile: profile, allowUnknown: allowUnknown, avoidEdgeIds: avoidEdgeIds,
+                priorEdgeIds: priorEdgeIds.union(first.edgeIds),
+                arrivalEdgeId: first.edgeIds.last ?? arrivalEdgeId,
+                backtrackFactor: backtrackFactor,
                 sessionSeed: sessionSeed,
                 maxRouteMeters: maxRouteMeters.map { max(0, $0 - first.distanceMeters) }
             )
@@ -522,6 +546,9 @@ final class GraphPackStore {
         profile: RouteProfile,
         allowUnknown: Bool,
         avoidEdgeIds: [String],
+        priorEdgeIds: Set<String>,
+        arrivalEdgeId: String?,
+        backtrackFactor: Double,
         sessionSeed: UInt64,
         maxRouteMeters: Double? = nil
     ) async -> Result<OnDeviceRouter.Result, OnDeviceRouter.Failure> {
@@ -547,6 +574,9 @@ final class GraphPackStore {
                 profile: routeProfile,
                 allowUnknown: allow,
                 avoidEdgeIds: avoid,
+                priorEdgeIds: priorEdgeIds,
+                arrivalEdgeId: arrivalEdgeId,
+                backtrackFactor: backtrackFactor,
                 sessionSeed: seed,
                 maxRouteMeters: maxRouteMeters
             )
