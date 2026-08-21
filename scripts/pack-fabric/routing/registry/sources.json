@@ -282,7 +282,7 @@
         "path": "routing/data/regions/qc/graph.v1.json.gz",
         "edgeCount": 1075322,
         "nodeCount": 901223,
-        "gzBytes": 74865493
+        "gzBytes": 74865496
       },
       "osm": {
         "adapter": "osm-roads",
@@ -304,9 +304,9 @@
         "format": "GeoPackage",
         "license": "Open Government Licence - Canada",
         "adapter": "nrn",
-        "status": "ready",
+        "status": "deferred",
         "dateRetrieved": "2026-07-20",
-        "notes": "NRN omitted from routing fabric (OSM + provincial only)."
+        "notes": "NRN omitted from routing fabric (OSM-only)."
       },
       "provincial": {
         "sourceName": "New Brunswick Forest Roads (DNR-ED)",
@@ -315,26 +315,26 @@
         "format": "ArcGIS FeatureServer",
         "license": "Open Government Licence - New Brunswick",
         "adapter": "nb-forest-roads",
-        "status": "ready",
+        "status": "deferred",
         "dateRetrieved": "2026-08-05",
-        "notes": "Capillary: all resource / motorized_unknown. Sparse attrs (no surface/class). Best-effort vs NSTDB — see DIRT-MAP-A-PROVINCE assessment."
+        "notes": "Inactive during the foundational OSM-only phase. Adapter/data are retained for later controlled evaluation and are not in this pack."
       },
       "routingReady": true,
-      "routingMode": "osm+provincial",
+      "routingMode": "osm-only",
       "backboneArtifact": {
         "path": "routing/data/regions/nb/graph.v1.json.gz",
-        "edgeCount": 259155,
-        "nodeCount": 300152,
-        "gzBytes": 31021049
+        "edgeCount": 155380,
+        "nodeCount": 135154,
+        "gzBytes": 10105010
       },
       "osm": {
         "adapter": "osm-roads",
         "role": "sole-fabric",
         "status": "ready",
-        "featureCount": 80646,
-        "added": 80646,
+        "featureCount": 86681,
+        "added": 86681,
         "license": "OpenStreetMap contributors (ODbL)",
-        "dateRetrieved": "2026-08-05"
+        "dateRetrieved": "2026-08-21"
       }
     },
     {

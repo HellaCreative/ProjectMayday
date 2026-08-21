@@ -110,6 +110,21 @@ tag: pack-qc-osm-20260821-01
 note: ON re-cut on-osm-20260821-02 after ON–QC seam
 ```
 
+
+```
+region: nb   release-id: nb-osm-20260821-01   geofabrik ts: 2026-08-20T20:20:51Z   pbf sha: 0626ad15cf001e83ef9b30b160c63d155da92f0093f13784b865642490eeaf9e
+steps 1–7: ok
+audit contradictions: 0     non-OSM edges: 0
+stitches: 2802  free-space: 0
+largest permissive component: 95.92% of edges
+urban cores: 5 hard / 46 scored
+seams built: qc-nb           seams deferred: nb-ns (NS frozen); nb-pe pending
+route acceptance: 15/15
+candidate uploaded: https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/candidates/nb-osm-20260821-01   promoted: NO
+tag: pack-nb-osm-20260821-01
+note: QC re-cut qc-osm-20260821-02 after QC–NB seam
+```
+
 ## Promote commands (not run)
 
 ```
