@@ -153,6 +153,21 @@ candidate uploaded: https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/candidat
 tag: pack-nl-osm-20260821-01
 ```
 
+
+```
+region: yt   release-id: yt-osm-20260821-01   geofabrik ts: 2026-08-20T20:20:51Z   pbf sha: 6ad12035926125c9c7c3b66e5b45dd22e61488af4c0ffa822f258312040eafa4
+steps 1–7: ok
+audit contradictions: 0     non-OSM edges: 0
+stitches: 610  free-space: 0
+largest permissive component: 81.27% of edges
+urban cores: 1 hard / 9 scored
+seams built: bc-yt           seams deferred: yt-nt
+route acceptance: 8/15 — red: long-watson-lake-dawson all 5 profiles no route; short dirt 28%<40%; dirt-allow-unknown 30%<50%
+candidate uploaded: https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/candidates/yt-osm-20260821-01   promoted: NO
+tag: pack-yt-osm-20260821-01
+note: BC re-cut bc-osm-20260821-04 after BC–YT seam
+```
+
 ## Promote commands (not run)
 
 ```

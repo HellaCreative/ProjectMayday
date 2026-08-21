@@ -474,9 +474,9 @@
         "format": "GeoPackage",
         "license": "Open Government Licence - Canada",
         "adapter": "nrn",
-        "status": "ready",
+        "status": "deferred",
         "dateRetrieved": "2026-07-20",
-        "notes": "NRN ROADSEG ingested as national backbone artifact. Not product routing-ready until audit validation + supplement policy applied."
+        "notes": "NRN omitted from routing fabric (OSM-only). NRN ROADSEG ingested as national backbone artifact. Not product routing-ready until audit validation + supplement policy applied."
       },
       "provincial": {
         "sourceName": "Yukon Forest Resource Roads 50k (+ optional YRN Resource/Rec)",
@@ -485,17 +485,26 @@
         "format": "ArcGIS MapServer",
         "license": "Open Government Licence - Yukon",
         "adapter": null,
-        "status": "verified",
+        "status": "deferred",
         "dateRetrieved": "2026-07-21",
-        "notes": "Live REST verified (~556 FRR features). Incomplete by design; optional YRN Resource/Recreation+Winter filter. Phase-1 candidate."
+        "notes": "Inactive during the foundational OSM-only phase. Adapter/data are retained for later controlled evaluation and are not in this pack."
       },
       "routingReady": true,
-      "routingMode": "nrn-backbone",
+      "routingMode": "osm-only",
       "backboneArtifact": {
         "path": "routing/data/regions/yt/graph.v1.json.gz",
-        "edgeCount": 7308,
-        "nodeCount": 6186,
-        "gzBytes": 1141693
+        "edgeCount": 20791,
+        "nodeCount": 17563,
+        "gzBytes": 2098324
+      },
+      "osm": {
+        "adapter": "osm-roads",
+        "role": "sole-fabric",
+        "status": "ready",
+        "featureCount": 11519,
+        "added": 11519,
+        "license": "OpenStreetMap contributors (ODbL)",
+        "dateRetrieved": "2026-08-21"
       }
     },
     {
