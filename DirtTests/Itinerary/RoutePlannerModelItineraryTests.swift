@@ -5,6 +5,39 @@ import Testing
 @MainActor
 @Suite(.serialized)
 struct RoutePlannerModelItineraryTests {
+    @Test func planModeUsesTheInstalledPackRegistry() async {
+        let source = PlannerFakeRoutingSource()
+        let registry = FakeInstalledPackRegistry(installedRegionIDs: ["ns"])
+        var policyReports: [String] = []
+        let policy = RoutingSourcePolicy(
+            isOnline: { true },
+            installedPacks: registry,
+            live: source,
+            pack: source,
+            report: { policyReports.append($0) }
+        )
+        let model = makeModel(source: source, policy: policy)
+        model.selectMode(.plan)
+        model.apply(
+            .replaceAll(
+                waypoints: [
+                    RouteCoordinate(longitude: -63.57, latitude: 44.65),
+                    RouteCoordinate(longitude: -60.19, latitude: 46.14)
+                ],
+                profile: .dirt,
+                allowUnknown: false
+            ),
+            source: "plan"
+        )
+
+        await model.waitForCanonicalBuildForTesting()
+
+        #expect(policyReports.contains { report in
+            report.contains("packsCover=true") && report.contains("installed=[ns]")
+        })
+        #expect(source.routeRequests.isEmpty == false)
+    }
+
     @Test func fromHereFuelBuildSwitchesToPlanWithoutNetworkCalls() async throws {
         let prefs = FuelPrefsRestore()
         defer { prefs.restore() }
@@ -156,7 +189,10 @@ struct RoutePlannerModelItineraryTests {
 }
 
 @MainActor
-private func makeModel(source: PlannerFakeRoutingSource) -> RoutePlannerModel {
+private func makeModel(
+    source: PlannerFakeRoutingSource,
+    policy: RoutingSourcePolicy? = nil
+) -> RoutePlannerModel {
     RoutePlannerModel(
         routing: RoutingClient(),
         locationService: LocationService(),
@@ -165,9 +201,27 @@ private func makeModel(source: PlannerFakeRoutingSource) -> RoutePlannerModel {
         offline: OfflineTileManager(),
         graphPacks: GraphPackStore(),
         network: NetworkPathMonitor(),
-        routingSourcePolicy: .fixed(source),
+        routingSourcePolicy: policy ?? .fixed(source),
         itineraryBuilder: ItineraryBuilder()
     )
+}
+
+@MainActor
+private final class FakeInstalledPackRegistry: RoutingInstalledPackRegistry {
+    let installedRegionIDs: Set<String>
+    let routingManifestVersion = "test-manifest"
+
+    init(installedRegionIDs: Set<String>) {
+        self.installedRegionIDs = installedRegionIDs
+    }
+
+    func isRoutingPackInstalled(_ regionID: String) -> Bool {
+        installedRegionIDs.contains(regionID)
+    }
+
+    func installedRoutingGraphPath(regionID: String) -> String? {
+        isRoutingPackInstalled(regionID) ? "/fake/\(regionID)/graph.v2.bin" : nil
+    }
 }
 
 @MainActor

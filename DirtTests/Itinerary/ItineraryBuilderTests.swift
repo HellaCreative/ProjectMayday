@@ -162,6 +162,7 @@ struct ItineraryBuilderTests {
             let to = point(Double(index) + 0.1)
             let cacheKey = RouteResponseCache.Key(
                 from: from, to: to, profile: .dirt, allowUnknown: false,
+                priorEdgeIDs: [], arrivalEdgeID: nil, backtrackFactor: 4,
                 sourceName: "live", packRevision: "test"
             )
             if index == 0 { firstKey = cacheKey }

@@ -227,10 +227,29 @@ final class PackRoutingSource: RoutingSource {
 }
 
 @MainActor
-struct RoutingSourcePolicy {
-    private let selector: (RouteRequest) -> any RoutingSource
+protocol RoutingInstalledPackRegistry: AnyObject {
+    var routingManifestVersion: String { get }
+    func isRoutingPackInstalled(_ regionID: String) -> Bool
+    func installedRoutingGraphPath(regionID: String) -> String?
+}
 
-    init(selector: @escaping (RouteRequest) -> any RoutingSource) {
+extension GraphPackStore: RoutingInstalledPackRegistry {
+    var routingManifestVersion: String { lastManifestVersion }
+
+    func isRoutingPackInstalled(_ regionID: String) -> Bool {
+        isInstalled(regionID)
+    }
+
+    func installedRoutingGraphPath(regionID: String) -> String? {
+        installedGraphPath(regionId: regionID)
+    }
+}
+
+@MainActor
+struct RoutingSourcePolicy {
+    private let selector: @MainActor (RouteRequest) -> any RoutingSource
+
+    init(selector: @escaping @MainActor (RouteRequest) -> any RoutingSource) {
         self.selector = selector
     }
 
@@ -240,20 +259,36 @@ struct RoutingSourcePolicy {
         live: any RoutingSource,
         pack: any RoutingSource
     ) {
+        self.init(
+            isOnline: { network.isOnline },
+            installedPacks: packs,
+            live: live,
+            pack: pack
+        )
+    }
+
+    init(
+        isOnline: @escaping () -> Bool,
+        installedPacks: any RoutingInstalledPackRegistry,
+        live: any RoutingSource,
+        pack: any RoutingSource,
+        report: @escaping @MainActor (String) -> Void = { RoutingDebugLog.shared.event($0) }
+    ) {
         selector = { request in
             let locations = request.locations.map {
                 CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude)
             }
             let needed = GraphPackStore.regionIds(containingAny: locations)
-            let packsCover = installedPacksCover(locations, packs: packs)
+            let installed = needed.filter { installedPacks.isRoutingPackInstalled($0) }
+            let packsCover = installedPacksCover(locations, registry: installedPacks)
             let singleRegion = needed.count <= 1
-            RoutingDebugLog.shared.event(
+            report(
                 "policy packsCover=\(packsCover) singleRegion=\(singleRegion) " +
-                    "installed=[\(needed.filter { packs.isInstalled($0) }.joined(separator: ","))] " +
-                    "path=\(needed.first.flatMap { packs.installedGraphPath(regionId: $0) } ?? "nil") " +
-                    "manifest=\(packs.lastManifestVersion) online=\(network.isOnline)"
+                    "installed=[\(installed.joined(separator: ","))] " +
+                    "path=\(needed.first.flatMap { installedPacks.installedRoutingGraphPath(regionID: $0) } ?? "nil") " +
+                    "manifest=\(installedPacks.routingManifestVersion) online=\(isOnline())"
             )
-            return network.isOnline ? live : pack
+            return isOnline() ? live : pack
         }
     }
 
@@ -268,13 +303,13 @@ struct RoutingSourcePolicy {
 
 private func installedPacksCover(
     _ endpoints: [CLLocationCoordinate2D],
-    packs: GraphPackStore
+    registry: any RoutingInstalledPackRegistry
 ) -> Bool {
     let needed = GraphPackStore.regionIds(containingAny: endpoints)
-    if !needed.isEmpty, needed.allSatisfy({ packs.isInstalled($0) }) { return true }
+    if !needed.isEmpty, needed.allSatisfy({ registry.isRoutingPackInstalled($0) }) { return true }
     let primaries = endpoints.compactMap { GraphPackStore.primaryRegionId(containing: $0) }
     guard let first = primaries.first, primaries.allSatisfy({ $0 == first }) else { return false }
-    return packs.isInstalled(first)
+    return registry.isRoutingPackInstalled(first)
 }
 
 private func coordinate(_ location: RouteLocation) -> RouteCoordinate {
