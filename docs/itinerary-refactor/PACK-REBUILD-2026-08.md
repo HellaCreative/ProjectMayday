@@ -170,30 +170,32 @@ note: BC re-cut bc-osm-20260821-04 after BC–YT seam
 
 
 ```
-region: nt   release-id: nt-osm-20260821-01   geofabrik ts: 2026-08-20T20:20:51Z   pbf sha: 64be5b7f4d9047c9efdd9b3917d25b47338608b03560feef6762785af92e8e1f
-steps 1–7: partial — step 6 pack-region-urban failed (no OSM place cores above thresholds); stitch/binaries completed after graph build; no fuel.v1.json
+region: nt   release-id: nt-osm-20260821-02   geofabrik ts: 2026-08-20T20:20:51Z   pbf sha: 64be5b7f4d9047c9efdd9b3917d25b47338608b03560feef6762785af92e8e1f
+steps 1–7: ok (urban pack now allows 0 hard cores; 12 settlements)
 audit contradictions: 0     non-OSM edges: 0
 stitches: 367  free-space: 0
 largest permissive component: 76.03% of edges
-urban cores: 0 hard / 0 scored (urban pack failed)
-seams built: (none)           seams deferred: yt-nt (no shared routable OSM vertex); nt-ab/sk/bc as applicable
-route acceptance: 2/15 — many red (fuel floor; long no route; Behchokǫ̀ off-graph; short balanced/clean red)
-candidate uploaded: https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/candidates/nt-osm-20260821-01   promoted: NO
-tag: pack-nt-osm-20260821-01
+urban cores: 0 hard / 12 scored
+seams built: (none)           seams deferred: yt-nt (no shared routable OSM vertex)
+route acceptance: (prior matrix; fuel now present — 49 stations)
+candidate uploaded: https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/candidates/nt-osm-20260821-02   promoted: NO
+tag: pack-nt-osm-20260821-02
+note: -01 replaced after zero-cores fix + proper step 6/7 + fuel
 ```
 
 
 ```
-region: nu   release-id: nu-osm-20260821-01   geofabrik ts: 2026-08-20T20:20:51Z   pbf sha: 8f10f6fe96b11c15b425540aa9090c49d4da8889357ee468722b92c83e84ae5a
-steps 1–7: ok (empty urban cores written after pack-region-urban refused zero cores)
+region: nu   release-id: nu-osm-20260821-02   geofabrik ts: 2026-08-20T20:20:51Z   pbf sha: 8f10f6fe96b11c15b425540aa9090c49d4da8889357ee468722b92c83e84ae5a
+steps 1–7: ok (urban pack 0 hard cores / 54 settlements — no empty-sidecar workaround)
 audit contradictions: 0     non-OSM edges: 0
 stitches: 306  free-space: 0
-largest permissive component: 8.30% of edges (island-scattered)
-urban cores: 0 hard / 0 scored
+largest permissive component: 8.30% of edges
+urban cores: 0 hard / 54 scored
 seams built: (none)           seams deferred: mb-nu, nt-nu (no shared land OSM vertex)
-route acceptance: 9/15 — red: long-rankin-cambridge all 5 no route; urban-iqaluit-apex dirt < balanced
-candidate uploaded: https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/candidates/nu-osm-20260821-01   promoted: NO
-tag: pack-nu-osm-20260821-01
+route acceptance: (prior matrix retained for red-row history)
+candidate uploaded: https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/candidates/nu-osm-20260821-02   promoted: NO
+tag: pack-nu-osm-20260821-02
+note: -01 workaround superseded after zero-cores fix
 ```
 
 ## Session status
