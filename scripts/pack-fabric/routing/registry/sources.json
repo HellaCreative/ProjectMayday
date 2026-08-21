@@ -1,6 +1,6 @@
 {
   "schemaVersion": "canada-source-registry-1",
-  "updatedAt": "2026-08-20",
+  "updatedAt": "2026-08-21",
   "notes": [
     "Province fabric is product-locked per region — do not assume NRN everywhere.",
     "NS foundational fabric: OSM-only. NSTDB and NRN are retained but inactive until the OSM product is approved.",
@@ -35,25 +35,25 @@
         "license": "Open Government Licence - British Columbia",
         "adapter": "bc-dra-roads",
         "status": "deferred",
-        "notes": "Inactive during the foundational OSM-only phase. DRA and FTEN adapters/data are retained for later evaluation; neither is in the BC pack.",
+        "notes": "Inactive during the foundational OSM-only phase. Adapter/data are retained for later controlled evaluation and are not in this pack.",
         "dateRetrieved": "2026-08-05"
       },
       "routingReady": true,
       "routingMode": "osm-only",
       "backboneArtifact": {
         "path": "routing/data/regions/bc/graph.v1.json.gz",
-        "edgeCount": 910528,
-        "nodeCount": 787447,
-        "gzBytes": 71225014
+        "edgeCount": 910813,
+        "nodeCount": 787681,
+        "gzBytes": 71239228
       },
       "osm": {
         "adapter": "osm-roads",
         "role": "sole-fabric",
         "status": "ready",
-        "featureCount": 531042,
-        "added": 531042,
+        "featureCount": 531241,
+        "added": 531241,
         "license": "OpenStreetMap contributors (ODbL)",
-        "dateRetrieved": "2026-08-20"
+        "dateRetrieved": "2026-08-21"
       }
     },
     {
