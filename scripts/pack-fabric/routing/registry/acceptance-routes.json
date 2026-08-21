@@ -236,6 +236,65 @@
           "maximumDirtBackwardPercent": 35
         }
       ]
+    },
+    "sk": {
+      "fuelMinimum": 800,
+      "routes": [
+        {
+          "id": "long-swift-current-yorkton",
+          "from": {
+            "lat": 50.288,
+            "lon": -107.801,
+            "label": "Swift Current"
+          },
+          "to": {
+            "lat": 51.214,
+            "lon": -102.463,
+            "label": "Yorkton"
+          },
+          "minimumDirtPercent": 50,
+          "minimumDirtAllowUnknownPercent": 60,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 8,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "urban-moose-jaw-regina",
+          "from": {
+            "lat": 50.393,
+            "lon": -105.551,
+            "label": "Moose Jaw"
+          },
+          "to": {
+            "lat": 50.4452,
+            "lon": -104.6189,
+            "label": "Regina"
+          },
+          "minimumDirtPercent": 30,
+          "minimumDirtAllowUnknownPercent": 40,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 10,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "short-outlook-davidson",
+          "from": {
+            "lat": 51.483,
+            "lon": -107.051,
+            "label": "Outlook"
+          },
+          "to": {
+            "lat": 51.266,
+            "lon": -105.991,
+            "label": "Davidson"
+          },
+          "minimumDirtPercent": 40,
+          "minimumDirtAllowUnknownPercent": 50,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 8,
+          "maximumDirtBackwardPercent": 40
+        }
+      ]
     }
   }
 }
