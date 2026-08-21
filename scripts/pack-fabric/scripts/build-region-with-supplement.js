@@ -54,7 +54,10 @@ const OSM_REGION = {
   ab: { slug: "alberta", country: "canada" },
   bc: { slug: "british-columbia", country: "canada" },
   nl: { slug: "newfoundland-and-labrador", country: "canada" },
-  wa: { slug: "washington", country: "us" }
+  wa: { slug: "washington", country: "us" },
+  yt: { slug: "yukon", country: "canada" },
+  nt: { slug: "northwest-territories", country: "canada" },
+  nu: { slug: "nunavut", country: "canada" }
 };
 
 async function loadNrnFeatures(code) {
