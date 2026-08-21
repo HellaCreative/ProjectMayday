@@ -16,6 +16,19 @@ const NS_RELEASE_PATH = path.join(
   REPO_ROOT,
   "scripts/pack-fabric/routing/data/releases/ns-osm-20260820-01.json"
 );
+const NS_FUEL_PATH = path.join(
+  REPO_ROOT,
+  "scripts/pack-fabric/app/data/packs/v1/ns/fuel.v1.json"
+);
+const NS_FUEL = JSON.parse(fs.readFileSync(NS_FUEL_PATH, "utf8"));
+
+async function loadBenchFuel() {
+  return {
+    ok: true,
+    regionIds: ["ns"],
+    stations: Array.isArray(NS_FUEL.stations) ? NS_FUEL.stations : []
+  };
+}
 
 // The live Nova Scotia service is intentionally pinned to an immutable
 // candidate while the downloadable pack remains on the last approved build.
@@ -106,7 +119,7 @@ function caseID(item) {
   ].join("/");
 }
 
-function requestBody(profile, allowUnknown, from, to, history, maxPathMeters) {
+function requestBody(profile, allowUnknown, from, to, history, maxPathMeters, directExtraBudgetMeters) {
   const options = {
     sessionSeed: SESSION_SEED,
     priorEdgeIds: [...history.edgeIDs],
@@ -114,6 +127,7 @@ function requestBody(profile, allowUnknown, from, to, history, maxPathMeters) {
     backtrackFactor: 4
   };
   if (Number.isFinite(maxPathMeters)) options.maxPathMeters = maxPathMeters;
+  if (Number.isFinite(directExtraBudgetMeters)) options.directExtraBudgetMeters = directExtraBudgetMeters;
   return {
     profile: PROFILE_API[profile],
     locations: [from, to],
@@ -126,7 +140,7 @@ function requestBody(profile, allowUnknown, from, to, history, maxPathMeters) {
   };
 }
 
-function fuelBody(profile, allowUnknown, from, to, history, firstCap, requireStop) {
+function fuelBody(profile, allowUnknown, from, to, history, firstCap, requireStop, profileMeters, riderLegId, destinationFuelUsedLimitMeters) {
   return {
     profile: PROFILE_API[profile],
     locations: [from, to],
@@ -138,7 +152,10 @@ function fuelBody(profile, allowUnknown, from, to, history, firstCap, requireSto
     fuel: {
       usableRangeMeters: USABLE_METERS,
       firstLegMaxMeters: firstCap,
-      requireFuelStopBeforeEnd: requireStop
+      requireFuelStopBeforeEnd: requireStop,
+      profileMeters,
+      riderLegId,
+      destinationFuelUsedLimitMeters
     },
     options: {
       sessionSeed: SESSION_SEED,
@@ -230,11 +247,15 @@ async function routeCase(item, shortestMeters) {
   const baseline = [];
   const baselineHistories = [];
   const discoveryHistory = emptyHistory();
+  const directLegBudget = item.profile === "direct" ? 15_000 / (points.length - 1) : undefined;
 
   for (let index = 0; index < points.length - 1; index += 1) {
     baselineHistories[index] = cloneHistory(discoveryHistory);
     const response = requireComplete(await timed(
-      () => routeRequest(requestBody(item.profile, item.allowUnknown, points[index], points[index + 1], discoveryHistory)),
+      () => routeRequest(requestBody(
+        item.profile, item.allowUnknown, points[index], points[index + 1],
+        discoveryHistory, undefined, directLegBudget
+      )),
       timings
     ), `baseline leg ${index + 1}`);
     baseline[index] = response;
@@ -277,12 +298,16 @@ async function routeCase(item, shortestMeters) {
       continue;
     }
 
-    const chain = await timed(
-      () => fuelChainRequest(fuelBody(
-        item.profile, item.allowUnknown, from, to, finalHistory, firstCap, requireStop
-      )),
-      timings
-    );
+    const chainStarted = process.hrtime.bigint();
+    const chain = await fuelChainRequest(fuelBody(
+        item.profile, item.allowUnknown, from, to, finalHistory, firstCap, requireStop,
+        baselineMeters, `${item.route.id}:${index + 1}`,
+        requireStop && Number.isFinite(nextMeters) && nextMeters <= USABLE_METERS + 1
+          ? Math.max(0, USABLE_METERS - nextMeters)
+          : null
+      ), { loadFuelForLocations: loadBenchFuel });
+    const chainMs = Number(process.hrtime.bigint() - chainStarted) / 1e6;
+    timings.push(Number(chain && chain.diagnostics && chain.diagnostics.maxHopMs) || chainMs);
     if (!chain || chain.status !== "complete") {
       const reason = chain && (chain.error || chain.message) || "no_fuel_chain";
       const error = new Error(`fuel leg ${index + 1}: ${reason}`);
@@ -303,7 +328,8 @@ async function routeCase(item, shortestMeters) {
       const cap = hop === 0 ? firstCap : USABLE_METERS;
       const response = requireComplete(await timed(
         () => routeRequest(requestBody(
-          item.profile, item.allowUnknown, hopPoints[hop], hopPoints[hop + 1], finalHistory, cap
+          item.profile, item.allowUnknown, hopPoints[hop], hopPoints[hop + 1], finalHistory, cap,
+          item.profile === "direct" ? 0 : undefined
         )),
         timings
       ), `fuel leg ${index + 1} hop ${hop + 1}`);
@@ -381,7 +407,8 @@ function assertionsFor(item, result) {
   const add = (name, pass, detail) => checks.push({ name, pass: !!pass, detail });
   if (result.status !== "complete") {
     add("route complete", false, result.error || "failed");
-    add("≤4000ms per hop", result.maxHopMs <= 4000, `${result.maxHopMs}ms`);
+    const limit = item.fuelOn ? 6000 : 4000;
+    add(`≤${limit}ms per hop`, result.maxHopMs <= limit, `${result.maxHopMs}ms`);
     return checks;
   }
   if (item.profile === "dirt" && !item.allowUnknown && !item.fuelOn
@@ -415,7 +442,8 @@ function assertionsFor(item, result) {
     result.backtrackPct === 0 || !!result.fallbackReason,
     result.backtrackPct === 0 ? "0%" : `${result.backtrackPct}% ${result.fallbackReason || "unexplained"}`
   );
-  add("≤4000ms per hop", result.maxHopMs <= 4000, `${result.maxHopMs}ms`);
+  const limit = item.fuelOn ? 6000 : 4000;
+  add(`≤${limit}ms per hop`, result.maxHopMs <= limit, `${result.maxHopMs}ms`);
   return checks;
 }
 

@@ -2,7 +2,11 @@
 
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { planFuelChainOnRuntime, rankForwardFuel } = require("./fuel-chain");
+const {
+  fuelNeedForProfileRide,
+  planFuelChainOnRuntime,
+  rankForwardFuel
+} = require("./fuel-chain");
 
 function lineRuntime() {
   const nodes = [];
@@ -54,6 +58,15 @@ function station(id, lon) {
   return { id, name: id, lat: 45, lon };
 }
 
+function fixtureRouteCandidate({ candidate }) {
+  return Promise.resolve({
+    status: "complete",
+    distanceMeters: candidate.graphMeters,
+    stats: { dirtPercent: 0 },
+    segments: []
+  });
+}
+
 test("fuel chain is constructed forward from graph-reachable pumps", async () => {
   const result = await planFuelChainOnRuntime({
     runtime: lineRuntime(),
@@ -103,10 +116,74 @@ test("short route does not manufacture a fuel plan", async () => {
     profile: "balanced",
     accessPolicy: { motorizedPermissive: true, motorizedUnknown: false },
     usableRangeMeters: 100_000,
-    firstLegMaxMeters: 100_000
+    firstLegMaxMeters: 100_000,
+    routeCandidate: fixtureRouteCandidate
   });
 
   assert.equal(result.ok, true);
   assert.deepEqual(result.stops, []);
   assert.equal(result.graphMeters.length, 1);
+});
+
+test("profile ride length requires Dirt fuel even when shortest reachability fits", async () => {
+  const usable = 237_500;
+  const stopsNeeded = fuelNeedForProfileRide(300_000, usable, usable);
+  assert.equal(stopsNeeded, 1);
+
+  const dirt = await planFuelChainOnRuntime({
+    runtime: lineRuntime(),
+    stations: [station("mid", 1)],
+    start: { lat: 45, lon: 0 },
+    destination: { lat: 45, lon: 2 },
+    profile: "dirt",
+    accessPolicy: { motorizedPermissive: true, motorizedUnknown: false },
+    usableRangeMeters: usable,
+    firstLegMaxMeters: usable,
+    requireFuelStopBeforeEnd: stopsNeeded > 0,
+    minimumFuelStops: stopsNeeded,
+    routeCandidate: ({ candidate }) => Promise.resolve({
+      status: "complete",
+      distanceMeters: candidate.graphMeters,
+      stats: { dirtPercent: 80 },
+      segments: []
+    })
+  });
+  assert.equal(dirt.ok, true);
+  assert.deepEqual(dirt.stops.map((row) => row.id), ["mid"]);
+  assert.ok(Math.abs(dirt.stops[0].dirtPercent - 80) <= 10);
+
+  const clean = await planFuelChainOnRuntime({
+    runtime: lineRuntime(),
+    stations: [station("mid", 1)],
+    start: { lat: 45, lon: 0 },
+    destination: { lat: 45, lon: 2 },
+    profile: "cleanest",
+    accessPolicy: { motorizedPermissive: true, motorizedUnknown: false },
+    usableRangeMeters: usable,
+    firstLegMaxMeters: usable,
+    requireFuelStopBeforeEnd: fuelNeedForProfileRide(200_000, usable, usable) > 0,
+    routeCandidate: fixtureRouteCandidate
+  });
+  assert.equal(clean.ok, true);
+  assert.deepEqual(clean.stops, []);
+});
+
+test("refuel-before-waypoint leaves enough fuel for the known next rider leg", async () => {
+  const result = await planFuelChainOnRuntime({
+    runtime: lineRuntime(),
+    stations: [station("early", 1), station("late", 1.5)],
+    start: { lat: 45, lon: 0 },
+    destination: { lat: 45, lon: 2 },
+    profile: "dirt",
+    accessPolicy: { motorizedPermissive: true, motorizedUnknown: false },
+    usableRangeMeters: 237_500,
+    firstLegMaxMeters: 237_500,
+    requireFuelStopBeforeEnd: true,
+    destinationFuelUsedLimitMeters: 40_000,
+    routeCandidate: fixtureRouteCandidate
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.stops.at(-1).id, "late");
+  assert.ok(result.graphMeters.at(-1) <= 40_000);
 });
