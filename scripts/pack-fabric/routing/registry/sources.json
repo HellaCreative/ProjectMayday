@@ -179,7 +179,7 @@
         "format": "GeoPackage",
         "license": "Open Government Licence - Canada",
         "adapter": "nrn",
-        "status": "ready",
+        "status": "deferred",
         "dateRetrieved": "2026-07-20",
         "notes": "NRN omitted from routing fabric (OSM-only)."
       },
@@ -190,24 +190,24 @@
         "license": "verify before ingest",
         "adapter": null,
         "status": "deferred",
-        "notes": "Phase 1 OSM-only shipping. WMA Official Trails specialty deferred (no adapter this pass)."
+        "notes": "Inactive during the foundational OSM-only phase. Adapter/data are retained for later controlled evaluation and are not in this pack."
       },
       "routingReady": true,
       "routingMode": "osm-only",
       "backboneArtifact": {
         "path": "routing/data/regions/mb/graph.v1.json.gz",
-        "edgeCount": 141737,
-        "nodeCount": 191170,
-        "gzBytes": 11277238
+        "edgeCount": 290829,
+        "nodeCount": 229022,
+        "gzBytes": 15178975
       },
       "osm": {
         "adapter": "osm-roads",
         "role": "sole-fabric",
         "status": "ready",
-        "featureCount": 143055,
-        "added": 143055,
+        "featureCount": 153227,
+        "added": 153227,
         "license": "OpenStreetMap contributors (ODbL)",
-        "dateRetrieved": "2026-07-29"
+        "dateRetrieved": "2026-08-21"
       }
     },
     {

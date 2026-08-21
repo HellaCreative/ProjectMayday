@@ -65,6 +65,21 @@ tag: pack-sk-osm-20260821-01
 note: AB re-cut ab-osm-20260821-02 after AB–SK seam
 ```
 
+
+```
+region: mb   release-id: mb-osm-20260821-01   geofabrik ts: 2026-08-20T20:20:51Z   pbf sha: 226f75f37653193d1a3e860c841deadc46cee3d83faadc9b91eec79e39fb5676
+steps 1–7: ok
+audit contradictions: 0     non-OSM edges: 0
+stitches: 2978  free-space: 0
+largest permissive component: 98.00% of edges
+urban cores: 2 hard / 163 scored
+seams built: sk-mb           seams deferred: mb-on, mb-nu
+route acceptance: 14/15 — red: long-brandon-thompson/dirt 47%<50%
+candidate uploaded: https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/candidates/mb-osm-20260821-01   promoted: NO
+tag: pack-mb-osm-20260821-01
+note: SK re-cut sk-osm-20260821-02 after SK–MB seam
+```
+
 ## Promote commands (not run)
 
 ```
