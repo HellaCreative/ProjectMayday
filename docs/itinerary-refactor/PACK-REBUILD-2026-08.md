@@ -222,6 +222,21 @@ tag: pack-nb-osm-20260821-04
 ```
 
 
+
+```
+region: id   release-id: id-osm-20260821-01   geofabrik ts: 2026-08-20T20:20:51Z   pbf sha: d0c711f742acb7d000eed487e6fd7061ccef4a38ae4882a3c3c494f027041b91
+steps 1–7: ok (fuel after US slug map)
+audit contradictions: 0     non-OSM edges: 0
+stitches: 8267  free-space: 0
+largest permissive component: 97.62% of edges
+urban cores: 140 hard / 49 scored
+seams built: wa-id, bc-id           seams deferred: id-mt, id-or, id-nv, id-ut, id-wy (US later)
+route acceptance: 13/15 — red: long-lewiston-idaho-falls/cleanest 21%>Clean max; short-mccall-cascade/cleanest 39%>Clean max
+candidate uploaded: https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/candidates/id-osm-20260821-01   promoted: NO
+tag: pack-id-osm-20260821-01
+note: WA re-cut wa-osm-20260821-03; BC re-cut bc-osm-20260821-05 after ID seams
+```
+
 ## Session status
 
 **Canada complete including NS rebuild.** **US states next.** — resume from tag `pack-nu-osm-20260821-01` with order `id`, `mt`, `or`, then A–Z remainder; add Geofabrik slug mappings per state as needed.
@@ -229,9 +244,9 @@ tag: pack-nb-osm-20260821-04
 ### Latest live candidates (promote when physical OK)
 
 ```
-node scripts/pack-fabric/scripts/ship-routing.js --promote bc-osm-20260821-04 --pack bc --live --assert
+node scripts/pack-fabric/scripts/ship-routing.js --promote bc-osm-20260821-05 --pack bc --live --assert
 node scripts/pack-fabric/scripts/ship-routing.js --promote ab-osm-20260821-02 --pack ab --live --assert
-node scripts/pack-fabric/scripts/ship-routing.js --promote wa-osm-20260821-02 --pack wa --live --assert
+node scripts/pack-fabric/scripts/ship-routing.js --promote wa-osm-20260821-03 --pack wa --live --assert
 node scripts/pack-fabric/scripts/ship-routing.js --promote sk-osm-20260821-02 --pack sk --live --assert
 node scripts/pack-fabric/scripts/ship-routing.js --promote mb-osm-20260821-02 --pack mb --live --assert
 node scripts/pack-fabric/scripts/ship-routing.js --promote on-osm-20260821-02 --pack on --live --assert
@@ -240,6 +255,7 @@ node scripts/pack-fabric/scripts/ship-routing.js --promote nb-osm-20260821-04 --
 node scripts/pack-fabric/scripts/ship-routing.js --promote pe-osm-20260821-01 --pack pe --live --assert
 node scripts/pack-fabric/scripts/ship-routing.js --promote nl-osm-20260821-02 --pack nl --live --assert
 node scripts/pack-fabric/scripts/ship-routing.js --promote ns-osm-20260821-02 --pack ns --live --assert
+node scripts/pack-fabric/scripts/ship-routing.js --promote id-osm-20260821-01 --pack id --live --assert
 node scripts/pack-fabric/scripts/ship-routing.js --promote yt-osm-20260821-01 --pack yt --live --assert
 node scripts/pack-fabric/scripts/ship-routing.js --promote nt-osm-20260821-01 --pack nt --live --assert
 node scripts/pack-fabric/scripts/ship-routing.js --promote nu-osm-20260821-01 --pack nu --live --assert
@@ -250,5 +266,5 @@ node scripts/pack-fabric/scripts/ship-routing.js --promote nu-osm-20260821-01 --
 node scripts/pack-fabric/scripts/ship-routing.js --promote sk-osm-20260821-01 --pack sk --live --assert
 node scripts/pack-fabric/scripts/ship-routing.js --promote bc-osm-20260821-03 --pack bc --live --assert
 node scripts/pack-fabric/scripts/ship-routing.js --promote ab-osm-20260821-02 --pack ab --live --assert
-node scripts/pack-fabric/scripts/ship-routing.js --promote wa-osm-20260821-02 --pack wa --live --assert
+node scripts/pack-fabric/scripts/ship-routing.js --promote wa-osm-20260821-03 --pack wa --live --assert
 ```
