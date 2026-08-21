@@ -191,11 +191,8 @@ final class ItineraryBuilder {
             let finalResponse = baselineHistory == history
                 ? baseline
                 : try await source.route(routeRequest(
-                    profile: riderLeg.profile,
-                    allowUnknown: riderLeg.allowUnknown,
-                    from: from,
-                    to: to,
-                    avoidEdgeIDs: itinerary.impassableEdgeIDs,
+                    itinerary: itinerary,
+                    legIndex: index,
                     maxPathMeters: nil,
                     history: history
                 ))
@@ -212,8 +209,16 @@ final class ItineraryBuilder {
         }
 
         let firstCap = max(0, fuel.usableMeters - fuelUsedAtStart)
+        let stopsNeeded = meters <= firstCap + 1
+            ? 0
+            : Int(ceil((meters - firstCap) / fuel.usableMeters))
+        RoutingDebugLog.shared.event(
+            "fuel need riderLeg=\(riderLeg.id) profileMeters=\(Int(meters)) " +
+                "usable=\(Int(fuel.usableMeters)) stopsNeeded=\(stopsNeeded)"
+        )
         let nextMeters = allBaseline[index + 1]?.distanceMeters
         let requirePumpBeforeWaypoint: Bool
+        let destinationFuelUsedLimitMeters: Double?
         if index + 1 < itinerary.legs.count {
             guard let nextMeters else {
                 throw RoutingError.invalidResponse
@@ -221,8 +226,12 @@ final class ItineraryBuilder {
             let arrivalWithoutPump = fuelUsedAtStart + meters
             requirePumpBeforeWaypoint = meters <= firstCap + 1
                 && nextMeters > max(0, fuel.usableMeters - arrivalWithoutPump) + 1
+            destinationFuelUsedLimitMeters = requirePumpBeforeWaypoint && nextMeters <= fuel.usableMeters + 1
+                ? max(0, fuel.usableMeters - nextMeters)
+                : nil
         } else {
             requirePumpBeforeWaypoint = false
+            destinationFuelUsedLimitMeters = nil
         }
 
         if meters <= firstCap + 1, !requirePumpBeforeWaypoint {
@@ -247,7 +256,11 @@ final class ItineraryBuilder {
             allowUnknown: riderLeg.allowUnknown,
             usableRangeMeters: fuel.usableMeters,
             firstLegMaxMeters: firstCap,
-            requireFuelStopBeforeEnd: requirePumpBeforeWaypoint,
+            requireFuelStopBeforeEnd: requirePumpBeforeWaypoint || stopsNeeded > 0,
+            minimumFuelStops: stopsNeeded,
+            destinationFuelUsedLimitMeters: destinationFuelUsedLimitMeters,
+            profileMeters: meters,
+            riderLegId: riderLeg.id.uuidString,
             avoidEdgeIds: Array(itinerary.impassableEdgeIDs),
             priorEdgeIds: history.edgeIDs,
             arrivalEdgeId: history.arrivalEdgeID,
@@ -273,6 +286,7 @@ final class ItineraryBuilder {
                 to: points[subIndex + 1],
                 avoidEdgeIDs: itinerary.impassableEdgeIDs,
                 maxPathMeters: cap,
+                directExtraBudgetMeters: riderLeg.profile == .direct ? 0 : nil,
                 history: sublegHistory
             )
             let response = try await source.route(request)
@@ -375,6 +389,10 @@ private func routeRequest(
     history: EdgeHistory = EdgeHistory()
 ) -> RouteRequest {
     let leg = itinerary.legs[legIndex]
+    let directLegCount = itinerary.legs.filter { $0.profile == .direct }.count
+    let directExtraBudget = leg.profile == .direct && directLegCount > 0
+        ? 15_000 / Double(directLegCount)
+        : nil
     return routeRequest(
         profile: leg.profile,
         allowUnknown: leg.allowUnknown,
@@ -382,6 +400,7 @@ private func routeRequest(
         to: itinerary.waypoints[legIndex + 1].coordinate,
         avoidEdgeIDs: itinerary.impassableEdgeIDs,
         maxPathMeters: maxPathMeters,
+        directExtraBudgetMeters: directExtraBudget,
         history: history
     )
 }
@@ -393,6 +412,7 @@ private func routeRequest(
     to: RouteCoordinate,
     avoidEdgeIDs: Set<String>,
     maxPathMeters: Double?,
+    directExtraBudgetMeters: Double? = nil,
     history: EdgeHistory = EdgeHistory()
 ) -> RouteRequest {
     RouteRequest(
@@ -406,7 +426,8 @@ private func routeRequest(
         priorEdgeIds: history.edgeIDs,
         arrivalEdgeId: history.arrivalEdgeID,
         backtrackFactor: 4,
-        maxPathMeters: maxPathMeters
+        maxPathMeters: maxPathMeters,
+        directExtraBudgetMeters: directExtraBudgetMeters
     )
 }
 

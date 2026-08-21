@@ -91,6 +91,7 @@ struct RouteRequestOptions: Codable, Sendable {
     var backtrackFactor: Double?
     var sessionSeed: UInt64?
     var maxPathMeters: Double?
+    var directExtraBudgetMeters: Double?
 
     init(
         avoidEdgeIds: [String] = [],
@@ -98,7 +99,8 @@ struct RouteRequestOptions: Codable, Sendable {
         arrivalEdgeId: String? = nil,
         backtrackFactor: Double? = nil,
         sessionSeed: UInt64? = nil,
-        maxPathMeters: Double? = nil
+        maxPathMeters: Double? = nil,
+        directExtraBudgetMeters: Double? = nil
     ) {
         self.avoidEdgeIds = avoidEdgeIds.isEmpty ? nil : avoidEdgeIds
         self.priorEdgeIds = priorEdgeIds.isEmpty ? nil : priorEdgeIds
@@ -106,6 +108,7 @@ struct RouteRequestOptions: Codable, Sendable {
         self.backtrackFactor = backtrackFactor
         self.sessionSeed = sessionSeed
         self.maxPathMeters = maxPathMeters
+        self.directExtraBudgetMeters = directExtraBudgetMeters
     }
 }
 
@@ -125,7 +128,8 @@ struct RouteRequest: Codable, Sendable {
         arrivalEdgeId: String? = nil,
         backtrackFactor: Double? = nil,
         sessionSeed: UInt64 = 0,
-        maxPathMeters: Double? = nil
+        maxPathMeters: Double? = nil,
+        directExtraBudgetMeters: Double? = nil
     ) {
         self.profile = profile
         self.locations = locations
@@ -136,7 +140,8 @@ struct RouteRequest: Codable, Sendable {
         )
         let seed = sessionSeed == 0 ? nil : sessionSeed
         if avoidEdgeIds.isEmpty, priorEdgeIds.isEmpty, arrivalEdgeId == nil,
-           backtrackFactor == nil, seed == nil, maxPathMeters == nil {
+           backtrackFactor == nil, seed == nil, maxPathMeters == nil,
+           directExtraBudgetMeters == nil {
             options = nil
         } else {
             options = RouteRequestOptions(
@@ -145,7 +150,8 @@ struct RouteRequest: Codable, Sendable {
                 arrivalEdgeId: arrivalEdgeId,
                 backtrackFactor: backtrackFactor,
                 sessionSeed: seed,
-                maxPathMeters: maxPathMeters
+                maxPathMeters: maxPathMeters,
+                directExtraBudgetMeters: directExtraBudgetMeters
             )
         }
     }
@@ -158,6 +164,10 @@ struct FuelChainConstraint: Codable, Sendable {
     let usableRangeMeters: Double
     let firstLegMaxMeters: Double
     let requireFuelStopBeforeEnd: Bool
+    let minimumFuelStops: Int
+    let destinationFuelUsedLimitMeters: Double?
+    let profileMeters: Double
+    let riderLegId: String
 }
 
 struct FuelChainRequest: Codable, Sendable {
@@ -176,6 +186,10 @@ struct FuelChainRequest: Codable, Sendable {
         usableRangeMeters: Double,
         firstLegMaxMeters: Double,
         requireFuelStopBeforeEnd: Bool,
+        minimumFuelStops: Int,
+        destinationFuelUsedLimitMeters: Double? = nil,
+        profileMeters: Double,
+        riderLegId: String,
         avoidEdgeIds: [String] = [],
         priorEdgeIds: [String] = [],
         arrivalEdgeId: String? = nil,
@@ -203,7 +217,11 @@ struct FuelChainRequest: Codable, Sendable {
         fuel = FuelChainConstraint(
             usableRangeMeters: usableRangeMeters,
             firstLegMaxMeters: firstLegMaxMeters,
-            requireFuelStopBeforeEnd: requireFuelStopBeforeEnd
+            requireFuelStopBeforeEnd: requireFuelStopBeforeEnd,
+            minimumFuelStops: minimumFuelStops,
+            destinationFuelUsedLimitMeters: destinationFuelUsedLimitMeters,
+            profileMeters: profileMeters,
+            riderLegId: riderLegId
         )
     }
 }

@@ -174,8 +174,11 @@ final class PackRoutingSource: RoutingSource {
                 profile: req.profile,
                 allowUnknown: req.accessPolicy.motorizedUnknown
             )
-            let mustPump = stops.isEmpty && req.fuel.requireFuelStopBeforeEnd
-            if let direct, !mustPump {
+            let mustPump = stops.count < req.fuel.minimumFuelStops
+                || (stops.isEmpty && req.fuel.requireFuelStopBeforeEnd)
+            let destinationLimit = req.fuel.destinationFuelUsedLimitMeters
+            if let direct, !mustPump,
+               destinationLimit == nil || direct <= (destinationLimit ?? .infinity) + 1 {
                 graphMeters.append(direct)
                 return FuelChainResponse(
                     status: "complete", error: nil, message: nil,
