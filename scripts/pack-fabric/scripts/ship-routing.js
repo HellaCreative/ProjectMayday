@@ -24,6 +24,8 @@
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
+const os = require("os");
+const zlib = require("zlib");
 const { spawnSync } = require("child_process");
 
 const DIRT = path.resolve(__dirname, "../../..");
@@ -34,6 +36,8 @@ const OPTIONAL_PHONE_FILES = ["fuel.v1.json"];
 const ALL_PHONE_FILES = PHONE_FILES.concat(OPTIONAL_PHONE_FILES);
 const RELEASES = path.join(FABRIC, "routing/data/releases");
 const PUBLIC_R2_BASE = process.env.R2_PUBLIC_BASE || "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev";
+/** Wrangler `r2 object put` rejects bodies over 300 MiB; gzip large packs under that. */
+const WRANGLER_MAX_BYTES = 290 * 1024 * 1024;
 
 function die(msg) {
   console.error(msg);
@@ -86,11 +90,49 @@ function putR2(regionId, fileName, prefix = "") {
   const src = path.join(PACKS, regionId, fileName);
   if (!fs.existsSync(src)) die("missing " + src + " — build the phone pack first");
   const key = "dirt-packs/" + (prefix ? prefix.replace(/^\/+|\/+$/g, "") + "/" : "") + regionId + "/" + fileName;
-  const mb = fs.statSync(src).size / 1e6;
-  console.log("PUT", key, mb >= 1 ? Math.round(mb) + "MB" : Math.round(mb * 1000) + "KB");
-  run("npx", ["wrangler", "r2", "object", "put", key, "--file=" + src, "--remote"], {
-    cwd: FABRIC
-  });
+  const bytes = fs.statSync(src).size;
+  const mb = bytes / 1e6;
+  let uploadPath = src;
+  const extra = [];
+  let tmp = null;
+  if (bytes > WRANGLER_MAX_BYTES) {
+    tmp = path.join(os.tmpdir(), `dirt-r2-${regionId}-${fileName.replace(/\W+/g, "_")}.gz`);
+    const gz = zlib.gzipSync(fs.readFileSync(src), { level: 1 });
+    if (gz.length > WRANGLER_MAX_BYTES) {
+      die(
+        key +
+          " is " +
+          Math.round(mb) +
+          "MB raw / " +
+          Math.round(gz.length / 1e6) +
+          "MB gzip — still over wrangler 300MiB; need S3 multipart"
+      );
+    }
+    fs.writeFileSync(tmp, gz);
+    uploadPath = tmp;
+    extra.push("--content-encoding", "gzip");
+    console.log(
+      "PUT",
+      key,
+      Math.round(mb) + "MB raw →",
+      Math.round(gz.length / 1e6) + "MB gzip (wrangler 300MiB cap)"
+    );
+  } else {
+    console.log("PUT", key, mb >= 1 ? Math.round(mb) + "MB" : Math.round(mb * 1000) + "KB");
+  }
+  try {
+    run(
+      "npx",
+      ["wrangler", "r2", "object", "put", key, "--file=" + uploadPath, "--remote"].concat(extra),
+      { cwd: FABRIC }
+    );
+  } finally {
+    if (tmp) {
+      try {
+        fs.unlinkSync(tmp);
+      } catch (_) {}
+    }
+  }
 }
 
 function releasePath(releaseId) {

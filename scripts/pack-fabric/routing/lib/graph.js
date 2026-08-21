@@ -188,16 +188,27 @@ function isPhonePackV2Path(graphPath) {
   return /graph\.v2\.bin$/i.test(String(graphPath || ""));
 }
 
+function maybeGunzipPackBuffer(buf, contentEncoding) {
+  const enc = String(contentEncoding || "").toLowerCase();
+  const magicGzip = buf.length >= 2 && buf[0] === 0x1f && buf[1] === 0x8b;
+  if (!enc.includes("gzip") && !magicGzip) return buf;
+  try {
+    return zlib.gunzipSync(buf);
+  } catch (_) {
+    return buf;
+  }
+}
+
 async function loadV2RuntimeAsync(graphPath, started) {
   const paths = v2PathsForV1Path(graphPath);
   let graphRaw;
   let geomRaw;
   if (String(graphPath).startsWith("http://") || String(graphPath).startsWith("https://")) {
-    graphRaw = await fetchBuffer(paths.graph);
-    geomRaw = await fetchBuffer(paths.geom);
+    graphRaw = maybeGunzipPackBuffer(await fetchBuffer(paths.graph));
+    geomRaw = maybeGunzipPackBuffer(await fetchBuffer(paths.geom));
   } else {
-    graphRaw = fs.readFileSync(paths.graph);
-    geomRaw = fs.readFileSync(paths.geom);
+    graphRaw = maybeGunzipPackBuffer(fs.readFileSync(paths.graph));
+    geomRaw = maybeGunzipPackBuffer(fs.readFileSync(paths.geom));
   }
   const graphBuf = Buffer.alloc(graphRaw.length);
   const geomBuf = Buffer.alloc(geomRaw.length);
@@ -213,8 +224,8 @@ async function loadV2RuntimeAsync(graphPath, started) {
 function loadV2RuntimeSync(v1Path, started) {
   const paths = v2PathsForV1Path(v1Path);
   // Read into freshly allocated buffers (byteOffset 0) so typed views align.
-  const graphRaw = fs.readFileSync(paths.graph);
-  const geomRaw = fs.readFileSync(paths.geom);
+  const graphRaw = maybeGunzipPackBuffer(fs.readFileSync(paths.graph));
+  const geomRaw = maybeGunzipPackBuffer(fs.readFileSync(paths.geom));
   const graphBuf = Buffer.alloc(graphRaw.length);
   const geomBuf = Buffer.alloc(geomRaw.length);
   graphRaw.copy(graphBuf);
