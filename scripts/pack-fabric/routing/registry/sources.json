@@ -390,7 +390,7 @@
         "format": "GeoPackage",
         "license": "Open Government Licence - Canada",
         "adapter": "nrn",
-        "status": "ready",
+        "status": "deferred",
         "dateRetrieved": "2026-07-20",
         "notes": "NRN omitted from routing fabric (OSM-only)."
       },
@@ -407,18 +407,18 @@
       "routingMode": "osm-only",
       "backboneArtifact": {
         "path": "routing/data/regions/pe/graph.v1.json.gz",
-        "edgeCount": 21807,
-        "nodeCount": 31571,
-        "gzBytes": 1752384
+        "edgeCount": 41961,
+        "nodeCount": 35905,
+        "gzBytes": 2388855
       },
       "osm": {
         "adapter": "osm-roads",
         "role": "sole-fabric",
         "status": "ready",
-        "featureCount": 22173,
-        "added": 22173,
+        "featureCount": 24564,
+        "added": 24564,
         "license": "OpenStreetMap contributors (ODbL)",
-        "dateRetrieved": "2026-07-29"
+        "dateRetrieved": "2026-08-21"
       }
     },
     {

@@ -125,6 +125,20 @@ tag: pack-nb-osm-20260821-01
 note: QC re-cut qc-osm-20260821-02 after QC–NB seam
 ```
 
+
+```
+region: pe   release-id: pe-osm-20260821-01   geofabrik ts: 2026-08-20T20:20:51Z   pbf sha: 87601a175a08d544e19f16cc69b59cb7be5211e6016f9e97046eeb239f83d25f
+steps 1–7: ok
+audit contradictions: 0     non-OSM edges: 0
+stitches: 973  free-space: 0
+largest permissive component: 98.62% of edges
+urban cores: 1 hard / 12 scored
+seams built: nb-pe           seams deferred: none
+route acceptance: 14/15 — red: short-montague-georgetown/balanced 22% off 50/50
+candidate uploaded: https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/candidates/pe-osm-20260821-01   promoted: NO
+tag: pack-pe-osm-20260821-01
+```
+
 ## Promote commands (not run)
 
 ```
