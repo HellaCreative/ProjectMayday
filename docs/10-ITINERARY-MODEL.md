@@ -12,6 +12,25 @@ hops through that station and replans forward; changing the leg profile clears
 the leg's overrides. Overrides for stations absent from the replacement chain
 are pruned after a successful build.
 
+Phase 11 deliberately adds a second, distinct kind of rider intent for moving a
+generated pump. `fuelStopOverrides[departureAnchorID] = chosenStationID` says
+which pump must follow a particular departure anchor. The anchor is the rider
+waypoint ID for the first fuel hop or the preceding station ID for a later hop.
+It is not stored on a derived `FuelStop`, and it is not combined with
+`hopOverrides`: one chooses a station while the other chooses a routing profile.
+The builder validates every requested pump with forward two-step reachability,
+replans from the departure anchor, and prunes overrides whose anchor or chosen
+station disappears from the accepted replacement chain. Changing a rider-leg
+profile clears both kinds of override on that leg.
+
+An accepted fuel gap is also rider intent. `acceptedFuelGapIDs` contains only
+deterministic fingerprints of the current built gap: rider-leg ID, bracketing
+anchors, usable range, and gap metres. Acceptance means “I will manage
+additional fuel”; it never invents litres, changes range, or turns an unproved
+station chain into a proved one. Any route, range, reserve, waypoint, station,
+profile, access, or pack-revision change produces a different fingerprint and
+therefore requires a new acknowledgement.
+
 `RoutePlannerModel.apply(_:source:)` is the single mutation door. Append, insert,
 move, delete, profile, access, fuel rebuild, and impassable actions go through the
 pure `ItineraryReducer`. Every real change advances the generation and identifies
@@ -30,7 +49,10 @@ The core invariants are:
 - Each leg connects adjacent waypoint IDs in order.
 - Waypoint IDs are unique and leg IDs are deterministic from their endpoints.
 - Fuel-stop geometry and ordering exist only in built output; canonical fuel
-  identity appears only as a station-keyed hop profile override.
+  identity appears only in station-keyed hop profiles and explicit
+  departure-anchor fuel-stop overrides.
+- A fuel gap remains derived output. Only its exact deterministic acceptance
+  fingerprint may be persisted as rider intent.
 - One touch resolves to one of pin, route, or map, in that order.
 
 Every canonical edit emits `itinerary action=… source=… gen=…` with coordinates for

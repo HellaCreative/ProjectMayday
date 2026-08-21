@@ -26,7 +26,7 @@ Rider waypoints, generated fuel stops, UI rows, route geometry, and async routin
 
 ### Where it stands
 
-- Bench: 64/75 at `04ded27`, re-baselined against promoted NS release `ns-osm-20260821-02`. This is the comparison baseline for subsequent routing phases.
+- Bench: 66/75 in `scripts/pack-fabric/bench/results/10e38b5-20260821T180738Z.json`, measured at `10e38b5` against promoted NS release `ns-osm-20260821-02`. Commit `4b78558` preserves that result with the routed near-waypoint recovery fix and is the comparison baseline for Phase 11.
 - The original `ee25e92` baseline and every `ns-osm-20260820-01` benchmark are invalid for current deltas because the NS graph changed; retain them as historical measurements only.
 - Device: insert/renumber, drag, swipe-delete, From Here → Plan, and progressive reveal verified by the human on 08-21 pre-Phase 7. Post-Phase 9 device pass pending.
 - Offline: architecture in place; **never exercised end-to-end under the new model.** Treat as unverified.
@@ -37,8 +37,8 @@ Rider waypoints, generated fuel stops, UI rows, route geometry, and async routin
 
 - `docs/08-MAP-REFINEMENT.md` — the routing laws. Do not reopen to chase a number. If a bench row can't go green inside the laws, report it; the human decides.
 - `docs/09-OSM-PACK-QUALITY-STANDARD.md` — the pack build and release gate.
-- `docs/10-ITINERARY-MODEL.md` — the canonical model. Fuel stops never become rider waypoints. `RiderItinerary` never gets a setter.
-- `RoutePlannerCard.swift` outside `stageList`/`StageCard`, and the label helpers in `RoutePlannerModel.swift` — UI in progress by another agent; byte-identical output required.
+- `docs/10-ITINERARY-MODEL.md` — the canonical model. Fuel stops never become rider waypoints. `RiderItinerary` never gets a setter. Phase 11 is explicitly authorized to add separate fuel-stop overrides and exact gap acknowledgements as rider intent.
+- `RoutePlannerCard.swift` outside `stageList`/`StageCard`, and the label helpers in `RoutePlannerModel.swift` remain locked, except that Phase 11 is explicitly authorized to replace the fuel-control area with the map fuel affordance. All unrelated layout remains byte-identical.
 
 ### Working rules that kept this from going sideways
 
