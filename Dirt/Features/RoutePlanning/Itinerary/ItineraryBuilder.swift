@@ -156,6 +156,7 @@ final class ItineraryBuilder {
 
         var waypointFuelStops: [UUID: FuelStop] = [:]
         var firstReachableFuel = [Int: Double]()
+        let fuelDeadline = fuelReplan ? Date().addingTimeInterval(20) : .distantFuture
         if fuelReplan, baselineFailure == nil {
             RoutingDebugLog.shared.event(
                 "fuel replan fromLeg=0 reason=\(startIndex == 0 ? "build" : "edit")"
@@ -175,6 +176,7 @@ final class ItineraryBuilder {
                 }
             }
             for index in itinerary.legs.indices where itinerary.legs.count > 1 {
+                guard Date() < fuelDeadline else { break }
                 guard let base = baseline[index],
                       let meters = base.distanceMeters
                 else { continue }
@@ -193,7 +195,11 @@ final class ItineraryBuilder {
                     profileMeters: meters,
                     riderLegId: riderLeg.id.uuidString,
                     avoidEdgeIds: Array(itinerary.impassableEdgeIDs),
-                    probeFirstReachableStation: true
+                    probeFirstReachableStation: true,
+                    windowTimeBudgetMs: min(
+                        5_800,
+                        max(100, Int(fuelDeadline.timeIntervalSinceNow * 1_000))
+                    )
                 ))
                 if let distance = probe?.firstReachableStationMeters {
                     firstReachableFuel[index] = distance
@@ -224,7 +230,6 @@ final class ItineraryBuilder {
         var attemptedStationSets = Set<String>()
         var fuelBacktrackAttempts = 0
         var lookaheadEnabled = true
-        let fuelDeadline = fuelReplan ? Date().addingTimeInterval(20) : .distantFuture
 
         fuelAttempts: while true {
             if fuelReplan, Date() >= fuelDeadline {
