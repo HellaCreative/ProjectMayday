@@ -708,6 +708,65 @@
           "maximumDirtBackwardPercent": 40
         }
       ]
+    },
+    "nt": {
+      "fuelMinimum": 40,
+      "routes": [
+        {
+          "id": "long-hay-river-inuvik",
+          "from": {
+            "lat": 60.816,
+            "lon": -115.78,
+            "label": "Hay River"
+          },
+          "to": {
+            "lat": 68.36,
+            "lon": -133.723,
+            "label": "Inuvik"
+          },
+          "minimumDirtPercent": 30,
+          "minimumDirtAllowUnknownPercent": 40,
+          "balancedTolerance": 30,
+          "maximumCleanDirtPercent": 20,
+          "maximumDirtBackwardPercent": 45
+        },
+        {
+          "id": "urban-yellowknife-behchoko",
+          "from": {
+            "lat": 62.454,
+            "lon": -114.372,
+            "label": "Yellowknife"
+          },
+          "to": {
+            "lat": 62.802,
+            "lon": -116.046,
+            "label": "Behchok\u01eb\u0300"
+          },
+          "minimumDirtPercent": 20,
+          "minimumDirtAllowUnknownPercent": 30,
+          "balancedTolerance": 30,
+          "maximumCleanDirtPercent": 20,
+          "maximumDirtBackwardPercent": 45
+        },
+        {
+          "id": "short-fort-simpson-wrigley",
+          "from": {
+            "lat": 61.863,
+            "lon": -121.355,
+            "label": "Fort Simpson"
+          },
+          "to": {
+            "lat": 63.228,
+            "lon": -123.474,
+            "label": "Wrigley"
+          },
+          "minimumDirtPercent": 30,
+          "minimumDirtAllowUnknownPercent": 40,
+          "balancedTolerance": 30,
+          "maximumCleanDirtPercent": 20,
+          "maximumDirtBackwardPercent": 45
+        }
+      ]
     }
   }
 }
