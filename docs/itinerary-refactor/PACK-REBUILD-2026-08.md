@@ -141,16 +141,17 @@ tag: pack-pe-osm-20260821-01
 
 
 ```
-region: nl   release-id: nl-osm-20260821-01   geofabrik ts: 2026-08-20T20:20:51Z   pbf sha: 2eabe993c7e5fec7ee1b328e894ab23935b9f444543878275763a5c6c10a99e8
+region: nl   release-id: nl-osm-20260821-02   geofabrik ts: 2026-08-20T20:20:51Z   pbf sha: 2eabe993c7e5fec7ee1b328e894ab23935b9f444543878275763a5c6c10a99e8
 steps 1–7: ok
 audit contradictions: 0     non-OSM edges: 0
 stitches: 4741  free-space: 0
 largest permissive component: 89.34% of edges
 urban cores: 3 hard / 343 scored
-seams built: (none)           seams deferred: qc-nl (no shared routable OSM vertex — ferry-only Labrador link)
+seams built: qc-nl (96 anchors / 44 OSM ways / 0 m gap — Fermont–Labrador City R389/TLH 500)
 route acceptance: 12/15 — red: long-port-aux-basques-st-johns dirt/balanced/direct no route (allow-unknown completes)
-candidate uploaded: https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/candidates/nl-osm-20260821-01   promoted: NO
-tag: pack-nl-osm-20260821-01
+candidate uploaded: https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/candidates/nl-osm-20260821-02   promoted: NO
+tag: pack-nl-osm-20260821-02
+note: QC–NL was wrongly deferred as ferry-only. Labrador land corridors share OSM topology with QC (Fermont: 559 shared way IDs / 8135 quantized verts; Blanc-Sablon R138/R510: 8 / 564). Prior seam failure: NL pack giant is Newfoundland island (~119k nodes); Labrador is 2nd component (~8.8k). build-cross-pack-seams now uses the largest component touching shared candidate ways. QC re-cut qc-osm-20260821-03. Blanc vertices qualify but spread selected Fermont density.
 ```
 
 
@@ -234,10 +235,11 @@ node scripts/pack-fabric/scripts/ship-routing.js --promote wa-osm-20260821-02 --
 node scripts/pack-fabric/scripts/ship-routing.js --promote sk-osm-20260821-02 --pack sk --live --assert
 node scripts/pack-fabric/scripts/ship-routing.js --promote mb-osm-20260821-02 --pack mb --live --assert
 node scripts/pack-fabric/scripts/ship-routing.js --promote on-osm-20260821-02 --pack on --live --assert
-node scripts/pack-fabric/scripts/ship-routing.js --promote qc-osm-20260821-02 --pack qc --live --assert
-node scripts/pack-fabric/scripts/ship-routing.js --promote nb-osm-20260821-02 --pack nb --live --assert
+node scripts/pack-fabric/scripts/ship-routing.js --promote qc-osm-20260821-03 --pack qc --live --assert
+node scripts/pack-fabric/scripts/ship-routing.js --promote nb-osm-20260821-04 --pack nb --live --assert
 node scripts/pack-fabric/scripts/ship-routing.js --promote pe-osm-20260821-01 --pack pe --live --assert
-node scripts/pack-fabric/scripts/ship-routing.js --promote nl-osm-20260821-01 --pack nl --live --assert
+node scripts/pack-fabric/scripts/ship-routing.js --promote nl-osm-20260821-02 --pack nl --live --assert
+node scripts/pack-fabric/scripts/ship-routing.js --promote ns-osm-20260821-02 --pack ns --live --assert
 node scripts/pack-fabric/scripts/ship-routing.js --promote yt-osm-20260821-01 --pack yt --live --assert
 node scripts/pack-fabric/scripts/ship-routing.js --promote nt-osm-20260821-01 --pack nt --live --assert
 node scripts/pack-fabric/scripts/ship-routing.js --promote nu-osm-20260821-01 --pack nu --live --assert

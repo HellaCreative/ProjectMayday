@@ -326,10 +326,31 @@ async function streamGraphComponents(file, wantedWays) {
   for (let i = 1; i < meta.nodeCount; i += 1) {
     if (parent[i] === i && size[i] > size[giant]) giant = i;
   }
+  // Prefer the largest permissible component that actually touches the shared
+  // candidate ways. Newfoundland & Labrador is one Geofabrik extract but two
+  // land networks (island vs Labrador); the island is the pack giant, while
+  // QC–NL land seams live on the Labrador component (Route 389 / TLH 500 /
+  // Route 510). Using the island giant alone falsely reports "no shared
+  // vertex" when thousands of shared OSM vertices exist on Labrador.
+  const wantedRoots = new Set();
+  for (const endpoints of wayEndpoints.values()) {
+    for (const node of endpoints) wantedRoots.add(find(node));
+  }
+  let relevantGiant = giant;
+  let best = 0;
+  for (const root of wantedRoots) {
+    if (size[root] > best) {
+      best = size[root];
+      relevantGiant = root;
+    }
+  }
   return {
     wayOnGiant(wayId) {
-      return (wayEndpoints.get(wayId) || []).some((node) => find(node) === giant);
-    }
+      return (wayEndpoints.get(wayId) || []).some((node) => find(node) === relevantGiant);
+    },
+    relevantGiant,
+    packGiant: giant,
+    relevantGiantNodes: size[relevantGiant]
   };
 }
 

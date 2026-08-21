@@ -3,7 +3,7 @@
   "packFormat": "graph.v2",
   "geometryFormat": "geometry.v1",
   "version": "v1",
-  "generatedAt": "2026-08-21T11:24:09.720Z",
+  "generatedAt": "2026-08-21T11:34:47.650Z",
   "basePath": "/app/data/packs/v1",
   "regions": [
     {
@@ -91,8 +91,8 @@
       "files": [
         {
           "name": "graph.v2.bin",
-          "bytes": 58263359,
-          "sha256": "c43609112cc8ecfeb3e8e062fe081e40f12f14bb1e8cfe4fa6b738b9f32dd7f3"
+          "bytes": 58288049,
+          "sha256": "55e1839e283abf69dfe7aa1ef547cfb55b0f5d5dc43b75a5edf77a20caf52be0"
         },
         {
           "name": "geometry.v1.bin",
@@ -231,13 +231,18 @@
       "files": [
         {
           "name": "graph.v2.bin",
-          "bytes": 19519982,
-          "sha256": "01265b80f4fbe14be6405545de74222cbee248b3b019b19d0ef5bb8f94e54dcf"
+          "bytes": 40198375,
+          "sha256": "dc4808faa780dbb5808adc22f1c23c2fcb9b109667bcd9ac3c116dfd7286f429"
         },
         {
           "name": "geometry.v1.bin",
-          "bytes": 53357552,
-          "sha256": "39e0b3ad1409b3a1d4604a5d3ccbcb3ed57593b59115d65bdc5428958b99bfad"
+          "bytes": 65826136,
+          "sha256": "3d75632229c7b0188275813cb34554a2b58401110f765f8ed3b248e10a1a03bd"
+        },
+        {
+          "name": "fuel.v1.json",
+          "bytes": 232548,
+          "sha256": "ace32cd60ac6311f7d7a75aff1bc72e4d245fb7dcd260f52236cffca8cc2498c"
         }
       ]
     },
@@ -556,8 +561,8 @@
       "files": [
         {
           "name": "graph.v2.bin",
-          "bytes": 10419962,
-          "sha256": "5e1e5fbfbe04bd6b34170d0d42d9aec77be8021fb671bb15ba706c1b17968dd9"
+          "bytes": 10446280,
+          "sha256": "a2345f7d01e866b6ed09df66b45254cafb811f183fd7120f812da1b941a1b9d6"
         },
         {
           "name": "geometry.v1.bin",
@@ -781,8 +786,8 @@
       "files": [
         {
           "name": "graph.v2.bin",
-          "bytes": 67446683,
-          "sha256": "2ddbd5d1daef0dd64f8208b24ff327137aeabb52af7816d97e2c298e1b72add9"
+          "bytes": 67482438,
+          "sha256": "46dbb65b8ac5cfac4995e57889ca515352c09798f300046d39b1d3d2332eaf91"
         },
         {
           "name": "geometry.v1.bin",
@@ -941,8 +946,8 @@
       "files": [
         {
           "name": "graph.v2.bin",
-          "bytes": 108057871,
-          "sha256": "0010e24daa76fa2ff0aede6dd2f6ca11fc645dd8560d3282633854eac4f69818"
+          "bytes": 108083703,
+          "sha256": "88265c6001755a8f6c925a74b0bcda8d31de2c53cde66b5184804bd23e8c8be3"
         },
         {
           "name": "geometry.v1.bin",
