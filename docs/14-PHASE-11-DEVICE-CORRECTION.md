@@ -32,6 +32,19 @@ Point 3 in Quebec. The first cross-region leg began as Balanced, the long second
 leg took too long, no fuel chain was committed, and the UI offered auxiliary
 fuel even though live viewport queries saw dense station coverage.
 
+A third Plan test placed both rider waypoints inside Nova Scotia, one near
+`45.874661,-61.910289` and one near `43.651303,-65.684758`. Both visibly touched
+mapped roads. Routing failed immediately with `No eligible edge within 500 m of
+start (hop 1/3)`, then the sheet displayed the empty-plan instructions while both
+waypoint pins remained on the map.
+
+Moving Point 1 from the original mapped road to a more major highway allowed the
+same plan to route and place fuel stops. This confirms that the route and fuel
+chain are possible and isolates the failure to endpoint region/snap resolution.
+It is not acceptable recovery behavior: an eligible NS road must not require the
+rider to relocate to a major highway merely because PEI's coarse rectangle
+overlaps the coordinate.
+
 ## Confirmed implementation causes
 
 1. `stageListContent` iterates `RiderItinerary.legs` to create an aggregate parent
@@ -53,6 +66,15 @@ fuel even though live viewport queries saw dense station coverage.
 8. A fuel timeout or transport failure is converted into a derived `.gap`. The
    card therefore offers `I'll carry fuel` even though the solver did not prove
    that a chain was impossible.
+9. Region ownership is inferred from overlapping rectangular bounding boxes.
+   The northern NS coordinate also falls inside the coarse PEI rectangle, and
+   the smallest-box rule incorrectly assigns it to PEI. The server consequently
+   manufactures a PEI/NB/NS three-hop chain for a route wholly inside NS and
+   attempts to snap an NS road point against the PEI graph.
+10. A baseline routing failure can leave rider waypoints and map pins intact while
+    the legacy stage projection becomes empty. The card then tells the rider to
+    place Point 1 and Point 2 again instead of showing the failed Point 1 → Point
+    2 row and a recovery action.
 
 ## Second device evidence: confirmed timeline
 
@@ -231,6 +253,50 @@ and the matching client build are both live. The app should expose a diagnostic
 service contract/version so a mismatched client can report `Routing service
 update required` instead of producing misleading fuel behavior.
 
+### 9. Authoritative region ownership and eligible-edge snap
+
+Rectangular pack bounds remain useful for quickly finding candidate regions, but
+they are not province/state ownership truth and must not decide a route chain.
+
+Endpoint resolution becomes a two-stage operation shared by client and server:
+
+1. Use a compact, versioned province/state coverage geometry to determine the
+   administrative owner of each rider waypoint. The geometry is generated once
+   from the same OSM administrative boundaries and consumed by both Swift and
+   JavaScript.
+2. Validate that ownership by snapping against the nearest profile-eligible graph
+   edge within 500 m. Where boundary geometry or islands produce more than one
+   candidate, probe each candidate pack and choose the closest eligible edge.
+
+The resolved endpoint record contains region ID, edge ID, access class, snap
+distance, and resolver version. Route chaining uses those resolved region IDs,
+never raw bounding-box overlap.
+
+This is routing metadata, not a graph-pack rebuild. Existing graph and fuel pack
+bytes remain unchanged. The same coverage artifact ships with the app/server so
+online and offline decisions cannot disagree.
+
+For `45.874661,-61.910289`, the resolver must return NS and an NS eligible edge.
+For `43.651303,-65.684758`, it must also return NS. The resulting request is one
+NS route, not a three-hop regional chain.
+
+If no eligible edge exists after probing the correct region and adjacent boundary
+candidates, report which coordinate failed, which regions were probed, nearest
+edge distance/access in each, and an actionable `Move Point N` control. Never
+label an internally generated seam hop as the rider's start point.
+
+### 10. Preserve the rider's failed plan
+
+A routing failure does not erase or hide rider intent:
+
+- Point 1 and Point 2 remain in `RiderItinerary` and on the map.
+- The route sheet shows a `Point 1 → Point 2` failed row.
+- The row carries the precise reason and `Move Point 1`, `Move Point 2`, Retry,
+  and Clear route actions as appropriate.
+- Empty-plan guidance appears only when fewer than two rider waypoints exist.
+- A failed baseline route does not invoke fuel planning and does not expose fuel
+  gap or auxiliary-fuel actions.
+
 ## Model boundary
 
 This correction changes the presentation and control surface, not the canonical
@@ -273,6 +339,16 @@ ownership law:
     auxiliary fuel.
 17. A client/server contract mismatch blocks fuel acceptance with an honest
     service-version message.
+18. The two Nova Scotia reproduction coordinates both resolve to NS and generate
+    a single-region request.
+19. A coordinate in the NS/PEI bounding-box overlap resolves using coverage
+    geometry and eligible graph edges, not smallest rectangle.
+20. Every province/state overlap fixture resolves identically in Swift and
+    JavaScript.
+21. A genuine cross-region endpoint pair still produces the correct region chain.
+22. A failed two-waypoint route retains both waypoints and renders one failed leg
+    row with recovery and Clear route actions.
+23. Fuel planning is not invoked after a baseline edge-snap failure.
 
 ## Acceptance criteria for the next White build
 
@@ -287,4 +363,7 @@ ownership law:
 - Fuel stops appear progressively in bounded forward windows.
 - Dense station coverage cannot be represented as a proven fuel gap merely
   because the service timed out.
+- The Nova Scotia north-to-south reproduction is resolved as NS → NS and no
+  longer emits `hop 1/3` or probes PEI for the start edge.
+- Failed routing leaves the rider's waypoints visible and editable in the sheet.
 - No map pack or pack manifest change is involved.
