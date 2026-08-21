@@ -1937,6 +1937,9 @@ async function routeOnRuntime(body, graphResolution, runtime) {
   if (Number.isFinite(Number(options.maxPathMeters))) {
     searchOpts.maxPathMeters = Number(options.maxPathMeters);
   }
+  if (Number.isFinite(Number(options.directExtraBudgetMeters))) {
+    searchOpts.directExtraBudgetMeters = Number(options.directExtraBudgetMeters);
+  }
   let path = null;
   let urbanCoreFallbackUsed = false;
   let cleanUnpavedFallbackUsed = false;
@@ -2001,8 +2004,11 @@ async function routeOnRuntime(body, graphResolution, runtime) {
     const adventureSearchOpts = Object.assign({}, searchOpts, {
       // A settlement relaxation is a fallback, not a normal scoring mode.
       // findPathV2 may relax it only after every bounded attempt proves noPath.
-      settlementWall: true,
-      settlementFallback: false,
+      // Direct's hard promise is shortest graph path +15 km. Smaller mapped
+      // settlements remain scored avoidance, but cannot be hard walls that
+      // redefine the shortest reference underneath that distance budget.
+      settlementWall: profile !== "direct",
+      settlementFallback: profile === "direct",
       diagnostics
     });
     path = findPath(
@@ -2223,6 +2229,9 @@ async function routeOnRuntime(body, graphResolution, runtime) {
     policy
   );
   const lowDirt = isLowDirtRoute(profile, path);
+  const balancedMiss = profile === "balanced"
+    ? Number(path.searchMeta && path.searchMeta.balancedMiss) || 0
+    : null;
   const backtrack = backtrackSummary(path, priorEdgeIds);
   const restricted = restrictedSummary(path);
 
@@ -2231,6 +2240,7 @@ async function routeOnRuntime(body, graphResolution, runtime) {
     routeId: "route-" + Date.now().toString(36),
     profile,
     lowDirt,
+    balancedMiss,
     vehicle: body.vehicle || "dual-sport-motorcycle",
     accessPolicy: policy,
     geometry: path.geometry,
@@ -2259,6 +2269,7 @@ async function routeOnRuntime(body, graphResolution, runtime) {
       profileCost: path.profileCost,
       searchMeta: path.searchMeta || null,
       balancedMixChoice,
+      balancedMiss,
       fallback: urbanCoreFallbackUsed ? "urban_core_last_resort" : null,
       objective: path.searchMeta && path.searchMeta.rideObjective || (
         profile === "dirt" ? "earned-dirt-detour" :

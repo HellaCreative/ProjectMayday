@@ -51,7 +51,6 @@ const {
   progressRegressionForAttempt,
   annotateCorridorMeta,
   corridorMetersForProfile,
-  pickResourceEnd,
   VARIETY_SLOTS,
   BALANCED_BUCKETS,
   dirtBucket,
@@ -372,9 +371,67 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
       : profile === "dirt" ? [4, 3, 2, 1, 6, 8] : [1, 2, 3, 4, 6, 8];
     const widths = widthMultipliers.map((m) => baseCorridor * m).concat(Infinity);
     const requestedCap = Number(searchOpts.maxPathMeters);
+    // Direct's 15 km promise is a path-length budget, not merely a lateral
+    // corridor width. Establish the wall-respecting physical shortest path,
+    // then let the Direct profile minimize pavement inside that exact budget.
+    const budgetedProfile = profile === "direct" || profile === "balanced";
+    const directShortest = budgetedProfile
+      ? findPathV2(
+          runtime, startMatch, endMatch, profile, policy, avoidEdgeIds, pavedBias,
+          {
+            ...searchOpts,
+            costMode: "distance",
+            corridorMeters: 0,
+            hardCorridor: false,
+            boundedSearch: false,
+            variety: false,
+            settlementWall: false,
+            settlementFallback: false,
+            priorEdgeIds: [],
+            arrivalEdgeId: null,
+            backtrackFactor: 1,
+            progressRegressionMeters: Number.MAX_SAFE_INTEGER,
+            maxPathMeters: undefined
+          }
+        )
+      : null;
+    const directShortestMeters = Number(directShortest && directShortest.distanceMeters);
+    const requestedDirectExtra = Number(searchOpts.directExtraBudgetMeters);
+    const directExtraBudget = Number.isFinite(requestedDirectExtra)
+      ? Math.max(0, Math.min(15_000, requestedDirectExtra))
+      : 15_000;
+    const directBudget = Number.isFinite(directShortestMeters)
+      ? directShortestMeters + (profile === "direct" ? directExtraBudget : 40_000)
+      : Infinity;
+    const activePathCap = budgetedProfile
+      ? Math.min(Number.isFinite(requestedCap) ? requestedCap : Infinity, directBudget)
+      : requestedCap;
+    if (profile === "direct" && directExtraBudget === 0 && directShortest) {
+      if (Number.isFinite(activePathCap) && directShortestMeters > activePathCap + 1) {
+        if (searchOpts.diagnostics) searchOpts.diagnostics.outcome = "noPath";
+        return null;
+      }
+      directShortest.searchMeta = directShortest.searchMeta || {};
+      directShortest.searchMeta.rideObjective = "crow-flies-adventure";
+      directShortest.searchMeta.shortestMeters = Math.round(directShortestMeters);
+      directShortest.searchMeta.extraUsedMeters = 0;
+      directShortest.searchMeta.extraBudgetMeters = 0;
+      return directShortest;
+    }
     const dirtCandidates = [];
     const attemptDiagnostics = [];
+    // Keep one absolute ceiling across corridor attempts and any internal
+    // fallback recursion. A failed hop must not receive a fresh clock merely
+    // because the search widens or relaxes a scored preference.
+    const outerDeadline = Number.isFinite(Number(searchOpts.deadlineAtMs))
+      ? Number(searchOpts.deadlineAtMs)
+      : Date.now() + (profile === "balanced" ? 2_200 : 3_500);
+    searchOpts.deadlineAtMs = outerDeadline;
     for (const width of widths) {
+      if (Date.now() >= outerDeadline) {
+        attemptDiagnostics.push({ corridorMeters: null, outcome: "timeCap", pops: 0 });
+        break;
+      }
       // Once Dirt has compared its three deliberate envelopes, wider bands are
       // connectivity fallbacks only. Stop at the first one that connects.
       const dirtComparisonWidth = profile === "dirt" && Number.isFinite(width) && width <= baseCorridor * 4;
@@ -407,9 +464,14 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
         rideOpts.timeCapMs = 7000;
         rideOpts.popCap = Math.ceil(PASS2_POP_CAP / 2);
       }
+      rideOpts.timeCapMs = Math.min(
+        Number(rideOpts.timeCapMs) || PASS2_TIME_MS,
+        Math.max(250, outerDeadline - Date.now())
+      );
       // A real per-hop constraint (fuel range) remains a hard safety limit. It
       // is not a shortest-path-derived product objective.
-      if (Number.isFinite(requestedCap)) rideOpts.maxPathMeters = requestedCap;
+      if (Number.isFinite(activePathCap)) rideOpts.maxPathMeters = activePathCap;
+      if (Number.isFinite(directShortestMeters)) rideOpts.shortestMeters = directShortestMeters;
       const ride = findPathV2(
         runtime, startMatch, endMatch, profile, policy, avoidEdgeIds, pavedBias, rideOpts
       );
@@ -1092,7 +1154,13 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
       verifiedAccessPercent: pct(byAccessM.motorized_verified || 0)
     }
   };
-  return annotateCorridorMeta(csrResult, startLL, endLL, profile);
+  return annotateCorridorMeta(
+    csrResult,
+    startLL,
+    endLL,
+    profile,
+    Number(searchOpts.shortestMeters)
+  );
 }
 
 function searchBalancedResource(ctx) {
@@ -1323,8 +1391,7 @@ function searchBalancedResource(ctx) {
     if (!Number.isFinite(len) || len <= 0) continue;
     cands.push({ lab: endLab, len, dirt: dirtAt[endLab], score: score[endLab] });
   }
-  const bestLab = pickResourceEnd(cands, profile, sessionSeed);
-  if (bestLab < 0 || !Number.isFinite(dist[bestLab])) {
+  if (!cands.length) {
     if (diagnostics) {
       diagnostics.outcome = abort === "completed" ? "noPath" : abort;
       diagnostics.pops = pops;
@@ -1332,48 +1399,61 @@ function searchBalancedResource(ctx) {
     return null;
   }
 
-  const used = [];
-  let hops = 0;
-  for (let label = bestLab; nid(label) !== startNode; ) {
-    hops += 1;
-    if (hops > labels + 4) return null;
-    const parent = prev[label];
-    if (parent < 0) return null;
-    if (prevKind[label] === 1) {
-      const v = virt[prevData[label]];
-      const forward = prevForward[label] === 1;
-      used.push({
-        coords: forward ? v.coords : v.coords.slice().reverse(),
-        meters: v.meters,
-        surface: unpackSurface(edgeAttrs[v.ei]),
-        access: unpackAccess(edgeAttrs[v.ei]),
-        structure: unpackStructure(edgeAttrs[v.ei]),
-        roadClass: ROAD_CLASS_NAME[unpackRoadClass(edgeAttrs[v.ei])] || "unknown",
-        edgeId: pack.edgeId(v.ei),
-        accessLeg: v.accessLeg,
-        confidence: unpackConfidence(edgeAttrs[v.ei]),
-        seasonal: unpackSeasonal(edgeAttrs[v.ei])
-      });
-    } else {
-      const ei = prevData[label];
-      const forward = prevForward[label] === 1;
-      used.push({
-        coords: geom.polylineMaybeReversed(ei, forward),
-        meters: edgeMeters[ei],
-        surface: unpackSurface(edgeAttrs[ei]),
-        access: unpackAccess(edgeAttrs[ei]),
-        structure: unpackStructure(edgeAttrs[ei]),
-        roadClass: ROAD_CLASS_NAME[unpackRoadClass(edgeAttrs[ei])] || "unknown",
-        edgeId: pack.edgeId(ei),
-        accessLeg: false,
-        confidence: unpackConfidence(edgeAttrs[ei]),
-        seasonal: unpackSeasonal(edgeAttrs[ei])
-      });
+  function materializeCandidate(candidate) {
+    const used = [];
+    let hops = 0;
+    for (let label = candidate.lab; nid(label) !== startNode; ) {
+      hops += 1;
+      if (hops > labels + 4) return null;
+      const parent = prev[label];
+      if (parent < 0) return null;
+      if (prevKind[label] === 1) {
+        const v = virt[prevData[label]];
+        const forward = prevForward[label] === 1;
+        used.push({
+          coords: forward ? v.coords : v.coords.slice().reverse(), meters: v.meters,
+          surface: unpackSurface(edgeAttrs[v.ei]), access: unpackAccess(edgeAttrs[v.ei]),
+          structure: unpackStructure(edgeAttrs[v.ei]),
+          roadClass: ROAD_CLASS_NAME[unpackRoadClass(edgeAttrs[v.ei])] || "unknown",
+          edgeId: pack.edgeId(v.ei), accessLeg: v.accessLeg,
+          confidence: unpackConfidence(edgeAttrs[v.ei]), seasonal: unpackSeasonal(edgeAttrs[v.ei])
+        });
+      } else {
+        const ei = prevData[label];
+        const forward = prevForward[label] === 1;
+        used.push({
+          coords: geom.polylineMaybeReversed(ei, forward), meters: edgeMeters[ei],
+          surface: unpackSurface(edgeAttrs[ei]), access: unpackAccess(edgeAttrs[ei]),
+          structure: unpackStructure(edgeAttrs[ei]),
+          roadClass: ROAD_CLASS_NAME[unpackRoadClass(edgeAttrs[ei])] || "unknown",
+          edgeId: pack.edgeId(ei), accessLeg: false,
+          confidence: unpackConfidence(edgeAttrs[ei]), seasonal: unpackSeasonal(edgeAttrs[ei])
+        });
+      }
+      label = parent;
     }
-    label = parent;
+    used.reverse();
+    const pruned = pruneGeographicLoops(used, (edge) => edge.coords);
+    const meters = pruned.edges.reduce((sum, edge) => sum + edge.meters, 0);
+    const dirt = pruned.edges.reduce((sum, edge) => {
+      const surface = enums.SURFACE_NAME[edge.surface] || "unknown";
+      return sum + (isDirtSurface(surface, edge.roadClass) ? edge.meters : 0);
+    }, 0);
+    return { candidate, pruned, dirtPercent: meters > 0 ? dirt / meters * 100 : 0, meters };
   }
-  used.reverse();
-  const pruned = pruneGeographicLoops(used, (edge) => edge.coords);
+  const materialized = cands.map(materializeCandidate).filter(Boolean);
+  materialized.sort((a, b) => {
+    const miss = Math.abs(a.dirtPercent - 50) - Math.abs(b.dirtPercent - 50);
+    if (Math.abs(miss) > 0.1) return miss;
+    if (Math.abs(a.candidate.score - b.candidate.score) > 50) {
+      return a.candidate.score - b.candidate.score;
+    }
+    return a.meters - b.meters;
+  });
+  const selected = materialized[0];
+  if (!selected) return null;
+  const bestLab = selected.candidate.lab;
+  const pruned = selected.pruned;
   const routeEdges = pruned.edges;
   const geometry = [];
   const segments = [];
@@ -1438,12 +1518,17 @@ function searchBalancedResource(ctx) {
       ellipseLabel: "balanced-resource",
       balancedResource: true,
       dirtPercent: pct(dirtMeters),
+      balancedCandidateBuckets: cands.map((candidate) => ({
+        dirtPercent: Math.round(candidate.dirt / candidate.len * 1000) / 10,
+        distanceMeters: Math.round(candidate.len)
+      })),
       prunedLoopCount: pruned.prunedLoopCount,
       prunedLoopMeters: Math.round(pruned.prunedMeters),
       pops,
       timedOut: abort === "timeCap" || abort === "popCap",
       pass2Outcome: abort,
-      settlementFallbackUsed: settlementCrossingUsed
+      settlementFallbackUsed: settlementCrossingUsed,
+      balancedMiss: Math.abs(pct(dirtMeters) - 50)
     },
     stats: {
       pavedPercent: pct(pavedMeters),
