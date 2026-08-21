@@ -108,24 +108,24 @@
         "license": "verify before ingest",
         "adapter": null,
         "status": "deferred",
-        "notes": "No secondary state source is active during the foundational OSM-only phase."
+        "notes": "Inactive during the foundational OSM-only phase. Adapter/data are retained for later controlled evaluation and are not in this pack."
       },
       "routingReady": true,
       "routingMode": "osm-only",
       "backboneArtifact": {
         "path": "routing/data/regions/wa/graph.v1.json.gz",
-        "edgeCount": 1719403,
-        "nodeCount": 1465235,
-        "gzBytes": 105231532
+        "edgeCount": 1719604,
+        "nodeCount": 1465436,
+        "gzBytes": 105250933
       },
       "osm": {
         "adapter": "osm-roads",
         "role": "sole-fabric",
         "status": "ready",
-        "featureCount": 889124,
-        "added": 889124,
+        "featureCount": 889247,
+        "added": 889247,
         "license": "OpenStreetMap contributors (ODbL)",
-        "dateRetrieved": "2026-08-20"
+        "dateRetrieved": "2026-08-21"
       }
     },
     {

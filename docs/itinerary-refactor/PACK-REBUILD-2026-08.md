@@ -1,47 +1,58 @@
 # Pack rebuild 2026-08
 
-Live OSM-only candidates for all regions except frozen Nova Scotia (`ns-osm-20260820-01`).
-Follows `docs/09-OSM-PACK-QUALITY-STANDARD.md` steps 1–10. No promotion.
+Live OSM-only candidates except frozen Nova Scotia (`ns-osm-20260820-01`).
+Steps 1–10 per `docs/09-OSM-PACK-QUALITY-STANDARD.md`. No promotion.
 
-**Branch:** `feature/pack-rebuild-2026-08` (from `feature/routing-itinerary-rebuild` @ d196992)
-**Worktree:** `/Users/richardsmith/SandBox01/MAYDAYiOS/Dirt-pack-rebuild`
-**Checkpoint:** `e9c6f8a`
-**Live:** `dirt-mayday` with cumulative `R2_REGION_BASE_OVERRIDES` always including frozen NS.
+**Branch/worktree:** `feature/pack-rebuild-2026-08` @ `/Users/richardsmith/SandBox01/MAYDAYiOS/Dirt-pack-rebuild`
+**Live:** `dirt-mayday` with cumulative overrides always including NS.
 
 ## Regions
 
 ```
-region: bc   release-id: bc-osm-20260821-02   geofabrik ts: 2026-08-20T20:20:51Z   pbf sha: 0d8cb68a6fb32e244eef2ae2fc9d237d248701c7eea1c7e286c70f2ad8644fa2
+region: bc   release-id: bc-osm-20260821-03   geofabrik ts: 2026-08-20T20:20:51Z   pbf sha: 0d8cb68a6fb32e244eef2ae2fc9d237d248701c7eea1c7e286c70f2ad8644fa2
 steps 1–7: ok
-audit contradictions: 0
-non-OSM edges: 0
+audit contradictions: 0     non-OSM edges: 0
 stitches: 25450  free-space: 0
 largest permissive component: 70.97% of edges
 urban cores: 33 hard / 145 scored
-seams built: bc-ab           seams deferred: bc-wa (WA not yet); *-ns skipped
+seams built: bc-ab, bc-wa           seams deferred: bc-id (US later); *-ns skipped
 route acceptance: 13/15 — red: urban-abbotsford-merritt/dirt 65%<70%; urban-abbotsford-merritt/dirt 26.7% backward>25%
-candidate uploaded: https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/candidates/bc-osm-20260821-02   promoted: NO
-note: bc-osm-20260821-01 superseded after BC–AB seam embedded (new checksums → -02)
-tag: pack-bc-osm-20260821-02
+candidate uploaded: https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/candidates/bc-osm-20260821-03   promoted: NO
+note: -01 then -02 (AB seam) then -03 (WA seam via --left-seq/--right-seq)
+tag: pack-bc-osm-20260821-03
 ```
 
 ```
 region: ab   release-id: ab-osm-20260821-01   geofabrik ts: 2026-08-20T20:20:51Z   pbf sha: 4d8b08d3e48a06fac87376acf21970e89245ea1ec6996a19071ecf21d3a55ebb
 steps 1–7: ok
-audit contradictions: 0
-non-OSM edges: 0
+audit contradictions: 0     non-OSM edges: 0
 stitches: 15522  free-space: 0
 largest permissive component: 98.57% of edges
 urban cores: 14 hard / 125 scored
-seams built: bc-ab           seams deferred: ab-sk, ab-mt (not yet); ab-ns N/A
-route acceptance: 15/15 — red rows: none (short pin moved Bragg Creek→Black Diamond; Longview/Turner Valley off-graph)
+seams built: bc-ab           seams deferred: ab-sk, ab-mt
+route acceptance: 15/15 — pin note: short dest moved to Bragg Creek→Black Diamond (Longview/Turner Valley off-graph)
 candidate uploaded: https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/candidates/ab-osm-20260821-01   promoted: NO
 tag: pack-ab-osm-20260821-01
 ```
 
-## Promote commands (do not run until physical OK)
+```
+region: wa   release-id: wa-osm-20260821-02   geofabrik ts: 2026-08-20T20:20:51Z   pbf sha: a3b85feed0d7ccf98fc19624f879e11a2b360a5e4d1fff48fa50b07b39fdfa3e
+steps 1–7: ok
+audit contradictions: 0     non-OSM edges: 0
+stitches: 16037  free-space: 0
+largest permissive component: 96.43% of edges
+urban cores: 58 hard / 159 scored
+seams built: bc-wa (via --left-seq/--right-seq after Node string-limit on graph.v1)           seams deferred: wa-id, wa-or
+route acceptance: 9/15 — red: urban-tacoma-everett/dirt 20%<30%; urban-tacoma-everett/balanced timeCap + 10% off 50/50; short-concrete-marblemount/dirt 1%<50%; dirt-allow-unknown 51%<60%; dirt < balanced
+candidate uploaded: https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/candidates/wa-osm-20260821-02   promoted: NO
+note: wa-osm-20260821-01 uploaded pre-seam; superseded by -02 after BC–WA seam
+tag: pack-wa-osm-20260821-02
+```
+
+## Promote commands (not run)
 
 ```
-node scripts/pack-fabric/scripts/ship-routing.js --promote bc-osm-20260821-02 --pack bc --live --assert
+node scripts/pack-fabric/scripts/ship-routing.js --promote bc-osm-20260821-03 --pack bc --live --assert
 node scripts/pack-fabric/scripts/ship-routing.js --promote ab-osm-20260821-01 --pack ab --live --assert
+node scripts/pack-fabric/scripts/ship-routing.js --promote wa-osm-20260821-02 --pack wa --live --assert
 ```
