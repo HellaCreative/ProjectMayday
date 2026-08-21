@@ -1416,6 +1416,2366 @@
           "maximumDirtBackwardPercent": 40
         }
       ]
+    },
+    "al": {
+      "fuelMinimum": 400,
+      "routes": [
+        {
+          "id": "long-birmingham-mobile",
+          "from": {
+            "lat": 33.5186,
+            "lon": -86.8104,
+            "label": "Birmingham"
+          },
+          "to": {
+            "lat": 30.6954,
+            "lon": -88.0399,
+            "label": "Mobile"
+          },
+          "minimumDirtPercent": 35,
+          "minimumDirtAllowUnknownPercent": 45,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "urban-birmingham-montgomery",
+          "from": {
+            "lat": 33.5186,
+            "lon": -86.8104,
+            "label": "Birmingham"
+          },
+          "to": {
+            "lat": 32.3792,
+            "lon": -86.3077,
+            "label": "Montgomery"
+          },
+          "minimumDirtPercent": 20,
+          "minimumDirtAllowUnknownPercent": 30,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 15,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "short-montgomery-mid",
+          "from": {
+            "lat": 32.3792,
+            "lon": -86.3077,
+            "label": "Montgomery"
+          },
+          "to": {
+            "lat": 31.5373,
+            "lon": -87.1738,
+            "label": "Midpoint"
+          },
+          "minimumDirtPercent": 30,
+          "minimumDirtAllowUnknownPercent": 40,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        }
+      ]
+    },
+    "ak": {
+      "fuelMinimum": 400,
+      "routes": [
+        {
+          "id": "long-anchorage-juneau",
+          "from": {
+            "lat": 61.2181,
+            "lon": -149.9003,
+            "label": "Anchorage"
+          },
+          "to": {
+            "lat": 58.3019,
+            "lon": -134.4197,
+            "label": "Juneau"
+          },
+          "minimumDirtPercent": 35,
+          "minimumDirtAllowUnknownPercent": 45,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "urban-anchorage-fairbanks",
+          "from": {
+            "lat": 61.2181,
+            "lon": -149.9003,
+            "label": "Anchorage"
+          },
+          "to": {
+            "lat": 64.8378,
+            "lon": -147.7164,
+            "label": "Fairbanks"
+          },
+          "minimumDirtPercent": 20,
+          "minimumDirtAllowUnknownPercent": 30,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 15,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "short-fairbanks-mid",
+          "from": {
+            "lat": 64.8378,
+            "lon": -147.7164,
+            "label": "Fairbanks"
+          },
+          "to": {
+            "lat": 61.56985,
+            "lon": -141.06805,
+            "label": "Midpoint"
+          },
+          "minimumDirtPercent": 30,
+          "minimumDirtAllowUnknownPercent": 40,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        }
+      ]
+    },
+    "az": {
+      "fuelMinimum": 400,
+      "routes": [
+        {
+          "id": "long-phoenix-flagstaff",
+          "from": {
+            "lat": 33.4484,
+            "lon": -112.074,
+            "label": "Phoenix"
+          },
+          "to": {
+            "lat": 35.1983,
+            "lon": -111.6513,
+            "label": "Flagstaff"
+          },
+          "minimumDirtPercent": 35,
+          "minimumDirtAllowUnknownPercent": 45,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "urban-phoenix-tucson",
+          "from": {
+            "lat": 33.4484,
+            "lon": -112.074,
+            "label": "Phoenix"
+          },
+          "to": {
+            "lat": 32.2226,
+            "lon": -110.9747,
+            "label": "Tucson"
+          },
+          "minimumDirtPercent": 20,
+          "minimumDirtAllowUnknownPercent": 30,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 15,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "short-tucson-mid",
+          "from": {
+            "lat": 32.2226,
+            "lon": -110.9747,
+            "label": "Tucson"
+          },
+          "to": {
+            "lat": 33.71045,
+            "lon": -111.313,
+            "label": "Midpoint"
+          },
+          "minimumDirtPercent": 30,
+          "minimumDirtAllowUnknownPercent": 40,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        }
+      ]
+    },
+    "ar": {
+      "fuelMinimum": 400,
+      "routes": [
+        {
+          "id": "long-little-rock-fort-smith",
+          "from": {
+            "lat": 34.7465,
+            "lon": -92.2896,
+            "label": "Little Rock"
+          },
+          "to": {
+            "lat": 35.3859,
+            "lon": -94.3985,
+            "label": "Fort Smith"
+          },
+          "minimumDirtPercent": 35,
+          "minimumDirtAllowUnknownPercent": 45,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "urban-little-rock-fayetteville",
+          "from": {
+            "lat": 34.7465,
+            "lon": -92.2896,
+            "label": "Little Rock"
+          },
+          "to": {
+            "lat": 36.0726,
+            "lon": -94.1574,
+            "label": "Fayetteville"
+          },
+          "minimumDirtPercent": 20,
+          "minimumDirtAllowUnknownPercent": 30,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 15,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "short-fayetteville-mid",
+          "from": {
+            "lat": 36.0726,
+            "lon": -94.1574,
+            "label": "Fayetteville"
+          },
+          "to": {
+            "lat": 35.72925,
+            "lon": -94.27795,
+            "label": "Midpoint"
+          },
+          "minimumDirtPercent": 30,
+          "minimumDirtAllowUnknownPercent": 40,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        }
+      ]
+    },
+    "ca": {
+      "fuelMinimum": 400,
+      "routes": [
+        {
+          "id": "long-los-angeles-san-diego",
+          "from": {
+            "lat": 34.0522,
+            "lon": -118.2437,
+            "label": "Los Angeles"
+          },
+          "to": {
+            "lat": 32.7157,
+            "lon": -117.1611,
+            "label": "San Diego"
+          },
+          "minimumDirtPercent": 35,
+          "minimumDirtAllowUnknownPercent": 45,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "urban-los-angeles-san-francisco",
+          "from": {
+            "lat": 34.0522,
+            "lon": -118.2437,
+            "label": "Los Angeles"
+          },
+          "to": {
+            "lat": 37.7749,
+            "lon": -122.4194,
+            "label": "San Francisco"
+          },
+          "minimumDirtPercent": 20,
+          "minimumDirtAllowUnknownPercent": 30,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 15,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "short-san-francisco-mid",
+          "from": {
+            "lat": 37.7749,
+            "lon": -122.4194,
+            "label": "San Francisco"
+          },
+          "to": {
+            "lat": 35.2453,
+            "lon": -119.79025,
+            "label": "Midpoint"
+          },
+          "minimumDirtPercent": 30,
+          "minimumDirtAllowUnknownPercent": 40,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        }
+      ]
+    },
+    "co": {
+      "fuelMinimum": 400,
+      "routes": [
+        {
+          "id": "long-denver-aspen",
+          "from": {
+            "lat": 39.7392,
+            "lon": -104.9903,
+            "label": "Denver"
+          },
+          "to": {
+            "lat": 39.1911,
+            "lon": -106.8175,
+            "label": "Aspen"
+          },
+          "minimumDirtPercent": 35,
+          "minimumDirtAllowUnknownPercent": 45,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "urban-denver-colorado-springs",
+          "from": {
+            "lat": 39.7392,
+            "lon": -104.9903,
+            "label": "Denver"
+          },
+          "to": {
+            "lat": 38.8339,
+            "lon": -104.8214,
+            "label": "Colorado Springs"
+          },
+          "minimumDirtPercent": 20,
+          "minimumDirtAllowUnknownPercent": 30,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 15,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "short-colorado-springs-mid",
+          "from": {
+            "lat": 38.8339,
+            "lon": -104.8214,
+            "label": "Colorado Springs"
+          },
+          "to": {
+            "lat": 39.0125,
+            "lon": -105.81944999999999,
+            "label": "Midpoint"
+          },
+          "minimumDirtPercent": 30,
+          "minimumDirtAllowUnknownPercent": 40,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        }
+      ]
+    },
+    "ct": {
+      "fuelMinimum": 400,
+      "routes": [
+        {
+          "id": "long-hartford-stamford",
+          "from": {
+            "lat": 41.7658,
+            "lon": -72.6734,
+            "label": "Hartford"
+          },
+          "to": {
+            "lat": 41.0534,
+            "lon": -73.5387,
+            "label": "Stamford"
+          },
+          "minimumDirtPercent": 35,
+          "minimumDirtAllowUnknownPercent": 45,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "urban-hartford-new-haven",
+          "from": {
+            "lat": 41.7658,
+            "lon": -72.6734,
+            "label": "Hartford"
+          },
+          "to": {
+            "lat": 41.3083,
+            "lon": -72.9279,
+            "label": "New Haven"
+          },
+          "minimumDirtPercent": 20,
+          "minimumDirtAllowUnknownPercent": 30,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 15,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "short-new-haven-mid",
+          "from": {
+            "lat": 41.3083,
+            "lon": -72.9279,
+            "label": "New Haven"
+          },
+          "to": {
+            "lat": 41.18085000000001,
+            "lon": -73.2333,
+            "label": "Midpoint"
+          },
+          "minimumDirtPercent": 30,
+          "minimumDirtAllowUnknownPercent": 40,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        }
+      ]
+    },
+    "de": {
+      "fuelMinimum": 400,
+      "routes": [
+        {
+          "id": "long-wilmington-lewes",
+          "from": {
+            "lat": 39.7447,
+            "lon": -75.5484,
+            "label": "Wilmington"
+          },
+          "to": {
+            "lat": 38.774,
+            "lon": -75.1393,
+            "label": "Lewes"
+          },
+          "minimumDirtPercent": 35,
+          "minimumDirtAllowUnknownPercent": 45,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "urban-wilmington-dover",
+          "from": {
+            "lat": 39.7447,
+            "lon": -75.5484,
+            "label": "Wilmington"
+          },
+          "to": {
+            "lat": 39.1582,
+            "lon": -75.5244,
+            "label": "Dover"
+          },
+          "minimumDirtPercent": 20,
+          "minimumDirtAllowUnknownPercent": 30,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 15,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "short-dover-mid",
+          "from": {
+            "lat": 39.1582,
+            "lon": -75.5244,
+            "label": "Dover"
+          },
+          "to": {
+            "lat": 38.9661,
+            "lon": -75.33185,
+            "label": "Midpoint"
+          },
+          "minimumDirtPercent": 30,
+          "minimumDirtAllowUnknownPercent": 40,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        }
+      ]
+    },
+    "fl": {
+      "fuelMinimum": 400,
+      "routes": [
+        {
+          "id": "long-miami-jacksonville",
+          "from": {
+            "lat": 25.7617,
+            "lon": -80.1918,
+            "label": "Miami"
+          },
+          "to": {
+            "lat": 30.3322,
+            "lon": -81.6557,
+            "label": "Jacksonville"
+          },
+          "minimumDirtPercent": 35,
+          "minimumDirtAllowUnknownPercent": 45,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "urban-miami-tampa",
+          "from": {
+            "lat": 25.7617,
+            "lon": -80.1918,
+            "label": "Miami"
+          },
+          "to": {
+            "lat": 27.9506,
+            "lon": -82.4572,
+            "label": "Tampa"
+          },
+          "minimumDirtPercent": 20,
+          "minimumDirtAllowUnknownPercent": 30,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 15,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "short-tampa-mid",
+          "from": {
+            "lat": 27.9506,
+            "lon": -82.4572,
+            "label": "Tampa"
+          },
+          "to": {
+            "lat": 29.1414,
+            "lon": -82.05645,
+            "label": "Midpoint"
+          },
+          "minimumDirtPercent": 30,
+          "minimumDirtAllowUnknownPercent": 40,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        }
+      ]
+    },
+    "ga": {
+      "fuelMinimum": 400,
+      "routes": [
+        {
+          "id": "long-atlanta-athens",
+          "from": {
+            "lat": 33.749,
+            "lon": -84.388,
+            "label": "Atlanta"
+          },
+          "to": {
+            "lat": 33.9519,
+            "lon": -83.3576,
+            "label": "Athens"
+          },
+          "minimumDirtPercent": 35,
+          "minimumDirtAllowUnknownPercent": 45,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "urban-atlanta-savannah",
+          "from": {
+            "lat": 33.749,
+            "lon": -84.388,
+            "label": "Atlanta"
+          },
+          "to": {
+            "lat": 32.0809,
+            "lon": -81.0912,
+            "label": "Savannah"
+          },
+          "minimumDirtPercent": 20,
+          "minimumDirtAllowUnknownPercent": 30,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 15,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "short-savannah-mid",
+          "from": {
+            "lat": 32.0809,
+            "lon": -81.0912,
+            "label": "Savannah"
+          },
+          "to": {
+            "lat": 33.016400000000004,
+            "lon": -82.2244,
+            "label": "Midpoint"
+          },
+          "minimumDirtPercent": 30,
+          "minimumDirtAllowUnknownPercent": 40,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        }
+      ]
+    },
+    "hi": {
+      "fuelMinimum": 400,
+      "routes": [
+        {
+          "id": "long-honolulu-kahului",
+          "from": {
+            "lat": 21.3069,
+            "lon": -157.8583,
+            "label": "Honolulu"
+          },
+          "to": {
+            "lat": 20.8947,
+            "lon": -156.47,
+            "label": "Kahului"
+          },
+          "minimumDirtPercent": 35,
+          "minimumDirtAllowUnknownPercent": 45,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "urban-honolulu-hilo",
+          "from": {
+            "lat": 21.3069,
+            "lon": -157.8583,
+            "label": "Honolulu"
+          },
+          "to": {
+            "lat": 19.7074,
+            "lon": -155.0885,
+            "label": "Hilo"
+          },
+          "minimumDirtPercent": 20,
+          "minimumDirtAllowUnknownPercent": 30,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 15,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "short-hilo-mid",
+          "from": {
+            "lat": 19.7074,
+            "lon": -155.0885,
+            "label": "Hilo"
+          },
+          "to": {
+            "lat": 20.30105,
+            "lon": -155.77925,
+            "label": "Midpoint"
+          },
+          "minimumDirtPercent": 30,
+          "minimumDirtAllowUnknownPercent": 40,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        }
+      ]
+    },
+    "il": {
+      "fuelMinimum": 400,
+      "routes": [
+        {
+          "id": "long-chicago-peoria",
+          "from": {
+            "lat": 41.8781,
+            "lon": -87.6298,
+            "label": "Chicago"
+          },
+          "to": {
+            "lat": 40.6936,
+            "lon": -89.589,
+            "label": "Peoria"
+          },
+          "minimumDirtPercent": 35,
+          "minimumDirtAllowUnknownPercent": 45,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "urban-chicago-springfield",
+          "from": {
+            "lat": 41.8781,
+            "lon": -87.6298,
+            "label": "Chicago"
+          },
+          "to": {
+            "lat": 39.7817,
+            "lon": -89.6501,
+            "label": "Springfield"
+          },
+          "minimumDirtPercent": 20,
+          "minimumDirtAllowUnknownPercent": 30,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 15,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "short-springfield-mid",
+          "from": {
+            "lat": 39.7817,
+            "lon": -89.6501,
+            "label": "Springfield"
+          },
+          "to": {
+            "lat": 40.23765,
+            "lon": -89.61955,
+            "label": "Midpoint"
+          },
+          "minimumDirtPercent": 30,
+          "minimumDirtAllowUnknownPercent": 40,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        }
+      ]
+    },
+    "in": {
+      "fuelMinimum": 400,
+      "routes": [
+        {
+          "id": "long-indianapolis-columbus",
+          "from": {
+            "lat": 39.7684,
+            "lon": -86.1581,
+            "label": "Indianapolis"
+          },
+          "to": {
+            "lat": 39.2014,
+            "lon": -85.9214,
+            "label": "Columbus"
+          },
+          "minimumDirtPercent": 35,
+          "minimumDirtAllowUnknownPercent": 45,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "urban-indianapolis-south-bend",
+          "from": {
+            "lat": 39.7684,
+            "lon": -86.1581,
+            "label": "Indianapolis"
+          },
+          "to": {
+            "lat": 41.6764,
+            "lon": -86.252,
+            "label": "South Bend"
+          },
+          "minimumDirtPercent": 20,
+          "minimumDirtAllowUnknownPercent": 30,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 15,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "short-south-bend-mid",
+          "from": {
+            "lat": 41.6764,
+            "lon": -86.252,
+            "label": "South Bend"
+          },
+          "to": {
+            "lat": 40.438900000000004,
+            "lon": -86.08670000000001,
+            "label": "Midpoint"
+          },
+          "minimumDirtPercent": 30,
+          "minimumDirtAllowUnknownPercent": 40,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        }
+      ]
+    },
+    "ia": {
+      "fuelMinimum": 400,
+      "routes": [
+        {
+          "id": "long-des-moines-sioux-city",
+          "from": {
+            "lat": 41.5868,
+            "lon": -93.625,
+            "label": "Des Moines"
+          },
+          "to": {
+            "lat": 42.5,
+            "lon": -96.4003,
+            "label": "Sioux City"
+          },
+          "minimumDirtPercent": 35,
+          "minimumDirtAllowUnknownPercent": 45,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "urban-des-moines-iowa-city",
+          "from": {
+            "lat": 41.5868,
+            "lon": -93.625,
+            "label": "Des Moines"
+          },
+          "to": {
+            "lat": 41.6611,
+            "lon": -91.5302,
+            "label": "Iowa City"
+          },
+          "minimumDirtPercent": 20,
+          "minimumDirtAllowUnknownPercent": 30,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 15,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "short-iowa-city-mid",
+          "from": {
+            "lat": 41.6611,
+            "lon": -91.5302,
+            "label": "Iowa City"
+          },
+          "to": {
+            "lat": 42.08055,
+            "lon": -93.96525,
+            "label": "Midpoint"
+          },
+          "minimumDirtPercent": 30,
+          "minimumDirtAllowUnknownPercent": 40,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        }
+      ]
+    },
+    "ks": {
+      "fuelMinimum": 400,
+      "routes": [
+        {
+          "id": "long-topeka-kansas-city",
+          "from": {
+            "lat": 39.0473,
+            "lon": -95.6752,
+            "label": "Topeka"
+          },
+          "to": {
+            "lat": 39.1141,
+            "lon": -94.6275,
+            "label": "Kansas City"
+          },
+          "minimumDirtPercent": 35,
+          "minimumDirtAllowUnknownPercent": 45,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "urban-topeka-wichita",
+          "from": {
+            "lat": 39.0473,
+            "lon": -95.6752,
+            "label": "Topeka"
+          },
+          "to": {
+            "lat": 37.6872,
+            "lon": -97.3301,
+            "label": "Wichita"
+          },
+          "minimumDirtPercent": 20,
+          "minimumDirtAllowUnknownPercent": 30,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 15,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "short-wichita-mid",
+          "from": {
+            "lat": 37.6872,
+            "lon": -97.3301,
+            "label": "Wichita"
+          },
+          "to": {
+            "lat": 38.40065,
+            "lon": -95.9788,
+            "label": "Midpoint"
+          },
+          "minimumDirtPercent": 30,
+          "minimumDirtAllowUnknownPercent": 40,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        }
+      ]
+    },
+    "ky": {
+      "fuelMinimum": 400,
+      "routes": [
+        {
+          "id": "long-louisville-paducah",
+          "from": {
+            "lat": 38.2527,
+            "lon": -85.7585,
+            "label": "Louisville"
+          },
+          "to": {
+            "lat": 37.0834,
+            "lon": -88.6001,
+            "label": "Paducah"
+          },
+          "minimumDirtPercent": 35,
+          "minimumDirtAllowUnknownPercent": 45,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "urban-louisville-lexington",
+          "from": {
+            "lat": 38.2527,
+            "lon": -85.7585,
+            "label": "Louisville"
+          },
+          "to": {
+            "lat": 38.0406,
+            "lon": -84.5037,
+            "label": "Lexington"
+          },
+          "minimumDirtPercent": 20,
+          "minimumDirtAllowUnknownPercent": 30,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 15,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "short-lexington-mid",
+          "from": {
+            "lat": 38.0406,
+            "lon": -84.5037,
+            "label": "Lexington"
+          },
+          "to": {
+            "lat": 37.562,
+            "lon": -86.55189999999999,
+            "label": "Midpoint"
+          },
+          "minimumDirtPercent": 30,
+          "minimumDirtAllowUnknownPercent": 40,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        }
+      ]
+    },
+    "la": {
+      "fuelMinimum": 400,
+      "routes": [
+        {
+          "id": "long-new-orleans-monroe",
+          "from": {
+            "lat": 29.9511,
+            "lon": -90.0715,
+            "label": "New Orleans"
+          },
+          "to": {
+            "lat": 32.5252,
+            "lon": -92.084,
+            "label": "Monroe"
+          },
+          "minimumDirtPercent": 35,
+          "minimumDirtAllowUnknownPercent": 45,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "urban-new-orleans-baton-rouge",
+          "from": {
+            "lat": 29.9511,
+            "lon": -90.0715,
+            "label": "New Orleans"
+          },
+          "to": {
+            "lat": 30.4515,
+            "lon": -91.1871,
+            "label": "Baton Rouge"
+          },
+          "minimumDirtPercent": 20,
+          "minimumDirtAllowUnknownPercent": 30,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 15,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "short-baton-rouge-mid",
+          "from": {
+            "lat": 30.4515,
+            "lon": -91.1871,
+            "label": "Baton Rouge"
+          },
+          "to": {
+            "lat": 31.488349999999997,
+            "lon": -91.63555,
+            "label": "Midpoint"
+          },
+          "minimumDirtPercent": 30,
+          "minimumDirtAllowUnknownPercent": 40,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        }
+      ]
+    },
+    "md": {
+      "fuelMinimum": 400,
+      "routes": [
+        {
+          "id": "long-baltimore-frederick",
+          "from": {
+            "lat": 39.2904,
+            "lon": -76.6122,
+            "label": "Baltimore"
+          },
+          "to": {
+            "lat": 39.4143,
+            "lon": -77.4105,
+            "label": "Frederick"
+          },
+          "minimumDirtPercent": 35,
+          "minimumDirtAllowUnknownPercent": 45,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "urban-baltimore-annapolis",
+          "from": {
+            "lat": 39.2904,
+            "lon": -76.6122,
+            "label": "Baltimore"
+          },
+          "to": {
+            "lat": 38.9784,
+            "lon": -76.4922,
+            "label": "Annapolis"
+          },
+          "minimumDirtPercent": 20,
+          "minimumDirtAllowUnknownPercent": 30,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 15,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "short-annapolis-mid",
+          "from": {
+            "lat": 38.9784,
+            "lon": -76.4922,
+            "label": "Annapolis"
+          },
+          "to": {
+            "lat": 39.196349999999995,
+            "lon": -76.95134999999999,
+            "label": "Midpoint"
+          },
+          "minimumDirtPercent": 30,
+          "minimumDirtAllowUnknownPercent": 40,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        }
+      ]
+    },
+    "ma": {
+      "fuelMinimum": 400,
+      "routes": [
+        {
+          "id": "long-boston-new-bedford",
+          "from": {
+            "lat": 42.3601,
+            "lon": -71.0589,
+            "label": "Boston"
+          },
+          "to": {
+            "lat": 41.6362,
+            "lon": -70.9342,
+            "label": "New Bedford"
+          },
+          "minimumDirtPercent": 35,
+          "minimumDirtAllowUnknownPercent": 45,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "urban-boston-springfield",
+          "from": {
+            "lat": 42.3601,
+            "lon": -71.0589,
+            "label": "Boston"
+          },
+          "to": {
+            "lat": 42.1015,
+            "lon": -72.5898,
+            "label": "Springfield"
+          },
+          "minimumDirtPercent": 20,
+          "minimumDirtAllowUnknownPercent": 30,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 15,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "short-springfield-mid",
+          "from": {
+            "lat": 42.1015,
+            "lon": -72.5898,
+            "label": "Springfield"
+          },
+          "to": {
+            "lat": 41.86885,
+            "lon": -71.762,
+            "label": "Midpoint"
+          },
+          "minimumDirtPercent": 30,
+          "minimumDirtAllowUnknownPercent": 40,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        }
+      ]
+    },
+    "ms": {
+      "fuelMinimum": 400,
+      "routes": [
+        {
+          "id": "long-jackson-tupelo",
+          "from": {
+            "lat": 32.2988,
+            "lon": -90.1848,
+            "label": "Jackson"
+          },
+          "to": {
+            "lat": 34.2576,
+            "lon": -88.7034,
+            "label": "Tupelo"
+          },
+          "minimumDirtPercent": 35,
+          "minimumDirtAllowUnknownPercent": 45,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "urban-jackson-gulfport",
+          "from": {
+            "lat": 32.2988,
+            "lon": -90.1848,
+            "label": "Jackson"
+          },
+          "to": {
+            "lat": 30.4278,
+            "lon": -89.0928,
+            "label": "Gulfport"
+          },
+          "minimumDirtPercent": 20,
+          "minimumDirtAllowUnknownPercent": 30,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 15,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "short-gulfport-mid",
+          "from": {
+            "lat": 30.4278,
+            "lon": -89.0928,
+            "label": "Gulfport"
+          },
+          "to": {
+            "lat": 32.3427,
+            "lon": -88.8981,
+            "label": "Midpoint"
+          },
+          "minimumDirtPercent": 30,
+          "minimumDirtAllowUnknownPercent": 40,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        }
+      ]
+    },
+    "mo": {
+      "fuelMinimum": 400,
+      "routes": [
+        {
+          "id": "long-st-louis-springfield",
+          "from": {
+            "lat": 38.627,
+            "lon": -90.1994,
+            "label": "St Louis"
+          },
+          "to": {
+            "lat": 37.209,
+            "lon": -93.2923,
+            "label": "Springfield"
+          },
+          "minimumDirtPercent": 35,
+          "minimumDirtAllowUnknownPercent": 45,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "urban-st-louis-kansas-city",
+          "from": {
+            "lat": 38.627,
+            "lon": -90.1994,
+            "label": "St Louis"
+          },
+          "to": {
+            "lat": 39.0997,
+            "lon": -94.5786,
+            "label": "Kansas City"
+          },
+          "minimumDirtPercent": 20,
+          "minimumDirtAllowUnknownPercent": 30,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 15,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "short-kansas-city-mid",
+          "from": {
+            "lat": 39.0997,
+            "lon": -94.5786,
+            "label": "Kansas City"
+          },
+          "to": {
+            "lat": 38.15435,
+            "lon": -93.93545,
+            "label": "Midpoint"
+          },
+          "minimumDirtPercent": 30,
+          "minimumDirtAllowUnknownPercent": 40,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        }
+      ]
+    },
+    "ne": {
+      "fuelMinimum": 400,
+      "routes": [
+        {
+          "id": "long-omaha-north-platte",
+          "from": {
+            "lat": 41.2565,
+            "lon": -95.9345,
+            "label": "Omaha"
+          },
+          "to": {
+            "lat": 41.1239,
+            "lon": -100.7654,
+            "label": "North Platte"
+          },
+          "minimumDirtPercent": 35,
+          "minimumDirtAllowUnknownPercent": 45,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "urban-omaha-lincoln",
+          "from": {
+            "lat": 41.2565,
+            "lon": -95.9345,
+            "label": "Omaha"
+          },
+          "to": {
+            "lat": 40.8136,
+            "lon": -96.7026,
+            "label": "Lincoln"
+          },
+          "minimumDirtPercent": 20,
+          "minimumDirtAllowUnknownPercent": 30,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 15,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "short-lincoln-mid",
+          "from": {
+            "lat": 40.8136,
+            "lon": -96.7026,
+            "label": "Lincoln"
+          },
+          "to": {
+            "lat": 40.96875,
+            "lon": -98.73400000000001,
+            "label": "Midpoint"
+          },
+          "minimumDirtPercent": 30,
+          "minimumDirtAllowUnknownPercent": 40,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        }
+      ]
+    },
+    "nv": {
+      "fuelMinimum": 400,
+      "routes": [
+        {
+          "id": "long-las-vegas-carson-city",
+          "from": {
+            "lat": 36.1699,
+            "lon": -115.1398,
+            "label": "Las Vegas"
+          },
+          "to": {
+            "lat": 39.1637,
+            "lon": -119.7674,
+            "label": "Carson City"
+          },
+          "minimumDirtPercent": 35,
+          "minimumDirtAllowUnknownPercent": 45,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "urban-las-vegas-reno",
+          "from": {
+            "lat": 36.1699,
+            "lon": -115.1398,
+            "label": "Las Vegas"
+          },
+          "to": {
+            "lat": 39.5296,
+            "lon": -119.8138,
+            "label": "Reno"
+          },
+          "minimumDirtPercent": 20,
+          "minimumDirtAllowUnknownPercent": 30,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 15,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "short-reno-mid",
+          "from": {
+            "lat": 39.5296,
+            "lon": -119.8138,
+            "label": "Reno"
+          },
+          "to": {
+            "lat": 39.34665,
+            "lon": -119.7906,
+            "label": "Midpoint"
+          },
+          "minimumDirtPercent": 30,
+          "minimumDirtAllowUnknownPercent": 40,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        }
+      ]
+    },
+    "nj": {
+      "fuelMinimum": 400,
+      "routes": [
+        {
+          "id": "long-newark-atlantic-city",
+          "from": {
+            "lat": 40.7357,
+            "lon": -74.1724,
+            "label": "Newark"
+          },
+          "to": {
+            "lat": 39.3643,
+            "lon": -74.4229,
+            "label": "Atlantic City"
+          },
+          "minimumDirtPercent": 35,
+          "minimumDirtAllowUnknownPercent": 45,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "urban-newark-trenton",
+          "from": {
+            "lat": 40.7357,
+            "lon": -74.1724,
+            "label": "Newark"
+          },
+          "to": {
+            "lat": 40.2206,
+            "lon": -74.7597,
+            "label": "Trenton"
+          },
+          "minimumDirtPercent": 20,
+          "minimumDirtAllowUnknownPercent": 30,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 15,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "short-trenton-mid",
+          "from": {
+            "lat": 40.2206,
+            "lon": -74.7597,
+            "label": "Trenton"
+          },
+          "to": {
+            "lat": 39.79245,
+            "lon": -74.59129999999999,
+            "label": "Midpoint"
+          },
+          "minimumDirtPercent": 30,
+          "minimumDirtAllowUnknownPercent": 40,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        }
+      ]
+    },
+    "nm": {
+      "fuelMinimum": 400,
+      "routes": [
+        {
+          "id": "long-albuquerque-las-cruces",
+          "from": {
+            "lat": 35.0844,
+            "lon": -106.6504,
+            "label": "Albuquerque"
+          },
+          "to": {
+            "lat": 32.3199,
+            "lon": -106.7637,
+            "label": "Las Cruces"
+          },
+          "minimumDirtPercent": 35,
+          "minimumDirtAllowUnknownPercent": 45,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "urban-albuquerque-santa-fe",
+          "from": {
+            "lat": 35.0844,
+            "lon": -106.6504,
+            "label": "Albuquerque"
+          },
+          "to": {
+            "lat": 35.687,
+            "lon": -105.9378,
+            "label": "Santa Fe"
+          },
+          "minimumDirtPercent": 20,
+          "minimumDirtAllowUnknownPercent": 30,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 15,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "short-santa-fe-mid",
+          "from": {
+            "lat": 35.687,
+            "lon": -105.9378,
+            "label": "Santa Fe"
+          },
+          "to": {
+            "lat": 34.00345,
+            "lon": -106.35075,
+            "label": "Midpoint"
+          },
+          "minimumDirtPercent": 30,
+          "minimumDirtAllowUnknownPercent": 40,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        }
+      ]
+    },
+    "nc": {
+      "fuelMinimum": 400,
+      "routes": [
+        {
+          "id": "long-charlotte-asheville",
+          "from": {
+            "lat": 35.2271,
+            "lon": -80.8431,
+            "label": "Charlotte"
+          },
+          "to": {
+            "lat": 35.5951,
+            "lon": -82.5515,
+            "label": "Asheville"
+          },
+          "minimumDirtPercent": 35,
+          "minimumDirtAllowUnknownPercent": 45,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "urban-charlotte-raleigh",
+          "from": {
+            "lat": 35.2271,
+            "lon": -80.8431,
+            "label": "Charlotte"
+          },
+          "to": {
+            "lat": 35.7796,
+            "lon": -78.6382,
+            "label": "Raleigh"
+          },
+          "minimumDirtPercent": 20,
+          "minimumDirtAllowUnknownPercent": 30,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 15,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "short-raleigh-mid",
+          "from": {
+            "lat": 35.7796,
+            "lon": -78.6382,
+            "label": "Raleigh"
+          },
+          "to": {
+            "lat": 35.68735,
+            "lon": -80.59485000000001,
+            "label": "Midpoint"
+          },
+          "minimumDirtPercent": 30,
+          "minimumDirtAllowUnknownPercent": 40,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        }
+      ]
+    },
+    "oh": {
+      "fuelMinimum": 400,
+      "routes": [
+        {
+          "id": "long-columbus-cincinnati",
+          "from": {
+            "lat": 39.9612,
+            "lon": -82.9988,
+            "label": "Columbus"
+          },
+          "to": {
+            "lat": 39.1031,
+            "lon": -84.512,
+            "label": "Cincinnati"
+          },
+          "minimumDirtPercent": 35,
+          "minimumDirtAllowUnknownPercent": 45,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "urban-columbus-cleveland",
+          "from": {
+            "lat": 39.9612,
+            "lon": -82.9988,
+            "label": "Columbus"
+          },
+          "to": {
+            "lat": 41.4993,
+            "lon": -81.6944,
+            "label": "Cleveland"
+          },
+          "minimumDirtPercent": 20,
+          "minimumDirtAllowUnknownPercent": 30,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 15,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "short-cleveland-mid",
+          "from": {
+            "lat": 41.4993,
+            "lon": -81.6944,
+            "label": "Cleveland"
+          },
+          "to": {
+            "lat": 40.301199999999994,
+            "lon": -83.1032,
+            "label": "Midpoint"
+          },
+          "minimumDirtPercent": 30,
+          "minimumDirtAllowUnknownPercent": 40,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        }
+      ]
+    },
+    "ok": {
+      "fuelMinimum": 400,
+      "routes": [
+        {
+          "id": "long-oklahoma-city-lawton",
+          "from": {
+            "lat": 35.4676,
+            "lon": -97.5164,
+            "label": "Oklahoma City"
+          },
+          "to": {
+            "lat": 34.6036,
+            "lon": -98.3959,
+            "label": "Lawton"
+          },
+          "minimumDirtPercent": 35,
+          "minimumDirtAllowUnknownPercent": 45,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "urban-oklahoma-city-tulsa",
+          "from": {
+            "lat": 35.4676,
+            "lon": -97.5164,
+            "label": "Oklahoma City"
+          },
+          "to": {
+            "lat": 36.154,
+            "lon": -95.9928,
+            "label": "Tulsa"
+          },
+          "minimumDirtPercent": 20,
+          "minimumDirtAllowUnknownPercent": 30,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 15,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "short-tulsa-mid",
+          "from": {
+            "lat": 36.154,
+            "lon": -95.9928,
+            "label": "Tulsa"
+          },
+          "to": {
+            "lat": 35.3788,
+            "lon": -97.19435,
+            "label": "Midpoint"
+          },
+          "minimumDirtPercent": 30,
+          "minimumDirtAllowUnknownPercent": 40,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        }
+      ]
+    },
+    "pa": {
+      "fuelMinimum": 400,
+      "routes": [
+        {
+          "id": "long-pittsburgh-harrisburg",
+          "from": {
+            "lat": 40.4406,
+            "lon": -79.9959,
+            "label": "Pittsburgh"
+          },
+          "to": {
+            "lat": 40.2737,
+            "lon": -76.8844,
+            "label": "Harrisburg"
+          },
+          "minimumDirtPercent": 35,
+          "minimumDirtAllowUnknownPercent": 45,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "urban-pittsburgh-philadelphia",
+          "from": {
+            "lat": 40.4406,
+            "lon": -79.9959,
+            "label": "Pittsburgh"
+          },
+          "to": {
+            "lat": 39.9526,
+            "lon": -75.1652,
+            "label": "Philadelphia"
+          },
+          "minimumDirtPercent": 20,
+          "minimumDirtAllowUnknownPercent": 30,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 15,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "short-philadelphia-mid",
+          "from": {
+            "lat": 39.9526,
+            "lon": -75.1652,
+            "label": "Philadelphia"
+          },
+          "to": {
+            "lat": 40.11315,
+            "lon": -76.0248,
+            "label": "Midpoint"
+          },
+          "minimumDirtPercent": 30,
+          "minimumDirtAllowUnknownPercent": 40,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        }
+      ]
+    },
+    "ri": {
+      "fuelMinimum": 400,
+      "routes": [
+        {
+          "id": "long-providence-woonsocket",
+          "from": {
+            "lat": 41.824,
+            "lon": -71.4128,
+            "label": "Providence"
+          },
+          "to": {
+            "lat": 41.8787,
+            "lon": -71.3826,
+            "label": "Woonsocket"
+          },
+          "minimumDirtPercent": 35,
+          "minimumDirtAllowUnknownPercent": 45,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "urban-providence-newport",
+          "from": {
+            "lat": 41.824,
+            "lon": -71.4128,
+            "label": "Providence"
+          },
+          "to": {
+            "lat": 41.4901,
+            "lon": -71.3128,
+            "label": "Newport"
+          },
+          "minimumDirtPercent": 20,
+          "minimumDirtAllowUnknownPercent": 30,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 15,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "short-newport-mid",
+          "from": {
+            "lat": 41.4901,
+            "lon": -71.3128,
+            "label": "Newport"
+          },
+          "to": {
+            "lat": 41.6844,
+            "lon": -71.3477,
+            "label": "Midpoint"
+          },
+          "minimumDirtPercent": 30,
+          "minimumDirtAllowUnknownPercent": 40,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        }
+      ]
+    },
+    "sc": {
+      "fuelMinimum": 400,
+      "routes": [
+        {
+          "id": "long-charleston-greenville",
+          "from": {
+            "lat": 32.7765,
+            "lon": -79.9311,
+            "label": "Charleston"
+          },
+          "to": {
+            "lat": 34.8526,
+            "lon": -82.394,
+            "label": "Greenville"
+          },
+          "minimumDirtPercent": 35,
+          "minimumDirtAllowUnknownPercent": 45,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "urban-charleston-columbia",
+          "from": {
+            "lat": 32.7765,
+            "lon": -79.9311,
+            "label": "Charleston"
+          },
+          "to": {
+            "lat": 34.0007,
+            "lon": -81.0348,
+            "label": "Columbia"
+          },
+          "minimumDirtPercent": 20,
+          "minimumDirtAllowUnknownPercent": 30,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 15,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "short-columbia-mid",
+          "from": {
+            "lat": 34.0007,
+            "lon": -81.0348,
+            "label": "Columbia"
+          },
+          "to": {
+            "lat": 34.42665,
+            "lon": -81.71440000000001,
+            "label": "Midpoint"
+          },
+          "minimumDirtPercent": 30,
+          "minimumDirtAllowUnknownPercent": 40,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        }
+      ]
+    },
+    "sd": {
+      "fuelMinimum": 400,
+      "routes": [
+        {
+          "id": "long-sioux-falls-pierre",
+          "from": {
+            "lat": 43.546,
+            "lon": -96.7313,
+            "label": "Sioux Falls"
+          },
+          "to": {
+            "lat": 44.3683,
+            "lon": -100.351,
+            "label": "Pierre"
+          },
+          "minimumDirtPercent": 35,
+          "minimumDirtAllowUnknownPercent": 45,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "urban-sioux-falls-rapid-city",
+          "from": {
+            "lat": 43.546,
+            "lon": -96.7313,
+            "label": "Sioux Falls"
+          },
+          "to": {
+            "lat": 44.0805,
+            "lon": -103.231,
+            "label": "Rapid City"
+          },
+          "minimumDirtPercent": 20,
+          "minimumDirtAllowUnknownPercent": 30,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 15,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "short-rapid-city-mid",
+          "from": {
+            "lat": 44.0805,
+            "lon": -103.231,
+            "label": "Rapid City"
+          },
+          "to": {
+            "lat": 44.2244,
+            "lon": -101.791,
+            "label": "Midpoint"
+          },
+          "minimumDirtPercent": 30,
+          "minimumDirtAllowUnknownPercent": 40,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        }
+      ]
+    },
+    "tn": {
+      "fuelMinimum": 400,
+      "routes": [
+        {
+          "id": "long-nashville-knoxville",
+          "from": {
+            "lat": 36.1627,
+            "lon": -86.7816,
+            "label": "Nashville"
+          },
+          "to": {
+            "lat": 35.9606,
+            "lon": -83.9207,
+            "label": "Knoxville"
+          },
+          "minimumDirtPercent": 35,
+          "minimumDirtAllowUnknownPercent": 45,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "urban-nashville-memphis",
+          "from": {
+            "lat": 36.1627,
+            "lon": -86.7816,
+            "label": "Nashville"
+          },
+          "to": {
+            "lat": 35.1495,
+            "lon": -90.049,
+            "label": "Memphis"
+          },
+          "minimumDirtPercent": 20,
+          "minimumDirtAllowUnknownPercent": 30,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 15,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "short-memphis-mid",
+          "from": {
+            "lat": 35.1495,
+            "lon": -90.049,
+            "label": "Memphis"
+          },
+          "to": {
+            "lat": 35.55505,
+            "lon": -86.98485,
+            "label": "Midpoint"
+          },
+          "minimumDirtPercent": 30,
+          "minimumDirtAllowUnknownPercent": 40,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        }
+      ]
+    },
+    "tx": {
+      "fuelMinimum": 400,
+      "routes": [
+        {
+          "id": "long-austin-dallas",
+          "from": {
+            "lat": 30.2672,
+            "lon": -97.7431,
+            "label": "Austin"
+          },
+          "to": {
+            "lat": 32.7767,
+            "lon": -96.797,
+            "label": "Dallas"
+          },
+          "minimumDirtPercent": 35,
+          "minimumDirtAllowUnknownPercent": 45,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "urban-austin-houston",
+          "from": {
+            "lat": 30.2672,
+            "lon": -97.7431,
+            "label": "Austin"
+          },
+          "to": {
+            "lat": 29.7604,
+            "lon": -95.3698,
+            "label": "Houston"
+          },
+          "minimumDirtPercent": 20,
+          "minimumDirtAllowUnknownPercent": 30,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 15,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "short-houston-mid",
+          "from": {
+            "lat": 29.7604,
+            "lon": -95.3698,
+            "label": "Houston"
+          },
+          "to": {
+            "lat": 31.268549999999998,
+            "lon": -96.0834,
+            "label": "Midpoint"
+          },
+          "minimumDirtPercent": 30,
+          "minimumDirtAllowUnknownPercent": 40,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        }
+      ]
+    },
+    "ut": {
+      "fuelMinimum": 400,
+      "routes": [
+        {
+          "id": "long-salt-lake-city-provo",
+          "from": {
+            "lat": 40.7608,
+            "lon": -111.891,
+            "label": "Salt Lake City"
+          },
+          "to": {
+            "lat": 40.2338,
+            "lon": -111.6585,
+            "label": "Provo"
+          },
+          "minimumDirtPercent": 35,
+          "minimumDirtAllowUnknownPercent": 45,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "urban-salt-lake-city-st-george",
+          "from": {
+            "lat": 40.7608,
+            "lon": -111.891,
+            "label": "Salt Lake City"
+          },
+          "to": {
+            "lat": 37.0965,
+            "lon": -113.5684,
+            "label": "St George"
+          },
+          "minimumDirtPercent": 20,
+          "minimumDirtAllowUnknownPercent": 30,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 15,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "short-st-george-mid",
+          "from": {
+            "lat": 37.0965,
+            "lon": -113.5684,
+            "label": "St George"
+          },
+          "to": {
+            "lat": 38.66515,
+            "lon": -112.61345,
+            "label": "Midpoint"
+          },
+          "minimumDirtPercent": 30,
+          "minimumDirtAllowUnknownPercent": 40,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        }
+      ]
+    },
+    "va": {
+      "fuelMinimum": 400,
+      "routes": [
+        {
+          "id": "long-richmond-roanoke",
+          "from": {
+            "lat": 37.5407,
+            "lon": -77.436,
+            "label": "Richmond"
+          },
+          "to": {
+            "lat": 37.2707,
+            "lon": -79.9414,
+            "label": "Roanoke"
+          },
+          "minimumDirtPercent": 35,
+          "minimumDirtAllowUnknownPercent": 45,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "urban-richmond-virginia-beach",
+          "from": {
+            "lat": 37.5407,
+            "lon": -77.436,
+            "label": "Richmond"
+          },
+          "to": {
+            "lat": 36.8529,
+            "lon": -75.978,
+            "label": "Virginia Beach"
+          },
+          "minimumDirtPercent": 20,
+          "minimumDirtAllowUnknownPercent": 30,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 15,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "short-virginia-beach-mid",
+          "from": {
+            "lat": 36.8529,
+            "lon": -75.978,
+            "label": "Virginia Beach"
+          },
+          "to": {
+            "lat": 37.0618,
+            "lon": -77.9597,
+            "label": "Midpoint"
+          },
+          "minimumDirtPercent": 30,
+          "minimumDirtAllowUnknownPercent": 40,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        }
+      ]
+    },
+    "wv": {
+      "fuelMinimum": 400,
+      "routes": [
+        {
+          "id": "long-charleston-huntington",
+          "from": {
+            "lat": 38.3498,
+            "lon": -81.6326,
+            "label": "Charleston"
+          },
+          "to": {
+            "lat": 38.4192,
+            "lon": -82.4452,
+            "label": "Huntington"
+          },
+          "minimumDirtPercent": 35,
+          "minimumDirtAllowUnknownPercent": 45,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "urban-charleston-morgantown",
+          "from": {
+            "lat": 38.3498,
+            "lon": -81.6326,
+            "label": "Charleston"
+          },
+          "to": {
+            "lat": 39.6295,
+            "lon": -79.9559,
+            "label": "Morgantown"
+          },
+          "minimumDirtPercent": 20,
+          "minimumDirtAllowUnknownPercent": 30,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 15,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "short-morgantown-mid",
+          "from": {
+            "lat": 39.6295,
+            "lon": -79.9559,
+            "label": "Morgantown"
+          },
+          "to": {
+            "lat": 39.02435,
+            "lon": -81.20054999999999,
+            "label": "Midpoint"
+          },
+          "minimumDirtPercent": 30,
+          "minimumDirtAllowUnknownPercent": 40,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        }
+      ]
+    },
+    "wi": {
+      "fuelMinimum": 400,
+      "routes": [
+        {
+          "id": "long-milwaukee-green-bay",
+          "from": {
+            "lat": 43.0389,
+            "lon": -87.9065,
+            "label": "Milwaukee"
+          },
+          "to": {
+            "lat": 44.5133,
+            "lon": -88.0133,
+            "label": "Green Bay"
+          },
+          "minimumDirtPercent": 35,
+          "minimumDirtAllowUnknownPercent": 45,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "urban-milwaukee-madison",
+          "from": {
+            "lat": 43.0389,
+            "lon": -87.9065,
+            "label": "Milwaukee"
+          },
+          "to": {
+            "lat": 43.0731,
+            "lon": -89.4012,
+            "label": "Madison"
+          },
+          "minimumDirtPercent": 20,
+          "minimumDirtAllowUnknownPercent": 30,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 15,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "short-madison-mid",
+          "from": {
+            "lat": 43.0731,
+            "lon": -89.4012,
+            "label": "Madison"
+          },
+          "to": {
+            "lat": 43.7932,
+            "lon": -88.70725,
+            "label": "Midpoint"
+          },
+          "minimumDirtPercent": 30,
+          "minimumDirtAllowUnknownPercent": 40,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        }
+      ]
+    },
+    "wy": {
+      "fuelMinimum": 400,
+      "routes": [
+        {
+          "id": "long-cheyenne-cody",
+          "from": {
+            "lat": 41.14,
+            "lon": -104.8202,
+            "label": "Cheyenne"
+          },
+          "to": {
+            "lat": 44.5263,
+            "lon": -109.0565,
+            "label": "Cody"
+          },
+          "minimumDirtPercent": 35,
+          "minimumDirtAllowUnknownPercent": 45,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "urban-cheyenne-casper",
+          "from": {
+            "lat": 41.14,
+            "lon": -104.8202,
+            "label": "Cheyenne"
+          },
+          "to": {
+            "lat": 42.8666,
+            "lon": -106.3131,
+            "label": "Casper"
+          },
+          "minimumDirtPercent": 20,
+          "minimumDirtAllowUnknownPercent": 30,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 15,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "short-casper-mid",
+          "from": {
+            "lat": 42.8666,
+            "lon": -106.3131,
+            "label": "Casper"
+          },
+          "to": {
+            "lat": 43.69645,
+            "lon": -107.6848,
+            "label": "Midpoint"
+          },
+          "minimumDirtPercent": 30,
+          "minimumDirtAllowUnknownPercent": 40,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        }
+      ]
+    },
+    "dc": {
+      "fuelMinimum": 400,
+      "routes": [
+        {
+          "id": "long-capitol-hill-national-mall",
+          "from": {
+            "lat": 38.9072,
+            "lon": -77.0369,
+            "label": "Capitol Hill"
+          },
+          "to": {
+            "lat": 38.8893,
+            "lon": -77.0502,
+            "label": "National Mall"
+          },
+          "minimumDirtPercent": 35,
+          "minimumDirtAllowUnknownPercent": 45,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "urban-capitol-hill-dupont-circle",
+          "from": {
+            "lat": 38.9072,
+            "lon": -77.0369,
+            "label": "Capitol Hill"
+          },
+          "to": {
+            "lat": 38.917,
+            "lon": -77.0365,
+            "label": "Dupont Circle"
+          },
+          "minimumDirtPercent": 20,
+          "minimumDirtAllowUnknownPercent": 30,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 15,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "short-dupont-circle-mid",
+          "from": {
+            "lat": 38.917,
+            "lon": -77.0365,
+            "label": "Dupont Circle"
+          },
+          "to": {
+            "lat": 38.90315,
+            "lon": -77.04335,
+            "label": "Midpoint"
+          },
+          "minimumDirtPercent": 30,
+          "minimumDirtAllowUnknownPercent": 40,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 12,
+          "maximumDirtBackwardPercent": 40
+        }
+      ]
     }
   }
 }
