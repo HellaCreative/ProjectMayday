@@ -159,16 +159,16 @@
           "maximumDirtBackwardPercent": 35
         },
         {
-          "id": "short-black-diamond-turner-valley",
+          "id": "short-black-diamond-longview",
           "from": {
             "lat": 50.688,
             "lon": -114.321,
             "label": "Black Diamond"
           },
           "to": {
-            "lat": 50.542,
-            "lon": -114.496,
-            "label": "Turner Valley area / Longview"
+            "lat": 50.4647,
+            "lon": -114.2847,
+            "label": "Longview"
           },
           "minimumDirtPercent": 50,
           "minimumDirtAllowUnknownPercent": 60,
