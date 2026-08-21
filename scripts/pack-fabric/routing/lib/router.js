@@ -2026,8 +2026,8 @@ async function routeOnRuntime(body, graphResolution, runtime) {
         Object.assign({}, searchOpts, {
           cityWall: false,
           urbanCoreFallback: true,
-          settlementWall: true,
-          settlementFallback: false,
+          settlementWall: false,
+          settlementFallback: true,
           diagnostics: relaxedDiagnostics
         })
       );
