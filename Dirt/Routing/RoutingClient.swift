@@ -90,7 +90,7 @@ final class RoutingClient {
             }
             throw RoutingError.server("Fuel planning server error (\(status)).")
         }
-        guard response.isComplete else {
+        guard response.isUsableFuelResult else {
             let message = response.message ?? response.error ?? "Fuel chain unavailable."
             Task { @MainActor in
                 RoutingDebugLog.shared.event(

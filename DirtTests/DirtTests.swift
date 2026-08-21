@@ -103,6 +103,31 @@ struct DirtTests {
         #expect(xml.contains("<trkseg>"))
     }
 
+    @Test func gpxExporterMakesFuelGapVisible() {
+        let route = SavedRoute(
+            name: "Gap Ride",
+            profile: .dirt,
+            coordinates: [
+                RouteCoordinate(longitude: -63.57, latitude: 44.64),
+                RouteCoordinate(longitude: -62.57, latitude: 45.64)
+            ],
+            distanceMeters: 180_000,
+            dirtPercent: 80,
+            pavedPercent: 20
+        )
+        let warning = GPXExporter.FuelWarning(
+            from: route.coordinates[0],
+            to: route.coordinates[1],
+            description: "No pump in range · 33 km over usable range"
+        )
+
+        let xml = GPXExporter.document(for: route, fuelWarnings: [warning])
+
+        #expect(xml.contains("FUEL GAP START 1"))
+        #expect(xml.contains("FUEL GAP END 1"))
+        #expect(xml.contains("33 km over usable range"))
+    }
+
     @Test func navigationChromeHidesDockAsSoonAsStartBegins() {
         #expect(NavigationChrome.showsDock(for: .idle))
         #expect(!NavigationChrome.showsDock(for: .prefetching))

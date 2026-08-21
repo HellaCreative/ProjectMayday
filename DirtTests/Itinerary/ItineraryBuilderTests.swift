@@ -53,6 +53,32 @@ struct ItineraryBuilderTests {
         #expect(result.legs[1].fuelUsedOnArrivalMeters == 237_500)
     }
 
+    @Test func fuelServiceFailureKeepsRouteAndReturnsGap() async throws {
+        let points = [point(0), point(1)]
+        let source = FakeRoutingSource(name: "live")
+        source.distances[key(points[0], points[1])] = 300_000
+        source.fuelChainError = RoutingError.server("timed out")
+        let itinerary = makeItinerary(points)
+
+        let result = await ItineraryBuilder().build(
+            itinerary, from: 0, reuse: nil,
+            fuel: FuelRangePrefs.Snapshot(
+                tankMeters: 150_000,
+                usableMeters: 150_000, reservePercent: 0
+            ),
+            source: .fixed(source), onProgress: { _ in }
+        )
+
+        #expect(result.legs.count == 1)
+        #expect(result.legs.first?.response.distanceMeters == 300_000)
+        if case .gap(let gap) = result.riderLegStatus[itinerary.legs[0].id] {
+            #expect(gap.reason.contains("timed out"))
+            #expect(gap.overByMeters == 150_000)
+        } else {
+            Issue.record("Expected a drawable fuel gap")
+        }
+    }
+
     @Test func longRiderLegUsesThreeStopWindowsAndCommitsEveryHop() async throws {
         let points = [point(0), point(1)]
         let stops = [point(0.2), point(0.4), point(0.6), point(0.8)]
@@ -73,7 +99,7 @@ struct ItineraryBuilderTests {
         let result = await ItineraryBuilder().build(
             itinerary, from: 0, reuse: nil,
             fuel: FuelRangePrefs.Snapshot(
-                isEnabled: true, tankMeters: 237_500,
+                tankMeters: 237_500,
                 usableMeters: 237_500, reservePercent: 0
             ),
             source: .fixed(source)
@@ -114,7 +140,7 @@ struct ItineraryBuilderTests {
         let first = await builder.build(
             initial, from: 0, reuse: nil,
             fuel: FuelRangePrefs.Snapshot(
-                isEnabled: true, tankMeters: 150_000,
+                tankMeters: 150_000,
                 usableMeters: 150_000, reservePercent: 0
             ),
             source: .fixed(source), onProgress: { _ in }
@@ -138,7 +164,7 @@ struct ItineraryBuilderTests {
             from: try #require(change.rebuildFromLegIndex),
             reuse: first,
             fuel: FuelRangePrefs.Snapshot(
-                isEnabled: true, tankMeters: 150_000,
+                tankMeters: 150_000,
                 usableMeters: 150_000, reservePercent: 0
             ),
             source: .fixed(source),
@@ -153,6 +179,44 @@ struct ItineraryBuilderTests {
         #expect(second.legs.dropFirst().allSatisfy { $0.fromCoordinate != points[0] })
         let plans = source.fuelChainRequests.filter { $0.fuel.probeFirstReachableStation != true }
         #expect(plans.suffix(3).allSatisfy { $0.fuel.windowMaxStops == 1 })
+    }
+
+    @Test func fuelStopOverrideIsSeparateFromProfileAndForcesDepartureStation() async throws {
+        let points = [point(0), point(1)]
+        let chosen = point(0.5)
+        let source = FakeRoutingSource(name: "live")
+        source.distances[key(points[0], points[1])] = 300_000
+        source.distances[key(points[0], chosen)] = 150_000
+        source.distances[key(chosen, points[1])] = 150_000
+        source.fuelStops = [fuelStop("chosen-pump", at: chosen)]
+        let initial = makeItinerary(points)
+        let riderLeg = try #require(initial.legs.first)
+        let departure = riderLeg.from.uuidString
+        let change = reduce(
+            initial,
+            .setFuelStopOverride(
+                legID: riderLeg.id,
+                departureAnchorID: departure,
+                stationID: "chosen-pump"
+            )
+        )
+
+        #expect(change.itinerary.legs[0].fuelStopOverrides[departure] == "chosen-pump")
+        #expect(change.itinerary.legs[0].hopOverrides.isEmpty)
+        #expect(change.itinerary.legs[0].profile == riderLeg.profile)
+
+        _ = await ItineraryBuilder().build(
+            change.itinerary, from: 0, reuse: nil,
+            fuel: FuelRangePrefs.Snapshot(
+                tankMeters: 150_000,
+                usableMeters: 150_000, reservePercent: 0
+            ),
+            source: .fixed(source), onProgress: { _ in }
+        )
+        let request = try #require(source.fuelChainRequests.first {
+            $0.fuel.probeFirstReachableStation != true
+        })
+        #expect(request.fuel.requiredFirstStationId == "chosen-pump")
     }
 
     @Test func fuelCarriesAcrossOrdinaryWaypointWithoutExtraStop() async throws {
@@ -286,7 +350,7 @@ struct ItineraryBuilderTests {
 
         let task = Task { @MainActor in
             await builder.build(
-                itinerary, from: 0, reuse: nil, fuel: .disabled,
+                itinerary, from: 0, reuse: nil, fuel: .routeOnly,
                 source: .fixed(source)
             ) { _ in progress += 1 }
         }
@@ -307,7 +371,7 @@ struct ItineraryBuilderTests {
         let firstItinerary = makeItinerary(points)
         let builder = ItineraryBuilder()
         let first = await builder.build(
-            firstItinerary, from: 0, reuse: nil, fuel: .disabled,
+            firstItinerary, from: 0, reuse: nil, fuel: .routeOnly,
             source: .fixed(source), onProgress: { _ in }
         )
         let change = reduce(
@@ -318,7 +382,7 @@ struct ItineraryBuilderTests {
         source.routeRequests.removeAll()
 
         let second = await builder.build(
-            change.itinerary, from: 1, reuse: first, fuel: .disabled,
+            change.itinerary, from: 1, reuse: first, fuel: .routeOnly,
             source: .fixed(source), onProgress: { _ in }
         )
 
@@ -334,7 +398,7 @@ struct ItineraryBuilderTests {
         let firstItinerary = makeItinerary(points)
         let builder = ItineraryBuilder()
         let first = await builder.build(
-            firstItinerary, from: 0, reuse: nil, fuel: .disabled,
+            firstItinerary, from: 0, reuse: nil, fuel: .routeOnly,
             source: .fixed(source), onProgress: { _ in }
         )
         let secondLegID = try #require(firstItinerary.legs.last?.id)
@@ -346,7 +410,7 @@ struct ItineraryBuilderTests {
         source.routeRequests.removeAll()
 
         let second = await builder.build(
-            change.itinerary, from: rebuildIndex, reuse: first, fuel: .disabled,
+            change.itinerary, from: rebuildIndex, reuse: first, fuel: .routeOnly,
             source: .fixed(source), onProgress: { _ in }
         )
 
@@ -365,7 +429,7 @@ struct ItineraryBuilderTests {
         let itinerary = makeItinerary(points)
 
         let result = await ItineraryBuilder().build(
-            itinerary, from: 0, reuse: nil, fuel: .disabled,
+            itinerary, from: 0, reuse: nil, fuel: .routeOnly,
             source: .fixed(source), onProgress: { _ in }
         )
 
@@ -427,6 +491,7 @@ private final class FakeRoutingSource: RoutingSource {
     var waypointFuelStations: [String: FuelChainStop] = [:]
     var firstReachableStationMeters: [String: Double] = [:]
     var failKey: String?
+    var fuelChainError: Error?
     var suspendNextRoute = false
     var pendingRouteContinuation: CheckedContinuation<Void, Never>?
 
@@ -449,6 +514,7 @@ private final class FakeRoutingSource: RoutingSource {
 
     func fuelChain(_ req: FuelChainRequest) async throws -> FuelChainResponse {
         fuelChainRequests.append(req)
+        if let fuelChainError { throw fuelChainError }
         let pair = (
             RouteCoordinate(longitude: req.locations[0].longitude, latitude: req.locations[0].latitude),
             RouteCoordinate(longitude: req.locations[1].longitude, latitude: req.locations[1].latitude)
@@ -499,9 +565,9 @@ private func build(
 ) async -> BuiltItinerary {
     let fuel = usable.map {
         FuelRangePrefs.Snapshot(
-            isEnabled: true, tankMeters: $0, usableMeters: $0, reservePercent: 0
+            tankMeters: $0, usableMeters: $0, reservePercent: 0
         )
-    } ?? .disabled
+    } ?? .routeOnly
     return await ItineraryBuilder().build(
         makeItinerary(points, profile: profile), from: 0, reuse: nil, fuel: fuel,
         source: .fixed(source), onProgress: { _ in }

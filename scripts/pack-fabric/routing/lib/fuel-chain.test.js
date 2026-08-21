@@ -5,7 +5,8 @@ const test = require("node:test");
 const {
   fuelNeedForProfileRide,
   planFuelChainOnRuntime,
-  rankForwardFuel
+  rankForwardFuel,
+  stationEligibility
 } = require("./fuel-chain");
 
 function lineRuntime() {
@@ -114,6 +115,25 @@ test("long fuel chain returns a resumable window capped at three stops", async (
   assert.equal(result.graphMeters.length, 3);
 });
 
+test("a rider fuel-stop override forces the first station without changing later search", async () => {
+  const result = await planFuelChainOnRuntime({
+    runtime: lineRuntime(),
+    stations: [station("f1", 1), station("f2", 2), station("f3", 3)],
+    start: { lat: 45, lon: 0 },
+    destination: { lat: 45, lon: 4 },
+    profile: "dirt",
+    accessPolicy: { motorizedPermissive: true, motorizedUnknown: false },
+    usableRangeMeters: 170_000,
+    firstLegMaxMeters: 170_000,
+    requiredFirstStationId: "f2",
+    routeCandidate: fixtureRouteCandidate
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.stops[0].id, "f2");
+  assert.equal(result.stops.length, 1);
+});
+
 test("fuel ranking rejects a geographically backward pump", () => {
   const ranked = rankForwardFuel(
     [
@@ -177,6 +197,38 @@ test("look-ahead measures a nearby pump instead of reporting zero fuel distance"
   assert.equal(result.ok, true);
   assert.ok(result.firstReachableStationMeters >= 400);
   assert.ok(result.firstReachableStationMeters < 1_000);
+});
+
+test("fixed station sample gives probe and selector the same base eligibility", () => {
+  let seed = 0x5eed11;
+  const random = () => {
+    seed = (seed * 1664525 + 1013904223) >>> 0;
+    return seed / 0x100000000;
+  };
+  const current = [0, 45];
+  const destination = [4, 45];
+  const currentLocation = { lon: current[0], lat: current[1] };
+  const destinationLocation = { lon: destination[0], lat: destination[1] };
+  const visited = new Set(["visited"]);
+  for (let index = 0; index < 64; index += 1) {
+    const row = {
+      station: { id: index % 11 === 0 ? "visited" : `s${index}` },
+      location: { lon: random() * 4.5 - 0.25, lat: 45 + (random() - 0.5) * 0.2 },
+      graphMeters: 500 + random() * 95_000,
+      dirtAdjacent: index % 2 === 0
+    };
+    const expected = stationEligibility(row, {
+      current,
+      destination,
+      capMeters: 90_000,
+      visited,
+      allowNearStartRecovery: false
+    }).forward;
+    const ranked = rankForwardFuel(
+      [row], currentLocation, destinationLocation, 90_000, visited, "balanced", null, null, false
+    );
+    assert.equal(ranked.length === 1, expected, `station sample ${index}`);
+  }
 });
 
 test("short route does not manufacture a fuel plan", async () => {

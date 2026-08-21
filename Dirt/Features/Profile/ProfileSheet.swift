@@ -24,6 +24,9 @@ struct ProfileSheet: View {
 
     private var supabase: SupabaseService { app.supabase }
     private var subscription: SubscriptionService { app.subscription }
+    private var displayedFuelRangeKm: Double {
+        fuelRangeKm > 0 ? fuelRangeKm : FuelRangePrefs.kilometers
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -230,50 +233,50 @@ struct ProfileSheet: View {
     private var fuelRangeCard: some View {
         VStack(alignment: .leading, spacing: DirtSpace.inner) {
             DirtSectionLabel(title: "Fuel range")
-            Toggle(
-                "Auto fuel stops while routing",
-                isOn: Binding(
-                    get: { fuelRangeKm > 0 },
-                    set: { on in
-                        fuelRangeKm = on ? max(FuelRangePrefs.suggestedDefaultKm, FuelRangePrefs.minimumKm) : 0
+            HStack(spacing: DirtSpace.inner) {
+                Text("\(Int(displayedFuelRangeKm)) km")
+                    .font(DirtType.metricInline)
+                    .foregroundStyle(DirtTheme.ink)
+                    .frame(minWidth: 56, alignment: .leading)
+                Slider(
+                    value: Binding(
+                        get: { displayedFuelRangeKm },
+                        set: { fuelRangeKm = $0 }
+                    ),
+                    in: FuelRangePrefs.minimumKm...FuelRangePrefs.maximumKm,
+                    step: 10
+                ) { editing in
+                    if editing {
+                        profileFuelDebounce?.cancel()
+                        app.planner.cancelFuelAssistForRangeEdit()
+                    } else {
+                        let selected = displayedFuelRangeKm
+                        FuelRangePrefs.kilometers = selected
+                        FuelRangePrefs.lastEnabledKilometers = selected
+                        app.planner.reapplyFuelAssist(rangeKm: selected)
                     }
-                )
-            )
-            .font(DirtType.rowTitle)
-            .tint(DirtTheme.orange)
-            if fuelRangeKm > 0 {
-                HStack(spacing: DirtSpace.inner) {
-                    Text("\(Int(fuelRangeKm)) km")
-                        .font(DirtType.metricInline)
+                }
+                .tint(DirtTheme.orange)
+                .accessibilityLabel("Kilometers per tank")
+            }
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Safety reserve")
+                        .font(DirtType.rowTitle)
                         .foregroundStyle(DirtTheme.ink)
-                        .frame(minWidth: 56, alignment: .leading)
-                    Slider(
-                        value: $fuelRangeKm,
-                        in: FuelRangePrefs.minimumKm...FuelRangePrefs.maximumKm,
-                        step: 10
-                    )
-                    .tint(DirtTheme.orange)
-                    .accessibilityLabel("Kilometers per tank")
+                    Text("\(Int(FuelRangePrefs.usableKilometers(for: displayedFuelRangeKm, reservePercent: fuelReservePercent).rounded())) km usable")
+                        .font(DirtType.helper)
+                        .foregroundStyle(DirtTheme.muted)
                 }
-                HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Safety reserve")
-                            .font(DirtType.rowTitle)
-                            .foregroundStyle(DirtTheme.ink)
-                        Text("Plans stops within \(Int(FuelRangePrefs.usableKilometers(for: fuelRangeKm, reservePercent: fuelReservePercent).rounded())) km usable range")
-                            .font(DirtType.helper)
-                            .foregroundStyle(DirtTheme.muted)
+                Spacer(minLength: 0)
+                Menu("\(Int(fuelReservePercent))%") {
+                    ForEach([0, 5, 10, 15, 20, 25, 30], id: \.self) { percent in
+                        Button("\(percent)%") { fuelReservePercent = Double(percent) }
                     }
-                    Spacer(minLength: 0)
-                    Menu("\(Int(fuelReservePercent))%") {
-                        ForEach([0, 5, 10, 15, 20, 25, 30], id: \.self) { percent in
-                            Button("\(percent)%") { fuelReservePercent = Double(percent) }
-                        }
-                    }
-                    .font(DirtType.chip)
-                    .fontWeight(.bold)
-                    .foregroundStyle(DirtTheme.orange)
                 }
+                .font(DirtType.chip)
+                .fontWeight(.bold)
+                .foregroundStyle(DirtTheme.orange)
             }
         }
         .padding(DirtSpace.row)
@@ -283,24 +286,10 @@ struct ProfileSheet: View {
             RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous)
                 .stroke(DirtTheme.hairline, lineWidth: 1)
         )
-        .onChange(of: fuelRangeKm) { _, newValue in
-            profileFuelDebounce?.cancel()
-            guard newValue > 0 else { return }
-            profileFuelDebounce = Task {
-                try? await Task.sleep(for: .seconds(2.5))
-                guard !Task.isCancelled else { return }
-                app.planner.reapplyFuelAssist()
-            }
-        }
         .onChange(of: fuelReservePercent) { _, newValue in
             FuelRangePrefs.reservePercent = newValue
             profileFuelDebounce?.cancel()
-            guard fuelRangeKm > 0 else { return }
-            profileFuelDebounce = Task {
-                try? await Task.sleep(for: .seconds(0.5))
-                guard !Task.isCancelled else { return }
-                app.planner.reapplyFuelAssist()
-            }
+            app.planner.reapplyFuelAssist(rangeKm: displayedFuelRangeKm)
         }
     }
 

@@ -731,6 +731,7 @@ struct MapLibreMapView: UIViewRepresentable {
                 } else {
                     view.onDragBegan = { [weak self] markerID in
                         self?.state.selectPlannerPin(markerID)
+                        self?.state.onPlannerPinDragBegan?(markerID)
                     }
                     view.onDragEnded = { [weak self] markerID, coordinate in
                         self?.state.onPlannerPinDragEnd?(markerID, coordinate)
@@ -965,6 +966,7 @@ struct MapLibreMapView: UIViewRepresentable {
             } else {
                 view.onDragBegan = { [weak self] markerID in
                     self?.state.selectPlannerPin(markerID)
+                    self?.state.onPlannerPinDragBegan?(markerID)
                 }
                 view.onDragEnded = { [weak self] markerID, coordinate in
                     self?.state.onPlannerPinDragEnd?(markerID, coordinate)
@@ -990,6 +992,9 @@ struct MapLibreMapView: UIViewRepresentable {
             guard !state.isNavigating else { return }
             // Tap pin → select (orange lift) so drag / second-tap relocate is obvious.
             state.selectPlannerPin(dirtAnnotation.markerID)
+            if dirtAnnotation.kind == .fuel {
+                state.onPlannerPinDragBegan?(dirtAnnotation.markerID)
+            }
         }
 
         func mapView(_ mapView: MLNMapView, didDeselect annotation: MLNAnnotation) {

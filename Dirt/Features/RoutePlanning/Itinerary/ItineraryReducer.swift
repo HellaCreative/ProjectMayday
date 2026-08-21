@@ -92,6 +92,7 @@ nonisolated func reduce(
         for index in affected {
             legs[index].profile = profile
             legs[index].hopOverrides.removeAll()
+            legs[index].fuelStopOverrides.removeAll()
             if profile == .cleanest { legs[index].allowUnknown = false }
         }
         return changed(
@@ -113,7 +114,37 @@ nonisolated func reduce(
             waypoints: itinerary.waypoints,
             legs: legs,
             rebuildFrom: index,
-            replanFromStationID: stationID
+            replanFromStationID: stationID == legs[index].from.uuidString ? nil : stationID
+        )
+
+    case .setFuelStopOverride(let legID, let departureAnchorID, let stationID):
+        guard !departureAnchorID.isEmpty, !stationID.isEmpty,
+              let index = itinerary.legs.firstIndex(where: { $0.id == legID }),
+              itinerary.legs[index].fuelStopOverrides[departureAnchorID] != stationID
+        else { return unchanged(itinerary) }
+        var legs = itinerary.legs
+        legs[index].fuelStopOverrides[departureAnchorID] = stationID
+        return changed(
+            itinerary,
+            waypoints: itinerary.waypoints,
+            legs: legs,
+            rebuildFrom: index,
+            replanFromStationID: departureAnchorID == legs[index].from.uuidString
+                ? nil
+                : departureAnchorID
+        )
+
+    case .clearFuelStopOverrides(let legID):
+        guard let index = itinerary.legs.firstIndex(where: { $0.id == legID }),
+              !itinerary.legs[index].fuelStopOverrides.isEmpty
+        else { return unchanged(itinerary) }
+        var legs = itinerary.legs
+        legs[index].fuelStopOverrides.removeAll()
+        return changed(
+            itinerary,
+            waypoints: itinerary.waypoints,
+            legs: legs,
+            rebuildFrom: index
         )
 
     case .setAllowUnknown(let legID, let allowUnknown):

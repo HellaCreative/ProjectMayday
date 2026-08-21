@@ -308,12 +308,11 @@ private final class PlannerFakeRoutingSource: RoutingSource {
 }
 
 private struct FuelPrefsRestore {
-    let enabled = FuelRangePrefs.isEnabled
     let kilometers = FuelRangePrefs.kilometers
     let reserve = FuelRangePrefs.reservePercent
 
     func restore() {
-        FuelRangePrefs.kilometers = enabled ? kilometers : 0
+        FuelRangePrefs.kilometers = kilometers
         FuelRangePrefs.reservePercent = reserve
     }
 }

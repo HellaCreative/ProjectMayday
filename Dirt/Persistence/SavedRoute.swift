@@ -44,16 +44,38 @@ final class SavedRoute {
 }
 
 enum GPXExporter {
-    static func document(for route: SavedRoute) -> String {
+    struct FuelWarning: Equatable {
+        let from: RouteCoordinate
+        let to: RouteCoordinate
+        let description: String
+    }
+
+    static func document(
+        for route: SavedRoute,
+        fuelWarnings: [FuelWarning] = [],
+        fuelUnknownMessages: [String] = []
+    ) -> String {
         let points = route.coordinates.map {
             "      <trkpt lat=\"\($0.latitude)\" lon=\"\($0.longitude)\"></trkpt>"
         }.joined(separator: "\n")
+        let warningWaypoints = fuelWarnings.enumerated().flatMap { index, warning in
+            let description = escape(warning.description)
+            return [
+                "  <wpt lat=\"\(warning.from.latitude)\" lon=\"\(warning.from.longitude)\"><name>FUEL GAP START \(index + 1)</name><desc>\(description)</desc></wpt>",
+                "  <wpt lat=\"\(warning.to.latitude)\" lon=\"\(warning.to.longitude)\"><name>FUEL GAP END \(index + 1)</name><desc>\(description)</desc></wpt>"
+            ]
+        }.joined(separator: "\n")
+        let warningDescriptions = fuelWarnings.map(\.description) + fuelUnknownMessages
+        let routeDescription = warningDescriptions.isEmpty
+            ? ""
+            : "\n    <desc>\(escape(warningDescriptions.joined(separator: " | ")))</desc>"
         return """
         <?xml version="1.0" encoding="UTF-8"?>
         <gpx version="1.1" creator="DIRT" xmlns="http://www.topografix.com/GPX/1/1">
           <metadata><name>\(escape(route.name))</name></metadata>
+        \(warningWaypoints)
           <trk>
-            <name>\(escape(route.name))</name>
+            <name>\(escape(route.name))</name>\(routeDescription)
             <trkseg>
         \(points)
             </trkseg>

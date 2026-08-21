@@ -173,6 +173,7 @@ struct FuelChainConstraint: Codable, Sendable {
     var windowMaxStops: Int? = nil
     var allowPartialWindow: Bool? = nil
     var windowTimeBudgetMs: Int? = nil
+    var requiredFirstStationId: String? = nil
 }
 
 struct FuelChainRequest: Codable, Sendable {
@@ -203,7 +204,8 @@ struct FuelChainRequest: Codable, Sendable {
         excludedStationIds: [String] = [],
         windowMaxStops: Int? = nil,
         allowPartialWindow: Bool = false,
-        windowTimeBudgetMs: Int? = nil
+        windowTimeBudgetMs: Int? = nil,
+        requiredFirstStationId: String? = nil
     ) {
         self.profile = profile
         locations = [
@@ -236,7 +238,8 @@ struct FuelChainRequest: Codable, Sendable {
             excludedStationIds: excludedStationIds.isEmpty ? nil : excludedStationIds,
             windowMaxStops: windowMaxStops,
             allowPartialWindow: allowPartialWindow ? true : nil,
-            windowTimeBudgetMs: windowTimeBudgetMs
+            windowTimeBudgetMs: windowTimeBudgetMs,
+            requiredFirstStationId: requiredFirstStationId
         )
     }
 }
@@ -280,6 +283,11 @@ struct FuelStationCandidate: Codable, Sendable {
     let id: String
     let meters: Double
     let dirtPct: Int
+    var departureId: String? = nil
+    var latitude: Double? = nil
+    var longitude: Double? = nil
+    var name: String? = nil
+    var validForward: Bool? = nil
 }
 
 struct FuelChainResponse: Codable, Sendable {
@@ -295,8 +303,15 @@ struct FuelChainResponse: Codable, Sendable {
     /// False means this bounded response ends at its final pump and the client
     /// must request the next window toward the rider waypoint.
     var windowComplete: Bool? = nil
+    var gapMeters: Double? = nil
+    var overByMeters: Double? = nil
+    var gapFrom: FuelChainStop? = nil
+    var gapTo: FuelChainStop? = nil
 
     var isComplete: Bool { status == "complete" }
+    var isGap: Bool { status == "gap" }
+    var isFuelUnknown: Bool { status == "unknown" }
+    var isUsableFuelResult: Bool { isComplete || isGap || isFuelUnknown }
     var reachesDestination: Bool { windowComplete != false }
 }
 
@@ -542,6 +557,8 @@ enum RoutingError: LocalizedError {
     case invalidResponse
     /// From here: GPS (or start) is farther than the snap radius from any eligible edge.
     case offGraphStart
+    case fuelGap(FuelGap)
+    case fuelUnknown(String)
 
     var errorDescription: String? {
         switch self {
@@ -550,6 +567,8 @@ enum RoutingError: LocalizedError {
         case .invalidResponse: "The routing service returned an unreadable response."
         case .offGraphStart:
             "Your start (GPS) isn’t close enough to a mapped road. Tap the nearest road to set A — B stays put."
+        case .fuelGap(let gap): gap.message
+        case .fuelUnknown(let message): message
         }
     }
 }

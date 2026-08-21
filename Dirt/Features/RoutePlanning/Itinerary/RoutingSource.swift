@@ -161,6 +161,17 @@ final class PackRoutingSource: RoutingSource {
         let start = coordinate(req.locations[0])
         let end = coordinate(req.locations[1])
         let stations = packs.fuelStations(from: start, to: end)
+        guard !stations.isEmpty else {
+            return FuelChainResponse(
+                status: "unknown",
+                error: "fuel_data_unavailable",
+                message: "Installed fuel data is unavailable for this part of the route.",
+                regionIds: GraphPackStore.regionIds(containingAny: [
+                    start.locationCoordinate, end.locationCoordinate
+                ]),
+                stops: [], graphMeters: [], diagnostics: nil
+            )
+        }
         if req.fuel.probeFirstReachableStation == true {
             let reachable = await packs.reachableFuelMeters(
                 from: start.locationCoordinate,
@@ -188,6 +199,7 @@ final class PackRoutingSource: RoutingSource {
         var visited = Set(req.fuel.excludedStationIds ?? [])
         var stops: [FuelChainStop] = []
         var graphMeters: [Double] = []
+        var stationCandidates: [FuelStationCandidate] = []
         let maximumStops = min(12, max(1, req.fuel.windowMaxStops ?? 12))
 
         while stops.count <= maximumStops {
@@ -217,7 +229,8 @@ final class PackRoutingSource: RoutingSource {
                     diagnostics: FuelChainDiagnostics(
                         strategy: "pack-forward", states: stops.count + 1,
                         dijkstraPops: nil, matchedFuel: stations.count, elapsedMs: nil
-                    )
+                    ),
+                    stationCandidates: stationCandidates
                 )
             }
 
@@ -232,6 +245,7 @@ final class PackRoutingSource: RoutingSource {
                         strategy: "pack-forward-window", states: stops.count,
                         dijkstraPops: nil, matchedFuel: stations.count, elapsedMs: nil
                     ),
+                    stationCandidates: stationCandidates,
                     windowComplete: false
                 )
             }
@@ -244,7 +258,7 @@ final class PackRoutingSource: RoutingSource {
                 profile: req.profile,
                 allowUnknown: req.accessPolicy.motorizedUnknown
             )
-            guard let station = FuelItinerary.rankedProgressFuel(
+            let ranked = FuelItinerary.rankedProgressFuel(
                 fuels: stations,
                 from: current,
                 to: end,
@@ -252,8 +266,80 @@ final class PackRoutingSource: RoutingSource {
                 tankMeters: firstCap,
                 sessionSeed: 0,
                 excluding: visited
-            ).first, let meters = reachable[station.id] else {
-                throw RoutingError.server("No route-connected fuel chain fits the usable range.")
+            )
+            let departureID = stops.last?.id ?? "start"
+            var validForward = Set<String>()
+            for candidate in ranked.prefix(16) {
+                let candidateCoordinate = CLLocationCoordinate2D(
+                    latitude: candidate.latitude,
+                    longitude: candidate.longitude
+                )
+                let destinationCap = req.fuel.destinationFuelUsedLimitMeters
+                    ?? req.fuel.usableRangeMeters
+                let reachesDestination = await packs.shortestGraphMeters(
+                    from: candidateCoordinate,
+                    to: end.locationCoordinate,
+                    maxMeters: destinationCap,
+                    profile: req.profile,
+                    allowUnknown: req.accessPolicy.motorizedUnknown
+                ) != nil
+                let onward: [String: Double]
+                if reachesDestination {
+                    onward = [:]
+                } else {
+                    onward = await packs.reachableFuelMeters(
+                        from: candidateCoordinate,
+                        toward: end.locationCoordinate,
+                        pumps: stations,
+                        maxMeters: req.fuel.usableRangeMeters,
+                        profile: req.profile,
+                        allowUnknown: req.accessPolicy.motorizedUnknown
+                    )
+                }
+                let hasOnwardPump = onward.keys.contains {
+                    $0 != candidate.id && !visited.contains($0)
+                }
+                if reachesDestination || hasOnwardPump { validForward.insert(candidate.id) }
+                stationCandidates.append(FuelStationCandidate(
+                    id: candidate.id,
+                    meters: reachable[candidate.id] ?? 0,
+                    dirtPct: 0,
+                    departureId: departureID,
+                    latitude: candidate.latitude,
+                    longitude: candidate.longitude,
+                    name: candidate.name ?? candidate.brand,
+                    validForward: reachesDestination || hasOnwardPump
+                ))
+            }
+            let required = stops.isEmpty ? req.fuel.requiredFirstStationId : nil
+            let choices = ranked.filter { candidate in
+                validForward.contains(candidate.id)
+                    && (required == nil || candidate.id == required)
+            }
+            guard let station = choices.first, let meters = reachable[station.id] else {
+                let routedPrefix = graphMeters.reduce(0, +)
+                let gap = max(0, req.fuel.profileMeters - routedPrefix)
+                let remaining = stops.isEmpty ? req.fuel.firstLegMaxMeters : req.fuel.usableRangeMeters
+                let forcedMessage = required.map {
+                    "The selected fuel stop \($0) is not reachable without stranding the next section."
+                }
+                return FuelChainResponse(
+                    status: "gap",
+                    error: "no_route_connected_fuel_chain",
+                    message: forcedMessage ?? "No route-connected fuel chain fits the usable range.",
+                    regionIds: GraphPackStore.regionIds(containingAny: [
+                        start.locationCoordinate, end.locationCoordinate
+                    ]),
+                    stops: stops,
+                    graphMeters: graphMeters,
+                    diagnostics: FuelChainDiagnostics(
+                        strategy: "pack-forward-gap", states: stops.count + 1,
+                        dijkstraPops: nil, matchedFuel: stations.count, elapsedMs: nil
+                    ),
+                    stationCandidates: stationCandidates,
+                    gapMeters: gap,
+                    overByMeters: max(0, gap - remaining)
+                )
             }
             visited.insert(station.id)
             graphMeters.append(meters)
@@ -268,7 +354,25 @@ final class PackRoutingSource: RoutingSource {
             ))
             current = RouteCoordinate(longitude: station.longitude, latitude: station.latitude)
         }
-        throw RoutingError.server("No route-connected fuel chain fits the usable range.")
+        let routedPrefix = graphMeters.reduce(0, +)
+        let gap = max(0, req.fuel.profileMeters - routedPrefix)
+        return FuelChainResponse(
+            status: "gap",
+            error: "no_route_connected_fuel_chain",
+            message: "No route-connected fuel chain fits the usable range.",
+            regionIds: GraphPackStore.regionIds(containingAny: [
+                start.locationCoordinate, end.locationCoordinate
+            ]),
+            stops: stops,
+            graphMeters: graphMeters,
+            diagnostics: FuelChainDiagnostics(
+                strategy: "pack-forward-gap", states: stops.count,
+                dijkstraPops: nil, matchedFuel: stations.count, elapsedMs: nil
+            ),
+            stationCandidates: stationCandidates,
+            gapMeters: gap,
+            overByMeters: max(0, gap - req.fuel.usableRangeMeters)
+        )
     }
 
     func fuelStation(near point: RouteCoordinate, within meters: Double) async throws -> FuelChainStop? {

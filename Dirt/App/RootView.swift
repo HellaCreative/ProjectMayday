@@ -68,6 +68,9 @@ struct RootView: View {
     @State private var portraitRouteSheetHeight: CGFloat = 0
     @State private var showRouteConfetti = false
     @State private var offlinePacksOpen = false
+    @State private var fuelControlsOpen = false
+    @State private var mapFuelRangeKm = FuelRangePrefs.kilometers
+    @State private var mapFuelReservePercent = FuelRangePrefs.reservePercent
     @State private var coachStep: CoachStep? = OnboardingPrefs.coachComplete ? nil : .openRoute
     /// Left↔right landscape keeps the same size; this ticket forces chrome to re-read
     /// island-side safe-area insets when the device flips.
@@ -249,6 +252,16 @@ struct RootView: View {
                 .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
+        .overlay(alignment: .top) {
+            if fuelControlsOpen, routeCardOpen, !navActive, activeSheet == nil {
+                fuelControlPanel
+                    .padding(.top, isLandscape ? 12 : 72)
+                    .padding(.horizontal, 12)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+                    .zIndex(20)
+            }
+        }
+        .animation(.easeInOut(duration: 0.18), value: fuelControlsOpen)
         .animation(.easeInOut(duration: 0.22), value: app.groups.peerAlerts.map(\.id))
         .overlay {
             if showRouteConfetti {
@@ -530,6 +543,7 @@ struct RootView: View {
                     if BuildChannel.debugRoutingGraphOverlay {
                         routingGraphDebugButton
                     }
+                    fuelRangeButton
                     Spacer(minLength: 0)
                     mapControlStack
                 }
@@ -787,6 +801,7 @@ struct RootView: View {
             if BuildChannel.debugRoutingGraphOverlay {
                 routingGraphDebugButton
             }
+            fuelRangeButton
             Spacer(minLength: 8)
             if app.planner.canFocusEntirePlannedRoute {
                 landscapeFitPlanButton
@@ -897,6 +912,123 @@ struct RootView: View {
             )
         }
         .accessibilityLabel("Debug routing graph overlay")
+    }
+
+    private var fuelRangeButton: some View {
+        Button {
+            mapFuelRangeKm = FuelRangePrefs.kilometers
+            mapFuelReservePercent = FuelRangePrefs.reservePercent
+            withAnimation(.easeInOut(duration: 0.18)) {
+                fuelControlsOpen.toggle()
+            }
+        } label: {
+            VStack(spacing: 1) {
+                Image(systemName: "fuelpump.fill")
+                    .font(.system(size: 14, weight: .bold))
+                Text("\(Int(FuelRangePrefs.kilometers))")
+                    .font(.dirtMono(8, weight: .bold))
+                    .monospacedDigit()
+            }
+            .foregroundStyle(fuelControlsOpen ? DirtTheme.onOrange : .white)
+            .frame(width: 50, height: 50)
+            .background(fuelControlsOpen ? DirtTheme.orange : DirtTheme.chrome)
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(DirtTheme.chromeBorder, lineWidth: 1)
+            )
+        }
+        .accessibilityLabel("Fuel range")
+        .accessibilityValue("\(Int(FuelRangePrefs.kilometers)) kilometers, \(Int(FuelRangePrefs.reservePercent)) percent reserve")
+        .accessibilityHint("Opens fuel range controls")
+    }
+
+    private var fuelControlPanel: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Image(systemName: "fuelpump.fill")
+                    .foregroundStyle(DirtTheme.orange)
+                Text("Fuel range")
+                    .font(DirtType.rowTitle)
+                    .fontWeight(.bold)
+                    .foregroundStyle(DirtTheme.ink)
+                Spacer(minLength: 0)
+                Text("\(Int(mapFuelRangeKm)) km")
+                    .font(DirtType.metricInline)
+                    .foregroundStyle(DirtTheme.ink)
+                    .monospacedDigit()
+                Button("Done") {
+                    withAnimation(.easeInOut(duration: 0.18)) { fuelControlsOpen = false }
+                }
+                .font(DirtType.chip)
+                .fontWeight(.bold)
+                .foregroundStyle(DirtTheme.orange)
+                .frame(minHeight: DirtHit.min)
+            }
+
+            Slider(
+                value: $mapFuelRangeKm,
+                in: FuelRangePrefs.minimumKm...FuelRangePrefs.maximumKm,
+                step: 10
+            ) { editing in
+                if editing {
+                    app.planner.cancelFuelAssistForRangeEdit()
+                    RoutingDebugLog.shared.event(
+                        "ui fuel slider begin range=\(Int(mapFuelRangeKm))km"
+                    )
+                } else {
+                    FuelRangePrefs.kilometers = mapFuelRangeKm
+                    FuelRangePrefs.lastEnabledKilometers = mapFuelRangeKm
+                    RoutingDebugLog.shared.event(
+                        "ui fuel slider release range=\(Int(mapFuelRangeKm))km recalc=1"
+                    )
+                    app.planner.reapplyFuelAssist(rangeKm: mapFuelRangeKm)
+                }
+            }
+            .tint(DirtTheme.orange)
+            .accessibilityLabel("Kilometers per tank")
+
+            HStack {
+                Text("Usable \(Int(FuelRangePrefs.usableKilometers(for: mapFuelRangeKm, reservePercent: mapFuelReservePercent))) km")
+                    .font(DirtType.helper)
+                    .foregroundStyle(DirtTheme.muted)
+                Spacer(minLength: 0)
+                Menu {
+                    ForEach([0, 5, 10, 15, 20, 25, 30], id: \.self) { percent in
+                        Button("\(percent)%") {
+                            mapFuelReservePercent = Double(percent)
+                            FuelRangePrefs.reservePercent = Double(percent)
+                            RoutingDebugLog.shared.event(
+                                "ui fuel reserve selected=\(percent)% recalc=1"
+                            )
+                            app.planner.reapplyFuelAssist(rangeKm: mapFuelRangeKm)
+                        }
+                    }
+                } label: {
+                    HStack(spacing: 4) {
+                        Text("\(Int(mapFuelReservePercent))% reserve")
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 8, weight: .bold))
+                    }
+                    .font(DirtType.chip)
+                    .fontWeight(.bold)
+                    .foregroundStyle(DirtTheme.ink)
+                    .padding(.horizontal, 10)
+                    .frame(minHeight: 34)
+                    .background(DirtTheme.wash, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                }
+                .accessibilityLabel("Fuel safety reserve")
+                .accessibilityValue("\(Int(mapFuelReservePercent)) percent")
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: 420)
+        .background(DirtTheme.sheetMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(DirtTheme.hairline, lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.24), radius: 16, y: 8)
     }
 
     private func syncLandscapeMapInsets(dockLeading: Bool, sheetWidth: CGFloat) {

@@ -22,9 +22,28 @@ struct FuelStop: Equatable, Sendable {
     }
 }
 
+struct FuelGap: Equatable, Sendable {
+    let id: String
+    let gapMeters: Double
+    let overByMeters: Double
+    let usableRangeMeters: Double
+    let remainingFuelMeters: Double
+    let reason: String
+    let fromCoordinate: RouteCoordinate
+    let toCoordinate: RouteCoordinate
+
+    var message: String {
+        let gapKM = Int((gapMeters / 1_000).rounded())
+        let overKM = Int((overByMeters / 1_000).rounded())
+        return "No pump proven in range · \(gapKM) km gap · \(overKM) km beyond planned range"
+    }
+}
+
 enum LegStatus: Equatable, Sendable {
     case pending
     case built
+    case gap(FuelGap)
+    case fuelUnknown(String)
     case failed(String)
 }
 
@@ -38,6 +57,7 @@ struct BuiltLeg: Equatable, Sendable {
     /// The effective profile for this generated hop. Nil decodes legacy/test
     /// projections as the rider-leg profile.
     let routeProfile: RouteProfile?
+    let validFuelTargets: [FuelStationCandidate]
 
     init(
         riderLegID: UUID,
@@ -46,7 +66,8 @@ struct BuiltLeg: Equatable, Sendable {
         endsAtFuelStop: FuelStop?,
         response: RouteResponse,
         fuelUsedOnArrivalMeters: Double,
-        routeProfile: RouteProfile? = nil
+        routeProfile: RouteProfile? = nil,
+        validFuelTargets: [FuelStationCandidate] = []
     ) {
         self.riderLegID = riderLegID
         self.fromCoordinate = fromCoordinate
@@ -55,6 +76,7 @@ struct BuiltLeg: Equatable, Sendable {
         self.response = response
         self.fuelUsedOnArrivalMeters = fuelUsedOnArrivalMeters
         self.routeProfile = routeProfile
+        self.validFuelTargets = validFuelTargets
     }
 
     static func == (lhs: BuiltLeg, rhs: BuiltLeg) -> Bool {
@@ -64,6 +86,7 @@ struct BuiltLeg: Equatable, Sendable {
             && lhs.endsAtFuelStop == rhs.endsAtFuelStop
             && lhs.fuelUsedOnArrivalMeters == rhs.fuelUsedOnArrivalMeters
             && lhs.routeProfile == rhs.routeProfile
+            && lhs.validFuelTargets.map(\.id) == rhs.validFuelTargets.map(\.id)
             && lhs.response.itineraryValueSignature == rhs.response.itineraryValueSignature
     }
 }

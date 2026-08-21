@@ -28,7 +28,7 @@ final class RoutingDebugLog {
             "app \(version) (\(build))",
             "device \(device.model) · iOS \(device.systemVersion) · memory \(memoryMB)MB",
             "locale \(Locale.current.identifier) · timezone \(TimeZone.current.identifier)",
-            "fuel enabled=\(FuelRangePrefs.isEnabled ? 1 : 0) range=\(Int(FuelRangePrefs.kilometers))km last=\(Int(FuelRangePrefs.lastEnabledKilometers))km",
+            "fuel required=1 range=\(Int(FuelRangePrefs.kilometers))km last=\(Int(FuelRangePrefs.lastEnabledKilometers))km",
             "scope app,lifecycle,network,map,routing,fuel,navigation,groups",
             "entries \(entries.count)",
             "---"

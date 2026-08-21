@@ -101,8 +101,10 @@ function benchmarkCases(routes) {
     for (const profile of PROFILES) {
       const unknownModes = profile === "dirt" ? [false, true] : [false];
       for (const allowUnknown of unknownModes) {
-        const fuelModes = route.id === "short-no-fuel" ? [false] : [false, true];
-        for (const fuelOn of fuelModes) cases.push({ route, profile, allowUnknown, fuelOn });
+        // Fuel is always planned. The baseline route above remains an internal
+        // route-only diagnostic, but it is no longer a rider-visible mode or a
+        // second benchmark axis.
+        cases.push({ route, profile, allowUnknown, fuelOn: true });
       }
     }
   }
@@ -114,7 +116,7 @@ function caseID(item) {
     item.route.id,
     item.profile,
     item.allowUnknown ? "unknown-on" : "unknown-off",
-    item.fuelOn ? "fuel-on" : "fuel-off"
+    "fuel-planned"
   ].join("/");
 }
 
@@ -143,7 +145,7 @@ function requestBody(
   };
 }
 
-function fuelBody(profile, allowUnknown, from, to, history, firstCap, requireStop, profileMeters, riderLegId, destinationFuelUsedLimitMeters, probe = false, excludedStationIds = []) {
+function fuelBody(profile, allowUnknown, from, to, history, firstCap, requireStop, profileMeters, riderLegId, destinationFuelUsedLimitMeters, probe = false, excludedStationIds = [], windowTimeBudgetMs = 5_800) {
   return {
     profile: PROFILE_API[profile],
     locations: [from, to],
@@ -160,7 +162,8 @@ function fuelBody(profile, allowUnknown, from, to, history, firstCap, requireSto
       riderLegId,
       destinationFuelUsedLimitMeters,
       probeFirstReachableStation: probe,
-      excludedStationIds
+      excludedStationIds,
+      windowTimeBudgetMs
     },
     options: {
       sessionSeed: SESSION_SEED,
@@ -221,7 +224,10 @@ function summarizeResponses(responses, metadata) {
     ? responses.reduce((sum, response) => sum + Number(response.stats && response.stats[field] || 0) * Number(response.distanceMeters || 0), 0) / meters
     : 0;
   const backtrackMeters = responses.reduce((sum, response) => sum + Number(response.backtrackMeters || 0), 0);
-  const fallbackReasons = [...new Set(responses.map(routeFallback).filter(Boolean))];
+  const fallbackReasons = [...new Set([
+    ...responses.map(routeFallback).filter(Boolean),
+    metadata.fallbackReason
+  ].filter(Boolean))];
   return {
     status: "complete",
     meters: Math.round(meters),
@@ -241,32 +247,44 @@ function summarizeResponses(responses, metadata) {
     ms: Math.round(metadata.totalMs),
     maxHopMs: Math.round(Math.max(0, ...metadata.timings)),
     shortestMeters: metadata.shortestMeters,
-    urbanWall: metadata.urbanWall
+    urbanWall: metadata.urbanWall,
+    fuelGap: metadata.fuelGap === true,
+    gapReason: metadata.gapReason || null
   };
 }
 
 async function routeCase(item, shortestMeters) {
-  const started = process.hrtime.bigint();
-  const timings = [];
+  const startedAt = Number(item._startedAt || Date.now());
+  const timings = Array.isArray(item._timings) ? [...item._timings] : [];
   const points = locationsFor(item.route);
-  const baseline = [];
-  const baselineHistories = [];
-  const discoveryHistory = emptyHistory();
+  const baseline = Array.isArray(item._baseline) ? item._baseline : [];
   const directLegBudget = item.profile === "direct" ? 15_000 / (points.length - 1) : undefined;
 
-  for (let index = 0; index < points.length - 1; index += 1) {
-    baselineHistories[index] = cloneHistory(discoveryHistory);
-    const response = requireComplete(await timed(
-      () => routeRequest(requestBody(
-        item.profile, item.allowUnknown, points[index], points[index + 1],
-        discoveryHistory, undefined, directLegBudget,
-        item.route.id === "through-halifax"
-      )),
-      timings
-    ), `baseline leg ${index + 1}`);
-    baseline[index] = response;
-    appendHistory(discoveryHistory, response);
+  if (!baseline.length) {
+    const discoveryHistory = emptyHistory();
+    for (let index = 0; index < points.length - 1; index += 1) {
+      const response = requireComplete(await timed(
+        () => routeRequest(requestBody(
+          item.profile, item.allowUnknown, points[index], points[index + 1],
+          discoveryHistory, undefined, directLegBudget,
+          item.route.id === "through-halifax"
+        )),
+        timings
+      ), `baseline leg ${index + 1}`);
+      baseline[index] = response;
+      appendHistory(discoveryHistory, response);
+    }
   }
+
+  // Route responses are reusable. Fuel decisions are not. Retry the forward
+  // chain against the same cached routes under one itinerary-wide deadline.
+  const fuelDeadline = Number(item._fuelDeadline || (Date.now() + 20_000));
+  const retryContext = {
+    _baseline: baseline,
+    _timings: timings,
+    _startedAt: startedAt,
+    _fuelDeadline: fuelDeadline
+  };
 
   if (!item.fuelOn) {
     return summarizeResponses(baseline, {
@@ -274,7 +292,7 @@ async function routeCase(item, shortestMeters) {
       stationCandidateCount: 0,
       chosenDirtPct: [],
       timings,
-      totalMs: Number(process.hrtime.bigint() - started) / 1e6,
+      totalMs: Date.now() - startedAt,
       shortestMeters,
       urbanWall: urbanWallStatus(item, baseline)
     });
@@ -292,10 +310,11 @@ async function routeCase(item, shortestMeters) {
   // This bounded profile-route probe is the itinerary look-ahead pass. It
   // measures the first pump on each cached RiderLeg before any is selected.
   for (let index = 0; !item._disableLookahead && baseline.length > 1 && index < baseline.length; index += 1) {
+    const remainingMs = Math.max(100, fuelDeadline - Date.now());
     const probe = await fuelChainRequest(fuelBody(
       item.profile, item.allowUnknown, points[index], points[index + 1],
       emptyHistory(), USABLE_METERS, false, Number(baseline[index].distanceMeters),
-      `${item.route.id}:${index + 1}:probe`, null, true
+      `${item.route.id}:${index + 1}:probe`, null, true, [], Math.min(5_800, remainingMs)
     ), { loadFuelForLocations: loadBenchFuel });
     firstReachable[index] = Number(probe && probe.firstReachableStationMeters);
   }
@@ -327,42 +346,68 @@ async function routeCase(item, shortestMeters) {
       continue;
     }
 
+    if (Date.now() >= fuelDeadline) {
+      return summarizeFuelGap(item, baseline, responses, index, {
+        fuelStops, stationCandidateCount, chosenDirtPct, timings, startedAt,
+        shortestMeters, reason: "itinerary_fuel_time_budget"
+      });
+    }
     const chainStarted = process.hrtime.bigint();
     const chain = await fuelChainRequest(fuelBody(
         item.profile, item.allowUnknown, from, to, finalHistory, firstCap, requireStop,
         baselineMeters, `${item.route.id}:${index + 1}`,
-        destinationLimit, false, (item._excludedStationsByLeg || {})[index] || []
+        destinationLimit, false, (item._excludedStationsByLeg || {})[index] || [],
+        Math.min(5_800, Math.max(100, fuelDeadline - Date.now()))
       ), { loadFuelForLocations: loadBenchFuel });
     const chainMs = Number(process.hrtime.bigint() - chainStarted) / 1e6;
     timings.push(Number(chain && chain.diagnostics && chain.diagnostics.maxHopMs) || chainMs);
     if (!chain || chain.status !== "complete") {
       if (index === 0 && !item._disableLookahead) {
-        return routeCase({ ...item, _disableLookahead: true, _fuelBacktrackAttempt: 1 }, shortestMeters);
+        return routeCase({
+          ...item, ...retryContext,
+          _disableLookahead: true,
+          _fuelBacktrackAttempt: 1
+        }, shortestMeters);
       }
-      if (index > 0 && Number(item._fuelBacktrackAttempt || 0) < 8) {
+      if (index > 0 && Number(item._fuelBacktrackAttempt || 0) < 2) {
         const priorIndex = index - 1;
         const priorStops = selectedStopsByLeg[priorIndex] || [];
+        const signature = priorStops.map((stop) => String(stop.id)).join(",");
+        const priorSignatures = new Set(item._fuelStationSignatures || []);
+        if (priorSignatures.has(signature)) {
+          return summarizeFuelGap(item, baseline, responses, index, {
+            fuelStops, stationCandidateCount, chosenDirtPct, timings, startedAt,
+            shortestMeters,
+            reason: `repeated_station_set:${signature || "empty"}`
+          });
+        }
+        priorSignatures.add(signature);
         const priorLatest = priorStops[priorStops.length - 1];
         const excluded = { ...(item._excludedStationsByLeg || {}) };
         excluded[priorIndex] = [...(excluded[priorIndex] || [])];
         if (priorLatest && priorLatest.id != null) excluded[priorIndex].push(String(priorLatest.id));
         return routeCase({
-          ...item,
+          ...item, ...retryContext,
           _fuelBacktrackAttempt: Number(item._fuelBacktrackAttempt || 0) + 1,
+          _fuelStationSignatures: [...priorSignatures],
           _excludedStationsByLeg: excluded,
           _forceFuelLeg: priorLatest ? item._forceFuelLeg : priorIndex
         }, shortestMeters);
       }
       const reason = chain && (chain.error || chain.message) || "no_fuel_chain";
-      const error = new Error(`fuel leg ${index + 1}: ${reason}`);
       const directCandidates = chain && chain.stationCandidates;
       const attempted = Array.isArray(directCandidates) && directCandidates.length
         ? directCandidates
         : chain && chain.diagnostics && chain.diagnostics.stationCandidates;
-      error.benchmark = {
-        stationCandidateCount: Array.isArray(attempted) ? attempted.length : 0
-      };
-      throw error;
+      return summarizeFuelGap(item, baseline, responses, index, {
+        fuelStops,
+        stationCandidateCount: stationCandidateCount + (Array.isArray(attempted) ? attempted.length : 0),
+        chosenDirtPct,
+        timings,
+        startedAt,
+        shortestMeters,
+        reason: `leg_${index + 1}:${reason}`
+      });
     }
     stationCandidateCount += (chain.stationCandidates || []).length;
     const stops = chain.stops || [];
@@ -395,9 +440,25 @@ async function routeCase(item, shortestMeters) {
     stationCandidateCount,
     chosenDirtPct,
     timings,
-    totalMs: Number(process.hrtime.bigint() - started) / 1e6,
+    totalMs: Date.now() - startedAt,
     shortestMeters,
     urbanWall: urbanWallStatus(item, responses)
+  });
+}
+
+function summarizeFuelGap(item, baseline, completedResponses, failedLegIndex, metadata) {
+  const drawable = [...completedResponses, ...baseline.slice(failedLegIndex)];
+  return summarizeResponses(drawable, {
+    fuelStops: metadata.fuelStops,
+    stationCandidateCount: metadata.stationCandidateCount,
+    chosenDirtPct: metadata.chosenDirtPct,
+    timings: metadata.timings,
+    totalMs: Date.now() - metadata.startedAt,
+    shortestMeters: metadata.shortestMeters,
+    urbanWall: urbanWallStatus(item, drawable),
+    fallbackReason: `fuel_gap:${metadata.reason}`,
+    fuelGap: true,
+    gapReason: metadata.reason
   });
 }
 
@@ -456,13 +517,18 @@ function assertionsFor(item, result) {
     add(`≤${limit}ms per hop`, result.maxHopMs <= limit, `${result.maxHopMs}ms`);
     return checks;
   }
-  if (item.profile === "dirt" && !item.allowUnknown && !item.fuelOn
-      && !["through-halifax", "short-no-fuel"].includes(item.route.id)) {
-    add("dirt ≥70", result.dirtPct >= 70, `${result.dirtPct}%`);
-  }
   if (item.profile === "dirt" && !item.allowUnknown && item.fuelOn) {
-    add("dirt ≥70", result.dirtPct >= 70, `${result.dirtPct}%`);
-    add("fuel hops ≤237500", result.maxHopMeters <= USABLE_METERS, `${result.maxHopMeters}m`);
+    if (!["through-halifax", "short-no-fuel"].includes(item.route.id)) {
+      add("dirt ≥70", result.dirtPct >= 70, `${result.dirtPct}%`);
+    }
+    if (result.fuelGap) {
+      add("fuel gap labelled", !!result.gapReason, result.gapReason || "missing reason");
+    } else {
+      add("fuel hops ≤237500", result.maxHopMeters <= USABLE_METERS, `${result.maxHopMeters}m`);
+    }
+  }
+  if (item.fuelOn && result.fuelGap && !(item.profile === "dirt" && !item.allowUnknown)) {
+    add("fuel gap labelled", !!result.gapReason, result.gapReason || "missing reason");
   }
   if (item.profile === "balanced") {
     add("balanced 45–55", result.dirtPct >= 45 && result.dirtPct <= 55, `${result.dirtPct}%`);
@@ -583,7 +649,8 @@ function comparisonTable(current, prior) {
     `| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- |`
   ];
   for (const row of current.cases) {
-    const before = priorByID.get(row.id);
+    const legacyFuelOnID = row.id.replace(/\/fuel-planned$/, "/fuel-on");
+    const before = priorByID.get(row.id) || priorByID.get(legacyFuelOnID);
     if (!before) continue;
     const chosenNow = row.stationCandidates.chosenDirtPct[0];
     const chosenBefore = before.stationCandidates.chosenDirtPct[0];

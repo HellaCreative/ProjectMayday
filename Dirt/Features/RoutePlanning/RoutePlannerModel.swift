@@ -29,6 +29,8 @@ final class RoutePlannerModel {
         let response: RouteResponse?
         let isRouting: Bool
         let error: String?
+        let fuelGap: FuelGap?
+        let fuelUnknown: String?
         let endsAtFuelStop: Bool
         let fuelStopID: String?
         let fuelStopName: String?
@@ -53,6 +55,8 @@ final class RoutePlannerModel {
             response = builtLeg.response
             if case .pending = status { isRouting = true } else { isRouting = false }
             if case .failed(let message) = status { error = message } else { error = nil }
+            if case .gap(let gap) = status { fuelGap = gap } else { fuelGap = nil }
+            if case .fuelUnknown(let message) = status { fuelUnknown = message } else { fuelUnknown = nil }
             endsAtFuelStop = builtLeg.endsAtFuelStop != nil
             fuelStopID = builtLeg.endsAtFuelStop?.stationID
             fuelStopName = builtLeg.endsAtFuelStop?.name
@@ -102,11 +106,14 @@ final class RoutePlannerModel {
     // Canonical rider intent and its disposable routed projection.
     private(set) var itinerary = RiderItinerary()
     private(set) var built: BuiltItinerary?
+    private(set) var acknowledgedFuelGapIDs = Set<String>()
     var stages: [Stage] {
         guard let built else { return [] }
         let riderLegs = Dictionary(uniqueKeysWithValues: itinerary.legs.map { ($0.id, $0) })
         let counts = Dictionary(grouping: built.legs, by: \.riderLegID).mapValues(\.count)
-        var departures: [UUID: String] = [:]
+        var departures = Dictionary(uniqueKeysWithValues: itinerary.legs.map {
+            ($0.id, $0.from.uuidString)
+        })
         return built.legs.compactMap { builtLeg in
             guard let riderLeg = riderLegs[builtLeg.riderLegID] else { return nil }
             let departure = departures[riderLeg.id]
@@ -141,6 +148,8 @@ final class RoutePlannerModel {
     var errorMessage: String?
     /// Non-destructive fuel recovery/status shown in the compact fuel summary.
     private(set) var fuelPlanNotice: String?
+    private var fuelTargetMarkers: [MapState.Marker] = []
+    private var activeFuelDragMarkerID: String?
     /// Persistent, specific progress for multi-request fuel planning. Unlike a
     /// toast, this remains visible for the full operation and survives tab hops.
     private(set) var fuelPlanningStatus: String?
@@ -334,8 +343,7 @@ final class RoutePlannerModel {
     func fuelMarginText(at index: Int) -> String? {
         guard stages.indices.contains(index),
               stages[index].fuelGroupID != nil,
-              let meters = stages[index].response?.distanceMeters,
-              FuelRangePrefs.isEnabled
+              let meters = stages[index].response?.distanceMeters
         else { return nil }
         let margin = FuelRangePrefs.usableKilometers(for: FuelRangePrefs.kilometers) - meters / 1000
         if margin >= 0 {
@@ -390,6 +398,15 @@ final class RoutePlannerModel {
     /// The only mutation door for rider-owned route intent.
     func apply(_ action: ItineraryAction, source: String) {
         if case .move(let waypointID, let coordinate) = action {
+            // A drag-end is already a settled gesture. Commit it immediately so
+            // an in-flight progress refresh cannot redraw the old marker during
+            // the generic tap-move debounce window.
+            if source == "drag" {
+                moveDebounceTask?.cancel()
+                pendingMove = nil
+                applyImmediately(action, source: source)
+                return
+            }
             pendingMove = (waypointID, coordinate, source)
             moveDebounceTask?.cancel()
             moveDebounceTask = Task { @MainActor [weak self] in
@@ -464,7 +481,8 @@ final class RoutePlannerModel {
         lastCanonicalBuildFromLegIndex = legIndex
         isRouting = true
         isAssemblingRoute = true
-        fuelPlanningStatus = FuelRangePrefs.isEnabled ? "Planning fuel legs…" : nil
+        fuelPlanNotice = nil
+        fuelPlanningStatus = "Planning fuel legs…"
         toast = Self.calculatingRouteToast
         refreshMap()
         buildTask = Task { @MainActor [weak self] in
@@ -483,13 +501,27 @@ final class RoutePlannerModel {
             }
             guard !Task.isCancelled, self.itinerary.generation == result.generation else { return }
             self.built = result
+            let currentGapIDs = Set(result.riderLegStatus.values.compactMap { status -> String? in
+                if case .gap(let gap) = status { return gap.id }
+                return nil
+            })
+            self.acknowledgedFuelGapIDs.formIntersection(currentGapIDs)
             var activeStations: [UUID: Set<String>] = [:]
             for leg in result.legs {
                 if let stationID = leg.endsAtFuelStop?.stationID {
                     activeStations[leg.riderLegID, default: []].insert(stationID)
                 }
             }
+            for riderLeg in self.itinerary.legs {
+                if case .gap = result.riderLegStatus[riderLeg.id] {
+                    activeStations[riderLeg.id, default: []]
+                        .formUnion(riderLeg.fuelStopOverrides.values)
+                    activeStations[riderLeg.id, default: []]
+                        .formUnion(riderLeg.fuelStopOverrides.keys)
+                }
+            }
             self.itinerary.pruneHopOverrides(to: activeStations)
+            self.itinerary.pruneFuelStopOverrides(to: activeStations)
             self.isRouting = false
             self.isAssemblingRoute = false
             self.fuelPlanningStatus = nil
@@ -504,6 +536,24 @@ final class RoutePlannerModel {
                 self.announceRouteReadyIfComplete()
             } else if self.toast == Self.calculatingRouteToast {
                 self.toast = nil
+            }
+            if let gap = result.riderLegStatus.values.compactMap({ status -> FuelGap? in
+                if case .gap(let gap) = status { return gap }
+                return nil
+            }).first {
+                self.toast = gap.message
+            } else {
+                let requestedProfiles = Dictionary(uniqueKeysWithValues: self.itinerary.legs.map {
+                    ($0.id, $0.profile)
+                })
+                let defaultedCleanCount = result.legs.filter {
+                    $0.routeProfile == .cleanest && requestedProfiles[$0.riderLegID] != .cleanest
+                }.count
+                if defaultedCleanCount > 3 {
+                    let notice = "Long route — planned as Clean between fuel stops. Tap any leg to make it Dirt."
+                    self.fuelPlanNotice = notice
+                    self.toast = notice
+                }
             }
             self.refreshMap()
         }
@@ -704,6 +754,10 @@ final class RoutePlannerModel {
         guard stages.indices.contains(index) else { return }
         let stage = stages[index]
         if let stationID = stage.departureFuelStopID {
+            RoutingDebugLog.shared.event(
+                "fuel leg override departure=\(stationID) profile=\(newProfile.rawValue) " +
+                    "replanFrom=\(stationID)"
+            )
             apply(
                 .setHopProfile(
                     legID: stage.riderLegID,
@@ -715,6 +769,54 @@ final class RoutePlannerModel {
         } else {
             apply(.setProfile(legID: stage.riderLegID, newProfile), source: "card-hop-first")
         }
+    }
+
+    func acknowledgeFuelGap(_ gap: FuelGap) {
+        acknowledgedFuelGapIDs.insert(gap.id)
+        toast = "Fuel gap marked: rider will carry auxiliary fuel"
+        RoutingDebugLog.shared.event("fuel gap acknowledged id=\(gap.id)")
+    }
+
+    func isFuelGapAcknowledged(_ gap: FuelGap) -> Bool {
+        acknowledgedFuelGapIDs.contains(gap.id)
+    }
+
+    func hasFuelStopOverride(for riderLegID: UUID) -> Bool {
+        itinerary.legs.first(where: { $0.id == riderLegID })?.fuelStopOverrides.isEmpty == false
+    }
+
+    func revertFuelStopOverrides(for riderLegID: UUID) {
+        apply(.clearFuelStopOverrides(legID: riderLegID), source: "fuel-gap-revert")
+    }
+
+    var fuelGaps: [FuelGap] {
+        guard let built else { return [] }
+        return itinerary.legs.compactMap { leg in
+            guard case .gap(let gap) = built.riderLegStatus[leg.id] else { return nil }
+            return gap
+        }
+    }
+
+    var unacknowledgedFuelGaps: [FuelGap] {
+        fuelGaps.filter { !acknowledgedFuelGapIDs.contains($0.id) }
+    }
+
+    var fuelUnknownMessages: [String] {
+        guard let built else { return [] }
+        return itinerary.legs.compactMap { leg in
+            guard case .fuelUnknown(let message) = built.riderLegStatus[leg.id] else { return nil }
+            return message
+        }
+    }
+
+    func prepareToMoveWaypoint(for riderLegID: UUID) {
+        guard let index = itinerary.legs.firstIndex(where: { $0.id == riderLegID }),
+              itinerary.waypoints.indices.contains(index + 1)
+        else { return }
+        let waypointID = itinerary.waypoints[index + 1].id
+        mapState.selectPlannerPin("wp:\(waypointID.uuidString)")
+        toast = "Move Point \(index + 2) to shorten the fuel gap"
+        focusStage(at: stages.firstIndex(where: { $0.riderLegID == riderLegID }) ?? 0)
     }
 
     /// Per-stage unknown-access policy.
@@ -1068,6 +1170,10 @@ final class RoutePlannerModel {
     /// MapLibre Native iOS.
     func moveWaypoint(markerID: String, to rawCoordinate: CLLocationCoordinate2D) {
         guard navigation.phase == .idle else { return }
+        if markerID.hasPrefix("fuel:") {
+            moveFuelStop(markerID: markerID, to: rawCoordinate)
+            return
+        }
         let raw = RouteCoordinate(longitude: rawCoordinate.longitude, latitude: rawCoordinate.latitude)
         let snapped = snapToRouteNetwork(raw)
         switch mode {
@@ -1084,6 +1190,84 @@ final class RoutePlannerModel {
         case .plan:
             movePlanStyleWaypoint(markerID: markerID, snapped: snapped)
         }
+    }
+
+    func beginPlannerPinDrag(markerID: String) {
+        if activeFuelDragMarkerID == markerID, !fuelTargetMarkers.isEmpty { return }
+        guard markerID.hasPrefix("fuel:"),
+              let context = fuelMoveContext(markerID: markerID)
+        else {
+            fuelTargetMarkers = []
+            activeFuelDragMarkerID = nil
+            return
+        }
+        activeFuelDragMarkerID = markerID
+        fuelTargetMarkers = context.leg.validFuelTargets.compactMap { candidate in
+            guard candidate.validForward == true,
+                  let latitude = candidate.latitude,
+                  let longitude = candidate.longitude
+            else { return nil }
+            return MapState.Marker(
+                id: "fuel-target:\(candidate.id)",
+                latitude: latitude,
+                longitude: longitude,
+                label: "•",
+                kind: .fuel,
+                subtitle: candidate.name ?? "Valid fuel stop",
+                isLocked: true
+            )
+        }
+        refreshMap()
+    }
+
+    private func moveFuelStop(markerID: String, to coordinate: CLLocationCoordinate2D) {
+        defer {
+            fuelTargetMarkers = []
+            activeFuelDragMarkerID = nil
+            mapState.selectPlannerPin(nil)
+            refreshMap()
+        }
+        guard let context = fuelMoveContext(markerID: markerID) else { return }
+        let dropped = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
+        let targets = context.leg.validFuelTargets.compactMap { candidate -> (FuelStationCandidate, Double)? in
+            guard candidate.validForward == true,
+                  let latitude = candidate.latitude,
+                  let longitude = candidate.longitude
+            else { return nil }
+            let meters = dropped.distance(from: CLLocation(latitude: latitude, longitude: longitude))
+            return (candidate, meters)
+        }
+        guard let nearest = targets.min(by: { $0.1 < $1.1 }), nearest.1 <= 5_000 else {
+            toast = "Drop the fuel pin on one of the highlighted stations."
+            return
+        }
+        RoutingDebugLog.shared.event(
+            "fuel stop override riderLeg=\(context.riderLeg.id) from=\(context.departureAnchorID) " +
+                "to=\(nearest.0.id) validTargets=\(targets.count)"
+        )
+        apply(
+            .setFuelStopOverride(
+                legID: context.riderLeg.id,
+                departureAnchorID: context.departureAnchorID,
+                stationID: nearest.0.id
+            ),
+            source: "fuel-drag"
+        )
+    }
+
+    private func fuelMoveContext(markerID: String) -> (
+        leg: BuiltLeg, riderLeg: RiderLeg, departureAnchorID: String
+    )? {
+        let parts = markerID.split(separator: ":", omittingEmptySubsequences: false)
+        guard parts.count >= 3,
+              let index = Int(parts[2]),
+              let built, built.legs.indices.contains(index),
+              let riderLeg = itinerary.legs.first(where: { $0.id == built.legs[index].riderLegID })
+        else { return nil }
+        let previousStop = index > 0 && built.legs[index - 1].riderLegID == riderLeg.id
+            ? built.legs[index - 1].endsAtFuelStop?.stationID
+            : nil
+        return (built.legs[index], riderLeg, previousStop ?? riderLeg.from.uuidString)
     }
 
     private func movePlanStyleWaypoint(markerID: String, snapped: RouteCoordinate) {
@@ -1403,6 +1587,7 @@ final class RoutePlannerModel {
                 )
             }
         }
+        markers.append(contentsOf: fuelTargetMarkers)
         let riders = mapState.markers.filter { $0.kind.isGroupOverlay }
         mapState.setMarkers(markers + riders)
     }
@@ -1430,7 +1615,7 @@ final class RoutePlannerModel {
                     label: "F\(fuelOrdinal)",
                     kind: .fuel,
                     subtitle: stop.name,
-                    isLocked: true
+                    isLocked: leg.validFuelTargets.isEmpty
                 )
             )
         }
@@ -1790,18 +1975,6 @@ final class RoutePlannerModel {
         refreshMap()
     }
 
-    /// Turn fuel assist off even when its last attempt removed the route.
-    /// Collapses auto fuel hops back to rider waypoints and immediately restores
-    /// an ordinary A→B route, instead of leaving the switch hidden behind error UI.
-    func disableFuelAssistAndRestoreRoute() {
-        fuelPlanningStatus = nil
-        fuelPreviewStops = []
-        errorMessage = nil
-        toast = Self.calculatingRouteToast
-        apply(.rebuild, source: "fuel")
-    }
-
-
     /// Station beside the already-drawn line, ~0.8 tank along it.
     /// Not the nearest pump to a crow-flies point (that is the 50 km spur).
     static func pickFuelStop(
@@ -1864,7 +2037,17 @@ final class RoutePlannerModel {
             dirtPercent: aggregateDirtPercent,
             pavedPercent: aggregatePavedPercent
         )
-        let xml = GPXExporter.document(for: route)
+        let xml = GPXExporter.document(
+            for: route,
+            fuelWarnings: fuelGaps.map {
+                GPXExporter.FuelWarning(
+                    from: $0.fromCoordinate,
+                    to: $0.toCoordinate,
+                    description: $0.message
+                )
+            },
+            fuelUnknownMessages: fuelUnknownMessages.map { "FUEL STATUS UNKNOWN · \($0)" }
+        )
         let url = FileManager.default.temporaryDirectory.appending(path: "dirt-route.gpx")
         do {
             try xml.write(to: url, atomically: true, encoding: .utf8)
@@ -2530,6 +2713,8 @@ final class RoutePlannerModel {
         if let built, !itinerary.legs.isEmpty {
             return itinerary.legs.allSatisfy { leg in
                 if case .built = built.riderLegStatus[leg.id] { return true }
+                if case .gap = built.riderLegStatus[leg.id] { return true }
+                if case .fuelUnknown = built.riderLegStatus[leg.id] { return true }
                 return false
             }
         }

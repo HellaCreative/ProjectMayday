@@ -174,6 +174,9 @@ final class AppEnvironment {
         mapState.onPlannerPinDragEnd = { [planner] markerID, coordinate in
             planner.moveWaypoint(markerID: markerID, to: coordinate)
         }
+        mapState.onPlannerPinDragBegan = { [planner] markerID in
+            planner.beginPlannerPinDrag(markerID: markerID)
+        }
 
         // Frame the map on the rider as soon as GPS (or a cached fix) arrives.
         let priorLocationHandler = location.onLocation

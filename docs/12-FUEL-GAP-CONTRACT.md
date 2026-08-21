@@ -72,7 +72,9 @@ audit; Phase 11 continues to model a full tank at Point 1 and resets at pumps.
 
 ## Long-haul planning
 
-Routes requiring more than three generated pumps may offer `Build quickly using
-Clean sections`. The rider must explicitly accept it. Clean remains pavement-
-first, urban-wall, and major-highway-avoiding; it is not described as shortest
-path. The selected route profile is never silently overwritten.
+Routes requiring more than three generated pumps automatically build their
+generated fuel-to-fuel sections with Clean for a fast, stable first itinerary.
+Clean remains pavement-first, urban-wall, and major-highway-avoiding; it is not
+described as shortest path. The route-level control continues to show the
+rider's selected profile, a notice explains the Clean section default, and each
+section can be changed independently to Dirt, Balanced, Direct, or Clean.

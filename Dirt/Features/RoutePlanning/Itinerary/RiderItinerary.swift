@@ -19,13 +19,17 @@ nonisolated struct RiderLeg: Identifiable, Equatable, Codable, Sendable {
     /// A generated fuel hop inherits the rider-leg profile unless the pump it
     /// departs from has an explicit rider override.
     var hopOverrides: [String: RouteProfile]
+    /// Rider-selected pump keyed by the departure waypoint/station anchor.
+    /// This is distinct from hopOverrides, which changes routing profile only.
+    var fuelStopOverrides: [String: String]
 
     init(
         from: UUID,
         to: UUID,
         profile: RouteProfile,
         allowUnknown: Bool,
-        hopOverrides: [String: RouteProfile] = [:]
+        hopOverrides: [String: RouteProfile] = [:],
+        fuelStopOverrides: [String: String] = [:]
     ) {
         id = RiderItinerary.legID(from: from, to: to)
         self.from = from
@@ -33,10 +37,11 @@ nonisolated struct RiderLeg: Identifiable, Equatable, Codable, Sendable {
         self.profile = profile
         self.allowUnknown = profile == .cleanest ? false : allowUnknown
         self.hopOverrides = hopOverrides
+        self.fuelStopOverrides = fuelStopOverrides
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, from, to, profile, allowUnknown, hopOverrides
+        case id, from, to, profile, allowUnknown, hopOverrides, fuelStopOverrides
     }
 
     init(from decoder: Decoder) throws {
@@ -48,6 +53,9 @@ nonisolated struct RiderLeg: Identifiable, Equatable, Codable, Sendable {
         allowUnknown = try container.decode(Bool.self, forKey: .allowUnknown)
         hopOverrides = try container.decodeIfPresent(
             [String: RouteProfile].self, forKey: .hopOverrides
+        ) ?? [:]
+        fuelStopOverrides = try container.decodeIfPresent(
+            [String: String].self, forKey: .fuelStopOverrides
         ) ?? [:]
     }
 }
@@ -106,8 +114,20 @@ nonisolated struct RiderItinerary: Equatable, Codable, Sendable {
 
     mutating func pruneHopOverrides(to activeStationIDs: [UUID: Set<String>]) {
         for index in legs.indices where !legs[index].hopOverrides.isEmpty {
-            let active = activeStationIDs[legs[index].id] ?? []
+            var active = activeStationIDs[legs[index].id] ?? []
+            active.insert(legs[index].from.uuidString)
             legs[index].hopOverrides = legs[index].hopOverrides.filter { active.contains($0.key) }
+        }
+    }
+
+    mutating func pruneFuelStopOverrides(to activeStationIDs: [UUID: Set<String>]) {
+        for index in legs.indices where !legs[index].fuelStopOverrides.isEmpty {
+            var activeAnchors = activeStationIDs[legs[index].id] ?? []
+            activeAnchors.insert(legs[index].from.uuidString)
+            let activeStations = activeStationIDs[legs[index].id] ?? []
+            legs[index].fuelStopOverrides = legs[index].fuelStopOverrides.filter {
+                activeAnchors.contains($0.key) && activeStations.contains($0.value)
+            }
         }
     }
 

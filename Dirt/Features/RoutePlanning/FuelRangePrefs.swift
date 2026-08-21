@@ -1,27 +1,26 @@
 import Foundation
 
-/// Rider tank range for Plan fuel-assist. `0` disables auto gas waypoints.
+/// Rider tank range used by every navigable itinerary.
 enum FuelRangePrefs {
     nonisolated struct Snapshot: Equatable, Sendable {
-        let isEnabled: Bool
         let tankMeters: Double
         let usableMeters: Double
         let reservePercent: Double
 
         init(
-            isEnabled: Bool,
             tankMeters: Double,
             usableMeters: Double,
             reservePercent: Double
         ) {
-            self.isEnabled = isEnabled
             self.tankMeters = tankMeters
             self.usableMeters = usableMeters
             self.reservePercent = reservePercent
         }
 
-        static let disabled = Snapshot(
-            isEnabled: false,
+        /// Internal route-only diagnostics retain a zero-range snapshot so the
+        /// benchmark can isolate routing from fuel-chain behaviour. Product UI
+        /// never selects this state.
+        static let routeOnly = Snapshot(
             tankMeters: 0,
             usableMeters: 0,
             reservePercent: 0
@@ -41,26 +40,21 @@ enum FuelRangePrefs {
     static var kilometers: Double {
         get {
             let raw = UserDefaults.standard.object(forKey: key) as? Double
-            return raw ?? 0
+            guard let raw, raw > 0 else { return lastEnabledKilometers }
+            return min(maximumKm, max(minimumKm, raw))
         }
         set {
-            let clamped: Double
-            if newValue <= 0 {
-                clamped = 0
-            } else {
-                clamped = min(maximumKm, max(minimumKm, newValue))
-            }
+            let clamped = newValue > 0
+                ? min(maximumKm, max(minimumKm, newValue))
+                : lastEnabledKilometers
             UserDefaults.standard.set(clamped, forKey: key)
         }
     }
-
-    static var isEnabled: Bool { kilometers > 0 }
 
     static var snapshot: Snapshot {
         let tankKm = kilometers
         let reserve = reservePercent
         return Snapshot(
-            isEnabled: tankKm > 0,
             tankMeters: tankKm * 1_000,
             usableMeters: usableKilometers(for: tankKm, reservePercent: reserve) * 1_000,
             reservePercent: reserve
@@ -91,8 +85,7 @@ enum FuelRangePrefs {
         return tankKilometers * (1 - reserve / 100)
     }
 
-    /// Turning fuel assist off must not erase the rider's tank setting. The
-    /// zero value only means disabled; this stores the last real slider value.
+    /// Migration fallback for riders whose older toggle stored a zero range.
     static var lastEnabledKilometers: Double {
         get {
             let raw = UserDefaults.standard.object(forKey: lastEnabledKey) as? Double

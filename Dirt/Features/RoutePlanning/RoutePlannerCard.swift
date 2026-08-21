@@ -30,17 +30,12 @@ struct RoutePlannerCard: View {
     @State private var showFromHereToPlanConfirm = false
     @State private var showPlanToFromHereConfirm = false
     @State private var showClearConfirm = false
+    @State private var showFuelGapStartConfirm = false
     /// Saved: the library collapses once a track is loaded, so the sheet isn't showing the
     /// route you just opened *and* the whole list you opened it from at the same time.
     @State private var savedLibraryOpen = false
-    @AppStorage(FuelRangePrefs.key) private var fuelRangeKm = 0.0
-    @AppStorage(FuelRangePrefs.reservePercentKey) private var fuelReservePercent = FuelRangePrefs.suggestedReservePercent
-    @State private var fuelAssistDebounce: Task<Void, Never>?
     /// Fuel plans open as a compact safety summary so the map remains useful.
     @State private var fuelLegsExpanded = false
-    /// A completed plan keeps range controls to one row until the rider edits them.
-    /// Legs and range are mutually exclusive disclosures so neither can bury the map.
-    @State private var fuelRangeEditorExpanded = false
 
     private var planner: RoutePlannerModel { app.planner }
 
@@ -154,6 +149,32 @@ struct RoutePlannerCard: View {
         } message: {
             Text("Removes pins, fuel stops, and the line on the map.")
         }
+        .confirmationDialog(
+            "Fuel gap on this route",
+            isPresented: $showFuelGapStartConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Review fuel gap") {
+                fuelLegsExpanded = true
+                if let gap = planner.unacknowledgedFuelGaps.first,
+                   let legIndex = planner.itinerary.legs.firstIndex(where: { leg in
+                       if case .gap(let candidate) = planner.built?.riderLegStatus[leg.id] {
+                           return candidate.id == gap.id
+                       }
+                       return false
+                   }) {
+                    planner.focusStage(at: planner.stages.firstIndex(where: {
+                        $0.riderLegID == planner.itinerary.legs[legIndex].id
+                    }) ?? 0)
+                }
+            }
+            Button("Continue without acknowledging", role: .destructive) {
+                beginNavigation()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text(planner.unacknowledgedFuelGaps.first?.message ?? "Fuel continuity is not proven for part of this route.")
+        }
     }
 
     private func performClear() {
@@ -161,7 +182,6 @@ struct RoutePlannerCard: View {
         selectedStage = nil
         fromHereChipsOpen = false
         fuelLegsExpanded = false
-        fuelRangeEditorExpanded = false
     }
 
     // MARK: - Portrait shell
@@ -367,7 +387,6 @@ struct RoutePlannerCard: View {
             }
 
             routingStatus
-            fuelRangeControl
             if !fuelLegsExpanded {
                 statsRow
             }
@@ -483,12 +502,6 @@ struct RoutePlannerCard: View {
 
         routingStatus
 
-        if !planner.stages.isEmpty {
-            // Keep the switch reachable after fuel planning fails. Hiding this
-            // control with `hasRoute == false` trapped the rider in the error.
-            fuelRangeControl
-        }
-
         if planner.hasRoute {
             if !fuelLegsExpanded {
                 statsRow
@@ -502,160 +515,14 @@ struct RoutePlannerCard: View {
         }
     }
 
-    private var compactFuelRangeControl: Bool {
-        planner.hasFuelAssistedPlan && !fuelRangeEditorExpanded
-    }
-
-    private var fuelRangeControl: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: DirtSpace.tight) {
-                Text("Fuel range")
-                    .font(.dirtUI(14, weight: .bold))
-                    .foregroundStyle(DirtTheme.muted)
-
-                if compactFuelRangeControl, fuelRangeKm > 0 {
-                    Text("\(Int(fuelRangeKm)) km · \(Int(fuelReservePercent))% reserve")
-                        .font(DirtType.metricInline)
-                        .foregroundStyle(DirtTheme.ink)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                }
-
-                Spacer()
-
-                if planner.hasFuelAssistedPlan, fuelRangeKm > 0 {
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.18)) {
-                            if !fuelRangeEditorExpanded {
-                                fuelLegsExpanded = false
-                            }
-                            fuelRangeEditorExpanded.toggle()
-                        }
-                    } label: {
-                        HStack(spacing: 4) {
-                            Text(fuelRangeEditorExpanded ? "Done" : "Edit")
-                            Image(systemName: "slider.horizontal.3")
-                                .font(.system(size: 11, weight: .bold))
-                        }
-                        .font(DirtType.chip)
-                        .fontWeight(.bold)
-                        .foregroundStyle(DirtTheme.orange)
-                        .frame(minHeight: DirtHit.min)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(fuelRangeEditorExpanded ? "Close fuel range controls" : "Edit fuel range")
-                }
-
-                Toggle(
-                    "",
-                    isOn: Binding(
-                        get: { fuelRangeKm > 0 },
-                        set: { on in
-                            if on {
-                                let restoredRange = FuelRangePrefs.lastEnabledKilometers
-                                fuelRangeKm = restoredRange
-                                let usable = Int(FuelRangePrefs.usableKilometers(
-                                    for: restoredRange,
-                                    reservePercent: fuelReservePercent
-                                ).rounded())
-                                planner.toast = "Fuel planning: \(usable) km usable range"
-                                // Toggle can re-run sooner than the slider settle delay.
-                                scheduleFuelAssistReapply(restoredRange, delaySeconds: 0.4)
-                            } else {
-                                fuelAssistDebounce?.cancel()
-                                FuelRangePrefs.lastEnabledKilometers = fuelRangeKm
-                                fuelRangeKm = 0
-                                planner.disableFuelAssistAndRestoreRoute()
-                            }
-                        }
-                    )
-                )
-                .labelsHidden()
-                .tint(DirtTheme.orange)
-            }
-            .frame(minHeight: DirtHit.min)
-
-            if fuelRangeKm > 0, !compactFuelRangeControl {
-                HStack(spacing: 10) {
-                    Text("\(Int(fuelRangeKm)) km")
-                        .font(.dirtMono(13, weight: .bold))
-                        .foregroundStyle(DirtTheme.ink)
-                        .frame(width: 56, alignment: .leading)
-                    Slider(
-                        value: $fuelRangeKm,
-                        in: FuelRangePrefs.minimumKm...FuelRangePrefs.maximumKm,
-                        step: 10
-                    ) { editing in
-                        if editing {
-                            fuelAssistDebounce?.cancel()
-                            planner.cancelFuelAssistForRangeEdit()
-                            RoutingDebugLog.shared.event(
-                                "ui fuel slider begin range=\(Int(fuelRangeKm))km"
-                            )
-                        } else {
-                            FuelRangePrefs.lastEnabledKilometers = fuelRangeKm
-                            // Give the rider a full two seconds after the final
-                            // movement before any route work starts.
-                            scheduleFuelAssistReapply(fuelRangeKm, delaySeconds: 2.0)
-                        }
-                    }
-                    .tint(DirtTheme.orange)
-                    Menu {
-                        ForEach([0, 5, 10, 15, 20, 25, 30], id: \.self) { percent in
-                            Button("\(percent)%") { fuelReservePercent = Double(percent) }
-                        }
-                    } label: {
-                        HStack(spacing: 4) {
-                            Text("\(Int(fuelReservePercent))% reserve")
-                            Image(systemName: "chevron.down")
-                                .font(.system(size: 8, weight: .bold))
-                        }
-                        .font(DirtType.chip)
-                        .fontWeight(.bold)
-                        .foregroundStyle(DirtTheme.ink)
-                        .padding(.horizontal, 10)
-                        .frame(minHeight: 32)
-                        .background(DirtTheme.wash, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
-                    }
-                    .accessibilityLabel("Fuel safety reserve")
-                    .accessibilityValue("\(Int(fuelReservePercent)) percent")
-                }
-            }
-        }
-        .padding(.horizontal, DirtSpace.inner)
-        .padding(.vertical, compactFuelRangeControl ? 0 : DirtSpace.inner)
-        .background(DirtTheme.rowFill, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .stroke(DirtTheme.hairline, lineWidth: 1)
-        )
-        .onChange(of: fuelRangeKm) { oldValue, newValue in
-            // Slider release callbacks can be lost when a route-sheet update
-            // lands during the drag. Debouncing every real movement guarantees
-            // one recalculation two seconds after the last value change.
-            guard oldValue > 0, newValue > 0, oldValue != newValue else { return }
-            FuelRangePrefs.lastEnabledKilometers = newValue
-            scheduleFuelAssistReapply(newValue, delaySeconds: 2.0)
-        }
-        .onChange(of: fuelReservePercent) { _, newValue in
-            FuelRangePrefs.reservePercent = newValue
-            guard fuelRangeKm > 0 else { return }
-            scheduleFuelAssistReapply(fuelRangeKm, delaySeconds: 0.4)
-        }
-    }
-
     /// Compact completion/safety state. The detailed legs are one deliberate tap
     /// away, rather than permanently consuming the map with a five-row list.
     private var fuelPlanSummary: some View {
         VStack(alignment: .leading, spacing: 4) {
             Button {
                 withAnimation(.easeInOut(duration: 0.18)) {
-                    let openingLegs = !fuelLegsExpanded
                     fuelLegsExpanded.toggle()
                     selectedStage = nil
-                    if openingLegs {
-                        fuelRangeEditorExpanded = false
-                    }
                 }
             } label: {
                 HStack(spacing: DirtSpace.tight) {
@@ -727,30 +594,6 @@ struct RoutePlannerCard: View {
                 .stroke(DirtTheme.hairline, lineWidth: 1)
         )
         .accessibilityElement(children: .contain)
-    }
-
-    /// Debounced re-assist after fuel range changes. Slider uses a long settle
-    /// delay so dragging doesn’t spam the router.
-    private func scheduleFuelAssistReapply(_ km: Double, delaySeconds: Double) {
-        fuelAssistDebounce?.cancel()
-        RoutingDebugLog.shared.event(
-            "ui fuel range selected=\(Int(km))km recalcIn=\(String(format: "%.1f", delaySeconds))s"
-        )
-        guard km > 0, delaySeconds > 0 else {
-            if km <= 0 { return }
-            FuelRangePrefs.kilometers = km
-            FuelRangePrefs.lastEnabledKilometers = km
-            planner.reapplyFuelAssist(rangeKm: km)
-            return
-        }
-        fuelAssistDebounce = Task { @MainActor in
-            try? await Task.sleep(for: .seconds(delaySeconds))
-            guard !Task.isCancelled else { return }
-            FuelRangePrefs.kilometers = km
-            FuelRangePrefs.lastEnabledKilometers = km
-            RoutingDebugLog.shared.event("ui fuel recalculation fired range=\(Int(km))km")
-            planner.reapplyFuelAssist(rangeKm: km)
-        }
     }
 
     // MARK: - Saved
@@ -979,6 +822,16 @@ struct RoutePlannerCard: View {
                                     .font(DirtType.helper)
                                     .foregroundStyle(DirtTheme.muted)
                             }
+                        } else if let gap = stage.fuelGap {
+                            Label(gap.message, systemImage: "fuelpump.slash.fill")
+                                .font(DirtType.helper)
+                                .foregroundStyle(DirtTheme.orange)
+                                .lineLimit(3)
+                        } else if let unknown = stage.fuelUnknown {
+                            Label(unknown, systemImage: "questionmark.circle.fill")
+                                .font(DirtType.helper)
+                                .foregroundStyle(DirtTheme.orange)
+                                .lineLimit(3)
                         } else if let error = stage.error {
                             Text(error)
                                 .font(DirtType.helper)
@@ -1015,6 +868,49 @@ struct RoutePlannerCard: View {
                                     .font(DirtType.helper)
                                     .foregroundStyle(DirtTheme.orange)
                                     .fixedSize(horizontal: false, vertical: true)
+                            }
+                            if let gap = stage.fuelGap {
+                                HStack(spacing: DirtSpace.tight) {
+                                    Button {
+                                        planner.prepareToMoveWaypoint(for: riderLeg.id)
+                                    } label: {
+                                        Label("Move waypoint", systemImage: "mappin.and.ellipse")
+                                            .font(DirtType.chip)
+                                            .fontWeight(.bold)
+                                            .frame(maxWidth: .infinity, minHeight: DirtHit.min)
+                                    }
+                                    .buttonStyle(.plain)
+                                    .foregroundStyle(DirtTheme.ink)
+                                    .background(DirtTheme.wash, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+
+                                    Button {
+                                        planner.acknowledgeFuelGap(gap)
+                                    } label: {
+                                        Label(
+                                            planner.isFuelGapAcknowledged(gap) ? "Carrying fuel" : "I'll carry fuel",
+                                            systemImage: planner.isFuelGapAcknowledged(gap) ? "checkmark.circle.fill" : "fuelpump.fill"
+                                        )
+                                        .font(DirtType.chip)
+                                        .fontWeight(.bold)
+                                        .frame(maxWidth: .infinity, minHeight: DirtHit.min)
+                                    }
+                                    .buttonStyle(.plain)
+                                    .foregroundStyle(DirtTheme.orange)
+                                    .background(DirtTheme.wash, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                                }
+                                if planner.hasFuelStopOverride(for: riderLeg.id) {
+                                    Button {
+                                        planner.revertFuelStopOverrides(for: riderLeg.id)
+                                    } label: {
+                                        Label("Use the planned fuel stops", systemImage: "arrow.uturn.backward.circle")
+                                            .font(DirtType.chip)
+                                            .fontWeight(.bold)
+                                            .frame(maxWidth: .infinity, minHeight: DirtHit.min)
+                                    }
+                                    .buttonStyle(.plain)
+                                    .foregroundStyle(DirtTheme.orange)
+                                    .background(DirtTheme.wash, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                                }
                             }
                             profileSegments(active: riderLeg.profile) { profile in
                                 planner.setStageProfile(profile, at: stageIndex)
@@ -1217,6 +1113,16 @@ struct RoutePlannerCard: View {
                     .font(DirtType.helper)
                     .foregroundStyle(DirtTheme.muted)
             }
+        } else if let gap = stage.fuelGap {
+            Label(gap.message, systemImage: "fuelpump.slash.fill")
+                .font(DirtType.helper)
+                .foregroundStyle(DirtTheme.orange)
+                .lineLimit(3)
+        } else if let unknown = stage.fuelUnknown {
+            Label(unknown, systemImage: "questionmark.circle.fill")
+                .font(DirtType.helper)
+                .foregroundStyle(DirtTheme.orange)
+                .lineLimit(3)
         } else if let error = stage.error {
             Text(error)
                 .font(DirtType.helper)
@@ -1605,6 +1511,14 @@ struct RoutePlannerCard: View {
 
     private func requestStart() {
         guard app.trial.requestStart() else { return }
+        if !planner.unacknowledgedFuelGaps.isEmpty {
+            showFuelGapStartConfirm = true
+            return
+        }
+        beginNavigation()
+    }
+
+    private func beginNavigation() {
         isOpen = false
         planner.startNavigation()
     }

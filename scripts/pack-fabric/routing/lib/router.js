@@ -1405,12 +1405,15 @@ async function routeCanadaChain(body, graphResolution) {
       }
     });
     if (hop.status !== "complete") {
+      const destinationKind = hopEnd.seamSnapped
+        ? `seam:${(hopEnd.between || []).join("-") || "regional"}`
+        : "rider-pin";
       return {
         status: hop.status || "failed",
         error: hop.error || "chain_hop_failed",
         message:
           (hop.message || "Long-haul hop failed") +
-          ` (hop ${i + 1}/${waypoints.length - 1})`,
+          ` (hop ${i + 1}/${waypoints.length - 1} destination=${destinationKind})`,
         regionIds: graphResolution.regionIds,
         hopIndex: i,
         hop,

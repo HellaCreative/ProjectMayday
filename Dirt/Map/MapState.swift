@@ -248,6 +248,9 @@ final class MapState {
     var onRouteTap: ((UUID, CLLocationCoordinate2D, String) -> Void)?
     var onLongPress: ((CLLocationCoordinate2D) -> Void)?
     var onRiderTap: ((String) -> Void)?
+    /// Called as a movable planner pin begins dragging so the planner can
+    /// reveal constrained targets (for example alternate route-connected pumps).
+    var onPlannerPinDragBegan: ((String) -> Void)?
     /// Called when the user drags a planner pin and releases it.
     /// Arguments: marker ID (e.g. "s0", "e0", "dest") + new map coordinate.
     var onPlannerPinDragEnd: ((String, CLLocationCoordinate2D) -> Void)?
