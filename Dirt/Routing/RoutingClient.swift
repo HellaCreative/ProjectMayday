@@ -1,3 +1,4 @@
+import CoreLocation
 import Foundation
 
 /// HTTPS client for the production DIRT routing engine on Vercel.
@@ -96,5 +97,38 @@ final class RoutingClient {
             throw RoutingError.server(message)
         }
         return response
+    }
+
+    /// Resolves whether a rider waypoint itself is a packed fuel stop. This
+    /// uses the same live regional fuel sidecar as itinerary planning.
+    func fuelStation(
+        near point: RouteCoordinate,
+        within meters: Double
+    ) async throws -> FuelChainStop? {
+        let pad = max(0.002, meters / 111_000)
+        struct Request: Encodable { let locations: [RouteLocation] }
+        var request = URLRequest(url: AppConfig.liveFuelURL)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 30
+        request.httpBody = try JSONEncoder().encode(Request(locations: [
+            RouteLocation(latitude: point.latitude - pad, longitude: point.longitude - pad, label: "Fuel box 1"),
+            RouteLocation(latitude: point.latitude + pad, longitude: point.longitude + pad, label: "Fuel box 2")
+        ]))
+        let (data, response) = try await session.data(for: request)
+        guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
+            throw RoutingError.server("Live fuel data is unavailable.")
+        }
+        return PackedFuel.decode(data).compactMap { station -> (POIFeature, Double)? in
+            let distance = CLLocation(latitude: point.latitude, longitude: point.longitude)
+                .distance(from: CLLocation(latitude: station.latitude, longitude: station.longitude))
+            return distance <= meters ? (station, distance) : nil
+        }.min { $0.1 < $1.1 }.map { station, _ in
+            FuelChainStop(
+                id: station.id, latitude: station.latitude, longitude: station.longitude,
+                name: station.name, brand: station.brand, address: station.address,
+                graphMeters: 0
+            )
+        }
     }
 }

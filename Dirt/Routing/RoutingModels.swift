@@ -168,6 +168,8 @@ struct FuelChainConstraint: Codable, Sendable {
     let destinationFuelUsedLimitMeters: Double?
     let profileMeters: Double
     let riderLegId: String
+    var probeFirstReachableStation: Bool? = nil
+    var excludedStationIds: [String]? = nil
 }
 
 struct FuelChainRequest: Codable, Sendable {
@@ -193,7 +195,9 @@ struct FuelChainRequest: Codable, Sendable {
         avoidEdgeIds: [String] = [],
         priorEdgeIds: [String] = [],
         arrivalEdgeId: String? = nil,
-        backtrackFactor: Double? = nil
+        backtrackFactor: Double? = nil,
+        probeFirstReachableStation: Bool = false,
+        excludedStationIds: [String] = []
     ) {
         self.profile = profile
         locations = [
@@ -221,7 +225,9 @@ struct FuelChainRequest: Codable, Sendable {
             minimumFuelStops: minimumFuelStops,
             destinationFuelUsedLimitMeters: destinationFuelUsedLimitMeters,
             profileMeters: profileMeters,
-            riderLegId: riderLegId
+            riderLegId: riderLegId,
+            probeFirstReachableStation: probeFirstReachableStation ? true : nil,
+            excludedStationIds: excludedStationIds.isEmpty ? nil : excludedStationIds
         )
     }
 }
@@ -276,6 +282,7 @@ struct FuelChainResponse: Codable, Sendable {
     let graphMeters: [Double]?
     let diagnostics: FuelChainDiagnostics?
     var stationCandidates: [FuelStationCandidate]? = nil
+    var firstReachableStationMeters: Double? = nil
 
     var isComplete: Bool { status == "complete" }
 }

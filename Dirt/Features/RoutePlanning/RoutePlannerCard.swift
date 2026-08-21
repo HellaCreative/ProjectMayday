@@ -966,6 +966,7 @@ struct RoutePlannerCard: View {
                     isActive: isActive,
                     onToggle: { toggleStageSelection(stageIndex) },
                     endpointTitle: planner.stageEndpointTitle(at: stageIndex),
+                    endpointIsFuelStation: planner.stageEndpointIsFuelStation(at: stageIndex),
                     viaSubtitle: viaSubtitle,
                     headline: {
                         if stage.isRouting {
@@ -1639,6 +1640,7 @@ struct StageCard<Headline: View, Detail: View>: View {
     let isActive: Bool
     let onToggle: () -> Void
     var endpointTitle: String? = nil
+    var endpointIsFuelStation = false
     var viaSubtitle: String? = nil
     @ViewBuilder var headline: () -> Headline
     @ViewBuilder var detail: () -> Detail
@@ -1674,10 +1676,16 @@ struct StageCard<Headline: View, Detail: View>: View {
 
                 if let endpointTitle {
                     VStack(alignment: .leading, spacing: 1) {
-                        Text(endpointTitle)
-                            .font(.dirtUI(10.5, weight: .bold))
-                            .foregroundStyle(DirtTheme.ink)
-                            .lineLimit(1)
+                        HStack(spacing: 3) {
+                            if endpointIsFuelStation {
+                                Image(systemName: "fuelpump.fill")
+                                    .foregroundStyle(DirtTheme.orange)
+                            }
+                            Text(endpointTitle)
+                                .foregroundStyle(DirtTheme.ink)
+                                .lineLimit(1)
+                        }
+                        .font(.dirtUI(10.5, weight: .bold))
                         if let viaSubtitle {
                             Text(viaSubtitle)
                                 .font(.dirtUI(9.5, weight: .semibold))

@@ -6,6 +6,7 @@ protocol RoutingSource: AnyObject {
     var name: String { get }
     func route(_ req: RouteRequest) async throws -> RouteResponse
     func fuelChain(_ req: FuelChainRequest) async throws -> FuelChainResponse
+    func fuelStation(near point: RouteCoordinate, within meters: Double) async throws -> FuelChainStop?
 }
 
 @MainActor
@@ -96,6 +97,10 @@ final class LiveRoutingSource: RoutingSource {
     func fuelChain(_ req: FuelChainRequest) async throws -> FuelChainResponse {
         try await client.fuelChain(req)
     }
+
+    func fuelStation(near point: RouteCoordinate, within meters: Double) async throws -> FuelChainStop? {
+        try await client.fuelStation(near: point, within: meters)
+    }
 }
 
 @MainActor
@@ -156,8 +161,31 @@ final class PackRoutingSource: RoutingSource {
         let start = coordinate(req.locations[0])
         let end = coordinate(req.locations[1])
         let stations = packs.fuelStations(from: start, to: end)
+        if req.fuel.probeFirstReachableStation == true {
+            let reachable = await packs.reachableFuelMeters(
+                from: start.locationCoordinate,
+                toward: end.locationCoordinate,
+                pumps: stations,
+                maxMeters: req.fuel.usableRangeMeters,
+                profile: req.profile,
+                allowUnknown: req.accessPolicy.motorizedUnknown
+            )
+            let first = reachable.values.min()
+            return FuelChainResponse(
+                status: "complete", error: nil, message: nil,
+                regionIds: GraphPackStore.regionIds(containingAny: [
+                    start.locationCoordinate, end.locationCoordinate
+                ]),
+                stops: [], graphMeters: [],
+                diagnostics: FuelChainDiagnostics(
+                    strategy: "pack-first-reachable-probe", states: 1,
+                    dijkstraPops: nil, matchedFuel: reachable.count, elapsedMs: nil
+                ),
+                firstReachableStationMeters: first
+            )
+        }
         var current = start
-        var visited = Set<String>()
+        var visited = Set(req.fuel.excludedStationIds ?? [])
         var stops: [FuelChainStop] = []
         var graphMeters: [Double] = []
         let maximumStops = 12
@@ -226,6 +254,28 @@ final class PackRoutingSource: RoutingSource {
             current = RouteCoordinate(longitude: station.longitude, latitude: station.latitude)
         }
         throw RoutingError.server("No route-connected fuel chain fits the usable range.")
+    }
+
+    func fuelStation(near point: RouteCoordinate, within meters: Double) async throws -> FuelChainStop? {
+        let pad = max(0.002, meters / 111_000)
+        let candidates = packs.fuelStations(
+            minLat: point.latitude - pad,
+            maxLat: point.latitude + pad,
+            minLon: point.longitude - pad,
+            maxLon: point.longitude + pad
+        )
+        return candidates.compactMap { station -> (POIFeature, Double)? in
+            let distance = CLLocation(
+                latitude: point.latitude, longitude: point.longitude
+            ).distance(from: CLLocation(latitude: station.latitude, longitude: station.longitude))
+            return distance <= meters ? (station, distance) : nil
+        }.min { $0.1 < $1.1 }.map { station, _ in
+            FuelChainStop(
+                id: station.id, latitude: station.latitude, longitude: station.longitude,
+                name: station.name, brand: station.brand, address: station.address,
+                graphMeters: 0
+            )
+        }
     }
 }
 

@@ -291,6 +291,10 @@ private final class PlannerFakeRoutingSource: RoutingSource {
             )
         )
     }
+
+    func fuelStation(near point: RouteCoordinate, within meters: Double) async throws -> FuelChainStop? {
+        nil
+    }
 }
 
 private struct FuelPrefsRestore {

@@ -15,8 +15,9 @@ struct ItineraryBuilderTests {
 
         let dirt = await build(points, source: dirtSource, usable: 237_500, profile: .dirt)
 
-        #expect(dirtSource.fuelChainRequests.count == 1)
-        #expect(dirtSource.fuelChainRequests.first?.fuel.requireFuelStopBeforeEnd == true)
+        let dirtPlans = dirtSource.fuelChainRequests.filter { $0.fuel.probeFirstReachableStation != true }
+        #expect(dirtPlans.count == 1)
+        #expect(dirtPlans.first?.fuel.requireFuelStopBeforeEnd == true)
         #expect(dirt.legs.filter { $0.endsAtFuelStop != nil }.count == 1)
         let dirtMeters = dirt.legs.reduce(0.0) { $0 + ($1.response.distanceMeters ?? 0) }
         let dirtShare = dirt.legs.reduce(0.0) {
@@ -29,7 +30,7 @@ struct ItineraryBuilderTests {
         cleanSource.fuelStops = [fuelStop("unused", at: stop)]
         let clean = await build(points, source: cleanSource, usable: 237_500, profile: .cleanest)
 
-        #expect(cleanSource.fuelChainRequests.isEmpty)
+        #expect(cleanSource.fuelChainRequests.filter { $0.fuel.probeFirstReachableStation != true }.isEmpty)
         #expect(clean.legs.count == 1)
         #expect(clean.legs.first?.endsAtFuelStop == nil)
     }
@@ -64,7 +65,7 @@ struct ItineraryBuilderTests {
 
         let result = await build(points, source: source, usable: 180_000)
 
-        #expect(source.fuelChainRequests.count == 1)
+        #expect(source.fuelChainRequests.filter { $0.fuel.probeFirstReachableStation != true }.count == 1)
         #expect(result.legs.filter { $0.endsAtFuelStop != nil }.count == 1)
         let firstLegID = try #require(result.legs.first?.riderLegID)
         let firstRiderLeg = result.legs.filter { $0.riderLegID == firstLegID }
@@ -85,7 +86,7 @@ struct ItineraryBuilderTests {
 
         let result = await build(points, source: source, usable: 237_500)
 
-        let request = try #require(source.fuelChainRequests.first)
+        let request = try #require(source.fuelChainRequests.first { $0.fuel.probeFirstReachableStation != true })
         #expect(request.fuel.requireFuelStopBeforeEnd)
         #expect(result.legs.filter { $0.endsAtFuelStop != nil }.count == 1)
         let firstLegID = try #require(result.legs.first?.riderLegID)
@@ -106,6 +107,7 @@ struct ItineraryBuilderTests {
         source.distances[key(stop1, points[1])] = 20_000
         source.distances[key(points[1], stop2)] = 180_000
         source.distances[key(stop2, points[2])] = 20_000
+        source.firstReachableStationMeters[key(points[1], points[2])] = 180_000
         source.fuelStopResponses = [
             [fuelStop("fuel-before-2", at: stop1)],
             [fuelStop("fuel-before-3", at: stop2)]
@@ -113,13 +115,62 @@ struct ItineraryBuilderTests {
 
         let result = await build(points, source: source, usable: 237_500)
 
-        #expect(source.fuelChainRequests.count == 2)
-        #expect(source.fuelChainRequests.allSatisfy { $0.fuel.requireFuelStopBeforeEnd })
-        #expect(source.fuelChainRequests[0].fuel.destinationFuelUsedLimitMeters == 37_500)
-        #expect(source.fuelChainRequests[1].fuel.destinationFuelUsedLimitMeters == 177_500)
+        let plans = source.fuelChainRequests.filter { $0.fuel.probeFirstReachableStation != true }
+        #expect(plans.count == 2)
+        #expect(plans.allSatisfy { $0.fuel.requireFuelStopBeforeEnd })
+        #expect(plans[0].fuel.destinationFuelUsedLimitMeters == 57_500)
+        #expect(plans[1].fuel.destinationFuelUsedLimitMeters == 177_500)
         #expect(result.legs.compactMap(\.endsAtFuelStop?.stationID) == ["fuel-before-2", "fuel-before-3"])
         #expect(result.legs.last?.fuelUsedOnArrivalMeters == 80_000)
         #expect(result.riderLegStatus.values.allSatisfy { $0 == .built })
+    }
+
+    @Test func itineraryLookaheadChoosesLatePumpAndCompletesAllThreeLegs() async throws {
+        let points = [point(0), point(1), point(2), point(3)]
+        let early = point(0.2)
+        let late = point(0.8)
+        let next = point(1.6)
+        let source = FakeRoutingSource(name: "live")
+        source.distances[key(points[0], points[1])] = 230_000
+        source.distances[key(points[1], points[2])] = 190_000
+        source.distances[key(points[2], points[3])] = 150_000
+        source.distances[key(points[0], late)] = 180_000
+        source.distances[key(late, points[1])] = 50_000
+        source.distances[key(points[1], next)] = 120_000
+        source.distances[key(next, points[2])] = 70_000
+        source.firstReachableStationMeters[key(points[0], points[1])] = 44_000
+        source.firstReachableStationMeters[key(points[1], points[2])] = 120_000
+        source.fuelStopResponses = [
+            [fuelStop("late-180", at: late)],
+            [fuelStop("next-120", at: next)]
+        ]
+        _ = early
+
+        let result = await build(points, source: source, usable: 237_500)
+
+        #expect(result.legs.compactMap(\.endsAtFuelStop?.stationID) == ["late-180", "next-120"])
+        #expect(result.riderLegStatus.values.allSatisfy { $0 == .built })
+        #expect(result.legs.last?.fuelUsedOnArrivalMeters == 220_000)
+        let plans = source.fuelChainRequests.filter { $0.fuel.probeFirstReachableStation != true }
+        #expect(plans.first?.fuel.destinationFuelUsedLimitMeters == 117_500)
+    }
+
+    @Test func riderWaypointOnStationResetsTankWithoutGeneratedStop() async throws {
+        let points = [point(0), point(1), point(2)]
+        let source = FakeRoutingSource(name: "live")
+        source.distances[key(points[0], points[1])] = 200_000
+        source.distances[key(points[1], points[2])] = 200_000
+        source.waypointFuelStations[key(points[1], points[1])] = fuelStop(
+            "irving-antigonish", at: points[1]
+        )
+
+        let result = await build(points, source: source, usable: 237_500)
+
+        #expect(result.legs.compactMap(\.endsAtFuelStop).isEmpty)
+        #expect(result.legs.first?.fuelUsedOnArrivalMeters == 0)
+        #expect(result.legs.last?.fuelUsedOnArrivalMeters == 200_000)
+        #expect(result.waypointFuelStops.values.first?.name == "irving-antigonish")
+        #expect(source.fuelChainRequests.filter { $0.fuel.probeFirstReachableStation != true }.isEmpty)
     }
 
     @Test func staleResultIsDroppedAfterGenerationChangesMidAwait() async {
@@ -270,6 +321,8 @@ private final class FakeRoutingSource: RoutingSource {
     var fuelStopResponses: [[FuelChainStop]] = []
     var routeRequests: [RouteRequest] = []
     var fuelChainRequests: [FuelChainRequest] = []
+    var waypointFuelStations: [String: FuelChainStop] = [:]
+    var firstReachableStationMeters: [String: Double] = [:]
     var failKey: String?
     var suspendNextRoute = false
     var pendingRouteContinuation: CheckedContinuation<Void, Never>?
@@ -293,6 +346,21 @@ private final class FakeRoutingSource: RoutingSource {
 
     func fuelChain(_ req: FuelChainRequest) async throws -> FuelChainResponse {
         fuelChainRequests.append(req)
+        let pair = (
+            RouteCoordinate(longitude: req.locations[0].longitude, latitude: req.locations[0].latitude),
+            RouteCoordinate(longitude: req.locations[1].longitude, latitude: req.locations[1].latitude)
+        )
+        if req.fuel.probeFirstReachableStation == true {
+            return FuelChainResponse(
+                status: "complete", error: nil, message: nil, regionIds: ["test"],
+                stops: [], graphMeters: nil,
+                diagnostics: FuelChainDiagnostics(
+                    strategy: "fake-probe", states: 1, dijkstraPops: 1,
+                    matchedFuel: 0, elapsedMs: 1
+                ),
+                firstReachableStationMeters: firstReachableStationMeters[key(pair.0, pair.1)]
+            )
+        }
         let selectedStops = fuelStopResponses.isEmpty ? fuelStops : fuelStopResponses.removeFirst()
         return FuelChainResponse(
             status: "complete", error: nil, message: nil, regionIds: ["test"],
@@ -302,6 +370,10 @@ private final class FakeRoutingSource: RoutingSource {
                 matchedFuel: selectedStops.count, elapsedMs: 1
             )
         )
+    }
+
+    func fuelStation(near point: RouteCoordinate, within meters: Double) async throws -> FuelChainStop? {
+        waypointFuelStations[key(point, point)]
     }
 
     func resumeRoute() {

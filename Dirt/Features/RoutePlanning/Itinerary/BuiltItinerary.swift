@@ -50,6 +50,35 @@ struct BuiltItinerary: Equatable, Sendable {
     let generation: Int
     let legs: [BuiltLeg]
     let riderLegStatus: [UUID: LegStatus]
+    /// Unsplit rider routes are the only reusable routing product. Fuel stops,
+    /// carried range and split BuiltLegs are derived afresh on every build.
+    let riderRoutes: [UUID: RouteResponse]
+    /// A rider-created waypoint that currently sits on a packed pump. Derived
+    /// from its coordinate on every build; never persisted on RiderWaypoint.
+    let waypointFuelStops: [UUID: FuelStop]
+
+    init(
+        generation: Int,
+        legs: [BuiltLeg],
+        riderLegStatus: [UUID: LegStatus],
+        riderRoutes: [UUID: RouteResponse] = [:],
+        waypointFuelStops: [UUID: FuelStop] = [:]
+    ) {
+        self.generation = generation
+        self.legs = legs
+        self.riderLegStatus = riderLegStatus
+        self.riderRoutes = riderRoutes
+        self.waypointFuelStops = waypointFuelStops
+    }
+
+    static func == (lhs: BuiltItinerary, rhs: BuiltItinerary) -> Bool {
+        lhs.generation == rhs.generation
+            && lhs.legs == rhs.legs
+            && lhs.riderLegStatus == rhs.riderLegStatus
+            && lhs.waypointFuelStops == rhs.waypointFuelStops
+            && lhs.riderRoutes.mapValues(\.itineraryValueSignature)
+                == rhs.riderRoutes.mapValues(\.itineraryValueSignature)
+    }
 
     static func empty(for itinerary: RiderItinerary) -> BuiltItinerary {
         BuiltItinerary(
@@ -57,7 +86,9 @@ struct BuiltItinerary: Equatable, Sendable {
             legs: [],
             riderLegStatus: Dictionary(
                 uniqueKeysWithValues: itinerary.legs.map { ($0.id, .pending) }
-            )
+            ),
+            riderRoutes: [:],
+            waypointFuelStops: [:]
         )
     }
 }

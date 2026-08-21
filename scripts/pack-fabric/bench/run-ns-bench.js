@@ -84,7 +84,7 @@ function locationsFor(route) {
 }
 
 function validateFixtures(routes) {
-  if (!Array.isArray(routes) || routes.length !== 7) throw new Error("Expected exactly seven NS benchmark routes");
+  if (!Array.isArray(routes) || routes.length !== 8) throw new Error("Expected exactly eight NS benchmark routes");
   const ids = new Set();
   for (const route of routes) {
     if (!route.id || ids.has(route.id)) throw new Error(`Invalid or duplicate route id: ${route.id}`);
@@ -144,7 +144,7 @@ function requestBody(
   };
 }
 
-function fuelBody(profile, allowUnknown, from, to, history, firstCap, requireStop, profileMeters, riderLegId, destinationFuelUsedLimitMeters) {
+function fuelBody(profile, allowUnknown, from, to, history, firstCap, requireStop, profileMeters, riderLegId, destinationFuelUsedLimitMeters, probe = false, excludedStationIds = []) {
   return {
     profile: PROFILE_API[profile],
     locations: [from, to],
@@ -159,7 +159,9 @@ function fuelBody(profile, allowUnknown, from, to, history, firstCap, requireSto
       requireFuelStopBeforeEnd: requireStop,
       profileMeters,
       riderLegId,
-      destinationFuelUsedLimitMeters
+      destinationFuelUsedLimitMeters,
+      probeFirstReachableStation: probe,
+      excludedStationIds
     },
     options: {
       sessionSeed: SESSION_SEED,
@@ -285,16 +287,39 @@ async function routeCase(item, shortestMeters) {
   let fuelStops = 0;
   let stationCandidateCount = 0;
   const chosenDirtPct = [];
+  const selectedStopsByLeg = [];
+  const firstReachable = [];
+
+  // This bounded profile-route probe is the itinerary look-ahead pass. It
+  // measures the first pump on each cached RiderLeg before any is selected.
+  for (let index = 0; !item._disableLookahead && baseline.length > 1 && index < baseline.length; index += 1) {
+    const probe = await fuelChainRequest(fuelBody(
+      item.profile, item.allowUnknown, points[index], points[index + 1],
+      emptyHistory(), USABLE_METERS, false, Number(baseline[index].distanceMeters),
+      `${item.route.id}:${index + 1}:probe`, null, true
+    ), { loadFuelForLocations: loadBenchFuel });
+    firstReachable[index] = Number(probe && probe.firstReachableStationMeters);
+  }
+  const onward = [];
+  let tail = 0;
+  for (let index = baseline.length - 1; index >= 0; index -= 1) {
+    const through = Number(baseline[index].distanceMeters) + tail;
+    onward[index] = Number.isFinite(firstReachable[index])
+      ? Math.min(firstReachable[index], through)
+      : through;
+    tail = onward[index];
+  }
 
   for (let index = 0; index < baseline.length; index += 1) {
     const from = points[index];
     const to = points[index + 1];
     const baselineMeters = Number(baseline[index].distanceMeters);
     const firstCap = Math.max(0, USABLE_METERS - fuelUsed);
-    const nextMeters = baseline[index + 1] && Number(baseline[index + 1].distanceMeters);
-    const requireStop = index + 1 < baseline.length
-      && baselineMeters <= firstCap + 1
-      && nextMeters > Math.max(0, USABLE_METERS - (fuelUsed + baselineMeters)) + 1;
+    const destinationLimit = !item._disableLookahead && index + 1 < baseline.length
+      ? Math.max(0, USABLE_METERS - onward[index + 1])
+      : null;
+    const requireStop = index === item._forceFuelLeg || baselineMeters > firstCap + 1
+      || (Number.isFinite(destinationLimit) && fuelUsed + baselineMeters > destinationLimit + 1);
 
     if (baselineMeters <= firstCap + 1 && !requireStop) {
       responses.push(baseline[index]);
@@ -307,13 +332,28 @@ async function routeCase(item, shortestMeters) {
     const chain = await fuelChainRequest(fuelBody(
         item.profile, item.allowUnknown, from, to, finalHistory, firstCap, requireStop,
         baselineMeters, `${item.route.id}:${index + 1}`,
-        requireStop && Number.isFinite(nextMeters) && nextMeters <= USABLE_METERS + 1
-          ? Math.max(0, USABLE_METERS - nextMeters)
-          : null
+        destinationLimit, false, (item._excludedStationsByLeg || {})[index] || []
       ), { loadFuelForLocations: loadBenchFuel });
     const chainMs = Number(process.hrtime.bigint() - chainStarted) / 1e6;
     timings.push(Number(chain && chain.diagnostics && chain.diagnostics.maxHopMs) || chainMs);
     if (!chain || chain.status !== "complete") {
+      if (index === 0 && !item._disableLookahead) {
+        return routeCase({ ...item, _disableLookahead: true, _fuelBacktrackAttempt: 1 }, shortestMeters);
+      }
+      if (index > 0 && Number(item._fuelBacktrackAttempt || 0) < 8) {
+        const priorIndex = index - 1;
+        const priorStops = selectedStopsByLeg[priorIndex] || [];
+        const priorLatest = priorStops[priorStops.length - 1];
+        const excluded = { ...(item._excludedStationsByLeg || {}) };
+        excluded[priorIndex] = [...(excluded[priorIndex] || [])];
+        if (priorLatest && priorLatest.id != null) excluded[priorIndex].push(String(priorLatest.id));
+        return routeCase({
+          ...item,
+          _fuelBacktrackAttempt: Number(item._fuelBacktrackAttempt || 0) + 1,
+          _excludedStationsByLeg: excluded,
+          _forceFuelLeg: priorLatest ? item._forceFuelLeg : priorIndex
+        }, shortestMeters);
+      }
       const reason = chain && (chain.error || chain.message) || "no_fuel_chain";
       const error = new Error(`fuel leg ${index + 1}: ${reason}`);
       const directCandidates = chain && chain.stationCandidates;
@@ -327,6 +367,7 @@ async function routeCase(item, shortestMeters) {
     }
     stationCandidateCount += (chain.stationCandidates || []).length;
     const stops = chain.stops || [];
+    selectedStopsByLeg[index] = stops;
     chosenDirtPct.push(...stops.map((stop) => Number(stop.dirtPercent)).filter(Number.isFinite));
     const hopPoints = [from, ...stops.map(stopLocation), to];
     for (let hop = 0; hop < hopPoints.length - 1; hop += 1) {

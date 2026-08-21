@@ -22,7 +22,9 @@ final class ItineraryBuilder {
     ) async -> BuiltItinerary {
         currentGeneration = itinerary.generation
         let startIndex = min(max(0, legIndex), itinerary.legs.count)
-        let kept = reusableLegs(from: reuse, itinerary: itinerary, before: startIndex)
+        let fuelReplan = fuel.isEnabled && fuel.usableMeters > 0
+        let kept = fuelReplan ? [] : reusableLegs(from: reuse, itinerary: itinerary, before: startIndex)
+        let reusableRoutes = reusableRiderRoutes(from: reuse, itinerary: itinerary, before: startIndex)
         var statuses = Dictionary(
             uniqueKeysWithValues: itinerary.legs.map { ($0.id, LegStatus.pending) }
         )
@@ -30,10 +32,12 @@ final class ItineraryBuilder {
         var committed = BuiltItinerary(
             generation: itinerary.generation,
             legs: kept,
-            riderLegStatus: statuses
+            riderLegStatus: statuses,
+            riderRoutes: reusableRoutes,
+            waypointFuelStops: [:]
         )
 
-        guard startIndex < itinerary.legs.count else {
+        guard !itinerary.legs.isEmpty else {
             RoutingDebugLog.shared.event(
                 "build committed gen=\(itinerary.generation) legs=\(kept.count)"
             )
@@ -42,7 +46,7 @@ final class ItineraryBuilder {
 
         let firstRequest = routeRequest(
             itinerary: itinerary,
-            legIndex: startIndex,
+            legIndex: min(startIndex, itinerary.legs.count - 1),
             maxPathMeters: nil
         )
         let selectedSource = policy.select(for: firstRequest)
@@ -55,17 +59,23 @@ final class ItineraryBuilder {
         // decision. The next rider leg can therefore never be a nil fallback.
         var baseline: [Int: RouteResponse] = [:]
         var baselineHistory: [Int: EdgeHistory] = [:]
-        var discoveryHistory = EdgeHistory(legs: kept)
+        var discoveryHistory = EdgeHistory()
         var baselineFailure: (index: Int, message: String)?
-        for index in startIndex..<itinerary.legs.count {
+        for index in 0..<itinerary.legs.count {
             do {
                 baselineHistory[index] = discoveryHistory
-                let response = try await selectedSource.route(routeRequest(
-                    itinerary: itinerary,
-                    legIndex: index,
-                    maxPathMeters: nil,
-                    history: discoveryHistory
-                ))
+                let riderLeg = itinerary.legs[index]
+                let response: RouteResponse
+                if index < startIndex, let cached = reusableRoutes[riderLeg.id] {
+                    response = cached
+                } else {
+                    response = try await selectedSource.route(routeRequest(
+                        itinerary: itinerary,
+                        legIndex: index,
+                        maxPathMeters: nil,
+                        history: discoveryHistory
+                    ))
+                }
                 guard active(itinerary) else {
                     return dropped(itinerary, committed: committed)
                 }
@@ -82,10 +92,90 @@ final class ItineraryBuilder {
             }
         }
 
-        var fuelUsed = carriedFuel(from: kept)
-        var finalHistory = EdgeHistory(legs: kept)
+        committed = BuiltItinerary(
+            generation: itinerary.generation,
+            legs: kept,
+            riderLegStatus: statuses,
+            riderRoutes: Dictionary(uniqueKeysWithValues: baseline.map {
+                (itinerary.legs[$0.key].id, $0.value)
+            }),
+            waypointFuelStops: [:]
+        )
+
+        var waypointFuelStops: [UUID: FuelStop] = [:]
+        var firstReachableFuel = [Int: Double]()
+        if fuelReplan, baselineFailure == nil {
+            RoutingDebugLog.shared.event(
+                "fuel replan fromLeg=0 reason=\(startIndex == 0 ? "build" : "edit")"
+            )
+            for waypointIndex in 1..<itinerary.waypoints.count - 1 {
+                let waypoint = itinerary.waypoints[waypointIndex]
+                if let station = try? await selectedSource.fuelStation(
+                    near: waypoint.coordinate, within: 150
+                ) {
+                    let precedingLeg = itinerary.legs[waypointIndex - 1]
+                    waypointFuelStops[waypoint.id] = FuelStop(
+                        coordinate: station.coordinate,
+                        stationID: station.id,
+                        name: station.displayName,
+                        afterRiderLegID: precedingLeg.id
+                    )
+                }
+            }
+            for index in itinerary.legs.indices where itinerary.legs.count > 1 {
+                guard let base = baseline[index],
+                      let meters = base.distanceMeters
+                else { continue }
+                let riderLeg = itinerary.legs[index]
+                let from = itinerary.waypoints[index].coordinate
+                let to = itinerary.waypoints[index + 1].coordinate
+                let probe = try? await selectedSource.fuelChain(FuelChainRequest(
+                    profile: riderLeg.profile,
+                    from: from,
+                    to: to,
+                    allowUnknown: riderLeg.allowUnknown,
+                    usableRangeMeters: fuel.usableMeters,
+                    firstLegMaxMeters: fuel.usableMeters,
+                    requireFuelStopBeforeEnd: false,
+                    minimumFuelStops: 0,
+                    profileMeters: meters,
+                    riderLegId: riderLeg.id.uuidString,
+                    avoidEdgeIds: Array(itinerary.impassableEdgeIDs),
+                    probeFirstReachableStation: true
+                ))
+                if let distance = probe?.firstReachableStationMeters {
+                    firstReachableFuel[index] = distance
+                }
+            }
+            committed = BuiltItinerary(
+                generation: committed.generation,
+                legs: committed.legs,
+                riderLegStatus: committed.riderLegStatus,
+                riderRoutes: committed.riderRoutes,
+                waypointFuelStops: waypointFuelStops
+            )
+        }
+
+        let onwardFuelDistance = distanceToNextFuelOpportunity(
+            itinerary: itinerary,
+            baseline: baseline,
+            firstReachableFuel: firstReachableFuel,
+            waypointFuelStops: waypointFuelStops
+        )
+
         let lastBuildable = baselineFailure?.index ?? itinerary.legs.count
-        for index in startIndex..<lastBuildable {
+        let finalStartIndex = fuelReplan ? 0 : startIndex
+        let fuelAttemptBase = committed
+        var excludedStationsByLeg = [Int: Set<String>]()
+        var forcedFuelLegs = Set<Int>()
+        var fuelBacktrackAttempts = 0
+        var lookaheadEnabled = true
+
+        fuelAttempts: while true {
+            if fuelBacktrackAttempts > 0 { committed = fuelAttemptBase }
+            var fuelUsed = fuelReplan ? 0 : carriedFuel(from: kept)
+            var finalHistory = fuelReplan ? EdgeHistory() : EdgeHistory(legs: kept)
+            for index in finalStartIndex..<lastBuildable {
             guard let base = baseline[index] else { break }
             let riderLeg = itinerary.legs[index]
             do {
@@ -98,7 +188,13 @@ final class ItineraryBuilder {
                     fuelUsedAtStart: fuelUsed,
                     fuel: fuel,
                     source: selectedSource,
-                    history: finalHistory
+                    history: finalHistory,
+                    destinationFuelUsedLimitMeters: lookaheadEnabled && index + 1 < itinerary.legs.count
+                        ? onwardFuelDistance[index + 1].map { max(0, fuel.usableMeters - $0) }
+                        : nil,
+                    waypointFuelReset: waypointFuelStops[itinerary.waypoints[index + 1].id],
+                    forceFuelStop: forcedFuelLegs.contains(index),
+                    excludedStationIDs: excludedStationsByLeg[index] ?? []
                 )
                 guard active(itinerary) else {
                     return dropped(itinerary, committed: committed)
@@ -146,6 +242,33 @@ final class ItineraryBuilder {
                 guard active(itinerary) else {
                     return dropped(itinerary, committed: committed)
                 }
+                if fuelReplan, index == 0, lookaheadEnabled, fuelBacktrackAttempts < 8 {
+                    lookaheadEnabled = false
+                    fuelBacktrackAttempts += 1
+                    RoutingDebugLog.shared.event(
+                        "fuel backtrack failedLeg=\(riderLeg.id) replanLeg=\(riderLeg.id) " +
+                            "attempt=\(fuelBacktrackAttempts) reason=probe_inconclusive"
+                    )
+                    continue fuelAttempts
+                }
+                if fuelReplan, index > 0, fuelBacktrackAttempts < 8 {
+                    let priorIndex = index - 1
+                    let priorLegID = itinerary.legs[priorIndex].id
+                    let priorStops = committed.legs
+                        .filter { $0.riderLegID == priorLegID }
+                        .compactMap { $0.endsAtFuelStop?.stationID }
+                    if let latest = priorStops.last {
+                        excludedStationsByLeg[priorIndex, default: []].insert(latest)
+                    } else {
+                        forcedFuelLegs.insert(priorIndex)
+                    }
+                    fuelBacktrackAttempts += 1
+                    RoutingDebugLog.shared.event(
+                        "fuel backtrack failedLeg=\(riderLeg.id) replanLeg=\(priorLegID) " +
+                            "attempt=\(fuelBacktrackAttempts)"
+                    )
+                    continue fuelAttempts
+                }
                 let message = error.localizedDescription
                 committed = markingFailed(riderLeg.id, message: message, in: committed)
                 RoutingDebugLog.shared.event(
@@ -154,6 +277,8 @@ final class ItineraryBuilder {
                 onProgress(committed)
                 return committed
             }
+            }
+            break fuelAttempts
         }
 
         if let failure = baselineFailure {
@@ -181,7 +306,11 @@ final class ItineraryBuilder {
         fuelUsedAtStart: Double,
         fuel: FuelRangePrefs.Snapshot,
         source: any RoutingSource,
-        history: EdgeHistory
+        history: EdgeHistory,
+        destinationFuelUsedLimitMeters: Double?,
+        waypointFuelReset: FuelStop?,
+        forceFuelStop: Bool,
+        excludedStationIDs: Set<String>
     ) async throws -> [BuiltLeg] {
         let riderLeg = itinerary.legs[index]
         let from = itinerary.waypoints[index].coordinate
@@ -216,26 +345,18 @@ final class ItineraryBuilder {
             "fuel need riderLeg=\(riderLeg.id) profileMeters=\(Int(meters)) " +
                 "usable=\(Int(fuel.usableMeters)) stopsNeeded=\(stopsNeeded)"
         )
-        let nextMeters = allBaseline[index + 1]?.distanceMeters
-        let requirePumpBeforeWaypoint: Bool
-        let destinationFuelUsedLimitMeters: Double?
-        if index + 1 < itinerary.legs.count {
-            guard let nextMeters else {
-                throw RoutingError.invalidResponse
-            }
-            let arrivalWithoutPump = fuelUsedAtStart + meters
-            requirePumpBeforeWaypoint = meters <= firstCap + 1
-                && nextMeters > max(0, fuel.usableMeters - arrivalWithoutPump) + 1
-            destinationFuelUsedLimitMeters = requirePumpBeforeWaypoint && nextMeters <= fuel.usableMeters + 1
-                ? max(0, fuel.usableMeters - nextMeters)
-                : nil
-        } else {
-            requirePumpBeforeWaypoint = false
-            destinationFuelUsedLimitMeters = nil
-        }
+        _ = allBaseline
+        let arrivalWithoutPump = fuelUsedAtStart + meters
+        let requirePumpBeforeWaypoint = forceFuelStop || (waypointFuelReset == nil
+            && destinationFuelUsedLimitMeters.map { arrivalWithoutPump > $0 + 1 } == true)
 
         if meters <= firstCap + 1, !requirePumpBeforeWaypoint {
-            let arrival = fuelUsedAtStart + meters
+            let arrival = waypointFuelReset == nil ? fuelUsedAtStart + meters : 0
+            if let reset = waypointFuelReset {
+                RoutingDebugLog.shared.event(
+                    "fuel reset riderLeg=\(riderLeg.id) station=\(reset.stationID ?? "unknown") source=waypoint"
+                )
+            }
             RoutingDebugLog.shared.event(
                 "fuel carry riderLeg=\(riderLeg.id) used=\(Int(arrival))"
             )
@@ -249,23 +370,32 @@ final class ItineraryBuilder {
             )]
         }
 
-        let chain = try await source.fuelChain(FuelChainRequest(
-            profile: riderLeg.profile,
-            from: from,
-            to: to,
-            allowUnknown: riderLeg.allowUnknown,
-            usableRangeMeters: fuel.usableMeters,
-            firstLegMaxMeters: firstCap,
-            requireFuelStopBeforeEnd: requirePumpBeforeWaypoint || stopsNeeded > 0,
-            minimumFuelStops: stopsNeeded,
-            destinationFuelUsedLimitMeters: destinationFuelUsedLimitMeters,
-            profileMeters: meters,
-            riderLegId: riderLeg.id.uuidString,
-            avoidEdgeIds: Array(itinerary.impassableEdgeIDs),
-            priorEdgeIds: history.edgeIDs,
-            arrivalEdgeId: history.arrivalEdgeID,
-            backtrackFactor: 4
-        ))
+        let chain: FuelChainResponse
+        do {
+            chain = try await source.fuelChain(FuelChainRequest(
+                profile: riderLeg.profile,
+                from: from,
+                to: to,
+                allowUnknown: riderLeg.allowUnknown,
+                usableRangeMeters: fuel.usableMeters,
+                firstLegMaxMeters: firstCap,
+                requireFuelStopBeforeEnd: requirePumpBeforeWaypoint || stopsNeeded > 0,
+                minimumFuelStops: stopsNeeded,
+                destinationFuelUsedLimitMeters: waypointFuelReset == nil
+                    ? destinationFuelUsedLimitMeters
+                    : nil,
+                profileMeters: meters,
+                riderLegId: riderLeg.id.uuidString,
+                avoidEdgeIds: Array(itinerary.impassableEdgeIDs),
+                priorEdgeIds: history.edgeIDs,
+                arrivalEdgeId: history.arrivalEdgeID,
+                backtrackFactor: 4,
+                excludedStationIds: Array(excludedStationIDs)
+            ))
+        } catch {
+            let remaining = max(0, Int((fuel.usableMeters - fuelUsedAtStart) / 1000))
+            throw RoutingError.server("No pump reachable with \(remaining) km remaining")
+        }
         guard active(itinerary) else { throw CancellationError() }
         let stops = chain.stops ?? []
         guard !stops.isEmpty else {
@@ -325,7 +455,7 @@ final class ItineraryBuilder {
                 )
                 used = 0
             } else {
-                used += subMeters
+                used = waypointFuelReset == nil ? used + subMeters : 0
                 output.append(BuiltLeg(
                     riderLegID: riderLeg.id,
                     fromCoordinate: points[subIndex],
@@ -337,6 +467,11 @@ final class ItineraryBuilder {
                 RoutingDebugLog.shared.event(
                     "fuel carry riderLeg=\(riderLeg.id) used=\(Int(used))"
                 )
+                if let reset = waypointFuelReset {
+                    RoutingDebugLog.shared.event(
+                        "fuel reset riderLeg=\(riderLeg.id) station=\(reset.stationID ?? "unknown") source=waypoint"
+                    )
+                }
             }
         }
         return output
@@ -366,6 +501,53 @@ private func reusableLegs(
     guard let reuse else { return [] }
     let ids = Set(itinerary.legs.prefix(legIndex).map(\.id))
     return reuse.legs.filter { ids.contains($0.riderLegID) }
+}
+
+private func reusableRiderRoutes(
+    from reuse: BuiltItinerary?,
+    itinerary: RiderItinerary,
+    before legIndex: Int
+) -> [UUID: RouteResponse] {
+    guard let reuse else { return [:] }
+    var routes: [UUID: RouteResponse] = [:]
+    for leg in itinerary.legs.prefix(legIndex) {
+        if let response = reuse.riderRoutes[leg.id] {
+            routes[leg.id] = response
+            continue
+        }
+        // Compatibility with builds produced before riderRoutes existed: an
+        // unsplit leg is itself the reusable rider route. Split fuel work is
+        // deliberately never reconstructed or reused.
+        let matches = reuse.legs.filter { $0.riderLegID == leg.id }
+        if matches.count == 1, let response = matches.first?.response {
+            routes[leg.id] = response
+        }
+    }
+    return routes
+}
+
+/// Distance from each rider-leg start to the first possible tank reset on the
+/// remaining itinerary (or to the final destination when no reset is needed).
+private func distanceToNextFuelOpportunity(
+    itinerary: RiderItinerary,
+    baseline: [Int: RouteResponse],
+    firstReachableFuel: [Int: Double],
+    waypointFuelStops: [UUID: FuelStop]
+) -> [Int: Double] {
+    var result: [Int: Double] = [:]
+    var tailDistance = 0.0
+    for index in itinerary.legs.indices.reversed() {
+        let legMeters = baseline[index]?.distanceMeters ?? .infinity
+        let endpointID = itinerary.waypoints[index + 1].id
+        let throughWaypoint = legMeters + (
+            waypointFuelStops[endpointID] == nil ? tailDistance : 0
+        )
+        let firstPump = firstReachableFuel[index] ?? .infinity
+        let distance = min(firstPump, throughWaypoint)
+        result[index] = distance
+        tailDistance = distance
+    }
+    return result
 }
 
 private func carriedFuel(from legs: [BuiltLeg]) -> Double {
@@ -462,7 +644,9 @@ private func replacing(
     return BuiltItinerary(
         generation: built.generation,
         legs: built.legs.filter { $0.riderLegID != riderLegID } + replacement,
-        riderLegStatus: statuses
+        riderLegStatus: statuses,
+        riderRoutes: built.riderRoutes,
+        waypointFuelStops: built.waypointFuelStops
     )
 }
 
@@ -476,6 +660,8 @@ private func markingFailed(
     return BuiltItinerary(
         generation: built.generation,
         legs: built.legs,
-        riderLegStatus: statuses
+        riderLegStatus: statuses,
+        riderRoutes: built.riderRoutes,
+        waypointFuelStops: built.waypointFuelStops
     )
 }

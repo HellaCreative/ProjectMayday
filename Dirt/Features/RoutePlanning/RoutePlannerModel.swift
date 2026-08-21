@@ -295,7 +295,21 @@ final class RoutePlannerModel {
         let stage = stages[index]
         guard let riderLegIndex = itinerary.legs.firstIndex(where: { $0.id == stage.riderLegID })
         else { return "Leg \(index + 1)" }
-        return "Point \(riderLegIndex + 1) → Point \(riderLegIndex + 2)"
+        let base = "Point \(riderLegIndex + 1) → Point \(riderLegIndex + 2)"
+        let endpoint = itinerary.waypoints[riderLegIndex + 1]
+        guard let station = built?.waypointFuelStops[endpoint.id],
+              let name = station.name, !name.isEmpty
+        else { return base }
+        return "\(base) · \(name)"
+    }
+
+    func stageEndpointIsFuelStation(at index: Int) -> Bool {
+        guard stages.indices.contains(index),
+              let riderLegIndex = itinerary.legs.firstIndex(where: {
+                  $0.id == stages[index].riderLegID
+              })
+        else { return false }
+        return built?.waypointFuelStops[itinerary.waypoints[riderLegIndex + 1].id] != nil
     }
 
     /// Automatic pump hops are derived safety stops. The final non-fuel hop in
@@ -405,7 +419,9 @@ final class RoutePlannerModel {
                 built = BuiltItinerary(
                     generation: itinerary.generation,
                     legs: current.legs,
-                    riderLegStatus: current.riderLegStatus
+                    riderLegStatus: current.riderLegStatus,
+                    riderRoutes: current.riderRoutes,
+                    waypointFuelStops: current.waypointFuelStops
                 )
             }
             isRouting = false
@@ -492,7 +508,8 @@ final class RoutePlannerModel {
             legs: legs,
             riderLegStatus: Dictionary(uniqueKeysWithValues: itinerary.legs.map { riderLeg in
                 (riderLeg.id, legs.contains(where: { $0.riderLegID == riderLeg.id }) ? .built : .pending)
-            })
+            }),
+            riderRoutes: Dictionary(uniqueKeysWithValues: legs.map { ($0.riderLegID, $0.response) })
         )
         RoutingDebugLog.shared.event(
             ItineraryLog.line(
@@ -2352,7 +2369,13 @@ final class RoutePlannerModel {
         )
         var statuses = current.riderLegStatus
         statuses[old.riderLegID] = .built
-        built = BuiltItinerary(generation: current.generation, legs: legs, riderLegStatus: statuses)
+        built = BuiltItinerary(
+            generation: current.generation,
+            legs: legs,
+            riderLegStatus: statuses,
+            riderRoutes: current.riderRoutes,
+            waypointFuelStops: current.waypointFuelStops
+        )
 
         recomposeNavigationFromActiveStage(index)
         refreshMap()
