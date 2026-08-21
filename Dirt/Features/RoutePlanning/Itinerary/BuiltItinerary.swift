@@ -35,6 +35,27 @@ struct BuiltLeg: Equatable, Sendable {
     let endsAtFuelStop: FuelStop?
     let response: RouteResponse
     let fuelUsedOnArrivalMeters: Double
+    /// The effective profile for this generated hop. Nil decodes legacy/test
+    /// projections as the rider-leg profile.
+    let routeProfile: RouteProfile?
+
+    init(
+        riderLegID: UUID,
+        fromCoordinate: RouteCoordinate,
+        toCoordinate: RouteCoordinate,
+        endsAtFuelStop: FuelStop?,
+        response: RouteResponse,
+        fuelUsedOnArrivalMeters: Double,
+        routeProfile: RouteProfile? = nil
+    ) {
+        self.riderLegID = riderLegID
+        self.fromCoordinate = fromCoordinate
+        self.toCoordinate = toCoordinate
+        self.endsAtFuelStop = endsAtFuelStop
+        self.response = response
+        self.fuelUsedOnArrivalMeters = fuelUsedOnArrivalMeters
+        self.routeProfile = routeProfile
+    }
 
     static func == (lhs: BuiltLeg, rhs: BuiltLeg) -> Bool {
         lhs.riderLegID == rhs.riderLegID
@@ -42,6 +63,7 @@ struct BuiltLeg: Equatable, Sendable {
             && lhs.toCoordinate == rhs.toCoordinate
             && lhs.endsAtFuelStop == rhs.endsAtFuelStop
             && lhs.fuelUsedOnArrivalMeters == rhs.fuelUsedOnArrivalMeters
+            && lhs.routeProfile == rhs.routeProfile
             && lhs.response.itineraryValueSignature == rhs.response.itineraryValueSignature
     }
 }

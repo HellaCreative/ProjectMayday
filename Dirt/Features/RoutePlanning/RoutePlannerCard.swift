@@ -1013,6 +1013,67 @@ struct RoutePlannerCard: View {
                                     .foregroundStyle(DirtTheme.orange)
                                     .fixedSize(horizontal: false, vertical: true)
                             }
+                            if childStages.count > 1 {
+                                VStack(alignment: .leading, spacing: DirtSpace.tight) {
+                                    Text("Fuel hops")
+                                        .font(DirtType.helper)
+                                        .fontWeight(.bold)
+                                        .foregroundStyle(DirtTheme.muted)
+                                    ForEach(childStages.indices, id: \.self) { hopIndex in
+                                        let indexedStage = childStages[hopIndex]
+                                        let hop = indexedStage.element
+                                        HStack(spacing: DirtSpace.tight) {
+                                            Text("Hop \(hopIndex + 1)")
+                                                .font(DirtType.rowTitle)
+                                                .foregroundStyle(DirtTheme.ink)
+                                            if let response = hop.response {
+                                                Text("\((response.distanceMeters ?? 0) / 1000, specifier: "%.1f") km · \(response.dirtPercent)% dirt")
+                                                    .font(DirtType.helper)
+                                                    .foregroundStyle(DirtTheme.muted)
+                                                    .lineLimit(1)
+                                            }
+                                            Spacer(minLength: 4)
+                                            Menu {
+                                                ForEach(RouteProfile.allCases) { profile in
+                                                    Button(profile.title) {
+                                                        planner.setFuelHopProfile(
+                                                            profile,
+                                                            at: indexedStage.offset
+                                                        )
+                                                    }
+                                                }
+                                            } label: {
+                                                HStack(spacing: 3) {
+                                                    Text(hop.profile.title)
+                                                    Image(systemName: "chevron.down")
+                                                        .font(.system(size: 8, weight: .black))
+                                                }
+                                                .font(DirtType.chip)
+                                                .fontWeight(.bold)
+                                                .foregroundStyle(DirtTheme.ink)
+                                                .padding(.horizontal, 8)
+                                                .frame(height: 28)
+                                                .background(DirtTheme.wash)
+                                                .clipShape(RoundedRectangle(cornerRadius: 4))
+                                            }
+                                            .accessibilityLabel(
+                                                "Profile for fuel hop \(hopIndex + 1)"
+                                            )
+                                        }
+                                        .frame(minHeight: DirtHit.min)
+                                        if hopIndex < childStages.count - 1 {
+                                            Rectangle()
+                                                .fill(DirtTheme.hairline)
+                                                .frame(height: 1)
+                                        }
+                                    }
+                                }
+                                .padding(DirtSpace.tight)
+                                .background(
+                                    DirtTheme.wash,
+                                    in: RoundedRectangle(cornerRadius: 6, style: .continuous)
+                                )
+                            }
                             profileSegments(active: riderLeg.profile) { profile in
                                 planner.setStageProfile(profile, at: stageIndex)
                                 withAnimation(.easeInOut(duration: 0.18)) { selectedStage = nil }

@@ -12,7 +12,7 @@ Rider waypoints, generated fuel stops, UI rows, route geometry, and async routin
 
 ### What was built
 
-**Canonical itinerary** (`Dirt/Features/RoutePlanning/Itinerary/`). `RiderItinerary` holds ordered `RiderWaypoint`s and `RiderLeg`s with a `generation` counter. It has no fuel concept and no public setters. All change goes through one reducer via `ItineraryAction` (`append | insert | move | delete | setProfile | setAllowUnknown | markImpassable | replaceAll | clear | rebuild`). Every action logs `itinerary action=… gen=a→b before=[…] after=[…] source=…`.
+**Canonical itinerary** (`Dirt/Features/RoutePlanning/Itinerary/`). `RiderItinerary` holds ordered `RiderWaypoint`s and `RiderLeg`s with a `generation` counter. Generated fuel stops never become waypoints; the only persisted fuel-related intent is an optional per-hop profile override keyed by station ID. It has no public setters. All change goes through one reducer via `ItineraryAction` (`append | insert | move | delete | setProfile | setHopProfile | setAllowUnknown | markImpassable | replaceAll | clear | rebuild`). Every action logs `itinerary action=… gen=a→b before=[…] after=[…] source=…`.
 
 **Derived build** (`ItineraryBuilder`, `BuiltItinerary`, `BuiltLeg`, `FuelStop`). Fuel stops and geometry are outputs, recomputed from the first changed leg forward, with earlier legs reused from the previous build. Every `await` is generation-guarded; stale results are dropped and logged. Progressive reveal commits partial builds with later legs `.pending`.
 
@@ -54,6 +54,10 @@ Rider waypoints, generated fuel stops, UI rows, route geometry, and async routin
 
 ## Part 2 — Roadmap
 
+### Phase 10, item 8 — Per-hop profile with forward replan
+
+`RiderLeg.hopOverrides` stores a profile keyed by the fuel station a generated hop departs from. Changing a fuel-hop profile preserves every upstream `BuiltLeg` through that station, then rebuilds only that station forward. The first fuel station therefore remains fixed while later pump choices and geometry may change. Overrides for stations absent from the completed replacement chain are pruned; changing the rider-leg profile clears every hop override on that leg. The expanded rider-leg card exposes compact, non-deletable hop rows with kilometres, dirt percentage, and an individual profile menu. The diagnostic contract is `fuel hop override station=<id> profile=<p> replanFrom=<id>`.
+
 Ordered by rider risk, then value. Each item is sized for one prompt in the phase style above.
 
 ### R1 — Fuel economy by surface (safety)
@@ -83,7 +87,6 @@ Toast → slide-out from the logo. From Here default profile policy (always Dirt
 ### Not on the roadmap, deliberately
 - Reopening 08 cost tables or corridor budgets. Only R7's telemetry earns that conversation.
 - Secondary data sources (DRA/FTEN/NRN). 09 says OSM-only until every region passes on OSM alone.
-- Per-fuel-hop profiles. Profile belongs to the rider leg; drop a waypoint if you want a different profile mid-leg.
 
 ---
 

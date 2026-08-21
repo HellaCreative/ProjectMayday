@@ -20,6 +20,8 @@ nonisolated enum ItineraryLog {
             return "itinerary action=append \(generation) before=\(coordinates(before)) after=\(coordinates(after))\(sourceSuffix)"
         case .setProfile(let legID, let profile):
             return "itinerary action=setProfile leg=\(legID?.uuidString ?? "all") profile=\(profile.rawValue) \(generation)\(sourceSuffix)"
+        case .setHopProfile(let legID, let stationID, let profile):
+            return "fuel hop override station=\(stationID) profile=\(profile.rawValue) replanFrom=\(stationID) riderLeg=\(legID.uuidString) \(generation)\(sourceSuffix)"
         case .setAllowUnknown(let legID, let allow):
             return "itinerary action=setAllowUnknown leg=\(legID?.uuidString ?? "all") allow=\(allow) \(generation)\(sourceSuffix)"
         case .markImpassable(let edgeIDs):

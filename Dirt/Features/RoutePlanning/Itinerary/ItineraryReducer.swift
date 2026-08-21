@@ -3,6 +3,7 @@ import Foundation
 nonisolated struct ItineraryChange: Equatable, Sendable {
     let itinerary: RiderItinerary
     let rebuildFromLegIndex: Int?
+    let replanFromStationID: String?
 }
 
 nonisolated func reduce(
@@ -90,6 +91,7 @@ nonisolated func reduce(
         }
         for index in affected {
             legs[index].profile = profile
+            legs[index].hopOverrides.removeAll()
             if profile == .cleanest { legs[index].allowUnknown = false }
         }
         return changed(
@@ -97,6 +99,21 @@ nonisolated func reduce(
             waypoints: itinerary.waypoints,
             legs: legs,
             rebuildFrom: legID == nil ? 0 : affected.first
+        )
+
+    case .setHopProfile(let legID, let stationID, let profile):
+        guard !stationID.isEmpty,
+              let index = itinerary.legs.firstIndex(where: { $0.id == legID }),
+              itinerary.legs[index].hopOverrides[stationID] != profile
+        else { return unchanged(itinerary) }
+        var legs = itinerary.legs
+        legs[index].hopOverrides[stationID] = profile
+        return changed(
+            itinerary,
+            waypoints: itinerary.waypoints,
+            legs: legs,
+            rebuildFrom: index,
+            replanFromStationID: stationID
         )
 
     case .setAllowUnknown(let legID, let allowUnknown):
@@ -199,7 +216,11 @@ private nonisolated func rebuiltLegs(
 }
 
 private nonisolated func unchanged(_ itinerary: RiderItinerary) -> ItineraryChange {
-    ItineraryChange(itinerary: itinerary, rebuildFromLegIndex: nil)
+    ItineraryChange(
+        itinerary: itinerary,
+        rebuildFromLegIndex: nil,
+        replanFromStationID: nil
+    )
 }
 
 private nonisolated func changed(
@@ -207,7 +228,8 @@ private nonisolated func changed(
     waypoints: [RiderWaypoint],
     legs: [RiderLeg],
     impassableEdgeIDs: Set<String>? = nil,
-    rebuildFrom: Int?
+    rebuildFrom: Int?,
+    replanFromStationID: String? = nil
 ) -> ItineraryChange {
     let itinerary = RiderItinerary(
         waypoints: waypoints,
@@ -215,5 +237,9 @@ private nonisolated func changed(
         generation: prior.generation + 1,
         impassableEdgeIDs: impassableEdgeIDs ?? prior.impassableEdgeIDs
     )
-    return ItineraryChange(itinerary: itinerary, rebuildFromLegIndex: rebuildFrom)
+    return ItineraryChange(
+        itinerary: itinerary,
+        rebuildFromLegIndex: rebuildFrom,
+        replanFromStationID: replanFromStationID
+    )
 }

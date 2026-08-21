@@ -18,12 +18,22 @@ final class ItineraryBuilder {
         reuse: BuiltItinerary?,
         fuel: FuelRangePrefs.Snapshot,
         source policy: RoutingSourcePolicy,
+        replanFromStationID: String? = nil,
         onProgress: @MainActor (BuiltItinerary) -> Void
     ) async -> BuiltItinerary {
         currentGeneration = itinerary.generation
         let startIndex = min(max(0, legIndex), itinerary.legs.count)
         let fuelReplan = fuel.isEnabled && fuel.usableMeters > 0
-        let kept = fuelReplan ? [] : reusableLegs(from: reuse, itinerary: itinerary, before: startIndex)
+        let resume = fuelReplan ? fuelResume(
+            stationID: replanFromStationID,
+            riderLegIndex: startIndex,
+            itinerary: itinerary,
+            reuse: reuse
+        ) : nil
+        let kept: [BuiltLeg] = {
+            if let resume { return resume.kept }
+            return fuelReplan ? [] : reusableLegs(from: reuse, itinerary: itinerary, before: startIndex)
+        }()
         let reusableRoutes = reusableRiderRoutes(from: reuse, itinerary: itinerary, before: startIndex)
         var statuses = Dictionary(
             uniqueKeysWithValues: itinerary.legs.map { ($0.id, LegStatus.pending) }
@@ -66,7 +76,8 @@ final class ItineraryBuilder {
                 baselineHistory[index] = discoveryHistory
                 let riderLeg = itinerary.legs[index]
                 let response: RouteResponse
-                if index < startIndex, let cached = reusableRoutes[riderLeg.id] {
+                if (index < startIndex || (resume != nil && index == startIndex)),
+                   let cached = reuse?.riderRoutes[riderLeg.id] ?? reusableRoutes[riderLeg.id] {
                     response = cached
                 } else {
                     response = try await selectedSource.route(routeRequest(
@@ -164,7 +175,7 @@ final class ItineraryBuilder {
         )
 
         let lastBuildable = baselineFailure?.index ?? itinerary.legs.count
-        let finalStartIndex = fuelReplan ? 0 : startIndex
+        let finalStartIndex = resume == nil && fuelReplan ? 0 : startIndex
         let fuelAttemptBase = committed
         var excludedStationsByLeg = [Int: Set<String>]()
         var forcedFuelLegs = Set<Int>()
@@ -173,11 +184,12 @@ final class ItineraryBuilder {
 
         fuelAttempts: while true {
             if fuelBacktrackAttempts > 0 { committed = fuelAttemptBase }
-            var fuelUsed = fuelReplan ? 0 : carriedFuel(from: kept)
-            var finalHistory = fuelReplan ? EdgeHistory() : EdgeHistory(legs: kept)
+            var fuelUsed = resume != nil ? 0 : (fuelReplan ? 0 : carriedFuel(from: kept))
+            var finalHistory = resume == nil && fuelReplan ? EdgeHistory() : EdgeHistory(legs: kept)
             for index in finalStartIndex..<lastBuildable {
             guard let base = baseline[index] else { break }
             let riderLeg = itinerary.legs[index]
+            let reusedPrefix = index == startIndex ? (resume?.riderLegPrefix ?? []) : []
             do {
                 let builtLegs = try await buildRiderLeg(
                     itinerary: itinerary,
@@ -195,10 +207,11 @@ final class ItineraryBuilder {
                     waypointFuelReset: waypointFuelStops[itinerary.waypoints[index + 1].id],
                     forceFuelStop: forcedFuelLegs.contains(index),
                     excludedStationIDs: excludedStationsByLeg[index] ?? [],
+                    resumeAfterStation: index == startIndex ? resume?.station : nil,
                     onHop: { partial in
                         committed = replacing(
                             riderLegID: riderLeg.id,
-                            with: partial,
+                            with: reusedPrefix + partial,
                             in: committed,
                             status: .pending
                         )
@@ -210,7 +223,7 @@ final class ItineraryBuilder {
                 }
                 committed = replacing(
                     riderLegID: riderLeg.id,
-                    with: builtLegs,
+                    with: reusedPrefix + builtLegs,
                     in: committed,
                     status: .built
                 )
@@ -320,18 +333,42 @@ final class ItineraryBuilder {
         waypointFuelReset: FuelStop?,
         forceFuelStop: Bool,
         excludedStationIDs: Set<String>,
+        resumeAfterStation: FuelStop?,
         onHop: @MainActor ([BuiltLeg]) -> Void
     ) async throws -> [BuiltLeg] {
         let riderLeg = itinerary.legs[index]
-        let from = itinerary.waypoints[index].coordinate
+        let from = resumeAfterStation?.coordinate ?? itinerary.waypoints[index].coordinate
         let to = itinerary.waypoints[index + 1].coordinate
-        let meters = try responseMeters(baseline)
+        var activeProfile = resumeAfterStation?.stationID.flatMap {
+            riderLeg.hopOverrides[$0]
+        } ?? riderLeg.profile
+        func allowUnknown(for profile: RouteProfile) -> Bool {
+            profile == .cleanest ? false : riderLeg.allowUnknown
+        }
+        let effectiveBaseline: RouteResponse
+        if resumeAfterStation != nil {
+            effectiveBaseline = try await source.route(routeRequest(
+                profile: activeProfile,
+                allowUnknown: allowUnknown(for: activeProfile),
+                from: from,
+                to: to,
+                avoidEdgeIDs: itinerary.impassableEdgeIDs,
+                maxPathMeters: nil,
+                history: history
+            ))
+        } else {
+            effectiveBaseline = baseline
+        }
+        let meters = try responseMeters(effectiveBaseline)
         guard fuel.isEnabled, fuel.usableMeters > 0 else {
-            let finalResponse = baselineHistory == history
-                ? baseline
+            let finalResponse = baselineHistory == history && resumeAfterStation == nil
+                ? effectiveBaseline
                 : try await source.route(routeRequest(
-                    itinerary: itinerary,
-                    legIndex: index,
+                    profile: activeProfile,
+                    allowUnknown: allowUnknown(for: activeProfile),
+                    from: from,
+                    to: to,
+                    avoidEdgeIDs: itinerary.impassableEdgeIDs,
                     maxPathMeters: nil,
                     history: history
                 ))
@@ -343,7 +380,8 @@ final class ItineraryBuilder {
                 toCoordinate: to,
                 endsAtFuelStop: nil,
                 response: finalResponse,
-                fuelUsedOnArrivalMeters: fuelUsedAtStart + finalMeters
+                fuelUsedOnArrivalMeters: fuelUsedAtStart + finalMeters,
+                routeProfile: activeProfile
             )]
         }
 
@@ -375,8 +413,9 @@ final class ItineraryBuilder {
                 fromCoordinate: from,
                 toCoordinate: to,
                 endsAtFuelStop: nil,
-                response: baseline,
-                fuelUsedOnArrivalMeters: arrival
+                response: effectiveBaseline,
+                fuelUsedOnArrivalMeters: arrival,
+                routeProfile: activeProfile
             )]
         }
 
@@ -406,10 +445,10 @@ final class ItineraryBuilder {
             let chain: FuelChainResponse
             do {
                 chain = try await source.fuelChain(FuelChainRequest(
-                    profile: riderLeg.profile,
+                    profile: activeProfile,
                     from: windowStart,
                     to: to,
-                    allowUnknown: riderLeg.allowUnknown,
+                    allowUnknown: allowUnknown(for: activeProfile),
                     usableRangeMeters: fuel.usableMeters,
                     firstLegMaxMeters: windowFirstCap,
                     requireFuelStopBeforeEnd: requirePumpBeforeWaypoint || remainingStops > 0,
@@ -424,9 +463,9 @@ final class ItineraryBuilder {
                     arrivalEdgeId: sublegHistory.arrivalEdgeID,
                     backtrackFactor: 4,
                     excludedStationIds: Array(excluded),
-                    windowMaxStops: usesWindows ? 3 : nil,
-                    allowPartialWindow: usesWindows,
-                    windowTimeBudgetMs: usesWindows ? 5_800 : nil
+                    windowMaxStops: !riderLeg.hopOverrides.isEmpty ? 1 : (usesWindows ? 3 : nil),
+                    allowPartialWindow: !riderLeg.hopOverrides.isEmpty || usesWindows,
+                    windowTimeBudgetMs: !riderLeg.hopOverrides.isEmpty || usesWindows ? 5_800 : nil
                 ))
             } catch {
                 let remaining = max(0, Int((fuel.usableMeters - used) / 1000))
@@ -440,14 +479,18 @@ final class ItineraryBuilder {
             let points = [windowStart] + stops.map(\.coordinate) + (chain.reachesDestination ? [to] : [])
             for subIndex in 0..<(points.count - 1) {
                 let cap = subIndex == 0 ? windowFirstCap : fuel.usableMeters
+                let hopProfile = subIndex == 0
+                    ? activeProfile
+                    : (riderLeg.hopOverrides[stops[subIndex - 1].id] ?? riderLeg.profile)
+                let hopAllowUnknown = hopProfile == .cleanest ? false : riderLeg.allowUnknown
                 let request = routeRequest(
-                    profile: riderLeg.profile,
-                    allowUnknown: riderLeg.allowUnknown,
+                    profile: hopProfile,
+                    allowUnknown: hopAllowUnknown,
                     from: points[subIndex],
                     to: points[subIndex + 1],
                     avoidEdgeIDs: itinerary.impassableEdgeIDs,
                     maxPathMeters: cap,
-                    directExtraBudgetMeters: riderLeg.profile == .direct ? 0 : nil,
+                    directExtraBudgetMeters: hopProfile == .direct ? 0 : nil,
                     history: sublegHistory
                 )
                 let response = try await source.route(request)
@@ -472,7 +515,8 @@ final class ItineraryBuilder {
                         toCoordinate: points[subIndex + 1],
                         endsAtFuelStop: stop,
                         response: response,
-                        fuelUsedOnArrivalMeters: 0
+                        fuelUsedOnArrivalMeters: 0,
+                        routeProfile: hopProfile
                     ))
                     excluded.insert(station.id)
                     let stationLog = station.id.isEmpty
@@ -495,7 +539,8 @@ final class ItineraryBuilder {
                         toCoordinate: points[subIndex + 1],
                         endsAtFuelStop: nil,
                         response: response,
-                        fuelUsedOnArrivalMeters: used
+                        fuelUsedOnArrivalMeters: used,
+                        routeProfile: hopProfile
                     ))
                     RoutingDebugLog.shared.event(
                         "fuel carry riderLeg=\(riderLeg.id) used=\(Int(used))"
@@ -506,13 +551,14 @@ final class ItineraryBuilder {
                         )
                     }
                 }
-                if usesWindows { onHop(output) }
+                if usesWindows || !riderLeg.hopOverrides.isEmpty { onHop(output) }
             }
             if chain.reachesDestination { break }
             guard let lastStop = stops.last else {
                 throw RoutingError.server("A fuel window ended without a continuation pump.")
             }
             windowStart = lastStop.coordinate
+            activeProfile = riderLeg.hopOverrides[lastStop.id] ?? riderLeg.profile
             RoutingDebugLog.shared.event(
                 "fuel window riderLeg=\(riderLeg.id) window=\(windowIndex) " +
                     "stops=\(stops.count) committedHops=\(output.count)"
@@ -545,6 +591,35 @@ private func reusableLegs(
     guard let reuse else { return [] }
     let ids = Set(itinerary.legs.prefix(legIndex).map(\.id))
     return reuse.legs.filter { ids.contains($0.riderLegID) }
+}
+
+private struct FuelResume {
+    let station: FuelStop
+    let kept: [BuiltLeg]
+    let riderLegPrefix: [BuiltLeg]
+}
+
+private func fuelResume(
+    stationID: String?,
+    riderLegIndex: Int,
+    itinerary: RiderItinerary,
+    reuse: BuiltItinerary?
+) -> FuelResume? {
+    guard let stationID,
+          itinerary.legs.indices.contains(riderLegIndex),
+          let reuse,
+          let matchIndex = reuse.legs.firstIndex(where: {
+              $0.riderLegID == itinerary.legs[riderLegIndex].id
+                  && $0.endsAtFuelStop?.stationID == stationID
+          }),
+          let station = reuse.legs[matchIndex].endsAtFuelStop
+    else { return nil }
+    let kept = Array(reuse.legs.prefix(through: matchIndex))
+    return FuelResume(
+        station: station,
+        kept: kept,
+        riderLegPrefix: kept.filter { $0.riderLegID == itinerary.legs[riderLegIndex].id }
+    )
 }
 
 private func reusableRiderRoutes(

@@ -5,6 +5,13 @@ ordered list of rider waypoints (`1 → 2 → 3 → …`), the deterministic leg
 them, the current generation, and reported impassable edge IDs. It never contains
 fuel stops, route geometry, or routing progress.
 
+Phase 10 item 8 adds rider intent for generated fuel hops without promoting
+pumps into waypoints: each `RiderLeg` may hold `hopOverrides[stationID] = profile`.
+The key is the station a hop departs from. Changing one override preserves built
+hops through that station and replans forward; changing the leg profile clears
+the leg's overrides. Overrides for stations absent from the replacement chain
+are pruned after a successful build.
+
 `RoutePlannerModel.apply(_:source:)` is the single mutation door. Append, insert,
 move, delete, profile, access, fuel rebuild, and impassable actions go through the
 pure `ItineraryReducer`. Every real change advances the generation and identifies
@@ -22,7 +29,8 @@ The core invariants are:
 - `legs.count == max(0, waypoints.count - 1)`.
 - Each leg connects adjacent waypoint IDs in order.
 - Waypoint IDs are unique and leg IDs are deterministic from their endpoints.
-- Fuel identity exists only in built output.
+- Fuel-stop geometry and ordering exist only in built output; canonical fuel
+  identity appears only as a station-keyed hop profile override.
 - One touch resolves to one of pin, route, or map, in that order.
 
 Every canonical edit emits `itinerary action=… source=… gen=…` with coordinates for

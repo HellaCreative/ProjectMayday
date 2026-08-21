@@ -16,18 +16,39 @@ nonisolated struct RiderLeg: Identifiable, Equatable, Codable, Sendable {
     let to: UUID
     var profile: RouteProfile
     var allowUnknown: Bool
+    /// A generated fuel hop inherits the rider-leg profile unless the pump it
+    /// departs from has an explicit rider override.
+    var hopOverrides: [String: RouteProfile]
 
     init(
         from: UUID,
         to: UUID,
         profile: RouteProfile,
-        allowUnknown: Bool
+        allowUnknown: Bool,
+        hopOverrides: [String: RouteProfile] = [:]
     ) {
         id = RiderItinerary.legID(from: from, to: to)
         self.from = from
         self.to = to
         self.profile = profile
         self.allowUnknown = profile == .cleanest ? false : allowUnknown
+        self.hopOverrides = hopOverrides
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, from, to, profile, allowUnknown, hopOverrides
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        from = try container.decode(UUID.self, forKey: .from)
+        to = try container.decode(UUID.self, forKey: .to)
+        profile = try container.decode(RouteProfile.self, forKey: .profile)
+        allowUnknown = try container.decode(Bool.self, forKey: .allowUnknown)
+        hopOverrides = try container.decodeIfPresent(
+            [String: RouteProfile].self, forKey: .hopOverrides
+        ) ?? [:]
     }
 }
 
@@ -81,6 +102,13 @@ nonisolated struct RiderItinerary: Equatable, Codable, Sendable {
         line: UInt = #line
     ) {
         assert(invariantsHold, "RiderItinerary invariant violation", file: file, line: line)
+    }
+
+    mutating func pruneHopOverrides(to activeStationIDs: [UUID: Set<String>]) {
+        for index in legs.indices where !legs[index].hopOverrides.isEmpty {
+            let active = activeStationIDs[legs[index].id] ?? []
+            legs[index].hopOverrides = legs[index].hopOverrides.filter { active.contains($0.key) }
+        }
     }
 
     /// Stable, process-independent identity for an ordered endpoint pair.

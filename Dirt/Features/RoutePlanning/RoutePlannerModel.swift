@@ -32,6 +32,7 @@ final class RoutePlannerModel {
         let endsAtFuelStop: Bool
         let fuelStopID: String?
         let fuelStopName: String?
+        let departureFuelStopID: String?
         let fuelGroupID: UUID?
         let maxRouteMeters: Double?
 
@@ -39,12 +40,15 @@ final class RoutePlannerModel {
             builtLeg: BuiltLeg,
             riderLeg: RiderLeg,
             status: LegStatus,
-            isFuelExpanded: Bool
+            isFuelExpanded: Bool,
+            departureFuelStopID: String?
         ) {
             riderLegID = riderLeg.id
             start = builtLeg.fromCoordinate
             end = builtLeg.toCoordinate
-            profile = riderLeg.profile
+            profile = builtLeg.routeProfile
+                ?? departureFuelStopID.flatMap { riderLeg.hopOverrides[$0] }
+                ?? riderLeg.profile
             allowUnknown = riderLeg.allowUnknown
             response = builtLeg.response
             if case .pending = status { isRouting = true } else { isRouting = false }
@@ -52,6 +56,7 @@ final class RoutePlannerModel {
             endsAtFuelStop = builtLeg.endsAtFuelStop != nil
             fuelStopID = builtLeg.endsAtFuelStop?.stationID
             fuelStopName = builtLeg.endsAtFuelStop?.name
+            self.departureFuelStopID = departureFuelStopID
             fuelGroupID = isFuelExpanded ? riderLeg.id : nil
             maxRouteMeters = nil
             let suffix = builtLeg.endsAtFuelStop?.stationID
@@ -101,14 +106,21 @@ final class RoutePlannerModel {
         guard let built else { return [] }
         let riderLegs = Dictionary(uniqueKeysWithValues: itinerary.legs.map { ($0.id, $0) })
         let counts = Dictionary(grouping: built.legs, by: \.riderLegID).mapValues(\.count)
+        var departures: [UUID: String] = [:]
         return built.legs.compactMap { builtLeg in
             guard let riderLeg = riderLegs[builtLeg.riderLegID] else { return nil }
-            return Stage(
+            let departure = departures[riderLeg.id]
+            let stage = Stage(
                 builtLeg: builtLeg,
                 riderLeg: riderLeg,
                 status: built.riderLegStatus[riderLeg.id] ?? .pending,
-                isFuelExpanded: (counts[riderLeg.id] ?? 0) > 1
+                isFuelExpanded: (counts[riderLeg.id] ?? 0) > 1,
+                departureFuelStopID: departure
             )
+            if let stationID = builtLeg.endsAtFuelStop?.stationID {
+                departures[riderLeg.id] = stationID
+            }
+            return stage
         }
     }
 
@@ -435,10 +447,18 @@ final class RoutePlannerModel {
             refreshMap()
             return
         }
-        startCanonicalBuild(from: fromLeg, reuse: built)
+        startCanonicalBuild(
+            from: fromLeg,
+            reuse: built,
+            replanFromStationID: change.replanFromStationID
+        )
     }
 
-    private func startCanonicalBuild(from legIndex: Int, reuse: BuiltItinerary?) {
+    private func startCanonicalBuild(
+        from legIndex: Int,
+        reuse: BuiltItinerary?,
+        replanFromStationID: String? = nil
+    ) {
         let requested = itinerary
         canonicalBuildStartCount += 1
         lastCanonicalBuildFromLegIndex = legIndex
@@ -454,7 +474,8 @@ final class RoutePlannerModel {
                 from: legIndex,
                 reuse: reuse,
                 fuel: FuelRangePrefs.snapshot,
-                source: self.routingSourcePolicy
+                source: self.routingSourcePolicy,
+                replanFromStationID: replanFromStationID
             ) { [weak self] progress in
                 guard let self, self.itinerary.generation == progress.generation else { return }
                 self.built = progress
@@ -462,6 +483,13 @@ final class RoutePlannerModel {
             }
             guard !Task.isCancelled, self.itinerary.generation == result.generation else { return }
             self.built = result
+            var activeStations: [UUID: Set<String>] = [:]
+            for leg in result.legs {
+                if let stationID = leg.endsAtFuelStop?.stationID {
+                    activeStations[leg.riderLegID, default: []].insert(stationID)
+                }
+            }
+            self.itinerary.pruneHopOverrides(to: activeStations)
             self.isRouting = false
             self.isAssemblingRoute = false
             self.fuelPlanningStatus = nil
@@ -670,6 +698,23 @@ final class RoutePlannerModel {
     func setStageProfile(_ newProfile: RouteProfile, at index: Int) {
         guard stages.indices.contains(index) else { return }
         apply(.setProfile(legID: stages[index].riderLegID, newProfile), source: "card")
+    }
+
+    func setFuelHopProfile(_ newProfile: RouteProfile, at index: Int) {
+        guard stages.indices.contains(index) else { return }
+        let stage = stages[index]
+        if let stationID = stage.departureFuelStopID {
+            apply(
+                .setHopProfile(
+                    legID: stage.riderLegID,
+                    stationID: stationID,
+                    newProfile
+                ),
+                source: "card-hop"
+            )
+        } else {
+            apply(.setProfile(legID: stage.riderLegID, newProfile), source: "card-hop-first")
+        }
     }
 
     /// Per-stage unknown-access policy.
@@ -2365,7 +2410,8 @@ final class RoutePlannerModel {
             toCoordinate: old.toCoordinate,
             endsAtFuelStop: old.endsAtFuelStop,
             response: applied,
-            fuelUsedOnArrivalMeters: old.fuelUsedOnArrivalMeters
+            fuelUsedOnArrivalMeters: old.fuelUsedOnArrivalMeters,
+            routeProfile: old.routeProfile
         )
         var statuses = current.riderLegStatus
         statuses[old.riderLegID] = .built
