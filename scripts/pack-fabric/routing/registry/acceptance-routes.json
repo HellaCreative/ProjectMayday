@@ -649,6 +649,65 @@
           "maximumDirtBackwardPercent": 40
         }
       ]
+    },
+    "yt": {
+      "fuelMinimum": 50,
+      "routes": [
+        {
+          "id": "long-watson-lake-dawson",
+          "from": {
+            "lat": 60.063,
+            "lon": -128.709,
+            "label": "Watson Lake"
+          },
+          "to": {
+            "lat": 64.044,
+            "lon": -139.43,
+            "label": "Dawson City"
+          },
+          "minimumDirtPercent": 40,
+          "minimumDirtAllowUnknownPercent": 50,
+          "balancedTolerance": 25,
+          "maximumCleanDirtPercent": 15,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "urban-whitehorse-carcross",
+          "from": {
+            "lat": 60.721,
+            "lon": -135.057,
+            "label": "Whitehorse"
+          },
+          "to": {
+            "lat": 60.166,
+            "lon": -134.704,
+            "label": "Carcross"
+          },
+          "minimumDirtPercent": 30,
+          "minimumDirtAllowUnknownPercent": 40,
+          "balancedTolerance": 25,
+          "maximumCleanDirtPercent": 15,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "short-haines-junction-destruction-bay",
+          "from": {
+            "lat": 60.752,
+            "lon": -137.511,
+            "label": "Haines Junction"
+          },
+          "to": {
+            "lat": 61.252,
+            "lon": -138.801,
+            "label": "Destruction Bay"
+          },
+          "minimumDirtPercent": 40,
+          "minimumDirtAllowUnknownPercent": 50,
+          "balancedTolerance": 25,
+          "maximumCleanDirtPercent": 15,
+          "maximumDirtBackwardPercent": 40
+        }
+      ]
     }
   }
 }
