@@ -826,6 +826,65 @@
           "maximumDirtBackwardPercent": 50
         }
       ]
+    },
+    "id": {
+      "fuelMinimum": 800,
+      "routes": [
+        {
+          "id": "long-lewiston-idaho-falls",
+          "from": {
+            "lat": 46.4165,
+            "lon": -117.0177,
+            "label": "Lewiston"
+          },
+          "to": {
+            "lat": 43.4917,
+            "lon": -112.0339,
+            "label": "Idaho Falls"
+          },
+          "minimumDirtPercent": 40,
+          "minimumDirtAllowUnknownPercent": 50,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 10,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "urban-nampa-meridian",
+          "from": {
+            "lat": 43.5407,
+            "lon": -116.5635,
+            "label": "Nampa"
+          },
+          "to": {
+            "lat": 43.6121,
+            "lon": -116.3915,
+            "label": "Meridian"
+          },
+          "minimumDirtPercent": 20,
+          "minimumDirtAllowUnknownPercent": 30,
+          "balancedTolerance": 25,
+          "maximumCleanDirtPercent": 15,
+          "maximumDirtBackwardPercent": 45
+        },
+        {
+          "id": "short-mccall-cascade",
+          "from": {
+            "lat": 44.911,
+            "lon": -116.098,
+            "label": "McCall"
+          },
+          "to": {
+            "lat": 44.516,
+            "lon": -116.042,
+            "label": "Cascade"
+          },
+          "minimumDirtPercent": 40,
+          "minimumDirtAllowUnknownPercent": 50,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 10,
+          "maximumDirtBackwardPercent": 40
+        }
+      ]
     }
   }
 }
