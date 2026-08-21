@@ -119,7 +119,10 @@ function caseID(item) {
   ].join("/");
 }
 
-function requestBody(profile, allowUnknown, from, to, history, maxPathMeters, directExtraBudgetMeters) {
+function requestBody(
+  profile, allowUnknown, from, to, history, maxPathMeters, directExtraBudgetMeters,
+  logSnap = false
+) {
   const options = {
     sessionSeed: SESSION_SEED,
     priorEdgeIds: [...history.edgeIDs],
@@ -128,6 +131,7 @@ function requestBody(profile, allowUnknown, from, to, history, maxPathMeters, di
   };
   if (Number.isFinite(maxPathMeters)) options.maxPathMeters = maxPathMeters;
   if (Number.isFinite(directExtraBudgetMeters)) options.directExtraBudgetMeters = directExtraBudgetMeters;
+  if (logSnap) options.logSnap = true;
   return {
     profile: PROFILE_API[profile],
     locations: [from, to],
@@ -254,7 +258,8 @@ async function routeCase(item, shortestMeters) {
     const response = requireComplete(await timed(
       () => routeRequest(requestBody(
         item.profile, item.allowUnknown, points[index], points[index + 1],
-        discoveryHistory, undefined, directLegBudget
+        discoveryHistory, undefined, directLegBudget,
+        item.route.id === "through-halifax"
       )),
       timings
     ), `baseline leg ${index + 1}`);

@@ -539,7 +539,7 @@ function matchPoint(
   if (!best || best.distanceM > matchMeters) {
     return {
       ok: false,
-      reason: "no_eligible_edge_within_match_limit",
+      reason: "snap_no_eligible_edge",
       matchLimitMeters: matchMeters,
       nearestMeters: best ? Math.round(best.distanceM) : null
     };
@@ -1865,17 +1865,32 @@ async function routeOnRuntime(body, graphResolution, runtime) {
     }
   }
 
+  // Snap selection is part of the routing contract. Log the final edge and
+  // access class after component reconciliation so a device/server trace can
+  // prove whether profiles started from the same eligible graph fabric.
+  if (options.logSnap === true) {
+    console.log(
+      "route snap profile=" + profile +
+      " startEdge=" + (startMatch.ok ? startMatch.edgeId : "none") +
+      " startAccess=" + (startMatch.ok ? startMatch.accessClass : startMatch.reason) +
+      " endEdge=" + (endMatch.ok ? endMatch.edgeId : "none") +
+      " endAccess=" + (endMatch.ok ? endMatch.accessClass : endMatch.reason)
+    );
+  }
+
   if (!startMatch.ok || !endMatch.ok) {
+    const noEligible = startMatch.reason === "snap_no_eligible_edge" ||
+      endMatch.reason === "snap_no_eligible_edge";
     return {
       status: "failed",
       profile,
       accessPolicy: policy,
-      error: "match_failed",
+      error: noEligible ? "snap_no_eligible_edge" : "match_failed",
       message: !startMatch.ok
         ? "No eligible edge within " + limit + " m of start"
         : "No eligible edge within " + limit + " m of destination",
       warnings: [{
-        code: "match_failed",
+        code: noEligible ? "snap_no_eligible_edge" : "match_failed",
         message: "Could not snap to an eligible graph edge. No free-space connector was created."
       }],
       debug: {
