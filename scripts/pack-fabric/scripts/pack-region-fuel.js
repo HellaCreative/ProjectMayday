@@ -30,7 +30,57 @@ const OSM_SLUG = {
   yt: "yukon",
   nt: "northwest-territories",
   nu: "nunavut",
-  wa: "washington"
+  wa: "washington",
+  ak: "alaska",
+  al: "alabama",
+  ar: "arkansas",
+  az: "arizona",
+  ca: "california",
+  co: "colorado",
+  ct: "connecticut",
+  dc: "district-of-columbia",
+  de: "delaware",
+  fl: "florida",
+  ga: "georgia",
+  hi: "hawaii",
+  ia: "iowa",
+  id: "idaho",
+  il: "illinois",
+  in: "indiana",
+  ks: "kansas",
+  ky: "kentucky",
+  la: "louisiana",
+  ma: "massachusetts",
+  md: "maryland",
+  me: "maine",
+  mi: "michigan",
+  mn: "minnesota",
+  mo: "missouri",
+  ms: "mississippi",
+  mt: "montana",
+  nc: "north-carolina",
+  nd: "north-dakota",
+  ne: "nebraska",
+  nh: "new-hampshire",
+  nj: "new-jersey",
+  nm: "new-mexico",
+  nv: "nevada",
+  ny: "new-york",
+  oh: "ohio",
+  ok: "oklahoma",
+  or: "oregon",
+  pa: "pennsylvania",
+  ri: "rhode-island",
+  sc: "south-carolina",
+  sd: "south-dakota",
+  tn: "tennessee",
+  tx: "texas",
+  ut: "utah",
+  va: "virginia",
+  vt: "vermont",
+  wi: "wisconsin",
+  wv: "west-virginia",
+  wy: "wyoming"
 };
 
 const id = String(process.argv[2] || "").toLowerCase();
@@ -45,7 +95,7 @@ if (!fs.existsSync(seq)) {
   console.error(
     "Run: bash scripts/pack-fabric/scripts/extract-osm-fuel.sh " +
       OSM_SLUG[id] +
-      (id === "wa" ? " us" : " canada")
+      (["wa","al","ak","az","ar","ca","co","ct","de","fl","ga","hi","id","il","in","ia","ks","ky","la","me","md","ma","mi","mn","ms","mo","mt","ne","nv","nh","nj","nm","ny","nc","nd","oh","ok","or","pa","ri","sc","sd","tn","tx","ut","vt","va","wv","wi","wy","dc"].includes(id) ? " us" : " canada")
   );
   process.exit(1);
 }
