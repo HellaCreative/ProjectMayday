@@ -182,7 +182,42 @@ candidate uploaded: https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/candidat
 tag: pack-nt-osm-20260821-01
 ```
 
-## Promote commands (not run)
+
+```
+region: nu   release-id: nu-osm-20260821-01   geofabrik ts: 2026-08-20T20:20:51Z   pbf sha: 8f10f6fe96b11c15b425540aa9090c49d4da8889357ee468722b92c83e84ae5a
+steps 1–7: ok (empty urban cores written after pack-region-urban refused zero cores)
+audit contradictions: 0     non-OSM edges: 0
+stitches: 306  free-space: 0
+largest permissive component: 8.30% of edges (island-scattered)
+urban cores: 0 hard / 0 scored
+seams built: (none)           seams deferred: mb-nu, nt-nu (no shared land OSM vertex)
+route acceptance: 9/15 — red: long-rankin-cambridge all 5 no route; urban-iqaluit-apex dirt < balanced
+candidate uploaded: https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/candidates/nu-osm-20260821-01   promoted: NO
+tag: pack-nu-osm-20260821-01
+```
+
+## Session status
+
+**Canada complete** (NS frozen untouched). **US states not started** — resume from tag `pack-nu-osm-20260821-01` with order `id`, `mt`, `or`, then A–Z remainder; add Geofabrik slug mappings per state as needed.
+
+### Latest live candidates (promote when physical OK)
+
+```
+node scripts/pack-fabric/scripts/ship-routing.js --promote bc-osm-20260821-04 --pack bc --live --assert
+node scripts/pack-fabric/scripts/ship-routing.js --promote ab-osm-20260821-02 --pack ab --live --assert
+node scripts/pack-fabric/scripts/ship-routing.js --promote wa-osm-20260821-02 --pack wa --live --assert
+node scripts/pack-fabric/scripts/ship-routing.js --promote sk-osm-20260821-02 --pack sk --live --assert
+node scripts/pack-fabric/scripts/ship-routing.js --promote mb-osm-20260821-02 --pack mb --live --assert
+node scripts/pack-fabric/scripts/ship-routing.js --promote on-osm-20260821-02 --pack on --live --assert
+node scripts/pack-fabric/scripts/ship-routing.js --promote qc-osm-20260821-02 --pack qc --live --assert
+node scripts/pack-fabric/scripts/ship-routing.js --promote nb-osm-20260821-02 --pack nb --live --assert
+node scripts/pack-fabric/scripts/ship-routing.js --promote pe-osm-20260821-01 --pack pe --live --assert
+node scripts/pack-fabric/scripts/ship-routing.js --promote nl-osm-20260821-01 --pack nl --live --assert
+node scripts/pack-fabric/scripts/ship-routing.js --promote yt-osm-20260821-01 --pack yt --live --assert
+node scripts/pack-fabric/scripts/ship-routing.js --promote nt-osm-20260821-01 --pack nt --live --assert
+node scripts/pack-fabric/scripts/ship-routing.js --promote nu-osm-20260821-01 --pack nu --live --assert
+```
+
 
 ```
 node scripts/pack-fabric/scripts/ship-routing.js --promote sk-osm-20260821-01 --pack sk --live --assert

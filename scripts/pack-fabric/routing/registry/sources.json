@@ -560,9 +560,9 @@
         "format": "GeoPackage",
         "license": "Open Government Licence - Canada",
         "adapter": "nrn",
-        "status": "ready",
+        "status": "deferred",
         "dateRetrieved": "2026-07-20",
-        "notes": "NRN ROADSEG ingested as national backbone artifact. Not product routing-ready until audit validation + supplement policy applied."
+        "notes": "NRN omitted from routing fabric (OSM-only). NRN ROADSEG ingested as national backbone artifact. Not product routing-ready until audit validation + supplement policy applied."
       },
       "provincial": {
         "sourceName": "Nunavut Geoportal",
@@ -570,16 +570,25 @@
         "format": "GIS portal",
         "license": "verify before ingest",
         "adapter": null,
-        "status": "blocked",
-        "notes": "Portal historically unreachable; limited dual-sport forestry relevance."
+        "status": "deferred",
+        "notes": "Inactive during the foundational OSM-only phase. Adapter/data are retained for later controlled evaluation and are not in this pack."
       },
       "routingReady": true,
-      "routingMode": "nrn-backbone",
+      "routingMode": "osm-only",
       "backboneArtifact": {
         "path": "routing/data/regions/nu/graph.v1.json.gz",
-        "edgeCount": 5100,
-        "nodeCount": 3912,
-        "gzBytes": 664453
+        "edgeCount": 8530,
+        "nodeCount": 7169,
+        "gzBytes": 727354
+      },
+      "osm": {
+        "adapter": "osm-roads",
+        "role": "sole-fabric",
+        "status": "ready",
+        "featureCount": 4885,
+        "added": 4885,
+        "license": "OpenStreetMap contributors (ODbL)",
+        "dateRetrieved": "2026-08-21"
       }
     }
   ]
