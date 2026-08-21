@@ -118,6 +118,15 @@ not an ineligible snapped edge.
 
 ## Awaiting production and physical validation
 
+Deployment status at 2026-08-21 17:24 America/Halifax:
+
+- The Phase 11 production deployment was attempted and rejected by Vercel with
+  `api-deployments-free-per-day` because the project exceeded 100 deployments in
+  24 hours. No new production deployment was created or promoted.
+- A signed Debug build for White succeeded and White is connected. It has not
+  been installed because the client and live fuel service must be released as a
+  matching pair.
+
 The following are not complete until the matching routing service and client are
 deployed and exercised on White:
 
