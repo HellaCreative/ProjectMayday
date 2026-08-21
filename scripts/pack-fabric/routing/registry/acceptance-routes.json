@@ -590,6 +590,65 @@
           "maximumDirtBackwardPercent": 40
         }
       ]
+    },
+    "nl": {
+      "fuelMinimum": 300,
+      "routes": [
+        {
+          "id": "long-port-aux-basques-st-johns",
+          "from": {
+            "lat": 47.572,
+            "lon": -59.136,
+            "label": "Port aux Basques"
+          },
+          "to": {
+            "lat": 47.561,
+            "lon": -52.712,
+            "label": "St. John's"
+          },
+          "minimumDirtPercent": 30,
+          "minimumDirtAllowUnknownPercent": 40,
+          "balancedTolerance": 25,
+          "maximumCleanDirtPercent": 15,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "urban-mount-pearl-cbs",
+          "from": {
+            "lat": 47.519,
+            "lon": -52.807,
+            "label": "Mount Pearl"
+          },
+          "to": {
+            "lat": 47.517,
+            "lon": -52.968,
+            "label": "Conception Bay South"
+          },
+          "minimumDirtPercent": 15,
+          "minimumDirtAllowUnknownPercent": 25,
+          "balancedTolerance": 25,
+          "maximumCleanDirtPercent": 15,
+          "maximumDirtBackwardPercent": 45
+        },
+        {
+          "id": "short-gander-lewisporte",
+          "from": {
+            "lat": 48.956,
+            "lon": -54.609,
+            "label": "Gander"
+          },
+          "to": {
+            "lat": 49.249,
+            "lon": -55.06,
+            "label": "Lewisporte"
+          },
+          "minimumDirtPercent": 30,
+          "minimumDirtAllowUnknownPercent": 40,
+          "balancedTolerance": 25,
+          "maximumCleanDirtPercent": 15,
+          "maximumDirtBackwardPercent": 40
+        }
+      ]
     }
   }
 }
