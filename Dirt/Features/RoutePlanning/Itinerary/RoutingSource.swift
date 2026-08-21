@@ -344,7 +344,9 @@ private extension RouteResponse {
             dirtPercentValue: nil, pavedPercentValue: nil,
             backtrackMeters: repeatedMeters,
             backtrackPct: repeatedPct,
-            backtrackReason: repeatedMeters > 0 ? "dead_end_or_only_connector" : nil
+            backtrackReason: repeatedMeters > 0 ? "dead_end_or_only_connector" : nil,
+            restrictedMeters: 0,
+            restrictedReason: nil
         )
     }
 }

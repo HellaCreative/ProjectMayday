@@ -216,9 +216,10 @@ struct FuelChainStop: Codable, Sendable {
     let brand: String?
     let address: String?
     let graphMeters: Double?
+    var dirtPercent: Int? = nil
 
     enum CodingKeys: String, CodingKey {
-        case id, name, brand, address, graphMeters
+        case id, name, brand, address, graphMeters, dirtPercent
         case latitude = "lat"
         case longitude = "lon"
     }
@@ -239,6 +240,13 @@ struct FuelChainDiagnostics: Codable, Sendable {
     let dijkstraPops: Int?
     let matchedFuel: Int?
     let elapsedMs: Int?
+    var candidateK: Int? = nil
+}
+
+struct FuelStationCandidate: Codable, Sendable {
+    let id: String
+    let meters: Double
+    let dirtPct: Int
 }
 
 struct FuelChainResponse: Codable, Sendable {
@@ -249,6 +257,7 @@ struct FuelChainResponse: Codable, Sendable {
     let stops: [FuelChainStop]?
     let graphMeters: [Double]?
     let diagnostics: FuelChainDiagnostics?
+    var stationCandidates: [FuelStationCandidate]? = nil
 
     var isComplete: Bool { status == "complete" }
 }
@@ -470,11 +479,14 @@ struct RouteResponse: Codable, Sendable {
     var backtrackMeters: Double? = nil
     var backtrackPct: Double? = nil
     var backtrackReason: String? = nil
+    var restrictedMeters: Double? = nil
+    var restrictedReason: String? = nil
     var debug: RouteResponseDebug? = nil
 
     enum CodingKeys: String, CodingKey {
         case status, error, message, distanceMeters, geometry, segments, stats, maneuvers, warnings, debug
         case backtrackMeters, backtrackPct, backtrackReason
+        case restrictedMeters, restrictedReason
         case estimatedMovingSeconds, estimatedElapsedSeconds
         case dirtPercentValue = "dirtPercent"
         case pavedPercentValue = "pavedPercent"

@@ -131,6 +131,14 @@ final class ItineraryBuilder {
                     "build leg riderLeg=\(riderLeg.id) priorEdges=\(requestPriorCount) " +
                         "arrivalEdge=\(requestArrival) backtrackPct=\(String(format: "%.1f", backtrackPct))"
                 )
+                let restrictedMeters = builtLegs.reduce(0.0) {
+                    $0 + ($1.response.restrictedMeters ?? 0)
+                }
+                let restrictedReason = builtLegs.compactMap(\.response.restrictedReason).first ?? "none"
+                RoutingDebugLog.shared.event(
+                    "build leg riderLeg=\(riderLeg.id) restrictedMeters=\(Int(restrictedMeters)) " +
+                        "restrictedReason=\(restrictedReason)"
+                )
                 onProgress(committed)
             } catch is CancellationError {
                 return dropped(itinerary, committed: committed, cancelled: true)
@@ -295,6 +303,11 @@ final class ItineraryBuilder {
                     : station.id
                 RoutingDebugLog.shared.event(
                     "fuel reset riderLeg=\(riderLeg.id) station=\(stationLog)"
+                )
+                RoutingDebugLog.shared.event(
+                    "fuel station chosen riderLeg=\(riderLeg.id) station=\(stationLog) " +
+                        "dirt%=\(response.dirtPercent) meters=\(Int(subMeters)) " +
+                        "candidates=\(chain.stationCandidates?.count ?? 0)"
                 )
                 used = 0
             } else {

@@ -15,7 +15,8 @@ const {
   matchPoint,
   normalizePolicy,
   accessAllowed,
-  resolveChainSeamWaypoints
+  resolveChainSeamWaypoints,
+  routeRequest
 } = require("./router");
 const {
   resolveGraphRequest,
@@ -297,11 +298,13 @@ function rankForwardFuel(
     })
     .filter((row) => row.useful);
   const preferred = scored.filter((row) => row.graphMeters <= preferredMax);
-  const pool = preferred.length ? preferred : scored;
-  return pool.sort((a, b) => b.score - a.score || a.graphMeters - b.graphMeters);
+  const overflow = scored.filter((row) => row.graphMeters > preferredMax);
+  return preferred
+    .sort((a, b) => b.score - a.score || a.graphMeters - b.graphMeters)
+    .concat(overflow.sort((a, b) => b.score - a.score || a.graphMeters - b.graphMeters));
 }
 
-function planFuelChainOnRuntime({
+async function planFuelChainOnRuntime({
   runtime,
   stations,
   start,
@@ -315,6 +318,9 @@ function planFuelChainOnRuntime({
   priorEdgeIds = [],
   arrivalEdgeId = null,
   backtrackFactor = 4,
+  routeCandidate = null,
+  candidateK = 6,
+  hopTimeBudgetMs = 4_000,
   maxStops = 12,
   maxStates = 24
 }) {
@@ -351,13 +357,16 @@ function planFuelChainOnRuntime({
   let dijkstraPops = 0;
   const started = Date.now();
   const memo = new Map();
+  const stationCandidates = [];
+  let effectiveK = Math.max(1, Math.min(6, Number(candidateK) || 6));
 
-  function reachableFrom(currentKey, currentMatch, capMeters) {
-    const memoKey = `${currentKey}:${Math.round(capMeters)}`;
+  function reachableFrom(currentKey, currentMatch, capMeters, history, arrival) {
+    const historyKey = [...history].sort().join(",");
+    const memoKey = `${currentKey}:${Math.round(capMeters)}:${arrival || "-"}:${historyKey}`;
     if (memo.has(memoKey)) return memo.get(memoKey);
     const graph = boundedGraphDistances(
       runtime, currentMatch, policy, capMeters, avoidEdgeIds,
-      priorEdgeIds, arrivalEdgeId, backtrackFactor
+      [...history], arrival, backtrackFactor
     );
     dijkstraPops += graph.pops;
     const destinationMeters = distanceToMatch(
@@ -378,12 +387,90 @@ function planFuelChainOnRuntime({
     return result;
   }
 
-  function search(currentKey, currentLocation, currentMatch, visited, depth) {
+  async function evaluatedRoutes(ranked, currentLocation, cap, history, arrival) {
+    const candidates = ranked.slice(0, effectiveK);
+    const hopStarted = Date.now();
+    const evaluate = routeCandidate || (async ({ candidate, from, maxMeters }) => routeRequest({
+      profile,
+      locations: [from, candidate.location],
+      accessPolicy: rawPolicy,
+      options: {
+        avoidEdgeIds,
+        priorEdgeIds: [...history],
+        arrivalEdgeId: arrival,
+        backtrackFactor,
+        maxPathMeters: maxMeters
+      }
+    }));
+    const rows = await Promise.all(candidates.map(async (candidate, rank) => {
+      try {
+        const response = await evaluate({
+          candidate,
+          from: currentLocation,
+          maxMeters: cap,
+          profile,
+          accessPolicy: rawPolicy,
+          priorEdgeIds: [...history],
+          arrivalEdgeId: arrival,
+          backtrackFactor
+        });
+        const meters = Number(response && response.distanceMeters);
+        const dirtPct = Number(response && response.stats && response.stats.dirtPercent);
+        const fits = response && response.status === "complete"
+          && Number.isFinite(meters) && meters <= cap + 1;
+        const row = {
+          candidate,
+          response,
+          rank,
+          meters: Number.isFinite(meters) ? meters : candidate.graphMeters,
+          dirtPct: Number.isFinite(dirtPct) ? dirtPct : 0,
+          fits
+        };
+        stationCandidates.push({
+          id: String(candidate.station.id),
+          meters: Math.round(row.meters),
+          dirtPct: row.dirtPct
+        });
+        return row;
+      } catch (_) {
+        stationCandidates.push({
+          id: String(candidate.station.id),
+          meters: Math.round(candidate.graphMeters),
+          dirtPct: 0
+        });
+        return { candidate, response: null, rank, meters: candidate.graphMeters, dirtPct: 0, fits: false };
+      }
+    }));
+    const elapsed = Date.now() - hopStarted;
+    if (elapsed > hopTimeBudgetMs && effectiveK > 3) {
+      effectiveK = 3;
+      console.warn(`fuel candidate K reduced=3 elapsedMs=${elapsed}`);
+    }
+    const fitting = rows.filter((row) => row.fits);
+    switch (String(profile || "").toLowerCase()) {
+      case "dirt":
+        fitting.sort((a, b) => b.dirtPct - a.dirtPct || a.meters - b.meters);
+        break;
+      case "balanced":
+        fitting.sort((a, b) =>
+          Math.abs(a.dirtPct - 50) - Math.abs(b.dirtPct - 50) || a.meters - b.meters
+        );
+        break;
+      case "cleanest":
+        fitting.sort((a, b) => a.dirtPct - b.dirtPct || a.meters - b.meters);
+        break;
+      default:
+        fitting.sort((a, b) => a.rank - b.rank || a.meters - b.meters);
+    }
+    return fitting;
+  }
+
+  async function search(currentKey, currentLocation, currentMatch, visited, depth, history, arrival) {
     if (states >= maxStates || depth > maxStops) return null;
     states += 1;
     const cap = depth === 0 ? firstLegMaxMeters : usableRangeMeters;
     if (!(cap > 0)) return null;
-    const reach = reachableFrom(currentKey, currentMatch, cap);
+    const reach = reachableFrom(currentKey, currentMatch, cap, history, arrival);
     if (
       Number.isFinite(reach.destinationMeters) &&
       reach.destinationMeters <= cap &&
@@ -403,22 +490,43 @@ function planFuelChainOnRuntime({
     );
     // This is bounded graph look-ahead, not full route probing. Six branches
     // are enough to escape a closed service-road pump without exponential work.
-    for (const candidate of ranked.slice(0, 6)) {
+    const evaluated = await evaluatedRoutes(ranked, currentLocation, cap, history, arrival);
+    for (const evaluation of evaluated) {
       if (states >= maxStates) break;
+      const candidate = evaluation.candidate;
       const id = String(candidate.station.id);
       const nextVisited = new Set(visited);
       nextVisited.add(id);
-      const tail = search(id, candidate.location, candidate.match, nextVisited, depth + 1);
+      const nextHistory = new Set(history);
+      let nextArrival = arrival;
+      for (const segment of (evaluation.response && evaluation.response.segments) || []) {
+        const edgeId = segment && segment.edgeId != null ? String(segment.edgeId) : "";
+        if (!edgeId) continue;
+        nextHistory.add(edgeId);
+        nextArrival = edgeId;
+      }
+      const tail = await search(
+        id, candidate.location, candidate.match, nextVisited, depth + 1,
+        nextHistory, nextArrival
+      );
       if (!tail) continue;
       return {
-        stops: [{ ...candidate.station, graphMeters: candidate.graphMeters }].concat(tail.stops),
-        graphMeters: [candidate.graphMeters].concat(tail.graphMeters)
+        stops: [{
+          ...candidate.station,
+          graphMeters: evaluation.meters,
+          dirtPercent: evaluation.dirtPct
+        }].concat(tail.stops),
+        graphMeters: [evaluation.meters].concat(tail.graphMeters)
       };
     }
     return null;
   }
 
-  const chain = search("start", start, startMatch, new Set(), 0);
+  const chain = await search(
+    "start", start, startMatch, new Set(), 0,
+    new Set((priorEdgeIds || []).map(String)),
+    arrivalEdgeId == null ? null : String(arrivalEdgeId)
+  );
   if (!chain) {
     return {
       ok: false,
@@ -428,6 +536,8 @@ function planFuelChainOnRuntime({
         states,
         dijkstraPops,
         matchedFuel: targets.fuelTargets.length,
+        candidateK: effectiveK,
+        stationCandidates,
         elapsedMs: Date.now() - started
       }
     };
@@ -437,11 +547,13 @@ function planFuelChainOnRuntime({
     ok: true,
     stops: chain.stops,
     graphMeters: chain.graphMeters,
+    stationCandidates,
     diagnostics: {
       strategy: "forward_graph_reachability",
       states,
       dijkstraPops,
       matchedFuel: targets.fuelTargets.length,
+      candidateK: effectiveK,
       elapsedMs: Date.now() - started
     }
   };
@@ -474,6 +586,7 @@ async function planCrossRegionFuelChain(body, selection, fuelOptions, dependenci
   let fuelUsedMeters = Math.max(0, usableRangeMeters - initialCap);
   const allStops = [];
   const graphMeters = [];
+  const stationCandidates = [];
   let totalStates = 0;
   let totalPops = 0;
   let matchedFuel = 0;
@@ -509,7 +622,7 @@ async function planCrossRegionFuelChain(body, selection, fuelOptions, dependenci
       profile: body.profile
     });
     const cap = usableRangeMeters - fuelUsedMeters;
-    const planned = planFuelChainOnRuntime({
+    const planned = await planFuelChainOnRuntime({
       runtime,
       stations: fuel.stations,
       start: hopStart,
@@ -537,6 +650,7 @@ async function planCrossRegionFuelChain(body, selection, fuelOptions, dependenci
 
     allStops.push(...planned.stops);
     graphMeters.push(...planned.graphMeters);
+    stationCandidates.push(...(planned.stationCandidates || []));
     totalStates += Number(planned.diagnostics && planned.diagnostics.states) || 0;
     totalPops += Number(planned.diagnostics && planned.diagnostics.dijkstraPops) || 0;
     matchedFuel += Number(planned.diagnostics && planned.diagnostics.matchedFuel) || 0;
@@ -570,6 +684,7 @@ async function planCrossRegionFuelChain(body, selection, fuelOptions, dependenci
     regionIds: selection.regionIds,
     stops: allStops,
     graphMeters,
+    stationCandidates,
     diagnostics: {
       strategy: "forward_graph_reachability_across_seams",
       states: totalStates,
@@ -636,7 +751,7 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
     profile: body.profile
   });
   const options = body.options || {};
-  const planned = planFuelChainOnRuntime({
+  const planned = await planFuelChainOnRuntime({
     runtime,
     stations: fuel.stations,
     start: locations[0],
@@ -659,6 +774,7 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
     regionIds: fuel.regionIds,
     stops: planned.stops || [],
     graphMeters: planned.graphMeters || [],
+    stationCandidates: planned.stationCandidates || [],
     diagnostics: planned.diagnostics || null
   };
 }

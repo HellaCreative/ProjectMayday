@@ -133,6 +133,20 @@ function backtrackSummary(path, priorEdgeIds) {
   };
 }
 
+function restrictedSummary(path) {
+  const meters = ((path && path.segments) || []).reduce((sum, segment) =>
+    String(segment.accessClass || "") === "motorized_restricted"
+      ? sum + (Number(segment.distanceMeters) || 0)
+      : sum,
+  0);
+  return {
+    restrictedMeters: Math.round(meters),
+    // Restricted edges are filtered before relaxation. Seeing one here is an
+    // auditable correctness failure, never an implicit permission fallback.
+    restrictedReason: meters > 0 ? "filter_miss" : null
+  };
+}
+
 function projectOnSegment(point, a, b) {
   const [px, py] = point;
   const [ax, ay] = a;
@@ -2210,6 +2224,7 @@ async function routeOnRuntime(body, graphResolution, runtime) {
   );
   const lowDirt = isLowDirtRoute(profile, path);
   const backtrack = backtrackSummary(path, priorEdgeIds);
+  const restricted = restrictedSummary(path);
 
   return {
     status: "complete",
@@ -2221,6 +2236,7 @@ async function routeOnRuntime(body, graphResolution, runtime) {
     geometry: path.geometry,
     distanceMeters: Math.round(path.distanceMeters),
     ...backtrack,
+    ...restricted,
     estimatedMovingSeconds: Math.round(path.movingSeconds),
     estimatedElapsedSeconds: Math.round(path.movingSeconds * 1.15),
     stats: path.stats,
@@ -3150,5 +3166,6 @@ module.exports = {
   fallbackReasonFor,
   clippedDirtMeters,
   isLowDirtRoute,
-  backtrackSummary
+  backtrackSummary,
+  restrictedSummary
 };

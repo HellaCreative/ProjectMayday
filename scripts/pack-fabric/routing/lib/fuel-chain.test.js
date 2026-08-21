@@ -54,8 +54,8 @@ function station(id, lon) {
   return { id, name: id, lat: 45, lon };
 }
 
-test("fuel chain is constructed forward from graph-reachable pumps", () => {
-  const result = planFuelChainOnRuntime({
+test("fuel chain is constructed forward from graph-reachable pumps", async () => {
+  const result = await planFuelChainOnRuntime({
     runtime: lineRuntime(),
     stations: [station("f1", 1), station("f2", 2), station("f3", 3)],
     start: { lat: 45, lon: 0 },
@@ -63,7 +63,13 @@ test("fuel chain is constructed forward from graph-reachable pumps", () => {
     profile: "dirt",
     accessPolicy: { motorizedPermissive: true, motorizedUnknown: false },
     usableRangeMeters: 90_000,
-    firstLegMaxMeters: 90_000
+    firstLegMaxMeters: 90_000,
+    routeCandidate: ({ candidate }) => Promise.resolve({
+      status: "complete",
+      distanceMeters: candidate.graphMeters,
+      stats: { dirtPercent: 0 },
+      segments: []
+    })
   });
 
   assert.equal(result.ok, true);
@@ -88,8 +94,8 @@ test("fuel ranking rejects a geographically backward pump", () => {
   assert.deepEqual(ranked.map((row) => row.station.id), ["forward"]);
 });
 
-test("short route does not manufacture a fuel plan", () => {
-  const result = planFuelChainOnRuntime({
+test("short route does not manufacture a fuel plan", async () => {
+  const result = await planFuelChainOnRuntime({
     runtime: lineRuntime(),
     stations: [station("f1", 1)],
     start: { lat: 45, lon: 0 },
