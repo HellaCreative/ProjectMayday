@@ -22,16 +22,16 @@ Rider waypoints, generated fuel stops, UI rows, route geometry, and async routin
 
 **Server** (`scripts/pack-fabric/routing/lib/router.js`, `fuel-chain.js`, `api/fuel-chain.js`). Settlement-wall fallback fires only on a proved no-path, never on timeout or low score; low-dirt routes return with `lowDirt=true` instead of being replaced. Soft backtrack penalty (`priorEdgeIds` ×4, `arrivalEdgeId` ×12) replaced the client wall; dead ends are still routable and report `backtrackPct`. Fuel need is decided by routing the leg with the active profile unconstrained — if that ride exceeds usable range, a stop is needed regardless of reachability. Station selection routes the top K=6 candidates and picks the best dirt% that fits (Dirt/Balanced) or the one nearest the shortest path (Direct/Clean). `maxMeters` is a search-time prune. Direct honours `shortest + 15 km`. Responses carry `legId`, `restrictedMeters/Reason`, `stationCandidates`, `balancedMiss`.
 
-**Benchmark** (`scripts/pack-fabric/bench/`). Seven fixed NS routes × 4 profiles × unknown on/off × fuel on/off, deterministic, pinned to live candidate `ns-osm-20260820-01`. `npm run bench:ns -- --compare <sha>` prints deltas. **Every routing change ships with this table in its report.** Assertions are never relaxed to go green; red rows come to the human.
+**Benchmark** (`scripts/pack-fabric/bench/`). Fixed NS routes × 4 profiles × unknown on/off × fuel on/off, deterministic, pinned to the immutable release that supplied the current promoted stable NS pack, `ns-osm-20260821-02`. `npm run bench:ns -- --compare <sha>` prints deltas only when both runs use the same pack. **Every routing change ships with this table in its report.** Assertions are never relaxed to go green; red rows come to the human.
 
 ### Where it stands
 
-- Bench: 56/65 at `34b777d`; expected ~62/65 after the approved 9e fix (`phase 9g`). The remaining reds are the short-Balanced fabric limit (kept red deliberately) and whatever 9g doesn't flip.
-- Dirt without fuel: 82–92% on every NS route. Dirt with fuel: 80–87% on targeted routes.
+- Bench: 64/75 at `04ded27`, re-baselined against promoted NS release `ns-osm-20260821-02`. This is the comparison baseline for subsequent routing phases.
+- The original `ee25e92` baseline and every `ns-osm-20260820-01` benchmark are invalid for current deltas because the NS graph changed; retain them as historical measurements only.
 - Device: insert/renumber, drag, swipe-delete, From Here → Plan, and progressive reveal verified by the human on 08-21 pre-Phase 7. Post-Phase 9 device pass pending.
 - Offline: architecture in place; **never exercised end-to-end under the new model.** Treat as unverified.
 - Navigation (cues, deviation reroute, impassable flow): **not audited this cycle.** Planning was the scope.
-- Packs: NS frozen at `ns-osm-20260820-01`. All other regions being rebuilt as live candidates on `feature/pack-rebuild-2026-08` (separate worktree). None promoted.
+- Packs: all 13 Canadian provinces and territories are promoted to stable. Nova Scotia was rebuilt and promoted as `ns-osm-20260821-02`. All United States regions are uploaded as candidates and are not promoted.
 
 ### Locked
 
@@ -75,8 +75,8 @@ Same treatment planning got: read the deviation-reroute, cue, and impassable cod
 ### R5 — Balanced miss and low-dirt surfaced in the UI
 The server already returns `balancedMiss` and `lowDirt`. Show them: a small badge on the leg ("58% — no 50/50 route this short"). Stops riders thinking the router is broken when the terrain is.
 
-### R6 — Pack promotion workflow
-Once the rebuild branch finishes: review `PACK-REBUILD-2026-08.md`, promote BC/AB/WA candidates after a device pass in each, then the rest. Re-cut NS last, re-baseline the bench against the new NS candidate, and commit the new baseline. Cross-pack seams involving NS are built at that point.
+### R6 — United States pack promotion workflow
+All 13 Canadian regions are stable and NS has been rebuilt. The United States regions remain uploaded candidates. Review `PACK-REBUILD-2026-08.md`, complete the required device and seam validation, and promote only the exact approved candidate bytes. Do not compare routing changes against an NS benchmark produced from the superseded `ns-osm-20260820-01` graph.
 
 ### R7 — Alternatives per leg
 Server returns 2–3 candidates per leg with dirt%, km, backtrack%, and a meander score. Card lets the rider pick. Cheap on the server (the K-candidate machinery from station selection generalises), and it gives telemetry on what riders actually choose — the input for any future profile tuning, which is the only legitimate way 08 gets reopened.

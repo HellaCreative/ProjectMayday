@@ -14,7 +14,7 @@ const RESULTS_DIR = path.join(BENCH_DIR, "results");
 const LATEST_PATH = path.join(RESULTS_DIR, "latest.md");
 const NS_RELEASE_PATH = path.join(
   REPO_ROOT,
-  "scripts/pack-fabric/routing/data/releases/ns-osm-20260820-01.json"
+  "scripts/pack-fabric/routing/data/releases/ns-osm-20260821-02.json"
 );
 const NS_FUEL_PATH = path.join(
   REPO_ROOT,
@@ -30,10 +30,9 @@ async function loadBenchFuel() {
   };
 }
 
-// The live Nova Scotia service is intentionally pinned to an immutable
-// candidate while the downloadable pack remains on the last approved build.
-// Reproduce that deployment-scoped override before loading any routing module
-// so graph and fuel resolve to the same bytes the online app uses.
+// Benchmark the immutable release that supplied the current promoted stable
+// Nova Scotia pack. The candidate URL retains the exact approved bytes even
+// after promotion, keeping repeated runs deterministic.
 function configureLiveNovaScotiaSource() {
   if (process.env.R2_REGION_BASE_OVERRIDES) return;
   const release = JSON.parse(fs.readFileSync(NS_RELEASE_PATH, "utf8"));
