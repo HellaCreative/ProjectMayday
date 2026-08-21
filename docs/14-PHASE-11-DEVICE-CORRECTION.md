@@ -1,6 +1,6 @@
 # DIRT Routing — Phase 11 Device Correction
 
-Status: rider-approved; implementation verified locally, production deployment pending
+Status: rider-approved; implementation verified locally and deployed to production
 Evidence: physical From Here and Plan tests on White, 2026-08-21
 
 ## Implementation checkpoint — 2026-08-21
@@ -28,8 +28,8 @@ Implemented in the current working phase:
   endpoints and failure reason.
 
 No graph, fuel, map, or manifest pack bytes changed. The endpoint correction is
-runtime selection logic and therefore requires the matching routing service
-deployment before White can validate it.
+runtime selection logic. The matching routing service was deployed to production
+as Vercel deployment `dpl_Cz45cYuCXcrtdE2nER3G9tmy2t7M` before the White build.
 
 ## What failed
 
