@@ -1,0 +1,9 @@
+{
+  "name": "dirt-routing-workspace",
+  "private": true,
+  "scripts": {
+    "test": "node --test scripts/pack-fabric/poi/*.test.js scripts/pack-fabric/routing/**/*.test.js scripts/pack-fabric/scripts/*.test.js",
+    "bench:ns": "node scripts/pack-fabric/bench/run-ns-bench.js",
+    "test:phase": "npm test && npm run bench:ns"
+  }
+}
