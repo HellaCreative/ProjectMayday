@@ -46,3 +46,11 @@ test("Direct may keep the farther forward station", async () => {
   assert.equal(result.ok, true);
   assert.equal(result.stops[0].id, "far-paved");
 });
+
+test("Clean picks the forward paved-side station while Dirt picks the dirt-side station", async () => {
+  const clean = await plan("cleanest");
+  const dirt = await plan("dirt");
+  assert.equal(clean.ok, true);
+  assert.equal(clean.stops[0].id, "far-paved");
+  assert.equal(dirt.stops[0].id, "mid-dirt");
+});
