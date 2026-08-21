@@ -413,6 +413,65 @@
           "maximumDirtBackwardPercent": 40
         }
       ]
+    },
+    "qc": {
+      "fuelMinimum": 2000,
+      "routes": [
+        {
+          "id": "long-gatineau-gaspe",
+          "from": {
+            "lat": 45.4765,
+            "lon": -75.7013,
+            "label": "Gatineau"
+          },
+          "to": {
+            "lat": 48.83,
+            "lon": -64.482,
+            "label": "Gasp\u00e9"
+          },
+          "minimumDirtPercent": 40,
+          "minimumDirtAllowUnknownPercent": 50,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 10,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "urban-laval-longueuil",
+          "from": {
+            "lat": 45.57,
+            "lon": -73.692,
+            "label": "Laval"
+          },
+          "to": {
+            "lat": 45.531,
+            "lon": -73.518,
+            "label": "Longueuil"
+          },
+          "minimumDirtPercent": 15,
+          "minimumDirtAllowUnknownPercent": 25,
+          "balancedTolerance": 25,
+          "maximumCleanDirtPercent": 15,
+          "maximumDirtBackwardPercent": 45
+        },
+        {
+          "id": "short-shawinigan-la-tuque",
+          "from": {
+            "lat": 46.567,
+            "lon": -72.749,
+            "label": "Shawinigan"
+          },
+          "to": {
+            "lat": 47.441,
+            "lon": -72.785,
+            "label": "La Tuque"
+          },
+          "minimumDirtPercent": 50,
+          "minimumDirtAllowUnknownPercent": 60,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 8,
+          "maximumDirtBackwardPercent": 40
+        }
+      ]
     }
   }
 }
