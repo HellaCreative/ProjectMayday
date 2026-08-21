@@ -177,6 +177,65 @@
           "maximumDirtBackwardPercent": 35
         }
       ]
+    },
+    "wa": {
+      "fuelMinimum": 3000,
+      "routes": [
+        {
+          "id": "long-bellingham-spokane",
+          "from": {
+            "lat": 48.7519,
+            "lon": -122.4787,
+            "label": "Bellingham"
+          },
+          "to": {
+            "lat": 47.6588,
+            "lon": -117.426,
+            "label": "Spokane"
+          },
+          "minimumDirtPercent": 50,
+          "minimumDirtAllowUnknownPercent": 60,
+          "balancedTolerance": 15,
+          "maximumCleanDirtPercent": 5,
+          "maximumDirtBackwardPercent": 35
+        },
+        {
+          "id": "urban-tacoma-everett",
+          "from": {
+            "lat": 47.2529,
+            "lon": -122.4443,
+            "label": "Tacoma"
+          },
+          "to": {
+            "lat": 47.979,
+            "lon": -122.2021,
+            "label": "Everett"
+          },
+          "minimumDirtPercent": 30,
+          "minimumDirtAllowUnknownPercent": 40,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 8,
+          "maximumDirtBackwardPercent": 40
+        },
+        {
+          "id": "short-concrete-marblemount",
+          "from": {
+            "lat": 48.5393,
+            "lon": -121.7457,
+            "label": "Concrete"
+          },
+          "to": {
+            "lat": 48.5279,
+            "lon": -121.4437,
+            "label": "Marblemount"
+          },
+          "minimumDirtPercent": 50,
+          "minimumDirtAllowUnknownPercent": 60,
+          "balancedTolerance": 15,
+          "maximumCleanDirtPercent": 5,
+          "maximumDirtBackwardPercent": 35
+        }
+      ]
     }
   }
 }
