@@ -79,24 +79,24 @@
         "adapter": "ab-access-roads",
         "status": "deferred",
         "dateRetrieved": "2026-08-05",
-        "notes": "Inactive during the foundational OSM-only phase. The adapter and source are retained for later evaluation; neither is in the Alberta pack."
+        "notes": "Inactive during the foundational OSM-only phase. Adapter/data are retained for later controlled evaluation and are not in this pack."
       },
       "routingReady": true,
       "routingMode": "osm-only",
       "backboneArtifact": {
         "path": "routing/data/regions/ab/graph.v1.json.gz",
-        "edgeCount": 956740,
-        "nodeCount": 765453,
-        "gzBytes": 51299652
+        "edgeCount": 956921,
+        "nodeCount": 765592,
+        "gzBytes": 51306020
       },
       "osm": {
         "adapter": "osm-roads",
         "role": "sole-fabric",
         "status": "ready",
-        "featureCount": 539905,
-        "added": 539905,
+        "featureCount": 539989,
+        "added": 539989,
         "license": "OpenStreetMap contributors (ODbL)",
-        "dateRetrieved": "2026-08-20"
+        "dateRetrieved": "2026-08-21"
       }
     },
     {
