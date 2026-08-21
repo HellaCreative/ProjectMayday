@@ -155,6 +155,30 @@ test("a depleted waypoint may use one nearby non-forward pump before resuming fo
   assert.ok(result.graphMeters.every((meters) => meters <= 90_000));
 });
 
+test("look-ahead measures a nearby pump instead of reporting zero fuel distance", async () => {
+  const result = await planFuelChainOnRuntime({
+    runtime: lineRuntime(),
+    stations: [station("near-waypoint", 2.005)],
+    start: { lat: 45, lon: 2 },
+    destination: { lat: 45, lon: 4 },
+    profile: "dirt",
+    accessPolicy: { motorizedPermissive: true, motorizedUnknown: false },
+    usableRangeMeters: 90_000,
+    firstLegMaxMeters: 90_000,
+    probeFirstReachableStation: true,
+    routeCandidate: ({ candidate }) => Promise.resolve({
+      status: "complete",
+      distanceMeters: Math.max(400, candidate.graphMeters),
+      stats: { dirtPercent: 0 },
+      segments: []
+    })
+  });
+
+  assert.equal(result.ok, true);
+  assert.ok(result.firstReachableStationMeters >= 400);
+  assert.ok(result.firstReachableStationMeters < 1_000);
+});
+
 test("short route does not manufacture a fuel plan", async () => {
   const result = await planFuelChainOnRuntime({
     runtime: lineRuntime(),

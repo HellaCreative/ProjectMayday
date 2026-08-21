@@ -297,6 +297,7 @@ function rankForwardFuel(
     .filter((row) => !visited.has(String(row.station.id)))
     .map((row) => {
       const point = [row.location.lon, row.location.lat];
+      const startMeters = haversineMeters(point, current);
       const remaining = haversineMeters(point, destination);
       const gain = currentRemaining - remaining;
       const progress = projectedProgressMeters(point, current, destination);
@@ -315,7 +316,7 @@ function rankForwardFuel(
         crossTrack * 0.35 -
         Math.abs(row.graphMeters - targetUse) * 0.12 +
         ((profile === "dirt" || profile === "balanced") && row.dirtAdjacent ? 25_000 : 0);
-      return { ...row, remainingMeters: remaining, progressMeters: progress, score, useful };
+      return { ...row, startMeters, remainingMeters: remaining, progressMeters: progress, score, useful };
     });
   const forward = scored.filter((row) => row.useful);
   const preferred = forward.filter((row) => row.graphMeters <= preferredMax);
@@ -330,10 +331,12 @@ function rankForwardFuel(
     // this recovery refuel the normal forward-progress gate applies again.
     return scored
       .filter((row) =>
-        row.graphMeters >= MIN_STOP_SEPARATION_M &&
+        row.startMeters >= 50 &&
         row.remainingMeters >= MIN_STOP_SEPARATION_M
       )
-      .sort((a, b) => a.graphMeters - b.graphMeters || b.score - a.score);
+      .sort((a, b) =>
+        a.graphMeters - b.graphMeters || a.startMeters - b.startMeters || b.score - a.score
+      );
   }
   const arrivalLimit = destinationFuelUsedLimitMeters == null
     ? NaN
@@ -604,7 +607,7 @@ async function planFuelChainOnRuntime({
           reach.fuel, currentLocation, destination, cap, visited, profile,
           null,
           reach.destinationMeters,
-          firstLegMaxMeters + 1 < usableRangeMeters
+          true
         );
         const evaluated = await evaluatedRoutes(ranked, currentLocation, cap, history, arrival);
         const evaluatedFirstReachableStationMeters = evaluated.reduce((best, row) =>
