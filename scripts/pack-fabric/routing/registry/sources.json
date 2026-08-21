@@ -360,24 +360,24 @@
         "adapter": "ns-nstdb",
         "status": "deferred",
         "dateRetrieved": "2026-08-05",
-        "notes": "Inactive during the foundational OSM-only phase. NSTDB adapter/data are retained for later evaluation and are not in the NS pack."
+        "notes": "Inactive during the foundational OSM-only phase. Adapter/data are retained for later controlled evaluation and are not in this pack."
       },
       "routingReady": true,
       "backboneArtifact": {
         "path": "routing/data/regions/ns/graph.v1.json.gz",
-        "edgeCount": 211931,
-        "nodeCount": 193747,
-        "gzBytes": 20584038
+        "edgeCount": 211930,
+        "nodeCount": 193742,
+        "gzBytes": 20584251
       },
       "routingMode": "osm-only",
       "osm": {
         "adapter": "osm-roads",
         "role": "sole-fabric",
         "status": "ready",
-        "featureCount": 141021,
-        "added": 141021,
+        "featureCount": 141020,
+        "added": 141020,
         "license": "OpenStreetMap contributors (ODbL)",
-        "dateRetrieved": "2026-08-20"
+        "dateRetrieved": "2026-08-21"
       }
     },
     {

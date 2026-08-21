@@ -198,9 +198,32 @@ tag: pack-nu-osm-20260821-02
 note: -01 workaround superseded after zero-cores fix
 ```
 
+
+```
+region: ns   release-id: ns-osm-20260821-02   geofabrik ts: 2026-08-20T20:20:51Z   pbf sha: e2b9c773416988d1e74bb97f2f46aa2c935cd674db734726f5c4e227c50dd627
+steps 1–7: ok
+audit contradictions: 0     non-OSM edges: 0
+stitches: 5127  free-space: 0
+largest permissive component: 98.77% of edges
+urban cores: 3 hard / 57 scored
+seams built: nb-ns (96 anchors, 0 m gap)           seams deferred: none
+route acceptance: 14/15 — red: long-yarmouth-sydney/dirt-allow-unknown 88%<90%
+candidate uploaded: https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/candidates/ns-osm-20260821-02   promoted: NO
+tag: pack-ns-osm-20260821-02
+note: replaces frozen ns-osm-20260820-01; NB re-cut as nb-osm-20260821-04 after NB–NS seam
+```
+
+```
+region: nb   release-id: nb-osm-20260821-04   (updated after NB–NS seam)
+seams built: qc-nb, nb-pe, nb-ns
+candidate: https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/candidates/nb-osm-20260821-04
+tag: pack-nb-osm-20260821-04
+```
+
+
 ## Session status
 
-**Canada complete** (NS frozen untouched). **US states not started** — resume from tag `pack-nu-osm-20260821-01` with order `id`, `mt`, `or`, then A–Z remainder; add Geofabrik slug mappings per state as needed.
+**Canada complete including NS rebuild.** **US states next.** — resume from tag `pack-nu-osm-20260821-01` with order `id`, `mt`, `or`, then A–Z remainder; add Geofabrik slug mappings per state as needed.
 
 ### Latest live candidates (promote when physical OK)
 
