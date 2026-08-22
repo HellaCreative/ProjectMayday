@@ -45,6 +45,12 @@ Only these unless Claude opens a CONTRACT amendment via GATE:
 
 ## Forbidden without GATE + human
 
+- **Vercel production deploys** (`vercel --prod`, `ship-routing.js --live`, any
+  push to `/api/route` prod). The loop benches **locally** against the R2 pack —
+  no per-turn deploy is needed or allowed. A live deploy is a deliberate,
+  matched client+service release, GATE + human only. (Root cause of the
+  2026-08-22 Hobby→Pro deploy-hammer: `cursor-cli` redeployed the same commit to
+  production ~14× in 80 min.)
 - Pack rebuilds / R2 uploads / promote
 - Changing bench assertion thresholds to “make green”
 - Broad refactors across router + UI + packs in one turn
