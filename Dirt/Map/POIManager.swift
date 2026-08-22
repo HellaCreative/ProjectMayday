@@ -90,10 +90,89 @@ enum POIDeduper {
     }
 }
 
+/// Stable station cache indexed by geographic cells. Viewport responses merge
+/// into it by station ID; zooming only changes presentation, not station truth.
+struct FuelViewportCache {
+    private struct Cell: Hashable {
+        let longitude: Int
+        let latitude: Int
+    }
+
+    private static let cellDegrees = 0.25
+    private(set) var sourceID: String?
+    private(set) var successfulCoverages: [MapViewportBounds] = []
+    private var featuresByID: [String: POIFeature] = [:]
+    private var cellByID: [String: Cell] = [:]
+    private var IDsByCell: [Cell: Set<String>] = [:]
+
+    var count: Int { featuresByID.count }
+
+    /// Returns true when changing live/installed source invalidated the cache.
+    mutating func prepare(for sourceID: String) -> Bool {
+        guard self.sourceID != sourceID else { return false }
+        self.sourceID = sourceID
+        successfulCoverages = []
+        featuresByID = [:]
+        cellByID = [:]
+        IDsByCell = [:]
+        return true
+    }
+
+    func covers(_ bounds: MapViewportBounds) -> Bool {
+        successfulCoverages.contains { $0.contains(bounds) }
+    }
+
+    mutating func merge(_ features: [POIFeature], coverage: MapViewportBounds) {
+        for feature in features where feature.category == "fuel" {
+            let newCell = Self.cell(latitude: feature.latitude, longitude: feature.longitude)
+            if let oldCell = cellByID[feature.id], oldCell != newCell {
+                IDsByCell[oldCell]?.remove(feature.id)
+            }
+            featuresByID[feature.id] = feature
+            cellByID[feature.id] = newCell
+            IDsByCell[newCell, default: []].insert(feature.id)
+        }
+        successfulCoverages.append(coverage)
+        if successfulCoverages.count > 24 {
+            successfulCoverages.removeFirst(successfulCoverages.count - 24)
+        }
+    }
+
+    func features(in bounds: MapViewportBounds) -> [POIFeature] {
+        var IDs = Set<String>()
+        let minCell = Self.cell(
+            latitude: bounds.minLatitude,
+            longitude: bounds.minLongitude
+        )
+        let maxCell = Self.cell(
+            latitude: bounds.maxLatitude,
+            longitude: bounds.maxLongitude
+        )
+        for longitude in minCell.longitude...maxCell.longitude {
+            for latitude in minCell.latitude...maxCell.latitude {
+                IDs.formUnion(IDsByCell[Cell(longitude: longitude, latitude: latitude)] ?? [])
+            }
+        }
+        return IDs.compactMap { featuresByID[$0] }
+            .filter { bounds.contains(latitude: $0.latitude, longitude: $0.longitude) }
+            .sorted { lhs, rhs in
+                lhs.id == rhs.id ? lhs.displayName < rhs.displayName : lhs.id < rhs.id
+            }
+    }
+
+    private static func cell(latitude: Double, longitude: Double) -> Cell {
+        Cell(
+            longitude: Int(floor(longitude / cellDegrees)),
+            latitude: Int(floor(latitude / cellDegrees))
+        )
+    }
+}
+
 
 private enum POIC {
     static let minZoom = 6.5
     static let refreshDelay = UInt64(350_000_000)
+    static let viewportOverscan = 0.20
 }
 
 /// Loads Rider Services POIs. Online planning fuel comes from the same live
@@ -117,6 +196,7 @@ final class POIManager {
     private let graphPacks: GraphPackStore
     private let network: NetworkPathMonitor
     private var debounceTask: Task<Void, Never>?
+    private var fuelViewportCache = FuelViewportCache()
     private let session: URLSession = {
         let cfg = URLSessionConfiguration.default
         cfg.timeoutIntervalForRequest = 30
@@ -218,6 +298,7 @@ final class POIManager {
             _ = mapState.mapCenter.latitude
             _ = mapState.mapCenter.longitude
             _ = mapState.mapZoom
+            _ = mapState.visibleCoordinateBounds
             _ = mapState.layerPrefsGeneration
             _ = network.isOnline
         } onChange: {
@@ -239,54 +320,74 @@ final class POIManager {
 
     private func performRefresh() async {
         let zoom = mapState.mapZoom
-        let center = mapState.mapCenter
         let prefs = LayerPrefsSnapshot()
 
         guard zoom >= POIC.minZoom, prefs.anyPOIEnabled else {
             mapState.updatePOIFeatures([])
             return
         }
-
-        let overview = zoom < 9.0
-        let padKm = overview ? 28.0 : 4.0
-        let padDeg = padKm / 111.0
+        guard let viewport = mapState.visibleCoordinateBounds else { return }
+        let queryBounds = viewport.expanded(by: POIC.viewportOverscan)
         let bbox = _BBox(
-            minLon: center.longitude - padDeg,
-            minLat: center.latitude - padDeg,
-            maxLon: center.longitude + padDeg,
-            maxLat: center.latitude + padDeg
+            minLon: queryBounds.minLongitude,
+            minLat: queryBounds.minLatitude,
+            maxLon: queryBounds.maxLongitude,
+            maxLat: queryBounds.maxLatitude
         )
         var features: [POIFeature] = []
         if prefs.showFuel {
-            if network.isOnline {
-                let from = RouteCoordinate(longitude: bbox.minLon, latitude: bbox.minLat)
-                let to = RouteCoordinate(longitude: bbox.maxLon, latitude: bbox.maxLat)
-                do {
-                    let live = try await liveFuelCandidates(
-                        from: from,
-                        to: to,
-                        padDegrees: 0
+            let sourceID = network.isOnline ? "live-pack" : "installed-pack"
+            let sourceChanged = fuelViewportCache.prepare(for: sourceID)
+            if sourceChanged {
+                // Never paint installed-pack stations as if they were a live
+                // response (or vice versa) while the new source is loading.
+                mapState.updatePOIFeatures([])
+            }
+            if !fuelViewportCache.covers(queryBounds) {
+                if network.isOnline {
+                    let from = RouteCoordinate(longitude: bbox.minLon, latitude: bbox.minLat)
+                    let to = RouteCoordinate(longitude: bbox.maxLon, latitude: bbox.maxLat)
+                    do {
+                        let live = try await liveFuelCandidates(
+                            from: from,
+                            to: to,
+                            padDegrees: 0
+                        )
+                        fuelViewportCache.merge(live, coverage: queryBounds)
+                        RoutingDebugLog.shared.event(
+                            "fuel viewport packed=\(live.count) cached=\(fuelViewportCache.count) " +
+                                "source=live-pack bounds=visible+20pct"
+                        )
+                    } catch is CancellationError {
+                        // Continued map motion cancels stale work. Keep the last
+                        // successful paint; the settled camera schedules another.
+                        return
+                    } catch {
+                        // Online means live-only. Preserve the last successful
+                        // same-source paint instead of publishing an empty set
+                        // for a viewport the cache does not cover.
+                        RoutingDebugLog.shared.event(
+                            "fuel viewport live source unavailable preserved=\(fuelViewportCache.count)"
+                        )
+                        return
+                    }
+                } else {
+                    let installed = graphPacks.fuelStations(
+                        minLat: bbox.minLat, maxLat: bbox.maxLat,
+                        minLon: bbox.minLon, maxLon: bbox.maxLon
                     )
-                    features.append(contentsOf: live)
+                    fuelViewportCache.merge(installed, coverage: queryBounds)
                     RoutingDebugLog.shared.event(
-                        "fuel viewport packed=\(live.count) source=live-pack"
+                        "fuel viewport packed=\(installed.count) cached=\(fuelViewportCache.count) " +
+                            "source=installed-pack bounds=visible+20pct"
                     )
-                } catch is CancellationError {
-                    return
-                } catch {
-                    // Online means live-only. Do not paint stale downloaded fuel.
-                    RoutingDebugLog.shared.event("fuel viewport live source unavailable")
                 }
             } else {
-                let installed = graphPacks.fuelStations(
-                    minLat: bbox.minLat, maxLat: bbox.maxLat,
-                    minLon: bbox.minLon, maxLon: bbox.maxLon
-                )
-                features.append(contentsOf: installed)
                 RoutingDebugLog.shared.event(
-                    "fuel viewport packed=\(installed.count) source=installed-pack"
+                    "fuel viewport cache hit source=\(sourceID) cached=\(fuelViewportCache.count)"
                 )
             }
+            features.append(contentsOf: fuelViewportCache.features(in: queryBounds))
         }
         let needOverpass = prefs.showCampgrounds || prefs.showLodging || prefs.showLiquor
         if needOverpass {
@@ -297,7 +398,10 @@ final class POIManager {
                 // Keep last paint when Overpass is unreachable.
             }
         }
-        mapState.updatePOIFeatures(POIDeduper.collapseNearby(features))
+        let stable = POIDeduper.collapseNearby(features).sorted {
+            $0.category == $1.category ? $0.id < $1.id : $0.category < $1.category
+        }
+        mapState.updatePOIFeatures(stable)
     }
 
     private func fetchOSM(bbox: _BBox) async throws -> [_OSMElement] {

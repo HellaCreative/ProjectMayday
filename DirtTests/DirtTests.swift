@@ -229,4 +229,70 @@ struct DirtTests {
         #expect(merged.filter { $0.category == "campground" }.count == 2)
         #expect(merged.contains { $0.category == "fuel" })
     }
+
+    @Test func fuelViewportUsesVisibleBoundsWithTwentyPercentOverscan() {
+        let viewport = MapViewportBounds(
+            minLongitude: -64,
+            minLatitude: 44,
+            maxLongitude: -63,
+            maxLatitude: 45
+        )
+        let expanded = viewport.expanded(by: 0.20)
+        #expect(expanded.minLongitude == -64.2)
+        #expect(expanded.maxLongitude == -62.8)
+        #expect(expanded.minLatitude == 43.8)
+        #expect(expanded.maxLatitude == 45.2)
+        #expect(expanded.contains(viewport))
+    }
+
+    @Test func fuelViewportCacheIsStableWithinCoverageAndSourceSpecific() throws {
+        let coverage = MapViewportBounds(
+            minLongitude: -64,
+            minLatitude: 44,
+            maxLongitude: -63,
+            maxLatitude: 45
+        )
+        let inner = MapViewportBounds(
+            minLongitude: -63.8,
+            minLatitude: 44.2,
+            maxLongitude: -63.2,
+            maxLatitude: 44.8
+        )
+        let station = POIFeature(
+            id: "irving", category: "fuel",
+            latitude: 44.65, longitude: -63.57,
+            name: "Irving", address: nil, brand: nil,
+            openingHours: nil, phone: nil, website: nil
+        )
+        var cache = FuelViewportCache()
+        let firstSourceChanged = cache.prepare(for: "live-pack")
+        #expect(firstSourceChanged)
+        cache.merge([station], coverage: coverage)
+        #expect(cache.covers(inner))
+        #expect(cache.features(in: inner).map(\.id) == ["irving"])
+        let sameSourceChanged = cache.prepare(for: "live-pack")
+        #expect(!sameSourceChanged)
+        #expect(cache.count == 1)
+
+        let installedSourceChanged = cache.prepare(for: "installed-pack")
+        #expect(installedSourceChanged)
+        #expect(cache.count == 0)
+        #expect(!cache.covers(inner))
+    }
+
+    @Test func mapStatePublishesFuelReplacementModeFromCandidateMarkers() {
+        let state = MapState()
+        state.setMarkers([
+            MapState.Marker(
+                id: "fuel-target:alternate",
+                latitude: 44.65,
+                longitude: -63.57,
+                label: "",
+                kind: .fuel
+            )
+        ])
+        #expect(state.hasFuelReplacementCandidates)
+        state.setMarkers([])
+        #expect(!state.hasFuelReplacementCandidates)
+    }
 }

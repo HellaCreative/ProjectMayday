@@ -309,7 +309,8 @@ struct RoutePlannerModelItineraryTests {
                 longitude: alternate.longitude, name: "Alternate Pump", validForward: true
             )
         ]
-        let model = makeModel(source: source)
+        let mapState = MapState()
+        let model = makeModel(source: source, mapState: mapState)
         model.apply(
             .replaceAll(waypoints: [first, second], profile: .dirt, allowUnknown: false),
             source: "seed"
@@ -318,8 +319,11 @@ struct RoutePlannerModelItineraryTests {
 
         #expect(model.canReplaceFuelStop(at: 0))
         model.selectFuelWaypoint(at: 0)
+        #expect(mapState.hasFuelReplacementCandidates)
         model.selectFuelTarget(markerID: "fuel-target:alternate")
         await model.waitForCanonicalBuildForTesting()
+
+        #expect(!mapState.hasFuelReplacementCandidates)
 
         let riderLeg = try #require(model.itinerary.legs.first)
         #expect(riderLeg.fuelStopOverrides[riderLeg.from.uuidString] == "alternate")
@@ -373,12 +377,13 @@ struct RoutePlannerModelItineraryTests {
 @MainActor
 private func makeModel(
     source: PlannerFakeRoutingSource,
-    policy: RoutingSourcePolicy? = nil
+    policy: RoutingSourcePolicy? = nil,
+    mapState: MapState? = nil
 ) -> RoutePlannerModel {
     RoutePlannerModel(
         routing: RoutingClient(),
         locationService: LocationService(),
-        mapState: MapState(),
+        mapState: mapState ?? MapState(),
         navigation: NavigationSession(),
         offline: OfflineTileManager(),
         graphPacks: GraphPackStore(),

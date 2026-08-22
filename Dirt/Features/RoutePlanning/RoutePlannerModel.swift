@@ -1265,7 +1265,14 @@ final class RoutePlannerModel {
             selectFuelTarget(markerID: markerID)
             return
         }
-        if activeFuelDragMarkerID == markerID, !fuelTargetMarkers.isEmpty { return }
+        if activeFuelDragMarkerID == markerID, !fuelTargetMarkers.isEmpty {
+            fuelTargetMarkers = []
+            activeFuelDragMarkerID = nil
+            mapState.selectPlannerPin(nil)
+            refreshMap()
+            toast = "Fuel stop unchanged"
+            return
+        }
         guard markerID.hasPrefix("fuel:"),
               let context = fuelMoveContext(markerID: markerID)
         else {

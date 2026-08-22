@@ -3,6 +3,49 @@ import Foundation
 import Observation
 import UIKit
 
+/// Geographic area currently visible in MapLibre. Fuel loading uses this
+/// concrete viewport instead of guessing an area from centre + zoom.
+struct MapViewportBounds: Equatable, Sendable {
+    let minLongitude: Double
+    let minLatitude: Double
+    let maxLongitude: Double
+    let maxLatitude: Double
+
+    init(minLongitude: Double, minLatitude: Double, maxLongitude: Double, maxLatitude: Double) {
+        self.minLongitude = min(minLongitude, maxLongitude)
+        self.minLatitude = min(minLatitude, maxLatitude)
+        self.maxLongitude = max(minLongitude, maxLongitude)
+        self.maxLatitude = max(minLatitude, maxLatitude)
+    }
+
+    var longitudeSpan: Double { max(0, maxLongitude - minLongitude) }
+    var latitudeSpan: Double { max(0, maxLatitude - minLatitude) }
+
+    func expanded(by fraction: Double) -> MapViewportBounds {
+        let safeFraction = max(0, fraction)
+        let lonPad = max(longitudeSpan * safeFraction, 0.002)
+        let latPad = max(latitudeSpan * safeFraction, 0.002)
+        return MapViewportBounds(
+            minLongitude: max(-180, minLongitude - lonPad),
+            minLatitude: max(-90, minLatitude - latPad),
+            maxLongitude: min(180, maxLongitude + lonPad),
+            maxLatitude: min(90, maxLatitude + latPad)
+        )
+    }
+
+    func contains(_ other: MapViewportBounds) -> Bool {
+        minLongitude <= other.minLongitude
+            && minLatitude <= other.minLatitude
+            && maxLongitude >= other.maxLongitude
+            && maxLatitude >= other.maxLatitude
+    }
+
+    func contains(latitude: Double, longitude: Double) -> Bool {
+        latitude >= minLatitude && latitude <= maxLatitude
+            && longitude >= minLongitude && longitude <= maxLongitude
+    }
+}
+
 struct RouteDisplaySegment {
     let coordinates: [RouteCoordinate]
     /// Surface/access-aware key used for selected-route paint.
@@ -69,6 +112,7 @@ final class MapState {
     private(set) var routeGeneration = 0
     private(set) var markers: [Marker] = []
     private(set) var markerGeneration = 0
+    private(set) var hasFuelReplacementCandidates = false
     private(set) var camera: (id: UUID, command: CameraCommand)?
     /// Bumps when the basemap style URL changes so MapLibre reloads.
     private(set) var styleGeneration = 0
@@ -94,6 +138,9 @@ final class MapState {
     var mapCenter: CLLocationCoordinate2D = AppConfig.overviewCenter
     /// Current map zoom; managers observe for min-zoom gating.
     var mapZoom: Double = AppConfig.overviewZoom
+    /// Settled MapLibre viewport. POI loading expands this by a small overscan
+    /// so zooming does not swap stations merely because a centre pad changed.
+    private(set) var visibleCoordinateBounds: MapViewportBounds?
     /// True until the first GPS/cached fix centers the map (or the rider pans away).
     private(set) var awaitingInitialUserCenter = true
 
@@ -112,6 +159,18 @@ final class MapState {
     /// Rider panned / pinched — do not yank back to GPS on the next fix.
     func cancelAwaitingInitialUserCenter() {
         awaitingInitialUserCenter = false
+    }
+
+    func updateMapViewport(
+        center: CLLocationCoordinate2D,
+        zoom: Double,
+        bounds: MapViewportBounds
+    ) {
+        mapCenter = center
+        mapZoom = zoom
+        if visibleCoordinateBounds != bounds {
+            visibleCoordinateBounds = bounds
+        }
     }
 
     // MARK: - Overlay layer state
@@ -312,6 +371,7 @@ final class MapState {
 
     func setMarkers(_ new: [Marker]) {
         markers = new
+        hasFuelReplacementCandidates = new.contains { $0.id.hasPrefix("fuel-target:") }
         markerGeneration += 1
     }
 

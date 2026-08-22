@@ -106,6 +106,10 @@ struct MapLibreMapView: UIViewRepresentable {
 
     /// Per-category POI circle layer IDs and display colors.
     enum POILayer {
+        static let generalSourceID = "dirt-poi"
+        static let fuelSourceID = "dirt-poi-fuel"
+        static let fuelClusterCircleID = "dirt-poi-fuel-cluster"
+        static let fuelClusterCountID = "dirt-poi-fuel-cluster-count"
         static let categories: [(id: String, color: UIColor)] = [
             ("fuel",       UIColor(red: 0.910, green: 0.451, blue: 0.047, alpha: 1)),
             ("campground", UIColor(red: 0.184, green: 0.620, blue: 0.267, alpha: 1)),
@@ -118,10 +122,23 @@ struct MapLibreMapView: UIViewRepresentable {
         static func iconName(_ category: String) -> String { "dirt-poi-icon-\(category)" }
         /// Dots visible from regional overview for plan-route scanning.
         static let dotMinZoom = 6.5
-        /// Glyphs only when close enough to read.
-        static let iconMinZoom = 11.0
-        static var allLayerIDs: [String] {
+        /// Regional stations cluster through zoom 10; close planning shows all pumps.
+        static let clusterMaxZoom = 10
+        /// Glyphs only when close enough to distinguish individual stations.
+        static let iconMinZoom = 10.5
+        static var fuelSourceOptions: [MLNShapeSourceOption: Any] {
+            [
+                .clustered: true,
+                .clusterRadius: 44,
+                .clusterMinPoints: 2,
+                .maximumZoomLevelForClustering: clusterMaxZoom
+            ]
+        }
+        static var individualLayerIDs: [String] {
             categories.flatMap { [layerID($0.id), symbolID($0.id)] }
+        }
+        static var allLayerIDs: [String] {
+            individualLayerIDs + [fuelClusterCircleID, fuelClusterCountID]
         }
 
         static func systemSymbolName(for category: String) -> String {
@@ -158,6 +175,7 @@ struct MapLibreMapView: UIViewRepresentable {
         private var appliedStyleGeneration = -1
         private var appliedRouteGeneration = -1
         private var appliedMarkerGeneration = -1
+        private var appliedFuelReplacementGeneration = -1
         private var appliedPinSelectionGeneration = -1
         private var appliedNavigatingLock: Bool?
         private var appliedCameraID: UUID?
@@ -199,6 +217,7 @@ struct MapLibreMapView: UIViewRepresentable {
             addPOILayers(to: style)
             styleLoaded = true
             appliedRouteGeneration = -1
+            appliedFuelReplacementGeneration = -1
             // Force overlay re-sync after a style reload
             appliedPoiData = -1; appliedPoiPrefs = -1
             appliedNetData = -1; appliedNetPrefs = -1
@@ -431,15 +450,63 @@ struct MapLibreMapView: UIViewRepresentable {
         // MARK: - POI layers (drawn above route layers)
 
         private func addPOILayers(to style: MLNStyle) {
-            guard style.source(withIdentifier: "dirt-poi") == nil else { return }
-            let src = MLNShapeSource(identifier: "dirt-poi", shape: nil, options: nil)
-            style.addSource(src)
+            guard style.source(withIdentifier: POILayer.generalSourceID) == nil else { return }
+            let generalSource = MLNShapeSource(
+                identifier: POILayer.generalSourceID,
+                shape: nil,
+                options: nil
+            )
+            let fuelSource = MLNShapeSource(
+                identifier: POILayer.fuelSourceID,
+                shape: nil,
+                options: POILayer.fuelSourceOptions
+            )
+            style.addSource(generalSource)
+            style.addSource(fuelSource)
             registerPOIIcons(in: style)
+
+            let fuelColor = POILayer.categories.first(where: { $0.id == "fuel" })?.color
+                ?? UIColor(DirtTheme.orange)
+            let clusterCircle = MLNCircleStyleLayer(
+                identifier: POILayer.fuelClusterCircleID,
+                source: fuelSource
+            )
+            clusterCircle.predicate = NSPredicate(format: "cluster == YES")
+            clusterCircle.circleColor = NSExpression(forConstantValue: fuelColor)
+            clusterCircle.circleRadius = NSExpression(mglJSONObject: [
+                "interpolate", ["linear"], ["get", "point_count"],
+                2, 13,
+                10, 17,
+                50, 21
+            ] as [Any])
+            clusterCircle.circleStrokeColor = NSExpression(forConstantValue: UIColor.white)
+            clusterCircle.circleStrokeWidth = NSExpression(forConstantValue: 2)
+            clusterCircle.minimumZoomLevel = Float(POILayer.dotMinZoom)
+            clusterCircle.maximumZoomLevel = Float(POILayer.iconMinZoom)
+            style.addLayer(clusterCircle)
+
+            let clusterCount = MLNSymbolStyleLayer(
+                identifier: POILayer.fuelClusterCountID,
+                source: fuelSource
+            )
+            clusterCount.predicate = NSPredicate(format: "cluster == YES")
+            clusterCount.text = NSExpression(forKeyPath: "point_count_abbreviated")
+            clusterCount.textColor = NSExpression(forConstantValue: UIColor.white)
+            clusterCount.textFontSize = NSExpression(forConstantValue: 11)
+            clusterCount.textAllowsOverlap = NSExpression(forConstantValue: true)
+            clusterCount.textIgnoresPlacement = NSExpression(forConstantValue: true)
+            clusterCount.minimumZoomLevel = Float(POILayer.dotMinZoom)
+            clusterCount.maximumZoomLevel = Float(POILayer.iconMinZoom)
+            style.addLayer(clusterCount)
+
             for (cat, color) in POILayer.categories {
+                let source = cat == "fuel" ? fuelSource : generalSource
                 // Soft colored disc — small dots when zoomed out for planning,
                 // larger when close enough to read icons.
-                let circle = MLNCircleStyleLayer(identifier: POILayer.layerID(cat), source: src)
-                circle.predicate = NSPredicate(format: "category == %@", cat)
+                let circle = MLNCircleStyleLayer(identifier: POILayer.layerID(cat), source: source)
+                circle.predicate = cat == "fuel"
+                    ? NSPredicate(format: "category == %@ AND cluster != YES", cat)
+                    : NSPredicate(format: "category == %@", cat)
                 circle.circleColor = NSExpression(forConstantValue: color)
                 circle.circleRadius = NSExpression(mglJSONObject: [
                     "interpolate", ["linear"], ["zoom"],
@@ -458,8 +525,10 @@ struct MapLibreMapView: UIViewRepresentable {
                 style.addLayer(circle)
 
                 // Category glyph only once zoomed in enough to read it.
-                let symbol = MLNSymbolStyleLayer(identifier: POILayer.symbolID(cat), source: src)
-                symbol.predicate = NSPredicate(format: "category == %@", cat)
+                let symbol = MLNSymbolStyleLayer(identifier: POILayer.symbolID(cat), source: source)
+                symbol.predicate = cat == "fuel"
+                    ? NSPredicate(format: "category == %@ AND cluster != YES", cat)
+                    : NSPredicate(format: "category == %@", cat)
                 symbol.iconImageName = NSExpression(forConstantValue: POILayer.iconName(cat))
                 symbol.iconAllowsOverlap = NSExpression(forConstantValue: true)
                 symbol.iconIgnoresPlacement = NSExpression(forConstantValue: true)
@@ -524,6 +593,7 @@ struct MapLibreMapView: UIViewRepresentable {
             guard styleLoaded, let style = mapView.style else { return }
             syncRoute(style: style)
             syncPOI(style: style)
+            syncFuelReplacementEmphasis(style: style)
             syncNetwork(style: style)
             syncDebugGraph(style: style)
             syncBCOSMHierarchy(style: style)
@@ -562,7 +632,7 @@ struct MapLibreMapView: UIViewRepresentable {
             appliedPoiPrefs = state.layerPrefsGeneration
 
             if dataChanged {
-                let shapes = state.poiFeatures.map { poi -> MLNPointFeature in
+                let pointFeature: (POIFeature) -> MLNPointFeature = { poi in
                     let f = MLNPointFeature()
                     f.coordinate = CLLocationCoordinate2D(latitude: poi.latitude, longitude: poi.longitude)
                     f.attributes = [
@@ -576,8 +646,12 @@ struct MapLibreMapView: UIViewRepresentable {
                     ]
                     return f
                 }
-                (style.source(withIdentifier: "dirt-poi") as? MLNShapeSource)?.shape =
-                    MLNShapeCollectionFeature(shapes: shapes)
+                let fuelShapes = state.poiFeatures.filter { $0.category == "fuel" }.map(pointFeature)
+                let generalShapes = state.poiFeatures.filter { $0.category != "fuel" }.map(pointFeature)
+                (style.source(withIdentifier: POILayer.fuelSourceID) as? MLNShapeSource)?.shape =
+                    MLNShapeCollectionFeature(shapes: fuelShapes)
+                (style.source(withIdentifier: POILayer.generalSourceID) as? MLNShapeSource)?.shape =
+                    MLNShapeCollectionFeature(shapes: generalShapes)
             }
 
             if prefsChanged {
@@ -592,6 +666,27 @@ struct MapLibreMapView: UIViewRepresentable {
                 style.layer(withIdentifier: POILayer.layerID(cat))?.isVisible = visible
                 style.layer(withIdentifier: POILayer.symbolID(cat))?.isVisible = visible
             }
+            style.layer(withIdentifier: POILayer.fuelClusterCircleID)?.isVisible = prefs.showFuel
+            style.layer(withIdentifier: POILayer.fuelClusterCountID)?.isVisible = prefs.showFuel
+            applyFuelReplacementEmphasis(to: style)
+        }
+
+        private func applyFuelReplacementEmphasis(to style: MLNStyle) {
+            let opacity = state.hasFuelReplacementCandidates ? 0.28 : 1.0
+            (style.layer(withIdentifier: POILayer.layerID("fuel")) as? MLNCircleStyleLayer)?
+                .circleOpacity = NSExpression(forConstantValue: opacity)
+            (style.layer(withIdentifier: POILayer.symbolID("fuel")) as? MLNSymbolStyleLayer)?
+                .iconOpacity = NSExpression(forConstantValue: opacity)
+            (style.layer(withIdentifier: POILayer.fuelClusterCircleID) as? MLNCircleStyleLayer)?
+                .circleOpacity = NSExpression(forConstantValue: opacity)
+            (style.layer(withIdentifier: POILayer.fuelClusterCountID) as? MLNSymbolStyleLayer)?
+                .textOpacity = NSExpression(forConstantValue: opacity)
+        }
+
+        private func syncFuelReplacementEmphasis(style: MLNStyle) {
+            guard appliedFuelReplacementGeneration != state.markerGeneration else { return }
+            appliedFuelReplacementGeneration = state.markerGeneration
+            applyFuelReplacementEmphasis(to: style)
         }
 
         // MARK: - Network overlay sync
@@ -872,9 +967,7 @@ struct MapLibreMapView: UIViewRepresentable {
             if abs(bearing - state.mapBearing) > 0.4 {
                 state.mapBearing = bearing
             }
-            // Update viewport so POIManager / NetworkOverlayManager observe the change.
-            state.mapCenter = mapView.camera.centerCoordinate
-            state.mapZoom   = mapView.zoomLevel
+            publishViewport(from: mapView)
         }
 
         func mapView(
@@ -899,8 +992,21 @@ struct MapLibreMapView: UIViewRepresentable {
             if abs(bearing - state.mapBearing) > 0.4 {
                 state.mapBearing = bearing
             }
-            state.mapCenter = mapView.camera.centerCoordinate
-            state.mapZoom = mapView.zoomLevel
+            publishViewport(from: mapView)
+        }
+
+        private func publishViewport(from mapView: MLNMapView) {
+            let visible = mapView.visibleCoordinateBounds
+            state.updateMapViewport(
+                center: mapView.camera.centerCoordinate,
+                zoom: mapView.zoomLevel,
+                bounds: MapViewportBounds(
+                    minLongitude: visible.sw.longitude,
+                    minLatitude: visible.sw.latitude,
+                    maxLongitude: visible.ne.longitude,
+                    maxLatitude: visible.ne.latitude
+                )
+            )
         }
 
         /// MapLibre clears tracking on user gesture — keep `followMode` in sync so
@@ -1071,6 +1177,12 @@ struct MapLibreMapView: UIViewRepresentable {
             // but remains locked against every relocation path.
             if case .pin(let pin) = resolution {
                 logTouch(resolution)
+                if pin.kind == .fuel,
+                   pin.markerID == state.selectedPlannerPinID,
+                   !pin.markerID.hasPrefix("fuel-target:") {
+                    state.onPlannerPinDragBegan?(pin.markerID)
+                    return
+                }
                 mapView.selectAnnotation(pin, animated: true, completionHandler: nil)
                 state.selectPlannerPin(pin.markerID)
                 return
@@ -1093,6 +1205,10 @@ struct MapLibreMapView: UIViewRepresentable {
 
             // POI wins over pin-drop: generous hit box so a near-miss still
             // opens the POI sheet instead of placing a From-here destination.
+            if let cluster = fuelClusterFeature(at: pt, in: mapView, hitRadius: 32) {
+                zoomIntoFuelCluster(cluster, on: mapView)
+                return
+            }
             if let poi = poiFeature(at: pt, in: mapView, hitRadius: 32) {
                 state.onPOITap?(poi)
                 return
@@ -1171,12 +1287,22 @@ struct MapLibreMapView: UIViewRepresentable {
                 let selectedScale: CGFloat = annotation.markerID == state.selectedPlannerPinID ? 1.18 : 1
                 let kindScale: CGFloat = annotation.kind == .fuel ? 0.82 : 1
                 let scale = selectedScale * kindScale
-                let fallbackFrame = CGRect(
-                    x: pinPoint.x - DirtPlannerPinView.pinWidth * scale / 2,
-                    y: pinPoint.y - DirtPlannerPinView.pinHeight * scale,
-                    width: DirtPlannerPinView.pinWidth * scale,
-                    height: DirtPlannerPinView.pinHeight * scale
-                )
+                let fallbackFrame: CGRect
+                if annotation.markerID.hasPrefix("fuel-target:") {
+                    fallbackFrame = CGRect(
+                        x: pinPoint.x - DirtPlannerPinView.pinWidth * scale / 2,
+                        y: pinPoint.y - DirtPlannerPinView.pinHeight * scale / 2,
+                        width: DirtPlannerPinView.pinWidth * scale,
+                        height: DirtPlannerPinView.pinHeight * scale
+                    )
+                } else {
+                    fallbackFrame = CGRect(
+                        x: pinPoint.x - DirtPlannerPinView.pinWidth * scale / 2,
+                        y: pinPoint.y - DirtPlannerPinView.pinHeight * scale,
+                        width: DirtPlannerPinView.pinWidth * scale,
+                        height: DirtPlannerPinView.pinHeight * scale
+                    )
+                }
                 let frame = mapView.view(for: annotation)?.frame ?? fallbackFrame
                 guard frame.insetBy(dx: -12, dy: -12).contains(point) else { continue }
                 let dx = pinPoint.x - point.x
@@ -1213,6 +1339,10 @@ struct MapLibreMapView: UIViewRepresentable {
                 return
             case .map:
                 break
+            }
+            if let cluster = fuelClusterFeature(at: pt, in: mapView, hitRadius: 32) {
+                zoomIntoFuelCluster(cluster, on: mapView)
+                return
             }
             // Same rule for plan waypoints: don't place on top of a POI.
             if let poi = poiFeature(at: pt, in: mapView, hitRadius: 32) {
@@ -1339,7 +1469,7 @@ struct MapLibreMapView: UIViewRepresentable {
                 width: hitRadius * 2,
                 height: hitRadius * 2
             )
-            let poiLayerIDs = Set(POILayer.allLayerIDs)
+            let poiLayerIDs = Set(POILayer.individualLayerIDs)
             let poiHits = mapView.visibleFeatures(in: box, styleLayerIdentifiers: poiLayerIDs)
             guard let hit = poiHits.first as? MLNPointFeature else { return nil }
             let attrs = hit.attributes
@@ -1354,6 +1484,34 @@ struct MapLibreMapView: UIViewRepresentable {
                 openingHours: nil,
                 phone:        (attrs["phone"]   as? String).flatMap { $0.isEmpty ? nil : $0 },
                 website:      (attrs["website"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+            )
+        }
+
+        private func fuelClusterFeature(
+            at point: CGPoint,
+            in mapView: MLNMapView,
+            hitRadius: CGFloat
+        ) -> MLNPointFeature? {
+            let box = CGRect(
+                x: point.x - hitRadius,
+                y: point.y - hitRadius,
+                width: hitRadius * 2,
+                height: hitRadius * 2
+            )
+            let layerIDs: Set<String> = [
+                POILayer.fuelClusterCircleID,
+                POILayer.fuelClusterCountID
+            ]
+            return mapView.visibleFeatures(in: box, styleLayerIdentifiers: layerIDs)
+                .compactMap { $0 as? MLNPointFeature }
+                .first
+        }
+
+        private func zoomIntoFuelCluster(_ cluster: MLNPointFeature, on mapView: MLNMapView) {
+            let nextZoom = min(max(mapView.zoomLevel + 2, 8.5), 11)
+            mapView.setCenter(cluster.coordinate, zoomLevel: nextZoom, animated: true)
+            RoutingDebugLog.shared.event(
+                "map tap result=fuelCluster count=\(cluster.attributes["point_count"] ?? "unknown") zoom=\(nextZoom)"
             )
         }
     }
@@ -1376,7 +1534,11 @@ final class DirtPlannerPinView: MLNAnnotationView {
     private let bodyLayer = CAShapeLayer()
     private let circleLayer = CAShapeLayer()
     private let labelView = UILabel()
+    private let candidateHaloLayer = CAShapeLayer()
+    private let candidateBadgeLayer = CAShapeLayer()
+    private let candidateIconView = UIImageView()
     private var baseScale: CGFloat = 1
+    private var isFuelCandidate = false
     private var isSelectedForEditing = false
     private var isCustomDragging = false
     private var savedMapScrollEnabled = true
@@ -1403,6 +1565,25 @@ final class DirtPlannerPinView: MLNAnnotationView {
         layer.shadowRadius = 3
         layer.shadowOffset = CGSize(width: 0, height: 2)
 
+        // Replacement candidates are centered pump badges, not route-stage pins.
+        candidateHaloLayer.path = UIBezierPath(
+            ovalIn: CGRect(x: 2, y: 6, width: 32, height: 32)
+        ).cgPath
+        candidateHaloLayer.fillColor = UIColor.clear.cgColor
+        candidateHaloLayer.strokeColor = UIColor(DirtTheme.orange).cgColor
+        candidateHaloLayer.lineWidth = 2
+        candidateHaloLayer.opacity = 0
+        layer.addSublayer(candidateHaloLayer)
+
+        candidateBadgeLayer.path = UIBezierPath(
+            ovalIn: CGRect(x: 5, y: 9, width: 26, height: 26)
+        ).cgPath
+        candidateBadgeLayer.fillColor = UIColor(DirtTheme.orange).cgColor
+        candidateBadgeLayer.strokeColor = UIColor.white.cgColor
+        candidateBadgeLayer.lineWidth = 2
+        candidateBadgeLayer.isHidden = true
+        layer.addSublayer(candidateBadgeLayer)
+
         // Teardrop body (viewBox 0 0 36 44).
         bodyLayer.path = tearDropPath().cgPath
         bodyLayer.lineWidth = 1
@@ -1423,6 +1604,13 @@ final class DirtPlannerPinView: MLNAnnotationView {
         labelView.minimumScaleFactor = 0.7
         addSubview(labelView)
 
+        candidateIconView.frame = CGRect(x: 10, y: 14, width: 16, height: 16)
+        candidateIconView.image = UIImage(systemName: "fuelpump.fill")
+        candidateIconView.tintColor = .white
+        candidateIconView.contentMode = .scaleAspectFit
+        candidateIconView.isHidden = true
+        addSubview(candidateIconView)
+
         let pan = UIPanGestureRecognizer(target: self, action: #selector(handlePinPan(_:)))
         pan.maximumNumberOfTouches = 1
         pan.delegate = self
@@ -1434,19 +1622,53 @@ final class DirtPlannerPinView: MLNAnnotationView {
 
     func configure(for annotation: DirtAnnotation) {
         if isCustomDragging { restoreMapGestures(reason: "pinReconfigured") }
+        isFuelCandidate = annotation.markerID.hasPrefix("fuel-target:")
         labelView.text = annotation.label
         baseScale = annotation.kind == .fuel ? 0.82 : 1
-        centerOffset = CGVector(dx: 0, dy: -(Self.pinHeight * baseScale / 2))
+        centerOffset = isFuelCandidate
+            ? .zero
+            : CGVector(dx: 0, dy: -(Self.pinHeight * baseScale / 2))
         transform = CGAffineTransform(scaleX: baseScale, y: baseScale)
+        bodyLayer.isHidden = isFuelCandidate
+        circleLayer.isHidden = isFuelCandidate
+        labelView.isHidden = isFuelCandidate
+        candidateBadgeLayer.isHidden = !isFuelCandidate
+        candidateIconView.isHidden = !isFuelCandidate
+        updateCandidateHalo()
         isAccessibilityElement = true
         let title = annotation.title ?? annotation.label
-        accessibilityLabel = annotation.kind == .fuel
+        accessibilityLabel = isFuelCandidate
+            ? "Alternative fuel station, \(title)"
+            : annotation.kind == .fuel
             ? "Fuel stop \(annotation.label), \(title)"
             : "Route pin \(annotation.label)"
         // All planner pins: dark #111820 body + orange circle.
         bodyLayer.fillColor = UIColor(red: 17/255, green: 24/255, blue: 32/255, alpha: 1).cgColor
         bodyLayer.strokeColor = UIColor(DirtTheme.orange).cgColor
         circleLayer.fillColor = UIColor(DirtTheme.orange).cgColor
+    }
+
+    private func updateCandidateHalo() {
+        candidateHaloLayer.removeAllAnimations()
+        guard isFuelCandidate else {
+            candidateHaloLayer.opacity = 0
+            return
+        }
+        candidateHaloLayer.opacity = UIAccessibility.isReduceMotionEnabled ? 0.9 : 0.7
+        guard !UIAccessibility.isReduceMotionEnabled else { return }
+
+        let scale = CABasicAnimation(keyPath: "transform.scale")
+        scale.fromValue = 0.85
+        scale.toValue = 1.35
+        let opacity = CABasicAnimation(keyPath: "opacity")
+        opacity.fromValue = 0.7
+        opacity.toValue = 0
+        let group = CAAnimationGroup()
+        group.animations = [scale, opacity]
+        group.duration = 1.2
+        group.repeatCount = .infinity
+        group.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        candidateHaloLayer.add(group, forKey: "fuelCandidatePulse")
     }
 
     /// Selected = lifted + thicker orange rim so "ready to move" is obvious.
@@ -1462,6 +1684,7 @@ final class DirtPlannerPinView: MLNAnnotationView {
             self.layer.shadowRadius = selected ? 6 : 3
             self.circleLayer.lineWidth = selected ? 2 : 0
             self.circleLayer.strokeColor = selected ? UIColor.white.cgColor : UIColor.clear.cgColor
+            self.candidateBadgeLayer.lineWidth = selected ? 3 : 2
         }
         if animated {
             UIView.animate(withDuration: 0.18, delay: 0, options: [.curveEaseOut], animations: changes)
