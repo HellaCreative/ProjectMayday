@@ -84,8 +84,7 @@ final class ItineraryBuilder {
                     from.locationCoordinate, to.locationCoordinate
                 ])
                 let cleanFoundation = fuel.usableMeters > 0 && (
-                    straightMeters > fuel.usableMeters
-                        || straightMeters >= 1_000_000
+                    straightMeters >= 1_000_000
                         || endpointRegions.count > 1
                 )
                 var discoveryProfile: RouteProfile = cleanFoundation ? .cleanest : riderLeg.profile
@@ -111,7 +110,9 @@ final class ItineraryBuilder {
                 // Once a pump is needed, Clean is the fast connectivity
                 // foundation. The rider can then set every visible fuel leg's
                 // own adventure profile without preserving a disposable A→B line.
-                if fuel.usableMeters > 0, discoveredStops > 0, discoveryProfile != .cleanest {
+                if fuel.usableMeters > 0,
+                   (straightMeters >= 1_000_000 || discoveredStops > 3),
+                   discoveryProfile != .cleanest {
                     discoveryProfile = .cleanest
                     response = try await selectedSource.route(routeRequest(
                         itinerary: itinerary,

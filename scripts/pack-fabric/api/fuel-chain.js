@@ -15,10 +15,12 @@ module.exports = async function handler(req, res) {
 
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method === "GET") {
+    const { FUEL_CHAIN_SERVICE_VERSION } = require("../routing/lib/fuel-chain.js");
     return res.status(200).json({
       ok: true,
       service: "dirt-live-fuel-chain",
-      strategy: "forward-graph-reachability"
+      strategy: "forward-graph-reachability",
+      serviceVersion: FUEL_CHAIN_SERVICE_VERSION
     });
   }
   if (req.method !== "POST") {

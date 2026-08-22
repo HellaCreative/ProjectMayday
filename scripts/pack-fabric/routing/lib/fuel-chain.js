@@ -32,6 +32,14 @@ const { resolveLocationsByEligibleEdge } = require("../regional/endpoint-resolve
 const HARD_MATCH_METERS = 750;
 const MIN_STOP_SEPARATION_M = 800;
 const MIN_FORWARD_PROGRESS_M = 2_500;
+/** Bumped when fuel-selection / ranking contracts change. Clients may assert. */
+const FUEL_CHAIN_SERVICE_VERSION = "2026-08-22.fuel-coherence.3";
+/** Clean/direct reject pumps whose full chain exceeds foundation by this much. */
+const MAX_CLEAN_CHAIN_DETOUR_RATIO = 1.12;
+const MAX_CLEAN_CHAIN_DETOUR_ABS_M = 20_000;
+/** Soft corridor half-width; beyond this, cross-track dominates clean ranking. */
+const CORRIDOR_SOFT_WIDTH_M = 25_000;
+const SHORTLIST_MIN_SEPARATION_M = 15_000;
 
 function fuelNeedForProfileRide(profileMeters, firstLegMaxMeters, usableRangeMeters) {
   const meters = Number(profileMeters);
@@ -278,7 +286,9 @@ function stationEligibility(row, {
   destination,
   capMeters,
   visited = new Set(),
-  allowNearStartRecovery = false
+  allowNearStartRecovery = false,
+  profile = "balanced",
+  destinationGraphMeters = null
 }) {
   const point = [row.location.lon, row.location.lat];
   const startMeters = haversineMeters(point, current);
@@ -286,13 +296,44 @@ function stationEligibility(row, {
   const currentRemaining = haversineMeters(current, destination);
   const gainMeters = currentRemaining - remainingMeters;
   const progressMeters = projectedProgressMeters(point, current, destination);
+  const crossTrack = Math.abs(crossTrackMeters(point, current, destination));
   const notVisited = !visited.has(String(row.station.id));
   const routeReachable = Number.isFinite(row.graphMeters) && row.graphMeters <= capMeters + 1;
-  const forward = routeReachable && notVisited
+  let forward = routeReachable && notVisited
     && row.graphMeters >= MIN_STOP_SEPARATION_M
     && remainingMeters >= MIN_STOP_SEPARATION_M
     && progressMeters >= MIN_FORWARD_PROGRESS_M
     && gainMeters >= -5_000;
+  // Clean/direct: reject needless lateral excursions whose full P1→pump→P2
+  // chain is dominated by the foundation ride. Score alone was letting a
+  // Wallace-class pump win because it used nearly the whole tank.
+  const profileKey = String(profile || "").toLowerCase();
+  if (forward && (profileKey === "cleanest" || profileKey === "direct")) {
+    const directMeters = Number(destinationGraphMeters);
+    const remainingGraph = Number(row.remainingGraphMeters);
+    if (Number.isFinite(directMeters) && Number.isFinite(remainingGraph) && Number.isFinite(row.graphMeters)) {
+      const chainMeters = row.graphMeters + remainingGraph;
+      const detourCap = Math.max(
+        directMeters * MAX_CLEAN_CHAIN_DETOUR_RATIO,
+        directMeters + MAX_CLEAN_CHAIN_DETOUR_ABS_M
+      );
+      if (chainMeters > detourCap + 1) forward = false;
+    }
+    // Hard corridor gate: pumps that sit far sideways of the P1→P2 axis are
+    // not "forward" for paved skeleton planning even if closer to P2 than P1.
+    // Also reject early off-axis resets (e.g. Eastern Passage on a ride that
+    // should climb the Truro corridor) when sideways exceeds forward progress.
+    if (crossTrack > CORRIDOR_SOFT_WIDTH_M * 2.2 && progressMeters < currentRemaining * 0.55) {
+      forward = false;
+    }
+    if (crossTrack > CORRIDOR_SOFT_WIDTH_M && crossTrack > progressMeters * 0.9) {
+      forward = false;
+    }
+    if (progressMeters < Math.max(MIN_FORWARD_PROGRESS_M * 4, currentRemaining * 0.18)
+        && crossTrack > CORRIDOR_SOFT_WIDTH_M * 0.6) {
+      forward = false;
+    }
+  }
   const recovery = routeReachable && notVisited && allowNearStartRecovery
     && startMeters >= 50 && remainingMeters >= MIN_STOP_SEPARATION_M;
   return {
@@ -303,7 +344,8 @@ function stationEligibility(row, {
     startMeters,
     remainingMeters,
     gainMeters,
-    progressMeters
+    progressMeters,
+    crossTrack
   };
 }
 
@@ -333,21 +375,24 @@ function rankForwardFuel(
         destination,
         capMeters,
         visited,
-        allowNearStartRecovery
+        allowNearStartRecovery,
+        profile,
+        destinationGraphMeters
       });
-      const point = [row.location.lon, row.location.lat];
       const remaining = eligibility.remainingMeters;
       const gain = eligibility.gainMeters;
       const progress = eligibility.progressMeters;
-      const crossTrack = Math.abs(crossTrackMeters(point, current, destination));
-      // Progress is the primary objective. Tank use rewards pumps late enough
-      // to avoid needless stops; cross-track discourages arbitrary north/south
-      // excursions merely because the usable corridor is wide.
+      const crossTrack = eligibility.crossTrack;
+      const profileKey = String(profile || "").toLowerCase();
+      const crossTrackWeight = (profileKey === "cleanest" || profileKey === "direct") ? 1.15 : 0.35;
+      const tankWeight = (profileKey === "cleanest" || profileKey === "direct") ? 0.04 : 0.12;
+      // Progress/coherence first. Tank use is secondary for Clean/Direct so a
+      // full-tank lateral excursion cannot outrank a shorter corridor pump.
       const score =
         progress * 1.0 +
         gain * 0.45 -
-        crossTrack * 0.35 -
-        Math.abs(row.graphMeters - targetUse) * 0.12 +
+        crossTrack * crossTrackWeight -
+        Math.abs(row.graphMeters - targetUse) * tankWeight +
         ((profile === "dirt" || profile === "balanced") && row.dirtAdjacent ? 25_000 : 0);
       return {
         ...row,
@@ -355,6 +400,7 @@ function rankForwardFuel(
         startMeters: eligibility.startMeters,
         remainingMeters: remaining,
         progressMeters: progress,
+        crossTrack,
         score
       };
     });
@@ -525,13 +571,37 @@ async function planFuelChainOnRuntime({
     // OSM often contains several objects for one forecourt or a tight town
     // cluster. Spend K=6 on geographically distinct choices so the planner
     // compares real chain shapes instead of six aliases of the same detour.
-    for (const candidate of unique) {
+    // Prefer corridor progress bins so a Wallace cluster cannot fill all K
+    // slots and starve Truro/on-axis pumps that ranked slightly lower on tank use.
+    const currentCoord = locationCoordinate(currentLocation);
+    const destinationCoord = locationCoordinate(destination);
+    const axisMeters = Math.max(1, haversineMeters(currentCoord, destinationCoord));
+    const binCount = Math.max(3, effectiveK);
+    const binUsed = new Set();
+    function progressBin(candidate) {
       const point = locationCoordinate(candidate.location);
-      if (candidates.some((selected) =>
-        haversineMeters(point, locationCoordinate(selected.location)) < 15_000
-      )) continue;
-      candidates.push(candidate);
+      const progress = Math.max(0, projectedProgressMeters(point, currentCoord, destinationCoord));
+      return Math.min(binCount - 1, Math.floor((progress / axisMeters) * binCount));
+    }
+    function tooClose(candidate) {
+      const point = locationCoordinate(candidate.location);
+      return candidates.some((selected) =>
+        haversineMeters(point, locationCoordinate(selected.location)) < SHORTLIST_MIN_SEPARATION_M
+      );
+    }
+    // Pass 1: one candidate per progress bin (best-ranked first).
+    for (const candidate of unique) {
       if (candidates.length >= effectiveK) break;
+      const bin = progressBin(candidate);
+      if (binUsed.has(bin) || tooClose(candidate)) continue;
+      binUsed.add(bin);
+      candidates.push(candidate);
+    }
+    // Pass 2: fill remaining slots with geographic diversity.
+    for (const candidate of unique) {
+      if (candidates.length >= effectiveK) break;
+      if (candidates.includes(candidate) || tooClose(candidate)) continue;
+      candidates.push(candidate);
     }
     for (const candidate of unique) {
       if (candidates.length >= effectiveK) break;
@@ -651,13 +721,35 @@ async function planFuelChainOnRuntime({
         );
         break;
       case "cleanest":
-        // Clean retains its profile-aware station ranking: minimizing the
-        // complete trip cannot come at the expense of its paved contract.
-        fitting.sort((a, b) => a.rank - b.rank || a.meters - b.meters);
+      case "direct":
+        // Anchor coherence to the foundation ride, not the shortest forced stop.
+        // A stop is required because profileMeters exceeded the tank; among
+        // pumps whose complete chain stays near that foundation, prefer the one
+        // that actually uses the tank along the corridor (Truro over a 15 km Shell).
+        fitting.sort((a, b) => {
+          const remainA = Number(a.candidate.remainingGraphMeters);
+          const remainB = Number(b.candidate.remainingGraphMeters);
+          const chainA = a.meters + (Number.isFinite(remainA) ? remainA : 0);
+          const chainB = b.meters + (Number.isFinite(remainB) ? remainB : 0);
+          const foundation = Number(profileMeters);
+          const cap = Number.isFinite(foundation) && foundation > 0
+            ? foundation * 1.12
+            : Infinity;
+          const aCoherent = chainA <= cap + 1;
+          const bCoherent = chainB <= cap + 1;
+          if (aCoherent !== bCoherent) return aCoherent ? -1 : 1;
+          if (aCoherent && bCoherent) {
+            // Prefer fuller tank use / further along the axis within the band.
+            const progressA = Number(a.candidate.progressMeters) || a.meters;
+            const progressB = Number(b.candidate.progressMeters) || b.meters;
+            if (Math.abs(progressA - progressB) > 15_000) return progressB - progressA;
+            return chainA - chainB || a.rank - b.rank;
+          }
+          // Both exceed foundation band: pick the smaller complete detour.
+          return chainA - chainB || a.rank - b.rank || a.meters - b.meters;
+        });
         break;
       default:
-        // Direct compares the complete trip through each candidate rather
-        // than optimizing only the first fuel hop.
         fitting.sort((a, b) =>
           (a.meters + a.candidate.remainingGraphMeters) -
             (b.meters + b.candidate.remainingGraphMeters) ||
@@ -1222,6 +1314,7 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
     status: planned.ok ? "complete" : (gapResult ? "gap" : "failed"),
     error: planned.error || null,
     message: planned.message || null,
+    serviceVersion: FUEL_CHAIN_SERVICE_VERSION,
     regionIds: fuel.regionIds,
     stops: planned.stops || [],
     graphMeters: planned.graphMeters || [],
@@ -1303,6 +1396,7 @@ function planItineraryFuelChain({ legs, usableRangeMeters, initialFuelUsedMeters
 }
 
 module.exports = {
+  FUEL_CHAIN_SERVICE_VERSION,
   boundedGraphDistances,
   distanceToMatch,
   fuelPlanningSpan,

@@ -2,7 +2,7 @@
 
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { planFuelChainOnRuntime } = require("./fuel-chain");
+const { planFuelChainOnRuntime, rankForwardFuel, FUEL_CHAIN_SERVICE_VERSION } = require("./fuel-chain");
 const { lineRuntime } = require("./fuel-chain.test-fixture");
 
 function station(id, lon) {
@@ -53,4 +53,44 @@ test("Clean picks the forward paved-side station while Dirt picks the dirt-side 
   assert.equal(clean.ok, true);
   assert.equal(clean.stops[0].id, "far-paved");
   assert.equal(dirt.stops[0].id, "mid-dirt");
+});
+
+
+test("Clean rejects a full-tank lateral Gulf-class pump in favor of a corridor pump", () => {
+  assert.equal(typeof FUEL_CHAIN_SERVICE_VERSION, "string");
+  assert.match(FUEL_CHAIN_SERVICE_VERSION, /fuel-coherence/);
+  // Halifax-ish → Tatamagouche-ish geometry: Wallace Gulf is nearly a full tank
+  // sideways; Truro sits on the corridor with a shorter complete chain.
+  const start = { lat: 44.764823, lon: -63.340271 };
+  const destination = { lat: 45.636595, lon: -63.056267 };
+  const foundationMeters = 252_989;
+  const gulf = {
+    station: { id: "osm:n11084635754", name: "Gulf Wallace" },
+    location: { lat: 45.962505, lon: -63.883625 },
+    graphMeters: 237_278,
+    remainingGraphMeters: 119_390,
+    dirtAdjacent: false
+  };
+  const truro = {
+    station: { id: "truro-corridor", name: "Truro corridor" },
+    location: { lat: 45.365, lon: -63.280 },
+    graphMeters: 180_000,
+    remainingGraphMeters: 75_000,
+    dirtAdjacent: false
+  };
+  const ranked = rankForwardFuel(
+    [gulf, truro],
+    start,
+    destination,
+    237_500,
+    new Set(),
+    "cleanest",
+    null,
+    foundationMeters,
+    false
+  );
+  assert.ok(ranked.length >= 1, "expected at least one forward pump");
+  assert.equal(ranked[0].station.id, "truro-corridor");
+  assert.ok(!ranked.some((row) => row.station.id === gulf.station.id),
+    "Gulf Wallace must not remain forward after chain-coherence gates");
 });
