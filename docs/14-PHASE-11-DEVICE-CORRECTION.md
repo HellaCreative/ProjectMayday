@@ -1,5 +1,14 @@
 # DIRT Routing — Phase 11 Device Correction
 
+> **2026-08-22 release erratum:** an exact production `/api/fuel-chain` replay
+> reports the older `candidateK=3` planner and old candidate payload, while the
+> current repository uses six geographically distinct candidates and richer
+> forward-validity diagnostics. The production alias therefore cannot presently
+> be treated as a proven match for the current client/repository. The deployment
+> statement below records what was attempted at the time; current fuel acceptance
+> is blocked until a service contract/version proves the match. See
+> [`00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md`](00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md#10-current-blocking-defect--2026-08-22).
+
 Status: rider-approved; implementation verified locally and deployed to production
 Evidence: physical From Here and Plan tests on White, 2026-08-21
 

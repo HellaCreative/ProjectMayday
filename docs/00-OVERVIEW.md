@@ -1,11 +1,16 @@
 # DIRT iOS — Overview
 
+> **Current authority:** Read
+> [`00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md`](00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md)
+> first. This page is a short technical introduction and does not define current
+> routing status or work priority.
+
 Native SwiftUI client for the DIRT dual-sport navigator. No staging.
 
 | | |
 | --- | --- |
 | **Develop here** | `/Users/richardsmith/SandBox01/MAYDAYiOS/Dirt` |
-| Working branch | `rescue/2026-08-19` |
+| Working branch | `feature/routing-itinerary-rebuild` |
 | Agent primer | [../AGENTS.md](../AGENTS.md) |
 | Packs + live API | `scripts/pack-fabric/` |
 
@@ -26,6 +31,7 @@ MapLibre Native renders the map. Online planning uses live `POST /api/route` as 
 
 | Doc | Scope |
 | --- | --- |
+| [00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md](./00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md) | Canonical product, routing, source policy, current state, and priority |
 | [../AGENTS.md](../AGENTS.md) | New-agent primer (Vercel vs R2, branch) |
 | [00-OVERVIEW.md](./00-OVERVIEW.md) | This file |
 | [01-STACK.md](./01-STACK.md) | Swift stack, SPM, structure, signing |
@@ -42,7 +48,9 @@ MapLibre Native renders the map. Online planning uses live `POST /api/route` as 
 ## Locked decisions
 
 - Sign in with Apple is the only account path
-- Routing: on-device packs when downloaded; live `/api/route` when online without that pack. **Same R2 `graph.v2.bin`.** Ship live + download together (`scripts/pack-fabric/scripts/ship-routing.js`).
+- Routing: live graph/fuel while Wi-Fi or cellular is available; installed packs
+  while offline. No silent cross-source fallback. After candidate approval,
+  live and downloadable use the exact same promoted R2 bytes.
 - Rider Services POIs from OSM, with motorcycle fuel filter
 - Network overlay paints the installed pack, not a second CDN
 - dirtmoto.app is the marketing / legal site (not a map client)

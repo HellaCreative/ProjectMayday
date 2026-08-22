@@ -1,6 +1,13 @@
 # DIRT iOS — Routing
 
-Client routing behaviour as implemented. Prefer on-device `graph.v2` + `OnDeviceRouter` when packs cover the pins; otherwise live `POST AppConfig.routeURL` via `RoutingClient`.
+> **Supporting implementation reference.** Current product law, source policy,
+> release state, and blocker priority are defined in
+> [`00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md`](00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md).
+
+Client routing behaviour as implemented. While online, use live route, fuel, and
+graph services. While offline, use installed `graph.v2` packs through
+`OnDeviceRouter`. Never silently substitute one source after the selected source
+fails.
 
 The canonical waypoint, derived fuel-stop, rebuild-boundary, and replay contracts
 are defined in [`10-ITINERARY-MODEL.md`](10-ITINERARY-MODEL.md).
@@ -44,11 +51,14 @@ Vehicle is always `"dual-sport-motorcycle"`. `motorizedPermissive` is always `tr
 
 ## Policy (planning)
 
-1. **Online planning** → live `/api/route` (same R2 object the phone downloads).
+1. **Online planning** → live `/api/route` and matching live fuel/graph data.
 2. **Offline with covering packs** → on-device; two adjacent installed packs can chain.
 3. **Offline without covering packs** → actionable “download from PACKS” copy.
 
-Pack download is **manual** (PACKS sheet). It is not required to drop a pin or plan while you have cell service. Start Nav does not fetch a routing pack.
+Pack download may be initiated manually from PACKS. It is not required to plan
+while online. Before navigation participation, Start must prepare the corridor
+basemap layers and touched routing packs for offline use; end-to-end verification
+of that preparation remains an active acceptance gate.
 
 Live without a pack **must** search the same `graph.v2.bin` PACKS would install. If you rebuild a pack or retune costs, ship both (`scripts/pack-fabric/scripts/ship-routing.js`). Do not leave live on `longhaul.v1.json.gz`.
 

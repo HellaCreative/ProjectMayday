@@ -1,5 +1,10 @@
 # Canonical itinerary model
 
+> **Supporting authority:** this is the canonical internal ownership and
+> mutation model. Product meaning, rider-facing routing laws, release state, and
+> current work priority are maintained in
+> [`00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md`](00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md).
+
 The planner has one durable source of rider intent: `RiderItinerary`. It owns an
 ordered list of rider waypoints (`1 → 2 → 3 → …`), the deterministic legs between
 them, the current generation, and reported impassable edge IDs. It never contains

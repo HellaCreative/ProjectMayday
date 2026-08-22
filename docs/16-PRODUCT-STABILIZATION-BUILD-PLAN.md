@@ -1,5 +1,8 @@
 # DIRT — Product Stabilization Build Plan
 
+Canonical product and routing authority:
+[`00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md`](00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md).
+
 Status: active operating plan
 Owner: Richard Smith with Codex as primary engineering agent
 Purpose: prevent circular repairs, preserve known-good behavior, and determine
@@ -13,6 +16,10 @@ now?”
   recorded before pack validation begins
 - Downloadable packs: not promoted from the rebuilt live packs
 - Current activity: physical-device validation on White
+- Current blocker: production fuel service does not expose the current
+  repository's candidate contract and selected a 71 km cross-track pump for the
+  fixed 2026-08-22 From Here reproduction. Further dependent device testing is
+  paused pending rider-approved service-version and pump-selection repair.
 
 ## Operating rules
 
@@ -157,4 +164,3 @@ If one test produces a severe blocker, stop the remaining test script. Preserve
 the screenshot, debug log, coordinates, mode, profile, fuel range, connectivity,
 client commit, and live-pack manifest. Diagnose that blocker before asking the
 rider to spend time testing dependent behavior.
-

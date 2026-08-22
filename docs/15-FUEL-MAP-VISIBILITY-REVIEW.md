@@ -1,5 +1,9 @@
 # DIRT — Fuel Map Visibility Review
 
+> **Implementation evidence.** This records an approved fuel-layer repair and
+> its acceptance criteria. Current product authority and work priority are in
+> [`00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md`](00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md).
+
 Status: approved by rider and implemented; awaiting physical-device validation
 Evidence: physical device test on White, 2026-08-21
 

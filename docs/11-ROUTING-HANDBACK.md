@@ -1,5 +1,11 @@
 # DIRT Routing — Handback and Roadmap
 
+> **Historical record only.** This captures the system after Phases 0–9 and is
+> not the current project brief, roadmap, benchmark baseline, or release state.
+> Use
+> [`00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md`](00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md)
+> for current authority.
+
 Written 2026-08-21 after Phases 0–9. Codex drives from here. This file goes in `docs/11-ROUTING-HANDBACK.md`.
 
 ---

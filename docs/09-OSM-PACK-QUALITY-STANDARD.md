@@ -1,5 +1,10 @@
 # OSM Pack Quality Standard
 
+> **Supporting authority:** this remains the locked build and release gate for
+> regional routing packs. Current product behaviour, release inventory, and
+> blocker priority are maintained in
+> [`00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md`](00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md).
+
 This is the release gate for every DIRT province, territory, and US state pack. The live pack is the source of truth. A downloadable/offline pack is published from the exact same `graph.v2.bin` only after its live routes are approved.
 
 The foundational pack is OSM-only. Provincial, state, DRA, FTEN, NRN, and other secondary sources stay out until that region's OSM pack and router pass this standard. Secondary data must later be evaluated as an explicit, separately reported layer; it must never silently change the OSM baseline.

@@ -1,7 +1,13 @@
 # DIRT — Map refinement (locked)
 
+> **Authority boundary:** this document remains locked for road eligibility,
+> surface, access, corridor, urban, stitch, and seam laws. Current online/offline
+> source policy, release state, and work priority live in
+> [`00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md`](00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md).
+> Later rider decisions supersede the older source-selection tables below.
+
 How Dirt chooses roads, what Layers may paint, how packs are joined, and how
-profiles cost a ride. Phone on-device routing is the source of truth.
+profiles cost a ride. These laws apply identically to live and on-device routing.
 Do not re-open these laws to chase a dirt% number.
 
 **Last confirmed:** 2026-08-19 (R2 catalog = all CA + US; Vercel = API only; develop in iOS Dirt only).
@@ -306,9 +312,9 @@ on it.
 
 | Hop | Engine |
 | --- | --- |
-| Both pins in one downloaded province | On-device `graph.v2` (even on Wi‑Fi) |
-| Pins in two adjacent provinces + both packs installed | On-device chain (two hops + seam). **No live fallback.** |
-| Pin in a province not on the phone + online | Live `/api/route`. Never auto-download the pack. |
+| Wi-Fi or cellular available | Live route, fuel, and graph services. Never silently fall back to an installed pack. |
+| No Wi-Fi and no cellular; required packs installed | On-device `graph.v2` and installed fuel sidecars, including adjacent-pack seam chaining. |
+| Offline and a required pack is missing | Honest unavailable/download-required result; never invent or silently span the missing fabric. |
 
 ### Live seams (canada-chain)
 

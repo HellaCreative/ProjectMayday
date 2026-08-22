@@ -2,7 +2,7 @@
 
 **Develop only in this folder:** `/Users/richardsmith/SandBox01/MAYDAYiOS/Dirt`
 
-Open `Dirt.xcodeproj`. Branch: `rescue/2026-08-19`.
+Open `Dirt.xcodeproj`. Branch: `feature/routing-itinerary-rebuild`.
 
 Packs, adapters, live `/api/route`, and ship scripts live here under `scripts/pack-fabric/`. There is no second product repo.
 
@@ -25,4 +25,7 @@ Vercel is API code only (`scripts/pack-fabric/api`). Packs never go on Hobby.
 - Auto-download packs to “make live match.”
 - Leave a pack rebuild unpublished.
 
-Read next: [docs/00-OVERVIEW.md](docs/00-OVERVIEW.md), [docs/02-ROUTING.md](docs/02-ROUTING.md), [docs/08-MAP-REFINEMENT.md](docs/08-MAP-REFINEMENT.md).
+Read first: [docs/00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md](docs/00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md).
+
+Then read the narrow contract relevant to the task. Phase reports and handback
+documents are historical evidence, not current instructions.

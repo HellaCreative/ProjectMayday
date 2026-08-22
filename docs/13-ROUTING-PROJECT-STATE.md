@@ -1,4 +1,8 @@
-# DIRT Routing — Active Project State
+# DIRT Routing — Phase 11 Project-State Snapshot
+
+> **Historical snapshot.** “Active” statements below describe 2026-08-21 only.
+> Current product law, release state, blockers, and work priority are in
+> [`00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md`](00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md).
 
 Point-in-time record: 2026-08-21  
 Active project lead: Codex  

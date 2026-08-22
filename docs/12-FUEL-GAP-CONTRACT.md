@@ -1,5 +1,10 @@
 # Fuel gap contract
 
+> **Supporting authority:** this remains the safety contract for fuel-gap
+> calculation, acknowledgement, Start, and GPX behaviour. Current product state
+> and active blockers are maintained in
+> [`00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md`](00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md).
+
 Phase 11 implementation contract. This document defines planner behaviour; it
 does not change road or fuel data in any map pack.
 
