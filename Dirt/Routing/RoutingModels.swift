@@ -424,19 +424,23 @@ struct RouteStats: Codable, Sendable {
     let pavedPercent: Int?
     /// Share of route distance on `motorized_unknown` (Allow-gated purple).
     let unknownAccessPercent: Int?
+    /// Share of route distance whose surface family is Unknown (Phase E1).
+    let unknownSurfacePercent: Int?
 
     init(
         dirtPercent: Int? = nil,
         pavedPercent: Int? = nil,
-        unknownAccessPercent: Int? = nil
+        unknownAccessPercent: Int? = nil,
+        unknownSurfacePercent: Int? = nil
     ) {
         self.dirtPercent = dirtPercent
         self.pavedPercent = pavedPercent
         self.unknownAccessPercent = unknownAccessPercent
+        self.unknownSurfacePercent = unknownSurfacePercent
     }
 
     enum CodingKeys: String, CodingKey {
-        case dirtPercent, pavedPercent, unknownAccessPercent
+        case dirtPercent, pavedPercent, unknownAccessPercent, unknownSurfacePercent
     }
 
     init(from decoder: Decoder) throws {
@@ -444,6 +448,7 @@ struct RouteStats: Codable, Sendable {
         dirtPercent = try c.decodeIfPresent(Int.self, forKey: .dirtPercent)
         pavedPercent = try c.decodeIfPresent(Int.self, forKey: .pavedPercent)
         unknownAccessPercent = try c.decodeIfPresent(Int.self, forKey: .unknownAccessPercent)
+        unknownSurfacePercent = try c.decodeIfPresent(Int.self, forKey: .unknownSurfacePercent)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -451,6 +456,7 @@ struct RouteStats: Codable, Sendable {
         try c.encodeIfPresent(dirtPercent, forKey: .dirtPercent)
         try c.encodeIfPresent(pavedPercent, forKey: .pavedPercent)
         try c.encodeIfPresent(unknownAccessPercent, forKey: .unknownAccessPercent)
+        try c.encodeIfPresent(unknownSurfacePercent, forKey: .unknownSurfacePercent)
     }
 }
 

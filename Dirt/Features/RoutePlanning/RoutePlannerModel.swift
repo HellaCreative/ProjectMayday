@@ -2001,6 +2001,7 @@ final class RoutePlannerModel {
         segmentPolylines: [[RouteCoordinate]]? = nil,
         networkSegments: [RouteSegment]? = nil,
         unknownAccessPercent: Int = 0,
+        unknownSurfacePercent: Int = 0,
         warnings: [RouteWarning]? = nil
     ) -> RouteResponse {
         let segments: [RouteSegment]?
@@ -2032,7 +2033,8 @@ final class RoutePlannerModel {
             stats: RouteStats(
                 dirtPercent: dirtPercent,
                 pavedPercent: pavedPercent,
-                unknownAccessPercent: unknownAccessPercent
+                unknownAccessPercent: unknownAccessPercent,
+                unknownSurfacePercent: unknownSurfacePercent
             ),
             maneuvers: nil,
             warnings: warnings,
@@ -2061,11 +2063,12 @@ final class RoutePlannerModel {
         return makeStoredRouteResponse(
             coordinates: coords,
             distanceMeters: local.distanceMeters,
-            dirtPercent: local.dirtPercent,
-            pavedPercent: local.pavedPercent,
+            dirtPercent: local.reportedDirtPercent,
+            pavedPercent: local.reportedPavedPercent,
             imported: false,
             networkSegments: segments,
             unknownAccessPercent: local.unknownAccessPercent,
+            unknownSurfacePercent: local.unknownSurfacePercent,
             warnings: {
                 var warnings: [RouteWarning] = []
                 if local.searchMeta.urbanCoreFallbackUsed {

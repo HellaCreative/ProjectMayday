@@ -24,6 +24,8 @@ nonisolated struct OnDeviceRouter {
         /// Packed OSM road class (freeway…track). Used so untagged highways
         /// paint as paved, not dirt.
         var roadClassName: String = "unknown"
+        /// Graph-v3 surface leaf (nil on v2 / soft-stitch). Stats only in E1.
+        var surfaceLeaf: String? = nil
 
         /// Rider-facing surface after OSM highway class wins over untagged unknown.
         var paintSurfaceName: String {
@@ -39,9 +41,14 @@ nonisolated struct OnDeviceRouter {
         var distanceMeters: Double
         var edgeIds: [String]
         var legs: [Leg]
+        /// Coarse adventure Dirt% — used for path selection / ranking (unchanged E1).
         var dirtPercent: Int
         var pavedPercent: Int
         var unknownAccessPercent: Int
+        /// Honest leaf-based Dirt% when pack has leaves; else mirrors dirtPercent.
+        var reportedDirtPercent: Int
+        var reportedPavedPercent: Int
+        var unknownSurfacePercent: Int
         var backtrackMeters: Double = 0
         var backtrackPct: Double = 0
         var backtrackReason: String? = nil
@@ -1075,7 +1082,8 @@ nonisolated struct OnDeviceRouter {
             surfaceName: surface,
             edgeId: id,
             accessName: accessNameForEdge(ei),
-            roadClassName: roadClassNameForEdge(ei)
+            roadClassName: roadClassNameForEdge(ei),
+            surfaceLeaf: pack.hasLeaves ? pack.surfaceLeaf(ei) : nil
         ))
         if let stub = softStitchStub(tap: to, snap: endSnap, idSuffix: "end") {
             legs.append(stub)
@@ -1604,7 +1612,8 @@ nonisolated struct OnDeviceRouter {
                         surfaceName: surface,
                         edgeId: id,
                         accessName: v.junctionStitch ? "motorized_permissive" : accessNameForEdge(v.ei),
-                        roadClassName: v.junctionStitch ? "unknown" : roadClassNameForEdge(v.ei)
+                        roadClassName: v.junctionStitch ? "unknown" : roadClassNameForEdge(v.ei),
+                        surfaceLeaf: v.junctionStitch || !pack.hasLeaves ? nil : pack.surfaceLeaf(v.ei)
                     ))
                 }
             } else if prevKind[node] == 2 {
@@ -1627,7 +1636,8 @@ nonisolated struct OnDeviceRouter {
                     surfaceName: surface,
                     edgeId: id,
                     accessName: accessNameForEdge(ei),
-                    roadClassName: roadClassNameForEdge(ei)
+                    roadClassName: roadClassNameForEdge(ei),
+                    surfaceLeaf: pack.hasLeaves ? pack.surfaceLeaf(ei) : nil
                 ))
             }
             node = parent
@@ -1905,7 +1915,8 @@ nonisolated struct OnDeviceRouter {
                         surfaceName: surface,
                         edgeId: id,
                         accessName: v.junctionStitch ? "motorized_permissive" : accessNameForEdge(v.ei),
-                        roadClassName: v.junctionStitch ? "unknown" : roadClassNameForEdge(v.ei)
+                        roadClassName: v.junctionStitch ? "unknown" : roadClassNameForEdge(v.ei),
+                        surfaceLeaf: v.junctionStitch || !pack.hasLeaves ? nil : pack.surfaceLeaf(v.ei)
                     ))
                 }
             } else {
@@ -1930,7 +1941,8 @@ nonisolated struct OnDeviceRouter {
                     surfaceName: surface,
                     edgeId: id,
                     accessName: accessNameForEdge(ei),
-                    roadClassName: roadClassNameForEdge(ei)
+                    roadClassName: roadClassNameForEdge(ei),
+                    surfaceLeaf: pack.hasLeaves ? pack.surfaceLeaf(ei) : nil
                 ))
             }
             label = parent
@@ -2551,7 +2563,8 @@ nonisolated struct OnDeviceRouter {
                     surfaceName: surface,
                     edgeId: id,
                     accessName: accessNameForEdge(ei),
-                    roadClassName: roadClassNameForEdge(ei)
+                    roadClassName: roadClassNameForEdge(ei),
+                    surfaceLeaf: pack.hasLeaves ? pack.surfaceLeaf(ei) : nil
                 ))
             }
             node = parent
@@ -2607,7 +2620,8 @@ nonisolated struct OnDeviceRouter {
                     surfaceName: edge.surfaceName,
                     edgeId: edge.edgeId,
                     accessName: prior?.accessName ?? "motorized_permissive",
-                    roadClassName: prior?.roadClassName ?? "unknown"
+                    roadClassName: prior?.roadClassName ?? "unknown",
+                    surfaceLeaf: prior?.surfaceLeaf
                 )
             }
             // Second pass: remove sharp out-and-backs that share no exact revisit
@@ -2630,7 +2644,8 @@ nonisolated struct OnDeviceRouter {
                     surfaceName: edge.surfaceName,
                     edgeId: edge.edgeId,
                     accessName: prior?.accessName ?? "motorized_permissive",
-                    roadClassName: prior?.roadClassName ?? "unknown"
+                    roadClassName: prior?.roadClassName ?? "unknown",
+                    surfaceLeaf: prior?.surfaceLeaf
                 )
             }
         }
@@ -2671,6 +2686,20 @@ nonisolated struct OnDeviceRouter {
             unknownPct = 0
         }
 
+        // Phase E1: honest reported % from surfaceLeaf (selection keeps coarse dirtPct).
+        let reported: SurfaceFamilyStats.Percents
+        if pack.hasLeaves {
+            let rows = worked.map { ($0.distanceMeters, $0.surfaceLeaf) }
+            reported = SurfaceFamilyStats.honestPercents(rows: rows, distanceMeters: meters)
+        } else {
+            reported = SurfaceFamilyStats.Percents(
+                dirtPercent: dirtPct,
+                pavedPercent: pavedPct,
+                gravelPercent: 0,
+                unknownSurfacePercent: 0
+            )
+        }
+
         var searchMeta = SearchMeta()
         if let start = coords.first, let end = coords.last {
             searchMeta.settlementFallbackUsed = coords.contains {
@@ -2685,6 +2714,9 @@ nonisolated struct OnDeviceRouter {
             dirtPercent: dirtPct,
             pavedPercent: pavedPct,
             unknownAccessPercent: unknownPct,
+            reportedDirtPercent: reported.dirtPercent,
+            reportedPavedPercent: reported.pavedPercent,
+            unknownSurfacePercent: reported.unknownSurfacePercent,
             searchMeta: searchMeta
         )
     }

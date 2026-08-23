@@ -60,6 +60,28 @@ const {
   PASS2_TIME_MS,
   PASS2_POP_CAP
 } = require("./hop-search");
+const { applyHonestSurfaceStats } = require("./surface-family");
+
+/** Attach surfaceLeaf for E1 post-selection stats (search still uses coarse dirt). */
+function withSurfaceLeaf(edge, pack, ei) {
+  if (!pack || !pack.hasLeaves || typeof pack.edgeLeaves !== "function") {
+    return edge;
+  }
+  const leaves = pack.edgeLeaves(ei);
+  return Object.assign({}, edge, {
+    undirectedEdgeIndex: ei,
+    surfaceLeaf: leaves && leaves.surfaceLeaf != null ? leaves.surfaceLeaf : null
+  });
+}
+
+function finalizeReportedStats(stats, routeEdges, distanceMeters, pack) {
+  if (!pack || !pack.hasLeaves) return stats;
+  const rows = (routeEdges || []).map((edge) => ({
+    meters: edge.meters,
+    surfaceLeaf: edge.surfaceLeaf
+  }));
+  return applyHonestSurfaceStats(stats, rows, distanceMeters, true);
+}
 
 function haversineMeters(a, b) {
   const R = 6371000;
@@ -1141,35 +1163,47 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
     if (prevKind[node] === 1) {
       const v = virt[prevData[node]];
       const forward = prevForward[node] === 1;
-      used.push({
-        coords: forward ? v.coords : v.coords.slice().reverse(),
-        meters: v.meters,
-        surface: unpackSurface(edgeAttrs[v.ei]),
-        access: unpackAccess(edgeAttrs[v.ei]),
-        structure: unpackStructure(edgeAttrs[v.ei]),
-        roadClass: ROAD_CLASS_NAME[unpackRoadClass(edgeAttrs[v.ei])] || "unknown",
-        edgeId: pack.edgeId(v.ei),
-        accessLeg: v.accessLeg,
-        confidence: unpackConfidence(edgeAttrs[v.ei]),
-        seasonal: unpackSeasonal(edgeAttrs[v.ei])
-      });
+      used.push(
+        withSurfaceLeaf(
+          {
+            coords: forward ? v.coords : v.coords.slice().reverse(),
+            meters: v.meters,
+            surface: unpackSurface(edgeAttrs[v.ei]),
+            access: unpackAccess(edgeAttrs[v.ei]),
+            structure: unpackStructure(edgeAttrs[v.ei]),
+            roadClass: ROAD_CLASS_NAME[unpackRoadClass(edgeAttrs[v.ei])] || "unknown",
+            edgeId: pack.edgeId(v.ei),
+            accessLeg: v.accessLeg,
+            confidence: unpackConfidence(edgeAttrs[v.ei]),
+            seasonal: unpackSeasonal(edgeAttrs[v.ei])
+          },
+          pack,
+          v.ei
+        )
+      );
     } else if (prevKind[node] === 2) {
       // Coincident duplicate-node stitch — no geometry.
     } else {
       const ei = prevData[node];
       const forward = prevForward[node] === 1;
-      used.push({
-        coords: geom.polylineMaybeReversed(ei, forward),
-        meters: edgeMeters[ei],
-        surface: unpackSurface(edgeAttrs[ei]),
-        access: unpackAccess(edgeAttrs[ei]),
-        structure: unpackStructure(edgeAttrs[ei]),
-        roadClass: ROAD_CLASS_NAME[unpackRoadClass(edgeAttrs[ei])] || "unknown",
-        edgeId: pack.edgeId(ei),
-        accessLeg: false,
-        confidence: unpackConfidence(edgeAttrs[ei]),
-        seasonal: unpackSeasonal(edgeAttrs[ei])
-      });
+      used.push(
+        withSurfaceLeaf(
+          {
+            coords: geom.polylineMaybeReversed(ei, forward),
+            meters: edgeMeters[ei],
+            surface: unpackSurface(edgeAttrs[ei]),
+            access: unpackAccess(edgeAttrs[ei]),
+            structure: unpackStructure(edgeAttrs[ei]),
+            roadClass: ROAD_CLASS_NAME[unpackRoadClass(edgeAttrs[ei])] || "unknown",
+            edgeId: pack.edgeId(ei),
+            accessLeg: false,
+            confidence: unpackConfidence(edgeAttrs[ei]),
+            seasonal: unpackSeasonal(edgeAttrs[ei])
+          },
+          pack,
+          ei
+        )
+      );
     }
     node = parent;
   }
@@ -1216,6 +1250,7 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
       trackClass: edge.roadClass,
       structureType: enums.STRUCTURE_NAME[edge.structure] || "none",
       accessClass: accessName,
+      surfaceLeaf: edge.surfaceLeaf != null ? edge.surfaceLeaf : null,
       source: null,
       sourceRecordId: null,
       sourceDescription: null,
@@ -1241,7 +1276,7 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
     profileCost: dist[endNode],
     searchMeta: {
       bidir: false,
-      packFormat: "v2",
+      packFormat: pack.hasLeaves ? "v3" : "v2",
       ellipseFactor: Infinity,
       ellipseLabel: "csr-uni",
       ellipseEscalation: "v2_uni",
@@ -1253,6 +1288,7 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
       pass2Outcome: abort,
       settlementFallbackUsed: settlementCrossingUsed
     },
+    // Coarse dirt% kept for Balanced mix selection; honest overlay applied after pick.
     stats: {
       pavedPercent: pct(pavedMeters),
       gravelPercent: pct(bySurfaceM.gravel || 0),
@@ -1552,25 +1588,45 @@ function searchBalancedResource(ctx) {
       if (prevKind[label] === 1) {
         const v = virt[prevData[label]];
         const forward = prevForward[label] === 1;
-        used.push({
-          coords: forward ? v.coords : v.coords.slice().reverse(), meters: v.meters,
-          surface: unpackSurface(edgeAttrs[v.ei]), access: unpackAccess(edgeAttrs[v.ei]),
-          structure: unpackStructure(edgeAttrs[v.ei]),
-          roadClass: ROAD_CLASS_NAME[unpackRoadClass(edgeAttrs[v.ei])] || "unknown",
-          edgeId: pack.edgeId(v.ei), accessLeg: v.accessLeg,
-          confidence: unpackConfidence(edgeAttrs[v.ei]), seasonal: unpackSeasonal(edgeAttrs[v.ei])
-        });
+        used.push(
+          withSurfaceLeaf(
+            {
+              coords: forward ? v.coords : v.coords.slice().reverse(),
+              meters: v.meters,
+              surface: unpackSurface(edgeAttrs[v.ei]),
+              access: unpackAccess(edgeAttrs[v.ei]),
+              structure: unpackStructure(edgeAttrs[v.ei]),
+              roadClass: ROAD_CLASS_NAME[unpackRoadClass(edgeAttrs[v.ei])] || "unknown",
+              edgeId: pack.edgeId(v.ei),
+              accessLeg: v.accessLeg,
+              confidence: unpackConfidence(edgeAttrs[v.ei]),
+              seasonal: unpackSeasonal(edgeAttrs[v.ei])
+            },
+            pack,
+            v.ei
+          )
+        );
       } else {
         const ei = prevData[label];
         const forward = prevForward[label] === 1;
-        used.push({
-          coords: geom.polylineMaybeReversed(ei, forward), meters: edgeMeters[ei],
-          surface: unpackSurface(edgeAttrs[ei]), access: unpackAccess(edgeAttrs[ei]),
-          structure: unpackStructure(edgeAttrs[ei]),
-          roadClass: ROAD_CLASS_NAME[unpackRoadClass(edgeAttrs[ei])] || "unknown",
-          edgeId: pack.edgeId(ei), accessLeg: false,
-          confidence: unpackConfidence(edgeAttrs[ei]), seasonal: unpackSeasonal(edgeAttrs[ei])
-        });
+        used.push(
+          withSurfaceLeaf(
+            {
+              coords: geom.polylineMaybeReversed(ei, forward),
+              meters: edgeMeters[ei],
+              surface: unpackSurface(edgeAttrs[ei]),
+              access: unpackAccess(edgeAttrs[ei]),
+              structure: unpackStructure(edgeAttrs[ei]),
+              roadClass: ROAD_CLASS_NAME[unpackRoadClass(edgeAttrs[ei])] || "unknown",
+              edgeId: pack.edgeId(ei),
+              accessLeg: false,
+              confidence: unpackConfidence(edgeAttrs[ei]),
+              seasonal: unpackSeasonal(edgeAttrs[ei])
+            },
+            pack,
+            ei
+          )
+        );
       }
       label = parent;
     }
@@ -1631,6 +1687,7 @@ function searchBalancedResource(ctx) {
       trackClass: edge.roadClass,
       structureType: enums.STRUCTURE_NAME[edge.structure] || "none",
       accessClass: accessName,
+      surfaceLeaf: edge.surfaceLeaf != null ? edge.surfaceLeaf : null,
       source: null,
       sourceRecordId: null,
       sourceDescription: null,
@@ -1655,7 +1712,7 @@ function searchBalancedResource(ctx) {
     profileCost: score[bestLab],
     searchMeta: {
       bidir: false,
-      packFormat: "v2",
+      packFormat: pack.hasLeaves ? "v3" : "v2",
       ellipseFactor: Infinity,
       ellipseLabel: "balanced-resource",
       balancedResource: true,
@@ -1672,6 +1729,7 @@ function searchBalancedResource(ctx) {
       settlementFallbackUsed: settlementCrossingUsed,
       balancedMiss: Math.abs(pct(dirtMeters) - 50)
     },
+    // Coarse dirt% for candidate pick; honest overlay after path selection.
     stats: {
       pavedPercent: pct(pavedMeters),
       gravelPercent: pct(bySurfaceM.gravel || 0),
@@ -1688,4 +1746,22 @@ function searchBalancedResource(ctx) {
   return annotateCorridorMeta(mixResult, startLL, endLL, profile);
 }
 
-module.exports = { findPathV2, chooseDirtRideCandidate, dirtCandidateSummary };
+/** Phase E1: rewrite reported Dirt%/paved%/unknownSurface% from surfaceLeaf after path pick. */
+function applyHonestReportedStats(path) {
+  if (!path || !path.stats || !Array.isArray(path.segments)) return path;
+  const hasLeaf = path.segments.some((s) => Object.prototype.hasOwnProperty.call(s, "surfaceLeaf"));
+  if (!hasLeaf) return path;
+  const rows = path.segments.map((s) => ({
+    meters: s.distanceMeters,
+    surfaceLeaf: s.surfaceLeaf
+  }));
+  path.stats = applyHonestSurfaceStats(path.stats, rows, path.distanceMeters, true);
+  return path;
+}
+
+module.exports = {
+  findPathV2,
+  chooseDirtRideCandidate,
+  dirtCandidateSummary,
+  applyHonestReportedStats
+};

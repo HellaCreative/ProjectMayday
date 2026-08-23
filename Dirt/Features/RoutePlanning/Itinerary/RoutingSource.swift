@@ -565,9 +565,10 @@ private extension RouteResponse {
             estimatedMovingSeconds: nil, estimatedElapsedSeconds: nil,
             geometry: geometry, segments: segments,
             stats: RouteStats(
-                dirtPercent: local.dirtPercent,
-                pavedPercent: local.pavedPercent,
-                unknownAccessPercent: local.unknownAccessPercent
+                dirtPercent: local.reportedDirtPercent,
+                pavedPercent: local.reportedPavedPercent,
+                unknownAccessPercent: local.unknownAccessPercent,
+                unknownSurfacePercent: local.unknownSurfacePercent
             ),
             maneuvers: nil, warnings: nil,
             dirtPercentValue: nil, pavedPercentValue: nil,

@@ -109,8 +109,49 @@ final class GraphPackStore {
     var isQuietDownloadInFlight: Bool { !quietDownloadIds.isEmpty }
 
     init() {
+        seedLocalV3PacksFromDocumentsIfPresent()
         refreshInstalledFromDisk()
         Task { await refreshCatalog() }
+    }
+
+    /// Phase E1 ride-test: drop `graph.v3.bin` + `geometry.v1.bin` into
+    /// Documents/DirtLocalPacks/<region>/ and they install into the pack cache
+    /// (preferring v3 over catalog v2). Keeps prior v2 bytes untouched.
+    private func seedLocalV3PacksFromDocumentsIfPresent() {
+        let fm = FileManager.default
+        guard let docs = fm.urls(for: .documentDirectory, in: .userDomainMask).first else { return }
+        let root = docs.appendingPathComponent("DirtLocalPacks", isDirectory: true)
+        guard let regions = try? fm.contentsOfDirectory(
+            at: root,
+            includingPropertiesForKeys: [.isDirectoryKey],
+            options: [.skipsHiddenFiles]
+        ) else { return }
+        for regionURL in regions {
+            var isDir: ObjCBool = false
+            guard fm.fileExists(atPath: regionURL.path, isDirectory: &isDir), isDir.boolValue else { continue }
+            let id = regionURL.lastPathComponent.lowercased()
+            let srcGraph = regionURL.appendingPathComponent("graph.v3.bin")
+            let srcGeom = regionURL.appendingPathComponent("geometry.v1.bin")
+            guard fm.fileExists(atPath: srcGraph.path) else { continue }
+            let dest = regionDir(regionId: id)
+            try? fm.createDirectory(at: dest, withIntermediateDirectories: true)
+            let destGraph = dest.appendingPathComponent("graph.v3.bin")
+            let destGeom = dest.appendingPathComponent("geometry.v1.bin")
+            // Preserve shipped/local v2 geometry before overwriting geometry.v1.bin.
+            let existingGeom = dest.appendingPathComponent("geometry.v1.bin")
+            let rollback = dest.appendingPathComponent("geometry.v1.v2-rollback.bin")
+            if fm.fileExists(atPath: existingGeom.path),
+               !fm.fileExists(atPath: rollback.path),
+               fm.fileExists(atPath: dest.appendingPathComponent("graph.v2.bin").path) {
+                try? fm.copyItem(at: existingGeom, to: rollback)
+            }
+            try? fm.removeItem(at: destGraph)
+            try? fm.copyItem(at: srcGraph, to: destGraph)
+            if fm.fileExists(atPath: srcGeom.path) {
+                try? fm.removeItem(at: destGeom)
+                try? fm.copyItem(at: srcGeom, to: destGeom)
+            }
+        }
     }
 
     // MARK: - Public
@@ -920,22 +961,31 @@ final class GraphPackStore {
     private func graphFileURL(regionId: String) -> URL {
         if let found = findGraphFileURL(regionId: regionId) { return found }
         // Destination for a fresh download into the current manifest version.
-        return regionDir(regionId: regionId).appendingPathComponent("graph.v2.bin")
+        // Prefer v3 when present for local ride-tests; catalog still ships v2.
+        return regionDir(regionId: regionId).appendingPathComponent("graph.v3.bin")
     }
 
-    /// Locate `graph.v2.bin` across manifest version folders. A catalog refresh that
-    /// bumps `lastManifestVersion` must not pretend the pack vanished.
+    /// Prefer `graph.v3.bin` when present (Phase E1 local packs); else `graph.v2.bin`.
+    /// Searches across manifest version folders so a catalog bump does not hide installs.
     private func findGraphFileURL(regionId: String) -> URL? {
         let id = regionId.lowercased()
         let fm = FileManager.default
-        let primary = regionDir(regionId: id).appendingPathComponent("graph.v2.bin")
-        if fm.fileExists(atPath: primary.path) { return primary }
+        let names = ["graph.v3.bin", "graph.v2.bin"]
+
+        func firstExisting(in dir: URL) -> URL? {
+            for name in names {
+                let url = dir.appendingPathComponent(name)
+                if fm.fileExists(atPath: url.path) { return url }
+            }
+            return nil
+        }
+
+        if let hit = firstExisting(in: regionDir(regionId: id)) { return hit }
 
         let legacy = cacheRoot
             .appendingPathComponent("v1", isDirectory: true)
             .appendingPathComponent(id, isDirectory: true)
-            .appendingPathComponent("graph.v2.bin")
-        if fm.fileExists(atPath: legacy.path) { return legacy }
+        if let hit = firstExisting(in: legacy) { return hit }
 
         guard let versions = try? fm.contentsOfDirectory(
             at: cacheRoot,
@@ -947,16 +997,16 @@ final class GraphPackStore {
             var isDir: ObjCBool = false
             guard fm.fileExists(atPath: versionURL.path, isDirectory: &isDir), isDir.boolValue
             else { continue }
-            let candidate = versionURL
-                .appendingPathComponent(id, isDirectory: true)
-                .appendingPathComponent("graph.v2.bin")
-            if fm.fileExists(atPath: candidate.path) { return candidate }
+            if let hit = firstExisting(in: versionURL.appendingPathComponent(id, isDirectory: true)) {
+                return hit
+            }
         }
         return nil
     }
 
     nonisolated private static let phonePackFileNames: Set<String> = [
         "graph.v2.bin",
+        "graph.v3.bin",
         "geometry.v1.bin",
         "fuel.v1.json"
     ]
@@ -964,6 +1014,17 @@ final class GraphPackStore {
     private func geometryFileURL(regionId: String) -> URL {
         let id = regionId.lowercased()
         let fm = FileManager.default
+        // Pair geometry with the graph we will load: v3 → geometry.v1.bin;
+        // v2 rollback → geometry.v1.v2-rollback.bin when present.
+        if let graph = findGraphFileURL(regionId: id) {
+            let dir = graph.deletingLastPathComponent()
+            if graph.lastPathComponent == "graph.v2.bin" {
+                let rollback = dir.appendingPathComponent("geometry.v1.v2-rollback.bin")
+                if fm.fileExists(atPath: rollback.path) { return rollback }
+            }
+            let sibling = dir.appendingPathComponent("geometry.v1.bin")
+            if fm.fileExists(atPath: sibling.path) { return sibling }
+        }
         let primary = regionDir(regionId: id).appendingPathComponent("geometry.v1.bin")
         if fm.fileExists(atPath: primary.path) { return primary }
         let legacy = cacheRoot
@@ -971,10 +1032,6 @@ final class GraphPackStore {
             .appendingPathComponent(id, isDirectory: true)
             .appendingPathComponent("geometry.v1.bin")
         if fm.fileExists(atPath: legacy.path) { return legacy }
-        if let graph = findGraphFileURL(regionId: id) {
-            let sibling = graph.deletingLastPathComponent().appendingPathComponent("geometry.v1.bin")
-            if fm.fileExists(atPath: sibling.path) { return sibling }
-        }
         return regionDir(regionId: id).appendingPathComponent("geometry.v1.bin")
     }
 

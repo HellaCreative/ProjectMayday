@@ -462,7 +462,10 @@ struct CrossPackSeamTests {
             ],
             dirtPercent: 100,
             pavedPercent: 0,
-            unknownAccessPercent: 0
+            unknownAccessPercent: 0,
+            reportedDirtPercent: 100,
+            reportedPavedPercent: 0,
+            unknownSurfacePercent: 0
         )
         let hop2 = OnDeviceRouter.Result(
             coordinates: [
@@ -484,7 +487,10 @@ struct CrossPackSeamTests {
             ],
             dirtPercent: 0,
             pavedPercent: 100,
-            unknownAccessPercent: 0
+            unknownAccessPercent: 0,
+            reportedDirtPercent: 0,
+            reportedPavedPercent: 100,
+            unknownSurfacePercent: 0
         )
         let merged = try #require(OnDeviceRouter.Result.concatenating([hop1, hop2]))
         #expect(merged.dirtPercent == 50)

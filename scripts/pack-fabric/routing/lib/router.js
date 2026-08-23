@@ -40,7 +40,8 @@ const {
   unpackRoadClass,
   ROAD_CLASS_NAME
 } = require("./pack-v2");
-const { findPathV2 } = require("./find-path-v2");
+const { findPathV2, applyHonestReportedStats } = require("./find-path-v2");
+const { applyHonestSurfaceStats } = require("./surface-family");
 const {
   isDirtSurface,
   outsideCorridor,
@@ -1574,7 +1575,7 @@ function aggregateRouteSurfaceStats(segments, distanceMeters) {
     if (accessName === "motorized_unknown") unknownAccessMeters += meters;
   }
   const pct = (m) => (distanceMeters > 0 ? Math.round((m / distanceMeters) * 100) : 0);
-  return {
+  let stats = {
     pavedPercent: pct(pavedMeters),
     gravelPercent: pct(bySurfaceM.gravel || 0),
     accessPercent: pct((bySurfaceM.access || 0) + (bySurfaceM.resource || 0)),
@@ -1586,6 +1587,22 @@ function aggregateRouteSurfaceStats(segments, distanceMeters) {
     permissiveAccessPercent: pct(byAccessM.motorized_permissive || 0),
     verifiedAccessPercent: pct(byAccessM.motorized_verified || 0)
   };
+  // Phase E1: when segments carry surfaceLeaf (v3), replace reported Dirt%/paved%/unknown.
+  const hasLeaf = (segments || []).some((s) =>
+    Object.prototype.hasOwnProperty.call(s || {}, "surfaceLeaf")
+  );
+  if (hasLeaf) {
+    stats = applyHonestSurfaceStats(
+      stats,
+      (segments || []).map((s) => ({
+        meters: s.distanceMeters,
+        surfaceLeaf: s.surfaceLeaf
+      })),
+      distanceMeters,
+      true
+    );
+  }
+  return stats;
 }
 
 function adventureSurfaceMeters(bySurfaceM) {
@@ -2206,6 +2223,8 @@ async function routeOnRuntime(body, graphResolution, runtime) {
       }
     }
   }
+  // Phase E1: honest Dirt% after path selection (selection used coarse dirt%).
+  if (path) applyHonestReportedStats(path);
   const searchMs = Date.now() - searchStarted;
   if (!path) {
     const failedOutcome = cleanSearchOutcome || primarySearchOutcome;

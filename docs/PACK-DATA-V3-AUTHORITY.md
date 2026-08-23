@@ -86,14 +86,7 @@ store repeated strings per edge). Recommended sections:
 | `edgeAccessLeaf` | `Uint8` | index into `accessLeafNames` (raw effective access value incl. an `atv_permitted` entry; `0` = unknown) — parallels the existing `accessNames`; keeps access independent of surface |
 | `edgeFlags` | `Uint8` | per-edge bit flags. **bit 0 = `atvDesignated`** (atv ∈ {yes,designated,permissive}; switch-governed routing input — the ATV-trail recovery); bit 1 = `seasonal`; bits 2–7 reserved (0) |
 
-Total new per-edge cost = **7 bytes** (surfaceLeaf, roadClassLeaf, grade, layer, structureLeaf, accessLeaf, flags). For NS post-B (~199,724 edges) ≈ **+1.4 MB** against the ~13 MB graph — still modest. `atvDesignated` gets its own flag bit (not a dictionary) because the router reads it on the hot path as a boolean; `layer` stays `Int8` (no dictionary). All string dictionaries (`surfaceLeafNames`, `roadClassLeafNames`, `structureLeafNames`, `accessLeafNames`) live in `enumsJson`, index 0 = untagged/unknown sentinel, builder fails closed if any exceeds 255.
-
-Dictionaries (`surfaceLeafNames`, `roadClassLeafNames`, `structureLeafNames`) live in
-`enumsJson`, index 0 reserved for the untagged/unknown sentinel. NS dictionaries are
-small (~30 / ~15 / ~8 entries), so `Uint8` indices are ample **for NS** — but the
-builder MUST **fail closed** (hard error, no silent truncation) if any region's
-dictionary exceeds 255 entries. Do not let an NS-only assumption ship a broken
-national pack; widen the index type or split the dictionary if a region overflows.
+Total new per-edge cost = **7 bytes** (surfaceLeaf, roadClassLeaf, grade, layer, structureLeaf, accessLeaf, flags). For NS post-B (~199,724 edges) ≈ **+1.4 MB** against the ~13 MB graph — still modest. `atvDesignated` gets its own flag bit (not a dictionary) because the router reads it on the hot path as a boolean; `layer` stays `Int8` (no dictionary). All string dictionaries (`surfaceLeafNames`, `roadClassLeafNames`, `structureLeafNames`, `accessLeafNames`) live in `enumsJson`, index 0 = untagged/unknown sentinel, builder fails closed if any exceeds 255. Fail-closed if any region's dictionary exceeds 255 entries — do not let an NS-only assumption ship a broken national pack; widen the index type or split the dictionary if a region overflows.
 
 **Compound surfaces** (e.g. `surface=asphalt;gravel`): the contract stores the
 **normalized full compound value as a single dictionary token** (`asphalt;gravel` is
@@ -107,10 +100,7 @@ constraints: the broken lossy value is no longer authoritative, and graph expans
 (hundreds of k edge relaxations per route) still gets O(1) coarse costing without
 touching the dictionaries on the hot path.
 
-Cost: ~5 bytes per undirected edge (`surfaceLeaf` + `roadClassLeaf` + `grade` + `layer`
-+ `structureLeaf`). NS is **217,057 edges → ≈ +1.1 MB** against a **~13 MB** graph pack
-(geometry ~22 MB, fuel ~140 KB) — a real but modest increase. (The "base OSM extract" is
-multi-GB, but that is the raw input, not the shipped pack — do not compare against it.)
+(Per-edge cost and edge count: see the 7-byte / ~199,724-edge / ≈ +1.4 MB / 4 dictionaries figure above. The "base OSM extract" is multi-GB, but that is the raw input, not the shipped pack — do not compare against it.)
 
 ### Graph v3 byte layout (Phase C / Phase D contract — exact)
 
@@ -198,8 +188,11 @@ into at read time, plus build-time membership changes.
   natural, woodchips.
 - **Unknown (switch-governed):** missing (16%) + compound oddballs (gravel,earth; trail;
   rocky; marsh; mowed_grass/dirt; dirt/loose_rock; …).
-The mode switch (Dirt↔Clean) governs tolerance of Loose/technical + Unknown. The exact
-Dirt% definition (does Gravel count toward it?) is finalized at read time in Phase E1.
+The mode switch (Dirt↔Clean) governs tolerance of Loose/technical + Unknown. **Dirt%
+(E1, locked):** share of route distance whose surface family ∈ {Loose/technical,
+Unknown}. **Gravel does not count as dirt.** Paved and Gravel are reported separately;
+Unknown is also a distinct `unknownSurfacePercent` bucket and is never silently folded
+into paved.
 
 *Road tiers (Clean):*
 - Motorway (motorway/_link) → avoid hard. Trunk (trunk/_link) → avoid.

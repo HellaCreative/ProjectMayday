@@ -87,14 +87,34 @@ extension OnDeviceRouter.Result {
             }
         }
         guard meters > 0, coords.count >= 2 else { return nil }
+        let coarseDirt = Int((dirtMeters / meters * 100).rounded())
+        let coarsePaved = Int((pavedMeters / meters * 100).rounded())
+        let hasLeaves = legs.contains { $0.surfaceLeaf != nil }
+        let reported: SurfaceFamilyStats.Percents
+        if hasLeaves {
+            reported = SurfaceFamilyStats.honestPercents(
+                rows: legs.map { ($0.distanceMeters, $0.surfaceLeaf) },
+                distanceMeters: meters
+            )
+        } else {
+            reported = SurfaceFamilyStats.Percents(
+                dirtPercent: coarseDirt,
+                pavedPercent: coarsePaved,
+                gravelPercent: 0,
+                unknownSurfacePercent: 0
+            )
+        }
         return OnDeviceRouter.Result(
             coordinates: coords,
             distanceMeters: meters,
             edgeIds: edgeIds,
             legs: legs,
-            dirtPercent: Int((dirtMeters / meters * 100).rounded()),
-            pavedPercent: Int((pavedMeters / meters * 100).rounded()),
+            dirtPercent: coarseDirt,
+            pavedPercent: coarsePaved,
             unknownAccessPercent: Int((unknownMeters / meters * 100).rounded()),
+            reportedDirtPercent: reported.dirtPercent,
+            reportedPavedPercent: reported.pavedPercent,
+            unknownSurfacePercent: reported.unknownSurfacePercent,
             searchMeta: OnDeviceRouter.SearchMeta(
                 urbanCoreFallbackUsed: hops.contains { $0.searchMeta.urbanCoreFallbackUsed },
                 cleanUnpavedFallbackUsed: hops.contains { $0.searchMeta.cleanUnpavedFallbackUsed },
