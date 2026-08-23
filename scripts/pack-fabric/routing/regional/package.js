@@ -468,6 +468,17 @@ function buildRegionalGraph(options = {}) {
         rid: feature.sourceFeatureId || "",
         lin: feature.lineageId || "",
         role: (feature.meta && feature.meta.conflationRole) || "",
+        // Phase B2 leaf fields — intermediate JSON only (not packed to .bin yet).
+        surfaceLeaf: feature.surfaceLeaf != null && feature.surfaceLeaf !== "" ? feature.surfaceLeaf : null,
+        roadClassLeaf: feature.roadClassLeaf || "unknown",
+        tracktype: feature.tracktype != null && feature.tracktype !== "" ? feature.tracktype : null,
+        smoothness: feature.smoothness != null && feature.smoothness !== "" ? feature.smoothness : null,
+        layer: Number.isFinite(Number(feature.layer)) ? Number(feature.layer) : 0,
+        structureLeaf:
+          feature.structureLeaf != null && feature.structureLeaf !== "" ? feature.structureLeaf : null,
+        accessLeaf: feature.accessLeaf != null && feature.accessLeaf !== "" ? feature.accessLeaf : null,
+        atv: feature.atv != null && feature.atv !== "" ? feature.atv : null,
+        atvDesignated: !!feature.atvDesignated,
         g: segCoords.map((c) => [Number(c[0]), Number(c[1])])
       });
     }

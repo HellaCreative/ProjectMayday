@@ -24,7 +24,11 @@
 const fs = require("fs");
 const readline = require("readline");
 const crypto = require("crypto");
-const { createNormalizedEdge } = require("../schema/edge");
+const {
+  createNormalizedEdge,
+  normalizeLeafString,
+  normalizeLayer
+} = require("../schema/edge");
 const {
   SURFACE_CLASS,
   ACCESS_CLASS,
@@ -355,6 +359,40 @@ function classify(props, options = {}) {
   };
 }
 
+/**
+ * OSM leaf fields for Graph-v3 — preserved alongside coarse family/class.
+ * Does not alter surfaceClass / roadTrackClass / structureType derivation.
+ */
+function leafFieldsFromProps(props) {
+  const surfaceLeaf = normalizeLeafString(tag(props, "surface"));
+  const roadClassLeaf = normalizeLeafString(tag(props, "highway")) || "unknown";
+  const tracktype = normalizeLeafString(tag(props, "tracktype"));
+  const smoothness = normalizeLeafString(tag(props, "smoothness"));
+  const layer = normalizeLayer(tag(props, "layer"));
+  const bridge = tag(props, "bridge");
+  const tunnel = tag(props, "tunnel");
+  const ford = tag(props, "ford");
+  let structureLeaf = null;
+  if (bridge) structureLeaf = bridge;
+  else if (tunnel) structureLeaf = tunnel;
+  else if (ford) structureLeaf = ford;
+  const effective = effectiveMotorcycleAccess(props);
+  const accessLeaf = normalizeLeafString(effective.value);
+  const atv = normalizeLeafString(tag(props, "atv"));
+  const atvDesignated = positiveAtv(props);
+  return {
+    surfaceLeaf,
+    roadClassLeaf,
+    tracktype,
+    smoothness,
+    layer,
+    structureLeaf,
+    accessLeaf,
+    atv,
+    atvDesignated
+  };
+}
+
 function lineStringsFromGeometry(geom) {
   if (!geom) return [];
   if (geom.type === "LineString") {
@@ -433,6 +471,7 @@ async function run(options = {}) {
       bump(classification.access, classified.accessClass);
       bump(classification.structure, classified.structureType);
       bump(classification.roadTrack, classified.roadTrackClass);
+      const leaves = leafFieldsFromProps(props);
       features.push(
         createNormalizedEdge({
           edgeId,
@@ -448,6 +487,15 @@ async function run(options = {}) {
           accessClass: classified.accessClass,
           structureType: classified.structureType,
           sourceConfidence: classified.confidence,
+          surfaceLeaf: leaves.surfaceLeaf,
+          roadClassLeaf: leaves.roadClassLeaf,
+          tracktype: leaves.tracktype,
+          smoothness: leaves.smoothness,
+          layer: leaves.layer,
+          structureLeaf: leaves.structureLeaf,
+          accessLeaf: leaves.accessLeaf,
+          atv: leaves.atv,
+          atvDesignated: leaves.atvDesignated,
           roadName: props.name || props.ref || null,
           direction: "both",
           seasonal: false,
@@ -459,6 +507,7 @@ async function run(options = {}) {
             service: tag(props, "service") || null,
             layer: tag(props, "layer") || null,
             level: tag(props, "level") || null,
+            atv: tag(props, "atv") || null,
             gapFill: true
           }
         })
@@ -502,5 +551,6 @@ module.exports = {
   explicitSurfaceClass,
   effectiveMotorcycleAccess,
   positiveAtv,
+  leafFieldsFromProps,
   INCLUDE_HIGHWAY
 };

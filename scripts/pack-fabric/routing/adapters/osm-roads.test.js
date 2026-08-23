@@ -112,3 +112,59 @@ test("OSM source identity cannot bypass an unknown access class", () => {
     true
   );
 });
+
+test("leaf fields populate alongside unchanged coarse classes", () => {
+  const { leafFieldsFromProps } = require("./osm-roads");
+  const leaves = leafFieldsFromProps({
+    highway: "track",
+    surface: "fine_gravel",
+    tracktype: "grade2",
+    smoothness: "bad",
+    layer: "1",
+    bridge: "boardwalk",
+    motorcycle: "no",
+    atv: "yes"
+  });
+  assert.equal(leaves.surfaceLeaf, "fine_gravel");
+  assert.equal(leaves.roadClassLeaf, "track");
+  assert.equal(leaves.tracktype, "grade2");
+  assert.equal(leaves.smoothness, "bad");
+  assert.equal(leaves.layer, 1);
+  assert.equal(leaves.structureLeaf, "boardwalk");
+  assert.equal(leaves.accessLeaf, "no");
+  assert.equal(leaves.atv, "yes");
+  assert.equal(leaves.atvDesignated, true);
+  const classified = classify({
+    highway: "track",
+    surface: "fine_gravel",
+    bridge: "boardwalk",
+    atv: "yes",
+    motorcycle: "no"
+  });
+  assert.equal(classified.ok, true);
+  assert.equal(classified.surfaceClass, "gravel");
+  assert.equal(classified.structureType, "none");
+  assert.equal(classified.accessClass, "motorized_permissive");
+});
+
+test("createNormalizedEdge defaults leaf fields safely when omitted", () => {
+  const { createNormalizedEdge } = require("../schema/edge");
+  const edge = createNormalizedEdge({
+    edgeId: "t1",
+    geometry: { type: "LineString", coordinates: [[-63, 44], [-63.1, 44.1]] },
+    surfaceClass: "paved",
+    accessClass: "motorized_permissive",
+    structureType: "none",
+    roadTrackClass: "local"
+  });
+  assert.equal(edge.surfaceLeaf, null);
+  assert.equal(edge.roadClassLeaf, "unknown");
+  assert.equal(edge.tracktype, null);
+  assert.equal(edge.smoothness, null);
+  assert.equal(edge.layer, 0);
+  assert.equal(edge.structureLeaf, null);
+  assert.equal(edge.accessLeaf, null);
+  assert.equal(edge.atv, null);
+  assert.equal(edge.atvDesignated, false);
+  assert.equal(edge.surfaceClass, "paved");
+});
