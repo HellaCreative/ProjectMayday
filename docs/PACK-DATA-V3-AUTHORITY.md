@@ -290,8 +290,9 @@ regress the others. Do them in order:
   identical Clean path on NS v3; Clean ~0% honest dirt on a sane paved back-road;
   Dirt/Balanced/Direct selection unchanged.
 - **E3 — Debug display layers.** Surface-leaf, Road-class-leaf, Access as separate map
-  layers, to visually verify a road you KNOW is fine gravel reads as such. **Gate:**
-  spot-checks match reality on the map.
+  layers (GRAPH debug paint modes) plus an always-visible pack version badge
+  (`NS v3 · <revision>` / `v2`). **Gate:** spot-checks match known roads; badge reads
+  v3 with leaves pack and v2 on fallback; no routing change.
 - **E4 — Split the "Avoid Highway & Motorway" control** into **avoid motorway/trunk**
   vs **prefer back roads (penalize primary/secondary — never delete)**. **Gate:** the
   two controls behave independently; connectivity preserved.

@@ -8,6 +8,12 @@ struct RoutingGraphDebugHit: Equatable {
     let accessClass: String
     let roadClass: String
     let source: String
+    let surfaceLeaf: String
+    let surfaceFamily: String
+    let roadClassLeaf: String
+    let roadTier: String
+    let accessLeaf: String
+    let atvDesignated: Bool
 }
 
 private struct LiveDebugGraphRequest: Encodable {
@@ -49,8 +55,8 @@ private struct LiveDebugGraphResponse: Decodable {
     let matchingCount: Int?
 }
 
-/// DEBUG: paints viewport edges from the live routing pack. Installed packs are
-/// an offline fallback only; the button never installs or registers a pack.
+/// DEBUG: paints viewport edges from the installed pack (v3 leaves when present).
+/// Live API is a fallback only when no pack is installed — it has no leaf fields.
 @MainActor
 final class RoutingGraphDebugManager {
     private let mapState: MapState
@@ -68,10 +74,12 @@ final class RoutingGraphDebugManager {
     private func armObservation() {
         withObservationTracking {
             _ = mapState.showRoutingGraphDebug
+            _ = mapState.debugGraphPaintMode
             _ = mapState.mapCenter.latitude
             _ = mapState.mapCenter.longitude
             _ = mapState.mapZoom
             _ = network.isOnline
+            _ = graphPacks.loadedRegionIds
         } onChange: {
             Task { @MainActor [weak self] in
                 self?.scheduleRefresh()
@@ -113,16 +121,37 @@ final class RoutingGraphDebugManager {
         let maxLat = center.latitude + pad * 0.7
         let cap = 4000
 
+        // Phase E3: prefer installed pack so surface/road-class leaves paint.
+        if let pack = graphPacks.packIfInstalled(region.uppercased()) {
+            let pool = await Task.detached(priority: .userInitiated) {
+                PackNetworkOverlay.features(
+                    from: pack,
+                    minLon: minLon,
+                    minLat: minLat,
+                    maxLon: maxLon,
+                    maxLat: maxLat,
+                    province: region.uppercased(),
+                    cap: cap
+                )
+            }.value
+            guard mapState.showRoutingGraphDebug else { return }
+            let capped = pool.count >= cap
+            let fmt = pack.hasLeaves ? "v3" : "v2"
+            let mode = mapState.debugGraphPaintMode.title
+            let status = capped
+                ? "PACK \(fmt) · \(mode) · \(pool.count) edges (capped — zoom in)"
+                : "PACK \(fmt) · \(mode) · \(pool.count) edges"
+            mapState.updateDebugGraphFeatures(pool, status: status, capped: capped)
+            return
+        }
+
         if network.isOnline {
             mapState.updateDebugGraphFeatures(
                 [],
-                status: "Loading LIVE routing graph…",
+                status: "No pack installed — loading LIVE graph (no v3 leaves)…",
                 capped: false
             )
             do {
-                RoutingDebugLog.shared.event(
-                    "debug graph request region=\(region) center=\(center.latitude),\(center.longitude) zoom=\(String(format: "%.1f", mapState.mapZoom))"
-                )
                 let response = try await liveFeatures(
                     minLon: minLon,
                     minLat: minLat,
@@ -135,14 +164,11 @@ final class RoutingGraphDebugManager {
                 let count = response.features.count
                 let status = response.capped
                     ? "LIVE graph · \(count) edges (capped — zoom in)"
-                    : "LIVE graph · \(count) edges · all access classes"
+                    : "LIVE graph · \(count) edges · coarse only"
                 mapState.updateDebugGraphFeatures(
                     response.features,
                     status: status,
                     capped: response.capped
-                )
-                RoutingDebugLog.shared.event(
-                    "debug graph live ok region=\(region) edges=\(count) capped=\(response.capped ? 1 : 0)"
                 )
                 return
             } catch is CancellationError {
@@ -154,34 +180,11 @@ final class RoutingGraphDebugManager {
             }
         }
 
-        guard let pack = graphPacks.packIfInstalled(region.uppercased()) else {
-            mapState.updateDebugGraphFeatures(
-                [],
-                status: network.isOnline
-                    ? "Live graph unavailable. Move the map or try again."
-                    : "Go online to view the live graph.",
-                capped: false
-            )
-            return
-        }
-
-        let pool = await Task.detached(priority: .userInitiated) {
-            PackNetworkOverlay.features(
-                from: pack,
-                minLon: minLon,
-                minLat: minLat,
-                maxLon: maxLon,
-                maxLat: maxLat,
-                province: region.uppercased(),
-                cap: cap
-            )
-        }.value
-
-        let capped = pool.count >= cap
-        let status = capped
-            ? "OFFLINE graph · \(pool.count) edges (capped — zoom in)"
-            : "OFFLINE graph · \(pool.count) edges · all access classes"
-        mapState.updateDebugGraphFeatures(pool, status: status, capped: capped)
+        mapState.updateDebugGraphFeatures(
+            [],
+            status: "Install the NS pack (PACKS) to paint graph leaves.",
+            capped: false
+        )
     }
 
     private func liveFeatures(
@@ -241,7 +244,13 @@ final class RoutingGraphDebugManager {
                 accessClass: feature.accessClass,
                 structureType: feature.structureType,
                 province: region,
-                roadClass: feature.roadClass
+                roadClass: feature.roadClass,
+                surfaceLeaf: "",
+                surfaceFamily: "unknown",
+                roadClassLeaf: "",
+                roadTier: "unknown",
+                accessLeaf: "",
+                atvDesignated: false
             )
         }
         return (features, decoded.capped)

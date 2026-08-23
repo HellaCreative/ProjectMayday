@@ -193,6 +193,8 @@ final class MapState {
 
     /// DEBUG: paint installed BC routing graph by access class.
     var showRoutingGraphDebug = false
+    /// Phase E3: which leaf dimension colors the debug graph (Access / Surface / Road class).
+    var debugGraphPaintMode: DebugGraphPaintMode = .surfaceFamily
     var debugGraphFeatures: [NetworkLineFeature] = []
     private(set) var debugGraphDataGeneration = 0
     var debugGraphStatus: String?

@@ -192,6 +192,7 @@ struct MapLibreMapView: UIViewRepresentable {
         private var appliedNetData    = -1
         private var appliedNetPrefs   = -1
         private var appliedDebugGraph = -1
+        private var appliedDebugPaintMode: DebugGraphPaintMode?
         private var appliedBCOSMGeneration = -1
         private var appliedBCOSMTemplate: String?
 
@@ -309,22 +310,44 @@ struct MapLibreMapView: UIViewRepresentable {
             guard style.source(withIdentifier: "dirt-debug-graph") == nil else { return }
             let src = MLNShapeSource(identifier: "dirt-debug-graph", shape: nil, options: nil)
             style.addSource(src)
+            rebuildDebugPaintLayers(on: style, mode: state.debugGraphPaintMode)
+            appliedDebugPaintMode = state.debugGraphPaintMode
+        }
 
-            func line(_ id: String, access: String, color: UIColor, dash: Bool = false) {
+        private func debugPaintLayerIDs(for mode: DebugGraphPaintMode) -> [String] {
+            PackDebugPaint.legend(for: mode).map { "dirt-debug-\(mode.rawValue)-\($0.key)" }
+        }
+
+        private func rebuildDebugPaintLayers(on style: MLNStyle, mode: DebugGraphPaintMode) {
+            for old in DebugGraphPaintMode.allCases.flatMap({ debugPaintLayerIDs(for: $0) }) {
+                if let layer = style.layer(withIdentifier: old) {
+                    style.removeLayer(layer)
+                }
+            }
+            guard let src = style.source(withIdentifier: "dirt-debug-graph") else { return }
+            let attr = PackDebugPaint.attributeKey(for: mode)
+            for item in PackDebugPaint.legend(for: mode) {
+                let id = "dirt-debug-\(mode.rawValue)-\(item.key)"
                 let layer = MLNLineStyleLayer(identifier: id, source: src)
-                layer.predicate = NSPredicate(format: "accessClass == %@", access)
-                layer.lineColor = NSExpression(forConstantValue: color)
-                layer.lineWidth = NSExpression(forConstantValue: 2.4)
+                if mode == .access, item.key == "atv" {
+                    layer.predicate = NSPredicate(format: "atvDesignated == 1")
+                } else {
+                    layer.predicate = NSPredicate(format: "%K == %@", attr, item.key)
+                }
+                layer.lineColor = NSExpression(forConstantValue: item.color)
+                layer.lineWidth = NSExpression(forConstantValue: mode == .access && item.key == "atv" ? 3.2 : 2.4)
                 layer.lineOpacity = NSExpression(forConstantValue: 0.92)
-                if dash {
+                if item.dashed {
                     layer.lineDashPattern = NSExpression(forConstantValue: [1.2, 1.2] as [NSNumber])
                 }
                 style.addLayer(layer)
             }
-            line("dirt-debug-perm", access: "motorized_permissive", color: UIColor(red: 0.18, green: 0.72, blue: 0.32, alpha: 1))
-            line("dirt-debug-unknown", access: "motorized_unknown", color: UIColor(red: 0.95, green: 0.72, blue: 0.12, alpha: 1))
-            line("dirt-debug-restricted", access: "motorized_restricted", color: UIColor(red: 0.95, green: 0.48, blue: 0.12, alpha: 1), dash: true)
-            line("dirt-debug-excluded", access: "motorized_excluded", color: UIColor(red: 0.86, green: 0.16, blue: 0.18, alpha: 1), dash: true)
+        }
+
+        private func syncDebugGraphPaintMode(style: MLNStyle) {
+            guard appliedDebugPaintMode != state.debugGraphPaintMode else { return }
+            rebuildDebugPaintLayers(on: style, mode: state.debugGraphPaintMode)
+            appliedDebugPaintMode = state.debugGraphPaintMode
         }
 
         // MARK: - BC OSM hierarchy (feasibility mbtiles)
@@ -595,6 +618,7 @@ struct MapLibreMapView: UIViewRepresentable {
             syncPOI(style: style)
             syncFuelReplacementEmphasis(style: style)
             syncNetwork(style: style)
+            syncDebugGraphPaintMode(style: style)
             syncDebugGraph(style: style)
             syncBCOSMHierarchy(style: style)
         }
@@ -734,7 +758,13 @@ struct MapLibreMapView: UIViewRepresentable {
                     "surfaceClass": feature.surfaceClass,
                     "accessClass": feature.accessClass,
                     "roadClass": feature.roadClass,
-                    "source": RoutingGraphDebugManager.sourceLabel(edgeId: feature.edgeId)
+                    "source": RoutingGraphDebugManager.sourceLabel(edgeId: feature.edgeId),
+                    "surfaceLeaf": feature.surfaceLeaf,
+                    "surfaceFamily": feature.surfaceFamily,
+                    "roadClassLeaf": feature.roadClassLeaf,
+                    "roadTier": feature.roadTier,
+                    "accessLeaf": feature.accessLeaf,
+                    "atvDesignated": feature.atvDesignated ? 1 : 0
                 ]
                 return line
             }
@@ -1356,23 +1386,28 @@ struct MapLibreMapView: UIViewRepresentable {
         }
 
         private func debugGraphFeature(at point: CGPoint, in mapView: MLNMapView) -> RoutingGraphDebugHit? {
-            let ids: Set<String> = [
-                "dirt-debug-perm",
-                "dirt-debug-unknown",
-                "dirt-debug-restricted",
-                "dirt-debug-excluded"
-            ]
+            let ids = Set(debugPaintLayerIDs(for: state.debugGraphPaintMode))
             let box = CGRect(x: point.x - 16, y: point.y - 16, width: 32, height: 32)
             let hits = mapView.visibleFeatures(in: box, styleLayerIdentifiers: ids)
             guard let feature = hits.first else { return nil }
             let attrs = feature.attributes
             let edgeId = attrs["edgeId"] as? String ?? ""
+            let atvRaw = attrs["atvDesignated"]
+            let atv = (atvRaw as? Int).map { $0 != 0 }
+                ?? (atvRaw as? NSNumber).map { $0.intValue != 0 }
+                ?? false
             return RoutingGraphDebugHit(
                 edgeId: edgeId,
                 surfaceClass: attrs["surfaceClass"] as? String ?? "",
                 accessClass: attrs["accessClass"] as? String ?? "",
                 roadClass: attrs["roadClass"] as? String ?? "",
-                source: attrs["source"] as? String ?? RoutingGraphDebugManager.sourceLabel(edgeId: edgeId)
+                source: attrs["source"] as? String ?? RoutingGraphDebugManager.sourceLabel(edgeId: edgeId),
+                surfaceLeaf: attrs["surfaceLeaf"] as? String ?? "",
+                surfaceFamily: attrs["surfaceFamily"] as? String ?? "",
+                roadClassLeaf: attrs["roadClassLeaf"] as? String ?? "",
+                roadTier: attrs["roadTier"] as? String ?? "",
+                accessLeaf: attrs["accessLeaf"] as? String ?? "",
+                atvDesignated: atv
             )
         }
 

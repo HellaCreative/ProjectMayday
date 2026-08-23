@@ -158,6 +158,48 @@ final class GraphPackStore {
 
     var canRouteOnDevice: Bool { activePack != nil }
 
+    /// Phase E3: always-visible pack format chip (v2 vs v3 leaves).
+    struct PackFormatBadge: Equatable, Sendable {
+        let regionId: String
+        /// `"v3"` when `hasLeaves`, else `"v2"`, or `"—"` when no pack.
+        let format: String
+        let revision: String
+        let hasLeaves: Bool
+
+        var label: String {
+            if format == "—" { return "\(regionId) · no pack" }
+            return "\(regionId) \(format) · \(revision)"
+        }
+    }
+
+    func packFormatBadge(at coordinate: CLLocationCoordinate2D) -> PackFormatBadge {
+        let region = (Self.primaryRegionId(containing: coordinate) ?? "??").uppercased()
+        guard let pack = packIfInstalled(region) else {
+            return PackFormatBadge(regionId: region, format: "—", revision: "—", hasLeaves: false)
+        }
+        let format = pack.hasLeaves ? "v3" : "v2"
+        return PackFormatBadge(
+            regionId: (pack.regionId ?? region).uppercased(),
+            format: format,
+            revision: packRevisionLabel(regionId: pack.regionId ?? region),
+            hasLeaves: pack.hasLeaves
+        )
+    }
+
+    /// Short revision for the badge: catalog sha8, else `local`, else manifest version.
+    func packRevisionLabel(regionId: String) -> String {
+        let id = regionId.lowercased()
+        if let files = installedPackIdentity(regionId: id) {
+            let sha = files["graph.v3.bin"] ?? files["graph.v2.bin"]
+            if let sha, sha.count >= 8 { return String(sha.prefix(8)) }
+        }
+        if let url = findGraphFileURL(regionId: id) {
+            if url.lastPathComponent == "graph.v3.bin" { return "local" }
+            return lastManifestVersion
+        }
+        return lastManifestVersion
+    }
+
     @ObservationIgnored private var lastCatalogRefreshAt: Date?
 
     func refreshCatalog() async {

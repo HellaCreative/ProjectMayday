@@ -11,6 +11,13 @@ struct NetworkLineFeature: Sendable {
     let structureType: String
     let province: String
     let roadClass: String
+    /// Graph-v3 leaves (empty on v2 / live debug without leaves).
+    let surfaceLeaf: String
+    let surfaceFamily: String
+    let roadClassLeaf: String
+    let roadTier: String
+    let accessLeaf: String
+    let atvDesignated: Bool
 }
 
 private enum NetC {
@@ -351,15 +358,26 @@ nonisolated enum PackNetworkOverlay {
             let access = (accessCode >= 0 && accessCode < pack.accessNames.count)
                 ? pack.accessNames[accessCode]
                 : "motorized_permissive"
+            let leaves = pack.edgeLeaves(ei)
             out.append(
                 NetworkLineFeature(
                     edgeId: pack.edgeId(ei),
                     coordinates: coords,
                     surfaceClass: surface,
                     accessClass: access,
-                    structureType: "none",
+                    structureType: leaves.structureLeaf ?? "none",
                     province: province,
-                    roadClass: GraphV2Pack.roadClassName(GraphV2Pack.unpackRoadClass(attr))
+                    roadClass: GraphV2Pack.roadClassName(GraphV2Pack.unpackRoadClass(attr)),
+                    surfaceLeaf: leaves.surfaceLeaf ?? "",
+                    surfaceFamily: PackDebugPaint.surfaceFamilyKey(
+                        pack.hasLeaves ? pack.surfaceFamily(ei) : nil
+                    ),
+                    roadClassLeaf: leaves.roadClassLeaf ?? "",
+                    roadTier: PackDebugPaint.roadTierKey(
+                        pack.hasLeaves ? pack.roadTier(ei) : nil
+                    ),
+                    accessLeaf: leaves.accessLeaf ?? "",
+                    atvDesignated: leaves.atvDesignated
                 )
             )
             if out.count >= cap { break }

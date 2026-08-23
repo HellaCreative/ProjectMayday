@@ -1251,18 +1251,18 @@ struct RootView: View {
     private var topChrome: some View {
         Group {
             if navActive {
-                // Speed moved to the bottom-left block, so the cue takes the width it left
-                // behind — the turn instruction is the second thing a rider looks at.
                 HStack(alignment: .top, spacing: 8) {
                     BrandChip(minHeight: 68)
                     NavCueCard()
                         .frame(maxWidth: .infinity)
+                    packFormatBadge
                 }
                 .transition(.opacity.combined(with: .move(edge: .top)))
             } else {
-                HStack(alignment: .top) {
+                HStack(alignment: .top, spacing: 8) {
                     BrandChip()
-                    Spacer()
+                    Spacer(minLength: 8)
+                    packFormatBadge
                 }
             }
         }
@@ -1270,21 +1270,64 @@ struct RootView: View {
         .padding(.top, 6)
     }
 
+    /// Always-visible pack version chip (Phase E3) — not behind the GRAPH debug toggle.
+    private var packFormatBadge: some View {
+        // Touch observables so the chip refreshes on pan / pack install.
+        let _ = app.mapState.mapCenter
+        let _ = app.graphPacks.loadedRegionIds
+        let badge = app.graphPacks.packFormatBadge(at: app.mapState.mapCenter)
+        return Text(badge.label)
+            .font(.dirtMono(10, weight: .bold))
+            .foregroundStyle(badge.hasLeaves ? DirtTheme.onOrange : .white)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .background(badge.hasLeaves ? DirtTheme.orange : DirtTheme.chrome.opacity(0.92))
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .stroke(DirtTheme.chromeBorder, lineWidth: 1)
+            )
+            .accessibilityLabel("Pack format \(badge.label)")
+    }
+
     private var routingGraphDebugHUD: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 8) {
             Text(app.mapState.debugGraphStatus ?? "DEBUG routing graph")
                 .font(.dirtMono(11, weight: .semibold))
                 .foregroundStyle(.white)
-            Text("Green = permissive · amber = unknown/Allow · orange = restricted · red = excluded. OSM highway tag is not in the pack — road class shown on tap. Viewport-capped.")
-                .font(.dirtMono(10))
-                .foregroundStyle(.white.opacity(0.72))
+
+            HStack(spacing: 4) {
+                ForEach(DebugGraphPaintMode.allCases, id: \.self) { mode in
+                    Button {
+                        app.mapState.debugGraphPaintMode = mode
+                    } label: {
+                        Text(mode.title)
+                            .font(.dirtMono(10, weight: .bold))
+                            .foregroundStyle(
+                                app.mapState.debugGraphPaintMode == mode
+                                    ? DirtTheme.onOrange : .white.opacity(0.85)
+                            )
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 5)
+                            .background(
+                                app.mapState.debugGraphPaintMode == mode
+                                    ? DirtTheme.orange : DirtTheme.chrome.opacity(0.55)
+                            )
+                            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            debugGraphLegend(for: app.mapState.debugGraphPaintMode)
+
             if let hit = app.mapState.debugGraphHit {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("tap \(hit.edgeId)")
-                    Text("surface \(hit.surfaceClass)")
-                    Text("access \(hit.accessClass)")
-                    Text("roadClass \(hit.roadClass)  ·  highway (not packed)")
-                    Text("source \(hit.source)")
+                    Text("surfaceLeaf \(hit.surfaceLeaf.isEmpty ? "—" : hit.surfaceLeaf) · family \(hit.surfaceFamily)")
+                    Text("roadClassLeaf \(hit.roadClassLeaf.isEmpty ? "—" : hit.roadClassLeaf) · tier \(hit.roadTier)")
+                    Text("access \(hit.accessClass) · leaf \(hit.accessLeaf.isEmpty ? "—" : hit.accessLeaf)\(hit.atvDesignated ? " · ATV" : "")")
+                    Text("coarse \(hit.surfaceClass) / \(hit.roadClass) · \(hit.source)")
                 }
                 .font(.dirtMono(11, weight: .medium))
                 .foregroundStyle(DirtTheme.onOrange)
@@ -1294,6 +1337,27 @@ struct RootView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(DirtTheme.chrome.opacity(0.92))
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+
+    private func debugGraphLegend(for mode: DebugGraphPaintMode) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            ForEach(PackDebugPaint.legend(for: mode), id: \.key) { item in
+                HStack(spacing: 6) {
+                    RoundedRectangle(cornerRadius: 2, style: .continuous)
+                        .fill(Color(item.color))
+                        .frame(width: 14, height: 4)
+                        .overlay {
+                            if item.dashed {
+                                RoundedRectangle(cornerRadius: 2, style: .continuous)
+                                    .stroke(Color.white.opacity(0.5), style: StrokeStyle(lineWidth: 0.5, dash: [2, 2]))
+                            }
+                        }
+                    Text(item.label)
+                        .font(.dirtMono(10))
+                        .foregroundStyle(.white.opacity(0.78))
+                }
+            }
+        }
     }
 
     /// Floating dark-glass bar inside the safe area: the map runs past it on every side,
