@@ -1,7 +1,7 @@
 {
-  "generatedAt": "2026-08-23T19:27:14.671Z",
+  "generatedAt": "2026-08-23T22:56:35.716Z",
   "candidateFile": "ns-graph.v3.bin",
-  "undirectedEdgeCount": 199724,
+  "undirectedEdgeCount": 199738,
   "surfaceFamilyMap": {
     "asphalt": "paved",
     "paved": "paved",

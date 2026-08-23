@@ -28,6 +28,10 @@ nonisolated enum ItineraryLog {
             return "fuel stop override revert riderLeg=\(legID.uuidString) \(generation)\(sourceSuffix)"
         case .setAllowUnknown(let legID, let allow):
             return "itinerary action=setAllowUnknown leg=\(legID?.uuidString ?? "all") allow=\(allow) \(generation)\(sourceSuffix)"
+        case .setAvoidMotorways(let legID, let avoid):
+            return "itinerary action=setAvoidMotorways leg=\(legID?.uuidString ?? "all") avoid=\(avoid) \(generation)\(sourceSuffix)"
+        case .setPreferBackRoads(let legID, let prefer):
+            return "itinerary action=setPreferBackRoads leg=\(legID?.uuidString ?? "all") prefer=\(prefer) \(generation)\(sourceSuffix)"
         case .markImpassable(let edgeIDs):
             return "itinerary action=markImpassable edges=\(edgeIDs.sorted().joined(separator: ",")) \(generation)\(sourceSuffix)"
         case .replaceAll:

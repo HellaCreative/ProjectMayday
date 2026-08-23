@@ -469,7 +469,9 @@ struct ItineraryBuilderTests {
                 from: from, to: to, profile: .dirt, allowUnknown: false,
                 priorEdgeIDs: [], arrivalEdgeID: nil, backtrackFactor: 4,
                 sourceName: "live", packRevision: "test",
-                cleanMetroMultiplier: nil
+                cleanMetroMultiplier: nil,
+                avoidMotorways: false,
+                preferBackRoads: false
             )
             if index == 0 { firstKey = cacheKey }
             cache.insert(response(from: from, to: to, meters: Double(index + 1)), for: cacheKey)

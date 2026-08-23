@@ -26,13 +26,11 @@ struct FerryLockstepTests {
         ]
         let withFerry = SurfaceFamilyStats.honestPercents(
             rows: rows,
-            distanceMeters: 1500,
-            familyMap: [:]
+            distanceMeters: 1500
         )
         let pavedOnly = SurfaceFamilyStats.honestPercents(
             rows: [(1000, "asphalt")],
-            distanceMeters: 1000,
-            familyMap: [:]
+            distanceMeters: 1000
         )
         #expect(withFerry.pavedPercent == 67)
         #expect(pavedOnly.pavedPercent == 100)
