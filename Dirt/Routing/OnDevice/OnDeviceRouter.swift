@@ -213,8 +213,8 @@ nonisolated struct OnDeviceRouter {
         case .failure: return pavedWall
         }
 
-        // The urban wall is more important than Clean's surface preference.
-        // Before relaxing a core, allow tagged unpaved fabric outside it.
+        // Unpaved last resort only after paved-only already exhausted every
+        // Clean corridor width inside routeDetailedOnce (incl. unbounded).
         let anySurfaceWall = routeDetailedOnce(
             from: from, to: to, profile: profile,
             allowUnknown: allowUnknown, avoidEdgeIds: avoidEdgeIds,
@@ -348,6 +348,7 @@ nonisolated struct OnDeviceRouter {
         allowUnknown: Bool,
         cityWall: Bool
     ) -> [Double]? {
+        _ = cityWall
         let snaps = nearestEdgeSnaps(
             to: from, allowUnknown: allowUnknown, profile: profile,
             maxMeters: Self.preferredMatchMeters
@@ -393,10 +394,6 @@ nonisolated struct OnDeviceRouter {
                 let attr = pack.edgeAttrs[ei]
                 let access = GraphV2Pack.unpackAccess(attr)
                 if !accessAllowed(access, allowUnknown: policyUnknown, profile: profile) { continue }
-                let toLL = coordinate(forNode: toNode)
-                if cityWall, UrbanCore.blocks(point: toLL, start: from, end: toward, boxes: packUrbanCores) {
-                    continue
-                }
                 let newCost = cur.cost + Double(pack.edgeMeters[ei])
                 if newCost > maxMeters { continue }
                 if newCost < dist[toNode] {
@@ -675,6 +672,49 @@ nonisolated struct OnDeviceRouter {
                 case .failure(let failure):
                     lastEnvelopeFailure = failure
                 }
+            }
+            return .failure(lastEnvelopeFailure)
+        }
+
+        // Clean: pavement hard, corridor soft. Exhaust paved widen before caller
+        // may open unpaved last resort. Always honor ctx.pavedOnly.
+        if profile == .cleanest {
+            let base = HopSearchPolicy.cleanCorridorMeters
+            let multipliers: [Double] = [1, 2, 3, 4, 6, 8, 12, 16, 24]
+            var lastEnvelopeFailure: Failure = .noPath
+            var attemptNote: [String] = []
+            for width in multipliers.map({ base * $0 }) + [0] {
+                var envelope = ctx
+                envelope.costMode = .profile
+                envelope.variety = false
+                // Never drop pavedOnly while widening Clean.
+                envelope.pavedOnly = ctx.pavedOnly
+                envelope.corridorMeters = width > 0 ? width : nil
+                envelope.hardCorridor = width > 0
+                envelope.boundedSearch = true
+                // Fresh budget per band so one tight corridor cannot abort the ladder.
+                envelope.timeCapSeconds = ctx.pavedOnly ? 5.0 : HopSearchPolicy.pass2TimeCapSeconds
+                envelope.popCap = HopSearchPolicy.pass2PopCap
+                envelope.maxPathMeters = maxRouteMeters
+                lastFailure = .noPath
+                switch runProfile(envelope) {
+                case .success(var route):
+                    route.searchMeta.rideObjective = "practical-pavement"
+                    route.searchMeta.corridorMeters = width > 0 ? width : nil
+                    route.searchMeta.corridorWidened = width > base
+                    route.searchMeta.maxCrossTrackMeters = HopSearchPolicy.maxCrossTrackMeters(
+                        coordinates: route.coordinates, start: from, end: to
+                    )
+                    let note = "objective=practical-pavement corridor=\(Int(width))m pavedOnly=\(ctx.pavedOnly ? 1 : 0)"
+                    route.debugNote = route.debugNote.isEmpty ? note : route.debugNote + " " + note
+                    return .success(route)
+                case .failure(let failure):
+                    lastEnvelopeFailure = failure
+                    attemptNote.append("\(Int(width))m:\(String(describing: failure))")
+                }
+            }
+            if !attemptNote.isEmpty {
+                lastFailure = lastEnvelopeFailure
             }
             return .failure(lastEnvelopeFailure)
         }
@@ -1012,7 +1052,7 @@ nonisolated struct OnDeviceRouter {
         if startSnap.edgeIndex >= 0,
            startSnap.edgeIndex == endSnap.edgeIndex,
            abs(startSnap.distanceAlongM - endSnap.distanceAlongM) > 1 {
-            if ctx.pavedOnly, edgeIsDirt(startSnap.edgeIndex) {
+            if edgeBlockedByPavedOnly(startSnap.edgeIndex, ctx: ctx) {
                 return .failure(.noPath)
             }
             if let same = sameEdgeResult(from: from, to: to, startSnap: startSnap, endSnap: endSnap) {
@@ -1313,12 +1353,11 @@ nonisolated struct OnDeviceRouter {
         pathMeters[startVirt] = 0
         heap.push(node: startVirt, cost: 0)
 
-        let applyAway = profile != .cleanest
-            && (ctx.costMode == .profile || ctx.costMode == .pavement)
-        // Direct keeps a centreline pull even when a hard corridor exists. The
-        // corridor is a ceiling, not permission to hunt dirt along its edge.
+        let applyAway = ctx.costMode == .profile || ctx.costMode == .pavement
+        // Direct/Clean keep a centreline pull even when a hard corridor exists.
         let applySoftCorridor = applyAway
-            && (ctx.costMode == .pavement || profile == .direct || ctx.corridorMeters == nil)
+            && (ctx.costMode == .pavement || profile == .direct || profile == .cleanest
+                || ctx.corridorMeters == nil)
         let isHunt = ctx.maxPathMeters != nil || ctx.boundedSearch
         var pops = 0
         var abort = "completed"
@@ -1355,7 +1394,7 @@ nonisolated struct OnDeviceRouter {
                     let attr = pack.edgeAttrs[ei]
                     let access = GraphV2Pack.unpackAccess(attr)
                     if !accessAllowed(access, allowUnknown: policyUnknown, profile: profile) { continue }
-                    if ctx.pavedOnly, edgeIsDirt(ei) { continue }
+                    if edgeBlockedByPavedOnly(ei, ctx: ctx) { continue }
                     let eid = pack.edgeId(ei)
                     if !eid.isEmpty, avoidEdgeIds.contains(eid) { continue }
 
@@ -1390,9 +1429,13 @@ nonisolated struct OnDeviceRouter {
                         endOnMajorHighway: endOnMajorHighway,
                         policyUnknown: policyUnknown
                     )
-                    if ctx.urbanCoreFallback {
-                        step *= UrbanCore.fallbackMultiplier(point: toLL, start: from, end: to, boxes: packUrbanCores)
-                    }
+                    step *= UrbanCore.fallbackMultiplier(
+                        point: toLL,
+                        start: from,
+                        end: to,
+                        boxes: packUrbanCores,
+                        edgeFrom: coordinate(forNode: cur.node)
+                    )
                     if ctx.settlementFallback {
                         step *= UrbanCore.settlementFallbackMultiplier(
                             point: toLL, start: from, end: to, boxes: packSettlements
@@ -1448,7 +1491,7 @@ nonisolated struct OnDeviceRouter {
                 for item in vlist {
                     let v = virt[item.id]
                     if ctx.pavedOnly {
-                        if v.junctionStitch || (v.ei >= 0 && edgeIsDirt(v.ei)) { continue }
+                        if v.junctionStitch || (v.ei >= 0 && edgeBlockedForCleanPavement(v.ei)) { continue }
                     }
                     if ctx.noBacktrack, v.ei >= 0,
                        isBacktrack(prevKind: prevKind[cur.node], prevData: prevData[cur.node], ei: v.ei, virt: virt) {
@@ -1477,9 +1520,13 @@ nonisolated struct OnDeviceRouter {
                     ) { continue }
                     var step = v.meters / 1000.0
                     if v.junctionStitch { step *= Self.junctionStitchCostPremium }
-                    if ctx.urbanCoreFallback {
-                        step *= UrbanCore.fallbackMultiplier(point: toLL, start: from, end: to, boxes: packUrbanCores)
-                    }
+                    step *= UrbanCore.fallbackMultiplier(
+                        point: toLL,
+                        start: from,
+                        end: to,
+                        boxes: packUrbanCores,
+                        edgeFrom: edgeFrom
+                    )
                     if ctx.settlementFallback {
                         step *= UrbanCore.settlementFallbackMultiplier(
                             point: toLL, start: from, end: to, boxes: packSettlements
@@ -1685,7 +1732,7 @@ nonisolated struct OnDeviceRouter {
                     let attr = pack.edgeAttrs[ei]
                     let access = GraphV2Pack.unpackAccess(attr)
                     if !accessAllowed(access, allowUnknown: policyUnknown, profile: profile) { continue }
-                    if ctx.pavedOnly, edgeIsDirt(ei) { continue }
+                    if edgeBlockedByPavedOnly(ei, ctx: ctx) { continue }
                     let eid = pack.edgeId(ei)
                     if !eid.isEmpty, avoidEdgeIds.contains(eid) { continue }
                     let toLL = coordinate(forNode: toNode)
@@ -1705,8 +1752,15 @@ nonisolated struct OnDeviceRouter {
                             point: toLL, start: from, end: to, boxes: packSettlements
                         )
                         : 1
+                    let urbanMult = UrbanCore.fallbackMultiplier(
+                        point: toLL,
+                        start: from,
+                        end: to,
+                        boxes: packUrbanCores,
+                        edgeFrom: coordinate(forNode: node)
+                    )
                     let newScore = cur.cost + backtrackPenalized(
-                        edgeM * settlementMult,
+                        edgeM * settlementMult * urbanMult,
                         edgeID: pack.edgeId(ei),
                         ctx: ctx
                     )
@@ -1744,19 +1798,19 @@ nonisolated struct OnDeviceRouter {
                 for item in vlist {
                     let v = virt[item.id]
                     if ctx.pavedOnly {
-                        if v.junctionStitch || (v.ei >= 0 && edgeIsDirt(v.ei)) { continue }
+                        if v.junctionStitch || (v.ei >= 0 && edgeBlockedForCleanPavement(v.ei)) { continue }
                     }
                     let newMeters = metersSoFar + v.meters
                     if exceedsLengthSlack(
                         newMeters: newMeters, toNode: item.to,
                         slackToDest: slackToDest, cap: cap
                     ) { continue }
+                    let edgeFrom = node < n
+                        ? coordinate(forNode: node)
+                        : (node == startVirt ? startSnap.projected : endSnap.projected)
                     if ctx.cityWall, item.to < n {
-                        let toLL = coordinate(forNode: item.to)
-                        let edgeFrom = node < n
-                            ? coordinate(forNode: node)
-                            : (node == startVirt ? startSnap.projected : endSnap.projected)
-                        if hopBlocked(toLL, edgeFrom: edgeFrom, from: from, to: to, ctx: ctx) { continue }
+                        let blockedLL = coordinate(forNode: item.to)
+                        if hopBlocked(blockedLL, edgeFrom: edgeFrom, from: from, to: to, ctx: ctx) { continue }
                     }
                     let b = HopSearchPolicy.dirtBucket(dirtMeters: dirtSoFar, pathMeters: newMeters)
                     let toLab = lab(item.to, b)
@@ -1766,11 +1820,18 @@ nonisolated struct OnDeviceRouter {
                             point: toLL, start: from, end: to, boxes: packSettlements
                         )
                         : 1
+                    let urbanMult = UrbanCore.fallbackMultiplier(
+                        point: toLL,
+                        start: from,
+                        end: to,
+                        boxes: packUrbanCores,
+                        edgeFrom: edgeFrom
+                    )
                     let virtualEdgeID = v.junctionStitch
                         ? v.stitchEdgeId
                         : (v.ei >= 0 ? pack.edgeId(v.ei) : "")
                     let newScore = cur.cost + backtrackPenalized(
-                        v.meters * settlementMult,
+                        v.meters * settlementMult * urbanMult,
                         edgeID: virtualEdgeID,
                         ctx: ctx
                     )
@@ -1948,7 +2009,7 @@ nonisolated struct OnDeviceRouter {
                     let attr = pack.edgeAttrs[ei]
                     let access = GraphV2Pack.unpackAccess(attr)
                     if !accessAllowed(access, allowUnknown: policyUnknown, profile: profile) { continue }
-                    if ctx.pavedOnly, edgeIsDirt(ei) { continue }
+                    if edgeBlockedByPavedOnly(ei, ctx: ctx) { continue }
                     let eid = pack.edgeId(ei)
                     if !eid.isEmpty, avoidEdgeIds.contains(eid) { continue }
                     let toLL = coordinate(forNode: toNode)
@@ -1966,7 +2027,7 @@ nonisolated struct OnDeviceRouter {
                 for item in vlist {
                     let v = virt[item.id]
                     if ctx.pavedOnly {
-                        if v.junctionStitch || (v.ei >= 0 && edgeIsDirt(v.ei)) { continue }
+                        if v.junctionStitch || (v.ei >= 0 && edgeBlockedForCleanPavement(v.ei)) { continue }
                     }
                     let edgeFrom = cur.node < n
                         ? coordinate(forNode: cur.node)
@@ -2319,7 +2380,7 @@ nonisolated struct OnDeviceRouter {
                     let attr = pack.edgeAttrs[ei]
                     let access = GraphV2Pack.unpackAccess(attr)
                     if !accessAllowed(access, allowUnknown: policyUnknown, profile: profile) { continue }
-                    if ctx.pavedOnly, edgeIsDirt(ei) { continue }
+                    if edgeBlockedByPavedOnly(ei, ctx: ctx) { continue }
                     let eid = pack.edgeId(ei)
                     if !eid.isEmpty, avoidEdgeIds.contains(eid) { continue }
                     if ctx.noBacktrack, prevEdge[cur.node] == ei { continue }
@@ -2360,9 +2421,13 @@ nonisolated struct OnDeviceRouter {
                         startOnMajorHighway: startOnMajorHighway,
                         endOnMajorHighway: endOnMajorHighway
                     )
-                    if ctx.urbanCoreFallback {
-                        step *= UrbanCore.fallbackMultiplier(point: toLL, start: from, end: to, boxes: packUrbanCores)
-                    }
+                    step *= UrbanCore.fallbackMultiplier(
+                        point: toLL,
+                        start: from,
+                        end: to,
+                        boxes: packUrbanCores,
+                        edgeFrom: coordinate(forNode: cur.node)
+                    )
                     if ctx.settlementFallback {
                         step *= UrbanCore.settlementFallbackMultiplier(
                             point: toLL, start: from, end: to, boxes: packSettlements
@@ -2386,7 +2451,7 @@ nonisolated struct OnDeviceRouter {
                         abMeters: abMeters,
                         regionId: pack.regionId
                     )
-                    if profile == .direct || ctx.corridorMeters == nil {
+                    if profile == .direct || profile == .cleanest || ctx.corridorMeters == nil {
                         step += OnDeviceProfileCosts.corridorCrossTrackExtra(
                             profile: profile,
                             point: toLL,
@@ -2414,25 +2479,27 @@ nonisolated struct OnDeviceRouter {
                     let s = stitches[link.idx]
                     var step = (s.meters / 1000.0) * Self.junctionStitchCostPremium
                     let stitchTo = coordinate(forNode: link.to)
-                    if ctx.urbanCoreFallback {
-                        step *= UrbanCore.fallbackMultiplier(point: stitchTo, start: from, end: to, boxes: packUrbanCores)
-                    }
+                    step *= UrbanCore.fallbackMultiplier(
+                        point: stitchTo,
+                        start: from,
+                        end: to,
+                        boxes: packUrbanCores,
+                        edgeFrom: coordinate(forNode: cur.node)
+                    )
                     if ctx.settlementFallback {
                         step *= UrbanCore.settlementFallbackMultiplier(
                             point: stitchTo, start: from, end: to, boxes: packSettlements
                         )
                     }
-                    if profile != .cleanest {
-                        let fromLL = coordinate(forNode: cur.node)
-                        let toLL = coordinate(forNode: link.to)
-                        step += OnDeviceProfileCosts.approachAwayExtra(
-                            profile: profile,
-                            dFromMeters: meters(fromLL, endLL),
-                            dToMeters: meters(toLL, endLL),
-                            abMeters: abMeters,
-                            regionId: pack.regionId
-                        )
-                    }
+                    let fromLL = coordinate(forNode: cur.node)
+                    let toLL = coordinate(forNode: link.to)
+                    step += OnDeviceProfileCosts.approachAwayExtra(
+                        profile: profile,
+                        dFromMeters: meters(fromLL, endLL),
+                        dToMeters: meters(toLL, endLL),
+                        abMeters: abMeters,
+                        regionId: pack.regionId
+                    )
                     let cost = cur.cost + step
                     if cost < dist[link.to] {
                         dist[link.to] = cost
@@ -3067,6 +3134,21 @@ nonisolated struct OnDeviceRouter {
         return OnDeviceProfileCosts.isAdventureSurface(paint)
     }
 
+    /// Clean paved-only: block gravel/track and untagged minor roads.
+    private func edgeBlockedForCleanPavement(_ ei: Int) -> Bool {
+        guard ei >= 0, ei < pack.undirectedEdgeCount else { return true }
+        let attr = pack.edgeAttrs[ei]
+        return OnDeviceProfileCosts.isBlockedForCleanPavement(
+            surfaceName: OnDeviceProfileCosts.surfaceName(code: GraphV2Pack.unpackSurface(attr)),
+            roadClassName: GraphV2Pack.roadClassName(GraphV2Pack.unpackRoadClass(attr))
+        )
+    }
+
+    private func edgeBlockedByPavedOnly(_ ei: Int, ctx: HopSearchContext) -> Bool {
+        guard ctx.pavedOnly else { return false }
+        return edgeBlockedForCleanPavement(ei)
+    }
+
     private func isBacktrack(
         prevKind: UInt8,
         prevData: Int,
@@ -3088,14 +3170,9 @@ nonisolated struct OnDeviceRouter {
         to: CLLocationCoordinate2D,
         ctx: HopSearchContext
     ) -> Bool {
-        if ctx.cityWall {
-            if UrbanCore.blocks(point: point, start: from, end: to, boxes: packUrbanCores) { return true }
-            if let edgeFrom,
-               UrbanCore.blocks(
-                segmentFrom: edgeFrom, segmentTo: point,
-                start: from, end: to, boxes: packUrbanCores
-               ) { return true }
-        }
+        // Urban cores are strongly penalized in hopCostStep / callers via
+        // UrbanCore.fallbackMultiplier — not hard-blocked — so a short graze
+        // can beat a pathological detour.
         if ctx.settlementWall,
            UrbanCore.blocks(point: point, start: from, end: to, boxes: packSettlements) {
             return true
@@ -3104,6 +3181,7 @@ nonisolated struct OnDeviceRouter {
            abs(GeoMath.crossTrackMeters(point: point, lineFrom: from, to: to)) > corridor {
             return true
         }
+        _ = edgeFrom
         return false
     }
 

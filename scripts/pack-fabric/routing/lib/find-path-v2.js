@@ -33,6 +33,7 @@ const {
   shouldPush,
   createsCycle,
   isDirtSurface,
+  isBlockedForCleanPavement,
   dirtRideCostPerKm,
   DIRT_RIDE_PAVED_PER_KM,
   DIRT_RIDE_GRAVEL_PER_KM,
@@ -196,8 +197,11 @@ function blockedForRide(
   settlementBoxes,
   fromPoint
 ) {
-  if (hopBlocked(point, startLL, endLL, cityWall, urbanBoxes)) return true;
-  if (cityWall && metroEdgeBlocks(fromPoint, point, startLL, endLL, urbanBoxes)) return true;
+  // Urban cores: passable under a strong cost penalty (see urbanCoreFallbackMultiplier).
+  // cityWall no longer hard-blocks; settlement + corridor walls remain hard.
+  void cityWall;
+  void urbanBoxes;
+  void fromPoint;
   if (
     settlementWall && point &&
     settlementBlocks(point[0], point[1], startLL, endLL, settlementBoxes)
@@ -278,7 +282,7 @@ function fillShortestMeters(args) {
         if (pavedOnly) {
           const surfaceName = enums.SURFACE_NAME[unpackSurface(attr)] || "unknown";
           const roadName = ROAD_CLASS_NAME[unpackRoadClass(attr)] || "unknown";
-          if (isDirtSurface(surfaceName, roadName)) continue;
+          if (isBlockedForCleanPavement(surfaceName, roadName)) continue;
         }
         if (avoid && avoid.has(pack.edgeId(ei))) continue;
         const toLL = nodeLL(to);
@@ -303,7 +307,7 @@ function fillShortestMeters(args) {
           const attr = edgeAttrs[v.ei];
           const surfaceName = enums.SURFACE_NAME[unpackSurface(attr)] || "unknown";
           const roadName = ROAD_CLASS_NAME[unpackRoadClass(attr)] || "unknown";
-          if (isDirtSurface(surfaceName, roadName)) continue;
+          if (isBlockedForCleanPavement(surfaceName, roadName)) continue;
         }
         const toLL = nodeLL(item.to);
         if (blockedForRide(
@@ -375,14 +379,18 @@ function chooseDirtRideCandidate(candidates) {
 function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds, pavedBias, searchOpts) {
   searchOpts = searchOpts || {};
   const sessionSeed = Number(searchOpts.sessionSeed) || 0;
-  if (!searchOpts.costMode && profile !== "cleanest") {
+  if (!searchOpts.costMode) {
     const baseCorridor = corridorMetersForProfile(profile);
-    // Direct/Balanced keep the narrowest viable band. Dirt first compares
-    // coherent rides inside 50/100/150 km envelopes; the corridor is an outer
+    // Direct/Balanced/Clean keep the narrowest viable band. Dirt first compares
+    // coherent rides inside wide envelopes; the corridor is an outer
     // permission, never distance the route must consume.
     const widthMultipliers = profile === "direct"
       ? [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12]
-      : profile === "dirt" ? [4, 3, 2, 1, 6, 8] : [1, 2, 3, 4, 6, 8];
+      : profile === "dirt" ? [4, 3, 2, 1, 6, 8]
+        : profile === "cleanest"
+          // Pavement > corridor tightness: widen hard before any unpaved fallback.
+          ? [1, 2, 3, 4, 6, 8, 12, 16, 24]
+          : [1, 2, 3, 4, 6, 8]; // balanced
     const widths = widthMultipliers.map((m) => baseCorridor * m).concat(Infinity);
     const requestedCap = Number(searchOpts.maxPathMeters);
     // Direct's 15 km promise is a path-length budget, not merely a lateral
@@ -439,12 +447,26 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
     // because the search widens or relaxes a scored preference.
     const outerDeadline = Number.isFinite(Number(searchOpts.deadlineAtMs))
       ? Number(searchOpts.deadlineAtMs)
-      : Date.now() + (profile === "balanced" ? 2_200 : 3_500);
-    searchOpts.deadlineAtMs = outerDeadline;
+      : Date.now() + (
+        profile === "balanced" ? 2_200
+          // Clean paved-only must finish the full widen ladder, not abort after one band.
+          : profile === "cleanest" && searchOpts.pavedOnly === true ? 55_000
+            : profile === "cleanest" ? 5_500
+              : 3_500
+      );
+    let liveDeadline = outerDeadline;
+    searchOpts.deadlineAtMs = liveDeadline;
     for (const width of widths) {
-      if (Date.now() >= outerDeadline) {
-        attemptDiagnostics.push({ corridorMeters: null, outcome: "timeCap", pops: 0 });
-        break;
+      if (Date.now() >= liveDeadline) {
+        if (profile === "cleanest" && searchOpts.pavedOnly === true && Number.isFinite(width)) {
+          liveDeadline = Date.now() + 5_000;
+          searchOpts.deadlineAtMs = liveDeadline;
+        } else {
+          attemptDiagnostics.push({
+            corridorMeters: null, outcome: "timeCap", pops: 0, searchMs: 0
+          });
+          break;
+        }
       }
       // Once Dirt has compared its three deliberate envelopes, wider bands are
       // connectivity fallbacks only. Stop at the first one that connects.
@@ -462,6 +484,10 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
         boundedSearch: true,
         sessionSeed,
         variety: false,
+        // Preserve Clean's paved-only gate across corridor widen attempts.
+        pavedOnly: searchOpts.pavedOnly === true,
+        cityWall: searchOpts.cityWall !== false,
+        urbanCoreFallback: searchOpts.urbanCoreFallback === true,
         // Width is lateral permission, not permission to head away from the
         // next pin. Keep the forward-progress guard fixed while widening; only
         // the final unbounded attempt may relax it to prove connectivity.
@@ -480,25 +506,29 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
       }
       rideOpts.timeCapMs = Math.min(
         Number(rideOpts.timeCapMs) || PASS2_TIME_MS,
-        Math.max(250, outerDeadline - Date.now())
+        Math.max(250, liveDeadline - Date.now())
       );
       // A real per-hop constraint (fuel range) remains a hard safety limit. It
       // is not a shortest-path-derived product objective.
       if (Number.isFinite(activePathCap)) rideOpts.maxPathMeters = activePathCap;
       if (Number.isFinite(directShortestMeters)) rideOpts.shortestMeters = directShortestMeters;
+      const attemptStarted = Date.now();
       const ride = findPathV2(
         runtime, startMatch, endMatch, profile, policy, avoidEdgeIds, pavedBias, rideOpts
       );
       attemptDiagnostics.push({
         corridorMeters: Number.isFinite(width) ? width : null,
         outcome: ride ? "completed" : (diagnostics.outcome || "noPath"),
-        pops: diagnostics.pops || (ride && ride.searchMeta && ride.searchMeta.pops) || 0
+        pops: diagnostics.pops || (ride && ride.searchMeta && ride.searchMeta.pops) || 0,
+        searchMs: Date.now() - attemptStarted
       });
       if (!ride) continue;
       ride.searchMeta = ride.searchMeta || {};
       ride.searchMeta.rideObjective =
         profile === "dirt" ? "earned-dirt-detour" :
-        profile === "balanced" ? "surface-balance" : "crow-flies-adventure";
+        profile === "balanced" ? "surface-balance" :
+        profile === "cleanest" ? "practical-pavement" :
+        "crow-flies-adventure";
       ride.searchMeta.corridorMeters = Number.isFinite(width) ? width : null;
       ride.searchMeta.corridorWidened = Number.isFinite(width) && width > baseCorridor;
       if (profile === "dirt") {
@@ -560,6 +590,10 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
       );
       searchOpts.diagnostics.outcome = incomplete ? incomplete.outcome : "noPath";
       searchOpts.diagnostics.attempts = attemptDiagnostics;
+      searchOpts.diagnostics.pops = attemptDiagnostics.reduce(
+        (sum, attempt) => sum + (Number(attempt.pops) || 0),
+        0
+      );
     }
     return null;
   }
@@ -692,9 +726,9 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
     ? Number(searchOpts.maxPathMeters)
     : Infinity;
   const varietyOn = searchOpts.variety !== false && profile !== "cleanest";
-  // Every profile treats a recognized urban core as a wall. The caller may
-  // explicitly relax the wall only after a wall-respecting search has proved
-  // there is no route. A/B inside the same core remain exempt in metroBlocks.
+  // Urban cores are strongly penalized (×120) but passable so a short graze
+  // beats a hundreds-of-kilometre detour. cityWall remains in searchOpts for
+  // caller compatibility; it no longer hard-blocks fabric.
   const cityWall = searchOpts.cityWall !== false;
   const corridorM = Number.isFinite(Number(searchOpts.corridorMeters))
     ? Number(searchOpts.corridorMeters)
@@ -702,16 +736,17 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
   const hardCorridor = searchOpts.hardCorridor === true;
   const pavedOnly = searchOpts.pavedOnly === true;
   const urbanCoreFallback = searchOpts.urbanCoreFallback === true;
+  void urbanCoreFallback;
   const settlementWall = searchOpts.settlementWall === true;
   const settlementFallback = searchOpts.settlementFallback !== false;
   const regressionLimit = Number.isFinite(Number(searchOpts.progressRegressionMeters))
     ? Number(searchOpts.progressRegressionMeters)
     : maxProgressRegressionMeters(profile);
-  const applyAwayXt = costMode === "profile" && profile !== "cleanest";
-  // Direct means closest practical ride to the A→B great-circle. Its hard
-  // corridor is only an outer feasibility wall; keep pulling toward the
-  // centreline inside that wall so dirt pricing cannot hug the far edge.
-  const applySoftCorridor = applyAwayXt && (profile === "direct" || !(corridorM > 0));
+  const applyAwayXt = costMode === "profile";
+  // Direct/Clean keep a centreline pull even when a hard corridor exists. The
+  // corridor is a ceiling, not permission to hug the far edge.
+  const applySoftCorridor = applyAwayXt
+    && (profile === "direct" || profile === "cleanest" || !(corridorM > 0));
   const isHunt = Number.isFinite(maxPathMeters);
   const boundedSearch = isHunt || searchOpts.boundedSearch === true;
   const slackToDest = isHunt
@@ -857,7 +892,7 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
         const surface = unpackSurface(attr);
         const road = ROAD_CLASS_NAME[unpackRoadClass(attr)] || "unknown";
         const surfaceName = enums.SURFACE_NAME[surface] || "unknown";
-        if (pavedOnly && isDirtSurface(surfaceName, road)) continue;
+        if (pavedOnly && isBlockedForCleanPavement(surfaceName, road)) continue;
         let step;
         if (costMode === "distance") {
           step = edgeM / 1000;
@@ -918,8 +953,10 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
             }
           }
         }
-        if (urbanCoreFallback && toLL) {
-          step *= urbanCoreFallbackMultiplier(toLL[0], toLL[1], startLL, endLL, urbanBoxes);
+        if (toLL) {
+          step *= urbanCoreFallbackMultiplier(
+            toLL[0], toLL[1], startLL, endLL, urbanBoxes, nodeLL(cur.node)
+          );
         }
         if (settlementFallback && toLL) {
           step *= settlementFallbackMultiplier(
@@ -976,7 +1013,7 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
         const vSurface = unpackSurface(vAttr);
         const vRoad = ROAD_CLASS_NAME[unpackRoadClass(vAttr)] || "unknown";
         const vSurfaceName = enums.SURFACE_NAME[vSurface] || "unknown";
-        if (pavedOnly && isDirtSurface(vSurfaceName, vRoad)) continue;
+        if (pavedOnly && isBlockedForCleanPavement(vSurfaceName, vRoad)) continue;
         let step = costMode === "pavement"
           ? (v.meters / 1000) * dirtRideCostPerKm(vSurfaceName, vRoad, unpackConfidence(vAttr))
           : v.meters / 1000;
@@ -988,8 +1025,10 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
         } else if (applyAwayXt) {
           step += awayExtra(cur.node, item.to);
         }
-        if (urbanCoreFallback && toLL) {
-          step *= urbanCoreFallbackMultiplier(toLL[0], toLL[1], startLL, endLL, urbanBoxes);
+        if (toLL) {
+          step *= urbanCoreFallbackMultiplier(
+            toLL[0], toLL[1], startLL, endLL, urbanBoxes, nodeLL(cur.node)
+          );
         }
         if (settlementFallback && toLL) {
           step *= settlementFallbackMultiplier(
@@ -1274,6 +1313,20 @@ function searchBalancedResource(ctx) {
     return null;
   }
 
+  const abMeters = haversineMeters(startLL, endLL);
+  function awayExtra(fromNode, toNode) {
+    const a = nodeLL(fromNode);
+    const b = nodeLL(toNode);
+    if (!a || !b) return 0;
+    return approachAwayExtraCost(
+      profile,
+      haversineMeters(a, endLL),
+      haversineMeters(b, endLL),
+      abMeters,
+      50
+    );
+  }
+
   while (heap.items.length) {
     pops += 1;
     if (pops > popCap) {
@@ -1329,8 +1382,16 @@ function searchBalancedResource(ctx) {
         const settlementMult = settlementFallback && toLL
           ? settlementFallbackMultiplier(toLL[0], toLL[1], startLL, endLL, settlementBoxes)
           : 1;
+        const urbanMult = toLL
+          ? urbanCoreFallbackMultiplier(
+            toLL[0], toLL[1], startLL, endLL, urbanBoxes, nodeLL(node)
+          )
+          : 1;
         const newScore = cur.searchCost
-          + penalizeBacktrack(edgeM * settlementMult, pack.edgeId(ei));
+          + penalizeBacktrack(
+            edgeM * settlementMult * urbanMult + awayExtra(node, to),
+            pack.edgeId(ei)
+          );
         let action = considerRelax(
           newScore,
           score[toLab],
@@ -1380,8 +1441,16 @@ function searchBalancedResource(ctx) {
         const settlementMult = settlementFallback && toLL
           ? settlementFallbackMultiplier(toLL[0], toLL[1], startLL, endLL, settlementBoxes)
           : 1;
+        const urbanMult = toLL
+          ? urbanCoreFallbackMultiplier(
+            toLL[0], toLL[1], startLL, endLL, urbanBoxes, nodeLL(node)
+          )
+          : 1;
         const newScore = cur.searchCost
-          + penalizeBacktrack(v.meters * settlementMult, pack.edgeId(v.ei));
+          + penalizeBacktrack(
+            v.meters * settlementMult * urbanMult + awayExtra(node, item.to),
+            pack.edgeId(v.ei)
+          );
         if (newScore < score[toLab]) {
           dist[toLab] = newMeters;
           score[toLab] = newScore;

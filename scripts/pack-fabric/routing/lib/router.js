@@ -27,6 +27,11 @@ const {
   isBcDirt
 } = require("./profile-costs");
 const {
+  buildRouteDiagnostics,
+  classifyRouteFailureReason,
+  sumPops
+} = require("./route-diagnostics");
+const {
   unpackSurface,
   unpackAccess,
   unpackStructure,
@@ -36,10 +41,17 @@ const {
   ROAD_CLASS_NAME
 } = require("./pack-v2");
 const { findPathV2 } = require("./find-path-v2");
-const { isDirtSurface, outsideCorridor } = require("./hop-search");
+const {
+  isDirtSurface,
+  outsideCorridor,
+  CLEAN_CORRIDOR_M,
+  maxProgressRegressionMeters
+} = require("./hop-search");
 const crossPackTopology = require("../schema/cross-pack-topology.v1.json");
 const { resolveLocationsByEligibleEdge } = require("../regional/endpoint-resolver");
 
+const CLEAN_CORRIDOR_WIDTH_MULTIPLIERS = Object.freeze([1, 2, 3, 4, 6, 8, 12, 16, 24]);
+const CLEAN_PAVED_ATTEMPT_MS = 5_000;
 const DEFAULT_MATCH_METERS = 250;
 const EARTH_M = 6371000;
 
@@ -863,11 +875,21 @@ async function routeRequestCore(body = {}) {
       profile: body.profile
     });
   } catch (err) {
+    const message = err && err.message ? err.message : String(err);
+    const corridorClip = /corridor clip removed all edges/i.test(message);
     return {
       status: "error",
-      error: "graph_load_failed",
-      message: err && err.message ? err.message : String(err),
-      regionIds: graphResolution.regionIds || []
+      error: corridorClip ? "corridor_clip" : "graph_load_failed",
+      message,
+      regionIds: graphResolution.regionIds || [],
+      debug: {
+        failureReason: corridorClip ? "corridor_clip" : "graph_load_failed",
+        diagnostics: {
+          failureReason: corridorClip ? "corridor_clip" : "graph_load_failed",
+          buildMs: null,
+          searchAttempts: []
+        }
+      }
     };
   }
   if (body.action === "debug_graph") {
@@ -1607,6 +1629,7 @@ function pickCloserToBalancedMix(pathVerified, pathWithUnknown) {
 }
 
 async function routeOnRuntime(body, graphResolution, runtime) {
+  const buildStarted = Date.now();
   const enums = runtime.enums;
   const profile = String(body.profile || "balanced").toLowerCase();
   if (!["direct", "balanced", "dirt", "cleanest"].includes(profile)) {
@@ -1895,6 +1918,7 @@ async function routeOnRuntime(body, graphResolution, runtime) {
   if (!startMatch.ok || !endMatch.ok) {
     const noEligible = startMatch.reason === "snap_no_eligible_edge" ||
       endMatch.reason === "snap_no_eligible_edge";
+    const failureReason = "snap_failure";
     return {
       status: "failed",
       profile,
@@ -1912,6 +1936,15 @@ async function routeOnRuntime(body, graphResolution, runtime) {
         endMatch,
         matchLimitMeters: limit,
         fallback: null,
+        failureReason,
+        diagnostics: buildRouteDiagnostics({
+          requestedProfile: profile,
+          buildMs: Date.now() - buildStarted,
+          searchMs: 0,
+          attempts: [],
+          failureReason,
+          searchOutcome: "snap_failure"
+        }),
         graph: {
           edgeCount: runtime.data.edgeCount,
           nodeCount: runtime.data.nodeCount,
@@ -1932,6 +1965,7 @@ async function routeOnRuntime(body, graphResolution, runtime) {
     endMatch.componentId >= 0 &&
     startMatch.componentId !== endMatch.componentId
   ) {
+    const failureReason = "disconnected";
     return {
       status: "failed",
       profile,
@@ -1947,7 +1981,15 @@ async function routeOnRuntime(body, graphResolution, runtime) {
         endMatch,
         matchLimitMeters: limit,
         componentId: null,
-        fallback: null
+        failureReason,
+        diagnostics: buildRouteDiagnostics({
+          requestedProfile: profile,
+          buildMs: Date.now() - buildStarted,
+          searchMs: 0,
+          attempts: [],
+          failureReason,
+          searchOutcome: "disconnected_components"
+        })
       },
       maneuvers: [],
       segments: [],
@@ -1975,57 +2017,175 @@ async function routeOnRuntime(body, graphResolution, runtime) {
   let settlementFallbackUsed = false;
   let cleanSearchOutcome = null;
   let primarySearchOutcome = null;
+  let lastSearchDiagnostics = null;
   if (profile === "cleanest") {
-    const cleanFind = (extra) => {
+    const cleanFindOnce = (extra) => {
       const diagnostics = {};
       const found = findPath(
         runtime, startMatch, endMatch, profile, policy, avoidEdgeIds,
         Object.assign({}, searchOpts, extra || {}, { diagnostics })
       );
+      lastSearchDiagnostics = diagnostics;
       return {
         path: found,
-        outcome: found ? "completed" : (diagnostics.outcome || "noPath")
+        outcome: found ? "completed" : (diagnostics.outcome || "noPath"),
+        pops: diagnostics.pops || (found && found.searchMeta && found.searchMeta.pops) || 0
       };
     };
-    // Clean first proves whether a paved, wall-respecting route exists.
-    let attempt = cleanFind({ pavedOnly: true });
-    path = attempt.path;
-    cleanSearchOutcome = attempt.outcome;
-    // Explicitly tagged dirt is a last resort, never a competitive Clean edge.
-    // Reaching a search cap is not proof that every route is exhausted.
-    if (!path && cleanSearchOutcome === "noPath") {
-      attempt = cleanFind({});
-      path = attempt.path;
-      cleanSearchOutcome = attempt.outcome;
-      cleanUnpavedFallbackUsed = !!path;
-      if (path) {
+    // Pavement is hard, corridor is soft: drive every widen step ourselves with
+    // costMode set so findPathV2 cannot nest/abort the ladder early. Unpaved
+    // last resort only after every paved width (incl. unbounded) proves noPath.
+    const pavedAttemptRows = [];
+    const pavedWidths = CLEAN_CORRIDOR_WIDTH_MULTIPLIERS
+      .map((m) => CLEAN_CORRIDOR_M * m)
+      .concat([null]);
+    for (const width of pavedWidths) {
+      const finite = Number.isFinite(width);
+      const attempt = cleanFindOnce({
+        pavedOnly: true,
+        costMode: "profile",
+        variety: false,
+        boundedSearch: true,
+        corridorMeters: finite ? width : 0,
+        hardCorridor: finite,
+        progressRegressionMeters: finite
+          ? maxProgressRegressionMeters("cleanest")
+          : Number.MAX_SAFE_INTEGER,
+        timeCapMs: CLEAN_PAVED_ATTEMPT_MS,
+        deadlineAtMs: Date.now() + CLEAN_PAVED_ATTEMPT_MS
+      });
+      pavedAttemptRows.push({
+        corridorMeters: finite ? width : null,
+        outcome: attempt.outcome,
+        pops: attempt.pops || 0,
+        searchMs: 0,
+        pavedOnly: true
+      });
+      if (attempt.path) {
+        path = attempt.path;
+        cleanSearchOutcome = "completed";
+        path.searchMeta = path.searchMeta || {};
+        path.searchMeta.corridorCandidates = pavedAttemptRows.slice();
+        path.searchMeta.corridorMeters = finite ? width : null;
+        path.searchMeta.corridorWidened = finite && width > CLEAN_CORRIDOR_M;
+        path.searchMeta.rideObjective = "practical-pavement";
+        break;
+      }
+    }
+    if (!path) {
+      cleanSearchOutcome = pavedAttemptRows.every((row) => row.outcome === "noPath")
+        ? "noPath"
+        : (pavedAttemptRows.find((row) => row.outcome === "timeCap" || row.outcome === "popCap")
+          || { outcome: "noPath" }).outcome;
+    }
+    const pavedExhaustedNoPath =
+      !path &&
+      pavedAttemptRows.length === pavedWidths.length &&
+      pavedAttemptRows.every((row) => row.outcome === "noPath");
+    if (pavedExhaustedNoPath) {
+      const unpaved = cleanFindOnce({
+        pavedOnly: false,
+        costMode: "profile",
+        variety: false,
+        boundedSearch: true,
+        corridorMeters: 0,
+        hardCorridor: false,
+        progressRegressionMeters: Number.MAX_SAFE_INTEGER,
+        timeCapMs: CLEAN_PAVED_ATTEMPT_MS * 2,
+        deadlineAtMs: Date.now() + CLEAN_PAVED_ATTEMPT_MS * 2
+      });
+      if (unpaved.path) {
+        path = unpaved.path;
+        cleanSearchOutcome = "completed";
+        cleanUnpavedFallbackUsed = true;
         path.searchMeta = path.searchMeta || {};
         path.searchMeta.cleanUnpavedFallbackUsed = true;
+        path.searchMeta.corridorCandidates = pavedAttemptRows.concat([{
+          corridorMeters: null,
+          outcome: "completed",
+          pops: unpaved.pops || 0,
+          searchMs: 0,
+          pavedOnly: false
+        }]);
+        path.searchMeta.rideObjective = "practical-pavement";
+      } else {
+        cleanSearchOutcome = unpaved.outcome || "noPath";
       }
     }
     // Smaller OSM cities/towns are a separate avoidance layer. Relax them only
-    // after both paved and any-surface searches prove that avoidance cannot
-    // reach B; major urban cores remain hard walls.
+    // after paved (and any-surface last resort) still cannot reach B.
     if (!path && cleanSearchOutcome === "noPath") {
-      attempt = cleanFind({
-        pavedOnly: true,
-        settlementWall: false,
-        settlementFallback: true
-      });
-      path = attempt.path;
-      cleanSearchOutcome = attempt.outcome;
-      settlementFallbackUsed = !!path;
-      if (!path && cleanSearchOutcome === "noPath") {
-        attempt = cleanFind({ settlementWall: false, settlementFallback: true });
-        path = attempt.path;
-        cleanSearchOutcome = attempt.outcome;
-        cleanUnpavedFallbackUsed = !!path;
-        settlementFallbackUsed = !!path;
+      const settlementPavedRows = [];
+      for (const width of pavedWidths) {
+        const finite = Number.isFinite(width);
+        const attempt = cleanFindOnce({
+          pavedOnly: true,
+          costMode: "profile",
+          variety: false,
+          boundedSearch: true,
+          corridorMeters: finite ? width : 0,
+          hardCorridor: finite,
+          progressRegressionMeters: finite
+            ? maxProgressRegressionMeters("cleanest")
+            : Number.MAX_SAFE_INTEGER,
+          settlementWall: false,
+          settlementFallback: true,
+          timeCapMs: CLEAN_PAVED_ATTEMPT_MS,
+          deadlineAtMs: Date.now() + CLEAN_PAVED_ATTEMPT_MS
+        });
+        settlementPavedRows.push({
+          corridorMeters: finite ? width : null,
+          outcome: attempt.outcome,
+          pops: attempt.pops || 0,
+          searchMs: 0,
+          pavedOnly: true
+        });
+        if (attempt.path) {
+          path = attempt.path;
+          cleanSearchOutcome = "completed";
+          settlementFallbackUsed = true;
+          path.searchMeta = path.searchMeta || {};
+          path.searchMeta.settlementFallbackUsed = true;
+          path.searchMeta.corridorCandidates = pavedAttemptRows.concat(settlementPavedRows);
+          break;
+        }
       }
-      if (path) {
-        path.searchMeta = path.searchMeta || {};
-        path.searchMeta.settlementFallbackUsed = true;
-        if (cleanUnpavedFallbackUsed) path.searchMeta.cleanUnpavedFallbackUsed = true;
+      const settlementPavedExhausted =
+        !path &&
+        settlementPavedRows.length === pavedWidths.length &&
+        settlementPavedRows.every((row) => row.outcome === "noPath");
+      if (settlementPavedExhausted) {
+        const unpaved = cleanFindOnce({
+          pavedOnly: false,
+          costMode: "profile",
+          variety: false,
+          boundedSearch: true,
+          corridorMeters: 0,
+          hardCorridor: false,
+          progressRegressionMeters: Number.MAX_SAFE_INTEGER,
+          settlementWall: false,
+          settlementFallback: true,
+          timeCapMs: CLEAN_PAVED_ATTEMPT_MS * 2,
+          deadlineAtMs: Date.now() + CLEAN_PAVED_ATTEMPT_MS * 2
+        });
+        if (unpaved.path) {
+          path = unpaved.path;
+          cleanSearchOutcome = "completed";
+          cleanUnpavedFallbackUsed = true;
+          settlementFallbackUsed = true;
+          path.searchMeta = path.searchMeta || {};
+          path.searchMeta.cleanUnpavedFallbackUsed = true;
+          path.searchMeta.settlementFallbackUsed = true;
+          path.searchMeta.corridorCandidates = pavedAttemptRows.concat(settlementPavedRows).concat([{
+            corridorMeters: null,
+            outcome: "completed",
+            pops: unpaved.pops || 0,
+            searchMs: 0,
+            pavedOnly: false
+          }]);
+        } else {
+          cleanSearchOutcome = unpaved.outcome || "noPath";
+        }
       }
     }
   } else {
@@ -2044,6 +2204,7 @@ async function routeOnRuntime(body, graphResolution, runtime) {
       runtime, startMatch, endMatch, profile, policy, avoidEdgeIds,
       adventureSearchOpts
     );
+    lastSearchDiagnostics = diagnostics;
     primarySearchOutcome = path ? "completed" : (diagnostics.outcome || "noPath");
     // A city wall may sever the only mountain-valley or border connection.
     // Only a proved no-path result (never a timeout/pop cap) may relax it, and
@@ -2060,6 +2221,7 @@ async function routeOnRuntime(body, graphResolution, runtime) {
           diagnostics: relaxedDiagnostics
         })
       );
+      lastSearchDiagnostics = relaxedDiagnostics;
       if (path) {
         urbanCoreFallbackUsed = true;
         path.searchMeta = path.searchMeta || {};
@@ -2068,7 +2230,7 @@ async function routeOnRuntime(body, graphResolution, runtime) {
     }
   }
   // Urban cores are walls for every normal search. Clean gets an escape hatch
-  // only after neither paved nor unpaved wall-respecting fabric can reach B.
+  // only after paved search still cannot reach B — widen paved first, then unpaved.
   if (!path && profile === "cleanest" && cleanSearchOutcome === "noPath") {
     const cleanFindRelaxed = (extra) => {
       const diagnostics = {};
@@ -2076,38 +2238,85 @@ async function routeOnRuntime(body, graphResolution, runtime) {
         runtime, startMatch, endMatch, profile, policy, avoidEdgeIds,
         Object.assign({}, searchOpts, extra, { diagnostics })
       );
+      lastSearchDiagnostics = diagnostics;
       return {
         path: found,
-        outcome: found ? "completed" : (diagnostics.outcome || "noPath")
+        outcome: found ? "completed" : (diagnostics.outcome || "noPath"),
+        pops: diagnostics.pops || (found && found.searchMeta && found.searchMeta.pops) || 0
       };
     };
-    let attempt = cleanFindRelaxed({
+    const relaxedPavedRows = [];
+    const pavedWidths = CLEAN_CORRIDOR_WIDTH_MULTIPLIERS
+      .map((m) => CLEAN_CORRIDOR_M * m)
+      .concat([null]);
+    for (const width of pavedWidths) {
+      const finite = Number.isFinite(width);
+      const attempt = cleanFindRelaxed({
         cityWall: false,
         pavedOnly: true,
         urbanCoreFallback: true,
         settlementWall: false,
-        settlementFallback: true
-    });
-    path = attempt.path;
-    cleanSearchOutcome = attempt.outcome;
-    if (!path && cleanSearchOutcome === "noPath") {
-      attempt = cleanFindRelaxed({
+        settlementFallback: true,
+        costMode: "profile",
+        variety: false,
+        boundedSearch: true,
+        corridorMeters: finite ? width : 0,
+        hardCorridor: finite,
+        progressRegressionMeters: finite
+          ? maxProgressRegressionMeters("cleanest")
+          : Number.MAX_SAFE_INTEGER,
+        timeCapMs: CLEAN_PAVED_ATTEMPT_MS,
+        deadlineAtMs: Date.now() + CLEAN_PAVED_ATTEMPT_MS
+      });
+      relaxedPavedRows.push({
+        corridorMeters: finite ? width : null,
+        outcome: attempt.outcome,
+        pops: attempt.pops || 0,
+        searchMs: 0,
+        pavedOnly: true
+      });
+      if (attempt.path) {
+        path = attempt.path;
+        cleanSearchOutcome = "completed";
+        break;
+      }
+    }
+    const relaxedPavedExhausted =
+      !path &&
+      relaxedPavedRows.length === pavedWidths.length &&
+      relaxedPavedRows.every((row) => row.outcome === "noPath");
+    if (relaxedPavedExhausted) {
+      const attempt = cleanFindRelaxed({
         cityWall: false,
+        pavedOnly: false,
         urbanCoreFallback: true,
         settlementWall: false,
-        settlementFallback: true
+        settlementFallback: true,
+        costMode: "profile",
+        variety: false,
+        boundedSearch: true,
+        corridorMeters: 0,
+        hardCorridor: false,
+        progressRegressionMeters: Number.MAX_SAFE_INTEGER,
+        timeCapMs: CLEAN_PAVED_ATTEMPT_MS * 2,
+        deadlineAtMs: Date.now() + CLEAN_PAVED_ATTEMPT_MS * 2
       });
       path = attempt.path;
-      cleanSearchOutcome = attempt.outcome;
-      cleanUnpavedFallbackUsed = !!path;
+      cleanSearchOutcome = attempt.path ? "completed" : (attempt.outcome || "noPath");
+      cleanUnpavedFallbackUsed = !!attempt.path;
     }
     if (path) {
       urbanCoreFallbackUsed = true;
       settlementFallbackUsed = true;
       path.searchMeta = path.searchMeta || {};
       path.searchMeta.urbanCoreFallbackUsed = true;
-      if (cleanUnpavedFallbackUsed) path.searchMeta.cleanUnpavedFallbackUsed = true;
       path.searchMeta.settlementFallbackUsed = true;
+      if (cleanUnpavedFallbackUsed) path.searchMeta.cleanUnpavedFallbackUsed = true;
+      path.searchMeta.corridorCandidates = (
+        Array.isArray(path.searchMeta.corridorCandidates)
+          ? path.searchMeta.corridorCandidates
+          : []
+      ).concat(relaxedPavedRows);
     }
   }
   // Balanced + Allow ON: unknown dirt usually wins under normal surface weights and
@@ -2142,6 +2351,25 @@ async function routeOnRuntime(body, graphResolution, runtime) {
   if (!path) {
     const failedOutcome = cleanSearchOutcome || primarySearchOutcome;
     const searchIncomplete = failedOutcome === "timeCap" || failedOutcome === "popCap";
+    const attempts =
+      (lastSearchDiagnostics && lastSearchDiagnostics.attempts) ||
+      [];
+    const failureReason = classifyRouteFailureReason({
+      searchOutcome: failedOutcome,
+      attempts
+    });
+    const diagnostics = buildRouteDiagnostics({
+      requestedProfile: profile,
+      buildMs: Date.now() - buildStarted,
+      searchMs,
+      attempts,
+      searchMeta: {
+        pops: Number(lastSearchDiagnostics && lastSearchDiagnostics.pops) || sumPops(attempts),
+        corridorCandidates: attempts
+      },
+      failureReason,
+      searchOutcome: failedOutcome
+    });
     return {
       status: "failed",
       profile,
@@ -2169,18 +2397,20 @@ async function routeOnRuntime(body, graphResolution, runtime) {
         searchMs,
         fallback: null,
         searchOutcome: failedOutcome,
+        failureReason,
         objective:
           profile === "dirt" ? "earned-dirt-detour" :
           profile === "balanced" ? "surface-balance" :
           profile === "direct" ? "crow-flies-adventure" : "clean-pavement",
         outcome: failedOutcome || "noPath",
-        pops: 0,
+        pops: diagnostics.pops,
         corridor: null,
         settlementFallback: false,
         fallbackReason: searchIncomplete ? "timeout" : "no_route",
         preFallbackDirtPct: null,
         preFallbackMeters: null,
-        corridorClippedDirtMeters: 0
+        corridorClippedDirtMeters: 0,
+        diagnostics
       },
       maneuvers: [],
       segments: [],
@@ -2263,6 +2493,23 @@ async function routeOnRuntime(body, graphResolution, runtime) {
     : null;
   const backtrack = backtrackSummary(path, priorEdgeIds);
   const restricted = restrictedSummary(path);
+  const attemptRows =
+    (path.searchMeta && path.searchMeta.corridorCandidates) ||
+    (lastSearchDiagnostics && lastSearchDiagnostics.attempts) ||
+    [];
+  const routeDiagnostics = buildRouteDiagnostics({
+    requestedProfile: profile,
+    buildMs: Date.now() - buildStarted,
+    searchMs,
+    attempts: attemptRows,
+    searchMeta: path.searchMeta || {},
+    backtrackPct: backtrack.backtrackPct,
+    urbanCoreFallbackUsed,
+    cleanUnpavedFallbackUsed,
+    settlementFallbackUsed:
+      settlementFallbackUsed || !!(path.searchMeta && path.searchMeta.settlementFallbackUsed),
+    searchOutcome: "completed"
+  });
 
   return {
     status: "complete",
@@ -2318,6 +2565,7 @@ async function routeOnRuntime(body, graphResolution, runtime) {
         ? null
         : (Number.isFinite(selectedMeters) ? Math.round(selectedMeters) : null),
       corridorClippedDirtMeters,
+      diagnostics: routeDiagnostics,
       regionIds: graphResolution.regionIds,
       graphMode: graphResolution.mode,
       packIdentity: runtime.packIdentity || [],
