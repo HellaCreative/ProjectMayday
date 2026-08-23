@@ -26,10 +26,16 @@ nonisolated struct OnDeviceRouter {
         var roadClassName: String = "unknown"
         /// Graph-v3 surface leaf (nil on v2 / soft-stitch). Stats only in E1.
         var surfaceLeaf: String? = nil
-        /// Packed structure type name (e.g. ferry).
+        /// Packed structure type name (e.g. ferry / ford / tunnel).
         var structureType: String? = nil
-        /// Rider-facing label for timed connectors (ferry crossings).
+        /// Graph-v3 structure leaf (boardwalk, culvert, stepping_stones, …).
+        var structureLeaf: String? = nil
+        /// OSM layer (overpass > 0, underpass < 0).
+        var layer: Int = 0
+        /// Rider-facing label for ferries and structure crossings.
         var crossingLabel: String? = nil
+        /// True for fords / low-water crossings (adventure/safety signal).
+        var waterCrossing: Bool = false
 
         /// Rider-facing surface after OSM highway class wins over untagged unknown.
         var paintSurfaceName: String {
@@ -1166,7 +1172,10 @@ nonisolated struct OnDeviceRouter {
             roadClassName: roadClassNameForEdge(ei),
             surfaceLeaf: pack.hasLeaves ? pack.surfaceLeaf(ei) : nil,
             structureType: structureTypeForEdge(ei),
-            crossingLabel: crossingLabelForEdge(ei)
+            structureLeaf: structureLeafForEdge(ei),
+            layer: layerForEdge(ei),
+            crossingLabel: crossingLabelForEdge(ei),
+            waterCrossing: waterCrossingForEdge(ei)
         ))
         if let stub = softStitchStub(tap: to, snap: endSnap, idSuffix: "end") {
             legs.append(stub)
@@ -1721,7 +1730,10 @@ nonisolated struct OnDeviceRouter {
                         roadClassName: v.junctionStitch ? "unknown" : roadClassNameForEdge(v.ei),
                         surfaceLeaf: v.junctionStitch || !pack.hasLeaves ? nil : pack.surfaceLeaf(v.ei),
                         structureType: v.junctionStitch ? nil : structureTypeForEdge(v.ei),
-                        crossingLabel: v.junctionStitch ? nil : crossingLabelForEdge(v.ei)
+                        structureLeaf: v.junctionStitch ? nil : structureLeafForEdge(v.ei),
+                        layer: v.junctionStitch ? 0 : layerForEdge(v.ei),
+                        crossingLabel: v.junctionStitch ? nil : crossingLabelForEdge(v.ei),
+                        waterCrossing: v.junctionStitch ? false : waterCrossingForEdge(v.ei)
                     ))
                 }
             } else if prevKind[node] == 2 {
@@ -1747,7 +1759,10 @@ nonisolated struct OnDeviceRouter {
                     roadClassName: roadClassNameForEdge(ei),
                     surfaceLeaf: pack.hasLeaves ? pack.surfaceLeaf(ei) : nil,
                     structureType: structureTypeForEdge(ei),
-                    crossingLabel: crossingLabelForEdge(ei)
+                    structureLeaf: structureLeafForEdge(ei),
+                    layer: layerForEdge(ei),
+                    crossingLabel: crossingLabelForEdge(ei),
+                    waterCrossing: waterCrossingForEdge(ei)
                 ))
             }
             node = parent
@@ -2055,7 +2070,10 @@ nonisolated struct OnDeviceRouter {
                         roadClassName: v.junctionStitch ? "unknown" : roadClassNameForEdge(v.ei),
                         surfaceLeaf: v.junctionStitch || !pack.hasLeaves ? nil : pack.surfaceLeaf(v.ei),
                         structureType: v.junctionStitch ? nil : structureTypeForEdge(v.ei),
-                        crossingLabel: v.junctionStitch ? nil : crossingLabelForEdge(v.ei)
+                        structureLeaf: v.junctionStitch ? nil : structureLeafForEdge(v.ei),
+                        layer: v.junctionStitch ? 0 : layerForEdge(v.ei),
+                        crossingLabel: v.junctionStitch ? nil : crossingLabelForEdge(v.ei),
+                        waterCrossing: v.junctionStitch ? false : waterCrossingForEdge(v.ei)
                     ))
                 }
             } else {
@@ -2083,7 +2101,10 @@ nonisolated struct OnDeviceRouter {
                     roadClassName: roadClassNameForEdge(ei),
                     surfaceLeaf: pack.hasLeaves ? pack.surfaceLeaf(ei) : nil,
                     structureType: structureTypeForEdge(ei),
-                    crossingLabel: crossingLabelForEdge(ei)
+                    structureLeaf: structureLeafForEdge(ei),
+                    layer: layerForEdge(ei),
+                    crossingLabel: crossingLabelForEdge(ei),
+                    waterCrossing: waterCrossingForEdge(ei)
                 ))
             }
             label = parent
@@ -2695,7 +2716,10 @@ nonisolated struct OnDeviceRouter {
                     roadClassName: roadClassNameForEdge(ei),
                     surfaceLeaf: pack.hasLeaves ? pack.surfaceLeaf(ei) : nil,
                     structureType: structureTypeForEdge(ei),
-                    crossingLabel: crossingLabelForEdge(ei)
+                    structureLeaf: structureLeafForEdge(ei),
+                    layer: layerForEdge(ei),
+                    crossingLabel: crossingLabelForEdge(ei),
+                    waterCrossing: waterCrossingForEdge(ei)
                 ))
             }
             node = parent
@@ -2760,7 +2784,10 @@ nonisolated struct OnDeviceRouter {
                     roadClassName: prior?.roadClassName ?? "unknown",
                     surfaceLeaf: prior?.surfaceLeaf,
                     structureType: prior?.structureType,
-                    crossingLabel: prior?.crossingLabel
+                    structureLeaf: prior?.structureLeaf,
+                    layer: prior?.layer ?? 0,
+                    crossingLabel: prior?.crossingLabel,
+                    waterCrossing: prior?.waterCrossing ?? false
                 )
             }
             // Second pass: remove sharp out-and-backs that share no exact revisit
@@ -2786,7 +2813,10 @@ nonisolated struct OnDeviceRouter {
                     roadClassName: prior?.roadClassName ?? "unknown",
                     surfaceLeaf: prior?.surfaceLeaf,
                     structureType: prior?.structureType,
-                    crossingLabel: prior?.crossingLabel
+                    structureLeaf: prior?.structureLeaf,
+                    layer: prior?.layer ?? 0,
+                    crossingLabel: prior?.crossingLabel,
+                    waterCrossing: prior?.waterCrossing ?? false
                 )
             }
         }
@@ -3322,22 +3352,39 @@ nonisolated struct OnDeviceRouter {
 
     private func structureTypeForEdge(_ ei: Int) -> String? {
         guard ei >= 0, ei < pack.undirectedEdgeCount else { return nil }
-        let code = GraphV2Pack.unpackStructure(pack.edgeAttrs[ei])
-        if GraphV2Pack.isFerryStructure(code) { return "ferry" }
-        if pack.hasLeaves {
-            if let leaf = pack.structureLeaf(ei), leaf != "n/a", !leaf.isEmpty {
-                return leaf
-            }
+        let name = GraphV2Pack.structureName(GraphV2Pack.unpackStructure(pack.edgeAttrs[ei]))
+        return name == "none" ? nil : name
+    }
+
+    private func structureLeafForEdge(_ ei: Int) -> String? {
+        guard ei >= 0, ei < pack.undirectedEdgeCount, pack.hasLeaves else { return nil }
+        if let leaf = pack.structureLeaf(ei), leaf != "n/a", !leaf.isEmpty {
+            return leaf
         }
         return nil
     }
 
+    private func layerForEdge(_ ei: Int) -> Int {
+        guard ei >= 0, ei < pack.undirectedEdgeCount, pack.hasLeaves else { return 0 }
+        return pack.layer(ei)
+    }
+
     private func crossingLabelForEdge(_ ei: Int) -> String? {
         guard ei >= 0, ei < pack.undirectedEdgeCount else { return nil }
-        if GraphV2Pack.isFerryStructure(GraphV2Pack.unpackStructure(pack.edgeAttrs[ei])) {
-            return OnDeviceProfileCosts.ferryCrossingLabel
-        }
-        return nil
+        let code = GraphV2Pack.unpackStructure(pack.edgeAttrs[ei])
+        return OnDeviceProfileCosts.structureCrossingLabel(
+            structureCode: code,
+            structureLeaf: structureLeafForEdge(ei),
+            layer: layerForEdge(ei)
+        )
+    }
+
+    private func waterCrossingForEdge(_ ei: Int) -> Bool {
+        guard ei >= 0, ei < pack.undirectedEdgeCount else { return false }
+        return OnDeviceProfileCosts.isWaterCrossing(
+            structureCode: GraphV2Pack.unpackStructure(pack.edgeAttrs[ei]),
+            structureLeaf: structureLeafForEdge(ei)
+        )
     }
 
     private func edgeIsDirt(_ ei: Int) -> Bool {

@@ -365,7 +365,7 @@ nonisolated enum PackNetworkOverlay {
                     coordinates: coords,
                     surfaceClass: surface,
                     accessClass: access,
-                    structureType: leaves.structureLeaf ?? "none",
+                    structureType: GraphV2Pack.structureName(GraphV2Pack.unpackStructure(attr)),
                     province: province,
                     roadClass: GraphV2Pack.roadClassName(GraphV2Pack.unpackRoadClass(attr)),
                     surfaceLeaf: leaves.surfaceLeaf ?? "",

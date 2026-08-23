@@ -38,8 +38,24 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
     static let flagEdgeFromTo: UInt16 = 1
     static let flagV3Leaves: UInt16 = 2
     static let flagV3CrossingSeconds: UInt16 = 4
-    /// Packed structure enum: ferry (lockstep regional/package.js).
+    /// Packed structure enum (lockstep regional/package.js STRUCTURE).
+    static let structureNone = 0
+    static let structureBridge = 1
+    static let structureTunnel = 2
+    static let structureFord = 3
     static let structureFerry = 4
+
+    static func structureName(_ code: Int) -> String {
+        switch code {
+        case structureBridge: return "bridge"
+        case structureTunnel: return "tunnel"
+        case structureFord: return "ford"
+        case structureFerry: return "ferry"
+        case 5: return "blocked_passage"
+        case 6: return "unknown"
+        default: return "none"
+        }
+    }
 
     let data: Data
     let version: UInt16

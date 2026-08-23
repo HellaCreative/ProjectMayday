@@ -41,6 +41,7 @@ const {
   LEAF_NOT_APPLICABLE,
   ferryCrossingSeconds
 } = require("../lib/ferry");
+const { structureFromTags } = require("../lib/structure");
 
 const name = "osm-roads";
 
@@ -365,32 +366,17 @@ function classify(props, options = {}) {
     confidence = SOURCE_CONFIDENCE.low;
   }
 
-  if (tag(props, "bridge") === "yes") {
-    return {
-      ok: true,
-      surfaceClass,
-      accessClass,
-      structureType: STRUCTURE_TYPE.bridge,
-      roadTrackClass,
-      confidence
-    };
-  }
-  if (tag(props, "tunnel") === "yes") {
-    return {
-      ok: true,
-      surfaceClass,
-      accessClass,
-      structureType: STRUCTURE_TYPE.tunnel,
-      roadTrackClass,
-      confidence
-    };
-  }
+  const structure = structureFromTags({
+    bridge: tag(props, "bridge"),
+    tunnel: tag(props, "tunnel"),
+    ford: tag(props, "ford")
+  });
 
   return {
     ok: true,
     surfaceClass,
     accessClass,
-    structureType: STRUCTURE_TYPE.none,
+    structureType: structure.structureType,
     roadTrackClass,
     confidence
   };
@@ -406,13 +392,12 @@ function leafFieldsFromProps(props) {
   const tracktype = normalizeLeafString(tag(props, "tracktype"));
   const smoothness = normalizeLeafString(tag(props, "smoothness"));
   const layer = normalizeLayer(tag(props, "layer"));
-  const bridge = tag(props, "bridge");
-  const tunnel = tag(props, "tunnel");
-  const ford = tag(props, "ford");
-  let structureLeaf = null;
-  if (bridge) structureLeaf = bridge;
-  else if (tunnel) structureLeaf = tunnel;
-  else if (ford) structureLeaf = ford;
+  const structure = structureFromTags({
+    bridge: tag(props, "bridge"),
+    tunnel: tag(props, "tunnel"),
+    ford: tag(props, "ford")
+  });
+  const structureLeaf = structure.structureLeaf;
   const effective = effectiveMotorcycleAccess(props);
   const accessLeaf = normalizeLeafString(effective.value);
   const atv = normalizeLeafString(tag(props, "atv"));

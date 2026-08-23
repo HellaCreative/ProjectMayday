@@ -46,9 +46,9 @@ const {
   isFerryStructureCode,
   ferryRelaxStepCost,
   ferryCrossingSeconds,
-  ferryCrossingLabel,
   LEAF_NOT_APPLICABLE
 } = require("./ferry");
+const { segmentStructureFields } = require("./structure");
 const {
   isDirtSurface,
   outsideCorridor,
@@ -2554,6 +2554,8 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds, 
       surface: edge.s,
       access: edge.ac,
       structure: edge.t,
+      structureLeaf: edge.structureLeaf,
+      layer: edge.layer,
       edgeId: edge.i,
       componentId: edge.c,
       source: edge.src,
@@ -2573,6 +2575,8 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds, 
       surface: edge.s,
       access: edge.ac,
       structure: edge.t,
+      structureLeaf: edge.structureLeaf,
+      layer: edge.layer,
       edgeId: edge.i,
       componentId: edge.c,
       source: edge.src,
@@ -2600,6 +2604,8 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds, 
       surface: edge.s,
       access: edge.ac,
       structure: edge.t,
+      structureLeaf: edge.structureLeaf,
+      layer: edge.layer,
       edgeId: edge.i,
       componentId: edge.c,
       source: edge.src,
@@ -2634,6 +2640,10 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds, 
             surface: edge.s,
             access: edge.ac,
             structure: edge.t,
+      structureLeaf: edge.structureLeaf,
+      layer: edge.layer,
+            structureLeaf: edge.structureLeaf,
+            layer: edge.layer,
             roadTrack: edge.rt || "unknown",
             edgeId: edge.i,
             componentId: edge.c,
@@ -3126,6 +3136,11 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds, 
       if (byAccessM[accessName] != null) byAccessM[accessName] += meters;
       if (accessName === "motorized_unknown") unknownAccessMeters += meters;
 
+      const structFields = segmentStructureFields({
+        structureCode: edge.structure,
+        structureLeaf: edge.structureLeaf,
+        layer: edge.layer
+      });
       segments.push({
         edgeId: edge.edgeId,
         surfaceClass: surfaceName,
@@ -3142,7 +3157,10 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds, 
         accessLeg: !!edge.accessLeg,
         geometry: coords,
         surfaceLeaf: isFerry ? LEAF_NOT_APPLICABLE : edge.surfaceLeaf,
-        crossingLabel: isFerry ? ferryCrossingLabel() : null
+        structureLeaf: structFields.structureLeaf,
+        layer: structFields.layer,
+        crossingLabel: structFields.crossingLabel,
+        waterCrossing: structFields.waterCrossing
       });
     }
 

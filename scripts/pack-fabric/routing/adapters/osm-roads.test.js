@@ -143,8 +143,19 @@ test("leaf fields populate alongside unchanged coarse classes", () => {
   });
   assert.equal(classified.ok, true);
   assert.equal(classified.surfaceClass, "gravel");
-  assert.equal(classified.structureType, "none");
+  assert.equal(classified.structureType, "bridge");
   assert.equal(classified.accessClass, "motorized_permissive");
+});
+
+test("ford / tunnel / viaduct / culvert set coarse structureType from richer leaves", () => {
+  assert.equal(classify({ highway: "unclassified", ford: "stepping_stones" }).structureType, "ford");
+  assert.equal(classify({ highway: "unclassified", tunnel: "culvert" }).structureType, "tunnel");
+  assert.equal(classify({ highway: "unclassified", bridge: "viaduct" }).structureType, "bridge");
+  assert.equal(classify({ highway: "unclassified", bridge: "low_water_crossing" }).structureType, "ford");
+  const { leafFieldsFromProps } = require("./osm-roads");
+  assert.equal(leafFieldsFromProps({ highway: "track", ford: "stream" }).structureLeaf, "stream");
+  assert.equal(leafFieldsFromProps({ highway: "secondary", layer: "-1" }).layer, -1);
+  assert.equal(leafFieldsFromProps({ highway: "primary", bridge: "yes", layer: "1" }).layer, 1);
 });
 
 test("createNormalizedEdge defaults leaf fields safely when omitted", () => {

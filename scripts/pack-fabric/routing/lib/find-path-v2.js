@@ -64,9 +64,9 @@ const { applyHonestSurfaceStats } = require("./surface-family");
 const {
   isFerryStructureCode,
   ferryRelaxStepCost,
-  ferryCrossingLabel,
   ferryCrossingSeconds
 } = require("./ferry");
+const { segmentStructureFields } = require("./structure");
 
 function ferrySecondsForPackEdge(pack, ei, meters) {
   if (pack.crossingSeconds) {
@@ -89,7 +89,7 @@ const {
 } = require("./road-tier");
 const { surfaceFamilyOf } = require("./surface-family");
 
-/** Attach surfaceLeaf for E1 post-selection stats (search still uses coarse dirt). */
+/** Attach surfaceLeaf / structureLeaf / layer for post-selection stats and labels. */
 function withSurfaceLeaf(edge, pack, ei) {
   if (!pack || !pack.hasLeaves || typeof pack.edgeLeaves !== "function") {
     return edge;
@@ -97,7 +97,9 @@ function withSurfaceLeaf(edge, pack, ei) {
   const leaves = pack.edgeLeaves(ei);
   return Object.assign({}, edge, {
     undirectedEdgeIndex: ei,
-    surfaceLeaf: leaves && leaves.surfaceLeaf != null ? leaves.surfaceLeaf : null
+    surfaceLeaf: leaves && leaves.surfaceLeaf != null ? leaves.surfaceLeaf : null,
+    structureLeaf: leaves && leaves.structureLeaf != null ? leaves.structureLeaf : null,
+    layer: leaves && leaves.layer != null ? leaves.layer : 0
   });
 }
 
@@ -1409,6 +1411,11 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
     profileCost += isFerry
       ? ferryStepForPackEdge(pack, edge.undirectedEdgeIndex, edge.meters)
       : (edge.meters / 1000) * mult;
+    const structFields = segmentStructureFields({
+      structureCode: edge.structure,
+      structureLeaf: edge.structureLeaf,
+      layer: edge.layer
+    });
     segments.push({
       edgeId: edge.edgeId,
       surfaceClass: surfaceName,
@@ -1416,7 +1423,10 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
       structureType: enums.STRUCTURE_NAME[edge.structure] || "none",
       accessClass: accessName,
       surfaceLeaf: edge.surfaceLeaf != null ? edge.surfaceLeaf : null,
-      crossingLabel: isFerry ? ferryCrossingLabel() : null,
+      structureLeaf: structFields.structureLeaf,
+      layer: structFields.layer,
+      crossingLabel: structFields.crossingLabel,
+      waterCrossing: structFields.waterCrossing,
       source: null,
       sourceRecordId: null,
       sourceDescription: null,
@@ -1863,6 +1873,11 @@ function searchBalancedResource(ctx) {
     } else {
       movingSeconds += ferrySecondsForPackEdge(pack, edge.undirectedEdgeIndex, edge.meters);
     }
+    const structFields = segmentStructureFields({
+      structureCode: edge.structure,
+      structureLeaf: edge.structureLeaf,
+      layer: edge.layer
+    });
     segments.push({
       edgeId: edge.edgeId,
       surfaceClass: surfaceName,
@@ -1870,7 +1885,10 @@ function searchBalancedResource(ctx) {
       structureType: enums.STRUCTURE_NAME[edge.structure] || "none",
       accessClass: accessName,
       surfaceLeaf: edge.surfaceLeaf != null ? edge.surfaceLeaf : null,
-      crossingLabel: isFerry ? ferryCrossingLabel() : null,
+      structureLeaf: structFields.structureLeaf,
+      layer: structFields.layer,
+      crossingLabel: structFields.crossingLabel,
+      waterCrossing: structFields.waterCrossing,
       source: null,
       sourceRecordId: null,
       sourceDescription: null,

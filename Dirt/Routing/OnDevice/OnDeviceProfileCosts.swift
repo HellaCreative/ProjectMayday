@@ -456,4 +456,62 @@ nonisolated enum OnDeviceProfileCosts {
         guard crossingSeconds > 0 else { return 0 }
         return (crossingSeconds / 3600.0) * ferryCostReferenceKmh
     }
+
+    // Phase G2 — structure labels (lockstep scripts/pack-fabric/routing/lib/structure.js).
+    private static let structureLabelByLeaf: [String: String] = [
+        "ford": "Ford",
+        "stepping_stones": "Ford",
+        "stream": "Ford",
+        "tidal": "Ford",
+        "seasonal": "Ford",
+        "low_water_crossing": "Low-water crossing",
+        "boardwalk": "Boardwalk",
+        "viaduct": "Viaduct",
+        "culvert": "Culvert",
+        "building_passage": "Building passage",
+        "tunnel": "Tunnel",
+        "bridge": "Bridge"
+    ]
+
+    static func normalizeStructureLeaf(_ raw: String?) -> String? {
+        guard let s = raw?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
+              !s.isEmpty else { return nil }
+        return s
+    }
+
+    static func isWaterCrossing(structureCode: Int, structureLeaf: String?) -> Bool {
+        if structureCode == GraphV2Pack.structureFord { return true }
+        guard let leaf = normalizeStructureLeaf(structureLeaf) else { return false }
+        return leaf == "ford"
+            || leaf == "low_water_crossing"
+            || leaf == "stepping_stones"
+            || leaf == "stream"
+            || leaf == "tidal"
+    }
+
+    static func structureCrossingLabel(
+        structureCode: Int,
+        structureLeaf: String?,
+        layer: Int
+    ) -> String? {
+        if structureCode == GraphV2Pack.structureFerry { return ferryCrossingLabel }
+        let leaf = normalizeStructureLeaf(structureLeaf)
+        if let leaf, let named = structureLabelByLeaf[leaf], leaf != "bridge" {
+            return named
+        }
+        if structureCode == GraphV2Pack.structureTunnel || leaf == "tunnel" {
+            return "Tunnel"
+        }
+        if structureCode == GraphV2Pack.structureFord || leaf == "ford" {
+            return "Ford"
+        }
+        if structureCode == GraphV2Pack.structureBridge || leaf == "bridge" {
+            if layer > 0 { return "Overpass" }
+            if layer < 0 { return "Underpass" }
+            return "Bridge"
+        }
+        if layer > 0 { return "Overpass" }
+        if layer < 0 { return "Underpass" }
+        return nil
+    }
 }

@@ -2109,7 +2109,12 @@ final class RoutePlannerModel {
                     RouteCoordinate(longitude: $0.longitude, latitude: $0.latitude)
                 },
                 coords: nil,
-                edgeId: leg.edgeId.isEmpty ? nil : leg.edgeId
+                edgeId: leg.edgeId.isEmpty ? nil : leg.edgeId,
+                structureType: leg.structureType,
+                structureLeaf: leg.structureLeaf,
+                layer: leg.layer,
+                crossingLabel: leg.crossingLabel,
+                waterCrossing: leg.waterCrossing
             )
         }
         return makeStoredRouteResponse(

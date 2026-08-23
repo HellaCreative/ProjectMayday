@@ -357,9 +357,15 @@ struct RouteSegment: Codable, Identifiable, Sendable {
     /// Authoritative network edge ID (e.g. `ns-gov-…`) — used by incident
     /// reports so "Find a way around" can avoid this edge on-device.
     let edgeId: String?
+    let structureType: String?
+    let structureLeaf: String?
+    let layer: Int?
+    let crossingLabel: String?
+    let waterCrossing: Bool?
 
     enum CodingKeys: String, CodingKey {
         case surfaceClass, trackClass, accessClass, distanceMeters, geometry, coords, edgeId
+        case structureType, structureLeaf, layer, crossingLabel, waterCrossing
     }
 
     init(
@@ -369,7 +375,12 @@ struct RouteSegment: Codable, Identifiable, Sendable {
         distanceMeters: Double?,
         geometry: [RouteCoordinate]?,
         coords: [RouteCoordinate]?,
-        edgeId: String?
+        edgeId: String?,
+        structureType: String? = nil,
+        structureLeaf: String? = nil,
+        layer: Int? = nil,
+        crossingLabel: String? = nil,
+        waterCrossing: Bool? = nil
     ) {
         self.surfaceClass = surfaceClass
         self.trackClass = trackClass
@@ -378,6 +389,11 @@ struct RouteSegment: Codable, Identifiable, Sendable {
         self.geometry = geometry
         self.coords = coords
         self.edgeId = edgeId
+        self.structureType = structureType
+        self.structureLeaf = structureLeaf
+        self.layer = layer
+        self.crossingLabel = crossingLabel
+        self.waterCrossing = waterCrossing
     }
 
     var coordinates: [RouteCoordinate] { geometry ?? coords ?? [] }
