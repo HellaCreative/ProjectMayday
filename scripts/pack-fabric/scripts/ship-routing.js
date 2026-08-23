@@ -360,11 +360,24 @@ async function shipPack(ids, releaseRecord) {
 
 function shipLive(regionBaseOverrides) {
   console.log("deploying /api/route from", FABRIC);
-  const args = ["vercel", "--prod", "--yes"];
+  const git = spawnSync("git", ["rev-parse", "HEAD"], { cwd: DIRT, encoding: "utf8" });
+  const sourceVersion = git.status === 0 ? String(git.stdout || "").trim() : "";
+  if (!/^[a-f0-9]{7,40}$/i.test(sourceVersion)) {
+    throw new Error("live deployment requires a committed Git source identity");
+  }
+  const args = liveDeployArgs(regionBaseOverrides, sourceVersion);
+  run("npx", args, { cwd: FABRIC });
+}
+
+function liveDeployArgs(regionBaseOverrides, sourceVersion) {
+  if (!/^[a-f0-9]{7,40}$/i.test(String(sourceVersion || ""))) {
+    throw new Error("live deployment requires a committed Git source identity");
+  }
+  const args = ["vercel", "--prod", "--yes", "--env", "SOURCE_VERSION=" + sourceVersion];
   if (regionBaseOverrides && Object.keys(regionBaseOverrides).length) {
     args.push("--env", "R2_REGION_BASE_OVERRIDES=" + JSON.stringify(regionBaseOverrides));
   }
-  run("npx", args, { cwd: FABRIC });
+  return args;
 }
 
 function shipAssert() {
@@ -421,6 +434,7 @@ module.exports = {
   assertPublicationCommand,
   assertSourceMatchesRelease,
   mergePromotedRegionsIntoCatalog,
+  liveDeployArgs,
   parseArgs,
   parseRemoteCatalogJson,
   planStablePublication,

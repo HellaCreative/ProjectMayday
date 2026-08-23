@@ -6,6 +6,7 @@ const {
   BARE_PACK_REJECTION,
   assertPublicationCommand,
   assertSourceMatchesRelease,
+  liveDeployArgs,
   mergePromotedRegionsIntoCatalog,
   parseArgs,
   parseRemoteCatalogJson,
@@ -227,4 +228,11 @@ test("assertSourceMatchesRelease fails closed on size or hash drift", () => {
     () => assertSourceMatchesRelease(NS_20_FILES, NS_02_FILES, "ns-osm-20260821-02/ns"),
     /no longer matches the tested candidate/
   );
+});
+
+test("live deployment carries the exact committed source identity", () => {
+  assert.deepEqual(liveDeployArgs(null, "dc22053"), [
+    "vercel", "--prod", "--yes", "--env", "SOURCE_VERSION=dc22053"
+  ]);
+  assert.throws(() => liveDeployArgs(null, "local-uncommitted"), /committed Git source identity/);
 });
