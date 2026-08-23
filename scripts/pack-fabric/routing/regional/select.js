@@ -387,14 +387,25 @@ function localGraphPath(regionId, { longhaul = false } = {}) {
   return path.join(REGIONS_DIR, regionId, "graph.v1.json.gz");
 }
 
+/**
+ * Phone PACKS and live /api/route are the same object. Catalog lists one graph
+ * per region: NS is graph.v3.bin (leaves); other regions remain graph.v2.bin
+ * until promoted. Vercel never ships pack bytes, so this cannot probe local R2
+ * staging — keep the published name here in lockstep with the public manifest.
+ */
+function phoneGraphFileName(regionId) {
+  const id = String(regionId || "").toLowerCase();
+  if (id === "ns" || id === "__legacy_ns__") return "graph.v3.bin";
+  return "graph.v2.bin";
+}
+
 function remoteGraphUrl(regionId, _opts = {}) {
   const id = String(regionId || "").toLowerCase();
+  const fileName = phoneGraphFileName(id);
   if (id === "__legacy_ns__") {
-    return graphCdnBaseUrlForRegion("ns") + "/ns/graph.v2.bin";
+    return graphCdnBaseUrlForRegion("ns") + "/ns/" + fileName;
   }
-  // Phone PACKS and live /api/route are the same object. There is no second
-  // "live extract." Publishing graph.v2.bin updates both.
-  return graphCdnBaseUrlForRegion(id) + "/" + id + "/graph.v2.bin";
+  return graphCdnBaseUrlForRegion(id) + "/" + id + "/" + fileName;
 }
 
 function graphPathForRegion(regionId, _opts = {}) {
@@ -416,6 +427,8 @@ function graphPathForRegion(regionId, _opts = {}) {
       return verifiedPath;
     }
   }
+  const localV3 = path.join(REGIONS_DIR, id, "graph.v3.bin");
+  if (fs.existsSync(localV3)) return localV3;
   const localV2 = path.join(REGIONS_DIR, id, "graph.v2.bin");
   if (fs.existsSync(localV2)) return localV2;
   return remoteGraphUrl(id);
@@ -584,6 +597,7 @@ module.exports = {
   selectRegionsForLocations,
   graphPathForRegion,
   remoteGraphUrl,
+  phoneGraphFileName,
   graphCdnBaseUrl,
   graphCdnBaseUrlForRegion,
   resolveGraphRequest,

@@ -23,7 +23,7 @@ test("a deployment-scoped live candidate overrides only its named region", () =>
   try {
     assert.equal(
       remoteGraphUrl("ns"),
-      "https://packs.example/candidates/ns-release/ns/graph.v2.bin"
+      "https://packs.example/candidates/ns-release/ns/graph.v3.bin"
     );
     assert.match(remoteGraphUrl("bc"), /\/bc\/graph\.v2\.bin$/);
     assert.doesNotMatch(remoteGraphUrl("bc"), /ns-release/);

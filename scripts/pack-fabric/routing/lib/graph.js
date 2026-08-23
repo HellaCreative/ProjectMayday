@@ -209,7 +209,8 @@ function v2PackIdentity(graphPath, paths, graphRaw, geomRaw, pack) {
 }
 
 function isPhonePackV2Path(graphPath) {
-  return /graph\.v2\.bin$/i.test(String(graphPath || ""));
+  // graph.v2.bin and graph.v3.bin share the CSR decode path (v3 adds leaf sections).
+  return /graph\.v[23]\.bin$/i.test(String(graphPath || ""));
 }
 
 async function loadV2RuntimeAsync(graphPath, started) {
