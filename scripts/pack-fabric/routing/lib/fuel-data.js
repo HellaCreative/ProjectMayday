@@ -1,5 +1,7 @@
 "use strict";
 
+const crypto = require("crypto");
+
 /**
  * Candidate-aware packed fuel loader shared by the live fuel list and the
  * graph-connected fuel-chain planner. Fuel and routing must resolve the same
@@ -19,10 +21,19 @@ async function loadRegionFuel(regionId) {
     if (response.status === 404) return { regionId: id, stations: [] };
     throw new Error(`fuel_fetch_${id}_${response.status}`);
   }
-  const payload = await response.json();
+  const bytes = Buffer.from(await response.arrayBuffer());
+  const payload = JSON.parse(bytes.toString("utf8"));
+  const releaseMatch = url.match(/\/candidates\/([^/]+)\//i);
   return {
     regionId: id,
-    stations: Array.isArray(payload && payload.stations) ? payload.stations : []
+    stations: Array.isArray(payload && payload.stations) ? payload.stations : [],
+    packIdentity: {
+      regionId: id,
+      releaseId: releaseMatch ? decodeURIComponent(releaseMatch[1]) : null,
+      fuelSource: url,
+      fuelBytes: bytes.length,
+      fuelSha256: crypto.createHash("sha256").update(bytes).digest("hex")
+    }
   };
 }
 
@@ -45,7 +56,8 @@ async function loadFuelForLocations(locations) {
     ok: true,
     selection,
     regionIds,
-    stations: packs.flatMap((pack) => pack.stations)
+    stations: packs.flatMap((pack) => pack.stations),
+    packIdentity: packs.map((pack) => pack.packIdentity).filter(Boolean)
   };
 }
 

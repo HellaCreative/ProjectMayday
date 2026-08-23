@@ -25,6 +25,31 @@ final class RoutingClient {
     /// Multi-province canada-chain (several CDN pack loads + searches).
     nonisolated static let longHaulTimeout: TimeInterval = 240
 
+    nonisolated static func validateServiceContract(_ received: String?, endpoint: String) throws {
+        guard received == AppConfig.routingServiceContract else {
+            let actual = received ?? "missing"
+            throw RoutingError.server(
+                "DIRT \(endpoint) service is out of date (expected \(AppConfig.routingServiceContract), received \(actual))."
+            )
+        }
+    }
+
+    nonisolated static func identitySummary(
+        contract: String?,
+        build: String?,
+        packs: [RoutingPackIdentity]?
+    ) -> String {
+        let packText = (packs ?? []).map { pack in
+            let region = pack.regionId ?? "?"
+            let release = pack.releaseId ?? "stable-or-local"
+            let graph = pack.graphSha256 ?? "-"
+            let geometry = pack.geometrySha256 ?? "-"
+            let fuel = pack.fuelSha256 ?? "-"
+            return "\(region){release=\(release),graph=\(graph),geometry=\(geometry),fuel=\(fuel)}"
+        }.joined(separator: ",")
+        return "contract=\(contract ?? "missing") build=\(build ?? "missing") packs=[\(packText)]"
+    }
+
     /// POSTs one A→B request (the client always sends exactly two locations;
     /// multi-stage plans issue one call per stage.
     func route(_ request: RouteRequest, timeout: TimeInterval = RoutingClient.defaultTimeout) async throws -> RouteResponse {
@@ -47,6 +72,16 @@ final class RoutingClient {
                 )
             }
             throw RoutingError.server("Routing server error (\(status)).")
+        }
+        try Self.validateServiceContract(response.serviceContract, endpoint: "route")
+        Task { @MainActor in
+            RoutingDebugLog.shared.event(
+                "route identity " + Self.identitySummary(
+                    contract: response.serviceContract,
+                    build: response.serviceBuild,
+                    packs: response.debug?.packIdentity
+                )
+            )
         }
         guard response.isComplete else {
             let msg = response.message ?? response.error ?? "Route unavailable."
@@ -90,6 +125,16 @@ final class RoutingClient {
             }
             throw RoutingError.server("Fuel planning server error (\(status)).")
         }
+        try Self.validateServiceContract(response.serviceContract, endpoint: "fuel")
+        Task { @MainActor in
+            RoutingDebugLog.shared.event(
+                "fuel identity " + Self.identitySummary(
+                    contract: response.serviceContract,
+                    build: response.serviceBuild,
+                    packs: response.packIdentity
+                )
+            )
+        }
         guard response.isUsableFuelResult else {
             let message = response.message ?? response.error ?? "Fuel chain unavailable."
             Task { @MainActor in
@@ -121,6 +166,19 @@ final class RoutingClient {
         let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse, (200..<300).contains(http.statusCode) else {
             throw RoutingError.server("Live fuel data is unavailable.")
+        }
+        guard let fuelFile = PackedFuel.decodeFile(data) else {
+            throw RoutingError.server("Live fuel data returned an unreadable response.")
+        }
+        try Self.validateServiceContract(fuelFile.serviceContract, endpoint: "fuel data")
+        Task { @MainActor in
+            RoutingDebugLog.shared.event(
+                "fuel data identity " + Self.identitySummary(
+                    contract: fuelFile.serviceContract,
+                    build: fuelFile.serviceBuild,
+                    packs: fuelFile.packIdentity
+                )
+            )
         }
         return PackedFuel.decode(data).compactMap { station -> (POIFeature, Double)? in
             let distance = CLLocation(latitude: point.latitude, longitude: point.longitude)

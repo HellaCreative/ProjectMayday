@@ -7,6 +7,9 @@ import Foundation
 /// source of truth while online, regardless of installed packs. Map tiles are
 /// OSM Shortbread. Accounts are Supabase.
 enum AppConfig {
+    /// Must match the deployed route and fuel-chain service. A missing or stale
+    /// value is rejected so device evidence cannot silently mix releases.
+    nonisolated static let routingServiceContract = "dirt-routing.r0.v1"
     static let baseURL = URL(string: "https://dirt-mayday.vercel.app")!
     static let routeURL = URL(string: "https://dirt-mayday.vercel.app/api/route")!
     /// Candidate-aware packed fuel for live planning. The server resolves the

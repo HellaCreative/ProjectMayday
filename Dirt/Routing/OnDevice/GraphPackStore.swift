@@ -1,4 +1,5 @@
 import CoreLocation
+import CryptoKit
 import Foundation
 import Observation
 
@@ -48,6 +49,7 @@ final class GraphPackStore {
     private(set) var activePack: GraphV2Pack?
     private(set) var regions: [RegionInfo] = GraphPackStore.catalogSeed
     private(set) var lastManifestVersion: String = "v1"
+    private(set) var verifiedInstalledRegionIds: Set<String> = []
     private(set) var isRefreshingCatalog = false
     /// Fuel stations loaded from installed `fuel.v1.json` sidecars.
     private var packedFuelByRegion: [String: [POIFeature]] = [:]
@@ -67,6 +69,8 @@ final class GraphPackStore {
     /// Last primary region we already considered for auto-download (spam guard).
     private var lastAutoDownloadRegionId: String?
     private var publishedIds: Set<String> = ["ns"] // known live until manifest loads
+    private var catalogIdentityLoaded = false
+    private var manifestFilesByRegion: [String: [PackManifest.File]] = [:]
 
     private let session: URLSession = {
         let cfg = URLSessionConfiguration.default
@@ -112,6 +116,10 @@ final class GraphPackStore {
             }
             let manifest = try JSONDecoder().decode(PackManifest.self, from: data)
             lastManifestVersion = manifest.version
+            manifestFilesByRegion = Dictionary(uniqueKeysWithValues: manifest.regions.map {
+                ($0.id.lowercased(), $0.files.filter { Self.phonePackFileNames.contains($0.name) })
+            })
+            catalogIdentityLoaded = true
             var sizes: [String: Int64] = [:]
             var published = Set<String>()
             for region in manifest.regions {
@@ -128,6 +136,10 @@ final class GraphPackStore {
                 }
             }
             publishedIds = published
+            verifiedInstalledRegionIds = await Self.verifyInstalledRegions(
+                manifest: manifest,
+                cacheRoot: cacheRoot
+            )
             applyCatalog(published: published, sizes: sizes)
             refreshInstalledFromDisk()
         } catch {
@@ -181,6 +193,7 @@ final class GraphPackStore {
 
     func isInstalled(_ regionId: String) -> Bool {
         let id = regionId.lowercased()
+        if catalogIdentityLoaded { return verifiedInstalledRegionIds.contains(id) }
         if findGraphFileURL(regionId: id) != nil { return true }
         // In-memory pack still counts while a manifest version folder is mid-migrate.
         if activePack?.regionId?.lowercased() == id { return true }
@@ -189,7 +202,20 @@ final class GraphPackStore {
 
     /// Absolute path of the on-disk graph when present (any manifest version folder).
     func installedGraphPath(regionId: String) -> String? {
-        findGraphFileURL(regionId: regionId.lowercased())?.path
+        if catalogIdentityLoaded, !verifiedInstalledRegionIds.contains(regionId.lowercased()) {
+            return nil
+        }
+        return findGraphFileURL(regionId: regionId.lowercased())?.path
+    }
+
+    func installedPackIdentity(regionId: String) -> [String: String]? {
+        let id = regionId.lowercased()
+        guard verifiedInstalledRegionIds.contains(id),
+              let files = manifestFilesByRegion[id] else { return nil }
+        return Dictionary(uniqueKeysWithValues: files.compactMap { file in
+            guard let sha = file.sha256 else { return nil }
+            return (file.name, sha)
+        })
     }
 
     func isPublished(_ regionId: String) -> Bool {
@@ -856,7 +882,7 @@ final class GraphPackStore {
         return nil
     }
 
-    private static let phonePackFileNames: Set<String> = [
+    nonisolated private static let phonePackFileNames: Set<String> = [
         "graph.v2.bin",
         "geometry.v1.bin",
         "fuel.v1.json"
@@ -1050,13 +1076,21 @@ final class GraphPackStore {
             }
             let manifest = try JSONDecoder().decode(PackManifest.self, from: manifestData)
             lastManifestVersion = manifest.version
+            manifestFilesByRegion = Dictionary(uniqueKeysWithValues: manifest.regions.map {
+                ($0.id.lowercased(), $0.files.filter { Self.phonePackFileNames.contains($0.name) })
+            })
+            catalogIdentityLoaded = true
             guard let region = manifest.regions.first(where: { $0.id.lowercased() == regionId }),
-                  region.files.contains(where: { $0.name == fileName })
+                  let file = region.files.first(where: { $0.name == fileName })
             else { return }
             let dest = regionDir(regionId: regionId)
             try FileManager.default.createDirectory(at: dest, withIntermediateDirectories: true)
             let fileURL = dest.appendingPathComponent(fileName)
-            guard !FileManager.default.fileExists(atPath: fileURL.path) else { return }
+            if Self.fileMatchesIdentity(
+                at: fileURL,
+                expectedBytes: file.bytes,
+                expectedSHA256: file.sha256
+            ) { return }
             let remote = AppConfig.packFileURL(
                 version: manifest.version,
                 regionId: region.id,
@@ -1066,10 +1100,19 @@ final class GraphPackStore {
             if let http = fileResponse as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
                 return
             }
+            guard Self.fileMatchesIdentity(
+                at: tmp,
+                expectedBytes: file.bytes,
+                expectedSHA256: file.sha256
+            ) else { return }
             if FileManager.default.fileExists(atPath: fileURL.path) {
-                try FileManager.default.removeItem(at: fileURL)
+                _ = try FileManager.default.replaceItemAt(fileURL, withItemAt: tmp)
+            } else {
+                try FileManager.default.moveItem(at: tmp, to: fileURL)
             }
-            try FileManager.default.moveItem(at: tmp, to: fileURL)
+            if Self.regionMatchesIdentity(region: region, directory: dest) {
+                verifiedInstalledRegionIds.insert(regionId)
+            }
         } catch {
             // Best-effort top-up; chord paint remains until shapes land.
         }
@@ -1093,6 +1136,10 @@ final class GraphPackStore {
             }
             let manifest = try JSONDecoder().decode(PackManifest.self, from: manifestData)
             lastManifestVersion = manifest.version
+            manifestFilesByRegion = Dictionary(uniqueKeysWithValues: manifest.regions.map {
+                ($0.id.lowercased(), $0.files.filter { Self.phonePackFileNames.contains($0.name) })
+            })
+            catalogIdentityLoaded = true
             // Keep published set current so PACKS UI flips Soon → Download after deploy.
             var published = Set<String>()
             var sizes: [String: Int64] = [:]
@@ -1127,7 +1174,11 @@ final class GraphPackStore {
             for (index, file) in files.enumerated() {
                 try Task.checkCancellation()
                 let fileURL = dest.appendingPathComponent(file.name)
-                if FileManager.default.fileExists(atPath: fileURL.path) {
+                if Self.fileMatchesIdentity(
+                    at: fileURL,
+                    expectedBytes: file.bytes,
+                    expectedSHA256: file.sha256
+                ) {
                     let frac = Double(index + 1) / Double(total)
                     setInstall(regionId, .downloading(0.15 + 0.8 * frac))
                     if asNavigationPrep { progress = 0.15 + 0.8 * frac }
@@ -1146,12 +1197,25 @@ final class GraphPackStore {
                 if let http = fileResponse as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
                     throw URLError(.badServerResponse)
                 }
-                if FileManager.default.fileExists(atPath: fileURL.path) {
-                    try FileManager.default.removeItem(at: fileURL)
+                guard Self.fileMatchesIdentity(
+                    at: tmp,
+                    expectedBytes: file.bytes,
+                    expectedSHA256: file.sha256
+                ) else {
+                    throw PackIntegrityError.identityMismatch(regionId: regionId, fileName: file.name)
                 }
-                try FileManager.default.moveItem(at: tmp, to: fileURL)
+                if FileManager.default.fileExists(atPath: fileURL.path) {
+                    _ = try FileManager.default.replaceItemAt(fileURL, withItemAt: tmp)
+                } else {
+                    try FileManager.default.moveItem(at: tmp, to: fileURL)
+                }
             }
 
+            guard Self.regionMatchesIdentity(region: region, directory: dest) else {
+                throw PackIntegrityError.regionIncomplete(regionId: regionId)
+            }
+
+            verifiedInstalledRegionIds.insert(regionId)
             setInstall(regionId, .installed)
             packedFuelByRegion.removeValue(forKey: regionId)
             await activateInstalledPack(regionId: regionId)
@@ -1489,18 +1553,92 @@ final class GraphPackStore {
             return "Couldn’t build an on-device route in \(regionClause). Check which end is off the roadway and nudge that pin."
         }
     }
+
+    nonisolated static func fileMatchesIdentity(
+        at url: URL,
+        expectedBytes: Int?,
+        expectedSHA256: String?
+    ) -> Bool {
+        guard let expectedBytes,
+              let expectedSHA256,
+              expectedSHA256.range(of: "^[a-fA-F0-9]{64}$", options: .regularExpression) != nil,
+              let values = try? url.resourceValues(forKeys: [.fileSizeKey]),
+              values.fileSize == expectedBytes,
+              let data = try? Data(contentsOf: url, options: [.mappedIfSafe]) else { return false }
+        let digest = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+        return digest.caseInsensitiveCompare(expectedSHA256) == .orderedSame
+    }
+
+    nonisolated private static func regionMatchesIdentity(
+        region: PackManifest.Region,
+        directory: URL
+    ) -> Bool {
+        let files = region.files.filter { phonePackFileNames.contains($0.name) }
+        guard files.contains(where: { $0.name == "graph.v2.bin" }) else { return false }
+        return files.allSatisfy { file in
+            fileMatchesIdentity(
+                at: directory.appendingPathComponent(file.name),
+                expectedBytes: file.bytes,
+                expectedSHA256: file.sha256
+            )
+        }
+    }
+
+    nonisolated private static func verifyInstalledRegions(
+        manifest: PackManifest,
+        cacheRoot: URL
+    ) async -> Set<String> {
+        await Task.detached(priority: .utility) {
+            let fm = FileManager.default
+            var verified = Set<String>()
+            let versionRoot = cacheRoot.appendingPathComponent(manifest.version, isDirectory: true)
+            let legacyRoot = cacheRoot.appendingPathComponent("v1", isDirectory: true)
+            let versionFolders = (try? fm.contentsOfDirectory(
+                at: cacheRoot,
+                includingPropertiesForKeys: [.isDirectoryKey],
+                options: [.skipsHiddenFiles]
+            )) ?? []
+            for region in manifest.regions {
+                let id = region.id.lowercased()
+                let roots = [versionRoot, legacyRoot] + versionFolders
+                if roots.contains(where: { root in
+                    regionMatchesIdentity(
+                        region: region,
+                        directory: root.appendingPathComponent(id, isDirectory: true)
+                    )
+                }) {
+                    verified.insert(id)
+                }
+            }
+            return verified
+        }.value
+    }
 }
 
-private struct PackManifest: Decodable {
+private enum PackIntegrityError: LocalizedError {
+    case identityMismatch(regionId: String, fileName: String)
+    case regionIncomplete(regionId: String)
+
+    var errorDescription: String? {
+        switch self {
+        case .identityMismatch(let regionId, let fileName):
+            return "Downloaded \(regionId)/\(fileName) did not match the approved catalog identity."
+        case .regionIncomplete(let regionId):
+            return "Installed \(regionId) pack is incomplete or does not match the approved catalog identity."
+        }
+    }
+}
+
+private struct PackManifest: Decodable, Sendable {
     var version: String
     var regions: [Region]
 
-    struct Region: Decodable {
+    struct Region: Decodable, Sendable {
         var id: String
         var files: [File]
     }
 
-    struct File: Decodable {
+    struct File: Decodable, Sendable {
         var name: String
         var bytes: Int?
         var sha256: String?

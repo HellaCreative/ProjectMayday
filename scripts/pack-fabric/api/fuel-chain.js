@@ -1,6 +1,11 @@
 "use strict";
 
 const { fuelChainRequest } = require("../routing/lib/fuel-chain.js");
+const {
+  ROUTING_SERVICE_CONTRACT,
+  serviceBuild,
+  withServiceIdentity
+} = require("../routing/lib/service-contract.js");
 
 function echoLegId(result, legId) {
   if (legId == null || legId === "" || !result || typeof result !== "object") return result;
@@ -20,6 +25,8 @@ module.exports = async function handler(req, res) {
       ok: true,
       service: "dirt-live-fuel-chain",
       strategy: "forward-graph-reachability",
+      serviceContract: ROUTING_SERVICE_CONTRACT,
+      serviceBuild: serviceBuild(),
       serviceVersion: FUEL_CHAIN_SERVICE_VERSION
     });
   }
@@ -31,14 +38,14 @@ module.exports = async function handler(req, res) {
     const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
     const result = echoLegId(await fuelChainRequest(body), body.legId);
     const status = result.status === "complete" ? 200 : (result.status === "error" ? 400 : 422);
-    return res.status(status).json(result);
+    return res.status(status).json(withServiceIdentity(result));
   } catch (error) {
     console.error("live fuel chain failed", error);
-    return res.status(500).json({
+    return res.status(500).json(withServiceIdentity({
       status: "error",
       error: "fuel_chain_internal_error",
       message: error && error.message ? error.message : "Live fuel-chain planning failed."
-    });
+    }));
   }
 };
 

@@ -5,11 +5,46 @@
 //  Created by Richard Smith on 7/25/26.
 //
 
+import CryptoKit
 import Foundation
 import Testing
 @testable import Dirt
 
 struct DirtTests {
+    @Test func routingServiceContractRejectsMissingOrStaleDeployments() throws {
+        #expect(throws: RoutingError.self) {
+            try RoutingClient.validateServiceContract(nil, endpoint: "route")
+        }
+        #expect(throws: RoutingError.self) {
+            try RoutingClient.validateServiceContract("older", endpoint: "fuel")
+        }
+        try RoutingClient.validateServiceContract(AppConfig.routingServiceContract, endpoint: "route")
+    }
+
+    @Test func installedPackIdentityRequiresExactBytesAndSHA256() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("dirt-pack-identity-\(UUID().uuidString).bin")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let data = Data("approved pack bytes".utf8)
+        try data.write(to: url)
+        let sha = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+        #expect(GraphPackStore.fileMatchesIdentity(
+            at: url,
+            expectedBytes: data.count,
+            expectedSHA256: sha
+        ))
+        #expect(!GraphPackStore.fileMatchesIdentity(
+            at: url,
+            expectedBytes: data.count + 1,
+            expectedSHA256: sha
+        ))
+        #expect(!GraphPackStore.fileMatchesIdentity(
+            at: url,
+            expectedBytes: data.count,
+            expectedSHA256: String(repeating: "0", count: 64)
+        ))
+    }
+
     @Test func routeRequestEncodesProfileAndAccessPolicy() throws {
         let request = RouteRequest(
             profile: .balanced,

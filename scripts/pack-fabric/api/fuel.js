@@ -5,6 +5,11 @@
  * /api/route, without changing the approved downloadable-pack manifest.
  */
 const { loadFuelForLocations } = require("../routing/lib/fuel-data.js");
+const {
+  ROUTING_SERVICE_CONTRACT,
+  serviceBuild,
+  withServiceIdentity
+} = require("../routing/lib/service-contract.js");
 
 module.exports = async function handler(req, res) {
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -14,7 +19,12 @@ module.exports = async function handler(req, res) {
 
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method === "GET") {
-    return res.status(200).json({ ok: true, service: "dirt-live-fuel" });
+    return res.status(200).json({
+      ok: true,
+      service: "dirt-live-fuel",
+      serviceContract: ROUTING_SERVICE_CONTRACT,
+      serviceBuild: serviceBuild()
+    });
   }
   if (req.method !== "POST") {
     return res.status(405).json({ ok: false, error: "method_not_allowed" });
@@ -24,25 +34,28 @@ module.exports = async function handler(req, res) {
     const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
     const fuel = await loadFuelForLocations(body.locations || []);
     if (!fuel.ok) {
-      return res.status(400).json({
+      return res.status(400).json(withServiceIdentity({
         ok: false,
         error: fuel.error,
         message: fuel.message
-      });
+      }));
     }
     return res.status(200).json({
       schema: "fuel.v1",
       regionId: fuel.regionIds.length === 1 ? fuel.regionIds[0] : null,
       regionIds: fuel.regionIds,
+      packIdentity: fuel.packIdentity || [],
+      serviceContract: ROUTING_SERVICE_CONTRACT,
+      serviceBuild: serviceBuild(),
       stations: fuel.stations
     });
   } catch (error) {
     console.error("live fuel failed", error);
-    return res.status(502).json({
+    return res.status(502).json(withServiceIdentity({
       ok: false,
       error: "fuel_source_unavailable",
       message: "Live packed fuel is temporarily unavailable."
-    });
+    }));
   }
 };
 

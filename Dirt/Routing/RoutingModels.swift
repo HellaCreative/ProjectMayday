@@ -307,6 +307,9 @@ struct FuelChainResponse: Codable, Sendable {
     var overByMeters: Double? = nil
     var gapFrom: FuelChainStop? = nil
     var gapTo: FuelChainStop? = nil
+    var serviceContract: String? = nil
+    var serviceBuild: String? = nil
+    var packIdentity: [RoutingPackIdentity]? = nil
 
     var isComplete: Bool { status == "complete" }
     var isGap: Bool { status == "gap" }
@@ -457,6 +460,21 @@ struct RouteResponseDebug: Codable, Sendable {
     let graphMode: String?
     let searchMeta: RouteResponseSearchMeta?
     let fallback: String?
+    var packIdentity: [RoutingPackIdentity]? = nil
+}
+
+struct RoutingPackIdentity: Codable, Sendable, Equatable {
+    let regionId: String?
+    let releaseId: String?
+    let graphSource: String?
+    let geometrySource: String?
+    let graphBytes: Int?
+    let geometryBytes: Int?
+    let fuelBytes: Int?
+    let graphSha256: String?
+    let geometrySha256: String?
+    let fuelSha256: String?
+    let fuelSource: String?
 }
 
 nonisolated struct RouteManeuver: Codable, Identifiable, Sendable {
@@ -535,9 +553,12 @@ struct RouteResponse: Codable, Sendable {
     var restrictedMeters: Double? = nil
     var restrictedReason: String? = nil
     var debug: RouteResponseDebug? = nil
+    var serviceContract: String? = nil
+    var serviceBuild: String? = nil
 
     enum CodingKeys: String, CodingKey {
         case status, error, message, distanceMeters, geometry, segments, stats, maneuvers, warnings, debug
+        case serviceContract, serviceBuild
         case backtrackMeters, backtrackPct, backtrackReason
         case restrictedMeters, restrictedReason
         case estimatedMovingSeconds, estimatedElapsedSeconds

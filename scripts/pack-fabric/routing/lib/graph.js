@@ -1,5 +1,6 @@
 "use strict";
 
+const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 const zlib = require("zlib");
@@ -154,7 +155,7 @@ function buildEdgeGridFromGeom(geom, edgeCount) {
   return { edgeGrid, GRID };
 }
 
-function materializeRuntimeV2(cacheKey, pack, geom, started) {
+function materializeRuntimeV2(cacheKey, pack, geom, started, packIdentity = null) {
   const { edgeGrid, GRID } = buildEdgeGridFromGeom(geom, pack.undirectedEdgeCount);
   const loadMs = Date.now() - started;
 
@@ -170,6 +171,7 @@ function materializeRuntimeV2(cacheKey, pack, geom, started) {
     loadMs,
     enums: pack.enums,
     meta: pack.meta,
+    packIdentity: packIdentity ? [packIdentity] : [],
     data: {
       nodeCount: pack.nodeCount,
       edgeCount: pack.undirectedEdgeCount,
@@ -182,6 +184,28 @@ function materializeRuntimeV2(cacheKey, pack, geom, started) {
   };
   putCached(cacheKey, runtime);
   return runtime;
+}
+
+function sha256(buffer) {
+  return crypto.createHash("sha256").update(buffer).digest("hex");
+}
+
+function releaseIdFromGraphPath(graphPath) {
+  const match = String(graphPath || "").match(/\/candidates\/([^/]+)\//i);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+function v2PackIdentity(graphPath, paths, graphRaw, geomRaw, pack) {
+  return {
+    regionId: pack.regionId || null,
+    releaseId: releaseIdFromGraphPath(graphPath),
+    graphSource: paths.graph,
+    geometrySource: paths.geom,
+    graphBytes: graphRaw.length,
+    geometryBytes: geomRaw.length,
+    graphSha256: sha256(graphRaw),
+    geometrySha256: sha256(geomRaw)
+  };
 }
 
 function isPhonePackV2Path(graphPath) {
@@ -207,7 +231,13 @@ async function loadV2RuntimeAsync(graphPath, started) {
   const geom = decodeGeometryV1(geomBuf);
   cacheStats.loads += 1;
   cacheStats.inflateMs += Date.now() - started;
-  return materializeRuntimeV2(graphPath, pack, geom, started);
+  return materializeRuntimeV2(
+    graphPath,
+    pack,
+    geom,
+    started,
+    v2PackIdentity(graphPath, paths, graphRaw, geomRaw, pack)
+  );
 }
 
 function loadV2RuntimeSync(v1Path, started) {
@@ -223,7 +253,13 @@ function loadV2RuntimeSync(v1Path, started) {
   const geom = decodeGeometryV1(geomBuf);
   cacheStats.loads += 1;
   cacheStats.inflateMs += Date.now() - started;
-  return materializeRuntimeV2(v1Path, pack, geom, started);
+  return materializeRuntimeV2(
+    v1Path,
+    pack,
+    geom,
+    started,
+    v2PackIdentity(v1Path, paths, graphRaw, geomRaw, pack)
+  );
 }
 
 function fetchBuffer(url) {

@@ -1512,6 +1512,11 @@ async function routeCanadaChain(body, graphResolution) {
       routingRevision: "ride-objectives-v9-settlement-gated",
       engine: "dirt-node-astar-chain",
       graphMode: "canada-chain",
+      packIdentity: parts.flatMap((part) =>
+        part && part.debug && Array.isArray(part.debug.packIdentity)
+          ? part.debug.packIdentity
+          : []
+      ),
       searchMeta: chainSearchMeta,
       regionIds: graphResolution.regionIds,
       waypoints: waypoints.length,
@@ -2315,6 +2320,7 @@ async function routeOnRuntime(body, graphResolution, runtime) {
       corridorClippedDirtMeters,
       regionIds: graphResolution.regionIds,
       graphMode: graphResolution.mode,
+      packIdentity: runtime.packIdentity || [],
       merge: runtime.mergeReport || null,
       graph: {
         edgeCount: runtime.data.edgeCount,

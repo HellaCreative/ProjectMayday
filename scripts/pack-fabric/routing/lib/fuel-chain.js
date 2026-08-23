@@ -25,6 +25,15 @@ const {
 } = require("../regional/select");
 const { corridorLocationsForRoute } = require("../regional/merge");
 const { loadFuelForLocations, loadRegionFuel } = require("./fuel-data");
+
+function mergePackIdentities(...groups) {
+  const byRegion = new Map();
+  for (const identity of groups.flat().filter(Boolean)) {
+    const key = String(identity.regionId || "unknown").toLowerCase();
+    byRegion.set(key, { ...(byRegion.get(key) || {}), ...identity });
+  }
+  return [...byRegion.values()];
+}
 const { unpackAccess, unpackSurface } = require("./pack-v2");
 const { projectedProgressMeters, crossTrackMeters } = require("./hop-search");
 const { resolveLocationsByEligibleEdge } = require("../regional/endpoint-resolver");
@@ -979,6 +988,7 @@ async function planCrossRegionFuelChain(body, selection, fuelOptions, dependenci
   const allStops = [];
   const graphMeters = [];
   const stationCandidates = [];
+  const packIdentities = [];
   let totalStates = 0;
   let totalPops = 0;
   let matchedFuel = 0;
@@ -998,6 +1008,7 @@ async function planCrossRegionFuelChain(body, selection, fuelOptions, dependenci
         error: "window_time_budget",
         message: "This fuel window reached its planning budget.",
         regionIds: selection.regionIds,
+        packIdentity: mergePackIdentities(packIdentities),
         stops: allStops,
         graphMeters,
         gapMeters: null,
@@ -1021,7 +1032,8 @@ async function planCrossRegionFuelChain(body, selection, fuelOptions, dependenci
       return {
         status: "failed",
         error: "region_unknown",
-        message: `Could not resolve the regional fabric for fuel segment ${i + 1}.`
+        message: `Could not resolve the regional fabric for fuel segment ${i + 1}.`,
+        packIdentity: mergePackIdentities(packIdentities)
       };
     }
 
@@ -1032,6 +1044,7 @@ async function planCrossRegionFuelChain(body, selection, fuelOptions, dependenci
       locations: [hopStart, hopEnd]
     });
     const fuel = await loadRegion(regionId);
+    if (fuel && fuel.packIdentity) packIdentities.push(fuel.packIdentity);
     if (!fuel || !Array.isArray(fuel.stations) || !fuel.stations.length) {
       clearGraphCache();
       return {
@@ -1039,6 +1052,7 @@ async function planCrossRegionFuelChain(body, selection, fuelOptions, dependenci
         error: "fuel_data_unavailable",
         message: `Fuel data is unavailable for regional segment ${i + 1}/${waypoints.length - 1}.`,
         regionIds: selection.regionIds,
+        packIdentity: mergePackIdentities(packIdentities),
         stops: allStops,
         graphMeters
       };
@@ -1047,6 +1061,7 @@ async function planCrossRegionFuelChain(body, selection, fuelOptions, dependenci
       locations: [hopStart, hopEnd],
       profile: body.profile
     });
+    packIdentities.push(...(runtime.packIdentity || []));
     const cap = usableRangeMeters - fuelUsedMeters;
     const planned = await planFuelChainOnRuntime({
       runtime,
@@ -1087,6 +1102,7 @@ async function planCrossRegionFuelChain(body, selection, fuelOptions, dependenci
         error: planned.error,
         message: `${planned.message || "No fuel chain found"} (regional segment ${i + 1}/${waypoints.length - 1})`,
         regionIds: selection.regionIds,
+        packIdentity: mergePackIdentities(packIdentities),
         stops: allStops.concat(planned.stops || []),
         graphMeters: graphMeters.concat(planned.graphMeters || []),
         diagnostics: planned.diagnostics || null,
@@ -1114,6 +1130,7 @@ async function planCrossRegionFuelChain(body, selection, fuelOptions, dependenci
         error: null,
         message: null,
         regionIds: selection.regionIds,
+        packIdentity: mergePackIdentities(packIdentities),
         stops: allStops.slice(0, windowMaxStops),
         graphMeters: graphMeters.slice(0, windowMaxStops),
         stationCandidates,
@@ -1138,7 +1155,8 @@ async function planCrossRegionFuelChain(body, selection, fuelOptions, dependenci
       return {
         status: "failed",
         error: "fuel_range_exceeded_at_seam",
-        message: "The route reaches a regional boundary after the usable fuel range."
+        message: "The route reaches a regional boundary after the usable fuel range.",
+        packIdentity: mergePackIdentities(packIdentities)
       };
     }
   }
@@ -1148,7 +1166,8 @@ async function planCrossRegionFuelChain(body, selection, fuelOptions, dependenci
     return {
       status: "failed",
       error: "fuel_stop_required",
-      message: "A route-connected fuel stop is required before point 2."
+      message: "A route-connected fuel stop is required before point 2.",
+      packIdentity: mergePackIdentities(packIdentities)
     };
   }
   return {
@@ -1156,6 +1175,7 @@ async function planCrossRegionFuelChain(body, selection, fuelOptions, dependenci
     error: null,
     message: null,
     regionIds: selection.regionIds,
+    packIdentity: mergePackIdentities(packIdentities),
     stops: allStops,
     graphMeters,
     stationCandidates,
@@ -1316,6 +1336,7 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
     message: planned.message || null,
     serviceVersion: FUEL_CHAIN_SERVICE_VERSION,
     regionIds: fuel.regionIds,
+    packIdentity: mergePackIdentities(runtime.packIdentity || [], fuel.packIdentity || []),
     stops: planned.stops || [],
     graphMeters: planned.graphMeters || [],
     stationCandidates: planned.stationCandidates || [],

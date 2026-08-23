@@ -6,6 +6,9 @@ nonisolated enum PackedFuel {
     struct File: Decodable, Sendable {
         var schema: String?
         var regionId: String?
+        var serviceContract: String?
+        var serviceBuild: String?
+        var packIdentity: [RoutingPackIdentity]?
         var stations: [Station]
     }
 
@@ -22,7 +25,7 @@ nonisolated enum PackedFuel {
     }
 
     static func decode(_ data: Data) -> [POIFeature] {
-        guard let file = try? JSONDecoder().decode(File.self, from: data) else { return [] }
+        guard let file = decodeFile(data) else { return [] }
         return file.stations.compactMap { s in
             guard s.lat.isFinite, s.lon.isFinite else { return nil }
             return POIFeature(
@@ -38,5 +41,9 @@ nonisolated enum PackedFuel {
                 website: s.website
             )
         }
+    }
+
+    static func decodeFile(_ data: Data) -> File? {
+        try? JSONDecoder().decode(File.self, from: data)
     }
 }
