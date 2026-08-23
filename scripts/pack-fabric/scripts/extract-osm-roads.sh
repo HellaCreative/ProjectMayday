@@ -49,3 +49,22 @@ osmium export "$OUT_DIR/roads.osm.pbf" \
 
 echo "Done: $OUT_DIR/roads.geojsonseq"
 ls -lh "$OUT_DIR/roads.geojsonseq"
+
+echo "Filtering OSM route=ferry ways (timed harbour connectors)…"
+osmium tags-filter "$PBF" \
+  w/route=ferry \
+  -o "$OUT_DIR/ferries.osm.pbf" --overwrite
+
+echo "Exporting ferry GeoJSON sequence…"
+osmium export "$OUT_DIR/ferries.osm.pbf" \
+  --geometry-types=linestring \
+  --add-unique-id=type_id \
+  -a type,id,version,timestamp \
+  -f geojsonseq \
+  -o "$OUT_DIR/ferries.geojsonseq" --overwrite
+
+if [ -s "$OUT_DIR/ferries.geojsonseq" ]; then
+  cat "$OUT_DIR/ferries.geojsonseq" >> "$OUT_DIR/roads.geojsonseq"
+  echo "Merged ferries into roads.geojsonseq"
+fi
+ls -lh "$OUT_DIR/ferries.geojsonseq" "$OUT_DIR/roads.geojsonseq"

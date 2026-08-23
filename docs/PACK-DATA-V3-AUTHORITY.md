@@ -14,6 +14,14 @@ time from the preserved leaf.**
 Nova Scotia only until proven. One phase at a time. Physically test between phases.
 Never stack. Restore floor stays commit `7cd5a40`.
 
+**DEFINITION OF DONE (every phase): DEPLOYED LIVE + VERIFIED — not "committed."** The app
+routes via the live Vercel engine (`selected=live`), so a phase is only testable once BOTH
+the code and the pack are live. Every phase gate MUST end with: (1) deploy the live engine
+at the phase HEAD commit; (2) publish/replace any changed pack; (3) verify against the live
+endpoint that the route-identity `build=` stamp equals the HEAD commit (NOT an older one)
+and the pack hash is the new one. Nothing is "ready to test" until that stamp check passes.
+Never leave code committed-but-undeployed.
+
 ---
 
 ## 0. Root cause (verified in code, 2026-08-23)

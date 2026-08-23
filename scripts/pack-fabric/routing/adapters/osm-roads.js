@@ -37,6 +37,10 @@ const {
   SOURCE_CONFIDENCE
 } = require("../schema/enums");
 const { bump, makeReport, emptyCounts } = require("./contract");
+const {
+  LEAF_NOT_APPLICABLE,
+  ferryCrossingSeconds
+} = require("../lib/ferry");
 
 const name = "osm-roads";
 
@@ -248,7 +252,40 @@ function explicitSurfaceClass(surface) {
   return classes.size === 1 ? classes.values().next().value : SURFACE_CLASS.unknown;
 }
 
+/**
+ * OSM route=ferry ways (not highway=*). Timed connectors — not dirt fabric.
+ */
+function classifyFerry(props) {
+  if (tag(props, "route") !== "ferry") return null;
+  for (const key of ["motorcar", "motor_vehicle", "motorcycle"]) {
+    if (tag(props, key) === "no") return { ok: false, reason: "ferry_vehicle_denied" };
+  }
+  if (hardLandDeny(props)) return { ok: false, reason: "access_restricted" };
+  const effective = effectiveMotorcycleAccess(props);
+  if (ACCESS_DENIED.has(effective.value)) {
+    return { ok: false, reason: "access_restricted" };
+  }
+  let accessClass = ACCESS_CLASS.motorized_permissive;
+  let confidence = SOURCE_CONFIDENCE.medium;
+  if (ACCESS_UNKNOWN.has(effective.value)) {
+    accessClass = ACCESS_CLASS.motorized_unknown;
+    confidence = SOURCE_CONFIDENCE.low;
+  }
+  return {
+    ok: true,
+    isFerry: true,
+    surfaceClass: SURFACE_CLASS.unknown,
+    accessClass,
+    structureType: STRUCTURE_TYPE.ferry,
+    roadTrackClass: ROAD_TRACK_CLASS.unknown,
+    confidence
+  };
+}
+
 function classify(props, options = {}) {
+  const ferry = classifyFerry(props);
+  if (ferry) return ferry;
+
   const denied = isDenied(props);
   if (denied) return { ok: false, reason: denied };
 
@@ -471,7 +508,21 @@ async function run(options = {}) {
       bump(classification.access, classified.accessClass);
       bump(classification.structure, classified.structureType);
       bump(classification.roadTrack, classified.roadTrackClass);
-      const leaves = leafFieldsFromProps(props);
+      const distanceMeters = lineMeters(coords);
+      const osmDuration = props.duration || tag(props, "duration") || null;
+      const leaves = classified.isFerry
+        ? {
+            surfaceLeaf: LEAF_NOT_APPLICABLE,
+            roadClassLeaf: LEAF_NOT_APPLICABLE,
+            tracktype: null,
+            smoothness: null,
+            layer: 0,
+            structureLeaf: "ferry",
+            accessLeaf: normalizeLeafString(effectiveMotorcycleAccess(props).value),
+            atv: null,
+            atvDesignated: false
+          }
+        : leafFieldsFromProps(props);
       features.push(
         createNormalizedEdge({
           edgeId,
@@ -499,15 +550,20 @@ async function run(options = {}) {
           roadName: props.name || props.ref || null,
           direction: "both",
           seasonal: false,
-          distanceMeters: lineMeters(coords),
+          distanceMeters,
           meta: {
-            highway: tag(props, "highway"),
+            highway: tag(props, "highway") || null,
+            route: tag(props, "route") || null,
             surface: tag(props, "surface") || null,
             tracktype: tag(props, "tracktype") || null,
             service: tag(props, "service") || null,
             layer: tag(props, "layer") || null,
             level: tag(props, "level") || null,
             atv: tag(props, "atv") || null,
+            duration: osmDuration,
+            ferryCrossingSeconds: classified.isFerry
+              ? ferryCrossingSeconds(distanceMeters, osmDuration)
+              : null,
             gapFill: true
           }
         })
@@ -533,7 +589,8 @@ async function run(options = {}) {
       "Excluded cycleway, non-atv path, footway/pedestrian/steps, private/no, and abandoned ways.",
       "Positive atv (yes/designated/permissive) → motorized_permissive; overrides motorcycle/motor_vehicle/vehicle deny; never overrides access=private|no.",
       "Missing surface stays unknown on service/track/path; road class guides search without inventing material.",
-      "OSM motorcycle access precedence is motorcycle > motor_vehicle > vehicle > access (atv consulted for override only)."
+      "OSM motorcycle access precedence is motorcycle > motor_vehicle > vehicle > access (atv consulted for override only).",
+      "route=ferry ways are timed connectors (structureType=ferry); not highway fabric."
     ],
     knownLimitations: [
       "OSM tagging quality varies; not a legal access assertion.",
@@ -548,6 +605,7 @@ module.exports = {
   name,
   run,
   classify,
+  classifyFerry,
   explicitSurfaceClass,
   effectiveMotorcycleAccess,
   positiveAtv,

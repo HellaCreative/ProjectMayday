@@ -10,6 +10,10 @@ const {
   nodeKeyGraded,
   gradesCompatible
 } = require("../lib/grade-bucket");
+const {
+  FERRY_TERMINAL_SNAP_METERS,
+  ferryCrossingSeconds
+} = require("../lib/ferry");
 
 /**
  * Build a compact offline routing graph from canonical edges.
@@ -321,6 +325,7 @@ function buildRegionalGraph(options = {}) {
   const sourceCounts = {};
   const snapGrid = new Map();
   let endpointSnaps = 0;
+  let ferryTerminalSnaps = 0;
   let gradeSeparatedCoincident = 0;
   let endpointSnapRejectedGrade = 0;
 
@@ -411,13 +416,54 @@ function buildRegionalGraph(options = {}) {
     return addNodeExact(coord, grade);
   }
 
-  function addFeatureEdge(feature, snapEndpoints, junctionKeys) {
+  /** Ferry terminals: snap onto existing road-graph nodes (no orphan water edges). */
+  function addNodeFerrySnapped(coord, gradeBucket, roadNodeIds) {
+    const grade = gradeBucket || "ground";
+    const key = nodeKeyGraded(coord, grade);
+    const exact = nodeLookup.get(key);
+    if (exact != null) return exact;
+    const snapM = FERRY_TERMINAL_SNAP_METERS;
+    if (!(snapM > 0) || !roadNodeIds || roadNodeIds.size === 0) return addNodeExact(coord, grade);
+
+    const ll = [Number(coord[0]), Number(coord[1])];
+    const cx = Math.floor(ll[0] / SNAP_CELL);
+    const cy = Math.floor(ll[1] / SNAP_CELL);
+    let best = null;
+    let bestD = snapM + 1;
+    for (let dx = -2; dx <= 2; dx += 1) {
+      for (let dy = -2; dy <= 2; dy += 1) {
+        const bucket = snapGrid.get(cx + dx + ":" + (cy + dy));
+        if (!bucket) continue;
+        for (const id of bucket) {
+          if (!roadNodeIds.has(id)) continue;
+          const d = haversineMeters(ll, nodes[id]);
+          if (d > snapM) continue;
+          if (!gradesCompatible(grade, nodeGrades[id])) continue;
+          if (d < bestD) {
+            bestD = d;
+            best = id;
+          }
+        }
+      }
+    }
+    if (best != null && bestD <= snapM) {
+      ferryTerminalSnaps += 1;
+      nodeLookup.set(key, best);
+      return best;
+    }
+    return addNodeExact(coord, grade);
+  }
+
+  function addFeatureEdge(feature, snapEndpoints, junctionKeys, opts = {}) {
     const policyAccess = accessForPolicy(feature.accessClass);
     if (policyAccess === "motorized_excluded") return;
     const coords = feature.geometry && feature.geometry.coordinates;
     if (!coords || coords.length < 2) return;
     const grade = gradeBucketFromFeature(feature);
-    const add = snapEndpoints ? addNodeSnapped : addNodeExact;
+    const isFerry = feature.structureType === "ferry" || opts.ferryTerminalSnap;
+    const add = isFerry && opts.roadNodeIds
+      ? (coord, gr) => addNodeFerrySnapped(coord, gr, opts.roadNodeIds)
+      : (snapEndpoints ? addNodeSnapped : addNodeExact);
 
     const splitIdx = [0];
     for (let i = 1; i < coords.length - 1; i += 1) {
@@ -451,6 +497,12 @@ function buildRegionalGraph(options = {}) {
       surfaceCounts[costSurface] = (surfaceCounts[costSurface] || 0) + 1;
       sourceCounts[feature.sourceName] = (sourceCounts[feature.sourceName] || 0) + 1;
 
+      const meta = feature.meta || {};
+      const crossingSec = structureCode === STRUCTURE.ferry
+        ? Number(meta.ferryCrossingSeconds) ||
+          ferryCrossingSeconds(segMeters, meta.duration)
+        : 0;
+
       edges.push({
         i: splitIdx.length > 2 ? `${feature.edgeId}-s${s}` : feature.edgeId,
         a,
@@ -479,6 +531,7 @@ function buildRegionalGraph(options = {}) {
         accessLeaf: feature.accessLeaf != null && feature.accessLeaf !== "" ? feature.accessLeaf : null,
         atv: feature.atv != null && feature.atv !== "" ? feature.atv : null,
         atvDesignated: !!feature.atvDesignated,
+        xs: crossingSec > 0 ? Math.round(crossingSec) : 0,
         g: segCoords.map((c) => [Number(c[0]), Number(c[1])])
       });
     }
@@ -487,13 +540,29 @@ function buildRegionalGraph(options = {}) {
   const junctionKeys = computeJunctionKeys(features);
   const fabric = [];
   const capillary = [];
+  const ferries = [];
   for (const feature of features) {
-    if (isCapillaryFeature(feature)) capillary.push(feature);
+    if (feature.structureType === "ferry") ferries.push(feature);
+    else if (isCapillaryFeature(feature)) capillary.push(feature);
     else fabric.push(feature);
   }
-  const featuresBeforeSplit = fabric.length + capillary.length;
+  const featuresBeforeSplit = fabric.length + capillary.length + ferries.length;
   for (const feature of fabric) addFeatureEdge(feature, false, junctionKeys);
   for (const feature of capillary) addFeatureEdge(feature, true, junctionKeys);
+
+  const roadNodeIds = new Set();
+  for (const e of edges) {
+    if (e.t !== STRUCTURE.ferry) {
+      roadNodeIds.add(e.a);
+      roadNodeIds.add(e.b);
+    }
+  }
+  for (const feature of ferries) {
+    addFeatureEdge(feature, false, junctionKeys, {
+      ferryTerminalSnap: true,
+      roadNodeIds
+    });
+  }
 
   // Abutment heal: bridge/tunnel endpoints that continue a ground road at the
   // same XY must share a node. Perpendicular crossings stay split (overpass).
@@ -545,8 +614,11 @@ function buildRegionalGraph(options = {}) {
   lineage.endpointSnap = {
     meters: snapMeters,
     snappedEndpoints: endpointSnaps,
+    ferryTerminalSnaps,
+    ferryTerminalSnapMeters: FERRY_TERMINAL_SNAP_METERS,
     note:
-      "Provincial capillary endpoints within snap meters reuse existing fabric nodes (survey near-miss joins). No free-space edges. Grade-incompatible snaps are rejected."
+      "Provincial capillary endpoints within snap meters reuse existing fabric nodes (survey near-miss joins). " +
+      "Ferry terminals snap to nearest road node within ferry snap meters. No free-space edges. Grade-incompatible snaps are rejected."
   };
   lineage.gradeSeparation = {
     gradeSeparatedCoincident,

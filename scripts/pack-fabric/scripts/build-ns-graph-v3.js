@@ -45,12 +45,32 @@ async function main() {
     console.warn("warning: graph.v2.bin missing — rollback pair incomplete");
   }
 
-  console.log("building NS intermediate (post-B membership + leaves)…");
-  const { features } = await osmRoads.run({
+  console.log("building NS intermediate (post-B membership + leaves + ferries)…");
+  const { features: roadFeatures } = await osmRoads.run({
     inputPath: SEQ,
     province: "NS",
-    datasetVersion: "phase-e1-v3"
+    datasetVersion: "phase-g1-v3"
   });
+  const FERRY_SEQ = path.join(
+    __dirname,
+    "..",
+    "data-raw",
+    "osm-roads",
+    "nova-scotia",
+    "ferries.geojsonseq"
+  );
+  let features = roadFeatures;
+  if (fs.existsSync(FERRY_SEQ)) {
+    const { features: ferryFeatures } = await osmRoads.run({
+      inputPath: FERRY_SEQ,
+      province: "NS",
+      datasetVersion: "phase-g1-ferries"
+    });
+    features = roadFeatures.concat(ferryFeatures);
+    console.log("ferry features merged:", ferryFeatures.length);
+  } else {
+    console.warn("warning: no ferries.geojsonseq — run extract-osm-roads.sh for NS");
+  }
   const graph = buildRegionalGraph({
     features,
     regionId: "ns",

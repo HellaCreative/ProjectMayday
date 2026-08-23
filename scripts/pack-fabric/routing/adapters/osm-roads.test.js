@@ -168,3 +168,26 @@ test("createNormalizedEdge defaults leaf fields safely when omitted", () => {
   assert.equal(edge.atvDesignated, false);
   assert.equal(edge.surfaceClass, "paved");
 });
+
+test("route=ferry ways classify as timed ferry connectors", () => {
+  const ferry = classify({ route: "ferry", duration: "15" });
+  assert.equal(ferry.ok, true);
+  assert.equal(ferry.isFerry, true);
+  assert.equal(ferry.structureType, "ferry");
+  assert.equal(ferry.surfaceClass, "unknown");
+  assert.equal(ferry.roadTrackClass, "unknown");
+});
+
+test("route=ferry rejects vehicle=no and private access", () => {
+  assert.equal(classify({ route: "ferry", motor_vehicle: "no" }).ok, false);
+  assert.equal(classify({ route: "ferry", access: "private" }).ok, false);
+});
+
+test("ferry connectors are not highway leaf fields", () => {
+  const { leafFieldsFromProps } = require("./osm-roads");
+  const leaves = leafFieldsFromProps({ route: "ferry", duration: "10" });
+  assert.equal(leaves.surfaceLeaf, null);
+  assert.equal(leaves.roadClassLeaf, "unknown");
+  const classified = classify({ route: "ferry", duration: "10" });
+  assert.equal(classified.structureType, "ferry");
+});

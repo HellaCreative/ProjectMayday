@@ -440,4 +440,20 @@ nonisolated enum OnDeviceProfileCosts {
             return false
         }
     }
+
+    // Phase G1 — ferries (lockstep scripts/pack-fabric/routing/lib/ferry.js).
+    static let ferrySpeedKmh: Double = 18
+    static let ferryCostReferenceKmh: Double = 50
+    static let ferryCrossingLabel = "Ferry crossing"
+
+    static func ferryCrossingSeconds(distanceMeters: Double, storedSeconds: UInt32) -> Double {
+        if storedSeconds > 0 { return Double(storedSeconds) }
+        guard distanceMeters > 0 else { return 300 }
+        return max(60, (distanceMeters / 1000.0) / ferrySpeedKmh * 3600.0)
+    }
+
+    static func ferryRelaxStepCost(crossingSeconds: Double) -> Double {
+        guard crossingSeconds > 0 else { return 0 }
+        return (crossingSeconds / 3600.0) * ferryCostReferenceKmh
+    }
 }

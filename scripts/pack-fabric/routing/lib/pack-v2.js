@@ -26,13 +26,15 @@ const GRAPH_VERSION = 3;
 const GRAPH_VERSION_MIN_READ = 2;
 const GEOM_VERSION = 1;
 
-/** Header sizes: v2 = 72; v3 with leaf section offsets appended = 100. */
+/** Header sizes: v2 = 72; v3 with leaf section offsets = 100; + crossing seconds = 104. */
 const HEADER_V2 = 72;
 const HEADER_V3 = 100;
+const HEADER_V3_CROSSING = 104;
 
-/** flags bit0 = edgeFrom/edgeTo present; bit1 = v3 leaf sections present. */
+/** flags bit0 = edgeFrom/edgeTo present; bit1 = v3 leaf sections; bit2 = edgeCrossingSeconds. */
 const FLAG_EDGE_FROM_TO = 1;
 const FLAG_V3_LEAVES = 2;
+const FLAG_V3_CROSSING_SECONDS = 4;
 
 const CONF_CODE = { high: 0, medium: 1, low: 2 };
 
@@ -235,6 +237,7 @@ function encodeFromV1(data) {
   const edgeStructureLeaf = new Uint8Array(undirectedEdgeCount);
   const edgeAccessLeaf = new Uint8Array(undirectedEdgeCount);
   const edgeFlags = new Uint8Array(undirectedEdgeCount);
+  const edgeCrossingSeconds = new Uint32Array(undirectedEdgeCount);
   const idStrings = [];
   let idBytesLen = 0;
 
@@ -285,6 +288,8 @@ function encodeFromV1(data) {
     if (edge.atvDesignated) flagsByte |= 1;
     if (edge.seasonal) flagsByte |= 2;
     edgeFlags[ei] = flagsByte;
+    const xs = Number(edge.xs) || 0;
+    edgeCrossingSeconds[ei] = xs > 0 ? Math.min(0xffffffff, Math.round(xs)) : 0;
 
     const id = String(edge.i || ei);
     idStrings.push(id);
@@ -371,7 +376,7 @@ function encodeFromV1(data) {
   Buffer.from(geomCoords.buffer, geomCoords.byteOffset, geomCoordBytes).copy(geomBuffer, geomCoordsAt);
 
   // --- assemble graph.v3 (v2 section table preserved; leaf offsets appended) ---
-  const HEADER = HEADER_V3;
+  const HEADER = HEADER_V3_CROSSING;
   let offset = HEADER;
   const sections = {};
   function place(name, byteLength, align) {
@@ -431,16 +436,20 @@ function encodeFromV1(data) {
   place("edgeStructureLeaf", edgeStructureLeaf.byteLength, 1);
   place("edgeAccessLeaf", edgeAccessLeaf.byteLength, 1);
   place("edgeFlags", edgeFlags.byteLength, 1);
+  place("edgeCrossingSeconds", edgeCrossingSeconds.byteLength, 4);
 
   const graphBuffer = Buffer.allocUnsafe(offset);
   graphBuffer.fill(0);
   graphBuffer.writeUInt32LE(GRAPH_MAGIC, 0);
   graphBuffer.writeUInt16LE(GRAPH_VERSION, 4);
-  graphBuffer.writeUInt16LE(FLAG_EDGE_FROM_TO | FLAG_V3_LEAVES, 6);
+  graphBuffer.writeUInt16LE(
+    FLAG_EDGE_FROM_TO | FLAG_V3_LEAVES | FLAG_V3_CROSSING_SECONDS,
+    6
+  );
   graphBuffer.writeUInt32LE(nodeCount, 8);
   graphBuffer.writeUInt32LE(undirectedEdgeCount, 12);
   graphBuffer.writeUInt32LE(directedArcCount, 16);
-  graphBuffer.writeUInt32LE(HEADER, 20);
+  graphBuffer.writeUInt32LE(HEADER_V3_CROSSING, 20);
   graphBuffer.writeUInt32LE(sections.nodeOffsets, 24);
   graphBuffer.writeUInt32LE(sections.edgeTargets, 28);
   graphBuffer.writeUInt32LE(sections.edgeUndirectedIndex, 32);
@@ -460,6 +469,7 @@ function encodeFromV1(data) {
   graphBuffer.writeUInt32LE(sections.edgeStructureLeaf, 88);
   graphBuffer.writeUInt32LE(sections.edgeAccessLeaf, 92);
   graphBuffer.writeUInt32LE(sections.edgeFlags, 96);
+  graphBuffer.writeUInt32LE(sections.edgeCrossingSeconds, 100);
 
   function copyTyped(arr, at) {
     Buffer.from(arr.buffer, arr.byteOffset, arr.byteLength).copy(graphBuffer, at);
@@ -483,6 +493,7 @@ function encodeFromV1(data) {
   copyTyped(edgeStructureLeaf, sections.edgeStructureLeaf);
   copyTyped(edgeAccessLeaf, sections.edgeAccessLeaf);
   copyTyped(edgeFlags, sections.edgeFlags);
+  copyTyped(edgeCrossingSeconds, sections.edgeCrossingSeconds);
 
   return {
     graphBuffer,
@@ -546,6 +557,11 @@ function decodeGraphV2(buffer) {
   const offEdgeStructureLeaf = hasLeaves ? viewU32(buf, 88) : 0;
   const offEdgeAccessLeaf = hasLeaves ? viewU32(buf, 92) : 0;
   const offEdgeFlags = hasLeaves ? viewU32(buf, 96) : 0;
+  const hasCrossingSeconds =
+    version >= 3 &&
+    (flags & FLAG_V3_CROSSING_SECONDS) !== 0 &&
+    headerSize >= HEADER_V3_CROSSING;
+  const offEdgeCrossingSeconds = hasCrossingSeconds ? viewU32(buf, 100) : 0;
 
   const base = buf.byteOffset;
   const ab = buf.buffer;
@@ -562,7 +578,10 @@ function decodeGraphV2(buffer) {
   const idOffsets = new Int32Array(ab, base + offIdOffsets, undirectedEdgeCount + 1);
   const idBlob = buf.subarray(offIdBlob, offEnums);
 
-  const metaEnd = hasLeaves && offEdgeSurfaceLeaf > offMeta ? offEdgeSurfaceLeaf : buf.length;
+  const metaEnd =
+    hasLeaves && offEdgeSurfaceLeaf > offMeta
+      ? offEdgeSurfaceLeaf
+      : buf.length;
   const enums = JSON.parse(buf.subarray(offEnums, offMeta).toString("utf8") || "{}");
   const meta = JSON.parse(buf.subarray(offMeta, metaEnd).toString("utf8") || "{}");
 
@@ -582,6 +601,9 @@ function decodeGraphV2(buffer) {
     : null;
   const edgeFlagBytes = hasLeaves
     ? new Uint8Array(ab, base + offEdgeFlags, undirectedEdgeCount)
+    : null;
+  const edgeCrossingSeconds = hasCrossingSeconds
+    ? new Uint32Array(ab, base + offEdgeCrossingSeconds, undirectedEdgeCount)
     : null;
 
   const surfaceLeafNames = enums.surfaceLeafNames || [""];
@@ -655,11 +677,17 @@ function decodeGraphV2(buffer) {
     };
   }
 
+  function crossingSeconds(ei) {
+    if (!edgeCrossingSeconds || ei < 0 || ei >= undirectedEdgeCount) return 0;
+    return edgeCrossingSeconds[ei] || 0;
+  }
+
   return {
     format: hasLeaves ? "v3" : "v2",
     version,
     flags,
     hasLeaves,
+    hasCrossingSeconds,
     surfaceFamilyMap,
     roadTierMap,
     nodeCount,
@@ -681,6 +709,8 @@ function decodeGraphV2(buffer) {
     edgeStructureLeaf,
     edgeAccessLeaf,
     edgeFlags: edgeFlagBytes,
+    edgeCrossingSeconds,
+    crossingSeconds,
     edgeId,
     edgeLeaves,
     enums,

@@ -27,9 +27,11 @@ const { spawnSync } = require("child_process");
 const DIRT = path.resolve(__dirname, "../../..");
 const FABRIC = path.join(DIRT, "scripts/pack-fabric");
 const PACKS = path.join(FABRIC, "app/data/packs/v1");
-const PHONE_FILES = ["graph.v2.bin", "geometry.v1.bin"];
+/** Prefer graph.v3 when staged; fall back to graph.v2 for other regions. */
+const PHONE_GRAPH_NAMES = ["graph.v3.bin", "graph.v2.bin"];
+const PHONE_SIDE_FILES = ["geometry.v1.bin"];
 const OPTIONAL_PHONE_FILES = ["fuel.v1.json"];
-const ALL_PHONE_FILES = PHONE_FILES.concat(OPTIONAL_PHONE_FILES);
+const ALL_PHONE_FILES = PHONE_GRAPH_NAMES.concat(PHONE_SIDE_FILES).concat(OPTIONAL_PHONE_FILES);
 const RELEASES = path.join(FABRIC, "routing/data/releases");
 const PUBLIC_R2_BASE = process.env.R2_PUBLIC_BASE || "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev";
 const BARE_PACK_REJECTION =
@@ -135,7 +137,11 @@ function mergePromotedRegionsIntoCatalog(remoteCatalog, promotedRegions, options
   for (const region of promotedRegions) {
     if (!region || !region.id) throw new Error("promoted region is missing id");
     const files = (region.files || []).map(fileIdentity);
-    for (const required of PHONE_FILES) {
+    const hasGraph = files.some((file) => PHONE_GRAPH_NAMES.includes(file.name));
+    if (!hasGraph) {
+      throw new Error("release record missing graph.v3.bin or graph.v2.bin for " + region.id);
+    }
+    for (const required of PHONE_SIDE_FILES) {
       if (!files.some((file) => file.name === required)) {
         throw new Error("release record missing " + required + " for " + region.id);
       }
@@ -241,10 +247,21 @@ function releasePath(releaseId) {
 
 function packRecord(regionId) {
   const files = [];
-  for (const name of ALL_PHONE_FILES) {
+  let graphAdded = false;
+  for (const name of PHONE_GRAPH_NAMES) {
+    const file = path.join(PACKS, regionId, name);
+    if (!fs.existsSync(file)) continue;
+    const stat = fs.statSync(file);
+    files.push({ name, bytes: stat.size, sha256: sha256File(file) });
+    graphAdded = true;
+    // Publish only the preferred graph (v3 wins when present).
+    break;
+  }
+  if (!graphAdded) die("missing graph.v3.bin or graph.v2.bin in " + path.join(PACKS, regionId));
+  for (const name of PHONE_SIDE_FILES.concat(OPTIONAL_PHONE_FILES)) {
     const file = path.join(PACKS, regionId, name);
     if (!fs.existsSync(file)) {
-      if (PHONE_FILES.includes(name)) die("missing " + file);
+      if (PHONE_SIDE_FILES.includes(name)) die("missing " + file);
       continue;
     }
     const stat = fs.statSync(file);
@@ -299,9 +316,9 @@ function uploadCandidate(releaseId, ids) {
   const prefix = "candidates/" + releaseId;
   const record = writeCandidateRecord(releaseId, ids);
   for (const id of ids) {
-    for (const name of ALL_PHONE_FILES) {
-      const file = path.join(PACKS, id, name);
-      if (fs.existsSync(file)) putR2(id, name, prefix);
+    const recorded = (record.regions || []).find((region) => region.id === id);
+    for (const file of recorded.files || []) {
+      putR2(id, file.name, prefix);
     }
   }
   const recordFile = releasePath(releaseId);
@@ -430,7 +447,8 @@ if (require.main === module) {
 module.exports = {
   ALL_PHONE_FILES,
   BARE_PACK_REJECTION,
-  PHONE_FILES,
+  PHONE_GRAPH_NAMES,
+  PHONE_SIDE_FILES,
   assertPublicationCommand,
   assertSourceMatchesRelease,
   mergePromotedRegionsIntoCatalog,

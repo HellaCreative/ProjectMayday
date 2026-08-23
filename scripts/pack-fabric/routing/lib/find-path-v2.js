@@ -62,6 +62,24 @@ const {
 } = require("./hop-search");
 const { applyHonestSurfaceStats } = require("./surface-family");
 const {
+  isFerryStructureCode,
+  ferryRelaxStepCost,
+  ferryCrossingLabel,
+  ferryCrossingSeconds
+} = require("./ferry");
+
+function ferrySecondsForPackEdge(pack, ei, meters) {
+  if (pack.crossingSeconds) {
+    const xs = pack.crossingSeconds(ei);
+    if (xs > 0) return xs;
+  }
+  return ferryCrossingSeconds(meters, null);
+}
+
+function ferryStepForPackEdge(pack, ei, meters) {
+  return ferryRelaxStepCost(ferrySecondsForPackEdge(pack, ei, meters));
+}
+const {
   roadTierOf,
   isBlockedForCleanLeaf,
   cleanLeafCostMult,
@@ -1019,11 +1037,14 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
         const surface = unpackSurface(attr);
         const road = ROAD_CLASS_NAME[unpackRoadClass(attr)] || "unknown";
         const surfaceName = enums.SURFACE_NAME[surface] || "unknown";
-        const leafBlock = profile === "cleanest"
+        const structureCode = unpackStructure(attr);
+        const isFerryEdge = isFerryStructureCode(structureCode);
+        const leafBlock = !isFerryEdge && profile === "cleanest"
           ? cleanLeafBlocked(pack, ei, pavedOnly, startEi, endEi)
           : null;
         if (leafBlock === true) continue;
         if (
+          !isFerryEdge &&
           leafBlock == null &&
           pavedOnly &&
           isBlockedForCleanPavement(surfaceName, road) &&
@@ -1031,7 +1052,9 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
           ei !== endEi
         ) continue;
         let step;
-        if (costMode === "distance") {
+        if (isFerryEdge) {
+          step = ferryStepForPackEdge(pack, ei, edgeM);
+        } else if (costMode === "distance") {
           step = edgeM / 1000;
         } else if (costMode === "pavement") {
           // Earned-detour objective: Dirt still strongly prefers unpaved, but
@@ -1200,11 +1223,14 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
         const vSurface = unpackSurface(vAttr);
         const vRoad = ROAD_CLASS_NAME[unpackRoadClass(vAttr)] || "unknown";
         const vSurfaceName = enums.SURFACE_NAME[vSurface] || "unknown";
-        const vLeafBlock = profile === "cleanest"
+        const vStructure = unpackStructure(vAttr);
+        const isFerryVirt = isFerryStructureCode(vStructure);
+        const vLeafBlock = !isFerryVirt && profile === "cleanest"
           ? cleanLeafBlocked(pack, v.ei, pavedOnly, startEi, endEi)
           : null;
         if (vLeafBlock === true) continue;
         if (
+          !isFerryVirt &&
           vLeafBlock == null &&
           pavedOnly &&
           isBlockedForCleanPavement(vSurfaceName, vRoad) &&
@@ -1212,7 +1238,9 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
           v.ei !== endEi
         ) continue;
         let step;
-        if (costMode === "pavement") {
+        if (isFerryVirt) {
+          step = ferryStepForPackEdge(pack, v.ei, v.meters);
+        } else if (costMode === "pavement") {
           step = (v.meters / 1000) * dirtRideCostPerKm(vSurfaceName, vRoad, unpackConfidence(vAttr));
         } else if (profile === "cleanest" && pack.hasLeaves) {
           step = cleanLeafStepCost(
@@ -1348,6 +1376,7 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
   let profileCost = 0;
   let dirtMeters = 0;
   let pavedMeters = 0;
+  let surfaceDistanceMeters = 0;
   const bySurfaceM = { paved: 0, gravel: 0, access: 0, track: 0, unknown: 0, single: 0 };
   const byAccessM = {
     motorized_verified: 0,
@@ -1362,16 +1391,24 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
       geometry.push(c);
     }
     distanceMeters += edge.meters;
-    const mult = edge.accessLeg ? 1 : surfaceMultiplier(edge.surface, profile, regionId);
-    profileCost += (edge.meters / 1000) * mult;
+    const isFerry = isFerryStructureCode(edge.structure);
     const surfaceName = enums.SURFACE_NAME[edge.surface] || "unknown";
     const accessName = enums.ACCESS_NAME[edge.access] || "motorized_unknown";
-    bySurfaceM[surfaceName] = (bySurfaceM[surfaceName] || 0) + edge.meters;
-    if (isDirtSurface(surfaceName, edge.roadClass)) dirtMeters += edge.meters;
-    else pavedMeters += edge.meters;
-    if (byAccessM[accessName] != null) byAccessM[accessName] += edge.meters;
-    if (accessName === "motorized_unknown") unknownAccessMeters += edge.meters;
-    movingSeconds += (edge.meters / 1000) / classSpeedKmh(edge.surface) * 3600;
+    if (!isFerry) {
+      surfaceDistanceMeters += edge.meters;
+      bySurfaceM[surfaceName] = (bySurfaceM[surfaceName] || 0) + edge.meters;
+      if (isDirtSurface(surfaceName, edge.roadClass)) dirtMeters += edge.meters;
+      else pavedMeters += edge.meters;
+      if (byAccessM[accessName] != null) byAccessM[accessName] += edge.meters;
+      if (accessName === "motorized_unknown") unknownAccessMeters += edge.meters;
+      movingSeconds += (edge.meters / 1000) / classSpeedKmh(edge.surface) * 3600;
+    } else {
+      movingSeconds += ferrySecondsForPackEdge(pack, edge.undirectedEdgeIndex, edge.meters);
+    }
+    const mult = edge.accessLeg ? 1 : surfaceMultiplier(edge.surface, profile, regionId);
+    profileCost += isFerry
+      ? ferryStepForPackEdge(pack, edge.undirectedEdgeIndex, edge.meters)
+      : (edge.meters / 1000) * mult;
     segments.push({
       edgeId: edge.edgeId,
       surfaceClass: surfaceName,
@@ -1379,6 +1416,7 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
       structureType: enums.STRUCTURE_NAME[edge.structure] || "none",
       accessClass: accessName,
       surfaceLeaf: edge.surfaceLeaf != null ? edge.surfaceLeaf : null,
+      crossingLabel: isFerry ? ferryCrossingLabel() : null,
       source: null,
       sourceRecordId: null,
       sourceDescription: null,
@@ -1391,7 +1429,7 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
     });
   }
 
-  const pct = (m) => (distanceMeters > 0 ? Math.round((m / distanceMeters) * 100) : 0);
+  const pct = (m) => (surfaceDistanceMeters > 0 ? Math.round((m / surfaceDistanceMeters) * 100) : 0);
   const settlementCrossingUsed = settlementFallback && geometry.some((point) =>
     settlementBlocks(point[0], point[1], startLL, endLL, settlementBoxes)
   );
@@ -1601,7 +1639,9 @@ function searchBalancedResource(ctx) {
         const surface = unpackSurface(attr);
         const road = ROAD_CLASS_NAME[unpackRoadClass(attr)] || "unknown";
         const surfaceName = enums.SURFACE_NAME[surface] || "unknown";
-        const addDirt = isDirtSurface(surfaceName, road) ? edgeM : 0;
+        const structureCode = unpackStructure(attr);
+        const isFerryEdge = isFerryStructureCode(structureCode);
+        const addDirt = !isFerryEdge && isDirtSurface(surfaceName, road) ? edgeM : 0;
         const newDirt = dirtSoFar + addDirt;
         const b = dirtBucket(newDirt, newMeters);
         const toLab = lab(to, b);
@@ -1613,9 +1653,12 @@ function searchBalancedResource(ctx) {
             toLL[0], toLL[1], startLL, endLL, urbanBoxes, nodeLL(node), metroFallbackPenalty
           )
           : 1;
+        const edgeBase = isFerryEdge
+          ? ferryStepForPackEdge(pack, ei, edgeM)
+          : edgeM * settlementMult * urbanMult;
         const newScore = cur.searchCost
           + penalizeBacktrack(
-            edgeM * settlementMult * urbanMult + awayExtra(node, to),
+            edgeBase + awayExtra(node, to),
             pack.edgeId(ei)
           );
         let action = considerRelax(
@@ -1765,6 +1808,7 @@ function searchBalancedResource(ctx) {
     const pruned = pruneGeographicLoops(used, (edge) => edge.coords);
     const meters = pruned.edges.reduce((sum, edge) => sum + edge.meters, 0);
     const dirt = pruned.edges.reduce((sum, edge) => {
+      if (isFerryStructureCode(edge.structure)) return sum;
       const surface = enums.SURFACE_NAME[edge.surface] || "unknown";
       return sum + (isDirtSurface(surface, edge.roadClass) ? edge.meters : 0);
     }, 0);
@@ -1791,6 +1835,7 @@ function searchBalancedResource(ctx) {
   let movingSeconds = 0;
   let dirtMeters = 0;
   let pavedMeters = 0;
+  let surfaceDistanceMeters = 0;
   const bySurfaceM = { paved: 0, gravel: 0, access: 0, track: 0, unknown: 0, single: 0 };
   const byAccessM = {
     motorized_verified: 0,
@@ -1804,14 +1849,20 @@ function searchBalancedResource(ctx) {
       geometry.push(c);
     }
     distanceMeters += edge.meters;
+    const isFerry = isFerryStructureCode(edge.structure);
     const surfaceName = enums.SURFACE_NAME[edge.surface] || "unknown";
     const accessName = enums.ACCESS_NAME[edge.access] || "motorized_unknown";
-    bySurfaceM[surfaceName] = (bySurfaceM[surfaceName] || 0) + edge.meters;
-    if (isDirtSurface(surfaceName, edge.roadClass)) dirtMeters += edge.meters;
-    else pavedMeters += edge.meters;
-    if (byAccessM[accessName] != null) byAccessM[accessName] += edge.meters;
-    if (accessName === "motorized_unknown") unknownAccessMeters += edge.meters;
-    movingSeconds += ((edge.meters / 1000) / classSpeedKmh(edge.surface)) * 3600;
+    if (!isFerry) {
+      surfaceDistanceMeters += edge.meters;
+      bySurfaceM[surfaceName] = (bySurfaceM[surfaceName] || 0) + edge.meters;
+      if (isDirtSurface(surfaceName, edge.roadClass)) dirtMeters += edge.meters;
+      else pavedMeters += edge.meters;
+      if (byAccessM[accessName] != null) byAccessM[accessName] += edge.meters;
+      if (accessName === "motorized_unknown") unknownAccessMeters += edge.meters;
+      movingSeconds += ((edge.meters / 1000) / classSpeedKmh(edge.surface)) * 3600;
+    } else {
+      movingSeconds += ferrySecondsForPackEdge(pack, edge.undirectedEdgeIndex, edge.meters);
+    }
     segments.push({
       edgeId: edge.edgeId,
       surfaceClass: surfaceName,
@@ -1819,6 +1870,7 @@ function searchBalancedResource(ctx) {
       structureType: enums.STRUCTURE_NAME[edge.structure] || "none",
       accessClass: accessName,
       surfaceLeaf: edge.surfaceLeaf != null ? edge.surfaceLeaf : null,
+      crossingLabel: isFerry ? ferryCrossingLabel() : null,
       source: null,
       sourceRecordId: null,
       sourceDescription: null,
@@ -1830,7 +1882,7 @@ function searchBalancedResource(ctx) {
       geometry: edge.coords
     });
   }
-  const pct = (m) => (distanceMeters > 0 ? Math.round((m / distanceMeters) * 100) : 0);
+  const pct = (m) => (surfaceDistanceMeters > 0 ? Math.round((m / surfaceDistanceMeters) * 100) : 0);
   const settlementCrossingUsed = ctx.settlementFallback && geometry.some((point) =>
     settlementBlocks(point[0], point[1], startLL, endLL, settlementBoxes)
   );
@@ -1882,11 +1934,14 @@ function applyHonestReportedStats(path) {
   if (!path || !path.stats || !Array.isArray(path.segments)) return path;
   const hasLeaf = path.segments.some((s) => Object.prototype.hasOwnProperty.call(s, "surfaceLeaf"));
   if (!hasLeaf) return path;
-  const rows = path.segments.map((s) => ({
-    meters: s.distanceMeters,
-    surfaceLeaf: s.surfaceLeaf
-  }));
-  path.stats = applyHonestSurfaceStats(path.stats, rows, path.distanceMeters, true);
+  const rows = path.segments
+    .filter((s) => s.structureType !== "ferry")
+    .map((s) => ({
+      meters: s.distanceMeters,
+      surfaceLeaf: s.surfaceLeaf
+    }));
+  const surfaceMeters = rows.reduce((sum, row) => sum + (Number(row.meters) || 0), 0);
+  path.stats = applyHonestSurfaceStats(path.stats, rows, surfaceMeters, true);
   return path;
 }
 

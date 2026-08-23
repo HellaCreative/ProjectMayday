@@ -33,9 +33,13 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
     static let versionV3: UInt16 = 3
     static let headerSizeV2 = 72
     static let headerSizeV3 = 100
-    /// flags bit0 = edgeFrom/edgeTo; bit1 = v3 leaf sections present.
+    static let headerSizeV3Crossing = 104
+    /// flags bit0 = edgeFrom/edgeTo; bit1 = v3 leaf sections; bit2 = edgeCrossingSeconds.
     static let flagEdgeFromTo: UInt16 = 1
     static let flagV3Leaves: UInt16 = 2
+    static let flagV3CrossingSeconds: UInt16 = 4
+    /// Packed structure enum: ferry (lockstep regional/package.js).
+    static let structureFerry = 4
 
     let data: Data
     let version: UInt16
@@ -68,6 +72,8 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
     let edgeStructureLeaf: [UInt8]?
     let edgeAccessLeaf: [UInt8]?
     let edgeFlags: [UInt8]?
+    let edgeCrossingSeconds: [UInt32]?
+    let hasCrossingSeconds: Bool
     let crossPackSeams: [String: [CrossPackSeamAnchor]]
     let urbanCores: [UrbanCore.Box]
     let settlements: [UrbanCore.Box]
@@ -124,6 +130,12 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
         let offEdgeStructureLeaf = hasLeaves ? Int(data.readUInt32LE(88)) : 0
         let offEdgeAccessLeaf = hasLeaves ? Int(data.readUInt32LE(92)) : 0
         let offEdgeFlags = hasLeaves ? Int(data.readUInt32LE(96)) : 0
+        let hasCrossingSeconds =
+            ver >= Self.versionV3
+            && (flags & Self.flagV3CrossingSeconds) != 0
+            && effectiveHeader >= Self.headerSizeV3Crossing
+        let offEdgeCrossingSeconds = hasCrossingSeconds ? Int(data.readUInt32LE(100)) : 0
+        self.hasCrossingSeconds = hasCrossingSeconds
 
         nodeOffsets = data.readInt32Array(at: offNodeOffsets, count: nodeCount + 1)
         edgeTargets = data.readInt32Array(at: offEdgeTargets, count: directedArcCount)
@@ -136,7 +148,12 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
         idOffsets = data.readInt32Array(at: offIdOffsets, count: undirectedEdgeCount + 1)
         idBlob = data.subdata(in: offIdBlob..<offEnums)
 
-        let metaEnd = hasLeaves && offEdgeSurfaceLeaf > offMeta ? offEdgeSurfaceLeaf : data.count
+        let metaEnd: Int
+        if hasLeaves && offEdgeSurfaceLeaf > offMeta {
+            metaEnd = offEdgeSurfaceLeaf
+        } else {
+            metaEnd = data.count
+        }
         let enumsData = data.subdata(in: offEnums..<offMeta)
         let enums = (try? JSONSerialization.jsonObject(with: enumsData) as? [String: Any]) ?? [:]
         accessNames = Self.stringArray(from: enums["ACCESS_NAME"]) ?? [
@@ -158,6 +175,9 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
             edgeStructureLeaf = data.readUInt8Array(at: offEdgeStructureLeaf, count: undirectedEdgeCount)
             edgeAccessLeaf = data.readUInt8Array(at: offEdgeAccessLeaf, count: undirectedEdgeCount)
             edgeFlags = data.readUInt8Array(at: offEdgeFlags, count: undirectedEdgeCount)
+            edgeCrossingSeconds = hasCrossingSeconds
+                ? data.readUInt32Array(at: offEdgeCrossingSeconds, count: undirectedEdgeCount)
+                : nil
         } else {
             edgeSurfaceLeaf = nil
             edgeRoadClassLeaf = nil
@@ -166,6 +186,7 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
             edgeStructureLeaf = nil
             edgeAccessLeaf = nil
             edgeFlags = nil
+            edgeCrossingSeconds = nil
         }
 
         var decodedSeams: [String: [CrossPackSeamAnchor]] = [:]
@@ -310,6 +331,15 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
             return Self.unpackSeasonal(edgeAttrs[safe: ei] ?? 0)
         }
         return ((arr[ei] >> 1) & 0x1) != 0 || Self.unpackSeasonal(edgeAttrs[ei])
+    }
+
+    func crossingSeconds(_ ei: Int) -> UInt32 {
+        guard hasCrossingSeconds, let arr = edgeCrossingSeconds, ei >= 0, ei < arr.count else { return 0 }
+        return arr[ei]
+    }
+
+    static func isFerryStructure(_ code: Int) -> Bool {
+        code == structureFerry
     }
 
     /// Full leaf snapshot matching JS `edgeLeaves(ei)`.
