@@ -375,17 +375,22 @@ benchmark baseline until its exact candidate identities are recorded.
 
 ## 9. Verification and benchmark truth
 
-The latest committed deterministic NS table is
-`scripts/pack-fabric/bench/results/1da4442-20260822T160913Z.json`:
+The latest exact-pack NS table is
+`scripts/pack-fabric/bench/results/42c8d48-20260823T020222Z.json`:
 
 - source: immutable `ns-osm-20260821-02` candidate;
+- graph SHA-256: `a9c5cb27eba2dc298344d9c80298881e1e0cfc0d40435d17cd9c4e210d1bef51`;
 - seed: `3511091208`;
-- result: 35/40 green; and
-- five known red rows: two Balanced surface misses and three Halifax
-  unknown-off connectivity failures.
+- result: 33/40 green; and
+- seven red rows: two Balanced surface misses, one Antigonish–Sydney Dirt
+  surface miss, three Halifax unknown-off connectivity failures, and one
+  Dartmouth–Antigonish unknown-on timing miss.
 
-That table is valid only for the pinned pack and code under measurement. It is
-not a baseline for the unrecorded Cursor live-candidate rebuild.
+The runner now downloads graph, geometry, and fuel from the immutable release,
+verifies byte counts and SHA-256 values, and prevents stale local files from
+shadowing that identity. That table is valid only for the pinned pack and code
+under measurement. Timing remains a measured assertion and may expose runtime
+variance even when route geometry is unchanged.
 
 Every routing or fuel change requires:
 
@@ -429,15 +434,18 @@ The same replay also proved a release mismatch:
 - running current repository logic against the same public pack selected a
   coherent station near Truro instead of the distant Gulf.
 
-Because the service exposes no contract/commit version, the exact stale server
-revision cannot be identified from the client response. **Further fuel-device
-acceptance is blocked until client and service versions are proven to match.**
+R0 now adds contract `dirt-routing.r0.v1`, deployment-build identity, and exact
+graph, geometry, and fuel hashes to local route/fuel responses and device logs.
+The client rejects a missing or stale service contract. Installed pack files
+are also checksum-verified instead of being trusted merely because they exist.
+**Further fuel-device acceptance remains blocked until this matched client and
+service are deployed together and the coordinates above are replayed.**
 
 Approved repair has not yet been given. The recommended order for rider review
 is:
 
-1. deploy and verify the current routing service without changing pack bytes;
-2. add an explicit client/service contract version gate;
+1. deploy and verify the committed R0 routing service without changing pack bytes;
+2. build the matching client on White and confirm its identity log;
 3. replay the exact coordinates above;
 4. harden whole-chain pump selection with route-coherence rejection and complete
    candidate diagnostics; and
@@ -455,6 +463,12 @@ is:
 - Eligible-edge endpoint resolver and NS/PEI overlap regression coverage.
 - Fuel-layer visible-bounds cache, deterministic clusters, and candidate halos.
 - Fixed-pin Nova Scotia benchmark.
+- Identity-safe pack promotion that merges only approved regions into the
+  current remote catalog and rejects bare local publication.
+- Immutable-release benchmark loading with graph, geometry, and fuel checksum
+  verification.
+- Shared route/fuel service contract and exact pack identity in diagnostics.
+- Installed-pack byte and checksum verification with mismatched-file repair.
 
 ### Not yet accepted end to end
 
