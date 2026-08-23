@@ -1,6 +1,6 @@
 import Foundation
 
-/// Decoded `graph.v2.bin` (CSR). Same layout as `pack-fabric/routing/lib/pack-v2.js`.
+/// Decoded `graph.v2.bin` / `graph.v3.bin` (CSR). Same layout as `pack-fabric/routing/lib/pack-v2.js`.
 /// Opted out of `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` so decode + Dijkstra
 /// can run on `Task.detached` without freezing the map.
 nonisolated final class GraphV2Pack: @unchecked Sendable {
@@ -14,10 +14,33 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
         let gapMeters: Double
     }
 
+    /// Resolved Graph-v3 leaf fields for one undirected edge (mirrors JS `edgeLeaves`).
+    struct EdgeLeaves: Sendable, Equatable {
+        let surfaceLeaf: String?
+        let roadClassLeaf: String?
+        let tracktype: Int
+        let smoothness: Int
+        let layer: Int
+        let structureLeaf: String?
+        let accessLeaf: String?
+        let atvDesignated: Bool
+        let seasonal: Bool
+        let fromLeaves: Bool
+    }
+
     static let magic: UInt32 = 0x3247_3244
-    static let version: UInt16 = 2
+    static let versionV2: UInt16 = 2
+    static let versionV3: UInt16 = 3
+    static let headerSizeV2 = 72
+    static let headerSizeV3 = 100
+    /// flags bit0 = edgeFrom/edgeTo; bit1 = v3 leaf sections present.
+    static let flagEdgeFromTo: UInt16 = 1
+    static let flagV3Leaves: UInt16 = 2
 
     let data: Data
+    let version: UInt16
+    let flags: UInt16
+    let hasLeaves: Bool
     let nodeCount: Int
     let undirectedEdgeCount: Int
     let directedArcCount: Int
@@ -30,6 +53,17 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
     let edgeTo: [Int32]?
     let nodeCoords: [Float] // lon,lat pairs
     let accessNames: [String]
+    let surfaceLeafNames: [String]
+    let roadClassLeafNames: [String]
+    let structureLeafNames: [String]
+    let accessLeafNames: [String]
+    let edgeSurfaceLeaf: [UInt8]?
+    let edgeRoadClassLeaf: [UInt8]?
+    let edgeGrade: [UInt8]?
+    let edgeLayer: [Int8]?
+    let edgeStructureLeaf: [UInt8]?
+    let edgeAccessLeaf: [UInt8]?
+    let edgeFlags: [UInt8]?
     let crossPackSeams: [String: [CrossPackSeamAnchor]]
     let urbanCores: [UrbanCore.Box]
     let settlements: [UrbanCore.Box]
@@ -42,16 +76,24 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
 
     init(data: Data) throws {
         self.data = data
-        guard data.count >= 72 else { throw PackError.truncated }
+        guard data.count >= Self.headerSizeV2 else { throw PackError.truncated }
         let magic: UInt32 = data.readUInt32LE(0)
         guard magic == Self.magic else { throw PackError.badMagic }
         let ver: UInt16 = data.readUInt16LE(4)
-        guard ver == Self.version else { throw PackError.unsupportedVersion(ver) }
+        guard ver == Self.versionV2 || ver == Self.versionV3 else {
+            throw PackError.unsupportedVersion(ver)
+        }
+        version = ver
+        flags = data.readUInt16LE(6)
+        let headerSize = Int(data.readUInt32LE(20))
+        let expectHeader = ver == Self.versionV3 ? Self.headerSizeV3 : Self.headerSizeV2
+        // Tolerate older writers that omit headerSize field contents for v2.
+        let effectiveHeader = headerSize > 0 ? headerSize : expectHeader
+        guard data.count >= effectiveHeader else { throw PackError.truncated }
 
         nodeCount = Int(data.readUInt32LE(8))
         undirectedEdgeCount = Int(data.readUInt32LE(12))
         directedArcCount = Int(data.readUInt32LE(16))
-        let flags: UInt16 = data.readUInt16LE(6)
 
         let offNodeOffsets = Int(data.readUInt32LE(24))
         let offEdgeTargets = Int(data.readUInt32LE(28))
@@ -63,8 +105,21 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
         let offIdBlob = Int(data.readUInt32LE(52))
         let offEnums = Int(data.readUInt32LE(56))
         let offMeta = Int(data.readUInt32LE(60))
-        let offEdgeFrom = (flags & 1) != 0 ? Int(data.readUInt32LE(64)) : 0
-        let offEdgeTo = (flags & 1) != 0 ? Int(data.readUInt32LE(68)) : 0
+        let offEdgeFrom = (flags & Self.flagEdgeFromTo) != 0 ? Int(data.readUInt32LE(64)) : 0
+        let offEdgeTo = (flags & Self.flagEdgeFromTo) != 0 ? Int(data.readUInt32LE(68)) : 0
+
+        hasLeaves =
+            ver >= Self.versionV3
+            && (flags & Self.flagV3Leaves) != 0
+            && effectiveHeader >= Self.headerSizeV3
+
+        let offEdgeSurfaceLeaf = hasLeaves ? Int(data.readUInt32LE(72)) : 0
+        let offEdgeRoadClassLeaf = hasLeaves ? Int(data.readUInt32LE(76)) : 0
+        let offEdgeGrade = hasLeaves ? Int(data.readUInt32LE(80)) : 0
+        let offEdgeLayer = hasLeaves ? Int(data.readUInt32LE(84)) : 0
+        let offEdgeStructureLeaf = hasLeaves ? Int(data.readUInt32LE(88)) : 0
+        let offEdgeAccessLeaf = hasLeaves ? Int(data.readUInt32LE(92)) : 0
+        let offEdgeFlags = hasLeaves ? Int(data.readUInt32LE(96)) : 0
 
         nodeOffsets = data.readInt32Array(at: offNodeOffsets, count: nodeCount + 1)
         edgeTargets = data.readInt32Array(at: offEdgeTargets, count: directedArcCount)
@@ -77,21 +132,42 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
         idOffsets = data.readInt32Array(at: offIdOffsets, count: undirectedEdgeCount + 1)
         idBlob = data.subdata(in: offIdBlob..<offEnums)
 
+        let metaEnd = hasLeaves && offEdgeSurfaceLeaf > offMeta ? offEdgeSurfaceLeaf : data.count
         let enumsData = data.subdata(in: offEnums..<offMeta)
         let enums = (try? JSONSerialization.jsonObject(with: enumsData) as? [String: Any]) ?? [:]
-        if let names = enums["ACCESS_NAME"] as? [String] {
-            accessNames = names
-        } else if let names = enums["ACCESS_NAME"] as? [Any] {
-            accessNames = names.map { "\($0)" }
+        accessNames = Self.stringArray(from: enums["ACCESS_NAME"]) ?? [
+            "motorized_permissive", "motorized_verified", "motorized_unknown",
+            "motorized_restricted", "motorized_excluded"
+        ]
+        surfaceLeafNames = Self.stringArray(from: enums["surfaceLeafNames"]) ?? [""]
+        roadClassLeafNames = Self.stringArray(from: enums["roadClassLeafNames"]) ?? ["unknown"]
+        structureLeafNames = Self.stringArray(from: enums["structureLeafNames"]) ?? [""]
+        accessLeafNames = Self.stringArray(from: enums["accessLeafNames"]) ?? [""]
+
+        if hasLeaves {
+            edgeSurfaceLeaf = data.readUInt8Array(at: offEdgeSurfaceLeaf, count: undirectedEdgeCount)
+            edgeRoadClassLeaf = data.readUInt8Array(at: offEdgeRoadClassLeaf, count: undirectedEdgeCount)
+            edgeGrade = data.readUInt8Array(at: offEdgeGrade, count: undirectedEdgeCount)
+            edgeLayer = data.readInt8Array(at: offEdgeLayer, count: undirectedEdgeCount)
+            edgeStructureLeaf = data.readUInt8Array(at: offEdgeStructureLeaf, count: undirectedEdgeCount)
+            edgeAccessLeaf = data.readUInt8Array(at: offEdgeAccessLeaf, count: undirectedEdgeCount)
+            edgeFlags = data.readUInt8Array(at: offEdgeFlags, count: undirectedEdgeCount)
         } else {
-            accessNames = ["motorized_permissive", "motorized_verified", "motorized_unknown", "motorized_restricted", "motorized_excluded"]
+            edgeSurfaceLeaf = nil
+            edgeRoadClassLeaf = nil
+            edgeGrade = nil
+            edgeLayer = nil
+            edgeStructureLeaf = nil
+            edgeAccessLeaf = nil
+            edgeFlags = nil
         }
 
         var decodedSeams: [String: [CrossPackSeamAnchor]] = [:]
         var decodedUrbanCores: [UrbanCore.Box] = []
         var decodedSettlements: [UrbanCore.Box] = []
-        if let metaData = data.subdata(in: offMeta..<data.count) as Data?,
-           let meta = try? JSONSerialization.jsonObject(with: metaData) as? [String: Any] {
+        if let meta = try? JSONSerialization.jsonObject(
+            with: data.subdata(in: offMeta..<metaEnd)
+        ) as? [String: Any] {
             regionId = meta["regionId"] as? String ?? meta["province"] as? String
             if let neighbors = meta["crossPackSeams"] as? [String: Any] {
                 for (rawNeighbor, rawRows) in neighbors {
@@ -149,12 +225,112 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
         settlements = decodedSettlements
     }
 
+    private static func stringArray(from value: Any?) -> [String]? {
+        if let names = value as? [String] { return names }
+        if let names = value as? [Any] { return names.map { "\($0)" } }
+        return nil
+    }
+
     func edgeId(_ ei: Int) -> String {
         guard ei >= 0, ei < undirectedEdgeCount else { return "" }
         let a = Int(idOffsets[ei])
         let b = Int(idOffsets[ei + 1])
         guard a >= 0, b >= a, b <= idBlob.count else { return "" }
         return String(data: idBlob.subdata(in: a..<b), encoding: .utf8) ?? ""
+    }
+
+    // MARK: - Graph-v3 leaf accessors (JS lockstep)
+
+    func surfaceLeaf(_ ei: Int) -> String? {
+        guard hasLeaves, let arr = edgeSurfaceLeaf, ei >= 0, ei < arr.count else { return nil }
+        let idx = Int(arr[ei])
+        if idx == 0 { return nil }
+        return Self.nameAt(surfaceLeafNames, idx, fallback: nil)
+    }
+
+    func roadClassLeaf(_ ei: Int) -> String? {
+        guard hasLeaves, let arr = edgeRoadClassLeaf, ei >= 0, ei < arr.count else { return nil }
+        return Self.nameAt(roadClassLeafNames, Int(arr[ei]), fallback: "unknown")
+    }
+
+    func structureLeaf(_ ei: Int) -> String? {
+        guard hasLeaves, let arr = edgeStructureLeaf, ei >= 0, ei < arr.count else { return nil }
+        let idx = Int(arr[ei])
+        if idx == 0 { return nil }
+        return Self.nameAt(structureLeafNames, idx, fallback: nil)
+    }
+
+    func accessLeaf(_ ei: Int) -> String? {
+        guard hasLeaves, let arr = edgeAccessLeaf, ei >= 0, ei < arr.count else { return nil }
+        let idx = Int(arr[ei])
+        if idx == 0 { return nil }
+        return Self.nameAt(accessLeafNames, idx, fallback: nil)
+    }
+
+    /// Tracktype nibble from `edgeGrade` bits 0–3 (0 = none).
+    func tracktype(_ ei: Int) -> Int {
+        guard hasLeaves, let arr = edgeGrade, ei >= 0, ei < arr.count else { return 0 }
+        return Int(arr[ei] & 0x0F)
+    }
+
+    /// Smoothness nibble from `edgeGrade` bits 4–7 (0 = missing).
+    func smoothness(_ ei: Int) -> Int {
+        guard hasLeaves, let arr = edgeGrade, ei >= 0, ei < arr.count else { return 0 }
+        return Int((arr[ei] >> 4) & 0x0F)
+    }
+
+    func layer(_ ei: Int) -> Int {
+        guard hasLeaves, let arr = edgeLayer, ei >= 0, ei < arr.count else { return 0 }
+        return Int(arr[ei])
+    }
+
+    func atvDesignated(_ ei: Int) -> Bool {
+        guard hasLeaves, let arr = edgeFlags, ei >= 0, ei < arr.count else { return false }
+        return (arr[ei] & 0x1) != 0
+    }
+
+    func seasonalFlag(_ ei: Int) -> Bool {
+        guard hasLeaves, let arr = edgeFlags, ei >= 0, ei < arr.count else {
+            return Self.unpackSeasonal(edgeAttrs[safe: ei] ?? 0)
+        }
+        return ((arr[ei] >> 1) & 0x1) != 0 || Self.unpackSeasonal(edgeAttrs[ei])
+    }
+
+    /// Full leaf snapshot matching JS `edgeLeaves(ei)`.
+    func edgeLeaves(_ ei: Int) -> EdgeLeaves {
+        guard hasLeaves else {
+            return EdgeLeaves(
+                surfaceLeaf: nil,
+                roadClassLeaf: nil,
+                tracktype: 0,
+                smoothness: 0,
+                layer: 0,
+                structureLeaf: nil,
+                accessLeaf: nil,
+                atvDesignated: false,
+                seasonal: Self.unpackSeasonal(edgeAttrs[safe: ei] ?? 0),
+                fromLeaves: false
+            )
+        }
+        return EdgeLeaves(
+            surfaceLeaf: surfaceLeaf(ei),
+            roadClassLeaf: roadClassLeaf(ei),
+            tracktype: tracktype(ei),
+            smoothness: smoothness(ei),
+            layer: layer(ei),
+            structureLeaf: structureLeaf(ei),
+            accessLeaf: accessLeaf(ei),
+            atvDesignated: atvDesignated(ei),
+            seasonal: seasonalFlag(ei),
+            fromLeaves: true
+        )
+    }
+
+    private static func nameAt(_ names: [String], _ idx: Int, fallback: String?) -> String? {
+        guard idx >= 0, idx < names.count else { return fallback }
+        let v = names[idx]
+        if v.isEmpty { return fallback }
+        return v
     }
 
     /// Provincial capillary (DRA / FTEN / Access / MNRF / …). Same-region dirt only.
@@ -180,8 +356,10 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
 
     static func unpackSurface(_ attr: UInt16) -> Int { Int(attr & 7) }
     static func unpackAccess(_ attr: UInt16) -> Int { Int((attr >> 3) & 7) }
+    static func unpackStructure(_ attr: UInt16) -> Int { Int((attr >> 6) & 7) }
     /// Confidence: 0 high, 1 medium, 2 low (bits 9–10).
     static func unpackConfidence(_ attr: UInt16) -> Int { Int((attr >> 9) & 3) }
+    static func unpackSeasonal(_ attr: UInt16) -> Bool { ((attr >> 11) & 1) == 1 }
     /// Road-track class packed in bits 12–15 (0 when older packs omit it).
     static func unpackRoadClass(_ attr: UInt16) -> Int { Int((attr >> 12) & 15) }
 
@@ -205,6 +383,13 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
         case truncated
         case badMagic
         case unsupportedVersion(UInt16)
+    }
+}
+
+private extension Array {
+    subscript(safe index: Int) -> Element? {
+        guard index >= 0, index < count else { return nil }
+        return self[index]
     }
 }
 
@@ -246,6 +431,18 @@ private extension Data {
         let byteCount = count * 4
         return subdata(in: offset..<(offset + byteCount)).withUnsafeBytes { raw in
             Array(raw.bindMemory(to: Float.self).prefix(count))
+        }
+    }
+
+    nonisolated func readUInt8Array(at offset: Int, count: Int) -> [UInt8] {
+        guard count > 0 else { return [] }
+        return Array(subdata(in: offset..<(offset + count)))
+    }
+
+    nonisolated func readInt8Array(at offset: Int, count: Int) -> [Int8] {
+        guard count > 0 else { return [] }
+        return subdata(in: offset..<(offset + count)).withUnsafeBytes { raw in
+            Array(raw.bindMemory(to: Int8.self).prefix(count))
         }
     }
 }
