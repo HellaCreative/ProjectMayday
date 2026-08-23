@@ -614,6 +614,9 @@ law documents, itinerary contracts, fuel-gap contracts, handbacks, project-state
 snapshots, phase corrections, visibility reviews, build plans, pack notes, and
 refactor findings are decommissioned under `docs/archive/routing/`.
 
+Pack data model / Graph-v3 build order: see `docs/PACK-DATA-V3-AUTHORITY.md`
+(authoritative for pack data).
+
 The archive is evidence, not authority. No archived instruction may drive new
 work unless Richard explicitly restores it and this document is updated in the
 same change. Every accepted routing decision, current blocker, release-policy

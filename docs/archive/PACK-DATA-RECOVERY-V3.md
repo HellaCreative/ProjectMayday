@@ -1,3 +1,5 @@
+ARCHIVED 2026-08-23 — superseded by docs/PACK-DATA-V3-AUTHORITY.md
+
 # DIRT — Pack Data Recovery (Pack v3): Step-by-Step for Cursor
 
 Purpose: fix the foundational pack-data mistake so Clean works and the dirt/paved

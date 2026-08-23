@@ -1,9 +1,8 @@
 # DIRT — Pack Data De-compression (Graph v3): Claude Build Order
 
-> **Status: REVIEW PROPOSAL, not authority.** The only active routing authority is
-> `docs/00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md`. This plan becomes binding only when
-> Rick approves it and the accepted decisions are folded into that source of truth.
-> Reviewed by Codex 2026-08-23; corrections below are incorporated.
+> **Status: AUTHORITY for pack-data / Graph-v3 (approved 2026-08-23). Ride-mode and
+> routing-law definitions remain governed by docs/00-PRODUCT-AND-ROUTING-SOURCE-OF-
+> TRUTH.md; this doc governs the pack data model and the v3 build order.** Reviewed by Codex 2026-08-23; corrections below are incorporated.
 
 **Supersedes the framing of `PACK-DATA-RECOVERY-V3.md`.** That doc correctly wanted
 honesty and independent dimensions, but its edge contract (`surfaceFamily =
