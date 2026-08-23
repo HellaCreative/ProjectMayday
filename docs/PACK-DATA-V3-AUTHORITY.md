@@ -83,6 +83,10 @@ store repeated strings per edge). Recommended sections:
 | `edgeGrade` | `Uint8` | **nibble each**: tracktype in bits 0–3 (0 = none/missing, 1–5 = grade1–5), smoothness in bits 4–7 (0 = missing, 1–8 = excellent…impassable). Smoothness has 8 OSM values + missing = 9 states → needs a full nibble, not 3 bits. |
 | `edgeLayer` | `Int8` | OSM `layer=` (signed; distinguishes overpass `>0` from underpass `<0` from at-grade `0`) |
 | `edgeStructureLeaf` | `Uint8` | index into `structureLeafNames` (bridge/tunnel/viaduct/culvert/ford/ferry/…; `0` = none) — supersedes the 3-bit coarse field for reading |
+| `edgeAccessLeaf` | `Uint8` | index into `accessLeafNames` (raw effective access value incl. an `atv_permitted` entry; `0` = unknown) — parallels the existing `accessNames`; keeps access independent of surface |
+| `edgeFlags` | `Uint8` | per-edge bit flags. **bit 0 = `atvDesignated`** (atv ∈ {yes,designated,permissive}; switch-governed routing input — the ATV-trail recovery); bit 1 = `seasonal`; bits 2–7 reserved (0) |
+
+Total new per-edge cost = **7 bytes** (surfaceLeaf, roadClassLeaf, grade, layer, structureLeaf, accessLeaf, flags). For NS post-B (~199,724 edges) ≈ **+1.4 MB** against the ~13 MB graph — still modest. `atvDesignated` gets its own flag bit (not a dictionary) because the router reads it on the hot path as a boolean; `layer` stays `Int8` (no dictionary). All string dictionaries (`surfaceLeafNames`, `roadClassLeafNames`, `structureLeafNames`, `accessLeafNames`) live in `enumsJson`, index 0 = untagged/unknown sentinel, builder fails closed if any exceeds 255.
 
 Dictionaries (`surfaceLeafNames`, `roadClassLeafNames`, `structureLeafNames`) live in
 `enumsJson`, index 0 reserved for the untagged/unknown sentinel. NS dictionaries are
@@ -107,6 +111,126 @@ Cost: ~5 bytes per undirected edge (`surfaceLeaf` + `roadClassLeaf` + `grade` + 
 + `structureLeaf`). NS is **217,057 edges → ≈ +1.1 MB** against a **~13 MB** graph pack
 (geometry ~22 MB, fuel ~140 KB) — a real but modest increase. (The "base OSM extract" is
 multi-GB, but that is the raw input, not the shipped pack — do not compare against it.)
+
+### Graph v3 byte layout (Phase C / Phase D contract — exact)
+
+All multi-byte integers are **little-endian**. Magic and geometry format unchanged from v2.
+
+**File:** `graph.v3` binary (same `GRAPH_MAGIC = 0x32473244`). Geometry remains `geometry.v1`.
+
+| Offset | Type | Field |
+| --- | --- | --- |
+| 0 | u32 | magic `0x32473244` |
+| 4 | u16 | `version` = **3** (decoder also accepts **2**) |
+| 6 | u16 | `flags`: bit0 = `edgeFrom`/`edgeTo` present; **bit1 = v3 leaf sections present** (`FLAG_V3_LEAVES=2`); bits 2–15 reserved 0 |
+| 8 | u32 | `nodeCount` |
+| 12 | u32 | `undirectedEdgeCount` |
+| 16 | u32 | `directedArcCount` |
+| 20 | u32 | `headerSize` = **100** for v3 (v2 was 72) |
+| 24 | u32 | off `nodeOffsets` (Int32 × nodeCount+1) |
+| 28 | u32 | off `edgeTargets` (Int32 × directedArcCount) |
+| 32 | u32 | off `edgeUndirectedIndex` (Int32 × directedArcCount) |
+| 36 | u32 | off `edgeAttrs` (Uint16 × undirectedEdgeCount) — **derived coarse cache** |
+| 40 | u32 | off `edgeMeters` (Uint32 × undirectedEdgeCount) |
+| 44 | u32 | off `nodeCoords` (Float32 × nodeCount×2) |
+| 48 | u32 | off `idOffsets` (Int32 × undirectedEdgeCount+1) |
+| 52 | u32 | off `idBlob` (utf8) |
+| 56 | u32 | off `enumsJson` (utf8 JSON) |
+| 60 | u32 | off `metaJson` (utf8 JSON) |
+| 64 | u32 | off `edgeFrom` (Int32 × undirectedEdgeCount) when flags bit0 |
+| 68 | u32 | off `edgeTo` (Int32 × undirectedEdgeCount) when flags bit0 |
+| **72** | u32 | off **`edgeSurfaceLeaf`** (Uint8 × undirectedEdgeCount) — **appended** |
+| **76** | u32 | off **`edgeRoadClassLeaf`** (Uint8 × …) |
+| **80** | u32 | off **`edgeGrade`** (Uint8 × …) |
+| **84** | u32 | off **`edgeLayer`** (Int8 × …) |
+| **88** | u32 | off **`edgeStructureLeaf`** (Uint8 × …) |
+| **92** | u32 | off **`edgeAccessLeaf`** (Uint8 × …) |
+| **96** | u32 | off **`edgeFlags`** (Uint8 × …) |
+
+**Payload order:** existing v2 sections first (same relative order as today), then
+`enumsJson`, `metaJson`, then the seven leaf arrays in the order above. `metaJson` ends
+at `edgeSurfaceLeaf` offset (not EOF) when bit1 is set.
+
+**`edgeGrade` (Uint8):** bits 0–3 = tracktype code (0=none, 1–5=`grade1`…`grade5`);
+bits 4–7 = smoothness code (0=missing, 1=`excellent`, 2=`good`, 3=`intermediate`,
+4=`bad`, 5=`very_bad`, 6=`horrible`, 7=`very_horrible`, 8=`impassable`).
+
+**`edgeFlags` (Uint8):** bit0=`atvDesignated`; bit1=`seasonal`; bits 2–7 = 0.
+
+**`enumsJson` dictionaries** (arrays of strings; index 0 = sentinel):
+`surfaceLeafNames` (0=`""`), `roadClassLeafNames` (0=`"unknown"`),
+`structureLeafNames` (0=`""`), `accessLeafNames` (0=`""`), plus existing
+`SURFACE`/`ACCESS`/`STRUCTURE`/`*_NAME` maps. Builder **fails closed** if any leaf
+dictionary length > 255.
+
+**v2 rollback:** version=2 packs omit offsets 72–96 and bit1; JS/Swift readers use coarse
+`edgeAttrs` only (no error).
+
+**Phase A results (NS, 2026-08-23 — confirmed against `roads.geojsonseq`, 60,992 km /
+141,022 ways):** cardinality per tag fits `Uint8` with wide headroom (surface 38 → 217
+spare; highway 17; tracktype 6; smoothness 9; layer 6; bridge 11; tunnel 4; ford 4) —
+`Uint8` locked for NS, fail-closed >255 stays for national. Compound surfaces negligible
+(~5 km / 0.01%). `edgeGrade` nibbles confirmed (smoothness needs 4 bits). `layer` → `Int8`
+directly (6 values), no dictionary. Coverage is sparse for enrichment tags: tracktype
+~1,012 km, smoothness ~741 km, layer/bridge/tunnel/ford 99% missing — read-time logic must
+treat these as *refinements where present*, never required.
+
+**Key policy finding (drives Phase E, not the data plan):** `surface=unpaved` alone is
+**49% of the network (30,004 km)** and is OSM's *deliberately vague* "not-paved,
+unspecified" value — it is NOT technical dirt/sand/mud (those total only ~800 km).
+Therefore: (1) `unpaved` must be preserved as its own leaf, distinct from the granular
+resource surfaces (raw-leaf preservation does this) and read-time family logic must not
+equate "unspecified unpaved" with technical resource; (2) with 49% `unpaved` + 16%
+`missing` (highway-inferred), the **road-class leaf carries more of the Clean signal than
+surface does** — confirming road-class as a co-equal dimension.
+
+**LOCKED TAXONOMY (Rick, 2026-08-23) — the read-time family map + graph membership.**
+Leaves are always preserved in the pack; these are the top-level families leaves roll up
+into at read time, plus build-time membership changes.
+
+*Surface families (4):*
+- **Paved:** asphalt, paved, concrete, chipseal, paving_stones, cobblestone, sett, brick,
+  metal, wood — Clean target, never switch-gated.
+- **Gravel:** gravel, compacted, fine_gravel, pebblestone, **+ `unpaved` (the 49% leaf)**.
+  Rationale: `unpaved` is "unspecified, not technical" → a usable unpaved surface, so it
+  rolls under Gravel, NOT Loose/technical.
+- **Loose / technical (switch-governed):** dirt, ground, earth, grass, mud, sand, rock,
+  natural, woodchips.
+- **Unknown (switch-governed):** missing (16%) + compound oddballs (gravel,earth; trail;
+  rocky; marsh; mowed_grass/dirt; dirt/loose_rock; …).
+The mode switch (Dirt↔Clean) governs tolerance of Loose/technical + Unknown. The exact
+Dirt% definition (does Gravel count toward it?) is finalized at read time in Phase E1.
+
+*Road tiers (Clean):*
+- Motorway (motorway/_link) → avoid hard. Trunk (trunk/_link) → avoid.
+- **Arterial = primary/_link → CONNECTOR ONLY.**
+- **Collector = secondary/_link → Clean's backbone / primary road type.**
+- Local paved through-routes: tertiary, unclassified (+ links).
+- **Residential + living_street → DESTINATION-ACCESS ONLY** — never used as a through-
+  route; routable only when a waypoint is placed on them (reach a specific street).
+- track → adventure/dirt (kept).
+
+*Graph membership (build-time):*
+- **Keep all `track`. Keep `path` ONLY where `atv ∈ {yes, designated, permissive}`. Drop
+  all other `path` and all `cycleway`.** (ATV audit 2026-08-23: a broad `motor_vehicle`
+  path-exception recovered only ~2.7 km and was rejected; cycleway has zero `atv=`. So the
+  exception is ATV-specific and narrow.) All other non-motoring ways
+  (footway/pedestrian/steps/bridleway/busway/corridor…) stay excluded by the allowlist.
+- **ATV access rule (LOCKED, Rick 2026-08-23): positive `atv` overrides a vehicle-type
+  deny.** Rationale: a dual-sport is an off-road vehicle allowed on ATV trails; `motorcycle=no`
+  on such a trail means "street bikes can't handle it," not a legal bar. So for the access
+  model, an edge with `atv ∈ {yes, designated, permissive}` is treated as **permitted and
+  routed as an adventure/ATV trail (switch-governed like Loose/technical)**, overriding
+  `motorcycle=no` / `motor_vehicle=no`. **Guardrail:** `atv` does NOT override a hard land
+  deny (`access=private` / `access=no`) — private property stays excluded. NS impact
+  (audit 2026-08-23): recovers all **350.7 km** (100% was `motorcycle=no`, 0 km hard-denied;
+  94% is `highway=path` + `atv=yes`). These atv-positive paths are therefore KEPT by the
+  membership rule above AND rescued from access-exclusion. B2 preserves `accessLeaf` + raw
+  `atv` and derives `atvDesignated` (lossless marking + debug layer).
+- **Ferries: INCLUDE (new).** Currently fully excluded (adapters reject `route=ferry`;
+  the `structureType=ferry` enum slot is unused). Add a `route=ferry` inclusion path →
+  `structureType=ferry` + crossing time/cost. Essential for cross-province (NL Country
+  Harbour, BC). Belongs to §G structure workstream but **elevated priority**.
 
 **Rule that must never be violated again:** no lossy bucketing at build time. The
 adapter records the leaf; families are computed at read time by both engines from the
