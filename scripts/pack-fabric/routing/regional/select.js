@@ -394,6 +394,22 @@ function remoteGraphUrl(regionId, _opts = {}) {
 function graphPathForRegion(regionId, _opts = {}) {
   const id = String(regionId || "").toLowerCase();
   if (id === "__legacy_ns__") return LEGACY_GRAPH;
+  const verifiedOverridesRaw = process.env.ROUTING_VERIFIED_GRAPH_PATH_OVERRIDES;
+  if (verifiedOverridesRaw) {
+    let verifiedOverrides;
+    try {
+      verifiedOverrides = JSON.parse(verifiedOverridesRaw);
+    } catch (_) {
+      throw new Error("Invalid ROUTING_VERIFIED_GRAPH_PATH_OVERRIDES JSON");
+    }
+    if (Object.prototype.hasOwnProperty.call(verifiedOverrides, id)) {
+      const verifiedPath = verifiedOverrides[id];
+      if (typeof verifiedPath !== "string" || !path.isAbsolute(verifiedPath) || !fs.existsSync(verifiedPath)) {
+        throw new Error(`Verified graph override is unavailable for ${id}`);
+      }
+      return verifiedPath;
+    }
+  }
   const localV2 = path.join(REGIONS_DIR, id, "graph.v2.bin");
   if (fs.existsSync(localV2)) return localV2;
   return remoteGraphUrl(id);

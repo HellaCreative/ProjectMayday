@@ -16,17 +16,18 @@ const NS_RELEASE_PATH = path.join(
   REPO_ROOT,
   "scripts/pack-fabric/routing/data/releases/ns-osm-20260821-02.json"
 );
-const NS_FUEL_PATH = path.join(
-  REPO_ROOT,
-  "scripts/pack-fabric/app/data/packs/v1/ns/fuel.v1.json"
-);
-const NS_FUEL = JSON.parse(fs.readFileSync(NS_FUEL_PATH, "utf8"));
+let NS_FUEL = null;
+let NS_FUEL_IDENTITY = null;
+const { materializeVerifiedRelease } = require("./release-pack");
+const NS_RELEASE = JSON.parse(fs.readFileSync(NS_RELEASE_PATH, "utf8"));
 
 async function loadBenchFuel() {
+  if (!NS_FUEL) throw new Error("Verified NS fuel sidecar was not prepared");
   return {
     ok: true,
     regionIds: ["ns"],
-    stations: Array.isArray(NS_FUEL.stations) ? NS_FUEL.stations : []
+    stations: Array.isArray(NS_FUEL.stations) ? NS_FUEL.stations : [],
+    packIdentity: NS_FUEL_IDENTITY ? [NS_FUEL_IDENTITY] : []
   };
 }
 
@@ -34,12 +35,41 @@ async function loadBenchFuel() {
 // Nova Scotia pack. The candidate URL retains the exact approved bytes even
 // after promotion, keeping repeated runs deterministic.
 function configureLiveNovaScotiaSource() {
-  if (process.env.R2_REGION_BASE_OVERRIDES) return;
-  const release = JSON.parse(fs.readFileSync(NS_RELEASE_PATH, "utf8"));
-  if (!release.publicBase || !(release.regions || []).some((region) => region.id === "ns")) {
+  if (!NS_RELEASE.publicBase || !(NS_RELEASE.regions || []).some((region) => region.id === "ns")) {
     throw new Error("Nova Scotia live release record is incomplete");
   }
-  process.env.R2_REGION_BASE_OVERRIDES = JSON.stringify({ ns: release.publicBase });
+  if (process.env.R2_REGION_BASE_OVERRIDES) {
+    let configured;
+    try {
+      configured = JSON.parse(process.env.R2_REGION_BASE_OVERRIDES);
+    } catch (_) {
+      throw new Error("Invalid R2_REGION_BASE_OVERRIDES JSON");
+    }
+    if (configured.ns !== NS_RELEASE.publicBase) {
+      throw new Error(`NS benchmark source override does not match ${NS_RELEASE.releaseId}`);
+    }
+  }
+  process.env.R2_REGION_BASE_OVERRIDES = JSON.stringify({ ns: NS_RELEASE.publicBase });
+}
+
+async function prepareImmutableNovaScotiaRelease() {
+  const verified = await materializeVerifiedRelease({
+    release: NS_RELEASE,
+    regionId: "ns",
+    fileNames: ["graph.v2.bin", "geometry.v1.bin", "fuel.v1.json"]
+  });
+  process.env.ROUTING_VERIFIED_GRAPH_PATH_OVERRIDES = JSON.stringify({
+    ns: verified.files["graph.v2.bin"].path
+  });
+  NS_FUEL = JSON.parse(fs.readFileSync(verified.files["fuel.v1.json"].path, "utf8"));
+  NS_FUEL_IDENTITY = {
+    regionId: "ns",
+    releaseId: verified.releaseId,
+    fuelSource: verified.files["fuel.v1.json"].path,
+    fuelBytes: verified.files["fuel.v1.json"].bytes,
+    fuelSha256: verified.files["fuel.v1.json"].sha256
+  };
+  return verified;
 }
 
 configureLiveNovaScotiaSource();
@@ -670,6 +700,7 @@ function comparisonTable(current, prior) {
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   if (args.help) return usage();
+  const verifiedRelease = await prepareImmutableNovaScotiaRelease();
   const routes = JSON.parse(fs.readFileSync(FIXTURE_PATH, "utf8"));
   validateFixtures(routes);
   fs.mkdirSync(RESULTS_DIR, { recursive: true });
@@ -722,7 +753,11 @@ async function main() {
     source: {
       region: "ns",
       graphBase: graphCdnBaseUrlForRegion("ns"),
-      releaseRecord: path.relative(REPO_ROOT, NS_RELEASE_PATH)
+      releaseRecord: path.relative(REPO_ROOT, NS_RELEASE_PATH),
+      releaseId: verifiedRelease.releaseId,
+      graphSha256: verifiedRelease.files["graph.v2.bin"].sha256,
+      geometrySha256: verifiedRelease.files["geometry.v1.bin"].sha256,
+      fuelSha256: verifiedRelease.files["fuel.v1.json"].sha256
     },
     fuel: { tankMeters: 250_000, reservePercent: 5, usableMeters: USABLE_METERS },
     summary: { total: rows.length, passed, failed: rows.length - passed },
