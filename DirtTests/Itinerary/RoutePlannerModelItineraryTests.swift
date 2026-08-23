@@ -7,17 +7,18 @@ import Testing
 @Suite(.serialized)
 struct RoutePlannerModelItineraryTests {
     @Test func planModeUsesTheInstalledPackRegistry() async {
-        let source = PlannerFakeRoutingSource()
+        let live = PlannerFakeRoutingSource(name: "live")
+        let pack = PlannerFakeRoutingSource(name: "pack")
         let registry = FakeInstalledPackRegistry(installedRegionIDs: ["ns"])
         var policyReports: [String] = []
         let policy = RoutingSourcePolicy(
             isOnline: { true },
             installedPacks: registry,
-            live: source,
-            pack: source,
+            live: live,
+            pack: pack,
             report: { policyReports.append($0) }
         )
-        let model = makeModel(source: source, policy: policy)
+        let model = makeModel(source: pack, policy: policy)
         model.selectMode(.plan)
         model.apply(
             .replaceAll(
@@ -34,9 +35,12 @@ struct RoutePlannerModelItineraryTests {
         await model.waitForCanonicalBuildForTesting()
 
         #expect(policyReports.contains { report in
-            report.contains("packsCover=true") && report.contains("installed=[ns]")
+            report.contains("packsCover=true")
+                && report.contains("installed=[ns]")
+                && report.contains("selected=pack")
         })
-        #expect(source.routeRequests.isEmpty == false)
+        #expect(pack.routeRequests.isEmpty == false)
+        #expect(live.routeRequests.isEmpty)
     }
 
     @Test func fromHereFuelBuildSwitchesToPlanWithoutNetworkCalls() async throws {
@@ -389,8 +393,26 @@ private func makeModel(
         graphPacks: GraphPackStore(),
         network: NetworkPathMonitor(),
         routingSourcePolicy: policy ?? .fixed(source),
-        itineraryBuilder: ItineraryBuilder()
+        itineraryBuilder: ItineraryBuilder(),
+        packAcquisition: {
+            let coverage = PermissivePackCoverage()
+            return PackAcquisitionCoordinator(inspect: coverage, installer: coverage)
+        }()
     )
+}
+
+@MainActor
+private final class PermissivePackCoverage: PackCoverageInspecting, PackInstalling {
+    let routingManifestVersion = "test-permissive"
+
+    func isRoutingPackInstalled(_ regionID: String) -> Bool { true }
+    func installedRoutingGraphPath(regionID: String) -> String? {
+        "/fake/\(regionID)/graph.v2.bin"
+    }
+    func isRoutingPackPublished(_ regionID: String) -> Bool { true }
+    func packRevisionState(_ regionID: String) -> PackRevisionState { .current }
+    func displayTitle(forRegionId id: String) -> String { id.uppercased() }
+    func installVerifiedPacks(_ regionIDs: [String], replaceInstalled: Bool) async throws {}
 }
 
 @MainActor
@@ -413,7 +435,7 @@ private final class FakeInstalledPackRegistry: RoutingInstalledPackRegistry {
 
 @MainActor
 private final class PlannerFakeRoutingSource: RoutingSource {
-    let name = "live"
+    let name: String
     var routeRequests: [RouteRequest] = []
     var fuelChainRequests: [FuelChainRequest] = []
     var distanceOverrides: [String: Double] = [:]
@@ -421,6 +443,10 @@ private final class PlannerFakeRoutingSource: RoutingSource {
     var stationCandidates: [FuelStationCandidate] = []
     var routeError: Error?
     var fuelChainError: Error?
+
+    init(name: String = "live") {
+        self.name = name
+    }
 
     func route(_ req: RouteRequest) async throws -> RouteResponse {
         routeRequests.append(req)

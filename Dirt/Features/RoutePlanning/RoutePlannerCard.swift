@@ -1165,6 +1165,16 @@ struct RoutePlannerCard: View {
                 .font(.dirtUI(12, weight: .semibold))
                 .foregroundStyle(DirtTheme.danger)
                 .multilineTextAlignment(.center)
+        } else if !planner.packRoutingWarnings.isEmpty {
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(planner.packRoutingWarnings) { warning in
+                    Text(warning.message)
+                        .font(.dirtUI(12, weight: .semibold))
+                        .foregroundStyle(DirtTheme.muted)
+                        .multilineTextAlignment(.leading)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
 

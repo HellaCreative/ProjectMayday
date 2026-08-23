@@ -6,9 +6,9 @@ import UIKit
 
 /// Planner state machine covering three route-finder modes:
 /// From here (GPS → point 2), Plan a route (chained ordered waypoint hops),
-/// and Saved (local SwiftData store). Live `/api/route` is always authoritative
-/// while online. Start Navigation downloads the published regional packs needed
-/// for no-signal recovery; installed packs route only while offline.
+/// and Saved (local SwiftData store). Approved installed packs route first
+/// whether the device is online or offline. Live `/api/route` is used only
+/// when the rider declines a required pack or no approved pack is available.
 @Observable
 final class RoutePlannerModel {
     enum Mode: String, CaseIterable, Identifiable {
@@ -174,6 +174,11 @@ final class RoutePlannerModel {
     /// Coalesce profile / Allow toggles so we don't fire 6 parallel Dijkstras.
     @ObservationIgnored private var rerouteCoalesceTask: Task<Void, Never>?
     @ObservationIgnored private var buildTask: Task<Void, Never>?
+    @ObservationIgnored private var pendingPackBuild: (
+        from: Int,
+        reuse: BuiltItinerary?,
+        replanFromStationID: String?
+    )?
     @ObservationIgnored private var moveDebounceTask: Task<Void, Never>?
     @ObservationIgnored private var pendingMove: (waypointID: UUID, coordinate: RouteCoordinate, source: String)?
     @ObservationIgnored private(set) var canonicalBuildStartCount = 0
@@ -233,6 +238,7 @@ final class RoutePlannerModel {
     private let network: NetworkPathMonitor
     private let itineraryBuilder: ItineraryBuilder
     private let routingSourcePolicy: RoutingSourcePolicy
+    private let packAcquisition: PackAcquisitionCoordinator
     private weak var poiManager: POIManager?
     /// Wired by AppEnvironment — restore Music volume after End Navigation.
     /// Fires after nav teardown. Argument is a contribute candidate when enough
@@ -249,7 +255,8 @@ final class RoutePlannerModel {
         network: NetworkPathMonitor,
         poiManager: POIManager? = nil,
         routingSourcePolicy: RoutingSourcePolicy? = nil,
-        itineraryBuilder: ItineraryBuilder? = nil
+        itineraryBuilder: ItineraryBuilder? = nil,
+        packAcquisition: PackAcquisitionCoordinator? = nil
     ) {
         self.routing = routing
         self.locationService = locationService
@@ -274,6 +281,7 @@ final class RoutePlannerModel {
                 network: network, packs: graphPacks, live: live, pack: pack
             )
         }
+        self.packAcquisition = packAcquisition ?? PackAcquisitionCoordinator(store: graphPacks)
 
         navigation.onRerouteNeeded = { [weak self] in
             guard let self else { return }
@@ -282,10 +290,6 @@ final class RoutePlannerModel {
         locationService.onLocation = { [weak self] location in
             guard let self else { return }
             self.navigation.update(with: location)
-            self.considerAutoDownloadWhileRiding(at: location.coordinate)
-        }
-        graphPacks.onQuietPackReady = { [weak self] message in
-            self?.toast = message
         }
         mapState.fromHereLongPressRelocatesDestination = true
     }
@@ -539,12 +543,60 @@ final class RoutePlannerModel {
         )
     }
 
+    var packConsent: PackConsentPrompt? { packAcquisition.consent }
+    var packRoutingWarnings: [PackRoutingWarning] { packAcquisition.warnings }
+
+    func acceptPackConsent() async {
+        do {
+            try await packAcquisition.acceptConsent()
+            resumePendingPackBuild()
+        } catch {
+            errorMessage = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+            isRouting = false
+            isAssemblingRoute = false
+            if toast == Self.calculatingRouteToast { toast = nil }
+        }
+    }
+
+    func declinePackConsent() {
+        packAcquisition.declineConsent()
+        resumePendingPackBuild()
+    }
+
+    private func resumePendingPackBuild() {
+        guard let pending = pendingPackBuild else { return }
+        pendingPackBuild = nil
+        startCanonicalBuild(
+            from: pending.from,
+            reuse: pending.reuse,
+            replanFromStationID: pending.replanFromStationID
+        )
+    }
+
     private func startCanonicalBuild(
         from legIndex: Int,
         reuse: BuiltItinerary?,
         replanFromStationID: String? = nil
     ) {
         let requested = itinerary
+        if requested.waypoints.count >= 2 {
+            let coords = requested.waypoints.map(\.coordinate.locationCoordinate)
+            let protect = navigation.phase == .active || graphPacks.protectInstalledRevisions
+            switch packAcquisition.evaluate(
+                coordinates: coords,
+                protectInstalledRevisions: protect
+            ) {
+            case .requestConsent:
+                pendingPackBuild = (legIndex, reuse, replanFromStationID)
+                isRouting = false
+                isAssemblingRoute = false
+                if toast == Self.calculatingRouteToast { toast = nil }
+                refreshMap()
+                return
+            case .useInstalledPacks, .useLive:
+                pendingPackBuild = nil
+            }
+        }
         canonicalBuildStartCount += 1
         lastCanonicalBuildFromLegIndex = legIndex
         isRouting = true
@@ -1478,6 +1530,8 @@ final class RoutePlannerModel {
         errorMessage = nil
         routeIdentity = nil
         savedRouteOrigin = nil
+        pendingPackBuild = nil
+        packAcquisition.resetSession()
         mapState.selectPlannerPin(nil)
         refreshMap()
     }
@@ -2226,18 +2280,13 @@ final class RoutePlannerModel {
         let clCoords = coords.map {
             CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude)
         }
+        graphPacks.protectInstalledRevisions = true
         graphPacks.prepareForNavigation(
             coordinates: clCoords,
             keepExisting: keepExisting
         )
-        // Refresh published catalog, then quietly prefetch the first missing neighbor.
         Task { @MainActor [weak self] in
-            guard let self else { return }
-            await self.graphPacks.refreshCatalogIfStale()
-            self.graphPacks.maybeAutoDownloadNeighbors(
-                for: clCoords,
-                online: self.network.isOnline
-            )
+            await self?.graphPacks.refreshCatalogIfStale()
         }
     }
 
@@ -2266,15 +2315,6 @@ final class RoutePlannerModel {
             }
         }
         return routeIdentity
-    }
-
-    /// Mid-ride: when GPS enters a published region that isn’t installed, fetch that pack.
-    private func considerAutoDownloadWhileRiding(at coordinate: CLLocationCoordinate2D) {
-        guard navigation.phase == .active else { return }
-        graphPacks.maybeAutoDownloadNeighbors(
-            for: [coordinate],
-            online: network.isOnline
-        )
     }
 
     /// Called when offline prep is ready (or rider confirms after delight).
@@ -2363,6 +2403,7 @@ final class RoutePlannerModel {
         mapState.endNavigationCamera()
         locationService.setBackgroundUpdates(false)
         offline.disengageOfflineBasemap()
+        graphPacks.protectInstalledRevisions = false
         graphPacks.cancelQuietDownloads()
         onNavigationEnded?(candidate)
     }
@@ -2407,7 +2448,7 @@ final class RoutePlannerModel {
                 )
             }
             throw RoutingError.server(
-                "You’re offline and no routing pack is loaded. Reconnect for live routing, or download a province from PACKS before you lose signal."
+                "You’re offline and no routing pack is loaded. Reconnect, or install the required regional pack when asked."
             )
         }
 
@@ -2425,10 +2466,8 @@ final class RoutePlannerModel {
     }
 
     /// From here / Plan A→B.
-    /// Live `/api/route` is the source of truth whenever the phone is online,
-    /// even if an offline pack happens to be installed. Packs are used here
-    /// only without connectivity; navigation recovery has its own local-first
-    /// path in `routeWhileNavigating`.
+    /// Approved installed packs route first, online or offline. Live `/api/route`
+    /// is used when the rider declines a required pack or none is available.
     var preservedDestination: RouteCoordinate? {
         if shouldPreserveStagesForRecovery,
            let idx = activeStageIndex(near: locationService.currentCoordinate),

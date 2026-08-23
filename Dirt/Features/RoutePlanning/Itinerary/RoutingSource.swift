@@ -405,7 +405,7 @@ protocol RoutingInstalledPackRegistry: AnyObject {
     func installedRoutingGraphPath(regionID: String) -> String?
 }
 
-extension GraphPackStore: RoutingInstalledPackRegistry {
+extension GraphPackStore: PackCoverageInspecting, PackInstalling {
     var routingManifestVersion: String { lastManifestVersion }
 
     func isRoutingPackInstalled(_ regionID: String) -> Bool {
@@ -454,13 +454,15 @@ struct RoutingSourcePolicy {
             let installed = needed.filter { installedPacks.isRoutingPackInstalled($0) }
             let packsCover = installedPacksCover(locations, registry: installedPacks)
             let singleRegion = needed.count <= 1
+            let chosen = packsCover ? pack : live
             report(
                 "policy packsCover=\(packsCover) singleRegion=\(singleRegion) " +
                     "installed=[\(installed.joined(separator: ","))] " +
                     "path=\(needed.first.flatMap { installedPacks.installedRoutingGraphPath(regionID: $0) } ?? "nil") " +
-                    "manifest=\(installedPacks.routingManifestVersion) online=\(isOnline())"
+                    "manifest=\(installedPacks.routingManifestVersion) online=\(isOnline()) " +
+                    "selected=\(chosen.name)"
             )
-            return isOnline() ? live : pack
+            return chosen
         }
     }
 

@@ -317,6 +317,16 @@ struct RootView: View {
         .sheet(isPresented: softPaywallPresented) {
             softPaywallSheet
         }
+        .alert(packConsentTitle, isPresented: packConsentPresented) {
+            Button(packConsentPrimaryTitle) {
+                Task { await app.planner.acceptPackConsent() }
+            }
+            Button(packConsentCancelTitle, role: .cancel) {
+                app.planner.declinePackConsent()
+            }
+        } message: {
+            Text(packConsentMessage)
+        }
         .confirmationDialog(
             poiDialogTitle,
             isPresented: Binding(
@@ -351,6 +361,33 @@ struct RootView: View {
             .presentationDragIndicator(.visible)
             .presentationBackground(DirtTheme.sheetMaterial)
         }
+    }
+
+    private var packConsentTitle: String {
+        app.planner.packConsent?.title ?? "Routing pack"
+    }
+
+    private var packConsentMessage: String {
+        app.planner.packConsent?.message ?? ""
+    }
+
+    private var packConsentPrimaryTitle: String {
+        app.planner.packConsent?.kind == .update ? "Update" : "Download"
+    }
+
+    private var packConsentCancelTitle: String {
+        app.planner.packConsent?.kind == .update ? "Keep installed" : "Not now"
+    }
+
+    private var packConsentPresented: Binding<Bool> {
+        Binding(
+            get: { app.planner.packConsent != nil },
+            set: { presented in
+                if !presented, app.planner.packConsent != nil {
+                    app.planner.declinePackConsent()
+                }
+            }
+        )
     }
 
     private var softPaywallSheet: some View {

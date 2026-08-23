@@ -36,10 +36,30 @@ final class GraphPackStore {
         var install: InstallState
         var exactBytes: Int64?
         var country: Country
+        var revisionState: PackRevisionState = .missing
+    }
+
+    struct InstalledPackManagementRow: Identifiable, Equatable {
+        let id: String
+        let title: String
+        let revisionState: PackRevisionState
+        let bytes: Int64
+        let canDelete: Bool
+        let canDownload: Bool
+
+        var revisionLabel: String {
+            switch revisionState {
+            case .current:
+                return "Current approved revision"
+            case .stale:
+                return "Update available — using installed revision"
+            case .missing:
+                return "Not installed"
+            }
+        }
     }
 
     private enum Prefs {
-        static let autoNext = "dirt.packs.autoDownloadNextRegion.v2"
         static let installed = "dirt.packs.installedRegionIds"
     }
 
@@ -54,12 +74,10 @@ final class GraphPackStore {
     /// Fuel stations loaded from installed `fuel.v1.json` sidecars.
     private var packedFuelByRegion: [String: [POIFeature]] = [:]
 
-    /// When online near a border, quietly fetch the next published region.
-    var autoDownloadNextRegion: Bool {
-        didSet { UserDefaults.standard.set(autoDownloadNextRegion, forKey: Prefs.autoNext) }
-    }
+    /// When true, a checksum-valid installed revision is not replaced in place.
+    var protectInstalledRevisions = false
 
-    /// Fired when a quiet (auto) neighbor pack finishes — e.g. "New Brunswick pack ready".
+    /// Fired when a quiet pack finishes — unused after waypoint-driven acquisition.
     var onQuietPackReady: ((String) -> Void)?
 
     private var task: Task<Void, Never>?
@@ -91,7 +109,6 @@ final class GraphPackStore {
     var isQuietDownloadInFlight: Bool { !quietDownloadIds.isEmpty }
 
     init() {
-        autoDownloadNextRegion = UserDefaults.standard.object(forKey: Prefs.autoNext) as? Bool ?? false
         refreshInstalledFromDisk()
         Task { await refreshCatalog() }
     }
@@ -193,19 +210,77 @@ final class GraphPackStore {
 
     func isInstalled(_ regionId: String) -> Bool {
         let id = regionId.lowercased()
-        if catalogIdentityLoaded { return verifiedInstalledRegionIds.contains(id) }
         if findGraphFileURL(regionId: id) != nil { return true }
-        // In-memory pack still counts while a manifest version folder is mid-migrate.
         if activePack?.regionId?.lowercased() == id { return true }
         return loadedRegionIds.contains { $0.lowercased() == id }
     }
 
     /// Absolute path of the on-disk graph when present (any manifest version folder).
     func installedGraphPath(regionId: String) -> String? {
-        if catalogIdentityLoaded, !verifiedInstalledRegionIds.contains(regionId.lowercased()) {
-            return nil
+        findGraphFileURL(regionId: regionId.lowercased())?.path
+    }
+
+    func packRevisionState(_ regionID: String) -> PackRevisionState {
+        let id = regionID.lowercased()
+        guard isInstalled(id) else { return .missing }
+        if !catalogIdentityLoaded { return .current }
+        return verifiedInstalledRegionIds.contains(id) ? .current : .stale
+    }
+
+    func isRoutingPackPublished(_ regionID: String) -> Bool {
+        isPublished(regionID)
+    }
+
+    static func shouldReplaceInstalledRevision(
+        hasChecksumValidInstalledRevision: Bool,
+        replaceInstalled: Bool,
+        protectInstalledRevisions: Bool
+    ) -> Bool {
+        guard hasChecksumValidInstalledRevision else { return true }
+        if protectInstalledRevisions { return false }
+        return replaceInstalled
+    }
+
+    static func managementRows(from regions: [RegionInfo]) -> [InstalledPackManagementRow] {
+        regions.compactMap { region in
+            guard case .installed = region.install else { return nil }
+            let state: PackRevisionState = region.revisionState == .missing ? .current : region.revisionState
+            return InstalledPackManagementRow(
+                id: region.id,
+                title: region.title,
+                revisionState: state,
+                bytes: region.exactBytes ?? region.approxBytes,
+                canDelete: true,
+                canDownload: false
+            )
         }
-        return findGraphFileURL(regionId: regionId.lowercased())?.path
+    }
+
+    var installedManagementRows: [InstalledPackManagementRow] {
+        Self.managementRows(from: regions)
+    }
+
+    func installVerifiedPacks(_ regionIDs: [String], replaceInstalled: Bool) async throws {
+        for raw in regionIDs {
+            let id = raw.lowercased()
+            guard publishedIds.contains(id) else {
+                throw PackAcquisitionError.unavailable(regionID: id)
+            }
+            let hadInstalled = isInstalled(id)
+            await performDownload(
+                regionId: id,
+                asNavigationPrep: false,
+                quiet: false,
+                replaceInstalled: replaceInstalled
+            )
+            if replaceInstalled || !hadInstalled {
+                guard packRevisionState(id) == .current else {
+                    throw PackAcquisitionError.checksumMismatch(regionID: id)
+                }
+            } else if !isInstalled(id) {
+                throw PackAcquisitionError.checksumMismatch(regionID: id)
+            }
+        }
     }
 
     func installedPackIdentity(regionId: String) -> [String: String]? {
@@ -253,7 +328,7 @@ final class GraphPackStore {
         }()
 
         if needed.isEmpty {
-            return "This pin isn’t in a known pack region. \(installedClause) Open PACKS on Wi‑Fi and download where you ride."
+            return "This pin isn’t in a known pack region. \(installedClause) Place a route through Canada or the United States to install a required pack."
         }
 
         let missing = needed.filter { !isInstalled($0) }
@@ -267,12 +342,12 @@ final class GraphPackStore {
         let unpublishedMissing = missing.filter { !isPublished($0) }
 
         if !publishedMissing.isEmpty, unpublishedMissing.isEmpty {
-            return "\(missingList) isn’t on this phone. \(installedClause) Connect to the internet and download \(missingList) from PACKS — or keep your pin inside a downloaded region."
+            return "\(missingList) isn’t on this phone. \(installedClause) Connect to the internet and install \(missingList) when asked — or keep your pin inside an installed region."
         }
         if publishedMissing.isEmpty, !unpublishedMissing.isEmpty {
-            return "\(missingList) isn’t published for offline packs yet. \(installedClause) Plan inside a downloaded region."
+            return "\(missingList) isn’t published as an approved pack yet. \(installedClause) Offline rerouting will not be available for this region."
         }
-        return "Need \(missingList) for that pin. \(installedClause) Open PACKS when you have internet to download what’s published."
+        return "Need \(missingList) for that pin. \(installedClause) Offline rerouting will not be available until an approved pack can be installed."
     }
 
     func downloadRegion(_ regionId: String, quiet: Bool = false) {
@@ -285,7 +360,7 @@ final class GraphPackStore {
         }
         setInstall(id, .downloading(0.02))
         downloadTasks[id] = Task { [weak self] in
-            await self?.performDownload(regionId: id, asNavigationPrep: false, quiet: quiet)
+            await self?.performDownload(regionId: id, asNavigationPrep: false, quiet: quiet, replaceInstalled: false)
             self?.downloadTasks[id] = nil
             self?.quietDownloadIds.remove(id)
         }
@@ -303,7 +378,7 @@ final class GraphPackStore {
         }
         setInstall(id, .downloading(0.02))
         let task = Task { [weak self] in
-            await self?.performDownload(regionId: id, asNavigationPrep: false, quiet: false)
+            await self?.performDownload(regionId: id, asNavigationPrep: false, quiet: false, replaceInstalled: false)
             self?.downloadTasks[id] = nil
         }
         downloadTasks[id] = task
@@ -327,8 +402,8 @@ final class GraphPackStore {
     }
 
     /// Start Nav: download every published province/state pack touched by the
-    /// route, then activate the first one. Planning remains live while online;
-    /// these bytes exist only for offline navigation recovery.
+    /// route that is not already installed. Checksum-valid installed revisions
+    /// are not replaced while an itinerary is protected.
     func prepareForNavigation(coordinates: [CLLocationCoordinate2D], keepExisting: Bool) {
         task?.cancel()
         _ = keepExisting // Disk packs and corridor tiles are reused automatically.
@@ -365,7 +440,7 @@ final class GraphPackStore {
             for (offset, id) in missing.enumerated() {
                 guard !Task.isCancelled else { return }
                 // Run inside the prep task so Cancel genuinely cancels this download.
-                await self.performDownload(regionId: id, asNavigationPrep: false, quiet: false)
+                await self.performDownload(regionId: id, asNavigationPrep: false, quiet: false, replaceInstalled: false)
                 guard !Task.isCancelled else { return }
                 guard self.isInstalled(id) else {
                     self.phase = .failed("Couldn’t download the \(self.displayTitle(forRegionId: id)) routing pack. Check your connection and try again.")
@@ -724,29 +799,6 @@ final class GraphPackStore {
         }
     }
 
-    /// If auto-download is on, quietly fetch one missing published region covering these coords.
-    /// One region at a time; no-ops while a quiet download is already running.
-    /// Call with the rider GPS while navigating, or the route corridor at Start Nav.
-    func maybeAutoDownloadNeighbors(for coordinates: [CLLocationCoordinate2D], online: Bool) {
-        guard autoDownloadNextRegion, online else { return }
-        guard !coordinates.isEmpty else { return }
-        guard quietDownloadIds.isEmpty else { return }
-
-        let missing = missingPublishedRegions(for: coordinates)
-        guard let id = missing.first else {
-            // Track primary GPS region so crossing into a new pack re-arms the trigger.
-            if let primary = Self.primaryRegionId(containing: coordinates[0]) {
-                lastAutoDownloadRegionId = primary
-            }
-            return
-        }
-
-        // One kick per region visit (cleared on End Nav / leaving the region).
-        if lastAutoDownloadRegionId == id { return }
-        lastAutoDownloadRegionId = id
-        downloadRegion(id, quiet: true)
-    }
-
     // MARK: - Catalog seed
 
     private static let catalogSeed: [RegionInfo] = {
@@ -803,11 +855,14 @@ final class GraphPackStore {
             // Preserve in-flight download progress across manifest refreshes.
             if case .downloading(let p) = prior[seed.id] {
                 row.install = .downloading(p)
+            } else if isInstalled(seed.id) {
+                row.install = .installed
             } else if published.contains(seed.id) {
-                row.install = isInstalled(seed.id) ? .installed : .available
+                row.install = .available
             } else {
                 row.install = .unavailable
             }
+            row.revisionState = packRevisionState(seed.id)
             return row
         }
     }
@@ -824,6 +879,7 @@ final class GraphPackStore {
             } else if publishedIds.contains(row.id) {
                 copy.install = .available
             }
+            copy.revisionState = packRevisionState(row.id)
             return copy
         }
         // Packs decode off MainActor via `ensureActivePackAsync` when routing starts.
@@ -834,6 +890,7 @@ final class GraphPackStore {
             guard row.id == id else { return row }
             var copy = row
             copy.install = state
+            copy.revisionState = packRevisionState(id)
             return copy
         }
     }
@@ -1121,7 +1178,8 @@ final class GraphPackStore {
     private func performDownload(
         regionId: String,
         asNavigationPrep: Bool = false,
-        quiet: Bool = false
+        quiet: Bool = false,
+        replaceInstalled: Bool = false
     ) async {
         do {
             try Task.checkCancellation()
@@ -1164,6 +1222,32 @@ final class GraphPackStore {
                     phase = .skipped("No pack published for \(regionId)")
                     progress = 1
                 }
+                return
+            }
+
+            let existingGraph = findGraphFileURL(regionId: regionId)
+            let hasChecksumValidInstalledRevision = existingGraph != nil
+            let existingDir = existingGraph?.deletingLastPathComponent()
+            let matchesCurrent = existingDir.map {
+                Self.regionMatchesIdentity(region: region, directory: $0)
+            } ?? false
+            if hasChecksumValidInstalledRevision,
+               matchesCurrent
+                || !Self.shouldReplaceInstalledRevision(
+                    hasChecksumValidInstalledRevision: true,
+                    replaceInstalled: replaceInstalled,
+                    protectInstalledRevisions: protectInstalledRevisions
+                ) {
+                if matchesCurrent {
+                    verifiedInstalledRegionIds.insert(regionId)
+                }
+                setInstall(regionId, .installed)
+                await activateInstalledPack(regionId: regionId)
+                if asNavigationPrep {
+                    progress = 1
+                    phase = .ready
+                }
+                refreshInstalledFromDisk()
                 return
             }
 
