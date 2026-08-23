@@ -5,25 +5,23 @@
  * One door for live + download. There is no second fabric.
  *
  *   node scripts/pack-fabric/scripts/ship-routing.js --assert
- *   node scripts/pack-fabric/scripts/ship-routing.js --pack bc
  *   node scripts/pack-fabric/scripts/ship-routing.js --live
- *   node scripts/pack-fabric/scripts/ship-routing.js --pack bc --live --assert
- *   node scripts/pack-fabric/scripts/ship-routing.js --candidate ns-20260820 --pack ns --live
- *   node scripts/pack-fabric/scripts/ship-routing.js --promote ns-20260820 --pack ns --live
+ *   node scripts/pack-fabric/scripts/ship-routing.js --candidate ns-osm-20260821-02 --pack ns --live
+ *   node scripts/pack-fabric/scripts/ship-routing.js --promote ns-osm-20260821-02 --pack ns
  *
- * --pack  uploads graph.v2.bin + geometry.v1.bin (+ fuel.v1.json if present) to R2 dirt-packs/{id}/
- * --live  deploys /api/route from this pack-fabric tree (not another repo)
+ * --candidate uploads immutable candidate objects. It does not touch the download catalog.
+ * --promote --pack copies recorded candidate bytes to stable keys and merges only
+ *             those regions into the current remote catalog.
+ * --pack alone is rejected: it used to publish unrecorded local bytes and replace
+ *             the 63-region public catalog.
+ * --live  deploys /api/route from this pack-fabric tree
  * --assert  curls production; fails if the graph is still the longhaul extract
- * --candidate uploads immutable candidate objects and deploys only the named
- *             regions from that prefix. It does not touch the download manifest.
- * --promote verifies the candidate record, copies the same local checksums to
- *           stable pack keys, updates the approved manifest, and removes the
- *           candidate override on the next live deployment.
  */
 
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
+const os = require("os");
 const { spawnSync } = require("child_process");
 
 const DIRT = path.resolve(__dirname, "../../..");
@@ -34,6 +32,10 @@ const OPTIONAL_PHONE_FILES = ["fuel.v1.json"];
 const ALL_PHONE_FILES = PHONE_FILES.concat(OPTIONAL_PHONE_FILES);
 const RELEASES = path.join(FABRIC, "routing/data/releases");
 const PUBLIC_R2_BASE = process.env.R2_PUBLIC_BASE || "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev";
+const BARE_PACK_REJECTION =
+  "bare --pack is rejected: it would publish unrecorded local bytes and replace the public catalog. " +
+  "Use --candidate <releaseId> --pack <region> to upload an immutable live candidate without changing the download catalog, " +
+  "or --promote <releaseId> --pack <region> to publish the recorded candidate bytes by merging that region into the remote catalog.";
 
 function die(msg) {
   console.error(msg);
@@ -72,7 +74,7 @@ function parseArgs(argv) {
     pack: flags.has("--pack"),
     live: flags.has("--live"),
     assert: flags.has("--assert"),
-    ids: ids.length ? ids : flags.has("--pack") ? ["bc"] : [],
+    ids,
     candidate,
     promote
   };
@@ -80,6 +82,146 @@ function parseArgs(argv) {
 
 function sha256File(filePath) {
   return crypto.createHash("sha256").update(fs.readFileSync(filePath)).digest("hex");
+}
+
+function fileIdentity(file) {
+  return {
+    name: String(file.name),
+    bytes: Number(file.bytes),
+    sha256: String(file.sha256)
+  };
+}
+
+function assertCatalogShape(catalog, label) {
+  if (catalog == null || typeof catalog !== "object" || Array.isArray(catalog)) {
+    throw new Error(label + " catalog is missing or not an object");
+  }
+  if (!Array.isArray(catalog.regions)) {
+    throw new Error(label + " catalog has no regions array");
+  }
+}
+
+function parseRemoteCatalogJson(text) {
+  if (text == null || String(text).trim() === "") {
+    throw new Error("remote catalog unavailable");
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(String(text));
+  } catch (error) {
+    throw new Error("malformed remote catalog: " + error.message);
+  }
+  assertCatalogShape(parsed, "remote");
+  return parsed;
+}
+
+function assertSourceMatchesRelease(sourceFiles, recordedFiles, label) {
+  const sourceByName = new Map((sourceFiles || []).map((file) => [file.name, fileIdentity(file)]));
+  for (const recorded of recordedFiles || []) {
+    const expected = fileIdentity(recorded);
+    const source = sourceByName.get(expected.name);
+    if (!source || source.bytes !== expected.bytes || source.sha256 !== expected.sha256) {
+      throw new Error(`${label}/${expected.name} no longer matches the tested candidate`);
+    }
+  }
+}
+
+function mergePromotedRegionsIntoCatalog(remoteCatalog, promotedRegions, options = {}) {
+  assertCatalogShape(remoteCatalog, "remote");
+  if (!Array.isArray(promotedRegions) || !promotedRegions.length) {
+    throw new Error("promotion requires at least one region");
+  }
+  const byId = new Map();
+  for (const region of promotedRegions) {
+    if (!region || !region.id) throw new Error("promoted region is missing id");
+    const files = (region.files || []).map(fileIdentity);
+    for (const required of PHONE_FILES) {
+      if (!files.some((file) => file.name === required)) {
+        throw new Error("release record missing " + required + " for " + region.id);
+      }
+    }
+    byId.set(region.id, { id: region.id, files });
+  }
+  const seen = new Set();
+  const regions = remoteCatalog.regions.map((region) => {
+    const promoted = byId.get(region.id);
+    if (!promoted) return region;
+    seen.add(region.id);
+    return Object.assign({}, region, { id: region.id, files: promoted.files });
+  });
+  for (const promoted of byId.values()) {
+    if (!seen.has(promoted.id)) {
+      regions.push({ id: promoted.id, files: promoted.files });
+    }
+  }
+  const catalog = Object.assign({}, remoteCatalog, { regions });
+  if (options.generatedAt !== false) {
+    catalog.generatedAt = options.generatedAt || new Date().toISOString();
+  }
+  return catalog;
+}
+
+function planStablePublication({
+  remoteCatalogText,
+  releaseRecord,
+  regionIds,
+  sourceRegions,
+  generatedAt
+} = {}) {
+  const remote = parseRemoteCatalogJson(remoteCatalogText);
+  if (!releaseRecord || !Array.isArray(releaseRecord.regions)) {
+    throw new Error("immutable release record is missing regions");
+  }
+  if (!Array.isArray(regionIds) || !regionIds.length) {
+    throw new Error("promotion requires at least one region");
+  }
+  const sourceById = new Map((sourceRegions || []).map((region) => [region.id, region]));
+  const promoted = [];
+  for (const id of regionIds) {
+    const recorded = releaseRecord.regions.find((region) => region.id === id);
+    if (!recorded) {
+      throw new Error((releaseRecord.releaseId || "release") + " does not contain region " + id);
+    }
+    const source = sourceById.get(id);
+    if (!source) throw new Error("missing local source for " + id);
+    const label = (releaseRecord.releaseId || "release") + "/" + id;
+    assertSourceMatchesRelease(source.files, recorded.files, label);
+    promoted.push({
+      id,
+      files: (recorded.files || []).map(fileIdentity)
+    });
+  }
+  return {
+    catalog: mergePromotedRegionsIntoCatalog(remote, promoted, { generatedAt }),
+    promoted
+  };
+}
+
+function publishStablePack(input) {
+  const planned = planStablePublication(input);
+  const putObject = input && input.putObject;
+  if (typeof putObject !== "function") {
+    throw new Error("publication requires a putObject handler");
+  }
+  for (const region of planned.promoted) {
+    for (const file of region.files) {
+      putObject({
+        kind: "pack",
+        regionId: region.id,
+        fileName: file.name,
+        bytes: file.bytes,
+        sha256: file.sha256
+      });
+    }
+  }
+  putObject({ kind: "manifest", catalog: planned.catalog });
+  return planned;
+}
+
+function assertPublicationCommand(opts) {
+  if (opts && opts.pack && !opts.promote && !opts.candidate) {
+    throw new Error(BARE_PACK_REJECTION);
+  }
 }
 
 function putR2(regionId, fileName, prefix = "") {
@@ -148,13 +290,7 @@ function verifyCandidateRecord(releaseId, ids) {
   for (const id of ids) {
     const recorded = (record.regions || []).find((region) => region.id === id);
     if (!recorded) die(releaseId + " does not contain region " + id);
-    const current = packRecord(id);
-    for (const file of recorded.files || []) {
-      const local = current.files.find((row) => row.name === file.name);
-      if (!local || local.bytes !== file.bytes || local.sha256 !== file.sha256) {
-        die(`${releaseId}/${id}/${file.name} no longer matches the tested candidate`);
-      }
-    }
+    assertSourceMatchesRelease(packRecord(id).files, recorded.files, `${releaseId}/${id}`);
   }
   return record;
 }
@@ -176,45 +312,50 @@ function uploadCandidate(releaseId, ids) {
   return record;
 }
 
-function mergeFuelIntoManifest(ids) {
-  const manifestPath = path.join(PACKS, "manifest.json");
-  if (!fs.existsSync(manifestPath)) return;
-  const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
-  let changed = false;
-  for (const id of ids) {
-    const src = path.join(PACKS, id, "fuel.v1.json");
-    if (!fs.existsSync(src)) continue;
-    const region = (manifest.regions || []).find((r) => r.id === id);
-    if (!region) continue;
-    const st = fs.statSync(src);
-    region.files = (region.files || []).filter((f) => f.name !== "fuel.v1.json");
-    region.files.push({ name: "fuel.v1.json", bytes: st.size, sha256: sha256File(src) });
-    changed = true;
+function fetchRemoteCatalogText() {
+  const url = PUBLIC_R2_BASE.replace(/\/$/, "") + "/manifest.json";
+  const script =
+    "fetch(process.argv[1],{cache:'no-store'}).then(async(res)=>{if(!res.ok){console.error('HTTP '+res.status);process.exit(2);}process.stdout.write(await res.text());}).catch((err)=>{console.error(err&&err.message?err.message:err);process.exit(2);});";
+  const r = spawnSync(process.execPath, ["-e", script, url], {
+    encoding: "utf8",
+    maxBuffer: 20 * 1024 * 1024
+  });
+  if (r.status !== 0) {
+    throw new Error("remote catalog unavailable" + (r.stderr ? ": " + String(r.stderr).trim() : ""));
   }
-  if (changed) {
-    fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + "\n");
-    console.log("manifest merged fuel.v1.json for", ids.join(","));
-  }
+  return r.stdout;
 }
 
-function shipPack(ids) {
-  mergeFuelIntoManifest(ids);
-  for (const id of ids) {
-    for (const name of PHONE_FILES) putR2(id, name);
-    for (const name of OPTIONAL_PHONE_FILES) {
-      const src = path.join(PACKS, id, name);
-      if (fs.existsSync(src)) putR2(id, name);
-      else console.warn("skip", id + "/" + name, "(not built — extract-osm-fuel + pack-region-fuel)");
+async function shipPack(ids, releaseRecord) {
+  const remoteCatalogText = await fetchRemoteCatalogText();
+  publishStablePack({
+    remoteCatalogText,
+    releaseRecord,
+    regionIds: ids,
+    sourceRegions: ids.map(packRecord),
+    putObject: (item) => {
+      if (item.kind === "pack") {
+        putR2(item.regionId, item.fileName);
+        return;
+      }
+      if (item.kind !== "manifest") return;
+      const tmp = path.join(os.tmpdir(), "dirt-manifest-merge-" + process.pid + ".json");
+      fs.writeFileSync(tmp, JSON.stringify(item.catalog, null, 2) + "\n");
+      try {
+        console.log("PUT dirt-packs/manifest.json (merge only promoted regions into the remote catalog)");
+        run(
+          "npx",
+          ["wrangler", "r2", "object", "put", "dirt-packs/manifest.json", "--file=" + tmp, "--remote"],
+          { cwd: FABRIC }
+        );
+      } finally {
+        try {
+          fs.unlinkSync(tmp);
+        } catch (_) {}
+      }
     }
-  }
-  const manifest = path.join(PACKS, "manifest.json");
-  if (fs.existsSync(manifest)) {
-    console.log("PUT dirt-packs/manifest.json (merge on the bucket — this replaces the object)");
-    run("npx", ["wrangler", "r2", "object", "put", "dirt-packs/manifest.json", "--file=" + manifest, "--remote"], {
-      cwd: FABRIC
-    });
-  }
-  console.log("pack published — live /api/route and PACKS download now share those bytes");
+  });
+  console.log("pack published — live /api/route and PACKS download now share those recorded bytes");
 }
 
 function shipLive(regionBaseOverrides) {
@@ -233,19 +374,19 @@ function shipAssert() {
   });
 }
 
-function main() {
+async function main() {
   const argv = process.argv.slice(2);
   if (!argv.length || argv.includes("--help")) {
     console.log(`Usage:
   node scripts/pack-fabric/scripts/ship-routing.js --assert
-  node scripts/pack-fabric/scripts/ship-routing.js --pack bc
   node scripts/pack-fabric/scripts/ship-routing.js --live
-  node scripts/pack-fabric/scripts/ship-routing.js --pack bc --live --assert
-  node scripts/pack-fabric/scripts/ship-routing.js --candidate ns-20260820 --pack ns --live
-  node scripts/pack-fabric/scripts/ship-routing.js --promote ns-20260820 --pack ns --live`);
+  node scripts/pack-fabric/scripts/ship-routing.js --candidate ns-osm-20260821-02 --pack ns --live
+  node scripts/pack-fabric/scripts/ship-routing.js --promote ns-osm-20260821-02 --pack ns
+bare --pack is rejected; use --candidate/--promote with a recorded release id.`);
     process.exit(argv.includes("--help") ? 0 : 1);
   }
   const opts = parseArgs(argv);
+  assertPublicationCommand(opts);
   if ((opts.candidate || opts.promote) && !opts.ids.length) {
     const existing = readCandidateRecord(opts.candidate || opts.promote);
     opts.ids = (existing.regions || []).map((region) => region.id);
@@ -260,13 +401,28 @@ function main() {
       : verifyCandidateRecord(opts.candidate, opts.ids);
     liveOverrides = Object.fromEntries(opts.ids.map((id) => [id, record.publicBase]));
   } else if (opts.promote) {
-    verifyCandidateRecord(opts.promote, opts.ids);
-    if (opts.pack) shipPack(opts.ids);
-  } else if (opts.pack) {
-    shipPack(opts.ids);
+    const record = verifyCandidateRecord(opts.promote, opts.ids);
+    if (opts.pack) await shipPack(opts.ids, record);
   }
   if (opts.live) shipLive(liveOverrides);
   if (opts.assert) shipAssert();
 }
 
-main();
+if (require.main === module) {
+  main().catch((error) => {
+    die(error && error.message ? error.message : String(error));
+  });
+}
+
+module.exports = {
+  ALL_PHONE_FILES,
+  BARE_PACK_REJECTION,
+  PHONE_FILES,
+  assertPublicationCommand,
+  assertSourceMatchesRelease,
+  mergePromotedRegionsIntoCatalog,
+  parseArgs,
+  parseRemoteCatalogJson,
+  planStablePublication,
+  publishStablePack
+};
