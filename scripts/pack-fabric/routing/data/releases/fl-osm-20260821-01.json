@@ -1,0 +1,29 @@
+{
+  "schemaVersion": "dirt-pack-release.v1",
+  "releaseId": "fl-osm-20260821-01",
+  "status": "live-candidate",
+  "createdAt": "2026-08-21T16:27:02.246Z",
+  "publicBase": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/candidates/fl-osm-20260821-01",
+  "regions": [
+    {
+      "id": "fl",
+      "files": [
+        {
+          "name": "graph.v2.bin",
+          "bytes": 227783809,
+          "sha256": "743ecabafde899865979efb1ae9f69719313ed624cec083f9f74b4af0c6d7424"
+        },
+        {
+          "name": "geometry.v1.bin",
+          "bytes": 139729812,
+          "sha256": "5e7f434b50daafc2db8f57310635b1653d24df425e997e7443a25b663807e2aa"
+        },
+        {
+          "name": "fuel.v1.json",
+          "bytes": 1576249,
+          "sha256": "944220a0e7283aa2ab0743ed946814b9ee087cef63af174ff96c7a6e063bba98"
+        }
+      ]
+    }
+  ]
+}

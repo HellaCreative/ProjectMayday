@@ -42,6 +42,27 @@ struct FuelAssistTests {
         #expect(message.contains("working Clean plan was kept"))
     }
 
+    @Test func fuelReplacementRequiresTwoStepReachability() {
+        #expect(FuelReplacement.isValid(
+            fromPreviousMeters: 180_000,
+            toNextMeters: 230_000,
+            previousCapMeters: 217_500,
+            usableRangeMeters: 237_500
+        ))
+        #expect(!FuelReplacement.isValid(
+            fromPreviousMeters: 400_000,
+            toNextMeters: 50_000,
+            previousCapMeters: 217_500,
+            usableRangeMeters: 237_500
+        ))
+        #expect(!FuelReplacement.isValid(
+            fromPreviousMeters: 180_000,
+            toNextMeters: nil,
+            previousCapMeters: 217_500,
+            usableRangeMeters: 237_500
+        ))
+    }
+
     @Test func fuelPickPrefersStationOnTheLineNotASpur() {
         let start = RouteCoordinate(longitude: -123.2, latitude: 50.0)
         let end = RouteCoordinate(longitude: -119.7, latitude: 50.0)

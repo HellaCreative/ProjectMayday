@@ -51,6 +51,11 @@ const {
   progressRegressionForAttempt,
   annotateCorridorMeta,
   corridorMetersForProfile,
+  corridorCapMetersForProfile,
+  corridorSearchWidthsForProfile,
+  capCorridorMeters,
+  DIRT_CORRIDOR_M,
+  DIRT_CORRIDOR_MAX_M,
   pickResourceEnd,
   VARIETY_SLOTS,
   BALANCED_BUCKETS,
@@ -364,20 +369,20 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
   const sessionSeed = Number(searchOpts.sessionSeed) || 0;
   if (!searchOpts.costMode && profile !== "cleanest") {
     const baseCorridor = corridorMetersForProfile(profile);
-    // Direct/Balanced keep the narrowest viable band. Dirt first compares
-    // coherent rides inside 50/100/150 km envelopes; the corridor is an outer
-    // permission, never distance the route must consume.
-    const widthMultipliers = profile === "direct"
-      ? [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12]
-      : profile === "dirt" ? [4, 3, 2, 1, 6, 8] : [1, 2, 3, 4, 6, 8];
-    const widths = widthMultipliers.map((m) => baseCorridor * m).concat(Infinity);
+    const corridorCap = corridorCapMetersForProfile(profile);
+    // Direct/Balanced: one hard 25 km band. Dirt: 60 km, then 80 km only if
+    // that search fails (fuel / large water). No unbounded corridor.
+    const widths = profile === "dirt"
+      ? [DIRT_CORRIDOR_M, DIRT_CORRIDOR_MAX_M]
+      : corridorSearchWidthsForProfile(profile);
     const requestedCap = Number(searchOpts.maxPathMeters);
     const dirtCandidates = [];
     const attemptDiagnostics = [];
-    for (const width of widths) {
-      // Once Dirt has compared its three deliberate envelopes, wider bands are
-      // connectivity fallbacks only. Stop at the first one that connects.
-      const dirtComparisonWidth = profile === "dirt" && Number.isFinite(width) && width <= baseCorridor * 4;
+    for (const rawWidth of widths) {
+      const width = capCorridorMeters(profile, rawWidth);
+      if (!Number.isFinite(width) || width > corridorCap) continue;
+      // Dirt's 80 km envelope is desperation only. Stop if 60 km already connected.
+      const dirtComparisonWidth = profile === "dirt" && width <= DIRT_CORRIDOR_M;
       if (profile === "dirt" && dirtCandidates.length && !dirtComparisonWidth) break;
       const diagnostics = {};
       const rideOpts = {
@@ -386,14 +391,13 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
         costMode:
           profile === "balanced" ? "balancedResource" :
           profile === "dirt" ? "pavement" : "profile",
-        corridorMeters: Number.isFinite(width) ? width : 0,
-        hardCorridor: Number.isFinite(width),
+        corridorMeters: width,
+        hardCorridor: true,
         boundedSearch: true,
         sessionSeed,
         variety: false,
         // Width is lateral permission, not permission to head away from the
-        // next pin. Keep the forward-progress guard fixed while widening; only
-        // the final unbounded attempt may relax it to prove connectivity.
+        // next pin. Keep the forward-progress guard fixed at every envelope.
         progressRegressionMeters: progressRegressionForAttempt(profile, width),
         diagnostics,
         settlementWall: searchOpts.settlementWall === true,
@@ -414,7 +418,7 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
         runtime, startMatch, endMatch, profile, policy, avoidEdgeIds, pavedBias, rideOpts
       );
       attemptDiagnostics.push({
-        corridorMeters: Number.isFinite(width) ? width : null,
+        corridorMeters: width,
         outcome: ride ? "completed" : (diagnostics.outcome || "noPath"),
         pops: diagnostics.pops || (ride && ride.searchMeta && ride.searchMeta.pops) || 0
       });
@@ -423,8 +427,8 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
       ride.searchMeta.rideObjective =
         profile === "dirt" ? "earned-dirt-detour" :
         profile === "balanced" ? "surface-balance" : "crow-flies-adventure";
-      ride.searchMeta.corridorMeters = Number.isFinite(width) ? width : null;
-      ride.searchMeta.corridorWidened = Number.isFinite(width) && width > baseCorridor;
+      ride.searchMeta.corridorMeters = width;
+      ride.searchMeta.corridorWidened = width > baseCorridor;
       if (profile === "dirt") {
         ride.searchMeta.dirtRideWeights = {
           paved: DIRT_RIDE_PAVED_PER_KM,
@@ -1247,8 +1251,9 @@ function searchBalancedResource(ctx) {
         const settlementMult = settlementFallback && toLL
           ? settlementFallbackMultiplier(toLL[0], toLL[1], startLL, endLL, settlementBoxes)
           : 1;
+        const surfMult = surfaceMultiplier(surface, "balanced", undefined, road);
         const newScore = cur.searchCost
-          + penalizeBacktrack(edgeM * settlementMult, pack.edgeId(ei));
+          + penalizeBacktrack(edgeM * settlementMult * surfMult, pack.edgeId(ei));
         let action = considerRelax(
           newScore,
           score[toLab],
@@ -1298,8 +1303,11 @@ function searchBalancedResource(ctx) {
         const settlementMult = settlementFallback && toLL
           ? settlementFallbackMultiplier(toLL[0], toLL[1], startLL, endLL, settlementBoxes)
           : 1;
+        const vAttr = edgeAttrs[v.ei];
+        const vRoad = ROAD_CLASS_NAME[unpackRoadClass(vAttr)] || "unknown";
+        const surfMult = surfaceMultiplier(unpackSurface(vAttr), "balanced", undefined, vRoad);
         const newScore = cur.searchCost
-          + penalizeBacktrack(v.meters * settlementMult, pack.edgeId(v.ei));
+          + penalizeBacktrack(v.meters * settlementMult * surfMult, pack.edgeId(v.ei));
         if (newScore < score[toLab]) {
           dist[toLab] = newMeters;
           score[toLab] = newScore;

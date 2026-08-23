@@ -116,12 +116,15 @@ struct HopSearchPolicyTests {
     }
 
     @Test func corridorWidthsMatchSpec() {
-        #expect(HopSearchPolicy.corridorMeters(for: .direct) == 15_000)
-        #expect(HopSearchPolicy.corridorMeters(for: .dirt) == 50_000)
-        #expect(HopSearchPolicy.corridorMeters(for: .balanced) == 40_000)
+        #expect(HopSearchPolicy.corridorMeters(for: .direct) == 25_000)
+        #expect(HopSearchPolicy.corridorMeters(for: .dirt) == 60_000)
+        #expect(HopSearchPolicy.corridorMeters(for: .balanced) == 25_000)
+        #expect(HopSearchPolicy.dirtCorridorMaxMeters == 80_000)
         #expect(HopSearchPolicy.corridorMeters(for: .cleanest) == nil)
-        #expect(HopSearchPolicy.extraBudget(shortestMeters: 100_000, for: .direct) == 115_000)
+        #expect(HopSearchPolicy.extraBudget(shortestMeters: 100_000, for: .direct) == 125_000)
         #expect(HopSearchPolicy.extraBudget(shortestMeters: 100_000, for: .cleanest) == nil)
+        #expect(HopSearchPolicy.capCorridorMeters(120_000, for: .dirt) == 80_000)
+        #expect(HopSearchPolicy.capCorridorMeters(40_000, for: .direct) == 25_000)
     }
 
     @Test func ratioBucketsSplitTheTenPointBand() {
@@ -154,7 +157,7 @@ struct HopSearchPolicyTests {
         #expect(ctx.pavedOnly == false)
         #expect(ctx.urbanCoreFallback == false)
         ctx = HopSearchContext.forProfile(.direct, seed: 1)
-        #expect(ctx.corridorMeters == 15_000)
+        #expect(ctx.corridorMeters == 25_000)
         #expect(ctx.cityWall == true)
     }
 }

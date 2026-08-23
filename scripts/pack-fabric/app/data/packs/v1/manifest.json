@@ -3,7 +3,7 @@
   "packFormat": "graph.v2",
   "geometryFormat": "geometry.v1",
   "version": "v1",
-  "generatedAt": "2026-08-21T12:23:26.923Z",
+  "generatedAt": "2026-08-21T20:23:24.652Z",
   "basePath": "/app/data/packs/v1",
   "regions": [
     {
@@ -11,8 +11,8 @@
       "files": [
         {
           "name": "graph.v2.bin",
-          "bytes": 59807860,
-          "sha256": "deabc3515cce7d5a0f6d73e6a5405ae71544cf32a8e1e59f46e00f3157152b49"
+          "bytes": 59832088,
+          "sha256": "cab645abed3221078cbb327232679c72a449ab81d379fabcdf2a800d9b3ae0a4"
         },
         {
           "name": "geometry.v1.bin",
@@ -31,13 +31,18 @@
       "files": [
         {
           "name": "graph.v2.bin",
-          "bytes": 6708015,
-          "sha256": "3ecd66f4ffa656ed6e6e7978d676e6330e1b464fd0ef4f426665ce4560c8ad01"
+          "bytes": 13970805,
+          "sha256": "32d1eb09b050c96d86b2a9c117554bd572d90eb23e5e112da0e8b2b938ea7a34"
         },
         {
           "name": "geometry.v1.bin",
-          "bytes": 9305508,
-          "sha256": "9adcb698df1d743919fc359a7d81d80e6369a199dd62e88dfdadc97c7741bca3"
+          "bytes": 13081980,
+          "sha256": "ee22fd67c8227d410344a59c53a8eff3595cd862250776c26766c2867d49a000"
+        },
+        {
+          "name": "fuel.v1.json",
+          "bytes": 86168,
+          "sha256": "36e681552be84f310d6c1c11445c722ab87e82acf2d9771edcb9ce0b9e78b847"
         }
       ]
     },
@@ -46,13 +51,18 @@
       "files": [
         {
           "name": "graph.v2.bin",
-          "bytes": 40404128,
-          "sha256": "6d7bd181ac42c4f7cfca5ad6bed3caf3007128d6cf2777324ed28ec205799781"
+          "bytes": 76222711,
+          "sha256": "0513a97d282541b8e5cb907b04813ed529308289fde713ba894db8a924e4474b"
         },
         {
           "name": "geometry.v1.bin",
-          "bytes": 58941372,
-          "sha256": "fab973fef061254fc8c98d90ad82e0f897742e0bf744c3099b46dea1345c0528"
+          "bytes": 68597680,
+          "sha256": "8c31e8f49da0bdc8a27a9c59f4b51adc56bfc2e6ebcaf880c9abf8903a5d1e58"
+        },
+        {
+          "name": "fuel.v1.json",
+          "bytes": 568504,
+          "sha256": "00ebd8844daa535fc02425a0b4d80d093066305421ec0b277ec6b27d79bb685a"
         }
       ]
     },
@@ -61,13 +71,18 @@
       "files": [
         {
           "name": "graph.v2.bin",
-          "bytes": 29684559,
-          "sha256": "6611a3f6b060f952e347982d674e0ce3eedbb4753333a2cd25714ffa64d98625"
+          "bytes": 55492210,
+          "sha256": "adac4c1492f44424fd9fb7085248669623b931111c2855a3f12aac6f2711f386"
         },
         {
           "name": "geometry.v1.bin",
-          "bytes": 39904448,
-          "sha256": "e963b983a77fcf15ed5c4976c711e5db716008347ced325d2fb1d53a9c0e4578"
+          "bytes": 47508200,
+          "sha256": "ea792c88900fe91637d235d341e5ff44426e681861dc5318771cb9ecb1f1712f"
+        },
+        {
+          "name": "fuel.v1.json",
+          "bytes": 384639,
+          "sha256": "a881931132900ce8e6d6966ee82e65af2f2b8b1612fff9ca46db728154ed081f"
         }
       ]
     },
@@ -76,13 +91,18 @@
       "files": [
         {
           "name": "graph.v2.bin",
-          "bytes": 54681233,
-          "sha256": "d744993589309447587ceaa61343b2edda7d689980852eb6c00f87a3a6dadfe0"
+          "bytes": 104241878,
+          "sha256": "16a23c04e541d5f90cc10ab7b31ca55f9caf4fc399bc8fd70eed90a8974f492c"
         },
         {
           "name": "geometry.v1.bin",
-          "bytes": 66532896,
-          "sha256": "c1bce8c5899eeb26b298ce73f408db3278b550e71e84f8bd7ba2471c29f0f9f8"
+          "bytes": 87334924,
+          "sha256": "5a06572bbb8e209d05fe16db1cf4ed2e37846e230b0d429016f020bb560f7e96"
+        },
+        {
+          "name": "fuel.v1.json",
+          "bytes": 712166,
+          "sha256": "e1f960f5832f49863f1261caec16e7f5b6f5456ba324fd2ca8c651b83e872f00"
         }
       ]
     },
@@ -91,8 +111,8 @@
       "files": [
         {
           "name": "graph.v2.bin",
-          "bytes": 58288049,
-          "sha256": "55e1839e283abf69dfe7aa1ef547cfb55b0f5d5dc43b75a5edf77a20caf52be0"
+          "bytes": 58312915,
+          "sha256": "3a9d63f8d76fb0e5de82ae4f0a9c081ae08b5720c314cbaa23c1b8093f0195e2"
         },
         {
           "name": "geometry.v1.bin",
@@ -111,13 +131,18 @@
       "files": [
         {
           "name": "graph.v2.bin",
-          "bytes": 47954366,
-          "sha256": "1e55d6e464df7d2d227200797f97901e714d32914f1f60ff51f8d1ac65d90013"
+          "bytes": 331929895,
+          "sha256": "7c385b8e09816be3fdfdd687836598d36d3e144b1d50acc2e92aedd53c4342aa"
         },
         {
           "name": "geometry.v1.bin",
-          "bytes": 100794088,
-          "sha256": "a5db9b4aa3748d90d441882f0964b8c7acd1a3a99950ce2139fd25d79b824282"
+          "bytes": 277341012,
+          "sha256": "3d62bb40731a8a33ae666c8d43b50bf0a0b8112a23f8bd5f432bc4fafb6116ee"
+        },
+        {
+          "name": "fuel.v1.json",
+          "bytes": 2126083,
+          "sha256": "c5ad90034869c3a6abef2710566c8e5c5f688ffdab212461c8d56a5242b9504f"
         }
       ]
     },
@@ -126,13 +151,18 @@
       "files": [
         {
           "name": "graph.v2.bin",
-          "bytes": 48237889,
-          "sha256": "3a45c5580cf39f8806cf19018645b32ab353d16dc8d7257f1d6a4bd23e564db9"
+          "bytes": 95676933,
+          "sha256": "6c114e04785039289b98f678149161cb4a404fff6e7e7ec12adb2ae5258dfef5"
         },
         {
           "name": "geometry.v1.bin",
-          "bytes": 66068164,
-          "sha256": "db09e20bb8d0a1228bc31ce83e178cab20d3d19daff26bab72247145e15e2dd8"
+          "bytes": 89356144,
+          "sha256": "abe6757c23b449641d10b45e4e3f115d27ff9ef4f35f60ac9e9b33feaba6550d"
+        },
+        {
+          "name": "fuel.v1.json",
+          "bytes": 616723,
+          "sha256": "b4fd49a9d47daa78cfb118c566933d7cdbc84a22000f7fb715def9f8156e99ac"
         }
       ]
     },
@@ -141,13 +171,38 @@
       "files": [
         {
           "name": "graph.v2.bin",
-          "bytes": 24660968,
-          "sha256": "ef58c4e51023317c3c9ec729000b17b86a0b5bcc43deeefee02679bf4cd546c1"
+          "bytes": 45583165,
+          "sha256": "f7ee411792ecc8224b67ba6b422b74b8e855bc6e23164108f78dbb994407e766"
         },
         {
           "name": "geometry.v1.bin",
-          "bytes": 28077420,
-          "sha256": "ae69d82b37e7e8b5232a2cde0574037f7af99f8c1509feed079df88c5f8a7964"
+          "bytes": 38312520,
+          "sha256": "4ff7eb045011224d3eea8abda2a4ba55798a5343d8e816895c98eec6eb60a52b"
+        },
+        {
+          "name": "fuel.v1.json",
+          "bytes": 321451,
+          "sha256": "d53620da496ee7d26f65f620f6ccae3e93f1aeab477daee761925c55cbe3e368"
+        }
+      ]
+    },
+    {
+      "id": "dc",
+      "files": [
+        {
+          "name": "graph.v2.bin",
+          "bytes": 3668563,
+          "sha256": "bc80dbf7f583cd8142a68eebc1433d69def02526e2ec8d7da054d483aaeb6e4e"
+        },
+        {
+          "name": "geometry.v1.bin",
+          "bytes": 2226876,
+          "sha256": "e23266f9909676179703330eed55de852bc15cf65a32b3bd5b7832f4398a4ca7"
+        },
+        {
+          "name": "fuel.v1.json",
+          "bytes": 33216,
+          "sha256": "e4414a443742c3a9753d30c348c0244cbdbfe491b36bc8a2780cee4e114bf895"
         }
       ]
     },
@@ -156,13 +211,18 @@
       "files": [
         {
           "name": "graph.v2.bin",
-          "bytes": 6855819,
-          "sha256": "7bc240c67344d7c1a00fcce3686d8c02a2abf4d68577ab5aaca4589a360df646"
+          "bytes": 12697438,
+          "sha256": "34e2b0fe0c9bc987c5e5ed1f563e53aeb57a5d5e8960d4684ba27a707f28ad24"
         },
         {
           "name": "geometry.v1.bin",
-          "bytes": 6698164,
-          "sha256": "5d0805a3c36275e50fb6b1b70714720985ea756ce321a134138c218d1abad70a"
+          "bytes": 8435256,
+          "sha256": "1ad72c7b20e623506b7575d967b46bb9647b778ebf9445debac41985971600e3"
+        },
+        {
+          "name": "fuel.v1.json",
+          "bytes": 105720,
+          "sha256": "3530c9be2b91b56ad4bae748e2667a20ad07367cd9a4975bb75b5694341abb08"
         }
       ]
     },
@@ -171,13 +231,18 @@
       "files": [
         {
           "name": "graph.v2.bin",
-          "bytes": 56922415,
-          "sha256": "49030e6daf7cbf0c72623280d0dc6251b11c84719b1a507c398e0b811716678c"
+          "bytes": 227783809,
+          "sha256": "743ecabafde899865979efb1ae9f69719313ed624cec083f9f74b4af0c6d7424"
         },
         {
           "name": "geometry.v1.bin",
-          "bytes": 64023756,
-          "sha256": "1e71750acea2fcd3ecb9f158cb7676a3a3ea108087b9fe01e87a9afe1ae583e7"
+          "bytes": 139729812,
+          "sha256": "5e7f434b50daafc2db8f57310635b1653d24df425e997e7443a25b663807e2aa"
+        },
+        {
+          "name": "fuel.v1.json",
+          "bytes": 1576249,
+          "sha256": "944220a0e7283aa2ab0743ed946814b9ee087cef63af174ff96c7a6e063bba98"
         }
       ]
     },
@@ -186,13 +251,18 @@
       "files": [
         {
           "name": "graph.v2.bin",
-          "bytes": 81104099,
-          "sha256": "212f02972b79b2d4de5dc9ca92f482371d19c636005336a7781a8f2bcfbd1850"
+          "bytes": 143800527,
+          "sha256": "79c7107e4302141c2ece1c2ba123e5731f60be0a1f13ce4514d29e6add4e64ca"
         },
         {
           "name": "geometry.v1.bin",
-          "bytes": 86375092,
-          "sha256": "991d63bd376b114efb5ca8f99d5b9dc0f860670b2cfdfcc3c9b75a960b3c0b3f"
+          "bytes": 104429040,
+          "sha256": "6f34be47abc5685566d9b8b0e9577655aef519f84618d6b2bc23d5854477b4c3"
+        },
+        {
+          "name": "fuel.v1.json",
+          "bytes": 1285395,
+          "sha256": "4c911578cce3ca092052d0b6f738d2bf6df67c67e588ce612da692c6e6324252"
         }
       ]
     },
@@ -201,13 +271,18 @@
       "files": [
         {
           "name": "graph.v2.bin",
-          "bytes": 5090377,
-          "sha256": "d74130cd12dba7ef8b63dea5c6646bc64b4bebafdcfad65a9c43399fc531d84d"
+          "bytes": 8725030,
+          "sha256": "157e2305facd9c53a3fd386e1aee7779096cbbf9c1e0b9075b406cef6a982a18"
         },
         {
           "name": "geometry.v1.bin",
-          "bytes": 5806380,
-          "sha256": "f17cea7046d6384412efb76e888b06ed1b01e56dae2590c52a2f61f27e9beed2"
+          "bytes": 7211076,
+          "sha256": "8912d0eb668947c9d94cc0f57a6c303d0efe762e27070051a3d7cef8f52f7d8a"
+        },
+        {
+          "name": "fuel.v1.json",
+          "bytes": 79361,
+          "sha256": "516d58eece46053c72a6ea33d591d134f7c94baaa7e5e938aa17ba4c71124730"
         }
       ]
     },
@@ -216,13 +291,18 @@
       "files": [
         {
           "name": "graph.v2.bin",
-          "bytes": 26689560,
-          "sha256": "89eb0e0fdb508148945ceda70f33f05531b2560d166cdad4b81820785d8490b4"
+          "bytes": 56702901,
+          "sha256": "42eeb9c3f56c27a459dc481a2bafad81f460148ccf2841831754dc3027a7b446"
         },
         {
           "name": "geometry.v1.bin",
-          "bytes": 29468772,
-          "sha256": "71d65cb739c72a5d1f026e64ca75964cd4c718992a4eaaf07d23ab8a74ba72c5"
+          "bytes": 38626276,
+          "sha256": "7661442490ab1330760c6309f47d1d7d580c3ee482e246a3fc97be9b34c4ebdf"
+        },
+        {
+          "name": "fuel.v1.json",
+          "bytes": 428454,
+          "sha256": "c5d1ed543baa4fa1d36dbeeea3d454555f0aaee6bb7d9453e7db82ff328704e1"
         }
       ]
     },
@@ -231,8 +311,8 @@
       "files": [
         {
           "name": "graph.v2.bin",
-          "bytes": 40198375,
-          "sha256": "dc4808faa780dbb5808adc22f1c23c2fcb9b109667bcd9ac3c116dfd7286f429"
+          "bytes": 40304374,
+          "sha256": "170ee25350364f9e54d6d6ad47487a10d49f955dd4bee762f78ff3cf04eb596a"
         },
         {
           "name": "geometry.v1.bin",
@@ -251,13 +331,18 @@
       "files": [
         {
           "name": "graph.v2.bin",
-          "bytes": 78371508,
-          "sha256": "f045ac217169154597d85b003e9d0ff9595410ed1c80d2f7be9434080437af87"
+          "bytes": 154541652,
+          "sha256": "3ba569ee760e9beda299fcfe8ce410cf5e69c8319ae6d23add646c3bf036ae0e"
         },
         {
           "name": "geometry.v1.bin",
-          "bytes": 73271248,
-          "sha256": "9f55708f5c293bd59afb18d5c1f9870f7c629c6d69abf90a9fd629d461cc3449"
+          "bytes": 95150192,
+          "sha256": "46101fcf3f0ab9f652572a0b0acb8620cac7a4375841e9290a144e3cd296e12c"
+        },
+        {
+          "name": "fuel.v1.json",
+          "bytes": 1247569,
+          "sha256": "175cdd40d7f742207908a4d959f5e12916bc372aae1eeba6b5b1cf25a41509ff"
         }
       ]
     },
@@ -266,13 +351,18 @@
       "files": [
         {
           "name": "graph.v2.bin",
-          "bytes": 57597076,
-          "sha256": "068c348852e25914b8427374958e7519361d62cd239b3419340f8b486dd4243e"
+          "bytes": 113710742,
+          "sha256": "5473eab27309622b06bf63ad471129905b4fbd52a059d1702025fe482bfdd06b"
         },
         {
           "name": "geometry.v1.bin",
-          "bytes": 58974856,
-          "sha256": "40af02789888b8dcbec36b100951c0649647bd3aa29a7d8bce99f1ee1a51480a"
+          "bytes": 74433856,
+          "sha256": "34d240465b512024234a67c8276e7ff8d277b70c118b10141c7109ec1d85d682"
+        },
+        {
+          "name": "fuel.v1.json",
+          "bytes": 722231,
+          "sha256": "41cc2c3777c2d7edd16038408176ff48895a31b4922780b5e4ff04f64b32c2dd"
         }
       ]
     },
@@ -281,13 +371,18 @@
       "files": [
         {
           "name": "graph.v2.bin",
-          "bytes": 32368701,
-          "sha256": "f7ec1ed77f98f78d7a3a08f031493bffdb09cc8e8ebdcab09fed76ec7a29258f"
+          "bytes": 66983194,
+          "sha256": "33a50627683df554ee4a8b9388e3415c784c58013e27bb1e5ee1304b1fd93213"
         },
         {
           "name": "geometry.v1.bin",
-          "bytes": 35397936,
-          "sha256": "03c56569484735ff40a129dd8eea22585fc2b58eb23f8ad58ab9eb7ec623ac85"
+          "bytes": 44056852,
+          "sha256": "3e900376faab478acce804342010424d3945b0f89c1332fa4d23072aa59a22ae"
+        },
+        {
+          "name": "fuel.v1.json",
+          "bytes": 303558,
+          "sha256": "effa803d78ea81a44908a05c73a50d8ae67b9ce5213e6bc114d995cb0016ff41"
         }
       ]
     },
@@ -296,13 +391,18 @@
       "files": [
         {
           "name": "graph.v2.bin",
-          "bytes": 35833460,
-          "sha256": "e1f895902364ca78b8948c86f4aa8f199e4047476e818384d4b6eb3568011ee9"
+          "bytes": 65153010,
+          "sha256": "b14842d199abddbffe38eb0448ab880356b0889367045c6ef5d1cb6cb9a79db7"
         },
         {
           "name": "geometry.v1.bin",
-          "bytes": 64600856,
-          "sha256": "c340a29bc515878fb5dabc408e619726062176363e524fa28ffad6d96307b7d8"
+          "bytes": 73037064,
+          "sha256": "ed9ab998c656cf6b2fec7addb547362dac215eb263c9305afa9282665a47da3b"
+        },
+        {
+          "name": "fuel.v1.json",
+          "bytes": 463735,
+          "sha256": "4072ed02d4c3055677fe2db8de7c2c879351e17162f7bda39c00c7ef2cd85d94"
         }
       ]
     },
@@ -311,13 +411,18 @@
       "files": [
         {
           "name": "graph.v2.bin",
-          "bytes": 29965828,
-          "sha256": "364fde6d84320fb2489d8b7a60240ec689abb2388dac6dac832f540e5283d7da"
+          "bytes": 57509951,
+          "sha256": "d56eb87f413fb6604edf5c3a61f0891c352352f1bbe53e861f6739f8a7f85e7e"
         },
         {
           "name": "geometry.v1.bin",
-          "bytes": 32260716,
-          "sha256": "7796de676b9da35b58d250d3a0b434569d17fdd059c3409a11ec7439a5eb492d"
+          "bytes": 39120228,
+          "sha256": "df3dc571545a108f2e103eeeed2b771ca91e4d3e06d10593e11142d41f9455e6"
+        },
+        {
+          "name": "fuel.v1.json",
+          "bytes": 366111,
+          "sha256": "e44a0236715c50341653be2d257213f7319226236c84a2a3c923d1b090634ac7"
         }
       ]
     },
@@ -326,13 +431,18 @@
       "files": [
         {
           "name": "graph.v2.bin",
-          "bytes": 40552967,
-          "sha256": "c04a74a22fa661a6000cea5c858f1a6a5b1a72d1697926527ab6ee72dd38ddf3"
+          "bytes": 78016769,
+          "sha256": "677bdaf9a246e8ff8a463d031622a01ba8c545b37c17dd142828160112770ce9"
         },
         {
           "name": "geometry.v1.bin",
-          "bytes": 50191712,
-          "sha256": "8585424dfb468d64353c3a3337a05c0181caf6528d45fd947d172a4dae78abdd"
+          "bytes": 67127144,
+          "sha256": "136581038edb91e5ad1d741ea2dbc7fff06849b2c026df49504eda6955592961"
+        },
+        {
+          "name": "fuel.v1.json",
+          "bytes": 424115,
+          "sha256": "ad372ac57a14b2853522b48589fbfb975a33f01af1d1da16fc80d974965f906a"
         }
       ]
     },
@@ -341,8 +451,8 @@
       "files": [
         {
           "name": "graph.v2.bin",
-          "bytes": 18120027,
-          "sha256": "72ccbb8cb262fb6ae287e70a3b2e1d0ae98ffb7e65f43112608ecb2a37d77b3e"
+          "bytes": 18168983,
+          "sha256": "414c915f79af3c98bd885455ea96101e1816dec002ab1bd2a28ce468511df2a0"
         },
         {
           "name": "geometry.v1.bin",
@@ -361,13 +471,18 @@
       "files": [
         {
           "name": "graph.v2.bin",
-          "bytes": 40814704,
-          "sha256": "a3ead800b2c7056117fb0adf701ad132987bb1660fe160732acb848cbe7c7732"
+          "bytes": 75384295,
+          "sha256": "f1800fede8c8de99d78edc4d92acfd09fac540f403cdef00a20d6e0f6d5b4116"
         },
         {
           "name": "geometry.v1.bin",
-          "bytes": 43116972,
-          "sha256": "2f46fa6fd5a8e5677e17f695fa77ac77252fe86bf406d2cf253e0fe4b9a2e1c6"
+          "bytes": 54362260,
+          "sha256": "1dd7075ab3d3adb53f8529d86e830ec105fed20ad8e960d67e21b80284e3ea68"
+        },
+        {
+          "name": "fuel.v1.json",
+          "bytes": 582420,
+          "sha256": "71a7695508e416679600d0b187e5f7c81978b8128f586f620fbf2c7d72ccb6b7"
         }
       ]
     },
@@ -376,13 +491,13 @@
       "files": [
         {
           "name": "graph.v2.bin",
-          "bytes": 15034884,
-          "sha256": "b2adcea664f630090a58bacea07e3cd18bb0efe142731e50d52a220ce6a166f3"
+          "bytes": 27758051,
+          "sha256": "c4cc6d25f5cd811059329922f32d27c56a7fe2a0bf288d67d8bb3e8a6b3fa1e5"
         },
         {
           "name": "geometry.v1.bin",
-          "bytes": 24302788,
-          "sha256": "2155077f4da16497e2a709f6fa14c51b1d09e1fd61f10e1567239ff94b3237a4"
+          "bytes": 30075332,
+          "sha256": "4c4528dcc42dfc919bd0235310b4f704bc0451f56701a2e535ac2ec3e3f8887f"
         }
       ]
     },
@@ -391,13 +506,18 @@
       "files": [
         {
           "name": "graph.v2.bin",
-          "bytes": 76593544,
-          "sha256": "fd248388fe55e6f850a2cdf65cfecc5e884da559971c148dc8e1f0587311ec16"
+          "bytes": 151206155,
+          "sha256": "8cb049735f348d451fc9662b0fc855c2e2ee0561740796f4641d078a5bddcf9c"
         },
         {
           "name": "geometry.v1.bin",
-          "bytes": 81314216,
-          "sha256": "173efbe31b4314bd91332e09d3b5ee1dc9aec2baca6dbaf7ffdf3441f17d0dbf"
+          "bytes": 105984824,
+          "sha256": "9fd47244fbdd0e30ff1929420cd2587741f62ad653b7ed2bc235302e6111ca70"
+        },
+        {
+          "name": "fuel.v1.json",
+          "bytes": 1071761,
+          "sha256": "5c64d2a34777631ff737ce44c498e2f45080bca7836ad4ba87bdfc64268a2b5a"
         }
       ]
     },
@@ -406,13 +526,18 @@
       "files": [
         {
           "name": "graph.v2.bin",
-          "bytes": 43959296,
-          "sha256": "56f0a2f21d446b8b9959ba37d9a48dac5cbf2a21abf89a300e2b8b8b501addeb"
+          "bytes": 89153532,
+          "sha256": "4300d81a4f6d9c856ccf95a85abae165b0c32f6a1f3cfdf4459fa0236758ce18"
         },
         {
           "name": "geometry.v1.bin",
-          "bytes": 47278868,
-          "sha256": "8d364444e1818ba407f2036775b0638de91141a3f06e01e7eceacacd731e4693"
+          "bytes": 63377020,
+          "sha256": "35094c876c845db1056dafe06b28a71a3a04dc0efad11f10ee6d35b1bbb7f365"
+        },
+        {
+          "name": "fuel.v1.json",
+          "bytes": 642044,
+          "sha256": "ad88a9000b7996714dfda69970e938f090f8a1be6eccc1374749190456adaeee"
         }
       ]
     },
@@ -421,13 +546,18 @@
       "files": [
         {
           "name": "graph.v2.bin",
-          "bytes": 55918307,
-          "sha256": "3ecf36a5da51cd4945e4bc72738d8744e2127453e8e3a2049c1208e498269029"
+          "bytes": 105385438,
+          "sha256": "6768498dd63d35040fd0ee5f3285c7fd58082c701aa5bc21edc41b2690678a21"
         },
         {
           "name": "geometry.v1.bin",
-          "bytes": 72484296,
-          "sha256": "aac677d6b1ef03dd5b779574dc1a588a28129aafb1e313d503f92ed6f5285971"
+          "bytes": 86838716,
+          "sha256": "a07d9588f3a6cf1629683ac6dcdc2f3ea823e778126f707045c910be3312c8b8"
+        },
+        {
+          "name": "fuel.v1.json",
+          "bytes": 618018,
+          "sha256": "8020f274bd015fc6ec7fb19d252cfcc48255e56153a1ac08ff3aa22901b25839"
         }
       ]
     },
@@ -436,13 +566,18 @@
       "files": [
         {
           "name": "graph.v2.bin",
-          "bytes": 24420612,
-          "sha256": "04975d20e57d9e8db0ff6304fa570c869cb360d22f9d3d0a006d4701ec7e9e65"
+          "bytes": 46257202,
+          "sha256": "b7de27251741018451464993bbef9d0de0275ef2cd352604ea48bbbfe5204f3e"
         },
         {
           "name": "geometry.v1.bin",
-          "bytes": 31993896,
-          "sha256": "09cde1a2d2e443f2c9e3251e70a601bfe0f5d19bf1b9c59f1f1afe5cbd5233ab"
+          "bytes": 37622996,
+          "sha256": "4c78998dc9c3399424b0178c95f0db341e9ddbf72638f84a43c1b0d4660cf8a1"
+        },
+        {
+          "name": "fuel.v1.json",
+          "bytes": 325021,
+          "sha256": "3fcd7927de32a1b30937d4411aa7fa621b49f2d1ec3747883946c0737a26d298"
         }
       ]
     },
@@ -451,8 +586,8 @@
       "files": [
         {
           "name": "graph.v2.bin",
-          "bytes": 36504269,
-          "sha256": "ee0ba8425847210c522bd1ab3e525c2a69d68353415073361fa6cba36c9c7105"
+          "bytes": 36628092,
+          "sha256": "f6189f4c28a066b34f3216a4a598e84c2197c02905b1fbbe55139d235c52c8d3"
         },
         {
           "name": "geometry.v1.bin",
@@ -471,8 +606,8 @@
       "files": [
         {
           "name": "graph.v2.bin",
-          "bytes": 9914704,
-          "sha256": "2e13a7c95110db5554fad0d6e016b07fec74bca194e06bde33ff59f12319e171"
+          "bytes": 9938483,
+          "sha256": "0ac58aa73eff10acdfb204379d8d91e0fef0c241d6f2149b4630303bc355f9e1"
         },
         {
           "name": "geometry.v1.bin",
@@ -491,13 +626,18 @@
       "files": [
         {
           "name": "graph.v2.bin",
-          "bytes": 19345272,
-          "sha256": "829c5d84b7ff1cad4d3f4ca110e0538bb59de0769e979f05ddee58846a924e65"
+          "bytes": 172634811,
+          "sha256": "ee93049d859d4b79e00cd9949e017234e57d4f115f69a82bdddef2d78e1e6cdc"
         },
         {
           "name": "geometry.v1.bin",
-          "bytes": 41187380,
-          "sha256": "aa91d4d615bce1ede59a7f98868a8b53b2872bd8b072398513ed0409b0953174"
+          "bytes": 140449476,
+          "sha256": "3783041f9b399b928ee0c3c0d2ffff899bce7d927cca6f8f6549770cbe670921"
+        },
+        {
+          "name": "fuel.v1.json",
+          "bytes": 905174,
+          "sha256": "874cd8878032c93ba4e87b542288c8abba9907e3488f360b02eae1b37164c86c"
         }
       ]
     },
@@ -506,13 +646,18 @@
       "files": [
         {
           "name": "graph.v2.bin",
-          "bytes": 14490352,
-          "sha256": "09b2cf7b1efe1e31b5eb4c6bcf9ea0c222bbb65a5473459d62c96aa93fd7c66a"
+          "bytes": 29458097,
+          "sha256": "747ae360482cbba6b96f4ee1e7850f38b35c3659383e9bf666f69f429ccf9364"
         },
         {
           "name": "geometry.v1.bin",
-          "bytes": 27151400,
-          "sha256": "c08fb2b79c962cddcb3486df35a9e176e594cc968bf4ca8c6319a8f23653b046"
+          "bytes": 31360352,
+          "sha256": "8484d3e5f78e01e65498f92558a2a11d6010790c73e30af1eafb1c775ce34905"
+        },
+        {
+          "name": "fuel.v1.json",
+          "bytes": 107600,
+          "sha256": "26c1daf4702abb0376b5f4ed22f699162240b32a0a13c667b290653247ba3b19"
         }
       ]
     },
@@ -521,13 +666,18 @@
       "files": [
         {
           "name": "graph.v2.bin",
-          "bytes": 18187929,
-          "sha256": "f02ceb60bee92301fc0fabdc8af4596cd2403e7b08dd79e30f1c142c82451d87"
+          "bytes": 37854734,
+          "sha256": "88a18874795e700d069cbac9f48a9574f78d1bc5995db98c5464f4b3c6401da9"
         },
         {
           "name": "geometry.v1.bin",
-          "bytes": 25236672,
-          "sha256": "32c24a7050e5da17ce98320b199d61e44eb25ea885fe99f9edacdbef85177685"
+          "bytes": 30596444,
+          "sha256": "b79ecb3791f261ea1fa80d73ba97ef17622e7229efb1a1fc8f690964985d5f15"
+        },
+        {
+          "name": "fuel.v1.json",
+          "bytes": 215376,
+          "sha256": "7b50be6ce26a2392c4f5c6d964b86389b343f5f5903e278d3093e8ec1c1b5613"
         }
       ]
     },
@@ -536,13 +686,13 @@
       "files": [
         {
           "name": "graph.v2.bin",
-          "bytes": 15864032,
-          "sha256": "7e3383cd8dd0b5ceea5ca492f83453c527e72863032ce45f44aac6850835a801"
+          "bytes": 29589112,
+          "sha256": "48513a50a45cc0f8ac1e9d01138b7b4e755e1ac804da2096a4be7ab0c1c8fdee"
         },
         {
           "name": "geometry.v1.bin",
-          "bytes": 21026392,
-          "sha256": "f1eceb4e8bc506a96a822d00b82a3cd99d5e8616d9a232499b5b9d6e14aedafe"
+          "bytes": 27578208,
+          "sha256": "aa1359223aaa6c316c78338bb57d1a57dfc73185e04bdef58086b611fcfa5245"
         }
       ]
     },
@@ -551,13 +701,18 @@
       "files": [
         {
           "name": "graph.v2.bin",
-          "bytes": 40444972,
-          "sha256": "4b1785bba3e53f5ea6dbee7adbd5e5357e94d7667e8cf788737457d340cc2b3e"
+          "bytes": 73538703,
+          "sha256": "d05355b2f58fd580031df84be1ea7916ca3bdf8e61c6fae9d8f2b0fc9ccccd4b"
         },
         {
           "name": "geometry.v1.bin",
-          "bytes": 39241316,
-          "sha256": "b28aabe1a42da1dee815a0fd4d8476c7144652c6737fcaa5127d07fdd522ae0a"
+          "bytes": 49572780,
+          "sha256": "ec824c411cbdce11729737f5ed2f85be08400305aef148958ededd8ad18cea1a"
+        },
+        {
+          "name": "fuel.v1.json",
+          "bytes": 591143,
+          "sha256": "4190bfcc55a33d875f5e1fd24d5f7c28332c3f704b183d189caf0f28a28306e2"
         }
       ]
     },
@@ -586,13 +741,18 @@
       "files": [
         {
           "name": "graph.v2.bin",
-          "bytes": 22947258,
-          "sha256": "2859bf9e16828bfddc2f52b5586e4849898fc25d1a0adbb55aed815281817e1b"
+          "bytes": 46807990,
+          "sha256": "d0035c8957f374ad226c344a37cfb0431dd1ee979fbed0e39e8322b874931b2e"
         },
         {
           "name": "geometry.v1.bin",
-          "bytes": 40812332,
-          "sha256": "7358e97c90a94d6da94ecaaaaf97fd5edc4b77a9c0742ccf163bac09c852be9e"
+          "bytes": 50055392,
+          "sha256": "bcc83adacdb1823d4bf8721c0fad48f3847fb02ff54b592b7265ff6a0426ac20"
+        },
+        {
+          "name": "fuel.v1.json",
+          "bytes": 299336,
+          "sha256": "deba02a467b80c90f579c2ff7f42149f62fadb9339a57a250a33593b4d5b17a6"
         }
       ]
     },
@@ -661,13 +821,13 @@
       "files": [
         {
           "name": "graph.v2.bin",
-          "bytes": 22755198,
-          "sha256": "ce760ccd87f66e292210aef47c376aab2d332474a66eca675cb14677e5cb0fe4"
+          "bytes": 46478944,
+          "sha256": "b3d584fc26a888912e82b84a1d623e15aaba147161cc8c1c1b47f24f21934adc"
         },
         {
           "name": "geometry.v1.bin",
-          "bytes": 45694868,
-          "sha256": "513895b9d4115db415dfe2ef5ec7a2c31bc38444f932aafe40a9293187a0117f"
+          "bytes": 54606236,
+          "sha256": "57f76dbc47e563092547cf3c3ac63d30ecb9c450c02ae3e4d7df0022ba9d4396"
         }
       ]
     },
@@ -676,13 +836,18 @@
       "files": [
         {
           "name": "graph.v2.bin",
-          "bytes": 71439294,
-          "sha256": "83f3ce763dee874a8a533bb64c38dc9cb02c4b3980d8a7658da52e95431ad8ec"
+          "bytes": 130740227,
+          "sha256": "d4c67271a9a0fd54bc4e08656f8554e8994d642d9a82bb69f64ca547bd41666f"
         },
         {
           "name": "geometry.v1.bin",
-          "bytes": 79665332,
-          "sha256": "08eddfc4ba5933412f79d5428437877d00ef875baffd6cf23090b4fa7d7992cb"
+          "bytes": 100050288,
+          "sha256": "7aba6462acf4daea017e5fdd5748dd52c6dd38142834bb9064c5dfad086be627"
+        },
+        {
+          "name": "fuel.v1.json",
+          "bytes": 1113816,
+          "sha256": "6825384cff822ede8f70275f3c272e61238a8e59562418e5a70cbc1492158216"
         }
       ]
     },
@@ -691,13 +856,18 @@
       "files": [
         {
           "name": "graph.v2.bin",
-          "bytes": 28797248,
-          "sha256": "b3308284bbef84e193b6af060c6d6337d5a6dba81db01dcd2fd5e55995594792"
+          "bytes": 170120308,
+          "sha256": "742c6ba2d3e6a64e020485e8a79b4f42ae7e2a99d838fd5f1da417bae4311533"
         },
         {
           "name": "geometry.v1.bin",
-          "bytes": 47402052,
-          "sha256": "b47d8925515a93e320cd4b46ce0dfbb2101beaa7a507098756c10a66e189062f"
+          "bytes": 115463448,
+          "sha256": "749b9c8fbbd8014542c7037456e6812c613c919e785436189c082278cfb31582"
+        },
+        {
+          "name": "fuel.v1.json",
+          "bytes": 1229122,
+          "sha256": "ee7b27ffea4fe120d5ee8811dd134dc8eaa27bd55a9f3d0b58e21e4ae4f84933"
         }
       ]
     },
@@ -706,13 +876,18 @@
       "files": [
         {
           "name": "graph.v2.bin",
-          "bytes": 41119549,
-          "sha256": "f77d9affadbe9b4e7449007b874f6729f1f16759d01cd9d0c857211ddf123ce9"
+          "bytes": 76323011,
+          "sha256": "a53a151bfdebe69fcebf83d695a11e20157fa3b95cb6ce31df0959b8f51b1fe6"
         },
         {
           "name": "geometry.v1.bin",
-          "bytes": 43080772,
-          "sha256": "f8f81bd0d644a3edd2a6d4a189a2b8210f665f3b9367eb341ff218dfabac6499"
+          "bytes": 52309232,
+          "sha256": "c2a23a8dc04aea427d0f99de6a1f5eba45771d6af4017aed13c71931e927486c"
+        },
+        {
+          "name": "fuel.v1.json",
+          "bytes": 446068,
+          "sha256": "c560b5307f25981bde5acab4f5c51272cdb7913fde3a6e23491dd0276d712da7"
         }
       ]
     },
@@ -721,8 +896,8 @@
       "files": [
         {
           "name": "graph.v2.bin",
-          "bytes": 112298528,
-          "sha256": "d97cc863ff1f3273f21322f8ea9d3b3f2d2312b8ec69d6799ac84181e4bc27e1"
+          "bytes": 112470697,
+          "sha256": "674f686f41ecbca2340d4a3156a4255186c99101a7c166b0a085060ce32a5f47"
         },
         {
           "name": "geometry.v1.bin",
@@ -741,13 +916,18 @@
       "files": [
         {
           "name": "graph.v2.bin",
-          "bytes": 40689458,
-          "sha256": "4ae5e65fd91adc1346a0981e54352b810b2e6ddb2c3158ce93f7474e1bc4de72"
+          "bytes": 76578233,
+          "sha256": "ee4e54a4680c9c3530bf8b7d6f1f40adaccb0728cffea8772da63265a3c70bc0"
         },
         {
           "name": "geometry.v1.bin",
-          "bytes": 75977348,
-          "sha256": "3031587632ed3a1593f4842fadcc879868fad7f5238cc32175f5c470c66e50fa"
+          "bytes": 90451944,
+          "sha256": "14e86fc251c2dc53947565f15931393b946923ebe229ccbd91f1d3db2c4ca258"
+        },
+        {
+          "name": "fuel.v1.json",
+          "bytes": 372483,
+          "sha256": "db4a0ef0c0c4f903cb3a34605c9bdf53d867f9674168751902ad4a4445a2e2c1"
         }
       ]
     },
@@ -756,13 +936,18 @@
       "files": [
         {
           "name": "graph.v2.bin",
-          "bytes": 35378624,
-          "sha256": "704308a2aacbf631834074f005cafc1d2ae61bbaf5297ad6a45c4f83554de2f6"
+          "bytes": 157949940,
+          "sha256": "17332a9df1369e84f9ad22942b3eb867fe84cb1d3d0e6f1bf25b4cc8b2e889d8"
         },
         {
           "name": "geometry.v1.bin",
-          "bytes": 61437548,
-          "sha256": "5ae5c110eebd90edd95024e0b69923d4162a4ddcdee86cb858686a92f2a8acb7"
+          "bytes": 123558732,
+          "sha256": "11e0fd5affb77863888fbce6e86d701efe2c77d17f1917c106e802f46fa897d7"
+        },
+        {
+          "name": "fuel.v1.json",
+          "bytes": 1202023,
+          "sha256": "726ccd6a3d99a01effa6d17e7f23ef140db98630ba31c09282357dbebff6f068"
         }
       ]
     },
@@ -782,7 +967,7 @@
         {
           "name": "fuel.v1.json",
           "bytes": 27695,
-          "sha256": "e6d2c006a51741e38034d21c10b1918af580063ee12fe9604fc9f1a071806223"
+          "sha256": "60cb406cca11ab74de1076de996db7bd9a962cd14def8fea7aded63cf7585d0a"
         }
       ]
     },
@@ -791,8 +976,8 @@
       "files": [
         {
           "name": "graph.v2.bin",
-          "bytes": 67482438,
-          "sha256": "46dbb65b8ac5cfac4995e57889ca515352c09798f300046d39b1d3d2332eaf91"
+          "bytes": 67579057,
+          "sha256": "3d18ac495bdcf8517540c1e68ed232c9635dbb0c60781e3f5aadf5b8141a65f9"
         },
         {
           "name": "geometry.v1.bin",
@@ -811,13 +996,18 @@
       "files": [
         {
           "name": "graph.v2.bin",
-          "bytes": 5812051,
-          "sha256": "2563c1e4deb8b6e8a3a9731a8cbe73f7a5b8f75f4cb5be6fe81b7377bbca234c"
+          "bytes": 11203849,
+          "sha256": "29fa3a5ab2cb6f6ccd3d105871c20bde69c62547b8c1f71c0234d7e29d1a7cf3"
         },
         {
           "name": "geometry.v1.bin",
-          "bytes": 6334984,
-          "sha256": "251c31ca91c9e39e6c2b5e46ea7a5849f435bab7450bdfc52aad5747fd168290"
+          "bytes": 8353628,
+          "sha256": "e150b81eb542970cb3da6b3be16c4166f56302df1dd7c0401a7f6e9913b56494"
+        },
+        {
+          "name": "fuel.v1.json",
+          "bytes": 56963,
+          "sha256": "d7f6272c8d575b7e8cca210bf4fc0b68c34999878aeb29fd209e9b0627f0287f"
         }
       ]
     },
@@ -826,13 +1016,18 @@
       "files": [
         {
           "name": "graph.v2.bin",
-          "bytes": 41240094,
-          "sha256": "672146547fca2dffa560d3a0e28804dc80e6be9d31ef7b4c3b51b8a91b25a3c7"
+          "bytes": 76437806,
+          "sha256": "abf7a5d11763ecfc111a283257c97effb8c15e2a86e5dc27e9e9ce4904352cf7"
         },
         {
           "name": "geometry.v1.bin",
-          "bytes": 48844040,
-          "sha256": "6af8d1abf553675ce7ac8167e9b2e5b79ec9ea6e52cfa06060017497b9df9d83"
+          "bytes": 58818112,
+          "sha256": "7c0ba04be3e947b429ec9175b3db4bbdfef4a867912818a564fa0ca854324e32"
+        },
+        {
+          "name": "fuel.v1.json",
+          "bytes": 544651,
+          "sha256": "60c00160b3d10e6ae6533434b8bd02f4d3edbb9f088353bd26211c3db76bddb2"
         }
       ]
     },
@@ -841,13 +1036,18 @@
       "files": [
         {
           "name": "graph.v2.bin",
-          "bytes": 11533900,
-          "sha256": "ebffd32c280caaa4ef066fac10453b809fd0413801a8dc3d2f0aa65243bfc2e2"
+          "bytes": 23770940,
+          "sha256": "2ca1093814d17912c285c1763b4d93a9772c258cca5b0845d72726aa224a08fa"
         },
         {
           "name": "geometry.v1.bin",
-          "bytes": 17201948,
-          "sha256": "6240347cf94eb3e66e563ae50651824a58714ddd9a84f078270ec698754a7316"
+          "bytes": 20564272,
+          "sha256": "ac8c96b7d9037c3cf37b6be22a5a459f1039e28bfd5445a87c9fbecec2cb71dc"
+        },
+        {
+          "name": "fuel.v1.json",
+          "bytes": 160117,
+          "sha256": "9bb05f320bcdcd207b08e27f24ddb3ec5fedeaa65ce38cc32ff0fb5d95a064b6"
         }
       ]
     },
@@ -856,8 +1056,8 @@
       "files": [
         {
           "name": "graph.v2.bin",
-          "bytes": 26590396,
-          "sha256": "df95ee6e5f2e69c062efe4cddc7f9c56c2602c2dab894349d1d778f890b9860c"
+          "bytes": 26639805,
+          "sha256": "5d3d9dd043c74b9b8e7f778a81774ca45fa11c58feb5349fa71e83a35ea65ebc"
         },
         {
           "name": "geometry.v1.bin",
@@ -876,13 +1076,18 @@
       "files": [
         {
           "name": "graph.v2.bin",
-          "bytes": 51174488,
-          "sha256": "38f65eb07d01b78e552884039d9daceabbfbccfbd1ef0b40b27380306b09b95c"
+          "bytes": 93655561,
+          "sha256": "57f4f8d91d4f2cafd456c670c24630f1911aede36911e133f19114d67a6b4c12"
         },
         {
           "name": "geometry.v1.bin",
-          "bytes": 61011820,
-          "sha256": "bbb83fc276fcfe955f63f9ffc3b9d20d317e9445c8e1aec41899d720899b49c3"
+          "bytes": 73366356,
+          "sha256": "7d22add5971e91ad6a96049ec3e1dcc0da60d3475fa185f72a9a01c24b2b6d54"
+        },
+        {
+          "name": "fuel.v1.json",
+          "bytes": 685807,
+          "sha256": "d6d606286ca7c025b5185f09fce6d853f300ab1c0e5cb44be7a288ab1475065b"
         }
       ]
     },
@@ -891,13 +1096,18 @@
       "files": [
         {
           "name": "graph.v2.bin",
-          "bytes": 37362469,
-          "sha256": "96e167651caa5dbcd4ca72fa040b2ed69504bd7ca98c0ca579c4fe6993c83e21"
+          "bytes": 374707547,
+          "sha256": "c78ce543762f47bb9119938c320419adbebe8c2dac0cb29f00922d48b9db813a"
         },
         {
           "name": "geometry.v1.bin",
-          "bytes": 52215156,
-          "sha256": "222865e1769159bef37d20964373866e81823dd32fd0fab0d5923fef3bd198e0"
+          "bytes": 247726160,
+          "sha256": "a93455ce393f48ec1cdf46ebf6797888e3789088e8ee4ebc85998c9477797381"
+        },
+        {
+          "name": "fuel.v1.json",
+          "bytes": 3353631,
+          "sha256": "15d443aacfd286ec0e6b4bbb58cb6f85765c8adf38d40f8c75ca5827d08a4045"
         }
       ]
     },
@@ -906,13 +1116,18 @@
       "files": [
         {
           "name": "graph.v2.bin",
-          "bytes": 26223974,
-          "sha256": "67c8cc3def467ca9869eada1be9ebb5222473d8c4629188e66dcbc90bb448c61"
+          "bytes": 50651635,
+          "sha256": "28aad4329561cc5452cbc83b1b410dbad5b7d89b81386ddd7ff2abe4c8d3159e"
         },
         {
           "name": "geometry.v1.bin",
-          "bytes": 39988364,
-          "sha256": "ee5977be6305309b1328ea2c89135e70bc8906b3bbad5d1639f7a06b2ec20fc0"
+          "bytes": 50454724,
+          "sha256": "4c82a1b7bdb9366f00c03d55312b889d7b27c5751e4e8dc5b9868bb0696e8c9e"
+        },
+        {
+          "name": "fuel.v1.json",
+          "bytes": 485446,
+          "sha256": "b93ba9e9c54aee7f110b4aeb74ed6d7083e77b946e15dfca86b2a1116584de3f"
         }
       ]
     },
@@ -921,13 +1136,18 @@
       "files": [
         {
           "name": "graph.v2.bin",
-          "bytes": 14688275,
-          "sha256": "38b132b6bc7c68dd13c9216c828b27cc9e06cd9cdeb39707d1299c78f3265be4"
+          "bytes": 118149205,
+          "sha256": "03ef73209e2148298fc64abd17c818ebe9c1fe7789df2f7a2084a2599e9107cd"
         },
         {
           "name": "geometry.v1.bin",
-          "bytes": 47676832,
-          "sha256": "63ffd8c0ad949ade6eae7a9de2427baa2d83f04f710ac922fc77c0cb195b0468"
+          "bytes": 129141768,
+          "sha256": "d148d3617b380b50a501f434f3d8c7344d5190a5b90a7822b08e2a55cbbbb609"
+        },
+        {
+          "name": "fuel.v1.json",
+          "bytes": 1076998,
+          "sha256": "4e91a9eb242b8d58d62d8a4bb99fa53cfa40f1e4fda36232b9202e61628d28f1"
         }
       ]
     },
@@ -936,13 +1156,18 @@
       "files": [
         {
           "name": "graph.v2.bin",
-          "bytes": 7715106,
-          "sha256": "9d7013223c42f2c4cd420985d8a895e9898dd163b0998d9e8d45c43b3da69164"
+          "bytes": 14158903,
+          "sha256": "88cf20298172ea9bb65759935768a804a05ced30bba0714f802334bbc857777f"
         },
         {
           "name": "geometry.v1.bin",
-          "bytes": 13558268,
-          "sha256": "0ca3f0bd905bec6b7152a4ab0a59dab105c22e898e5c59550034ddf4948792ba"
+          "bytes": 17195648,
+          "sha256": "b2c1171105ee7100eb0c37e5bf544e1c3e0484ced66b6f60e503f97e900167df"
+        },
+        {
+          "name": "fuel.v1.json",
+          "bytes": 149280,
+          "sha256": "1da73a4070e0878881e7da81668b9af4a1bf1cb36b85546aaf5aedabca4fd19b"
         }
       ]
     },
@@ -951,8 +1176,8 @@
       "files": [
         {
           "name": "graph.v2.bin",
-          "bytes": 108083703,
-          "sha256": "88265c6001755a8f6c925a74b0bcda8d31de2c53cde66b5184804bd23e8c8be3"
+          "bytes": 108110409,
+          "sha256": "fe19c1a0d45d6148d7c748a88f4bdc30364ade10438d91266c89577348aa5dcf"
         },
         {
           "name": "geometry.v1.bin",
@@ -971,13 +1196,18 @@
       "files": [
         {
           "name": "graph.v2.bin",
-          "bytes": 50805499,
-          "sha256": "c39c0f709e9ccc6eaa866111a864020de70e087c28ca07b12277637e9a1803a1"
+          "bytes": 98011498,
+          "sha256": "987e3d7c949a5245ea728ad2ce2de91c0254167c220d3d9bbcbdcf705e0679a9"
         },
         {
           "name": "geometry.v1.bin",
-          "bytes": 58601968,
-          "sha256": "b1d197df7ac82c2595822ee41204f28fe3f41fa4105543610e2955468376b2c5"
+          "bytes": 72901956,
+          "sha256": "e946265c5d7d18795b92f0f11e471b7039cf7be030ec0888f3fc580766c0fb6a"
+        },
+        {
+          "name": "fuel.v1.json",
+          "bytes": 708331,
+          "sha256": "93995e165ffb9ab4d1fab8202733a79e6c6f31f270cbc6f7f034770d1b6b7c02"
         }
       ]
     },
@@ -986,13 +1216,18 @@
       "files": [
         {
           "name": "graph.v2.bin",
-          "bytes": 17362752,
-          "sha256": "2ca60d296f08a2b3bbe4cde6e230bda94dc4c302e847aec3cb9887522dcb3bce"
+          "bytes": 30673031,
+          "sha256": "80d556ae7e7f051cb418b1085e4b8ba0447a2e34eb1a8f26a1490643f3404a51"
         },
         {
           "name": "geometry.v1.bin",
-          "bytes": 28672068,
-          "sha256": "bc55f10cf93567782cbe3b93410c7f70d8748a8417ec599972499daebc65399a"
+          "bytes": 33531436,
+          "sha256": "285de405ee9197627bac48ef9c38f63749cb6e12f19b506a54d71a1e5b1b0eff"
+        },
+        {
+          "name": "fuel.v1.json",
+          "bytes": 218940,
+          "sha256": "1eb2a8e47fa09b39e40d357e58063e9c22050f2cb86e688c3c8ed0fd682716bb"
         }
       ]
     },
@@ -1001,13 +1236,13 @@
       "files": [
         {
           "name": "graph.v2.bin",
-          "bytes": 13514446,
-          "sha256": "cdd761df9ba77f51fd7ebbab0f8f8db72d2a8fa0242f19ef3bb2a1081650724d"
+          "bytes": 27685150,
+          "sha256": "ee0c75b05c9d662d52401df618f15d75f76830cfa5905b23f2f4bf5ad5e72638"
         },
         {
           "name": "geometry.v1.bin",
-          "bytes": 30439064,
-          "sha256": "5393ce8f513b7f8f553278895997e43f20f2a78e15d197afe7d6b14af6af00cd"
+          "bytes": 38461804,
+          "sha256": "d822020d3414c4a65156c3084ef0c614d3b3054526eefcb4902fd8f2afa5a589"
         }
       ]
     },

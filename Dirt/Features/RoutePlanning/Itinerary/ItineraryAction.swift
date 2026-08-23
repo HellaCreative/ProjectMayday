@@ -15,4 +15,22 @@ nonisolated enum ItineraryAction: Equatable, Codable, Sendable {
     )
     case clear
     case rebuild
+    case replaceFuelStop(
+        id: UUID,
+        stationID: String,
+        coordinate: RouteCoordinate,
+        name: String?
+    )
+    case setHopProfile(
+        id: UUID,
+        riderLegID: UUID,
+        sequence: Int,
+        RouteProfile
+    )
+    case setHopAllowUnknown(
+        id: UUID,
+        riderLegID: UUID,
+        sequence: Int,
+        Bool
+    )
 }

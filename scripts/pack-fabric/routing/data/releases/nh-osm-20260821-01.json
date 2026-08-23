@@ -1,0 +1,24 @@
+{
+  "schemaVersion": "dirt-pack-release.v1",
+  "releaseId": "nh-osm-20260821-01",
+  "status": "live-candidate",
+  "createdAt": "2026-08-21T14:19:02.786Z",
+  "publicBase": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/candidates/nh-osm-20260821-01",
+  "regions": [
+    {
+      "id": "nh",
+      "files": [
+        {
+          "name": "graph.v2.bin",
+          "bytes": 29589112,
+          "sha256": "48513a50a45cc0f8ac1e9d01138b7b4e755e1ac804da2096a4be7ab0c1c8fdee"
+        },
+        {
+          "name": "geometry.v1.bin",
+          "bytes": 27578208,
+          "sha256": "aa1359223aaa6c316c78338bb57d1a57dfc73185e04bdef58086b611fcfa5245"
+        }
+      ]
+    }
+  ]
+}

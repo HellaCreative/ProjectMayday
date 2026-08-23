@@ -1,0 +1,78 @@
+
+> bench:ns
+> node scripts/pack-fabric/bench/run-ns-bench.js
+
+bench:ns using promoted stable NS pack ns-osm-20260821-02
+[1/65] short-no-fuel/dirt/unknown-off/fuel-off
+[2/65] short-no-fuel/dirt/unknown-on/fuel-off
+[3/65] short-no-fuel/balanced/unknown-off/fuel-off
+[4/65] short-no-fuel/direct/unknown-off/fuel-off
+[5/65] short-no-fuel/clean/unknown-off/fuel-off
+[6/65] dartmouth-capebreton/dirt/unknown-off/fuel-off
+[7/65] dartmouth-capebreton/dirt/unknown-off/fuel-on
+fuel candidate K reduced=3 elapsedMs=5453
+[8/65] dartmouth-capebreton/dirt/unknown-on/fuel-off
+[9/65] dartmouth-capebreton/dirt/unknown-on/fuel-on
+fuel candidate K reduced=3 elapsedMs=11092
+[10/65] dartmouth-capebreton/balanced/unknown-off/fuel-off
+[11/65] dartmouth-capebreton/balanced/unknown-off/fuel-on
+fuel candidate K reduced=3 elapsedMs=5355
+[12/65] dartmouth-capebreton/direct/unknown-off/fuel-off
+[13/65] dartmouth-capebreton/direct/unknown-off/fuel-on
+[14/65] dartmouth-capebreton/clean/unknown-off/fuel-off
+[15/65] dartmouth-capebreton/clean/unknown-off/fuel-on
+[16/65] dartmouth-antigonish/dirt/unknown-off/fuel-off
+[17/65] dartmouth-antigonish/dirt/unknown-off/fuel-on
+[18/65] dartmouth-antigonish/dirt/unknown-on/fuel-off
+[19/65] dartmouth-antigonish/dirt/unknown-on/fuel-on
+[20/65] dartmouth-antigonish/balanced/unknown-off/fuel-off
+[21/65] dartmouth-antigonish/balanced/unknown-off/fuel-on
+[22/65] dartmouth-antigonish/direct/unknown-off/fuel-off
+[23/65] dartmouth-antigonish/direct/unknown-off/fuel-on
+[24/65] dartmouth-antigonish/clean/unknown-off/fuel-off
+[25/65] dartmouth-antigonish/clean/unknown-off/fuel-on
+[26/65] musq-sherbrooke/dirt/unknown-off/fuel-off
+[27/65] musq-sherbrooke/dirt/unknown-off/fuel-on
+[28/65] musq-sherbrooke/dirt/unknown-on/fuel-off
+[29/65] musq-sherbrooke/dirt/unknown-on/fuel-on
+[30/65] musq-sherbrooke/balanced/unknown-off/fuel-off
+[31/65] musq-sherbrooke/balanced/unknown-off/fuel-on
+[32/65] musq-sherbrooke/direct/unknown-off/fuel-off
+[33/65] musq-sherbrooke/direct/unknown-off/fuel-on
+[34/65] musq-sherbrooke/clean/unknown-off/fuel-off
+[35/65] musq-sherbrooke/clean/unknown-off/fuel-on
+[36/65] antigonish-sydney/dirt/unknown-off/fuel-off
+[37/65] antigonish-sydney/dirt/unknown-off/fuel-on
+[38/65] antigonish-sydney/dirt/unknown-on/fuel-off
+[39/65] antigonish-sydney/dirt/unknown-on/fuel-on
+[40/65] antigonish-sydney/balanced/unknown-off/fuel-off
+[41/65] antigonish-sydney/balanced/unknown-off/fuel-on
+[42/65] antigonish-sydney/direct/unknown-off/fuel-off
+[43/65] antigonish-sydney/direct/unknown-off/fuel-on
+[44/65] antigonish-sydney/clean/unknown-off/fuel-off
+[45/65] antigonish-sydney/clean/unknown-off/fuel-on
+[46/65] through-halifax/dirt/unknown-off/fuel-off
+[47/65] through-halifax/dirt/unknown-off/fuel-on
+[48/65] through-halifax/dirt/unknown-on/fuel-off
+[49/65] through-halifax/dirt/unknown-on/fuel-on
+[50/65] through-halifax/balanced/unknown-off/fuel-off
+[51/65] through-halifax/balanced/unknown-off/fuel-on
+[52/65] through-halifax/direct/unknown-off/fuel-off
+[53/65] through-halifax/direct/unknown-off/fuel-on
+[54/65] through-halifax/clean/unknown-off/fuel-off
+[55/65] through-halifax/clean/unknown-off/fuel-on
+[56/65] three-waypoint/dirt/unknown-off/fuel-off
+[57/65] three-waypoint/dirt/unknown-off/fuel-on
+fuel candidate K reduced=3 elapsedMs=5151
+[58/65] three-waypoint/dirt/unknown-on/fuel-off
+[59/65] three-waypoint/dirt/unknown-on/fuel-on
+fuel candidate K reduced=3 elapsedMs=6308
+[60/65] three-waypoint/balanced/unknown-off/fuel-off
+[61/65] three-waypoint/balanced/unknown-off/fuel-on
+[62/65] three-waypoint/direct/unknown-off/fuel-off
+[63/65] three-waypoint/direct/unknown-off/fuel-on
+[64/65] three-waypoint/clean/unknown-off/fuel-off
+[65/65] three-waypoint/clean/unknown-off/fuel-on
+Wrote scripts/pack-fabric/bench/results/f129df4-20260821T162434Z.json
+Wrote scripts/pack-fabric/bench/results/latest.md
+38/65 cases green; failures are reported, not thrown.

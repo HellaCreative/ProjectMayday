@@ -31,19 +31,44 @@ nonisolated struct RiderLeg: Identifiable, Equatable, Codable, Sendable {
     }
 }
 
-/// The rider-owned route intent. Fuel never appears here; pumps and routed
-/// geometry are disposable output produced from this ordered waypoint chain.
+nonisolated struct FuelAnchor: Identifiable, Equatable, Codable, Sendable {
+    let id: UUID
+    let riderLegID: UUID
+    let sequence: Int
+    var stationID: String
+    var coordinate: RouteCoordinate
+    var name: String?
+    var isPinned: Bool
+}
+
+/// Per-hop ride type and Allow Unknown, keyed by fuel-stop identity or the
+/// rider-leg id for the hop that ends at the rider waypoint.
+nonisolated struct HopOverride: Identifiable, Equatable, Codable, Sendable {
+    let id: UUID
+    let riderLegID: UUID
+    let sequence: Int
+    var profile: RouteProfile
+    var allowUnknown: Bool
+}
+
+/// The rider-owned route intent. Generated pumps are recorded here only as
+/// stable fuel identities and rider-pinned replacements. Routed geometry stays
+/// in `BuiltItinerary`.
 nonisolated struct RiderItinerary: Equatable, Codable, Sendable {
     private(set) var waypoints: [RiderWaypoint]
     private(set) var legs: [RiderLeg]
     private(set) var generation: Int
     private(set) var impassableEdgeIDs: Set<String>
+    private(set) var fuelAnchors: [FuelAnchor]
+    private(set) var hopOverrides: [HopOverride]
 
     init() {
         waypoints = []
         legs = []
         generation = 0
         impassableEdgeIDs = []
+        fuelAnchors = []
+        hopOverrides = []
         assertInvariants()
     }
 
@@ -51,18 +76,24 @@ nonisolated struct RiderItinerary: Equatable, Codable, Sendable {
         waypoints: [RiderWaypoint],
         legs: [RiderLeg],
         generation: Int,
-        impassableEdgeIDs: Set<String>
+        impassableEdgeIDs: Set<String>,
+        fuelAnchors: [FuelAnchor] = [],
+        hopOverrides: [HopOverride] = []
     ) {
         self.waypoints = waypoints
         self.legs = legs
         self.generation = generation
         self.impassableEdgeIDs = impassableEdgeIDs
+        self.fuelAnchors = fuelAnchors
+        self.hopOverrides = hopOverrides
         assertInvariants()
     }
 
     var invariantsHold: Bool {
         guard legs.count == max(0, waypoints.count - 1),
-              Set(waypoints.map(\.id)).count == waypoints.count
+              Set(waypoints.map(\.id)).count == waypoints.count,
+              Set(fuelAnchors.map(\.id)).count == fuelAnchors.count,
+              Set(hopOverrides.map(\.id)).count == hopOverrides.count
         else { return false }
         for index in legs.indices {
             guard legs[index].from == waypoints[index].id,
@@ -73,7 +104,31 @@ nonisolated struct RiderItinerary: Equatable, Codable, Sendable {
                   )
             else { return false }
         }
+        let legIDs = Set(legs.map(\.id))
+        var sequences = Set<String>()
+        for anchor in fuelAnchors {
+            guard legIDs.contains(anchor.riderLegID), anchor.sequence >= 0 else { return false }
+            let key = "\(anchor.riderLegID.uuidString):\(anchor.sequence)"
+            guard sequences.insert(key).inserted else { return false }
+        }
+        for override in hopOverrides {
+            guard legIDs.contains(override.riderLegID), override.sequence >= 0 else { return false }
+        }
         return true
+    }
+
+    func hopOverrideID(riderLegID: UUID, sequence: Int) -> UUID {
+        fuelAnchors.first { $0.riderLegID == riderLegID && $0.sequence == sequence }?.id
+            ?? riderLegID
+    }
+
+    func hopPolicy(riderLeg: RiderLeg, sequence: Int) -> (profile: RouteProfile, allowUnknown: Bool) {
+        let key = hopOverrideID(riderLegID: riderLeg.id, sequence: sequence)
+        guard let override = hopOverrides.first(where: { $0.id == key }) else {
+            return (riderLeg.profile, riderLeg.allowUnknown)
+        }
+        let allow = override.profile == .cleanest ? false : override.allowUnknown
+        return (override.profile, allow)
     }
 
     func assertInvariants(
@@ -111,6 +166,8 @@ nonisolated struct RiderItinerary: Equatable, Codable, Sendable {
         case legs
         case generation
         case impassableEdgeIDs
+        case fuelAnchors
+        case hopOverrides
     }
 
     init(from decoder: Decoder) throws {
@@ -119,6 +176,8 @@ nonisolated struct RiderItinerary: Equatable, Codable, Sendable {
         legs = try container.decode([RiderLeg].self, forKey: .legs)
         generation = try container.decode(Int.self, forKey: .generation)
         impassableEdgeIDs = try container.decode(Set<String>.self, forKey: .impassableEdgeIDs)
+        fuelAnchors = try container.decodeIfPresent([FuelAnchor].self, forKey: .fuelAnchors) ?? []
+        hopOverrides = try container.decodeIfPresent([HopOverride].self, forKey: .hopOverrides) ?? []
         guard invariantsHold else {
             throw DecodingError.dataCorruptedError(
                 forKey: .legs,

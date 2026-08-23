@@ -7,11 +7,13 @@ nonisolated enum HopSearchPolicy {
     static let directStretch: Double = 1.20
     /// Balanced: compute prune only (resource labels). Corridor is the geographic ceiling.
     static let balancedStretch: Double = 1.40
-    /// Extra metres over the graph shortest path (not a great-circle band).
-    static let directCorridorMeters: Double = 15_000
-    static let dirtCorridorMeters: Double = 50_000
-    /// Safety ceiling only — Balanced shaping is the 45–55% dirt ratio.
-    static let balancedCorridorMeters: Double = 40_000
+    /// Extra metres off the A–B crow-flies line (hard corridor, not a length budget).
+    static let directCorridorMeters: Double = 25_000
+    static let dirtCorridorMeters: Double = 60_000
+    /// Dirt only: fuel / large-water reroute after the 60 km search fails.
+    static let dirtCorridorMaxMeters: Double = 80_000
+    /// Direct and Balanced share a tight 25 km band. Balanced shaping is 45–55% dirt.
+    static let balancedCorridorMeters: Double = 25_000
     /// Choice set: paths within this fraction of the incumbent score (5–10% band).
     static let varietyMargin: Double = 0.08
     /// Max near-equal labels expanded per node. Bounds heap growth when the
@@ -200,6 +202,20 @@ nonisolated enum HopSearchPolicy {
         case .balanced: return balancedCorridorMeters
         case .cleanest: return nil
         }
+    }
+
+    static func corridorCapMeters(for profile: RouteProfile) -> Double? {
+        switch profile {
+        case .direct: return directCorridorMeters
+        case .dirt: return dirtCorridorMaxMeters
+        case .balanced: return balancedCorridorMeters
+        case .cleanest: return nil
+        }
+    }
+
+    static func capCorridorMeters(_ width: Double, for profile: RouteProfile) -> Double {
+        guard let cap = corridorCapMeters(for: profile) else { return width }
+        return min(width, cap)
     }
 
     static func extraBudget(shortestMeters: Double, for profile: RouteProfile) -> Double? {

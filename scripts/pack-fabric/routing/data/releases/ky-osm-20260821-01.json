@@ -1,0 +1,29 @@
+{
+  "schemaVersion": "dirt-pack-release.v1",
+  "releaseId": "ky-osm-20260821-01",
+  "status": "live-candidate",
+  "createdAt": "2026-08-21T17:10:03.155Z",
+  "publicBase": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/candidates/ky-osm-20260821-01",
+  "regions": [
+    {
+      "id": "ky",
+      "files": [
+        {
+          "name": "graph.v2.bin",
+          "bytes": 65153010,
+          "sha256": "b14842d199abddbffe38eb0448ab880356b0889367045c6ef5d1cb6cb9a79db7"
+        },
+        {
+          "name": "geometry.v1.bin",
+          "bytes": 73037064,
+          "sha256": "ed9ab998c656cf6b2fec7addb547362dac215eb263c9305afa9282665a47da3b"
+        },
+        {
+          "name": "fuel.v1.json",
+          "bytes": 463735,
+          "sha256": "4072ed02d4c3055677fe2db8de7c2c879351e17162f7bda39c00c7ef2cd85d94"
+        }
+      ]
+    }
+  ]
+}

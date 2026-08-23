@@ -15,6 +15,8 @@ final class ItineraryBuilder {
     func build(
         _ itinerary: RiderItinerary,
         from legIndex: Int,
+        fromFuelSequence: Int = 0,
+        preserveFuelStops: Bool = false,
         reuse: BuiltItinerary?,
         fuel: FuelRangePrefs.Snapshot,
         source policy: RoutingSourcePolicy,
@@ -48,7 +50,8 @@ final class ItineraryBuilder {
         let selectedSource = policy.select(for: firstRequest)
         RoutingDebugLog.shared.event(
             "build start gen=\(itinerary.generation) fromLeg=\(startIndex) " +
-                "reuseLegs=\(kept.count) source=\(selectedSource.name)"
+                "fromFuelSeq=\(fromFuelSequence) reuseLegs=\(kept.count) " +
+                "source=\(selectedSource.name)"
         )
 
         // Distance discovery is intentionally complete before the first fuel
@@ -96,6 +99,9 @@ final class ItineraryBuilder {
                     baselineHistory: baselineHistory[index] ?? EdgeHistory(),
                     allBaseline: baseline,
                     fuelUsedAtStart: fuelUsed,
+                    fromFuelSequence: index == startIndex ? fromFuelSequence : 0,
+                    preserveFuelStops: index == startIndex && preserveFuelStops,
+                    reuse: reuse,
                     fuel: fuel,
                     source: selectedSource,
                     history: finalHistory
@@ -179,13 +185,33 @@ final class ItineraryBuilder {
         baselineHistory: EdgeHistory,
         allBaseline: [Int: RouteResponse],
         fuelUsedAtStart: Double,
+        fromFuelSequence: Int,
+        preserveFuelStops: Bool,
+        reuse: BuiltItinerary?,
         fuel: FuelRangePrefs.Snapshot,
         source: any RoutingSource,
         history: EdgeHistory
     ) async throws -> [BuiltLeg] {
         let riderLeg = itinerary.legs[index]
-        let from = itinerary.waypoints[index].coordinate
+        let riderStart = itinerary.waypoints[index].coordinate
         let to = itinerary.waypoints[index + 1].coordinate
+        let keptHops = reusedFuelPrefix(
+            from: reuse,
+            riderLegID: riderLeg.id,
+            beforeSequence: fromFuelSequence
+        )
+        let from: RouteCoordinate
+        let fuelAtDeparture: Double
+        if let last = keptHops.last {
+            from = last.toCoordinate
+            fuelAtDeparture = last.endsAtFuelStop != nil ? 0 : last.fuelUsedOnArrivalMeters
+        } else {
+            from = riderStart
+            fuelAtDeparture = fuelUsedAtStart
+        }
+        var hopHistory = history
+        for hop in keptHops { hopHistory.append(hop.response) }
+        let sequenceBase = keptHops.filter { $0.endsAtFuelStop != nil }.count
         let meters = try responseMeters(baseline)
         guard fuel.isEnabled, fuel.usableMeters > 0 else {
             let finalResponse = baselineHistory == history
@@ -193,7 +219,7 @@ final class ItineraryBuilder {
                 : try await source.route(routeRequest(
                     profile: riderLeg.profile,
                     allowUnknown: riderLeg.allowUnknown,
-                    from: from,
+                    from: riderStart,
                     to: to,
                     avoidEdgeIDs: itinerary.impassableEdgeIDs,
                     maxPathMeters: nil,
@@ -203,7 +229,7 @@ final class ItineraryBuilder {
             let finalMeters = try responseMeters(finalResponse)
             return [BuiltLeg(
                 riderLegID: riderLeg.id,
-                fromCoordinate: from,
+                fromCoordinate: riderStart,
                 toCoordinate: to,
                 endsAtFuelStop: nil,
                 response: finalResponse,
@@ -211,22 +237,29 @@ final class ItineraryBuilder {
             )]
         }
 
-        let firstCap = max(0, fuel.usableMeters - fuelUsedAtStart)
+        let firstCap = max(0, fuel.usableMeters - fuelAtDeparture)
         let nextMeters = allBaseline[index + 1]?.distanceMeters
         let requirePumpBeforeWaypoint: Bool
         if index + 1 < itinerary.legs.count {
             guard let nextMeters else {
                 throw RoutingError.invalidResponse
             }
-            let arrivalWithoutPump = fuelUsedAtStart + meters
+            let arrivalWithoutPump = fuelAtDeparture + meters
             requirePumpBeforeWaypoint = meters <= firstCap + 1
                 && nextMeters > max(0, fuel.usableMeters - arrivalWithoutPump) + 1
         } else {
             requirePumpBeforeWaypoint = false
         }
 
-        if meters <= firstCap + 1, !requirePumpBeforeWaypoint {
-            let arrival = fuelUsedAtStart + meters
+        let pinnedPrefix = consecutiveAnchors(
+            on: riderLeg.id,
+            in: itinerary,
+            fromSequence: sequenceBase == 0 ? 0 : fromFuelSequence,
+            includeUnpinned: preserveFuelStops,
+            includeUnpinnedBelow: sequenceBase == 0 && !preserveFuelStops ? fromFuelSequence : 0
+        )
+        if keptHops.isEmpty, pinnedPrefix.isEmpty, meters <= firstCap + 1, !requirePumpBeforeWaypoint {
+            let arrival = fuelAtDeparture + meters
             RoutingDebugLog.shared.event(
                 "fuel carry riderLeg=\(riderLeg.id) used=\(Int(arrival))"
             )
@@ -240,35 +273,106 @@ final class ItineraryBuilder {
             )]
         }
 
-        let chain = try await source.fuelChain(FuelChainRequest(
-            profile: riderLeg.profile,
-            from: from,
-            to: to,
-            allowUnknown: riderLeg.allowUnknown,
-            usableRangeMeters: fuel.usableMeters,
-            firstLegMaxMeters: firstCap,
-            requireFuelStopBeforeEnd: requirePumpBeforeWaypoint,
-            avoidEdgeIds: Array(itinerary.impassableEdgeIDs),
-            priorEdgeIds: history.edgeIDs,
-            arrivalEdgeId: history.arrivalEdgeID,
-            backtrackFactor: 4
-        ))
-        guard active(itinerary) else { throw CancellationError() }
-        let stops = chain.stops ?? []
+        var autoStops: [FuelChainStop] = []
+        var candidateCount = 0
+        if pinnedPrefix.isEmpty, !keptHops.isEmpty, !requirePumpBeforeWaypoint {
+            let tailPolicy = itinerary.hopPolicy(riderLeg: riderLeg, sequence: sequenceBase)
+            let tailRequest = routeRequest(
+                profile: tailPolicy.profile,
+                allowUnknown: tailPolicy.allowUnknown,
+                from: from,
+                to: to,
+                avoidEdgeIDs: itinerary.impassableEdgeIDs,
+                maxPathMeters: firstCap,
+                history: hopHistory
+            )
+            let tailResponse = try await source.route(tailRequest)
+            guard active(itinerary) else { throw CancellationError() }
+            let tailMeters = try responseMeters(tailResponse)
+            if tailMeters <= firstCap + 1 {
+                return keptHops + [BuiltLeg(
+                    riderLegID: riderLeg.id,
+                    fromCoordinate: from,
+                    toCoordinate: to,
+                    endsAtFuelStop: nil,
+                    response: tailResponse,
+                    fuelUsedOnArrivalMeters: tailMeters
+                )]
+            }
+        }
+        if pinnedPrefix.isEmpty {
+            let chain = try await source.fuelChain(FuelChainRequest(
+                profile: riderLeg.profile,
+                from: from,
+                to: to,
+                allowUnknown: riderLeg.allowUnknown,
+                usableRangeMeters: fuel.usableMeters,
+                firstLegMaxMeters: firstCap,
+                requireFuelStopBeforeEnd: requirePumpBeforeWaypoint,
+                avoidEdgeIds: Array(itinerary.impassableEdgeIDs),
+                priorEdgeIds: hopHistory.edgeIDs,
+                arrivalEdgeId: hopHistory.arrivalEdgeID,
+                backtrackFactor: 4
+            ))
+            guard active(itinerary) else { throw CancellationError() }
+            autoStops = chain.stops ?? []
+            candidateCount = chain.stationCandidates?.count ?? 0
+        } else {
+            let lastPinned = pinnedPrefix[pinnedPrefix.count - 1]
+            let remainderMeters: Double
+            do {
+                let remainder = try await source.route(routeRequest(
+                    profile: riderLeg.profile,
+                    allowUnknown: riderLeg.allowUnknown,
+                    from: lastPinned.coordinate,
+                    to: to,
+                    avoidEdgeIDs: itinerary.impassableEdgeIDs,
+                    maxPathMeters: fuel.usableMeters,
+                    history: hopHistory
+                ))
+                guard active(itinerary) else { throw CancellationError() }
+                remainderMeters = (try? responseMeters(remainder)) ?? .infinity
+            } catch is CancellationError {
+                throw CancellationError()
+            } catch {
+                remainderMeters = .infinity
+            }
+            if remainderMeters > fuel.usableMeters + 1 || requirePumpBeforeWaypoint {
+                let chain = try await source.fuelChain(FuelChainRequest(
+                    profile: riderLeg.profile,
+                    from: lastPinned.coordinate,
+                    to: to,
+                    allowUnknown: riderLeg.allowUnknown,
+                    usableRangeMeters: fuel.usableMeters,
+                    firstLegMaxMeters: fuel.usableMeters,
+                    requireFuelStopBeforeEnd: requirePumpBeforeWaypoint,
+                    avoidEdgeIds: Array(itinerary.impassableEdgeIDs),
+                    priorEdgeIds: hopHistory.edgeIDs,
+                    arrivalEdgeId: hopHistory.arrivalEdgeID,
+                    backtrackFactor: 4
+                ))
+                guard active(itinerary) else { throw CancellationError() }
+                autoStops = chain.stops ?? []
+                candidateCount = chain.stationCandidates?.count ?? 0
+            }
+        }
+
+        let stops = pinnedPrefix + autoStops
         guard !stops.isEmpty else {
             throw RoutingError.server("No route-connected fuel stop was returned for this leg.")
         }
 
         let points = [from] + stops.map(\.coordinate) + [to]
-        var output: [BuiltLeg] = []
-        output.reserveCapacity(points.count - 1)
-        var used = fuelUsedAtStart
-        var sublegHistory = history
+        var output: [BuiltLeg] = keptHops
+        output.reserveCapacity(keptHops.count + points.count - 1)
+        var used = fuelAtDeparture
+        var sublegHistory = hopHistory
         for subIndex in 0..<(points.count - 1) {
             let cap = subIndex == 0 ? firstCap : fuel.usableMeters
+            let policy = itinerary.hopPolicy(riderLeg: riderLeg, sequence: sequenceBase + subIndex)
             let request = routeRequest(
-                profile: riderLeg.profile,
-                allowUnknown: riderLeg.allowUnknown,
+                profile: policy.profile,
+                allowUnknown: policy.allowUnknown,
                 from: points[subIndex],
                 to: points[subIndex + 1],
                 avoidEdgeIDs: itinerary.impassableEdgeIDs,
@@ -284,7 +388,11 @@ final class ItineraryBuilder {
             }
             if subIndex < stops.count {
                 let station = stops[subIndex]
+                let identity = itinerary.fuelAnchors.first {
+                    $0.riderLegID == riderLeg.id && $0.sequence == sequenceBase + subIndex
+                }?.id ?? UUID()
                 let stop = FuelStop(
+                    id: identity,
                     coordinate: station.coordinate,
                     stationID: station.id,
                     name: station.displayName,
@@ -307,7 +415,7 @@ final class ItineraryBuilder {
                 RoutingDebugLog.shared.event(
                     "fuel station chosen riderLeg=\(riderLeg.id) station=\(stationLog) " +
                         "dirt%=\(response.dirtPercent) meters=\(Int(subMeters)) " +
-                        "candidates=\(chain.stationCandidates?.count ?? 0)"
+                        "candidates=\(candidateCount)"
                 )
                 used = 0
             } else {
@@ -342,6 +450,54 @@ final class ItineraryBuilder {
         )
         return committed
     }
+}
+
+private func consecutiveAnchors(
+    on riderLegID: UUID,
+    in itinerary: RiderItinerary,
+    fromSequence: Int,
+    includeUnpinned: Bool,
+    includeUnpinnedBelow: Int
+) -> [FuelChainStop] {
+    let anchors = itinerary.fuelAnchors
+        .filter { $0.riderLegID == riderLegID }
+        .sorted { $0.sequence < $1.sequence }
+    var prefix: [FuelChainStop] = []
+    var expected = fromSequence
+    for anchor in anchors {
+        if anchor.sequence < fromSequence { continue }
+        guard anchor.sequence == expected else { break }
+        let frozen = includeUnpinned || anchor.sequence < includeUnpinnedBelow
+        guard anchor.isPinned || frozen else { break }
+        prefix.append(FuelChainStop(
+            id: anchor.stationID,
+            latitude: anchor.coordinate.latitude,
+            longitude: anchor.coordinate.longitude,
+            name: anchor.name,
+            brand: nil,
+            address: nil,
+            graphMeters: nil
+        ))
+        expected += 1
+    }
+    return prefix
+}
+
+private func reusedFuelPrefix(
+    from reuse: BuiltItinerary?,
+    riderLegID: UUID,
+    beforeSequence: Int
+) -> [BuiltLeg] {
+    guard beforeSequence > 0, let reuse else { return [] }
+    var kept: [BuiltLeg] = []
+    var sequence = 0
+    for hop in reuse.legs where hop.riderLegID == riderLegID {
+        if sequence >= beforeSequence { break }
+        kept.append(hop)
+        if hop.endsAtFuelStop != nil { sequence += 1 }
+    }
+    let fuelCount = kept.filter { $0.endsAtFuelStop != nil }.count
+    return fuelCount == beforeSequence ? kept : []
 }
 
 private func reusableLegs(

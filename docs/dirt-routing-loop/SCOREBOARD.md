@@ -6,18 +6,19 @@ Updated by **Cursor** after every `npm run bench:ns` (or noted “not run”).
 
 | Field | Value |
 | --- | --- |
-| As of | 2026-08-22 (seeded from last committed bench; re-run to refresh) |
-| Green | **38 / 65** |
-| Source | `scripts/pack-fabric/bench/results/latest.md` (git `f129df4`, promoted NS pack) |
-| Ladder | 38 → **45** (next) → 50 → 56 |
-| Last turn | loop folder created; no new router patch yet |
+| As of | 2026-08-22 17:40 ADT |
+| Green | **41 / 65** |
+| Durable note | Rick spec: Balanced bench band **35–65%**. +3 conversions, no green flips. Routes unchanged (assert only). `antigonish-sydney/balanced/fuel-on` still `no_route` (25 km cap). Ladder next is still **45**. |
+| Source | `scripts/pack-fabric/bench/results/latest.md` + `a965d91-20260822T204051Z.json` |
+| Ladder | 38 → **41** (this turn) → **45** (next) → 50 → 56 |
+| Last turn | Clean-sections default gated to **≥1000 km OR >3 pumps** (was any fuel stop). Inbox `cursor-20260822-1952-longhaul-clean-gate.md`. Fix landed in Dirt itinerary-rebuild `ItineraryBuilder.swift`. Bench not run. 41/65 stands. |
 
 ## Red clusters (work these in order)
 
-1. **Dirt fuel-on loses dirt% and/or exceeds 4s/hop** — e.g. `dartmouth-capebreton/dirt/.../fuel-on`, `dartmouth-antigonish/dirt/.../fuel-on`
-2. **Balanced off 45–55** — e.g. `short-no-fuel/balanced/...`, `musq-sherbrooke/balanced/...`
-3. **Direct overshoot** — e.g. `dartmouth-capebreton/direct/...`, `dartmouth-antigonish/direct/fuel-off`
-4. **Through-halifax / three-waypoint** — no_route or fuel-chain failures (see latest.md)
+1. **Direct dirt ≥60** — corridor holding. Remaining: `short-no-fuel/direct` 19%, `musq-sherbrooke/direct` 40%, `antigonish-sydney/direct/fuel-off` 50%, `dartmouth-antigonish/direct/fuel-on` 52%, `three-waypoint/direct` 57.9%/49%.
+2. **Fuel-on `no_route` (25 km hard cap)** — `dartmouth-capebreton/{balanced,direct}/fuel-on`, `antigonish-sydney/{balanced,direct}/fuel-on`. Not a band problem.
+3. **Dirt fuel-on dirt% / chain** — `dartmouth-capebreton/dirt/fuel-on` 62.8%, `dartmouth-antigonish/dirt/fuel-on` 54%, `antigonish-sydney/dirt/fuel-on` 25%; `three-waypoint/dirt/*/fuel-on` no_route_connected_fuel_chain.
+4. **Through-halifax** — Dirt/Balanced/Direct still `no_route`; Clean fuel-on 20% dirt.
 
 Do not expand this list mid-turn. Claude may re-rank in `inbox/claude-*.md` then Cursor updates this section.
 
@@ -25,12 +26,14 @@ Do not expand this list mid-turn. Claude may re-rank in `inbox/claude-*.md` then
 
 | When | Green | Note |
 | --- | ---: | --- |
-| 2026-08-21 (old candidate assert era) | ~56 | Pre-promote / looser hop budget — not the current baseline |
-| 2026-08-21 `f129df4` | 38 | Promoted NS + ≤4000ms/hop — **current baseline** |
-| 2026-08-22 | — | Loop started |
+| 2026-08-21 `f129df4` | 38 | Promoted NS + ≤4000ms/hop — prior durable baseline |
+| 2026-08-22 16:43 | **38 / 65 NEW BASELINE** | Spec-alignment |
+| 2026-08-22 17:01–17:21 | 38 / 65 | Balanced surface table live + Swift compile fix |
+| 2026-08-22 17:33 | 37 / 65 | Balanced paved 1.70 **REJECTED**. Reverted. |
+| 2026-08-22 17:35 | 38 / 65 | Post-revert restore |
+| 2026-08-22 17:40 | **41 / 65** | Balanced bench band 35–65 (Rick). +3: short-no-fuel 44%, musq 40%/40%. |
 
 ## Pack / live notes (fabric)
 
 - CA: promoted stable. US: live-candidates via `R2_REGION_BASE_OVERRIDES`.
-- Fuel backfill 2026-08-22: me/nh/nv/wy candidates re-shipped with `fuel.v1.json`.
-- Acceptance theme dump: `scripts/pack-fabric/routing/data/reports/pack-rebuild-2026-08/ACCEPTANCE-TRIAGE.md` (secondary to NS bench).
+- This turn: **no** Vercel deploy, **no** pack rebuild, **no** R2 promote. Fuel-chain WIP remains in `stash@{0}`/`@{1}` — not popped.

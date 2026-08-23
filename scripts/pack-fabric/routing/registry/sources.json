@@ -116,7 +116,7 @@
         "path": "routing/data/regions/wa/graph.v1.json.gz",
         "edgeCount": 1719604,
         "nodeCount": 1465436,
-        "gzBytes": 105250938
+        "gzBytes": 105250933
       },
       "osm": {
         "adapter": "osm-roads",
@@ -240,7 +240,7 @@
         "path": "routing/data/regions/on/graph.v1.json.gz",
         "edgeCount": 1808291,
         "nodeCount": 1498160,
-        "gzBytes": 102318663
+        "gzBytes": 102318669
       },
       "osm": {
         "adapter": "osm-roads",
@@ -409,7 +409,7 @@
         "path": "routing/data/regions/pe/graph.v1.json.gz",
         "edgeCount": 41961,
         "nodeCount": 35905,
-        "gzBytes": 2388855
+        "gzBytes": 2388854
       },
       "osm": {
         "adapter": "osm-roads",

@@ -6,6 +6,10 @@ const {
   DIRECT_CORRIDOR_M,
   BALANCED_CORRIDOR_M,
   DIRT_CORRIDOR_M,
+  DIRT_CORRIDOR_MAX_M,
+  corridorSearchWidthsForProfile,
+  corridorCapMetersForProfile,
+  capCorridorMeters,
   projectedProgressMeters,
   maxProgressRegressionMeters,
   progressRegressionForAttempt,
@@ -54,9 +58,25 @@ test("smaller settlements are avoided unless an endpoint is inside", () => {
   assert.equal(settlementBlocks(-122.1, 48.05, [-122.1, 48.05], outsideB, [town]), false);
 });
 
-test("adventure corridors widen from Direct to Balanced to Dirt", () => {
-  assert.ok(DIRECT_CORRIDOR_M < BALANCED_CORRIDOR_M);
+test("adventure corridors follow the mode spec", () => {
+  assert.equal(DIRECT_CORRIDOR_M, 25000);
+  assert.equal(BALANCED_CORRIDOR_M, 25000);
+  assert.equal(DIRT_CORRIDOR_M, 60000);
+  assert.equal(DIRT_CORRIDOR_MAX_M, 80000);
+  assert.equal(DIRECT_CORRIDOR_M, BALANCED_CORRIDOR_M);
   assert.ok(BALANCED_CORRIDOR_M < DIRT_CORRIDOR_M);
+  assert.ok(DIRT_CORRIDOR_M < DIRT_CORRIDOR_MAX_M);
+});
+
+test("no mode searches wider than its corridor cap", () => {
+  assert.deepEqual(corridorSearchWidthsForProfile("direct"), [DIRECT_CORRIDOR_M]);
+  assert.deepEqual(corridorSearchWidthsForProfile("balanced"), [BALANCED_CORRIDOR_M]);
+  assert.deepEqual(corridorSearchWidthsForProfile("dirt"), [DIRT_CORRIDOR_M]);
+  assert.equal(corridorCapMetersForProfile("direct"), DIRECT_CORRIDOR_M);
+  assert.equal(corridorCapMetersForProfile("balanced"), BALANCED_CORRIDOR_M);
+  assert.equal(corridorCapMetersForProfile("dirt"), DIRT_CORRIDOR_MAX_M);
+  assert.equal(capCorridorMeters("dirt", 120000), DIRT_CORRIDOR_MAX_M);
+  assert.equal(capCorridorMeters("direct", Infinity), DIRECT_CORRIDOR_M);
 });
 
 test("progress is measured along A to B without a reference route", () => {

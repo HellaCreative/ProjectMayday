@@ -234,6 +234,39 @@ struct FuelChainStop: Codable, Sendable {
     }
 }
 
+struct FuelAlternateRequest: Sendable {
+    let profile: RouteProfile
+    let allowUnknown: Bool
+    let previous: RouteCoordinate
+    let next: RouteCoordinate
+    let usableRangeMeters: Double
+    let previousCapMeters: Double
+    let currentStationID: String?
+}
+
+struct FuelAlternate: Equatable, Sendable, Identifiable {
+    var id: String { stationID }
+    let stationID: String
+    let coordinate: RouteCoordinate
+    let name: String?
+    let isValid: Bool
+    let fromPreviousMeters: Double?
+    let toNextMeters: Double?
+}
+
+enum FuelReplacement {
+    static func isValid(
+        fromPreviousMeters: Double?,
+        toNextMeters: Double?,
+        previousCapMeters: Double,
+        usableRangeMeters: Double
+    ) -> Bool {
+        guard let fromPreviousMeters, let toNextMeters else { return false }
+        return fromPreviousMeters <= previousCapMeters + 1
+            && toNextMeters <= usableRangeMeters + 1
+    }
+}
+
 struct FuelChainDiagnostics: Codable, Sendable {
     let strategy: String?
     let states: Int?

@@ -1,35 +1,21 @@
 # Handoff
 
-**Next agent: Cursor**
-**Status: ACTIVE — GATE CLOSED, cleared to execute**
-**Updated: 2026-08-22 by Claude (GATE closed on Richard's GO)**
+**Next agent: Claude**
+**Status: ACTIVE — GATE CLOSED, Clean-sections longhaul gate shipped; Rick physical test**
+**Updated: 2026-08-22 19:52 ADT by Cursor**
 
-## Job (Cursor — go now)
+## Job (Claude + Rick)
 
-Execute the one primary knob in `inbox/claude-20260822-1414-plan.md`:
-Direct-overshoot cluster. Raise Direct's cross-track corridor tax in
-`scripts/pack-fabric/routing/lib/profile-costs.js` (`directCrossTrackExtra`, the
-`direct` branch `k`), plus `Dirt/Routing/OnDevice/OnDeviceProfileCosts.swift` in
-lockstep if the knob exists there. ONE knob, ONE patch.
+Cursor restricted the Clean-sections default to genuine long-haul
+(≥1000 km OR more than 3 generated pumps). Inbox:
+`inbox/cursor-20260822-1952-longhaul-clean-gate.md`.
 
-## Then
+The emitting file was **Dirt** `feature/routing-itinerary-rebuild`
+`ItineraryBuilder.swift` (device log), not pack-rebuild. App **BUILD SUCCEEDED**.
 
-1. `npm run bench:ns` (LOCAL — do NOT deploy to Vercel; CONTRACT forbids prod deploy).
-2. Update `SCOREBOARD.md`, write `inbox/cursor-*.md`.
-3. Hand to **Codex** for the post-execution verify/debug pass — Codex runs the
-   CONTRACT per-turn safety gate (`npm test`, JS↔Swift lockstep) and confirms no
-   protected green flipped red.
-4. If green count drops or any protected green flips red → **revert**, do not fix
-   forward, hand back to **Claude**.
-
-## Protected greens (must not flip)
-
-`short-no-fuel/direct/unknown-off/fuel-off`,
-`dartmouth-antigonish/direct/unknown-off/fuel-on`,
-`musq-sherbrooke/direct/unknown-off/fuel-off`,
-`musq-sherbrooke/direct/unknown-off/fuel-on`, and every non-Direct green.
+Rick physically tests: ~319 km From Here, Dirt, one fuel stop → Dirt stays Dirt.
+No Codex this turn.
 
 ## Loop order
 
-Claude plans → Cursor executes → Codex tests/debugs until clean → human ride
-test → guidance back to Claude → repeat.
+Claude plans → Cursor executes → Rick physical test → guidance back to Claude.

@@ -1,6 +1,7 @@
 import Foundation
 
 struct FuelStop: Equatable, Sendable {
+    let id: UUID
     let coordinate: RouteCoordinate
     let stationID: String?
     let name: String?
@@ -8,12 +9,14 @@ struct FuelStop: Equatable, Sendable {
     let resetsTank: Bool
 
     init(
+        id: UUID = UUID(),
         coordinate: RouteCoordinate,
         stationID: String?,
         name: String?,
         afterRiderLegID: UUID,
         resetsTank: Bool = true
     ) {
+        self.id = id
         self.coordinate = coordinate
         self.stationID = stationID
         self.name = name

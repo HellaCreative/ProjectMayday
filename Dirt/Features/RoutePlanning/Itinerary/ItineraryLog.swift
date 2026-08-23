@@ -30,6 +30,12 @@ nonisolated enum ItineraryLog {
             return "itinerary action=clear \(generation)\(sourceSuffix)"
         case .rebuild:
             return "itinerary action=rebuild \(generation)\(sourceSuffix)"
+        case .replaceFuelStop(let id, let stationID, _, _):
+            return "itinerary action=replaceFuelStop id=\(id.uuidString) station=\(stationID) \(generation)\(sourceSuffix)"
+        case .setHopProfile(let id, _, let sequence, let profile):
+            return "itinerary action=setHopProfile id=\(id.uuidString) seq=\(sequence) profile=\(profile.rawValue) \(generation)\(sourceSuffix)"
+        case .setHopAllowUnknown(let id, _, let sequence, let allow):
+            return "itinerary action=setHopAllowUnknown id=\(id.uuidString) seq=\(sequence) allow=\(allow) \(generation)\(sourceSuffix)"
         }
     }
 

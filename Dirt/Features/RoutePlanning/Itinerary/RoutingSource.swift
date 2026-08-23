@@ -6,6 +6,13 @@ protocol RoutingSource: AnyObject {
     var name: String { get }
     func route(_ req: RouteRequest) async throws -> RouteResponse
     func fuelChain(_ req: FuelChainRequest) async throws -> FuelChainResponse
+    func fuelAlternates(_ req: FuelAlternateRequest) async throws -> [FuelAlternate]
+}
+
+extension RoutingSource {
+    func fuelAlternates(_ req: FuelAlternateRequest) async throws -> [FuelAlternate] {
+        []
+    }
 }
 
 @MainActor
@@ -223,6 +230,54 @@ final class PackRoutingSource: RoutingSource {
             current = RouteCoordinate(longitude: station.longitude, latitude: station.latitude)
         }
         throw RoutingError.server("No route-connected fuel chain fits the usable range.")
+    }
+
+    func fuelAlternates(_ req: FuelAlternateRequest) async throws -> [FuelAlternate] {
+        let stations = packs.fuelStations(from: req.previous, to: req.next)
+            .filter { $0.id != req.currentStationID }
+        let reachable = await packs.reachableFuelMeters(
+            from: req.previous.locationCoordinate,
+            toward: req.next.locationCoordinate,
+            pumps: stations,
+            maxMeters: req.previousCapMeters,
+            profile: req.profile,
+            allowUnknown: req.allowUnknown
+        )
+        let ranked = stations.sorted { left, right in
+            let dLeft = hypot(left.latitude - req.previous.latitude, left.longitude - req.previous.longitude)
+            let dRight = hypot(right.latitude - req.previous.latitude, right.longitude - req.previous.longitude)
+            return dLeft < dRight
+        }
+        let visible = Array(ranked.prefix(30))
+        var result: [FuelAlternate] = []
+        result.reserveCapacity(visible.count)
+        for station in visible {
+            let fromMeters = reachable[station.id]
+            var toNext: Double?
+            if fromMeters != nil {
+                toNext = await packs.shortestGraphMeters(
+                    from: CLLocationCoordinate2D(latitude: station.latitude, longitude: station.longitude),
+                    to: req.next.locationCoordinate,
+                    maxMeters: req.usableRangeMeters,
+                    profile: req.profile,
+                    allowUnknown: req.allowUnknown
+                )
+            }
+            result.append(FuelAlternate(
+                stationID: station.id,
+                coordinate: RouteCoordinate(longitude: station.longitude, latitude: station.latitude),
+                name: station.displayName,
+                isValid: FuelReplacement.isValid(
+                    fromPreviousMeters: fromMeters,
+                    toNextMeters: toNext,
+                    previousCapMeters: req.previousCapMeters,
+                    usableRangeMeters: req.usableRangeMeters
+                ),
+                fromPreviousMeters: fromMeters,
+                toNextMeters: toNext
+            ))
+        }
+        return result
     }
 }
 

@@ -689,6 +689,7 @@ struct MapLibreMapView: UIViewRepresentable {
                 annotation.kind = marker.kind
                 annotation.status = marker.status
                 annotation.isLocked = marker.isLocked
+                annotation.isPulsing = marker.isPulsing
                 annotation.title = marker.subtitle ?? marker.label
                 return annotation
             }
@@ -987,6 +988,15 @@ struct MapLibreMapView: UIViewRepresentable {
                 mapView.deselectAnnotation(annotation, animated: false)
                 return
             }
+            if dirtAnnotation.kind == .fuelCandidate {
+                state.onFuelAlternateTap?(dirtAnnotation.markerID)
+                mapView.deselectAnnotation(annotation, animated: false)
+                return
+            }
+            if dirtAnnotation.kind == .fuel {
+                state.onFuelStopTap?(dirtAnnotation.markerID)
+                return
+            }
             guard !state.isNavigating else { return }
             // Tap pin → select (orange lift) so drag / second-tap relocate is obvious.
             state.selectPlannerPin(dirtAnnotation.markerID)
@@ -1037,7 +1047,7 @@ struct MapLibreMapView: UIViewRepresentable {
             let suffix = gesture.map { " gesture=\($0)" } ?? ""
             switch resolution {
             case .pin(let pin):
-                let kind = pin.kind == .fuel ? "fuel" : "waypoint"
+                let kind = pin.kind == .fuel || pin.kind == .fuelCandidate ? "fuel" : "waypoint"
                 RoutingDebugLog.shared.event(
                     "map tap result=pin markerID=\(pin.markerID) kind=\(kind)\(suffix)"
                 )
@@ -1066,6 +1076,15 @@ struct MapLibreMapView: UIViewRepresentable {
             // but remains locked against every relocation path.
             if case .pin(let pin) = resolution {
                 logTouch(resolution)
+                if pin.kind == .fuelCandidate {
+                    state.onFuelAlternateTap?(pin.markerID)
+                    return
+                }
+                if pin.kind == .fuel {
+                    mapView.selectAnnotation(pin, animated: true, completionHandler: nil)
+                    state.onFuelStopTap?(pin.markerID)
+                    return
+                }
                 mapView.selectAnnotation(pin, animated: true, completionHandler: nil)
                 state.selectPlannerPin(pin.markerID)
                 return
@@ -1164,7 +1183,7 @@ struct MapLibreMapView: UIViewRepresentable {
                 // The annotation coordinate is the tip. The view frame covers the
                 // full body and tip and already reflects the selected scale.
                 let selectedScale: CGFloat = annotation.markerID == state.selectedPlannerPinID ? 1.18 : 1
-                let kindScale: CGFloat = annotation.kind == .fuel ? 0.82 : 1
+                let kindScale: CGFloat = (annotation.kind == .fuel || annotation.kind == .fuelCandidate) ? 0.82 : 1
                 let scale = selectedScale * kindScale
                 let fallbackFrame = CGRect(
                     x: pinPoint.x - DirtPlannerPinView.pinWidth * scale / 2,
@@ -1360,6 +1379,7 @@ final class DirtAnnotation: MLNPointAnnotation {
     var kind: MapState.MarkerKind = .start
     var status: String?
     var isLocked = false
+    var isPulsing = false
 }
 
 /// Teardrop stage pin: dark body + orange circle + white number,
@@ -1370,6 +1390,7 @@ final class DirtPlannerPinView: MLNAnnotationView {
 
     private let bodyLayer = CAShapeLayer()
     private let circleLayer = CAShapeLayer()
+    private let haloLayer = CAShapeLayer()
     private let labelView = UILabel()
     private var baseScale: CGFloat = 1
     private var isSelectedForEditing = false
@@ -1397,6 +1418,13 @@ final class DirtPlannerPinView: MLNAnnotationView {
         layer.shadowOpacity = 0.38
         layer.shadowRadius = 3
         layer.shadowOffset = CGSize(width: 0, height: 2)
+
+        haloLayer.path = UIBezierPath(ovalIn: CGRect(x: -6, y: -4, width: 48, height: 48)).cgPath
+        haloLayer.fillColor = UIColor.clear.cgColor
+        haloLayer.strokeColor = UIColor(DirtTheme.orange).cgColor
+        haloLayer.lineWidth = 2
+        haloLayer.opacity = 0
+        layer.addSublayer(haloLayer)
 
         // Teardrop body (viewBox 0 0 36 44).
         bodyLayer.path = tearDropPath().cgPath
@@ -1435,13 +1463,45 @@ final class DirtPlannerPinView: MLNAnnotationView {
         transform = CGAffineTransform(scaleX: baseScale, y: baseScale)
         isAccessibilityElement = true
         let title = annotation.title ?? annotation.label
-        accessibilityLabel = annotation.kind == .fuel
+        accessibilityLabel = annotation.kind == .fuel || annotation.kind == .fuelCandidate
             ? "Fuel stop \(annotation.label), \(title)"
             : "Route pin \(annotation.label)"
         // All planner pins: dark #111820 body + orange circle.
-        bodyLayer.fillColor = UIColor(red: 17/255, green: 24/255, blue: 32/255, alpha: 1).cgColor
+        let candidate = annotation.kind == .fuelCandidate
+        bodyLayer.fillColor = candidate
+            ? UIColor(DirtTheme.orange).withAlphaComponent(annotation.isPulsing ? 0.35 : 0.12).cgColor
+            : UIColor(red: 17/255, green: 24/255, blue: 32/255, alpha: 1).cgColor
         bodyLayer.strokeColor = UIColor(DirtTheme.orange).cgColor
-        circleLayer.fillColor = UIColor(DirtTheme.orange).cgColor
+        circleLayer.fillColor = UIColor(DirtTheme.orange).withAlphaComponent(candidate && !annotation.isPulsing ? 0.35 : 1).cgColor
+        applyHaloPulse(annotation.isPulsing)
+    }
+
+    private func applyHaloPulse(_ pulsing: Bool) {
+        haloLayer.removeAnimation(forKey: "dirt-fuel-halo")
+        guard pulsing else {
+            haloLayer.opacity = 0
+            return
+        }
+        haloLayer.opacity = 0.85
+        let scale = CABasicAnimation(keyPath: "transform.scale")
+        scale.fromValue = 0.85
+        scale.toValue = 1.35
+        scale.duration = 1.1
+        scale.autoreverses = true
+        scale.repeatCount = .infinity
+        scale.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        let fade = CABasicAnimation(keyPath: "opacity")
+        fade.fromValue = 0.85
+        fade.toValue = 0.15
+        fade.duration = 1.1
+        fade.autoreverses = true
+        fade.repeatCount = .infinity
+        let group = CAAnimationGroup()
+        group.animations = [scale, fade]
+        group.duration = 1.1
+        group.repeatCount = .infinity
+        group.autoreverses = true
+        haloLayer.add(group, forKey: "dirt-fuel-halo")
     }
 
     /// Selected = lifted + thicker orange rim so "ready to move" is obvious.
@@ -1514,7 +1574,7 @@ final class DirtPlannerPinView: MLNAnnotationView {
         guard let mapView = hostMapView,
               let dirtAnnotation = annotation as? DirtAnnotation else { return }
 
-        if gesture.state == .began, dirtAnnotation.kind == .fuel {
+        if gesture.state == .began, dirtAnnotation.kind == .fuel || dirtAnnotation.kind == .fuelCandidate {
             RoutingDebugLog.shared.event(
                 "map pinPan refused markerID=\(dirtAnnotation.markerID) reason=fuel"
             )

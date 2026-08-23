@@ -268,3 +268,41 @@ node scripts/pack-fabric/scripts/ship-routing.js --promote bc-osm-20260821-03 --
 node scripts/pack-fabric/scripts/ship-routing.js --promote ab-osm-20260821-02 --pack ab --live --assert
 node scripts/pack-fabric/scripts/ship-routing.js --promote wa-osm-20260821-03 --pack wa --live --assert
 ```
+
+## Claude disk / shard / bench notes (2026-08-21)
+
+- Post-ship scrub: delete OPL/extracted-roads/source pbf/`graph.v1.json.gz` and region copies of `graph.v2.bin`/`geometry.v1.bin`; keep packs + urban/seam sidecars + reports. Wired into `/tmp/dirt-finish-us-state.sh` via `/tmp/dirt-scrub-region.sh`. Swept all shipped regions except in-flight FL; poi cache ~11G → ~0.6G.
+- Sharded Map patch PE verify vs `pe-osm-20260821-01`: `graph.v2.bin` and `geometry.v1.bin` **byte-identical**; `fuel.v1.json` same size, different SHA (fuel non-determinism — not a shard regression). Pre-CA regions do **not** need re-cut for the shard patch.
+- `npm run bench:ns` re-run against promoted stable NS (`…/ns`); baseline committed `cec508d` (38/65 green).
+
+## Session complete (2026-08-22)
+
+- **Canada:** 13 provinces/territories **promoted** on stable R2 (`bc` through `nu`, including `ns-osm-20260821-02`).
+- **US:** all **51** states + DC uploaded as **live-candidates** (`ALL_US_COMPLETE` 2026-08-21T20:24:08Z). Not promoted — physical OK still required per region.
+- **Live deploy:** `node scripts/pack-fabric/scripts/ship-routing.js --live --assert` succeeded on Pro (`dpl_9xbXdzxymwKt8LawfCGUrVgqQiAH`). `R2_REGION_BASE_OVERRIDES` set for **51** live-candidate US regions; promoted Canada resolves from stable R2 with no override.
+- **Ship helper:** `--live` now auto-builds overrides from release records (latest release per region; skip override when latest is promoted). Per-state Vercel deploys no longer required.
+- **Assert:** lockstep check updated to fetch candidate URLs for live-candidate regions (e.g. WA `-04`).
+- **Log:** `scripts/pack-fabric/routing/data/reports/pack-rebuild-2026-08/live-deploy-final.log`
+
+### Fuel backfill (2026-08-22)
+
+Four US candidates had shipped **without** `fuel.v1.json` (acceptance `packed fuel 0`). Rebuilt OSM fuel and re-candidate’d:
+
+| Region | Stations | Candidate |
+| --- | ---: | --- |
+| me | 1012 | `me-osm-20260821-02` |
+| nh | 982 | `nh-osm-20260821-02` |
+| nv | 1857 | `nv-osm-20260821-03` |
+| wy | 572 | `wy-osm-20260821-02` |
+
+Live redeployed with updated overrides; lockstep assert green. Acceptance theme triage: `scripts/pack-fabric/routing/data/reports/pack-rebuild-2026-08/ACCEPTANCE-TRIAGE.md`.
+
+### US promote commands (do not run until physical OK)
+
+Run individually after device testing:
+
+```
+node scripts/pack-fabric/scripts/ship-routing.js --promote <release-id> --pack <code> --live --assert
+```
+
+Latest release id per US state is the highest `-osm-20260821-NN` in `routing/data/releases/`.

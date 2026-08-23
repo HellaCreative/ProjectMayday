@@ -45,7 +45,7 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
         // Large packs may be stored on R2 as gzip (wrangler 300MiB upload cap).
         if data.count >= 2, data[data.startIndex] == 0x1f,
            data[data.index(after: data.startIndex)] == 0x8b {
-            data = try Self.gunzipped(data)
+            data = try data.gunzipped()
         }
         self.data = data
         guard data.count >= 72 else { throw PackError.truncated }

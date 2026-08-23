@@ -1,0 +1,29 @@
+{
+  "schemaVersion": "dirt-pack-release.v1",
+  "releaseId": "ny-osm-20260821-02",
+  "status": "live-candidate",
+  "createdAt": "2026-08-21T14:13:31.469Z",
+  "publicBase": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/candidates/ny-osm-20260821-02",
+  "regions": [
+    {
+      "id": "ny",
+      "files": [
+        {
+          "name": "graph.v2.bin",
+          "bytes": 130700478,
+          "sha256": "cbe1816830eff33083dd060daf25c4caad7ab069ce9aa59bbf5a4ad4bb60b580"
+        },
+        {
+          "name": "geometry.v1.bin",
+          "bytes": 100050288,
+          "sha256": "7aba6462acf4daea017e5fdd5748dd52c6dd38142834bb9064c5dfad086be627"
+        },
+        {
+          "name": "fuel.v1.json",
+          "bytes": 1113816,
+          "sha256": "6825384cff822ede8f70275f3c272e61238a8e59562418e5a70cbc1492158216"
+        }
+      ]
+    }
+  ]
+}

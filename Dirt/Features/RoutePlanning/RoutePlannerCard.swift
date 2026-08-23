@@ -964,7 +964,12 @@ struct RoutePlannerCard: View {
             number: index + 1,
             profileTitle: stage.profile.title,
             isActive: isActive,
-            onToggle: { toggleStageSelection(index) },
+            onToggle: {
+                toggleStageSelection(index)
+                if stage.endsAtFuelStop, let identity = stage.fuelIdentity {
+                    Task { await planner.beginFuelReplacement(id: identity) }
+                }
+            },
             headline: { stageHeadline(stage, at: index) },
             detail: {
                 VStack(alignment: .leading, spacing: DirtSpace.inner) {

@@ -32,6 +32,7 @@ final class RoutePlannerModel {
         let endsAtFuelStop: Bool
         let fuelStopID: String?
         let fuelStopName: String?
+        let fuelIdentity: UUID?
         let fuelGroupID: UUID?
         let maxRouteMeters: Double?
 
@@ -39,24 +40,31 @@ final class RoutePlannerModel {
             builtLeg: BuiltLeg,
             riderLeg: RiderLeg,
             status: LegStatus,
-            isFuelExpanded: Bool
+            isFuelExpanded: Bool,
+            profile: RouteProfile,
+            allowUnknown: Bool
         ) {
             riderLegID = riderLeg.id
             start = builtLeg.fromCoordinate
             end = builtLeg.toCoordinate
-            profile = riderLeg.profile
-            allowUnknown = riderLeg.allowUnknown
+            self.profile = profile
+            self.allowUnknown = allowUnknown
             response = builtLeg.response
             if case .pending = status { isRouting = true } else { isRouting = false }
             if case .failed(let message) = status { error = message } else { error = nil }
             endsAtFuelStop = builtLeg.endsAtFuelStop != nil
             fuelStopID = builtLeg.endsAtFuelStop?.stationID
             fuelStopName = builtLeg.endsAtFuelStop?.name
+            fuelIdentity = builtLeg.endsAtFuelStop?.id
             fuelGroupID = isFuelExpanded ? riderLeg.id : nil
             maxRouteMeters = nil
-            let suffix = builtLeg.endsAtFuelStop?.stationID
-                ?? "\(builtLeg.toCoordinate.latitude),\(builtLeg.toCoordinate.longitude)"
-            id = "\(riderLeg.id.uuidString):\(suffix)"
+            if let identity = builtLeg.endsAtFuelStop?.id {
+                id = identity.uuidString
+            } else {
+                let suffix = builtLeg.endsAtFuelStop?.stationID
+                    ?? "\(builtLeg.toCoordinate.latitude),\(builtLeg.toCoordinate.longitude)"
+                id = "\(riderLeg.id.uuidString):\(suffix)"
+            }
         }
     }
 
@@ -101,13 +109,19 @@ final class RoutePlannerModel {
         guard let built else { return [] }
         let riderLegs = Dictionary(uniqueKeysWithValues: itinerary.legs.map { ($0.id, $0) })
         let counts = Dictionary(grouping: built.legs, by: \.riderLegID).mapValues(\.count)
+        var sequenceByLeg: [UUID: Int] = [:]
         return built.legs.compactMap { builtLeg in
             guard let riderLeg = riderLegs[builtLeg.riderLegID] else { return nil }
+            let sequence = sequenceByLeg[builtLeg.riderLegID, default: 0]
+            sequenceByLeg[builtLeg.riderLegID] = sequence + 1
+            let policy = itinerary.hopPolicy(riderLeg: riderLeg, sequence: sequence)
             return Stage(
                 builtLeg: builtLeg,
                 riderLeg: riderLeg,
                 status: built.riderLegStatus[riderLeg.id] ?? .pending,
-                isFuelExpanded: (counts[riderLeg.id] ?? 0) > 1
+                isFuelExpanded: (counts[riderLeg.id] ?? 0) > 1,
+                profile: policy.profile,
+                allowUnknown: policy.allowUnknown
             )
         }
     }
@@ -134,6 +148,8 @@ final class RoutePlannerModel {
     private(set) var fuelPlanningStatus: String?
     /// Tentative, route-connected pumps revealed as the chain search advances.
     private var fuelPreviewStops: [RouteCoordinate] = []
+    private(set) var replacingFuelStopID: UUID?
+    private(set) var fuelReplacementCandidates: [FuelAlternate] = []
     /// Transient status capsule. Non-calculating toasts auto-clear.
     var toast: String? {
         didSet {
@@ -409,6 +425,11 @@ final class RoutePlannerModel {
     }
 
     private func applyImmediately(_ action: ItineraryAction, source: String) {
+        if case .replaceFuelStop = action {
+        } else if replacingFuelStopID != nil || !fuelReplacementCandidates.isEmpty {
+            replacingFuelStopID = nil
+            fuelReplacementCandidates = []
+        }
         let before = itinerary
         let change = reduce(before, action)
         guard change.itinerary != before else { return }
@@ -441,10 +462,20 @@ final class RoutePlannerModel {
             refreshMap()
             return
         }
-        startCanonicalBuild(from: fromLeg, reuse: built)
+        startCanonicalBuild(
+            from: fromLeg,
+            fromFuelSequence: change.rebuildFromFuelSequence,
+            preserveFuelStops: change.preserveFuelStops,
+            reuse: built
+        )
     }
 
-    private func startCanonicalBuild(from legIndex: Int, reuse: BuiltItinerary?) {
+    private func startCanonicalBuild(
+        from legIndex: Int,
+        fromFuelSequence: Int = 0,
+        preserveFuelStops: Bool = false,
+        reuse: BuiltItinerary?
+    ) {
         let requested = itinerary
         canonicalBuildStartCount += 1
         lastCanonicalBuildFromLegIndex = legIndex
@@ -458,6 +489,8 @@ final class RoutePlannerModel {
             let result = await self.itineraryBuilder.build(
                 requested,
                 from: legIndex,
+                fromFuelSequence: fromFuelSequence,
+                preserveFuelStops: preserveFuelStops,
                 reuse: reuse,
                 fuel: FuelRangePrefs.snapshot,
                 source: self.routingSourcePolicy
@@ -483,6 +516,7 @@ final class RoutePlannerModel {
             } else if self.toast == Self.calculatingRouteToast {
                 self.toast = nil
             }
+            self.syncFuelAnchors(from: result)
             self.refreshMap()
         }
     }
@@ -543,6 +577,10 @@ final class RoutePlannerModel {
 
     func handleMapTap(_ coordinate: CLLocationCoordinate2D) {
         guard navigation.phase == .idle else { return }
+        if replacingFuelStopID != nil {
+            cancelFuelReplacement()
+            return
+        }
         let point = RouteCoordinate(longitude: coordinate.longitude, latitude: coordinate.latitude)
         switch mode {
         case .fromHere:
@@ -671,16 +709,51 @@ final class RoutePlannerModel {
         apply(.append(coordinate: point), source: "longPress")
     }
 
-    /// Per-stage surface mode (each stage is its own on-device routing request).
+    /// Per-stage surface mode (each visible hop is its own routing request).
     func setStageProfile(_ newProfile: RouteProfile, at index: Int) {
         guard stages.indices.contains(index) else { return }
-        apply(.setProfile(legID: stages[index].riderLegID, newProfile), source: "card")
+        let stage = stages[index]
+        if stage.fuelGroupID != nil {
+            apply(
+                .setHopProfile(
+                    id: hopAnchorID(for: stage),
+                    riderLegID: stage.riderLegID,
+                    sequence: hopSequence(at: index),
+                    newProfile
+                ),
+                source: "card"
+            )
+        } else {
+            apply(.setProfile(legID: stage.riderLegID, newProfile), source: "card")
+        }
     }
 
     /// Per-stage unknown-access policy.
     func setStageAllowUnknown(_ allow: Bool, at index: Int) {
         guard stages.indices.contains(index) else { return }
-        apply(.setAllowUnknown(legID: stages[index].riderLegID, allow), source: "card")
+        let stage = stages[index]
+        if stage.fuelGroupID != nil {
+            apply(
+                .setHopAllowUnknown(
+                    id: hopAnchorID(for: stage),
+                    riderLegID: stage.riderLegID,
+                    sequence: hopSequence(at: index),
+                    allow
+                ),
+                source: "card"
+            )
+        } else {
+            apply(.setAllowUnknown(legID: stage.riderLegID, allow), source: "card")
+        }
+    }
+
+    private func hopSequence(at index: Int) -> Int {
+        let legID = stages[index].riderLegID
+        return stages.prefix(index).filter { $0.riderLegID == legID }.count
+    }
+
+    private func hopAnchorID(for stage: Stage) -> UUID {
+        stage.fuelIdentity ?? stage.riderLegID
     }
 
     static func fuelProfileFailureMessage(
@@ -705,6 +778,159 @@ final class RoutePlannerModel {
         else { return }
         mapState.selectPlannerPin(nil)
         apply(.delete(waypointID: itinerary.waypoints[legIndex + 1].id), source: "card")
+    }
+
+    func canDeleteFuelStop(_ id: UUID) -> Bool {
+        _ = id
+        return false
+    }
+
+    func handleFuelMarkerTap(_ markerID: String) {
+        guard let id = Self.fuelStopID(fromMarker: markerID) else { return }
+        Task { await beginFuelReplacement(id: id) }
+    }
+
+    func beginFuelReplacement(id: UUID) async {
+        guard navigation.phase == .idle,
+              let context = fuelReplacementContext(id: id)
+        else { return }
+        replacingFuelStopID = id
+        mapState.selectPlannerPin(Self.fuelMarkerID(id))
+        let request = FuelAlternateRequest(
+            profile: context.profile,
+            allowUnknown: context.allowUnknown,
+            previous: context.previous,
+            next: context.next,
+            usableRangeMeters: context.usable,
+            previousCapMeters: context.previousCap,
+            currentStationID: context.stationID
+        )
+        let routeReq = RouteRequest(
+            profile: context.profile,
+            locations: [
+                RouteLocation(latitude: context.previous.latitude, longitude: context.previous.longitude, label: "Point 1"),
+                RouteLocation(latitude: context.next.latitude, longitude: context.next.longitude, label: "Point 2")
+            ],
+            allowUnknown: context.allowUnknown
+        )
+        var candidates: [FuelAlternate] = []
+        do {
+            candidates = try await routingSourcePolicy.select(for: routeReq).fuelAlternates(request)
+        } catch {
+            candidates = []
+        }
+        if candidates.isEmpty, routingSourcePolicy.select(for: routeReq).name != "pack" {
+            let pack = PackRoutingSource(packs: graphPacks, cache: RouteResponseCache())
+            candidates = (try? await pack.fuelAlternates(request)) ?? []
+        }
+        guard replacingFuelStopID == id else { return }
+        fuelReplacementCandidates = candidates
+        toast = candidates.contains(where: \.isValid)
+            ? "Select a pulsing station"
+            : "No in-range alternate"
+        refreshMap()
+    }
+
+    func selectFuelAlternate(stationID: String) {
+        guard let id = replacingFuelStopID,
+              let candidate = fuelReplacementCandidates.first(where: { $0.stationID == stationID }),
+              candidate.isValid
+        else { return }
+        replacingFuelStopID = nil
+        fuelReplacementCandidates = []
+        apply(
+            .replaceFuelStop(
+                id: id,
+                stationID: candidate.stationID,
+                coordinate: candidate.coordinate,
+                name: candidate.name
+            ),
+            source: "fuelReplace"
+        )
+    }
+
+    func cancelFuelReplacement() {
+        guard replacingFuelStopID != nil || !fuelReplacementCandidates.isEmpty else { return }
+        replacingFuelStopID = nil
+        fuelReplacementCandidates = []
+        mapState.selectPlannerPin(nil)
+        refreshMap()
+    }
+
+    static func fuelMarkerID(_ id: UUID) -> String { "fuel:\(id.uuidString)" }
+
+    static func fuelStopID(fromMarker markerID: String) -> UUID? {
+        guard markerID.hasPrefix("fuel:") else { return nil }
+        return UUID(uuidString: String(markerID.dropFirst(5)))
+    }
+
+    private func syncFuelAnchors(from built: BuiltItinerary) {
+        var next: [FuelAnchor] = []
+        var sequenceByLeg: [UUID: Int] = [:]
+        for leg in built.legs {
+            guard let stop = leg.endsAtFuelStop else { continue }
+            let sequence = sequenceByLeg[leg.riderLegID, default: 0]
+            sequenceByLeg[leg.riderLegID] = sequence + 1
+            let pinned = itinerary.fuelAnchors.first { $0.id == stop.id }?.isPinned == true
+            next.append(FuelAnchor(
+                id: stop.id,
+                riderLegID: leg.riderLegID,
+                sequence: sequence,
+                stationID: stop.stationID ?? "",
+                coordinate: stop.coordinate,
+                name: stop.name,
+                isPinned: pinned
+            ))
+        }
+        guard next != itinerary.fuelAnchors else { return }
+        itinerary = RiderItinerary(
+            waypoints: itinerary.waypoints,
+            legs: itinerary.legs,
+            generation: itinerary.generation,
+            impassableEdgeIDs: itinerary.impassableEdgeIDs,
+            fuelAnchors: next,
+            hopOverrides: itinerary.hopOverrides
+        )
+    }
+
+    private func fuelReplacementContext(id: UUID) -> (
+        previous: RouteCoordinate,
+        next: RouteCoordinate,
+        previousCap: Double,
+        usable: Double,
+        profile: RouteProfile,
+        allowUnknown: Bool,
+        stationID: String?
+    )? {
+        guard let built,
+              let hopIndex = built.legs.firstIndex(where: { $0.endsAtFuelStop?.id == id })
+        else { return nil }
+        let hop = built.legs[hopIndex]
+        let next: RouteCoordinate
+        if let laterFuel = built.legs.dropFirst(hopIndex + 1).first(where: { $0.endsAtFuelStop != nil }) {
+            next = laterFuel.toCoordinate
+        } else if let riderIndex = itinerary.legs.firstIndex(where: { $0.id == hop.riderLegID }) {
+            next = itinerary.waypoints[riderIndex + 1].coordinate
+        } else {
+            next = hop.toCoordinate
+        }
+        let usable = FuelRangePrefs.snapshot.usableMeters
+        let carried: Double
+        if hopIndex == 0 || built.legs[hopIndex - 1].endsAtFuelStop != nil {
+            carried = 0
+        } else {
+            carried = built.legs[hopIndex - 1].fuelUsedOnArrivalMeters
+        }
+        let rider = itinerary.legs.first { $0.id == hop.riderLegID }
+        return (
+            hop.fromCoordinate,
+            next,
+            max(0, usable - carried),
+            usable,
+            rider?.profile ?? profile,
+            rider?.allowUnknown ?? allowUnknown,
+            hop.endsAtFuelStop?.stationID
+        )
     }
 
     // MARK: - Routing
@@ -1124,6 +1350,8 @@ final class RoutePlannerModel {
         built = nil
         fuelPlanningStatus = nil
         fuelPreviewStops = []
+        replacingFuelStopID = nil
+        fuelReplacementCandidates = []
         errorMessage = nil
         routeIdentity = nil
         savedRouteOrigin = nil
@@ -1363,6 +1591,22 @@ final class RoutePlannerModel {
                 )
             }
         }
+        if replacingFuelStopID != nil {
+            for candidate in fuelReplacementCandidates {
+                markers.append(
+                    MapState.Marker(
+                        id: "fuel-alt:\(candidate.stationID)",
+                        latitude: candidate.coordinate.latitude,
+                        longitude: candidate.coordinate.longitude,
+                        label: candidate.isValid ? "F" : "·",
+                        kind: .fuelCandidate,
+                        subtitle: candidate.name,
+                        isLocked: true,
+                        isPulsing: candidate.isValid
+                    )
+                )
+            }
+        }
         let riders = mapState.markers.filter { $0.kind.isGroupOverlay }
         mapState.setMarkers(markers + riders)
     }
@@ -1379,12 +1623,12 @@ final class RoutePlannerModel {
             )
         }
         var fuelOrdinal = 0
-        for (index, leg) in (built?.legs ?? []).enumerated() {
+        for leg in built?.legs ?? [] {
             guard let stop = leg.endsAtFuelStop else { continue }
             fuelOrdinal += 1
             markers.append(
                 MapState.Marker(
-                    id: "fuel:\(leg.riderLegID.uuidString):\(index)",
+                    id: Self.fuelMarkerID(stop.id),
                     latitude: stop.coordinate.latitude,
                     longitude: stop.coordinate.longitude,
                     label: "F\(fuelOrdinal)",

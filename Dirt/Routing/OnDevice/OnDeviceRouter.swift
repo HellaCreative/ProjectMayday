@@ -583,17 +583,17 @@ nonisolated struct OnDeviceRouter {
 
         if profile == .dirt {
             let base = HopSearchPolicy.dirtCorridorMeters
-            let comparisonWidths = [base * 4, base * 3, base * 2, base]
-            let connectivityWidths: [Double?] = [base * 6, base * 8, nil]
+            let comparisonWidths = [base]
+            let connectivityWidths = [HopSearchPolicy.dirtCorridorMaxMeters]
             var candidates: [(route: Result, width: Double)] = []
             var lastBoundedFailure: Failure = .noPath
 
-            func searchDirt(width: Double?) -> Swift.Result<Result, Failure> {
+            func searchDirt(width: Double) -> Swift.Result<Result, Failure> {
                 var hunt = ctx
                 hunt.costMode = .pavement
                 hunt.variety = false
-                hunt.corridorMeters = width
-                hunt.hardCorridor = width != nil
+                hunt.corridorMeters = HopSearchPolicy.capCorridorMeters(width, for: .dirt)
+                hunt.hardCorridor = true
                 hunt.boundedSearch = true
                 hunt.timeCapSeconds = HopSearchPolicy.dirtCandidateTimeCapSeconds
                 hunt.popCap = HopSearchPolicy.dirtCandidatePopCap
@@ -612,7 +612,7 @@ nonisolated struct OnDeviceRouter {
                 for width in connectivityWidths {
                     switch searchDirt(width: width) {
                     case .success(let route):
-                        candidates.append((route, width ?? 0))
+                        candidates.append((route, width))
                     case .failure(let failure):
                         lastBoundedFailure = failure
                         continue
@@ -625,7 +625,7 @@ nonisolated struct OnDeviceRouter {
             }
             var route = selected.route
             route.searchMeta.rideObjective = "earned-dirt-detour"
-            route.searchMeta.corridorMeters = selected.width > 0 ? selected.width : nil
+            route.searchMeta.corridorMeters = selected.width
             route.searchMeta.corridorWidened = selected.width > base
             route.searchMeta.maxCrossTrackMeters = HopSearchPolicy.maxCrossTrackMeters(
                 coordinates: route.coordinates, start: from, end: to
@@ -642,39 +642,35 @@ nonisolated struct OnDeviceRouter {
             let base = profile == .direct
                 ? HopSearchPolicy.directCorridorMeters
                 : HopSearchPolicy.balancedCorridorMeters
-            let multipliers: [Double] = profile == .direct
-                ? [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12]
-                : [1, 2, 3, 4, 6, 8]
             var lastEnvelopeFailure: Failure = .noPath
-            for width in multipliers.map({ base * $0 }) + [0] {
-                var envelope = ctx
-                envelope.costMode = profile == .balanced ? .balancedResource : .profile
-                envelope.variety = false
-                envelope.corridorMeters = width > 0 ? width : nil
-                envelope.hardCorridor = width > 0
-                envelope.boundedSearch = true
-                envelope.timeCapSeconds = HopSearchPolicy.pass2TimeCapSeconds
-                envelope.popCap = profile == .balanced
-                    ? HopSearchPolicy.pass2PopCap * 10
-                    : HopSearchPolicy.pass2PopCap
-                envelope.maxPathMeters = maxRouteMeters
-                lastFailure = .noPath
-                switch runProfile(envelope) {
-                case .success(var route):
-                    route.searchMeta.rideObjective = profile == .balanced
-                        ? "surface-balance"
-                        : "crow-flies-adventure"
-                    route.searchMeta.corridorMeters = width > 0 ? width : nil
-                    route.searchMeta.corridorWidened = width > base
-                    route.searchMeta.maxCrossTrackMeters = HopSearchPolicy.maxCrossTrackMeters(
-                        coordinates: route.coordinates, start: from, end: to
-                    )
-                    let note = "objective=\(route.searchMeta.rideObjective ?? "-") corridor=\(Int(width))m"
-                    route.debugNote = route.debugNote.isEmpty ? note : route.debugNote + " " + note
-                    return .success(route)
-                case .failure(let failure):
-                    lastEnvelopeFailure = failure
-                }
+            let width = HopSearchPolicy.capCorridorMeters(base, for: profile)
+            var envelope = ctx
+            envelope.costMode = profile == .balanced ? .balancedResource : .profile
+            envelope.variety = false
+            envelope.corridorMeters = width
+            envelope.hardCorridor = true
+            envelope.boundedSearch = true
+            envelope.timeCapSeconds = HopSearchPolicy.pass2TimeCapSeconds
+            envelope.popCap = profile == .balanced
+                ? HopSearchPolicy.pass2PopCap * 10
+                : HopSearchPolicy.pass2PopCap
+            envelope.maxPathMeters = maxRouteMeters
+            lastFailure = .noPath
+            switch runProfile(envelope) {
+            case .success(var route):
+                route.searchMeta.rideObjective = profile == .balanced
+                    ? "surface-balance"
+                    : "crow-flies-adventure"
+                route.searchMeta.corridorMeters = width
+                route.searchMeta.corridorWidened = false
+                route.searchMeta.maxCrossTrackMeters = HopSearchPolicy.maxCrossTrackMeters(
+                    coordinates: route.coordinates, start: from, end: to
+                )
+                let note = "objective=\(route.searchMeta.rideObjective ?? "-") corridor=\(Int(width))m"
+                route.debugNote = route.debugNote.isEmpty ? note : route.debugNote + " " + note
+                return .success(route)
+            case .failure(let failure):
+                lastEnvelopeFailure = failure
             }
             return .failure(lastEnvelopeFailure)
         }
@@ -700,13 +696,13 @@ nonisolated struct OnDeviceRouter {
             case .direct:
                 // Ratio labels preserve both short and dirt-rich arrivals at a
                 // node. A single pavement-cost label can discard the shorter
-                // arrival required to finish inside Direct's 15 km budget.
+                // arrival required to finish inside Direct's 25 km corridor.
                 hunt.costMode = .balancedResource
                 // Variety steal+cycle walks explode on long hops; pass 2
                 // optimizes a real cost with a length cap — keep it strict.
                 hunt.variety = false
             case .dirt:
-                // Dirt explicitly minimizes pavement inside shortest + 50 km.
+                // Dirt explicitly minimizes pavement inside the 60 km corridor.
                 // Weighted Dijkstra spent the budget without maximizing dirt
                 // and could return less dirt than Balanced on the same graph.
                 hunt.costMode = .balancedResource
@@ -1687,8 +1683,15 @@ nonisolated struct OnDeviceRouter {
                             point: toLL, start: from, end: to, boxes: packSettlements
                         )
                         : 1
+                    let surfMult = profile == .balanced
+                        ? OnDeviceProfileCosts.surfaceWeight(
+                            profile: .balanced,
+                            surfaceCode: GraphV2Pack.unpackSurface(attr),
+                            roadClassCode: GraphV2Pack.unpackRoadClass(attr)
+                        )
+                        : 1.0
                     let newScore = cur.cost + backtrackPenalized(
-                        edgeM * settlementMult,
+                        edgeM * settlementMult * surfMult,
                         edgeID: pack.edgeId(ei),
                         ctx: ctx
                     )
@@ -1748,11 +1751,20 @@ nonisolated struct OnDeviceRouter {
                             point: toLL, start: from, end: to, boxes: packSettlements
                         )
                         : 1
+                    var surfMult = 1.0
+                    if profile == .balanced, v.ei >= 0 {
+                        let vAttr = pack.edgeAttrs[v.ei]
+                        surfMult = OnDeviceProfileCosts.surfaceWeight(
+                            profile: .balanced,
+                            surfaceCode: GraphV2Pack.unpackSurface(vAttr),
+                            roadClassCode: GraphV2Pack.unpackRoadClass(vAttr)
+                        )
+                    }
                     let virtualEdgeID = v.junctionStitch
                         ? v.stitchEdgeId
                         : (v.ei >= 0 ? pack.edgeId(v.ei) : "")
                     let newScore = cur.cost + backtrackPenalized(
-                        v.meters * settlementMult,
+                        v.meters * settlementMult * surfMult,
                         edgeID: virtualEdgeID,
                         ctx: ctx
                     )
@@ -3120,8 +3132,17 @@ nonisolated struct OnDeviceRouter {
     ) -> Double {
         let km = edgeMeters / 1000.0
         switch ctx.costMode {
-        case .distance, .balancedResource:
+        case .distance:
             return km
+        case .balancedResource:
+            // Balanced only: make PROFILE_SURFACE_WEIGHTS.balanced live.
+            // Direct/Dirt extraBudget still uses this costMode as length-only.
+            guard profile == .balanced else { return km }
+            return km * OnDeviceProfileCosts.surfaceWeight(
+                profile: .balanced,
+                surfaceCode: surface,
+                roadClassCode: roadClass
+            )
         case .pavement:
             let paint = OnDeviceProfileCosts.riderPaintSurface(
                 surfaceName: OnDeviceProfileCosts.surfaceName(code: surface),

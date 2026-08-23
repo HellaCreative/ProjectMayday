@@ -1,0 +1,29 @@
+{
+  "schemaVersion": "dirt-pack-release.v1",
+  "releaseId": "az-osm-20260821-01",
+  "status": "live-candidate",
+  "createdAt": "2026-08-21T15:00:11.273Z",
+  "publicBase": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/candidates/az-osm-20260821-01",
+  "regions": [
+    {
+      "id": "az",
+      "files": [
+        {
+          "name": "graph.v2.bin",
+          "bytes": 104217725,
+          "sha256": "05b5fab379722e190e5e1d9e9dc7083a5be0bf5cf6c0156f28a4f6ab83ee610b"
+        },
+        {
+          "name": "geometry.v1.bin",
+          "bytes": 87334924,
+          "sha256": "5a06572bbb8e209d05fe16db1cf4ed2e37846e230b0d429016f020bb560f7e96"
+        },
+        {
+          "name": "fuel.v1.json",
+          "bytes": 712166,
+          "sha256": "e1f960f5832f49863f1261caec16e7f5b6f5456ba324fd2ca8c651b83e872f00"
+        }
+      ]
+    }
+  ]
+}

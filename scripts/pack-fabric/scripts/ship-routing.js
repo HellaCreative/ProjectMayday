@@ -259,10 +259,36 @@ function shipPack(ids) {
   console.log("pack published — live /api/route and PACKS download now share those bytes");
 }
 
+/**
+ * Pin live `/api/route` to the latest live-candidate per region. Regions whose
+ * newest release is promoted resolve from stable R2 with no override.
+ */
+function collectLiveCandidateOverrides() {
+  if (!fs.existsSync(RELEASES)) return {};
+  const latestByRegion = {};
+  for (const file of fs.readdirSync(RELEASES).filter((name) => name.endsWith(".json"))) {
+    const record = JSON.parse(fs.readFileSync(path.join(RELEASES, file), "utf8"));
+    for (const region of record.regions || []) {
+      const id = region.id;
+      const prev = latestByRegion[id];
+      if (!prev || String(record.releaseId).localeCompare(String(prev.releaseId)) > 0) {
+        latestByRegion[id] = record;
+      }
+    }
+  }
+  const overrides = {};
+  for (const [id, record] of Object.entries(latestByRegion)) {
+    if (record.status !== "live-candidate" || !record.publicBase) continue;
+    overrides[id] = String(record.publicBase).replace(/\/$/, "");
+  }
+  return overrides;
+}
+
 function shipLive(regionBaseOverrides) {
   console.log("deploying /api/route from", FABRIC);
   const args = ["vercel", "--prod", "--yes"];
   if (regionBaseOverrides && Object.keys(regionBaseOverrides).length) {
+    console.log("R2_REGION_BASE_OVERRIDES for", Object.keys(regionBaseOverrides).length, "regions");
     args.push("--env", "R2_REGION_BASE_OVERRIDES=" + JSON.stringify(regionBaseOverrides));
   }
   run("npx", args, { cwd: FABRIC });
@@ -307,7 +333,10 @@ function main() {
   } else if (opts.pack) {
     shipPack(opts.ids);
   }
-  if (opts.live) shipLive(liveOverrides);
+  if (opts.live) {
+    const overrides = liveOverrides || collectLiveCandidateOverrides();
+    shipLive(overrides);
+  }
   if (opts.assert) shipAssert();
 }
 

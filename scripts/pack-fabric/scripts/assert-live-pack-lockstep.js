@@ -17,7 +17,30 @@ const DIRT = path.resolve(__dirname, "../../..");
 const FABRIC = path.join(DIRT, "scripts/pack-fabric");
 const LIVE_URL = process.env.LIVE_ROUTE_URL || "https://dirt-mayday.vercel.app/api/route";
 const PACKS = path.join(FABRIC, "app/data/packs/v1");
+const RELEASES = path.join(FABRIC, "routing/data/releases");
 const REGION_IDS = ["bc", "ab", "wa"];
+const PUBLIC_R2_BASE = "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev";
+
+function latestReleaseForRegion(regionId) {
+  if (!fs.existsSync(RELEASES)) return null;
+  let latest = null;
+  for (const file of fs.readdirSync(RELEASES).filter((name) => name.endsWith(".json"))) {
+    const record = JSON.parse(fs.readFileSync(path.join(RELEASES, file), "utf8"));
+    if (!(record.regions || []).some((region) => region.id === regionId)) continue;
+    if (!latest || String(record.releaseId).localeCompare(String(latest.releaseId)) > 0) {
+      latest = record;
+    }
+  }
+  return latest;
+}
+
+function r2FileUrl(regionId, fileName) {
+  const latest = latestReleaseForRegion(regionId);
+  if (latest && latest.status === "live-candidate" && latest.publicBase) {
+    return `${String(latest.publicBase).replace(/\/$/, "")}/${regionId}/${fileName}`;
+  }
+  return `${PUBLIC_R2_BASE}/${regionId}/${fileName}`;
+}
 
 function fail(msg) {
   console.error("LOCKSTEP FAIL:", msg);
@@ -110,10 +133,9 @@ async function main() {
   const dirt = require(costsPath);
   console.log("ok cost tables dirt.paved =", dirt.PROFILE_SURFACE_WEIGHTS.dirt.paved);
 
-  const publicBase = "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev";
   for (const regionId of REGION_IDS) {
     for (const fileName of ["graph.v2.bin", "geometry.v1.bin", "fuel.v1.json"]) {
-      const remote = `${publicBase}/${regionId}/${fileName}`;
+      const remote = r2FileUrl(regionId, fileName);
       const head = await request(remote, "HEAD");
       if (head.status !== 200) fail(`R2 pack missing HTTP ${head.status} ${remote}`);
       const remoteBytes = Number(head.headers["content-length"] || 0);

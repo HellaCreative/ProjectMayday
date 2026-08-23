@@ -26,6 +26,7 @@ final class MapState {
         case start
         case stage
         case fuel
+        case fuelCandidate
         case destination
         case rider
         /// Unresolved peer `rider_alerts` pin when the rider is not live-sharing.
@@ -49,6 +50,8 @@ final class MapState {
         var status: String?
         /// When true, map ignores drag / tap-to-relocate (From here fuel pins).
         var isLocked: Bool = false
+        /// Valid fuel-replacement candidate: pulsing halo.
+        var isPulsing: Bool = false
     }
 
     enum CameraCommand {
@@ -251,6 +254,8 @@ final class MapState {
     /// Called when the user drags a planner pin and releases it.
     /// Arguments: marker ID (e.g. "s0", "e0", "dest") + new map coordinate.
     var onPlannerPinDragEnd: ((String, CLLocationCoordinate2D) -> Void)?
+    var onFuelStopTap: ((String) -> Void)?
+    var onFuelAlternateTap: ((String) -> Void)?
 
     /// Currently selected planner pin (tap-to-select, then drag or tap map to move).
     var selectedPlannerPinID: String? {

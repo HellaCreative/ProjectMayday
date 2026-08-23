@@ -1,0 +1,29 @@
+{
+  "schemaVersion": "dirt-pack-release.v1",
+  "releaseId": "mo-osm-20260821-01",
+  "status": "live-candidate",
+  "createdAt": "2026-08-21T17:33:53.797Z",
+  "publicBase": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/candidates/mo-osm-20260821-01",
+  "regions": [
+    {
+      "id": "mo",
+      "files": [
+        {
+          "name": "graph.v2.bin",
+          "bytes": 105385438,
+          "sha256": "6768498dd63d35040fd0ee5f3285c7fd58082c701aa5bc21edc41b2690678a21"
+        },
+        {
+          "name": "geometry.v1.bin",
+          "bytes": 86838716,
+          "sha256": "a07d9588f3a6cf1629683ac6dcdc2f3ea823e778126f707045c910be3312c8b8"
+        },
+        {
+          "name": "fuel.v1.json",
+          "bytes": 618018,
+          "sha256": "8020f274bd015fc6ec7fb19d252cfcc48255e56153a1ac08ff3aa22901b25839"
+        }
+      ]
+    }
+  ]
+}

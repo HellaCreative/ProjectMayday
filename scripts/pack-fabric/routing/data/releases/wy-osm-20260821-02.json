@@ -1,0 +1,29 @@
+{
+  "schemaVersion": "dirt-pack-release.v1",
+  "releaseId": "wy-osm-20260821-02",
+  "status": "live-candidate",
+  "createdAt": "2026-08-22T16:13:24.367Z",
+  "publicBase": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/candidates/wy-osm-20260821-02",
+  "regions": [
+    {
+      "id": "wy",
+      "files": [
+        {
+          "name": "graph.v2.bin",
+          "bytes": 27685150,
+          "sha256": "ee0c75b05c9d662d52401df618f15d75f76830cfa5905b23f2f4bf5ad5e72638"
+        },
+        {
+          "name": "geometry.v1.bin",
+          "bytes": 38461804,
+          "sha256": "d822020d3414c4a65156c3084ef0c614d3b3054526eefcb4902fd8f2afa5a589"
+        },
+        {
+          "name": "fuel.v1.json",
+          "bytes": 98336,
+          "sha256": "93273d95ea8f93969211ddce7c383132586d7441cf737591f5a3940a662f10b1"
+        }
+      ]
+    }
+  ]
+}

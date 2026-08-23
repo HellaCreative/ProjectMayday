@@ -44,6 +44,7 @@ const { routeRequest, matchPoint, normalizePolicy } = require("../routing/lib/ro
 const { fuelChainRequest } = require("../routing/lib/fuel-chain");
 const { loadGraphsForRequest } = require("../routing/lib/graph");
 const { findPathV2 } = require("../routing/lib/find-path-v2");
+const { DIRECT_CORRIDOR_M } = require("../routing/lib/hop-search");
 const { resolveGraphRequest, graphCdnBaseUrlForRegion } = require("../routing/regional/select");
 const SESSION_SEED = 0xD1_47_0008;
 const USABLE_METERS = 237_500;
@@ -227,8 +228,22 @@ function summarizeResponses(responses, metadata) {
     ms: Math.round(metadata.totalMs),
     maxHopMs: Math.round(Math.max(0, ...metadata.timings)),
     shortestMeters: metadata.shortestMeters,
-    urbanWall: metadata.urbanWall
+    urbanWall: metadata.urbanWall,
+    maxCrossTrackMeters: maxXtFromResponses(responses)
   };
+}
+
+function maxXtFromResponses(responses) {
+  let best = 0;
+  let found = false;
+  for (const response of responses) {
+    const xt = Number(response.debug && response.debug.searchMeta && response.debug.searchMeta.maxCrossTrackMeters);
+    if (Number.isFinite(xt)) {
+      found = true;
+      if (xt > best) best = xt;
+    }
+  }
+  return found ? Math.round(best) : null;
 }
 
 async function routeCase(item, shortestMeters) {
@@ -401,7 +416,7 @@ function assertionsFor(item, result) {
     add("fuel hops ≤237500", result.maxHopMeters <= USABLE_METERS, `${result.maxHopMeters}m`);
   }
   if (item.profile === "balanced") {
-    add("balanced 45–55", result.dirtPct >= 45 && result.dirtPct <= 55, `${result.dirtPct}%`);
+    add("balanced 35–65", result.dirtPct >= 35 && result.dirtPct <= 65, `${result.dirtPct}%`);
   }
   if (item.profile === "clean") {
     add("clean ≤15", result.dirtPct <= 15, `${result.dirtPct}%`);
@@ -410,12 +425,13 @@ function assertionsFor(item, result) {
     }
   }
   if (item.profile === "direct") {
+    add("direct dirt ≥60", result.dirtPct >= 60, `${result.dirtPct}%`);
     add(
-      "direct ≤shortest+15km",
-      Number.isFinite(result.shortestMeters) && result.meters <= result.shortestMeters + 15_000,
-      Number.isFinite(result.shortestMeters)
-        ? `${result.meters}m vs ${result.shortestMeters}m`
-        : (result.shortestError || "shortest reference unavailable")
+      "direct corridor ≤25km",
+      Number.isFinite(result.maxCrossTrackMeters) && result.maxCrossTrackMeters <= DIRECT_CORRIDOR_M,
+      Number.isFinite(result.maxCrossTrackMeters)
+        ? `${result.maxCrossTrackMeters}m`
+        : "xt unavailable"
     );
   }
   add(

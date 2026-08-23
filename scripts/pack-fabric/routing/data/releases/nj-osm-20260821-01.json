@@ -1,0 +1,29 @@
+{
+  "schemaVersion": "dirt-pack-release.v1",
+  "releaseId": "nj-osm-20260821-01",
+  "status": "live-candidate",
+  "createdAt": "2026-08-21T17:45:21.168Z",
+  "publicBase": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/candidates/nj-osm-20260821-01",
+  "regions": [
+    {
+      "id": "nj",
+      "files": [
+        {
+          "name": "graph.v2.bin",
+          "bytes": 73538703,
+          "sha256": "d05355b2f58fd580031df84be1ea7916ca3bdf8e61c6fae9d8f2b0fc9ccccd4b"
+        },
+        {
+          "name": "geometry.v1.bin",
+          "bytes": 49572780,
+          "sha256": "ec824c411cbdce11729737f5ed2f85be08400305aef148958ededd8ad18cea1a"
+        },
+        {
+          "name": "fuel.v1.json",
+          "bytes": 591143,
+          "sha256": "4190bfcc55a33d875f5e1fd24d5f7c28332c3f704b183d189caf0f28a28306e2"
+        }
+      ]
+    }
+  ]
+}

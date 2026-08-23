@@ -6,9 +6,11 @@
 
 const DIRECT_STRETCH = 1.2; // unused for Direct shaping — corridor replaced stretch-factor
 const BALANCED_STRETCH = 1.4; // compute prune only; corridor is the geographic ceiling
-const DIRECT_CORRIDOR_M = 15000;
-const DIRT_CORRIDOR_M = 50000;
-const BALANCED_CORRIDOR_M = 40000;
+const DIRECT_CORRIDOR_M = 25000;
+const BALANCED_CORRIDOR_M = 25000;
+const DIRT_CORRIDOR_M = 60000;
+/** Dirt only: fuel / large-water reroute after the 60 km search fails. */
+const DIRT_CORRIDOR_MAX_M = 80000;
 const VARIETY_MARGIN = 0.08;
 const VARIETY_SLOTS = 3;
 const BALANCED_DIRT_LO = 0.45;
@@ -232,6 +234,29 @@ function corridorMetersForProfile(profile) {
   return null;
 }
 
+function corridorCapMetersForProfile(profile) {
+  if (profile === "dirt") return DIRT_CORRIDOR_MAX_M;
+  return corridorMetersForProfile(profile);
+}
+
+/**
+ * Search envelopes. Direct and Balanced are a single hard 25 km band.
+ * Dirt tries 60 km; callers may then try DIRT_CORRIDOR_MAX_M only if that
+ * search fails. No unbounded width.
+ */
+function corridorSearchWidthsForProfile(profile) {
+  const base = corridorMetersForProfile(profile);
+  if (profile === "direct" || profile === "balanced") return [base];
+  if (profile === "dirt") return [DIRT_CORRIDOR_M];
+  return [base];
+}
+
+function capCorridorMeters(profile, widthMeters) {
+  const cap = corridorCapMetersForProfile(profile);
+  if (!Number.isFinite(widthMeters) || !Number.isFinite(cap)) return cap;
+  return Math.min(widthMeters, cap);
+}
+
 function angularDistanceRadians(a, b) {
   const toR = Math.PI / 180;
   const dLat = (b[1] - a[1]) * toR;
@@ -419,8 +444,9 @@ module.exports = {
   DIRECT_STRETCH,
   BALANCED_STRETCH,
   DIRECT_CORRIDOR_M,
-  DIRT_CORRIDOR_M,
   BALANCED_CORRIDOR_M,
+  DIRT_CORRIDOR_M,
+  DIRT_CORRIDOR_MAX_M,
   VARIETY_MARGIN,
   VARIETY_SLOTS,
   BALANCED_DIRT_LO,
@@ -452,6 +478,9 @@ module.exports = {
   DIRT_RIDE_XT_SCALE,
   DIRT_RIDE_AWAY_SCALE,
   corridorMetersForProfile,
+  corridorCapMetersForProfile,
+  corridorSearchWidthsForProfile,
+  capCorridorMeters,
   crossTrackMeters,
   outsideCorridor,
   projectedProgressMeters,

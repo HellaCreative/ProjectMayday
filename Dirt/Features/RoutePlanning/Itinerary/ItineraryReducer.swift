@@ -3,6 +3,20 @@ import Foundation
 nonisolated struct ItineraryChange: Equatable, Sendable {
     let itinerary: RiderItinerary
     let rebuildFromLegIndex: Int?
+    let rebuildFromFuelSequence: Int
+    let preserveFuelStops: Bool
+
+    init(
+        itinerary: RiderItinerary,
+        rebuildFromLegIndex: Int?,
+        rebuildFromFuelSequence: Int = 0,
+        preserveFuelStops: Bool = false
+    ) {
+        self.itinerary = itinerary
+        self.rebuildFromLegIndex = rebuildFromLegIndex
+        self.rebuildFromFuelSequence = rebuildFromFuelSequence
+        self.preserveFuelStops = preserveFuelStops
+    }
 }
 
 nonisolated func reduce(
@@ -150,6 +164,7 @@ nonisolated func reduce(
             waypoints: waypoints,
             legs: legs,
             impassableEdgeIDs: [],
+            fuelAnchors: [],
             rebuildFrom: legs.isEmpty ? nil : 0
         )
 
@@ -162,6 +177,7 @@ nonisolated func reduce(
             waypoints: [],
             legs: [],
             impassableEdgeIDs: [],
+            fuelAnchors: [],
             rebuildFrom: nil
         )
 
@@ -172,6 +188,108 @@ nonisolated func reduce(
             waypoints: itinerary.waypoints,
             legs: itinerary.legs,
             rebuildFrom: 0
+        )
+
+    case .replaceFuelStop(let id, let stationID, let coordinate, let name):
+        guard let anchorIndex = itinerary.fuelAnchors.firstIndex(where: { $0.id == id }),
+              let legIndex = itinerary.legs.firstIndex(where: {
+                  $0.id == itinerary.fuelAnchors[anchorIndex].riderLegID
+              })
+        else { return unchanged(itinerary) }
+        var anchors = itinerary.fuelAnchors
+        var target = anchors[anchorIndex]
+        if target.stationID == stationID, target.coordinate == coordinate, target.isPinned {
+            return unchanged(itinerary)
+        }
+        target.stationID = stationID
+        target.coordinate = coordinate
+        target.name = name
+        target.isPinned = true
+        let riderLegID = target.riderLegID
+        let sequence = target.sequence
+        anchors[anchorIndex] = target
+        anchors.removeAll { anchor in
+            if anchor.id == id { return false }
+            if anchor.riderLegID == riderLegID { return anchor.sequence > sequence }
+            guard let otherIndex = itinerary.legs.firstIndex(where: { $0.id == anchor.riderLegID })
+            else { return true }
+            return otherIndex > legIndex
+        }
+        var overrides = itinerary.hopOverrides
+        overrides.removeAll { override in
+            if override.riderLegID == riderLegID { return override.sequence > sequence }
+            guard let otherIndex = itinerary.legs.firstIndex(where: { $0.id == override.riderLegID })
+            else { return true }
+            return otherIndex > legIndex
+        }
+        return changed(
+            itinerary,
+            waypoints: itinerary.waypoints,
+            legs: itinerary.legs,
+            fuelAnchors: anchors,
+            hopOverrides: overrides,
+            rebuildFrom: legIndex,
+            rebuildFromFuelSequence: sequence
+        )
+
+    case .setHopProfile(let id, let riderLegID, let sequence, let profile):
+        guard let legIndex = itinerary.legs.firstIndex(where: { $0.id == riderLegID }) else {
+            return unchanged(itinerary)
+        }
+        let riderLeg = itinerary.legs[legIndex]
+        let current = itinerary.hopPolicy(riderLeg: riderLeg, sequence: sequence)
+        guard current.profile != profile else { return unchanged(itinerary) }
+        var overrides = itinerary.hopOverrides
+        if let index = overrides.firstIndex(where: { $0.id == id }) {
+            overrides[index].profile = profile
+            if profile == .cleanest { overrides[index].allowUnknown = false }
+        } else {
+            overrides.append(HopOverride(
+                id: id,
+                riderLegID: riderLegID,
+                sequence: sequence,
+                profile: profile,
+                allowUnknown: profile == .cleanest ? false : riderLeg.allowUnknown
+            ))
+        }
+        return changed(
+            itinerary,
+            waypoints: itinerary.waypoints,
+            legs: itinerary.legs,
+            hopOverrides: overrides,
+            rebuildFrom: legIndex,
+            rebuildFromFuelSequence: sequence,
+            preserveFuelStops: true
+        )
+
+    case .setHopAllowUnknown(let id, let riderLegID, let sequence, let allowUnknown):
+        guard let legIndex = itinerary.legs.firstIndex(where: { $0.id == riderLegID }) else {
+            return unchanged(itinerary)
+        }
+        let riderLeg = itinerary.legs[legIndex]
+        let current = itinerary.hopPolicy(riderLeg: riderLeg, sequence: sequence)
+        let effective = current.profile == .cleanest ? false : allowUnknown
+        guard current.allowUnknown != effective else { return unchanged(itinerary) }
+        var overrides = itinerary.hopOverrides
+        if let index = overrides.firstIndex(where: { $0.id == id }) {
+            overrides[index].allowUnknown = overrides[index].profile == .cleanest ? false : effective
+        } else {
+            overrides.append(HopOverride(
+                id: id,
+                riderLegID: riderLegID,
+                sequence: sequence,
+                profile: riderLeg.profile,
+                allowUnknown: riderLeg.profile == .cleanest ? false : effective
+            ))
+        }
+        return changed(
+            itinerary,
+            waypoints: itinerary.waypoints,
+            legs: itinerary.legs,
+            hopOverrides: overrides,
+            rebuildFrom: legIndex,
+            rebuildFromFuelSequence: sequence,
+            preserveFuelStops: true
         )
     }
 }
@@ -207,13 +325,42 @@ private nonisolated func changed(
     waypoints: [RiderWaypoint],
     legs: [RiderLeg],
     impassableEdgeIDs: Set<String>? = nil,
-    rebuildFrom: Int?
+    fuelAnchors: [FuelAnchor]? = nil,
+    hopOverrides: [HopOverride]? = nil,
+    rebuildFrom: Int?,
+    rebuildFromFuelSequence: Int = 0,
+    preserveFuelStops: Bool = false
 ) -> ItineraryChange {
+    let anchors = fuelAnchors ?? retainedFuelAnchors(prior.fuelAnchors, legs: legs)
+    let overrides = hopOverrides ?? retainedHopOverrides(prior.hopOverrides, legs: legs)
     let itinerary = RiderItinerary(
         waypoints: waypoints,
         legs: legs,
         generation: prior.generation + 1,
-        impassableEdgeIDs: impassableEdgeIDs ?? prior.impassableEdgeIDs
+        impassableEdgeIDs: impassableEdgeIDs ?? prior.impassableEdgeIDs,
+        fuelAnchors: anchors,
+        hopOverrides: overrides
     )
-    return ItineraryChange(itinerary: itinerary, rebuildFromLegIndex: rebuildFrom)
+    return ItineraryChange(
+        itinerary: itinerary,
+        rebuildFromLegIndex: rebuildFrom,
+        rebuildFromFuelSequence: rebuildFromFuelSequence,
+        preserveFuelStops: preserveFuelStops
+    )
+}
+
+private nonisolated func retainedFuelAnchors(
+    _ anchors: [FuelAnchor],
+    legs: [RiderLeg]
+) -> [FuelAnchor] {
+    let ids = Set(legs.map(\.id))
+    return anchors.filter { ids.contains($0.riderLegID) }
+}
+
+private nonisolated func retainedHopOverrides(
+    _ overrides: [HopOverride],
+    legs: [RiderLeg]
+) -> [HopOverride] {
+    let ids = Set(legs.map(\.id))
+    return overrides.filter { ids.contains($0.riderLegID) }
 }

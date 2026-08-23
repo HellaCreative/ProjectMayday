@@ -174,6 +174,15 @@ final class AppEnvironment {
         mapState.onPlannerPinDragEnd = { [planner] markerID, coordinate in
             planner.moveWaypoint(markerID: markerID, to: coordinate)
         }
+        mapState.onFuelStopTap = { [planner] markerID in
+            planner.handleFuelMarkerTap(markerID)
+        }
+        mapState.onFuelAlternateTap = { [planner] markerID in
+            let stationID = markerID.hasPrefix("fuel-alt:")
+                ? String(markerID.dropFirst("fuel-alt:".count))
+                : markerID
+            planner.selectFuelAlternate(stationID: stationID)
+        }
 
         // Frame the map on the rider as soon as GPS (or a cached fix) arrives.
         let priorLocationHandler = location.onLocation
