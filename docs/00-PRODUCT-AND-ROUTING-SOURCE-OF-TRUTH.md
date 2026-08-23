@@ -451,6 +451,53 @@ is:
    candidate diagnostics; and
 5. add the reproduction permanently to the benchmark/regression suite.
 
+### R0 physical evidence — 2026-08-23
+
+White ran app `1.2 (4)` against the deployed R0 service. The diagnostic log
+proved all tested route and fuel responses came from:
+
+- service contract `dirt-routing.r0.v1`;
+- service build `fb28806514b904d1f1334dc9fe0380e7f48f7fe3`;
+- NS graph SHA-256 `a9c5cb27eba2dc298344d9c80298881e1e0cfc0d40435d17cd9c4e210d1bef51`;
+- NS geometry SHA-256 `01e2741006ae4ee2e4324e2254ca21d6e5ced7cdc2f3c16d0c07688cc09decc6`;
+  and
+- NS fuel SHA-256 `999e1cbd5901b2bb28f7c09d7578abe2e7c69ad3e68c25b0b776c0172305fdd2`.
+
+The installed-pack registry reported `[ns]` while the pack existed and `[]`
+immediately after the rider deleted it. This validates R0 service/data identity
+and registry observability. The device log still labels the release
+`stable-or-local` rather than the immutable candidate ID and identifies the
+client only as app version/build; exact release-ID and client-source-SHA display
+remain provenance follow-ups.
+
+The same session exposed a blocking fuel-planning defect outside R0's
+publication-safety scope:
+
+- rider range was 230 km with 5% reserve, correctly producing 218.5 km usable;
+- Dirt routes of 253.826 km, 342.943 km, and 343.028 km correctly declared that
+  at least one stop was needed;
+- Balanced similarly declared a stop was needed for a 248.191 km route;
+- the fuel service returned six station candidates, so station data was present;
+- Dirt and Balanced station-route probes took approximately 12–18 seconds per
+  attempt, returned `probe_inconclusive`, retried once, and then emitted a fuel
+  gap with no generated fuel waypoint; and
+- Clean and Direct selected station `osm:n5292116667` and successfully produced
+  two Point/F legs for comparable routes.
+
+Therefore the immediate defect is profile-dependent station-probe completion,
+not missing pumps or incorrect range arithmetic. Dirt and Balanced must not
+convert an inconclusive timed probe into proof that no fuel chain exists. The
+repair belongs in the fuel/search reconciliation after the benchmark contract
+is corrected, and must include fixed reproductions for these device coordinates.
+
+The session also reconfirmed the known acquisition-policy gap: deleting NS
+produced `packsCover=false installed=[]` and online routing continued against
+the live service without requesting pack-download consent. Manual region
+downloads also remain visible. This is the unimplemented required-pack resolver
+described under R2; the approved end state is automatic consent-driven
+acquisition from waypoint coverage, with deletion retained and arbitrary manual
+pre-download retired.
+
 ## 11. Current product status
 
 ### Implemented and covered locally
@@ -472,8 +519,11 @@ is:
 
 ### Not yet accepted end to end
 
-- Current client against a provably matching production service.
+- Exact client source SHA and immutable release ID in the physical diagnostic,
+  although service and pack byte identities are now proved.
 - The active fuel-selection defect above.
+- Dirt/Balanced fuel-station probe completion and latency exposed by the
+  2026-08-23 physical test.
 - Exact identity and benchmark baseline for Cursor's rebuilt live candidates.
 - Full online/offline parity with promoted packs.
 - Cross-country long-route performance and fuel-window behaviour.
