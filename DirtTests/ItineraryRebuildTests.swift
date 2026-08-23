@@ -28,6 +28,12 @@ struct UrbanCoreTests {
         #expect(UrbanCore.fallbackMultiplier(point: downtown, start: squamish, end: kelowna) == 120)
         #expect(UrbanCore.fallbackMultiplier(point: downtown, start: downtown, end: kelowna) == 1)
     }
+
+    @Test func cleanMetroMultiplierOverrideAppliesOnlyToCleanest() {
+        #expect(UrbanCore.resolveCleanMetroPenalty(profile: .cleanest, override: 5) == 5)
+        #expect(UrbanCore.resolveCleanMetroPenalty(profile: .balanced, override: 5) == 120)
+        #expect(UrbanCore.resolveCleanMetroPenalty(profile: .dirt, override: 5) == 120)
+    }
 }
 
 struct HopSearchPolicyTests {

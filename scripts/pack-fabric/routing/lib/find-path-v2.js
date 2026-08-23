@@ -43,7 +43,7 @@ const {
   DIRT_RIDE_AWAY_SCALE,
   hopBlocked,
   urbanCoreFallbackMultiplier,
-  resolveCleanMetroMultiplier,
+  resolveMetroFallbackPenalty,
   settlementBlocks,
   settlementFallbackMultiplier,
   metroEdgeBlocks,
@@ -849,8 +849,8 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
   // caller compatibility; it no longer hard-blocks fabric.
   // Clean pin tests may pass options.cleanMetroMultiplier (1–20) to soften ×120.
   const cityWall = searchOpts.cityWall !== false;
-  const cleanMetroPenalty =
-    resolveCleanMetroMultiplier(profile, searchOpts.cleanMetroMultiplier) ?? 120;
+  const metroFallbackPenalty =
+    resolveMetroFallbackPenalty(profile, searchOpts.cleanMetroMultiplier);
   const corridorM = Number.isFinite(Number(searchOpts.corridorMeters))
     ? Number(searchOpts.corridorMeters)
     : corridorMetersForProfile(profile);
@@ -947,7 +947,8 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
       popCap: searchOpts.popCap,
       prior,
       arrival,
-      backtrackFactor
+      backtrackFactor,
+      cleanMetroMultiplier: searchOpts.cleanMetroMultiplier
     });
   }
 
@@ -1104,7 +1105,7 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
         }
         if (toLL) {
           step *= urbanCoreFallbackMultiplier(
-            toLL[0], toLL[1], startLL, endLL, urbanBoxes, nodeLL(cur.node), cleanMetroPenalty
+            toLL[0], toLL[1], startLL, endLL, urbanBoxes, nodeLL(cur.node), metroFallbackPenalty
           );
         }
         if (settlementFallback && toLL) {
@@ -1233,7 +1234,7 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
         }
         if (toLL) {
           step *= urbanCoreFallbackMultiplier(
-            toLL[0], toLL[1], startLL, endLL, urbanBoxes, nodeLL(cur.node), cleanMetroPenalty
+            toLL[0], toLL[1], startLL, endLL, urbanBoxes, nodeLL(cur.node), metroFallbackPenalty
           );
         }
         if (settlementFallback && toLL) {
@@ -1478,8 +1479,11 @@ function searchBalancedResource(ctx) {
     popCap: requestedPopCap,
     prior,
     arrival,
-    backtrackFactor
+    backtrackFactor,
+    cleanMetroMultiplier
   } = ctx;
+  const metroFallbackPenalty =
+    resolveMetroFallbackPenalty(profile, cleanMetroMultiplier);
   const penalizeBacktrack = (cost, edgeId) => {
     const id = String(edgeId == null ? "" : edgeId);
     if (arrival != null && id === arrival) return cost * 12;
@@ -1606,7 +1610,7 @@ function searchBalancedResource(ctx) {
           : 1;
         const urbanMult = toLL
           ? urbanCoreFallbackMultiplier(
-            toLL[0], toLL[1], startLL, endLL, urbanBoxes, nodeLL(node), cleanMetroPenalty
+            toLL[0], toLL[1], startLL, endLL, urbanBoxes, nodeLL(node), metroFallbackPenalty
           )
           : 1;
         const newScore = cur.searchCost
@@ -1665,7 +1669,7 @@ function searchBalancedResource(ctx) {
           : 1;
         const urbanMult = toLL
           ? urbanCoreFallbackMultiplier(
-            toLL[0], toLL[1], startLL, endLL, urbanBoxes, nodeLL(node), cleanMetroPenalty
+            toLL[0], toLL[1], startLL, endLL, urbanBoxes, nodeLL(node), metroFallbackPenalty
           )
           : 1;
         const newScore = cur.searchCost

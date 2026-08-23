@@ -127,6 +127,11 @@ function resolveCleanMetroMultiplier(profile, raw) {
   return Math.min(20, Math.max(1, n));
 }
 
+/** Production ×120; Clean-only debug override via cleanMetroMultiplier (1–20). */
+function resolveMetroFallbackPenalty(profile, cleanMetroMultiplier) {
+  return resolveCleanMetroMultiplier(profile, cleanMetroMultiplier) ?? 120;
+}
+
 /**
  * A relaxed wall is still expensive. This makes the last-resort search cross
  * the smallest necessary urban section instead of treating every city as open.
@@ -520,6 +525,7 @@ module.exports = {
   metroEdgeBlocks,
   urbanCoreFallbackMultiplier,
   resolveCleanMetroMultiplier,
+  resolveMetroFallbackPenalty,
   settlementBlocks,
   settlementFallbackMultiplier,
   SETTLEMENT_FALLBACK_MULTIPLIER,

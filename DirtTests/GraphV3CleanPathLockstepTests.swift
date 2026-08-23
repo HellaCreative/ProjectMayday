@@ -109,4 +109,24 @@ struct GraphV3CleanPathLockstepTests {
             }
         }
     }
+
+    /// Regression: balanced search must not reference undefined Clean-only metro vars.
+    @Test func balancedRouteCompletesWithBothPinsInsideHalifaxMetro() throws {
+        let pack = try loadNsV3()
+        let router = OnDeviceRouter(pack: pack)
+        let a = CLLocationCoordinate2D(latitude: 44.6488, longitude: -63.5752)
+        let b = CLLocationCoordinate2D(latitude: 44.672, longitude: -63.601)
+        guard let result = router.route(
+            from: a,
+            to: b,
+            profile: .balanced,
+            allowUnknown: false,
+            cleanMetroMultiplier: 5
+        ) else {
+            Issue.record("balanced in-metro route failed")
+            return
+        }
+        #expect(result.distanceMeters > 0)
+        #expect(result.legs.count >= 1)
+    }
 }
