@@ -94,3 +94,28 @@ test("Clean rejects a full-tank lateral Gulf-class pump in favor of a corridor p
   assert.ok(!ranked.some((row) => row.station.id === gulf.station.id),
     "Gulf Wallace must not remain forward after chain-coherence gates");
 });
+
+test("Dirt rejects a remote lateral pump when a forward corridor pump exists", () => {
+  const start = { lat: 44.764823, lon: -63.340271 };
+  const destination = { lat: 45.644252, lon: -60.983077 };
+  const lateral = {
+    station: { id: "lateral-loop", name: "Lateral loop" },
+    location: { lat: 45.85, lon: -63.2 },
+    graphMeters: 210_000,
+    remainingGraphMeters: 240_000,
+    dirtAdjacent: true
+  };
+  const forward = {
+    station: { id: "forward", name: "Forward" },
+    location: { lat: 45.25, lon: -62.1 },
+    graphMeters: 160_000,
+    remainingGraphMeters: 170_000,
+    dirtAdjacent: false
+  };
+  const ranked = rankForwardFuel(
+    [lateral, forward], start, destination, 218_500, new Set(),
+    "dirt", null, 430_000, false
+  );
+  assert.equal(ranked[0].station.id, "forward");
+  assert.ok(!ranked.some((row) => row.station.id === "lateral-loop"));
+});

@@ -4,12 +4,13 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const { chooseDirtRideCandidate } = require("./find-path-v2");
 
-function candidate({ dirt, paved, backward = 0, lateral = 0, width }) {
+function candidate({ dirt, paved, backward = 0, lateral = 0, route = 300_000, width }) {
   return {
     ride: { id: width },
     width,
     dirtPercent: dirt,
     pavedMeters: paved,
+    routeMeters: route,
     backwardMeters: backward,
     lateralMeters: lateral
   };
@@ -37,4 +38,10 @@ test("Dirt does not consume a wider corridor when ride quality is identical", ()
   const wide = candidate({ dirt: 70, paved: 180_000, backward: 10_000, lateral: 20_000, width: 200_000 });
   const narrow = candidate({ dirt: 70, paved: 180_000, backward: 10_000, lateral: 20_000, width: 50_000 });
   assert.equal(chooseDirtRideCandidate([wide, narrow]).width, 50_000);
+});
+
+test("Dirt rejects a large loop for a single-digit dirt gain", () => {
+  const coherent = candidate({ dirt: 70, paved: 120_000, backward: 4_000, route: 250_000, width: 50_000 });
+  const loop = candidate({ dirt: 77, paved: 110_000, backward: 80_000, route: 340_000, width: 200_000 });
+  assert.equal(chooseDirtRideCandidate([loop, coherent]).width, 50_000);
 });

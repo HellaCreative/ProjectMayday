@@ -103,15 +103,11 @@ final class ItineraryBuilder {
                         profileOverride: discoveryProfile
                     ))
                 }
-                let discoveredStops = fuelStopCountNeeded(
-                    meters: response.distanceMeters ?? 0,
-                    usableMeters: fuel.usableMeters
-                )
-                // Once a pump is needed, Clean is the fast connectivity
-                // foundation. The rider can then set every visible fuel leg's
-                // own adventure profile without preserving a disposable A→B line.
+                // Clean is the fast connectivity foundation only for a true
+                // long-haul or cross-region leg. Requiring several pumps is not
+                // itself permission to replace a sub-1,000 km adventure route.
                 if fuel.usableMeters > 0,
-                   (straightMeters >= 1_000_000 || discoveredStops > 3),
+                   (straightMeters >= 1_000_000 || endpointRegions.count > 1),
                    discoveryProfile != .cleanest {
                     discoveryProfile = .cleanest
                     response = try await selectedSource.route(routeRequest(
@@ -130,7 +126,7 @@ final class ItineraryBuilder {
                 if discoveryProfile == .cleanest, riderLeg.profile != .cleanest {
                     RoutingDebugLog.shared.event(
                         "fuel longhaul default riderLeg=\(riderLeg.id) requested=\(riderLeg.profile.rawValue) " +
-                        "sections=clean reason=\(endpointRegions.count > 1 ? "cross_region" : (straightMeters >= 1_000_000 ? "over_1000km" : "fuel_stop_required"))"
+                        "sections=clean reason=\(endpointRegions.count > 1 ? "cross_region" : "over_1000km")"
                     )
                 }
                 discoveryHistory.append(response)
@@ -376,7 +372,12 @@ final class ItineraryBuilder {
                     onProgress(committed)
                     return committed
                 }
-                if fuelReplan, index == 0, lookaheadEnabled, fuelBacktrackAttempts < 2 {
+                let explicitFuelGap: Bool = {
+                    if case RoutingError.fuelGap = error { return true }
+                    return false
+                }()
+                if explicitFuelGap,
+                   fuelReplan, index == 0, lookaheadEnabled, fuelBacktrackAttempts < 2 {
                     lookaheadEnabled = false
                     fuelBacktrackAttempts += 1
                     RoutingDebugLog.shared.event(
@@ -385,7 +386,8 @@ final class ItineraryBuilder {
                     )
                     continue fuelAttempts
                 }
-                if fuelReplan, index > 0, fuelBacktrackAttempts < 2 {
+                if explicitFuelGap,
+                   fuelReplan, index > 0, fuelBacktrackAttempts < 2 {
                     let priorIndex = index - 1
                     let priorLegID = itinerary.legs[priorIndex].id
                     let priorStops = committed.legs
@@ -446,10 +448,40 @@ final class ItineraryBuilder {
                     onProgress(committed)
                     return committed
                 }
-                let message = error.localizedDescription
-                committed = markingFailed(riderLeg.id, message: message, in: committed)
+                // A transport/time-budget failure is not proof of an impossible
+                // fuel gap. Keep the already routed geometry explorable and
+                // label fuel continuity honestly as unknown.
+                let message = "Fuel planning unavailable: \(error.localizedDescription)"
+                committed = replacing(
+                    riderLegID: riderLeg.id,
+                    with: [unconstrainedFuelLeg(
+                        riderLeg: riderLeg,
+                        from: itinerary.waypoints[index].coordinate,
+                        to: itinerary.waypoints[index + 1].coordinate,
+                        response: base,
+                        fuelUsedAtStart: fuelUsed
+                    )],
+                    in: committed,
+                    status: .fuelUnknown(message)
+                )
+                for laterIndex in (index + 1)..<lastBuildable {
+                    guard let laterBase = baseline[laterIndex] else { continue }
+                    let laterLeg = itinerary.legs[laterIndex]
+                    committed = replacing(
+                        riderLegID: laterLeg.id,
+                        with: [unconstrainedFuelLeg(
+                            riderLeg: laterLeg,
+                            from: itinerary.waypoints[laterIndex].coordinate,
+                            to: itinerary.waypoints[laterIndex + 1].coordinate,
+                            response: laterBase,
+                            fuelUsedAtStart: 0
+                        )],
+                        in: committed,
+                        status: .fuelUnknown("Fuel continuity is unknown after the preceding leg.")
+                    )
+                }
                 RoutingDebugLog.shared.event(
-                    "build failed riderLeg=\(riderLeg.id) msg=\(message)"
+                    "fuel unavailable riderLeg=\(riderLeg.id) msg=\(message)"
                 )
                 onProgress(committed)
                 return committed

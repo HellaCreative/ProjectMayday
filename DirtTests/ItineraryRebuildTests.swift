@@ -223,6 +223,22 @@ struct FuelItineraryTests {
         #expect(ranked.map(\.id) == ["osm:preferred", "osm:detour"])
     }
 
+    @Test func rankedDoesNotPutRemoteLateralPumpAheadOfForwardPump() {
+        let start = RouteCoordinate(longitude: -63.340271, latitude: 44.764823)
+        let end = RouteCoordinate(longitude: -60.983077, latitude: 45.644252)
+        let forward = RouteCoordinate(longitude: -62.1, latitude: 45.25)
+        let lateral = RouteCoordinate(longitude: -63.2, latitude: 45.85)
+        let ranked = FuelItinerary.rankedProgressFuel(
+            fuels: [poi("lateral", lateral), poi("forward", forward)],
+            from: start,
+            to: end,
+            reachableMeters: ["osm:lateral": 210_000, "osm:forward": 160_000],
+            tankMeters: 218_500,
+            sessionSeed: 1
+        )
+        #expect(ranked.first?.id == "osm:forward")
+    }
+
     @Test func progressAlongABIsPositiveTowardB() {
         let a = RouteCoordinate(longitude: -123, latitude: 50)
         let b = RouteCoordinate(longitude: -120, latitude: 50)

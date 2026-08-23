@@ -332,6 +332,7 @@ function dirtCandidateSummary(ride, width) {
     width,
     dirtPercent,
     pavedMeters,
+    routeMeters: Number(shape.routeMeters) || distanceMeters,
     backwardMeters: Number(shape.backwardMeters) || 0,
     lateralMeters: Number(shape.lateralMeters) || 0
   };
@@ -345,7 +346,20 @@ function dirtCandidateSummary(ride, width) {
  */
 function chooseDirtRideCandidate(candidates) {
   if (!candidates.length) return null;
-  return candidates.slice().sort((a, b) => {
+  const coherent = candidates.filter((candidate) =>
+    candidate.backwardMeters <= Math.max(5_000, candidate.routeMeters * 0.08)
+  );
+  const bestDirt = Math.max(...candidates.map((candidate) => candidate.dirtPercent));
+  const bestCoherentDirt = coherent.length
+    ? Math.max(...coherent.map((candidate) => candidate.dirtPercent))
+    : -Infinity;
+  // A visibly looping ride cannot win for a marginal dirt improvement. Keep
+  // the wider adventure only when it earns a material (10-point) dirt gain,
+  // or when every connected candidate necessarily bends backward.
+  const pool = coherent.length && bestDirt - bestCoherentDirt < 10
+    ? coherent
+    : candidates;
+  return pool.slice().sort((a, b) => {
     const dirtDelta = b.dirtPercent - a.dirtPercent;
     if (Math.abs(dirtDelta) > 2) return dirtDelta;
     const pavedDelta = a.pavedMeters - b.pavedMeters;

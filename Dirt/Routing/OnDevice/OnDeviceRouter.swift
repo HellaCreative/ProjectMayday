@@ -808,7 +808,25 @@ nonisolated struct OnDeviceRouter {
     private func chooseDirtEnvelopeCandidate(
         _ candidates: [(route: Result, width: Double)]
     ) -> (route: Result, width: Double)? {
-        candidates.min { a, b in
+        let summaries = candidates.map { candidate in
+            let shape = HopSearchPolicy.routeShape(
+                coordinates: candidate.route.coordinates,
+                start: candidate.route.coordinates.first ?? .init(),
+                end: candidate.route.coordinates.last ?? .init()
+            )
+            return (candidate: candidate, shape: shape)
+        }
+        let coherent = summaries.filter {
+            $0.shape.backwardMeters <= max(5_000, $0.shape.routeMeters * 0.08)
+        }
+        let bestDirt = summaries.map(\.candidate.route.dirtPercent).max() ?? 0
+        let bestCoherentDirt = coherent.map(\.candidate.route.dirtPercent).max() ?? Int.min
+        let pool = !coherent.isEmpty && bestDirt - bestCoherentDirt < 10
+            ? coherent
+            : summaries
+        return pool.min { lhs, rhs in
+            let a = lhs.candidate
+            let b = rhs.candidate
             let dirtDelta = a.route.dirtPercent - b.route.dirtPercent
             if abs(dirtDelta) > 2 { return dirtDelta > 0 }
             let pavedA = a.route.distanceMeters * Double(100 - a.route.dirtPercent) / 100
@@ -828,7 +846,7 @@ nonisolated struct OnDeviceRouter {
                 return a.route.dirtPercent > b.route.dirtPercent
             }
             return a.width < b.width
-        }
+        }?.candidate
     }
 
     private enum SnapRole {

@@ -42,7 +42,7 @@ const HARD_MATCH_METERS = 750;
 const MIN_STOP_SEPARATION_M = 800;
 const MIN_FORWARD_PROGRESS_M = 2_500;
 /** Bumped when fuel-selection / ranking contracts change. Clients may assert. */
-const FUEL_CHAIN_SERVICE_VERSION = "2026-08-22.fuel-coherence.3";
+const FUEL_CHAIN_SERVICE_VERSION = "2026-08-23.fuel-coherence.4";
 /** Clean/direct reject pumps whose full chain exceeds foundation by this much. */
 const MAX_CLEAN_CHAIN_DETOUR_RATIO = 1.12;
 const MAX_CLEAN_CHAIN_DETOUR_ABS_M = 20_000;
@@ -320,6 +320,25 @@ function stationEligibility(row, {
     && remainingMeters >= MIN_STOP_SEPARATION_M
     && progressMeters >= MIN_FORWARD_PROGRESS_M
     && gainMeters >= -5_000;
+  // A pump is an anchor on the journey, not permission to take a large
+  // sideways loop merely to consume the tank. This applies to every profile;
+  // Dirt may meander between anchors, but the anchor itself must advance the
+  // itinerary unless the explicit near-start recovery below is required.
+  if (
+    forward &&
+    crossTrack > 50_000 &&
+    crossTrack > progressMeters * 0.75 &&
+    progressMeters < currentRemaining * 0.75
+  ) {
+    forward = false;
+  }
+  if (
+    forward &&
+    progressMeters < Math.max(10_000, currentRemaining * 0.18) &&
+    crossTrack > 25_000
+  ) {
+    forward = false;
+  }
   // Clean/direct: reject needless lateral excursions whose full P1→pump→P2
   // chain is dominated by the foundation ride. Score alone was letting a
   // Wallace-class pump win because it used nearly the whole tank.

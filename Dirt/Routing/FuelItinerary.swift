@@ -175,6 +175,8 @@ nonisolated enum FuelItinerary {
             var fuel: POIFeature
             var graphMeters: Double
             var progress: Double
+            var crossTrack: Double
+            var coherent: Bool
         }
         var cands: [Cand] = []
         cands.reserveCapacity(fuels.count)
@@ -188,12 +190,30 @@ nonisolated enum FuelItinerary {
             // gate rejects legitimate mountain/highway detours and can erase the
             // only usable fuel chain. Require real progress toward B instead.
             guard progress > 8_000, progress < ab - 5_000 else { continue }
-            cands.append(Cand(fuel: fuel, graphMeters: graph, progress: progress))
+            let crossTrack = abs(GeoMath.crossTrackMeters(
+                point: at.locationCoordinate,
+                lineFrom: from.locationCoordinate,
+                to: to.locationCoordinate
+            ))
+            let coherent = !(
+                (crossTrack > 50_000 && crossTrack > progress * 0.75 && progress < ab * 0.75)
+                    || (progress < max(10_000, ab * 0.18) && crossTrack > 25_000)
+            )
+            cands.append(Cand(
+                fuel: fuel,
+                graphMeters: graph,
+                progress: progress,
+                crossTrack: crossTrack,
+                coherent: coherent
+            ))
         }
         guard !cands.isEmpty else { return [] }
 
         let prefer = tankMeters * HopSearchPolicy.fuelPreferTank
         return cands.sorted { a, b in
+            // Preserve an off-axis pump as a last-resort connectivity fallback,
+            // but never rank it above a route-coherent forward pump.
+            if a.coherent != b.coherent { return a.coherent }
             let aInBand = a.graphMeters >= tankMeters * HopSearchPolicy.fuelMinTank
                 && a.graphMeters <= tankMeters * HopSearchPolicy.fuelMaxTank
             let bInBand = b.graphMeters >= tankMeters * HopSearchPolicy.fuelMinTank

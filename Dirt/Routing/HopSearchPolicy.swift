@@ -216,6 +216,32 @@ nonisolated enum HopSearchPolicy {
             max(best, abs(GeoMath.crossTrackMeters(point: p, lineFrom: start, to: end)))
         }
     }
+
+    static func routeShape(
+        coordinates: [CLLocationCoordinate2D],
+        start: CLLocationCoordinate2D,
+        end: CLLocationCoordinate2D
+    ) -> (routeMeters: Double, backwardMeters: Double) {
+        guard coordinates.count > 1 else { return (0, 0) }
+        let a = RouteCoordinate(longitude: start.longitude, latitude: start.latitude)
+        let b = RouteCoordinate(longitude: end.longitude, latitude: end.latitude)
+        var routeMeters = 0.0
+        var backwardMeters = 0.0
+        for index in 1..<coordinates.count {
+            let prior = coordinates[index - 1]
+            let current = coordinates[index]
+            let meters = GeoMath.meters(prior, current)
+            guard meters > 0 else { continue }
+            routeMeters += meters
+            let p0 = RouteCoordinate(longitude: prior.longitude, latitude: prior.latitude)
+            let p1 = RouteCoordinate(longitude: current.longitude, latitude: current.latitude)
+            if GeoMath.progressAlongAB(from: a, to: b, point: p1)
+                < GeoMath.progressAlongAB(from: a, to: b, point: p0) {
+                backwardMeters += meters
+            }
+        }
+        return (routeMeters, backwardMeters)
+    }
 }
 
 nonisolated struct HopSearchContext: Sendable {

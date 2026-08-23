@@ -10,12 +10,15 @@ enum PackRevisionState: String, Equatable, Sendable {
 
 enum PackAcquisitionError: LocalizedError, Equatable {
     case checksumMismatch(regionID: String)
+    case downloadFailed(regionID: String, message: String)
     case unavailable(regionID: String)
 
     var errorDescription: String? {
         switch self {
         case .checksumMismatch(let regionID):
             return "Downloaded \(regionID) did not match the approved catalog identity."
+        case .downloadFailed(let regionID, let message):
+            return "Could not install \(regionID): \(message)"
         case .unavailable(let regionID):
             return "No approved pack is available for \(regionID)."
         }
@@ -244,9 +247,27 @@ final class PackAcquisitionCoordinator {
     func acceptConsent() async throws {
         guard let prompt = consent else { return }
         consent = nil
-        try await installer.installVerifiedPacks(
-            prompt.regionIDs,
-            replaceInstalled: prompt.kind == .update
+        RoutingDebugLog.shared.event(
+            "pack install accepted regions=\(prompt.regionIDs.joined(separator: ",")) " +
+                "kind=\(prompt.kind == .update ? "update" : "download")"
+        )
+        do {
+            try await installer.installVerifiedPacks(
+                prompt.regionIDs,
+                replaceInstalled: prompt.kind == .update
+            )
+        } catch {
+            // A failed transfer is not a declined decision. Restore the exact
+            // prompt so the rider can retry and the pending route is preserved.
+            consent = prompt
+            RoutingDebugLog.shared.event(
+                "pack install failed regions=\(prompt.regionIDs.joined(separator: ",")) " +
+                    "message=\(error.localizedDescription)"
+            )
+            throw error
+        }
+        RoutingDebugLog.shared.event(
+            "pack install complete regions=\(prompt.regionIDs.joined(separator: ","))"
         )
     }
 

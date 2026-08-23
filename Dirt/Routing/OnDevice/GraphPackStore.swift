@@ -267,12 +267,19 @@ final class GraphPackStore {
                 throw PackAcquisitionError.unavailable(regionID: id)
             }
             let hadInstalled = isInstalled(id)
-            await performDownload(
-                regionId: id,
-                asNavigationPrep: false,
-                quiet: false,
-                replaceInstalled: replaceInstalled
-            )
+            do {
+                try await performDownload(
+                    regionId: id,
+                    asNavigationPrep: false,
+                    quiet: false,
+                    replaceInstalled: replaceInstalled
+                )
+            } catch {
+                throw PackAcquisitionError.downloadFailed(
+                    regionID: id,
+                    message: error.localizedDescription
+                )
+            }
             if replaceInstalled || !hadInstalled {
                 guard packRevisionState(id) == .current else {
                     throw PackAcquisitionError.checksumMismatch(regionID: id)
@@ -360,7 +367,7 @@ final class GraphPackStore {
         }
         setInstall(id, .downloading(0.02))
         downloadTasks[id] = Task { [weak self] in
-            await self?.performDownload(regionId: id, asNavigationPrep: false, quiet: quiet, replaceInstalled: false)
+            try? await self?.performDownload(regionId: id, asNavigationPrep: false, quiet: quiet, replaceInstalled: false)
             self?.downloadTasks[id] = nil
             self?.quietDownloadIds.remove(id)
         }
@@ -378,7 +385,7 @@ final class GraphPackStore {
         }
         setInstall(id, .downloading(0.02))
         let task = Task { [weak self] in
-            await self?.performDownload(regionId: id, asNavigationPrep: false, quiet: false, replaceInstalled: false)
+            try? await self?.performDownload(regionId: id, asNavigationPrep: false, quiet: false, replaceInstalled: false)
             self?.downloadTasks[id] = nil
         }
         downloadTasks[id] = task
@@ -440,7 +447,7 @@ final class GraphPackStore {
             for (offset, id) in missing.enumerated() {
                 guard !Task.isCancelled else { return }
                 // Run inside the prep task so Cancel genuinely cancels this download.
-                await self.performDownload(regionId: id, asNavigationPrep: false, quiet: false, replaceInstalled: false)
+                try? await self.performDownload(regionId: id, asNavigationPrep: false, quiet: false, replaceInstalled: false)
                 guard !Task.isCancelled else { return }
                 guard self.isInstalled(id) else {
                     self.phase = .failed("Couldn’t download the \(self.displayTitle(forRegionId: id)) routing pack. Check your connection and try again.")
@@ -1180,7 +1187,7 @@ final class GraphPackStore {
         asNavigationPrep: Bool = false,
         quiet: Bool = false,
         replaceInstalled: Bool = false
-    ) async {
+    ) async throws {
         do {
             try Task.checkCancellation()
             if asNavigationPrep {
@@ -1315,12 +1322,14 @@ final class GraphPackStore {
         } catch is CancellationError {
             setInstall(regionId, isInstalled(regionId) ? .installed : .available)
             if asNavigationPrep { phase = .idle }
+            throw CancellationError()
         } catch {
             setInstall(regionId, publishedIds.contains(regionId) ? .available : .unavailable)
             if asNavigationPrep {
                 phase = .skipped(error.localizedDescription)
                 progress = 1
             }
+            throw error
         }
     }
 

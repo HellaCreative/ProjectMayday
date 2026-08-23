@@ -53,7 +53,7 @@ struct ItineraryBuilderTests {
         #expect(result.legs[1].fuelUsedOnArrivalMeters == 237_500)
     }
 
-    @Test func fuelServiceFailureKeepsRouteAndReturnsGap() async throws {
+    @Test func fuelServiceFailureKeepsRouteWithoutFabricatingGap() async throws {
         let points = [point(0), point(1)]
         let source = FakeRoutingSource(name: "live")
         source.distances[key(points[0], points[1])] = 300_000
@@ -71,11 +71,10 @@ struct ItineraryBuilderTests {
 
         #expect(result.legs.count == 1)
         #expect(result.legs.first?.response.distanceMeters == 300_000)
-        if case .gap(let gap) = result.riderLegStatus[itinerary.legs[0].id] {
-            #expect(gap.reason.contains("timed out"))
-            #expect(gap.overByMeters == 150_000)
+        if case .fuelUnknown(let message) = result.riderLegStatus[itinerary.legs[0].id] {
+            #expect(message.contains("timed out"))
         } else {
-            Issue.record("Expected a drawable fuel gap")
+            Issue.record("Expected an honest unknown-fuel state")
         }
     }
 

@@ -382,11 +382,10 @@ struct RootView: View {
     private var packConsentPresented: Binding<Bool> {
         Binding(
             get: { app.planner.packConsent != nil },
-            set: { presented in
-                if !presented, app.planner.packConsent != nil {
-                    app.planner.declinePackConsent()
-                }
-            }
+            // Button actions own the choice. SwiftUI writes `false` while
+            // dismissing the alert, before an async Download action necessarily
+            // runs; interpreting that write as a decline cancels the download.
+            set: { _ in }
         )
     }
 

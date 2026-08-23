@@ -470,15 +470,10 @@ final class RoutePlannerModel {
     /// The only mutation door for rider-owned route intent.
     func apply(_ action: ItineraryAction, source: String) {
         if case .move(let waypointID, let coordinate) = action {
-            // A drag-end is already a settled gesture. Commit it immediately so
-            // an in-flight progress refresh cannot redraw the old marker during
-            // the generic tap-move debounce window.
-            if source == "drag" {
-                moveDebounceTask?.cancel()
-                pendingMove = nil
-                applyImmediately(action, source: source)
-                return
-            }
+            // Map frameworks may report several drag-end positions while the
+            // pin settles. Route only the final coordinate; rebuilding every
+            // intermediate position caused cancellation storms and lost fuel
+            // projections on multi-waypoint plans.
             pendingMove = (waypointID, coordinate, source)
             moveDebounceTask?.cancel()
             moveDebounceTask = Task { @MainActor [weak self] in

@@ -217,7 +217,7 @@ struct RoutePlannerModelItineraryTests {
         #expect(model.stageEndpointTitle(at: 0) == "Point 1 → F1")
         #expect(model.stageEndpointTitle(at: 1) == "F1 → Point 2")
         #expect(model.stageFuelStationSubtitle(at: 0) == "Shell Antigonish")
-        #expect(model.stages.allSatisfy { $0.profile == .cleanest })
+        #expect(model.stages.allSatisfy { $0.profile == .dirt })
     }
 
     @Test func twoWaypointTwoStopItineraryRendersExactlyThreeFlatRows() async throws {
@@ -247,7 +247,7 @@ struct RoutePlannerModelItineraryTests {
         await model.waitForCanonicalBuildForTesting()
 
         #expect(model.stages.count == 3)
-        #expect(model.stages.map(\.profile) == [.cleanest, .cleanest, .cleanest])
+        #expect(model.stages.map(\.profile) == [.dirt, .dirt, .dirt])
         #expect(model.stageEndpointTitle(at: 0) == "Point 1 → F1")
         #expect(model.stageEndpointTitle(at: 1) == "F1 → F2")
         #expect(model.stageEndpointTitle(at: 2) == "F2 → Point 2")
@@ -374,7 +374,9 @@ struct RoutePlannerModelItineraryTests {
         #expect(model.fuelGaps.isEmpty)
         #expect(model.unacknowledgedFuelGaps.isEmpty)
         #expect(model.stages.count == 1)
-        #expect(model.stages[0].error == "Routing service timed out")
+        #expect(model.stages[0].error == nil)
+        #expect(model.stages[0].fuelUnknown?.contains("Routing service timed out") == true)
+        #expect(model.stages[0].response?.distanceMeters == 300_000)
     }
 }
 

@@ -92,6 +92,27 @@ struct PackFirstRoutingTests {
         #expect(live.routeRequests.isEmpty)
     }
 
+    @Test func failedPackInstallKeepsConsentAvailableForRetry() async {
+        let coverage = FakePackCoverage(installed: [], published: ["ns"])
+        coverage.installError = PackAcquisitionError.downloadFailed(
+            regionID: "ns", message: "connection lost"
+        )
+        let coordinator = PackAcquisitionCoordinator(inspect: coverage, installer: coverage)
+        _ = coordinator.evaluate(
+            coordinates: [halifax.locationCoordinate, sydney.locationCoordinate],
+            protectInstalledRevisions: false
+        )
+
+        do {
+            try await coordinator.acceptConsent()
+            Issue.record("expected install failure")
+        } catch {
+            #expect(coordinator.consent?.regionIDs == ["ns"])
+            #expect(coverage.installed.isEmpty)
+            #expect(coverage.installCalls == [["ns"]])
+        }
+    }
+
     @Test func decliningConsentSelectsLiveAndRecordsOfflineWarning() async {
         let live = NamedFakeRoutingSource(name: "live")
         let pack = NamedFakeRoutingSource(name: "pack")
@@ -376,6 +397,7 @@ private final class FakePackCoverage: PackCoverageInspecting, PackInstalling {
     var stale: Set<String>
     var installCalls: [[String]] = []
     var replacedInstalled: [Bool] = []
+    var installError: Error?
     let routingManifestVersion = "test-manifest"
 
     init(installed: Set<String>, published: Set<String>, stale: Set<String> = []) {
@@ -415,6 +437,7 @@ private final class FakePackCoverage: PackCoverageInspecting, PackInstalling {
     func installVerifiedPacks(_ regionIDs: [String], replaceInstalled: Bool) async throws {
         installCalls.append(regionIDs)
         replacedInstalled.append(replaceInstalled)
+        if let installError { throw installError }
         for id in regionIDs {
             installed.insert(id.lowercased())
             stale.remove(id.lowercased())
