@@ -50,6 +50,7 @@ const {
   projectedProgressMeters,
   maxProgressRegressionMeters,
   progressRegressionForAttempt,
+  coincidentSiblingLists,
   annotateCorridorMeta,
   corridorMetersForProfile,
   VARIETY_SLOTS,
@@ -388,10 +389,12 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
       ? [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12]
       : profile === "dirt" ? [4, 3, 2, 1, 6, 8]
         : profile === "cleanest"
-          // Pavement > corridor tightness: widen hard before any unpaved fallback.
-          ? [1, 2, 3, 4, 6, 8, 12, 16, 24]
+          // Clean: no corridor ladder — one fabric search.
+          ? [Infinity]
           : [1, 2, 3, 4, 6, 8]; // balanced
-    const widths = widthMultipliers.map((m) => baseCorridor * m).concat(Infinity);
+    const widths = profile === "cleanest"
+      ? [Infinity]
+      : widthMultipliers.map((m) => baseCorridor * m).concat(Infinity);
     const requestedCap = Number(searchOpts.maxPathMeters);
     // Direct's 15 km promise is a path-length budget, not merely a lateral
     // corridor width. Establish the wall-respecting physical shortest path,
@@ -449,24 +452,17 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
       ? Number(searchOpts.deadlineAtMs)
       : Date.now() + (
         profile === "balanced" ? 2_200
-          // Clean paved-only must finish the full widen ladder, not abort after one band.
-          : profile === "cleanest" && searchOpts.pavedOnly === true ? 55_000
-            : profile === "cleanest" ? 5_500
-              : 3_500
+          : profile === "cleanest" ? 12_000
+            : 3_500
       );
     let liveDeadline = outerDeadline;
     searchOpts.deadlineAtMs = liveDeadline;
     for (const width of widths) {
       if (Date.now() >= liveDeadline) {
-        if (profile === "cleanest" && searchOpts.pavedOnly === true && Number.isFinite(width)) {
-          liveDeadline = Date.now() + 5_000;
-          searchOpts.deadlineAtMs = liveDeadline;
-        } else {
-          attemptDiagnostics.push({
-            corridorMeters: null, outcome: "timeCap", pops: 0, searchMs: 0
-          });
-          break;
-        }
+        attemptDiagnostics.push({
+          corridorMeters: null, outcome: "timeCap", pops: 0, searchMs: 0
+        });
+        break;
       }
       // Once Dirt has compared its three deliberate envelopes, wider bands are
       // connectivity fallbacks only. Stop at the first one that connects.
@@ -721,6 +717,11 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
   linkVirt(vEndB);
   if (vBetween >= 0) linkVirt(vBetween);
 
+  // Clean: bridge pack duplicate nodes on continuous OSM ways.
+  const coincidentSiblings = profile === "cleanest"
+    ? coincidentSiblingLists(nodeCoords, n)
+    : null;
+
   const costMode = searchOpts.costMode || "profile";
   const maxPathMeters = Number.isFinite(Number(searchOpts.maxPathMeters))
     ? Number(searchOpts.maxPathMeters)
@@ -738,13 +739,17 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
   const urbanCoreFallback = searchOpts.urbanCoreFallback === true;
   void urbanCoreFallback;
   const settlementWall = searchOpts.settlementWall === true;
-  const settlementFallback = searchOpts.settlementFallback !== false;
-  const regressionLimit = Number.isFinite(Number(searchOpts.progressRegressionMeters))
-    ? Number(searchOpts.progressRegressionMeters)
-    : maxProgressRegressionMeters(profile);
+  // Clean: small OSM towns are not cities — no settlement tax/wall by default.
+  const settlementFallback = profile === "cleanest"
+    ? searchOpts.settlementFallback === true
+    : searchOpts.settlementFallback !== false;
+  const regressionLimit = profile === "cleanest"
+    ? Number.MAX_SAFE_INTEGER
+    : (Number.isFinite(Number(searchOpts.progressRegressionMeters))
+      ? Number(searchOpts.progressRegressionMeters)
+      : maxProgressRegressionMeters(profile));
   const applyAwayXt = costMode === "profile";
-  // Direct/Clean keep a centreline pull even when a hard corridor exists. The
-  // corridor is a ceiling, not permission to hug the far edge.
+  // Direct keeps centreline pull. Clean uses mild XT without a hard corridor.
   const applySoftCorridor = applyAwayXt
     && (profile === "direct" || profile === "cleanest" || !(corridorM > 0));
   const isHunt = Number.isFinite(maxPathMeters);
@@ -892,7 +897,12 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
         const surface = unpackSurface(attr);
         const road = ROAD_CLASS_NAME[unpackRoadClass(attr)] || "unknown";
         const surfaceName = enums.SURFACE_NAME[surface] || "unknown";
-        if (pavedOnly && isBlockedForCleanPavement(surfaceName, road)) continue;
+        if (
+          pavedOnly &&
+          isBlockedForCleanPavement(surfaceName, road) &&
+          ei !== startEi &&
+          ei !== endEi
+        ) continue;
         let step;
         if (costMode === "distance") {
           step = edgeM / 1000;
@@ -992,6 +1002,43 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
           }
         }
       }
+      // Zero-cost transfer onto coincident duplicate nodes (Clean only).
+      if (coincidentSiblings) {
+        const sibs = coincidentSiblings[cur.node];
+        if (sibs) {
+          for (let si = 0; si < sibs.length; si += 1) {
+            const to = sibs[si];
+            const cost = cur.cost;
+            const newMeters = pathMeters[cur.node];
+            const newPeakProgress = peakProgress[cur.node];
+            let action = considerRelax(
+              cost,
+              dist[to],
+              -1,
+              prevData[to],
+              to,
+              sessionSeed,
+              false,
+              slots[to],
+              false,
+              false
+            );
+            if (action === "steal" && createsCycle(prev, cur.node, to)) action = "reject";
+            if (applyRelax(action, slots, to)) {
+              prev[to] = cur.node;
+              prevKind[to] = 2; // coincident stitch
+              prevData[to] = -1;
+              prevForward[to] = 1;
+              if (shouldPush(action)) {
+                dist[to] = cost;
+                pathMeters[to] = newMeters;
+                peakProgress[to] = newPeakProgress;
+                heap.push({ node: to, cost });
+              }
+            }
+          }
+        }
+      }
     }
 
     const vlist = virtAdj.get(cur.node);
@@ -1013,7 +1060,12 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
         const vSurface = unpackSurface(vAttr);
         const vRoad = ROAD_CLASS_NAME[unpackRoadClass(vAttr)] || "unknown";
         const vSurfaceName = enums.SURFACE_NAME[vSurface] || "unknown";
-        if (pavedOnly && isBlockedForCleanPavement(vSurfaceName, vRoad)) continue;
+        if (
+          pavedOnly &&
+          isBlockedForCleanPavement(vSurfaceName, vRoad) &&
+          v.ei !== startEi &&
+          v.ei !== endEi
+        ) continue;
         let step = costMode === "pavement"
           ? (v.meters / 1000) * dirtRideCostPerKm(vSurfaceName, vRoad, unpackConfidence(vAttr))
           : v.meters / 1000;
@@ -1096,6 +1148,8 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
         confidence: unpackConfidence(edgeAttrs[v.ei]),
         seasonal: unpackSeasonal(edgeAttrs[v.ei])
       });
+    } else if (prevKind[node] === 2) {
+      // Coincident duplicate-node stitch — no geometry.
     } else {
       const ei = prevData[node];
       const forward = prevForward[node] === 1;

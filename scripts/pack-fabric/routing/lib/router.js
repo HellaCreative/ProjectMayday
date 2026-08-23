@@ -44,14 +44,12 @@ const { findPathV2 } = require("./find-path-v2");
 const {
   isDirtSurface,
   outsideCorridor,
-  CLEAN_CORRIDOR_M,
   maxProgressRegressionMeters
 } = require("./hop-search");
 const crossPackTopology = require("../schema/cross-pack-topology.v1.json");
 const { resolveLocationsByEligibleEdge } = require("../regional/endpoint-resolver");
 
-const CLEAN_CORRIDOR_WIDTH_MULTIPLIERS = Object.freeze([1, 2, 3, 4, 6, 8, 12, 16, 24]);
-const CLEAN_PAVED_ATTEMPT_MS = 5_000;
+const CLEAN_PAVED_ATTEMPT_MS = 12_000;
 const DEFAULT_MATCH_METERS = 250;
 const EARTH_M = 6371000;
 
@@ -431,7 +429,8 @@ function matchPoint(
   const prof = profile ? String(profile).toLowerCase() : null;
   const role = snapRole === "start" || snapRole === "end" ? snapRole : "any";
   const preferAdventureSnap = prof && prof !== "cleanest" && role !== "end";
-  const preferPavedSnap = prof === "cleanest" || role === "end";
+  // Clean snaps nearest eligible way — never prefer pavement over a closer dirt/service.
+  const preferPavedSnap = role === "end" && prof !== "cleanest";
   const candidates = edgeCandidateIndexes(runtime, point[0], point[1], matchMeters);
   const isV2 = runtime.format === "v2";
   let bestAny = null;
@@ -2032,160 +2031,51 @@ async function routeOnRuntime(body, graphResolution, runtime) {
         pops: diagnostics.pops || (found && found.searchMeta && found.searchMeta.pops) || 0
       };
     };
-    // Pavement is hard, corridor is soft: drive every widen step ourselves with
-    // costMode set so findPathV2 cannot nest/abort the ladder early. Unpaved
-    // last resort only after every paved width (incl. unbounded) proves noPath.
-    const pavedAttemptRows = [];
-    const pavedWidths = CLEAN_CORRIDOR_WIDTH_MULTIPLIERS
-      .map((m) => CLEAN_CORRIDOR_M * m)
-      .concat([null]);
-    for (const width of pavedWidths) {
-      const finite = Number.isFinite(width);
-      const attempt = cleanFindOnce({
-        pavedOnly: true,
-        costMode: "profile",
-        variety: false,
-        boundedSearch: true,
-        corridorMeters: finite ? width : 0,
-        hardCorridor: finite,
-        progressRegressionMeters: finite
-          ? maxProgressRegressionMeters("cleanest")
-          : Number.MAX_SAFE_INTEGER,
-        timeCapMs: CLEAN_PAVED_ATTEMPT_MS,
-        deadlineAtMs: Date.now() + CLEAN_PAVED_ATTEMPT_MS
-      });
-      pavedAttemptRows.push({
-        corridorMeters: finite ? width : null,
-        outcome: attempt.outcome,
-        pops: attempt.pops || 0,
-        searchMs: 0,
-        pavedOnly: true
-      });
-      if (attempt.path) {
-        path = attempt.path;
-        cleanSearchOutcome = "completed";
-        path.searchMeta = path.searchMeta || {};
-        path.searchMeta.corridorCandidates = pavedAttemptRows.slice();
-        path.searchMeta.corridorMeters = finite ? width : null;
-        path.searchMeta.corridorWidened = finite && width > CLEAN_CORRIDOR_M;
-        path.searchMeta.rideObjective = "practical-pavement";
-        break;
-      }
+    // Clean law: pavement through-edges, no corridor, no hard regression.
+    // Soft forward fan lives in profile costs. Metro/motorway last-resort only
+    // after proved noPath. Settlement towns are not walls.
+    const cleanBase = {
+      pavedOnly: true,
+      costMode: "profile",
+      variety: false,
+      boundedSearch: true,
+      corridorMeters: 0,
+      hardCorridor: false,
+      progressRegressionMeters: Number.MAX_SAFE_INTEGER,
+      settlementWall: false,
+      settlementFallback: false,
+      cityWall: true,
+      urbanCoreFallback: false,
+      timeCapMs: CLEAN_PAVED_ATTEMPT_MS,
+      deadlineAtMs: Date.now() + CLEAN_PAVED_ATTEMPT_MS
+    };
+    const paved = cleanFindOnce(cleanBase);
+    if (paved.path) {
+      path = paved.path;
+      cleanSearchOutcome = "completed";
+      path.searchMeta = path.searchMeta || {};
+      path.searchMeta.corridorMeters = null;
+      path.searchMeta.corridorWidened = false;
+      path.searchMeta.rideObjective = "practical-pavement";
+    } else {
+      cleanSearchOutcome = paved.outcome || "noPath";
     }
-    if (!path) {
-      cleanSearchOutcome = pavedAttemptRows.every((row) => row.outcome === "noPath")
-        ? "noPath"
-        : (pavedAttemptRows.find((row) => row.outcome === "timeCap" || row.outcome === "popCap")
-          || { outcome: "noPath" }).outcome;
-    }
-    const pavedExhaustedNoPath =
-      !path &&
-      pavedAttemptRows.length === pavedWidths.length &&
-      pavedAttemptRows.every((row) => row.outcome === "noPath");
-    if (pavedExhaustedNoPath) {
-      const unpaved = cleanFindOnce({
+    if (!path && cleanSearchOutcome === "noPath") {
+      const unpaved = cleanFindOnce(Object.assign({}, cleanBase, {
         pavedOnly: false,
-        costMode: "profile",
-        variety: false,
-        boundedSearch: true,
-        corridorMeters: 0,
-        hardCorridor: false,
-        progressRegressionMeters: Number.MAX_SAFE_INTEGER,
         timeCapMs: CLEAN_PAVED_ATTEMPT_MS * 2,
         deadlineAtMs: Date.now() + CLEAN_PAVED_ATTEMPT_MS * 2
-      });
+      }));
       if (unpaved.path) {
         path = unpaved.path;
         cleanSearchOutcome = "completed";
         cleanUnpavedFallbackUsed = true;
         path.searchMeta = path.searchMeta || {};
         path.searchMeta.cleanUnpavedFallbackUsed = true;
-        path.searchMeta.corridorCandidates = pavedAttemptRows.concat([{
-          corridorMeters: null,
-          outcome: "completed",
-          pops: unpaved.pops || 0,
-          searchMs: 0,
-          pavedOnly: false
-        }]);
+        path.searchMeta.corridorMeters = null;
         path.searchMeta.rideObjective = "practical-pavement";
       } else {
         cleanSearchOutcome = unpaved.outcome || "noPath";
-      }
-    }
-    // Smaller OSM cities/towns are a separate avoidance layer. Relax them only
-    // after paved (and any-surface last resort) still cannot reach B.
-    if (!path && cleanSearchOutcome === "noPath") {
-      const settlementPavedRows = [];
-      for (const width of pavedWidths) {
-        const finite = Number.isFinite(width);
-        const attempt = cleanFindOnce({
-          pavedOnly: true,
-          costMode: "profile",
-          variety: false,
-          boundedSearch: true,
-          corridorMeters: finite ? width : 0,
-          hardCorridor: finite,
-          progressRegressionMeters: finite
-            ? maxProgressRegressionMeters("cleanest")
-            : Number.MAX_SAFE_INTEGER,
-          settlementWall: false,
-          settlementFallback: true,
-          timeCapMs: CLEAN_PAVED_ATTEMPT_MS,
-          deadlineAtMs: Date.now() + CLEAN_PAVED_ATTEMPT_MS
-        });
-        settlementPavedRows.push({
-          corridorMeters: finite ? width : null,
-          outcome: attempt.outcome,
-          pops: attempt.pops || 0,
-          searchMs: 0,
-          pavedOnly: true
-        });
-        if (attempt.path) {
-          path = attempt.path;
-          cleanSearchOutcome = "completed";
-          settlementFallbackUsed = true;
-          path.searchMeta = path.searchMeta || {};
-          path.searchMeta.settlementFallbackUsed = true;
-          path.searchMeta.corridorCandidates = pavedAttemptRows.concat(settlementPavedRows);
-          break;
-        }
-      }
-      const settlementPavedExhausted =
-        !path &&
-        settlementPavedRows.length === pavedWidths.length &&
-        settlementPavedRows.every((row) => row.outcome === "noPath");
-      if (settlementPavedExhausted) {
-        const unpaved = cleanFindOnce({
-          pavedOnly: false,
-          costMode: "profile",
-          variety: false,
-          boundedSearch: true,
-          corridorMeters: 0,
-          hardCorridor: false,
-          progressRegressionMeters: Number.MAX_SAFE_INTEGER,
-          settlementWall: false,
-          settlementFallback: true,
-          timeCapMs: CLEAN_PAVED_ATTEMPT_MS * 2,
-          deadlineAtMs: Date.now() + CLEAN_PAVED_ATTEMPT_MS * 2
-        });
-        if (unpaved.path) {
-          path = unpaved.path;
-          cleanSearchOutcome = "completed";
-          cleanUnpavedFallbackUsed = true;
-          settlementFallbackUsed = true;
-          path.searchMeta = path.searchMeta || {};
-          path.searchMeta.cleanUnpavedFallbackUsed = true;
-          path.searchMeta.settlementFallbackUsed = true;
-          path.searchMeta.corridorCandidates = pavedAttemptRows.concat(settlementPavedRows).concat([{
-            corridorMeters: null,
-            outcome: "completed",
-            pops: unpaved.pops || 0,
-            searchMs: 0,
-            pavedOnly: false
-          }]);
-        } else {
-          cleanSearchOutcome = unpaved.outcome || "noPath";
-        }
       }
     }
   } else {
@@ -2229,8 +2119,7 @@ async function routeOnRuntime(body, graphResolution, runtime) {
       }
     }
   }
-  // Urban cores are walls for every normal search. Clean gets an escape hatch
-  // only after paved search still cannot reach B — widen paved first, then unpaved.
+  // Major urban cores / motorways: Clean may cross only after proved noPath.
   if (!path && profile === "cleanest" && cleanSearchOutcome === "noPath") {
     const cleanFindRelaxed = (extra) => {
       const diagnostics = {};
@@ -2245,78 +2134,40 @@ async function routeOnRuntime(body, graphResolution, runtime) {
         pops: diagnostics.pops || (found && found.searchMeta && found.searchMeta.pops) || 0
       };
     };
-    const relaxedPavedRows = [];
-    const pavedWidths = CLEAN_CORRIDOR_WIDTH_MULTIPLIERS
-      .map((m) => CLEAN_CORRIDOR_M * m)
-      .concat([null]);
-    for (const width of pavedWidths) {
-      const finite = Number.isFinite(width);
-      const attempt = cleanFindRelaxed({
-        cityWall: false,
-        pavedOnly: true,
-        urbanCoreFallback: true,
-        settlementWall: false,
-        settlementFallback: true,
-        costMode: "profile",
-        variety: false,
-        boundedSearch: true,
-        corridorMeters: finite ? width : 0,
-        hardCorridor: finite,
-        progressRegressionMeters: finite
-          ? maxProgressRegressionMeters("cleanest")
-          : Number.MAX_SAFE_INTEGER,
-        timeCapMs: CLEAN_PAVED_ATTEMPT_MS,
-        deadlineAtMs: Date.now() + CLEAN_PAVED_ATTEMPT_MS
-      });
-      relaxedPavedRows.push({
-        corridorMeters: finite ? width : null,
-        outcome: attempt.outcome,
-        pops: attempt.pops || 0,
-        searchMs: 0,
-        pavedOnly: true
-      });
-      if (attempt.path) {
-        path = attempt.path;
-        cleanSearchOutcome = "completed";
-        break;
-      }
-    }
-    const relaxedPavedExhausted =
-      !path &&
-      relaxedPavedRows.length === pavedWidths.length &&
-      relaxedPavedRows.every((row) => row.outcome === "noPath");
-    if (relaxedPavedExhausted) {
-      const attempt = cleanFindRelaxed({
-        cityWall: false,
+    const relaxedBase = {
+      cityWall: false,
+      urbanCoreFallback: true,
+      settlementWall: false,
+      settlementFallback: false,
+      costMode: "profile",
+      variety: false,
+      boundedSearch: true,
+      corridorMeters: 0,
+      hardCorridor: false,
+      progressRegressionMeters: Number.MAX_SAFE_INTEGER,
+      timeCapMs: CLEAN_PAVED_ATTEMPT_MS,
+      deadlineAtMs: Date.now() + CLEAN_PAVED_ATTEMPT_MS
+    };
+    let attempt = cleanFindRelaxed(Object.assign({}, relaxedBase, { pavedOnly: true }));
+    if (!attempt.path) {
+      attempt = cleanFindRelaxed(Object.assign({}, relaxedBase, {
         pavedOnly: false,
-        urbanCoreFallback: true,
-        settlementWall: false,
-        settlementFallback: true,
-        costMode: "profile",
-        variety: false,
-        boundedSearch: true,
-        corridorMeters: 0,
-        hardCorridor: false,
-        progressRegressionMeters: Number.MAX_SAFE_INTEGER,
         timeCapMs: CLEAN_PAVED_ATTEMPT_MS * 2,
         deadlineAtMs: Date.now() + CLEAN_PAVED_ATTEMPT_MS * 2
-      });
-      path = attempt.path;
-      cleanSearchOutcome = attempt.path ? "completed" : (attempt.outcome || "noPath");
-      cleanUnpavedFallbackUsed = !!attempt.path;
+      }));
+      if (attempt.path) cleanUnpavedFallbackUsed = true;
     }
-    if (path) {
+    if (attempt.path) {
+      path = attempt.path;
+      cleanSearchOutcome = "completed";
       urbanCoreFallbackUsed = true;
-      settlementFallbackUsed = true;
       path.searchMeta = path.searchMeta || {};
       path.searchMeta.urbanCoreFallbackUsed = true;
-      path.searchMeta.settlementFallbackUsed = true;
+      path.searchMeta.corridorMeters = null;
+      path.searchMeta.rideObjective = "practical-pavement";
       if (cleanUnpavedFallbackUsed) path.searchMeta.cleanUnpavedFallbackUsed = true;
-      path.searchMeta.corridorCandidates = (
-        Array.isArray(path.searchMeta.corridorCandidates)
-          ? path.searchMeta.corridorCandidates
-          : []
-      ).concat(relaxedPavedRows);
+    } else {
+      cleanSearchOutcome = attempt.outcome || "noPath";
     }
   }
   // Balanced + Allow ON: unknown dirt usually wins under normal surface weights and

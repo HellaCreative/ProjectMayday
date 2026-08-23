@@ -78,22 +78,30 @@ not silently replace the selected ride objective.
 
 ### Clean
 
-- Works from a 100% pavement objective, not a shortest-path objective.
-- Treats every recognized major urban core as a wall unless a rider endpoint is
-  inside that core.
-- Avoids major highways and major population centres.
-- May use a rural unpaved connector before crossing an unrelated urban core.
-- Relaxes an urban wall only after a proved no-path result, never because of a
-  timeout, score, or search cap. The fallback must be labelled.
-- Forces Allow Unknown off.
+- Stay on pavement unless the snapped road at A or B is unpaved, or pavement
+  cannot connect. Then use that road for as many kilometres as it takes. Never
+  hunt dirt. There is no dirt% cap.
+- Soft forward preference (~45° fan): keep moving toward the next waypoint.
+  Direction only — not shortest-path and not a hard cone. A paved arterial that
+  briefly heads away around water or terrain is legal and preferred over a long
+  loop that merely “points at B.”
+- No Clean corridor. No hard progress-regression gate.
+- Avoid major urban cores and major highways (freeway / motorway+ramp). Not OSM
+  towns, not rural numbered trunks, not collectors. Cross metros/highways only
+  after a proved no-path on eligible fabric; label the fallback.
+- Snap nearest eligible road/path/trail. Never prefer pavement for Clean.
+- Untagged local/service remain impassable on through-edges. The snapped edge at
+  A and at B is always traversable. Allow Unknown is forced off.
+- Pack duplicate nodes on a continuous OSM way may be bridged at search time so
+  visibly continuous pavement stays continuous.
 
 ### Corridors
 
-A corridor is an internal search optimization, not a rider-facing profile law,
-distance allocation, or target the route is expected to fill. Search may use
-progressively wider tiers only when benchmarks show that doing so improves speed
-without suppressing the profile objective. Successful tiers belong in
-diagnostics, not the rider interface.
+A corridor is an internal search optimization for Dirt, Direct, and Balanced —
+not a Clean product rule, distance allocation, or target the route is expected
+to fill. Search may use progressively wider tiers only when benchmarks show that
+doing so improves speed without suppressing the profile objective. Successful
+tiers belong in diagnostics, not the rider interface.
 
 ## 3. Road eligibility, surface, and access
 
@@ -286,14 +294,26 @@ cannot become stale.
 
 ### Clean foundation for fuel and long routes
 
-Automatic Clean-first construction applies when a rider segment spans at least
-1,000 km. It establishes a fast, stable connectivity and fuel skeleton before
-the rider adjusts the visible Point/F legs. It does not automatically replace a
-sub-1,000 km Dirt section merely because fuel search is difficult.
+Automatic Clean-first construction applies ONLY when a rider segment (a) spans at
+least 1,000 km, OR (b) crosses a true province/state boundary (e.g. NS→NB). It
+establishes a fast, stable connectivity and fuel skeleton before the rider adjusts
+the visible Point/F legs. It does NOT apply to a sub-1,000 km, within-province
+route merely because fuel search is difficult.
 
-Changing an upstream Clean leg to Dirt can lengthen the ride and invalidate the
-fuel state. The changed leg and the complete downstream fuel chain are rebuilt;
-valid upstream legs remain unchanged.
+**Internal pack regions are a storage detail, invisible to routing.** A province's
+graph may be split into multiple internal region shards to fit size/upload/memory
+limits (V8 ~16.7M Map cap, Cloudflare R2/wrangler upload cap, on-device memory) and
+is stitched back together with seam edges. This sharding is NOT a Vercel-plan
+artifact and is unrelated to Hobby/Pro. Crossing an internal shard seam — e.g.
+mainland NS → Cape Breton, or Halifax → western NS — is NOT a "regional boundary":
+it MUST NOT trigger Clean-first and MUST NOT change the rider's chosen profile. The
+cross-boundary test uses the province/state, never the internal shard id.
+
+Clean-first never locks the rider out. The selected profile stays visible and every
+section recalculates when the rider switches profile. Changing an upstream Clean
+leg to Dirt can lengthen the ride and invalidate the fuel state; the changed leg
+and the complete downstream fuel chain are rebuilt while valid upstream legs remain
+unchanged.
 
 ### Automatic pump selection
 

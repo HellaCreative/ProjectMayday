@@ -9,8 +9,6 @@ const BALANCED_STRETCH = 1.4; // compute prune only; corridor is the geographic 
 const DIRECT_CORRIDOR_M = 15000;
 const DIRT_CORRIDOR_M = 60000;
 const BALANCED_CORRIDOR_M = 40000;
-/** Clean is practical A→B — tight band like Direct/Balanced, never unbounded. */
-const CLEAN_CORRIDOR_M = 25000;
 const VARIETY_MARGIN = 0.08;
 const VARIETY_SLOTS = 3;
 const BALANCED_DIRT_LO = 0.45;
@@ -19,15 +17,14 @@ const BALANCED_BUCKETS = 20;
 const PASS2_TIME_MS = 18000;
 const PASS2_POP_CAP = 400000;
 const EARTH_RADIUS_M = 6371000;
+/** Clean has no hard progress-regression gate — soft away-tax only. */
 const MAX_PROGRESS_REGRESSION_M = Object.freeze({
   direct: 5000,
   balanced: 10000,
-  dirt: 15000,
-  // Soft away-tax is the forward fan. The hard ceiling must still allow a paved
-  // arterial to dip ~15 km along-track around inlets (NS Digby-side cliff:
-  // 8 km made every finite Clean corridor noPath while unbounded looped 177 km).
-  cleanest: 20000
+  dirt: 15000
 });
+/** Merge pack duplicate nodes within this radius (Clean topology bridge). */
+const CLEAN_COINCIDENT_NODE_M = 2;
 // Dirt works back from 100%, but a kilometre of pavement cannot justify an
 // effectively unlimited dirt excursion. These are exchange rates, not a
 // shortest-path objective: extra dirt is welcome when it replaces meaningful
@@ -238,7 +235,7 @@ function corridorMetersForProfile(profile) {
   if (profile === "direct") return DIRECT_CORRIDOR_M;
   if (profile === "dirt") return DIRT_CORRIDOR_M;
   if (profile === "balanced") return BALANCED_CORRIDOR_M;
-  if (profile === "cleanest") return CLEAN_CORRIDOR_M;
+  // Clean: no corridor product rule.
   return null;
 }
 
@@ -290,18 +287,57 @@ function projectedProgressMeters(point, startLL, endLL) {
 }
 
 function maxProgressRegressionMeters(profile) {
+  if (profile === "cleanest") return Infinity;
   return MAX_PROGRESS_REGRESSION_M[profile] || Infinity;
 }
 
 /**
  * Corridor width grants lateral room; it must never grant permission to ride
  * farther away from B. Only the final connectivity proof may remove the
- * forward-progress guard.
+ * forward-progress guard. Clean never uses a hard regression continue.
  */
 function progressRegressionForAttempt(profile, corridorMeters) {
+  if (profile === "cleanest") return Infinity;
   return Number.isFinite(corridorMeters)
     ? maxProgressRegressionMeters(profile)
     : Infinity;
+}
+
+/**
+ * Pack builds sometimes leave coincident duplicate nodes on a continuous OSM
+ * way with no edge between them. Clean treats nodes within CLEAN_COINCIDENT_NODE_M
+ * as the same place (zero-cost transfer) so pavement stays continuous.
+ * Returns Int32Array length n: for each node, first sibling index or -1.
+ * Full sibling lists via coincidentSiblingLists.
+ */
+function coincidentSiblingLists(nodeCoords, n, epsilonMeters = CLEAN_COINCIDENT_NODE_M) {
+  const lists = new Array(n);
+  for (let i = 0; i < n; i += 1) lists[i] = null;
+  if (!nodeCoords || n <= 0) return lists;
+  const qLat = epsilonMeters / 111000;
+  const buckets = new Map();
+  for (let i = 0; i < n; i += 1) {
+    const lon = nodeCoords[i * 2];
+    const lat = nodeCoords[i * 2 + 1];
+    if (!Number.isFinite(lon) || !Number.isFinite(lat)) continue;
+    const cos = Math.max(0.2, Math.cos((lat * Math.PI) / 180));
+    const qLon = epsilonMeters / (111000 * cos);
+    const key = `${Math.round(lon / qLon)}:${Math.round(lat / qLat)}`;
+    let group = buckets.get(key);
+    if (!group) {
+      group = [];
+      buckets.set(key, group);
+    }
+    group.push(i);
+  }
+  for (const group of buckets.values()) {
+    if (group.length < 2) continue;
+    for (let i = 0; i < group.length; i += 1) {
+      const others = group.slice(0, i).concat(group.slice(i + 1));
+      lists[group[i]] = others;
+    }
+  }
+  return lists;
 }
 
 function hopBlocked(toLL, startLL, endLL, cityWall, boxes = METRO_CORE_WALL) {
@@ -454,7 +490,7 @@ module.exports = {
   DIRECT_CORRIDOR_M,
   DIRT_CORRIDOR_M,
   BALANCED_CORRIDOR_M,
-  CLEAN_CORRIDOR_M,
+  CLEAN_COINCIDENT_NODE_M,
   VARIETY_MARGIN,
   VARIETY_SLOTS,
   BALANCED_DIRT_LO,
@@ -492,6 +528,7 @@ module.exports = {
   projectedProgressMeters,
   maxProgressRegressionMeters,
   progressRegressionForAttempt,
+  coincidentSiblingLists,
   hopBlocked,
   maxCrossTrackMeters,
   routeShapeMetrics,

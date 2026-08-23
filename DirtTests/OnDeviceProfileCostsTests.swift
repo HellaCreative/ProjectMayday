@@ -79,7 +79,7 @@ struct OnDeviceProfileCostsTests {
         #expect(farDirect > farBalanced)
         #expect(farBalanced > farDirt)
         #expect(farDirt > 8)
-        #expect(farClean == 0)
+        #expect(farClean > farBalanced)
         let xt = abs(GeoMath.crossTrackMeters(point: farNorth, lineFrom: a, to: b))
         #expect(xt > 40_000)
     }
@@ -214,11 +214,37 @@ struct OnDeviceProfileCostsTests {
             dToMeters: 210_000,
             abMeters: 400_000
         )
-        #expect(mid < 20)
-        #expect(stillHuntingAtTenKm < 20)
+        // Forward fan: ~9.5/km mid-ride (×10 in pavement ≈ 95/km).
+        #expect(mid > 80)
+        #expect(mid < 120)
+        #expect(stillHuntingAtTenKm > 80)
         #expect(near > mid)
-        #expect(near < 25)
         #expect(mid < balancedMid)
+    }
+
+    @Test func cleanAwayTaxDoesNotDominateExtraPavement() {
+        // Clean away-tax is off; soft fan is cross-track only.
+        let cleanAway = OnDeviceProfileCosts.approachAwayExtra(
+            profile: .cleanest,
+            dFromMeters: 50_000,
+            dToMeters: 51_000,
+            abMeters: 100_000
+        )
+        let directAway = OnDeviceProfileCosts.approachAwayExtra(
+            profile: .direct,
+            dFromMeters: 50_000,
+            dToMeters: 51_000,
+            abMeters: 100_000
+        )
+        #expect(cleanAway == 0)
+        #expect(directAway >= 150)
+    }
+
+    @Test func cleanPavementGateBlocksMinorUnknownAndGravel() {
+        #expect(OnDeviceProfileCosts.isBlockedForCleanPavement(surfaceName: "paved", roadClassName: "local") == false)
+        #expect(OnDeviceProfileCosts.isBlockedForCleanPavement(surfaceName: "unknown", roadClassName: "arterial") == false)
+        #expect(OnDeviceProfileCosts.isBlockedForCleanPavement(surfaceName: "unknown", roadClassName: "local") == true)
+        #expect(OnDeviceProfileCosts.isBlockedForCleanPavement(surfaceName: "gravel", roadClassName: "collector") == true)
     }
 
     @Test func majorHighwaysStayAvoidedUntilNearAPinnedHighway() {
@@ -254,9 +280,9 @@ struct OnDeviceProfileCostsTests {
             startOnMajorHighway: false,
             endOnMajorHighway: true
         )
-        #expect(cleanFar > 10)
+        #expect(cleanFar > 2.5)
         #expect(cleanNearB == 1)
-        #expect(cleanNearBButPinOffHighway > 10)
+        #expect(cleanNearBButPinOffHighway > 2.5)
         #expect(localFar == 1)
     }
 
@@ -342,6 +368,22 @@ struct CrossPackSeamTests {
         let wa = CLLocationCoordinate2D(latitude: 48.99, longitude: -119.44)
         #expect(GraphPackStore.primaryRegionId(containing: bc) == "bc")
         #expect(GraphPackStore.primaryRegionId(containing: wa) == "wa")
+    }
+
+    @Test func westernNovaScotiaStaysNSDespiteNBBboxOverlap() {
+        let halifax = CLLocationCoordinate2D(latitude: 44.6488, longitude: -63.5752)
+        let digby = CLLocationCoordinate2D(latitude: 44.6221, longitude: -65.7587)
+        let kentville = CLLocationCoordinate2D(latitude: 45.0770, longitude: -64.4935)
+        let moncton = CLLocationCoordinate2D(latitude: 46.0878, longitude: -64.7782)
+        let saintJohn = CLLocationCoordinate2D(latitude: 45.2733, longitude: -66.0633)
+        #expect(GraphPackStore.primaryRegionId(containing: halifax) == "ns")
+        #expect(GraphPackStore.primaryRegionId(containing: digby) == "ns")
+        #expect(GraphPackStore.primaryRegionId(containing: kentville) == "ns")
+        #expect(GraphPackStore.primaryRegionId(containing: moncton) == "nb")
+        #expect(GraphPackStore.primaryRegionId(containing: saintJohn) == "nb")
+        #expect(GraphPackStore.endpointsCrossProvince([halifax, digby]) == false)
+        #expect(GraphPackStore.endpointProvinceIds(containingAny: [halifax, digby]) == ["ns"])
+        #expect(GraphPackStore.endpointsCrossProvince([halifax, moncton]) == true)
     }
 
     @Test func concatenatingAddsDirtAndPavedMeters() throws {

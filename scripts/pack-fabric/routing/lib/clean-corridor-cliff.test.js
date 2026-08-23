@@ -1,26 +1,29 @@
 "use strict";
 
 /**
- * NS Digby-side Clean corridor cliff (2026-08-23).
- * Point 1 fixed; Point 2 walks north on the orange arterial.
- * With progressRegressionMeters=8000, every finite Clean corridor was noPath
- * past ~44.876; unbounded found a ~177 km east loop. Raising Clean to 20 km
- * lets the arterial (~13–15 km along-track dip) complete inside 25 km corridor.
+ * Clean law (2026-08-23): pavement through-edges, soft forward fan, no corridor,
+ * no hard regression. Snapped A/B always traversable. Coincident pack nodes bridge.
  */
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const path = require("path");
 const fs = require("fs");
-const { maxProgressRegressionMeters } = require("./hop-search");
+const {
+  maxProgressRegressionMeters,
+  corridorMetersForProfile,
+  isBlockedForCleanPavement,
+  coincidentSiblingLists
+} = require("./hop-search");
+const { approachAwayExtraCost } = require("./profile-costs");
 const { findPathV2 } = require("./find-path-v2");
 const { loadGraphSync } = require("./graph");
 const { matchPoint, normalizePolicy } = require("./router");
 
 process.env.ROUTING_PACKS_V2 = process.env.ROUTING_PACKS_V2 || "1";
 
-const FROM = { lat: 44.764837, lon: -63.340267 };
+const FROM = { lat: 44.764816, lon: -63.340274 };
 const GOOD_TO = { lat: 44.866934, lon: -63.216915 };
-const CLIFF_TO = { lat: 44.876224, lon: -63.230298 };
+const FAIL_TO = { lat: 44.872924, lon: -63.220318 };
 
 const NS_GRAPH = path.resolve(
   __dirname,
@@ -37,17 +40,13 @@ function snap(runtime, loc, role) {
   return matchPoint(runtime, loc, policy, 250, null, null, "cleanest", role);
 }
 
-function tryClean(runtime, to, regressionMeters) {
+function tryClean(runtime, to) {
   const policy = normalizePolicy({}, "cleanest");
-  const startMatch = snap(runtime, FROM, "start");
-  const endMatch = snap(runtime, to, "end");
-  assert.ok(startMatch && startMatch.coord, "start snap failed");
-  assert.ok(endMatch && endMatch.coord, "end snap failed");
   const diagnostics = {};
   const found = findPathV2(
     runtime,
-    startMatch,
-    endMatch,
+    snap(runtime, FROM, "start"),
+    snap(runtime, to, "end"),
     "cleanest",
     policy,
     null,
@@ -57,52 +56,99 @@ function tryClean(runtime, to, regressionMeters) {
       costMode: "profile",
       variety: false,
       boundedSearch: true,
-      corridorMeters: 25000,
-      hardCorridor: true,
-      progressRegressionMeters: regressionMeters,
-      timeCapMs: 45000,
-      deadlineAtMs: Date.now() + 45000,
+      corridorMeters: 0,
+      hardCorridor: false,
+      progressRegressionMeters: Number.MAX_SAFE_INTEGER,
+      settlementWall: false,
+      settlementFallback: false,
+      cityWall: true,
+      timeCapMs: 20000,
+      deadlineAtMs: Date.now() + 20000,
       diagnostics
     }
   );
+  let west = Infinity;
+  const coords = found && found.geometry;
+  if (Array.isArray(coords)) {
+    for (const c of coords) {
+      const lon = Array.isArray(c) ? Number(c[0]) : Number(c.lon);
+      if (lon < west) west = lon;
+    }
+  }
   return {
     found: !!found,
     meters: found ? found.distanceMeters : null,
-    maxXt: found && found.searchMeta ? found.searchMeta.maxCrossTrackMeters : null,
+    dirtPct: found && found.stats ? found.stats.dirtPercent : null,
     corridor: found && found.searchMeta ? found.searchMeta.corridorMeters : null,
-    outcome: found ? "completed" : (diagnostics.outcome || "noPath")
+    west: west !== Infinity ? west : null,
+    outcome: found ? "completed" : diagnostics.outcome || "noPath"
   };
 }
 
-test("Clean regression ceiling clears the NS arterial cliff threshold", () => {
-  assert.equal(maxProgressRegressionMeters("cleanest"), 20000);
+test("Clean has no corridor and no hard regression cap", () => {
+  assert.equal(corridorMetersForProfile("cleanest"), null);
+  assert.equal(maxProgressRegressionMeters("cleanest"), Infinity);
+});
+
+test("Clean away-tax is off so 15 km dip cannot lose to 60 km extra pavement", () => {
+  const away15 = approachAwayExtraCost("cleanest", 20000, 35000, 15000, 50);
+  assert.equal(away15, 0);
+  // 60 km extra paved collector still costs ~70 in profile units.
+  const pavedExtra = 60 * 1.0 * 1.18;
+  assert.ok(away15 < pavedExtra);
+});
+
+test("untagged local/service blocked; major unknown allowed", () => {
+  assert.equal(isBlockedForCleanPavement("paved", "local"), false);
+  assert.equal(isBlockedForCleanPavement("unknown", "arterial"), false);
+  assert.equal(isBlockedForCleanPavement("unknown", "local"), true);
+  assert.equal(isBlockedForCleanPavement("unknown", "service"), true);
+  assert.equal(isBlockedForCleanPavement("gravel", "collector"), true);
+});
+
+test("coincident sibling lists merge duplicate nodes", () => {
+  // Two nodes at same coord → siblings
+  const coords = new Float64Array([
+    -63.22038, 44.87164,
+    -63.22038, 44.87164,
+    -63.21, 44.86
+  ]);
+  const lists = coincidentSiblingLists(coords, 3, 2);
+  assert.ok(lists[0] && lists[0].includes(1));
+  assert.ok(lists[1] && lists[1].includes(0));
+  assert.equal(lists[2], null);
 });
 
 test(
-  "NS Clean cliff: 8km regression noPath; 20km keeps arterial inside 25km corridor",
+  "NS Clean: GOOD and FAIL stay on short paved spine (not Dartmouth loop)",
   { timeout: 120_000 },
   () => {
     const runtime = loadNsRuntime();
 
-    const oldCliff = tryClean(runtime, CLIFF_TO, 8000);
-    assert.equal(
-      oldCliff.outcome,
-      "noPath",
-      "pre-fix 8km regression must still fail the cliff pin"
-    );
-
-    const fixedCliff = tryClean(runtime, CLIFF_TO, 20000);
-    assert.equal(fixedCliff.outcome, "completed");
-    assert.ok(fixedCliff.meters < 120000, `cliff path too long: ${fixedCliff.meters}`);
-    assert.ok(
-      (fixedCliff.maxXt || 0) <= 25000,
-      `cliff XT outside 25km corridor: ${fixedCliff.maxXt}`
-    );
-    assert.equal(fixedCliff.corridor, 25000);
-
-    const good = tryClean(runtime, GOOD_TO, 20000);
+    const good = tryClean(runtime, GOOD_TO);
     assert.equal(good.outcome, "completed");
-    assert.ok(good.meters < 50000, `good pin regressed: ${good.meters}`);
-    assert.ok(Math.abs(good.meters - 32137) < 500, `good pin drifted: ${good.meters}`);
+    assert.ok(Math.abs(good.meters - 32137) < 1000, `GOOD drifted: ${good.meters}`);
+    assert.equal(good.dirtPct, 0);
+    assert.equal(good.corridor, null);
+    assert.ok(good.west > -63.45, `GOOD went west: ${good.west}`);
+
+    const fail = tryClean(runtime, FAIL_TO);
+    assert.equal(fail.outcome, "completed");
+    assert.ok(fail.meters < 45000, `FAIL too long: ${fail.meters}`);
+    assert.equal(fail.dirtPct, 0);
+    assert.equal(fail.corridor, null);
+    assert.ok(fail.west > -63.45, `FAIL Dartmouth loop: west=${fail.west}`);
   }
 );
+
+test("Clean snap is nearest — does not prefer pavement over closer dirt", () => {
+  const runtime = loadNsRuntime();
+  const policy = normalizePolicy({}, "cleanest");
+  // Tap nearer a likely dirt/service than a highway when one exists around Halifax.
+  const tap = { lat: 44.764816, lon: -63.340274 };
+  const clean = matchPoint(runtime, tap, policy, 250, null, null, "cleanest", "start");
+  const asEnd = matchPoint(runtime, tap, policy, 250, null, null, "direct", "end");
+  assert.ok(clean && clean.coord);
+  // Clean must not apply paved preference; score is distance-first.
+  assert.ok(Math.abs(clean.distanceM - asEnd.distanceM) < 80 || clean.edgeIndex === asEnd.edgeIndex);
+});

@@ -269,16 +269,14 @@ nonisolated enum OnDeviceProfileCosts {
             if current <= target { return 1 }
             return target / current
         }
-        let target = 12.0
+        let target = 3.0
         if current >= target { return 1 }
         return target / current
     }
 
     /// Extra cost for meters walked *away* from B.
-    /// Dirt: hunt dirt for the ride. A/B are endpoints. Only a small *arrival*
-    /// clamp in the last ~2.5 km of B so the line does not orbit the pin.
-    /// Direct: same dirt prices, strong crow-flies (no meander).
-    /// Balanced: medium mix. Clean: pavement toward B, skip towns unless the pin is there.
+    /// Strong soft forward fan: regressing must cost more than grazing a city
+    /// (×120) or a short highway connector. Slight backtracks around water OK.
     static func approachAwayExtra(
         profile: RouteProfile,
         dFromMeters: Double,
@@ -296,45 +294,38 @@ nonisolated enum OnDeviceProfileCosts {
 
         switch profile {
         case .dirt:
-            // Hunt dirt, but still pay to walk away from B — 0.4 still allowed a
-            // province-scale loop when track was nearly free.
-            let mid = kmAway * 1.45
-            // Arrival only — not a 12 km hunt ban. Short A→B hops must still hunt.
+            // Applied with ×10 in pavement mode → ~95–150/km effective.
+            let mid = kmAway * 9.5
             let horizon = 2_500.0
             var near = 0.0
             if dFrom < horizon {
                 let t = 1 - dFrom / horizon
-                near = kmAway * (0.12 + t * t * 0.9)
+                near = kmAway * (2.0 + t * t * 6.0)
             }
-            let raw = mid + near
-            // Track is ~0.017/km; paved is 16/km. Away must not invert that.
-            let cap = kmAway * 16.0 * 0.12
-            return min(raw, cap)
+            return mid + near
         case .direct:
-            // Progress-toward-B only. Corridor bound is `corridorCrossTrackExtra`.
             let nearBand = max(3200.0, ab * 0.3)
-            let w = dFrom < nearBand ? 12.0 : 7.0
+            let w = dFrom < nearBand ? 200.0 : 150.0
             return kmAway * w
         case .balanced:
-            let mid = kmAway * 2.2
+            let mid = kmAway * 180.0
             let horizon = max(4_000.0, ab * 0.2)
             var near = 0.0
             if dFrom < horizon {
                 let t = 1 - dFrom / horizon
-                near = kmAway * (0.4 + t * t * 2.4)
+                near = kmAway * (20.0 + t * t * 60.0)
             }
             return mid + near
         case .cleanest:
-            let nearBand = max(2800.0, ab * 0.28)
-            let w = dFrom < nearBand ? 6.5 : 3.2
-            return kmAway * w
+            // Soft fan is corridorCrossTrackExtra only — away-tax made coastal
+            // arterial dips lose to long paved rings that point at B.
+            return 0
         }
     }
 
     /// Quadratic penalty on perpendicular distance to the A→B great-circle.
     /// A wide arc that still gets closer to B never trips `approachAwayExtra`.
-    /// Direct strongest, Balanced enough to stop a Williams Lake hunt, Dirt
-    /// allows nearby valleys but not a 200 km north detour.
+    /// Direct strongest, Clean/Balanced next, Dirt allows nearby valleys.
     static func corridorCrossTrackExtra(
         profile: RouteProfile,
         point: CLLocationCoordinate2D,
@@ -346,9 +337,9 @@ nonisolated enum OnDeviceProfileCosts {
         let k: Double
         switch profile {
         case .direct: k = 0.018
+        case .cleanest: k = 0.006
         case .balanced: k = 0.014
         case .dirt: k = 0.005
-        case .cleanest: return 0
         }
         let xtKm = abs(GeoMath.crossTrackMeters(point: point, lineFrom: lineFrom, to: lineTo)) / 1000.0
         let km = edgeMeters / 1000.0
@@ -400,6 +391,22 @@ nonisolated enum OnDeviceProfileCosts {
             }
         }
         return surfaceName
+    }
+
+    /// Clean paved-only gate: genuine paved, or untagged surface on major
+    /// classes only (freeway/arterial/ramp/collector). Gravel/track/access and
+    /// untagged local/service are impassable under Clean's pavement constraint.
+    static func isBlockedForCleanPavement(surfaceName: String, roadClassName: String) -> Bool {
+        if surfaceName == "paved" { return false }
+        if surfaceName == "unknown" {
+            switch roadClassName {
+            case "freeway", "arterial", "ramp", "collector":
+                return false
+            default:
+                return true
+            }
+        }
+        return true
     }
 
     /// Selected-route paint keeps two independent OSM facts separate:

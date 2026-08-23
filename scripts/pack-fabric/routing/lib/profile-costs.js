@@ -197,6 +197,12 @@ function classSpeedKmh(surfaceCode) {
   return SURFACE_SPEED_KMH[name] || 30;
 }
 
+/**
+ * Extra cost for meters walked *away* from B (distance-to-destination increases).
+ * Strong soft forward fan (~45°): regressing must cost more than grazing a city
+ * (×120) or a short highway connector (~×3), so the forward route wins.
+ * Slight backtracks around water remain possible — not a hard reject.
+ */
 function approachAwayExtraCost(profile, dFromMeters, dToMeters, abMeters, minAwayMeters, _regionId) {
   const away = dToMeters - dFromMeters;
   const minAway = minAwayMeters == null ? 50 : minAwayMeters;
@@ -205,33 +211,34 @@ function approachAwayExtraCost(profile, dFromMeters, dToMeters, abMeters, minAwa
   const ab = abMeters > 0 ? abMeters : 0;
   const kmAway = away / 1000;
   if (profile === "dirt") {
-    const mid = kmAway * 1.45;
+    // Applied with DIRT_RIDE_AWAY_SCALE (×10) in pavement mode → ~95–150/km.
+    const mid = kmAway * 9.5;
     const horizon = 2500;
     let near = 0;
     if (dFrom < horizon) {
       const t = 1 - dFrom / horizon;
-      near = kmAway * (0.12 + t * t * 0.9);
+      near = kmAway * (2.0 + t * t * 6.0);
     }
-    const raw = mid + near;
-    const cap = kmAway * 16.0 * 0.12;
-    return Math.min(raw, cap);
+    return mid + near;
   }
   if (profile === "direct") {
     const nearBand = Math.max(3200, ab * 0.3);
-    return kmAway * (dFrom < nearBand ? 12 : 7);
+    return kmAway * (dFrom < nearBand ? 200 : 150);
   }
   if (profile === "balanced") {
-    const mid = kmAway * 2.2;
+    const mid = kmAway * 180;
     const horizon = Math.max(4000, ab * 0.2);
     let near = 0;
     if (dFrom < horizon) {
       const t = 1 - dFrom / horizon;
-      near = kmAway * (0.4 + t * t * 2.4);
+      near = kmAway * (20 + t * t * 60);
     }
     return mid + near;
   }
-  const nearBand = Math.max(2800, ab * 0.28);
-  return kmAway * (dFrom < nearBand ? 6.5 : 3.2);
+  // cleanest — soft fan is corridorCrossTrackExtra only. A hard away-tax made
+  // coastal arterial dips lose to 3× paved rings that monotonically approach B.
+  if (profile === "cleanest") return 0;
+  return 0;
 }
 
 /** Clean: local/service expensive unless the pin is in that town (~2.5 km of B). */
@@ -341,11 +348,15 @@ function crossTrackMeters(point, a, b) {
   return Math.asin(Math.sin(d13) * Math.sin(t13 - t12)) * EARTH_RADIUS_M;
 }
 
-/** Corridor off-line tax. Direct strongest, then Balanced, then Dirt. */
+/** Corridor off-line tax. Direct strongest, then Clean/Balanced, then Dirt. */
 function directCrossTrackExtra(profile, point, lineFrom, lineTo, edgeMeters) {
   if (!(edgeMeters > 0) || !point || !lineFrom || !lineTo) return 0;
   const k =
-    profile === "direct" ? 0.018 : profile === "balanced" ? 0.014 : profile === "dirt" ? 0.005 : 0;
+    profile === "direct" ? 0.018
+      : profile === "cleanest" ? 0.006
+        : profile === "balanced" ? 0.014
+          : profile === "dirt" ? 0.005
+            : 0;
   if (!k) return 0;
   const xtKm = Math.abs(crossTrackMeters(point, lineFrom, lineTo)) / 1000;
   return (edgeMeters / 1000) * xtKm * xtKm * k;

@@ -119,10 +119,9 @@ struct HopSearchPolicyTests {
         #expect(HopSearchPolicy.corridorMeters(for: .direct) == 15_000)
         #expect(HopSearchPolicy.corridorMeters(for: .dirt) == 60_000)
         #expect(HopSearchPolicy.corridorMeters(for: .balanced) == 40_000)
-        #expect(HopSearchPolicy.corridorMeters(for: .cleanest) == 25_000)
-        #expect(HopSearchPolicy.cleanProgressRegressionMeters == 20_000)
+        #expect(HopSearchPolicy.corridorMeters(for: .cleanest) == nil)
         #expect(HopSearchPolicy.extraBudget(shortestMeters: 100_000, for: .direct) == 115_000)
-        #expect(HopSearchPolicy.extraBudget(shortestMeters: 100_000, for: .cleanest) == 125_000)
+        #expect(HopSearchPolicy.extraBudget(shortestMeters: 100_000, for: .cleanest) == nil)
     }
 
     @Test func ratioBucketsSplitTheTenPointBand() {

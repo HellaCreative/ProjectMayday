@@ -182,7 +182,7 @@ nonisolated struct OnDeviceRouter {
             pavedOnly: profile == .cleanest,
             urbanCoreFallback: false,
             settlementWall: false,
-            settlementFallback: true
+            settlementFallback: profile != .cleanest
         )
         guard profile == .cleanest else {
             guard case .failure(.noPath) = pavedWall else { return pavedWall }
@@ -213,8 +213,7 @@ nonisolated struct OnDeviceRouter {
         case .failure: return pavedWall
         }
 
-        // Unpaved last resort only after paved-only already exhausted every
-        // Clean corridor width inside routeDetailedOnce (incl. unbounded).
+        // Unpaved only after paved fabric proved noPath.
         let anySurfaceWall = routeDetailedOnce(
             from: from, to: to, profile: profile,
             allowUnknown: allowUnknown, avoidEdgeIds: avoidEdgeIds,
@@ -227,7 +226,7 @@ nonisolated struct OnDeviceRouter {
             pavedOnly: false,
             urbanCoreFallback: false,
             settlementWall: false,
-            settlementFallback: true
+            settlementFallback: false
         )
         switch anySurfaceWall {
         case .success(var route):
@@ -239,58 +238,7 @@ nonisolated struct OnDeviceRouter {
         case .failure: return anySurfaceWall
         }
 
-        // Preserve the major urban wall while relaxing smaller settlements.
-        let pavedSettlementFallback = routeDetailedOnce(
-            from: from, to: to, profile: profile,
-            allowUnknown: allowUnknown, avoidEdgeIds: avoidEdgeIds,
-            sessionSeed: sessionSeed ?? self.sessionSeed,
-            maxRouteMeters: maxRouteMeters,
-            priorEdgeIds: priorEdgeIds,
-            arrivalEdgeId: arrivalEdgeId,
-            backtrackFactor: backtrackFactor,
-            cityWall: true,
-            pavedOnly: true,
-            urbanCoreFallback: false,
-            settlementWall: false,
-            settlementFallback: true
-        )
-        switch pavedSettlementFallback {
-        case .success(var route):
-            route.searchMeta.settlementFallbackUsed = true
-            route.debugNote += route.debugNote.isEmpty
-                ? "settlementFallback=lastResort"
-                : " settlementFallback=lastResort"
-            return .success(route)
-        case .failure(.noPath): break
-        case .failure: return pavedSettlementFallback
-        }
-        let anySurfaceSettlementFallback = routeDetailedOnce(
-            from: from, to: to, profile: profile,
-            allowUnknown: allowUnknown, avoidEdgeIds: avoidEdgeIds,
-            sessionSeed: sessionSeed ?? self.sessionSeed,
-            maxRouteMeters: maxRouteMeters,
-            priorEdgeIds: priorEdgeIds,
-            arrivalEdgeId: arrivalEdgeId,
-            backtrackFactor: backtrackFactor,
-            cityWall: true,
-            pavedOnly: false,
-            urbanCoreFallback: false,
-            settlementWall: false,
-            settlementFallback: true
-        )
-        switch anySurfaceSettlementFallback {
-        case .success(var route):
-            route.searchMeta.cleanUnpavedFallbackUsed = true
-            route.searchMeta.settlementFallbackUsed = true
-            route.debugNote += route.debugNote.isEmpty
-                ? "cleanUnpavedFallback=lastResort settlementFallback=lastResort"
-                : " cleanUnpavedFallback=lastResort settlementFallback=lastResort"
-            return .success(route)
-        case .failure(.noPath): break
-        case .failure: return anySurfaceSettlementFallback
-        }
-
-        // Only a proven no-path result with the wall intact unlocks a crossing.
+        // Major urban core / motorway last resort after proved noPath only.
         let pavedUrbanFallback = routeDetailedOnce(
             from: from, to: to, profile: profile,
             allowUnknown: allowUnknown, avoidEdgeIds: avoidEdgeIds,
@@ -303,7 +251,7 @@ nonisolated struct OnDeviceRouter {
             pavedOnly: true,
             urbanCoreFallback: true,
             settlementWall: false,
-            settlementFallback: true
+            settlementFallback: false
         )
         let fallback: Swift.Result<Result, Failure>
         switch pavedUrbanFallback {
@@ -322,14 +270,13 @@ nonisolated struct OnDeviceRouter {
                 pavedOnly: false,
                 urbanCoreFallback: true,
                 settlementWall: false,
-                settlementFallback: true
+                settlementFallback: false
             )
         case .failure:
             return pavedUrbanFallback
         }
         guard case .success(var route) = fallback else { return fallback }
         route.searchMeta.urbanCoreFallbackUsed = true
-        route.searchMeta.settlementFallbackUsed = true
         if case .failure(.noPath) = pavedUrbanFallback {
             route.searchMeta.cleanUnpavedFallbackUsed = true
         }
@@ -676,47 +623,34 @@ nonisolated struct OnDeviceRouter {
             return .failure(lastEnvelopeFailure)
         }
 
-        // Clean: pavement hard, corridor soft. Exhaust paved widen before caller
-        // may open unpaved last resort. Always honor ctx.pavedOnly.
+        // Clean law: one paved fabric search — no corridor ladder, no regression wall.
         if profile == .cleanest {
-            let base = HopSearchPolicy.cleanCorridorMeters
-            let multipliers: [Double] = [1, 2, 3, 4, 6, 8, 12, 16, 24]
-            var lastEnvelopeFailure: Failure = .noPath
-            var attemptNote: [String] = []
-            for width in multipliers.map({ base * $0 }) + [0] {
-                var envelope = ctx
-                envelope.costMode = .profile
-                envelope.variety = false
-                // Never drop pavedOnly while widening Clean.
-                envelope.pavedOnly = ctx.pavedOnly
-                envelope.corridorMeters = width > 0 ? width : nil
-                envelope.hardCorridor = width > 0
-                envelope.boundedSearch = true
-                // Fresh budget per band so one tight corridor cannot abort the ladder.
-                envelope.timeCapSeconds = ctx.pavedOnly ? 5.0 : HopSearchPolicy.pass2TimeCapSeconds
-                envelope.popCap = HopSearchPolicy.pass2PopCap
-                envelope.maxPathMeters = maxRouteMeters
-                lastFailure = .noPath
-                switch runProfile(envelope) {
-                case .success(var route):
-                    route.searchMeta.rideObjective = "practical-pavement"
-                    route.searchMeta.corridorMeters = width > 0 ? width : nil
-                    route.searchMeta.corridorWidened = width > base
-                    route.searchMeta.maxCrossTrackMeters = HopSearchPolicy.maxCrossTrackMeters(
-                        coordinates: route.coordinates, start: from, end: to
-                    )
-                    let note = "objective=practical-pavement corridor=\(Int(width))m pavedOnly=\(ctx.pavedOnly ? 1 : 0)"
-                    route.debugNote = route.debugNote.isEmpty ? note : route.debugNote + " " + note
-                    return .success(route)
-                case .failure(let failure):
-                    lastEnvelopeFailure = failure
-                    attemptNote.append("\(Int(width))m:\(String(describing: failure))")
-                }
+            var envelope = ctx
+            envelope.costMode = .profile
+            envelope.variety = false
+            envelope.pavedOnly = ctx.pavedOnly
+            envelope.corridorMeters = nil
+            envelope.hardCorridor = false
+            envelope.boundedSearch = true
+            envelope.settlementWall = false
+            envelope.settlementFallback = false
+            envelope.timeCapSeconds = ctx.pavedOnly ? 12.0 : HopSearchPolicy.pass2TimeCapSeconds
+            envelope.popCap = HopSearchPolicy.pass2PopCap
+            envelope.maxPathMeters = maxRouteMeters
+            switch runProfile(envelope) {
+            case .success(var route):
+                route.searchMeta.rideObjective = "practical-pavement"
+                route.searchMeta.corridorMeters = nil
+                route.searchMeta.corridorWidened = false
+                route.searchMeta.maxCrossTrackMeters = HopSearchPolicy.maxCrossTrackMeters(
+                    coordinates: route.coordinates, start: from, end: to
+                )
+                let note = "objective=practical-pavement pavedOnly=\(ctx.pavedOnly ? 1 : 0)"
+                route.debugNote = route.debugNote.isEmpty ? note : route.debugNote + " " + note
+                return .success(route)
+            case .failure(let failure):
+                return .failure(failure)
             }
-            if !attemptNote.isEmpty {
-                lastFailure = lastEnvelopeFailure
-            }
-            return .failure(lastEnvelopeFailure)
         }
 
         if let policyExtra = HopSearchPolicy.corridorMeters(for: profile) {
@@ -977,7 +911,7 @@ nonisolated struct OnDeviceRouter {
 
         switch (profile, role) {
         case (.cleanest, _):
-            if surfaceName == "paved" { score -= 30 }
+            break // nearest eligible — never prefer pavement
         case (_, .start) where profile != .cleanest:
             if surfaceName != "paved" { score -= 22 }
             if OnDeviceProfileCosts.isAdventureRoadClass(roadClass) { score -= 12 }
@@ -1052,7 +986,11 @@ nonisolated struct OnDeviceRouter {
         if startSnap.edgeIndex >= 0,
            startSnap.edgeIndex == endSnap.edgeIndex,
            abs(startSnap.distanceAlongM - endSnap.distanceAlongM) > 1 {
-            if edgeBlockedByPavedOnly(startSnap.edgeIndex, ctx: ctx) {
+            // Snapped A/B edge is always traversable under Clean law.
+            if edgeBlockedByPavedOnly(
+                startSnap.edgeIndex, ctx: ctx,
+                allowSnapEdges: startSnap.edgeIndex, endEi: endSnap.edgeIndex
+            ) {
                 return .failure(.noPath)
             }
             if let same = sameEdgeResult(from: from, to: to, startSnap: startSnap, endSnap: endSnap) {
@@ -1279,6 +1217,8 @@ nonisolated struct OnDeviceRouter {
         linkVirt(vEndB)
         if vBetween >= 0 { linkVirt(vBetween) }
 
+        let coincidentSiblings: [[Int]?] = profile == .cleanest ? coincidentSiblingLists() : []
+
         // Join near-miss fabric tips so Allow OFF works
         // on NS OSM+NSTDB packs (Farm Road / driveway → public road).
         let stitches = junctionStitches(
@@ -1394,7 +1334,7 @@ nonisolated struct OnDeviceRouter {
                     let attr = pack.edgeAttrs[ei]
                     let access = GraphV2Pack.unpackAccess(attr)
                     if !accessAllowed(access, allowUnknown: policyUnknown, profile: profile) { continue }
-                    if edgeBlockedByPavedOnly(ei, ctx: ctx) { continue }
+                    if edgeBlockedByPavedOnly(ei, ctx: ctx, allowSnapEdges: startEi, endEi: endEi) { continue }
                     let eid = pack.edgeId(ei)
                     if !eid.isEmpty, avoidEdgeIds.contains(eid) { continue }
 
@@ -1487,11 +1427,49 @@ nonisolated struct OnDeviceRouter {
                 }
             }
 
+            if profile == .cleanest, cur.node < n,
+               let sibs = coincidentSiblings[cur.node] {
+                for toNode in sibs {
+                    let cost = cur.cost
+                    let newMeters = pathMeters[cur.node]
+                    var action = HopSearchPolicy.considerRelax(
+                        newCost: cost,
+                        oldCost: dist[toNode],
+                        newEi: -1,
+                        oldEi: prevData[toNode],
+                        node: toNode,
+                        newIsDirt: false,
+                        oldIsDirt: false,
+                        seed: ctx.sessionSeed,
+                        variety: false,
+                        slotsUsed: Int(slots[toNode])
+                    )
+                    if action == .stealPred, HopSearchPolicy.createsCycle(prev: prev, from: cur.node, through: toNode) {
+                        action = .reject
+                    }
+                    if HopSearchPolicy.apply(action, slots: &slots, at: toNode) {
+                        prev[toNode] = cur.node
+                        prevKind[toNode] = 2
+                        prevData[toNode] = -1
+                        prevForward[toNode] = true
+                        if HopSearchPolicy.shouldPush(action) {
+                            dist[toNode] = cost
+                            pathMeters[toNode] = newMeters
+                            heap.push(node: toNode, cost: cost)
+                        }
+                    }
+                }
+            }
+
             if let vlist = virtAdj[cur.node] {
                 for item in vlist {
                     let v = virt[item.id]
                     if ctx.pavedOnly {
-                        if v.junctionStitch || (v.ei >= 0 && edgeBlockedForCleanPavement(v.ei)) { continue }
+                        if v.junctionStitch { continue }
+                        if v.ei >= 0,
+                           edgeBlockedByPavedOnly(v.ei, ctx: ctx, allowSnapEdges: startEi, endEi: endEi) {
+                            continue
+                        }
                     }
                     if ctx.noBacktrack, v.ei >= 0,
                        isBacktrack(prevKind: prevKind[cur.node], prevData: prevData[cur.node], ei: v.ei, virt: virt) {
@@ -1617,6 +1595,8 @@ nonisolated struct OnDeviceRouter {
                         roadClassName: v.junctionStitch ? "unknown" : roadClassNameForEdge(v.ei)
                     ))
                 }
+            } else if prevKind[node] == 2 {
+                // Coincident duplicate-node stitch — no geometry.
             } else {
                 let ei = prevData[node]
                 let aNode = parent
@@ -1673,6 +1653,8 @@ nonisolated struct OnDeviceRouter {
         ctx: HopSearchContext,
         slackToDest: [Double]?
     ) -> Swift.Result<Result, Failure> {
+        let startEi = startSnap.edgeIndex
+        let endEi = endSnap.edgeIndex
         let B = HopSearchPolicy.balancedBuckets
         let totalNodes = n + 2
         let labels = totalNodes * B
@@ -1732,7 +1714,7 @@ nonisolated struct OnDeviceRouter {
                     let attr = pack.edgeAttrs[ei]
                     let access = GraphV2Pack.unpackAccess(attr)
                     if !accessAllowed(access, allowUnknown: policyUnknown, profile: profile) { continue }
-                    if edgeBlockedByPavedOnly(ei, ctx: ctx) { continue }
+                    if edgeBlockedByPavedOnly(ei, ctx: ctx, allowSnapEdges: startEi, endEi: endEi) { continue }
                     let eid = pack.edgeId(ei)
                     if !eid.isEmpty, avoidEdgeIds.contains(eid) { continue }
                     let toLL = coordinate(forNode: toNode)
@@ -1798,7 +1780,11 @@ nonisolated struct OnDeviceRouter {
                 for item in vlist {
                     let v = virt[item.id]
                     if ctx.pavedOnly {
-                        if v.junctionStitch || (v.ei >= 0 && edgeBlockedForCleanPavement(v.ei)) { continue }
+                        if v.junctionStitch { continue }
+                        if v.ei >= 0,
+                           edgeBlockedByPavedOnly(v.ei, ctx: ctx, allowSnapEdges: startEi, endEi: endEi) {
+                            continue
+                        }
                     }
                     let newMeters = metersSoFar + v.meters
                     if exceedsLengthSlack(
@@ -2334,6 +2320,8 @@ nonisolated struct OnDeviceRouter {
         avoidEdgeIds: Set<String>,
         ctx: HopSearchContext
     ) -> Swift.Result<Result, Failure> {
+        let startEi = startSnap.edgeIndex
+        let endEi = endSnap.edgeIndex
         let start = preferredNode(for: startSnap, toward: to)
         let end = preferredNode(for: endSnap, toward: from)
         if start == end {
@@ -2380,7 +2368,7 @@ nonisolated struct OnDeviceRouter {
                     let attr = pack.edgeAttrs[ei]
                     let access = GraphV2Pack.unpackAccess(attr)
                     if !accessAllowed(access, allowUnknown: policyUnknown, profile: profile) { continue }
-                    if edgeBlockedByPavedOnly(ei, ctx: ctx) { continue }
+                    if edgeBlockedByPavedOnly(ei, ctx: ctx, allowSnapEdges: startEi, endEi: endEi) { continue }
                     let eid = pack.edgeId(ei)
                     if !eid.isEmpty, avoidEdgeIds.contains(eid) { continue }
                     if ctx.noBacktrack, prevEdge[cur.node] == ei { continue }
@@ -3144,9 +3132,42 @@ nonisolated struct OnDeviceRouter {
         )
     }
 
-    private func edgeBlockedByPavedOnly(_ ei: Int, ctx: HopSearchContext) -> Bool {
+    private func edgeBlockedByPavedOnly(
+        _ ei: Int,
+        ctx: HopSearchContext,
+        allowSnapEdges startEi: Int = -1,
+        endEi: Int = -1
+    ) -> Bool {
         guard ctx.pavedOnly else { return false }
+        if ei == startEi || ei == endEi { return false }
         return edgeBlockedForCleanPavement(ei)
+    }
+
+    /// Clean: pack duplicate nodes within `cleanCoincidentNodeMeters` share a place.
+    private func coincidentSiblingLists() -> [[Int]?] {
+        let n = pack.nodeCount
+        var lists = [[Int]?](repeating: nil, count: n)
+        let epsilon = HopSearchPolicy.cleanCoincidentNodeMeters
+        let qLat = epsilon / 111_000.0
+        var buckets: [String: [Int]] = [:]
+        for i in 0..<n {
+            let ll = coordinate(forNode: i)
+            let cos = max(0.2, cos(ll.latitude * .pi / 180))
+            let qLon = epsilon / (111_000.0 * cos)
+            let key = "\(Int((ll.longitude / qLon).rounded())):\(Int((ll.latitude / qLat).rounded()))"
+            buckets[key, default: []].append(i)
+        }
+        for group in buckets.values where group.count >= 2 {
+            for (idx, id) in group.enumerated() {
+                var others: [Int] = []
+                others.reserveCapacity(group.count - 1)
+                for (j, other) in group.enumerated() where j != idx {
+                    others.append(other)
+                }
+                lists[id] = others
+            }
+        }
+        return lists
     }
 
     private func isBacktrack(

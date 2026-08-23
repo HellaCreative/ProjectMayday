@@ -12,12 +12,9 @@ nonisolated enum HopSearchPolicy {
     static let dirtCorridorMeters: Double = 60_000
     /// Safety ceiling only — Balanced shaping is the 45–55% dirt ratio.
     static let balancedCorridorMeters: Double = 40_000
-    /// Clean is practical A→B — tight band like Direct/Balanced, never unbounded.
-    static let cleanCorridorMeters: Double = 25_000
-    /// Hard along-track backtrack ceiling for Clean finite corridors.
-    /// Lockstep: `MAX_PROGRESS_REGRESSION_M.cleanest` in hop-search.js (20 km —
-    /// 8 km blocked NS arterial past Digby-side inlet; soft away-tax still applies).
-    static let cleanProgressRegressionMeters: Double = 20_000
+    /// Clean has no corridor product rule (soft forward fan only).
+    /// Pack duplicate nodes within this radius are treated as one place for Clean.
+    static let cleanCoincidentNodeMeters: Double = 2
     /// Choice set: paths within this fraction of the incumbent score (5–10% band).
     static let varietyMargin: Double = 0.08
     /// Max near-equal labels expanded per node. Bounds heap growth when the
@@ -204,7 +201,7 @@ nonisolated enum HopSearchPolicy {
         case .direct: return directCorridorMeters
         case .dirt: return dirtCorridorMeters
         case .balanced: return balancedCorridorMeters
-        case .cleanest: return cleanCorridorMeters
+        case .cleanest: return nil
         }
     }
 

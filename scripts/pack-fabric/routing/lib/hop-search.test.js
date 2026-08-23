@@ -6,10 +6,10 @@ const {
   DIRECT_CORRIDOR_M,
   BALANCED_CORRIDOR_M,
   DIRT_CORRIDOR_M,
-  CLEAN_CORRIDOR_M,
   projectedProgressMeters,
   maxProgressRegressionMeters,
   progressRegressionForAttempt,
+  corridorMetersForProfile,
   pickResourceEnd,
   dirtRideCostPerKm,
   routeShapeMetrics,
@@ -75,19 +75,16 @@ test("Clean pavement gate blocks gravel and untagged minor roads", () => {
   assert.equal(isDirtSurface("unknown", "local"), false);
 });
 
-test("adventure corridors widen from Direct to Clean to Balanced to Dirt", () => {
-  assert.ok(DIRECT_CORRIDOR_M < CLEAN_CORRIDOR_M);
-  assert.ok(CLEAN_CORRIDOR_M < BALANCED_CORRIDOR_M);
+test("adventure corridors widen from Direct to Balanced to Dirt", () => {
+  assert.ok(DIRECT_CORRIDOR_M < BALANCED_CORRIDOR_M);
   assert.ok(BALANCED_CORRIDOR_M < DIRT_CORRIDOR_M);
-  assert.equal(CLEAN_CORRIDOR_M, 25000);
   assert.equal(DIRT_CORRIDOR_M, 60000);
+  assert.equal(corridorMetersForProfile("cleanest"), null);
 });
 
-test("Clean has a forward regression ceiling like other profiles", () => {
-  assert.ok(maxProgressRegressionMeters("cleanest") < maxProgressRegressionMeters("dirt") * 2);
-  assert.ok(maxProgressRegressionMeters("direct") < maxProgressRegressionMeters("cleanest"));
-  // Must clear ~15 km arterial backtracks (NS corridor cliff).
-  assert.ok(maxProgressRegressionMeters("cleanest") >= 20000);
+test("Clean has no hard forward regression ceiling", () => {
+  assert.equal(maxProgressRegressionMeters("cleanest"), Infinity);
+  assert.ok(maxProgressRegressionMeters("direct") < maxProgressRegressionMeters("dirt"));
 });
 
 test("progress is measured along A to B without a reference route", () => {
