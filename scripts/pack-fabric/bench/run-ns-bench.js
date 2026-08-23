@@ -113,7 +113,7 @@ function locationsFor(route) {
 }
 
 function validateFixtures(routes) {
-  if (!Array.isArray(routes) || routes.length !== 8) throw new Error("Expected exactly eight NS benchmark routes");
+  if (!Array.isArray(routes) || routes.length !== 9) throw new Error("Expected exactly nine NS benchmark routes");
   const ids = new Set();
   for (const route of routes) {
     if (!route.id || ids.has(route.id)) throw new Error(`Invalid or duplicate route id: ${route.id}`);

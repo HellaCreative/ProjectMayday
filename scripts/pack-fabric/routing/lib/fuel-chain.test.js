@@ -4,10 +4,17 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 const {
   fuelNeedForProfileRide,
+  fuelPlanStatus,
   planFuelChainOnRuntime,
   rankForwardFuel,
   stationEligibility
 } = require("./fuel-chain");
+
+test("an exhausted graph is a gap but a planning timeout is inconclusive", () => {
+  assert.equal(fuelPlanStatus({ ok: false, error: "no_route_connected_fuel_chain" }), "gap");
+  assert.equal(fuelPlanStatus({ ok: false, error: "window_time_budget" }), "failed");
+  assert.equal(fuelPlanStatus({ ok: true }), "complete");
+});
 
 function lineRuntime() {
   const nodes = [];
@@ -290,6 +297,68 @@ test("profile ride length requires Dirt fuel even when shortest reachability fit
   });
   assert.equal(clean.ok, true);
   assert.deepEqual(clean.stops, []);
+});
+
+for (const profile of ["dirt", "balanced"]) {
+  test(`${profile} keeps a completed viable pump when evaluation crosses the window deadline`, async () => {
+    const result = await planFuelChainOnRuntime({
+      runtime: lineRuntime(),
+      stations: [station("mid", 1)],
+      start: { lat: 45, lon: 0 },
+      destination: { lat: 45, lon: 2 },
+      profile,
+      accessPolicy: { motorizedPermissive: true, motorizedUnknown: false },
+      usableRangeMeters: 90_000,
+      firstLegMaxMeters: 90_000,
+      requireFuelStopBeforeEnd: true,
+      minimumFuelStops: 1,
+      timeBudgetMs: 1,
+      routeCandidate: ({ candidate }) => new Promise((resolve) => {
+        setTimeout(() => resolve({
+          status: "complete",
+          distanceMeters: candidate.graphMeters,
+          stats: { dirtPercent: profile === "dirt" ? 80 : 50 },
+          segments: []
+        }), 5);
+      })
+    });
+
+    assert.equal(result.ok, true);
+    assert.deepEqual(result.stops.map((row) => row.id), ["mid"]);
+    assert.equal(result.graphMeters.length, 2);
+    assert.ok(result.graphMeters.every((meters) => meters <= 90_000));
+  });
+}
+
+test("a pump is not committed until the active profile routes its continuation", async () => {
+  const result = await planFuelChainOnRuntime({
+    runtime: lineRuntime(),
+    stations: [station("early", 1), station("late", 1.5)],
+    start: { lat: 45, lon: 0 },
+    destination: { lat: 45, lon: 2 },
+    profile: "dirt",
+    accessPolicy: { motorizedPermissive: true, motorizedUnknown: false },
+    usableRangeMeters: 170_000,
+    firstLegMaxMeters: 170_000,
+    requireFuelStopBeforeEnd: true,
+    minimumFuelStops: 1,
+    routeCandidate: ({ candidate }) => {
+      const isDestination = candidate.station.id === "__destination__";
+      if (isDestination && Number(candidate.graphMeters) < 60_000) {
+        return Promise.resolve({ status: "no_route", distanceMeters: null, segments: [] });
+      }
+      return Promise.resolve({
+        status: "complete",
+        distanceMeters: candidate.graphMeters,
+        stats: { dirtPercent: 80 },
+        segments: []
+      });
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.stops.map((row) => row.id), ["early"]);
+  assert.equal(result.graphMeters.length, 2);
 });
 
 test("refuel-before-waypoint leaves enough fuel for the known next rider leg", async () => {

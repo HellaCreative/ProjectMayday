@@ -59,6 +59,13 @@ function fuelNeedForProfileRide(profileMeters, firstLegMaxMeters, usableRangeMet
   return Math.ceil((meters - firstCap) / usable);
 }
 
+function fuelPlanStatus(planned) {
+  if (planned && planned.ok) return "complete";
+  return planned && planned.error === "no_route_connected_fuel_chain"
+    ? "gap"
+    : "failed";
+}
+
 class MinHeap {
   constructor() { this.items = []; }
   push(item) {
@@ -567,6 +574,32 @@ async function planFuelChainOnRuntime({
     return result;
   }
 
+  const evaluateProfileHop = routeCandidate || (async ({
+    candidate, from, maxMeters, priorEdgeIds: evaluationHistory, arrivalEdgeId: evaluationArrival
+  }) => routeRequest({
+    profile,
+    locations: [from, candidate.location],
+    accessPolicy: rawPolicy,
+    options: {
+      avoidEdgeIds,
+      priorEdgeIds: [...(evaluationHistory || [])],
+      arrivalEdgeId: evaluationArrival,
+      backtrackFactor,
+      directExtraBudgetMeters: profile === "direct" ? 0 : undefined,
+      maxPathMeters: maxMeters
+    }
+  }));
+
+  function destinationCandidate(graphMeters) {
+    return {
+      station: { id: "__destination__", name: "Destination" },
+      location: destination,
+      match: targets.destinationMatch,
+      graphMeters,
+      remainingGraphMeters: 0
+    };
+  }
+
   async function evaluatedRoutes(ranked, currentKey, currentLocation, cap, visited, history, arrival) {
     const candidates = [];
     const stationLocations = new Set();
@@ -617,22 +650,13 @@ async function planFuelChainOnRuntime({
       if (!candidates.includes(candidate)) candidates.push(candidate);
     }
     const hopStarted = Date.now();
-    const evaluate = routeCandidate || (async ({ candidate, from, maxMeters }) => routeRequest({
-      profile,
-      locations: [from, candidate.location],
-      accessPolicy: rawPolicy,
-      options: {
-        avoidEdgeIds,
-        priorEdgeIds: [...history],
-        arrivalEdgeId: arrival,
-        backtrackFactor,
-        directExtraBudgetMeters: profile === "direct" ? 0 : undefined,
-        maxPathMeters: maxMeters
-      }
-    }));
-    const rows = await Promise.all(candidates.map(async (candidate, rank) => {
+    const rows = [];
+    const adventureProfile = profile === "dirt" || profile === "balanced";
+    async function evaluateCandidate(candidate, rank) {
+      let row;
+      let diagnostic;
       try {
-        const response = await evaluate({
+        const response = await evaluateProfileHop({
           candidate,
           from: currentLocation,
           maxMeters: cap,
@@ -646,13 +670,18 @@ async function planFuelChainOnRuntime({
         const dirtPct = Number(response && response.stats && response.stats.dirtPercent);
         const fits = response && response.status === "complete"
           && Number.isFinite(meters) && meters <= cap + 1;
-        const row = {
+        row = {
           candidate,
           response,
           rank,
           meters: Number.isFinite(meters) ? meters : candidate.graphMeters,
           dirtPct: Number.isFinite(dirtPct) ? dirtPct : 0,
-          fits
+          chainDirtPct: Number.isFinite(dirtPct) ? dirtPct : 0,
+          fits,
+          continuationDestinationMeters: null,
+          continuationResponse: null,
+          hasForwardStation: false,
+          validForward: false
         };
         let validForward = false;
         if (fits) {
@@ -676,12 +705,52 @@ async function planFuelChainOnRuntime({
             new Set([...visited, String(candidate.station.id)]),
             profile
           );
+          row.continuationDestinationMeters = Number.isFinite(continuation.destinationMeters)
+            ? continuation.destinationMeters
+            : null;
+          if (
+            Number.isFinite(continuation.destinationMeters) &&
+            continuation.destinationMeters <= usableRangeMeters + 1
+          ) {
+            const continuationResponse = await evaluateProfileHop({
+              candidate: destinationCandidate(continuation.destinationMeters),
+              from: candidate.location,
+              maxMeters: usableRangeMeters,
+              profile,
+              accessPolicy: rawPolicy,
+              priorEdgeIds: [...nextHistory],
+              arrivalEdgeId: nextArrival,
+              backtrackFactor
+            });
+            const routedContinuationMeters = Number(
+              continuationResponse && continuationResponse.distanceMeters
+            );
+            if (
+              continuationResponse && continuationResponse.status === "complete" &&
+              Number.isFinite(routedContinuationMeters) &&
+              routedContinuationMeters <= usableRangeMeters + 1
+            ) {
+              row.continuationResponse = continuationResponse;
+              row.continuationDestinationMeters = routedContinuationMeters;
+              const continuationDirtPct = Number(
+                continuationResponse.stats && continuationResponse.stats.dirtPercent
+              );
+              if (Number.isFinite(continuationDirtPct)) {
+                row.chainDirtPct = (
+                  row.meters * row.dirtPct + routedContinuationMeters * continuationDirtPct
+                ) / (row.meters + routedContinuationMeters);
+              }
+            } else {
+              row.continuationDestinationMeters = null;
+            }
+          }
+          row.hasForwardStation = forwardStations.length > 0;
           validForward = (
-            Number.isFinite(continuation.destinationMeters)
-              && continuation.destinationMeters <= usableRangeMeters + 1
+            row.continuationResponse != null
           ) || forwardStations.length > 0;
         }
-        stationCandidates.push({
+        row.validForward = validForward;
+        diagnostic = {
           id: String(candidate.station.id),
           departureId: currentKey,
           latitude: Number(candidate.location.lat),
@@ -693,10 +762,9 @@ async function planFuelChainOnRuntime({
           remainingGraphMeters: Number.isFinite(candidate.remainingGraphMeters)
             ? Math.round(candidate.remainingGraphMeters)
             : null
-        });
-        return row;
+        };
       } catch (_) {
-        stationCandidates.push({
+        diagnostic = {
           id: String(candidate.station.id),
           departureId: currentKey,
           latitude: Number(candidate.location.lat),
@@ -704,14 +772,61 @@ async function planFuelChainOnRuntime({
           name: candidate.station.name || candidate.station.brand || "Fuel stop",
           meters: Math.round(candidate.graphMeters),
           dirtPct: 0,
+          chainDirtPct: 0,
           validForward: false,
           remainingGraphMeters: Number.isFinite(candidate.remainingGraphMeters)
             ? Math.round(candidate.remainingGraphMeters)
             : null
-        });
-        return { candidate, response: null, rank, meters: candidate.graphMeters, dirtPct: 0, fits: false };
+        };
+        row = {
+          candidate,
+          response: null,
+          rank,
+          meters: candidate.graphMeters,
+          dirtPct: 0,
+          fits: false,
+          continuationDestinationMeters: null,
+          continuationResponse: null,
+          hasForwardStation: false,
+          validForward: false
+        };
       }
-    }));
+      return { row, diagnostic };
+    }
+
+    // Adventure probes are expensive, but strictly sequential probing lets
+    // one slow rejected pump consume the whole window. Evaluate two choices
+    // concurrently, preserve rank order, and only launch another pair when no
+    // profile-quality forward-valid choice has been proven.
+    const batchSize = profile === "dirt"
+      ? 2
+      : (profile === "balanced" ? Math.min(4, Math.max(1, candidates.length)) : Math.max(1, candidates.length));
+    for (let startRank = 0; startRank < candidates.length; startRank += batchSize) {
+      if (rows.length > 0 && Date.now() >= deadline) break;
+      const batch = candidates.slice(startRank, startRank + batchSize);
+      const evaluatedBatch = await Promise.all(batch.map((candidate, offset) =>
+        evaluateCandidate(candidate, startRank + offset)
+      ));
+      evaluatedBatch.sort((a, b) => a.row.rank - b.row.rank);
+      for (const evaluated of evaluatedBatch) {
+        rows.push(evaluated.row);
+        stationCandidates.push(evaluated.diagnostic);
+      }
+      const hasProfileQualityChoice = rows.some((evaluated) => {
+        if (!(evaluated.fits && evaluated.validForward)) return false;
+        // Fuel continuity wins over surface quality. Dirt stops after the
+        // first bounded pair proves a usable chain; Balanced probes its small
+        // shortlist together so it can choose the closest whole-chain 50/50.
+        if (profile === "dirt") return true;
+        if (profile === "balanced") return Math.abs(evaluated.chainDirtPct - 50) <= 5;
+        return true;
+      });
+      if (
+        adventureProfile &&
+        rows.length >= 2 &&
+        hasProfileQualityChoice
+      ) break;
+    }
     const elapsed = Date.now() - hopStarted;
     maxHopMs = Math.max(maxHopMs, elapsed);
     void hopTimeBudgetMs;
@@ -719,14 +834,14 @@ async function planFuelChainOnRuntime({
     switch (String(profile || "").toLowerCase()) {
       case "dirt":
         fitting.sort((a, b) => {
-          const dirtDelta = b.dirtPct - a.dirtPct;
+          const dirtDelta = b.chainDirtPct - a.chainDirtPct;
           if (Math.abs(dirtDelta) > 5) return dirtDelta;
           return b.candidate.graphMeters - a.candidate.graphMeters || a.meters - b.meters;
         });
         break;
       case "balanced":
         fitting.sort((a, b) =>
-          Math.abs(a.dirtPct - 50) - Math.abs(b.dirtPct - 50) || a.meters - b.meters
+          Math.abs(a.chainDirtPct - 50) - Math.abs(b.chainDirtPct - 50) || a.meters - b.meters
         );
         break;
       case "cleanest":
@@ -828,7 +943,29 @@ async function planFuelChainOnRuntime({
       !(depth === 0 && requireFuelStopBeforeEnd) &&
       !mustContinueForProfileRide
     ) {
-      return { stops: [], graphMeters: [reach.destinationMeters] };
+      try {
+        const response = await evaluateProfileHop({
+          candidate: destinationCandidate(reach.destinationMeters),
+          from: currentLocation,
+          maxMeters: cap,
+          profile,
+          accessPolicy: rawPolicy,
+          priorEdgeIds: [...history],
+          arrivalEdgeId: arrival,
+          backtrackFactor
+        });
+        const routedMeters = Number(response && response.distanceMeters);
+        if (
+          response && response.status === "complete" &&
+          Number.isFinite(routedMeters) && routedMeters <= cap + 1 &&
+          (!Number.isFinite(destinationLimit) || routedMeters <= destinationLimit + 1)
+        ) {
+          return { stops: [], graphMeters: [routedMeters] };
+        }
+      } catch (_) {
+        // Graph reachability is only a candidate generator. Continue searching
+        // for a pump when the active profile cannot complete this final hop.
+      }
     }
     if (depth >= maxStops) {
       return allowPartialWindow && depth > 0
@@ -857,12 +994,41 @@ async function planFuelChainOnRuntime({
     const evaluated = await evaluatedRoutes(
       ranked, currentKey, currentLocation, cap, visited, history, arrival
     );
+    // Inspect every already-routed direct continuation before consulting the
+    // wall-clock budget. A slower rejected candidate must not hide a second
+    // candidate whose complete two-hop chain has already been proven.
+    for (const evaluation of evaluated) {
+      const continuationMeters = evaluation.continuationDestinationMeters == null
+        ? NaN
+        : Number(evaluation.continuationDestinationMeters);
+      const destinationLimitSatisfied = !Number.isFinite(destinationLimit)
+        || continuationMeters <= destinationLimit + 1;
+      const requiredStopsSatisfied = depth + 1 >= Math.max(0, Number(minimumFuelStops) || 0);
+      if (
+        evaluation.fits &&
+        Number.isFinite(continuationMeters) &&
+        continuationMeters <= usableRangeMeters + 1 &&
+        destinationLimitSatisfied &&
+        requiredStopsSatisfied
+      ) {
+        const candidate = evaluation.candidate;
+        return {
+          stops: [{
+            ...candidate.station,
+            graphMeters: evaluation.meters,
+            dirtPercent: evaluation.dirtPct
+          }],
+          graphMeters: [evaluation.meters, continuationMeters]
+        };
+      }
+    }
     for (const evaluation of evaluated) {
       if (Date.now() >= deadline) {
         timeBudgetExceeded = true;
         break;
       }
       if (states >= maxStates) break;
+      if (!evaluation.validForward) continue;
       const candidate = evaluation.candidate;
       const id = String(candidate.station.id);
       const nextVisited = new Set(visited);
@@ -1095,10 +1261,10 @@ async function planCrossRegionFuelChain(body, selection, fuelOptions, dependenci
     });
     if (!planned.ok) {
       clearGraphCache();
-      const gapResult = planned.error === "no_route_connected_fuel_chain"
-        || planned.error === "window_time_budget";
+      // A time budget is an inconclusive search, never proof of a physical
+      // fuel gap. Only an exhausted graph search may produce gap state.
       return {
-        status: gapResult ? "gap" : "failed",
+        status: fuelPlanStatus(planned),
         error: planned.error,
         message: `${planned.message || "No fuel chain found"} (regional segment ${i + 1}/${waypoints.length - 1})`,
         regionIds: selection.regionIds,
@@ -1326,12 +1492,10 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
     profileMeters
   });
 
-  const gapResult = !planned.ok && (
-    planned.error === "no_route_connected_fuel_chain" ||
-    planned.error === "window_time_budget"
-  );
+  // Do not offer auxiliary fuel for an incomplete computation. A timeout is a
+  // retryable planning failure; only an exhausted graph search proves a gap.
   return {
-    status: planned.ok ? "complete" : (gapResult ? "gap" : "failed"),
+    status: fuelPlanStatus(planned),
     error: planned.error || null,
     message: planned.message || null,
     serviceVersion: FUEL_CHAIN_SERVICE_VERSION,
@@ -1424,6 +1588,7 @@ module.exports = {
   rankForwardFuel,
   stationEligibility,
   fuelNeedForProfileRide,
+  fuelPlanStatus,
   planFuelChainOnRuntime,
   planCrossRegionFuelChain,
   planItineraryFuelChain,
