@@ -7,8 +7,10 @@
 const DIRECT_STRETCH = 1.2; // unused for Direct shaping — corridor replaced stretch-factor
 const BALANCED_STRETCH = 1.4; // compute prune only; corridor is the geographic ceiling
 const DIRECT_CORRIDOR_M = 15000;
-const DIRT_CORRIDOR_M = 50000;
+const DIRT_CORRIDOR_M = 60000;
 const BALANCED_CORRIDOR_M = 40000;
+/** Clean is practical A→B — tight band like Direct/Balanced, never unbounded. */
+const CLEAN_CORRIDOR_M = 25000;
 const VARIETY_MARGIN = 0.08;
 const VARIETY_SLOTS = 3;
 const BALANCED_DIRT_LO = 0.45;
@@ -20,7 +22,11 @@ const EARTH_RADIUS_M = 6371000;
 const MAX_PROGRESS_REGRESSION_M = Object.freeze({
   direct: 5000,
   balanced: 10000,
-  dirt: 15000
+  dirt: 15000,
+  // Soft away-tax is the forward fan. The hard ceiling must still allow a paved
+  // arterial to dip ~15 km along-track around inlets (NS Digby-side cliff:
+  // 8 km made every finite Clean corridor noPath while unbounded looped 177 km).
+  cleanest: 20000
 });
 // Dirt works back from 100%, but a kilometre of pavement cannot justify an
 // effectively unlimited dirt excursion. These are exchange rates, not a
@@ -115,9 +121,12 @@ function metroEdgeBlocks(fromLL, toLL, startLL, endLL, boxes = METRO_CORE_WALL) 
 /**
  * A relaxed wall is still expensive. This makes the last-resort search cross
  * the smallest necessary urban section instead of treating every city as open.
+ * Optional fromLL also taxes edges that tunnel through a core between nodes.
  */
-function urbanCoreFallbackMultiplier(lon, lat, startLL, endLL, boxes = METRO_CORE_WALL) {
-  return metroBlocks(lon, lat, startLL, endLL, boxes) ? 120 : 1;
+function urbanCoreFallbackMultiplier(lon, lat, startLL, endLL, boxes = METRO_CORE_WALL, fromLL = null) {
+  if (metroBlocks(lon, lat, startLL, endLL, boxes)) return 120;
+  if (fromLL && metroEdgeBlocks(fromLL, [lon, lat], startLL, endLL, boxes)) return 120;
+  return 1;
 }
 
 /** Smaller OSM place=city|town boxes receive scored avoidance. */
@@ -229,6 +238,7 @@ function corridorMetersForProfile(profile) {
   if (profile === "direct") return DIRECT_CORRIDOR_M;
   if (profile === "dirt") return DIRT_CORRIDOR_M;
   if (profile === "balanced") return BALANCED_CORRIDOR_M;
+  if (profile === "cleanest") return CLEAN_CORRIDOR_M;
   return null;
 }
 
@@ -295,8 +305,13 @@ function progressRegressionForAttempt(profile, corridorMeters) {
 }
 
 function hopBlocked(toLL, startLL, endLL, cityWall, boxes = METRO_CORE_WALL) {
-  if (!toLL) return false;
-  if (cityWall && metroBlocks(toLL[0], toLL[1], startLL, endLL, boxes)) return true;
+  // Urban cores are passable under urbanCoreFallbackMultiplier (×120).
+  // cityWall is retained for callers but no longer hard-blocks.
+  void toLL;
+  void startLL;
+  void endLL;
+  void cityWall;
+  void boxes;
   return false;
 }
 
@@ -400,6 +415,24 @@ function isDirtSurface(surfaceName, roadClassName) {
   );
 }
 
+/**
+ * Clean pavement gate: only genuine paved, or untagged surface on major
+ * paint-as-paved classes (freeway/arterial/ramp/collector). Gravel/track/
+ * access and untagged local/service are impassable under pavedOnly.
+ */
+function isBlockedForCleanPavement(surfaceName, roadClassName) {
+  if (surfaceName === "paved") return false;
+  if (surfaceName === "unknown") {
+    return !(
+      roadClassName === "freeway" ||
+      roadClassName === "arterial" ||
+      roadClassName === "ramp" ||
+      roadClassName === "collector"
+    );
+  }
+  return true;
+}
+
 function dirtRideCostPerKm(surfaceName, roadClassName, confidence) {
   if (!isDirtSurface(surfaceName, roadClassName)) return DIRT_RIDE_PAVED_PER_KM;
   let cost;
@@ -421,6 +454,7 @@ module.exports = {
   DIRECT_CORRIDOR_M,
   DIRT_CORRIDOR_M,
   BALANCED_CORRIDOR_M,
+  CLEAN_CORRIDOR_M,
   VARIETY_MARGIN,
   VARIETY_SLOTS,
   BALANCED_DIRT_LO,
@@ -444,6 +478,7 @@ module.exports = {
   shouldPush,
   createsCycle,
   isDirtSurface,
+  isBlockedForCleanPavement,
   dirtRideCostPerKm,
   DIRT_RIDE_PAVED_PER_KM,
   DIRT_RIDE_GRAVEL_PER_KM,

@@ -6,6 +6,7 @@ const {
   DIRECT_CORRIDOR_M,
   BALANCED_CORRIDOR_M,
   DIRT_CORRIDOR_M,
+  CLEAN_CORRIDOR_M,
   projectedProgressMeters,
   maxProgressRegressionMeters,
   progressRegressionForAttempt,
@@ -19,7 +20,7 @@ const {
   settlementFallbackMultiplier
 } = require("./hop-search");
 
-test("recognized urban cores are walls unless A or B is inside that core", () => {
+test("recognized urban cores are detected unless A or B is inside that core", () => {
   const outsideA = [-123.5, 49.7];
   const outsideB = [-119.1, 50.5];
   const vancouver = [-123.1, 49.25];
@@ -28,7 +29,7 @@ test("recognized urban cores are walls unless A or B is inside that core", () =>
   assert.equal(metroBlocks(vancouver[0], vancouver[1], outsideA, vancouver), false);
 });
 
-test("an edge cannot tunnel through an urban wall between outside nodes", () => {
+test("an edge cannot tunnel through an urban core between outside nodes", () => {
   const core = { minLat: 49.0, maxLat: 49.1, minLon: -122.4, maxLon: -122.2 };
   const start = [-122.6, 49.05];
   const end = [-122.0, 49.05];
@@ -37,12 +38,20 @@ test("an edge cannot tunnel through an urban wall between outside nodes", () => 
   assert.equal(metroEdgeBlocks(start, end, [-122.3, 49.05], end, [core]), false);
 });
 
-test("a relaxed urban wall still charges a prohibitive crossing cost", () => {
+test("urban cores are strongly penalized but not hard-blocked", () => {
+  const { hopBlocked } = require("./hop-search");
   const outsideA = [-123.5, 49.7];
   const outsideB = [-119.1, 50.5];
   const vancouver = [-123.1, 49.25];
+  assert.equal(hopBlocked(vancouver, outsideA, outsideB, true), false);
   assert.equal(urbanCoreFallbackMultiplier(vancouver[0], vancouver[1], outsideA, outsideB), 120);
   assert.equal(urbanCoreFallbackMultiplier(vancouver[0], vancouver[1], vancouver, outsideB), 1);
+  assert.equal(
+    urbanCoreFallbackMultiplier(-122.0, 49.05, outsideA, outsideB, [
+      { minLat: 49.0, maxLat: 49.1, minLon: -122.4, maxLon: -122.2 }
+    ], [-122.6, 49.05]),
+    120
+  );
 });
 
 test("smaller settlements are avoided unless an endpoint is inside", () => {
@@ -54,9 +63,31 @@ test("smaller settlements are avoided unless an endpoint is inside", () => {
   assert.equal(settlementBlocks(-122.1, 48.05, [-122.1, 48.05], outsideB, [town]), false);
 });
 
-test("adventure corridors widen from Direct to Balanced to Dirt", () => {
-  assert.ok(DIRECT_CORRIDOR_M < BALANCED_CORRIDOR_M);
+test("Clean pavement gate blocks gravel and untagged minor roads", () => {
+  const { isBlockedForCleanPavement, isDirtSurface } = require("./hop-search");
+  assert.equal(isBlockedForCleanPavement("paved", "local"), false);
+  assert.equal(isBlockedForCleanPavement("unknown", "arterial"), false);
+  assert.equal(isBlockedForCleanPavement("unknown", "local"), true);
+  assert.equal(isBlockedForCleanPavement("unknown", "service"), true);
+  assert.equal(isBlockedForCleanPavement("gravel", "local"), true);
+  assert.equal(isBlockedForCleanPavement("track", "track"), true);
+  // Adventure dirt% still treats unknown+local as paved paint (not dirt).
+  assert.equal(isDirtSurface("unknown", "local"), false);
+});
+
+test("adventure corridors widen from Direct to Clean to Balanced to Dirt", () => {
+  assert.ok(DIRECT_CORRIDOR_M < CLEAN_CORRIDOR_M);
+  assert.ok(CLEAN_CORRIDOR_M < BALANCED_CORRIDOR_M);
   assert.ok(BALANCED_CORRIDOR_M < DIRT_CORRIDOR_M);
+  assert.equal(CLEAN_CORRIDOR_M, 25000);
+  assert.equal(DIRT_CORRIDOR_M, 60000);
+});
+
+test("Clean has a forward regression ceiling like other profiles", () => {
+  assert.ok(maxProgressRegressionMeters("cleanest") < maxProgressRegressionMeters("dirt") * 2);
+  assert.ok(maxProgressRegressionMeters("direct") < maxProgressRegressionMeters("cleanest"));
+  // Must clear ~15 km arterial backtracks (NS corridor cliff).
+  assert.ok(maxProgressRegressionMeters("cleanest") >= 20000);
 });
 
 test("progress is measured along A to B without a reference route", () => {
