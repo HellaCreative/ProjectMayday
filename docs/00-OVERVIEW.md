@@ -25,7 +25,10 @@ TestFlight / signing steps live in [../README_TESTFLIGHT.md](../README_TESTFLIGH
 - Turn-by-turn HUD that survives lock screen / interruptions
 - App Store / TestFlight distribution and OS permissions UX
 
-MapLibre Native renders the map. Online planning uses live `POST /api/route` as the source of truth; offline planning and navigation recovery use installed `graph.v2` packs from Cloudflare R2. Both engines consume the same published pack bytes. Accounts and groups are Supabase. Route-planning fuel comes from the packed OSM fuel sidecar; non-routing POIs may use Overpass.
+MapLibre Native renders the map. Current and intended routing-source behaviour,
+pack acquisition, fuel construction, and regional policy are defined only in the
+canonical routing document. Accounts and groups are Supabase. Non-routing POIs
+may use Overpass.
 
 ## Doc index
 
@@ -35,22 +38,17 @@ MapLibre Native renders the map. Online planning uses live `POST /api/route` as 
 | [../AGENTS.md](../AGENTS.md) | New-agent primer (Vercel vs R2, branch) |
 | [00-OVERVIEW.md](./00-OVERVIEW.md) | This file |
 | [01-STACK.md](./01-STACK.md) | Swift stack, SPM, structure, signing |
-| [02-ROUTING.md](./02-ROUTING.md) | Client models, on-device packs, profiles |
 | [03-GROUPS.md](./03-GROUPS.md) | Groups, presence |
 | [04-PROFILES-AUTH.md](./04-PROFILES-AUTH.md) | Sign in with Apple, session, display name |
 | [05-MAPS.md](./05-MAPS.md) | MapLibre, style, route paint, offline tiles |
 | [06-UI-DESIGN.md](./06-UI-DESIGN.md) | Tokens, dock, CTAs |
 | [07-FUTURE.md](./07-FUTURE.md) | Deferred work + App Store checklist |
-| [08-MAP-REFINEMENT.md](./08-MAP-REFINEMENT.md) | OSM / Layers / stitches / costs / seams (locked) |
-| [09-OSM-PACK-QUALITY-STANDARD.md](./09-OSM-PACK-QUALITY-STANDARD.md) | Repeatable province/state OSM build, audit, acceptance, and release gate |
 | [../README_TESTFLIGHT.md](../README_TESTFLIGHT.md) | Device / archive / TestFlight ops |
 
 ## Locked decisions
 
 - Sign in with Apple is the only account path
-- Routing: live graph/fuel while Wi-Fi or cellular is available; installed packs
-  while offline. No silent cross-source fallback. After candidate approval,
-  live and downloadable use the exact same promoted R2 bytes.
+- Routing decisions and pack policy live only in the canonical routing document.
 - Rider Services POIs from OSM, with motorcycle fuel filter
 - Network overlay paints the installed pack, not a second CDN
 - dirtmoto.app is the marketing / legal site (not a map client)

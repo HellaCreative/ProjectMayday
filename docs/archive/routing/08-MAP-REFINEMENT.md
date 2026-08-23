@@ -1,5 +1,9 @@
 # DIRT — Map refinement (locked)
 
+> **DECOMMISSIONED:** No longer locked or authoritative. Historical evidence
+> only. Current authority:
+> [`00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md`](../../00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md).
+
 > **Authority boundary:** this document remains locked for road eligibility,
 > surface, access, corridor, urban, stitch, and seam laws. Current online/offline
 > source policy, release state, and work priority live in

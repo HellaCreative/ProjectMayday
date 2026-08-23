@@ -135,7 +135,7 @@ Western BC → Calgary was pavement because live fetched `longhaul.v1.json.gz` (
 
 ## 2026-08-12 — Map refinement locked + Alberta stitches
 
-- Laws: [docs/08-MAP-REFINEMENT.md](./08-MAP-REFINEMENT.md) — OSM include, honest Layers, pack stitches, costs, Allow, seams.
+- Current routing authority: [00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md](./00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md). Earlier routing-law documents are archived historical evidence.
 - Verdict: Chilliwack→Enderby **37% Allow-off vs 67% Allow-on** is the legal gate, not a cost miss. Do not chase 67% with Allow off.
 - Live + pack-fabric `profile-costs.js` lockstepped to iOS Dirt tables (paved tax 36×).
 - Alberta pack stitched: **21,387** permissive tips, 694,894 → **716,281** edges. Access Roads stay `motorized_unknown` (not stitched).

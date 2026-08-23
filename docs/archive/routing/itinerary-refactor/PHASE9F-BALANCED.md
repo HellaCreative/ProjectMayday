@@ -1,5 +1,8 @@
 # Phase 9f — Balanced short-route investigation
 
+> **DECOMMISSIONED:** Historical evidence only. Current authority:
+> [`00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md`](../../../00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md).
+
 ## Finding
 
 The Musquodoboit–Sherbrooke search was not failing because the 40 km extra-distance ceiling was too tight. The search produced nominal ratio labels near 50%, but path-coherence pruning removed geographic loops from those labels. Selecting the bucket before that pruning made the reported route collapse to a materially different surface ratio.

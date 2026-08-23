@@ -1,5 +1,8 @@
 # Replay a device itinerary log
 
+> **DECOMMISSIONED:** Historical evidence only. Current authority:
+> [`00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md`](../../../00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md).
+
 1. Export the app debug log and keep only lines containing `itinerary action=`.
 2. Paste the shortest sequence that reproduces the issue into a multiline fixture
    in `DirtTests/Itinerary/LogReplayTests.swift`. Keep the complete `before=[…]` and

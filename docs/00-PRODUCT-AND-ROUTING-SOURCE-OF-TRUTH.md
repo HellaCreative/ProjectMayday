@@ -16,11 +16,10 @@ This is the first document to read before changing DIRT routing. It exists so a
 new session does not revive a superseded idea, treat an old phase report as
 current, or repair one path by breaking another.
 
-If another document conflicts with this one about current product behaviour,
-current release state, or work priority, **this document wins**. The locked map,
-pack, itinerary, and fuel-gap documents remain authoritative for their narrower
-technical contracts unless this document explicitly records a later rider
-decision.
+This is the only active routing authority. All earlier routing, pack-law,
+itinerary, fuel-gap, handback, phase, and stabilization documents are archived
+historical evidence. They do not retain narrower authority and cannot supersede
+or supplement this document without Richard explicitly restoring a rule here.
 
 ## 1. What DIRT is
 
@@ -61,7 +60,7 @@ not silently replace the selected ride objective.
 ### Balanced
 
 - Targets the closest feasible result to 50% dirt and 50% paved.
-- Uses a narrower corridor than Dirt because it is allowed less journey.
+- Should normally remain below 60% dirt so it stays distinct from Direct.
 - Does not optimize shortest distance.
 - A miss must be labelled with the closest connected result rather than
   represented as a successful 50/50 route.
@@ -69,13 +68,17 @@ not silently replace the selected ride objective.
 ### Direct
 
 - Follows the Point N to Point N+1 crow-flies alignment.
-- Uses the narrowest practical corridor and minimizes lateral journey.
-- May use dirt or pavement according to the available aligned fabric.
+- Pushes toward at least 60% dirt, prefers roughly 60–70%, and normally remains
+  below 75% so it stays distinct from Dirt.
+- Progressively widens its internal search when the aligned result is materially
+  below 60%, while continuing to minimize lateral journey.
+- Never fails solely because 60% dirt is unavailable; it returns the closest
+  aligned result after reasonable widening.
 - “Direct” means geometrically direct, not shortest-road distance.
 
 ### Clean
 
-- Is pavement-first, not shortest-path routing.
+- Works from a 100% pavement objective, not a shortest-path objective.
 - Treats every recognized major urban core as a wall unless a rider endpoint is
   inside that core.
 - Avoids major highways and major population centres.
@@ -86,10 +89,11 @@ not silently replace the selected ride objective.
 
 ### Corridors
 
-A corridor is an outer search envelope, not a distance allocation or a target
-the route is expected to fill. Dirt may search wider envelopes than Balanced;
-Direct searches a narrow alignment. A wider corridor grants permission to find
-a better ride—it never instructs the router to travel to the boundary.
+A corridor is an internal search optimization, not a rider-facing profile law,
+distance allocation, or target the route is expected to fill. Search may use
+progressively wider tiers only when benchmarks show that doing so improves speed
+without suppressing the profile objective. Successful tiers belong in
+diagnostics, not the rider interface.
 
 ## 3. Road eligibility, surface, and access
 
@@ -113,37 +117,65 @@ a better ride—it never instructs the router to travel to the boundary.
   visibly continuous OSM road that fails to connect is a pack/topology defect to
   investigate rather than dismiss.
 
-The complete normalization, stitch, seam, urban, and release laws remain in
-[`08-MAP-REFINEMENT.md`](08-MAP-REFINEMENT.md) and
-[`09-OSM-PACK-QUALITY-STANDARD.md`](09-OSM-PACK-QUALITY-STANDARD.md).
+These are the active normalization, access, topology, and release laws. Detailed
+historical build procedures remain auditable in the routing archive, but they
+are not separate authority.
 
-## 4. Online, offline, and pack policy
+## 4. Approved pack-first routing policy
 
-### Online
+This policy deliberately supersedes the earlier live-first consumer policy. It
+is approved product intent but is not yet fully implemented in the current
+client.
 
-When either Wi-Fi or cellular connectivity is available:
+### Source of truth and consumer routing
 
-- route search uses the live routing service;
-- fuel planning and fuel pins use the matching live fuel data;
-- live graph display uses the matching live graph data; and
-- a preinstalled downloadable pack does not silently replace or rescue a failed
-  live request.
+- A live candidate is the source of truth while a regional revision is being
+  tested.
+- After approval, the exact graph, geometry, and fuel bytes are promoted as an
+  immutable downloadable revision.
+- Ordinary consumer planning primarily routes on-device from that installed,
+  approved revision whether connectivity is present or absent.
+- The live service remains available for candidate validation, internal
+  benchmarking, and an explicit online path when a rider declines a required
+  pack download. It is never a silent competing source.
 
-A live failure must be reported honestly. Silent fallback makes testing
-meaningless because the rider cannot know which revision produced the result.
+Every route result must identify its source and pack revision so accuracy is
+reproducible.
 
-### Offline
+### Automatic acquisition
 
-When neither Wi-Fi nor cellular connectivity is available:
+When waypoint placement requires a current regional pack that is not installed:
 
-- planning, rerouting, fuel lookup, and graph display use installed packs;
-- absence of a required pack or fuel sidecar is reported honestly; and
-- fuel-data absence is unknown, not proof that no pump exists.
+1. DIRT identifies the required province/state chain.
+2. DIRT explains that the regional routing pack improves speed and enables
+   offline rerouting, and asks the rider to accept the download.
+3. On acceptance, DIRT downloads the current approved graph, geometry, and fuel
+   sidecar and then routes locally.
+4. On refusal, online planning may use the live service, but DIRT records and
+   displays that offline rerouting is unavailable.
+
+Riders may delete installed packs but do not pre-emptively browse and download
+arbitrary packs. Only regions required by the selected regional chain are
+requested.
+
+### Updates
+
+- Currency is compared by immutable manifest identity and checksums, not dates
+  alone.
+- A newer approved revision is recommended, not forced.
+- Declining an update keeps the itinerary pinned to its installed older
+  revision.
+- Accepting an update before navigation rebuilds and revalidates the route
+  because topology, access, surface, seams, or fuel stations may have changed.
+- The currently published packs remain untouched until the next deliberately
+  approved pack release.
 
 ### Preparing for navigation
 
-Before participation begins, Start Navigation must make the corridor basemap
-layers and every touched province/state routing pack available for offline use.
+Before participation begins, Start Navigation must verify the corridor basemap
+layers and every touched province/state routing pack are available for offline
+use. If the rider previously declined a required pack, DIRT warns that offline
+rerouting may be unavailable and offers the download again before proceeding.
 During the ride the app may move in and out of coverage; the route corridor must
 remain usable for zooming, obstruction recovery, backtracking, and rerouting.
 This end-to-end behaviour remains a required navigation acceptance test.
@@ -198,16 +230,22 @@ For `Point 1 → F1 → F2 → Point 2`, the sheet shows exactly:
 3. F2 → Point 2
 
 There is no aggregate Point 1 → Point 2 parent row and no hidden subleg
-hierarchy. Each row may expose its own profile control. Fuel rows are not
-deletable rider stages; the committed fuel waypoint can instead be inspected or
-replaced with a graph-valid alternative.
+hierarchy. Each row exposes its own profile control. Generated fuel waypoints are
+not freely dragged or directly deleted; they can be inspected and replaced with
+a graph-valid alternative.
+
+Deletion acts on a rider-ending leg. In `Point 1 → F1 → Point 2`, deleting the
+second leg removes Point 2 and preserves the primary `Point 1 → F1` leg. F1 then
+becomes the current route endpoint. Dropping another destination builds forward
+from F1. The primary leg cannot be deleted independently; Clear Route removes
+the complete route.
 
 From Here uses Point 1 for the current location and Point 2 for the destination.
 Switching to Plan preserves those points. Inserting a new rider waypoint between
 Points 1 and 2 renumbers the sequence to 1, 2, 3.
 
-The complete ownership and rebuild rules are in
-[`10-ITINERARY-MODEL.md`](10-ITINERARY-MODEL.md).
+These ownership and rebuild rules are canonical. Implementation details must
+conform to them rather than redefining them in a second document.
 
 ## 6. Fuel is part of route creation
 
@@ -218,6 +256,9 @@ rider's configured range is not yet a navigable route.
 
 - Point 1 begins with a full tank. This is a documented planning assumption.
 - The rider sets tank range and reserve. Usable range is the range after reserve.
+- The planner does not pre-compute or promise a minimum stop count. From each
+  full-tank anchor it evaluates graph-connected forward stations before the
+  usable limit and continues until the next rider waypoint is reachable.
 - Fuel consumption is currently modelled in routed kilometres, not litres.
 - Only a packed, route-connected station or a rider waypoint derived on a
   station resets the tank.
@@ -245,11 +286,14 @@ cannot become stale.
 
 ### Clean foundation for fuel and long routes
 
-When a rider leg needs generated fuel waypoints, crosses a regional boundary,
-or spans at least 1,000 km, the system may use Clean sections to establish a
-fast, stable connectivity and fuel skeleton. This is not permission to silently
-change the rider's chosen route profile. The selected profile stays visible and
-each Point/F section can be changed independently afterward.
+Automatic Clean-first construction applies when a rider segment spans at least
+1,000 km. It establishes a fast, stable connectivity and fuel skeleton before
+the rider adjusts the visible Point/F legs. It does not automatically replace a
+sub-1,000 km Dirt section merely because fuel search is difficult.
+
+Changing an upstream Clean leg to Dirt can lengthen the ride and invalidate the
+fuel state. The changed leg and the complete downstream fuel chain are rebuilt;
+valid upstream legs remain unchanged.
 
 ### Automatic pump selection
 
@@ -269,11 +313,13 @@ This is a fuel-skeleton coherence rule, not a global shortest-route objective.
 
 ### Fuel-stop replacement
 
-Tapping a committed F pin or its row enters replacement mode. Valid forward
-alternatives receive pulsing candidate halos; ordinary fuel stations remain
-visible for context. Selecting a candidate snaps the fuel waypoint to that pump
-and replans only from the affected anchor forward. Upstream geometry and fuel
-identities remain unchanged when still valid.
+Tapping a committed F pin or its row enters replacement mode. The fuel waypoint
+is a hybrid rigid anchor: it is fixed to a verified station and cannot be freely
+dragged, but the rider can replace it. Alternatives receive pulsing candidate
+halos only when they are reachable from the preceding anchor within usable
+range and preserve a viable forward chain. Selecting one replans from the
+affected preceding anchor forward. Upstream geometry and fuel identities remain
+unchanged when still valid.
 
 ### Fuel result states
 
@@ -286,7 +332,7 @@ identities remain unchanged when still valid.
 - **Failed:** route geometry itself could not be produced.
 
 Start and GPX export remain possible with a visible gap, but the gap must never
-be silent. See [`12-FUEL-GAP-CONTRACT.md`](12-FUEL-GAP-CONTRACT.md).
+be silent in the planner, navigation experience, or exported GPX.
 
 ## 7. Routing interaction and presentation
 
@@ -421,13 +467,40 @@ is:
 - Complete navigation/off-route/incident recovery audit.
 - Promotion of rebuilt downloadable packs.
 
-### Work priority
+### Work priority and stabilization gates
 
-Follow [`16-PRODUCT-STABILIZATION-BUILD-PLAN.md`](16-PRODUCT-STABILIZATION-BUILD-PLAN.md).
 The first applicable priority is always a blocker preventing meaningful device
-testing. The current blocker is service-version and automatic-pump-selection
-correctness. Do not move to pack promotion, navigation hardening, onboarding, or
-polish until Gate 1 route creation is trustworthy.
+testing. Do not move to pack promotion, navigation hardening, onboarding, or
+polish until route creation is trustworthy.
+
+**Gate 1 — Route creation:** short and long single-region routes, eligible-edge
+snapping, forward fuel chains, flat Point/F legs, fuel replacement, From Here →
+Plan preservation, waypoint operations, Clear Route, profile isolation, and
+cross-region seams all pass fixed regressions.
+
+**Gate 2 — Permanent routing matrix:** fixed Nova Scotia, Atlantic cross-region,
+BC–Alberta, and BC–Washington coordinates run across every profile, representative
+fuel ranges, applicable Allow Unknown states, installed/live source paths,
+waypoint editing, and fuel replacement with deterministic before/after results.
+
+**Gate 3 — Pack release:** record immutable candidate identities, validate graph,
+geometry, fuel, seams, and the routing matrix, complete physical acceptance, then
+promote the exact approved bytes. Current published packs remain untouched until
+that deliberate release.
+
+**Gate 4 — Navigation:** prepare corridor layers and routing packs, survive
+connectivity loss, reroute around reported obstructions offline, preserve state,
+and verify cues, progress, arrival, off-route detection, incident sync, active
+fuel continuity, and visible route gaps.
+
+**Gate 5 — Onboarding and polish:** explain DIRT and pack preparation clearly,
+request permissions in context, make first-route creation understandable, and
+verify accessibility, motion, layout, empty, loading, failure, and recovery
+states.
+
+When deciding what comes next, choose in order: a blocker preventing testing; a
+regression in previously working behaviour; an unresolved Gate 1 issue; missing
+coverage for a Gate 1 repair; Gate 2; Gate 3; Gate 4; then Gate 5.
 
 ## 12. Change discipline
 
@@ -445,22 +518,15 @@ polish until Gate 1 route creation is trustworthy.
 10. No design skill or agent may remove existing product functionality without
     rider approval.
 
-## 13. Document authority and consolidation map
+## 13. Single-document authority
 
-| Document | Role after this reconciliation |
-| --- | --- |
-| **This document** | Canonical product intent, current routing behaviour, source policy, release state, blockers, and work order. |
-| `08-MAP-REFINEMENT.md` | Locked search, eligibility, surface, access, urban, corridor, and seam laws. Supporting authority. |
-| `09-OSM-PACK-QUALITY-STANDARD.md` | Locked repeatable build and live-before-download release gate. Supporting authority. |
-| `10-ITINERARY-MODEL.md` | Canonical internal ownership and mutation model. Supporting authority. |
-| `12-FUEL-GAP-CONTRACT.md` | Canonical fuel gap, acknowledgement, Start, and GPX safety contract. Supporting authority. |
-| `16-PRODUCT-STABILIZATION-BUILD-PLAN.md` | Active checklist and “what next?” decision rule. |
-| `00-OVERVIEW.md`, `02-ROUTING.md` | Technical introductions. They must defer here for current policy/status. |
-| `11-ROUTING-HANDBACK.md` | Historical Phase 0–10 handback. Never current status. |
-| `13-ROUTING-PROJECT-STATE.md` | Historical Phase 11 snapshot. Never current status. |
-| `14-PHASE-11-DEVICE-CORRECTION.md` | Phase 11 defect/decision/acceptance evidence. |
-| `15-FUEL-MAP-VISIBILITY-REVIEW.md` | Fuel-layer design decision and implementation evidence. |
+This is the only active routing document. Previous routing introductions, locked
+law documents, itinerary contracts, fuel-gap contracts, handbacks, project-state
+snapshots, phase corrections, visibility reviews, build plans, pack notes, and
+refactor findings are decommissioned under `docs/archive/routing/`.
 
-Phase documents are evidence, not instructions to repeat completed work. When a
-new decision is accepted, update this document and the affected narrow contract
-in the same documentation commit.
+The archive is evidence, not authority. No archived instruction may drive new
+work unless Richard explicitly restores it and this document is updated in the
+same change. Every accepted routing decision, current blocker, release-policy
+change, or work-priority change must be recorded here so a future agent has one
+place to read and one place to update.

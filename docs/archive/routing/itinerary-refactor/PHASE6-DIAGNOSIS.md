@@ -1,5 +1,8 @@
 # Phase 6 diagnosis — Nova Scotia Dirt objective
 
+> **DECOMMISSIONED:** Historical evidence only. Current authority:
+> [`00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md`](../../../00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md).
+
 The two coordinates from `195931Z` were replayed on 2026-08-20 against the
 checked-in Nova Scotia OSM live-pack artifacts with unknown access disabled.
 This was done before changing routing behavior.

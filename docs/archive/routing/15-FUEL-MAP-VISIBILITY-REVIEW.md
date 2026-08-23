@@ -1,5 +1,8 @@
 # DIRT — Fuel Map Visibility Review
 
+> **DECOMMISSIONED:** Historical evidence only. Current authority:
+> [`00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md`](../../00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md).
+
 > **Implementation evidence.** This records an approved fuel-layer repair and
 > its acceptance criteria. Current product authority and work priority are in
 > [`00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md`](00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md).

@@ -1,5 +1,8 @@
 # DIRT Routing — Handback and Roadmap
 
+> **DECOMMISSIONED:** Historical evidence only. Current authority:
+> [`00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md`](../../00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md).
+
 > **Historical record only.** This captures the system after Phases 0–9 and is
 > not the current project brief, roadmap, benchmark baseline, or release state.
 > Use

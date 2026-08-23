@@ -1,5 +1,8 @@
 # DIRT Routing — Phase 11 Device Correction
 
+> **DECOMMISSIONED:** Historical evidence only. Current authority:
+> [`00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md`](../../00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md).
+
 > **2026-08-22 release erratum:** an exact production `/api/fuel-chain` replay
 > reports the older `candidateK=3` planner and old candidate payload, while the
 > current repository uses six geographically distinct candidates and richer

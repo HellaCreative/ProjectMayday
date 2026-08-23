@@ -1,5 +1,9 @@
 # DIRT — Product Stabilization Build Plan
 
+> **DECOMMISSIONED:** Historical evidence only. Its active gate order has been
+> consolidated into the current authority:
+> [`00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md`](../../00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md).
+
 Canonical product and routing authority:
 [`00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md`](00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md).
 

@@ -1,5 +1,8 @@
 # DIRT — Pack catalog (CDN)
 
+> **DECOMMISSIONED:** Historical evidence only. Current authority:
+> [`00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md`](../../00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md).
+
 SoT: R2 `https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/manifest.json`  
 (`AppConfig.packCDNBaseURL`). **63 regions** as of 2026-08-12: every Canadian
 province/territory and every US state. Each region is `graph.v2.bin` +

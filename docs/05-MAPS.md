@@ -139,7 +139,7 @@ BC network lens is parked (`if false` in Layers). Overlay paint is the installed
 
 ### Province network overlays
 
-`NetworkOverlayManager` paints nearby edges from the **installed graph pack**. Honest Layers: when Allow is off, `motorized_unknown` / `motorized_excluded` are omitted. Laws: [08-MAP-REFINEMENT.md](./08-MAP-REFINEMENT.md).
+`NetworkOverlayManager` paints nearby edges from the **installed graph pack**. Honest Layers: when Allow is off, `motorized_unknown` / `motorized_excluded` are omitted. Routing laws: [00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md](./00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md).
 
 | | |
 |---|---|

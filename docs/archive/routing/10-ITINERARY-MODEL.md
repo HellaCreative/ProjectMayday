@@ -1,5 +1,9 @@
 # Canonical itinerary model
 
+> **DECOMMISSIONED:** This is no longer a separate canonical document.
+> Historical evidence only. Current authority:
+> [`00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md`](../../00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md).
+
 > **Supporting authority:** this is the canonical internal ownership and
 > mutation model. Product meaning, rider-facing routing laws, release state, and
 > current work priority are maintained in

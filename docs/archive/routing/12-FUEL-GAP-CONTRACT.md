@@ -1,5 +1,8 @@
 # Fuel gap contract
 
+> **DECOMMISSIONED:** Historical evidence only. Current authority:
+> [`00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md`](../../00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md).
+
 > **Supporting authority:** this remains the safety contract for fuel-gap
 > calculation, acknowledgement, Start, and GPX behaviour. Current product state
 > and active blockers are maintained in

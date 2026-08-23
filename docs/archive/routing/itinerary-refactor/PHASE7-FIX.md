@@ -1,5 +1,8 @@
 # Phase 7 — fuel-aware Dirt and continuity
 
+> **DECOMMISSIONED:** Historical evidence only. Current authority:
+> [`00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md`](../../../00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md).
+
 ## 7a — continuity
 
 Route requests now carry all previously built edge IDs plus the immediately

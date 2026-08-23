@@ -1,5 +1,8 @@
 # Phase 9g — Approved Halifax fallback
 
+> **DECOMMISSIONED:** Historical evidence only. Current authority:
+> [`00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md`](../../../00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md).
+
 The Phase 9e settlement escape was approved and applied to the final
 proved-no-path adventure fallback. That fallback now relaxes the smaller
 settlement wall and retains the scored settlement penalty while the urban-core

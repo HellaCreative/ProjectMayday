@@ -1,5 +1,8 @@
 # Phase 6b — Dirt objective fix
 
+> **DECOMMISSIONED:** Historical evidence only. Current authority:
+> [`00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md`](../../../00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md).
+
 The new acceptance test passed after step 1, so steps 2–5 were not applied.
 
 Adventure profiles now search with settlement walls first. The router relaxes a

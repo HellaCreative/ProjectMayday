@@ -1,5 +1,8 @@
 # Phase 9e — through-Halifax diagnosis
 
+> **DECOMMISSIONED:** Historical evidence only. Current authority:
+> [`00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md`](../../../00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md).
+
 Benchmark pins: `44.650000,-63.750000` to `44.700000,-63.300000`.
 
 ## Findings

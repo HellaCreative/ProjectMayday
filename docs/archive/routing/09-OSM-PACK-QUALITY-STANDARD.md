@@ -1,5 +1,8 @@
 # OSM Pack Quality Standard
 
+> **DECOMMISSIONED:** Historical evidence only. Current authority:
+> [`00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md`](../../00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md).
+
 > **Supporting authority:** this remains the locked build and release gate for
 > regional routing packs. Current product behaviour, release inventory, and
 > blocker priority are maintained in

@@ -58,7 +58,7 @@ Shipped. `GraphPackStore` + `OnDeviceRouter` on R2 `graph.v2` packs. Costing mus
 
 ## Packs / performance (later)
 
-Pack streaming lives in **this** repo: `scripts/pack-fabric/` → R2. Locked laws: [08-MAP-REFINEMENT.md](./08-MAP-REFINEMENT.md). Two adjacent installed packs already chain on-device.
+Pack streaming lives in **this** repo: `scripts/pack-fabric/` → R2. Routing and pack laws: [00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md](./00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md).
 
 ---
 

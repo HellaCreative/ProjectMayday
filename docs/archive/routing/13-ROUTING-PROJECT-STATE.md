@@ -1,5 +1,8 @@
 # DIRT Routing — Phase 11 Project-State Snapshot
 
+> **DECOMMISSIONED:** Historical evidence only. Current authority:
+> [`00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md`](../../00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md).
+
 > **Historical snapshot.** “Active” statements below describe 2026-08-21 only.
 > Current product law, release state, blockers, and work priority are in
 > [`00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md`](00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md).

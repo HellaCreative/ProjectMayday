@@ -1,5 +1,8 @@
 # Phase 0 — Fuel-stage mutation inventory
 
+> **DECOMMISSIONED:** Historical evidence only. Current authority:
+> [`00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md`](../../../00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md).
+
 This phase instruments the mutable `Stage` representation without changing its
 behaviour. The device reproduction log will identify which mutation path loses
 the fuel-end flag before the canonical itinerary replaces this representation.
