@@ -532,7 +532,8 @@ final class GraphPackStore {
         arrivalEdgeId: String? = nil,
         backtrackFactor: Double = 4,
         sessionSeed: UInt64 = 0,
-        maxRouteMeters: Double? = nil
+        maxRouteMeters: Double? = nil,
+        cleanMetroMultiplier: Double? = nil
     ) async -> Result<OnDeviceRouter.Result, OnDeviceRouter.Failure> {
         let fromId = Self.primaryRegionId(containing: from)
         let toId = Self.primaryRegionId(containing: to)
@@ -551,7 +552,8 @@ final class GraphPackStore {
                 arrivalEdgeId: arrivalEdgeId,
                 backtrackFactor: backtrackFactor,
                 sessionSeed: sessionSeed,
-                maxRouteMeters: maxRouteMeters
+                maxRouteMeters: maxRouteMeters,
+                cleanMetroMultiplier: cleanMetroMultiplier
             )
         }
         return await routeOnDeviceInRegion(
@@ -565,7 +567,8 @@ final class GraphPackStore {
             arrivalEdgeId: arrivalEdgeId,
             backtrackFactor: backtrackFactor,
             sessionSeed: sessionSeed,
-            maxRouteMeters: maxRouteMeters
+            maxRouteMeters: maxRouteMeters,
+            cleanMetroMultiplier: cleanMetroMultiplier
         )
     }
 
@@ -584,7 +587,8 @@ final class GraphPackStore {
         arrivalEdgeId: String?,
         backtrackFactor: Double,
         sessionSeed: UInt64,
-        maxRouteMeters: Double?
+        maxRouteMeters: Double?,
+        cleanMetroMultiplier: Double? = nil
     ) async -> Result<OnDeviceRouter.Result, OnDeviceRouter.Failure> {
         await activateInstalledPack(regionId: left)
         guard let leftPack = activePack else { return .failure(.noPath) }
@@ -617,7 +621,8 @@ final class GraphPackStore {
                 arrivalEdgeId: arrivalEdgeId,
                 backtrackFactor: backtrackFactor,
                 sessionSeed: sessionSeed,
-                maxRouteMeters: maxRouteMeters
+                maxRouteMeters: maxRouteMeters,
+                cleanMetroMultiplier: cleanMetroMultiplier
             )
             guard case .success(let first) = hop1, first.coordinates.count > 1 else {
                 if case .failure(let reason) = hop1 { lastFailure = reason }
@@ -631,7 +636,8 @@ final class GraphPackStore {
                 arrivalEdgeId: first.edgeIds.last ?? arrivalEdgeId,
                 backtrackFactor: backtrackFactor,
                 sessionSeed: sessionSeed,
-                maxRouteMeters: maxRouteMeters.map { max(0, $0 - first.distanceMeters) }
+                maxRouteMeters: maxRouteMeters.map { max(0, $0 - first.distanceMeters) },
+                cleanMetroMultiplier: cleanMetroMultiplier
             )
             guard case .success(let second) = hop2, second.coordinates.count > 1 else {
                 if case .failure(let reason) = hop2 { lastFailure = reason }
@@ -658,7 +664,8 @@ final class GraphPackStore {
         arrivalEdgeId: String?,
         backtrackFactor: Double,
         sessionSeed: UInt64,
-        maxRouteMeters: Double? = nil
+        maxRouteMeters: Double? = nil,
+        cleanMetroMultiplier: Double? = nil
     ) async -> Result<OnDeviceRouter.Result, OnDeviceRouter.Failure> {
         if let regionId {
             await activateInstalledPack(regionId: regionId)
@@ -673,6 +680,7 @@ final class GraphPackStore {
         let routeProfile = profile
         let allow = allowUnknown
         let seed = sessionSeed
+        let metro = cleanMetroMultiplier
         return await Task.detached(priority: .userInitiated) {
             var router = OnDeviceRouter(pack: packRef)
             router.sessionSeed = seed
@@ -686,7 +694,8 @@ final class GraphPackStore {
                 arrivalEdgeId: arrivalEdgeId,
                 backtrackFactor: backtrackFactor,
                 sessionSeed: seed,
-                maxRouteMeters: maxRouteMeters
+                maxRouteMeters: maxRouteMeters,
+                cleanMetroMultiplier: metro
             )
         }.value
     }
@@ -1379,6 +1388,31 @@ final class GraphPackStore {
         return ordered
     }
 
+    /// Collapse legacy QC quadrant / shard ids to one province pack family.
+    /// Lockstep: `scripts/pack-fabric/routing/regional/select.js` `provinceFamily`.
+    static func provinceFamily(_ regionId: String) -> String {
+        let id = regionId.lowercased()
+        if id == "qc" || id.hasPrefix("qc-") { return "qc" }
+        return id
+    }
+
+    /// Distinct province/state families for endpoints (not internal shard ids).
+    /// Use this for cross-region product decisions (force-Clean, fuel windows).
+    static func endpointProvinceIds(containingAny coordinates: [CLLocationCoordinate2D]) -> [String] {
+        var ordered: [String] = []
+        for coordinate in coordinates {
+            guard let primary = primaryRegionId(containing: coordinate) else { continue }
+            let family = provinceFamily(primary)
+            if !ordered.contains(family) { ordered.append(family) }
+        }
+        return ordered
+    }
+
+    /// True only when endpoints sit in different provinces/states.
+    static func endpointsCrossProvince(_ coordinates: [CLLocationCoordinate2D]) -> Bool {
+        endpointProvinceIds(containingAny: coordinates).count > 1
+    }
+
     /// Prefer the correct province/state when a coordinate sits in overlapping bboxes.
     /// Mirrors `routing/regional/select.js` `primaryRegionForPoint`.
     static func primaryRegionId(containing coordinate: CLLocationCoordinate2D) -> String? {
@@ -1476,7 +1510,12 @@ final class GraphPackStore {
             return "pe"
         }
         if hits.contains("ns"), hits.contains("nb") {
-            // Roughly east of the interprovincial line stays Nova Scotia.
+            // NB's coarse east edge covers Digby / Annapolis / Kentville. Those
+            // points are deep inside NS and only skim NB — keep them Nova Scotia.
+            // Missaguash (~-64.27) applies when the point is not clearly deeper in NS.
+            let nsScore = canadaBboxInteriorScore(lon: lon, lat: lat, regionId: "ns")
+            let nbScore = canadaBboxInteriorScore(lon: lon, lat: lat, regionId: "nb")
+            if nsScore > nbScore * 1.5 { return "ns" }
             if lon >= -64.27 { return "ns" }
             return "nb"
         }
@@ -1522,6 +1561,12 @@ final class GraphPackStore {
 
     private static func bboxInteriorScore(lon: Double, lat: Double, regionId: String) -> Double {
         guard let b = usStateBounds[regionId] else { return -Double.greatestFiniteMagnitude }
+        let (west, south, east, north) = b
+        return min(lon - west, east - lon, lat - south, north - lat)
+    }
+
+    private static func canadaBboxInteriorScore(lon: Double, lat: Double, regionId: String) -> Double {
+        guard let b = bbox(forRegionId: regionId) else { return -Double.greatestFiniteMagnitude }
         let (west, south, east, north) = b
         return min(lon - west, east - lon, lat - south, north - lat)
     }

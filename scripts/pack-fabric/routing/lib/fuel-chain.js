@@ -12,6 +12,10 @@
  */
 const { loadGraphsForRequest, clearGraphCache } = require("./graph");
 const {
+  classifyFuelFailureReason,
+  enrichFuelDiagnostics
+} = require("./route-diagnostics");
+const {
   matchPoint,
   normalizePolicy,
   accessAllowed,
@@ -551,6 +555,7 @@ async function planFuelChainOnRuntime({
   let effectiveK = Math.max(1, Math.min(6, Number(candidateK) || 6));
   let maxHopMs = 0;
   let firstReachableStationMeters = null;
+  let stationsReachableWithinRange = 0;
   let timeBudgetExceeded = false;
   const physicalStart = locationCoordinate(start);
   const physicalDestination = locationCoordinate(destination);
@@ -928,6 +933,7 @@ async function planFuelChainOnRuntime({
     if (!(cap > 0)) return null;
     const reach = reachableFrom(currentKey, currentMatch, cap, history, arrival);
     if (depth === 0) {
+      stationsReachableWithinRange = Array.isArray(reach.fuel) ? reach.fuel.length : 0;
       firstReachableStationMeters = reach.fuel.reduce((best, row) =>
         best == null || row.graphMeters < best ? row.graphMeters : best
       , null);
@@ -1096,13 +1102,19 @@ async function planFuelChainOnRuntime({
       ? Math.max(0, knownProfileMeters - routedPrefixMeters)
       : Math.max(0, physicalTotal - bestPartial.progressMeters);
     const remainingCap = bestPartial.stops.length ? usableRangeMeters : firstLegMaxMeters;
-    return {
+    const plannedFailure = {
       ok: false,
       error: timeBudgetExceeded ? "window_time_budget" : "no_route_connected_fuel_chain",
+      timeBudgetExceeded
+    };
+    const gapReason = classifyFuelFailureReason(plannedFailure);
+    return {
+      ok: false,
+      error: plannedFailure.error,
       message: timeBudgetExceeded
         ? "This fuel window exceeded its six-second planning budget."
         : "No forward, route-connected fuel chain fits the usable range.",
-      diagnostics: {
+      diagnostics: enrichFuelDiagnostics({
         states,
         dijkstraPops,
         matchedFuel: targets.fuelTargets.length,
@@ -1110,7 +1122,13 @@ async function planFuelChainOnRuntime({
         stationCandidates,
         elapsedMs: Date.now() - started,
         maxHopMs
-      },
+      }, {
+        stationsReachableWithinRange,
+        candidatesEvaluated: stationCandidates.length,
+        gapReason,
+        failureReason: gapReason,
+        stationCandidates
+      }),
       firstReachableStationMeters,
       stops: bestPartial.stops,
       graphMeters: bestPartial.graphMeters,
@@ -1133,7 +1151,7 @@ async function planFuelChainOnRuntime({
     stationCandidates,
     firstReachableStationMeters,
     windowComplete: !chain.partial,
-    diagnostics: {
+    diagnostics: enrichFuelDiagnostics({
       strategy: "forward_graph_reachability",
       states,
       dijkstraPops,
@@ -1141,7 +1159,11 @@ async function planFuelChainOnRuntime({
       candidateK: effectiveK,
       elapsedMs: Date.now() - started,
       maxHopMs
-    }
+    }, {
+      stationsReachableWithinRange,
+      candidatesEvaluated: stationCandidates.length,
+      stationCandidates
+    })
   };
 }
 
@@ -1320,14 +1342,17 @@ async function planCrossRegionFuelChain(body, selection, fuelOptions, dependenci
         graphMeters: graphMeters.slice(0, windowMaxStops),
         stationCandidates,
         windowComplete: false,
-        diagnostics: {
+        diagnostics: enrichFuelDiagnostics({
           strategy: "forward_graph_reachability_across_seams_window",
           states: totalStates,
           dijkstraPops: totalPops,
           matchedFuel,
           elapsedMs: Date.now() - started,
           maxHopMs
-        }
+        }, {
+          candidatesEvaluated: stationCandidates.length,
+          stationCandidates
+        })
       };
     }
     if (planned.stops.length) {
@@ -1341,7 +1366,11 @@ async function planCrossRegionFuelChain(body, selection, fuelOptions, dependenci
         status: "failed",
         error: "fuel_range_exceeded_at_seam",
         message: "The route reaches a regional boundary after the usable fuel range.",
-        packIdentity: mergePackIdentities(packIdentities)
+        packIdentity: mergePackIdentities(packIdentities),
+        diagnostics: enrichFuelDiagnostics({}, {
+          failureReason: "fuel_range_exceeded_at_seam",
+          gapReason: "fuel_range_exceeded_at_seam"
+        })
       };
     }
   }
@@ -1352,7 +1381,11 @@ async function planCrossRegionFuelChain(body, selection, fuelOptions, dependenci
       status: "failed",
       error: "fuel_stop_required",
       message: "A route-connected fuel stop is required before point 2.",
-      packIdentity: mergePackIdentities(packIdentities)
+      packIdentity: mergePackIdentities(packIdentities),
+      diagnostics: enrichFuelDiagnostics({}, {
+        failureReason: "fuel_stop_required",
+        gapReason: "fuel_stop_required"
+      })
     };
   }
   return {
@@ -1365,14 +1398,17 @@ async function planCrossRegionFuelChain(body, selection, fuelOptions, dependenci
     graphMeters,
     stationCandidates,
     windowComplete: true,
-    diagnostics: {
+    diagnostics: enrichFuelDiagnostics({
       strategy: "forward_graph_reachability_across_seams",
       states: totalStates,
       dijkstraPops: totalPops,
       matchedFuel,
       elapsedMs: Date.now() - started,
       maxHopMs
-    }
+    }, {
+      candidatesEvaluated: stationCandidates.length,
+      stationCandidates
+    })
   };
 }
 

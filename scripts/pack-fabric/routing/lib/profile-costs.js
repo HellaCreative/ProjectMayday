@@ -235,9 +235,13 @@ function approachAwayExtraCost(profile, dFromMeters, dToMeters, abMeters, minAwa
     }
     return mid + near;
   }
-  // cleanest — soft fan is corridorCrossTrackExtra only. A hard away-tax made
-  // coastal arterial dips lose to 3× paved rings that monotonically approach B.
-  if (profile === "cleanest") return 0;
+  // cleanest — gravity toward B only (edges moving away from B). Never chord XT.
+  // ~2/km keeps a 15 km dip (~30) below ~60 km extra pavement (~70).
+  if (profile === "cleanest") {
+    const nearBand = Math.max(2500, ab * 0.08);
+    const w = dFrom < nearBand ? 2.5 : 2.0;
+    return kmAway * w;
+  }
   return 0;
 }
 
@@ -255,12 +259,19 @@ function cleanCityStreetMult(profile, roadTrackClass, dToMeters) {
 const MAJOR_HIGHWAY_PIN_METERS = 18;
 const MAJOR_HIGHWAY_JOIN_METERS = 6000;
 
-function isMajorHighwayClass(road) {
-  return road === "freeway" || road === "arterial" || road === "ramp";
+/**
+ * Major highway avoid class.
+ * Clean: freeway + ramp only (arterial is normal Clean pavement ~0.98).
+ * Direct / Balanced / Dirt: freeway + arterial + ramp.
+ */
+function isMajorHighwayClass(road, profile) {
+  if (road === "freeway" || road === "ramp") return true;
+  if (profile === "cleanest") return false;
+  return road === "arterial";
 }
 
-function pinMatchesMajorHighway(match) {
-  if (!match || !isMajorHighwayClass(match.roadTrack)) return false;
+function pinMatchesMajorHighway(match, profile) {
+  if (!match || !isMajorHighwayClass(match.roadTrack, profile)) return false;
   return Number(match.distanceM) < MAJOR_HIGHWAY_PIN_METERS;
 }
 
@@ -273,7 +284,7 @@ function majorHighwayAvoidMult(
   startOnMajorHighway,
   endOnMajorHighway
 ) {
-  if (!isMajorHighwayClass(roadTrackClass)) return 1;
+  if (!isMajorHighwayClass(roadTrackClass, profile)) return 1;
   const join = MAJOR_HIGHWAY_JOIN_METERS;
   const nearPinnedHighway =
     (endOnMajorHighway && metersToDestination < join) ||
@@ -348,15 +359,15 @@ function crossTrackMeters(point, a, b) {
   return Math.asin(Math.sin(d13) * Math.sin(t13 - t12)) * EARTH_RADIUS_M;
 }
 
-/** Corridor off-line tax. Direct strongest, then Clean/Balanced, then Dirt. */
+/** Corridor off-line tax. Direct strongest, then Balanced, then Dirt. Clean has none. */
 function directCrossTrackExtra(profile, point, lineFrom, lineTo, edgeMeters) {
   if (!(edgeMeters > 0) || !point || !lineFrom || !lineTo) return 0;
+  if (profile === "cleanest") return 0;
   const k =
     profile === "direct" ? 0.018
-      : profile === "cleanest" ? 0.006
-        : profile === "balanced" ? 0.014
-          : profile === "dirt" ? 0.005
-            : 0;
+      : profile === "balanced" ? 0.014
+        : profile === "dirt" ? 0.005
+          : 0;
   if (!k) return 0;
   const xtKm = Math.abs(crossTrackMeters(point, lineFrom, lineTo)) / 1000;
   return (edgeMeters / 1000) * xtKm * xtKm * k;

@@ -21,6 +21,7 @@ final class RouteResponseCache {
         let backtrackFactor: Double
         let sourceName: String
         let packRevision: String
+        let cleanMetroMultiplier: Double?
 
         var description: String {
             "\(from.latitude),\(from.longitude)>\(to.latitude),\(to.longitude)" +
@@ -28,6 +29,7 @@ final class RouteResponseCache {
                 "|prior=\(priorEdgeIDs.joined(separator: ","))" +
                 "|arrival=\(arrivalEdgeID ?? "nil")" +
                 "|backtrack=\(backtrackFactor)" +
+                "|metro=\(cleanMetroMultiplier.map { String(format: "%.0f", $0) } ?? "-")" +
                 "|\(sourceName)|\(packRevision)"
         }
     }
@@ -125,7 +127,8 @@ final class PackRoutingSource: RoutingSource {
             arrivalEdgeID: req.options?.arrivalEdgeId,
             backtrackFactor: req.options?.backtrackFactor ?? 4,
             sourceName: name,
-            packRevision: packs.lastManifestVersion
+            packRevision: packs.lastManifestVersion,
+            cleanMetroMultiplier: req.options?.cleanMetroMultiplier
         )
         if req.options?.maxPathMeters == nil, let cached = cache.value(for: key) {
             return cached
@@ -141,15 +144,29 @@ final class PackRoutingSource: RoutingSource {
             arrivalEdgeId: req.options?.arrivalEdgeId,
             backtrackFactor: req.options?.backtrackFactor ?? 4,
             sessionSeed: req.options?.sessionSeed ?? 0,
-            maxRouteMeters: req.options?.maxPathMeters
+            maxRouteMeters: req.options?.maxPathMeters,
+            cleanMetroMultiplier: req.options?.cleanMetroMultiplier
         )
         guard case .success(let local) = result, local.coordinates.count > 1 else {
             throw RoutingError.server("No route is available on the installed pack.")
         }
-        let response = RouteResponse(
+        var response = RouteResponse(
             onDevice: local,
             priorEdgeIDs: Set(req.options?.priorEdgeIds ?? [])
         )
+        if let metro = req.options?.cleanMetroMultiplier {
+            response.debug = RouteResponseDebug(
+                routingRevision: nil,
+                graphMode: "on-device",
+                searchMeta: nil,
+                fallback: nil,
+                packIdentity: nil,
+                diagnostics: RouteResponseDiagnostics(cleanMetroMultiplier: metro),
+                failureReason: nil,
+                searchMs: nil,
+                pops: nil
+            )
+        }
         if req.options?.maxPathMeters == nil { cache.insert(response, for: key) }
         return response
     }
@@ -451,12 +468,14 @@ struct RoutingSourcePolicy {
                 CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude)
             }
             let needed = GraphPackStore.regionIds(containingAny: locations)
+            let provinces = GraphPackStore.endpointProvinceIds(containingAny: locations)
             let installed = needed.filter { installedPacks.isRoutingPackInstalled($0) }
             let packsCover = installedPacksCover(locations, registry: installedPacks)
-            let singleRegion = needed.count <= 1
-            let chosen = packsCover ? pack : live
+            let singleRegion = provinces.count <= 1
+            let chosen = isOnline() ? live : pack
             report(
                 "policy packsCover=\(packsCover) singleRegion=\(singleRegion) " +
+                    "provinces=[\(provinces.joined(separator: ","))] " +
                     "installed=[\(installed.joined(separator: ","))] " +
                     "path=\(needed.first.flatMap { installedPacks.installedRoutingGraphPath(regionID: $0) } ?? "nil") " +
                     "manifest=\(installedPacks.routingManifestVersion) online=\(isOnline()) " +
@@ -507,7 +526,8 @@ private func cacheKey(
         priorEdgeIDs: normalizedEdgeIDs(request.options?.priorEdgeIds),
         arrivalEdgeID: request.options?.arrivalEdgeId,
         backtrackFactor: request.options?.backtrackFactor ?? 4,
-        sourceName: sourceName, packRevision: packRevision
+        sourceName: sourceName, packRevision: packRevision,
+        cleanMetroMultiplier: request.options?.cleanMetroMultiplier
     )
 }
 

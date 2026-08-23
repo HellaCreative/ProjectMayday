@@ -273,6 +273,8 @@ nonisolated struct HopSearchContext: Sendable {
     var priorEdgeIds: Set<String>
     var arrivalEdgeId: String?
     var backtrackFactor: Double
+    /// DEBUG ONLY. Clean urban-core multiplier override (1…20). Nil → ×120.
+    var cleanMetroMultiplier: Double?
 
     static func forProfile(_ profile: RouteProfile, seed: UInt64) -> HopSearchContext {
         HopSearchContext(
@@ -294,7 +296,8 @@ nonisolated struct HopSearchContext: Sendable {
             popCap: nil,
             priorEdgeIds: [],
             arrivalEdgeId: nil,
-            backtrackFactor: 4
+            backtrackFactor: 4,
+            cleanMetroMultiplier: nil
         )
     }
 }

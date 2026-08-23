@@ -19,6 +19,8 @@ struct ProfileSheet: View {
     @AppStorage(FuelRangePrefs.key) private var fuelRangeKm = 0.0
     @AppStorage(FuelRangePrefs.reservePercentKey) private var fuelReservePercent = FuelRangePrefs.suggestedReservePercent
     @AppStorage(KeepAwakePrefs.key) private var keepAwakeWhileUsing = false
+    @AppStorage(CleanMetroDebugPrefs.enabledKey) private var cleanMetroOverride = false
+    @AppStorage(CleanMetroDebugPrefs.valueKey) private var cleanMetroSlider = 5.0
     @Environment(\.scenePhase) private var scenePhase
     @State private var profileFuelDebounce: Task<Void, Never>?
 
@@ -477,6 +479,8 @@ struct ProfileSheet: View {
             .contentShape(Rectangle())
             .buttonStyle(.plain)
 
+            cleanMetroDebugControls
+
             if let routeDebugStatus {
                 Text(routeDebugStatus)
                     .font(DirtType.helper)
@@ -492,6 +496,33 @@ struct ProfileSheet: View {
             RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous)
                 .stroke(DirtTheme.hairline, lineWidth: 1)
         )
+    }
+
+    private var cleanMetroDebugControls: some View {
+        VStack(alignment: .leading, spacing: DirtSpace.tight) {
+            Toggle(isOn: $cleanMetroOverride) {
+                Text("Clean city ×")
+                    .font(.dirtUI(13, weight: .semibold))
+                    .foregroundStyle(DirtTheme.ink)
+            }
+            .tint(DirtTheme.orange)
+
+            if cleanMetroOverride {
+                Text("Override \(Int(cleanMetroSlider.rounded())) (live default ×120)")
+                    .font(DirtType.helper)
+                    .foregroundStyle(DirtTheme.muted)
+                Slider(value: $cleanMetroSlider, in: 1...20, step: 1)
+                    .tint(DirtTheme.orange)
+            } else {
+                Text("current live (×120) — enable to send 1…20 on Clean routes")
+                    .font(DirtType.helper)
+                    .foregroundStyle(DirtTheme.muted)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(.top, DirtSpace.inner)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Clean city multiplier debug")
     }
 
     private func shareRouteDebug() {

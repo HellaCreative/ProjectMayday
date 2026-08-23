@@ -79,7 +79,7 @@ struct OnDeviceProfileCostsTests {
         #expect(farDirect > farBalanced)
         #expect(farBalanced > farDirt)
         #expect(farDirt > 8)
-        #expect(farClean > farBalanced)
+        #expect(farClean == 0)
         let xt = abs(GeoMath.crossTrackMeters(point: farNorth, lineFrom: a, to: b))
         #expect(xt > 40_000)
     }
@@ -222,13 +222,12 @@ struct OnDeviceProfileCostsTests {
         #expect(mid < balancedMid)
     }
 
-    @Test func cleanAwayTaxDoesNotDominateExtraPavement() {
-        // Clean away-tax is off; soft fan is cross-track only.
+    @Test func cleanAwayGravityDoesNotDominateExtraPavement() {
         let cleanAway = OnDeviceProfileCosts.approachAwayExtra(
             profile: .cleanest,
-            dFromMeters: 50_000,
-            dToMeters: 51_000,
-            abMeters: 100_000
+            dFromMeters: 20_000,
+            dToMeters: 35_000,
+            abMeters: 15_000
         )
         let directAway = OnDeviceProfileCosts.approachAwayExtra(
             profile: .direct,
@@ -236,7 +235,9 @@ struct OnDeviceProfileCostsTests {
             dToMeters: 51_000,
             abMeters: 100_000
         )
-        #expect(cleanAway == 0)
+        #expect(cleanAway > 0)
+        #expect(cleanAway <= 15 * 2.5)
+        #expect(cleanAway < 60 * 1.18)
         #expect(directAway >= 150)
     }
 
@@ -245,6 +246,60 @@ struct OnDeviceProfileCostsTests {
         #expect(OnDeviceProfileCosts.isBlockedForCleanPavement(surfaceName: "unknown", roadClassName: "arterial") == false)
         #expect(OnDeviceProfileCosts.isBlockedForCleanPavement(surfaceName: "unknown", roadClassName: "local") == true)
         #expect(OnDeviceProfileCosts.isBlockedForCleanPavement(surfaceName: "gravel", roadClassName: "collector") == true)
+    }
+
+    @Test func cleanMajorHighwayIsFreewayAndRampNotArterial() {
+        #expect(OnDeviceProfileCosts.isMajorHighway("freeway", profile: .cleanest))
+        #expect(OnDeviceProfileCosts.isMajorHighway("ramp", profile: .cleanest))
+        #expect(!OnDeviceProfileCosts.isMajorHighway("arterial", profile: .cleanest))
+        #expect(OnDeviceProfileCosts.isMajorHighway("arterial", profile: .direct))
+        #expect(OnDeviceProfileCosts.isMajorHighway("arterial", profile: .dirt))
+
+        let cleanArterial = OnDeviceProfileCosts.majorHighwayAvoidMult(
+            profile: .cleanest,
+            roadClassCode: 2, // arterial
+            metersFromStart: 80_000,
+            metersToDestination: 80_000,
+            startOnMajorHighway: false,
+            endOnMajorHighway: false
+        )
+        let cleanFreeway = OnDeviceProfileCosts.majorHighwayAvoidMult(
+            profile: .cleanest,
+            roadClassCode: 1, // freeway
+            metersFromStart: 80_000,
+            metersToDestination: 80_000,
+            startOnMajorHighway: false,
+            endOnMajorHighway: false
+        )
+        let cleanRamp = OnDeviceProfileCosts.majorHighwayAvoidMult(
+            profile: .cleanest,
+            roadClassCode: 10, // ramp
+            metersFromStart: 80_000,
+            metersToDestination: 80_000,
+            startOnMajorHighway: false,
+            endOnMajorHighway: false
+        )
+        let directArterial = OnDeviceProfileCosts.majorHighwayAvoidMult(
+            profile: .direct,
+            roadClassCode: 2,
+            metersFromStart: 80_000,
+            metersToDestination: 80_000,
+            startOnMajorHighway: false,
+            endOnMajorHighway: false
+        )
+        let dirtArterial = OnDeviceProfileCosts.majorHighwayAvoidMult(
+            profile: .dirt,
+            roadClassCode: 2,
+            metersFromStart: 80_000,
+            metersToDestination: 80_000,
+            startOnMajorHighway: false,
+            endOnMajorHighway: false
+        )
+        #expect(cleanArterial == 1)
+        #expect(cleanFreeway > 1)
+        #expect(cleanRamp > 1)
+        #expect(directArterial > 1)
+        #expect(dirtArterial > 1)
     }
 
     @Test func majorHighwaysStayAvoidedUntilNearAPinnedHighway() {

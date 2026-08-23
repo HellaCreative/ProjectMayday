@@ -1,6 +1,6 @@
 {
   "schemaVersion": "canada-source-registry-1",
-  "updatedAt": "2026-08-20",
+  "updatedAt": "2026-08-23",
   "notes": [
     "Province fabric is product-locked per region — do not assume NRN everywhere.",
     "NS foundational fabric: OSM-only. NSTDB and NRN are retained but inactive until the OSM product is approved.",
@@ -360,14 +360,14 @@
         "adapter": "ns-nstdb",
         "status": "deferred",
         "dateRetrieved": "2026-08-05",
-        "notes": "Inactive during the foundational OSM-only phase. NSTDB adapter/data are retained for later evaluation and are not in the NS pack."
+        "notes": "Inactive during the foundational OSM-only phase. Adapter/data are retained for later controlled evaluation and are not in this pack."
       },
       "routingReady": true,
       "backboneArtifact": {
         "path": "routing/data/regions/ns/graph.v1.json.gz",
         "edgeCount": 211931,
         "nodeCount": 193747,
-        "gzBytes": 20584038
+        "gzBytes": 20583619
       },
       "routingMode": "osm-only",
       "osm": {
@@ -377,7 +377,7 @@
         "featureCount": 141021,
         "added": 141021,
         "license": "OpenStreetMap contributors (ODbL)",
-        "dateRetrieved": "2026-08-20"
+        "dateRetrieved": "2026-08-23"
       }
     },
     {

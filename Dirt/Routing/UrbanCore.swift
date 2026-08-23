@@ -1,11 +1,12 @@
 import CoreLocation
 import Foundation
 
-/// Hard urban-core wall for every routing profile.
+/// Soft urban-core avoidance for every routing profile.
 ///
 /// Boxes cover the practical through-route core, not merely a downtown point;
-/// otherwise a router can still treat the surrounding city grid as a shortcut.
-/// Lockstep: `scripts/pack-fabric/routing/lib/hop-search.js`.
+/// otherwise a router can still treat the surrounding city grid as free fabric.
+/// Crossing is strongly penalized (×120) but passable so a short graze beats a
+/// hundreds-of-kilometre detour. Lockstep: `scripts/pack-fabric/routing/lib/hop-search.js`.
 nonisolated enum UrbanCore {
     struct Box: Sendable {
         var minLat: Double
@@ -100,6 +101,8 @@ nonisolated enum UrbanCore {
     }
 
     /// Ban travel through an urban core unless A or B is inside that same box.
+    /// Used for detection / diagnostics; routing applies `fallbackMultiplier`
+    /// instead of hard-blocking these points.
     static func blocks(
         point: CLLocationCoordinate2D,
         start: CLLocationCoordinate2D,
@@ -125,16 +128,32 @@ nonisolated enum UrbanCore {
         return false
     }
 
-    /// A relaxed wall remains a last resort rather than becoming ordinary
-    /// routing space. The large multiplier favours the shortest necessary
-    /// crossing while preserving the A/B-inside exemption.
+    /// Strong but passable urban-core penalty. Favours the shortest necessary
+    /// crossing while preserving the A/B-inside exemption. Applied on every
+    /// search (not only last-resort), so cities stay expensive without forcing
+    /// province-scale detours.
+    /// - Parameter penalty: production default 120. Clean pin tests may pass 1…20.
     static func fallbackMultiplier(
         point: CLLocationCoordinate2D,
         start: CLLocationCoordinate2D,
         end: CLLocationCoordinate2D,
-        boxes candidateBoxes: [Box]? = nil
+        boxes candidateBoxes: [Box]? = nil,
+        edgeFrom: CLLocationCoordinate2D? = nil,
+        penalty: Double = 120
     ) -> Double {
-        blocks(point: point, start: start, end: end, boxes: candidateBoxes) ? 120 : 1
+        let p = penalty.isFinite && penalty > 0 ? penalty : 120
+        if blocks(point: point, start: start, end: end, boxes: candidateBoxes) { return p }
+        if let edgeFrom,
+           blocks(segmentFrom: edgeFrom, segmentTo: point, start: start, end: end, boxes: candidateBoxes) {
+            return p
+        }
+        return 1
+    }
+
+    /// Debug-only Clean override. Nil / non-cleanest → use production ×120.
+    static func resolveCleanMetroPenalty(profile: RouteProfile, override: Double?) -> Double {
+        guard profile == .cleanest, let raw = override, raw.isFinite else { return 120 }
+        return min(20, max(1, raw))
     }
 
     /// Smaller OSM cities/towns are strongly penalized so a practical wilderness

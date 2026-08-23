@@ -90,6 +90,47 @@ final class RoutingDebugLog {
         )
     }
 
+    func liveRouteDiagnostics(_ response: RouteResponse) {
+        let d = response.debug?.diagnostics
+        let attempts = d?.searchAttempts ?? response.debug?.searchMeta?.corridorCandidates ?? []
+        let attemptText = attempts.map { attempt in
+            let width = attempt.corridorMeters.map { "\(Int($0))" } ?? "unbounded"
+            let ms = attempt.searchMs.map(String.init) ?? "-"
+            let pops = attempt.pops.map(String.init) ?? "-"
+            return "\(width)m:\(attempt.outcome ?? "?")/pops=\(pops)/ms=\(ms)"
+        }.joined(separator: ",")
+        event(
+            "ROUTE diag buildMs=\(d?.buildMs.map(String.init) ?? "-") "
+                + "searchMs=\(d?.searchMs.map(String.init) ?? response.debug?.searchMs.map(String.init) ?? "-") "
+                + "pops=\(d?.pops.map(String.init) ?? response.debug?.pops.map(String.init) ?? "-") "
+                + "requestedProfile=\(d?.requestedProfile ?? "-") "
+                + "effectiveProfile=\(d?.effectiveProfile ?? "-") "
+                + "fallbacks=[\((d?.profileFallbacks ?? []).joined(separator: ","))] "
+                + "corridor=\(d?.corridorMeters.map { "\(Int($0))" } ?? "-") "
+                + "widened=\(d?.corridorWidened == true ? 1 : 0) "
+                + "maxCrossTrack=\(d?.maxCrossTrackMeters.map { "\(Int($0))" } ?? "-")m "
+                + "backtrackPct=\(d?.backtrackPct.map { String(format: "%.1f", $0) } ?? response.backtrackPct.map { String(format: "%.1f", $0) } ?? "-") "
+                + "failureReason=\(d?.failureReason ?? response.debug?.failureReason ?? "-") "
+                + "cleanMetroMultiplier=\(d?.cleanMetroMultiplier.map { String(format: "%.0f", $0) } ?? "-") "
+                + "attempts=[\(attemptText)]"
+        )
+    }
+
+    func liveFuelDiagnostics(_ response: FuelChainResponse) {
+        let d = response.diagnostics
+        event(
+            "FUEL diag status=\(response.status) "
+                + "reachable=\(d?.stationsReachableWithinRange.map(String.init) ?? "-") "
+                + "candidates=\(d?.candidatesEvaluated.map(String.init) ?? response.stationCandidates.map { String($0.count) } ?? "-") "
+                + "matchedFuel=\(d?.matchedFuel.map(String.init) ?? "-") "
+                + "pops=\(d?.dijkstraPops.map(String.init) ?? "-") "
+                + "elapsedMs=\(d?.elapsedMs.map(String.init) ?? "-") "
+                + "gapReason=\(d?.gapReason ?? "-") "
+                + "failureReason=\(d?.failureReason ?? response.error ?? "-") "
+                + "msg=\(response.message ?? "-")"
+        )
+    }
+
     func copyToPasteboard() {
         UIPasteboard.general.string = text
         event("copied to pasteboard (\(entries.count) lines)")

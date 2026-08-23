@@ -14,7 +14,7 @@ const {
   isBlockedForCleanPavement,
   coincidentSiblingLists
 } = require("./hop-search");
-const { approachAwayExtraCost } = require("./profile-costs");
+const { approachAwayExtraCost, directCrossTrackExtra } = require("./profile-costs");
 const { findPathV2 } = require("./find-path-v2");
 const { loadGraphSync } = require("./graph");
 const { matchPoint, normalizePolicy } = require("./router");
@@ -90,12 +90,29 @@ test("Clean has no corridor and no hard regression cap", () => {
   assert.equal(maxProgressRegressionMeters("cleanest"), Infinity);
 });
 
-test("Clean away-tax is off so 15 km dip cannot lose to 60 km extra pavement", () => {
+test("Clean has no chord cross-track cone", () => {
+  const a = { lat: 44.76, lon: -63.34 };
+  const b = { lat: 44.87, lon: -63.22 };
+  const far = { lat: 45.2, lon: -63.5 };
+  const xt = directCrossTrackExtra("cleanest", far, a, b, 1000);
+  assert.equal(xt, 0);
+});
+
+test("Clean away gravity stays below extra pavement of a long loop", () => {
   const away15 = approachAwayExtraCost("cleanest", 20000, 35000, 15000, 50);
-  assert.equal(away15, 0);
+  assert.ok(away15 > 0);
+  assert.ok(away15 <= 15 * 2.5);
   // 60 km extra paved collector still costs ~70 in profile units.
   const pavedExtra = 60 * 1.0 * 1.18;
   assert.ok(away15 < pavedExtra);
+});
+
+test("short around beats long monotonic loop when both flow toward B", () => {
+  const collectorPerKm = 1.0 * 1.18;
+  const shortAround = 32 * collectorPerKm;
+  const dipAway = approachAwayExtraCost("cleanest", 20000, 35000, 15000, 50);
+  const longLoop = 92 * collectorPerKm;
+  assert.ok(shortAround + dipAway < longLoop);
 });
 
 test("untagged local/service blocked; major unknown allowed", () => {

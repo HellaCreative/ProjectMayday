@@ -52,6 +52,19 @@ test("urban cores are strongly penalized but not hard-blocked", () => {
     ], [-122.6, 49.05]),
     120
   );
+  assert.equal(
+    urbanCoreFallbackMultiplier(vancouver[0], vancouver[1], outsideA, outsideB, undefined, null, 5),
+    5
+  );
+});
+
+test("Clean metro multiplier override clamps 1–20 and ignores other profiles", () => {
+  const { resolveCleanMetroMultiplier } = require("./hop-search");
+  assert.equal(resolveCleanMetroMultiplier("cleanest", 5), 5);
+  assert.equal(resolveCleanMetroMultiplier("cleanest", 0.5), 1);
+  assert.equal(resolveCleanMetroMultiplier("cleanest", 99), 20);
+  assert.equal(resolveCleanMetroMultiplier("cleanest", null), null);
+  assert.equal(resolveCleanMetroMultiplier("dirt", 5), null);
 });
 
 test("smaller settlements are avoided unless an endpoint is inside", () => {

@@ -10,7 +10,7 @@ struct PackFirstRoutingTests {
     private let sydney = RouteCoordinate(longitude: -60.1942, latitude: 46.1368)
     private let fredericton = RouteCoordinate(longitude: -66.6431, latitude: 45.9636)
 
-    @Test func installedNSIsSelectedWhileOnline() {
+    @Test func liveIsSelectedWhileOnlineEvenWhenNSIsInstalled() {
         let live = NamedFakeRoutingSource(name: "live")
         let pack = NamedFakeRoutingSource(name: "pack")
         let policy = RoutingSourcePolicy(
@@ -20,8 +20,9 @@ struct PackFirstRoutingTests {
             pack: pack
         )
         let selected = policy.select(for: nsRequest())
-        #expect(selected.name == "pack")
+        #expect(selected.name == "live")
         #expect(live.routeRequests.isEmpty)
+        #expect(pack.routeRequests.isEmpty)
     }
 
     @Test func installedNSIsSelectedWhileOffline() {
@@ -55,7 +56,7 @@ struct PackFirstRoutingTests {
         #expect(prompt.message.contains("offline rerouting"))
     }
 
-    @Test func acceptingConsentDownloadsVerifiesAndResumesPendingRoute() async {
+    @Test func onlinePlanningUsesLiveWithoutWaitingForPackInstall() async {
         let live = NamedFakeRoutingSource(name: "live")
         let pack = NamedFakeRoutingSource(name: "pack")
         let coverage = FakePackCoverage(installed: [], published: ["ns"])
@@ -74,22 +75,13 @@ struct PackFirstRoutingTests {
             .replaceAll(waypoints: [halifax, sydney], profile: .dirt, allowUnknown: false),
             source: "plan"
         )
-
-        #expect(model.packConsent?.regionIDs == ["ns"])
-        #expect(model.itinerary.waypoints.count == 2)
-        #expect(live.routeRequests.isEmpty)
-        #expect(pack.routeRequests.isEmpty)
-
-        await model.acceptPackConsent()
         await model.waitForCanonicalBuildForTesting()
 
-        #expect(coverage.installed.contains("ns"))
-        #expect(coverage.installCalls == [["ns"]])
-        #expect(coverage.replacedInstalled == [false])
         #expect(model.packConsent == nil)
         #expect(model.itinerary.waypoints.count == 2)
-        #expect(pack.routeRequests.isEmpty == false)
-        #expect(live.routeRequests.isEmpty)
+        #expect(live.routeRequests.isEmpty == false)
+        #expect(pack.routeRequests.isEmpty)
+        #expect(coverage.installCalls.isEmpty)
     }
 
     @Test func failedPackInstallKeepsConsentAvailableForRetry() async {
@@ -132,17 +124,12 @@ struct PackFirstRoutingTests {
             .replaceAll(waypoints: [halifax, sydney], profile: .dirt, allowUnknown: false),
             source: "plan"
         )
-        model.declinePackConsent()
         await model.waitForCanonicalBuildForTesting()
 
+        #expect(model.packConsent == nil)
         #expect(coverage.installCalls.isEmpty)
         #expect(live.routeRequests.isEmpty == false)
         #expect(pack.routeRequests.isEmpty)
-        #expect(model.packRoutingWarnings.contains { warning in
-            warning.reason == .declinedDownload
-                && warning.message.contains("Offline rerouting will not be available")
-                && warning.regionIDs == ["ns"]
-        })
     }
 
     @Test func unavailableRequiredPackSelectsLiveAndRecordsUnavailableWarning() async {
@@ -169,11 +156,7 @@ struct PackFirstRoutingTests {
         #expect(model.packConsent == nil)
         #expect(live.routeRequests.isEmpty == false)
         #expect(pack.routeRequests.isEmpty)
-        #expect(model.packRoutingWarnings.contains { warning in
-            warning.reason == .packUnavailable
-                && warning.message.contains("not available as an approved pack")
-                && warning.regionIDs == ["ns"]
-        })
+        #expect(coverage.installCalls.isEmpty)
     }
 
     @Test func staleInstalledNSOffersUpdate() {
@@ -214,17 +197,14 @@ struct PackFirstRoutingTests {
             .replaceAll(waypoints: [halifax, sydney], profile: .dirt, allowUnknown: false),
             source: "plan"
         )
-        #expect(model.packConsent?.kind == .update)
-        let installedBefore = coverage.installed
-        model.declinePackConsent()
         await model.waitForCanonicalBuildForTesting()
 
-        #expect(coverage.installed == installedBefore)
+        #expect(model.packConsent == nil)
+        #expect(coverage.installed.contains("ns"))
         #expect(coverage.stale.contains("ns"))
         #expect(coverage.installCalls.isEmpty)
-        #expect(pack.routeRequests.isEmpty == false)
-        #expect(live.routeRequests.isEmpty)
-        #expect(model.packRoutingWarnings.isEmpty)
+        #expect(live.routeRequests.isEmpty == false)
+        #expect(pack.routeRequests.isEmpty)
     }
 
     @Test func multiRegionWaypointCoverageRequestsEachRequiredRegionOnce() {
@@ -347,12 +327,15 @@ struct PackFirstRoutingTests {
             .replaceAll(waypoints: [halifax, sydney], profile: .dirt, allowUnknown: false),
             source: "fromHere"
         )
+        await planModel.waitForCanonicalBuildForTesting()
+        await fromModel.waitForCanonicalBuildForTesting()
 
-        #expect(planModel.packConsent?.regionIDs == ["ns"])
-        #expect(fromModel.packConsent?.regionIDs == ["ns"])
-        #expect(planModel.packConsent?.kind == fromModel.packConsent?.kind)
-        #expect(planLive.routeRequests.isEmpty)
-        #expect(fromLive.routeRequests.isEmpty)
+        #expect(planModel.packConsent == nil)
+        #expect(fromModel.packConsent == nil)
+        #expect(planLive.routeRequests.isEmpty == false)
+        #expect(fromLive.routeRequests.isEmpty == false)
+        #expect(planPack.routeRequests.isEmpty)
+        #expect(fromPack.routeRequests.isEmpty)
         #expect(planModel.itinerary.waypoints.count == 2)
         #expect(fromModel.itinerary.waypoints.count == 2)
     }

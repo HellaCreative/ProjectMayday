@@ -44,7 +44,8 @@ const { findPathV2 } = require("./find-path-v2");
 const {
   isDirtSurface,
   outsideCorridor,
-  maxProgressRegressionMeters
+  maxProgressRegressionMeters,
+  resolveCleanMetroMultiplier
 } = require("./hop-search");
 const crossPackTopology = require("../schema/cross-pack-topology.v1.json");
 const { resolveLocationsByEligibleEdge } = require("../regional/endpoint-resolver");
@@ -509,7 +510,7 @@ function matchPoint(
         surfaceBias = -22;
       } else if (preferPavedSnap && surfaceName === "paved") {
         surfaceBias = -30;
-        if (isMajorHighwayClass(roadTrack) && projected.distanceM >= 18) {
+        if (isMajorHighwayClass(roadTrack, prof) && projected.distanceM >= 18) {
           surfaceBias = 28;
         }
       }
@@ -2010,6 +2011,13 @@ async function routeOnRuntime(body, graphResolution, runtime) {
   if (Number.isFinite(Number(options.directExtraBudgetMeters))) {
     searchOpts.directExtraBudgetMeters = Number(options.directExtraBudgetMeters);
   }
+  const cleanMetroMultiplier = resolveCleanMetroMultiplier(
+    profile,
+    options.cleanMetroMultiplier
+  );
+  if (cleanMetroMultiplier != null) {
+    searchOpts.cleanMetroMultiplier = cleanMetroMultiplier;
+  }
   let path = null;
   let urbanCoreFallbackUsed = false;
   let cleanUnpavedFallbackUsed = false;
@@ -2219,7 +2227,8 @@ async function routeOnRuntime(body, graphResolution, runtime) {
         corridorCandidates: attempts
       },
       failureReason,
-      searchOutcome: failedOutcome
+      searchOutcome: failedOutcome,
+      cleanMetroMultiplier
     });
     return {
       status: "failed",
@@ -2359,7 +2368,8 @@ async function routeOnRuntime(body, graphResolution, runtime) {
     cleanUnpavedFallbackUsed,
     settlementFallbackUsed:
       settlementFallbackUsed || !!(path.searchMeta && path.searchMeta.settlementFallbackUsed),
-    searchOutcome: "completed"
+    searchOutcome: "completed",
+    cleanMetroMultiplier
   });
 
   return {
@@ -2640,8 +2650,8 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds, 
   const startLL = startMatch.coord;
   const endLL = endMatch.coord;
   const abMeters = haversineMeters(startLL, endLL);
-  const startOnMajorHighway = pinMatchesMajorHighway(startMatch);
-  const endOnMajorHighway = pinMatchesMajorHighway(endMatch);
+  const startOnMajorHighway = pinMatchesMajorHighway(startMatch, profile);
+  const endOnMajorHighway = pinMatchesMajorHighway(endMatch, profile);
   const regionId =
     (runtime.pack && (runtime.pack.regionId || runtime.pack.province)) ||
     (runtime.data && (runtime.data.regionId || runtime.data.province)) ||

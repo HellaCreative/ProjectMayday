@@ -81,14 +81,19 @@ not silently replace the selected ride objective.
 - Stay on pavement unless the snapped road at A or B is unpaved, or pavement
   cannot connect. Then use that road for as many kilometres as it takes. Never
   hunt dirt. There is no dirt% cap.
-- Soft forward preference (~45° fan): keep moving toward the next waypoint.
-  Direction only — not shortest-path and not a hard cone. A paved arterial that
-  briefly heads away around water or terrain is legal and preferred over a long
-  loop that merely “points at B.”
+- Direction = gravity toward the next waypoint. Paths must keep flowing toward B.
+  Going around water, terrain, or a city for many kilometres is legal if that is
+  how the pavement still flows toward B.
+- When two arounds both flow toward B, shorter pavement wins. A long loop that
+  better “points at B” or avoids a short around loses.
+- Soft forward preference only — mild tax on edges that move away from B, never
+  stronger than the extra kilometres of the long around (~2/km). No chord
+  cross-track cone; that treats a short around-the-lake as flowing uphill.
 - No Clean corridor. No hard progress-regression gate.
-- Avoid major urban cores and major highways (freeway / motorway+ramp). Not OSM
-  towns, not rural numbered trunks, not collectors. Cross metros/highways only
-  after a proved no-path on eligible fabric; label the fallback.
+- Avoid major urban cores and freeways (motorway + ramp). Arterial is normal
+  Clean pavement. Not OSM towns, not rural numbered trunks, not collectors.
+  Cross metros/freeways only after a proved no-path on eligible fabric; label
+  the fallback.
 - Snap nearest eligible road/path/trail. Never prefer pavement for Clean.
 - Untagged local/service remain impassable on through-edges. The snapped edge at
   A and at B is always traversable. Allow Unknown is forced off.

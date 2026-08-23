@@ -22,8 +22,9 @@ enum CrossProvinceRouteDebug {
     }
 
     /// Default pins — keep in sync with `scripts/debug-cross-province-route.mjs`.
-    static let pinA = Pin(latitude: 49.0253, longitude: -122.8029, label: "White Rock BC")
-    static let pinB = Pin(latitude: 49.6956, longitude: -112.8451, label: "outside Lethbridge AB")
+    /// `nonisolated` so they can be default arguments under MainActor isolation.
+    nonisolated static let pinA = Pin(latitude: 49.0253, longitude: -122.8029, label: "White Rock BC")
+    nonisolated static let pinB = Pin(latitude: 49.6956, longitude: -112.8451, label: "outside Lethbridge AB")
 
     private static let endpoint = AppConfig.routeURL
     /// Runs the full diagnostic suite and writes
@@ -259,15 +260,6 @@ enum CrossProvinceRouteDebug {
                 "INCONCLUSIVE: inspect per-line FAIL details (status/message/dbg) above."
         }
 
-        var lines = [
-            "========== SUMMARY ==========",
-            "Controls: BC-only \(grade(bc)) | AB-only \(grade(ab))",
-            "Full A→B: \(fullAnyPass ? (allPass(full) ? "ALL PASS" : "PARTIAL") : "ALL FAIL") (\(full.filter(\.ok).count)/\(full.count))",
-            "Reverse B→A: \(anyPass(reverse) ? (allPass(reverse) ? "ALL PASS" : "PARTIAL") : "ALL FAIL") (\(reverse.filter(\.ok).count)/\(reverse.count))",
-            "Interpretation: \(interpretation)",
-            "=============================",
-        ]
-        _ = lines
         return Summary(lines: [
             "========== SUMMARY ==========",
             "Controls: BC-only \(grade(bc)) | AB-only \(grade(ab))",

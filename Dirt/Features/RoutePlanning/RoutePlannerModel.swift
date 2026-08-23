@@ -6,9 +6,9 @@ import UIKit
 
 /// Planner state machine covering three route-finder modes:
 /// From here (GPS → point 2), Plan a route (chained ordered waypoint hops),
-/// and Saved (local SwiftData store). Approved installed packs route first
-/// whether the device is online or offline. Live `/api/route` is used only
-/// when the rider declines a required pack or no approved pack is available.
+/// and Saved (local SwiftData store). Live `/api/route` is always authoritative
+/// while online. Start Navigation downloads the published regional packs needed
+/// for no-signal recovery; installed packs route only while offline.
 @Observable
 final class RoutePlannerModel {
     enum Mode: String, CaseIterable, Identifiable {
@@ -574,24 +574,6 @@ final class RoutePlannerModel {
         replanFromStationID: String? = nil
     ) {
         let requested = itinerary
-        if requested.waypoints.count >= 2 {
-            let coords = requested.waypoints.map(\.coordinate.locationCoordinate)
-            let protect = navigation.phase == .active || graphPacks.protectInstalledRevisions
-            switch packAcquisition.evaluate(
-                coordinates: coords,
-                protectInstalledRevisions: protect
-            ) {
-            case .requestConsent:
-                pendingPackBuild = (legIndex, reuse, replanFromStationID)
-                isRouting = false
-                isAssemblingRoute = false
-                if toast == Self.calculatingRouteToast { toast = nil }
-                refreshMap()
-                return
-            case .useInstalledPacks, .useLive:
-                pendingPackBuild = nil
-            }
-        }
         canonicalBuildStartCount += 1
         lastCanonicalBuildFromLegIndex = legIndex
         isRouting = true
@@ -2455,14 +2437,15 @@ final class RoutePlannerModel {
             ],
             allowUnknown: useAllow,
             avoidEdgeIds: avoidEdgeIds,
-            sessionSeed: planningSessionSeed
+            sessionSeed: planningSessionSeed,
+            cleanMetroMultiplier: CleanMetroDebugPrefs.requestMultiplier
         )
         return try await routing.route(request, timeout: 15)
     }
 
     /// From here / Plan A→B.
-    /// Approved installed packs route first, online or offline. Live `/api/route`
-    /// is used when the rider declines a required pack or none is available.
+    /// Live `/api/route` is always authoritative while online. Installed packs
+    /// route only while offline.
     var preservedDestination: RouteCoordinate? {
         if shouldPreserveStagesForRecovery,
            let idx = activeStageIndex(near: locationService.currentCoordinate),

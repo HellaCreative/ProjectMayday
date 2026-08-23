@@ -80,12 +80,14 @@ final class ItineraryBuilder {
                 let from = itinerary.waypoints[index].coordinate
                 let to = itinerary.waypoints[index + 1].coordinate
                 let straightMeters = straightLineMeters(from, to)
-                let endpointRegions = GraphPackStore.regionIds(containingAny: [
+                // Province/state families only — never treat internal pack-shard
+                // seams (or coarse bbox overlaps within one province) as cross-region.
+                let crossProvince = GraphPackStore.endpointsCrossProvince([
                     from.locationCoordinate, to.locationCoordinate
                 ])
                 let cleanFoundation = fuel.usableMeters > 0 && (
                     straightMeters >= 1_000_000
-                        || endpointRegions.count > 1
+                        || crossProvince
                 )
                 var discoveryProfile: RouteProfile = cleanFoundation ? .cleanest : riderLeg.profile
                 var response: RouteResponse
@@ -107,7 +109,7 @@ final class ItineraryBuilder {
                 // long-haul or cross-region leg. Requiring several pumps is not
                 // itself permission to replace a sub-1,000 km adventure route.
                 if fuel.usableMeters > 0,
-                   (straightMeters >= 1_000_000 || endpointRegions.count > 1),
+                   (straightMeters >= 1_000_000 || crossProvince),
                    discoveryProfile != .cleanest {
                     discoveryProfile = .cleanest
                     response = try await selectedSource.route(routeRequest(
@@ -126,7 +128,7 @@ final class ItineraryBuilder {
                 if discoveryProfile == .cleanest, riderLeg.profile != .cleanest {
                     RoutingDebugLog.shared.event(
                         "fuel longhaul default riderLeg=\(riderLeg.id) requested=\(riderLeg.profile.rawValue) " +
-                        "sections=clean reason=\(endpointRegions.count > 1 ? "cross_region" : "over_1000km")"
+                        "sections=clean reason=\(crossProvince ? "cross_region" : "over_1000km")"
                     )
                 }
                 discoveryHistory.append(response)
@@ -617,10 +619,10 @@ final class ItineraryBuilder {
         var windowStart = from
         var routedMeters = 0.0
         var excluded = excludedStationIDs
-        let packRegions = GraphPackStore.regionIds(containingAny: [
+        let packProvinces = GraphPackStore.endpointProvinceIds(containingAny: [
             from.locationCoordinate, to.locationCoordinate
         ])
-        let usesWindows = stopsNeeded > 3 || meters > 600_000 || packRegions.count > 1
+        let usesWindows = stopsNeeded > 3 || meters > 600_000 || packProvinces.count > 1
         var windowIndex = 0
 
         while true {
@@ -1077,7 +1079,8 @@ private func routeRequest(
         arrivalEdgeId: history.arrivalEdgeID,
         backtrackFactor: 4,
         maxPathMeters: maxPathMeters,
-        directExtraBudgetMeters: directExtraBudgetMeters
+        directExtraBudgetMeters: directExtraBudgetMeters,
+        cleanMetroMultiplier: CleanMetroDebugPrefs.requestMultiplier
     )
 }
 

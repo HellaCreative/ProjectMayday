@@ -82,12 +82,16 @@ final class RoutingClient {
                     packs: response.debug?.packIdentity
                 )
             )
+            RoutingDebugLog.shared.liveRouteDiagnostics(response)
         }
         guard response.isComplete else {
             let msg = response.message ?? response.error ?? "Route unavailable."
+            let reason = response.debug?.failureReason
+                ?? response.debug?.diagnostics?.failureReason
+                ?? "-"
             Task { @MainActor in
                 RoutingDebugLog.shared.event(
-                    "live incomplete http=\(http?.statusCode ?? 0) msg=\(msg)"
+                    "live incomplete http=\(http?.statusCode ?? 0) msg=\(msg) failureReason=\(reason)"
                 )
             }
             throw RoutingError.server(msg)
@@ -134,12 +138,14 @@ final class RoutingClient {
                     packs: response.packIdentity
                 )
             )
+            RoutingDebugLog.shared.liveFuelDiagnostics(response)
         }
         guard response.isUsableFuelResult else {
             let message = response.message ?? response.error ?? "Fuel chain unavailable."
             Task { @MainActor in
                 RoutingDebugLog.shared.event(
-                    "fuel chain incomplete http=\(http?.statusCode ?? 0) code=\(response.error ?? "-") msg=\(message)"
+                    "fuel chain incomplete http=\(http?.statusCode ?? 0) code=\(response.error ?? "-") msg=\(message) "
+                        + "gapReason=\(response.diagnostics?.gapReason ?? "-")"
                 )
             }
             throw RoutingError.server(message)

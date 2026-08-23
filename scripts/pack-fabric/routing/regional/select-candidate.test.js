@@ -5,7 +5,15 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const { graphPathForRegion, remoteGraphUrl } = require("./select");
+const { graphPathForRegion, remoteGraphUrl, primaryRegionForPoint } = require("./select");
+
+test("western Nova Scotia stays NS despite NB bbox overlap", () => {
+  assert.equal(primaryRegionForPoint(-63.5752, 44.6488), "ns"); // Halifax
+  assert.equal(primaryRegionForPoint(-65.7587, 44.6221), "ns"); // Digby
+  assert.equal(primaryRegionForPoint(-64.4935, 45.0770), "ns"); // Kentville
+  assert.equal(primaryRegionForPoint(-64.7782, 46.0878), "nb"); // Moncton
+  assert.equal(primaryRegionForPoint(-66.0633, 45.2733), "nb"); // Saint John
+});
 
 test("a deployment-scoped live candidate overrides only its named region", () => {
   const previous = process.env.R2_REGION_BASE_OVERRIDES;

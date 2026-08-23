@@ -238,8 +238,10 @@ nonisolated enum OnDeviceProfileCosts {
         return 1 + 2.4 * t
     }
 
-    static func isMajorHighway(_ road: String) -> Bool {
-        road == "freeway" || road == "arterial" || road == "ramp"
+    static func isMajorHighway(_ road: String, profile: RouteProfile = .dirt) -> Bool {
+        if road == "freeway" || road == "ramp" { return true }
+        if profile == .cleanest { return false }
+        return road == "arterial"
     }
 
     /// Pin counts as “on a major highway” only when the tap is on that carriageway.
@@ -248,6 +250,7 @@ nonisolated enum OnDeviceProfileCosts {
     static let majorHighwayJoinMeters = 6_000.0
 
     /// Major highways stay expensive except to enter/leave a pin on that class.
+    /// Clean avoids freeway+ramp only; arterial is normal Clean pavement.
     static func majorHighwayAvoidMult(
         profile: RouteProfile,
         roadClassCode: Int,
@@ -257,7 +260,7 @@ nonisolated enum OnDeviceProfileCosts {
         endOnMajorHighway: Bool
     ) -> Double {
         let road = GraphV2Pack.roadClassName(roadClassCode)
-        guard isMajorHighway(road) else { return 1 }
+        guard isMajorHighway(road, profile: profile) else { return 1 }
         let join = majorHighwayJoinMeters
         let nearPinnedHighway =
             (endOnMajorHighway && metersToDestination < join)
@@ -317,15 +320,16 @@ nonisolated enum OnDeviceProfileCosts {
             }
             return mid + near
         case .cleanest:
-            // Soft fan is corridorCrossTrackExtra only — away-tax made coastal
-            // arterial dips lose to long paved rings that point at B.
-            return 0
+            // Gravity toward B only — ~2/km away keeps a 15 km dip below ~60 km extra pavement.
+            let nearBand = max(2500.0, ab * 0.08)
+            let w = dFrom < nearBand ? 2.5 : 2.0
+            return kmAway * w
         }
     }
 
     /// Quadratic penalty on perpendicular distance to the A→B great-circle.
-    /// A wide arc that still gets closer to B never trips `approachAwayExtra`.
-    /// Direct strongest, Clean/Balanced next, Dirt allows nearby valleys.
+    /// Clean has none — around-the-lake pavement that flows toward B is legal.
+    /// Direct strongest, then Balanced, then Dirt.
     static func corridorCrossTrackExtra(
         profile: RouteProfile,
         point: CLLocationCoordinate2D,
@@ -334,12 +338,13 @@ nonisolated enum OnDeviceProfileCosts {
         edgeMeters: Double
     ) -> Double {
         guard edgeMeters > 0 else { return 0 }
+        if profile == .cleanest { return 0 }
         let k: Double
         switch profile {
         case .direct: k = 0.018
-        case .cleanest: k = 0.006
         case .balanced: k = 0.014
         case .dirt: k = 0.005
+        case .cleanest: k = 0
         }
         let xtKm = abs(GeoMath.crossTrackMeters(point: point, lineFrom: lineFrom, to: lineTo)) / 1000.0
         let km = edgeMeters / 1000.0

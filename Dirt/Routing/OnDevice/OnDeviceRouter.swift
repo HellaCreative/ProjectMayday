@@ -139,7 +139,8 @@ nonisolated struct OnDeviceRouter {
         arrivalEdgeId: String? = nil,
         backtrackFactor: Double = 4,
         sessionSeed: UInt64? = nil,
-        maxRouteMeters: Double? = nil
+        maxRouteMeters: Double? = nil,
+        cleanMetroMultiplier: Double? = nil
     ) -> Result? {
         switch routeDetailed(
             from: from,
@@ -151,7 +152,8 @@ nonisolated struct OnDeviceRouter {
             arrivalEdgeId: arrivalEdgeId,
             backtrackFactor: backtrackFactor,
             sessionSeed: sessionSeed,
-            maxRouteMeters: maxRouteMeters
+            maxRouteMeters: maxRouteMeters,
+            cleanMetroMultiplier: cleanMetroMultiplier
         ) {
         case .success(let result): return result
         case .failure: return nil
@@ -168,7 +170,8 @@ nonisolated struct OnDeviceRouter {
         arrivalEdgeId: String? = nil,
         backtrackFactor: Double = 4,
         sessionSeed: UInt64? = nil,
-        maxRouteMeters: Double? = nil
+        maxRouteMeters: Double? = nil,
+        cleanMetroMultiplier: Double? = nil
     ) -> Swift.Result<Result, Failure> {
         let pavedWall = routeDetailedOnce(
             from: from, to: to, profile: profile,
@@ -182,7 +185,8 @@ nonisolated struct OnDeviceRouter {
             pavedOnly: profile == .cleanest,
             urbanCoreFallback: false,
             settlementWall: false,
-            settlementFallback: profile != .cleanest
+            settlementFallback: profile != .cleanest,
+            cleanMetroMultiplier: cleanMetroMultiplier
         )
         guard profile == .cleanest else {
             guard case .failure(.noPath) = pavedWall else { return pavedWall }
@@ -198,7 +202,8 @@ nonisolated struct OnDeviceRouter {
                 pavedOnly: false,
                 urbanCoreFallback: false,
                 settlementWall: false,
-                settlementFallback: true
+                settlementFallback: true,
+                cleanMetroMultiplier: cleanMetroMultiplier
             )
             guard case .success(var route) = relaxed else { return relaxed }
             route.searchMeta.settlementFallbackUsed = true
@@ -226,7 +231,8 @@ nonisolated struct OnDeviceRouter {
             pavedOnly: false,
             urbanCoreFallback: false,
             settlementWall: false,
-            settlementFallback: false
+            settlementFallback: false,
+            cleanMetroMultiplier: cleanMetroMultiplier
         )
         switch anySurfaceWall {
         case .success(var route):
@@ -251,7 +257,8 @@ nonisolated struct OnDeviceRouter {
             pavedOnly: true,
             urbanCoreFallback: true,
             settlementWall: false,
-            settlementFallback: false
+            settlementFallback: false,
+            cleanMetroMultiplier: cleanMetroMultiplier
         )
         let fallback: Swift.Result<Result, Failure>
         switch pavedUrbanFallback {
@@ -270,7 +277,8 @@ nonisolated struct OnDeviceRouter {
                 pavedOnly: false,
                 urbanCoreFallback: true,
                 settlementWall: false,
-                settlementFallback: false
+                settlementFallback: false,
+                cleanMetroMultiplier: cleanMetroMultiplier
             )
         case .failure:
             return pavedUrbanFallback
@@ -433,7 +441,8 @@ nonisolated struct OnDeviceRouter {
         pavedOnly: Bool,
         urbanCoreFallback: Bool,
         settlementWall: Bool,
-        settlementFallback: Bool
+        settlementFallback: Bool,
+        cleanMetroMultiplier: Double? = nil
     ) -> Swift.Result<Result, Failure> {
         // Snap only onto edges the profile can traverse.
         // Otherwise Banjo Mike–style camps lock onto NSTDB TRACK (motorized_unknown),
@@ -524,6 +533,7 @@ nonisolated struct OnDeviceRouter {
         ctx.urbanCoreFallback = urbanCoreFallback
         ctx.settlementWall = settlementWall
         ctx.settlementFallback = settlementFallback
+        ctx.cleanMetroMultiplier = cleanMetroMultiplier
 
         if profile == .dirt {
             let base = HopSearchPolicy.dirtCorridorMeters
@@ -904,7 +914,7 @@ nonisolated struct OnDeviceRouter {
         let surfaceName = OnDeviceProfileCosts.surfaceName(code: surface)
         let roadName = GraphV2Pack.roadClassName(roadClass)
 
-        if OnDeviceProfileCosts.isMajorHighway(roadName),
+        if OnDeviceProfileCosts.isMajorHighway(roadName, profile: profile),
            snap.distanceMeters < OnDeviceProfileCosts.majorHighwayPinMeters {
             return snap.distanceMeters
         }
@@ -1128,8 +1138,8 @@ nonisolated struct OnDeviceRouter {
         let edgeMetersEnd = Double(pack.edgeMeters[endEi])
         let endLL = endSnap.projected
         let abMeters = meters(startSnap.projected, endLL)
-        let startOnMajorHighway = snapIsMajorHighwayPin(startSnap)
-        let endOnMajorHighway = snapIsMajorHighwayPin(endSnap)
+        let startOnMajorHighway = snapIsMajorHighwayPin(startSnap, profile: profile)
+        let endOnMajorHighway = snapIsMajorHighwayPin(endSnap, profile: profile)
 
         func awayExtra(fromNode: Int, toNode: Int) -> Double {
             func ll(_ node: Int) -> CLLocationCoordinate2D? {
@@ -1294,10 +1304,10 @@ nonisolated struct OnDeviceRouter {
         heap.push(node: startVirt, cost: 0)
 
         let applyAway = ctx.costMode == .profile || ctx.costMode == .pavement
-        // Direct/Clean keep a centreline pull even when a hard corridor exists.
+        // Direct keeps centreline pull. Clean uses toward-B gravity only — no chord XT.
         let applySoftCorridor = applyAway
-            && (ctx.costMode == .pavement || profile == .direct || profile == .cleanest
-                || ctx.corridorMeters == nil)
+            && profile != .cleanest
+            && (ctx.costMode == .pavement || profile == .direct || ctx.corridorMeters == nil)
         let isHunt = ctx.maxPathMeters != nil || ctx.boundedSearch
         var pops = 0
         var abort = "completed"
@@ -1374,7 +1384,8 @@ nonisolated struct OnDeviceRouter {
                         start: from,
                         end: to,
                         boxes: packUrbanCores,
-                        edgeFrom: coordinate(forNode: cur.node)
+                        edgeFrom: coordinate(forNode: cur.node),
+                        penalty: UrbanCore.resolveCleanMetroPenalty(profile: profile, override: ctx.cleanMetroMultiplier)
                     )
                     if ctx.settlementFallback {
                         step *= UrbanCore.settlementFallbackMultiplier(
@@ -1503,7 +1514,8 @@ nonisolated struct OnDeviceRouter {
                         start: from,
                         end: to,
                         boxes: packUrbanCores,
-                        edgeFrom: edgeFrom
+                        edgeFrom: edgeFrom,
+                        penalty: UrbanCore.resolveCleanMetroPenalty(profile: profile, override: ctx.cleanMetroMultiplier)
                     )
                     if ctx.settlementFallback {
                         step *= UrbanCore.settlementFallbackMultiplier(
@@ -1739,7 +1751,8 @@ nonisolated struct OnDeviceRouter {
                         start: from,
                         end: to,
                         boxes: packUrbanCores,
-                        edgeFrom: coordinate(forNode: node)
+                        edgeFrom: coordinate(forNode: node),
+                        penalty: UrbanCore.resolveCleanMetroPenalty(profile: profile, override: ctx.cleanMetroMultiplier)
                     )
                     let newScore = cur.cost + backtrackPenalized(
                         edgeM * settlementMult * urbanMult,
@@ -1811,7 +1824,8 @@ nonisolated struct OnDeviceRouter {
                         start: from,
                         end: to,
                         boxes: packUrbanCores,
-                        edgeFrom: edgeFrom
+                        edgeFrom: edgeFrom,
+                        penalty: UrbanCore.resolveCleanMetroPenalty(profile: profile, override: ctx.cleanMetroMultiplier)
                     )
                     let virtualEdgeID = v.junctionStitch
                         ? v.stitchEdgeId
@@ -2342,8 +2356,8 @@ nonisolated struct OnDeviceRouter {
         let policyUnknown = allowUnknown && profile != .cleanest
         let endLL = endSnap.projected
         let abMeters = meters(startSnap.projected, endLL)
-        let startOnMajorHighway = snapIsMajorHighwayPin(startSnap)
-        let endOnMajorHighway = snapIsMajorHighwayPin(endSnap)
+        let startOnMajorHighway = snapIsMajorHighwayPin(startSnap, profile: profile)
+        let endOnMajorHighway = snapIsMajorHighwayPin(endSnap, profile: profile)
         let stitches = junctionStitches(
             near: from, and: to, profile: profile,
             allowUnknown: allowUnknown, avoidEdgeIds: avoidEdgeIds
@@ -2414,7 +2428,8 @@ nonisolated struct OnDeviceRouter {
                         start: from,
                         end: to,
                         boxes: packUrbanCores,
-                        edgeFrom: coordinate(forNode: cur.node)
+                        edgeFrom: coordinate(forNode: cur.node),
+                        penalty: UrbanCore.resolveCleanMetroPenalty(profile: profile, override: ctx.cleanMetroMultiplier)
                     )
                     if ctx.settlementFallback {
                         step *= UrbanCore.settlementFallbackMultiplier(
@@ -2439,7 +2454,7 @@ nonisolated struct OnDeviceRouter {
                         abMeters: abMeters,
                         regionId: pack.regionId
                     )
-                    if profile == .direct || profile == .cleanest || ctx.corridorMeters == nil {
+                    if profile == .direct || ctx.corridorMeters == nil {
                         step += OnDeviceProfileCosts.corridorCrossTrackExtra(
                             profile: profile,
                             point: toLL,
@@ -2472,7 +2487,8 @@ nonisolated struct OnDeviceRouter {
                         start: from,
                         end: to,
                         boxes: packUrbanCores,
-                        edgeFrom: coordinate(forNode: cur.node)
+                        edgeFrom: coordinate(forNode: cur.node),
+                        penalty: UrbanCore.resolveCleanMetroPenalty(profile: profile, override: ctx.cleanMetroMultiplier)
                     )
                     if ctx.settlementFallback {
                         step *= UrbanCore.settlementFallbackMultiplier(
@@ -3102,9 +3118,12 @@ nonisolated struct OnDeviceRouter {
         return name.isEmpty ? "motorized_permissive" : name
     }
 
-    private func snapIsMajorHighwayPin(_ snap: EdgeSnap) -> Bool {
+    private func snapIsMajorHighwayPin(_ snap: EdgeSnap, profile: RouteProfile) -> Bool {
         guard snap.distanceMeters < OnDeviceProfileCosts.majorHighwayPinMeters else { return false }
-        return OnDeviceProfileCosts.isMajorHighway(roadClassNameForEdge(snap.edgeIndex))
+        return OnDeviceProfileCosts.isMajorHighway(
+            roadClassNameForEdge(snap.edgeIndex),
+            profile: profile
+        )
     }
 
     private func roadClassNameForEdge(_ ei: Int) -> String {

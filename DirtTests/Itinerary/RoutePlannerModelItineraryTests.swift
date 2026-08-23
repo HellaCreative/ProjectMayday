@@ -6,7 +6,7 @@ import Testing
 @MainActor
 @Suite(.serialized)
 struct RoutePlannerModelItineraryTests {
-    @Test func planModeUsesTheInstalledPackRegistry() async {
+    @Test func planModeSelectsLiveWhileOnline() async {
         let live = PlannerFakeRoutingSource(name: "live")
         let pack = PlannerFakeRoutingSource(name: "pack")
         let registry = FakeInstalledPackRegistry(installedRegionIDs: ["ns"])
@@ -37,10 +37,11 @@ struct RoutePlannerModelItineraryTests {
         #expect(policyReports.contains { report in
             report.contains("packsCover=true")
                 && report.contains("installed=[ns]")
-                && report.contains("selected=pack")
+                && report.contains("online=true")
+                && report.contains("selected=live")
         })
-        #expect(pack.routeRequests.isEmpty == false)
-        #expect(live.routeRequests.isEmpty)
+        #expect(live.routeRequests.isEmpty == false)
+        #expect(pack.routeRequests.isEmpty)
     }
 
     @Test func fromHereFuelBuildSwitchesToPlanWithoutNetworkCalls() async throws {

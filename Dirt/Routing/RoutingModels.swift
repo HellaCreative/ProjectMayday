@@ -92,6 +92,8 @@ struct RouteRequestOptions: Codable, Sendable {
     var sessionSeed: UInt64?
     var maxPathMeters: Double?
     var directExtraBudgetMeters: Double?
+    /// DEBUG ONLY. Clean pin tests: urban-core multiplier override (1…20).
+    var cleanMetroMultiplier: Double?
 
     init(
         avoidEdgeIds: [String] = [],
@@ -100,7 +102,8 @@ struct RouteRequestOptions: Codable, Sendable {
         backtrackFactor: Double? = nil,
         sessionSeed: UInt64? = nil,
         maxPathMeters: Double? = nil,
-        directExtraBudgetMeters: Double? = nil
+        directExtraBudgetMeters: Double? = nil,
+        cleanMetroMultiplier: Double? = nil
     ) {
         self.avoidEdgeIds = avoidEdgeIds.isEmpty ? nil : avoidEdgeIds
         self.priorEdgeIds = priorEdgeIds.isEmpty ? nil : priorEdgeIds
@@ -109,6 +112,11 @@ struct RouteRequestOptions: Codable, Sendable {
         self.sessionSeed = sessionSeed
         self.maxPathMeters = maxPathMeters
         self.directExtraBudgetMeters = directExtraBudgetMeters
+        if let cleanMetroMultiplier, cleanMetroMultiplier.isFinite {
+            self.cleanMetroMultiplier = min(20, max(1, cleanMetroMultiplier))
+        } else {
+            self.cleanMetroMultiplier = nil
+        }
     }
 }
 
@@ -129,7 +137,8 @@ struct RouteRequest: Codable, Sendable {
         backtrackFactor: Double? = nil,
         sessionSeed: UInt64 = 0,
         maxPathMeters: Double? = nil,
-        directExtraBudgetMeters: Double? = nil
+        directExtraBudgetMeters: Double? = nil,
+        cleanMetroMultiplier: Double? = nil
     ) {
         self.profile = profile
         self.locations = locations
@@ -139,9 +148,10 @@ struct RouteRequest: Codable, Sendable {
             motorizedUnknown: profile == .cleanest ? false : allowUnknown
         )
         let seed = sessionSeed == 0 ? nil : sessionSeed
+        let metro = profile == .cleanest ? cleanMetroMultiplier : nil
         if avoidEdgeIds.isEmpty, priorEdgeIds.isEmpty, arrivalEdgeId == nil,
            backtrackFactor == nil, seed == nil, maxPathMeters == nil,
-           directExtraBudgetMeters == nil {
+           directExtraBudgetMeters == nil, metro == nil {
             options = nil
         } else {
             options = RouteRequestOptions(
@@ -151,7 +161,8 @@ struct RouteRequest: Codable, Sendable {
                 backtrackFactor: backtrackFactor,
                 sessionSeed: seed,
                 maxPathMeters: maxPathMeters,
-                directExtraBudgetMeters: directExtraBudgetMeters
+                directExtraBudgetMeters: directExtraBudgetMeters,
+                cleanMetroMultiplier: metro
             )
         }
     }
@@ -277,6 +288,10 @@ struct FuelChainDiagnostics: Codable, Sendable {
     let matchedFuel: Int?
     let elapsedMs: Int?
     var candidateK: Int? = nil
+    var stationsReachableWithinRange: Int? = nil
+    var candidatesEvaluated: Int? = nil
+    var gapReason: String? = nil
+    var failureReason: String? = nil
 }
 
 struct FuelStationCandidate: Codable, Sendable {
@@ -439,6 +454,14 @@ struct RouteStats: Codable, Sendable {
     }
 }
 
+struct RouteSearchAttempt: Codable, Sendable {
+    let corridorMeters: Double?
+    let outcome: String?
+    let pops: Int?
+    let searchMs: Int?
+    var succeeded: Bool? = nil
+}
+
 struct RouteResponseSearchMeta: Codable, Sendable {
     let pass2Outcome: String?
     let pops: Int?
@@ -453,6 +476,27 @@ struct RouteResponseSearchMeta: Codable, Sendable {
     let urbanCoreFallbackUsed: Bool?
     let cleanUnpavedFallbackUsed: Bool?
     let settlementFallbackUsed: Bool?
+    var corridorCandidates: [RouteSearchAttempt]? = nil
+}
+
+/// Live `/api/route` diagnostics block (`debug.diagnostics`). Logging only.
+struct RouteResponseDiagnostics: Codable, Sendable {
+    var buildMs: Int? = nil
+    var searchMs: Int? = nil
+    var searchAttempts: [RouteSearchAttempt]? = nil
+    var pops: Int? = nil
+    var corridorMeters: Double? = nil
+    var corridorWidened: Bool? = nil
+    var corridorWidthsTried: [Double?]? = nil
+    var maxCrossTrackMeters: Double? = nil
+    var backtrackPct: Double? = nil
+    var failureReason: String? = nil
+    var searchOutcome: String? = nil
+    var requestedProfile: String? = nil
+    var effectiveProfile: String? = nil
+    var profileFallbacks: [String]? = nil
+    /// DEBUG ONLY. Echo of options.cleanMetroMultiplier when Clean override was applied.
+    var cleanMetroMultiplier: Double? = nil
 }
 
 struct RouteResponseDebug: Codable, Sendable {
@@ -461,6 +505,10 @@ struct RouteResponseDebug: Codable, Sendable {
     let searchMeta: RouteResponseSearchMeta?
     let fallback: String?
     var packIdentity: [RoutingPackIdentity]? = nil
+    var diagnostics: RouteResponseDiagnostics? = nil
+    var failureReason: String? = nil
+    var searchMs: Int? = nil
+    var pops: Int? = nil
 }
 
 struct RoutingPackIdentity: Codable, Sendable, Equatable {

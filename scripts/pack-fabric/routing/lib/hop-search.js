@@ -116,13 +116,29 @@ function metroEdgeBlocks(fromLL, toLL, startLL, endLL, boxes = METRO_CORE_WALL) 
 }
 
 /**
+ * Debug-only Clean override: clamp options.cleanMetroMultiplier to 1–20.
+ * Null means keep production ×120. Ignored for non-cleanest profiles.
+ */
+function resolveCleanMetroMultiplier(profile, raw) {
+  if (String(profile || "").toLowerCase() !== "cleanest") return null;
+  if (raw == null || raw === "") return null;
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return null;
+  return Math.min(20, Math.max(1, n));
+}
+
+/**
  * A relaxed wall is still expensive. This makes the last-resort search cross
  * the smallest necessary urban section instead of treating every city as open.
  * Optional fromLL also taxes edges that tunnel through a core between nodes.
+ * `penalty` defaults to 120; Clean pin tests may pass 1–20 via cleanMetroMultiplier.
  */
-function urbanCoreFallbackMultiplier(lon, lat, startLL, endLL, boxes = METRO_CORE_WALL, fromLL = null) {
-  if (metroBlocks(lon, lat, startLL, endLL, boxes)) return 120;
-  if (fromLL && metroEdgeBlocks(fromLL, [lon, lat], startLL, endLL, boxes)) return 120;
+function urbanCoreFallbackMultiplier(
+  lon, lat, startLL, endLL, boxes = METRO_CORE_WALL, fromLL = null, penalty = 120
+) {
+  const p = Number.isFinite(Number(penalty)) && Number(penalty) > 0 ? Number(penalty) : 120;
+  if (metroBlocks(lon, lat, startLL, endLL, boxes)) return p;
+  if (fromLL && metroEdgeBlocks(fromLL, [lon, lat], startLL, endLL, boxes)) return p;
   return 1;
 }
 
@@ -503,6 +519,7 @@ module.exports = {
   segmentIntersectsBox,
   metroEdgeBlocks,
   urbanCoreFallbackMultiplier,
+  resolveCleanMetroMultiplier,
   settlementBlocks,
   settlementFallbackMultiplier,
   SETTLEMENT_FALLBACK_MULTIPLIER,

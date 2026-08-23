@@ -43,6 +43,7 @@ const {
   DIRT_RIDE_AWAY_SCALE,
   hopBlocked,
   urbanCoreFallbackMultiplier,
+  resolveCleanMetroMultiplier,
   settlementBlocks,
   settlementFallbackMultiplier,
   metroEdgeBlocks,
@@ -641,8 +642,8 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
   const startLL = startMatch.coord;
   const endLL = endMatch.coord;
   const abMeters = haversineMeters(startLL, endLL);
-  const startOnMajorHighway = pinMatchesMajorHighway(startMatch);
-  const endOnMajorHighway = pinMatchesMajorHighway(endMatch);
+  const startOnMajorHighway = pinMatchesMajorHighway(startMatch, profile);
+  const endOnMajorHighway = pinMatchesMajorHighway(endMatch, profile);
 
   function nodeLL(node) {
     if (node === startNode) return startLL;
@@ -730,7 +731,10 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
   // Urban cores are strongly penalized (×120) but passable so a short graze
   // beats a hundreds-of-kilometre detour. cityWall remains in searchOpts for
   // caller compatibility; it no longer hard-blocks fabric.
+  // Clean pin tests may pass options.cleanMetroMultiplier (1–20) to soften ×120.
   const cityWall = searchOpts.cityWall !== false;
+  const cleanMetroPenalty =
+    resolveCleanMetroMultiplier(profile, searchOpts.cleanMetroMultiplier) ?? 120;
   const corridorM = Number.isFinite(Number(searchOpts.corridorMeters))
     ? Number(searchOpts.corridorMeters)
     : corridorMetersForProfile(profile);
@@ -749,9 +753,10 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
       ? Number(searchOpts.progressRegressionMeters)
       : maxProgressRegressionMeters(profile));
   const applyAwayXt = costMode === "profile";
-  // Direct keeps centreline pull. Clean uses mild XT without a hard corridor.
+  // Direct keeps centreline pull. Clean uses toward-B gravity only — no chord XT.
   const applySoftCorridor = applyAwayXt
-    && (profile === "direct" || profile === "cleanest" || !(corridorM > 0));
+    && profile !== "cleanest"
+    && (profile === "direct" || !(corridorM > 0));
   const isHunt = Number.isFinite(maxPathMeters);
   const boundedSearch = isHunt || searchOpts.boundedSearch === true;
   const slackToDest = isHunt
@@ -965,7 +970,7 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
         }
         if (toLL) {
           step *= urbanCoreFallbackMultiplier(
-            toLL[0], toLL[1], startLL, endLL, urbanBoxes, nodeLL(cur.node)
+            toLL[0], toLL[1], startLL, endLL, urbanBoxes, nodeLL(cur.node), cleanMetroPenalty
           );
         }
         if (settlementFallback && toLL) {
@@ -1079,7 +1084,7 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
         }
         if (toLL) {
           step *= urbanCoreFallbackMultiplier(
-            toLL[0], toLL[1], startLL, endLL, urbanBoxes, nodeLL(cur.node)
+            toLL[0], toLL[1], startLL, endLL, urbanBoxes, nodeLL(cur.node), cleanMetroPenalty
           );
         }
         if (settlementFallback && toLL) {
@@ -1438,7 +1443,7 @@ function searchBalancedResource(ctx) {
           : 1;
         const urbanMult = toLL
           ? urbanCoreFallbackMultiplier(
-            toLL[0], toLL[1], startLL, endLL, urbanBoxes, nodeLL(node)
+            toLL[0], toLL[1], startLL, endLL, urbanBoxes, nodeLL(node), cleanMetroPenalty
           )
           : 1;
         const newScore = cur.searchCost
@@ -1497,7 +1502,7 @@ function searchBalancedResource(ctx) {
           : 1;
         const urbanMult = toLL
           ? urbanCoreFallbackMultiplier(
-            toLL[0], toLL[1], startLL, endLL, urbanBoxes, nodeLL(node)
+            toLL[0], toLL[1], startLL, endLL, urbanBoxes, nodeLL(node), cleanMetroPenalty
           )
           : 1;
         const newScore = cur.searchCost

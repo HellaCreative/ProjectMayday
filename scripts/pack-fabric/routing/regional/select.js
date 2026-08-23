@@ -227,7 +227,13 @@ function primaryRegionForPoint(lon, lat) {
     return "pe";
   }
   if (ids.has("ns") && ids.has("nb")) {
-    // Roughly east of the interprovincial line stays Nova Scotia.
+    // NB's coarse east edge covers Digby / Annapolis / Kentville. Those points
+    // are deep inside NS and only skim NB — keep them Nova Scotia. The real
+    // Missaguash line (~-64.27) applies only when the point is not clearly
+    // deeper in NS (Tantramar / Moncton side).
+    const nsScore = bboxInteriorScore(lon, lat, REGION_BBOX.ns);
+    const nbScore = bboxInteriorScore(lon, lat, REGION_BBOX.nb);
+    if (nsScore > nbScore * 1.5) return "ns";
     if (lon >= -64.27) return "ns";
     return "nb";
   }
