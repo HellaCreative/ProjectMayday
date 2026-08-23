@@ -393,6 +393,7 @@ function encodeFromV1(data) {
   place("idBlob", idBlob.length, 1);
 
   const { SURFACE_FAMILY_MAP } = require("./surface-family");
+  const { ROAD_TIER_MAP } = require("./road-tier");
   const enumsPayload = {
     ...(data.enums || {}),
     surfaceLeafNames: surfaceDict.names,
@@ -400,7 +401,9 @@ function encodeFromV1(data) {
     structureLeafNames: structureDict.names,
     accessLeafNames: accessDict.names,
     // Phase E1: shared read-time family table — JS + Swift must derive identically.
-    surfaceFamilyMap: { ...SURFACE_FAMILY_MAP }
+    surfaceFamilyMap: { ...SURFACE_FAMILY_MAP },
+    // Phase E2: shared Clean road-tier table from roadClassLeaf.
+    roadTierMap: { ...ROAD_TIER_MAP }
   };
   const enumsJson = Buffer.from(JSON.stringify(enumsPayload), "utf8");
   place("enumsJson", enumsJson.length, 1);
@@ -586,10 +589,15 @@ function decodeGraphV2(buffer) {
   const structureLeafNames = enums.structureLeafNames || [""];
   const accessLeafNames = enums.accessLeafNames || [""];
   const { SURFACE_FAMILY_MAP } = require("./surface-family");
+  const { ROAD_TIER_MAP } = require("./road-tier");
   const surfaceFamilyMap =
     enums.surfaceFamilyMap && typeof enums.surfaceFamilyMap === "object"
       ? enums.surfaceFamilyMap
       : SURFACE_FAMILY_MAP;
+  const roadTierMap =
+    enums.roadTierMap && typeof enums.roadTierMap === "object"
+      ? enums.roadTierMap
+      : ROAD_TIER_MAP;
 
   function edgeId(ei) {
     const a = idOffsets[ei];
@@ -653,6 +661,7 @@ function decodeGraphV2(buffer) {
     flags,
     hasLeaves,
     surfaceFamilyMap,
+    roadTierMap,
     nodeCount,
     undirectedEdgeCount,
     directedArcCount,

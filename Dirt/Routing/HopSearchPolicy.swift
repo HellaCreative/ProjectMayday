@@ -249,6 +249,7 @@ nonisolated enum HopSearchPolicy {
 
 nonisolated struct HopSearchContext: Sendable {
     var sessionSeed: UInt64
+    var profile: RouteProfile
     var costMode: HopSearchPolicy.CostMode
     var maxPathMeters: Double?
     var shortestMeters: Double?
@@ -279,6 +280,7 @@ nonisolated struct HopSearchContext: Sendable {
     static func forProfile(_ profile: RouteProfile, seed: UInt64) -> HopSearchContext {
         HopSearchContext(
             sessionSeed: seed,
+            profile: profile,
             costMode: .profile,
             maxPathMeters: nil,
             shortestMeters: nil,

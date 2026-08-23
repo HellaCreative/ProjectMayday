@@ -61,6 +61,14 @@ const {
   PASS2_POP_CAP
 } = require("./hop-search");
 const { applyHonestSurfaceStats } = require("./surface-family");
+const {
+  roadTierOf,
+  isBlockedForCleanLeaf,
+  cleanLeafCostMult,
+  cleanLeafHighwayAvoidMult,
+  ROAD_TIER
+} = require("./road-tier");
+const { surfaceFamilyOf } = require("./surface-family");
 
 /** Attach surfaceLeaf for E1 post-selection stats (search still uses coarse dirt). */
 function withSurfaceLeaf(edge, pack, ei) {
@@ -72,6 +80,45 @@ function withSurfaceLeaf(edge, pack, ei) {
     undirectedEdgeIndex: ei,
     surfaceLeaf: leaves && leaves.surfaceLeaf != null ? leaves.surfaceLeaf : null
   });
+}
+
+/** Phase E2 Clean leaf gate. Returns null → use coarse isBlockedForCleanPavement. */
+function cleanLeafBlocked(pack, ei, pavedOnly, startEi, endEi) {
+  if (!pack || !pack.hasLeaves) return null;
+  if (ei === startEi || ei === endEi) return false;
+  const leaves = pack.edgeLeaves(ei);
+  const family = surfaceFamilyOf(leaves.surfaceLeaf, pack.surfaceFamilyMap);
+  const tier = roadTierOf(leaves.roadClassLeaf, pack.roadTierMap);
+  return isBlockedForCleanLeaf({
+    family,
+    tier,
+    pavedOnly: !!pavedOnly,
+    isEndpointEdge: false
+  });
+}
+
+function cleanLeafStepCost(pack, ei, edgeM, toLL, startLL, endLL, startOnHwy, endOnHwy) {
+  const leaves = pack.edgeLeaves(ei);
+  const family = surfaceFamilyOf(leaves.surfaceLeaf, pack.surfaceFamilyMap);
+  const tier = roadTierOf(leaves.roadClassLeaf, pack.roadTierMap);
+  let step = (edgeM / 1000) * cleanLeafCostMult(tier, family);
+  if (toLL) {
+    step *= cleanLeafHighwayAvoidMult(
+      tier,
+      haversineMeters(toLL, startLL),
+      haversineMeters(toLL, endLL),
+      !!startOnHwy,
+      !!endOnHwy
+    );
+  }
+  return step;
+}
+
+function leafPinIsHighway(pack, match) {
+  if (!pack || !pack.hasLeaves || !match || match.edgeIndex == null) return false;
+  const leaves = pack.edgeLeaves(match.edgeIndex);
+  const tier = roadTierOf(leaves.roadClassLeaf, pack.roadTierMap);
+  return tier === ROAD_TIER.MOTORWAY || tier === ROAD_TIER.TRUNK;
 }
 
 function finalizeReportedStats(stats, routeEdges, distanceMeters, pack) {
@@ -304,9 +351,13 @@ function fillShortestMeters(args) {
         const access = unpackAccess(attr);
         if (!accessAllowed(access, policy, enums)) continue;
         if (pavedOnly) {
-          const surfaceName = enums.SURFACE_NAME[unpackSurface(attr)] || "unknown";
-          const roadName = ROAD_CLASS_NAME[unpackRoadClass(attr)] || "unknown";
-          if (isBlockedForCleanPavement(surfaceName, roadName)) continue;
+          const leafBlock = cleanLeafBlocked(pack, ei, true, -1, -1);
+          if (leafBlock === true) continue;
+          if (leafBlock == null) {
+            const surfaceName = enums.SURFACE_NAME[unpackSurface(attr)] || "unknown";
+            const roadName = ROAD_CLASS_NAME[unpackRoadClass(attr)] || "unknown";
+            if (isBlockedForCleanPavement(surfaceName, roadName)) continue;
+          }
         }
         if (avoid && avoid.has(pack.edgeId(ei))) continue;
         const toLL = nodeLL(to);
@@ -328,10 +379,14 @@ function fillShortestMeters(args) {
         const item = vlist[vi];
         const v = virt[item.id];
         if (pavedOnly) {
-          const attr = edgeAttrs[v.ei];
-          const surfaceName = enums.SURFACE_NAME[unpackSurface(attr)] || "unknown";
-          const roadName = ROAD_CLASS_NAME[unpackRoadClass(attr)] || "unknown";
-          if (isBlockedForCleanPavement(surfaceName, roadName)) continue;
+          const leafBlock = cleanLeafBlocked(pack, v.ei, true, -1, -1);
+          if (leafBlock === true) continue;
+          if (leafBlock == null) {
+            const attr = edgeAttrs[v.ei];
+            const surfaceName = enums.SURFACE_NAME[unpackSurface(attr)] || "unknown";
+            const roadName = ROAD_CLASS_NAME[unpackRoadClass(attr)] || "unknown";
+            if (isBlockedForCleanPavement(surfaceName, roadName)) continue;
+          }
         }
         const toLL = nodeLL(item.to);
         if (blockedForRide(
@@ -664,8 +719,12 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
   const startLL = startMatch.coord;
   const endLL = endMatch.coord;
   const abMeters = haversineMeters(startLL, endLL);
-  const startOnMajorHighway = pinMatchesMajorHighway(startMatch, profile);
-  const endOnMajorHighway = pinMatchesMajorHighway(endMatch, profile);
+  const startOnMajorHighway = profile === "cleanest" && pack.hasLeaves
+    ? leafPinIsHighway(pack, startMatch) || pinMatchesMajorHighway(startMatch, profile)
+    : pinMatchesMajorHighway(startMatch, profile);
+  const endOnMajorHighway = profile === "cleanest" && pack.hasLeaves
+    ? leafPinIsHighway(pack, endMatch) || pinMatchesMajorHighway(endMatch, profile)
+    : pinMatchesMajorHighway(endMatch, profile);
 
   function nodeLL(node) {
     if (node === startNode) return startLL;
@@ -924,7 +983,12 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
         const surface = unpackSurface(attr);
         const road = ROAD_CLASS_NAME[unpackRoadClass(attr)] || "unknown";
         const surfaceName = enums.SURFACE_NAME[surface] || "unknown";
+        const leafBlock = profile === "cleanest"
+          ? cleanLeafBlocked(pack, ei, pavedOnly, startEi, endEi)
+          : null;
+        if (leafBlock === true) continue;
         if (
+          leafBlock == null &&
           pavedOnly &&
           isBlockedForCleanPavement(surfaceName, road) &&
           ei !== startEi &&
@@ -953,6 +1017,13 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
             );
             step += awayExtra(cur.node, to) * DIRT_RIDE_AWAY_SCALE;
             step += directCrossTrackExtra(profile, toLL, startLL, endLL, edgeM) * DIRT_RIDE_XT_SCALE;
+          }
+        } else if (profile === "cleanest" && pack.hasLeaves) {
+          step = cleanLeafStepCost(
+            pack, ei, edgeM, toLL, startLL, endLL, startOnMajorHighway, endOnMajorHighway
+          );
+          if (toLL && applyAwayXt) {
+            step += awayExtra(cur.node, to);
           }
         } else {
           step = (edgeM / 1000) * costView[surface] * roadClassMultiplier(road, profile);
@@ -1087,15 +1158,27 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
         const vSurface = unpackSurface(vAttr);
         const vRoad = ROAD_CLASS_NAME[unpackRoadClass(vAttr)] || "unknown";
         const vSurfaceName = enums.SURFACE_NAME[vSurface] || "unknown";
+        const vLeafBlock = profile === "cleanest"
+          ? cleanLeafBlocked(pack, v.ei, pavedOnly, startEi, endEi)
+          : null;
+        if (vLeafBlock === true) continue;
         if (
+          vLeafBlock == null &&
           pavedOnly &&
           isBlockedForCleanPavement(vSurfaceName, vRoad) &&
           v.ei !== startEi &&
           v.ei !== endEi
         ) continue;
-        let step = costMode === "pavement"
-          ? (v.meters / 1000) * dirtRideCostPerKm(vSurfaceName, vRoad, unpackConfidence(vAttr))
-          : v.meters / 1000;
+        let step;
+        if (costMode === "pavement") {
+          step = (v.meters / 1000) * dirtRideCostPerKm(vSurfaceName, vRoad, unpackConfidence(vAttr));
+        } else if (profile === "cleanest" && pack.hasLeaves) {
+          step = cleanLeafStepCost(
+            pack, v.ei, v.meters, toLL, startLL, endLL, startOnMajorHighway, endOnMajorHighway
+          );
+        } else {
+          step = v.meters / 1000;
+        }
         if (costMode === "pavement") {
           step += awayExtra(cur.node, item.to) * DIRT_RIDE_AWAY_SCALE;
           if (toLL) {

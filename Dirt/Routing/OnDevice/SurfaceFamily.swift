@@ -40,7 +40,8 @@ nonisolated enum SurfaceFamilyStats {
 
     static func honestPercents(
         rows: [(meters: Double, surfaceLeaf: String?)],
-        distanceMeters: Double
+        distanceMeters: Double,
+        familyMap: [String: SurfaceFamily] = defaultMap
     ) -> Percents {
         var pavedM = 0.0
         var gravelM = 0.0
@@ -48,7 +49,7 @@ nonisolated enum SurfaceFamilyStats {
         var unknownM = 0.0
         for row in rows {
             guard row.meters > 0 else { continue }
-            switch family(of: row.surfaceLeaf) {
+            switch family(of: row.surfaceLeaf, map: familyMap) {
             case .paved: pavedM += row.meters
             case .gravel: gravelM += row.meters
             case .loose: looseM += row.meters

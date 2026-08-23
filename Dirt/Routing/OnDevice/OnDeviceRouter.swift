@@ -167,6 +167,63 @@ nonisolated struct OnDeviceRouter {
         }
     }
 
+    /// Phase E2 lockstep: Clean route with JS-provided snap edges (identical path gate).
+    func routeCleanLockstep(
+        from: CLLocationCoordinate2D,
+        to: CLLocationCoordinate2D,
+        startEdgeIndex: Int,
+        endEdgeIndex: Int,
+        startProjected: CLLocationCoordinate2D,
+        endProjected: CLLocationCoordinate2D,
+        startAlongM: Double,
+        endAlongM: Double,
+        sessionSeed: UInt64 = 1
+    ) -> Result? {
+        guard pack.hasLeaves else { return nil }
+        guard startEdgeIndex >= 0, startEdgeIndex < pack.undirectedEdgeCount,
+              endEdgeIndex >= 0, endEdgeIndex < pack.undirectedEdgeCount else { return nil }
+        let startFrom = pack.edgeFrom?[startEdgeIndex] ?? 0
+        let startTo = pack.edgeTo?[startEdgeIndex] ?? 0
+        let endFrom = pack.edgeFrom?[endEdgeIndex] ?? 0
+        let endTo = pack.edgeTo?[endEdgeIndex] ?? 0
+        let startSnap = EdgeSnap(
+            edgeIndex: startEdgeIndex,
+            nodeA: Int(startFrom),
+            nodeB: Int(startTo),
+            distanceMeters: 0,
+            projected: startProjected,
+            distanceAlongM: startAlongM,
+            segmentIndex: 0
+        )
+        let endSnap = EdgeSnap(
+            edgeIndex: endEdgeIndex,
+            nodeA: Int(endFrom),
+            nodeB: Int(endTo),
+            distanceMeters: 0,
+            projected: endProjected,
+            distanceAlongM: endAlongM,
+            segmentIndex: 0
+        )
+        var ctx = HopSearchContext.forProfile(.cleanest, seed: sessionSeed)
+        ctx.pavedOnly = true
+        ctx.cityWall = true
+        ctx.variety = false
+        ctx.settlementFallback = false
+        switch routeWithSnaps(
+            from: from,
+            to: to,
+            startSnap: startSnap,
+            endSnap: endSnap,
+            profile: .cleanest,
+            allowUnknown: false,
+            avoidEdgeIds: [],
+            ctx: ctx
+        ) {
+        case .success(let result): return result
+        case .failure: return nil
+        }
+    }
+
     func routeDetailed(
         from: CLLocationCoordinate2D,
         to: CLLocationCoordinate2D,
@@ -1089,7 +1146,7 @@ nonisolated struct OnDeviceRouter {
             legs.append(stub)
         }
 
-        return finalize(legs: legs, nodeFallback: between)
+        return finalize(legs: legs, nodeFallback: between, profile: .cleanest)
     }
 
     // MARK: - Virtual endpoint Dijkstra (find-path-v2 parity)
@@ -1239,13 +1296,18 @@ nonisolated struct OnDeviceRouter {
 
         // Join near-miss fabric tips so Allow OFF works
         // on NS OSM+NSTDB packs (Farm Road / driveway → public road).
-        let stitches = junctionStitches(
-            near: from,
-            and: to,
-            profile: profile,
-            allowUnknown: allowUnknown,
-            avoidEdgeIds: avoidEdgeIds
-        )
+        // find-path-v2 has no perm-/unknown-island stitches — Clean+leaves must
+        // omit them so JS↔Swift paths stay identical (Phase E2).
+        let stitches: [JunctionStitch] =
+            (profile == .cleanest && pack.hasLeaves)
+            ? []
+            : junctionStitches(
+                near: from,
+                and: to,
+                profile: profile,
+                allowUnknown: allowUnknown,
+                avoidEdgeIds: avoidEdgeIds
+            )
         for stitch in stitches {
             let coords = [coordinate(forNode: stitch.a), coordinate(forNode: stitch.b)]
             let id = addVirt(
@@ -1346,8 +1408,18 @@ nonisolated struct OnDeviceRouter {
                     let toNode = Int(pack.edgeTargets[i])
                     let ei = Int(pack.edgeUndirectedIndex[i])
                     guard ei >= 0, ei < pack.undirectedEdgeCount else { continue }
-                    if ctx.noBacktrack, isBacktrack(prevKind: prevKind[cur.node], prevData: prevData[cur.node], ei: ei, virt: virt) {
-                        continue
+                    // find-path-v2: only suppress immediate U-turn on a prior *real*
+                    // edge. Clean+leaves must not treat a mid-edge virt stub of `ei`
+                    // as blocking the real traversal of `ei` (JS parity / E2 lockstep).
+                    if ctx.noBacktrack {
+                        if profile == .cleanest, pack.hasLeaves {
+                            if prevKind[cur.node] == 0, prevData[cur.node] == ei { continue }
+                        } else if isBacktrack(
+                            prevKind: prevKind[cur.node], prevData: prevData[cur.node],
+                            ei: ei, virt: virt
+                        ) {
+                            continue
+                        }
                     }
                     let attr = pack.edgeAttrs[ei]
                     let access = GraphV2Pack.unpackAccess(attr)
@@ -1373,6 +1445,7 @@ nonisolated struct OnDeviceRouter {
                     let confidence = GraphV2Pack.unpackConfidence(attr)
                     var step = hopCostStep(
                         meters: edgeM,
+                        edgeIndex: ei,
                         surface: surface,
                         roadClass: roadClass,
                         access: access,
@@ -1436,7 +1509,11 @@ nonisolated struct OnDeviceRouter {
                         prev[toNode] = cur.node
                         prevKind[toNode] = 0
                         prevData[toNode] = ei
-                        prevForward[toNode] = true
+                        if let fromArr = pack.edgeFrom {
+                            prevForward[toNode] = Int(fromArr[ei]) == cur.node
+                        } else {
+                            prevForward[toNode] = true
+                        }
                         if HopSearchPolicy.shouldPush(action) {
                             dist[toNode] = cost
                             pathMeters[toNode] = newMeters
@@ -1490,7 +1567,10 @@ nonisolated struct OnDeviceRouter {
                             continue
                         }
                     }
+                    // find-path-v2 does not U-turn-suppress virt expansions.
+                    // Dirt/Balanced/Direct keep pre-E2 virt backtrack; Clean+leaves match JS.
                     if ctx.noBacktrack, v.ei >= 0,
+                       !(profile == .cleanest && pack.hasLeaves),
                        isBacktrack(prevKind: prevKind[cur.node], prevData: prevData[cur.node], ei: v.ei, virt: virt) {
                         continue
                     }
@@ -1654,7 +1734,7 @@ nonisolated struct OnDeviceRouter {
 
         let fallback = [startSnap.projected, endSnap.projected]
         return .success(stampHunt(
-            finalize(legs: legs, nodeFallback: fallback),
+            finalize(legs: legs, nodeFallback: fallback, profile: profile),
             pops: pops, abort: abort, started: huntStart, isHunt: isHunt
         ))
     }
@@ -1955,7 +2035,7 @@ nonisolated struct OnDeviceRouter {
             legs.append(stub)
         }
         return .success(stampHunt(
-            finalize(legs: legs, nodeFallback: [startSnap.projected, endSnap.projected]),
+            finalize(legs: legs, nodeFallback: [startSnap.projected, endSnap.projected], profile: profile),
             pops: pops, abort: abort, started: huntStart, isHunt: isHunt
         ))
     }
@@ -2406,34 +2486,22 @@ nonisolated struct OnDeviceRouter {
                     let surface = GraphV2Pack.unpackSurface(attr)
                     let roadClass = GraphV2Pack.unpackRoadClass(attr)
                     let confidence = GraphV2Pack.unpackConfidence(attr)
-                    var step = (Double(pack.edgeMeters[ei]) / 1000.0)
-                        * OnDeviceProfileCosts.edgeCostPerKm(
-                            profile: profile,
-                            surfaceCode: surface,
-                            roadClassCode: roadClass,
-                            regionId: pack.regionId,
-                            accessCode: access,
-                            confidenceCode: confidence,
-                            pavedBias: pavedBias
-                        )
-                    step *= OnDeviceProfileCosts.pavementLateJoinMult(
+                    var step = hopCostStep(
+                        meters: Double(pack.edgeMeters[ei]),
+                        edgeIndex: ei,
+                        surface: surface,
+                        roadClass: roadClass,
+                        access: access,
+                        confidence: confidence,
                         profile: profile,
-                        surfaceCode: surface,
-                        distanceToDestinationMeters: meters(toLL, endLL),
-                        abMeters: abMeters
-                    )
-                    step *= OnDeviceProfileCosts.cleanCityStreetMult(
-                        profile: profile,
-                        roadClassCode: roadClass,
-                        distanceToDestinationMeters: meters(toLL, endLL)
-                    )
-                    step *= OnDeviceProfileCosts.majorHighwayAvoidMult(
-                        profile: profile,
-                        roadClassCode: roadClass,
-                        metersFromStart: meters(toLL, startSnap.projected),
-                        metersToDestination: meters(toLL, endLL),
+                        ctx: ctx,
+                        toLL: toLL,
+                        endLL: endLL,
+                        abMeters: abMeters,
+                        startSnap: startSnap,
                         startOnMajorHighway: startOnMajorHighway,
-                        endOnMajorHighway: endOnMajorHighway
+                        endOnMajorHighway: endOnMajorHighway,
+                        policyUnknown: policyUnknown
                     )
                     step *= UrbanCore.fallbackMultiplier(
                         point: toLL,
@@ -2580,7 +2648,8 @@ nonisolated struct OnDeviceRouter {
 
         return .success(finalize(
             legs: legs,
-            nodeFallback: [startSnap.projected, endSnap.projected]
+            nodeFallback: [startSnap.projected, endSnap.projected],
+            profile: profile
         ))
     }
 
@@ -2588,14 +2657,19 @@ nonisolated struct OnDeviceRouter {
 
     private func finalize(
         legs: [Leg],
-        nodeFallback: [CLLocationCoordinate2D]
+        nodeFallback: [CLLocationCoordinate2D],
+        profile: RouteProfile = .balanced
     ) -> Result {
         var worked = legs
 
         // Geographic loop pruning when legs carry real polyline geometry.
+        // Clean+leaves lockstep: JS `pruneGeographicLoops` is a no-op on the NS
+        // fixture routes; Swift's proximity-grid variant can drop short stubs and
+        // break edge-id identity. Skip prune so both engines keep the Dijkstra list.
+        let skipGeoPrune = profile == .cleanest && pack.hasLeaves
         let hasGeometry = worked.contains { $0.coordinates.count >= 3 }
             || pack.geometry != nil
-        if hasGeometry, !worked.isEmpty {
+        if hasGeometry, !worked.isEmpty, !skipGeoPrune {
             let pieces = worked.map {
                 OnDevicePathPruning.EdgePiece(
                     edgeId: $0.edgeId,
@@ -2687,10 +2761,19 @@ nonisolated struct OnDeviceRouter {
         }
 
         // Phase E1: honest reported % from surfaceLeaf (selection keeps coarse dirtPct).
+        // Exclude soft/perm stitches — they have no leaf and must not inflate Unknown/Dirt%.
         let reported: SurfaceFamilyStats.Percents
         if pack.hasLeaves {
-            let rows = worked.map { ($0.distanceMeters, $0.surfaceLeaf) }
-            reported = SurfaceFamilyStats.honestPercents(rows: rows, distanceMeters: meters)
+            let leafLegs = worked.filter {
+                !$0.edgeId.hasPrefix("soft-stitch-") && !$0.edgeId.hasPrefix("perm-stitch-")
+            }
+            let rows = leafLegs.map { ($0.distanceMeters, $0.surfaceLeaf) }
+            let leafMeters = leafLegs.reduce(0.0) { $0 + $1.distanceMeters }
+            reported = SurfaceFamilyStats.honestPercents(
+                rows: rows,
+                distanceMeters: leafMeters,
+                familyMap: pack.surfaceFamilyMap
+            )
         } else {
             reported = SurfaceFamilyStats.Percents(
                 dirtPercent: dirtPct,
@@ -3152,6 +3235,10 @@ nonisolated struct OnDeviceRouter {
 
     private func snapIsMajorHighwayPin(_ snap: EdgeSnap, profile: RouteProfile) -> Bool {
         guard snap.distanceMeters < OnDeviceProfileCosts.majorHighwayPinMeters else { return false }
+        if profile == .cleanest, pack.hasLeaves {
+            let tier = pack.roadTier(snap.edgeIndex)
+            return tier == .motorway || tier == .trunk
+        }
         return OnDeviceProfileCosts.isMajorHighway(
             roadClassNameForEdge(snap.edgeIndex),
             profile: profile
@@ -3173,9 +3260,17 @@ nonisolated struct OnDeviceRouter {
         return OnDeviceProfileCosts.isAdventureSurface(paint)
     }
 
-    /// Clean paved-only: block gravel/track and untagged minor roads.
+    /// Clean paved-only: leaf law when pack has leaves; else coarse gate.
     private func edgeBlockedForCleanPavement(_ ei: Int) -> Bool {
         guard ei >= 0, ei < pack.undirectedEdgeCount else { return true }
+        if pack.hasLeaves {
+            return RoadTierStats.isBlockedForCleanLeaf(
+                family: pack.surfaceFamily(ei),
+                tier: pack.roadTier(ei),
+                pavedOnly: true,
+                isEndpointEdge: false
+            )
+        }
         let attr = pack.edgeAttrs[ei]
         return OnDeviceProfileCosts.isBlockedForCleanPavement(
             surfaceName: OnDeviceProfileCosts.surfaceName(code: GraphV2Pack.unpackSurface(attr)),
@@ -3189,8 +3284,16 @@ nonisolated struct OnDeviceRouter {
         allowSnapEdges startEi: Int = -1,
         endEi: Int = -1
     ) -> Bool {
-        guard ctx.pavedOnly else { return false }
         if ei == startEi || ei == endEi { return false }
+        if pack.hasLeaves, ctx.profile == .cleanest {
+            return RoadTierStats.isBlockedForCleanLeaf(
+                family: pack.surfaceFamily(ei),
+                tier: pack.roadTier(ei),
+                pavedOnly: ctx.pavedOnly,
+                isEndpointEdge: false
+            )
+        }
+        guard ctx.pavedOnly else { return false }
         return edgeBlockedForCleanPavement(ei)
     }
 
@@ -3272,6 +3375,7 @@ nonisolated struct OnDeviceRouter {
 
     private func hopCostStep(
         meters edgeMeters: Double,
+        edgeIndex ei: Int = -1,
         surface: Int,
         roadClass: Int,
         access: Int,
@@ -3318,6 +3422,20 @@ nonisolated struct OnDeviceRouter {
             )
             return step
         case .profile:
+            // Phase E2: Clean + leaves → road-tier × surface-family costs only.
+            if profile == .cleanest, pack.hasLeaves, ei >= 0 {
+                let tier = pack.roadTier(ei)
+                let family = pack.surfaceFamily(ei)
+                var step = km * RoadTierStats.cleanLeafCostMult(tier: tier, family: family)
+                step *= RoadTierStats.cleanLeafHighwayAvoidMult(
+                    tier: tier,
+                    metersFromStart: meters(toLL, startSnap.projected),
+                    metersToDestination: meters(toLL, endLL),
+                    startOnHighway: startOnMajorHighway,
+                    endOnHighway: endOnMajorHighway
+                )
+                return step
+            }
             var step = km * OnDeviceProfileCosts.edgeCostPerKm(
                 profile: profile,
                 surfaceCode: surface,

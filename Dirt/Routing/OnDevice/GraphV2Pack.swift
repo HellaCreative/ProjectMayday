@@ -59,6 +59,8 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
     let accessLeafNames: [String]
     /// Leaf → family table from enumsJson (Phase E1). Empty on v2 packs.
     let surfaceFamilyMap: [String: SurfaceFamily]
+    /// Leaf → Clean road tier from enumsJson (Phase E2).
+    let roadTierMap: [String: RoadTier]
     let edgeSurfaceLeaf: [UInt8]?
     let edgeRoadClassLeaf: [UInt8]?
     let edgeGrade: [UInt8]?
@@ -146,6 +148,7 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
         structureLeafNames = Self.stringArray(from: enums["structureLeafNames"]) ?? [""]
         accessLeafNames = Self.stringArray(from: enums["accessLeafNames"]) ?? [""]
         surfaceFamilyMap = SurfaceFamilyStats.parseFamilyMap(enums["surfaceFamilyMap"])
+        roadTierMap = RoadTierStats.parseTierMap(enums["roadTierMap"])
 
         if hasLeaves {
             edgeSurfaceLeaf = data.readUInt8Array(at: offEdgeSurfaceLeaf, count: undirectedEdgeCount)
@@ -259,6 +262,11 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
     func roadClassLeaf(_ ei: Int) -> String? {
         guard hasLeaves, let arr = edgeRoadClassLeaf, ei >= 0, ei < arr.count else { return nil }
         return Self.nameAt(roadClassLeafNames, Int(arr[ei]), fallback: "unknown")
+    }
+
+    func roadTier(_ ei: Int) -> RoadTier {
+        guard hasLeaves else { return .unknown }
+        return RoadTierStats.tier(of: roadClassLeaf(ei), map: roadTierMap)
     }
 
     func structureLeaf(_ ei: Int) -> String? {

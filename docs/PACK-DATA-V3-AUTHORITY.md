@@ -285,8 +285,10 @@ regress the others. Do them in order:
   identical in both engines). No route-selection change yet. **Gate:** Dirt% shifts to
   honest values; Dirt/Balanced/Direct route selection unchanged.
 - **E2 — Clean behavior.** Clean reads surface leaf (prefer paved) + road-class leaf
-  (prefer rural ancillary, avoid highway/freeway). **Gate:** Clean ~0% dirt on a sane
-  paved back-road route; Dirt/Balanced/Direct do not regress.
+  via shared `roadTierMap` (collector = backbone; arterial = connector; motorway/trunk
+  avoided; residential/living_street = destination-access only). **Gate:** JS↔Swift
+  identical Clean path on NS v3; Clean ~0% honest dirt on a sane paved back-road;
+  Dirt/Balanced/Direct selection unchanged.
 - **E3 — Debug display layers.** Surface-leaf, Road-class-leaf, Access as separate map
   layers, to visually verify a road you KNOW is fine gravel reads as such. **Gate:**
   spot-checks match reality on the map.
