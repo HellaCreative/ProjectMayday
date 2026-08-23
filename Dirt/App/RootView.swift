@@ -75,6 +75,8 @@ struct RootView: View {
     /// Left↔right landscape keeps the same size; this ticket forces chrome to re-read
     /// island-side safe-area insets when the device flips.
     @State private var landscapeEdgeTicket: String = ""
+    /// GRAPH debug HUD starts collapsed so the map stays visible.
+    @State private var routingGraphDebugPanelExpanded = false
 
     private var navActive: Bool { app.navigation.phase != .idle }
 
@@ -509,9 +511,12 @@ struct RootView: View {
             VStack(spacing: 0) {
                 topChrome
                 if BuildChannel.debugRoutingGraphOverlay, app.mapState.showRoutingGraphDebug {
-                    routingGraphDebugHUD
-                        .padding(.horizontal, 12)
-                        .padding(.top, 8)
+                    HStack(alignment: .top) {
+                        Spacer(minLength: 0)
+                        routingGraphDebugHUD
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.top, 8)
                 }
                 Spacer(minLength: 0)
 
@@ -929,6 +934,7 @@ struct RootView: View {
             app.mapState.showRoutingGraphDebug.toggle()
             if !app.mapState.showRoutingGraphDebug {
                 app.mapState.debugGraphHit = nil
+                routingGraphDebugPanelExpanded = false
             }
         } label: {
             VStack(spacing: 2) {
@@ -1291,52 +1297,104 @@ struct RootView: View {
     }
 
     private var routingGraphDebugHUD: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(app.mapState.debugGraphStatus ?? "DEBUG routing graph")
-                .font(.dirtMono(11, weight: .semibold))
-                .foregroundStyle(.white)
-
-            HStack(spacing: 4) {
-                ForEach(DebugGraphPaintMode.allCases, id: \.self) { mode in
-                    Button {
-                        app.mapState.debugGraphPaintMode = mode
-                    } label: {
-                        Text(mode.title)
-                            .font(.dirtMono(10, weight: .bold))
-                            .foregroundStyle(
-                                app.mapState.debugGraphPaintMode == mode
-                                    ? DirtTheme.onOrange : .white.opacity(0.85)
-                            )
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 5)
-                            .background(
-                                app.mapState.debugGraphPaintMode == mode
-                                    ? DirtTheme.orange : DirtTheme.chrome.opacity(0.55)
-                            )
-                            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-                    }
-                    .buttonStyle(.plain)
+        VStack(alignment: .leading, spacing: routingGraphDebugPanelExpanded ? 8 : 0) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    routingGraphDebugPanelExpanded.toggle()
                 }
+            } label: {
+                HStack(spacing: 6) {
+                    Text("GRAPH")
+                        .font(.dirtMono(8, weight: .bold))
+                        .tracking(0.4)
+                        .foregroundStyle(DirtTheme.onOrange)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(DirtTheme.orange)
+                        .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+
+                    Text(compactDebugGraphSummary)
+                        .font(.dirtMono(10, weight: .medium))
+                        .foregroundStyle(.white.opacity(0.9))
+                        .lineLimit(1)
+
+                    Image(systemName: routingGraphDebugPanelExpanded ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundStyle(.white.opacity(0.55))
+                }
+                .frame(maxWidth: routingGraphDebugPanelExpanded ? .infinity : nil, alignment: .leading)
             }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Graph debug panel")
+            .accessibilityHint(routingGraphDebugPanelExpanded ? "Collapse graph debug controls" : "Expand graph debug controls")
 
-            debugGraphLegend(for: app.mapState.debugGraphPaintMode)
+            if routingGraphDebugPanelExpanded {
+                Text(app.mapState.debugGraphStatus ?? "DEBUG routing graph")
+                    .font(.dirtMono(10, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.82))
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
 
-            if let hit = app.mapState.debugGraphHit {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("tap \(hit.edgeId)")
-                    Text("surfaceLeaf \(hit.surfaceLeaf.isEmpty ? "—" : hit.surfaceLeaf) · family \(hit.surfaceFamily)")
-                    Text("roadClassLeaf \(hit.roadClassLeaf.isEmpty ? "—" : hit.roadClassLeaf) · tier \(hit.roadTier)")
-                    Text("access \(hit.accessClass) · leaf \(hit.accessLeaf.isEmpty ? "—" : hit.accessLeaf)\(hit.atvDesignated ? " · ATV" : "")")
-                    Text("coarse \(hit.surfaceClass) / \(hit.roadClass) · \(hit.source)")
+                HStack(spacing: 4) {
+                    ForEach(DebugGraphPaintMode.allCases, id: \.self) { mode in
+                        Button {
+                            app.mapState.debugGraphPaintMode = mode
+                        } label: {
+                            Text(mode.title)
+                                .font(.dirtMono(10, weight: .bold))
+                                .foregroundStyle(
+                                    app.mapState.debugGraphPaintMode == mode
+                                        ? DirtTheme.onOrange : .white.opacity(0.85)
+                                )
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 5)
+                                .background(
+                                    app.mapState.debugGraphPaintMode == mode
+                                        ? DirtTheme.orange : DirtTheme.chrome.opacity(0.55)
+                                )
+                                .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                        }
+                        .buttonStyle(.plain)
+                    }
                 }
-                .font(.dirtMono(11, weight: .medium))
-                .foregroundStyle(DirtTheme.onOrange)
+
+                ScrollView(.vertical, showsIndicators: false) {
+                    debugGraphLegend(for: app.mapState.debugGraphPaintMode)
+                }
+                .frame(maxHeight: 96)
+
+                if let hit = app.mapState.debugGraphHit {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("tap \(hit.edgeId)")
+                        Text("surfaceLeaf \(hit.surfaceLeaf.isEmpty ? "—" : hit.surfaceLeaf) · family \(hit.surfaceFamily)")
+                        Text("roadClassLeaf \(hit.roadClassLeaf.isEmpty ? "—" : hit.roadClassLeaf) · tier \(hit.roadTier)")
+                        Text("access \(hit.accessClass) · leaf \(hit.accessLeaf.isEmpty ? "—" : hit.accessLeaf)\(hit.atvDesignated ? " · ATV" : "")")
+                        Text("coarse \(hit.surfaceClass) / \(hit.roadClass) · \(hit.source)")
+                    }
+                    .font(.dirtMono(10, weight: .medium))
+                    .foregroundStyle(DirtTheme.onOrange)
+                }
             }
         }
-        .padding(10)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(routingGraphDebugPanelExpanded ? 10 : 8)
+        .frame(maxWidth: routingGraphDebugPanelExpanded ? 300 : 260, alignment: .leading)
         .background(DirtTheme.chrome.opacity(0.92))
         .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(DirtTheme.chromeBorder, lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.22), radius: 6, y: 2)
+    }
+
+    private var compactDebugGraphSummary: String {
+        var parts: [String] = [app.mapState.debugGraphPaintMode.title]
+        if let hit = app.mapState.debugGraphHit {
+            parts.append(hit.edgeId)
+        } else if app.mapState.debugGraphCapped {
+            parts.append("capped")
+        }
+        return parts.joined(separator: " · ")
     }
 
     private func debugGraphLegend(for mode: DebugGraphPaintMode) -> some View {
