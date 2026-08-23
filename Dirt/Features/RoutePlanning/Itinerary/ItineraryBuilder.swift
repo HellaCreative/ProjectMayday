@@ -547,7 +547,9 @@ final class ItineraryBuilder {
                 to: to,
                 avoidEdgeIDs: itinerary.impassableEdgeIDs,
                 maxPathMeters: nil,
-                history: history
+                history: history,
+                avoidMotorways: riderLeg.avoidMotorways,
+                preferBackRoads: riderLeg.preferBackRoads
             ))
         } else {
             effectiveBaseline = baseline
@@ -563,7 +565,9 @@ final class ItineraryBuilder {
                     to: to,
                     avoidEdgeIDs: itinerary.impassableEdgeIDs,
                     maxPathMeters: nil,
-                    history: history
+                    history: history,
+                    avoidMotorways: riderLeg.avoidMotorways,
+                    preferBackRoads: riderLeg.preferBackRoads
                 ))
             guard active(itinerary) else { throw CancellationError() }
             let finalMeters = try responseMeters(finalResponse)
@@ -723,7 +727,9 @@ final class ItineraryBuilder {
                     avoidEdgeIDs: itinerary.impassableEdgeIDs,
                     maxPathMeters: cap,
                     directExtraBudgetMeters: hopProfile == .direct ? 0 : nil,
-                    history: sublegHistory
+                    history: sublegHistory,
+                    avoidMotorways: riderLeg.avoidMotorways,
+                    preferBackRoads: riderLeg.preferBackRoads
                 )
                 let response = try await source.route(request)
                 guard active(itinerary) else { throw CancellationError() }
@@ -1041,7 +1047,9 @@ private func routeRequest(
         avoidEdgeIDs: itinerary.impassableEdgeIDs,
         maxPathMeters: maxPathMeters,
         directExtraBudgetMeters: directExtraBudget,
-        history: history
+        history: history,
+        avoidMotorways: leg.avoidMotorways,
+        preferBackRoads: leg.preferBackRoads
     )
 }
 
@@ -1065,7 +1073,9 @@ private func routeRequest(
     avoidEdgeIDs: Set<String>,
     maxPathMeters: Double?,
     directExtraBudgetMeters: Double? = nil,
-    history: EdgeHistory = EdgeHistory()
+    history: EdgeHistory = EdgeHistory(),
+    avoidMotorways: Bool = false,
+    preferBackRoads: Bool = false
 ) -> RouteRequest {
     RouteRequest(
         profile: profile,
@@ -1080,7 +1090,9 @@ private func routeRequest(
         backtrackFactor: 4,
         maxPathMeters: maxPathMeters,
         directExtraBudgetMeters: directExtraBudgetMeters,
-        cleanMetroMultiplier: CleanMetroDebugPrefs.requestMultiplier
+        cleanMetroMultiplier: CleanMetroDebugPrefs.requestMultiplier,
+        avoidMotorways: avoidMotorways,
+        preferBackRoads: preferBackRoads
     )
 }
 

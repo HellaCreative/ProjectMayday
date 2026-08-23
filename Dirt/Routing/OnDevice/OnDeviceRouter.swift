@@ -147,7 +147,9 @@ nonisolated struct OnDeviceRouter {
         backtrackFactor: Double = 4,
         sessionSeed: UInt64? = nil,
         maxRouteMeters: Double? = nil,
-        cleanMetroMultiplier: Double? = nil
+        cleanMetroMultiplier: Double? = nil,
+        avoidMotorways: Bool = false,
+        preferBackRoads: Bool = false
     ) -> Result? {
         switch routeDetailed(
             from: from,
@@ -160,7 +162,9 @@ nonisolated struct OnDeviceRouter {
             backtrackFactor: backtrackFactor,
             sessionSeed: sessionSeed,
             maxRouteMeters: maxRouteMeters,
-            cleanMetroMultiplier: cleanMetroMultiplier
+            cleanMetroMultiplier: cleanMetroMultiplier,
+            avoidMotorways: avoidMotorways,
+            preferBackRoads: preferBackRoads
         ) {
         case .success(let result): return result
         case .failure: return nil
@@ -235,7 +239,9 @@ nonisolated struct OnDeviceRouter {
         backtrackFactor: Double = 4,
         sessionSeed: UInt64? = nil,
         maxRouteMeters: Double? = nil,
-        cleanMetroMultiplier: Double? = nil
+        cleanMetroMultiplier: Double? = nil,
+        avoidMotorways: Bool = false,
+        preferBackRoads: Bool = false
     ) -> Swift.Result<Result, Failure> {
         let pavedWall = routeDetailedOnce(
             from: from, to: to, profile: profile,
@@ -250,7 +256,9 @@ nonisolated struct OnDeviceRouter {
             urbanCoreFallback: false,
             settlementWall: false,
             settlementFallback: profile != .cleanest,
-            cleanMetroMultiplier: cleanMetroMultiplier
+            cleanMetroMultiplier: cleanMetroMultiplier,
+            avoidMotorways: avoidMotorways,
+            preferBackRoads: preferBackRoads
         )
         guard profile == .cleanest else {
             guard case .failure(.noPath) = pavedWall else { return pavedWall }
@@ -267,7 +275,9 @@ nonisolated struct OnDeviceRouter {
                 urbanCoreFallback: false,
                 settlementWall: false,
                 settlementFallback: true,
-                cleanMetroMultiplier: cleanMetroMultiplier
+                cleanMetroMultiplier: cleanMetroMultiplier,
+            avoidMotorways: avoidMotorways,
+            preferBackRoads: preferBackRoads
             )
             guard case .success(var route) = relaxed else { return relaxed }
             route.searchMeta.settlementFallbackUsed = true
@@ -296,7 +306,9 @@ nonisolated struct OnDeviceRouter {
             urbanCoreFallback: false,
             settlementWall: false,
             settlementFallback: false,
-            cleanMetroMultiplier: cleanMetroMultiplier
+            cleanMetroMultiplier: cleanMetroMultiplier,
+            avoidMotorways: avoidMotorways,
+            preferBackRoads: preferBackRoads
         )
         switch anySurfaceWall {
         case .success(var route):
@@ -322,7 +334,9 @@ nonisolated struct OnDeviceRouter {
             urbanCoreFallback: true,
             settlementWall: false,
             settlementFallback: false,
-            cleanMetroMultiplier: cleanMetroMultiplier
+            cleanMetroMultiplier: cleanMetroMultiplier,
+            avoidMotorways: avoidMotorways,
+            preferBackRoads: preferBackRoads
         )
         let fallback: Swift.Result<Result, Failure>
         switch pavedUrbanFallback {
@@ -342,7 +356,9 @@ nonisolated struct OnDeviceRouter {
                 urbanCoreFallback: true,
                 settlementWall: false,
                 settlementFallback: false,
-                cleanMetroMultiplier: cleanMetroMultiplier
+                cleanMetroMultiplier: cleanMetroMultiplier,
+            avoidMotorways: avoidMotorways,
+            preferBackRoads: preferBackRoads
             )
         case .failure:
             return pavedUrbanFallback
@@ -506,7 +522,9 @@ nonisolated struct OnDeviceRouter {
         urbanCoreFallback: Bool,
         settlementWall: Bool,
         settlementFallback: Bool,
-        cleanMetroMultiplier: Double? = nil
+        cleanMetroMultiplier: Double? = nil,
+        avoidMotorways: Bool = false,
+        preferBackRoads: Bool = false
     ) -> Swift.Result<Result, Failure> {
         // Snap only onto edges the profile can traverse.
         // Otherwise Banjo Mike–style camps lock onto NSTDB TRACK (motorized_unknown),
@@ -598,6 +616,8 @@ nonisolated struct OnDeviceRouter {
         ctx.settlementWall = settlementWall
         ctx.settlementFallback = settlementFallback
         ctx.cleanMetroMultiplier = cleanMetroMultiplier
+        ctx.avoidMotorways = avoidMotorways
+        ctx.preferBackRoads = preferBackRoads
 
         if profile == .dirt {
             let base = HopSearchPolicy.dirtCorridorMeters
@@ -3420,6 +3440,17 @@ nonisolated struct OnDeviceRouter {
                 startOnMajorHighway: startOnMajorHighway,
                 endOnMajorHighway: endOnMajorHighway
             )
+            if pack.hasLeaves, ei >= 0, ctx.avoidMotorways || ctx.preferBackRoads {
+                step *= RoadTierStats.e4LeafCostMult(
+                    tier: pack.roadTier(ei),
+                    avoidMotorways: ctx.avoidMotorways,
+                    preferBackRoads: ctx.preferBackRoads,
+                    metersFromStart: meters(toLL, startSnap.projected),
+                    metersToDestination: meters(toLL, endLL),
+                    startOnHighway: startOnMajorHighway,
+                    endOnHighway: endOnMajorHighway
+                )
+            }
             return step
         case .profile:
             // Phase E2: Clean + leaves → road-tier × surface-family costs only.
@@ -3429,6 +3460,15 @@ nonisolated struct OnDeviceRouter {
                 var step = km * RoadTierStats.cleanLeafCostMult(tier: tier, family: family)
                 step *= RoadTierStats.cleanLeafHighwayAvoidMult(
                     tier: tier,
+                    metersFromStart: meters(toLL, startSnap.projected),
+                    metersToDestination: meters(toLL, endLL),
+                    startOnHighway: startOnMajorHighway,
+                    endOnHighway: endOnMajorHighway
+                )
+                step *= RoadTierStats.e4LeafCostMult(
+                    tier: tier,
+                    avoidMotorways: ctx.avoidMotorways,
+                    preferBackRoads: ctx.preferBackRoads,
                     metersFromStart: meters(toLL, startSnap.projected),
                     metersToDestination: meters(toLL, endLL),
                     startOnHighway: startOnMajorHighway,
@@ -3469,6 +3509,17 @@ nonisolated struct OnDeviceRouter {
                 if accessName == "motorized_unknown", profile == .direct {
                     step *= 0.92
                 }
+            }
+            if pack.hasLeaves, ei >= 0, ctx.avoidMotorways || ctx.preferBackRoads {
+                step *= RoadTierStats.e4LeafCostMult(
+                    tier: pack.roadTier(ei),
+                    avoidMotorways: ctx.avoidMotorways,
+                    preferBackRoads: ctx.preferBackRoads,
+                    metersFromStart: meters(toLL, startSnap.projected),
+                    metersToDestination: meters(toLL, endLL),
+                    startOnHighway: startOnMajorHighway,
+                    endOnHighway: endOnMajorHighway
+                )
             }
             return step
         }

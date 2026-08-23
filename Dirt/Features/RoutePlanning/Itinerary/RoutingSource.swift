@@ -22,6 +22,8 @@ final class RouteResponseCache {
         let sourceName: String
         let packRevision: String
         let cleanMetroMultiplier: Double?
+        let avoidMotorways: Bool
+        let preferBackRoads: Bool
 
         var description: String {
             "\(from.latitude),\(from.longitude)>\(to.latitude),\(to.longitude)" +
@@ -30,6 +32,7 @@ final class RouteResponseCache {
                 "|arrival=\(arrivalEdgeID ?? "nil")" +
                 "|backtrack=\(backtrackFactor)" +
                 "|metro=\(cleanMetroMultiplier.map { String(format: "%.0f", $0) } ?? "-")" +
+                "|avoidMwy=\(avoidMotorways ? 1 : 0)|back=\(preferBackRoads ? 1 : 0)" +
                 "|\(sourceName)|\(packRevision)"
         }
     }
@@ -128,7 +131,9 @@ final class PackRoutingSource: RoutingSource {
             backtrackFactor: req.options?.backtrackFactor ?? 4,
             sourceName: name,
             packRevision: packs.lastManifestVersion,
-            cleanMetroMultiplier: req.options?.cleanMetroMultiplier
+            cleanMetroMultiplier: req.options?.cleanMetroMultiplier,
+            avoidMotorways: req.options?.avoidMotorways == true,
+            preferBackRoads: req.options?.preferBackRoads == true
         )
         if req.options?.maxPathMeters == nil, let cached = cache.value(for: key) {
             return cached
@@ -145,7 +150,9 @@ final class PackRoutingSource: RoutingSource {
             backtrackFactor: req.options?.backtrackFactor ?? 4,
             sessionSeed: req.options?.sessionSeed ?? 0,
             maxRouteMeters: req.options?.maxPathMeters,
-            cleanMetroMultiplier: req.options?.cleanMetroMultiplier
+            cleanMetroMultiplier: req.options?.cleanMetroMultiplier,
+            avoidMotorways: req.options?.avoidMotorways == true,
+            preferBackRoads: req.options?.preferBackRoads == true
         )
         guard case .success(let local) = result, local.coordinates.count > 1 else {
             throw RoutingError.server("No route is available on the installed pack.")
@@ -527,7 +534,9 @@ private func cacheKey(
         arrivalEdgeID: request.options?.arrivalEdgeId,
         backtrackFactor: request.options?.backtrackFactor ?? 4,
         sourceName: sourceName, packRevision: packRevision,
-        cleanMetroMultiplier: request.options?.cleanMetroMultiplier
+        cleanMetroMultiplier: request.options?.cleanMetroMultiplier,
+        avoidMotorways: request.options?.avoidMotorways == true,
+        preferBackRoads: request.options?.preferBackRoads == true
     )
 }
 

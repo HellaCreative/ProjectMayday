@@ -116,4 +116,57 @@ nonisolated enum RoadTierStats {
         if near { return 1 }
         return tier == .motorway ? 1.8 : 1.35
     }
+
+    // Phase E4 — rider knobs (default OFF). Soft costs only; never delete edges.
+    static let e4AvoidMotorwayMult = 40.0
+    static let e4AvoidTrunkMult = 18.0
+    static let e4PreferBackArterialMult = 4.5
+    static let e4PreferBackCollectorMult = 0.82
+    static let e4HighwayJoinMeters = 6000.0
+
+    static func e4AvoidMotorwaysMult(
+        tier: RoadTier,
+        enabled: Bool,
+        metersFromStart: Double,
+        metersToDestination: Double,
+        startOnHighway: Bool,
+        endOnHighway: Bool
+    ) -> Double {
+        guard enabled else { return 1 }
+        guard tier == .motorway || tier == .trunk else { return 1 }
+        let near =
+            (endOnHighway && metersToDestination < e4HighwayJoinMeters) ||
+            (startOnHighway && metersFromStart < e4HighwayJoinMeters)
+        if near { return 1 }
+        return tier == .motorway ? e4AvoidMotorwayMult : e4AvoidTrunkMult
+    }
+
+    /// Prefer back roads: penalize arterial; mild collector preference. Never excludes.
+    static func e4PreferBackRoadsMult(tier: RoadTier, enabled: Bool) -> Double {
+        guard enabled else { return 1 }
+        switch tier {
+        case .arterial: return e4PreferBackArterialMult
+        case .collector: return e4PreferBackCollectorMult
+        default: return 1
+        }
+    }
+
+    static func e4LeafCostMult(
+        tier: RoadTier,
+        avoidMotorways: Bool,
+        preferBackRoads: Bool,
+        metersFromStart: Double,
+        metersToDestination: Double,
+        startOnHighway: Bool,
+        endOnHighway: Bool
+    ) -> Double {
+        e4AvoidMotorwaysMult(
+            tier: tier,
+            enabled: avoidMotorways,
+            metersFromStart: metersFromStart,
+            metersToDestination: metersToDestination,
+            startOnHighway: startOnHighway,
+            endOnHighway: endOnHighway
+        ) * e4PreferBackRoadsMult(tier: tier, enabled: preferBackRoads)
+    }
 }

@@ -580,7 +580,7 @@ private func makeItinerary(
 ) -> RiderItinerary {
     reduce(
         RiderItinerary(),
-        .replaceAll(waypoints: points, profile: profile, allowUnknown: false)
+        .replaceAll(waypoints: points, profile: profile, allowUnknown: false, avoidMotorways: false, preferBackRoads: false)
     ).itinerary
 }
 

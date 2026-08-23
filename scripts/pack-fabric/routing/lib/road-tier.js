@@ -135,6 +135,60 @@ function cleanLeafHighwayAvoidMult(tier, metersFromStart, metersToDestination, s
   return tier === ROAD_TIER.MOTORWAY ? 1.8 : 1.35;
 }
 
+/**
+ * Phase E4 — rider knobs (default OFF → Dirt/Balanced/Direct + Clean E2 unchanged).
+ * Soft costs only: never remove edges from the graph.
+ */
+const E4_AVOID_MOTORWAY_MULT = 40;
+const E4_AVOID_TRUNK_MULT = 18;
+const E4_PREFER_BACK_ARTERIAL_MULT = 4.5;
+const E4_PREFER_BACK_COLLECTOR_MULT = 0.82;
+const E4_HIGHWAY_JOIN_METERS = 6000;
+
+/** Strong soft-hard avoid of motorway + trunk (+links). Pin-join relief near A/B. */
+function e4AvoidMotorwaysMult(
+  tier,
+  enabled,
+  metersFromStart,
+  metersToDestination,
+  startOnHighway,
+  endOnHighway
+) {
+  if (!enabled) return 1;
+  if (tier !== ROAD_TIER.MOTORWAY && tier !== ROAD_TIER.TRUNK) return 1;
+  const near =
+    (endOnHighway && metersToDestination < E4_HIGHWAY_JOIN_METERS) ||
+    (startOnHighway && metersFromStart < E4_HIGHWAY_JOIN_METERS);
+  if (near) return 1;
+  return tier === ROAD_TIER.MOTORWAY ? E4_AVOID_MOTORWAY_MULT : E4_AVOID_TRUNK_MULT;
+}
+
+/**
+ * Prefer back roads: penalize arterial (primary); mild collector preference vs primary.
+ * Never excludes primary/secondary — connectivity preserved.
+ */
+function e4PreferBackRoadsMult(tier, enabled) {
+  if (!enabled) return 1;
+  if (tier === ROAD_TIER.ARTERIAL) return E4_PREFER_BACK_ARTERIAL_MULT;
+  if (tier === ROAD_TIER.COLLECTOR) return E4_PREFER_BACK_COLLECTOR_MULT;
+  return 1;
+}
+
+function e4LeafCostMult(opts) {
+  const tier = opts.tier || ROAD_TIER.UNKNOWN;
+  let m = 1;
+  m *= e4AvoidMotorwaysMult(
+    tier,
+    !!opts.avoidMotorways,
+    Number(opts.metersFromStart) || 0,
+    Number(opts.metersToDestination) || 0,
+    !!opts.startOnHighway,
+    !!opts.endOnHighway
+  );
+  m *= e4PreferBackRoadsMult(tier, !!opts.preferBackRoads);
+  return m;
+}
+
 module.exports = {
   ROAD_TIER,
   ROAD_TIER_MAP,
@@ -144,5 +198,12 @@ module.exports = {
   tierIsPavedCapable,
   isBlockedForCleanLeaf,
   cleanLeafCostMult,
-  cleanLeafHighwayAvoidMult
+  cleanLeafHighwayAvoidMult,
+  e4AvoidMotorwaysMult,
+  e4PreferBackRoadsMult,
+  e4LeafCostMult,
+  E4_AVOID_MOTORWAY_MULT,
+  E4_AVOID_TRUNK_MULT,
+  E4_PREFER_BACK_ARTERIAL_MULT,
+  E4_PREFER_BACK_COLLECTOR_MULT
 };

@@ -366,6 +366,16 @@ struct RoutePlannerCard: View {
                                 withAnimation(.easeInOut(duration: 0.18)) { fromHereChipsOpen = false }
                             }
                             profileGuidanceLine(planner.profile)
+                            e4RoadPreferenceControls(
+                                avoidMotorways: Binding(
+                                    get: { planner.avoidMotorways },
+                                    set: { planner.avoidMotorways = $0 }
+                                ),
+                                preferBackRoads: Binding(
+                                    get: { planner.preferBackRoads },
+                                    set: { planner.preferBackRoads = $0 }
+                                )
+                            )
                             allowUnknownControl(
                                 binding: Binding(
                                     get: { planner.allowUnknown },
@@ -397,6 +407,16 @@ struct RoutePlannerCard: View {
         } else {
             fromHereProfileHeader
             if fromHereChipsOpen {
+                e4RoadPreferenceControls(
+                    avoidMotorways: Binding(
+                        get: { planner.avoidMotorways },
+                        set: { planner.avoidMotorways = $0 }
+                    ),
+                    preferBackRoads: Binding(
+                        get: { planner.preferBackRoads },
+                        set: { planner.preferBackRoads = $0 }
+                    )
+                )
                 allowUnknownControl(
                     binding: Binding(
                         get: { planner.allowUnknown },
@@ -867,6 +887,16 @@ struct RoutePlannerCard: View {
                         withAnimation(.easeInOut(duration: 0.18)) { selectedStage = nil }
                     }
                     profileGuidanceLine(stage.profile)
+                    e4RoadPreferenceControls(
+                        avoidMotorways: Binding(
+                            get: { stage.avoidMotorways },
+                            set: { planner.setStageAvoidMotorways($0, at: index) }
+                        ),
+                        preferBackRoads: Binding(
+                            get: { stage.preferBackRoads },
+                            set: { planner.setStagePreferBackRoads($0, at: index) }
+                        )
+                    )
                     allowUnknownControl(
                         binding: Binding(
                             get: { stage.allowUnknown },
@@ -1118,6 +1148,55 @@ struct RoutePlannerCard: View {
             Text(allowUnknownFootnote(disabled: disabled, profile: profile))
                 .font(.dirtUI(11))
                 .foregroundStyle(DirtTheme.muted)
+        }
+        .padding(10)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(DirtTheme.rowFill)
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(DirtTheme.hairline, lineWidth: 1)
+        )
+    }
+
+    /// Phase E4 — split Avoid Highway into independent soft-cost knobs.
+    private func e4RoadPreferenceControls(
+        avoidMotorways: Binding<Bool>,
+        preferBackRoads: Binding<Bool>
+    ) -> some View {
+        VStack(alignment: .leading, spacing: DirtSpace.tight) {
+            e4ToggleRow(
+                title: "Avoid motorways",
+                footnote: "Motorway + trunk stay on the graph but cost hard — never a hard cut.",
+                binding: avoidMotorways
+            )
+            e4ToggleRow(
+                title: "Prefer back roads",
+                footnote: "Penalize primary; prefer collector. Primary/secondary stay routable.",
+                binding: preferBackRoads
+            )
+        }
+    }
+
+    private func e4ToggleRow(
+        title: String,
+        footnote: String,
+        binding: Binding<Bool>
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 10) {
+                Text(title)
+                    .font(.dirtUI(13, weight: .semibold))
+                    .foregroundStyle(DirtTheme.ink)
+                Spacer(minLength: 0)
+                Toggle("", isOn: binding)
+                    .labelsHidden()
+                    .tint(DirtTheme.orange)
+            }
+            Text(footnote)
+                .font(.dirtUI(11))
+                .foregroundStyle(DirtTheme.muted)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(10)
         .frame(maxWidth: .infinity, alignment: .leading)

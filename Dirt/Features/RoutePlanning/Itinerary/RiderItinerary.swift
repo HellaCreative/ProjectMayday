@@ -16,6 +16,10 @@ nonisolated struct RiderLeg: Identifiable, Equatable, Codable, Sendable {
     let to: UUID
     var profile: RouteProfile
     var allowUnknown: Bool
+    /// Phase E4: strong soft-avoid motorway + trunk.
+    var avoidMotorways: Bool
+    /// Phase E4: penalize arterial / prefer collector.
+    var preferBackRoads: Bool
     /// A generated fuel hop inherits the rider-leg profile unless the pump it
     /// departs from has an explicit rider override.
     var hopOverrides: [String: RouteProfile]
@@ -28,6 +32,8 @@ nonisolated struct RiderLeg: Identifiable, Equatable, Codable, Sendable {
         to: UUID,
         profile: RouteProfile,
         allowUnknown: Bool,
+        avoidMotorways: Bool = false,
+        preferBackRoads: Bool = false,
         hopOverrides: [String: RouteProfile] = [:],
         fuelStopOverrides: [String: String] = [:]
     ) {
@@ -36,12 +42,14 @@ nonisolated struct RiderLeg: Identifiable, Equatable, Codable, Sendable {
         self.to = to
         self.profile = profile
         self.allowUnknown = profile == .cleanest ? false : allowUnknown
+        self.avoidMotorways = avoidMotorways
+        self.preferBackRoads = preferBackRoads
         self.hopOverrides = hopOverrides
         self.fuelStopOverrides = fuelStopOverrides
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, from, to, profile, allowUnknown, hopOverrides, fuelStopOverrides
+        case id, from, to, profile, allowUnknown, avoidMotorways, preferBackRoads, hopOverrides, fuelStopOverrides
     }
 
     init(from decoder: Decoder) throws {
@@ -51,6 +59,8 @@ nonisolated struct RiderLeg: Identifiable, Equatable, Codable, Sendable {
         to = try container.decode(UUID.self, forKey: .to)
         profile = try container.decode(RouteProfile.self, forKey: .profile)
         allowUnknown = try container.decode(Bool.self, forKey: .allowUnknown)
+        avoidMotorways = try container.decodeIfPresent(Bool.self, forKey: .avoidMotorways) ?? false
+        preferBackRoads = try container.decodeIfPresent(Bool.self, forKey: .preferBackRoads) ?? false
         hopOverrides = try container.decodeIfPresent(
             [String: RouteProfile].self, forKey: .hopOverrides
         ) ?? [:]

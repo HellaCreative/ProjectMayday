@@ -26,6 +26,8 @@ final class RoutePlannerModel {
         let end: RouteCoordinate?
         let profile: RouteProfile
         let allowUnknown: Bool
+        let avoidMotorways: Bool
+        let preferBackRoads: Bool
         let response: RouteResponse?
         let isRouting: Bool
         let error: String?
@@ -54,6 +56,8 @@ final class RoutePlannerModel {
                 ?? departureFuelStopID.flatMap { riderLeg.hopOverrides[$0] }
                 ?? riderLeg.profile
             allowUnknown = riderLeg.allowUnknown
+            avoidMotorways = riderLeg.avoidMotorways
+            preferBackRoads = riderLeg.preferBackRoads
             response = builtLeg.response
             if case .pending = status { isRouting = true } else { isRouting = false }
             if case .failed(let message) = status { error = message } else { error = nil }
@@ -83,6 +87,8 @@ final class RoutePlannerModel {
             self.end = end
             profile = riderLeg.profile
             allowUnknown = riderLeg.allowUnknown
+            avoidMotorways = riderLeg.avoidMotorways
+            preferBackRoads = riderLeg.preferBackRoads
             response = nil
             if case .pending = status { isRouting = true } else { isRouting = false }
             if case .failed(let message) = status { error = message } else { error = nil }
@@ -118,6 +124,28 @@ final class RoutePlannerModel {
             if oldValue != allowUnknown {
                 syncNetworkAccessPolicy()
                 reroute()
+            }
+        }
+    }
+    /// Phase E4 — strong soft-avoid motorway + trunk. Default off.
+    var avoidMotorways = false {
+        didSet {
+            guard oldValue != avoidMotorways else { return }
+            if itinerary.legs.isEmpty {
+                reroute()
+            } else if !suppressPlannerReroute {
+                apply(.setAvoidMotorways(legID: nil, avoidMotorways), source: "avoidMotorways")
+            }
+        }
+    }
+    /// Phase E4 — prefer back roads (penalize arterial). Default off.
+    var preferBackRoads = false {
+        didSet {
+            guard oldValue != preferBackRoads else { return }
+            if itinerary.legs.isEmpty {
+                reroute()
+            } else if !suppressPlannerReroute {
+                apply(.setPreferBackRoads(legID: nil, preferBackRoads), source: "preferBackRoads")
             }
         }
     }
@@ -665,7 +693,13 @@ final class RoutePlannerModel {
         let before = itinerary
         itinerary = reduce(
             before,
-            .replaceAll(waypoints: coordinates, profile: profile, allowUnknown: allowUnknown)
+            .replaceAll(
+                waypoints: coordinates,
+                profile: profile,
+                allowUnknown: allowUnknown,
+                avoidMotorways: avoidMotorways,
+                preferBackRoads: preferBackRoads
+            )
         ).itinerary
         var legs: [BuiltLeg] = []
         for index in responses.indices where itinerary.legs.indices.contains(index) {
@@ -688,7 +722,13 @@ final class RoutePlannerModel {
         )
         RoutingDebugLog.shared.event(
             ItineraryLog.line(
-                action: .replaceAll(waypoints: coordinates, profile: profile, allowUnknown: allowUnknown),
+                action: .replaceAll(
+                    waypoints: coordinates,
+                    profile: profile,
+                    allowUnknown: allowUnknown,
+                    avoidMotorways: avoidMotorways,
+                    preferBackRoads: preferBackRoads
+                ),
                 before: before,
                 after: itinerary,
                 source: "seed"
@@ -922,6 +962,16 @@ final class RoutePlannerModel {
         apply(.setAllowUnknown(legID: stages[index].riderLegID, allow), source: "card")
     }
 
+    func setStageAvoidMotorways(_ on: Bool, at index: Int) {
+        guard stages.indices.contains(index) else { return }
+        apply(.setAvoidMotorways(legID: stages[index].riderLegID, on), source: "card")
+    }
+
+    func setStagePreferBackRoads(_ on: Bool, at index: Int) {
+        guard stages.indices.contains(index) else { return }
+        apply(.setPreferBackRoads(legID: stages[index].riderLegID, on), source: "card")
+    }
+
     static func fuelProfileFailureMessage(
         requestedProfile: RouteProfile,
         priorProfile: RouteProfile,
@@ -995,7 +1045,9 @@ final class RoutePlannerModel {
             .replaceAll(
                 waypoints: [origin, requestedDest],
                 profile: profile,
-                allowUnknown: allowUnknown
+                allowUnknown: allowUnknown,
+                avoidMotorways: avoidMotorways,
+                preferBackRoads: preferBackRoads
             ),
             source: "fromHere"
         )
@@ -2441,7 +2493,9 @@ final class RoutePlannerModel {
             allowUnknown: useAllow,
             avoidEdgeIds: avoidEdgeIds,
             sessionSeed: planningSessionSeed,
-            cleanMetroMultiplier: CleanMetroDebugPrefs.requestMultiplier
+            cleanMetroMultiplier: CleanMetroDebugPrefs.requestMultiplier,
+            avoidMotorways: avoidMotorways,
+            preferBackRoads: preferBackRoads
         )
         return try await routing.route(request, timeout: 15)
     }

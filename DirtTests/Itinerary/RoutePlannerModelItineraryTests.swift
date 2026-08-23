@@ -27,7 +27,9 @@ struct RoutePlannerModelItineraryTests {
                     RouteCoordinate(longitude: -60.19, latitude: 46.14)
                 ],
                 profile: .dirt,
-                allowUnknown: false
+                allowUnknown: false,
+                avoidMotorways: false,
+                preferBackRoads: false
             ),
             source: "plan"
         )
@@ -61,7 +63,7 @@ struct RoutePlannerModelItineraryTests {
         let model = makeModel(source: source)
 
         model.apply(
-            .replaceAll(waypoints: [start, end], profile: .dirt, allowUnknown: false),
+            .replaceAll(waypoints: [start, end], profile: .dirt, allowUnknown: false, avoidMotorways: false, preferBackRoads: false),
             source: "fromHere"
         )
         await model.waitForCanonicalBuildForTesting()
@@ -95,7 +97,7 @@ struct RoutePlannerModelItineraryTests {
         source.fuelStops = [fuelStop("fuel-after-insert", at: pump)]
         let model = makeModel(source: source)
         model.apply(
-            .replaceAll(waypoints: [start, end], profile: .dirt, allowUnknown: false),
+            .replaceAll(waypoints: [start, end], profile: .dirt, allowUnknown: false, avoidMotorways: false, preferBackRoads: false),
             source: "fromHere"
         )
         await model.waitForCanonicalBuildForTesting()
@@ -125,7 +127,7 @@ struct RoutePlannerModelItineraryTests {
         let source = PlannerFakeRoutingSource()
         let model = makeModel(source: source)
         model.apply(
-            .replaceAll(waypoints: [point(0), point(0.5), point(1)], profile: .dirt, allowUnknown: false),
+            .replaceAll(waypoints: [point(0), point(0.5), point(1)], profile: .dirt, allowUnknown: false, avoidMotorways: false, preferBackRoads: false),
             source: "seed"
         )
         await model.waitForCanonicalBuildForTesting()
@@ -152,7 +154,7 @@ struct RoutePlannerModelItineraryTests {
         let source = PlannerFakeRoutingSource()
         let model = makeModel(source: source)
         model.apply(
-            .replaceAll(waypoints: [point(0), point(1)], profile: .dirt, allowUnknown: false),
+            .replaceAll(waypoints: [point(0), point(1)], profile: .dirt, allowUnknown: false, avoidMotorways: false, preferBackRoads: false),
             source: "seed"
         )
         await model.waitForCanonicalBuildForTesting()
@@ -182,7 +184,7 @@ struct RoutePlannerModelItineraryTests {
         source.fuelStops = [fuelStop("shell-antigonish", name: "Shell Antigonish", at: pump)]
         let model = makeModel(source: source)
         model.apply(
-            .replaceAll(waypoints: [first, second, third], profile: .dirt, allowUnknown: false),
+            .replaceAll(waypoints: [first, second, third], profile: .dirt, allowUnknown: false, avoidMotorways: false, preferBackRoads: false),
             source: "seed"
         )
         await model.waitForCanonicalBuildForTesting()
@@ -209,7 +211,7 @@ struct RoutePlannerModelItineraryTests {
         source.fuelStops = [fuelStop("shell-antigonish", name: "Shell Antigonish", at: pump)]
         let model = makeModel(source: source)
         model.apply(
-            .replaceAll(waypoints: [first, second], profile: .dirt, allowUnknown: false),
+            .replaceAll(waypoints: [first, second], profile: .dirt, allowUnknown: false, avoidMotorways: false, preferBackRoads: false),
             source: "seed"
         )
         await model.waitForCanonicalBuildForTesting()
@@ -242,7 +244,7 @@ struct RoutePlannerModelItineraryTests {
         ]
         let model = makeModel(source: source)
         model.apply(
-            .replaceAll(waypoints: [first, second], profile: .dirt, allowUnknown: false),
+            .replaceAll(waypoints: [first, second], profile: .dirt, allowUnknown: false, avoidMotorways: false, preferBackRoads: false),
             source: "seed"
         )
         await model.waitForCanonicalBuildForTesting()
@@ -275,7 +277,7 @@ struct RoutePlannerModelItineraryTests {
         ]
         let model = makeModel(source: source)
         model.apply(
-            .replaceAll(waypoints: [first, second], profile: .dirt, allowUnknown: false),
+            .replaceAll(waypoints: [first, second], profile: .dirt, allowUnknown: false, avoidMotorways: false, preferBackRoads: false),
             source: "seed"
         )
         await model.waitForCanonicalBuildForTesting()
@@ -317,7 +319,7 @@ struct RoutePlannerModelItineraryTests {
         let mapState = MapState()
         let model = makeModel(source: source, mapState: mapState)
         model.apply(
-            .replaceAll(waypoints: [first, second], profile: .dirt, allowUnknown: false),
+            .replaceAll(waypoints: [first, second], profile: .dirt, allowUnknown: false, avoidMotorways: false, preferBackRoads: false),
             source: "seed"
         )
         await model.waitForCanonicalBuildForTesting()
@@ -344,7 +346,7 @@ struct RoutePlannerModelItineraryTests {
         source.routeError = RoutingError.server("No eligible edge near Point 1")
         let model = makeModel(source: source)
         model.apply(
-            .replaceAll(waypoints: [point(0), point(1)], profile: .dirt, allowUnknown: false),
+            .replaceAll(waypoints: [point(0), point(1)], profile: .dirt, allowUnknown: false, avoidMotorways: false, preferBackRoads: false),
             source: "seed"
         )
         await model.waitForCanonicalBuildForTesting()
@@ -367,7 +369,7 @@ struct RoutePlannerModelItineraryTests {
         source.fuelChainError = RoutingError.server("Routing service timed out")
         let model = makeModel(source: source)
         model.apply(
-            .replaceAll(waypoints: [start, end], profile: .dirt, allowUnknown: false),
+            .replaceAll(waypoints: [start, end], profile: .dirt, allowUnknown: false, avoidMotorways: false, preferBackRoads: false),
             source: "seed"
         )
         await model.waitForCanonicalBuildForTesting()

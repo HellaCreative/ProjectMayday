@@ -2035,6 +2035,8 @@ async function routeOnRuntime(body, graphResolution, runtime) {
   if (cleanMetroMultiplier != null) {
     searchOpts.cleanMetroMultiplier = cleanMetroMultiplier;
   }
+  if (options.avoidMotorways === true) searchOpts.avoidMotorways = true;
+  if (options.preferBackRoads === true) searchOpts.preferBackRoads = true;
   let path = null;
   let urbanCoreFallbackUsed = false;
   let cleanUnpavedFallbackUsed = false;

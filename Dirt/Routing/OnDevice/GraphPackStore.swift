@@ -440,7 +440,7 @@ final class GraphPackStore {
         return "Need \(missingList) for that pin. \(installedClause) Offline rerouting will not be available until an approved pack can be installed."
     }
 
-    func downloadRegion(_ regionId: String, quiet: Bool = false) {
+    func downloadRegion(_ regionId: String, quiet: Bool = false, replaceInstalled: Bool = false) {
         let id = regionId.lowercased()
         guard publishedIds.contains(id) else { return }
         guard downloadTasks[id] == nil else { return }
@@ -450,7 +450,12 @@ final class GraphPackStore {
         }
         setInstall(id, .downloading(0.02))
         downloadTasks[id] = Task { [weak self] in
-            try? await self?.performDownload(regionId: id, asNavigationPrep: false, quiet: quiet, replaceInstalled: false)
+            try? await self?.performDownload(
+                regionId: id,
+                asNavigationPrep: false,
+                quiet: quiet,
+                replaceInstalled: replaceInstalled
+            )
             self?.downloadTasks[id] = nil
             self?.quietDownloadIds.remove(id)
         }
@@ -616,7 +621,9 @@ final class GraphPackStore {
         backtrackFactor: Double = 4,
         sessionSeed: UInt64 = 0,
         maxRouteMeters: Double? = nil,
-        cleanMetroMultiplier: Double? = nil
+        cleanMetroMultiplier: Double? = nil,
+        avoidMotorways: Bool = false,
+        preferBackRoads: Bool = false
     ) async -> Result<OnDeviceRouter.Result, OnDeviceRouter.Failure> {
         let fromId = Self.primaryRegionId(containing: from)
         let toId = Self.primaryRegionId(containing: to)
@@ -636,7 +643,9 @@ final class GraphPackStore {
                 backtrackFactor: backtrackFactor,
                 sessionSeed: sessionSeed,
                 maxRouteMeters: maxRouteMeters,
-                cleanMetroMultiplier: cleanMetroMultiplier
+                cleanMetroMultiplier: cleanMetroMultiplier,
+                avoidMotorways: avoidMotorways,
+                preferBackRoads: preferBackRoads
             )
         }
         return await routeOnDeviceInRegion(
@@ -651,7 +660,9 @@ final class GraphPackStore {
             backtrackFactor: backtrackFactor,
             sessionSeed: sessionSeed,
             maxRouteMeters: maxRouteMeters,
-            cleanMetroMultiplier: cleanMetroMultiplier
+            cleanMetroMultiplier: cleanMetroMultiplier,
+                avoidMotorways: avoidMotorways,
+                preferBackRoads: preferBackRoads
         )
     }
 
@@ -671,7 +682,9 @@ final class GraphPackStore {
         backtrackFactor: Double,
         sessionSeed: UInt64,
         maxRouteMeters: Double?,
-        cleanMetroMultiplier: Double? = nil
+        cleanMetroMultiplier: Double? = nil,
+        avoidMotorways: Bool = false,
+        preferBackRoads: Bool = false
     ) async -> Result<OnDeviceRouter.Result, OnDeviceRouter.Failure> {
         await activateInstalledPack(regionId: left)
         guard let leftPack = activePack else { return .failure(.noPath) }
@@ -705,7 +718,9 @@ final class GraphPackStore {
                 backtrackFactor: backtrackFactor,
                 sessionSeed: sessionSeed,
                 maxRouteMeters: maxRouteMeters,
-                cleanMetroMultiplier: cleanMetroMultiplier
+                cleanMetroMultiplier: cleanMetroMultiplier,
+                avoidMotorways: avoidMotorways,
+                preferBackRoads: preferBackRoads
             )
             guard case .success(let first) = hop1, first.coordinates.count > 1 else {
                 if case .failure(let reason) = hop1 { lastFailure = reason }
@@ -720,7 +735,9 @@ final class GraphPackStore {
                 backtrackFactor: backtrackFactor,
                 sessionSeed: sessionSeed,
                 maxRouteMeters: maxRouteMeters.map { max(0, $0 - first.distanceMeters) },
-                cleanMetroMultiplier: cleanMetroMultiplier
+                cleanMetroMultiplier: cleanMetroMultiplier,
+                avoidMotorways: avoidMotorways,
+                preferBackRoads: preferBackRoads
             )
             guard case .success(let second) = hop2, second.coordinates.count > 1 else {
                 if case .failure(let reason) = hop2 { lastFailure = reason }
@@ -748,7 +765,9 @@ final class GraphPackStore {
         backtrackFactor: Double,
         sessionSeed: UInt64,
         maxRouteMeters: Double? = nil,
-        cleanMetroMultiplier: Double? = nil
+        cleanMetroMultiplier: Double? = nil,
+        avoidMotorways: Bool = false,
+        preferBackRoads: Bool = false
     ) async -> Result<OnDeviceRouter.Result, OnDeviceRouter.Failure> {
         if let regionId {
             await activateInstalledPack(regionId: regionId)
@@ -778,7 +797,9 @@ final class GraphPackStore {
                 backtrackFactor: backtrackFactor,
                 sessionSeed: seed,
                 maxRouteMeters: maxRouteMeters,
-                cleanMetroMultiplier: metro
+                cleanMetroMultiplier: metro,
+                avoidMotorways: avoidMotorways,
+                preferBackRoads: preferBackRoads
             )
         }.value
     }
@@ -1330,7 +1351,7 @@ final class GraphPackStore {
             }
 
             guard let region = manifest.regions.first(where: { $0.id.lowercased() == regionId }),
-                  region.files.contains(where: { $0.name == "graph.v2.bin" })
+                  Self.regionHasPhoneGraph(region)
             else {
                 setInstall(regionId, .unavailable)
                 if asNavigationPrep {
@@ -1806,12 +1827,16 @@ final class GraphPackStore {
         return digest.caseInsensitiveCompare(expectedSHA256) == .orderedSame
     }
 
+    nonisolated private static func regionHasPhoneGraph(_ region: PackManifest.Region) -> Bool {
+        region.files.contains { $0.name == "graph.v3.bin" || $0.name == "graph.v2.bin" }
+    }
+
     nonisolated private static func regionMatchesIdentity(
         region: PackManifest.Region,
         directory: URL
     ) -> Bool {
         let files = region.files.filter { phonePackFileNames.contains($0.name) }
-        guard files.contains(where: { $0.name == "graph.v2.bin" }) else { return false }
+        guard regionHasPhoneGraph(region) else { return false }
         return files.allSatisfy { file in
             fileMatchesIdentity(
                 at: directory.appendingPathComponent(file.name),

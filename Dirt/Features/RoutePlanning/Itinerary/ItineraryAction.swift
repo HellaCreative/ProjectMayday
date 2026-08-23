@@ -10,11 +10,15 @@ nonisolated enum ItineraryAction: Equatable, Codable, Sendable {
     case setFuelStopOverride(legID: UUID, departureAnchorID: String, stationID: String)
     case clearFuelStopOverrides(legID: UUID)
     case setAllowUnknown(legID: UUID?, Bool)
+    case setAvoidMotorways(legID: UUID?, Bool)
+    case setPreferBackRoads(legID: UUID?, Bool)
     case markImpassable(edgeIDs: Set<String>)
     case replaceAll(
         waypoints: [RouteCoordinate],
         profile: RouteProfile,
-        allowUnknown: Bool
+        allowUnknown: Bool,
+        avoidMotorways: Bool,
+        preferBackRoads: Bool
     )
     case clear
     case rebuild

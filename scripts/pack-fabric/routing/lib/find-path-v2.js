@@ -66,6 +66,7 @@ const {
   isBlockedForCleanLeaf,
   cleanLeafCostMult,
   cleanLeafHighwayAvoidMult,
+  e4LeafCostMult,
   ROAD_TIER
 } = require("./road-tier");
 const { surfaceFamilyOf } = require("./surface-family");
@@ -97,7 +98,9 @@ function cleanLeafBlocked(pack, ei, pavedOnly, startEi, endEi) {
   });
 }
 
-function cleanLeafStepCost(pack, ei, edgeM, toLL, startLL, endLL, startOnHwy, endOnHwy) {
+function cleanLeafStepCost(
+  pack, ei, edgeM, toLL, startLL, endLL, startOnHwy, endOnHwy, e4Opts
+) {
   const leaves = pack.edgeLeaves(ei);
   const family = surfaceFamilyOf(leaves.surfaceLeaf, pack.surfaceFamilyMap);
   const tier = roadTierOf(leaves.roadClassLeaf, pack.roadTierMap);
@@ -110,8 +113,36 @@ function cleanLeafStepCost(pack, ei, edgeM, toLL, startLL, endLL, startOnHwy, en
       !!startOnHwy,
       !!endOnHwy
     );
+    step *= e4LeafCostMult({
+      tier,
+      avoidMotorways: !!(e4Opts && e4Opts.avoidMotorways),
+      preferBackRoads: !!(e4Opts && e4Opts.preferBackRoads),
+      metersFromStart: haversineMeters(toLL, startLL),
+      metersToDestination: haversineMeters(toLL, endLL),
+      startOnHighway: !!startOnHwy,
+      endOnHighway: !!endOnHwy
+    });
   }
   return step;
+}
+
+/** Apply E4 knobs on leaf packs for any profile (no-op when both off or no leaves). */
+function applyE4LeafMult(pack, ei, step, toLL, startLL, endLL, startOnHwy, endOnHwy, e4Opts) {
+  if (!pack || !pack.hasLeaves || !e4Opts) return step;
+  if (!e4Opts.avoidMotorways && !e4Opts.preferBackRoads) return step;
+  const leaves = pack.edgeLeaves(ei);
+  const tier = roadTierOf(leaves.roadClassLeaf, pack.roadTierMap);
+  const metersFromStart = toLL ? haversineMeters(toLL, startLL) : 1e9;
+  const metersToDestination = toLL ? haversineMeters(toLL, endLL) : 1e9;
+  return step * e4LeafCostMult({
+    tier,
+    avoidMotorways: !!e4Opts.avoidMotorways,
+    preferBackRoads: !!e4Opts.preferBackRoads,
+    metersFromStart,
+    metersToDestination,
+    startOnHighway: !!startOnHwy,
+    endOnHighway: !!endOnHwy
+  });
 }
 
 function leafPinIsHighway(pack, match) {
@@ -725,6 +756,10 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
   const endOnMajorHighway = profile === "cleanest" && pack.hasLeaves
     ? leafPinIsHighway(pack, endMatch) || pinMatchesMajorHighway(endMatch, profile)
     : pinMatchesMajorHighway(endMatch, profile);
+  const e4Opts = {
+    avoidMotorways: searchOpts.avoidMotorways === true,
+    preferBackRoads: searchOpts.preferBackRoads === true
+  };
 
   function nodeLL(node) {
     if (node === startNode) return startLL;
@@ -1018,9 +1053,12 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
             step += awayExtra(cur.node, to) * DIRT_RIDE_AWAY_SCALE;
             step += directCrossTrackExtra(profile, toLL, startLL, endLL, edgeM) * DIRT_RIDE_XT_SCALE;
           }
+          step = applyE4LeafMult(
+            pack, ei, step, toLL, startLL, endLL, startOnMajorHighway, endOnMajorHighway, e4Opts
+          );
         } else if (profile === "cleanest" && pack.hasLeaves) {
           step = cleanLeafStepCost(
-            pack, ei, edgeM, toLL, startLL, endLL, startOnMajorHighway, endOnMajorHighway
+            pack, ei, edgeM, toLL, startLL, endLL, startOnMajorHighway, endOnMajorHighway, e4Opts
           );
           if (toLL && applyAwayXt) {
             step += awayExtra(cur.node, to);
@@ -1060,6 +1098,9 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
               step += directCrossTrackExtra(profile, toLL, startLL, endLL, edgeM);
             }
           }
+          step = applyE4LeafMult(
+            pack, ei, step, toLL, startLL, endLL, startOnMajorHighway, endOnMajorHighway, e4Opts
+          );
         }
         if (toLL) {
           step *= urbanCoreFallbackMultiplier(
@@ -1174,10 +1215,13 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
           step = (v.meters / 1000) * dirtRideCostPerKm(vSurfaceName, vRoad, unpackConfidence(vAttr));
         } else if (profile === "cleanest" && pack.hasLeaves) {
           step = cleanLeafStepCost(
-            pack, v.ei, v.meters, toLL, startLL, endLL, startOnMajorHighway, endOnMajorHighway
+            pack, v.ei, v.meters, toLL, startLL, endLL, startOnMajorHighway, endOnMajorHighway, e4Opts
           );
         } else {
           step = v.meters / 1000;
+          step = applyE4LeafMult(
+            pack, v.ei, step, toLL, startLL, endLL, startOnMajorHighway, endOnMajorHighway, e4Opts
+          );
         }
         if (costMode === "pavement") {
           step += awayExtra(cur.node, item.to) * DIRT_RIDE_AWAY_SCALE;

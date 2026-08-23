@@ -276,6 +276,10 @@ nonisolated struct HopSearchContext: Sendable {
     var backtrackFactor: Double
     /// DEBUG ONLY. Clean urban-core multiplier override (1…20). Nil → ×120.
     var cleanMetroMultiplier: Double?
+    /// Phase E4: strong soft-avoid motorway + trunk (roadClassLeaf). Default off.
+    var avoidMotorways: Bool
+    /// Phase E4: penalize arterial / prefer collector — never delete. Default off.
+    var preferBackRoads: Bool
 
     static func forProfile(_ profile: RouteProfile, seed: UInt64) -> HopSearchContext {
         HopSearchContext(
@@ -299,7 +303,9 @@ nonisolated struct HopSearchContext: Sendable {
             priorEdgeIds: [],
             arrivalEdgeId: nil,
             backtrackFactor: 4,
-            cleanMetroMultiplier: nil
+            cleanMetroMultiplier: nil,
+            avoidMotorways: false,
+            preferBackRoads: false
         )
     }
 }

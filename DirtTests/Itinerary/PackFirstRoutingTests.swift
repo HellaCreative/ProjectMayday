@@ -72,7 +72,7 @@ struct PackFirstRoutingTests {
         )
         model.selectMode(.plan)
         model.apply(
-            .replaceAll(waypoints: [halifax, sydney], profile: .dirt, allowUnknown: false),
+            .replaceAll(waypoints: [halifax, sydney], profile: .dirt, allowUnknown: false, avoidMotorways: false, preferBackRoads: false),
             source: "plan"
         )
         await model.waitForCanonicalBuildForTesting()
@@ -121,7 +121,7 @@ struct PackFirstRoutingTests {
         )
         model.selectMode(.plan)
         model.apply(
-            .replaceAll(waypoints: [halifax, sydney], profile: .dirt, allowUnknown: false),
+            .replaceAll(waypoints: [halifax, sydney], profile: .dirt, allowUnknown: false, avoidMotorways: false, preferBackRoads: false),
             source: "plan"
         )
         await model.waitForCanonicalBuildForTesting()
@@ -148,7 +148,7 @@ struct PackFirstRoutingTests {
         )
         model.selectMode(.plan)
         model.apply(
-            .replaceAll(waypoints: [halifax, sydney], profile: .dirt, allowUnknown: false),
+            .replaceAll(waypoints: [halifax, sydney], profile: .dirt, allowUnknown: false, avoidMotorways: false, preferBackRoads: false),
             source: "plan"
         )
         await model.waitForCanonicalBuildForTesting()
@@ -194,7 +194,7 @@ struct PackFirstRoutingTests {
         )
         model.selectMode(.plan)
         model.apply(
-            .replaceAll(waypoints: [halifax, sydney], profile: .dirt, allowUnknown: false),
+            .replaceAll(waypoints: [halifax, sydney], profile: .dirt, allowUnknown: false, avoidMotorways: false, preferBackRoads: false),
             source: "plan"
         )
         await model.waitForCanonicalBuildForTesting()
@@ -304,7 +304,7 @@ struct PackFirstRoutingTests {
         )
         planModel.selectMode(.plan)
         planModel.apply(
-            .replaceAll(waypoints: [halifax, sydney], profile: .dirt, allowUnknown: false),
+            .replaceAll(waypoints: [halifax, sydney], profile: .dirt, allowUnknown: false, avoidMotorways: false, preferBackRoads: false),
             source: "plan"
         )
 
@@ -324,7 +324,7 @@ struct PackFirstRoutingTests {
             acquisition: fromCoordinator
         )
         fromModel.apply(
-            .replaceAll(waypoints: [halifax, sydney], profile: .dirt, allowUnknown: false),
+            .replaceAll(waypoints: [halifax, sydney], profile: .dirt, allowUnknown: false, avoidMotorways: false, preferBackRoads: false),
             source: "fromHere"
         )
         await planModel.waitForCanonicalBuildForTesting()

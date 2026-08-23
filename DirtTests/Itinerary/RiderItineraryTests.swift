@@ -209,7 +209,7 @@ struct RiderItineraryTests {
     ) -> RiderItinerary {
         reduce(
             RiderItinerary(),
-            .replaceAll(waypoints: coordinates, profile: profile, allowUnknown: allowUnknown)
+            .replaceAll(waypoints: coordinates, profile: profile, allowUnknown: allowUnknown, avoidMotorways: false, preferBackRoads: false)
         ).itinerary
     }
 

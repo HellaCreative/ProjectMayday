@@ -58,7 +58,7 @@ private enum ItineraryLogReplay {
         }
         switch name {
         case "replaceAll":
-            return .replaceAll(waypoints: after, profile: .balanced, allowUnknown: false)
+            return .replaceAll(waypoints: after, profile: .balanced, allowUnknown: false, avoidMotorways: false, preferBackRoads: false)
         case "append":
             guard let coordinate = after.last else { throw ReplayError.malformed(line) }
             return .append(coordinate: coordinate)

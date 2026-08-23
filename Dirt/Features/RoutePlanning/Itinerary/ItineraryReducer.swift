@@ -18,7 +18,9 @@ nonisolated func reduce(
             waypoints: waypoints,
             preserving: itinerary.legs,
             fallbackProfile: itinerary.legs.last?.profile ?? .balanced,
-            fallbackAllowUnknown: itinerary.legs.last?.allowUnknown ?? false
+            fallbackAllowUnknown: itinerary.legs.last?.allowUnknown ?? false,
+            fallbackAvoidMotorways: itinerary.legs.last?.avoidMotorways ?? false,
+            fallbackPreferBackRoads: itinerary.legs.last?.preferBackRoads ?? false
         )
         return changed(
             itinerary,
@@ -38,7 +40,9 @@ nonisolated func reduce(
             waypoints: waypoints,
             preserving: itinerary.legs,
             fallbackProfile: split.profile,
-            fallbackAllowUnknown: split.allowUnknown
+            fallbackAllowUnknown: split.allowUnknown,
+            fallbackAvoidMotorways: split.avoidMotorways,
+            fallbackPreferBackRoads: split.preferBackRoads
         )
         return changed(itinerary, waypoints: waypoints, legs: legs, rebuildFrom: legIndex)
 
@@ -72,7 +76,9 @@ nonisolated func reduce(
             waypoints: waypoints,
             preserving: itinerary.legs,
             fallbackProfile: fallbackLeg?.profile ?? .balanced,
-            fallbackAllowUnknown: fallbackLeg?.allowUnknown ?? false
+            fallbackAllowUnknown: fallbackLeg?.allowUnknown ?? false,
+            fallbackAvoidMotorways: fallbackLeg?.avoidMotorways ?? false,
+            fallbackPreferBackRoads: fallbackLeg?.preferBackRoads ?? false
         )
         let joinedIndex = legs.isEmpty ? nil : min(max(0, waypointIndex - 1), legs.count - 1)
         return changed(itinerary, waypoints: waypoints, legs: legs, rebuildFrom: joinedIndex)
@@ -174,6 +180,46 @@ nonisolated func reduce(
             rebuildFrom: legID == nil ? 0 : affected.first
         )
 
+    case .setAvoidMotorways(let legID, let avoidMotorways):
+        var legs = itinerary.legs
+        let affected: [Int]
+        if let legID {
+            guard let index = legs.firstIndex(where: { $0.id == legID }),
+                  legs[index].avoidMotorways != avoidMotorways
+            else { return unchanged(itinerary) }
+            affected = [index]
+        } else {
+            affected = legs.indices.filter { legs[$0].avoidMotorways != avoidMotorways }
+            guard !affected.isEmpty else { return unchanged(itinerary) }
+        }
+        for index in affected { legs[index].avoidMotorways = avoidMotorways }
+        return changed(
+            itinerary,
+            waypoints: itinerary.waypoints,
+            legs: legs,
+            rebuildFrom: legID == nil ? 0 : affected.first
+        )
+
+    case .setPreferBackRoads(let legID, let preferBackRoads):
+        var legs = itinerary.legs
+        let affected: [Int]
+        if let legID {
+            guard let index = legs.firstIndex(where: { $0.id == legID }),
+                  legs[index].preferBackRoads != preferBackRoads
+            else { return unchanged(itinerary) }
+            affected = [index]
+        } else {
+            affected = legs.indices.filter { legs[$0].preferBackRoads != preferBackRoads }
+            guard !affected.isEmpty else { return unchanged(itinerary) }
+        }
+        for index in affected { legs[index].preferBackRoads = preferBackRoads }
+        return changed(
+            itinerary,
+            waypoints: itinerary.waypoints,
+            legs: legs,
+            rebuildFrom: legID == nil ? 0 : affected.first
+        )
+
     case .markImpassable(let edgeIDs):
         let merged = itinerary.impassableEdgeIDs.union(edgeIDs)
         guard merged != itinerary.impassableEdgeIDs else { return unchanged(itinerary) }
@@ -185,13 +231,15 @@ nonisolated func reduce(
             rebuildFrom: itinerary.legs.isEmpty ? nil : 0
         )
 
-    case .replaceAll(let coordinates, let profile, let allowUnknown):
+    case .replaceAll(let coordinates, let profile, let allowUnknown, let avoidMotorways, let preferBackRoads):
         let waypoints = coordinates.map { RiderWaypoint(coordinate: $0) }
         let legs = rebuiltLegs(
             waypoints: waypoints,
             preserving: [],
             fallbackProfile: profile,
-            fallbackAllowUnknown: allowUnknown
+            fallbackAllowUnknown: allowUnknown,
+            fallbackAvoidMotorways: avoidMotorways,
+            fallbackPreferBackRoads: preferBackRoads
         )
         return changed(
             itinerary,
@@ -228,7 +276,9 @@ private nonisolated func rebuiltLegs(
     waypoints: [RiderWaypoint],
     preserving existing: [RiderLeg],
     fallbackProfile: RouteProfile,
-    fallbackAllowUnknown: Bool
+    fallbackAllowUnknown: Bool,
+    fallbackAvoidMotorways: Bool = false,
+    fallbackPreferBackRoads: Bool = false
 ) -> [RiderLeg] {
     guard waypoints.count > 1 else { return [] }
     let existingByID = Dictionary(uniqueKeysWithValues: existing.map { ($0.id, $0) })
@@ -241,7 +291,9 @@ private nonisolated func rebuiltLegs(
             from: from,
             to: to,
             profile: fallbackProfile,
-            allowUnknown: fallbackAllowUnknown
+            allowUnknown: fallbackAllowUnknown,
+            avoidMotorways: fallbackAvoidMotorways,
+            preferBackRoads: fallbackPreferBackRoads
         )
     }
 }

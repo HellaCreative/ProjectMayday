@@ -94,6 +94,10 @@ struct RouteRequestOptions: Codable, Sendable {
     var directExtraBudgetMeters: Double?
     /// DEBUG ONLY. Clean pin tests: urban-core multiplier override (1…20).
     var cleanMetroMultiplier: Double?
+    /// Phase E4: avoid motorway + trunk (strong soft cost). Omitted when false.
+    var avoidMotorways: Bool?
+    /// Phase E4: prefer back roads (penalize arterial). Omitted when false.
+    var preferBackRoads: Bool?
 
     init(
         avoidEdgeIds: [String] = [],
@@ -103,7 +107,9 @@ struct RouteRequestOptions: Codable, Sendable {
         sessionSeed: UInt64? = nil,
         maxPathMeters: Double? = nil,
         directExtraBudgetMeters: Double? = nil,
-        cleanMetroMultiplier: Double? = nil
+        cleanMetroMultiplier: Double? = nil,
+        avoidMotorways: Bool = false,
+        preferBackRoads: Bool = false
     ) {
         self.avoidEdgeIds = avoidEdgeIds.isEmpty ? nil : avoidEdgeIds
         self.priorEdgeIds = priorEdgeIds.isEmpty ? nil : priorEdgeIds
@@ -117,6 +123,8 @@ struct RouteRequestOptions: Codable, Sendable {
         } else {
             self.cleanMetroMultiplier = nil
         }
+        self.avoidMotorways = avoidMotorways ? true : nil
+        self.preferBackRoads = preferBackRoads ? true : nil
     }
 }
 
@@ -138,7 +146,9 @@ struct RouteRequest: Codable, Sendable {
         sessionSeed: UInt64 = 0,
         maxPathMeters: Double? = nil,
         directExtraBudgetMeters: Double? = nil,
-        cleanMetroMultiplier: Double? = nil
+        cleanMetroMultiplier: Double? = nil,
+        avoidMotorways: Bool = false,
+        preferBackRoads: Bool = false
     ) {
         self.profile = profile
         self.locations = locations
@@ -151,7 +161,8 @@ struct RouteRequest: Codable, Sendable {
         let metro = profile == .cleanest ? cleanMetroMultiplier : nil
         if avoidEdgeIds.isEmpty, priorEdgeIds.isEmpty, arrivalEdgeId == nil,
            backtrackFactor == nil, seed == nil, maxPathMeters == nil,
-           directExtraBudgetMeters == nil, metro == nil {
+           directExtraBudgetMeters == nil, metro == nil,
+           !avoidMotorways, !preferBackRoads {
             options = nil
         } else {
             options = RouteRequestOptions(
@@ -162,7 +173,9 @@ struct RouteRequest: Codable, Sendable {
                 sessionSeed: seed,
                 maxPathMeters: maxPathMeters,
                 directExtraBudgetMeters: directExtraBudgetMeters,
-                cleanMetroMultiplier: metro
+                cleanMetroMultiplier: metro,
+                avoidMotorways: avoidMotorways,
+                preferBackRoads: preferBackRoads
             )
         }
     }
