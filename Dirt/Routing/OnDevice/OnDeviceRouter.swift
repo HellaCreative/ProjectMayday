@@ -626,8 +626,13 @@ nonisolated struct OnDeviceRouter {
         ctx.settlementWall = settlementWall
         ctx.settlementFallback = settlementFallback
         ctx.cleanMetroMultiplier = cleanMetroMultiplier
-        ctx.avoidMotorways = avoidMotorways
-        ctx.preferBackRoads = preferBackRoads
+        let e4 = RoadTierStats.e4Flags(
+            for: profile,
+            avoidMotorways: avoidMotorways,
+            preferBackRoads: preferBackRoads
+        )
+        ctx.avoidMotorways = e4.avoidMotorways
+        ctx.preferBackRoads = e4.preferBackRoads
 
         if profile == .dirt {
             let base = HopSearchPolicy.dirtCorridorMeters
@@ -3564,7 +3569,7 @@ nonisolated struct OnDeviceRouter {
                 startOnMajorHighway: startOnMajorHighway,
                 endOnMajorHighway: endOnMajorHighway
             )
-            if pack.hasLeaves, ei >= 0, ctx.avoidMotorways || ctx.preferBackRoads {
+            if profile == .cleanest, pack.hasLeaves, ei >= 0, ctx.avoidMotorways || ctx.preferBackRoads {
                 step *= RoadTierStats.e4LeafCostMult(
                     tier: pack.roadTier(ei),
                     avoidMotorways: ctx.avoidMotorways,
@@ -3634,7 +3639,7 @@ nonisolated struct OnDeviceRouter {
                     step *= 0.92
                 }
             }
-            if pack.hasLeaves, ei >= 0, ctx.avoidMotorways || ctx.preferBackRoads {
+            if profile == .cleanest, pack.hasLeaves, ei >= 0, ctx.avoidMotorways || ctx.preferBackRoads {
                 step *= RoadTierStats.e4LeafCostMult(
                     tier: pack.roadTier(ei),
                     avoidMotorways: ctx.avoidMotorways,

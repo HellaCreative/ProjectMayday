@@ -189,6 +189,21 @@ function e4LeafCostMult(opts) {
   return m;
 }
 
+/**
+ * E4 knobs are Clean-only. Dirt / Balanced / Direct ignore rider flags so
+ * costing matches pre-E4. Clean always prefers back roads; avoid-motorways
+ * is the Clean toggle.
+ */
+function e4FlagsForProfile(profile, flags) {
+  if (profile !== "cleanest") {
+    return { avoidMotorways: false, preferBackRoads: false };
+  }
+  return {
+    avoidMotorways: !!(flags && flags.avoidMotorways),
+    preferBackRoads: true
+  };
+}
+
 module.exports = {
   ROAD_TIER,
   ROAD_TIER_MAP,
@@ -202,6 +217,7 @@ module.exports = {
   e4AvoidMotorwaysMult,
   e4PreferBackRoadsMult,
   e4LeafCostMult,
+  e4FlagsForProfile,
   E4_AVOID_MOTORWAY_MULT,
   E4_AVOID_TRUNK_MULT,
   E4_PREFER_BACK_ARTERIAL_MULT,

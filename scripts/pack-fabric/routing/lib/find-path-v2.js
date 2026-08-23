@@ -85,6 +85,7 @@ const {
   cleanLeafCostMult,
   cleanLeafHighwayAvoidMult,
   e4LeafCostMult,
+  e4FlagsForProfile,
   ROAD_TIER
 } = require("./road-tier");
 const { surfaceFamilyOf } = require("./surface-family");
@@ -146,7 +147,7 @@ function cleanLeafStepCost(
   return step;
 }
 
-/** Apply E4 knobs on leaf packs for any profile (no-op when both off or no leaves). */
+/** Apply E4 knobs on leaf packs (Clean-only flags; no-op when both off or no leaves). */
 function applyE4LeafMult(pack, ei, step, toLL, startLL, endLL, startOnHwy, endOnHwy, e4Opts) {
   if (!pack || !pack.hasLeaves || !e4Opts) return step;
   if (!e4Opts.avoidMotorways && !e4Opts.preferBackRoads) return step;
@@ -776,10 +777,10 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
   const endOnMajorHighway = profile === "cleanest" && pack.hasLeaves
     ? leafPinIsHighway(pack, endMatch) || pinMatchesMajorHighway(endMatch, profile)
     : pinMatchesMajorHighway(endMatch, profile);
-  const e4Opts = {
+  const e4Opts = e4FlagsForProfile(profile, {
     avoidMotorways: searchOpts.avoidMotorways === true,
     preferBackRoads: searchOpts.preferBackRoads === true
-  };
+  });
 
   function nodeLL(node) {
     if (node === startNode) return startLL;

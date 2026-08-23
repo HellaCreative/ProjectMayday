@@ -169,4 +169,17 @@ nonisolated enum RoadTierStats {
             endOnHighway: endOnHighway
         ) * e4PreferBackRoadsMult(tier: tier, enabled: preferBackRoads)
     }
+
+    /// E4 knobs are Clean-only. Dirt / Balanced / Direct ignore rider flags.
+    /// Clean always prefers back roads; avoid-motorways is the Clean toggle.
+    static func e4Flags(
+        for profile: RouteProfile,
+        avoidMotorways: Bool,
+        preferBackRoads: Bool
+    ) -> (avoidMotorways: Bool, preferBackRoads: Bool) {
+        if profile != .cleanest {
+            return (false, false)
+        }
+        return (avoidMotorways, true)
+    }
 }

@@ -42,8 +42,8 @@ nonisolated struct RiderLeg: Identifiable, Equatable, Codable, Sendable {
         self.to = to
         self.profile = profile
         self.allowUnknown = profile == .cleanest ? false : allowUnknown
-        self.avoidMotorways = avoidMotorways
-        self.preferBackRoads = preferBackRoads
+        self.avoidMotorways = profile == .cleanest ? avoidMotorways : false
+        self.preferBackRoads = profile == .cleanest
         self.hopOverrides = hopOverrides
         self.fuelStopOverrides = fuelStopOverrides
     }
@@ -61,6 +61,13 @@ nonisolated struct RiderLeg: Identifiable, Equatable, Codable, Sendable {
         allowUnknown = try container.decode(Bool.self, forKey: .allowUnknown)
         avoidMotorways = try container.decodeIfPresent(Bool.self, forKey: .avoidMotorways) ?? false
         preferBackRoads = try container.decodeIfPresent(Bool.self, forKey: .preferBackRoads) ?? false
+        if profile == .cleanest {
+            allowUnknown = false
+            preferBackRoads = true
+        } else {
+            avoidMotorways = false
+            preferBackRoads = false
+        }
         hopOverrides = try container.decodeIfPresent(
             [String: RouteProfile].self, forKey: .hopOverrides
         ) ?? [:]

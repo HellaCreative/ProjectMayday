@@ -159,10 +159,12 @@ struct RouteRequest: Codable, Sendable {
         )
         let seed = sessionSeed == 0 ? nil : sessionSeed
         let metro = profile == .cleanest ? cleanMetroMultiplier : nil
+        let scopedAvoid = profile == .cleanest && avoidMotorways
+        let scopedPrefer = profile == .cleanest
         if avoidEdgeIds.isEmpty, priorEdgeIds.isEmpty, arrivalEdgeId == nil,
            backtrackFactor == nil, seed == nil, maxPathMeters == nil,
            directExtraBudgetMeters == nil, metro == nil,
-           !avoidMotorways, !preferBackRoads {
+           !scopedAvoid, !scopedPrefer {
             options = nil
         } else {
             options = RouteRequestOptions(
@@ -174,8 +176,8 @@ struct RouteRequest: Codable, Sendable {
                 maxPathMeters: maxPathMeters,
                 directExtraBudgetMeters: directExtraBudgetMeters,
                 cleanMetroMultiplier: metro,
-                avoidMotorways: avoidMotorways,
-                preferBackRoads: preferBackRoads
+                avoidMotorways: scopedAvoid,
+                preferBackRoads: scopedPrefer
             )
         }
     }

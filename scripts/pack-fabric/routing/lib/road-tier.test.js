@@ -10,6 +10,7 @@ const {
   e4AvoidMotorwaysMult,
   e4PreferBackRoadsMult,
   e4LeafCostMult,
+  e4FlagsForProfile,
   ROAD_TIER,
   E4_AVOID_MOTORWAY_MULT,
   E4_PREFER_BACK_ARTERIAL_MULT
@@ -120,5 +121,23 @@ describe("road-tier E4 knobs", () => {
   it("never hard-blocks arterial/collector when prefer-back is on", () => {
     assert.ok(e4PreferBackRoadsMult(ROAD_TIER.ARTERIAL, true) < Infinity);
     assert.ok(e4PreferBackRoadsMult(ROAD_TIER.COLLECTOR, true) > 0);
+  });
+
+  it("scopes knobs to Clean only — Dirt/Balanced/Direct ignore rider flags", () => {
+    const leaked = { avoidMotorways: true, preferBackRoads: true };
+    for (const profile of ["dirt", "balanced", "direct"]) {
+      const flags = e4FlagsForProfile(profile, leaked);
+      assert.equal(flags.avoidMotorways, false, profile);
+      assert.equal(flags.preferBackRoads, false, profile);
+    }
+  });
+
+  it("Clean always prefers back roads; avoid-motorways follows the toggle", () => {
+    const off = e4FlagsForProfile("cleanest", { avoidMotorways: false, preferBackRoads: false });
+    assert.equal(off.avoidMotorways, false);
+    assert.equal(off.preferBackRoads, true);
+    const on = e4FlagsForProfile("cleanest", { avoidMotorways: true, preferBackRoads: false });
+    assert.equal(on.avoidMotorways, true);
+    assert.equal(on.preferBackRoads, true);
   });
 });

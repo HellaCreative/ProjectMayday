@@ -99,7 +99,13 @@ nonisolated func reduce(
             legs[index].profile = profile
             legs[index].hopOverrides.removeAll()
             legs[index].fuelStopOverrides.removeAll()
-            if profile == .cleanest { legs[index].allowUnknown = false }
+            if profile == .cleanest {
+                legs[index].allowUnknown = false
+                legs[index].preferBackRoads = true
+            } else {
+                legs[index].avoidMotorways = false
+                legs[index].preferBackRoads = false
+            }
         }
         return changed(
             itinerary,
@@ -185,11 +191,14 @@ nonisolated func reduce(
         let affected: [Int]
         if let legID {
             guard let index = legs.firstIndex(where: { $0.id == legID }),
+                  legs[index].profile == .cleanest,
                   legs[index].avoidMotorways != avoidMotorways
             else { return unchanged(itinerary) }
             affected = [index]
         } else {
-            affected = legs.indices.filter { legs[$0].avoidMotorways != avoidMotorways }
+            affected = legs.indices.filter {
+                legs[$0].profile == .cleanest && legs[$0].avoidMotorways != avoidMotorways
+            }
             guard !affected.isEmpty else { return unchanged(itinerary) }
         }
         for index in affected { legs[index].avoidMotorways = avoidMotorways }
@@ -200,25 +209,9 @@ nonisolated func reduce(
             rebuildFrom: legID == nil ? 0 : affected.first
         )
 
-    case .setPreferBackRoads(let legID, let preferBackRoads):
-        var legs = itinerary.legs
-        let affected: [Int]
-        if let legID {
-            guard let index = legs.firstIndex(where: { $0.id == legID }),
-                  legs[index].preferBackRoads != preferBackRoads
-            else { return unchanged(itinerary) }
-            affected = [index]
-        } else {
-            affected = legs.indices.filter { legs[$0].preferBackRoads != preferBackRoads }
-            guard !affected.isEmpty else { return unchanged(itinerary) }
-        }
-        for index in affected { legs[index].preferBackRoads = preferBackRoads }
-        return changed(
-            itinerary,
-            waypoints: itinerary.waypoints,
-            legs: legs,
-            rebuildFrom: legID == nil ? 0 : affected.first
-        )
+    case .setPreferBackRoads:
+        // Prefer-back-roads is intrinsic to Clean, not a rider toggle.
+        return unchanged(itinerary)
 
     case .markImpassable(let edgeIDs):
         let merged = itinerary.impassableEdgeIDs.union(edgeIDs)

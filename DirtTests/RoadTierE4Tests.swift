@@ -65,4 +65,35 @@ struct RoadTierE4Tests {
         #expect(a.isFinite && a > 0)
         #expect(c.isFinite && c > 0)
     }
+
+    @Test("Dirt/Balanced/Direct ignore E4 flags — pre-E4 costing")
+    func nonCleanProfilesIgnoreFlags() {
+        for profile in [RouteProfile.dirt, .balanced, .direct] {
+            let flags = RoadTierStats.e4Flags(
+                for: profile,
+                avoidMotorways: true,
+                preferBackRoads: true
+            )
+            #expect(flags.avoidMotorways == false)
+            #expect(flags.preferBackRoads == false)
+        }
+    }
+
+    @Test("Clean always prefers back roads; avoid-motorways follows the toggle")
+    func cleanIntrinsicPreferBackRoads() {
+        let off = RoadTierStats.e4Flags(
+            for: .cleanest,
+            avoidMotorways: false,
+            preferBackRoads: false
+        )
+        #expect(off.avoidMotorways == false)
+        #expect(off.preferBackRoads == true)
+        let on = RoadTierStats.e4Flags(
+            for: .cleanest,
+            avoidMotorways: true,
+            preferBackRoads: false
+        )
+        #expect(on.avoidMotorways == true)
+        #expect(on.preferBackRoads == true)
+    }
 }

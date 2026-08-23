@@ -366,18 +366,9 @@ struct RoutePlannerCard: View {
                                 withAnimation(.easeInOut(duration: 0.18)) { fromHereChipsOpen = false }
                             }
                             profileGuidanceLine(planner.profile)
-                            e4RoadPreferenceControls(
-                                avoidMotorways: Binding(
-                                    get: { planner.avoidMotorways },
-                                    set: { planner.avoidMotorways = $0 }
-                                ),
-                                preferBackRoads: Binding(
-                                    get: { planner.preferBackRoads },
-                                    set: { planner.preferBackRoads = $0 }
-                                )
-                            )
-                            allowUnknownControl(
-                                binding: Binding(
+                            profilePolicyToggle(
+                                profile: planner.profile,
+                                allowUnknown: Binding(
                                     get: { planner.allowUnknown },
                                     set: { on in
                                         if on {
@@ -388,8 +379,10 @@ struct RoutePlannerCard: View {
                                         }
                                     }
                                 ),
-                                disabled: planner.profile == .cleanest,
-                                profile: planner.profile
+                                avoidMotorways: Binding(
+                                    get: { planner.avoidMotorways },
+                                    set: { planner.avoidMotorways = $0 }
+                                )
                             )
                         }
                     }
@@ -407,18 +400,9 @@ struct RoutePlannerCard: View {
         } else {
             fromHereProfileHeader
             if fromHereChipsOpen {
-                e4RoadPreferenceControls(
-                    avoidMotorways: Binding(
-                        get: { planner.avoidMotorways },
-                        set: { planner.avoidMotorways = $0 }
-                    ),
-                    preferBackRoads: Binding(
-                        get: { planner.preferBackRoads },
-                        set: { planner.preferBackRoads = $0 }
-                    )
-                )
-                allowUnknownControl(
-                    binding: Binding(
+                profilePolicyToggle(
+                    profile: planner.profile,
+                    allowUnknown: Binding(
                         get: { planner.allowUnknown },
                         set: { on in
                             if on {
@@ -429,8 +413,10 @@ struct RoutePlannerCard: View {
                             }
                         }
                     ),
-                    disabled: planner.profile == .cleanest,
-                    profile: planner.profile
+                    avoidMotorways: Binding(
+                        get: { planner.avoidMotorways },
+                        set: { planner.avoidMotorways = $0 }
+                    )
                 )
             }
             fromHereGuidanceAndRecovery
@@ -887,18 +873,9 @@ struct RoutePlannerCard: View {
                         withAnimation(.easeInOut(duration: 0.18)) { selectedStage = nil }
                     }
                     profileGuidanceLine(stage.profile)
-                    e4RoadPreferenceControls(
-                        avoidMotorways: Binding(
-                            get: { stage.avoidMotorways },
-                            set: { planner.setStageAvoidMotorways($0, at: index) }
-                        ),
-                        preferBackRoads: Binding(
-                            get: { stage.preferBackRoads },
-                            set: { planner.setStagePreferBackRoads($0, at: index) }
-                        )
-                    )
-                    allowUnknownControl(
-                        binding: Binding(
+                    profilePolicyToggle(
+                        profile: stage.profile,
+                        allowUnknown: Binding(
                             get: { stage.allowUnknown },
                             set: { on in
                                 if on {
@@ -909,8 +886,10 @@ struct RoutePlannerCard: View {
                                 }
                             }
                         ),
-                        disabled: stage.profile == .cleanest,
-                        profile: stage.profile
+                        avoidMotorways: Binding(
+                            get: { stage.avoidMotorways },
+                            set: { planner.setStageAvoidMotorways($0, at: index) }
+                        )
                     )
                     if stage.error != nil, stage.profile != .cleanest {
                         Button {
@@ -1159,21 +1138,26 @@ struct RoutePlannerCard: View {
         )
     }
 
-    /// Phase E4 — split Avoid Highway into independent soft-cost knobs.
-    private func e4RoadPreferenceControls(
-        avoidMotorways: Binding<Bool>,
-        preferBackRoads: Binding<Bool>
+    /// Exactly one rider toggle per profile.
+    /// Clean: Avoid motorways (prefer-back-roads is intrinsic).
+    /// Dirt / Balanced / Direct: Allow unknown.
+    @ViewBuilder
+    private func profilePolicyToggle(
+        profile: RouteProfile,
+        allowUnknown: Binding<Bool>,
+        avoidMotorways: Binding<Bool>
     ) -> some View {
-        VStack(alignment: .leading, spacing: DirtSpace.tight) {
+        if profile == .cleanest {
             e4ToggleRow(
                 title: "Avoid motorways",
                 footnote: "Motorway + trunk stay on the graph but cost hard — never a hard cut.",
                 binding: avoidMotorways
             )
-            e4ToggleRow(
-                title: "Prefer back roads",
-                footnote: "Penalize primary; prefer collector. Primary/secondary stay routable.",
-                binding: preferBackRoads
+        } else {
+            allowUnknownControl(
+                binding: allowUnknown,
+                disabled: false,
+                profile: profile
             )
         }
     }

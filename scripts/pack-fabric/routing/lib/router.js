@@ -41,6 +41,7 @@ const {
   ROAD_CLASS_NAME
 } = require("./pack-v2");
 const { findPathV2, applyHonestReportedStats } = require("./find-path-v2");
+const { e4FlagsForProfile } = require("./road-tier");
 const { applyHonestSurfaceStats } = require("./surface-family");
 const {
   isFerryStructureCode,
@@ -2050,8 +2051,9 @@ async function routeOnRuntime(body, graphResolution, runtime) {
   if (cleanMetroMultiplier != null) {
     searchOpts.cleanMetroMultiplier = cleanMetroMultiplier;
   }
-  if (options.avoidMotorways === true) searchOpts.avoidMotorways = true;
-  if (options.preferBackRoads === true) searchOpts.preferBackRoads = true;
+  const e4 = e4FlagsForProfile(profile, options);
+  if (e4.avoidMotorways) searchOpts.avoidMotorways = true;
+  if (e4.preferBackRoads) searchOpts.preferBackRoads = true;
   let path = null;
   let urbanCoreFallbackUsed = false;
   let cleanUnpavedFallbackUsed = false;
