@@ -3655,10 +3655,13 @@ nonisolated struct OnDeviceRouter {
     }
 
     private func accessAllowed(_ code: Int, allowUnknown: Bool, profile: RouteProfile) -> Bool {
+        // Eligibility gate (not a cost). Purple motorized_unknown edges are
+        // in the search graph only when Allow unknown is on. Clean never opens them.
         let name = accessName(code)
         if name == "motorized_restricted" || name == "motorized_excluded" { return false }
         if name == "motorized_unknown" { return allowUnknown && profile != .cleanest }
-        return true
+        if name == "motorized_verified" || name == "motorized_permissive" { return true }
+        return false
     }
 }
 

@@ -182,13 +182,16 @@ function projectOnSegment(point, a, b) {
   return { coord, t, distanceM: haversineMeters(point, coord) };
 }
 
-function accessAllowed(accessCode, policy, enums, edge) {
-  // Access class, not dataset name, is authoritative. OSM path/cycleway edges
-  // with uncertain motorcycle legality must remain behind Allow Unknown.
+function accessAllowed(accessCode, policy, enums, edge, profile) {
+  // Eligibility gate (not a cost). Purple motorized_unknown edges are in the
+  // search graph only when Allow unknown is on. Clean never opens them.
   void edge;
   const name = enums.ACCESS_NAME[accessCode];
   if (name === "motorized_restricted" || name === "motorized_excluded") return false;
-  if (name === "motorized_unknown") return !!policy.motorizedUnknown;
+  if (name === "motorized_unknown") {
+    if (String(profile || "").toLowerCase() === "cleanest") return false;
+    return !!policy.motorizedUnknown;
+  }
   if (name === "motorized_verified") return true;
   if (name === "motorized_permissive") return policy.motorizedPermissive !== false;
   return false;
@@ -479,7 +482,7 @@ function matchPoint(
       roadTrack = edge.rt || "unknown";
     }
     if (isV2) {
-      if (!accessAllowed(accessCode, policy, enums, null)) continue;
+      if (!accessAllowed(accessCode, policy, enums, null, prof)) continue;
       if (avoid && avoid.has(String(edgeId))) continue;
     }
     let along = 0;
@@ -697,14 +700,20 @@ function buildManeuvers(geometry) {
   return maneuvers;
 }
 
-function normalizePolicy(input, profile) {
+function normalizePolicy(input, profile, extras) {
   const policy = input || {};
+  const extra = extras || {};
+  const options = extra.options || {};
   // Product law: Clean / cleanest is immune to Allow — never open purple
   // motorized_unknown capillary, even if the UI toggle is on.
   const isClean = String(profile || "").toLowerCase() === "cleanest";
+  const requested =
+    policy.motorizedUnknown === true ||
+    extra.allowUnknown === true ||
+    options.allowUnknown === true;
   return {
     motorizedPermissive: policy.motorizedPermissive !== false,
-    motorizedUnknown: isClean ? false : !!policy.motorizedUnknown
+    motorizedUnknown: isClean ? false : requested
   };
 }
 
@@ -1682,7 +1691,7 @@ async function routeOnRuntime(body, graphResolution, runtime) {
     };
   }
 
-  const policy = normalizePolicy(body.accessPolicy, profile);
+  const policy = normalizePolicy(body.accessPolicy, profile, body);
   const options = body.options || {};
   const matchMeters = Number(options.matchLimitMeters);
   // Default 250 m on dense/legacy packs. Longhaul / Vercel packs are thinned —

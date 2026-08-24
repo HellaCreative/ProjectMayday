@@ -195,13 +195,16 @@ function haversineMeters(a, b) {
   return 2 * R * Math.asin(Math.sqrt(h));
 }
 
-function accessAllowed(accessCode, policy, enums, edgeOrSource) {
-  // Access class, not dataset name, is authoritative. OSM path/cycleway edges
-  // with uncertain motorcycle legality must remain behind Allow Unknown.
+function accessAllowed(accessCode, policy, enums, edgeOrSource, profile) {
+  // Eligibility gate (not a cost). Purple motorized_unknown edges are in the
+  // search graph only when Allow unknown is on. Clean never opens them.
   void edgeOrSource;
   const name = enums.ACCESS_NAME[accessCode];
   if (name === "motorized_restricted" || name === "motorized_excluded") return false;
-  if (name === "motorized_unknown") return !!policy.motorizedUnknown;
+  if (name === "motorized_unknown") {
+    if (String(profile || "").toLowerCase() === "cleanest") return false;
+    return !!policy.motorizedUnknown;
+  }
   if (name === "motorized_verified") return true;
   if (name === "motorized_permissive") return policy.motorizedPermissive !== false;
   return false;
