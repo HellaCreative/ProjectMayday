@@ -20,7 +20,8 @@ nonisolated enum HopSearchPolicy {
     static let balancedDirtHi: Double = 0.55
     /// Ratio buckets (5% each). Meter-span buckets were coarser than the 10-point band.
     static let balancedBuckets: Int = 20
-    /// Comfort refuel window as a fraction of usable tank. Lockstep: fuel-chain.js.
+    /// Numbered waypoint on a packed pump. Lockstep: fuel-chain.js WAYPOINT_FUEL_SNAP_METERS.
+    static let fuelWaypointSnapMeters: Double = 150
     static let fuelComfortLo: Double = 0.50
     static let fuelComfortHi: Double = 0.80
     /// Too-early below this. Dijkstra reachability still uses fuelMaxTank = 1.0.

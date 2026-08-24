@@ -163,7 +163,7 @@ final class ItineraryBuilder {
             for waypointIndex in 1..<itinerary.waypoints.count - 1 {
                 let waypoint = itinerary.waypoints[waypointIndex]
                 if let station = try? await selectedSource.fuelStation(
-                    near: waypoint.coordinate, within: 150
+                    near: waypoint.coordinate, within: HopSearchPolicy.fuelWaypointSnapMeters
                 ) {
                     let precedingLeg = itinerary.legs[waypointIndex - 1]
                     waypointFuelStops[waypoint.id] = FuelStop(

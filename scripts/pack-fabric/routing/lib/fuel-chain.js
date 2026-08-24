@@ -47,10 +47,12 @@ const HARD_MATCH_METERS = 750;
 const MIN_STOP_SEPARATION_M = 800;
 const MIN_FORWARD_PROGRESS_M = 2_500;
 /** Bumped when fuel-selection / ranking contracts change. Clients may assert. */
-const FUEL_CHAIN_SERVICE_VERSION = "2026-08-24.fuel-coherence.window.1";
+const FUEL_CHAIN_SERVICE_VERSION = "2026-08-24.fuel-coherence.waypoint-refuel.1";
 /** Comfort refuel window as a fraction of usable tank. Lockstep: FuelItinerary.swift. */
 const FUEL_COMFORT_LO = 0.50;
 const FUEL_COMFORT_HI = 0.80;
+/** Numbered waypoint on a packed pump. Lockstep: HopSearchPolicy.fuelWaypointSnapMeters. */
+const WAYPOINT_FUEL_SNAP_METERS = 150;
 /** Clean rejects pumps whose full chain exceeds foundation by this much. */
 const MAX_CLEAN_CHAIN_DETOUR_RATIO = 1.12;
 const MAX_CLEAN_CHAIN_DETOUR_ABS_M = 20_000;
@@ -252,10 +254,50 @@ function distanceToMatch(runtime, originMatch, targetMatch, distances) {
 
 function stationLocation(station) {
   return {
-    lat: Number(station.lat),
-    lon: Number(station.lon),
-    label: station.name || station.brand || "Fuel"
+    lat: Number(station && (station.lat != null ? station.lat : station.latitude)),
+    lon: Number(station && (station.lon != null ? station.lon : station.lng != null ? station.lng : station.longitude)),
+    label: (station && (station.name || station.brand)) || "Fuel"
   };
+}
+
+/**
+ * A numbered rider waypoint is a live refuel only while it sits on a packed
+ * pump. Recompute from coordinates; never persist a flag on the waypoint.
+ * Lockstep: FuelItinerary.nearestFuelStation.
+ */
+function deriveWaypointFuelStation(location, stations, radiusMeters = WAYPOINT_FUEL_SNAP_METERS) {
+  const point = locationCoordinate(location);
+  const radius = Number(radiusMeters);
+  if (!Number.isFinite(point[0]) || !Number.isFinite(point[1]) || !(radius >= 0)) return null;
+  if (!Array.isArray(stations) || !stations.length) return null;
+  let best = null;
+  for (const station of stations) {
+    const at = stationLocation(station);
+    if (!Number.isFinite(at.lat) || !Number.isFinite(at.lon)) continue;
+    const meters = haversineMeters(point, [at.lon, at.lat]);
+    if (meters > radius) continue;
+    if (!best || meters < best.metersFromWaypoint) {
+      best = {
+        id: String(station.id || station.stationId || ""),
+        name: station.name || station.brand || at.label,
+        lat: at.lat,
+        lon: at.lon,
+        metersFromWaypoint: meters
+      };
+    }
+  }
+  return best && best.id ? best : null;
+}
+
+/** Intermediate numbered waypoints only (not origin, not destination). */
+function deriveWaypointRefuels(locations, stations, radiusMeters = WAYPOINT_FUEL_SNAP_METERS) {
+  const rows = [];
+  const points = Array.isArray(locations) ? locations : [];
+  for (let index = 1; index < points.length - 1; index += 1) {
+    const hit = deriveWaypointFuelStation(points[index], stations, radiusMeters);
+    if (hit) rows.push({ locationIndex: index, ...hit });
+  }
+  return rows;
 }
 
 function prepareTargets(runtime, stations, destination, policy, profile, avoid) {
@@ -1478,6 +1520,90 @@ async function planCrossRegionFuelChain(body, selection, fuelOptions, dependenci
   };
 }
 
+/**
+ * Consecutive numbered waypoints are planned as their own hops. A waypoint
+ * that currently sits on a packed pump resets the tank; an ordinary waypoint
+ * only carries remaining fuel. Auto stops still use the 50–80% window.
+ */
+async function planFuelChainAcrossRiderWaypoints(body, {
+  locations,
+  usableRangeMeters,
+  firstLegMaxMeters,
+  rawFuelOptions,
+  dependencies
+}) {
+  const loadFuel = dependencies.loadFuelForLocations || loadFuelForLocations;
+  const fuel = await loadFuel(locations);
+  if (!fuel.ok) {
+    return {
+      status: "error",
+      error: fuel.error,
+      message: fuel.message
+    };
+  }
+  const waypointResets = deriveWaypointRefuels(locations, fuel.stations);
+  const resetAt = new Set(waypointResets.map((row) => row.locationIndex));
+  let fuelUsedMeters = Math.max(0, usableRangeMeters - firstLegMaxMeters);
+  const allStops = [];
+  const graphMeters = [];
+  const stationCandidates = [];
+  const packIdentities = [fuel.packIdentity];
+  let lastHop = null;
+
+  for (let index = 0; index < locations.length - 1; index += 1) {
+    const hopFuel = { ...rawFuelOptions };
+    delete hopFuel.profileMeters;
+    hopFuel.usableRangeMeters = usableRangeMeters;
+    hopFuel.firstLegMaxMeters = Math.max(0, usableRangeMeters - fuelUsedMeters);
+    hopFuel.requireFuelStopBeforeEnd = false;
+    hopFuel.minimumFuelStops = 0;
+    hopFuel.destinationFuelUsedLimitMeters = null;
+    hopFuel.riderLegId = `${rawFuelOptions.riderLegId || "itinerary"}:${index}`;
+    const hop = await fuelChainRequest({
+      ...body,
+      locations: [locations[index], locations[index + 1]],
+      fuel: hopFuel
+    }, dependencies);
+    lastHop = hop;
+    stationCandidates.push(...(hop.stationCandidates || []));
+    packIdentities.push(hop.packIdentity);
+    if (hop.status !== "complete") {
+      return {
+        ...hop,
+        stops: allStops.concat(hop.stops || []),
+        graphMeters: graphMeters.concat(hop.graphMeters || []),
+        stationCandidates,
+        waypointResets,
+        packIdentity: mergePackIdentities(...packIdentities)
+      };
+    }
+    allStops.push(...(hop.stops || []));
+    graphMeters.push(...(hop.graphMeters || []));
+    if (resetAt.has(index + 1)) {
+      fuelUsedMeters = 0;
+    } else if ((hop.stops || []).length) {
+      fuelUsedMeters = hop.graphMeters[hop.graphMeters.length - 1] || 0;
+    } else {
+      fuelUsedMeters += hop.graphMeters[0] || 0;
+    }
+  }
+
+  return {
+    status: "complete",
+    error: null,
+    message: null,
+    serviceVersion: FUEL_CHAIN_SERVICE_VERSION,
+    regionIds: fuel.regionIds,
+    packIdentity: mergePackIdentities(...packIdentities),
+    stops: allStops,
+    graphMeters,
+    stationCandidates,
+    waypointResets,
+    windowComplete: true,
+    diagnostics: lastHop && lastHop.diagnostics
+  };
+}
+
 async function fuelChainRequest(body = {}, dependencies = {}) {
   const loadFuel = dependencies.loadFuelForLocations || loadFuelForLocations;
   const loadRuntime = dependencies.loadGraphsForRequest || loadGraphsForRequest;
@@ -1511,6 +1637,16 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
       error: "invalid_fuel_range",
       message: "Fuel range must be greater than zero."
     };
+  }
+
+  if (locations.length > 2) {
+    return planFuelChainAcrossRiderWaypoints(body, {
+      locations,
+      usableRangeMeters,
+      firstLegMaxMeters,
+      rawFuelOptions,
+      dependencies
+    });
   }
 
   let profileMeters = Number(rawFuelOptions.profileMeters);
@@ -1627,6 +1763,7 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
     stationCandidates: planned.stationCandidates || [],
     firstReachableStationMeters: planned.firstReachableStationMeters,
     windowComplete: planned.windowComplete,
+    waypointResets: [],
     gapMeters: planned.gapMeters,
     overByMeters: planned.overByMeters,
     gapFrom: planned.gapFrom,
@@ -1658,7 +1795,22 @@ function planItineraryFuelChain({ legs, usableRangeMeters, initialFuelUsedMeters
       }
     }
     offset += meters;
-    if (leg.waypointReset) waypointResets.push({ legIndex, absoluteMeters: offset, ...leg.waypointReset });
+    const waypoint = leg.waypoint || leg.end || null;
+    const pois = []
+      .concat(leg.fuelPois || [])
+      .concat((leg.stations || []).filter((row) => row && (row.lat != null || row.latitude != null)));
+    const derived = deriveWaypointFuelStation(waypoint, pois);
+    if (derived) {
+      waypointResets.push({
+        legIndex,
+        absoluteMeters: offset,
+        id: derived.id,
+        name: derived.name,
+        lat: derived.lat,
+        lon: derived.lon,
+        metersFromWaypoint: derived.metersFromWaypoint
+      });
+    }
   }
   const finish = offset;
   const resetPoints = stations.concat(waypointResets.map((row) => ({ ...row, waypoint: true })))
@@ -1716,5 +1868,8 @@ module.exports = {
   planFuelChainOnRuntime,
   planCrossRegionFuelChain,
   planItineraryFuelChain,
+  deriveWaypointFuelStation,
+  deriveWaypointRefuels,
+  WAYPOINT_FUEL_SNAP_METERS,
   fuelChainRequest
 };

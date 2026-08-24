@@ -119,6 +119,7 @@ struct HopSearchPolicyTests {
         #expect(HopSearchPolicy.pass2PopCap == 400_000)
         #expect(HopSearchPolicy.pass2PopCap < 8_000_000)
         #expect(HopSearchPolicy.fuelMaxTank == 1.0)
+        #expect(HopSearchPolicy.fuelWaypointSnapMeters == 150)
         #expect(HopSearchPolicy.fuelMinTank == 0.50)
         #expect(HopSearchPolicy.fuelPreferTank == 0.65)
         #expect(HopSearchPolicy.fuelComfortLo == 0.50)
@@ -273,6 +274,28 @@ struct FuelItineraryTests {
         )
         #expect(ranked.first?.id == "osm:window")
         #expect(ranked.map(\.id) == ["osm:window", "osm:wall"])
+    }
+
+    @Test func numberedWaypointOnStationIsALiveRefuelUntilDraggedOff() {
+        let on = RouteCoordinate(longitude: -61.998, latitude: 45.616)
+        let off = RouteCoordinate(longitude: -61.980, latitude: 45.630)
+        let origin = RouteCoordinate(longitude: -63.58, latitude: 44.65)
+        let dest = RouteCoordinate(longitude: -60.19, latitude: 46.14)
+        let pump = poi("irving", on)
+        #expect(FuelItinerary.nearestFuelStation(to: on, stations: [pump])?.station.id == "osm:irving")
+        #expect(FuelItinerary.nearestFuelStation(to: off, stations: [pump]) == nil)
+        let onRoute = FuelItinerary.deriveWaypointRefuels(
+            waypoints: [origin, on, dest], stations: [pump]
+        )
+        #expect(onRoute.map(\.locationIndex) == [1])
+        let offRoute = FuelItinerary.deriveWaypointRefuels(
+            waypoints: [origin, off, dest], stations: [pump]
+        )
+        #expect(offRoute.isEmpty)
+        let ordinary = FuelItinerary.deriveWaypointRefuels(
+            waypoints: [origin, dest], stations: [pump]
+        )
+        #expect(ordinary.isEmpty)
     }
 
     @Test func progressAlongABIsPositiveTowardB() {

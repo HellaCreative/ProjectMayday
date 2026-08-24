@@ -338,6 +338,51 @@ struct ItineraryBuilderTests {
         #expect(source.fuelChainRequests.filter { $0.fuel.probeFirstReachableStation != true }.isEmpty)
     }
 
+    @Test func ordinaryWaypointNeverResetsFuel() async throws {
+        let points = [point(0), point(1), point(2)]
+        let stop = point(0.5)
+        let source = FakeRoutingSource(name: "live")
+        source.distances[key(points[0], points[1])] = 200_000
+        source.distances[key(points[1], points[2])] = 200_000
+        source.distances[key(points[0], stop)] = 150_000
+        source.distances[key(stop, points[1])] = 50_000
+        source.fuelStops = [fuelStop("auto-1", at: stop)]
+
+        let result = await build(points, source: source, usable: 237_500)
+
+        #expect(result.waypointFuelStops.isEmpty)
+        #expect(result.legs.contains { $0.endsAtFuelStop != nil })
+    }
+
+    @Test func draggingWaypointOffStationRemovesResetAndReplansFuel() async throws {
+        let origin = point(0)
+        let onStation = point(1)
+        let destination = point(2)
+        let dragged = point(1.2)
+        let auto = point(0.5)
+        let source = FakeRoutingSource(name: "live")
+        source.distances[key(origin, onStation)] = 200_000
+        source.distances[key(onStation, destination)] = 200_000
+        source.distances[key(origin, dragged)] = 210_000
+        source.distances[key(dragged, destination)] = 190_000
+        source.distances[key(origin, auto)] = 150_000
+        source.distances[key(auto, dragged)] = 60_000
+        source.distances[key(auto, destination)] = 250_000
+        source.waypointFuelStations[key(onStation, onStation)] = fuelStop(
+            "irving-antigonish", at: onStation
+        )
+        source.fuelStops = [fuelStop("auto-1", at: auto)]
+
+        let on = await build([origin, onStation, destination], source: source, usable: 237_500)
+        #expect(on.waypointFuelStops.values.first?.name == "irving-antigonish")
+        #expect(on.legs.compactMap(\.endsAtFuelStop).isEmpty)
+
+        source.fuelChainRequests.removeAll()
+        let off = await build([origin, dragged, destination], source: source, usable: 237_500)
+        #expect(off.waypointFuelStops.isEmpty)
+        #expect(off.legs.contains { $0.endsAtFuelStop?.stationID == "auto-1" })
+    }
+
     @Test func staleResultIsDroppedAfterGenerationChangesMidAwait() async {
         let points = [point(0), point(1)]
         let itinerary = makeItinerary(points)

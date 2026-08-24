@@ -277,6 +277,15 @@ struct FuelChainRequest: Codable, Sendable {
     }
 }
 
+struct FuelWaypointReset: Codable, Sendable {
+    let locationIndex: Int?
+    let id: String?
+    let name: String?
+    let lat: Double?
+    let lon: Double?
+    let metersFromWaypoint: Double?
+}
+
 struct FuelChainStop: Codable, Sendable {
     let id: String
     let latitude: Double
@@ -347,6 +356,8 @@ struct FuelChainResponse: Codable, Sendable {
     var serviceContract: String? = nil
     var serviceBuild: String? = nil
     var packIdentity: [RoutingPackIdentity]? = nil
+    /// Live-derived numbered-waypoint refuels. Never persisted on the waypoint.
+    var waypointResets: [FuelWaypointReset]? = nil
 
     var isComplete: Bool { status == "complete" }
     var isGap: Bool { status == "gap" }

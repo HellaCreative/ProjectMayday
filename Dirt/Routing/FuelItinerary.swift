@@ -5,6 +5,45 @@ import Foundation
 /// Graph reachability is supplied by the caller (pack Dijkstra). This type
 /// only chooses among pumps already proven reachable on the hop.
 nonisolated enum FuelItinerary {
+    /// A numbered rider waypoint is a live refuel only while it sits on a packed
+    /// pump. Recompute from coordinates; never persist a flag on the waypoint.
+    /// Lockstep: fuel-chain.js deriveWaypointFuelStation.
+    static func nearestFuelStation(
+        to point: RouteCoordinate,
+        stations: [POIFeature],
+        within meters: Double = HopSearchPolicy.fuelWaypointSnapMeters
+    ) -> (station: POIFeature, meters: Double)? {
+        guard meters >= 0, !stations.isEmpty else { return nil }
+        var best: (POIFeature, Double)?
+        for station in stations {
+            let distance = GeoMath.meters(
+                point,
+                RouteCoordinate(longitude: station.longitude, latitude: station.latitude)
+            )
+            guard distance <= meters else { continue }
+            if best == nil || distance < best!.1 {
+                best = (station, distance)
+            }
+        }
+        return best.map { (station: $0.0, meters: $0.1) }
+    }
+
+    /// Intermediate numbered waypoints only (not origin, not destination).
+    static func deriveWaypointRefuels(
+        waypoints: [RouteCoordinate],
+        stations: [POIFeature],
+        within meters: Double = HopSearchPolicy.fuelWaypointSnapMeters
+    ) -> [(locationIndex: Int, station: POIFeature, meters: Double)] {
+        guard waypoints.count >= 3 else { return [] }
+        var rows: [(locationIndex: Int, station: POIFeature, meters: Double)] = []
+        for index in 1..<(waypoints.count - 1) {
+            if let hit = nearestFuelStation(to: waypoints[index], stations: stations, within: meters) {
+                rows.append((locationIndex: index, station: hit.station, meters: hit.meters))
+            }
+        }
+        return rows
+    }
+
     /// Remaining portion of an already-selected ride near the current pump.
     /// This lets live fuel planning reuse one route shape instead of asking the
     /// server for another unconstrained current→B adventure route at every

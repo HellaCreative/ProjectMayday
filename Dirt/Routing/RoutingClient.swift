@@ -186,14 +186,14 @@ final class RoutingClient {
                 )
             )
         }
-        return PackedFuel.decode(data).compactMap { station -> (POIFeature, Double)? in
-            let distance = CLLocation(latitude: point.latitude, longitude: point.longitude)
-                .distance(from: CLLocation(latitude: station.latitude, longitude: station.longitude))
-            return distance <= meters ? (station, distance) : nil
-        }.min { $0.1 < $1.1 }.map { station, _ in
+        return FuelItinerary.nearestFuelStation(
+            to: point,
+            stations: PackedFuel.decode(data),
+            within: meters
+        ).map { hit in
             FuelChainStop(
-                id: station.id, latitude: station.latitude, longitude: station.longitude,
-                name: station.name, brand: station.brand, address: station.address,
+                id: hit.station.id, latitude: hit.station.latitude, longitude: hit.station.longitude,
+                name: hit.station.name, brand: hit.station.brand, address: hit.station.address,
                 graphMeters: 0
             )
         }
