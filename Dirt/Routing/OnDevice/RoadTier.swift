@@ -28,13 +28,13 @@ nonisolated enum RoadTierStats {
     ]
 
     static let cleanTierCost: [RoadTier: Double] = [
-        .collector: 0.86,
-        .localPaved: 0.92,
-        .arterial: 1.4, // mild connector; not a near-ban (lockstep with road-tier.js)
+        .collector: 0.92,
+        .localPaved: 1.0,
+        .arterial: 0.96,
         .service: 2.8,
         .destination: 1.15,
-        .trunk: 16.0,
-        .motorway: 70.0,
+        .trunk: 1.0,
+        .motorway: 1.0,
         .adventure: 120.0,
         .unknown: 2.2
     ]
@@ -74,6 +74,14 @@ nonisolated enum RoadTierStats {
         }
     }
 
+    static func isCleanPavementEligible(family: SurfaceFamily, tier: RoadTier) -> Bool {
+        switch family {
+        case .paved: return true
+        case .unknown: return isPavedCapable(tier)
+        case .gravel, .loose: return false
+        }
+    }
+
     /// Clean leaf passability — mirrors `isBlockedForCleanLeaf` in road-tier.js.
     static func isBlockedForCleanLeaf(
         family: SurfaceFamily,
@@ -81,15 +89,12 @@ nonisolated enum RoadTierStats {
         pavedOnly: Bool,
         isEndpointEdge: Bool
     ) -> Bool {
+        if pavedOnly, !isCleanPavementEligible(family: family, tier: tier) { return true }
         if isEndpointEdge { return false }
         if tier == .destination { return true }
         if tier == .adventure { return pavedOnly }
         if pavedOnly {
-            switch family {
-            case .paved: return false
-            case .gravel, .loose: return true
-            case .unknown: return !isPavedCapable(tier)
-            }
+            return false
         }
         if family == .loose, !isPavedCapable(tier) { return true }
         return false
@@ -101,23 +106,8 @@ nonisolated enum RoadTierStats {
         return t * f
     }
 
-    static func cleanLeafHighwayAvoidMult(
-        tier: RoadTier,
-        metersFromStart: Double,
-        metersToDestination: Double,
-        startOnHighway: Bool,
-        endOnHighway: Bool
-    ) -> Double {
-        guard tier == .motorway || tier == .trunk else { return 1 }
-        let join = 6000.0
-        let near =
-            (endOnHighway && metersToDestination < join) ||
-            (startOnHighway && metersFromStart < join)
-        if near { return 1 }
-        return tier == .motorway ? 1.8 : 1.35
-    }
-
-    // Phase E4 — rider knobs (default OFF). Soft costs only; never delete edges.
+    // Clean motorway policy. Avoidance is the default internal state; the rider-facing
+    // "Allow motorways" switch disables it. Soft costs only; never delete edges.
     static let e4AvoidMotorwayMult = 40.0
     static let e4AvoidTrunkMult = 18.0
     static let e4PreferBackArterialMult = 4.5
@@ -170,8 +160,8 @@ nonisolated enum RoadTierStats {
         ) * e4PreferBackRoadsMult(tier: tier, enabled: preferBackRoads)
     }
 
-    /// E4 knobs are Clean-only. Dirt / Balanced ignore rider flags.
-    /// Clean always prefers back roads; avoid-motorways is the Clean toggle.
+    /// Clean-only motorway policy. Primary and secondary roads remain ordinary
+    /// pavement; only motorway/trunk receive the default soft avoidance.
     static func e4Flags(
         for profile: RouteProfile,
         avoidMotorways: Bool,
@@ -180,6 +170,6 @@ nonisolated enum RoadTierStats {
         if profile != .cleanest {
             return (false, false)
         }
-        return (avoidMotorways, true)
+        return (avoidMotorways, false)
     }
 }

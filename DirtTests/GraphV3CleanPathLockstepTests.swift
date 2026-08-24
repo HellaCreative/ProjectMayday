@@ -23,7 +23,7 @@ struct GraphV3CleanPathLockstepTests {
         return pack
     }
 
-    @Test func cleanLeafLawBlocksDestinationAndPrefersCollector() {
+    @Test func cleanLeafLawBlocksDestinationAndKeepsOrdinaryPavementLowCost() {
         #expect(RoadTierStats.tier(of: "secondary") == .collector)
         #expect(RoadTierStats.tier(of: "primary") == .arterial)
         #expect(RoadTierStats.tier(of: "residential") == .destination)
@@ -37,12 +37,17 @@ struct GraphV3CleanPathLockstepTests {
                 family: .paved, tier: .destination, pavedOnly: true, isEndpointEdge: true
             )
         )
+        #expect(
+            RoadTierStats.isBlockedForCleanLeaf(
+                family: .gravel, tier: .collector, pavedOnly: true, isEndpointEdge: true
+            )
+        )
         let collector = RoadTierStats.cleanLeafCostMult(tier: .collector, family: .paved)
         let arterial = RoadTierStats.cleanLeafCostMult(tier: .arterial, family: .paved)
         let motorway = RoadTierStats.cleanLeafCostMult(tier: .motorway, family: .paved)
-        #expect(arterial == 1.4)
+        #expect(arterial == 0.96)
         #expect(collector < arterial)
-        #expect(arterial < motorway)
+        #expect(motorway == 1)
     }
 
     @Test func swiftCleanPathMatchesJsLockstepFixture() throws {

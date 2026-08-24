@@ -34,7 +34,7 @@ const DIRT_RIDE_RESOURCE_PER_KM = Number(process.env.DIRT_RIDE_RESOURCE_PER_KM |
 const DIRT_RIDE_UNKNOWN_TRACK_PER_KM = Number(process.env.DIRT_RIDE_UNKNOWN_TRACK_PER_KM || 0.9);
 const DIRT_RIDE_XT_SCALE = Number(process.env.DIRT_RIDE_XT_SCALE || 1);
 const DIRT_RIDE_AWAY_SCALE = Number(process.env.DIRT_RIDE_AWAY_SCALE || 10);
-const SETTLEMENT_FALLBACK_MULTIPLIER = Number(process.env.SETTLEMENT_FALLBACK_MULTIPLIER || 4);
+const SETTLEMENT_FALLBACK_MULTIPLIER = Number(process.env.SETTLEMENT_FALLBACK_MULTIPLIER || 5);
 
 const METRO_CORE_WALL = [
   { minLat: 49.0, maxLat: 49.42, minLon: -123.32, maxLon: -122.7, name: "vancouver" },
@@ -116,7 +116,7 @@ function metroEdgeBlocks(fromLL, toLL, startLL, endLL, boxes = METRO_CORE_WALL) 
 
 /**
  * Debug-only Clean override: clamp options.cleanMetroMultiplier to 1–20.
- * Null means keep production ×120. Ignored for non-cleanest profiles.
+ * Null means use the production Clean default ×5. Ignored for other profiles.
  */
 function resolveCleanMetroMultiplier(profile, raw) {
   if (String(profile || "").toLowerCase() !== "cleanest") return null;
@@ -126,9 +126,10 @@ function resolveCleanMetroMultiplier(profile, raw) {
   return Math.min(20, Math.max(1, n));
 }
 
-/** Production ×120; Clean-only debug override via cleanMetroMultiplier (1–20). */
+/** Production Clean ×5; other profiles retain ×120 fallback protection. */
 function resolveMetroFallbackPenalty(profile, cleanMetroMultiplier) {
-  return resolveCleanMetroMultiplier(profile, cleanMetroMultiplier) ?? 120;
+  if (String(profile || "").toLowerCase() !== "cleanest") return 120;
+  return resolveCleanMetroMultiplier(profile, cleanMetroMultiplier) ?? 5;
 }
 
 /**

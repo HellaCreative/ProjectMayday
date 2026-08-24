@@ -113,6 +113,8 @@ final class RoutePlannerModel {
             if !suppressPlannerReroute, profile == .cleanest {
                 suppressPlannerReroute = true
                 allowUnknown = false
+                avoidMotorways = true
+                preferBackRoads = false
                 suppressPlannerReroute = false
             }
             syncNetworkAccessPolicy()
@@ -127,13 +129,15 @@ final class RoutePlannerModel {
             }
         }
     }
-    /// Phase E4 — strong soft-avoid motorway + trunk. Default off.
-    var avoidMotorways = false {
+    /// Internal inverse of the rider-facing "Allow motorways" switch.
+    /// Clean defaults to avoiding motorway + trunk; other profiles ignore it.
+    var avoidMotorways = true {
         didSet {
             guard oldValue != avoidMotorways else { return }
+            guard !suppressPlannerReroute else { return }
             if itinerary.legs.isEmpty {
                 reroute()
-            } else if !suppressPlannerReroute {
+            } else {
                 apply(.setAvoidMotorways(legID: nil, avoidMotorways), source: "avoidMotorways")
             }
         }
@@ -142,9 +146,10 @@ final class RoutePlannerModel {
     var preferBackRoads = false {
         didSet {
             guard oldValue != preferBackRoads else { return }
+            guard !suppressPlannerReroute else { return }
             if itinerary.legs.isEmpty {
                 reroute()
-            } else if !suppressPlannerReroute {
+            } else {
                 apply(.setPreferBackRoads(legID: nil, preferBackRoads), source: "preferBackRoads")
             }
         }

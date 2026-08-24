@@ -101,7 +101,8 @@ nonisolated func reduce(
             legs[index].fuelStopOverrides.removeAll()
             if profile == .cleanest {
                 legs[index].allowUnknown = false
-                legs[index].preferBackRoads = true
+                legs[index].avoidMotorways = true
+                legs[index].preferBackRoads = false
             } else {
                 legs[index].avoidMotorways = false
                 legs[index].preferBackRoads = false
@@ -210,7 +211,8 @@ nonisolated func reduce(
         )
 
     case .setPreferBackRoads:
-        // Prefer-back-roads is intrinsic to Clean, not a rider toggle.
+        // Retained for itinerary compatibility; Clean no longer applies a
+        // separate primary-road penalty.
         return unchanged(itinerary)
 
     case .markImpassable(let edgeIDs):

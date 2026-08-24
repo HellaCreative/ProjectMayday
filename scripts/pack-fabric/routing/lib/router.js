@@ -42,8 +42,8 @@ const {
   ROAD_CLASS_NAME
 } = require("./pack-v2");
 const { findPathV2, applyHonestReportedStats } = require("./find-path-v2");
-const { e4FlagsForProfile } = require("./road-tier");
-const { applyHonestSurfaceStats } = require("./surface-family");
+const { e4FlagsForProfile, roadTierOf, isCleanPavementEligible } = require("./road-tier");
+const { applyHonestSurfaceStats, surfaceFamilyOf } = require("./surface-family");
 const {
   isFerryStructureCode,
   ferryRelaxStepCost,
@@ -53,6 +53,7 @@ const {
 const { segmentStructureFields } = require("./structure");
 const {
   isDirtSurface,
+  isBlockedForCleanPavement,
   outsideCorridor,
   maxProgressRegressionMeters,
   resolveCleanMetroMultiplier
@@ -446,7 +447,7 @@ function matchPoint(
   const prof = profile ? resolveProfile(profile) : null;
   const role = snapRole === "start" || snapRole === "end" ? snapRole : "any";
   const preferAdventureSnap = prof && prof !== "cleanest" && role !== "end";
-  // Clean snaps nearest eligible way — never prefer pavement over a closer dirt/service.
+  // Clean candidates are pavement-eligible only; distance decides among them.
   const preferPavedSnap = role === "end" && prof !== "cleanest";
   const candidates = edgeCandidateIndexes(runtime, point[0], point[1], matchMeters);
   const isV2 = runtime.format === "v2";
@@ -488,6 +489,20 @@ function matchPoint(
     if (isV2) {
       if (!accessAllowed(accessCode, policy, enums, null, prof)) continue;
       if (avoid && avoid.has(String(edgeId))) continue;
+    }
+    if (prof === "cleanest") {
+      let pavedEligible;
+      if (isV2 && runtime.pack.hasLeaves) {
+        const leaves = runtime.pack.edgeLeaves(index);
+        pavedEligible = isCleanPavementEligible(
+          surfaceFamilyOf(leaves.surfaceLeaf, runtime.pack.surfaceFamilyMap),
+          roadTierOf(leaves.roadClassLeaf, runtime.pack.roadTierMap)
+        );
+      } else {
+        const surfaceName = enums.SURFACE_NAME[surfaceCode] || "unknown";
+        pavedEligible = !isBlockedForCleanPavement(surfaceName, roadTrack);
+      }
+      if (!pavedEligible) continue;
     }
     let along = 0;
     for (let i = 1; i < coords.length; i += 1) {
@@ -2107,24 +2122,6 @@ async function routeOnRuntime(body, graphResolution, runtime) {
     } else {
       cleanSearchOutcome = paved.outcome || "noPath";
     }
-    if (!path && cleanSearchOutcome === "noPath") {
-      const unpaved = cleanFindOnce(Object.assign({}, cleanBase, {
-        pavedOnly: false,
-        timeCapMs: CLEAN_PAVED_ATTEMPT_MS * 2,
-        deadlineAtMs: Date.now() + CLEAN_PAVED_ATTEMPT_MS * 2
-      }));
-      if (unpaved.path) {
-        path = unpaved.path;
-        cleanSearchOutcome = "completed";
-        cleanUnpavedFallbackUsed = true;
-        path.searchMeta = path.searchMeta || {};
-        path.searchMeta.cleanUnpavedFallbackUsed = true;
-        path.searchMeta.corridorMeters = null;
-        path.searchMeta.rideObjective = "practical-pavement";
-      } else {
-        cleanSearchOutcome = unpaved.outcome || "noPath";
-      }
-    }
   } else {
     const diagnostics = {};
     const adventureSearchOpts = Object.assign({}, searchOpts, {
@@ -2194,15 +2191,7 @@ async function routeOnRuntime(body, graphResolution, runtime) {
       timeCapMs: CLEAN_PAVED_ATTEMPT_MS,
       deadlineAtMs: Date.now() + CLEAN_PAVED_ATTEMPT_MS
     };
-    let attempt = cleanFindRelaxed(Object.assign({}, relaxedBase, { pavedOnly: true }));
-    if (!attempt.path) {
-      attempt = cleanFindRelaxed(Object.assign({}, relaxedBase, {
-        pavedOnly: false,
-        timeCapMs: CLEAN_PAVED_ATTEMPT_MS * 2,
-        deadlineAtMs: Date.now() + CLEAN_PAVED_ATTEMPT_MS * 2
-      }));
-      if (attempt.path) cleanUnpavedFallbackUsed = true;
-    }
+    const attempt = cleanFindRelaxed(Object.assign({}, relaxedBase, { pavedOnly: true }));
     if (attempt.path) {
       path = attempt.path;
       cleanSearchOutcome = "completed";
@@ -2979,7 +2968,7 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds, 
     if (haversineMeters(ll, startLL) < 2500 || haversineMeters(ll, endLL) < 2500) return 1;
     // Strong enough that trunk/primary through a core loses to a ring/highway
     // or a dirt bypass. Finite so unavoidable bridges still work.
-    if (profile === "cleanest") return 4.0;
+    if (profile === "cleanest") return 5.0;
     if (profile === "dirt") return 5.5;
     return 4.8;
   }

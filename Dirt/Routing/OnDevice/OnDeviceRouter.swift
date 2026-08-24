@@ -223,6 +223,8 @@ nonisolated struct OnDeviceRouter {
         ctx.cityWall = true
         ctx.variety = false
         ctx.settlementFallback = false
+        ctx.avoidMotorways = true
+        ctx.preferBackRoads = false
         switch routeWithSnaps(
             from: from,
             to: to,
@@ -302,35 +304,7 @@ nonisolated struct OnDeviceRouter {
         case .failure: return pavedWall
         }
 
-        // Unpaved only after paved fabric proved noPath.
-        let anySurfaceWall = routeDetailedOnce(
-            from: from, to: to, profile: profile,
-            allowUnknown: allowUnknown, avoidEdgeIds: avoidEdgeIds,
-            sessionSeed: sessionSeed ?? self.sessionSeed,
-            maxRouteMeters: maxRouteMeters,
-            priorEdgeIds: priorEdgeIds,
-            arrivalEdgeId: arrivalEdgeId,
-            backtrackFactor: backtrackFactor,
-            cityWall: true,
-            pavedOnly: false,
-            urbanCoreFallback: false,
-            settlementWall: false,
-            settlementFallback: false,
-            cleanMetroMultiplier: cleanMetroMultiplier,
-            avoidMotorways: avoidMotorways,
-            preferBackRoads: preferBackRoads
-        )
-        switch anySurfaceWall {
-        case .success(var route):
-            route.searchMeta.cleanUnpavedFallbackUsed = true
-            let note = "cleanUnpavedFallback=lastResort"
-            route.debugNote = route.debugNote.isEmpty ? note : route.debugNote + " " + note
-            return .success(route)
-        case .failure(.noPath): break
-        case .failure: return anySurfaceWall
-        }
-
-        // Major urban core / motorway last resort after proved noPath only.
+        // A city may be unavoidable, but Clean never relaxes the pavement rule.
         let pavedUrbanFallback = routeDetailedOnce(
             from: from, to: to, profile: profile,
             allowUnknown: allowUnknown, avoidEdgeIds: avoidEdgeIds,
@@ -348,38 +322,9 @@ nonisolated struct OnDeviceRouter {
             avoidMotorways: avoidMotorways,
             preferBackRoads: preferBackRoads
         )
-        let fallback: Swift.Result<Result, Failure>
-        switch pavedUrbanFallback {
-        case .success:
-            fallback = pavedUrbanFallback
-        case .failure(.noPath):
-            fallback = routeDetailedOnce(
-                from: from, to: to, profile: profile,
-                allowUnknown: allowUnknown, avoidEdgeIds: avoidEdgeIds,
-                sessionSeed: sessionSeed ?? self.sessionSeed,
-                maxRouteMeters: maxRouteMeters,
-                priorEdgeIds: priorEdgeIds,
-                arrivalEdgeId: arrivalEdgeId,
-                backtrackFactor: backtrackFactor,
-                cityWall: false,
-                pavedOnly: false,
-                urbanCoreFallback: true,
-                settlementWall: false,
-                settlementFallback: false,
-                cleanMetroMultiplier: cleanMetroMultiplier,
-            avoidMotorways: avoidMotorways,
-            preferBackRoads: preferBackRoads
-            )
-        case .failure:
-            return pavedUrbanFallback
-        }
-        guard case .success(var route) = fallback else { return fallback }
+        guard case .success(var route) = pavedUrbanFallback else { return pavedUrbanFallback }
         route.searchMeta.urbanCoreFallbackUsed = true
-        if case .failure(.noPath) = pavedUrbanFallback {
-            route.searchMeta.cleanUnpavedFallbackUsed = true
-        }
         let note = "urbanCoreFallback=lastResort"
-            + (route.searchMeta.cleanUnpavedFallbackUsed ? " cleanUnpavedFallback=lastResort" : "")
         route.debugNote = route.debugNote.isEmpty ? note : route.debugNote + " " + note
         return .success(route)
     }
@@ -1004,7 +949,7 @@ nonisolated struct OnDeviceRouter {
 
         switch (profile, role) {
         case (.cleanest, _):
-            break // nearest eligible — never prefer pavement
+            break // pavement eligibility is enforced before ranking
         case (_, .start) where profile != .cleanest:
             if surfaceName != "paved" { score -= 22 }
             if OnDeviceProfileCosts.isAdventureRoadClass(roadClass) { score -= 12 }
@@ -3129,6 +3074,25 @@ nonisolated struct OnDeviceRouter {
                 let access = GraphV2Pack.unpackAccess(pack.edgeAttrs[ei])
                 guard accessAllowed(access, allowUnknown: policyUnknown, profile: profile) else { continue }
                 if osmCoreOnly, !GraphV2Pack.isOsmCoreEdge(pack.edgeId(ei)) { continue }
+                if profile == .cleanest {
+                    if pack.hasLeaves {
+                        guard RoadTierStats.isCleanPavementEligible(
+                            family: pack.surfaceFamily(ei),
+                            tier: pack.roadTier(ei)
+                        ) else { continue }
+                    } else {
+                        let surface = OnDeviceProfileCosts.surfaceName(
+                            code: GraphV2Pack.unpackSurface(pack.edgeAttrs[ei])
+                        )
+                        let road = GraphV2Pack.roadClassName(
+                            GraphV2Pack.unpackRoadClass(pack.edgeAttrs[ei])
+                        )
+                        guard !OnDeviceProfileCosts.isBlockedForCleanPavement(
+                            surfaceName: surface,
+                            roadClassName: road
+                        ) else { continue }
+                    }
+                }
 
                 let a = Int(fromArr[ei])
                 let b = Int(toArr[ei])
@@ -3560,13 +3524,6 @@ nonisolated struct OnDeviceRouter {
                 let tier = pack.roadTier(ei)
                 let family = pack.surfaceFamily(ei)
                 var step = km * RoadTierStats.cleanLeafCostMult(tier: tier, family: family)
-                step *= RoadTierStats.cleanLeafHighwayAvoidMult(
-                    tier: tier,
-                    metersFromStart: meters(toLL, startSnap.projected),
-                    metersToDestination: meters(toLL, endLL),
-                    startOnHighway: startOnMajorHighway,
-                    endOnHighway: endOnMajorHighway
-                )
                 step *= RoadTierStats.e4LeafCostMult(
                     tier: tier,
                     avoidMotorways: ctx.avoidMotorways,

@@ -16,9 +16,9 @@ nonisolated struct RiderLeg: Identifiable, Equatable, Codable, Sendable {
     let to: UUID
     var profile: RouteProfile
     var allowUnknown: Bool
-    /// Phase E4: strong soft-avoid motorway + trunk.
+    /// Internal inverse of the Clean "Allow motorways" control.
     var avoidMotorways: Bool
-    /// Phase E4: penalize arterial / prefer collector.
+    /// Legacy persisted field. Clean no longer adds a primary-road penalty.
     var preferBackRoads: Bool
     /// A generated fuel hop inherits the rider-leg profile unless the pump it
     /// departs from has an explicit rider override.
@@ -32,7 +32,7 @@ nonisolated struct RiderLeg: Identifiable, Equatable, Codable, Sendable {
         to: UUID,
         profile: RouteProfile,
         allowUnknown: Bool,
-        avoidMotorways: Bool = false,
+        avoidMotorways: Bool = true,
         preferBackRoads: Bool = false,
         hopOverrides: [String: RouteProfile] = [:],
         fuelStopOverrides: [String: String] = [:]
@@ -43,7 +43,7 @@ nonisolated struct RiderLeg: Identifiable, Equatable, Codable, Sendable {
         self.profile = profile
         self.allowUnknown = profile == .cleanest ? false : allowUnknown
         self.avoidMotorways = profile == .cleanest ? avoidMotorways : false
-        self.preferBackRoads = profile == .cleanest
+        self.preferBackRoads = false
         self.hopOverrides = hopOverrides
         self.fuelStopOverrides = fuelStopOverrides
     }
@@ -59,11 +59,12 @@ nonisolated struct RiderLeg: Identifiable, Equatable, Codable, Sendable {
         to = try container.decode(UUID.self, forKey: .to)
         profile = try container.decode(RouteProfile.self, forKey: .profile)
         allowUnknown = try container.decode(Bool.self, forKey: .allowUnknown)
-        avoidMotorways = try container.decodeIfPresent(Bool.self, forKey: .avoidMotorways) ?? false
+        avoidMotorways = try container.decodeIfPresent(Bool.self, forKey: .avoidMotorways)
+            ?? (profile == .cleanest)
         preferBackRoads = try container.decodeIfPresent(Bool.self, forKey: .preferBackRoads) ?? false
         if profile == .cleanest {
             allowUnknown = false
-            preferBackRoads = true
+            preferBackRoads = false
         } else {
             avoidMotorways = false
             preferBackRoads = false

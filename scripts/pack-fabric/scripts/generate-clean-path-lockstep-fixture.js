@@ -11,7 +11,7 @@ const fs = require("fs");
 const path = require("path");
 const { decodeGraphV2, decodeGeometryV1 } = require("../routing/lib/pack-v2");
 const { findPathV2 } = require("../routing/lib/find-path-v2");
-const { roadTierOf } = require("../routing/lib/road-tier");
+const { roadTierOf, isCleanPavementEligible } = require("../routing/lib/road-tier");
 const { surfaceFamilyOf, honestSurfaceStatsFromLeaves } = require("../routing/lib/surface-family");
 
 const ROOT = path.join(__dirname, "../../..");
@@ -38,6 +38,10 @@ function matchNearest(pack, geom, lon, lat) {
   let best = null;
   const E = pack.undirectedEdgeCount;
   for (let ei = 0; ei < E; ei += 1) {
+    const leaves = pack.edgeLeaves(ei);
+    const family = surfaceFamilyOf(leaves.surfaceLeaf, pack.surfaceFamilyMap);
+    const tier = roadTierOf(leaves.roadClassLeaf, pack.roadTierMap);
+    if (!isCleanPavementEligible(family, tier)) continue;
     const poly = geom.polyline(ei);
     if (!poly || poly.length < 2) continue;
     for (let i = 0; i < poly.length - 1; i += 1) {
@@ -131,6 +135,8 @@ function main() {
         cityWall: true,
         variety: false,
         settlementFallback: false,
+        avoidMotorways: true,
+        preferBackRoads: false,
         sessionSeed: 1,
         boundedSearch: false
       }

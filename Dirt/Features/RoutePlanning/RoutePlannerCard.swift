@@ -1021,7 +1021,7 @@ struct RoutePlannerCard: View {
     }
 
     /// Exactly one rider toggle per profile.
-    /// Clean: Avoid motorways (prefer-back-roads is intrinsic).
+    /// Clean: allow motorway/trunk at ordinary paved-road cost.
     /// Dirt / Balanced: Allow unknown.
     @ViewBuilder
     private func profilePolicyToggle(
@@ -1031,9 +1031,12 @@ struct RoutePlannerCard: View {
     ) -> some View {
         if profile == .cleanest {
             e4ToggleRow(
-                title: "Avoid motorways",
-                footnote: "Motorway + trunk stay on the graph but cost hard — never a hard cut.",
-                binding: avoidMotorways
+                title: "Allow motorways",
+                footnote: "Off keeps freeways and trunk roads as a last resort.",
+                binding: Binding(
+                    get: { !avoidMotorways.wrappedValue },
+                    set: { avoidMotorways.wrappedValue = !$0 }
+                )
             )
         } else {
             allowUnknownControl(

@@ -84,7 +84,6 @@ const {
   roadTierOf,
   isBlockedForCleanLeaf,
   cleanLeafCostMult,
-  cleanLeafHighwayAvoidMult,
   e4LeafCostMult,
   e4FlagsForProfile,
   ROAD_TIER
@@ -128,13 +127,6 @@ function cleanLeafStepCost(
   const tier = roadTierOf(leaves.roadClassLeaf, pack.roadTierMap);
   let step = (edgeM / 1000) * cleanLeafCostMult(tier, family);
   if (toLL) {
-    step *= cleanLeafHighwayAvoidMult(
-      tier,
-      haversineMeters(toLL, startLL),
-      haversineMeters(toLL, endLL),
-      !!startOnHwy,
-      !!endOnHwy
-    );
     step *= e4LeafCostMult({
       tier,
       avoidMotorways: !!(e4Opts && e4Opts.avoidMotorways),

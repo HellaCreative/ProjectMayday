@@ -30,6 +30,7 @@ struct UrbanCoreTests {
     }
 
     @Test func cleanMetroMultiplierOverrideAppliesOnlyToCleanest() {
+        #expect(UrbanCore.resolveCleanMetroPenalty(profile: .cleanest, override: nil) == 5)
         #expect(UrbanCore.resolveCleanMetroPenalty(profile: .cleanest, override: 5) == 5)
         #expect(UrbanCore.resolveCleanMetroPenalty(profile: .balanced, override: 5) == 120)
         #expect(UrbanCore.resolveCleanMetroPenalty(profile: .dirt, override: 5) == 120)

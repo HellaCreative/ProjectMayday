@@ -44,17 +44,17 @@ const ROAD_TIER_MAP = Object.freeze({
 
 /**
  * Clean km multipliers by tier (profile=cleanest + leaves only).
- * Collector/local_paved preferred; arterial is a mild connector (1.4, not a
- * near-ban); trunk/motorway avoided.
+ * Primary/secondary/local paved roads are ordinary Clean fabric. Motorway and
+ * trunk receive their default soft avoidance through the Clean motorway policy.
  */
 const CLEAN_TIER_COST = Object.freeze({
-  [ROAD_TIER.COLLECTOR]: 0.86,
-  [ROAD_TIER.LOCAL_PAVED]: 0.92,
-  [ROAD_TIER.ARTERIAL]: 1.4,
+  [ROAD_TIER.COLLECTOR]: 0.92,
+  [ROAD_TIER.LOCAL_PAVED]: 1.0,
+  [ROAD_TIER.ARTERIAL]: 0.96,
   [ROAD_TIER.SERVICE]: 2.8,
   [ROAD_TIER.DESTINATION]: 1.15,
-  [ROAD_TIER.TRUNK]: 16.0,
-  [ROAD_TIER.MOTORWAY]: 70.0,
+  [ROAD_TIER.TRUNK]: 1.0,
+  [ROAD_TIER.MOTORWAY]: 1.0,
   [ROAD_TIER.ADVENTURE]: 120.0,
   [ROAD_TIER.UNKNOWN]: 2.2
 });
@@ -84,6 +84,12 @@ function tierIsPavedCapable(tier) {
   );
 }
 
+function isCleanPavementEligible(family, tier) {
+  if (family === "paved") return true;
+  if (family === "unknown") return tierIsPavedCapable(tier);
+  return false;
+}
+
 /**
  * Clean passability from leaves.
  * @param {object} opts
@@ -96,6 +102,7 @@ function isBlockedForCleanLeaf(opts) {
   const family = opts.family || "unknown";
   const tier = opts.tier || ROAD_TIER.UNKNOWN;
   const pavedOnly = !!opts.pavedOnly;
+  if (pavedOnly && !isCleanPavementEligible(family, tier)) return true;
   if (opts.isEndpointEdge) return false;
 
   // Residential / living_street: never a through-route.
@@ -104,13 +111,7 @@ function isBlockedForCleanLeaf(opts) {
   // track / atv-path: not Clean surface.
   if (tier === ROAD_TIER.ADVENTURE) return pavedOnly;
 
-  if (pavedOnly) {
-    if (family === "paved") return false;
-    if (family === "gravel" || family === "loose") return true;
-    // Missing/unknown leaf on a paved-capable highway → inferred pavement.
-    if (family === "unknown") return !tierIsPavedCapable(tier);
-    return true;
-  }
+  if (pavedOnly) return false;
 
   // Fallback pass: gravel connectors OK; loose still last-resort (high cost, not hard-block
   // except adventure already handled). Service/destination still blocked above.
@@ -124,21 +125,9 @@ function cleanLeafCostMult(tier, family) {
   return t * f;
 }
 
-/** Motorway/trunk hard-avoid with pin join relief (leaf Clean). */
-function cleanLeafHighwayAvoidMult(tier, metersFromStart, metersToDestination, startOnHighway, endOnHighway) {
-  if (tier !== ROAD_TIER.MOTORWAY && tier !== ROAD_TIER.TRUNK) return 1;
-  const join = 6000;
-  const near =
-    (endOnHighway && metersToDestination < join) ||
-    (startOnHighway && metersFromStart < join);
-  if (near) return 1;
-  // Push toward CLEAN_TIER_COST already high; extra avoid on mid-route motorway/trunk.
-  return tier === ROAD_TIER.MOTORWAY ? 1.8 : 1.35;
-}
-
 /**
- * Phase E4 — rider knobs (default OFF → Dirt/Balanced + Clean E2 unchanged).
- * Soft costs only: never remove edges from the graph.
+ * Clean motorway policy. Avoidance is the default internal state; the
+ * rider-facing "Allow motorways" switch disables it. Soft costs only.
  */
 const E4_AVOID_MOTORWAY_MULT = 40;
 const E4_AVOID_TRUNK_MULT = 18;
@@ -191,9 +180,8 @@ function e4LeafCostMult(opts) {
 }
 
 /**
- * E4 knobs are Clean-only. Dirt / Balanced ignore rider flags so
- * costing matches pre-E4. Clean always prefers back roads; avoid-motorways
- * is the Clean toggle.
+ * Clean-only motorway policy. Primary and secondary remain ordinary pavement;
+ * only motorway/trunk receive the default soft avoidance.
  */
 function e4FlagsForProfile(profile, flags) {
   if (profile !== "cleanest") {
@@ -201,7 +189,7 @@ function e4FlagsForProfile(profile, flags) {
   }
   return {
     avoidMotorways: !!(flags && flags.avoidMotorways),
-    preferBackRoads: true
+    preferBackRoads: false
   };
 }
 
@@ -212,9 +200,9 @@ module.exports = {
   CLEAN_FAMILY_COST,
   roadTierOf,
   tierIsPavedCapable,
+  isCleanPavementEligible,
   isBlockedForCleanLeaf,
   cleanLeafCostMult,
-  cleanLeafHighwayAvoidMult,
   e4AvoidMotorwaysMult,
   e4PreferBackRoadsMult,
   e4LeafCostMult,

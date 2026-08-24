@@ -79,21 +79,73 @@ struct RoadTierE4Tests {
         }
     }
 
-    @Test("Clean always prefers back roads; avoid-motorways follows the toggle")
-    func cleanIntrinsicPreferBackRoads() {
+    @Test("Clean limits the policy to motorway and trunk")
+    func cleanMotorwayPolicy() {
         let off = RoadTierStats.e4Flags(
             for: .cleanest,
             avoidMotorways: false,
             preferBackRoads: false
         )
         #expect(off.avoidMotorways == false)
-        #expect(off.preferBackRoads == true)
+        #expect(off.preferBackRoads == false)
         let on = RoadTierStats.e4Flags(
             for: .cleanest,
             avoidMotorways: true,
             preferBackRoads: false
         )
         #expect(on.avoidMotorways == true)
-        #expect(on.preferBackRoads == true)
+        #expect(on.preferBackRoads == false)
+
+        let primary = RoadTierStats.cleanLeafCostMult(tier: .arterial, family: .paved)
+        let secondary = RoadTierStats.cleanLeafCostMult(tier: .collector, family: .paved)
+        let allowedMotorway = RoadTierStats.cleanLeafCostMult(tier: .motorway, family: .paved)
+        let avoidedMotorway = allowedMotorway * RoadTierStats.e4LeafCostMult(
+            tier: .motorway,
+            avoidMotorways: true,
+            preferBackRoads: false,
+            metersFromStart: 1e9,
+            metersToDestination: 1e9,
+            startOnHighway: false,
+            endOnHighway: false
+        )
+        #expect(primary == 0.96)
+        #expect(secondary == 0.92)
+        #expect(allowedMotorway == 1)
+        #expect(avoidedMotorway == 40)
+    }
+
+    @Test("Clean defaults to motorway avoidance and Allow removes it")
+    func cleanRequestDefaultsAndAllowState() {
+        let from = UUID()
+        let to = UUID()
+        let leg = RiderLeg(
+            from: from,
+            to: to,
+            profile: .cleanest,
+            allowUnknown: false
+        )
+        #expect(leg.avoidMotorways)
+        #expect(!leg.preferBackRoads)
+
+        let locations = [
+            RouteLocation(latitude: 44.64, longitude: -63.57, label: "A"),
+            RouteLocation(latitude: 44.74, longitude: -63.47, label: "B")
+        ]
+        let defaultRequest = RouteRequest(
+            profile: .cleanest,
+            locations: locations,
+            allowUnknown: false,
+            avoidMotorways: true
+        )
+        #expect(defaultRequest.options?.avoidMotorways == true)
+        #expect(defaultRequest.options?.preferBackRoads == nil)
+
+        let allowedRequest = RouteRequest(
+            profile: .cleanest,
+            locations: locations,
+            allowUnknown: false,
+            avoidMotorways: false
+        )
+        #expect(allowedRequest.options == nil)
     }
 }

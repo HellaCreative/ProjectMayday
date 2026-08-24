@@ -96,7 +96,7 @@ function snap(edgeIndex, coord, alongM, edgeMeters) {
 test("metro fallback penalty ignores cleanMetroMultiplier for balanced", () => {
   assert.equal(resolveMetroFallbackPenalty("balanced", 5), 120);
   assert.equal(resolveMetroFallbackPenalty("cleanest", 5), 5);
-  assert.equal(resolveMetroFallbackPenalty("cleanest", null), 120);
+  assert.equal(resolveMetroFallbackPenalty("cleanest", null), 5);
 });
 
 test("balanced search completes with both pins inside metro (no cleanMetroPenalty crash)", () => {

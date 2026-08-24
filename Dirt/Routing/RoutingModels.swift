@@ -101,9 +101,9 @@ struct RouteRequestOptions: Codable, Sendable {
     var directExtraBudgetMeters: Double?
     /// DEBUG ONLY. Clean pin tests: urban-core multiplier override (1…20).
     var cleanMetroMultiplier: Double?
-    /// Phase E4: avoid motorway + trunk (strong soft cost). Omitted when false.
+    /// Internal inverse of the rider-facing "Allow motorways" control.
     var avoidMotorways: Bool?
-    /// Phase E4: prefer back roads (penalize arterial). Omitted when false.
+    /// Legacy compatibility field; Clean no longer adds a primary-road penalty.
     var preferBackRoads: Bool?
 
     init(
@@ -167,7 +167,7 @@ struct RouteRequest: Codable, Sendable {
         let seed = sessionSeed == 0 ? nil : sessionSeed
         let metro = profile == .cleanest ? cleanMetroMultiplier : nil
         let scopedAvoid = profile == .cleanest && avoidMotorways
-        let scopedPrefer = profile == .cleanest
+        let scopedPrefer = false
         if avoidEdgeIds.isEmpty, priorEdgeIds.isEmpty, arrivalEdgeId == nil,
            backtrackFactor == nil, seed == nil, maxPathMeters == nil,
            directExtraBudgetMeters == nil, metro == nil,

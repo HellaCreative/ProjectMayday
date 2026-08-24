@@ -1,7 +1,7 @@
 import Foundation
 
 /// DEBUG ONLY — Clean urban-core multiplier override for live pin tests.
-/// Not rider UI. Default is unset (production ×120). When enabled, sends
+/// Not rider UI. Default is unset (production ×5). When enabled, sends
 /// `options.cleanMetroMultiplier` clamped 1…20.
 enum CleanMetroDebugPrefs {
     static let enabledKey = "dirt.debug.cleanMetroOverride"

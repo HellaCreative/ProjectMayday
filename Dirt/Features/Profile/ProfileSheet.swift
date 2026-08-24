@@ -508,13 +508,13 @@ struct ProfileSheet: View {
             .tint(DirtTheme.orange)
 
             if cleanMetroOverride {
-                Text("Override \(Int(cleanMetroSlider.rounded())) (live default ×120)")
+                Text("Override \(Int(cleanMetroSlider.rounded())) (live default ×5)")
                     .font(DirtType.helper)
                     .foregroundStyle(DirtTheme.muted)
                 Slider(value: $cleanMetroSlider, in: 1...20, step: 1)
                     .tint(DirtTheme.orange)
             } else {
-                Text("current live (×120) — enable to send 1…20 on Clean routes")
+                Text("Current live (×5) — enable to test 1…20 on Clean routes")
                     .font(DirtType.helper)
                     .foregroundStyle(DirtTheme.muted)
                     .fixedSize(horizontal: false, vertical: true)

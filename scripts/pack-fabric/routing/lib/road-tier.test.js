@@ -46,6 +46,15 @@ describe("road-tier E2 Clean", () => {
     );
     assert.equal(
       isBlockedForCleanLeaf({
+        family: "gravel",
+        tier: ROAD_TIER.COLLECTOR,
+        pavedOnly: true,
+        isEndpointEdge: true
+      }),
+      true
+    );
+    assert.equal(
+      isBlockedForCleanLeaf({
         family: "paved",
         tier: ROAD_TIER.COLLECTOR,
         pavedOnly: true,
@@ -64,13 +73,13 @@ describe("road-tier E2 Clean", () => {
     );
   });
 
-  it("prefers collector over arterial/motorway in cost", () => {
+  it("keeps primary and secondary at ordinary paved-road cost", () => {
     const collector = cleanLeafCostMult(ROAD_TIER.COLLECTOR, "paved");
     const arterial = cleanLeafCostMult(ROAD_TIER.ARTERIAL, "paved");
     const motorway = cleanLeafCostMult(ROAD_TIER.MOTORWAY, "paved");
-    assert.equal(arterial, 1.4);
+    assert.equal(arterial, 0.96);
     assert.ok(collector < arterial);
-    assert.ok(arterial < motorway);
+    assert.equal(motorway, 1);
   });
 });
 
@@ -133,12 +142,27 @@ describe("road-tier E4 knobs", () => {
     }
   });
 
-  it("Clean always prefers back roads; avoid-motorways follows the toggle", () => {
+  it("Clean limits the policy to motorway and trunk", () => {
     const off = e4FlagsForProfile("cleanest", { avoidMotorways: false, preferBackRoads: false });
     assert.equal(off.avoidMotorways, false);
-    assert.equal(off.preferBackRoads, true);
+    assert.equal(off.preferBackRoads, false);
     const on = e4FlagsForProfile("cleanest", { avoidMotorways: true, preferBackRoads: false });
     assert.equal(on.avoidMotorways, true);
-    assert.equal(on.preferBackRoads, true);
+    assert.equal(on.preferBackRoads, false);
+
+    const primary = cleanLeafCostMult(ROAD_TIER.ARTERIAL, "paved");
+    const secondary = cleanLeafCostMult(ROAD_TIER.COLLECTOR, "paved");
+    const allowedMotorway = cleanLeafCostMult(ROAD_TIER.MOTORWAY, "paved");
+    const avoidedMotorway = allowedMotorway * e4LeafCostMult({
+      tier: ROAD_TIER.MOTORWAY,
+      avoidMotorways: true,
+      preferBackRoads: false,
+      metersFromStart: 1e9,
+      metersToDestination: 1e9
+    });
+    assert.equal(primary, 0.96);
+    assert.equal(secondary, 0.92);
+    assert.equal(allowedMotorway, 1);
+    assert.equal(avoidedMotorway, 40);
   });
 });

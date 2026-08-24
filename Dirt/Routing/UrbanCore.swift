@@ -5,7 +5,7 @@ import Foundation
 ///
 /// Boxes cover the practical through-route core, not merely a downtown point;
 /// otherwise a router can still treat the surrounding city grid as free fabric.
-/// Crossing is strongly penalized (×120) but passable so a short graze beats a
+/// Crossing is penalized (×5 for Clean) but passable so a short graze beats a
 /// hundreds-of-kilometre detour. Lockstep: `scripts/pack-fabric/routing/lib/hop-search.js`.
 nonisolated enum UrbanCore {
     struct Box: Sendable {
@@ -132,7 +132,7 @@ nonisolated enum UrbanCore {
     /// crossing while preserving the A/B-inside exemption. Applied on every
     /// search (not only last-resort), so cities stay expensive without forcing
     /// province-scale detours.
-    /// - Parameter penalty: production default 120. Clean pin tests may pass 1…20.
+    /// - Parameter penalty: generic fallback default 120. Clean passes its ×5 policy.
     static func fallbackMultiplier(
         point: CLLocationCoordinate2D,
         start: CLLocationCoordinate2D,
@@ -150,9 +150,10 @@ nonisolated enum UrbanCore {
         return 1
     }
 
-    /// Debug-only Clean override. Nil / non-cleanest → use production ×120.
+    /// Clean city policy defaults to ×5; tester override remains available at 1…20.
     static func resolveCleanMetroPenalty(profile: RouteProfile, override: Double?) -> Double {
-        guard profile == .cleanest, let raw = override, raw.isFinite else { return 120 }
+        guard profile == .cleanest else { return 120 }
+        guard let raw = override, raw.isFinite else { return 5 }
         return min(20, max(1, raw))
     }
 
@@ -164,6 +165,6 @@ nonisolated enum UrbanCore {
         end: CLLocationCoordinate2D,
         boxes candidateBoxes: [Box]
     ) -> Double {
-        blocks(point: point, start: start, end: end, boxes: candidateBoxes) ? 4 : 1
+        blocks(point: point, start: start, end: end, boxes: candidateBoxes) ? 5 : 1
     }
 }
