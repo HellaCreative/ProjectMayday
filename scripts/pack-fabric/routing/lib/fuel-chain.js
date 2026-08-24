@@ -331,6 +331,14 @@ function compareTankCommit(aMeters, aProgress, bMeters, bProgress, capMeters) {
   return 0;
 }
 
+/** Comfort/early hops may not spend the last 20% of tank as meander. Forced stretch keeps 100%. */
+function hopBudgetMeters(graphMeters, capMeters) {
+  const cap = Number(capMeters);
+  if (!(cap > 0)) return cap;
+  if (tankCommitBand(graphMeters, cap) === 2) return cap;
+  return Math.min(cap, cap * FUEL_COMFORT_HI);
+}
+
 function stationEligibility(row, {
   current,
   destination,
@@ -687,9 +695,9 @@ async function planFuelChainOnRuntime({
         haversineMeters(point, locationCoordinate(selected.location)) < SHORTLIST_MIN_SEPARATION_M
       );
     }
-    function fillFrom(pool) {
+    function fillFrom(pool, limit = effectiveK) {
       for (const candidate of pool) {
-        if (candidates.length >= effectiveK) return;
+        if (candidates.length >= limit) return;
         if (candidates.includes(candidate) || tooClose(candidate)) continue;
         const bin = progressBin(candidate);
         if (binUsed.has(bin)) continue;
@@ -697,18 +705,20 @@ async function planFuelChainOnRuntime({
         candidates.push(candidate);
       }
       for (const candidate of pool) {
-        if (candidates.length >= effectiveK) return;
+        if (candidates.length >= limit) return;
         if (candidates.includes(candidate) || tooClose(candidate)) continue;
         candidates.push(candidate);
       }
     }
     // Comfort-band first so Dirt's small batch cannot fill K with wall stations
-    // and starve the 50–80% pool. Too-early next (still better than the wall);
-    // desperation (>80%) last, and only after the rest of the range is sampled.
+    // and starve the 50–80% pool. Reserve slots for too-early pumps so a cluster
+    // of far Dijkstra-comfort stations cannot hide the mid-ride band. Desperation
+    // (>80%) last.
     const comfort = unique.filter((row) => tankCommitBand(row.graphMeters, cap) === 0);
     const early = unique.filter((row) => tankCommitBand(row.graphMeters, cap) === 1);
     const desperation = unique.filter((row) => tankCommitBand(row.graphMeters, cap) === 2);
-    fillFrom(comfort);
+    const reserved = (early.length ? 2 : 0) + (comfort.length === 0 && desperation.length ? 1 : 0);
+    fillFrom(comfort, Math.max(1, effectiveK - reserved));
     fillFrom(early);
     fillFrom(desperation);
     for (const candidate of unique) {
@@ -721,11 +731,12 @@ async function planFuelChainOnRuntime({
     async function evaluateCandidate(candidate, rank) {
       let row;
       let diagnostic;
+      const hopCap = hopBudgetMeters(candidate.graphMeters, cap);
       try {
         const response = await evaluateProfileHop({
           candidate,
           from: currentLocation,
-          maxMeters: cap,
+          maxMeters: hopCap,
           profile,
           accessPolicy: rawPolicy,
           priorEdgeIds: [...history],
@@ -735,7 +746,7 @@ async function planFuelChainOnRuntime({
         const meters = Number(response && response.distanceMeters);
         const dirtPct = Number(response && response.stats && response.stats.dirtPercent);
         const fits = response && response.status === "complete"
-          && Number.isFinite(meters) && meters <= cap + 1;
+          && Number.isFinite(meters) && meters <= hopCap + 1;
         row = {
           candidate,
           response,
@@ -909,8 +920,14 @@ async function planFuelChainOnRuntime({
       return Number(row.candidate.progressMeters) || row.meters;
     }
     fitting.sort((a, b) => {
-      const band = tankCommitBand(a.meters, cap) - tankCommitBand(b.meters, cap);
+      const band = tankCommitBand(a.candidate.graphMeters, cap) -
+        tankCommitBand(b.candidate.graphMeters, cap);
       if (band !== 0) return band;
+      if (tankCommitBand(a.candidate.graphMeters, cap) === 0) {
+        const aRouted = tankCommitBand(a.meters, cap);
+        const bRouted = tankCommitBand(b.meters, cap);
+        if (aRouted !== bRouted) return aRouted - bRouted;
+      }
       switch (resolveProfile(profile)) {
         case "dirt": {
           const dirtDelta = b.chainDirtPct - a.chainDirtPct;
