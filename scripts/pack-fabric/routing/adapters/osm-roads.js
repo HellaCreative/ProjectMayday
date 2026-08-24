@@ -5,17 +5,19 @@
  * OSM road fabric — motorized + dual-sport ways from Geofabrik extracts.
  *
  * Product role: the driveable basemap network (paved/gravel/dirt/service) plus
- * adventure ways (track + atv-positive path). Always motorized_permissive for
+ * adventure ways (track + path). Always motorized_permissive for
  * standard roads; positive atv marks adventure trails as permissive (overrides
  * vehicle-type deny; never overrides access=private|no).
+ * Untagged path is motorized_unknown and search-gated by Allow unknown.
  * Conflation: after NRN (NRN keeps identity on overlaps), before provincial
  * capillary that fills *between* OSM roads. Not a wholesale NRN replace.
  *
- * Excluded: footway / pedestrian / steps, cycleway, non-atv path, private/no, abandoned.
+ * Excluded: footway / pedestrian / steps, cycleway, private/no, abandoned.
+ * highway=path is kept (Allow unknown gates untagged motor legality at search).
  * Licence: OpenStreetMap contributors (ODbL).
  *
  * Options:
- *   includeAdventurePaths (default true) — keep highway=path when positive atv=
+ *   includeAdventurePaths (default true) — keep highway=path
  *   (footway always excluded; cycleway never included)
  *
  * Usage (via build script):
@@ -62,8 +64,7 @@ const INCLUDE_HIGHWAY = new Set([
   "road",
   "service",
   "track",
-  // Adventure: keep all track; path only when positive atv= (checked in classify).
-  // cycleway dropped (LOCKED TAXONOMY 2026-08-23).
+  // Adventure: keep all track and path. cycleway dropped (LOCKED TAXONOMY 2026-08-23).
   "path"
 ]);
 
@@ -296,10 +297,6 @@ function classify(props, options = {}) {
   if (!includeAdventure && hw === "path") {
     return { ok: false, reason: "adventure_paths_disabled" };
   }
-  // Keep path ONLY with positive atv (LOCKED TAXONOMY).
-  if (hw === "path" && !positiveAtv(props)) {
-    return { ok: false, reason: "path_without_atv" };
-  }
 
   const surface = tag(props, "surface");
   let surfaceClass = SURFACE_CLASS.unknown;
@@ -340,8 +337,8 @@ function classify(props, options = {}) {
     accessClass = ACCESS_CLASS.motorized_unknown;
     confidence = SOURCE_CONFIDENCE.low;
   } else if (hw === "path") {
-    // Retained path always has positive atv (membership); belt-and-suspenders.
-    if (ACCESS_ALLOWED.has(effectiveAccess.value)) {
+    // Untagged / non-atv path: motorized_unknown, gated by Allow unknown at search.
+    if (ACCESS_ALLOWED.has(effectiveAccess.value) || atvOk) {
       accessClass = ACCESS_CLASS.motorized_permissive;
     } else {
       accessClass = ACCESS_CLASS.motorized_unknown;
@@ -570,9 +567,9 @@ async function run(options = {}) {
     classification,
     excludedByReason,
     notes: [
-      "OSM fabric for conventional motorized roads plus dual-sport track and atv-positive path.",
-      "Excluded cycleway, non-atv path, footway/pedestrian/steps, private/no, and abandoned ways.",
-      "Positive atv (yes/designated/permissive) → motorized_permissive; overrides motorcycle/motor_vehicle/vehicle deny; never overrides access=private|no.",
+      "OSM fabric for conventional motorized roads plus dual-sport track and path.",
+      "Excluded cycleway, footway/pedestrian/steps, private/no, and abandoned ways.",
+      "highway=path is kept. Untagged path is motorized_unknown (Allow unknown at search). Positive atv (yes/designated/permissive) → motorized_permissive; overrides motorcycle/motor_vehicle/vehicle deny; never overrides access=private|no.",
       "Missing surface stays unknown on service/track/path; road class guides search without inventing material.",
       "OSM motorcycle access precedence is motorcycle > motor_vehicle > vehicle > access (atv consulted for override only).",
       "route=ferry ways are timed connectors (structureType=ferry); not highway fabric."

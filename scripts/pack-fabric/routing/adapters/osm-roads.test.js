@@ -29,8 +29,11 @@ test("missing minor-road surface is never invented as dirt", () => {
     assert.equal(result.surfaceClass, "unknown", highway);
     assert.equal(result.confidence, "low", highway);
   }
-  // path without atv is excluded; path with atv keeps unknown surface when untagged.
+  // path without atv is kept as unknown surface + unknown access.
   assert.equal(classify({ highway: "path", atv: "yes" }).surfaceClass, "unknown");
+  assert.equal(classify({ highway: "path" }).ok, true);
+  assert.equal(classify({ highway: "path" }).surfaceClass, "unknown");
+  assert.equal(classify({ highway: "path" }).accessClass, "motorized_unknown");
 });
 
 test("explicit surface always wins over road-type fallback", () => {
@@ -63,15 +66,18 @@ test("known through-access restrictions do not become permissive green edges", (
   }
 });
 
-test("adventure membership: cycleway dropped; path requires positive atv", () => {
+test("adventure membership: cycleway dropped; all path kept", () => {
   assert.equal(INCLUDE_HIGHWAY.has("cycleway"), false);
   assert.equal(INCLUDE_HIGHWAY.has("path"), true);
   assert.equal(INCLUDE_HIGHWAY.has("track"), true);
   assert.equal(classify({ highway: "cycleway" }).ok, false);
   assert.equal(classify({ highway: "cycleway" }).reason, "highway_excluded");
-  assert.equal(classify({ highway: "path" }).ok, false);
-  assert.equal(classify({ highway: "path" }).reason, "path_without_atv");
+  const untaggedPath = classify({ highway: "path" });
+  assert.equal(untaggedPath.ok, true);
+  assert.equal(untaggedPath.accessClass, "motorized_unknown");
+  assert.equal(untaggedPath.surfaceClass, "unknown");
   assert.equal(classify({ highway: "path", atv: "yes" }).ok, true);
+  assert.equal(classify({ highway: "path", atv: "yes" }).accessClass, "motorized_permissive");
   assert.equal(classify({ highway: "path", atv: "designated" }).ok, true);
   assert.equal(classify({ highway: "path", atv: "permissive" }).ok, true);
   assert.equal(classify({ highway: "track" }).ok, true);

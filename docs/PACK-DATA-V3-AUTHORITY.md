@@ -212,11 +212,12 @@ into paved.
 - track → adventure/dirt (kept).
 
 *Graph membership (build-time):*
-- **Keep all `track`. Keep `path` ONLY where `atv ∈ {yes, designated, permissive}`. Drop
-  all other `path` and all `cycleway`.** (ATV audit 2026-08-23: a broad `motor_vehicle`
-  path-exception recovered only ~2.7 km and was rejected; cycleway has zero `atv=`. So the
-  exception is ATV-specific and narrow.) All other non-motoring ways
-  (footway/pedestrian/steps/bridleway/busway/corridor…) stay excluded by the allowlist.
+- **Keep all `track`. Keep all `path`. Drop all `cycleway`.** Untagged `path` is
+  `motorized_unknown` and is search-gated by Allow unknown. Positive
+  `atv ∈ {yes, designated, permissive}` still marks the edge `motorized_permissive`
+  (and still overrides vehicle-type deny). Cycleway stays out (zero `atv=`). All other
+  non-motoring ways (footway/pedestrian/steps/bridleway/busway/corridor…) stay excluded
+  by the allowlist.
 - **ATV access rule (LOCKED, Rick 2026-08-23): positive `atv` overrides a vehicle-type
   deny.** Rationale: a dual-sport is an off-road vehicle allowed on ATV trails; `motorcycle=no`
   on such a trail means "street bikes can't handle it," not a legal bar. So for the access
