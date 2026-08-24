@@ -810,6 +810,7 @@ final class ItineraryBuilder {
                         to: target,
                         avoidEdgeIDs: itinerary.impassableEdgeIDs,
                         maxPathMeters: remaining,
+                        regionalHopMinimumMeters: chain.graphMeters ?? [],
                         history: history,
                         avoidMotorways: riderLeg.avoidMotorways,
                         preferBackRoads: riderLeg.preferBackRoads
@@ -1467,6 +1468,7 @@ private func routeRequest(
     avoidEdgeIDs: Set<String>,
     maxPathMeters: Double?,
     directExtraBudgetMeters: Double? = nil,
+    regionalHopMinimumMeters: [Double] = [],
     history: EdgeHistory = EdgeHistory(),
     avoidMotorways: Bool = false,
     preferBackRoads: Bool = false
@@ -1484,6 +1486,7 @@ private func routeRequest(
         backtrackFactor: 4,
         maxPathMeters: maxPathMeters,
         directExtraBudgetMeters: directExtraBudgetMeters,
+        regionalHopMinimumMeters: regionalHopMinimumMeters,
         cleanMetroMultiplier: CleanMetroDebugPrefs.requestMultiplier,
         avoidMotorways: avoidMotorways,
         preferBackRoads: preferBackRoads

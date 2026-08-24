@@ -683,10 +683,16 @@ final class RoutePlannerModel {
             self.isRouting = false
             self.isAssemblingRoute = false
             self.fuelPlanningStatus = nil
-            self.errorMessage = result.riderLegStatus.values.compactMap {
+            let hardFailure = result.riderLegStatus.values.compactMap {
                 if case .failed(let message) = $0 { return message }
                 return nil
             }.first
+            let fuelFailure = result.riderLegStatus.values.compactMap {
+                if case .fuelUnknown(let message) = $0 { return message }
+                return nil
+            }.first
+            self.errorMessage = hardFailure
+                ?? fuelFailure.map(Self.userFacingFuelFailureMessage)
             if self.errorMessage == nil {
                 self.routeIdentity = "plan:" + self.itinerary.waypoints.dropFirst().map {
                     "\($0.coordinate.latitude),\($0.coordinate.longitude)"
@@ -694,8 +700,8 @@ final class RoutePlannerModel {
                 if self.toast != Self.legCompleteToast {
                     self.announceRouteReadyIfComplete()
                 }
-            } else if let toast = self.toast, Self.isPersistentProgressToast(toast) {
-                self.toast = nil
+            } else if let error = self.errorMessage {
+                self.toast = error
             }
             if let gap = result.riderLegStatus.values.compactMap({ status -> FuelGap? in
                 if case .gap(let gap) = status { return gap }
@@ -3009,10 +3015,11 @@ final class RoutePlannerModel {
     private var routePlanIsCompleteSuccess: Bool {
         if let built, !itinerary.legs.isEmpty {
             return itinerary.legs.allSatisfy { leg in
-                if case .built = built.riderLegStatus[leg.id] { return true }
-                if case .gap = built.riderLegStatus[leg.id] { return true }
-                if case .fuelUnknown = built.riderLegStatus[leg.id] { return true }
-                return false
+                guard case .built = built.riderLegStatus[leg.id] else { return false }
+                let routed = built.legs.filter { $0.riderLegID == leg.id }
+                return !routed.isEmpty && routed.allSatisfy {
+                    $0.response.status == "complete" && $0.response.coordinates.count > 1
+                }
             }
         }
         switch mode {
@@ -3026,5 +3033,15 @@ final class RoutePlannerModel {
     /// Mid-nav / single-leg success toast (caller already verified the response).
     private func announceRouteReady() {
         announceRouteReadyIfComplete()
+    }
+
+    private static func userFacingFuelFailureMessage(_ message: String) -> String {
+        let normalized = message.lowercased()
+        if normalized.contains("fuel planning")
+            || normalized.contains("fuel continuity")
+            || normalized.contains("fuel chain") {
+            return "Couldn’t complete a fuel-safe route within your range. Your pins are unchanged."
+        }
+        return message
     }
 }

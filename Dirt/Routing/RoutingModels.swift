@@ -99,6 +99,9 @@ struct RouteRequestOptions: Codable, Sendable {
     var sessionSeed: UInt64?
     var maxPathMeters: Double?
     var directExtraBudgetMeters: Double?
+    /// Fuel-chain graph minima for each regional seam hop. The final route
+    /// reserves later hops before spending distance on Dirt detours.
+    var regionalHopMinimumMeters: [Double]?
     /// DEBUG ONLY. Clean pin tests: urban-core multiplier override (1…20).
     var cleanMetroMultiplier: Double?
     /// Internal inverse of the rider-facing "Allow major highways" control.
@@ -114,6 +117,7 @@ struct RouteRequestOptions: Codable, Sendable {
         sessionSeed: UInt64? = nil,
         maxPathMeters: Double? = nil,
         directExtraBudgetMeters: Double? = nil,
+        regionalHopMinimumMeters: [Double] = [],
         cleanMetroMultiplier: Double? = nil,
         avoidMotorways: Bool = false,
         preferBackRoads: Bool = false
@@ -125,6 +129,8 @@ struct RouteRequestOptions: Codable, Sendable {
         self.sessionSeed = sessionSeed
         self.maxPathMeters = maxPathMeters
         self.directExtraBudgetMeters = directExtraBudgetMeters
+        let regionalMinima = regionalHopMinimumMeters.filter { $0.isFinite && $0 >= 0 }
+        self.regionalHopMinimumMeters = regionalMinima.isEmpty ? nil : regionalMinima
         if let cleanMetroMultiplier, cleanMetroMultiplier.isFinite {
             self.cleanMetroMultiplier = min(20, max(1, cleanMetroMultiplier))
         } else {
@@ -153,6 +159,7 @@ struct RouteRequest: Codable, Sendable {
         sessionSeed: UInt64 = 0,
         maxPathMeters: Double? = nil,
         directExtraBudgetMeters: Double? = nil,
+        regionalHopMinimumMeters: [Double] = [],
         cleanMetroMultiplier: Double? = nil,
         avoidMotorways: Bool = false,
         preferBackRoads: Bool = false
@@ -170,7 +177,7 @@ struct RouteRequest: Codable, Sendable {
         let scopedPrefer = false
         if avoidEdgeIds.isEmpty, priorEdgeIds.isEmpty, arrivalEdgeId == nil,
            backtrackFactor == nil, seed == nil, maxPathMeters == nil,
-           directExtraBudgetMeters == nil, metro == nil,
+           directExtraBudgetMeters == nil, regionalHopMinimumMeters.isEmpty, metro == nil,
            !scopedAvoid, !scopedPrefer {
             options = nil
         } else {
@@ -182,6 +189,7 @@ struct RouteRequest: Codable, Sendable {
                 sessionSeed: seed,
                 maxPathMeters: maxPathMeters,
                 directExtraBudgetMeters: directExtraBudgetMeters,
+                regionalHopMinimumMeters: regionalHopMinimumMeters,
                 cleanMetroMultiplier: metro,
                 avoidMotorways: scopedAvoid,
                 preferBackRoads: scopedPrefer

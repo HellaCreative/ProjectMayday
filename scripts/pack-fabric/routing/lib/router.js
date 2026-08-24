@@ -1369,6 +1369,25 @@ function remainingChainPathCap(options, completedMeters) {
   return requested - Math.max(0, Number(completedMeters) || 0);
 }
 
+/**
+ * Reserve the graph-proven minimum for every later regional hop before the
+ * current hop spends the shared fuel-leg allowance on profile detours.
+ */
+function reservedChainHopCap(options, completedMeters, hopIndex, hopCount) {
+  const remaining = remainingChainPathCap(options, completedMeters);
+  if (remaining == null) return null;
+  const minima = Array.isArray(options && options.regionalHopMinimumMeters)
+    ? options.regionalHopMinimumMeters.map(Number)
+    : [];
+  if (
+    minima.length !== hopCount ||
+    minima.some((meters) => !Number.isFinite(meters) || meters < 0) ||
+    hopIndex < 0 || hopIndex >= hopCount
+  ) return Math.max(0, remaining);
+  const laterMinimum = minima.slice(hopIndex + 1).reduce((sum, meters) => sum + meters, 0);
+  return Math.max(0, remaining - laterMinimum);
+}
+
 async function routeCanadaChain(body, graphResolution) {
   const profile = resolveProfile(body.profile);
   // Every profile uses neutral province-seam joints (never city hubs) so each
@@ -1444,7 +1463,12 @@ async function routeCanadaChain(body, graphResolution) {
     const hopRegion =
       i === waypoints.length - 2 ? endFam || startFam : startFam || endFam;
     const requestedPathCap = Number((body.options || {}).maxPathMeters);
-    const remainingPathCap = remainingChainPathCap(body.options, totalMeters);
+    const remainingPathCap = reservedChainHopCap(
+      body.options,
+      totalMeters,
+      i,
+      waypoints.length - 1
+    );
     if (remainingPathCap != null && remainingPathCap <= 0) {
       return {
         status: "failed",
@@ -3371,6 +3395,7 @@ module.exports = {
   coordinateInUrbanBoxes,
   coordinateNearUrbanBoxes,
   remainingChainPathCap,
+  reservedChainHopCap,
   topologySeamFromIndex,
   fallbackReasonFor,
   clippedDirtMeters,

@@ -379,7 +379,10 @@ struct RoutePlannerModelItineraryTests {
         #expect(model.stages.count == 1)
         #expect(model.stages[0].error == nil)
         #expect(model.stages[0].fuelUnknown?.contains("Routing service timed out") == true)
-        #expect(model.stages[0].response?.distanceMeters == 300_000)
+        #expect(model.stages[0].response == nil)
+        #expect(model.errorMessage == "Couldn’t complete a fuel-safe route within your range. Your pins are unchanged.")
+        #expect(model.toast != RoutePlannerModel.routeReadyToast)
+        #expect(!model.hasRoute)
     }
 }
 

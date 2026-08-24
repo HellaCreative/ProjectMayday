@@ -38,6 +38,33 @@ struct UrbanCoreTests {
     }
 }
 
+struct CrossPackFuelBudgetTests {
+    @Test func currentHopReservesTheMinimumForEveryLaterProvince() {
+        let minima = [218_046.0, 45_300.0]
+        #expect(GraphPackStore.reservedChainHopCap(
+            totalCapMeters: 279_000,
+            completedMeters: 0,
+            hopIndex: 0,
+            hopCount: 2,
+            minimumHopMeters: minima
+        ) == 233_700)
+        #expect(GraphPackStore.reservedChainHopCap(
+            totalCapMeters: 279_000,
+            completedMeters: 230_000,
+            hopIndex: 1,
+            hopCount: 2,
+            minimumHopMeters: minima
+        ) == 49_000)
+        #expect(GraphPackStore.reservedChainHopCap(
+            totalCapMeters: 279_000,
+            completedMeters: 0,
+            hopIndex: 0,
+            hopCount: 2,
+            minimumHopMeters: []
+        ) == 279_000)
+    }
+}
+
 struct HopSearchPolicyTests {
     @Test func varietyHashIsStablePerSeed() {
         let a = HopSearchPolicy.hash(42, 100, 7)

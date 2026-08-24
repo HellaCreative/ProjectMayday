@@ -158,6 +158,25 @@ struct ItineraryBuilderTests {
         #expect(progressiveHopCounts.contains(4))
     }
 
+    @Test func finalFuelLegReceivesRegionalGraphMinimaForSeamBudgeting() async throws {
+        let points = [point(0), point(1)]
+        let stop = point(0.5)
+        let source = FakeRoutingSource(name: "live")
+        source.distances[key(points[0], stop)] = 230_000
+        source.distances[key(stop, points[1])] = 45_000
+        source.fuelStopResponses = [[fuelStop("fuel-1", at: stop)], []]
+        source.fuelGraphMeterResponses = [
+            [218_046, 45_300],
+            [45_000]
+        ]
+
+        let result = await build(points, source: source, usable: 279_000)
+
+        #expect(result.legs.count == 2)
+        #expect(source.routeRequests.first?.options?.regionalHopMinimumMeters == [218_046, 45_300])
+        #expect(source.routeRequests.last?.options?.regionalHopMinimumMeters == [45_000])
+    }
+
     @Test func fuelHopProfileReusesUpstreamAndReplansFromDepartureStation() async throws {
         let points = [point(0), point(1)]
         let pumps = [point(0.25), point(0.5), point(0.75)]
@@ -607,6 +626,7 @@ private final class FakeRoutingSource: RoutingSource {
     var distances: [String: Double] = [:]
     var fuelStops: [FuelChainStop] = []
     var fuelStopResponses: [[FuelChainStop]] = []
+    var fuelGraphMeterResponses: [[Double]] = []
     var fuelWindowCompleteResponses: [Bool] = []
     var routeRequests: [RouteRequest] = []
     var fuelChainRequests: [FuelChainRequest] = []
@@ -656,9 +676,12 @@ private final class FakeRoutingSource: RoutingSource {
         let windowComplete = fuelWindowCompleteResponses.isEmpty
             ? true
             : fuelWindowCompleteResponses.removeFirst()
+        let graphMeters = fuelGraphMeterResponses.isEmpty
+            ? nil
+            : fuelGraphMeterResponses.removeFirst()
         return FuelChainResponse(
             status: "complete", error: nil, message: nil, regionIds: ["test"],
-            stops: selectedStops, graphMeters: nil,
+            stops: selectedStops, graphMeters: graphMeters,
             diagnostics: FuelChainDiagnostics(
                 strategy: "fake", states: 1, dijkstraPops: 1,
                 matchedFuel: selectedStops.count, elapsedMs: 1

@@ -150,6 +150,7 @@ final class PackRoutingSource: RoutingSource {
             backtrackFactor: req.options?.backtrackFactor ?? 4,
             sessionSeed: req.options?.sessionSeed ?? 0,
             maxRouteMeters: req.options?.maxPathMeters,
+            regionalHopMinimumMeters: req.options?.regionalHopMinimumMeters ?? [],
             cleanMetroMultiplier: req.options?.cleanMetroMultiplier,
             avoidMotorways: req.options?.avoidMotorways == true,
             preferBackRoads: req.options?.preferBackRoads == true

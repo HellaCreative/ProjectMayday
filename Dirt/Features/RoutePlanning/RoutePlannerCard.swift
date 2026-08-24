@@ -477,6 +477,9 @@ struct RoutePlannerCard: View {
         if msg.contains("mapped road") || msg.contains("set a") || msg.contains("set point 1") || msg.contains("set your start") || msg.contains("your start") {
             return "Tap a mapped road near you for point 1. Point 2 stays where you put it."
         }
+        if msg.contains("fuel-safe route") {
+            return "Try again. If it repeats, choose Balanced for this leg or move point 2 closer."
+        }
         return "Try another profile (tap Balanced), turn on Allow unknown, or long-press to move point 2."
     }
 

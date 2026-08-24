@@ -6,6 +6,7 @@ const {
   coordinateInUrbanBoxes,
   coordinateNearUrbanBoxes,
   remainingChainPathCap,
+  reservedChainHopCap,
   topologySeamFromIndex,
   echoLegId
 } = require("./router");
@@ -40,6 +41,16 @@ test("fuel distance ceiling is cumulative across regional hops", () => {
   assert.equal(remainingChainPathCap({ maxPathMeters: 237_500 }, 0), 237_500);
   assert.equal(remainingChainPathCap({ maxPathMeters: 237_500 }, 151_250), 86_250);
   assert.equal(remainingChainPathCap({}, 151_250), null);
+});
+
+test("fuel distance ceiling reserves every later regional hop", () => {
+  const options = {
+    maxPathMeters: 279_000,
+    regionalHopMinimumMeters: [218_046, 45_300]
+  };
+  assert.equal(reservedChainHopCap(options, 0, 0, 2), 233_700);
+  assert.equal(reservedChainHopCap(options, 230_000, 1, 2), 49_000);
+  assert.equal(reservedChainHopCap({ maxPathMeters: 279_000 }, 0, 0, 2), 279_000);
 });
 
 test("deployment seam index resolves a shared non-urban OSM vertex without loading graphs", () => {

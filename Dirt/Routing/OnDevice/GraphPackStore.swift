@@ -591,7 +591,8 @@ final class GraphPackStore {
         arrivalEdgeId: String? = nil,
         backtrackFactor: Double = 4,
         sessionSeed: UInt64 = 0,
-        maxRouteMeters: Double? = nil
+        maxRouteMeters: Double? = nil,
+        regionalHopMinimumMeters: [Double] = []
     ) async -> OnDeviceRouter.Result? {
         switch await routeOnDeviceDetailed(
             from: from,
@@ -603,7 +604,8 @@ final class GraphPackStore {
             arrivalEdgeId: arrivalEdgeId,
             backtrackFactor: backtrackFactor,
             sessionSeed: sessionSeed,
-            maxRouteMeters: maxRouteMeters
+            maxRouteMeters: maxRouteMeters,
+            regionalHopMinimumMeters: regionalHopMinimumMeters
         ) {
         case .success(let result): return result
         case .failure: return nil
@@ -621,6 +623,7 @@ final class GraphPackStore {
         backtrackFactor: Double = 4,
         sessionSeed: UInt64 = 0,
         maxRouteMeters: Double? = nil,
+        regionalHopMinimumMeters: [Double] = [],
         cleanMetroMultiplier: Double? = nil,
         avoidMotorways: Bool = false,
         preferBackRoads: Bool = false
@@ -643,6 +646,7 @@ final class GraphPackStore {
                 backtrackFactor: backtrackFactor,
                 sessionSeed: sessionSeed,
                 maxRouteMeters: maxRouteMeters,
+                regionalHopMinimumMeters: regionalHopMinimumMeters,
                 cleanMetroMultiplier: cleanMetroMultiplier,
                 avoidMotorways: avoidMotorways,
                 preferBackRoads: preferBackRoads
@@ -682,6 +686,7 @@ final class GraphPackStore {
         backtrackFactor: Double,
         sessionSeed: UInt64,
         maxRouteMeters: Double?,
+        regionalHopMinimumMeters: [Double] = [],
         cleanMetroMultiplier: Double? = nil,
         avoidMotorways: Bool = false,
         preferBackRoads: Bool = false
@@ -709,6 +714,13 @@ final class GraphPackStore {
                 latitude: (anchor.latitude + reverse.latitude) / 2,
                 longitude: (anchor.longitude + reverse.longitude) / 2
             )
+            let firstHopCap = Self.reservedChainHopCap(
+                totalCapMeters: maxRouteMeters,
+                completedMeters: 0,
+                hopIndex: 0,
+                hopCount: 2,
+                minimumHopMeters: regionalHopMinimumMeters
+            )
 
             let hop1 = await routeOnDeviceInRegion(
                 from: from, to: seam, regionId: left,
@@ -717,7 +729,7 @@ final class GraphPackStore {
                 arrivalEdgeId: arrivalEdgeId,
                 backtrackFactor: backtrackFactor,
                 sessionSeed: sessionSeed,
-                maxRouteMeters: maxRouteMeters,
+                maxRouteMeters: firstHopCap,
                 cleanMetroMultiplier: cleanMetroMultiplier,
                 avoidMotorways: avoidMotorways,
                 preferBackRoads: preferBackRoads
@@ -734,7 +746,13 @@ final class GraphPackStore {
                 arrivalEdgeId: first.edgeIds.last ?? arrivalEdgeId,
                 backtrackFactor: backtrackFactor,
                 sessionSeed: sessionSeed,
-                maxRouteMeters: maxRouteMeters.map { max(0, $0 - first.distanceMeters) },
+                maxRouteMeters: Self.reservedChainHopCap(
+                    totalCapMeters: maxRouteMeters,
+                    completedMeters: first.distanceMeters,
+                    hopIndex: 1,
+                    hopCount: 2,
+                    minimumHopMeters: regionalHopMinimumMeters
+                ),
                 cleanMetroMultiplier: cleanMetroMultiplier,
                 avoidMotorways: avoidMotorways,
                 preferBackRoads: preferBackRoads
@@ -751,6 +769,27 @@ final class GraphPackStore {
             return .success(merged)
         }
         return .failure(lastFailure)
+    }
+
+    /// A fuel-leg cap belongs to the complete regional chain. Before the
+    /// current hop spends distance on Dirt detours, reserve the graph-proven
+    /// minimum for every later province hop.
+    nonisolated static func reservedChainHopCap(
+        totalCapMeters: Double?,
+        completedMeters: Double,
+        hopIndex: Int,
+        hopCount: Int,
+        minimumHopMeters: [Double]
+    ) -> Double? {
+        guard let totalCapMeters, totalCapMeters.isFinite else { return nil }
+        let remaining = max(0, totalCapMeters - max(0, completedMeters))
+        guard hopIndex >= 0,
+              hopIndex < hopCount,
+              minimumHopMeters.count == hopCount,
+              minimumHopMeters.allSatisfy({ $0.isFinite && $0 >= 0 })
+        else { return remaining }
+        let laterMinimum = minimumHopMeters.dropFirst(hopIndex + 1).reduce(0, +)
+        return max(0, remaining - laterMinimum)
     }
 
     private func routeOnDeviceInRegion(
