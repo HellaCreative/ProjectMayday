@@ -30,12 +30,13 @@ nonisolated enum HopSearchPolicy {
     /// The rider-entered range is already the safety limit; do not silently shave 5%.
     static let fuelMaxTank: Double = 1.0
 
-    /// 0 = comfort [0.50, 0.80], 1 = desperation >0.80, 2 = too-early <0.50.
+    /// 0 = comfort [0.50, 0.80], 1 = too-early <0.50, 2 = desperation >0.80.
+    /// Desperation is last so a slightly-early stop beats the tank wall.
     static func tankCommitBand(graphMeters: Double, tankMeters: Double) -> Int {
-        guard tankMeters > 0, graphMeters.isFinite else { return 2 }
+        guard tankMeters > 0, graphMeters.isFinite else { return 1 }
         let frac = graphMeters / tankMeters
         if frac >= fuelComfortLo && frac <= fuelComfortHi { return 0 }
-        if frac > fuelComfortHi { return 1 }
+        if frac < fuelComfortLo { return 1 }
         return 2
     }
     /// Finish to B only when the destination is inside the configured tank range.

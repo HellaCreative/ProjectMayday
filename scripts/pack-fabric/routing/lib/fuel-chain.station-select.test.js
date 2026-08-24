@@ -127,11 +127,11 @@ test("Dirt rejects a remote lateral pump when a forward corridor pump exists", (
   assert.ok(!ranked.some((row) => row.station.id === "lateral-loop"));
 });
 
-test("tank commit band is comfort, then desperation, then too-early", () => {
+test("tank commit band is comfort, then too-early, then desperation", () => {
   assert.equal(tankCommitBand(225_000, 450_000), 0);
   assert.equal(tankCommitBand(360_000, 450_000), 0);
-  assert.equal(tankCommitBand(449_800, 450_000), 1);
-  assert.equal(tankCommitBand(200_000, 450_000), 2);
+  assert.equal(tankCommitBand(200_000, 450_000), 1);
+  assert.equal(tankCommitBand(449_800, 450_000), 2);
 });
 
 test("comfort-band ranking beats a wall station; desperation only if comfort is empty", () => {
@@ -158,11 +158,7 @@ test("comfort-band ranking beats a wall station; desperation only if comfort is 
   const ranked = rankForwardFuel(
     [wall, early, comfort], start, destination, 450_000, new Set(), "dirt"
   );
-  assert.equal(ranked[0].station.id, "comfort");
-  assert.ok(ranked.findIndex((row) => row.station.id === "wall") >
-    ranked.findIndex((row) => row.station.id === "comfort"));
-  assert.ok(ranked.findIndex((row) => row.station.id === "early") >
-    ranked.findIndex((row) => row.station.id === "comfort"));
+  assert.deepEqual(ranked.map((row) => row.station.id), ["comfort", "early", "wall"]);
 
   const desperationOnly = rankForwardFuel(
     [wall, { ...wall, station: { id: "wall-closer" }, location: { lat: 45, lon: 1.8 }, graphMeters: 400_000 }],

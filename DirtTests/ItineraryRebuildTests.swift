@@ -124,8 +124,8 @@ struct HopSearchPolicyTests {
         #expect(HopSearchPolicy.fuelComfortLo == 0.50)
         #expect(HopSearchPolicy.fuelComfortHi == 0.80)
         #expect(HopSearchPolicy.tankCommitBand(graphMeters: 280_000, tankMeters: 450_000) == 0)
-        #expect(HopSearchPolicy.tankCommitBand(graphMeters: 449_800, tankMeters: 450_000) == 1)
-        #expect(HopSearchPolicy.tankCommitBand(graphMeters: 200_000, tankMeters: 450_000) == 2)
+        #expect(HopSearchPolicy.tankCommitBand(graphMeters: 200_000, tankMeters: 450_000) == 1)
+        #expect(HopSearchPolicy.tankCommitBand(graphMeters: 449_800, tankMeters: 450_000) == 2)
     }
 
     @Test func corridorWidthsMatchSpec() {

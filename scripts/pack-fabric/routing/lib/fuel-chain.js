@@ -307,17 +307,18 @@ function fuelPlanningSpan(profile) {
 }
 
 /**
- * 0 = comfort [0.50, 0.80] × cap, 1 = desperation >0.80, 2 = too-early <0.50.
+ * 0 = comfort [0.50, 0.80] × cap, 1 = too-early <0.50, 2 = desperation >0.80.
  * Dijkstra reachability stays at 100% usable range; this is the commit ranking.
+ * Desperation is last: a slightly-early stop beats stretching to the tank wall.
  * Lockstep: HopSearchPolicy.tankCommitBand.
  */
 function tankCommitBand(graphMeters, capMeters) {
   const cap = Number(capMeters);
   const meters = Number(graphMeters);
-  if (!(cap > 0) || !Number.isFinite(meters)) return 2;
+  if (!(cap > 0) || !Number.isFinite(meters)) return 1;
   const frac = meters / cap;
   if (frac >= FUEL_COMFORT_LO && frac <= FUEL_COMFORT_HI) return 0;
-  if (frac > FUEL_COMFORT_HI) return 1;
+  if (frac < FUEL_COMFORT_LO) return 1;
   return 2;
 }
 
@@ -702,14 +703,14 @@ async function planFuelChainOnRuntime({
       }
     }
     // Comfort-band first so Dirt's small batch cannot fill K with wall stations
-    // and starve the 50–80% pool. Desperation (>80%) only after that band is
-    // exhausted; too-early (<50%) last.
+    // and starve the 50–80% pool. Too-early next (still better than the wall);
+    // desperation (>80%) last, and only after the rest of the range is sampled.
     const comfort = unique.filter((row) => tankCommitBand(row.graphMeters, cap) === 0);
-    const desperation = unique.filter((row) => tankCommitBand(row.graphMeters, cap) === 1);
-    const early = unique.filter((row) => tankCommitBand(row.graphMeters, cap) === 2);
+    const early = unique.filter((row) => tankCommitBand(row.graphMeters, cap) === 1);
+    const desperation = unique.filter((row) => tankCommitBand(row.graphMeters, cap) === 2);
     fillFrom(comfort);
-    fillFrom(desperation);
     fillFrom(early);
+    fillFrom(desperation);
     for (const candidate of unique) {
       if (candidates.length >= effectiveK) break;
       if (!candidates.includes(candidate)) candidates.push(candidate);
@@ -822,6 +823,9 @@ async function planFuelChainOnRuntime({
           longitude: Number(candidate.location.lon),
           name: candidate.station.name || candidate.station.brand || "Fuel stop",
           meters: Math.round(row.meters),
+          graphMeters: Number.isFinite(candidate.graphMeters)
+            ? Math.round(candidate.graphMeters)
+            : null,
           dirtPct: row.dirtPct,
           validForward,
           remainingGraphMeters: Number.isFinite(candidate.remainingGraphMeters)
@@ -866,6 +870,7 @@ async function planFuelChainOnRuntime({
       ? Math.min(4, Math.max(1, candidates.length))
       : (profile === "balanced" ? Math.min(4, Math.max(1, candidates.length)) : Math.max(1, candidates.length));
     const comfortAvailable = unique.some((row) => tankCommitBand(row.graphMeters, cap) === 0);
+    const earlyAvailable = unique.some((row) => tankCommitBand(row.graphMeters, cap) === 1);
     for (let startRank = 0; startRank < candidates.length; startRank += batchSize) {
       if (rows.length > 0 && Date.now() >= deadline) break;
       const batch = candidates.slice(startRank, startRank + batchSize);
@@ -886,11 +891,14 @@ async function planFuelChainOnRuntime({
       const comfortFit = rows.some((evaluated) =>
         evaluated.fits && evaluated.validForward && tankCommitBand(evaluated.meters, cap) === 0
       );
+      const earlyFit = rows.some((evaluated) =>
+        evaluated.fits && evaluated.validForward && tankCommitBand(evaluated.meters, cap) === 1
+      );
       if (
         adventureProfile &&
         rows.length >= 2 &&
         hasProfileQualityChoice &&
-        (comfortFit || !comfortAvailable)
+        (comfortFit || (!comfortAvailable && (earlyFit || !earlyAvailable)))
       ) break;
     }
     const elapsed = Date.now() - hopStarted;
