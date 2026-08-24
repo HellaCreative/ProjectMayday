@@ -30,7 +30,7 @@ nonisolated enum RoadTierStats {
     static let cleanTierCost: [RoadTier: Double] = [
         .collector: 0.86,
         .localPaved: 0.92,
-        .arterial: 5.5,
+        .arterial: 1.4, // mild connector; not a near-ban (lockstep with road-tier.js)
         .service: 2.8,
         .destination: 1.15,
         .trunk: 16.0,

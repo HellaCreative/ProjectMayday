@@ -44,12 +44,13 @@ const ROAD_TIER_MAP = Object.freeze({
 
 /**
  * Clean km multipliers by tier (profile=cleanest + leaves only).
- * Collector/local_paved preferred; arterial connector; trunk/motorway avoided.
+ * Collector/local_paved preferred; arterial is a mild connector (1.4, not a
+ * near-ban); trunk/motorway avoided.
  */
 const CLEAN_TIER_COST = Object.freeze({
   [ROAD_TIER.COLLECTOR]: 0.86,
   [ROAD_TIER.LOCAL_PAVED]: 0.92,
-  [ROAD_TIER.ARTERIAL]: 5.5,
+  [ROAD_TIER.ARTERIAL]: 1.4,
   [ROAD_TIER.SERVICE]: 2.8,
   [ROAD_TIER.DESTINATION]: 1.15,
   [ROAD_TIER.TRUNK]: 16.0,

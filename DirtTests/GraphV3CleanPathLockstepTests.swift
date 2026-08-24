@@ -40,6 +40,7 @@ struct GraphV3CleanPathLockstepTests {
         let collector = RoadTierStats.cleanLeafCostMult(tier: .collector, family: .paved)
         let arterial = RoadTierStats.cleanLeafCostMult(tier: .arterial, family: .paved)
         let motorway = RoadTierStats.cleanLeafCostMult(tier: .motorway, family: .paved)
+        #expect(arterial == 1.4)
         #expect(collector < arterial)
         #expect(arterial < motorway)
     }

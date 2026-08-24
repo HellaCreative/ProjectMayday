@@ -68,6 +68,7 @@ describe("road-tier E2 Clean", () => {
     const collector = cleanLeafCostMult(ROAD_TIER.COLLECTOR, "paved");
     const arterial = cleanLeafCostMult(ROAD_TIER.ARTERIAL, "paved");
     const motorway = cleanLeafCostMult(ROAD_TIER.MOTORWAY, "paved");
+    assert.equal(arterial, 1.4);
     assert.ok(collector < arterial);
     assert.ok(arterial < motorway);
   });
