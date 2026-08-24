@@ -101,6 +101,16 @@ final class MapState {
         case resetNorth
     }
 
+    enum RouteBuildCameraStep {
+        case start(RouteCoordinate)
+        case completedLeg([RouteCoordinate])
+    }
+
+    struct RouteBuildCameraSequence {
+        let id: UUID
+        var steps: [RouteBuildCameraStep]
+    }
+
     /// Follow locked with course-up vs north-up while following.
     enum FollowMode: Equatable {
         case off
@@ -114,6 +124,9 @@ final class MapState {
     private(set) var markerGeneration = 0
     private(set) var hasFuelReplacementCandidates = false
     private(set) var camera: (id: UUID, command: CameraCommand)?
+    /// Ordered camera story for a pin-triggered route build. The coordinator
+    /// consumes every step, so fast fuel responses cannot overwrite one another.
+    private(set) var routeBuildCameraSequence: RouteBuildCameraSequence?
     /// Bumps when the basemap style URL changes so MapLibre reloads.
     private(set) var styleGeneration = 0
     private(set) var styleURL: URL = MapStyleCatalog.styleURL()
@@ -378,18 +391,41 @@ final class MapState {
     }
 
     func fly(to coordinate: RouteCoordinate, zoom: Double = 13) {
+        cancelRouteBuildCamera()
         camera = (UUID(), .center(latitude: coordinate.latitude, longitude: coordinate.longitude, zoom: zoom))
     }
 
     /// Frame coordinates in view. Releases location-follow so course-up / zoom-lock
     /// cannot yank the camera back after an overview fit (Zoom to Route).
     func fit(_ coordinates: [RouteCoordinate]) {
+        cancelRouteBuildCamera()
         stopFollowingForOverview()
         guard coordinates.count > 1 else {
             if let only = coordinates.first { fly(to: only) }
             return
         }
         camera = (UUID(), .fit(coordinates))
+    }
+
+    /// Start the leg-by-leg planning camera at the rider's first anchor.
+    func beginRouteBuildCamera(at coordinate: RouteCoordinate) {
+        stopFollowingForOverview()
+        routeBuildCameraSequence = RouteBuildCameraSequence(
+            id: UUID(),
+            steps: [.start(coordinate)]
+        )
+    }
+
+    /// Add the exact geometry that just became visible on the map.
+    func appendCompletedRouteBuildLeg(_ coordinates: [RouteCoordinate]) {
+        guard coordinates.count >= 2, var sequence = routeBuildCameraSequence else { return }
+        sequence.steps.append(.completedLeg(coordinates))
+        routeBuildCameraSequence = sequence
+    }
+
+    /// Rider gestures and deliberate camera controls always win immediately.
+    func cancelRouteBuildCamera() {
+        routeBuildCameraSequence = nil
     }
 
     /// Drop user-tracking before overview framing (fit-route, stage focus, etc.).

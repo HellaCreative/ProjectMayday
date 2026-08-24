@@ -151,6 +151,11 @@ final class RoutePlannerModel {
     }
     var showUnknownAck = false
 
+    /// A pin-triggered build gets one spatial story: first anchor, then each
+    /// newly committed fuel leg. Routine option reroutes do not replay it.
+    private var cameraBuildGeneration: Int?
+    private var cameraBuildLegKeys: Set<String> = []
+
     // From here
     private(set) var destination: RouteCoordinate?
     private(set) var destinationName: String?
@@ -553,10 +558,26 @@ final class RoutePlannerModel {
         }
 
         guard let fromLeg = change.rebuildFromLegIndex else {
+            cameraBuildGeneration = nil
+            cameraBuildLegKeys = []
+            mapState.cancelRouteBuildCamera()
             built = BuiltItinerary.empty(for: itinerary)
             isRouting = false
             refreshMap()
             return
+        }
+        if shouldChoreographCamera(for: action, source: source),
+           let first = itinerary.waypoints.first?.coordinate {
+            cameraBuildGeneration = itinerary.generation
+            cameraBuildLegKeys = []
+            mapState.beginRouteBuildCamera(at: first)
+            RoutingDebugLog.shared.event(
+                "camera build begin gen=\(itinerary.generation) source=\(source)"
+            )
+        } else {
+            cameraBuildGeneration = nil
+            cameraBuildLegKeys = []
+            mapState.cancelRouteBuildCamera()
         }
         startCanonicalBuild(
             from: fromLeg,
@@ -626,11 +647,13 @@ final class RoutePlannerModel {
                 onProgress: { [weak self] progress in
                     guard let self, self.itinerary.generation == progress.generation else { return }
                     self.built = progress
+                    self.advanceRouteBuildCamera(with: progress)
                     self.refreshMap()
                 }
             )
             guard !Task.isCancelled, self.itinerary.generation == result.generation else { return }
             self.built = result
+            self.advanceRouteBuildCamera(with: result)
             let currentGapIDs = Set(result.riderLegStatus.values.compactMap { status -> String? in
                 if case .gap(let gap) = status { return gap.id }
                 return nil
@@ -853,6 +876,7 @@ final class RoutePlannerModel {
 
     private func beginFromHereDestination(_ point: RouteCoordinate) {
         buildTask?.cancel()
+        mapState.cancelRouteBuildCamera()
         built = nil
         itinerary = RiderItinerary()
         fromHereResponse = nil
@@ -875,6 +899,7 @@ final class RoutePlannerModel {
     private func beginFromHereStartOverride(_ point: RouteCoordinate) {
         guard destination != nil else { return }
         buildTask?.cancel()
+        mapState.cancelRouteBuildCamera()
         built = nil
         itinerary = RiderItinerary()
         fromHereResponse = nil
@@ -902,6 +927,42 @@ final class RoutePlannerModel {
 
     private func appendPlanPoint(_ point: RouteCoordinate) {
         apply(.append(coordinate: point), source: "longPress")
+    }
+
+    private func shouldChoreographCamera(
+        for action: ItineraryAction,
+        source: String
+    ) -> Bool {
+        switch action {
+        case .append, .insert:
+            return true
+        case .replaceAll:
+            return source == "fromHere"
+        default:
+            return false
+        }
+    }
+
+    private func advanceRouteBuildCamera(with progress: BuiltItinerary) {
+        guard cameraBuildGeneration == progress.generation else { return }
+        for leg in progress.legs {
+            let key = routeBuildCameraKey(for: leg)
+            let coordinates = leg.response.coordinates
+            guard coordinates.count >= 2 else { continue }
+            guard cameraBuildLegKeys.insert(key).inserted else { continue }
+            mapState.appendCompletedRouteBuildLeg(coordinates)
+            RoutingDebugLog.shared.event(
+                "camera build leg gen=\(progress.generation) "
+                    + "number=\(cameraBuildLegKeys.count) points=\(coordinates.count)"
+            )
+        }
+    }
+
+    private func routeBuildCameraKey(for leg: BuiltLeg) -> String {
+        let meters = Int((leg.response.distanceMeters ?? 0).rounded())
+        let station = leg.endsAtFuelStop?.stationID ?? "waypoint"
+        return "\(leg.riderLegID.uuidString)|\(leg.fromCoordinate.latitude),\(leg.fromCoordinate.longitude)"
+            + ">\(leg.toCoordinate.latitude),\(leg.toCoordinate.longitude)|\(station)|\(meters)"
     }
 
     /// Per-stage surface mode (each stage is its own on-device routing request).
@@ -1074,7 +1135,6 @@ final class RoutePlannerModel {
             ),
             source: "fromHere"
         )
-        mapState.fit([origin, requestedDest])
     }
 
     private static let offGraphStartMessage =

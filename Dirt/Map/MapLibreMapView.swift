@@ -182,6 +182,11 @@ struct MapLibreMapView: UIViewRepresentable {
         private var appliedPinSelectionGeneration = -1
         private var appliedNavigatingLock: Bool?
         private var appliedCameraID: UUID?
+        private var routeBuildSequenceID: UUID?
+        private var importedRouteBuildStepCount = 0
+        private var pendingRouteBuildSteps: [MapState.RouteBuildCameraStep] = []
+        private var routeBuildCameraIsMoving = false
+        private var routeBuildCameraRunID = UUID()
         private var followApplied: MapState.FollowMode?
         private var followGenerationApplied = -1
         private var annotations: [DirtAnnotation] = []
@@ -612,6 +617,7 @@ struct MapLibreMapView: UIViewRepresentable {
             // Explicit camera (fit / fly) before follow — otherwise the follow
             // zoom-lock can immediately undo a Zoom-to-Route after recenter.
             syncCamera(mapView: mapView)
+            syncRouteBuildCamera(mapView: mapView)
             syncFollow(mapView: mapView)
             syncMarkers(mapView: mapView)
             syncPinSelection(mapView: mapView)
@@ -932,6 +938,120 @@ struct MapLibreMapView: UIViewRepresentable {
             }
         }
 
+        private func syncRouteBuildCamera(mapView: MLNMapView) {
+            guard let sequence = state.routeBuildCameraSequence else {
+                cancelRouteBuildCameraPlayback()
+                return
+            }
+            if routeBuildSequenceID != sequence.id {
+                cancelRouteBuildCameraPlayback()
+                routeBuildSequenceID = sequence.id
+                importedRouteBuildStepCount = 0
+            }
+            if sequence.steps.count > importedRouteBuildStepCount {
+                pendingRouteBuildSteps.append(
+                    contentsOf: sequence.steps[importedRouteBuildStepCount...]
+                )
+                importedRouteBuildStepCount = sequence.steps.count
+            }
+            playNextRouteBuildCameraStep(on: mapView)
+        }
+
+        private func playNextRouteBuildCameraStep(on mapView: MLNMapView) {
+            guard !routeBuildCameraIsMoving, !pendingRouteBuildSteps.isEmpty else { return }
+            routeBuildCameraIsMoving = true
+            let step = pendingRouteBuildSteps.removeFirst()
+            let runID = routeBuildCameraRunID
+            let reduceMotion = UIAccessibility.isReduceMotionEnabled
+            mapView.userTrackingMode = .none
+            suppressFollowBreak(for: 1.2)
+            // Set pitch before moving the camera. A second camera write during a
+            // bounds animation is the flick the rider reported.
+            applyPitch(on: mapView, animated: false)
+
+            switch step {
+            case .start(let coordinate):
+                mapView.setCenter(
+                    coordinate.locationCoordinate,
+                    zoomLevel: 12.5,
+                    direction: mapView.direction,
+                    animated: !reduceMotion
+                )
+                finishRouteBuildCameraStep(
+                    on: mapView,
+                    runID: runID,
+                    delay: reduceMotion ? 0.05 : 0.45
+                )
+
+            case .completedLeg(let coordinates):
+                guard let bounds = coordinateBounds(for: coordinates) else {
+                    finishRouteBuildCameraStep(on: mapView, runID: runID, delay: 0)
+                    return
+                }
+                let insets = planningCameraInsets(for: mapView)
+                if reduceMotion {
+                    mapView.setVisibleCoordinateBounds(
+                        bounds,
+                        edgePadding: insets,
+                        animated: false,
+                        completionHandler: nil
+                    )
+                    finishRouteBuildCameraStep(on: mapView, runID: runID, delay: 0.05)
+                } else {
+                    mapView.setVisibleCoordinateBounds(
+                        bounds,
+                        edgePadding: insets,
+                        animated: true
+                    ) { [weak self, weak mapView] in
+                        guard let self, let mapView else { return }
+                        self.finishRouteBuildCameraStep(on: mapView, runID: runID, delay: 0.18)
+                    }
+                }
+            }
+        }
+
+        private func finishRouteBuildCameraStep(
+            on mapView: MLNMapView,
+            runID: UUID,
+            delay: TimeInterval
+        ) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self, weak mapView] in
+                guard let self, let mapView, self.routeBuildCameraRunID == runID else { return }
+                self.routeBuildCameraIsMoving = false
+                self.playNextRouteBuildCameraStep(on: mapView)
+            }
+        }
+
+        private func cancelRouteBuildCameraPlayback() {
+            routeBuildCameraRunID = UUID()
+            routeBuildSequenceID = nil
+            importedRouteBuildStepCount = 0
+            pendingRouteBuildSteps = []
+            routeBuildCameraIsMoving = false
+        }
+
+        private func coordinateBounds(for coordinates: [RouteCoordinate]) -> MLNCoordinateBounds? {
+            guard let first = coordinates.first else { return nil }
+            var bounds = MLNCoordinateBounds(
+                sw: first.locationCoordinate,
+                ne: first.locationCoordinate
+            )
+            for coordinate in coordinates.dropFirst() {
+                bounds.sw.latitude = min(bounds.sw.latitude, coordinate.latitude)
+                bounds.sw.longitude = min(bounds.sw.longitude, coordinate.longitude)
+                bounds.ne.latitude = max(bounds.ne.latitude, coordinate.latitude)
+                bounds.ne.longitude = max(bounds.ne.longitude, coordinate.longitude)
+            }
+            return bounds
+        }
+
+        private func planningCameraInsets(for mapView: MLNMapView) -> UIEdgeInsets {
+            let overlay = state.overlayContentInsets
+            let sheetOpen = overlay.bottom > 1 || overlay.left > 1 || overlay.right > 1
+            let bottomChrome: CGFloat = sheetOpen ? 64 : 120
+            return UIEdgeInsets(top: 88, left: 40, bottom: bottomChrome, right: 40)
+        }
+
         private func applyPitch(on mapView: MLNMapView, animated: Bool) {
             let pitch = state.desiredPitch
             guard abs(mapView.camera.pitch - pitch) > 0.5 else { return }
@@ -1065,6 +1185,8 @@ struct MapLibreMapView: UIViewRepresentable {
             // User gestures always release follow — even during the post-recenter
             // suppress window (that window only shields programmatic setCenter/zoom).
             if !reason.isDisjoint(with: gestureBits) {
+                cancelRouteBuildCameraPlayback()
+                state.cancelRouteBuildCamera()
                 state.breakFollowFromGesture()
                 return
             }
