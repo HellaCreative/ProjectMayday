@@ -155,7 +155,9 @@ final class ItineraryBuilder {
 
         var waypointFuelStops: [UUID: FuelStop] = [:]
         var firstReachableFuel = [Int: Double]()
-        let fuelDeadline = fuelReplan ? Date().addingTimeInterval(20) : .distantFuture
+        // Look-ahead is advisory. It gets a small budget of its own and must
+        // never consume the 20 seconds reserved for building the actual chain.
+        let fuelProbeDeadline = fuelReplan ? Date().addingTimeInterval(3) : .distantFuture
         if fuelReplan, baselineFailure == nil {
             RoutingDebugLog.shared.event(
                 "fuel replan fromLeg=0 reason=\(startIndex == 0 ? "build" : "edit")"
@@ -174,8 +176,20 @@ final class ItineraryBuilder {
                     )
                 }
             }
-            for index in itinerary.legs.indices where itinerary.legs.count > 1 {
-                guard Date() < fuelDeadline else { break }
+            let knownOnwardFuelDistance = distanceToNextFuelOpportunity(
+                itinerary: itinerary,
+                baseline: baseline,
+                firstReachableFuel: [:],
+                waypointFuelStops: waypointFuelStops
+            )
+            // Index zero is never an onward leg for another rider leg. A leg
+            // whose known route already reaches the next reset/destination in
+            // one tank also needs no station probe. This is the common
+            // Point 1 -> Point 2 -> Point 3 edit and must build immediately.
+            for index in itinerary.legs.indices where itinerary.legs.count > 1 && index > 0 {
+                guard Date() < fuelProbeDeadline else { break }
+                guard (knownOnwardFuelDistance[index] ?? .infinity) > fuel.usableMeters + 1
+                else { continue }
                 guard let base = baseline[index],
                       let meters = base.distanceMeters
                 else { continue }
@@ -196,8 +210,8 @@ final class ItineraryBuilder {
                     avoidEdgeIds: Array(itinerary.impassableEdgeIDs),
                     probeFirstReachableStation: true,
                     windowTimeBudgetMs: min(
-                        5_800,
-                        max(100, Int(fuelDeadline.timeIntervalSinceNow * 1_000))
+                        2_500,
+                        max(100, Int(fuelProbeDeadline.timeIntervalSinceNow * 1_000))
                     )
                 ))
                 if let distance = probe?.firstReachableStationMeters {
@@ -212,6 +226,10 @@ final class ItineraryBuilder {
                 waypointFuelStops: waypointFuelStops
             )
         }
+
+        // Actual construction always receives its complete budget regardless
+        // of whether an optional look-ahead probe succeeded, failed, or timed out.
+        let fuelDeadline = fuelReplan ? Date().addingTimeInterval(20) : .distantFuture
 
         let onwardFuelDistance = distanceToNextFuelOpportunity(
             itinerary: itinerary,
@@ -235,18 +253,28 @@ final class ItineraryBuilder {
                 let failedIndex = min(max(0, finalStartIndex), itinerary.legs.count - 1)
                 let failedID = itinerary.legs[failedIndex].id
                 let message = "Fuel planning reached its 20-second itinerary budget."
-                if baseline[failedIndex] != nil {
-                    (committed, _) = markingFuelGap(
-                        itinerary: itinerary,
-                        baseline: baseline,
-                        lastBuildable: lastBuildable,
-                        committed: committed,
-                        index: failedIndex,
-                        fuel: fuel,
-                        fuelUsed: 0,
-                        reason: message
+                committed = fuelAttemptBase
+                var markedUnknown = false
+                for index in finalStartIndex..<lastBuildable {
+                    guard let response = baseline[index] else { continue }
+                    let riderLeg = itinerary.legs[index]
+                    committed = replacing(
+                        riderLegID: riderLeg.id,
+                        with: [unconstrainedFuelLeg(
+                            riderLeg: riderLeg,
+                            from: itinerary.waypoints[index].coordinate,
+                            to: itinerary.waypoints[index + 1].coordinate,
+                            response: response,
+                            fuelUsedAtStart: 0
+                        )],
+                        in: committed,
+                        status: .fuelUnknown(index == failedIndex
+                            ? message
+                            : "Fuel continuity is unknown after the interrupted plan.")
                     )
-                } else {
+                    markedUnknown = true
+                }
+                if !markedUnknown {
                     committed = markingFailed(failedID, message: message, in: committed)
                 }
                 RoutingDebugLog.shared.event(

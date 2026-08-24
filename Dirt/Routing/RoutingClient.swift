@@ -114,7 +114,11 @@ final class RoutingClient {
         // Long/cross-pack fuel plans are deliberately split into small
         // windows. A stalled window must fail quickly so the client can retry
         // or backtrack without waiting for a platform 504.
-        urlRequest.timeoutInterval = request.fuel.windowMaxStops == nil ? timeout : 6
+        let requestedBudget = request.fuel.windowTimeBudgetMs.map {
+            max(1, Double($0) / 1_000 + 1.5)
+        }
+        let defaultWindowTimeout = request.fuel.windowMaxStops == nil ? timeout : 6
+        urlRequest.timeoutInterval = min(defaultWindowTimeout, requestedBudget ?? defaultWindowTimeout)
 
         let (data, urlResponse) = try await session.data(for: urlRequest)
         let http = urlResponse as? HTTPURLResponse

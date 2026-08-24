@@ -335,7 +335,44 @@ struct ItineraryBuilderTests {
         #expect(result.legs.first?.fuelUsedOnArrivalMeters == 0)
         #expect(result.legs.last?.fuelUsedOnArrivalMeters == 200_000)
         #expect(result.waypointFuelStops.values.first?.name == "irving-antigonish")
-        #expect(source.fuelChainRequests.filter { $0.fuel.probeFirstReachableStation != true }.isEmpty)
+        #expect(source.fuelChainRequests.isEmpty)
+    }
+
+    @Test func appendingPointThreeKeepsAutomaticFuelContinuityWithoutUnneededProbes() async throws {
+        let point1 = point(0)
+        let point2 = point(1)
+        let point3 = point(2)
+        let automaticFuel = point(0.72)
+        let source = FakeRoutingSource(name: "live")
+        source.distances[key(point1, point2)] = 220_000
+        source.distances[key(point1, automaticFuel)] = 150_000
+        source.distances[key(automaticFuel, point2)] = 70_000
+        source.distances[key(point2, point3)] = 100_000
+        source.fuelStops = [fuelStop("automatic-f1", at: automaticFuel)]
+        let builder = ItineraryBuilder()
+        let fuel = FuelRangePrefs.Snapshot(
+            tankMeters: 200_000, usableMeters: 190_000, reservePercent: 5
+        )
+
+        let initial = makeItinerary([point1, point2], profile: .balanced)
+        let first = await builder.build(
+            initial, from: 0, reuse: nil, fuel: fuel,
+            source: .fixed(source), onProgress: { _ in }
+        )
+        #expect(first.legs.compactMap(\.endsAtFuelStop?.stationID) == ["automatic-f1"])
+
+        source.fuelChainRequests.removeAll()
+        let change = reduce(initial, .append(coordinate: point3))
+        let rebuildIndex = try #require(change.rebuildFromLegIndex)
+        let rebuilt = await builder.build(
+            change.itinerary, from: rebuildIndex, reuse: first, fuel: fuel,
+            source: .fixed(source), onProgress: { _ in }
+        )
+
+        #expect(rebuilt.legs.compactMap(\.endsAtFuelStop?.stationID) == ["automatic-f1"])
+        #expect(rebuilt.riderLegStatus.values.allSatisfy { $0 == .built })
+        #expect(rebuilt.legs.last?.fuelUsedOnArrivalMeters == 170_000)
+        #expect(source.fuelChainRequests.filter { $0.fuel.probeFirstReachableStation == true }.isEmpty)
     }
 
     @Test func ordinaryWaypointNeverResetsFuel() async throws {
@@ -376,6 +413,7 @@ struct ItineraryBuilderTests {
         let on = await build([origin, onStation, destination], source: source, usable: 237_500)
         #expect(on.waypointFuelStops.values.first?.name == "irving-antigonish")
         #expect(on.legs.compactMap(\.endsAtFuelStop).isEmpty)
+        #expect(source.fuelChainRequests.isEmpty)
 
         source.fuelChainRequests.removeAll()
         let off = await build([origin, dragged, destination], source: source, usable: 237_500)
