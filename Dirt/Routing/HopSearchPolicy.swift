@@ -20,11 +20,24 @@ nonisolated enum HopSearchPolicy {
     static let balancedDirtHi: Double = 0.55
     /// Ratio buckets (5% each). Meter-span buckets were coarser than the 10-point band.
     static let balancedBuckets: Int = 20
-    /// Fuel: prefer a pump around this fraction of tank on the hop.
-    static let fuelPreferTank: Double = 0.82
-    static let fuelMinTank: Double = 0.40
+    /// Comfort refuel window as a fraction of usable tank. Lockstep: fuel-chain.js.
+    static let fuelComfortLo: Double = 0.50
+    static let fuelComfortHi: Double = 0.80
+    /// Too-early below this. Dijkstra reachability still uses fuelMaxTank = 1.0.
+    static let fuelMinTank: Double = 0.50
+    /// Midpoint of the comfort window (ranking uses the window, not this target).
+    static let fuelPreferTank: Double = 0.65
     /// The rider-entered range is already the safety limit; do not silently shave 5%.
     static let fuelMaxTank: Double = 1.0
+
+    /// 0 = comfort [0.50, 0.80], 1 = desperation >0.80, 2 = too-early <0.50.
+    static func tankCommitBand(graphMeters: Double, tankMeters: Double) -> Int {
+        guard tankMeters > 0, graphMeters.isFinite else { return 2 }
+        let frac = graphMeters / tankMeters
+        if frac >= fuelComfortLo && frac <= fuelComfortHi { return 0 }
+        if frac > fuelComfortHi { return 1 }
+        return 2
+    }
     /// Finish to B only when the destination is inside the configured tank range.
     static let fuelSkipIfWithin: Double = 1.0
     /// Pass 2 (profile / pavement / balanced) must finish well under a minute.

@@ -119,6 +119,13 @@ struct HopSearchPolicyTests {
         #expect(HopSearchPolicy.pass2PopCap == 400_000)
         #expect(HopSearchPolicy.pass2PopCap < 8_000_000)
         #expect(HopSearchPolicy.fuelMaxTank == 1.0)
+        #expect(HopSearchPolicy.fuelMinTank == 0.50)
+        #expect(HopSearchPolicy.fuelPreferTank == 0.65)
+        #expect(HopSearchPolicy.fuelComfortLo == 0.50)
+        #expect(HopSearchPolicy.fuelComfortHi == 0.80)
+        #expect(HopSearchPolicy.tankCommitBand(graphMeters: 280_000, tankMeters: 450_000) == 0)
+        #expect(HopSearchPolicy.tankCommitBand(graphMeters: 449_800, tankMeters: 450_000) == 1)
+        #expect(HopSearchPolicy.tankCommitBand(graphMeters: 200_000, tankMeters: 450_000) == 2)
     }
 
     @Test func corridorWidthsMatchSpec() {
@@ -249,6 +256,23 @@ struct FuelItineraryTests {
             sessionSeed: 1
         )
         #expect(ranked.first?.id == "osm:forward")
+    }
+
+    @Test func rankedPrefersComfortWindowOverTankWall() {
+        let start = RouteCoordinate(longitude: -63.5752, latitude: 44.6488)
+        let end = RouteCoordinate(longitude: -60.1942, latitude: 46.1368)
+        let windowStop = GeoMath.interpolate(start, end, fraction: 0.52)
+        let wallStop = GeoMath.interpolate(start, end, fraction: 0.82)
+        let ranked = FuelItinerary.rankedProgressFuel(
+            fuels: [poi("wall", wallStop), poi("window", windowStop)],
+            from: start,
+            to: end,
+            reachableMeters: ["osm:wall": 449_800, "osm:window": 280_000],
+            tankMeters: 450_000,
+            sessionSeed: 1
+        )
+        #expect(ranked.first?.id == "osm:window")
+        #expect(ranked.map(\.id) == ["osm:window", "osm:wall"])
     }
 
     @Test func progressAlongABIsPositiveTowardB() {

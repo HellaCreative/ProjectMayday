@@ -81,10 +81,6 @@ nonisolated enum FuelItinerary {
         let cumulative = GeoMath.cumulativeMeters(routeCoordinates)
         guard let routeMeters = cumulative.last, routeMeters > 13_000 else { return [] }
         let farthestAlong = min(tankMeters, routeMeters - 5_000)
-        let preferredAlong = min(
-            tankMeters * HopSearchPolicy.fuelPreferTank,
-            farthestAlong
-        )
 
         struct Candidate {
             var fuel: POIFeature
@@ -121,15 +117,17 @@ nonisolated enum FuelItinerary {
         }
 
         return candidates.sorted { a, b in
-            let aInBand = a.alongMeters >= tankMeters * HopSearchPolicy.fuelMinTank
-            let bInBand = b.alongMeters >= tankMeters * HopSearchPolicy.fuelMinTank
-            if aInBand != bInBand { return aInBand }
-            let aScore = abs(a.alongMeters - preferredAlong) + a.offMeters * 2
-            let bScore = abs(b.alongMeters - preferredAlong) + b.offMeters * 2
-            if abs(aScore - bScore) > 1_000 { return aScore < bScore }
+            let ba = HopSearchPolicy.tankCommitBand(
+                graphMeters: a.alongMeters, tankMeters: tankMeters
+            )
+            let bb = HopSearchPolicy.tankCommitBand(
+                graphMeters: b.alongMeters, tankMeters: tankMeters
+            )
+            if ba != bb { return ba < bb }
             if abs(a.alongMeters - b.alongMeters) > 1_000 {
                 return a.alongMeters > b.alongMeters
             }
+            if abs(a.offMeters - b.offMeters) > 1_000 { return a.offMeters < b.offMeters }
             let ha = HopSearchPolicy.hash(
                 sessionSeed, Int(a.alongMeters), Int(a.airMeters)
             )
@@ -209,20 +207,19 @@ nonisolated enum FuelItinerary {
         }
         guard !cands.isEmpty else { return [] }
 
-        let prefer = tankMeters * HopSearchPolicy.fuelPreferTank
         return cands.sorted { a, b in
             // Preserve an off-axis pump as a last-resort connectivity fallback,
             // but never rank it above a route-coherent forward pump.
             if a.coherent != b.coherent { return a.coherent }
-            let aInBand = a.graphMeters >= tankMeters * HopSearchPolicy.fuelMinTank
-                && a.graphMeters <= tankMeters * HopSearchPolicy.fuelMaxTank
-            let bInBand = b.graphMeters >= tankMeters * HopSearchPolicy.fuelMinTank
-                && b.graphMeters <= tankMeters * HopSearchPolicy.fuelMaxTank
-            if aInBand != bInBand { return aInBand }
+            let ba = HopSearchPolicy.tankCommitBand(
+                graphMeters: a.graphMeters, tankMeters: tankMeters
+            )
+            let bb = HopSearchPolicy.tankCommitBand(
+                graphMeters: b.graphMeters, tankMeters: tankMeters
+            )
+            if ba != bb { return ba < bb }
             if abs(a.progress - b.progress) > 2_000 { return a.progress > b.progress }
-            let da = abs(a.graphMeters - prefer)
-            let db = abs(b.graphMeters - prefer)
-            if abs(da - db) > 1 { return da < db }
+            if abs(a.crossTrack - b.crossTrack) > 5_000 { return a.crossTrack < b.crossTrack }
             let ha = HopSearchPolicy.hash(sessionSeed, Int(a.progress), Int(a.graphMeters))
             let hb = HopSearchPolicy.hash(sessionSeed, Int(b.progress), Int(b.graphMeters))
             if ha != hb { return ha < hb }

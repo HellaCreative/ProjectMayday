@@ -2,7 +2,12 @@
 
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const { planFuelChainOnRuntime, rankForwardFuel, FUEL_CHAIN_SERVICE_VERSION } = require("./fuel-chain");
+const {
+  planFuelChainOnRuntime,
+  rankForwardFuel,
+  tankCommitBand,
+  FUEL_CHAIN_SERVICE_VERSION
+} = require("./fuel-chain");
 const { lineRuntime } = require("./fuel-chain.test-fixture");
 
 function station(id, lon) {
@@ -49,12 +54,12 @@ test("unknown profile plans as Balanced", async () => {
   assert.equal(unknown.stops[0].id, balanced.stops[0].id);
 });
 
-test("Clean picks the forward paved-side station while Dirt picks the dirt-side station", async () => {
-  const clean = await plan("cleanest");
-  const dirt = await plan("dirt");
-  assert.equal(clean.ok, true);
-  assert.equal(clean.stops[0].id, "far-paved");
-  assert.equal(dirt.stops[0].id, "mid-dirt");
+test("all profiles prefer a 50-80% tank-window stop over a wall-stretch station", async () => {
+  for (const profile of ["dirt", "balanced", "cleanest"]) {
+    const result = await plan(profile);
+    assert.equal(result.ok, true, profile);
+    assert.equal(result.stops[0].id, "mid-dirt", profile);
+  }
 });
 
 
@@ -120,4 +125,48 @@ test("Dirt rejects a remote lateral pump when a forward corridor pump exists", (
   );
   assert.equal(ranked[0].station.id, "forward");
   assert.ok(!ranked.some((row) => row.station.id === "lateral-loop"));
+});
+
+test("tank commit band is comfort, then desperation, then too-early", () => {
+  assert.equal(tankCommitBand(225_000, 450_000), 0);
+  assert.equal(tankCommitBand(360_000, 450_000), 0);
+  assert.equal(tankCommitBand(449_800, 450_000), 1);
+  assert.equal(tankCommitBand(200_000, 450_000), 2);
+});
+
+test("comfort-band ranking beats a wall station; desperation only if comfort is empty", () => {
+  const start = { lat: 45, lon: 0 };
+  const destination = { lat: 45, lon: 5 };
+  const comfort = {
+    station: { id: "comfort" },
+    location: { lat: 45, lon: 1.2 },
+    graphMeters: 280_000,
+    remainingGraphMeters: 200_000
+  };
+  const wall = {
+    station: { id: "wall" },
+    location: { lat: 45, lon: 2.0 },
+    graphMeters: 449_800,
+    remainingGraphMeters: 80_000
+  };
+  const early = {
+    station: { id: "early" },
+    location: { lat: 45, lon: 0.6 },
+    graphMeters: 180_000,
+    remainingGraphMeters: 300_000
+  };
+  const ranked = rankForwardFuel(
+    [wall, early, comfort], start, destination, 450_000, new Set(), "dirt"
+  );
+  assert.equal(ranked[0].station.id, "comfort");
+  assert.ok(ranked.findIndex((row) => row.station.id === "wall") >
+    ranked.findIndex((row) => row.station.id === "comfort"));
+  assert.ok(ranked.findIndex((row) => row.station.id === "early") >
+    ranked.findIndex((row) => row.station.id === "comfort"));
+
+  const desperationOnly = rankForwardFuel(
+    [wall, { ...wall, station: { id: "wall-closer" }, location: { lat: 45, lon: 1.8 }, graphMeters: 400_000 }],
+    start, destination, 450_000, new Set(), "balanced"
+  );
+  assert.equal(desperationOnly[0].station.id, "wall");
 });
