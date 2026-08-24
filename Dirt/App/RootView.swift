@@ -1261,14 +1261,14 @@ struct RootView: View {
                     BrandChip(minHeight: 68)
                     NavCueCard()
                         .frame(maxWidth: .infinity)
-                    packFormatBadge
+                    if packFormatBadgeVisible { packFormatBadge }
                 }
                 .transition(.opacity.combined(with: .move(edge: .top)))
             } else {
                 HStack(alignment: .top, spacing: 8) {
                     BrandChip()
                     Spacer(minLength: 8)
-                    packFormatBadge
+                    if packFormatBadgeVisible { packFormatBadge }
                 }
             }
         }
@@ -1276,7 +1276,15 @@ struct RootView: View {
         .padding(.top, 6)
     }
 
-    /// Always-visible pack version chip (Phase E3) — not behind the GRAPH debug toggle.
+    /// Hide the "NS · no pack" test chip when this map region has no installed pack.
+    private var packFormatBadgeVisible: Bool {
+        let _ = app.mapState.mapCenter
+        let _ = app.graphPacks.loadedRegionIds
+        return app.graphPacks.packFormatBadge(at: app.mapState.mapCenter).format != "—"
+    }
+
+    /// Pack version chip (Phase E3) — not behind the GRAPH debug toggle.
+    /// Hidden when no pack is installed (avoids a permanent "NS · no pack" badge).
     private var packFormatBadge: some View {
         // Touch observables so the chip refreshes on pan / pack install.
         let _ = app.mapState.mapCenter
