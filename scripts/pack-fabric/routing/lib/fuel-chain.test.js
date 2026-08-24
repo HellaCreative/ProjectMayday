@@ -5,6 +5,7 @@ const test = require("node:test");
 const {
   fuelNeedForProfileRide,
   fuelPlanStatus,
+  planCrossRegionFuelChain,
   planFuelChainOnRuntime,
   rankForwardFuel,
   stationEligibility
@@ -309,6 +310,74 @@ test("forward feeler proves the next anchor without routing a scout leg", async 
   assert.equal(result.ok, true);
   assert.equal(scoutCalls, 0);
   assert.deepEqual(result.stops.map((row) => row.id), ["mid"]);
+});
+
+test("NS to NB forward feeler stays graph-only while targeting the Tantramar door", async () => {
+  const start = { lat: 44.76479020946905, lon: -63.34021720179615 };
+  const destination = { lat: 46.053670, lon: -67.565147 };
+  const tantramar = {
+    lat: 45.92,
+    lon: -64.35,
+    role: "seam",
+    between: ["nb", "ns"],
+    resolvedRegionId: "ns"
+  };
+  const calls = [];
+  const result = await planCrossRegionFuelChain({
+    profile: "dirt",
+    locations: [start, destination],
+    accessPolicy: { motorizedPermissive: true, motorizedUnknown: false },
+    options: {}
+  }, {
+    mode: "canada-chain",
+    regionIds: ["ns", "nb"]
+  }, {
+    usableRangeMeters: 207_000,
+    firstLegMaxMeters: 207_000,
+    windowMaxStops: 1,
+    allowPartialWindow: true,
+    windowTimeBudgetMs: 5_800,
+    forwardFeeler: true
+  }, {
+    resolveChainSeamWaypoints: async () => ({
+      ok: true,
+      waypoints: [
+        { ...start, resolvedRegionId: "ns" },
+        tantramar,
+        { ...destination, resolvedRegionId: "nb" }
+      ]
+    }),
+    loadRegionFuel: async (regionId) => ({
+      stations: [station("ns-forward-pump", -64.005937)],
+      packIdentity: { regionId }
+    }),
+    loadGraphsForRequest: async () => ({
+      packIdentity: [{ regionId: "ns" }]
+    }),
+    planFuelChainOnRuntime: async (options) => {
+      calls.push(options);
+      return {
+        ok: true,
+        stops: [{
+          id: "ns-forward-pump",
+          lat: 45.230113,
+          lon: -64.005937,
+          name: "Fuel stop"
+        }],
+        graphMeters: [136_600],
+        stationCandidates: [],
+        windowComplete: false,
+        diagnostics: {}
+      };
+    }
+  });
+
+  assert.equal(result.status, "complete");
+  assert.equal(result.windowComplete, false);
+  assert.deepEqual(result.stops.map((row) => row.id), ["ns-forward-pump"]);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].graphOnlyFeeler, true);
+  assert.deepEqual(calls[0].destination, tantramar);
 });
 
 test("profile ride length requires Dirt fuel even when shortest reachability fits", async () => {

@@ -47,7 +47,7 @@ const HARD_MATCH_METERS = 750;
 const MIN_STOP_SEPARATION_M = 800;
 const MIN_FORWARD_PROGRESS_M = 2_500;
 /** Bumped when fuel-selection / ranking contracts change. Clients may assert. */
-const FUEL_CHAIN_SERVICE_VERSION = "2026-08-24.fuel-coherence.waypoint-refuel.1";
+const FUEL_CHAIN_SERVICE_VERSION = "2026-08-24.fuel-coherence.cross-region-feeler.2";
 /** Comfort refuel window as a fraction of usable tank. Lockstep: FuelItinerary.swift. */
 const FUEL_COMFORT_LO = 0.50;
 const FUEL_COMFORT_HI = 0.80;
@@ -1305,11 +1305,13 @@ async function planFuelChainOnRuntime({
 async function planCrossRegionFuelChain(body, selection, fuelOptions, dependencies = {}) {
   const loadRuntime = dependencies.loadGraphsForRequest || loadGraphsForRequest;
   const loadRegion = dependencies.loadRegionFuel || loadRegionFuel;
+  const resolveSeams = dependencies.resolveChainSeamWaypoints || resolveChainSeamWaypoints;
+  const planRuntime = dependencies.planFuelChainOnRuntime || planFuelChainOnRuntime;
   let waypoints = corridorLocationsForRoute(body.locations || [], {
     profile: body.profile,
     forChain: true
   });
-  const resolved = await resolveChainSeamWaypoints(waypoints, body);
+  const resolved = await resolveSeams(waypoints, body);
   if (!resolved.ok) {
     return {
       status: "failed",
@@ -1400,7 +1402,7 @@ async function planCrossRegionFuelChain(body, selection, fuelOptions, dependenci
     });
     packIdentities.push(...(runtime.packIdentity || []));
     const cap = usableRangeMeters - fuelUsedMeters;
-    const planned = await planFuelChainOnRuntime({
+    const planned = await planRuntime({
       runtime,
       stations: fuel.stations,
       start: hopStart,
@@ -1428,7 +1430,11 @@ async function planCrossRegionFuelChain(body, selection, fuelOptions, dependenci
       timeBudgetMs: Number.isFinite(windowDeadline)
         ? Math.max(1, windowDeadline - Date.now())
         : null,
-      profileMeters: haversineMeters(startCoord, endCoord)
+      profileMeters: haversineMeters(startCoord, endCoord),
+      // Cross-region feelers obey the same contract as same-region feelers:
+      // graph reachability selects the next anchor; the client routes only the
+      // committed rider leg. Do not generate disposable profile scout routes.
+      graphOnlyFeeler: fuelOptions.forwardFeeler === true
     });
     if (!planned.ok) {
       clearGraphCache();
