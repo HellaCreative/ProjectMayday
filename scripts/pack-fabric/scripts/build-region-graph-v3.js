@@ -98,7 +98,7 @@ async function buildRegionGraphV3(regionId) {
   const id = source.id;
   if (!isV3Region(id)) {
     throw new Error(
-      `'${id}' is not in routing/data/v3-regions.json; add it there so live requests graph.v3.bin`
+      `'${id}' is not in routing/schema/v3-regions.json; add it there so live requests graph.v3.bin`
     );
   }
 

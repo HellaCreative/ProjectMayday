@@ -2,8 +2,8 @@
 
 const path = require("path");
 
-const RECORD_PATH = path.join(__dirname, "..", "data", "v3-regions.json");
-const RECORD = require("../data/v3-regions.json");
+const RECORD_PATH = path.join(__dirname, "..", "schema", "v3-regions.json");
+const RECORD = require("../schema/v3-regions.json");
 
 let cached = null;
 

@@ -395,7 +395,7 @@ function localGraphPath(regionId, { longhaul = false } = {}) {
 /**
  * Phone PACKS and live /api/route are the same object. Catalog lists one graph
  * per region. Vercel never ships pack bytes, so this cannot probe local R2 —
- * `routing/data/v3-regions.json` is the lockstep list of regions that serve
+ * `routing/schema/v3-regions.json` is the lockstep list of regions that serve
  * graph.v3.bin. Everyone else remains graph.v2.bin until stamped and listed.
  */
 function phoneGraphFileName(regionId) {

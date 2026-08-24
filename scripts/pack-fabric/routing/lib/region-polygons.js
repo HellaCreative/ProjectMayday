@@ -2,8 +2,8 @@
 
 const path = require("path");
 
-const RECORD_PATH = path.join(__dirname, "..", "data", "region-polygons", "maritimes.v1.json");
-const RECORD = require("../data/region-polygons/maritimes.v1.json");
+const RECORD_PATH = path.join(__dirname, "..", "schema", "maritimes.v1.json");
+const RECORD = require("../schema/maritimes.v1.json");
 
 let cached = null;
 
