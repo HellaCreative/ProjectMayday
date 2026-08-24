@@ -351,7 +351,9 @@ struct RoutePlannerCard: View {
                     headline: {
                         stageMetrics(
                             km: planner.totalMeters / 1000,
-                            dirtPercent: planner.aggregateDirtPercent
+                            dirtPercent: planner.aggregateDirtPercent,
+                            margin: nil,
+                            showsWarning: false
                         )
                     },
                     detail: {
@@ -814,28 +816,12 @@ struct RoutePlannerCard: View {
                 .foregroundStyle(DirtTheme.danger)
                 .lineLimit(2)
         } else if let response = stage.response {
-            VStack(alignment: .leading, spacing: 1) {
-                Text(planner.stageEndpointTitle(at: index))
-                    .font(.dirtUI(10.5, weight: .bold))
-                    .foregroundStyle(DirtTheme.ink)
-                    .lineLimit(1)
-                stageMetrics(
-                    km: (response.distanceMeters ?? 0) / 1000,
-                    dirtPercent: response.dirtPercent
-                )
-                if let margin = planner.fuelMarginText(at: index) {
-                    HStack(spacing: 4) {
-                        Text(margin)
-                        if planner.profileAvailabilityNotice(at: index) != nil {
-                            Image(systemName: "exclamationmark.triangle.fill")
-                                .foregroundStyle(DirtTheme.orange)
-                        }
-                    }
-                    .font(.dirtUI(9.5, weight: .semibold))
-                    .foregroundStyle(DirtTheme.muted)
-                    .lineLimit(1)
-                }
-            }
+            stageMetrics(
+                km: (response.distanceMeters ?? 0) / 1000,
+                dirtPercent: response.dirtPercent,
+                margin: planner.fuelMarginText(at: index),
+                showsWarning: planner.profileAvailabilityNotice(at: index) != nil
+            )
         } else {
             Text(stage.end == nil ? "Hold the map to set the end" : "Waiting for route…")
                 .font(DirtType.helper)
@@ -844,8 +830,13 @@ struct RoutePlannerCard: View {
         }
     }
 
-    /// Distance + dirt share on one line — frees the right side for the profile control.
-    private func stageMetrics(km: Double, dirtPercent: Int) -> some View {
+    /// One evidence line: distance, surface mix, reserve margin, then warning.
+    private func stageMetrics(
+        km: Double,
+        dirtPercent: Int,
+        margin: String?,
+        showsWarning: Bool
+    ) -> some View {
         HStack(spacing: DirtSpace.tight) {
             Text(String(format: "%.1f km", km))
                 .font(DirtType.metricInline)
@@ -858,9 +849,23 @@ struct RoutePlannerCard: View {
                 .font(DirtType.metricInline)
                 .fontWeight(.bold)
                 .foregroundStyle(DirtTheme.dirtMix)
+            if let margin {
+                Text("·")
+                    .font(DirtType.metricInline)
+                    .foregroundStyle(DirtTheme.muted)
+                Text(margin)
+                    .font(DirtType.metricInline)
+                    .fontWeight(.bold)
+                    .foregroundStyle(DirtTheme.muted)
+            }
+            if showsWarning {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(DirtType.metricInline)
+                    .foregroundStyle(DirtTheme.orange)
+            }
         }
         .lineLimit(1)
-        .minimumScaleFactor(0.8)
+        .minimumScaleFactor(0.72)
     }
 
     /// Equal-width profile segments. Reads as one control instead of three loose pills.
@@ -1410,15 +1415,17 @@ struct StageCard<Headline: View, Detail: View>: View {
                                     .foregroundStyle(DirtTheme.orange)
                             }
                             Text(endpointTitle)
+                                .font(.dirtUI(10.5, weight: .bold))
                                 .foregroundStyle(DirtTheme.ink)
                                 .lineLimit(1)
-                        }
-                        .font(.dirtUI(10.5, weight: .bold))
-                        if let viaSubtitle {
-                            Text(viaSubtitle)
-                                .font(.dirtUI(9.5, weight: .semibold))
-                                .foregroundStyle(DirtTheme.muted)
-                                .lineLimit(1)
+                                .fixedSize(horizontal: true, vertical: false)
+                            if let viaSubtitle {
+                                Text(viaSubtitle)
+                                    .font(.dirtUI(10.5, weight: .semibold))
+                                    .foregroundStyle(DirtTheme.muted)
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
+                            }
                         }
                         headline()
                     }

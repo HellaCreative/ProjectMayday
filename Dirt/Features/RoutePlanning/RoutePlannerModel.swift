@@ -446,7 +446,7 @@ final class RoutePlannerModel {
         else { return nil }
         let margin = FuelRangePrefs.usableKilometers(for: FuelRangePrefs.kilometers) - meters / 1000
         if margin >= 0 {
-            return "\(Int(margin.rounded())) km before reserve"
+            return "\(Int(margin.rounded())) km br"
         }
         return "\(Int(abs(margin).rounded())) km beyond usable range"
     }

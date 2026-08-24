@@ -122,6 +122,9 @@ struct MapLibreMapView: UIViewRepresentable {
         static func iconName(_ category: String) -> String { "dirt-poi-icon-\(category)" }
         /// Dots visible from regional overview for plan-route scanning.
         static let dotMinZoom = 6.5
+        /// Numbered fuel clusters are useful only once the rider has moved
+        /// from province overview into a local planning area.
+        static let fuelClusterDetailMinZoom = 9.25
         /// Regional stations cluster through zoom 10; close planning shows all pumps.
         static let clusterMaxZoom = 10
         /// Glyphs only when close enough to distinguish individual stations.
@@ -504,7 +507,7 @@ struct MapLibreMapView: UIViewRepresentable {
             ] as [Any])
             clusterCircle.circleStrokeColor = NSExpression(forConstantValue: UIColor.white)
             clusterCircle.circleStrokeWidth = NSExpression(forConstantValue: 2)
-            clusterCircle.minimumZoomLevel = Float(POILayer.dotMinZoom)
+            clusterCircle.minimumZoomLevel = Float(POILayer.fuelClusterDetailMinZoom)
             clusterCircle.maximumZoomLevel = Float(POILayer.iconMinZoom)
             style.addLayer(clusterCircle)
 
@@ -518,7 +521,7 @@ struct MapLibreMapView: UIViewRepresentable {
             clusterCount.textFontSize = NSExpression(forConstantValue: 11)
             clusterCount.textAllowsOverlap = NSExpression(forConstantValue: true)
             clusterCount.textIgnoresPlacement = NSExpression(forConstantValue: true)
-            clusterCount.minimumZoomLevel = Float(POILayer.dotMinZoom)
+            clusterCount.minimumZoomLevel = Float(POILayer.fuelClusterDetailMinZoom)
             clusterCount.maximumZoomLevel = Float(POILayer.iconMinZoom)
             style.addLayer(clusterCount)
 
