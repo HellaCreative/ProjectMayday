@@ -30,7 +30,8 @@ nonisolated enum SurfaceFamilyStats {
         return map[raw.lowercased()] ?? .unknown
     }
 
-    /// Honest Dirt% = Loose/technical + Unknown. Paved and Gravel do not count as dirt.
+    /// Rider-facing Dirt% = non-paved (gravel + loose + unknown). Matches map paint.
+    /// Selection-time coarse dirt is separate and is not computed here.
     struct Percents: Sendable, Equatable {
         var dirtPercent: Int
         var pavedPercent: Int
@@ -56,7 +57,7 @@ nonisolated enum SurfaceFamilyStats {
             case .unknown: unknownM += row.meters
             }
         }
-        let dirtM = looseM + unknownM
+        let dirtM = gravelM + looseM + unknownM
         let total = distanceMeters > 0 ? distanceMeters : (pavedM + gravelM + looseM + unknownM)
         func pct(_ m: Double) -> Int {
             guard total > 0 else { return 0 }

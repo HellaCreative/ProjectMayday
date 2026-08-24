@@ -88,6 +88,22 @@ struct GraphV3DirtPercentLockstepTests {
         _ = rows
         _ = pack
     }
+
+    @Test func riderDirtPercentCountsGravelAsDirt() {
+        let got = SurfaceFamilyStats.honestPercents(
+            rows: [
+                (100, "asphalt"),
+                (100, "gravel"),
+                (50, "dirt"),
+                (50, nil)
+            ],
+            distanceMeters: 300
+        )
+        #expect(got.pavedPercent == 33)
+        #expect(got.gravelPercent == 33)
+        #expect(got.dirtPercent == 67)
+        #expect(got.unknownSurfacePercent == 17)
+    }
 }
 
 private final class DirtPercentBundleToken: NSObject {}

@@ -18,7 +18,7 @@ describe("surface-family E1", () => {
     assert.equal(surfaceFamilyOf("asphalt;gravel"), SURFACE_FAMILY.UNKNOWN);
   });
 
-  it("Dirt% counts only loose + unknown (not gravel)", () => {
+  it("rider Dirt% counts gravel + loose + unknown (not paved)", () => {
     const stats = honestSurfaceStatsFromLeaves(
       [
         { meters: 100, surfaceLeaf: "asphalt" },
@@ -30,7 +30,7 @@ describe("surface-family E1", () => {
     );
     assert.equal(stats.pavedPercent, 33);
     assert.equal(stats.gravelPercent, 33);
-    assert.equal(stats.dirtPercent, 33);
+    assert.equal(stats.dirtPercent, 67);
     assert.equal(stats.unknownSurfacePercent, 17);
   });
 });

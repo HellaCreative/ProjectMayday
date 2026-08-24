@@ -92,9 +92,15 @@ extension OnDeviceRouter.Result {
         let hasLeaves = legs.contains { $0.surfaceLeaf != nil }
         let reported: SurfaceFamilyStats.Percents
         if hasLeaves {
+            let leafLegs = legs.filter {
+                !$0.edgeId.hasPrefix("soft-stitch-") &&
+                !$0.edgeId.hasPrefix("perm-stitch-") &&
+                $0.structureType != "ferry"
+            }
+            let leafMeters = leafLegs.reduce(0.0) { $0 + $1.distanceMeters }
             reported = SurfaceFamilyStats.honestPercents(
-                rows: legs.map { ($0.distanceMeters, $0.surfaceLeaf) },
-                distanceMeters: meters
+                rows: leafLegs.map { ($0.distanceMeters, $0.surfaceLeaf) },
+                distanceMeters: leafMeters
             )
         } else {
             reported = SurfaceFamilyStats.Percents(

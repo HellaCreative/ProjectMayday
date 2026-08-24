@@ -77,7 +77,7 @@ function main() {
     candidateFile: "ns-graph.v3.bin",
     undirectedEdgeCount: pack.undirectedEdgeCount,
     surfaceFamilyMap: pack.surfaceFamilyMap || SURFACE_FAMILY_MAP,
-    note: "Dirt% = loose+unknown families; gravel and paved excluded",
+    note: "Dirt% = gravel+loose+unknown (non-paved); paved family only in Paved%",
     routes
   };
   fs.writeFileSync(OUT, JSON.stringify(fixture, null, 2) + "\n");

@@ -6,7 +6,8 @@
  * so Swift and JS derive identically from surfaceLeaf.
  *
  * Families: paved | gravel | loose | unknown
- * Dirt% = share of distance whose family ∈ {loose, unknown}. Gravel is NOT dirt.
+ * Rider-facing Dirt% = non-paved = gravel + loose + unknown (matches map paint).
+ * Selection-time coarse dirt is separate and is not computed here.
  */
 
 const SURFACE_FAMILY = Object.freeze({
@@ -58,7 +59,11 @@ function surfaceFamilyOf(surfaceLeaf, familyMap = SURFACE_FAMILY_MAP) {
 }
 
 function isHonestDirtFamily(family) {
-  return family === SURFACE_FAMILY.LOOSE || family === SURFACE_FAMILY.UNKNOWN;
+  return (
+    family === SURFACE_FAMILY.GRAVEL ||
+    family === SURFACE_FAMILY.LOOSE ||
+    family === SURFACE_FAMILY.UNKNOWN
+  );
 }
 
 /**
@@ -77,8 +82,10 @@ function honestSurfaceStatsFromLeaves(rows, distanceMeters) {
     if (!(meters > 0)) continue;
     const family = surfaceFamilyOf(row.surfaceLeaf, map);
     if (family === SURFACE_FAMILY.PAVED) pavedM += meters;
-    else if (family === SURFACE_FAMILY.GRAVEL) gravelM += meters;
-    else if (family === SURFACE_FAMILY.LOOSE) {
+    else if (family === SURFACE_FAMILY.GRAVEL) {
+      gravelM += meters;
+      dirtM += meters;
+    } else if (family === SURFACE_FAMILY.LOOSE) {
       looseM += meters;
       dirtM += meters;
     } else {

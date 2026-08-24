@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-23T23:22:44.415Z",
+  "generatedAt": "2026-08-24T00:00:57.359Z",
   "candidateFile": "ns-graph.v3.bin",
   "undirectedEdgeCount": 199738,
   "surfaceFamilyMap": {
@@ -28,7 +28,7 @@
     "natural": "loose",
     "woodchips": "loose"
   },
-  "note": "Dirt% = loose+unknown families; gravel and paved excluded",
+  "note": "Dirt% = gravel+loose+unknown (non-paved); paved family only in Paved%",
   "routes": [
     {
       "id": "every-791",
@@ -288,7 +288,7 @@
         198541,
         199332
       ],
-      "dirtPercent": 12,
+      "dirtPercent": 75,
       "pavedPercent": 25,
       "gravelPercent": 63,
       "unknownSurfacePercent": 12
@@ -744,7 +744,7 @@
         174130,
         174131
       ],
-      "dirtPercent": 48,
+      "dirtPercent": 99,
       "pavedPercent": 1,
       "gravelPercent": 51,
       "unknownSurfacePercent": 45
@@ -2754,7 +2754,7 @@
         1998,
         1999
       ],
-      "dirtPercent": 3,
+      "dirtPercent": 6,
       "pavedPercent": 94,
       "gravelPercent": 4,
       "unknownSurfacePercent": 3
