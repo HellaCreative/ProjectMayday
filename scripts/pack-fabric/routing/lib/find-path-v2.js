@@ -163,7 +163,7 @@ function leafPinIsHighway(pack, match) {
   if (!pack || !pack.hasLeaves || !match || match.edgeIndex == null) return false;
   const leaves = pack.edgeLeaves(match.edgeIndex);
   const tier = roadTierOf(leaves.roadClassLeaf, pack.roadTierMap);
-  return tier === ROAD_TIER.MOTORWAY || tier === ROAD_TIER.TRUNK;
+  return tier === ROAD_TIER.MOTORWAY || tier === ROAD_TIER.TRUNK || tier === ROAD_TIER.ARTERIAL;
 }
 
 function finalizeReportedStats(stats, routeEdges, distanceMeters, pack) {
@@ -848,7 +848,7 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
   // Clean pin tests may pass options.cleanMetroMultiplier (1–20) to soften ×120.
   const cityWall = searchOpts.cityWall !== false;
   const metroFallbackPenalty =
-    resolveMetroFallbackPenalty(profile, searchOpts.cleanMetroMultiplier);
+    resolveMetroFallbackPenalty(profile, searchOpts.cleanMetroMultiplier, e4Opts.avoidMotorways);
   const corridorM = Number.isFinite(Number(searchOpts.corridorMeters))
     ? Number(searchOpts.corridorMeters)
     : corridorMetersForProfile(profile);
@@ -946,7 +946,8 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
       prior,
       arrival,
       backtrackFactor,
-      cleanMetroMultiplier: searchOpts.cleanMetroMultiplier
+      cleanMetroMultiplier: searchOpts.cleanMetroMultiplier,
+      avoidMotorways: e4Opts.avoidMotorways
     });
   }
 
@@ -1052,7 +1053,8 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
               haversineMeters(toLL, startLL),
               haversineMeters(toLL, endLL),
               startOnMajorHighway,
-              endOnMajorHighway
+              endOnMajorHighway,
+              !pack.hasLeaves && e4Opts.avoidMotorways
             );
             step += awayExtra(cur.node, to) * DIRT_RIDE_AWAY_SCALE;
             step += corridorCrossTrackExtra(profile, toLL, startLL, endLL, edgeM) * DIRT_RIDE_XT_SCALE;
@@ -1076,11 +1078,14 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
               haversineMeters(toLL, startLL),
               haversineMeters(toLL, endLL),
               startOnMajorHighway,
-              endOnMajorHighway
+              endOnMajorHighway,
+              !pack.hasLeaves && e4Opts.avoidMotorways
             );
             step *= cleanCityStreetMult(profile, road, haversineMeters(toLL, endLL));
           } else {
-            step *= majorHighwayAvoidMult(profile, road, 1e9, 1e9, false, false);
+            step *= majorHighwayAvoidMult(
+              profile, road, 1e9, 1e9, false, false, !pack.hasLeaves && e4Opts.avoidMotorways
+            );
           }
           if (policy.motorizedUnknown && profile !== "cleanest") {
             const accessName = enums.ACCESS_NAME[access] || "";
@@ -1506,10 +1511,11 @@ function searchBalancedResource(ctx) {
     prior,
     arrival,
     backtrackFactor,
-    cleanMetroMultiplier
+    cleanMetroMultiplier,
+    avoidMotorways
   } = ctx;
   const metroFallbackPenalty =
-    resolveMetroFallbackPenalty(profile, cleanMetroMultiplier);
+    resolveMetroFallbackPenalty(profile, cleanMetroMultiplier, avoidMotorways === true);
   const penalizeBacktrack = (cost, edgeId) => {
     const id = String(edgeId == null ? "" : edgeId);
     if (arrival != null && id === arrival) return cost * 12;

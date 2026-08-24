@@ -127,7 +127,7 @@ struct GraphV3CleanPathLockstepTests {
             to: b,
             profile: .balanced,
             allowUnknown: false,
-            cleanMetroMultiplier: 5
+            cleanMetroMultiplier: 10
         ) else {
             Issue.record("balanced in-metro route failed")
             return

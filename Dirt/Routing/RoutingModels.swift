@@ -101,7 +101,7 @@ struct RouteRequestOptions: Codable, Sendable {
     var directExtraBudgetMeters: Double?
     /// DEBUG ONLY. Clean pin tests: urban-core multiplier override (1…20).
     var cleanMetroMultiplier: Double?
-    /// Internal inverse of the rider-facing "Allow motorways" control.
+    /// Internal inverse of the rider-facing "Allow major highways" control.
     var avoidMotorways: Bool?
     /// Legacy compatibility field; Clean no longer adds a primary-road penalty.
     var preferBackRoads: Bool?

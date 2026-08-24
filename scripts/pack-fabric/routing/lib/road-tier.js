@@ -44,8 +44,8 @@ const ROAD_TIER_MAP = Object.freeze({
 
 /**
  * Clean km multipliers by tier (profile=cleanest + leaves only).
- * Primary/secondary/local paved roads are ordinary Clean fabric. Motorway and
- * trunk receive their default soft avoidance through the Clean motorway policy.
+ * Paved road classes have ordinary cost when major highways are allowed.
+ * The rider-facing policy adds motorway/trunk/primary avoidance when off.
  */
 const CLEAN_TIER_COST = Object.freeze({
   [ROAD_TIER.COLLECTOR]: 0.92,
@@ -126,11 +126,12 @@ function cleanLeafCostMult(tier, family) {
 }
 
 /**
- * Clean motorway policy. Avoidance is the default internal state; the
- * rider-facing "Allow motorways" switch disables it. Soft costs only.
+ * Clean major-highway policy. Avoidance is the default internal state; the
+ * rider-facing "Allow major highways" switch disables it. Soft costs only.
  */
 const E4_AVOID_MOTORWAY_MULT = 40;
 const E4_AVOID_TRUNK_MULT = 18;
+const E4_AVOID_PRIMARY_MULT = 8;
 const E4_PREFER_BACK_ARTERIAL_MULT = 4.5;
 const E4_PREFER_BACK_COLLECTOR_MULT = 0.82;
 const E4_HIGHWAY_JOIN_METERS = 6000;
@@ -145,12 +146,14 @@ function e4AvoidMotorwaysMult(
   endOnHighway
 ) {
   if (!enabled) return 1;
-  if (tier !== ROAD_TIER.MOTORWAY && tier !== ROAD_TIER.TRUNK) return 1;
+  if (tier !== ROAD_TIER.MOTORWAY && tier !== ROAD_TIER.TRUNK && tier !== ROAD_TIER.ARTERIAL) return 1;
   const near =
     (endOnHighway && metersToDestination < E4_HIGHWAY_JOIN_METERS) ||
     (startOnHighway && metersFromStart < E4_HIGHWAY_JOIN_METERS);
   if (near) return 1;
-  return tier === ROAD_TIER.MOTORWAY ? E4_AVOID_MOTORWAY_MULT : E4_AVOID_TRUNK_MULT;
+  if (tier === ROAD_TIER.MOTORWAY) return E4_AVOID_MOTORWAY_MULT;
+  if (tier === ROAD_TIER.TRUNK) return E4_AVOID_TRUNK_MULT;
+  return E4_AVOID_PRIMARY_MULT;
 }
 
 /**
@@ -180,8 +183,8 @@ function e4LeafCostMult(opts) {
 }
 
 /**
- * Clean-only motorway policy. Primary and secondary remain ordinary pavement;
- * only motorway/trunk receive the default soft avoidance.
+ * Clean-only major-highway policy. Secondary and lower paved roads remain
+ * ordinary pavement; motorway, trunk, and primary receive soft avoidance.
  */
 function e4FlagsForProfile(profile, flags) {
   if (profile !== "cleanest") {
@@ -209,6 +212,7 @@ module.exports = {
   e4FlagsForProfile,
   E4_AVOID_MOTORWAY_MULT,
   E4_AVOID_TRUNK_MULT,
+  E4_AVOID_PRIMARY_MULT,
   E4_PREFER_BACK_ARTERIAL_MULT,
   E4_PREFER_BACK_COLLECTOR_MULT
 };

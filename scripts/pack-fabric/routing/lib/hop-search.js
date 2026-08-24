@@ -116,7 +116,7 @@ function metroEdgeBlocks(fromLL, toLL, startLL, endLL, boxes = METRO_CORE_WALL) 
 
 /**
  * Debug-only Clean override: clamp options.cleanMetroMultiplier to 1–20.
- * Null means use the production Clean default ×5. Ignored for other profiles.
+ * Null uses the production Clean value from the major-highway control.
  */
 function resolveCleanMetroMultiplier(profile, raw) {
   if (String(profile || "").toLowerCase() !== "cleanest") return null;
@@ -126,10 +126,11 @@ function resolveCleanMetroMultiplier(profile, raw) {
   return Math.min(20, Math.max(1, n));
 }
 
-/** Production Clean ×5; other profiles retain ×120 fallback protection. */
-function resolveMetroFallbackPenalty(profile, cleanMetroMultiplier) {
+/** Clean ×10 with major highways off, ×2 with them on; other profiles retain ×120. */
+function resolveMetroFallbackPenalty(profile, cleanMetroMultiplier, avoidMajorHighways = true) {
   if (String(profile || "").toLowerCase() !== "cleanest") return 120;
-  return resolveCleanMetroMultiplier(profile, cleanMetroMultiplier) ?? 5;
+  return resolveCleanMetroMultiplier(profile, cleanMetroMultiplier)
+    ?? (avoidMajorHighways ? 10 : 2);
 }
 
 /**

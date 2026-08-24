@@ -1433,7 +1433,11 @@ nonisolated struct OnDeviceRouter {
                         end: to,
                         boxes: packUrbanCores,
                         edgeFrom: coordinate(forNode: cur.node),
-                        penalty: UrbanCore.resolveCleanMetroPenalty(profile: profile, override: ctx.cleanMetroMultiplier)
+                        penalty: UrbanCore.resolveCleanMetroPenalty(
+                            profile: profile,
+                            override: ctx.cleanMetroMultiplier,
+                            avoidMajorHighways: ctx.avoidMotorways
+                        )
                     )
                     if ctx.settlementFallback {
                         step *= UrbanCore.settlementFallbackMultiplier(
@@ -1570,7 +1574,11 @@ nonisolated struct OnDeviceRouter {
                         end: to,
                         boxes: packUrbanCores,
                         edgeFrom: edgeFrom,
-                        penalty: UrbanCore.resolveCleanMetroPenalty(profile: profile, override: ctx.cleanMetroMultiplier)
+                        penalty: UrbanCore.resolveCleanMetroPenalty(
+                            profile: profile,
+                            override: ctx.cleanMetroMultiplier,
+                            avoidMajorHighways: ctx.avoidMotorways
+                        )
                     )
                     if ctx.settlementFallback {
                         step *= UrbanCore.settlementFallbackMultiplier(
@@ -1825,7 +1833,11 @@ nonisolated struct OnDeviceRouter {
                         end: to,
                         boxes: packUrbanCores,
                         edgeFrom: coordinate(forNode: node),
-                        penalty: UrbanCore.resolveCleanMetroPenalty(profile: profile, override: ctx.cleanMetroMultiplier)
+                        penalty: UrbanCore.resolveCleanMetroPenalty(
+                            profile: profile,
+                            override: ctx.cleanMetroMultiplier,
+                            avoidMajorHighways: ctx.avoidMotorways
+                        )
                     )
                     let isFerry = GraphV2Pack.isFerryStructure(GraphV2Pack.unpackStructure(attr))
                     var step = hopCostStep(
@@ -1919,7 +1931,11 @@ nonisolated struct OnDeviceRouter {
                         end: to,
                         boxes: packUrbanCores,
                         edgeFrom: edgeFrom,
-                        penalty: UrbanCore.resolveCleanMetroPenalty(profile: profile, override: ctx.cleanMetroMultiplier)
+                        penalty: UrbanCore.resolveCleanMetroPenalty(
+                            profile: profile,
+                            override: ctx.cleanMetroMultiplier,
+                            avoidMajorHighways: ctx.avoidMotorways
+                        )
                     )
                     let virtualEdgeID = v.junctionStitch
                         ? v.stitchEdgeId
@@ -2523,7 +2539,11 @@ nonisolated struct OnDeviceRouter {
                         end: to,
                         boxes: packUrbanCores,
                         edgeFrom: coordinate(forNode: cur.node),
-                        penalty: UrbanCore.resolveCleanMetroPenalty(profile: profile, override: ctx.cleanMetroMultiplier)
+                        penalty: UrbanCore.resolveCleanMetroPenalty(
+                            profile: profile,
+                            override: ctx.cleanMetroMultiplier,
+                            avoidMajorHighways: ctx.avoidMotorways
+                        )
                     )
                     if ctx.settlementFallback {
                         step *= UrbanCore.settlementFallbackMultiplier(
@@ -2573,7 +2593,11 @@ nonisolated struct OnDeviceRouter {
                         end: to,
                         boxes: packUrbanCores,
                         edgeFrom: coordinate(forNode: cur.node),
-                        penalty: UrbanCore.resolveCleanMetroPenalty(profile: profile, override: ctx.cleanMetroMultiplier)
+                        penalty: UrbanCore.resolveCleanMetroPenalty(
+                            profile: profile,
+                            override: ctx.cleanMetroMultiplier,
+                            avoidMajorHighways: ctx.avoidMotorways
+                        )
                     )
                     if ctx.settlementFallback {
                         step *= UrbanCore.settlementFallbackMultiplier(
@@ -3279,7 +3303,7 @@ nonisolated struct OnDeviceRouter {
         guard snap.distanceMeters < OnDeviceProfileCosts.majorHighwayPinMeters else { return false }
         if profile == .cleanest, pack.hasLeaves {
             let tier = pack.roadTier(snap.edgeIndex)
-            return tier == .motorway || tier == .trunk
+            return tier == .motorway || tier == .trunk || tier == .arterial
         }
         return OnDeviceProfileCosts.isMajorHighway(
             roadClassNameForEdge(snap.edgeIndex),
@@ -3504,7 +3528,8 @@ nonisolated struct OnDeviceRouter {
                 metersFromStart: meters(toLL, startSnap.projected),
                 metersToDestination: meters(toLL, endLL),
                 startOnMajorHighway: startOnMajorHighway,
-                endOnMajorHighway: endOnMajorHighway
+                endOnMajorHighway: endOnMajorHighway,
+                avoidMajorHighways: !pack.hasLeaves && ctx.avoidMotorways
             )
             if profile == .cleanest, pack.hasLeaves, ei >= 0, ctx.avoidMotorways || ctx.preferBackRoads {
                 step *= RoadTierStats.e4LeafCostMult(
@@ -3561,7 +3586,8 @@ nonisolated struct OnDeviceRouter {
                 metersFromStart: meters(toLL, startSnap.projected),
                 metersToDestination: meters(toLL, endLL),
                 startOnMajorHighway: startOnMajorHighway,
-                endOnMajorHighway: endOnMajorHighway
+                endOnMajorHighway: endOnMajorHighway,
+                avoidMajorHighways: !pack.hasLeaves && ctx.avoidMotorways
             )
             if profile == .cleanest, pack.hasLeaves, ei >= 0, ctx.avoidMotorways || ctx.preferBackRoads {
                 step *= RoadTierStats.e4LeafCostMult(

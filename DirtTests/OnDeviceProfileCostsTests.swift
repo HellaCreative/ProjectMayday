@@ -212,10 +212,10 @@ struct OnDeviceProfileCostsTests {
         #expect(OnDeviceProfileCosts.isBlockedForCleanPavement(surfaceName: "gravel", roadClassName: "collector") == true)
     }
 
-    @Test func cleanMajorHighwayIsFreewayAndRampNotArterial() {
+    @Test func cleanCoarseMajorHighwaysFollowAllowControl() {
         #expect(OnDeviceProfileCosts.isMajorHighway("freeway", profile: .cleanest))
         #expect(OnDeviceProfileCosts.isMajorHighway("ramp", profile: .cleanest))
-        #expect(!OnDeviceProfileCosts.isMajorHighway("arterial", profile: .cleanest))
+        #expect(OnDeviceProfileCosts.isMajorHighway("arterial", profile: .cleanest))
         #expect(OnDeviceProfileCosts.isMajorHighway("arterial", profile: .balanced))
         #expect(OnDeviceProfileCosts.isMajorHighway("arterial", profile: .dirt))
 
@@ -259,12 +259,21 @@ struct OnDeviceProfileCostsTests {
             startOnMajorHighway: false,
             endOnMajorHighway: false
         )
-        #expect(cleanArterial == 1)
-        #expect(cleanFreeway > 1)
-        #expect(cleanRamp > 1)
+        let allowedArterial = OnDeviceProfileCosts.majorHighwayAvoidMult(
+            profile: .cleanest,
+            roadClassCode: 2,
+            metersFromStart: 80_000,
+            metersToDestination: 80_000,
+            startOnMajorHighway: false,
+            endOnMajorHighway: false,
+            avoidMajorHighways: false
+        )
+        #expect(cleanArterial == 8)
+        #expect(cleanFreeway == 40)
+        #expect(cleanRamp == 40)
+        #expect(allowedArterial == 1)
         #expect(balancedArterial > 1)
-        // Dirt arterial is already 9.5× — the extra avoid target does not apply.
-        #expect(dirtArterial == 1)
+        #expect(dirtArterial > 1)
     }
 
     @Test func majorHighwaysStayAvoidedUntilNearAPinnedHighway() {

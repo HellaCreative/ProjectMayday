@@ -56,7 +56,8 @@ const {
   isBlockedForCleanPavement,
   outsideCorridor,
   maxProgressRegressionMeters,
-  resolveCleanMetroMultiplier
+  resolveCleanMetroMultiplier,
+  resolveMetroFallbackPenalty
 } = require("./hop-search");
 const crossPackTopology = require("../schema/cross-pack-topology.v1.json");
 const { resolveLocationsByEligibleEdge } = require("../regional/endpoint-resolver");
@@ -2480,6 +2481,12 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds, 
   const backtrackFactor = Number.isFinite(Number(searchOpts && searchOpts.backtrackFactor))
     ? Math.max(1, Number(searchOpts.backtrackFactor))
     : 4;
+  const avoidMajorHighways = profile === "cleanest" && searchOpts && searchOpts.avoidMotorways === true;
+  const cleanCityPenalty = resolveMetroFallbackPenalty(
+    profile,
+    searchOpts && searchOpts.cleanMetroMultiplier,
+    avoidMajorHighways
+  );
 
   function withBacktrackPenalty(cost, edgeId) {
     const id = String(edgeId == null ? "" : edgeId);
@@ -2968,7 +2975,7 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds, 
     if (haversineMeters(ll, startLL) < 2500 || haversineMeters(ll, endLL) < 2500) return 1;
     // Strong enough that trunk/primary through a core loses to a ring/highway
     // or a dirt bypass. Finite so unavoidable bridges still work.
-    if (profile === "cleanest") return 5.0;
+    if (profile === "cleanest") return cleanCityPenalty;
     if (profile === "dirt") return 5.5;
     return 4.8;
   }
@@ -3013,7 +3020,8 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds, 
         dFromStart,
         dToPin,
         startOnMajorHighway,
-        endOnMajorHighway
+        endOnMajorHighway,
+        avoidMajorHighways
       );
       cost *= cleanCityStreetMult(profile, edge.roadTrack, dToPin);
     } else {
@@ -3023,7 +3031,8 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds, 
         1e9,
         1e9,
         false,
-        false
+        false,
+        avoidMajorHighways
       );
     }
     // When the rider opts into unknown access, Dirt prefers capillary

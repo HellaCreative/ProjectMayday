@@ -79,7 +79,7 @@ struct RoadTierE4Tests {
         }
     }
 
-    @Test("Clean limits the policy to motorway and trunk")
+    @Test("Clean avoids motorway, trunk, and primary when major highways are off")
     func cleanMotorwayPolicy() {
         let off = RoadTierStats.e4Flags(
             for: .cleanest,
@@ -98,6 +98,15 @@ struct RoadTierE4Tests {
 
         let primary = RoadTierStats.cleanLeafCostMult(tier: .arterial, family: .paved)
         let secondary = RoadTierStats.cleanLeafCostMult(tier: .collector, family: .paved)
+        let avoidedPrimary = primary * RoadTierStats.e4LeafCostMult(
+            tier: .arterial,
+            avoidMotorways: true,
+            preferBackRoads: false,
+            metersFromStart: 1e9,
+            metersToDestination: 1e9,
+            startOnHighway: false,
+            endOnHighway: false
+        )
         let allowedMotorway = RoadTierStats.cleanLeafCostMult(tier: .motorway, family: .paved)
         let avoidedMotorway = allowedMotorway * RoadTierStats.e4LeafCostMult(
             tier: .motorway,
@@ -110,11 +119,12 @@ struct RoadTierE4Tests {
         )
         #expect(primary == 0.96)
         #expect(secondary == 0.92)
+        #expect(avoidedPrimary == primary * 8)
         #expect(allowedMotorway == 1)
         #expect(avoidedMotorway == 40)
     }
 
-    @Test("Clean defaults to motorway avoidance and Allow removes it")
+    @Test("Clean defaults to major-highway avoidance and Allow removes it")
     func cleanRequestDefaultsAndAllowState() {
         let from = UUID()
         let to = UUID()

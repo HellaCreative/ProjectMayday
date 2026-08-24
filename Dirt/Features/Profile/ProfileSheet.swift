@@ -20,7 +20,7 @@ struct ProfileSheet: View {
     @AppStorage(FuelRangePrefs.reservePercentKey) private var fuelReservePercent = FuelRangePrefs.suggestedReservePercent
     @AppStorage(KeepAwakePrefs.key) private var keepAwakeWhileUsing = false
     @AppStorage(CleanMetroDebugPrefs.enabledKey) private var cleanMetroOverride = false
-    @AppStorage(CleanMetroDebugPrefs.valueKey) private var cleanMetroSlider = 5.0
+    @AppStorage(CleanMetroDebugPrefs.valueKey) private var cleanMetroSlider = 10.0
     @Environment(\.scenePhase) private var scenePhase
     @State private var profileFuelDebounce: Task<Void, Never>?
 
@@ -508,13 +508,13 @@ struct ProfileSheet: View {
             .tint(DirtTheme.orange)
 
             if cleanMetroOverride {
-                Text("Override \(Int(cleanMetroSlider.rounded())) (live default ×5)")
+                Text("Override ×\(Int(cleanMetroSlider.rounded()))")
                     .font(DirtType.helper)
                     .foregroundStyle(DirtTheme.muted)
                 Slider(value: $cleanMetroSlider, in: 1...20, step: 1)
                     .tint(DirtTheme.orange)
             } else {
-                Text("Current live (×5) — enable to test 1…20 on Clean routes")
+                Text("Automatic: highways off ×10 · highways on ×2")
                     .font(DirtType.helper)
                     .foregroundStyle(DirtTheme.muted)
                     .fixedSize(horizontal: false, vertical: true)

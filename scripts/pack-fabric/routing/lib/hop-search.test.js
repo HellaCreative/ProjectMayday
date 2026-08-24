@@ -64,9 +64,10 @@ test("Clean metro multiplier override clamps 1–20 and ignores other profiles",
   assert.equal(resolveCleanMetroMultiplier("cleanest", 99), 20);
   assert.equal(resolveCleanMetroMultiplier("cleanest", null), null);
   assert.equal(resolveCleanMetroMultiplier("dirt", 5), null);
-  assert.equal(resolveMetroFallbackPenalty("balanced", 5), 120);
-  assert.equal(resolveMetroFallbackPenalty("cleanest", null), 5);
-  assert.equal(resolveMetroFallbackPenalty("cleanest", 5), 5);
+  assert.equal(resolveMetroFallbackPenalty("balanced", 5, true), 120);
+  assert.equal(resolveMetroFallbackPenalty("cleanest", null, true), 10);
+  assert.equal(resolveMetroFallbackPenalty("cleanest", null, false), 2);
+  assert.equal(resolveMetroFallbackPenalty("cleanest", 7, true), 7);
 });
 
 test("smaller settlements are avoided unless an endpoint is inside", () => {

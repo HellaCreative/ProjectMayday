@@ -106,10 +106,11 @@ nonisolated enum RoadTierStats {
         return t * f
     }
 
-    // Clean motorway policy. Avoidance is the default internal state; the rider-facing
-    // "Allow motorways" switch disables it. Soft costs only; never delete edges.
+    // Clean major-highway policy. Avoidance is the default internal state; the rider-facing
+    // "Allow major highways" switch disables it. Soft costs only; never delete edges.
     static let e4AvoidMotorwayMult = 40.0
     static let e4AvoidTrunkMult = 18.0
+    static let e4AvoidPrimaryMult = 8.0
     static let e4PreferBackArterialMult = 4.5
     static let e4PreferBackCollectorMult = 0.82
     static let e4HighwayJoinMeters = 6000.0
@@ -123,12 +124,17 @@ nonisolated enum RoadTierStats {
         endOnHighway: Bool
     ) -> Double {
         guard enabled else { return 1 }
-        guard tier == .motorway || tier == .trunk else { return 1 }
+        guard tier == .motorway || tier == .trunk || tier == .arterial else { return 1 }
         let near =
             (endOnHighway && metersToDestination < e4HighwayJoinMeters) ||
             (startOnHighway && metersFromStart < e4HighwayJoinMeters)
         if near { return 1 }
-        return tier == .motorway ? e4AvoidMotorwayMult : e4AvoidTrunkMult
+        switch tier {
+        case .motorway: return e4AvoidMotorwayMult
+        case .trunk: return e4AvoidTrunkMult
+        case .arterial: return e4AvoidPrimaryMult
+        default: return 1
+        }
     }
 
     /// Prefer back roads: penalize arterial; mild collector preference. Never excludes.
@@ -160,8 +166,8 @@ nonisolated enum RoadTierStats {
         ) * e4PreferBackRoadsMult(tier: tier, enabled: preferBackRoads)
     }
 
-    /// Clean-only motorway policy. Primary and secondary roads remain ordinary
-    /// pavement; only motorway/trunk receive the default soft avoidance.
+    /// Clean-only major-highway policy. Secondary and lower paved roads remain
+    /// ordinary pavement; motorway, trunk, and primary receive soft avoidance.
     static func e4Flags(
         for profile: RouteProfile,
         avoidMotorways: Bool,

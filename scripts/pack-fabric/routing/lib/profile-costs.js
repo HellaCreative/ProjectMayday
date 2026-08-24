@@ -14,8 +14,9 @@
  *                       pavement only when forced. Longer OK; no destination loops.
  *
  * Packed surface codes: paved=0 gravel=1 access=2 (resource) track=3 unknown=4.
- * Road-class (`rt` on v1 edges): cleanest prefers freeway/arterial; non-cleanest
- * pay hard for freeway/arterial so adventure never keeps a highway spine.
+ * Road-class (`rt` on v1 edges): Clean's rider control decides whether major
+ * highways are ordinary pavement or strongly avoided. Adventure profiles retain
+ * their own freeway/arterial penalties.
  *
  * SoT: Dirt/Routing/OnDevice/OnDeviceProfileCosts.swift (phone). Dirt surface
  * values here already include iOS `dirtUnpavedMult` so live API matches.
@@ -53,7 +54,7 @@ const PROFILE_SURFACE_WEIGHTS = Object.freeze({
     track: 0.0168,
     unknown: 0.154
   }),
-  // Google/Apple: shortest practical pavement. Do not punish highway.
+  // Base paved surface cost. Major-highway policy is applied during search.
   cleanest: Object.freeze({
     paved: 1.0,
     gravel: 60.0,
@@ -238,13 +239,12 @@ const MAJOR_HIGHWAY_PIN_METERS = 18;
 const MAJOR_HIGHWAY_JOIN_METERS = 6000;
 
 /**
- * Major highway avoid class.
- * Clean: freeway + ramp only (arterial is normal Clean pavement ~0.98).
- * Balanced / Dirt: freeway + arterial + ramp.
+ * Major-highway class in coarse packs. These packs collapse trunk and primary
+ * into arterial, so Clean applies the approved primary ×8 approximation there.
  */
 function isMajorHighwayClass(road, profile) {
+  void profile;
   if (road === "freeway" || road === "ramp") return true;
-  if (resolveProfile(profile) === "cleanest") return false;
   return road === "arterial";
 }
 
@@ -260,9 +260,12 @@ function majorHighwayAvoidMult(
   metersFromStart,
   metersToDestination,
   startOnMajorHighway,
-  endOnMajorHighway
+  endOnMajorHighway,
+  avoidMajorHighways = true
 ) {
   if (!isMajorHighwayClass(roadTrackClass, profile)) return 1;
+  profile = resolveProfile(profile);
+  if (profile === "cleanest" && !avoidMajorHighways) return 1;
   const join = MAJOR_HIGHWAY_JOIN_METERS;
   const nearPinnedHighway =
     (endOnMajorHighway && metersToDestination < join) ||
@@ -273,6 +276,9 @@ function majorHighwayAvoidMult(
     const target = 2.0;
     if (current <= target) return 1;
     return target / current;
+  }
+  if (profile === "cleanest") {
+    return roadTrackClass === "arterial" ? 8 : 40;
   }
   const target = 12.0;
   if (current >= target) return 1;

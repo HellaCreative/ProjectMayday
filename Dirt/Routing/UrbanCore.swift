@@ -5,7 +5,8 @@ import Foundation
 ///
 /// Boxes cover the practical through-route core, not merely a downtown point;
 /// otherwise a router can still treat the surrounding city grid as free fabric.
-/// Crossing is penalized (×5 for Clean) but passable so a short graze beats a
+/// Crossing is penalized (Clean ×10 with major highways off, ×2 with them on)
+/// but passable so a short graze beats a
 /// hundreds-of-kilometre detour. Lockstep: `scripts/pack-fabric/routing/lib/hop-search.js`.
 nonisolated enum UrbanCore {
     struct Box: Sendable {
@@ -150,10 +151,14 @@ nonisolated enum UrbanCore {
         return 1
     }
 
-    /// Clean city policy defaults to ×5; tester override remains available at 1…20.
-    static func resolveCleanMetroPenalty(profile: RouteProfile, override: Double?) -> Double {
+    /// Clean city policy follows the major-highway control; tester override remains 1…20.
+    static func resolveCleanMetroPenalty(
+        profile: RouteProfile,
+        override: Double?,
+        avoidMajorHighways: Bool
+    ) -> Double {
         guard profile == .cleanest else { return 120 }
-        guard let raw = override, raw.isFinite else { return 5 }
+        guard let raw = override, raw.isFinite else { return avoidMajorHighways ? 10 : 2 }
         return min(20, max(1, raw))
     }
 

@@ -16,7 +16,7 @@ nonisolated struct RiderLeg: Identifiable, Equatable, Codable, Sendable {
     let to: UUID
     var profile: RouteProfile
     var allowUnknown: Bool
-    /// Internal inverse of the Clean "Allow motorways" control.
+    /// Internal inverse of the Clean "Allow major highways" control.
     var avoidMotorways: Bool
     /// Legacy persisted field. Clean no longer adds a primary-road penalty.
     var preferBackRoads: Bool

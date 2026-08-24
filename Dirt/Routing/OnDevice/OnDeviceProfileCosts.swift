@@ -8,9 +8,9 @@ import Foundation
 ///   Dirt     → adventure ride: progress generally toward B, meander for yellow/white/blue
 ///              dirt; pavement only when forced. Allow Unknown stays OFF unless the rider
 ///              opts in (legal risk) — purple Access is gated by that toggle.
-///   All profiles skip freeway / arterial / ramp except to join a pin that
-///   actually sits on that highway (last/first ~6 km). A 401 destination does
-///   not unlock motorways from Barrie.
+///   Clean's rider control decides whether major highways are ordinary pavement
+///   or strongly avoided. Balanced / Dirt retain their own highway penalties.
+///   Pin-join relief keeps a highway endpoint routable for the first/last ~6 km.
 /// Opted out of `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` for `Task.detached` search.
 nonisolated enum OnDeviceProfileCosts {
     /// Packed surface codes: paved=0 gravel=1 access=2 track=3 unknown=4.
@@ -84,8 +84,8 @@ nonisolated enum OnDeviceProfileCosts {
         let table: [String: Double]
         switch profile {
         case .cleanest:
-            // Highway around towns. Local/service is the city grid — extra tax
-            // in `cleanCityStreetMult` eases only near A/B.
+            // Base paved-road costs. The rider's major-highway control and the
+            // urban-core policy apply their dynamic penalties during search.
             table = [
                 "freeway": 0.94, "arterial": 0.98, "collector": 1.18, "ramp": 0.96,
                 "local": 2.6, "service": 3.2, "resource": 1.0, "recreation": 1.0,
@@ -228,8 +228,8 @@ nonisolated enum OnDeviceProfileCosts {
     }
 
     static func isMajorHighway(_ road: String, profile: RouteProfile = .dirt) -> Bool {
+        _ = profile
         if road == "freeway" || road == "ramp" { return true }
-        if profile == .cleanest { return false }
         return road == "arterial"
     }
 
@@ -239,17 +239,19 @@ nonisolated enum OnDeviceProfileCosts {
     static let majorHighwayJoinMeters = 6_000.0
 
     /// Major highways stay expensive except to enter/leave a pin on that class.
-    /// Clean avoids freeway+ramp only; arterial is normal Clean pavement.
+    /// Coarse packs collapse trunk and primary into arterial, so Clean uses ×8.
     static func majorHighwayAvoidMult(
         profile: RouteProfile,
         roadClassCode: Int,
         metersFromStart: Double,
         metersToDestination: Double,
         startOnMajorHighway: Bool,
-        endOnMajorHighway: Bool
+        endOnMajorHighway: Bool,
+        avoidMajorHighways: Bool = true
     ) -> Double {
         let road = GraphV2Pack.roadClassName(roadClassCode)
         guard isMajorHighway(road, profile: profile) else { return 1 }
+        if profile == .cleanest, !avoidMajorHighways { return 1 }
         let join = majorHighwayJoinMeters
         let nearPinnedHighway =
             (endOnMajorHighway && metersToDestination < join)
@@ -261,7 +263,8 @@ nonisolated enum OnDeviceProfileCosts {
             if current <= target { return 1 }
             return target / current
         }
-        let target = 3.0
+        if profile == .cleanest { return road == "arterial" ? 8 : 40 }
+        let target = 12.0
         if current >= target { return 1 }
         return target / current
     }

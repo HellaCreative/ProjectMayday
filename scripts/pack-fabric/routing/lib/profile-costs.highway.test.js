@@ -7,15 +7,17 @@ const {
   majorHighwayAvoidMult
 } = require("./profile-costs");
 
-test("Clean isMajorHighway — freeway yes, arterial no, ramp yes-as-freeway", () => {
+test("Clean coarse packs avoid freeway, arterial, and ramp when major highways are off", () => {
   assert.equal(isMajorHighwayClass("freeway", "cleanest"), true);
   assert.equal(isMajorHighwayClass("ramp", "cleanest"), true);
-  assert.equal(isMajorHighwayClass("arterial", "cleanest"), false);
+  assert.equal(isMajorHighwayClass("arterial", "cleanest"), true);
   assert.equal(isMajorHighwayClass("collector", "cleanest"), false);
 
-  assert.equal(majorHighwayAvoidMult("cleanest", "arterial", 80_000, 80_000, false, false), 1);
-  assert.ok(majorHighwayAvoidMult("cleanest", "freeway", 80_000, 80_000, false, false) > 1);
-  assert.ok(majorHighwayAvoidMult("cleanest", "ramp", 80_000, 80_000, false, false) > 1);
+  assert.equal(majorHighwayAvoidMult("cleanest", "arterial", 80_000, 80_000, false, false, true), 8);
+  assert.equal(majorHighwayAvoidMult("cleanest", "freeway", 80_000, 80_000, false, false, true), 40);
+  assert.equal(majorHighwayAvoidMult("cleanest", "ramp", 80_000, 80_000, false, false, true), 40);
+  assert.equal(majorHighwayAvoidMult("cleanest", "arterial", 80_000, 80_000, false, false, false), 1);
+  assert.equal(majorHighwayAvoidMult("cleanest", "freeway", 80_000, 80_000, false, false, false), 1);
 });
 
 test("Balanced and Dirt still tax arterial as major highway", () => {

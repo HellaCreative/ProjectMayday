@@ -129,8 +129,8 @@ final class RoutePlannerModel {
             }
         }
     }
-    /// Internal inverse of the rider-facing "Allow motorways" switch.
-    /// Clean defaults to avoiding motorway + trunk; other profiles ignore it.
+    /// Internal inverse of the rider-facing "Allow major highways" switch.
+    /// Clean defaults to avoiding motorway + trunk + primary; other profiles ignore it.
     var avoidMotorways = true {
         didSet {
             guard oldValue != avoidMotorways else { return }

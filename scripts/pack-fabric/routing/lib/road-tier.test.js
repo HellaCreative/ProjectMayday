@@ -13,6 +13,7 @@ const {
   e4FlagsForProfile,
   ROAD_TIER,
   E4_AVOID_MOTORWAY_MULT,
+  E4_AVOID_PRIMARY_MULT,
   E4_PREFER_BACK_ARTERIAL_MULT
 } = require("./road-tier");
 
@@ -142,7 +143,7 @@ describe("road-tier E4 knobs", () => {
     }
   });
 
-  it("Clean limits the policy to motorway and trunk", () => {
+  it("Clean avoids motorway, trunk, and primary when major highways are off", () => {
     const off = e4FlagsForProfile("cleanest", { avoidMotorways: false, preferBackRoads: false });
     assert.equal(off.avoidMotorways, false);
     assert.equal(off.preferBackRoads, false);
@@ -152,6 +153,13 @@ describe("road-tier E4 knobs", () => {
 
     const primary = cleanLeafCostMult(ROAD_TIER.ARTERIAL, "paved");
     const secondary = cleanLeafCostMult(ROAD_TIER.COLLECTOR, "paved");
+    const avoidedPrimary = primary * e4LeafCostMult({
+      tier: ROAD_TIER.ARTERIAL,
+      avoidMotorways: true,
+      preferBackRoads: false,
+      metersFromStart: 1e9,
+      metersToDestination: 1e9
+    });
     const allowedMotorway = cleanLeafCostMult(ROAD_TIER.MOTORWAY, "paved");
     const avoidedMotorway = allowedMotorway * e4LeafCostMult({
       tier: ROAD_TIER.MOTORWAY,
@@ -162,6 +170,7 @@ describe("road-tier E4 knobs", () => {
     });
     assert.equal(primary, 0.96);
     assert.equal(secondary, 0.92);
+    assert.equal(avoidedPrimary, primary * E4_AVOID_PRIMARY_MULT);
     assert.equal(allowedMotorway, 1);
     assert.equal(avoidedMotorway, 40);
   });
