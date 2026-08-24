@@ -63,7 +63,7 @@ function effectiveProfileInfo(requestedProfile, flags = {}) {
   if (flags.cleanUnpavedFallbackUsed) fallbacks.push("clean_unpaved_last_resort");
   if (flags.settlementFallbackUsed) fallbacks.push("settlement_relaxed");
 
-  // Urban-core last resort is the Clean escape hatch; when Dirt/Balanced/Direct
+  // Urban-core last resort is the Clean escape hatch; when Dirt/Balanced
   // only connect after that hatch, the ride is effectively a Clean connectivity
   // result under the requested objective label.
   let effective = requested;

@@ -18,10 +18,20 @@ test("Clean isMajorHighway — freeway yes, arterial no, ramp yes-as-freeway", (
   assert.ok(majorHighwayAvoidMult("cleanest", "ramp", 80_000, 80_000, false, false) > 1);
 });
 
-test("Direct and Dirt still tax arterial as major highway", () => {
-  assert.equal(isMajorHighwayClass("arterial", "direct"), true);
-  assert.equal(isMajorHighwayClass("arterial", "dirt"), true);
+test("Balanced and Dirt still tax arterial as major highway", () => {
   assert.equal(isMajorHighwayClass("arterial", "balanced"), true);
-  assert.ok(majorHighwayAvoidMult("direct", "arterial", 80_000, 80_000, false, false) > 1);
+  assert.equal(isMajorHighwayClass("arterial", "dirt"), true);
+  assert.ok(majorHighwayAvoidMult("balanced", "arterial", 80_000, 80_000, false, false) > 1);
   assert.ok(majorHighwayAvoidMult("dirt", "arterial", 80_000, 80_000, false, false) > 1);
+});
+
+test("unknown or missing profile uses Balanced", () => {
+  const { resolveProfile, surfaceMultiplier } = require("./profile-costs");
+  assert.equal(resolveProfile(undefined), "balanced");
+  assert.equal(resolveProfile(""), "balanced");
+  assert.equal(resolveProfile("scenic"), "balanced");
+  assert.equal(
+    surfaceMultiplier(0, "scenic"),
+    surfaceMultiplier(0, "balanced")
+  );
 });

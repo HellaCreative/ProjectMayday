@@ -70,7 +70,7 @@ lockstep (there is already `scripts/assert-live-pack-lockstep.js`).
 ## 1. Target v3 edge model (preserve leaves; derive families at read time)
 
 **Two primary dimensions, each with a distinct job — never collapse either:**
-- **Surface leaf** drives **Dirt / Balanced / Direct / Clean** (the real dirt↔paved
+- **Surface leaf** drives **Dirt / Balanced / Clean** (the real dirt↔paved
   spectrum; makes Dirt% honest).
 - **Road-class leaf** drives **Clean specifically** — so Clean can read road nuance and
   prefer rural paved ancillary roads while avoiding highways/freeways.
@@ -292,12 +292,12 @@ regress the others. Do them in order:
 - **E1 — Statistics only.** Router reads leaves for honest Dirt% (count real unpaved
   leaves only; untagged `unknown` is its own bucket, never silently dirt or paved —
   identical in both engines). No route-selection change yet. **Gate:** Dirt% shifts to
-  honest values; Dirt/Balanced/Direct route selection unchanged.
+  honest values; Dirt/Balanced route selection unchanged.
 - **E2 — Clean behavior.** Clean reads surface leaf (prefer paved) + road-class leaf
   via shared `roadTierMap` (collector = backbone; arterial = connector; motorway/trunk
   avoided; residential/living_street = destination-access only). **Gate:** JS↔Swift
   identical Clean path on NS v3; Clean ~0% honest dirt on a sane paved back-road;
-  Dirt/Balanced/Direct selection unchanged.
+  Dirt/Balanced selection unchanged.
 - **E3 — Debug display layers.** Surface-leaf, Road-class-leaf, Access as separate map
   layers (GRAPH debug paint modes) plus an always-visible pack version badge
   (`NS v3 · <revision>` / `v2`). **Gate:** spot-checks match known roads; badge reads

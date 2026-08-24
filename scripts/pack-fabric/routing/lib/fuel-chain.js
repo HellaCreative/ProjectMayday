@@ -28,6 +28,7 @@ const {
   provinceFamily
 } = require("../regional/select");
 const { corridorLocationsForRoute } = require("../regional/merge");
+const { resolveProfile } = require("./profile-costs");
 const { loadFuelForLocations, loadRegionFuel } = require("./fuel-data");
 
 function mergePackIdentities(...groups) {
@@ -47,7 +48,7 @@ const MIN_STOP_SEPARATION_M = 800;
 const MIN_FORWARD_PROGRESS_M = 2_500;
 /** Bumped when fuel-selection / ranking contracts change. Clients may assert. */
 const FUEL_CHAIN_SERVICE_VERSION = "2026-08-23.fuel-coherence.4";
-/** Clean/direct reject pumps whose full chain exceeds foundation by this much. */
+/** Clean rejects pumps whose full chain exceeds foundation by this much. */
 const MAX_CLEAN_CHAIN_DETOUR_RATIO = 1.12;
 const MAX_CLEAN_CHAIN_DETOUR_ABS_M = 20_000;
 /** Soft corridor half-width; beyond this, cross-track dominates clean ranking. */
@@ -292,10 +293,9 @@ function prepareTargets(runtime, stations, destination, policy, profile, avoid) 
 }
 
 function fuelPlanningSpan(profile) {
-  switch (String(profile || "").toLowerCase()) {
+  switch (resolveProfile(profile)) {
     case "dirt": return 0.78;
     case "balanced": return 0.84;
-    case "direct": return 0.91;
     case "cleanest": return 0.95;
     default: return 0.84;
   }
@@ -343,11 +343,11 @@ function stationEligibility(row, {
   ) {
     forward = false;
   }
-  // Clean/direct: reject needless lateral excursions whose full P1→pump→P2
+  // Clean: reject needless lateral excursions whose full P1→pump→P2
   // chain is dominated by the foundation ride. Score alone was letting a
   // Wallace-class pump win because it used nearly the whole tank.
-  const profileKey = String(profile || "").toLowerCase();
-  if (forward && (profileKey === "cleanest" || profileKey === "direct")) {
+  const profileKey = resolveProfile(profile);
+  if (forward && profileKey === "cleanest") {
     const directMeters = Number(destinationGraphMeters);
     const remainingGraph = Number(row.remainingGraphMeters);
     if (Number.isFinite(directMeters) && Number.isFinite(remainingGraph) && Number.isFinite(row.graphMeters)) {
@@ -422,10 +422,10 @@ function rankForwardFuel(
       const gain = eligibility.gainMeters;
       const progress = eligibility.progressMeters;
       const crossTrack = eligibility.crossTrack;
-      const profileKey = String(profile || "").toLowerCase();
-      const crossTrackWeight = (profileKey === "cleanest" || profileKey === "direct") ? 1.15 : 0.35;
-      const tankWeight = (profileKey === "cleanest" || profileKey === "direct") ? 0.04 : 0.12;
-      // Progress/coherence first. Tank use is secondary for Clean/Direct so a
+      const profileKey = resolveProfile(profile);
+      const crossTrackWeight = profileKey === "cleanest" ? 1.15 : 0.35;
+      const tankWeight = profileKey === "cleanest" ? 0.04 : 0.12;
+      // Progress/coherence first. Tank use is secondary for Clean so a
       // full-tank lateral excursion cannot outrank a shorter corridor pump.
       const score =
         progress * 1.0 +
@@ -463,7 +463,7 @@ function rankForwardFuel(
   const arrivalLimit = destinationFuelUsedLimitMeters == null
     ? NaN
     : Number(destinationFuelUsedLimitMeters);
-  if (profile === "direct" || profile === "cleanest") {
+  if (resolveProfile(profile) === "cleanest") {
     const exact = normal.filter((row) => Number.isFinite(row.remainingGraphMeters));
     const withinArrival = Number.isFinite(arrivalLimit)
       ? exact.filter((row) => row.remainingGraphMeters <= arrivalLimit + 1)
@@ -518,6 +518,7 @@ async function planFuelChainOnRuntime({
   timeBudgetMs = null,
   profileMeters = null
 }) {
+  profile = resolveProfile(profile);
   const policy = normalizePolicy(rawPolicy, profile);
   const avoid = new Set((avoidEdgeIds || []).map(String));
   const startMatch = matchPoint(
@@ -609,7 +610,7 @@ async function planFuelChainOnRuntime({
       priorEdgeIds: [...(evaluationHistory || [])],
       arrivalEdgeId: evaluationArrival,
       backtrackFactor,
-      directExtraBudgetMeters: profile === "direct" ? 0 : undefined,
+      directExtraBudgetMeters: undefined,
       maxPathMeters: maxMeters
     }
   }));
@@ -855,7 +856,7 @@ async function planFuelChainOnRuntime({
     maxHopMs = Math.max(maxHopMs, elapsed);
     void hopTimeBudgetMs;
     const fitting = rows.filter((row) => row.fits);
-    switch (String(profile || "").toLowerCase()) {
+    switch (resolveProfile(profile)) {
       case "dirt":
         fitting.sort((a, b) => {
           const dirtDelta = b.chainDirtPct - a.chainDirtPct;
@@ -869,7 +870,6 @@ async function planFuelChainOnRuntime({
         );
         break;
       case "cleanest":
-      case "direct":
         // Anchor coherence to the foundation ride, not the shortest forced stop.
         // A stop is required because profileMeters exceeded the tank; among
         // pumps whose complete chain stays near that foundation, prefer the one

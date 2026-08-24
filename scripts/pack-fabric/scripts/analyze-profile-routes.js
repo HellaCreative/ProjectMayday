@@ -2,7 +2,7 @@
 "use strict";
 
 /**
- * Compare Dirt vs Balanced vs Direct vs Clean on a local graph.v2.bin.
+ * Compare Dirt vs Balanced vs Clean on a local graph.v2.bin.
  * Mirrors OnDeviceProfileCosts.swift + a node-to-node Dijkstra (no virtual
  * endpoints / runtime stitches). Good enough to see whether profiles diverge.
  *
@@ -90,7 +90,6 @@ function haversine(aLat, aLon, bLat, bLon) {
 
 function surfaceWeight(profile, surfaceCode, roadClassCode) {
   const tables = {
-    direct: [1.42, 0.98, 0.92, 0.88, 0.96],
     balanced: [1.38, 1.12, 1.05, 1.0, 1.18],
     dirt: [16.0, 0.28, 0.12, 0.06, 0.28],
     cleanest: [1.0, 8.0, 10.0, 14.0, 6.0]
@@ -100,7 +99,7 @@ function surfaceWeight(profile, surfaceCode, roadClassCode) {
   const road = ROAD_CLASS_NAME[roadClassCode] || "unknown";
   // Untagged highway is pavement, not adventure fuel — match rider paint.
   if (
-    (profile === "dirt" || profile === "balanced" || profile === "direct") &&
+    (profile === "dirt" || profile === "balanced") &&
     idx === 4 &&
     (road === "freeway" ||
       road === "arterial" ||
@@ -123,11 +122,6 @@ function roadClassWeight(profile, roadClassCode) {
       freeway: 0.94, arterial: 0.98, collector: 1.18, ramp: 0.96,
       local: 2.6, service: 3.2, resource: 1.0, recreation: 1.0,
       track: 1.0, double_track: 1.0, unknown: 1.0
-    },
-    direct: {
-      freeway: 1.7, arterial: 1.45, collector: 1.06, ramp: 1.6,
-      local: 0.98, service: 1.12, resource: 0.9, recreation: 0.88,
-      track: 0.9, double_track: 0.9, unknown: 1.0
     },
     balanced: {
       freeway: 3.2, arterial: 2.4, collector: 1.08, ramp: 2.8,
@@ -200,10 +194,6 @@ function approachAwayExtra(profile, dFrom, dTo, abMeters) {
     const raw = mid + near;
     const cap = kmAway * 16.0 * 0.12;
     return Math.min(raw, cap);
-  }
-  if (profile === "direct") {
-    const nearBand = Math.max(3200, abMeters * 0.3);
-    return kmAway * (dFrom < nearBand ? 10 : 4.2);
   }
   if (profile === "balanced") {
     const mid = kmAway * 1.1;
@@ -492,8 +482,8 @@ function fabricCensus(pack, allowUnknown) {
 
 function runPair(packs, name, spec, profiles, allowUnknown) {
   const pack = packs[spec.pack];
-  const fromNode = snapNode(pack, spec.from.lat, spec.from.lon, "direct", allowUnknown);
-  const toNode = snapNode(pack, spec.to.lat, spec.to.lon, "direct", allowUnknown);
+  const fromNode = snapNode(pack, spec.from.lat, spec.from.lon, "balanced", allowUnknown);
+  const toNode = snapNode(pack, spec.to.lat, spec.to.lon, "balanced", allowUnknown);
   if (fromNode < 0 || toNode < 0) {
     return { name, error: `snap failed from=${fromNode} to=${toNode}` };
   }
@@ -552,7 +542,7 @@ async function main() {
     : ["hope-princeton", "merritt-kamloops", "calgary-drumheller", "chilliwack-enderby", "calgary-lethbridge", "golden-revelstoke"];
   const profiles = process.env.PROFILES
     ? process.env.PROFILES.split(",")
-    : ["dirt", "balanced", "direct", "cleanest"];
+    : ["dirt", "balanced", "cleanest"];
   if (BAN_PAVED) console.log("BAN_PAVED=1 (unpaved-only graph)");
   if (VARIANT !== "current") console.log("VARIANT=" + VARIANT);
   if (DIRT_AWAY_MID !== 0.18) console.log("DIRT_AWAY_MID=" + DIRT_AWAY_MID);

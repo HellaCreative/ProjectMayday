@@ -137,7 +137,7 @@ function cleanLeafHighwayAvoidMult(tier, metersFromStart, metersToDestination, s
 }
 
 /**
- * Phase E4 — rider knobs (default OFF → Dirt/Balanced/Direct + Clean E2 unchanged).
+ * Phase E4 — rider knobs (default OFF → Dirt/Balanced + Clean E2 unchanged).
  * Soft costs only: never remove edges from the graph.
  */
 const E4_AVOID_MOTORWAY_MULT = 40;
@@ -191,7 +191,7 @@ function e4LeafCostMult(opts) {
 }
 
 /**
- * E4 knobs are Clean-only. Dirt / Balanced / Direct ignore rider flags so
+ * E4 knobs are Clean-only. Dirt / Balanced ignore rider flags so
  * costing matches pre-E4. Clean always prefers back roads; avoid-motorways
  * is the Clean toggle.
  */

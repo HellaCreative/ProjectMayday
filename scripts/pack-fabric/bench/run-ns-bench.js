@@ -81,8 +81,8 @@ const { findPathV2 } = require("../routing/lib/find-path-v2");
 const { resolveGraphRequest, graphCdnBaseUrlForRegion } = require("../routing/regional/select");
 const SESSION_SEED = 0xD1_47_0008;
 const USABLE_METERS = 237_500;
-const PROFILES = ["dirt", "balanced", "direct", "clean"];
-const PROFILE_API = { dirt: "dirt", balanced: "balanced", direct: "direct", clean: "cleanest" };
+const PROFILES = ["dirt", "balanced", "clean"];
+const PROFILE_API = { dirt: "dirt", balanced: "balanced", clean: "cleanest" };
 
 function usage() {
   console.log("Usage: npm run bench:ns [-- --compare <sha>]");
@@ -288,7 +288,6 @@ async function routeCase(item, shortestMeters) {
   const timings = Array.isArray(item._timings) ? [...item._timings] : [];
   const points = locationsFor(item.route);
   const baseline = Array.isArray(item._baseline) ? item._baseline : [];
-  const directLegBudget = item.profile === "direct" ? 15_000 / (points.length - 1) : undefined;
 
   if (!baseline.length) {
     const discoveryHistory = emptyHistory();
@@ -296,7 +295,7 @@ async function routeCase(item, shortestMeters) {
       const response = requireComplete(await timed(
         () => routeRequest(requestBody(
           item.profile, item.allowUnknown, points[index], points[index + 1],
-          discoveryHistory, undefined, directLegBudget,
+          discoveryHistory, undefined, undefined,
           item.route.id === "through-halifax"
         )),
         timings
@@ -449,7 +448,7 @@ async function routeCase(item, shortestMeters) {
       const response = requireComplete(await timed(
         () => routeRequest(requestBody(
           item.profile, item.allowUnknown, hopPoints[hop], hopPoints[hop + 1], finalHistory, cap,
-          item.profile === "direct" ? 0 : undefined
+          undefined
         )),
         timings
       ), `fuel leg ${index + 1} hop ${hop + 1}`);
@@ -507,18 +506,18 @@ async function shortestPathMeters(route, allowUnknown) {
   let total = 0;
   for (let index = 0; index < points.length - 1; index += 1) {
     const body = {
-      profile: "direct",
+      profile: "balanced",
       locations: [points[index], points[index + 1]],
       accessPolicy: { motorizedPermissive: true, motorizedUnknown: allowUnknown }
     };
     const selection = resolveGraphRequest(body);
-    const runtime = await loadGraphsForRequest(selection, { locations: body.locations, profile: "direct" });
+    const runtime = await loadGraphsForRequest(selection, { locations: body.locations, profile: "balanced" });
     if (runtime.format !== "v2") throw new Error("NS shortest reference requires the live graph.v2 pack");
-    const policy = normalizePolicy(body.accessPolicy, "direct");
-    const start = matchPoint(runtime, points[index], policy, 250, new Set(), null, "direct", "start");
-    const end = matchPoint(runtime, points[index + 1], policy, 250, new Set(), start.componentId, "direct", "end");
+    const policy = normalizePolicy(body.accessPolicy, "balanced");
+    const start = matchPoint(runtime, points[index], policy, 250, new Set(), null, "balanced", "start");
+    const end = matchPoint(runtime, points[index + 1], policy, 250, new Set(), start.componentId, "balanced", "end");
     if (!start.ok || !end.ok) throw new Error(`Shortest reference match failed for ${route.id} leg ${index + 1}`);
-    const shortest = findPathV2(runtime, start, end, "direct", policy, new Set(), undefined, {
+    const shortest = findPathV2(runtime, start, end, "balanced", policy, new Set(), undefined, {
       costMode: "distance",
       corridorMeters: 0,
       hardCorridor: false,
@@ -568,15 +567,6 @@ function assertionsFor(item, result) {
     if (item.route.id === "through-halifax") {
       add("urban wall", ["held", "labelled_fallback"].includes(result.urbanWall), result.urbanWall || "unlabelled");
     }
-  }
-  if (item.profile === "direct") {
-    add(
-      "direct ≤shortest+15km",
-      Number.isFinite(result.shortestMeters) && result.meters <= result.shortestMeters + 15_000,
-      Number.isFinite(result.shortestMeters)
-        ? `${result.meters}m vs ${result.shortestMeters}m`
-        : (result.shortestError || "shortest reference unavailable")
-    );
   }
   add(
     "no unexplained backtrack",
@@ -718,13 +708,6 @@ async function main() {
     try {
       let shortest = null;
       let shortestError = null;
-      if (item.profile === "direct") {
-        try {
-          shortest = await shortestPathMeters(item.route, item.allowUnknown);
-        } catch (error) {
-          shortestError = error && error.message ? error.message : String(error);
-        }
-      }
       result = await routeCase(item, shortest);
       if (shortestError) result.shortestError = shortestError;
       if (item.profile === "dirt" && Number.isFinite(result.dirtPct) && result.dirtPct < 70) {

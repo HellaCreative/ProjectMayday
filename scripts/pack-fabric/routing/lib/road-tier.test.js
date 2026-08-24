@@ -124,9 +124,9 @@ describe("road-tier E4 knobs", () => {
     assert.ok(e4PreferBackRoadsMult(ROAD_TIER.COLLECTOR, true) > 0);
   });
 
-  it("scopes knobs to Clean only — Dirt/Balanced/Direct ignore rider flags", () => {
+  it("scopes knobs to Clean only — Dirt/Balanced ignore rider flags", () => {
     const leaked = { avoidMotorways: true, preferBackRoads: true };
-    for (const profile of ["dirt", "balanced", "direct"]) {
+    for (const profile of ["dirt", "balanced"]) {
       const flags = e4FlagsForProfile(profile, leaked);
       assert.equal(flags.avoidMotorways, false, profile);
       assert.equal(flags.preferBackRoads, false, profile);

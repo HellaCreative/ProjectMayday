@@ -87,7 +87,7 @@ function route(runtime) {
     runtime,
     start,
     end,
-    "direct",
+    "balanced",
     { motorizedPermissive: true, motorizedUnknown: false },
     new Set(),
     undefined,

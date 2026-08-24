@@ -41,10 +41,12 @@ test("Dirt chooses the mid-range dirt-network station over a farther paved stati
   assert.equal(result.stationCandidates.length, 2);
 });
 
-test("Direct may keep the farther forward station", async () => {
-  const result = await plan("direct");
-  assert.equal(result.ok, true);
-  assert.equal(result.stops[0].id, "far-paved");
+test("unknown profile plans as Balanced", async () => {
+  const unknown = await plan("scenic");
+  const balanced = await plan("balanced");
+  assert.equal(unknown.ok, true);
+  assert.equal(balanced.ok, true);
+  assert.equal(unknown.stops[0].id, balanced.stops[0].id);
 });
 
 test("Clean picks the forward paved-side station while Dirt picks the dirt-side station", async () => {

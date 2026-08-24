@@ -8,8 +8,6 @@
  * Mental model — dirt is the default fabric except Clean:
  *   Clean / Cleanest → cleanest — pavement only. Avoid town cores unless
  *                       A/B (or a stage waypoint) sits in that town.
- *   Direct           → dirt on the crow-flies line. Pavement when a dirt loop
- *                       would double the ride. Strong away-tax. Not Dirt’s 16× hunt.
  *   Balanced         → dual-sport mix (~35–50% dirt when fabric allows).
  *                       may meander off the crow-flies cut to pick up dirt.
  *   Dirt             → dirt     — maximize purple NSTDB + OSM dirt/gravel/track;
@@ -27,17 +25,15 @@
  * Dirt arrival clamp (last ~2.5 km of B) must match OnDeviceProfileCosts.approachAwayExtra.
  */
 
+const KNOWN_PROFILES = Object.freeze(["cleanest", "balanced", "dirt"]);
+
+/** Missing or unknown profile names use Balanced. */
+function resolveProfile(profile) {
+  const p = String(profile || "balanced").toLowerCase();
+  return KNOWN_PROFILES.includes(p) ? p : "balanced";
+}
+
 const PROFILE_SURFACE_WEIGHTS = Object.freeze({
-  // Direct is geometry-first: surface is only a tie-break between similarly
-  // aligned roads. A large paved penalty made it behave like a narrower Dirt
-  // mode and spend hundreds of kilometres collecting off-line gravel.
-  direct: Object.freeze({
-    paved: 1.15,
-    gravel: 1.00,
-    access: 0.95,
-    track: 0.90,
-    unknown: 1.00
-  }),
   // Dual-sport ~50/50. Cross-track stops the Williams Lake hunt.
   balanced: Object.freeze({
     paved: 1.42,
@@ -94,20 +90,6 @@ const ADVENTURE_ROAD_CLASS_WEIGHTS = Object.freeze({
   unknown: 0.95
 });
 
-const DIRECT_ROAD_CLASS_WEIGHTS = Object.freeze({
-  freeway: 1.7,
-  arterial: 1.45,
-  collector: 1.06,
-  ramp: 1.6,
-  local: 0.98,
-  service: 1.12,
-  resource: 0.9,
-  recreation: 0.88,
-  track: 0.9,
-  double_track: 0.9,
-  unknown: 1.0
-});
-
 const BALANCED_ROAD_CLASS_WEIGHTS = Object.freeze({
   freeway: 3.2,
   arterial: 2.4,
@@ -139,7 +121,6 @@ const PROFILE_ROAD_CLASS_WEIGHTS = Object.freeze({
     double_track: 1.0,
     unknown: 1.0
   }),
-  direct: DIRECT_ROAD_CLASS_WEIGHTS,
   balanced: BALANCED_ROAD_CLASS_WEIGHTS,
   dirt: ADVENTURE_ROAD_CLASS_WEIGHTS
 });
@@ -174,7 +155,7 @@ function paintsAsPavedRoadClass(road) {
 
 function surfaceMultiplier(surfaceCode, profile, _regionId, roadTrackClass) {
   const name = SURFACE_CODE_NAME[surfaceCode] || "unknown";
-  const table = PROFILE_SURFACE_WEIGHTS[profile] || PROFILE_SURFACE_WEIGHTS.balanced;
+  const table = PROFILE_SURFACE_WEIGHTS[resolveProfile(profile)] || PROFILE_SURFACE_WEIGHTS.balanced;
   // Untagged OSM highway paints paved — cost it as paved or Dirt≈Balanced.
   if (
     name === "unknown" &&
@@ -186,7 +167,7 @@ function surfaceMultiplier(surfaceCode, profile, _regionId, roadTrackClass) {
 }
 
 function roadClassMultiplier(roadTrackClass, profile) {
-  const table = PROFILE_ROAD_CLASS_WEIGHTS[profile];
+  const table = PROFILE_ROAD_CLASS_WEIGHTS[resolveProfile(profile)];
   if (!table) return 1;
   const key = roadTrackClass || "unknown";
   return table[key] != null ? table[key] : table.unknown != null ? table.unknown : 1;
@@ -210,6 +191,7 @@ function approachAwayExtraCost(profile, dFromMeters, dToMeters, abMeters, minAwa
   const dFrom = Math.max(0, dFromMeters);
   const ab = abMeters > 0 ? abMeters : 0;
   const kmAway = away / 1000;
+  profile = resolveProfile(profile);
   if (profile === "dirt") {
     // Applied with DIRT_RIDE_AWAY_SCALE (×10) in pavement mode → ~95–150/km.
     const mid = kmAway * 9.5;
@@ -220,10 +202,6 @@ function approachAwayExtraCost(profile, dFromMeters, dToMeters, abMeters, minAwa
       near = kmAway * (2.0 + t * t * 6.0);
     }
     return mid + near;
-  }
-  if (profile === "direct") {
-    const nearBand = Math.max(3200, ab * 0.3);
-    return kmAway * (dFrom < nearBand ? 200 : 150);
   }
   if (profile === "balanced") {
     const mid = kmAway * 180;
@@ -262,11 +240,11 @@ const MAJOR_HIGHWAY_JOIN_METERS = 6000;
 /**
  * Major highway avoid class.
  * Clean: freeway + ramp only (arterial is normal Clean pavement ~0.98).
- * Direct / Balanced / Dirt: freeway + arterial + ramp.
+ * Balanced / Dirt: freeway + arterial + ramp.
  */
 function isMajorHighwayClass(road, profile) {
   if (road === "freeway" || road === "ramp") return true;
-  if (profile === "cleanest") return false;
+  if (resolveProfile(profile) === "cleanest") return false;
   return road === "arterial";
 }
 
@@ -306,6 +284,7 @@ function isBcDirt(_profile, _regionId) {
 }
 
 function maxSurfaceMultiplier(profile) {
+  profile = resolveProfile(profile);
   const table = PROFILE_SURFACE_WEIGHTS[profile] || PROFILE_SURFACE_WEIGHTS.balanced;
   const surfaceMax = Math.max(...Object.values(table));
   const classTable = PROFILE_ROAD_CLASS_WEIGHTS[profile];
@@ -359,21 +338,23 @@ function crossTrackMeters(point, a, b) {
   return Math.asin(Math.sin(d13) * Math.sin(t13 - t12)) * EARTH_RADIUS_M;
 }
 
-/** Corridor off-line tax. Direct strongest, then Balanced, then Dirt. Clean has none. */
-function directCrossTrackExtra(profile, point, lineFrom, lineTo, edgeMeters) {
+/** Corridor off-line tax. Balanced then Dirt. Clean has none. */
+function corridorCrossTrackExtra(profile, point, lineFrom, lineTo, edgeMeters) {
   if (!(edgeMeters > 0) || !point || !lineFrom || !lineTo) return 0;
+  profile = resolveProfile(profile);
   if (profile === "cleanest") return 0;
   const k =
-    profile === "direct" ? 0.018
-      : profile === "balanced" ? 0.014
-        : profile === "dirt" ? 0.005
-          : 0;
+    profile === "balanced" ? 0.014
+      : profile === "dirt" ? 0.005
+        : 0;
   if (!k) return 0;
   const xtKm = Math.abs(crossTrackMeters(point, lineFrom, lineTo)) / 1000;
   return (edgeMeters / 1000) * xtKm * xtKm * k;
 }
 
 module.exports = {
+  KNOWN_PROFILES,
+  resolveProfile,
   PROFILE_SURFACE_WEIGHTS,
   PROFILE_ROAD_CLASS_WEIGHTS,
   SURFACE_SPEED_KMH,
@@ -391,5 +372,5 @@ module.exports = {
   isBcDirt,
   costPerKmView,
   crossTrackMeters,
-  directCrossTrackExtra
+  corridorCrossTrackExtra
 };

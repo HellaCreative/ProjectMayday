@@ -24,7 +24,8 @@ const {
   isMajorHighwayClass,
   pinMatchesMajorHighway,
   majorHighwayAvoidMult,
-  directCrossTrackExtra
+  corridorCrossTrackExtra,
+  resolveProfile
 } = require("./profile-costs");
 const { pruneGeographicLoops } = require("./path-pruning");
 const {
@@ -512,28 +513,24 @@ function chooseDirtRideCandidate(candidates) {
 
 function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds, pavedBias, searchOpts) {
   searchOpts = searchOpts || {};
+  profile = resolveProfile(profile);
   const sessionSeed = Number(searchOpts.sessionSeed) || 0;
   if (!searchOpts.costMode) {
     const baseCorridor = corridorMetersForProfile(profile);
-    // Direct/Balanced/Clean keep the narrowest viable band. Dirt scores only
+    // Balanced/Clean keep the narrowest viable band. Dirt scores only
     // 120 km + 60 km; 180/240/unbounded are connectivity fallbacks if those
     // two bands find no path. The corridor is an outer permission, never
     // distance the route must consume.
-    const widthMultipliers = profile === "direct"
-      ? [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12]
-      : profile === "dirt" ? [2, 1, 3, 4]
-        : profile === "cleanest"
-          // Clean: no corridor ladder — one fabric search.
-          ? [Infinity]
-          : [1, 2, 3, 4, 6, 8]; // balanced
+    const widthMultipliers = profile === "dirt" ? [2, 1, 3, 4]
+      : profile === "cleanest"
+        // Clean: no corridor ladder — one fabric search.
+        ? [Infinity]
+        : [1, 2, 3, 4, 6, 8]; // balanced
     const widths = profile === "cleanest"
       ? [Infinity]
       : widthMultipliers.map((m) => baseCorridor * m).concat(Infinity);
     const requestedCap = Number(searchOpts.maxPathMeters);
-    // Direct's 15 km promise is a path-length budget, not merely a lateral
-    // corridor width. Establish the wall-respecting physical shortest path,
-    // then let the Direct profile minimize pavement inside that exact budget.
-    const budgetedProfile = profile === "direct" || profile === "balanced";
+    const budgetedProfile = profile === "balanced";
     const directShortest = budgetedProfile
       ? findPathV2(
           runtime, startMatch, endMatch, profile, policy, avoidEdgeIds, pavedBias,
@@ -555,28 +552,12 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
         )
       : null;
     const directShortestMeters = Number(directShortest && directShortest.distanceMeters);
-    const requestedDirectExtra = Number(searchOpts.directExtraBudgetMeters);
-    const directExtraBudget = Number.isFinite(requestedDirectExtra)
-      ? Math.max(0, Math.min(15_000, requestedDirectExtra))
-      : 15_000;
     const directBudget = Number.isFinite(directShortestMeters)
-      ? directShortestMeters + (profile === "direct" ? directExtraBudget : 40_000)
+      ? directShortestMeters + 40_000
       : Infinity;
     const activePathCap = budgetedProfile
       ? Math.min(Number.isFinite(requestedCap) ? requestedCap : Infinity, directBudget)
       : requestedCap;
-    if (profile === "direct" && directExtraBudget === 0 && directShortest) {
-      if (Number.isFinite(activePathCap) && directShortestMeters > activePathCap + 1) {
-        if (searchOpts.diagnostics) searchOpts.diagnostics.outcome = "noPath";
-        return null;
-      }
-      directShortest.searchMeta = directShortest.searchMeta || {};
-      directShortest.searchMeta.rideObjective = "crow-flies-adventure";
-      directShortest.searchMeta.shortestMeters = Math.round(directShortestMeters);
-      directShortest.searchMeta.extraUsedMeters = 0;
-      directShortest.searchMeta.extraBudgetMeters = 0;
-      return directShortest;
-    }
     const dirtCandidates = [];
     const attemptDiagnostics = [];
     // Keep one absolute ceiling across corridor attempts and any internal
@@ -894,10 +875,10 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
       ? Number(searchOpts.progressRegressionMeters)
       : maxProgressRegressionMeters(profile));
   const applyAwayXt = costMode === "profile";
-  // Direct keeps centreline pull. Clean uses toward-B gravity only — no chord XT.
+  // Balanced keeps centreline pull. Clean uses toward-B gravity only — no chord XT.
   const applySoftCorridor = applyAwayXt
     && profile !== "cleanest"
-    && (profile === "direct" || !(corridorM > 0));
+    && !(corridorM > 0);
   const isHunt = Number.isFinite(maxPathMeters);
   const boundedSearch = isHunt || searchOpts.boundedSearch === true;
   const slackToDest = isHunt
@@ -1082,7 +1063,7 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
               endOnMajorHighway
             );
             step += awayExtra(cur.node, to) * DIRT_RIDE_AWAY_SCALE;
-            step += directCrossTrackExtra(profile, toLL, startLL, endLL, edgeM) * DIRT_RIDE_XT_SCALE;
+            step += corridorCrossTrackExtra(profile, toLL, startLL, endLL, edgeM) * DIRT_RIDE_XT_SCALE;
           }
           step = applyE4LeafMult(
             pack, ei, step, toLL, startLL, endLL, startOnMajorHighway, endOnMajorHighway, e4Opts
@@ -1112,7 +1093,7 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
           if (policy.motorizedUnknown && profile !== "cleanest") {
             const accessName = enums.ACCESS_NAME[access] || "";
             if (accessName === "motorized_unknown") {
-              if (profile === "dirt" || profile === "direct") step *= 0.5;
+              if (profile === "dirt") step *= 0.5;
             }
             const id = pack.edgeId(ei);
             if (
@@ -1120,13 +1101,13 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
               String(id).startsWith("nb-fr") ||
               /nstdb|Topographic|Forest Roads/i.test(String(id))
             ) {
-              if (profile === "dirt" || profile === "direct") step *= 0.68;
+              if (profile === "dirt") step *= 0.68;
             }
           }
           if (applyAwayXt) {
             step += awayExtra(cur.node, to);
             if (toLL && applySoftCorridor) {
-              step += directCrossTrackExtra(profile, toLL, startLL, endLL, edgeM);
+              step += corridorCrossTrackExtra(profile, toLL, startLL, endLL, edgeM);
             }
           }
           step = applyE4LeafMult(
@@ -1262,7 +1243,7 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
         if (costMode === "pavement") {
           step += awayExtra(cur.node, item.to) * DIRT_RIDE_AWAY_SCALE;
           if (toLL) {
-            step += directCrossTrackExtra(profile, toLL, startLL, endLL, v.meters) * DIRT_RIDE_XT_SCALE;
+            step += corridorCrossTrackExtra(profile, toLL, startLL, endLL, v.meters) * DIRT_RIDE_XT_SCALE;
           }
         } else if (applyAwayXt) {
           step += awayExtra(cur.node, item.to);
@@ -1574,7 +1555,7 @@ function searchBalancedResource(ctx) {
   const isHunt = Number.isFinite(maxPathMeters);
   const cappedSearch = isHunt || boundedSearch === true;
   // Balanced carries a surface-ratio label set, so it legitimately needs more
-  // expansions than the single-label Dirt/Direct searches. The time deadline
+  // expansions than the single-label Dirt searches. The time deadline
   // remains the ultimate guardrail.
   const popCap = cappedSearch
     ? (Number.isFinite(Number(requestedPopCap)) ? Number(requestedPopCap) : PASS2_POP_CAP * 10)

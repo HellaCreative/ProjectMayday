@@ -986,7 +986,7 @@ struct RoutePlannerCard: View {
         .minimumScaleFactor(0.8)
     }
 
-    /// Equal-width profile segments. Reads as one control instead of four loose pills.
+    /// Equal-width profile segments. Reads as one control instead of three loose pills.
     private func profileSegments(
         active: RouteProfile,
         onSelect: @escaping (RouteProfile) -> Void
@@ -1140,7 +1140,7 @@ struct RoutePlannerCard: View {
 
     /// Exactly one rider toggle per profile.
     /// Clean: Avoid motorways (prefer-back-roads is intrinsic).
-    /// Dirt / Balanced / Direct: Allow unknown.
+    /// Dirt / Balanced: Allow unknown.
     @ViewBuilder
     private func profilePolicyToggle(
         profile: RouteProfile,

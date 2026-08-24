@@ -122,11 +122,10 @@ struct HopSearchPolicyTests {
     }
 
     @Test func corridorWidthsMatchSpec() {
-        #expect(HopSearchPolicy.corridorMeters(for: .direct) == 15_000)
         #expect(HopSearchPolicy.corridorMeters(for: .dirt) == 60_000)
         #expect(HopSearchPolicy.corridorMeters(for: .balanced) == 40_000)
         #expect(HopSearchPolicy.corridorMeters(for: .cleanest) == nil)
-        #expect(HopSearchPolicy.extraBudget(shortestMeters: 100_000, for: .direct) == 115_000)
+        #expect(HopSearchPolicy.extraBudget(shortestMeters: 100_000, for: .balanced) == 140_000)
         #expect(HopSearchPolicy.extraBudget(shortestMeters: 100_000, for: .cleanest) == nil)
     }
 
@@ -149,7 +148,6 @@ struct HopSearchPolicyTests {
             (3, 205_000, 80_000)   // 39%
         ]
         #expect(HopSearchPolicy.pickResourceEnd(labels: labels, profile: .balanced, seed: 1) == 2)
-        #expect(HopSearchPolicy.pickResourceEnd(labels: labels, profile: .direct, seed: 1) == 1)
         #expect(HopSearchPolicy.pickResourceEnd(labels: labels, profile: .dirt, seed: 1) == 1)
     }
 
@@ -159,9 +157,17 @@ struct HopSearchPolicyTests {
         #expect(ctx.cityWall == true)
         #expect(ctx.pavedOnly == false)
         #expect(ctx.urbanCoreFallback == false)
-        ctx = HopSearchContext.forProfile(.direct, seed: 1)
-        #expect(ctx.corridorMeters == 15_000)
+        ctx = HopSearchContext.forProfile(.balanced, seed: 1)
+        #expect(ctx.corridorMeters == 40_000)
         #expect(ctx.cityWall == true)
+    }
+
+    @Test func unknownProfileDecodesAsBalanced() throws {
+        #expect(RouteProfile(rawValue: "scenic") == nil)
+        #expect(RouteProfile.allCases == [.cleanest, .balanced, .dirt])
+        let data = Data(#""scenic""#.utf8)
+        let decoded = try JSONDecoder().decode(RouteProfile.self, from: data)
+        #expect(decoded == .balanced)
     }
 }
 

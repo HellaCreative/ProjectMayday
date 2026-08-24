@@ -4,7 +4,7 @@ import Testing
 
 @Suite("Phase E4 road preference knobs")
 struct RoadTierE4Tests {
-    @Test("defaults off leave costs at 1 — Dirt/Balanced/Direct baseline unchanged")
+    @Test("defaults off leave costs at 1 — Dirt/Balanced baseline unchanged")
     func defaultsOffAreIdentity() {
         #expect(
             RoadTierStats.e4LeafCostMult(
@@ -66,9 +66,9 @@ struct RoadTierE4Tests {
         #expect(c.isFinite && c > 0)
     }
 
-    @Test("Dirt/Balanced/Direct ignore E4 flags — pre-E4 costing")
+    @Test("Dirt/Balanced ignore E4 flags — pre-E4 costing")
     func nonCleanProfilesIgnoreFlags() {
-        for profile in [RouteProfile.dirt, .balanced, .direct] {
+        for profile in [RouteProfile.dirt, .balanced] {
             let flags = RoadTierStats.e4Flags(
                 for: profile,
                 avoidMotorways: true,

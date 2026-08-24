@@ -3,7 +3,6 @@ import Foundation
 
 nonisolated enum RouteProfile: String, Codable, CaseIterable, Identifiable, Sendable {
     case cleanest
-    case direct
     case balanced
     case dirt
 
@@ -12,7 +11,6 @@ nonisolated enum RouteProfile: String, Codable, CaseIterable, Identifiable, Send
     var title: String {
         switch self {
         case .cleanest: "Clean"
-        case .direct: "Direct"
         case .balanced: "Balanced"
         case .dirt: "Dirt"
         }
@@ -22,10 +20,19 @@ nonisolated enum RouteProfile: String, Codable, CaseIterable, Identifiable, Send
     var guidance: String {
         switch self {
         case .cleanest: "Pavement · soft forward · skip metros/highways"
-        case .direct: "Follow the A→B line · take dirt when it stays direct"
         case .balanced: "Dual-sport mix · aim about half dirt / half paved"
         case .dirt: "Adventure ride to B · meander for dirt, not the highway ETA"
         }
+    }
+
+    init(from decoder: Decoder) throws {
+        let raw = try decoder.singleValueContainer().decode(String.self)
+        self = RouteProfile(rawValue: raw) ?? .balanced
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
     }
 }
 

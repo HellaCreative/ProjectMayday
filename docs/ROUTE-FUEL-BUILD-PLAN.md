@@ -73,7 +73,7 @@ Rules:
 - Add an admissible **straight-line-to-goal heuristic** to the core bounded search
   (`exploreNodeMeters` / `routeWithSnaps` on-device first) so it expands toward the
   destination instead of evenly in all directions. Keep the existing corridor
-  (25 km Direct/Balanced, 60 km Dirt) as the lateral limit; A\* adds the forward aim.
+  (25 km Balanced, 60 km Dirt) as the lateral limit; A\* adds the forward aim.
 - **Route output must not change** — this is speed only.
 - **Accept:** materially fewer node expansions / faster builds, and routes identical
   to pre-A\* on the test fixtures (parity check).

@@ -22,7 +22,6 @@ const RUNS = [
   { key: "dirt", profile: "dirt", allowUnknown: false },
   { key: "dirt-allow-unknown", profile: "dirt", allowUnknown: true },
   { key: "balanced", profile: "balanced", allowUnknown: false },
-  { key: "direct", profile: "direct", allowUnknown: false },
   { key: "cleanest", profile: "cleanest", allowUnknown: false }
 ];
 

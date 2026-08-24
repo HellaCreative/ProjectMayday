@@ -14,7 +14,7 @@ Native SwiftUI client for the DIRT dual-sport navigator. No staging.
 | Agent primer | [../AGENTS.md](../AGENTS.md) |
 | Packs + live API | `scripts/pack-fabric/` |
 
-DIRT helps dual-sport riders plot A→B routes with surface-mix control (Clean / Direct / Balanced / Dirt + Allow unknown), navigate the line, save/export GPX, and optionally ride with a signed-in group.
+DIRT helps dual-sport riders plot A→B routes with surface-mix control (Clean / Balanced / Dirt + Allow unknown), navigate the line, save/export GPX, and optionally ride with a signed-in group.
 
 TestFlight / signing steps live in [../README_TESTFLIGHT.md](../README_TESTFLIGHT.md).
 

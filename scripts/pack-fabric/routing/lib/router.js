@@ -24,7 +24,8 @@ const {
   isMajorHighwayClass,
   pinMatchesMajorHighway,
   majorHighwayAvoidMult,
-  isBcDirt
+  isBcDirt,
+  resolveProfile
 } = require("./profile-costs");
 const {
   buildRouteDiagnostics,
@@ -275,8 +276,6 @@ function ellipseDirtEnabled() {
 /**
  * Ellipse detour factors by profile.
  *   cleanest — tight Google-style pavement corridor
- *   direct   — crow-flies on dirt fabric; wide enough for NSTDB/OSM cuts
- *              off the highway chord (not so tight it forces the paved spine)
  *   balanced — wider for dual-sport mix
  *   dirt     — widest adventure room; stays unpruned unless ROUTING_ELLIPSE_DIRT=1
  *              Exception: BC Dirt uses factor 2.0 (~2× crow-flies) so denser
@@ -284,14 +283,19 @@ function ellipseDirtEnabled() {
  */
 const ELLIPSE_FACTORS = {
   cleanest: 1.25,
-  // Crow-flies Direct: tight band — length wins; mild dirt only among equals.
-  direct: 1.22,
-  // Balanced may leave Direct’s cut to pick up dirt corridors.
+  // Balanced may leave the crow-flies cut to pick up dirt corridors.
   balanced: 1.55,
   dirt: 2.6
 };
 
+function rideObjectiveForProfile(profile) {
+  if (profile === "dirt") return "earned-dirt-detour";
+  if (profile === "balanced") return "surface-balance";
+  return "clean-pavement";
+}
+
 function ellipseAttemptsForProfile(profile, regionId) {
+  profile = resolveProfile(profile);
   if (!ellipsePruneEnabled()) {
     return [{ factor: Infinity, label: "unpruned", escalation: "none" }];
   }
@@ -439,7 +443,7 @@ function matchPoint(
   // when a dirt edge is almost as close. End snaps stay distance-first — adventure
   // dirt bias at B caused paved-approach → dirt-spur U-turns past the destination.
   // Cleanest: slight paved preference on both ends.
-  const prof = profile ? String(profile).toLowerCase() : null;
+  const prof = profile ? resolveProfile(profile) : null;
   const role = snapRole === "start" || snapRole === "end" ? snapRole : "any";
   const preferAdventureSnap = prof && prof !== "cleanest" && role !== "end";
   // Clean snaps nearest eligible way — never prefer pavement over a closer dirt/service.
@@ -706,7 +710,7 @@ function normalizePolicy(input, profile, extras) {
   const options = extra.options || {};
   // Product law: Clean / cleanest is immune to Allow — never open purple
   // motorized_unknown capillary, even if the UI toggle is on.
-  const isClean = String(profile || "").toLowerCase() === "cleanest";
+  const isClean = resolveProfile(profile) === "cleanest";
   const requested =
     policy.motorizedUnknown === true ||
     extra.allowUnknown === true ||
@@ -890,7 +894,7 @@ async function routeRequestCore(body = {}) {
     runtime = await loadGraphsForRequest(graphResolution, {
       locations: body.locations || [],
       corridorBufferMeters: body.options && body.options.corridorBufferMeters,
-      profile: body.profile
+      profile: resolveProfile(body.profile)
     });
   } catch (err) {
     const message = err && err.message ? err.message : String(err);
@@ -1279,7 +1283,7 @@ async function topologySeamWaypoint(seed, regionIds) {
  * User start/end pins are left untouched.
  */
 async function resolveChainSeamWaypoints(waypoints, body = {}) {
-  const profile = String(body.profile || "balanced").toLowerCase();
+  const profile = resolveProfile(body.profile);
   const out = (waypoints || []).map((w) => ({ ...w }));
   const snaps = [];
 
@@ -1350,7 +1354,7 @@ function remainingChainPathCap(options, completedMeters) {
 }
 
 async function routeCanadaChain(body, graphResolution) {
-  const profile = body.profile || "balanced";
+  const profile = resolveProfile(body.profile);
   // Every profile uses neutral province-seam joints (never city hubs) so each
   // hop loads ≤2 packs without manufacturing an urban-core endpoint exemption.
   let waypoints = corridorLocationsForRoute(body.locations || [], {
@@ -1516,10 +1520,7 @@ async function routeCanadaChain(body, graphResolution) {
       : "completed",
     pops: hopMetas.reduce((sum, meta) => sum + (Number(meta.pops) || 0), 0),
     timedOut: hopMetas.some((meta) => meta.timedOut === true),
-    rideObjective:
-      profile === "dirt" ? "earned-dirt-detour" :
-      profile === "balanced" ? "surface-balance" :
-      profile === "direct" ? "crow-flies-adventure" : "clean-pavement",
+    rideObjective: rideObjectiveForProfile(profile),
     corridorMeters: hopMetas.reduce((max, meta) =>
       Math.max(max, Number(meta.corridorMeters) || 0), 0
     ) || null,
@@ -1534,7 +1535,7 @@ async function routeCanadaChain(body, graphResolution) {
   };
   return {
     status: "complete",
-    profile: String(body.profile || "balanced").toLowerCase(),
+    profile,
     distanceMeters: totalMeters,
     geometry,
     segments,
@@ -1673,14 +1674,7 @@ function pickCloserToBalancedMix(pathVerified, pathWithUnknown) {
 async function routeOnRuntime(body, graphResolution, runtime) {
   const buildStarted = Date.now();
   const enums = runtime.enums;
-  const profile = String(body.profile || "balanced").toLowerCase();
-  if (!["direct", "balanced", "dirt", "cleanest"].includes(profile)) {
-    return {
-      status: "error",
-      error: "invalid_profile",
-      message: "profile must be direct|balanced|dirt|cleanest"
-    };
-  }
+  const profile = resolveProfile(body.profile);
 
   const locations = body.locations || [];
   if (!Array.isArray(locations) || locations.length < 2) {
@@ -2136,11 +2130,10 @@ async function routeOnRuntime(body, graphResolution, runtime) {
     const adventureSearchOpts = Object.assign({}, searchOpts, {
       // A settlement relaxation is a fallback, not a normal scoring mode.
       // findPathV2 may relax it only after every bounded attempt proves noPath.
-      // Direct's hard promise is shortest graph path +15 km. Smaller mapped
-      // settlements remain scored avoidance, but cannot be hard walls that
-      // redefine the shortest reference underneath that distance budget.
-      settlementWall: profile !== "direct",
-      settlementFallback: profile === "direct",
+      // Smaller mapped settlements remain scored avoidance, but cannot be hard
+      // walls that redefine the shortest reference underneath the distance budget.
+      settlementWall: true,
+      settlementFallback: false,
       diagnostics
     });
     path = findPath(
@@ -2305,10 +2298,7 @@ async function routeOnRuntime(body, graphResolution, runtime) {
         fallback: null,
         searchOutcome: failedOutcome,
         failureReason,
-        objective:
-          profile === "dirt" ? "earned-dirt-detour" :
-          profile === "balanced" ? "surface-balance" :
-          profile === "direct" ? "crow-flies-adventure" : "clean-pavement",
+        objective: rideObjectiveForProfile(profile),
         outcome: failedOutcome || "noPath",
         pops: diagnostics.pops,
         corridor: null,
@@ -2455,11 +2445,7 @@ async function routeOnRuntime(body, graphResolution, runtime) {
       balancedMixChoice,
       balancedMiss,
       fallback: urbanCoreFallbackUsed ? "urban_core_last_resort" : null,
-      objective: path.searchMeta && path.searchMeta.rideObjective || (
-        profile === "dirt" ? "earned-dirt-detour" :
-        profile === "balanced" ? "surface-balance" :
-        profile === "direct" ? "crow-flies-adventure" : "clean-pavement"
-      ),
+      objective: path.searchMeta && path.searchMeta.rideObjective || rideObjectiveForProfile(profile),
       outcome: "completed",
       pops: Number(path.searchMeta && path.searchMeta.pops) || 0,
       corridor: Number.isFinite(selectedCorridor) ? selectedCorridor : null,
@@ -2719,7 +2705,7 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds, 
 
   // Soft-stitch motorized_unknown islands (NSTDB / provincial capillary) when
   // Allow is on. Conflation leaves purple fabric as near-touching components;
-  // without stitches Direct/Dirt keep a paved spine and only nibble dirt spurs.
+  // without stitches Dirt keeps a paved spine and only nibble dirt spurs.
   //
   // Hard rule: NEVER span a gap from a dead-end track to another dead-end track
   // (island↔island tip stitches invented gray connectors / Sackville loops).
@@ -2995,16 +2981,11 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds, 
     // or a dirt bypass. Finite so unavoidable bridges still work.
     if (profile === "cleanest") return 4.0;
     if (profile === "dirt") return 5.5;
-    if (profile === "balanced") return 4.8;
-    return 4.4; // direct — dirt fabric, still skip downtown unless the pin is there
+    return 4.8;
   }
 
   function edgeStepCost(edge, fromNode, toNode) {
     if (edge.accessLeg) {
-      // Soft-stitch / pin access: real meters, but Direct still pays for
-      // walking away from the goal near B (no free dirt-tourism connectors).
-      // Soft-stitches pay a steep premium so they are connectivity last-resort,
-      // not gray shortcuts across unmapped land.
       let accessCost = (edge.meters / 1000) * (edge.softStitch ? 12 : 1);
       if (
         fromNode != null &&
@@ -3015,7 +2996,6 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds, 
       ) {
         const dFrom = haversineMeters(nodeCoord[fromNode], endLL);
         const dTo = haversineMeters(nodeCoord[toNode], endLL);
-        // Dirt uses graduated near-B clamp; Direct/Balanced keep legacy band.
         const minAway = profile === "dirt" ? 50 : 60;
         accessCost += approachAwayExtraCost(profile, dFrom, dTo, abMeters, minAway, regionId);
         const mid = [
@@ -3057,15 +3037,14 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds, 
         false
       );
     }
-    // When the rider opts into unknown access, Direct/Dirt prefer capillary
-    // over paved spine. Direct stays on-line via away-tax, not via a paved table.
-    // Balanced deliberately does NOT get that discount: Allow only unlocks the
+    // When the rider opts into unknown access, Dirt prefers capillary
+    // over paved spine. Balanced deliberately does NOT get that discount: Allow only unlocks the
     // edges so they can compete; the normal ~50/50 surface weights still decide.
     // (An earlier ×0.72/×0.78 Balanced pull blew mix routes to ~85% dirt.)
     if (policy.motorizedUnknown && profile !== "cleanest") {
       const accessName = enums.ACCESS_NAME[edge.access] || "";
       if (accessName === "motorized_unknown") {
-        if (profile === "dirt" || profile === "direct") cost *= 0.5;
+        if (profile === "dirt") cost *= 0.5;
       }
       const id = String(edge.edgeId || "");
       const src = String(edge.source || "");
@@ -3075,7 +3054,7 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds, 
         id.startsWith("nb-fr") ||
         /nstdb|Topographic|Forest Roads/i.test(src)
       ) {
-        if (profile === "dirt" || profile === "direct") cost *= 0.68;
+        if (profile === "dirt") cost *= 0.68;
       }
     }
     // Adventure: avoid major city/town cores unless pin is there or unavoidable.
@@ -3091,7 +3070,7 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds, 
     }
     // Approach-to-goal: penalize edges that increase distance to B.
     // Dirt: hunt mid-route; small arrival clamp in the last ~2.5 km of B.
-    // Direct: dirt fabric, hold the line. Balanced: milder mix. Clean: pavement.
+    // Balanced: milder mix. Clean: pavement.
     if (fromNode != null && toNode != null && nodeCoord[fromNode] && nodeCoord[toNode]) {
       const dFrom = haversineMeters(nodeCoord[fromNode], endLL);
       const dTo = haversineMeters(nodeCoord[toNode], endLL);
@@ -3102,7 +3081,7 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds, 
 
   function materializeUsed(used, searchMeta) {
     // Strip geographic out-and-backs / house loops for every profile. A
-    // motorcycle turnaround on a dead spur is bad in Direct and Dirt alike —
+    // motorcycle turnaround on a dead spur is bad in Balanced and Dirt alike —
     // Dirt still prefers adventure surface during search; pruning only removes
     // non-advancing loops after the path is chosen.
     const pruned = pruneGeographicLoops(used, resolveEdgeCoords);
@@ -3387,6 +3366,7 @@ module.exports = {
   SEAM_SNAP_RADIUS_M,
   matchPoint,
   normalizePolicy,
+  resolveProfile,
   accessAllowed,
   resolveChainSeamWaypoints,
   snapSeamWaypoint,

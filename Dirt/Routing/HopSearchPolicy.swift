@@ -3,12 +3,8 @@ import Foundation
 
 /// Shared hop-search constants. Lockstep: `scripts/pack-fabric/routing/lib/hop-search.js`.
 nonisolated enum HopSearchPolicy {
-    /// Unused for Direct shaping — corridor width replaced stretch-factor.
-    static let directStretch: Double = 1.20
     /// Balanced: compute prune only (resource labels). Corridor is the geographic ceiling.
     static let balancedStretch: Double = 1.40
-    /// Extra metres over the graph shortest path (not a great-circle band).
-    static let directCorridorMeters: Double = 15_000
     static let dirtCorridorMeters: Double = 60_000
     /// Safety ceiling only — Balanced shaping is the 45–55% dirt ratio.
     static let balancedCorridorMeters: Double = 40_000
@@ -47,9 +43,9 @@ nonisolated enum HopSearchPolicy {
         case profile
         /// Physical meters — shortest path / fuel reach.
         case distance
-        /// Minimize pavement meters (Direct pass 2).
+        /// Minimize pavement meters (adventure pass 2).
         case pavement
-        /// Length cost + dirt resource labels (Direct, Balanced, Dirt).
+        /// Length cost + dirt resource labels (Balanced, Dirt).
         case balancedResource
     }
 
@@ -84,7 +80,7 @@ nonisolated enum HopSearchPolicy {
         func ratio(_ x: (lab: Int, len: Double, dirt: Double)) -> Double {
             x.len > 0 ? x.dirt / x.len : 0
         }
-        if profile == .direct || profile == .dirt {
+        if profile == .dirt {
             return labels.min { a, b in
                 let ra = ratio(a)
                 let rb = ratio(b)
@@ -198,7 +194,6 @@ nonisolated enum HopSearchPolicy {
 
     static func corridorMeters(for profile: RouteProfile) -> Double? {
         switch profile {
-        case .direct: return directCorridorMeters
         case .dirt: return dirtCorridorMeters
         case .balanced: return balancedCorridorMeters
         case .cleanest: return nil

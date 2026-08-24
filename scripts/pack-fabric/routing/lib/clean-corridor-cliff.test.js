@@ -14,7 +14,7 @@ const {
   isBlockedForCleanPavement,
   coincidentSiblingLists
 } = require("./hop-search");
-const { approachAwayExtraCost, directCrossTrackExtra } = require("./profile-costs");
+const { approachAwayExtraCost, corridorCrossTrackExtra } = require("./profile-costs");
 const { findPathV2 } = require("./find-path-v2");
 const { loadGraphSync } = require("./graph");
 const { matchPoint, normalizePolicy } = require("./router");
@@ -94,7 +94,7 @@ test("Clean has no chord cross-track cone", () => {
   const a = { lat: 44.76, lon: -63.34 };
   const b = { lat: 44.87, lon: -63.22 };
   const far = { lat: 45.2, lon: -63.5 };
-  const xt = directCrossTrackExtra("cleanest", far, a, b, 1000);
+  const xt = corridorCrossTrackExtra("cleanest", far, a, b, 1000);
   assert.equal(xt, 0);
 });
 
@@ -164,7 +164,7 @@ test("Clean snap is nearest — does not prefer pavement over closer dirt", () =
   // Tap nearer a likely dirt/service than a highway when one exists around Halifax.
   const tap = { lat: 44.764816, lon: -63.340274 };
   const clean = matchPoint(runtime, tap, policy, 250, null, null, "cleanest", "start");
-  const asEnd = matchPoint(runtime, tap, policy, 250, null, null, "direct", "end");
+  const asEnd = matchPoint(runtime, tap, policy, 250, null, null, "balanced", "end");
   assert.ok(clean && clean.coord);
   // Clean must not apply paved preference; score is distance-first.
   assert.ok(Math.abs(clean.distanceM - asEnd.distanceM) < 80 || clean.edgeIndex === asEnd.edgeIndex);

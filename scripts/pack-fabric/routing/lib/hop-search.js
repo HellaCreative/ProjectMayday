@@ -1,12 +1,12 @@
 "use strict";
 
+const { resolveProfile } = require("./profile-costs");
+
 /**
  * Hop-search constraints. Lockstep: Dirt/Routing/UrbanCore.swift + HopSearchPolicy.swift.
  */
 
-const DIRECT_STRETCH = 1.2; // unused for Direct shaping — corridor replaced stretch-factor
 const BALANCED_STRETCH = 1.4; // compute prune only; corridor is the geographic ceiling
-const DIRECT_CORRIDOR_M = 15000;
 const DIRT_CORRIDOR_M = 60000;
 const BALANCED_CORRIDOR_M = 40000;
 const VARIETY_MARGIN = 0.08;
@@ -19,7 +19,6 @@ const PASS2_POP_CAP = 400000;
 const EARTH_RADIUS_M = 6371000;
 /** Clean has no hard progress-regression gate — soft away-tax only. */
 const MAX_PROGRESS_REGRESSION_M = Object.freeze({
-  direct: 5000,
   balanced: 10000,
   dirt: 15000
 });
@@ -176,8 +175,9 @@ function dirtBucket(dirtMeters, pathMeters) {
 
 function pickResourceEnd(cands, profile, seed) {
   if (!cands.length) return -1;
+  profile = resolveProfile(profile);
   const ratio = (x) => (x.len > 0 ? x.dirt / x.len : 0);
-  if (profile === "direct" || profile === "dirt") {
+  if (profile === "dirt") {
     cands.sort((a, b) => {
       const dr = ratio(b) - ratio(a);
       if (Math.abs(dr) > 0.005) return dr;
@@ -253,7 +253,7 @@ function createsCycle(prev, from, through) {
 }
 
 function corridorMetersForProfile(profile) {
-  if (profile === "direct") return DIRECT_CORRIDOR_M;
+  profile = resolveProfile(profile);
   if (profile === "dirt") return DIRT_CORRIDOR_M;
   if (profile === "balanced") return BALANCED_CORRIDOR_M;
   // Clean: no corridor product rule.
@@ -308,6 +308,7 @@ function projectedProgressMeters(point, startLL, endLL) {
 }
 
 function maxProgressRegressionMeters(profile) {
+  profile = resolveProfile(profile);
   if (profile === "cleanest") return Infinity;
   return MAX_PROGRESS_REGRESSION_M[profile] || Infinity;
 }
@@ -318,7 +319,7 @@ function maxProgressRegressionMeters(profile) {
  * forward-progress guard. Clean never uses a hard regression continue.
  */
 function progressRegressionForAttempt(profile, corridorMeters) {
-  if (profile === "cleanest") return Infinity;
+  if (resolveProfile(profile) === "cleanest") return Infinity;
   return Number.isFinite(corridorMeters)
     ? maxProgressRegressionMeters(profile)
     : Infinity;
@@ -506,9 +507,7 @@ function dirtRideCostPerKm(surfaceName, roadClassName, confidence) {
 }
 
 module.exports = {
-  DIRECT_STRETCH,
   BALANCED_STRETCH,
-  DIRECT_CORRIDOR_M,
   DIRT_CORRIDOR_M,
   BALANCED_CORRIDOR_M,
   CLEAN_COINCIDENT_NODE_M,

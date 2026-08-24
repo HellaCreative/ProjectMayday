@@ -533,7 +533,7 @@ final class GroupsViewModel {
         let display_name: String?
     }
 
-    /// Direct profiles lookup — nested `profiles(display_name)` on group_members
+    /// Nested `profiles(display_name)` on group_members
     /// can come back empty under RLS / embed shape quirks.
     private func fetchDisplayNames(for userIDs: [String]) async -> [String: String] {
         guard !userIDs.isEmpty else { return [:] }

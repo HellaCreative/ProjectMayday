@@ -86,7 +86,7 @@ No bundled custom fonts in the target today.
 ### Route planner card (Figma redesign)
 
 - **Orange tab bar** (From here / Plan a route / Saved) with white active pill.
-- Mode chips Clean / Direct / Balanced / Dirt (active orange). In Plan they edit the selected stage; otherwise the default for new stages.
+- Mode chips Clean / Balanced / Dirt (active orange). In Plan they edit the selected stage; otherwise the default for new stages.
 - **Stage rows**: orange number badge · white km box · blue `% dirt` box · per-stage Allow-unknown mini toggle, with the stage's mode label above the row. >3 stages scrolls.
 - Stat chips (KM / %DIRT / %PAVED on `wash`) + blue/yellow mix bar.
 - Icon CTAs: SAVE (chrome) · EXPORT GPX (gray) · START (green, play) · red "Clear All" text.

@@ -60,21 +60,9 @@ not silently replace the selected ride objective.
 ### Balanced
 
 - Targets the closest feasible result to 50% dirt and 50% paved.
-- Should normally remain below 60% dirt so it stays distinct from Direct.
 - Does not optimize shortest distance.
 - A miss must be labelled with the closest connected result rather than
   represented as a successful 50/50 route.
-
-### Direct
-
-- Follows the Point N to Point N+1 crow-flies alignment.
-- Pushes toward at least 60% dirt, prefers roughly 60–70%, and normally remains
-  below 75% so it stays distinct from Dirt.
-- Progressively widens its internal search when the aligned result is materially
-  below 60%, while continuing to minimize lateral journey.
-- Never fails solely because 60% dirt is unavailable; it returns the closest
-  aligned result after reasonable widening.
-- “Direct” means geometrically direct, not shortest-road distance.
 
 ### Clean
 
@@ -102,7 +90,7 @@ not silently replace the selected ride objective.
 
 ### Corridors
 
-A corridor is an internal search optimization for Dirt, Direct, and Balanced —
+A corridor is an internal search optimization for Dirt and Balanced —
 not a Clean product rule, distance allocation, or target the route is expected
 to fill. Search may use progressively wider tiers only when benchmarks show that
 doing so improves speed without suppressing the profile objective. Successful
@@ -506,7 +494,7 @@ publication-safety scope:
 - Dirt and Balanced station-route probes took approximately 12–18 seconds per
   attempt, returned `probe_inconclusive`, retried once, and then emitted a fuel
   gap with no generated fuel waypoint; and
-- Clean and Direct selected station `osm:n5292116667` and successfully produced
+- Clean selected station `osm:n5292116667` and successfully produced
   two Point/F legs for comparable routes.
 
 Therefore the immediate defect is profile-dependent station-probe completion,

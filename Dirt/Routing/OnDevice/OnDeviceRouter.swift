@@ -123,7 +123,7 @@ nonisolated struct OnDeviceRouter {
     static let maxPermissiveStitches: Int = 4000
 
     let pack: GraphV2Pack
-    /// Balanced ratio-seeking: scale paved km cost. Direct/Dirt/Clean stay 1.
+    /// Balanced ratio-seeking: scale paved km cost. Dirt/Clean stay 1.
     var pavedBias: Double = 1
     /// Planning-session seed for controlled variety. New process → new seed.
     var sessionSeed: UInt64 = 0
@@ -602,11 +602,11 @@ nonisolated struct OnDeviceRouter {
             }
             if profile == .dirt || profile == .balanced {
                 let bridgeStarts = diversifySnapCandidates(
-                    preferred: throughPreferredSnaps(startRaw, profile: .direct, role: .start),
+                    preferred: throughPreferredSnaps(startRaw, profile: .balanced, role: .start),
                     distanceOrdered: startRaw
                 )
                 let bridgeEnds = diversifySnapCandidates(
-                    preferred: throughPreferredSnaps(endRaw, profile: .direct, role: .end),
+                    preferred: throughPreferredSnaps(endRaw, profile: .cleanest, role: .end),
                     distanceOrdered: endRaw
                 )
                 if let hit = attempt(starts: bridgeStarts, ends: bridgeEnds, ctx: ctx) {
@@ -691,32 +691,24 @@ nonisolated struct OnDeviceRouter {
             return .success(route)
         }
 
-        if profile == .direct || profile == .balanced {
-            let base = profile == .direct
-                ? HopSearchPolicy.directCorridorMeters
-                : HopSearchPolicy.balancedCorridorMeters
-            let multipliers: [Double] = profile == .direct
-                ? [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12]
-                : [1, 2, 3, 4, 6, 8]
+        if profile == .balanced {
+            let base = HopSearchPolicy.balancedCorridorMeters
+            let multipliers: [Double] = [1, 2, 3, 4, 6, 8]
             var lastEnvelopeFailure: Failure = .noPath
             for width in multipliers.map({ base * $0 }) + [0] {
                 var envelope = ctx
-                envelope.costMode = profile == .balanced ? .balancedResource : .profile
+                envelope.costMode = .balancedResource
                 envelope.variety = false
                 envelope.corridorMeters = width > 0 ? width : nil
                 envelope.hardCorridor = width > 0
                 envelope.boundedSearch = true
                 envelope.timeCapSeconds = HopSearchPolicy.pass2TimeCapSeconds
-                envelope.popCap = profile == .balanced
-                    ? HopSearchPolicy.pass2PopCap * 10
-                    : HopSearchPolicy.pass2PopCap
+                envelope.popCap = HopSearchPolicy.pass2PopCap * 10
                 envelope.maxPathMeters = maxRouteMeters
                 lastFailure = .noPath
                 switch runProfile(envelope) {
                 case .success(var route):
-                    route.searchMeta.rideObjective = profile == .balanced
-                        ? "surface-balance"
-                        : "crow-flies-adventure"
+                    route.searchMeta.rideObjective = "surface-balance"
                     route.searchMeta.corridorMeters = width > 0 ? width : nil
                     route.searchMeta.corridorWidened = width > base
                     route.searchMeta.maxCrossTrackMeters = HopSearchPolicy.maxCrossTrackMeters(
@@ -780,14 +772,6 @@ nonisolated struct OnDeviceRouter {
             hunt.shortestMeters = short.distanceMeters
             hunt.maxPathMeters = short.distanceMeters + extra
             switch profile {
-            case .direct:
-                // Ratio labels preserve both short and dirt-rich arrivals at a
-                // node. A single pavement-cost label can discard the shorter
-                // arrival required to finish inside Direct's 15 km budget.
-                hunt.costMode = .balancedResource
-                // Variety steal+cycle walks explode on long hops; pass 2
-                // optimizes a real cost with a length cap — keep it strict.
-                hunt.variety = false
             case .dirt:
                 // Dirt explicitly minimizes pavement inside shortest + 50 km.
                 // Weighted Dijkstra spent the budget without maximizing dirt
@@ -1035,8 +1019,6 @@ nonisolated struct OnDeviceRouter {
             if roadName == "freeway" || roadName == "arterial" || roadName == "ramp" {
                 score += 28
             }
-        case (.direct, .end):
-            break // pure distance
         default:
             break
         }
@@ -1414,10 +1396,10 @@ nonisolated struct OnDeviceRouter {
         heap.push(node: startVirt, cost: 0)
 
         let applyAway = ctx.costMode == .profile || ctx.costMode == .pavement
-        // Direct keeps centreline pull. Clean uses toward-B gravity only — no chord XT.
+        // Clean uses toward-B gravity only — no chord XT.
         let applySoftCorridor = applyAway
             && profile != .cleanest
-            && (ctx.costMode == .pavement || profile == .direct || ctx.corridorMeters == nil)
+            && (ctx.costMode == .pavement || ctx.corridorMeters == nil)
         let isHunt = ctx.maxPathMeters != nil || ctx.boundedSearch
         var pops = 0
         var abort = "completed"
@@ -1608,7 +1590,7 @@ nonisolated struct OnDeviceRouter {
                         }
                     }
                     // find-path-v2 does not U-turn-suppress virt expansions.
-                    // Dirt/Balanced/Direct keep pre-E2 virt backtrack; Clean+leaves match JS.
+                    // Dirt/Balanced keep pre-E2 virt backtrack; Clean+leaves match JS.
                     if ctx.noBacktrack, v.ei >= 0,
                        !(profile == .cleanest && pack.hasLeaves),
                        isBacktrack(prevKind: prevKind[cur.node], prevData: prevData[cur.node], ei: v.ei, virt: virt) {
@@ -2604,15 +2586,6 @@ nonisolated struct OnDeviceRouter {
                         )
                     }
 
-                    if policyUnknown {
-                        // Allow unlocks unknown; passableQualityMult already prefers
-                        // real FSR/track over speculative unknown connectors.
-                        let accessName = accessName(access)
-                        if accessName == "motorized_unknown", profile == .direct {
-                            step *= 0.92
-                        }
-                    }
-
                     let fromLL = coordinate(forNode: cur.node)
                     step += OnDeviceProfileCosts.approachAwayExtra(
                         profile: profile,
@@ -2621,7 +2594,7 @@ nonisolated struct OnDeviceRouter {
                         abMeters: abMeters,
                         regionId: pack.regionId
                     )
-                    if profile == .direct || ctx.corridorMeters == nil {
+                    if ctx.corridorMeters == nil {
                         step += OnDeviceProfileCosts.corridorCrossTrackExtra(
                             profile: profile,
                             point: toLL,
@@ -3633,12 +3606,6 @@ nonisolated struct OnDeviceRouter {
                 startOnMajorHighway: startOnMajorHighway,
                 endOnMajorHighway: endOnMajorHighway
             )
-            if policyUnknown {
-                let accessName = accessName(access)
-                if accessName == "motorized_unknown", profile == .direct {
-                    step *= 0.92
-                }
-            }
             if profile == .cleanest, pack.hasLeaves, ei >= 0, ctx.avoidMotorways || ctx.preferBackRoads {
                 step *= RoadTierStats.e4LeafCostMult(
                     tier: pack.roadTier(ei),

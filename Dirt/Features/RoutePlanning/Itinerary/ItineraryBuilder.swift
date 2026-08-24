@@ -726,7 +726,6 @@ final class ItineraryBuilder {
                     to: points[subIndex + 1],
                     avoidEdgeIDs: itinerary.impassableEdgeIDs,
                     maxPathMeters: cap,
-                    directExtraBudgetMeters: hopProfile == .direct ? 0 : nil,
                     history: sublegHistory,
                     avoidMotorways: riderLeg.avoidMotorways,
                     preferBackRoads: riderLeg.preferBackRoads
@@ -1035,10 +1034,6 @@ private func routeRequest(
 ) -> RouteRequest {
     let leg = itinerary.legs[legIndex]
     let profile = profileOverride ?? leg.profile
-    let directLegCount = itinerary.legs.filter { $0.profile == .direct }.count
-    let directExtraBudget = profile == .direct && directLegCount > 0
-        ? 15_000 / Double(directLegCount)
-        : nil
     return routeRequest(
         profile: profile,
         allowUnknown: profile == .cleanest ? false : leg.allowUnknown,
@@ -1046,7 +1041,6 @@ private func routeRequest(
         to: itinerary.waypoints[legIndex + 1].coordinate,
         avoidEdgeIDs: itinerary.impassableEdgeIDs,
         maxPathMeters: maxPathMeters,
-        directExtraBudgetMeters: directExtraBudget,
         history: history,
         avoidMotorways: leg.avoidMotorways,
         preferBackRoads: leg.preferBackRoads

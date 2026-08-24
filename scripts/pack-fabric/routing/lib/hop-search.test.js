@@ -3,7 +3,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const {
-  DIRECT_CORRIDOR_M,
   BALANCED_CORRIDOR_M,
   DIRT_CORRIDOR_M,
   projectedProgressMeters,
@@ -90,16 +89,16 @@ test("Clean pavement gate blocks gravel and untagged minor roads", () => {
   assert.equal(isDirtSurface("unknown", "local"), false);
 });
 
-test("adventure corridors widen from Direct to Balanced to Dirt", () => {
-  assert.ok(DIRECT_CORRIDOR_M < BALANCED_CORRIDOR_M);
+test("adventure corridors widen from Balanced to Dirt", () => {
   assert.ok(BALANCED_CORRIDOR_M < DIRT_CORRIDOR_M);
   assert.equal(DIRT_CORRIDOR_M, 60000);
   assert.equal(corridorMetersForProfile("cleanest"), null);
+  assert.equal(corridorMetersForProfile("balanced"), BALANCED_CORRIDOR_M);
 });
 
 test("Clean has no hard forward regression ceiling", () => {
   assert.equal(maxProgressRegressionMeters("cleanest"), Infinity);
-  assert.ok(maxProgressRegressionMeters("direct") < maxProgressRegressionMeters("dirt"));
+  assert.ok(maxProgressRegressionMeters("balanced") < maxProgressRegressionMeters("dirt"));
 });
 
 test("progress is measured along A to B without a reference route", () => {
@@ -112,8 +111,7 @@ test("progress is measured along A to B without a reference route", () => {
   assert.ok(total > 250000);
 });
 
-test("Dirt may regress more than Balanced, and Direct the least", () => {
-  assert.ok(maxProgressRegressionMeters("direct") < maxProgressRegressionMeters("balanced"));
+test("Dirt may regress more than Balanced", () => {
   assert.ok(maxProgressRegressionMeters("balanced") < maxProgressRegressionMeters("dirt"));
 });
 

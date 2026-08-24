@@ -24,7 +24,7 @@ const CASES = [
     to: { lon: -119.435, lat: 48.939 } // Oroville, WA
   }
 ];
-const PROFILES = ["dirt", "balanced", "direct", "cleanest"];
+const PROFILES = ["dirt", "balanced", "cleanest"];
 
 function haversineMeters(a, b) {
   const toR = Math.PI / 180;

@@ -119,7 +119,7 @@ test("OSM source identity cannot bypass an unknown access class", () => {
   );
 });
 
-test("Allow unknown is an eligibility gate for dirt/balanced/direct, not a cost", () => {
+test("Allow unknown is an eligibility gate for dirt/balanced, not a cost", () => {
   const enums = {
     ACCESS_NAME: {
       1: "motorized_permissive",
@@ -128,15 +128,15 @@ test("Allow unknown is an eligibility gate for dirt/balanced/direct, not a cost"
   };
   const off = { motorizedPermissive: true, motorizedUnknown: false };
   const on = { motorizedPermissive: true, motorizedUnknown: true };
-  for (const profile of ["dirt", "balanced", "direct"]) {
+  for (const profile of ["dirt", "balanced"]) {
     assert.equal(accessAllowed(2, off, enums, null, profile), false, profile + " off");
     assert.equal(accessAllowed(2, on, enums, null, profile), true, profile + " on");
     assert.equal(accessAllowed(1, off, enums, null, profile), true, profile + " permissive");
   }
   assert.equal(accessAllowed(2, on, enums, null, "cleanest"), false);
   const { normalizePolicy } = require("../lib/router");
-  assert.equal(normalizePolicy({}, "direct", { allowUnknown: true }).motorizedUnknown, true);
-  assert.equal(normalizePolicy({}, "direct", { allowUnknown: false }).motorizedUnknown, false);
+  assert.equal(normalizePolicy({}, "balanced", { allowUnknown: true }).motorizedUnknown, true);
+  assert.equal(normalizePolicy({}, "balanced", { allowUnknown: false }).motorizedUnknown, false);
   assert.equal(normalizePolicy({ motorizedUnknown: true }, "cleanest", { allowUnknown: true }).motorizedUnknown, false);
 });
 

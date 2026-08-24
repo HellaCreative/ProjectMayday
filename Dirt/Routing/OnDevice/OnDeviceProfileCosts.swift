@@ -4,7 +4,6 @@ import Foundation
 /// Shared surface + road-class weight tables with pack-fabric `routing/lib/profile-costs.js`.
 /// Profile intent (the dial — there is no separate Wander control):
 ///   Clean    → pavement only. Avoid town cores and major highways unless A/B is there.
-///   Direct   → dirt on the crow-flies line. No hunt. Pavement OK when dirt loops.
 ///   Balanced → dual-sport mix (~50/50 when fabric allows)
 ///   Dirt     → adventure ride: progress generally toward B, meander for yellow/white/blue
 ///              dirt; pavement only when forced. Allow Unknown stays OFF unless the rider
@@ -44,10 +43,6 @@ nonisolated enum OnDeviceProfileCosts {
         _ = regionId
         let table: [Double]
         switch profile {
-        case .direct:
-            // Geometry first. Surface is a mild tie-break between roads that
-            // make similar progress near the A→B line.
-            table = [1.15, 1.00, 0.95, 0.90, 1.00]
         case .balanced:
             // Dual-sport ~50/50. Cross-track keeps it on the A→B corridor;
             // without that it hunts like Dirt.
@@ -95,12 +90,6 @@ nonisolated enum OnDeviceProfileCosts {
                 "freeway": 0.94, "arterial": 0.98, "collector": 1.18, "ramp": 0.96,
                 "local": 2.6, "service": 3.2, "resource": 1.0, "recreation": 1.0,
                 "track": 1.0, "double_track": 1.0, "unknown": 1.0
-            ]
-        case .direct:
-            table = [
-                "freeway": 1.7, "arterial": 1.45, "collector": 1.06, "ramp": 1.6,
-                "local": 0.98, "service": 1.12, "resource": 0.90, "recreation": 0.88,
-                "track": 0.90, "double_track": 0.90, "unknown": 1.0
             ]
         case .balanced:
             table = [
@@ -198,7 +187,7 @@ nonisolated enum OnDeviceProfileCosts {
     }
 
     /// Extra paved tax while still far from B.
-    /// Dirt stays off highway spines until forced; Balanced milder; Direct/Clean skip.
+    /// Dirt stays off highway spines until forced; Balanced milder; Clean skips.
     static func pavementLateJoinMult(
         profile: RouteProfile,
         surfaceCode: Int,
@@ -306,10 +295,6 @@ nonisolated enum OnDeviceProfileCosts {
                 near = kmAway * (2.0 + t * t * 6.0)
             }
             return mid + near
-        case .direct:
-            let nearBand = max(3200.0, ab * 0.3)
-            let w = dFrom < nearBand ? 200.0 : 150.0
-            return kmAway * w
         case .balanced:
             let mid = kmAway * 180.0
             let horizon = max(4_000.0, ab * 0.2)
@@ -329,7 +314,7 @@ nonisolated enum OnDeviceProfileCosts {
 
     /// Quadratic penalty on perpendicular distance to the A→B great-circle.
     /// Clean has none — around-the-lake pavement that flows toward B is legal.
-    /// Direct strongest, then Balanced, then Dirt.
+    /// Balanced, then Dirt.
     static func corridorCrossTrackExtra(
         profile: RouteProfile,
         point: CLLocationCoordinate2D,
@@ -341,7 +326,6 @@ nonisolated enum OnDeviceProfileCosts {
         if profile == .cleanest { return 0 }
         let k: Double
         switch profile {
-        case .direct: k = 0.018
         case .balanced: k = 0.014
         case .dirt: k = 0.005
         case .cleanest: k = 0
@@ -349,22 +333,6 @@ nonisolated enum OnDeviceProfileCosts {
         let xtKm = abs(GeoMath.crossTrackMeters(point: point, lineFrom: lineFrom, to: lineTo)) / 1000.0
         let km = edgeMeters / 1000.0
         return km * xtKm * xtKm * k
-    }
-
-    static func directCrossTrackExtra(
-        profile: RouteProfile,
-        point: CLLocationCoordinate2D,
-        lineFrom: CLLocationCoordinate2D,
-        lineTo: CLLocationCoordinate2D,
-        edgeMeters: Double
-    ) -> Double {
-        corridorCrossTrackExtra(
-            profile: profile,
-            point: point,
-            lineFrom: lineFrom,
-            lineTo: lineTo,
-            edgeMeters: edgeMeters
-        )
     }
 
     /// Adventure meters share — OSM highway stack is pavement when untagged.

@@ -23,48 +23,13 @@ struct OnDeviceProfileCostsTests {
         #expect(dirtPaved / dirtTrack > 20)
     }
 
-    @Test func directPrefersDirtOnTheLineNotDirtHuntPrices() {
-        let directPaved = OnDeviceProfileCosts.edgeCostPerKm(
-            profile: .direct, surfaceCode: 0, roadClassCode: 4
-        )
-        let dirtPaved = OnDeviceProfileCosts.edgeCostPerKm(
-            profile: .dirt, surfaceCode: 0, roadClassCode: 4
-        )
-        let directTrack = OnDeviceProfileCosts.edgeCostPerKm(
-            profile: .direct, surfaceCode: 3, roadClassCode: 8
-        )
-        let dirtTrack = OnDeviceProfileCosts.edgeCostPerKm(
-            profile: .dirt, surfaceCode: 3, roadClassCode: 8
-        )
-        let directAway = OnDeviceProfileCosts.approachAwayExtra(
-            profile: .direct,
-            dFromMeters: 200_000,
-            dToMeters: 210_000,
-            abMeters: 400_000
-        )
-        let dirtAway = OnDeviceProfileCosts.approachAwayExtra(
-            profile: .dirt,
-            dFromMeters: 200_000,
-            dToMeters: 210_000,
-            abMeters: 400_000
-        )
-        #expect(directPaved < dirtPaved / 3)
-        #expect(directTrack > dirtTrack * 8)
-        #expect(directPaved / directTrack > 1.1)
-        #expect(directPaved / directTrack < 4)
-        #expect(directAway > dirtAway * 3)
-    }
-
-    @Test func corridorCrossTrackTaxesOffLineArcsForAdventureProfiles() {
+    @Test func adventureCrossTrackTaxesOffLineArcs() {
         let a = CLLocationCoordinate2D(latitude: 49.73269, longitude: -123.13511)
         let b = CLLocationCoordinate2D(latitude: 50.46739, longitude: -119.14172)
         let onLine = CLLocationCoordinate2D(latitude: 50.1, longitude: -121.14)
         let farNorth = CLLocationCoordinate2D(latitude: 51.4, longitude: -121.14)
         let near = OnDeviceProfileCosts.corridorCrossTrackExtra(
-            profile: .direct, point: onLine, lineFrom: a, lineTo: b, edgeMeters: 1000
-        )
-        let farDirect = OnDeviceProfileCosts.corridorCrossTrackExtra(
-            profile: .direct, point: farNorth, lineFrom: a, lineTo: b, edgeMeters: 1000
+            profile: .balanced, point: onLine, lineFrom: a, lineTo: b, edgeMeters: 1000
         )
         let farBalanced = OnDeviceProfileCosts.corridorCrossTrackExtra(
             profile: .balanced, point: farNorth, lineFrom: a, lineTo: b, edgeMeters: 1000
@@ -75,8 +40,7 @@ struct OnDeviceProfileCostsTests {
         let farClean = OnDeviceProfileCosts.corridorCrossTrackExtra(
             profile: .cleanest, point: farNorth, lineFrom: a, lineTo: b, edgeMeters: 1000
         )
-        #expect(farDirect > near * 8)
-        #expect(farDirect > farBalanced)
+        #expect(farBalanced > near * 8)
         #expect(farBalanced > farDirt)
         #expect(farDirt > 8)
         #expect(farClean == 0)
@@ -229,8 +193,8 @@ struct OnDeviceProfileCostsTests {
             dToMeters: 35_000,
             abMeters: 15_000
         )
-        let directAway = OnDeviceProfileCosts.approachAwayExtra(
-            profile: .direct,
+        let balancedAway = OnDeviceProfileCosts.approachAwayExtra(
+            profile: .balanced,
             dFromMeters: 50_000,
             dToMeters: 51_000,
             abMeters: 100_000
@@ -238,7 +202,7 @@ struct OnDeviceProfileCostsTests {
         #expect(cleanAway > 0)
         #expect(cleanAway <= 15 * 2.5)
         #expect(cleanAway < 60 * 1.18)
-        #expect(directAway >= 150)
+        #expect(balancedAway >= 150)
     }
 
     @Test func cleanPavementGateBlocksMinorUnknownAndGravel() {
@@ -252,7 +216,7 @@ struct OnDeviceProfileCostsTests {
         #expect(OnDeviceProfileCosts.isMajorHighway("freeway", profile: .cleanest))
         #expect(OnDeviceProfileCosts.isMajorHighway("ramp", profile: .cleanest))
         #expect(!OnDeviceProfileCosts.isMajorHighway("arterial", profile: .cleanest))
-        #expect(OnDeviceProfileCosts.isMajorHighway("arterial", profile: .direct))
+        #expect(OnDeviceProfileCosts.isMajorHighway("arterial", profile: .balanced))
         #expect(OnDeviceProfileCosts.isMajorHighway("arterial", profile: .dirt))
 
         let cleanArterial = OnDeviceProfileCosts.majorHighwayAvoidMult(
@@ -279,8 +243,8 @@ struct OnDeviceProfileCostsTests {
             startOnMajorHighway: false,
             endOnMajorHighway: false
         )
-        let directArterial = OnDeviceProfileCosts.majorHighwayAvoidMult(
-            profile: .direct,
+        let balancedArterial = OnDeviceProfileCosts.majorHighwayAvoidMult(
+            profile: .balanced,
             roadClassCode: 2,
             metersFromStart: 80_000,
             metersToDestination: 80_000,
@@ -298,8 +262,9 @@ struct OnDeviceProfileCostsTests {
         #expect(cleanArterial == 1)
         #expect(cleanFreeway > 1)
         #expect(cleanRamp > 1)
-        #expect(directArterial > 1)
-        #expect(dirtArterial > 1)
+        #expect(balancedArterial > 1)
+        // Dirt arterial is already 9.5× — the extra avoid target does not apply.
+        #expect(dirtArterial == 1)
     }
 
     @Test func majorHighwaysStayAvoidedUntilNearAPinnedHighway() {
