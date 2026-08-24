@@ -11,8 +11,10 @@ test("western Nova Scotia stays NS despite NB bbox overlap", () => {
   assert.equal(primaryRegionForPoint(-63.5752, 44.6488), "ns"); // Halifax
   assert.equal(primaryRegionForPoint(-65.7587, 44.6221), "ns"); // Digby
   assert.equal(primaryRegionForPoint(-64.4935, 45.0770), "ns"); // Kentville
+  assert.equal(primaryRegionForPoint(-64.213, 45.833), "ns"); // Amherst — NS side of Tantramar
   assert.equal(primaryRegionForPoint(-64.7782, 46.0878), "nb"); // Moncton
   assert.equal(primaryRegionForPoint(-66.0633, 45.2733), "nb"); // Saint John
+  assert.equal(primaryRegionForPoint(-64.368, 45.918), "nb"); // Sackville — not stolen by NS bbox
 });
 
 test("a deployment-scoped live candidate overrides only its named region", () => {
@@ -26,6 +28,7 @@ test("a deployment-scoped live candidate overrides only its named region", () =>
       "https://packs.example/candidates/ns-release/ns/graph.v3.bin"
     );
     assert.match(remoteGraphUrl("bc"), /\/bc\/graph\.v2\.bin$/);
+    assert.match(remoteGraphUrl("nb"), /\/nb\/graph\.v3\.bin$/);
     assert.doesNotMatch(remoteGraphUrl("bc"), /ns-release/);
   } finally {
     if (previous == null) delete process.env.R2_REGION_BASE_OVERRIDES;

@@ -28,6 +28,7 @@ const nrnAdapter = require("../routing/adapters/nrn");
 const osmRoads = require("../routing/adapters/osm-roads");
 const { conflateRegion } = require("../routing/conflation/conflate");
 const { buildRegionalGraph, writeRegionalGraph } = require("../routing/regional/package");
+const { OSM_REGION } = require("../routing/registry/geofabrik");
 
 const ROOT = path.join(__dirname, "..");
 const REGISTRY = path.join(ROOT, "routing", "registry", "sources.json");
@@ -40,21 +41,6 @@ const SUPPLEMENTS = {
   ab: () => require("../routing/adapters/ab-access"),
   on: () => require("../routing/adapters/on-mnrf"),
   qc: () => require("../routing/adapters/qc-multiusage")
-};
-
-/** Geofabrik source for OSM road-fabric extracts. */
-const OSM_REGION = {
-  nb: { slug: "new-brunswick", country: "canada" },
-  qc: { slug: "quebec", country: "canada" },
-  ns: { slug: "nova-scotia", country: "canada" },
-  pe: { slug: "prince-edward-island", country: "canada" },
-  on: { slug: "ontario", country: "canada" },
-  mb: { slug: "manitoba", country: "canada" },
-  sk: { slug: "saskatchewan", country: "canada" },
-  ab: { slug: "alberta", country: "canada" },
-  bc: { slug: "british-columbia", country: "canada" },
-  nl: { slug: "newfoundland-and-labrador", country: "canada" },
-  wa: { slug: "washington", country: "us" }
 };
 
 async function loadNrnFeatures(code) {

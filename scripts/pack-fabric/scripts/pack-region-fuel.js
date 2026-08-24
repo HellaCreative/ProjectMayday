@@ -14,38 +14,31 @@ const fs = require("fs");
 const path = require("path");
 const { spawnSync } = require("child_process");
 
+const { geofabrikSource } = require("../routing/registry/geofabrik");
+
 const DIRT = path.resolve(__dirname, "../../..");
 const FABRIC = path.join(DIRT, "scripts/pack-fabric");
-const OSM_SLUG = {
-  nb: "new-brunswick",
-  qc: "quebec",
-  ns: "nova-scotia",
-  pe: "prince-edward-island",
-  on: "ontario",
-  mb: "manitoba",
-  sk: "saskatchewan",
-  ab: "alberta",
-  bc: "british-columbia",
-  nl: "newfoundland-and-labrador",
-  yt: "yukon",
-  nt: "northwest-territories",
-  nu: "nunavut",
-  wa: "washington"
-};
 
 const id = String(process.argv[2] || "").toLowerCase();
-if (!id || !OSM_SLUG[id]) {
+let source;
+try {
+  source = geofabrikSource(id);
+} catch (_) {
+  source = null;
+}
+if (!id || !source) {
   console.error("Usage: pack-region-fuel.js <region-id>   (e.g. bc)");
   process.exit(1);
 }
 
-const seq = path.join(DIRT, "data-raw/osm-fuel", OSM_SLUG[id], "fuel.geojsonseq");
+const seq = path.join(DIRT, "data-raw/osm-fuel", source.slug, "fuel.geojsonseq");
 if (!fs.existsSync(seq)) {
   console.error("missing " + seq);
   console.error(
     "Run: bash scripts/pack-fabric/scripts/extract-osm-fuel.sh " +
-      OSM_SLUG[id] +
-      (id === "wa" ? " us" : " canada")
+      source.slug +
+      " " +
+      source.country
   );
   process.exit(1);
 }

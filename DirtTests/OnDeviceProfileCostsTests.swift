@@ -396,14 +396,19 @@ struct CrossPackSeamTests {
         let kentville = CLLocationCoordinate2D(latitude: 45.0770, longitude: -64.4935)
         let moncton = CLLocationCoordinate2D(latitude: 46.0878, longitude: -64.7782)
         let saintJohn = CLLocationCoordinate2D(latitude: 45.2733, longitude: -66.0633)
+        let amherst = CLLocationCoordinate2D(latitude: 45.833, longitude: -64.213)
+        let sackville = CLLocationCoordinate2D(latitude: 45.918, longitude: -64.368)
         #expect(GraphPackStore.primaryRegionId(containing: halifax) == "ns")
         #expect(GraphPackStore.primaryRegionId(containing: digby) == "ns")
         #expect(GraphPackStore.primaryRegionId(containing: kentville) == "ns")
+        #expect(GraphPackStore.primaryRegionId(containing: amherst) == "ns")
         #expect(GraphPackStore.primaryRegionId(containing: moncton) == "nb")
         #expect(GraphPackStore.primaryRegionId(containing: saintJohn) == "nb")
+        #expect(GraphPackStore.primaryRegionId(containing: sackville) == "nb")
         #expect(GraphPackStore.endpointsCrossProvince([halifax, digby]) == false)
         #expect(GraphPackStore.endpointProvinceIds(containingAny: [halifax, digby]) == ["ns"])
         #expect(GraphPackStore.endpointsCrossProvince([halifax, moncton]) == true)
+        #expect(GraphPackStore.endpointsCrossProvince([amherst, sackville]) == true)
     }
 
     @Test func concatenatingAddsDirtAndPavedMeters() throws {

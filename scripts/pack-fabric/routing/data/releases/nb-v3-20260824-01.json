@@ -1,0 +1,30 @@
+{
+  "schemaVersion": "dirt-pack-release.v1",
+  "releaseId": "nb-v3-20260824-01",
+  "status": "live-candidate",
+  "createdAt": "2026-08-24T15:35:00.000Z",
+  "notes": "NS v3 stamp on NB, clipped to OSM admin polygon (complete_ways). Do not promote until physical Tantramar hop approval. NS pack unchanged.",
+  "publicBase": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/candidates/nb-v3-20260824-01",
+  "regions": [
+    {
+      "id": "nb",
+      "files": [
+        {
+          "name": "graph.v3.bin",
+          "bytes": 10883448,
+          "sha256": "ef2b554099463fa04613d89a4aef0b8a610175cf878773d9627c94a1fc550db8"
+        },
+        {
+          "name": "geometry.v1.bin",
+          "bytes": 8737200,
+          "sha256": "803b2c3a6ed1b27f2b88e209ba2b8eadd9d62de56b472e28575f25e0a11aa18a"
+        },
+        {
+          "name": "fuel.v1.json",
+          "bytes": 141937,
+          "sha256": "da064856c77f36dd2a7c1c9af0a2fd04a8fe0bbccdaa0b74f6265a46449907f9"
+        }
+      ]
+    }
+  ]
+}

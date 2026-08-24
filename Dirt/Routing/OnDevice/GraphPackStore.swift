@@ -266,9 +266,9 @@ final class GraphPackStore {
             let key = id.lowercased()
             if !ordered.contains(key) { ordered.append(key) }
         }
-        for id in Self.regionIds(covering: routeCoordinates) { push(id) }
+        for id in Self.regionIds(containingAny: routeCoordinates) { push(id) }
         if let location {
-            for id in Self.regionIds(covering: [location]) { push(id) }
+            for id in Self.regionIds(containingAny: [location]) { push(id) }
         }
         return ordered
     }
@@ -1540,6 +1540,10 @@ final class GraphPackStore {
         guard !hits.isEmpty else { return nil }
         let lon = coordinate.longitude
         let lat = coordinate.latitude
+
+        if let maritime = RegionPolygons.maritimesOwner(longitude: lon, latitude: lat) {
+            return maritime
+        }
 
         // Resolve the international border before overlapping Canadian
         // province rectangles. Southern BC is also inside AB's coarse bbox.

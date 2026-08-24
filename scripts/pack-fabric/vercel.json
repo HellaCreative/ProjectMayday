@@ -5,17 +5,17 @@
     "api/route.js": {
       "memory": 2048,
       "maxDuration": 300,
-      "includeFiles": "routing/{lib,regional,schema}/**"
+      "includeFiles": "{routing/lib/**,routing/regional/**,routing/schema/**,routing/data/v3-regions.json,routing/data/region-polygons/**}"
     },
     "api/fuel.js": {
       "memory": 1024,
       "maxDuration": 30,
-      "includeFiles": "routing/{lib,regional}/**"
+      "includeFiles": "{routing/lib/**,routing/regional/**,routing/data/v3-regions.json,routing/data/region-polygons/**}"
     },
     "api/fuel-chain.js": {
       "memory": 2048,
       "maxDuration": 60,
-      "includeFiles": "routing/{lib,regional,schema}/**"
+      "includeFiles": "{routing/lib/**,routing/regional/**,routing/schema/**,routing/data/v3-regions.json,routing/data/region-polygons/**}"
     }
   },
   "headers": [

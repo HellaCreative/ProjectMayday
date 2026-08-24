@@ -3,6 +3,8 @@
 const fs = require("fs");
 const path = require("path");
 const { regionsForRoute } = require("./merge");
+const { phoneGraphFileNameForRegion } = require("../lib/v3-regions");
+const { maritimesOwner } = require("../lib/region-polygons");
 
 const REGIONS_DIR = path.join(__dirname, "..", "data", "regions");
 const LEGACY_GRAPH = path.join(__dirname, "..", "data", "ns-graph.v1.json.gz");
@@ -158,6 +160,9 @@ function primaryRegionForPoint(lon, lat) {
     hits.push({ id, area: bboxArea(bbox) });
   }
   if (!hits.length) return null;
+
+  const maritime = maritimesOwner(lon, lat);
+  if (maritime) return maritime;
 
   const ids = new Set(hits.map((h) => h.id));
   // Resolve the international border before overlapping Canadian province
@@ -389,14 +394,12 @@ function localGraphPath(regionId, { longhaul = false } = {}) {
 
 /**
  * Phone PACKS and live /api/route are the same object. Catalog lists one graph
- * per region: NS is graph.v3.bin (leaves); other regions remain graph.v2.bin
- * until promoted. Vercel never ships pack bytes, so this cannot probe local R2
- * staging — keep the published name here in lockstep with the public manifest.
+ * per region. Vercel never ships pack bytes, so this cannot probe local R2 —
+ * `routing/data/v3-regions.json` is the lockstep list of regions that serve
+ * graph.v3.bin. Everyone else remains graph.v2.bin until stamped and listed.
  */
 function phoneGraphFileName(regionId) {
-  const id = String(regionId || "").toLowerCase();
-  if (id === "ns" || id === "__legacy_ns__") return "graph.v3.bin";
-  return "graph.v2.bin";
+  return phoneGraphFileNameForRegion(regionId);
 }
 
 function remoteGraphUrl(regionId, _opts = {}) {
