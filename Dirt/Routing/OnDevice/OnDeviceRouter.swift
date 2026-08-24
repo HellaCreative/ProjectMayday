@@ -636,8 +636,8 @@ nonisolated struct OnDeviceRouter {
 
         if profile == .dirt {
             let base = HopSearchPolicy.dirtCorridorMeters
-            let comparisonWidths = [base * 4, base * 3, base * 2, base]
-            let connectivityWidths: [Double?] = [base * 6, base * 8, nil]
+            let comparisonWidths = [base * 2, base]
+            let connectivityWidths: [Double?] = [base * 3, base * 4, nil]
             var candidates: [(route: Result, width: Double)] = []
             var lastBoundedFailure: Failure = .noPath
 

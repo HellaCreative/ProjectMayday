@@ -512,12 +512,13 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
   const sessionSeed = Number(searchOpts.sessionSeed) || 0;
   if (!searchOpts.costMode) {
     const baseCorridor = corridorMetersForProfile(profile);
-    // Direct/Balanced/Clean keep the narrowest viable band. Dirt first compares
-    // coherent rides inside wide envelopes; the corridor is an outer
-    // permission, never distance the route must consume.
+    // Direct/Balanced/Clean keep the narrowest viable band. Dirt scores only
+    // 120 km + 60 km; 180/240/unbounded are connectivity fallbacks if those
+    // two bands find no path. The corridor is an outer permission, never
+    // distance the route must consume.
     const widthMultipliers = profile === "direct"
       ? [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12]
-      : profile === "dirt" ? [4, 3, 2, 1, 6, 8]
+      : profile === "dirt" ? [2, 1, 3, 4]
         : profile === "cleanest"
           // Clean: no corridor ladder — one fabric search.
           ? [Infinity]
@@ -594,9 +595,9 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
         });
         break;
       }
-      // Once Dirt has compared its three deliberate envelopes, wider bands are
-      // connectivity fallbacks only. Stop at the first one that connects.
-      const dirtComparisonWidth = profile === "dirt" && Number.isFinite(width) && width <= baseCorridor * 4;
+      // Once Dirt has compared 60/120 km, wider bands are connectivity
+      // fallbacks only. Stop at the first one that connects.
+      const dirtComparisonWidth = profile === "dirt" && Number.isFinite(width) && width <= baseCorridor * 2;
       if (profile === "dirt" && dirtCandidates.length && !dirtComparisonWidth) break;
       const diagnostics = {};
       const rideOpts = {
@@ -626,7 +627,7 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
         backtrackFactor: searchOpts.backtrackFactor
       };
       if (dirtComparisonWidth) {
-        // Three candidates share roughly one old pass-2 budget.
+        // Comparison candidates share roughly one old pass-2 budget.
         rideOpts.timeCapMs = 7000;
         rideOpts.popCap = Math.ceil(PASS2_POP_CAP / 2);
       }
