@@ -1,6 +1,28 @@
 import CoreLocation
 import Foundation
 
+struct FuelPlanningProgressWatchdog {
+    let inactivityInterval: TimeInterval
+    private(set) var deadline: Date
+
+    init(inactivityInterval: TimeInterval = 20, now: Date = Date()) {
+        self.inactivityInterval = inactivityInterval
+        deadline = now.addingTimeInterval(inactivityInterval)
+    }
+
+    mutating func recordProgress(at now: Date = Date()) {
+        deadline = now.addingTimeInterval(inactivityInterval)
+    }
+
+    func isExpired(at now: Date = Date()) -> Bool {
+        now >= deadline
+    }
+
+    func remainingMilliseconds(at now: Date = Date()) -> Int {
+        max(0, Int(deadline.timeIntervalSince(now) * 1_000))
+    }
+}
+
 @MainActor
 final class ItineraryBuilder {
     private var currentGeneration: Int?
@@ -588,7 +610,10 @@ final class ItineraryBuilder {
         )
         var history = EdgeHistory()
         var fuelUsed = 0.0
-        let deadline = Date().addingTimeInterval(20)
+        // This is an inactivity watchdog, not a cap on total itinerary time.
+        // Long routes may legitimately need many quick fuel hops; every proven
+        // forward leg renews the window while stalled searches still terminate.
+        var progressWatchdog = FuelPlanningProgressWatchdog()
 
         for index in itinerary.legs.indices {
             let riderLeg = itinerary.legs[index]
@@ -603,9 +628,13 @@ final class ItineraryBuilder {
                 guard active(itinerary) else {
                     return dropped(itinerary, committed: committed, cancelled: true)
                 }
-                guard Date() < deadline else {
+                guard !progressWatchdog.isExpired() else {
                     statuses[riderLeg.id] = .fuelUnknown(
-                        "Fuel planning could not complete this route in time."
+                        "Fuel planning made no forward progress for 20 seconds."
+                    )
+                    RoutingDebugLog.shared.event(
+                        "fuel progress timeout gen=\(itinerary.generation) "
+                            + "riderLeg=\(riderLeg.id) attempts=\(attempts) committed=\(committed.legs.count)"
                     )
                     return BuiltItinerary(
                         generation: itinerary.generation,
@@ -688,7 +717,7 @@ final class ItineraryBuilder {
                         allowPartialWindow: true,
                         windowTimeBudgetMs: min(
                             5_800,
-                            max(100, Int(deadline.timeIntervalSinceNow * 1_000))
+                            max(100, progressWatchdog.remainingMilliseconds())
                         ),
                         requiredFirstStationId: requiredStationID,
                         forwardFeeler: true
@@ -819,6 +848,12 @@ final class ItineraryBuilder {
                         with: builtLegs,
                         in: committed,
                         status: statuses[riderLeg.id] ?? .pending
+                    )
+                    progressWatchdog.recordProgress()
+                    RoutingDebugLog.shared.event(
+                        "fuel progress renewed gen=\(itinerary.generation) "
+                            + "riderLeg=\(riderLeg.id) kind=\(selectedStop == nil ? "waypoint" : "pump") "
+                            + "committed=\(committed.legs.count)"
                     )
                     onProgress(committed)
 

@@ -3,6 +3,38 @@ import Testing
 @testable import Dirt
 
 @MainActor
+struct FuelPlanningProgressWatchdogTests {
+    @Test func regularForwardProgressOutlivesTheOriginalWindow() {
+        let start = Date(timeIntervalSinceReferenceDate: 1_000)
+        var watchdog = FuelPlanningProgressWatchdog(now: start)
+
+        watchdog.recordProgress(at: start.addingTimeInterval(12))
+        watchdog.recordProgress(at: start.addingTimeInterval(24))
+
+        #expect(!watchdog.isExpired(at: start.addingTimeInterval(30)))
+        #expect(watchdog.remainingMilliseconds(at: start.addingTimeInterval(30)) == 14_000)
+    }
+
+    @Test func twentySecondsWithoutForwardProgressExpires() {
+        let start = Date(timeIntervalSinceReferenceDate: 2_000)
+        let watchdog = FuelPlanningProgressWatchdog(now: start)
+
+        #expect(!watchdog.isExpired(at: start.addingTimeInterval(19.999)))
+        #expect(watchdog.isExpired(at: start.addingTimeInterval(20)))
+    }
+
+    @Test func newRiderBuildReceivesAnIndependentWindow() {
+        let start = Date(timeIntervalSinceReferenceDate: 3_000)
+        let oldBuild = FuelPlanningProgressWatchdog(now: start)
+        let newBuild = FuelPlanningProgressWatchdog(now: start.addingTimeInterval(25))
+
+        #expect(oldBuild.isExpired(at: start.addingTimeInterval(25)))
+        #expect(!newBuild.isExpired(at: start.addingTimeInterval(25)))
+        #expect(newBuild.remainingMilliseconds(at: start.addingTimeInterval(25)) == 20_000)
+    }
+}
+
+@MainActor
 struct ItineraryBuilderTests {
     @Test func dirtFuelNeedUsesUnconstrainedProfileRideWhileCleanNeedsNoStop() async throws {
         let points = [point(0), point(1)]
