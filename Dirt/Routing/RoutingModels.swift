@@ -207,6 +207,9 @@ struct FuelChainConstraint: Codable, Sendable {
     var allowPartialWindow: Bool? = nil
     var windowTimeBudgetMs: Int? = nil
     var requiredFirstStationId: String? = nil
+    /// Discover the next reachable anchor using graph distance only. The
+    /// selected anchor is routed once, as the real rider leg, by the client.
+    var forwardFeeler: Bool? = nil
 }
 
 struct FuelChainRequest: Codable, Sendable {
@@ -238,7 +241,8 @@ struct FuelChainRequest: Codable, Sendable {
         windowMaxStops: Int? = nil,
         allowPartialWindow: Bool = false,
         windowTimeBudgetMs: Int? = nil,
-        requiredFirstStationId: String? = nil
+        requiredFirstStationId: String? = nil,
+        forwardFeeler: Bool = false
     ) {
         self.profile = profile
         locations = [
@@ -272,7 +276,8 @@ struct FuelChainRequest: Codable, Sendable {
             windowMaxStops: windowMaxStops,
             allowPartialWindow: allowPartialWindow ? true : nil,
             windowTimeBudgetMs: windowTimeBudgetMs,
-            requiredFirstStationId: requiredFirstStationId
+            requiredFirstStationId: requiredFirstStationId,
+            forwardFeeler: forwardFeeler ? true : nil
         )
     }
 }

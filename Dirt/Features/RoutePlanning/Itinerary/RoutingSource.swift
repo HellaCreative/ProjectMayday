@@ -293,7 +293,10 @@ final class PackRoutingSource: RoutingSource {
             )
             let departureID = stops.last?.id ?? "start"
             var validForward = Set<String>()
-            for candidate in ranked.prefix(16) {
+            // Match the live allocator's bounded shortlist. One-stop windows
+            // resume from the selected pump, so neither engine needs to prove
+            // a large station tree in a single request.
+            for candidate in ranked.prefix(6) {
                 let candidateCoordinate = CLLocationCoordinate2D(
                     latitude: candidate.latitude,
                     longitude: candidate.longitude

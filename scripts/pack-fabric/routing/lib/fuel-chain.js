@@ -597,7 +597,8 @@ async function planFuelChainOnRuntime({
   requiredFirstStationId = null,
   allowPartialWindow = false,
   timeBudgetMs = null,
-  profileMeters = null
+  profileMeters = null,
+  graphOnlyFeeler = false
 }) {
   profile = resolveProfile(profile);
   const policy = normalizePolicy(rawPolicy, profile);
@@ -680,21 +681,28 @@ async function planFuelChainOnRuntime({
     return result;
   }
 
-  const evaluateProfileHop = routeCandidate || (async ({
-    candidate, from, maxMeters, priorEdgeIds: evaluationHistory, arrivalEdgeId: evaluationArrival
-  }) => routeRequest({
-    profile,
-    locations: [from, candidate.location],
-    accessPolicy: rawPolicy,
-    options: {
-      avoidEdgeIds,
-      priorEdgeIds: [...(evaluationHistory || [])],
-      arrivalEdgeId: evaluationArrival,
-      backtrackFactor,
-      directExtraBudgetMeters: undefined,
-      maxPathMeters: maxMeters
-    }
-  }));
+  const evaluateProfileHop = graphOnlyFeeler
+    ? (async ({ candidate }) => ({
+        status: "complete",
+        distanceMeters: candidate.graphMeters,
+        stats: { dirtPercent: 0 },
+        segments: []
+      }))
+    : routeCandidate || (async ({
+        candidate, from, maxMeters, priorEdgeIds: evaluationHistory, arrivalEdgeId: evaluationArrival
+      }) => routeRequest({
+        profile,
+        locations: [from, candidate.location],
+        accessPolicy: rawPolicy,
+        options: {
+          avoidEdgeIds,
+          priorEdgeIds: [...(evaluationHistory || [])],
+          arrivalEdgeId: evaluationArrival,
+          backtrackFactor,
+          directExtraBudgetMeters: undefined,
+          maxPathMeters: maxMeters
+        }
+      }));
 
   function destinationCandidate(graphMeters) {
     return {
@@ -916,12 +924,11 @@ async function planFuelChainOnRuntime({
       return { row, diagnostic };
     }
 
-    // Adventure probes are expensive. Evaluate a small concurrent batch, then
-    // stop only after a profile-quality choice in the comfort tank window —
-    // never after two wall-stretch stations when a 50–80% stop remains unevaluated.
-    const batchSize = profile === "dirt"
-      ? Math.min(4, Math.max(1, candidates.length))
-      : (profile === "balanced" ? Math.min(4, Math.max(1, candidates.length)) : Math.max(1, candidates.length));
+    // Profile-route probes dominate fuel latency. Bound every batch to two
+    // geographically distinct choices and check the deadline between batches.
+    // This still compares alternatives inside the 50–80% comfort band without
+    // making a rider wait for four full Dijkstras before any pump can commit.
+    const batchSize = Math.min(2, Math.max(1, candidates.length));
     const comfortAvailable = unique.some((row) => tankCommitBand(row.graphMeters, cap) === 0);
     const earlyAvailable = unique.some((row) => tankCommitBand(row.graphMeters, cap) === 1);
     for (let startRank = 0; startRank < candidates.length; startRank += batchSize) {
@@ -937,6 +944,7 @@ async function planFuelChainOnRuntime({
       }
       const hasProfileQualityChoice = rows.some((evaluated) => {
         if (!(evaluated.fits && evaluated.validForward)) return false;
+        if (graphOnlyFeeler) return true;
         if (profile === "dirt") return true;
         if (profile === "balanced") return Math.abs(evaluated.chainDirtPct - 50) <= 5;
         return true;
@@ -1156,13 +1164,27 @@ async function planFuelChainOnRuntime({
       }
     }
     for (const evaluation of evaluated) {
+      if (states >= maxStates) break;
+      if (!evaluation.validForward) continue;
+      const candidate = evaluation.candidate;
+      // A completed, forward-valid pump is useful work. When this request is a
+      // resumable one-stop window, commit it even if candidate evaluation
+      // crossed the wall-clock boundary by a few milliseconds.
+      if (allowPartialWindow && depth + 1 >= maxStops) {
+        return {
+          stops: [{
+            ...candidate.station,
+            graphMeters: evaluation.meters,
+            dirtPercent: evaluation.dirtPct
+          }],
+          graphMeters: [evaluation.meters],
+          partial: true
+        };
+      }
       if (Date.now() >= deadline) {
         timeBudgetExceeded = true;
         break;
       }
-      if (states >= maxStates) break;
-      if (!evaluation.validForward) continue;
-      const candidate = evaluation.candidate;
       const id = String(candidate.station.id);
       const nextVisited = new Set(visited);
       nextVisited.add(id);
@@ -1220,7 +1242,7 @@ async function planFuelChainOnRuntime({
       ok: false,
       error: plannedFailure.error,
       message: timeBudgetExceeded
-        ? "This fuel window exceeded its six-second planning budget."
+        ? "Fuel planning could not finish this window in time."
         : "No forward, route-connected fuel chain fits the usable range.",
       diagnostics: enrichFuelDiagnostics({
         states,
@@ -1628,6 +1650,7 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
     };
   }
   const rawFuelOptions = body.fuel || {};
+  const forwardFeeler = rawFuelOptions.forwardFeeler === true;
   let fuelOptions = rawFuelOptions;
   const usableRangeMeters = Number(fuelOptions.usableRangeMeters);
   const firstLegMaxMeters = Number(fuelOptions.firstLegMaxMeters || usableRangeMeters);
@@ -1650,7 +1673,12 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
   }
 
   let profileMeters = Number(rawFuelOptions.profileMeters);
-  if (!(profileMeters >= 0)) {
+  if (forwardFeeler) {
+    profileMeters = haversineMeters(
+      locationCoordinate(locations[0]),
+      locationCoordinate(locations[locations.length - 1])
+    );
+  } else if (!(profileMeters >= 0)) {
     const routeProfile = dependencies.routeRequest || routeRequest;
     const options = { ...(body.options || {}) };
     delete options.maxPathMeters;
@@ -1670,10 +1698,8 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
       };
     }
   }
-  const stopsNeeded = fuelNeedForProfileRide(
-    profileMeters,
-    firstLegMaxMeters,
-    usableRangeMeters
+  const stopsNeeded = forwardFeeler ? 0 : fuelNeedForProfileRide(
+    profileMeters, firstLegMaxMeters, usableRangeMeters
   );
   if (stopsNeeded == null) {
     return {
@@ -1685,15 +1711,14 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
   fuelOptions = {
     ...rawFuelOptions,
     profileMeters,
-    requireFuelStopBeforeEnd:
-      !!rawFuelOptions.requireFuelStopBeforeEnd || stopsNeeded > 0,
+    requireFuelStopBeforeEnd: !!rawFuelOptions.requireFuelStopBeforeEnd || stopsNeeded > 0,
     minimumFuelStops: Math.max(
       Number(rawFuelOptions.minimumFuelStops) || 0,
       stopsNeeded
     )
   };
   console.log(
-    `fuel need riderLeg=${rawFuelOptions.riderLegId || "unknown"} ` +
+    `${forwardFeeler ? "fuel feeler" : "fuel need"} riderLeg=${rawFuelOptions.riderLegId || "unknown"} ` +
     `profileMeters=${Math.round(profileMeters)} usable=${Math.round(usableRangeMeters)} ` +
     `stopsNeeded=${stopsNeeded}`
   );
@@ -1746,7 +1771,8 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
     maxStops: Math.min(12, Math.max(1, Number(fuelOptions.windowMaxStops) || 12)),
     allowPartialWindow: !!fuelOptions.allowPartialWindow,
     timeBudgetMs: Number(fuelOptions.windowTimeBudgetMs) || null,
-    profileMeters
+    profileMeters,
+    graphOnlyFeeler: forwardFeeler
   });
 
   // Do not offer auxiliary fuel for an incomplete computation. A timeout is a

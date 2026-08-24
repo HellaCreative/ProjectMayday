@@ -221,8 +221,7 @@ final class RoutePlannerModel {
     private(set) var fuelPlanNotice: String?
     private var fuelTargetMarkers: [MapState.Marker] = []
     private var activeFuelDragMarkerID: String?
-    /// Persistent, specific progress for multi-request fuel planning. Unlike a
-    /// toast, this remains visible for the full operation and survives tab hops.
+    /// Current fuel-build milestone. The primary toast is its only animated UI.
     private(set) var fuelPlanningStatus: String?
     /// Tentative, route-connected pumps revealed as the chain search advances.
     private var fuelPreviewStops: [RouteCoordinate] = []
@@ -232,7 +231,7 @@ final class RoutePlannerModel {
             guard toast != oldValue else { return }
             toastDismissTask?.cancel()
             toastDismissTask = nil
-            guard let message = toast, message != Self.calculatingRouteToast else { return }
+            guard let message = toast, !Self.isPersistentProgressToast(message) else { return }
             let shown = message
             let seconds: Double = {
                 if message.localizedCaseInsensitiveContains("PACKS") { return 4.5 }
@@ -607,8 +606,8 @@ final class RoutePlannerModel {
         isRouting = true
         isAssemblingRoute = true
         fuelPlanNotice = nil
-        fuelPlanningStatus = "Planning fuel legs…"
-        toast = Self.calculatingRouteToast
+        fuelPlanningStatus = Self.calculatingFuelRangeToast
+        toast = Self.calculatingFuelRangeToast
         refreshMap()
         buildTask = Task { @MainActor [weak self] in
             guard let self else { return }
@@ -618,12 +617,18 @@ final class RoutePlannerModel {
                 reuse: reuse,
                 fuel: FuelRangePrefs.snapshot,
                 source: self.routingSourcePolicy,
-                replanFromStationID: replanFromStationID
-            ) { [weak self] progress in
-                guard let self, self.itinerary.generation == progress.generation else { return }
-                self.built = progress
-                self.refreshMap()
-            }
+                replanFromStationID: replanFromStationID,
+                onFuelStatus: { [weak self] status in
+                    guard let self, self.itinerary.generation == requested.generation else { return }
+                    self.fuelPlanningStatus = status
+                    self.toast = status
+                },
+                onProgress: { [weak self] progress in
+                    guard let self, self.itinerary.generation == progress.generation else { return }
+                    self.built = progress
+                    self.refreshMap()
+                }
+            )
             guard !Task.isCancelled, self.itinerary.generation == result.generation else { return }
             self.built = result
             let currentGapIDs = Set(result.riderLegStatus.values.compactMap { status -> String? in
@@ -658,8 +663,10 @@ final class RoutePlannerModel {
                 self.routeIdentity = "plan:" + self.itinerary.waypoints.dropFirst().map {
                     "\($0.coordinate.latitude),\($0.coordinate.longitude)"
                 }.joined(separator: ";")
-                self.announceRouteReadyIfComplete()
-            } else if self.toast == Self.calculatingRouteToast {
+                if self.toast != Self.legCompleteToast {
+                    self.announceRouteReadyIfComplete()
+                }
+            } else if let toast = self.toast, Self.isPersistentProgressToast(toast) {
                 self.toast = nil
             }
             if let gap = result.riderLegStatus.values.compactMap({ status -> FuelGap? in
@@ -744,6 +751,22 @@ final class RoutePlannerModel {
     static let paintsDestinationImmediatelyOnFromHereTap = true
     static let calculatingRouteToast = "Calculating route"
     static let routeReadyToast = "Route successful"
+    static let calculatingFuelRangeToast = "Calculating fuel range"
+    static let fuelStopRequiredToast = "Fuel stop required"
+    static let fuelStopAcquiredToast = "Fuel stop acquired"
+    static let noFuelStopRequiredToast = "No fuel stop required"
+    static let legCompleteToast = "Leg complete"
+
+    static func isPersistentProgressToast(_ message: String) -> Bool {
+        message == calculatingRouteToast
+            || message == calculatingFuelRangeToast
+            || message == fuelStopRequiredToast
+            || message == noFuelStopRequiredToast
+    }
+
+    static func isAnimatedProgressToast(_ message: String) -> Bool {
+        isPersistentProgressToast(message)
+    }
 
     /// True while From here / Plan is still building the full route
     /// (including chained fuel stops). Holds calculating toast + spinner.
@@ -1556,6 +1579,9 @@ final class RoutePlannerModel {
         built = nil
         fuelPlanningStatus = nil
         fuelPreviewStops = []
+        toast = nil
+        isRouting = false
+        isAssemblingRoute = false
         errorMessage = nil
         routeIdentity = nil
         savedRouteOrigin = nil

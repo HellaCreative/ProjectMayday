@@ -122,6 +122,36 @@ test("long fuel chain returns a resumable window capped at three stops", async (
   assert.equal(result.graphMeters.length, 3);
 });
 
+test("one-stop window keeps a proven pump when evaluation crosses its deadline", async () => {
+  const result = await planFuelChainOnRuntime({
+    runtime: lineRuntime(),
+    stations: [station("f1", 1), station("f2", 2), station("f3", 3)],
+    start: { lat: 45, lon: 0 },
+    destination: { lat: 45, lon: 4 },
+    profile: "dirt",
+    accessPolicy: { motorizedPermissive: true, motorizedUnknown: false },
+    usableRangeMeters: 90_000,
+    firstLegMaxMeters: 90_000,
+    minimumFuelStops: 3,
+    maxStops: 1,
+    allowPartialWindow: true,
+    timeBudgetMs: 1,
+    routeCandidate: ({ candidate }) => new Promise((resolve) => {
+      setTimeout(() => resolve({
+        status: "complete",
+        distanceMeters: candidate.graphMeters,
+        stats: { dirtPercent: 80 },
+        segments: []
+      }), 5);
+    })
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.windowComplete, false);
+  assert.deepEqual(result.stops.map((row) => row.id), ["f1"]);
+  assert.deepEqual(result.graphMeters, [78_626]);
+});
+
 test("a rider fuel-stop override forces the first station without changing later search", async () => {
   const result = await planFuelChainOnRuntime({
     runtime: lineRuntime(),
@@ -254,6 +284,31 @@ test("short route does not manufacture a fuel plan", async () => {
   assert.equal(result.ok, true);
   assert.deepEqual(result.stops, []);
   assert.equal(result.graphMeters.length, 1);
+});
+
+test("forward feeler proves the next anchor without routing a scout leg", async () => {
+  let scoutCalls = 0;
+  const result = await planFuelChainOnRuntime({
+    runtime: lineRuntime(),
+    stations: [station("mid", 1)],
+    start: { lat: 45, lon: 0 },
+    destination: { lat: 45, lon: 2 },
+    profile: "dirt",
+    accessPolicy: { motorizedPermissive: true, motorizedUnknown: false },
+    usableRangeMeters: 90_000,
+    firstLegMaxMeters: 90_000,
+    maxStops: 1,
+    allowPartialWindow: true,
+    graphOnlyFeeler: true,
+    routeCandidate: async () => {
+      scoutCalls += 1;
+      throw new Error("a forward feeler must not route a disposable scout");
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(scoutCalls, 0);
+  assert.deepEqual(result.stops.map((row) => row.id), ["mid"]);
 });
 
 test("profile ride length requires Dirt fuel even when shortest reachability fits", async () => {

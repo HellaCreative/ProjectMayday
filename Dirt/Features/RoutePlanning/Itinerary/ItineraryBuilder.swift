@@ -20,6 +20,7 @@ final class ItineraryBuilder {
         fuel: FuelRangePrefs.Snapshot,
         source policy: RoutingSourcePolicy,
         replanFromStationID: String? = nil,
+        onFuelStatus: @MainActor (String) -> Void = { _ in },
         onProgress: @MainActor (BuiltItinerary) -> Void
     ) async -> BuiltItinerary {
         currentGeneration = itinerary.generation
@@ -65,6 +66,20 @@ final class ItineraryBuilder {
             "build start gen=\(itinerary.generation) fromLeg=\(startIndex) " +
                 "reuseLegs=\(kept.count) source=\(selectedSource.name)"
         )
+
+        // Fuel-enabled routing is built forward from one proven anchor to the
+        // next. There is deliberately no disposable Point 1 -> Point 2 scout
+        // route: each feeler asks whether the rider waypoint is reachable with
+        // the fuel currently available, otherwise it returns one forward pump.
+        if fuelReplan {
+            return await buildForwardFuelItinerary(
+                itinerary,
+                fuel: fuel,
+                source: selectedSource,
+                onFuelStatus: onFuelStatus,
+                onProgress: onProgress
+            )
+        }
 
         // Distance discovery is intentionally complete before the first fuel
         // decision. The next rider leg can therefore never be a nil fallback.
@@ -536,6 +551,324 @@ final class ItineraryBuilder {
         return committed
     }
 
+    private func buildForwardFuelItinerary(
+        _ itinerary: RiderItinerary,
+        fuel: FuelRangePrefs.Snapshot,
+        source: any RoutingSource,
+        onFuelStatus: @MainActor (String) -> Void,
+        onProgress: @MainActor (BuiltItinerary) -> Void
+    ) async -> BuiltItinerary {
+        var statuses = Dictionary(
+            uniqueKeysWithValues: itinerary.legs.map { ($0.id, LegStatus.pending) }
+        )
+        var waypointFuelStops: [UUID: FuelStop] = [:]
+        if itinerary.waypoints.count > 1 {
+            for waypointIndex in 1..<itinerary.waypoints.count {
+                let waypoint = itinerary.waypoints[waypointIndex]
+                if let station = try? await source.fuelStation(
+                    near: waypoint.coordinate,
+                    within: HopSearchPolicy.fuelWaypointSnapMeters
+                ) {
+                    waypointFuelStops[waypoint.id] = FuelStop(
+                        coordinate: station.coordinate,
+                        stationID: station.id,
+                        name: station.displayName,
+                        afterRiderLegID: itinerary.legs[waypointIndex - 1].id
+                    )
+                }
+            }
+        }
+
+        var committed = BuiltItinerary(
+            generation: itinerary.generation,
+            legs: [],
+            riderLegStatus: statuses,
+            riderRoutes: [:],
+            waypointFuelStops: waypointFuelStops
+        )
+        var history = EdgeHistory()
+        var fuelUsed = 0.0
+        let deadline = Date().addingTimeInterval(20)
+
+        for index in itinerary.legs.indices {
+            let riderLeg = itinerary.legs[index]
+            let riderDestination = itinerary.waypoints[index + 1]
+            var current = itinerary.waypoints[index].coordinate
+            var builtLegs: [BuiltLeg] = []
+            var excludedStations = Set<String>()
+            var forceFuelStop = false
+            var attempts = 0
+
+            while true {
+                guard active(itinerary) else {
+                    return dropped(itinerary, committed: committed, cancelled: true)
+                }
+                guard Date() < deadline else {
+                    statuses[riderLeg.id] = .fuelUnknown(
+                        "Fuel planning could not complete this route in time."
+                    )
+                    return BuiltItinerary(
+                        generation: itinerary.generation,
+                        legs: committed.legs,
+                        riderLegStatus: statuses,
+                        riderRoutes: committed.riderRoutes,
+                        waypointFuelStops: waypointFuelStops
+                    )
+                }
+                attempts += 1
+                guard attempts <= 16 else {
+                    statuses[riderLeg.id] = .fuelUnknown(
+                        "Fuel planning could not find a stable forward sequence."
+                    )
+                    return BuiltItinerary(
+                        generation: itinerary.generation,
+                        legs: committed.legs,
+                        riderLegStatus: statuses,
+                        riderRoutes: committed.riderRoutes,
+                        waypointFuelStops: waypointFuelStops
+                    )
+                }
+
+                let remaining = max(0, fuel.usableMeters - fuelUsed)
+                guard remaining > 0 else {
+                    let gap = FuelGap(
+                        id: fuelGapID(
+                            riderLegID: riderLeg.id,
+                            gapMeters: straightLineMeters(current, riderDestination.coordinate),
+                            usableRangeMeters: fuel.usableMeters,
+                            from: current,
+                            to: riderDestination.coordinate
+                        ),
+                        gapMeters: straightLineMeters(current, riderDestination.coordinate),
+                        overByMeters: 0,
+                        usableRangeMeters: fuel.usableMeters,
+                        remainingFuelMeters: 0,
+                        reason: "No usable fuel remains before the next waypoint.",
+                        fromCoordinate: current,
+                        toCoordinate: riderDestination.coordinate
+                    )
+                    statuses[riderLeg.id] = .gap(gap)
+                    committed = BuiltItinerary(
+                        generation: itinerary.generation,
+                        legs: committed.legs,
+                        riderLegStatus: statuses,
+                        riderRoutes: committed.riderRoutes,
+                        waypointFuelStops: waypointFuelStops
+                    )
+                    onProgress(committed)
+                    return committed
+                }
+
+                let departureID = builtLegs.last?.endsAtFuelStop?.stationID
+                    ?? riderLeg.from.uuidString
+                let activeProfile = riderLeg.hopOverrides[departureID]
+                    ?? riderLeg.profile
+                let requiredStationID = riderLeg.fuelStopOverrides[departureID]
+                onFuelStatus("Calculating fuel range")
+
+                let chain: FuelChainResponse
+                do {
+                    chain = try await source.fuelChain(FuelChainRequest(
+                        profile: activeProfile,
+                        from: current,
+                        to: riderDestination.coordinate,
+                        allowUnknown: activeProfile == .cleanest ? false : riderLeg.allowUnknown,
+                        usableRangeMeters: fuel.usableMeters,
+                        firstLegMaxMeters: remaining,
+                        requireFuelStopBeforeEnd: forceFuelStop,
+                        minimumFuelStops: forceFuelStop ? 1 : 0,
+                        profileMeters: straightLineMeters(current, riderDestination.coordinate),
+                        riderLegId: riderLeg.id.uuidString,
+                        avoidEdgeIds: Array(itinerary.impassableEdgeIDs),
+                        priorEdgeIds: history.edgeIDs,
+                        arrivalEdgeId: history.arrivalEdgeID,
+                        backtrackFactor: 4,
+                        excludedStationIds: Array(excludedStations),
+                        windowMaxStops: 1,
+                        allowPartialWindow: true,
+                        windowTimeBudgetMs: min(
+                            5_800,
+                            max(100, Int(deadline.timeIntervalSinceNow * 1_000))
+                        ),
+                        requiredFirstStationId: requiredStationID,
+                        forwardFeeler: true
+                    ))
+                } catch is CancellationError {
+                    return dropped(itinerary, committed: committed, cancelled: true)
+                } catch {
+                    statuses[riderLeg.id] = .fuelUnknown(
+                        "Fuel planning unavailable: \(error.localizedDescription)"
+                    )
+                    committed = BuiltItinerary(
+                        generation: itinerary.generation,
+                        legs: committed.legs,
+                        riderLegStatus: statuses,
+                        riderRoutes: committed.riderRoutes,
+                        waypointFuelStops: waypointFuelStops
+                    )
+                    onProgress(committed)
+                    return committed
+                }
+
+                if chain.isFuelUnknown {
+                    statuses[riderLeg.id] = .fuelUnknown(
+                        chain.message ?? "Fuel data is unavailable for this part of the route."
+                    )
+                    committed = BuiltItinerary(
+                        generation: itinerary.generation,
+                        legs: committed.legs,
+                        riderLegStatus: statuses,
+                        riderRoutes: committed.riderRoutes,
+                        waypointFuelStops: waypointFuelStops
+                    )
+                    onProgress(committed)
+                    return committed
+                }
+                if chain.isGap {
+                    let gapMeters = chain.gapMeters
+                        ?? straightLineMeters(current, riderDestination.coordinate)
+                    let gap = FuelGap(
+                        id: fuelGapID(
+                            riderLegID: riderLeg.id,
+                            gapMeters: gapMeters,
+                            usableRangeMeters: fuel.usableMeters,
+                            from: current,
+                            to: riderDestination.coordinate
+                        ),
+                        gapMeters: gapMeters,
+                        overByMeters: chain.overByMeters ?? max(0, gapMeters - remaining),
+                        usableRangeMeters: fuel.usableMeters,
+                        remainingFuelMeters: remaining,
+                        reason: chain.message ?? "No forward fuel stop is reachable within range.",
+                        fromCoordinate: current,
+                        toCoordinate: riderDestination.coordinate
+                    )
+                    statuses[riderLeg.id] = .gap(gap)
+                    committed = BuiltItinerary(
+                        generation: itinerary.generation,
+                        legs: committed.legs,
+                        riderLegStatus: statuses,
+                        riderRoutes: committed.riderRoutes,
+                        waypointFuelStops: waypointFuelStops
+                    )
+                    onProgress(committed)
+                    return committed
+                }
+
+                let selectedStop = chain.stops?.first
+                guard selectedStop != nil || chain.reachesDestination else {
+                    statuses[riderLeg.id] = .fuelUnknown(
+                        "Fuel planning returned no forward anchor."
+                    )
+                    committed = BuiltItinerary(
+                        generation: itinerary.generation,
+                        legs: committed.legs,
+                        riderLegStatus: statuses,
+                        riderRoutes: committed.riderRoutes,
+                        waypointFuelStops: waypointFuelStops
+                    )
+                    onProgress(committed)
+                    return committed
+                }
+
+                let target = selectedStop?.coordinate ?? riderDestination.coordinate
+                onFuelStatus(selectedStop == nil ? "No fuel stop required" : "Fuel stop required")
+                do {
+                    let response = try await source.route(routeRequest(
+                        profile: activeProfile,
+                        allowUnknown: activeProfile == .cleanest ? false : riderLeg.allowUnknown,
+                        from: current,
+                        to: target,
+                        avoidEdgeIDs: itinerary.impassableEdgeIDs,
+                        maxPathMeters: remaining,
+                        history: history,
+                        avoidMotorways: riderLeg.avoidMotorways,
+                        preferBackRoads: riderLeg.preferBackRoads
+                    ))
+                    let meters = try responseMeters(response)
+                    guard meters <= remaining + 1 else { throw RoutingError.invalidResponse }
+                    let fuelStop = selectedStop.map {
+                        FuelStop(
+                            coordinate: $0.coordinate,
+                            stationID: $0.id,
+                            name: $0.displayName,
+                            afterRiderLegID: riderLeg.id
+                        )
+                    }
+                    let resetsAtWaypoint = selectedStop == nil
+                        && waypointFuelStops[riderDestination.id] != nil
+                    let arrivalFuel = fuelStop != nil || resetsAtWaypoint
+                        ? 0
+                        : fuelUsed + meters
+                    let built = BuiltLeg(
+                        riderLegID: riderLeg.id,
+                        fromCoordinate: current,
+                        toCoordinate: target,
+                        endsAtFuelStop: fuelStop,
+                        response: response,
+                        fuelUsedOnArrivalMeters: arrivalFuel,
+                        routeProfile: activeProfile
+                    )
+                    builtLegs.append(built)
+                    history.append(response)
+                    fuelUsed = arrivalFuel
+                    current = target
+                    statuses[riderLeg.id] = selectedStop == nil ? .built : .pending
+                    committed = replacing(
+                        riderLegID: riderLeg.id,
+                        with: builtLegs,
+                        in: committed,
+                        status: statuses[riderLeg.id] ?? .pending
+                    )
+                    onProgress(committed)
+
+                    if selectedStop != nil {
+                        onFuelStatus("Fuel stop acquired")
+                        await Task.yield()
+                        excludedStations.removeAll()
+                        forceFuelStop = false
+                        continue
+                    }
+                    onFuelStatus("Leg complete")
+                    break
+                } catch is CancellationError {
+                    return dropped(itinerary, committed: committed, cancelled: true)
+                } catch {
+                    if let selectedStop {
+                        excludedStations.insert(selectedStop.id)
+                        RoutingDebugLog.shared.event(
+                            "fuel feeler reject riderLeg=\(riderLeg.id) station=\(selectedStop.id) " +
+                                "reason=route_failed msg=\(error.localizedDescription)"
+                        )
+                        continue
+                    }
+                    if !forceFuelStop {
+                        forceFuelStop = true
+                        RoutingDebugLog.shared.event(
+                            "fuel feeler direct retry riderLeg=\(riderLeg.id) reason=profile_route_exceeds_range"
+                        )
+                        continue
+                    }
+                    statuses[riderLeg.id] = .failed(error.localizedDescription)
+                    committed = BuiltItinerary(
+                        generation: itinerary.generation,
+                        legs: committed.legs,
+                        riderLegStatus: statuses,
+                        riderRoutes: committed.riderRoutes,
+                        waypointFuelStops: waypointFuelStops
+                    )
+                    onProgress(committed)
+                    return committed
+                }
+            }
+        }
+
+        RoutingDebugLog.shared.event(
+            "fuel forward committed gen=\(itinerary.generation) legs=\(committed.legs.count)"
+        )
+        return committed
+    }
+
     private func buildRiderLeg(
         itinerary: RiderItinerary,
         index: Int,
@@ -654,7 +987,11 @@ final class ItineraryBuilder {
         let packProvinces = GraphPackStore.endpointProvinceIds(containingAny: [
             from.locationCoordinate, to.locationCoordinate
         ])
-        let usesWindows = stopsNeeded > 3 || meters > 600_000 || packProvinces.count > 1
+        // Fuel allocation is intentionally resumable one pump at a time. A
+        // single service request must prove the next useful stop, not solve an
+        // entire multi-stop itinerary before the rider sees any progress.
+        let usesWindows = stopsNeeded > 0 || requirePumpBeforeWaypoint
+            || meters > 600_000 || packProvinces.count > 1
         var windowIndex = 0
 
         while true {
@@ -698,8 +1035,8 @@ final class ItineraryBuilder {
                     arrivalEdgeId: sublegHistory.arrivalEdgeID,
                     backtrackFactor: 4,
                     excludedStationIds: Array(excluded),
-                    windowMaxStops: !riderLeg.hopOverrides.isEmpty ? 1 : (usesWindows ? 3 : nil),
-                    allowPartialWindow: !riderLeg.hopOverrides.isEmpty || usesWindows,
+                    windowMaxStops: usesWindows ? 1 : nil,
+                    allowPartialWindow: usesWindows,
                     windowTimeBudgetMs: min(5_800, remainingBudgetMs),
                     requiredFirstStationId: requiredStationID
                 ))

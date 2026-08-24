@@ -78,28 +78,30 @@ struct ItineraryBuilderTests {
         }
     }
 
-    @Test func longRiderLegUsesThreeStopWindowsAndCommitsEveryHop() async throws {
+    @Test func threeStopRouteUsesResumableOnePumpWindowsAndCommitsEveryHop() async throws {
         let points = [point(0), point(1)]
-        let stops = [point(0.2), point(0.4), point(0.6), point(0.8)]
+        let stops = [point(0.25), point(0.5), point(0.75)]
         let source = FakeRoutingSource(name: "live")
-        source.distances[key(points[0], points[1])] = 900_000
+        source.distances[key(points[0], points[1])] = 450_000
         let hopPoints = [points[0]] + stops + [points[1]]
         for index in 0..<(hopPoints.count - 1) {
-            source.distances[key(hopPoints[index], hopPoints[index + 1])] = 180_000
+            source.distances[key(hopPoints[index], hopPoints[index + 1])] = 112_500
         }
         source.fuelStopResponses = [
-            Array(stops.prefix(3).enumerated()).map { fuelStop("fuel-\($0.offset + 1)", at: $0.element) },
-            [fuelStop("fuel-4", at: stops[3])]
+            [fuelStop("fuel-1", at: stops[0])],
+            [fuelStop("fuel-2", at: stops[1])],
+            [fuelStop("fuel-3", at: stops[2])],
+            []
         ]
-        source.fuelWindowCompleteResponses = [false, true]
+        source.fuelWindowCompleteResponses = [false, false, false, true]
         let itinerary = makeItinerary(points)
         var progressiveHopCounts: [Int] = []
 
         let result = await ItineraryBuilder().build(
             itinerary, from: 0, reuse: nil,
             fuel: FuelRangePrefs.Snapshot(
-                tankMeters: 237_500,
-                usableMeters: 237_500, reservePercent: 0
+                tankMeters: 150_000,
+                usableMeters: 135_000, reservePercent: 10
             ),
             source: .fixed(source)
         ) { progress in
@@ -107,14 +109,17 @@ struct ItineraryBuilderTests {
         }
 
         let plans = source.fuelChainRequests.filter { $0.fuel.probeFirstReachableStation != true }
-        #expect(plans.count == 2)
-        #expect(plans.allSatisfy { $0.fuel.windowMaxStops == 3 })
+        #expect(plans.count == 4)
+        #expect(plans.allSatisfy { $0.fuel.windowMaxStops == 1 })
         #expect(plans.allSatisfy { $0.fuel.allowPartialWindow == true })
+        #expect(plans.allSatisfy { $0.fuel.forwardFeeler == true })
         #expect(plans.allSatisfy { $0.fuel.windowTimeBudgetMs == 5_800 })
-        #expect(plans[1].locations[0].longitude == stops[2].longitude)
-        #expect(result.legs.count == 5)
+        #expect(plans[1].locations[0].longitude == stops[0].longitude)
+        #expect(plans[2].locations[0].longitude == stops[1].longitude)
+        #expect(plans[3].locations[0].longitude == stops[2].longitude)
+        #expect(result.legs.count == 4)
         #expect(result.legs.compactMap(\.endsAtFuelStop?.stationID)
-            == ["fuel-1", "fuel-2", "fuel-3", "fuel-4"])
+            == ["fuel-1", "fuel-2", "fuel-3"])
         #expect(progressiveHopCounts.contains(1))
         #expect(progressiveHopCounts.contains(2))
         #expect(progressiveHopCounts.contains(3))

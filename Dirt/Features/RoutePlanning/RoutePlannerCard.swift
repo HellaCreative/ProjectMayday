@@ -34,8 +34,6 @@ struct RoutePlannerCard: View {
     /// Saved: the library collapses once a track is loaded, so the sheet isn't showing the
     /// route you just opened *and* the whole list you opened it from at the same time.
     @State private var savedLibraryOpen = false
-    /// Fuel plans open as a compact safety summary so the map remains useful.
-    @State private var fuelLegsExpanded = false
 
     private var planner: RoutePlannerModel { app.planner }
 
@@ -155,7 +153,6 @@ struct RoutePlannerCard: View {
             titleVisibility: .visible
         ) {
             Button("Review fuel gap") {
-                fuelLegsExpanded = true
                 if let gap = planner.unacknowledgedFuelGaps.first,
                    let legIndex = planner.itinerary.legs.firstIndex(where: { leg in
                        if case .gap(let candidate) = planner.built?.riderLegStatus[leg.id] {
@@ -181,7 +178,6 @@ struct RoutePlannerCard: View {
         planner.clearRoute()
         selectedStage = nil
         fromHereChipsOpen = false
-        fuelLegsExpanded = false
     }
 
     // MARK: - Portrait shell
@@ -343,8 +339,7 @@ struct RoutePlannerCard: View {
     @ViewBuilder private var fromHereContent: some View {
         if planner.hasRoute {
             if planner.hasFuelAssistedPlan {
-                fuelPlanSummary
-                if fuelLegsExpanded { stageList }
+                stageList
             } else {
                 StageCard(
                     number: 1,
@@ -390,13 +385,9 @@ struct RoutePlannerCard: View {
             }
 
             routingStatus
-            if !fuelLegsExpanded {
-                statsRow
-            }
+            statsRow
             ctaRow
-            if !fuelLegsExpanded {
-                clearAllButton
-            }
+            clearAllButton
         } else {
             fromHereProfileHeader
             if fromHereChipsOpen {
@@ -498,127 +489,18 @@ struct RoutePlannerCard: View {
                 GPXImportButton(continueAsPlan: true)
             }
         } else {
-            if planner.hasFuelAssistedPlan {
-                fuelPlanSummary
-                if fuelLegsExpanded { stageList }
-            } else {
-                stageList
-            }
+            stageList
         }
 
         routingStatus
 
         if planner.hasRoute {
-            if !fuelLegsExpanded {
-                statsRow
-            }
+            statsRow
             ctaRow
-            if !fuelLegsExpanded {
-                clearAllButton
-            }
+            clearAllButton
         } else if !planner.stages.isEmpty {
             clearAllButton
         }
-    }
-
-    /// Compact completion/safety state. The detailed legs are one deliberate tap
-    /// away, rather than permanently consuming the map with a five-row list.
-    private var fuelPlanSummary: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Button {
-                withAnimation(.easeInOut(duration: 0.18)) {
-                    fuelLegsExpanded.toggle()
-                    selectedStage = nil
-                }
-            } label: {
-                HStack(spacing: DirtSpace.tight) {
-                    Image(systemName: "fuelpump.fill")
-                        .foregroundStyle(DirtTheme.orange)
-                    Text(fuelLegsExpanded ? "Fuel plan legs" : "Fuel ready")
-                        .font(DirtType.rowTitle)
-                        .fontWeight(.bold)
-                        .foregroundStyle(DirtTheme.ink)
-                    if !fuelLegsExpanded {
-                        Text("\(planner.stages.count) legs · \(planner.fuelStopCount) stops")
-                            .font(DirtType.helper)
-                            .foregroundStyle(DirtTheme.muted)
-                            .lineLimit(1)
-                    }
-                    Spacer(minLength: 0)
-                    Text(fuelLegsExpanded ? "Done" : "Legs")
-                        .font(DirtType.chip)
-                        .fontWeight(.bold)
-                        .foregroundStyle(DirtTheme.orange)
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 9, weight: .black))
-                        .foregroundStyle(DirtTheme.orange)
-                        .rotationEffect(.degrees(fuelLegsExpanded ? 180 : 0))
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-
-            if fuelLegsExpanded {
-                Button(role: .destructive) {
-                    if shouldConfirmClear {
-                        showClearConfirm = true
-                    } else {
-                        performClear()
-                    }
-                } label: {
-                    Label("Clear route", systemImage: "trash.fill")
-                        .font(DirtType.chip)
-                        .fontWeight(.bold)
-                        .foregroundStyle(DirtTheme.danger)
-                        .frame(maxWidth: .infinity, minHeight: 34)
-                        .background(DirtTheme.wash, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
-                }
-                .buttonStyle(.plain)
-                .accessibilityHint("Removes every waypoint, fuel stop and route section")
-            }
-
-            if !fuelLegsExpanded {
-                if planner.longestFuelLegMeters > 0 {
-                    HStack(spacing: 5) {
-                        Text("Longest \(String(format: "%.1f", planner.longestFuelLegMeters / 1000)) km")
-                        Text("·")
-                        Text("\(String(format: "%.1f", planner.fuelReserveMarginKm)) km reserve")
-                        Text("·")
-                        Text("\(Int(planner.fuelUsableRangeKm.rounded())) km usable")
-                    }
-                    .font(.dirtMono(10.5, weight: .semibold))
-                    .foregroundStyle(DirtTheme.ink)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.72)
-                }
-
-                if planner.fuelSurfaceNoticeCount > 0 {
-                    Label(
-                        "\(planner.fuelSurfaceNoticeCount) leg\(planner.fuelSurfaceNoticeCount == 1 ? "" : "s") could not fully meet the selected surface target. Open the legs for details.",
-                        systemImage: "exclamationmark.triangle.fill"
-                    )
-                    .font(DirtType.helper)
-                    .foregroundStyle(DirtTheme.orange)
-                    .fixedSize(horizontal: false, vertical: true)
-                }
-
-                if let notice = planner.fuelPlanNotice, !notice.isEmpty {
-                    Label(notice, systemImage: "info.circle.fill")
-                        .font(DirtType.helper)
-                        .foregroundStyle(DirtTheme.ink)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-            }
-        }
-        .padding(.horizontal, DirtSpace.inner)
-        .padding(.vertical, 8)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(DirtTheme.rowFill, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .stroke(DirtTheme.hairline, lineWidth: 1)
-        )
-        .accessibilityElement(children: .contain)
     }
 
     // MARK: - Saved
@@ -751,13 +633,11 @@ struct RoutePlannerCard: View {
     @ViewBuilder private var stageList: some View {
         // Native List owns horizontal gesture arbitration: a left swipe reveals
         // Delete without opening the profile disclosure or moving the map.
-        let bandHeight: CGFloat = planner.hasFuelAssistedPlan
-            ? (selectedStage == nil ? 170 : 230)
-            : (selectedStage == nil ? 180 : 280)
+        let bandHeight: CGFloat = selectedStage == nil ? 210 : 280
         let visibleRows = planner.stages.count
         let collapsedHeight = min(
             bandHeight,
-            max(56, CGFloat(max(1, visibleRows)) * 62)
+            max(62, CGFloat(max(1, visibleRows)) * 70)
         )
         ScrollViewReader { proxy in
             List {
@@ -915,12 +795,9 @@ struct RoutePlannerCard: View {
     /// Left side of a stage row: metrics once routed, state text before that.
     @ViewBuilder private func stageHeadline(_ stage: RoutePlannerModel.Stage, at index: Int) -> some View {
         if stage.isRouting {
-            HStack(spacing: DirtSpace.tight) {
-                ProgressView().controlSize(.mini)
-                Text("Routing…")
-                    .font(DirtType.helper)
-                    .foregroundStyle(DirtTheme.muted)
-            }
+            Text("Pending…")
+                .font(DirtType.helper)
+                .foregroundStyle(DirtTheme.muted)
         } else if let gap = stage.fuelGap {
             Label(gap.message, systemImage: "fuelpump.slash.fill")
                 .font(DirtType.helper)
@@ -1200,29 +1077,8 @@ struct RoutePlannerCard: View {
     }
 
     @ViewBuilder private var routingStatus: some View {
-        if let fuelStatus = planner.fuelPlanningStatus {
-            HStack(spacing: 8) {
-                ProgressView()
-                    .controlSize(.small)
-                    .tint(DirtTheme.orange)
-                Image(systemName: "fuelpump.fill")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundStyle(DirtTheme.orange)
-                Text(fuelStatus)
-                    .font(.dirtUI(12, weight: .semibold))
-                    .foregroundStyle(DirtTheme.ink)
-                    .contentTransition(.numericText())
-                Spacer(minLength: 0)
-            }
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel(fuelStatus)
-        } else if planner.isRouting {
-            HStack(spacing: 8) {
-                ProgressView().controlSize(.small)
-                Text("Finding your route…")
-                    .font(.dirtUI(12, weight: .semibold))
-                    .foregroundStyle(DirtTheme.muted)
-            }
+        if planner.fuelPlanningStatus != nil || planner.isRouting {
+            EmptyView()
         } else if let error = planner.errorMessage {
             Text(error)
                 .font(.dirtUI(12, weight: .semibold))

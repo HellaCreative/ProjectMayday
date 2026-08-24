@@ -118,7 +118,10 @@ final class RoutingClient {
             max(1, Double($0) / 1_000 + 1.5)
         }
         let defaultWindowTimeout = request.fuel.windowMaxStops == nil ? timeout : 6
-        urlRequest.timeoutInterval = min(defaultWindowTimeout, requestedBudget ?? defaultWindowTimeout)
+        // The server owns the planning deadline. Leave enough transport grace
+        // for it to return a proven partial window instead of cancelling the
+        // request at the same six-second boundary.
+        urlRequest.timeoutInterval = requestedBudget ?? defaultWindowTimeout
 
         let (data, urlResponse) = try await session.data(for: urlRequest)
         let http = urlResponse as? HTTPURLResponse

@@ -1568,7 +1568,7 @@ struct ToastView: View {
     let text: String
 
     private var isCalculating: Bool {
-        text == RoutePlannerModel.calculatingRouteToast
+        RoutePlannerModel.isAnimatedProgressToast(text)
     }
 
     private var isSuccess: Bool {
