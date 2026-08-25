@@ -2614,7 +2614,7 @@ final class RoutePlannerModel {
             allowUnknown: useAllow,
             avoidEdgeIds: avoidEdgeIds,
             sessionSeed: planningSessionSeed,
-            cleanMetroMultiplier: CleanMetroDebugPrefs.requestMultiplier,
+            cleanMetroMultiplier: nil,
             avoidMotorways: avoidMotorways,
             preferBackRoads: preferBackRoads
         )

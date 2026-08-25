@@ -247,7 +247,7 @@ final class ItineraryBuilder {
                     profileMeters: meters,
                     riderLegId: riderLeg.id.uuidString,
                     avoidEdgeIds: Array(itinerary.impassableEdgeIDs),
-                    cleanMetroMultiplier: CleanMetroDebugPrefs.requestMultiplier,
+                    cleanMetroMultiplier: nil,
                     avoidMotorways: riderLeg.avoidMotorways,
                     probeFirstReachableStation: true,
                     windowTimeBudgetMs: min(
@@ -734,7 +734,7 @@ final class ItineraryBuilder {
                         profileMeters: straightLineMeters(current, riderDestination.coordinate),
                         riderLegId: riderLeg.id.uuidString,
                         avoidEdgeIds: Array(itinerary.impassableEdgeIDs),
-                        cleanMetroMultiplier: CleanMetroDebugPrefs.requestMultiplier,
+                        cleanMetroMultiplier: nil,
                         avoidMotorways: activeAvoidMotorways,
                         priorEdgeIds: history.edgeIDs,
                         arrivalEdgeId: history.arrivalEdgeID,
@@ -1111,7 +1111,7 @@ final class ItineraryBuilder {
                     profileMeters: remainingProfileMeters,
                     riderLegId: riderLeg.id.uuidString,
                     avoidEdgeIds: Array(itinerary.impassableEdgeIDs),
-                    cleanMetroMultiplier: CleanMetroDebugPrefs.requestMultiplier,
+                    cleanMetroMultiplier: nil,
                     avoidMotorways: activeAvoidMotorways,
                     priorEdgeIds: sublegHistory.edgeIDs,
                     arrivalEdgeId: sublegHistory.arrivalEdgeID,
@@ -1544,7 +1544,7 @@ private func routeRequest(
         maxPathMeters: maxPathMeters,
         directExtraBudgetMeters: directExtraBudgetMeters,
         regionalHopMinimumMeters: regionalHopMinimumMeters,
-        cleanMetroMultiplier: CleanMetroDebugPrefs.requestMultiplier,
+        cleanMetroMultiplier: nil,
         avoidMotorways: avoidMotorways,
         preferBackRoads: preferBackRoads
     )
