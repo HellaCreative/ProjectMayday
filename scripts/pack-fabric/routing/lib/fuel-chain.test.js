@@ -193,6 +193,25 @@ test("fuel ranking rejects a geographically backward pump", () => {
   assert.deepEqual(ranked.map((row) => row.station.id), ["forward"]);
 });
 
+test("fuel ranking leaves the final five kilometres for the destination", () => {
+  const ranked = rankForwardFuel(
+    [
+      {
+        station: station("city-hop", 3.96),
+        location: { lat: 45, lon: 3.96 },
+        graphMeters: 20_000
+      }
+    ],
+    { lat: 45, lon: 3.88 },
+    { lat: 45, lon: 4 },
+    100_000,
+    new Set(),
+    "cleanest"
+  );
+
+  assert.deepEqual(ranked, []);
+});
+
 test("a depleted waypoint may use one nearby non-forward pump before resuming forward travel", async () => {
   const result = await planFuelChainOnRuntime({
     runtime: lineRuntime(),

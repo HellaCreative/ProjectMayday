@@ -899,7 +899,10 @@ final class ItineraryBuilder {
                     if selectedStop != nil {
                         onFuelStatus("Fuel stop acquired")
                         await Task.yield()
-                        excludedStations.removeAll()
+                        // Keep every committed pump excluded for the rest of
+                        // this rider leg. Clearing here allowed short urban
+                        // stations to alternate forever near the destination.
+                        if let selectedStop { excludedStations.insert(selectedStop.id) }
                         forceFuelStop = false
                         continue
                     }

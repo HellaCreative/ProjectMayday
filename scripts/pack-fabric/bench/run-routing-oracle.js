@@ -140,7 +140,10 @@ async function runCase(profile, scenario, buildState, identities) {
         windowMaxStops: 1,
         allowPartialWindow: true,
         windowTimeBudgetMs: 5_800,
-        forwardFeeler: true
+        // Match the app: fuel allocation must prove the active profile route
+        // to each committed stop or destination. Graph-only feelers can claim
+        // Clean reached B while the actual Clean hop still exceeds the tank.
+        forwardFeeler: false
       },
       options: options(profile, history)
     });
@@ -184,7 +187,9 @@ async function runCase(profile, scenario, buildState, identities) {
     });
     current = target;
     remaining = usableRangeMeters;
-    excludedStationIds.clear();
+    // Match the app: committed pumps stay excluded for the rider leg so a
+    // later one-stop window cannot bounce back to an earlier city station.
+    excludedStationIds.add(String(selectedStop.id));
     forceFuelStop = false;
     if (attempt === 16) throw new Error("Fuel feeler exceeded 16 forward attempts");
   }

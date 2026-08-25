@@ -24,6 +24,10 @@ nonisolated enum HopSearchPolicy {
     static let fuelWaypointSnapMeters: Double = 150
     static let fuelComfortLo: Double = 0.50
     static let fuelComfortHi: Double = 0.80
+    /// A generated stop must make a useful hop and leave a real final leg.
+    /// Lockstep: fuel-chain.js MIN_FORWARD_PROGRESS_M / MIN_DESTINATION_FUEL_CLEARANCE_M.
+    static let fuelMinimumForwardMeters: Double = 8_000
+    static let fuelDestinationClearanceMeters: Double = 5_000
     /// Too-early below this. Dijkstra reachability still uses fuelMaxTank = 1.0.
     static let fuelMinTank: Double = 0.50
     /// Midpoint of the comfort window (ranking uses the window, not this target).

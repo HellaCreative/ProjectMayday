@@ -301,6 +301,22 @@ struct FuelItineraryTests {
         #expect(next.map(\.id) == ["osm:near"])
     }
 
+    @Test func rankedLeavesTheFinalFiveKilometresForTheDestination() {
+        let start = RouteCoordinate(longitude: -63.20, latitude: 45)
+        let end = RouteCoordinate(longitude: -63.00, latitude: 45)
+        let tooClose = GeoMath.interpolate(start, end, fraction: 0.80)
+        let ranked = FuelItinerary.rankedProgressFuel(
+            fuels: [poi("city-hop", tooClose)],
+            from: start,
+            to: end,
+            reachableMeters: ["osm:city-hop": 20_000],
+            tankMeters: 100_000,
+            sessionSeed: 1
+        )
+
+        #expect(ranked.isEmpty)
+    }
+
     @Test func rankedKeepsShortRangeFallbackAndOffAxisPump() {
         let start = RouteCoordinate(longitude: -123.2, latitude: 50.0)
         let end = RouteCoordinate(longitude: -119.7, latitude: 50.0)

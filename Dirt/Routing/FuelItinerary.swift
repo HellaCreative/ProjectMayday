@@ -321,7 +321,7 @@ nonisolated enum FuelItinerary {
     ) -> [POIFeature] {
         guard tankMeters > 0, !fuels.isEmpty else { return [] }
         let ab = GeoMath.meters(from, to)
-        guard ab > 8_000 else { return [] }
+        guard ab > HopSearchPolicy.fuelMinimumForwardMeters else { return [] }
 
         struct Cand {
             var fuel: POIFeature
@@ -334,14 +334,18 @@ nonisolated enum FuelItinerary {
         cands.reserveCapacity(fuels.count)
         for fuel in fuels {
             if excluding.contains(fuel.id) { continue }
-            guard let graph = reachableMeters[fuel.id], graph.isFinite, graph > 8_000 else { continue }
+            guard let graph = reachableMeters[fuel.id], graph.isFinite,
+                  graph > HopSearchPolicy.fuelMinimumForwardMeters
+            else { continue }
             guard graph <= tankMeters * HopSearchPolicy.fuelMaxTank else { continue }
             let at = RouteCoordinate(longitude: fuel.longitude, latitude: fuel.latitude)
             let progress = GeoMath.progressAlongAB(from: from, to: to, point: at)
             // Graph reachability is the route corridor. A straight A→B cross-track
             // gate rejects legitimate mountain/highway detours and can erase the
             // only usable fuel chain. Require real progress toward B instead.
-            guard progress > 8_000, progress < ab - 5_000 else { continue }
+            guard progress > HopSearchPolicy.fuelMinimumForwardMeters,
+                  progress < ab - HopSearchPolicy.fuelDestinationClearanceMeters
+            else { continue }
             let crossTrack = abs(GeoMath.crossTrackMeters(
                 point: at.locationCoordinate,
                 lineFrom: from.locationCoordinate,
