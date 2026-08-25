@@ -46,17 +46,26 @@ final class ItineraryBuilder {
         onProgress: @MainActor (BuiltItinerary) -> Void
     ) async -> BuiltItinerary {
         currentGeneration = itinerary.generation
-        let startIndex = min(max(0, legIndex), itinerary.legs.count)
+        let requestedStartIndex = min(max(0, legIndex), itinerary.legs.count)
         let fuelReplan = fuel.usableMeters > 0
         let resume = fuelReplan ? fuelResume(
             stationID: replanFromStationID,
-            riderLegIndex: startIndex,
+            riderLegIndex: requestedStartIndex,
             itinerary: itinerary,
             reuse: reuse
         ) : nil
+        let prefix = reusablePrefix(
+            from: reuse,
+            itinerary: itinerary,
+            before: requestedStartIndex
+        )
+        // A rider can append or move another pin while the previous suffix is
+        // still building. Start at the first unfinished rider leg so a partial
+        // progress snapshot can never strand an earlier leg as pending.
+        let startIndex = resume == nil ? prefix.riderLegCount : requestedStartIndex
         let kept: [BuiltLeg] = {
             if let resume { return resume.kept }
-            return fuelReplan ? [] : reusableLegs(from: reuse, itinerary: itinerary, before: startIndex)
+            return prefix.legs
         }()
         let reusableRoutes = reusableRiderRoutes(from: reuse, itinerary: itinerary, before: startIndex)
         var statuses = Dictionary(
@@ -86,7 +95,8 @@ final class ItineraryBuilder {
         let selectedSource = policy.select(for: firstRequest)
         RoutingDebugLog.shared.event(
             "build start gen=\(itinerary.generation) fromLeg=\(startIndex) " +
-                "reuseLegs=\(kept.count) source=\(selectedSource.name)"
+                "requestedFrom=\(requestedStartIndex) reuseLegs=\(kept.count) " +
+                "source=\(selectedSource.name)"
         )
 
         // Fuel-enabled routing is built forward from one proven anchor to the
@@ -98,6 +108,7 @@ final class ItineraryBuilder {
                 itinerary,
                 startIndex: startIndex,
                 resume: resume,
+                kept: kept,
                 fuel: fuel,
                 source: selectedSource,
                 onFuelStatus: onFuelStatus,
@@ -581,6 +592,7 @@ final class ItineraryBuilder {
         _ itinerary: RiderItinerary,
         startIndex: Int,
         resume: FuelResume?,
+        kept: [BuiltLeg],
         fuel: FuelRangePrefs.Snapshot,
         source: any RoutingSource,
         onFuelStatus: @MainActor (String) -> Void,
@@ -589,7 +601,6 @@ final class ItineraryBuilder {
         var statuses = Dictionary(
             uniqueKeysWithValues: itinerary.legs.map { ($0.id, LegStatus.pending) }
         )
-        let kept = resume?.kept ?? []
         for leg in kept { statuses[leg.riderLegID] = .built }
         if resume != nil, itinerary.legs.indices.contains(startIndex) {
             statuses[itinerary.legs[startIndex].id] = .pending
@@ -620,7 +631,7 @@ final class ItineraryBuilder {
             waypointFuelStops: waypointFuelStops
         )
         var history = EdgeHistory(legs: kept)
-        var fuelUsed = 0.0
+        var fuelUsed = resume == nil ? carriedFuel(from: kept) : 0
         // This is an inactivity watchdog, not a cap on total itinerary time.
         // Long routes may legitimately need many quick fuel hops; every proven
         // forward leg renews the window while stalled searches still terminate.
@@ -1286,14 +1297,26 @@ final class ItineraryBuilder {
     }
 }
 
-private func reusableLegs(
+private struct ReusablePrefix {
+    let legs: [BuiltLeg]
+    let riderLegCount: Int
+}
+
+private func reusablePrefix(
     from reuse: BuiltItinerary?,
     itinerary: RiderItinerary,
     before legIndex: Int
-) -> [BuiltLeg] {
-    guard let reuse else { return [] }
-    let ids = Set(itinerary.legs.prefix(legIndex).map(\.id))
-    return reuse.legs.filter { ids.contains($0.riderLegID) }
+) -> ReusablePrefix {
+    guard let reuse else { return ReusablePrefix(legs: [], riderLegCount: 0) }
+    var legs: [BuiltLeg] = []
+    var riderLegCount = 0
+    for riderLeg in itinerary.legs.prefix(legIndex) {
+        let matches = reuse.legs.filter { $0.riderLegID == riderLeg.id }
+        guard reuse.riderLegStatus[riderLeg.id] == .built, !matches.isEmpty else { break }
+        legs.append(contentsOf: matches)
+        riderLegCount += 1
+    }
+    return ReusablePrefix(legs: legs, riderLegCount: riderLegCount)
 }
 
 private struct FuelResume {

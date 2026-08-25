@@ -413,7 +413,10 @@ struct ItineraryBuilderTests {
         source.distances[key(point1, automaticFuel)] = 150_000
         source.distances[key(automaticFuel, point2)] = 70_000
         source.distances[key(point2, point3)] = 100_000
-        source.fuelStops = [fuelStop("automatic-f1", at: automaticFuel)]
+        source.fuelStopResponses = [
+            [fuelStop("automatic-f1", at: automaticFuel)],
+            []
+        ]
         let builder = ItineraryBuilder()
         let fuel = FuelRangePrefs.Snapshot(
             tankMeters: 200_000, usableMeters: 190_000, reservePercent: 5
@@ -427,6 +430,7 @@ struct ItineraryBuilderTests {
         #expect(first.legs.compactMap(\.endsAtFuelStop?.stationID) == ["automatic-f1"])
 
         source.fuelChainRequests.removeAll()
+        source.fuelStopResponses = [[]]
         let change = reduce(initial, .append(coordinate: point3))
         let rebuildIndex = try #require(change.rebuildFromLegIndex)
         let rebuilt = await builder.build(
@@ -626,6 +630,94 @@ struct ItineraryBuilderTests {
         }
         #expect(cache.count == 64)
         #expect(firstKey.flatMap { cache.value(for: $0) } == nil)
+    }
+}
+
+@MainActor
+struct IncrementalItineraryRebuildTests {
+    @Test func completedFuelPrefixRemainsVisibleAndCarriesRangeIntoAppendedLeg() async throws {
+        let point1 = point(0)
+        let point2 = point(1)
+        let point3 = point(2)
+        let automaticFuel = point(0.72)
+        let source = FakeRoutingSource(name: "live")
+        source.distances[key(point1, point2)] = 220_000
+        source.distances[key(point1, automaticFuel)] = 150_000
+        source.distances[key(automaticFuel, point2)] = 70_000
+        source.distances[key(point2, point3)] = 100_000
+        source.fuelStopResponses = [
+            [fuelStop("automatic-f1", at: automaticFuel)],
+            []
+        ]
+        let builder = ItineraryBuilder()
+        let fuel = FuelRangePrefs.Snapshot(
+            tankMeters: 200_000, usableMeters: 190_000, reservePercent: 5
+        )
+
+        let initial = makeItinerary([point1, point2], profile: .balanced)
+        let first = await builder.build(
+            initial, from: 0, reuse: nil, fuel: fuel,
+            source: .fixed(source), onProgress: { _ in }
+        )
+        let change = reduce(initial, .append(coordinate: point3))
+        let rebuildIndex = try #require(change.rebuildFromLegIndex)
+        source.fuelStopResponses = [[]]
+
+        let rebuilt = await builder.build(
+            change.itinerary, from: rebuildIndex, reuse: first, fuel: fuel,
+            source: .fixed(source), onProgress: { _ in }
+        )
+
+        #expect(rebuilt.legs.prefix(first.legs.count).elementsEqual(first.legs))
+        #expect(rebuilt.legs.compactMap(\.endsAtFuelStop?.stationID) == ["automatic-f1"])
+        #expect(rebuilt.legs.last?.fuelUsedOnArrivalMeters == 170_000)
+        #expect(rebuilt.riderLegStatus.values.allSatisfy { $0 == .built })
+    }
+
+    @Test func appendDuringAnIncompleteBuildRestartsAtFirstMissingRiderLeg() async throws {
+        let points = [point(0), point(1), point(2), point(3)]
+        let itinerary = makeItinerary(points, profile: .cleanest)
+        let firstResponse = response(from: points[0], to: points[1], meters: 100_000)
+        let firstBuilt = BuiltLeg(
+            riderLegID: itinerary.legs[0].id,
+            fromCoordinate: points[0],
+            toCoordinate: points[1],
+            endsAtFuelStop: nil,
+            response: firstResponse,
+            fuelUsedOnArrivalMeters: 100_000,
+            routeProfile: .cleanest
+        )
+        let partial = BuiltItinerary(
+            generation: itinerary.generation - 1,
+            legs: [firstBuilt],
+            riderLegStatus: [
+                itinerary.legs[0].id: .built,
+                itinerary.legs[1].id: .pending,
+                itinerary.legs[2].id: .pending
+            ],
+            riderRoutes: [itinerary.legs[0].id: firstResponse]
+        )
+        let source = FakeRoutingSource(name: "live")
+        source.distances[key(points[1], points[2])] = 100_000
+        source.distances[key(points[2], points[3])] = 100_000
+
+        let rebuilt = await ItineraryBuilder().build(
+            itinerary,
+            from: 2,
+            reuse: partial,
+            fuel: FuelRangePrefs.Snapshot(
+                tankMeters: 500_000, usableMeters: 500_000, reservePercent: 0
+            ),
+            source: .fixed(source),
+            onProgress: { _ in }
+        )
+
+        #expect(rebuilt.legs.count == 3)
+        #expect(rebuilt.legs.first == firstBuilt)
+        #expect(rebuilt.legs.last?.fuelUsedOnArrivalMeters == 300_000)
+        #expect(rebuilt.riderLegStatus.values.allSatisfy { $0 == .built })
+        #expect(source.routeRequests.count == 2)
+        #expect(source.routeRequests.first?.locations.first?.longitude == points[1].longitude)
     }
 }
 

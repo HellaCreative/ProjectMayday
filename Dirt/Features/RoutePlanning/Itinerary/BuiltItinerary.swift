@@ -95,8 +95,8 @@ struct BuiltItinerary: Equatable, Sendable {
     let generation: Int
     let legs: [BuiltLeg]
     let riderLegStatus: [UUID: LegStatus]
-    /// Unsplit rider routes are the only reusable routing product. Fuel stops,
-    /// carried range and split BuiltLegs are derived afresh on every build.
+    /// Unsplit rider routes support rebuilding the affected suffix. Completed
+    /// generated legs before that suffix remain visible and preserve fuel carry.
     let riderRoutes: [UUID: RouteResponse]
     /// A rider-created waypoint that currently sits on a packed pump. Derived
     /// from its coordinate on every build; never persisted on RiderWaypoint.
