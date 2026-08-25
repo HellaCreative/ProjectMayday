@@ -708,7 +708,7 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
     pack.meta && Array.isArray(pack.meta.urbanCores) && pack.meta.urbanCores.length
       ? pack.meta.urbanCores
       : undefined;
-  const settlementBoxes = settlementBoxesForPack(pack);
+  const settlementBoxes = settlementBoxesForPack(pack, profile);
   const geom = runtime.geom;
   const enums = runtime.enums;
   const avoid = avoidEdgeIds instanceof Set ? avoidEdgeIds : null;

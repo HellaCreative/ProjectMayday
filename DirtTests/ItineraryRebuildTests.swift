@@ -62,14 +62,24 @@ struct UrbanCoreTests {
     }
 
     @Test func emptyV3PackUsesNovaScotiaTownCompatibilityData() {
-        let fallback = UrbanCore.settlementBoxes(embedded: [], regionId: "NS")
+        let fallback = UrbanCore.settlementBoxes(embedded: [], regionId: "NS", profile: .cleanest)
         #expect(fallback.count > 1)
         #expect(fallback.contains { $0.name == "Truro" })
         let embedded = [UrbanCore.Box(
             minLat: 1, maxLat: 2, minLon: 3, maxLon: 4, name: "pack-authoritative"
         )]
-        #expect(UrbanCore.settlementBoxes(embedded: embedded, regionId: "ns").first?.name == "pack-authoritative")
-        #expect(UrbanCore.settlementBoxes(embedded: [], regionId: "nb").isEmpty)
+        #expect(UrbanCore.settlementBoxes(
+            embedded: embedded, regionId: "ns", profile: .balanced
+        ).first?.name == "pack-authoritative")
+        #expect(UrbanCore.settlementBoxes(
+            embedded: [], regionId: "ns", profile: .balanced
+        ).isEmpty)
+        #expect(UrbanCore.settlementBoxes(
+            embedded: [], regionId: "ns", profile: .dirt
+        ).isEmpty)
+        #expect(UrbanCore.settlementBoxes(
+            embedded: [], regionId: "nb", profile: .cleanest
+        ).isEmpty)
     }
 }
 

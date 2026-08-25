@@ -134,8 +134,14 @@ nonisolated struct OnDeviceRouter {
         pack.urbanCores.isEmpty ? UrbanCore.boxes : pack.urbanCores
     }
 
-    private var packSettlements: [UrbanCore.Box] {
-        UrbanCore.settlementBoxes(embedded: pack.settlements, regionId: pack.regionId)
+    private var packSettlements: [UrbanCore.Box] { pack.settlements }
+
+    private func settlementBoxes(for profile: RouteProfile) -> [UrbanCore.Box] {
+        UrbanCore.settlementBoxes(
+            embedded: pack.settlements,
+            regionId: pack.regionId,
+            profile: profile
+        )
     }
 
     /// Meters to the nearest **routable** pack edge within `maxSnapMeters`.
@@ -1443,7 +1449,7 @@ nonisolated struct OnDeviceRouter {
                     )
                     if ctx.settlementFallback {
                         step *= UrbanCore.settlementFallbackMultiplier(
-                            point: toLL, start: from, end: to, boxes: packSettlements,
+                            point: toLL, start: from, end: to, boxes: settlementBoxes(for: profile),
                             penalty: UrbanCore.resolveSettlementPenalty(
                                 profile: profile,
                                 override: ctx.cleanMetroMultiplier,
@@ -1589,7 +1595,7 @@ nonisolated struct OnDeviceRouter {
                     )
                     if ctx.settlementFallback {
                         step *= UrbanCore.settlementFallbackMultiplier(
-                            point: toLL, start: from, end: to, boxes: packSettlements,
+                            point: toLL, start: from, end: to, boxes: settlementBoxes(for: profile),
                             penalty: UrbanCore.resolveSettlementPenalty(
                                 profile: profile,
                                 override: ctx.cleanMetroMultiplier,
@@ -1836,7 +1842,7 @@ nonisolated struct OnDeviceRouter {
                     let toLab = lab(toNode, b)
                     let settlementMult = ctx.settlementFallback
                         ? UrbanCore.settlementFallbackMultiplier(
-                            point: toLL, start: from, end: to, boxes: packSettlements,
+                            point: toLL, start: from, end: to, boxes: settlementBoxes(for: profile),
                             penalty: UrbanCore.resolveSettlementPenalty(
                                 profile: profile,
                                 override: ctx.cleanMetroMultiplier,
@@ -1939,7 +1945,7 @@ nonisolated struct OnDeviceRouter {
                     let toLL = item.to < n ? coordinate(forNode: item.to) : endSnap.projected
                     let settlementMult = ctx.settlementFallback
                         ? UrbanCore.settlementFallbackMultiplier(
-                            point: toLL, start: from, end: to, boxes: packSettlements,
+                            point: toLL, start: from, end: to, boxes: settlementBoxes(for: profile),
                             penalty: UrbanCore.resolveSettlementPenalty(
                                 profile: profile,
                                 override: ctx.cleanMetroMultiplier,
@@ -2569,7 +2575,7 @@ nonisolated struct OnDeviceRouter {
                     )
                     if ctx.settlementFallback {
                         step *= UrbanCore.settlementFallbackMultiplier(
-                            point: toLL, start: from, end: to, boxes: packSettlements,
+                            point: toLL, start: from, end: to, boxes: settlementBoxes(for: profile),
                             penalty: UrbanCore.resolveSettlementPenalty(
                                 profile: profile,
                                 override: ctx.cleanMetroMultiplier,
@@ -2628,7 +2634,7 @@ nonisolated struct OnDeviceRouter {
                     )
                     if ctx.settlementFallback {
                         step *= UrbanCore.settlementFallbackMultiplier(
-                            point: stitchTo, start: from, end: to, boxes: packSettlements,
+                            point: stitchTo, start: from, end: to, boxes: settlementBoxes(for: profile),
                             penalty: UrbanCore.resolveSettlementPenalty(
                                 profile: profile,
                                 override: ctx.cleanMetroMultiplier,
@@ -2865,7 +2871,12 @@ nonisolated struct OnDeviceRouter {
         var searchMeta = SearchMeta()
         if let start = coords.first, let end = coords.last {
             searchMeta.settlementFallbackUsed = coords.contains {
-                UrbanCore.blocks(point: $0, start: start, end: end, boxes: packSettlements)
+                UrbanCore.blocks(
+                    point: $0,
+                    start: start,
+                    end: end,
+                    boxes: settlementBoxes(for: profile)
+                )
             }
         }
         return Result(

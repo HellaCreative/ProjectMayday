@@ -84,8 +84,13 @@ nonisolated enum UrbanCore {
     }()
 
     /// Embedded pack metadata is authoritative; compatibility data only fills an empty v3 pack.
-    static func settlementBoxes(embedded: [Box], regionId: String?) -> [Box] {
+    static func settlementBoxes(
+        embedded: [Box],
+        regionId: String?,
+        profile: RouteProfile
+    ) -> [Box] {
         if !embedded.isEmpty { return embedded }
+        guard profile == .cleanest else { return [] }
         return fallbackSettlementsByRegion[regionId?.lowercased() ?? ""] ?? []
     }
 
