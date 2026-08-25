@@ -133,6 +133,16 @@ function resolveMetroFallbackPenalty(profile, cleanMetroMultiplier, avoidMajorHi
     ?? (avoidMajorHighways ? 10 : 2);
 }
 
+/** Pack-derived towns share Clean's bounded 1–20 city control; adventure stays ×5. */
+function resolveSettlementFallbackPenalty(
+  profile, cleanMetroMultiplier, avoidMajorHighways = true
+) {
+  if (String(profile || "").toLowerCase() === "cleanest") {
+    return resolveMetroFallbackPenalty(profile, cleanMetroMultiplier, avoidMajorHighways);
+  }
+  return SETTLEMENT_FALLBACK_MULTIPLIER;
+}
+
 /**
  * A relaxed wall is still expensive. This makes the last-resort search cross
  * the smallest necessary urban section instead of treating every city as open.
@@ -153,10 +163,13 @@ function settlementBlocks(lon, lat, startLL, endLL, boxes = []) {
   return metroBlocks(lon, lat, startLL, endLL, boxes);
 }
 
-/** Town travel remains far more expensive than ordinary routing fabric. */
-function settlementFallbackMultiplier(lon, lat, startLL, endLL, boxes = []) {
+/** Town travel remains a finite cost, with an endpoint-inside exemption. */
+function settlementFallbackMultiplier(lon, lat, startLL, endLL, boxes = [], penalty = 5) {
+  const p = Number.isFinite(Number(penalty))
+    ? Math.min(20, Math.max(1, Number(penalty)))
+    : SETTLEMENT_FALLBACK_MULTIPLIER;
   return settlementBlocks(lon, lat, startLL, endLL, boxes)
-    ? SETTLEMENT_FALLBACK_MULTIPLIER
+    ? p
     : 1;
 }
 
@@ -527,6 +540,7 @@ module.exports = {
   urbanCoreFallbackMultiplier,
   resolveCleanMetroMultiplier,
   resolveMetroFallbackPenalty,
+  resolveSettlementFallbackPenalty,
   settlementBlocks,
   settlementFallbackMultiplier,
   SETTLEMENT_FALLBACK_MULTIPLIER,

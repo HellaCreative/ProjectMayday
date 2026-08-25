@@ -162,14 +162,32 @@ nonisolated enum UrbanCore {
         return min(20, max(1, raw))
     }
 
+    /// Pack-derived towns share Clean's bounded city control. Adventure profiles
+    /// retain the existing finite ×5 settlement preference.
+    static func resolveSettlementPenalty(
+        profile: RouteProfile,
+        override: Double?,
+        avoidMajorHighways: Bool
+    ) -> Double {
+        profile == .cleanest
+            ? resolveCleanMetroPenalty(
+                profile: profile,
+                override: override,
+                avoidMajorHighways: avoidMajorHighways
+            )
+            : 5
+    }
+
     /// Smaller OSM cities/towns are strongly penalized so a practical wilderness
     /// alternative wins without severing the only through-road.
     static func settlementFallbackMultiplier(
         point: CLLocationCoordinate2D,
         start: CLLocationCoordinate2D,
         end: CLLocationCoordinate2D,
-        boxes candidateBoxes: [Box]
+        boxes candidateBoxes: [Box],
+        penalty: Double = 5
     ) -> Double {
-        blocks(point: point, start: start, end: end, boxes: candidateBoxes) ? 5 : 1
+        let bounded = penalty.isFinite ? min(20, max(1, penalty)) : 5
+        return blocks(point: point, start: start, end: end, boxes: candidateBoxes) ? bounded : 1
     }
 }

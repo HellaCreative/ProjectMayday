@@ -222,7 +222,7 @@ nonisolated struct OnDeviceRouter {
         ctx.pavedOnly = true
         ctx.cityWall = true
         ctx.variety = false
-        ctx.settlementFallback = false
+        ctx.settlementFallback = true
         ctx.avoidMotorways = true
         ctx.preferBackRoads = false
         switch routeWithSnaps(
@@ -267,7 +267,7 @@ nonisolated struct OnDeviceRouter {
             pavedOnly: profile == .cleanest,
             urbanCoreFallback: false,
             settlementWall: false,
-            settlementFallback: profile != .cleanest,
+            settlementFallback: true,
             cleanMetroMultiplier: cleanMetroMultiplier,
             avoidMotorways: avoidMotorways,
             preferBackRoads: preferBackRoads
@@ -317,7 +317,7 @@ nonisolated struct OnDeviceRouter {
             pavedOnly: true,
             urbanCoreFallback: true,
             settlementWall: false,
-            settlementFallback: false,
+            settlementFallback: true,
             cleanMetroMultiplier: cleanMetroMultiplier,
             avoidMotorways: avoidMotorways,
             preferBackRoads: preferBackRoads
@@ -1441,7 +1441,12 @@ nonisolated struct OnDeviceRouter {
                     )
                     if ctx.settlementFallback {
                         step *= UrbanCore.settlementFallbackMultiplier(
-                            point: toLL, start: from, end: to, boxes: packSettlements
+                            point: toLL, start: from, end: to, boxes: packSettlements,
+                            penalty: UrbanCore.resolveSettlementPenalty(
+                                profile: profile,
+                                override: ctx.cleanMetroMultiplier,
+                                avoidMajorHighways: ctx.avoidMotorways
+                            )
                         )
                     }
                     if applyAway {
@@ -1582,7 +1587,12 @@ nonisolated struct OnDeviceRouter {
                     )
                     if ctx.settlementFallback {
                         step *= UrbanCore.settlementFallbackMultiplier(
-                            point: toLL, start: from, end: to, boxes: packSettlements
+                            point: toLL, start: from, end: to, boxes: packSettlements,
+                            penalty: UrbanCore.resolveSettlementPenalty(
+                                profile: profile,
+                                override: ctx.cleanMetroMultiplier,
+                                avoidMajorHighways: ctx.avoidMotorways
+                            )
                         )
                     }
                     if applyAway {
@@ -1824,7 +1834,12 @@ nonisolated struct OnDeviceRouter {
                     let toLab = lab(toNode, b)
                     let settlementMult = ctx.settlementFallback
                         ? UrbanCore.settlementFallbackMultiplier(
-                            point: toLL, start: from, end: to, boxes: packSettlements
+                            point: toLL, start: from, end: to, boxes: packSettlements,
+                            penalty: UrbanCore.resolveSettlementPenalty(
+                                profile: profile,
+                                override: ctx.cleanMetroMultiplier,
+                                avoidMajorHighways: ctx.avoidMotorways
+                            )
                         )
                         : 1
                     let urbanMult = UrbanCore.fallbackMultiplier(
@@ -1922,7 +1937,12 @@ nonisolated struct OnDeviceRouter {
                     let toLL = item.to < n ? coordinate(forNode: item.to) : endSnap.projected
                     let settlementMult = ctx.settlementFallback
                         ? UrbanCore.settlementFallbackMultiplier(
-                            point: toLL, start: from, end: to, boxes: packSettlements
+                            point: toLL, start: from, end: to, boxes: packSettlements,
+                            penalty: UrbanCore.resolveSettlementPenalty(
+                                profile: profile,
+                                override: ctx.cleanMetroMultiplier,
+                                avoidMajorHighways: ctx.avoidMotorways
+                            )
                         )
                         : 1
                     let urbanMult = UrbanCore.fallbackMultiplier(
@@ -2547,7 +2567,12 @@ nonisolated struct OnDeviceRouter {
                     )
                     if ctx.settlementFallback {
                         step *= UrbanCore.settlementFallbackMultiplier(
-                            point: toLL, start: from, end: to, boxes: packSettlements
+                            point: toLL, start: from, end: to, boxes: packSettlements,
+                            penalty: UrbanCore.resolveSettlementPenalty(
+                                profile: profile,
+                                override: ctx.cleanMetroMultiplier,
+                                avoidMajorHighways: ctx.avoidMotorways
+                            )
                         )
                     }
 
@@ -2601,7 +2626,12 @@ nonisolated struct OnDeviceRouter {
                     )
                     if ctx.settlementFallback {
                         step *= UrbanCore.settlementFallbackMultiplier(
-                            point: stitchTo, start: from, end: to, boxes: packSettlements
+                            point: stitchTo, start: from, end: to, boxes: packSettlements,
+                            penalty: UrbanCore.resolveSettlementPenalty(
+                                profile: profile,
+                                override: ctx.cleanMetroMultiplier,
+                                avoidMajorHighways: ctx.avoidMotorways
+                            )
                         )
                     }
                     let fromLL = coordinate(forNode: cur.node)

@@ -1590,7 +1590,7 @@ async function routeCanadaChain(body, graphResolution) {
       inflateMs: cache.inflateMs
     },
     debug: {
-      routingRevision: "ride-objectives-v9-settlement-gated",
+      routingRevision: "ride-objectives-v10-clean-town-cost",
       engine: "dirt-node-astar-chain",
       graphMode: "canada-chain",
       packIdentity: parts.flatMap((part) =>
@@ -2130,7 +2130,7 @@ async function routeOnRuntime(body, graphResolution, runtime) {
       hardCorridor: false,
       progressRegressionMeters: Number.MAX_SAFE_INTEGER,
       settlementWall: false,
-      settlementFallback: false,
+      settlementFallback: true,
       cityWall: true,
       urbanCoreFallback: false,
       timeCapMs: CLEAN_PAVED_ATTEMPT_MS,
@@ -2206,7 +2206,7 @@ async function routeOnRuntime(body, graphResolution, runtime) {
       cityWall: false,
       urbanCoreFallback: true,
       settlementWall: false,
-      settlementFallback: false,
+      settlementFallback: true,
       costMode: "profile",
       variety: false,
       boundedSearch: true,
@@ -2442,7 +2442,7 @@ async function routeOnRuntime(body, graphResolution, runtime) {
     maneuvers: buildManeuvers(path.geometry),
     warnings,
     debug: {
-      routingRevision: "ride-objectives-v9-settlement-gated",
+      routingRevision: "ride-objectives-v10-clean-town-cost",
       startMatchedEdge: startMatch.edgeId,
       endMatchedEdge: endMatch.edgeId,
       startAccessMeters: Math.round(startMatch.distanceM),

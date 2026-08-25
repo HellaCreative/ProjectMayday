@@ -284,7 +284,7 @@ nonisolated struct HopSearchContext: Sendable {
     var priorEdgeIds: Set<String>
     var arrivalEdgeId: String?
     var backtrackFactor: Double
-    /// DEBUG ONLY. Clean urban-core multiplier override (1…20). Nil → ×5.
+    /// DEBUG ONLY. Clean urban/town multiplier override (1…20). Nil → ×10/×2.
     var cleanMetroMultiplier: Double?
     /// Phase E4: strong soft-avoid motorway + trunk (roadClassLeaf). Default off.
     var avoidMotorways: Bool

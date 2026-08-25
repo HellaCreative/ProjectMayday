@@ -35,6 +35,30 @@ struct UrbanCoreTests {
         #expect(UrbanCore.resolveCleanMetroPenalty(profile: .cleanest, override: 7, avoidMajorHighways: true) == 7)
         #expect(UrbanCore.resolveCleanMetroPenalty(profile: .balanced, override: 5, avoidMajorHighways: true) == 120)
         #expect(UrbanCore.resolveCleanMetroPenalty(profile: .dirt, override: 5, avoidMajorHighways: true) == 120)
+        #expect(UrbanCore.resolveSettlementPenalty(profile: .cleanest, override: nil, avoidMajorHighways: true) == 10)
+        #expect(UrbanCore.resolveSettlementPenalty(profile: .cleanest, override: nil, avoidMajorHighways: false) == 2)
+        #expect(UrbanCore.resolveSettlementPenalty(profile: .cleanest, override: 99, avoidMajorHighways: true) == 20)
+        #expect(UrbanCore.resolveSettlementPenalty(profile: .balanced, override: 20, avoidMajorHighways: true) == 5)
+    }
+
+    @Test func packTownPenaltyIsFiniteAndKeepsEndpointExemption() {
+        let town = UrbanCore.Box(
+            minLat: 45.3, maxLat: 45.4,
+            minLon: -63.4, maxLon: -63.2,
+            name: "test-town"
+        )
+        let centre = CLLocationCoordinate2D(latitude: 45.35, longitude: -63.3)
+        let west = CLLocationCoordinate2D(latitude: 45.35, longitude: -63.6)
+        let east = CLLocationCoordinate2D(latitude: 45.35, longitude: -63.0)
+        #expect(UrbanCore.settlementFallbackMultiplier(
+            point: centre, start: west, end: east, boxes: [town], penalty: 10
+        ) == 10)
+        #expect(UrbanCore.settlementFallbackMultiplier(
+            point: centre, start: west, end: east, boxes: [town], penalty: 99
+        ) == 20)
+        #expect(UrbanCore.settlementFallbackMultiplier(
+            point: centre, start: centre, end: east, boxes: [town], penalty: 10
+        ) == 1)
     }
 }
 

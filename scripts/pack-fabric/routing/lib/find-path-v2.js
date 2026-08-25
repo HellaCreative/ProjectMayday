@@ -45,6 +45,7 @@ const {
   hopBlocked,
   urbanCoreFallbackMultiplier,
   resolveMetroFallbackPenalty,
+  resolveSettlementFallbackPenalty,
   settlementBlocks,
   settlementFallbackMultiplier,
   metroEdgeBlocks,
@@ -849,6 +850,9 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
   const cityWall = searchOpts.cityWall !== false;
   const metroFallbackPenalty =
     resolveMetroFallbackPenalty(profile, searchOpts.cleanMetroMultiplier, e4Opts.avoidMotorways);
+  const settlementFallbackPenalty = resolveSettlementFallbackPenalty(
+    profile, searchOpts.cleanMetroMultiplier, e4Opts.avoidMotorways
+  );
   const corridorM = Number.isFinite(Number(searchOpts.corridorMeters))
     ? Number(searchOpts.corridorMeters)
     : corridorMetersForProfile(profile);
@@ -857,7 +861,7 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
   const urbanCoreFallback = searchOpts.urbanCoreFallback === true;
   void urbanCoreFallback;
   const settlementWall = searchOpts.settlementWall === true;
-  // Clean: small OSM towns are not cities — no settlement tax/wall by default.
+  // Clean uses the pack town layer as a finite scored preference, never a wall.
   const settlementFallback = profile === "cleanest"
     ? searchOpts.settlementFallback === true
     : searchOpts.settlementFallback !== false;
@@ -1118,7 +1122,7 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
         }
         if (settlementFallback && toLL) {
           step *= settlementFallbackMultiplier(
-            toLL[0], toLL[1], startLL, endLL, settlementBoxes
+            toLL[0], toLL[1], startLL, endLL, settlementBoxes, settlementFallbackPenalty
           );
         }
         step = penalizeBacktrack(step, pack.edgeId(ei));
@@ -1252,7 +1256,7 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
         }
         if (settlementFallback && toLL) {
           step *= settlementFallbackMultiplier(
-            toLL[0], toLL[1], startLL, endLL, settlementBoxes
+            toLL[0], toLL[1], startLL, endLL, settlementBoxes, settlementFallbackPenalty
           );
         }
         step = penalizeBacktrack(step, pack.edgeId(v.ei));
@@ -1516,6 +1520,9 @@ function searchBalancedResource(ctx) {
   } = ctx;
   const metroFallbackPenalty =
     resolveMetroFallbackPenalty(profile, cleanMetroMultiplier, avoidMotorways === true);
+  const settlementFallbackPenalty = resolveSettlementFallbackPenalty(
+    profile, cleanMetroMultiplier, avoidMotorways === true
+  );
   const penalizeBacktrack = (cost, edgeId) => {
     const id = String(edgeId == null ? "" : edgeId);
     if (arrival != null && id === arrival) return cost * 12;
@@ -1640,7 +1647,9 @@ function searchBalancedResource(ctx) {
         const b = dirtBucket(newDirt, newMeters);
         const toLab = lab(to, b);
         const settlementMult = settlementFallback && toLL
-          ? settlementFallbackMultiplier(toLL[0], toLL[1], startLL, endLL, settlementBoxes)
+          ? settlementFallbackMultiplier(
+              toLL[0], toLL[1], startLL, endLL, settlementBoxes, settlementFallbackPenalty
+            )
           : 1;
         const urbanMult = toLL
           ? urbanCoreFallbackMultiplier(
@@ -1702,7 +1711,9 @@ function searchBalancedResource(ctx) {
         const b = dirtBucket(dirtSoFar, newMeters);
         const toLab = lab(item.to, b);
         const settlementMult = settlementFallback && toLL
-          ? settlementFallbackMultiplier(toLL[0], toLL[1], startLL, endLL, settlementBoxes)
+          ? settlementFallbackMultiplier(
+              toLL[0], toLL[1], startLL, endLL, settlementBoxes, settlementFallbackPenalty
+            )
           : 1;
         const urbanMult = toLL
           ? urbanCoreFallbackMultiplier(
