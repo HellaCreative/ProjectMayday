@@ -32,11 +32,11 @@ enum PackDebugPaint {
         }
     }
 
-    static func surfaceFamilyKey(_ family: SurfaceFamily?) -> String {
+    nonisolated static func surfaceFamilyKey(_ family: SurfaceFamily?) -> String {
         (family ?? .unknown).rawValue
     }
 
-    static func roadTierKey(_ tier: RoadTier?) -> String {
+    nonisolated static func roadTierKey(_ tier: RoadTier?) -> String {
         (tier ?? .unknown).rawValue
     }
 
