@@ -177,19 +177,21 @@ struct ItineraryBuilderTests {
         #expect(source.routeRequests.last?.options?.regionalHopMinimumMeters == [45_000])
     }
 
-    @Test func fuelHopProfileReusesUpstreamAndReplansFromDepartureStation() async throws {
+    @Test func changingFourthFuelHopProfilePreservesFirstThreeAndRebuildsOnlyFourth() async throws {
         let points = [point(0), point(1)]
         let pumps = [point(0.25), point(0.5), point(0.75)]
         let source = FakeRoutingSource(name: "live")
-        source.distances[key(points[0], points[1])] = 500_000
         let chainPoints = [points[0]] + pumps + [points[1]]
         for index in 0..<(chainPoints.count - 1) {
             source.distances[key(chainPoints[index], chainPoints[index + 1])] = 125_000
         }
-        source.distances[key(pumps[0], points[1])] = 375_000
-        source.fuelStops = pumps.enumerated().map {
-            fuelStop("fuel-\($0.offset + 1)", at: $0.element)
-        }
+        source.fuelStopResponses = [
+            [fuelStop("fuel-1", at: pumps[0])],
+            [fuelStop("fuel-2", at: pumps[1])],
+            [fuelStop("fuel-3", at: pumps[2])],
+            []
+        ]
+        source.fuelWindowCompleteResponses = [false, false, false, true]
         let initial = makeItinerary(points)
         let builder = ItineraryBuilder()
         let first = await builder.build(
@@ -203,16 +205,13 @@ struct ItineraryBuilderTests {
         let riderLeg = try #require(initial.legs.first)
         let change = reduce(
             initial,
-            .setHopProfile(legID: riderLeg.id, stationID: "fuel-1", .dirt)
+            .setHopProfile(legID: riderLeg.id, stationID: "fuel-3", .cleanest)
         )
         source.routeRequests.removeAll()
-        source.fuelStops = []
-        source.fuelStopResponses = [
-            [fuelStop("fuel-2", at: pumps[1])],
-            [fuelStop("fuel-3", at: pumps[2])],
-            []
-        ]
-        source.fuelWindowCompleteResponses = [false, false, true]
+        source.fuelChainRequests.removeAll()
+        source.fuelStopResponses = [[]]
+        source.fuelWindowCompleteResponses = [true]
+        var progressResults: [BuiltItinerary] = []
 
         let second = await builder.build(
             change.itinerary,
@@ -224,16 +223,23 @@ struct ItineraryBuilderTests {
             ),
             source: .fixed(source),
             replanFromStationID: change.replanFromStationID,
-            onProgress: { _ in }
+            onProgress: { progressResults.append($0) }
         )
 
         #expect(second.legs.count == 4)
-        #expect(second.legs[0] == first.legs[0])
-        #expect(second.legs[0].endsAtFuelStop?.stationID == "fuel-1")
-        #expect(second.legs[1].routeProfile == .dirt)
-        #expect(second.legs.dropFirst().allSatisfy { $0.fromCoordinate != points[0] })
+        #expect(Array(second.legs.prefix(3)) == Array(first.legs.prefix(3)))
+        #expect(second.legs[3].routeProfile == .cleanest)
+        #expect(second.legs[3].fromCoordinate == pumps[2])
+        #expect(change.replanFromStationID == "fuel-3")
+        #expect(source.routeRequests.count == 1)
+        #expect(source.routeRequests.first?.profile == .cleanest)
+        #expect(source.routeRequests.first?.locations.first?.longitude == pumps[2].longitude)
         let plans = source.fuelChainRequests.filter { $0.fuel.probeFirstReachableStation != true }
-        #expect(plans.suffix(3).allSatisfy { $0.fuel.windowMaxStops == 1 })
+        #expect(plans.count == 1)
+        #expect(plans.first?.locations.first?.longitude == pumps[2].longitude)
+        #expect(progressResults.allSatisfy {
+            Array($0.legs.prefix(3)) == Array(first.legs.prefix(3))
+        })
     }
 
     @Test func fuelStopOverrideIsSeparateFromProfileAndForcesDepartureStation() async throws {

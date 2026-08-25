@@ -96,6 +96,8 @@ final class ItineraryBuilder {
         if fuelReplan {
             return await buildForwardFuelItinerary(
                 itinerary,
+                startIndex: startIndex,
+                resume: resume,
                 fuel: fuel,
                 source: selectedSource,
                 onFuelStatus: onFuelStatus,
@@ -577,6 +579,8 @@ final class ItineraryBuilder {
 
     private func buildForwardFuelItinerary(
         _ itinerary: RiderItinerary,
+        startIndex: Int,
+        resume: FuelResume?,
         fuel: FuelRangePrefs.Snapshot,
         source: any RoutingSource,
         onFuelStatus: @MainActor (String) -> Void,
@@ -585,6 +589,11 @@ final class ItineraryBuilder {
         var statuses = Dictionary(
             uniqueKeysWithValues: itinerary.legs.map { ($0.id, LegStatus.pending) }
         )
+        let kept = resume?.kept ?? []
+        for leg in kept { statuses[leg.riderLegID] = .built }
+        if resume != nil, itinerary.legs.indices.contains(startIndex) {
+            statuses[itinerary.legs[startIndex].id] = .pending
+        }
         var waypointFuelStops: [UUID: FuelStop] = [:]
         if itinerary.waypoints.count > 1 {
             for waypointIndex in 1..<itinerary.waypoints.count {
@@ -605,23 +614,33 @@ final class ItineraryBuilder {
 
         var committed = BuiltItinerary(
             generation: itinerary.generation,
-            legs: [],
+            legs: kept,
             riderLegStatus: statuses,
             riderRoutes: [:],
             waypointFuelStops: waypointFuelStops
         )
-        var history = EdgeHistory()
+        var history = EdgeHistory(legs: kept)
         var fuelUsed = 0.0
         // This is an inactivity watchdog, not a cap on total itinerary time.
         // Long routes may legitimately need many quick fuel hops; every proven
         // forward leg renews the window while stalled searches still terminate.
         var progressWatchdog = FuelPlanningProgressWatchdog()
 
-        for index in itinerary.legs.indices {
+        if let resume {
+            RoutingDebugLog.shared.event(
+                "fuel forward resume gen=\(itinerary.generation) "
+                    + "fromLeg=\(startIndex) station=\(resume.station.stationID ?? "unknown") "
+                    + "keptLegs=\(kept.count)"
+            )
+        }
+
+        for index in startIndex..<itinerary.legs.count {
             let riderLeg = itinerary.legs[index]
             let riderDestination = itinerary.waypoints[index + 1]
-            var current = itinerary.waypoints[index].coordinate
-            var builtLegs: [BuiltLeg] = []
+            let resumesThisLeg = index == startIndex ? resume : nil
+            var current = resumesThisLeg?.station.coordinate
+                ?? itinerary.waypoints[index].coordinate
+            var builtLegs = resumesThisLeg?.riderLegPrefix ?? []
             var excludedStations = Set<String>()
             var forceFuelStop = false
             var attempts = 0
