@@ -42,8 +42,8 @@ const {
   ROAD_CLASS_NAME
 } = require("./pack-v2");
 const { findPathV2, applyHonestReportedStats } = require("./find-path-v2");
-const { e4FlagsForProfile, roadTierOf, isCleanPavementEligible } = require("./road-tier");
-const { applyHonestSurfaceStats, surfaceFamilyOf } = require("./surface-family");
+const { e4FlagsForProfile } = require("./road-tier");
+const { applyHonestSurfaceStats } = require("./surface-family");
 const {
   isFerryStructureCode,
   ferryRelaxStepCost,
@@ -53,7 +53,6 @@ const {
 const { segmentStructureFields } = require("./structure");
 const {
   isDirtSurface,
-  isBlockedForCleanPavement,
   outsideCorridor,
   maxProgressRegressionMeters,
   resolveCleanMetroMultiplier,
@@ -448,7 +447,6 @@ function matchPoint(
   const prof = profile ? resolveProfile(profile) : null;
   const role = snapRole === "start" || snapRole === "end" ? snapRole : "any";
   const preferAdventureSnap = prof && prof !== "cleanest" && role !== "end";
-  // Clean candidates are pavement-eligible only; distance decides among them.
   const preferPavedSnap = role === "end" && prof !== "cleanest";
   const candidates = edgeCandidateIndexes(runtime, point[0], point[1], matchMeters);
   const isV2 = runtime.format === "v2";
@@ -490,20 +488,6 @@ function matchPoint(
     if (isV2) {
       if (!accessAllowed(accessCode, policy, enums, null, prof)) continue;
       if (avoid && avoid.has(String(edgeId))) continue;
-    }
-    if (prof === "cleanest") {
-      let pavedEligible;
-      if (isV2 && runtime.pack.hasLeaves) {
-        const leaves = runtime.pack.edgeLeaves(index);
-        pavedEligible = isCleanPavementEligible(
-          surfaceFamilyOf(leaves.surfaceLeaf, runtime.pack.surfaceFamilyMap),
-          roadTierOf(leaves.roadClassLeaf, runtime.pack.roadTierMap)
-        );
-      } else {
-        const surfaceName = enums.SURFACE_NAME[surfaceCode] || "unknown";
-        pavedEligible = !isBlockedForCleanPavement(surfaceName, roadTrack);
-      }
-      if (!pavedEligible) continue;
     }
     let along = 0;
     for (let i = 1; i < coords.length; i += 1) {

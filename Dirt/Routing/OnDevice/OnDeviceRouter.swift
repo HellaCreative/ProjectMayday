@@ -1017,7 +1017,7 @@ nonisolated struct OnDeviceRouter {
 
         switch (profile, role) {
         case (.cleanest, _):
-            break // pavement eligibility is enforced before ranking
+            break // endpoint eligibility is access-only; Clean costs the routed path
         case (_, .start) where profile != .cleanest:
             if surfaceName != "paved" { score -= 22 }
             if OnDeviceProfileCosts.isAdventureRoadClass(roadClass) { score -= 12 }
@@ -3232,26 +3232,6 @@ nonisolated struct OnDeviceRouter {
                 let access = GraphV2Pack.unpackAccess(pack.edgeAttrs[ei])
                 guard accessAllowed(access, allowUnknown: policyUnknown, profile: profile) else { continue }
                 if osmCoreOnly, !GraphV2Pack.isOsmCoreEdge(pack.edgeId(ei)) { continue }
-                if profile == .cleanest {
-                    if pack.hasLeaves {
-                        guard RoadTierStats.isCleanPavementEligible(
-                            family: pack.surfaceFamily(ei),
-                            tier: pack.roadTier(ei)
-                        ) else { continue }
-                    } else {
-                        let surface = OnDeviceProfileCosts.surfaceName(
-                            code: GraphV2Pack.unpackSurface(pack.edgeAttrs[ei])
-                        )
-                        let road = GraphV2Pack.roadClassName(
-                            GraphV2Pack.unpackRoadClass(pack.edgeAttrs[ei])
-                        )
-                        guard !OnDeviceProfileCosts.isBlockedForCleanPavement(
-                            surfaceName: surface,
-                            roadClassName: road
-                        ) else { continue }
-                    }
-                }
-
                 let a = Int(fromArr[ei])
                 let b = Int(toArr[ei])
                 guard a >= 0, b >= 0, a < pack.nodeCount, b < pack.nodeCount else { continue }

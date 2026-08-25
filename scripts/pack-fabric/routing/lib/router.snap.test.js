@@ -67,3 +67,12 @@ test("Dirt snap reports snap_no_eligible_edge when the radius has none", () => {
   assert.equal(match.reason, "snap_no_eligible_edge");
   assert.equal(match.matchLimitMeters, 500);
 });
+
+test("Clean endpoint snap keeps a motorized gravel road eligible", () => {
+  const match = matchPoint(
+    runtime(true), location, policy, 500, new Set(), null, "cleanest", "end"
+  );
+  assert.equal(match.ok, true);
+  assert.equal(match.edgeId, "permissive-within-500m");
+  assert.equal(match.surfaceClass, "gravel");
+});
