@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "sessionSeed": 3511091208,
+  "tankRangeKm": 230,
+  "reservePercent": 10,
+  "profiles": ["cleanest", "balanced", "dirt"],
+  "scenarios": [
+    {
+      "id": "short-intra-metro",
+      "label": "Porters Lake short local",
+      "from": { "lat": 44.764919, "lon": -63.340350 },
+      "to": { "lat": 44.755736, "lon": -63.301255 }
+    },
+    {
+      "id": "rural-pair",
+      "label": "Musquodoboit to Sherbrooke",
+      "from": { "lat": 44.911062, "lon": -62.386656 },
+      "to": { "lat": 45.261359, "lon": -62.621027 }
+    },
+    {
+      "id": "cross-province",
+      "label": "Porters Lake to Moncton",
+      "from": { "lat": 44.764919, "lon": -63.340350 },
+      "to": { "lat": 46.0878, "lon": -64.7782 }
+    },
+    {
+      "id": "one-fuel-stop",
+      "label": "Porters Lake to Antigonish",
+      "from": { "lat": 44.764919, "lon": -63.340350 },
+      "to": { "lat": 45.602720, "lon": -61.930250 }
+    },
+    {
+      "id": "multi-fuel-stop",
+      "label": "Yarmouth to Sydney",
+      "from": { "lat": 43.8375, "lon": -66.1174 },
+      "to": { "lat": 46.1368, "lon": -60.1942 }
+    },
+    {
+      "id": "canso-causeway",
+      "label": "Antigonish side to Sydney across Canso",
+      "from": { "lat": 45.667087, "lon": -62.344120 },
+      "to": { "lat": 46.104710, "lon": -60.207400 }
+    }
+  ]
+}
