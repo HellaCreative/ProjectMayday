@@ -312,7 +312,37 @@ nonisolated struct OnDeviceRouter {
         case .failure: return pavedWall
         }
 
-        // A city may be unavoidable, but Clean never relaxes the pavement rule.
+        // Clean preferences are costs, not permanent graph deletion. First
+        // admit tagged unpaved fabric while keeping the urban-core wall.
+        let unpavedWall = routeDetailedOnce(
+            from: from, to: to, profile: profile,
+            allowUnknown: allowUnknown, avoidEdgeIds: avoidEdgeIds,
+            sessionSeed: sessionSeed ?? self.sessionSeed,
+            maxRouteMeters: maxRouteMeters,
+            priorEdgeIds: priorEdgeIds,
+            arrivalEdgeId: arrivalEdgeId,
+            backtrackFactor: backtrackFactor,
+            cityWall: true,
+            pavedOnly: false,
+            urbanCoreFallback: false,
+            settlementWall: false,
+            settlementFallback: true,
+            cleanMetroMultiplier: cleanMetroMultiplier,
+            avoidMotorways: avoidMotorways,
+            preferBackRoads: preferBackRoads
+        )
+        switch unpavedWall {
+        case .success(var route):
+            route.searchMeta.cleanUnpavedFallbackUsed = true
+            let note = "cleanUnpavedFallback=lastResort"
+            route.debugNote = route.debugNote.isEmpty ? note : route.debugNote + " " + note
+            return .success(route)
+        case .failure(.noPath): break
+        case .failure: return unpavedWall
+        }
+
+        // A city may be unavoidable. Prefer its paved crossing before allowing
+        // the combined urban + unpaved last resort.
         let pavedUrbanFallback = routeDetailedOnce(
             from: from, to: to, profile: profile,
             allowUnknown: allowUnknown, avoidEdgeIds: avoidEdgeIds,
@@ -330,9 +360,39 @@ nonisolated struct OnDeviceRouter {
             avoidMotorways: avoidMotorways,
             preferBackRoads: preferBackRoads
         )
-        guard case .success(var route) = pavedUrbanFallback else { return pavedUrbanFallback }
+        switch pavedUrbanFallback {
+        case .success(var route):
+            route.searchMeta.urbanCoreFallbackUsed = true
+            let note = "urbanCoreFallback=lastResort"
+            route.debugNote = route.debugNote.isEmpty ? note : route.debugNote + " " + note
+            return .success(route)
+        case .failure(.noPath): break
+        case .failure: return pavedUrbanFallback
+        }
+
+        let unpavedUrbanFallback = routeDetailedOnce(
+            from: from, to: to, profile: profile,
+            allowUnknown: allowUnknown, avoidEdgeIds: avoidEdgeIds,
+            sessionSeed: sessionSeed ?? self.sessionSeed,
+            maxRouteMeters: maxRouteMeters,
+            priorEdgeIds: priorEdgeIds,
+            arrivalEdgeId: arrivalEdgeId,
+            backtrackFactor: backtrackFactor,
+            cityWall: false,
+            pavedOnly: false,
+            urbanCoreFallback: true,
+            settlementWall: false,
+            settlementFallback: true,
+            cleanMetroMultiplier: cleanMetroMultiplier,
+            avoidMotorways: avoidMotorways,
+            preferBackRoads: preferBackRoads
+        )
+        guard case .success(var route) = unpavedUrbanFallback else {
+            return unpavedUrbanFallback
+        }
         route.searchMeta.urbanCoreFallbackUsed = true
-        let note = "urbanCoreFallback=lastResort"
+        route.searchMeta.cleanUnpavedFallbackUsed = true
+        let note = "urbanCoreFallback=lastResort cleanUnpavedFallback=lastResort"
         route.debugNote = route.debugNote.isEmpty ? note : route.debugNote + " " + note
         return .success(route)
     }

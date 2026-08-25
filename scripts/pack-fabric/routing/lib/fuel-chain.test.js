@@ -565,14 +565,14 @@ for (const profile of ["dirt", "balanced"]) {
       firstLegMaxMeters: 90_000,
       requireFuelStopBeforeEnd: true,
       minimumFuelStops: 1,
-      timeBudgetMs: 1,
+      timeBudgetMs: 50,
       routeCandidate: ({ candidate }) => new Promise((resolve) => {
         setTimeout(() => resolve({
           status: "complete",
           distanceMeters: candidate.graphMeters,
           stats: { dirtPercent: profile === "dirt" ? 80 : 50 },
           segments: []
-        }), 5);
+        }), 75);
       })
     });
 

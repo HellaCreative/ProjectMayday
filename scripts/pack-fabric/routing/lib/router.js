@@ -2187,7 +2187,9 @@ async function routeOnRuntime(body, graphResolution, runtime) {
       }
     }
   }
-  // Major urban cores / motorways: Clean may cross only after proved noPath.
+  // Clean preferences are costs, not permanent graph deletion. If the paved
+  // rural fabric is disconnected, keep the city wall and admit tagged
+  // unpaved edges at their strong Clean penalty before relaxing the wall.
   if (!path && profile === "cleanest" && cleanSearchOutcome === "noPath") {
     const cleanFindRelaxed = (extra) => {
       const diagnostics = {};
@@ -2203,8 +2205,6 @@ async function routeOnRuntime(body, graphResolution, runtime) {
       };
     };
     const relaxedBase = {
-      cityWall: false,
-      urbanCoreFallback: true,
       settlementWall: false,
       settlementFallback: true,
       costMode: "profile",
@@ -2216,18 +2216,62 @@ async function routeOnRuntime(body, graphResolution, runtime) {
       timeCapMs: CLEAN_PAVED_ATTEMPT_MS,
       deadlineAtMs: Date.now() + CLEAN_PAVED_ATTEMPT_MS
     };
-    const attempt = cleanFindRelaxed(Object.assign({}, relaxedBase, { pavedOnly: true }));
-    if (attempt.path) {
-      path = attempt.path;
+    const ruralUnpaved = cleanFindRelaxed(Object.assign({}, relaxedBase, {
+      cityWall: true,
+      urbanCoreFallback: false,
+      pavedOnly: false
+    }));
+    if (ruralUnpaved.path) {
+      path = ruralUnpaved.path;
       cleanSearchOutcome = "completed";
-      urbanCoreFallbackUsed = true;
+      cleanUnpavedFallbackUsed = true;
       path.searchMeta = path.searchMeta || {};
-      path.searchMeta.urbanCoreFallbackUsed = true;
+      path.searchMeta.cleanUnpavedFallbackUsed = true;
       path.searchMeta.corridorMeters = null;
       path.searchMeta.rideObjective = "practical-pavement";
-      if (cleanUnpavedFallbackUsed) path.searchMeta.cleanUnpavedFallbackUsed = true;
     } else {
-      cleanSearchOutcome = attempt.outcome || "noPath";
+      cleanSearchOutcome = ruralUnpaved.outcome || "noPath";
+    }
+
+    // Major urban cores remain the last resort. Prefer a paved crossing; only
+    // admit both the urban and unpaved fallbacks when that is still disconnected.
+    if (!path && cleanSearchOutcome === "noPath") {
+      const pavedUrban = cleanFindRelaxed(Object.assign({}, relaxedBase, {
+        cityWall: false,
+        urbanCoreFallback: true,
+        pavedOnly: true
+      }));
+      if (pavedUrban.path) {
+        path = pavedUrban.path;
+        cleanSearchOutcome = "completed";
+        urbanCoreFallbackUsed = true;
+        path.searchMeta = path.searchMeta || {};
+        path.searchMeta.urbanCoreFallbackUsed = true;
+        path.searchMeta.corridorMeters = null;
+        path.searchMeta.rideObjective = "practical-pavement";
+      } else {
+        cleanSearchOutcome = pavedUrban.outcome || "noPath";
+      }
+    }
+    if (!path && cleanSearchOutcome === "noPath") {
+      const unpavedUrban = cleanFindRelaxed(Object.assign({}, relaxedBase, {
+        cityWall: false,
+        urbanCoreFallback: true,
+        pavedOnly: false
+      }));
+      if (unpavedUrban.path) {
+        path = unpavedUrban.path;
+        cleanSearchOutcome = "completed";
+        urbanCoreFallbackUsed = true;
+        cleanUnpavedFallbackUsed = true;
+        path.searchMeta = path.searchMeta || {};
+        path.searchMeta.urbanCoreFallbackUsed = true;
+        path.searchMeta.cleanUnpavedFallbackUsed = true;
+        path.searchMeta.corridorMeters = null;
+        path.searchMeta.rideObjective = "practical-pavement";
+      } else {
+        cleanSearchOutcome = unpavedUrban.outcome || "noPath";
+      }
     }
   }
   // Balanced + Allow ON: unknown dirt usually wins under normal surface weights and
