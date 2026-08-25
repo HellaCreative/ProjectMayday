@@ -13,6 +13,8 @@ nonisolated enum FuelItinerary {
         let cleanFallbackCount: Int
         let cleanMajorRoadMeters: Double
         let cleanRoutedMeters: Double
+        let chainBacktrackMeters: Double
+        let chainStopCount: Int
         let progressMeters: Double
         let discoveryRank: Int
     }
@@ -46,6 +48,13 @@ nonisolated enum FuelItinerary {
         tankMeters: Double
     ) -> Bool {
         if a.validForward != b.validForward { return a.validForward }
+        let aBacktrack = a.cleanRoutedMeters > 0
+            ? a.chainBacktrackMeters / a.cleanRoutedMeters
+            : 0
+        let bBacktrack = b.cleanRoutedMeters > 0
+            ? b.chainBacktrackMeters / b.cleanRoutedMeters
+            : 0
+        if abs(aBacktrack - bBacktrack) > 0.01 { return aBacktrack < bBacktrack }
         switch profile {
         case .dirt:
             if abs(a.chainDirtPercent - b.chainDirtPercent) > 0.5 {
@@ -80,7 +89,35 @@ nonisolated enum FuelItinerary {
         if abs(a.routedMeters - b.routedMeters) > 50 {
             return a.routedMeters < b.routedMeters
         }
+        if a.chainStopCount != b.chainStopCount { return a.chainStopCount < b.chainStopCount }
         return a.discoveryRank < b.discoveryRank
+    }
+
+    /// The rider's usable range is a safety ceiling. Routine fuel allocation
+    /// targets the upper edge of the 50–80% comfort window and may stop earlier
+    /// when that produces a better complete ride.
+    static func comfortCapMeters(
+        firstLegMaxMeters: Double,
+        usableRangeMeters: Double
+    ) -> Double {
+        guard usableRangeMeters > 0, firstLegMaxMeters >= 0 else { return 0 }
+        let used = max(0, usableRangeMeters - min(usableRangeMeters, firstLegMaxMeters))
+        return max(0, usableRangeMeters * HopSearchPolicy.fuelComfortHi - used)
+    }
+
+    static func fuelStopCountNeeded(
+        profileMeters: Double,
+        firstLegMaxMeters: Double,
+        usableRangeMeters: Double
+    ) -> Int {
+        guard profileMeters.isFinite, profileMeters >= 0, usableRangeMeters > 0 else { return 0 }
+        let firstComfort = comfortCapMeters(
+            firstLegMaxMeters: firstLegMaxMeters,
+            usableRangeMeters: usableRangeMeters
+        )
+        guard profileMeters > firstComfort + 1 else { return 0 }
+        return Int(ceil((profileMeters - firstComfort) /
+            (usableRangeMeters * HopSearchPolicy.fuelComfortHi)))
     }
 
     /// A numbered rider waypoint is a live refuel only while it sits on a packed

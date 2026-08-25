@@ -6,6 +6,7 @@ const {
   planFuelChainOnRuntime,
   rankForwardFuel,
   tankCommitBand,
+  compareChainPlans,
   FUEL_CHAIN_SERVICE_VERSION
 } = require("./fuel-chain");
 const { lineRuntime } = require("./fuel-chain.test-fixture");
@@ -43,7 +44,7 @@ test("Dirt chooses the mid-range dirt-network station over a farther paved stati
   assert.equal(result.ok, true);
   assert.equal(result.stops[0].id, "mid-dirt");
   assert.equal(result.stops[0].dirtPercent, 90);
-  assert.equal(result.stationCandidates.length, 2);
+  assert.ok(result.stationCandidates.length >= 2);
 });
 
 test("unknown profile plans as Balanced", async () => {
@@ -138,7 +139,7 @@ test("Clean rural quality outranks a comfortable station that needs town fallbac
 
 test("Clean rejects a full-tank lateral Gulf-class pump in favor of a corridor pump", () => {
   assert.equal(typeof FUEL_CHAIN_SERVICE_VERSION, "string");
-  assert.match(FUEL_CHAIN_SERVICE_VERSION, /profile-quality-fuel-anchors/);
+  assert.match(FUEL_CHAIN_SERVICE_VERSION, /complete-profile-fuel-chains/);
   // Halifax-ish → Tatamagouche-ish geometry: Wallace Gulf is nearly a full tank
   // sideways; Truro sits on the corridor with a shorter complete chain.
   const start = { lat: 44.764823, lon: -63.340271 };
@@ -238,4 +239,48 @@ test("comfort-band ranking beats a wall station; desperation only if comfort is 
     start, destination, 450_000, new Set(), "balanced"
   );
   assert.equal(desperationOnly[0].station.id, "wall");
+});
+
+test("complete rural chain beats one town pump even when it adds stops", () => {
+  const town = {
+    complete: true,
+    stops: [{ id: "town" }],
+    graphMeters: [100_000, 80_000],
+    quality: {
+      meters: 180_000, dirtMeters: 0, cleanFallbackCount: 1,
+      cleanMajorRoadMeters: 60_000, backtrackMeters: 0
+    }
+  };
+  const rural = {
+    complete: true,
+    stops: [{ id: "east-1" }, { id: "east-2" }, { id: "east-3" }],
+    graphMeters: [60_000, 60_000, 60_000, 40_000],
+    quality: {
+      meters: 220_000, dirtMeters: 0, cleanFallbackCount: 0,
+      cleanMajorRoadMeters: 0, backtrackMeters: 0
+    }
+  };
+  assert.ok(compareChainPlans(rural, town, "cleanest", 130_000) < 0);
+});
+
+test("an arc beats a lollipop before stop count is considered", () => {
+  const arc = {
+    complete: true,
+    stops: [{ id: "arc-1" }, { id: "arc-2" }],
+    graphMeters: [70_000, 70_000, 40_000],
+    quality: {
+      meters: 180_000, dirtMeters: 108_000, cleanFallbackCount: 0,
+      cleanMajorRoadMeters: 0, backtrackMeters: 0
+    }
+  };
+  const lollipop = {
+    complete: true,
+    stops: [{ id: "loop" }],
+    graphMeters: [90_000, 70_000],
+    quality: {
+      meters: 160_000, dirtMeters: 112_000, cleanFallbackCount: 0,
+      cleanMajorRoadMeters: 0, backtrackMeters: 32_000
+    }
+  };
+  assert.ok(compareChainPlans(arc, lollipop, "dirt", 130_000) < 0);
 });

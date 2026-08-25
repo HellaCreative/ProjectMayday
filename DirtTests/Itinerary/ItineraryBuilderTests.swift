@@ -142,7 +142,10 @@ struct ItineraryBuilderTests {
 
         let plans = source.fuelChainRequests.filter { $0.fuel.probeFirstReachableStation != true }
         #expect(plans.count == 4)
-        #expect(plans.allSatisfy { $0.fuel.windowMaxStops == 1 })
+        #expect(plans.allSatisfy {
+            ($0.fuel.windowMaxStops ?? 0) >= 1 && ($0.fuel.windowMaxStops ?? 0) <= 4
+        })
+        #expect((plans.first?.fuel.windowMaxStops ?? 0) >= (plans.last?.fuel.windowMaxStops ?? 0))
         #expect(plans.allSatisfy { $0.fuel.allowPartialWindow == true })
         #expect(plans.allSatisfy { $0.fuel.forwardFeeler == true })
         #expect(plans.allSatisfy { $0.fuel.windowTimeBudgetMs == 5_800 })

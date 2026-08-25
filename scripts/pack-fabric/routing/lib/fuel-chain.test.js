@@ -17,6 +17,11 @@ test("an exhausted graph is a gap but a planning timeout is inconclusive", () =>
   assert.equal(fuelPlanStatus({ ok: true }), "complete");
 });
 
+test("a near-wall rider leg requests an earlier comfort stop", () => {
+  assert.equal(fuelNeedForProfileRide(152_000, 153_000, 153_000), 1);
+  assert.equal(fuelNeedForProfileRide(100_000, 153_000, 153_000), 0);
+});
+
 function lineRuntime() {
   const nodes = [];
   for (let i = 0; i <= 8; i += 1) nodes.push([i * 0.5, 45]);
@@ -499,7 +504,7 @@ test("profile ride length requires Dirt fuel even when shortest reachability fit
     routeCandidate: fixtureRouteCandidate
   });
   assert.equal(clean.ok, true);
-  assert.deepEqual(clean.stops, []);
+  assert.deepEqual(clean.stops.map((row) => row.id), ["mid"]);
 });
 
 for (const profile of ["dirt", "balanced"]) {

@@ -360,6 +360,8 @@ struct FuelItineraryTests {
             dirt: Double,
             fallback: Int = 0,
             major: Double = 0,
+            backtrack: Double = 0,
+            stops: Int = 1,
             rank: Int
         ) -> FuelItinerary.ProfileFuelCandidate {
             FuelItinerary.ProfileFuelCandidate(
@@ -370,6 +372,8 @@ struct FuelItineraryTests {
                 cleanFallbackCount: fallback,
                 cleanMajorRoadMeters: major,
                 cleanRoutedMeters: meters,
+                chainBacktrackMeters: backtrack,
+                chainStopCount: stops,
                 progressMeters: meters,
                 discoveryRank: rank
             )
@@ -393,6 +397,30 @@ struct FuelItineraryTests {
         #expect(FuelItinerary.prefersProfileFuelCandidate(
             earlyRural, over: comfortableTown, profile: .cleanest, tankMeters: 130_000
         ))
+
+        let ruralArc = candidate(
+            quality, meters: 180_000, dirt: 60, backtrack: 0, stops: 3, rank: 0
+        )
+        let lollipop = candidate(
+            comfort, meters: 160_000, dirt: 70, backtrack: 32_000, stops: 1, rank: 1
+        )
+        #expect(FuelItinerary.prefersProfileFuelCandidate(
+            ruralArc, over: lollipop, profile: .dirt, tankMeters: 130_000
+        ))
+    }
+
+
+    @Test func nearWallLegRequestsComfortFuelWhileShortLegDoesNot() {
+        #expect(FuelItinerary.fuelStopCountNeeded(
+            profileMeters: 152_000,
+            firstLegMaxMeters: 153_000,
+            usableRangeMeters: 153_000
+        ) == 1)
+        #expect(FuelItinerary.fuelStopCountNeeded(
+            profileMeters: 100_000,
+            firstLegMaxMeters: 153_000,
+            usableRangeMeters: 153_000
+        ) == 0)
     }
 
     @Test func numberedWaypointOnStationIsALiveRefuelUntilDraggedOff() {

@@ -225,7 +225,12 @@ final class PackRoutingSource: RoutingSource {
         var stops: [FuelChainStop] = []
         var graphMeters: [Double] = []
         var stationCandidates: [FuelStationCandidate] = []
-        let maximumStops = min(12, max(1, req.fuel.windowMaxStops ?? 12))
+        let returnedStopLimit = min(12, max(1, req.fuel.windowMaxStops ?? 12))
+        let maximumStops = req.fuel.allowPartialWindow == true
+            ? min(4, max(returnedStopLimit, req.fuel.minimumFuelStops + 1))
+            : returnedStopLimit
+        var carriedHistory = Set(req.options?.priorEdgeIds ?? [])
+        var carriedArrival = req.options?.arrivalEdgeId
 
         while stops.count <= maximumStops {
             try Task.checkCancellation()
@@ -242,30 +247,63 @@ final class PackRoutingSource: RoutingSource {
             let mustPump = stops.count < req.fuel.minimumFuelStops
                 || (stops.isEmpty && req.fuel.requireFuelStopBeforeEnd)
             let destinationLimit = req.fuel.destinationFuelUsedLimitMeters
-            if let direct, !mustPump,
+            var directFallback: Double?
+            if let direct,
                destinationLimit == nil || direct <= (destinationLimit ?? .infinity) + 1 {
-                graphMeters.append(direct)
+                let routed = await packs.routeOnDeviceDetailed(
+                    from: current.locationCoordinate,
+                    to: end.locationCoordinate,
+                    profile: req.profile,
+                    allowUnknown: req.accessPolicy.motorizedUnknown,
+                    avoidEdgeIds: req.options?.avoidEdgeIds ?? [],
+                    priorEdgeIds: carriedHistory,
+                    arrivalEdgeId: carriedArrival,
+                    backtrackFactor: req.options?.backtrackFactor ?? 4,
+                    sessionSeed: req.options?.sessionSeed ?? 0,
+                    maxRouteMeters: firstCap,
+                    regionalHopMinimumMeters: req.options?.regionalHopMinimumMeters ?? [],
+                    cleanMetroMultiplier: req.options?.cleanMetroMultiplier,
+                    avoidMotorways: req.options?.avoidMotorways == true,
+                    preferBackRoads: req.options?.preferBackRoads == true
+                )
+                if case .success(let route) = routed, route.distanceMeters <= firstCap + 1 {
+                    directFallback = route.distanceMeters
+                }
+            }
+            let directComfort = FuelItinerary.comfortCapMeters(
+                firstLegMaxMeters: firstCap,
+                usableRangeMeters: req.fuel.usableRangeMeters
+            )
+            if let directFallback, !mustPump, directFallback <= directComfort + 1 {
+                let visibleStops = Array(stops.prefix(returnedStopLimit))
+                let windowComplete = stops.count <= returnedStopLimit
+                let visibleMeters = windowComplete
+                    ? graphMeters + [directFallback]
+                    : Array(graphMeters.prefix(visibleStops.count))
                 return FuelChainResponse(
                     status: "complete", error: nil, message: nil,
                     regionIds: GraphPackStore.regionIds(containingAny: [
                         start.locationCoordinate, end.locationCoordinate
                     ]),
-                    stops: stops, graphMeters: graphMeters,
+                    stops: visibleStops, graphMeters: visibleMeters,
                     diagnostics: FuelChainDiagnostics(
                         strategy: "pack-forward", states: stops.count + 1,
                         dijkstraPops: nil, matchedFuel: stations.count, elapsedMs: nil
                     ),
-                    stationCandidates: stationCandidates
+                    stationCandidates: stationCandidates,
+                    windowComplete: windowComplete
                 )
             }
 
             if stops.count >= maximumStops, req.fuel.allowPartialWindow == true {
+                let visibleStops = Array(stops.prefix(returnedStopLimit))
                 return FuelChainResponse(
                     status: "complete", error: nil, message: nil,
                     regionIds: GraphPackStore.regionIds(containingAny: [
                         start.locationCoordinate, end.locationCoordinate
                     ]),
-                    stops: stops, graphMeters: graphMeters,
+                    stops: visibleStops,
+                    graphMeters: Array(graphMeters.prefix(visibleStops.count)),
                     diagnostics: FuelChainDiagnostics(
                         strategy: "pack-forward-window", states: stops.count,
                         dijkstraPops: nil, matchedFuel: stations.count, elapsedMs: nil
@@ -294,6 +332,7 @@ final class PackRoutingSource: RoutingSource {
             )
             let departureID = stops.last?.id ?? "start"
             var evaluated: [FuelItinerary.ProfileFuelCandidate] = []
+            var evaluatedRoutesByID: [String: OnDeviceRouter.Result] = [:]
             // Match live: route-score every geographically bounded candidate.
             // Reachability keeps the rider safe; profile quality decides which
             // safe pump is worth riding to.
@@ -308,8 +347,8 @@ final class PackRoutingSource: RoutingSource {
                     profile: req.profile,
                     allowUnknown: req.accessPolicy.motorizedUnknown,
                     avoidEdgeIds: req.options?.avoidEdgeIds ?? [],
-                    priorEdgeIds: Set(req.options?.priorEdgeIds ?? []),
-                    arrivalEdgeId: req.options?.arrivalEdgeId,
+                    priorEdgeIds: carriedHistory,
+                    arrivalEdgeId: carriedArrival,
                     backtrackFactor: req.options?.backtrackFactor ?? 4,
                     sessionSeed: req.options?.sessionSeed ?? 0,
                     maxRouteMeters: firstCap,
@@ -333,6 +372,7 @@ final class PackRoutingSource: RoutingSource {
                     ))
                     continue
                 }
+                evaluatedRoutesByID[candidate.id] = firstRoute
                 let destinationCap = req.fuel.destinationFuelUsedLimitMeters
                     ?? req.fuel.usableRangeMeters
                 let continuationResult = await packs.routeOnDeviceDetailed(
@@ -341,8 +381,8 @@ final class PackRoutingSource: RoutingSource {
                     profile: req.profile,
                     allowUnknown: req.accessPolicy.motorizedUnknown,
                     avoidEdgeIds: req.options?.avoidEdgeIds ?? [],
-                    priorEdgeIds: Set(req.options?.priorEdgeIds ?? []).union(firstRoute.edgeIds),
-                    arrivalEdgeId: firstRoute.edgeIds.last ?? req.options?.arrivalEdgeId,
+                    priorEdgeIds: carriedHistory.union(firstRoute.edgeIds),
+                    arrivalEdgeId: firstRoute.edgeIds.last ?? carriedArrival,
                     backtrackFactor: req.options?.backtrackFactor ?? 4,
                     sessionSeed: req.options?.sessionSeed ?? 0,
                     maxRouteMeters: destinationCap,
@@ -406,6 +446,9 @@ final class PackRoutingSource: RoutingSource {
                     cleanFallbackCount: clean.fallbackCount,
                     cleanMajorRoadMeters: clean.majorRoadMeters,
                     cleanRoutedMeters: clean.routedMeters,
+                    chainBacktrackMeters: firstRoute.backtrackMeters
+                        + (continuationRoute?.backtrackMeters ?? 0),
+                    chainStopCount: continuationRoute == nil ? 2 : 1,
                     progressMeters: GeoMath.progressAlongAB(from: current, to: end, point: RouteCoordinate(
                         longitude: candidate.longitude,
                         latitude: candidate.latitude
@@ -432,6 +475,29 @@ final class PackRoutingSource: RoutingSource {
                 )
             }
             guard let choice = choices.first else {
+                if let directFallback,
+                   !mustPump,
+                   !(stops.isEmpty && req.fuel.requiredFirstStationId != nil) {
+                    let visibleStops = Array(stops.prefix(returnedStopLimit))
+                    let windowComplete = stops.count <= returnedStopLimit
+                    let visibleMeters = windowComplete
+                        ? graphMeters + [directFallback]
+                        : Array(graphMeters.prefix(visibleStops.count))
+                    return FuelChainResponse(
+                        status: "complete", error: nil, message: nil,
+                        regionIds: GraphPackStore.regionIds(containingAny: [
+                            start.locationCoordinate, end.locationCoordinate
+                        ]),
+                        stops: Array(stops.prefix(returnedStopLimit)),
+                        graphMeters: visibleMeters,
+                        diagnostics: FuelChainDiagnostics(
+                            strategy: "pack-forward-hard-cap-fallback", states: stops.count + 1,
+                            dijkstraPops: nil, matchedFuel: stations.count, elapsedMs: nil
+                        ),
+                        stationCandidates: stationCandidates,
+                        windowComplete: windowComplete
+                    )
+                }
                 let routedPrefix = graphMeters.reduce(0, +)
                 let gap = max(0, req.fuel.profileMeters - routedPrefix)
                 let remaining = stops.isEmpty ? req.fuel.firstLegMaxMeters : req.fuel.usableRangeMeters
@@ -470,6 +536,12 @@ final class PackRoutingSource: RoutingSource {
                 graphMeters: meters
             ))
             current = RouteCoordinate(longitude: station.longitude, latitude: station.latitude)
+            // Repeated edges and immediate U-turns remain expensive on every
+            // downstream hop, not just the first request in the chain.
+            if let route = evaluatedRoutesByID[station.id] {
+                carriedHistory.formUnion(route.edgeIds)
+                carriedArrival = route.edgeIds.last ?? carriedArrival
+            }
         }
         let routedPrefix = graphMeters.reduce(0, +)
         let gap = max(0, req.fuel.profileMeters - routedPrefix)

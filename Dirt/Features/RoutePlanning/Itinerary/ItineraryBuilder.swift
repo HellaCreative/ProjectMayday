@@ -1014,9 +1014,15 @@ final class ItineraryBuilder {
         }
 
         let firstCap = max(0, fuel.usableMeters - fuelUsedAtStart)
-        let stopsNeeded = meters <= firstCap + 1
-            ? 0
-            : Int(ceil((meters - firstCap) / fuel.usableMeters))
+        let firstComfortCap = FuelItinerary.comfortCapMeters(
+            firstLegMaxMeters: firstCap,
+            usableRangeMeters: fuel.usableMeters
+        )
+        let stopsNeeded = FuelItinerary.fuelStopCountNeeded(
+            profileMeters: meters,
+            firstLegMaxMeters: firstCap,
+            usableRangeMeters: fuel.usableMeters
+        )
         RoutingDebugLog.shared.event(
             "fuel need riderLeg=\(riderLeg.id) profileMeters=\(Int(meters)) " +
                 "usable=\(Int(fuel.usableMeters)) stopsNeeded=\(stopsNeeded)"
@@ -1026,7 +1032,7 @@ final class ItineraryBuilder {
         let requirePumpBeforeWaypoint = forceFuelStop || (waypointFuelReset == nil
             && destinationFuelUsedLimitMeters.map { arrivalWithoutPump > $0 + 1 } == true)
 
-        if meters <= firstCap + 1, !requirePumpBeforeWaypoint {
+        if meters <= firstComfortCap + 1, !requirePumpBeforeWaypoint {
             let arrival = waypointFuelReset == nil ? fuelUsedAtStart + meters : 0
             if let reset = waypointFuelReset {
                 RoutingDebugLog.shared.event(
@@ -1083,9 +1089,11 @@ final class ItineraryBuilder {
             )
             let requiredStationID = riderLeg.fuelStopOverrides[departureAnchorID]
             let remainingProfileMeters = max(0, meters - routedMeters)
-            let remainingStops = remainingProfileMeters <= windowFirstCap + 1
-                ? 0
-                : Int(ceil((remainingProfileMeters - windowFirstCap) / fuel.usableMeters))
+            let remainingStops = FuelItinerary.fuelStopCountNeeded(
+                profileMeters: remainingProfileMeters,
+                firstLegMaxMeters: windowFirstCap,
+                usableRangeMeters: fuel.usableMeters
+            )
             let chain: FuelChainResponse
             do {
                 chain = try await source.fuelChain(FuelChainRequest(
@@ -1109,7 +1117,12 @@ final class ItineraryBuilder {
                     arrivalEdgeId: sublegHistory.arrivalEdgeID,
                     backtrackFactor: 4,
                     excludedStationIds: Array(excluded),
-                    windowMaxStops: usesWindows ? 1 : nil,
+                    // Rendering remains progressive, but selection sees several
+                    // anchors so a rural/profile-correct chain can beat the first
+                    // feasible town pump.
+                    windowMaxStops: usesWindows
+                        ? min(4, max(1, remainingStops + 1))
+                        : nil,
                     allowPartialWindow: usesWindows,
                     windowTimeBudgetMs: min(5_800, remainingBudgetMs),
                     requiredFirstStationId: requiredStationID
