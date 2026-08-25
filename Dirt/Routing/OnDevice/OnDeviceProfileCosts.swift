@@ -264,7 +264,9 @@ nonisolated enum OnDeviceProfileCosts {
             return target / current
         }
         if profile == .cleanest { return road == "arterial" ? 8 : 40 }
-        let target = 12.0
+        // Preserve the proven Dirt/Balanced baseline. The Clean control must
+        // never retune adventure profiles as a side effect.
+        let target = 3.0
         if current >= target { return 1 }
         return target / current
     }

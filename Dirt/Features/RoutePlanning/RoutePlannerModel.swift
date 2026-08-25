@@ -52,11 +52,15 @@ final class RoutePlannerModel {
             riderLegID = riderLeg.id
             start = builtLeg.fromCoordinate
             end = builtLeg.toCoordinate
-            profile = builtLeg.routeProfile
-                ?? departureFuelStopID.flatMap { riderLeg.hopOverrides[$0] }
-                ?? riderLeg.profile
+            let departureID = departureFuelStopID ?? riderLeg.from.uuidString
+            let effectiveProfile = builtLeg.routeProfile
+                ?? riderLeg.effectiveProfile(departingFrom: departureID)
+            profile = effectiveProfile
             allowUnknown = riderLeg.allowUnknown
-            avoidMotorways = riderLeg.avoidMotorways
+            avoidMotorways = riderLeg.avoidsMajorHighways(
+                departingFrom: departureID,
+                effectiveProfile: effectiveProfile
+            )
             preferBackRoads = riderLeg.preferBackRoads
             response = builtLeg.response
             if case .pending = status { isRouting = true } else { isRouting = false }
@@ -87,7 +91,10 @@ final class RoutePlannerModel {
             self.end = end
             profile = riderLeg.profile
             allowUnknown = riderLeg.allowUnknown
-            avoidMotorways = riderLeg.avoidMotorways
+            avoidMotorways = riderLeg.avoidsMajorHighways(
+                departingFrom: riderLeg.from.uuidString,
+                effectiveProfile: riderLeg.profile
+            )
             preferBackRoads = riderLeg.preferBackRoads
             response = nil
             if case .pending = status { isRouting = true } else { isRouting = false }
@@ -1059,7 +1066,19 @@ final class RoutePlannerModel {
 
     func setStageAvoidMotorways(_ on: Bool, at index: Int) {
         guard stages.indices.contains(index) else { return }
-        apply(.setAvoidMotorways(legID: stages[index].riderLegID, on), source: "card")
+        let stage = stages[index]
+        if let departureID = stage.departureFuelStopID {
+            apply(
+                .setHopAvoidMotorways(
+                    legID: stage.riderLegID,
+                    stationID: departureID,
+                    on
+                ),
+                source: "card-hop-highway"
+            )
+        } else {
+            apply(.setAvoidMotorways(legID: stage.riderLegID, on), source: "card")
+        }
     }
 
     func setStagePreferBackRoads(_ on: Bool, at index: Int) {

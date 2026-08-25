@@ -324,10 +324,13 @@ test("NS to NB forward feeler stays graph-only while targeting the Tantramar doo
   };
   const calls = [];
   const result = await planCrossRegionFuelChain({
-    profile: "dirt",
+    profile: "cleanest",
     locations: [start, destination],
     accessPolicy: { motorizedPermissive: true, motorizedUnknown: false },
-    options: {}
+    options: {
+      cleanMetroMultiplier: 14,
+      avoidMotorways: true
+    }
   }, {
     mode: "canada-chain",
     regionIds: ["ns", "nb"]
@@ -377,6 +380,8 @@ test("NS to NB forward feeler stays graph-only while targeting the Tantramar doo
   assert.deepEqual(result.stops.map((row) => row.id), ["ns-forward-pump"]);
   assert.equal(calls.length, 1);
   assert.equal(calls[0].graphOnlyFeeler, true);
+  assert.equal(calls[0].cleanMetroMultiplier, 14);
+  assert.equal(calls[0].avoidMotorways, true);
   assert.deepEqual(calls[0].destination, tantramar);
 });
 

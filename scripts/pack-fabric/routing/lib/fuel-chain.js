@@ -584,6 +584,8 @@ async function planFuelChainOnRuntime({
   minimumFuelStops = 0,
   destinationFuelUsedLimitMeters = null,
   avoidEdgeIds = [],
+  cleanMetroMultiplier = null,
+  avoidMotorways = false,
   priorEdgeIds = [],
   arrivalEdgeId = null,
   backtrackFactor = 4,
@@ -699,6 +701,8 @@ async function planFuelChainOnRuntime({
           priorEdgeIds: [...(evaluationHistory || [])],
           arrivalEdgeId: evaluationArrival,
           backtrackFactor,
+          cleanMetroMultiplier,
+          avoidMotorways: avoidMotorways === true,
           directExtraBudgetMeters: undefined,
           maxPathMeters: maxMeters
         }
@@ -1420,6 +1424,8 @@ async function planCrossRegionFuelChain(body, selection, fuelOptions, dependenci
         ? fuelOptions.destinationFuelUsedLimitMeters
         : null,
       avoidEdgeIds: ((body.options || {}).avoidEdgeIds || []),
+      cleanMetroMultiplier: (body.options || {}).cleanMetroMultiplier,
+      avoidMotorways: (body.options || {}).avoidMotorways === true,
       priorEdgeIds: ((body.options || {}).priorEdgeIds || []),
       arrivalEdgeId: (body.options || {}).arrivalEdgeId || null,
       backtrackFactor: (body.options || {}).backtrackFactor || 4,
@@ -1768,6 +1774,8 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
     minimumFuelStops: Number(fuelOptions.minimumFuelStops) || 0,
     destinationFuelUsedLimitMeters: fuelOptions.destinationFuelUsedLimitMeters,
     avoidEdgeIds: options.avoidEdgeIds || [],
+    cleanMetroMultiplier: options.cleanMetroMultiplier,
+    avoidMotorways: options.avoidMotorways === true,
     priorEdgeIds: options.priorEdgeIds || [],
     arrivalEdgeId: options.arrivalEdgeId || null,
     backtrackFactor: options.backtrackFactor || 4,

@@ -147,6 +147,74 @@ struct RiderItineraryTests {
         #expect(change.itinerary.legs.allSatisfy { $0.allowUnknown })
     }
 
+    @Test func cleanFuelHopOnDirtParentDefaultsToAvoidingMajorHighwaysAndTogglesIndependently() throws {
+        let initial = itinerary([point(0), point(1)], profile: .dirt)
+        let legID = try #require(initial.legs.first?.id)
+        let firstClean = reduce(
+            initial,
+            .setHopProfile(legID: legID, stationID: "fuel-a", .cleanest)
+        )
+        let bothClean = reduce(
+            firstClean.itinerary,
+            .setHopProfile(legID: legID, stationID: "fuel-b", .cleanest)
+        )
+        let cleanLeg = try #require(bothClean.itinerary.legs.first)
+
+        #expect(cleanLeg.profile == .dirt)
+        #expect(cleanLeg.avoidMotorways == false)
+        #expect(cleanLeg.avoidsMajorHighways(departingFrom: "fuel-a"))
+        #expect(cleanLeg.avoidsMajorHighways(departingFrom: "fuel-b"))
+        #expect(cleanLeg.hopAvoidMotorways.isEmpty)
+
+        let allowFuelA = reduce(
+            bothClean.itinerary,
+            .setHopAvoidMotorways(legID: legID, stationID: "fuel-a", false)
+        )
+        let allowedLeg = try #require(allowFuelA.itinerary.legs.first)
+
+        #expect(allowFuelA.rebuildFromLegIndex == 0)
+        #expect(allowFuelA.replanFromStationID == "fuel-a")
+        #expect(allowedLeg.hopAvoidMotorways["fuel-a"] == false)
+        #expect(!allowedLeg.avoidsMajorHighways(departingFrom: "fuel-a"))
+        #expect(allowedLeg.avoidsMajorHighways(departingFrom: "fuel-b"))
+
+        let avoidFuelA = reduce(
+            allowFuelA.itinerary,
+            .setHopAvoidMotorways(legID: legID, stationID: "fuel-a", true)
+        )
+        let avoidedLeg = try #require(avoidFuelA.itinerary.legs.first)
+
+        #expect(avoidFuelA.rebuildFromLegIndex == 0)
+        #expect(avoidFuelA.replanFromStationID == "fuel-a")
+        #expect(avoidedLeg.hopAvoidMotorways["fuel-a"] == true)
+        #expect(avoidedLeg.avoidsMajorHighways(departingFrom: "fuel-a"))
+        #expect(avoidedLeg.avoidsMajorHighways(departingFrom: "fuel-b"))
+    }
+
+    @Test func pruningFuelHopProfilesAlsoPrunesTheirHighwayPolicies() throws {
+        var current = itinerary([point(0), point(1)], profile: .dirt)
+        let leg = try #require(current.legs.first)
+        let departure = leg.from.uuidString
+        for anchor in [departure, "active-fuel", "stale-fuel"] {
+            current = reduce(
+                current,
+                .setHopProfile(legID: leg.id, stationID: anchor, .cleanest)
+            ).itinerary
+            current = reduce(
+                current,
+                .setHopAvoidMotorways(legID: leg.id, stationID: anchor, false)
+            ).itinerary
+        }
+
+        current.pruneHopOverrides(to: [leg.id: ["active-fuel"]])
+
+        let pruned = try #require(current.legs.first)
+        #expect(Set(pruned.hopOverrides.keys) == [departure, "active-fuel"])
+        #expect(Set(pruned.hopAvoidMotorways.keys) == [departure, "active-fuel"])
+        #expect(pruned.hopOverrides["stale-fuel"] == nil)
+        #expect(pruned.hopAvoidMotorways["stale-fuel"] == nil)
+    }
+
     @Test func randomActionSequencesPreserveEveryInvariant() {
         var random = TestRandom(seed: 0xD1_47)
         for _ in 0..<100 {
@@ -181,6 +249,15 @@ struct RiderItineraryTests {
     @Test func codableRoundTripPreservesItinerary() throws {
         var original = itinerary([point(0), point(1), point(2)], profile: .dirt, allowUnknown: true)
         original = reduce(original, .markImpassable(edgeIDs: ["edge-a", "edge-b"])).itinerary
+        let legID = try #require(original.legs.first?.id)
+        original = reduce(
+            original,
+            .setHopProfile(legID: legID, stationID: "fuel-a", .cleanest)
+        ).itinerary
+        original = reduce(
+            original,
+            .setHopAvoidMotorways(legID: legID, stationID: "fuel-a", false)
+        ).itinerary
 
         let data = try JSONEncoder().encode(original)
         let decoded = try JSONDecoder().decode(RiderItinerary.self, from: data)

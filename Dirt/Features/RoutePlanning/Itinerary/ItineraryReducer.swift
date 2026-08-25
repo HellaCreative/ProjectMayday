@@ -98,6 +98,7 @@ nonisolated func reduce(
         for index in affected {
             legs[index].profile = profile
             legs[index].hopOverrides.removeAll()
+            legs[index].hopAvoidMotorways.removeAll()
             legs[index].fuelStopOverrides.removeAll()
             if profile == .cleanest {
                 legs[index].allowUnknown = false
@@ -122,6 +123,23 @@ nonisolated func reduce(
         else { return unchanged(itinerary) }
         var legs = itinerary.legs
         legs[index].hopOverrides[stationID] = profile
+        return changed(
+            itinerary,
+            waypoints: itinerary.waypoints,
+            legs: legs,
+            rebuildFrom: index,
+            replanFromStationID: stationID == legs[index].from.uuidString ? nil : stationID
+        )
+
+    case .setHopAvoidMotorways(let legID, let stationID, let avoidMotorways):
+        guard !stationID.isEmpty,
+              let index = itinerary.legs.firstIndex(where: { $0.id == legID }),
+              itinerary.legs[index].effectiveProfile(departingFrom: stationID) == .cleanest,
+              itinerary.legs[index].avoidsMajorHighways(departingFrom: stationID)
+                != avoidMotorways
+        else { return unchanged(itinerary) }
+        var legs = itinerary.legs
+        legs[index].hopAvoidMotorways[stationID] = avoidMotorways
         return changed(
             itinerary,
             waypoints: itinerary.waypoints,

@@ -23,6 +23,10 @@ nonisolated struct RiderLeg: Identifiable, Equatable, Codable, Sendable {
     /// A generated fuel hop inherits the rider-leg profile unless the pump it
     /// departs from has an explicit rider override.
     var hopOverrides: [String: RouteProfile]
+    /// Clean's major-highway policy is owned by the same generated fuel hop
+    /// that owns its profile override. Values are the internal inverse of the
+    /// rider-facing "Allow major highways" control.
+    var hopAvoidMotorways: [String: Bool]
     /// Rider-selected pump keyed by the departure waypoint/station anchor.
     /// This is distinct from hopOverrides, which changes routing profile only.
     var fuelStopOverrides: [String: String]
@@ -35,6 +39,7 @@ nonisolated struct RiderLeg: Identifiable, Equatable, Codable, Sendable {
         avoidMotorways: Bool = true,
         preferBackRoads: Bool = false,
         hopOverrides: [String: RouteProfile] = [:],
+        hopAvoidMotorways: [String: Bool] = [:],
         fuelStopOverrides: [String: String] = [:]
     ) {
         id = RiderItinerary.legID(from: from, to: to)
@@ -45,11 +50,29 @@ nonisolated struct RiderLeg: Identifiable, Equatable, Codable, Sendable {
         self.avoidMotorways = profile == .cleanest ? avoidMotorways : false
         self.preferBackRoads = false
         self.hopOverrides = hopOverrides
+        self.hopAvoidMotorways = hopAvoidMotorways
         self.fuelStopOverrides = fuelStopOverrides
     }
 
+    func effectiveProfile(departingFrom anchorID: String) -> RouteProfile {
+        hopOverrides[anchorID] ?? profile
+    }
+
+    func avoidsMajorHighways(
+        departingFrom anchorID: String,
+        effectiveProfile: RouteProfile? = nil
+    ) -> Bool {
+        let activeProfile = effectiveProfile ?? self.effectiveProfile(departingFrom: anchorID)
+        guard activeProfile == .cleanest else { return false }
+        if let hopValue = hopAvoidMotorways[anchorID] { return hopValue }
+        // A Clean override on a Dirt/Balanced parent has no parent Clean
+        // preference to inherit. Its honest default is rider-facing Allow OFF.
+        return profile == .cleanest ? avoidMotorways : true
+    }
+
     private enum CodingKeys: String, CodingKey {
-        case id, from, to, profile, allowUnknown, avoidMotorways, preferBackRoads, hopOverrides, fuelStopOverrides
+        case id, from, to, profile, allowUnknown, avoidMotorways, preferBackRoads
+        case hopOverrides, hopAvoidMotorways, fuelStopOverrides
     }
 
     init(from decoder: Decoder) throws {
@@ -71,6 +94,9 @@ nonisolated struct RiderLeg: Identifiable, Equatable, Codable, Sendable {
         }
         hopOverrides = try container.decodeIfPresent(
             [String: RouteProfile].self, forKey: .hopOverrides
+        ) ?? [:]
+        hopAvoidMotorways = try container.decodeIfPresent(
+            [String: Bool].self, forKey: .hopAvoidMotorways
         ) ?? [:]
         fuelStopOverrides = try container.decodeIfPresent(
             [String: String].self, forKey: .fuelStopOverrides
@@ -131,10 +157,14 @@ nonisolated struct RiderItinerary: Equatable, Codable, Sendable {
     }
 
     mutating func pruneHopOverrides(to activeStationIDs: [UUID: Set<String>]) {
-        for index in legs.indices where !legs[index].hopOverrides.isEmpty {
+        for index in legs.indices where
+            !legs[index].hopOverrides.isEmpty || !legs[index].hopAvoidMotorways.isEmpty {
             var active = activeStationIDs[legs[index].id] ?? []
             active.insert(legs[index].from.uuidString)
             legs[index].hopOverrides = legs[index].hopOverrides.filter { active.contains($0.key) }
+            legs[index].hopAvoidMotorways = legs[index].hopAvoidMotorways.filter {
+                active.contains($0.key)
+            }
         }
     }
 

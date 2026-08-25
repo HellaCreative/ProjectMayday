@@ -292,6 +292,83 @@ struct RoutePlannerModelItineraryTests {
         #expect(riderLeg.hopOverrides["irving"] == .balanced)
     }
 
+    @Test func cleanFuelHopInsideDirtRouteOwnsItsHighwayPolicyAndPropagatesItToRequests() async throws {
+        let prefs = FuelPrefsRestore()
+        defer { prefs.restore() }
+        FuelRangePrefs.kilometers = 220
+        FuelRangePrefs.reservePercent = 5
+
+        let first = point(0)
+        let pump = point(0.25)
+        let second = point(0.5)
+        let source = PlannerFakeRoutingSource()
+        source.distanceOverrides[key(first, second)] = 340_000
+        source.distanceOverrides[key(first, pump)] = 170_000
+        source.distanceOverrides[key(pump, second)] = 170_000
+        source.fuelStops = [fuelStop("irving", name: "Irving", at: pump)]
+        let model = makeModel(source: source)
+        model.apply(
+            .replaceAll(waypoints: [first, second], profile: .dirt, allowUnknown: false, avoidMotorways: false, preferBackRoads: false),
+            source: "seed"
+        )
+        await model.waitForCanonicalBuildForTesting()
+        #expect(model.stages.count == 2)
+
+        source.routeRequests.removeAll()
+        source.fuelChainRequests.removeAll()
+        model.setFuelHopProfile(.cleanest, at: 1)
+        await model.waitForCanonicalBuildForTesting()
+
+        var riderLeg = try #require(model.itinerary.legs.first)
+        #expect(riderLeg.profile == .dirt)
+        #expect(riderLeg.hopOverrides["irving"] == .cleanest)
+        #expect(riderLeg.hopAvoidMotorways["irving"] == nil)
+        #expect(model.stages[0].profile == .dirt)
+        #expect(!model.stages[0].avoidMotorways)
+        #expect(model.stages[1].profile == .cleanest)
+        #expect(model.stages[1].avoidMotorways)
+        #expect(source.routeRequests.contains {
+            $0.profile == .cleanest && $0.options?.avoidMotorways == true
+        })
+        #expect(source.fuelChainRequests.contains {
+            $0.profile == .cleanest && $0.options?.avoidMotorways == true
+        })
+
+        source.routeRequests.removeAll()
+        source.fuelChainRequests.removeAll()
+        model.setStageAvoidMotorways(false, at: 1)
+        await model.waitForCanonicalBuildForTesting()
+
+        riderLeg = try #require(model.itinerary.legs.first)
+        #expect(riderLeg.profile == .dirt)
+        #expect(riderLeg.hopAvoidMotorways["irving"] == false)
+        #expect(!model.stages[0].avoidMotorways)
+        #expect(model.stages[1].profile == .cleanest)
+        #expect(!model.stages[1].avoidMotorways)
+        #expect(source.routeRequests.contains {
+            $0.profile == .cleanest && $0.options?.avoidMotorways != true
+        })
+        #expect(source.fuelChainRequests.contains {
+            $0.profile == .cleanest && $0.options?.avoidMotorways != true
+        })
+
+        source.routeRequests.removeAll()
+        source.fuelChainRequests.removeAll()
+        model.setStageAvoidMotorways(true, at: 1)
+        await model.waitForCanonicalBuildForTesting()
+
+        riderLeg = try #require(model.itinerary.legs.first)
+        #expect(riderLeg.hopAvoidMotorways["irving"] == true)
+        #expect(model.stages[1].profile == .cleanest)
+        #expect(model.stages[1].avoidMotorways)
+        #expect(source.routeRequests.contains {
+            $0.profile == .cleanest && $0.options?.avoidMotorways == true
+        })
+        #expect(source.fuelChainRequests.contains {
+            $0.profile == .cleanest && $0.options?.avoidMotorways == true
+        })
+    }
+
     @Test func tappingVisibleAlternativePumpReplacesTheFuelWaypoint() async throws {
         let prefs = FuelPrefsRestore()
         defer { prefs.restore() }
@@ -485,7 +562,28 @@ private final class PlannerFakeRoutingSource: RoutingSource {
                 name: candidate.name, brand: nil, address: nil, graphMeters: candidate.meters
             )]
         } else {
-            selectedStops = fuelStops
+            let endpoints = (
+                RouteCoordinate(
+                    longitude: req.locations[0].longitude,
+                    latitude: req.locations[0].latitude
+                ),
+                RouteCoordinate(
+                    longitude: req.locations[1].longitude,
+                    latitude: req.locations[1].latitude
+                )
+            )
+            if let remaining = distanceOverrides[key(endpoints.0, endpoints.1)],
+               remaining <= req.fuel.firstLegMaxMeters + 1 {
+                selectedStops = []
+            } else if let currentIndex = fuelStops.firstIndex(where: {
+                $0.coordinate == endpoints.0
+            }) {
+                selectedStops = fuelStops.indices.contains(currentIndex + 1)
+                    ? [fuelStops[currentIndex + 1]]
+                    : []
+            } else {
+                selectedStops = fuelStops.first.map { [$0] } ?? []
+            }
         }
         return FuelChainResponse(
             status: "complete", error: nil, message: nil, regionIds: ["test"],

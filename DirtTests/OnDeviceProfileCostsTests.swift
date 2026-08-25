@@ -272,8 +272,31 @@ struct OnDeviceProfileCostsTests {
         #expect(cleanFreeway == 40)
         #expect(cleanRamp == 40)
         #expect(allowedArterial == 1)
-        #expect(balancedArterial > 1)
-        #expect(dirtArterial > 1)
+        let balancedBase = OnDeviceProfileCosts.roadClassWeight(
+            profile: .balanced, roadClassCode: 2
+        )
+        let dirtBase = OnDeviceProfileCosts.roadClassWeight(
+            profile: .dirt, roadClassCode: 2
+        )
+        #expect(abs(balancedBase * balancedArterial - max(3, balancedBase)) < 0.000_001)
+        #expect(abs(dirtBase * dirtArterial - max(3, dirtBase)) < 0.000_001)
+
+        for profile in [RouteProfile.balanced, .dirt] {
+            for roadClassCode in [1, 2, 10] { // freeway, arterial, ramp
+                let base = OnDeviceProfileCosts.roadClassWeight(
+                    profile: profile, roadClassCode: roadClassCode
+                )
+                let multiplier = OnDeviceProfileCosts.majorHighwayAvoidMult(
+                    profile: profile,
+                    roadClassCode: roadClassCode,
+                    metersFromStart: 80_000,
+                    metersToDestination: 80_000,
+                    startOnMajorHighway: false,
+                    endOnMajorHighway: false
+                )
+                #expect(abs(base * multiplier - max(3, base)) < 0.000_001)
+            }
+        }
     }
 
     @Test func majorHighwaysStayAvoidedUntilNearAPinnedHighway() {

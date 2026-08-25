@@ -280,7 +280,9 @@ function majorHighwayAvoidMult(
   if (profile === "cleanest") {
     return roadTrackClass === "arterial" ? 8 : 40;
   }
-  const target = 12.0;
+  // Preserve the proven Dirt/Balanced baseline. Clean's rider control must not
+  // retune adventure profiles as a side effect.
+  const target = 3.0;
   if (current >= target) return 1;
   return target / current;
 }

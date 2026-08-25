@@ -245,6 +245,8 @@ final class ItineraryBuilder {
                     profileMeters: meters,
                     riderLegId: riderLeg.id.uuidString,
                     avoidEdgeIds: Array(itinerary.impassableEdgeIDs),
+                    cleanMetroMultiplier: CleanMetroDebugPrefs.requestMultiplier,
+                    avoidMotorways: riderLeg.avoidMotorways,
                     probeFirstReachableStation: true,
                     windowTimeBudgetMs: min(
                         2_500,
@@ -692,6 +694,10 @@ final class ItineraryBuilder {
                     ?? riderLeg.from.uuidString
                 let activeProfile = riderLeg.hopOverrides[departureID]
                     ?? riderLeg.profile
+                let activeAvoidMotorways = riderLeg.avoidsMajorHighways(
+                    departingFrom: departureID,
+                    effectiveProfile: activeProfile
+                )
                 let requiredStationID = riderLeg.fuelStopOverrides[departureID]
                 onFuelStatus("Calculating fuel range")
 
@@ -709,6 +715,8 @@ final class ItineraryBuilder {
                         profileMeters: straightLineMeters(current, riderDestination.coordinate),
                         riderLegId: riderLeg.id.uuidString,
                         avoidEdgeIds: Array(itinerary.impassableEdgeIDs),
+                        cleanMetroMultiplier: CleanMetroDebugPrefs.requestMultiplier,
+                        avoidMotorways: activeAvoidMotorways,
                         priorEdgeIds: history.edgeIDs,
                         arrivalEdgeId: history.arrivalEdgeID,
                         backtrackFactor: 4,
@@ -812,7 +820,7 @@ final class ItineraryBuilder {
                         maxPathMeters: remaining,
                         regionalHopMinimumMeters: chain.graphMeters ?? [],
                         history: history,
-                        avoidMotorways: riderLeg.avoidMotorways,
+                        avoidMotorways: activeAvoidMotorways,
                         preferBackRoads: riderLeg.preferBackRoads
                     ))
                     let meters = try responseMeters(response)
@@ -929,6 +937,7 @@ final class ItineraryBuilder {
         let from = resumeAfterStation?.coordinate ?? itinerary.waypoints[index].coordinate
         let to = itinerary.waypoints[index + 1].coordinate
         let riderDepartureID = riderLeg.from.uuidString
+        let initialDepartureID = resumeAfterStation?.stationID ?? riderDepartureID
         var activeProfile = resumeAfterStation?.stationID.flatMap {
             riderLeg.hopOverrides[$0]
         } ?? riderLeg.hopOverrides[riderDepartureID] ?? defaultProfile
@@ -945,7 +954,10 @@ final class ItineraryBuilder {
                 avoidEdgeIDs: itinerary.impassableEdgeIDs,
                 maxPathMeters: nil,
                 history: history,
-                avoidMotorways: riderLeg.avoidMotorways,
+                avoidMotorways: riderLeg.avoidsMajorHighways(
+                    departingFrom: initialDepartureID,
+                    effectiveProfile: activeProfile
+                ),
                 preferBackRoads: riderLeg.preferBackRoads
             ))
         } else {
@@ -963,7 +975,10 @@ final class ItineraryBuilder {
                     avoidEdgeIDs: itinerary.impassableEdgeIDs,
                     maxPathMeters: nil,
                     history: history,
-                    avoidMotorways: riderLeg.avoidMotorways,
+                    avoidMotorways: riderLeg.avoidsMajorHighways(
+                        departingFrom: initialDepartureID,
+                        effectiveProfile: activeProfile
+                    ),
                     preferBackRoads: riderLeg.preferBackRoads
                 ))
             guard active(itinerary) else { throw CancellationError() }
@@ -1040,12 +1055,14 @@ final class ItineraryBuilder {
                 throw RoutingError.server("The long-route fuel chain exceeded 16 planning windows.")
             }
             let windowFirstCap = max(0, fuel.usableMeters - used)
-            let departureAnchorID = windowStart == from
+            let departureAnchorID = (windowStart == from
                 ? (resumeAfterStation?.stationID ?? riderDepartureID)
-                : output.last?.endsAtFuelStop?.stationID
-            let requiredStationID = departureAnchorID.flatMap {
-                riderLeg.fuelStopOverrides[$0]
-            }
+                : output.last?.endsAtFuelStop?.stationID) ?? riderDepartureID
+            let activeAvoidMotorways = riderLeg.avoidsMajorHighways(
+                departingFrom: departureAnchorID,
+                effectiveProfile: activeProfile
+            )
+            let requiredStationID = riderLeg.fuelStopOverrides[departureAnchorID]
             let remainingProfileMeters = max(0, meters - routedMeters)
             let remainingStops = remainingProfileMeters <= windowFirstCap + 1
                 ? 0
@@ -1067,6 +1084,8 @@ final class ItineraryBuilder {
                     profileMeters: remainingProfileMeters,
                     riderLegId: riderLeg.id.uuidString,
                     avoidEdgeIds: Array(itinerary.impassableEdgeIDs),
+                    cleanMetroMultiplier: CleanMetroDebugPrefs.requestMultiplier,
+                    avoidMotorways: activeAvoidMotorways,
                     priorEdgeIds: sublegHistory.edgeIDs,
                     arrivalEdgeId: sublegHistory.arrivalEdgeID,
                     backtrackFactor: 4,
@@ -1119,6 +1138,9 @@ final class ItineraryBuilder {
                 let hopProfile = subIndex == 0
                     ? activeProfile
                     : (riderLeg.hopOverrides[stops[subIndex - 1].id] ?? defaultProfile)
+                let hopDepartureID = subIndex == 0
+                    ? departureAnchorID
+                    : stops[subIndex - 1].id
                 let hopAllowUnknown = hopProfile == .cleanest ? false : riderLeg.allowUnknown
                 let request = routeRequest(
                     profile: hopProfile,
@@ -1128,7 +1150,10 @@ final class ItineraryBuilder {
                     avoidEdgeIDs: itinerary.impassableEdgeIDs,
                     maxPathMeters: cap,
                     history: sublegHistory,
-                    avoidMotorways: riderLeg.avoidMotorways,
+                    avoidMotorways: riderLeg.avoidsMajorHighways(
+                        departingFrom: hopDepartureID,
+                        effectiveProfile: hopProfile
+                    ),
                     preferBackRoads: riderLeg.preferBackRoads
                 )
                 let response = try await source.route(request)

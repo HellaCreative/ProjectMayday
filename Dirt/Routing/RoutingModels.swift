@@ -241,6 +241,8 @@ struct FuelChainRequest: Codable, Sendable {
         profileMeters: Double,
         riderLegId: String,
         avoidEdgeIds: [String] = [],
+        cleanMetroMultiplier: Double? = nil,
+        avoidMotorways: Bool = false,
         priorEdgeIds: [String] = [],
         arrivalEdgeId: String? = nil,
         backtrackFactor: Double? = nil,
@@ -262,14 +264,18 @@ struct FuelChainRequest: Codable, Sendable {
             motorizedPermissive: true,
             motorizedUnknown: profile == .cleanest ? false : allowUnknown
         )
+        let metro = profile == .cleanest ? cleanMetroMultiplier : nil
+        let scopedAvoid = profile == .cleanest && avoidMotorways
         options = avoidEdgeIds.isEmpty && priorEdgeIds.isEmpty && arrivalEdgeId == nil
-            && backtrackFactor == nil
+            && backtrackFactor == nil && metro == nil && !scopedAvoid
             ? nil
             : RouteRequestOptions(
                 avoidEdgeIds: avoidEdgeIds,
                 priorEdgeIds: priorEdgeIds,
                 arrivalEdgeId: arrivalEdgeId,
-                backtrackFactor: backtrackFactor
+                backtrackFactor: backtrackFactor,
+                cleanMetroMultiplier: metro,
+                avoidMotorways: scopedAvoid
             )
         fuel = FuelChainConstraint(
             usableRangeMeters: usableRangeMeters,
