@@ -747,7 +747,7 @@ final class ItineraryBuilder {
                             max(100, progressWatchdog.remainingMilliseconds())
                         ),
                         requiredFirstStationId: requiredStationID,
-                        forwardFeeler: true
+                        forwardFeeler: false
                     ))
                 } catch is CancellationError {
                     return dropped(itinerary, committed: committed, cancelled: true)

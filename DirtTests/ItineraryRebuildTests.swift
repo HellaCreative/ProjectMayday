@@ -350,6 +350,51 @@ struct FuelItineraryTests {
         #expect(ranked.map(\.id) == ["osm:window", "osm:wall"])
     }
 
+    @Test func routedFuelCandidatesPutProfileQualityBeforeTankComfort() {
+        let point = RouteCoordinate(longitude: -63, latitude: 45)
+        let quality = poi("quality", point)
+        let comfort = poi("comfort", point)
+        func candidate(
+            _ fuel: POIFeature,
+            meters: Double,
+            dirt: Double,
+            fallback: Int = 0,
+            major: Double = 0,
+            rank: Int
+        ) -> FuelItinerary.ProfileFuelCandidate {
+            FuelItinerary.ProfileFuelCandidate(
+                fuel: fuel,
+                routedMeters: meters,
+                chainDirtPercent: dirt,
+                validForward: true,
+                cleanFallbackCount: fallback,
+                cleanMajorRoadMeters: major,
+                cleanRoutedMeters: meters,
+                progressMeters: meters,
+                discoveryRank: rank
+            )
+        }
+        let earlyDirt = candidate(quality, meters: 40_000, dirt: 92, rank: 0)
+        let comfortablePaved = candidate(comfort, meters: 80_000, dirt: 8, rank: 1)
+        #expect(FuelItinerary.prefersProfileFuelCandidate(
+            earlyDirt, over: comfortablePaved, profile: .dirt, tankMeters: 130_000
+        ))
+
+        let earlyBalanced = candidate(quality, meters: 40_000, dirt: 50, rank: 0)
+        let comfortableDirt = candidate(comfort, meters: 80_000, dirt: 95, rank: 1)
+        #expect(FuelItinerary.prefersProfileFuelCandidate(
+            earlyBalanced, over: comfortableDirt, profile: .balanced, tankMeters: 130_000
+        ))
+
+        let earlyRural = candidate(quality, meters: 40_000, dirt: 0, rank: 0)
+        let comfortableTown = candidate(
+            comfort, meters: 80_000, dirt: 0, fallback: 1, major: 60_000, rank: 1
+        )
+        #expect(FuelItinerary.prefersProfileFuelCandidate(
+            earlyRural, over: comfortableTown, profile: .cleanest, tankMeters: 130_000
+        ))
+    }
+
     @Test func numberedWaypointOnStationIsALiveRefuelUntilDraggedOff() {
         let on = RouteCoordinate(longitude: -61.998, latitude: 45.616)
         let off = RouteCoordinate(longitude: -61.980, latitude: 45.630)

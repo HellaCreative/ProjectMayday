@@ -293,26 +293,73 @@ final class PackRoutingSource: RoutingSource {
                 excluding: visited
             )
             let departureID = stops.last?.id ?? "start"
-            var validForward = Set<String>()
-            // Match the live allocator's bounded shortlist. One-stop windows
-            // resume from the selected pump, so neither engine needs to prove
-            // a large station tree in a single request.
-            for candidate in ranked.prefix(6) {
+            var evaluated: [FuelItinerary.ProfileFuelCandidate] = []
+            // Match live: route-score every geographically bounded candidate.
+            // Reachability keeps the rider safe; profile quality decides which
+            // safe pump is worth riding to.
+            for (rank, candidate) in ranked.prefix(6).enumerated() {
                 let candidateCoordinate = CLLocationCoordinate2D(
                     latitude: candidate.latitude,
                     longitude: candidate.longitude
                 )
+                let firstResult = await packs.routeOnDeviceDetailed(
+                    from: current.locationCoordinate,
+                    to: candidateCoordinate,
+                    profile: req.profile,
+                    allowUnknown: req.accessPolicy.motorizedUnknown,
+                    avoidEdgeIds: req.options?.avoidEdgeIds ?? [],
+                    priorEdgeIds: Set(req.options?.priorEdgeIds ?? []),
+                    arrivalEdgeId: req.options?.arrivalEdgeId,
+                    backtrackFactor: req.options?.backtrackFactor ?? 4,
+                    sessionSeed: req.options?.sessionSeed ?? 0,
+                    maxRouteMeters: firstCap,
+                    regionalHopMinimumMeters: req.options?.regionalHopMinimumMeters ?? [],
+                    cleanMetroMultiplier: req.options?.cleanMetroMultiplier,
+                    avoidMotorways: req.options?.avoidMotorways == true,
+                    preferBackRoads: req.options?.preferBackRoads == true
+                )
+                guard case .success(let firstRoute) = firstResult,
+                      firstRoute.distanceMeters <= firstCap + 1
+                else {
+                    stationCandidates.append(FuelStationCandidate(
+                        id: candidate.id,
+                        meters: reachable[candidate.id] ?? 0,
+                        dirtPct: 0,
+                        departureId: departureID,
+                        latitude: candidate.latitude,
+                        longitude: candidate.longitude,
+                        name: candidate.name ?? candidate.brand,
+                        validForward: false
+                    ))
+                    continue
+                }
                 let destinationCap = req.fuel.destinationFuelUsedLimitMeters
                     ?? req.fuel.usableRangeMeters
-                let reachesDestination = await packs.shortestGraphMeters(
+                let continuationResult = await packs.routeOnDeviceDetailed(
                     from: candidateCoordinate,
                     to: end.locationCoordinate,
-                    maxMeters: destinationCap,
                     profile: req.profile,
-                    allowUnknown: req.accessPolicy.motorizedUnknown
-                ) != nil
+                    allowUnknown: req.accessPolicy.motorizedUnknown,
+                    avoidEdgeIds: req.options?.avoidEdgeIds ?? [],
+                    priorEdgeIds: Set(req.options?.priorEdgeIds ?? []).union(firstRoute.edgeIds),
+                    arrivalEdgeId: firstRoute.edgeIds.last ?? req.options?.arrivalEdgeId,
+                    backtrackFactor: req.options?.backtrackFactor ?? 4,
+                    sessionSeed: req.options?.sessionSeed ?? 0,
+                    maxRouteMeters: destinationCap,
+                    regionalHopMinimumMeters: req.options?.regionalHopMinimumMeters ?? [],
+                    cleanMetroMultiplier: req.options?.cleanMetroMultiplier,
+                    avoidMotorways: req.options?.avoidMotorways == true,
+                    preferBackRoads: req.options?.preferBackRoads == true
+                )
+                let continuationRoute: OnDeviceRouter.Result?
+                if case .success(let route) = continuationResult,
+                   route.distanceMeters <= destinationCap + 1 {
+                    continuationRoute = route
+                } else {
+                    continuationRoute = nil
+                }
                 let onward: [String: Double]
-                if reachesDestination {
+                if continuationRoute != nil {
                     onward = [:]
                 } else {
                     onward = await packs.reachableFuelMeters(
@@ -327,24 +374,64 @@ final class PackRoutingSource: RoutingSource {
                 let hasOnwardPump = onward.keys.contains {
                     $0 != candidate.id && !visited.contains($0)
                 }
-                if reachesDestination || hasOnwardPump { validForward.insert(candidate.id) }
+                let validForward = continuationRoute != nil || hasOnwardPump
+                let chainDirt: Double
+                if let continuationRoute {
+                    let total = firstRoute.distanceMeters + continuationRoute.distanceMeters
+                    chainDirt = total > 0
+                        ? (firstRoute.distanceMeters * Double(firstRoute.dirtPercent)
+                            + continuationRoute.distanceMeters * Double(continuationRoute.dirtPercent)) / total
+                        : Double(firstRoute.dirtPercent)
+                } else {
+                    chainDirt = Double(firstRoute.dirtPercent)
+                }
+                var clean = FuelItinerary.cleanQuality(
+                    firstRoute,
+                    penalizeMajorRoads: req.options?.avoidMotorways == true
+                )
+                if let continuationRoute {
+                    let tail = FuelItinerary.cleanQuality(
+                        continuationRoute,
+                        penalizeMajorRoads: req.options?.avoidMotorways == true
+                    )
+                    clean.fallbackCount += tail.fallbackCount
+                    clean.majorRoadMeters += tail.majorRoadMeters
+                    clean.routedMeters += tail.routedMeters
+                }
+                evaluated.append(FuelItinerary.ProfileFuelCandidate(
+                    fuel: candidate,
+                    routedMeters: firstRoute.distanceMeters,
+                    chainDirtPercent: chainDirt,
+                    validForward: validForward,
+                    cleanFallbackCount: clean.fallbackCount,
+                    cleanMajorRoadMeters: clean.majorRoadMeters,
+                    cleanRoutedMeters: clean.routedMeters,
+                    progressMeters: GeoMath.progressAlongAB(from: current, to: end, point: RouteCoordinate(
+                        longitude: candidate.longitude,
+                        latitude: candidate.latitude
+                    )),
+                    discoveryRank: rank
+                ))
                 stationCandidates.append(FuelStationCandidate(
                     id: candidate.id,
-                    meters: reachable[candidate.id] ?? 0,
-                    dirtPct: 0,
+                    meters: firstRoute.distanceMeters,
+                    dirtPct: firstRoute.dirtPercent,
                     departureId: departureID,
                     latitude: candidate.latitude,
                     longitude: candidate.longitude,
                     name: candidate.name ?? candidate.brand,
-                    validForward: reachesDestination || hasOnwardPump
+                    validForward: validForward
                 ))
             }
             let required = stops.isEmpty ? req.fuel.requiredFirstStationId : nil
-            let choices = ranked.filter { candidate in
-                validForward.contains(candidate.id)
-                    && (required == nil || candidate.id == required)
+            let choices = evaluated.filter {
+                $0.validForward && (required == nil || $0.fuel.id == required)
+            }.sorted {
+                FuelItinerary.prefersProfileFuelCandidate(
+                    $0, over: $1, profile: req.profile, tankMeters: firstCap
+                )
             }
-            guard let station = choices.first, let meters = reachable[station.id] else {
+            guard let choice = choices.first else {
                 let routedPrefix = graphMeters.reduce(0, +)
                 let gap = max(0, req.fuel.profileMeters - routedPrefix)
                 let remaining = stops.isEmpty ? req.fuel.firstLegMaxMeters : req.fuel.usableRangeMeters
@@ -369,6 +456,8 @@ final class PackRoutingSource: RoutingSource {
                     overByMeters: max(0, gap - remaining)
                 )
             }
+            let station = choice.fuel
+            let meters = choice.routedMeters
             visited.insert(station.id)
             graphMeters.append(meters)
             stops.append(FuelChainStop(

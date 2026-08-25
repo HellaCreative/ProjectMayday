@@ -7,8 +7,9 @@
  * best forward pump, repeats from there, and stops as soon as point 2 is
  * graph-reachable within the remaining tank.
  *
- * This deliberately does not call /api/route for each candidate. The caller
- * routes only the selected point 1 -> F1 -> ... -> point 2 legs.
+ * Reachability produces a bounded candidate set. Actual profile routes then
+ * score those candidates before a pump is committed, and the caller renders
+ * the selected point 1 -> F1 -> ... -> point 2 legs.
  */
 const { loadGraphsForRequest, clearGraphCache } = require("./graph");
 const {
@@ -47,7 +48,7 @@ const HARD_MATCH_METERS = 750;
 const MIN_STOP_SEPARATION_M = 800;
 const MIN_FORWARD_PROGRESS_M = 2_500;
 /** Bumped when fuel-selection / ranking contracts change. Clients may assert. */
-const FUEL_CHAIN_SERVICE_VERSION = "2026-08-25.fuel-coherence.cross-region-minima.3";
+const FUEL_CHAIN_SERVICE_VERSION = "2026-08-25.profile-quality-fuel-anchors.1";
 /** Comfort refuel window as a fraction of usable tank. Lockstep: FuelItinerary.swift. */
 const FUEL_COMFORT_LO = 0.50;
 const FUEL_COMFORT_HI = 0.80;
@@ -59,6 +60,42 @@ const MAX_CLEAN_CHAIN_DETOUR_ABS_M = 20_000;
 /** Soft corridor half-width; beyond this, cross-track dominates clean ranking. */
 const CORRIDOR_SOFT_WIDTH_M = 25_000;
 const SHORTLIST_MIN_SEPARATION_M = 15_000;
+const CLEAN_MAJOR_ROAD_CLASSES = new Set([
+  "motorway", "motorway_link", "trunk", "trunk_link", "primary", "primary_link",
+  "freeway", "ramp", "arterial"
+]);
+
+function cleanRouteQuality(response, penalizeMajorRoads) {
+  const debug = response && response.debug || {};
+  const meta = debug.searchMeta || {};
+  const diagnostics = debug.diagnostics || {};
+  const fallbacks = Array.isArray(diagnostics.profileFallbacks)
+    ? diagnostics.profileFallbacks.map((row) => String(row).toLowerCase())
+    : [];
+  const urbanFallback = meta.urbanCoreFallbackUsed === true ||
+    debug.fallback === "urban_core_last_resort" || fallbacks.includes("urban_core_relaxed");
+  const settlementFallback = meta.settlementFallbackUsed === true ||
+    debug.settlementFallback === true || fallbacks.includes("settlement_relaxed");
+  let majorRoadMeters = 0;
+  let routedMeters = 0;
+  for (const segment of (response && response.segments) || []) {
+    const meters = Number(segment && segment.distanceMeters) || 0;
+    if (!(meters > 0)) continue;
+    routedMeters += meters;
+    const roadClass = String(
+      segment.roadClassLeaf || segment.trackClass || segment.roadClass || "unknown"
+    ).toLowerCase();
+    if (penalizeMajorRoads && CLEAN_MAJOR_ROAD_CLASSES.has(roadClass)) {
+      majorRoadMeters += meters;
+    }
+  }
+  if (!(routedMeters > 0)) routedMeters = Number(response && response.distanceMeters) || 0;
+  return {
+    fallbackCount: (urbanFallback ? 2 : 0) + (settlementFallback ? 1 : 0),
+    majorRoadMeters,
+    routedMeters
+  };
+}
 
 function fuelNeedForProfileRide(profileMeters, firstLegMaxMeters, usableRangeMeters) {
   const meters = Number(profileMeters);
@@ -548,13 +585,18 @@ function rankForwardFuel(
     const pool = withinArrival.length ? withinArrival : exact;
     if (pool.length) {
       const directMeters = Number(destinationGraphMeters);
-      return pool.sort((a, b) => {
+      const ordered = pool.slice().sort((a, b) => {
         const detourA = a.graphMeters + a.remainingGraphMeters - (Number.isFinite(directMeters) ? directMeters : 0);
         const detourB = b.graphMeters + b.remainingGraphMeters - (Number.isFinite(directMeters) ? directMeters : 0);
         return compareTankCommit(
           a.graphMeters, a.progressMeters, b.graphMeters, b.progressMeters, capMeters
         ) || detourA - detourB || a.remainingGraphMeters - b.remainingGraphMeters;
       });
+      // Candidate discovery must not erase a rural/profile-quality alternative
+      // before its actual Clean route is measured. Keep the coherent priority
+      // pool first, then the remaining forward pumps for bounded route scoring.
+      const picked = new Set(ordered.map((row) => String(row.station.id)));
+      return ordered.concat(normal.filter((row) => !picked.has(String(row.station.id))));
     }
   }
   if (!Number.isFinite(arrivalLimit)) return normal;
@@ -781,7 +823,6 @@ async function planFuelChainOnRuntime({
     }
     const hopStarted = Date.now();
     const rows = [];
-    const adventureProfile = profile === "dirt" || profile === "balanced";
     async function evaluateCandidate(candidate, rank) {
       let row;
       let diagnostic;
@@ -812,8 +853,15 @@ async function planFuelChainOnRuntime({
           continuationDestinationMeters: null,
           continuationResponse: null,
           hasForwardStation: false,
-          validForward: false
+          validForward: false,
+          cleanFallbackCount: 0,
+          cleanMajorRoadMeters: 0,
+          cleanRoutedMeters: 0
         };
+        const firstClean = cleanRouteQuality(response, avoidMotorways === true);
+        row.cleanFallbackCount = firstClean.fallbackCount;
+        row.cleanMajorRoadMeters = firstClean.majorRoadMeters;
+        row.cleanRoutedMeters = firstClean.routedMeters;
         let validForward = false;
         if (fits) {
           const nextHistory = new Set(history);
@@ -871,6 +919,13 @@ async function planFuelChainOnRuntime({
                   row.meters * row.dirtPct + routedContinuationMeters * continuationDirtPct
                 ) / (row.meters + routedContinuationMeters);
               }
+              const continuationClean = cleanRouteQuality(
+                continuationResponse,
+                avoidMotorways === true
+              );
+              row.cleanFallbackCount += continuationClean.fallbackCount;
+              row.cleanMajorRoadMeters += continuationClean.majorRoadMeters;
+              row.cleanRoutedMeters += continuationClean.routedMeters;
             } else {
               row.continuationDestinationMeters = null;
             }
@@ -922,16 +977,18 @@ async function planFuelChainOnRuntime({
           continuationDestinationMeters: null,
           continuationResponse: null,
           hasForwardStation: false,
-          validForward: false
+          validForward: false,
+          cleanFallbackCount: Infinity,
+          cleanMajorRoadMeters: Infinity,
+          cleanRoutedMeters: 0
         };
       }
       return { row, diagnostic };
     }
 
-    // Profile-route probes dominate fuel latency. Bound every batch to two
-    // geographically distinct choices and check the deadline between batches.
-    // This still compares alternatives inside the 50–80% comfort band without
-    // making a rider wait for four full Dijkstras before any pump can commit.
+    // Profile-route probes dominate fuel latency. Run two geographically
+    // distinct choices in parallel, then check the request deadline before the
+    // next pair. This compares up to K=6 real rides without unbounded search.
     const batchSize = Math.min(2, Math.max(1, candidates.length));
     const comfortAvailable = unique.some((row) => tankCommitBand(row.graphMeters, cap) === 0);
     const earlyAvailable = unique.some((row) => tankCommitBand(row.graphMeters, cap) === 1);
@@ -946,23 +1003,18 @@ async function planFuelChainOnRuntime({
         rows.push(evaluated.row);
         stationCandidates.push(evaluated.diagnostic);
       }
-      const hasProfileQualityChoice = rows.some((evaluated) => {
-        if (!(evaluated.fits && evaluated.validForward)) return false;
-        if (graphOnlyFeeler) return true;
-        if (profile === "dirt") return true;
-        if (profile === "balanced") return Math.abs(evaluated.chainDirtPct - 50) <= 5;
-        return true;
-      });
       const comfortFit = rows.some((evaluated) =>
         evaluated.fits && evaluated.validForward && tankCommitBand(evaluated.meters, cap) === 0
       );
       const earlyFit = rows.some((evaluated) =>
         evaluated.fits && evaluated.validForward && tankCommitBand(evaluated.meters, cap) === 1
       );
+      // Graph-only probes have no ride-quality signal. Real fuel allocation
+      // evaluates every geographically distinct candidate that fits inside the
+      // planning window; the first feasible pair is not evidence of the best
+      // Dirt/Balanced/Clean ride.
       if (
-        adventureProfile &&
-        rows.length >= 2 &&
-        hasProfileQualityChoice &&
+        graphOnlyFeeler && rows.length >= 2 &&
         (comfortFit || (!comfortAvailable && (earlyFit || !earlyAvailable)))
       ) break;
     }
@@ -974,30 +1026,31 @@ async function planFuelChainOnRuntime({
       return Number(row.candidate.progressMeters) || row.meters;
     }
     fitting.sort((a, b) => {
-      const band = tankCommitBand(a.candidate.graphMeters, cap) -
-        tankCommitBand(b.candidate.graphMeters, cap);
-      if (band !== 0) return band;
-      if (tankCommitBand(a.candidate.graphMeters, cap) === 0) {
-        const aRouted = tankCommitBand(a.meters, cap);
-        const bRouted = tankCommitBand(b.meters, cap);
-        if (aRouted !== bRouted) return aRouted - bRouted;
-      }
+      if (a.validForward !== b.validForward) return a.validForward ? -1 : 1;
       switch (resolveProfile(profile)) {
         case "dirt": {
           const dirtDelta = b.chainDirtPct - a.chainDirtPct;
-          if (Math.abs(dirtDelta) > 5) return dirtDelta;
-          return compareTankCommit(
-            a.meters, hopProgress(a), b.meters, hopProgress(b), cap
-          ) || a.rank - b.rank;
+          if (Math.abs(dirtDelta) > 0.5) return dirtDelta;
+          break;
         }
         case "balanced": {
-          const progress = compareTankCommit(
-            a.meters, hopProgress(a), b.meters, hopProgress(b), cap
-          );
-          if (progress !== 0) return progress;
-          return Math.abs(a.chainDirtPct - 50) - Math.abs(b.chainDirtPct - 50) || a.meters - b.meters;
+          const mixDelta = Math.abs(a.chainDirtPct - 50) - Math.abs(b.chainDirtPct - 50);
+          if (Math.abs(mixDelta) > 0.5) return mixDelta;
+          break;
         }
         case "cleanest": {
+          if (a.cleanFallbackCount !== b.cleanFallbackCount) {
+            return a.cleanFallbackCount - b.cleanFallbackCount;
+          }
+          const majorShareA = a.cleanRoutedMeters > 0
+            ? a.cleanMajorRoadMeters / a.cleanRoutedMeters
+            : 0;
+          const majorShareB = b.cleanRoutedMeters > 0
+            ? b.cleanMajorRoadMeters / b.cleanRoutedMeters
+            : 0;
+          if (Math.abs(majorShareA - majorShareB) > 0.005) {
+            return majorShareA - majorShareB;
+          }
           const remainA = Number(a.candidate.remainingGraphMeters);
           const remainB = Number(b.candidate.remainingGraphMeters);
           const chainA = a.meters + (Number.isFinite(remainA) ? remainA : 0);
@@ -1010,19 +1063,25 @@ async function planFuelChainOnRuntime({
           const bCoherent = chainB <= foundationCap + 1;
           if (aCoherent !== bCoherent) return aCoherent ? -1 : 1;
           if (aCoherent && bCoherent) {
-            return compareTankCommit(
-              a.meters, hopProgress(a), b.meters, hopProgress(b), cap
-            ) || chainA - chainB || a.rank - b.rank;
+            const chainDelta = chainA - chainB;
+            if (Math.abs(chainDelta) > 1_000) return chainDelta;
           }
-          return chainA - chainB || a.rank - b.rank || a.meters - b.meters;
+          break;
         }
         default:
-          return compareTankCommit(
-            a.meters, hopProgress(a), b.meters, hopProgress(b), cap
-          ) || (a.meters + a.candidate.remainingGraphMeters) -
-            (b.meters + b.candidate.remainingGraphMeters) ||
-            a.rank - b.rank;
+          break;
       }
+      // Fuel position is comfort, not the ride objective. It breaks profile-
+      // quality ties only after every candidate has passed the safety gates.
+      const band = tankCommitBand(a.candidate.graphMeters, cap) -
+        tankCommitBand(b.candidate.graphMeters, cap);
+      if (band !== 0) return band;
+      const aRoutedBand = tankCommitBand(a.meters, cap);
+      const bRoutedBand = tankCommitBand(b.meters, cap);
+      if (aRoutedBand !== bRoutedBand) return aRoutedBand - bRoutedBand;
+      return compareTankCommit(
+        a.meters, hopProgress(a), b.meters, hopProgress(b), cap
+      ) || a.rank - b.rank;
     });
     return fitting;
   }
@@ -1139,16 +1198,19 @@ async function planFuelChainOnRuntime({
     const evaluated = await evaluatedRoutes(
       ranked, currentKey, currentLocation, cap, visited, history, arrival
     );
-    // Inspect every already-routed direct continuation before consulting the
-    // wall-clock budget. A slower rejected candidate must not hide a second
-    // candidate whose complete two-hop chain has already been proven.
     for (const evaluation of evaluated) {
+      if (states >= maxStates) break;
+      if (!evaluation.validForward) continue;
+      const candidate = evaluation.candidate;
       const continuationMeters = evaluation.continuationDestinationMeters == null
         ? NaN
         : Number(evaluation.continuationDestinationMeters);
       const destinationLimitSatisfied = !Number.isFinite(destinationLimit)
         || continuationMeters <= destinationLimit + 1;
       const requiredStopsSatisfied = depth + 1 >= Math.max(0, Number(minimumFuelStops) || 0);
+      // The evaluated list is already profile-quality ordered. Do not skip a
+      // better Dirt/Balanced/Clean anchor merely because a lower-quality pump
+      // happens to be able to finish B in one fewer refuel.
       if (
         evaluation.fits &&
         Number.isFinite(continuationMeters) &&
@@ -1156,7 +1218,6 @@ async function planFuelChainOnRuntime({
         destinationLimitSatisfied &&
         requiredStopsSatisfied
       ) {
-        const candidate = evaluation.candidate;
         return {
           stops: [{
             ...candidate.station,
@@ -1166,11 +1227,6 @@ async function planFuelChainOnRuntime({
           graphMeters: [evaluation.meters, continuationMeters]
         };
       }
-    }
-    for (const evaluation of evaluated) {
-      if (states >= maxStates) break;
-      if (!evaluation.validForward) continue;
-      const candidate = evaluation.candidate;
       // A completed, forward-valid pump is useful work. When this request is a
       // resumable one-stop window, commit it even if candidate evaluation
       // crossed the wall-clock boundary by a few milliseconds.

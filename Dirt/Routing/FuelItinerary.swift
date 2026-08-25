@@ -5,6 +5,84 @@ import Foundation
 /// Graph reachability is supplied by the caller (pack Dijkstra). This type
 /// only chooses among pumps already proven reachable on the hop.
 nonisolated enum FuelItinerary {
+    struct ProfileFuelCandidate: Sendable {
+        let fuel: POIFeature
+        let routedMeters: Double
+        let chainDirtPercent: Double
+        let validForward: Bool
+        let cleanFallbackCount: Int
+        let cleanMajorRoadMeters: Double
+        let cleanRoutedMeters: Double
+        let progressMeters: Double
+        let discoveryRank: Int
+    }
+
+    static func cleanQuality(
+        _ route: OnDeviceRouter.Result,
+        penalizeMajorRoads: Bool
+    ) -> (fallbackCount: Int, majorRoadMeters: Double, routedMeters: Double) {
+        let fallbackCount = (route.searchMeta.urbanCoreFallbackUsed ? 2 : 0)
+            + (route.searchMeta.settlementFallbackUsed ? 1 : 0)
+        let major = Set([
+            "motorway", "motorway_link", "trunk", "trunk_link", "primary", "primary_link",
+            "freeway", "ramp", "arterial"
+        ])
+        let majorMeters = penalizeMajorRoads
+            ? route.legs.reduce(0.0) { total, leg in
+                major.contains(leg.roadClassName.lowercased())
+                    ? total + leg.distanceMeters
+                    : total
+            }
+            : 0
+        return (fallbackCount, majorMeters, route.distanceMeters)
+    }
+
+    /// Safety/continuity is a gate. After that, ride character chooses the
+    /// pump; the 50–80% comfort window only breaks profile-quality ties.
+    static func prefersProfileFuelCandidate(
+        _ a: ProfileFuelCandidate,
+        over b: ProfileFuelCandidate,
+        profile: RouteProfile,
+        tankMeters: Double
+    ) -> Bool {
+        if a.validForward != b.validForward { return a.validForward }
+        switch profile {
+        case .dirt:
+            if abs(a.chainDirtPercent - b.chainDirtPercent) > 0.5 {
+                return a.chainDirtPercent > b.chainDirtPercent
+            }
+        case .balanced:
+            let aMiss = abs(a.chainDirtPercent - 50)
+            let bMiss = abs(b.chainDirtPercent - 50)
+            if abs(aMiss - bMiss) > 0.5 { return aMiss < bMiss }
+        case .cleanest:
+            if a.cleanFallbackCount != b.cleanFallbackCount {
+                return a.cleanFallbackCount < b.cleanFallbackCount
+            }
+            let aMajor = a.cleanRoutedMeters > 0
+                ? a.cleanMajorRoadMeters / a.cleanRoutedMeters
+                : 0
+            let bMajor = b.cleanRoutedMeters > 0
+                ? b.cleanMajorRoadMeters / b.cleanRoutedMeters
+                : 0
+            if abs(aMajor - bMajor) > 0.005 { return aMajor < bMajor }
+        }
+        let aBand = HopSearchPolicy.tankCommitBand(
+            graphMeters: a.routedMeters, tankMeters: tankMeters
+        )
+        let bBand = HopSearchPolicy.tankCommitBand(
+            graphMeters: b.routedMeters, tankMeters: tankMeters
+        )
+        if aBand != bBand { return aBand < bBand }
+        if abs(a.progressMeters - b.progressMeters) > 2_000 {
+            return a.progressMeters > b.progressMeters
+        }
+        if abs(a.routedMeters - b.routedMeters) > 50 {
+            return a.routedMeters < b.routedMeters
+        }
+        return a.discoveryRank < b.discoveryRank
+    }
+
     /// A numbered rider waypoint is a live refuel only while it sits on a packed
     /// pump. Recompute from coordinates; never persist a flag on the waypoint.
     /// Lockstep: fuel-chain.js deriveWaypointFuelStation.

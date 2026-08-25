@@ -62,10 +62,83 @@ test("all profiles prefer a 50-80% tank-window stop over a wall-stretch station"
   }
 });
 
+test("Dirt profile quality outranks a merely comfortable paved pump", async () => {
+  const result = await planFuelChainOnRuntime({
+    runtime: lineRuntime(),
+    stations: [station("early-dirt", 0.5), station("comfort-paved", 1)],
+    start: { lat: 45, lon: 0 },
+    destination: { lat: 45, lon: 2 },
+    profile: "dirt",
+    accessPolicy: { motorizedPermissive: true, motorizedUnknown: false },
+    usableRangeMeters: 130_000,
+    firstLegMaxMeters: 130_000,
+    routeCandidate: ({ candidate }) => Promise.resolve({
+      status: "complete",
+      distanceMeters: candidate.graphMeters,
+      stats: { dirtPercent: candidate.station.id === "early-dirt" ? 92 : 8 },
+      segments: [{ edgeId: candidate.station.id, distanceMeters: candidate.graphMeters }]
+    })
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.stops[0].id, "early-dirt");
+});
+
+test("Balanced profile quality outranks a merely comfortable poor-mix pump", async () => {
+  const result = await planFuelChainOnRuntime({
+    runtime: lineRuntime(),
+    stations: [station("early-balanced", 0.5), station("comfort-dirt", 1)],
+    start: { lat: 45, lon: 0 },
+    destination: { lat: 45, lon: 2 },
+    profile: "balanced",
+    accessPolicy: { motorizedPermissive: true, motorizedUnknown: false },
+    usableRangeMeters: 130_000,
+    firstLegMaxMeters: 130_000,
+    routeCandidate: ({ candidate }) => Promise.resolve({
+      status: "complete",
+      distanceMeters: candidate.graphMeters,
+      stats: { dirtPercent: candidate.station.id === "early-balanced" ? 50 : 95 },
+      segments: [{ edgeId: candidate.station.id, distanceMeters: candidate.graphMeters }]
+    })
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.stops[0].id, "early-balanced");
+});
+
+test("Clean rural quality outranks a comfortable station that needs town fallback", async () => {
+  const result = await planFuelChainOnRuntime({
+    runtime: lineRuntime(),
+    stations: [station("early-rural", 0.5), station("comfort-town", 1)],
+    start: { lat: 45, lon: 0 },
+    destination: { lat: 45, lon: 2 },
+    profile: "cleanest",
+    accessPolicy: { motorizedPermissive: true, motorizedUnknown: false },
+    usableRangeMeters: 130_000,
+    firstLegMaxMeters: 130_000,
+    avoidMotorways: true,
+    routeCandidate: ({ candidate }) => Promise.resolve({
+      status: "complete",
+      distanceMeters: candidate.graphMeters,
+      stats: { dirtPercent: 0 },
+      segments: [{
+        edgeId: candidate.station.id,
+        distanceMeters: candidate.graphMeters,
+        trackClass: "secondary"
+      }],
+      debug: {
+        searchMeta: {
+          settlementFallbackUsed: candidate.station.id === "comfort-town"
+        }
+      }
+    })
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.stops[0].id, "early-rural");
+});
+
 
 test("Clean rejects a full-tank lateral Gulf-class pump in favor of a corridor pump", () => {
   assert.equal(typeof FUEL_CHAIN_SERVICE_VERSION, "string");
-  assert.match(FUEL_CHAIN_SERVICE_VERSION, /fuel-coherence/);
+  assert.match(FUEL_CHAIN_SERVICE_VERSION, /profile-quality-fuel-anchors/);
   // Halifax-ish → Tatamagouche-ish geometry: Wallace Gulf is nearly a full tank
   // sideways; Truro sits on the corridor with a shorter complete chain.
   const start = { lat: 44.764823, lon: -63.340271 };
