@@ -59,6 +59,16 @@ enum NavigationChrome {
     }
 }
 
+enum POIActionPolicy {
+    static func primaryTitle(mode: RoutePlannerModel.Mode, category: String) -> String {
+        let isFuel = category == "fuel"
+        if mode == .plan {
+            return isFuel ? "Add as fuel waypoint" : "Add as waypoint"
+        }
+        return isFuel ? "Navigate to fuel station" : "Navigate here"
+    }
+}
+
 struct RootView: View {
     @Environment(AppEnvironment.self) private var app
     @Environment(\.verticalSizeClass) private var verticalSizeClass
@@ -405,25 +415,38 @@ struct RootView: View {
     @ViewBuilder
     private var poiDialogButtons: some View {
         if let poi = app.mapState.selectedPOI {
-            Button("Route to this") {
-                app.planner.routeToCoordinate(
-                    name: poi.displayName,
-                    latitude: poi.latitude,
-                    longitude: poi.longitude
-                )
-                app.mapState.selectedPOI = nil
-                withAnimation(DockSheetMotion.spring) {
-                    activeSheet = nil
-                    routeCardOpen = true
-                }
-            }
             if app.planner.mode == .plan {
-                Button("Add as waypoint") {
+                Button(POIActionPolicy.primaryTitle(
+                    mode: app.planner.mode,
+                    category: poi.category
+                )) {
+                    RoutingDebugLog.shared.event(
+                        "ui poi action=add-waypoint category=\(poi.category) id=\(poi.id)"
+                    )
                     app.planner.addPlanWaypoint(
                         latitude: poi.latitude,
                         longitude: poi.longitude
                     )
                     app.mapState.selectedPOI = nil
+                }
+            } else {
+                Button(POIActionPolicy.primaryTitle(
+                    mode: app.planner.mode,
+                    category: poi.category
+                )) {
+                    RoutingDebugLog.shared.event(
+                        "ui poi action=navigate category=\(poi.category) id=\(poi.id)"
+                    )
+                    app.planner.routeToCoordinate(
+                        name: poi.displayName,
+                        latitude: poi.latitude,
+                        longitude: poi.longitude
+                    )
+                    app.mapState.selectedPOI = nil
+                    withAnimation(DockSheetMotion.spring) {
+                        activeSheet = nil
+                        routeCardOpen = true
+                    }
                 }
             }
             Button("Cancel", role: .cancel) {

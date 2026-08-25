@@ -331,3 +331,12 @@ struct DirtTests {
         #expect(!state.hasFuelReplacementCandidates)
     }
 }
+
+struct POIActionPolicyTests {
+    @Test func actionsRespectPlannerModeAndFuelIntent() {
+        #expect(POIActionPolicy.primaryTitle(mode: .plan, category: "fuel") == "Add as fuel waypoint")
+        #expect(POIActionPolicy.primaryTitle(mode: .plan, category: "campground") == "Add as waypoint")
+        #expect(POIActionPolicy.primaryTitle(mode: .fromHere, category: "fuel") == "Navigate to fuel station")
+        #expect(POIActionPolicy.primaryTitle(mode: .fromHere, category: "lodging") == "Navigate here")
+    }
+}
