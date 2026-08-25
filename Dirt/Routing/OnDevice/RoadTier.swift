@@ -91,12 +91,11 @@ nonisolated enum RoadTierStats {
     ) -> Bool {
         if pavedOnly, !isCleanPavementEligible(family: family, tier: tier) { return true }
         if isEndpointEdge { return false }
+        // The fallback is the connectivity safety net. Surface and road class
+        // remain expensive, but must not make a motorized edge ineligible.
+        if !pavedOnly { return false }
         if tier == .destination { return true }
         if tier == .adventure { return pavedOnly }
-        if pavedOnly {
-            return false
-        }
-        if family == .loose, !isPavedCapable(tier) { return true }
         return false
     }
 

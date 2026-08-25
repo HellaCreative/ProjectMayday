@@ -105,17 +105,16 @@ function isBlockedForCleanLeaf(opts) {
   if (pavedOnly && !isCleanPavementEligible(family, tier)) return true;
   if (opts.isEndpointEdge) return false;
 
+  // The fallback is the connectivity safety net. Surface and road class remain
+  // expensive through cleanLeafCostMult, but must never make the graph ineligible.
+  if (!pavedOnly) return false;
+
   // Residential / living_street: never a through-route.
   if (tier === ROAD_TIER.DESTINATION) return true;
 
   // track / atv-path: not Clean surface.
   if (tier === ROAD_TIER.ADVENTURE) return pavedOnly;
 
-  if (pavedOnly) return false;
-
-  // Fallback pass: gravel connectors OK; loose still last-resort (high cost, not hard-block
-  // except adventure already handled). Service/destination still blocked above.
-  if (family === "loose" && !tierIsPavedCapable(tier)) return true;
   return false;
 }
 

@@ -49,7 +49,7 @@ const MIN_STOP_SEPARATION_M = 800;
 const MIN_FORWARD_PROGRESS_M = 8_000;
 const MIN_DESTINATION_FUEL_CLEARANCE_M = 5_000;
 /** Bumped when fuel-selection / ranking contracts change. Clients may assert. */
-const FUEL_CHAIN_SERVICE_VERSION = "2026-08-25.complete-profile-fuel-chains.4";
+const FUEL_CHAIN_SERVICE_VERSION = "2026-08-25.complete-profile-fuel-chains.5";
 /** Comfort refuel window as a fraction of usable tank. Lockstep: FuelItinerary.swift. */
 const FUEL_COMFORT_LO = 0.50;
 const FUEL_COMFORT_HI = 0.80;

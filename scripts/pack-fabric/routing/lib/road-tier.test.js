@@ -76,6 +76,21 @@ describe("road-tier E2 Clean", () => {
     );
   });
 
+  it("keeps every motorized surface and road tier eligible in the fallback", () => {
+    for (const [family, tier] of [
+      ["paved", ROAD_TIER.DESTINATION],
+      ["gravel", ROAD_TIER.ADVENTURE],
+      ["loose", ROAD_TIER.DESTINATION],
+      ["unknown", ROAD_TIER.UNKNOWN]
+    ]) {
+      assert.equal(
+        isBlockedForCleanLeaf({ family, tier, pavedOnly: false, isEndpointEdge: false }),
+        false,
+        `${family}/${tier}`
+      );
+    }
+  });
+
   it("keeps primary and secondary at ordinary paved-road cost", () => {
     const collector = cleanLeafCostMult(ROAD_TIER.COLLECTOR, "paved");
     const arterial = cleanLeafCostMult(ROAD_TIER.ARTERIAL, "paved");

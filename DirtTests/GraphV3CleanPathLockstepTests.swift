@@ -42,6 +42,21 @@ struct GraphV3CleanPathLockstepTests {
                 family: .gravel, tier: .collector, pavedOnly: true, isEndpointEdge: true
             )
         )
+        #expect(
+            !RoadTierStats.isBlockedForCleanLeaf(
+                family: .paved, tier: .destination, pavedOnly: false, isEndpointEdge: false
+            )
+        )
+        #expect(
+            !RoadTierStats.isBlockedForCleanLeaf(
+                family: .gravel, tier: .adventure, pavedOnly: false, isEndpointEdge: false
+            )
+        )
+        #expect(
+            !RoadTierStats.isBlockedForCleanLeaf(
+                family: .loose, tier: .destination, pavedOnly: false, isEndpointEdge: false
+            )
+        )
         let collector = RoadTierStats.cleanLeafCostMult(tier: .collector, family: .paved)
         let arterial = RoadTierStats.cleanLeafCostMult(tier: .arterial, family: .paved)
         let motorway = RoadTierStats.cleanLeafCostMult(tier: .motorway, family: .paved)
