@@ -47,7 +47,7 @@ const HARD_MATCH_METERS = 750;
 const MIN_STOP_SEPARATION_M = 800;
 const MIN_FORWARD_PROGRESS_M = 2_500;
 /** Bumped when fuel-selection / ranking contracts change. Clients may assert. */
-const FUEL_CHAIN_SERVICE_VERSION = "2026-08-24.fuel-coherence.cross-region-feeler.2";
+const FUEL_CHAIN_SERVICE_VERSION = "2026-08-25.fuel-coherence.cross-region-minima.3";
 /** Comfort refuel window as a fraction of usable tank. Lockstep: FuelItinerary.swift. */
 const FUEL_COMFORT_LO = 0.50;
 const FUEL_COMFORT_HI = 0.80;
@@ -1336,6 +1336,7 @@ async function planCrossRegionFuelChain(body, selection, fuelOptions, dependenci
   let totalPops = 0;
   let matchedFuel = 0;
   let maxHopMs = 0;
+  let graphMeterCountThroughLastStop = 0;
   const started = Date.now();
   const windowMaxStops = Math.min(12, Math.max(1, Number(fuelOptions.windowMaxStops) || 12));
   const allowPartialWindow = !!fuelOptions.allowPartialWindow;
@@ -1462,8 +1463,18 @@ async function planCrossRegionFuelChain(body, selection, fuelOptions, dependenci
       };
     }
 
+    const priorStopCount = allStops.length;
+    const priorGraphMeterCount = graphMeters.length;
     allStops.push(...planned.stops);
     graphMeters.push(...planned.graphMeters);
+    if (planned.stops.length) {
+      const remainingWindowStops = Math.max(0, windowMaxStops - priorStopCount);
+      graphMeterCountThroughLastStop = priorGraphMeterCount + Math.min(
+        remainingWindowStops,
+        planned.stops.length,
+        planned.graphMeters.length
+      );
+    }
     stationCandidates.push(...(planned.stationCandidates || []));
     totalStates += Number(planned.diagnostics && planned.diagnostics.states) || 0;
     totalPops += Number(planned.diagnostics && planned.diagnostics.dijkstraPops) || 0;
@@ -1481,7 +1492,13 @@ async function planCrossRegionFuelChain(body, selection, fuelOptions, dependenci
         regionIds: selection.regionIds,
         packIdentity: mergePackIdentities(packIdentities),
         stops: allStops.slice(0, windowMaxStops),
-        graphMeters: graphMeters.slice(0, windowMaxStops),
+        // Regional seams consume fuel but are not rider-visible stops. Keep
+        // every graph minimum through the returned pump; slicing this array by
+        // stop count drops the pre-seam hop and disables the client's reserved
+        // cross-region cap because the hop counts no longer match.
+        graphMeters: graphMeterCountThroughLastStop > 0
+          ? graphMeters.slice(0, graphMeterCountThroughLastStop)
+          : graphMeters,
         stationCandidates,
         windowComplete: false,
         diagnostics: enrichFuelDiagnostics({

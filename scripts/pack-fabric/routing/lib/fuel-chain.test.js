@@ -385,6 +385,80 @@ test("NS to NB forward feeler stays graph-only while targeting the Tantramar doo
   assert.deepEqual(calls[0].destination, tantramar);
 });
 
+test("cross-region one-stop window preserves every seam minimum through the returned pump", async () => {
+  const start = { lat: 44.764863437891236, lon: -63.340304626331005 };
+  const pump = {
+    id: "osm:w330696506",
+    lat: 45.908655,
+    lon: -64.374146,
+    name: "Esso"
+  };
+  const destination = { lat: 46.192496, lon: -64.242925 };
+  const seam = {
+    lat: 45.92,
+    lon: -64.35,
+    role: "seam",
+    between: ["nb", "ns"],
+    resolvedRegionId: "ns"
+  };
+  const plannedSegments = [
+    {
+      ok: true,
+      stops: [],
+      graphMeters: [218_050.6],
+      stationCandidates: [],
+      windowComplete: true,
+      diagnostics: {}
+    },
+    {
+      ok: true,
+      stops: [pump],
+      graphMeters: [8_730.8],
+      stationCandidates: [],
+      windowComplete: false,
+      diagnostics: {}
+    }
+  ];
+
+  const result = await planCrossRegionFuelChain({
+    profile: "cleanest",
+    locations: [start, destination],
+    accessPolicy: { motorizedPermissive: true, motorizedUnknown: false },
+    options: { cleanMetroMultiplier: 2, avoidMotorways: true }
+  }, {
+    mode: "canada-chain",
+    regionIds: ["ns", "nb"]
+  }, {
+    usableRangeMeters: 248_000,
+    firstLegMaxMeters: 248_000,
+    windowMaxStops: 1,
+    allowPartialWindow: true,
+    windowTimeBudgetMs: 5_800,
+    forwardFeeler: true
+  }, {
+    resolveChainSeamWaypoints: async () => ({
+      ok: true,
+      waypoints: [
+        { ...start, resolvedRegionId: "ns" },
+        seam,
+        { ...destination, resolvedRegionId: "nb" }
+      ]
+    }),
+    loadRegionFuel: async (regionId) => ({
+      stations: [pump],
+      packIdentity: { regionId }
+    }),
+    loadGraphsForRequest: async () => ({ packIdentity: [] }),
+    planFuelChainOnRuntime: async () => plannedSegments.shift()
+  });
+
+  assert.equal(result.status, "complete");
+  assert.equal(result.windowComplete, false);
+  assert.deepEqual(result.stops.map((row) => row.id), ["osm:w330696506"]);
+  assert.deepEqual(result.graphMeters, [218_050.6, 8_730.8]);
+  assert.equal(plannedSegments.length, 0);
+});
+
 test("profile ride length requires Dirt fuel even when shortest reachability fits", async () => {
   const usable = 237_500;
   const stopsNeeded = fuelNeedForProfileRide(300_000, usable, usable);
