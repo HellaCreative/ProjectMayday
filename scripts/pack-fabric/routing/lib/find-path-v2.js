@@ -87,6 +87,7 @@ const {
   isBlockedForCleanLeaf,
   cleanLeafCostMult,
   e4LeafCostMult,
+  e4MajorHighwayEntryCost,
   e4FlagsForProfile,
   ROAD_TIER
 } = require("./road-tier");
@@ -966,6 +967,24 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
   pathMeters.fill(Infinity);
   const slots = new Uint8Array(total);
   const heap = new MinHeap();
+
+  // Preserve the arrival road tier across virtual snap stubs and zero-cost
+  // duplicate-node stitches so the transition toll is charged at the real
+  // low-road -> trunk/motorway boundary, not once per highway edge.
+  function predecessorGraphEdgeIndex(node) {
+    let cursor = node;
+    for (let hops = 0; hops < 8 && cursor >= 0 && prev[cursor] >= 0; hops += 1) {
+      if (prevKind[cursor] === 0) return prevData[cursor];
+      if (prevKind[cursor] === 1) {
+        const v = virt[prevData[cursor]];
+        return v && Number.isInteger(v.ei) ? v.ei : -1;
+      }
+      if (prevKind[cursor] !== 2) return -1;
+      cursor = prev[cursor];
+    }
+    return -1;
+  }
+
   dist[startNode] = 0;
   pathMeters[startNode] = 0;
   peakProgress[startNode] = 0;
@@ -1124,6 +1143,22 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
           );
         }
         step = penalizeBacktrack(step, pack.edgeId(ei));
+        if (!isFerryEdge && profile === "cleanest" && pack.hasLeaves && e4Opts.avoidMotorways) {
+          const fromEi = predecessorGraphEdgeIndex(cur.node);
+          if (fromEi >= 0) {
+            const fromLeaves = pack.edgeLeaves(fromEi);
+            const toLeaves = pack.edgeLeaves(ei);
+            step += e4MajorHighwayEntryCost({
+              fromTier: roadTierOf(fromLeaves.roadClassLeaf, pack.roadTierMap),
+              toTier: roadTierOf(toLeaves.roadClassLeaf, pack.roadTierMap),
+              enabled: true,
+              metersFromStart: toLL ? haversineMeters(toLL, startLL) : 1e9,
+              metersToDestination: toLL ? haversineMeters(toLL, endLL) : 1e9,
+              startOnHighway: startOnMajorHighway,
+              endOnHighway: endOnMajorHighway
+            });
+          }
+        }
         const cost = cur.cost + step;
         const dirt = isDirtSurface(surfaceName, road);
         let action = considerRelax(

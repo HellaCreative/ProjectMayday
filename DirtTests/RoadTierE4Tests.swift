@@ -158,4 +158,34 @@ struct RoadTierE4Tests {
         )
         #expect(allowedRequest.options == nil)
     }
+
+    @Test("Clean charges once on highway-tier entry and again after leaving")
+    func highwayEntryCost() {
+        func entry(
+            _ from: RoadTier,
+            _ to: RoadTier,
+            enabled: Bool = true,
+            metersToDestination: Double = 1e9,
+            endOnHighway: Bool = false
+        ) -> Double {
+            RoadTierStats.e4MajorHighwayEntryCost(
+                fromTier: from,
+                toTier: to,
+                enabled: enabled,
+                metersFromStart: 1e9,
+                metersToDestination: metersToDestination,
+                startOnHighway: false,
+                endOnHighway: endOnHighway
+            )
+        }
+
+        #expect(entry(.collector, .trunk) == RoadTierStats.e4MajorHighwayEntryCostUnits)
+        #expect(entry(.trunk, .motorway) == 0)
+        #expect(entry(.motorway, .trunk) == 0)
+        #expect(entry(.trunk, .collector) == 0)
+        #expect(entry(.collector, .trunk) == RoadTierStats.e4MajorHighwayEntryCostUnits)
+        #expect(entry(.collector, .arterial) == 0)
+        #expect(entry(.collector, .trunk, enabled: false) == 0)
+        #expect(entry(.collector, .trunk, metersToDestination: 1000, endOnHighway: true) == 0)
+    }
 }

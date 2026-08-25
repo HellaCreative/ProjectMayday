@@ -114,6 +114,8 @@ nonisolated enum RoadTierStats {
     static let e4PreferBackArterialMult = 4.5
     static let e4PreferBackCollectorMult = 0.82
     static let e4HighwayJoinMeters = 6000.0
+    /// Fixed low-road-kilometre equivalent paid once on entry to trunk/motorway.
+    static let e4MajorHighwayEntryCostUnits = 6.0
 
     static func e4AvoidMotorwaysMult(
         tier: RoadTier,
@@ -135,6 +137,25 @@ nonisolated enum RoadTierStats {
         case .arterial: return e4AvoidPrimaryMult
         default: return 1
         }
+    }
+
+    static func e4MajorHighwayEntryCost(
+        fromTier: RoadTier,
+        toTier: RoadTier,
+        enabled: Bool,
+        metersFromStart: Double,
+        metersToDestination: Double,
+        startOnHighway: Bool,
+        endOnHighway: Bool
+    ) -> Double {
+        guard enabled else { return 0 }
+        let fromHighway = fromTier == .motorway || fromTier == .trunk
+        let toHighway = toTier == .motorway || toTier == .trunk
+        guard toHighway, !fromHighway else { return 0 }
+        let near =
+            (endOnHighway && metersToDestination < e4HighwayJoinMeters) ||
+            (startOnHighway && metersFromStart < e4HighwayJoinMeters)
+        return near ? 0 : e4MajorHighwayEntryCostUnits
     }
 
     /// Prefer back roads: penalize arterial; mild collector preference. Never excludes.

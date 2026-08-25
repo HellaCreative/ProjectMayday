@@ -14,6 +14,8 @@ const {
   ROAD_TIER,
   E4_AVOID_MOTORWAY_MULT,
   E4_AVOID_PRIMARY_MULT,
+  E4_MAJOR_HIGHWAY_ENTRY_COST,
+  e4MajorHighwayEntryCost,
   E4_PREFER_BACK_ARTERIAL_MULT
 } = require("./road-tier");
 
@@ -173,5 +175,31 @@ describe("road-tier E4 knobs", () => {
     assert.equal(avoidedPrimary, primary * E4_AVOID_PRIMARY_MULT);
     assert.equal(allowedMotorway, 1);
     assert.equal(avoidedMotorway, 40);
+  });
+
+  it("charges once when Clean enters trunk or motorway and again after leaving", () => {
+    const entry = (fromTier, toTier, enabled = true, overrides = {}) =>
+      e4MajorHighwayEntryCost({
+        fromTier,
+        toTier,
+        enabled,
+        metersFromStart: 1e9,
+        metersToDestination: 1e9,
+        startOnHighway: false,
+        endOnHighway: false,
+        ...overrides
+      });
+
+    assert.equal(entry(ROAD_TIER.COLLECTOR, ROAD_TIER.TRUNK), E4_MAJOR_HIGHWAY_ENTRY_COST);
+    assert.equal(entry(ROAD_TIER.TRUNK, ROAD_TIER.MOTORWAY), 0);
+    assert.equal(entry(ROAD_TIER.MOTORWAY, ROAD_TIER.TRUNK), 0);
+    assert.equal(entry(ROAD_TIER.TRUNK, ROAD_TIER.COLLECTOR), 0);
+    assert.equal(entry(ROAD_TIER.COLLECTOR, ROAD_TIER.TRUNK), E4_MAJOR_HIGHWAY_ENTRY_COST);
+    assert.equal(entry(ROAD_TIER.COLLECTOR, ROAD_TIER.ARTERIAL), 0);
+    assert.equal(entry(ROAD_TIER.COLLECTOR, ROAD_TIER.TRUNK, false), 0);
+    assert.equal(entry(ROAD_TIER.COLLECTOR, ROAD_TIER.TRUNK, true, {
+      endOnHighway: true,
+      metersToDestination: 1000
+    }), 0);
   });
 });

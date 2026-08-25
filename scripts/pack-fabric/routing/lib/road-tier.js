@@ -135,6 +135,10 @@ const E4_AVOID_PRIMARY_MULT = 8;
 const E4_PREFER_BACK_ARTERIAL_MULT = 4.5;
 const E4_PREFER_BACK_COLLECTOR_MULT = 0.82;
 const E4_HIGHWAY_JOIN_METERS = 6000;
+// Fixed low-road-kilometre equivalent paid once on entry to the highway tier.
+// This makes a brief trunk/motorway shortcut compete against the whole rural
+// alternative, rather than winning one cheap fragment at a time.
+const E4_MAJOR_HIGHWAY_ENTRY_COST = 6;
 
 /** Strong soft-hard avoid of motorway + trunk (+links). Pin-join relief near A/B. */
 function e4AvoidMotorwaysMult(
@@ -154,6 +158,19 @@ function e4AvoidMotorwaysMult(
   if (tier === ROAD_TIER.MOTORWAY) return E4_AVOID_MOTORWAY_MULT;
   if (tier === ROAD_TIER.TRUNK) return E4_AVOID_TRUNK_MULT;
   return E4_AVOID_PRIMARY_MULT;
+}
+
+function e4MajorHighwayEntryCost(opts) {
+  if (!opts || !opts.enabled) return 0;
+  const fromTier = opts.fromTier || ROAD_TIER.UNKNOWN;
+  const toTier = opts.toTier || ROAD_TIER.UNKNOWN;
+  const fromHighway = fromTier === ROAD_TIER.MOTORWAY || fromTier === ROAD_TIER.TRUNK;
+  const toHighway = toTier === ROAD_TIER.MOTORWAY || toTier === ROAD_TIER.TRUNK;
+  if (!toHighway || fromHighway) return 0;
+  const near =
+    (!!opts.endOnHighway && Number(opts.metersToDestination) < E4_HIGHWAY_JOIN_METERS) ||
+    (!!opts.startOnHighway && Number(opts.metersFromStart) < E4_HIGHWAY_JOIN_METERS);
+  return near ? 0 : E4_MAJOR_HIGHWAY_ENTRY_COST;
 }
 
 /**
@@ -207,12 +224,14 @@ module.exports = {
   isBlockedForCleanLeaf,
   cleanLeafCostMult,
   e4AvoidMotorwaysMult,
+  e4MajorHighwayEntryCost,
   e4PreferBackRoadsMult,
   e4LeafCostMult,
   e4FlagsForProfile,
   E4_AVOID_MOTORWAY_MULT,
   E4_AVOID_TRUNK_MULT,
   E4_AVOID_PRIMARY_MULT,
+  E4_MAJOR_HIGHWAY_ENTRY_COST,
   E4_PREFER_BACK_ARTERIAL_MULT,
   E4_PREFER_BACK_COLLECTOR_MULT
 };

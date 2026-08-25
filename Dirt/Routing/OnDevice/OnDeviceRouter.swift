@@ -1344,6 +1344,24 @@ nonisolated struct OnDeviceRouter {
         var slots = [UInt8](repeating: 0, count: total)
         var heap = MinHeap()
 
+        // Preserve the arrival road tier across virtual snap stubs and
+        // duplicate-node stitches. The toll belongs at the real transition,
+        // not on every trunk/motorway edge.
+        func predecessorGraphEdgeIndex(at node: Int) -> Int? {
+            var cursor = node
+            for _ in 0..<8 where cursor >= 0 && prev[cursor] >= 0 {
+                if prevKind[cursor] == 0 { return prevData[cursor] }
+                if prevKind[cursor] == 1 {
+                    let id = prevData[cursor]
+                    guard id >= 0, id < virt.count, virt[id].ei >= 0 else { return nil }
+                    return virt[id].ei
+                }
+                guard prevKind[cursor] == 2 else { return nil }
+                cursor = prev[cursor]
+            }
+            return nil
+        }
+
         dist[startVirt] = 0
         pathMeters[startVirt] = 0
         heap.push(node: startVirt, cost: 0)
@@ -1471,6 +1489,19 @@ nonisolated struct OnDeviceRouter {
                         }
                     }
                     step = backtrackPenalized(step, edgeID: eid, ctx: ctx)
+                    let isFerry = GraphV2Pack.isFerryStructure(GraphV2Pack.unpackStructure(attr))
+                    if !isFerry, profile == .cleanest, pack.hasLeaves, ctx.avoidMotorways,
+                       let fromEI = predecessorGraphEdgeIndex(at: cur.node) {
+                        step += RoadTierStats.e4MajorHighwayEntryCost(
+                            fromTier: pack.roadTier(fromEI),
+                            toTier: pack.roadTier(ei),
+                            enabled: true,
+                            metersFromStart: meters(toLL, startSnap.projected),
+                            metersToDestination: meters(toLL, endLL),
+                            startOnHighway: startOnMajorHighway,
+                            endOnHighway: endOnMajorHighway
+                        )
+                    }
                     let cost = cur.cost + step
                     let newDirt = edgeIsDirt(ei)
                     let oldDirt = prevKind[toNode] == 0 ? edgeIsDirt(prevData[toNode]) : false
