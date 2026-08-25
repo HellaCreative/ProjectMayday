@@ -1,8 +1,8 @@
 # Routing Regression Baseline
 
-Captured 2026-08-25 from the live service before applying the routing-research work.
+Captured 2026-08-25 from the live service, then advanced after each accepted routing checkpoint.
 
-- Live `serviceBuild`: `dcd63082d315bc9ef49369669afbf2889507f91c`
+- Live `serviceBuild`: `944dba69bcdf4415ea934bd103bd8650fd181801`
 - Fixed session seed: `3511091208`
 - Fuel setup: 230 km tank, 10% reserve, 207 km usable
 - Access: dual-sport motorcycle, permissive access allowed, unknown access off
@@ -20,16 +20,16 @@ The live oracle uses the app's actual forward workflow: find one reachable fuel 
 | Rural pair | Clean | 56.9 | 0% | 0% | 100% | None |
 | Rural pair | Balanced | 73.6 | 58% | 58% | 42% | None |
 | Rural pair | Dirt | 64.2 | 92% | 83% | 8% | None |
-| Cross-province | Clean | 348.7 | 5.5% | 0% | 94.5% | Wilson's 68.4% |
+| Cross-province | Clean | 364.2 | 5.7% | 0% | 94.3% | Wilson's 68.4% |
 | Cross-province | Balanced | 329.6 | 53.6% | 42.6% | 46.4% | Wilsons 85.8% |
 | Cross-province | Dirt | 362.7 | 67.9% | 55.1% | 32.1% | Wilsons 90% |
-| One-stop | Clean | 277.1 | 0.9% | 0% | 99.1% | Fas Gas Plus 83.1% |
+| One-stop | Clean | 289.7 | 0.6% | 0% | 99.4% | Fas Gas Plus 88.5% |
 | One-stop | Balanced | 265.4 | 53.1% | 45.1% | 46.9% | Mobil 80.8% |
 | One-stop | Dirt | 320.0 | 81.1% | 75.1% | 18.9% | Mobil 90% |
-| Multi-stop | Clean | 930.9 | 3.5% | 0% | 96.5% | XTR 78.9%; Irving 89.8%; Coast Gas 75.2%; Maclean's 87.8%; Ultramar 58.5%; four short Sydney-area hops 2.3–4.3% |
+| Multi-stop | Clean | 940.2 | 3.5% | 0% | 96.5% | XTR 89.8%; Irving 85.1%; Coast Gas 75.2%; Maclean's 87.8%; Ultramar 58.5%; four short Sydney-area hops 2.3–3.9% |
 | Multi-stop | Balanced | 703.0 | 46.8% | 31.5% | 53.2% | Esso 69.3%; Coast Gas 72%; Irving 75.5% |
 | Multi-stop | Dirt | 818.3 | 63% | 55.3% | 37% | Esso 86.2%; Coast Gas 89.7%; Petro-Canada 90% |
-| Canso Causeway | Clean | 300.6 | 8.7% | 0% | 91.3% | Maclean's 77.5% |
+| Canso Causeway | Clean | 305.6 | 8.2% | 0% | 91.8% | Maclean's 77.5% |
 | Canso Causeway | Balanced | 306.0 | 50.1% | 49.1% | 49.9% | Ultramar 85.3% |
 | Canso Causeway | Dirt | 299.6 | 49.1% | 40.8% | 50.9% | Ultramar 90% |
 
@@ -44,3 +44,5 @@ Run `npm run bench:routing-oracle -- --expected-build <live-head> --compare` aft
 - Any movement outside the profile/scenario deliberately targeted by an approved item is a suspected cascade and stops the sequence.
 
 The Clean multi-stop result includes a known pre-existing Sydney-endpoint anomaly: the live workflow adds four very short station hops near the destination. This is recorded, not accepted as correct; it prevents a later change from hiding or worsening it without an explicit diagnosis.
+
+The NS fuel pack also contains duplicate OSM way/area records for the same physical Coast Gas at Densmores Mills (about 3 m apart, with the same name, address, and phone). An oracle-only ID swap between `osm:w548436467` and `osm:a1096872934` is an identity alias, not a route change; distance, stop order, and tank percentage must still match.
