@@ -50,6 +50,45 @@ nonisolated enum UrbanCore {
         Box(minLat: 52.05, maxLat: 52.22, minLon: -106.80, maxLon: -106.55, name: "saskatoon")
     ]
 
+    private struct SettlementRow: Decodable {
+        let minLat: Double
+        let maxLat: Double
+        let minLon: Double
+        let maxLon: Double
+        let name: String
+    }
+
+    private struct SettlementFile: Decodable {
+        let regions: [String: [SettlementRow]]
+    }
+
+    private static let fallbackSettlementsByRegion: [String: [Box]] = {
+        let url = Bundle.main.url(forResource: "UrbanSettlements", withExtension: "json")
+            ?? Bundle(for: UrbanSettlementBundleToken.self)
+                .url(forResource: "UrbanSettlements", withExtension: "json")
+        guard let url,
+              let data = try? Data(contentsOf: url),
+              let decoded = try? JSONDecoder().decode(SettlementFile.self, from: data)
+        else { return [:] }
+        return decoded.regions.mapValues { rows in
+            rows.map {
+                Box(
+                    minLat: $0.minLat,
+                    maxLat: $0.maxLat,
+                    minLon: $0.minLon,
+                    maxLon: $0.maxLon,
+                    name: $0.name
+                )
+            }
+        }
+    }()
+
+    /// Embedded pack metadata is authoritative; compatibility data only fills an empty v3 pack.
+    static func settlementBoxes(embedded: [Box], regionId: String?) -> [Box] {
+        if !embedded.isEmpty { return embedded }
+        return fallbackSettlementsByRegion[regionId?.lowercased() ?? ""] ?? []
+    }
+
     static func box(containing c: CLLocationCoordinate2D, boxes candidateBoxes: [Box]? = nil) -> Box? {
         (candidateBoxes ?? boxes).first { $0.contains(c) }
     }
@@ -191,3 +230,5 @@ nonisolated enum UrbanCore {
         return blocks(point: point, start: start, end: end, boxes: candidateBoxes) ? bounded : 1
     }
 }
+
+private final class UrbanSettlementBundleToken {}

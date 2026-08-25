@@ -60,6 +60,17 @@ struct UrbanCoreTests {
             point: centre, start: centre, end: east, boxes: [town], penalty: 10
         ) == 1)
     }
+
+    @Test func emptyV3PackUsesNovaScotiaTownCompatibilityData() {
+        let fallback = UrbanCore.settlementBoxes(embedded: [], regionId: "NS")
+        #expect(fallback.count > 1)
+        #expect(fallback.contains { $0.name == "Truro" })
+        let embedded = [UrbanCore.Box(
+            minLat: 1, maxLat: 2, minLon: 3, maxLon: 4, name: "pack-authoritative"
+        )]
+        #expect(UrbanCore.settlementBoxes(embedded: embedded, regionId: "ns").first?.name == "pack-authoritative")
+        #expect(UrbanCore.settlementBoxes(embedded: [], regionId: "nb").isEmpty)
+    }
 }
 
 struct CrossPackFuelBudgetTests {

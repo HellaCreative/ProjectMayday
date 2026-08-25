@@ -134,7 +134,9 @@ nonisolated struct OnDeviceRouter {
         pack.urbanCores.isEmpty ? UrbanCore.boxes : pack.urbanCores
     }
 
-    private var packSettlements: [UrbanCore.Box] { pack.settlements }
+    private var packSettlements: [UrbanCore.Box] {
+        UrbanCore.settlementBoxes(embedded: pack.settlements, regionId: pack.regionId)
+    }
 
     /// Meters to the nearest **routable** pack edge within `maxSnapMeters`.
     /// Matches snap policy: unknown tracks are ignored unless `allowUnknown`.

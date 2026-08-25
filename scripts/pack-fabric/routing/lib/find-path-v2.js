@@ -62,6 +62,7 @@ const {
   PASS2_TIME_MS,
   PASS2_POP_CAP
 } = require("./hop-search");
+const { settlementBoxesForPack } = require("./urban-settlements");
 const { applyHonestSurfaceStats } = require("./surface-family");
 const {
   isFerryStructureCode,
@@ -707,10 +708,7 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
     pack.meta && Array.isArray(pack.meta.urbanCores) && pack.meta.urbanCores.length
       ? pack.meta.urbanCores
       : undefined;
-  const settlementBoxes =
-    pack.meta && Array.isArray(pack.meta.settlements)
-      ? pack.meta.settlements
-      : [];
+  const settlementBoxes = settlementBoxesForPack(pack);
   const geom = runtime.geom;
   const enums = runtime.enums;
   const avoid = avoidEdgeIds instanceof Set ? avoidEdgeIds : null;
