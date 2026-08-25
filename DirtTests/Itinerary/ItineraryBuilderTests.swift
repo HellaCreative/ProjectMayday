@@ -148,7 +148,7 @@ struct ItineraryBuilderTests {
         #expect((plans.first?.fuel.windowMaxStops ?? 0) >= (plans.last?.fuel.windowMaxStops ?? 0))
         #expect(plans.allSatisfy { $0.fuel.allowPartialWindow == true })
         #expect(plans.allSatisfy { $0.fuel.forwardFeeler != true })
-        #expect(plans.allSatisfy { $0.fuel.windowTimeBudgetMs == 5_800 })
+        #expect(plans.allSatisfy { $0.fuel.windowTimeBudgetMs == 15_000 })
         #expect(plans[1].locations[0].longitude == stops[0].longitude)
         #expect(plans[2].locations[0].longitude == stops[1].longitude)
         #expect(plans[3].locations[0].longitude == stops[2].longitude)

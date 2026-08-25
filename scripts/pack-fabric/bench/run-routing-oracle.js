@@ -139,7 +139,7 @@ async function runCase(profile, scenario, buildState, identities) {
         excludedStationIds: [...excludedStationIds],
         windowMaxStops: 1,
         allowPartialWindow: true,
-        windowTimeBudgetMs: 5_800,
+        windowTimeBudgetMs: 15_000,
         // Match the app: fuel allocation must prove the active profile route
         // to each committed stop or destination. Graph-only feelers can claim
         // Clean reached B while the actual Clean hop still exceeds the tank.

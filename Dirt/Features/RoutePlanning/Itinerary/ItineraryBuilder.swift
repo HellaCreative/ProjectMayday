@@ -754,7 +754,7 @@ final class ItineraryBuilder {
                         windowMaxStops: 1,
                         allowPartialWindow: true,
                         windowTimeBudgetMs: min(
-                            5_800,
+                            15_000,
                             max(100, progressWatchdog.remainingMilliseconds())
                         ),
                         requiredFirstStationId: requiredStationID,
@@ -1138,7 +1138,7 @@ final class ItineraryBuilder {
                         ? min(4, max(1, remainingStops + 1))
                         : nil,
                     allowPartialWindow: usesWindows,
-                    windowTimeBudgetMs: min(5_800, remainingBudgetMs),
+                    windowTimeBudgetMs: min(15_000, remainingBudgetMs),
                     requiredFirstStationId: requiredStationID
                 ))
             } catch {

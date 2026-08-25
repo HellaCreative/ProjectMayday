@@ -141,14 +141,14 @@ test("one-stop window keeps a proven pump when evaluation crosses its deadline",
     minimumFuelStops: 3,
     maxStops: 1,
     allowPartialWindow: true,
-    timeBudgetMs: 1,
+    timeBudgetMs: 50,
     routeCandidate: ({ candidate }) => new Promise((resolve) => {
       setTimeout(() => resolve({
         status: "complete",
         distanceMeters: candidate.graphMeters,
         stats: { dirtPercent: 80 },
         segments: []
-      }), 5);
+      }), 75);
     })
   });
 
@@ -156,6 +156,32 @@ test("one-stop window keeps a proven pump when evaluation crosses its deadline",
   assert.equal(result.windowComplete, false);
   assert.deepEqual(result.stops.map((row) => row.id), ["f1"]);
   assert.deepEqual(result.graphMeters, [78_626]);
+});
+
+test("a difficult first window evaluates all six distinct station choices", async () => {
+  const result = await planFuelChainOnRuntime({
+    runtime: lineRuntime(),
+    stations: [
+      station("f1", 0.5), station("f2", 1), station("f3", 1.5),
+      station("f4", 2), station("f5", 2.5), station("f6", 3)
+    ],
+    start: { lat: 45, lon: 0 },
+    destination: { lat: 45, lon: 4 },
+    profile: "cleanest",
+    accessPolicy: { motorizedPermissive: true, motorizedUnknown: false },
+    usableRangeMeters: 250_000,
+    firstLegMaxMeters: 250_000,
+    maxStops: 1,
+    allowPartialWindow: true,
+    timeBudgetMs: 15_000,
+    routeCandidate: fixtureRouteCandidate
+  });
+
+  assert.equal(result.ok, true);
+  const firstWindow = result.stationCandidates.filter((row) => row.departureId === "start");
+  assert.equal(firstWindow.length, 6);
+  assert.deepEqual(new Set(firstWindow.map((row) => row.id)),
+    new Set(["f1", "f2", "f3", "f4", "f5", "f6"]));
 });
 
 test("a rider fuel-stop override forces the first station without changing later search", async () => {
