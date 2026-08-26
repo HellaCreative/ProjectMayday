@@ -21,10 +21,10 @@ enum CorridorTilePlanner {
         let truncated: Bool
     }
 
-    private static let maxNativeZoom = 14
-    private static let maxTiles = 1200
+    nonisolated private static let maxNativeZoom = 14
+    nonisolated private static let maxTiles = 1200
 
-    static func collectRouteTiles(
+    nonisolated static func collectRouteTiles(
         coordinates: [RouteCoordinate],
         viewportWidth: Double = 390,
         viewportHeight: Double = 844
@@ -77,26 +77,26 @@ enum CorridorTilePlanner {
 
     // MARK: - Geometry helpers
 
-    private static func clamp(_ value: Double, _ minV: Double, _ maxV: Double) -> Double {
+    nonisolated private static func clamp(_ value: Double, _ minV: Double, _ maxV: Double) -> Double {
         min(maxV, max(minV, value))
     }
 
-    private static func mercatorX(_ lon: Double) -> Double { (lon + 180) / 360 }
+    nonisolated private static func mercatorX(_ lon: Double) -> Double { (lon + 180) / 360 }
 
-    private static func mercatorY(_ lat: Double) -> Double {
+    nonisolated private static func mercatorY(_ lat: Double) -> Double {
         let safe = clamp(lat, -85.05112878, 85.05112878)
         let rad = safe * .pi / 180
         return (1 - log(tan(rad) + 1 / cos(rad)) / .pi) / 2
     }
 
-    private static func coordToTile(_ lon: Double, _ lat: Double, z: Int) -> (x: Int, y: Int) {
+    nonisolated private static func coordToTile(_ lon: Double, _ lat: Double, z: Int) -> (x: Int, y: Int) {
         let scale = pow(2.0, Double(z))
         let x = Int(clamp(floor(mercatorX(lon) * scale), 0, scale - 1))
         let y = Int(clamp(floor(mercatorY(lat) * scale), 0, scale - 1))
         return (x, y)
     }
 
-    private static func routeBounds(_ coords: [RouteCoordinate], paddingRatio: Double) -> (minLon: Double, minLat: Double, maxLon: Double, maxLat: Double) {
+    nonisolated private static func routeBounds(_ coords: [RouteCoordinate], paddingRatio: Double) -> (minLon: Double, minLat: Double, maxLon: Double, maxLat: Double) {
         var minLon = Double.infinity, minLat = Double.infinity
         var maxLon = -Double.infinity, maxLat = -Double.infinity
         for c in coords {
@@ -115,7 +115,7 @@ enum CorridorTilePlanner {
         )
     }
 
-    private static func fitZoomForBounds(
+    nonisolated private static func fitZoomForBounds(
         _ bounds: (minLon: Double, minLat: Double, maxLon: Double, maxLat: Double),
         width: Double,
         height: Double,
@@ -130,7 +130,7 @@ enum CorridorTilePlanner {
         return min(maxZoom, max(0, z))
     }
 
-    private static func traceRouteTileKeys(_ coords: [RouteCoordinate], z: Int) -> Set<String> {
+    nonisolated private static func traceRouteTileKeys(_ coords: [RouteCoordinate], z: Int) -> Set<String> {
         var keys = Set<String>()
         let scale = pow(2.0, Double(z))
         guard coords.count >= 2 else {
@@ -156,7 +156,7 @@ enum CorridorTilePlanner {
         return keys
     }
 
-    private static func levelCandidates(
+    nonisolated private static func levelCandidates(
         _ coords: [RouteCoordinate],
         bounds: (minLon: Double, minLat: Double, maxLon: Double, maxLat: Double),
         z: Int
@@ -197,7 +197,7 @@ enum CorridorTilePlanner {
         return (z, core, extras)
     }
 
-    private static func evenlySelect(_ values: [String], limit: Int) -> [String] {
+    nonisolated private static func evenlySelect(_ values: [String], limit: Int) -> [String] {
         guard limit > 0, !values.isEmpty else { return [] }
         if values.count <= limit { return values }
         if limit == 1 { return [values[0]] }
@@ -213,7 +213,7 @@ enum CorridorTilePlanner {
         return selected
     }
 
-    private static func parseKey(_ key: String) -> Tile? {
+    nonisolated private static func parseKey(_ key: String) -> Tile? {
         let parts = key.split(separator: "/").compactMap { Int($0) }
         guard parts.count == 3 else { return nil }
         return Tile(z: parts[0], x: parts[1], y: parts[2])
