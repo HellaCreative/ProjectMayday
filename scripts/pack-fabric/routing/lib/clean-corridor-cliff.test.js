@@ -27,7 +27,7 @@ const FAIL_TO = { lat: 44.872924, lon: -63.220318 };
 
 const NS_GRAPH = path.resolve(
   __dirname,
-  "../../app/data/packs/v1/ns/graph.v2.bin"
+  "../../app/data/packs/v1/ns/graph.v3.bin"
 );
 
 function loadNsRuntime() {
