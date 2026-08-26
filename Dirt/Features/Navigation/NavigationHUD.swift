@@ -47,6 +47,16 @@ struct NavCueCard: View {
                         .font(.dirtUI(14, weight: .heavy))
                         .foregroundStyle(DirtTheme.panelText.opacity(0.7))
                 }
+                if !nav.offRoute,
+                   app.cueSettings.mode == .rally,
+                   let following = nav.followingManeuver,
+                   following.isRallyCurve {
+                    Text("Next \(following.displayLabel(cueMode: .rally)) · \(Self.formatDistance(nav.followingManeuverMeters ?? 0))")
+                        .font(.dirtUI(11, weight: .semibold))
+                        .foregroundStyle(DirtTheme.panelText.opacity(0.72))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .layoutPriority(1)
@@ -242,6 +252,11 @@ enum NavTripFormat {
         meters < 1 ? "0" : "\(Int(meters.rounded()))"
     }
 
+    static func elapsed(_ seconds: Double) -> String {
+        let totalMinutes = max(0, Int(seconds) / 60)
+        return String(format: "%d:%02d", totalMinutes / 60, totalMinutes % 60)
+    }
+
     static func tripSummaryLine(
         remainingKm: Double,
         phase: NavigationSession.Phase,
@@ -396,6 +411,7 @@ struct NavBottomPanel: View {
     private var activeCard: some View {
         TimelineView(.periodic(from: .now, by: 1)) { _ in
             VStack(alignment: .leading, spacing: 8) {
+                waypointProgress
                 statusRow
 
                 if statsExpanded {
@@ -425,13 +441,56 @@ struct NavBottomPanel: View {
         }
     }
 
+    /// The rider's next meaningful anchor is primary trip information—not a
+    /// hidden detail. Keep it visible beside its live countdown at all times.
+    private var waypointProgress: some View {
+        HStack(alignment: .center, spacing: 10) {
+            Image(systemName: nav.currentStage?.kind == .fuelStop ? "fuelpump.fill" : "flag.checkered")
+                .font(.system(size: 22, weight: .bold))
+                .foregroundStyle(DirtTheme.orange)
+                .frame(width: 30)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(nav.currentStage?.title ?? "Destination")
+                    .font(.dirtUI(18, weight: .heavy))
+                    .foregroundStyle(DirtTheme.panelText)
+                    .lineLimit(1)
+                if let detail = nav.currentStage?.detail, !detail.isEmpty {
+                    Text(detail)
+                        .font(.dirtUI(12, weight: .semibold))
+                        .foregroundStyle(DirtTheme.panelText.opacity(0.72))
+                        .lineLimit(1)
+                }
+                Text("\(NavTripFormat.travelTime(phase: nav.phase, etaSeconds: nav.etaSeconds)) to waypoint · Ride \(NavTripFormat.elapsed(nav.elapsedSeconds))")
+                    .font(.dirtUI(11, weight: .semibold))
+                    .foregroundStyle(DirtTheme.panelText.opacity(0.82))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+            }
+            Spacer(minLength: 6)
+            Text(Self.waypointDistance(nav.remainingInCurrentStageMeters))
+                .font(.dirtMono(22, weight: .bold))
+                .foregroundStyle(DirtTheme.panelValue)
+                .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Next \(nav.currentStage?.title ?? "destination"), \(Self.waypointDistance(nav.remainingInCurrentStageMeters)), \(NavTripFormat.travelTime(phase: nav.phase, etaSeconds: nav.etaSeconds))")
+    }
+
+    private static func waypointDistance(_ meters: Double) -> String {
+        if meters >= 10_000 { return "\(Int((meters / 1000).rounded())) km" }
+        if meters >= 1_000 { return String(format: "%.1f km", meters / 1000) }
+        return "\(Int(max(0, meters).rounded())) m"
+    }
+
     /// Surface under the tires (left) + remaining trip (right) on one tappable line.
     private var statusRow: some View {
-        let summary = NavTripFormat.tripSummaryLine(
-            remainingKm: nav.remainingMeters / 1000,
-            phase: nav.phase,
-            etaSeconds: nav.etaSeconds,
-            climbMeters: nav.climbMeters
+        let summary = String(
+            format: "Destination %.1f km · +%@ m",
+            nav.remainingMeters / 1000,
+            NavTripFormat.climbMeters(nav.climbMeters)
         )
         return Button {
             withAnimation(.easeInOut(duration: 0.18)) { statsExpanded.toggle() }
@@ -453,22 +512,15 @@ struct NavBottomPanel: View {
                     .foregroundStyle(DirtTheme.panelText.opacity(0.85))
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
-                Image(systemName: "chevron.up")
+                Image(systemName: "chevron.down")
                     .font(.system(size: 10, weight: .black))
                     .foregroundStyle(DirtTheme.orange)
                     .rotationEffect(.degrees(statsExpanded ? 180 : 0))
             }
-            .padding(.horizontal, 10)
+            .padding(.horizontal, 2)
             .frame(maxWidth: .infinity, minHeight: DirtHit.min)
-            .background(surfaceIsAlert ? DirtTheme.orange.opacity(0.16) : Color.clear)
-            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .stroke(
-                        surfaceIsAlert ? DirtTheme.orange.opacity(0.55) : DirtTheme.chromeBorder,
-                        lineWidth: surfaceIsAlert ? 1.5 : 1
-                    )
-            )
+            .background(surfaceIsAlert ? DirtTheme.orange.opacity(0.12) : Color.clear)
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -485,13 +537,8 @@ struct NavBottomPanel: View {
     @ViewBuilder
     private func tripStatBoxes(compact: Bool) -> some View {
         NavStatBox(
-            label: "km to go",
+            label: "destination km",
             value: String(format: "%.1f", nav.remainingMeters / 1000),
-            compact: compact
-        )
-        NavStatBox(
-            label: nav.travelTimeLabel,
-            value: NavTripFormat.travelTime(phase: nav.phase, etaSeconds: nav.etaSeconds),
             compact: compact
         )
         NavStatBox(
@@ -581,6 +628,33 @@ struct NavLandscapeRail: View {
 
     private var activeRail: some View {
         VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 5) {
+                    Image(systemName: nav.currentStage?.kind == .fuelStop ? "fuelpump.fill" : "flag.checkered")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundStyle(DirtTheme.orange)
+                    Text(nav.currentStage?.title ?? "Destination")
+                        .font(.dirtUI(13, weight: .heavy))
+                        .foregroundStyle(DirtTheme.panelText)
+                        .lineLimit(1)
+                }
+                if let detail = nav.currentStage?.detail, !detail.isEmpty {
+                    Text(detail)
+                        .font(.dirtUI(9, weight: .semibold))
+                        .foregroundStyle(DirtTheme.panelText.opacity(0.72))
+                        .lineLimit(1)
+                }
+                Text(Self.waypointDistance(nav.remainingInCurrentStageMeters))
+                    .font(.dirtMono(19, weight: .bold))
+                    .foregroundStyle(DirtTheme.panelValue)
+                    .monospacedDigit()
+                Text("\(NavTripFormat.travelTime(phase: nav.phase, etaSeconds: nav.etaSeconds)) · Ride \(NavTripFormat.elapsed(nav.elapsedSeconds))")
+                    .font(.dirtUI(9, weight: .semibold))
+                    .foregroundStyle(DirtTheme.panelText.opacity(0.82))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
+
             HStack(spacing: 6) {
                 Image(systemName: surfaceIsAlert ? "exclamationmark.triangle.fill" : "road.lanes")
                     .font(.system(size: 12, weight: .bold))
@@ -602,12 +676,7 @@ struct NavLandscapeRail: View {
                 NavEndButton(title: "END", fillWidth: true) { showEndConfirm = true }
             }
 
-            let summary = NavTripFormat.tripSummaryLine(
-                remainingKm: nav.remainingMeters / 1000,
-                phase: nav.phase,
-                etaSeconds: nav.etaSeconds,
-                climbMeters: nav.climbMeters
-            )
+            let summary = String(format: "Destination %.1f km · +%@ m", nav.remainingMeters / 1000, NavTripFormat.climbMeters(nav.climbMeters))
             Button {
                 withAnimation(.easeInOut(duration: 0.18)) { statsExpanded.toggle() }
             } label: {
@@ -633,13 +702,8 @@ struct NavLandscapeRail: View {
             if statsExpanded {
                 VStack(spacing: 8) {
                     NavStatBox(
-                        label: "km to go",
+                        label: "destination km",
                         value: String(format: "%.1f", nav.remainingMeters / 1000),
-                        compact: true
-                    )
-                    NavStatBox(
-                        label: nav.travelTimeLabel,
-                        value: NavTripFormat.travelTime(phase: nav.phase, etaSeconds: nav.etaSeconds),
                         compact: true
                     )
                     NavStatBox(
@@ -658,6 +722,12 @@ struct NavLandscapeRail: View {
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .stroke(DirtTheme.chromeBorder, lineWidth: 1)
         )
+    }
+
+    private static func waypointDistance(_ meters: Double) -> String {
+        if meters >= 10_000 { return "\(Int((meters / 1000).rounded())) km" }
+        if meters >= 1_000 { return String(format: "%.1f km", meters / 1000) }
+        return "\(Int(max(0, meters).rounded())) m"
     }
 
     private var prefetchRail: some View {

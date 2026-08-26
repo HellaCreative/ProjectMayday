@@ -53,6 +53,8 @@ final class NavigationSession {
     /// Structured maneuver behind `currentCue` (side / rally number / kind) for
     /// the HUD cue card. Nil for surface alerts, off-route, and arrival states.
     private(set) var currentManeuver: RouteManeuver?
+    private(set) var followingManeuver: RouteManeuver?
+    private(set) var followingManeuverMeters: Double?
     /// Wall-clock start of the active session (survives mid-trip reroutes).
     private(set) var startedAt: Date?
     private(set) var currentSurfaceLabel: String?
@@ -71,6 +73,8 @@ final class NavigationSession {
     private var lastRerouteRequest: Date?
     private var lastSurfaceAlertKey: String?
     private var deliveredCuePhases: [String: Set<NavigationCuePhase>] = [:]
+    private var announcedStageApproaches: Set<String> = []
+    private var announcedStageArrivals: Set<String> = []
 
     struct SurfaceRun: Sendable {
         let startMeters: Double
@@ -174,14 +178,18 @@ final class NavigationSession {
         offRoute = false
         offRouteStrikes = 0
         lastSurfaceAlertKey = nil
-        deliveredCuePhases = [:]
         if !continuing {
+            deliveredCuePhases = [:]
+            announcedStageApproaches = []
+            announcedStageArrivals = []
             climbMeters = 0
             lastAltitudeMeters = nil
         }
         currentCue = "Follow the route"
         currentCueMeters = nil
         currentManeuver = nil
+        followingManeuver = nil
+        followingManeuverMeters = nil
         currentSurfaceLabel = surfaceRuns.first?.label
         upcomingSurfaceAlert = nil
         phase = .active
@@ -200,6 +208,8 @@ final class NavigationSession {
         currentCue = "Follow the route"
         currentCueMeters = nil
         currentManeuver = nil
+        followingManeuver = nil
+        followingManeuverMeters = nil
     }
 
     /// Replaces the line mid-trip (recalculate). Offline tiles are kept.
@@ -275,6 +285,8 @@ final class NavigationSession {
             currentCue = "Off route — recalculating…"
             currentCueMeters = nil
             currentManeuver = nil
+            followingManeuver = nil
+            followingManeuverMeters = nil
             upcomingSurfaceAlert = nil
             let now = Date()
             if lastRerouteRequest == nil || now.timeIntervalSince(lastRerouteRequest!) > 20 {
@@ -291,6 +303,14 @@ final class NavigationSession {
         let metersToTurn = nextManeuver.flatMap { man -> Double? in
             guard let along = man.alongMeters else { return nil }
             return max(0, along - traveledMeters)
+        }
+        if let nextAlong = nextManeuver?.alongMeters,
+           let following = visibleManeuvers.first(where: { ($0.alongMeters ?? 0) > nextAlong + 15 }) {
+            followingManeuver = following
+            followingManeuverMeters = following.alongMeters.map { max(0, $0 - traveledMeters) }
+        } else {
+            followingManeuver = nil
+            followingManeuverMeters = nil
         }
 
         // Top cue card + voice are turn-by-turn only. Surface stays on the bottom
@@ -316,6 +336,26 @@ final class NavigationSession {
         }
 
         announceCueIfNeeded(nextManeuver: nextManeuver, metersToTurn: metersToTurn)
+        announceStageIfNeeded()
+    }
+
+    private func announceStageIfNeeded() {
+        guard let stage = currentStage else { return }
+        let meters = remainingInCurrentStageMeters
+        let spokenName: String = {
+            if stage.kind == .fuelStop, stage.title.hasPrefix("F") {
+                return "Fuel \(stage.title.dropFirst())"
+            }
+            return stage.title
+        }()
+        if meters <= 120, !announcedStageArrivals.contains(stage.id) {
+            announcedStageApproaches.insert(stage.id)
+            announcedStageArrivals.insert(stage.id)
+            onCueAnnounced?("Arriving at \(spokenName)", "waypoint-\(stage.id)|now")
+        } else if meters <= 2_000, !announcedStageApproaches.contains(stage.id) {
+            announcedStageApproaches.insert(stage.id)
+            onCueAnnounced?("\(spokenName) in two kilometres", "waypoint-\(stage.id)|prepare")
+        }
     }
 
     private func announceCueIfNeeded(nextManeuver: RouteManeuver?, metersToTurn: Double?) {
@@ -360,10 +400,14 @@ final class NavigationSession {
         currentCue = "Follow the route"
         currentCueMeters = nil
         currentManeuver = nil
+        followingManeuver = nil
+        followingManeuverMeters = nil
         currentSurfaceLabel = nil
         upcomingSurfaceAlert = nil
         lastSurfaceAlertKey = nil
         deliveredCuePhases = [:]
+        announcedStageApproaches = []
+        announcedStageArrivals = []
         climbMeters = 0
         lastAltitudeMeters = nil
         startedAt = nil
