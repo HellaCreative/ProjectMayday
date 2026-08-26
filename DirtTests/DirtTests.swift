@@ -221,6 +221,16 @@ struct DirtTests {
         #expect(NavigationCueMode.fromStorage("unknown") == .junctions)
     }
 
+    @Test func navigationCueCadenceAdaptsAndStaysBounded() {
+        #expect(NavigationCuePhase.phase(forMeters: 601, speedMPS: 40) == nil)
+        #expect(NavigationCuePhase.phase(forMeters: 600, speedMPS: 40) == .prepare)
+        #expect(NavigationCuePhase.phase(forMeters: 81, speedMPS: 40) == .prepare)
+        #expect(NavigationCuePhase.phase(forMeters: 80, speedMPS: 40) == .now)
+        #expect(NavigationCuePhase.phase(forMeters: 161, speedMPS: 1) == nil)
+        #expect(NavigationCuePhase.phase(forMeters: 160, speedMPS: 1) == .prepare)
+        #expect(NavigationCuePhase.phase(forMeters: 25, speedMPS: 1) == .now)
+    }
+
     @Test func backgroundLocationRequiresInfoPlistMode() {
         #expect(!LocationBackgroundPolicy.shouldEnable(
             requested: true,

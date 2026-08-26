@@ -70,7 +70,7 @@ final class NavigationSession {
     private var offRouteStrikes = 0
     private var lastRerouteRequest: Date?
     private var lastSurfaceAlertKey: String?
-    private var lastAnnouncedCue: String?
+    private var deliveredCuePhases: [String: Set<NavigationCuePhase>] = [:]
 
     struct SurfaceRun: Sendable {
         let startMeters: Double
@@ -172,7 +172,7 @@ final class NavigationSession {
         offRoute = false
         offRouteStrikes = 0
         lastSurfaceAlertKey = nil
-        lastAnnouncedCue = nil
+        deliveredCuePhases = [:]
         if !continuing {
             climbMeters = 0
             lastAltitudeMeters = nil
@@ -194,7 +194,7 @@ final class NavigationSession {
             cueMode: cueMode
         )
             .sorted { ($0.alongMeters ?? 0) < ($1.alongMeters ?? 0) }
-        lastAnnouncedCue = nil
+        deliveredCuePhases = [:]
         currentCue = "Follow the route"
         currentCueMeters = nil
         currentManeuver = nil
@@ -227,7 +227,10 @@ final class NavigationSession {
     func update(with location: CLLocation) {
         guard phase == .active, coordinates.count > 1 else { return }
         if location.speed >= 0 {
-            lastSpeedMPS = location.speed
+            let measured = location.speed
+            lastSpeedMPS = lastSpeedMPS > 0
+                ? lastSpeedMPS * 0.75 + measured * 0.25
+                : measured
         }
         // Accumulate uphill only — ignore noisy verticals and downhill.
         if location.verticalAccuracy >= 0, location.verticalAccuracy < 30 {
@@ -315,13 +318,23 @@ final class NavigationSession {
         guard phase == .active else { return }
         guard let man = nextManeuver, let meters = metersToTurn else { return }
 
-        let band = NavigationCueBand.band(forMeters: meters)
-        guard band.shouldSpeak else { return }
+        guard let cuePhase = NavigationCuePhase.phase(
+            forMeters: meters,
+            speedMPS: lastSpeedMPS
+        ) else { return }
 
-        let spoken = man.spokenLabel(cueMode: cueMode, meters: meters)
-        let key = "\(man.announceIdentity)-\(band.rawValue)"
-        guard key != lastAnnouncedCue else { return }
-        lastAnnouncedCue = key
+        let identity = man.announceIdentity
+        let delivered = deliveredCuePhases[identity] ?? []
+        guard !delivered.contains(cuePhase) else { return }
+        // A rider who first enters the window at "now" must never receive a
+        // late prepare after GPS jitter moves the projection backwards.
+        var updated = delivered
+        if cuePhase == .now { updated.insert(.prepare) }
+        updated.insert(cuePhase)
+        deliveredCuePhases[identity] = updated
+
+        let spoken = man.spokenLabel(cueMode: cueMode, meters: meters, phase: cuePhase)
+        let key = "\(identity)|\(cuePhase.rawValue)"
         onCueAnnounced?(spoken, key)
     }
 
@@ -346,7 +359,7 @@ final class NavigationSession {
         currentSurfaceLabel = nil
         upcomingSurfaceAlert = nil
         lastSurfaceAlertKey = nil
-        lastAnnouncedCue = nil
+        deliveredCuePhases = [:]
         climbMeters = 0
         lastAltitudeMeters = nil
         startedAt = nil

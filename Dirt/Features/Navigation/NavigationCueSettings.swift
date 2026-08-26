@@ -191,6 +191,21 @@ enum NavigationCueBand: Int, Sendable {
     }
 }
 
+/// Spoken delivery moves forward only: prepare → now → passed.
+nonisolated enum NavigationCuePhase: String, Hashable, Sendable {
+    case prepare
+    case now
+
+    static func phase(forMeters meters: Double, speedMPS: Double) -> NavigationCuePhase? {
+        let planningSpeed = speedMPS > 2 ? speedMPS : 12
+        let prepareLead = min(600, max(160, planningSpeed * 20))
+        let nowLead = min(80, max(25, planningSpeed * 3))
+        if meters <= nowLead { return .now }
+        if meters <= prepareLead { return .prepare }
+        return nil
+    }
+}
+
 @MainActor
 @Observable
 final class NavigationCueSettings: NSObject, AVSpeechSynthesizerDelegate {
@@ -210,6 +225,7 @@ final class NavigationCueSettings: NSObject, AVSpeechSynthesizerDelegate {
         didSet {
             UserDefaults.standard.set(audioEnabled ? "on" : "off", forKey: audioKey)
             if !audioEnabled {
+                speechQueue = []
                 synthesizer.stopSpeaking(at: .immediate)
                 lastSpokenKey = ""
                 deactivateSpeechSessionSoon()
@@ -224,7 +240,13 @@ final class NavigationCueSettings: NSObject, AVSpeechSynthesizerDelegate {
     private var lastSpokenKey = ""
     private var speechSessionActive = false
     private var deactivateWorkItem: DispatchWorkItem?
-    private var pendingSpeakWorkItem: DispatchWorkItem?
+    private struct PendingSpeech {
+        let text: String
+        let announceKey: String
+        let maneuverKey: String
+        let isNow: Bool
+    }
+    private var speechQueue: [PendingSpeech] = []
 
     override init() {
         let defaults = UserDefaults.standard
@@ -243,41 +265,41 @@ final class NavigationCueSettings: NSObject, AVSpeechSynthesizerDelegate {
         guard trimmed.count >= 2 else { return }
         guard announceKey != lastSpokenKey else { return }
 
-        guard activateSpeechSession() else {
-            // Don't burn the key — retry on the next GPS tick once the session is free.
-            return
+        let parts = announceKey.split(separator: "|", maxSplits: 1).map(String.init)
+        let maneuverKey = parts.first ?? announceKey
+        let isNow = parts.last == NavigationCuePhase.now.rawValue
+        guard !speechQueue.contains(where: { $0.announceKey == announceKey }) else { return }
+        if isNow {
+            speechQueue.removeAll { $0.maneuverKey == maneuverKey && !$0.isNow }
         }
+        speechQueue.append(
+            PendingSpeech(
+                text: trimmed,
+                announceKey: announceKey,
+                maneuverKey: maneuverKey,
+                isNow: isNow
+            )
+        )
+        speakNextQueuedIfPossible()
+    }
 
-        lastSpokenKey = announceKey
-        pendingSpeakWorkItem?.cancel()
-
-        let utterance = AVSpeechUtterance(string: trimmed)
+    private func speakNextQueuedIfPossible() {
+        guard audioEnabled, !synthesizer.isSpeaking, !speechQueue.isEmpty else { return }
+        guard activateSpeechSession() else { return }
+        let next = speechQueue.removeFirst()
+        lastSpokenKey = next.announceKey
+        let utterance = AVSpeechUtterance(string: next.text)
         utterance.rate = AVSpeechUtteranceDefaultSpeechRate * 0.90
         utterance.pitchMultiplier = 0.97
         utterance.preUtteranceDelay = 0.02
         utterance.volume = Self.voiceoverVolume
         utterance.voice = CueSpeechVoice.preferred()
-
-        // Never stop→speak on the same tick — that races an empty PCM buffer.
-        if synthesizer.isSpeaking {
-            synthesizer.stopSpeaking(at: .immediate)
-            let work = DispatchWorkItem { [weak self] in
-                guard let self, self.audioEnabled else { return }
-                guard self.activateSpeechSession() else { return }
-                self.synthesizer.speak(utterance)
-            }
-            pendingSpeakWorkItem = work
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05, execute: work)
-            return
-        }
-
         synthesizer.speak(utterance)
     }
 
     /// Stop cues when navigation ends. Music was never ducked.
     func stopSpeaking() {
-        pendingSpeakWorkItem?.cancel()
-        pendingSpeakWorkItem = nil
+        speechQueue = []
         synthesizer.stopSpeaking(at: .immediate)
         lastSpokenKey = ""
         deactivateSpeechSessionSoon()
@@ -319,8 +341,7 @@ final class NavigationCueSettings: NSObject, AVSpeechSynthesizerDelegate {
 
     private func deactivateSpeechSessionNow() {
         guard speechSessionActive else { return }
-        // Don't tear down while a deferred speak is still queued.
-        if pendingSpeakWorkItem != nil { return }
+        if !speechQueue.isEmpty { return }
         if synthesizer.isSpeaking { return }
         speechSessionActive = false
         do {
@@ -334,13 +355,19 @@ final class NavigationCueSettings: NSObject, AVSpeechSynthesizerDelegate {
 
     nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
         Task { @MainActor in
-            self.deactivateSpeechSessionSoon()
+            self.speakNextQueuedIfPossible()
+            if self.speechQueue.isEmpty {
+                self.deactivateSpeechSessionSoon()
+            }
         }
     }
 
     nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
         Task { @MainActor in
-            self.deactivateSpeechSessionSoon()
+            self.speakNextQueuedIfPossible()
+            if self.speechQueue.isEmpty {
+                self.deactivateSpeechSessionSoon()
+            }
         }
     }
 }
@@ -405,7 +432,11 @@ extension RouteManeuver {
 
     /// Spoken callout. Junctions get distance bands ("In 200 metres, Turn left").
     /// Rally roadbook cues stay short ("right 6") — no distance preface.
-    func spokenLabel(cueMode: NavigationCueMode, meters: Double?) -> String {
+    func spokenLabel(
+        cueMode: NavigationCueMode,
+        meters: Double?,
+        phase: NavigationCuePhase? = nil
+    ) -> String {
         let core = displayLabel(cueMode: cueMode)
         // Rally curves: number + side only.
         if cueMode == .rally {
@@ -414,20 +445,23 @@ extension RouteManeuver {
                 let base = number == 1
                     ? "\(spokenSide) 1 hairpin"
                     : "\(spokenSide) \(number)"
-                let band = NavigationCueBand.band(forMeters: meters)
-                return band == .now ? "\(base) now" : base
+                if phase == .now { return "\(base) now" }
+                if let meters {
+                    let rounded = max(10, Int((meters / 10.0).rounded() * 10))
+                    return "In \(rounded) metres, \(base)"
+                }
+                return base
             }
             return core.lowercased()
         }
         guard let meters else { return core }
-        let band = NavigationCueBand.band(forMeters: meters)
-        switch band {
+        switch phase {
         case .now:
             return "\(core) now"
-        case .near, .mid:
+        case .prepare:
             let rounded = max(10, Int((meters / 10.0).rounded() * 10))
             return "In \(rounded) metres, \(core)"
-        case .far, .none:
+        case nil:
             return core
         }
     }
