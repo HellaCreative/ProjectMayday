@@ -357,7 +357,7 @@ nonisolated enum PackNetworkOverlay {
             let accessCode = GraphV2Pack.unpackAccess(attr)
             let access = (accessCode >= 0 && accessCode < pack.accessNames.count)
                 ? pack.accessNames[accessCode]
-                : "motorized_permissive"
+                : "motorized_unknown"
             let leaves = pack.edgeLeaves(ei)
             out.append(
                 NetworkLineFeature(

@@ -851,7 +851,7 @@ function debugGraphResponse(body, graphResolution, runtime) {
       edgeId,
       coordinates: debugPolyline(coords),
       surfaceClass: (enums.SURFACE_NAME || [])[surfaceCode] || "unknown",
-      accessClass: (enums.ACCESS_NAME || [])[accessCode] || "motorized_permissive",
+      accessClass: (enums.ACCESS_NAME || [])[accessCode] || "motorized_unknown",
       structureType: (enums.STRUCTURE_NAME || [])[structureCode] || "none",
       roadClass
     });

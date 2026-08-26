@@ -14,15 +14,18 @@ const {
 } = require("./ferry");
 const { applyHonestSurfaceStats } = require("./surface-family");
 
-test("parseOsmDuration reads HH:MM, bare minutes, and seconds", () => {
+test("parseOsmDuration requires HH:MM or an explicit unit", () => {
   assert.equal(parseOsmDuration("1:30"), 5400);
-  assert.equal(parseOsmDuration("5"), 300);
-  assert.equal(parseOsmDuration("600"), 600);
+  assert.equal(parseOsmDuration("5 min"), 300);
+  assert.equal(parseOsmDuration("600 sec"), 600);
+  assert.equal(parseOsmDuration("1.5 hours"), 5400);
+  assert.equal(parseOsmDuration("5"), null);
+  assert.equal(parseOsmDuration("600"), null);
   assert.equal(parseOsmDuration(""), null);
 });
 
 test("ferryCrossingSeconds prefers OSM duration over distance estimate", () => {
-  assert.equal(ferryCrossingSeconds(2000, "10"), 600);
+  assert.equal(ferryCrossingSeconds(2000, "10 min"), 600);
   const est = ferryCrossingSeconds(1800, null);
   assert.equal(est, Math.max(60, Math.round((1.8 / FERRY_SPEED_KMH) * 3600)));
 });

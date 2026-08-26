@@ -22,7 +22,8 @@ const LEAF_NOT_APPLICABLE = "n/a";
 const FERRY_CROSSING_LABEL = "Ferry crossing";
 
 /**
- * Parse OSM duration tag (HH:MM, M:SS, bare minutes, or seconds).
+ * Parse OSM duration tag. Ambiguous bare numbers are rejected: values must use
+ * HH:MM or an explicit hour/minute/second unit.
  * @returns {number|null} seconds, or null when unparseable
  */
 function parseOsmDuration(raw) {
@@ -39,12 +40,18 @@ function parseOsmDuration(raw) {
     }
   }
 
-  const bare = Number(s.replace(/[^0-9.]/g, ""));
-  if (Number.isFinite(bare) && bare > 0) {
-    // Bare numbers under 10 are treated as minutes (OSM convention for short ferries).
-    if (bare < 10) return Math.max(60, Math.round(bare * 60));
-    if (bare < 180) return Math.max(60, Math.round(bare * 60));
-    return Math.max(60, Math.round(bare));
+  const explicit = s.match(/^(\d+(?:\.\d+)?)\s*(h|hr|hrs|hour|hours|min|mins|minute|minutes|s|sec|secs|second|seconds)$/);
+  if (explicit) {
+    const value = Number(explicit[1]);
+    if (!(Number.isFinite(value) && value > 0)) return null;
+    const unit = explicit[2];
+    if (["h", "hr", "hrs", "hour", "hours"].includes(unit)) {
+      return Math.max(60, Math.round(value * 3600));
+    }
+    if (["min", "mins", "minute", "minutes"].includes(unit)) {
+      return Math.max(60, Math.round(value * 60));
+    }
+    return Math.max(1, Math.round(value));
   }
 
   return null;

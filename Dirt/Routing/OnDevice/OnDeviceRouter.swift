@@ -3408,9 +3408,9 @@ nonisolated struct OnDeviceRouter {
     }
 
     private func accessNameForEdge(_ ei: Int) -> String {
-        guard ei >= 0, ei < pack.undirectedEdgeCount else { return "motorized_permissive" }
+        guard ei >= 0, ei < pack.undirectedEdgeCount else { return "motorized_unknown" }
         let name = accessName(GraphV2Pack.unpackAccess(pack.edgeAttrs[ei]))
-        return name.isEmpty ? "motorized_permissive" : name
+        return name.isEmpty ? "motorized_unknown" : name
     }
 
     private func snapIsMajorHighwayPin(_ snap: EdgeSnap, profile: RouteProfile) -> Bool {
