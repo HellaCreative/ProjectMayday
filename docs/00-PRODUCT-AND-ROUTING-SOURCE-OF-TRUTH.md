@@ -181,6 +181,10 @@ During the ride the app may move in and out of coverage; the route corridor must
 remain usable for zooming, obstruction recovery, backtracking, and rerouting.
 This end-to-end behaviour remains a required navigation acceptance test.
 
+Spoken cues, HUD countdown, Junction versus Rally, and named waypoint callouts
+are defined only in
+[00-NAVIGATION-SOURCE-OF-TRUTH.md](00-NAVIGATION-SOURCE-OF-TRUTH.md).
+
 ### Live candidates and downloadable packs
 
 The live pack is tested first. A new regional build is uploaded under an

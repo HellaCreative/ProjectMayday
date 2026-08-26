@@ -9,8 +9,10 @@
  * Modes:
  *   1) Local staging (always): copy into app/data/packs/v1/{region}/
  *      → served by Vercel as static files (interim CDN).
- *   2) Cloudflare R2 / S3-compatible: if AWS_ACCESS_KEY_ID + AWS_ENDPOINT_URL
- *      (or R2_*) are set, also `aws s3 sync` the staging tree.
+ *   2) Cloudflare R2 / S3-compatible: `aws s3 sync` the staging tree.
+ *      Requires AWS_ENDPOINT_URL + R2_BUCKET + AWS_ACCESS_KEY_ID (R2_* aliases
+ *      accepted). Missing creds or a failed sync is a hard error unless
+ *      --local-only. Never report success for a publish that did not reach R2.
  *
  * Usage:
  *   node scripts/publish-packs-cdn.js              # ns only (merge into existing manifest)
@@ -130,19 +132,33 @@ function writeManifest(regions, { merge = true } = {}) {
   return manifest;
 }
 
+function missingR2Env() {
+  const missing = [];
+  if (!(process.env.AWS_ENDPOINT_URL || process.env.R2_ENDPOINT_URL)) {
+    missing.push("AWS_ENDPOINT_URL");
+  }
+  if (!(process.env.R2_BUCKET || process.env.AWS_S3_BUCKET)) {
+    missing.push("R2_BUCKET");
+  }
+  if (!(process.env.AWS_ACCESS_KEY_ID || process.env.R2_ACCESS_KEY_ID)) {
+    missing.push("AWS_ACCESS_KEY_ID");
+  }
+  return missing;
+}
+
 function syncR2() {
-  const endpoint =
-    process.env.AWS_ENDPOINT_URL ||
-    process.env.R2_ENDPOINT_URL ||
-    "";
-  const bucket = process.env.R2_BUCKET || process.env.AWS_S3_BUCKET || "";
-  const keyId = process.env.AWS_ACCESS_KEY_ID || process.env.R2_ACCESS_KEY_ID;
-  if (!endpoint || !bucket || !keyId) {
-    console.log(
-      "R2/S3 sync skipped (set AWS_ENDPOINT_URL + R2_BUCKET + AWS_ACCESS_KEY_ID to upload)"
+  const missing = missingR2Env();
+  if (missing.length) {
+    console.error(
+      "ERROR: cannot publish packs to R2 — missing " +
+        missing.join(", ") +
+        ". Set AWS_ENDPOINT_URL, R2_BUCKET, and AWS_ACCESS_KEY_ID (R2_* aliases accepted). " +
+        "A publish that cannot reach R2 is a hard error. Pass --local-only to skip upload."
     );
     return false;
   }
+  const endpoint = process.env.AWS_ENDPOINT_URL || process.env.R2_ENDPOINT_URL;
+  const bucket = process.env.R2_BUCKET || process.env.AWS_S3_BUCKET;
   const prefix = process.env.R2_PREFIX || `packs/${VERSION}`;
   const dest = `s3://${bucket}/${prefix}`;
   console.log("aws s3 sync", OUT, "→", dest);
@@ -151,9 +167,17 @@ function syncR2() {
     ["s3", "sync", OUT, dest, "--endpoint-url", endpoint],
     { stdio: "inherit", env: process.env }
   );
+  if (r.error) {
+    console.error(
+      "ERROR: aws s3 sync did not run (" +
+        (r.error.code || r.error.message) +
+        "). Install the AWS CLI and retry."
+    );
+    return false;
+  }
   if (r.status !== 0) {
-    console.error("aws s3 sync failed — install AWS CLI or fix credentials");
-    process.exit(r.status || 1);
+    console.error("ERROR: aws s3 sync failed — fix credentials or the R2 endpoint and retry.");
+    return false;
   }
   return true;
 }
@@ -169,7 +193,11 @@ function main() {
   if (argv.includes("--local-only")) {
     console.log("R2/S3 sync skipped (--local-only)");
   } else {
-    syncR2();
+    const synced = syncR2();
+    if (!synced) {
+      console.error("ERROR: pack publish did not reach R2.");
+      process.exit(1);
+    }
   }
   console.log(
     JSON.stringify(

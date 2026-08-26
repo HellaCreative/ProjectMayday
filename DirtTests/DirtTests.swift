@@ -164,6 +164,9 @@ struct DirtTests {
     }
 
     @Test func navigationChromeHidesDockAsSoonAsStartBegins() {
+        #expect(!NavigationChrome.showsRideHUD(for: .idle))
+        #expect(!NavigationChrome.showsRideHUD(for: .prefetching))
+        #expect(NavigationChrome.showsRideHUD(for: .active))
         #expect(NavigationChrome.showsDock(for: .idle))
         #expect(!NavigationChrome.showsDock(for: .prefetching))
         #expect(!NavigationChrome.showsDock(for: .active))

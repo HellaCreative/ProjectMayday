@@ -1,0 +1,30 @@
+{
+  "schemaVersion": "dirt-pack-release.v1",
+  "releaseId": "pe-v3-20260825-01",
+  "status": "live-candidate",
+  "createdAt": "2026-08-25T15:12:00.000Z",
+  "notes": "NS v3 stamp on PE, clipped to OSM admin polygon (complete_ways). Seams vs frozen NS/NB CDN packs. NS/NB packs unchanged.",
+  "publicBase": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/candidates/pe-v3-20260825-01",
+  "regions": [
+    {
+      "id": "pe",
+      "files": [
+        {
+          "name": "graph.v3.bin",
+          "bytes": 2936780,
+          "sha256": "109b9ffd87c1f5fb0df5623a1a6a3dfbce33bc740babf407ae40516a52aa9534"
+        },
+        {
+          "name": "geometry.v1.bin",
+          "bytes": 2011908,
+          "sha256": "9d4c94e487f4be13a6e8f504d4a944ef9df43e0fdc0b2fa88c3a68ebe86ffb83"
+        },
+        {
+          "name": "fuel.v1.json",
+          "bytes": 27694,
+          "sha256": "605488e89e9e81e047f8c442deba45b7b954519cd59a92ab298ee3a9c9bdc5ad"
+        }
+      ]
+    }
+  ]
+}

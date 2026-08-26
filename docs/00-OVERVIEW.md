@@ -2,7 +2,9 @@
 
 > **Current authority:** Read
 > [`00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md`](00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md)
-> first. This page is a short technical introduction and does not define current
+> first. Start Navigation, cues, and HUD:
+> [`00-NAVIGATION-SOURCE-OF-TRUTH.md`](00-NAVIGATION-SOURCE-OF-TRUTH.md).
+> This page is a short technical introduction and does not define current
 > routing status or work priority.
 
 Native SwiftUI client for the DIRT dual-sport navigator. No staging.
@@ -35,6 +37,7 @@ may use Overpass.
 | Doc | Scope |
 | --- | --- |
 | [00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md](./00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md) | Canonical product, routing, source policy, current state, and priority |
+| [00-NAVIGATION-SOURCE-OF-TRUTH.md](./00-NAVIGATION-SOURCE-OF-TRUTH.md) | Canonical Start Navigation, Junction/Rally cues, HUD, in-ride waypoints |
 | [../AGENTS.md](../AGENTS.md) | New-agent primer (Vercel vs R2, branch) |
 | [00-OVERVIEW.md](./00-OVERVIEW.md) | This file |
 | [01-STACK.md](./01-STACK.md) | Swift stack, SPM, structure, signing |

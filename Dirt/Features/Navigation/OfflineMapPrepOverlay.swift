@@ -61,32 +61,51 @@ struct OfflineMapPrepOverlay: View {
     }
 
     private func downloadingContent(completed: Int, total: Int) -> some View {
+        let planning = total == 0
         let mostlyCached = total > 0 && completed >= total && offline.progress >= 0.99
         return VStack(alignment: .leading, spacing: 14) {
-            Text(mostlyCached ? "Checking maps for this ride" : "Saving maps for the trail")
+            Text(planning
+                 ? "Preparing offline maps"
+                 : (mostlyCached ? "Checking maps for this ride" : "Saving maps for the trail"))
                 .font(.dirtUI(22, weight: .bold))
                 .foregroundStyle(DirtTheme.ink)
 
-            Text(mostlyCached
-                 ? "This corridor is already on your phone. Confirming tiles, then you’re set."
-                 : "Dual-sport country means no signal. We’re downloading the route corridor before you roll.")
+            Text(planning
+                 ? "Mapping the route corridor before the download begins."
+                 : (mostlyCached
+                    ? "This corridor is already on your phone. Confirming tiles, then you’re set."
+                    : "Dual-sport country means no signal. We’re downloading the route corridor before you roll."))
                 .font(.dirtUI(14))
                 .foregroundStyle(DirtTheme.muted)
                 .fixedSize(horizontal: false, vertical: true)
 
-            ProgressView(value: offline.progress)
-                .tint(DirtTheme.orange)
-                .scaleEffect(x: 1, y: 1.4, anchor: .center)
+            Group {
+                if planning {
+                    ProgressView()
+                } else {
+                    ProgressView(value: offline.progress)
+                        .scaleEffect(x: 1, y: 1.4, anchor: .center)
+                }
+            }
+            .tint(DirtTheme.orange)
 
             HStack {
-                Text("\(offline.progressPercent)%")
-                    .font(.dirtMono(28, weight: .bold))
-                    .foregroundStyle(DirtTheme.ink)
-                    .contentTransition(.numericText())
+                if planning {
+                    Text("Building corridor")
+                        .font(.dirtUI(13, weight: .bold))
+                        .foregroundStyle(DirtTheme.muted)
+                } else {
+                    Text("\(offline.progressPercent)%")
+                        .font(.dirtMono(28, weight: .bold))
+                        .foregroundStyle(DirtTheme.ink)
+                        .contentTransition(.numericText())
+                }
                 Spacer()
-                Text("\(completed) / \(total) tiles")
-                    .font(.dirtMono(12, weight: .semibold))
-                    .foregroundStyle(DirtTheme.muted)
+                if !planning {
+                    Text("\(completed) / \(total) tiles")
+                        .font(.dirtMono(12, weight: .semibold))
+                        .foregroundStyle(DirtTheme.muted)
+                }
             }
 
             cancelButton(topPadding: 4)

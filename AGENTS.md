@@ -17,7 +17,7 @@ Packs, adapters, live `/api/route`, and ship scripts live here under `scripts/pa
 
 Vercel is API code only (`scripts/pack-fabric/api`). Packs never go on Hobby.
 
-**Pack changes must land on R2.** Xcode ships the app, not the road file. A pack that exists only on the laptop was **not** tested on a device.
+**Pack changes must land on R2 the same turn they are stamped.** `--candidate` then `--promote`; add the id to `routing/schema/v3-regions.json` and `--live` so `/api/route` requests that same object. Xcode ships the app, not the road file. A pack that exists only on the laptop was **not** tested.
 
 ## Do not
 
@@ -26,6 +26,9 @@ Vercel is API code only (`scripts/pack-fabric/api`). Packs never go on Hobby.
 - Leave a pack rebuild unpublished.
 
 Read first: [docs/00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md](docs/00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md).
+
+For Start Navigation, cues, HUD, and in-ride waypoints:
+[docs/00-NAVIGATION-SOURCE-OF-TRUTH.md](docs/00-NAVIGATION-SOURCE-OF-TRUTH.md).
 
 Then read the narrow contract relevant to the task. Phase reports and handback
 documents are historical evidence, not current instructions.

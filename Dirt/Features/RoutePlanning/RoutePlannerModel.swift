@@ -2470,9 +2470,6 @@ final class RoutePlannerModel {
             coordinates: clCoords,
             keepExisting: keepExisting
         )
-        Task { @MainActor [weak self] in
-            await self?.graphPacks.refreshCatalogIfStale()
-        }
     }
 
     /// Basemap tiles are geography-only; strip profile suffixes from route identity.

@@ -12,13 +12,17 @@ const {
 } = require("./build-region-graph-v3");
 const { remoteGraphUrl } = require("../routing/regional/select");
 
-test("Geofabrik stamp covers Canada plus Washington", () => {
+test("Geofabrik stamp covers every catalog province and state", () => {
   assert.equal(geofabrikSource("nb").slug, "new-brunswick");
   assert.equal(geofabrikSource("nb").country, "canada");
   assert.equal(geofabrikSource("NS").slug, "nova-scotia");
   assert.equal(geofabrikSource("yt").slug, "yukon");
   assert.equal(geofabrikSource("wa").country, "us");
+  assert.equal(geofabrikSource("me").slug, "maine");
+  assert.equal(geofabrikSource("ca").slug, "california");
+  assert.equal(geofabrikSource("tx").country, "us");
   assert.equal(OSM_REGION.pe.slug, "prince-edward-island");
+  assert.equal(Object.keys(OSM_REGION).length, 63);
   assert.throws(() => geofabrikSource("xx"), /no Geofabrik source/);
 });
 
@@ -26,22 +30,35 @@ test("v3 region registry drives live graph filename", () => {
   assert.equal(isV3Region("ns"), true);
   assert.equal(isV3Region("nb"), true);
   assert.equal(isV3Region("__legacy_ns__"), true);
-  assert.equal(isV3Region("pe"), false);
+  assert.equal(isV3Region("pe"), true);
+  assert.equal(isV3Region("nl"), true);
+  assert.equal(isV3Region("qc"), true);
   assert.equal(isV3Region("bc"), false);
   assert.equal(phoneGraphFileNameForRegion("nb"), "graph.v3.bin");
+  assert.equal(phoneGraphFileNameForRegion("pe"), "graph.v3.bin");
   assert.equal(phoneGraphFileNameForRegion("bc"), "graph.v2.bin");
 });
 
 test("live remote URLs follow the v3 registry", () => {
   assert.match(remoteGraphUrl("nb"), /\/nb\/graph\.v3\.bin$/);
   assert.match(remoteGraphUrl("ns"), /\/ns\/graph\.v3\.bin$/);
-  assert.match(remoteGraphUrl("pe"), /\/pe\/graph\.v2\.bin$/);
+  assert.match(remoteGraphUrl("pe"), /\/pe\/graph\.v3\.bin$/);
+  assert.match(remoteGraphUrl("nl"), /\/nl\/graph\.v3\.bin$/);
+  assert.match(remoteGraphUrl("qc"), /\/qc\/graph\.v3\.bin$/);
+  assert.match(remoteGraphUrl("bc"), /\/bc\/graph\.v2\.bin$/);
 });
 
 test("builder points at the Geofabrik extract, not an NS-only path", () => {
   assert.match(roadsSeqPath("nb"), /osm-roads\/new-brunswick\/roads\.geojsonseq$/);
-  assert.match(extractHint("nb"), /extract-osm-roads\.sh new-brunswick canada/);
-  assert.match(extractHint("wa"), /extract-osm-roads\.sh washington us/);
+  assert.match(extractHint("pe"), /clip-and-extract-osm-roads\.sh pe/);
+  assert.match(extractHint("nl"), /clip-and-extract-osm-roads\.sh nl/);
+});
+
+test("builder refuses to stamp frozen live ns/nb packs", async () => {
+  const { buildRegionGraphV3, FROZEN_STAMPS } = require("./build-region-graph-v3");
+  assert.deepEqual([...FROZEN_STAMPS].sort(), ["nb", "ns"]);
+  await assert.rejects(() => buildRegionGraphV3("ns"), /frozen live pack 'ns'/);
+  await assert.rejects(() => buildRegionGraphV3("nb"), /frozen live pack 'nb'/);
 });
 
 test("leaf dictionaries fail closed before encode", () => {

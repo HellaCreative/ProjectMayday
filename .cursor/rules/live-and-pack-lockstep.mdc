@@ -11,6 +11,7 @@ There is **one** routing file per region: R2 `dirt-packs/{id}/graph.v2.bin` + `g
 - Live `POST /api/route` loads **that same object** from R2.
 - Downloaded vs cellular is delivery, not a second road network.
 - **If we change a pack, it goes to R2, or we did not test it.** Xcode ships the app, not the road file.
+- **Always `--candidate` then `--promote` after a stamp.** A pack that only sits on the laptop cannot be tested. Do not wait to be asked.
 - Vercel Hobby is the API only (`scripts/pack-fabric/api`). Never `includeFiles` pack binaries or `longhaul.v1.json.gz`.
 - `longhaul.v1.json.gz` is a thinned highway extract. It is **not** Dirt.
 
@@ -18,7 +19,7 @@ There is **one** routing file per region: R2 `dirt-packs/{id}/graph.v2.bin` + `g
 
 | Change | Ship |
 | --- | --- |
-| OSM / stitches / capillary / pack rebuild | Publish `graph.v2.bin` + `geometry.v1.bin` to R2. Then `node scripts/pack-fabric/scripts/ship-routing.js --assert`. |
+| OSM / stitches / capillary / pack rebuild | Record a release, `--candidate`, `--promote` those regions, add v3 ids to `routing/schema/v3-regions.json`, then `--live` so `/api/route` requests the same `graph.v3.bin`. Then `--assert`. |
 | Cost tables / Allow / search | Update `OnDeviceProfileCosts.swift` **and** `scripts/pack-fabric/routing/lib/profile-costs.js`, then `node scripts/pack-fabric/scripts/ship-routing.js --live`. Pack binaries unchanged. |
 | Live graph loader (`select.js`, `graph.js`) | Edit files in `scripts/pack-fabric/routing/`, then `--live`. |
 
@@ -35,9 +36,10 @@ A routing change that is only on the phone, or only on live, is **not shipped**.
 ## Commands
 
 ```
-node scripts/pack-fabric/scripts/ship-routing.js --assert
-node scripts/pack-fabric/scripts/ship-routing.js --pack bc
+node scripts/pack-fabric/scripts/ship-routing.js --candidate <releaseId> --pack <id>
+node scripts/pack-fabric/scripts/ship-routing.js --promote <releaseId> --pack <id>
 node scripts/pack-fabric/scripts/ship-routing.js --live
+node scripts/pack-fabric/scripts/ship-routing.js --assert
 ```
 
 Workspace: `/Users/richardsmith/SandBox01/MAYDAYiOS/Dirt`. API: `https://dirt-mayday.vercel.app/api/route`.

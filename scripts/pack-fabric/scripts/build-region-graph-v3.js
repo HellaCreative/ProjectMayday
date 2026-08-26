@@ -7,20 +7,25 @@
  * Same rules as NS: OSM-only membership (track + path, no cycleway, ATV override,
  * ferries), leaves preserved, families at read time, fail-closed dictionaries.
  *
- *   node --max-old-space-size=8192 scripts/pack-fabric/scripts/build-region-graph-v3.js nb
+ *   node --max-old-space-size=8192 scripts/pack-fabric/scripts/build-region-graph-v3.js pe
  *
- * Requires:
- *   bash scripts/pack-fabric/scripts/extract-osm-roads.sh <slug> <country>
+ * Clips the Geofabrik extract to the OSM admin polygon, then encodes.
+ * Frozen live packs ns/nb cannot be rebuilt here.
+ *
+ *   --reuse-extract   skip osmium if roads.geojsonseq already exists
  *
  * Writes gitignored:
  *   routing/data/regions/<id>/graph.v3.bin
  *   routing/data/regions/<id>/geometry.v1.bin
  *   app/data/packs/v1/<id>/graph.v3.bin  (ship-routing source)
  *
- * Does not overwrite graph.v2.bin. Does not publish or promote.
+ * Does not overwrite graph.v2.bin. After a successful stamp, always
+ * `--candidate` then `--promote` that release; add the id to
+ * routing/schema/v3-regions.json and `--live`.
  */
 const fs = require("fs");
 const path = require("path");
+const { spawnSync } = require("child_process");
 const osmRoads = require("../routing/adapters/osm-roads");
 const { buildRegionalGraph } = require("../routing/regional/package");
 const { encodeFromV1 } = require("../routing/lib/pack-v2");
@@ -33,6 +38,7 @@ const OSM_ROADS_ROOT = process.env.OSM_ROADS_ROOT || path.join(FABRIC, "data-raw
 const PACKS = path.join(FABRIC, "app", "data", "packs", "v1");
 const REGIONS = path.join(FABRIC, "routing", "data", "regions");
 const SEED_FIXTURES = new Set(["ns"]);
+const FROZEN_STAMPS = new Set(["ns", "nb"]);
 const MAX_LEAF_ENTRIES = 255;
 
 function roadsSeqPath(regionId) {
@@ -41,8 +47,27 @@ function roadsSeqPath(regionId) {
 }
 
 function extractHint(regionId) {
-  const source = geofabrikSource(regionId);
-  return `bash scripts/pack-fabric/scripts/extract-osm-roads.sh ${source.slug} ${source.country}`;
+  return `bash scripts/pack-fabric/scripts/clip-and-extract-osm-roads.sh ${String(regionId || "").toLowerCase()}`;
+}
+
+function prepareExtract(regionId, { reuseExtract = false } = {}) {
+  const seq = roadsSeqPath(regionId);
+  if (reuseExtract && fs.existsSync(seq)) {
+    console.warn("reusing existing extract", seq);
+    return seq;
+  }
+  const script = path.join(__dirname, "clip-and-extract-osm-roads.sh");
+  const result = spawnSync("bash", [script, regionId], {
+    stdio: "inherit",
+    env: { ...process.env, OSM_ROADS_ROOT, FABRIC }
+  });
+  if (result.status !== 0) {
+    throw new Error(`${extractHint(regionId)} failed (${result.status})`);
+  }
+  if (!fs.existsSync(seq)) {
+    throw new Error(`clip extract did not write ${seq}`);
+  }
+  return seq;
 }
 
 function uniqueLeafCount(edges, field, sentinel) {
@@ -93,19 +118,21 @@ function seedFixtures(regionId, graphPath, geomPath) {
   return seedDir;
 }
 
-async function buildRegionGraphV3(regionId) {
+async function buildRegionGraphV3(regionId, { reuseExtract = false } = {}) {
   const source = geofabrikSource(regionId);
   const id = source.id;
-  if (!isV3Region(id)) {
+  if (FROZEN_STAMPS.has(id)) {
     throw new Error(
-      `'${id}' is not in routing/schema/v3-regions.json; add it there so live requests graph.v3.bin`
+      `refusing to stamp frozen live pack '${id}'. Codex owns ns/nb; rebuild only pe/nl/qc and later regions.`
+    );
+  }
+  if (!isV3Region(id)) {
+    console.warn(
+      `'${id}' is not in live v3-regions.json; stamping locally. Live still requests graph.v2.bin until promote.`
     );
   }
 
-  const seq = roadsSeqPath(id);
-  if (!fs.existsSync(seq)) {
-    throw new Error(`missing OSM extract: ${seq}\nRun: ${extractHint(id)}`);
-  }
+  const seq = prepareExtract(id, { reuseExtract });
 
   const outDir = path.join(REGIONS, id);
   fs.mkdirSync(outDir, { recursive: true });
@@ -176,10 +203,10 @@ async function main(argv = process.argv.slice(2)) {
   const regionId = String(argv.find((value) => !value.startsWith("-")) || "").toLowerCase();
   if (!regionId) {
     throw new Error(
-      "Usage: build-region-graph-v3.js <region-id>\nExample: node --max-old-space-size=8192 scripts/pack-fabric/scripts/build-region-graph-v3.js nb"
+      "Usage: build-region-graph-v3.js <region-id> [--reuse-extract]\nExample: node --max-old-space-size=8192 scripts/pack-fabric/scripts/build-region-graph-v3.js pe"
     );
   }
-  return buildRegionGraphV3(regionId);
+  return buildRegionGraphV3(regionId, { reuseExtract: argv.includes("--reuse-extract") });
 }
 
 if (require.main === module) {
@@ -190,11 +217,13 @@ if (require.main === module) {
 }
 
 module.exports = {
+  FROZEN_STAMPS,
   MAX_LEAF_ENTRIES,
   assertLeafDictionaries,
   buildRegionGraphV3,
   extractHint,
   leafCardinalityReport,
   main,
+  prepareExtract,
   roadsSeqPath
 };

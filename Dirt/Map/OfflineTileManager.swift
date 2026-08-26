@@ -39,6 +39,13 @@ final class OfflineTileManager {
     @ObservationIgnored private let cacheDirectory: URL
     @ObservationIgnored private var offlineStyleFileURL: URL?
 
+    private struct TilePreparation: Sendable {
+        let tiles: [CorridorTilePlanner.Tile]
+        let alreadyCached: Int
+        let missing: [CorridorTilePlanner.Tile]
+        let truncated: Bool
+    }
+
     init() {
         let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first
             ?? FileManager.default.temporaryDirectory
@@ -81,43 +88,81 @@ final class OfflineTileManager {
         _ = keepExisting
         try? FileManager.default.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
 
-        let plan = CorridorTilePlanner.collectRouteTiles(
-            coordinates: coordinates,
-            viewportWidth: viewportSize.width,
-            viewportHeight: viewportSize.height
+        // Publish a visible state before route analysis or cache inspection. Long,
+        // detailed routes can contain thousands of vertices; doing this work here
+        // used to freeze the Start button before the overlay could render.
+        phase = .downloading(completed: 0, total: 0)
+        progress = 0
+        let startedAt = Date()
+        RoutingDebugLog.shared.event(
+            "navigation map prep begin points=\(coordinates.count) identity=\(identity)"
         )
-        let tiles = plan.tiles
-        guard !tiles.isEmpty else {
-            phase = .ready(cached: 0, total: 0)
-            progress = 1
-            return
-        }
 
         let cacheRoot = cacheDirectory
-        let alreadyCached = tiles.reduce(into: 0) { count, tile in
-            if Self.cachedTileExists(tile, in: cacheRoot) { count += 1 }
-        }
-        // Same corridor already on disk — skip the download UI churn.
-        if alreadyCached == tiles.count {
-            phase = .downloading(completed: tiles.count, total: tiles.count)
-            progress = 1
-            prefetchTask = Task { @MainActor in
+        let coordinateSnapshot = coordinates
+        let viewportWidth = viewportSize.width
+        let viewportHeight = viewportSize.height
+        prefetchTask = Task { @MainActor in
+            await Task.yield()
+            let scan = await Task.detached(priority: .userInitiated) {
+                let plan = CorridorTilePlanner.collectRouteTiles(
+                    coordinates: coordinateSnapshot,
+                    viewportWidth: viewportWidth,
+                    viewportHeight: viewportHeight
+                )
+                var alreadyCached = 0
+                var missing: [CorridorTilePlanner.Tile] = []
+                missing.reserveCapacity(plan.tiles.count)
+                for tile in plan.tiles {
+                    if Self.cachedTileExists(tile, in: cacheRoot) {
+                        alreadyCached += 1
+                    } else {
+                        missing.append(tile)
+                    }
+                }
+                return TilePreparation(
+                    tiles: plan.tiles,
+                    alreadyCached: alreadyCached,
+                    missing: missing,
+                    truncated: plan.truncated
+                )
+            }.value
+            guard generation == self.prefetchGeneration, !Task.isCancelled else { return }
+
+            let tiles = scan.tiles
+            let alreadyCached = scan.alreadyCached
+            RoutingDebugLog.shared.event(
+                "navigation map prep planned tiles=\(tiles.count) cached=\(alreadyCached) "
+                    + "missing=\(scan.missing.count) truncated=\(scan.truncated ? 1 : 0) "
+                    + "elapsedMs=\(Int(Date().timeIntervalSince(startedAt) * 1_000))"
+            )
+
+            guard !tiles.isEmpty else {
+                self.phase = .ready(cached: 0, total: 0)
+                self.progress = 1
+                return
+            }
+
+            self.phase = .downloading(completed: alreadyCached, total: tiles.count)
+            self.progress = Double(alreadyCached) / Double(tiles.count)
+
+            // Same corridor already on disk — skip network work entirely.
+            if alreadyCached == tiles.count {
                 await self.prepareOfflineEngage()
                 guard generation == self.prefetchGeneration, !Task.isCancelled else { return }
                 self.phase = .ready(cached: tiles.count, total: tiles.count)
                 self.progress = 1
+                RoutingDebugLog.shared.event(
+                    "navigation map prep ready source=cache tiles=\(tiles.count) "
+                        + "elapsedMs=\(Int(Date().timeIntervalSince(startedAt) * 1_000))"
+                )
+                return
             }
-            return
-        }
 
-        phase = .downloading(completed: alreadyCached, total: tiles.count)
-        progress = Double(alreadyCached) / Double(tiles.count)
-
-        prefetchTask = Task { @MainActor in
             var completed = alreadyCached
             var cachedHit = alreadyCached
             let concurrency = 6
-            let missing = tiles.filter { !Self.cachedTileExists($0, in: cacheRoot) }
+            let missing = scan.missing
             let tileCount = tiles.count
 
             await withTaskGroup(of: Bool.self) { group in
@@ -160,6 +205,10 @@ final class OfflineTileManager {
             if successRatio < 0.7 {
                 self.phase = .failed("Couldn’t download enough map tiles. Get a signal and try again.")
                 self.progress = successRatio
+                RoutingDebugLog.shared.event(
+                    "navigation map prep failed cached=\(cachedHit) total=\(tileCount) "
+                        + "elapsedMs=\(Int(Date().timeIntervalSince(startedAt) * 1_000))"
+                )
             } else {
                 // Warm proxy + proxied style while the rider reads the success card,
                 // so Begin Ride isn’t stuck starting the localhost server on-tap.
@@ -167,6 +216,10 @@ final class OfflineTileManager {
                 guard generation == self.prefetchGeneration, !Task.isCancelled else { return }
                 self.phase = .ready(cached: cachedHit, total: tileCount)
                 self.progress = 1
+                RoutingDebugLog.shared.event(
+                    "navigation map prep ready source=network cached=\(cachedHit) total=\(tileCount) "
+                        + "elapsedMs=\(Int(Date().timeIntervalSince(startedAt) * 1_000))"
+                )
             }
         }
     }

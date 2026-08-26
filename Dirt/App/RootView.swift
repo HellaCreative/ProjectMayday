@@ -48,6 +48,10 @@ enum ActiveSheet: String, Identifiable {
 }
 
 enum NavigationChrome {
+    static func showsRideHUD(for phase: NavigationSession.Phase) -> Bool {
+        phase == .active
+    }
+
     static func showsDock(for phase: NavigationSession.Phase) -> Bool {
         phase == .idle
     }
@@ -87,7 +91,9 @@ struct RootView: View {
     /// GRAPH debug HUD starts collapsed so the map stays visible.
     @State private var routingGraphDebugPanelExpanded = false
 
-    private var navActive: Bool { app.navigation.phase != .idle }
+    // OfflineMapPrepOverlay exclusively owns prefetch progress. Showing the ride
+    // HUD during `.prefetching` duplicated the same loading state behind the modal.
+    private var navActive: Bool { NavigationChrome.showsRideHUD(for: app.navigation.phase) }
 
     /// iPhone landscape — Figma `Navigation — Landscape` packing while navigating.
     private var isLandscape: Bool { verticalSizeClass == .compact }

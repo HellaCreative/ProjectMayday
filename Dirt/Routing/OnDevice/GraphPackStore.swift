@@ -504,11 +504,13 @@ final class GraphPackStore {
         _ = keepExisting // Disk packs and corridor tiles are reused automatically.
         phase = .downloading
         progress = 0.02
+        let startedAt = Date()
+        RoutingDebugLog.shared.event("navigation routing pack prep begin points=\(coordinates.count)")
         task = Task { [weak self] in
             guard let self else { return }
-            // Refresh first so a newly promoted pack is downloaded on the same
-            // Start tap rather than being mislabeled unavailable from stale state.
-            await self.refreshCatalogIfStale(staleSeconds: 0)
+            // The app already refreshes this catalog. Reuse a recent result rather
+            // than issuing duplicate manifest requests on every Start tap.
+            await self.refreshCatalogIfStale()
             guard !Task.isCancelled else { return }
 
             // Primary region for every route coordinate follows the actual ride
@@ -520,6 +522,7 @@ final class GraphPackStore {
             guard !needed.isEmpty else {
                 self.phase = .skipped("No offline routing region covers this route")
                 self.progress = 1
+                RoutingDebugLog.shared.event("navigation routing pack prep skipped reason=no-region")
                 return
             }
             let published = needed.filter { self.publishedIds.contains($0) }
@@ -528,10 +531,17 @@ final class GraphPackStore {
                 let names = needed.map { self.displayTitle(forRegionId: $0) }.joined(separator: ", ")
                 self.phase = .skipped("No offline routing pack is published yet for \(names)")
                 self.progress = 1
+                RoutingDebugLog.shared.event(
+                    "navigation routing pack prep skipped reason=unpublished regions=\(needed.joined(separator: ","))"
+                )
                 return
             }
 
             let missing = published.filter { !self.isInstalled($0) }
+            RoutingDebugLog.shared.event(
+                "navigation routing pack prep regions=\(needed.joined(separator: ",")) "
+                    + "missing=\(missing.joined(separator: ","))"
+            )
             for (offset, id) in missing.enumerated() {
                 guard !Task.isCancelled else { return }
                 // Run inside the prep task so Cancel genuinely cancels this download.
@@ -540,6 +550,7 @@ final class GraphPackStore {
                 guard self.isInstalled(id) else {
                     self.phase = .failed("Couldn’t download the \(self.displayTitle(forRegionId: id)) routing pack. Check your connection and try again.")
                     self.progress = 1
+                    RoutingDebugLog.shared.event("navigation routing pack prep failed region=\(id)")
                     return
                 }
                 self.progress = 0.05 + 0.85 * Double(offset + 1) / Double(max(missing.count, 1))
@@ -550,6 +561,7 @@ final class GraphPackStore {
             guard self.activePack != nil else {
                 self.phase = .failed("The downloaded routing pack could not be opened.")
                 self.progress = 1
+                RoutingDebugLog.shared.event("navigation routing pack prep failed reason=decode")
                 return
             }
 
@@ -560,6 +572,10 @@ final class GraphPackStore {
                 let names = unpublished.map { self.displayTitle(forRegionId: $0) }.joined(separator: ", ")
                 self.phase = .skipped("No offline routing pack is published yet for \(names)")
             }
+            RoutingDebugLog.shared.event(
+                "navigation routing pack prep ready loaded=\(self.loadedRegionIds.joined(separator: ",")) "
+                    + "elapsedMs=\(Int(Date().timeIntervalSince(startedAt) * 1_000))"
+            )
         }
     }
 
