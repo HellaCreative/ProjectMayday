@@ -118,9 +118,11 @@ final class AppEnvironment {
             network: network
         )
         bcOSMHierarchy         = BCOSMHierarchyOverlay(mapState: mapState)
-        // Park BC extra lenses so leftover UserDefaults cannot paint a second
-        // classification over OSM Shortbread (highway → track/path).
-        UserDefaults.standard.set(false, forKey: "dirt.layers.network.bc")
+        // Network Lens was removed from Layers. Clear every legacy preference
+        // so an old installation cannot retain an overlay it can no longer control.
+        for region in ["ns", "nb", "qc", "on", "bc", "ab"] {
+            UserDefaults.standard.set(false, forKey: "dirt.layers.network.\(region)")
+        }
         UserDefaults.standard.set(false, forKey: BCOSMHierarchyOverlay.prefsKey)
         mapState.bumpLayerPrefs()
         bcOSMHierarchy.applyPrefs()
