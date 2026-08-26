@@ -411,7 +411,9 @@ struct RoutePlannerModelItineraryTests {
 
         let riderLeg = try #require(model.itinerary.legs.first)
         #expect(riderLeg.fuelStopOverrides[riderLeg.from.uuidString] == "alternate")
-        #expect(source.fuelChainRequests.last?.fuel.requiredFirstStationId == "alternate")
+        #expect(source.fuelChainRequests.contains {
+            $0.fuel.requiredFirstStationId == "alternate"
+        })
         #expect(model.built?.legs.first?.endsAtFuelStop?.stationID == "alternate")
     }
 

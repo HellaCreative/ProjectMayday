@@ -648,6 +648,45 @@ final class ItineraryBuilder {
         for index in startIndex..<itinerary.legs.count {
             let riderLeg = itinerary.legs[index]
             let riderDestination = itinerary.waypoints[index + 1]
+            let needsOnwardFuel = index + 1 < itinerary.legs.count
+                && waypointFuelStops[riderDestination.id] == nil
+            let onwardFuelMeters: Double?
+            if needsOnwardFuel {
+                let nextLeg = itinerary.legs[index + 1]
+                let nextFrom = riderDestination.coordinate
+                let nextTo = itinerary.waypoints[index + 2].coordinate
+                let probe = try? await source.fuelChain(FuelChainRequest(
+                    profile: nextLeg.profile,
+                    from: nextFrom,
+                    to: nextTo,
+                    allowUnknown: nextLeg.profile == .cleanest ? false : nextLeg.allowUnknown,
+                    usableRangeMeters: fuel.usableMeters,
+                    firstLegMaxMeters: fuel.usableMeters,
+                    requireFuelStopBeforeEnd: false,
+                    minimumFuelStops: 0,
+                    profileMeters: straightLineMeters(nextFrom, nextTo),
+                    riderLegId: nextLeg.id.uuidString,
+                    avoidEdgeIds: Array(itinerary.impassableEdgeIDs),
+                    cleanMetroMultiplier: nil,
+                    avoidMotorways: nextLeg.avoidMotorways,
+                    probeFirstReachableStation: true,
+                    windowTimeBudgetMs: min(
+                        2_500,
+                        max(100, progressWatchdog.remainingMilliseconds())
+                    )
+                ))
+                // A proven profile-routed pump is preferred. When no pump is
+                // returned, the geodesic distance to the next rider waypoint
+                // remains a conservative minimum rather than pretending the
+                // waypoint resets the tank.
+                onwardFuelMeters = probe?.firstReachableStationMeters
+                    ?? straightLineMeters(nextFrom, nextTo)
+            } else {
+                onwardFuelMeters = nil
+            }
+            let arrivalFuelLimit = onwardFuelMeters.map {
+                max(0, fuel.usableMeters - $0)
+            }
             let resumesThisLeg = index == startIndex ? resume : nil
             var current = resumesThisLeg?.station.coordinate
                 ?? itinerary.waypoints[index].coordinate
@@ -731,6 +770,51 @@ final class ItineraryBuilder {
                 let requiredStationID = riderLeg.fuelStopOverrides[departureID]
                 onFuelStatus("Calculating fuel range")
 
+                // A rider pin placed on a packed pump is already the next
+                // useful fuel anchor. Build that real leg directly up to the
+                // hard range ceiling; the comfort window must not manufacture
+                // an earlier automatic stop before a chosen refuel waypoint.
+                if waypointFuelStops[riderDestination.id] != nil,
+                   requiredStationID == nil,
+                   let response = try? await source.route(routeRequest(
+                       profile: activeProfile,
+                       allowUnknown: activeProfile == .cleanest ? false : riderLeg.allowUnknown,
+                       from: current,
+                       to: riderDestination.coordinate,
+                       avoidEdgeIDs: itinerary.impassableEdgeIDs,
+                       maxPathMeters: remaining,
+                       history: history,
+                       avoidMotorways: activeAvoidMotorways,
+                       preferBackRoads: riderLeg.preferBackRoads
+                   )),
+                   let meters = try? responseMeters(response),
+                   meters <= remaining + 1 {
+                    let built = BuiltLeg(
+                        riderLegID: riderLeg.id,
+                        fromCoordinate: current,
+                        toCoordinate: riderDestination.coordinate,
+                        endsAtFuelStop: nil,
+                        response: response,
+                        fuelUsedOnArrivalMeters: 0,
+                        routeProfile: activeProfile
+                    )
+                    builtLegs.append(built)
+                    history.append(response)
+                    fuelUsed = 0
+                    current = riderDestination.coordinate
+                    statuses[riderLeg.id] = .built
+                    committed = replacing(
+                        riderLegID: riderLeg.id,
+                        with: builtLegs,
+                        in: committed,
+                        status: .built
+                    )
+                    progressWatchdog.recordProgress()
+                    onProgress(committed)
+                    onFuelStatus("Leg complete")
+                    break
+                }
+
                 let chain: FuelChainResponse
                 do {
                     chain = try await source.fuelChain(FuelChainRequest(
@@ -742,6 +826,7 @@ final class ItineraryBuilder {
                         firstLegMaxMeters: remaining,
                         requireFuelStopBeforeEnd: forceFuelStop,
                         minimumFuelStops: forceFuelStop ? 1 : 0,
+                        destinationFuelUsedLimitMeters: arrivalFuelLimit,
                         profileMeters: straightLineMeters(current, riderDestination.coordinate),
                         riderLegId: riderLeg.id.uuidString,
                         avoidEdgeIds: Array(itinerary.impassableEdgeIDs),
@@ -868,6 +953,12 @@ final class ItineraryBuilder {
                     let arrivalFuel = fuelStop != nil || resetsAtWaypoint
                         ? 0
                         : fuelUsed + meters
+                    let validFuelTargets = fuelStop == nil ? [] : (chain.stationCandidates ?? []).filter {
+                        $0.departureId == "start"
+                            && $0.validForward == true
+                            && $0.latitude != nil
+                            && $0.longitude != nil
+                    }
                     let built = BuiltLeg(
                         riderLegID: riderLeg.id,
                         fromCoordinate: current,
@@ -875,7 +966,8 @@ final class ItineraryBuilder {
                         endsAtFuelStop: fuelStop,
                         response: response,
                         fuelUsedOnArrivalMeters: arrivalFuel,
-                        routeProfile: activeProfile
+                        routeProfile: activeProfile,
+                        validFuelTargets: validFuelTargets
                     )
                     builtLegs.append(built)
                     history.append(response)
