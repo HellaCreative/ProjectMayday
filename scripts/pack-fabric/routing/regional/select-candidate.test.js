@@ -15,6 +15,13 @@ test("western Nova Scotia stays NS despite NB bbox overlap", () => {
   assert.equal(primaryRegionForPoint(-64.7782, 46.0878), "nb"); // Moncton
   assert.equal(primaryRegionForPoint(-66.0633, 45.2733), "nb"); // Saint John
   assert.equal(primaryRegionForPoint(-64.368, 45.918), "nb"); // Sackville — not stolen by NS bbox
+  assert.equal(primaryRegionForPoint(-63.1316, 46.2382), "pe"); // Charlottetown
+  assert.equal(primaryRegionForPoint(-54.6103, 48.9544), "nl"); // Gander
+  assert.equal(primaryRegionForPoint(-52.7126, 47.5615), "nl"); // St. John's
+  assert.equal(primaryRegionForPoint(-71.2075, 46.8139), "qc"); // Québec City
+  assert.equal(primaryRegionForPoint(-73.5673, 45.5017), "qc"); // Montréal
+  assert.equal(primaryRegionForPoint(-75.6972, 45.4215), "on"); // Ottawa — not stolen by QC
+  assert.equal(primaryRegionForPoint(-63.814, 46.162), "nb"); // Cape Jourimain — not PE
 });
 
 test("a deployment-scoped live candidate overrides only its named region", () => {

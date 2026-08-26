@@ -1,8 +1,19 @@
 import Foundation
 
-/// OSM administrative polygons for Nova Scotia and New Brunswick.
+/// OSM administrative polygons for stamped v3 regions.
 /// Lockstep with `scripts/pack-fabric/routing/lib/region-polygons.js`.
 enum RegionPolygons {
+    private struct BBox {
+        var minLon: Double
+        var minLat: Double
+        var maxLon: Double
+        var maxLat: Double
+        var area: Double { max(0, maxLon - minLon) * max(0, maxLat - minLat) }
+        func contains(lon: Double, lat: Double) -> Bool {
+            lon >= minLon && lon <= maxLon && lat >= minLat && lat <= maxLat
+        }
+    }
+
     private static let geometries: [String: [String: Any]] = {
         let url = Bundle.main.url(forResource: "RegionPolygons", withExtension: "json")
             ?? Bundle(for: BundleToken.self).url(forResource: "RegionPolygons", withExtension: "json")
@@ -13,21 +24,68 @@ enum RegionPolygons {
         return regions
     }()
 
+    private static let bboxes: [String: BBox] = {
+        var out: [String: BBox] = [:]
+        for (id, geom) in geometries {
+            if let box = geometryBbox(geom) { out[id] = box }
+        }
+        return out
+    }()
+
     static func contains(_ regionId: String, longitude lon: Double, latitude lat: Double) -> Bool {
         guard let geom = geometries[regionId.lowercased()],
               let type = geom["type"] as? String
         else { return false }
+        if let box = bboxes[regionId.lowercased()], !box.contains(lon: lon, lat: lat) {
+            return false
+        }
         return pointInGeometry(lon: lon, lat: lat, type: type, coordinates: geom["coordinates"])
     }
 
-    /// Admin-polygon owner for NS/NB. Nil when the point is in neither polygon.
+    /// Admin-polygon owner. Nil when the point is in none of the loaded polygons.
+    static func polygonOwner(longitude lon: Double, latitude lat: Double) -> String? {
+        var hits: [String] = []
+        for id in geometries.keys where contains(id, longitude: lon, latitude: lat) {
+            hits.append(id)
+        }
+        if hits.isEmpty { return nil }
+        if hits.count == 1 { return hits[0] }
+        if hits.contains("ns"), hits.contains("nb") {
+            return lon >= -64.27 ? "ns" : "nb"
+        }
+        hits.sort { (bboxes[$0]?.area ?? .infinity) < (bboxes[$1]?.area ?? .infinity) }
+        return hits[0]
+    }
+
+    /// Alias kept for lockstep with live `maritimesOwner`.
     static func maritimesOwner(longitude lon: Double, latitude lat: Double) -> String? {
-        let ns = contains("ns", longitude: lon, latitude: lat)
-        let nb = contains("nb", longitude: lon, latitude: lat)
-        if ns && !nb { return "ns" }
-        if nb && !ns { return "nb" }
-        if ns && nb { return lon >= -64.27 ? "ns" : "nb" }
-        return nil
+        polygonOwner(longitude: lon, latitude: lat)
+    }
+
+    private static func geometryBbox(_ geom: [String: Any]) -> BBox? {
+        var minLon = Double.infinity
+        var minLat = Double.infinity
+        var maxLon = -Double.infinity
+        var maxLat = -Double.infinity
+        func walk(_ raw: Any?) {
+            guard let raw else { return }
+            if let pair = raw as? [Any], pair.count >= 2,
+               let lon = (pair[0] as? NSNumber)?.doubleValue,
+               let lat = (pair[1] as? NSNumber)?.doubleValue,
+               !(pair[0] is [Any]) {
+                if lon < minLon { minLon = lon }
+                if lat < minLat { minLat = lat }
+                if lon > maxLon { maxLon = lon }
+                if lat > maxLat { maxLat = lat }
+                return
+            }
+            if let list = raw as? [Any] {
+                for child in list { walk(child) }
+            }
+        }
+        walk(geom["coordinates"])
+        guard minLon.isFinite else { return nil }
+        return BBox(minLon: minLon, minLat: minLat, maxLon: maxLon, maxLat: maxLat)
     }
 
     private static func pointInGeometry(lon: Double, lat: Double, type: String, coordinates: Any?) -> Bool {

@@ -880,7 +880,8 @@ final class GraphPackStore {
         }.value
     }
 
-    /// Canada land/bridge neighbours, plus bbox-touch for US / Canada–US.
+    /// Canada land/bridge neighbours and topology-proven vehicle ferries,
+    /// plus bbox-touch for US / Canada–US.
     static func packsShareABorder(_ left: String, _ right: String) -> Bool {
         let a = left.lowercased()
         let b = right.lowercased()
@@ -893,9 +894,9 @@ final class GraphPackStore {
             "on": ["mb", "qc"],
             "qc": ["on", "nb", "nl"],
             "nb": ["qc", "ns", "pe"],
-            "ns": ["nb"],
-            "pe": ["nb"],
-            "nl": ["qc"],
+            "ns": ["nb", "pe", "nl"],
+            "pe": ["nb", "ns"],
+            "nl": ["qc", "ns"],
             "yt": ["bc", "nt"],
             "nt": ["yt", "bc", "ab", "sk", "nu"],
             "nu": ["nt", "mb"]
@@ -1580,8 +1581,8 @@ final class GraphPackStore {
         let lon = coordinate.longitude
         let lat = coordinate.latitude
 
-        if let maritime = RegionPolygons.maritimesOwner(longitude: lon, latitude: lat) {
-            return maritime
+        if let owner = RegionPolygons.polygonOwner(longitude: lon, latitude: lat) {
+            return owner
         }
 
         // Resolve the international border before overlapping Canadian

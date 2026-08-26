@@ -443,6 +443,33 @@ struct CrossPackSeamTests {
         #expect(GraphPackStore.endpointsCrossProvince([amherst, sackville]) == true)
     }
 
+    @Test func atlanticAdminPolygonsOwnTheirCapitals() {
+        let charlottetown = CLLocationCoordinate2D(latitude: 46.2382, longitude: -63.1316)
+        let gander = CLLocationCoordinate2D(latitude: 48.9544, longitude: -54.6103)
+        let stJohns = CLLocationCoordinate2D(latitude: 47.5615, longitude: -52.7126)
+        let quebecCity = CLLocationCoordinate2D(latitude: 46.8139, longitude: -71.2075)
+        let montreal = CLLocationCoordinate2D(latitude: 45.5017, longitude: -73.5673)
+        let ottawa = CLLocationCoordinate2D(latitude: 45.4215, longitude: -75.6972)
+        let capeJourimain = CLLocationCoordinate2D(latitude: 46.162, longitude: -63.814)
+        #expect(GraphPackStore.primaryRegionId(containing: charlottetown) == "pe")
+        #expect(GraphPackStore.primaryRegionId(containing: gander) == "nl")
+        #expect(GraphPackStore.primaryRegionId(containing: stJohns) == "nl")
+        #expect(GraphPackStore.primaryRegionId(containing: quebecCity) == "qc")
+        #expect(GraphPackStore.primaryRegionId(containing: montreal) == "qc")
+        #expect(GraphPackStore.primaryRegionId(containing: ottawa) == "on")
+        #expect(GraphPackStore.primaryRegionId(containing: capeJourimain) == "nb")
+        #expect(GraphPackStore.endpointsCrossProvince([charlottetown, capeJourimain]) == true)
+    }
+
+    @Test func atlanticV3PacksRecognizeRoadAndVehicleFerryNeighbours() {
+        #expect(GraphPackStore.packsShareABorder("ns", "nb"))
+        #expect(GraphPackStore.packsShareABorder("nb", "pe"))
+        #expect(GraphPackStore.packsShareABorder("nb", "qc"))
+        #expect(GraphPackStore.packsShareABorder("qc", "nl"))
+        #expect(GraphPackStore.packsShareABorder("ns", "nl"))
+        #expect(GraphPackStore.packsShareABorder("ns", "pe"))
+    }
+
     @Test func concatenatingAddsDirtAndPavedMeters() throws {
         let hop1 = OnDeviceRouter.Result(
             coordinates: [

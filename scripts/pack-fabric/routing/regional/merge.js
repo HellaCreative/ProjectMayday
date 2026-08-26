@@ -157,8 +157,9 @@ function mergeRegionalGraphs(graphs) {
  * Undirected neighbours based on shared land/ferry borders.
  */
 const REGION_NEIGHBOURS = {
-  // Land / contiguous borders only. Ferry-dependent links are omitted until
-  // NRN ferry connection layers are ingested as routable edges.
+  // Land / contiguous borders plus topology-proven vehicle ferry links.
+  // A ferry pair is added only when both v3 packs publish the same routable
+  // OSM vertices in cross-pack-topology.v1.json.
   bc: ["ab", "yt", "nt"],
   ab: ["bc", "sk", "nt"],
   sk: ["ab", "mb", "nt"],
@@ -172,9 +173,9 @@ const REGION_NEIGHBOURS = {
   "qc-north": ["qc", "qc-sl", "qc-west"],
   // Confederation Bridge is a legal road link (not ferry) — NB↔PE must chain.
   nb: ["qc", "ns", "pe"],
-  ns: ["nb"],
-  pe: ["nb"],
-  nl: ["qc"],
+  ns: ["nb", "pe", "nl"],
+  pe: ["nb", "ns"],
+  nl: ["qc", "ns"],
   yt: ["bc", "nt"],
   nt: ["yt", "bc", "ab", "sk", "nu"],
   nu: ["nt", "mb"]

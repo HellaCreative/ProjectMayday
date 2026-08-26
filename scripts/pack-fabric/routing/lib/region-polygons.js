@@ -2,12 +2,12 @@
 
 const path = require("path");
 
-const RECORD_PATH = path.join(__dirname, "..", "schema", "maritimes.v1.json");
-const RECORD = require("../schema/maritimes.v1.json");
+const RECORD_PATH = path.join(__dirname, "..", "schema", "region-polygons.v1.json");
+const RECORD = require("../schema/region-polygons.v1.json");
 
 let cached = null;
 
-function loadMaritimesPolygons() {
+function loadRegionPolygons() {
   if (cached) return cached;
   cached = RECORD;
   return cached;
@@ -45,22 +45,95 @@ function pointInGeometry(lon, lat, geom) {
 
 function pointInRegionPolygon(regionId, lon, lat) {
   const id = String(regionId || "").toLowerCase();
-  const geom = loadMaritimesPolygons().regions && loadMaritimesPolygons().regions[id];
+  const geom = loadRegionPolygons().regions && loadRegionPolygons().regions[id];
   if (!geom) return false;
   return pointInGeometry(lon, lat, geom);
 }
 
+function geometryBbox(geom) {
+  let minLon = Infinity;
+  let minLat = Infinity;
+  let maxLon = -Infinity;
+  let maxLat = -Infinity;
+  function walk(coords) {
+    if (!Array.isArray(coords) || !coords.length) return;
+    if (typeof coords[0] === "number") {
+      const lon = Number(coords[0]);
+      const lat = Number(coords[1]);
+      if (lon < minLon) minLon = lon;
+      if (lat < minLat) minLat = lat;
+      if (lon > maxLon) maxLon = lon;
+      if (lat > maxLat) maxLat = lat;
+      return;
+    }
+    for (const child of coords) walk(child);
+  }
+  walk(geom && geom.coordinates);
+  if (!Number.isFinite(minLon)) return null;
+  return { minLon, minLat, maxLon, maxLat };
+}
+
+function bboxArea(box) {
+  if (!box) return Infinity;
+  return Math.max(0, box.maxLon - box.minLon) * Math.max(0, box.maxLat - box.minLat);
+}
+
+function expandBbox(box, padDeg) {
+  return {
+    minLon: box.minLon - padDeg,
+    minLat: box.minLat - padDeg,
+    maxLon: box.maxLon + padDeg,
+    maxLat: box.maxLat + padDeg
+  };
+}
+
+function intersectBboxes(a, b) {
+  const box = {
+    minLon: Math.max(a.minLon, b.minLon),
+    minLat: Math.max(a.minLat, b.minLat),
+    maxLon: Math.min(a.maxLon, b.maxLon),
+    maxLat: Math.min(a.maxLat, b.maxLat)
+  };
+  if (box.minLon >= box.maxLon || box.minLat >= box.maxLat) return null;
+  return box;
+}
+
+function seamCorridor(leftId, rightId, padDeg = 0.15) {
+  const regions = loadRegionPolygons().regions || {};
+  const left = geometryBbox(regions[String(leftId || "").toLowerCase()]);
+  const right = geometryBbox(regions[String(rightId || "").toLowerCase()]);
+  if (!left || !right) return null;
+  const overlap = intersectBboxes(expandBbox(left, padDeg), expandBbox(right, padDeg));
+  return overlap;
+}
+
+function pointInBbox(lon, lat, box) {
+  return lon >= box.minLon && lon <= box.maxLon && lat >= box.minLat && lat <= box.maxLat;
+}
+
 /**
- * Admin-polygon owner for Nova Scotia / New Brunswick.
- * Returns null when the point is in neither polygon so bbox logic can continue.
+ * Admin-polygon owner. Null when the point is in none of the loaded polygons.
+ * NS/NB overlap on the isthmus uses the meridian already proven in the field.
  */
+function polygonOwner(lon, lat) {
+  const regions = loadRegionPolygons().regions || {};
+  const hits = [];
+  for (const id of Object.keys(regions)) {
+    const box = geometryBbox(regions[id]);
+    if (box && !pointInBbox(lon, lat, box)) continue;
+    if (pointInRegionPolygon(id, lon, lat)) hits.push(id);
+  }
+  if (!hits.length) return null;
+  if (hits.length === 1) return hits[0];
+  if (hits.includes("ns") && hits.includes("nb")) {
+    return lon >= -64.27 ? "ns" : "nb";
+  }
+  hits.sort((a, b) => bboxArea(geometryBbox(regions[a])) - bboxArea(geometryBbox(regions[b])));
+  return hits[0];
+}
+
 function maritimesOwner(lon, lat) {
-  const ns = pointInRegionPolygon("ns", lon, lat);
-  const nb = pointInRegionPolygon("nb", lon, lat);
-  if (ns && !nb) return "ns";
-  if (nb && !ns) return "nb";
-  if (ns && nb) return lon >= -64.27 ? "ns" : "nb";
-  return null;
+  return polygonOwner(lon, lat);
 }
 
 function resetPolygonCache() {
@@ -69,9 +142,13 @@ function resetPolygonCache() {
 
 module.exports = {
   RECORD_PATH,
-  loadMaritimesPolygons,
+  geometryBbox,
+  loadRegionPolygons,
   maritimesOwner,
+  pointInBbox,
   pointInGeometry,
   pointInRegionPolygon,
-  resetPolygonCache
+  polygonOwner,
+  resetPolygonCache,
+  seamCorridor
 };

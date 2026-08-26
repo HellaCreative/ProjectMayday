@@ -2,7 +2,34 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { corridorLocationsForRoute } = require("./merge");
+const {
+  corridorLocationsForRoute,
+  shortestRegionPath
+} = require("./merge");
+
+test("Nova Scotia and Newfoundland use their topology-proven direct ferry", () => {
+  assert.deepEqual(shortestRegionPath("ns", "nl"), ["ns", "nl"]);
+
+  const points = corridorLocationsForRoute([
+    { lon: -60.251, lat: 46.207 },
+    { lon: -59.1367, lat: 47.5721 }
+  ], { profile: "cleanest", forChain: true });
+
+  assert.equal(points.length, 3);
+  assert.deepEqual(points[1].between, ["nl", "ns"]);
+});
+
+test("Nova Scotia and Prince Edward Island use their topology-proven direct ferry", () => {
+  assert.deepEqual(shortestRegionPath("ns", "pe"), ["ns", "pe"]);
+
+  const points = corridorLocationsForRoute([
+    { lon: -63.288, lat: 45.665 },
+    { lon: -62.65, lat: 46.2 }
+  ], { profile: "cleanest", forChain: true });
+
+  assert.equal(points.length, 3);
+  assert.deepEqual(points[1].between, ["ns", "pe"]);
+});
 const { metroBlocks } = require("../lib/hop-search");
 
 test("Clean long-haul chaining never manufactures city-core waypoints", () => {
