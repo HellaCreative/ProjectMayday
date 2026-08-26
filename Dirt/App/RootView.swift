@@ -77,7 +77,6 @@ struct RootView: View {
     /// Measured portrait planner sheet height so compact map controls sit just above it.
     @State private var portraitRouteSheetHeight: CGFloat = 0
     @State private var showRouteConfetti = false
-    @State private var offlinePacksOpen = false
     @State private var fuelControlsOpen = false
     @State private var mapFuelRangeKm = FuelRangePrefs.kilometers
     @State private var mapFuelReservePercent = FuelRangePrefs.reservePercent
@@ -308,12 +307,6 @@ struct RootView: View {
             }
         }
         .animation(.easeInOut(duration: 0.25), value: app.incidents.isPresented)
-        .sheet(isPresented: $offlinePacksOpen) {
-            OfflinePacksSheet(isPresented: $offlinePacksOpen)
-                .environment(app)
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
-        }
         .sheet(item: Binding(
             get: { app.pendingTrackContribution },
             set: { app.pendingTrackContribution = $0 }
@@ -533,14 +526,6 @@ struct RootView: View {
         return ZStack(alignment: .bottom) {
             VStack(spacing: 0) {
                 topChrome
-                if BuildChannel.debugRoutingGraphOverlay, app.mapState.showRoutingGraphDebug {
-                    HStack(alignment: .top) {
-                        Spacer(minLength: 0)
-                        routingGraphDebugHUD
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.top, 8)
-                }
                 Spacer(minLength: 0)
 
                 if navActive,
@@ -600,13 +585,9 @@ struct RootView: View {
                     .zIndex(1)
             }
 
-            // Offline packs (leading) + recenter / fit plan (trailing) above route sheet.
+            // Fuel range (leading) + recenter / fit plan (trailing) above route sheet.
             if showsDock, routeCardOpen, activeSheet == nil, !navActive {
                 HStack(alignment: .bottom, spacing: 10) {
-                    offlinePacksButton
-                    if BuildChannel.debugRoutingGraphOverlay {
-                        routingGraphDebugButton
-                    }
                     fuelRangeButton
                     Spacer(minLength: 0)
                     mapControlStack
@@ -752,7 +733,7 @@ struct RootView: View {
             VStack {
                 HStack {
                     if dockLeading { Spacer(minLength: 0) }
-                    BrandChip()
+                    idleBrandStack
                     if !dockLeading { Spacer(minLength: 0) }
                 }
                 .padding(.top, max(insets.top, 12))
@@ -761,7 +742,6 @@ struct RootView: View {
                 Spacer(minLength: 0)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            .allowsHitTesting(false)
 
             // Side drawers behind the vertical dock (wash extends under the rail).
             if routeCardOpen {
@@ -861,10 +841,6 @@ struct RootView: View {
         let gutter = Color.clear.frame(width: sheetWidth + gap, height: 1)
         // Packs on the sheet-adjacent edge; fit + recenter on the far open-map edge.
         let controls = HStack(spacing: 10) {
-            offlinePacksButton
-            if BuildChannel.debugRoutingGraphOverlay {
-                routingGraphDebugButton
-            }
             fuelRangeButton
             Spacer(minLength: 8)
             if app.planner.canFocusEntirePlannedRoute {
@@ -929,54 +905,50 @@ struct RootView: View {
         .accessibilityLabel("Follow my location")
     }
 
-    private var offlinePacksButton: some View {
+    private var graphBrandButton: some View {
         Button {
-            offlinePacksOpen = true
-        } label: {
-            VStack(spacing: 2) {
-                Image(systemName: "square.stack.3d.up.fill")
-                    .font(.system(size: 16, weight: .bold))
-                Text("PACKS")
-                    .font(.dirtMono(7, weight: .bold))
-                    .tracking(0.5)
+            withAnimation(.easeInOut(duration: 0.22)) {
+                app.mapState.showRoutingGraphDebug.toggle()
+                if !app.mapState.showRoutingGraphDebug {
+                    app.mapState.debugGraphHit = nil
+                    routingGraphDebugPanelExpanded = false
+                }
             }
-            .foregroundStyle(app.graphPacks.loadedRegionIds.isEmpty ? .white : DirtTheme.onOrange)
-            .frame(width: 50, height: 50)
-            .background(app.graphPacks.loadedRegionIds.isEmpty ? DirtTheme.chrome : DirtTheme.orange)
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        } label: {
+            BrandChip(minHeight: 48)
             .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(DirtTheme.chromeBorder, lineWidth: 1)
+                RoundedRectangle(cornerRadius: DirtRadius.chip, style: .continuous)
+                    .stroke(
+                        app.mapState.showRoutingGraphDebug ? DirtTheme.orange : Color.clear,
+                        lineWidth: 2
+                    )
             )
         }
-        .accessibilityLabel("Offline map packs")
+        .buttonStyle(.plain)
+        .accessibilityLabel(app.mapState.showRoutingGraphDebug ? "Hide routing graph" : "Show routing graph")
+        .accessibilityHint("Toggles the graph overlay and legend")
     }
 
-    private var routingGraphDebugButton: some View {
-        Button {
-            app.mapState.showRoutingGraphDebug.toggle()
-            if !app.mapState.showRoutingGraphDebug {
-                app.mapState.debugGraphHit = nil
-                routingGraphDebugPanelExpanded = false
+    @ViewBuilder
+    private var idleBrandStack: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if BuildChannel.debugRoutingGraphOverlay {
+                graphBrandButton
+            } else {
+                BrandChip(minHeight: 48)
             }
-        } label: {
-            VStack(spacing: 2) {
-                Image(systemName: "point.3.connected.trianglepath.dotted")
-                    .font(.system(size: 16, weight: .bold))
-                Text("GRAPH")
-                    .font(.dirtMono(7, weight: .bold))
-                    .tracking(0.5)
+
+            if BuildChannel.debugRoutingGraphOverlay, app.mapState.showRoutingGraphDebug {
+                routingGraphDebugHUD
+                    .transition(
+                        .asymmetric(
+                            insertion: .move(edge: .top).combined(with: .opacity),
+                            removal: .opacity
+                        )
+                    )
             }
-            .foregroundStyle(app.mapState.showRoutingGraphDebug ? DirtTheme.onOrange : .white)
-            .frame(width: 50, height: 50)
-            .background(app.mapState.showRoutingGraphDebug ? DirtTheme.orange : DirtTheme.chrome)
-            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(DirtTheme.chromeBorder, lineWidth: 1)
-            )
         }
-        .accessibilityLabel("Debug routing graph overlay")
+        .frame(maxWidth: 300, alignment: .leading)
     }
 
     private var fuelRangeButton: some View {
@@ -1284,47 +1256,17 @@ struct RootView: View {
                     BrandChip(minHeight: 68)
                     NavCueCard()
                         .frame(maxWidth: .infinity)
-                    if packFormatBadgeVisible { packFormatBadge }
                 }
                 .transition(.opacity.combined(with: .move(edge: .top)))
             } else {
                 HStack(alignment: .top, spacing: 8) {
-                    BrandChip()
+                    idleBrandStack
                     Spacer(minLength: 8)
-                    if packFormatBadgeVisible { packFormatBadge }
                 }
             }
         }
         .padding(.horizontal, 12)
         .padding(.top, 6)
-    }
-
-    /// Hide the "NS · no pack" test chip when this map region has no installed pack.
-    private var packFormatBadgeVisible: Bool {
-        let _ = app.mapState.mapCenter
-        let _ = app.graphPacks.loadedRegionIds
-        return app.graphPacks.packFormatBadge(at: app.mapState.mapCenter).format != "—"
-    }
-
-    /// Pack version chip (Phase E3) — not behind the GRAPH debug toggle.
-    /// Hidden when no pack is installed (avoids a permanent "NS · no pack" badge).
-    private var packFormatBadge: some View {
-        // Touch observables so the chip refreshes on pan / pack install.
-        let _ = app.mapState.mapCenter
-        let _ = app.graphPacks.loadedRegionIds
-        let badge = app.graphPacks.packFormatBadge(at: app.mapState.mapCenter)
-        return Text(badge.label)
-            .font(.dirtMono(10, weight: .bold))
-            .foregroundStyle(badge.hasLeaves ? DirtTheme.onOrange : .white)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 5)
-            .background(badge.hasLeaves ? DirtTheme.orange : DirtTheme.chrome.opacity(0.92))
-            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .stroke(DirtTheme.chromeBorder, lineWidth: 1)
-            )
-            .accessibilityLabel("Pack format \(badge.label)")
     }
 
     private var routingGraphDebugHUD: some View {

@@ -5,6 +5,7 @@ import SwiftUI
 /// coordinator can apply visibility on the live style.
 struct LayersSheet: View {
     @Environment(AppEnvironment.self) private var app
+    @State private var offlinePacksOpen = false
 
     @AppStorage(MapStyleCatalog.preferenceKey) private var styleIDRaw = MapStyleID.shortbreadRich.rawValue
     @AppStorage("dirt.layers.fuel") private var showFuel = false
@@ -27,6 +28,7 @@ struct LayersSheet: View {
         List {
             legendSection
             servicesSection
+            offlineRoutingSection
             basemapSection
         }
         .scrollEdgeEffectStyle(.soft, for: .top)
@@ -35,6 +37,12 @@ struct LayersSheet: View {
         .onChange(of: showCampgrounds) { _, _ in app.mapState.bumpLayerPrefs() }
         .onChange(of: showLodging)     { _, _ in app.mapState.bumpLayerPrefs() }
         .onChange(of: showLiquor)      { _, _ in app.mapState.bumpLayerPrefs() }
+        .sheet(isPresented: $offlinePacksOpen) {
+            OfflinePacksSheet(isPresented: $offlinePacksOpen)
+                .environment(app)
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
+        }
     }
 
     private var legendSection: some View {
@@ -71,6 +79,44 @@ struct LayersSheet: View {
                 .font(DirtType.helper)
         }
         .listRowBackground(DirtTheme.rowFill)
+    }
+
+    private var offlineRoutingSection: some View {
+        Section("Offline routing") {
+            Button {
+                offlinePacksOpen = true
+            } label: {
+                HStack(spacing: DirtSpace.inner) {
+                    Image(systemName: "square.stack.3d.up.fill")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(DirtTheme.orange)
+                        .frame(width: 22)
+                    VStack(alignment: .leading, spacing: DirtSpace.hairGap) {
+                        Text("Downloaded maps")
+                            .font(DirtType.rowTitle)
+                            .fontWeight(.bold)
+                            .foregroundStyle(DirtTheme.ink)
+                        Text(downloadedMapsDetail)
+                            .font(DirtType.helper)
+                            .foregroundStyle(DirtTheme.muted)
+                    }
+                    Spacer(minLength: DirtSpace.tight)
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(DirtTheme.muted)
+                }
+                .frame(minHeight: DirtHit.min)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+        }
+        .listRowBackground(DirtTheme.rowFill)
+    }
+
+    private var downloadedMapsDetail: String {
+        let count = app.graphPacks.installedManagementRows.count
+        if count == 0 { return "Installed automatically when a route needs them" }
+        return count == 1 ? "1 region on this phone" : "\(count) regions on this phone"
     }
 
     private func basemapRow(_ style: MapStyleID) -> some View {

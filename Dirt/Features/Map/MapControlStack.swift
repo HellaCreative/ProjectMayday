@@ -31,11 +31,11 @@ struct MapControlStack: View {
     var body: some View {
         Group {
             if horizontal {
-                HStack(spacing: compact ? 0 : 10) {
+                HStack(spacing: 10) {
                     controlButtons
                 }
             } else {
-                VStack(alignment: .trailing, spacing: compact ? 0 : 10) {
+                VStack(alignment: .trailing, spacing: 10) {
                     controlButtons
                 }
             }
