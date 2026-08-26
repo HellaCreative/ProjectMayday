@@ -231,6 +231,8 @@ final class RoutePlannerModel {
     /// Debounce From here point-2/point-1 retaps while the rider is adjusting the pin.
     @ObservationIgnored private var fromHereRouteDebounceTask: Task<Void, Never>?
     @ObservationIgnored private var fromHereIntentGeneration = 0
+    @ObservationIgnored private var navigationRerouteTask: Task<Void, Never>?
+    @ObservationIgnored private var navigationRerouteGeneration = 0
 
     private(set) var isRouting = false
     var errorMessage: String?
@@ -330,6 +332,9 @@ final class RoutePlannerModel {
         navigation.onRerouteNeeded = { [weak self] in
             guard let self else { return }
             self.recalculateFromRider(networkOnline: self.network.isOnline)
+        }
+        navigation.onRouteRecovered = { [weak self] in
+            self?.cancelNavigationReroute()
         }
         locationService.onLocation = { [weak self] location in
             guard let self else { return }
@@ -1364,17 +1369,23 @@ final class RoutePlannerModel {
         guard navigation.phase == .active,
               let rider = locationService.currentCoordinate else { return }
 
+        cancelNavigationReroute()
+        navigationRerouteGeneration += 1
+        let requestGeneration = navigationRerouteGeneration
+
         if shouldPreserveStagesForRecovery,
            let idx = activeStageIndex(near: rider),
            let stageEnd = stages[idx].end {
-            Task {
-                await rerouteActiveStage(
+            navigationRerouteTask = Task { @MainActor [weak self] in
+                guard let self else { return }
+                await self.rerouteActiveStage(
                     at: idx,
                     from: rider,
                     to: stageEnd,
                     avoidEdgeIds: [],
                     networkOnline: networkOnline,
-                    announce: true
+                    announce: true,
+                    requestGeneration: requestGeneration
                 )
             }
             return
@@ -1389,32 +1400,46 @@ final class RoutePlannerModel {
         }
         guard let target else { return }
 
-        Task {
+        navigationRerouteTask = Task { @MainActor [weak self] in
+            guard let self else { return }
             do {
-                let response = try await routeWhileNavigating(
+                let response = try await self.routeWhileNavigating(
                     from: rider,
                     to: target,
                     networkOnline: networkOnline
                 )
-                mode = .fromHere
-                destination = target
-                seedCanonicalBuild(
+                guard !Task.isCancelled,
+                      self.navigationRerouteGeneration == requestGeneration,
+                      self.navigation.phase == .active
+                else { return }
+                self.mode = .fromHere
+                self.destination = target
+                self.seedCanonicalBuild(
                     coordinates: [rider, target],
-                    profile: profile,
-                    allowUnknown: allowUnknown,
+                    profile: self.profile,
+                    allowUnknown: self.allowUnknown,
                     responses: [response]
                 )
                 let display = MapState.displaySegments(from: [response])
-                navigation.replaceRoute(
+                self.navigation.replaceRoute(
                     coordinates: response.coordinates,
                     maneuvers: response.maneuvers ?? [],
                     segments: display,
-                    networkSegments: networkSegments(from: [response])
+                    networkSegments: self.networkSegments(from: [response])
                 )
             } catch {
-                toast = error.localizedDescription
+                guard !Task.isCancelled,
+                      self.navigationRerouteGeneration == requestGeneration
+                else { return }
+                self.toast = error.localizedDescription
             }
         }
+    }
+
+    private func cancelNavigationReroute() {
+        navigationRerouteTask?.cancel()
+        navigationRerouteTask = nil
+        navigationRerouteGeneration += 1
     }
 
     // MARK: - Waypoint drag (map pin drag-to-move)
@@ -2609,6 +2634,7 @@ final class RoutePlannerModel {
     }
 
     func endNavigation() {
+        cancelNavigationReroute()
         let cleaned = RideEdgeSequence.sanitize(navigation.riddenEdgeIds)
         let candidate: RideContributionCandidate? =
             cleaned.count >= 3
@@ -2910,7 +2936,8 @@ final class RoutePlannerModel {
         to: RouteCoordinate,
         avoidEdgeIds: [String],
         networkOnline: Bool,
-        announce: Bool
+        announce: Bool,
+        requestGeneration: Int
     ) async {
         guard stages.indices.contains(index) else { return }
         let riderLegID = stages[index].riderLegID
@@ -2926,6 +2953,10 @@ final class RoutePlannerModel {
                 profile: useProfile,
                 allowUnknown: useAllow
             )
+            guard !Task.isCancelled,
+                  navigationRerouteGeneration == requestGeneration,
+                  navigation.phase == .active
+            else { return }
             guard let idx = stages.firstIndex(where: { $0.riderLegID == riderLegID }) else { return }
 
             applyActiveStageResponse(response, at: idx, isReturnToNetwork: false)
@@ -2937,6 +2968,9 @@ final class RoutePlannerModel {
                 }
             }
         } catch {
+            guard !Task.isCancelled,
+                  navigationRerouteGeneration == requestGeneration
+            else { return }
             toast = error.localizedDescription
         }
     }

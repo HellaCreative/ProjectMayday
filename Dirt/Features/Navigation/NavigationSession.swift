@@ -84,6 +84,8 @@ final class NavigationSession {
     /// Wired by the planner: recalculates from the rider's position to the
     /// preserved destination with the same profile + access policy.
     var onRerouteNeeded: (() -> Void)?
+    /// Cancels an in-flight reroute if the rider naturally rejoins the line.
+    var onRouteRecovered: (() -> Void)?
 
     /// Remaining seconds to the **current stage end** (or final destination).
     /// Uses live speed when moving (>2 m/s), else ~43 km/h planning speed.
@@ -259,11 +261,13 @@ final class NavigationSession {
         // 50 m on-route threshold.
         // Three consecutive misses required before declaring off-route so GPS
         // scatter and brief shadows don't trigger unnecessary reroutes.
+        let wasOffRoute = offRoute || offRouteStrikes > 0
         if proj.offMeters > 50 {
             offRouteStrikes += 1
         } else {
             offRouteStrikes = 0
             offRoute = false
+            if wasOffRoute { onRouteRecovered?() }
         }
 
         if offRouteStrikes >= 3 {
