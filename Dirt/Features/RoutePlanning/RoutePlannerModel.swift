@@ -504,7 +504,7 @@ final class RoutePlannerModel {
             for maneuver in response.maneuvers ?? [] {
                 result.append(maneuver.shiftingAlong(by: offset))
             }
-            offset += response.distanceMeters ?? 0
+            offset += response.distanceMeters ?? GeoMath.lineMeters(response.coordinates)
         }
         return result
     }
@@ -3050,7 +3050,7 @@ final class RoutePlannerModel {
             for maneuver in response.maneuvers ?? [] {
                 maneuvers.append(maneuver.shiftingAlong(by: offset))
             }
-            offset += response.distanceMeters ?? 0
+            offset += response.distanceMeters ?? GeoMath.lineMeters(response.coordinates)
         }
 
         let display = MapState.displaySegments(from: remainingResponses)

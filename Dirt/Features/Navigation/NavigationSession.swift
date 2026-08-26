@@ -33,6 +33,8 @@ final class NavigationSession {
     private(set) var phase: Phase = .idle
     private(set) var coordinates: [RouteCoordinate] = []
     private(set) var maneuvers: [RouteManeuver] = []
+    /// Unfiltered route-engine payload retained across mid-ride mode changes.
+    private var sourceManeuvers: [RouteManeuver] = []
     /// Along-route surface runs built from route segments.
     private(set) var surfaceRuns: [SurfaceRun] = []
     /// Network edge spans for ride-intelligence contribution (no stitch IDs).
@@ -144,13 +146,12 @@ final class NavigationSession {
     ) {
         let continuing = phase == .active
         self.coordinates = coordinates
-        // Always rebuild from geometry. On-device /
-        // saved routes ship maneuvers: nil — without this the HUD stays on
-        // "Follow the route" for the whole ride.
-        let built = NavCueBuilder.build(coordinates: coordinates, cueMode: cueMode)
-        self.maneuvers = (built.isEmpty
-            ? RouteManeuver.enrichForVoiceCues(maneuvers)
-            : built)
+        sourceManeuvers = maneuvers
+        self.maneuvers = Self.resolveManeuvers(
+            coordinates: coordinates,
+            incoming: sourceManeuvers,
+            cueMode: cueMode
+        )
             .sorted { ($0.alongMeters ?? 0) < ($1.alongMeters ?? 0) }
         cumulative = GeoMath.cumulativeMeters(coordinates)
         totalMeters = cumulative.last ?? 0
@@ -187,7 +188,11 @@ final class NavigationSession {
     /// Cue mode changed mid-ride — rebuild geometry cues and clear speech dedupe.
     func rebuildCuesForCurrentMode() {
         guard phase == .active, coordinates.count > 1 else { return }
-        maneuvers = NavCueBuilder.build(coordinates: coordinates, cueMode: cueMode)
+        maneuvers = Self.resolveManeuvers(
+            coordinates: coordinates,
+            incoming: sourceManeuvers,
+            cueMode: cueMode
+        )
             .sorted { ($0.alongMeters ?? 0) < ($1.alongMeters ?? 0) }
         lastAnnouncedCue = nil
         currentCue = "Follow the route"
@@ -324,6 +329,7 @@ final class NavigationSession {
         phase = .idle
         coordinates = []
         maneuvers = []
+        sourceManeuvers = []
         surfaceRuns = []
         edgeSpans = []
         riddenEdgeIds = []
@@ -357,6 +363,37 @@ final class NavigationSession {
                 kind: isFinal ? .destination : .waypoint,
                 endMeters: end
             )
+        }
+    }
+
+    /// One maneuver contract for live, saved, and on-device routes.
+    /// Junction mode trusts explicit graph decision points when present; older
+    /// payloads fall back to decisive geometry. Rally is always derived from
+    /// the final displayed line so its 6→1 scale cannot differ by engine.
+    private static func resolveManeuvers(
+        coordinates: [RouteCoordinate],
+        incoming: [RouteManeuver],
+        cueMode: NavigationCueMode
+    ) -> [RouteManeuver] {
+        switch cueMode {
+        case .rally:
+            return NavCueBuilder.build(coordinates: coordinates, cueMode: .rally)
+        case .junctions:
+            let enriched = RouteManeuver.enrichForVoiceCues(incoming)
+            let graphDecisions = enriched.filter { $0.isJunctionCue }
+            guard !graphDecisions.isEmpty else {
+                return NavCueBuilder.build(coordinates: coordinates, cueMode: .junctions)
+            }
+            let arrival = enriched.last(where: {
+                ($0.type ?? $0.kind ?? "").lowercased() == "arrive"
+            }) ?? RouteManeuver(
+                instruction: "Arrive at destination",
+                type: "arrive",
+                kind: "arrive",
+                distanceMeters: 0,
+                alongMeters: GeoMath.lineMeters(coordinates)
+            )
+            return graphDecisions + [arrival]
         }
     }
 
