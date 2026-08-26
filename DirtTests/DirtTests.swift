@@ -204,13 +204,21 @@ struct DirtTests {
             alongMeters: 300
         )
 
-        #expect(bend.matches(cueMode: .all))
         #expect(bend.matches(cueMode: .rally))
         #expect(!bend.matches(cueMode: .junctions))
 
         #expect(sharp.matches(cueMode: .junctions))
         #expect(junction.matches(cueMode: .junctions))
         #expect(!junction.matches(cueMode: .rally))
+    }
+
+    @Test func retiredAllCueModeMigratesToJunctions() {
+        #expect(NavigationCueMode.fromStorage(nil) == .junctions)
+        #expect(NavigationCueMode.fromStorage("") == .junctions)
+        #expect(NavigationCueMode.fromStorage("bends") == .junctions)
+        #expect(NavigationCueMode.fromStorage("junctions") == .junctions)
+        #expect(NavigationCueMode.fromStorage("rally") == .rally)
+        #expect(NavigationCueMode.fromStorage("unknown") == .junctions)
     }
 
     @Test func backgroundLocationRequiresInfoPlistMode() {

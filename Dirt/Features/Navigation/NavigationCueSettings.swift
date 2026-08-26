@@ -123,11 +123,9 @@ enum CueSpeechVoice {
 }
 
 /// Pref keys: `dirt_cue_mode_v1` / `dirt_cue_audio_v1`.
-/// - all (`bends`): roadbook curves + junctions
 /// - junctions: network / decision turns
 /// - rally: geometry-derived roadbook curves only
 nonisolated enum NavigationCueMode: String, CaseIterable, Identifiable, Sendable {
-    case all = "bends"
     case junctions
     case rally
 
@@ -135,7 +133,6 @@ nonisolated enum NavigationCueMode: String, CaseIterable, Identifiable, Sendable
 
     var shortLabel: String {
         switch self {
-        case .all: "ALL"
         case .junctions: "JCT"
         case .rally: "RALLY"
         }
@@ -143,7 +140,6 @@ nonisolated enum NavigationCueMode: String, CaseIterable, Identifiable, Sendable
 
     var menuLabel: String {
         switch self {
-        case .all: "All"
         case .junctions: "Junction"
         case .rally: "Rally"
         }
@@ -151,14 +147,22 @@ nonisolated enum NavigationCueMode: String, CaseIterable, Identifiable, Sendable
 
     var statusToast: String {
         switch self {
-        case .all: "Cues: all curves + junctions"
         case .junctions: "Cues: junctions only"
         case .rally: "Cues: rally curves only"
         }
     }
 
     static func fromStorage(_ raw: String?) -> NavigationCueMode {
-        NavigationCueMode(rawValue: raw ?? "") ?? .all
+        switch raw {
+        case NavigationCueMode.rally.rawValue:
+            return .rally
+        case NavigationCueMode.junctions.rawValue, "bends", nil, "":
+            // `bends` was the removed All mode. Migrate it to the safer,
+            // quieter Junction mode instead of silently preserving curve spam.
+            return .junctions
+        default:
+            return .junctions
+        }
     }
 }
 
@@ -357,8 +361,6 @@ extension RouteManeuver {
         if normalized == "arrive" { return true }
 
         switch cueMode {
-        case .all:
-            return true
         case .rally:
             // Roadbook / geometry curves from the router (`type: bend`) or explicit curve kind.
             return isRallyCurve
@@ -385,7 +387,7 @@ extension RouteManeuver {
     /// HUD label: Rally → "Right 6"; Junction → "Turn left".
     func displayLabel(cueMode: NavigationCueMode) -> String {
         let side = self.side?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        if cueMode == .rally || (cueMode == .all && isRallyCurve) {
+        if cueMode == .rally {
             if let side, let number {
                 return "\(side.capitalized) \(number)"
             }
@@ -406,7 +408,7 @@ extension RouteManeuver {
     func spokenLabel(cueMode: NavigationCueMode, meters: Double?) -> String {
         let core = displayLabel(cueMode: cueMode)
         // Rally curves: number + side only.
-        if cueMode == .rally || (cueMode == .all && isRallyCurve) {
+        if cueMode == .rally {
             if let side = side?.lowercased(), let number {
                 let spokenSide = side
                 let base = number == 1

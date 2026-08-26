@@ -47,10 +47,6 @@ nonisolated enum NavCueBuilder {
             return curves.map(asRallyManeuver) + [arrive]
         case .junctions:
             return curves.compactMap(asJunctionIfDecisive) + [arrive]
-        case .all:
-            let rally = curves.map(asRallyManeuver)
-            let junctions = curves.compactMap(asJunctionIfDecisive)
-            return merge(curves: rally, junctions: junctions) + [arrive]
         }
     }
 

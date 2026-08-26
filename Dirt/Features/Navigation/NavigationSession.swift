@@ -45,7 +45,7 @@ final class NavigationSession {
     private var lastSpeedMPS: Double = 0
     private var lastAltitudeMeters: Double?
     /// Cue filter (`dirt_cue_mode_v1`).
-    var cueMode: NavigationCueMode = .all
+    var cueMode: NavigationCueMode = .junctions
     /// Optional speech hook: (spoken text, stable announce key).
     var onCueAnnounced: ((String, String) -> Void)?
     private var offRouteStrikes = 0
