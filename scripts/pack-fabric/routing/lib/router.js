@@ -704,6 +704,78 @@ function buildManeuvers(geometry) {
   return maneuvers;
 }
 
+function graphDecisionManeuvers(used, resolveEdgeCoords, neighborsForNode) {
+  const routeEdges = Array.isArray(used) ? used : [];
+  if (!routeEdges.length) return [];
+
+  const maneuvers = [];
+  let alongMeters = 0;
+  const ignoredTracks = new Set(["service", "parking", "driveway"]);
+
+  for (let i = 1; i < routeEdges.length; i += 1) {
+    const incoming = routeEdges[i - 1];
+    const outgoing = routeEdges[i];
+    alongMeters += Number(incoming.meters) || 0;
+
+    const node = incoming.b;
+    if (!Number.isInteger(node) || node !== outgoing.a) continue;
+    if (incoming.accessLeg || outgoing.accessLeg) continue;
+
+    const alternatives = (neighborsForNode(node) || []).filter((candidate) => {
+      const edge = candidate && candidate.edge;
+      if (!edge || edge.accessLeg || edge.virtual) return false;
+      if ((Number(edge.meters) || 0) < 30) return false;
+      if (ignoredTracks.has(String(edge.roadTrack || "").toLowerCase())) return false;
+      const candidateID = String(edge.edgeId || "");
+      if (candidateID && candidateID === String(incoming.edgeId || "")) return false;
+      if (candidateID && candidateID === String(outgoing.edgeId || "")) return false;
+      return candidate.to !== incoming.a && candidate.to !== outgoing.b;
+    });
+    if (!alternatives.length) continue;
+
+    const inCoords = resolveEdgeCoords(incoming) || [];
+    const outCoords = resolveEdgeCoords(outgoing) || [];
+    if (inCoords.length < 2 || outCoords.length < 2) continue;
+    const a = inCoords[inCoords.length - 2];
+    const b = inCoords[inCoords.length - 1];
+    const c = outCoords[1];
+    if (!a || !b || !c) continue;
+
+    const bearingIn = Math.atan2(b[0] - a[0], b[1] - a[1]);
+    const bearingOut = Math.atan2(c[0] - b[0], c[1] - b[1]);
+    let delta = ((bearingOut - bearingIn) * 180) / Math.PI;
+    while (delta > 180) delta -= 360;
+    while (delta < -180) delta += 360;
+    const degrees = Math.round(Math.abs(delta));
+    const straight = degrees < 30;
+    const side = straight ? null : delta > 0 ? "right" : "left";
+    const stableID = `jct:${String(incoming.edgeId || i - 1)}>${String(outgoing.edgeId || i)}`;
+
+    maneuvers.push({
+      stableID,
+      type: straight ? "continueStraight" : "turn",
+      kind: "junction",
+      instruction: straight ? "Continue straight" : `Turn ${side}`,
+      side,
+      degrees,
+      alongMeters: Math.round(alongMeters),
+      distanceMeters: 0
+    });
+  }
+
+  const last = routeEdges[routeEdges.length - 1];
+  const totalMeters = routeEdges.reduce((sum, edge) => sum + (Number(edge.meters) || 0), 0);
+  maneuvers.push({
+    stableID: `arrive:${String((last && last.edgeId) || "destination")}`,
+    type: "arrive",
+    kind: "arrive",
+    instruction: "Arrive at destination",
+    distanceMeters: 0,
+    alongMeters: Math.round(totalMeters)
+  });
+  return maneuvers;
+}
+
 function normalizePolicy(input, profile, extras) {
   const policy = input || {};
   const extra = extras || {};
@@ -2467,7 +2539,9 @@ async function routeOnRuntime(body, graphResolution, runtime) {
     estimatedElapsedSeconds: Math.round(path.movingSeconds * 1.15),
     stats: path.stats,
     segments: path.segments,
-    maneuvers: buildManeuvers(path.geometry),
+    maneuvers: path.maneuvers && path.maneuvers.length
+      ? path.maneuvers
+      : buildManeuvers(path.geometry),
     warnings,
     debug: {
       routingRevision: "ride-objectives-v10-clean-town-cost",
@@ -3138,6 +3212,7 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds, 
     used = pruned.edges;
     searchMeta.prunedLoopCount = pruned.prunedLoopCount;
     searchMeta.prunedLoopMeters = Math.round(pruned.prunedMeters);
+    const graphManeuvers = graphDecisionManeuvers(used, resolveEdgeCoords, neighbors);
     const geometry = [];
     const segments = [];
     let distanceMeters = 0;
@@ -3223,7 +3298,8 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds, 
       movingSeconds,
       profileCost,
       searchMeta,
-      stats
+      stats,
+      maneuvers: graphManeuvers
     };
   }
 
@@ -3429,5 +3505,6 @@ module.exports = {
   clippedDirtMeters,
   isLowDirtRoute,
   backtrackSummary,
-  restrictedSummary
+  restrictedSummary,
+  graphDecisionManeuvers
 };

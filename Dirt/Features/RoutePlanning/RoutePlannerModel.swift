@@ -790,6 +790,9 @@ final class RoutePlannerModel {
     }
 
     func waitForCanonicalBuildForTesting() async {
+        // A drag may still be inside its settle window. Await the pending move
+        // first so the test hook never observes the previous completed build.
+        await moveDebounceTask?.value
         await buildTask?.value
     }
 
@@ -2195,6 +2198,7 @@ final class RoutePlannerModel {
         networkSegments: [RouteSegment]? = nil,
         unknownAccessPercent: Int = 0,
         unknownSurfacePercent: Int = 0,
+        maneuvers: [RouteManeuver]? = nil,
         warnings: [RouteWarning]? = nil
     ) -> RouteResponse {
         let segments: [RouteSegment]?
@@ -2229,7 +2233,7 @@ final class RoutePlannerModel {
                 unknownAccessPercent: unknownAccessPercent,
                 unknownSurfacePercent: unknownSurfacePercent
             ),
-            maneuvers: nil,
+            maneuvers: maneuvers,
             warnings: warnings,
             dirtPercentValue: nil,
             pavedPercentValue: nil
@@ -2267,6 +2271,7 @@ final class RoutePlannerModel {
             networkSegments: segments,
             unknownAccessPercent: local.unknownAccessPercent,
             unknownSurfacePercent: local.unknownSurfacePercent,
+            maneuvers: local.maneuvers,
             warnings: {
                 var warnings: [RouteWarning] = []
                 if local.searchMeta.urbanCoreFallbackUsed {

@@ -601,6 +601,10 @@ struct RoutingPackIdentity: Codable, Sendable, Equatable {
 
 nonisolated struct RouteManeuver: Codable, Identifiable, Sendable {
     let id = UUID()
+    /// Route-engine identity that survives decode and route-stage composition.
+    let stableID: String?
+    /// Optional itinerary stage arrival identity.
+    let stageID: String?
     let instruction: String?
     let type: String?
     /// Web roadbook kind (`curve` / `junction`) when the backend or client enricher provides it.
@@ -612,12 +616,15 @@ nonisolated struct RouteManeuver: Codable, Identifiable, Sendable {
     let alongMeters: Double?
 
     enum CodingKeys: String, CodingKey {
-        case instruction, type, kind, side, number, degrees, distanceMeters, alongMeters
+        case stableID, stageID, instruction, type, kind, side, number, degrees
+        case distanceMeters, alongMeters
     }
 
     init(
         instruction: String?,
         type: String?,
+        stableID: String? = nil,
+        stageID: String? = nil,
         kind: String? = nil,
         side: String? = nil,
         number: Int? = nil,
@@ -625,6 +632,8 @@ nonisolated struct RouteManeuver: Codable, Identifiable, Sendable {
         distanceMeters: Double?,
         alongMeters: Double?
     ) {
+        self.stableID = stableID
+        self.stageID = stageID
         self.instruction = instruction
         self.type = type
         self.kind = kind
@@ -640,6 +649,8 @@ nonisolated struct RouteManeuver: Codable, Identifiable, Sendable {
         RouteManeuver(
             instruction: instruction,
             type: type,
+            stableID: stableID,
+            stageID: stageID,
             kind: kind,
             side: side,
             number: number,

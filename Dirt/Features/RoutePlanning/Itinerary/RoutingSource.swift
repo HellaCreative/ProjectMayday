@@ -748,7 +748,7 @@ private extension RouteResponse {
                 unknownAccessPercent: local.unknownAccessPercent,
                 unknownSurfacePercent: local.unknownSurfacePercent
             ),
-            maneuvers: nil, warnings: nil,
+            maneuvers: local.maneuvers, warnings: nil,
             dirtPercentValue: nil, pavedPercentValue: nil,
             backtrackMeters: repeatedMeters,
             backtrackPct: repeatedPct,

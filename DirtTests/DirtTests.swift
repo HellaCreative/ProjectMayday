@@ -212,6 +212,37 @@ struct DirtTests {
         #expect(!junction.matches(cueMode: .rally))
     }
 
+    @Test func continueStraightIsAnExplicitGraphDecisionCue() {
+        let cue = RouteManeuver(
+            instruction: "Continue straight",
+            type: "continueStraight",
+            stableID: "jct:edge-a>edge-b",
+            kind: "junction",
+            distanceMeters: 0,
+            alongMeters: 420
+        )
+
+        #expect(cue.matches(cueMode: .junctions))
+        #expect(!cue.matches(cueMode: .rally))
+        #expect(cue.displayLabel(cueMode: .junctions) == "Continue straight")
+        #expect(cue.arrowSystemName(cueMode: .junctions) == "arrow.up")
+        #expect(cue.announceIdentity == "jct:edge-a>edge-b")
+        let enriched = RouteManeuver.enrichForVoiceCues([cue])
+        #expect(enriched.first?.type == "continueStraight")
+        #expect(enriched.first?.arrowSystemName(cueMode: .junctions) == "arrow.up")
+        #expect(enriched.first?.announceIdentity == "jct:edge-a>edge-b")
+    }
+
+    @Test func legacyManeuverPayloadStillDecodesWithoutStableIdentity() throws {
+        let json = """
+        {"instruction":"Turn left","type":"turn","kind":"junction","side":"left","alongMeters":200}
+        """
+        let cue = try JSONDecoder().decode(RouteManeuver.self, from: Data(json.utf8))
+
+        #expect(cue.stableID == nil)
+        #expect(cue.announceIdentity == "200-junction-left-")
+    }
+
     @Test func retiredAllCueModeMigratesToJunctions() {
         #expect(NavigationCueMode.fromStorage(nil) == .junctions)
         #expect(NavigationCueMode.fromStorage("") == .junctions)

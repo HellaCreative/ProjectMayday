@@ -36,6 +36,10 @@ nonisolated struct OnDeviceRouter {
         var crossingLabel: String? = nil
         /// True for fords / low-water crossings (adventure/safety signal).
         var waterCrossing: Bool = false
+        /// Packed graph identity retained for real decision-point navigation cues.
+        var edgeIndex: Int? = nil
+        var fromNode: Int? = nil
+        var toNode: Int? = nil
 
         /// Rider-facing surface after OSM highway class wins over untagged unknown.
         var paintSurfaceName: String {
@@ -59,6 +63,7 @@ nonisolated struct OnDeviceRouter {
         var reportedDirtPercent: Int
         var reportedPavedPercent: Int
         var unknownSurfacePercent: Int
+        var maneuvers: [RouteManeuver] = []
         var backtrackMeters: Double = 0
         var backtrackPct: Double = 0
         var backtrackReason: String? = nil
@@ -1811,7 +1816,10 @@ nonisolated struct OnDeviceRouter {
                     structureLeaf: structureLeafForEdge(ei),
                     layer: layerForEdge(ei),
                     crossingLabel: crossingLabelForEdge(ei),
-                    waterCrossing: waterCrossingForEdge(ei)
+                    waterCrossing: waterCrossingForEdge(ei),
+                    edgeIndex: ei,
+                    fromNode: aNode,
+                    toNode: bNode
                 ))
             }
             node = parent
@@ -1828,7 +1836,12 @@ nonisolated struct OnDeviceRouter {
 
         let fallback = [startSnap.projected, endSnap.projected]
         return .success(stampHunt(
-            finalize(legs: legs, nodeFallback: fallback, profile: profile),
+            finalize(
+                legs: legs,
+                nodeFallback: fallback,
+                profile: profile,
+                allowUnknown: policyUnknown
+            ),
             pops: pops, abort: abort, started: huntStart, isHunt: isHunt
         ))
     }
@@ -2171,7 +2184,10 @@ nonisolated struct OnDeviceRouter {
                     structureLeaf: structureLeafForEdge(ei),
                     layer: layerForEdge(ei),
                     crossingLabel: crossingLabelForEdge(ei),
-                    waterCrossing: waterCrossingForEdge(ei)
+                    waterCrossing: waterCrossingForEdge(ei),
+                    edgeIndex: ei,
+                    fromNode: aNode,
+                    toNode: bNode
                 ))
             }
             label = parent
@@ -2184,7 +2200,12 @@ nonisolated struct OnDeviceRouter {
             legs.append(stub)
         }
         return .success(stampHunt(
-            finalize(legs: legs, nodeFallback: [startSnap.projected, endSnap.projected], profile: profile),
+            finalize(
+                legs: legs,
+                nodeFallback: [startSnap.projected, endSnap.projected],
+                profile: profile,
+                allowUnknown: policyUnknown
+            ),
             pops: pops, abort: abort, started: huntStart, isHunt: isHunt
         ))
     }
@@ -2795,7 +2816,10 @@ nonisolated struct OnDeviceRouter {
                     structureLeaf: structureLeafForEdge(ei),
                     layer: layerForEdge(ei),
                     crossingLabel: crossingLabelForEdge(ei),
-                    waterCrossing: waterCrossingForEdge(ei)
+                    waterCrossing: waterCrossingForEdge(ei),
+                    edgeIndex: ei,
+                    fromNode: parent,
+                    toNode: node
                 ))
             }
             node = parent
@@ -2812,7 +2836,8 @@ nonisolated struct OnDeviceRouter {
         return .success(finalize(
             legs: legs,
             nodeFallback: [startSnap.projected, endSnap.projected],
-            profile: profile
+            profile: profile,
+            allowUnknown: allowUnknown && profile != .cleanest
         ))
     }
 
@@ -2821,7 +2846,8 @@ nonisolated struct OnDeviceRouter {
     private func finalize(
         legs: [Leg],
         nodeFallback: [CLLocationCoordinate2D],
-        profile: RouteProfile = .balanced
+        profile: RouteProfile = .balanced,
+        allowUnknown: Bool = false
     ) -> Result {
         var worked = legs
 
@@ -2863,7 +2889,10 @@ nonisolated struct OnDeviceRouter {
                     structureLeaf: prior?.structureLeaf,
                     layer: prior?.layer ?? 0,
                     crossingLabel: prior?.crossingLabel,
-                    waterCrossing: prior?.waterCrossing ?? false
+                    waterCrossing: prior?.waterCrossing ?? false,
+                    edgeIndex: prior?.edgeIndex,
+                    fromNode: prior?.fromNode,
+                    toNode: prior?.toNode
                 )
             }
             // Second pass: remove sharp out-and-backs that share no exact revisit
@@ -2892,7 +2921,10 @@ nonisolated struct OnDeviceRouter {
                     structureLeaf: prior?.structureLeaf,
                     layer: prior?.layer ?? 0,
                     crossingLabel: prior?.crossingLabel,
-                    waterCrossing: prior?.waterCrossing ?? false
+                    waterCrossing: prior?.waterCrossing ?? false,
+                    edgeIndex: prior?.edgeIndex,
+                    fromNode: prior?.fromNode,
+                    toNode: prior?.toNode
                 )
             }
         }
@@ -2981,8 +3013,100 @@ nonisolated struct OnDeviceRouter {
             reportedDirtPercent: reported.dirtPercent,
             reportedPavedPercent: reported.pavedPercent,
             unknownSurfacePercent: reported.unknownSurfacePercent,
+            maneuvers: graphDecisionManeuvers(
+                legs: worked,
+                profile: profile,
+                allowUnknown: allowUnknown,
+                totalMeters: meters
+            ),
             searchMeta: searchMeta
         )
+    }
+
+    /// Junction mode is authored from real eligible graph choices. A bend in
+    /// an uninterrupted road is not a junction; a straight movement through a
+    /// branching node is explicitly announced as Continue straight.
+    private func graphDecisionManeuvers(
+        legs: [Leg],
+        profile: RouteProfile,
+        allowUnknown: Bool,
+        totalMeters: Double
+    ) -> [RouteManeuver] {
+        guard !legs.isEmpty else { return [] }
+        var output: [RouteManeuver] = []
+        var alongMeters = 0.0
+        let ignoredRoadClasses: Set<String> = ["service", "parking", "driveway"]
+
+        for index in 1..<legs.count {
+            let incoming = legs[index - 1]
+            let outgoing = legs[index]
+            alongMeters += incoming.distanceMeters
+
+            guard let incomingEdge = incoming.edgeIndex,
+                  let outgoingEdge = outgoing.edgeIndex,
+                  let node = incoming.toNode,
+                  node == outgoing.fromNode,
+                  node >= 0,
+                  node < pack.nodeCount,
+                  incoming.coordinates.count >= 2,
+                  outgoing.coordinates.count >= 2
+            else { continue }
+
+            let arcStart = Int(pack.nodeOffsets[node])
+            let arcEnd = Int(pack.nodeOffsets[node + 1])
+            guard arcStart >= 0, arcEnd <= pack.edgeTargets.count else { continue }
+            let hasUsefulAlternative = (arcStart..<arcEnd).contains { arcIndex in
+                let candidateEdge = Int(pack.edgeUndirectedIndex[arcIndex])
+                let targetNode = Int(pack.edgeTargets[arcIndex])
+                guard candidateEdge >= 0,
+                      candidateEdge < pack.undirectedEdgeCount,
+                      candidateEdge != incomingEdge,
+                      candidateEdge != outgoingEdge,
+                      targetNode != incoming.fromNode,
+                      targetNode != outgoing.toNode,
+                      Double(pack.edgeMeters[candidateEdge]) >= 30,
+                      !ignoredRoadClasses.contains(roadClassNameForEdge(candidateEdge).lowercased())
+                else { return false }
+                let access = GraphV2Pack.unpackAccess(pack.edgeAttrs[candidateEdge])
+                return accessAllowed(access, allowUnknown: allowUnknown, profile: profile)
+            }
+            guard hasUsefulAlternative else { continue }
+
+            let a = incoming.coordinates[incoming.coordinates.count - 2]
+            let b = incoming.coordinates[incoming.coordinates.count - 1]
+            let c = outgoing.coordinates[1]
+            let bearingIn = atan2(b.longitude - a.longitude, b.latitude - a.latitude)
+            let bearingOut = atan2(c.longitude - b.longitude, c.latitude - b.latitude)
+            var delta = (bearingOut - bearingIn) * 180 / .pi
+            while delta > 180 { delta -= 360 }
+            while delta < -180 { delta += 360 }
+            let degrees = abs(delta).rounded()
+            let straight = degrees < 30
+            let side = straight ? nil : (delta > 0 ? "right" : "left")
+
+            output.append(RouteManeuver(
+                instruction: straight ? "Continue straight" : "Turn \(side ?? "")",
+                type: straight ? "continueStraight" : "turn",
+                stableID: "jct:\(incoming.edgeId)>\(outgoing.edgeId)",
+                kind: "junction",
+                side: side,
+                number: nil,
+                degrees: degrees,
+                distanceMeters: 0,
+                alongMeters: alongMeters
+            ))
+        }
+
+        let lastID = legs.last.flatMap { $0.edgeId.isEmpty ? nil : $0.edgeId } ?? "destination"
+        output.append(RouteManeuver(
+            instruction: "Arrive at destination",
+            type: "arrive",
+            stableID: "arrive:\(lastID)",
+            kind: "arrive",
+            distanceMeters: 0,
+            alongMeters: totalMeters
+        ))
+        return output
     }
 
     // MARK: - Soft-stitch stubs

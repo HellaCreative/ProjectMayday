@@ -197,7 +197,9 @@ nonisolated enum NavigationCuePhase: String, Hashable, Sendable {
     case now
 
     static func phase(forMeters meters: Double, speedMPS: Double) -> NavigationCuePhase? {
-        let planningSpeed = speedMPS > 2 ? speedMPS : 12
+        // A stopped/slow GPS sample must use the minimum lead, not invent a
+        // highway pace and call a turn 240 m early.
+        let planningSpeed = speedMPS > 2 ? speedMPS : 8
         let prepareLead = min(600, max(160, planningSpeed * 20))
         let nowLead = min(80, max(25, planningSpeed * 3))
         if meters <= nowLead { return .now }
@@ -375,6 +377,7 @@ final class NavigationCueSettings: NSObject, AVSpeechSynthesizerDelegate {
 extension RouteManeuver {
     /// Stable identity for announce dedupe (UUID `id` changes per decode).
     var announceIdentity: String {
+        if let stableID, !stableID.isEmpty { return stableID }
         let along = Int((alongMeters ?? 0).rounded())
         let kindKey = (kind ?? type ?? "cue").lowercased()
         let sideKey = (side ?? "").lowercased()
@@ -405,7 +408,7 @@ extension RouteManeuver {
 
     nonisolated var isJunctionCue: Bool {
         let normalized = (type ?? kind ?? "").lowercased()
-        if ["turn", "fork", "junction", "merge", "off ramp", "roundabout"].contains(normalized) {
+        if ["turn", "continuestraight", "fork", "junction", "merge", "off ramp", "roundabout"].contains(normalized) {
             return true
         }
         return kind?.lowercased() == "junction"
@@ -470,6 +473,9 @@ extension RouteManeuver {
     func arrowSystemName(cueMode: NavigationCueMode) -> String {
         let left = side?.lowercased() == "left"
         if cueMode == .junctions || isJunctionCue {
+            if (type ?? kind ?? "").lowercased() == "continuestraight" {
+                return "arrow.up"
+            }
             return left ? "arrow.turn.up.left" : "arrow.turn.up.right"
         }
         if cueMode == .rally || isRallyCurve {
@@ -503,10 +509,13 @@ extension RouteManeuver {
                 continue
             }
             if man.isJunctionCue {
+                let straight = normalized.type == "continuestraight"
                 output.append(
                     RouteManeuver(
                         instruction: man.side.map { "Turn \($0)" } ?? man.instruction,
-                        type: "turn",
+                        type: straight ? "continueStraight" : "turn",
+                        stableID: man.stableID,
+                        stageID: man.stageID,
                         kind: "junction",
                         side: man.side,
                         number: nil,
@@ -524,6 +533,8 @@ extension RouteManeuver {
                         RouteManeuver(
                             instruction: "Turn \(side)",
                             type: "turn",
+                            stableID: man.stableID,
+                            stageID: man.stageID,
                             kind: "junction",
                             side: side,
                             number: nil,
@@ -537,6 +548,8 @@ extension RouteManeuver {
                         RouteManeuver(
                             instruction: man.instruction,
                             type: "bend",
+                            stableID: man.stableID,
+                            stageID: man.stageID,
                             kind: "curve",
                             side: man.side,
                             number: man.number,
