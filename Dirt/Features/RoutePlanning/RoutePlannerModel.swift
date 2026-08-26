@@ -2400,6 +2400,8 @@ final class RoutePlannerModel {
         let coords = allCoordinates
         guard coords.count > 1 else { return }
 
+        navigation.beginPrefetch()
+
         // Lock pin edit for the whole prep → ride window. Pan/zoom stay free.
         // Prevents accidental waypoint moves that invalidate the route and re-download.
         mapState.lockRouteEditingForPrep()
@@ -2499,6 +2501,7 @@ final class RoutePlannerModel {
                 maneuvers: maneuvers,
                 segments: displaySegments,
                 stageEndMeters: stageEndAlongMeters(),
+                stages: navigationStages(),
                 networkSegments: networkSegments(from: activeResponses)
             )
             // Seed cue card immediately from last GPS (don't wait for next tick).
@@ -2515,6 +2518,7 @@ final class RoutePlannerModel {
     func cancelOfflineMapPrep() {
         offline.cancelPrep()
         graphPacks.cancel()
+        navigation.cancelPrefetch()
         if navigation.phase == .idle {
             mapState.unlockRouteEditingAfterPrepCancel()
         }
@@ -2536,6 +2540,68 @@ final class RoutePlannerModel {
         }
         let total = GeoMath.lineMeters(allCoordinates)
         return total > 0 ? [total] : []
+    }
+
+    /// Stable rider-facing stage names travel with the route into navigation.
+    /// Fuel points retain the station name; rider points retain their itinerary ordinal.
+    private func navigationStages(fromStage startIndex: Int = 0) -> [NavigationStage] {
+        var result: [NavigationStage] = []
+        var cursor = 0.0
+        for (index, stage) in stages.enumerated() where index >= startIndex {
+            guard let response = stage.response else { continue }
+            cursor += response.distanceMeters ?? GeoMath.lineMeters(response.coordinates)
+
+            let riderLegIndex = itinerary.legs.firstIndex(where: { $0.id == stage.riderLegID })
+            let pointOrdinal = (riderLegIndex ?? index) + 2
+            let waypointID = riderLegIndex.flatMap { legIndex in
+                itinerary.waypoints.indices.contains(legIndex + 1)
+                    ? itinerary.waypoints[legIndex + 1].id
+                    : nil
+            }
+            let waypointFuel = waypointID.flatMap { built?.waypointFuelStops[$0] }
+
+            let title: String
+            let detail: String?
+            let kind: NavigationStage.Kind
+            if stage.endsAtFuelStop {
+                title = "F\(fuelOrdinal(endingAt: index))"
+                detail = stage.fuelStopName
+                kind = .fuelStop
+            } else if let waypointFuel {
+                title = "Point \(pointOrdinal)"
+                detail = waypointFuel.name ?? "Fuel stop"
+                kind = .fuelStop
+            } else {
+                title = "Point \(pointOrdinal)"
+                detail = nil
+                kind = index == stages.indices.last ? .destination : .waypoint
+            }
+            result.append(
+                NavigationStage(
+                    id: stage.id,
+                    title: title,
+                    detail: detail,
+                    kind: kind,
+                    endMeters: cursor
+                )
+            )
+        }
+
+        if result.isEmpty {
+            let meters = GeoMath.lineMeters(allCoordinates)
+            if meters > 0 {
+                result.append(
+                    NavigationStage(
+                        id: routeIdentity ?? "destination",
+                        title: destinationName ?? "Destination",
+                        detail: nil,
+                        kind: .destination,
+                        endMeters: meters
+                    )
+                )
+            }
+        }
+        return result
     }
 
     func skipPrefetch() {
@@ -2993,6 +3059,7 @@ final class RoutePlannerModel {
             maneuvers: maneuvers,
             segments: display,
             stageEndMeters: stageEndAlongMeters(fromStage: index),
+            stages: navigationStages(fromStage: index),
             networkSegments: networkSegments(from: Array(remainingResponses))
         )
     }

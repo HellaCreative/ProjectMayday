@@ -2,6 +2,22 @@ import CoreLocation
 import Foundation
 import Observation
 
+/// Rider-facing progress anchor. Geometry may be replaced during a reroute;
+/// this identity and label survive so navigation still knows what comes next.
+nonisolated struct NavigationStage: Identifiable, Equatable, Sendable {
+    enum Kind: String, Equatable, Sendable {
+        case waypoint
+        case fuelStop
+        case destination
+    }
+
+    let id: String
+    let title: String
+    let detail: String?
+    let kind: Kind
+    let endMeters: Double
+}
+
 /// Turn-by-turn session: follows the rider along the routed polyline, speaks
 /// junction / rally cues only, shows surface changes visually (no voice), and
 /// asks for a recalculation when the rider leaves the line.
@@ -29,6 +45,7 @@ final class NavigationSession {
     private(set) var traveledMeters: Double = 0
     /// Cumulative along-meters at each stage end (empty = single destination).
     private(set) var stageEndMeters: [Double] = []
+    private(set) var stages: [NavigationStage] = []
     private(set) var currentCue = "Follow the route"
     private(set) var currentCueMeters: Double?
     /// Structured maneuver behind `currentCue` (side / rally number / kind) for
@@ -86,21 +103,35 @@ final class NavigationSession {
     }
 
     var travelTimeLabel: String {
-        if let stage = currentStageNumber {
-            return "travel time stage \(stage)"
-        }
-        return "travel time"
+        currentStage?.title ?? "Destination"
     }
 
-    private var remainingInCurrentStageMeters: Double {
+    var remainingInCurrentStageMeters: Double {
         guard let end = stageEndMeters.first(where: { $0 > traveledMeters + 1 }) else {
             return remainingMeters
         }
         return max(0, end - traveledMeters)
     }
 
+    var currentStage: NavigationStage? {
+        guard !stages.isEmpty else { return nil }
+        return stages.first(where: { $0.endMeters > traveledMeters + 1 }) ?? stages.last
+    }
+
+    var finalStage: NavigationStage? { stages.last }
+
+    var elapsedSeconds: Double {
+        guard let startedAt else { return 0 }
+        return max(0, Date().timeIntervalSince(startedAt))
+    }
+
     func beginPrefetch() {
         phase = .prefetching
+    }
+
+    func cancelPrefetch() {
+        guard phase == .prefetching else { return }
+        phase = .idle
     }
 
     func activate(
@@ -108,6 +139,7 @@ final class NavigationSession {
         maneuvers: [RouteManeuver],
         segments: [RouteDisplaySegment] = [],
         stageEndMeters: [Double] = [],
+        stages: [NavigationStage] = [],
         networkSegments: [RouteSegment] = []
     ) {
         let continuing = phase == .active
@@ -127,6 +159,9 @@ final class NavigationSession {
         self.stageEndMeters = stageEndMeters.isEmpty
             ? (totalMeters > 0 ? [totalMeters] : [])
             : stageEndMeters
+        self.stages = stages.isEmpty
+            ? Self.fallbackStages(for: self.stageEndMeters)
+            : stages
         surfaceRuns = Self.buildSurfaceRuns(segments: segments, totalMeters: totalMeters)
         edgeSpans = RideEdgeSequence.spans(from: networkSegments)
         if !continuing {
@@ -137,8 +172,10 @@ final class NavigationSession {
         offRouteStrikes = 0
         lastSurfaceAlertKey = nil
         lastAnnouncedCue = nil
-        climbMeters = 0
-        lastAltitudeMeters = nil
+        if !continuing {
+            climbMeters = 0
+            lastAltitudeMeters = nil
+        }
         currentCue = "Follow the route"
         currentCueMeters = nil
         currentManeuver = nil
@@ -164,6 +201,7 @@ final class NavigationSession {
         maneuvers: [RouteManeuver],
         segments: [RouteDisplaySegment] = [],
         stageEndMeters: [Double] = [],
+        stages: [NavigationStage]? = nil,
         networkSegments: [RouteSegment] = []
     ) {
         guard phase == .active else { return }
@@ -172,6 +210,10 @@ final class NavigationSession {
             maneuvers: maneuvers,
             segments: segments,
             stageEndMeters: stageEndMeters.isEmpty ? self.stageEndMeters : stageEndMeters,
+            stages: stages ?? Self.rebasedStages(
+                self.stages,
+                onto: stageEndMeters.isEmpty ? self.stageEndMeters : stageEndMeters
+            ),
             networkSegments: networkSegments
         )
         currentCue = "Route recalculated"
@@ -249,7 +291,7 @@ final class NavigationSession {
         } else if remainingInCurrentStageMeters < 120 {
             if let stage = currentStageNumber, stageEndMeters.count > 1,
                traveledMeters < (stageEndMeters.last ?? 0) - 30 {
-                currentCue = "Arriving at stage \(stage)"
+                currentCue = "Arriving at \(currentStage?.title ?? "stage \(stage)")"
             } else {
                 currentCue = "Arriving at destination"
             }
@@ -287,6 +329,7 @@ final class NavigationSession {
         riddenEdgeIds = []
         cumulative = []
         stageEndMeters = []
+        stages = []
         totalMeters = 0
         remainingMeters = 0
         traveledMeters = 0
@@ -302,6 +345,39 @@ final class NavigationSession {
         lastAltitudeMeters = nil
         startedAt = nil
         lastSpeedMPS = 0
+    }
+
+    private static func fallbackStages(for ends: [Double]) -> [NavigationStage] {
+        ends.enumerated().map { index, end in
+            let isFinal = index == ends.count - 1
+            return NavigationStage(
+                id: "stage-\(index + 1)",
+                title: isFinal ? "Destination" : "Point \(index + 2)",
+                detail: nil,
+                kind: isFinal ? .destination : .waypoint,
+                endMeters: end
+            )
+        }
+    }
+
+    private static func rebasedStages(
+        _ existing: [NavigationStage],
+        onto ends: [Double]
+    ) -> [NavigationStage] {
+        guard !ends.isEmpty else { return [] }
+        return ends.enumerated().map { index, end in
+            guard existing.indices.contains(index) else {
+                return fallbackStages(for: ends)[index]
+            }
+            let stage = existing[index]
+            return NavigationStage(
+                id: stage.id,
+                title: stage.title,
+                detail: stage.detail,
+                kind: stage.kind,
+                endMeters: end
+            )
+        }
     }
 
     // MARK: - Surface awareness (OSM segment classes ↔ Mapbox RoadSurface idea)
