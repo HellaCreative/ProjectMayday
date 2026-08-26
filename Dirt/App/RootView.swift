@@ -244,6 +244,7 @@ struct RootView: View {
                 app.trial.consumeFreeStartIfNeeded()
             }
         }
+        .modifier(KeepAwakeLifecycle())
         .overlay {
             if let toast = app.planner.toast {
                 ToastView(text: toast)
@@ -1536,6 +1537,25 @@ struct RootView: View {
         .accessibilityLabel(tab.title)
         .accessibilityHint(dockAccessibilityHint(tab, state: state))
         .accessibilityAddTraits(state == .open ? [.isSelected] : [])
+    }
+}
+
+private struct KeepAwakeLifecycle: ViewModifier {
+    @Environment(AppEnvironment.self) private var app
+    @Environment(\.scenePhase) private var scenePhase
+
+    func body(content: Content) -> some View {
+        content
+            .onAppear { sync(scenePhase) }
+            .onChange(of: scenePhase) { _, phase in sync(phase) }
+            .onChange(of: app.navigation.phase) { _, _ in sync(scenePhase) }
+    }
+
+    private func sync(_ phase: ScenePhase) {
+        KeepAwakePrefs.sync(
+            sceneActive: phase == .active,
+            navigating: app.navigation.phase == .active
+        )
     }
 }
 
