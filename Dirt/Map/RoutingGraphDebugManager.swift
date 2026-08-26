@@ -63,6 +63,7 @@ final class RoutingGraphDebugManager {
     private let graphPacks: GraphPackStore
     private let network: NetworkPathMonitor
     private var debounceTask: Task<Void, Never>?
+    private var refreshTask: Task<Void, Never>?
 
     init(mapState: MapState, graphPacks: GraphPackStore, network: NetworkPathMonitor) {
         self.mapState = mapState
@@ -91,8 +92,18 @@ final class RoutingGraphDebugManager {
     private func scheduleRefresh() {
         debounceTask?.cancel()
         debounceTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 350_000_000)
+            try? await Task.sleep(nanoseconds: 500_000_000)
             guard !Task.isCancelled else { return }
+            self?.startRefresh()
+        }
+    }
+
+    /// Keep viewport debounce separate from the request itself. Panning now cancels
+    /// only the pending timer; once the rider pauses, one refresh replaces any older
+    /// in-flight request instead of producing a cancellation for every map tick.
+    private func startRefresh() {
+        refreshTask?.cancel()
+        refreshTask = Task { [weak self] in
             await self?.performRefresh()
         }
     }
@@ -146,6 +157,9 @@ final class RoutingGraphDebugManager {
         }
 
         if network.isOnline {
+            if mapState.debugGraphPaintMode != .access {
+                mapState.debugGraphPaintMode = .access
+            }
             mapState.updateDebugGraphFeatures(
                 [],
                 status: "No pack installed — loading LIVE graph (no v3 leaves)…",
@@ -173,6 +187,8 @@ final class RoutingGraphDebugManager {
                 return
             } catch is CancellationError {
                 return
+            } catch let error as URLError where error.code == .cancelled {
+                return
             } catch {
                 RoutingDebugLog.shared.event(
                     "debug graph live failed region=\(region): \(error.localizedDescription)"
@@ -182,7 +198,7 @@ final class RoutingGraphDebugManager {
 
         mapState.updateDebugGraphFeatures(
             [],
-            status: "Install the NS pack (PACKS) to paint graph leaves.",
+            status: "Install the \(region.uppercased()) pack from Layers to paint graph leaves.",
             capped: false
         )
     }

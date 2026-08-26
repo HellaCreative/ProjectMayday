@@ -590,16 +590,16 @@ struct MapLibreMapView: UIViewRepresentable {
 
                 let casing = MLNLineStyleLayer(identifier: bucket.casingID, source: source)
                 casing.lineColor = NSExpression(forConstantValue: UIColor.white)
-                // +1px over prior 9/7 so the route reads clearly wider than basemap roads.
-                casing.lineWidth = NSExpression(forConstantValue: 10)
-                casing.lineOpacity = NSExpression(forConstantValue: 0.85)
+                // Keep the selected route legible without masking road names beneath it.
+                casing.lineWidth = NSExpression(forConstantValue: 7)
+                casing.lineOpacity = NSExpression(forConstantValue: 0.62)
                 casing.lineCap = NSExpression(forConstantValue: "round")
                 casing.lineJoin = NSExpression(forConstantValue: "round")
 
                 let line = MLNLineStyleLayer(identifier: bucket.lineID, source: source)
                 line.lineColor = NSExpression(forConstantValue: UIColor(bucket.color))
-                line.lineWidth = NSExpression(forConstantValue: 8)
-                line.lineOpacity = NSExpression(forConstantValue: 0.98)
+                line.lineWidth = NSExpression(forConstantValue: 5.5)
+                line.lineOpacity = NSExpression(forConstantValue: 0.82)
                 line.lineCap = NSExpression(forConstantValue: "round")
                 line.lineJoin = NSExpression(forConstantValue: "round")
 

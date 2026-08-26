@@ -1309,7 +1309,7 @@ struct RootView: View {
                     .fixedSize(horizontal: false, vertical: true)
 
                 HStack(spacing: 4) {
-                    ForEach(DebugGraphPaintMode.allCases, id: \.self) { mode in
+                    ForEach(availableDebugGraphPaintModes, id: \.self) { mode in
                         Button {
                             app.mapState.debugGraphPaintMode = mode
                         } label: {
@@ -1368,6 +1368,16 @@ struct RootView: View {
             parts.append("capped")
         }
         return parts.joined(separator: " · ")
+    }
+
+    /// Live graph responses expose only coarse access. Surface-family and road-tier
+    /// controls appear only when the map is backed by an installed v3 pack.
+    private var availableDebugGraphPaintModes: [DebugGraphPaintMode] {
+        guard let region = GraphPackStore.primaryRegionId(containing: app.mapState.mapCenter),
+              let pack = app.graphPacks.packIfInstalled(region.uppercased()),
+              pack.hasLeaves
+        else { return [.access] }
+        return DebugGraphPaintMode.allCases
     }
 
     private func debugGraphLegend(for mode: DebugGraphPaintMode) -> some View {

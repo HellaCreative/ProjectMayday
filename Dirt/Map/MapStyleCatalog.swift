@@ -44,9 +44,11 @@ enum MapStyleCatalog {
     static func styleURL(for id: MapStyleID = selectedID) -> URL {
         switch id {
         case .shortbread:
-            return bundledStyleURL(resource: "shortbread-style") ?? AppConfig.mapStyleURL
+            return generatedShortbreadStyleURL(rich: false)
+                ?? bundledStyleURL(resource: "shortbread-style")
+                ?? AppConfig.mapStyleURL
         case .shortbreadRich:
-            return generatedRichStyleURL()
+            return generatedShortbreadStyleURL(rich: true)
                 ?? bundledStyleURL(resource: "shortbread-rich-style")
                 ?? bundledStyleURL(resource: "shortbread-style")
                 ?? AppConfig.mapStyleURL
@@ -57,7 +59,7 @@ enum MapStyleCatalog {
     /// structurally identical while Rich gets the saturated outdoor palette the
     /// product promises. This also avoids silently falling back to Standard when
     /// a second, very large style JSON is omitted from the app bundle.
-    private static func generatedRichStyleURL() -> URL? {
+    private static func generatedShortbreadStyleURL(rich: Bool) -> URL? {
         guard let source = Bundle.main.url(forResource: "shortbread-style", withExtension: "json"),
               let data = try? Data(contentsOf: source),
               var root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -68,50 +70,66 @@ enum MapStyleCatalog {
             let id = (layers[index]["id"] as? String ?? "").lowercased()
             var paint = layers[index]["paint"] as? [String: Any] ?? [:]
 
-            if id == "background" {
+            if rich, id == "background" {
                 paint["background-color"] = "#f3eadb"
-            } else if id.contains("water") {
+            } else if rich, id.contains("water") {
                 if paint["fill-color"] != nil { paint["fill-color"] = "#91c8ef" }
                 if paint["line-color"] != nil { paint["line-color"] = "#5ba9df" }
-            } else if id.contains("forest") {
+            } else if rich, id.contains("forest") {
                 paint["fill-color"] = "#96ce74"
-            } else if id.contains("orchard") || id.contains("vineyard") || id.contains("scrub") {
+            } else if rich, id.contains("orchard") || id.contains("vineyard") || id.contains("scrub") {
                 paint["fill-color"] = "#a4d381"
-            } else if id.contains("park") || id.contains("heath") || id.contains("meadow") {
+            } else if rich, id.contains("park") || id.contains("heath") || id.contains("meadow") {
                 paint["fill-color"] = "#b2dc90"
-            } else if id.contains("grass") || id.contains("recreation_ground")
+            } else if rich, id.contains("grass") || id.contains("recreation_ground")
                         || id.contains("village_green") || id.contains("golf_course") {
                 paint["fill-color"] = "#b9df98"
-            } else if id.contains("farmland") || id.contains("farmyard") {
+            } else if rich, id.contains("farmland") || id.contains("farmyard") {
                 paint["fill-color"] = "#e7c98e"
-            } else if id.contains("residential-fill") {
+            } else if rich, id.contains("residential-fill") {
                 paint["fill-color"] = "#edddca"
-            } else if id.contains("retail-fill") || id.contains("commercial-fill") {
+            } else if rich, id.contains("retail-fill") || id.contains("commercial-fill") {
                 paint["fill-color"] = "#efbeb9"
-            } else if id.contains("industrial-fill") || id.contains("construction-fill") {
+            } else if rich, id.contains("industrial-fill") || id.contains("construction-fill") {
                 paint["fill-color"] = "#f2dda0"
-            } else if id.contains("eduhospital-fill") || id.contains("schoolyard-fill") {
+            } else if rich, id.contains("eduhospital-fill") || id.contains("schoolyard-fill") {
                 paint["fill-color"] = "#e4d5f1"
-            } else if id.contains("beach-fill") || id.contains("sand-fill") {
+            } else if rich, id.contains("beach-fill") || id.contains("sand-fill") {
                 paint["fill-color"] = "#f1df8d"
             }
 
             if paint["line-color"] != nil, id.contains("highway") {
-                if id.contains("motorway") || id.contains("trunk") {
-                    paint["line-color"] = "#e45e3d"
-                } else if id.contains("primary") {
-                    paint["line-color"] = "#ee8732"
-                } else if id.contains("secondary") {
-                    paint["line-color"] = "#f0b54d"
-                } else if id.contains("tertiary") {
-                    paint["line-color"] = "#f0ca70"
+                let isCasing = id.contains("casing") || id.contains("outline")
+                if isCasing {
+                    if id.contains("motorway") || id.contains("trunk") {
+                        paint["line-color"] = rich ? "#9f3528" : "#6f4d49"
+                    } else if id.contains("primary") {
+                        paint["line-color"] = rich ? "#ad5424" : "#805c50"
+                    } else if id.contains("secondary") {
+                        paint["line-color"] = rich ? "#a47725" : "#79684a"
+                    } else if id.contains("tertiary") {
+                        paint["line-color"] = rich ? "#90772d" : "#6f6d50"
+                    } else if id.contains("service") || id.contains("unclassified")
+                                || id.contains("living_street") {
+                        paint["line-color"] = rich ? "#747067" : "#77736b"
+                    }
+                } else if rich {
+                    if id.contains("motorway") || id.contains("trunk") {
+                        paint["line-color"] = "#e45e3d"
+                    } else if id.contains("primary") {
+                        paint["line-color"] = "#ee8732"
+                    } else if id.contains("secondary") {
+                        paint["line-color"] = "#f0b54d"
+                    } else if id.contains("tertiary") {
+                        paint["line-color"] = "#e8c45f"
+                    }
                 }
             }
 
             layers[index]["paint"] = paint
         }
 
-        root["name"] = "DIRT Rich Shortbread"
+        root["name"] = rich ? "DIRT Rich Shortbread" : "DIRT Standard Shortbread"
         root["layers"] = layers
         if (root["sprite"] as? String) == "DIRT_SPRITE_PLACEHOLDER",
            let spriteBase = bundledSpriteBaseURL() {
@@ -120,7 +138,7 @@ enum MapStyleCatalog {
         guard let richData = try? JSONSerialization.data(withJSONObject: root) else { return nil }
 
         let destination = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("dirt-shortbread-rich-style.json")
+            .appendingPathComponent(rich ? "dirt-shortbread-rich-style.json" : "dirt-shortbread-standard-style.json")
         do {
             try richData.write(to: destination, options: .atomic)
             return destination

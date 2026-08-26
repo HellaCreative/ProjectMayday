@@ -31,9 +31,6 @@ struct RoutePlannerCard: View {
     @State private var showPlanToFromHereConfirm = false
     @State private var showClearConfirm = false
     @State private var showFuelGapStartConfirm = false
-    /// Saved: the library collapses once a track is loaded, so the sheet isn't showing the
-    /// route you just opened *and* the whole list you opened it from at the same time.
-    @State private var savedLibraryOpen = false
 
     private var planner: RoutePlannerModel { app.planner }
 
@@ -516,7 +513,6 @@ struct RoutePlannerCard: View {
             ctaRow
             continuePlanningButton
             clearAllButton
-            savedLibraryDisclosure
         } else {
             SavedRoutesList(showImport: true)
         }
@@ -602,37 +598,6 @@ struct RoutePlannerCard: View {
         }
         .buttonStyle(.plain)
         .accessibilityHint("Keeps this line and lets you add more waypoints")
-    }
-
-    /// Browsing the library is a separate intent from riding the loaded track, so it
-    /// waits behind one tap instead of stacking a second screen under this one.
-    private var savedLibraryDisclosure: some View {
-        VStack(spacing: DirtSpace.tight) {
-            Button {
-                withAnimation(.easeInOut(duration: 0.18)) { savedLibraryOpen.toggle() }
-            } label: {
-                HStack(spacing: DirtSpace.tight) {
-                    Text("Saved routes")
-                        .font(DirtType.rowTitle)
-                        .fontWeight(.bold)
-                        .foregroundStyle(DirtTheme.ink)
-                    Spacer(minLength: 0)
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 10, weight: .black))
-                        .foregroundStyle(DirtTheme.orange)
-                        .rotationEffect(.degrees(savedLibraryOpen ? 180 : 0))
-                }
-                .padding(.horizontal, DirtSpace.inner)
-                .frame(maxWidth: .infinity, minHeight: DirtHit.min)
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityHint(savedLibraryOpen ? "Hides your saved routes" : "Shows your saved routes")
-
-            if savedLibraryOpen {
-                SavedRoutesList(showImport: true)
-            }
-        }
     }
 
     @ViewBuilder private var stageList: some View {
