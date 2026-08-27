@@ -127,7 +127,16 @@ extension OnDeviceRouter.Result {
             searchMeta: OnDeviceRouter.SearchMeta(
                 urbanCoreFallbackUsed: hops.contains { $0.searchMeta.urbanCoreFallbackUsed },
                 cleanUnpavedFallbackUsed: hops.contains { $0.searchMeta.cleanUnpavedFallbackUsed },
-                settlementFallbackUsed: hops.contains { $0.searchMeta.settlementFallbackUsed }
+                settlementFallbackUsed: hops.contains { $0.searchMeta.settlementFallbackUsed },
+                minimumEarnedDirtExcursionMeters: hops.compactMap {
+                    $0.searchMeta.minimumEarnedDirtExcursionMeters
+                }.max(),
+                shortDirtRepairPasses: hops.reduce(0) {
+                    $0 + $1.searchMeta.shortDirtRepairPasses
+                },
+                shortDirtPenaltyEdgeCount: hops.reduce(0) {
+                    $0 + $1.searchMeta.shortDirtPenaltyEdgeCount
+                }
             )
         )
     }

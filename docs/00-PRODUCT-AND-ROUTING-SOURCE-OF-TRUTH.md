@@ -52,6 +52,11 @@ not silently replace the selected ride objective.
 - Does not consume the available corridor merely because it exists.
 - Rejects arbitrary backward travel, lateral tourism, loops, and backtracking
   when they do not materially improve the ride.
+- May leave a sensible paved line for an optional dirt excursion only when that
+  excursion provides at least 1 km of continuous, explicitly known unpaved
+  riding. Unknown surface contributes zero metres. Sub-kilometre dirt is
+  re-priced as pavement rather than deleted, so necessary connectors, rider-
+  placed waypoints, and destination access remain routable.
 - Shortest distance is not an objective.
 - A result near Balanced is not acceptable merely because it connects; a low
   dirt result must be labelled and supported by evidence about the eligible

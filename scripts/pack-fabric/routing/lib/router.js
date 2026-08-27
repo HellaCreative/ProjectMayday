@@ -2135,7 +2135,8 @@ async function routeOnRuntime(body, graphResolution, runtime) {
     sessionSeed: Number(options.sessionSeed) || 0,
     priorEdgeIds: Array.from(priorEdgeIds),
     arrivalEdgeId,
-    backtrackFactor
+    backtrackFactor,
+    skipShortDirtRepair: options.internalFuelProbe === true
   };
   if (Number.isFinite(Number(options.maxPathMeters))) {
     searchOpts.maxPathMeters = Number(options.maxPathMeters);

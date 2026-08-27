@@ -71,6 +71,119 @@ const {
 } = require("./ferry");
 const { segmentStructureFields } = require("./structure");
 
+const MINIMUM_EARNED_DIRT_EXCURSION_METERS = 1_000;
+const MAX_SHORT_DIRT_REPAIR_PASSES = 3;
+
+function isKnownUnpavedSurface(surfaceName) {
+  return (
+    surfaceName === "gravel" ||
+    surfaceName === "access" ||
+    surfaceName === "resource" ||
+    surfaceName === "track" ||
+    surfaceName === "double_track" ||
+    surfaceName === "single" ||
+    surfaceName === "unpaved" ||
+    surfaceName === "dirt"
+  );
+}
+
+/**
+ * Find optional paved-to-paved excursions that have not earned one continuous
+ * kilometre of known unpaved riding. Unknown surface can connect known dirt,
+ * but contributes zero metres to the threshold. Route-start/end approaches
+ * are deliberately excluded; necessary connectors remain eligible because the
+ * returned edges are re-priced, never blocked.
+ */
+function shortDirtExcursionEdgeIds(
+  segments,
+  minimumMeters = MINIMUM_EARNED_DIRT_EXCURSION_METERS
+) {
+  const result = new Set();
+  if (!Array.isArray(segments) || segments.length < 3) return result;
+  const isPavedBoundary = (segment) =>
+    segment && segment.structureType !== "ferry" && segment.surfaceClass === "paved";
+  let index = 0;
+  while (index < segments.length) {
+    if (isPavedBoundary(segments[index]) || segments[index].structureType === "ferry") {
+      index += 1;
+      continue;
+    }
+    const start = index;
+    let knownUnpavedMeters = 0;
+    const edgeIds = [];
+    while (
+      index < segments.length &&
+      !isPavedBoundary(segments[index]) &&
+      segments[index].structureType !== "ferry"
+    ) {
+      const segment = segments[index];
+      if (isKnownUnpavedSurface(segment.surfaceClass)) {
+        knownUnpavedMeters += Math.max(0, Number(segment.distanceMeters) || 0);
+      }
+      const edgeId = String(segment.edgeId || "");
+      if (
+        edgeId &&
+        !edgeId.startsWith("soft-stitch-") &&
+        !edgeId.startsWith("perm-stitch-")
+      ) {
+        edgeIds.push(edgeId);
+      }
+      index += 1;
+    }
+    const boundedByPavement =
+      start > 0 &&
+      index < segments.length &&
+      isPavedBoundary(segments[start - 1]) &&
+      isPavedBoundary(segments[index]);
+    if (boundedByPavement && knownUnpavedMeters < minimumMeters) {
+      for (const edgeId of edgeIds) result.add(edgeId);
+    }
+  }
+  return result;
+}
+
+function repairShortDirtExcursions(
+  ride,
+  runtime,
+  startMatch,
+  endMatch,
+  profile,
+  policy,
+  avoidEdgeIds,
+  pavedBias,
+  rideOpts
+) {
+  if (!ride || profile !== "dirt" || rideOpts.skipShortDirtRepair === true) return ride;
+  let repaired = ride;
+  const penaltyEdgeIds = new Set(rideOpts.shortDirtPenaltyEdgeIds || []);
+  let passes = 0;
+  for (let pass = 0; pass < MAX_SHORT_DIRT_REPAIR_PASSES; pass += 1) {
+    const found = shortDirtExcursionEdgeIds(repaired.segments);
+    const additions = [...found].filter((edgeId) => !penaltyEdgeIds.has(edgeId));
+    if (!additions.length) break;
+    for (const edgeId of additions) penaltyEdgeIds.add(edgeId);
+    const next = findPathV2(
+      runtime,
+      startMatch,
+      endMatch,
+      profile,
+      policy,
+      avoidEdgeIds,
+      pavedBias,
+      { ...rideOpts, shortDirtPenaltyEdgeIds: penaltyEdgeIds }
+    );
+    if (!next) break;
+    repaired = next;
+    passes += 1;
+  }
+  repaired.searchMeta = repaired.searchMeta || {};
+  repaired.searchMeta.minimumEarnedDirtExcursionMeters =
+    MINIMUM_EARNED_DIRT_EXCURSION_METERS;
+  repaired.searchMeta.shortDirtRepairPasses = passes;
+  repaired.searchMeta.shortDirtPenaltyEdgeCount = penaltyEdgeIds.size;
+  return repaired;
+}
+
 function ferrySecondsForPackEdge(pack, ei, meters) {
   if (pack.crossingSeconds) {
     const xs = pack.crossingSeconds(ei);
@@ -603,7 +716,8 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
         settlementFallback: searchOpts.settlementFallback !== false,
         priorEdgeIds: searchOpts.priorEdgeIds || [],
         arrivalEdgeId: searchOpts.arrivalEdgeId == null ? null : searchOpts.arrivalEdgeId,
-        backtrackFactor: searchOpts.backtrackFactor
+        backtrackFactor: searchOpts.backtrackFactor,
+        skipShortDirtRepair: searchOpts.skipShortDirtRepair === true
       };
       if (dirtComparisonWidth) {
         // Comparison candidates share roughly one old pass-2 budget.
@@ -619,8 +733,19 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
       if (Number.isFinite(activePathCap)) rideOpts.maxPathMeters = activePathCap;
       if (Number.isFinite(directShortestMeters)) rideOpts.shortestMeters = directShortestMeters;
       const attemptStarted = Date.now();
-      const ride = findPathV2(
+      const initialRide = findPathV2(
         runtime, startMatch, endMatch, profile, policy, avoidEdgeIds, pavedBias, rideOpts
+      );
+      const ride = repairShortDirtExcursions(
+        initialRide,
+        runtime,
+        startMatch,
+        endMatch,
+        profile,
+        policy,
+        avoidEdgeIds,
+        pavedBias,
+        rideOpts
       );
       attemptDiagnostics.push({
         corridorMeters: Number.isFinite(width) ? width : null,
@@ -713,6 +838,9 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
   const geom = runtime.geom;
   const enums = runtime.enums;
   const avoid = avoidEdgeIds instanceof Set ? avoidEdgeIds : null;
+  const shortDirtPenaltyEdgeIds = searchOpts.shortDirtPenaltyEdgeIds instanceof Set
+    ? searchOpts.shortDirtPenaltyEdgeIds
+    : new Set(searchOpts.shortDirtPenaltyEdgeIds || []);
   const prior = new Set((searchOpts.priorEdgeIds || []).map(String));
   const arrival = searchOpts.arrivalEdgeId == null ? null : String(searchOpts.arrivalEdgeId);
   const backtrackFactor = Number.isFinite(Number(searchOpts.backtrackFactor))
@@ -1062,10 +1190,11 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
           // Earned-detour objective: Dirt still strongly prefers unpaved, but
           // every kilometre carries cost and off-line/backward motion is taxed.
           // Corridor width is an outer permission, never free space to consume.
-          step = (edgeM / 1000) * dirtRideCostPerKm(
-            surfaceName,
-            road,
-            unpackConfidence(attr)
+          const edgeId = pack.edgeId(ei);
+          step = (edgeM / 1000) * (
+            shortDirtPenaltyEdgeIds.has(edgeId)
+              ? DIRT_RIDE_PAVED_PER_KM
+              : dirtRideCostPerKm(surfaceName, road, unpackConfidence(attr))
           );
           if (toLL) {
             step *= majorHighwayAvoidMult(
@@ -1263,7 +1392,12 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
         if (isFerryVirt) {
           step = ferryStepForPackEdge(pack, v.ei, v.meters);
         } else if (costMode === "pavement") {
-          step = (v.meters / 1000) * dirtRideCostPerKm(vSurfaceName, vRoad, unpackConfidence(vAttr));
+          const edgeId = pack.edgeId(v.ei);
+          step = (v.meters / 1000) * (
+            shortDirtPenaltyEdgeIds.has(edgeId)
+              ? DIRT_RIDE_PAVED_PER_KM
+              : dirtRideCostPerKm(vSurfaceName, vRoad, unpackConfidence(vAttr))
+          );
         } else if (profile === "cleanest" && pack.hasLeaves) {
           step = cleanLeafStepCost(
             pack, v.ei, v.meters, toLL, startLL, endLL, startOnMajorHighway, endOnMajorHighway, e4Opts
@@ -1995,5 +2129,7 @@ module.exports = {
   findPathV2,
   chooseDirtRideCandidate,
   dirtCandidateSummary,
+  shortDirtExcursionEdgeIds,
+  MINIMUM_EARNED_DIRT_EXCURSION_METERS,
   applyHonestReportedStats
 };

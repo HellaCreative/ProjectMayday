@@ -67,6 +67,11 @@ nonisolated enum HopSearchPolicy {
     static let dirtRideGravelPerKm: Double = 0.7
     static let dirtRideResourcePerKm: Double = 0.5
     static let dirtRideUnknownTrackPerKm: Double = 0.9
+    /// Optional paved-to-paved Dirt excursions must earn this much continuous,
+    /// explicitly known unpaved riding. Unknown surface contributes zero.
+    static let minimumEarnedDirtExcursionMeters: Double = 1_000
+    /// Bound the retry cost when successive tiny alternatives are discovered.
+    static let maximumShortDirtRepairPasses: Int = 3
 
     enum CostMode: Sendable {
         /// Existing profile weight tables (Clean and legacy/fallback searches).
@@ -299,6 +304,9 @@ nonisolated struct HopSearchContext: Sendable {
     var priorEdgeIds: Set<String>
     var arrivalEdgeId: String?
     var backtrackFactor: Double
+    /// Dirt edges already found in sub-kilometre optional excursions. These
+    /// remain routable but receive paved cost so they cannot win for Dirt yield.
+    var shortDirtPenaltyEdgeIds: Set<String>
     /// DEBUG ONLY. Clean urban/town multiplier override (1…20). Nil → ×10/×2.
     var cleanMetroMultiplier: Double?
     /// Phase E4: strong soft-avoid motorway + trunk (roadClassLeaf). Default off.
@@ -328,6 +336,7 @@ nonisolated struct HopSearchContext: Sendable {
             priorEdgeIds: [],
             arrivalEdgeId: nil,
             backtrackFactor: 4,
+            shortDirtPenaltyEdgeIds: [],
             cleanMetroMultiplier: nil,
             avoidMotorways: false,
             preferBackRoads: false

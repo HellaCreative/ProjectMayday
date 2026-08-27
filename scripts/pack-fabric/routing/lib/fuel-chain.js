@@ -898,6 +898,7 @@ async function planFuelChainOnRuntime({
           backtrackFactor,
           cleanMetroMultiplier,
           avoidMotorways: avoidMotorways === true,
+          internalFuelProbe: true,
           directExtraBudgetMeters: undefined,
           maxPathMeters: maxMeters
         }

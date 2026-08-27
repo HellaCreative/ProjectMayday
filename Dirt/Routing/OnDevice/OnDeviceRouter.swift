@@ -95,6 +95,9 @@ nonisolated struct OnDeviceRouter {
         /// True when the selected route still crosses a mapped smaller
         /// settlement after applying the strong avoidance score.
         var settlementFallbackUsed: Bool = false
+        var minimumEarnedDirtExcursionMeters: Double? = nil
+        var shortDirtRepairPasses: Int = 0
+        var shortDirtPenaltyEdgeCount: Int = 0
     }
 
     enum Failure: Error, Equatable, Sendable {
@@ -673,7 +676,29 @@ nonisolated struct OnDeviceRouter {
                 hunt.popCap = HopSearchPolicy.dirtCandidatePopCap
                 hunt.maxPathMeters = maxRouteMeters
                 lastFailure = .noPath
-                return runProfile(hunt)
+                let initial: Result
+                switch runProfile(hunt) {
+                case .success(let route): initial = route
+                case .failure(let failure): return .failure(failure)
+                }
+                var route = initial
+                var penaltyEdgeIds = hunt.shortDirtPenaltyEdgeIds
+                var repairPasses = 0
+                for _ in 0..<HopSearchPolicy.maximumShortDirtRepairPasses {
+                    let found = Self.shortDirtExcursionEdgeIDs(in: route.legs)
+                    let additions = found.subtracting(penaltyEdgeIds)
+                    if additions.isEmpty { break }
+                    penaltyEdgeIds.formUnion(additions)
+                    hunt.shortDirtPenaltyEdgeIds = penaltyEdgeIds
+                    guard case .success(let next) = runProfile(hunt) else { break }
+                    route = next
+                    repairPasses += 1
+                }
+                route.searchMeta.minimumEarnedDirtExcursionMeters =
+                    HopSearchPolicy.minimumEarnedDirtExcursionMeters
+                route.searchMeta.shortDirtRepairPasses = repairPasses
+                route.searchMeta.shortDirtPenaltyEdgeCount = penaltyEdgeIds.count
+                return .success(route)
             }
 
             for width in comparisonWidths {
@@ -935,6 +960,53 @@ nonisolated struct OnDeviceRouter {
             }
             return a.width < b.width
         }?.candidate
+    }
+
+    static func shortDirtExcursionEdgeIDs(
+        in legs: [Leg],
+        minimumMeters: Double = HopSearchPolicy.minimumEarnedDirtExcursionMeters
+    ) -> Set<String> {
+        guard legs.count >= 3 else { return [] }
+        func isPavedBoundary(_ leg: Leg) -> Bool {
+            leg.structureType != "ferry" && leg.surfaceName == "paved"
+        }
+        func isKnownUnpaved(_ surface: String) -> Bool {
+            ["gravel", "access", "resource", "track", "double_track", "single", "unpaved", "dirt"]
+                .contains(surface)
+        }
+
+        var result: Set<String> = []
+        var index = 0
+        while index < legs.count {
+            if isPavedBoundary(legs[index]) || legs[index].structureType == "ferry" {
+                index += 1
+                continue
+            }
+            let start = index
+            var knownUnpavedMeters = 0.0
+            var edgeIDs: [String] = []
+            while index < legs.count,
+                  !isPavedBoundary(legs[index]),
+                  legs[index].structureType != "ferry" {
+                let leg = legs[index]
+                if isKnownUnpaved(leg.surfaceName) {
+                    knownUnpavedMeters += max(0, leg.distanceMeters)
+                }
+                if !leg.edgeId.isEmpty,
+                   !leg.edgeId.hasPrefix("soft-stitch-"),
+                   !leg.edgeId.hasPrefix("perm-stitch-") {
+                    edgeIDs.append(leg.edgeId)
+                }
+                index += 1
+            }
+            let boundedByPavement = start > 0 && index < legs.count
+                && isPavedBoundary(legs[start - 1])
+                && isPavedBoundary(legs[index])
+            if boundedByPavement && knownUnpavedMeters < minimumMeters {
+                result.formUnion(edgeIDs)
+            }
+        }
+        return result
     }
 
     private enum SnapRole {
@@ -3754,7 +3826,8 @@ nonisolated struct OnDeviceRouter {
             let dirt = OnDeviceProfileCosts.isAdventureSurface(paint)
             let surfaceName = OnDeviceProfileCosts.surfaceName(code: surface)
             var step: Double
-            if !dirt {
+            let penalized = ei >= 0 && ctx.shortDirtPenaltyEdgeIds.contains(pack.edgeId(ei))
+            if penalized || !dirt {
                 step = km * HopSearchPolicy.dirtRidePavedPerKm
             } else if surfaceName == "gravel" {
                 step = km * HopSearchPolicy.dirtRideGravelPerKm
@@ -3763,7 +3836,7 @@ nonisolated struct OnDeviceRouter {
             } else {
                 step = km * HopSearchPolicy.dirtRideUnknownTrackPerKm
             }
-            if confidence == 0 { step *= 1.2 }
+            if !penalized && confidence == 0 { step *= 1.2 }
             step *= OnDeviceProfileCosts.majorHighwayAvoidMult(
                 profile: profile,
                 roadClassCode: roadClass,

@@ -2,7 +2,15 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { chooseDirtRideCandidate } = require("./find-path-v2");
+const {
+  chooseDirtRideCandidate,
+  shortDirtExcursionEdgeIds,
+  MINIMUM_EARNED_DIRT_EXCURSION_METERS
+} = require("./find-path-v2");
+
+function segment(edgeId, surfaceClass, distanceMeters, structureType = "none") {
+  return { edgeId, surfaceClass, distanceMeters, structureType };
+}
 
 function candidate({ dirt, paved, backward = 0, lateral = 0, route = 300_000, width }) {
   return {
@@ -44,4 +52,44 @@ test("Dirt rejects a large loop for a single-digit dirt gain", () => {
   const coherent = candidate({ dirt: 70, paved: 120_000, backward: 4_000, route: 250_000, width: 50_000 });
   const loop = candidate({ dirt: 77, paved: 110_000, backward: 80_000, route: 340_000, width: 200_000 });
   assert.equal(chooseDirtRideCandidate([loop, coherent]).width, 50_000);
+});
+
+test("sub-kilometre known dirt excursion is re-priced, including unknown gaps", () => {
+  const edges = shortDirtExcursionEdgeIds([
+    segment("paved-a", "paved", 2_000),
+    segment("gravel-a", "gravel", 450),
+    segment("unknown-a", "unknown", 800),
+    segment("track-a", "track", 500),
+    segment("paved-b", "paved", 2_000)
+  ]);
+  assert.deepEqual([...edges].sort(), ["gravel-a", "track-a", "unknown-a"]);
+});
+
+test("one kilometre of known unpaved riding earns the Dirt diversion", () => {
+  const edges = shortDirtExcursionEdgeIds([
+    segment("paved-a", "paved", 2_000),
+    segment("gravel-a", "gravel", 400),
+    segment("unknown-a", "unknown", 800),
+    segment("track-a", "track", MINIMUM_EARNED_DIRT_EXCURSION_METERS - 400),
+    segment("paved-b", "paved", 2_000)
+  ]);
+  assert.equal(edges.size, 0);
+});
+
+test("unknown surface never earns the kilometre", () => {
+  const edges = shortDirtExcursionEdgeIds([
+    segment("paved-a", "paved", 2_000),
+    segment("unknown-a", "unknown", 1_500),
+    segment("paved-b", "paved", 2_000)
+  ]);
+  assert.deepEqual([...edges], ["unknown-a"]);
+});
+
+test("route endpoint dirt remains eligible for pins and necessary connectors", () => {
+  const edges = shortDirtExcursionEdgeIds([
+    segment("paved-a", "paved", 2_000),
+    segment("gravel-a", "gravel", 300),
+    segment("destination", "track", 300)
+  ]);
+  assert.equal(edges.size, 0);
 });

@@ -111,6 +111,15 @@ struct CrossPackFuelBudgetTests {
 }
 
 struct HopSearchPolicyTests {
+    private func leg(_ id: String, _ surface: String, _ meters: Double) -> OnDeviceRouter.Leg {
+        OnDeviceRouter.Leg(
+            coordinates: [],
+            distanceMeters: meters,
+            surfaceName: surface,
+            edgeId: id
+        )
+    }
+
     @Test func varietyHashIsStablePerSeed() {
         let a = HopSearchPolicy.hash(42, 100, 7)
         let b = HopSearchPolicy.hash(42, 100, 7)
@@ -219,6 +228,35 @@ struct HopSearchPolicyTests {
         #expect(HopSearchPolicy.corridorMeters(for: .cleanest) == nil)
         #expect(HopSearchPolicy.extraBudget(shortestMeters: 100_000, for: .balanced) == 140_000)
         #expect(HopSearchPolicy.extraBudget(shortestMeters: 100_000, for: .cleanest) == nil)
+    }
+
+    @Test func shortKnownDirtExcursionIsRepricedAndUnknownDoesNotEarnDistance() {
+        let edges = OnDeviceRouter.shortDirtExcursionEdgeIDs(in: [
+            leg("paved-a", "paved", 2_000),
+            leg("gravel-a", "gravel", 450),
+            leg("unknown-a", "unknown", 800),
+            leg("track-a", "track", 500),
+            leg("paved-b", "paved", 2_000)
+        ])
+        #expect(edges == Set(["gravel-a", "unknown-a", "track-a"]))
+    }
+
+    @Test func fullKnownDirtKilometreAndEndpointConnectorsRemainEligible() {
+        let earned = OnDeviceRouter.shortDirtExcursionEdgeIDs(in: [
+            leg("paved-a", "paved", 2_000),
+            leg("gravel-a", "gravel", 400),
+            leg("unknown-a", "unknown", 800),
+            leg("track-a", "track", 600),
+            leg("paved-b", "paved", 2_000)
+        ])
+        #expect(earned.isEmpty)
+
+        let endpoint = OnDeviceRouter.shortDirtExcursionEdgeIDs(in: [
+            leg("paved-a", "paved", 2_000),
+            leg("gravel-a", "gravel", 300),
+            leg("destination", "track", 300)
+        ])
+        #expect(endpoint.isEmpty)
     }
 
     @Test func ratioBucketsSplitTheTenPointBand() {
