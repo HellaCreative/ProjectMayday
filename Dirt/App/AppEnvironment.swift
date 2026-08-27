@@ -222,6 +222,11 @@ final class AppEnvironment {
                 ]
             )
         }
+        // Stable visual fixture for the route-progress notice. It exercises
+        // the shipping view without starting routing or changing rider data.
+        if ProcessInfo.processInfo.environment["DIRT_UI_TEST_ROUTE_PROGRESS"] == "fuel-off" {
+            planner.toast = RoutePlannerModel.creatingRouteWithoutFuelToast
+        }
 #endif
     }
 

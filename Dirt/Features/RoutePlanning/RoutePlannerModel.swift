@@ -647,13 +647,15 @@ final class RoutePlannerModel {
         replanFromStationID: String? = nil
     ) {
         let requested = itinerary
+        let fuel = FuelRangePrefs.snapshot
+        let initialProgress = Self.initialBuildProgressToast(for: fuel)
         canonicalBuildStartCount += 1
         lastCanonicalBuildFromLegIndex = legIndex
         isRouting = true
         isAssemblingRoute = true
         fuelPlanNotice = nil
-        fuelPlanningStatus = Self.calculatingFuelRangeToast
-        toast = Self.calculatingFuelRangeToast
+        fuelPlanningStatus = initialProgress
+        toast = initialProgress
         refreshMap()
         buildTask = Task { @MainActor [weak self] in
             guard let self else { return }
@@ -661,7 +663,7 @@ final class RoutePlannerModel {
                 requested,
                 from: legIndex,
                 reuse: reuse,
-                fuel: FuelRangePrefs.snapshot,
+                fuel: fuel,
                 source: self.routingSourcePolicy,
                 replanFromStationID: replanFromStationID,
                 onFuelStatus: { [weak self] status in
@@ -808,25 +810,78 @@ final class RoutePlannerModel {
     static let paintsDestinationImmediatelyOnFromHereTap = true
     static let calculatingRouteToast = "Calculating route"
     static let routeReadyToast = "Route successful"
-    static let calculatingFuelRangeToast = "Calculating fuel range"
-    static let fuelStopRequiredToast = "Fuel stop required"
-    static let fuelStopAcquiredToast = "Fuel stop acquired"
+    static let calculatingFuelRangeToast = "Checking fuel range"
+    static let creatingRouteWithoutFuelToast = "Building route without automatic fuel planning"
     static let noFuelStopRequiredToast = "No fuel stop required"
     static let legCompleteToast = "Leg complete"
 
-    static func isPersistentProgressToast(_ message: String) -> Bool {
-        message == calculatingRouteToast
-            || message == calculatingFuelRangeToast
-            || message == fuelStopRequiredToast
-            || message == noFuelStopRequiredToast
+    struct ProgressToastContent: Equatable {
+        let title: String
+        let detail: String
     }
 
-    static func isAnimatedProgressToast(_ message: String) -> Bool {
-        isPersistentProgressToast(message)
+    static func initialBuildProgressToast(for fuel: FuelRangePrefs.Snapshot) -> String {
+        fuel.automaticPlanningEnabled && fuel.usableMeters > 0
+            ? calculatingFuelRangeToast
+            : creatingRouteWithoutFuelToast
+    }
+
+    static func progressToastContent(for message: String) -> ProgressToastContent? {
+        switch message {
+        case calculatingRouteToast:
+            return ProgressToastContent(
+                title: "Creating route",
+                detail: "Calculating distance"
+            )
+        case creatingRouteWithoutFuelToast:
+            return ProgressToastContent(
+                title: "Creating route",
+                detail: "Fuel planning is off · Calculating distance"
+            )
+        case calculatingFuelRangeToast:
+            return ProgressToastContent(
+                title: "Checking fuel range",
+                detail: "Calculating distance and fuel needs"
+            )
+        case "Checking fuel after destination":
+            return ProgressToastContent(
+                title: "Checking destination fuel",
+                detail: "Confirming a pump is reachable after arrival"
+            )
+        case noFuelStopRequiredToast:
+            return ProgressToastContent(
+                title: "No fuel stop needed",
+                detail: "Creating the route to your waypoint"
+            )
+        default:
+            if message.hasPrefix("Creating fuel stop ") {
+                return ProgressToastContent(
+                    title: message,
+                    detail: "Fuel stop required"
+                )
+            }
+            if message.hasPrefix("Fuel stop "), message.hasSuffix(" added") {
+                return ProgressToastContent(
+                    title: message,
+                    detail: "Continuing the route"
+                )
+            }
+            if message.hasPrefix("Checking range after fuel stop ") {
+                return ProgressToastContent(
+                    title: message,
+                    detail: "Calculating the remaining route"
+                )
+            }
+            return nil
+        }
+    }
+
+    static func isPersistentProgressToast(_ message: String) -> Bool {
+        progressToastContent(for: message) != nil
     }
 
     /// True while From here / Plan is still building the full route
-    /// (including chained fuel stops). Holds calculating toast + spinner.
+    /// (including chained fuel stops). Holds the indeterminate progress notice.
     private var isAssemblingRoute = false
     /// Stable within this app process; a fresh launch can pick a different near-equal corridor.
     let planningSessionSeed: UInt64 = UInt64.random(in: 1...9_007_199_254_740_991)

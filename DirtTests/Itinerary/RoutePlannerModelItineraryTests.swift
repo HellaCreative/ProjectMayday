@@ -6,6 +6,46 @@ import Testing
 @MainActor
 @Suite(.serialized)
 struct RoutePlannerModelItineraryTests {
+    @Test func progressNotificationMatchesAutomaticFuelPlanningState() {
+        let fuelOn = FuelRangePrefs.Snapshot(
+            tankMeters: 260_000,
+            usableMeters: 247_000,
+            reservePercent: 5,
+            automaticPlanningEnabled: true
+        )
+        let fuelOff = FuelRangePrefs.Snapshot(
+            tankMeters: 260_000,
+            usableMeters: 247_000,
+            reservePercent: 5,
+            automaticPlanningEnabled: false
+        )
+
+        #expect(RoutePlannerModel.initialBuildProgressToast(for: fuelOn)
+            == RoutePlannerModel.calculatingFuelRangeToast)
+        #expect(RoutePlannerModel.initialBuildProgressToast(for: fuelOff)
+            == RoutePlannerModel.creatingRouteWithoutFuelToast)
+        #expect(RoutePlannerModel.progressToastContent(
+            for: RoutePlannerModel.creatingRouteWithoutFuelToast
+        ) == RoutePlannerModel.ProgressToastContent(
+            title: "Creating route",
+            detail: "Fuel planning is off · Calculating distance"
+        ))
+    }
+
+    @Test func progressNotificationNumbersEachFuelStop() {
+        #expect(RoutePlannerModel.progressToastContent(for: "Creating fuel stop 1")
+            == RoutePlannerModel.ProgressToastContent(
+                title: "Creating fuel stop 1",
+                detail: "Fuel stop required"
+            ))
+        #expect(RoutePlannerModel.progressToastContent(for: "Fuel stop 2 added")
+            == RoutePlannerModel.ProgressToastContent(
+                title: "Fuel stop 2 added",
+                detail: "Continuing the route"
+            ))
+        #expect(RoutePlannerModel.isPersistentProgressToast("Checking range after fuel stop 2"))
+    }
+
     @Test func planModeSelectsLiveWhileOnline() async {
         let live = PlannerFakeRoutingSource(name: "live")
         let pack = PlannerFakeRoutingSource(name: "pack")
@@ -610,10 +650,12 @@ private final class PlannerFakeRoutingSource: RoutingSource {
 private struct FuelPrefsRestore {
     let kilometers = FuelRangePrefs.kilometers
     let reserve = FuelRangePrefs.reservePercent
+    let automatic = FuelRangePrefs.automaticPlanningEnabled
 
     func restore() {
         FuelRangePrefs.kilometers = kilometers
         FuelRangePrefs.reservePercent = reserve
+        FuelRangePrefs.automaticPlanningEnabled = automatic
     }
 }
 

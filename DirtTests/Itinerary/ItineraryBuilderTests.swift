@@ -91,6 +91,7 @@ struct ItineraryBuilderTests {
         let source = FakeRoutingSource(name: "live")
         source.distances[key(points[0], points[1])] = 300_000
         source.fuelStops = [fuelStop("unused", at: point(0.5))]
+        var fuelMilestones: [String] = []
 
         let result = await ItineraryBuilder().build(
             makeItinerary(points), from: 0, reuse: nil,
@@ -100,12 +101,15 @@ struct ItineraryBuilderTests {
                 reservePercent: 10,
                 automaticPlanningEnabled: false
             ),
-            source: .fixed(source), onProgress: { _ in }
+            source: .fixed(source),
+            onFuelStatus: { fuelMilestones.append($0) },
+            onProgress: { _ in }
         )
 
         #expect(result.legs.count == 1)
         #expect(result.legs.first?.endsAtFuelStop == nil)
         #expect(source.fuelChainRequests.isEmpty)
+        #expect(fuelMilestones.isEmpty)
     }
 
     @Test func reachableDestinationGoesDirectWhenTheEscapePumpFitsRemainingFuel() async throws {
@@ -202,6 +206,7 @@ struct ItineraryBuilderTests {
         source.fuelWindowCompleteResponses = [false, false, false, true]
         let itinerary = makeItinerary(points)
         var progressiveHopCounts: [Int] = []
+        var fuelMilestones: [String] = []
 
         let result = await ItineraryBuilder().build(
             itinerary, from: 0, reuse: nil,
@@ -209,10 +214,12 @@ struct ItineraryBuilderTests {
                 tankMeters: 150_000,
                 usableMeters: 135_000, reservePercent: 10
             ),
-            source: .fixed(source)
-        ) { progress in
-            progressiveHopCounts.append(progress.legs.count)
-        }
+            source: .fixed(source),
+            onFuelStatus: { fuelMilestones.append($0) },
+            onProgress: { progress in
+                progressiveHopCounts.append(progress.legs.count)
+            }
+        )
 
         let plans = source.fuelChainRequests.filter { $0.fuel.probeFirstReachableStation != true }
         #expect(plans.count == 4)
@@ -236,6 +243,13 @@ struct ItineraryBuilderTests {
         #expect(progressiveHopCounts.contains(2))
         #expect(progressiveHopCounts.contains(3))
         #expect(progressiveHopCounts.contains(4))
+        #expect(fuelMilestones.contains("Creating fuel stop 1"))
+        #expect(fuelMilestones.contains("Fuel stop 1 added"))
+        #expect(fuelMilestones.contains("Creating fuel stop 2"))
+        #expect(fuelMilestones.contains("Fuel stop 2 added"))
+        #expect(fuelMilestones.contains("Creating fuel stop 3"))
+        #expect(fuelMilestones.contains("Fuel stop 3 added"))
+        #expect(fuelMilestones.contains("Checking range after fuel stop 3"))
     }
 
     @Test func finalFuelLegReceivesRegionalGraphMinimaForSeamBudgeting() async throws {

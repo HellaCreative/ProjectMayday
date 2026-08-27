@@ -129,6 +129,30 @@ final class DirtUITests: XCTestCase {
     }
 
     @MainActor
+    func testRouteProgressExplainsThatFuelPlanningIsOff() throws {
+        let app = XCUIApplication()
+        app.launchEnvironment["DIRT_UI_TEST_ROUTE_PROGRESS"] = "fuel-off"
+        app.launch()
+
+        let skipToMap = app.buttons["Skip to map"]
+        if skipToMap.waitForExistence(timeout: 3) {
+            skipToMap.tap()
+        }
+
+        let progress = app.descendants(matching: .any)["route-progress-toast"]
+        XCTAssertTrue(progress.waitForExistence(timeout: 8))
+        XCTAssertEqual(progress.label, "Creating route")
+        XCTAssertTrue((progress.value as? String)?.contains(
+            "Fuel planning is off · Calculating distance"
+        ) == true)
+
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = "Route Progress — Fuel Planning Off"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+
+    @MainActor
     func testLaunchPerformance() throws {
         // This measures how long it takes to launch your application.
         measure(metrics: [XCTApplicationLaunchMetric()]) {

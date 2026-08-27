@@ -820,7 +820,12 @@ final class ItineraryBuilder {
                     effectiveProfile: activeProfile
                 )
                 let requiredStationID = riderLeg.fuelStopOverrides[departureID]
-                onFuelStatus("Calculating fuel range")
+                let committedFuelStopCount = builtLegs.filter {
+                    $0.endsAtFuelStop != nil
+                }.count
+                onFuelStatus(committedFuelStopCount == 0
+                    ? "Checking fuel range"
+                    : "Checking range after fuel stop \(committedFuelStopCount)")
 
                 // A rider pin placed on a packed pump is already the next
                 // useful fuel anchor. Build that real leg directly up to the
@@ -976,7 +981,10 @@ final class ItineraryBuilder {
                 }
 
                 let target = selectedStop?.coordinate ?? riderDestination.coordinate
-                onFuelStatus(selectedStop == nil ? "No fuel stop required" : "Fuel stop required")
+                let nextFuelStopNumber = committedFuelStopCount + 1
+                onFuelStatus(selectedStop == nil
+                    ? "No fuel stop required"
+                    : "Creating fuel stop \(nextFuelStopNumber)")
                 do {
                     let response = try await source.route(routeRequest(
                         profile: activeProfile,
@@ -1048,7 +1056,7 @@ final class ItineraryBuilder {
                     onProgress(committed)
 
                     if selectedStop != nil {
-                        onFuelStatus("Fuel stop acquired")
+                        onFuelStatus("Fuel stop \(nextFuelStopNumber) added")
                         await Task.yield()
                         // Keep every committed pump excluded for the rest of
                         // this rider leg. Clearing here allowed short urban

@@ -1600,8 +1600,8 @@ private struct KeepAwakeLifecycle: ViewModifier {
 struct ToastView: View {
     let text: String
 
-    private var isCalculating: Bool {
-        RoutePlannerModel.isAnimatedProgressToast(text)
+    private var progress: RoutePlannerModel.ProgressToastContent? {
+        RoutePlannerModel.progressToastContent(for: text)
     }
 
     private var isSuccess: Bool {
@@ -1609,28 +1609,55 @@ struct ToastView: View {
     }
 
     var body: some View {
-        HStack(spacing: 8) {
-            if isCalculating {
-                ProgressView()
-                    .controlSize(.small)
-                    .tint(.white)
+        Group {
+            if let progress {
+                VStack(alignment: .leading, spacing: DirtSpace.tight) {
+                    Text(progress.title)
+                        .font(DirtType.rowTitle)
+                        .foregroundStyle(.white)
+                    Text(progress.detail)
+                        .font(DirtType.helper)
+                        .foregroundStyle(.white.opacity(0.78))
+                        .fixedSize(horizontal: false, vertical: true)
+                    ProgressView()
+                        .progressViewStyle(.linear)
+                        .tint(DirtTheme.orange)
+                        .accessibilityHidden(true)
+                }
+                .frame(minWidth: 240, maxWidth: 300, alignment: .leading)
+                .accessibilityElement(children: .ignore)
+                .accessibilityIdentifier("route-progress-toast")
+                .accessibilityLabel(progress.title)
+                .accessibilityValue("\(progress.detail). In progress.")
+                .accessibilityAddTraits(.updatesFrequently)
+            } else {
+                Text(text)
+                    .font(.dirtUI(12, weight: .bold))
+                    .foregroundStyle(.white)
             }
-            Text(text)
-                .font(.dirtUI(12, weight: .bold))
-                .foregroundStyle(.white)
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 10)
+        .padding(.vertical, progress == nil ? 10 : 12)
         .background(
             (isSuccess ? DirtTheme.navGreen : DirtTheme.chrome).opacity(0.95)
         )
-        .clipShape(Capsule())
+        .clipShape(
+            RoundedRectangle(
+                cornerRadius: progress == nil ? 100 : DirtRadius.card,
+                style: .continuous
+            )
+        )
         .overlay(
-            Capsule().stroke(
+            RoundedRectangle(
+                cornerRadius: progress == nil ? 100 : DirtRadius.card,
+                style: .continuous
+            )
+            .stroke(
                 isSuccess ? DirtTheme.navGreen.opacity(0.9) : DirtTheme.chromeBorder,
                 lineWidth: 1
             )
         )
+        .shadow(color: .black.opacity(0.18), radius: 10, y: 4)
         .transition(.opacity)
     }
 }
