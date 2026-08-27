@@ -112,6 +112,14 @@ final class OfflineTileManager {
 
     // MARK: - Prep (before navigation)
 
+    /// Give Start Navigation immediate visual ownership before route geometry,
+    /// cache, or regional-pack work begins. This is an indeterminate preparation
+    /// state; `prepareForNavigation` replaces it with measured tile progress.
+    func beginNavigationPrepPresentation() {
+        phase = .downloading(completed: 0, total: 0)
+        progress = 0
+    }
+
     /// Build the first blocking corridor while the rider is reviewing the route.
     /// This is deliberately CPU/disk only; no tile is fetched before Start.
     func primeNavigationPlan(

@@ -1619,9 +1619,7 @@ struct ToastView: View {
                         .font(DirtType.helper)
                         .foregroundStyle(.white.opacity(0.78))
                         .fixedSize(horizontal: false, vertical: true)
-                    ProgressView()
-                        .progressViewStyle(.linear)
-                        .tint(DirtTheme.orange)
+                    RouteBuildPistonIndicator()
                         .accessibilityHidden(true)
                 }
                 .frame(minWidth: 240, maxWidth: 300, alignment: .leading)
@@ -1659,6 +1657,49 @@ struct ToastView: View {
         )
         .shadow(color: .black.opacity(0.18), radius: 10, y: 4)
         .transition(.opacity)
+    }
+}
+
+/// Brand motion for route construction. This deliberately communicates activity,
+/// not measured completion: a quick power stroke followed by a slower return.
+private struct RouteBuildPistonIndicator: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var fill: CGFloat = 0.16
+
+    var body: some View {
+        Capsule(style: .continuous)
+            .fill(.white.opacity(0.12))
+            .frame(height: 6)
+            .overlay {
+                Capsule(style: .continuous)
+                    .fill(DirtTheme.orange)
+                    .scaleEffect(x: fill, y: 1, anchor: .leading)
+            }
+            .clipShape(Capsule(style: .continuous))
+            .task(id: reduceMotion) {
+                fill = reduceMotion ? 0.58 : 0.16
+                guard !reduceMotion else { return }
+
+                while !Task.isCancelled {
+                    withAnimation(.easeOut(duration: 0.30)) {
+                        fill = 1
+                    }
+                    do {
+                        try await Task.sleep(for: .milliseconds(360))
+                    } catch {
+                        return
+                    }
+
+                    withAnimation(.easeInOut(duration: 0.92)) {
+                        fill = 0.16
+                    }
+                    do {
+                        try await Task.sleep(for: .milliseconds(980))
+                    } catch {
+                        return
+                    }
+                }
+            }
     }
 }
 

@@ -12,6 +12,16 @@ import Testing
 @testable import Dirt
 
 struct DirtTests {
+    @Test @MainActor func navigationPrepPublishesVisibleStateBeforePlanning() {
+        let offline = OfflineTileManager()
+
+        offline.beginNavigationPrepPresentation()
+
+        #expect(offline.phase == .downloading(completed: 0, total: 0))
+        #expect(offline.progress == 0)
+        offline.cancelPrep()
+    }
+
     @Test func navigationTileScopeBlocksOnlyFirstRiderOrFuelStage() throws {
         let first = [
             RouteCoordinate(longitude: -63.57, latitude: 44.64),

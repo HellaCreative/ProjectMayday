@@ -276,6 +276,7 @@ final class RoutePlannerModel {
     private(set) var savedRouteOrigin: SavedRouteOrigin?
     private var lastNavigationIdentity: String?
     @ObservationIgnored private var lastQueuedTileLookaheadStageIndex: Int?
+    @ObservationIgnored private var navigationStartTask: Task<Void, Never>?
     private let routing: RoutingClient
     private let locationService: LocationService
     private let mapState: MapState
@@ -2640,19 +2641,43 @@ final class RoutePlannerModel {
     /// stages are saved one at a time while riding, before the rider reaches them.
     func startNavigation() {
         guard hasRoute else { return }
+
+        navigationStartTask?.cancel()
+        navigation.beginPrefetch()
+        offline.beginNavigationPrepPresentation()
+
+        // Lock pin edit for the whole prep → ride window. Pan/zoom stay free.
+        // Prevents accidental waypoint moves that invalidate the route and re-download.
+        mapState.lockRouteEditingForPrep()
+
+        let startedAt = Date()
+        RoutingDebugLog.shared.event("navigation start presentation ready")
+        navigationStartTask = Task { @MainActor [weak self] in
+            // Let SwiftUI commit the full-screen prep state before copying a long
+            // route or determining the map/routing-pack preparation inputs.
+            await Task.yield()
+            guard let self,
+                  !Task.isCancelled,
+                  self.navigation.phase == .prefetching
+            else { return }
+            self.continueNavigationStart(startedAt: startedAt)
+            self.navigationStartTask = nil
+        }
+    }
+
+    private func continueNavigationStart(startedAt: Date) {
         let coords = allCoordinates
-        guard coords.count > 1 else { return }
+        guard coords.count > 1 else {
+            offline.cancelPrep()
+            navigation.cancelPrefetch()
+            mapState.unlockRouteEditingAfterPrepCancel()
+            return
+        }
         let tileStages = navigationTileStageCoordinates
         let blockingTileCoordinates = NavigationTileScope.blockingCoordinates(
             stageCoordinates: tileStages,
             fallback: coords
         )
-
-        navigation.beginPrefetch()
-
-        // Lock pin edit for the whole prep → ride window. Pan/zoom stay free.
-        // Prevents accidental waypoint moves that invalidate the route and re-download.
-        mapState.lockRouteEditingForPrep()
 
         let identity = routeIdentity ?? "route"
         let keepExisting = (lastNavigationIdentity == identity)
@@ -2668,7 +2693,8 @@ final class RoutePlannerModel {
         )
         lastQueuedTileLookaheadStageIndex = nil
         RoutingDebugLog.shared.event(
-            "navigation map scope blockingStages=1 availableStages=\(tileStages.count) "
+            "navigation prep handoff elapsedMs=\(Int(Date().timeIntervalSince(startedAt) * 1_000)) "
+                + "blockingStages=1 availableStages=\(tileStages.count) "
                 + "points=\(blockingTileCoordinates.count) allRoutePoints=\(coords.count)"
         )
         offline.prepareForNavigation(
@@ -2760,6 +2786,8 @@ final class RoutePlannerModel {
     }
 
     func cancelOfflineMapPrep() {
+        navigationStartTask?.cancel()
+        navigationStartTask = nil
         offline.cancelPrep()
         graphPacks.cancel()
         navigation.cancelPrefetch()

@@ -1257,8 +1257,15 @@ struct RoutePlannerCard: View {
     }
 
     private func beginNavigation() {
-        isOpen = false
-        planner.startNavigation()
+        // Start prep and remove the planning sheet as one immediate handoff.
+        // A spring removal here competes with the full-screen prep overlay and
+        // briefly leaves both workspaces ghosted on top of the map.
+        var transaction = Transaction(animation: nil)
+        transaction.disablesAnimations = true
+        withTransaction(transaction) {
+            planner.startNavigation()
+            isOpen = false
+        }
     }
 
     private func resumeAfterSubscribe(_ reason: PaywallReason) {
