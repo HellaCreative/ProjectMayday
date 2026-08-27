@@ -346,6 +346,35 @@ struct DirtTests {
         #expect(display[1].accessUnknown)
     }
 
+    @Test @MainActor func ferryRunStaysDistinctFromUnknownRoadSurface() throws {
+        let json = """
+        {
+          "status":"complete",
+          "distanceMeters":300,
+          "geometry":[[-69.90,47.84],[-69.60,47.84]],
+          "segments":[
+            {"surfaceClass":"unknown","accessClass":"motorized_permissive","distanceMeters":50,"geometry":[[-69.90,47.84],[-69.88,47.84]]},
+            {"surfaceClass":"unknown","accessClass":"motorized_permissive","structureType":"ferry","crossingLabel":"Ferry crossing","distanceMeters":100,"geometry":[[-69.88,47.84],[-69.75,47.84]]},
+            {"surfaceClass":"unknown","accessClass":"motorized_permissive","structureType":"ferry","crossingLabel":"Ferry crossing","distanceMeters":100,"geometry":[[-69.75,47.84],[-69.62,47.84]]},
+            {"surfaceClass":"unknown","accessClass":"motorized_permissive","distanceMeters":50,"geometry":[[-69.62,47.84],[-69.60,47.84]]}
+          ],
+          "stats":{"dirtPercent":100,"pavedPercent":0,"surfaceFamilyMode":"leaf-v3"}
+        }
+        """
+        let response = try JSONDecoder().decode(RouteResponse.self, from: Data(json.utf8))
+        let display = MapState.displaySegments(from: [response])
+        let summary = RouteFerrySummary.from(responses: [response])
+
+        #expect(display.count == 3)
+        #expect(!display[0].isFerry)
+        #expect(display[1].isFerry)
+        #expect(display[1].crossingLabel == "Ferry crossing")
+        #expect(display[1].coordinates.count == 3)
+        #expect(!display[2].isFerry)
+        #expect(summary.crossingCount == 1)
+        #expect(summary.distanceMeters == 200)
+    }
+
     @Test func savedRouteRetainsDetailedSurfaceRuns() throws {
         let segment = RouteSegment(
             surfaceClass: "gravel",

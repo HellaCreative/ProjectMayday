@@ -393,6 +393,10 @@ be silent in the planner, navigation experience, or exported GPX.
 - General fuel stations remain spatially stable across actionable zoom levels;
   clusters split deterministically into individual pumps. A failed refresh never
   blanks already proven same-source fuel data.
+- Ferry edges remain valid timed transport connectors, are excluded from road-
+  surface percentages, and paint as a distinct marine-blue dashed crossing.
+  The route sheet must state that a ferry is included and tell the rider to
+  verify departure times, seasonal service, and motorcycle boarding.
 
 ## 8. Pack and regional release state
 

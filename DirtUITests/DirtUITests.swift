@@ -153,6 +153,39 @@ final class DirtUITests: XCTestCase {
     }
 
     @MainActor
+    func testFerryRouteIsDistinctAndExplained() throws {
+        let app = XCUIApplication()
+        app.launchEnvironment["DIRT_UI_TEST_FERRY"] = "1"
+        app.launch()
+
+        let skipToMap = app.buttons["Skip to map"]
+        if skipToMap.waitForExistence(timeout: 3) {
+            skipToMap.tap()
+        }
+
+        let route = app.buttons["Route"]
+        XCTAssertTrue(route.waitForExistence(timeout: 8))
+        route.tap()
+
+        let notice = app.descendants(matching: .any)["ferry-route-notice"]
+        XCTAssertTrue(notice.waitForExistence(timeout: 5))
+        XCTAssertTrue(notice.label.contains("Ferry crossing included"))
+
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = "Ferry Route — Crossing and Rider Notice"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+
+        route.tap()
+        XCTAssertTrue(app.buttons["planned-route-overview"].waitForExistence(timeout: 3))
+
+        let mapAttachment = XCTAttachment(screenshot: app.screenshot())
+        mapAttachment.name = "Ferry Route — Marine Blue Crossing"
+        mapAttachment.lifetime = .keepAlways
+        add(mapAttachment)
+    }
+
+    @MainActor
     func testLaunchPerformance() throws {
         // This measures how long it takes to launch your application.
         measure(metrics: [XCTApplicationLaunchMetric()]) {

@@ -384,6 +384,7 @@ struct RoutePlannerCard: View {
             }
 
             routingStatus
+            ferryNotice
             statsRow
             ctaRow
             clearAllButton
@@ -497,6 +498,7 @@ struct RoutePlannerCard: View {
         routingStatus
 
         if planner.hasRoute {
+            ferryNotice
             statsRow
             ctaRow
             clearAllButton
@@ -510,6 +512,7 @@ struct RoutePlannerCard: View {
     @ViewBuilder private var savedContent: some View {
         if planner.hasRoute {
             loadedTrackCard
+            ferryNotice
             ctaRow
             continuePlanningButton
             clearAllButton
@@ -785,7 +788,8 @@ struct RoutePlannerCard: View {
                 km: (response.distanceMeters ?? 0) / 1000,
                 dirtPercent: response.dirtPercent,
                 margin: planner.fuelMarginText(at: index),
-                showsWarning: planner.profileAvailabilityNotice(at: index) != nil
+                showsWarning: planner.profileAvailabilityNotice(at: index) != nil,
+                includesFerry: RouteFerrySummary.from(responses: [response]).hasCrossing
             )
         } else {
             Text(stage.end == nil ? "Hold the map to set the end" : "Waiting for route…")
@@ -800,7 +804,8 @@ struct RoutePlannerCard: View {
         km: Double,
         dirtPercent: Int,
         margin: String?,
-        showsWarning: Bool
+        showsWarning: Bool,
+        includesFerry: Bool = false
     ) -> some View {
         HStack(spacing: DirtSpace.tight) {
             Text(String(format: "%.1f km", km))
@@ -814,6 +819,15 @@ struct RoutePlannerCard: View {
                 .font(DirtType.metricInline)
                 .fontWeight(.bold)
                 .foregroundStyle(DirtTheme.dirtMix)
+            if includesFerry {
+                Text("·")
+                    .font(DirtType.metricInline)
+                    .foregroundStyle(DirtTheme.muted)
+                Label("Ferry", systemImage: "ferry.fill")
+                    .font(DirtType.metricInline)
+                    .fontWeight(.bold)
+                    .foregroundStyle(DirtTheme.routeFerry)
+            }
             if let margin {
                 Text("·")
                     .font(DirtType.metricInline)
@@ -831,6 +845,53 @@ struct RoutePlannerCard: View {
         }
         .lineLimit(1)
         .minimumScaleFactor(0.72)
+    }
+
+    @ViewBuilder private var ferryNotice: some View {
+        let summary = planner.ferrySummary
+        if summary.hasCrossing {
+            HStack(alignment: .top, spacing: DirtSpace.inner) {
+                Image(systemName: "ferry.fill")
+                    .font(.system(.headline, weight: .bold))
+                    .foregroundStyle(DirtTheme.routeFerry)
+                    .frame(width: 24, height: 24)
+                    .accessibilityHidden(true)
+
+                VStack(alignment: .leading, spacing: DirtSpace.hairGap) {
+                    Text(summary.crossingCount == 1
+                         ? "Ferry crossing included"
+                         : "\(summary.crossingCount) ferry crossings included")
+                        .font(DirtType.rowTitle)
+                        .foregroundStyle(DirtTheme.ink)
+                    Text(ferryNoticeDetail(summary))
+                        .font(DirtType.helper)
+                        .foregroundStyle(DirtTheme.ink.opacity(0.76))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(DirtSpace.inner)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                DirtTheme.routeFerry.opacity(0.10),
+                in: RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous)
+                    .stroke(DirtTheme.routeFerry.opacity(0.30), lineWidth: 1)
+            )
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("ferry-route-notice")
+        }
+    }
+
+    private func ferryNoticeDetail(_ summary: RouteFerrySummary) -> String {
+        let crossingDistance = summary.distanceMeters / 1000
+        let distanceText = crossingDistance >= 1
+            ? "About \(Int(crossingDistance.rounded())) km by ferry. "
+            : ""
+        return distanceText
+            + "Check departure times, seasonal service, and motorcycle boarding before you ride."
     }
 
     /// Equal-width profile segments. Reads as one control instead of three loose pills.

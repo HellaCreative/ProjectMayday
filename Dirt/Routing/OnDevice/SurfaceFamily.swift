@@ -84,6 +84,33 @@ struct RouteSurfaceComposition: Equatable, Sendable {
     }
 }
 
+/// Ferry travel is route distance but not a road surface. Count continuous
+/// ferry runs for rider-facing notices while preserving the existing surface
+/// denominator exactly.
+struct RouteFerrySummary: Equatable, Sendable {
+    var crossingCount = 0
+    var distanceMeters = 0.0
+
+    var hasCrossing: Bool { crossingCount > 0 }
+
+    static func from(responses: [RouteResponse]) -> RouteFerrySummary {
+        var result = RouteFerrySummary()
+        for response in responses {
+            var isInsideCrossing = false
+            for segment in response.segments ?? [] {
+                let isFerry = segment.structureType?.lowercased() == "ferry"
+                if isFerry {
+                    if !isInsideCrossing { result.crossingCount += 1 }
+                    let meters = segment.distanceMeters ?? GeoMath.lineMeters(segment.coordinates)
+                    if meters.isFinite, meters > 0 { result.distanceMeters += meters }
+                }
+                isInsideCrossing = isFerry
+            }
+        }
+        return result
+    }
+}
+
 nonisolated enum SurfaceFamilyStats {
     /// Canonical fallback when a v2 pack has no `surfaceFamilyMap` in enums.
     static let defaultMap: [String: SurfaceFamily] = [

@@ -72,6 +72,12 @@ struct LayersSheet: View {
                 title: "Unknown access",
                 detail: "Purple halo · motorcycle permission unproven"
             )
+            legendRow(
+                color: DirtTheme.routeFerry,
+                title: "Ferry crossing",
+                detail: "Scheduled transport · verify service before riding",
+                dashed: true
+            )
         } header: {
             Text("Route paint")
         } footer: {
@@ -175,10 +181,11 @@ struct LayersSheet: View {
     private func legendRow(
         color: Color,
         title: String,
-        detail: String
+        detail: String,
+        dashed: Bool = false
     ) -> some View {
         HStack(spacing: DirtSpace.inner) {
-            RoutePaintLegendSwatch(color: color)
+            RoutePaintLegendSwatch(color: color, dashed: dashed)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: DirtSpace.hairGap) {
                 Text(title)
@@ -215,15 +222,26 @@ struct LayersSheet: View {
 
 private struct RoutePaintLegendSwatch: View {
     let color: Color
+    var dashed = false
 
     var body: some View {
         ZStack {
             Capsule()
                 .fill(Color.white.opacity(0.92))
                 .frame(width: 32, height: 10)
-            Capsule()
-                .fill(color)
-                .frame(width: 30, height: 6)
+            if dashed {
+                HStack(spacing: 3) {
+                    ForEach(0..<3, id: \.self) { _ in
+                        Capsule()
+                            .fill(color)
+                            .frame(width: 8, height: 6)
+                    }
+                }
+            } else {
+                Capsule()
+                    .fill(color)
+                    .frame(width: 30, height: 6)
+            }
         }
         .frame(width: 32, height: 10)
     }

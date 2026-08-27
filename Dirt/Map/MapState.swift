@@ -50,6 +50,10 @@ struct RouteDisplaySegment {
     let coordinates: [RouteCoordinate]
     /// Four-family surface key used for selected-route paint.
     let surfaceKey: String
+    /// Ferry is a transport connector, not an unknown road surface.
+    var isFerry = false
+    /// Rider-facing crossing label carried by graph-v3 route segments.
+    var crossingLabel: String? = nil
     /// Access is an independent warning channel and must not replace surface.
     var accessUnknown = false
     /// Planner stage that produced this paint run. Diagnostic in Phase 0 and
@@ -552,6 +556,8 @@ final class MapState {
             let segments = response.segments ?? []
             var currentCoords: [RouteCoordinate] = []
             var currentKey: String?
+            var currentIsFerry = false
+            var currentCrossingLabel: String?
             var currentAccessUnknown = false
             func flush() {
                 if currentCoords.count > 1, let key = currentKey {
@@ -559,6 +565,8 @@ final class MapState {
                         RouteDisplaySegment(
                             coordinates: currentCoords,
                             surfaceKey: key,
+                            isFerry: currentIsFerry,
+                            crossingLabel: currentCrossingLabel,
                             accessUnknown: currentAccessUnknown,
                             stageIndex: stageIndex,
                             riderLegID: riderLegID
@@ -567,6 +575,8 @@ final class MapState {
                 }
                 currentCoords = []
                 currentKey = nil
+                currentIsFerry = false
+                currentCrossingLabel = nil
                 currentAccessUnknown = false
             }
             if segments.isEmpty {
@@ -590,14 +600,23 @@ final class MapState {
                 let key = segment.presentationSurfaceFamily(
                     usesSurfaceLeaves: response.stats?.surfaceFamilyMode == "leaf-v3"
                 ).rawValue
+                let isFerry = segment.structureType?.lowercased() == "ferry"
+                let crossingLabel = isFerry
+                    ? (segment.crossingLabel?.isEmpty == false ? segment.crossingLabel : "Ferry crossing")
+                    : nil
                 let accessUnknown = segment.accessClass?.lowercased() == "motorized_unknown"
-                if currentKey == key, currentAccessUnknown == accessUnknown {
+                if currentKey == key,
+                   currentIsFerry == isFerry,
+                   currentCrossingLabel == crossingLabel,
+                   currentAccessUnknown == accessUnknown {
                     for coordinate in coords where coordinate != currentCoords.last {
                         currentCoords.append(coordinate)
                     }
                 } else {
                     flush()
                     currentKey = key
+                    currentIsFerry = isFerry
+                    currentCrossingLabel = crossingLabel
                     currentAccessUnknown = accessUnknown
                     currentCoords = coords
                 }

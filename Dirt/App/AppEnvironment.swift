@@ -236,6 +236,9 @@ final class AppEnvironment {
         if ProcessInfo.processInfo.environment["DIRT_UI_TEST_ROUTE_PROGRESS"] == "fuel-off" {
             planner.toast = RoutePlannerModel.creatingRouteWithoutFuelToast
         }
+        if ProcessInfo.processInfo.environment["DIRT_UI_TEST_FERRY"] == "1" {
+            planner.installFerryPresentationFixtureForTesting()
+        }
 #endif
     }
 

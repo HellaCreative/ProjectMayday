@@ -39,6 +39,12 @@ struct MapLibreMapView: UIViewRepresentable {
         static let lineID = "\(sourceID)-line"
     }
 
+    private enum RouteFerryPaint {
+        static let sourceID = "dirt-route-ferry"
+        static let casingID = "\(sourceID)-casing"
+        static let lineID = "\(sourceID)-line"
+    }
+
     private enum RoutePaintMetrics {
         static let surfaceWidth: CGFloat = 8
         static let casingWidth: CGFloat = 10
@@ -598,7 +604,7 @@ struct MapLibreMapView: UIViewRepresentable {
         private func addRouteLayers(to style: MLNStyle) {
             guard style.source(withIdentifier: RoutePaintBucket.paved.sourceID) == nil else { return }
 
-            // Draw unknown-access as a wider purple dashed halo beneath the
+            // Draw unknown-access as a wider solid purple halo beneath the
             // surface line. Surface and access remain independently legible.
             let accessSource = MLNShapeSource(
                 identifier: RouteAccessPaint.sourceID,
@@ -613,7 +619,6 @@ struct MapLibreMapView: UIViewRepresentable {
             accessLine.lineColor = NSExpression(forConstantValue: UIColor(DirtTheme.routeAccess))
             accessLine.lineWidth = NSExpression(forConstantValue: RoutePaintMetrics.accessHaloWidth)
             accessLine.lineOpacity = NSExpression(forConstantValue: 0.88)
-            accessLine.lineDashPattern = NSExpression(forConstantValue: [1.4, 0.9] as [NSNumber])
             accessLine.lineCap = NSExpression(forConstantValue: "round")
             accessLine.lineJoin = NSExpression(forConstantValue: "round")
             addRouteLayer(accessLine, to: style)
@@ -637,13 +642,43 @@ struct MapLibreMapView: UIViewRepresentable {
                 line.lineOpacity = NSExpression(forConstantValue: 0.82)
                 line.lineCap = NSExpression(forConstantValue: "round")
                 line.lineJoin = NSExpression(forConstantValue: "round")
-                if bucket == .unknown {
-                    line.lineDashPattern = NSExpression(forConstantValue: [1.2, 0.8] as [NSNumber])
-                }
 
                 addRouteLayer(casing, to: style)
                 addRouteLayer(line, to: style)
             }
+
+            // Ferry is not a fifth surface. It receives a conventional marine
+            // dash treatment and remains outside the Dirt/Paved composition.
+            let ferrySource = MLNShapeSource(
+                identifier: RouteFerryPaint.sourceID,
+                shape: nil,
+                options: nil
+            )
+            style.addSource(ferrySource)
+
+            let ferryCasing = MLNLineStyleLayer(
+                identifier: RouteFerryPaint.casingID,
+                source: ferrySource
+            )
+            ferryCasing.lineColor = NSExpression(forConstantValue: UIColor.white)
+            ferryCasing.lineWidth = NSExpression(forConstantValue: RoutePaintMetrics.casingWidth)
+            ferryCasing.lineOpacity = NSExpression(forConstantValue: 0.72)
+            ferryCasing.lineCap = NSExpression(forConstantValue: "round")
+            ferryCasing.lineJoin = NSExpression(forConstantValue: "round")
+
+            let ferryLine = MLNLineStyleLayer(
+                identifier: RouteFerryPaint.lineID,
+                source: ferrySource
+            )
+            ferryLine.lineColor = NSExpression(forConstantValue: UIColor(DirtTheme.routeFerry))
+            ferryLine.lineWidth = NSExpression(forConstantValue: RoutePaintMetrics.surfaceWidth)
+            ferryLine.lineOpacity = NSExpression(forConstantValue: 0.92)
+            ferryLine.lineDashPattern = NSExpression(forConstantValue: [2.4, 1.1] as [NSNumber])
+            ferryLine.lineCap = NSExpression(forConstantValue: "round")
+            ferryLine.lineJoin = NSExpression(forConstantValue: "round")
+
+            addRouteLayer(ferryCasing, to: style)
+            addRouteLayer(ferryLine, to: style)
         }
 
         // MARK: Sync
@@ -831,9 +866,14 @@ struct MapLibreMapView: UIViewRepresentable {
             guard appliedRouteGeneration != state.routeGeneration else { return }
             appliedRouteGeneration = state.routeGeneration
             for bucket in RoutePaintBucket.allCases {
-                let segments = state.routeSegments.filter { RoutePaintBucket.bucket(for: $0.surfaceKey) == bucket }
+                let segments = state.routeSegments.filter {
+                    !$0.isFerry && RoutePaintBucket.bucket(for: $0.surfaceKey) == bucket
+                }
                 (style.source(withIdentifier: bucket.sourceID) as? MLNShapeSource)?.shape = polylines(for: segments)
             }
+            let ferries = state.routeSegments.filter(\.isFerry)
+            (style.source(withIdentifier: RouteFerryPaint.sourceID) as? MLNShapeSource)?.shape =
+                polylines(for: ferries)
             let unknownAccess = state.routeSegments.filter(\.accessUnknown)
             (style.source(withIdentifier: RouteAccessPaint.sourceID) as? MLNShapeSource)?.shape =
                 polylines(for: unknownAccess)
@@ -1443,7 +1483,11 @@ struct MapLibreMapView: UIViewRepresentable {
             )
             let ids = Set(
                 RoutePaintBucket.allCases.flatMap { [$0.casingID, $0.lineID] }
-                    + [RouteAccessPaint.lineID]
+                    + [
+                        RouteAccessPaint.lineID,
+                        RouteFerryPaint.casingID,
+                        RouteFerryPaint.lineID
+                    ]
             )
             let features = mapView.visibleFeatures(in: box, styleLayerIdentifiers: ids)
             for feature in features {

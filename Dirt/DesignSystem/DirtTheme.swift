@@ -88,6 +88,9 @@ enum DirtTheme {
     static let routeGravel = Color(dirtHex: 0xB56A00)
     static let routeLoose = Color(dirtHex: 0x6E2F16)
     static let routeUnknown = Color(dirtHex: 0x555A63)
+    /// Transport connector rather than a road surface. Kept marine-blue so a
+    /// ferry reads immediately over water without entering the Dirt/Paved mix.
+    static let routeFerry = Color(dirtHex: 0x005A70)
 
     /// Dirt % text + mix bar — matches map dirt (warm brand orange).
     static let dirtMix = orange
@@ -107,6 +110,8 @@ enum DirtTheme {
             return routeUnknown
         case "unknown_access":
             return routeAccess
+        case "ferry":
+            return routeFerry
         default:
             return routeUnknown
         }

@@ -379,6 +379,10 @@ final class RoutePlannerModel {
         RouteSurfaceComposition.from(responses: activeResponses)
     }
 
+    var ferrySummary: RouteFerrySummary {
+        RouteFerrySummary.from(responses: activeResponses)
+    }
+
     private var activeSurfaceFamilyMode: String? {
         guard !activeResponses.isEmpty,
               activeResponses.allSatisfy({ $0.stats?.surfaceFamilyMode == "leaf-v3" })
@@ -2140,6 +2144,71 @@ final class RoutePlannerModel {
         // Set after applying geometry — that path clears the origin for imports.
         savedRouteOrigin = SavedRouteOrigin(id: saved.id, name: saved.name)
     }
+
+#if DEBUG
+    /// Stable, non-persistent route used only by visual/UI tests. It keeps a
+    /// real ferry edge between two ordinary road runs so the shipping map and
+    /// route-card presentation can be reviewed without making a network route.
+    func installFerryPresentationFixtureForTesting() {
+        let west = [
+            RouteCoordinate(longitude: -69.99, latitude: 47.86),
+            RouteCoordinate(longitude: -69.872, latitude: 47.844)
+        ]
+        let ferry = [
+            west[1],
+            RouteCoordinate(longitude: -69.553, latitude: 47.847)
+        ]
+        let east = [
+            ferry[1],
+            RouteCoordinate(longitude: -69.43, latitude: 47.87)
+        ]
+        let segments = [
+            RouteSegment(
+                surfaceClass: "gravel",
+                trackClass: "secondary",
+                accessClass: "motorized_permissive",
+                distanceMeters: GeoMath.lineMeters(west),
+                geometry: west,
+                coords: nil,
+                edgeId: "ui-test-west",
+                surfaceLeaf: "gravel"
+            ),
+            RouteSegment(
+                surfaceClass: "unknown",
+                trackClass: "ferry",
+                accessClass: "motorized_permissive",
+                distanceMeters: GeoMath.lineMeters(ferry),
+                geometry: ferry,
+                coords: nil,
+                edgeId: "ui-test-ferry",
+                structureType: "ferry",
+                crossingLabel: "Ferry crossing"
+            ),
+            RouteSegment(
+                surfaceClass: "paved",
+                trackClass: "secondary",
+                accessClass: "motorized_permissive",
+                distanceMeters: GeoMath.lineMeters(east),
+                geometry: east,
+                coords: nil,
+                edgeId: "ui-test-east",
+                surfaceLeaf: "asphalt"
+            )
+        ]
+        let coordinates = west + Array(ferry.dropFirst()) + Array(east.dropFirst())
+        applyStoredRouteGeometry(
+            name: "Rivière-du-Loup ferry",
+            coordinates: coordinates,
+            distanceMeters: segments.compactMap(\.distanceMeters).reduce(0, +),
+            dirtPercent: 50,
+            pavedPercent: 50,
+            identity: "ui-test:ferry-presentation",
+            imported: false,
+            networkSegments: segments,
+            surfaceFamilyMode: "leaf-v3"
+        )
+    }
+#endif
 
     /// Reads a GPX file from the document picker or share sheet, displays the
     /// track on the map, and saves it to SwiftData.
