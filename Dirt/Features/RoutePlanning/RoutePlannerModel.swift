@@ -1495,12 +1495,10 @@ final class RoutePlannerModel {
             selectFuelTarget(markerID: markerID)
             return
         }
+        // MapLibre re-selects the active annotation after markers are redrawn.
+        // Treat that callback as idempotent; toggling here made replacement
+        // candidates flash briefly and then disappear before a rider could tap.
         if activeFuelDragMarkerID == markerID, !fuelTargetMarkers.isEmpty {
-            fuelTargetMarkers = []
-            activeFuelDragMarkerID = nil
-            mapState.selectPlannerPin(nil)
-            refreshMap()
-            toast = "Fuel stop unchanged"
             return
         }
         guard markerID.hasPrefix("fuel:"),

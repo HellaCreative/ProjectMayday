@@ -480,9 +480,14 @@ struct FuelItineraryTests {
             profileMeters: 152_000,
             firstLegMaxMeters: 153_000,
             usableRangeMeters: 153_000
-        ) == 0)
+        ) == 1)
         #expect(FuelItinerary.fuelStopCountNeeded(
             profileMeters: 100_000,
+            firstLegMaxMeters: 153_000,
+            usableRangeMeters: 153_000
+        ) == 1)
+        #expect(FuelItinerary.fuelStopCountNeeded(
+            profileMeters: 70_000,
             firstLegMaxMeters: 153_000,
             usableRangeMeters: 153_000
         ) == 0)

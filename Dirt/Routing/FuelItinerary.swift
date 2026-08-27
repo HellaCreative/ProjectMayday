@@ -91,8 +91,7 @@ nonisolated enum FuelItinerary {
         return a.discoveryRank < b.discoveryRank
     }
 
-    /// Remaining usable fuel is the hard first-leg ceiling. A reachable rider
-    /// waypoint never receives a manufactured comfort stop.
+    /// Remaining usable fuel is the hard first-leg ceiling.
     static func comfortCapMeters(
         firstLegMaxMeters: Double,
         usableRangeMeters: Double
@@ -120,8 +119,18 @@ nonisolated enum FuelItinerary {
     ) -> Int {
         guard profileMeters.isFinite, profileMeters >= 0, usableRangeMeters > 0 else { return 0 }
         let firstCap = min(firstLegMaxMeters, usableRangeMeters)
-        guard profileMeters > firstCap + 1 else { return 0 }
-        return Int(ceil((profileMeters - firstCap) / usableRangeMeters))
+        if profileMeters > firstCap + 1 {
+            return Int(ceil((profileMeters - firstCap) / usableRangeMeters))
+        }
+        // Once the leg consumes half of the reserve-adjusted range, prefer one
+        // sensible forward pump before an ordinary waypoint. This prevents a
+        // technically reachable remote pin from winning with almost no usable
+        // fuel left. A waypoint already on a packed pump is handled separately.
+        let searchStart = fuelSearchStartMeters(
+            firstLegMaxMeters: firstCap,
+            usableRangeMeters: usableRangeMeters
+        )
+        return profileMeters >= searchStart + 1 ? 1 : 0
     }
 
     /// A numbered rider waypoint is a live refuel only while it sits on a packed

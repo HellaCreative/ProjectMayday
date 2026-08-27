@@ -268,9 +268,10 @@ rider's configured range is not yet a navigable route.
   been consumed. For a 200 km tank with 30% reserve, usable range is 140 km and
   search opens at 70 km. Fuel already consumed before the rider leg advances
   that threshold by the same amount.
-- The 50% threshold opens candidate search; it does not force a stop. If the
-  next rider waypoint is safely reachable within remaining usable range, no
-  automatic fuel waypoint is manufactured.
+- The 50% threshold opens candidate search. Once an active-profile hop reaches
+  that threshold, a sensible forward, route-connected pump is preferred before
+  an ordinary rider waypoint even when the waypoint barely fits inside usable
+  range. A waypoint already on a packed pump remains the fuel anchor.
 - Fuel consumption is currently modelled in routed kilometres, not litres.
 - Only a packed, route-connected station or a rider waypoint derived on a
   station resets the tank.

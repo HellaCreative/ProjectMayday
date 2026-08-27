@@ -49,7 +49,7 @@ const MIN_STOP_SEPARATION_M = 800;
 const MIN_FORWARD_PROGRESS_M = 8_000;
 const MIN_DESTINATION_FUEL_CLEARANCE_M = 5_000;
 /** Bumped when fuel-selection / ranking contracts change. Clients may assert. */
-const FUEL_CHAIN_SERVICE_VERSION = "2026-08-26.forward-minimum-stop-fuel.7";
+const FUEL_CHAIN_SERVICE_VERSION = "2026-08-26.arrival-window-fuel.8";
 /** Search opens after half of reserve-adjusted usable range. Lockstep: FuelItinerary.swift. */
 const FUEL_COMFORT_LO = 0.50;
 const FUEL_COMFORT_HI = 1.0;
@@ -204,8 +204,14 @@ function fuelNeedForProfileRide(profileMeters, firstLegMaxMeters, usableRangeMet
   const usable = Number(usableRangeMeters);
   if (!(meters >= 0) || !(firstCap >= 0) || !(usable > 0)) return null;
   const firstHardCap = comfortCapMeters(firstCap, usable);
-  if (meters <= firstHardCap + 1) return 0;
-  return Math.ceil((meters - firstHardCap) / usable);
+  if (meters > firstHardCap + 1) {
+    return Math.ceil((meters - firstHardCap) / usable);
+  }
+  // A non-fuel destination must not beat every sensible pump merely because
+  // it is barely inside the hard usable-range ceiling. Once search is open,
+  // prefer one forward stop; profile evaluation below catches meandering rides
+  // whose straight-line estimate has not crossed this threshold yet.
+  return meters >= fuelSearchStartMeters(firstHardCap, usable) + 1 ? 1 : 0;
 }
 
 function fuelPlanStatus(planned) {
@@ -1296,7 +1302,7 @@ async function planFuelChainOnRuntime({
       }
     }
     const mustContinueForProfileRide = depth < Math.max(0, Number(minimumFuelStops) || 0);
-    const stopRequiredHere = (depth === 0 && requireFuelStopBeforeEnd) || mustContinueForProfileRide;
+    let stopRequiredHere = (depth === 0 && requireFuelStopBeforeEnd) || mustContinueForProfileRide;
     const destinationLimit = destinationFuelUsedLimitMeters == null
       ? NaN
       : Number(destinationFuelUsedLimitMeters);
@@ -1323,6 +1329,13 @@ async function planFuelChainOnRuntime({
           Number.isFinite(routedMeters) && routedMeters <= cap + 1 &&
           (!Number.isFinite(destinationLimit) || routedMeters <= destinationLimit + 1)
         ) {
+          // The graph minimum may be short while the selected Dirt/Balanced
+          // ride meanders beyond the 50% search threshold. Use the actual
+          // profile-routed hop to decide whether the waypoint may finish the
+          // leg without first taking a sensible forward fuel opportunity.
+          if (routedMeters >= fuelSearchStartMeters(cap, usableRangeMeters) + 1) {
+            stopRequiredHere = true;
+          }
           directPlan = {
             stops: [],
             graphMeters: [routedMeters],
@@ -1330,8 +1343,8 @@ async function planFuelChainOnRuntime({
             complete: true
           };
           if (stopRequiredHere) directPlan = null;
-          // A safely reachable rider waypoint always wins with zero generated
-          // stops unless the request explicitly requires a pump.
+          // A short final hop may finish directly. Once the search window is
+          // open, continue through station evaluation instead.
           if (depth === 0 && !stopRequiredHere) {
             return directPlan;
           }

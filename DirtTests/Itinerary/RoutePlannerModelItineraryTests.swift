@@ -404,6 +404,10 @@ struct RoutePlannerModelItineraryTests {
         #expect(model.canReplaceFuelStop(at: 0))
         model.selectFuelWaypoint(at: 0)
         #expect(mapState.hasFuelReplacementCandidates)
+        // Marker redraw reselects the active F pin. Replacement mode must stay
+        // open rather than treating that callback as a dismissal tap.
+        model.selectFuelWaypoint(at: 0)
+        #expect(mapState.hasFuelReplacementCandidates)
         model.selectFuelTarget(markerID: "fuel-target:alternate")
         await model.waitForCanonicalBuildForTesting()
 
