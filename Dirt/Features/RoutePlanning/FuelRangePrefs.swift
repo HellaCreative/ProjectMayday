@@ -6,15 +6,18 @@ enum FuelRangePrefs {
         let tankMeters: Double
         let usableMeters: Double
         let reservePercent: Double
+        let automaticPlanningEnabled: Bool
 
         init(
             tankMeters: Double,
             usableMeters: Double,
-            reservePercent: Double
+            reservePercent: Double,
+            automaticPlanningEnabled: Bool = true
         ) {
             self.tankMeters = tankMeters
             self.usableMeters = usableMeters
             self.reservePercent = reservePercent
+            self.automaticPlanningEnabled = automaticPlanningEnabled
         }
 
         /// Internal route-only diagnostics retain a zero-range snapshot so the
@@ -23,12 +26,14 @@ enum FuelRangePrefs {
         static let routeOnly = Snapshot(
             tankMeters: 0,
             usableMeters: 0,
-            reservePercent: 0
+            reservePercent: 0,
+            automaticPlanningEnabled: false
         )
     }
     static let key = "dirt.rider.fuelRangeKm"
     static let lastEnabledKey = "dirt.rider.lastEnabledFuelRangeKm"
     static let reservePercentKey = "dirt.rider.fuelReservePercent"
+    static let automaticPlanningKey = "dirt.rider.automaticFuelPlanning"
     /// Sensible dual-sport default when the rider enables the control blank.
     static let suggestedDefaultKm: Double = 200
     static let minimumKm: Double = 40
@@ -57,8 +62,23 @@ enum FuelRangePrefs {
         return Snapshot(
             tankMeters: tankKm * 1_000,
             usableMeters: usableKilometers(for: tankKm, reservePercent: reserve) * 1_000,
-            reservePercent: reserve
+            reservePercent: reserve,
+            automaticPlanningEnabled: automaticPlanningEnabled
         )
+    }
+
+    /// Automatic planning is the safe default. Riders may deliberately turn it
+    /// off and place their own fuel waypoints without losing their saved range.
+    static var automaticPlanningEnabled: Bool {
+        get {
+            guard UserDefaults.standard.object(forKey: automaticPlanningKey) != nil else {
+                return true
+            }
+            return UserDefaults.standard.bool(forKey: automaticPlanningKey)
+        }
+        set {
+            UserDefaults.standard.set(newValue, forKey: automaticPlanningKey)
+        }
     }
 
     /// Range held back for wind, elevation, closures, and station uncertainty.

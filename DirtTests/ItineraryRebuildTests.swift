@@ -195,18 +195,22 @@ struct HopSearchPolicyTests {
         #expect(HopSearchPolicy.fuelMaxTank == 1.0)
         #expect(HopSearchPolicy.fuelWaypointSnapMeters == 150)
         #expect(HopSearchPolicy.fuelMinTank == 0.50)
-        #expect(HopSearchPolicy.fuelPreferTank == 0.50)
+        #expect(HopSearchPolicy.fuelPreferTank == 0.70)
         #expect(HopSearchPolicy.fuelComfortLo == 0.50)
-        #expect(HopSearchPolicy.fuelComfortHi == 1.0)
-        #expect(HopSearchPolicy.tankCommitBand(graphMeters: 280_000, tankMeters: 450_000) == 0)
-        #expect(HopSearchPolicy.tankCommitBand(graphMeters: 200_000, tankMeters: 450_000) == 1)
+        #expect(HopSearchPolicy.fuelComfortHi == 0.70)
+        #expect(HopSearchPolicy.tankCommitBand(graphMeters: 315_000, tankMeters: 450_000) == 0)
+        #expect(HopSearchPolicy.tankCommitBand(graphMeters: 280_000, tankMeters: 450_000) == 1)
+        #expect(HopSearchPolicy.tankCommitBand(graphMeters: 200_000, tankMeters: 450_000) == 2)
         #expect(HopSearchPolicy.tankCommitBand(graphMeters: 449_800, tankMeters: 450_000) == 0)
         #expect(HopSearchPolicy.tankCommitBand(
-            graphMeters: 40_000, tankMeters: 100_000, usableRangeMeters: 140_000
+            graphMeters: 60_000, tankMeters: 100_000, usableRangeMeters: 140_000
         ) == 0)
         #expect(HopSearchPolicy.tankCommitBand(
-            graphMeters: 20_000, tankMeters: 100_000, usableRangeMeters: 140_000
+            graphMeters: 40_000, tankMeters: 100_000, usableRangeMeters: 140_000
         ) == 1)
+        #expect(HopSearchPolicy.tankCommitBand(
+            graphMeters: 20_000, tankMeters: 100_000, usableRangeMeters: 140_000
+        ) == 2)
     }
 
     @Test func corridorWidthsMatchSpec() {
@@ -474,18 +478,66 @@ struct FuelItineraryTests {
         ))
     }
 
+    @Test func automaticFuelChoiceExcludesEarlyPumpWhenSearchWindowPumpIsValid() {
+        let point = RouteCoordinate(longitude: -63, latitude: 45)
+        let earlyFuel = poi("early", point)
+        let windowFuel = poi("window", point)
+        func candidate(_ fuel: POIFeature, meters: Double) -> FuelItinerary.ProfileFuelCandidate {
+            FuelItinerary.ProfileFuelCandidate(
+                fuel: fuel,
+                routedMeters: meters,
+                chainDirtPercent: 50,
+                validForward: true,
+                cleanFallbackCount: 0,
+                cleanMajorRoadMeters: 0,
+                cleanRoutedMeters: meters,
+                chainBacktrackMeters: 0,
+                chainStopCount: 1,
+                progressMeters: meters,
+                directionalDetourMeters: 0,
+                discoveryRank: 0
+            )
+        }
+        let early = candidate(earlyFuel, meters: 32_000)
+        let window = candidate(windowFuel, meters: 140_000)
+
+        let automatic = FuelItinerary.eligibleProfileFuelCandidates(
+            [early, window],
+            firstLegMaxMeters: 247_000,
+            usableRangeMeters: 247_000,
+            requiredFirstStationID: nil
+        )
+        #expect(automatic.map(\.fuel.id) == [windowFuel.id])
+
+        let sparseFallback = FuelItinerary.eligibleProfileFuelCandidates(
+            [early],
+            firstLegMaxMeters: 247_000,
+            usableRangeMeters: 247_000,
+            requiredFirstStationID: nil
+        )
+        #expect(sparseFallback.map(\.fuel.id) == [earlyFuel.id])
+
+        let explicit = FuelItinerary.eligibleProfileFuelCandidates(
+            [early, window],
+            firstLegMaxMeters: 247_000,
+            usableRangeMeters: 247_000,
+            requiredFirstStationID: earlyFuel.id
+        )
+        #expect(explicit.map(\.fuel.id) == [earlyFuel.id])
+    }
+
 
     @Test func safelyReachableLegDoesNotManufactureAComfortFuelStop() {
         #expect(FuelItinerary.fuelStopCountNeeded(
             profileMeters: 152_000,
             firstLegMaxMeters: 153_000,
             usableRangeMeters: 153_000
-        ) == 1)
+        ) == 0)
         #expect(FuelItinerary.fuelStopCountNeeded(
             profileMeters: 100_000,
             firstLegMaxMeters: 153_000,
             usableRangeMeters: 153_000
-        ) == 1)
+        ) == 0)
         #expect(FuelItinerary.fuelStopCountNeeded(
             profileMeters: 70_000,
             firstLegMaxMeters: 153_000,
@@ -507,6 +559,14 @@ struct FuelItineraryTests {
             firstLegMaxMeters: 100_000,
             usableRangeMeters: 140_000
         ) == 30_000)
+        #expect(FuelItinerary.fuelPreferredStartMeters(
+            firstLegMaxMeters: 140_000,
+            usableRangeMeters: 140_000
+        ) == 98_000)
+        #expect(FuelItinerary.fuelPreferredStartMeters(
+            firstLegMaxMeters: 100_000,
+            usableRangeMeters: 140_000
+        ) == 58_000)
     }
 
     @Test func numberedWaypointOnStationIsALiveRefuelUntilDraggedOff() {
@@ -525,6 +585,11 @@ struct FuelItineraryTests {
             waypoints: [origin, off, dest], stations: [pump]
         )
         #expect(offRoute.isEmpty)
+
+        let finalPump = FuelItinerary.deriveWaypointRefuels(
+            waypoints: [origin, on], stations: [pump]
+        )
+        #expect(finalPump.map(\.locationIndex) == [1])
         let ordinary = FuelItinerary.deriveWaypointRefuels(
             waypoints: [origin, dest], stations: [pump]
         )

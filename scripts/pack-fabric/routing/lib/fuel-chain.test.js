@@ -18,15 +18,15 @@ test("an exhausted graph is a gap but a planning timeout is inconclusive", () =>
   assert.equal(fuelPlanStatus({ ok: true }), "complete");
 });
 
-test("a reachable rider leg requires a forward stop after the search window opens", () => {
+test("watching and the preferred zone never manufacture a stop", () => {
   assert.equal(fuelNeedForProfileRide(null, 153_000, 153_000), null);
-  assert.equal(fuelNeedForProfileRide(152_000, 153_000, 153_000), 1);
-  assert.equal(fuelNeedForProfileRide(100_000, 153_000, 153_000), 1);
+  assert.equal(fuelNeedForProfileRide(152_000, 153_000, 153_000), 0);
+  assert.equal(fuelNeedForProfileRide(100_000, 153_000, 153_000), 0);
   assert.equal(fuelNeedForProfileRide(70_000, 153_000, 153_000), 0);
   assert.equal(fuelNeedForProfileRide(154_000, 153_000, 153_000), 1);
 });
 
-test("profile-routed distance opens fuel search even when graph distance looks short", async () => {
+test("a reachable 233 km ride goes direct when destination escape fuel fits", async () => {
   const result = await planFuelChainOnRuntime({
     runtime: lineRuntime(),
     stations: [station("late", 1.5)],
@@ -47,7 +47,54 @@ test("profile-routed distance opens fuel search even when graph distance looks s
     })
   });
   assert.equal(result.ok, true);
+  assert.deepEqual(result.stops.map((row) => row.id), []);
+  assert.equal(result.diagnostics.selectedReason, "direct_destination");
+});
+
+test("a reachable 233 km ride refuels when destination escape fuel does not fit", async () => {
+  const result = await planFuelChainOnRuntime({
+    runtime: lineRuntime(),
+    stations: [station("late", 1.5)],
+    start: { lat: 45, lon: 0 },
+    destination: { lat: 45, lon: 2 },
+    profile: "dirt",
+    accessPolicy: { motorizedPermissive: true, motorizedUnknown: false },
+    usableRangeMeters: 237_500,
+    firstLegMaxMeters: 237_500,
+    destinationFuelUsedLimitMeters: 210_000,
+    profileMeters: 233_400,
+    routeCandidate: ({ candidate }) => Promise.resolve({
+      status: "complete",
+      distanceMeters: candidate.station.id === "__destination__"
+        ? candidate.graphMeters > 100_000 ? 233_400 : candidate.graphMeters
+        : candidate.graphMeters,
+      stats: { dirtPercent: 80 },
+      segments: []
+    })
+  });
+  assert.equal(result.ok, true);
   assert.deepEqual(result.stops.map((row) => row.id), ["late"]);
+  assert.equal(result.diagnostics.destinationEscapeMeters, 27_500);
+});
+
+test("a valid post-threshold pump excludes a 32 km full-tank stop", async () => {
+  const result = await planFuelChainOnRuntime({
+    runtime: lineRuntime(),
+    stations: [station("early-32km", 0.5), station("window", 1), station("late", 1.5)],
+    start: { lat: 45, lon: 0 },
+    destination: { lat: 45, lon: 2 },
+    profile: "dirt",
+    accessPolicy: { motorizedPermissive: true, motorizedUnknown: false },
+    usableRangeMeters: 130_000,
+    firstLegMaxMeters: 130_000,
+    requireFuelStopBeforeEnd: true,
+    minimumFuelStops: 1,
+    routeCandidate: fixtureRouteCandidate
+  });
+  assert.equal(result.ok, true);
+  assert.ok(result.stops.length >= 1);
+  assert.notEqual(result.stops[0].id, "early-32km");
+  assert.ok(result.graphMeters[0] >= 65_000);
 });
 
 test("fuel search begins after half the reserve-adjusted usable range", () => {
@@ -606,7 +653,7 @@ test("profile ride length requires Dirt fuel even when shortest reachability fit
     routeCandidate: fixtureRouteCandidate
   });
   assert.equal(clean.ok, true);
-  assert.deepEqual(clean.stops.map((row) => row.id), ["mid"]);
+  assert.deepEqual(clean.stops.map((row) => row.id), []);
 });
 
 for (const profile of ["dirt", "balanced"]) {

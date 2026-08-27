@@ -28,7 +28,7 @@ final class RoutingDebugLog {
             "app \(version) (\(build))",
             "device \(device.model) · iOS \(device.systemVersion) · memory \(memoryMB)MB",
             "locale \(Locale.current.identifier) · timezone \(TimeZone.current.identifier)",
-            "fuel required=1 range=\(Int(FuelRangePrefs.kilometers))km last=\(Int(FuelRangePrefs.lastEnabledKilometers))km",
+            "fuel automatic=\(FuelRangePrefs.automaticPlanningEnabled ? 1 : 0) range=\(Int(FuelRangePrefs.kilometers))km reserve=\(Int(FuelRangePrefs.reservePercent))% last=\(Int(FuelRangePrefs.lastEnabledKilometers))km",
             "scope app,lifecycle,network,map,routing,fuel,navigation,groups",
             "entries \(entries.count)",
             "---"
@@ -125,6 +125,11 @@ final class RoutingDebugLog {
                 + "matchedFuel=\(d?.matchedFuel.map(String.init) ?? "-") "
                 + "pops=\(d?.dijkstraPops.map(String.init) ?? "-") "
                 + "elapsedMs=\(d?.elapsedMs.map(String.init) ?? "-") "
+                + "watch=\(d?.watchStartMeters.map { String(Int($0)) } ?? "-")m "
+                + "preferred=\(d?.preferredStartMeters.map { String(Int($0)) } ?? "-")m "
+                + "hard=\(d?.hardRangeMeters.map { String(Int($0)) } ?? "-")m "
+                + "escape=\(d?.destinationEscapeMeters.map { String(Int($0)) } ?? "-")m "
+                + "selected=\(d?.selectedReason ?? "-") "
                 + "gapReason=\(d?.gapReason ?? "-") "
                 + "failureReason=\(d?.failureReason ?? response.error ?? "-") "
                 + "msg=\(response.message ?? "-")"

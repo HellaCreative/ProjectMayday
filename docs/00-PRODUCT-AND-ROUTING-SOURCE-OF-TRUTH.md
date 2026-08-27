@@ -254,8 +254,10 @@ conform to them rather than redefining them in a second document.
 
 ## 6. Fuel is part of route creation
 
-Fuel planning is not an optional enhancement. A route that cannot support the
-rider's configured range is not yet a navigable route.
+Automatic fuel planning is the default safety system. The rider may deliberately
+turn it off and place fuel waypoints manually; in that state DIRT adds no fuel
+stops and makes no claim that the route is fuel-safe. Tank range and reserve stay
+saved so automatic planning can be restored without re-entry.
 
 ### Fuel laws
 
@@ -264,14 +266,23 @@ rider's configured range is not yet a navigable route.
 - The planner computes the minimum safe stop count from routed distance and
   reserve-adjusted usable range, then compares complete feasible chains with
   that stop count before considering ride character.
-- Automatic station search opens after 50% of reserve-adjusted usable range has
-  been consumed. For a 200 km tank with 30% reserve, usable range is 140 km and
-  search opens at 70 km. Fuel already consumed before the rider leg advances
-  that threshold by the same amount.
-- The 50% threshold opens candidate search. Once an active-profile hop reaches
-  that threshold, a sensible forward, route-connected pump is preferred before
-  an ordinary rider waypoint even when the waypoint barely fits inside usable
-  range. A waypoint already on a packed pump remains the fuel anchor.
+- At 50% of reserve-adjusted usable range consumed, automatic planning begins
+  watching sensible forward pumps while continuing to build the ride. For a
+  200 km tank with 30% reserve, usable range is 140 km and watching begins at
+  70 km. Fuel already consumed advances the threshold by the same amount.
+- The 50% watch point never manufactures a stop. Seventy percent consumed is the
+  preferred refuelling zone among otherwise equal, sensible choices; it is not a
+  required stop distance or a replacement hard range.
+- If the destination is reachable, DIRT goes directly there with zero generated
+  stops only when the fuel remaining on arrival can also reach the nearest pump
+  by road from that destination. This destination-escape search is 360° because
+  there is no later travel direction. If the rider's destination waypoint sits
+  on a packed pump, arrival resets the tank and no separate escape allowance is
+  required.
+- A valid watched pump excludes earlier automatic pumps. An earlier pump is used
+  only when it is the sole safe continuation through a sparse corridor. A rider-
+  selected pump waypoint remains selectable regardless of its distance from the
+  prior anchor.
 - Fuel consumption is currently modelled in routed kilometres, not litres.
 - Only a packed, route-connected station or a rider waypoint derived on a
   station resets the tank.
@@ -495,9 +506,9 @@ journey expansion before returning southeast to Point 2, despite coherent fuel
 options along the journey. Build 6 repairs this without changing pack bytes:
 
 1. a rider waypoint reachable within remaining usable range wins with zero
-   generated stops;
-2. search opens after 50% of usable range, with reserve and prior consumption
-   applied first;
+   generated stops only when the rider can still reach a pump by road afterward;
+2. watching opens after 50% of usable range and 70% is the preferred refuelling
+   zone, with reserve and prior consumption applied first; neither forces a stop;
 3. complete-chain stop count and forward coherence precede profile quality;
 4. graph-foundation detour checks accommodate obstacles while rejecting gross
    fuel-only expansion; and
@@ -560,7 +571,7 @@ pre-download retired.
 
 - Canonical rider itinerary and generation-guarded builder.
 - Flat Point/F leg presentation rather than parent/subleg hierarchy.
-- Always-on fuel planning and fuel-gap states.
+- Default-on automatic fuel planning, deliberate manual-off mode, and fuel-gap states.
 - Fuel waypoint alternatives and forward station overrides.
 - Clear Route availability repairs.
 - Eligible-edge endpoint resolver and NS/PEI overlap regression coverage.

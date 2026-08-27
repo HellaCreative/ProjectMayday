@@ -86,6 +86,80 @@ struct ItineraryBuilderTests {
         #expect(result.legs[1].fuelUsedOnArrivalMeters == 237_500)
     }
 
+    @Test func automaticFuelPlanningOffBuildsTheRideWithoutFuelRequests() async throws {
+        let points = [point(0), point(1)]
+        let source = FakeRoutingSource(name: "live")
+        source.distances[key(points[0], points[1])] = 300_000
+        source.fuelStops = [fuelStop("unused", at: point(0.5))]
+
+        let result = await ItineraryBuilder().build(
+            makeItinerary(points), from: 0, reuse: nil,
+            fuel: FuelRangePrefs.Snapshot(
+                tankMeters: 150_000,
+                usableMeters: 135_000,
+                reservePercent: 10,
+                automaticPlanningEnabled: false
+            ),
+            source: .fixed(source), onProgress: { _ in }
+        )
+
+        #expect(result.legs.count == 1)
+        #expect(result.legs.first?.endsAtFuelStop == nil)
+        #expect(source.fuelChainRequests.isEmpty)
+    }
+
+    @Test func reachableDestinationGoesDirectWhenTheEscapePumpFitsRemainingFuel() async throws {
+        let points = [point(0), point(1)]
+        let source = FakeRoutingSource(name: "live")
+        source.distances[key(points[0], points[1])] = 233_400
+        source.firstReachableStationMeters[key(points[1], points[1])] = 10_000
+
+        let result = await build(points, source: source, usable: 247_000)
+
+        #expect(result.legs.count == 1)
+        #expect(result.legs.first?.endsAtFuelStop == nil)
+        #expect(result.legs.first?.fuelUsedOnArrivalMeters == 233_400)
+    }
+
+    @Test func reachableDestinationRefuelsWhenTheEscapePumpWouldNotFit() async throws {
+        let points = [point(0), point(1)]
+        let stop = point(0.8)
+        let source = FakeRoutingSource(name: "live")
+        source.distances[key(points[0], points[1])] = 233_400
+        source.distances[key(points[0], stop)] = 200_000
+        source.distances[key(stop, points[1])] = 33_400
+        source.firstReachableStationMeters[key(points[1], points[1])] = 30_000
+        source.fuelStops = [fuelStop("safe-before-destination", at: stop)]
+
+        let result = await build(points, source: source, usable: 247_000)
+
+        #expect(result.legs.compactMap(\.endsAtFuelStop?.stationID)
+            == ["safe-before-destination"])
+        #expect(result.legs.last?.fuelUsedOnArrivalMeters == 33_400)
+        let firstPlan = try #require(source.fuelChainRequests.first {
+            $0.fuel.probeFirstReachableStation != true
+        })
+        #expect(firstPlan.fuel.destinationFuelUsedLimitMeters == 217_000)
+    }
+
+    @Test func finalRiderWaypointOnPumpResetsWithoutDestinationEscapeStop() async throws {
+        let points = [point(0), point(1)]
+        let source = FakeRoutingSource(name: "live")
+        source.distances[key(points[0], points[1])] = 233_400
+        source.waypointFuelStations[key(points[1], points[1])] = fuelStop(
+            "destination-pump", at: points[1]
+        )
+
+        let result = await build(points, source: source, usable: 247_000)
+
+        #expect(result.legs.count == 1)
+        #expect(result.legs.first?.endsAtFuelStop == nil)
+        #expect(result.legs.first?.fuelUsedOnArrivalMeters == 0)
+        #expect(source.fuelChainRequests.allSatisfy {
+            $0.fuel.riderLegId != "destination-escape"
+        })
+    }
+
     @Test func fuelServiceFailureKeepsRouteWithoutFabricatingGap() async throws {
         let points = [point(0), point(1)]
         let source = FakeRoutingSource(name: "live")
@@ -455,7 +529,11 @@ struct ItineraryBuilderTests {
         #expect(rebuilt.legs.compactMap(\.endsAtFuelStop?.stationID) == ["automatic-f1"])
         #expect(rebuilt.riderLegStatus.values.allSatisfy { $0 == .built })
         #expect(rebuilt.legs.last?.fuelUsedOnArrivalMeters == 170_000)
-        #expect(source.fuelChainRequests.filter { $0.fuel.probeFirstReachableStation == true }.isEmpty)
+        let safetyProbes = source.fuelChainRequests.filter {
+            $0.fuel.probeFirstReachableStation == true
+        }
+        #expect(safetyProbes.count == 1)
+        #expect(safetyProbes.first?.fuel.riderLegId == "destination-escape")
     }
 
     @Test func ordinaryWaypointNeverResetsFuel() async throws {
@@ -797,6 +875,8 @@ private final class FakeRoutingSource: RoutingSource {
             RouteCoordinate(longitude: req.locations[1].longitude, latitude: req.locations[1].latitude)
         )
         if req.fuel.probeFirstReachableStation == true {
+            let scripted = firstReachableStationMeters[key(pair.0, pair.1)]
+            let defaultDestinationEscape = pair.0 == pair.1 ? 10_000.0 : nil
             return FuelChainResponse(
                 status: "complete", error: nil, message: nil, regionIds: ["test"],
                 stops: [], graphMeters: nil,
@@ -804,7 +884,7 @@ private final class FakeRoutingSource: RoutingSource {
                     strategy: "fake-probe", states: 1, dijkstraPops: 1,
                     matchedFuel: 0, elapsedMs: 1
                 ),
-                firstReachableStationMeters: firstReachableStationMeters[key(pair.0, pair.1)]
+                firstReachableStationMeters: scripted ?? defaultDestinationEscape
             )
         }
         let selectedStops: [FuelChainStop]

@@ -342,6 +342,11 @@ struct FuelChainDiagnostics: Codable, Sendable {
     var candidatesEvaluated: Int? = nil
     var gapReason: String? = nil
     var failureReason: String? = nil
+    var watchStartMeters: Double? = nil
+    var preferredStartMeters: Double? = nil
+    var hardRangeMeters: Double? = nil
+    var destinationEscapeMeters: Double? = nil
+    var selectedReason: String? = nil
 }
 
 struct FuelStationCandidate: Codable, Sendable {
@@ -353,6 +358,9 @@ struct FuelStationCandidate: Codable, Sendable {
     var longitude: Double? = nil
     var name: String? = nil
     var validForward: Bool? = nil
+    var remainingGraphMeters: Double? = nil
+    var commitBand: Int? = nil
+    var canFinish: Bool? = nil
 }
 
 struct FuelChainResponse: Codable, Sendable {

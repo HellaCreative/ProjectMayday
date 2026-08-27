@@ -82,6 +82,53 @@ final class DirtUITests: XCTestCase {
     }
 
     @MainActor
+    func testFuelPanelOffersReversibleAutomaticPlanningControl() throws {
+        let app = XCUIApplication()
+        app.launch()
+
+        let skipToMap = app.buttons["Skip to map"]
+        if skipToMap.waitForExistence(timeout: 3) {
+            skipToMap.tap()
+        }
+
+        let route = app.buttons["Route"]
+        XCTAssertTrue(route.waitForExistence(timeout: 8))
+        route.tap()
+
+        let fuelRange = app.buttons["Fuel range"]
+        XCTAssertTrue(fuelRange.waitForExistence(timeout: 8))
+        fuelRange.tap()
+
+        let automatic = app.switches["Automatic fuel planning"]
+        XCTAssertTrue(automatic.waitForExistence(timeout: 2))
+
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = "Fuel Panel — Automatic Planning"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+
+        let original = automatic.value as? String ?? String(describing: automatic.value)
+        automatic.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap()
+        let changed = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "value != %@", original),
+            object: automatic
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [changed], timeout: 3), .completed)
+
+        let changedAttachment = XCTAttachment(screenshot: app.screenshot())
+        changedAttachment.name = "Fuel Panel — Automatic Planning Changed"
+        changedAttachment.lifetime = .keepAlways
+        add(changedAttachment)
+
+        automatic.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap()
+        let restored = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "value == %@", original),
+            object: automatic
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [restored], timeout: 3), .completed)
+    }
+
+    @MainActor
     func testLaunchPerformance() throws {
         // This measures how long it takes to launch your application.
         measure(metrics: [XCTApplicationLaunchMetric()]) {

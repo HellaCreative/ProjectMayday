@@ -84,6 +84,7 @@ struct RootView: View {
     @State private var fuelControlsOpen = false
     @State private var mapFuelRangeKm = FuelRangePrefs.kilometers
     @State private var mapFuelReservePercent = FuelRangePrefs.reservePercent
+    @State private var mapAutomaticFuelPlanning = FuelRangePrefs.automaticPlanningEnabled
     @State private var coachStep: CoachStep? = OnboardingPrefs.coachComplete ? nil : .openRoute
     /// Left↔right landscape keeps the same size; this ticket forces chrome to re-read
     /// island-side safe-area insets when the device flips.
@@ -962,6 +963,7 @@ struct RootView: View {
         Button {
             mapFuelRangeKm = FuelRangePrefs.kilometers
             mapFuelReservePercent = FuelRangePrefs.reservePercent
+            mapAutomaticFuelPlanning = FuelRangePrefs.automaticPlanningEnabled
             withAnimation(.easeInOut(duration: 0.18)) {
                 fuelControlsOpen.toggle()
             }
@@ -969,7 +971,9 @@ struct RootView: View {
             VStack(spacing: 1) {
                 Image(systemName: "fuelpump.fill")
                     .font(.system(size: 14, weight: .bold))
-                Text("\(Int(FuelRangePrefs.kilometers))")
+                Text(FuelRangePrefs.automaticPlanningEnabled
+                    ? "\(Int(FuelRangePrefs.kilometers))"
+                    : "OFF")
                     .font(.dirtMono(8, weight: .bold))
                     .monospacedDigit()
             }
@@ -983,7 +987,11 @@ struct RootView: View {
             )
         }
         .accessibilityLabel("Fuel range")
-        .accessibilityValue("\(Int(FuelRangePrefs.kilometers)) kilometers, \(Int(FuelRangePrefs.reservePercent)) percent reserve")
+        .accessibilityValue(
+            FuelRangePrefs.automaticPlanningEnabled
+                ? "Automatic planning on, \(Int(FuelRangePrefs.kilometers)) kilometers, \(Int(FuelRangePrefs.reservePercent)) percent reserve"
+                : "Automatic planning off"
+        )
         .accessibilityHint("Opens fuel range controls")
     }
 
@@ -1009,6 +1017,30 @@ struct RootView: View {
                 .foregroundStyle(DirtTheme.orange)
                 .frame(minHeight: DirtHit.min)
             }
+
+            Toggle(
+                "Automatic fuel planning",
+                isOn: Binding(
+                    get: { mapAutomaticFuelPlanning },
+                    set: { enabled in
+                        mapAutomaticFuelPlanning = enabled
+                        FuelRangePrefs.automaticPlanningEnabled = enabled
+                        RoutingDebugLog.shared.event(
+                            "ui automatic fuel planning=\(enabled ? 1 : 0) recalc=1"
+                        )
+                        app.planner.reapplyFuelAssist(rangeKm: mapFuelRangeKm)
+                    }
+                )
+            )
+            .font(DirtType.rowTitle)
+            .tint(DirtTheme.orange)
+
+            Text(mapAutomaticFuelPlanning
+                ? "Dirt adds only the fuel stops needed to finish safely."
+                : "Off — Dirt will not add fuel stops or check whether this route has enough fuel.")
+                .font(DirtType.helper)
+                .foregroundStyle(mapAutomaticFuelPlanning ? DirtTheme.muted : DirtTheme.danger)
+                .fixedSize(horizontal: false, vertical: true)
 
             Slider(
                 value: $mapFuelRangeKm,

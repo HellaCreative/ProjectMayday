@@ -47,7 +47,7 @@ final class ItineraryBuilder {
     ) async -> BuiltItinerary {
         currentGeneration = itinerary.generation
         let requestedStartIndex = min(max(0, legIndex), itinerary.legs.count)
-        let fuelReplan = fuel.usableMeters > 0
+        let fuelReplan = fuel.automaticPlanningEnabled && fuel.usableMeters > 0
         let resume = fuelReplan ? fuelResume(
             stationID: replanFromStationID,
             riderLegIndex: requestedStartIndex,
@@ -135,7 +135,7 @@ final class ItineraryBuilder {
                 let crossProvince = GraphPackStore.endpointsCrossProvince([
                     from.locationCoordinate, to.locationCoordinate
                 ])
-                let cleanFoundation = fuel.usableMeters > 0 && (
+                let cleanFoundation = fuelReplan && (
                     straightMeters >= 1_000_000
                         || crossProvince
                 )
@@ -158,7 +158,7 @@ final class ItineraryBuilder {
                 // Clean is the fast connectivity foundation only for a true
                 // long-haul or cross-region leg. Requiring several pumps is not
                 // itself permission to replace a sub-1,000 km adventure route.
-                if fuel.usableMeters > 0,
+                if fuelReplan,
                    (straightMeters >= 1_000_000 || crossProvince),
                    discoveryProfile != .cleanest {
                     discoveryProfile = .cleanest
@@ -350,7 +350,7 @@ final class ItineraryBuilder {
                     baselineHistory: baselineHistory[index] ?? EdgeHistory(),
                     allBaseline: baseline,
                     fuelUsedAtStart: fuelUsed,
-                    fuel: fuel,
+                    fuel: fuelReplan ? fuel : .routeOnly,
                     source: selectedSource,
                     history: finalHistory,
                     destinationFuelUsedLimitMeters: lookaheadEnabled && index + 1 < itinerary.legs.count
@@ -623,6 +623,56 @@ final class ItineraryBuilder {
             }
         }
 
+        // A final waypoint is safe only when the fuel remaining on arrival can
+        // reach the nearest pump by road. The search is deliberately 360°: with
+        // no later rider waypoint, "forward" has no useful meaning. A final
+        // waypoint already on a packed pump resets the tank instead.
+        let finalWaypoint = itinerary.waypoints.last
+        let finalWaypointIsFuel = finalWaypoint.map { waypointFuelStops[$0.id] != nil } ?? false
+        var finalEscapeFuelMeters: Double?
+        var finalEscapeVerificationWarning: String?
+        if let finalWaypoint, !finalWaypointIsFuel {
+            onFuelStatus("Checking fuel after destination")
+            do {
+                let escape = try await source.fuelChain(FuelChainRequest(
+                    profile: .cleanest,
+                    from: finalWaypoint.coordinate,
+                    to: finalWaypoint.coordinate,
+                    allowUnknown: false,
+                    usableRangeMeters: fuel.usableMeters,
+                    firstLegMaxMeters: fuel.usableMeters,
+                    requireFuelStopBeforeEnd: false,
+                    minimumFuelStops: 0,
+                    profileMeters: 0,
+                    riderLegId: "destination-escape",
+                    probeFirstReachableStation: true,
+                    windowTimeBudgetMs: 2_500,
+                    forwardFeeler: true
+                ))
+                if escape.isComplete {
+                    // Nil after an exhaustive full-tank probe means the
+                    // destination itself has no safe fuel escape. A zero arrival
+                    // limit forces an honest gap instead of pretending otherwise.
+                    finalEscapeFuelMeters = escape.firstReachableStationMeters
+                        .map { min(fuel.usableMeters, max(0, $0)) }
+                        ?? fuel.usableMeters
+                    RoutingDebugLog.shared.event(
+                        "fuel destination escape meters=\(Int(finalEscapeFuelMeters ?? 0)) "
+                            + "arrivalLimit=\(Int(max(0, fuel.usableMeters - (finalEscapeFuelMeters ?? 0))))"
+                    )
+                } else {
+                    finalEscapeVerificationWarning = escape.message
+                        ?? "Fuel safety after the destination could not be checked."
+                }
+            } catch {
+                finalEscapeVerificationWarning =
+                    "Fuel safety after the destination could not be checked: \(error.localizedDescription)"
+                RoutingDebugLog.shared.event(
+                    "fuel destination escape unavailable msg=\(error.localizedDescription)"
+                )
+            }
+        }
+
         var committed = BuiltItinerary(
             generation: itinerary.generation,
             legs: kept,
@@ -681,6 +731,8 @@ final class ItineraryBuilder {
                 // waypoint resets the tank.
                 onwardFuelMeters = probe?.firstReachableStationMeters
                     ?? straightLineMeters(nextFrom, nextTo)
+            } else if index == itinerary.legs.count - 1, !finalWaypointIsFuel {
+                onwardFuelMeters = finalEscapeFuelMeters
             } else {
                 onwardFuelMeters = nil
             }
@@ -973,7 +1025,14 @@ final class ItineraryBuilder {
                     history.append(response)
                     fuelUsed = arrivalFuel
                     current = target
-                    statuses[riderLeg.id] = selectedStop == nil ? .built : .pending
+                    let completedWithUnknownDestinationFuel = selectedStop == nil
+                        && index == itinerary.legs.count - 1
+                        && finalEscapeVerificationWarning != nil
+                    statuses[riderLeg.id] = selectedStop == nil
+                        ? (completedWithUnknownDestinationFuel
+                            ? .fuelUnknown(finalEscapeVerificationWarning!)
+                            : .built)
+                        : .pending
                     committed = replacing(
                         riderLegID: riderLeg.id,
                         with: builtLegs,
@@ -998,7 +1057,9 @@ final class ItineraryBuilder {
                         forceFuelStop = false
                         continue
                     }
-                    onFuelStatus("Leg complete")
+                    onFuelStatus(completedWithUnknownDestinationFuel
+                        ? "Destination fuel safety not verified"
+                        : "Leg complete")
                     break
                 } catch is CancellationError {
                     return dropped(itinerary, committed: committed, cancelled: true)

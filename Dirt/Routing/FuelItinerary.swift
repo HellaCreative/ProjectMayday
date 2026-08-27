@@ -63,6 +63,15 @@ nonisolated enum FuelItinerary {
         if abs(a.progressMeters - b.progressMeters) > 2_000 {
             return a.progressMeters > b.progressMeters
         }
+        let aBand = HopSearchPolicy.tankCommitBand(
+            graphMeters: a.routedMeters,
+            tankMeters: tankMeters
+        )
+        let bBand = HopSearchPolicy.tankCommitBand(
+            graphMeters: b.routedMeters,
+            tankMeters: tankMeters
+        )
+        if aBand != bBand { return aBand < bBand }
         if abs(a.cleanRoutedMeters - b.cleanRoutedMeters) > 50 {
             return a.cleanRoutedMeters < b.cleanRoutedMeters
         }
@@ -91,6 +100,27 @@ nonisolated enum FuelItinerary {
         return a.discoveryRank < b.discoveryRank
     }
 
+    /// Watching begins at 50% consumed. An early pump remains a sparse-corridor
+    /// fallback, and an explicit rider pump always remains selectable.
+    static func eligibleProfileFuelCandidates(
+        _ candidates: [ProfileFuelCandidate],
+        firstLegMaxMeters: Double,
+        usableRangeMeters: Double,
+        requiredFirstStationID: String?
+    ) -> [ProfileFuelCandidate] {
+        let valid = candidates.filter {
+            $0.validForward
+                && (requiredFirstStationID == nil || $0.fuel.id == requiredFirstStationID)
+        }
+        guard requiredFirstStationID == nil else { return valid }
+        let searchStart = fuelSearchStartMeters(
+            firstLegMaxMeters: firstLegMaxMeters,
+            usableRangeMeters: usableRangeMeters
+        )
+        let watched = valid.filter { $0.routedMeters >= searchStart }
+        return watched.isEmpty ? valid : watched
+    }
+
     /// Remaining usable fuel is the hard first-leg ceiling.
     static func comfortCapMeters(
         firstLegMaxMeters: Double,
@@ -112,6 +142,15 @@ nonisolated enum FuelItinerary {
         return max(0, usableRangeMeters * HopSearchPolicy.fuelComfortLo - used)
     }
 
+    static func fuelPreferredStartMeters(
+        firstLegMaxMeters: Double,
+        usableRangeMeters: Double
+    ) -> Double {
+        guard usableRangeMeters > 0, firstLegMaxMeters >= 0 else { return 0 }
+        let used = max(0, usableRangeMeters - min(firstLegMaxMeters, usableRangeMeters))
+        return max(0, usableRangeMeters * HopSearchPolicy.fuelComfortHi - used)
+    }
+
     static func fuelStopCountNeeded(
         profileMeters: Double,
         firstLegMaxMeters: Double,
@@ -122,15 +161,10 @@ nonisolated enum FuelItinerary {
         if profileMeters > firstCap + 1 {
             return Int(ceil((profileMeters - firstCap) / usableRangeMeters))
         }
-        // Once the leg consumes half of the reserve-adjusted range, prefer one
-        // sensible forward pump before an ordinary waypoint. This prevents a
-        // technically reachable remote pin from winning with almost no usable
-        // fuel left. A waypoint already on a packed pump is handled separately.
-        let searchStart = fuelSearchStartMeters(
-            firstLegMaxMeters: firstCap,
-            usableRangeMeters: usableRangeMeters
-        )
-        return profileMeters >= searchStart + 1 ? 1 : 0
+        // Crossing the watch or preferred zone never manufactures a stop. A
+        // reachable destination wins unless its destination-escape requirement
+        // proves that a prior refuel is necessary.
+        return 0
     }
 
     /// A numbered rider waypoint is a live refuel only while it sits on a packed
@@ -156,15 +190,17 @@ nonisolated enum FuelItinerary {
         return best.map { (station: $0.0, meters: $0.1) }
     }
 
-    /// Intermediate numbered waypoints only (not origin, not destination).
+    /// Numbered rider waypoints after the origin, including a final destination.
+    /// A final waypoint on a packed pump is a deliberate refuel and needs no
+    /// separate destination-escape allowance.
     static func deriveWaypointRefuels(
         waypoints: [RouteCoordinate],
         stations: [POIFeature],
         within meters: Double = HopSearchPolicy.fuelWaypointSnapMeters
     ) -> [(locationIndex: Int, station: POIFeature, meters: Double)] {
-        guard waypoints.count >= 3 else { return [] }
+        guard waypoints.count >= 2 else { return [] }
         var rows: [(locationIndex: Int, station: POIFeature, meters: Double)] = []
-        for index in 1..<(waypoints.count - 1) {
+        for index in 1..<waypoints.count {
             if let hit = nearestFuelStation(to: waypoints[index], stations: stations, within: meters) {
                 rows.append((locationIndex: index, station: hit.station, meters: hit.meters))
             }

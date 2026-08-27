@@ -139,7 +139,7 @@ test("forward progress outranks an early Clean-quality pump", async () => {
 
 test("Clean rejects a full-tank lateral Gulf-class pump in favor of a corridor pump", () => {
   assert.equal(typeof FUEL_CHAIN_SERVICE_VERSION, "string");
-  assert.match(FUEL_CHAIN_SERVICE_VERSION, /arrival-window-fuel/);
+  assert.match(FUEL_CHAIN_SERVICE_VERSION, /destination-escape-fuel/);
   // Halifax-ish → Tatamagouche-ish geometry: Wallace Gulf is nearly a full tank
   // sideways; Truro sits on the corridor with a shorter complete chain.
   const start = { lat: 44.764823, lon: -63.340271 };
@@ -225,13 +225,14 @@ test("Nova Scotia regression demotes the northwest overshoot beyond the rider wa
   assert.ok(!ranked.some((row) => row.station.id === "grotesque-overshoot"));
 });
 
-test("tank commit band begins at half the usable range and has no artificial upper edge", () => {
-  assert.equal(tankCommitBand(225_000, 450_000), 0);
+test("tank commit band watches at half range and prefers the 70 percent zone", () => {
+  assert.equal(tankCommitBand(225_000, 450_000), 1);
   assert.equal(tankCommitBand(360_000, 450_000), 0);
-  assert.equal(tankCommitBand(200_000, 450_000), 1);
+  assert.equal(tankCommitBand(200_000, 450_000), 2);
   assert.equal(tankCommitBand(449_800, 450_000), 0);
-  assert.equal(tankCommitBand(40_000, 100_000, 140_000), 0);
-  assert.equal(tankCommitBand(20_000, 100_000, 140_000), 1);
+  assert.equal(tankCommitBand(40_000, 100_000, 140_000), 1);
+  assert.equal(tankCommitBand(60_000, 100_000, 140_000), 0);
+  assert.equal(tankCommitBand(20_000, 100_000, 140_000), 2);
 });
 
 test("search-open candidates preserve progress and early pumps remain fallback", () => {
@@ -264,7 +265,7 @@ test("search-open candidates preserve progress and early pumps remain fallback",
     [wall, { ...wall, station: { id: "wall-closer" }, location: { lat: 45, lon: 1.8 }, graphMeters: 400_000 }],
     start, destination, 450_000, new Set(), "balanced"
   );
-  assert.equal(desperationOnly[0].station.id, "wall");
+  assert.equal(desperationOnly[0].station.id, "wall-closer");
 });
 
 test("a complete one-stop chain beats a three-stop chain", () => {
@@ -289,7 +290,7 @@ test("a complete one-stop chain beats a three-stop chain", () => {
   assert.ok(compareChainPlans(town, rural, "cleanest", 130_000) < 0);
 });
 
-test("an arc beats a lollipop before stop count is considered", () => {
+test("minimum stop count ranks first after down-and-back stems are rejected", () => {
   const arc = {
     complete: true,
     stops: [{ id: "arc-1" }, { id: "arc-2" }],
@@ -308,5 +309,5 @@ test("an arc beats a lollipop before stop count is considered", () => {
       cleanMajorRoadMeters: 0, backtrackMeters: 32_000
     }
   };
-  assert.ok(compareChainPlans(arc, lollipop, "dirt", 130_000) < 0);
+  assert.ok(compareChainPlans(lollipop, arc, "dirt", 130_000) < 0);
 });

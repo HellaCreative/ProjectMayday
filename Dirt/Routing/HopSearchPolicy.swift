@@ -22,33 +22,38 @@ nonisolated enum HopSearchPolicy {
     static let balancedBuckets: Int = 20
     /// Numbered waypoint on a packed pump. Lockstep: fuel-chain.js WAYPOINT_FUEL_SNAP_METERS.
     static let fuelWaypointSnapMeters: Double = 150
+    /// Begin watching for sensible forward pumps after half of usable fuel is consumed.
     static let fuelComfortLo: Double = 0.50
-    /// Candidate discovery begins after half of the reserve-adjusted usable range.
-    /// There is no artificial upper comfort edge; the usable range is the hard ceiling.
-    static let fuelComfortHi: Double = 1.0
+    /// Prefer a sensible pump after 70% consumption when stop count and route
+    /// coherence are otherwise equal. This is not a mandatory stop distance.
+    static let fuelComfortHi: Double = 0.70
     /// A generated stop must make a useful hop and leave a real final leg.
     /// Lockstep: fuel-chain.js MIN_FORWARD_PROGRESS_M / MIN_DESTINATION_FUEL_CLEARANCE_M.
     static let fuelMinimumForwardMeters: Double = 8_000
     static let fuelDestinationClearanceMeters: Double = 5_000
     /// Too-early below this. Dijkstra reachability still uses fuelMaxTank = 1.0.
     static let fuelMinTank: Double = 0.50
-    /// Search-opening threshold, retained for request-contract compatibility.
-    static let fuelPreferTank: Double = 0.50
+    /// Preferred refuelling zone. Candidate discovery still opens at 50%.
+    static let fuelPreferTank: Double = 0.70
     /// The rider-entered range is already the safety limit; do not silently shave 5%.
     static let fuelMaxTank: Double = 1.0
 
-    /// 0 = search is open (at least 50% consumed), 1 = early fallback.
+    /// 0 = preferred zone (70%+ consumed), 1 = watched zone (50–70%),
+    /// 2 = early sparse-corridor fallback.
     /// Reachability still uses the full reserve-adjusted usable range.
     static func tankCommitBand(
         graphMeters: Double,
         tankMeters: Double,
         usableRangeMeters: Double? = nil
     ) -> Int {
-        guard tankMeters > 0, graphMeters.isFinite else { return 1 }
+        guard tankMeters > 0, graphMeters.isFinite else { return 2 }
         let usable = max(tankMeters, usableRangeMeters ?? tankMeters)
         let alreadyUsed = max(0, usable - min(tankMeters, usable))
-        let searchStart = max(0, usable * fuelComfortLo - alreadyUsed)
-        return graphMeters >= searchStart ? 0 : 1
+        let watchStart = max(0, usable * fuelComfortLo - alreadyUsed)
+        let preferredStart = max(0, usable * fuelComfortHi - alreadyUsed)
+        if graphMeters >= preferredStart { return 0 }
+        if graphMeters >= watchStart { return 1 }
+        return 2
     }
     /// Finish to B only when the destination is inside the configured tank range.
     static let fuelSkipIfWithin: Double = 1.0

@@ -2330,8 +2330,8 @@ final class RoutePlannerModel {
 
     // MARK: - Fuel assist
 
-    /// Re-run fuel-stop insertion for the current route after the rider enables
-    /// or changes tank range (From here / Plan).
+    /// Rebuild the current route after the rider changes automatic planning,
+    /// tank range, or reserve (From here / Plan).
     func reapplyFuelAssist(rangeKm requestedRangeKm: Double? = nil) {
         let rangeKm = requestedRangeKm ?? FuelRangePrefs.kilometers
         guard rangeKm > 0 else { return }
@@ -2341,8 +2341,12 @@ final class RoutePlannerModel {
         FuelRangePrefs.lastEnabledKilometers = rangeKm
         fuelPlanNotice = nil
 
-        RoutingDebugLog.shared.event("fuel reapply start mode=\(mode) legs=\(itinerary.legs.count) range=\(Int(rangeKm))km")
-        toast = "Looking for fuel stops"
+        let automatic = FuelRangePrefs.automaticPlanningEnabled
+        RoutingDebugLog.shared.event(
+            "fuel reapply start mode=\(mode) legs=\(itinerary.legs.count) "
+                + "automatic=\(automatic ? 1 : 0) range=\(Int(rangeKm))km"
+        )
+        toast = automatic ? "Looking for fuel stops" : "Building without automatic fuel stops"
         apply(.rebuild, source: "fuel")
     }
 

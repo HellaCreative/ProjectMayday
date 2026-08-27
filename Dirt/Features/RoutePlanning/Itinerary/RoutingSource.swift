@@ -239,7 +239,7 @@ final class PackRoutingSource: RoutingSource {
         var stationCandidates: [FuelStationCandidate] = []
         let returnedStopLimit = min(12, max(1, req.fuel.windowMaxStops ?? 12))
         let maximumStops = req.fuel.allowPartialWindow == true
-            ? min(4, max(returnedStopLimit, req.fuel.minimumFuelStops + 1))
+            ? min(4, max(returnedStopLimit + 2, req.fuel.minimumFuelStops + 1))
             : returnedStopLimit
         var carriedHistory = Set(req.options?.priorEdgeIds ?? [])
         var carriedArrival = req.options?.arrivalEdgeId
@@ -499,9 +499,12 @@ final class PackRoutingSource: RoutingSource {
                 ))
             }
             let required = stops.isEmpty ? req.fuel.requiredFirstStationId : nil
-            let choices = evaluated.filter {
-                $0.validForward && (required == nil || $0.fuel.id == required)
-            }.sorted {
+            let choices = FuelItinerary.eligibleProfileFuelCandidates(
+                evaluated,
+                firstLegMaxMeters: firstCap,
+                usableRangeMeters: req.fuel.usableRangeMeters,
+                requiredFirstStationID: required
+            ).sorted {
                 FuelItinerary.prefersProfileFuelCandidate(
                     $0, over: $1, profile: req.profile, tankMeters: firstCap
                 )
