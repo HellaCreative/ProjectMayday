@@ -41,14 +41,17 @@ enum MapStyleCatalog {
     }
 
     /// Style URL for MapLibre (bundled JSON with local sprite sheet).
-    static func styleURL(for id: MapStyleID = selectedID) -> URL {
+    static func styleURL(
+        for id: MapStyleID = selectedID,
+        tileSource: ShortbreadTileSource = .publicOSM
+    ) -> URL {
         switch id {
         case .shortbread:
-            return generatedShortbreadStyleURL(rich: false)
+            return generatedShortbreadStyleURL(rich: false, tileSource: tileSource)
                 ?? bundledStyleURL(resource: "shortbread-style")
                 ?? AppConfig.mapStyleURL
         case .shortbreadRich:
-            return generatedShortbreadStyleURL(rich: true)
+            return generatedShortbreadStyleURL(rich: true, tileSource: tileSource)
                 ?? bundledStyleURL(resource: "shortbread-rich-style")
                 ?? bundledStyleURL(resource: "shortbread-style")
                 ?? AppConfig.mapStyleURL
@@ -59,7 +62,10 @@ enum MapStyleCatalog {
     /// structurally identical while Rich gets the saturated outdoor palette the
     /// product promises. This also avoids silently falling back to Standard when
     /// a second, very large style JSON is omitted from the app bundle.
-    private static func generatedShortbreadStyleURL(rich: Bool) -> URL? {
+    private static func generatedShortbreadStyleURL(
+        rich: Bool,
+        tileSource: ShortbreadTileSource
+    ) -> URL? {
         guard let source = Bundle.main.url(forResource: "shortbread-style", withExtension: "json"),
               let data = try? Data(contentsOf: source),
               var root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
@@ -129,6 +135,16 @@ enum MapStyleCatalog {
             layers[index]["paint"] = paint
         }
 
+        if var sources = root["sources"] as? [String: Any] {
+            for key in sources.keys {
+                guard var source = sources[key] as? [String: Any],
+                      source["type"] as? String == "vector"
+                else { continue }
+                source["tiles"] = [tileSource.tileTemplate]
+                sources[key] = source
+            }
+            root["sources"] = sources
+        }
         root["name"] = rich ? "DIRT Rich Shortbread" : "DIRT Standard Shortbread"
         root["layers"] = layers
         if (root["sprite"] as? String) == "DIRT_SPRITE_PLACEHOLDER",
@@ -138,7 +154,9 @@ enum MapStyleCatalog {
         guard let richData = try? JSONSerialization.data(withJSONObject: root) else { return nil }
 
         let destination = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent(rich ? "dirt-shortbread-rich-style.json" : "dirt-shortbread-standard-style.json")
+            .appendingPathComponent(
+                "dirt-shortbread-\(rich ? "rich" : "standard")-\(tileSource.styleCacheKey).json"
+            )
         do {
             try richData.write(to: destination, options: .atomic)
             return destination

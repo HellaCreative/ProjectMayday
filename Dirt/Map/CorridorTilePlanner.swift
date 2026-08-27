@@ -9,9 +9,6 @@ enum CorridorTilePlanner {
 
         var key: String { "\(z)/\(x)/\(y)" }
 
-        var remoteURL: URL {
-            URL(string: "https://vector.openstreetmap.org/shortbread_v1/\(z)/\(x)/\(y).mvt")!
-        }
     }
 
     nonisolated struct Plan: Sendable {

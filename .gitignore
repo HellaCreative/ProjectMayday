@@ -25,3 +25,8 @@ data-raw/
 # Local deploy caches — account ids, not source
 scripts/pack-fabric/.vercel/
 scripts/pack-fabric/.wrangler/
+
+# Shortbread edge service dependencies and generated tile archives
+scripts/shortbread-edge/node_modules/
+scripts/shortbread-edge/.wrangler/
+scripts/shortbread-edge/artifacts/

@@ -43,6 +43,7 @@ final class OfflineTileManager {
     @ObservationIgnored private var backgroundPrefetchTask: Task<Void, Never>?
     @ObservationIgnored private var backgroundPrefetchQueue: [BackgroundPrefetchRequest] = []
     @ObservationIgnored private var queuedBackgroundIdentities = Set<String>()
+    @ObservationIgnored private var tileSources = [ShortbreadTileSource.publicOSM]
 
     private struct TilePreparation: Sendable {
         let plan: CorridorTilePlanner.Plan
@@ -81,7 +82,10 @@ final class OfflineTileManager {
             ?? FileManager.default.temporaryDirectory
         cacheDirectory = base.appendingPathComponent("dirt-nav-basemap-v2", isDirectory: true)
         try? FileManager.default.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
-        proxy = OfflineTileProxy(cacheDirectory: cacheDirectory)
+        proxy = OfflineTileProxy(
+            cacheDirectory: cacheDirectory,
+            tileSources: tileSources
+        )
         // Leftover MapLibre packs from older builds still crash on resume.
         Self.purgeMapLibrePacks()
     }
@@ -95,6 +99,15 @@ final class OfflineTileManager {
 
     var progressPercent: Int {
         Int((progress * 100).rounded())
+    }
+
+    /// Apply the same health-approved origin to live MapLibre, blocking nav
+    /// downloads, and proxy fill-through. Public Shortbread stays second as the
+    /// transport fallback; the z/x/y disk cache remains compatible.
+    func useTileSource(_ source: ShortbreadTileSource) {
+        tileSources = source == .publicOSM ? [.publicOSM] : [source, .publicOSM]
+        proxy.configure(tileSources: tileSources)
+        offlineStyleFileURL = nil
     }
 
     // MARK: - Prep (before navigation)
@@ -174,6 +187,7 @@ final class OfflineTileManager {
         let coordinateSnapshot = coordinates
         let viewportWidth = viewportSize.width
         let viewportHeight = viewportSize.height
+        let sourceSnapshot = tileSources
         let reusablePlan = tilePlanCache.plan(
             for: coordinates,
             viewportWidth: viewportWidth,
@@ -268,7 +282,7 @@ final class OfflineTileManager {
                     nextIndex += 1
                     inFlight += 1
                     group.addTask {
-                        await Self.downloadTile(tile, into: cacheRoot)
+                        await Self.downloadTile(tile, into: cacheRoot, sources: sourceSnapshot)
                     }
                 }
 
@@ -300,7 +314,7 @@ final class OfflineTileManager {
                         nextIndex += 1
                         inFlight += 1
                         group.addTask {
-                            await Self.downloadTile(tile, into: cacheRoot)
+                            await Self.downloadTile(tile, into: cacheRoot, sources: sourceSnapshot)
                         }
                     }
                 }
@@ -355,7 +369,8 @@ final class OfflineTileManager {
     /// Background-safe tile fetch — no MainActor / Observable state.
     nonisolated private static func downloadTile(
         _ tile: CorridorTilePlanner.Tile,
-        into cacheRoot: URL
+        into cacheRoot: URL,
+        sources: [ShortbreadTileSource]
     ) async -> TileDownloadResult {
         let file = cacheRoot
             .appendingPathComponent("\(tile.z)", isDirectory: true)
@@ -367,42 +382,50 @@ final class OfflineTileManager {
            size.intValue > 0 {
             return TileDownloadResult(tile: tile, succeeded: true, retries: 0, statusCategories: ["cache"])
         }
-        let maximumAttempts = 2
+        let primaryMaximumAttempts = 2
         var attemptsMade = 0
         var lastCategory = "transport"
         var categories: [String] = []
-        for attempt in 1...maximumAttempts {
-            attemptsMade = attempt
-            do {
-                let (data, response) = try await tileSession.data(from: tile.remoteURL)
-                let code = (response as? HTTPURLResponse)?.statusCode
-                lastCategory = statusCategory(for: code, hasData: !data.isEmpty)
-                categories.append(lastCategory)
-                if code == 200, !data.isEmpty {
-                    try FileManager.default.createDirectory(
-                        at: file.deletingLastPathComponent(),
-                        withIntermediateDirectories: true
-                    )
-                    try data.write(to: file, options: .atomic)
-                    return TileDownloadResult(
-                        tile: tile,
-                        succeeded: true,
-                        retries: attempt - 1,
-                        statusCategories: categories
-                    )
-                }
-                guard shouldRetry(statusCode: code, urlErrorCode: nil, attempt: attempt) else {
-                    break
-                }
-            } catch {
-                let urlCode = (error as? URLError)?.code
-                lastCategory = urlCode == nil ? "write" : "transport"
-                categories.append(lastCategory)
-                guard shouldRetry(statusCode: nil, urlErrorCode: urlCode, attempt: attempt) else {
-                    break
-                }
+        for (sourceIndex, source) in sources.enumerated() {
+            guard let remoteURL = source.url(for: tile) else {
+                categories.append("\(source.provider.rawValue):invalid-url")
+                continue
             }
-            try? await Task.sleep(for: .milliseconds(300))
+            let maximumAttempts = sourceIndex == 0 ? primaryMaximumAttempts : 1
+            for attempt in 1...maximumAttempts {
+                attemptsMade += 1
+                do {
+                    let (data, response) = try await tileSession.data(from: remoteURL)
+                    let code = (response as? HTTPURLResponse)?.statusCode
+                    lastCategory = "\(source.provider.rawValue):\(statusCategory(for: code, hasData: !data.isEmpty))"
+                    categories.append(lastCategory)
+                    if code == 200, !data.isEmpty {
+                        try FileManager.default.createDirectory(
+                            at: file.deletingLastPathComponent(),
+                            withIntermediateDirectories: true
+                        )
+                        try data.write(to: file, options: .atomic)
+                        return TileDownloadResult(
+                            tile: tile,
+                            succeeded: true,
+                            retries: max(0, attemptsMade - 1),
+                            statusCategories: categories
+                        )
+                    }
+                    guard shouldRetry(statusCode: code, urlErrorCode: nil, attempt: attempt) else {
+                        break
+                    }
+                } catch {
+                    let urlCode = (error as? URLError)?.code
+                    let detail = urlCode == nil ? "write" : "transport"
+                    lastCategory = "\(source.provider.rawValue):\(detail)"
+                    categories.append(lastCategory)
+                    guard shouldRetry(statusCode: nil, urlErrorCode: urlCode, attempt: attempt) else {
+                        break
+                    }
+                }
+                try? await Task.sleep(for: .milliseconds(300))
+            }
         }
         return TileDownloadResult(
             tile: tile,
@@ -467,6 +490,7 @@ final class OfflineTileManager {
         guard backgroundPrefetchTask == nil, !backgroundPrefetchQueue.isEmpty else { return }
         let request = backgroundPrefetchQueue.removeFirst()
         let cacheRoot = cacheDirectory
+        let sourceSnapshot = tileSources
         let reusablePlan = tilePlanCache.plan(
             for: request.coordinates,
             viewportWidth: request.viewportWidth,
@@ -506,7 +530,9 @@ final class OfflineTileManager {
                     let tile = missing[nextIndex]
                     nextIndex += 1
                     inFlight += 1
-                    group.addTask { await Self.downloadTile(tile, into: cacheRoot) }
+                    group.addTask {
+                        await Self.downloadTile(tile, into: cacheRoot, sources: sourceSnapshot)
+                    }
                 }
                 for await result in group {
                     guard !Task.isCancelled else {
@@ -523,7 +549,9 @@ final class OfflineTileManager {
                         let tile = missing[nextIndex]
                         nextIndex += 1
                         inFlight += 1
-                        group.addTask { await Self.downloadTile(tile, into: cacheRoot) }
+                        group.addTask {
+                            await Self.downloadTile(tile, into: cacheRoot, sources: sourceSnapshot)
+                        }
                     }
                 }
             }
@@ -582,7 +610,7 @@ final class OfflineTileManager {
                 try await proxy.start()
             }
             let port = proxy.port
-            let base = MapStyleCatalog.styleURL()
+            let base = MapStyleCatalog.styleURL(tileSource: tileSources[0])
             let styleURL = try await Task.detached(priority: .userInitiated) {
                 try Self.writeProxiedStyle(baseStyleURL: base, proxyPort: port)
             }.value

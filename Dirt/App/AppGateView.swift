@@ -43,6 +43,7 @@ struct AppGateView: View {
         .animation(gateAnimation, value: showsSplash)
         .animation(gateAnimation, value: introDone)
         .task {
+            Task { await app.bootstrapShortbreadTileDelivery() }
             await app.supabase.bootstrap()
             didBootstrap = true
         }

@@ -86,6 +86,73 @@ struct DirtTests {
         #expect(!OfflineTileManager.shouldRetry(statusCode: 503, urlErrorCode: nil, attempt: 2))
     }
 
+    @Test func shortbreadManifestActivatesCompatibleImmutableRelease() throws {
+        let manifestURL = try #require(URL(
+            string: "https://tiles.example.test/shortbread/v1/manifest.json"
+        ))
+        let manifest = testShortbreadManifest()
+        let source = try manifest.validatedSource(manifestURL: manifestURL)
+
+        #expect(source.provider == .dirtR2)
+        #expect(source.releaseID == "maritimes-20260607")
+        #expect(source.cacheNamespace == ShortbreadTileSource.publicOSM.cacheNamespace)
+        #expect(source.url(z: 10, x: 331, y: 369)?.absoluteString ==
+            "https://tiles.example.test/shortbread/v1/releases/maritimes-20260607/tiles/10/331/369.mvt")
+    }
+
+    @Test func shortbreadManifestRejectsSchemaOrOriginDrift() throws {
+        let manifestURL = try #require(URL(
+            string: "https://tiles.example.test/shortbread/v1/manifest.json"
+        ))
+        #expect(throws: ShortbreadTileSourceError.self) {
+            try testShortbreadManifest(schema: "2.0")
+                .validatedSource(manifestURL: manifestURL)
+        }
+        #expect(throws: ShortbreadTileSourceError.self) {
+            try testShortbreadManifest(sampleHost: "other.example.test")
+                .validatedSource(manifestURL: manifestURL)
+        }
+    }
+
+    @Test func shortbreadStyleRewritesEveryVectorSourceToApprovedOrigin() throws {
+        let source = try testShortbreadManifest().validatedSource(
+            manifestURL: #require(URL(
+                string: "https://tiles.example.test/shortbread/v1/manifest.json"
+            ))
+        )
+        let styleURL = MapStyleCatalog.styleURL(for: .shortbreadRich, tileSource: source)
+        let data = try Data(contentsOf: styleURL)
+        let root = try #require(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let sources = try #require(root["sources"] as? [String: Any])
+        let vectorSources = sources.values.compactMap { $0 as? [String: Any] }
+            .filter { $0["type"] as? String == "vector" }
+        #expect(!vectorSources.isEmpty)
+        #expect(vectorSources.allSatisfy {
+            ($0["tiles"] as? [String]) == [source.tileTemplate]
+        })
+    }
+
+    private func testShortbreadManifest(
+        schema: String = "1.0",
+        sampleHost: String = "tiles.example.test"
+    ) -> ShortbreadTileManifest {
+        ShortbreadTileManifest(
+            contract: "dirt.shortbread-manifest.v1",
+            releaseID: "maritimes-20260607",
+            shortbreadSchema: schema,
+            sourceUpdatedAt: "2026-06-07T00:00:00Z",
+            cacheNamespace: "shortbread-v1",
+            minZoom: 0,
+            maxZoom: 14,
+            bounds: [-69, 43, -59, 49],
+            tileTemplate: "https://tiles.example.test/shortbread/v1/releases/maritimes-20260607/tiles/{z}/{x}/{y}.mvt",
+            sampleTile: URL(
+                string: "https://\(sampleHost)/shortbread/v1/releases/maritimes-20260607/tiles/10/331/369.mvt"
+            )!,
+            attribution: "© OpenStreetMap contributors · Shortbread vector tile schema"
+        )
+    }
+
     @Test func routingServiceContractRejectsMissingOrStaleDeployments() throws {
         #expect(throws: RoutingError.self) {
             try RoutingClient.validateServiceContract(nil, endpoint: "route")

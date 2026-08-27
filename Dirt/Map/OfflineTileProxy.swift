@@ -13,9 +13,15 @@ final class OfflineTileProxy: @unchecked Sendable {
     private var listener: NWListener?
     private let queue = DispatchQueue(label: "dirt.offline.tile-proxy")
     private let portLock = OSAllocatedUnfairLock(initialState: UInt16(0))
+    private let sourceLock: OSAllocatedUnfairLock<[ShortbreadTileSource]>
 
-    init(cacheDirectory: URL) {
+    init(cacheDirectory: URL, tileSources: [ShortbreadTileSource]) {
         self.cacheDirectory = cacheDirectory
+        sourceLock = OSAllocatedUnfairLock(initialState: tileSources)
+    }
+
+    func configure(tileSources: [ShortbreadTileSource]) {
+        sourceLock.withLock { $0 = tileSources }
     }
 
     var port: UInt16 {
@@ -131,11 +137,24 @@ final class OfflineTileProxy: @unchecked Sendable {
             send(status: 200, body: data, on: connection, contentType: "application/vnd.mapbox-vector-tile")
             return
         }
-        URLSession.shared.dataTask(with: tile.remoteURL) { [weak self] data, response, _ in
+        fetch(tile, from: sourceLock.withLock { $0 }, sourceIndex: 0, on: connection)
+    }
+
+    private func fetch(
+        _ tile: CorridorTilePlanner.Tile,
+        from sources: [ShortbreadTileSource],
+        sourceIndex: Int,
+        on connection: NWConnection
+    ) {
+        guard sourceIndex < sources.count, let remoteURL = sources[sourceIndex].url(for: tile) else {
+            send(status: 404, body: Data(), on: connection)
+            return
+        }
+        URLSession.shared.dataTask(with: remoteURL) { [weak self] data, response, _ in
             guard let self else { return }
             let code = (response as? HTTPURLResponse)?.statusCode ?? 500
             guard let data, !data.isEmpty, code == 200 else {
-                self.send(status: 404, body: Data(), on: connection)
+                self.fetch(tile, from: sources, sourceIndex: sourceIndex + 1, on: connection)
                 return
             }
             try? self.store(data, for: tile)

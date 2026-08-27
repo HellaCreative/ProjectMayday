@@ -11,23 +11,43 @@ MapLibre Native integration, route paint, markers, location, and offline tile se
 | `Dirt/Map/MapLibreMapView.swift` | `UIViewRepresentable` + style layers + gestures |
 | `Dirt/Map/MapState.swift` | Observable map model (route, markers, camera, style, overlays) |
 | `Dirt/Map/MapStyleCatalog.swift` | Basemap IDs, style URL writer |
+| `Dirt/Map/ShortbreadTileSource.swift` | Dirt manifest validation, health gate, fallback, rollback |
 | `Dirt/Map/OfflineTileManager.swift` | Offline pack prefetch (active basemap) |
 | `Dirt/Map/POIManager.swift` | Rider Services POIs from OSM Overpass → MapState |
 | `Dirt/Map/NetworkOverlayManager.swift` | Paints nearby edges from the installed graph pack |
 | `Dirt/Map/GeoJSON+Utils.swift` | `Data.gunzipped()` gzip decompression; `LayerPrefsSnapshot` |
 | `Dirt/Networking/AppConfig.swift` | Shortbread URL + idle camera |
 | `Dirt/Features/Layers/LayersSheet.swift` | Basemap picker + all overlay toggles |
+| `scripts/shortbread-edge/` | Reproducible PMTiles build, R2 Worker, deploy and verification |
 
 ---
 
 ## MapLibre integration
 
-- Default style: OSM **Shortbread** (bundled `shortbread-style.json`).
+- Default style schema: OSM **Shortbread** (bundled `shortbread-style.json`).
 - **Swappable basemaps** (`MapStyleCatalog` + Layers → Basemap):
   | ID | Source | Notes |
   | --- | --- | --- |
   | `shortbread` | Bundled Shortbread JSON | Standard · high-contrast OSM vector |
-  | `shortbreadRich` | Intended richer JSON | Default in UI; **`shortbread-rich-style.json` is not in the repo** — falls back to Standard |
+  | `shortbreadRich` | Runtime derivative of bundled JSON | Default · richer outdoor palette and road colours |
+- **Tile delivery:** the app starts safely on public OSM Shortbread, then validates
+  Dirt's manifest and an R2-backed sample tile. Only a compatible, healthy,
+  same-origin release replaces the tile URL in every vector source.
+- **Current Dirt release:** `maritimes-20260607`, Shortbread 1.0, source data
+  `2026-06-07`, bounds `-69,43,-59,49`, native zoom 0–14.
+- **Immutable R2 object:**
+  `dirt-packs/shortbread/v1/releases/maritimes-20260607/maritimes.pmtiles`
+  (238,802,510 bytes; SHA-256
+  `2dd47ad2a6091a6800fd49d20cc90c913056fd0c36648b1d315165a60c4756f6`).
+- **Edge service:** `dirt-shortbread-tiles` serves manifest, health, and
+  release-versioned MVT URLs. Tiles outside the first regional archive pass
+  through the public Shortbread fallback instead of leaving a blank map.
+- **Rollback:** an unhealthy manifest/sample stays on public OSM automatically;
+  `dirt.shortbread.forcePublicFallback = true` is the app-wide emergency switch.
+- **Custom domain:** `tiles.dirtmoto.app` is reserved as the durable endpoint.
+  `dirtmoto.app` DNS is currently at SiteGround; no DNS change has been made.
+  Attach that hostname deliberately, verify TLS/headers, then change only the
+  manifest URL in `AppConfig`.
 - No Mapbox token. Retired Esri satellite maps to Rich.
 - **Routing is unchanged:** OSM dual-sport graph via on-device / live packs. Basemap swap is visual only.
 - Idle camera: continental US overview `(39.5, -98.0)` zoom `3.5` — do not flash Nova Scotia at launch.
@@ -97,11 +117,12 @@ Session rules in `OfflineTileManager`:
 
 | # | Rule | iOS behaviour |
 | --- | --- | --- |
-| 1 | Prefetch **only on Start Navigation** | `RoutePlannerModel.startNavigation` → `offline.startPrefetch` |
-| 2 | Same route identity → keep / top up | `keepExisting` when identity == `lastNavigationIdentity` |
+| 1 | Network prefetch **only on Start Navigation** | Route review may prime geometry only; Start triggers tile requests |
+| 2 | Reuse / top up by z/x/y | Existing compatible tiles survive route and provider changes |
 | 3 | Mid-trip recalculate → keep tiles | `recalculateFromRider` passes `keepExisting: true` |
-| 4 | Clear only when Start Nav on a **different** identity | Removes packs whose context ≠ new identity when `!keepExisting` |
-| — | End nav alone must **not** wipe cache | `endNavigation` does not call pack removal |
+| 4 | Block only on the first rider/fuel stage | Later stages do not delay navigation start |
+| 5 | Prepare exactly one stage ahead | Serialized background work at concurrency 3 |
+| — | Route changes and End Nav must **not** wipe cache | Disk cache is geography-addressed, not route-addressed |
 
 Navigation becomes active immediately. MapLibre offline packs are **fully disabled** and any leftover packs are purged on launch. MapLibre Native aborts with `std::regex_error` on the `DatabaseFileSource` thread when offline packs enumerate glyph URLs containing `{fontstack}/{range}` (known upstream). Start Navigation no longer creates or resumes packs. Sprites are the bundled Shortbread sheet (local file URL).
 
@@ -110,11 +131,15 @@ Navigation becomes active immediately. MapLibre offline packs are **fully disabl
 | | iOS |
 | --- | --- |
 | Trigger | Start Nav |
-| Geometry | Bounding-box tile pyramid z8–14 + 0.02° pad |
-| Cap | 45s wall-clock skip |
-| Style | `AppConfig.activeMapStyleURL` |
+| Geometry | Route-intersected Shortbread pyramid through native z14, with a small readability halo |
+| Cap | 1,200 tiles per stage plan; required ride tiles distinguished from optional halo tiles |
+| Blocking concurrency | 6 (parallel testing remains unrelated and disabled) |
+| Fill order | Health-approved Dirt origin, then public OSM transport fallback |
+| Style | Same active origin for live MapLibre, downloads, and localhost proxy fill-through |
 
-Documented limit in README and code: **not a true route corridor** — best-effort bbox covering the polyline extents.
+The provider switch deliberately keeps the existing `dirt-nav-basemap-v2`
+cache because both origins are compatible Shortbread v1 tiles. A future schema
+major must use a new cache namespace instead of reinterpreting old bytes.
 
 ---
 

@@ -131,7 +131,16 @@ final class MapState {
     private(set) var routeBuildCameraSequence: RouteBuildCameraSequence?
     /// Bumps when the basemap style URL changes so MapLibre reloads.
     private(set) var styleGeneration = 0
-    private(set) var styleURL: URL = MapStyleCatalog.styleURL()
+    private(set) var tileSource = ShortbreadTileSource.publicOSM
+    private(set) var styleURL: URL = MapStyleCatalog.styleURL(tileSource: .publicOSM)
+
+    func useTileSource(_ source: ShortbreadTileSource, reloadStyle: Bool = true) {
+        guard source != tileSource else { return }
+        tileSource = source
+        if reloadStyle {
+            applyBasemapStyleURL(MapStyleCatalog.styleURL(tileSource: source))
+        }
+    }
 
     func applyBasemapStyleURL(_ url: URL) {
         guard url != styleURL else { return }
@@ -140,11 +149,11 @@ final class MapState {
     }
 
     func restoreCatalogBasemapStyle() {
-        applyBasemapStyleURL(MapStyleCatalog.styleURL())
+        applyBasemapStyleURL(MapStyleCatalog.styleURL(tileSource: tileSource))
     }
 
     func applySelectedMapStyle() {
-        applyBasemapStyleURL(MapStyleCatalog.styleURL())
+        applyBasemapStyleURL(MapStyleCatalog.styleURL(tileSource: tileSource))
     }
 
     // MARK: - Map viewport (set by Coordinator on regionDidChange)

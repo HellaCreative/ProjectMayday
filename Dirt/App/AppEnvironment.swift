@@ -10,6 +10,7 @@ final class AppEnvironment {
     let supabase = SupabaseService()
     let mapState = MapState()
     let offline = OfflineTileManager()
+    let shortbreadTiles = ShortbreadTileSourceManager()
     let graphPacks = GraphPackStore()
     let network = NetworkPathMonitor()
     let routing = RoutingClient()
@@ -68,6 +69,14 @@ final class AppEnvironment {
         } else {
             trial.isSubscribed = false
         }
+    }
+
+    /// Resolve Dirt's tile release once per launch. The map starts on public
+    /// Shortbread, so manifest or edge failures never block launch or routing.
+    func bootstrapShortbreadTileDelivery() async {
+        let source = await shortbreadTiles.resolve()
+        offline.useTileSource(source)
+        mapState.useTileSource(source, reloadStyle: !offline.isEngaged)
     }
 
     init() {

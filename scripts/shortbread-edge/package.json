@@ -1,0 +1,19 @@
+{
+  "name": "dirt-shortbread-edge",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "tsc --noEmit",
+    "deploy": "wrangler deploy",
+    "deploy:dry": "wrangler deploy --dry-run",
+    "verify": "node verify-release.mjs"
+  },
+  "dependencies": {
+    "pmtiles": "4.5.0"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "5.20260827.1",
+    "typescript": "^5.9.2",
+    "wrangler": "4.126.0"
+  }
+}

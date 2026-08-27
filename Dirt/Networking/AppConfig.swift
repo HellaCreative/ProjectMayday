@@ -4,8 +4,8 @@ import Foundation
 /// DIRT iOS endpoints.
 /// Road fabric: Cloudflare R2 `dirt-packs` (`graph.v2.bin`) for PACKS download
 /// and on-device navigation recovery. Live `/api/route` is always the planning
-/// source of truth while online, regardless of installed packs. Map tiles are
-/// OSM Shortbread. Accounts are Supabase.
+/// source of truth while online, regardless of installed packs. Map tiles use
+/// the Shortbread schema through Dirt's health-gated edge service. Accounts are Supabase.
 enum AppConfig {
     /// Must match the deployed route and fuel-chain service. A missing or stale
     /// value is rejected so device evidence cannot silently mix releases.
@@ -18,6 +18,12 @@ enum AppConfig {
     /// One bounded graph pass per committed fuel waypoint. This returns an
     /// ordered pump chain; final ride legs still come from `/api/route`.
     static let liveFuelChainURL = URL(string: "https://dirt-mayday.vercel.app/api/fuel-chain")!
+
+    /// Candidate manifest for Dirt-hosted Shortbread tiles. The app keeps the
+    /// public OSM Shortbread origin until this manifest and its R2 sample pass.
+    nonisolated static let shortbreadManifestURL = URL(
+        string: "https://dirt-shortbread-tiles.dirt-shortbread-edge.workers.dev/shortbread/v1/manifest.json"
+    )!
 
     /// Public Supabase project (anon key is meant for clients).
     static let supabaseURL = URL(string: "https://iiiguqknqxoumlmppzfw.supabase.co")!

@@ -1,0 +1,25 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "dirt-shortbread-tiles",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-27",
+  "workers_dev": true,
+  "observability": {
+    "enabled": true
+  },
+  "r2_buckets": [
+    {
+      "binding": "SHORTBREAD",
+      "bucket_name": "dirt-packs"
+    }
+  ],
+  "vars": {
+    "RELEASE_ID": "maritimes-20260607",
+    "ARCHIVE_KEY": "shortbread/v1/releases/maritimes-20260607/maritimes.pmtiles",
+    "SHORTBREAD_SCHEMA": "1.0",
+    "SOURCE_UPDATED_AT": "2026-06-07T00:00:00Z",
+    "COVERAGE_BOUNDS": "-69,43,-59,49",
+    "SAMPLE_TILE": "10/331/369",
+    "PUBLIC_FALLBACK_ORIGIN": "https://vector.openstreetmap.org/shortbread_v1"
+  }
+}
