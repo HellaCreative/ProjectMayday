@@ -12,14 +12,20 @@ const REPO_ROOT = path.resolve(BENCH_DIR, "../../..");
 const FIXTURE_PATH = path.join(BENCH_DIR, "ns-routes.json");
 const RESULTS_DIR = path.join(BENCH_DIR, "results");
 const LATEST_PATH = path.join(RESULTS_DIR, "latest.md");
-const NS_RELEASE_PATH = path.join(
-  REPO_ROOT,
-  "scripts/pack-fabric/routing/data/releases/ns-osm-20260821-02.json"
-);
+const NS_RELEASE_PATH = process.env.NS_BENCH_RELEASE_PATH
+  ? path.resolve(REPO_ROOT, process.env.NS_BENCH_RELEASE_PATH)
+  : path.join(
+      REPO_ROOT,
+      "scripts/pack-fabric/routing/data/releases/ns-osm-20260821-02.json"
+    );
 let NS_FUEL = null;
 let NS_FUEL_IDENTITY = null;
 const { materializeVerifiedRelease } = require("./release-pack");
 const NS_RELEASE = JSON.parse(fs.readFileSync(NS_RELEASE_PATH, "utf8"));
+const NS_RELEASE_REGION = (NS_RELEASE.regions || []).find((region) => region.id === "ns");
+const NS_GRAPH_FILE = ["graph.v3.bin", "graph.v2.bin"].find((name) =>
+  (NS_RELEASE_REGION && NS_RELEASE_REGION.files || []).some((file) => file.name === name)
+);
 
 async function loadBenchFuel() {
   if (!NS_FUEL) throw new Error("Verified NS fuel sidecar was not prepared");
@@ -53,13 +59,14 @@ function configureLiveNovaScotiaSource() {
 }
 
 async function prepareImmutableNovaScotiaRelease() {
+  if (!NS_GRAPH_FILE) throw new Error(`NS benchmark release ${NS_RELEASE.releaseId} has no graph`);
   const verified = await materializeVerifiedRelease({
     release: NS_RELEASE,
     regionId: "ns",
-    fileNames: ["graph.v2.bin", "geometry.v1.bin", "fuel.v1.json"]
+    fileNames: [NS_GRAPH_FILE, "geometry.v1.bin", "fuel.v1.json"]
   });
   process.env.ROUTING_VERIFIED_GRAPH_PATH_OVERRIDES = JSON.stringify({
-    ns: verified.files["graph.v2.bin"].path
+    ns: verified.files[NS_GRAPH_FILE].path
   });
   NS_FUEL = JSON.parse(fs.readFileSync(verified.files["fuel.v1.json"].path, "utf8"));
   NS_FUEL_IDENTITY = {
@@ -738,7 +745,8 @@ async function main() {
       graphBase: graphCdnBaseUrlForRegion("ns"),
       releaseRecord: path.relative(REPO_ROOT, NS_RELEASE_PATH),
       releaseId: verifiedRelease.releaseId,
-      graphSha256: verifiedRelease.files["graph.v2.bin"].sha256,
+      graphFile: NS_GRAPH_FILE,
+      graphSha256: verifiedRelease.files[NS_GRAPH_FILE].sha256,
       geometrySha256: verifiedRelease.files["geometry.v1.bin"].sha256,
       fuelSha256: verifiedRelease.files["fuel.v1.json"].sha256
     },

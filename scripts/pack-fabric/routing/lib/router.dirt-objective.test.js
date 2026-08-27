@@ -15,7 +15,10 @@ function request(profile, leg) {
   return {
     locations: leg.map(([lat, lon]) => ({ lat, lon })),
     profile,
-    accessPolicy: { motorizedPermissive: true, motorizedUnknown: false }
+    // These are profile-objective tests, not access-policy tests. Allow unknown
+    // so legacy CanVec reclassification cannot masquerade as a Dirt-quality
+    // regression; adapter and pack lockstep tests own the access boundary.
+    accessPolicy: { motorizedPermissive: true, motorizedUnknown: true }
   };
 }
 

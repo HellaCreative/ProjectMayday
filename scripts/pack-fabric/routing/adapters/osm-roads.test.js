@@ -66,6 +66,51 @@ test("known through-access restrictions do not become permissive green edges", (
   }
 });
 
+test("legacy CanVec track and service imports require explicit access evidence", () => {
+  for (const [highway, source] of [
+    ["track", "CanVec 6.0 - NRCan"],
+    ["service", "NRCan-CanVec-7.0"],
+    ["service", "survey;CanVec 10"]
+  ]) {
+    const result = classify({ highway, source, surface: "unpaved" });
+    assert.equal(result.ok, true, `${highway}/${source}`);
+    assert.equal(result.accessClass, "motorized_unknown", `${highway}/${source}`);
+    assert.equal(result.confidence, "low", `${highway}/${source}`);
+  }
+
+  assert.equal(
+    classify({ highway: "track", "source:geometry": "CanVec", surface: "unpaved" }).accessClass,
+    "motorized_unknown"
+  );
+});
+
+test("explicit access evidence and non-CanVec OSM roads keep their existing access", () => {
+  assert.equal(
+    classify({ highway: "track", source: "CanVec 6.0 - NRCan", motorcycle: "yes" }).accessClass,
+    "motorized_permissive"
+  );
+  assert.equal(
+    classify({ highway: "service", source: "NRCan-CanVec-7.0", access: "yes" }).accessClass,
+    "motorized_permissive"
+  );
+  assert.equal(
+    classify({ highway: "track", source: "NRCan-CanVec-7.0", atv: "yes", motorcycle: "no" }).accessClass,
+    "motorized_permissive"
+  );
+  assert.equal(
+    classify({ highway: "track", source: "local survey" }).accessClass,
+    "motorized_permissive"
+  );
+  assert.equal(
+    classify({ highway: "service", source: "Toporama WMS NRCan" }).accessClass,
+    "motorized_permissive"
+  );
+  assert.equal(
+    classify({ highway: "unclassified", source: "CanVec 6.0 - NRCan" }).accessClass,
+    "motorized_permissive"
+  );
+});
+
 test("adventure membership: cycleway dropped; all path kept", () => {
   assert.equal(INCLUDE_HIGHWAY.has("cycleway"), false);
   assert.equal(INCLUDE_HIGHWAY.has("path"), true);

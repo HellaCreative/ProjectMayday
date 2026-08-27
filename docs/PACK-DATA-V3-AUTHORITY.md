@@ -324,6 +324,13 @@ couple it to Phases A–F.
 
 ## 3. Guardrails
 - NS only until proven. Keep prior NS bytes for rollback. Both engines byte-identical.
+- Legacy CanVec `track` and `service` ways without explicit motor-access evidence
+  encode as `motorized_unknown`; the source tag is provenance, never permission.
+- Access-only repairs to a frozen pack must begin with checksum-verified live
+  bytes and preserve topology and geometry. Use the independently classified
+  build only as an edge-ID oracle, then patch only access/confidence fields via
+  `reclassify-legacy-canvec-v3.js`; publish candidate, benchmark those remote
+  bytes, and promote the identical release.
 - No lossy bucketing at build time — leaves preserved, families derived at read time
   from a shipped table.
 - Don't boil the ocean beyond §1: surface leaf + road-class leaf + tracktype +

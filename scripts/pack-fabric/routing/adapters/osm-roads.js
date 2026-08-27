@@ -5,9 +5,10 @@
  * OSM road fabric — motorized + dual-sport ways from Geofabrik extracts.
  *
  * Product role: the driveable basemap network (paved/gravel/dirt/service) plus
- * adventure ways (track + path). Always motorized_permissive for
- * standard roads; positive atv marks adventure trails as permissive (overrides
- * vehicle-type deny; never overrides access=private|no).
+ * adventure ways (track + path). Standard roads use explicit OSM access where
+ * present; legacy CanVec track/service imports without it are unknown. Positive
+ * atv marks adventure trails as permissive (overrides vehicle-type deny; never
+ * overrides access=private|no).
  * Untagged path is motorized_unknown and search-gated by Allow unknown.
  * Conflation: after NRN (NRN keeps identity on overlaps), before provincial
  * capillary that fills *between* OSM roads. Not a wholesale NRN replace.
@@ -204,6 +205,16 @@ function positiveAtv(props) {
   return POSITIVE_ATV.has(tag(props, "atv"));
 }
 
+/**
+ * Historic Canadian government road imports can remain in OSM long after the
+ * mapped track has stopped being a public motor road. The source tag is useful
+ * provenance, but is never permission.
+ */
+function isLegacyCanVecImport(props) {
+  return [tag(props, "source"), tag(props, "source:geometry")]
+    .some((value) => value.includes("canvec"));
+}
+
 /** Hard land deny — atv must never override these. */
 function hardLandDeny(props) {
   return HARD_LAND_DENY.has(tag(props, "access"));
@@ -334,6 +345,15 @@ function classify(props, options = {}) {
     // Adventure/ATV trail — permitted (overrides vehicle-type deny already handled in isDenied).
     accessClass = ACCESS_CLASS.motorized_permissive;
   } else if (ACCESS_UNKNOWN.has(effectiveAccess.value)) {
+    accessClass = ACCESS_CLASS.motorized_unknown;
+    confidence = SOURCE_CONFIDENCE.low;
+  } else if (
+    !effectiveAccess.value &&
+    (hw === "track" || hw === "service") &&
+    isLegacyCanVecImport(props)
+  ) {
+    // CanVec proves only that a line existed in the imported government data.
+    // Without explicit OSM motor access, require the rider's Allow unknown choice.
     accessClass = ACCESS_CLASS.motorized_unknown;
     confidence = SOURCE_CONFIDENCE.low;
   } else if (hw === "path") {
@@ -572,6 +592,7 @@ async function run(options = {}) {
       "highway=path is kept. Untagged path is motorized_unknown (Allow unknown at search). Positive atv (yes/designated/permissive) → motorized_permissive; overrides motorcycle/motor_vehicle/vehicle deny; never overrides access=private|no.",
       "Missing surface stays unknown on service/track/path; road class guides search without inventing material.",
       "OSM motorcycle access precedence is motorcycle > motor_vehicle > vehicle > access (atv consulted for override only).",
+      "Legacy CanVec track/service imports without explicit motor access are motorized_unknown; source provenance never grants permission.",
       "route=ferry ways are timed connectors (structureType=ferry); not highway fabric."
     ],
     knownLimitations: [
@@ -591,6 +612,7 @@ module.exports = {
   explicitSurfaceClass,
   effectiveMotorcycleAccess,
   positiveAtv,
+  isLegacyCanVecImport,
   leafFieldsFromProps,
   INCLUDE_HIGHWAY
 };

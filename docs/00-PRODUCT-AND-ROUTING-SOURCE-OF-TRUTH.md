@@ -111,6 +111,9 @@ tiers belong in diagnostics, not the rider interface.
   road paved default.
 - Dataset identity never proves surface or access.
 - Access precedence is `motorcycle` → `motor_vehicle` → `vehicle` → `access`.
+- Legacy CanVec `track` and `service` imports without explicit motor-access
+  evidence are `motorized_unknown`. Their import source proves historical
+  geometry, not present-day public permission.
 - Known private or purpose-limited access is not permissive through-routing.
 - Allow Unknown opens `motorized_unknown`; it does not manufacture access.
 - Clean never uses Allow Unknown.

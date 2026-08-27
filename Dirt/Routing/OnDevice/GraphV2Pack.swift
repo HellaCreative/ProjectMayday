@@ -173,7 +173,7 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
         let enumsData = data.subdata(in: offEnums..<offMeta)
         let enums = (try? JSONSerialization.jsonObject(with: enumsData) as? [String: Any]) ?? [:]
         accessNames = Self.stringArray(from: enums["ACCESS_NAME"]) ?? [
-            "motorized_permissive", "motorized_verified", "motorized_unknown",
+            "motorized_verified", "motorized_permissive", "motorized_unknown",
             "motorized_restricted", "motorized_excluded"
         ]
         surfaceLeafNames = Self.stringArray(from: enums["surfaceLeafNames"]) ?? [""]
@@ -271,6 +271,18 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
     private static func stringArray(from value: Any?) -> [String]? {
         if let names = value as? [String] { return names }
         if let names = value as? [Any] { return names.map { "\($0)" } }
+        if let names = value as? [String: Any] {
+            let indexed = names.compactMap { key, value -> (Int, String)? in
+                guard let index = Int(key), index >= 0 else { return nil }
+                return (index, "\(value)")
+            }
+            guard let lastIndex = indexed.map(\.0).max() else { return nil }
+            var result = Array(repeating: "", count: lastIndex + 1)
+            for (index, name) in indexed {
+                result[index] = name
+            }
+            return result
+        }
         return nil
     }
 

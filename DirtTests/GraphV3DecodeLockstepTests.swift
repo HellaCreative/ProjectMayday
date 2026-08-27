@@ -55,6 +55,18 @@ struct GraphV3DecodeLockstepTests {
         let swiftAtvKm = Double(atvMeters) / 1000.0
         #expect(abs(swiftAtvKm - atvKm) < 0.05)
 
+        let expectedAccessCounts = fixture["accessClassCounts"] as? [String: Int] ?? [:]
+        var swiftAccessCounts: [String: Int] = [:]
+        for ei in 0..<pack.undirectedEdgeCount {
+            let accessCode = GraphV2Pack.unpackAccess(pack.edgeAttrs[ei])
+            let accessClass = pack.accessNames.indices.contains(accessCode)
+                ? pack.accessNames[accessCode]
+                : "unknown"
+            swiftAccessCounts[accessClass, default: 0] += 1
+        }
+        #expect(swiftAccessCounts == expectedAccessCounts)
+        #expect((swiftAccessCounts["motorized_unknown"] ?? 0) > 30_000)
+
         guard let samples = fixture["samples"] as? [[String: Any]] else {
             Issue.record("fixture samples missing")
             return
@@ -87,6 +99,13 @@ struct GraphV3DecodeLockstepTests {
 
             let expAccess = sample["accessLeaf"] as? String
             #expect(pack.accessLeaf(ei) == expAccess, "accessLeaf ei=\(ei)")
+
+            let expAccessClass = sample["accessClass"] as? String ?? "unknown"
+            let accessCode = GraphV2Pack.unpackAccess(pack.edgeAttrs[ei])
+            let gotAccessClass = pack.accessNames.indices.contains(accessCode)
+                ? pack.accessNames[accessCode]
+                : "unknown"
+            #expect(gotAccessClass == expAccessClass, "accessClass ei=\(ei)")
 
             let expAtv = sample["atvDesignated"] as? Bool ?? false
             #expect(pack.atvDesignated(ei) == expAtv, "atvDesignated ei=\(ei)")

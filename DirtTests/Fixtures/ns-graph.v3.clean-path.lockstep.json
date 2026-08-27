@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-24T22:10:57.904Z",
+  "generatedAt": "2026-08-27T18:18:29.613Z",
   "candidateFile": "DirtLocalPacks/ns/graph.v3.bin",
   "note": "Clean path lockstep — edgeIndexes must match Swift OnDeviceRouter cleanest",
   "routes": [

@@ -49,7 +49,9 @@ test("one-stop fuel window hands every regional minimum to the committed route",
     {
       ok: true,
       stops: [pump],
-      graphMeters: [8_730.8],
+      // Current confirmed-access NB continuation is ~12.1 km after legacy
+      // CanVec roads are no longer treated as public by default.
+      graphMeters: [14_000],
       stationCandidates: [],
       windowComplete: false,
       diagnostics: {}
@@ -93,7 +95,7 @@ test("one-stop fuel window hands every regional minimum to the committed route",
     planFuelChainOnRuntime: async () => segmentResults.shift()
   });
 
-  assert.deepEqual(fuelWindow.graphMeters, [218_050.6, 8_730.8]);
+  assert.deepEqual(fuelWindow.graphMeters, [218_050.6, 14_000]);
   const result = await routeRequest({
     profile: "cleanest",
     locations: [start, pump],
