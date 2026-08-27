@@ -11,11 +11,10 @@ struct MapLibreMapView: UIViewRepresentable {
 
     /// Paint buckets per-surface route colors.
     enum RoutePaintBucket: String, CaseIterable {
-        case access
-        case gravel
-        case track
         case paved
-        case connector
+        case gravel
+        case loose
+        case unknown
 
         var sourceID: String { "dirt-route-\(rawValue)" }
         var casingID: String { "\(sourceID)-casing" }
@@ -23,30 +22,27 @@ struct MapLibreMapView: UIViewRepresentable {
 
         var color: Color {
             switch self {
-            case .access: DirtTheme.routeAccess
-            case .gravel: DirtTheme.routeGravel
-            case .track: DirtTheme.routeTrack
             case .paved: DirtTheme.routePaved
-            case .connector: DirtTheme.routeConnector
+            case .gravel: DirtTheme.routeGravel
+            case .loose: DirtTheme.routeLoose
+            case .unknown: DirtTheme.routeUnknown
             }
         }
 
         static func bucket(for surfaceKey: String) -> RoutePaintBucket {
-            switch surfaceKey.lowercased() {
-            case "unknown_access":
-                return .access
-            case "access", "resource", "gravel", "unpaved", "dirt":
-                return .gravel
-            case "track", "double_track", "unknown":
-                return .track
-            case "connector":
-                return .connector
-            case "paved":
-                return .paved
-            default:
-                return .paved
-            }
+            RoutePaintBucket(rawValue: surfaceKey.lowercased()) ?? .unknown
         }
+    }
+
+    private enum RouteAccessPaint {
+        static let sourceID = "dirt-route-unknown-access"
+        static let lineID = "\(sourceID)-line"
+    }
+
+    private enum RoutePaintMetrics {
+        static let surfaceWidth: CGFloat = 8
+        static let casingWidth: CGFloat = 10
+        static let accessHaloWidth: CGFloat = 13
     }
 
     func makeCoordinator() -> Coordinator {
@@ -425,7 +421,7 @@ struct MapLibreMapView: UIViewRepresentable {
             path.lineDashPattern = NSExpression(forConstantValue: [1.5, 1.2] as [NSNumber])
 
             // Insert under route layers when present.
-            if let routeBottom = style.layer(withIdentifier: RoutePaintBucket.access.casingID) {
+            if let routeBottom = style.layer(withIdentifier: RouteAccessPaint.lineID) {
                 style.insertLayer(paved, below: routeBottom)
                 style.insertLayer(local, below: routeBottom)
                 style.insertLayer(track, below: routeBottom)
@@ -581,8 +577,46 @@ struct MapLibreMapView: UIViewRepresentable {
 
         // MARK: - Route layers
 
+        /// Keep selected-route paint above the road geometry but below the
+        /// basemap's trail and street names. Both bundled map styles share
+        /// these label identifiers; the fallback preserves route visibility if
+        /// a future style does not.
+        private func addRouteLayer(_ layer: MLNStyleLayer, to style: MLNStyle) {
+            let labelAnchorIDs = [
+                "label-path-bottom-12",
+                "label-street-centre-12"
+            ]
+            if let labelAnchor = labelAnchorIDs.lazy.compactMap({
+                style.layer(withIdentifier: $0)
+            }).first {
+                style.insertLayer(layer, below: labelAnchor)
+            } else {
+                style.addLayer(layer)
+            }
+        }
+
         private func addRouteLayers(to style: MLNStyle) {
-            guard style.source(withIdentifier: RoutePaintBucket.access.sourceID) == nil else { return }
+            guard style.source(withIdentifier: RoutePaintBucket.paved.sourceID) == nil else { return }
+
+            // Draw unknown-access as a wider purple dashed halo beneath the
+            // surface line. Surface and access remain independently legible.
+            let accessSource = MLNShapeSource(
+                identifier: RouteAccessPaint.sourceID,
+                shape: nil,
+                options: nil
+            )
+            style.addSource(accessSource)
+            let accessLine = MLNLineStyleLayer(
+                identifier: RouteAccessPaint.lineID,
+                source: accessSource
+            )
+            accessLine.lineColor = NSExpression(forConstantValue: UIColor(DirtTheme.routeAccess))
+            accessLine.lineWidth = NSExpression(forConstantValue: RoutePaintMetrics.accessHaloWidth)
+            accessLine.lineOpacity = NSExpression(forConstantValue: 0.88)
+            accessLine.lineDashPattern = NSExpression(forConstantValue: [1.4, 0.9] as [NSNumber])
+            accessLine.lineCap = NSExpression(forConstantValue: "round")
+            accessLine.lineJoin = NSExpression(forConstantValue: "round")
+            addRouteLayer(accessLine, to: style)
 
             for bucket in RoutePaintBucket.allCases {
                 let source = MLNShapeSource(identifier: bucket.sourceID, shape: nil, options: nil)
@@ -590,21 +624,25 @@ struct MapLibreMapView: UIViewRepresentable {
 
                 let casing = MLNLineStyleLayer(identifier: bucket.casingID, source: source)
                 casing.lineColor = NSExpression(forConstantValue: UIColor.white)
-                // Keep the selected route legible without masking road names beneath it.
-                casing.lineWidth = NSExpression(forConstantValue: 7)
+                // The route stack sits below street names, whose white halos
+                // preserve legibility across every surface color.
+                casing.lineWidth = NSExpression(forConstantValue: RoutePaintMetrics.casingWidth)
                 casing.lineOpacity = NSExpression(forConstantValue: 0.62)
                 casing.lineCap = NSExpression(forConstantValue: "round")
                 casing.lineJoin = NSExpression(forConstantValue: "round")
 
                 let line = MLNLineStyleLayer(identifier: bucket.lineID, source: source)
                 line.lineColor = NSExpression(forConstantValue: UIColor(bucket.color))
-                line.lineWidth = NSExpression(forConstantValue: 5.5)
+                line.lineWidth = NSExpression(forConstantValue: RoutePaintMetrics.surfaceWidth)
                 line.lineOpacity = NSExpression(forConstantValue: 0.82)
                 line.lineCap = NSExpression(forConstantValue: "round")
                 line.lineJoin = NSExpression(forConstantValue: "round")
+                if bucket == .unknown {
+                    line.lineDashPattern = NSExpression(forConstantValue: [1.2, 0.8] as [NSNumber])
+                }
 
-                style.addLayer(casing)
-                style.addLayer(line)
+                addRouteLayer(casing, to: style)
+                addRouteLayer(line, to: style)
             }
         }
 
@@ -796,6 +834,9 @@ struct MapLibreMapView: UIViewRepresentable {
                 let segments = state.routeSegments.filter { RoutePaintBucket.bucket(for: $0.surfaceKey) == bucket }
                 (style.source(withIdentifier: bucket.sourceID) as? MLNShapeSource)?.shape = polylines(for: segments)
             }
+            let unknownAccess = state.routeSegments.filter(\.accessUnknown)
+            (style.source(withIdentifier: RouteAccessPaint.sourceID) as? MLNShapeSource)?.shape =
+                polylines(for: unknownAccess)
         }
 
         private func polylines(for segments: [RouteDisplaySegment]) -> MLNShapeCollectionFeature {
@@ -1400,7 +1441,10 @@ struct MapLibreMapView: UIViewRepresentable {
                 width: hitRadius * 2,
                 height: hitRadius * 2
             )
-            let ids = Set(RoutePaintBucket.allCases.flatMap { [$0.casingID, $0.lineID] })
+            let ids = Set(
+                RoutePaintBucket.allCases.flatMap { [$0.casingID, $0.lineID] }
+                    + [RouteAccessPaint.lineID]
+            )
             let features = mapView.visibleFeatures(in: box, styleLayerIdentifiers: ids)
             for feature in features {
                 guard let raw = feature.attribute(forKey: "riderLegID") as? String,

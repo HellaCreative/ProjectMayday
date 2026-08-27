@@ -39,11 +39,11 @@ async function plan(profile) {
   });
 }
 
-test("Dirt chooses the mid-range dirt-network station over a farther paved station", async () => {
+test("Dirt preserves forward progress before using surface quality as a tiebreaker", async () => {
   const result = await plan("dirt");
   assert.equal(result.ok, true);
-  assert.equal(result.stops[0].id, "mid-dirt");
-  assert.equal(result.stops[0].dirtPercent, 90);
+  assert.equal(result.stops[0].id, "far-paved");
+  assert.equal(result.stops[0].dirtPercent, 10);
   assert.ok(result.stationCandidates.length >= 2);
 });
 
@@ -55,15 +55,15 @@ test("unknown profile plans as Balanced", async () => {
   assert.equal(unknown.stops[0].id, balanced.stops[0].id);
 });
 
-test("all profiles prefer a 50-80% tank-window stop over a wall-stretch station", async () => {
+test("all profiles preserve forward progress after search opens", async () => {
   for (const profile of ["dirt", "balanced", "cleanest"]) {
     const result = await plan(profile);
     assert.equal(result.ok, true, profile);
-    assert.equal(result.stops[0].id, "mid-dirt", profile);
+    assert.equal(result.stops[0].id, "far-paved", profile);
   }
 });
 
-test("Dirt profile quality outranks a merely comfortable paved pump", async () => {
+test("forward progress outranks an early Dirt-quality pump", async () => {
   const result = await planFuelChainOnRuntime({
     runtime: lineRuntime(),
     stations: [station("early-dirt", 0.5), station("comfort-paved", 1)],
@@ -81,10 +81,10 @@ test("Dirt profile quality outranks a merely comfortable paved pump", async () =
     })
   });
   assert.equal(result.ok, true);
-  assert.equal(result.stops[0].id, "early-dirt");
+  assert.equal(result.stops[0].id, "comfort-paved");
 });
 
-test("Balanced profile quality outranks a merely comfortable poor-mix pump", async () => {
+test("forward progress outranks an early Balanced-quality pump", async () => {
   const result = await planFuelChainOnRuntime({
     runtime: lineRuntime(),
     stations: [station("early-balanced", 0.5), station("comfort-dirt", 1)],
@@ -102,10 +102,10 @@ test("Balanced profile quality outranks a merely comfortable poor-mix pump", asy
     })
   });
   assert.equal(result.ok, true);
-  assert.equal(result.stops[0].id, "early-balanced");
+  assert.equal(result.stops[0].id, "comfort-dirt");
 });
 
-test("Clean rural quality outranks a comfortable station that needs town fallback", async () => {
+test("forward progress outranks an early Clean-quality pump", async () => {
   const result = await planFuelChainOnRuntime({
     runtime: lineRuntime(),
     stations: [station("early-rural", 0.5), station("comfort-town", 1)],
@@ -133,13 +133,13 @@ test("Clean rural quality outranks a comfortable station that needs town fallbac
     })
   });
   assert.equal(result.ok, true);
-  assert.equal(result.stops[0].id, "early-rural");
+  assert.equal(result.stops[0].id, "comfort-town");
 });
 
 
 test("Clean rejects a full-tank lateral Gulf-class pump in favor of a corridor pump", () => {
   assert.equal(typeof FUEL_CHAIN_SERVICE_VERSION, "string");
-  assert.match(FUEL_CHAIN_SERVICE_VERSION, /complete-profile-fuel-chains/);
+  assert.match(FUEL_CHAIN_SERVICE_VERSION, /forward-minimum-stop-fuel/);
   // Halifax-ish → Tatamagouche-ish geometry: Wallace Gulf is nearly a full tank
   // sideways; Truro sits on the corridor with a shorter complete chain.
   const start = { lat: 44.764823, lon: -63.340271 };
@@ -198,17 +198,43 @@ test("Dirt rejects a remote lateral pump when a forward corridor pump exists", (
     "dirt", null, 430_000, false
   );
   assert.equal(ranked[0].station.id, "forward");
-  assert.ok(!ranked.some((row) => row.station.id === "lateral-loop"));
+  assert.ok(ranked.some((row) => row.station.id === "lateral-loop"),
+    "obstacle-aware fallback should remain behind the coherent pump");
 });
 
-test("tank commit band is comfort, then too-early, then desperation", () => {
+test("Nova Scotia regression demotes the northwest overshoot beyond the rider waypoint", () => {
+  const start = { lat: 44.764839, lon: -63.340268 };
+  const destination = { lat: 45.399717, lon: -62.495696 };
+  const overshoot = {
+    station: { id: "grotesque-overshoot" },
+    location: { lat: 45.707419, lon: -63.284407 },
+    graphMeters: 205_000,
+    remainingGraphMeters: 90_000
+  };
+  const onJourney = {
+    station: { id: "on-journey" },
+    location: { lat: 45.17, lon: -62.82 },
+    graphMeters: 125_000,
+    remainingGraphMeters: 55_000
+  };
+  const ranked = rankForwardFuel(
+    [overshoot, onJourney], start, destination, 250_000, new Set(),
+    "dirt", null, 180_000, false
+  );
+  assert.equal(ranked[0].station.id, "on-journey");
+  assert.ok(!ranked.some((row) => row.station.id === "grotesque-overshoot"));
+});
+
+test("tank commit band begins at half the usable range and has no artificial upper edge", () => {
   assert.equal(tankCommitBand(225_000, 450_000), 0);
   assert.equal(tankCommitBand(360_000, 450_000), 0);
   assert.equal(tankCommitBand(200_000, 450_000), 1);
-  assert.equal(tankCommitBand(449_800, 450_000), 2);
+  assert.equal(tankCommitBand(449_800, 450_000), 0);
+  assert.equal(tankCommitBand(40_000, 100_000, 140_000), 0);
+  assert.equal(tankCommitBand(20_000, 100_000, 140_000), 1);
 });
 
-test("comfort-band ranking beats a wall station; desperation only if comfort is empty", () => {
+test("search-open candidates preserve progress and early pumps remain fallback", () => {
   const start = { lat: 45, lon: 0 };
   const destination = { lat: 45, lon: 5 };
   const comfort = {
@@ -232,7 +258,7 @@ test("comfort-band ranking beats a wall station; desperation only if comfort is 
   const ranked = rankForwardFuel(
     [wall, early, comfort], start, destination, 450_000, new Set(), "dirt"
   );
-  assert.deepEqual(ranked.map((row) => row.station.id), ["comfort", "early", "wall"]);
+  assert.deepEqual(ranked.map((row) => row.station.id), ["wall", "comfort", "early"]);
 
   const desperationOnly = rankForwardFuel(
     [wall, { ...wall, station: { id: "wall-closer" }, location: { lat: 45, lon: 1.8 }, graphMeters: 400_000 }],
@@ -241,7 +267,7 @@ test("comfort-band ranking beats a wall station; desperation only if comfort is 
   assert.equal(desperationOnly[0].station.id, "wall");
 });
 
-test("complete rural chain beats one town pump even when it adds stops", () => {
+test("a complete one-stop chain beats a three-stop chain", () => {
   const town = {
     complete: true,
     stops: [{ id: "town" }],
@@ -260,7 +286,7 @@ test("complete rural chain beats one town pump even when it adds stops", () => {
       cleanMajorRoadMeters: 0, backtrackMeters: 0
     }
   };
-  assert.ok(compareChainPlans(rural, town, "cleanest", 130_000) < 0);
+  assert.ok(compareChainPlans(town, rural, "cleanest", 130_000) < 0);
 });
 
 test("an arc beats a lollipop before stop count is considered", () => {

@@ -2,7 +2,8 @@ import SwiftUI
 
 /// Map chrome stack:
 /// Route overview (nav) · 3D/2D · Cues · Compass · Status · Recenter.
-/// Planning (compact): fit whole route (when polyline exists) · Recenter.
+/// Planning (compact): 3D/2D · Compass · Status · fit whole route (only when
+/// a polyline is painted) · Recenter. Cues remain navigation-only.
 /// (Layers stay on the dock — not during navigation.)
 /// Portrait = vertical trailing stack; landscape primary = horizontal bottom strip.
 struct MapControlStack: View {
@@ -63,11 +64,17 @@ struct MapControlStack: View {
             compassButton
             riderStatusButton
             recenterButton
-        } else {
-            // Planning is not navigation: 3D, cues and rider status stay out
-            // until Start. Compass is the one universal map orientation tool.
+        } else if groupOnly {
+            // Group browsing owns its map actions; retain only orientation.
             compassButton
-            if !groupOnly, app.planner.canFocusEntirePlannedRoute {
+        } else {
+            // Primary map: view mode and rider status remain available before
+            // navigation. Cues are ride-only.
+            viewModeButton
+            compassButton
+            riderStatusButton
+            if app.mapState.hasDisplayedRoute,
+               app.planner.canFocusEntirePlannedRoute {
                 if horizontal {
                     fitPlannedRouteButton
                     recenterButton
@@ -77,7 +84,7 @@ struct MapControlStack: View {
                         recenterButton
                     }
                 }
-            } else if !groupOnly {
+            } else {
                 recenterButton
             }
         }
@@ -131,6 +138,7 @@ struct MapControlStack: View {
                 )
         }
         .accessibilityLabel(app.mapState.view3D ? "Switch to top-down 2D" : "Toggle 3D view")
+        .accessibilityIdentifier("map-view-mode")
     }
 
     private var cuesButton: some View {
@@ -161,6 +169,7 @@ struct MapControlStack: View {
         .accessibilityLabel(
             "Navigation cues: \(app.cueSettings.mode.menuLabel.lowercased()), audio \(app.cueSettings.audioEnabled ? "on" : "off")"
         )
+        .accessibilityIdentifier("navigation-cues")
     }
 
     private var compassButton: some View {
@@ -204,6 +213,7 @@ struct MapControlStack: View {
                 )
         }
         .accessibilityLabel("Open group sharing controls")
+        .accessibilityIdentifier("rider-status")
     }
 
     private var fitPlannedRouteButton: some View {
@@ -223,6 +233,7 @@ struct MapControlStack: View {
                 )
         }
         .accessibilityLabel("Show entire planned route")
+        .accessibilityIdentifier("planned-route-overview")
     }
 
     private var recenterButton: some View {
@@ -260,45 +271,79 @@ struct MapControlStack: View {
     // MARK: - Popovers
 
     private var cuesPopover: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("CUES")
+                .font(.dirtMono(9, weight: .bold))
+                .tracking(0.8)
+                .foregroundStyle(DirtTheme.muted)
+
             HStack(spacing: 6) {
                 ForEach(NavigationCueMode.allCases) { mode in
+                    let selected = app.cueSettings.mode == mode
                     Button {
                         app.setCueMode(mode)
                         app.planner.toast = mode.statusToast
                     } label: {
-                        Text(mode.menuLabel)
-                            .font(.dirtUI(11, weight: .bold))
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 8)
-                            .background(app.cueSettings.mode == mode ? DirtTheme.orange : DirtTheme.wash)
-                            .foregroundStyle(app.cueSettings.mode == mode ? .white : DirtTheme.ink)
-                            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        VStack(spacing: 3) {
+                            HStack(spacing: 4) {
+                                Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                                    .font(.system(size: 11, weight: .bold))
+                                Text(mode.menuLabel)
+                                    .font(.dirtUI(11, weight: .bold))
+                            }
+                            Text(mode.detailLabel)
+                                .font(.dirtUI(9, weight: .semibold))
+                                .opacity(selected ? 0.9 : 0.66)
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 48)
+                        .padding(.horizontal, 6)
+                        .background(selected ? DirtTheme.orange : DirtTheme.wash)
+                        .foregroundStyle(selected ? .white : DirtTheme.ink)
+                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
                     }
+                    .buttonStyle(.plain)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("\(mode.menuLabel), \(mode.detailLabel) cues")
+                    .accessibilityIdentifier("cue-mode-\(mode.rawValue)")
+                    .accessibilityValue(selected ? "Selected" : "Not selected")
+                    .accessibilityAddTraits(selected ? .isSelected : [])
                 }
             }
-            Button {
-                let next = !app.cueSettings.audioEnabled
-                app.setCueAudioEnabled(next)
-                app.planner.toast = "Cue audio \(next ? "on" : "off")"
-            } label: {
-                HStack {
-                    Text("Audio")
-                        .font(.dirtUI(12, weight: .bold))
-                    Spacer()
-                    Text(app.cueSettings.audioEnabled ? "ON" : "OFF")
-                        .font(.dirtMono(11, weight: .bold))
-                        .foregroundStyle(app.cueSettings.audioEnabled ? DirtTheme.orange : DirtTheme.muted)
+
+            Text("AUDIO")
+                .font(.dirtMono(9, weight: .bold))
+                .tracking(0.8)
+                .foregroundStyle(DirtTheme.muted)
+
+            HStack(spacing: 6) {
+                ForEach([true, false], id: \.self) { enabled in
+                    let selected = app.cueSettings.audioEnabled == enabled
+                    Button {
+                        app.setCueAudioEnabled(enabled)
+                        app.planner.toast = "Cue audio \(enabled ? "on" : "off")"
+                    } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: selected ? "checkmark.circle.fill" : "circle")
+                                .font(.system(size: 11, weight: .bold))
+                            Text(enabled ? "On" : "Off")
+                                .font(.dirtUI(11, weight: .bold))
+                        }
+                        .frame(maxWidth: .infinity, minHeight: 38)
+                        .background(selected ? DirtTheme.orange : DirtTheme.wash)
+                        .foregroundStyle(selected ? .white : DirtTheme.ink)
+                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("Cue audio \(enabled ? "on" : "off")")
+                    .accessibilityIdentifier(enabled ? "cue-audio-on" : "cue-audio-off")
+                    .accessibilityValue(selected ? "Selected" : "Not selected")
+                    .accessibilityAddTraits(selected ? .isSelected : [])
                 }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 10)
-                .background(DirtTheme.wash)
-                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                .foregroundStyle(DirtTheme.ink)
             }
         }
         .padding(10)
-        .frame(width: 220)
+        .frame(width: 246)
         .background(DirtTheme.sheet)
         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(

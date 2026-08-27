@@ -47,11 +47,36 @@ struct LayersSheet: View {
 
     private var legendSection: some View {
         Section {
-            legendRow(color: DirtTheme.routeGravel, title: "Dirt", detail: "Gravel, track, dual-sport")
-            legendRow(color: DirtTheme.routePaved, title: "Paved", detail: "Highway and sealed road")
-            legendRow(color: DirtTheme.routeAccess, title: "Unknown access", detail: "Motorcycle permission unproven · Allow unknown only")
+            legendRow(
+                color: DirtTheme.routePaved,
+                title: "Paved",
+                detail: "Sealed surface"
+            )
+            legendRow(
+                color: DirtTheme.routeGravel,
+                title: "Gravel",
+                detail: "Gravel, compacted, or generic unpaved"
+            )
+            legendRow(
+                color: DirtTheme.routeLoose,
+                title: "Loose",
+                detail: "Dirt, earth, mud, sand, or natural surface"
+            )
+            legendRow(
+                color: DirtTheme.routeUnknown,
+                title: "Unknown surface",
+                detail: "Surface is not identified in map data"
+            )
+            legendRow(
+                color: DirtTheme.routeAccess,
+                title: "Unknown access",
+                detail: "Purple halo · motorcycle permission unproven"
+            )
         } header: {
             Text("Route paint")
+        } footer: {
+            Text("Dirt includes gravel, loose, and unknown surface.")
+                .font(DirtType.helper)
         }
         .listRowBackground(DirtTheme.rowFill)
     }
@@ -147,11 +172,13 @@ struct LayersSheet: View {
         .buttonStyle(.plain)
     }
 
-    private func legendRow(color: Color, title: String, detail: String) -> some View {
+    private func legendRow(
+        color: Color,
+        title: String,
+        detail: String
+    ) -> some View {
         HStack(spacing: DirtSpace.inner) {
-            Capsule()
-                .fill(color)
-                .frame(width: 28, height: 6)
+            RoutePaintLegendSwatch(color: color)
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: DirtSpace.hairGap) {
                 Text(title)
@@ -183,6 +210,22 @@ struct LayersSheet: View {
         styleIDRaw = style.rawValue
         MapStyleCatalog.selectedID = style
         app.mapState.applySelectedMapStyle()
+    }
+}
+
+private struct RoutePaintLegendSwatch: View {
+    let color: Color
+
+    var body: some View {
+        ZStack {
+            Capsule()
+                .fill(Color.white.opacity(0.92))
+                .frame(width: 32, height: 10)
+            Capsule()
+                .fill(color)
+                .frame(width: 30, height: 6)
+        }
+        .frame(width: 32, height: 10)
     }
 }
 

@@ -275,6 +275,7 @@ final class RoutePlannerModel {
     /// so that saving an edited route writes back to it instead of forking a second copy.
     private(set) var savedRouteOrigin: SavedRouteOrigin?
     private var lastNavigationIdentity: String?
+    @ObservationIgnored private var lastQueuedTileLookaheadStageIndex: Int?
     private let routing: RoutingClient
     private let locationService: LocationService
     private let mapState: MapState
@@ -339,6 +340,7 @@ final class RoutePlannerModel {
         locationService.onLocation = { [weak self] location in
             guard let self else { return }
             self.navigation.update(with: location)
+            self.prefetchNextNavigationTileStageIfNeeded()
         }
         mapState.fromHereLongPressRelocatesDestination = true
     }
@@ -366,16 +368,22 @@ final class RoutePlannerModel {
     }
 
     var aggregateDirtPercent: Int {
-        let total = totalMeters
-        guard total > 0 else { return 0 }
-        let dirtMeters = activeResponses.reduce(0.0) {
-            $0 + ($1.distanceMeters ?? 0) * Double($1.dirtPercent) / 100
-        }
-        return Int((dirtMeters / total * 100).rounded())
+        surfaceComposition.dirtPercent
     }
 
     var aggregatePavedPercent: Int {
-        hasRoute ? max(0, 100 - aggregateDirtPercent) : 0
+        hasRoute ? surfaceComposition.pavedPercent : 0
+    }
+
+    var surfaceComposition: RouteSurfaceComposition {
+        RouteSurfaceComposition.from(responses: activeResponses)
+    }
+
+    private var activeSurfaceFamilyMode: String? {
+        guard !activeResponses.isEmpty,
+              activeResponses.allSatisfy({ $0.stats?.surfaceFamilyMode == "leaf-v3" })
+        else { return nil }
+        return "leaf-v3"
     }
 
     var hasFuelAssistedPlan: Bool {
@@ -1944,6 +1952,7 @@ final class RoutePlannerModel {
         markers.append(contentsOf: fuelTargetMarkers)
         let riders = mapState.markers.filter { $0.kind.isGroupOverlay }
         mapState.setMarkers(markers + riders)
+        primeNavigationTilePlanIfReady()
     }
 
     private func canonicalMarkers(riderPinsLocked: Bool) -> [MapState.Marker] {
@@ -2031,6 +2040,8 @@ final class RoutePlannerModel {
         existing.distanceMeters = totalMeters
         existing.dirtPercent = aggregateDirtPercent
         existing.pavedPercent = aggregatePavedPercent
+        existing.segments = activeResponses.flatMap { $0.segments ?? [] }
+        existing.surfaceFamilyMode = activeSurfaceFamilyMode
         try? context.save()
         savedRouteOrigin = SavedRouteOrigin(id: existing.id, name: existing.name)
         toast = "Updated “\(existing.name)”"
@@ -2043,7 +2054,9 @@ final class RoutePlannerModel {
             coordinates: allCoordinates,
             distanceMeters: totalMeters,
             dirtPercent: aggregateDirtPercent,
-            pavedPercent: aggregatePavedPercent
+            pavedPercent: aggregatePavedPercent,
+            segments: activeResponses.flatMap { $0.segments ?? [] },
+            surfaceFamilyMode: activeSurfaceFamilyMode
         )
         context.insert(route)
         try? context.save()
@@ -2067,7 +2080,9 @@ final class RoutePlannerModel {
             dirtPercent: saved.dirtPercent,
             pavedPercent: saved.pavedPercent,
             identity: "saved:\(saved.id.uuidString)",
-            imported: false
+            imported: false,
+            networkSegments: saved.segments,
+            surfaceFamilyMode: saved.surfaceFamilyMode
         )
         // Set after applying geometry — that path clears the origin for imports.
         savedRouteOrigin = SavedRouteOrigin(id: saved.id, name: saved.name)
@@ -2163,7 +2178,9 @@ final class RoutePlannerModel {
         pavedPercent: Int,
         identity: String,
         imported: Bool,
-        segmentPolylines: [[RouteCoordinate]]? = nil
+        segmentPolylines: [[RouteCoordinate]]? = nil,
+        networkSegments: [RouteSegment]? = nil,
+        surfaceFamilyMode: String? = nil
     ) {
         mode = .saved
         // Whatever was loaded before is no longer what's on the map; loadSavedRoute
@@ -2177,7 +2194,9 @@ final class RoutePlannerModel {
             dirtPercent: dirtPercent,
             pavedPercent: pavedPercent,
             imported: imported,
-            segmentPolylines: segmentPolylines
+            segmentPolylines: segmentPolylines,
+            networkSegments: networkSegments,
+            surfaceFamilyMode: surfaceFamilyMode
         )
         routeIdentity = identity
         refreshMap()
@@ -2198,6 +2217,7 @@ final class RoutePlannerModel {
         networkSegments: [RouteSegment]? = nil,
         unknownAccessPercent: Int = 0,
         unknownSurfacePercent: Int = 0,
+        surfaceFamilyMode: String? = nil,
         maneuvers: [RouteManeuver]? = nil,
         warnings: [RouteWarning]? = nil
     ) -> RouteResponse {
@@ -2231,7 +2251,8 @@ final class RoutePlannerModel {
                 dirtPercent: dirtPercent,
                 pavedPercent: pavedPercent,
                 unknownAccessPercent: unknownAccessPercent,
-                unknownSurfacePercent: unknownSurfacePercent
+                unknownSurfacePercent: unknownSurfacePercent,
+                surfaceFamilyMode: surfaceFamilyMode
             ),
             maneuvers: maneuvers,
             warnings: warnings,
@@ -2259,7 +2280,8 @@ final class RoutePlannerModel {
                 structureLeaf: leg.structureLeaf,
                 layer: leg.layer,
                 crossingLabel: leg.crossingLabel,
-                waterCrossing: leg.waterCrossing
+                waterCrossing: leg.waterCrossing,
+                surfaceLeaf: leg.surfaceLeaf
             )
         }
         return makeStoredRouteResponse(
@@ -2271,6 +2293,7 @@ final class RoutePlannerModel {
             networkSegments: segments,
             unknownAccessPercent: local.unknownAccessPercent,
             unknownSurfacePercent: local.unknownSurfacePercent,
+            surfaceFamilyMode: local.hasSurfaceLeaves ? "leaf-v3" : nil,
             maneuvers: local.maneuvers,
             warnings: {
                 var warnings: [RouteWarning] = []
@@ -2423,12 +2446,81 @@ final class RoutePlannerModel {
 
     // MARK: - Navigation
 
-    /// Start Navigation always prefetches the route corridor first. Dual-sport
-    /// riders leave cell coverage — maps must be on-device before the trek begins.
+    private var navigationViewportSize: CGSize {
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        let scene = scenes.first { $0.activationState == .foregroundActive } ?? scenes.first
+        if let size = scene?.screen.bounds.size, size.width > 0, size.height > 0 {
+            return size
+        }
+        return CGSize(width: 390, height: 844)
+    }
+
+    /// Visible stage geometry is already split at generated fuel stops. Saved
+    /// single-line routes fall back to their one stored response.
+    private var navigationTileStageCoordinates: [[RouteCoordinate]] {
+        switch mode {
+        case .saved:
+            return activeResponses.map(\.coordinates).filter { $0.count >= 2 }
+        case .fromHere, .plan:
+            let routedStages = stages.compactMap { stage -> [RouteCoordinate]? in
+                guard let coordinates = stage.response?.coordinates, coordinates.count >= 2 else {
+                    return nil
+                }
+                return coordinates
+            }
+            return routedStages.isEmpty
+                ? activeResponses.map(\.coordinates).filter { $0.count >= 2 }
+                : routedStages
+        }
+    }
+
+    /// Use otherwise-idle route review time to eliminate corridor computation
+    /// from the Start button. No network request occurs here.
+    private func primeNavigationTilePlanIfReady() {
+        guard navigation.phase == .idle,
+              !isRouting,
+              fuelPlanningStatus == nil,
+              routeIdentity != nil,
+              allCoordinates.count >= 2
+        else { return }
+        let blocking = NavigationTileScope.blockingCoordinates(
+            stageCoordinates: navigationTileStageCoordinates,
+            fallback: allCoordinates
+        )
+        offline.primeNavigationPlan(coordinates: blocking, viewportSize: navigationViewportSize)
+    }
+
+    private func prefetchNextNavigationTileStageIfNeeded() {
+        guard navigation.phase == .active else { return }
+        let currentIndex = max(0, (navigation.currentStageNumber ?? 1) - 1)
+        prefetchNextNavigationTileStage(after: currentIndex)
+    }
+
+    private func prefetchNextNavigationTileStage(after currentStageIndex: Int) {
+        guard let next = NavigationTileScope.lookaheadCoordinates(
+            after: currentStageIndex,
+            stageCoordinates: navigationTileStageCoordinates
+        ), lastQueuedTileLookaheadStageIndex != next.index
+        else { return }
+        lastQueuedTileLookaheadStageIndex = next.index
+        offline.prefetchInBackground(
+            identity: "stage-\(next.index + 1)",
+            coordinates: next.coordinates,
+            viewportSize: navigationViewportSize
+        )
+    }
+
+    /// Start Navigation gates only the first rider/fuel stage corridor. Later
+    /// stages are saved one at a time while riding, before the rider reaches them.
     func startNavigation() {
         guard hasRoute else { return }
         let coords = allCoordinates
         guard coords.count > 1 else { return }
+        let tileStages = navigationTileStageCoordinates
+        let blockingTileCoordinates = NavigationTileScope.blockingCoordinates(
+            stageCoordinates: tileStages,
+            fallback: coords
+        )
 
         navigation.beginPrefetch()
 
@@ -2441,23 +2533,21 @@ final class RoutePlannerModel {
         lastNavigationIdentity = identity
 
         locationService.requestAlways()
-        let windowSize: CGSize = {
-            let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
-            let scene = scenes.first { $0.activationState == .foregroundActive } ?? scenes.first
-            if let size = scene?.screen.bounds.size, size.width > 0, size.height > 0 {
-                return size
-            }
-            return CGSize(width: 390, height: 844)
-        }()
+        let windowSize = navigationViewportSize
         // Tile identity is geographic — profile changes must not wipe corridor cache.
         let tileIdentity = Self.geographicTileIdentity(
             routeIdentity: identity,
             destination: destination,
             stages: stages
         )
+        lastQueuedTileLookaheadStageIndex = nil
+        RoutingDebugLog.shared.event(
+            "navigation map scope blockingStages=1 availableStages=\(tileStages.count) "
+                + "points=\(blockingTileCoordinates.count) allRoutePoints=\(coords.count)"
+        )
         offline.prepareForNavigation(
             identity: tileIdentity,
-            coordinates: coords,
+            coordinates: blockingTileCoordinates,
             keepExisting: keepExisting,
             viewportSize: windowSize
         )
@@ -2531,6 +2621,7 @@ final class RoutePlannerModel {
                 stages: navigationStages(),
                 networkSegments: networkSegments(from: activeResponses)
             )
+            prefetchNextNavigationTileStage(after: 0)
             // Seed cue card immediately from last GPS (don't wait for next tick).
             if let fix = locationService.lastLocation {
                 navigation.update(with: fix)
@@ -2647,6 +2738,7 @@ final class RoutePlannerModel {
             )
             : nil
         navigation.end()
+        lastQueuedTileLookaheadStageIndex = nil
         mapState.endNavigationCamera()
         locationService.setBackgroundUpdates(false)
         offline.disengageOfflineBasemap()

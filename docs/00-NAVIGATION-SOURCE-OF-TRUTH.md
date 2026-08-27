@@ -32,25 +32,24 @@ Start Navigation must:
 1. lock the corridor basemap and every touched routing pack (or warn before
    riding without offline reroute);
 2. follow the polyline in course-up detail, with overview on demand;
-3. speak and show **one cue type at a time** — Junction or Rally;
+3. speak and show the selected detail level — Junction/Essential or
+   Rally/Everything;
 4. count down distance and time to the **next named waypoint** on the itinerary;
 5. keep speed, elapsed rider time, and (in Rally) the next roadbook notes on
    screen without stealing the cue channel.
 
-Google Maps and Waze optimize arrival with junction decisions. DIRT also offers
-Rally, which is a copilot calling the sharpness of the road. Those are two cue
-types. They are not mixed in one mouth.
+Google Maps and Waze optimize arrival with junction decisions. DIRT's Rally
+level keeps those essential decisions and adds a copilot calling the sharpness
+of the road between them. A real junction always takes priority over a nearby
+roadbook curve so two calls never compete for the same decision.
 
 ---
 
 ## 2. Two cue types
 
-The rider picks **Junction** or **Rally**. Default is Junction. There is no
-combined “ALL” mode in the product. A control that mixes both is a defect.
-
-**Continue straight** is the only shared sentence. It is used when the chosen
-road goes through a real junction and the rider must not turn. Everywhere else,
-one type owns the voice and the top cue card.
+The rider picks **Junction / Essential** or **Rally / Everything**. Default is
+Junction. There is no third “Both” control: Rally is the comprehensive level.
+Audio On/Off is independent and changes speech only, not the visual cue level.
 
 ### Junction (Google / Waze)
 
@@ -71,19 +70,22 @@ Junctions come from the **road graph** (degree, chosen continuation), not from a
 15° bend in the polyline. Unnamed dirt roads may omit the street name. Silence
 through a real intersection is a defect.
 
-### Rally (copilot / roadbook)
+### Rally / Everything (essential navigation + copilot / roadbook)
 
-Sharpness and side, the way a rally copilot calls the road.
+Every Junction/Essential decision remains spoken and shown. Between those
+decisions, Rally adds sharpness and side the way a rally copilot calls the road.
 
 Spoken and shown:
 
 - Right 6, 200 m
 - Right 6 now
 - Left 3 now
+- Turn left in X metres
 - Continue straight (same meaning as Junction: through, do not turn)
 
-Numbers are 6 (wide / easy) through 1 (hairpin). Rally never says “turn”. A
-sweeping right 6 is not a junction call.
+Numbers are 6 (wide / easy) through 1 (hairpin). A roadbook curve never says
+“turn”; essential junctions included in Rally retain their normal navigation
+wording. A sweeping right 6 is not itself a junction call.
 
 The Rally HUD is a short roadbook: the current note plus the next one, with
 partial distance. Silence between notes is correct.
@@ -105,10 +107,11 @@ Every maneuver carries:
 - stage identity when the maneuver is an arrival.
 
 The JavaScript live engine and Swift on-device engine author Junction and
-Continue Straight from the same graph rules. Rally is derived from route
-geometry with the same 6→1 classifier in both engines. The phone selects one cue
-type and filters the canonical list; it does not reinterpret Rally as Junction
-or regenerate an unrelated list.
+Continue Straight from the same graph rules. Rally curves are derived from route
+geometry with the same 6→1 classifier in both engines. Junction mode filters to
+essential decisions. Rally mode merges those same decisions with the geometry
+curves, suppressing any curve within the junction attention window. A curve can
+never replace a junction, and distinct nearby junctions are never collapsed.
 
 A real junction has at least one plausible motorized outgoing choice after
 removing the arrival edge, private/service driveways, parking aisles, pack
@@ -132,10 +135,10 @@ string.
 
 Junction uses two beats. Prepare is approximately 20 seconds of travel using a
 smoothed speed, bounded so crawling does not make it too late and highway speed
-does not make it absurdly early. Now has its own bounded short lead. Rally also
-uses two beats: the first includes distance to the note; the second is the short
-“now” call. Exact distance clamps are constants covered by tests, not scattered
-HUD literals.
+does not make it absurdly early. Now has its own bounded short lead. In Rally,
+essential junctions keep that wording and cadence; added roadbook curves also
+use two beats, with distance first and the short “now” call second. Exact
+distance clamps are constants covered by tests, not scattered HUD literals.
 
 Speech never interrupts an utterance already in progress. A newer `now` may
 discard an obsolete queued `prepare`, and passed maneuvers are removed from the
@@ -294,7 +297,8 @@ Fix the cue types and the waypoint countdown before adding more chrome.
 
 Navigation changes are complete only when automated tests cover:
 
-- Junction and Rally isolation, including migration from stored `ALL`;
+- Junction/Essential filtering and Rally/Everything inclusion, including
+  junction priority over nearby curves and migration from stored `ALL`;
 - equivalent maneuver classification from live and on-device routing fixtures;
 - Rally 6→1 direction (wide/easy to hairpin), never inverted;
 - real-junction filtering and Continue Straight through a genuine decision;
@@ -319,7 +323,8 @@ offline reroute.
 ## 10. Locked implementation order
 
 1. Freeze the maneuver and `NavigationStage` contracts with fixtures.
-2. Remove `ALL`, migrate preferences, and default to Junction.
+2. Keep two levels, Junction/Essential and Rally/Everything; migrate the retired
+   `ALL` preference and default to Junction.
 3. Author graph Junction/Continue Straight and matching Rally classification in
    both routing engines; stop discarding authoritative maneuvers.
 4. Build the monotonic speech queue and adaptive cadence.

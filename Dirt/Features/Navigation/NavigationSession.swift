@@ -428,33 +428,41 @@ final class NavigationSession {
     }
 
     /// One maneuver contract for live, saved, and on-device routes.
-    /// Junction mode trusts explicit graph decision points when present; older
-    /// payloads fall back to decisive geometry. Rally is always derived from
-    /// the final displayed line so its 6→1 scale cannot differ by engine.
+    /// Junction/Essential trusts explicit graph decision points when present;
+    /// older payloads fall back to decisive geometry. Rally/Everything adds
+    /// curves derived from the final displayed line while preserving every
+    /// essential decision, so its 6→1 scale cannot differ by engine.
     private static func resolveManeuvers(
         coordinates: [RouteCoordinate],
         incoming: [RouteManeuver],
         cueMode: NavigationCueMode
     ) -> [RouteManeuver] {
+        let enriched = RouteManeuver.enrichForVoiceCues(incoming)
+        let graphDecisions = enriched.filter { $0.isJunctionCue }
+        let essential = graphDecisions.isEmpty
+            ? NavCueBuilder.build(coordinates: coordinates, cueMode: .junctions)
+                .filter(\.isJunctionCue)
+            : graphDecisions
+        let arrival = enriched.last(where: {
+            ($0.type ?? $0.kind ?? "").lowercased() == "arrive"
+        }) ?? RouteManeuver(
+            instruction: "Arrive at destination",
+            type: "arrive",
+            kind: "arrive",
+            distanceMeters: 0,
+            alongMeters: GeoMath.lineMeters(coordinates)
+        )
+
         switch cueMode {
-        case .rally:
-            return NavCueBuilder.build(coordinates: coordinates, cueMode: .rally)
         case .junctions:
-            let enriched = RouteManeuver.enrichForVoiceCues(incoming)
-            let graphDecisions = enriched.filter { $0.isJunctionCue }
-            guard !graphDecisions.isEmpty else {
-                return NavCueBuilder.build(coordinates: coordinates, cueMode: .junctions)
-            }
-            let arrival = enriched.last(where: {
-                ($0.type ?? $0.kind ?? "").lowercased() == "arrive"
-            }) ?? RouteManeuver(
-                instruction: "Arrive at destination",
-                type: "arrive",
-                kind: "arrive",
-                distanceMeters: 0,
-                alongMeters: GeoMath.lineMeters(coordinates)
-            )
-            return graphDecisions + [arrival]
+            return essential + [arrival]
+        case .rally:
+            let curves = NavCueBuilder.build(coordinates: coordinates, cueMode: .rally)
+                .filter(\.isRallyCurve)
+            return NavCueBuilder.mergeRallyEverything(
+                curves: curves,
+                junctions: essential
+            ) + [arrival]
         }
     }
 

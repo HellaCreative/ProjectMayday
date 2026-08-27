@@ -261,9 +261,16 @@ rider's configured range is not yet a navigable route.
 
 - Point 1 begins with a full tank. This is a documented planning assumption.
 - The rider sets tank range and reserve. Usable range is the range after reserve.
-- The planner does not pre-compute or promise a minimum stop count. From each
-  full-tank anchor it evaluates graph-connected forward stations before the
-  usable limit and continues until the next rider waypoint is reachable.
+- The planner computes the minimum safe stop count from routed distance and
+  reserve-adjusted usable range, then compares complete feasible chains with
+  that stop count before considering ride character.
+- Automatic station search opens after 50% of reserve-adjusted usable range has
+  been consumed. For a 200 km tank with 30% reserve, usable range is 140 km and
+  search opens at 70 km. Fuel already consumed before the rider leg advances
+  that threshold by the same amount.
+- The 50% threshold opens candidate search; it does not force a stop. If the
+  next rider waypoint is safely reachable within remaining usable range, no
+  automatic fuel waypoint is manufactured.
 - Fuel consumption is currently modelled in routed kilometres, not litres.
 - Only a packed, route-connected station or a rider waypoint derived on a
   station resets the tank.
@@ -321,10 +328,15 @@ An automatic fuel chain must be physically viable and route-coherent:
 3. candidates must cover the forward corridor and meaningful geographic
    alternatives, not merely the stations nearest empty-tank distance;
 4. the complete chain is evaluated, not only the first hop;
-5. arbitrary lateral excursions, directional regression, and avoidable
-   backtracking lose to a coherent feasible chain; and
-6. profile quality differentiates coherent candidates—it does not justify a
-   random fuel detour.
+5. ranking order is minimum complete-chain stop count, directional coherence
+   and forward progress, then journey distance/detour;
+6. water, terrain, and sparse-road detours are allowed when they remain a
+   sensible continuation toward the rider waypoint, but a fuel-only chain may
+   not materially inflate the graph-routed foundation journey;
+7. a short forecourt connector may repeat, but a meaningful down-and-back fuel
+   stem is ineligible; and
+8. profile quality, including Dirt percentage, is the final tiebreaker among
+   otherwise sensible chains—it never justifies a random fuel detour.
 
 This is a fuel-skeleton coherence rule, not a global shortest-route objective.
 
@@ -458,8 +470,8 @@ are also checksum-verified instead of being trusted merely because they exist.
 **Further fuel-device acceptance remains blocked until this matched client and
 service are deployed together and the coordinates above are replayed.**
 
-Approved repair has not yet been given. The recommended order for rider review
-is:
+This historical defect subsequently received approval for repair. Its original
+recommended validation order was:
 
 1. deploy and verify the committed R0 routing service without changing pack bytes;
 2. build the matching client on White and confirm its identity log;
@@ -467,6 +479,32 @@ is:
 4. harden whole-chain pump selection with route-coherence rejection and complete
    candidate diagnostics; and
 5. add the reproduction permanently to the benchmark/regression suite.
+
+### Build 6 approved fuel-selection repair — 2026-08-26
+
+A second physical reproduction exposed the priority inversion directly:
+
+- Point 1: `44.764839,-63.340268`
+- first generated pump: `44.778483,-63.084597`
+- erroneous second pump: `45.707419,-63.284407`
+- Point 2: `45.399717,-62.495696`
+
+The second pump was about 68 km cross-track and created a north/west fuel-only
+journey expansion before returning southeast to Point 2, despite coherent fuel
+options along the journey. Build 6 repairs this without changing pack bytes:
+
+1. a rider waypoint reachable within remaining usable range wins with zero
+   generated stops;
+2. search opens after 50% of usable range, with reserve and prior consumption
+   applied first;
+3. complete-chain stop count and forward coherence precede profile quality;
+4. graph-foundation detour checks accommodate obstacles while rejecting gross
+   fuel-only expansion; and
+5. meaningful repeated-road fuel stems are rejected, with a 1 km allowance for
+   short station access geometry.
+
+The on-device and live-service implementations must remain lockstep. The fixed
+coordinates above and the earlier Gulf/Truro case are permanent regressions.
 
 ### R0 physical evidence — 2026-08-23
 

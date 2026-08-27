@@ -401,10 +401,13 @@ struct RouteSegment: Codable, Identifiable, Sendable {
     let layer: Int?
     let crossingLabel: String?
     let waterCrossing: Bool?
+    /// Graph-v3 normalized OSM `surface=*` leaf. Nil means genuinely untagged
+    /// when the response advertises `surfaceFamilyMode=leaf-v3`.
+    let surfaceLeaf: String?
 
     enum CodingKeys: String, CodingKey {
         case surfaceClass, trackClass, accessClass, distanceMeters, geometry, coords, edgeId
-        case structureType, structureLeaf, layer, crossingLabel, waterCrossing
+        case structureType, structureLeaf, layer, crossingLabel, waterCrossing, surfaceLeaf
     }
 
     init(
@@ -419,7 +422,8 @@ struct RouteSegment: Codable, Identifiable, Sendable {
         structureLeaf: String? = nil,
         layer: Int? = nil,
         crossingLabel: String? = nil,
-        waterCrossing: Bool? = nil
+        waterCrossing: Bool? = nil,
+        surfaceLeaf: String? = nil
     ) {
         self.surfaceClass = surfaceClass
         self.trackClass = trackClass
@@ -433,6 +437,7 @@ struct RouteSegment: Codable, Identifiable, Sendable {
         self.layer = layer
         self.crossingLabel = crossingLabel
         self.waterCrossing = waterCrossing
+        self.surfaceLeaf = surfaceLeaf
     }
 
     var coordinates: [RouteCoordinate] { geometry ?? coords ?? [] }
@@ -462,6 +467,24 @@ struct RouteSegment: Codable, Identifiable, Sendable {
             // surface paint rather than inventing an unknown-access warning.
             accessName: (accessClass ?? "motorized_permissive").lowercased()
         )
+    }
+
+    /// Detailed surface leaves are authoritative whenever Graph v3 says they
+    /// are present. Coarse classes remain a rollback path for v2/legacy data.
+    func presentationSurfaceFamily(usesSurfaceLeaves: Bool) -> SurfaceFamily {
+        if usesSurfaceLeaves {
+            return SurfaceFamilyStats.family(of: surfaceLeaf)
+        }
+        let coarse = paintSurfaceKey.lowercased()
+        let leafFamily = SurfaceFamilyStats.family(of: coarse)
+        if leafFamily != .unknown { return leafFamily }
+        switch coarse {
+        case "paved": return .paved
+        case "gravel", "unpaved", "compacted", "fine_gravel": return .gravel
+        case "dirt", "ground", "earth", "grass", "mud", "sand", "rock", "natural", "woodchips":
+            return .loose
+        default: return .unknown
+        }
     }
 
     var isDirt: Bool {
@@ -494,21 +517,26 @@ struct RouteStats: Codable, Sendable {
     let unknownAccessPercent: Int?
     /// Share of route distance whose surface family is Unknown (Phase E1).
     let unknownSurfacePercent: Int?
+    /// `leaf-v3` means a missing per-edge leaf is honest Unknown, not a legacy
+    /// payload omission that should fall back to its coarse surface class.
+    let surfaceFamilyMode: String?
 
     init(
         dirtPercent: Int? = nil,
         pavedPercent: Int? = nil,
         unknownAccessPercent: Int? = nil,
-        unknownSurfacePercent: Int? = nil
+        unknownSurfacePercent: Int? = nil,
+        surfaceFamilyMode: String? = nil
     ) {
         self.dirtPercent = dirtPercent
         self.pavedPercent = pavedPercent
         self.unknownAccessPercent = unknownAccessPercent
         self.unknownSurfacePercent = unknownSurfacePercent
+        self.surfaceFamilyMode = surfaceFamilyMode
     }
 
     enum CodingKeys: String, CodingKey {
-        case dirtPercent, pavedPercent, unknownAccessPercent, unknownSurfacePercent
+        case dirtPercent, pavedPercent, unknownAccessPercent, unknownSurfacePercent, surfaceFamilyMode
     }
 
     init(from decoder: Decoder) throws {
@@ -517,6 +545,7 @@ struct RouteStats: Codable, Sendable {
         pavedPercent = try c.decodeIfPresent(Int.self, forKey: .pavedPercent)
         unknownAccessPercent = try c.decodeIfPresent(Int.self, forKey: .unknownAccessPercent)
         unknownSurfacePercent = try c.decodeIfPresent(Int.self, forKey: .unknownSurfacePercent)
+        surfaceFamilyMode = try c.decodeIfPresent(String.self, forKey: .surfaceFamilyMode)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -525,6 +554,7 @@ struct RouteStats: Codable, Sendable {
         try c.encodeIfPresent(pavedPercent, forKey: .pavedPercent)
         try c.encodeIfPresent(unknownAccessPercent, forKey: .unknownAccessPercent)
         try c.encodeIfPresent(unknownSurfacePercent, forKey: .unknownSurfacePercent)
+        try c.encodeIfPresent(surfaceFamilyMode, forKey: .surfaceFamilyMode)
     }
 }
 

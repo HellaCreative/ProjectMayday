@@ -243,52 +243,42 @@ nonisolated enum NavCueBuilder {
         )
     }
 
-    private static func merge(curves: [RouteManeuver], junctions: [RouteManeuver]) -> [RouteManeuver] {
-        var items = (curves + junctions).sorted {
+    /// Everything-mode merger. Every graph-authored junction is preserved;
+    /// only rally curves may be suppressed. A curve within 70 m of a real
+    /// decision would compete for the same attention window, so the essential
+    /// junction wins. Distinct nearby junctions are never collapsed.
+    static func mergeRallyEverything(
+        curves: [RouteManeuver],
+        junctions: [RouteManeuver]
+    ) -> [RouteManeuver] {
+        let junctionMeters = junctions.compactMap(\.alongMeters)
+        let awayFromJunctions = curves.filter { curve in
+            guard let along = curve.alongMeters else { return false }
+            return !junctionMeters.contains(where: { abs($0 - along) < mergeJunctionM })
+        }
+
+        // Curve-vs-curve separation is normally already guaranteed by the
+        // geometry builder. Keep it here so callers and fixtures remain safe.
+        var keptCurves: [RouteManeuver] = []
+        for item in awayFromJunctions.sorted(by: {
             ($0.alongMeters ?? 0) < ($1.alongMeters ?? 0)
-        }
-        var merged: [RouteManeuver] = []
-        for item in items {
-            guard let prev = merged.last,
+        }) {
+            guard let prev = keptCurves.last,
                   let a = prev.alongMeters,
                   let b = item.alongMeters,
-                  abs(a - b) < mergeJunctionM
+                  (b - a) < minSeparationM
             else {
-                merged.append(item)
-                continue
-            }
-            let prevJ = prev.isJunctionCue
-            let itemJ = item.isJunctionCue
-            if itemJ && !prevJ {
-                merged[merged.count - 1] = item
-            } else if !itemJ && prevJ {
-                // Keep junction.
-            } else if itemJ && prevJ {
-                if (item.degrees ?? 0) > (prev.degrees ?? 0) {
-                    merged[merged.count - 1] = item
-                }
-            } else if (item.number ?? 99) < (prev.number ?? 99) {
-                merged[merged.count - 1] = item
-            }
-        }
-        // Extra curve-vs-curve separation.
-        items = merged
-        merged = []
-        for item in items {
-            guard let prev = merged.last,
-                  let a = prev.alongMeters,
-                  let b = item.alongMeters,
-                  (b - a) < minSeparationM,
-                  !item.isJunctionCue
-            else {
-                merged.append(item)
+                keptCurves.append(item)
                 continue
             }
             if (item.number ?? 99) < (prev.number ?? 99) {
-                merged[merged.count - 1] = item
+                keptCurves[keptCurves.count - 1] = item
             }
         }
-        return merged
+
+        return (junctions + keptCurves).sorted {
+            ($0.alongMeters ?? 0) < ($1.alongMeters ?? 0)
+        }
     }
 
     // MARK: - Geometry helpers

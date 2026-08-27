@@ -551,16 +551,13 @@ struct RoutePlannerCard: View {
             .lineLimit(1)
             .minimumScaleFactor(0.8)
 
-            // Colors are already named on the line above, so the bar needs no labels.
-            GeometryReader { proxy in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(DirtTheme.pavedMix)
-                    Capsule()
-                        .fill(DirtTheme.dirtMix)
-                        .frame(width: proxy.size.width * CGFloat(dirt) / 100)
-                }
-            }
-            .frame(height: 6)
+            // The text stays Dirt/Paved; the line preserves the honest
+            // paved/gravel/loose/unknown composition.
+            SurfaceMixBar(
+                composition: planner.surfaceComposition,
+                height: 6,
+                showsLabels: false
+            )
         }
         .padding(DirtSpace.inner)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -1117,31 +1114,7 @@ struct RoutePlannerCard: View {
     }
 
     private var mixBar: some View {
-        let dirt = max(0, min(100, planner.aggregateDirtPercent))
-        return VStack(alignment: .leading, spacing: 4) {
-            GeometryReader { proxy in
-                ZStack(alignment: .leading) {
-                    Capsule().fill(DirtTheme.pavedMix)
-                    Capsule()
-                        .fill(DirtTheme.dirtMix)
-                        .frame(width: proxy.size.width * CGFloat(dirt) / 100)
-                }
-            }
-            .frame(height: 8)
-
-            HStack {
-                Text("Dirt")
-                    .font(.dirtUI(12, weight: .bold))
-                    .foregroundStyle(DirtTheme.dirtMix)
-                Spacer(minLength: 0)
-                Text("Paved")
-                    .font(.dirtUI(12, weight: .bold))
-                    .foregroundStyle(DirtTheme.pavedMix)
-            }
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Surface mix")
-        .accessibilityValue("\(dirt) percent dirt, \(100 - dirt) percent paved")
+        SurfaceMixBar(composition: planner.surfaceComposition)
     }
 
     // MARK: - CTAs

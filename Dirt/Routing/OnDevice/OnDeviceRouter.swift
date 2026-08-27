@@ -63,6 +63,9 @@ nonisolated struct OnDeviceRouter {
         var reportedDirtPercent: Int
         var reportedPavedPercent: Int
         var unknownSurfacePercent: Int
+        /// True when every real graph edge can report the authoritative v3
+        /// surface leaf, including an honest nil/untagged value.
+        var hasSurfaceLeaves: Bool = false
         var maneuvers: [RouteManeuver] = []
         var backtrackMeters: Double = 0
         var backtrackPct: Double = 0
@@ -3013,6 +3016,7 @@ nonisolated struct OnDeviceRouter {
             reportedDirtPercent: reported.dirtPercent,
             reportedPavedPercent: reported.pavedPercent,
             unknownSurfacePercent: reported.unknownSurfacePercent,
+            hasSurfaceLeaves: pack.hasLeaves,
             maneuvers: graphDecisionManeuvers(
                 legs: worked,
                 profile: profile,

@@ -1629,12 +1629,6 @@ private func straightLineMeters(_ from: RouteCoordinate, _ to: RouteCoordinate) 
     )
 }
 
-private func fuelStopCountNeeded(meters: Double, usableMeters: Double) -> Int {
-    guard meters.isFinite, meters > 0, usableMeters > 0 else { return 0 }
-    guard meters > usableMeters + 1 else { return 0 }
-    return Int(ceil((meters - usableMeters) / usableMeters))
-}
-
 private func routeRequest(
     profile: RouteProfile,
     allowUnknown: Bool,

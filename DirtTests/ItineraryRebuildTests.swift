@@ -195,12 +195,18 @@ struct HopSearchPolicyTests {
         #expect(HopSearchPolicy.fuelMaxTank == 1.0)
         #expect(HopSearchPolicy.fuelWaypointSnapMeters == 150)
         #expect(HopSearchPolicy.fuelMinTank == 0.50)
-        #expect(HopSearchPolicy.fuelPreferTank == 0.65)
+        #expect(HopSearchPolicy.fuelPreferTank == 0.50)
         #expect(HopSearchPolicy.fuelComfortLo == 0.50)
-        #expect(HopSearchPolicy.fuelComfortHi == 0.80)
+        #expect(HopSearchPolicy.fuelComfortHi == 1.0)
         #expect(HopSearchPolicy.tankCommitBand(graphMeters: 280_000, tankMeters: 450_000) == 0)
         #expect(HopSearchPolicy.tankCommitBand(graphMeters: 200_000, tankMeters: 450_000) == 1)
-        #expect(HopSearchPolicy.tankCommitBand(graphMeters: 449_800, tankMeters: 450_000) == 2)
+        #expect(HopSearchPolicy.tankCommitBand(graphMeters: 449_800, tankMeters: 450_000) == 0)
+        #expect(HopSearchPolicy.tankCommitBand(
+            graphMeters: 40_000, tankMeters: 100_000, usableRangeMeters: 140_000
+        ) == 0)
+        #expect(HopSearchPolicy.tankCommitBand(
+            graphMeters: 20_000, tankMeters: 100_000, usableRangeMeters: 140_000
+        ) == 1)
     }
 
     @Test func corridorWidthsMatchSpec() {
@@ -349,7 +355,24 @@ struct FuelItineraryTests {
         #expect(ranked.first?.id == "osm:forward")
     }
 
-    @Test func rankedPrefersComfortWindowOverTankWall() {
+    @Test func novaScotiaRegressionRejectsNorthwestOvershootPastTheWaypoint() {
+        let start = RouteCoordinate(longitude: -63.340268, latitude: 44.764839)
+        let end = RouteCoordinate(longitude: -62.495696, latitude: 45.399717)
+        let onJourney = RouteCoordinate(longitude: -62.82, latitude: 45.17)
+        let grotesqueOvershoot = RouteCoordinate(longitude: -63.284407, latitude: 45.707419)
+        let ranked = FuelItinerary.rankedProgressFuel(
+            fuels: [poi("overshoot", grotesqueOvershoot), poi("on-journey", onJourney)],
+            from: start,
+            to: end,
+            reachableMeters: ["osm:overshoot": 205_000, "osm:on-journey": 125_000],
+            tankMeters: 250_000,
+            sessionSeed: 1
+        )
+        #expect(ranked.first?.id == "osm:on-journey")
+        #expect(ranked.last?.id == "osm:overshoot")
+    }
+
+    @Test func rankedPreservesForwardProgressAfterSearchOpens() {
         let start = RouteCoordinate(longitude: -63.5752, latitude: 44.6488)
         let end = RouteCoordinate(longitude: -60.1942, latitude: 46.1368)
         let windowStop = GeoMath.interpolate(start, end, fraction: 0.52)
@@ -362,11 +385,11 @@ struct FuelItineraryTests {
             tankMeters: 450_000,
             sessionSeed: 1
         )
-        #expect(ranked.first?.id == "osm:window")
-        #expect(ranked.map(\.id) == ["osm:window", "osm:wall"])
+        #expect(ranked.first?.id == "osm:wall")
+        #expect(ranked.map(\.id) == ["osm:wall", "osm:window"])
     }
 
-    @Test func routedFuelCandidatesPutProfileQualityBeforeTankComfort() {
+    @Test func routedFuelCandidatesPutStopsAndDirectionBeforeProfileQuality() {
         let point = RouteCoordinate(longitude: -63, latitude: 45)
         let quality = poi("quality", point)
         let comfort = poi("comfort", point)
@@ -376,34 +399,38 @@ struct FuelItineraryTests {
             dirt: Double,
             fallback: Int = 0,
             major: Double = 0,
+            total: Double? = nil,
             backtrack: Double = 0,
             stops: Int = 1,
+            detour: Double = 0,
+            valid: Bool = true,
             rank: Int
         ) -> FuelItinerary.ProfileFuelCandidate {
             FuelItinerary.ProfileFuelCandidate(
                 fuel: fuel,
                 routedMeters: meters,
                 chainDirtPercent: dirt,
-                validForward: true,
+                validForward: valid,
                 cleanFallbackCount: fallback,
                 cleanMajorRoadMeters: major,
-                cleanRoutedMeters: meters,
+                cleanRoutedMeters: total ?? meters,
                 chainBacktrackMeters: backtrack,
                 chainStopCount: stops,
                 progressMeters: meters,
+                directionalDetourMeters: detour,
                 discoveryRank: rank
             )
         }
         let earlyDirt = candidate(quality, meters: 40_000, dirt: 92, rank: 0)
         let comfortablePaved = candidate(comfort, meters: 80_000, dirt: 8, rank: 1)
         #expect(FuelItinerary.prefersProfileFuelCandidate(
-            earlyDirt, over: comfortablePaved, profile: .dirt, tankMeters: 130_000
+            comfortablePaved, over: earlyDirt, profile: .dirt, tankMeters: 130_000
         ))
 
         let earlyBalanced = candidate(quality, meters: 40_000, dirt: 50, rank: 0)
         let comfortableDirt = candidate(comfort, meters: 80_000, dirt: 95, rank: 1)
         #expect(FuelItinerary.prefersProfileFuelCandidate(
-            earlyBalanced, over: comfortableDirt, profile: .balanced, tankMeters: 130_000
+            comfortableDirt, over: earlyBalanced, profile: .balanced, tankMeters: 130_000
         ))
 
         let earlyRural = candidate(quality, meters: 40_000, dirt: 0, rank: 0)
@@ -411,32 +438,70 @@ struct FuelItineraryTests {
             comfort, meters: 80_000, dirt: 0, fallback: 1, major: 60_000, rank: 1
         )
         #expect(FuelItinerary.prefersProfileFuelCandidate(
-            earlyRural, over: comfortableTown, profile: .cleanest, tankMeters: 130_000
+            comfortableTown, over: earlyRural, profile: .cleanest, tankMeters: 130_000
         ))
 
         let ruralArc = candidate(
             quality, meters: 180_000, dirt: 60, backtrack: 0, stops: 3, rank: 0
         )
         let lollipop = candidate(
-            comfort, meters: 160_000, dirt: 70, backtrack: 32_000, stops: 1, rank: 1
+            comfort, meters: 160_000, dirt: 70, backtrack: 32_000, stops: 1,
+            valid: false, rank: 1
         )
         #expect(FuelItinerary.prefersProfileFuelCandidate(
             ruralArc, over: lollipop, profile: .dirt, tankMeters: 130_000
         ))
+
+        let forward = candidate(
+            quality, meters: 90_000, dirt: 10, stops: 1, detour: 2_000, rank: 0
+        )
+        let sideways = candidate(
+            comfort, meters: 90_000, dirt: 95, stops: 1, detour: 70_000, rank: 1
+        )
+        #expect(FuelItinerary.prefersProfileFuelCandidate(
+            forward, over: sideways, profile: .dirt, tankMeters: 130_000
+        ))
+
+        let shorterWholeChain = candidate(
+            quality, meters: 100_000, dirt: 10, total: 150_000, rank: 0
+        )
+        let shortFirstHopLongChain = candidate(
+            comfort, meters: 80_000, dirt: 95, total: 210_000, rank: 1
+        )
+        #expect(FuelItinerary.prefersProfileFuelCandidate(
+            shorterWholeChain, over: shortFirstHopLongChain,
+            profile: .dirt, tankMeters: 130_000
+        ))
     }
 
 
-    @Test func nearWallLegRequestsComfortFuelWhileShortLegDoesNot() {
+    @Test func safelyReachableLegDoesNotManufactureAComfortFuelStop() {
         #expect(FuelItinerary.fuelStopCountNeeded(
             profileMeters: 152_000,
             firstLegMaxMeters: 153_000,
             usableRangeMeters: 153_000
-        ) == 1)
+        ) == 0)
         #expect(FuelItinerary.fuelStopCountNeeded(
             profileMeters: 100_000,
             firstLegMaxMeters: 153_000,
             usableRangeMeters: 153_000
         ) == 0)
+        #expect(FuelItinerary.fuelStopCountNeeded(
+            profileMeters: 154_000,
+            firstLegMaxMeters: 153_000,
+            usableRangeMeters: 153_000
+        ) == 1)
+    }
+
+    @Test func reserveAdjustedSearchBeginsAfterHalfTheUsableRange() {
+        #expect(FuelItinerary.fuelSearchStartMeters(
+            firstLegMaxMeters: 140_000,
+            usableRangeMeters: 140_000
+        ) == 70_000)
+        #expect(FuelItinerary.fuelSearchStartMeters(
+            firstLegMaxMeters: 100_000,
+            usableRangeMeters: 140_000
+        ) == 30_000)
     }
 
     @Test func numberedWaypointOnStationIsALiveRefuelUntilDraggedOff() {

@@ -43,13 +43,16 @@ Right-edge chrome above the dock / nav HUD:
 
 | Control | Behavior |
 | --- | --- |
-| **3D / 2D** | Toggles basemap pitch (`45°` idle / `55°` while following) |
-| **Cues** | Popover: All / Junction / Rally + Audio on/off (`dirt_cue_mode_v1`, `dirt_cue_audio_v1`) |
+| **3D / 2D** | Always available on the primary map; toggles basemap pitch (`45°` idle / `55°` while following) |
+| **Cues** | Navigation-only. Popover: Junction / Essential or Rally / Everything + independent Audio On/Off (`dirt_cue_mode_v1`, `dirt_cue_audio_v1`) |
 | **Compass** | Rose tracks map bearing; tap resets north-up |
-| **Rider status** | Quick group sharing + Available / Breakdown / Injured / Stuck |
+| **Rider status** | Always available on the primary map; quick group sharing + Available / Breakdown / Injured / Stuck |
+| **Route overview** | Appears beside Recenter only when an actual route polyline is painted |
 | **Recenter** | Follow my location (course-up); orange while follow is locked **or while the nav Recenter chip is up** (either control re-locks follow) |
 
-When the route planner card is open, only **Recenter** remains.
+Planning keeps 3D/2D, Compass, Rider Status, and Recenter visible. Cues appears
+only after navigation begins; Route Overview hides immediately when no route is
+painted.
 
 Idle map top-left holds the brand chip. During navigation the top row is **DIRT.** · turn cue (+ distance) · dark speed pill. Recenter lives on the right control stack.
 

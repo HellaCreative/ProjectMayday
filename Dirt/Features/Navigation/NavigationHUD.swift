@@ -49,8 +49,7 @@ struct NavCueCard: View {
                 }
                 if !nav.offRoute,
                    app.cueSettings.mode == .rally,
-                   let following = nav.followingManeuver,
-                   following.isRallyCurve {
+                   let following = nav.followingManeuver {
                     Text("Next \(following.displayLabel(cueMode: .rally)) · \(Self.formatDistance(nav.followingManeuverMeters ?? 0))")
                         .font(.dirtUI(11, weight: .semibold))
                         .foregroundStyle(DirtTheme.panelText.opacity(0.72))

@@ -48,8 +48,10 @@ struct MapViewportBounds: Equatable, Sendable {
 
 struct RouteDisplaySegment {
     let coordinates: [RouteCoordinate]
-    /// Surface/access-aware key used for selected-route paint.
+    /// Four-family surface key used for selected-route paint.
     let surfaceKey: String
+    /// Access is an independent warning channel and must not replace surface.
+    var accessUnknown = false
     /// Planner stage that produced this paint run. Diagnostic in Phase 0 and
     /// later carried into the canonical rider-leg feature identity.
     var stageIndex: Int? = nil
@@ -57,7 +59,7 @@ struct RouteDisplaySegment {
     var riderLegID: UUID? = nil
 
     var isDirt: Bool {
-        RouteSegment.isAdventureSurface(surfaceKey)
+        surfaceKey != SurfaceFamily.paved.rawValue
     }
 }
 
@@ -368,6 +370,12 @@ final class MapState {
         setRoute([])
     }
 
+    /// Exact visibility gate for controls that operate on the painted route.
+    /// Waypoints or an in-progress/failed build do not count as a route line.
+    var hasDisplayedRoute: Bool {
+        routeSegments.contains(where: { $0.coordinates.count >= 2 })
+    }
+
     /// Flattened active-route polyline for network corridor sampling.
     var routePolylineCoordinates: [RouteCoordinate] {
         var out: [RouteCoordinate] = []
@@ -535,12 +543,14 @@ final class MapState {
             let segments = response.segments ?? []
             var currentCoords: [RouteCoordinate] = []
             var currentKey: String?
+            var currentAccessUnknown = false
             func flush() {
                 if currentCoords.count > 1, let key = currentKey {
                     result.append(
                         RouteDisplaySegment(
                             coordinates: currentCoords,
                             surfaceKey: key,
+                            accessUnknown: currentAccessUnknown,
                             stageIndex: stageIndex,
                             riderLegID: riderLegID
                         )
@@ -548,6 +558,7 @@ final class MapState {
                 }
                 currentCoords = []
                 currentKey = nil
+                currentAccessUnknown = false
             }
             if segments.isEmpty {
                 let coords = response.coordinates
@@ -556,7 +567,7 @@ final class MapState {
                     result.append(
                         RouteDisplaySegment(
                             coordinates: coords,
-                            surfaceKey: "connector",
+                            surfaceKey: SurfaceFamily.unknown.rawValue,
                             stageIndex: stageIndex,
                             riderLegID: riderLegID
                         )
@@ -567,14 +578,18 @@ final class MapState {
             for segment in segments {
                 let coords = segment.coordinates
                 guard !coords.isEmpty else { continue }
-                let key = segment.selectedRoutePaintKey
-                if currentKey == key {
+                let key = segment.presentationSurfaceFamily(
+                    usesSurfaceLeaves: response.stats?.surfaceFamilyMode == "leaf-v3"
+                ).rawValue
+                let accessUnknown = segment.accessClass?.lowercased() == "motorized_unknown"
+                if currentKey == key, currentAccessUnknown == accessUnknown {
                     for coordinate in coords where coordinate != currentCoords.last {
                         currentCoords.append(coordinate)
                     }
                 } else {
                     flush()
                     currentKey = key
+                    currentAccessUnknown = accessUnknown
                     currentCoords = coords
                 }
             }

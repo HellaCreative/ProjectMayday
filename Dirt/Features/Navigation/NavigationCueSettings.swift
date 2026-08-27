@@ -123,8 +123,8 @@ enum CueSpeechVoice {
 }
 
 /// Pref keys: `dirt_cue_mode_v1` / `dirt_cue_audio_v1`.
-/// - junctions: network / decision turns
-/// - rally: geometry-derived roadbook curves only
+/// - junctions: essential network / decision turns
+/// - rally: every essential junction plus geometry-derived roadbook curves
 nonisolated enum NavigationCueMode: String, CaseIterable, Identifiable, Sendable {
     case junctions
     case rally
@@ -145,10 +145,17 @@ nonisolated enum NavigationCueMode: String, CaseIterable, Identifiable, Sendable
         }
     }
 
+    var detailLabel: String {
+        switch self {
+        case .junctions: "Essential"
+        case .rally: "Everything"
+        }
+    }
+
     var statusToast: String {
         switch self {
-        case .junctions: "Cues: junctions only"
-        case .rally: "Cues: rally curves only"
+        case .junctions: "Essential junction cues"
+        case .rally: "Everything: junctions and rally curves"
         }
     }
 
@@ -392,8 +399,8 @@ extension RouteManeuver {
 
         switch cueMode {
         case .rally:
-            // Roadbook / geometry curves from the router (`type: bend`) or explicit curve kind.
-            return isRallyCurve
+            // Everything: essential decisions plus the roadbook curves between them.
+            return isJunctionCue || isRallyCurve
         case .junctions:
             return isJunctionCue
                 || (normalized == "bend" && (degrees ?? 0) >= 70)
@@ -441,8 +448,9 @@ extension RouteManeuver {
         phase: NavigationCuePhase? = nil
     ) -> String {
         let core = displayLabel(cueMode: cueMode)
-        // Rally curves: number + side only.
-        if cueMode == .rally {
+        // Rally curves: number + side only. Essential junctions included in
+        // Everything retain their normal distance/now navigation wording.
+        if cueMode == .rally, isRallyCurve {
             if let side = side?.lowercased(), let number {
                 let spokenSide = side
                 let base = number == 1

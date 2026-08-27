@@ -16,9 +16,13 @@ final class RouteResponseCache {
         let to: RouteCoordinate
         let profile: RouteProfile
         let allowUnknown: Bool
+        let avoidEdgeIDs: [String]
         let priorEdgeIDs: [String]
         let arrivalEdgeID: String?
         let backtrackFactor: Double
+        let sessionSeed: UInt64?
+        let directExtraBudgetMeters: Double?
+        let regionalHopMinimumMeters: [Double]
         let sourceName: String
         let packRevision: String
         let cleanMetroMultiplier: Double?
@@ -28,9 +32,13 @@ final class RouteResponseCache {
         var description: String {
             "\(from.latitude),\(from.longitude)>\(to.latitude),\(to.longitude)" +
                 "|\(profile.rawValue)|unknown=\(allowUnknown ? 1 : 0)" +
+                "|avoid=\(avoidEdgeIDs.joined(separator: ","))" +
                 "|prior=\(priorEdgeIDs.joined(separator: ","))" +
                 "|arrival=\(arrivalEdgeID ?? "nil")" +
                 "|backtrack=\(backtrackFactor)" +
+                "|seed=\(sessionSeed.map { String($0) } ?? "-")" +
+                "|extra=\(directExtraBudgetMeters.map { String($0) } ?? "-")" +
+                "|regional=\(regionalHopMinimumMeters.map { String($0) }.joined(separator: ","))" +
                 "|metro=\(cleanMetroMultiplier.map { String(format: "%.0f", $0) } ?? "-")" +
                 "|avoidMwy=\(avoidMotorways ? 1 : 0)|back=\(preferBackRoads ? 1 : 0)" +
                 "|\(sourceName)|\(packRevision)"
@@ -126,9 +134,13 @@ final class PackRoutingSource: RoutingSource {
             to: endpoints.1,
             profile: req.profile,
             allowUnknown: req.accessPolicy.motorizedUnknown,
+            avoidEdgeIDs: normalizedEdgeIDs(req.options?.avoidEdgeIds),
             priorEdgeIDs: normalizedEdgeIDs(req.options?.priorEdgeIds),
             arrivalEdgeID: req.options?.arrivalEdgeId,
             backtrackFactor: req.options?.backtrackFactor ?? 4,
+            sessionSeed: req.options?.sessionSeed,
+            directExtraBudgetMeters: req.options?.directExtraBudgetMeters,
+            regionalHopMinimumMeters: req.options?.regionalHopMinimumMeters ?? [],
             sourceName: name,
             packRevision: packs.lastManifestVersion,
             cleanMetroMultiplier: req.options?.cleanMetroMultiplier,
@@ -270,11 +282,7 @@ final class PackRoutingSource: RoutingSource {
                     directFallback = route.distanceMeters
                 }
             }
-            let directComfort = FuelItinerary.comfortCapMeters(
-                firstLegMaxMeters: firstCap,
-                usableRangeMeters: req.fuel.usableRangeMeters
-            )
-            if let directFallback, !mustPump, directFallback <= directComfort + 1 {
+            if let directFallback, !mustPump {
                 let visibleStops = Array(stops.prefix(returnedStopLimit))
                 let windowComplete = stops.count <= returnedStopLimit
                 let visibleMeters = windowComplete
@@ -327,6 +335,7 @@ final class PackRoutingSource: RoutingSource {
                 to: end,
                 reachableMeters: reachable,
                 tankMeters: firstCap,
+                usableRangeMeters: req.fuel.usableRangeMeters,
                 sessionSeed: 0,
                 excluding: visited
             )
@@ -411,10 +420,28 @@ final class PackRoutingSource: RoutingSource {
                         allowUnknown: req.accessPolicy.motorizedUnknown
                     )
                 }
-                let hasOnwardPump = onward.keys.contains {
-                    $0 != candidate.id && !visited.contains($0)
-                }
-                let validForward = continuationRoute != nil || hasOnwardPump
+                var onwardExclusions = visited
+                onwardExclusions.insert(candidate.id)
+                let hasOnwardPump = continuationRoute == nil && !FuelItinerary.rankedProgressFuel(
+                    fuels: stations,
+                    from: RouteCoordinate(
+                        longitude: candidate.longitude,
+                        latitude: candidate.latitude
+                    ),
+                    to: end,
+                    reachableMeters: onward,
+                    tankMeters: req.fuel.usableRangeMeters,
+                    usableRangeMeters: req.fuel.usableRangeMeters,
+                    sessionSeed: req.options?.sessionSeed ?? 0,
+                    excluding: onwardExclusions
+                ).isEmpty
+                // A forecourt connector may repeat briefly; a meaningful
+                // down-and-back fuel stem is never a valid chain anchor.
+                let maximumFuelRetraceMeters = 1_000.0
+                let avoidsMeaningfulRetrace = firstRoute.backtrackMeters <= maximumFuelRetraceMeters
+                    && (continuationRoute?.backtrackMeters ?? 0) <= maximumFuelRetraceMeters
+                let validForward = (continuationRoute != nil || hasOnwardPump)
+                    && avoidsMeaningfulRetrace
                 let chainDirt: Double
                 if let continuationRoute {
                     let total = firstRoute.distanceMeters + continuationRoute.distanceMeters
@@ -452,6 +479,11 @@ final class PackRoutingSource: RoutingSource {
                     progressMeters: GeoMath.progressAlongAB(from: current, to: end, point: RouteCoordinate(
                         longitude: candidate.longitude,
                         latitude: candidate.latitude
+                    )),
+                    directionalDetourMeters: abs(GeoMath.crossTrackMeters(
+                        point: candidateCoordinate,
+                        lineFrom: current.locationCoordinate,
+                        to: end.locationCoordinate
                     )),
                     discoveryRank: rank
                 ))
@@ -694,9 +726,13 @@ private func cacheKey(
     return RouteResponseCache.Key(
         from: endpoints.0, to: endpoints.1, profile: request.profile,
         allowUnknown: request.accessPolicy.motorizedUnknown,
+        avoidEdgeIDs: normalizedEdgeIDs(request.options?.avoidEdgeIds),
         priorEdgeIDs: normalizedEdgeIDs(request.options?.priorEdgeIds),
         arrivalEdgeID: request.options?.arrivalEdgeId,
         backtrackFactor: request.options?.backtrackFactor ?? 4,
+        sessionSeed: request.options?.sessionSeed,
+        directExtraBudgetMeters: request.options?.directExtraBudgetMeters,
+        regionalHopMinimumMeters: request.options?.regionalHopMinimumMeters ?? [],
         sourceName: sourceName, packRevision: packRevision,
         cleanMetroMultiplier: request.options?.cleanMetroMultiplier,
         avoidMotorways: request.options?.avoidMotorways == true,
@@ -728,7 +764,8 @@ private extension RouteResponse {
                 structureLeaf: leg.structureLeaf,
                 layer: leg.layer,
                 crossingLabel: leg.crossingLabel,
-                waterCrossing: leg.waterCrossing
+                waterCrossing: leg.waterCrossing,
+                surfaceLeaf: leg.surfaceLeaf
             )
         }
         let repeatedMeters = local.legs.reduce(0.0) {
@@ -746,7 +783,8 @@ private extension RouteResponse {
                 dirtPercent: local.reportedDirtPercent,
                 pavedPercent: local.reportedPavedPercent,
                 unknownAccessPercent: local.unknownAccessPercent,
-                unknownSurfacePercent: local.unknownSurfacePercent
+                unknownSurfacePercent: local.unknownSurfacePercent,
+                surfaceFamilyMode: local.hasSurfaceLeaves ? "leaf-v3" : nil
             ),
             maneuvers: local.maneuvers, warnings: nil,
             dirtPercentValue: nil, pavedPercentValue: nil,

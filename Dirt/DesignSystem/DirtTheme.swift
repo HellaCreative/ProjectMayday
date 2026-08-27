@@ -81,31 +81,34 @@ enum DirtTheme {
     /// Layers legend / basemap paved overlay (not selected-route paint).
     static let pavedLine = Color(dirtHex: 0x303A45)
 
-    // Selected-route map paint:
-    // purple = Allow-unknown motor access, warm brand orange = adventure
-    // surface, near-black = explicit/inferred paved.
-    static let routeAccess = Color(dirtHex: 0x6D36C9)
-    static let routeGravel = Color(dirtHex: 0xDC6803)
-    static let routeTrack = Color(dirtHex: 0xDC6803)
-    static let routePaved = Color(dirtHex: 0x17181C)
-    static let routeConnector = Color(dirtHex: 0x6D36C9)
+    // Selected-route surface families. Rich, deep colors stay legible against
+    // the white route casing; purple remains an independent access warning.
+    static let routeAccess = Color(dirtHex: 0x54208F)
+    static let routePaved = Color(dirtHex: 0x14161A)
+    static let routeGravel = Color(dirtHex: 0xB56A00)
+    static let routeLoose = Color(dirtHex: 0x6E2F16)
+    static let routeUnknown = Color(dirtHex: 0x555A63)
 
     /// Dirt % text + mix bar — matches map dirt (warm brand orange).
-    static let dirtMix = routeGravel
-    /// Paved % text + mix bar — matches map paved (near-black).
+    static let dirtMix = orange
+    /// Paved % text + mix bar — matches the four-family map legend.
     static let pavedMix = routePaved
 
     /// Paint bucket for a graph surface/track class.
     static func routePaintColor(for surfaceKey: String) -> Color {
         switch surfaceKey.lowercased() {
-        case "unknown_access", "connector":
-            return routeAccess
-        case "access", "resource", "gravel", "unknown", "unpaved", "dirt", "track", "double_track":
-            return routeGravel
         case "paved":
             return routePaved
+        case "gravel":
+            return routeGravel
+        case "loose":
+            return routeLoose
+        case "unknown":
+            return routeUnknown
+        case "unknown_access":
+            return routeAccess
         default:
-            return routePaved
+            return routeUnknown
         }
     }
 }

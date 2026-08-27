@@ -74,7 +74,7 @@ struct OfflineMapPrepOverlay: View {
                  ? "Mapping the route corridor before the download begins."
                  : (mostlyCached
                     ? "This corridor is already on your phone. Confirming tiles, then you’re set."
-                    : "Dual-sport country means no signal. We’re downloading the route corridor before you roll."))
+                    : "Dual-sport country means no signal. We’re saving the first riding section before you roll."))
                 .font(.dirtUI(14))
                 .foregroundStyle(DirtTheme.muted)
                 .fixedSize(horizontal: false, vertical: true)

@@ -199,6 +199,30 @@ final class AppEnvironment {
         if debugBypassSubscription {
             syncTrialEntitlement()
         }
+
+#if DEBUG
+        // Focused UI-test state for navigation-only chrome. This never ships in
+        // release builds and avoids creating routes, downloads, or simulators.
+        if ProcessInfo.processInfo.environment["DIRT_UI_TEST_CUES"] == "1" {
+            navigation.activate(
+                coordinates: [
+                    RouteCoordinate(longitude: -63.60, latitude: 44.65),
+                    RouteCoordinate(longitude: -63.58, latitude: 44.66)
+                ],
+                maneuvers: [
+                    RouteManeuver(
+                        instruction: "Turn right",
+                        type: "turn",
+                        stableID: "ui-test-junction",
+                        kind: "junction",
+                        side: "right",
+                        distanceMeters: 0,
+                        alongMeters: 700
+                    )
+                ]
+            )
+        }
+#endif
     }
 
     func setCueMode(_ mode: NavigationCueMode) {

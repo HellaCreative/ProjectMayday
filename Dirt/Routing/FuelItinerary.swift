@@ -16,6 +16,7 @@ nonisolated enum FuelItinerary {
         let chainBacktrackMeters: Double
         let chainStopCount: Int
         let progressMeters: Double
+        let directionalDetourMeters: Double
         let discoveryRank: Int
     }
 
@@ -39,8 +40,8 @@ nonisolated enum FuelItinerary {
         return (fallbackCount, majorMeters, route.distanceMeters)
     }
 
-    /// Safety/continuity is a gate. After that, ride character chooses the
-    /// pump; the 50–80% comfort window only breaks profile-quality ties.
+    /// Safety/continuity is a gate. Then minimize complete-chain stops and
+    /// preserve forward travel. Ride character is the final tiebreaker.
     static func prefersProfileFuelCandidate(
         _ a: ProfileFuelCandidate,
         over b: ProfileFuelCandidate,
@@ -48,6 +49,7 @@ nonisolated enum FuelItinerary {
         tankMeters: Double
     ) -> Bool {
         if a.validForward != b.validForward { return a.validForward }
+        if a.chainStopCount != b.chainStopCount { return a.chainStopCount < b.chainStopCount }
         let aBacktrack = a.cleanRoutedMeters > 0
             ? a.chainBacktrackMeters / a.cleanRoutedMeters
             : 0
@@ -55,6 +57,15 @@ nonisolated enum FuelItinerary {
             ? b.chainBacktrackMeters / b.cleanRoutedMeters
             : 0
         if abs(aBacktrack - bBacktrack) > 0.01 { return aBacktrack < bBacktrack }
+        if abs(a.directionalDetourMeters - b.directionalDetourMeters) > 2_000 {
+            return a.directionalDetourMeters < b.directionalDetourMeters
+        }
+        if abs(a.progressMeters - b.progressMeters) > 2_000 {
+            return a.progressMeters > b.progressMeters
+        }
+        if abs(a.cleanRoutedMeters - b.cleanRoutedMeters) > 50 {
+            return a.cleanRoutedMeters < b.cleanRoutedMeters
+        }
         switch profile {
         case .dirt:
             if abs(a.chainDirtPercent - b.chainDirtPercent) > 0.5 {
@@ -76,33 +87,30 @@ nonisolated enum FuelItinerary {
                 : 0
             if abs(aMajor - bMajor) > 0.005 { return aMajor < bMajor }
         }
-        let aBand = HopSearchPolicy.tankCommitBand(
-            graphMeters: a.routedMeters, tankMeters: tankMeters
-        )
-        let bBand = HopSearchPolicy.tankCommitBand(
-            graphMeters: b.routedMeters, tankMeters: tankMeters
-        )
-        if aBand != bBand { return aBand < bBand }
-        if abs(a.progressMeters - b.progressMeters) > 2_000 {
-            return a.progressMeters > b.progressMeters
-        }
-        if abs(a.routedMeters - b.routedMeters) > 50 {
-            return a.routedMeters < b.routedMeters
-        }
-        if a.chainStopCount != b.chainStopCount { return a.chainStopCount < b.chainStopCount }
+        _ = tankMeters
         return a.discoveryRank < b.discoveryRank
     }
 
-    /// The rider's usable range is a safety ceiling. Routine fuel allocation
-    /// targets the upper edge of the 50–80% comfort window and may stop earlier
-    /// when that produces a better complete ride.
+    /// Remaining usable fuel is the hard first-leg ceiling. A reachable rider
+    /// waypoint never receives a manufactured comfort stop.
     static func comfortCapMeters(
         firstLegMaxMeters: Double,
         usableRangeMeters: Double
     ) -> Double {
         guard usableRangeMeters > 0, firstLegMaxMeters >= 0 else { return 0 }
-        let used = max(0, usableRangeMeters - min(usableRangeMeters, firstLegMaxMeters))
-        return max(0, usableRangeMeters * HopSearchPolicy.fuelComfortHi - used)
+        return min(firstLegMaxMeters, usableRangeMeters)
+    }
+
+    /// Distance from the current departure at which fuel candidate search opens.
+    /// Reserve is already reflected in `usableRangeMeters`; partial-tank use is
+    /// reflected by a smaller `firstLegMaxMeters`.
+    static func fuelSearchStartMeters(
+        firstLegMaxMeters: Double,
+        usableRangeMeters: Double
+    ) -> Double {
+        guard usableRangeMeters > 0, firstLegMaxMeters >= 0 else { return 0 }
+        let used = max(0, usableRangeMeters - min(firstLegMaxMeters, usableRangeMeters))
+        return max(0, usableRangeMeters * HopSearchPolicy.fuelComfortLo - used)
     }
 
     static func fuelStopCountNeeded(
@@ -111,13 +119,9 @@ nonisolated enum FuelItinerary {
         usableRangeMeters: Double
     ) -> Int {
         guard profileMeters.isFinite, profileMeters >= 0, usableRangeMeters > 0 else { return 0 }
-        let firstComfort = comfortCapMeters(
-            firstLegMaxMeters: firstLegMaxMeters,
-            usableRangeMeters: usableRangeMeters
-        )
-        guard profileMeters > firstComfort + 1 else { return 0 }
-        return Int(ceil((profileMeters - firstComfort) /
-            (usableRangeMeters * HopSearchPolicy.fuelComfortHi)))
+        let firstCap = min(firstLegMaxMeters, usableRangeMeters)
+        guard profileMeters > firstCap + 1 else { return 0 }
+        return Int(ceil((profileMeters - firstCap) / usableRangeMeters))
     }
 
     /// A numbered rider waypoint is a live refuel only while it sits on a packed
@@ -300,12 +304,14 @@ nonisolated enum FuelItinerary {
         to: RouteCoordinate,
         reachableMeters: [String: Double],
         tankMeters: Double,
+        usableRangeMeters: Double? = nil,
         sessionSeed: UInt64,
         excluding: Set<String> = []
     ) -> POIFeature? {
         rankedProgressFuel(
             fuels: fuels, from: from, to: to, reachableMeters: reachableMeters,
-            tankMeters: tankMeters, sessionSeed: sessionSeed, excluding: excluding
+            tankMeters: tankMeters, usableRangeMeters: usableRangeMeters,
+            sessionSeed: sessionSeed, excluding: excluding
         ).first
     }
 
@@ -316,6 +322,7 @@ nonisolated enum FuelItinerary {
         to: RouteCoordinate,
         reachableMeters: [String: Double],
         tankMeters: Double,
+        usableRangeMeters: Double? = nil,
         sessionSeed: UInt64,
         excluding: Set<String> = []
     ) -> [POIFeature] {
@@ -352,7 +359,7 @@ nonisolated enum FuelItinerary {
                 to: to.locationCoordinate
             ))
             let coherent = !(
-                (crossTrack > 50_000 && crossTrack > progress * 0.75 && progress < ab * 0.75)
+                (crossTrack > 50_000 && crossTrack > progress * 0.75)
                     || (progress < max(10_000, ab * 0.18) && crossTrack > 25_000)
             )
             cands.append(Cand(
@@ -370,14 +377,19 @@ nonisolated enum FuelItinerary {
             // but never rank it above a route-coherent forward pump.
             if a.coherent != b.coherent { return a.coherent }
             let ba = HopSearchPolicy.tankCommitBand(
-                graphMeters: a.graphMeters, tankMeters: tankMeters
+                graphMeters: a.graphMeters,
+                tankMeters: tankMeters,
+                usableRangeMeters: usableRangeMeters
             )
             let bb = HopSearchPolicy.tankCommitBand(
-                graphMeters: b.graphMeters, tankMeters: tankMeters
+                graphMeters: b.graphMeters,
+                tankMeters: tankMeters,
+                usableRangeMeters: usableRangeMeters
             )
             if ba != bb { return ba < bb }
-            if abs(a.progress - b.progress) > 2_000 { return a.progress > b.progress }
             if abs(a.crossTrack - b.crossTrack) > 5_000 { return a.crossTrack < b.crossTrack }
+            if abs(a.progress - b.progress) > 2_000 { return a.progress > b.progress }
+            if abs(a.graphMeters - b.graphMeters) > 2_000 { return a.graphMeters < b.graphMeters }
             let ha = HopSearchPolicy.hash(sessionSeed, Int(a.progress), Int(a.graphMeters))
             let hb = HopSearchPolicy.hash(sessionSeed, Int(b.progress), Int(b.graphMeters))
             if ha != hb { return ha < hb }

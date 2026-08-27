@@ -89,7 +89,9 @@ extension OnDeviceRouter.Result {
         guard meters > 0, coords.count >= 2 else { return nil }
         let coarseDirt = Int((dirtMeters / meters * 100).rounded())
         let coarsePaved = Int((pavedMeters / meters * 100).rounded())
-        let hasLeaves = legs.contains { $0.surfaceLeaf != nil }
+        // A nil leaf in Graph v3 means honestly untagged. Do not mistake an
+        // all-untagged hop for a legacy v2 response.
+        let hasLeaves = hops.allSatisfy(\.hasSurfaceLeaves)
         let reported: SurfaceFamilyStats.Percents
         if hasLeaves {
             let leafLegs = legs.filter {
@@ -121,6 +123,7 @@ extension OnDeviceRouter.Result {
             reportedDirtPercent: reported.dirtPercent,
             reportedPavedPercent: reported.pavedPercent,
             unknownSurfacePercent: reported.unknownSurfacePercent,
+            hasSurfaceLeaves: hasLeaves,
             searchMeta: OnDeviceRouter.SearchMeta(
                 urbanCoreFallbackUsed: hops.contains { $0.searchMeta.urbanCoreFallbackUsed },
                 cleanUnpavedFallbackUsed: hops.contains { $0.searchMeta.cleanUnpavedFallbackUsed },

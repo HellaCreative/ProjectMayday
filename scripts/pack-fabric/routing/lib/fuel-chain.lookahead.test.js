@@ -29,6 +29,21 @@ test("itinerary look-ahead rejects a dirt-preferred pump that strands the next l
   assert.equal(result.stops[1].legIndex, 1);
 });
 
+test("equal-stop itinerary chains preserve forward progress before dirt quality", () => {
+  const result = planItineraryFuelChain({
+    usableRangeMeters: 200_000,
+    legs: [{
+      meters: 300_000,
+      stations: [
+        { id: "early-dirt", meters: 120_000, dirtPct: 95 },
+        { id: "forward-paved", meters: 180_000, dirtPct: 5 }
+      ]
+    }]
+  });
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.stops.map((stop) => stop.id), ["forward-paved"]);
+});
+
 test("rider waypoint on a station resets the tank without a generated stop", () => {
   const result = planItineraryFuelChain({
     usableRangeMeters: 237_500,

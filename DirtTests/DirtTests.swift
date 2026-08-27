@@ -6,11 +6,86 @@
 //
 
 import CryptoKit
+import CoreLocation
 import Foundation
 import Testing
 @testable import Dirt
 
 struct DirtTests {
+    @Test func navigationTileScopeBlocksOnlyFirstRiderOrFuelStage() throws {
+        let first = [
+            RouteCoordinate(longitude: -63.57, latitude: 44.64),
+            RouteCoordinate(longitude: -63.82, latitude: 44.78)
+        ]
+        let second = [
+            RouteCoordinate(longitude: -63.82, latitude: 44.78),
+            RouteCoordinate(longitude: -64.15, latitude: 45.02)
+        ]
+        let wholeRoute = first + second.dropFirst()
+
+        #expect(NavigationTileScope.blockingCoordinates(
+            stageCoordinates: [first, second],
+            fallback: wholeRoute
+        ) == first)
+        let lookahead = try #require(NavigationTileScope.lookaheadCoordinates(
+            after: 0,
+            stageCoordinates: [first, second]
+        ))
+        #expect(lookahead.index == 1)
+        #expect(lookahead.coordinates == second)
+        #expect(NavigationTileScope.lookaheadCoordinates(
+            after: 1,
+            stageCoordinates: [first, second]
+        ) == nil)
+        #expect(NavigationTileScope.blockingCoordinates(
+            stageCoordinates: [],
+            fallback: wholeRoute
+        ) == wholeRoute)
+    }
+
+    @Test func navigationTilePlanCacheRequiresExactGeometryAndViewport() throws {
+        let route = [
+            RouteCoordinate(longitude: -63.5752, latitude: 44.6488),
+            RouteCoordinate(longitude: -64.4935, latitude: 45.0770)
+        ]
+        let plan = CorridorTilePlanner.collectRouteTiles(
+            coordinates: route,
+            viewportWidth: 390,
+            viewportHeight: 844
+        )
+        var cache = CorridorTilePlanCache()
+        #expect(cache.plan(for: route, viewportWidth: 390, viewportHeight: 844) == nil)
+        cache.store(plan, for: route, viewportWidth: 390, viewportHeight: 844)
+        #expect(cache.plan(for: route, viewportWidth: 390, viewportHeight: 844)?.tiles == plan.tiles)
+
+        var changed = route
+        changed[1] = RouteCoordinate(longitude: -64.4935, latitude: 45.0870)
+        #expect(cache.plan(for: changed, viewportWidth: 390, viewportHeight: 844) == nil)
+        #expect(cache.plan(for: route, viewportWidth: 844, viewportHeight: 390) == nil)
+        let changedPlan = CorridorTilePlanner.collectRouteTiles(coordinates: changed)
+        cache.store(changedPlan, for: changed, viewportWidth: 390, viewportHeight: 844)
+        #expect(cache.plan(for: route, viewportWidth: 390, viewportHeight: 844)?.tiles == plan.tiles)
+    }
+
+    @Test func navigationCorridorDistinguishesRequiredRideTilesFromBuffer() {
+        let route = [
+            RouteCoordinate(longitude: -63.5752, latitude: 44.6488),
+            RouteCoordinate(longitude: -63.7000, latitude: 44.7000)
+        ]
+        let plan = CorridorTilePlanner.collectRouteTiles(coordinates: route)
+        #expect(!plan.requiredTiles.isEmpty)
+        #expect(plan.requiredTiles.isSubset(of: Set(plan.tiles)))
+        #expect(plan.tiles.count > plan.requiredTiles.count)
+    }
+
+    @Test func navigationTileRetryIsBoundedAndTransientOnly() {
+        #expect(OfflineTileManager.shouldRetry(statusCode: 429, urlErrorCode: nil, attempt: 1))
+        #expect(OfflineTileManager.shouldRetry(statusCode: 503, urlErrorCode: nil, attempt: 1))
+        #expect(OfflineTileManager.shouldRetry(statusCode: nil, urlErrorCode: .timedOut, attempt: 1))
+        #expect(!OfflineTileManager.shouldRetry(statusCode: 404, urlErrorCode: nil, attempt: 1))
+        #expect(!OfflineTileManager.shouldRetry(statusCode: 503, urlErrorCode: nil, attempt: 2))
+    }
+
     @Test func routingServiceContractRejectsMissingOrStaleDeployments() throws {
         #expect(throws: RoutingError.self) {
             try RoutingClient.validateServiceContract(nil, endpoint: "route")
@@ -45,6 +120,44 @@ struct DirtTests {
         ))
     }
 
+    @Test @MainActor func navigationPackRequirementsReuseUnchangedRouteGeometry() {
+        let route = [
+            CLLocationCoordinate2D(latitude: 44.6488, longitude: -63.5752),
+            CLLocationCoordinate2D(latitude: 45.0770, longitude: -64.4935),
+            CLLocationCoordinate2D(latitude: 45.8330, longitude: -64.2130)
+        ]
+        var cache = NavigationRegionRequirementCache()
+        var ownershipWalks = 0
+        let resolve: ([CLLocationCoordinate2D]) -> [String] = { coordinates in
+            ownershipWalks += 1
+            return GraphPackStore.regionIds(containingAny: coordinates)
+        }
+
+        #expect(cache.regionIds(for: route, resolve: resolve) == ["ns"])
+        #expect(cache.regionIds(for: route, resolve: resolve) == ["ns"])
+        #expect(ownershipWalks == 1)
+
+        var changedRoute = route
+        changedRoute[1] = CLLocationCoordinate2D(latitude: 46.0878, longitude: -64.7782)
+        #expect(cache.regionIds(for: changedRoute, resolve: resolve) == ["ns", "nb"])
+        #expect(ownershipWalks == 2)
+    }
+
+    @Test @MainActor func navigationPackRequirementsPreserveCrossProvinceOwnership() {
+        let halifax = CLLocationCoordinate2D(latitude: 44.6488, longitude: -63.5752)
+        let amherst = CLLocationCoordinate2D(latitude: 45.8330, longitude: -64.2130)
+        let sackville = CLLocationCoordinate2D(latitude: 45.9180, longitude: -64.3680)
+        let moncton = CLLocationCoordinate2D(latitude: 46.0878, longitude: -64.7782)
+        var cache = NavigationRegionRequirementCache()
+
+        let required = cache.regionIds(
+            for: [halifax, amherst, sackville, moncton],
+            resolve: GraphPackStore.regionIds(containingAny:)
+        )
+
+        #expect(required == ["ns", "nb"])
+    }
+
     @Test func routeRequestEncodesProfileAndAccessPolicy() throws {
         let request = RouteRequest(
             profile: .balanced,
@@ -69,8 +182,8 @@ struct DirtTests {
           "status":"complete",
           "distanceMeters":12500,
           "geometry":[[-63.57,44.64],[-63.61,44.67]],
-          "segments":[{"surfaceClass":"gravel","distanceMeters":7500,"geometry":[[-63.57,44.64],[-63.59,44.65]]}],
-          "stats":{"dirtPercent":60,"pavedPercent":40},
+          "segments":[{"surfaceClass":"gravel","surfaceLeaf":"fine_gravel","distanceMeters":7500,"geometry":[[-63.57,44.64],[-63.59,44.65]]}],
+          "stats":{"dirtPercent":60,"pavedPercent":40,"surfaceFamilyMode":"leaf-v3"},
           "maneuvers":[{"instruction":"Continue","distanceMeters":12500,"alongMeters":0}]
         }
         """
@@ -80,6 +193,134 @@ struct DirtTests {
         #expect(response.pavedPercent == 40)
         #expect(response.coordinates.count == 2)
         #expect(response.segments?.first?.surfaceClass == "gravel")
+        #expect(response.segments?.first?.surfaceLeaf == "fine_gravel")
+        #expect(response.stats?.surfaceFamilyMode == "leaf-v3")
+    }
+
+    @Test func surfaceFamiliesAreSpecificWithoutGuessing() {
+        #expect(SurfaceFamilyStats.family(of: "asphalt") == .paved)
+        #expect(SurfaceFamilyStats.family(of: "fine_gravel") == .gravel)
+        #expect(SurfaceFamilyStats.family(of: "unpaved") == .gravel)
+        #expect(SurfaceFamilyStats.family(of: "mud") == .loose)
+        #expect(SurfaceFamilyStats.family(of: nil) == .unknown)
+        #expect(SurfaceFamilyStats.family(of: "mystery_mix") == .unknown)
+    }
+
+    @Test func routeCompositionKeepsFourFamiliesAndTwoTotalsConsistent() throws {
+        let json = """
+        {
+          "status":"complete",
+          "distanceMeters":1000,
+          "geometry":[[-63.00,44.00],[-63.04,44.04]],
+          "segments":[
+            {"surfaceClass":"paved","surfaceLeaf":"asphalt","distanceMeters":400,"geometry":[[-63.00,44.00],[-63.01,44.01]]},
+            {"surfaceClass":"gravel","surfaceLeaf":"fine_gravel","distanceMeters":300,"geometry":[[-63.01,44.01],[-63.02,44.02]]},
+            {"surfaceClass":"dirt","surfaceLeaf":"mud","distanceMeters":200,"geometry":[[-63.02,44.02],[-63.03,44.03]]},
+            {"surfaceClass":"unknown","distanceMeters":100,"geometry":[[-63.03,44.03],[-63.04,44.04]]}
+          ],
+          "stats":{"dirtPercent":60,"pavedPercent":40,"surfaceFamilyMode":"leaf-v3"}
+        }
+        """
+        let response = try JSONDecoder().decode(RouteResponse.self, from: Data(json.utf8))
+        let mix = RouteSurfaceComposition.from(responses: [response])
+
+        #expect(mix.pavedMeters == 400)
+        #expect(mix.gravelMeters == 300)
+        #expect(mix.looseMeters == 200)
+        #expect(mix.unknownMeters == 100)
+        #expect(mix.dirtPercent == 60)
+        #expect(mix.pavedPercent == 40)
+        #expect(mix.gravelPercent == 30)
+        #expect(mix.loosePercent == 20)
+        #expect(mix.unknownPercent == 10)
+    }
+
+    @Test @MainActor func unknownAccessDoesNotReplaceKnownSurface() throws {
+        let json = """
+        {
+          "status":"complete",
+          "distanceMeters":100,
+          "geometry":[[-63.00,44.00],[-63.01,44.01]],
+          "segments":[{"surfaceClass":"paved","surfaceLeaf":"asphalt","accessClass":"motorized_unknown","distanceMeters":100,"geometry":[[-63.00,44.00],[-63.01,44.01]]}],
+          "stats":{"dirtPercent":0,"pavedPercent":100,"surfaceFamilyMode":"leaf-v3"}
+        }
+        """
+        let response = try JSONDecoder().decode(RouteResponse.self, from: Data(json.utf8))
+        let mix = RouteSurfaceComposition.from(responses: [response])
+        let display = try #require(MapState.displaySegments(from: [response]).first)
+
+        #expect(mix.pavedPercent == 100)
+        #expect(display.surfaceKey == SurfaceFamily.paved.rawValue)
+        #expect(display.accessUnknown)
+    }
+
+    @Test @MainActor func displayRunsMergeByFamilyButKeepAccessBoundaries() throws {
+        let json = """
+        {
+          "status":"complete",
+          "distanceMeters":300,
+          "geometry":[[-63.00,44.00],[-63.03,44.03]],
+          "segments":[
+            {"surfaceClass":"gravel","surfaceLeaf":"gravel","accessClass":"motorized_permissive","distanceMeters":100,"geometry":[[-63.00,44.00],[-63.01,44.01]]},
+            {"surfaceClass":"gravel","surfaceLeaf":"fine_gravel","accessClass":"motorized_permissive","distanceMeters":100,"geometry":[[-63.01,44.01],[-63.02,44.02]]},
+            {"surfaceClass":"gravel","surfaceLeaf":"compacted","accessClass":"motorized_unknown","distanceMeters":100,"geometry":[[-63.02,44.02],[-63.03,44.03]]}
+          ],
+          "stats":{"dirtPercent":100,"pavedPercent":0,"surfaceFamilyMode":"leaf-v3"}
+        }
+        """
+        let response = try JSONDecoder().decode(RouteResponse.self, from: Data(json.utf8))
+        let display = MapState.displaySegments(from: [response])
+
+        #expect(display.count == 2)
+        #expect(display[0].surfaceKey == SurfaceFamily.gravel.rawValue)
+        #expect(display[0].coordinates.count == 3)
+        #expect(!display[0].accessUnknown)
+        #expect(display[1].surfaceKey == SurfaceFamily.gravel.rawValue)
+        #expect(display[1].accessUnknown)
+    }
+
+    @Test func savedRouteRetainsDetailedSurfaceRuns() throws {
+        let segment = RouteSegment(
+            surfaceClass: "gravel",
+            trackClass: "secondary",
+            accessClass: "motorized_permissive",
+            distanceMeters: 250,
+            geometry: [
+                RouteCoordinate(longitude: -63.00, latitude: 44.00),
+                RouteCoordinate(longitude: -63.01, latitude: 44.01)
+            ],
+            coords: nil,
+            edgeId: "edge-1",
+            surfaceLeaf: "fine_gravel"
+        )
+        let route = SavedRoute(
+            name: "Surface route",
+            profile: .dirt,
+            coordinates: segment.coordinates,
+            distanceMeters: 250,
+            dirtPercent: 100,
+            pavedPercent: 0,
+            segments: [segment],
+            surfaceFamilyMode: "leaf-v3"
+        )
+
+        #expect(route.surfaceFamilyMode == "leaf-v3")
+        #expect(route.segments?.first?.surfaceLeaf == "fine_gravel")
+        #expect(route.segments?.first?.edgeId == "edge-1")
+    }
+
+    @Test func legacySummaryPreservesTotalsButNamesNonPavedUnknown() throws {
+        let json = """
+        {"status":"complete","distanceMeters":1000,"geometry":[[-63.00,44.00],[-63.01,44.01]],"stats":{"dirtPercent":65,"pavedPercent":35}}
+        """
+        let response = try JSONDecoder().decode(RouteResponse.self, from: Data(json.utf8))
+        let mix = RouteSurfaceComposition.from(responses: [response])
+
+        #expect(mix.dirtPercent == 65)
+        #expect(mix.pavedPercent == 35)
+        #expect(mix.unknownPercent == 65)
+        #expect(mix.gravelPercent == 0)
+        #expect(mix.loosePercent == 0)
     }
 
     @Test func gpxParserReadsTrackPoints() throws {
@@ -175,7 +416,34 @@ struct DirtTests {
         #expect(!NavigationChrome.mapStackCompact(routeCardOpen: true, phase: .active))
     }
 
-    @Test func cueModeFiltersBendAndJunctionManeuvers() {
+    @Test func displayedRouteGateRequiresAPaintedPolyline() {
+        let mapState = MapState()
+        #expect(!mapState.hasDisplayedRoute)
+
+        mapState.setRoute([
+            RouteDisplaySegment(
+                coordinates: [RouteCoordinate(longitude: -63.0, latitude: 45.0)],
+                surfaceKey: SurfaceFamily.paved.rawValue
+            )
+        ])
+        #expect(!mapState.hasDisplayedRoute)
+
+        mapState.setRoute([
+            RouteDisplaySegment(
+                coordinates: [
+                    RouteCoordinate(longitude: -63.0, latitude: 45.0),
+                    RouteCoordinate(longitude: -62.99, latitude: 45.01)
+                ],
+                surfaceKey: SurfaceFamily.paved.rawValue
+            )
+        ])
+        #expect(mapState.hasDisplayedRoute)
+
+        mapState.clearRoute()
+        #expect(!mapState.hasDisplayedRoute)
+    }
+
+    @Test func cueLevelsKeepEssentialJunctionsInRallyEverything() {
         let bend = RouteManeuver(
             instruction: "3 RIGHT",
             type: "bend",
@@ -212,7 +480,9 @@ struct DirtTests {
 
         #expect(sharp.matches(cueMode: .junctions))
         #expect(junction.matches(cueMode: .junctions))
-        #expect(!junction.matches(cueMode: .rally))
+        #expect(junction.matches(cueMode: .rally))
+        #expect(NavigationCueMode.junctions.detailLabel == "Essential")
+        #expect(NavigationCueMode.rally.detailLabel == "Everything")
     }
 
     @Test func continueStraightIsAnExplicitGraphDecisionCue() {
@@ -226,14 +496,91 @@ struct DirtTests {
         )
 
         #expect(cue.matches(cueMode: .junctions))
-        #expect(!cue.matches(cueMode: .rally))
+        #expect(cue.matches(cueMode: .rally))
         #expect(cue.displayLabel(cueMode: .junctions) == "Continue straight")
+        #expect(cue.displayLabel(cueMode: .rally) == "Continue straight")
+        #expect(cue.spokenLabel(cueMode: .rally, meters: 200, phase: .prepare) == "In 200 metres, Continue straight")
         #expect(cue.arrowSystemName(cueMode: .junctions) == "arrow.up")
         #expect(cue.announceIdentity == "jct:edge-a>edge-b")
         let enriched = RouteManeuver.enrichForVoiceCues([cue])
         #expect(enriched.first?.type == "continueStraight")
         #expect(enriched.first?.arrowSystemName(cueMode: .junctions) == "arrow.up")
         #expect(enriched.first?.announceIdentity == "jct:edge-a>edge-b")
+    }
+
+    @Test func rallyEverythingSuppressesNearbyCurvesWithoutCollapsingJunctions() {
+        let nearCurve = RouteManeuver(
+            instruction: "Right 3",
+            type: "bend",
+            kind: "curve",
+            side: "right",
+            number: 3,
+            degrees: 60,
+            distanceMeters: 0,
+            alongMeters: 100
+        )
+        let farCurve = RouteManeuver(
+            instruction: "Left 5",
+            type: "bend",
+            kind: "curve",
+            side: "left",
+            number: 5,
+            degrees: 35,
+            distanceMeters: 0,
+            alongMeters: 300
+        )
+        let firstJunction = RouteManeuver(
+            instruction: "Turn right",
+            type: "turn",
+            stableID: "junction-a",
+            kind: "junction",
+            side: "right",
+            distanceMeters: 0,
+            alongMeters: 130
+        )
+        let secondJunction = RouteManeuver(
+            instruction: "Turn left",
+            type: "turn",
+            stableID: "junction-b",
+            kind: "junction",
+            side: "left",
+            distanceMeters: 0,
+            alongMeters: 170
+        )
+
+        let merged = NavCueBuilder.mergeRallyEverything(
+            curves: [nearCurve, farCurve],
+            junctions: [firstJunction, secondJunction]
+        )
+
+        #expect(merged.count == 3)
+        #expect(merged[0].stableID == "junction-a")
+        #expect(merged[1].stableID == "junction-b")
+        #expect(merged[2].number == 5)
+    }
+
+    @Test @MainActor func rallyEverythingSessionPreservesIncomingJunctions() {
+        let session = NavigationSession()
+        session.cueMode = .rally
+        session.activate(
+            coordinates: [
+                RouteCoordinate(longitude: -63.0, latitude: 45.0),
+                RouteCoordinate(longitude: -62.99, latitude: 45.0)
+            ],
+            maneuvers: [
+                RouteManeuver(
+                    instruction: "Turn right",
+                    type: "turn",
+                    stableID: "essential-junction",
+                    kind: "junction",
+                    side: "right",
+                    distanceMeters: 0,
+                    alongMeters: 300
+                )
+            ]
+        )
+
+        #expect(session.maneuvers.contains(where: { $0.stableID == "essential-junction" }))
     }
 
     @Test func legacyManeuverPayloadStillDecodesWithoutStableIdentity() throws {

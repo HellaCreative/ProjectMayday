@@ -7,6 +7,7 @@ struct FuelAssistTests {
     @Test func fuelReserveReducesThePlanningRangeWithoutChangingTankRange() {
         #expect(FuelRangePrefs.usableKilometers(for: 180, reservePercent: 10) == 162)
         #expect(FuelRangePrefs.usableKilometers(for: 250, reservePercent: 20) == 200)
+        #expect(FuelRangePrefs.usableKilometers(for: 200, reservePercent: 30) == 140)
         #expect(FuelRangePrefs.usableKilometers(for: 180, reservePercent: 0) == 180)
     }
 

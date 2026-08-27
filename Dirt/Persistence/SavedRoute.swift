@@ -10,6 +10,9 @@ final class SavedRoute {
     var distanceMeters: Double
     var dirtPercent: Int
     var pavedPercent: Int
+    /// Optional Graph-v3 route runs. Existing records remain valid with nil.
+    var segmentsData: Data?
+    var surfaceFamilyMode: String?
     var createdAt: Date
 
     var profile: RouteProfile {
@@ -22,6 +25,16 @@ final class SavedRoute {
         set { coordinatesData = (try? JSONEncoder().encode(newValue)) ?? Data() }
     }
 
+    var segments: [RouteSegment]? {
+        get {
+            guard let segmentsData else { return nil }
+            return try? JSONDecoder().decode([RouteSegment].self, from: segmentsData)
+        }
+        set {
+            segmentsData = newValue.flatMap { try? JSONEncoder().encode($0) }
+        }
+    }
+
     init(
         id: UUID = UUID(),
         name: String,
@@ -30,6 +43,8 @@ final class SavedRoute {
         distanceMeters: Double,
         dirtPercent: Int,
         pavedPercent: Int,
+        segments: [RouteSegment]? = nil,
+        surfaceFamilyMode: String? = nil,
         createdAt: Date = .now
     ) {
         self.id = id
@@ -39,6 +54,8 @@ final class SavedRoute {
         self.distanceMeters = distanceMeters
         self.dirtPercent = dirtPercent
         self.pavedPercent = pavedPercent
+        segmentsData = segments.flatMap { try? JSONEncoder().encode($0) }
+        self.surfaceFamilyMode = surfaceFamilyMode
         self.createdAt = createdAt
     }
 }

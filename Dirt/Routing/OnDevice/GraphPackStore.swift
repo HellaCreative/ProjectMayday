@@ -3,6 +3,40 @@ import CryptoKit
 import Foundation
 import Observation
 
+/// Exact route-geometry cache for navigation pack requirements.
+///
+/// Keeping the coordinate signature (rather than only a hash) makes reuse
+/// collision-free while avoiding repeated administrative-polygon walks on an
+/// unchanged route.
+struct NavigationRegionRequirementCache {
+    private struct CoordinateKey: Equatable {
+        let latitudeBits: UInt64
+        let longitudeBits: UInt64
+
+        nonisolated init(_ coordinate: CLLocationCoordinate2D) {
+            latitudeBits = coordinate.latitude.bitPattern
+            longitudeBits = coordinate.longitude.bitPattern
+        }
+    }
+
+    private var coordinateKeys: [CoordinateKey] = []
+    private var cachedRegionIds: [String] = []
+
+    mutating func regionIds(
+        for coordinates: [CLLocationCoordinate2D],
+        resolve: ([CLLocationCoordinate2D]) -> [String]
+    ) -> [String] {
+        let keys = coordinates.map(CoordinateKey.init)
+        if keys == coordinateKeys {
+            return cachedRegionIds
+        }
+        let resolved = resolve(coordinates)
+        coordinateKeys = keys
+        cachedRegionIds = resolved
+        return resolved
+    }
+}
+
 /// Province / state routing packs for offline detours (download once on Wi‑Fi).
 @Observable
 @MainActor
@@ -89,6 +123,7 @@ final class GraphPackStore {
     private var publishedIds: Set<String> = ["ns"] // known live until manifest loads
     private var catalogIdentityLoaded = false
     private var manifestFilesByRegion: [String: [PackManifest.File]] = [:]
+    @ObservationIgnored private var navigationRegionRequirementCache = NavigationRegionRequirementCache()
 
     private let session: URLSession = {
         let cfg = URLSessionConfiguration.default
@@ -515,9 +550,9 @@ final class GraphPackStore {
 
             // Primary region for every route coordinate follows the actual ride
             // and avoids coarse whole-bounding-box false positives.
-            var needed = Self.regionIds(containingAny: coordinates)
-            if needed.isEmpty {
-                needed = Self.regionIds(covering: coordinates)
+            let needed = self.navigationRegionRequirementCache.regionIds(for: coordinates) { route in
+                let primaryRegions = Self.regionIds(containingAny: route)
+                return primaryRegions.isEmpty ? Self.regionIds(covering: route) : primaryRegions
             }
             guard !needed.isEmpty else {
                 self.phase = .skipped("No offline routing region covers this route")
@@ -556,7 +591,7 @@ final class GraphPackStore {
                 self.progress = 0.05 + 0.85 * Double(offset + 1) / Double(max(missing.count, 1))
             }
 
-            await self.ensureActivePackAsync(for: coordinates)
+            await self.ensureActivePackAsync(preferredRegionIds: needed)
             guard !Task.isCancelled else { return }
             guard self.activePack != nil else {
                 self.phase = .failed("The downloaded routing pack could not be opened.")
@@ -1247,6 +1282,12 @@ final class GraphPackStore {
     /// Load / switch the active pack off MainActor so toast + map gestures stay live.
     private func ensureActivePackAsync(for coordinates: [CLLocationCoordinate2D]) async {
         let needed = Self.preferredRegionOrder(for: coordinates)
+        await ensureActivePackAsync(preferredRegionIds: needed)
+    }
+
+    /// Navigation prep has already resolved exact route ownership. Reuse that
+    /// ordered result instead of walking every route coordinate a second time.
+    private func ensureActivePackAsync(preferredRegionIds needed: [String]) async {
         let preferred = needed.first(where: { isInstalled($0) }) ?? loadedRegionIds.first
         guard let preferred else { return }
         await activateInstalledPack(regionId: preferred)

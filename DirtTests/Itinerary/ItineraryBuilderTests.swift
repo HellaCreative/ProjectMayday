@@ -498,7 +498,7 @@ struct ItineraryBuilderTests {
         #expect(on.legs.compactMap(\.endsAtFuelStop).isEmpty)
         #expect(source.fuelChainRequests.filter {
             $0.fuel.probeFirstReachableStation != true
-        }.count == 2)
+        }.count == 1)
 
         source.fuelChainRequests.removeAll()
         let off = await build([origin, dragged, destination], source: source, usable: 237_500)
@@ -635,7 +635,9 @@ struct ItineraryBuilderTests {
             let to = point(Double(index) + 0.1)
             let cacheKey = RouteResponseCache.Key(
                 from: from, to: to, profile: .dirt, allowUnknown: false,
-                priorEdgeIDs: [], arrivalEdgeID: nil, backtrackFactor: 4,
+                avoidEdgeIDs: [], priorEdgeIDs: [], arrivalEdgeID: nil, backtrackFactor: 4,
+                sessionSeed: nil, directExtraBudgetMeters: nil,
+                regionalHopMinimumMeters: [],
                 sourceName: "live", packRevision: "test",
                 cleanMetroMultiplier: nil,
                 avoidMotorways: false,
@@ -646,6 +648,22 @@ struct ItineraryBuilderTests {
         }
         #expect(cache.count == 64)
         #expect(firstKey.flatMap { cache.value(for: $0) } == nil)
+    }
+
+    @Test func routeCacheNeverReusesGeometryAcrossRoutingConstraints() {
+        func cacheKey(avoid: [String], seed: UInt64?) -> RouteResponseCache.Key {
+            RouteResponseCache.Key(
+                from: point(0), to: point(1), profile: .dirt, allowUnknown: false,
+                avoidEdgeIDs: avoid, priorEdgeIDs: [], arrivalEdgeID: nil,
+                backtrackFactor: 4, sessionSeed: seed,
+                directExtraBudgetMeters: nil, regionalHopMinimumMeters: [],
+                sourceName: "live", packRevision: "test",
+                cleanMetroMultiplier: nil, avoidMotorways: false,
+                preferBackRoads: false
+            )
+        }
+        #expect(cacheKey(avoid: [], seed: 1) != cacheKey(avoid: ["blocked-edge"], seed: 1))
+        #expect(cacheKey(avoid: [], seed: 1) != cacheKey(avoid: [], seed: 2))
     }
 }
 

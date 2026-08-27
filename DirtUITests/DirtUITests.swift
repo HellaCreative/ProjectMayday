@@ -34,6 +34,54 @@ final class DirtUITests: XCTestCase {
     }
 
     @MainActor
+    func testCueSelectorHierarchy() throws {
+        let app = XCUIApplication()
+        app.launchEnvironment["DIRT_UI_TEST_CUES"] = "1"
+        app.launch()
+
+        let skipToMap = app.buttons["Skip to map"]
+        if skipToMap.waitForExistence(timeout: 3) {
+            skipToMap.tap()
+        }
+
+        let cues = app.buttons["navigation-cues"]
+        XCTAssertTrue(cues.waitForExistence(timeout: 8))
+        cues.tap()
+
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = "Cue Selector — Essential and Everything"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+
+        XCTAssertTrue(app.descendants(matching: .any)["cue-mode-junctions"].waitForExistence(timeout: 2))
+        XCTAssertTrue(app.descendants(matching: .any)["cue-mode-rally"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["cue-audio-on"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["cue-audio-off"].exists)
+    }
+
+    @MainActor
+    func testPrimaryMapKeepsViewAndStatusButHidesRideOnlyControls() throws {
+        let app = XCUIApplication()
+        app.launch()
+
+        let skipToMap = app.buttons["Skip to map"]
+        if skipToMap.waitForExistence(timeout: 3) {
+            skipToMap.tap()
+        }
+
+        XCTAssertTrue(app.buttons["map-view-mode"].waitForExistence(timeout: 8))
+
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = "Primary Map Controls — Idle"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+
+        XCTAssertTrue(app.buttons["rider-status"].exists)
+        XCTAssertFalse(app.buttons["navigation-cues"].exists)
+        XCTAssertFalse(app.buttons["planned-route-overview"].exists)
+    }
+
+    @MainActor
     func testLaunchPerformance() throws {
         // This measures how long it takes to launch your application.
         measure(metrics: [XCTApplicationLaunchMetric()]) {
