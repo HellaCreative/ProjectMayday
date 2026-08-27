@@ -8,10 +8,11 @@ Group ride list/detail, invite codes, presence sharing, and map roster. Spec: th
 
 | File | Role |
 | --- | --- |
-| `Dirt/Features/Groups/GroupsViewModel.swift` | Data + presence + polling |
+| `Dirt/Features/Groups/GroupsViewModel.swift` | Membership, validated presence, realtime, and polling fallback |
+| `Dirt/Features/Groups/GroupSafetyPolicies.swift` | Presence validity and stop-trigger tracking rules |
 | `Dirt/Features/Groups/GroupsSheet.swift` | List / detail UI |
 | `Dirt/Persistence/SupabaseService.swift` | Client + session |
-| `Dirt/Map/MapState.swift` | Rider markers (kind `.rider`) |
+| `Dirt/Map/MapState.swift` | Independent rider and planner marker state |
 
 ---
 
@@ -24,9 +25,8 @@ Group ride list/detail, invite codes, presence sharing, and map roster. Spec: th
 | `group_members` | List memberships (`role` + nested `groups`); member roster with `profiles(display_name)` |
 | `groups` | Create `{ name, owner_id }`; soft-delete via RPC (`deleted_at` filtered client-side) |
 | `rider_presence` | Upsert while sharing; select for live counts + map pins |
+| `rider_alerts` | Insert distress/route reports, fetch unresolved peer alerts, resolve dismissed/recovered alerts |
 | `profiles` | Nested select for display names (writes happen in auth/profile flow) |
-
-**Not used on iOS yet:** `rider_alerts` (table exists; Report does not insert).
 
 ### RPCs
 
@@ -45,10 +45,11 @@ Client validates `^[a-z0-9]{6}$` (trimmed, lowercased) before RPC.
 List path:
 
 - `sharing_enabled == true`
-- valid presence row
-- `last_seen_at` within **120s**, **or** null/`parse` failure treated as live (`PresenceRow.isLive`)
+- valid, non-sentinel coordinate
+- `last_seen_at` parses and is within **120s**
 
 ISO8601 parsing accepts fractional seconds (`ISO8601DateFormatterBox`).
+Missing, future, malformed, or stale timestamps are offline, never live.
 
 ---
 
@@ -58,35 +59,45 @@ ISO8601 parsing accepts fractional seconds (`ISO8601DateFormatterBox`).
 | --- | --- |
 | Auth gate | Sheet shows sign-in prompt if `!supabase.isSignedIn` |
 | List | Name · member count · live count; pull-to-refresh |
-| Create | Insert group + owner `group_members` row (`role: owner`) |
+| Create | Trim and validate name (1–60 chars), then insert group + owner membership; compensate by deleting the group if membership fails |
 | Join | Invite code → RPC → refresh |
 | Detail | Invite code + copy; sharing controls; roster; leave/delete |
-| Start sharing | `requestAlways` + background location; upsert every **5s** |
-| Stop sharing | Upsert `sharing_enabled: false`, `status: offline` |
+| Start sharing | Wait for a current, accurate GPS fix, then `requestAlways` + background location; upsert every **5s** |
+| Stop sharing | Broadcast sharing-off, upsert `sharing_enabled: false`, `status: offline`, and release only the group-sharing background-location claim |
 | Status while sharing | `available` \| `breakdown` \| `injured` \| `stuck` (picker) |
-| Roster poll | While detail open, refresh members + presence every **10s** |
+| Roster refresh | Realtime updates with a database polling fallback while tracked (**30s** when connected, **10s** when Realtime is down) |
 | Map pins | Live peers (not self): status-colored dot + **name/status chip**; pins keep updating after sheet close while that group is tracked |
 | Focus peer | Scope button flies map to peer, closes sheet |
-| Route to member | Sheet **or tap peer pin on map** → `planner.routeToMember` → From here to peer coords; toast |
+| Route to member | Sheet **or tap peer pin on map** → route to the validated last-known position while preserving stable group/member identity |
+| Stop-trigger tracking | During navigation the route stays frozen while the follower is moving. After an 8s stop, it updates if the member moved at least 100m and is still live. Resuming motion cancels/discards the update. |
+| Tracking notice | A successful update, sharing end, or safe fallback produces a persistent, dismissible navigation notice |
+| Peer alerts | Distress status and route reports are inserted, broadcast live, shown above the map, and reconciled against current presence |
+| Sign out | Broadcast offline, stop sharing/tracking tasks, close channels, and clear roster/pins before auth is removed |
 | Close sheet | `onDisappear` → `closeDetail()` (reset to list) |
 
 Presence upsert payload fields: `user_id`, `sharing_enabled`, `status`, `latitude`, `longitude`, `heading`, `speed_mps`, `accuracy_m`, `last_seen_at`.
 
 ---
 
-## Polling vs realtime (important gap)
+## Realtime and polling fallback
 
 Realtime uses a private Realtime channel `group:{groupId}` with presence + broadcast (`location`, `alert`, `sharing_off`).
 
-**iOS v1 does not subscribe to Realtime.** It:
+The app subscribes to the tracked group's private channel for low-latency validated location, alert, and sharing-off events. It also persists `rider_presence` every 5s while sharing and polls the database every 30s when Realtime is connected (10s when it is down), so a missed broadcast is eventually corrected. Request generations prevent old group/list responses from overwriting a newer selection.
 
-1. Writes the same `rider_presence` rows.
-2. Polls that table on a 10s timer while a group detail is open.
-3. Publishes location on a 5s timer while sharing.
+Location broadcasts and database rows pass the same validity checks. The app never publishes `(0,0)`, never treats a missing timestamp as live, and does not route to a stale member.
 
-Cross-client interoperability with another client works for **persisted** presence (list counts, pins, route-to-member). Latency and leave detection are coarser than Realtime. Broadcast alerts are absent.
+Planner pins and group pins have separate generations. Group movement updates only the rider annotation and does not rebuild or disturb route/fuel pins.
 
-Comment in code (`GroupsViewModel`): intentional v1 choice, documented in README.
+### Stop-trigger tracking rules
+
+1. Navigate paints the route to the member's validated last-known position.
+2. While the following rider is moving, member movement updates only the target pin.
+3. A stop begins only from an accurate location reading at or below 0.8 m/s and must hold for 8 seconds.
+4. If the member moved at least 100m and is still live, rebuild from the follower's stopped position.
+5. If the follower moves before completion, cancel and discard the result.
+6. If automatic fuel stops are present, do not silently remove them; ask the rider to review the route.
+7. If sharing ends or refresh fails, keep the existing route and clearly label it as the last-known destination.
 
 ---
 
@@ -94,10 +105,8 @@ Comment in code (`GroupsViewModel`): intentional v1 choice, documented in README
 
 | Priority | Work |
 | --- | --- |
-| High | Supabase Realtime channel parity (presence + location broadcast) |
-| Medium | Insert / display `rider_alerts`; wire HUD Report |
-| Medium | Stop sharing when leaving detail / signing out (verify edge cases) |
-| Low | Push / Live Activity hooks for peer alerts ([07-FUTURE.md](./07-FUTURE.md)) |
+| Medium | Replace client-side create compensation with one transactional backend RPC |
+| Low | Push, historical alert UI, and Live Activity hooks for peer alerts ([07-FUTURE.md](./07-FUTURE.md)) |
 
 ---
 
@@ -105,6 +114,6 @@ Comment in code (`GroupsViewModel`): intentional v1 choice, documented in README
 
 1. Read `GroupsViewModel.swift` end-to-end, then `GroupsSheet.swift`.
 2. Confirm table/RPC names against the iOS docs §4 — do not invent columns.
-3. Check how rider markers merge with planner markers (`paintLiveRiders` / `refreshMap`).
-4. **Invariants:** groups require signed-in session; invite codes stay 6-char lowercase alnum; live window 120s; closing sheet resets detail; do not break the `rider_presence` row shape.
-5. **Open questions:** Realtime before or after POI overlays?; should sharing continue with sheet closed (today share task is independent of detail poll, but UX may want an always-on share indicator on the dock).
+3. Check how rider markers are isolated from planner markers (`setGroupMarkers` / `setPlannerMarkers`).
+4. **Invariants:** groups require a signed-in session; invite codes stay 6-char lowercase alnum; live window is 120s; only fresh accurate local fixes publish; moving riders never receive a group-target reroute; do not break the `rider_presence` row shape.
+5. **Open question:** should the backend expose a transactional create-group-and-owner-membership RPC?

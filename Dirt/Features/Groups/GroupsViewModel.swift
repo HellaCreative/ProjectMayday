@@ -22,12 +22,14 @@ struct GroupMemberRow: Identifiable {
     var longitude: Double?
     var status: String?
     var lastSeenAt: Date?
+    var accuracyMeters: Double?
 
     var id: String { userID }
 }
 
 /// Map / roster selection for a live peer.
 struct SelectedGroupPeer: Identifiable, Equatable {
+    let groupID: String
     let userID: String
     let displayName: String
     let groupName: String
@@ -36,8 +38,22 @@ struct SelectedGroupPeer: Identifiable, Equatable {
     let lastSeenLabel: String
     let latitude: Double
     let longitude: Double
+    let lastSeenAt: Date
+    let accuracyMeters: Double?
 
     var id: String { userID }
+
+    var routeTarget: GroupMemberRouteTarget {
+        GroupMemberRouteTarget(
+            groupID: groupID,
+            userID: userID,
+            displayName: displayName,
+            coordinate: RouteCoordinate(longitude: longitude, latitude: latitude),
+            lastSeenAt: lastSeenAt,
+            accuracyMeters: accuracyMeters,
+            isLive: true
+        )
+    }
 }
 
 /// Peer distress / route-report alert shown on the map HUD.
@@ -73,13 +89,19 @@ final class GroupsViewModel {
 
     /// Optional toast sink (wired from AppEnvironment → planner.toast).
     var onToast: ((String) -> Void)?
+    /// Latest validated peer position. The map may move immediately; navigation
+    /// decides when a frozen route is safe to refresh.
+    var onPeerLocationUpdate: ((GroupMemberRouteTarget) -> Void)?
+    var onPeerSharingEnded: ((String, String) -> Void)?
 
     private(set) var groups: [GroupSummary] = []
     private(set) var selectedGroup: GroupSummary?
     private(set) var members: [GroupMemberRow] = []
     private(set) var peerAlerts: [PeerAlertBanner] = []
     private(set) var isLoading = false
+    private(set) var isMutatingGroup = false
     private(set) var isSharing = false
+    private(set) var isWaitingForLocation = false
     private(set) var realtimeConnected = false
     /// Live peer selected from the map (or roster) — details card, not auto-route.
     var selectedPeer: SelectedGroupPeer?
@@ -97,6 +119,9 @@ final class GroupsViewModel {
 
     @ObservationIgnored private var realtimeChannels: [String: RealtimeChannelV2] = [:]
     @ObservationIgnored private var channelListenTasks: [String: Task<Void, Never>] = [:]
+    @ObservationIgnored private var connectingGroupIDs: Set<String> = []
+    @ObservationIgnored private var groupRefreshGeneration = 0
+    @ObservationIgnored private var memberRefreshGeneration = 0
 
     init(supabase: SupabaseService, location: LocationService, mapState: MapState) {
         self.supabase = supabase
@@ -139,11 +164,16 @@ final class GroupsViewModel {
     }
 
     private func presentPeer(_ member: GroupMemberRow, latitude: Double, longitude: Double) {
+        guard member.isLive,
+              GroupPresencePolicy.isValidCoordinate(latitude: latitude, longitude: longitude),
+              let groupID = mapTrackedGroupID ?? selectedGroup?.id,
+              let lastSeenAt = member.lastSeenAt else { return }
         let status = {
             let raw = (member.status ?? "available").trimmingCharacters(in: .whitespacesAndNewlines)
             return raw.isEmpty ? "available" : raw.lowercased()
         }()
         selectedPeer = SelectedGroupPeer(
+            groupID: groupID,
             userID: member.userID,
             displayName: member.displayName,
             groupName: selectedGroup?.name
@@ -153,7 +183,9 @@ final class GroupsViewModel {
             statusText: Self.statusLabel(status),
             lastSeenLabel: Self.lastSeenLabel(member.lastSeenAt),
             latitude: latitude,
-            longitude: longitude
+            longitude: longitude,
+            lastSeenAt: lastSeenAt,
+            accuracyMeters: member.accuracyMeters
         )
     }
 
@@ -167,8 +199,8 @@ final class GroupsViewModel {
         }
     }
 
-    private static func lastSeenLabel(_ date: Date?) -> String {
-        guard let date else { return "just now" }
+    static func lastSeenLabel(_ date: Date?) -> String {
+        guard let date else { return "unknown" }
         let formatter = RelativeDateTimeFormatter()
         formatter.unitsStyle = .abbreviated
         return formatter.localizedString(for: date, relativeTo: .now)
@@ -218,12 +250,21 @@ final class GroupsViewModel {
         let status: String?
         let latitude: Double?
         let longitude: Double?
+        let accuracy_m: Double?
         let last_seen_at: String?
 
+        var lastSeenDate: Date? {
+            last_seen_at.flatMap { ISO8601DateFormatter.flexible.parse($0) }
+        }
+
         var isLive: Bool {
-            guard sharing_enabled == true else { return false }
-            guard let last_seen_at, let seen = ISO8601DateFormatter.flexible.parse(last_seen_at) else { return true }
-            return Date.now.timeIntervalSince(seen) < 120
+            GroupPresencePolicy.isLive(
+                sharingEnabled: sharing_enabled == true,
+                latitude: latitude,
+                longitude: longitude,
+                accuracyMeters: accuracy_m,
+                lastSeenAt: lastSeenDate
+            )
         }
     }
 
@@ -269,6 +310,7 @@ final class GroupsViewModel {
         let lat: Double?
         let heading: Double?
         let speed: Double?
+        let accuracy: Double?
         let status: String?
         let lastSeenAt: String?
         let groupId: String?
@@ -295,9 +337,16 @@ final class GroupsViewModel {
     // MARK: - List
 
     func refreshGroups() async {
-        guard let userID = supabase.userID else { return }
+        guard let userID = supabase.userID else {
+            handleSignedOut()
+            return
+        }
+        groupRefreshGeneration += 1
+        let requestGeneration = groupRefreshGeneration
         isLoading = true
-        defer { isLoading = false }
+        defer {
+            if groupRefreshGeneration == requestGeneration { isLoading = false }
+        }
         do {
             let rows: [MembershipRow] = try await client
                 .from("group_members")
@@ -328,7 +377,7 @@ final class GroupsViewModel {
                 let userIDs = Array(Set(memberships.map(\.user_id)))
                 let presence: [PresenceRow] = try await client
                     .from("rider_presence")
-                    .select("user_id,sharing_enabled,status,latitude,longitude,last_seen_at")
+                    .select("user_id,sharing_enabled,status,latitude,longitude,accuracy_m,last_seen_at")
                     .in("user_id", values: userIDs)
                     .execute()
                     .value
@@ -339,12 +388,26 @@ final class GroupsViewModel {
                     summaries[index].liveCount = groupMembers.filter { liveUsers.contains($0.user_id) }.count
                 }
             }
+            guard groupRefreshGeneration == requestGeneration,
+                  supabase.userID == userID else { return }
             groups = summaries
+            let activeIDs = Set(summaries.map(\.id))
+            if let tracked = mapTrackedGroupID, !activeIDs.contains(tracked) {
+                stopMapTracking()
+            }
+            if let selected = selectedGroup,
+               let refreshed = summaries.first(where: { $0.id == selected.id }) {
+                selectedGroup = refreshed
+            } else if selectedGroup != nil {
+                selectedGroup = nil
+            }
             errorMessage = nil
             // Subscribe even when self is not sharing so you still see live peers.
             await ensureRealtimeForAllGroups()
             await ensureMapTrackingIfNeeded()
         } catch {
+            guard groupRefreshGeneration == requestGeneration,
+                  supabase.userID == userID else { return }
             errorMessage = "Could not load your riding groups."
         }
     }
@@ -360,7 +423,18 @@ final class GroupsViewModel {
     }
 
     func createGroup(named name: String) async {
-        guard let userID = supabase.userID else { return }
+        guard let userID = supabase.userID, !isMutatingGroup else { return }
+        let cleaned = name
+            .replacingOccurrences(of: "\n", with: " ")
+            .replacingOccurrences(of: "\r", with: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleaned.isEmpty, cleaned.count <= 60 else {
+            errorMessage = "Group names must be between 1 and 60 characters."
+            return
+        }
+        isMutatingGroup = true
+        defer { isMutatingGroup = false }
+        var createdGroupID: String?
         do {
             struct NewGroup: Encodable {
                 let name: String
@@ -371,11 +445,12 @@ final class GroupsViewModel {
             }
             let created: CreatedGroup = try await client
                 .from("groups")
-                .insert(NewGroup(name: name, owner_id: userID))
+                .insert(NewGroup(name: cleaned, owner_id: userID))
                 .select("id")
                 .single()
                 .execute()
                 .value
+            createdGroupID = created.id
             struct NewMember: Encodable {
                 let group_id: String
                 let user_id: String
@@ -387,16 +462,30 @@ final class GroupsViewModel {
                 .execute()
             await refreshGroups()
         } catch {
+            // The backend currently exposes these as two writes. Compensating
+            // cleanup prevents a failed owner-membership insert from leaving an
+            // unusable orphan group until the server gains a transactional RPC.
+            if let createdGroupID {
+                _ = try? await client
+                    .from("groups")
+                    .delete()
+                    .eq("id", value: createdGroupID)
+                    .eq("owner_id", value: userID)
+                    .execute()
+            }
             errorMessage = "The group could not be created."
         }
     }
 
     func joinGroup(code rawCode: String) async {
+        guard !isMutatingGroup else { return }
         let code = rawCode.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard code.wholeMatch(of: /[a-z0-9]{6}/) != nil else {
             errorMessage = "Invite codes are six lowercase letters or numbers."
             return
         }
+        isMutatingGroup = true
+        defer { isMutatingGroup = false }
         do {
             try await client
                 .rpc("join_group_by_invite_code", params: ["p_invite_code": code])
@@ -408,6 +497,9 @@ final class GroupsViewModel {
     }
 
     func leaveGroup(_ group: GroupSummary) async {
+        guard !isMutatingGroup else { return }
+        isMutatingGroup = true
+        defer { isMutatingGroup = false }
         do {
             try await client.rpc("leave_group", params: ["p_group_id": group.id]).execute()
             await closeRealtimeChannel(groupID: group.id)
@@ -420,6 +512,9 @@ final class GroupsViewModel {
     }
 
     func deleteGroup(_ group: GroupSummary) async {
+        guard !isMutatingGroup else { return }
+        isMutatingGroup = true
+        defer { isMutatingGroup = false }
         do {
             try await client.rpc("delete_group", params: ["p_group_id": group.id]).execute()
             await closeRealtimeChannel(groupID: group.id)
@@ -434,6 +529,13 @@ final class GroupsViewModel {
     // MARK: - Detail
 
     func openDetail(_ group: GroupSummary) {
+        if mapTrackedGroupID != group.id {
+            memberRefreshGeneration += 1
+            members = []
+            peerAlerts = []
+            selectedPeer = nil
+            clearGroupOverlays()
+        }
         selectedGroup = group
         mapTrackedGroupID = group.id
         startPresencePolling(groupID: group.id)
@@ -471,6 +573,7 @@ final class GroupsViewModel {
     }
 
     private func stopMapTracking() {
+        memberRefreshGeneration += 1
         mapTrackedGroupID = nil
         members = []
         peerAlerts = []
@@ -481,6 +584,8 @@ final class GroupsViewModel {
     }
 
     private func refreshMembers(groupID: String) async {
+        memberRefreshGeneration += 1
+        let requestGeneration = memberRefreshGeneration
         do {
             let rows: [MemberRowDecodable] = try await client
                 .from("group_members")
@@ -491,13 +596,13 @@ final class GroupsViewModel {
             let userIDs = rows.map(\.user_id)
             let presence: [PresenceRow] = userIDs.isEmpty ? [] : try await client
                 .from("rider_presence")
-                .select("user_id,sharing_enabled,status,latitude,longitude,last_seen_at")
+                .select("user_id,sharing_enabled,status,latitude,longitude,accuracy_m,last_seen_at")
                 .in("user_id", values: userIDs)
                 .execute()
                 .value
             let presenceByUser = Dictionary(uniqueKeysWithValues: presence.map { ($0.user_id, $0) })
             let namesByUser = await fetchDisplayNames(for: userIDs)
-            members = rows.map { row in
+            let nextMembers = rows.map { row in
                 let p = presenceByUser[row.user_id]
                 let nested = row.profiles?.display_name
                 let fetched = namesByUser[row.user_id]
@@ -512,13 +617,60 @@ final class GroupsViewModel {
                         let raw = p?.status?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
                         return raw.isEmpty ? "available" : raw
                     }(),
-                    lastSeenAt: p?.last_seen_at.flatMap { ISO8601DateFormatter.flexible.parse($0) }
+                    lastSeenAt: p?.lastSeenDate,
+                    accuracyMeters: p?.accuracy_m
                 )
             }
+            guard memberRefreshGeneration == requestGeneration,
+                  mapTrackedGroupID == groupID,
+                  groups.contains(where: { $0.id == groupID })
+            else { return }
+            let nextLiveIDs = Set(nextMembers.filter(\.isLive).map(\.userID))
+            let sharingEnded = members.filter { $0.isLive && !nextLiveIDs.contains($0.userID) }
+            members = nextMembers
+            for member in sharingEnded where member.userID != supabase.userID {
+                onPeerSharingEnded?(member.userID, member.displayName)
+            }
+            refreshSelectedPeerFromRoster()
+            emitPeerUpdates(groupID: groupID)
             await reconcilePeerAlertsWithPresence()
             paintGroupOverlays()
         } catch {
             // Keep the last roster; polling retries shortly.
+        }
+    }
+
+    private func refreshSelectedPeerFromRoster() {
+        guard let selectedPeer,
+              let member = members.first(where: { $0.userID == selectedPeer.userID }),
+              member.isLive,
+              let latitude = member.latitude,
+              let longitude = member.longitude
+        else {
+            if selectedPeer != nil { self.selectedPeer = nil }
+            return
+        }
+        presentPeer(member, latitude: latitude, longitude: longitude)
+    }
+
+    private func emitPeerUpdates(groupID: String) {
+        for member in members where member.isLive && member.userID != supabase.userID {
+            guard let latitude = member.latitude,
+                  let longitude = member.longitude,
+                  let lastSeenAt = member.lastSeenAt,
+                  GroupPresencePolicy.isValidCoordinate(latitude: latitude, longitude: longitude)
+            else { continue }
+            onPeerLocationUpdate?(
+                GroupMemberRouteTarget(
+                    groupID: groupID,
+                    userID: member.userID,
+                    displayName: member.displayName,
+                    coordinate: RouteCoordinate(longitude: longitude, latitude: latitude),
+                    lastSeenAt: lastSeenAt,
+                    accuracyMeters: member.accuracyMeters,
+                    isLive: true
+                )
+            )
         }
     }
 
@@ -595,13 +747,11 @@ final class GroupsViewModel {
             )
         }
 
-        let retained = mapState.markers.filter { !$0.kind.isGroupOverlay }
-        mapState.setMarkers(retained + overlays)
+        mapState.setGroupMarkers(overlays)
     }
 
     private func clearGroupOverlays() {
-        let retained = mapState.markers.filter { !$0.kind.isGroupOverlay }
-        mapState.setMarkers(retained)
+        mapState.setGroupMarkers([])
     }
 
     // MARK: - Presence sharing
@@ -627,8 +777,9 @@ final class GroupsViewModel {
     func startSharing() {
         guard supabase.userID != nil else { return }
         isSharing = true
+        isWaitingForLocation = !GroupPresencePolicy.canPublish(location.lastLocation)
         location.requestAlways()
-        location.setBackgroundUpdates(true)
+        location.setBackgroundUpdates(true, for: .groupSharing)
         location.startUpdates()
         shareTask?.cancel()
         shareTask = Task { [weak self] in
@@ -644,8 +795,10 @@ final class GroupsViewModel {
 
     func stopSharing() {
         isSharing = false
+        isWaitingForLocation = false
         shareTask?.cancel()
         shareTask = nil
+        location.setBackgroundUpdates(false, for: .groupSharing)
         Task {
             await broadcastSharingOff()
             await publishPresence(enabled: false)
@@ -653,6 +806,58 @@ final class GroupsViewModel {
                 await channel.untrack()
             }
         }
+    }
+
+    /// Called before auth is cleared so peers receive a final offline signal and
+    /// no signed-out session keeps polling or sharing a cached location.
+    func prepareForSignOut() async {
+        if supabase.userID != nil {
+            await broadcastSharingOff()
+            await publishPresence(enabled: false)
+        }
+        for channel in realtimeChannels.values {
+            await channel.untrack()
+        }
+        await closeAllRealtimeChannels()
+        clearSessionState()
+    }
+
+    /// Fallback for token expiry or sign-out initiated outside Profile.
+    func handleSignedOut() {
+        clearSessionState()
+        Task { await closeAllRealtimeChannels() }
+    }
+
+    private func clearSessionState() {
+        groupRefreshGeneration += 1
+        memberRefreshGeneration += 1
+        shareTask?.cancel()
+        shareTask = nil
+        pollTask?.cancel()
+        pollTask = nil
+        channelListenTasks.values.forEach { $0.cancel() }
+        isSharing = false
+        isWaitingForLocation = false
+        isLoading = false
+        isMutatingGroup = false
+        realtimeConnected = false
+        groups = []
+        selectedGroup = nil
+        members = []
+        peerAlerts = []
+        selectedPeer = nil
+        mapTrackedGroupID = nil
+        sharingPanelOpen = false
+        location.setBackgroundUpdates(false, for: .groupSharing)
+        clearGroupOverlays()
+    }
+
+    private func closeAllRealtimeChannels() async {
+        for groupID in Array(realtimeChannels.keys) {
+            await closeRealtimeChannel(groupID: groupID)
+        }
+        channelListenTasks.removeAll()
+        realtimeConnected = false
     }
 
     private struct PresenceUpsert: Encodable {
@@ -667,19 +872,48 @@ final class GroupsViewModel {
         let last_seen_at: String
     }
 
+    private struct PresenceOfflineUpdate: Encodable {
+        let sharing_enabled: Bool
+        let status: String
+        let last_seen_at: String
+    }
+
     private func publishPresence(enabled: Bool) async {
         guard let userID = supabase.userID else { return }
+        if !enabled {
+            do {
+                try await client
+                    .from("rider_presence")
+                    .update(
+                        PresenceOfflineUpdate(
+                            sharing_enabled: false,
+                            status: "offline",
+                            last_seen_at: ISO8601DateFormatter().string(from: .now)
+                        )
+                    )
+                    .eq("user_id", value: userID)
+                    .execute()
+            } catch {
+                // Realtime sharing_off still removes the live map pin.
+            }
+            return
+        }
         let fix = location.lastLocation
+        guard GroupPresencePolicy.canPublish(fix), let fix else {
+            isWaitingForLocation = true
+            return
+        }
+        isWaitingForLocation = false
         let payload = PresenceUpsert(
             user_id: userID,
             sharing_enabled: enabled,
             status: enabled ? status : "offline",
-            latitude: fix?.coordinate.latitude ?? 0,
-            longitude: fix?.coordinate.longitude ?? 0,
-            heading: max(fix?.course ?? 0, 0),
-            speed_mps: max(fix?.speed ?? 0, 0),
-            accuracy_m: fix?.horizontalAccuracy ?? 0,
-            last_seen_at: ISO8601DateFormatter().string(from: .now)
+            latitude: fix.coordinate.latitude,
+            longitude: fix.coordinate.longitude,
+            heading: max(fix.course, 0),
+            speed_mps: max(fix.speed, 0),
+            accuracy_m: fix.horizontalAccuracy,
+            last_seen_at: ISO8601DateFormatter().string(from: fix.timestamp)
         )
         do {
             try await client
@@ -779,7 +1013,9 @@ final class GroupsViewModel {
         guard let userID = supabase.userID,
               let group = alertTargetGroup,
               Self.isDistressStatus(status) else { return }
-        let fix = location.lastLocation
+        let fix = GroupPresencePolicy.canPublish(location.lastLocation)
+            ? location.lastLocation
+            : nil
         let lat = fix?.coordinate.latitude
         let lon = fix?.coordinate.longitude
         do {
@@ -886,6 +1122,10 @@ final class GroupsViewModel {
                 .execute()
                 .value
             let names = await fetchDisplayNames(for: Array(Set(rows.map(\.user_id))))
+            guard supabase.userID == selfID,
+                  mapTrackedGroupID == groupID,
+                  groups.contains(where: { $0.id == groupID })
+            else { return }
             let groupName = groups.first(where: { $0.id == groupID })?.name
                 ?? selectedGroup?.name
                 ?? "Group"
@@ -898,7 +1138,9 @@ final class GroupsViewModel {
                 guard row.user_id != selfID,
                       Self.isDistressStatus(row.status),
                       let lat = row.latitude,
-                      let lon = row.longitude else { continue }
+                      let lon = row.longitude,
+                      GroupPresencePolicy.isValidCoordinate(latitude: lat, longitude: lon)
+                else { continue }
                 // Presence wins over a leftover unresolved alert row.
                 if let live = presenceByUser[row.user_id], !Self.isDistressStatus(live) {
                     staleIDs.append(row.id)
@@ -949,7 +1191,8 @@ final class GroupsViewModel {
         guard let selfID = supabase.userID, payload.userId != selfID else { return }
         guard Self.isDistressStatus(payload.status),
               let lat = payload.lat, let lng = payload.lng,
-              lat.isFinite, lng.isFinite else { return }
+              GroupPresencePolicy.isValidCoordinate(latitude: lat, longitude: lng)
+        else { return }
         let record = PeerAlertBanner(
             id: payload.alertId ?? "\(payload.userId):\(payload.status):\(payload.createdAt ?? "")",
             userID: payload.userId,
@@ -974,14 +1217,17 @@ final class GroupsViewModel {
             await ensureRealtimeChannel(groupID: group.id)
         }
         let active = Set(groups.map(\.id))
-        for groupID in realtimeChannels.keys where !active.contains(groupID) {
+        for groupID in Array(realtimeChannels.keys) where !active.contains(groupID) {
             await closeRealtimeChannel(groupID: groupID)
         }
     }
 
     private func ensureRealtimeChannel(groupID: String) async {
         guard let userID = supabase.userID, let client = try? client else { return }
-        if realtimeChannels[groupID] != nil { return }
+        guard realtimeChannels[groupID] == nil,
+              !connectingGroupIDs.contains(groupID) else { return }
+        connectingGroupIDs.insert(groupID)
+        defer { connectingGroupIDs.remove(groupID) }
 
         let channel = client.channel("group:\(groupID)") {
             $0.isPrivate = true
@@ -999,7 +1245,7 @@ final class GroupsViewModel {
                 group.addTask { [weak self] in
                     for await message in locationStream {
                         guard let self, !Task.isCancelled else { break }
-                        await self.handleLocationMessage(message)
+                        await self.handleLocationMessage(message, groupID: groupID)
                     }
                 }
                 group.addTask { [weak self] in
@@ -1011,7 +1257,7 @@ final class GroupsViewModel {
                 group.addTask { [weak self] in
                     for await message in sharingOffStream {
                         guard let self, !Task.isCancelled else { break }
-                        await self.handleSharingOffMessage(message)
+                        await self.handleSharingOffMessage(message, groupID: groupID)
                     }
                 }
                 group.addTask { [weak self] in
@@ -1027,6 +1273,15 @@ final class GroupsViewModel {
             try await channel.subscribeWithError()
         } catch {
             errorMessage = "Couldn't connect live updates for this group."
+            channelListenTasks[groupID]?.cancel()
+            channelListenTasks[groupID] = nil
+            await supabase.client?.removeChannel(channel)
+            return
+        }
+        guard supabase.userID == userID,
+              groups.contains(where: { $0.id == groupID }) else {
+            channelListenTasks[groupID]?.cancel()
+            channelListenTasks[groupID] = nil
             await supabase.client?.removeChannel(channel)
             return
         }
@@ -1047,7 +1302,9 @@ final class GroupsViewModel {
     }
 
     private func trackOnChannel(_ channel: RealtimeChannelV2, groupID: String) async {
-        guard let userID = supabase.userID, let fix = location.lastLocation else { return }
+        guard let userID = supabase.userID,
+              let fix = location.lastLocation,
+              GroupPresencePolicy.canPublish(fix) else { return }
         let groupName = groups.first(where: { $0.id == groupID })?.name ?? "Group"
         let payload = LocationBroadcast(
             userId: userID,
@@ -1056,8 +1313,9 @@ final class GroupsViewModel {
             lat: fix.coordinate.latitude,
             heading: max(fix.course, 0),
             speed: max(fix.speed, 0),
+            accuracy: fix.horizontalAccuracy,
             status: status,
-            lastSeenAt: ISO8601DateFormatter().string(from: .now),
+            lastSeenAt: ISO8601DateFormatter().string(from: fix.timestamp),
             groupId: groupID,
             groupName: groupName
         )
@@ -1065,7 +1323,10 @@ final class GroupsViewModel {
     }
 
     private func broadcastLocationToChannels() async {
-        guard isSharing, let userID = supabase.userID, let fix = location.lastLocation else { return }
+        guard isSharing,
+              let userID = supabase.userID,
+              let fix = location.lastLocation,
+              GroupPresencePolicy.canPublish(fix) else { return }
         for (groupID, channel) in realtimeChannels {
             let groupName = groups.first(where: { $0.id == groupID })?.name ?? "Group"
             let payload = LocationBroadcast(
@@ -1075,8 +1336,9 @@ final class GroupsViewModel {
                 lat: fix.coordinate.latitude,
                 heading: max(fix.course, 0),
                 speed: max(fix.speed, 0),
+                accuracy: fix.horizontalAccuracy,
                 status: status,
-                lastSeenAt: ISO8601DateFormatter().string(from: .now),
+                lastSeenAt: ISO8601DateFormatter().string(from: fix.timestamp),
                 groupId: groupID,
                 groupName: groupName
             )
@@ -1094,7 +1356,7 @@ final class GroupsViewModel {
     }
 
     @MainActor
-    private func handleLocationMessage(_ message: JSONObject) {
+    private func handleLocationMessage(_ message: JSONObject, groupID: String) {
         let payload: LocationBroadcast?
         if let nested = try? message["payload"]?.decode(as: LocationBroadcast.self) {
             payload = nested
@@ -1102,14 +1364,44 @@ final class GroupsViewModel {
             payload = try? message.decode(as: LocationBroadcast.self)
         }
         guard let payload, let selfID = supabase.userID, payload.userId != selfID else { return }
-        guard let lat = payload.lat, let lng = payload.lng, lat.isFinite, lng.isFinite else { return }
+        guard let lat = payload.lat,
+              let lng = payload.lng,
+              let lastSeenAt = payload.lastSeenAt.flatMap({ ISO8601DateFormatter.flexible.parse($0) }),
+              GroupPresencePolicy.isLive(
+                sharingEnabled: true,
+                latitude: lat,
+                longitude: lng,
+                accuracyMeters: payload.accuracy,
+                lastSeenAt: lastSeenAt
+              ) else { return }
+
+        let resolvedName = Self.resolvedDisplayName(
+            payload.displayName
+                ?? members.first(where: { $0.userID == payload.userId })?.displayName
+        )
+        onPeerLocationUpdate?(
+            GroupMemberRouteTarget(
+                groupID: groupID,
+                userID: payload.userId,
+                displayName: resolvedName,
+                coordinate: RouteCoordinate(longitude: lng, latitude: lat),
+                lastSeenAt: lastSeenAt,
+                accuracyMeters: payload.accuracy,
+                isLive: true
+            )
+        )
+        // We subscribe to every membership so tracking can continue even when
+        // another group is open. Only the tracked group's events may mutate the
+        // visible roster and rider pins.
+        guard mapTrackedGroupID == groupID else { return }
 
         let previousStatus = members.first(where: { $0.userID == payload.userId })?.status
         if let idx = members.firstIndex(where: { $0.userID == payload.userId }) {
             members[idx].isLive = true
             members[idx].latitude = lat
             members[idx].longitude = lng
-            members[idx].lastSeenAt = .now
+            members[idx].lastSeenAt = lastSeenAt
+            members[idx].accuracyMeters = payload.accuracy
             if let status = payload.status, !status.isEmpty {
                 members[idx].status = status
             }
@@ -1124,10 +1416,12 @@ final class GroupsViewModel {
                     latitude: lat,
                     longitude: lng,
                     status: payload.status ?? old.status,
-                    lastSeenAt: .now
+                    lastSeenAt: lastSeenAt,
+                    accuracyMeters: payload.accuracy
                 )
             }
         }
+        refreshSelectedPeerFromRoster()
         paintGroupOverlays()
 
         if let status = payload.status {
@@ -1165,7 +1459,7 @@ final class GroupsViewModel {
     }
 
     @MainActor
-    private func handleSharingOffMessage(_ message: JSONObject) {
+    private func handleSharingOffMessage(_ message: JSONObject, groupID: String) {
         let payload: SharingOffBroadcast?
         if let nested = try? message["payload"]?.decode(as: SharingOffBroadcast.self) {
             payload = nested
@@ -1173,18 +1467,46 @@ final class GroupsViewModel {
             payload = try? message.decode(as: SharingOffBroadcast.self)
         }
         guard let payload, let selfID = supabase.userID, payload.userId != selfID else { return }
+        let knownName = members.first(where: { $0.userID == payload.userId })?.displayName
+            ?? "Group member"
+        onPeerSharingEnded?(payload.userId, knownName)
+        guard mapTrackedGroupID == groupID else { return }
         if let idx = members.firstIndex(where: { $0.userID == payload.userId }) {
             members[idx].isLive = false
+            members[idx].status = "offline"
         }
+        if selectedPeer?.userID == payload.userId { selectedPeer = nil }
         paintGroupOverlays()
     }
 
     @MainActor
     private func handlePresenceAction(_ action: any PresenceAction, groupID: String) {
         guard let selfID = supabase.userID else { return }
+        let visibleGroup = mapTrackedGroupID == groupID
         if let joins = try? action.decodeJoins(as: LocationBroadcast.self) {
             for join in joins where join.userId != selfID {
-                guard let lat = join.lat, let lng = join.lng else { continue }
+                guard let lat = join.lat,
+                      let lng = join.lng,
+                      let seen = join.lastSeenAt.flatMap({ ISO8601DateFormatter.flexible.parse($0) }),
+                      GroupPresencePolicy.isLive(
+                        sharingEnabled: true,
+                        latitude: lat,
+                        longitude: lng,
+                        accuracyMeters: join.accuracy,
+                        lastSeenAt: seen
+                      ) else { continue }
+                onPeerLocationUpdate?(
+                    GroupMemberRouteTarget(
+                        groupID: groupID,
+                        userID: join.userId,
+                        displayName: Self.resolvedDisplayName(join.displayName),
+                        coordinate: RouteCoordinate(longitude: lng, latitude: lat),
+                        lastSeenAt: seen,
+                        accuracyMeters: join.accuracy,
+                        isLive: true
+                    )
+                )
+                guard visibleGroup else { continue }
                 if let idx = members.firstIndex(where: { $0.userID == join.userId }) {
                     let old = members[idx]
                     members[idx] = GroupMemberRow(
@@ -1195,23 +1517,51 @@ final class GroupsViewModel {
                         latitude: lat,
                         longitude: lng,
                         status: join.status ?? old.status ?? "available",
-                        lastSeenAt: .now
+                        lastSeenAt: seen,
+                        accuracyMeters: join.accuracy
                     )
                 }
             }
         }
         if let leaves = try? action.decodeLeaves(as: LocationBroadcast.self) {
             for leave in leaves where leave.userId != selfID {
+                let name = members.first(where: { $0.userID == leave.userId })?.displayName
+                    ?? Self.resolvedDisplayName(leave.displayName)
+                onPeerSharingEnded?(leave.userId, name)
+                guard visibleGroup else { continue }
                 if let idx = members.firstIndex(where: { $0.userID == leave.userId }) {
                     members[idx].isLive = false
+                    members[idx].status = "offline"
                 }
             }
         }
         // Also handle presence keyed by user id without full LocationBroadcast decode.
         for (key, presence) in action.joins where key != selfID {
             if let state = try? presence.decodeState(as: LocationBroadcast.self),
-               let lat = state.lat, let lng = state.lng,
-               let idx = members.firstIndex(where: { $0.userID == key }) {
+               let lat = state.lat,
+               let lng = state.lng,
+               let seen = state.lastSeenAt.flatMap({ ISO8601DateFormatter.flexible.parse($0) }),
+               GroupPresencePolicy.isLive(
+                sharingEnabled: true,
+                latitude: lat,
+                longitude: lng,
+                accuracyMeters: state.accuracy,
+                lastSeenAt: seen
+               ) {
+                onPeerLocationUpdate?(
+                    GroupMemberRouteTarget(
+                        groupID: groupID,
+                        userID: key,
+                        displayName: Self.resolvedDisplayName(state.displayName),
+                        coordinate: RouteCoordinate(longitude: lng, latitude: lat),
+                        lastSeenAt: seen,
+                        accuracyMeters: state.accuracy,
+                        isLive: true
+                    )
+                )
+                guard visibleGroup,
+                      let idx = members.firstIndex(where: { $0.userID == key })
+                else { continue }
                 let old = members[idx]
                 members[idx] = GroupMemberRow(
                     userID: old.userID,
@@ -1221,16 +1571,24 @@ final class GroupsViewModel {
                     latitude: lat,
                     longitude: lng,
                     status: state.status ?? old.status ?? "available",
-                    lastSeenAt: .now
+                    lastSeenAt: seen,
+                    accuracyMeters: state.accuracy
                 )
             }
         }
         for key in action.leaves.keys where key != selfID {
+            let name = members.first(where: { $0.userID == key })?.displayName
+                ?? "Group member"
+            onPeerSharingEnded?(key, name)
+            guard visibleGroup else { continue }
             if let idx = members.firstIndex(where: { $0.userID == key }) {
                 members[idx].isLive = false
+                members[idx].status = "offline"
             }
         }
-        _ = groupID
+        guard visibleGroup else { return }
+        refreshSelectedPeerFromRoster()
+        emitPeerUpdates(groupID: groupID)
         paintGroupOverlays()
     }
 }

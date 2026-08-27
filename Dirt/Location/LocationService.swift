@@ -14,10 +14,19 @@ enum LocationBackgroundPolicy {
     }
 }
 
+/// Independent features can need background GPS at the same time. Keeping the
+/// owners separate prevents ending navigation from silently stopping Group
+/// sharing (and vice versa).
+enum LocationBackgroundPurpose: Hashable {
+    case navigation
+    case groupSharing
+}
+
 @MainActor
 @Observable
 final class LocationService: NSObject, CLLocationManagerDelegate {
     private let manager = CLLocationManager()
+    private var backgroundPurposes: Set<LocationBackgroundPurpose> = []
 
     private(set) var authorization: CLAuthorizationStatus = .notDetermined
     private(set) var lastLocation: CLLocation?
@@ -26,6 +35,8 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
     private enum Prefs {
         static let lastLatitude = "dirt.lastUserLatitude"
         static let lastLongitude = "dirt.lastUserLongitude"
+        static let lastTimestamp = "dirt.lastUserLocationTimestamp"
+        static let lastAccuracy = "dirt.lastUserLocationAccuracy"
     }
 
     override init() {
@@ -41,7 +52,7 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
     private func seedLastKnownLocation() {
         if let system = manager.location, CLLocationCoordinate2DIsValid(system.coordinate) {
             lastLocation = system
-            persistLastCoordinate(system.coordinate)
+            persistLastLocation(system)
             return
         }
         let defaults = UserDefaults.standard
@@ -51,7 +62,17 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
               defaults.object(forKey: Prefs.lastLongitude) != nil else { return }
         let coordinate = CLLocationCoordinate2D(latitude: lat, longitude: lon)
         guard CLLocationCoordinate2DIsValid(coordinate) else { return }
-        lastLocation = CLLocation(latitude: lat, longitude: lon)
+        let timestamp = defaults.object(forKey: Prefs.lastTimestamp) as? Date ?? .distantPast
+        let accuracy = defaults.object(forKey: Prefs.lastAccuracy) == nil
+            ? -1
+            : defaults.double(forKey: Prefs.lastAccuracy)
+        lastLocation = CLLocation(
+            coordinate: coordinate,
+            altitude: 0,
+            horizontalAccuracy: accuracy,
+            verticalAccuracy: -1,
+            timestamp: timestamp
+        )
     }
 
     private func persistLastCoordinate(_ coordinate: CLLocationCoordinate2D) {
@@ -59,6 +80,13 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
         let defaults = UserDefaults.standard
         defaults.set(coordinate.latitude, forKey: Prefs.lastLatitude)
         defaults.set(coordinate.longitude, forKey: Prefs.lastLongitude)
+    }
+
+    private func persistLastLocation(_ location: CLLocation) {
+        persistLastCoordinate(location.coordinate)
+        let defaults = UserDefaults.standard
+        defaults.set(location.timestamp, forKey: Prefs.lastTimestamp)
+        defaults.set(location.horizontalAccuracy, forKey: Prefs.lastAccuracy)
     }
 
     var isAuthorized: Bool {
@@ -92,21 +120,33 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
 
     /// Background updates require the `location` UIBackgroundMode. Enabling
     /// without that key is a fatal Core Location exception.
-    func setBackgroundUpdates(_ enabled: Bool) {
+    func setBackgroundUpdates(_ enabled: Bool, for purpose: LocationBackgroundPurpose) {
+        if enabled {
+            backgroundPurposes.insert(purpose)
+        } else {
+            backgroundPurposes.remove(purpose)
+        }
+        applyBackgroundUpdateState()
+    }
+
+    private func applyBackgroundUpdateState() {
         guard isAuthorized else { return }
         let allow = LocationBackgroundPolicy.shouldEnable(
-            requested: enabled,
+            requested: !backgroundPurposes.isEmpty,
             hasLocationBackgroundMode: LocationBackgroundPolicy.bundleHasLocationBackgroundMode
         )
         manager.allowsBackgroundLocationUpdates = allow
         manager.showsBackgroundLocationIndicator = allow
     }
 
+    var backgroundUpdatePurposes: Set<LocationBackgroundPurpose> { backgroundPurposes }
+
     nonisolated func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         let status = manager.authorizationStatus
         Task { @MainActor in
             self.authorization = status
             if self.isAuthorized {
+                self.applyBackgroundUpdateState()
                 self.manager.startUpdatingLocation()
             }
         }
@@ -118,7 +158,7 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
         // @Observable nav / cue state (avoids unsafeForcedSync warnings).
         Task { @MainActor in
             self.lastLocation = latest
-            self.persistLastCoordinate(latest.coordinate)
+            self.persistLastLocation(latest)
             self.onLocation?(latest)
         }
     }

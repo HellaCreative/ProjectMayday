@@ -233,6 +233,28 @@ final class RoutePlannerModel {
     @ObservationIgnored private var fromHereIntentGeneration = 0
     @ObservationIgnored private var navigationRerouteTask: Task<Void, Never>?
     @ObservationIgnored private var navigationRerouteGeneration = 0
+    private struct PendingGroupTracking {
+        let groupID: String
+        let userID: String
+        let displayName: String
+        let routedCoordinate: RouteCoordinate
+        var latestTarget: GroupMemberRouteTarget
+    }
+    private struct ActiveGroupTracking {
+        let groupID: String
+        let userID: String
+        let displayName: String
+        var routedCoordinate: RouteCoordinate
+        var latestTarget: GroupMemberRouteTarget
+        var deferredCoordinate: RouteCoordinate?
+    }
+    @ObservationIgnored private var pendingGroupTracking: PendingGroupTracking?
+    @ObservationIgnored private var activeGroupTracking: ActiveGroupTracking?
+    @ObservationIgnored private var groupRouteUpdateTask: Task<Void, Never>?
+    @ObservationIgnored private var groupRouteUpdateGeneration = 0
+    @ObservationIgnored private var groupFollowerStoppedSince: Date?
+    @ObservationIgnored private var groupFollowerIsStopped = false
+    private(set) var groupNavigationNotice: GroupNavigationNotice?
 
     private(set) var isRouting = false
     var errorMessage: String?
@@ -342,6 +364,7 @@ final class RoutePlannerModel {
             guard let self else { return }
             self.navigation.update(with: location)
             self.prefetchNextNavigationTileStageIfNeeded()
+            self.handleGroupTrackingLocation(location)
         }
         mapState.fromHereLongPressRelocatesDestination = true
     }
@@ -969,6 +992,7 @@ final class RoutePlannerModel {
     }
 
     private func beginFromHereDestination(_ point: RouteCoordinate) {
+        pendingGroupTracking = nil
         buildTask?.cancel()
         mapState.cancelRouteBuildCamera()
         built = nil
@@ -1020,6 +1044,7 @@ final class RoutePlannerModel {
     }
 
     private func appendPlanPoint(_ point: RouteCoordinate) {
+        pendingGroupTracking = nil
         apply(.append(coordinate: point), source: "longPress")
     }
 
@@ -1440,6 +1465,7 @@ final class RoutePlannerModel {
         guard navigation.phase == .active,
               let rider = locationService.currentCoordinate else { return }
 
+        cancelGroupRouteUpdate(resetStopState: false)
         cancelNavigationReroute()
         navigationRerouteGeneration += 1
         let requestGeneration = navigationRerouteGeneration
@@ -1713,6 +1739,7 @@ final class RoutePlannerModel {
     /// Route from current GPS position to a POI coordinate.
     /// Route to this POI.
     func routeToCoordinate(name: String?, latitude: Double, longitude: Double) {
+        pendingGroupTracking = nil
         let point = RouteCoordinate(longitude: longitude, latitude: latitude)
         mode = .fromHere
         itinerary = RiderItinerary()
@@ -1731,6 +1758,7 @@ final class RoutePlannerModel {
     /// Add a coordinate as the next open plan waypoint.
     /// Add this POI as a plan waypoint.
     func addPlanWaypoint(latitude: Double, longitude: Double) {
+        pendingGroupTracking = nil
         let point = RouteCoordinate(longitude: longitude, latitude: latitude)
         if mode != .plan { mode = .plan }
         appendPlanPoint(point)
@@ -1770,6 +1798,10 @@ final class RoutePlannerModel {
         routeIdentity = nil
         savedRouteOrigin = nil
         pendingPackBuild = nil
+        pendingGroupTracking = nil
+        activeGroupTracking = nil
+        dismissGroupNavigationNotice()
+        cancelGroupRouteUpdate(resetStopState: true)
         packAcquisition.resetSession()
         mapState.selectPlannerPin(nil)
         refreshMap()
@@ -1783,6 +1815,7 @@ final class RoutePlannerModel {
 
     /// From here → Plan: keep GPS→B (or geometry) as stage 1.
     func switchToPlanKeepingFromHere() {
+        pendingGroupTracking = nil
         guard itinerary.waypoints.count == 2 else {
             switchToPlanClearing()
             return
@@ -1808,6 +1841,7 @@ final class RoutePlannerModel {
     /// Dragging A or B re-routes that leg like any other plan stage.
     @discardableResult
     func continuePlanningFromSavedTrack() -> Bool {
+        pendingGroupTracking = nil
         guard mode == .saved, let response = fromHereResponse else { return false }
         let coords = response.coordinates
         guard let start = coords.first,
@@ -1846,6 +1880,7 @@ final class RoutePlannerModel {
 
     /// From here → Plan: discard the From here draft and open an empty plan.
     func switchToPlanClearing() {
+        pendingGroupTracking = nil
         invalidateInFlightRoutes()
         destination = nil
         destinationName = nil
@@ -1864,6 +1899,7 @@ final class RoutePlannerModel {
 
     /// Plan → From here: use the last plan pin as From here destination B.
     func switchToFromHereUsingLastPin() {
+        pendingGroupTracking = nil
         let lastPin = itinerary.waypoints.last?.coordinate
         let keptProfile = itinerary.legs.last?.profile ?? profile
         let keptAllow = itinerary.legs.last?.allowUnknown ?? false
@@ -1893,6 +1929,7 @@ final class RoutePlannerModel {
 
     /// Plan → From here: discard the plan and open empty From here.
     func switchToFromHereClearing() {
+        pendingGroupTracking = nil
         invalidateInFlightRoutes()
         itinerary = RiderItinerary()
         built = nil
@@ -2008,8 +2045,7 @@ final class RoutePlannerModel {
             }
         }
         markers.append(contentsOf: fuelTargetMarkers)
-        let riders = mapState.markers.filter { $0.kind.isGroupOverlay }
-        mapState.setMarkers(markers + riders)
+        mapState.setPlannerMarkers(markers)
         primeNavigationTilePlanIfReady()
     }
 
@@ -2257,6 +2293,7 @@ final class RoutePlannerModel {
 
     /// Import straight into Plan: track geometry = stage 1 (not re-routed).
     private func seedPlanFromTrack(_ track: GPXParser.ParsedTrack) {
+        pendingGroupTracking = nil
         let coords = track.coordinates
         guard coords.count >= 2, let start = coords.first, let end = coords.last else {
             errorMessage = GPXParser.ParseError.noTrackOrRoute.errorDescription
@@ -2305,6 +2342,7 @@ final class RoutePlannerModel {
         networkSegments: [RouteSegment]? = nil,
         surfaceFamilyMode: String? = nil
     ) {
+        pendingGroupTracking = nil
         mode = .saved
         // Whatever was loaded before is no longer what's on the map; loadSavedRoute
         // re-establishes the link straight after this returns.
@@ -2642,6 +2680,24 @@ final class RoutePlannerModel {
     func startNavigation() {
         guard hasRoute else { return }
 
+        if let pendingGroupTracking,
+           destination == pendingGroupTracking.routedCoordinate {
+            activeGroupTracking = ActiveGroupTracking(
+                groupID: pendingGroupTracking.groupID,
+                userID: pendingGroupTracking.userID,
+                displayName: pendingGroupTracking.displayName,
+                routedCoordinate: pendingGroupTracking.routedCoordinate,
+                latestTarget: pendingGroupTracking.latestTarget,
+                deferredCoordinate: nil
+            )
+        } else {
+            activeGroupTracking = nil
+            self.pendingGroupTracking = nil
+        }
+        groupFollowerStoppedSince = nil
+        groupFollowerIsStopped = false
+        dismissGroupNavigationNotice()
+
         navigationStartTask?.cancel()
         navigation.beginPrefetch()
         offline.beginNavigationPrepPresentation()
@@ -2760,7 +2816,7 @@ final class RoutePlannerModel {
             }
 
             locationService.requestAlways()
-            locationService.setBackgroundUpdates(true)
+            locationService.setBackgroundUpdates(true, for: .navigation)
             locationService.startUpdates()
 
             let maneuvers = allManeuvers
@@ -2791,6 +2847,9 @@ final class RoutePlannerModel {
         offline.cancelPrep()
         graphPacks.cancel()
         navigation.cancelPrefetch()
+        activeGroupTracking = nil
+        groupFollowerStoppedSince = nil
+        groupFollowerIsStopped = false
         if navigation.phase == .idle {
             mapState.unlockRouteEditingAfterPrepCancel()
         }
@@ -2882,6 +2941,18 @@ final class RoutePlannerModel {
 
     func endNavigation() {
         cancelNavigationReroute()
+        cancelGroupRouteUpdate(resetStopState: true)
+        if let activeGroupTracking {
+            pendingGroupTracking = PendingGroupTracking(
+                groupID: activeGroupTracking.groupID,
+                userID: activeGroupTracking.userID,
+                displayName: activeGroupTracking.displayName,
+                routedCoordinate: activeGroupTracking.routedCoordinate,
+                latestTarget: activeGroupTracking.latestTarget
+            )
+        }
+        activeGroupTracking = nil
+        dismissGroupNavigationNotice()
         let cleaned = RideEdgeSequence.sanitize(navigation.riddenEdgeIds)
         let candidate: RideContributionCandidate? =
             cleaned.count >= 3
@@ -2894,7 +2965,7 @@ final class RoutePlannerModel {
         navigation.end()
         lastQueuedTileLookaheadStageIndex = nil
         mapState.endNavigationCamera()
-        locationService.setBackgroundUpdates(false)
+        locationService.setBackgroundUpdates(false, for: .navigation)
         offline.disengageOfflineBasemap()
         graphPacks.protectInstalledRevisions = false
         graphPacks.cancelQuietDownloads()
@@ -3353,14 +3424,246 @@ final class RoutePlannerModel {
 
     // MARK: - Route to member
 
-    func routeToMember(name: String, latitude: Double, longitude: Double) {
+    func routeToMember(_ target: GroupMemberRouteTarget) {
+        guard navigation.phase == .idle else {
+            toast = "End navigation before choosing a different rider."
+            return
+        }
+        guard StopTriggeredTrackingPolicy.targetIsFresh(target) else {
+            toast = "That rider's location is no longer current."
+            return
+        }
+        let point = target.coordinate
+        pendingGroupTracking = PendingGroupTracking(
+            groupID: target.groupID,
+            userID: target.userID,
+            displayName: target.displayName,
+            routedCoordinate: point,
+            latestTarget: target
+        )
         mode = .fromHere
-        destination = RouteCoordinate(longitude: longitude, latitude: latitude)
-        destinationName = name
+        itinerary = RiderItinerary()
+        built = nil
+        fromHereResponse = nil
+        destination = point
+        destinationName = target.displayName
         presentRouteCard = true
+        isAssemblingRoute = true
         toast = Self.calculatingRouteToast
+        mapState.fromHereLongPressRelocatesDestination = true
+        RoutingDebugLog.shared.event(
+            "group tracking route armed group=\(target.groupID) user=\(target.userID)"
+        )
         refreshMap()
         Task { await routeFromHere() }
+    }
+
+    /// Compatibility entry point for older call sites. It intentionally does
+    /// not enable stop-trigger tracking because it has no stable rider identity.
+    func routeToMember(name: String, latitude: Double, longitude: Double) {
+        pendingGroupTracking = nil
+        routeToCoordinate(name: name, latitude: latitude, longitude: longitude)
+    }
+
+    func receiveGroupMemberUpdate(_ target: GroupMemberRouteTarget) {
+        if var pending = pendingGroupTracking,
+           pending.groupID == target.groupID,
+           pending.userID == target.userID {
+            pending.latestTarget = target.withDisplayName(pending.displayName)
+            pendingGroupTracking = pending
+        }
+        if var active = activeGroupTracking,
+           active.groupID == target.groupID,
+           active.userID == target.userID {
+            active.latestTarget = target.withDisplayName(active.displayName)
+            if active.deferredCoordinate != target.coordinate {
+                active.deferredCoordinate = nil
+            }
+            activeGroupTracking = active
+        }
+    }
+
+    func receiveGroupMemberSharingEnded(userID: String, displayName: String) {
+        if pendingGroupTracking?.userID == userID {
+            pendingGroupTracking = nil
+        }
+        guard var active = activeGroupTracking, active.userID == userID else { return }
+        let lastKnown = active.latestTarget
+        active.latestTarget = GroupMemberRouteTarget(
+            groupID: lastKnown.groupID,
+            userID: lastKnown.userID,
+            displayName: lastKnown.displayName,
+            coordinate: lastKnown.coordinate,
+            lastSeenAt: lastKnown.lastSeenAt,
+            accuracyMeters: lastKnown.accuracyMeters,
+            isLive: false
+        )
+        activeGroupTracking = active
+        cancelGroupRouteUpdate(resetStopState: true)
+        RoutingDebugLog.shared.event("group tracking sharing ended user=\(userID)")
+        groupNavigationNotice = GroupNavigationNotice(
+            kind: .lastKnown,
+            title: "\(displayName) stopped sharing",
+            message: "Continuing to the last known location."
+        )
+    }
+
+    func dismissGroupNavigationNotice() {
+        groupNavigationNotice = nil
+    }
+
+    private func handleGroupTrackingLocation(_ location: CLLocation) {
+        guard navigation.phase == .active, activeGroupTracking != nil else {
+            groupFollowerStoppedSince = nil
+            groupFollowerIsStopped = false
+            return
+        }
+        switch StopTriggeredTrackingPolicy.motion(for: location) {
+        case .moving, .uncertain:
+            if groupRouteUpdateTask != nil {
+                RoutingDebugLog.shared.event("group tracking reroute discarded follower=moving")
+            }
+            cancelGroupRouteUpdate(resetStopState: true)
+        case .stopped:
+            groupFollowerIsStopped = true
+            let now = Date.now
+            if groupFollowerStoppedSince == nil {
+                groupFollowerStoppedSince = now
+                return
+            }
+            guard StopTriggeredTrackingPolicy.hasBeenStoppedLongEnough(
+                since: groupFollowerStoppedSince,
+                now: now
+            ) else { return }
+            beginStoppedGroupRouteUpdate(from: location)
+        }
+    }
+
+    private func beginStoppedGroupRouteUpdate(from location: CLLocation) {
+        guard groupRouteUpdateTask == nil,
+              groupFollowerIsStopped,
+              !navigation.offRoute,
+              var tracking = activeGroupTracking,
+              StopTriggeredTrackingPolicy.targetIsFresh(tracking.latestTarget),
+              StopTriggeredTrackingPolicy.targetMovedMeaningfully(
+                from: tracking.routedCoordinate,
+                to: tracking.latestTarget.coordinate
+              ),
+              tracking.deferredCoordinate != tracking.latestTarget.coordinate
+        else { return }
+
+        let target = tracking.latestTarget
+        if stages.contains(where: \.endsAtFuelStop) {
+            tracking.deferredCoordinate = target.coordinate
+            activeGroupTracking = tracking
+            groupNavigationNotice = GroupNavigationNotice(
+                kind: .needsReview,
+                title: "\(tracking.displayName)'s location changed",
+                message: "Open Route to update the destination without removing planned fuel stops."
+            )
+            RoutingDebugLog.shared.event("group tracking reroute deferred reason=fuel-stops")
+            return
+        }
+
+        let rider = RouteCoordinate(
+            longitude: location.coordinate.longitude,
+            latitude: location.coordinate.latitude
+        )
+        groupRouteUpdateGeneration += 1
+        let requestGeneration = groupRouteUpdateGeneration
+        let profile = self.profile
+        let allowUnknown = self.allowUnknown
+        RoutingDebugLog.shared.event(
+            "group tracking reroute begin group=\(target.groupID) user=\(target.userID)"
+        )
+        groupRouteUpdateTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            defer {
+                if self.groupRouteUpdateGeneration == requestGeneration {
+                    self.groupRouteUpdateTask = nil
+                }
+            }
+            do {
+                let response = try await self.routeWhileNavigating(
+                    from: rider,
+                    to: target.coordinate,
+                    profile: profile,
+                    allowUnknown: allowUnknown
+                )
+                guard !Task.isCancelled,
+                      self.groupRouteUpdateGeneration == requestGeneration,
+                      self.groupFollowerIsStopped,
+                      self.navigation.phase == .active,
+                      !self.navigation.offRoute,
+                      var current = self.activeGroupTracking,
+                      current.groupID == target.groupID,
+                      current.userID == target.userID,
+                      current.latestTarget.coordinate == target.coordinate,
+                      StopTriggeredTrackingPolicy.targetIsFresh(current.latestTarget)
+                else { return }
+
+                current.routedCoordinate = target.coordinate
+                current.deferredCoordinate = nil
+                self.activeGroupTracking = current
+                self.destination = target.coordinate
+                self.destinationName = current.displayName
+                self.seedCanonicalBuild(
+                    coordinates: [rider, target.coordinate],
+                    profile: profile,
+                    allowUnknown: allowUnknown,
+                    responses: [response]
+                )
+                let display = MapState.displaySegments(from: [response])
+                let meters = response.distanceMeters ?? GeoMath.lineMeters(response.coordinates)
+                self.navigation.replaceRoute(
+                    coordinates: response.coordinates,
+                    maneuvers: response.maneuvers ?? [],
+                    segments: display,
+                    stageEndMeters: [meters],
+                    stages: [
+                        NavigationStage(
+                            id: target.id,
+                            title: current.displayName,
+                            detail: "Group member",
+                            kind: .destination,
+                            endMeters: meters
+                        )
+                    ],
+                    networkSegments: self.networkSegments(from: [response])
+                )
+                self.refreshMap()
+                self.groupFollowerStoppedSince = .now
+                self.groupNavigationNotice = GroupNavigationNotice(
+                    kind: .updated,
+                    title: "\(current.displayName)'s location changed",
+                    message: "Your route has been updated."
+                )
+                RoutingDebugLog.shared.event(
+                    "group tracking reroute applied group=\(target.groupID) user=\(target.userID)"
+                )
+            } catch {
+                guard !Task.isCancelled,
+                      self.groupRouteUpdateGeneration == requestGeneration else { return }
+                self.groupNavigationNotice = GroupNavigationNotice(
+                    kind: .lastKnown,
+                    title: "Couldn't update the group route",
+                    message: "Continuing to \(target.displayName)'s last routed location."
+                )
+                RoutingDebugLog.shared.event(
+                    "group tracking reroute failed group=\(target.groupID) user=\(target.userID)"
+                )
+            }
+        }
+    }
+
+    private func cancelGroupRouteUpdate(resetStopState: Bool) {
+        groupRouteUpdateTask?.cancel()
+        groupRouteUpdateTask = nil
+        groupRouteUpdateGeneration += 1
+        if resetStopState {
+            groupFollowerStoppedSince = nil
+            groupFollowerIsStopped = false
+        }
     }
 
     /// Brief success confirmation after routing — dirt/paved detail lives in the stats row.

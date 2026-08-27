@@ -179,7 +179,8 @@ struct MapLibreMapView: UIViewRepresentable {
         private var styleLoaded = false
         private var appliedStyleGeneration = -1
         private var appliedRouteGeneration = -1
-        private var appliedMarkerGeneration = -1
+        private var appliedPlannerMarkerGeneration = -1
+        private var appliedGroupMarkerGeneration = -1
         private var appliedFuelReplacementGeneration = -1
         private var appliedPinSelectionGeneration = -1
         private var appliedNavigatingLock: Bool?
@@ -893,26 +894,65 @@ struct MapLibreMapView: UIViewRepresentable {
         }
 
         private func syncMarkers(mapView: MLNMapView) {
-            guard appliedMarkerGeneration != state.markerGeneration else { return }
-            appliedMarkerGeneration = state.markerGeneration
-            mapView.removeAnnotations(annotations)
-            annotations = state.markers.map { marker in
-                let annotation = DirtAnnotation()
-                annotation.coordinate = CLLocationCoordinate2D(latitude: marker.latitude, longitude: marker.longitude)
-                annotation.markerID = marker.id
-                annotation.label = marker.label
-                annotation.kind = marker.kind
-                annotation.status = marker.status
-                annotation.isLocked = marker.isLocked
-                annotation.title = marker.subtitle ?? marker.label
-                return annotation
+            if appliedPlannerMarkerGeneration != state.plannerMarkerGeneration {
+                appliedPlannerMarkerGeneration = state.plannerMarkerGeneration
+                let oldPlanner = annotations.filter { !$0.kind.isGroupOverlay }
+                mapView.removeAnnotations(oldPlanner)
+                annotations.removeAll { !$0.kind.isGroupOverlay }
+                let next = state.plannerMarkers.map(makeAnnotation)
+                annotations.append(contentsOf: next)
+                mapView.addAnnotations(next)
+                // Force selection chrome to re-apply after planner pin rebuild.
+                appliedPinSelectionGeneration = -1
+                appliedNavigatingLock = nil
+                syncPinSelection(mapView: mapView)
+                syncPinEditLock(mapView: mapView)
             }
-            mapView.addAnnotations(annotations)
-            // Force selection chrome to re-apply after annotation rebuild.
-            appliedPinSelectionGeneration = -1
-            appliedNavigatingLock = nil
-            syncPinSelection(mapView: mapView)
-            syncPinEditLock(mapView: mapView)
+
+            if appliedGroupMarkerGeneration != state.groupMarkerGeneration {
+                appliedGroupMarkerGeneration = state.groupMarkerGeneration
+                let desired = Dictionary(uniqueKeysWithValues: state.groupMarkers.map { ($0.id, $0) })
+                let existing = annotations.filter(\.kind.isGroupOverlay)
+                let stale = existing.filter { desired[$0.markerID] == nil }
+                if !stale.isEmpty {
+                    mapView.removeAnnotations(stale)
+                    let staleIDs = Set(stale.map(\.markerID))
+                    annotations.removeAll { staleIDs.contains($0.markerID) }
+                }
+                let existingByID = Dictionary(uniqueKeysWithValues: existing.map { ($0.markerID, $0) })
+                var added: [DirtAnnotation] = []
+                for marker in state.groupMarkers {
+                    if let annotation = existingByID[marker.id] {
+                        annotation.coordinate = CLLocationCoordinate2D(
+                            latitude: marker.latitude,
+                            longitude: marker.longitude
+                        )
+                        annotation.label = marker.label
+                        annotation.status = marker.status
+                        annotation.title = marker.subtitle ?? marker.label
+                        if let view = mapView.view(for: annotation) as? DirtRiderMarkerView {
+                            view.configure(for: annotation)
+                        }
+                    } else {
+                        let annotation = makeAnnotation(marker)
+                        annotations.append(annotation)
+                        added.append(annotation)
+                    }
+                }
+                if !added.isEmpty { mapView.addAnnotations(added) }
+            }
+        }
+
+        private func makeAnnotation(_ marker: MapState.Marker) -> DirtAnnotation {
+            let annotation = DirtAnnotation()
+            annotation.coordinate = CLLocationCoordinate2D(latitude: marker.latitude, longitude: marker.longitude)
+            annotation.markerID = marker.id
+            annotation.label = marker.label
+            annotation.kind = marker.kind
+            annotation.status = marker.status
+            annotation.isLocked = marker.isLocked
+            annotation.title = marker.subtitle ?? marker.label
+            return annotation
         }
 
         private func syncPinSelection(mapView: MLNMapView) {
@@ -1806,6 +1846,8 @@ final class DirtPlannerPinView: MLNAnnotationView {
         isDraggable = false
         isEnabled = true
         isUserInteractionEnabled = true
+        isAccessibilityElement = true
+        accessibilityTraits = [.button]
 
         // Shadow on the container layer
         layer.shadowColor = UIColor.black.cgColor
@@ -2112,6 +2154,8 @@ final class DirtRiderMarkerView: MLNAnnotationView {
         clipsToBounds = false
         isEnabled = true
         isUserInteractionEnabled = true
+        isAccessibilityElement = true
+        accessibilityTraits = [.button]
 
         dot.layer.cornerRadius = 11
         dot.layer.borderWidth = 2
@@ -2130,11 +2174,13 @@ final class DirtRiderMarkerView: MLNAnnotationView {
         chip.layer.shadowRadius = 4
         chip.layer.shadowOffset = CGSize(width: 0, height: 2)
 
-        nameLabel.font = .systemFont(ofSize: 12, weight: .bold)
+        nameLabel.font = .preferredFont(forTextStyle: .caption1)
+        nameLabel.adjustsFontForContentSizeCategory = true
         nameLabel.textColor = UIColor(DirtTheme.ink)
         nameLabel.numberOfLines = 1
 
-        statusLabel.font = .systemFont(ofSize: 10, weight: .medium)
+        statusLabel.font = .preferredFont(forTextStyle: .caption2)
+        statusLabel.adjustsFontForContentSizeCategory = true
         statusLabel.textColor = UIColor(DirtTheme.muted)
         statusLabel.numberOfLines = 1
 
@@ -2162,6 +2208,9 @@ final class DirtRiderMarkerView: MLNAnnotationView {
         nameLabel.text = name
         statusLabel.text = status.replacingOccurrences(of: "_", with: " ")
         dot.backgroundColor = Self.color(for: status)
+        accessibilityLabel = name
+        accessibilityValue = GroupsViewModel.statusLabel(status)
+        accessibilityHint = "Opens rider details"
 
         nameLabel.sizeToFit()
         statusLabel.sizeToFit()
@@ -2201,7 +2250,7 @@ final class DirtRiderMarkerView: MLNAnnotationView {
         case "breakdown": return UIColor(red: 0.863, green: 0.408, blue: 0.012, alpha: 1)
         case "injured": return UIColor(red: 0.757, green: 0.071, blue: 0.184, alpha: 1)
         case "stuck": return UIColor(red: 0.486, green: 0.227, blue: 0.929, alpha: 1)
-        default: return UIColor(red: 0.012, green: 0.329, blue: 0.651, alpha: 1)
+        default: return UIColor(DirtTheme.navGreen)
         }
     }
 }

@@ -126,7 +126,19 @@ struct GroupsSheet: View {
                     }
                     .buttonStyle(DirtCTAStyle(fill: DirtTheme.chrome))
                 }
+                .disabled(groups.isMutatingGroup)
                 .padding(.top, DirtSpace.tight)
+
+                if groups.isMutatingGroup {
+                    HStack(spacing: DirtSpace.tight) {
+                        ProgressView().tint(DirtTheme.orange)
+                        Text("Updating your groups…")
+                            .font(DirtType.helper)
+                            .foregroundStyle(DirtTheme.muted)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .accessibilityElement(children: .combine)
+                }
 
                 if let error = groups.errorMessage {
                     Text(error)
@@ -263,6 +275,11 @@ struct GroupDetailView: View {
 
             Section("Live sharing") {
                 if groups.isSharing {
+                    if groups.isWaitingForLocation {
+                        Label("Waiting for a current GPS position", systemImage: "location.magnifyingglass")
+                            .font(DirtType.helper)
+                            .foregroundStyle(DirtTheme.muted)
+                    }
                     Picker("Status", selection: Binding(
                         get: { groups.status },
                         set: { groups.setStatus($0) }
@@ -299,10 +316,12 @@ struct GroupDetailView: View {
                     Button("Delete group", role: .destructive) {
                         Task { await groups.deleteGroup(group) }
                     }
+                    .disabled(groups.isMutatingGroup)
                 } else {
                     Button("Leave group", role: .destructive) {
                         Task { await groups.leaveGroup(group) }
                     }
+                    .disabled(groups.isMutatingGroup)
                 }
             }
             .listRowBackground(DirtTheme.rowFill)
@@ -324,10 +343,11 @@ struct GroupDetailView: View {
                     .font(DirtType.rowTitle)
                     .fontWeight(.bold)
                     .foregroundStyle(DirtTheme.ink)
-                Text(member.role.capitalized + (member.status.map { " · \($0.capitalized)" } ?? ""))
+                Text(memberDetail(member))
                     .font(DirtType.helper)
                     .foregroundStyle(DirtTheme.muted)
             }
+            .accessibilityElement(children: .combine)
             Spacer(minLength: DirtSpace.tight)
             if member.isLive, let lat = member.latitude, let lon = member.longitude,
                member.userID != app.supabase.userID {
@@ -351,6 +371,13 @@ struct GroupDetailView: View {
             }
         }
         .frame(minHeight: DirtHit.min)
-        .accessibilityElement(children: .combine)
+    }
+
+    private func memberDetail(_ member: GroupMemberRow) -> String {
+        if member.isLive {
+            return "\(member.role.capitalized) · \(GroupsViewModel.statusLabel(member.status ?? "available"))"
+        }
+        let seen = GroupsViewModel.lastSeenLabel(member.lastSeenAt)
+        return "\(member.role.capitalized) · Offline · Seen \(seen)"
     }
 }

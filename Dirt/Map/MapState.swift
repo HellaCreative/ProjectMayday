@@ -126,8 +126,12 @@ final class MapState {
 
     private(set) var routeSegments: [RouteDisplaySegment] = []
     private(set) var routeGeneration = 0
-    private(set) var markers: [Marker] = []
+    private(set) var plannerMarkers: [Marker] = []
+    private(set) var groupMarkers: [Marker] = []
+    var markers: [Marker] { plannerMarkers + groupMarkers }
     private(set) var markerGeneration = 0
+    private(set) var plannerMarkerGeneration = 0
+    private(set) var groupMarkerGeneration = 0
     private(set) var hasFuelReplacementCandidates = false
     private(set) var camera: (id: UUID, command: CameraCommand)?
     /// Ordered camera story for a pin-triggered route build. The coordinator
@@ -406,8 +410,24 @@ final class MapState {
     }
 
     func setMarkers(_ new: [Marker]) {
-        markers = new
-        hasFuelReplacementCandidates = new.contains { $0.id.hasPrefix("fuel-target:") }
+        plannerMarkers = new.filter { !$0.kind.isGroupOverlay }
+        groupMarkers = new.filter { $0.kind.isGroupOverlay }
+        hasFuelReplacementCandidates = plannerMarkers.contains { $0.id.hasPrefix("fuel-target:") }
+        plannerMarkerGeneration += 1
+        groupMarkerGeneration += 1
+        markerGeneration += 1
+    }
+
+    func setPlannerMarkers(_ new: [Marker]) {
+        plannerMarkers = new.filter { !$0.kind.isGroupOverlay }
+        hasFuelReplacementCandidates = plannerMarkers.contains { $0.id.hasPrefix("fuel-target:") }
+        plannerMarkerGeneration += 1
+        markerGeneration += 1
+    }
+
+    func setGroupMarkers(_ new: [Marker]) {
+        groupMarkers = new.filter(\.kind.isGroupOverlay)
+        groupMarkerGeneration += 1
         markerGeneration += 1
     }
 

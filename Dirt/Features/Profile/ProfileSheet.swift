@@ -42,11 +42,23 @@ struct ProfileSheet: View {
 
                     if supabase.isSignedIn {
                         Button {
-                            Task { try? await supabase.signOut() }
+                            Task {
+                                guard !busy else { return }
+                                busy = true
+                                await app.groups.prepareForSignOut()
+                                do {
+                                    try await supabase.signOut()
+                                } catch {
+                                    message = "You could not sign out right now."
+                                    await app.groups.refreshGroups()
+                                }
+                                busy = false
+                            }
                         } label: {
                             Label("Sign out", systemImage: "rectangle.portrait.and.arrow.right")
                         }
                         .buttonStyle(DirtCTAStyle(fill: DirtTheme.chrome))
+                        .disabled(busy)
                     }
 
                     if let message {

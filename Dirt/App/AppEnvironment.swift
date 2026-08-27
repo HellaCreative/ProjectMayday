@@ -115,6 +115,12 @@ final class AppEnvironment {
         groups.onToast = { [planner] message in
             planner.toast = message
         }
+        groups.onPeerLocationUpdate = { [planner] target in
+            planner.receiveGroupMemberUpdate(target)
+        }
+        groups.onPeerSharingEnded = { [planner] userID, displayName in
+            planner.receiveGroupMemberSharingEnded(userID: userID, displayName: displayName)
+        }
         poiManager             = POIManager(
             mapState: mapState,
             graphPacks: graphPacks,

@@ -13,7 +13,7 @@ From the Codex iOS audit. **#2 stale routes** and **#5 failed-manifest retry** w
 | High | Stale on-device routing responses can overwrite newer intent | Request generation + stage-id apply; ignore mismatched replies | **Done** |
 | High | Failed POI / network manifest `Task` sticks for the session | Clear task on failure so a later refresh retries | **Done** |
 | High | Release builds include tester auth + subscription bypass | `BuildChannel.allowPreReleaseTesterUnlock` — intentional for TestFlight; set `false` (or Store-only config) before public App Store freeze | Open |
-| High | Live sharing can publish `(0,0)` before GPS is ready | `GroupsViewModel.publishPresence` — wait for a valid fix; don’t write Gulf-of-Guinea junk | Open |
+| High | Live sharing can publish `(0,0)` before GPS is ready | Wait for a fresh, accurate fix; reject sentinel coordinates locally and remotely | **Done** |
 | High | Gzip decode uses a fixed 8× output ceiling | `Data.gunzipped()` — grow buffer / stream; current packs may be fine until blank provinces appear | Open |
 | Medium | `IPHONEOS_DEPLOYMENT_TARGET = 26.5` | Likely Xcode default inheritance — lower to the real minimum OS before store if reach matters | Open |
 | Medium | Inconsistent HTTP response validation | Shared client: require `200..<300`, size limits, better diagnostics for R2 manifests / Overpass / pack chunks | Open |
@@ -28,8 +28,8 @@ From the Codex iOS audit. **#2 stale routes** and **#5 failed-manifest retry** w
 | --- | --- | --- |
 | POI / Rider Services overlays | Overpass + fuel filter | Keep respecting `@AppStorage` prefs; existence confirmation later |
 | NSTDB / provincial road overlays | Toggles only | Same — MapLibre sources/layers per installed province pack |
-| Supabase Realtime | `rider_presence` poll 10s | Private `group:{id}` channel + broadcast ([03-GROUPS.md](./03-GROUPS.md)) |
-| Shared incidents | Local HUD toast | `rider_alerts` insert + peer display; optional `avoidEdgeIds` recalculate |
+| Supabase Realtime | Private `group:{id}` channel + 10s persisted-presence fallback | Push notifications / durable alert history ([03-GROUPS.md](./03-GROUPS.md)) |
+| Shared incidents | `rider_alerts` + Realtime peer banner | Historical-alert UI; optional `avoidEdgeIds` recalculate |
 | Corridor offline tiles | BBox pyramid z8–14 | True corridor / budgeted tile set closer to a true corridor |
 | GPX import | Export only | GPX import |
 
@@ -87,9 +87,9 @@ Operational path also in [../README_TESTFLIGHT.md](../README_TESTFLIGHT.md).
 ## Suggested order (opinionated, not locked)
 
 1. Unblock TestFlight (signing + upload).
-2. Realtime groups **or** overlay streams (pick by field-test pain).
+2. Overlay streams.
 3. Corridor offline tiles.
-4. Shared incidents + avoid-edge.
+4. Shared-incident avoidance / avoid-edge.
 5. Voice / haptics.
 6. Live Activities → Watch → CarPlay.
 

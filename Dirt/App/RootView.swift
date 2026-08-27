@@ -260,16 +260,10 @@ struct RootView: View {
         }
         .animation(.easeInOut(duration: 0.2), value: app.planner.toast)
         .overlay(alignment: .top) {
-            if !app.groups.peerAlerts.isEmpty {
-                PeerAlertStack(
-                    alerts: app.groups.peerAlerts,
-                    onFocus: { app.groups.focusPeerAlert($0) },
-                    onDismiss: { app.groups.dismissPeerAlert($0) }
-                )
-                .padding(.top, 56)
-                .padding(.horizontal, 12)
-                .transition(.move(edge: .top).combined(with: .opacity))
-            }
+            GroupMapNoticesHost()
+            .padding(.top, 56)
+            .padding(.horizontal, 12)
+            .transition(.move(edge: .top).combined(with: .opacity))
         }
         .overlay(alignment: .top) {
             if fuelControlsOpen, routeCardOpen, !navActive, activeSheet == nil {
@@ -357,11 +351,7 @@ struct RootView: View {
             GroupPeerDetailSheet(
                 peer: peer,
                 onRoute: {
-                    app.planner.routeToMember(
-                        name: peer.displayName,
-                        latitude: peer.latitude,
-                        longitude: peer.longitude
-                    )
+                    app.planner.routeToMember(peer.routeTarget)
                     app.groups.clearSelectedPeer()
                     withAnimation(DockSheetMotion.spring) {
                         activeSheet = nil
@@ -523,8 +513,14 @@ struct RootView: View {
                 refreshLandscapeEdgeTicket()
             }
             .onChange(of: app.supabase.isSignedIn) { _, signedIn in
-                guard signedIn else { return }
-                Task { await app.rideIntelligence.flushPendingIncidents() }
+                if signedIn {
+                    Task {
+                        await app.rideIntelligence.flushPendingIncidents()
+                        await app.groups.refreshGroups()
+                    }
+                } else {
+                    app.groups.handleSignedOut()
+                }
             }
     }
 
@@ -1576,6 +1572,7 @@ struct RootView: View {
         .accessibilityHint(dockAccessibilityHint(tab, state: state))
         .accessibilityAddTraits(state == .open ? [.isSelected] : [])
     }
+
 }
 
 private struct KeepAwakeLifecycle: ViewModifier {
@@ -1713,10 +1710,10 @@ struct PeerAlertStack: View {
         VStack(spacing: DirtSpace.tight) {
             ForEach(alerts.prefix(3)) { alert in
                 let isBreakdown = alert.status == "breakdown"
-                Button {
-                    onFocus(alert)
-                } label: {
-                    HStack(alignment: .center, spacing: DirtSpace.inner) {
+                HStack(alignment: .center, spacing: DirtSpace.tight) {
+                    Button {
+                        onFocus(alert)
+                    } label: {
                         VStack(alignment: .leading, spacing: DirtSpace.hairGap) {
                             Text(alert.title)
                                 .font(DirtType.rowTitle)
@@ -1727,30 +1724,32 @@ struct PeerAlertStack: View {
                                 .foregroundStyle(isBreakdown ? .white.opacity(0.9) : DirtTheme.muted)
                                 .multilineTextAlignment(.leading)
                         }
-                        Spacer(minLength: 0)
-                        Button {
-                            onDismiss(alert.id)
-                        } label: {
-                            Image(systemName: "xmark")
-                                .font(.system(size: 12, weight: .bold))
-                                .foregroundStyle(isBreakdown ? .white.opacity(0.85) : DirtTheme.muted)
-                                .frame(width: DirtHit.min, height: DirtHit.min)
-                                .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("Dismiss alert")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .contentShape(Rectangle())
                     }
-                    .padding(.leading, DirtSpace.inner)
-                    .padding(.trailing, DirtSpace.tight)
-                    .padding(.vertical, DirtSpace.tight)
-                    .frame(minHeight: DirtHit.control)
-                    .background(background(for: alert.status), in: RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous)
-                            .stroke(border(for: alert.status), lineWidth: 1)
-                    )
+                    .buttonStyle(.plain)
+                    .accessibilityHint("Shows the rider's last known location")
+                    Button {
+                        onDismiss(alert.id)
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(isBreakdown ? .white.opacity(0.85) : DirtTheme.muted)
+                            .frame(width: DirtHit.min, height: DirtHit.min)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Dismiss alert")
                 }
-                .buttonStyle(.plain)
+                .padding(.leading, DirtSpace.inner)
+                .padding(.trailing, DirtSpace.tight)
+                .padding(.vertical, DirtSpace.tight)
+                .frame(minHeight: DirtHit.control)
+                .background(background(for: alert.status), in: RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous))
+                .overlay(
+                    RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous)
+                        .stroke(border(for: alert.status), lineWidth: 1)
+                )
             }
         }
     }

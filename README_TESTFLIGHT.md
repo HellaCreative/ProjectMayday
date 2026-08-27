@@ -137,13 +137,13 @@ ASC prerequisites before the first upload succeeds:
 | Save + Export GPX + Start/End nav HUD | Shipped |
 | Offline tile prefetch on Start (45s cap, skip) | Shipped |
 | Email OTP auth + profile | Shipped |
-| Groups create/join/share + route-to-member | Shipped (presence via `rider_presence` poll) |
+| Groups create/join/share + route-to-member | Shipped (validated Realtime presence + polling fallback; stop-trigger route refresh) |
 | Layers legend + persisted toggles | Shipped (overlay streams deferred) |
 | Design tokens / CTA matrix | Shipped |
 
 ## Known v1 gaps
 
-- Group live positions use `rider_presence` polling (10s), not a realtime channel.
+- Group alerts are persisted and delivered live in-app; push delivery and a historical-alert screen are deferred.
 - Offline nav tiles use a bounding-box pyramid (z8–14), 45s cap.
 - Incident reports are device-local.
 - Voice cues, haptics, Live Activities, CarPlay, and Watch are out of scope for v1.
