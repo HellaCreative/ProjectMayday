@@ -5,7 +5,11 @@ const assert = require("node:assert/strict");
 const {
   chooseDirtRideCandidate,
   shortDirtExcursionEdgeIds,
-  MINIMUM_EARNED_DIRT_EXCURSION_METERS
+  MINIMUM_EARNED_DIRT_EXCURSION_METERS,
+  BALANCED_BASE_SEARCH_BUDGET_MS,
+  BALANCED_MAX_SEARCH_BUDGET_MS,
+  balancedSearchBudgetMs,
+  balancedCorridorMultipliers
 } = require("./find-path-v2");
 
 function segment(edgeId, surfaceClass, distanceMeters, structureType = "none") {
@@ -92,4 +96,25 @@ test("route endpoint dirt remains eligible for pins and necessary connectors", (
     segment("destination", "track", 300)
   ]);
   assert.equal(edges.size, 0);
+});
+
+test("ordinary Balanced routes keep the established search budget and corridor ladder", () => {
+  assert.equal(
+    balancedSearchBudgetMs(250_000, 250_000),
+    BALANCED_BASE_SEARCH_BUDGET_MS
+  );
+  assert.deepEqual(
+    balancedCorridorMultipliers(250_000),
+    [1, 2, 3, 4, 6, 8]
+  );
+});
+
+test("long routes on province-sized graphs receive a bounded adaptive search budget", () => {
+  const budget = balancedSearchBudgetMs(1_016_620, 1_470_000);
+  assert.ok(budget >= 40_000, `expected Ontario-scale budget, got ${budget}`);
+  assert.ok(budget <= BALANCED_MAX_SEARCH_BUDGET_MS);
+  assert.deepEqual(
+    balancedCorridorMultipliers(1_016_620),
+    [2, 3, 4, 6, 8]
+  );
 });

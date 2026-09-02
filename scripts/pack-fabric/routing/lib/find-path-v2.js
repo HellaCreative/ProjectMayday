@@ -73,6 +73,47 @@ const { segmentStructureFields } = require("./structure");
 
 const MINIMUM_EARNED_DIRT_EXCURSION_METERS = 1_000;
 const MAX_SHORT_DIRT_REPAIR_PASSES = 3;
+const BALANCED_BASE_SEARCH_BUDGET_MS = 2_200;
+const BALANCED_MAX_SEARCH_BUDGET_MS = 45_000;
+const BALANCED_LONG_ROUTE_METERS = 500_000;
+const BALANCED_LARGE_GRAPH_NODES = 500_000;
+
+/**
+ * Balanced's old 2.2-second wall-clock ceiling was calibrated on small packs.
+ * A long ride on a province-sized graph needs enough time to finish the same
+ * bounded A* work on slower serverless CPU. Keep ordinary routes unchanged;
+ * scale only when both the journey and graph are materially large.
+ */
+function balancedSearchBudgetMs(straightLineMeters, nodeCount) {
+  const routeMeters = Math.max(0, Number(straightLineMeters) || 0);
+  const nodes = Math.max(0, Number(nodeCount) || 0);
+  if (
+    routeMeters <= BALANCED_LONG_ROUTE_METERS ||
+    nodes <= BALANCED_LARGE_GRAPH_NODES
+  ) {
+    return BALANCED_BASE_SEARCH_BUDGET_MS;
+  }
+  const routePressure = Math.min(
+    1,
+    (routeMeters - BALANCED_LONG_ROUTE_METERS) / 500_000
+  );
+  const graphPressure = Math.min(
+    1,
+    (nodes - BALANCED_LARGE_GRAPH_NODES) / 1_000_000
+  );
+  const pressure = Math.min(routePressure, graphPressure);
+  return Math.round(
+    BALANCED_BASE_SEARCH_BUDGET_MS +
+      (BALANCED_MAX_SEARCH_BUDGET_MS - BALANCED_BASE_SEARCH_BUDGET_MS) * pressure
+  );
+}
+
+/** Skip the provably undersized 40 km tier for long Balanced rides. */
+function balancedCorridorMultipliers(straightLineMeters) {
+  return Number(straightLineMeters) > BALANCED_LONG_ROUTE_METERS
+    ? [2, 3, 4, 6, 8]
+    : [1, 2, 3, 4, 6, 8];
+}
 
 function isKnownUnpavedSurface(surfaceName) {
   return (
@@ -625,6 +666,8 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
   const sessionSeed = Number(searchOpts.sessionSeed) || 0;
   if (!searchOpts.costMode) {
     const baseCorridor = corridorMetersForProfile(profile);
+    const straightLineMeters = haversineMeters(startMatch.coord, endMatch.coord);
+    const graphNodeCount = Number(runtime && runtime.pack && runtime.pack.nodeCount) || 0;
     // Balanced/Clean keep the narrowest viable band. Dirt scores only
     // 120 km + 60 km; 180/240/unbounded are connectivity fallbacks if those
     // two bands find no path. The corridor is an outer permission, never
@@ -633,7 +676,7 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
       : profile === "cleanest"
         // Clean: no corridor ladder — one fabric search.
         ? [Infinity]
-        : [1, 2, 3, 4, 6, 8]; // balanced
+        : balancedCorridorMultipliers(straightLineMeters); // balanced
     const widths = profile === "cleanest"
       ? [Infinity]
       : widthMultipliers.map((m) => baseCorridor * m).concat(Infinity);
@@ -671,13 +714,15 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
     // Keep one absolute ceiling across corridor attempts and any internal
     // fallback recursion. A failed hop must not receive a fresh clock merely
     // because the search widens or relaxes a scored preference.
-    const outerDeadline = Number.isFinite(Number(searchOpts.deadlineAtMs))
+    const adaptiveBudgetMs = profile === "balanced"
+      ? balancedSearchBudgetMs(straightLineMeters, graphNodeCount)
+      : profile === "cleanest" ? 12_000 : 3_500;
+    const deadlineStartedAt = Date.now();
+    const requestHasDeadline = Number.isFinite(Number(searchOpts.deadlineAtMs));
+    const outerDeadline = requestHasDeadline
       ? Number(searchOpts.deadlineAtMs)
-      : Date.now() + (
-        profile === "balanced" ? 2_200
-          : profile === "cleanest" ? 12_000
-            : 3_500
-      );
+      : deadlineStartedAt + adaptiveBudgetMs;
+    const effectiveBudgetMs = Math.max(0, outerDeadline - deadlineStartedAt);
     let liveDeadline = outerDeadline;
     searchOpts.deadlineAtMs = liveDeadline;
     for (const width of widths) {
@@ -762,6 +807,17 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
         "crow-flies-adventure";
       ride.searchMeta.corridorMeters = Number.isFinite(width) ? width : null;
       ride.searchMeta.corridorWidened = Number.isFinite(width) && width > baseCorridor;
+      ride.searchMeta.searchBudgetMs = effectiveBudgetMs;
+      ride.searchMeta.searchBudgetPolicy = requestHasDeadline
+        ? "request-deadline"
+        : "adaptive-profile";
+      if (directShortest) {
+        ride.searchMeta.directReference = {
+          algorithm: directShortest.searchMeta && directShortest.searchMeta.searchAlgorithm,
+          distanceMeters: Math.round(directShortestMeters),
+          pops: Number(directShortest.searchMeta && directShortest.searchMeta.pops) || 0
+        };
+      }
       if (profile === "dirt") {
         ride.searchMeta.dirtRideWeights = {
           paved: DIRT_RIDE_PAVED_PER_KM,
@@ -966,6 +1022,7 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
     : null;
 
   const costMode = searchOpts.costMode || "profile";
+  const distanceAStar = costMode === "distance";
   const maxPathMeters = Number.isFinite(Number(searchOpts.maxPathMeters))
     ? Number(searchOpts.maxPathMeters)
     : Infinity;
@@ -1116,7 +1173,12 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
   dist[startNode] = 0;
   pathMeters[startNode] = 0;
   peakProgress[startNode] = 0;
-  heap.push({ node: startNode, cost: 0 });
+  const queuePriority = (node, pathCost) => {
+    if (!distanceAStar) return pathCost;
+    const coordinate = nodeLL(node);
+    return pathCost + (coordinate ? haversineMeters(coordinate, endLL) / 1000 : 0);
+  };
+  heap.push({ node: startNode, cost: queuePriority(startNode, 0), pathCost: 0 });
   let pops = 0;
   let abort = "completed";
   const configuredPopCap = Number(searchOpts.popCap);
@@ -1130,7 +1192,9 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
 
   while (heap.items.length) {
     const cur = heap.pop();
-    if (!cur || cur.cost !== dist[cur.node]) continue;
+    if (!cur) continue;
+    const curPathCost = distanceAStar ? cur.pathCost : cur.cost;
+    if (curPathCost !== dist[cur.node]) continue;
     pops += 1;
     if (pops > popCap) {
       abort = "popCap";
@@ -1288,7 +1352,7 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
             });
           }
         }
-        const cost = cur.cost + step;
+        const cost = curPathCost + step;
         const dirt = isDirtSurface(surfaceName, road);
         let action = considerRelax(
           cost,
@@ -1312,7 +1376,11 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
             dist[to] = cost;
             pathMeters[to] = newMeters;
             peakProgress[to] = newPeakProgress;
-            heap.push({ node: to, cost });
+            heap.push({
+              node: to,
+              cost: queuePriority(to, cost),
+              pathCost: cost
+            });
           }
         }
       }
@@ -1322,7 +1390,7 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
         if (sibs) {
           for (let si = 0; si < sibs.length; si += 1) {
             const to = sibs[si];
-            const cost = cur.cost;
+            const cost = curPathCost;
             const newMeters = pathMeters[cur.node];
             const newPeakProgress = peakProgress[cur.node];
             let action = considerRelax(
@@ -1347,7 +1415,11 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
                 dist[to] = cost;
                 pathMeters[to] = newMeters;
                 peakProgress[to] = newPeakProgress;
-                heap.push({ node: to, cost });
+                heap.push({
+                  node: to,
+                  cost: queuePriority(to, cost),
+                  pathCost: cost
+                });
               }
             }
           }
@@ -1427,7 +1499,7 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
           );
         }
         step = penalizeBacktrack(step, pack.edgeId(v.ei));
-        const cost = cur.cost + step;
+        const cost = curPathCost + step;
         let action = considerRelax(
           cost,
           dist[item.to],
@@ -1450,7 +1522,11 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
             dist[item.to] = cost;
             pathMeters[item.to] = newMeters;
             peakProgress[item.to] = newPeakProgress;
-            heap.push({ node: item.to, cost });
+            heap.push({
+              node: item.to,
+              cost: queuePriority(item.to, cost),
+              pathCost: cost
+            });
           }
         }
       }
@@ -1616,6 +1692,7 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
       pops,
       timedOut: abort === "timeCap" || abort === "popCap",
       pass2Outcome: abort,
+      searchAlgorithm: distanceAStar ? "astar-distance" : "dijkstra-profile",
       settlementFallbackUsed: settlementCrossingUsed
     },
     // Coarse dirt% kept for Balanced mix selection; honest overlay applied after pick.
@@ -2131,5 +2208,11 @@ module.exports = {
   dirtCandidateSummary,
   shortDirtExcursionEdgeIds,
   MINIMUM_EARNED_DIRT_EXCURSION_METERS,
+  BALANCED_BASE_SEARCH_BUDGET_MS,
+  BALANCED_MAX_SEARCH_BUDGET_MS,
+  BALANCED_LONG_ROUTE_METERS,
+  BALANCED_LARGE_GRAPH_NODES,
+  balancedSearchBudgetMs,
+  balancedCorridorMultipliers,
   applyHonestReportedStats
 };

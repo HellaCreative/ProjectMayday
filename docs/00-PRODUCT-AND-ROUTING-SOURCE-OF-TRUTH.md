@@ -6,7 +6,7 @@
 
 **Primary engineering agent:** Codex
 
-**Last reconciled:** 2026-08-22
+**Last reconciled:** 2026-09-02
 
 **Repository:** `/Users/richardsmith/SandBox01/MAYDAYiOS/Dirt`
 
@@ -130,11 +130,11 @@ These are the active normalization, access, topology, and release laws. Detailed
 historical build procedures remain auditable in the routing archive, but they
 are not separate authority.
 
-## 4. Approved pack-first routing policy
+## 4. Approved live-planning and navigation-download policy
 
-This policy deliberately supersedes the earlier live-first consumer policy. It
-is approved product intent but is not yet fully implemented in the current
-client.
+Online route planning uses the live routing service. Regional downloads are
+prepared when the rider starts navigation so the same route fabric is available
+for offline rerouting; they are not a prerequisite for ordinary online planning.
 
 ### Source of truth and consumer routing
 
@@ -142,26 +142,29 @@ client.
   tested.
 - After approval, the exact graph, geometry, and fuel bytes are promoted as an
   immutable downloadable revision.
-- Ordinary consumer planning primarily routes on-device from that installed,
-  approved revision whether connectivity is present or absent.
-- The live service remains available for candidate validation, internal
-  benchmarking, and an explicit online path when a rider declines a required
-  pack download. It is never a silent competing source.
+- Ordinary consumer planning with connectivity routes through the live service
+  against the selected live regional pack, whether or not that pack is already
+  installed on the phone.
+- An installed pack is used when connectivity is unavailable and for offline
+  rerouting during navigation. Its presence must not silently divert an online
+  planning request away from the live service.
 
 Every route result must identify its source and pack revision so accuracy is
 reproducible.
 
 ### Automatic acquisition
 
-When waypoint placement requires a current regional pack that is not installed:
+Waypoint placement and online route creation do not trigger routing-pack
+downloads. When Start Navigation requires a current regional pack that is not
+installed:
 
 1. DIRT identifies the required province/state chain.
-2. DIRT explains that the regional routing pack improves speed and enables
-   offline rerouting, and asks the rider to accept the download.
+2. DIRT explains that the download enables offline rerouting and asks the rider
+   to accept it.
 3. On acceptance, DIRT downloads the current approved graph, geometry, and fuel
-   sidecar and then routes locally.
-4. On refusal, online planning may use the live service, but DIRT records and
-   displays that offline rerouting is unavailable.
+   sidecar before navigation begins.
+4. On refusal, the already-created online route remains valid, but DIRT records
+   and displays that offline rerouting is unavailable.
 
 Riders may delete installed packs but do not pre-emptively browse and download
 arbitrary packs. Only regions required by the selected regional chain are
@@ -569,13 +572,36 @@ convert an inconclusive timed probe into proof that no fuel chain exists. The
 repair belongs in the fuel/search reconciliation after the benchmark contract
 is corrected, and must include fixed reproductions for these device coordinates.
 
-The session also reconfirmed the known acquisition-policy gap: deleting NS
-produced `packsCover=false installed=[]` and online routing continued against
-the live service without requesting pack-download consent. Manual region
-downloads also remain visible. This is the unimplemented required-pack resolver
-described under R2; the approved end state is automatic consent-driven
-acquisition from waypoint coverage, with deletion retained and arbitrary manual
-pre-download retired.
+The session also confirmed that deleting NS produced
+`packsCover=false installed=[]` while online routing correctly continued against
+the live service. Required-pack acquisition belongs at Start Navigation, where
+the route's touched regions are known and offline rerouting can be prepared.
+
+### Ontario live-search repair — 2026-09-02
+
+The first long Ontario physical test used the live service correctly even though
+no Ontario pack was installed on the phone. The fixed reproduction is:
+
+- Point 1: `45.16042827226568,-76.07416570548115`
+- Point 2: `49.267740201600496,-88.12280920479155`
+- requested profile: Balanced
+- Ontario graph: approximately 1.47 million nodes and 1.76 million edges
+
+The service failed with `time_cap` after spending work on a provably undersized
+40 km corridor and using a fixed 2.2-second Balanced search ceiling inherited
+from much smaller regional graphs. The repair does not change pack bytes or
+client source selection. It:
+
+1. uses an exact A* distance reference instead of an unbounded Dijkstra scan;
+2. starts long Balanced rides at the 80 km corridor tier;
+3. scales the Balanced server search allowance only when both route length and
+   graph size are materially large; and
+4. reports the requested profile in a search-limit message.
+
+The exact Ontario route now completes locally at approximately 1,275 km. The
+fixed NS benchmark has zero route, surface, fuel-stop, hop-length, backtrack, or
+restricted-access deltas against the same `c2bb1b0` code and immutable NS pack.
+Production acceptance still requires deployment and replay from White.
 
 ## 11. Current product status
 
@@ -595,6 +621,8 @@ pre-download retired.
   verification.
 - Shared route/fuel service contract and exact pack identity in diagnostics.
 - Installed-pack byte and checksum verification with mismatched-file repair.
+- Long Ontario Balanced live-search scaling with a fixed physical-coordinate
+  regression and unchanged NS benchmark outcomes.
 
 ### Not yet accepted end to end
 

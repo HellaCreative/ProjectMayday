@@ -62,6 +62,15 @@ const crossPackTopology = require("../schema/cross-pack-topology.v1.json");
 const { resolveLocationsByEligibleEdge } = require("../regional/endpoint-resolver");
 
 const CLEAN_PAVED_ATTEMPT_MS = 12_000;
+
+function routeSearchLimitMessage(profile) {
+  const name = profile === "cleanest"
+    ? "Clean"
+    : profile === "balanced"
+      ? "Balanced"
+      : "Dirt";
+  return `${name} search reached its safety limit before proving whether a route exists`;
+}
 const DEFAULT_MATCH_METERS = 250;
 const EARTH_M = 6371000;
 
@@ -2391,7 +2400,7 @@ async function routeOnRuntime(body, graphResolution, runtime) {
       accessPolicy: policy,
       error: "no_route",
       message: searchIncomplete
-        ? "Clean search reached its safety limit before proving whether a route exists"
+        ? routeSearchLimitMessage(profile)
         : "No route on the eligible graph",
       warnings: [{
         code: searchIncomplete ? "search_limit" : "no_route",
@@ -3505,6 +3514,7 @@ module.exports = {
   fallbackReasonFor,
   clippedDirtMeters,
   isLowDirtRoute,
+  routeSearchLimitMessage,
   backtrackSummary,
   restrictedSummary,
   graphDecisionManeuvers
