@@ -167,6 +167,26 @@ test("bare --pack publication is rejected without reinterpretation", () => {
   );
 });
 
+test("live verification requires one explicit region", () => {
+  const scoped = parseArgs(["--assert", "--region", "on"]);
+  assert.equal(scoped.assert, true);
+  assert.equal(scoped.assertRegion, "on");
+  assert.deepEqual(scoped.ids, []);
+  assert.doesNotThrow(() => assertPublicationCommand(scoped));
+  assert.throws(
+    () => assertPublicationCommand(parseArgs(["--assert"])),
+    /requires exactly one --region/
+  );
+  assert.throws(
+    () => assertPublicationCommand(parseArgs(["--region", "ns"])),
+    /valid only with --assert/
+  );
+  assert.throws(
+    () => parseArgs(["--assert", "--region", "on", "--region", "bc"]),
+    /only once/
+  );
+});
+
 test("malformed or unavailable remote catalog aborts safely", () => {
   assert.throws(() => parseRemoteCatalogJson(null), /remote catalog unavailable/);
   assert.throws(() => parseRemoteCatalogJson(""), /remote catalog unavailable/);

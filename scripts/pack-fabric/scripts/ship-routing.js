@@ -4,7 +4,7 @@
 /**
  * One door for live + download. There is no second fabric.
  *
- *   node scripts/pack-fabric/scripts/ship-routing.js --assert
+ *   node scripts/pack-fabric/scripts/ship-routing.js --assert --region on
  *   node scripts/pack-fabric/scripts/ship-routing.js --live
  *   node scripts/pack-fabric/scripts/ship-routing.js --candidate ns-osm-20260821-02 --pack ns --live
  *   node scripts/pack-fabric/scripts/ship-routing.js --promote ns-osm-20260821-02 --pack ns
@@ -15,7 +15,7 @@
  * --pack alone is rejected: it used to publish unrecorded local bytes and replace
  *             the 63-region public catalog.
  * --live  deploys /api/route from this pack-fabric tree
- * --assert  curls production; fails if the graph is still the longhaul extract
+ * --assert --region <id> verifies one explicit live/download region only
  */
 
 const fs = require("fs");
@@ -58,6 +58,7 @@ function parseArgs(argv) {
   const ids = [];
   let candidate = null;
   let promote = null;
+  let assertRegion = null;
   for (let i = 0; i < argv.length; i += 1) {
     const value = argv[i];
     if (value === "--candidate" || value === "--promote") {
@@ -66,6 +67,16 @@ function parseArgs(argv) {
       if (!/^[a-z0-9][a-z0-9._-]{2,80}$/i.test(releaseId)) die("invalid release id " + releaseId);
       if (value === "--candidate") candidate = releaseId;
       else promote = releaseId;
+      i += 1;
+      continue;
+    }
+    if (value === "--region") {
+      const regionId = String(argv[i + 1] || "").toLowerCase();
+      if (!/^[a-z0-9][a-z0-9_-]{1,15}$/.test(regionId)) {
+        throw new Error("--region requires a valid region id");
+      }
+      if (assertRegion) throw new Error("--region may be provided only once");
+      assertRegion = regionId;
       i += 1;
       continue;
     }
@@ -78,7 +89,8 @@ function parseArgs(argv) {
     assert: flags.has("--assert"),
     ids,
     candidate,
-    promote
+    promote,
+    assertRegion
   };
 }
 
@@ -227,6 +239,12 @@ function publishStablePack(input) {
 function assertPublicationCommand(opts) {
   if (opts && opts.pack && !opts.promote && !opts.candidate) {
     throw new Error(BARE_PACK_REJECTION);
+  }
+  if (opts && opts.assert && !opts.assertRegion) {
+    throw new Error("--assert requires exactly one --region <id>");
+  }
+  if (opts && opts.assertRegion && !opts.assert) {
+    throw new Error("--region is valid only with --assert");
   }
 }
 
@@ -397,8 +415,12 @@ function liveDeployArgs(regionBaseOverrides, sourceVersion) {
   return args;
 }
 
-function shipAssert() {
-  run(process.execPath, [path.join(__dirname, "assert-live-pack-lockstep.js")], {
+function shipAssert(regionId) {
+  run(process.execPath, [
+    path.join(__dirname, "assert-live-pack-lockstep.js"),
+    "--region",
+    regionId
+  ], {
     cwd: DIRT,
     env: process.env
   });
@@ -408,7 +430,7 @@ async function main() {
   const argv = process.argv.slice(2);
   if (!argv.length || argv.includes("--help")) {
     console.log(`Usage:
-  node scripts/pack-fabric/scripts/ship-routing.js --assert
+  node scripts/pack-fabric/scripts/ship-routing.js --assert --region on
   node scripts/pack-fabric/scripts/ship-routing.js --live
   node scripts/pack-fabric/scripts/ship-routing.js --candidate ns-osm-20260821-02 --pack ns --live
   node scripts/pack-fabric/scripts/ship-routing.js --promote ns-osm-20260821-02 --pack ns
@@ -435,7 +457,7 @@ bare --pack is rejected; use --candidate/--promote with a recorded release id.`)
     if (opts.pack) await shipPack(opts.ids, record);
   }
   if (opts.live) shipLive(liveOverrides);
-  if (opts.assert) shipAssert();
+  if (opts.assert) shipAssert(opts.assertRegion);
 }
 
 if (require.main === module) {

@@ -460,6 +460,10 @@ Every routing or fuel change requires:
 Simulator work must reuse the existing simulator and DerivedData locations. Do
 not create or duplicate simulators for routine regression testing.
 
+Production pack lockstep verification is always scoped to one explicit region:
+`ship-routing.js --assert --region <id>`. It has no all-regions default, so an
+unrelated province or state cannot block validation of the region under test.
+
 ## 10. Current blocking defect — 2026-08-22
 
 Physical From Here test:
