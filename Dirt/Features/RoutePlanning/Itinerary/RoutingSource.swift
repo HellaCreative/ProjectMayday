@@ -4,9 +4,14 @@ import Foundation
 @MainActor
 protocol RoutingSource: AnyObject {
     var name: String { get }
+    var supportsCombinedFuelPlanning: Bool { get }
     func route(_ req: RouteRequest) async throws -> RouteResponse
     func fuelChain(_ req: FuelChainRequest) async throws -> FuelChainResponse
     func fuelStation(near point: RouteCoordinate, within meters: Double) async throws -> FuelChainStop?
+}
+
+extension RoutingSource {
+    var supportsCombinedFuelPlanning: Bool { false }
 }
 
 @MainActor
@@ -30,10 +35,11 @@ final class RouteResponseCache {
         let preferBackRoads: Bool
 
         var description: String {
-            "\(from.latitude),\(from.longitude)>\(to.latitude),\(to.longitude)" +
+            let recentPrior = priorEdgeIDs.suffix(4).joined(separator: ",")
+            return "\(from.latitude),\(from.longitude)>\(to.latitude),\(to.longitude)" +
                 "|\(profile.rawValue)|unknown=\(allowUnknown ? 1 : 0)" +
                 "|avoid=\(avoidEdgeIDs.joined(separator: ","))" +
-                "|prior=\(priorEdgeIDs.joined(separator: ","))" +
+                "|prior=\(priorEdgeIDs.count)[\(recentPrior)]" +
                 "|arrival=\(arrivalEdgeID ?? "nil")" +
                 "|backtrack=\(backtrackFactor)" +
                 "|seed=\(sessionSeed.map { String($0) } ?? "-")" +
@@ -80,9 +86,12 @@ final class RouteResponseCache {
 @MainActor
 final class LiveRoutingSource: RoutingSource {
     let name = "live"
+    let supportsCombinedFuelPlanning = true
     private let client: RoutingClient
     private let cache: RouteResponseCache
     private let packRevision: () -> String
+    private var fuelContextStationIDs: [String: [String]] = [:]
+    private var fuelContextRecency: [String] = []
 
     init(
         client: RoutingClient,
@@ -108,11 +117,54 @@ final class LiveRoutingSource: RoutingSource {
     }
 
     func fuelChain(_ req: FuelChainRequest) async throws -> FuelChainResponse {
-        try await client.fuelChain(req)
+        var request = req
+        let canReuseContext = req.fuel.forwardFeeler != true
+            && req.fuel.probeFirstReachableStation != true
+        let contextKey = fuelContextKey(req)
+        if canReuseContext,
+           req.fuel.requiredFirstStationId == nil,
+           let retained = fuelContextStationIDs[contextKey],
+           !retained.isEmpty {
+            request.fuel.preferredStationIds = retained
+            RoutingDebugLog.shared.event(
+                "fuel context reused candidates=\(retained.count) riderLeg=\(req.fuel.riderLegId)"
+            )
+        }
+        let response = try await client.fuelChain(request)
+        if canReuseContext, response.isComplete {
+            var seen = Set<String>()
+            let retained = ((response.stops ?? []).map(\.id) + (response.stationCandidates ?? [])
+                .filter { $0.validForward == true }
+                .map(\.id))
+                .filter { !$0.isEmpty && seen.insert($0).inserted }
+                .prefix(48)
+            let stationIDs = Array(retained)
+            if !stationIDs.isEmpty {
+                fuelContextStationIDs[contextKey] = stationIDs
+                fuelContextRecency.removeAll { $0 == contextKey }
+                fuelContextRecency.append(contextKey)
+                while fuelContextRecency.count > 16 {
+                    let oldest = fuelContextRecency.removeFirst()
+                    fuelContextStationIDs.removeValue(forKey: oldest)
+                }
+            }
+        }
+        return response
     }
 
     func fuelStation(near point: RouteCoordinate, within meters: Double) async throws -> FuelChainStop? {
         try await client.fuelStation(near: point, within: meters)
+    }
+
+    private func fuelContextKey(_ request: FuelChainRequest) -> String {
+        let points = request.locations.map {
+            String(format: "%.5f,%.5f", $0.latitude, $0.longitude)
+        }.joined(separator: ">")
+        let avoid = (request.options?.avoidEdgeIds ?? []).sorted().joined(separator: ",")
+        return points
+            + "|usable=\(Int(request.fuel.usableRangeMeters.rounded()))"
+            + "|first=\(Int(request.fuel.firstLegMaxMeters.rounded()))"
+            + "|avoid=\(avoid)"
     }
 }
 

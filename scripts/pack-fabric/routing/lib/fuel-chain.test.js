@@ -6,6 +6,7 @@ const {
   fuelNeedForProfileRide,
   fuelSearchStartMeters,
   fuelPlanStatus,
+  nearestReachableFuelDistance,
   planCrossRegionFuelChain,
   planFuelChainOnRuntime,
   rankForwardFuel,
@@ -27,6 +28,12 @@ test("watching and the preferred zone never manufacture a stop", () => {
 });
 
 test("a reachable 233 km ride goes direct when destination escape fuel fits", async () => {
+  const foundationRoute = {
+    status: "complete",
+    distanceMeters: 233_400,
+    stats: { dirtPercent: 80 },
+    segments: []
+  };
   const result = await planFuelChainOnRuntime({
     runtime: lineRuntime(),
     stations: [station("late", 1.5)],
@@ -37,18 +44,27 @@ test("a reachable 233 km ride goes direct when destination escape fuel fits", as
     usableRangeMeters: 237_500,
     firstLegMaxMeters: 237_500,
     profileMeters: 100_000,
-    routeCandidate: ({ candidate }) => Promise.resolve({
-      status: "complete",
-      distanceMeters: candidate.station.id === "__destination__"
-        ? 233_400
-        : candidate.graphMeters,
-      stats: { dirtPercent: 80 },
-      segments: []
-    })
+    foundationRoute
   });
   assert.equal(result.ok, true);
   assert.deepEqual(result.stops.map((row) => row.id), []);
+  assert.equal(result.routes[0], foundationRoute);
   assert.equal(result.diagnostics.selectedReason, "direct_destination");
+});
+
+test("destination escape stops at the nearest route-connected pump", () => {
+  const result = nearestReachableFuelDistance({
+    runtime: lineRuntime(),
+    stations: [station("near", 1), station("far", 3)],
+    origin: { lat: 45, lon: 0 },
+    profile: "cleanest",
+    accessPolicy: { motorizedPermissive: true, motorizedUnknown: false },
+    maxMeters: 200_000
+  });
+
+  assert.ok(result.meters >= 78_000 && result.meters <= 79_000);
+  assert.ok(result.pops < 9, "targeted escape must stop before flooding the fixture graph");
+  assert.equal(result.considered, 2);
 });
 
 test("a reachable 233 km ride refuels when destination escape fuel does not fit", async () => {
@@ -206,7 +222,32 @@ test("fuel chain is constructed forward from graph-reachable pumps", async () =>
   assert.equal(result.ok, true);
   assert.deepEqual(result.stops.map((row) => row.id), ["f1", "f2", "f3"]);
   assert.equal(result.graphMeters.length, 4);
+  assert.equal(result.routes.length, 4);
   assert.ok(result.graphMeters.every((meters) => meters <= 90_000));
+});
+
+test("fuel matching ignores pumps outside the rider's current tank reach", async () => {
+  const result = await planFuelChainOnRuntime({
+    runtime: lineRuntime(),
+    stations: [
+      station("f1", 1),
+      station("f2", 2),
+      station("f3", 3),
+      { id: "far-away", name: "far-away", lat: 0, lon: 0 }
+    ],
+    start: { lat: 45, lon: 0 },
+    destination: { lat: 45, lon: 4 },
+    profile: "dirt",
+    accessPolicy: { motorizedPermissive: true, motorizedUnknown: false },
+    usableRangeMeters: 90_000,
+    firstLegMaxMeters: 90_000,
+    routeCandidate: fixtureRouteCandidate
+  });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.stops.map((row) => row.id), ["f1", "f2", "f3"]);
+  assert.equal(result.diagnostics.matchedFuel, 3);
+  assert.equal(result.diagnostics.stationsConsidered, 3);
 });
 
 test("long fuel chain returns a resumable window capped at three stops", async () => {

@@ -607,6 +607,51 @@ fixed NS benchmark has zero route, surface, fuel-stop, hop-length, backtrack, or
 restricted-access deltas against the same `c2bb1b0` code and immutable NS pack.
 Production acceptance still requires deployment and replay from White.
 
+### Live planning operation reuse — 2026-09-02
+
+Ontario and Quebec exposed a system-wide planning defect rather than a
+province-specific routing defect. The client and live service repeatedly
+measured the same corridor for fuel, discarded already-calculated route work,
+then requested each selected hop again. Large v2 graphs also fetched graph and
+geometry sequentially, copied both buffers before decoding, rematched every
+regional pump, and received an ever-growing list of historical edge IDs.
+
+The approved repair does not change pack bytes or profile objectives:
+
+1. the selected profile route and the regional fuel sidecar load concurrently;
+2. that profile route becomes the foundation for the fuel decision instead of
+   disposable preflight work;
+3. one live fuel response may return a bounded, fully routed multi-stop window;
+   the client validates the complete window before committing any of it;
+4. station alternatives remain grouped by their departure pump and available
+   to **Choose another pump**; choosing one preserves upstream legs and rebuilds
+   the affected suffix because every later fuel distance changes;
+5. rider-placed waypoints remain durable planning boundaries. Per-hop rider
+   profile overrides deliberately keep one-hop planning rather than allowing a
+   multi-stop response to erase those choices;
+6. destination escape uses a targeted nearest-route-connected-pump search, not
+   a usable-range flood of the province graph;
+7. only pumps physically capable of fitting in the current tank are snapped to
+   the graph. Route reachability and the active profile still prove every pump;
+8. graph/geometry downloads run concurrently and decode their original buffers;
+   warm function isolates reuse immutable graph, fuel, and pump-snap data;
+9. a live client planning context retains proven pump IDs across Dirt, Balanced,
+   and Clean changes for the same rider corridor. Retained IDs are priority
+   hints only and can never bypass current range, access, continuation, or route
+   checks; and
+10. backtrack history is bounded to the recent 30 km / 256 edges. It protects
+    the current departure without sending or penalizing an entire long ride.
+
+The fixed Quebec 67 km route completes locally against live pack data in about
+1.3 seconds cold, down from the prior repeated multi-pass behaviour measured in
+tens of seconds to minutes. A representative same-region Ontario ride completes
+in about 5.4 seconds cold, of which about 4.8 seconds is the one-time live fuel
+sidecar transfer. The extreme 1,800 km Ontario stress route returns its first two
+fully proven pumps and their routes in about 19 seconds under the bounded
+long-haul window. Cross-country and complete extreme-window acceptance remain a
+separate Gate 2 concern; they do not justify splitting the rider-visible region
+or changing route quality.
+
 ## 11. Current product status
 
 ### Implemented and covered locally
@@ -627,14 +672,14 @@ Production acceptance still requires deployment and replay from White.
 - Installed-pack byte and checksum verification with mismatched-file repair.
 - Long Ontario Balanced live-search scaling with a fixed physical-coordinate
   regression and unchanged NS benchmark outcomes.
+- Shared live route/fuel planning, returned route-window reuse, targeted
+  destination escape, bounded prior-edge history, and warm fuel/pump context.
 
 ### Not yet accepted end to end
 
 - Exact client source SHA and immutable release ID in the physical diagnostic,
   although service and pack byte identities are now proved.
-- The active fuel-selection defect above.
-- Dirt/Balanced fuel-station probe completion and latency exposed by the
-  2026-08-23 physical test.
+- Physical White acceptance of the shared route/fuel planning repair.
 - Exact identity and benchmark baseline for Cursor's rebuilt live candidates.
 - Full online/offline parity with promoted packs.
 - Cross-country long-route performance and fuel-window behaviour.

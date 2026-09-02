@@ -215,9 +215,19 @@ struct FuelChainConstraint: Codable, Sendable {
     var allowPartialWindow: Bool? = nil
     var windowTimeBudgetMs: Int? = nil
     var requiredFirstStationId: String? = nil
+    /// Candidate pumps retained from a prior profile calculation for the same
+    /// rider corridor. The service may evaluate these first, but may not treat
+    /// them as required or skip normal eligibility checks.
+    var preferredStationIds: [String]? = nil
     /// Discover the next reachable anchor using graph distance only. The
     /// selected anchor is routed once, as the real rider leg, by the client.
     var forwardFeeler: Bool? = nil
+    /// Live-service capability: build the selected route before fuel search,
+    /// reuse that graph runtime, and return the route legs already calculated.
+    var routeFirstPlan: Bool? = nil
+    /// Require enough fuel on arrival to reach a packed pump by road from the
+    /// final destination. A rider waypoint on a pump satisfies this directly.
+    var ensureDestinationFuelEscape: Bool? = nil
 }
 
 struct FuelChainRequest: Codable, Sendable {
@@ -226,7 +236,7 @@ struct FuelChainRequest: Codable, Sendable {
     let vehicle: String
     let accessPolicy: AccessPolicy
     let options: RouteRequestOptions?
-    let fuel: FuelChainConstraint
+    var fuel: FuelChainConstraint
 
     init(
         profile: RouteProfile,
@@ -252,7 +262,10 @@ struct FuelChainRequest: Codable, Sendable {
         allowPartialWindow: Bool = false,
         windowTimeBudgetMs: Int? = nil,
         requiredFirstStationId: String? = nil,
-        forwardFeeler: Bool = false
+        preferredStationIds: [String] = [],
+        forwardFeeler: Bool = false,
+        routeFirstPlan: Bool = false,
+        ensureDestinationFuelEscape: Bool = false
     ) {
         self.profile = profile
         locations = [
@@ -291,7 +304,10 @@ struct FuelChainRequest: Codable, Sendable {
             allowPartialWindow: allowPartialWindow ? true : nil,
             windowTimeBudgetMs: windowTimeBudgetMs,
             requiredFirstStationId: requiredFirstStationId,
-            forwardFeeler: forwardFeeler ? true : nil
+            preferredStationIds: preferredStationIds.isEmpty ? nil : preferredStationIds,
+            forwardFeeler: forwardFeeler ? true : nil,
+            routeFirstPlan: routeFirstPlan ? true : nil,
+            ensureDestinationFuelEscape: ensureDestinationFuelEscape ? true : nil
         )
     }
 }
@@ -336,6 +352,7 @@ struct FuelChainDiagnostics: Codable, Sendable {
     let states: Int?
     let dijkstraPops: Int?
     let matchedFuel: Int?
+    var stationsConsidered: Int? = nil
     let elapsedMs: Int?
     var candidateK: Int? = nil
     var stationsReachableWithinRange: Int? = nil
@@ -347,6 +364,17 @@ struct FuelChainDiagnostics: Codable, Sendable {
     var hardRangeMeters: Double? = nil
     var destinationEscapeMeters: Double? = nil
     var selectedReason: String? = nil
+    var totalElapsedMs: Int? = nil
+    var routeFirstMs: Int? = nil
+    var graphFetchMs: Int? = nil
+    var graphDecodeMs: Int? = nil
+    var graphGridMs: Int? = nil
+    var fuelFetchMs: Int? = nil
+    var fuelCacheHit: Bool? = nil
+    var targetPrepareMs: Int? = nil
+    var targetCacheHit: Bool? = nil
+    var destinationEscapeSearchMs: Int? = nil
+    var destinationEscapePops: Int? = nil
 }
 
 struct FuelStationCandidate: Codable, Sendable {
@@ -371,8 +399,13 @@ struct FuelChainResponse: Codable, Sendable {
     let stops: [FuelChainStop]?
     let graphMeters: [Double]?
     let diagnostics: FuelChainDiagnostics?
+    /// Route responses already calculated while selecting the returned pump
+    /// chain. There is one response per returned hop, plus the destination hop
+    /// when windowComplete is true.
+    var routes: [RouteResponse]? = nil
     var stationCandidates: [FuelStationCandidate]? = nil
     var firstReachableStationMeters: Double? = nil
+    var destinationEscapeMeters: Double? = nil
     /// False means this bounded response ends at its final pump and the client
     /// must request the next window toward the rider waypoint.
     var windowComplete: Bool? = nil

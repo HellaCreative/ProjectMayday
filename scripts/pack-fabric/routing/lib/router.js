@@ -1824,7 +1824,7 @@ async function routeOnRuntime(body, graphResolution, runtime) {
       .map((id) => String(id))
   );
   const priorEdgeIds = new Set(
-    (Array.isArray(options.priorEdgeIds) ? options.priorEdgeIds : [])
+    (Array.isArray(options.priorEdgeIds) ? options.priorEdgeIds : []).slice(-256)
       .filter((id) => id != null)
       .map((id) => String(id))
   );

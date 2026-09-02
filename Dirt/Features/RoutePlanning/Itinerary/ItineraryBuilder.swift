@@ -631,7 +631,7 @@ final class ItineraryBuilder {
         let finalWaypointIsFuel = finalWaypoint.map { waypointFuelStops[$0.id] != nil } ?? false
         var finalEscapeFuelMeters: Double?
         var finalEscapeVerificationWarning: String?
-        if let finalWaypoint, !finalWaypointIsFuel {
+        if let finalWaypoint, !finalWaypointIsFuel, !source.supportsCombinedFuelPlanning {
             onFuelStatus("Checking fuel after destination")
             do {
                 let escape = try await source.fuelChain(FuelChainRequest(
@@ -831,7 +831,8 @@ final class ItineraryBuilder {
                 // useful fuel anchor. Build that real leg directly up to the
                 // hard range ceiling; the comfort window must not manufacture
                 // an earlier automatic stop before a chosen refuel waypoint.
-                if waypointFuelStops[riderDestination.id] != nil,
+                if !source.supportsCombinedFuelPlanning,
+                   waypointFuelStops[riderDestination.id] != nil,
                    requiredStationID == nil,
                    let response = try? await source.route(routeRequest(
                        profile: activeProfile,
@@ -872,6 +873,12 @@ final class ItineraryBuilder {
                     break
                 }
 
+                // A multi-stop response is only safe when every generated hop
+                // uses the same riding profile. Per-hop overrides are rider
+                // intent, so keep those builds one hop at a time while still
+                // using the live planner's route-first and cache path.
+                let canConsumeCombinedWindow = source.supportsCombinedFuelPlanning
+                    && riderLeg.hopOverrides.isEmpty
                 let chain: FuelChainResponse
                 do {
                     chain = try await source.fuelChain(FuelChainRequest(
@@ -893,14 +900,18 @@ final class ItineraryBuilder {
                         arrivalEdgeId: history.arrivalEdgeID,
                         backtrackFactor: 4,
                         excludedStationIds: Array(excludedStations),
-                        windowMaxStops: 1,
+                        windowMaxStops: canConsumeCombinedWindow ? 4 : 1,
                         allowPartialWindow: true,
                         windowTimeBudgetMs: min(
                             15_000,
                             max(100, progressWatchdog.remainingMilliseconds())
                         ),
                         requiredFirstStationId: requiredStationID,
-                        forwardFeeler: false
+                        forwardFeeler: false,
+                        routeFirstPlan: source.supportsCombinedFuelPlanning,
+                        ensureDestinationFuelEscape: source.supportsCombinedFuelPlanning
+                            && index == itinerary.legs.count - 1
+                            && !finalWaypointIsFuel
                     ))
                 } catch is CancellationError {
                     return dropped(itinerary, committed: committed, cancelled: true)
@@ -980,24 +991,140 @@ final class ItineraryBuilder {
                     return committed
                 }
 
+                // The live planner routes the selected chain while the graph
+                // is already loaded. Consume every returned hop instead of
+                // throwing those routes away and asking another serverless
+                // invocation to calculate each one again.
+                let plannedStops = chain.stops ?? []
+                var plannedTargets: [(coordinate: RouteCoordinate, stop: FuelChainStop?)] =
+                    plannedStops.map { ($0.coordinate, Optional($0)) }
+                if chain.reachesDestination {
+                    plannedTargets.append((riderDestination.coordinate, nil))
+                }
+                if source.supportsCombinedFuelPlanning,
+                   let plannedRoutes = chain.routes,
+                   !plannedTargets.isEmpty,
+                   plannedRoutes.count >= plannedTargets.count {
+                    // Validate the entire returned window before committing any
+                    // hop. A malformed later hop must not leave a half-consumed
+                    // chain and then rebuild the first stop a second time.
+                    let plannedMeters = plannedTargets.indices.compactMap { hopIndex in
+                        try? responseMeters(plannedRoutes[hopIndex])
+                    }
+                    let routesAreUsable = plannedMeters.count == plannedTargets.count
+                        && plannedMeters.indices.allSatisfy { hopIndex in
+                            let cap = hopIndex == 0 ? remaining : fuel.usableMeters
+                            return plannedMeters[hopIndex] <= cap + 1
+                        }
+                    if !routesAreUsable {
+                        RoutingDebugLog.shared.event(
+                            "fuel combined fallback riderLeg=\(riderLeg.id) "
+                                + "routes=\(plannedRoutes.count) targets=\(plannedTargets.count)"
+                        )
+                    } else {
+                        var departureCandidateID = "start"
+                        for hopIndex in plannedTargets.indices {
+                            let planned = plannedTargets[hopIndex]
+                            let response = plannedRoutes[hopIndex]
+                            let meters = plannedMeters[hopIndex]
+                            let number = builtLegs.filter { $0.endsAtFuelStop != nil }.count + 1
+                            onFuelStatus(planned.stop == nil
+                                ? "No fuel stop required"
+                                : "Creating fuel stop \(number)")
+                            let fuelStop = planned.stop.map {
+                                FuelStop(
+                                    coordinate: $0.coordinate,
+                                    stationID: $0.id,
+                                    name: $0.displayName,
+                                    afterRiderLegID: riderLeg.id
+                                )
+                            }
+                            let resetsAtWaypoint = planned.stop == nil
+                                && waypointFuelStops[riderDestination.id] != nil
+                            let arrivalFuel = fuelStop != nil || resetsAtWaypoint
+                                ? 0
+                                : fuelUsed + meters
+                            let validFuelTargets = fuelStop == nil ? [] : (chain.stationCandidates ?? []).filter {
+                                $0.departureId == departureCandidateID
+                                    && $0.validForward == true
+                                    && $0.latitude != nil
+                                    && $0.longitude != nil
+                            }
+                            let built = BuiltLeg(
+                                riderLegID: riderLeg.id,
+                                fromCoordinate: current,
+                                toCoordinate: planned.coordinate,
+                                endsAtFuelStop: fuelStop,
+                                response: response,
+                                fuelUsedOnArrivalMeters: arrivalFuel,
+                                routeProfile: activeProfile,
+                                validFuelTargets: validFuelTargets
+                            )
+                            builtLegs.append(built)
+                            history.append(response)
+                            fuelUsed = arrivalFuel
+                            current = planned.coordinate
+                            statuses[riderLeg.id] = planned.stop == nil ? .built : .pending
+                            committed = replacing(
+                                riderLegID: riderLeg.id,
+                                with: builtLegs,
+                                in: committed,
+                                status: statuses[riderLeg.id] ?? .pending
+                            )
+                            progressWatchdog.recordProgress()
+                            RoutingDebugLog.shared.event(
+                                "fuel combined progress gen=\(itinerary.generation) "
+                                    + "riderLeg=\(riderLeg.id) hop=\(hopIndex + 1)/\(plannedTargets.count) "
+                                    + "kind=\(planned.stop == nil ? "waypoint" : "pump")"
+                            )
+                            onProgress(committed)
+                            if let stop = planned.stop {
+                                excludedStations.insert(stop.id)
+                                departureCandidateID = stop.id
+                                onFuelStatus("Fuel stop \(number) added")
+                            }
+                        }
+                        if chain.reachesDestination {
+                            statuses[riderLeg.id] = .built
+                            committed = replacing(
+                                riderLegID: riderLeg.id,
+                                with: builtLegs,
+                                in: committed,
+                                status: .built
+                            )
+                            onProgress(committed)
+                            onFuelStatus("Leg complete")
+                            break
+                        }
+                        forceFuelStop = false
+                        continue
+                    }
+                }
+
                 let target = selectedStop?.coordinate ?? riderDestination.coordinate
                 let nextFuelStopNumber = committedFuelStopCount + 1
                 onFuelStatus(selectedStop == nil
                     ? "No fuel stop required"
                     : "Creating fuel stop \(nextFuelStopNumber)")
                 do {
-                    let response = try await source.route(routeRequest(
-                        profile: activeProfile,
-                        allowUnknown: activeProfile == .cleanest ? false : riderLeg.allowUnknown,
-                        from: current,
-                        to: target,
-                        avoidEdgeIDs: itinerary.impassableEdgeIDs,
-                        maxPathMeters: remaining,
-                        regionalHopMinimumMeters: chain.graphMeters ?? [],
-                        history: history,
-                        avoidMotorways: activeAvoidMotorways,
-                        preferBackRoads: riderLeg.preferBackRoads
-                    ))
+                    let response: RouteResponse
+                    if let planned = chain.routes?.first,
+                       (try? responseMeters(planned)) != nil {
+                        response = planned
+                    } else {
+                        response = try await source.route(routeRequest(
+                            profile: activeProfile,
+                            allowUnknown: activeProfile == .cleanest ? false : riderLeg.allowUnknown,
+                            from: current,
+                            to: target,
+                            avoidEdgeIDs: itinerary.impassableEdgeIDs,
+                            maxPathMeters: remaining,
+                            regionalHopMinimumMeters: chain.graphMeters ?? [],
+                            history: history,
+                            avoidMotorways: activeAvoidMotorways,
+                            preferBackRoads: riderLeg.preferBackRoads
+                        ))
+                    }
                     let meters = try responseMeters(response)
                     guard meters <= remaining + 1 else { throw RoutingError.invalidResponse }
                     let fuelStop = selectedStop.map {
@@ -1732,8 +1859,22 @@ private func routeRequest(
 }
 
 private struct EdgeHistory: Equatable {
-    private(set) var edgeIDs: [String] = []
+    private struct Entry: Equatable {
+        let id: String
+        let meters: Double
+    }
+
+    /// Backtrack protection is local to the departure. Sending every edge from
+    /// a thousand-kilometre ride made later fuel requests enormous and could
+    /// discourage a perfectly sensible road merely because it crossed the
+    /// route hundreds of kilometres earlier.
+    private static let recentMeterLimit = 30_000.0
+    private static let recentEdgeLimit = 256
+    private var recent: [Entry] = []
+    private var recentMeters = 0.0
     private(set) var arrivalEdgeID: String?
+
+    var edgeIDs: [String] { recent.map(\.id) }
 
     init() {}
 
@@ -1742,11 +1883,20 @@ private struct EdgeHistory: Equatable {
     }
 
     mutating func append(_ response: RouteResponse) {
-        var seen = Set(edgeIDs)
         for segment in response.segments ?? [] {
             guard let id = segment.edgeId, !id.isEmpty else { continue }
-            if seen.insert(id).inserted { edgeIDs.append(id) }
+            if let duplicate = recent.firstIndex(where: { $0.id == id }) {
+                recentMeters -= recent.remove(at: duplicate).meters
+            }
+            let meters = max(1, segment.distanceMeters ?? 0)
+            recent.append(Entry(id: id, meters: meters))
+            recentMeters += meters
             arrivalEdgeID = id
+            while recent.count > 1,
+                  (recent.count > Self.recentEdgeLimit
+                    || recentMeters > Self.recentMeterLimit) {
+                recentMeters -= recent.removeFirst().meters
+            }
         }
     }
 }

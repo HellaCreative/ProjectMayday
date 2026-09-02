@@ -1,57 +1,57 @@
 # Nova Scotia routing benchmark
 
-Git `c2bb1b0` · 2026-09-02T17:15:38.517Z · seed `3511091208` · 24/48 cases green
+Git `063ea94` · 2026-09-02T18:52:42.188Z · seed `3511091208` · 24/48 cases green
 Live source: `https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/candidates/ns-osm-20260821-02/ns`
 
 | Result | Case | km | Dirt | Paved | Unknown | Stops | Max hop | Backtrack | Restricted | Candidates / chosen dirt | ms | Assertions |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | ---: | --- |
-| 🟢 | `short-no-fuel/dirt/unknown-off/fuel-planned` | 8.2 | 100% | 0% | 100% | 0 | 8.2 km | 0% | 0 m | 0 / — | 178 | ✓ fuel hops ≤237500<br>✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
-| 🟢 | `short-no-fuel/dirt/unknown-on/fuel-planned` | 8.2 | 100% | 0% | 100% | 0 | 8.2 km | 0% | 0 m | 0 / — | 40 | ✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
-| 🔴 | `short-no-fuel/balanced/unknown-off/fuel-planned` | 9.9 | 100% | 0% | 100% | 0 | 9.9 km | 0% | 0 m | 0 / — | 77 | ✗ balanced 45–55 (100%)<br>✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
-| 🔴 | `short-no-fuel/clean/unknown-off/fuel-planned` | 7.5 | 100% | 0% | 100% | 0 | 7.5 km | 0% | 0 m | 0 / — | 438 | ✗ clean ≤15 (100%)<br>✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
-| 🟢 | `dartmouth-capebreton/dirt/unknown-off/fuel-planned` | 412.5 | 100% | 0% | 100% | 1 | 237.1 km | 0% | 0 m | 10 / 100% | 9979 | ✓ dirt ≥70<br>✓ fuel hops ≤237500<br>✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
-| 🟢 | `dartmouth-capebreton/dirt/unknown-on/fuel-planned` | 372.6 | 100% | 0% | 100% | 1 | 237.2 km | 0% | 0 m | 10 / 100% | 9007 | ✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
-| 🔴 | `dartmouth-capebreton/balanced/unknown-off/fuel-planned` | 345.7 | 100% | 0% | 100% | 1 | 221.6 km | 0.1% | 0 m | 8 / 100% | 7926 | ✗ balanced 45–55 (100%)<br>✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
-| 🔴 | `dartmouth-capebreton/clean/unknown-off/fuel-planned` | 323.6 | 100% | 0% | 100% | 1 | 237.0 km | 0.1% | 0 m | 13 / 100% | 7850 | ✗ clean ≤15 (100%)<br>✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
-| 🟢 | `dartmouth-antigonish/dirt/unknown-off/fuel-planned` | 324.8 | 100% | 0% | 100% | 1 | 223.5 km | 0% | 0 m | 10 / 100% | 8975 | ✓ dirt ≥70<br>✓ fuel hops ≤237500<br>✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
-| 🟢 | `dartmouth-antigonish/dirt/unknown-on/fuel-planned` | 309.7 | 100% | 0% | 100% | 1 | 228.3 km | 2.6% | 0 m | 8 / 100% | 7657 | ✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
-| 🔴 | `dartmouth-antigonish/balanced/unknown-off/fuel-planned` | 229.1 | 100% | 0% | 100% | 0 | 229.1 km | 0% | 0 m | 0 / — | 383 | ✗ balanced 45–55 (100%)<br>✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
-| 🔴 | `dartmouth-antigonish/clean/unknown-off/fuel-planned` | 205.9 | 100% | 0% | 100% | 0 | 205.9 km | 0% | 0 m | 0 / — | 200 | ✗ clean ≤15 (100%)<br>✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
-| 🟢 | `musq-sherbrooke/dirt/unknown-off/fuel-planned` | 64.2 | 100% | 0% | 100% | 0 | 64.2 km | 0% | 0 m | 0 / — | 54 | ✓ dirt ≥70<br>✓ fuel hops ≤237500<br>✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
-| 🟢 | `musq-sherbrooke/dirt/unknown-on/fuel-planned` | 64.2 | 100% | 0% | 100% | 0 | 64.2 km | 0% | 0 m | 0 / — | 47 | ✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
-| 🔴 | `musq-sherbrooke/balanced/unknown-off/fuel-planned` | 73.6 | 100% | 0% | 100% | 0 | 73.6 km | 0% | 0 m | 0 / — | 133 | ✗ balanced 45–55 (100%)<br>✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
-| 🔴 | `musq-sherbrooke/clean/unknown-off/fuel-planned` | 56.9 | 100% | 0% | 100% | 0 | 56.9 km | 0% | 0 m | 0 / — | 105 | ✗ clean ≤15 (100%)<br>✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
-| 🟢 | `antigonish-sydney/dirt/unknown-off/fuel-planned` | 262.9 | 100% | 0% | 100% | 1 | 237.2 km | 0% | 0 m | 10 / 100% | 7447 | ✓ dirt ≥70<br>✓ fuel hops ≤237500<br>✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
-| 🟢 | `antigonish-sydney/dirt/unknown-on/fuel-planned` | 271.4 | 100% | 0% | 100% | 1 | 237.2 km | 0% | 0 m | 10 / 100% | 7720 | ✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
-| 🔴 | `antigonish-sydney/balanced/unknown-off/fuel-planned` | 253.6 | 100% | 0% | 100% | 1 | 227.1 km | 0% | 0 m | 6 / 100% | 8303 | ✗ balanced 45–55 (100%)<br>✓ no unexplained backtrack<br>✗ ≤6000ms per hop (6100ms) |
-| 🔴 | `antigonish-sydney/clean/unknown-off/fuel-planned` | 231.7 | 100% | 0% | 100% | 0 | 231.7 km | 0% | 0 m | 0 / — | 149 | ✗ clean ≤15 (100%)<br>✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
-| 🟢 | `through-halifax/dirt/unknown-off/fuel-planned` | 80.7 | 100% | 0% | 100% | 0 | 80.7 km | 0% | 0 m | 0 / — | 2574 | ✓ fuel hops ≤237500<br>✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
-| 🟢 | `through-halifax/dirt/unknown-on/fuel-planned` | 180.6 | 100% | 0% | 100% | 0 | 180.6 km | 0% | 0 m | 0 / — | 430 | ✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
-| 🔴 | `through-halifax/balanced/unknown-off/fuel-planned` | — | — | — | — | — | — km | — | — | 0 / — | 2438 | ✗ route complete (baseline leg 1: no_route)<br>✓ ≤6000ms per hop |
-| 🔴 | `through-halifax/clean/unknown-off/fuel-planned` | 43.5 | 100% | 0% | 100% | 0 | 43.5 km | 0% | 0 m | 0 / — | 196 | ✗ clean ≤15 (100%)<br>✓ urban wall<br>✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
-| 🟢 | `white-fuel-20260823/dirt/unknown-off/fuel-planned` | 369.0 | 100% | 0% | 100% | 1 | 202.8 km | 0% | 0 m | 11 / 100% | 8748 | ✓ dirt ≥70<br>✓ fuel hops ≤237500<br>✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
-| 🟢 | `white-fuel-20260823/dirt/unknown-on/fuel-planned` | 300.0 | 100% | 0% | 100% | 1 | 207.8 km | 0% | 0 m | 11 / 100% | 7862 | ✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
-| 🔴 | `white-fuel-20260823/balanced/unknown-off/fuel-planned` | 288.1 | 100% | 0% | 100% | 1 | 201.0 km | 0.1% | 0 m | 10 / 100% | 7656 | ✗ balanced 45–55 (100%)<br>✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
-| 🔴 | `white-fuel-20260823/clean/unknown-off/fuel-planned` | 268.6 | 100% | 0% | 100% | 1 | 237.0 km | 0.2% | 0 m | 10 / 100% | 6113 | ✗ clean ≤15 (100%)<br>✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
-| 🟢 | `device-loop-20260823/dirt/unknown-off/fuel-planned` | 435.7 | 100% | 0% | 100% | 1 | 223.5 km | 0% | 0 m | 10 / 100% | 9843 | ✓ dirt ≥70<br>✓ fuel hops ≤237500<br>✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
-| 🟢 | `device-loop-20260823/dirt/unknown-on/fuel-planned` | 400.8 | 100% | 0% | 100% | 1 | 207.8 km | 0% | 0 m | 10 / 100% | 8315 | ✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
-| 🔴 | `device-loop-20260823/balanced/unknown-off/fuel-planned` | 354.5 | 100% | 0% | 100% | 1 | 201.0 km | 0.1% | 0 m | 8 / 100% | 8285 | ✗ balanced 45–55 (100%)<br>✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
-| 🔴 | `device-loop-20260823/clean/unknown-off/fuel-planned` | 324.5 | 100% | 0% | 100% | 1 | 173.8 km | 0% | 0 m | 11 / 100% | 6142 | ✗ clean ≤15 (100%)<br>✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
-| 🟢 | `fuel-overshoot-20260826/dirt/unknown-off/fuel-planned` | 229.4 | 100% | 0% | 100% | 0 | 229.4 km | 0% | 0 m | 0 / — | 417 | ✓ dirt ≥70<br>✓ fuel hops ≤237500<br>✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
-| 🟢 | `fuel-overshoot-20260826/dirt/unknown-on/fuel-planned` | 196.6 | 100% | 0% | 100% | 0 | 196.6 km | 0% | 0 m | 0 / — | 274 | ✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
-| 🔴 | `fuel-overshoot-20260826/balanced/unknown-off/fuel-planned` | 175.0 | 100% | 0% | 100% | 0 | 175.0 km | 0% | 0 m | 0 / — | 336 | ✗ balanced 45–55 (100%)<br>✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
-| 🔴 | `fuel-overshoot-20260826/clean/unknown-off/fuel-planned` | 171.1 | 100% | 0% | 100% | 0 | 171.1 km | 0% | 0 m | 0 / — | 214 | ✗ clean ≤15 (100%)<br>✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
-| 🟢 | `fuel-early-stop-20260827/dirt/unknown-off/fuel-planned` | 369.2 | 100% | 0% | 100% | 1 | 228.2 km | 0% | 0 m | 10 / 100% | 10181 | ✓ dirt ≥70<br>✓ fuel hops ≤237500<br>✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
-| 🟢 | `fuel-early-stop-20260827/dirt/unknown-on/fuel-planned` | 206.3 | 100% | 0% | 100% | 0 | 206.3 km | 0% | 0 m | 0 / — | 113 | ✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
-| 🔴 | `fuel-early-stop-20260827/balanced/unknown-off/fuel-planned` | 199.4 | 100% | 0% | 100% | 0 | 199.4 km | 0% | 0 m | 0 / — | 527 | ✗ balanced 45–55 (100%)<br>✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
-| 🔴 | `fuel-early-stop-20260827/clean/unknown-off/fuel-planned` | 199.0 | 100% | 0% | 100% | 0 | 199.0 km | 0% | 0 m | 0 / — | 191 | ✗ clean ≤15 (100%)<br>✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
-| 🟢 | `three-waypoint/dirt/unknown-off/fuel-planned` | 556.3 | 100% | 0% | 100% | 2 | 154.5 km | 0.9% | 0 m | 14 / 100%,100% | 22759 | ✓ dirt ≥70<br>✓ fuel hops ≤237500<br>✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
-| 🟢 | `three-waypoint/dirt/unknown-on/fuel-planned` | 444.5 | 100% | 0% | 100% | 1 | 136.8 km | 0.9% | 0 m | 17 / 100% | 18526 | ✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
-| 🔴 | `three-waypoint/balanced/unknown-off/fuel-planned` | 460.0 | 100% | 0% | 100% | 1 | 161.7 km | 0.2% | 0 m | 10 / 100% | 20130 | ✗ balanced 45–55 (100%)<br>✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
-| 🔴 | `three-waypoint/clean/unknown-off/fuel-planned` | 435.6 | 100% | 0% | 100% | 3 | 183.0 km | 1.7% | 0 m | 15 / 100%,100%,100% | 17781 | ✗ clean ≤15 (100%)<br>✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
-| 🟢 | `phase10-104745/dirt/unknown-off/fuel-planned` | 556.3 | 100% | 0% | 100% | 2 | 154.5 km | 0.9% | 0 m | 12 / 100%,100% | 22880 | ✓ dirt ≥70<br>✓ fuel hops ≤237500<br>✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
-| 🟢 | `phase10-104745/dirt/unknown-on/fuel-planned` | 444.5 | 100% | 0% | 100% | 1 | 136.8 km | 0.9% | 0 m | 17 / 100% | 18837 | ✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
-| 🔴 | `phase10-104745/balanced/unknown-off/fuel-planned` | 460.0 | 100% | 0% | 100% | 1 | 161.7 km | 0.2% | 0 m | 10 / 100% | 20701 | ✗ balanced 45–55 (100%)<br>✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
-| 🔴 | `phase10-104745/clean/unknown-off/fuel-planned` | 435.6 | 100% | 0% | 100% | 3 | 183.0 km | 1.7% | 0 m | 15 / 100%,100%,100% | 17785 | ✗ clean ≤15 (100%)<br>✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
+| 🟢 | `short-no-fuel/dirt/unknown-off/fuel-planned` | 8.2 | 100% | 0% | 100% | 0 | 8.2 km | 0% | 0 m | 0 / — | 177 | ✓ fuel hops ≤237500<br>✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
+| 🟢 | `short-no-fuel/dirt/unknown-on/fuel-planned` | 8.2 | 100% | 0% | 100% | 0 | 8.2 km | 0% | 0 m | 0 / — | 42 | ✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
+| 🔴 | `short-no-fuel/balanced/unknown-off/fuel-planned` | 9.9 | 100% | 0% | 100% | 0 | 9.9 km | 0% | 0 m | 0 / — | 81 | ✗ balanced 45–55 (100%)<br>✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
+| 🔴 | `short-no-fuel/clean/unknown-off/fuel-planned` | 7.5 | 100% | 0% | 100% | 0 | 7.5 km | 0% | 0 m | 0 / — | 467 | ✗ clean ≤15 (100%)<br>✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
+| 🟢 | `dartmouth-capebreton/dirt/unknown-off/fuel-planned` | 412.5 | 100% | 0% | 100% | 1 | 237.1 km | 0% | 0 m | 10 / 100% | 10215 | ✓ dirt ≥70<br>✓ fuel hops ≤237500<br>✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
+| 🟢 | `dartmouth-capebreton/dirt/unknown-on/fuel-planned` | 372.6 | 100% | 0% | 100% | 1 | 237.2 km | 0% | 0 m | 10 / 100% | 9341 | ✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
+| 🔴 | `dartmouth-capebreton/balanced/unknown-off/fuel-planned` | 345.7 | 100% | 0% | 100% | 1 | 221.6 km | 0.1% | 0 m | 6 / 100% | 7799 | ✗ balanced 45–55 (100%)<br>✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
+| 🔴 | `dartmouth-capebreton/clean/unknown-off/fuel-planned` | 323.6 | 100% | 0% | 100% | 1 | 237.0 km | 0.1% | 0 m | 10 / 100% | 7401 | ✗ clean ≤15 (100%)<br>✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
+| 🟢 | `dartmouth-antigonish/dirt/unknown-off/fuel-planned` | 324.8 | 100% | 0% | 100% | 1 | 223.5 km | 0% | 0 m | 8 / 100% | 9111 | ✓ dirt ≥70<br>✓ fuel hops ≤237500<br>✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
+| 🟢 | `dartmouth-antigonish/dirt/unknown-on/fuel-planned` | 309.7 | 100% | 0% | 100% | 1 | 228.3 km | 2.6% | 0 m | 8 / 100% | 7502 | ✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
+| 🔴 | `dartmouth-antigonish/balanced/unknown-off/fuel-planned` | 229.1 | 100% | 0% | 100% | 0 | 229.1 km | 0% | 0 m | 0 / — | 401 | ✗ balanced 45–55 (100%)<br>✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
+| 🔴 | `dartmouth-antigonish/clean/unknown-off/fuel-planned` | 205.9 | 100% | 0% | 100% | 0 | 205.9 km | 0% | 0 m | 0 / — | 235 | ✗ clean ≤15 (100%)<br>✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
+| 🟢 | `musq-sherbrooke/dirt/unknown-off/fuel-planned` | 64.2 | 100% | 0% | 100% | 0 | 64.2 km | 0% | 0 m | 0 / — | 47 | ✓ dirt ≥70<br>✓ fuel hops ≤237500<br>✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
+| 🟢 | `musq-sherbrooke/dirt/unknown-on/fuel-planned` | 64.2 | 100% | 0% | 100% | 0 | 64.2 km | 0% | 0 m | 0 / — | 42 | ✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
+| 🔴 | `musq-sherbrooke/balanced/unknown-off/fuel-planned` | 73.6 | 100% | 0% | 100% | 0 | 73.6 km | 0% | 0 m | 0 / — | 149 | ✗ balanced 45–55 (100%)<br>✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
+| 🔴 | `musq-sherbrooke/clean/unknown-off/fuel-planned` | 56.9 | 100% | 0% | 100% | 0 | 56.9 km | 0% | 0 m | 0 / — | 129 | ✗ clean ≤15 (100%)<br>✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
+| 🟢 | `antigonish-sydney/dirt/unknown-off/fuel-planned` | 262.9 | 100% | 0% | 100% | 1 | 237.2 km | 0% | 0 m | 10 / 100% | 7177 | ✓ dirt ≥70<br>✓ fuel hops ≤237500<br>✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
+| 🟢 | `antigonish-sydney/dirt/unknown-on/fuel-planned` | 271.4 | 100% | 0% | 100% | 1 | 237.2 km | 0% | 0 m | 10 / 100% | 7461 | ✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
+| 🔴 | `antigonish-sydney/balanced/unknown-off/fuel-planned` | 253.6 | 100% | 0% | 100% | 1 | 227.1 km | 0% | 0 m | 6 / 100% | 8088 | ✗ balanced 45–55 (100%)<br>✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
+| 🔴 | `antigonish-sydney/clean/unknown-off/fuel-planned` | 231.7 | 100% | 0% | 100% | 0 | 231.7 km | 0% | 0 m | 0 / — | 144 | ✗ clean ≤15 (100%)<br>✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
+| 🟢 | `through-halifax/dirt/unknown-off/fuel-planned` | 80.7 | 100% | 0% | 100% | 0 | 80.7 km | 0% | 0 m | 0 / — | 2539 | ✓ fuel hops ≤237500<br>✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
+| 🟢 | `through-halifax/dirt/unknown-on/fuel-planned` | 180.6 | 100% | 0% | 100% | 0 | 180.6 km | 0% | 0 m | 0 / — | 444 | ✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
+| 🔴 | `through-halifax/balanced/unknown-off/fuel-planned` | — | — | — | — | — | — km | — | — | 0 / — | 2534 | ✗ route complete (baseline leg 1: no_route)<br>✓ ≤6000ms per hop |
+| 🔴 | `through-halifax/clean/unknown-off/fuel-planned` | 43.5 | 100% | 0% | 100% | 0 | 43.5 km | 0% | 0 m | 0 / — | 192 | ✗ clean ≤15 (100%)<br>✓ urban wall<br>✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
+| 🟢 | `white-fuel-20260823/dirt/unknown-off/fuel-planned` | 369.0 | 100% | 0% | 100% | 1 | 202.8 km | 0% | 0 m | 10 / 100% | 8149 | ✓ dirt ≥70<br>✓ fuel hops ≤237500<br>✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
+| 🟢 | `white-fuel-20260823/dirt/unknown-on/fuel-planned` | 300.0 | 100% | 0% | 100% | 1 | 207.8 km | 0% | 0 m | 9 / 100% | 6974 | ✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
+| 🔴 | `white-fuel-20260823/balanced/unknown-off/fuel-planned` | 288.1 | 100% | 0% | 100% | 1 | 201.0 km | 0.1% | 0 m | 8 / 100% | 7473 | ✗ balanced 45–55 (100%)<br>✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
+| 🔴 | `white-fuel-20260823/clean/unknown-off/fuel-planned` | 268.6 | 100% | 0% | 100% | 1 | 237.0 km | 0.2% | 0 m | 10 / 100% | 6041 | ✗ clean ≤15 (100%)<br>✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
+| 🟢 | `device-loop-20260823/dirt/unknown-off/fuel-planned` | 435.7 | 100% | 0% | 100% | 1 | 223.5 km | 0% | 0 m | 8 / 100% | 8906 | ✓ dirt ≥70<br>✓ fuel hops ≤237500<br>✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
+| 🟢 | `device-loop-20260823/dirt/unknown-on/fuel-planned` | 400.8 | 100% | 0% | 100% | 1 | 207.8 km | 0% | 0 m | 10 / 100% | 7858 | ✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
+| 🔴 | `device-loop-20260823/balanced/unknown-off/fuel-planned` | 354.5 | 100% | 0% | 100% | 1 | 201.0 km | 0.1% | 0 m | 6 / 100% | 7085 | ✗ balanced 45–55 (100%)<br>✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
+| 🔴 | `device-loop-20260823/clean/unknown-off/fuel-planned` | 324.5 | 100% | 0% | 100% | 1 | 173.8 km | 0% | 0 m | 11 / 100% | 5955 | ✗ clean ≤15 (100%)<br>✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
+| 🟢 | `fuel-overshoot-20260826/dirt/unknown-off/fuel-planned` | 229.4 | 100% | 0% | 100% | 0 | 229.4 km | 0% | 0 m | 0 / — | 401 | ✓ dirt ≥70<br>✓ fuel hops ≤237500<br>✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
+| 🟢 | `fuel-overshoot-20260826/dirt/unknown-on/fuel-planned` | 196.6 | 100% | 0% | 100% | 0 | 196.6 km | 0% | 0 m | 0 / — | 253 | ✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
+| 🔴 | `fuel-overshoot-20260826/balanced/unknown-off/fuel-planned` | 175.0 | 100% | 0% | 100% | 0 | 175.0 km | 0% | 0 m | 0 / — | 330 | ✗ balanced 45–55 (100%)<br>✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
+| 🔴 | `fuel-overshoot-20260826/clean/unknown-off/fuel-planned` | 171.1 | 100% | 0% | 100% | 0 | 171.1 km | 0% | 0 m | 0 / — | 228 | ✗ clean ≤15 (100%)<br>✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
+| 🟢 | `fuel-early-stop-20260827/dirt/unknown-off/fuel-planned` | 369.2 | 100% | 0% | 100% | 1 | 228.2 km | 0% | 0 m | 8 / 100% | 8851 | ✓ dirt ≥70<br>✓ fuel hops ≤237500<br>✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
+| 🟢 | `fuel-early-stop-20260827/dirt/unknown-on/fuel-planned` | 206.3 | 100% | 0% | 100% | 0 | 206.3 km | 0% | 0 m | 0 / — | 110 | ✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
+| 🔴 | `fuel-early-stop-20260827/balanced/unknown-off/fuel-planned` | 199.4 | 100% | 0% | 100% | 0 | 199.4 km | 0% | 0 m | 0 / — | 538 | ✗ balanced 45–55 (100%)<br>✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
+| 🔴 | `fuel-early-stop-20260827/clean/unknown-off/fuel-planned` | 199.0 | 100% | 0% | 100% | 0 | 199.0 km | 0% | 0 m | 0 / — | 210 | ✗ clean ≤15 (100%)<br>✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
+| 🟢 | `three-waypoint/dirt/unknown-off/fuel-planned` | 556.3 | 100% | 0% | 100% | 2 | 154.5 km | 0.9% | 0 m | 16 / 100%,100% | 22479 | ✓ dirt ≥70<br>✓ fuel hops ≤237500<br>✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
+| 🟢 | `three-waypoint/dirt/unknown-on/fuel-planned` | 444.5 | 100% | 0% | 100% | 1 | 136.8 km | 0.9% | 0 m | 17 / 100% | 17741 | ✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
+| 🔴 | `three-waypoint/balanced/unknown-off/fuel-planned` | 460.0 | 100% | 0% | 100% | 1 | 161.7 km | 0.2% | 0 m | 10 / 100% | 18538 | ✗ balanced 45–55 (100%)<br>✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
+| 🔴 | `three-waypoint/clean/unknown-off/fuel-planned` | 435.6 | 100% | 0% | 100% | 3 | 183.0 km | 1.7% | 0 m | 15 / 100%,100%,100% | 17295 | ✗ clean ≤15 (100%)<br>✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
+| 🟢 | `phase10-104745/dirt/unknown-off/fuel-planned` | 556.3 | 100% | 0% | 100% | 2 | 154.5 km | 0.9% | 0 m | 16 / 100%,100% | 22164 | ✓ dirt ≥70<br>✓ fuel hops ≤237500<br>✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
+| 🟢 | `phase10-104745/dirt/unknown-on/fuel-planned` | 444.5 | 100% | 0% | 100% | 1 | 136.8 km | 0.9% | 0 m | 17 / 100% | 16950 | ✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
+| 🔴 | `phase10-104745/balanced/unknown-off/fuel-planned` | 460.0 | 100% | 0% | 100% | 1 | 161.7 km | 0.2% | 0 m | 10 / 100% | 17342 | ✗ balanced 45–55 (100%)<br>✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
+| 🔴 | `phase10-104745/clean/unknown-off/fuel-planned` | 435.6 | 100% | 0% | 100% | 3 | 183.0 km | 1.7% | 0 m | 15 / 100%,100%,100% | 15446 | ✗ clean ≤15 (100%)<br>✓ no unexplained backtrack<br>✓ ≤6000ms per hop |
 
 Red rows: `short-no-fuel/balanced/unknown-off/fuel-planned`, `short-no-fuel/clean/unknown-off/fuel-planned`, `dartmouth-capebreton/balanced/unknown-off/fuel-planned`, `dartmouth-capebreton/clean/unknown-off/fuel-planned`, `dartmouth-antigonish/balanced/unknown-off/fuel-planned`, `dartmouth-antigonish/clean/unknown-off/fuel-planned`, `musq-sherbrooke/balanced/unknown-off/fuel-planned`, `musq-sherbrooke/clean/unknown-off/fuel-planned`, `antigonish-sydney/balanced/unknown-off/fuel-planned`, `antigonish-sydney/clean/unknown-off/fuel-planned`, `through-halifax/balanced/unknown-off/fuel-planned`, `through-halifax/clean/unknown-off/fuel-planned`, `white-fuel-20260823/balanced/unknown-off/fuel-planned`, `white-fuel-20260823/clean/unknown-off/fuel-planned`, `device-loop-20260823/balanced/unknown-off/fuel-planned`, `device-loop-20260823/clean/unknown-off/fuel-planned`, `fuel-overshoot-20260826/balanced/unknown-off/fuel-planned`, `fuel-overshoot-20260826/clean/unknown-off/fuel-planned`, `fuel-early-stop-20260827/balanced/unknown-off/fuel-planned`, `fuel-early-stop-20260827/clean/unknown-off/fuel-planned`, `three-waypoint/balanced/unknown-off/fuel-planned`, `three-waypoint/clean/unknown-off/fuel-planned`, `phase10-104745/balanced/unknown-off/fuel-planned`, `phase10-104745/clean/unknown-off/fuel-planned`. These are measurements, not blocked tests.

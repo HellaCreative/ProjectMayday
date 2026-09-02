@@ -155,7 +155,15 @@ function buildEdgeGridFromGeom(geom, edgeCount) {
   return { edgeGrid, GRID };
 }
 
-function materializeRuntimeV2(cacheKey, pack, geom, started, packIdentity = null) {
+function materializeRuntimeV2(
+  cacheKey,
+  pack,
+  geom,
+  started,
+  packIdentity = null,
+  loadDiagnostics = null
+) {
+  const gridStarted = Date.now();
   const { edgeGrid, GRID } = buildEdgeGridFromGeom(geom, pack.undirectedEdgeCount);
   const loadMs = Date.now() - started;
 
@@ -171,6 +179,11 @@ function materializeRuntimeV2(cacheKey, pack, geom, started, packIdentity = null
     loadMs,
     enums: pack.enums,
     meta: pack.meta,
+    loadDiagnostics: {
+      ...(loadDiagnostics || {}),
+      gridMs: Date.now() - gridStarted,
+      totalMs: loadMs
+    },
     packIdentity: packIdentity ? [packIdentity] : [],
     data: {
       nodeCount: pack.nodeCount,
@@ -217,19 +230,26 @@ async function loadV2RuntimeAsync(graphPath, started) {
   const paths = v2PathsForV1Path(graphPath);
   let graphRaw;
   let geomRaw;
+  const fetchStarted = Date.now();
   if (String(graphPath).startsWith("http://") || String(graphPath).startsWith("https://")) {
-    graphRaw = await fetchBuffer(paths.graph);
-    geomRaw = await fetchBuffer(paths.geom);
+    [graphRaw, geomRaw] = await Promise.all([
+      fetchBuffer(paths.graph),
+      fetchBuffer(paths.geom)
+    ]);
   } else {
-    graphRaw = fs.readFileSync(paths.graph);
-    geomRaw = fs.readFileSync(paths.geom);
+    [graphRaw, geomRaw] = await Promise.all([
+      fs.promises.readFile(paths.graph),
+      fs.promises.readFile(paths.geom)
+    ]);
   }
-  const graphBuf = Buffer.alloc(graphRaw.length);
-  const geomBuf = Buffer.alloc(geomRaw.length);
-  graphRaw.copy(graphBuf);
-  geomRaw.copy(geomBuf);
-  const pack = decodeGraphV2(graphBuf);
-  const geom = decodeGeometryV1(geomBuf);
+  const fetchMs = Date.now() - fetchStarted;
+  const decodeStarted = Date.now();
+  // Both decoders honour Buffer.byteOffset, so the downloaded buffers can be
+  // decoded directly. Copying both files previously doubled the peak memory
+  // of Ontario/Quebec cold starts before the graph was even searchable.
+  const pack = decodeGraphV2(graphRaw);
+  const geom = decodeGeometryV1(geomRaw);
+  const decodeMs = Date.now() - decodeStarted;
   cacheStats.loads += 1;
   cacheStats.inflateMs += Date.now() - started;
   return materializeRuntimeV2(
@@ -237,21 +257,27 @@ async function loadV2RuntimeAsync(graphPath, started) {
     pack,
     geom,
     started,
-    v2PackIdentity(graphPath, paths, graphRaw, geomRaw, pack)
+    v2PackIdentity(graphPath, paths, graphRaw, geomRaw, pack),
+    {
+      fetchMs,
+      decodeMs,
+      graphBytes: graphRaw.length,
+      geometryBytes: geomRaw.length,
+      source: "async"
+    }
   );
 }
 
 function loadV2RuntimeSync(v1Path, started) {
   const paths = v2PathsForV1Path(v1Path);
-  // Read into freshly allocated buffers (byteOffset 0) so typed views align.
+  const fetchStarted = Date.now();
   const graphRaw = fs.readFileSync(paths.graph);
   const geomRaw = fs.readFileSync(paths.geom);
-  const graphBuf = Buffer.alloc(graphRaw.length);
-  const geomBuf = Buffer.alloc(geomRaw.length);
-  graphRaw.copy(graphBuf);
-  geomRaw.copy(geomBuf);
-  const pack = decodeGraphV2(graphBuf);
-  const geom = decodeGeometryV1(geomBuf);
+  const fetchMs = Date.now() - fetchStarted;
+  const decodeStarted = Date.now();
+  const pack = decodeGraphV2(graphRaw);
+  const geom = decodeGeometryV1(geomRaw);
+  const decodeMs = Date.now() - decodeStarted;
   cacheStats.loads += 1;
   cacheStats.inflateMs += Date.now() - started;
   return materializeRuntimeV2(
@@ -259,7 +285,14 @@ function loadV2RuntimeSync(v1Path, started) {
     pack,
     geom,
     started,
-    v2PackIdentity(v1Path, paths, graphRaw, geomRaw, pack)
+    v2PackIdentity(v1Path, paths, graphRaw, geomRaw, pack),
+    {
+      fetchMs,
+      decodeMs,
+      graphBytes: graphRaw.length,
+      geometryBytes: geomRaw.length,
+      source: "sync"
+    }
   );
 }
 

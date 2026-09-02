@@ -112,6 +112,121 @@ struct ItineraryBuilderTests {
         #expect(fuelMilestones.isEmpty)
     }
 
+    @Test func combinedLivePlanConsumesItsDirectRouteWithoutASecondRouteRequest() async throws {
+        let points = [point(0), point(1)]
+        let source = FakeRoutingSource(name: "live")
+        source.supportsCombinedFuelPlanning = true
+        source.distances[key(points[0], points[1])] = 100_000
+
+        let result = await build(points, source: source, usable: 300_000)
+
+        #expect(result.legs.count == 1)
+        #expect(source.routeRequests.isEmpty)
+        #expect(source.fuelChainRequests.count == 1)
+        #expect(source.fuelChainRequests[0].fuel.routeFirstPlan == true)
+        #expect(source.fuelChainRequests[0].fuel.ensureDestinationFuelEscape == true)
+    }
+
+    @Test func combinedLivePlanCommitsACompleteMultiStopWindowOnce() async throws {
+        let points = [point(0), point(1)]
+        let pump1 = point(0.33)
+        let pump2 = point(0.66)
+        let source = FakeRoutingSource(name: "live")
+        source.supportsCombinedFuelPlanning = true
+        source.distances[key(points[0], points[1])] = 360_000
+        source.distances[key(points[0], pump1)] = 120_000
+        source.distances[key(pump1, pump2)] = 120_000
+        source.distances[key(pump2, points[1])] = 120_000
+        source.fuelStopResponses = [[
+            fuelStop("fuel-1", at: pump1),
+            fuelStop("fuel-2", at: pump2)
+        ]]
+        source.stationCandidates = [
+            FuelStationCandidate(
+                id: "fuel-1", meters: 120_000, dirtPct: 70,
+                departureId: "start", latitude: pump1.latitude,
+                longitude: pump1.longitude, validForward: true
+            ),
+            FuelStationCandidate(
+                id: "fuel-2", meters: 120_000, dirtPct: 70,
+                departureId: "fuel-1", latitude: pump2.latitude,
+                longitude: pump2.longitude, validForward: true
+            )
+        ]
+
+        let result = await build(points, source: source, usable: 150_000)
+
+        #expect(source.fuelChainRequests.count == 1)
+        #expect(source.routeRequests.isEmpty)
+        #expect(result.legs.count == 3)
+        #expect(result.legs.compactMap(\.endsAtFuelStop?.stationID) == ["fuel-1", "fuel-2"])
+        #expect(result.legs[0].validFuelTargets.map(\.id) == ["fuel-1"])
+        #expect(result.legs[1].validFuelTargets.map(\.id) == ["fuel-2"])
+        #expect(result.riderLegStatus.values.allSatisfy { $0 == .built })
+    }
+
+    @Test func combinedFuelReplacementPreservesTheUpstreamPumpAndRebuildsTheSuffix() async throws {
+        let points = [point(0), point(1)]
+        let pump1 = point(0.30)
+        let originalPump2 = point(0.65)
+        let replacementPump2 = point(0.72)
+        let source = FakeRoutingSource(name: "live")
+        source.supportsCombinedFuelPlanning = true
+        source.distances[key(points[0], points[1])] = 360_000
+        source.distances[key(points[0], pump1)] = 100_000
+        source.distances[key(pump1, originalPump2)] = 120_000
+        source.distances[key(originalPump2, points[1])] = 100_000
+        source.distances[key(pump1, replacementPump2)] = 125_000
+        source.distances[key(replacementPump2, points[1])] = 95_000
+        source.fuelStopResponses = [[
+            fuelStop("fuel-1", at: pump1),
+            fuelStop("fuel-2", at: originalPump2)
+        ]]
+        source.stationCandidates = [
+            FuelStationCandidate(
+                id: "fuel-2-alt", meters: 125_000, dirtPct: 65,
+                departureId: "fuel-1", latitude: replacementPump2.latitude,
+                longitude: replacementPump2.longitude, validForward: true
+            )
+        ]
+        let itinerary = makeItinerary(points)
+        let builder = ItineraryBuilder()
+        let fuel = FuelRangePrefs.Snapshot(
+            tankMeters: 150_000, usableMeters: 150_000, reservePercent: 0
+        )
+        let first = await builder.build(
+            itinerary, from: 0, reuse: nil, fuel: fuel,
+            source: .fixed(source), onProgress: { _ in }
+        )
+        let riderLeg = try #require(itinerary.legs.first)
+        let change = reduce(
+            itinerary,
+            .setFuelStopOverride(
+                legID: riderLeg.id,
+                departureAnchorID: "fuel-1",
+                stationID: "fuel-2-alt"
+            )
+        )
+        source.fuelChainRequests.removeAll()
+        source.fuelStopResponses = []
+        source.fuelStops = [fuelStop("fuel-2-alt", at: replacementPump2)]
+
+        let rebuilt = await builder.build(
+            change.itinerary,
+            from: try #require(change.rebuildFromLegIndex),
+            reuse: first,
+            fuel: fuel,
+            source: .fixed(source),
+            replanFromStationID: change.replanFromStationID,
+            onProgress: { _ in }
+        )
+
+        #expect(rebuilt.legs.first == first.legs.first)
+        #expect(rebuilt.legs.compactMap(\.endsAtFuelStop?.stationID) == ["fuel-1", "fuel-2-alt"])
+        #expect(source.fuelChainRequests.first?.fuel.requiredFirstStationId == "fuel-2-alt")
+        #expect(source.routeRequests.isEmpty)
+    }
+
     @Test func reachableDestinationGoesDirectWhenTheEscapePumpFitsRemainingFuel() async throws {
         let points = [point(0), point(1)]
         let source = FakeRoutingSource(name: "live")
@@ -850,11 +965,13 @@ struct IncrementalItineraryRebuildTests {
 @MainActor
 private final class FakeRoutingSource: RoutingSource {
     let name: String
+    var supportsCombinedFuelPlanning = false
     var distances: [String: Double] = [:]
     var fuelStops: [FuelChainStop] = []
     var fuelStopResponses: [[FuelChainStop]] = []
     var fuelGraphMeterResponses: [[Double]] = []
     var fuelWindowCompleteResponses: [Bool] = []
+    var stationCandidates: [FuelStationCandidate] = []
     var routeRequests: [RouteRequest] = []
     var fuelChainRequests: [FuelChainRequest] = []
     var waypointFuelStations: [String: FuelChainStop] = [:]
@@ -920,9 +1037,15 @@ private final class FakeRoutingSource: RoutingSource {
                 selectedStops = []
             } else {
                 let excluded = Set(req.fuel.excludedStationIds ?? [])
-                selectedStops = fuelStops.first(where: {
-                    !excluded.contains($0.id) && $0.coordinate != pair.0
-                }).map { [$0] } ?? []
+                if let required = req.fuel.requiredFirstStationId {
+                    selectedStops = fuelStops.first(where: {
+                        $0.id == required && !excluded.contains($0.id) && $0.coordinate != pair.0
+                    }).map { [$0] } ?? []
+                } else {
+                    selectedStops = fuelStops.first(where: {
+                        !excluded.contains($0.id) && $0.coordinate != pair.0
+                    }).map { [$0] } ?? []
+                }
             }
         }
         let windowComplete = fuelWindowCompleteResponses.isEmpty
@@ -931,6 +1054,15 @@ private final class FakeRoutingSource: RoutingSource {
         let graphMeters = fuelGraphMeterResponses.isEmpty
             ? nil
             : fuelGraphMeterResponses.removeFirst()
+        let routePoints = [pair.0] + selectedStops.map(\.coordinate)
+            + (windowComplete ? [pair.1] : [])
+        let plannedRoutes: [RouteResponse]? = supportsCombinedFuelPlanning
+            ? zip(routePoints, routePoints.dropFirst()).compactMap { endpoints in
+                distances[key(endpoints.0, endpoints.1)].map {
+                    response(from: endpoints.0, to: endpoints.1, meters: $0)
+                }
+            }
+            : nil
         return FuelChainResponse(
             status: "complete", error: nil, message: nil, regionIds: ["test"],
             stops: selectedStops, graphMeters: graphMeters,
@@ -938,6 +1070,8 @@ private final class FakeRoutingSource: RoutingSource {
                 strategy: "fake", states: 1, dijkstraPops: 1,
                 matchedFuel: selectedStops.count, elapsedMs: 1
             ),
+            routes: plannedRoutes,
+            stationCandidates: stationCandidates,
             windowComplete: windowComplete
         )
     }

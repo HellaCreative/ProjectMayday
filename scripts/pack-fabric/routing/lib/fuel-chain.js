@@ -49,7 +49,7 @@ const MIN_STOP_SEPARATION_M = 800;
 const MIN_FORWARD_PROGRESS_M = 8_000;
 const MIN_DESTINATION_FUEL_CLEARANCE_M = 5_000;
 /** Bumped when fuel-selection / ranking contracts change. Clients may assert. */
-const FUEL_CHAIN_SERVICE_VERSION = "2026-08-27.destination-escape-fuel.10";
+const FUEL_CHAIN_SERVICE_VERSION = "2026-09-02.route-first-shared-plan.11";
 /** Watch at 50%; prefer sensible equal-stop choices at 70%. Lockstep: HopSearchPolicy.swift. */
 const FUEL_COMFORT_LO = 0.50;
 const FUEL_COMFORT_HI = 0.70;
@@ -70,6 +70,26 @@ const CLEAN_MAJOR_ROAD_CLASSES = new Set([
   "motorway", "motorway_link", "trunk", "trunk_link", "primary", "primary_link",
   "freeway", "ramp", "arterial"
 ]);
+
+const MAX_RECENT_EDGE_HISTORY = 256;
+
+function appendRecentEdge(history, edgeId) {
+  const id = String(edgeId == null ? "" : edgeId);
+  if (!id) return;
+  if (history.has(id)) history.delete(id);
+  history.add(id);
+  while (history.size > MAX_RECENT_EDGE_HISTORY) {
+    history.delete(history.values().next().value);
+  }
+}
+
+function recentEdgeHistory(edgeIds) {
+  const history = new Set();
+  for (const edgeId of (edgeIds || []).slice(-MAX_RECENT_EDGE_HISTORY)) {
+    appendRecentEdge(history, edgeId);
+  }
+  return history;
+}
 
 function cleanRouteQuality(response, penalizeMajorRoads) {
   const debug = response && response.debug || {};
@@ -395,6 +415,128 @@ function distanceToMatch(runtime, originMatch, targetMatch, distances) {
   return meters + Math.max(0, Number(targetMatch.distanceM) || 0);
 }
 
+/**
+ * Find the nearest route-connected pump without flooding the whole usable
+ * range. Nearby stations are matched in expanding geographic batches; the
+ * graph walk stops as soon as its frontier cannot beat the best pump already
+ * reached. Straight-line distance is a lower bound, so an unexamined batch can
+ * be skipped once its nearest member is farther than the proven road result.
+ */
+function nearestReachableFuelDistance({
+  runtime,
+  stations,
+  origin,
+  profile = "cleanest",
+  accessPolicy = { motorizedPermissive: true, motorizedUnknown: false },
+  maxMeters,
+  avoidEdgeIds = []
+}) {
+  const resolvedProfile = resolveProfile(profile);
+  const policy = normalizePolicy(accessPolicy, resolvedProfile);
+  const avoid = new Set((avoidEdgeIds || []).map(String));
+  const originMatch = matchPoint(
+    runtime, origin, policy, HARD_MATCH_METERS, avoid, null, resolvedProfile, "start"
+  );
+  if (!originMatch.ok) {
+    return { meters: null, pops: 0, matched: 0, considered: 0 };
+  }
+  const originCoord = locationCoordinate(origin);
+  const ordered = (stations || []).map((station) => {
+    const location = stationLocation(station);
+    return {
+      station,
+      location,
+      straightMeters: Number.isFinite(location.lat) && Number.isFinite(location.lon)
+        ? haversineMeters(originCoord, [location.lon, location.lat])
+        : Infinity
+    };
+  }).filter((row) => Number.isFinite(row.straightMeters))
+    .sort((a, b) => a.straightMeters - b.straightMeters);
+
+  const targetMatches = [];
+  let considered = 0;
+  let totalPops = 0;
+  const batchEnds = [...new Set([
+    Math.min(32, ordered.length),
+    Math.min(128, ordered.length),
+    ordered.length
+  ])].filter((value) => value > 0);
+
+  function searchMatchedTargets() {
+    const byNode = new Map();
+    let best = Infinity;
+    const originEdge = edgeView(runtime, originMatch.edgeIndex);
+    const originAlong = Math.max(
+      0, Math.min(originEdge.meters, Number(originMatch.distanceAlongM) || 0)
+    );
+    for (const target of targetMatches) {
+      const edge = edgeView(runtime, target.match.edgeIndex);
+      const along = Math.max(0, Math.min(edge.meters, Number(target.match.distanceAlongM) || 0));
+      const snap = Math.max(0, Number(target.match.distanceM) || 0);
+      const endpoints = [
+        [edge.a, along + snap],
+        [edge.b, Math.max(0, edge.meters - along) + snap]
+      ];
+      for (const [node, offset] of endpoints) {
+        const previous = byNode.get(node);
+        if (previous == null || offset < previous) byNode.set(node, offset);
+      }
+      if (target.match.edgeIndex === originMatch.edgeIndex) {
+        best = Math.min(best, Math.abs(originAlong - along) + snap);
+      }
+    }
+
+    const count = nodeCount(runtime);
+    const distances = new Float64Array(count);
+    distances.fill(Infinity);
+    const heap = new MinHeap();
+    seedMatchDistances(runtime, originMatch, distances, heap);
+    let pops = 0;
+    while (heap.items.length) {
+      const current = heap.pop();
+      if (!current || current.cost !== distances[current.node]) continue;
+      if (current.cost > maxMeters || current.cost >= best) break;
+      pops += 1;
+      const targetOffset = byNode.get(current.node);
+      if (targetOffset != null) best = Math.min(best, current.cost + targetOffset);
+      forEachNeighbor(runtime, current.node, (next, edgeIndex) => {
+        const edge = edgeView(runtime, edgeIndex);
+        if (avoid.has(edge.id)) return;
+        if (!accessAllowed(edge.access, policy, runtime.enums, null)) return;
+        const candidate = current.cost + edge.meters;
+        if (candidate > maxMeters || candidate >= best || candidate >= distances[next]) return;
+        distances[next] = candidate;
+        heap.push({ node: next, cost: candidate });
+      });
+    }
+    return { meters: Number.isFinite(best) && best <= maxMeters ? best : null, pops };
+  }
+
+  let best = null;
+  for (const batchEnd of batchEnds) {
+    for (; considered < batchEnd; considered += 1) {
+      const row = ordered[considered];
+      const match = matchPoint(
+        runtime, row.location, policy, HARD_MATCH_METERS, avoid, null, resolvedProfile, "end"
+      );
+      if (match.ok) targetMatches.push({ ...row, match });
+    }
+    const result = searchMatchedTargets();
+    totalPops += result.pops;
+    if (result.meters != null) {
+      best = result.meters;
+      const nextLowerBound = ordered[considered]?.straightMeters ?? Infinity;
+      if (nextLowerBound >= best) break;
+    }
+  }
+  return {
+    meters: best,
+    pops: totalPops,
+    matched: targetMatches.length,
+    considered
+  };
+}
+
 function stationLocation(station) {
   return {
     lat: Number(station && (station.lat != null ? station.lat : station.latitude)),
@@ -443,7 +585,13 @@ function deriveWaypointRefuels(locations, stations, radiusMeters = WAYPOINT_FUEL
   return rows;
 }
 
+// A warm live-planning isolate sees the same immutable graph and fuel
+// sidecar across profile changes. Reuse pump-to-road snaps; only the rider's
+// destination needs matching on each request.
+const preparedFuelTargetCache = new WeakMap();
+
 function prepareTargets(runtime, stations, destination, policy, profile, avoid) {
+  const started = Date.now();
   const destinationMatch = matchPoint(
     runtime,
     destination,
@@ -454,30 +602,102 @@ function prepareTargets(runtime, stations, destination, policy, profile, avoid) 
     profile,
     "end"
   );
-  const fuelTargets = [];
-  for (const station of stations || []) {
-    const location = stationLocation(station);
-    if (!Number.isFinite(location.lat) || !Number.isFinite(location.lon)) continue;
-    const match = matchPoint(
-      runtime,
-      location,
-      policy,
-      HARD_MATCH_METERS,
-      avoid,
-      null,
-      profile,
-      "end"
-    );
-    if (!match.ok) continue;
-    const surface = edgeView(runtime, match.edgeIndex).surface;
-    fuelTargets.push({
-      station,
-      location,
-      match,
-      dirtAdjacent: surface !== "paved" && surface !== "unknown"
-    });
+  const stationCacheKey = stations && stations.routingCacheKey;
+  const avoidKey = [...avoid].sort().join(",");
+  const snapProfileClass = resolveProfile(profile) === "cleanest" ? "cleanest" : "adventure";
+  const cacheKey = stationCacheKey
+    ? `${stationCacheKey}|${snapProfileClass}|unknown=${policy.motorizedUnknown ? 1 : 0}|avoid=${avoidKey}`
+    : null;
+  let runtimeCache = preparedFuelTargetCache.get(runtime);
+  let targetCache = cacheKey && runtimeCache && runtimeCache.get(cacheKey);
+  const cacheHit = !!targetCache;
+  if (!targetCache) {
+    targetCache = new Map();
+    if (cacheKey) {
+      if (!runtimeCache) {
+        runtimeCache = new Map();
+        preparedFuelTargetCache.set(runtime, runtimeCache);
+      }
+      runtimeCache.set(cacheKey, targetCache);
+      while (runtimeCache.size > 8) {
+        runtimeCache.delete(runtimeCache.keys().next().value);
+      }
+    }
   }
-  return { destinationMatch, fuelTargets };
+  const stationRows = (stations || []).map((station) => ({
+    station,
+    location: stationLocation(station)
+  })).filter((row) =>
+    Number.isFinite(row.location.lat) && Number.isFinite(row.location.lon)
+  );
+  const prepareDiagnostics = {
+    elapsedMs: Date.now() - started,
+    cacheHit,
+    stationsConsidered: 0,
+    stationsMatched: 0
+  };
+  const matchedStationIDs = new Set();
+
+  function fuelTargetsNear(origin, maxMeters) {
+    const originCoordinate = locationCoordinate(origin);
+    // Road distance cannot be shorter than the geographic chord. The extra
+    // snap allowance covers both endpoint projections, so this removes only
+    // pumps that are physically incapable of fitting in the current tank.
+    const geographicLimit = Math.max(0, Number(maxMeters) || 0) + HARD_MATCH_METERS * 2;
+    const nearby = stationRows.filter((row) =>
+      haversineMeters(originCoordinate, [row.location.lon, row.location.lat]) <= geographicLimit
+    );
+    const fuelTargets = [];
+    const matchStarted = Date.now();
+    for (const row of nearby) {
+      const stationID = String(row.station.id || row.station.stationId || "");
+      const cached = targetCache.get(stationID);
+      if (cached !== undefined) {
+        if (cached) {
+          matchedStationIDs.add(stationID);
+          fuelTargets.push(cached);
+        }
+        continue;
+      }
+      prepareDiagnostics.stationsConsidered += 1;
+      const { station, location } = row;
+      const match = matchPoint(
+        runtime,
+        location,
+        policy,
+        HARD_MATCH_METERS,
+        avoid,
+        null,
+        profile,
+        "end"
+      );
+      if (!match.ok) {
+        targetCache.set(stationID, null);
+        continue;
+      }
+      const target = {
+        station,
+        location,
+        match,
+        dirtAdjacent: (() => {
+          const surface = edgeView(runtime, match.edgeIndex).surface;
+          return surface !== "paved" && surface !== "unknown";
+        })()
+      };
+      targetCache.set(stationID, target);
+      matchedStationIDs.add(stationID);
+      fuelTargets.push(target);
+    }
+    prepareDiagnostics.stationsMatched = matchedStationIDs.size;
+    prepareDiagnostics.elapsedMs += Date.now() - matchStarted;
+    return fuelTargets;
+  }
+
+  return {
+    destinationMatch,
+    fuelTargetsNear,
+    prepareDiagnostics
+  };
 }
 
 function fuelPlanningSpan(profile) {
@@ -772,10 +992,12 @@ async function planFuelChainOnRuntime({
   probeFirstReachableStation = false,
   excludedStationIds = [],
   requiredFirstStationId = null,
+  preferredStationIds = [],
   allowPartialWindow = false,
   timeBudgetMs = null,
   profileMeters = null,
-  graphOnlyFeeler = false
+  graphOnlyFeeler = false,
+  foundationRoute = null
 }) {
   profile = resolveProfile(profile);
   const policy = normalizePolicy(rawPolicy, profile);
@@ -818,10 +1040,13 @@ async function planFuelChainOnRuntime({
     hardRangeMeters: Math.round(firstLegMaxMeters),
     destinationEscapeMeters: Number.isFinite(destinationLimitForDiagnostics)
       ? Math.max(0, Math.round(usableRangeMeters - destinationLimitForDiagnostics))
-      : null
+      : null,
+    targetPrepareMs: targets.prepareDiagnostics.elapsedMs,
+    targetCacheHit: targets.prepareDiagnostics.cacheHit
   };
   const memo = new Map();
   const stationCandidates = [];
+  const preferredStations = new Set((preferredStationIds || []).map(String));
   let effectiveK = Math.max(1, Math.min(6, Number(candidateK) || 6));
   let maxHopMs = 0;
   let firstReachableStationMeters = null;
@@ -848,7 +1073,7 @@ async function planFuelChainOnRuntime({
   );
   dijkstraPops += destinationGraph.pops;
 
-  function reachableFrom(currentKey, currentMatch, capMeters, history, arrival) {
+  function reachableFrom(currentKey, currentLocation, currentMatch, capMeters, history, arrival) {
     const historyKey = [...history].sort().join(",");
     const memoKey = `${currentKey}:${Math.round(capMeters)}:${arrival || "-"}:${historyKey}`;
     if (memo.has(memoKey)) return memo.get(memoKey);
@@ -864,7 +1089,7 @@ async function planFuelChainOnRuntime({
       graph.distances
     );
     const fuel = [];
-    for (const target of targets.fuelTargets) {
+    for (const target of targets.fuelTargetsNear(currentLocation, capMeters)) {
       const graphMeters = distanceToMatch(runtime, currentMatch, target.match, graph.distances);
       if (Number.isFinite(graphMeters) && graphMeters <= capMeters) {
         const remainingGraphMeters = distanceToMatch(
@@ -878,6 +1103,30 @@ async function planFuelChainOnRuntime({
     return result;
   }
 
+  const defaultProfileHop = async ({
+    candidate, from, maxMeters, priorEdgeIds: evaluationHistory, arrivalEdgeId: evaluationArrival
+  }) => {
+    const usesFoundation = foundationRoute && candidate.station.id === "__destination__" &&
+      Math.abs(Number(from.lat) - Number(start.lat)) < 1e-7 &&
+      Math.abs(Number(from.lon) - Number(start.lon)) < 1e-7;
+    if (usesFoundation) return foundationRoute;
+    return routeRequest({
+      profile,
+      locations: [from, candidate.location],
+      accessPolicy: rawPolicy,
+      options: {
+        avoidEdgeIds,
+        priorEdgeIds: [...(evaluationHistory || [])],
+        arrivalEdgeId: evaluationArrival,
+        backtrackFactor,
+        cleanMetroMultiplier,
+        avoidMotorways: avoidMotorways === true,
+        internalFuelProbe: true,
+        directExtraBudgetMeters: undefined,
+        maxPathMeters: maxMeters
+      }
+    });
+  };
   const evaluateProfileHop = graphOnlyFeeler
     ? (async ({ candidate }) => ({
         status: "complete",
@@ -885,24 +1134,7 @@ async function planFuelChainOnRuntime({
         stats: { dirtPercent: 0 },
         segments: []
       }))
-    : routeCandidate || (async ({
-        candidate, from, maxMeters, priorEdgeIds: evaluationHistory, arrivalEdgeId: evaluationArrival
-      }) => routeRequest({
-        profile,
-        locations: [from, candidate.location],
-        accessPolicy: rawPolicy,
-        options: {
-          avoidEdgeIds,
-          priorEdgeIds: [...(evaluationHistory || [])],
-          arrivalEdgeId: evaluationArrival,
-          backtrackFactor,
-          cleanMetroMultiplier,
-          avoidMotorways: avoidMotorways === true,
-          internalFuelProbe: true,
-          directExtraBudgetMeters: undefined,
-          maxPathMeters: maxMeters
-        }
-      }));
+    : routeCandidate || defaultProfileHop;
 
   function destinationCandidate(graphMeters) {
     return {
@@ -968,6 +1200,15 @@ async function planFuelChainOnRuntime({
         Number(a.graphMeters) - Number(b.graphMeters)
       ).slice(0, evaluationLimit));
     } else {
+      // A prior Dirt/Balanced/Clean calculation for the same rider corridor
+      // may send back its proven pumps. Evaluate up to two of those first,
+      // then fill the remaining bounded shortlist normally. They are hints,
+      // never requirements; current access, range and continuation checks
+      // still decide whether they remain valid for this profile.
+      const retained = unique.filter((row) =>
+        preferredStations.has(String(row.station.id))
+      );
+      fillFrom(retained, Math.min(2, evaluationLimit));
       // Preserve candidates capable of finishing with the fewest stops before
       // spending the bounded K=6 budget on general forward choices. One early
       // candidate is retained only as a sparse-corridor fallback.
@@ -1045,18 +1286,18 @@ async function planFuelChainOnRuntime({
         row.cleanRoutedMeters = firstClean.routedMeters;
         let validForward = false;
         if (fits) {
-          const nextHistory = new Set(history);
+          const nextHistory = recentEdgeHistory([...history]);
           let nextArrival = arrival;
           for (const segment of (response && response.segments) || []) {
             const edgeId = segment && segment.edgeId != null ? String(segment.edgeId) : "";
             if (!edgeId) continue;
-            nextHistory.add(edgeId);
+            appendRecentEdge(nextHistory, edgeId);
             nextArrival = edgeId;
           }
           row.nextHistory = nextHistory;
           row.nextArrival = nextArrival;
           const continuation = reachableFrom(
-            String(candidate.station.id), candidate.match, usableRangeMeters,
+            String(candidate.station.id), candidate.location, candidate.match, usableRangeMeters,
             nextHistory, nextArrival
           );
           const forwardStations = rankForwardFuel(
@@ -1330,7 +1571,9 @@ async function planFuelChainOnRuntime({
     states += 1;
     const cap = depth === 0 ? firstLegMaxMeters : usableRangeMeters;
     if (!(cap > 0)) return null;
-    const reach = reachableFrom(currentKey, currentMatch, cap, history, arrival);
+    const reach = reachableFrom(
+      currentKey, currentLocation, currentMatch, cap, history, arrival
+    );
     if (depth === 0) {
       stationsReachableWithinRange = Array.isArray(reach.fuel) ? reach.fuel.length : 0;
       firstReachableStationMeters = reach.fuel.reduce((best, row) =>
@@ -1359,9 +1602,19 @@ async function planFuelChainOnRuntime({
     }
     const mustContinueForProfileRide = depth < Math.max(0, Number(minimumFuelStops) || 0);
     let stopRequiredHere = (depth === 0 && requireFuelStopBeforeEnd) || mustContinueForProfileRide;
-    const destinationLimit = destinationFuelUsedLimitMeters == null
+    const configuredDestinationLimit = destinationFuelUsedLimitMeters == null
       ? NaN
       : Number(destinationFuelUsedLimitMeters);
+    // destinationFuelUsedLimitMeters is measured from a full tank. If this
+    // rider leg begins with fuel already consumed, only the remaining portion
+    // of that arrival allowance is available before the first generated pump.
+    // After a pump, the next search depth starts with a full tank again.
+    const carriedFuelUsed = depth === 0
+      ? Math.max(0, usableRangeMeters - firstLegMaxMeters)
+      : 0;
+    const destinationLimit = Number.isFinite(configuredDestinationLimit)
+      ? Math.max(0, configuredDestinationLimit - carriedFuelUsed)
+      : NaN;
     let directPlan = null;
     if (
       Number.isFinite(reach.destinationMeters) &&
@@ -1388,6 +1641,7 @@ async function planFuelChainOnRuntime({
           directPlan = {
             stops: [],
             graphMeters: [routedMeters],
+            routes: [response],
             quality: routeChainQuality(response, avoidMotorways === true),
             complete: true
           };
@@ -1452,6 +1706,7 @@ async function planFuelChainOnRuntime({
         stationPlans.push({
           stops: [stop],
           graphMeters: [evaluation.meters, continuationMeters],
+          routes: [evaluation.response, evaluation.continuationResponse],
           quality: evaluation.chainQuality,
           directionalDetourMeters: Number(evaluation.candidate.crossTrack) || 0,
           progressMeters: Number(evaluation.candidate.progressMeters) || 0,
@@ -1464,6 +1719,7 @@ async function planFuelChainOnRuntime({
           stationPlans.push({
             stops: [stop],
             graphMeters: [evaluation.meters],
+            routes: [evaluation.response],
             quality: evaluation.firstQuality,
             complete: false,
             partial: true
@@ -1491,6 +1747,7 @@ async function planFuelChainOnRuntime({
         stationPlans.push({
           stops: [stop].concat(tail.stops),
           graphMeters: [evaluation.meters].concat(tail.graphMeters),
+          routes: [evaluation.response].concat(tail.routes || []),
           quality: combineChainQuality(evaluation.firstQuality, tail.quality),
           directionalDetourMeters: Number(evaluation.candidate.crossTrack) || 0,
           progressMeters: Number(evaluation.candidate.progressMeters) || 0,
@@ -1507,6 +1764,7 @@ async function planFuelChainOnRuntime({
         stationPlans.push({
           stops: [stop],
           graphMeters: [evaluation.meters],
+          routes: [evaluation.response],
           quality: evaluation.firstQuality,
           complete: false,
           partial: true
@@ -1525,7 +1783,7 @@ async function planFuelChainOnRuntime({
 
   const chain = await search(
     "start", start, startMatch, new Set((excludedStationIds || []).map(String)), 0,
-    new Set((priorEdgeIds || []).map(String)),
+    recentEdgeHistory((priorEdgeIds || []).map(String)),
     arrivalEdgeId == null ? null : String(arrivalEdgeId), [], []
   );
   if (!chain) {
@@ -1549,9 +1807,12 @@ async function planFuelChainOnRuntime({
         : "No forward, route-connected fuel chain fits the usable range.",
       diagnostics: enrichFuelDiagnostics({
         ...fuelDecisionDiagnostics,
+        targetPrepareMs: targets.prepareDiagnostics.elapsedMs,
+        targetCacheHit: targets.prepareDiagnostics.cacheHit,
+        stationsConsidered: targets.prepareDiagnostics.stationsConsidered,
         states,
         dijkstraPops,
-        matchedFuel: targets.fuelTargets.length,
+        matchedFuel: targets.prepareDiagnostics.stationsMatched,
         candidateK: effectiveK,
         stationCandidates,
         elapsedMs: Date.now() - started,
@@ -1566,6 +1827,7 @@ async function planFuelChainOnRuntime({
       firstReachableStationMeters,
       stops: bestPartial.stops,
       graphMeters: bestPartial.graphMeters,
+      routes: [],
       gapMeters,
       overByMeters: Math.max(0, gapMeters - remainingCap),
       gapFrom: bestPartial.stops[bestPartial.stops.length - 1] || null,
@@ -1583,19 +1845,26 @@ async function planFuelChainOnRuntime({
   const returnedGraphMeters = reachesDestination
     ? chain.graphMeters
     : chain.graphMeters.slice(0, returnedStops.length);
+  const returnedRoutes = reachesDestination
+    ? (chain.routes || [])
+    : (chain.routes || []).slice(0, returnedStops.length);
   return {
     ok: true,
     stops: returnedStops,
     graphMeters: returnedGraphMeters,
+    routes: returnedRoutes,
     stationCandidates,
     firstReachableStationMeters,
     windowComplete: reachesDestination,
     diagnostics: enrichFuelDiagnostics({
       ...fuelDecisionDiagnostics,
+      targetPrepareMs: targets.prepareDiagnostics.elapsedMs,
+      targetCacheHit: targets.prepareDiagnostics.cacheHit,
+      stationsConsidered: targets.prepareDiagnostics.stationsConsidered,
       strategy: "forward_graph_reachability",
       states,
       dijkstraPops,
-      matchedFuel: targets.fuelTargets.length,
+      matchedFuel: targets.prepareDiagnostics.stationsMatched,
       candidateK: effectiveK,
       elapsedMs: Date.now() - started,
       maxHopMs,
@@ -1736,7 +2005,7 @@ async function planCrossRegionFuelChain(body, selection, fuelOptions, dependenci
       avoidEdgeIds: ((body.options || {}).avoidEdgeIds || []),
       cleanMetroMultiplier: (body.options || {}).cleanMetroMultiplier,
       avoidMotorways: (body.options || {}).avoidMotorways === true,
-      priorEdgeIds: ((body.options || {}).priorEdgeIds || []),
+      priorEdgeIds: ((body.options || {}).priorEdgeIds || []).slice(-MAX_RECENT_EDGE_HISTORY),
       arrivalEdgeId: (body.options || {}).arrivalEdgeId || null,
       backtrackFactor: (body.options || {}).backtrackFactor || 4,
       excludedStationIds: fuelOptions.excludedStationIds || [],
@@ -1966,6 +2235,7 @@ async function planFuelChainAcrossRiderWaypoints(body, {
 }
 
 async function fuelChainRequest(body = {}, dependencies = {}) {
+  const requestStarted = Date.now();
   const loadFuel = dependencies.loadFuelForLocations || loadFuelForLocations;
   const loadRuntime = dependencies.loadGraphsForRequest || loadGraphsForRequest;
   const endpointResolution = await resolveLocationsByEligibleEdge(body, {
@@ -1990,6 +2260,8 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
   }
   const rawFuelOptions = body.fuel || {};
   const forwardFeeler = rawFuelOptions.forwardFeeler === true;
+  const routeFirstPlan = rawFuelOptions.routeFirstPlan === true && !forwardFeeler &&
+    selection.mode !== "canada-chain";
   let fuelOptions = rawFuelOptions;
   const usableRangeMeters = Number(fuelOptions.usableRangeMeters);
   const firstLegMaxMeters = Number(fuelOptions.firstLegMaxMeters || usableRangeMeters);
@@ -2013,6 +2285,34 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
 
   let profileMeters = rawFuelOptions.profileMeters == null
     ? NaN : Number(rawFuelOptions.profileMeters);
+  let foundationRoute = null;
+  let fuel = null;
+  let routeFirstMs = 0;
+  if (routeFirstPlan) {
+    const routeProfile = dependencies.routeRequest || routeRequest;
+    const routeBody = {
+      ...body,
+      options: { ...(body.options || {}) }
+    };
+    delete routeBody.options.maxPathMeters;
+    delete routeBody.options.internalFuelProbe;
+    const routeStarted = Date.now();
+    [foundationRoute, fuel] = await Promise.all([
+      routeProfile(routeBody),
+      loadFuel(locations)
+    ]);
+    routeFirstMs = Date.now() - routeStarted;
+    profileMeters = Number(foundationRoute && foundationRoute.distanceMeters);
+    if (!foundationRoute || foundationRoute.status !== "complete" || !(profileMeters >= 0)) {
+      return {
+        status: "failed",
+        error: "profile_ride_unavailable",
+        message: foundationRoute && (foundationRoute.message || foundationRoute.error) ||
+          "The selected ride could not be built before fuel planning.",
+        routes: foundationRoute ? [foundationRoute] : []
+      };
+    }
+  }
   if (forwardFeeler) {
     profileMeters = haversineMeters(
       locationCoordinate(locations[0]),
@@ -2067,7 +2367,7 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
     return planCrossRegionFuelChain(body, selection, fuelOptions, dependencies);
   }
 
-  const fuel = await loadFuel(locations);
+  if (!fuel) fuel = await loadFuel(locations);
   if (!fuel.ok) {
     return {
       status: "error",
@@ -2089,6 +2389,94 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
     profile: body.profile
   });
   const options = body.options || {};
+  const waypointResets = deriveWaypointRefuels(locations, fuel.stations);
+  const finalWaypointReset = waypointResets.find((row) => row.locationIndex === locations.length - 1);
+  let destinationEscapeMeters = null;
+  let destinationEscapeDiagnostics = null;
+  if (rawFuelOptions.ensureDestinationFuelEscape === true) {
+    if (finalWaypointReset) {
+      destinationEscapeMeters = 0;
+      destinationEscapeDiagnostics = { pops: 0, matched: 1, considered: 1 };
+    } else {
+      const escapeStarted = Date.now();
+      destinationEscapeDiagnostics = nearestReachableFuelDistance({
+        runtime,
+        stations: fuel.stations,
+        origin: locations[locations.length - 1],
+        profile: "cleanest",
+        accessPolicy: { motorizedPermissive: true, motorizedUnknown: false },
+        maxMeters: usableRangeMeters,
+        avoidEdgeIds: options.avoidEdgeIds || []
+      });
+      destinationEscapeDiagnostics.elapsedMs = Date.now() - escapeStarted;
+      destinationEscapeMeters = destinationEscapeDiagnostics.meters;
+    }
+    const escapeArrivalLimit = destinationEscapeMeters == null
+      ? 0
+      : Math.max(0, usableRangeMeters - destinationEscapeMeters);
+    const requestedArrivalLimit = Number(fuelOptions.destinationFuelUsedLimitMeters);
+    fuelOptions = {
+      ...fuelOptions,
+      destinationFuelUsedLimitMeters: Number.isFinite(requestedArrivalLimit)
+        ? Math.min(requestedArrivalLimit, escapeArrivalLimit)
+        : escapeArrivalLimit
+    };
+  }
+
+  if (routeFirstPlan && foundationRoute) {
+    const initialFuelUsed = Math.max(0, usableRangeMeters - firstLegMaxMeters);
+    const configuredArrivalLimit = Number(fuelOptions.destinationFuelUsedLimitMeters);
+    const directArrivalAllowance = Number.isFinite(configuredArrivalLimit)
+      ? Math.max(0, configuredArrivalLimit - initialFuelUsed)
+      : Infinity;
+    const directAllowed =
+      fuelOptions.requireFuelStopBeforeEnd !== true &&
+      (Number(fuelOptions.minimumFuelStops) || 0) === 0 &&
+      !fuelOptions.requiredFirstStationId &&
+      profileMeters <= firstLegMaxMeters + 1 &&
+      profileMeters <= directArrivalAllowance + 1;
+    if (directAllowed) {
+      return {
+        status: "complete",
+        error: null,
+        message: null,
+        serviceVersion: FUEL_CHAIN_SERVICE_VERSION,
+        regionIds: fuel.regionIds,
+        packIdentity: mergePackIdentities(
+          runtime.packIdentity || [],
+          fuel.packIdentity || [],
+          foundationRoute.debug && foundationRoute.debug.packIdentity || []
+        ),
+        stops: [],
+        graphMeters: [profileMeters],
+        routes: [foundationRoute],
+        stationCandidates: [],
+        destinationEscapeMeters,
+        waypointResets,
+        windowComplete: true,
+        diagnostics: enrichFuelDiagnostics({
+          strategy: "route_first_direct",
+          states: 1,
+          dijkstraPops: Number(destinationEscapeDiagnostics && destinationEscapeDiagnostics.pops) || 0,
+          matchedFuel: fuel.stations.length,
+          elapsedMs: Date.now() - requestStarted,
+          totalElapsedMs: Date.now() - requestStarted,
+          selectedReason: "direct_destination",
+          routeFirstMs,
+          graphFetchMs: runtime.loadDiagnostics && runtime.loadDiagnostics.fetchMs,
+          graphDecodeMs: runtime.loadDiagnostics && runtime.loadDiagnostics.decodeMs,
+          graphGridMs: runtime.loadDiagnostics && runtime.loadDiagnostics.gridMs,
+          fuelFetchMs: fuel.loadDiagnostics && fuel.loadDiagnostics.fetchMs,
+          fuelCacheHit: fuel.loadDiagnostics && fuel.loadDiagnostics.cacheHit,
+          destinationEscapeSearchMs: destinationEscapeDiagnostics && destinationEscapeDiagnostics.elapsedMs,
+          destinationEscapePops: destinationEscapeDiagnostics && destinationEscapeDiagnostics.pops
+        }, {
+          candidatesEvaluated: 0,
+          stationCandidates: []
+        })
+      };
+    }
+  }
   const planned = await planFuelChainOnRuntime({
     runtime,
     stations: fuel.stations,
@@ -2104,17 +2492,19 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
     avoidEdgeIds: options.avoidEdgeIds || [],
     cleanMetroMultiplier: options.cleanMetroMultiplier,
     avoidMotorways: options.avoidMotorways === true,
-    priorEdgeIds: options.priorEdgeIds || [],
+    priorEdgeIds: (options.priorEdgeIds || []).slice(-MAX_RECENT_EDGE_HISTORY),
     arrivalEdgeId: options.arrivalEdgeId || null,
     backtrackFactor: options.backtrackFactor || 4,
     probeFirstReachableStation: !!fuelOptions.probeFirstReachableStation,
     excludedStationIds: fuelOptions.excludedStationIds || [],
     requiredFirstStationId: fuelOptions.requiredFirstStationId || null,
+    preferredStationIds: fuelOptions.preferredStationIds || [],
     maxStops: Math.min(12, Math.max(1, Number(fuelOptions.windowMaxStops) || 12)),
     allowPartialWindow: !!fuelOptions.allowPartialWindow,
     timeBudgetMs: Number(fuelOptions.windowTimeBudgetMs) || null,
     profileMeters,
-    graphOnlyFeeler: forwardFeeler
+    graphOnlyFeeler: forwardFeeler,
+    foundationRoute
   });
 
   // Do not offer auxiliary fuel for an incomplete computation. A timeout is a
@@ -2128,15 +2518,28 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
     packIdentity: mergePackIdentities(runtime.packIdentity || [], fuel.packIdentity || []),
     stops: planned.stops || [],
     graphMeters: planned.graphMeters || [],
+    routes: planned.routes || [],
     stationCandidates: planned.stationCandidates || [],
     firstReachableStationMeters: planned.firstReachableStationMeters,
+    destinationEscapeMeters,
     windowComplete: planned.windowComplete,
-    waypointResets: [],
+    waypointResets,
     gapMeters: planned.gapMeters,
     overByMeters: planned.overByMeters,
     gapFrom: planned.gapFrom,
     gapTo: planned.gapTo,
-    diagnostics: planned.diagnostics || null
+    diagnostics: planned.diagnostics ? {
+      ...planned.diagnostics,
+      totalElapsedMs: Date.now() - requestStarted,
+      routeFirstMs,
+      graphFetchMs: runtime.loadDiagnostics && runtime.loadDiagnostics.fetchMs,
+      graphDecodeMs: runtime.loadDiagnostics && runtime.loadDiagnostics.decodeMs,
+      graphGridMs: runtime.loadDiagnostics && runtime.loadDiagnostics.gridMs,
+      fuelFetchMs: fuel.loadDiagnostics && fuel.loadDiagnostics.fetchMs,
+      fuelCacheHit: fuel.loadDiagnostics && fuel.loadDiagnostics.cacheHit,
+      destinationEscapeSearchMs: destinationEscapeDiagnostics && destinationEscapeDiagnostics.elapsedMs,
+      destinationEscapePops: destinationEscapeDiagnostics && destinationEscapeDiagnostics.pops
+    } : null
   };
 }
 
@@ -2229,6 +2632,7 @@ module.exports = {
   FUEL_COMFORT_HI,
   boundedGraphDistances,
   distanceToMatch,
+  nearestReachableFuelDistance,
   fuelPlanningSpan,
   tankCommitBand,
   fuelSearchStartMeters,
