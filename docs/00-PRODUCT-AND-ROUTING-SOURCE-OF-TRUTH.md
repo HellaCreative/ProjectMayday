@@ -598,8 +598,8 @@ client source selection. It:
 
 1. uses an exact A* distance reference instead of an unbounded Dijkstra scan;
 2. starts long Balanced rides at the 80 km corridor tier;
-3. scales the Balanced server search allowance only when both route length and
-   graph size are materially large; and
+3. scales the Balanced server search allowance when graph size is materially
+   large, with a further bounded increase for genuinely long rides; and
 4. reports the requested profile in a search-limit message.
 
 The exact Ontario route now completes locally at approximately 1,275 km. The
@@ -640,7 +640,13 @@ The approved repair does not change pack bytes or profile objectives:
    hints only and can never bypass current range, access, continuation, or route
    checks; and
 10. backtrack history is bounded to the recent 30 km / 256 edges. It protects
-    the current departure without sending or penalizing an entire long ride.
+    the current departure without sending or penalizing an entire long ride;
+    and
+11. Dirt, Balanced, and Clean retain their established search ceilings on small
+    regional graphs, while both wall-clock and exploration limits scale on a
+    province/state-sized graph. This changes capacity only: profile costs,
+    corridors, access policy, route selection, rider pins, and pack bytes remain
+    unchanged.
 
 The fixed Quebec 67 km route completes locally against live pack data in about
 1.3 seconds cold, down from the prior repeated multi-pass behaviour measured in
@@ -650,7 +656,9 @@ sidecar transfer. The extreme 1,800 km Ontario stress route returns its first tw
 fully proven pumps and their routes in about 19 seconds under the bounded
 long-haul window. Cross-country and complete extreme-window acceptance remain a
 separate Gate 2 concern; they do not justify splitting the rider-visible region
-or changing route quality.
+or changing route quality. A fixed approximately 67–80 km Ontario reproduction
+now completes locally under serverless settings for Dirt, Balanced, and Clean;
+before the graph-sized allowance, each could stop at a small-region search cap.
 
 ## 11. Current product status
 
@@ -670,8 +678,8 @@ or changing route quality.
   verification.
 - Shared route/fuel service contract and exact pack identity in diagnostics.
 - Installed-pack byte and checksum verification with mismatched-file repair.
-- Long Ontario Balanced live-search scaling with a fixed physical-coordinate
-  regression and unchanged NS benchmark outcomes.
+- Large-graph Dirt, Balanced, and Clean live-search scaling with fixed Ontario
+  short-route and long-route regressions and unchanged small-region limits.
 - Shared live route/fuel planning, returned route-window reuse, targeted
   destination escape, bounded prior-edge history, and warm fuel/pump context.
 

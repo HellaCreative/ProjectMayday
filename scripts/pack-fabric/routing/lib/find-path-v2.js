@@ -73,39 +73,76 @@ const { segmentStructureFields } = require("./structure");
 
 const MINIMUM_EARNED_DIRT_EXCURSION_METERS = 1_000;
 const MAX_SHORT_DIRT_REPAIR_PASSES = 3;
+const DIRT_BASE_SEARCH_BUDGET_MS = 3_500;
+const DIRT_MAX_SEARCH_BUDGET_MS = 18_000;
 const BALANCED_BASE_SEARCH_BUDGET_MS = 2_200;
 const BALANCED_MAX_SEARCH_BUDGET_MS = 45_000;
+const LARGE_GRAPH_BASE_SEARCH_BUDGET_MS = 12_000;
+const CLEAN_BASE_SEARCH_BUDGET_MS = 12_000;
+const CLEAN_MAX_SEARCH_BUDGET_MS = 18_000;
 const BALANCED_LONG_ROUTE_METERS = 500_000;
 const BALANCED_LARGE_GRAPH_NODES = 500_000;
+const PROVINCE_SCALE_GRAPH_NODES = 1_500_000;
+
+function largeGraphPressure(nodeCount) {
+  const nodes = Math.max(0, Number(nodeCount) || 0);
+  if (nodes <= BALANCED_LARGE_GRAPH_NODES) return 0;
+  return Math.min(
+    1,
+    (nodes - BALANCED_LARGE_GRAPH_NODES) /
+      (PROVINCE_SCALE_GRAPH_NODES - BALANCED_LARGE_GRAPH_NODES)
+  );
+}
 
 /**
  * Balanced's old 2.2-second wall-clock ceiling was calibrated on small packs.
- * A long ride on a province-sized graph needs enough time to finish the same
- * bounded A* work on slower serverless CPU. Keep ordinary routes unchanged;
- * scale only when both the journey and graph are materially large.
+ * A ride on a province-sized graph needs enough time to finish the same
+ * bounded A* work on slower serverless CPU. Large graphs receive a modest
+ * floor even for short rides; long rides continue to scale to the established
+ * 45-second ceiling. Small regional graphs remain byte-for-byte unchanged.
  */
 function balancedSearchBudgetMs(straightLineMeters, nodeCount) {
   const routeMeters = Math.max(0, Number(straightLineMeters) || 0);
-  const nodes = Math.max(0, Number(nodeCount) || 0);
-  if (
-    routeMeters <= BALANCED_LONG_ROUTE_METERS ||
-    nodes <= BALANCED_LARGE_GRAPH_NODES
-  ) {
-    return BALANCED_BASE_SEARCH_BUDGET_MS;
-  }
+  const graphPressure = largeGraphPressure(nodeCount);
+  if (graphPressure === 0) return BALANCED_BASE_SEARCH_BUDGET_MS;
+  const graphFloor =
+    BALANCED_BASE_SEARCH_BUDGET_MS +
+    (LARGE_GRAPH_BASE_SEARCH_BUDGET_MS - BALANCED_BASE_SEARCH_BUDGET_MS) *
+      graphPressure;
+  if (routeMeters <= BALANCED_LONG_ROUTE_METERS) return Math.round(graphFloor);
   const routePressure = Math.min(
     1,
     (routeMeters - BALANCED_LONG_ROUTE_METERS) / 500_000
   );
-  const graphPressure = Math.min(
-    1,
-    (nodes - BALANCED_LARGE_GRAPH_NODES) / 1_000_000
-  );
   const pressure = Math.min(routePressure, graphPressure);
-  return Math.round(
+  const longRouteBudget =
     BALANCED_BASE_SEARCH_BUDGET_MS +
-      (BALANCED_MAX_SEARCH_BUDGET_MS - BALANCED_BASE_SEARCH_BUDGET_MS) * pressure
+    (BALANCED_MAX_SEARCH_BUDGET_MS - BALANCED_BASE_SEARCH_BUDGET_MS) * pressure;
+  return Math.round(Math.max(graphFloor, longRouteBudget));
+}
+
+function profileSearchBudgetMs(profile, straightLineMeters, nodeCount) {
+  if (profile === "balanced") {
+    return balancedSearchBudgetMs(straightLineMeters, nodeCount);
+  }
+  const graphPressure = largeGraphPressure(nodeCount);
+  if (profile === "cleanest") {
+    return Math.round(
+      CLEAN_BASE_SEARCH_BUDGET_MS +
+        (CLEAN_MAX_SEARCH_BUDGET_MS - CLEAN_BASE_SEARCH_BUDGET_MS) * graphPressure
+    );
+  }
+  return Math.round(
+    DIRT_BASE_SEARCH_BUDGET_MS +
+      (DIRT_MAX_SEARCH_BUDGET_MS - DIRT_BASE_SEARCH_BUDGET_MS) * graphPressure
   );
+}
+
+function profileSearchPopCap(profile, nodeCount, dirtComparison = false) {
+  const base = profile === "dirt" && dirtComparison
+    ? Math.ceil(PASS2_POP_CAP / 2)
+    : PASS2_POP_CAP;
+  return Math.ceil(base * (1 + largeGraphPressure(nodeCount)));
 }
 
 /** Skip the provably undersized 40 km tier for long Balanced rides. */
@@ -714,9 +751,11 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
     // Keep one absolute ceiling across corridor attempts and any internal
     // fallback recursion. A failed hop must not receive a fresh clock merely
     // because the search widens or relaxes a scored preference.
-    const adaptiveBudgetMs = profile === "balanced"
-      ? balancedSearchBudgetMs(straightLineMeters, graphNodeCount)
-      : profile === "cleanest" ? 12_000 : 3_500;
+    const adaptiveBudgetMs = profileSearchBudgetMs(
+      profile,
+      straightLineMeters,
+      graphNodeCount
+    );
     const deadlineStartedAt = Date.now();
     const requestHasDeadline = Number.isFinite(Number(searchOpts.deadlineAtMs));
     const outerDeadline = requestHasDeadline
@@ -762,12 +801,12 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
         priorEdgeIds: searchOpts.priorEdgeIds || [],
         arrivalEdgeId: searchOpts.arrivalEdgeId == null ? null : searchOpts.arrivalEdgeId,
         backtrackFactor: searchOpts.backtrackFactor,
-        skipShortDirtRepair: searchOpts.skipShortDirtRepair === true
+        skipShortDirtRepair: searchOpts.skipShortDirtRepair === true,
+        popCap: profileSearchPopCap(profile, graphNodeCount, dirtComparisonWidth)
       };
       if (dirtComparisonWidth) {
         // Comparison candidates share roughly one old pass-2 budget.
         rideOpts.timeCapMs = 7000;
-        rideOpts.popCap = Math.ceil(PASS2_POP_CAP / 2);
       }
       rideOpts.timeCapMs = Math.min(
         Number(rideOpts.timeCapMs) || PASS2_TIME_MS,
@@ -2208,11 +2247,19 @@ module.exports = {
   dirtCandidateSummary,
   shortDirtExcursionEdgeIds,
   MINIMUM_EARNED_DIRT_EXCURSION_METERS,
+  DIRT_BASE_SEARCH_BUDGET_MS,
+  DIRT_MAX_SEARCH_BUDGET_MS,
   BALANCED_BASE_SEARCH_BUDGET_MS,
   BALANCED_MAX_SEARCH_BUDGET_MS,
+  LARGE_GRAPH_BASE_SEARCH_BUDGET_MS,
+  CLEAN_BASE_SEARCH_BUDGET_MS,
+  CLEAN_MAX_SEARCH_BUDGET_MS,
   BALANCED_LONG_ROUTE_METERS,
   BALANCED_LARGE_GRAPH_NODES,
+  PROVINCE_SCALE_GRAPH_NODES,
   balancedSearchBudgetMs,
+  profileSearchBudgetMs,
+  profileSearchPopCap,
   balancedCorridorMultipliers,
   applyHonestReportedStats
 };

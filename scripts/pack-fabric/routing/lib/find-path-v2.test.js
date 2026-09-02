@@ -6,9 +6,16 @@ const {
   chooseDirtRideCandidate,
   shortDirtExcursionEdgeIds,
   MINIMUM_EARNED_DIRT_EXCURSION_METERS,
+  DIRT_BASE_SEARCH_BUDGET_MS,
+  DIRT_MAX_SEARCH_BUDGET_MS,
   BALANCED_BASE_SEARCH_BUDGET_MS,
   BALANCED_MAX_SEARCH_BUDGET_MS,
+  LARGE_GRAPH_BASE_SEARCH_BUDGET_MS,
+  CLEAN_BASE_SEARCH_BUDGET_MS,
+  CLEAN_MAX_SEARCH_BUDGET_MS,
   balancedSearchBudgetMs,
+  profileSearchBudgetMs,
+  profileSearchPopCap,
   balancedCorridorMultipliers
 } = require("./find-path-v2");
 
@@ -117,4 +124,41 @@ test("long routes on province-sized graphs receive a bounded adaptive search bud
     balancedCorridorMultipliers(1_016_620),
     [2, 3, 4, 6, 8]
   );
+});
+
+test("short routes on province-sized graphs do not inherit small-region ceilings", () => {
+  const nodes = 1_470_000;
+  const dirtBudget = profileSearchBudgetMs("dirt", 67_000, nodes);
+  const balancedBudget = profileSearchBudgetMs("balanced", 67_000, nodes);
+  const cleanBudget = profileSearchBudgetMs("cleanest", 67_000, nodes);
+
+  assert.ok(dirtBudget >= 16_000 && dirtBudget <= DIRT_MAX_SEARCH_BUDGET_MS);
+  assert.ok(
+    balancedBudget >= 10_000 &&
+      balancedBudget <= LARGE_GRAPH_BASE_SEARCH_BUDGET_MS
+  );
+  assert.ok(
+    cleanBudget >= CLEAN_BASE_SEARCH_BUDGET_MS &&
+      cleanBudget <= CLEAN_MAX_SEARCH_BUDGET_MS
+  );
+  assert.ok(profileSearchPopCap("dirt", nodes, true) > 200_000);
+  assert.ok(profileSearchPopCap("balanced", nodes) > 400_000);
+});
+
+test("small graphs retain established profile budgets and exploration caps", () => {
+  const nodes = 250_000;
+  assert.equal(
+    profileSearchBudgetMs("dirt", 67_000, nodes),
+    DIRT_BASE_SEARCH_BUDGET_MS
+  );
+  assert.equal(
+    profileSearchBudgetMs("balanced", 67_000, nodes),
+    BALANCED_BASE_SEARCH_BUDGET_MS
+  );
+  assert.equal(
+    profileSearchBudgetMs("cleanest", 67_000, nodes),
+    CLEAN_BASE_SEARCH_BUDGET_MS
+  );
+  assert.equal(profileSearchPopCap("dirt", nodes, true), 200_000);
+  assert.equal(profileSearchPopCap("dirt", nodes, false), 400_000);
 });

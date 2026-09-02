@@ -41,7 +41,12 @@ const {
   unpackRoadClass,
   ROAD_CLASS_NAME
 } = require("./pack-v2");
-const { findPathV2, applyHonestReportedStats } = require("./find-path-v2");
+const {
+  findPathV2,
+  applyHonestReportedStats,
+  profileSearchBudgetMs,
+  profileSearchPopCap
+} = require("./find-path-v2");
 const { e4FlagsForProfile } = require("./road-tier");
 const { applyHonestSurfaceStats } = require("./surface-family");
 const {
@@ -60,8 +65,6 @@ const {
 } = require("./hop-search");
 const crossPackTopology = require("../schema/cross-pack-topology.v1.json");
 const { resolveLocationsByEligibleEdge } = require("../regional/endpoint-resolver");
-
-const CLEAN_PAVED_ATTEMPT_MS = 12_000;
 
 function routeSearchLimitMessage(profile) {
   const name = profile === "cleanest"
@@ -2170,6 +2173,15 @@ async function routeOnRuntime(body, graphResolution, runtime) {
   let cleanSearchOutcome = null;
   let primarySearchOutcome = null;
   let lastSearchDiagnostics = null;
+  const cleanAttemptMs = profileSearchBudgetMs(
+    "cleanest",
+    haversineMeters(startMatch.coord, endMatch.coord),
+    Number(runtime && runtime.pack && runtime.pack.nodeCount) || 0
+  );
+  const cleanAttemptPopCap = profileSearchPopCap(
+    "cleanest",
+    Number(runtime && runtime.pack && runtime.pack.nodeCount) || 0
+  );
   if (profile === "cleanest") {
     const cleanFindOnce = (extra) => {
       const diagnostics = {};
@@ -2199,8 +2211,9 @@ async function routeOnRuntime(body, graphResolution, runtime) {
       settlementFallback: true,
       cityWall: true,
       urbanCoreFallback: false,
-      timeCapMs: CLEAN_PAVED_ATTEMPT_MS,
-      deadlineAtMs: Date.now() + CLEAN_PAVED_ATTEMPT_MS
+      timeCapMs: cleanAttemptMs,
+      deadlineAtMs: Date.now() + cleanAttemptMs,
+      popCap: cleanAttemptPopCap
     };
     const paved = cleanFindOnce(cleanBase);
     if (paved.path) {
@@ -2279,8 +2292,9 @@ async function routeOnRuntime(body, graphResolution, runtime) {
       corridorMeters: 0,
       hardCorridor: false,
       progressRegressionMeters: Number.MAX_SAFE_INTEGER,
-      timeCapMs: CLEAN_PAVED_ATTEMPT_MS,
-      deadlineAtMs: Date.now() + CLEAN_PAVED_ATTEMPT_MS
+      timeCapMs: cleanAttemptMs,
+      deadlineAtMs: Date.now() + cleanAttemptMs,
+      popCap: cleanAttemptPopCap
     };
     const ruralUnpaved = cleanFindRelaxed(Object.assign({}, relaxedBase, {
       cityWall: true,
