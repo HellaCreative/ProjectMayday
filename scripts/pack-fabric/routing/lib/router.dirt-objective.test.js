@@ -112,6 +112,11 @@ test("Dirt beats Balanced without routing through Halifax or collecting short di
   assert.equal(dirt.debug.searchMeta.urbanCoreFallbackUsed, undefined);
   assert.equal(balanced.debug.searchMeta.urbanCoreFallbackUsed, undefined);
   assert.equal(shortDirtExcursionEdgeIds(dirt.segments).size, 0);
+  assert.equal(dirt.debug.searchMeta.corridorCandidates[1].outcome, "reused");
+  assert.ok(
+    dirt.debug.searchMeta.corridorCandidates[2].maxPathMeters <= 92_000,
+    "low-DIRT recovery must not spend the complete tank range on a short ride"
+  );
 
   const start = [locations[0].lon, locations[0].lat];
   const end = [locations[1].lon, locations[1].lat];

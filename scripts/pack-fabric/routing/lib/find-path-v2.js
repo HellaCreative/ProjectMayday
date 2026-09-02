@@ -99,6 +99,12 @@ const CLEAN_MAX_SEARCH_BUDGET_MS = 18_000;
 const BALANCED_LONG_ROUTE_METERS = 500_000;
 const BALANCED_LARGE_GRAPH_NODES = 500_000;
 const PROVINCE_SCALE_GRAPH_NODES = 1_500_000;
+// Low-DIRT recovery may widen laterally, but it may not turn a proven ride
+// into an open-ended mileage search. Forty kilometres preserves the fixed
+// Halifax recovery; the proportional allowance scales the same rule to long
+// rides. A real fuel/tank cap always remains the harder ceiling.
+const DIRT_RECOVERY_EXTRA_METERS = 40_000;
+const DIRT_RECOVERY_DISTANCE_RATIO = 1.5;
 
 function largeGraphPressure(nodeCount) {
   const nodes = Math.max(0, Number(nodeCount) || 0);
@@ -159,6 +165,17 @@ function profileSearchPopCap(profile, nodeCount, dirtComparison = false) {
     ? Math.ceil(PASS2_POP_CAP / 2)
     : PASS2_POP_CAP;
   return Math.ceil(base * (1 + largeGraphPressure(nodeCount)));
+}
+
+function dirtRecoveryPathCap(primaryRideMeters, activePathCap = Infinity) {
+  const primary = Number(primaryRideMeters);
+  const hardCap = Number(activePathCap);
+  if (!(primary > 0)) return Number.isFinite(hardCap) ? hardCap : Infinity;
+  const coherentCap = Math.max(
+    primary + DIRT_RECOVERY_EXTRA_METERS,
+    primary * DIRT_RECOVERY_DISTANCE_RATIO
+  );
+  return Number.isFinite(hardCap) ? Math.min(hardCap, coherentCap) : coherentCap;
 }
 
 /** Skip the provably undersized 40 km tier for long Balanced rides. */
@@ -776,6 +793,7 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
       : requestedCap;
     const dirtCandidates = [];
     const attemptDiagnostics = [];
+    let containedBaseDirtCandidate = null;
     // Keep one absolute ceiling across corridor attempts and any internal
     // fallback recursion. A failed hop must not receive a fresh clock merely
     // because the search widens or relaxes a scored preference.
@@ -793,6 +811,20 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
     let liveDeadline = outerDeadline;
     searchOpts.deadlineAtMs = liveDeadline;
     for (const width of widths) {
+      if (
+        profile === "dirt" && width === baseCorridor && containedBaseDirtCandidate
+      ) {
+        dirtCandidates.push(containedBaseDirtCandidate);
+        attemptDiagnostics.push({
+          corridorMeters: baseCorridor,
+          searchObjective: "pavement",
+          outcome: "reused",
+          pops: 0,
+          searchMs: 0,
+          reusedFromCorridorMeters: baseCorridor * 2
+        });
+        continue;
+      }
       if (Date.now() >= liveDeadline) {
         attemptDiagnostics.push({
           corridorMeters: null, outcome: "timeCap", pops: 0, searchMs: 0
@@ -890,6 +922,19 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
         ride.searchMeta.dirtSelection = "highest-coherent-dirt-share";
         const summary = dirtCandidateSummary(ride, width, rideOpts.costMode);
         dirtCandidates.push(summary);
+        const maxCrossTrack = Number(ride.searchMeta.maxCrossTrackMeters);
+        if (
+          width === baseCorridor * 2 &&
+          Number.isFinite(maxCrossTrack) && maxCrossTrack <= baseCorridor
+        ) {
+          // The wide result is already feasible inside the next narrower
+          // corridor. Both attempts use the same objective and forward-progress
+          // guard, so solving that contained candidate again cannot improve it.
+          containedBaseDirtCandidate = {
+            ...summary,
+            width: baseCorridor
+          };
+        }
         if (dirtComparisonWidth) continue;
       }
       ride.searchMeta.corridorCandidates = attemptDiagnostics;
@@ -898,6 +943,11 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
     if (profile === "dirt" && dirtCandidates.length) {
       const primaryBestDirt = Math.max(...dirtCandidates.map((candidate) => candidate.dirtPercent));
       if (primaryBestDirt < 70) {
+        const primary = chooseDirtRideCandidate(dirtCandidates);
+        const recoveryCap = dirtRecoveryPathCap(
+          primary && primary.ride && primary.ride.distanceMeters,
+          activePathCap
+        );
         const diagnostics = {};
         const recoveryBudgetMs = Math.min(
           7_000,
@@ -925,7 +975,7 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
           timeCapMs: recoveryBudgetMs,
           deadlineAtMs: Date.now() + recoveryBudgetMs
         };
-        if (Number.isFinite(activePathCap)) resourceOpts.maxPathMeters = activePathCap;
+        if (Number.isFinite(recoveryCap)) resourceOpts.maxPathMeters = recoveryCap;
         const recoveryStarted = Date.now();
         const initialRecovery = findPathV2(
           runtime, startMatch, endMatch, profile, policy, avoidEdgeIds, pavedBias, resourceOpts
@@ -947,7 +997,8 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
           outcome: recoveredRide ? "completed" : (diagnostics.outcome || "noPath"),
           pops: diagnostics.pops ||
             (recoveredRide && recoveredRide.searchMeta && recoveredRide.searchMeta.pops) || 0,
-          searchMs: Date.now() - recoveryStarted
+          searchMs: Date.now() - recoveryStarted,
+          maxPathMeters: Number.isFinite(recoveryCap) ? Math.round(recoveryCap) : null
         });
         if (recoveredRide) {
           recoveredRide.searchMeta = recoveredRide.searchMeta || {};
@@ -963,6 +1014,9 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
         }
       }
       const best = chooseDirtRideCandidate(dirtCandidates);
+      best.ride.searchMeta.corridorMeters = best.width;
+      best.ride.searchMeta.corridorWidened =
+        Number.isFinite(best.width) && best.width > baseCorridor;
       best.ride.searchMeta.corridorCandidates = attemptDiagnostics.map((attempt) => {
         const candidate = dirtCandidates.find((item) =>
           item.width === attempt.corridorMeters &&
@@ -2396,9 +2450,12 @@ module.exports = {
   BALANCED_LONG_ROUTE_METERS,
   BALANCED_LARGE_GRAPH_NODES,
   PROVINCE_SCALE_GRAPH_NODES,
+  DIRT_RECOVERY_EXTRA_METERS,
+  DIRT_RECOVERY_DISTANCE_RATIO,
   balancedSearchBudgetMs,
   profileSearchBudgetMs,
   profileSearchPopCap,
+  dirtRecoveryPathCap,
   balancedCorridorMultipliers,
   applyHonestReportedStats
 };

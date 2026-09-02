@@ -1423,69 +1423,11 @@ async function planFuelChainOnRuntime({
       return { row, diagnostic };
     }
 
-    // Profile-route probes dominate fuel latency. Run two geographically
-    // distinct choices in parallel, then check the request deadline before the
-    // next pair. This compares up to K=6 real rides without unbounded search.
-    const batchSize = Math.min(2, Math.max(1, candidates.length));
-    const watchedAvailable = unique.some((row) => tankCommitBand(
-      row.graphMeters, cap, usableRangeMeters
-    ) <= 1);
-    const earlyAvailable = unique.some((row) => tankCommitBand(
-      row.graphMeters, cap, usableRangeMeters
-    ) === 2);
-    for (let startRank = 0; startRank < candidates.length; startRank += batchSize) {
-      if (rows.length > 0 && Date.now() >= deadline) break;
-      const batch = candidates.slice(startRank, startRank + batchSize);
-      const evaluatedBatch = await Promise.all(batch.map((candidate, offset) =>
-        evaluateCandidate(candidate, startRank + offset)
-      ));
-      evaluatedBatch.sort((a, b) => a.row.rank - b.row.rank);
-      for (const evaluated of evaluatedBatch) {
-        rows.push(evaluated.row);
-        stationCandidates.push(evaluated.diagnostic);
-      }
-      const watchedFit = rows.some((evaluated) =>
-        evaluated.fits && evaluated.validForward && tankCommitBand(
-          evaluated.meters, cap, usableRangeMeters
-        ) <= 1
-      );
-      const earlyFit = rows.some((evaluated) =>
-        evaluated.fits && evaluated.validForward && tankCommitBand(
-          evaluated.meters, cap, usableRangeMeters
-        ) === 2
-      );
-      // Graph-only probes have no ride-quality signal. Real fuel allocation
-      // evaluates every geographically distinct candidate that fits inside the
-      // planning window; the first feasible pair is not evidence of the best
-      // Dirt/Balanced/Clean ride.
-      if (
-        graphOnlyFeeler && rows.length >= 2 &&
-        (watchedFit || (!watchedAvailable && (earlyFit || !earlyAvailable)))
-      ) break;
-    }
-    const elapsed = Date.now() - hopStarted;
-    maxHopMs = Math.max(maxHopMs, elapsed);
-    void hopTimeBudgetMs;
-    const fitting = rows.filter((row) => row.fits);
-    if (probeFirstReachableStation) {
-      return fitting.sort((a, b) => a.meters - b.meters || a.rank - b.rank);
-    }
-    // Reachability deliberately includes the whole usable tank so an early
-    // top-up can rescue a genuinely sparse corridor. It must not, however,
-    // compete with a valid route-connected pump after the 50% search window.
-    // The previous shortlist let a 32 km pump win a full-tank 260 km departure
-    // even though several later candidates were valid, multiplying one needed
-    // stop into three. Use early pumps only as the safety fallback they are.
-    const watchedFitting = fitting.filter((row) =>
-      row.validForward && tankCommitBand(row.meters, cap, usableRangeMeters) <= 1
-    );
-    const eligibleFitting = watchedFitting.length
-      ? fitting.filter((row) => tankCommitBand(row.meters, cap, usableRangeMeters) <= 1)
-      : fitting;
     function hopProgress(row) {
       return Number(row.candidate.progressMeters) || row.meters;
     }
-    eligibleFitting.sort((a, b) => {
+
+    function compareEvaluatedRows(a, b) {
       if (a.validForward !== b.validForward) return a.validForward ? -1 : 1;
       const aStops = a.continuationResponse ? 1 : 2;
       const bStops = b.continuationResponse ? 1 : 2;
@@ -1543,7 +1485,122 @@ async function planFuelChainOnRuntime({
           break;
       }
       return a.rank - b.rank;
-    });
+    }
+
+    function canUnevaluatedCandidateBeatComplete(candidate, winner) {
+      const remaining = Number(candidate.remainingGraphMeters);
+      const arrivalLimit = destinationFuelUsedLimitMeters == null
+        ? NaN
+        : Number(destinationFuelUsedLimitMeters);
+      const oneStopLimit = Number.isFinite(arrivalLimit)
+        ? Math.min(usableRangeMeters, arrivalLimit)
+        : usableRangeMeters;
+      // Graph distance is a lower bound for the active-profile route. If even
+      // that cannot finish after this pump, it cannot tie the winner's stop count.
+      if (!Number.isFinite(remaining) || remaining > oneStopLimit + 1) return false;
+
+      const candidateCross = Number(candidate.crossTrack);
+      const winnerCross = Number(winner.candidate.crossTrack);
+      if (Number.isFinite(candidateCross) && Number.isFinite(winnerCross)) {
+        if (candidateCross < winnerCross - 2_000) return true;
+        if (candidateCross > winnerCross + 2_000) return false;
+      }
+      const candidateProgress = Number(candidate.progressMeters) || Number(candidate.graphMeters) || 0;
+      const winnerProgress = hopProgress(winner);
+      if (candidateProgress > winnerProgress + 2_000) return true;
+      if (candidateProgress < winnerProgress - 2_000) return false;
+
+      const candidateLowerBound = Number(candidate.graphMeters) + remaining;
+      const winnerChainMeters =
+        Number(winner.meters) + Number(winner.continuationDestinationMeters);
+      if (
+        Number.isFinite(candidateLowerBound) && Number.isFinite(winnerChainMeters) &&
+        candidateLowerBound > winnerChainMeters + 1_000
+      ) return false;
+      // Direction and distance are still tied closely enough that profile
+      // quality could decide the result. Evaluate this candidate.
+      return true;
+    }
+
+    // Profile-route probes dominate fuel latency. Run two geographically
+    // distinct choices in parallel, then check the request deadline before the
+    // next pair. This compares up to K=6 real rides without unbounded search.
+    const batchSize = Math.min(2, Math.max(1, candidates.length));
+    const watchedAvailable = unique.some((row) => tankCommitBand(
+      row.graphMeters, cap, usableRangeMeters
+    ) <= 1);
+    const earlyAvailable = unique.some((row) => tankCommitBand(
+      row.graphMeters, cap, usableRangeMeters
+    ) === 2);
+    for (let startRank = 0; startRank < candidates.length; startRank += batchSize) {
+      if (rows.length > 0 && Date.now() >= deadline) break;
+      const batch = candidates.slice(startRank, startRank + batchSize);
+      const evaluatedBatch = await Promise.all(batch.map((candidate, offset) =>
+        evaluateCandidate(candidate, startRank + offset)
+      ));
+      evaluatedBatch.sort((a, b) => a.row.rank - b.row.rank);
+      for (const evaluated of evaluatedBatch) {
+        rows.push(evaluated.row);
+        stationCandidates.push(evaluated.diagnostic);
+      }
+      const watchedFit = rows.some((evaluated) =>
+        evaluated.fits && evaluated.validForward && tankCommitBand(
+          evaluated.meters, cap, usableRangeMeters
+        ) <= 1
+      );
+      const earlyFit = rows.some((evaluated) =>
+        evaluated.fits && evaluated.validForward && tankCommitBand(
+          evaluated.meters, cap, usableRangeMeters
+        ) === 2
+      );
+      const provenComplete = rows.filter((evaluated) =>
+        evaluated.fits && evaluated.validForward && evaluated.continuationResponse &&
+        (
+          destinationFuelUsedLimitMeters == null ||
+          !Number.isFinite(Number(destinationFuelUsedLimitMeters)) ||
+          Number(evaluated.continuationDestinationMeters) <=
+            Number(destinationFuelUsedLimitMeters) + 1
+        )
+      ).sort(compareEvaluatedRows)[0];
+      const requiredStopsSatisfied = depth + 1 >= Math.max(
+        0, Number(minimumFuelStops) || 0
+      );
+      if (provenComplete && requiredStopsSatisfied && (!watchedAvailable || tankCommitBand(
+        provenComplete.meters, cap, usableRangeMeters
+      ) <= 1)) {
+        const remaining = candidates.slice(startRank + batch.length);
+        if (!remaining.some((candidate) =>
+          canUnevaluatedCandidateBeatComplete(candidate, provenComplete)
+        )) break;
+      }
+      // Graph-only probes have no ride-quality signal. Real fuel allocation
+      // keeps routing candidates until either their profile rides are compared
+      // or the remaining choices are proven unable to beat a complete winner.
+      if (
+        graphOnlyFeeler && rows.length >= 2 &&
+        (watchedFit || (!watchedAvailable && (earlyFit || !earlyAvailable)))
+      ) break;
+    }
+    const elapsed = Date.now() - hopStarted;
+    maxHopMs = Math.max(maxHopMs, elapsed);
+    void hopTimeBudgetMs;
+    const fitting = rows.filter((row) => row.fits);
+    if (probeFirstReachableStation) {
+      return fitting.sort((a, b) => a.meters - b.meters || a.rank - b.rank);
+    }
+    // Reachability deliberately includes the whole usable tank so an early
+    // top-up can rescue a genuinely sparse corridor. It must not, however,
+    // compete with a valid route-connected pump after the 50% search window.
+    // The previous shortlist let a 32 km pump win a full-tank 260 km departure
+    // even though several later candidates were valid, multiplying one needed
+    // stop into three. Use early pumps only as the safety fallback they are.
+    const watchedFitting = fitting.filter((row) =>
+      row.validForward && tankCommitBand(row.meters, cap, usableRangeMeters) <= 1
+    );
+    const eligibleFitting = watchedFitting.length
+      ? fitting.filter((row) => tankCommitBand(row.meters, cap, usableRangeMeters) <= 1)
+      : fitting;
+    eligibleFitting.sort(compareEvaluatedRows);
     return eligibleFitting;
   }
 
@@ -1713,6 +1770,13 @@ async function planFuelChainOnRuntime({
           complete: true,
           partial: false
         });
+      }
+      // Once this hop has produced a complete minimum-stop plan, recursively
+      // adding another pump can only make that same branch worse. Candidate
+      // comparison above has already preserved any live one-stop rivals whose
+      // direction, distance, or profile quality could still win.
+      if (requiredStopsSatisfied && stationPlans.some((plan) => plan.complete)) {
+        continue;
       }
       if (Date.now() >= deadline) {
         if (!stationPlans.length && allowPartialWindow && evaluation.validForward) {

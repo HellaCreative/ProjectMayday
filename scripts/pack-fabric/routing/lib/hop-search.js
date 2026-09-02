@@ -350,30 +350,41 @@ function progressRegressionForAttempt(profile, corridorMeters) {
  */
 function coincidentSiblingLists(nodeCoords, n, epsilonMeters = CLEAN_COINCIDENT_NODE_M) {
   const lists = new Array(n);
-  for (let i = 0; i < n; i += 1) lists[i] = null;
+  lists.fill(null);
   if (!nodeCoords || n <= 0) return lists;
   const qLat = epsilonMeters / 111000;
-  const buckets = new Map();
+  // Keep only the first node for the overwhelmingly common one-node bucket.
+  // Province-sized packs should allocate sibling arrays only for actual
+  // duplicate buckets, not once for every node in the graph.
+  const firstByBucket = new Map();
+  const latitudeKeyStride = 20_000_001;
   for (let i = 0; i < n; i += 1) {
     const lon = nodeCoords[i * 2];
     const lat = nodeCoords[i * 2 + 1];
     if (!Number.isFinite(lon) || !Number.isFinite(lat)) continue;
     const cos = Math.max(0.2, Math.cos((lat * Math.PI) / 180));
     const qLon = epsilonMeters / (111000 * cos);
-    const key = `${Math.round(lon / qLon)}:${Math.round(lat / qLat)}`;
-    let group = buckets.get(key);
-    if (!group) {
-      group = [];
-      buckets.set(key, group);
+    const key =
+      Math.round(lon / qLon) * latitudeKeyStride + Math.round(lat / qLat);
+    const encodedFirst = firstByBucket.get(key);
+    if (encodedFirst == null) {
+      // Store index + 1 so node zero is distinguishable from no entry.
+      firstByBucket.set(key, i + 1);
+      continue;
     }
-    group.push(i);
-  }
-  for (const group of buckets.values()) {
-    if (group.length < 2) continue;
-    for (let i = 0; i < group.length; i += 1) {
-      const others = group.slice(0, i).concat(group.slice(i + 1));
-      lists[group[i]] = others;
+
+    const first = encodedFirst - 1;
+    const prior = lists[first];
+    if (!prior) {
+      lists[first] = [i];
+      lists[i] = [first];
+      continue;
     }
+    const existing = [first].concat(prior);
+    for (const sibling of existing) {
+      lists[sibling].push(i);
+    }
+    lists[i] = existing;
   }
   return lists;
 }

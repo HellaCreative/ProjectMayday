@@ -16,6 +16,7 @@ const {
   balancedSearchBudgetMs,
   profileSearchBudgetMs,
   profileSearchPopCap,
+  dirtRecoveryPathCap,
   balancedCorridorMultipliers
 } = require("./find-path-v2");
 
@@ -161,4 +162,10 @@ test("small graphs retain established profile budgets and exploration caps", () 
   );
   assert.equal(profileSearchPopCap("dirt", nodes, true), 200_000);
   assert.equal(profileSearchPopCap("dirt", nodes, false), 400_000);
+});
+
+test("Dirt recovery scales a coherent detour allowance under the hard tank cap", () => {
+  assert.equal(dirtRecoveryPathCap(51_864), 91_864);
+  assert.equal(dirtRecoveryPathCap(110_275), 165_412.5);
+  assert.equal(dirtRecoveryPathCap(382_484, 382_500), 382_500);
 });

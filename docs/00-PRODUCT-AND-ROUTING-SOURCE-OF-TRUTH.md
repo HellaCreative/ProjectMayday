@@ -646,7 +646,12 @@ The approved repair does not change pack bytes or profile objectives:
     regional graphs, while both wall-clock and exploration limits scale on a
     province/state-sized graph. This changes capacity only: profile costs,
     corridors, access policy, route selection, rider pins, and pack bytes remain
-    unchanged.
+    unchanged; and
+12. fuel candidate routing ends once a complete minimum-stop plan is proven and
+    every remaining pump is mathematically worse on forward direction, progress,
+    or total distance. Profile quality remains the final tiebreaker among pumps
+    that can still compete, and a complete one-stop branch is never recursively
+    expanded into a slower two-stop branch.
 
 The fixed Quebec 67 km route completes locally against live pack data in about
 1.3 seconds cold, down from the prior repeated multi-pass behaviour measured in
@@ -679,9 +684,13 @@ The correction is pack-agnostic and does not alter or rebuild pack bytes:
 4. the established pavement-minimizing DIRT search remains primary so accepted
    high-DIRT routes and their speed do not change; and
 5. only when every primary DIRT candidate is below 70% does one bounded
-   dirt-share recovery compete with it. Final selection still rejects
-   purposeless meander, re-prices sub-kilometre dirt diversions, and prefers the
-   highest coherent dirt share before less pavement.
+   dirt-share recovery compete with it. That recovery may use the full lateral
+   corridor while preserving the forward-progress guard, but its total path
+   length is bounded relative to the already-proven DIRT ride and by any harder
+   fuel-range ceiling. A completed wide search whose route is wholly contained
+   by the next narrower corridor is reused instead of solved again. Final
+   selection still rejects purposeless meander, re-prices sub-kilometre dirt
+   diversions, and prefers the highest coherent dirt share before less pavement.
 
 The exact regression now avoids the Halifax core, has no optional dirt run
 under one kilometre, and returns 29% known dirt versus Balanced at 23% with

@@ -113,6 +113,33 @@ test("a valid post-threshold pump excludes a 32 km full-tank stop", async () => 
   assert.ok(result.graphMeters[0] >= 65_000);
 });
 
+test("a proven one-stop winner skips candidates that cannot beat its forward progress", async () => {
+  const result = await planFuelChainOnRuntime({
+    runtime: lineRuntime(),
+    stations: [station("early", 1), station("middle", 1.5), station("forward", 2)],
+    start: { lat: 45, lon: 0 },
+    destination: { lat: 45, lon: 4 },
+    profile: "dirt",
+    accessPolicy: { motorizedPermissive: true, motorizedUnknown: false },
+    usableRangeMeters: 170_000,
+    firstLegMaxMeters: 170_000,
+    requireFuelStopBeforeEnd: true,
+    minimumFuelStops: 1,
+    routeCandidate: fixtureRouteCandidate
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.stops[0].id, "forward");
+  const firstDepartureCandidates = result.stationCandidates.filter((row) =>
+    row.departureId === "start"
+  );
+  assert.equal(
+    firstDepartureCandidates.length,
+    2
+  );
+  assert.deepEqual(firstDepartureCandidates.map((row) => row.id), ["forward", "middle"]);
+});
+
 test("fuel search begins after half the reserve-adjusted usable range", () => {
   assert.equal(fuelSearchStartMeters(140_000, 140_000), 70_000);
   assert.equal(fuelSearchStartMeters(100_000, 140_000), 30_000);
@@ -303,7 +330,7 @@ test("one-stop window keeps a proven pump when evaluation crosses its deadline",
   assert.deepEqual(result.graphMeters, [78_626]);
 });
 
-test("a difficult first window evaluates all six distinct station choices", async () => {
+test("a proven forward one-stop chain does not route dominated earlier pumps", async () => {
   const result = await planFuelChainOnRuntime({
     runtime: lineRuntime(),
     stations: [
@@ -324,9 +351,7 @@ test("a difficult first window evaluates all six distinct station choices", asyn
 
   assert.equal(result.ok, true);
   const firstWindow = result.stationCandidates.filter((row) => row.departureId === "start");
-  assert.equal(firstWindow.length, 6);
-  assert.deepEqual(new Set(firstWindow.map((row) => row.id)),
-    new Set(["f1", "f2", "f3", "f4", "f5", "f6"]));
+  assert.deepEqual(firstWindow.map((row) => row.id), ["f6", "f5"]);
 });
 
 test("a rider fuel-stop override forces the first station without changing later search", async () => {

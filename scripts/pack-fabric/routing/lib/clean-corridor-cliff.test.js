@@ -123,17 +123,18 @@ test("untagged local/service blocked; major unknown allowed", () => {
   assert.equal(isBlockedForCleanPavement("gravel", "collector"), true);
 });
 
-test("coincident sibling lists merge duplicate nodes", () => {
-  // Two nodes at same coord → siblings
+test("coincident sibling lists merge every duplicate node", () => {
   const coords = new Float64Array([
+    -63.22038, 44.87164,
     -63.22038, 44.87164,
     -63.22038, 44.87164,
     -63.21, 44.86
   ]);
-  const lists = coincidentSiblingLists(coords, 3, 2);
-  assert.ok(lists[0] && lists[0].includes(1));
-  assert.ok(lists[1] && lists[1].includes(0));
-  assert.equal(lists[2], null);
+  const lists = coincidentSiblingLists(coords, 4, 2);
+  assert.deepEqual(lists[0].slice().sort(), [1, 2]);
+  assert.deepEqual(lists[1].slice().sort(), [0, 2]);
+  assert.deepEqual(lists[2].slice().sort(), [0, 1]);
+  assert.equal(lists[3], null);
 });
 
 test(
