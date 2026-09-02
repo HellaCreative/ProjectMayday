@@ -342,8 +342,9 @@ function progressRegressionForAttempt(profile, corridorMeters) {
 
 /**
  * Pack builds sometimes leave coincident duplicate nodes on a continuous OSM
- * way with no edge between them. Clean treats nodes within CLEAN_COINCIDENT_NODE_M
- * as the same place (zero-cost transfer) so pavement stays continuous.
+ * way with no edge between them. Every profile treats nodes within
+ * CLEAN_COINCIDENT_NODE_M as the same place (zero-cost transfer) so the road
+ * stays connected regardless of surface preference.
  * Returns Int32Array length n: for each node, first sibling index or -1.
  * Full sibling lists via coincidentSiblingLists.
  */
@@ -378,14 +379,8 @@ function coincidentSiblingLists(nodeCoords, n, epsilonMeters = CLEAN_COINCIDENT_
 }
 
 function hopBlocked(toLL, startLL, endLL, cityWall, boxes = METRO_CORE_WALL) {
-  // Urban cores are passable under urbanCoreFallbackMultiplier (×120).
-  // cityWall is retained for callers but no longer hard-blocks.
-  void toLL;
-  void startLL;
-  void endLL;
-  void cityWall;
-  void boxes;
-  return false;
+  if (!cityWall || !toLL) return false;
+  return metroBlocks(toLL[0], toLL[1], startLL, endLL, boxes);
 }
 
 function maxCrossTrackMeters(coords, startLL, endLL) {

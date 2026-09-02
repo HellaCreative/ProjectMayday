@@ -91,7 +91,7 @@ not silently replace the selected ride objective.
 - Untagged local/service remain impassable on through-edges. The snapped edge at
   A and at B is always traversable. Allow Unknown is forced off.
 - Pack duplicate nodes on a continuous OSM way may be bridged at search time so
-  visibly continuous pavement stays continuous.
+  visibly continuous road fabric stays connected for every profile.
 
 ### Corridors
 
@@ -660,6 +660,43 @@ or changing route quality. A fixed approximately 67–80 km Ontario reproduction
 now completes locally under serverless settings for Dirt, Balanced, and Clean;
 before the graph-sized allowance, each could stop at a small-region search cap.
 
+### Profile-quality and urban-topology correction — 2026-09-02
+
+A fixed Nova Scotia reproduction proved three independent search regressions:
+the configured major-urban-core wall was not being enforced, ordinary smaller
+settlements were being used as hard walls instead of scored avoidance, and a
+two-metre duplicate-node seam on one continuous OSM road was connected for
+Clean but not for Dirt or Balanced. The disconnected adventure graph could then
+fall back through Halifax and return DIRT with less dirt than Balanced.
+
+The correction is pack-agnostic and does not alter or rebuild pack bytes:
+
+1. every profile enforces embedded major urban cores during its primary search
+   and may relax one only after a proved no-path result;
+2. smaller settlements remain strongly scored but do not sever road fabric;
+3. the same zero-distance duplicate-node topology bridge is available to Dirt,
+   Balanced, and Clean, including bounded resource and reverse-distance work;
+4. the established pavement-minimizing DIRT search remains primary so accepted
+   high-DIRT routes and their speed do not change; and
+5. only when every primary DIRT candidate is below 70% does one bounded
+   dirt-share recovery compete with it. Final selection still rejects
+   purposeless meander, re-prices sub-kilometre dirt diversions, and prefers the
+   highest coherent dirt share before less pavement.
+
+The exact regression now avoids the Halifax core, has no optional dirt run
+under one kilometre, and returns 29% known dirt versus Balanced at 23% with
+Allow Unknown off. With Allow Unknown on, the same endpoints return 74% dirt;
+that difference is expected because unknown-access roads become eligible. The
+historic fixed DIRT routes remain above 70%. Ontario reproductions return
+79–83% DIRT, 63–64% Balanced, and 7–9% Clean without an urban fallback.
+
+All behaviour keys off the shared graph-v3 schema, embedded urban/settlement
+metadata, node count, and route geometry—not a province name. Future state and
+province packs built through the v3 registry therefore receive the same search
+logic. Live/download verification must continue to name exactly one explicit
+`--region <id>` so validating a new pack cannot fail on or mutate another
+region.
+
 ## 11. Current product status
 
 ### Implemented and covered locally
@@ -682,6 +719,8 @@ before the graph-sized allowance, each could stop at a small-region search cap.
   short-route and long-route regressions and unchanged small-region limits.
 - Shared live route/fuel planning, returned route-window reuse, targeted
   destination escape, bounded prior-edge history, and warm fuel/pump context.
+- Cross-profile duplicate-node topology, hard-primary urban-core avoidance,
+  scored smaller-settlement avoidance, and bounded low-DIRT share recovery.
 
 ### Not yet accepted end to end
 

@@ -37,12 +37,13 @@ test("an edge cannot tunnel through an urban core between outside nodes", () => 
   assert.equal(metroEdgeBlocks(start, end, [-122.3, 49.05], end, [core]), false);
 });
 
-test("urban cores are strongly penalized but not hard-blocked", () => {
+test("urban cores are hard-blocked first and strongly penalized on explicit fallback", () => {
   const { hopBlocked } = require("./hop-search");
   const outsideA = [-123.5, 49.7];
   const outsideB = [-119.1, 50.5];
   const vancouver = [-123.1, 49.25];
-  assert.equal(hopBlocked(vancouver, outsideA, outsideB, true), false);
+  assert.equal(hopBlocked(vancouver, outsideA, outsideB, true), true);
+  assert.equal(hopBlocked(vancouver, outsideA, outsideB, false), false);
   assert.equal(urbanCoreFallbackMultiplier(vancouver[0], vancouver[1], outsideA, outsideB), 120);
   assert.equal(urbanCoreFallbackMultiplier(vancouver[0], vancouver[1], vancouver, outsideB), 1);
   assert.equal(

@@ -1,13 +1,13 @@
 import CoreLocation
 import Foundation
 
-/// Soft urban-core avoidance for every routing profile.
+/// Major urban-core wall with an explicit, strongly penalized last resort.
 ///
 /// Boxes cover the practical through-route core, not merely a downtown point;
 /// otherwise a router can still treat the surrounding city grid as free fabric.
-/// Crossing is penalized (Clean ×10 with major highways off, ×2 with them on)
-/// but passable so a short graze beats a
-/// hundreds-of-kilometre detour. Lockstep: `scripts/pack-fabric/routing/lib/hop-search.js`.
+/// Primary searches do not cross these cores unless A or B is inside. A proved
+/// no-path result may retry with a strong crossing penalty. Lockstep:
+/// `scripts/pack-fabric/routing/lib/hop-search.js`.
 nonisolated enum UrbanCore {
     struct Box: Sendable {
         var minLat: Double
@@ -146,8 +146,7 @@ nonisolated enum UrbanCore {
     }
 
     /// Ban travel through an urban core unless A or B is inside that same box.
-    /// Used for detection / diagnostics; routing applies `fallbackMultiplier`
-    /// instead of hard-blocking these points.
+    /// Used by the primary-search wall and by fallback diagnostics.
     static func blocks(
         point: CLLocationCoordinate2D,
         start: CLLocationCoordinate2D,
@@ -173,10 +172,8 @@ nonisolated enum UrbanCore {
         return false
     }
 
-    /// Strong but passable urban-core penalty. Favours the shortest necessary
-    /// crossing while preserving the A/B-inside exemption. Applied on every
-    /// search (not only last-resort), so cities stay expensive without forcing
-    /// province-scale detours.
+    /// Strong but passable last-resort urban-core penalty. Favours the shortest
+    /// necessary crossing while preserving the A/B-inside exemption.
     /// - Parameter penalty: generic fallback default 120. Clean passes its ×5 policy.
     static func fallbackMultiplier(
         point: CLLocationCoordinate2D,

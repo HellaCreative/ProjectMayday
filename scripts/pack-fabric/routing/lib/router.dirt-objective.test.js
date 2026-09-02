@@ -5,6 +5,8 @@ process.env.ROUTING_USE_REGIONAL = "1";
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { routeRequest, isLowDirtRoute, restrictedSummary } = require("./router");
+const { shortDirtExcursionEdgeIds } = require("./find-path-v2");
+const { metroBlocks, metroEdgeBlocks, METRO_CORE_WALL } = require("./hop-search");
 
 const legs = [
   [[44.76549, -63.33983], [45.66744, -62.34420]],
@@ -79,6 +81,52 @@ test("Balanced and Clean keep their surface contracts under the same cap", async
     `Balanced received ${balanced.stats.dirtPercent}% dirt`);
   assert.equal(clean.status, "complete");
   assert.ok(clean.stats.dirtPercent <= 15, `Clean received ${clean.stats.dirtPercent}% dirt`);
+});
+
+test("Dirt beats Balanced without routing through Halifax or collecting short dirt teeth", {
+  timeout: 30_000
+}, async () => {
+  const locations = [
+    { lat: 44.764830, lon: -63.340265 },
+    { lat: 44.944419, lon: -63.326158 }
+  ];
+  const [dirt, balanced] = await Promise.all([
+    routeRequest({
+      ...request("dirt", locations.map((point) => [point.lat, point.lon])),
+      locations,
+      accessPolicy: { motorizedPermissive: true, motorizedUnknown: false }
+    }),
+    routeRequest({
+      ...request("balanced", locations.map((point) => [point.lat, point.lon])),
+      locations,
+      accessPolicy: { motorizedPermissive: true, motorizedUnknown: false }
+    })
+  ]);
+
+  assert.equal(dirt.status, "complete");
+  assert.equal(balanced.status, "complete");
+  assert.ok(
+    dirt.stats.dirtPercent >= balanced.stats.dirtPercent,
+    `Dirt ${dirt.stats.dirtPercent}% fell below Balanced ${balanced.stats.dirtPercent}%`
+  );
+  assert.equal(dirt.debug.searchMeta.urbanCoreFallbackUsed, undefined);
+  assert.equal(balanced.debug.searchMeta.urbanCoreFallbackUsed, undefined);
+  assert.equal(shortDirtExcursionEdgeIds(dirt.segments).size, 0);
+
+  const start = [locations[0].lon, locations[0].lat];
+  const end = [locations[1].lon, locations[1].lat];
+  for (const route of [dirt, balanced]) {
+    for (let index = 0; index < route.geometry.length; index += 1) {
+      const point = route.geometry[index];
+      assert.equal(metroBlocks(point[0], point[1], start, end, METRO_CORE_WALL), false);
+      if (index > 0) {
+        assert.equal(
+          metroEdgeBlocks(route.geometry[index - 1], point, start, end, METRO_CORE_WALL),
+          false
+        );
+      }
+    }
+  }
 });
 
 test("restricted segment diagnostics expose a filter miss", () => {

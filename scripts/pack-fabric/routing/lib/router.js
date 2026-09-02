@@ -2229,12 +2229,10 @@ async function routeOnRuntime(body, graphResolution, runtime) {
   } else {
     const diagnostics = {};
     const adventureSearchOpts = Object.assign({}, searchOpts, {
-      // A settlement relaxation is a fallback, not a normal scoring mode.
-      // findPathV2 may relax it only after every bounded attempt proves noPath.
-      // Smaller mapped settlements remain scored avoidance, but cannot be hard
-      // walls that redefine the shortest reference underneath the distance budget.
-      settlementWall: true,
-      settlementFallback: false,
+      // Major urban cores are walls. Smaller mapped towns remain a strong,
+      // finite avoidance cost so they cannot falsely disconnect rural fabric.
+      settlementWall: false,
+      settlementFallback: true,
       diagnostics
     });
     path = findPath(

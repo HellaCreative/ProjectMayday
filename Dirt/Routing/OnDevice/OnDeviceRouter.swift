@@ -252,7 +252,8 @@ nonisolated struct OnDeviceRouter {
             profile: .cleanest,
             allowUnknown: false,
             avoidEdgeIds: [],
-            ctx: ctx
+            ctx: ctx,
+            coincidentSiblings: coincidentSiblingLists()
         ) {
         case .success(let result): return result
         case .failure: return nil
@@ -577,6 +578,7 @@ nonisolated struct OnDeviceRouter {
         if tapSeparation < Self.identicalEndsMeters {
             return .failure(.identicalEnds)
         }
+        let coincidentSiblings = coincidentSiblingLists()
 
         // Prefer through-roads (deg ≥ 2) at BOTH ends. House GPS and basemap-snapped
         // B often lock onto NSTDB / OSM dead-end tips that never join the fabric.
@@ -608,7 +610,8 @@ nonisolated struct OnDeviceRouter {
                     profile: profile,
                     allowUnknown: allowUnknown,
                     avoidEdgeIds: avoidEdgeIds,
-                    ctx: ctx
+                    ctx: ctx,
+                    coincidentSiblings: coincidentSiblings
                 ) {
                 case .success(let result):
                     return .success(result)
@@ -647,8 +650,10 @@ nonisolated struct OnDeviceRouter {
         ctx.cityWall = cityWall
         ctx.pavedOnly = pavedOnly
         ctx.urbanCoreFallback = urbanCoreFallback
-        ctx.settlementWall = settlementWall
-        ctx.settlementFallback = settlementFallback
+        // Major urban cores are walls. Ordinary mapped towns are a finite
+        // avoidance cost so they do not sever otherwise valid rural routes.
+        ctx.settlementWall = false
+        ctx.settlementFallback = profile != .cleanest ? true : settlementFallback
         ctx.cleanMetroMultiplier = cleanMetroMultiplier
         let e4 = RoadTierStats.e4Flags(
             for: profile,
@@ -662,12 +667,15 @@ nonisolated struct OnDeviceRouter {
             let base = HopSearchPolicy.dirtCorridorMeters
             let comparisonWidths = [base * 2, base]
             let connectivityWidths: [Double?] = [base * 3, base * 4, nil]
-            var candidates: [(route: Result, width: Double)] = []
+            var candidates: [(route: Result, width: Double, objective: String)] = []
             var lastBoundedFailure: Failure = .noPath
 
-            func searchDirt(width: Double?) -> Swift.Result<Result, Failure> {
+            func searchDirt(
+                width: Double?,
+                costMode: HopSearchPolicy.CostMode = .pavement
+            ) -> Swift.Result<Result, Failure> {
                 var hunt = ctx
-                hunt.costMode = .pavement
+                hunt.costMode = costMode
                 hunt.variety = false
                 hunt.corridorMeters = width
                 hunt.hardCorridor = width != nil
@@ -703,7 +711,7 @@ nonisolated struct OnDeviceRouter {
 
             for width in comparisonWidths {
                 switch searchDirt(width: width) {
-                case .success(let route): candidates.append((route, width))
+                case .success(let route): candidates.append((route, width, "pavement"))
                 case .failure(let failure): lastBoundedFailure = failure
                 }
             }
@@ -711,12 +719,26 @@ nonisolated struct OnDeviceRouter {
                 for width in connectivityWidths {
                     switch searchDirt(width: width) {
                     case .success(let route):
-                        candidates.append((route, width ?? 0))
+                        candidates.append((route, width ?? 0, "pavement"))
                     case .failure(let failure):
                         lastBoundedFailure = failure
                         continue
                     }
                     break
+                }
+            }
+            // Minimizing absolute pavement normally produces excellent DIRT
+            // routes and preserves the established product behaviour. On a
+            // weak result, compare one bounded resource-labelled route so a
+            // shorter route with less dirt cannot beat a genuinely dirtier
+            // ride merely because it contains fewer paved kilometres.
+            let primaryBestDirt = candidates.map(\.route.dirtPercent).max() ?? 0
+            if primaryBestDirt < 70 {
+                switch searchDirt(width: base, costMode: .balancedResource) {
+                case .success(let route):
+                    candidates.append((route, base, "resource"))
+                case .failure(let failure):
+                    lastBoundedFailure = failure
                 }
             }
             guard let selected = chooseDirtEnvelopeCandidate(candidates) else {
@@ -730,7 +752,7 @@ nonisolated struct OnDeviceRouter {
                 coordinates: route.coordinates, start: from, end: to
             )
             let candidateSummary = candidates.map {
-                "\(Int($0.width / 1000))km:\($0.route.dirtPercent)%"
+                "\($0.objective)@\(Int($0.width / 1000))km:\($0.route.dirtPercent)%"
             }.joined(separator: ",")
             let note = "objective=earned-dirt-detour corridor=\(Int(selected.width))m candidates=[\(candidateSummary)]"
             route.debugNote = route.debugNote.isEmpty ? note : route.debugNote + " " + note
@@ -919,8 +941,8 @@ nonisolated struct OnDeviceRouter {
     /// less pavement and then less cross-track wandering. Total route length is
     /// intentionally not an objective.
     private func chooseDirtEnvelopeCandidate(
-        _ candidates: [(route: Result, width: Double)]
-    ) -> (route: Result, width: Double)? {
+        _ candidates: [(route: Result, width: Double, objective: String)]
+    ) -> (route: Result, width: Double, objective: String)? {
         let summaries = candidates.map { candidate in
             let shape = HopSearchPolicy.routeShape(
                 coordinates: candidate.route.coordinates,
@@ -1164,7 +1186,8 @@ nonisolated struct OnDeviceRouter {
         profile: RouteProfile,
         allowUnknown: Bool,
         avoidEdgeIds: Set<String>,
-        ctx: HopSearchContext
+        ctx: HopSearchContext,
+        coincidentSiblings: [[Int]?]
     ) -> Swift.Result<Result, Failure> {
         // Same snapped edge: paint the along-edge span (find-path-v2 vBetween).
         if startSnap.edgeIndex >= 0,
@@ -1195,7 +1218,8 @@ nonisolated struct OnDeviceRouter {
                 profile: profile,
                 allowUnknown: allowUnknown,
                 avoidEdgeIds: avoidEdgeIds,
-                ctx: ctx
+                ctx: ctx,
+                coincidentSiblings: coincidentSiblings
             )
         }
         return routeViaPreferredNodes(
@@ -1294,7 +1318,8 @@ nonisolated struct OnDeviceRouter {
         profile: RouteProfile,
         allowUnknown: Bool,
         avoidEdgeIds: Set<String>,
-        ctx: HopSearchContext
+        ctx: HopSearchContext,
+        coincidentSiblings: [[Int]?]
     ) -> Swift.Result<Result, Failure> {
         let n = pack.nodeCount
         let startVirt = n
@@ -1407,8 +1432,6 @@ nonisolated struct OnDeviceRouter {
         linkVirt(vEndB)
         if vBetween >= 0 { linkVirt(vBetween) }
 
-        let coincidentSiblings: [[Int]?] = profile == .cleanest ? coincidentSiblingLists() : []
-
         // Join near-miss fabric tips so Allow OFF works
         // on NS OSM+NSTDB packs (Farm Road / driveway → public road).
         // find-path-v2 has no perm-/unknown-island stitches — Clean+leaves must
@@ -1452,7 +1475,8 @@ nonisolated struct OnDeviceRouter {
                 ctx: ctx,
                 profile: profile,
                 policyUnknown: policyUnknown,
-                avoidEdgeIds: avoidEdgeIds
+                avoidEdgeIds: avoidEdgeIds,
+                coincidentSiblings: coincidentSiblings
             )
         }
 
@@ -1471,7 +1495,8 @@ nonisolated struct OnDeviceRouter {
                 policyUnknown: policyUnknown,
                 avoidEdgeIds: avoidEdgeIds,
                 ctx: ctx,
-                slackToDest: slackToDest
+                slackToDest: slackToDest,
+                coincidentSiblings: coincidentSiblings
             )
         }
 
@@ -1678,8 +1703,7 @@ nonisolated struct OnDeviceRouter {
                 }
             }
 
-            if profile == .cleanest, cur.node < n,
-               let sibs = coincidentSiblings[cur.node] {
+            if cur.node < n, let sibs = coincidentSiblings[cur.node] {
                 for toNode in sibs {
                     let cost = cur.cost
                     let newMeters = pathMeters[cur.node]
@@ -1935,7 +1959,8 @@ nonisolated struct OnDeviceRouter {
         policyUnknown: Bool,
         avoidEdgeIds: Set<String>,
         ctx: HopSearchContext,
-        slackToDest: [Double]?
+        slackToDest: [Double]?,
+        coincidentSiblings: [[Int]?]
     ) -> Swift.Result<Result, Failure> {
         let startEi = startSnap.edgeIndex
         let endEi = endSnap.edgeIndex
@@ -1958,7 +1983,6 @@ nonisolated struct OnDeviceRouter {
         var prevForward = [Bool](repeating: true, count: labels)
         var slots = [UInt8](repeating: 0, count: labels)
         var heap = MinHeap()
-
         let startLab = lab(startVirt, 0)
         dist[startLab] = 0
         pathMeters[startLab] = 0
@@ -2013,7 +2037,10 @@ nonisolated struct OnDeviceRouter {
                         newMeters: newMeters, toNode: toNode,
                         slackToDest: slackToDest, cap: cap
                     ) { continue }
+                    let shortDirtPenalized = profile == .dirt
+                        && ctx.shortDirtPenaltyEdgeIds.contains(eid)
                     let addDirt = GraphV2Pack.isFerryStructure(GraphV2Pack.unpackStructure(attr))
+                        || shortDirtPenalized
                         ? 0
                         : (edgeIsDirt(ei) ? edgeM : 0)
                     let newDirt = dirtSoFar + addDirt
@@ -2059,6 +2086,9 @@ nonisolated struct OnDeviceRouter {
                         endOnMajorHighway: endOnMajorHighway,
                         policyUnknown: policyUnknown
                     )
+                    if shortDirtPenalized {
+                        step *= HopSearchPolicy.dirtRidePavedPerKm
+                    }
                     if !isFerry {
                         step *= settlementMult * urbanMult
                     }
@@ -2092,6 +2122,25 @@ nonisolated struct OnDeviceRouter {
                             pathMeters[toLab] = newMeters
                             dirtAt[toLab] = newDirt
                             heap.push(node: toLab, cost: newScore)
+                        }
+                    }
+                }
+                if let siblings = coincidentSiblings[node] {
+                    for toNode in siblings {
+                        let bucket = HopSearchPolicy.dirtBucket(
+                            dirtMeters: dirtSoFar,
+                            pathMeters: metersSoFar
+                        )
+                        let toLab = lab(toNode, bucket)
+                        if cur.cost < dist[toLab] {
+                            dist[toLab] = cur.cost
+                            pathMeters[toLab] = metersSoFar
+                            dirtAt[toLab] = dirtSoFar
+                            prev[toLab] = cur.node
+                            prevKind[toLab] = 2
+                            prevData[toLab] = -1
+                            prevForward[toLab] = true
+                            heap.push(node: toLab, cost: cur.cost)
                         }
                     }
                 }
@@ -2147,8 +2196,12 @@ nonisolated struct OnDeviceRouter {
                     let virtualEdgeID = v.junctionStitch
                         ? v.stitchEdgeId
                         : (v.ei >= 0 ? pack.edgeId(v.ei) : "")
+                    let shortDirtPenalized = profile == .dirt
+                        && ctx.shortDirtPenaltyEdgeIds.contains(virtualEdgeID)
+                    let virtualStep = v.meters * settlementMult * urbanMult
+                        * (shortDirtPenalized ? HopSearchPolicy.dirtRidePavedPerKm : 1)
                     let newScore = cur.cost + backtrackPenalized(
-                        v.meters * settlementMult * urbanMult,
+                        virtualStep,
                         edgeID: virtualEdgeID,
                         ctx: ctx
                     )
@@ -2173,17 +2226,25 @@ nonisolated struct OnDeviceRouter {
             guard len.isFinite, len > 0 else { continue }
             labelsAtEnd.append((endLab, len, dirtAt[endLab], dist[endLab]))
         }
-        let inBand = labelsAtEnd.filter {
+        let inBand = profile == .balanced ? labelsAtEnd.filter {
             let ratio = $0.len > 0 ? $0.dirt / $0.len : 0
             return ratio >= HopSearchPolicy.balancedDirtLo && ratio <= HopSearchPolicy.balancedDirtHi
-        }
-        let candidatePool = inBand.isEmpty ? labelsAtEnd : inBand
+        } : []
+        let candidatePool = profile == .balanced && !inBand.isEmpty ? inBand : labelsAtEnd
         let bestLab = candidatePool.min { a, b in
             let ratioA = a.len > 0 ? a.dirt / a.len : 0
             let ratioB = b.len > 0 ? b.dirt / b.len : 0
+            if profile == .dirt, abs(ratioA - ratioB) > 0.005 {
+                return ratioA > ratioB
+            }
             let targetA = abs(ratioA - 0.5)
             let targetB = abs(ratioB - 0.5)
-            if abs(targetA - targetB) > 0.005 { return targetA < targetB }
+            if profile == .balanced, abs(targetA - targetB) > 0.005 { return targetA < targetB }
+            if profile == .dirt {
+                let pavedA = a.len - a.dirt
+                let pavedB = b.len - b.dirt
+                if abs(pavedA - pavedB) > 50 { return pavedA < pavedB }
+            }
             if abs(a.score - b.score) > 50 { return a.score < b.score }
             return a.len < b.len
         }?.lab
@@ -2231,6 +2292,8 @@ nonisolated struct OnDeviceRouter {
                         waterCrossing: v.junctionStitch ? false : waterCrossingForEdge(v.ei)
                     ))
                 }
+            } else if prevKind[label] == 2 {
+                // Coincident duplicate-node stitch — no geometry.
             } else {
                 let ei = prevData[label]
                 let aNode = nid(parent)
@@ -2300,7 +2363,8 @@ nonisolated struct OnDeviceRouter {
         ctx: HopSearchContext,
         profile: RouteProfile,
         policyUnknown: Bool,
-        avoidEdgeIds: Set<String>
+        avoidEdgeIds: Set<String>,
+        coincidentSiblings: [[Int]?]
     ) -> [Double] {
         var dist = [Double](repeating: .infinity, count: total)
         var heap = MinHeap()
@@ -2357,6 +2421,12 @@ nonisolated struct OnDeviceRouter {
                     if cand < dist[toNode] {
                         dist[toNode] = cand
                         heap.push(node: toNode, cost: cand)
+                    }
+                }
+                if let siblings = coincidentSiblings[cur.node] {
+                    for toNode in siblings where cur.cost < dist[toNode] {
+                        dist[toNode] = cur.cost
+                        heap.push(node: toNode, cost: cur.cost)
                     }
                 }
             }
@@ -3714,7 +3784,7 @@ nonisolated struct OnDeviceRouter {
         return edgeBlockedForCleanPavement(ei)
     }
 
-    /// Clean: pack duplicate nodes within `cleanCoincidentNodeMeters` share a place.
+    /// Pack duplicate nodes within `cleanCoincidentNodeMeters` share a place.
     private func coincidentSiblingLists() -> [[Int]?] {
         let n = pack.nodeCount
         var lists = [[Int]?](repeating: nil, count: n)
@@ -3762,9 +3832,20 @@ nonisolated struct OnDeviceRouter {
         to: CLLocationCoordinate2D,
         ctx: HopSearchContext
     ) -> Bool {
-        // Urban cores are strongly penalized in hopCostStep / callers via
-        // UrbanCore.fallbackMultiplier — not hard-blocked — so a short graze
-        // can beat a pathological detour.
+        if ctx.cityWall,
+           UrbanCore.blocks(point: point, start: from, end: to, boxes: packUrbanCores) {
+            return true
+        }
+        if ctx.cityWall, let edgeFrom,
+           UrbanCore.blocks(
+               segmentFrom: edgeFrom,
+               segmentTo: point,
+               start: from,
+               end: to,
+               boxes: packUrbanCores
+           ) {
+            return true
+        }
         if ctx.settlementWall,
            UrbanCore.blocks(point: point, start: from, end: to, boxes: packSettlements) {
             return true
@@ -3773,7 +3854,6 @@ nonisolated struct OnDeviceRouter {
            abs(GeoMath.crossTrackMeters(point: point, lineFrom: from, to: to)) > corridor {
             return true
         }
-        _ = edgeFrom
         return false
     }
 
