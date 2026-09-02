@@ -915,6 +915,57 @@ struct IncrementalItineraryRebuildTests {
         #expect(rebuilt.riderLegStatus.values.allSatisfy { $0 == .built })
     }
 
+    @Test func appendedWaypointCanMoveFuelDecisionIntoPriorLegWithoutRebuildingUpstream() async throws {
+        let points = [point(0), point(1), point(2), point(3), point(4)]
+        let latePump = point(2.8)
+        let source = FakeRoutingSource(name: "live")
+        source.distances[key(points[0], points[1])] = 100_000
+        source.distances[key(points[1], points[2])] = 100_000
+        source.distances[key(points[2], points[3])] = 154_000
+        source.distances[key(points[3], points[4])] = 77_000
+        source.distances[key(points[2], latePump)] = 120_000
+        source.distances[key(latePump, points[3])] = 34_000
+        let fuel = FuelRangePrefs.Snapshot(
+            tankMeters: 450_000, usableMeters: 382_500, reservePercent: 15
+        )
+        let builder = ItineraryBuilder()
+        let initial = makeItinerary(Array(points.prefix(4)), profile: .dirt)
+        let first = await builder.build(
+            initial,
+            from: 0,
+            reuse: nil,
+            fuel: fuel,
+            source: .fixed(source),
+            onProgress: { _ in }
+        )
+        #expect(first.legs.compactMap(\.endsAtFuelStop).isEmpty)
+        #expect(first.legs.last?.fuelUsedOnArrivalMeters == 354_000)
+
+        source.fuelStops = [fuelStop("late-before-point-4", at: latePump)]
+        source.gapWhenFirstLegMaxBelow[key(points[3], points[4])] = 30_000
+        let change = reduce(initial, .append(coordinate: points[4]))
+        let rebuildIndex = try #require(change.rebuildFromLegIndex)
+
+        let rebuilt = await builder.build(
+            change.itinerary,
+            from: rebuildIndex,
+            reuse: first,
+            fuel: fuel,
+            source: .fixed(source),
+            onProgress: { _ in }
+        )
+
+        #expect(Array(rebuilt.legs.prefix(2)) == Array(first.legs.prefix(2)))
+        #expect(rebuilt.legs.compactMap(\.endsAtFuelStop?.stationID) == ["late-before-point-4"])
+        #expect(rebuilt.legs.last?.toCoordinate == points[4])
+        #expect(rebuilt.legs.last?.fuelUsedOnArrivalMeters == 111_000)
+        #expect(rebuilt.riderLegStatus.values.allSatisfy { $0 == .built })
+        #expect(source.fuelChainRequests.contains {
+            $0.fuel.requireFuelStopBeforeEnd
+                && $0.fuel.riderLegId == change.itinerary.legs[2].id.uuidString
+        })
+    }
+
     @Test func appendDuringAnIncompleteBuildRestartsAtFirstMissingRiderLeg() async throws {
         let points = [point(0), point(1), point(2), point(3)]
         let itinerary = makeItinerary(points, profile: .cleanest)
@@ -976,6 +1027,7 @@ private final class FakeRoutingSource: RoutingSource {
     var fuelChainRequests: [FuelChainRequest] = []
     var waypointFuelStations: [String: FuelChainStop] = [:]
     var firstReachableStationMeters: [String: Double] = [:]
+    var gapWhenFirstLegMaxBelow: [String: Double] = [:]
     var failKey: String?
     var fuelChainError: Error?
     var suspendNextRoute = false
@@ -1016,6 +1068,22 @@ private final class FakeRoutingSource: RoutingSource {
                     matchedFuel: 0, elapsedMs: 1
                 ),
                 firstReachableStationMeters: scripted ?? defaultDestinationEscape
+            )
+        }
+        if let threshold = gapWhenFirstLegMaxBelow[key(pair.0, pair.1)],
+           req.fuel.firstLegMaxMeters < threshold {
+            return FuelChainResponse(
+                status: "gap",
+                error: "no_forward_fuel_chain",
+                message: "No forward, route-connected fuel chain fits the usable range.",
+                regionIds: ["test"],
+                stops: [],
+                graphMeters: nil,
+                diagnostics: FuelChainDiagnostics(
+                    strategy: "fake-gap", states: 1, dijkstraPops: 1,
+                    matchedFuel: fuelStops.count, elapsedMs: 1
+                ),
+                gapMeters: distances[key(pair.0, pair.1)]
             )
         }
         let selectedStops: [FuelChainStop]

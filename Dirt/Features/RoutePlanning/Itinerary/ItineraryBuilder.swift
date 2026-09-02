@@ -595,6 +595,9 @@ final class ItineraryBuilder {
         kept: [BuiltLeg],
         fuel: FuelRangePrefs.Snapshot,
         source: any RoutingSource,
+        forcedFuelLegIndex: Int? = nil,
+        recoveryDepth: Int = 0,
+        excludedFuelStationsByLeg: [Int: Set<String>] = [:],
         onFuelStatus: @MainActor (String) -> Void,
         onProgress: @MainActor (BuiltItinerary) -> Void
     ) async -> BuiltItinerary {
@@ -681,7 +684,39 @@ final class ItineraryBuilder {
             waypointFuelStops: waypointFuelStops
         )
         var history = EdgeHistory(legs: kept)
-        var fuelUsed = resume == nil ? carriedFuel(from: kept) : 0
+        let revalidatedPrefix = revalidatedFuelPrefix(
+            kept,
+            itinerary: itinerary,
+            waypointFuelStops: waypointFuelStops,
+            usableRangeMeters: fuel.usableMeters
+        )
+        if resume == nil,
+           let invalidIndex = revalidatedPrefix.firstInvalidRiderLegIndex,
+           invalidIndex < startIndex {
+            let repairedPrefix = builtPrefix(
+                before: invalidIndex,
+                from: kept,
+                itinerary: itinerary
+            )
+            RoutingDebugLog.shared.event(
+                "fuel prefix invalid gen=\(itinerary.generation) "
+                    + "replanLeg=\(invalidIndex) keptLegs=\(repairedPrefix.count)"
+            )
+            return await buildForwardFuelItinerary(
+                itinerary,
+                startIndex: invalidIndex,
+                resume: nil,
+                kept: repairedPrefix,
+                fuel: fuel,
+                source: source,
+                forcedFuelLegIndex: invalidIndex,
+                recoveryDepth: recoveryDepth + 1,
+                excludedFuelStationsByLeg: excludedFuelStationsByLeg,
+                onFuelStatus: onFuelStatus,
+                onProgress: onProgress
+            )
+        }
+        var fuelUsed = resume == nil ? revalidatedPrefix.fuelUsedMeters : 0
         // This is an inactivity watchdog, not a cap on total itinerary time.
         // Long routes may legitimately need many quick fuel hops; every proven
         // forward leg renews the window while stalled searches still terminate.
@@ -726,11 +761,42 @@ final class ItineraryBuilder {
                     )
                 ))
                 // A proven profile-routed pump is preferred. When no pump is
-                // returned, the geodesic distance to the next rider waypoint
-                // remains a conservative minimum rather than pretending the
-                // waypoint resets the tank.
-                onwardFuelMeters = probe?.firstReachableStationMeters
-                    ?? straightLineMeters(nextFrom, nextTo)
+                // returned, use route distance only if that next leg is
+                // already built. A full on-device build may measure the next
+                // leg once because it has no combined route-and-fuel response;
+                // incremental edits never issue that duplicate lookup. Their
+                // forward construction obtains the real route, and the fuel
+                // rewind below repairs the preceding leg if the actual
+                // distance proves that an earlier stop was required.
+                if let firstPumpMeters = probe?.firstReachableStationMeters {
+                    onwardFuelMeters = firstPumpMeters
+                } else {
+                    let cachedMeters = kept
+                        .filter { $0.riderLegID == nextLeg.id }
+                        .reduce(0.0) { $0 + ($1.response.distanceMeters ?? 0) }
+                    if cachedMeters > 0 {
+                        onwardFuelMeters = cachedMeters
+                    } else if startIndex == 0,
+                              !source.supportsCombinedFuelPlanning,
+                              let response = try? await source.route(routeRequest(
+                                  profile: nextLeg.profile,
+                                  allowUnknown: nextLeg.profile == .cleanest
+                                      ? false
+                                      : nextLeg.allowUnknown,
+                                  from: nextFrom,
+                                  to: nextTo,
+                                  avoidEdgeIDs: itinerary.impassableEdgeIDs,
+                                  maxPathMeters: nil,
+                                  history: EdgeHistory(),
+                                  avoidMotorways: nextLeg.avoidMotorways,
+                                  preferBackRoads: nextLeg.preferBackRoads
+                              )),
+                              let meters = try? responseMeters(response) {
+                        onwardFuelMeters = meters
+                    } else {
+                        onwardFuelMeters = nil
+                    }
+                }
             } else if index == itinerary.legs.count - 1, !finalWaypointIsFuel {
                 onwardFuelMeters = finalEscapeFuelMeters
             } else {
@@ -743,8 +809,8 @@ final class ItineraryBuilder {
             var current = resumesThisLeg?.station.coordinate
                 ?? itinerary.waypoints[index].coordinate
             var builtLegs = resumesThisLeg?.riderLegPrefix ?? []
-            var excludedStations = Set<String>()
-            var forceFuelStop = false
+            var excludedStations = excludedFuelStationsByLeg[index] ?? []
+            var forceFuelStop = forcedFuelLegIndex == index
             var attempts = 0
 
             while true {
@@ -945,6 +1011,41 @@ final class ItineraryBuilder {
                     return committed
                 }
                 if chain.isGap {
+                    if resume == nil,
+                       index > 0,
+                       recoveryDepth < min(16, itinerary.legs.count) {
+                        let priorIndex = index - 1
+                        let priorStops = committed.legs
+                            .filter { $0.riderLegID == itinerary.legs[priorIndex].id }
+                            .compactMap(\.endsAtFuelStop?.stationID)
+                        var recoveryExclusions = excludedFuelStationsByLeg
+                        if let latestStop = priorStops.last {
+                            recoveryExclusions[priorIndex, default: []].insert(latestStop)
+                        }
+                        let repairedPrefix = builtPrefix(
+                            before: priorIndex,
+                            from: committed.legs,
+                            itinerary: itinerary
+                        )
+                        RoutingDebugLog.shared.event(
+                            "fuel rewind failedLeg=\(index) replanLeg=\(priorIndex) "
+                                + "attempt=\(recoveryDepth + 1) keptLegs=\(repairedPrefix.count)"
+                        )
+                        onFuelStatus("Rechecking an earlier fuel stop")
+                        return await buildForwardFuelItinerary(
+                            itinerary,
+                            startIndex: priorIndex,
+                            resume: nil,
+                            kept: repairedPrefix,
+                            fuel: fuel,
+                            source: source,
+                            forcedFuelLegIndex: priorIndex,
+                            recoveryDepth: recoveryDepth + 1,
+                            excludedFuelStationsByLeg: recoveryExclusions,
+                            onFuelStatus: onFuelStatus,
+                            onProgress: onProgress
+                        )
+                    }
                     let gapMeters = chain.gapMeters
                         ?? straightLineMeters(current, riderDestination.coordinate)
                     let gap = FuelGap(
@@ -1689,6 +1790,65 @@ private func distanceToNextFuelOpportunity(
 private func carriedFuel(from legs: [BuiltLeg]) -> Double {
     guard let last = legs.last else { return 0 }
     return last.endsAtFuelStop == nil ? last.fuelUsedOnArrivalMeters : 0
+}
+
+private struct RevalidatedFuelPrefix {
+    let fuelUsedMeters: Double
+    let firstInvalidRiderLegIndex: Int?
+}
+
+/// Replays fuel consumption across reusable geometry from Point 1. Stored
+/// arrival values are deliberately ignored: a later waypoint edit may have
+/// changed where fuel must be reserved even when the road geometry is unchanged.
+private func revalidatedFuelPrefix(
+    _ legs: [BuiltLeg],
+    itinerary: RiderItinerary,
+    waypointFuelStops: [UUID: FuelStop],
+    usableRangeMeters: Double
+) -> RevalidatedFuelPrefix {
+    let riderLegIndices = Dictionary(
+        uniqueKeysWithValues: itinerary.legs.enumerated().map { ($0.element.id, $0.offset) }
+    )
+    let resetCoordinates = itinerary.waypoints.compactMap { waypoint -> RouteCoordinate? in
+        waypointFuelStops[waypoint.id] == nil ? nil : waypoint.coordinate
+    }
+    var fuelUsed = 0.0
+    for leg in legs {
+        guard let riderLegIndex = riderLegIndices[leg.riderLegID] else {
+            return RevalidatedFuelPrefix(
+                fuelUsedMeters: fuelUsed,
+                firstInvalidRiderLegIndex: 0
+            )
+        }
+        guard let meters = leg.response.distanceMeters,
+              meters.isFinite,
+              meters >= 0,
+              meters <= max(0, usableRangeMeters - fuelUsed) + 1
+        else {
+            return RevalidatedFuelPrefix(
+                fuelUsedMeters: fuelUsed,
+                firstInvalidRiderLegIndex: riderLegIndex
+            )
+        }
+        fuelUsed += meters
+        if leg.endsAtFuelStop != nil || resetCoordinates.contains(leg.toCoordinate) {
+            fuelUsed = 0
+        }
+    }
+    return RevalidatedFuelPrefix(
+        fuelUsedMeters: fuelUsed,
+        firstInvalidRiderLegIndex: nil
+    )
+}
+
+private func builtPrefix(
+    before riderLegIndex: Int,
+    from legs: [BuiltLeg],
+    itinerary: RiderItinerary
+) -> [BuiltLeg] {
+    guard riderLegIndex > 0 else { return [] }
+    let riderLegIDs = Set(itinerary.legs.prefix(riderLegIndex).map(\.id))
+    return legs.filter { riderLegIDs.contains($0.riderLegID) }
 }
 
 private func unconstrainedFuelLeg(
