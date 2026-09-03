@@ -719,7 +719,9 @@ bytes, route-profile objectives, fuel priorities, or rider waypoint semantics:
    proof. Route-first receives a smaller portion of that window so fuel work
    always has time to run. Dirt, Balanced, and Clean receive the same 67%
    route-first allowance (capped at 10 seconds); profile choice must not make
-   a dense-region cold start fail sooner;
+   a dense-region cold start fail sooner. The foundational route and fuel
+   search share one request-scoped decoded graph/runtime, so a memory-safe
+   serverless worker never reloads the same province between those phases;
 2. every large inner loop observes the same deadline and request-cancellation
    signal. The iOS client also enforces a true wall-clock timeout—independent of
    the networking stack's inactivity timeout—and abandoning or replacing a
@@ -736,8 +738,8 @@ bytes, route-profile objectives, fuel priorities, or rider waypoint semantics:
 5. dense pump regions use a forward-oriented matching working set capped at
    192 newly snapped candidates per planning origin after at least 48 pumps
    have matched. This is a candidate-generator bound, not a reduction in the
-   live fuel sidecar or the pumps shown on the map;
-   Sparse regions remain uncapped. A retained candidate still has to pass the
+   live fuel sidecar or the pumps shown on the map. Sparse regions remain
+   uncapped. A retained candidate still has to pass the
    current tank range, access, forward-progress, active-profile route, and
    continuation proof; and
 6. a resumable partial window may commit a pump only after both its active-
@@ -750,7 +752,8 @@ The diagnostic contract now records the route-first budget and outcome,
 profile failure reason/timing/exploration count, pumps physically in range,
 cache-versus-fresh target matches and each target pass, every routed candidate's
 rank/timing/outcome/rejection, whether dense matching was limited, the exact
-deadline phase, and whether the request was cancelled. The fixed Ontario
+deadline phase, whether route-first shared its request runtime, and whether
+the request was cancelled. The fixed Ontario
 two-point fuel reproduction now
 returns a safe one-stop chain in about 12.2 seconds locally instead of 53
 seconds. The appended-leg reproduction with only 122.5 km remaining returns a

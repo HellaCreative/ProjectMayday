@@ -166,6 +166,7 @@ final class RoutingDebugLog {
                 + "profilePops=\(d?.profileRoutePops.map(String.init) ?? "-") "
                 + "routeFirstMs=\(d?.routeFirstMs.map(String.init) ?? "-") "
                 + "routeFirstBudgetMs=\(d?.routeFirstBudgetMs.map(String.init) ?? "-") "
+                + "routeFirstSharedRuntime=\(d?.routeFirstSharedRuntime == true ? 1 : 0) "
                 + "graphFetchMs=\(d?.graphFetchMs.map(String.init) ?? "-") "
                 + "graphDecodeMs=\(d?.graphDecodeMs.map(String.init) ?? "-") "
                 + "graphGridMs=\(d?.graphGridMs.map(String.init) ?? "-") "

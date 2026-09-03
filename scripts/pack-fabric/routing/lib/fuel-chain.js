@@ -21,7 +21,9 @@ const {
   normalizePolicy,
   accessAllowed,
   resolveChainSeamWaypoints,
-  routeRequest
+  routeRequest,
+  routeOnRuntime,
+  echoLegId
 } = require("./router");
 const {
   resolveGraphRequest,
@@ -49,7 +51,7 @@ const MIN_STOP_SEPARATION_M = 800;
 const MIN_FORWARD_PROGRESS_M = 8_000;
 const MIN_DESTINATION_FUEL_CLEARANCE_M = 5_000;
 /** Bumped when fuel-selection / ranking contracts change. Clients may assert. */
-const FUEL_CHAIN_SERVICE_VERSION = "2026-09-03.serial-forward-proof.15";
+const FUEL_CHAIN_SERVICE_VERSION = "2026-09-03.shared-runtime-serial-proof.16";
 /** Watch at 50%; prefer sensible equal-stop choices at 70%. Lockstep: HopSearchPolicy.swift. */
 const FUEL_COMFORT_LO = 0.50;
 const FUEL_COMFORT_HI = 0.70;
@@ -2642,9 +2644,10 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
     ? NaN : Number(rawFuelOptions.profileMeters);
   let foundationRoute = null;
   let fuel = null;
+  let runtime = null;
   let routeFirstMs = 0;
+  let routeFirstSharedRuntime = false;
   if (routeFirstPlan) {
-    const routeProfile = dependencies.routeRequest || routeRequest;
     const routeBody = {
       ...body,
       options: {
@@ -2658,10 +2661,45 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
     delete routeBody.options.maxPathMeters;
     delete routeBody.options.internalFuelProbe;
     const routeStarted = Date.now();
-    [foundationRoute, fuel] = await Promise.all([
-      routeProfile(routeBody),
-      loadFuel(locations)
-    ]);
+    // The same immutable runtime drives both the foundational ride and fuel
+    // selection. Vercel deliberately disables cross-operation graph retention
+    // for province-scale memory safety; calling routeRequest here therefore
+    // inflated Ontario once for the route and again below for fuel. Load once
+    // inside this request, route directly on it, and carry it forward.
+    try {
+      [runtime, fuel] = await Promise.all([
+        loadRuntime(selection, {
+          locations,
+          profile: body.profile
+        }),
+        loadFuel(locations)
+      ]);
+    } catch (error) {
+      const message = error && error.message ? error.message : String(error);
+      const corridorClip = /corridor clip/i.test(message);
+      return {
+        status: "failed",
+        error: corridorClip ? "corridor_clip" : "graph_load_failed",
+        message,
+        routes: [],
+        diagnostics: {
+          totalElapsedMs: Date.now() - requestStarted,
+          windowBudgetMs,
+          windowBudgetOverrunMs: windowBudgetOverrunMs(),
+          routeFirstMs: Date.now() - routeStarted,
+          routeFirstBudgetMs,
+          routeFirstSharedRuntime: false,
+          failureReason: corridorClip ? "corridor_clip" : "graph_load_failed",
+          deadlinePhase: "route_first_runtime_load"
+        }
+      };
+    }
+    const routeProfile = dependencies.routeRequest;
+    const routeOnLoadedRuntime = dependencies.routeOnRuntime || routeOnRuntime;
+    foundationRoute = routeProfile
+      ? await routeProfile(routeBody)
+      : echoLegId(await routeOnLoadedRuntime(routeBody, selection, runtime), routeBody.legId);
+    routeFirstSharedRuntime = !routeProfile;
     routeFirstMs = Date.now() - routeStarted;
     profileMeters = Number(foundationRoute && foundationRoute.distanceMeters);
     if (!foundationRoute || foundationRoute.status !== "complete" || !(profileMeters >= 0)) {
@@ -2693,6 +2731,7 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
           timeBudgetExceeded: deadlineExceeded,
           routeFirstMs,
           routeFirstBudgetMs,
+          routeFirstSharedRuntime,
           profileRouteFailureReason:
             routeDiagnostics && routeDiagnostics.failureReason ||
             foundationRoute && foundationRoute.debug && foundationRoute.debug.failureReason || null,
@@ -2785,10 +2824,12 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
     };
   }
 
-  const runtime = await loadRuntime(selection, {
-    locations,
-    profile: body.profile
-  });
+  if (!runtime) {
+    runtime = await loadRuntime(selection, {
+      locations,
+      profile: body.profile
+    });
+  }
   const options = body.options || {};
   const waypointResets = deriveWaypointRefuels(locations, fuel.stations);
   const finalWaypointReset = waypointResets.find((row) => row.locationIndex === locations.length - 1);
@@ -2869,6 +2910,7 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
           selectedReason: "direct_destination",
           routeFirstMs,
           routeFirstBudgetMs,
+          routeFirstSharedRuntime,
           graphFetchMs: runtime.loadDiagnostics && runtime.loadDiagnostics.fetchMs,
           graphDecodeMs: runtime.loadDiagnostics && runtime.loadDiagnostics.decodeMs,
           graphGridMs: runtime.loadDiagnostics && runtime.loadDiagnostics.gridMs,
@@ -2943,6 +2985,7 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
       windowBudgetOverrunMs: windowBudgetOverrunMs(),
       routeFirstMs,
       routeFirstBudgetMs,
+      routeFirstSharedRuntime,
       graphFetchMs: runtime.loadDiagnostics && runtime.loadDiagnostics.fetchMs,
       graphDecodeMs: runtime.loadDiagnostics && runtime.loadDiagnostics.decodeMs,
       graphGridMs: runtime.loadDiagnostics && runtime.loadDiagnostics.gridMs,

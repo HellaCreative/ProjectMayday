@@ -7,7 +7,8 @@ const {
   rankForwardFuel,
   tankCommitBand,
   compareChainPlans,
-  FUEL_CHAIN_SERVICE_VERSION
+  FUEL_CHAIN_SERVICE_VERSION,
+  fuelChainRequest
 } = require("./fuel-chain");
 const { lineRuntime } = require("./fuel-chain.test-fixture");
 
@@ -45,6 +46,58 @@ test("Dirt preserves forward progress before using surface quality as a tiebreak
   assert.equal(result.stops[0].id, "far-paved");
   assert.equal(result.stops[0].dirtPercent, 10);
   assert.ok(result.stationCandidates.length >= 2);
+});
+
+test("route-first and fuel selection load one shared request runtime", async () => {
+  let runtimeLoads = 0;
+  let routeCalls = 0;
+  const result = await fuelChainRequest({
+    legId: "shared-runtime-leg",
+    locations: [
+      { lat: 44.75, lon: -63.6 },
+      { lat: 44.85, lon: -63.4 }
+    ],
+    profile: "balanced",
+    fuel: {
+      routeFirstPlan: true,
+      usableRangeMeters: 100_000,
+      firstLegMaxMeters: 100_000,
+      windowTimeBudgetMs: 15_000
+    }
+  }, {
+    loadGraphsForRequest: async () => {
+      runtimeLoads += 1;
+      return {
+        packIdentity: [],
+        loadDiagnostics: { fetchMs: 1, decodeMs: 1, gridMs: 1 }
+      };
+    },
+    loadFuelForLocations: async () => ({
+      ok: true,
+      stations: [station("available", -63.5)],
+      regionIds: ["ns"],
+      packIdentity: [],
+      loadDiagnostics: { fetchMs: 1, cacheHit: false }
+    }),
+    routeOnRuntime: async (body, selection, runtime) => {
+      routeCalls += 1;
+      assert.equal(runtime.packIdentity.length, 0);
+      assert.equal(selection.ok, true);
+      return {
+        status: "complete",
+        distanceMeters: 20_000,
+        geometry: [[-63.6, 44.75], [-63.4, 44.85]],
+        debug: { packIdentity: [] }
+      };
+    }
+  });
+
+  assert.equal(result.status, "complete");
+  assert.equal(runtimeLoads, 1);
+  assert.equal(routeCalls, 1);
+  assert.equal(result.routes[0].legId, "shared-runtime-leg");
+  assert.equal(result.routes[0].geometryProperties.legId, "shared-runtime-leg");
+  assert.equal(result.diagnostics.routeFirstSharedRuntime, true);
 });
 
 test("unknown profile plans as Balanced", async () => {
@@ -139,7 +192,7 @@ test("forward progress outranks an early Clean-quality pump", async () => {
 
 test("Clean rejects a full-tank lateral Gulf-class pump in favor of a corridor pump", () => {
   assert.equal(typeof FUEL_CHAIN_SERVICE_VERSION, "string");
-  assert.match(FUEL_CHAIN_SERVICE_VERSION, /serial-forward-proof/);
+  assert.match(FUEL_CHAIN_SERVICE_VERSION, /shared-runtime-serial-proof/);
   // Halifax-ish → Tatamagouche-ish geometry: Wallace Gulf is nearly a full tank
   // sideways; Truro sits on the corridor with a shorter complete chain.
   const start = { lat: 44.764823, lon: -63.340271 };

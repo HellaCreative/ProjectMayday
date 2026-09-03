@@ -3528,6 +3528,7 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds, 
 
 module.exports = {
   routeRequest,
+  routeOnRuntime,
   echoLegId,
   loadGraph,
   DEFAULT_MATCH_METERS,
