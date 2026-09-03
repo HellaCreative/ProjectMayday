@@ -51,7 +51,7 @@ const MIN_STOP_SEPARATION_M = 800;
 const MIN_FORWARD_PROGRESS_M = 8_000;
 const MIN_DESTINATION_FUEL_CLEARANCE_M = 5_000;
 /** Bumped when fuel-selection / ranking contracts change. Clients may assert. */
-const FUEL_CHAIN_SERVICE_VERSION = "2026-09-03.shared-runtime-serial-proof.16";
+const FUEL_CHAIN_SERVICE_VERSION = "2026-09-03.shared-runtime-candidate-proof.17";
 /** Watch at 50%; prefer sensible equal-stop choices at 70%. Lockstep: HopSearchPolicy.swift. */
 const FUEL_COMFORT_LO = 0.50;
 const FUEL_COMFORT_HI = 0.70;
@@ -1111,6 +1111,8 @@ async function planFuelChainOnRuntime({
   profileMeters = null,
   graphOnlyFeeler = false,
   foundationRoute = null,
+  graphResolution = null,
+  routeOnLoadedRuntime = null,
   deadlineAtMs = null,
   abortSignal = null
 }) {
@@ -1165,6 +1167,7 @@ async function planFuelChainOnRuntime({
     destinationEscapeMeters: Number.isFinite(destinationLimitForDiagnostics)
       ? Math.max(0, Math.round(usableRangeMeters - destinationLimitForDiagnostics))
       : null,
+    profileRoutesSharedRuntime: !!graphResolution && !routeCandidate,
     targetPrepareMs: targets.prepareDiagnostics.elapsedMs,
     targetCacheHit: targets.prepareDiagnostics.cacheHit
   };
@@ -1254,7 +1257,7 @@ async function planFuelChainOnRuntime({
       Math.abs(Number(from.lat) - Number(start.lat)) < 1e-7 &&
       Math.abs(Number(from.lon) - Number(start.lon)) < 1e-7;
     if (usesFoundation) return foundationRoute;
-    return routeRequest({
+    const routeBody = {
       profile,
       locations: [from, candidate.location],
       accessPolicy: rawPolicy,
@@ -1271,7 +1274,10 @@ async function planFuelChainOnRuntime({
         deadlineAtMs: deadline,
         abortSignal
       }
-    });
+    };
+    return graphResolution
+      ? (routeOnLoadedRuntime || routeOnRuntime)(routeBody, graphResolution, runtime)
+      : routeRequest(routeBody);
   };
   let profileRouteAttempts = 0;
   const profileRouteTimings = [];
@@ -2953,6 +2959,7 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
     profileMeters,
     graphOnlyFeeler: forwardFeeler,
     foundationRoute,
+    graphResolution: selection,
     deadlineAtMs: windowDeadlineAtMs,
     abortSignal
   });

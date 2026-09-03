@@ -100,6 +100,40 @@ test("route-first and fuel selection load one shared request runtime", async () 
   assert.equal(result.diagnostics.routeFirstSharedRuntime, true);
 });
 
+test("candidate approach and continuation proofs stay on the loaded request runtime", async () => {
+  let routeCalls = 0;
+  const runtime = lineRuntime();
+  const result = await planFuelChainOnRuntime({
+    runtime,
+    stations: [station("forward-pump", 1.5)],
+    start: { lat: 45, lon: 0 },
+    destination: { lat: 45, lon: 2.5 },
+    profile: "balanced",
+    accessPolicy: { motorizedPermissive: true, motorizedUnknown: false },
+    usableRangeMeters: 130_000,
+    firstLegMaxMeters: 130_000,
+    graphResolution: { ok: true, mode: "single-v3", regionIds: ["ns"] },
+    routeOnLoadedRuntime: async (routeBody, selection, loadedRuntime) => {
+      routeCalls += 1;
+      assert.equal(selection.regionIds[0], "ns");
+      assert.equal(loadedRuntime, runtime);
+      const from = routeBody.locations[0];
+      const to = routeBody.locations[1];
+      const distanceMeters = Math.abs(to.lon - from.lon) * 80_000;
+      return {
+        status: "complete",
+        distanceMeters,
+        stats: { dirtPercent: 50 },
+        segments: [{ edgeId: `shared-${routeCalls}`, distanceMeters }]
+      };
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.ok(routeCalls >= 2, "expected an approach and continuation proof");
+  assert.equal(result.diagnostics.profileRoutesSharedRuntime, true);
+});
+
 test("unknown profile plans as Balanced", async () => {
   const unknown = await plan("scenic");
   const balanced = await plan("balanced");
@@ -192,7 +226,7 @@ test("forward progress outranks an early Clean-quality pump", async () => {
 
 test("Clean rejects a full-tank lateral Gulf-class pump in favor of a corridor pump", () => {
   assert.equal(typeof FUEL_CHAIN_SERVICE_VERSION, "string");
-  assert.match(FUEL_CHAIN_SERVICE_VERSION, /shared-runtime-serial-proof/);
+  assert.match(FUEL_CHAIN_SERVICE_VERSION, /shared-runtime-candidate-proof/);
   // Halifax-ish → Tatamagouche-ish geometry: Wallace Gulf is nearly a full tank
   // sideways; Truro sits on the corridor with a shorter complete chain.
   const start = { lat: 44.764823, lon: -63.340271 };

@@ -373,6 +373,7 @@ struct FuelChainDiagnostics: Codable, Sendable {
     var routeFirstMs: Int? = nil
     var routeFirstBudgetMs: Int? = nil
     var routeFirstSharedRuntime: Bool? = nil
+    var profileRoutesSharedRuntime: Bool? = nil
     var graphFetchMs: Int? = nil
     var graphDecodeMs: Int? = nil
     var graphGridMs: Int? = nil
