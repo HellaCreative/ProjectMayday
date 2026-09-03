@@ -397,6 +397,7 @@ final class RoutePlannerModel {
             guard let self else { return }
             self.navigation.update(with: location)
             self.prefetchNextNavigationTileStageIfNeeded()
+            self.prepareCurrentNavigationRoutingPackIfNeeded(at: location.coordinate)
             self.handleGroupTrackingLocation(location)
         }
         mapState.fromHereLongPressRelocatesDestination = true
@@ -2869,6 +2870,16 @@ final class RoutePlannerModel {
         )
     }
 
+    /// Routing packs follow the rider's actual province/state. This is kept
+    /// independent from one-stage-ahead basemap prefetch so entering a long
+    /// itinerary never starts a whole-country pack download.
+    private func prepareCurrentNavigationRoutingPackIfNeeded(
+        at coordinate: CLLocationCoordinate2D
+    ) {
+        guard navigation.phase == .active else { return }
+        graphPacks.prepareCurrentNavigationRegionIfNeeded(at: coordinate)
+    }
+
     /// Start Navigation gates only the first rider/fuel stage corridor. Later
     /// stages are saved one at a time while riding, before the rider reaches them.
     func startNavigation() {
@@ -2928,6 +2939,15 @@ final class RoutePlannerModel {
             stageCoordinates: tileStages,
             fallback: coords
         )
+        guard let routingStart = NavigationRoutingPackScope.startingCoordinate(
+            stageCoordinates: tileStages,
+            fallback: coords
+        ) else {
+            offline.cancelPrep()
+            navigation.cancelPrefetch()
+            mapState.unlockRouteEditingAfterPrepCancel()
+            return
+        }
 
         let identity = routeIdentity ?? "route"
         let keepExisting = (lastNavigationIdentity == identity)
@@ -2945,7 +2965,8 @@ final class RoutePlannerModel {
         RoutingDebugLog.shared.event(
             "navigation prep handoff elapsedMs=\(Int(Date().timeIntervalSince(startedAt) * 1_000)) "
                 + "blockingStages=1 availableStages=\(tileStages.count) "
-                + "points=\(blockingTileCoordinates.count) allRoutePoints=\(coords.count)"
+                + "points=\(blockingTileCoordinates.count) routingPoints=1 "
+                + "allRoutePoints=\(coords.count)"
         )
         offline.prepareForNavigation(
             identity: tileIdentity,
@@ -2953,13 +2974,15 @@ final class RoutePlannerModel {
             keepExisting: keepExisting,
             viewportSize: windowSize
         )
-        // Phase C: lock routing packs with maps when CDN has them for this corridor.
-        let clCoords = coords.map {
-            CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude)
-        }
+        // Start locks only the rider's current region. Subsequent regions are
+        // acquired on entry from location updates; the full itinerary is never
+        // scanned or downloaded here.
         graphPacks.protectInstalledRevisions = true
         graphPacks.prepareForNavigation(
-            coordinates: clCoords,
+            startingAt: CLLocationCoordinate2D(
+                latitude: routingStart.latitude,
+                longitude: routingStart.longitude
+            ),
             keepExisting: keepExisting
         )
     }

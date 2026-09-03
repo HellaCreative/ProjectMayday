@@ -29,8 +29,9 @@ already accepted the line and is moving.
 
 Start Navigation must:
 
-1. lock the corridor basemap and every touched routing pack (or warn before
-   riding without offline reroute);
+1. lock the first rider/fuel-stage basemap and the rider's current regional
+   routing pack (or warn before riding without current-region offline reroute),
+   then prepare later map stages and regions incrementally as the ride advances;
 2. follow the polyline in course-up detail, with overview on demand;
 3. speak and show the selected detail level — Junction/Essential or
    Rally/Everything;
@@ -205,10 +206,14 @@ may change along-metres but must not rename or reorder the remaining stages.
 
 ## 5. Start, ride, end
 
-1. **Start Navigation** — enter the prefetching phase, lock pin edit, prefetch corridor tiles, download
-   missing routing packs for the ride. The session is not active yet.
+1. **Start Navigation** — enter the prefetching phase, lock pin edit, prefetch
+   only the first rider/fuel-stage corridor, and download only the rider's
+   current regional routing pack. The session is not active yet; the complete
+   route must never be scanned or bulk-downloaded at this gate.
 2. **Begin Ride** — activate the session, background GPS, course-up camera,
-   keep the screen awake. Seed the cue card from the last fix.
+   keep the screen awake. Seed the cue card from the last fix. Quietly save the
+   next map stage while riding; on actual entry into another province/state,
+   activate or acquire that region's routing pack.
 3. **End Ride** — confirm, stop speech, restore the planner, offer track
    contribute when the ride earned it.
 
@@ -311,8 +316,9 @@ Navigation changes are complete only when automated tests cover:
   and later legs;
 - cancellation when the rider returns to the line and rejection of late stale
   reroute responses;
-- all touched region packs pinned during prep/ride and explicit degraded-mode
-  copy on failure;
+- only the current region pack gated at Start, later region acquisition on
+  actual boundary entry, no repeated same-region work, and explicit
+  degraded-mode copy on failure;
 - keep-awake transitions for active, inactive, background, reroute, and End;
 - portrait and landscape layouts at the supported iPhone sizes.
 

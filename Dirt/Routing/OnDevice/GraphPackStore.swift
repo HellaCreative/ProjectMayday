@@ -491,8 +491,15 @@ final class GraphPackStore {
                 quiet: quiet,
                 replaceInstalled: replaceInstalled
             )
-            self?.downloadTasks[id] = nil
-            self?.quietDownloadIds.remove(id)
+            guard let self else { return }
+            self.downloadTasks[id] = nil
+            self.quietDownloadIds.remove(id)
+            if quiet,
+               !self.isInstalled(id),
+               self.lastAutoDownloadRegionId == id {
+                // A later GPS fix may retry a failed boundary acquisition.
+                self.lastAutoDownloadRegionId = nil
+            }
         }
     }
 
@@ -531,16 +538,22 @@ final class GraphPackStore {
         refreshInstalledFromDisk()
     }
 
-    /// Start Nav: download every published province/state pack touched by the
-    /// route that is not already installed. Checksum-valid installed revisions
-    /// are not replaced while an itinerary is protected.
-    func prepareForNavigation(coordinates: [CLLocationCoordinate2D], keepExisting: Bool) {
+    /// Start Nav: prepare only the province/state containing the rider's start.
+    /// Later regions follow actual rider location and never bulk-download from
+    /// the complete itinerary. Checksum-valid installed revisions remain pinned.
+    func prepareForNavigation(startingAt coordinate: CLLocationCoordinate2D, keepExisting: Bool) {
         task?.cancel()
         _ = keepExisting // Disk packs and corridor tiles are reused automatically.
         phase = .downloading
         progress = 0.02
         let startedAt = Date()
-        RoutingDebugLog.shared.event("navigation routing pack prep begin points=\(coordinates.count)")
+        RoutingDebugLog.shared.event(
+            String(
+                format: "navigation routing pack prep begin scope=current point=%.5f,%.5f",
+                coordinate.latitude,
+                coordinate.longitude
+            )
+        )
         task = Task { [weak self] in
             guard let self else { return }
             // The app already refreshes this catalog. Reuse a recent result rather
@@ -548,9 +561,7 @@ final class GraphPackStore {
             await self.refreshCatalogIfStale()
             guard !Task.isCancelled else { return }
 
-            // Primary region for every route coordinate follows the actual ride
-            // and avoids coarse whole-bounding-box false positives.
-            let needed = self.navigationRegionRequirementCache.regionIds(for: coordinates) { route in
+            let needed = self.navigationRegionRequirementCache.regionIds(for: [coordinate]) { route in
                 let primaryRegions = Self.regionIds(containingAny: route)
                 return primaryRegions.isEmpty ? Self.regionIds(covering: route) : primaryRegions
             }
@@ -601,6 +612,7 @@ final class GraphPackStore {
             }
 
             self.progress = 1
+            self.lastAutoDownloadRegionId = needed.first(where: { self.isInstalled($0) })
             if unpublished.isEmpty {
                 self.phase = .ready
             } else {
@@ -612,6 +624,44 @@ final class GraphPackStore {
                     + "elapsedMs=\(Int(Date().timeIntervalSince(startedAt) * 1_000))"
             )
         }
+    }
+
+    /// Mid-ride rolling acquisition. Installed packs switch immediately; a
+    /// newly entered published region downloads quietly, one region at a time.
+    /// Repeated GPS fixes in the same region are a no-op.
+    func prepareCurrentNavigationRegionIfNeeded(at coordinate: CLLocationCoordinate2D) {
+        guard let id = NavigationRoutingPackScope.regionTransition(
+            currentRegionID: Self.primaryRegionId(containing: coordinate),
+            lastPreparedRegionID: lastAutoDownloadRegionId
+        ) else { return }
+
+        if isInstalled(id) {
+            lastAutoDownloadRegionId = id
+            RoutingDebugLog.shared.event(
+                "navigation routing pack region=\(id) source=installed action=activate"
+            )
+            Task { [weak self] in
+                await self?.activateInstalledPack(regionId: id)
+            }
+            return
+        }
+
+        guard publishedIds.contains(id) else {
+            lastAutoDownloadRegionId = id
+            RoutingDebugLog.shared.event(
+                "navigation routing pack region=\(id) source=unpublished action=live-only"
+            )
+            return
+        }
+        // If a previous boundary download is still finishing, the next GPS fix
+        // retries this transition instead of dropping it.
+        guard quietDownloadIds.isEmpty else { return }
+
+        lastAutoDownloadRegionId = id
+        RoutingDebugLog.shared.event(
+            "navigation routing pack region=\(id) source=boundary action=download"
+        )
+        downloadRegion(id, quiet: true)
     }
 
     func cancel() {

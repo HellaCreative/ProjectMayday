@@ -319,3 +319,29 @@ enum NavigationTileScope {
         return (nextIndex, stageCoordinates[nextIndex])
     }
 }
+
+/// Start Navigation needs one routing region, not the complete itinerary's
+/// province/state chain. The current region follows the rider later from live
+/// location updates, so a cross-country route never turns Start into a bulk
+/// pack scan or download.
+enum NavigationRoutingPackScope {
+    nonisolated static func startingCoordinate(
+        stageCoordinates: [[RouteCoordinate]],
+        fallback: [RouteCoordinate]
+    ) -> RouteCoordinate? {
+        NavigationTileScope.blockingCoordinates(
+            stageCoordinates: stageCoordinates,
+            fallback: fallback
+        ).first ?? fallback.first
+    }
+
+    nonisolated static func regionTransition(
+        currentRegionID: String?,
+        lastPreparedRegionID: String?
+    ) -> String? {
+        guard let currentRegionID,
+              currentRegionID != lastPreparedRegionID
+        else { return nil }
+        return currentRegionID
+    }
+}

@@ -155,10 +155,12 @@ reproducible.
 ### Automatic acquisition
 
 Waypoint placement and online route creation do not trigger routing-pack
-downloads. When Start Navigation requires a current regional pack that is not
-installed:
+downloads. Routing-pack acquisition is rolling and follows the rider's actual
+location; a long itinerary is never permission to bulk-download every province
+or state at Start Navigation. When Start Navigation requires the current
+regional pack and it is not installed:
 
-1. DIRT identifies the required province/state chain.
+1. DIRT identifies only the province/state containing the rider's start.
 2. DIRT explains that the download enables offline rerouting and asks the rider
    to accept it.
 3. On acceptance, DIRT downloads the current approved graph, geometry, and fuel
@@ -166,9 +168,14 @@ installed:
 4. On refusal, the already-created online route remains valid, but DIRT records
    and displays that offline rerouting is unavailable.
 
+After Begin Ride, DIRT observes actual rider location. On entry into a new
+province/state it activates that installed pack or quietly acquires the current
+approved pack. One boundary acquisition may run at a time. Repeated GPS fixes in
+the same region do no work, and later itinerary regions are not scanned or
+downloaded in advance.
+
 Riders may delete installed packs but do not pre-emptively browse and download
-arbitrary packs. Only regions required by the selected regional chain are
-requested.
+arbitrary packs. Only the current rider region is requested automatically.
 
 ### Updates
 
@@ -184,13 +191,17 @@ requested.
 
 ### Preparing for navigation
 
-Before participation begins, Start Navigation must verify the corridor basemap
-layers and every touched province/state routing pack are available for offline
-use. If the rider previously declined a required pack, DIRT warns that offline
-rerouting may be unavailable and offers the download again before proceeding.
-During the ride the app may move in and out of coverage; the route corridor must
-remain usable for zooming, obstruction recovery, backtracking, and rerouting.
-This end-to-end behaviour remains a required navigation acceptance test.
+Before participation begins, Start Navigation verifies the basemap tiles for the
+first visible rider/fuel stage and the routing pack for the rider's current
+province/state. It must not inspect or acquire the full itinerary's regional
+chain. After Begin Ride, the next basemap stage is saved quietly and later stages
+advance one at a time; routing packs advance only when actual rider location
+enters their region. If the rider previously declined a current required pack,
+DIRT warns that offline rerouting may be unavailable and offers the download
+again before proceeding. During the ride the app may move in and out of coverage;
+the prepared near-term corridor must remain usable for zooming, obstruction
+recovery, backtracking, and rerouting. This rolling end-to-end behaviour remains
+a required navigation acceptance test.
 
 Spoken cues, HUD countdown, Junction versus Rally, and named waypoint callouts
 are defined only in

@@ -53,6 +53,31 @@ struct DirtTests {
         ) == wholeRoute)
     }
 
+    @Test @MainActor func navigationRoutingPackScopeStartsAtFirstStageInsteadOfWholeRoute() throws {
+        let novaScotia = RouteCoordinate(longitude: -63.34025, latitude: 44.76483)
+        let newBrunswick = RouteCoordinate(longitude: -64.80650, latitude: 46.08652)
+        let ontario = RouteCoordinate(longitude: -81.13578, latitude: 44.66843)
+
+        let start = try #require(NavigationRoutingPackScope.startingCoordinate(
+            stageCoordinates: [[novaScotia, newBrunswick], [newBrunswick, ontario]],
+            fallback: [novaScotia, newBrunswick, ontario]
+        ))
+
+        #expect(start == novaScotia)
+        #expect(GraphPackStore.primaryRegionId(containing: CLLocationCoordinate2D(
+            latitude: start.latitude,
+            longitude: start.longitude
+        )) == "ns")
+        #expect(NavigationRoutingPackScope.regionTransition(
+            currentRegionID: "ns",
+            lastPreparedRegionID: "ns"
+        ) == nil)
+        #expect(NavigationRoutingPackScope.regionTransition(
+            currentRegionID: "nb",
+            lastPreparedRegionID: "ns"
+        ) == "nb")
+    }
+
     @Test func navigationTilePlanCacheRequiresExactGeometryAndViewport() throws {
         let route = [
             RouteCoordinate(longitude: -63.5752, latitude: 44.6488),

@@ -211,7 +211,7 @@ struct OfflineMapPrepOverlay: View {
             Text("Locking routing for the bush")
                 .font(.dirtUI(22, weight: .bold))
                 .foregroundStyle(DirtTheme.ink)
-            Text("Maps are ready. Downloading the road network so you can reroute without cell service.")
+            Text("Maps are ready. Downloading the road network for your current province so you can reroute without cell service.")
                 .font(.dirtUI(14))
                 .foregroundStyle(DirtTheme.muted)
                 .fixedSize(horizontal: false, vertical: true)
@@ -279,7 +279,7 @@ struct OfflineMapPrepOverlay: View {
     private var graphPackStatusLine: some View {
         switch graphPacks.phase {
         case .ready:
-            Text("On-device routing pack ready.")
+            Text("Current province routing pack ready.")
                 .font(.dirtUI(12, weight: .semibold))
                 .foregroundStyle(DirtTheme.navGreen)
         case .skipped:
@@ -297,11 +297,11 @@ struct OfflineMapPrepOverlay: View {
 
     private var readyBlurb: String {
         if case .ready = graphPacks.phase {
-            return "No bar? No problem. Basemap and routing for this corridor are on your phone."
+            return "The first riding section and your current province are ready offline. Later sections and provinces are saved as you ride."
         }
         if !graphPacks.loadedRegionIds.isEmpty {
-            return "Province packs on this phone will handle offline detours. Basemap for this ride is locked in."
+            return "The first riding section is saved. Packs already on this phone can handle offline detours as the ride continues."
         }
-        return "The corridor basemap is saved. Any published routing packs were downloaded automatically; an unpublished region may still require a live connection for rerouting."
+        return "The first riding section is saved. A later province may still require a live connection while its routing pack is acquired."
     }
 }
