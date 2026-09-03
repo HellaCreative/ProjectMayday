@@ -72,6 +72,8 @@ module.exports = async function handler(req, res) {
       `routeFirst=${diagnostics.routeFirstMs ?? "-"}ms ` +
       `(snap=${diagnostics.routeFirstSnapMs ?? "-"}/search=${diagnostics.routeFirstSearchMs ?? "-"}` +
       `/post=${diagnostics.routeFirstPostprocessMs ?? "-"}/pops=${diagnostics.routeFirstPops ?? "-"}) ` +
+      `routeSearchGranted=${diagnostics.routeFirstSearchBudgetGrantedMs ?? "-"}ms ` +
+      `loadRelief=${diagnostics.routeFirstLoadBudgetReliefMs ?? "-"}ms ` +
       `escape=${diagnostics.destinationEscapeSearchMs ?? "-"}ms ` +
       `targets=${diagnostics.targetPrepareMs ?? "-"}ms ` +
       `fuelSearch=${diagnostics.elapsedMs ?? "-"}ms ` +

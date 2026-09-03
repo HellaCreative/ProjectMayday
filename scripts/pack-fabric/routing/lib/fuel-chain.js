@@ -57,7 +57,7 @@ const MIN_STOP_SEPARATION_M = 800;
 const MIN_FORWARD_PROGRESS_M = 8_000;
 const MIN_DESTINATION_FUEL_CLEARANCE_M = 5_000;
 /** Bumped when fuel-selection / ranking contracts change. Clients may assert. */
-const FUEL_CHAIN_SERVICE_VERSION = "2026-09-03.foundation-route-fuel.23";
+const FUEL_CHAIN_SERVICE_VERSION = "2026-09-03.foundation-route-fuel.24";
 /** Watch at 50%; prefer sensible equal-stop choices at 70%. Lockstep: HopSearchPolicy.swift. */
 const FUEL_COMFORT_LO = 0.50;
 const FUEL_COMFORT_HI = 0.70;
@@ -118,6 +118,18 @@ function routeFirstBudgetForWindow(windowBudgetMs) {
   // before their legal fallback could complete. Keep a five-second minimum
   // reserve for fuel selection while treating every riding style equally.
   return Math.max(2_000, Math.min(10_000, Math.round(budget * 0.67)));
+}
+
+function routeFirstDeadlineAfterLoad(windowDeadlineAtMs, routeFirstBudgetMs, loadedAtMs) {
+  if (routeFirstBudgetMs == null || loadedAtMs == null) return Infinity;
+  const windowDeadline = Number(windowDeadlineAtMs);
+  const routeBudget = Number(routeFirstBudgetMs);
+  const loadedAt = Number(loadedAtMs);
+  if (!Number.isFinite(routeBudget) || !Number.isFinite(loadedAt)) return Infinity;
+  const searchDeadline = loadedAt + Math.max(0, routeBudget);
+  return Number.isFinite(windowDeadline)
+    ? Math.min(windowDeadline, searchDeadline)
+    : searchDeadline;
 }
 
 function candidateApproachDeadlineAtMs(deadlineAtMs, now = Date.now()) {
@@ -3311,7 +3323,7 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
   // profile refinement may use most of the window, but it may not consume the
   // entire request before fuel planning even begins.
   const routeFirstBudgetMs = routeFirstBudgetForWindow(windowBudgetMs);
-  const routeFirstDeadlineAtMs = routeFirstBudgetMs == null
+  let routeFirstDeadlineAtMs = routeFirstBudgetMs == null
     ? Infinity
     : Math.min(windowDeadlineAtMs, requestStarted + routeFirstBudgetMs);
   const abortSignal = body.options && body.options.abortSignal;
@@ -3360,6 +3372,9 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
   let routeFirstSearchOutcome = null;
   let routeFirstFallbacks = [];
   let routeFirstDeadlineRemainingAfterLoadMs = null;
+  let routeFirstWindowRemainingAfterLoadMs = null;
+  let routeFirstSearchBudgetGrantedMs = null;
+  let routeFirstLoadBudgetReliefMs = null;
   const routeFirstPhaseDiagnostics = () => ({
     routeFirstBuildMs,
     routeFirstSearchMs,
@@ -3368,7 +3383,11 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
     routeFirstPops,
     routeFirstSearchOutcome,
     routeFirstFallbacks,
-    routeFirstDeadlineRemainingAfterLoadMs
+    routeFirstDeadlineRemainingAfterLoadMs,
+    routeFirstWindowRemainingAfterLoadMs,
+    routeFirstSearchBudgetGrantedMs,
+    routeFirstLoadBudgetReliefMs,
+    routeFirstBudgetStartsAfterRuntimeLoad: routeFirstAttempted ? true : null
   });
   const directLowerBoundMeters = haversineMeters(
     locationCoordinate(locations[0]),
@@ -3394,9 +3413,13 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
         }),
         loadFuel(locations)
       ]);
-      planningDataLoadMs = Date.now() - loadStarted;
+      const loadedAtMs = Date.now();
+      planningDataLoadMs = loadedAtMs - loadStarted;
+      routeFirstWindowRemainingAfterLoadMs = Number.isFinite(windowDeadlineAtMs)
+        ? windowDeadlineAtMs - loadedAtMs
+        : null;
       routeFirstDeadlineRemainingAfterLoadMs = Number.isFinite(routeFirstDeadlineAtMs)
-        ? routeFirstDeadlineAtMs - Date.now()
+        ? routeFirstDeadlineAtMs - loadedAtMs
         : null;
     } catch (error) {
       const message = error && error.message ? error.message : String(error);
@@ -3454,9 +3477,29 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
         }),
         loadFuel(locations)
       ]);
-      planningDataLoadMs = Date.now() - loadStarted;
+      const loadedAtMs = Date.now();
+      planningDataLoadMs = loadedAtMs - loadStarted;
+      const deadlineBeforeLoadRelief = routeFirstDeadlineAtMs;
+      // Runtime inflation is prerequisite I/O, not active-profile search.
+      // Counting a cold Ontario load against the ten-second route allowance
+      // made an identical request fail cold and pass warm. Start that bounded
+      // search allowance only once the immutable graph and fuel data exist,
+      // while the outer fuel-window deadline remains an absolute hard cap.
+      routeFirstDeadlineAtMs = routeFirstDeadlineAfterLoad(
+        windowDeadlineAtMs,
+        routeFirstBudgetMs,
+        loadedAtMs
+      );
+      routeFirstWindowRemainingAfterLoadMs = Number.isFinite(windowDeadlineAtMs)
+        ? windowDeadlineAtMs - loadedAtMs
+        : null;
       routeFirstDeadlineRemainingAfterLoadMs = Number.isFinite(routeFirstDeadlineAtMs)
-        ? routeFirstDeadlineAtMs - Date.now()
+        ? routeFirstDeadlineAtMs - loadedAtMs
+        : null;
+      routeFirstSearchBudgetGrantedMs = routeFirstDeadlineRemainingAfterLoadMs;
+      routeFirstLoadBudgetReliefMs = Number.isFinite(deadlineBeforeLoadRelief) &&
+        Number.isFinite(routeFirstDeadlineAtMs)
+        ? Math.max(0, routeFirstDeadlineAtMs - deadlineBeforeLoadRelief)
         : null;
     } catch (error) {
       const message = error && error.message ? error.message : String(error);
@@ -3484,6 +3527,9 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
         }
       };
     }
+    routeBody.options.deadlineAtMs = Number.isFinite(routeFirstDeadlineAtMs)
+      ? routeFirstDeadlineAtMs
+      : undefined;
     const routeProfile = dependencies.routeRequest;
     const routeOnLoadedRuntime = dependencies.routeOnRuntime || routeOnRuntime;
     foundationRoute = routeProfile
@@ -3930,6 +3976,7 @@ module.exports = {
   stationEligibility,
   fuelNeedForProfileRide,
   routeFirstBudgetForWindow,
+  routeFirstDeadlineAfterLoad,
   comfortCapMeters,
   compareChainPlans,
   fuelPlanStatus,

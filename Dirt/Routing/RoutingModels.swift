@@ -387,6 +387,10 @@ struct FuelChainDiagnostics: Codable, Sendable {
     var routeFirstSearchOutcome: String? = nil
     var routeFirstFallbacks: [String]? = nil
     var routeFirstDeadlineRemainingAfterLoadMs: Int? = nil
+    var routeFirstWindowRemainingAfterLoadMs: Int? = nil
+    var routeFirstSearchBudgetGrantedMs: Int? = nil
+    var routeFirstLoadBudgetReliefMs: Int? = nil
+    var routeFirstBudgetStartsAfterRuntimeLoad: Bool? = nil
     var endpointResolutionMs: Int? = nil
     var endpointProbeCount: Int? = nil
     var endpointResolutionSources: String? = nil

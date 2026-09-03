@@ -24,7 +24,7 @@ Android's online planner must continue to call the shared LIVE route service. Th
 | `1c041e0` | Large-graph routing budgets scale without weakening the route objective. |
 | `a49d9d1` | DIRT route-quality recovery, urban-topology handling, and disconnected duplicate-node bridging. |
 | `b63a3bf` | Faster graph preparation, safe reuse of wide-search results, bounded low-DIRT recovery, and early completion of fuel-candidate evaluation once a winning minimum-stop plan is proven. |
-| `2026-09-03.foundation-route-fuel.23` | The selected profile route becomes the fuel foundation; an on-route one-stop plan partitions and reuses that geometry, while dense pump selection follows the winding route and ranks complete chains. |
+| `2026-09-03.foundation-route-fuel.24` | The selected profile route becomes the fuel foundation; an on-route one-stop plan partitions and reuses that geometry, dense pump selection follows the winding route and ranks complete chains, and cold graph loading cannot consume the profile-search allowance. |
 
 Online Android routing must not depend on a downloaded navigation pack. Downloaded packs are for offline navigation and rerouting after navigation starts.
 
@@ -61,6 +61,7 @@ Android must preserve the accepted fuel policy:
 10. When a proved selected-profile route contains a safe one-stop pump, split and reuse that route instead of independently rerouting profile legs to and from the pump. Fuel insertion must not lower the selected profile's route quality.
 11. Dense pump shortlisting follows the actual foundation route before the straight endpoint chord. Any route-proximity value is request-specific and must not leak through the reusable station-snap cache.
 12. When exact partitioning is unavailable, rank the full approach-plus-continuation chain. A pump near the winding foundation may relax chord-relative continuation backtrack only within the shared bound; range, forward continuation, total-detour, and retrace guards remain mandatory.
+13. Regional graph/fuel loading must not consume the bounded route-first search allowance. Start that allowance after the immutable runtime is ready, but never extend the absolute outer fuel-window deadline.
 
 The candidate search may stop once a complete minimum-stop plan has been proven and all remaining candidates are unable to beat it on the accepted ordering. That optimization must not remove the alternatives required by “Choose another pump.”
 
@@ -99,7 +100,9 @@ Android diagnostics must make parity failures observable. At minimum retain:
   profile-route attempts; and
 - per pump: foundation versus routed source, along/off-route placement,
   route-cell distance, complete-chain distance/dirt percentage, and continuation
-  backtrack, plus the client's skipped-speculative-look-ahead reason.
+  backtrack, plus the client's skipped-speculative-look-ahead reason; and
+- cold-start route budget boundary, outer-window time remaining after load,
+  profile-search milliseconds granted, and load-budget relief milliseconds.
 
 The live verification command must require a `--region` argument and verify only the requested state, province, or routing region. Do not let an unavailable BC pack fail an Ontario, Quebec, or Nova Scotia verification.
 

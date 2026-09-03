@@ -833,7 +833,13 @@ pack-independent laws:
    leg while the current combined route/fuel operation is running. It consumes a
    cached next-leg distance when one exists; otherwise it builds forward once
    and rewinds the prior fuel choice only if the real suffix proves it unsafe.
-   On-device planning retains its local bounded look-ahead.
+   On-device planning retains its local bounded look-ahead; and
+6. loading and inflating a regional graph is prerequisite I/O, not selected-
+   profile search. The bounded route-first search allowance starts after the
+   graph and fuel sidecar are available, while the outer fuel-window deadline
+   remains the absolute cap. A cold Ontario request therefore receives the same
+   route proof as the identical warm request instead of losing half its search
+   budget to graph preparation.
 
 The diagnostics identify foundation reuse, foundation route distance and dirt
 percentage, matched and route-priority pump counts, selected pump, final chain
@@ -841,6 +847,9 @@ distance/dirt percentage, avoided profile-route attempts, and for each pump its
 source, along-route/off-route placement, route-cell distance, full-chain
 distance/dirt percentage, and continuation backtrack. The client also records
 when speculative LIVE look-ahead was skipped in favour of forward build/rewind.
+Cold-start diagnostics additionally record the window remaining after load,
+profile-search allowance actually granted, milliseconds restored by excluding
+the load, and the explicit after-load budget boundary.
 
 Fixed production-pack reproductions now cover the reported coordinates. On the
 reference development machine, Halifax-to-southwest Nova Scotia completes in

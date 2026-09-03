@@ -11,6 +11,7 @@ const {
   planFuelChainOnRuntime,
   rankForwardFuel,
   routeFirstBudgetForWindow,
+  routeFirstDeadlineAfterLoad,
   stationEligibility
 } = require("./fuel-chain");
 
@@ -18,6 +19,22 @@ test("every riding style receives the same dense-region route-first allowance", 
   assert.equal(routeFirstBudgetForWindow(15_000), 10_000);
   assert.equal(routeFirstBudgetForWindow(5_800), 3_886);
   assert.equal(routeFirstBudgetForWindow(null), null);
+});
+
+test("cold graph loading cannot consume the active-profile search allowance", () => {
+  const requestStartedAtMs = 1_000;
+  const windowDeadlineAtMs = requestStartedAtMs + 20_000;
+  const graphLoadedAtMs = requestStartedAtMs + 5_000;
+  assert.equal(
+    routeFirstDeadlineAfterLoad(windowDeadlineAtMs, 10_000, graphLoadedAtMs),
+    graphLoadedAtMs + 10_000
+  );
+  assert.equal(
+    routeFirstDeadlineAfterLoad(windowDeadlineAtMs, 10_000, requestStartedAtMs + 15_000),
+    windowDeadlineAtMs,
+    "the outer fuel window remains the hard cap"
+  );
+  assert.equal(routeFirstDeadlineAfterLoad(Infinity, null, graphLoadedAtMs), Infinity);
 });
 
 test("an exhausted graph is a gap but a planning timeout is inconclusive", () => {
