@@ -1129,6 +1129,7 @@ async function planFuelChainOnRuntime({
     });
   };
   let profileRouteAttempts = 0;
+  const profileRouteTimings = [];
   const profileRoute = routeCandidate || defaultProfileHop;
   const evaluateProfileHop = graphOnlyFeeler
     ? (async ({ candidate }) => ({
@@ -1139,8 +1140,47 @@ async function planFuelChainOnRuntime({
       }))
     : (async (options) => {
         profileRouteAttempts += 1;
-        return profileRoute(options);
+        const attemptStarted = Date.now();
+        const candidateId = options && options.candidate && options.candidate.station
+          ? String(options.candidate.station.id || "-")
+          : "-";
+        try {
+          const response = await profileRoute(options);
+          profileRouteTimings.push({
+            candidateId,
+            elapsedMs: Date.now() - attemptStarted,
+            status: response && response.status || "unknown",
+            distanceMeters: Number.isFinite(Number(response && response.distanceMeters))
+              ? Math.round(Number(response.distanceMeters))
+              : null,
+            maxMeters: Number.isFinite(Number(options && options.maxMeters))
+              ? Math.round(Number(options.maxMeters))
+              : null
+          });
+          return response;
+        } catch (error) {
+          profileRouteTimings.push({
+            candidateId,
+            elapsedMs: Date.now() - attemptStarted,
+            status: "error",
+            distanceMeters: null,
+            maxMeters: Number.isFinite(Number(options && options.maxMeters))
+              ? Math.round(Number(options.maxMeters))
+              : null
+          });
+          throw error;
+        }
       });
+
+  function slowestProfileRoutes() {
+    return profileRouteTimings.slice().sort((a, b) =>
+      b.elapsedMs - a.elapsedMs
+    ).slice(0, 6);
+  }
+
+  function exceededSearchBudget() {
+    return timeBudgetExceeded || (Number.isFinite(deadline) && Date.now() > deadline);
+  }
 
   function destinationCandidate(graphMeters) {
     return {
@@ -1888,10 +1928,11 @@ async function planFuelChainOnRuntime({
         elapsedMs: Date.now() - started,
         maxHopMs,
         profileRouteAttempts,
+        slowestProfileRoutes: slowestProfileRoutes(),
         searchDeadlineOverrunMs: Number.isFinite(deadline)
           ? Math.max(0, Date.now() - deadline)
           : 0,
-        timeBudgetExceeded
+        timeBudgetExceeded: exceededSearchBudget()
       }, {
         stationsReachableWithinRange,
         candidatesEvaluated: stationCandidates.length,
@@ -1944,10 +1985,11 @@ async function planFuelChainOnRuntime({
       elapsedMs: Date.now() - started,
       maxHopMs,
       profileRouteAttempts,
+      slowestProfileRoutes: slowestProfileRoutes(),
       searchDeadlineOverrunMs: Number.isFinite(deadline)
         ? Math.max(0, Date.now() - deadline)
         : 0,
-      timeBudgetExceeded,
+      timeBudgetExceeded: exceededSearchBudget(),
       selectedReason: returnedStops.length
         ? "minimum_stops_forward"
         : "direct_destination"

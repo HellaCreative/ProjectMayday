@@ -85,8 +85,8 @@ Android diagnostics must make parity failures observable. At minimum retain:
 - one echoed request ID plus begin/response/transport-failure events for every
   live route, fuel-chain, and fuel-data request;
 - HTTP status, response bytes, elapsed time, configured timeout, cancellation
-  state, profile-route attempt count, longest candidate hop, and fuel-window
-  budget overrun; and
+  state, profile-route attempt count, slowest candidate route IDs and timings,
+  longest candidate hop, and fuel-window budget overrun; and
 - an explicit cancel request and cancelled/stale disposition for every route
   generation replaced by a later waypoint edit.
 

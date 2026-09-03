@@ -331,6 +331,9 @@ test("one-stop window keeps a proven pump when evaluation crosses its deadline",
   assert.ok(result.diagnostics.profileRouteAttempts > 0);
   assert.ok(result.diagnostics.maxHopMs >= 50);
   assert.ok(result.diagnostics.searchDeadlineOverrunMs > 0);
+  assert.equal(result.diagnostics.timeBudgetExceeded, true);
+  assert.equal(result.diagnostics.slowestProfileRoutes[0].candidateId, "f1");
+  assert.ok(result.diagnostics.slowestProfileRoutes[0].elapsedMs >= 50);
 });
 
 test("a proven forward one-stop chain does not route dominated earlier pumps", async () => {

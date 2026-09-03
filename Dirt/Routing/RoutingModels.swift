@@ -376,11 +376,20 @@ struct FuelChainDiagnostics: Codable, Sendable {
     var destinationEscapeSearchMs: Int? = nil
     var destinationEscapePops: Int? = nil
     var profileRouteAttempts: Int? = nil
+    var slowestProfileRoutes: [FuelRouteAttemptDiagnostic]? = nil
     var maxHopMs: Int? = nil
     var windowBudgetMs: Int? = nil
     var windowBudgetOverrunMs: Int? = nil
     var searchDeadlineOverrunMs: Int? = nil
     var timeBudgetExceeded: Bool? = nil
+}
+
+struct FuelRouteAttemptDiagnostic: Codable, Sendable {
+    let candidateId: String?
+    let elapsedMs: Int?
+    let status: String?
+    let distanceMeters: Double?
+    let maxMeters: Double?
 }
 
 struct FuelStationCandidate: Codable, Sendable {

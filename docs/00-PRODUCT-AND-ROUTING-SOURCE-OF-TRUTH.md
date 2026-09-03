@@ -791,9 +791,10 @@ coverage for a Gate 1 repair; Gate 2; Gate 3; Gate 4; then Gate 5.
    Every live route, fuel-chain, and fuel-data request also records one echoed
    request ID, start, HTTP response or transport failure, elapsed time, byte
    count, timeout/cancellation state, and a terminal generation disposition.
-   Fuel diagnostics record profile-route attempt count, longest candidate hop,
-   requested window budget, and any budget overrun so a cancelled pin move can
-   be distinguished from a server search that never returned.
+   Fuel diagnostics record profile-route attempt count, the slowest candidate
+   route IDs and timings, longest candidate hop, requested window budget, and
+   any budget overrun so a cancelled pin move can be distinguished from a
+   server search that never returned.
 8. A timeout never masquerades as a no-path or proven fuel gap.
 9. Historical measurements remain archived but are never used as a current
    baseline after code or pack bytes change.

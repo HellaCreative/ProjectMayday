@@ -120,6 +120,9 @@ final class RoutingDebugLog {
     func liveFuelDiagnostics(_ response: FuelChainResponse, requestID: String? = nil) {
         let d = response.diagnostics
         let request = requestID.map { " request=\($0)" } ?? ""
+        let slowRoutes = (d?.slowestProfileRoutes ?? []).map { attempt in
+            "\(attempt.candidateId ?? "-"):\(attempt.elapsedMs.map(String.init) ?? "-")ms/\(attempt.status ?? "-")"
+        }.joined(separator: ",")
         event(
             "FUEL diag\(request) status=\(response.status) "
                 + "strategy=\(d?.strategy ?? "-") "
@@ -131,6 +134,7 @@ final class RoutingDebugLog {
                 + "matchedFuel=\(d?.matchedFuel.map(String.init) ?? "-") "
                 + "pops=\(d?.dijkstraPops.map(String.init) ?? "-") "
                 + "profileRoutes=\(d?.profileRouteAttempts.map(String.init) ?? "-") "
+                + "slowRoutes=[\(slowRoutes)] "
                 + "maxHopMs=\(d?.maxHopMs.map(String.init) ?? "-") "
                 + "elapsedMs=\(d?.elapsedMs.map(String.init) ?? "-") "
                 + "totalMs=\(d?.totalElapsedMs.map(String.init) ?? "-") "
