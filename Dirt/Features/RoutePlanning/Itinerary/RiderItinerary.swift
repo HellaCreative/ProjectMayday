@@ -27,6 +27,10 @@ nonisolated struct RiderLeg: Identifiable, Equatable, Codable, Sendable {
     /// that owns its profile override. Values are the internal inverse of the
     /// rider-facing "Allow major highways" control.
     var hopAvoidMotorways: [String: Bool]
+    /// Unknown-access permission is owned by the generated stage that departs
+    /// from this rider waypoint or fuel stop. Keeping explicit false values is
+    /// important: a stage can opt out even when the parent rider leg opts in.
+    var hopAllowUnknown: [String: Bool]
     /// Rider-selected pump keyed by the departure waypoint/station anchor.
     /// This is distinct from hopOverrides, which changes routing profile only.
     var fuelStopOverrides: [String: String]
@@ -40,6 +44,7 @@ nonisolated struct RiderLeg: Identifiable, Equatable, Codable, Sendable {
         preferBackRoads: Bool = false,
         hopOverrides: [String: RouteProfile] = [:],
         hopAvoidMotorways: [String: Bool] = [:],
+        hopAllowUnknown: [String: Bool] = [:],
         fuelStopOverrides: [String: String] = [:]
     ) {
         id = RiderItinerary.legID(from: from, to: to)
@@ -51,6 +56,7 @@ nonisolated struct RiderLeg: Identifiable, Equatable, Codable, Sendable {
         self.preferBackRoads = false
         self.hopOverrides = hopOverrides
         self.hopAvoidMotorways = hopAvoidMotorways
+        self.hopAllowUnknown = hopAllowUnknown
         self.fuelStopOverrides = fuelStopOverrides
     }
 
@@ -70,9 +76,18 @@ nonisolated struct RiderLeg: Identifiable, Equatable, Codable, Sendable {
         return profile == .cleanest ? avoidMotorways : true
     }
 
+    func allowsUnknown(
+        departingFrom anchorID: String,
+        effectiveProfile: RouteProfile? = nil
+    ) -> Bool {
+        let activeProfile = effectiveProfile ?? self.effectiveProfile(departingFrom: anchorID)
+        guard activeProfile != .cleanest else { return false }
+        return hopAllowUnknown[anchorID] ?? allowUnknown
+    }
+
     private enum CodingKeys: String, CodingKey {
         case id, from, to, profile, allowUnknown, avoidMotorways, preferBackRoads
-        case hopOverrides, hopAvoidMotorways, fuelStopOverrides
+        case hopOverrides, hopAvoidMotorways, hopAllowUnknown, fuelStopOverrides
     }
 
     init(from decoder: Decoder) throws {
@@ -97,6 +112,9 @@ nonisolated struct RiderLeg: Identifiable, Equatable, Codable, Sendable {
         ) ?? [:]
         hopAvoidMotorways = try container.decodeIfPresent(
             [String: Bool].self, forKey: .hopAvoidMotorways
+        ) ?? [:]
+        hopAllowUnknown = try container.decodeIfPresent(
+            [String: Bool].self, forKey: .hopAllowUnknown
         ) ?? [:]
         fuelStopOverrides = try container.decodeIfPresent(
             [String: String].self, forKey: .fuelStopOverrides
@@ -158,11 +176,16 @@ nonisolated struct RiderItinerary: Equatable, Codable, Sendable {
 
     mutating func pruneHopOverrides(to activeStationIDs: [UUID: Set<String>]) {
         for index in legs.indices where
-            !legs[index].hopOverrides.isEmpty || !legs[index].hopAvoidMotorways.isEmpty {
+            !legs[index].hopOverrides.isEmpty
+                || !legs[index].hopAvoidMotorways.isEmpty
+                || !legs[index].hopAllowUnknown.isEmpty {
             var active = activeStationIDs[legs[index].id] ?? []
             active.insert(legs[index].from.uuidString)
             legs[index].hopOverrides = legs[index].hopOverrides.filter { active.contains($0.key) }
             legs[index].hopAvoidMotorways = legs[index].hopAvoidMotorways.filter {
+                active.contains($0.key)
+            }
+            legs[index].hopAllowUnknown = legs[index].hopAllowUnknown.filter {
                 active.contains($0.key)
             }
         }

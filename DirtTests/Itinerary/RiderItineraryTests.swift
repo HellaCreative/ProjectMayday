@@ -151,6 +151,62 @@ struct RiderItineraryTests {
         #expect(change.itinerary.legs.allSatisfy { $0.allowUnknown })
     }
 
+    @Test func fuelStageUnknownAccessIsIndependentAndRebuildsItsDependentSuffix() throws {
+        let initial = itinerary([point(0), point(1)], profile: .dirt)
+        let leg = try #require(initial.legs.first)
+        let departure = leg.from.uuidString
+
+        let firstStage = reduce(
+            initial,
+            .setHopAllowUnknown(legID: leg.id, stationID: departure, true)
+        )
+        let firstStageLeg = try #require(firstStage.itinerary.legs.first)
+
+        #expect(firstStage.rebuildFromLegIndex == 0)
+        #expect(firstStage.rebuildThroughLegIndex == 0)
+        #expect(firstStage.replanFromStationID == nil)
+        #expect(!firstStageLeg.allowUnknown)
+        #expect(firstStageLeg.allowsUnknown(departingFrom: departure))
+        #expect(!firstStageLeg.allowsUnknown(departingFrom: "fuel-a"))
+
+        let secondStage = reduce(
+            firstStage.itinerary,
+            .setHopAllowUnknown(legID: leg.id, stationID: "fuel-a", true)
+        )
+        let secondStageLeg = try #require(secondStage.itinerary.legs.first)
+
+        #expect(secondStage.rebuildFromLegIndex == 0)
+        #expect(secondStage.rebuildThroughLegIndex == 0)
+        #expect(secondStage.replanFromStationID == "fuel-a")
+        #expect(secondStageLeg.allowsUnknown(departingFrom: departure))
+        #expect(secondStageLeg.allowsUnknown(departingFrom: "fuel-a"))
+        #expect(!secondStageLeg.allowsUnknown(departingFrom: "fuel-b"))
+    }
+
+    @Test func fuelStageUnknownAccessStaysInsideItsPlannedRouteLeg() throws {
+        let initial = itinerary([point(0), point(1), point(2)], profile: .dirt)
+        let selectedLeg = initial.legs[1]
+        let selectedDeparture = selectedLeg.from.uuidString
+
+        let change = reduce(
+            initial,
+            .setHopAllowUnknown(
+                legID: selectedLeg.id,
+                stationID: selectedDeparture,
+                true
+            )
+        )
+
+        #expect(change.rebuildFromLegIndex == 1)
+        #expect(change.rebuildThroughLegIndex == 1)
+        #expect(change.itinerary.legs[0] == initial.legs[0])
+        #expect(!change.itinerary.legs[0].allowsUnknown(
+            departingFrom: change.itinerary.legs[0].from.uuidString
+        ))
+        #expect(change.itinerary.legs[1].allowsUnknown(departingFrom: selectedDeparture))
+        #expect(!change.itinerary.legs[1].allowsUnknown(departingFrom: "later-fuel"))
+    }
+
     @Test func cleanFuelHopOnDirtParentDefaultsToAvoidingMajorHighwaysAndTogglesIndependently() throws {
         let initial = itinerary([point(0), point(1)], profile: .dirt)
         let legID = try #require(initial.legs.first?.id)
@@ -195,11 +251,15 @@ struct RiderItineraryTests {
         #expect(avoidedLeg.avoidsMajorHighways(departingFrom: "fuel-b"))
     }
 
-    @Test func pruningFuelHopProfilesAlsoPrunesTheirHighwayPolicies() throws {
+    @Test func pruningFuelHopProfilesAlsoPrunesTheirStagePolicies() throws {
         var current = itinerary([point(0), point(1)], profile: .dirt)
         let leg = try #require(current.legs.first)
         let departure = leg.from.uuidString
         for anchor in [departure, "active-fuel", "stale-fuel"] {
+            current = reduce(
+                current,
+                .setHopAllowUnknown(legID: leg.id, stationID: anchor, true)
+            ).itinerary
             current = reduce(
                 current,
                 .setHopProfile(legID: leg.id, stationID: anchor, .cleanest)
@@ -215,8 +275,10 @@ struct RiderItineraryTests {
         let pruned = try #require(current.legs.first)
         #expect(Set(pruned.hopOverrides.keys) == [departure, "active-fuel"])
         #expect(Set(pruned.hopAvoidMotorways.keys) == [departure, "active-fuel"])
+        #expect(Set(pruned.hopAllowUnknown.keys) == [departure, "active-fuel"])
         #expect(pruned.hopOverrides["stale-fuel"] == nil)
         #expect(pruned.hopAvoidMotorways["stale-fuel"] == nil)
+        #expect(pruned.hopAllowUnknown["stale-fuel"] == nil)
     }
 
     @Test func randomActionSequencesPreserveEveryInvariant() {
@@ -261,6 +323,10 @@ struct RiderItineraryTests {
         original = reduce(
             original,
             .setHopAvoidMotorways(legID: legID, stationID: "fuel-a", false)
+        ).itinerary
+        original = reduce(
+            original,
+            .setHopAllowUnknown(legID: legID, stationID: "fuel-b", false)
         ).itinerary
 
         let data = try JSONEncoder().encode(original)

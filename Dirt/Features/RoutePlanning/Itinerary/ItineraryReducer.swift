@@ -102,6 +102,7 @@ nonisolated func reduce(
             legs[index].profile = profile
             legs[index].hopOverrides.removeAll()
             legs[index].hopAvoidMotorways.removeAll()
+            legs[index].hopAllowUnknown.removeAll()
             legs[index].fuelStopOverrides.removeAll()
             if profile == .cleanest {
                 legs[index].allowUnknown = false
@@ -145,6 +146,27 @@ nonisolated func reduce(
         else { return unchanged(itinerary) }
         var legs = itinerary.legs
         legs[index].hopAvoidMotorways[stationID] = avoidMotorways
+        return changed(
+            itinerary,
+            waypoints: itinerary.waypoints,
+            legs: legs,
+            rebuildFrom: index,
+            rebuildThrough: index,
+            replanFromStationID: stationID == legs[index].from.uuidString ? nil : stationID
+        )
+
+    case .setHopAllowUnknown(let legID, let stationID, let allowUnknown):
+        guard !stationID.isEmpty,
+              let index = itinerary.legs.firstIndex(where: { $0.id == legID })
+        else { return unchanged(itinerary) }
+        let profile = itinerary.legs[index].effectiveProfile(departingFrom: stationID)
+        let effective = profile == .cleanest ? false : allowUnknown
+        guard itinerary.legs[index].allowsUnknown(
+            departingFrom: stationID,
+            effectiveProfile: profile
+        ) != effective else { return unchanged(itinerary) }
+        var legs = itinerary.legs
+        legs[index].hopAllowUnknown[stationID] = effective
         return changed(
             itinerary,
             waypoints: itinerary.waypoints,
@@ -205,6 +227,7 @@ nonisolated func reduce(
         }
         for index in affected {
             legs[index].allowUnknown = legs[index].profile == .cleanest ? false : allowUnknown
+            legs[index].hopAllowUnknown.removeAll()
         }
         return changed(
             itinerary,

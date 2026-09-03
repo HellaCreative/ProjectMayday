@@ -8,6 +8,7 @@ nonisolated enum ItineraryAction: Equatable, Codable, Sendable {
     case setProfile(legID: UUID?, RouteProfile)
     case setHopProfile(legID: UUID, stationID: String, RouteProfile)
     case setHopAvoidMotorways(legID: UUID, stationID: String, Bool)
+    case setHopAllowUnknown(legID: UUID, stationID: String, Bool)
     case setFuelStopOverride(legID: UUID, departureAnchorID: String, stationID: String)
     case clearFuelStopOverrides(legID: UUID)
     case setAllowUnknown(legID: UUID?, Bool)

@@ -56,7 +56,10 @@ final class RoutePlannerModel {
             let effectiveProfile = builtLeg.routeProfile
                 ?? riderLeg.effectiveProfile(departingFrom: departureID)
             profile = effectiveProfile
-            allowUnknown = riderLeg.allowUnknown
+            allowUnknown = riderLeg.allowsUnknown(
+                departingFrom: departureID,
+                effectiveProfile: effectiveProfile
+            )
             avoidMotorways = riderLeg.avoidsMajorHighways(
                 departingFrom: departureID,
                 effectiveProfile: effectiveProfile
@@ -90,7 +93,10 @@ final class RoutePlannerModel {
             self.start = start
             self.end = end
             profile = riderLeg.profile
-            allowUnknown = riderLeg.allowUnknown
+            allowUnknown = riderLeg.allowsUnknown(
+                departingFrom: riderLeg.from.uuidString,
+                effectiveProfile: riderLeg.profile
+            )
             avoidMotorways = riderLeg.avoidsMajorHighways(
                 departingFrom: riderLeg.from.uuidString,
                 effectiveProfile: riderLeg.profile
@@ -1274,7 +1280,16 @@ final class RoutePlannerModel {
     /// Per-stage unknown-access policy.
     func setStageAllowUnknown(_ allow: Bool, at index: Int) {
         guard stages.indices.contains(index) else { return }
-        apply(.setAllowUnknown(legID: stages[index].riderLegID, allow), source: "card")
+        let stage = stages[index]
+        guard let departureID = stage.departureFuelStopID else { return }
+        apply(
+            .setHopAllowUnknown(
+                legID: stage.riderLegID,
+                stationID: departureID,
+                allow
+            ),
+            source: "card-hop-unknown"
+        )
     }
 
     func setStageAvoidMotorways(_ on: Bool, at index: Int) {

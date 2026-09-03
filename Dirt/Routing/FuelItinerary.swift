@@ -100,7 +100,7 @@ nonisolated enum FuelItinerary {
         return a.discoveryRank < b.discoveryRank
     }
 
-    /// Watching begins at 50% consumed. An early pump remains a sparse-corridor
+    /// Watching begins at 75% consumed. An early pump remains a sparse-corridor
     /// fallback, and an explicit rider pump always remains selectable.
     static func eligibleProfileFuelCandidates(
         _ candidates: [ProfileFuelCandidate],

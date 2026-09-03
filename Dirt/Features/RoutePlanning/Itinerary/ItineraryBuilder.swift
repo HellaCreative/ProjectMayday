@@ -314,11 +314,15 @@ final class ItineraryBuilder {
                 let riderLeg = itinerary.legs[index]
                 let from = itinerary.waypoints[index].coordinate
                 let to = itinerary.waypoints[index + 1].coordinate
+                let departureID = riderLeg.from.uuidString
                 let probe = try? await selectedSource.fuelChain(FuelChainRequest(
                     profile: riderLeg.profile,
                     from: from,
                     to: to,
-                    allowUnknown: riderLeg.allowUnknown,
+                    allowUnknown: riderLeg.allowsUnknown(
+                        departingFrom: departureID,
+                        effectiveProfile: riderLeg.profile
+                    ),
                     usableRangeMeters: fuel.usableMeters,
                     firstLegMaxMeters: fuel.usableMeters,
                     requireFuelStopBeforeEnd: false,
@@ -327,7 +331,10 @@ final class ItineraryBuilder {
                     riderLegId: riderLeg.id.uuidString,
                     avoidEdgeIds: Array(itinerary.impassableEdgeIDs),
                     cleanMetroMultiplier: nil,
-                    avoidMotorways: riderLeg.avoidMotorways,
+                    avoidMotorways: riderLeg.avoidsMajorHighways(
+                        departingFrom: departureID,
+                        effectiveProfile: riderLeg.profile
+                    ),
                     probeFirstReachableStation: true,
                     windowTimeBudgetMs: min(
                         2_500,
@@ -880,11 +887,15 @@ final class ItineraryBuilder {
                             + "cachedMeters=\(cachedMeters > 0 ? String(Int(cachedMeters)) : "-")"
                     )
                 } else {
+                    let nextDepartureID = nextLeg.from.uuidString
                     let probe = try? await source.fuelChain(FuelChainRequest(
                         profile: nextLeg.profile,
                         from: nextFrom,
                         to: nextTo,
-                        allowUnknown: nextLeg.profile == .cleanest ? false : nextLeg.allowUnknown,
+                        allowUnknown: nextLeg.allowsUnknown(
+                            departingFrom: nextDepartureID,
+                            effectiveProfile: nextLeg.profile
+                        ),
                         usableRangeMeters: fuel.usableMeters,
                         firstLegMaxMeters: fuel.usableMeters,
                         requireFuelStopBeforeEnd: false,
@@ -893,7 +904,10 @@ final class ItineraryBuilder {
                         riderLegId: nextLeg.id.uuidString,
                         avoidEdgeIds: Array(itinerary.impassableEdgeIDs),
                         cleanMetroMultiplier: nil,
-                        avoidMotorways: nextLeg.avoidMotorways,
+                        avoidMotorways: nextLeg.avoidsMajorHighways(
+                            departingFrom: nextDepartureID,
+                            effectiveProfile: nextLeg.profile
+                        ),
                         probeFirstReachableStation: true,
                         windowTimeBudgetMs: min(
                             2_500,
@@ -907,15 +921,19 @@ final class ItineraryBuilder {
                     } else if startIndex == 0,
                               let response = try? await source.route(routeRequest(
                                   profile: nextLeg.profile,
-                                  allowUnknown: nextLeg.profile == .cleanest
-                                      ? false
-                                      : nextLeg.allowUnknown,
+                                  allowUnknown: nextLeg.allowsUnknown(
+                                      departingFrom: nextDepartureID,
+                                      effectiveProfile: nextLeg.profile
+                                  ),
                                   from: nextFrom,
                                   to: nextTo,
                                   avoidEdgeIDs: itinerary.impassableEdgeIDs,
                                   maxPathMeters: nil,
                                   history: EdgeHistory(),
-                                  avoidMotorways: nextLeg.avoidMotorways,
+                                  avoidMotorways: nextLeg.avoidsMajorHighways(
+                                      departingFrom: nextDepartureID,
+                                      effectiveProfile: nextLeg.profile
+                                  ),
                                   preferBackRoads: nextLeg.preferBackRoads
                               )),
                               let meters = try? responseMeters(response) {
@@ -998,6 +1016,10 @@ final class ItineraryBuilder {
                     ?? riderLeg.from.uuidString
                 let activeProfile = riderLeg.hopOverrides[departureID]
                     ?? riderLeg.profile
+                let activeAllowUnknown = riderLeg.allowsUnknown(
+                    departingFrom: departureID,
+                    effectiveProfile: activeProfile
+                )
                 let activeAvoidMotorways = riderLeg.avoidsMajorHighways(
                     departingFrom: departureID,
                     effectiveProfile: activeProfile
@@ -1019,7 +1041,7 @@ final class ItineraryBuilder {
                    requiredStationID == nil,
                    let response = try? await source.route(routeRequest(
                        profile: activeProfile,
-                       allowUnknown: activeProfile == .cleanest ? false : riderLeg.allowUnknown,
+                       allowUnknown: activeAllowUnknown,
                        from: current,
                        to: riderDestination.coordinate,
                        avoidEdgeIDs: itinerary.impassableEdgeIDs,
@@ -1071,6 +1093,7 @@ final class ItineraryBuilder {
                 // return all of the corresponding route geometry.
                 let canConsumeCombinedWindow = source.supportsCombinedFuelPlanning
                     && riderLeg.hopOverrides.isEmpty
+                    && riderLeg.hopAllowUnknown.isEmpty
                     && !crossesProvinceBoundary
                 let chain: FuelChainResponse
                 let requestBudgetMs = min(
@@ -1096,7 +1119,7 @@ final class ItineraryBuilder {
                         profile: activeProfile,
                         from: current,
                         to: riderDestination.coordinate,
-                        allowUnknown: activeProfile == .cleanest ? false : riderLeg.allowUnknown,
+                        allowUnknown: activeAllowUnknown,
                         usableRangeMeters: fuel.usableMeters,
                         firstLegMaxMeters: remaining,
                         requireFuelStopBeforeEnd: forceFuelStop,
@@ -1392,9 +1415,7 @@ final class ItineraryBuilder {
                         } else {
                             response = try await source.route(routeRequest(
                                 profile: activeProfile,
-                                allowUnknown: activeProfile == .cleanest
-                                    ? false
-                                    : riderLeg.allowUnknown,
+                                allowUnknown: activeAllowUnknown,
                                 from: current,
                                 to: option.stop?.coordinate ?? riderDestination.coordinate,
                                 avoidEdgeIDs: itinerary.impassableEdgeIDs,
@@ -1604,10 +1625,14 @@ final class ItineraryBuilder {
                 departingFrom: departureID,
                 effectiveProfile: profile
             )
+            let allowUnknown = riderLeg.allowsUnknown(
+                departingFrom: departureID,
+                effectiveProfile: profile
+            )
             do {
                 let response = try await source.route(routeRequest(
                     profile: profile,
-                    allowUnknown: profile == .cleanest ? false : riderLeg.allowUnknown,
+                    allowUnknown: allowUnknown,
                     from: firstFrom,
                     to: destination,
                     avoidEdgeIDs: itinerary.impassableEdgeIDs,
@@ -1733,14 +1758,17 @@ final class ItineraryBuilder {
         var activeProfile = resumeAfterStation?.stationID.flatMap {
             riderLeg.hopOverrides[$0]
         } ?? riderLeg.hopOverrides[riderDepartureID] ?? defaultProfile
-        func allowUnknown(for profile: RouteProfile) -> Bool {
-            profile == .cleanest ? false : riderLeg.allowUnknown
+        func allowUnknown(for profile: RouteProfile, departingFrom anchorID: String) -> Bool {
+            riderLeg.allowsUnknown(departingFrom: anchorID, effectiveProfile: profile)
         }
         let effectiveBaseline: RouteResponse
         if resumeAfterStation != nil {
             effectiveBaseline = try await source.route(routeRequest(
                 profile: activeProfile,
-                allowUnknown: allowUnknown(for: activeProfile),
+                allowUnknown: allowUnknown(
+                    for: activeProfile,
+                    departingFrom: initialDepartureID
+                ),
                 from: from,
                 to: to,
                 avoidEdgeIDs: itinerary.impassableEdgeIDs,
@@ -1761,7 +1789,10 @@ final class ItineraryBuilder {
                 ? effectiveBaseline
                 : try await source.route(routeRequest(
                     profile: activeProfile,
-                    allowUnknown: allowUnknown(for: activeProfile),
+                    allowUnknown: allowUnknown(
+                        for: activeProfile,
+                        departingFrom: initialDepartureID
+                    ),
                     from: from,
                     to: to,
                     avoidEdgeIDs: itinerary.impassableEdgeIDs,
@@ -1860,6 +1891,10 @@ final class ItineraryBuilder {
                 departingFrom: departureAnchorID,
                 effectiveProfile: activeProfile
             )
+            let activeAllowUnknown = allowUnknown(
+                for: activeProfile,
+                departingFrom: departureAnchorID
+            )
             let requiredStationID = riderLeg.fuelStopOverrides[departureAnchorID]
             let remainingProfileMeters = max(0, meters - routedMeters)
             let remainingStops = FuelItinerary.fuelStopCountNeeded(
@@ -1873,7 +1908,7 @@ final class ItineraryBuilder {
                     profile: activeProfile,
                     from: windowStart,
                     to: to,
-                    allowUnknown: allowUnknown(for: activeProfile),
+                    allowUnknown: activeAllowUnknown,
                     usableRangeMeters: fuel.usableMeters,
                     firstLegMaxMeters: windowFirstCap,
                     requireFuelStopBeforeEnd: requirePumpBeforeWaypoint || remainingStops > 0,
@@ -1890,12 +1925,12 @@ final class ItineraryBuilder {
                     arrivalEdgeId: sublegHistory.arrivalEdgeID,
                     backtrackFactor: 4,
                     excludedStationIds: Array(excluded),
-                    // Rendering remains progressive, but selection sees several
-                    // anchors so a rural/profile-correct chain can beat the first
-                    // feasible town pump.
-                    windowMaxStops: usesWindows
-                        ? min(4, max(1, remainingStops + 1))
-                        : nil,
+                    // A stage-specific access policy must stop at the next
+                    // pump so the following stage can apply its own policy.
+                    // Otherwise selection may inspect several anchors at once.
+                    windowMaxStops: riderLeg.hopAllowUnknown.isEmpty
+                        ? (usesWindows ? min(4, max(1, remainingStops + 1)) : nil)
+                        : 1,
                     allowPartialWindow: usesWindows,
                     windowTimeBudgetMs: min(Self.liveFuelWindowBudgetMs, remainingBudgetMs),
                     requiredFirstStationId: requiredStationID
@@ -1946,7 +1981,10 @@ final class ItineraryBuilder {
                 let hopDepartureID = subIndex == 0
                     ? departureAnchorID
                     : stops[subIndex - 1].id
-                let hopAllowUnknown = hopProfile == .cleanest ? false : riderLeg.allowUnknown
+                let hopAllowUnknown = allowUnknown(
+                    for: hopProfile,
+                    departingFrom: hopDepartureID
+                )
                 let request = routeRequest(
                     profile: hopProfile,
                     allowUnknown: hopAllowUnknown,
@@ -2385,15 +2423,22 @@ private func routeRequest(
 ) -> RouteRequest {
     let leg = itinerary.legs[legIndex]
     let profile = profileOverride ?? leg.profile
+    let departureID = leg.from.uuidString
     return routeRequest(
         profile: profile,
-        allowUnknown: profile == .cleanest ? false : leg.allowUnknown,
+        allowUnknown: leg.allowsUnknown(
+            departingFrom: departureID,
+            effectiveProfile: profile
+        ),
         from: itinerary.waypoints[legIndex].coordinate,
         to: itinerary.waypoints[legIndex + 1].coordinate,
         avoidEdgeIDs: itinerary.impassableEdgeIDs,
         maxPathMeters: maxPathMeters,
         history: history,
-        avoidMotorways: leg.avoidMotorways,
+        avoidMotorways: leg.avoidsMajorHighways(
+            departingFrom: departureID,
+            effectiveProfile: profile
+        ),
         preferBackRoads: leg.preferBackRoads
     )
 }

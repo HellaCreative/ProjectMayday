@@ -239,6 +239,68 @@ struct ItineraryBuilderTests {
         #expect(result.riderLegStatus.values.allSatisfy { $0 == .built })
     }
 
+    @Test func unknownAccessOnFirstFuelStageCanMoveItsPumpWithoutLeakingDownstream() async throws {
+        let start = point(0)
+        let originalPump = point(0.50)
+        let earlierPump = point(0.35)
+        let destination = point(1)
+        let source = FakeRoutingSource(name: "live")
+        source.supportsCombinedFuelPlanning = true
+        source.distances[key(start, destination)] = 300_000
+        source.distances[key(start, originalPump)] = 150_000
+        source.distances[key(originalPump, destination)] = 150_000
+        source.distances[key(start, earlierPump)] = 180_000
+        source.distances[key(earlierPump, destination)] = 120_000
+        source.fuelStopResponses = [[fuelStop("original-pump", at: originalPump)]]
+
+        let itinerary = makeItinerary([start, destination])
+        let builder = ItineraryBuilder()
+        let fuel = FuelRangePrefs.Snapshot(
+            tankMeters: 200_000, usableMeters: 200_000, reservePercent: 0
+        )
+        let original = await builder.build(
+            itinerary, from: 0, reuse: nil, fuel: fuel,
+            source: .fixed(source), onProgress: { _ in }
+        )
+        #expect(original.legs.compactMap(\.endsAtFuelStop?.stationID) == ["original-pump"])
+
+        let riderLeg = try #require(itinerary.legs.first)
+        let change = reduce(
+            itinerary,
+            .setHopAllowUnknown(
+                legID: riderLeg.id,
+                stationID: riderLeg.from.uuidString,
+                true
+            )
+        )
+        source.fuelChainRequests.removeAll()
+        source.routeRequests.removeAll()
+        source.fuelStopResponses = [[fuelStop("earlier-pump", at: earlierPump)], []]
+        source.fuelWindowCompleteResponses = [false, true]
+
+        let rebuilt = await builder.build(
+            change.itinerary,
+            from: try #require(change.rebuildFromLegIndex),
+            through: change.rebuildThroughLegIndex,
+            reuse: original,
+            fuel: fuel,
+            source: .fixed(source),
+            replanFromStationID: change.replanFromStationID,
+            onProgress: { _ in }
+        )
+
+        let plans = source.fuelChainRequests.filter {
+            $0.fuel.probeFirstReachableStation != true
+        }
+        #expect(rebuilt.legs.compactMap(\.endsAtFuelStop?.stationID) == ["earlier-pump"])
+        #expect(rebuilt.legs.count == 2)
+        #expect(plans.count == 2)
+        #expect(plans[0].accessPolicy.motorizedUnknown == true)
+        #expect(plans[1].accessPolicy.motorizedUnknown == false)
+        #expect(plans.allSatisfy { $0.fuel.windowMaxStops == 1 })
+        #expect(change.itinerary.legs.first?.allowUnknown == false)
+    }
+
     @Test func combinedFuelReplacementPreservesTheUpstreamPumpAndRebuildsTheSuffix() async throws {
         let points = [point(0), point(1)]
         let pump1 = point(0.30)

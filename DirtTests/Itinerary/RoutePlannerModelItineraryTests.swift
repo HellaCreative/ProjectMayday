@@ -438,6 +438,53 @@ struct RoutePlannerModelItineraryTests {
         })
     }
 
+    @Test func allowUnknownSwitchUpdatesOnlyTheSelectedFuelStage() async throws {
+        let prefs = FuelPrefsRestore()
+        defer { prefs.restore() }
+        FuelRangePrefs.kilometers = 220
+        FuelRangePrefs.reservePercent = 5
+        FuelRangePrefs.automaticPlanningEnabled = true
+
+        let start = point(0)
+        let pump = point(0.25)
+        let destination = point(0.5)
+        let source = PlannerFakeRoutingSource()
+        source.distanceOverrides[key(start, destination)] = 340_000
+        source.distanceOverrides[key(start, pump)] = 170_000
+        source.distanceOverrides[key(pump, destination)] = 170_000
+        source.fuelStops = [fuelStop("irving", name: "Irving", at: pump)]
+        let model = makeModel(source: source)
+        model.apply(
+            .replaceAll(
+                waypoints: [start, destination],
+                profile: .dirt,
+                allowUnknown: false,
+                avoidMotorways: false,
+                preferBackRoads: false
+            ),
+            source: "seed"
+        )
+        await model.waitForCanonicalBuildForTesting()
+        #expect(model.stages.count == 2)
+
+        source.routeRequests.removeAll()
+        source.fuelChainRequests.removeAll()
+        model.setStageAllowUnknown(true, at: 0)
+        await model.waitForCanonicalBuildForTesting()
+
+        let riderLeg = try #require(model.itinerary.legs.first)
+        let plans = source.fuelChainRequests.filter {
+            $0.fuel.probeFirstReachableStation != true
+        }
+        #expect(!riderLeg.allowUnknown)
+        #expect(riderLeg.hopAllowUnknown[riderLeg.from.uuidString] == true)
+        #expect(model.stages.count == 2)
+        #expect(model.stages[0].allowUnknown)
+        #expect(!model.stages[1].allowUnknown)
+        #expect(plans.first?.accessPolicy.motorizedUnknown == true)
+        #expect(plans.last?.accessPolicy.motorizedUnknown == false)
+    }
+
     @Test func tappingVisibleAlternativePumpReplacesTheFuelWaypoint() async throws {
         let prefs = FuelPrefsRestore()
         defer { prefs.restore() }

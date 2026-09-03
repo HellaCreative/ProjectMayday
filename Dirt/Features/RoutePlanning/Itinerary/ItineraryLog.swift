@@ -24,6 +24,8 @@ nonisolated enum ItineraryLog {
             return "fuel hop override station=\(stationID) profile=\(profile.rawValue) replanFrom=\(stationID) riderLeg=\(legID.uuidString) \(generation)\(sourceSuffix)"
         case .setHopAvoidMotorways(let legID, let stationID, let avoid):
             return "fuel hop highway station=\(stationID) avoid=\(avoid) replanFrom=\(stationID) riderLeg=\(legID.uuidString) \(generation)\(sourceSuffix)"
+        case .setHopAllowUnknown(let legID, let stationID, let allow):
+            return "fuel hop unknown station=\(stationID) allow=\(allow) replanFrom=\(stationID) riderLeg=\(legID.uuidString) \(generation)\(sourceSuffix)"
         case .setFuelStopOverride(let legID, let departureAnchorID, let stationID):
             return "fuel stop override riderLeg=\(legID.uuidString) from=\(departureAnchorID) to=\(stationID) \(generation)\(sourceSuffix)"
         case .clearFuelStopOverrides(let legID):

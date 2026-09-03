@@ -6,7 +6,7 @@
 
 **Primary engineering agent:** Codex
 
-**Last reconciled:** 2026-09-02
+**Last reconciled:** 2026-09-03
 
 **Repository:** `/Users/richardsmith/SandBox01/MAYDAYiOS/Dirt`
 
@@ -225,8 +225,9 @@ delivery and availability, not two different road networks.
 
 - rider waypoints numbered `1, 2, 3, …`;
 - one `RiderLeg` between each pair of adjacent rider waypoints;
-- per-rider-leg profile and Allow Unknown intent;
-- station-keyed per-hop profile overrides;
+- per-rider-leg default profile and Allow Unknown intent;
+- departure-anchor-keyed per-stage profile, Allow Unknown, and Clean highway
+  overrides;
 - explicit fuel-station replacement overrides;
 - accepted fuel-gap fingerprints; and
 - reported impassable edge IDs.
@@ -313,11 +314,15 @@ saved so automatic planning can be restored without re-entry.
   timed-out, unavailable, or unreadable fuel source never destroys an otherwise
   valid road route. DIRT completes the affected rider leg without a fuel-range
   ceiling and attaches the warning to that exact leg.
-- A profile, Allow Unknown, or per-hop policy edit scoped to one rider leg
-  rebuilds only that rider leg, including any generated pumps inside it. Earlier
-  and later rider legs, their geometry, and their generated pump identities are
-  preserved exactly. The rebuilt leg must meet or improve its preserved arrival-
-  fuel ceiling so the untouched suffix is not made less safe.
+- A profile or Allow Unknown edit made on a visible Point/F row belongs only to
+  that row's departure-to-arrival stage. The selected stage and its fuel-
+  dependent suffix inside the same primary rider leg are regenerated because a
+  longer or shorter route may move the next pump. Only the selected stage uses
+  the edited policy; each following stage applies its own stored policy or the
+  primary rider-leg default. Completed stages before the selected departure and
+  all earlier and later primary rider legs remain exact. The rebuilt primary leg
+  must meet or improve its preserved arrival-fuel ceiling so the untouched
+  itinerary suffix is not made less safe.
 - Waypoint topology edits and global fuel-range/reserve changes may still
   revalidate forward from the earliest affected rider leg.
 - A transport error, timeout, decode error, or missing fuel source is not proof
@@ -335,10 +340,13 @@ It does not generate a disposable Point 1 → Point 2 route and then force the
 rider away from and back onto that geometry. A selected pump becomes the next
 anchor; the next section is created forward from that pump.
 
-Unchanged built sections are reused according to ownership. A rider-leg-local
-profile, access, or hop edit inherits the proven fuel state at that leg's entrance
-and the former safe arrival ceiling at its exit, then replaces only the geometry
-and generated pumps between those two primary waypoints. A waypoint/topology or
+Unchanged built sections are reused according to ownership. A visible-stage
+profile or access edit inherits the proven fuel state at that stage's departure,
+preserves every earlier stage, and rebuilds the selected stage plus the fuel-
+dependent suffix only as far as the owning primary rider waypoint. If the first
+stage's added dirt requires an earlier pump, that pump and the following stages
+may move, but Allow Unknown does not leak into them. The former safe arrival
+ceiling at the primary rider leg's exit is retained. A waypoint/topology or
 global fuel-setting edit may rebuild the affected suffix when its boundaries have
 actually changed.
 

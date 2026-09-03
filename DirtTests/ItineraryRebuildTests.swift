@@ -537,7 +537,7 @@ struct FuelItineraryTests {
             )
         }
         let early = candidate(earlyFuel, meters: 32_000)
-        let window = candidate(windowFuel, meters: 140_000)
+        let window = candidate(windowFuel, meters: 200_000)
 
         let automatic = FuelItinerary.eligibleProfileFuelCandidates(
             [early, window],
@@ -592,19 +592,19 @@ struct FuelItineraryTests {
         #expect(FuelItinerary.fuelSearchStartMeters(
             firstLegMaxMeters: 140_000,
             usableRangeMeters: 140_000
-        ) == 70_000)
+        ) == 105_000)
         #expect(FuelItinerary.fuelSearchStartMeters(
             firstLegMaxMeters: 100_000,
             usableRangeMeters: 140_000
-        ) == 30_000)
+        ) == 65_000)
         #expect(FuelItinerary.fuelPreferredStartMeters(
             firstLegMaxMeters: 140_000,
             usableRangeMeters: 140_000
-        ) == 98_000)
+        ) == 105_000)
         #expect(FuelItinerary.fuelPreferredStartMeters(
             firstLegMaxMeters: 100_000,
             usableRangeMeters: 140_000
-        ) == 58_000)
+        ) == 65_000)
     }
 
     @Test func numberedWaypointOnStationIsALiveRefuelUntilDraggedOff() {
