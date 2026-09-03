@@ -328,6 +328,9 @@ test("one-stop window keeps a proven pump when evaluation crosses its deadline",
   assert.equal(result.windowComplete, false);
   assert.deepEqual(result.stops.map((row) => row.id), ["f1"]);
   assert.deepEqual(result.graphMeters, [78_626]);
+  assert.ok(result.diagnostics.profileRouteAttempts > 0);
+  assert.ok(result.diagnostics.maxHopMs >= 50);
+  assert.ok(result.diagnostics.searchDeadlineOverrunMs > 0);
 });
 
 test("a proven forward one-stop chain does not route dominated earlier pumps", async () => {

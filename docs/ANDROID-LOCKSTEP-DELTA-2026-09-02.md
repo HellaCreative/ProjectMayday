@@ -82,6 +82,13 @@ Android diagnostics must make parity failures observable. At minimum retain:
 - route distance, dirt percentage, corridor, maximum cross-track distance, backtrack percentage, fallbacks, search duration, and search work;
 - automatic-fuel state, range, reserve, selected reason, stop count, candidate count, cache hits, and planning duration;
 - itinerary edit type, earliest rebuilt leg, and reused-leg count.
+- one echoed request ID plus begin/response/transport-failure events for every
+  live route, fuel-chain, and fuel-data request;
+- HTTP status, response bytes, elapsed time, configured timeout, cancellation
+  state, profile-route attempt count, longest candidate hop, and fuel-window
+  budget overrun; and
+- an explicit cancel request and cancelled/stale disposition for every route
+  generation replaced by a later waypoint edit.
 
 The live verification command must require a `--region` argument and verify only the requested state, province, or routing region. Do not let an unavailable BC pack fail an Ontario, Quebec, or Nova Scotia verification.
 

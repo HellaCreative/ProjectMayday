@@ -375,6 +375,12 @@ struct FuelChainDiagnostics: Codable, Sendable {
     var targetCacheHit: Bool? = nil
     var destinationEscapeSearchMs: Int? = nil
     var destinationEscapePops: Int? = nil
+    var profileRouteAttempts: Int? = nil
+    var maxHopMs: Int? = nil
+    var windowBudgetMs: Int? = nil
+    var windowBudgetOverrunMs: Int? = nil
+    var searchDeadlineOverrunMs: Int? = nil
+    var timeBudgetExceeded: Bool? = nil
 }
 
 struct FuelStationCandidate: Codable, Sendable {

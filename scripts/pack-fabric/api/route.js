@@ -10,9 +10,16 @@ const {
 } = require("../routing/lib/service-contract.js");
 
 module.exports = async function handler(req, res) {
+  const suppliedRequestId = String(
+    req.headers && req.headers["x-dirt-request-id"] || ""
+  ).trim();
+  const requestId = /^[a-zA-Z0-9-]{1,64}$/.test(suppliedRequestId)
+    ? suppliedRequestId
+    : `route-${Date.now().toString(36)}`;
+  res.setHeader("X-Dirt-Request-ID", requestId);
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Dirt-Request-ID");
 
   if (req.method === "OPTIONS") return res.status(200).end();
 
@@ -31,13 +38,22 @@ module.exports = async function handler(req, res) {
     return res.status(405).json({ status: "error", error: "method_not_allowed" });
   }
 
+  const started = Date.now();
   try {
     const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
+    console.log(
+      `route request begin id=${requestId} profile=${body.profile || "-"} ` +
+      `locations=${Array.isArray(body.locations) ? body.locations.length : 0}`
+    );
     const result = await routeRequest(body);
+    console.log(
+      `route request end id=${requestId} status=${result.status || "-"} ` +
+      `elapsedMs=${Date.now() - started}`
+    );
     const code = result.status === "complete" ? 200 : (result.status === "error" ? 400 : 422);
     return res.status(code).json(withServiceIdentity(result));
   } catch (err) {
-    console.error("route failed", err);
+    console.error(`route failed id=${requestId} elapsedMs=${Date.now() - started}`, err);
     const message = err && err.message ? err.message : "Routing failed";
     const memoryPressure = /graph_memory_pressure/i.test(message);
     return res.status(memoryPressure ? 503 : 500).json(withServiceIdentity({

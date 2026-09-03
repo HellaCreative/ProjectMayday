@@ -1032,6 +1032,7 @@ async function planFuelChainOnRuntime({
   let states = 0;
   let dijkstraPops = 0;
   const started = Date.now();
+  const searchBudgetMs = Number(timeBudgetMs) > 0 ? Number(timeBudgetMs) : null;
   const destinationLimitForDiagnostics = destinationFuelUsedLimitMeters == null
     ? NaN : Number(destinationFuelUsedLimitMeters);
   const fuelDecisionDiagnostics = {
@@ -1056,7 +1057,7 @@ async function planFuelChainOnRuntime({
   const physicalDestination = locationCoordinate(destination);
   const physicalTotal = haversineMeters(physicalStart, physicalDestination);
   let bestPartial = { progressMeters: 0, stops: [], graphMeters: [], location: start };
-  const deadline = Number(timeBudgetMs) > 0 ? started + Number(timeBudgetMs) : Infinity;
+  const deadline = searchBudgetMs != null ? started + searchBudgetMs : Infinity;
   const returnedStopLimit = Math.max(1, Math.min(12, Number(maxStops) || 12));
   // The UI may request one visible stop at a time. Selection still looks far
   // enough ahead to compare competing rural/profile chains before committing
@@ -1127,6 +1128,8 @@ async function planFuelChainOnRuntime({
       }
     });
   };
+  let profileRouteAttempts = 0;
+  const profileRoute = routeCandidate || defaultProfileHop;
   const evaluateProfileHop = graphOnlyFeeler
     ? (async ({ candidate }) => ({
         status: "complete",
@@ -1134,7 +1137,10 @@ async function planFuelChainOnRuntime({
         stats: { dirtPercent: 0 },
         segments: []
       }))
-    : routeCandidate || defaultProfileHop;
+    : (async (options) => {
+        profileRouteAttempts += 1;
+        return profileRoute(options);
+      });
 
   function destinationCandidate(graphMeters) {
     return {
@@ -1880,7 +1886,12 @@ async function planFuelChainOnRuntime({
         candidateK: effectiveK,
         stationCandidates,
         elapsedMs: Date.now() - started,
-        maxHopMs
+        maxHopMs,
+        profileRouteAttempts,
+        searchDeadlineOverrunMs: Number.isFinite(deadline)
+          ? Math.max(0, Date.now() - deadline)
+          : 0,
+        timeBudgetExceeded
       }, {
         stationsReachableWithinRange,
         candidatesEvaluated: stationCandidates.length,
@@ -1932,6 +1943,11 @@ async function planFuelChainOnRuntime({
       candidateK: effectiveK,
       elapsedMs: Date.now() - started,
       maxHopMs,
+      profileRouteAttempts,
+      searchDeadlineOverrunMs: Number.isFinite(deadline)
+        ? Math.max(0, Date.now() - deadline)
+        : 0,
+      timeBudgetExceeded,
       selectedReason: returnedStops.length
         ? "minimum_stops_forward"
         : "direct_destination"
@@ -2323,6 +2339,12 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
     };
   }
   const rawFuelOptions = body.fuel || {};
+  const windowBudgetMs = Number(rawFuelOptions.windowTimeBudgetMs) > 0
+    ? Number(rawFuelOptions.windowTimeBudgetMs)
+    : null;
+  const windowBudgetOverrunMs = () => windowBudgetMs == null
+    ? 0
+    : Math.max(0, Date.now() - requestStarted - windowBudgetMs);
   const forwardFeeler = rawFuelOptions.forwardFeeler === true;
   const routeFirstPlan = rawFuelOptions.routeFirstPlan === true && !forwardFeeler &&
     selection.mode !== "canada-chain";
@@ -2525,6 +2547,8 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
           matchedFuel: fuel.stations.length,
           elapsedMs: Date.now() - requestStarted,
           totalElapsedMs: Date.now() - requestStarted,
+          windowBudgetMs,
+          windowBudgetOverrunMs: windowBudgetOverrunMs(),
           selectedReason: "direct_destination",
           routeFirstMs,
           graphFetchMs: runtime.loadDiagnostics && runtime.loadDiagnostics.fetchMs,
@@ -2595,6 +2619,8 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
     diagnostics: planned.diagnostics ? {
       ...planned.diagnostics,
       totalElapsedMs: Date.now() - requestStarted,
+      windowBudgetMs,
+      windowBudgetOverrunMs: windowBudgetOverrunMs(),
       routeFirstMs,
       graphFetchMs: runtime.loadDiagnostics && runtime.loadDiagnostics.fetchMs,
       graphDecodeMs: runtime.loadDiagnostics && runtime.loadDiagnostics.decodeMs,

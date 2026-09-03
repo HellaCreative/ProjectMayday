@@ -589,6 +589,12 @@ final class RoutePlannerModel {
         RoutingDebugLog.shared.event(
             ItineraryLog.line(action: action, before: before, after: itinerary, source: source)
         )
+        if isRouting {
+            RoutingDebugLog.shared.event(
+                "build cancel requested gen=\(before.generation) "
+                    + "replacementGen=\(itinerary.generation) source=\(source)"
+            )
+        }
         buildTask?.cancel()
         itineraryBuilder.setCurrentGeneration(itinerary.generation)
 
@@ -706,7 +712,22 @@ final class RoutePlannerModel {
                     self.refreshMap()
                 }
             )
-            guard !Task.isCancelled, self.itinerary.generation == result.generation else { return }
+            guard !Task.isCancelled else {
+                RoutingDebugLog.shared.event(
+                    "build result discarded requestedGen=\(requested.generation) "
+                        + "resultGen=\(result.generation) currentGen=\(self.itinerary.generation) "
+                        + "reason=cancelled"
+                )
+                return
+            }
+            guard self.itinerary.generation == result.generation else {
+                RoutingDebugLog.shared.event(
+                    "build result discarded requestedGen=\(requested.generation) "
+                        + "resultGen=\(result.generation) currentGen=\(self.itinerary.generation) "
+                        + "reason=stale"
+                )
+                return
+            }
             self.built = result
             self.advanceRouteBuildCamera(with: result)
             let currentGapIDs = Set(result.riderLegStatus.values.compactMap { status -> String? in

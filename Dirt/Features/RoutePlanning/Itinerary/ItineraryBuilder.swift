@@ -946,6 +946,21 @@ final class ItineraryBuilder {
                 let canConsumeCombinedWindow = source.supportsCombinedFuelPlanning
                     && riderLeg.hopOverrides.isEmpty
                 let chain: FuelChainResponse
+                let requestBudgetMs = min(
+                    15_000,
+                    max(100, progressWatchdog.remainingMilliseconds())
+                )
+                RoutingDebugLog.shared.event(
+                    "fuel operation begin gen=\(itinerary.generation) "
+                        + "riderLeg=\(riderLeg.id) attempt=\(attempts) "
+                        + "profile=\(activeProfile.rawValue) "
+                        + "from=\(String(format: "%.5f,%.5f", current.latitude, current.longitude)) "
+                        + "to=\(String(format: "%.5f,%.5f", riderDestination.coordinate.latitude, riderDestination.coordinate.longitude)) "
+                        + "used=\(Int(fuelUsed))m remaining=\(Int(remaining))m "
+                        + "forceStop=\(forceFuelStop ? 1 : 0) "
+                        + "requiredStation=\(requiredStationID ?? "-") "
+                        + "budgetMs=\(requestBudgetMs)"
+                )
                 do {
                     chain = try await source.fuelChain(FuelChainRequest(
                         profile: activeProfile,
@@ -968,10 +983,7 @@ final class ItineraryBuilder {
                         excludedStationIds: Array(excludedStations),
                         windowMaxStops: canConsumeCombinedWindow ? 4 : 1,
                         allowPartialWindow: true,
-                        windowTimeBudgetMs: min(
-                            15_000,
-                            max(100, progressWatchdog.remainingMilliseconds())
-                        ),
+                        windowTimeBudgetMs: requestBudgetMs,
                         requiredFirstStationId: requiredStationID,
                         forwardFeeler: false,
                         routeFirstPlan: source.supportsCombinedFuelPlanning,
@@ -982,6 +994,19 @@ final class ItineraryBuilder {
                 } catch is CancellationError {
                     return dropped(itinerary, committed: committed, cancelled: true)
                 } catch {
+                    RoutingDebugLog.shared.routeFailure(
+                        error,
+                        context: "fuel operation gen=\(itinerary.generation) "
+                            + "riderLeg=\(riderLeg.id) attempt=\(attempts) "
+                            + "active=\(active(itinerary) ? 1 : 0)"
+                    )
+                    guard active(itinerary) else {
+                        return dropped(
+                            itinerary,
+                            committed: committed,
+                            cancelled: Task.isCancelled
+                        )
+                    }
                     statuses[riderLeg.id] = .fuelUnknown(
                         "Fuel planning unavailable: \(error.localizedDescription)"
                     )

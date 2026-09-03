@@ -90,8 +90,9 @@ final class RoutingDebugLog {
         )
     }
 
-    func liveRouteDiagnostics(_ response: RouteResponse) {
+    func liveRouteDiagnostics(_ response: RouteResponse, requestID: String? = nil) {
         let d = response.debug?.diagnostics
+        let request = requestID.map { " request=\($0)" } ?? ""
         let attempts = d?.searchAttempts ?? response.debug?.searchMeta?.corridorCandidates ?? []
         let attemptText = attempts.map { attempt in
             let width = attempt.corridorMeters.map { "\(Int($0))" } ?? "unbounded"
@@ -100,7 +101,7 @@ final class RoutingDebugLog {
             return "\(width)m:\(attempt.outcome ?? "?")/pops=\(pops)/ms=\(ms)"
         }.joined(separator: ",")
         event(
-            "ROUTE diag buildMs=\(d?.buildMs.map(String.init) ?? "-") "
+            "ROUTE diag\(request) buildMs=\(d?.buildMs.map(String.init) ?? "-") "
                 + "searchMs=\(d?.searchMs.map(String.init) ?? response.debug?.searchMs.map(String.init) ?? "-") "
                 + "pops=\(d?.pops.map(String.init) ?? response.debug?.pops.map(String.init) ?? "-") "
                 + "requestedProfile=\(d?.requestedProfile ?? "-") "
@@ -116,17 +117,27 @@ final class RoutingDebugLog {
         )
     }
 
-    func liveFuelDiagnostics(_ response: FuelChainResponse) {
+    func liveFuelDiagnostics(_ response: FuelChainResponse, requestID: String? = nil) {
         let d = response.diagnostics
+        let request = requestID.map { " request=\($0)" } ?? ""
         event(
-            "FUEL diag status=\(response.status) "
+            "FUEL diag\(request) status=\(response.status) "
+                + "strategy=\(d?.strategy ?? "-") "
+                + "states=\(d?.states.map(String.init) ?? "-") "
                 + "reachable=\(d?.stationsReachableWithinRange.map(String.init) ?? "-") "
                 + "candidates=\(d?.candidatesEvaluated.map(String.init) ?? response.stationCandidates.map { String($0.count) } ?? "-") "
+                + "candidateK=\(d?.candidateK.map(String.init) ?? "-") "
                 + "considered=\(d?.stationsConsidered.map(String.init) ?? "-") "
                 + "matchedFuel=\(d?.matchedFuel.map(String.init) ?? "-") "
                 + "pops=\(d?.dijkstraPops.map(String.init) ?? "-") "
+                + "profileRoutes=\(d?.profileRouteAttempts.map(String.init) ?? "-") "
+                + "maxHopMs=\(d?.maxHopMs.map(String.init) ?? "-") "
                 + "elapsedMs=\(d?.elapsedMs.map(String.init) ?? "-") "
                 + "totalMs=\(d?.totalElapsedMs.map(String.init) ?? "-") "
+                + "windowBudgetMs=\(d?.windowBudgetMs.map(String.init) ?? "-") "
+                + "windowOverrunMs=\(d?.windowBudgetOverrunMs.map(String.init) ?? "-") "
+                + "searchOverrunMs=\(d?.searchDeadlineOverrunMs.map(String.init) ?? "-") "
+                + "budgetExceeded=\(d?.timeBudgetExceeded == true ? 1 : 0) "
                 + "routeFirstMs=\(d?.routeFirstMs.map(String.init) ?? "-") "
                 + "graphFetchMs=\(d?.graphFetchMs.map(String.init) ?? "-") "
                 + "graphDecodeMs=\(d?.graphDecodeMs.map(String.init) ?? "-") "
