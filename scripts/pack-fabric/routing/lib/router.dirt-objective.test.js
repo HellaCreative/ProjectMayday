@@ -4,6 +4,13 @@ process.env.ROUTING_USE_REGIONAL = "1";
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const path = require("node:path");
+
+process.env.ROUTING_PACKS_V2 = "1";
+process.env.ROUTING_VERIFIED_GRAPH_PATH_OVERRIDES = JSON.stringify({
+  ns: path.resolve(__dirname, "../../../../DirtTests/Fixtures/DirtLocalPacks/ns/graph.v3.bin")
+});
+
 const { routeRequest, isLowDirtRoute, restrictedSummary } = require("./router");
 const { shortDirtExcursionEdgeIds } = require("./find-path-v2");
 const { metroBlocks, metroEdgeBlocks, METRO_CORE_WALL } = require("./hop-search");
@@ -130,6 +137,50 @@ test("Dirt beats Balanced without routing through Halifax or collecting short di
           false
         );
       }
+    }
+  }
+});
+
+test("reported southwest Nova Scotia ride avoids Halifax and improves its weak opening", {
+  timeout: 30_000
+}, async () => {
+  const locations = [
+    { lat: 44.764830, lon: -63.340265 },
+    { lat: 43.612692, lon: -65.798147 }
+  ];
+  const started = Date.now();
+  const result = await routeRequest({
+    profile: "dirt",
+    locations,
+    vehicle: "dual-sport-motorcycle",
+    accessPolicy: { motorizedPermissive: true, motorizedUnknown: false },
+    options: { sessionSeed: 0, backtrackFactor: 4 }
+  });
+
+  assert.equal(result.status, "complete");
+  assert.equal(result.debug.searchMeta.urbanCoreFallbackUsed, undefined);
+  assert.equal(result.debug.fallback, null);
+  assert.equal(result.quality.urbanCoreMeters, 0);
+  assert.ok(
+    result.quality.firstSectionDirtPercent >= 30,
+    `first quarter regressed to ${result.quality.firstSectionDirtPercent}% known Dirt`
+  );
+  assert.ok(
+    result.quality.knownDirtPercent >= 60,
+    `journey regressed to ${result.quality.knownDirtPercent}% known Dirt`
+  );
+  assert.ok(Date.now() - started < 12_000, "fixed route must complete under twelve seconds");
+
+  const start = [locations[0].lon, locations[0].lat];
+  const end = [locations[1].lon, locations[1].lat];
+  for (let index = 0; index < result.geometry.length; index += 1) {
+    const point = result.geometry[index];
+    assert.equal(metroBlocks(point[0], point[1], start, end, METRO_CORE_WALL), false);
+    if (index > 0) {
+      assert.equal(
+        metroEdgeBlocks(result.geometry[index - 1], point, start, end, METRO_CORE_WALL),
+        false
+      );
     }
   }
 });

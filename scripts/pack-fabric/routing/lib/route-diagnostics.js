@@ -64,19 +64,12 @@ function effectiveProfileInfo(requestedProfile, flags = {}) {
   if (flags.settlementFallbackUsed) fallbacks.push("settlement_relaxed");
   if (flags.balancedSearchFallbackUsed) fallbacks.push("balanced_distance_fallback");
 
-  // Urban-core last resort is the Clean escape hatch; when Dirt/Balanced
-  // only connect after that hatch, the ride is effectively a Clean connectivity
-  // result under the requested objective label.
-  let effective = requested;
-  if (flags.urbanCoreFallbackUsed && requested !== "cleanest") {
-    effective = "cleanest";
-  } else if (flags.cleanUnpavedFallbackUsed && requested === "cleanest") {
-    effective = "cleanest";
-  }
-
   return {
     requestedProfile: requested,
-    effectiveProfile: effective,
+    // An urban-core wall relaxation changes a constraint, not the surface-cost
+    // objective. Reporting Dirt as Clean hid the actual failure and made the
+    // diagnostic look like an intentional profile switch.
+    effectiveProfile: requested,
     profileFallbacks: fallbacks
   };
 }

@@ -334,10 +334,20 @@ function maxProgressRegressionMeters(profile) {
  * forward-progress guard. Clean never uses a hard regression continue.
  */
 function progressRegressionForAttempt(profile, corridorMeters) {
-  if (resolveProfile(profile) === "cleanest") return Infinity;
-  return Number.isFinite(corridorMeters)
-    ? maxProgressRegressionMeters(profile)
-    : Infinity;
+  profile = resolveProfile(profile);
+  if (profile === "cleanest") return Infinity;
+  if (!Number.isFinite(corridorMeters)) return Infinity;
+  if (profile !== "dirt") return maxProgressRegressionMeters(profile);
+  // Dirt can earn a larger initial bend when the search has deliberately been
+  // granted a wider adventure corridor. Keeping every finite attempt at 15 km
+  // made geographic choke points (Eastern Shore around Halifax is the fixed
+  // regression) look disconnected and prematurely opened the urban wall.
+  // The allowance remains bounded and proportional to the corridor; it is not
+  // an invitation to consume all lateral space or create a sightseeing loop.
+  return Math.max(
+    maxProgressRegressionMeters(profile),
+    Math.min(60_000, Number(corridorMeters) * 0.25)
+  );
 }
 
 /**

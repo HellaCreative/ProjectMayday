@@ -128,12 +128,11 @@ test("Dirt may regress more than Balanced", () => {
   assert.ok(maxProgressRegressionMeters("balanced") < maxProgressRegressionMeters("dirt"));
 });
 
-test("a wider adventure corridor never grants more travel away from the next pin", () => {
-  assert.equal(
-    progressRegressionForAttempt("dirt", DIRT_CORRIDOR_M),
-    progressRegressionForAttempt("dirt", DIRT_CORRIDOR_M * 4)
-  );
+test("a wider Dirt corridor earns a bounded detour around geographic choke points", () => {
   assert.equal(progressRegressionForAttempt("dirt", DIRT_CORRIDOR_M), 15000);
+  assert.equal(progressRegressionForAttempt("dirt", DIRT_CORRIDOR_M * 2), 30000);
+  assert.equal(progressRegressionForAttempt("dirt", DIRT_CORRIDOR_M * 4), 60000);
+  assert.equal(progressRegressionForAttempt("balanced", DIRT_CORRIDOR_M * 4), 10000);
   assert.equal(progressRegressionForAttempt("dirt", Infinity), Infinity);
 });
 

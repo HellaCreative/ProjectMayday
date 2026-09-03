@@ -80,6 +80,7 @@ function cachedCoincidentSiblingLists(nodeCoords, n) {
 }
 const { settlementBoxesForPack } = require("./urban-settlements");
 const { applyHonestSurfaceStats } = require("./surface-family");
+const { summarizeRouteQuality } = require("./route-quality");
 const {
   isFerryStructureCode,
   ferryRelaxStepCost,
@@ -710,12 +711,18 @@ function dirtCandidateSummary(ride, width, searchObjective = "pavement") {
   const dirtPercent = Number(ride && ride.stats && ride.stats.dirtPercent) || 0;
   const pavedMeters = distanceMeters * Math.max(0, 100 - dirtPercent) / 100;
   const shape = (ride && ride.searchMeta && ride.searchMeta.routeShape) || {};
+  const quality = summarizeRouteQuality(ride, { profile: "dirt" });
   return {
     ride,
     width,
     searchObjective,
     dirtPercent,
     pavedMeters,
+    quality,
+    firstSectionDirtPercent: quality.firstSectionDirtPercent,
+    minimumSectionDirtPercent: quality.minimumSectionDirtPercent,
+    longestPavedRunMeters: quality.longestPavedRunMeters,
+    urbanCoreMeters: quality.urbanCoreMeters,
     routeMeters: Number(shape.routeMeters) || distanceMeters,
     backwardMeters: Number(shape.backwardMeters) || 0,
     lateralMeters: Number(shape.lateralMeters) || 0
@@ -724,9 +731,9 @@ function dirtCandidateSummary(ride, width, searchObjective = "pavement") {
 
 /**
  * Dirt works back from 100%. Distance is deliberately absent: once candidates
- * are within two percentage points, choose less pavement, then less purposeless
- * backward/lateral movement. This prevents a corridor from becoming mileage
- * that the route feels obliged to consume.
+ * are within two percentage points, choose the more consistently enjoyable
+ * journey before aggregate pavement and purposeless movement. One paved stem
+ * or urban crossing must not hide behind a strong total Dirt percentage.
  */
 function chooseDirtRideCandidate(candidates) {
   if (!candidates.length) return null;
@@ -746,6 +753,16 @@ function chooseDirtRideCandidate(candidates) {
   return pool.slice().sort((a, b) => {
     const dirtDelta = b.dirtPercent - a.dirtPercent;
     if (Math.abs(dirtDelta) > 2) return dirtDelta;
+    const urbanDelta = (Number(a.urbanCoreMeters) || 0) - (Number(b.urbanCoreMeters) || 0);
+    if (Math.abs(urbanDelta) > 100) return urbanDelta;
+    const weakSectionDelta =
+      (Number(b.minimumSectionDirtPercent) || 0) -
+      (Number(a.minimumSectionDirtPercent) || 0);
+    if (Math.abs(weakSectionDelta) >= 5) return weakSectionDelta;
+    const pavedRunDelta =
+      (Number(a.longestPavedRunMeters) || 0) -
+      (Number(b.longestPavedRunMeters) || 0);
+    if (Math.abs(pavedRunDelta) > 2_000) return pavedRunDelta;
     const pavedDelta = a.pavedMeters - b.pavedMeters;
     if (Math.abs(pavedDelta) > 2000) return pavedDelta;
     const meanderA = a.backwardMeters + a.lateralMeters * 0.25;
@@ -1054,11 +1071,16 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
           dirtPercent: candidate.dirtPercent,
           distanceMeters: Math.round(candidate.ride.distanceMeters || 0),
           pavedMeters: Math.round(candidate.pavedMeters),
+          firstSectionDirtPercent: candidate.firstSectionDirtPercent,
+          minimumSectionDirtPercent: candidate.minimumSectionDirtPercent,
+          longestPavedRunMeters: Math.round(candidate.longestPavedRunMeters),
+          urbanCoreMeters: Math.round(candidate.urbanCoreMeters),
           backwardMeters: Math.round(candidate.backwardMeters),
           lateralMeters: Math.round(candidate.lateralMeters)
         } : attempt;
       });
-      best.ride.searchMeta.corridorSelection = "highest-dirt-then-less-pavement-meander";
+      best.ride.searchMeta.corridorSelection =
+        "highest-dirt-then-journey-continuity-pavement-meander";
       return best.ride;
     }
     const incompleteAttempt = attemptDiagnostics.find((attempt) =>

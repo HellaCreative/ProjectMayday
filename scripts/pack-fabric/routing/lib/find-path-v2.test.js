@@ -24,17 +24,53 @@ function segment(edgeId, surfaceClass, distanceMeters, structureType = "none") {
   return { edgeId, surfaceClass, distanceMeters, structureType };
 }
 
-function candidate({ dirt, paved, backward = 0, lateral = 0, route = 300_000, width }) {
+function candidate({
+  dirt,
+  paved,
+  backward = 0,
+  lateral = 0,
+  route = 300_000,
+  width,
+  firstSection = dirt,
+  minimumSection = dirt,
+  longestPavedRun = paved,
+  urbanCore = 0
+}) {
   return {
     ride: { id: width },
     width,
     dirtPercent: dirt,
     pavedMeters: paved,
+    firstSectionDirtPercent: firstSection,
+    minimumSectionDirtPercent: minimumSection,
+    longestPavedRunMeters: longestPavedRun,
+    urbanCoreMeters: urbanCore,
     routeMeters: route,
     backwardMeters: backward,
     lateralMeters: lateral
   };
 }
+
+test("Dirt prefers consistent journey quality when aggregate dirt is effectively tied", () => {
+  const frontLoadedPavement = candidate({
+    dirt: 68,
+    paved: 130_000,
+    minimumSection: 12,
+    longestPavedRun: 46_000,
+    width: 60_000
+  });
+  const consistentAdventure = candidate({
+    dirt: 67,
+    paved: 145_000,
+    minimumSection: 38,
+    longestPavedRun: 24_000,
+    width: 120_000
+  });
+  assert.equal(
+    chooseDirtRideCandidate([frontLoadedPavement, consistentAdventure]).width,
+    120_000
+  );
+});
 
 test("Dirt candidate selection works back from 100 percent, not shortest distance", () => {
   const directish = candidate({ dirt: 58, paved: 260_000, backward: 10_000, lateral: 30_000, width: 50_000 });

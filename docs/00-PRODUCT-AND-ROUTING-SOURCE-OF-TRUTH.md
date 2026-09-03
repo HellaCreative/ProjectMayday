@@ -720,6 +720,45 @@ logic. Live/download verification must continue to name exactly one explicit
 `--region <id>` so validating a new pack cannot fail on or mutate another
 region.
 
+### Whole-journey Dirt quality contract — 2026-09-03
+
+Aggregate Dirt percentage is necessary but not sufficient. A ride with a paved
+opening or ending, one long uninterrupted paved stem, or a major urban crossing
+does not become a good Dirt ride merely because later kilometres raise the
+total. Dirt candidate selection therefore uses one shared, auditable journey
+quality summary:
+
+1. known Dirt percentage for the complete ride;
+2. known Dirt percentage in four equal-distance quarters, including the weakest
+   quarter;
+3. the longest continuous paved run; and
+4. metres travelled inside a configured major urban core.
+
+The current ready target is at least 70% known Dirt overall, at least 35% in
+every quarter, no urban-core crossing, and no continuous paved run longer than
+the greater of 20 km or 6% of the ride. Unknown surface remains visible in the
+route's map/display totals but does not masquerade as confirmed Dirt in this
+quality contract. Missing a quality target never destroys a connected legal
+route; it returns a structured degraded-quality explanation.
+
+When aggregate Dirt candidates are within two percentage points, selection now
+prefers no urban crossing, the stronger weakest quarter, and the shorter paved
+run before aggregate pavement and purposeless meander. A material Dirt gain
+still wins. This makes the contract a close-candidate quality decision rather
+than a new source of unconstrained route length.
+
+The fixed `44.764830,-63.340265` → `43.612692,-65.798147` Nova Scotia case also
+proved that a global 15 km progress-regression ceiling falsely disconnected a
+valid wall-respecting Dirt route and opened the Halifax fallback. A finite Dirt
+corridor now earns a proportional detour allowance equal to 25% of its width,
+bounded between the existing 15 km floor and a 60 km ceiling. Balanced remains
+at its existing 10 km rule and an unbounded connectivity proof remains
+unbounded. Against the exact device graph, the fixed route completes in about
+1.5 seconds without entering Halifax; its first-quarter known Dirt rises from
+about 20% to 32%. It remains honestly classified as degraded at about 61% known
+Dirt, so future improvement belongs to a measured topology/surface-evidence
+audit rather than another silent fallback or province-specific weight tweak.
+
 ### Hard live-planning window and dense-region repair — 2026-09-03
 
 Ontario device traces showed that fast downloads were followed by unbounded

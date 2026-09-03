@@ -52,10 +52,10 @@ test("unbounded noPath after corridor failures is disconnected", () => {
   );
 });
 
-test("urban core last resort reports effective cleanest", () => {
+test("urban core last resort remains explicit without relabelling Dirt as Clean", () => {
   const info = effectiveProfileInfo("dirt", { urbanCoreFallbackUsed: true });
   assert.equal(info.requestedProfile, "dirt");
-  assert.equal(info.effectiveProfile, "cleanest");
+  assert.equal(info.effectiveProfile, "dirt");
   assert.deepEqual(info.profileFallbacks, ["urban_core_last_resort"]);
 });
 

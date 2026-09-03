@@ -49,6 +49,7 @@ const {
 } = require("./find-path-v2");
 const { e4FlagsForProfile } = require("./road-tier");
 const { applyHonestSurfaceStats } = require("./surface-family");
+const { summarizeRouteQuality } = require("./route-quality");
 const {
   isFerryStructureCode,
   ferryRelaxStepCost,
@@ -149,6 +150,25 @@ function fallbackReasonFor(path, fallbackUsed, searchOutcome) {
 function isLowDirtRoute(profile, path, threshold = 70) {
   const dirtPercent = Number(path && path.stats && path.stats.dirtPercent);
   return profile === "dirt" && Number.isFinite(dirtPercent) && dirtPercent < threshold;
+}
+
+function dirtQualityWarning(quality) {
+  if (!quality || quality.profile !== "dirt" || quality.state !== "degraded") return null;
+  const details = [
+    `${quality.knownDirtPercent}% known Dirt overall`,
+    `${quality.minimumSectionDirtPercent}% in the weakest quarter`
+  ];
+  if (quality.longestPavedRunMeters > quality.longestPavedLimitMeters) {
+    details.push(`${Math.round(quality.longestPavedRunMeters / 1000)} km longest paved run`);
+  }
+  if (quality.urbanCoreMeters > 100) {
+    details.push(`${Math.max(0.1, Math.round(quality.urbanCoreMeters / 100) / 10)} km through an urban core`);
+  }
+  return {
+    code: "dirt_quality_limited",
+    message: `Dirt quality is limited on this journey: ${details.join(", ")}.`,
+    reasons: quality.reasons
+  };
 }
 
 function backtrackSummary(path, priorEdgeIds) {
@@ -1613,7 +1633,14 @@ async function routeCanadaChain(body, graphResolution) {
         hopIndex: i
       };
     }
-    if (Array.isArray(hop.warnings)) warnings.push(...hop.warnings);
+    if (Array.isArray(hop.warnings)) {
+      // A regional chain is one rider-visible journey. Keep operational hop
+      // warnings, then emit one whole-journey Dirt quality warning after the
+      // segments are merged instead of repeating the same warning per seam.
+      warnings.push(...hop.warnings.filter((warning) =>
+        warning && warning.code !== "dirt_quality_limited"
+      ));
+    }
     if (hop.debug && Number.isFinite(hop.debug.searchMs)) {
       searchMsTotal += hop.debug.searchMs;
     }
@@ -1665,6 +1692,14 @@ async function routeCanadaChain(body, graphResolution) {
     settlementFallbackUsed: hopMetas.some((meta) => meta.settlementFallbackUsed === true),
     hopSearches
   };
+  const quality = summarizeRouteQuality({
+    profile,
+    distanceMeters: totalMeters,
+    geometry,
+    segments
+  }, { profile });
+  const qualityWarning = dirtQualityWarning(quality);
+  if (qualityWarning) warnings.push(qualityWarning);
   return {
     status: "complete",
     profile,
@@ -1672,6 +1707,7 @@ async function routeCanadaChain(body, graphResolution) {
     geometry,
     segments,
     warnings,
+    quality,
     stats: {
       ...surfaceStats,
       hops: parts.length,
@@ -1682,7 +1718,7 @@ async function routeCanadaChain(body, graphResolution) {
       inflateMs: cache.inflateMs
     },
     debug: {
-      routingRevision: "ride-objectives-v10-clean-town-cost",
+      routingRevision: "ride-objectives-v11-journey-quality",
       engine: "dirt-node-astar-chain",
       graphMode: "canada-chain",
       packIdentity: parts.flatMap((part) =>
@@ -1700,6 +1736,7 @@ async function routeCanadaChain(body, graphResolution) {
       chainCacheEnabled: useChainCache,
       cache,
       hopTimings: hopCacheSnapshots,
+      journeyQuality: quality,
       searchMs: searchMsTotal
     }
   };
@@ -2504,6 +2541,7 @@ async function routeOnRuntime(body, graphResolution, runtime) {
     };
   }
 
+  const quality = summarizeRouteQuality(path, { profile });
   const warnings = [];
   if (policy.motorizedUnknown) {
     warnings.push({
@@ -2526,7 +2564,7 @@ async function routeOnRuntime(body, graphResolution, runtime) {
   if (urbanCoreFallbackUsed) {
     warnings.push({
       code: "urban_core_fallback",
-      message: "No route could reach the destination while keeping every urban core as a wall. This Clean route uses an urban crossing only as a last resort."
+      message: "No route could reach the destination while keeping every urban core as a wall. This route uses an urban crossing only as a last resort."
     });
   }
   if (cleanUnpavedFallbackUsed) {
@@ -2547,6 +2585,8 @@ async function routeOnRuntime(body, graphResolution, runtime) {
       message: "Balanced refinement reached its planning limit. A legal, range-safe road route was kept instead of failing the ride."
     });
   }
+  const qualityWarning = dirtQualityWarning(quality);
+  if (qualityWarning) warnings.push(qualityWarning);
   if (startMatch.distanceM > 1 || endMatch.distanceM > 1) {
     warnings.push({
       code: "access_legs",
@@ -2615,12 +2655,14 @@ async function routeOnRuntime(body, graphResolution, runtime) {
     ? routeDeadlineAtMs - Date.now()
     : null;
   routeDiagnostics.corridorClipDiagnosticSkipped = skipCorridorClipDiagnostic;
+  routeDiagnostics.journeyQuality = quality;
 
   return {
     status: "complete",
     routeId: "route-" + Date.now().toString(36),
     profile,
     lowDirt,
+    quality,
     balancedMiss,
     vehicle: body.vehicle || "dual-sport-motorcycle",
     accessPolicy: policy,
@@ -2637,7 +2679,7 @@ async function routeOnRuntime(body, graphResolution, runtime) {
       : buildManeuvers(path.geometry),
     warnings,
     debug: {
-      routingRevision: "ride-objectives-v10-clean-town-cost",
+      routingRevision: "ride-objectives-v11-journey-quality",
       startMatchedEdge: startMatch.edgeId,
       endMatchedEdge: endMatch.edgeId,
       startAccessMeters: Math.round(startMatch.distanceM),
@@ -2668,6 +2710,7 @@ async function routeOnRuntime(body, graphResolution, runtime) {
         ? null
         : (Number.isFinite(selectedMeters) ? Math.round(selectedMeters) : null),
       corridorClippedDirtMeters,
+      journeyQuality: quality,
       diagnostics: routeDiagnostics,
       regionIds: graphResolution.regionIds,
       graphMode: graphResolution.mode,
