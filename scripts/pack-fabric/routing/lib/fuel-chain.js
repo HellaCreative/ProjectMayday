@@ -49,7 +49,7 @@ const MIN_STOP_SEPARATION_M = 800;
 const MIN_FORWARD_PROGRESS_M = 8_000;
 const MIN_DESTINATION_FUEL_CLEARANCE_M = 5_000;
 /** Bumped when fuel-selection / ranking contracts change. Clients may assert. */
-const FUEL_CHAIN_SERVICE_VERSION = "2026-09-03.hard-window-dense-targets.12";
+const FUEL_CHAIN_SERVICE_VERSION = "2026-09-03.hard-window-dense-targets-equal-route.13";
 /** Watch at 50%; prefer sensible equal-stop choices at 70%. Lockstep: HopSearchPolicy.swift. */
 const FUEL_COMFORT_LO = 0.50;
 const FUEL_COMFORT_HI = 0.70;
@@ -77,6 +77,16 @@ const CLEAN_MAJOR_ROAD_CLASSES = new Set([
 ]);
 
 const MAX_RECENT_EDGE_HISTORY = 256;
+
+function routeFirstBudgetForWindow(windowBudgetMs) {
+  const budget = Number(windowBudgetMs);
+  if (!(budget > 0)) return null;
+  // The foundational ride is required evidence for every profile. Giving
+  // Balanced and Clean less time than Dirt made dense-region cold starts fail
+  // before their legal fallback could complete. Keep a five-second minimum
+  // reserve for fuel selection while treating every riding style equally.
+  return Math.max(2_000, Math.min(10_000, Math.round(budget * 0.67)));
+}
 
 function appendRecentEdge(history, edgeId) {
   const id = String(edgeId == null ? "" : edgeId);
@@ -2526,11 +2536,7 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
   // Reserve part of every fuel window for pump matching and chain proof. A
   // profile refinement may use most of the window, but it may not consume the
   // entire request before fuel planning even begins.
-  const requestedProfile = String(body.profile || "dirt").toLowerCase();
-  const routeFirstShare = requestedProfile === "dirt" ? 0.67 : 0.53;
-  const routeFirstBudgetMs = windowBudgetMs == null
-    ? null
-    : Math.max(2_000, Math.min(10_000, Math.round(windowBudgetMs * routeFirstShare)));
+  const routeFirstBudgetMs = routeFirstBudgetForWindow(windowBudgetMs);
   const routeFirstDeadlineAtMs = routeFirstBudgetMs == null
     ? Infinity
     : Math.min(windowDeadlineAtMs, requestStarted + routeFirstBudgetMs);
@@ -2975,6 +2981,7 @@ module.exports = {
   rankForwardFuel,
   stationEligibility,
   fuelNeedForProfileRide,
+  routeFirstBudgetForWindow,
   comfortCapMeters,
   compareChainPlans,
   fuelPlanStatus,

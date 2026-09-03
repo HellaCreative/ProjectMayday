@@ -10,8 +10,15 @@ const {
   planCrossRegionFuelChain,
   planFuelChainOnRuntime,
   rankForwardFuel,
+  routeFirstBudgetForWindow,
   stationEligibility
 } = require("./fuel-chain");
+
+test("every riding style receives the same dense-region route-first allowance", () => {
+  assert.equal(routeFirstBudgetForWindow(15_000), 10_000);
+  assert.equal(routeFirstBudgetForWindow(5_800), 3_886);
+  assert.equal(routeFirstBudgetForWindow(null), null);
+});
 
 test("an exhausted graph is a gap but a planning timeout is inconclusive", () => {
   assert.equal(fuelPlanStatus({ ok: false, error: "no_route_connected_fuel_chain" }), "gap");

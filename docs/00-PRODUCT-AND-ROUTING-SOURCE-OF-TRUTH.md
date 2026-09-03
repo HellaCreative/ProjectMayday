@@ -717,7 +717,9 @@ bytes, route-profile objectives, fuel priorities, or rider waypoint semantics:
 1. the fuel window is now one absolute deadline shared by route-first work,
    graph reachability, pump matching, candidate routing, and continuation
    proof. Route-first receives a smaller portion of that window so fuel work
-   always has time to run;
+   always has time to run. Dirt, Balanced, and Clean receive the same 67%
+   route-first allowance (capped at 10 seconds); profile choice must not make
+   a dense-region cold start fail sooner;
 2. every large inner loop observes the same deadline and request-cancellation
    signal. The iOS client also enforces a true wall-clock timeout—independent of
    the networking stack's inactivity timeout—and abandoning or replacing a
