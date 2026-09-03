@@ -221,6 +221,7 @@ final class RoutePlannerModel {
     @ObservationIgnored private var buildTask: Task<Void, Never>?
     @ObservationIgnored private var pendingPackBuild: (
         from: Int,
+        through: Int?,
         reuse: BuiltItinerary?,
         replanFromStationID: String?
     )?
@@ -640,6 +641,7 @@ final class RoutePlannerModel {
         }
         startCanonicalBuild(
             from: fromLeg,
+            through: change.rebuildThroughLegIndex,
             reuse: built,
             replanFromStationID: change.replanFromStationID
         )
@@ -670,6 +672,7 @@ final class RoutePlannerModel {
         pendingPackBuild = nil
         startCanonicalBuild(
             from: pending.from,
+            through: pending.through,
             reuse: pending.reuse,
             replanFromStationID: pending.replanFromStationID
         )
@@ -677,6 +680,7 @@ final class RoutePlannerModel {
 
     private func startCanonicalBuild(
         from legIndex: Int,
+        through throughLegIndex: Int? = nil,
         reuse: BuiltItinerary?,
         replanFromStationID: String? = nil
     ) {
@@ -696,6 +700,7 @@ final class RoutePlannerModel {
             let result = await self.itineraryBuilder.build(
                 requested,
                 from: legIndex,
+                through: throughLegIndex,
                 reuse: reuse,
                 fuel: fuel,
                 source: self.routingSourcePolicy,
@@ -762,8 +767,9 @@ final class RoutePlannerModel {
                 if case .fuelUnknown(let message) = $0 { return message }
                 return nil
             }.first
+            // Fuel proof is advisory once road geometry exists. Only a route
+            // geometry failure belongs in the blocking error channel.
             self.errorMessage = hardFailure
-                ?? fuelFailure.map(Self.userFacingFuelFailureMessage)
             if self.errorMessage == nil {
                 self.routeIdentity = "plan:" + self.itinerary.waypoints.dropFirst().map {
                     "\($0.coordinate.latitude),\($0.coordinate.longitude)"
@@ -779,6 +785,8 @@ final class RoutePlannerModel {
                 return nil
             }).first {
                 self.toast = gap.message
+            } else if let fuelFailure {
+                self.toast = Self.userFacingFuelFailureMessage(fuelFailure)
             } else {
                 let requestedProfiles = Dictionary(uniqueKeysWithValues: self.itinerary.legs.map {
                     ($0.id, $0.profile)
@@ -3732,7 +3740,7 @@ final class RoutePlannerModel {
         if normalized.contains("fuel planning")
             || normalized.contains("fuel continuity")
             || normalized.contains("fuel chain") {
-            return "Couldn’t complete a fuel-safe route within your range. Your pins are unchanged."
+            return "Route built. Fuel safety could not be verified for one or more legs."
         }
         return message
     }

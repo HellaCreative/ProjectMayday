@@ -57,7 +57,7 @@ Android must preserve the accepted fuel policy:
 6. Then prefer directional progress, followed by shorter sensible travel. Dirt percentage is the final tiebreaker only.
 7. Do not choose an early, backward, overshooting, or down-and-back pump when a sensible forward option exists.
 8. A rider-placed waypoint on a fuel station resets the tank because the rider is assumed to refuel there.
-9. Alternative-pump replacement must keep at least the useful evaluated candidates for that departure. Selecting another pump rebuilds the affected route because both the approach and downstream fuel state change.
+9. Alternative-pump replacement must keep at least the useful evaluated candidates for that departure. Selecting another pump rebuilds only the owning primary-to-primary rider leg, including its generated pumps; later rider legs and their pump identities remain unchanged.
 10. When a proved selected-profile route contains a safe one-stop pump, split and reuse that route instead of independently rerouting profile legs to and from the pump. Fuel insertion must not lower the selected profile's route quality.
 11. Dense pump shortlisting follows the actual foundation route before the straight endpoint chord. Any route-proximity value is request-specific and must not leak through the reusable station-snap cache.
 12. When exact partitioning is unavailable, rank the full approach-plus-continuation chain. A pump near the winding foundation may relax chord-relative continuation backtrack only within the shared bound; range, forward continuation, total-detour, and retrace guards remain mandatory.
@@ -72,11 +72,13 @@ Port the client-side behaviour from `effb608` and `d17a4a0`:
 - Keep route and fuel work within one live planning operation and consume the returned routed hops instead of routing the same selected pump hops again.
 - Reuse the broad corridor's station set when the rider changes DIRT/Balanced/Clean or Allow Unknown within the same planning operation.
 - Retain alternative-pump candidates by departure/fuel state so the pump chooser can show them without a fresh province-wide search.
+- A DIRT/Balanced/Clean, Allow Unknown, or per-hop policy edit on one rider leg rebuilds only that primary-to-primary leg. Preserve every earlier and later built leg and generated pump exactly, inherit the prior entrance fuel state, and meet or improve the prior arrival-fuel ceiling at the unchanged exit waypoint.
 - When a waypoint is appended, inserted, moved, or deleted, preserve unaffected route work but revalidate the fuel chain from the earliest affected rider leg.
 - Reuse an upstream automatic pump only when its incoming fuel state and downstream reachability remain valid.
 - A rider-added fuel waypoint must be treated as a refuelling reset before validating the suffix.
 - Never keep stale automatic pumps merely because their coordinates are unchanged.
-- In LIVE mode, do not launch a speculative next-leg fuel/route request beside the current combined operation. Use a cached next-leg measurement if present; otherwise build the suffix once and rewind the preceding fuel choice only when the completed suffix proves it unsafe.
+- In LIVE mode, do not launch a speculative next-leg fuel/route request beside the current combined operation. A local leg edit uses its preserved exit-fuel ceiling; a topology edit builds the affected suffix once.
+- Fuel planning is advisory to geometry. If no station chain is proven, or fuel planning times out/fails, complete the road route without a range ceiling and attach `gap` or `unknown` to the exact rider leg. Only failure to produce road geometry is a route failure.
 
 ### 4. Diagnostics and release verification
 
@@ -119,6 +121,7 @@ These are regression anchors, not universal route-quality targets. Run them agai
 | Nova Scotia Sept-3 fuel | `44.764830,-63.340265` → `43.678864,-65.794704` | complete one-stop Dirt chain; foundation partition; no pump profile reroutes |
 | Central Ontario Sept-3 fuel | `44.632662,-75.651839` → `44.601681,-79.308263` | complete one-stop Dirt chain; foundation partition; about 85% dirt |
 | Northern Ontario surface switch | `48.717124,-85.788718` → `49.690947,-87.041404` | reuse the useful pump across Balanced → Dirt; Dirt must exceed Balanced dirt share without remote paved hunting |
+| Long regional fuel window | `44.764830,-63.340265` → `45.645111,-75.907752` at 374 km usable | first LIVE window succeeds with one or more routed pumps and `windowComplete=false`; a continuation timeout must not erase the safe prefix |
 
 For the one-stop probe, the accepted routed legs were approximately 382,484 m and 12,940 m. Exact timing varies with network and device; route choice, stop count, forward progress, and parity laws are the gates.
 
@@ -134,6 +137,9 @@ Android is lockstep for this delta only when all of the following are true:
   Android LIVE returns equivalent stop/quality semantics, and Android offline
   has native fixtures for foundation partition, route-aware dense shortlisting,
   surface-switch pump reuse, and non-speculative forward/rewind planning.
+- Long-chain tests prove that a pump routed inside its approach deadline can be
+  committed as an incomplete window when only its continuation times out, while
+  an approach that itself misses the deadline remains uncommitted.
 - The Nova Scotia, Quebec, and Ontario fixed probes pass without changing the accepted profile objectives.
 - Android's required Pixel 7 emulator verification passes before any physical-device build.
 

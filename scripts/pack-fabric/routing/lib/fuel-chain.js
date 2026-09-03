@@ -2074,6 +2074,10 @@ async function planFuelChainOnRuntime({
         const fits = response && response.status === "complete"
           && Number.isFinite(meters) && meters <= hopCap + 1
           && firstBacktrackMeters <= MAX_FUEL_RETRACE_M + 1;
+        const approachProvenWithinBudget = fits && (
+          !Number.isFinite(approachDeadlineAtMs) || Date.now() <= approachDeadlineAtMs
+        );
+        if (fits && !approachProvenWithinBudget) timeBudgetExceeded = true;
         row = {
           candidate,
           response,
@@ -2082,6 +2086,7 @@ async function planFuelChainOnRuntime({
           dirtPct: Number.isFinite(dirtPct) ? dirtPct : 0,
           chainDirtPct: Number.isFinite(dirtPct) ? dirtPct : 0,
           fits,
+          approachProvenWithinBudget,
           continuationDestinationMeters: null,
           continuationResponse: null,
           continuationBacktrackMeters: null,
@@ -2146,6 +2151,9 @@ async function planFuelChainOnRuntime({
               abortSignal
             });
             continuationElapsedMs = Date.now() - continuationStarted;
+            const continuationProvenWithinBudget =
+              !Number.isFinite(deadline) || Date.now() <= deadline;
+            if (!continuationProvenWithinBudget) timeBudgetExceeded = true;
             const routedContinuationMeters = Number(
               continuationResponse && continuationResponse.distanceMeters
             );
@@ -2158,6 +2166,7 @@ async function planFuelChainOnRuntime({
               : MAX_FUEL_RETRACE_M;
             if (
               continuationResponse && continuationResponse.status === "complete" &&
+              continuationProvenWithinBudget &&
               Number.isFinite(routedContinuationMeters) &&
               routedContinuationMeters <= continuationCap + 1 &&
               continuationBacktrackMeters <= continuationBacktrackCap + 1
@@ -2245,6 +2254,7 @@ async function planFuelChainOnRuntime({
           approachBudgetMs,
           approachElapsedMs,
           approachStatus: response && response.status || null,
+          approachProvenWithinBudget,
           approachSearchOutcome: response && response.debug && response.debug.searchOutcome || null,
           approachFailureReason: response && response.debug && response.debug.failureReason || null,
           continuationElapsedMs,
@@ -2318,6 +2328,7 @@ async function planFuelChainOnRuntime({
           meters: candidate.graphMeters,
           dirtPct: 0,
           fits: false,
+          approachProvenWithinBudget: false,
           continuationDestinationMeters: null,
           continuationResponse: null,
           continuationBacktrackMeters: null,
@@ -2680,15 +2691,33 @@ async function planFuelChainOnRuntime({
       ranked, currentKey, currentLocation, cap, visited, history, arrival, depth
     );
     const stationPlans = [];
+    const routedApproachPlans = [];
     for (const evaluation of evaluated.slice(0, 2)) {
       if (states >= maxStates) break;
-      if (!evaluation.validForward) continue;
+      if (!evaluation.fits) continue;
       const candidate = evaluation.candidate;
       const stop = {
         ...candidate.station,
         graphMeters: evaluation.meters,
         dirtPercent: evaluation.dirtPct
       };
+      if (evaluation.approachProvenWithinBudget) {
+        routedApproachPlans.push({
+          evaluation,
+          plan: {
+            stops: [stop],
+            graphMeters: [evaluation.meters],
+            routes: [evaluation.response],
+            quality: evaluation.firstQuality,
+            directionalDetourMeters: Number(evaluation.candidate.crossTrack) || 0,
+            progressMeters: Number(evaluation.candidate.progressMeters) || 0,
+            complete: false,
+            partial: true,
+            partialReason: "approach_proved_continuation_timeout"
+          }
+        });
+      }
+      if (!evaluation.validForward) continue;
       const continuationMeters = Number(evaluation.continuationDestinationMeters);
       const requiredStopsSatisfied = depth + 1 >= Math.max(
         0, Number(minimumFuelStops) || 0
@@ -2783,6 +2812,20 @@ async function planFuelChainOnRuntime({
           partial: true
         });
       }
+    }
+    // The visible fuel window is incremental. If the active profile fully
+    // routed a forward pump before its own deadline, a later continuation
+    // timeout must not erase that safe progress. Return only the proved
+    // approach; the next client request resumes from the pump with a full tank
+    // and a fresh planning window. This is deliberately limited to timeouts:
+    // an exhausted (non-timeout) continuation still rejects the candidate.
+    if (!stationPlans.length && allowPartialWindow && exceededSearchBudget() &&
+        routedApproachPlans.length) {
+      // `evaluated` was already sorted by compareEvaluatedRows inside
+      // evaluatedRoutes, so preserve that order here. The comparator is local
+      // to evaluatedRoutes and intentionally is not duplicated at search scope.
+      stationPlans.push(routedApproachPlans[0].plan);
+      timeBudgetExceeded = true;
     }
     if (stationPlans.length) {
       stationPlans.sort((a, b) => compareChainPlans(a, b, profile, cap));
@@ -2910,8 +2953,11 @@ async function planFuelChainOnRuntime({
       timeBudgetExceeded: exceededSearchBudget(),
       deadlinePhase: exceededSearchBudget() ? planningStage : null,
       cancelled: !!(abortSignal && abortSignal.aborted),
-      selectedReason: returnedStops.length
-        ? "minimum_stops_forward"
+      partialReason: chain.partialReason || null,
+      selectedReason: chain.partial
+        ? "routed_prefix_timeout"
+        : returnedStops.length
+          ? "minimum_stops_forward"
         : "direct_destination"
     }, {
       stationsReachableWithinRange,
@@ -3127,7 +3173,10 @@ async function planCrossRegionFuelChain(body, selection, fuelOptions, dependenci
           dijkstraPops: totalPops,
           matchedFuel,
           elapsedMs: Date.now() - started,
-          maxHopMs
+          maxHopMs,
+          partialReason: planned.diagnostics && planned.diagnostics.partialReason || null,
+          selectedReason: planned.diagnostics && planned.diagnostics.selectedReason ||
+            "regional_window_progress"
         }, {
           candidatesEvaluated: stationCandidates.length,
           stationCandidates

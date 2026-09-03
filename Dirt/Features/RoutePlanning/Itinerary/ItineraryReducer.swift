@@ -3,6 +3,9 @@ import Foundation
 nonisolated struct ItineraryChange: Equatable, Sendable {
     let itinerary: RiderItinerary
     let rebuildFromLegIndex: Int?
+    /// Inclusive rider-leg boundary for a local option edit. Nil means the
+    /// rebuild may continue through the remaining itinerary.
+    let rebuildThroughLegIndex: Int?
     let replanFromStationID: String?
 }
 
@@ -113,7 +116,8 @@ nonisolated func reduce(
             itinerary,
             waypoints: itinerary.waypoints,
             legs: legs,
-            rebuildFrom: legID == nil ? 0 : affected.first
+            rebuildFrom: legID == nil ? 0 : affected.first,
+            rebuildThrough: legID == nil ? nil : affected.first
         )
 
     case .setHopProfile(let legID, let stationID, let profile):
@@ -128,6 +132,7 @@ nonisolated func reduce(
             waypoints: itinerary.waypoints,
             legs: legs,
             rebuildFrom: index,
+            rebuildThrough: index,
             replanFromStationID: stationID == legs[index].from.uuidString ? nil : stationID
         )
 
@@ -145,6 +150,7 @@ nonisolated func reduce(
             waypoints: itinerary.waypoints,
             legs: legs,
             rebuildFrom: index,
+            rebuildThrough: index,
             replanFromStationID: stationID == legs[index].from.uuidString ? nil : stationID
         )
 
@@ -160,6 +166,7 @@ nonisolated func reduce(
             waypoints: itinerary.waypoints,
             legs: legs,
             rebuildFrom: index,
+            rebuildThrough: index,
             replanFromStationID: departureAnchorID == legs[index].from.uuidString
                 ? nil
                 : departureAnchorID
@@ -175,7 +182,8 @@ nonisolated func reduce(
             itinerary,
             waypoints: itinerary.waypoints,
             legs: legs,
-            rebuildFrom: index
+            rebuildFrom: index,
+            rebuildThrough: index
         )
 
     case .setAllowUnknown(let legID, let allowUnknown):
@@ -202,7 +210,8 @@ nonisolated func reduce(
             itinerary,
             waypoints: itinerary.waypoints,
             legs: legs,
-            rebuildFrom: legID == nil ? 0 : affected.first
+            rebuildFrom: legID == nil ? 0 : affected.first,
+            rebuildThrough: legID == nil ? nil : affected.first
         )
 
     case .setAvoidMotorways(let legID, let avoidMotorways):
@@ -225,7 +234,8 @@ nonisolated func reduce(
             itinerary,
             waypoints: itinerary.waypoints,
             legs: legs,
-            rebuildFrom: legID == nil ? 0 : affected.first
+            rebuildFrom: legID == nil ? 0 : affected.first,
+            rebuildThrough: legID == nil ? nil : affected.first
         )
 
     case .setPreferBackRoads:
@@ -315,6 +325,7 @@ private nonisolated func unchanged(_ itinerary: RiderItinerary) -> ItineraryChan
     ItineraryChange(
         itinerary: itinerary,
         rebuildFromLegIndex: nil,
+        rebuildThroughLegIndex: nil,
         replanFromStationID: nil
     )
 }
@@ -325,6 +336,7 @@ private nonisolated func changed(
     legs: [RiderLeg],
     impassableEdgeIDs: Set<String>? = nil,
     rebuildFrom: Int?,
+    rebuildThrough: Int? = nil,
     replanFromStationID: String? = nil
 ) -> ItineraryChange {
     let itinerary = RiderItinerary(
@@ -336,6 +348,7 @@ private nonisolated func changed(
     return ItineraryChange(
         itinerary: itinerary,
         rebuildFromLegIndex: rebuildFrom,
+        rebuildThroughLegIndex: rebuildThrough,
         replanFromStationID: replanFromStationID
     )
 }

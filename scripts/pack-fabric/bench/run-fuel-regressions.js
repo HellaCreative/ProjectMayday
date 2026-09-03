@@ -17,6 +17,8 @@ const packPath = (region, name) => path.join(
 process.env.ROUTING_USE_REGIONAL = "1";
 process.env.ROUTING_VERIFIED_GRAPH_PATH_OVERRIDES = JSON.stringify({
   ns: packPath("ns", "graph.v3.bin"),
+  nb: packPath("nb", "graph.v3.bin"),
+  qc: packPath("qc", "graph.v3.bin"),
   on: packPath("on", "graph.v3.bin")
 });
 
@@ -39,6 +41,14 @@ function loadFuel(region) {
     stations: fuelFor(region).stations || [],
     packIdentity: []
   });
+}
+
+async function loadRegionFuel(region) {
+  return {
+    regionId: region,
+    stations: fuelFor(region).stations || [],
+    packIdentity: { regionId: region }
+  };
 }
 
 function weightedDirt(routes) {
@@ -96,7 +106,65 @@ async function runCase({ id, region, profile, from, to, usableMeters, preferredS
   };
 }
 
+async function runCrossRegionCase({ id, profile, from, to, usableMeters }) {
+  const started = Date.now();
+  const result = await fuelChainRequest({
+    profile,
+    locations: [from, to],
+    vehicle: "dual-sport-motorcycle",
+    accessPolicy: {
+      motorizedPermissive: true,
+      motorizedUnknown: false
+    },
+    fuel: {
+      usableRangeMeters: usableMeters,
+      firstLegMaxMeters: usableMeters,
+      routeFirstPlan: true,
+      ensureDestinationFuelEscape: true,
+      windowMaxStops: 4,
+      allowPartialWindow: true,
+      windowTimeBudgetMs: 20_000,
+      riderLegId: id
+    },
+    options: {
+      sessionSeed: 0xD1_47_0008,
+      backtrackFactor: 4
+    }
+  }, { loadRegionFuel });
+  const elapsedMs = Date.now() - started;
+  assert.equal(result.status, "complete", `${id}: ${result.error || result.message}`);
+  assert.ok((result.stops || []).length > 0,
+    `${id}: a resumable long-distance fuel window returned no pumps`);
+  assert.equal(result.windowComplete, false,
+    `${id}: a four-stop window unexpectedly claimed to finish the 2,000+ km ride`);
+  assert.ok((result.graphMeters || []).every((meters) => Number(meters) <= usableMeters + 1),
+    `${id}: a regional fuel hop exceeded ${usableMeters}m`);
+  assert.ok(elapsedMs < 35_000, `${id}: ${elapsedMs}ms exceeded the regression ceiling`);
+  return {
+    id,
+    elapsedMs,
+    stopIds: (result.stops || []).map((stop) => String(stop.id)),
+    meters: Math.round((result.graphMeters || []).reduce(
+      (sum, meters) => sum + Number(meters || 0), 0
+    )),
+    dirtPct: null,
+    strategy: result.diagnostics && result.diagnostics.strategy,
+    selectedReason: result.diagnostics && result.diagnostics.selectedReason,
+    profileRoutes: Number(result.diagnostics && result.diagnostics.profileRouteAttempts || 0),
+    foundationPriorityStations: 0,
+    candidates: result.stationCandidates || []
+  };
+}
+
 async function main() {
+  const longCrossRegion = await runCrossRegionCase({
+    id: "device-ns-to-ottawa-long-window",
+    profile: "dirt",
+    from: { lat: 44.764830, lon: -63.340265 },
+    to: { lat: 45.645111, lon: -75.907752 },
+    usableMeters: 374_000
+  });
+
   const novaScotia = await runCase({
     id: "device-ns-halifax-to-southwest",
     region: "ns",
@@ -146,13 +214,16 @@ async function main() {
     Number.isFinite(Number(candidate.foundationPriorityCellDistance))
   ), "Dirt did not retain a route-adjacent fuel candidate");
 
-  console.table([novaScotia, centralOntario, northernBalanced, northernDirt].map((row) => ({
+  console.table([
+    longCrossRegion, novaScotia, centralOntario, northernBalanced, northernDirt
+  ].map((row) => ({
     case: row.id,
     ms: row.elapsedMs,
     meters: row.meters,
-    dirt: `${row.dirtPct}%`,
+    dirt: row.dirtPct == null ? "window" : `${row.dirtPct}%`,
     stops: row.stopIds.join(",") || "none",
     strategy: row.strategy,
+    selected: row.selectedReason || "-",
     profileRoutes: row.profileRoutes,
     routePriority: row.foundationPriorityStations
   })));

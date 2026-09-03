@@ -480,7 +480,7 @@ struct RoutePlannerModelItineraryTests {
         #expect(model.stages[0].error == "No eligible edge near Point 1")
     }
 
-    @Test func fuelServiceFailureIsNotPresentedAsAProvenGap() async throws {
+    @Test func fuelServiceFailureCompletesRouteWithUnverifiedWarning() async throws {
         let prefs = FuelPrefsRestore()
         defer { prefs.restore() }
         FuelRangePrefs.kilometers = 250
@@ -502,10 +502,10 @@ struct RoutePlannerModelItineraryTests {
         #expect(model.stages.count == 1)
         #expect(model.stages[0].error == nil)
         #expect(model.stages[0].fuelUnknown?.contains("Routing service timed out") == true)
-        #expect(model.stages[0].response == nil)
-        #expect(model.errorMessage == "Couldn’t complete a fuel-safe route within your range. Your pins are unchanged.")
-        #expect(model.toast != RoutePlannerModel.routeReadyToast)
-        #expect(!model.hasRoute)
+        #expect(model.stages[0].response != nil)
+        #expect(model.errorMessage == nil)
+        #expect(model.toast == "Route built. Fuel safety could not be verified for one or more legs.")
+        #expect(model.hasRoute)
     }
 }
 

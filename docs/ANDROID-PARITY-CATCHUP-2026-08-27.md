@@ -75,6 +75,13 @@ The canonical model is rider intent (`RiderItinerary.swift:3-225`): ordered legs
 
 On a dead-end candidate, backtrack through earlier pump choices for at most **2** itinerary-level attempts (`ItineraryBuilder.swift:284-572`). Fuel search uses at most **16** windows and **15 seconds** per window (`ItineraryBuilder.swift:1191-1334`). Only an exhausted, complete search proves `fuelGap`; timeout/service/pack uncertainty is `fuelUnknown`, not a scary false gap. Destination escape is checked at `ItineraryBuilder.swift:626-671`. A route build progress watchdog fires at **20 seconds** (`ItineraryBuilder.swift:4-24`). Completed stages/prefix geometry and fuel state survive downstream edits where still valid (`ItineraryBuilder.swift:38-70,1477-1564`; `BuiltItinerary.swift:94-137`).
 
+Long regional LIVE chains also use resumable pump windows. If the selected
+profile proves the approach to a forward pump inside that approach's deadline
+but the continuation reaches the outer window deadline, accept the routed pump
+prefix with `windowComplete=false` and resume from that pump. Never accept a
+pump whose approach itself missed its deadline, and never reinterpret an
+exhausted no-forward-station result as a timeout.
+
 Android inputs: canonical rider legs, usable range/reserve, selected source and pack identities, packed stations, completed prefix, session seed. Outputs: built stages with stable IDs, route geometry/stats per hop, locked/replaceable pump choices, progress, and `none/pending/gap/unknown/error` fuel state (`BuiltItinerary.swift:25-48`). Port `DirtTests/Itinerary/*`, JS `fuel-chain*.test.js`, `router.cross-province-fuel.test.js`, and compare against the routing oracle. Do not query Overpass to fill a planning gap; do not drop a pump onto a prebuilt polyline; do not discard completed stages during a safe edit.
 
 ### 2.4 Maneuvers
@@ -138,9 +145,9 @@ Mirror `Dirt/App/RootView.swift:958-1093`: label **Fuel range**, toggle **Automa
 
 During planning, a fuel POI action is **Add as fuel waypoint**; outside planning it is **Navigate to fuel station**. Non-fuel POIs retain waypoint/navigate equivalents (`RootView.swift:68-72`). Planning station candidates must come from `fuel.v1.json`, be listed with the current reachability/order, and become stable itinerary waypoints. `RoutePlannerCard.swift:687-800` renders the stage fuel block and pending/gap/unknown/error states; the replacement action is **Choose another pump**. A selection rebuilds only the affected suffix and keeps the valid completed prefix (`ItineraryBuilder.swift:1477-1564`).
 
-The only proven-gap presentation is `BuiltItinerary.swift:25-48`: `No pump proven in range · X km gap · Y km beyond planned range`. A timeout or unavailable fuel sidecar is unknown, not gap. Starting such a route uses the alert **Fuel gap on this route** with actions **Review fuel gap** and **Continue without acknowledging** (`RoutePlannerCard.swift:148-170`). Preserve the distinction even if Android's visual component differs internally.
+The only proven-gap presentation is `BuiltItinerary.swift:25-48`: `No pump proven in range · X km gap · Y km beyond range. Carry extra fuel or reshape this leg.` A timeout or unavailable fuel sidecar is unknown, not gap. Either state preserves the complete road route; only road-geometry failure blocks completion. Starting a proven-gap route uses the alert **Fuel gap on this route** with actions **Review fuel gap** and **Continue without acknowledging** (`RoutePlannerCard.swift:148-170`). Preserve the distinction even if Android's visual component differs internally.
 
-Progress advances through current stage/pump creation, including **No fuel stop required** and **Creating fuel stop N** paths in `ItineraryBuilder.swift:827-986`; the watchdog becomes visible at 20 seconds. Stage cards in `RoutePlannerCard.swift:1370-1445` show ordered Point/Fuel waypoint identity and per-stage profile/policy. Editing a future stop, mode, access setting, or pump invalidates the suffix only. A station within 150 m of an explicit waypoint replenishes range and must not be duplicated.
+Progress advances through current stage/pump creation, including **No fuel stop required** and **Creating fuel stop N** paths in `ItineraryBuilder.swift`; the watchdog becomes visible at 20 seconds. Stage cards in `RoutePlannerCard.swift` show ordered Point/Fuel waypoint identity and per-stage profile/policy. Editing a profile, Allow Unknown, hop policy, or generated pump invalidates only its owning primary-to-primary rider leg; topology edits invalidate the affected suffix. A station within 150 m of an explicit waypoint replenishes range and must not be duplicated.
 
 ## 6. Navigation (Start Nav, cues, HUD)
 

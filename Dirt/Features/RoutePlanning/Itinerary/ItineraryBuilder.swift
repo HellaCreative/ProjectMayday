@@ -1,6 +1,18 @@
 import CoreLocation
 import Foundation
 
+private enum FuelAdvisoryIssue {
+    case gap(String)
+    case unknown(String)
+
+    var logValue: String {
+        switch self {
+        case .gap: "gap"
+        case .unknown: "unknown"
+        }
+    }
+}
+
 struct FuelPlanningProgressWatchdog {
     let inactivityInterval: TimeInterval
     private(set) var deadline: Date
@@ -42,6 +54,7 @@ final class ItineraryBuilder {
     func build(
         _ itinerary: RiderItinerary,
         from legIndex: Int,
+        through throughLegIndex: Int? = nil,
         reuse: BuiltItinerary?,
         fuel: FuelRangePrefs.Snapshot,
         source policy: RoutingSourcePolicy,
@@ -51,6 +64,9 @@ final class ItineraryBuilder {
     ) async -> BuiltItinerary {
         currentGeneration = itinerary.generation
         let requestedStartIndex = min(max(0, legIndex), itinerary.legs.count)
+        let requestedEndIndex = throughLegIndex.map {
+            min(itinerary.legs.count, max(requestedStartIndex, $0 + 1))
+        } ?? itinerary.legs.count
         let fuelReplan = fuel.automaticPlanningEnabled && fuel.usableMeters > 0
         let resume = fuelReplan ? fuelResume(
             stationID: replanFromStationID,
@@ -66,16 +82,33 @@ final class ItineraryBuilder {
         // A rider can append or move another pin while the previous suffix is
         // still building. Start at the first unfinished rider leg so a partial
         // progress snapshot can never strand an earlier leg as pending.
-        let startIndex = resume == nil ? prefix.riderLegCount : requestedStartIndex
+        let localEdit = throughLegIndex != nil
+        let startIndex = resume == nil
+            ? (localEdit ? requestedStartIndex : prefix.riderLegCount)
+            : requestedStartIndex
         let kept: [BuiltLeg] = {
             if let resume { return resume.kept }
             return prefix.legs
         }()
-        let reusableRoutes = reusableRiderRoutes(from: reuse, itinerary: itinerary, before: startIndex)
+        let preservedSuffix = localEdit
+            ? reusableSuffix(from: reuse, itinerary: itinerary, startingAt: requestedEndIndex)
+            : []
+        let reusableRoutes = reusableRiderRoutes(
+            from: reuse,
+            itinerary: itinerary,
+            outside: startIndex..<requestedEndIndex
+        )
         var statuses = Dictionary(
             uniqueKeysWithValues: itinerary.legs.map { ($0.id, LegStatus.pending) }
         )
-        for leg in kept { statuses[leg.riderLegID] = .built }
+        if let reuse {
+            let preservedIDs = Set((kept + preservedSuffix).map(\.riderLegID))
+            for id in preservedIDs {
+                statuses[id] = reuse.riderLegStatus[id] ?? .built
+            }
+        } else {
+            for leg in kept { statuses[leg.riderLegID] = .built }
+        }
         var committed = BuiltItinerary(
             generation: itinerary.generation,
             legs: kept,
@@ -99,7 +132,9 @@ final class ItineraryBuilder {
         let selectedSource = policy.select(for: firstRequest)
         RoutingDebugLog.shared.event(
             "build start gen=\(itinerary.generation) fromLeg=\(startIndex) " +
-                "requestedFrom=\(requestedStartIndex) reuseLegs=\(kept.count) " +
+                "throughLeg=\(max(startIndex, requestedEndIndex - 1)) " +
+                "requestedFrom=\(requestedStartIndex) reusePrefix=\(kept.count) " +
+                "reuseSuffix=\(preservedSuffix.count) localEdit=\(localEdit ? 1 : 0) " +
                 "source=\(selectedSource.name)"
         )
 
@@ -111,10 +146,19 @@ final class ItineraryBuilder {
             return await buildForwardFuelItinerary(
                 itinerary,
                 startIndex: startIndex,
+                endIndex: requestedEndIndex,
                 resume: resume,
                 kept: kept,
+                preservedSuffix: preservedSuffix,
+                preservedStatuses: statuses,
+                preservedRoutes: reusableRoutes,
+                preservedWaypointFuelStops: reuse?.waypointFuelStops ?? [:],
+                preservedArrivalFuelUsedByLeg: reuse?.legs.reduce(into: [:]) {
+                    $0[$1.riderLegID] = $1.fuelUsedOnArrivalMeters
+                } ?? [:],
                 fuel: fuel,
                 source: selectedSource,
+                allowFuelRewind: !localEdit,
                 onFuelStatus: onFuelStatus,
                 onProgress: onProgress
             )
@@ -127,7 +171,7 @@ final class ItineraryBuilder {
         var baselineHistory: [Int: EdgeHistory] = [:]
         var discoveryHistory = EdgeHistory()
         var baselineFailure: (index: Int, message: String)?
-        for index in 0..<itinerary.legs.count {
+        for index in 0..<requestedEndIndex {
             do {
                 baselineHistory[index] = discoveryHistory
                 let riderLeg = itinerary.legs[index]
@@ -197,13 +241,15 @@ final class ItineraryBuilder {
             }
         }
 
+        var routedResponses = reusableRoutes
+        for (index, response) in baseline {
+            routedResponses[itinerary.legs[index].id] = response
+        }
         committed = BuiltItinerary(
             generation: itinerary.generation,
             legs: kept,
             riderLegStatus: statuses,
-            riderRoutes: Dictionary(uniqueKeysWithValues: baseline.map {
-                (itinerary.legs[$0.key].id, $0.value)
-            }),
+            riderRoutes: routedResponses,
             waypointFuelStops: [:]
         )
 
@@ -294,7 +340,7 @@ final class ItineraryBuilder {
             waypointFuelStops: waypointFuelStops
         )
 
-        let lastBuildable = baselineFailure?.index ?? itinerary.legs.count
+        let lastBuildable = baselineFailure?.index ?? requestedEndIndex
         let finalStartIndex = resume == nil && fuelReplan ? 0 : startIndex
         let fuelAttemptBase = committed
         var excludedStationsByLeg = [Int: Set<String>]()
@@ -583,38 +629,57 @@ final class ItineraryBuilder {
                 "build failed riderLeg=\(legID) msg=\(failure.message)"
             )
             onProgress(committed)
-            return committed
+            return appendingPreservedSuffix(
+                preservedSuffix,
+                statuses: statuses,
+                routes: reusableRoutes,
+                to: committed
+            )
         }
 
         RoutingDebugLog.shared.event(
             "build committed gen=\(itinerary.generation) legs=\(committed.legs.count)"
         )
-        return committed
+        return appendingPreservedSuffix(
+            preservedSuffix,
+            statuses: statuses,
+            routes: reusableRoutes,
+            to: committed
+        )
     }
 
     private func buildForwardFuelItinerary(
         _ itinerary: RiderItinerary,
         startIndex: Int,
+        endIndex: Int,
         resume: FuelResume?,
         kept: [BuiltLeg],
+        preservedSuffix: [BuiltLeg],
+        preservedStatuses: [UUID: LegStatus],
+        preservedRoutes: [UUID: RouteResponse],
+        preservedWaypointFuelStops: [UUID: FuelStop],
+        preservedArrivalFuelUsedByLeg: [UUID: Double],
         fuel: FuelRangePrefs.Snapshot,
         source: any RoutingSource,
+        allowFuelRewind: Bool,
         forcedFuelLegIndex: Int? = nil,
         recoveryDepth: Int = 0,
         excludedFuelStationsByLeg: [Int: Set<String>] = [:],
         onFuelStatus: @MainActor (String) -> Void,
         onProgress: @MainActor (BuiltItinerary) -> Void
     ) async -> BuiltItinerary {
-        var statuses = Dictionary(
-            uniqueKeysWithValues: itinerary.legs.map { ($0.id, LegStatus.pending) }
-        )
-        for leg in kept { statuses[leg.riderLegID] = .built }
+        var statuses = preservedStatuses
+        for index in startIndex..<endIndex where itinerary.legs.indices.contains(index) {
+            statuses[itinerary.legs[index].id] = .pending
+        }
         if resume != nil, itinerary.legs.indices.contains(startIndex) {
             statuses[itinerary.legs[startIndex].id] = .pending
         }
-        var waypointFuelStops: [UUID: FuelStop] = [:]
-        if itinerary.waypoints.count > 1 {
-            for waypointIndex in 1..<itinerary.waypoints.count {
+        var waypointFuelStops = preservedWaypointFuelStops
+        let firstWaypointToProbe = min(itinerary.waypoints.count, startIndex + 1)
+        let waypointProbeEnd = min(itinerary.waypoints.count, endIndex + 1)
+        if firstWaypointToProbe < waypointProbeEnd {
+            for waypointIndex in firstWaypointToProbe..<waypointProbeEnd {
                 let waypoint = itinerary.waypoints[waypointIndex]
                 if let station = try? await source.fuelStation(
                     near: waypoint.coordinate,
@@ -626,6 +691,10 @@ final class ItineraryBuilder {
                         name: station.displayName,
                         afterRiderLegID: itinerary.legs[waypointIndex - 1].id
                     )
+                } else {
+                    // Coordinates inside the rebuilt rider-leg range may have
+                    // moved away from a previously detected pump.
+                    waypointFuelStops[waypoint.id] = nil
                 }
             }
         }
@@ -638,7 +707,10 @@ final class ItineraryBuilder {
         let finalWaypointIsFuel = finalWaypoint.map { waypointFuelStops[$0.id] != nil } ?? false
         var finalEscapeFuelMeters: Double?
         var finalEscapeVerificationWarning: String?
-        if let finalWaypoint, !finalWaypointIsFuel, !source.supportsCombinedFuelPlanning {
+        if endIndex == itinerary.legs.count,
+           let finalWaypoint,
+           !finalWaypointIsFuel,
+           !source.supportsCombinedFuelPlanning {
             onFuelStatus("Checking fuel after destination")
             do {
                 let escape = try await source.fuelChain(FuelChainRequest(
@@ -684,7 +756,7 @@ final class ItineraryBuilder {
             generation: itinerary.generation,
             legs: kept,
             riderLegStatus: statuses,
-            riderRoutes: [:],
+            riderRoutes: preservedRoutes,
             waypointFuelStops: waypointFuelStops
         )
         var history = EdgeHistory(legs: kept)
@@ -694,7 +766,8 @@ final class ItineraryBuilder {
             waypointFuelStops: waypointFuelStops,
             usableRangeMeters: fuel.usableMeters
         )
-        if resume == nil,
+        if allowFuelRewind,
+           resume == nil,
            let invalidIndex = revalidatedPrefix.firstInvalidRiderLegIndex,
            invalidIndex < startIndex {
             let repairedPrefix = builtPrefix(
@@ -709,10 +782,17 @@ final class ItineraryBuilder {
             return await buildForwardFuelItinerary(
                 itinerary,
                 startIndex: invalidIndex,
+                endIndex: endIndex,
                 resume: nil,
                 kept: repairedPrefix,
+                preservedSuffix: preservedSuffix,
+                preservedStatuses: preservedStatuses,
+                preservedRoutes: preservedRoutes,
+                preservedWaypointFuelStops: preservedWaypointFuelStops,
+                preservedArrivalFuelUsedByLeg: preservedArrivalFuelUsedByLeg,
                 fuel: fuel,
                 source: source,
+                allowFuelRewind: allowFuelRewind,
                 forcedFuelLegIndex: invalidIndex,
                 recoveryDepth: recoveryDepth + 1,
                 excludedFuelStationsByLeg: excludedFuelStationsByLeg,
@@ -720,7 +800,11 @@ final class ItineraryBuilder {
                 onProgress: onProgress
             )
         }
-        var fuelUsed = resume == nil ? revalidatedPrefix.fuelUsedMeters : 0
+        var fuelUsed = resume == nil
+            ? (revalidatedPrefix.firstInvalidRiderLegIndex == nil
+                ? revalidatedPrefix.fuelUsedMeters
+                : 0)
+            : 0
         // This is an inactivity watchdog, not a cap on total itinerary time.
         // Long routes may legitimately need many quick fuel hops; every proven
         // forward leg renews the window while stalled searches still terminate.
@@ -734,10 +818,20 @@ final class ItineraryBuilder {
             )
         }
 
-        for index in startIndex..<itinerary.legs.count {
+        for index in startIndex..<endIndex {
             let riderLeg = itinerary.legs[index]
             let riderDestination = itinerary.waypoints[index + 1]
-            let needsOnwardFuel = index + 1 < itinerary.legs.count
+            // A scoped option edit inherits the old arrival-fuel ceiling at
+            // its boundary. Meeting or improving that ceiling proves the
+            // untouched suffix remains at least as safe as it was before,
+            // without probing or rebuilding any later rider leg.
+            let inheritedArrivalFuelLimit = index == endIndex - 1
+                && endIndex < itinerary.legs.count
+                && waypointFuelStops[riderDestination.id] == nil
+                ? preservedArrivalFuelUsedByLeg[riderLeg.id]
+                : nil
+            let needsOnwardFuel = inheritedArrivalFuelLimit == nil
+                && index + 1 < itinerary.legs.count
                 && waypointFuelStops[riderDestination.id] == nil
             let onwardFuelMeters: Double?
             if needsOnwardFuel {
@@ -748,11 +842,8 @@ final class ItineraryBuilder {
                 // returned, use route distance only if that next leg is
                 // already built. A full on-device build may measure the next
                 // leg once because it has no combined route-and-fuel response;
-                // incremental edits never issue that duplicate lookup. Their
-                // forward construction obtains the real route, and the fuel
-                // rewind below repairs the preceding leg if the actual
-                // distance proves that an earlier stop was required.
-                let cachedMeters = kept
+                // incremental edits never issue that duplicate lookup.
+                let cachedMeters = (kept + preservedSuffix)
                     .filter { $0.riderLegID == nextLeg.id }
                     .reduce(0.0) { $0 + ($1.response.distanceMeters ?? 0) }
                 if source.supportsCombinedFuelPlanning {
@@ -760,13 +851,14 @@ final class ItineraryBuilder {
                     // chain together. A speculative next-leg request here used
                     // to cold-load another regional graph, compete with the
                     // real request, and often time out before returning useful
-                    // information. Build the actual next leg once; the rewind
-                    // below corrects the preceding arrival reserve if needed.
+                    // information. Build the actual next leg once. Scoped
+                    // edits instead inherit the preserved suffix's arrival
+                    // ceiling above.
                     onwardFuelMeters = cachedMeters > 0 ? cachedMeters : nil
                     RoutingDebugLog.shared.event(
                         "fuel onward probe skipped gen=\(itinerary.generation) "
                             + "riderLeg=\(riderLeg.id) nextLeg=\(nextLeg.id) "
-                            + "reason=combined_forward_rewind "
+                            + "reason=combined_single_pass "
                             + "cachedMeters=\(cachedMeters > 0 ? String(Int(cachedMeters)) : "-")"
                     )
                 } else {
@@ -819,7 +911,7 @@ final class ItineraryBuilder {
             } else {
                 onwardFuelMeters = nil
             }
-            let arrivalFuelLimit = onwardFuelMeters.map {
+            let arrivalFuelLimit = inheritedArrivalFuelLimit ?? onwardFuelMeters.map {
                 max(0, fuel.usableMeters - $0)
             }
             let resumesThisLeg = index == startIndex ? resume : nil
@@ -829,69 +921,50 @@ final class ItineraryBuilder {
             var excludedStations = excludedFuelStationsByLeg[index] ?? []
             var forceFuelStop = forcedFuelLegIndex == index
             var attempts = 0
+            func finishWithFuelAdvisory(_ issue: FuelAdvisoryIssue) async -> BuiltItinerary {
+                await buildAdvisoryRemainder(
+                    itinerary: itinerary,
+                    startIndex: index,
+                    endIndex: endIndex,
+                    current: current,
+                    builtLegPrefix: builtLegs,
+                    fuelUsedAtCurrent: fuelUsed,
+                    issue: issue,
+                    committed: committed,
+                    preservedSuffix: preservedSuffix,
+                    preservedStatuses: preservedStatuses,
+                    preservedRoutes: preservedRoutes,
+                    fuel: fuel,
+                    source: source,
+                    history: history,
+                    onProgress: onProgress
+                )
+            }
 
             while true {
                 guard active(itinerary) else {
                     return dropped(itinerary, committed: committed, cancelled: true)
                 }
                 guard !progressWatchdog.isExpired() else {
-                    statuses[riderLeg.id] = .fuelUnknown(
-                        "Fuel planning made no forward progress for 28 seconds."
-                    )
+                    let message = "Fuel planning made no forward progress for 28 seconds."
                     RoutingDebugLog.shared.event(
                         "fuel progress timeout gen=\(itinerary.generation) "
                             + "riderLeg=\(riderLeg.id) attempts=\(attempts) committed=\(committed.legs.count)"
                     )
-                    return BuiltItinerary(
-                        generation: itinerary.generation,
-                        legs: committed.legs,
-                        riderLegStatus: statuses,
-                        riderRoutes: committed.riderRoutes,
-                        waypointFuelStops: waypointFuelStops
-                    )
+                    return await finishWithFuelAdvisory(.unknown(message))
                 }
                 attempts += 1
                 guard attempts <= 16 else {
-                    statuses[riderLeg.id] = .fuelUnknown(
+                    return await finishWithFuelAdvisory(.unknown(
                         "Fuel planning could not find a stable forward sequence."
-                    )
-                    return BuiltItinerary(
-                        generation: itinerary.generation,
-                        legs: committed.legs,
-                        riderLegStatus: statuses,
-                        riderRoutes: committed.riderRoutes,
-                        waypointFuelStops: waypointFuelStops
-                    )
+                    ))
                 }
 
                 let remaining = max(0, fuel.usableMeters - fuelUsed)
                 guard remaining > 0 else {
-                    let gap = FuelGap(
-                        id: fuelGapID(
-                            riderLegID: riderLeg.id,
-                            gapMeters: straightLineMeters(current, riderDestination.coordinate),
-                            usableRangeMeters: fuel.usableMeters,
-                            from: current,
-                            to: riderDestination.coordinate
-                        ),
-                        gapMeters: straightLineMeters(current, riderDestination.coordinate),
-                        overByMeters: 0,
-                        usableRangeMeters: fuel.usableMeters,
-                        remainingFuelMeters: 0,
-                        reason: "No usable fuel remains before the next waypoint.",
-                        fromCoordinate: current,
-                        toCoordinate: riderDestination.coordinate
-                    )
-                    statuses[riderLeg.id] = .gap(gap)
-                    committed = BuiltItinerary(
-                        generation: itinerary.generation,
-                        legs: committed.legs,
-                        riderLegStatus: statuses,
-                        riderRoutes: committed.riderRoutes,
-                        waypointFuelStops: waypointFuelStops
-                    )
-                    onProgress(committed)
-                    return committed
+                    return await finishWithFuelAdvisory(.gap(
+                        "No usable fuel remains before the next waypoint."
+                    ))
                 }
 
                 let departureID = builtLegs.last?.endsAtFuelStop?.stationID
@@ -1024,36 +1097,19 @@ final class ItineraryBuilder {
                             cancelled: Task.isCancelled
                         )
                     }
-                    statuses[riderLeg.id] = .fuelUnknown(
+                    return await finishWithFuelAdvisory(.unknown(
                         "Fuel planning unavailable: \(error.localizedDescription)"
-                    )
-                    committed = BuiltItinerary(
-                        generation: itinerary.generation,
-                        legs: committed.legs,
-                        riderLegStatus: statuses,
-                        riderRoutes: committed.riderRoutes,
-                        waypointFuelStops: waypointFuelStops
-                    )
-                    onProgress(committed)
-                    return committed
+                    ))
                 }
 
                 if chain.isFuelUnknown {
-                    statuses[riderLeg.id] = .fuelUnknown(
+                    return await finishWithFuelAdvisory(.unknown(
                         chain.message ?? "Fuel data is unavailable for this part of the route."
-                    )
-                    committed = BuiltItinerary(
-                        generation: itinerary.generation,
-                        legs: committed.legs,
-                        riderLegStatus: statuses,
-                        riderRoutes: committed.riderRoutes,
-                        waypointFuelStops: waypointFuelStops
-                    )
-                    onProgress(committed)
-                    return committed
+                    ))
                 }
                 if chain.isGap {
-                    if resume == nil,
+                    if allowFuelRewind,
+                       resume == nil,
                        index > 0,
                        recoveryDepth < min(16, itinerary.legs.count) {
                         let priorIndex = index - 1
@@ -1077,10 +1133,17 @@ final class ItineraryBuilder {
                         return await buildForwardFuelItinerary(
                             itinerary,
                             startIndex: priorIndex,
+                            endIndex: endIndex,
                             resume: nil,
                             kept: repairedPrefix,
+                            preservedSuffix: preservedSuffix,
+                            preservedStatuses: preservedStatuses,
+                            preservedRoutes: preservedRoutes,
+                            preservedWaypointFuelStops: preservedWaypointFuelStops,
+                            preservedArrivalFuelUsedByLeg: preservedArrivalFuelUsedByLeg,
                             fuel: fuel,
                             source: source,
+                            allowFuelRewind: allowFuelRewind,
                             forcedFuelLegIndex: priorIndex,
                             recoveryDepth: recoveryDepth + 1,
                             excludedFuelStationsByLeg: recoveryExclusions,
@@ -1088,50 +1151,16 @@ final class ItineraryBuilder {
                             onProgress: onProgress
                         )
                     }
-                    let gapMeters = chain.gapMeters
-                        ?? straightLineMeters(current, riderDestination.coordinate)
-                    let gap = FuelGap(
-                        id: fuelGapID(
-                            riderLegID: riderLeg.id,
-                            gapMeters: gapMeters,
-                            usableRangeMeters: fuel.usableMeters,
-                            from: current,
-                            to: riderDestination.coordinate
-                        ),
-                        gapMeters: gapMeters,
-                        overByMeters: chain.overByMeters ?? max(0, gapMeters - remaining),
-                        usableRangeMeters: fuel.usableMeters,
-                        remainingFuelMeters: remaining,
-                        reason: chain.message ?? "No forward fuel stop is reachable within range.",
-                        fromCoordinate: current,
-                        toCoordinate: riderDestination.coordinate
-                    )
-                    statuses[riderLeg.id] = .gap(gap)
-                    committed = BuiltItinerary(
-                        generation: itinerary.generation,
-                        legs: committed.legs,
-                        riderLegStatus: statuses,
-                        riderRoutes: committed.riderRoutes,
-                        waypointFuelStops: waypointFuelStops
-                    )
-                    onProgress(committed)
-                    return committed
+                    return await finishWithFuelAdvisory(.gap(
+                        chain.message ?? "No forward fuel stop is reachable within range."
+                    ))
                 }
 
                 let selectedStop = chain.stops?.first
                 guard selectedStop != nil || chain.reachesDestination else {
-                    statuses[riderLeg.id] = .fuelUnknown(
+                    return await finishWithFuelAdvisory(.unknown(
                         "Fuel planning returned no forward anchor."
-                    )
-                    committed = BuiltItinerary(
-                        generation: itinerary.generation,
-                        legs: committed.legs,
-                        riderLegStatus: statuses,
-                        riderRoutes: committed.riderRoutes,
-                        waypointFuelStops: waypointFuelStops
-                    )
-                    onProgress(committed)
-                    return committed
+                    ))
                 }
 
                 // The live planner routes the selected chain while the graph
@@ -1357,16 +1386,9 @@ final class ItineraryBuilder {
                         )
                         continue
                     }
-                    statuses[riderLeg.id] = .failed(error.localizedDescription)
-                    committed = BuiltItinerary(
-                        generation: itinerary.generation,
-                        legs: committed.legs,
-                        riderLegStatus: statuses,
-                        riderRoutes: committed.riderRoutes,
-                        waypointFuelStops: waypointFuelStops
-                    )
-                    onProgress(committed)
-                    return committed
+                    return await finishWithFuelAdvisory(.gap(
+                        "No fuel-safe route to the next waypoint fits the planned range."
+                    ))
                 }
             }
         }
@@ -1374,7 +1396,159 @@ final class ItineraryBuilder {
         RoutingDebugLog.shared.event(
             "fuel forward committed gen=\(itinerary.generation) legs=\(committed.legs.count)"
         )
-        return committed
+        return appendingPreservedSuffix(
+            preservedSuffix,
+            statuses: preservedStatuses,
+            routes: preservedRoutes,
+            to: committed
+        )
+    }
+
+    /// Fuel planning is advisory. Once its proof ends, finish the road route
+    /// without a range ceiling, retain any pumps already proved in this rider
+    /// leg, and attach the warning to the exact leg whose fuel state is unsafe.
+    private func buildAdvisoryRemainder(
+        itinerary: RiderItinerary,
+        startIndex: Int,
+        endIndex: Int,
+        current: RouteCoordinate,
+        builtLegPrefix: [BuiltLeg],
+        fuelUsedAtCurrent: Double,
+        issue: FuelAdvisoryIssue,
+        committed initial: BuiltItinerary,
+        preservedSuffix: [BuiltLeg],
+        preservedStatuses: [UUID: LegStatus],
+        preservedRoutes: [UUID: RouteResponse],
+        fuel: FuelRangePrefs.Snapshot,
+        source: any RoutingSource,
+        history initialHistory: EdgeHistory,
+        onProgress: @MainActor (BuiltItinerary) -> Void
+    ) async -> BuiltItinerary {
+        var committed = initial
+        var history = initialHistory
+        var firstFrom = current
+        var firstPrefix = builtLegPrefix
+        var fuelUsed = fuelUsedAtCurrent
+
+        RoutingDebugLog.shared.event(
+            "fuel advisory fallback begin gen=\(itinerary.generation) "
+                + "fromLeg=\(startIndex) throughLeg=\(max(startIndex, endIndex - 1)) "
+                + "issue=\(issue.logValue) preservedPumps="
+                + "\(builtLegPrefix.filter { $0.endsAtFuelStop != nil }.count)"
+        )
+
+        for index in startIndex..<endIndex {
+            guard active(itinerary) else {
+                return dropped(itinerary, committed: committed, cancelled: Task.isCancelled)
+            }
+            let riderLeg = itinerary.legs[index]
+            let destination = itinerary.waypoints[index + 1].coordinate
+            let departureID = firstPrefix.last?.endsAtFuelStop?.stationID
+                ?? riderLeg.from.uuidString
+            let profile = index == startIndex
+                ? (riderLeg.hopOverrides[departureID] ?? riderLeg.profile)
+                : riderLeg.profile
+            let avoidMotorways = riderLeg.avoidsMajorHighways(
+                departingFrom: departureID,
+                effectiveProfile: profile
+            )
+            do {
+                let response = try await source.route(routeRequest(
+                    profile: profile,
+                    allowUnknown: profile == .cleanest ? false : riderLeg.allowUnknown,
+                    from: firstFrom,
+                    to: destination,
+                    avoidEdgeIDs: itinerary.impassableEdgeIDs,
+                    maxPathMeters: nil,
+                    history: history,
+                    avoidMotorways: avoidMotorways,
+                    preferBackRoads: riderLeg.preferBackRoads
+                ))
+                let meters = try responseMeters(response)
+                let resetsAtWaypoint = committed.waypointFuelStops.values.contains {
+                    $0.coordinate == destination
+                }
+                let arrivalFuel = resetsAtWaypoint ? 0 : fuelUsed + meters
+                let routed = BuiltLeg(
+                    riderLegID: riderLeg.id,
+                    fromCoordinate: firstFrom,
+                    toCoordinate: destination,
+                    endsAtFuelStop: nil,
+                    response: response,
+                    fuelUsedOnArrivalMeters: arrivalFuel,
+                    routeProfile: profile
+                )
+                let status: LegStatus
+                if index == startIndex {
+                    switch issue {
+                    case .gap(let reason):
+                        let remaining = max(0, fuel.usableMeters - fuelUsed)
+                        let gap = FuelGap(
+                            id: fuelGapID(
+                                riderLegID: riderLeg.id,
+                                gapMeters: meters,
+                                usableRangeMeters: fuel.usableMeters,
+                                from: firstFrom,
+                                to: destination
+                            ),
+                            gapMeters: meters,
+                            overByMeters: max(0, meters - remaining),
+                            usableRangeMeters: fuel.usableMeters,
+                            remainingFuelMeters: remaining,
+                            reason: reason,
+                            fromCoordinate: firstFrom,
+                            toCoordinate: destination
+                        )
+                        status = .gap(gap)
+                    case .unknown(let message):
+                        status = .fuelUnknown(message)
+                    }
+                } else {
+                    status = .fuelUnknown(
+                        "Fuel continuity is unknown after the preceding fuel warning."
+                    )
+                }
+                committed = replacing(
+                    riderLegID: riderLeg.id,
+                    with: firstPrefix + [routed],
+                    in: committed,
+                    status: status
+                )
+                history.append(response)
+                RoutingDebugLog.shared.event(
+                    "fuel advisory fallback committed gen=\(itinerary.generation) "
+                        + "riderLeg=\(riderLeg.id) issue=\(issue.logValue) "
+                        + "meters=\(Int(meters)) remaining=\(Int(max(0, fuel.usableMeters - fuelUsed)))"
+                )
+                onProgress(committed)
+                firstFrom = destination
+                firstPrefix = []
+                // Once continuity is unresolved, later rider legs are still
+                // useful route geometry but no arrival-fuel figure is proven.
+                fuelUsed = 0
+            } catch is CancellationError {
+                return dropped(itinerary, committed: committed, cancelled: true)
+            } catch {
+                committed = markingFailed(
+                    riderLeg.id,
+                    message: error.localizedDescription,
+                    in: committed
+                )
+                RoutingDebugLog.shared.routeFailure(
+                    error,
+                    context: "fuel advisory road route riderLeg=\(riderLeg.id)"
+                )
+                onProgress(committed)
+                break
+            }
+        }
+
+        return appendingPreservedSuffix(
+            preservedSuffix,
+            statuses: preservedStatuses,
+            routes: preservedRoutes,
+            to: committed
+        )
     }
 
     private func buildRiderLeg(
@@ -1746,11 +1920,35 @@ private func reusablePrefix(
     var riderLegCount = 0
     for riderLeg in itinerary.legs.prefix(legIndex) {
         let matches = reuse.legs.filter { $0.riderLegID == riderLeg.id }
-        guard reuse.riderLegStatus[riderLeg.id] == .built, !matches.isEmpty else { break }
+        guard isReusableRouteStatus(reuse.riderLegStatus[riderLeg.id]),
+              !matches.isEmpty
+        else { break }
         legs.append(contentsOf: matches)
         riderLegCount += 1
     }
     return ReusablePrefix(legs: legs, riderLegCount: riderLegCount)
+}
+
+private func reusableSuffix(
+    from reuse: BuiltItinerary?,
+    itinerary: RiderItinerary,
+    startingAt legIndex: Int
+) -> [BuiltLeg] {
+    guard let reuse, legIndex < itinerary.legs.count else { return [] }
+    let ids = Set(itinerary.legs.suffix(from: legIndex).map(\.id))
+    return reuse.legs.filter {
+        ids.contains($0.riderLegID)
+            && isReusableRouteStatus(reuse.riderLegStatus[$0.riderLegID])
+    }
+}
+
+private func isReusableRouteStatus(_ status: LegStatus?) -> Bool {
+    switch status {
+    case .built, .gap, .fuelUnknown:
+        return true
+    case .pending, .failed, nil:
+        return false
+    }
 }
 
 private struct FuelResume {
@@ -1785,11 +1983,11 @@ private func fuelResume(
 private func reusableRiderRoutes(
     from reuse: BuiltItinerary?,
     itinerary: RiderItinerary,
-    before legIndex: Int
+    outside rebuiltRange: Range<Int>
 ) -> [UUID: RouteResponse] {
     guard let reuse else { return [:] }
     var routes: [UUID: RouteResponse] = [:]
-    for leg in itinerary.legs.prefix(legIndex) {
+    for (index, leg) in itinerary.legs.enumerated() where !rebuiltRange.contains(index) {
         if let response = reuse.riderRoutes[leg.id] {
             routes[leg.id] = response
             continue
@@ -1803,6 +2001,31 @@ private func reusableRiderRoutes(
         }
     }
     return routes
+}
+
+private func appendingPreservedSuffix(
+    _ suffix: [BuiltLeg],
+    statuses preservedStatuses: [UUID: LegStatus],
+    routes preservedRoutes: [UUID: RouteResponse],
+    to built: BuiltItinerary
+) -> BuiltItinerary {
+    guard !suffix.isEmpty else { return built }
+    let suffixIDs = Set(suffix.map(\.riderLegID))
+    var statuses = built.riderLegStatus
+    for id in suffixIDs {
+        if let preserved = preservedStatuses[id] { statuses[id] = preserved }
+    }
+    var routes = built.riderRoutes
+    for (id, response) in preservedRoutes where suffixIDs.contains(id) {
+        routes[id] = response
+    }
+    return BuiltItinerary(
+        generation: built.generation,
+        legs: built.legs.filter { !suffixIDs.contains($0.riderLegID) } + suffix,
+        riderLegStatus: statuses,
+        riderRoutes: routes,
+        waypointFuelStops: built.waypointFuelStops
+    )
 }
 
 /// Distance from each rider-leg start to the first possible tank reset on the

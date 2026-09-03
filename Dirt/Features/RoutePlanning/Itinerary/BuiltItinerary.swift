@@ -35,7 +35,7 @@ struct FuelGap: Equatable, Sendable {
     var message: String {
         let gapKM = Int((gapMeters / 1_000).rounded())
         let overKM = Int((overByMeters / 1_000).rounded())
-        return "No pump proven in range · \(gapKM) km gap · \(overKM) km beyond planned range"
+        return "No pump proven in range · \(gapKM) km gap · \(overKM) km beyond range. Carry extra fuel or reshape this leg."
     }
 }
 

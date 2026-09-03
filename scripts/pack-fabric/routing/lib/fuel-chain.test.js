@@ -571,6 +571,51 @@ test("one-stop window does not commit a pump whose proof crosses its hard deadli
   assert.ok(result.diagnostics.slowestProfileRoutes[0].elapsedMs >= 50);
 });
 
+test("timed-out continuation keeps a pump whose approach was proved in time", async () => {
+  const result = await planFuelChainOnRuntime({
+    runtime: lineRuntime(),
+    stations: [station("f1", 1)],
+    start: { lat: 45, lon: 0 },
+    destination: { lat: 45, lon: 2 },
+    profile: "dirt",
+    accessPolicy: { motorizedPermissive: true, motorizedUnknown: false },
+    usableRangeMeters: 90_000,
+    firstLegMaxMeters: 90_000,
+    minimumFuelStops: 2,
+    maxStops: 4,
+    allowPartialWindow: true,
+    timeBudgetMs: 50,
+    routeCandidate: ({ candidate }) => {
+      if (candidate.station.id === "__destination__") {
+        return new Promise((resolve) => {
+          setTimeout(() => resolve({
+            status: "complete",
+            distanceMeters: candidate.graphMeters,
+            stats: { dirtPercent: 80 },
+            segments: []
+          }), 75);
+        });
+      }
+      return Promise.resolve({
+        status: "complete",
+        distanceMeters: candidate.graphMeters,
+        stats: { dirtPercent: 80 },
+        segments: []
+      });
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.windowComplete, false);
+  assert.deepEqual(result.stops.map((row) => row.id), ["f1"]);
+  assert.equal(result.routes.length, 1);
+  assert.equal(result.diagnostics.selectedReason, "routed_prefix_timeout");
+  assert.equal(
+    result.diagnostics.partialReason,
+    "approach_proved_continuation_timeout"
+  );
+});
+
 test("live fuel planning proves candidate routes serially", async () => {
   let active = 0;
   let maxActive = 0;

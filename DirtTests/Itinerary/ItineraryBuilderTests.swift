@@ -298,7 +298,7 @@ struct ItineraryBuilderTests {
         })
     }
 
-    @Test func fuelServiceFailureKeepsRouteWithoutFabricatingGap() async throws {
+    @Test func fuelServiceFailureKeepsCompleteRouteWithUnknownFuelWarning() async throws {
         let points = [point(0), point(1)]
         let source = FakeRoutingSource(name: "live")
         source.distances[key(points[0], points[1])] = 300_000
@@ -314,11 +314,43 @@ struct ItineraryBuilderTests {
             source: .fixed(source), onProgress: { _ in }
         )
 
-        #expect(result.legs.isEmpty)
+        #expect(result.legs.count == 1)
+        #expect(result.legs.first?.toCoordinate == points[1])
+        #expect(source.routeRequests.count == 1)
+        #expect(source.routeRequests.first?.options?.maxPathMeters == nil)
         if case .fuelUnknown(let message) = result.riderLegStatus[itinerary.legs[0].id] {
             #expect(message.contains("timed out"))
         } else {
             Issue.record("Expected an honest unknown-fuel state")
+        }
+    }
+
+    @Test func provenFuelGapKeepsCompleteRouteAndReportsExactOverage() async throws {
+        let points = [point(0), point(1)]
+        let source = FakeRoutingSource(name: "live")
+        source.distances[key(points[0], points[1])] = 300_000
+        source.gapWhenFirstLegMaxBelow[key(points[0], points[1])] = 150_001
+        let itinerary = makeItinerary(points)
+
+        let result = await ItineraryBuilder().build(
+            itinerary, from: 0, reuse: nil,
+            fuel: FuelRangePrefs.Snapshot(
+                tankMeters: 150_000,
+                usableMeters: 150_000, reservePercent: 0
+            ),
+            source: .fixed(source), onProgress: { _ in }
+        )
+
+        #expect(result.legs.count == 1)
+        #expect(result.legs.first?.toCoordinate == points[1])
+        #expect(source.routeRequests.count == 1)
+        #expect(source.routeRequests.first?.options?.maxPathMeters == nil)
+        if case .gap(let gap) = result.riderLegStatus[itinerary.legs[0].id] {
+            #expect(gap.gapMeters == 300_000)
+            #expect(gap.overByMeters == 150_000)
+            #expect(gap.message.contains("Carry extra fuel or reshape this leg"))
+        } else {
+            Issue.record("Expected a visible fuel-gap warning on the completed route")
         }
     }
 
@@ -812,6 +844,88 @@ struct ItineraryBuilderTests {
         #expect(source.routeRequests.count == 1)
         #expect(source.routeRequests.first?.profile == .cleanest)
         #expect(source.routeRequests.first?.accessPolicy.motorizedUnknown == false)
+    }
+
+    @Test func profileAndUnknownEditsRebuildOnlyOneLegOfFive() async throws {
+        let points = (0...5).map { point(Double($0)) }
+        let laterPump = point(4.5)
+        let source = FakeRoutingSource(name: "live")
+        source.supportsCombinedFuelPlanning = true
+        for index in 0..<(points.count - 1) {
+            source.distances[key(points[index], points[index + 1])] = 50_000
+        }
+        source.distances[key(points[4], laterPump)] = 25_000
+        source.distances[key(laterPump, points[5])] = 25_000
+        source.fuelStopResponses = [[], [], [], [], [
+            fuelStop("untouched-later-pump", at: laterPump)
+        ]]
+        let fuel = FuelRangePrefs.Snapshot(
+            tankMeters: 500_000,
+            usableMeters: 500_000,
+            reservePercent: 0
+        )
+        let initial = makeItinerary(points, profile: .balanced)
+        let editedIndex = 2
+        let editedLegID = initial.legs[editedIndex].id
+        let builder = ItineraryBuilder()
+        let first = await builder.build(
+            initial, from: 0, reuse: nil, fuel: fuel,
+            source: .fixed(source), onProgress: { _ in }
+        )
+        #expect(first.riderLegStatus.count == 5)
+        #expect(first.legs.count == 6)
+        #expect(first.legs.compactMap(\.endsAtFuelStop?.stationID) == ["untouched-later-pump"])
+
+        let profileChange = reduce(
+            initial,
+            .setProfile(legID: editedLegID, .dirt)
+        )
+        source.fuelChainRequests.removeAll()
+        source.routeRequests.removeAll()
+        let profiled = await builder.build(
+            profileChange.itinerary,
+            from: try #require(profileChange.rebuildFromLegIndex),
+            through: profileChange.rebuildThroughLegIndex,
+            reuse: first,
+            fuel: fuel,
+            source: .fixed(source),
+            onProgress: { _ in }
+        )
+
+        #expect(source.fuelChainRequests.count == 1)
+        #expect(source.fuelChainRequests.first?.profile == .dirt)
+        #expect(source.fuelChainRequests.first?.fuel.destinationFuelUsedLimitMeters == 150_000)
+        #expect(source.routeRequests.isEmpty)
+        #expect(profiled.legs[editedIndex].routeProfile == .dirt)
+        for index in profiled.legs.indices where index != editedIndex {
+            #expect(profiled.legs[index] == first.legs[index])
+        }
+
+        let unknownChange = reduce(
+            profileChange.itinerary,
+            .setAllowUnknown(legID: editedLegID, true)
+        )
+        source.fuelChainRequests.removeAll()
+        source.routeRequests.removeAll()
+        let unknownAllowed = await builder.build(
+            unknownChange.itinerary,
+            from: try #require(unknownChange.rebuildFromLegIndex),
+            through: unknownChange.rebuildThroughLegIndex,
+            reuse: profiled,
+            fuel: fuel,
+            source: .fixed(source),
+            onProgress: { _ in }
+        )
+
+        #expect(source.fuelChainRequests.count == 1)
+        #expect(source.fuelChainRequests.first?.accessPolicy.motorizedUnknown == true)
+        #expect(source.fuelChainRequests.first?.fuel.destinationFuelUsedLimitMeters == 150_000)
+        #expect(source.routeRequests.isEmpty)
+        #expect(unknownAllowed.legs.compactMap(\.endsAtFuelStop?.stationID)
+            == ["untouched-later-pump"])
+        for index in unknownAllowed.legs.indices where index != editedIndex {
+            #expect(unknownAllowed.legs[index] == profiled.legs[index])
+        }
     }
 
     @Test func failureKeepsEarlierBuiltLegAndLeavesLaterPending() async {

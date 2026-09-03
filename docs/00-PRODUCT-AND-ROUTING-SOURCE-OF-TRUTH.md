@@ -298,8 +298,17 @@ saved so automatic planning can be restored without re-entry.
 - Only a packed, route-connected station or a rider waypoint derived on a
   station resets the tank.
 - Ordinary rider waypoints do not reset the tank.
-- Fuel is recomputed forward from itinerary leg 0 after every material edit,
-  even when unchanged route responses are reused.
+- Fuel proof is advisory to route geometry. A proven fuel gap or an interrupted,
+  timed-out, unavailable, or unreadable fuel source never destroys an otherwise
+  valid road route. DIRT completes the affected rider leg without a fuel-range
+  ceiling and attaches the warning to that exact leg.
+- A profile, Allow Unknown, or per-hop policy edit scoped to one rider leg
+  rebuilds only that rider leg, including any generated pumps inside it. Earlier
+  and later rider legs, their geometry, and their generated pump identities are
+  preserved exactly. The rebuilt leg must meet or improve its preserved arrival-
+  fuel ceiling so the untouched suffix is not made less safe.
+- Waypoint topology edits and global fuel-range/reserve changes may still
+  revalidate forward from the earliest affected rider leg.
 - A transport error, timeout, decode error, or missing fuel source is not proof
   that no chain exists.
 - Carry Fuel is offered only for a proven fuel gap, never as the first recovery
@@ -315,9 +324,12 @@ It does not generate a disposable Point 1 → Point 2 route and then force the
 rider away from and back onto that geometry. A selected pump becomes the next
 anchor; the next section is created forward from that pump.
 
-Unchanged upstream built sections may be reused after a fuel-stop or profile
-edit. Fuel state itself is always recomputed from the beginning so carried fuel
-cannot become stale.
+Unchanged built sections are reused according to ownership. A rider-leg-local
+profile, access, or hop edit inherits the proven fuel state at that leg's entrance
+and the former safe arrival ceiling at its exit, then replaces only the geometry
+and generated pumps between those two primary waypoints. A waypoint/topology or
+global fuel-setting edit may rebuild the affected suffix when its boundaries have
+actually changed.
 
 ### Clean foundation for fuel and long routes
 
@@ -336,11 +348,11 @@ mainland NS → Cape Breton, or Halifax → western NS — is NOT a "regional bo
 it MUST NOT trigger Clean-first and MUST NOT change the rider's chosen profile. The
 cross-boundary test uses the province/state, never the internal shard id.
 
-Clean-first never locks the rider out. The selected profile stays visible and every
-section recalculates when the rider switches profile. Changing an upstream Clean
-leg to Dirt can lengthen the ride and invalidate the fuel state; the changed leg
-and the complete downstream fuel chain are rebuilt while valid upstream legs remain
-unchanged.
+Clean-first never locks the rider out. The selected profile stays visible and the
+selected rider leg recalculates when the rider switches profile. Changing one
+Clean leg to Dirt can lengthen the ride or require another pump, but that work stays
+between the same two primary waypoints; valid upstream and downstream rider legs
+remain unchanged.
 
 ### Automatic pump selection
 
@@ -377,14 +389,16 @@ unchanged when still valid.
 
 - **Ready:** every hop is proven and within range.
 - **Gap:** a route exists but an exhaustive station-chain proof found no complete
-  chain. The exact shortage remains visible.
-- **Unknown:** the route exists but fuel data is unavailable or unreadable.
-- **Interrupted:** timeout, cancellation, service 5xx, decode, or connectivity
-  failure. Retry is offered; auxiliary fuel is not.
+  chain. The complete route and exact routed shortage remain visible with advice
+  to carry extra fuel or reshape that rider leg.
+- **Unknown:** the complete route exists but fuel safety could not be verified
+  because fuel data or planning was unavailable, unreadable, interrupted, or
+  timed out. It remains distinct from a proven gap and may be retried.
 - **Failed:** route geometry itself could not be produced.
 
-Start and GPX export remain possible with a visible gap, but the gap must never
-be silent in the planner, navigation experience, or exported GPX.
+Start and GPX export remain possible with a visible gap or unknown-fuel warning,
+but the warning must never be silent in the planner or exported GPX. A proven gap
+still requires the existing explicit start acknowledgement.
 
 ## 7. Routing interaction and presentation
 
@@ -839,7 +853,14 @@ pack-independent laws:
    graph and fuel sidecar are available, while the outer fuel-window deadline
    remains the absolute cap. A cold Ontario request therefore receives the same
    route proof as the identical warm request instead of losing half its search
-   budget to graph preparation.
+   budget to graph preparation; and
+7. long regional chains are incremental. If the active profile finishes the
+   route to a forward pump inside that pump's approach allowance but the
+   continuation proof reaches the outer deadline, the service returns the
+   routed pump prefix as a successful incomplete window. The client commits the
+   pump and resumes from it with a full tank and a fresh window. A pump whose
+   own approach finishes after its deadline is never committed, and a completed
+   non-timeout search that proves no forward continuation remains a real gap.
 
 The diagnostics identify foundation reuse, foundation route distance and dirt
 percentage, matched and route-priority pump counts, selected pump, final chain
@@ -849,16 +870,23 @@ distance/dirt percentage, and continuation backtrack. The client also records
 when speculative LIVE look-ahead was skipped in favour of forward build/rewind.
 Cold-start diagnostics additionally record the window remaining after load,
 profile-search allowance actually granted, milliseconds restored by excluding
-the load, and the explicit after-load budget boundary.
+the load, and the explicit after-load budget boundary. Incremental timeout
+windows report `selectedReason=routed_prefix_timeout` and
+`partialReason=approach_proved_continuation_timeout`, so a future field log can
+distinguish safe progress from an all-or-nothing failure.
 
 Fixed production-pack reproductions now cover the reported coordinates. On the
 reference development machine, Halifax-to-southwest Nova Scotia completes in
 about 5.3 seconds with zero pump profile reroutes; central Ontario completes in
 about 4.8 seconds at 85% dirt instead of timing out; and the northern Ontario
 surface switch retains the same useful pump while Dirt improves from about 53%
-to 66% dirt. Timing is diagnostic, not a route law. The gates are a completed
-safe chain, preservation or improvement of the selected profile objective,
-sensible progress toward the rider waypoint, and retained pump alternatives.
+to 66% dirt. The September 3 Halifax-to-Ottawa-area reproduction
+(`44.764830,-63.340265` to `45.645111,-75.907752`, 374 km usable range) returns
+three routed pumps in its first incomplete regional window instead of returning
+a 422 with zero pumps. Timing is diagnostic, not a route law. The gates are a
+completed safe chain, preservation or improvement of the selected profile
+objective, sensible progress toward the rider waypoint, and retained pump
+alternatives.
 The fixed-coordinate command is `npm run bench:fuel-regressions`.
 
 Android must implement the same semantics before parity is claimed: a hard
@@ -870,7 +898,8 @@ must emit them when its live and on-device routing twins receive this repair.
 Android receives the LIVE foundation-route repair from the shared service; its
 offline twin must also partition an already-proved profile route when safe,
 retain route-priority alternatives, rank whole chains rather than isolated pump
-approaches, and avoid concurrent speculative next-leg work.
+approaches, avoid concurrent speculative next-leg work, and commit only an
+in-deadline routed pump prefix when a later continuation proof times out.
 
 ## 11. Current product status
 

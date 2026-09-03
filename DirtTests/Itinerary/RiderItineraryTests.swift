@@ -114,6 +114,7 @@ struct RiderItineraryTests {
         let change = reduce(initial, .setProfile(legID: secondLegID, .dirt))
 
         #expect(change.rebuildFromLegIndex == 1)
+        #expect(change.rebuildThroughLegIndex == 1)
         #expect(change.itinerary.legs[0] == initial.legs[0])
         #expect(change.itinerary.legs[1].profile == .dirt)
     }
@@ -124,6 +125,7 @@ struct RiderItineraryTests {
         let change = reduce(initial, .setProfile(legID: nil, .dirt))
 
         #expect(change.rebuildFromLegIndex == 0)
+        #expect(change.rebuildThroughLegIndex == nil)
         #expect(change.itinerary.legs.allSatisfy { $0.profile == .dirt })
     }
 
@@ -134,6 +136,7 @@ struct RiderItineraryTests {
         let change = reduce(initial, .setAllowUnknown(legID: secondLegID, true))
 
         #expect(change.rebuildFromLegIndex == 1)
+        #expect(change.rebuildThroughLegIndex == 1)
         #expect(change.itinerary.legs[0] == initial.legs[0])
         #expect(change.itinerary.legs[1].allowUnknown)
     }
@@ -144,6 +147,7 @@ struct RiderItineraryTests {
         let change = reduce(initial, .setAllowUnknown(legID: nil, true))
 
         #expect(change.rebuildFromLegIndex == 0)
+        #expect(change.rebuildThroughLegIndex == nil)
         #expect(change.itinerary.legs.allSatisfy { $0.allowUnknown })
     }
 
