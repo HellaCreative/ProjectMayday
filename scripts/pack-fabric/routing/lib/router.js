@@ -954,23 +954,47 @@ function debugGraphResponse(body, graphResolution, runtime) {
 }
 
 async function routeRequestCore(body = {}) {
+  const endpointStarted = Date.now();
   const endpointResolution = await resolveLocationsByEligibleEdge(body);
+  const endpointDiagnostics = {
+    endpointResolutionMs: Date.now() - endpointStarted,
+    endpointProbeCount: endpointResolution.resolutions.reduce(
+      (sum, row) => sum + (Array.isArray(row.probes) ? row.probes.length : 0),
+      0
+    ),
+    endpointResolutionSources: endpointResolution.resolutions
+      .map((row) => row.source || "unknown")
+      .join(",")
+  };
+  const attachEndpointDiagnostics = (result) => {
+    if (!result || typeof result !== "object") return result;
+    return {
+      ...result,
+      debug: {
+        ...(result.debug || {}),
+        diagnostics: {
+          ...(result.debug && result.debug.diagnostics || {}),
+          ...endpointDiagnostics
+        }
+      }
+    };
+  };
   body = endpointResolution.body;
   if (endpointResolution.resolutions.some((row) => row.probes && row.probes.length > 1)) {
     console.log("route endpoint resolver " + JSON.stringify(endpointResolution.resolutions));
   }
   const graphResolution = resolveGraphRequest(body);
   if (!graphResolution.ok) {
-    return {
+    return attachEndpointDiagnostics({
       status: "error",
       error: graphResolution.error,
       message: graphResolution.message,
       regionIds: graphResolution.regionIds || []
-    };
+    });
   }
 
   if (graphResolution.mode === "canada-chain") {
-    return routeCanadaChain(body, graphResolution);
+    return attachEndpointDiagnostics(await routeCanadaChain(body, graphResolution));
   }
 
   let runtime;
@@ -983,7 +1007,7 @@ async function routeRequestCore(body = {}) {
   } catch (err) {
     const message = err && err.message ? err.message : String(err);
     const corridorClip = /corridor clip removed all edges/i.test(message);
-    return {
+    return attachEndpointDiagnostics({
       status: "error",
       error: corridorClip ? "corridor_clip" : "graph_load_failed",
       message,
@@ -996,12 +1020,12 @@ async function routeRequestCore(body = {}) {
           searchAttempts: []
         }
       }
-    };
+    });
   }
   if (body.action === "debug_graph") {
     return debugGraphResponse(body, graphResolution, runtime);
   }
-  return routeOnRuntime(body, graphResolution, runtime);
+  return attachEndpointDiagnostics(await routeOnRuntime(body, graphResolution, runtime));
 }
 
 function echoLegId(result, legId) {

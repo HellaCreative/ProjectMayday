@@ -51,7 +51,7 @@ const MIN_STOP_SEPARATION_M = 800;
 const MIN_FORWARD_PROGRESS_M = 8_000;
 const MIN_DESTINATION_FUEL_CLEARANCE_M = 5_000;
 /** Bumped when fuel-selection / ranking contracts change. Clients may assert. */
-const FUEL_CHAIN_SERVICE_VERSION = "2026-09-03.shared-runtime-candidate-proof.17";
+const FUEL_CHAIN_SERVICE_VERSION = "2026-09-03.polygon-owned-endpoints.18";
 /** Watch at 50%; prefer sensible equal-stop choices at 70%. Lockstep: HopSearchPolicy.swift. */
 const FUEL_COMFORT_LO = 0.50;
 const FUEL_COMFORT_HI = 0.70;
@@ -2584,9 +2584,21 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
   const requestStarted = Date.now();
   const loadFuel = dependencies.loadFuelForLocations || loadFuelForLocations;
   const loadRuntime = dependencies.loadGraphsForRequest || loadGraphsForRequest;
+  const endpointStarted = Date.now();
   const endpointResolution = await resolveLocationsByEligibleEdge(body, {
-    probeRegion: dependencies.probeRegion
+    probeRegion: dependencies.probeRegion,
+    regionOwner: dependencies.regionOwner
   });
+  const endpointResolutionDiagnostics = {
+    endpointResolutionMs: Date.now() - endpointStarted,
+    endpointProbeCount: endpointResolution.resolutions.reduce(
+      (sum, row) => sum + (Array.isArray(row.probes) ? row.probes.length : 0),
+      0
+    ),
+    endpointResolutionSources: endpointResolution.resolutions
+      .map((row) => row.source || "unknown")
+      .join(",")
+  };
   body = endpointResolution.body;
   const selection = resolveGraphRequest(body);
   if (!selection.ok) {
@@ -2695,6 +2707,7 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
           routeFirstMs: Date.now() - routeStarted,
           routeFirstBudgetMs,
           routeFirstSharedRuntime: false,
+          ...endpointResolutionDiagnostics,
           failureReason: corridorClip ? "corridor_clip" : "graph_load_failed",
           deadlinePhase: "route_first_runtime_load"
         }
@@ -2738,6 +2751,7 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
           routeFirstMs,
           routeFirstBudgetMs,
           routeFirstSharedRuntime,
+          ...endpointResolutionDiagnostics,
           profileRouteFailureReason:
             routeDiagnostics && routeDiagnostics.failureReason ||
             foundationRoute && foundationRoute.debug && foundationRoute.debug.failureReason || null,
@@ -2917,6 +2931,7 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
           routeFirstMs,
           routeFirstBudgetMs,
           routeFirstSharedRuntime,
+          ...endpointResolutionDiagnostics,
           graphFetchMs: runtime.loadDiagnostics && runtime.loadDiagnostics.fetchMs,
           graphDecodeMs: runtime.loadDiagnostics && runtime.loadDiagnostics.decodeMs,
           graphGridMs: runtime.loadDiagnostics && runtime.loadDiagnostics.gridMs,
@@ -2993,6 +3008,7 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
       routeFirstMs,
       routeFirstBudgetMs,
       routeFirstSharedRuntime,
+      ...endpointResolutionDiagnostics,
       graphFetchMs: runtime.loadDiagnostics && runtime.loadDiagnostics.fetchMs,
       graphDecodeMs: runtime.loadDiagnostics && runtime.loadDiagnostics.decodeMs,
       graphGridMs: runtime.loadDiagnostics && runtime.loadDiagnostics.gridMs,

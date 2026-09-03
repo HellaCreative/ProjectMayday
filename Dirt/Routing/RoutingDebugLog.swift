@@ -113,6 +113,9 @@ final class RoutingDebugLog {
                 + "backtrackPct=\(d?.backtrackPct.map { String(format: "%.1f", $0) } ?? response.backtrackPct.map { String(format: "%.1f", $0) } ?? "-") "
                 + "failureReason=\(d?.failureReason ?? response.debug?.failureReason ?? "-") "
                 + "cleanMetroMultiplier=\(d?.cleanMetroMultiplier.map { String(format: "%.0f", $0) } ?? "-") "
+                + "endpointResolutionMs=\(d?.endpointResolutionMs.map(String.init) ?? "-") "
+                + "endpointProbes=\(d?.endpointProbeCount.map(String.init) ?? "-") "
+                + "endpointSources=\(d?.endpointResolutionSources ?? "-") "
                 + "attempts=[\(attemptText)]"
         )
     }
@@ -168,6 +171,9 @@ final class RoutingDebugLog {
                 + "routeFirstBudgetMs=\(d?.routeFirstBudgetMs.map(String.init) ?? "-") "
                 + "routeFirstSharedRuntime=\(d?.routeFirstSharedRuntime == true ? 1 : 0) "
                 + "profileRoutesSharedRuntime=\(d?.profileRoutesSharedRuntime == true ? 1 : 0) "
+                + "endpointResolutionMs=\(d?.endpointResolutionMs.map(String.init) ?? "-") "
+                + "endpointProbes=\(d?.endpointProbeCount.map(String.init) ?? "-") "
+                + "endpointSources=\(d?.endpointResolutionSources ?? "-") "
                 + "graphFetchMs=\(d?.graphFetchMs.map(String.init) ?? "-") "
                 + "graphDecodeMs=\(d?.graphDecodeMs.map(String.init) ?? "-") "
                 + "graphGridMs=\(d?.graphGridMs.map(String.init) ?? "-") "

@@ -6,6 +6,7 @@ const {
 } = require("./select");
 const { loadGraphsForRequest } = require("../lib/graph");
 const { unpackAccess } = require("../lib/pack-v2");
+const { polygonOwner } = require("../lib/region-polygons");
 
 const EARTH_M = 6371000;
 const DEFAULT_SNAP_METERS = 500;
@@ -135,6 +136,7 @@ async function resolveLocationsByEligibleEdge(body = {}, dependencies = {}) {
     return { body, resolutions: [] };
   }
   const runProbe = dependencies.probeRegion || probeRegion;
+  const resolvePolygonOwner = dependencies.regionOwner || polygonOwner;
   const resolutions = [];
   const locations = [];
   for (let index = 0; index < body.locations.length; index += 1) {
@@ -142,9 +144,27 @@ async function resolveLocationsByEligibleEdge(body = {}, dependencies = {}) {
     const lon = Number(location && (location.lon != null ? location.lon : location.lng));
     const lat = Number(location && location.lat);
     const candidates = candidateRegionsForPoint(lon, lat);
+    const adminOwner = resolvePolygonOwner(lon, lat);
+    if (adminOwner && candidates.includes(adminOwner)) {
+      locations.push({ ...location, resolvedRegionId: adminOwner });
+      resolutions.push({
+        index,
+        regionId: adminOwner,
+        candidates,
+        source: "admin_polygon",
+        probes: []
+      });
+      continue;
+    }
     if (candidates.length <= 1) {
       locations.push(location);
-      if (candidates[0]) resolutions.push({ index, regionId: candidates[0], candidates, probes: [] });
+      if (candidates[0]) resolutions.push({
+        index,
+        regionId: candidates[0],
+        candidates,
+        source: "single_candidate",
+        probes: []
+      });
       continue;
     }
 
@@ -169,7 +189,7 @@ async function resolveLocationsByEligibleEdge(body = {}, dependencies = {}) {
     }
     const regionId = selected ? selected.regionId : candidates[0];
     locations.push({ ...location, resolvedRegionId: regionId });
-    resolutions.push({ index, regionId, candidates, probes });
+    resolutions.push({ index, regionId, candidates, source: "eligible_edge_probe", probes });
   }
   return { body: { ...body, locations }, resolutions };
 }

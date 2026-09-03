@@ -749,13 +749,18 @@ bytes, route-profile objectives, fuel priorities, or rider waypoint semantics:
    searches cannot consume the same CPU window and leave both unfinished. The
    approach and continuation proofs run on the same request runtime as the
    foundational route instead of reopening the province graph per candidate.
+   When an authoritative admin polygon owns a pin, endpoint resolution accepts
+   that ownership without loading the same region merely to disambiguate
+   overlapping province/state rectangles. Pins outside or between those
+   polygons still use eligible-road probing.
 
 The diagnostic contract now records the route-first budget and outcome,
 profile failure reason/timing/exploration count, pumps physically in range,
 cache-versus-fresh target matches and each target pass, every routed candidate's
 rank/timing/outcome/rejection, whether dense matching was limited, the exact
 deadline phase, whether route-first shared its request runtime, and whether
-candidate proofs shared that runtime, and whether the request was cancelled.
+candidate proofs shared that runtime, endpoint-resolution time/source/probe
+count, and whether the request was cancelled.
 The fixed Ontario
 two-point fuel reproduction now
 returns a safe one-stop chain in about 12.2 seconds locally instead of 53

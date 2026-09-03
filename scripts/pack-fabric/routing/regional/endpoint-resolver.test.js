@@ -5,7 +5,7 @@ const assert = require("node:assert/strict");
 const { resolveLocationsByEligibleEdge } = require("./endpoint-resolver");
 const { resolveGraphRequest } = require("./select");
 
-test("NS road inside the PE rectangle resolves by eligible edge, not bbox size", async () => {
+test("admin polygon resolves an NS road inside overlapping province rectangles without graph I/O", async () => {
   const probes = [];
   const input = {
     profile: "dirt",
@@ -39,13 +39,14 @@ test("NS road inside the PE rectangle resolves by eligible edge, not bbox size",
   });
 
   assert.equal(resolved.body.locations[0].resolvedRegionId, "ns");
-  assert.ok(probes.indexOf("pe") < probes.indexOf("ns"));
+  assert.deepEqual(probes, []);
+  assert.equal(resolved.resolutions[0].source, "admin_polygon");
   const selection = resolveGraphRequest(resolved.body);
   assert.deepEqual(selection.regionIds, ["ns"]);
   assert.notEqual(selection.mode, "canada-chain");
 });
 
-test("an eligible primary region does not probe every overlapping pack", async () => {
+test("an admin-owned primary region does not probe overlapping packs", async () => {
   const probes = [];
   const resolved = await resolveLocationsByEligibleEdge({
     profile: "cleanest",
@@ -62,5 +63,26 @@ test("an eligible primary region does not probe every overlapping pack", async (
     }
   });
   assert.equal(resolved.body.locations[0].resolvedRegionId, "pe");
-  assert.deepEqual(probes, ["pe"]);
+  assert.deepEqual(probes, []);
+  assert.equal(resolved.resolutions[0].source, "admin_polygon");
+});
+
+test("a polygon-ambiguous point still resolves by eligible road fabric", async () => {
+  const probes = [];
+  const resolved = await resolveLocationsByEligibleEdge({
+    profile: "dirt",
+    locations: [{ lat: 45.874661, lon: -61.910289 }]
+  }, {
+    regionOwner: () => null,
+    probeRegion: async (regionId) => {
+      probes.push(regionId);
+      return regionId === "pe"
+        ? { ok: true, edgeId: "pe-road", accessClass: "motorized_verified", distanceM: 5 }
+        : { ok: false, reason: "snap_no_eligible_edge" };
+    }
+  });
+
+  assert.equal(resolved.body.locations[0].resolvedRegionId, "pe");
+  assert.deepEqual(probes, ["ns", "pe"]);
+  assert.equal(resolved.resolutions[0].source, "eligible_edge_probe");
 });

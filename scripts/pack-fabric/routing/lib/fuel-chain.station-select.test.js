@@ -226,7 +226,7 @@ test("forward progress outranks an early Clean-quality pump", async () => {
 
 test("Clean rejects a full-tank lateral Gulf-class pump in favor of a corridor pump", () => {
   assert.equal(typeof FUEL_CHAIN_SERVICE_VERSION, "string");
-  assert.match(FUEL_CHAIN_SERVICE_VERSION, /shared-runtime-candidate-proof/);
+  assert.match(FUEL_CHAIN_SERVICE_VERSION, /polygon-owned-endpoints/);
   // Halifax-ish → Tatamagouche-ish geometry: Wallace Gulf is nearly a full tank
   // sideways; Truro sits on the corridor with a shorter complete chain.
   const start = { lat: 44.764823, lon: -63.340271 };

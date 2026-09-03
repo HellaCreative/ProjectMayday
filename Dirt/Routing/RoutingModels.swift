@@ -374,6 +374,9 @@ struct FuelChainDiagnostics: Codable, Sendable {
     var routeFirstBudgetMs: Int? = nil
     var routeFirstSharedRuntime: Bool? = nil
     var profileRoutesSharedRuntime: Bool? = nil
+    var endpointResolutionMs: Int? = nil
+    var endpointProbeCount: Int? = nil
+    var endpointResolutionSources: String? = nil
     var graphFetchMs: Int? = nil
     var graphDecodeMs: Int? = nil
     var graphGridMs: Int? = nil
@@ -690,6 +693,9 @@ struct RouteResponseDiagnostics: Codable, Sendable {
     var requestedProfile: String? = nil
     var effectiveProfile: String? = nil
     var profileFallbacks: [String]? = nil
+    var endpointResolutionMs: Int? = nil
+    var endpointProbeCount: Int? = nil
+    var endpointResolutionSources: String? = nil
     /// DEBUG ONLY. Echo of options.cleanMetroMultiplier when Clean override was applied.
     var cleanMetroMultiplier: Double? = nil
 }
