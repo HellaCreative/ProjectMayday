@@ -353,6 +353,8 @@ struct FuelChainDiagnostics: Codable, Sendable {
     let dijkstraPops: Int?
     let matchedFuel: Int?
     var stationsConsidered: Int? = nil
+    var stationsInRange: Int? = nil
+    var stationsMatchLimited: Bool? = nil
     let elapsedMs: Int?
     var candidateK: Int? = nil
     var stationsReachableWithinRange: Int? = nil
@@ -366,6 +368,7 @@ struct FuelChainDiagnostics: Codable, Sendable {
     var selectedReason: String? = nil
     var totalElapsedMs: Int? = nil
     var routeFirstMs: Int? = nil
+    var routeFirstBudgetMs: Int? = nil
     var graphFetchMs: Int? = nil
     var graphDecodeMs: Int? = nil
     var graphGridMs: Int? = nil
@@ -382,6 +385,12 @@ struct FuelChainDiagnostics: Codable, Sendable {
     var windowBudgetOverrunMs: Int? = nil
     var searchDeadlineOverrunMs: Int? = nil
     var timeBudgetExceeded: Bool? = nil
+    var profileRouteFailureReason: String? = nil
+    var profileRouteSearchOutcome: String? = nil
+    var profileRouteSearchMs: Int? = nil
+    var profileRoutePops: Int? = nil
+    var deadlinePhase: String? = nil
+    var cancelled: Bool? = nil
 }
 
 struct FuelRouteAttemptDiagnostic: Codable, Sendable {

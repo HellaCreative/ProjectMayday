@@ -62,6 +62,7 @@ function effectiveProfileInfo(requestedProfile, flags = {}) {
   if (flags.urbanCoreFallbackUsed) fallbacks.push("urban_core_last_resort");
   if (flags.cleanUnpavedFallbackUsed) fallbacks.push("clean_unpaved_last_resort");
   if (flags.settlementFallbackUsed) fallbacks.push("settlement_relaxed");
+  if (flags.balancedSearchFallbackUsed) fallbacks.push("balanced_distance_fallback");
 
   // Urban-core last resort is the Clean escape hatch; when Dirt/Balanced
   // only connect after that hatch, the ride is effectively a Clean connectivity
@@ -114,7 +115,8 @@ function buildRouteDiagnostics({
   const profileInfo = effectiveProfileInfo(requestedProfile, {
     urbanCoreFallbackUsed: urbanCoreFallbackUsed || meta.urbanCoreFallbackUsed,
     cleanUnpavedFallbackUsed: cleanUnpavedFallbackUsed || meta.cleanUnpavedFallbackUsed,
-    settlementFallbackUsed: settlementFallbackUsed || meta.settlementFallbackUsed
+    settlementFallbackUsed: settlementFallbackUsed || meta.settlementFallbackUsed,
+    balancedSearchFallbackUsed: meta.balancedSearchFallbackUsed
   });
   const corridorMeters = Number.isFinite(Number(meta.corridorMeters))
     ? Number(meta.corridorMeters)

@@ -583,8 +583,14 @@ function fillShortestMeters(args) {
     origin,
     capMeters,
     nodeLL,
-    coincidentSiblings
+    coincidentSiblings,
+    deadlineAtMs,
+    abortSignal
   } = args;
+  const absoluteDeadline = Number(deadlineAtMs);
+  const deadlineExceeded = () =>
+    (abortSignal && abortSignal.aborted) ||
+    (Number.isFinite(absoluteDeadline) && Date.now() >= absoluteDeadline);
   const dist = new Float64Array(total);
   dist.fill(Infinity);
   const heap = new MinHeap();
@@ -594,15 +600,20 @@ function fillShortestMeters(args) {
   const arcCount = edgeTargets.length;
   const incomingCounts = new Uint32Array(n);
   for (let i = 0; i < arcCount; i += 1) {
+    if ((i & 8191) === 0 && deadlineExceeded()) return null;
     const target = edgeTargets[i];
     if (target < n) incomingCounts[target] += 1;
   }
   const incomingOffsets = new Uint32Array(n + 1);
-  for (let node = 0; node < n; node += 1) incomingOffsets[node + 1] = incomingOffsets[node] + incomingCounts[node];
+  for (let node = 0; node < n; node += 1) {
+    if ((node & 8191) === 0 && deadlineExceeded()) return null;
+    incomingOffsets[node + 1] = incomingOffsets[node] + incomingCounts[node];
+  }
   const incomingSources = new Uint32Array(arcCount);
   const incomingEdges = new Uint32Array(arcCount);
   const cursors = incomingOffsets.slice(0, n);
   for (let source = 0; source < n; source += 1) {
+    if ((source & 2047) === 0 && deadlineExceeded()) return null;
     for (let i = nodeOffsets[source]; i < nodeOffsets[source + 1]; i += 1) {
       const target = edgeTargets[i];
       if (target >= n) continue;
@@ -613,10 +624,13 @@ function fillShortestMeters(args) {
   }
   dist[origin] = 0;
   heap.push({ node: origin, cost: 0 });
+  let pops = 0;
   while (heap.items.length) {
     const cur = heap.pop();
     if (!cur || cur.cost !== dist[cur.node]) continue;
     if (cur.cost > capMeters) continue;
+    pops += 1;
+    if ((pops & 255) === 0 && deadlineExceeded()) return null;
     if (cur.node < n) {
       const start = incomingOffsets[cur.node];
       const end = incomingOffsets[cur.node + 1];
@@ -764,6 +778,20 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
       : widthMultipliers.map((m) => baseCorridor * m).concat(Infinity);
     const requestedCap = Number(searchOpts.maxPathMeters);
     const budgetedProfile = profile === "balanced";
+    // Fuel planning supplies one absolute wall-clock deadline. Every helper,
+    // corridor attempt and repair pass must share it; none may restart a fresh
+    // local clock after the outer request has expired.
+    const deadlineStartedAt = Date.now();
+    const requestHasDeadline = Number.isFinite(Number(searchOpts.deadlineAtMs));
+    const adaptiveBudgetMs = profileSearchBudgetMs(
+      profile,
+      straightLineMeters,
+      graphNodeCount
+    );
+    const outerDeadline = requestHasDeadline
+      ? Number(searchOpts.deadlineAtMs)
+      : deadlineStartedAt + adaptiveBudgetMs;
+    const effectiveBudgetMs = Math.max(0, outerDeadline - deadlineStartedAt);
     const directShortest = budgetedProfile
       ? findPathV2(
           runtime, startMatch, endMatch, profile, policy, avoidEdgeIds, pavedBias,
@@ -772,7 +800,7 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
             costMode: "distance",
             corridorMeters: 0,
             hardCorridor: false,
-            boundedSearch: false,
+            boundedSearch: requestHasDeadline,
             variety: false,
             settlementWall: false,
             settlementFallback: false,
@@ -780,7 +808,12 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
             arrivalEdgeId: null,
             backtrackFactor: 1,
             progressRegressionMeters: Number.MAX_SAFE_INTEGER,
-            maxPathMeters: undefined
+            maxPathMeters: undefined,
+            timeCapMs: requestHasDeadline
+              ? Math.max(1, outerDeadline - Date.now())
+              : undefined,
+            deadlineAtMs: requestHasDeadline ? outerDeadline : undefined,
+            abortSignal: searchOpts.abortSignal
           }
         )
       : null;
@@ -797,17 +830,6 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
     // Keep one absolute ceiling across corridor attempts and any internal
     // fallback recursion. A failed hop must not receive a fresh clock merely
     // because the search widens or relaxes a scored preference.
-    const adaptiveBudgetMs = profileSearchBudgetMs(
-      profile,
-      straightLineMeters,
-      graphNodeCount
-    );
-    const deadlineStartedAt = Date.now();
-    const requestHasDeadline = Number.isFinite(Number(searchOpts.deadlineAtMs));
-    const outerDeadline = requestHasDeadline
-      ? Number(searchOpts.deadlineAtMs)
-      : deadlineStartedAt + adaptiveBudgetMs;
-    const effectiveBudgetMs = Math.max(0, outerDeadline - deadlineStartedAt);
     let liveDeadline = outerDeadline;
     searchOpts.deadlineAtMs = liveDeadline;
     for (const width of widths) {
@@ -862,7 +884,9 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
         arrivalEdgeId: searchOpts.arrivalEdgeId == null ? null : searchOpts.arrivalEdgeId,
         backtrackFactor: searchOpts.backtrackFactor,
         skipShortDirtRepair: searchOpts.skipShortDirtRepair === true,
-        popCap: profileSearchPopCap(profile, graphNodeCount, dirtComparisonWidth)
+        popCap: profileSearchPopCap(profile, graphNodeCount, dirtComparisonWidth),
+        deadlineAtMs: requestHasDeadline ? liveDeadline : undefined,
+        abortSignal: searchOpts.abortSignal
       };
       if (dirtComparisonWidth) {
         // Comparison candidates share roughly one old pass-2 budget.
@@ -973,7 +997,10 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
           skipShortDirtRepair: searchOpts.skipShortDirtRepair === true,
           popCap: profileSearchPopCap(profile, graphNodeCount, false),
           timeCapMs: recoveryBudgetMs,
-          deadlineAtMs: Date.now() + recoveryBudgetMs
+          deadlineAtMs: requestHasDeadline
+            ? Math.min(liveDeadline, Date.now() + recoveryBudgetMs)
+            : Date.now() + recoveryBudgetMs,
+          abortSignal: searchOpts.abortSignal
         };
         if (Number.isFinite(recoveryCap)) resourceOpts.maxPathMeters = recoveryCap;
         const recoveryStarted = Date.now();
@@ -1033,6 +1060,38 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
       });
       best.ride.searchMeta.corridorSelection = "highest-dirt-then-less-pavement-meander";
       return best.ride;
+    }
+    const incompleteAttempt = attemptDiagnostics.find((attempt) =>
+      attempt.outcome === "timeCap" || attempt.outcome === "popCap"
+    );
+    const directFitsRequest = directShortest && Number.isFinite(directShortestMeters) && (
+      !Number.isFinite(requestedCap) || directShortestMeters <= requestedCap + 1
+    );
+    if (
+      profile === "balanced" && incompleteAttempt && directFitsRequest &&
+      !(searchOpts.abortSignal && searchOpts.abortSignal.aborted)
+    ) {
+      // A bounded Balanced preference search is allowed to lose refinement,
+      // never connectivity. The distance pass has already proved a legal road
+      // ride under the same access policy and hard fuel cap. Return it with an
+      // explicit diagnostic rather than falsely reporting that no route exists.
+      directShortest.searchMeta = directShortest.searchMeta || {};
+      directShortest.searchMeta.rideObjective = "surface-balance-bounded-fallback";
+      directShortest.searchMeta.balancedSearchFallbackUsed = true;
+      directShortest.searchMeta.balancedSearchFallbackReason = incompleteAttempt.outcome;
+      directShortest.searchMeta.corridorMeters = null;
+      directShortest.searchMeta.corridorWidened = false;
+      directShortest.searchMeta.corridorCandidates = attemptDiagnostics;
+      directShortest.searchMeta.searchBudgetMs = effectiveBudgetMs;
+      directShortest.searchMeta.searchBudgetPolicy = requestHasDeadline
+        ? "request-deadline"
+        : "adaptive-profile";
+      directShortest.searchMeta.directReference = {
+        algorithm: directShortest.searchMeta.searchAlgorithm,
+        distanceMeters: Math.round(directShortestMeters),
+        pops: Number(directShortest.searchMeta.pops) || 0
+      };
+      return directShortest;
     }
     const allProvedNoPath = attemptDiagnostics.length > 0
       && attemptDiagnostics.every((attempt) => attempt.outcome === "noPath");
@@ -1243,7 +1302,10 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
     && profile !== "cleanest"
     && !(corridorM > 0);
   const isHunt = Number.isFinite(maxPathMeters);
-  const boundedSearch = isHunt || searchOpts.boundedSearch === true;
+  const absoluteDeadline = Number(searchOpts.deadlineAtMs);
+  const hasAbsoluteDeadline = Number.isFinite(absoluteDeadline);
+  const abortSignal = searchOpts.abortSignal;
+  const boundedSearch = isHunt || searchOpts.boundedSearch === true || hasAbsoluteDeadline;
   const slackToDest = isHunt
     ? fillShortestMeters({
         n,
@@ -1271,9 +1333,25 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
         origin: endNode,
         capMeters: maxPathMeters,
         nodeLL,
-        coincidentSiblings
+        coincidentSiblings,
+        deadlineAtMs: absoluteDeadline,
+        abortSignal
       })
     : null;
+
+  // A bounded search cannot safely continue without its lower-bound table.
+  // Building that table is deliberately deadline-aware in large packs; when
+  // it is interrupted, report the real terminal condition instead of later
+  // treating a missing table as either a route miss or an unbounded search.
+  if (isHunt && !slackToDest) {
+    if (searchOpts.diagnostics) {
+      searchOpts.diagnostics.searchOutcome =
+        abortSignal && abortSignal.aborted ? "cancelled" : "timeCap";
+      searchOpts.diagnostics.failureReason =
+        abortSignal && abortSignal.aborted ? "cancelled" : "timeout";
+    }
+    return null;
+  }
 
   if (costMode === "balancedResource") {
     return searchBalancedResource({
@@ -1314,6 +1392,8 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
       hardCorridor,
       progressRegressionMeters: regressionLimit,
       timeCapMs: searchOpts.timeCapMs,
+      deadlineAtMs: absoluteDeadline,
+      abortSignal,
       popCap: searchOpts.popCap,
       prior,
       arrival,
@@ -1372,9 +1452,13 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
   const popCap = boundedSearch
     ? (Number.isFinite(configuredPopCap) ? configuredPopCap : PASS2_POP_CAP)
     : Math.min(8_000_000, total * (VARIETY_SLOTS + 2) * 8);
-  const deadline = boundedSearch
+  const localDeadline = boundedSearch
     ? Date.now() + (Number.isFinite(configuredTimeCapMs) ? configuredTimeCapMs : PASS2_TIME_MS)
-    : 0;
+    : Infinity;
+  const deadline = Math.min(
+    localDeadline,
+    hasAbsoluteDeadline ? absoluteDeadline : Infinity
+  );
 
   while (heap.items.length) {
     const cur = heap.pop();
@@ -1386,8 +1470,11 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
       abort = "popCap";
       break;
     }
-    if (deadline && (pops & 255) === 0 && Date.now() > deadline) {
-      abort = "timeCap";
+    if ((pops & 255) === 0 && (
+      (abortSignal && abortSignal.aborted) ||
+      (Number.isFinite(deadline) && Date.now() >= deadline)
+    )) {
+      abort = abortSignal && abortSignal.aborted ? "cancelled" : "timeCap";
       break;
     }
     if (cur.node === endNode) break;
@@ -1941,6 +2028,8 @@ function searchBalancedResource(ctx) {
     hardCorridor,
     progressRegressionMeters,
     timeCapMs,
+    deadlineAtMs,
+    abortSignal,
     popCap: requestedPopCap,
     prior,
     arrival,
@@ -1990,16 +2079,22 @@ function searchBalancedResource(ctx) {
   let pops = 0;
   let abort = "completed";
   const isHunt = Number.isFinite(maxPathMeters);
-  const cappedSearch = isHunt || boundedSearch === true;
+  const absoluteDeadline = Number(deadlineAtMs);
+  const hasAbsoluteDeadline = Number.isFinite(absoluteDeadline);
+  const cappedSearch = isHunt || boundedSearch === true || hasAbsoluteDeadline;
   // Balanced carries a surface-ratio label set, so it legitimately needs more
   // expansions than the single-label Dirt searches. The time deadline
   // remains the ultimate guardrail.
   const popCap = cappedSearch
     ? (Number.isFinite(Number(requestedPopCap)) ? Number(requestedPopCap) : PASS2_POP_CAP * 10)
     : 8_000_000;
-  const deadline = cappedSearch
+  const localDeadline = cappedSearch
     ? Date.now() + (Number.isFinite(Number(timeCapMs)) ? Number(timeCapMs) : PASS2_TIME_MS)
-    : 0;
+    : Infinity;
+  const deadline = Math.min(
+    localDeadline,
+    hasAbsoluteDeadline ? absoluteDeadline : Infinity
+  );
 
   function nodeLL(node) {
     if (node === startNode) return startLL;
@@ -2030,8 +2125,11 @@ function searchBalancedResource(ctx) {
       abort = "popCap";
       break;
     }
-    if (deadline && (pops & 255) === 0 && Date.now() > deadline) {
-      abort = "timeCap";
+    if ((pops & 255) === 0 && (
+      (abortSignal && abortSignal.aborted) ||
+      (Number.isFinite(deadline) && Date.now() >= deadline)
+    )) {
+      abort = abortSignal && abortSignal.aborted ? "cancelled" : "timeCap";
       break;
     }
     const cur = heap.pop();

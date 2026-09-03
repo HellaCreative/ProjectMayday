@@ -300,7 +300,7 @@ test("long fuel chain returns a resumable window capped at three stops", async (
   assert.equal(result.graphMeters.length, 3);
 });
 
-test("one-stop window keeps a proven pump when evaluation crosses its deadline", async () => {
+test("one-stop window does not commit a pump whose proof crosses its hard deadline", async () => {
   const result = await planFuelChainOnRuntime({
     runtime: lineRuntime(),
     stations: [station("f1", 1), station("f2", 2), station("f3", 3)],
@@ -324,10 +324,9 @@ test("one-stop window keeps a proven pump when evaluation crosses its deadline",
     })
   });
 
-  assert.equal(result.ok, true);
-  assert.equal(result.windowComplete, false);
-  assert.deepEqual(result.stops.map((row) => row.id), ["f1"]);
-  assert.deepEqual(result.graphMeters, [78_626]);
+  assert.equal(result.ok, false);
+  assert.equal(result.error, "window_time_budget");
+  assert.deepEqual(result.stops, []);
   assert.ok(result.diagnostics.profileRouteAttempts > 0);
   assert.ok(result.diagnostics.maxHopMs >= 50);
   assert.ok(result.diagnostics.searchDeadlineOverrunMs > 0);
@@ -729,7 +728,7 @@ test("profile ride length requires Dirt fuel even when shortest reachability fit
 });
 
 for (const profile of ["dirt", "balanced"]) {
-  test(`${profile} keeps a completed viable pump when evaluation crosses the window deadline`, async () => {
+  test(`${profile} does not accept an unproven continuation after the window deadline`, async () => {
     const result = await planFuelChainOnRuntime({
       runtime: lineRuntime(),
       stations: [station("mid", 1)],
@@ -752,10 +751,10 @@ for (const profile of ["dirt", "balanced"]) {
       })
     });
 
-    assert.equal(result.ok, true);
-    assert.deepEqual(result.stops.map((row) => row.id), ["mid"]);
-    assert.equal(result.graphMeters.length, 2);
-    assert.ok(result.graphMeters.every((meters) => meters <= 90_000));
+    assert.equal(result.ok, false);
+    assert.equal(result.error, "window_time_budget");
+    assert.deepEqual(result.stops, []);
+    assert.equal(result.diagnostics.deadlinePhase, "candidate_route");
   });
 }
 

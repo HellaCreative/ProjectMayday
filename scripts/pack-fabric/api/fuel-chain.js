@@ -42,8 +42,17 @@ module.exports = async function handler(req, res) {
   }
 
   const started = Date.now();
+  const abortController = new AbortController();
+  const abortRequest = () => abortController.abort();
+  if (typeof req.once === "function") req.once("aborted", abortRequest);
+  if (typeof res.once === "function") {
+    res.once("close", () => {
+      if (!res.writableEnded) abortRequest();
+    });
+  }
   try {
     const body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
+    body.options = { ...(body.options || {}), abortSignal: abortController.signal };
     console.log(
       `fuel request begin id=${requestId} profile=${body.profile || "-"} ` +
       `riderLeg=${body.fuel && body.fuel.riderLegId || "-"} ` +

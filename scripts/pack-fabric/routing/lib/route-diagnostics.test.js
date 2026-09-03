@@ -59,6 +59,14 @@ test("urban core last resort reports effective cleanest", () => {
   assert.deepEqual(info.profileFallbacks, ["urban_core_last_resort"]);
 });
 
+test("bounded Balanced road fallback stays explicit in diagnostics", () => {
+  const info = effectiveProfileInfo("balanced", {
+    balancedSearchFallbackUsed: true
+  });
+  assert.equal(info.effectiveProfile, "balanced");
+  assert.deepEqual(info.profileFallbacks, ["balanced_distance_fallback"]);
+});
+
 test("buildRouteDiagnostics keeps attempt timings", () => {
   const diag = buildRouteDiagnostics({
     requestedProfile: "dirt",

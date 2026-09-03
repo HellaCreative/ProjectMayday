@@ -13,10 +13,12 @@ const ON_GRAPH = path.join(
   "on",
   "graph.v3.bin"
 );
+const RUN_REGIONAL_REPLAY = fs.existsSync(ON_GRAPH) &&
+  process.env.ROUTING_REGIONAL_REPLAY === "1";
 
 test(
   "long live Ontario Balanced route completes instead of exhausting an NS-scale deadline",
-  { skip: !fs.existsSync(ON_GRAPH), timeout: 120_000 },
+  { skip: !RUN_REGIONAL_REPLAY, timeout: 120_000 },
   async (t) => {
     const oldVercel = process.env.VERCEL;
     const oldChainCache = process.env.ROUTING_CHAIN_CACHE;
@@ -57,7 +59,7 @@ test(
 
 test(
   "short live Ontario routes complete for every rider profile",
-  { skip: !fs.existsSync(ON_GRAPH), timeout: 120_000 },
+  { skip: !RUN_REGIONAL_REPLAY, timeout: 120_000 },
   async (t) => {
     const oldVercel = process.env.VERCEL;
     const oldChainCache = process.env.ROUTING_CHAIN_CACHE;
@@ -101,3 +103,31 @@ test("search-limit copy identifies the requested profile", () => {
   assert.match(routeSearchLimitMessage("dirt"), /^Dirt search/);
   assert.match(routeSearchLimitMessage("cleanest"), /^Clean search/);
 });
+
+test(
+  "Ontario Balanced keeps its proven road connection when refinement reaches a deadline",
+  {
+    skip: !RUN_REGIONAL_REPLAY,
+    timeout: 30_000
+  },
+  async () => {
+    const { routeRequest } = require("./router");
+    const result = await routeRequest({
+      locations: [
+        { lat: 43.370056, lon: -80.706045 },
+        { lat: 44.762876, lon: -79.929694 }
+      ],
+      profile: "balanced",
+      accessPolicy: {
+        motorizedPermissive: true,
+        motorizedUnknown: false
+      },
+      options: { deadlineAtMs: Date.now() + 5_000 }
+    });
+
+    assert.equal(result.status, "complete", result.message);
+    assert.equal(result.debug.searchMeta.balancedSearchFallbackUsed, true);
+    assert.ok(result.distanceMeters > 150_000 && result.distanceMeters < 250_000);
+    assert.ok(result.warnings.some((row) => row.code === "balanced_preference_limited"));
+  }
+);

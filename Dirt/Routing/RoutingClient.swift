@@ -5,12 +5,43 @@ import Foundation
 final class RoutingClient {
     private let session: URLSession
 
+    private struct TransferResult: @unchecked Sendable {
+        let data: Data
+        let response: URLResponse
+    }
+
     nonisolated private static func diagnosticRequestID(_ prefix: String) -> String {
         "\(prefix)-\(UUID().uuidString.prefix(8).lowercased())"
     }
 
     nonisolated private static func elapsedMilliseconds(since start: Date) -> Int {
         max(0, Int(Date().timeIntervalSince(start) * 1_000))
+    }
+
+    /// URLRequest's timeout is an inactivity interval, not a dependable total
+    /// wall-clock ceiling. Race the transfer against an explicit clock so a
+    /// live fuel window cannot linger until Vercel's platform timeout.
+    nonisolated private static func data(
+        for request: URLRequest,
+        session: URLSession,
+        hardTimeout: TimeInterval
+    ) async throws -> (Data, URLResponse) {
+        try await withThrowingTaskGroup(of: TransferResult.self) { group in
+            group.addTask {
+                let (data, response) = try await session.data(for: request)
+                return TransferResult(data: data, response: response)
+            }
+            group.addTask {
+                let nanoseconds = UInt64(max(0.001, hardTimeout) * 1_000_000_000)
+                try await Task.sleep(nanoseconds: nanoseconds)
+                throw URLError(.timedOut)
+            }
+            defer { group.cancelAll() }
+            guard let result = try await group.next() else {
+                throw URLError(.unknown)
+            }
+            return (result.data, result.response)
+        }
     }
 
     nonisolated private static func coordinateSummary(_ locations: [RouteLocation]) -> String {
@@ -158,7 +189,7 @@ final class RoutingClient {
         // windows. A stalled window must fail quickly so the client can retry
         // or backtrack without waiting for a platform 504.
         let requestedBudget = request.fuel.windowTimeBudgetMs.map {
-            max(1, Double($0) / 1_000 + 1.5)
+            max(1, Double($0) / 1_000 + 3)
         }
         let defaultWindowTimeout = request.fuel.windowMaxStops == nil ? timeout : 6
         // The server owns the planning deadline. Leave enough transport grace
@@ -181,7 +212,11 @@ final class RoutingClient {
         let data: Data
         let urlResponse: URLResponse
         do {
-            (data, urlResponse) = try await session.data(for: urlRequest)
+            (data, urlResponse) = try await Self.data(
+                for: urlRequest,
+                session: session,
+                hardTimeout: urlRequest.timeoutInterval
+            )
         } catch {
             let ns = error as NSError
             let failureLine = "fuel request transport-fail id=\(requestID) "

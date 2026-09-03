@@ -49,7 +49,7 @@ const MIN_STOP_SEPARATION_M = 800;
 const MIN_FORWARD_PROGRESS_M = 8_000;
 const MIN_DESTINATION_FUEL_CLEARANCE_M = 5_000;
 /** Bumped when fuel-selection / ranking contracts change. Clients may assert. */
-const FUEL_CHAIN_SERVICE_VERSION = "2026-09-02.route-first-shared-plan.11";
+const FUEL_CHAIN_SERVICE_VERSION = "2026-09-03.hard-window-dense-targets.12";
 /** Watch at 50%; prefer sensible equal-stop choices at 70%. Lockstep: HopSearchPolicy.swift. */
 const FUEL_COMFORT_LO = 0.50;
 const FUEL_COMFORT_HI = 0.70;
@@ -66,6 +66,11 @@ const MAX_FUEL_CHAIN_DETOUR_ABS_M = 50_000;
 /** Soft corridor half-width; beyond this, cross-track dominates clean ranking. */
 const CORRIDOR_SOFT_WIDTH_M = 25_000;
 const SHORTLIST_MIN_SEPARATION_M = 15_000;
+// Dense regions can contain thousands of pumps inside one tank radius. Snap a
+// broad, directionally ordered working set instead of blocking the request on
+// every pump in the province. Sparse regions remain uncapped.
+const DENSE_TARGET_MATCH_LIMIT = 768;
+const DENSE_TARGET_MIN_MATCHES = 48;
 const CLEAN_MAJOR_ROAD_CLASSES = new Set([
   "motorway", "motorway_link", "trunk", "trunk_link", "primary", "primary_link",
   "freeway", "ramp", "arterial"
@@ -357,7 +362,9 @@ function boundedGraphDistances(
   avoidEdgeIds = [],
   priorEdgeIds = [],
   arrivalEdgeId = null,
-  backtrackFactor = 4
+  backtrackFactor = 4,
+  deadlineAtMs = Infinity,
+  abortSignal = null
 ) {
   const count = nodeCount(runtime);
   const distances = new Float64Array(count);
@@ -374,12 +381,20 @@ function boundedGraphDistances(
   seedMatchDistances(runtime, startMatch, distances, heap);
   for (const item of heap.items) scores[item.node] = item.cost;
   let pops = 0;
+  let deadlineExceeded = false;
 
   while (heap.items.length) {
     const current = heap.pop();
     if (!current || current.cost !== scores[current.node]) continue;
     if (distances[current.node] > maxMeters) continue;
     pops += 1;
+    if ((pops & 255) === 0 && (
+      (abortSignal && abortSignal.aborted) ||
+      (Number.isFinite(Number(deadlineAtMs)) && Date.now() >= Number(deadlineAtMs))
+    )) {
+      deadlineExceeded = true;
+      break;
+    }
     forEachNeighbor(runtime, current.node, (next, edgeIndex) => {
       const edge = edgeView(runtime, edgeIndex);
       if (avoid.has(edge.id)) return;
@@ -393,7 +408,7 @@ function boundedGraphDistances(
     });
   }
 
-  return { distances, pops };
+  return { distances, pops, deadlineExceeded };
 }
 
 function distanceToMatch(runtime, originMatch, targetMatch, distances) {
@@ -429,8 +444,13 @@ function nearestReachableFuelDistance({
   profile = "cleanest",
   accessPolicy = { motorizedPermissive: true, motorizedUnknown: false },
   maxMeters,
-  avoidEdgeIds = []
+  avoidEdgeIds = [],
+  deadlineAtMs = Infinity,
+  abortSignal = null
 }) {
+  const deadlineExceeded = () =>
+    (abortSignal && abortSignal.aborted) ||
+    (Number.isFinite(Number(deadlineAtMs)) && Date.now() >= Number(deadlineAtMs));
   const resolvedProfile = resolveProfile(profile);
   const policy = normalizePolicy(accessPolicy, resolvedProfile);
   const avoid = new Set((avoidEdgeIds || []).map(String));
@@ -497,6 +517,9 @@ function nearestReachableFuelDistance({
       if (!current || current.cost !== distances[current.node]) continue;
       if (current.cost > maxMeters || current.cost >= best) break;
       pops += 1;
+      if ((pops & 255) === 0 && deadlineExceeded()) {
+        return { meters: null, pops, deadlineExceeded: true };
+      }
       const targetOffset = byNode.get(current.node);
       if (targetOffset != null) best = Math.min(best, current.cost + targetOffset);
       forEachNeighbor(runtime, current.node, (next, edgeIndex) => {
@@ -509,12 +532,21 @@ function nearestReachableFuelDistance({
         heap.push({ node: next, cost: candidate });
       });
     }
-    return { meters: Number.isFinite(best) && best <= maxMeters ? best : null, pops };
+    return {
+      meters: Number.isFinite(best) && best <= maxMeters ? best : null,
+      pops,
+      deadlineExceeded: false
+    };
   }
 
   let best = null;
+  let timedOut = false;
   for (const batchEnd of batchEnds) {
     for (; considered < batchEnd; considered += 1) {
+      if ((considered & 31) === 0 && deadlineExceeded()) {
+        timedOut = true;
+        break;
+      }
       const row = ordered[considered];
       const match = matchPoint(
         runtime, row.location, policy, HARD_MATCH_METERS, avoid, null, resolvedProfile, "end"
@@ -523,17 +555,20 @@ function nearestReachableFuelDistance({
     }
     const result = searchMatchedTargets();
     totalPops += result.pops;
+    if (result.deadlineExceeded) timedOut = true;
     if (result.meters != null) {
       best = result.meters;
       const nextLowerBound = ordered[considered]?.straightMeters ?? Infinity;
       if (nextLowerBound >= best) break;
     }
+    if (timedOut) break;
   }
   return {
     meters: best,
     pops: totalPops,
     matched: targetMatches.length,
-    considered
+    considered,
+    deadlineExceeded: timedOut
   };
 }
 
@@ -590,7 +625,10 @@ function deriveWaypointRefuels(locations, stations, radiusMeters = WAYPOINT_FUEL
 // destination needs matching on each request.
 const preparedFuelTargetCache = new WeakMap();
 
-function prepareTargets(runtime, stations, destination, policy, profile, avoid) {
+function prepareTargets(
+  runtime, stations, destination, policy, profile, avoid,
+  deadlineAtMs = Infinity, abortSignal = null
+) {
   const started = Date.now();
   const destinationMatch = matchPoint(
     runtime,
@@ -634,7 +672,10 @@ function prepareTargets(runtime, stations, destination, policy, profile, avoid) 
     elapsedMs: Date.now() - started,
     cacheHit,
     stationsConsidered: 0,
-    stationsMatched: 0
+    stationsMatched: 0,
+    deadlineExceeded: false,
+    stationsInRange: 0,
+    stationsMatchLimited: false
   };
   const matchedStationIDs = new Set();
 
@@ -644,12 +685,41 @@ function prepareTargets(runtime, stations, destination, policy, profile, avoid) 
     // snap allowance covers both endpoint projections, so this removes only
     // pumps that are physically incapable of fitting in the current tank.
     const geographicLimit = Math.max(0, Number(maxMeters) || 0) + HARD_MATCH_METERS * 2;
-    const nearby = stationRows.filter((row) =>
-      haversineMeters(originCoordinate, [row.location.lon, row.location.lat]) <= geographicLimit
+    const destinationCoordinate = locationCoordinate(destination);
+    const nearby = stationRows.map((row) => {
+      const point = [row.location.lon, row.location.lat];
+      const straightMeters = haversineMeters(originCoordinate, point);
+      return {
+        ...row,
+        straightMeters,
+        progressMeters: projectedProgressMeters(point, originCoordinate, destinationCoordinate),
+        crossTrack: Math.abs(crossTrackMeters(point, originCoordinate, destinationCoordinate))
+      };
+    }).filter((row) => row.straightMeters <= geographicLimit)
+      .sort((a, b) => {
+        const aForward = a.progressMeters >= -5_000 ? 0 : 1;
+        const bForward = b.progressMeters >= -5_000 ? 0 : 1;
+        if (aForward !== bForward) return aForward - bForward;
+        const cross = a.crossTrack - b.crossTrack;
+        if (Math.abs(cross) > 2_000) return cross;
+        return b.progressMeters - a.progressMeters || a.straightMeters - b.straightMeters;
+      });
+    prepareDiagnostics.stationsInRange = Math.max(
+      prepareDiagnostics.stationsInRange,
+      nearby.length
     );
     const fuelTargets = [];
     const matchStarted = Date.now();
-    for (const row of nearby) {
+    let newlyConsidered = 0;
+    for (let rowIndex = 0; rowIndex < nearby.length; rowIndex += 1) {
+      if ((rowIndex & 31) === 0 && (
+        (abortSignal && abortSignal.aborted) ||
+        (Number.isFinite(Number(deadlineAtMs)) && Date.now() >= Number(deadlineAtMs))
+      )) {
+        prepareDiagnostics.deadlineExceeded = true;
+        break;
+      }
+      const row = nearby[rowIndex];
       const stationID = String(row.station.id || row.station.stationId || "");
       const cached = targetCache.get(stationID);
       if (cached !== undefined) {
@@ -659,7 +729,16 @@ function prepareTargets(runtime, stations, destination, policy, profile, avoid) 
         }
         continue;
       }
+      if (
+        nearby.length > DENSE_TARGET_MATCH_LIMIT &&
+        newlyConsidered >= DENSE_TARGET_MATCH_LIMIT &&
+        fuelTargets.length >= DENSE_TARGET_MIN_MATCHES
+      ) {
+        prepareDiagnostics.stationsMatchLimited = true;
+        break;
+      }
       prepareDiagnostics.stationsConsidered += 1;
+      newlyConsidered += 1;
       const { station, location } = row;
       const match = matchPoint(
         runtime,
@@ -997,10 +1076,20 @@ async function planFuelChainOnRuntime({
   timeBudgetMs = null,
   profileMeters = null,
   graphOnlyFeeler = false,
-  foundationRoute = null
+  foundationRoute = null,
+  deadlineAtMs = null,
+  abortSignal = null
 }) {
   profile = resolveProfile(profile);
   const policy = normalizePolicy(rawPolicy, profile);
+  const started = Date.now();
+  const searchBudgetMs = Number(timeBudgetMs) > 0 ? Number(timeBudgetMs) : null;
+  const suppliedDeadline = Number(deadlineAtMs);
+  const hasSuppliedDeadline = deadlineAtMs != null && Number.isFinite(suppliedDeadline);
+  const deadline = hasSuppliedDeadline
+    ? suppliedDeadline
+    : (searchBudgetMs != null ? started + searchBudgetMs : Infinity);
+  let timeBudgetExceeded = false;
   const avoid = new Set((avoidEdgeIds || []).map(String));
   const startMatch = matchPoint(
     runtime,
@@ -1020,7 +1109,9 @@ async function planFuelChainOnRuntime({
     };
   }
 
-  const targets = prepareTargets(runtime, stations, destination, policy, profile, avoid);
+  const targets = prepareTargets(
+    runtime, stations, destination, policy, profile, avoid, deadline, abortSignal
+  );
   if (!targets.destinationMatch.ok) {
     return {
       ok: false,
@@ -1031,8 +1122,6 @@ async function planFuelChainOnRuntime({
 
   let states = 0;
   let dijkstraPops = 0;
-  const started = Date.now();
-  const searchBudgetMs = Number(timeBudgetMs) > 0 ? Number(timeBudgetMs) : null;
   const destinationLimitForDiagnostics = destinationFuelUsedLimitMeters == null
     ? NaN : Number(destinationFuelUsedLimitMeters);
   const fuelDecisionDiagnostics = {
@@ -1052,12 +1141,11 @@ async function planFuelChainOnRuntime({
   let maxHopMs = 0;
   let firstReachableStationMeters = null;
   let stationsReachableWithinRange = 0;
-  let timeBudgetExceeded = false;
   const physicalStart = locationCoordinate(start);
   const physicalDestination = locationCoordinate(destination);
   const physicalTotal = haversineMeters(physicalStart, physicalDestination);
+  let planningStage = "destination_graph";
   let bestPartial = { progressMeters: 0, stops: [], graphMeters: [], location: start };
-  const deadline = searchBudgetMs != null ? started + searchBudgetMs : Infinity;
   const returnedStopLimit = Math.max(1, Math.min(12, Number(maxStops) || 12));
   // The UI may request one visible stop at a time. Selection still looks far
   // enough ahead to compare competing rural/profile chains before committing
@@ -1070,19 +1158,22 @@ async function planFuelChainOnRuntime({
     : returnedStopLimit;
   const destinationGraph = boundedGraphDistances(
     runtime, targets.destinationMatch, policy, usableRangeMeters,
-    avoidEdgeIds, [], null, 1
+    avoidEdgeIds, [], null, 1, deadline, abortSignal
   );
   dijkstraPops += destinationGraph.pops;
+  if (destinationGraph.deadlineExceeded) timeBudgetExceeded = true;
 
   function reachableFrom(currentKey, currentLocation, currentMatch, capMeters, history, arrival) {
+    planningStage = "reachability_graph";
     const historyKey = [...history].sort().join(",");
     const memoKey = `${currentKey}:${Math.round(capMeters)}:${arrival || "-"}:${historyKey}`;
     if (memo.has(memoKey)) return memo.get(memoKey);
     const graph = boundedGraphDistances(
       runtime, currentMatch, policy, capMeters, avoidEdgeIds,
-      [...history], arrival, backtrackFactor
+      [...history], arrival, backtrackFactor, deadline, abortSignal
     );
     dijkstraPops += graph.pops;
+    if (graph.deadlineExceeded) timeBudgetExceeded = true;
     const destinationMeters = distanceToMatch(
       runtime,
       currentMatch,
@@ -1090,6 +1181,7 @@ async function planFuelChainOnRuntime({
       graph.distances
     );
     const fuel = [];
+    planningStage = "target_matching";
     for (const target of targets.fuelTargetsNear(currentLocation, capMeters)) {
       const graphMeters = distanceToMatch(runtime, currentMatch, target.match, graph.distances);
       if (Number.isFinite(graphMeters) && graphMeters <= capMeters) {
@@ -1099,6 +1191,7 @@ async function planFuelChainOnRuntime({
         fuel.push({ ...target, graphMeters, remainingGraphMeters });
       }
     }
+    if (targets.prepareDiagnostics.deadlineExceeded) timeBudgetExceeded = true;
     const result = { destinationMeters, fuel };
     memo.set(memoKey, result);
     return result;
@@ -1107,6 +1200,22 @@ async function planFuelChainOnRuntime({
   const defaultProfileHop = async ({
     candidate, from, maxMeters, priorEdgeIds: evaluationHistory, arrivalEdgeId: evaluationArrival
   }) => {
+    if (
+      (abortSignal && abortSignal.aborted) ||
+      (Number.isFinite(deadline) && Date.now() >= deadline)
+    ) {
+      timeBudgetExceeded = true;
+      return {
+        status: "failed",
+        error: "window_time_budget",
+        message: "Fuel candidate routing reached the planning deadline.",
+        distanceMeters: 0,
+        debug: {
+          failureReason: "timeout",
+          searchOutcome: abortSignal && abortSignal.aborted ? "cancelled" : "timeCap"
+        }
+      };
+    }
     const usesFoundation = foundationRoute && candidate.station.id === "__destination__" &&
       Math.abs(Number(from.lat) - Number(start.lat)) < 1e-7 &&
       Math.abs(Number(from.lon) - Number(start.lon)) < 1e-7;
@@ -1124,7 +1233,9 @@ async function planFuelChainOnRuntime({
         avoidMotorways: avoidMotorways === true,
         internalFuelProbe: true,
         directExtraBudgetMeters: undefined,
-        maxPathMeters: maxMeters
+        maxPathMeters: maxMeters,
+        deadlineAtMs: deadline,
+        abortSignal
       }
     });
   };
@@ -1179,7 +1290,9 @@ async function planFuelChainOnRuntime({
   }
 
   function exceededSearchBudget() {
-    return timeBudgetExceeded || (Number.isFinite(deadline) && Date.now() > deadline);
+    return timeBudgetExceeded ||
+      (abortSignal && abortSignal.aborted) ||
+      (Number.isFinite(deadline) && Date.now() >= deadline);
   }
 
   function destinationCandidate(graphMeters) {
@@ -1288,6 +1401,7 @@ async function planFuelChainOnRuntime({
       let diagnostic;
       const hopCap = hopBudgetMeters(candidate.graphMeters, cap);
       try {
+        planningStage = "candidate_route";
         const response = await evaluateProfileHop({
           candidate,
           from: currentLocation,
@@ -1296,7 +1410,9 @@ async function planFuelChainOnRuntime({
           accessPolicy: rawPolicy,
           priorEdgeIds: [...history],
           arrivalEdgeId: arrival,
-          backtrackFactor
+          backtrackFactor,
+          deadlineAtMs: deadline,
+          abortSignal
         });
         const meters = Number(response && response.distanceMeters);
         const dirtPct = Number(response && response.stats && response.stats.dirtPercent);
@@ -1331,7 +1447,10 @@ async function planFuelChainOnRuntime({
         row.cleanMajorRoadMeters = firstClean.majorRoadMeters;
         row.cleanRoutedMeters = firstClean.routedMeters;
         let validForward = false;
-        if (fits) {
+        const canContinueEvaluation =
+          !(abortSignal && abortSignal.aborted) && Date.now() < deadline;
+        if (fits && !canContinueEvaluation) timeBudgetExceeded = true;
+        if (fits && canContinueEvaluation) {
           const nextHistory = recentEdgeHistory([...history]);
           let nextArrival = arrival;
           for (const segment of (response && response.segments) || []) {
@@ -1359,8 +1478,11 @@ async function planFuelChainOnRuntime({
             : null;
           if (
             Number.isFinite(continuation.destinationMeters) &&
-            continuation.destinationMeters <= usableRangeMeters + 1
+            continuation.destinationMeters <= usableRangeMeters + 1 &&
+            Date.now() < deadline &&
+            !(abortSignal && abortSignal.aborted)
           ) {
+            planningStage = "candidate_continuation";
             const continuationResponse = await evaluateProfileHop({
               candidate: destinationCandidate(continuation.destinationMeters),
               from: candidate.location,
@@ -1369,7 +1491,9 @@ async function planFuelChainOnRuntime({
               accessPolicy: rawPolicy,
               priorEdgeIds: [...nextHistory],
               arrivalEdgeId: nextArrival,
-              backtrackFactor
+              backtrackFactor,
+              deadlineAtMs: deadline,
+              abortSignal
             });
             const routedContinuationMeters = Number(
               continuationResponse && continuationResponse.distanceMeters
@@ -1579,7 +1703,10 @@ async function planFuelChainOnRuntime({
       row.graphMeters, cap, usableRangeMeters
     ) === 2);
     for (let startRank = 0; startRank < candidates.length; startRank += batchSize) {
-      if (rows.length > 0 && Date.now() >= deadline) break;
+      if ((abortSignal && abortSignal.aborted) || Date.now() >= deadline) {
+        timeBudgetExceeded = true;
+        break;
+      }
       const batch = candidates.slice(startRank, startRank + batchSize);
       const evaluatedBatch = await Promise.all(batch.map((candidate, offset) =>
         evaluateCandidate(candidate, startRank + offset)
@@ -1666,7 +1793,7 @@ async function planFuelChainOnRuntime({
         location: currentLocation
       };
     }
-    if (Date.now() >= deadline) {
+    if ((abortSignal && abortSignal.aborted) || Date.now() >= deadline) {
       timeBudgetExceeded = true;
       return null;
     }
@@ -1725,6 +1852,7 @@ async function planFuelChainOnRuntime({
       (!Number.isFinite(destinationLimit) || reach.destinationMeters <= destinationLimit + 1)
     ) {
       try {
+        planningStage = "destination_route";
         const response = await evaluateProfileHop({
           candidate: destinationCandidate(reach.destinationMeters),
           from: currentLocation,
@@ -1824,7 +1952,7 @@ async function planFuelChainOnRuntime({
       if (requiredStopsSatisfied && stationPlans.some((plan) => plan.complete)) {
         continue;
       }
-      if (Date.now() >= deadline) {
+      if ((abortSignal && abortSignal.aborted) || Date.now() >= deadline) {
         if (!stationPlans.length && allowPartialWindow && evaluation.validForward) {
           stationPlans.push({
             stops: [stop],
@@ -1920,6 +2048,8 @@ async function planFuelChainOnRuntime({
         targetPrepareMs: targets.prepareDiagnostics.elapsedMs,
         targetCacheHit: targets.prepareDiagnostics.cacheHit,
         stationsConsidered: targets.prepareDiagnostics.stationsConsidered,
+        stationsInRange: targets.prepareDiagnostics.stationsInRange,
+        stationsMatchLimited: targets.prepareDiagnostics.stationsMatchLimited,
         states,
         dijkstraPops,
         matchedFuel: targets.prepareDiagnostics.stationsMatched,
@@ -1932,7 +2062,9 @@ async function planFuelChainOnRuntime({
         searchDeadlineOverrunMs: Number.isFinite(deadline)
           ? Math.max(0, Date.now() - deadline)
           : 0,
-        timeBudgetExceeded: exceededSearchBudget()
+        timeBudgetExceeded: exceededSearchBudget(),
+        deadlinePhase: exceededSearchBudget() ? planningStage : null,
+        cancelled: !!(abortSignal && abortSignal.aborted)
       }, {
         stationsReachableWithinRange,
         candidatesEvaluated: stationCandidates.length,
@@ -1977,6 +2109,8 @@ async function planFuelChainOnRuntime({
       targetPrepareMs: targets.prepareDiagnostics.elapsedMs,
       targetCacheHit: targets.prepareDiagnostics.cacheHit,
       stationsConsidered: targets.prepareDiagnostics.stationsConsidered,
+      stationsInRange: targets.prepareDiagnostics.stationsInRange,
+      stationsMatchLimited: targets.prepareDiagnostics.stationsMatchLimited,
       strategy: "forward_graph_reachability",
       states,
       dijkstraPops,
@@ -1990,6 +2124,8 @@ async function planFuelChainOnRuntime({
         ? Math.max(0, Date.now() - deadline)
         : 0,
       timeBudgetExceeded: exceededSearchBudget(),
+      deadlinePhase: exceededSearchBudget() ? planningStage : null,
+      cancelled: !!(abortSignal && abortSignal.aborted),
       selectedReason: returnedStops.length
         ? "minimum_stops_forward"
         : "direct_destination"
@@ -2384,6 +2520,21 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
   const windowBudgetMs = Number(rawFuelOptions.windowTimeBudgetMs) > 0
     ? Number(rawFuelOptions.windowTimeBudgetMs)
     : null;
+  const windowDeadlineAtMs = windowBudgetMs == null
+    ? Infinity
+    : requestStarted + windowBudgetMs;
+  // Reserve part of every fuel window for pump matching and chain proof. A
+  // profile refinement may use most of the window, but it may not consume the
+  // entire request before fuel planning even begins.
+  const requestedProfile = String(body.profile || "dirt").toLowerCase();
+  const routeFirstShare = requestedProfile === "dirt" ? 0.67 : 0.53;
+  const routeFirstBudgetMs = windowBudgetMs == null
+    ? null
+    : Math.max(2_000, Math.min(10_000, Math.round(windowBudgetMs * routeFirstShare)));
+  const routeFirstDeadlineAtMs = routeFirstBudgetMs == null
+    ? Infinity
+    : Math.min(windowDeadlineAtMs, requestStarted + routeFirstBudgetMs);
+  const abortSignal = body.options && body.options.abortSignal;
   const windowBudgetOverrunMs = () => windowBudgetMs == null
     ? 0
     : Math.max(0, Date.now() - requestStarted - windowBudgetMs);
@@ -2420,7 +2571,13 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
     const routeProfile = dependencies.routeRequest || routeRequest;
     const routeBody = {
       ...body,
-      options: { ...(body.options || {}) }
+      options: {
+        ...(body.options || {}),
+        deadlineAtMs: Number.isFinite(routeFirstDeadlineAtMs)
+          ? routeFirstDeadlineAtMs
+          : undefined,
+        abortSignal
+      }
     };
     delete routeBody.options.maxPathMeters;
     delete routeBody.options.internalFuelProbe;
@@ -2432,12 +2589,46 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
     routeFirstMs = Date.now() - routeStarted;
     profileMeters = Number(foundationRoute && foundationRoute.distanceMeters);
     if (!foundationRoute || foundationRoute.status !== "complete" || !(profileMeters >= 0)) {
+      const routeDiagnostics = foundationRoute && foundationRoute.debug &&
+        foundationRoute.debug.diagnostics;
+      const routeSearchOutcome =
+        foundationRoute && foundationRoute.debug && foundationRoute.debug.searchOutcome ||
+        routeDiagnostics && routeDiagnostics.searchOutcome || null;
+      const deadlineExceeded =
+        (abortSignal && abortSignal.aborted) ||
+        (Number.isFinite(routeFirstDeadlineAtMs) && Date.now() >= routeFirstDeadlineAtMs) ||
+        routeSearchOutcome === "timeCap" ||
+        routeSearchOutcome === "cancelled";
       return {
+        // A planning deadline is not evidence of a fuel gap or a disconnected
+        // road graph. Keep it explicitly failed/unknown so the UI never tells
+        // the rider that a timed-out proof is an unsafe route conclusion.
         status: "failed",
-        error: "profile_ride_unavailable",
-        message: foundationRoute && (foundationRoute.message || foundationRoute.error) ||
-          "The selected ride could not be built before fuel planning.",
-        routes: foundationRoute ? [foundationRoute] : []
+        error: deadlineExceeded ? "window_time_budget" : "profile_ride_unavailable",
+        message: deadlineExceeded
+          ? "The selected ride did not finish inside this planning window."
+          : (foundationRoute && (foundationRoute.message || foundationRoute.error) ||
+            "The selected ride could not be built before fuel planning."),
+        routes: foundationRoute ? [foundationRoute] : [],
+        diagnostics: {
+          totalElapsedMs: Date.now() - requestStarted,
+          windowBudgetMs,
+          windowBudgetOverrunMs: windowBudgetOverrunMs(),
+          timeBudgetExceeded: deadlineExceeded,
+          routeFirstMs,
+          routeFirstBudgetMs,
+          profileRouteFailureReason:
+            routeDiagnostics && routeDiagnostics.failureReason ||
+            foundationRoute && foundationRoute.debug && foundationRoute.debug.failureReason || null,
+          profileRouteSearchOutcome:
+            routeSearchOutcome,
+          profileRouteSearchMs:
+            routeDiagnostics && routeDiagnostics.searchMs ||
+            foundationRoute && foundationRoute.debug && foundationRoute.debug.searchMs || null,
+          profileRoutePops:
+            routeDiagnostics && routeDiagnostics.pops ||
+            foundationRoute && foundationRoute.debug && foundationRoute.debug.pops || null
+        }
       };
     }
   }
@@ -2448,7 +2639,13 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
     );
   } else if (!(profileMeters >= 0)) {
     const routeProfile = dependencies.routeRequest || routeRequest;
-    const options = { ...(body.options || {}) };
+    const options = {
+      ...(body.options || {}),
+      deadlineAtMs: Number.isFinite(routeFirstDeadlineAtMs)
+        ? routeFirstDeadlineAtMs
+        : undefined,
+      abortSignal
+    };
     delete options.maxPathMeters;
     const profileRide = await routeProfile({
       profile: body.profile,
@@ -2534,7 +2731,9 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
         profile: "cleanest",
         accessPolicy: { motorizedPermissive: true, motorizedUnknown: false },
         maxMeters: usableRangeMeters,
-        avoidEdgeIds: options.avoidEdgeIds || []
+        avoidEdgeIds: options.avoidEdgeIds || [],
+        deadlineAtMs: windowDeadlineAtMs,
+        abortSignal
       });
       destinationEscapeDiagnostics.elapsedMs = Date.now() - escapeStarted;
       destinationEscapeMeters = destinationEscapeDiagnostics.meters;
@@ -2593,6 +2792,7 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
           windowBudgetOverrunMs: windowBudgetOverrunMs(),
           selectedReason: "direct_destination",
           routeFirstMs,
+          routeFirstBudgetMs,
           graphFetchMs: runtime.loadDiagnostics && runtime.loadDiagnostics.fetchMs,
           graphDecodeMs: runtime.loadDiagnostics && runtime.loadDiagnostics.decodeMs,
           graphGridMs: runtime.loadDiagnostics && runtime.loadDiagnostics.gridMs,
@@ -2634,7 +2834,9 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
     timeBudgetMs: Number(fuelOptions.windowTimeBudgetMs) || null,
     profileMeters,
     graphOnlyFeeler: forwardFeeler,
-    foundationRoute
+    foundationRoute,
+    deadlineAtMs: windowDeadlineAtMs,
+    abortSignal
   });
 
   // Do not offer auxiliary fuel for an incomplete computation. A timeout is a
@@ -2664,6 +2866,7 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
       windowBudgetMs,
       windowBudgetOverrunMs: windowBudgetOverrunMs(),
       routeFirstMs,
+      routeFirstBudgetMs,
       graphFetchMs: runtime.loadDiagnostics && runtime.loadDiagnostics.fetchMs,
       graphDecodeMs: runtime.loadDiagnostics && runtime.loadDiagnostics.decodeMs,
       graphGridMs: runtime.loadDiagnostics && runtime.loadDiagnostics.gridMs,

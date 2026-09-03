@@ -2150,6 +2150,10 @@ async function routeOnRuntime(body, graphResolution, runtime) {
     backtrackFactor,
     skipShortDirtRepair: options.internalFuelProbe === true
   };
+  if (Number.isFinite(Number(options.deadlineAtMs))) {
+    searchOpts.deadlineAtMs = Number(options.deadlineAtMs);
+  }
+  if (options.abortSignal) searchOpts.abortSignal = options.abortSignal;
   if (Number.isFinite(Number(options.maxPathMeters))) {
     searchOpts.maxPathMeters = Number(options.maxPathMeters);
   }
@@ -2182,6 +2186,12 @@ async function routeOnRuntime(body, graphResolution, runtime) {
     "cleanest",
     Number(runtime && runtime.pack && runtime.pack.nodeCount) || 0
   );
+  const boundedCleanDeadline = () => {
+    const local = Date.now() + cleanAttemptMs;
+    return Number.isFinite(Number(searchOpts.deadlineAtMs))
+      ? Math.min(local, Number(searchOpts.deadlineAtMs))
+      : local;
+  };
   if (profile === "cleanest") {
     const cleanFindOnce = (extra) => {
       const diagnostics = {};
@@ -2199,6 +2209,7 @@ async function routeOnRuntime(body, graphResolution, runtime) {
     // Clean law: pavement through-edges, no corridor, no hard regression.
     // Soft forward fan lives in profile costs. Metro/motorway last-resort only
     // after proved noPath. Settlement towns are not walls.
+    const cleanBaseDeadline = boundedCleanDeadline();
     const cleanBase = {
       pavedOnly: true,
       costMode: "profile",
@@ -2211,8 +2222,9 @@ async function routeOnRuntime(body, graphResolution, runtime) {
       settlementFallback: true,
       cityWall: true,
       urbanCoreFallback: false,
-      timeCapMs: cleanAttemptMs,
-      deadlineAtMs: Date.now() + cleanAttemptMs,
+      timeCapMs: Math.max(1, cleanBaseDeadline - Date.now()),
+      deadlineAtMs: cleanBaseDeadline,
+      abortSignal: searchOpts.abortSignal,
       popCap: cleanAttemptPopCap
     };
     const paved = cleanFindOnce(cleanBase);
@@ -2281,6 +2293,7 @@ async function routeOnRuntime(body, graphResolution, runtime) {
         pops: diagnostics.pops || (found && found.searchMeta && found.searchMeta.pops) || 0
       };
     };
+    const relaxedDeadline = boundedCleanDeadline();
     const relaxedBase = {
       settlementWall: false,
       settlementFallback: true,
@@ -2290,8 +2303,9 @@ async function routeOnRuntime(body, graphResolution, runtime) {
       corridorMeters: 0,
       hardCorridor: false,
       progressRegressionMeters: Number.MAX_SAFE_INTEGER,
-      timeCapMs: cleanAttemptMs,
-      deadlineAtMs: Date.now() + cleanAttemptMs,
+      timeCapMs: Math.max(1, relaxedDeadline - Date.now()),
+      deadlineAtMs: relaxedDeadline,
+      abortSignal: searchOpts.abortSignal,
       popCap: cleanAttemptPopCap
     };
     const ruralUnpaved = cleanFindRelaxed(Object.assign({}, relaxedBase, {
@@ -2487,6 +2501,12 @@ async function routeOnRuntime(body, graphResolution, runtime) {
     warnings.push({
       code: "settlement_fallback",
       message: "This route could not avoid every mapped town without losing its routing objective. Town travel remains strongly penalized and is used only where the alternatives are worse."
+    });
+  }
+  if (path.searchMeta && path.searchMeta.balancedSearchFallbackUsed) {
+    warnings.push({
+      code: "balanced_preference_limited",
+      message: "Balanced refinement reached its planning limit. A legal, range-safe road route was kept instead of failing the ride."
     });
   }
   if (startMatch.distanceM > 1 || endMatch.distanceM > 1) {

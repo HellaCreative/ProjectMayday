@@ -706,6 +706,56 @@ logic. Live/download verification must continue to name exactly one explicit
 `--region <id>` so validating a new pack cannot fail on or mutate another
 region.
 
+### Hard live-planning window and dense-region repair — 2026-09-03
+
+Ontario device traces showed that fast downloads were followed by unbounded
+CPU work: a 15-second fuel window could run for 53–60 seconds, match almost
+5,000 pumps, explore 3.7 million states, and then either return late or die at
+the platform timeout. The repair is pack-agnostic and does not alter pack
+bytes, route-profile objectives, fuel priorities, or rider waypoint semantics:
+
+1. the fuel window is now one absolute deadline shared by route-first work,
+   graph reachability, pump matching, candidate routing, and continuation
+   proof. Route-first receives a smaller portion of that window so fuel work
+   always has time to run;
+2. every large inner loop observes the same deadline and request-cancellation
+   signal. The iOS client also enforces a true wall-clock timeout—independent of
+   the networking stack's inactivity timeout—and abandoning or replacing a
+   build cancels server work;
+3. reaching a time or exploration ceiling is explicitly inconclusive. It may
+   never be reported as a disconnected route or a proven fuel gap;
+4. when Balanced has already proved a legal, access-correct road connection
+   but cannot finish its 50/50 preference refinement before the deadline, it
+   returns that bounded connection with the explicit
+   `balanced_distance_fallback` diagnostic and warning. A cancelled request
+   never uses this fallback;
+5. dense pump regions use a forward-oriented matching working set capped at
+   768 candidates per planning origin after at least 48 pumps have matched.
+   Sparse regions remain uncapped. A retained candidate still has to pass the
+   current tank range, access, forward-progress, active-profile route, and
+   continuation proof; and
+6. a resumable partial window may commit a pump only after both its active-
+   profile approach and a sensible forward continuation are proved inside the
+   deadline. Late or unproved pumps are discarded.
+
+The diagnostic contract now records the route-first budget and outcome,
+profile failure reason/timing/exploration count, pumps physically in range,
+whether dense matching was limited, the exact deadline phase, and whether the
+request was cancelled. The fixed Ontario two-point fuel reproduction now
+returns a safe one-stop chain in about 12.2 seconds locally instead of 53
+seconds. The appended-leg reproduction with only 122.5 km remaining returns a
+proved, resumable pump window in about 15.1 seconds instead of reaching the
+60-second platform timeout. Target preparation fell from about 14.9 seconds to
+about 2.4 seconds. Exact timings are machine-dependent; the semantic gates are
+the hard deadline, no false no-route/no-fuel result, and no unproved pump.
+
+Android must implement the same semantics before parity is claimed: a hard
+total request deadline, cancellation propagation, the explicit bounded
+Balanced fallback, dense forward pump matching, and proof-before-commit for
+partial windows. The added diagnostic fields are optional and
+forward-compatible so an older Android decoder will not break, but Android
+must emit them when its live and on-device routing twins receive this repair.
+
 ## 11. Current product status
 
 ### Implemented and covered locally
@@ -713,6 +763,8 @@ region.
 - Canonical rider itinerary and generation-guarded builder.
 - Flat Point/F leg presentation rather than parent/subleg hierarchy.
 - Default-on automatic fuel planning, deliberate manual-off mode, and fuel-gap states.
+- Hard live fuel-planning windows, dense-region pump matching, cancellation,
+  and explicit inconclusive-search diagnostics.
 - Fuel waypoint alternatives and forward station overrides.
 - Clear Route availability repairs.
 - Eligible-edge endpoint resolver and NS/PEI overlap regression coverage.
