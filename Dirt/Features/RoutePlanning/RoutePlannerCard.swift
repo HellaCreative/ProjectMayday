@@ -180,31 +180,50 @@ struct RoutePlannerCard: View {
     // MARK: - Portrait shell
 
     private var portraitShell: some View {
-        VStack(spacing: 10) {
-            expandedPlannerContent
-        }
-        .padding(.horizontal, 14)
-        .padding(.top, 14)
-        .padding(.bottom, sitsBehindDock ? DockSheetMotion.dockClearance : 14)
-        .frame(maxWidth: .infinity)
-        .clipShape(portraitSurfaceShape)
-        // Surface only — the material runs past the home indicator so the sheet reads
-        // as coming from the bottom edge, with the dock floating on top of it.
-        .background(alignment: .top) {
-            portraitSurfaceShape
-                .fill(DirtTheme.sheetMaterial)
-                .overlay(portraitSurfaceShape.stroke(DirtTheme.hairline, lineWidth: 1))
-                .shadow(
-                    color: sitsBehindDock ? .clear : .black.opacity(0.18),
-                    radius: sitsBehindDock ? 0 : 14,
-                    y: sitsBehindDock ? 0 : -2
-                )
-                .ignoresSafeArea(edges: sitsBehindDock ? .bottom : [])
-        }
-        .background {
-            GeometryReader { geo in
-                Color.clear.preference(key: PlannerSheetHeightKey.self, value: geo.size.height)
+        GeometryReader { geo in
+            let panelHeight = min(max(360, geo.size.height * 0.72), geo.size.height - 88)
+
+            VStack(spacing: 10) {
+                tabBar
+
+                // Tabs stay anchored while the complete planning story scrolls.
+                // The fixed-height stage List below remains its own sub-scroll.
+                ScrollView(.vertical) {
+                    VStack(spacing: 10) {
+                        plannerModeContent
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.bottom, sitsBehindDock ? DockSheetMotion.dockClearance : 14)
+                }
+                .scrollBounceBehavior(.basedOnSize)
+                .scrollIndicators(.visible)
             }
+            .padding(.horizontal, 14)
+            .padding(.top, 14)
+            .frame(width: geo.size.width, height: panelHeight, alignment: .top)
+            .clipShape(portraitSurfaceShape)
+            // Surface only — the material runs past the home indicator so the sheet reads
+            // as coming from the bottom edge, with the dock floating on top of it.
+            .background(alignment: .top) {
+                portraitSurfaceShape
+                    .fill(DirtTheme.sheetMaterial)
+                    .overlay(portraitSurfaceShape.stroke(DirtTheme.hairline, lineWidth: 1))
+                    .shadow(
+                        color: sitsBehindDock ? .clear : .black.opacity(0.18),
+                        radius: sitsBehindDock ? 0 : 14,
+                        y: sitsBehindDock ? 0 : -2
+                    )
+                    .ignoresSafeArea(edges: sitsBehindDock ? .bottom : [])
+            }
+            .background {
+                GeometryReader { panel in
+                    Color.clear.preference(
+                        key: PlannerSheetHeightKey.self,
+                        value: panel.size.height
+                    )
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
         }
     }
 
@@ -241,8 +260,15 @@ struct RoutePlannerCard: View {
 
     private func landscapeDrawer(dockLeading: Bool, width: CGFloat, dockClearance: CGFloat) -> some View {
         VStack(spacing: 10) {
-            expandedPlannerContent
-            Spacer(minLength: 0)
+            tabBar
+            ScrollView(.vertical) {
+                VStack(spacing: 10) {
+                    plannerModeContent
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .scrollBounceBehavior(.basedOnSize)
+            .scrollIndicators(.visible)
         }
         .padding(.vertical, 12)
         .padding(.leading, dockLeading ? dockClearance + 10 : 14)
@@ -266,8 +292,7 @@ struct RoutePlannerCard: View {
     }
 
     @ViewBuilder
-    private var expandedPlannerContent: some View {
-        tabBar
+    private var plannerModeContent: some View {
         switch planner.mode {
         case .fromHere:
             fromHereContent
@@ -345,6 +370,7 @@ struct RoutePlannerCard: View {
                     onToggle: {
                         withAnimation(.easeInOut(duration: 0.18)) { fromHereChipsOpen.toggle() }
                     },
+                    onFocus: { planner.focusStage(at: 0) },
                     headline: {
                         stageMetrics(
                             km: planner.totalMeters / 1000,
@@ -384,6 +410,7 @@ struct RoutePlannerCard: View {
             }
 
             routingStatus
+            fuelCoverageNotices
             ferryNotice
             statsRow
             ctaRow
@@ -498,6 +525,7 @@ struct RoutePlannerCard: View {
         routingStatus
 
         if planner.hasRoute {
+            fuelCoverageNotices
             ferryNotice
             statsRow
             ctaRow
@@ -512,6 +540,7 @@ struct RoutePlannerCard: View {
     @ViewBuilder private var savedContent: some View {
         if planner.hasRoute {
             loadedTrackCard
+            fuelCoverageNotices
             ferryNotice
             ctaRow
             continuePlanningButton
@@ -620,12 +649,12 @@ struct RoutePlannerCard: View {
             .scrollBounceBehavior(.basedOnSize)
             .scrollIndicators(.visible)
             .onAppear {
-                if let last = planner.itinerary.legs.last?.id {
+                if let last = planner.stages.last?.id {
                     proxy.scrollTo(last, anchor: .bottom)
                 }
             }
             .onChange(of: planner.itinerary.legs.count) {
-                guard let last = planner.itinerary.legs.last?.id else { return }
+                guard let last = planner.stages.last?.id else { return }
                 withAnimation(.easeOut(duration: 0.25)) {
                     proxy.scrollTo(last, anchor: .bottom)
                 }
@@ -633,7 +662,7 @@ struct RoutePlannerCard: View {
             .onChange(of: selectedStage) {
                 guard let index = selectedStage, planner.stages.indices.contains(index) else { return }
                 withAnimation(.easeOut(duration: 0.25)) {
-                    proxy.scrollTo(planner.stages[index].riderLegID, anchor: .bottom)
+                    proxy.scrollTo(planner.stages[index].id, anchor: .bottom)
                 }
             }
         }
@@ -693,12 +722,33 @@ struct RoutePlannerCard: View {
             profileTitle: stage.profile.title,
             isActive: isActive,
             onToggle: { toggleStageSelection(index) },
+            onFocus: { planner.focusStage(at: index) },
             endpointTitle: planner.stageEndpointTitle(at: index),
             endpointIsFuelStation: planner.stageEndpointIsFuelStation(at: index),
             viaSubtitle: planner.stageFuelStationSubtitle(at: index),
             headline: { stageHeadline(stage, at: index) },
             detail: {
                 VStack(alignment: .leading, spacing: DirtSpace.inner) {
+                    if stage.response != nil {
+                        Button {
+                            planner.focusEntireStage(at: index)
+                        } label: {
+                            Label(
+                                "View entire leg",
+                                systemImage: "arrow.up.left.and.arrow.down.right"
+                            )
+                            .font(DirtType.chip)
+                            .fontWeight(.bold)
+                            .frame(maxWidth: .infinity, minHeight: DirtHit.min)
+                        }
+                        .buttonStyle(.plain)
+                        .foregroundStyle(DirtTheme.ink)
+                        .background(
+                            DirtTheme.wash,
+                            in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        )
+                        .accessibilityHint("Fits the complete geometry for this leg on the map")
+                    }
                     if let notice = planner.profileAvailabilityNotice(at: index) {
                         Label(notice, systemImage: "exclamationmark.triangle.fill")
                             .font(DirtType.helper)
@@ -768,21 +818,6 @@ struct RoutePlannerCard: View {
             Text("Pending…")
                 .font(DirtType.helper)
                 .foregroundStyle(DirtTheme.muted)
-        } else if let gap = stage.fuelGap {
-            Label(gap.message, systemImage: "fuelpump.slash.fill")
-                .font(DirtType.helper)
-                .foregroundStyle(DirtTheme.orange)
-                .lineLimit(3)
-        } else if let unknown = stage.fuelUnknown {
-            Label(unknown, systemImage: "questionmark.circle.fill")
-                .font(DirtType.helper)
-                .foregroundStyle(DirtTheme.orange)
-                .lineLimit(3)
-        } else if let error = stage.error {
-            Text(error)
-                .font(DirtType.helper)
-                .foregroundStyle(DirtTheme.danger)
-                .lineLimit(2)
         } else if let response = stage.response {
             stageMetrics(
                 km: (response.distanceMeters ?? 0) / 1000,
@@ -791,11 +826,63 @@ struct RoutePlannerCard: View {
                 showsWarning: planner.profileAvailabilityNotice(at: index) != nil,
                 includesFerry: RouteFerrySummary.from(responses: [response]).hasCrossing
             )
+        } else if let error = stage.error {
+            Text(error)
+                .font(DirtType.helper)
+                .foregroundStyle(DirtTheme.danger)
+                .lineLimit(2)
         } else {
             Text(stage.end == nil ? "Hold the map to set the end" : "Waiting for route…")
                 .font(DirtType.helper)
                 .foregroundStyle(DirtTheme.muted)
                 .lineLimit(2)
+        }
+    }
+
+    @ViewBuilder private var fuelCoverageNotices: some View {
+        ForEach(planner.fuelCoverageNotices) { notice in
+            Button {
+                planner.focusStage(at: notice.stageIndex)
+            } label: {
+                HStack(alignment: .top, spacing: DirtSpace.inner) {
+                    Image(systemName: notice.kind == .gap
+                          ? "fuelpump.slash.fill"
+                          : "fuelpump.fill")
+                        .font(.system(.headline, weight: .bold))
+                        .foregroundStyle(DirtTheme.orange)
+                        .frame(width: 24, height: 24)
+                        .accessibilityHidden(true)
+
+                    VStack(alignment: .leading, spacing: DirtSpace.hairGap) {
+                        Text(notice.title)
+                            .font(DirtType.rowTitle)
+                            .foregroundStyle(DirtTheme.ink)
+                        Text(notice.scope)
+                            .font(DirtType.chip)
+                            .fontWeight(.bold)
+                            .foregroundStyle(DirtTheme.orange)
+                        Text(notice.message)
+                            .font(DirtType.helper)
+                            .foregroundStyle(DirtTheme.ink.opacity(0.76))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(DirtSpace.inner)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(
+                    DirtTheme.orange.opacity(0.09),
+                    in: RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous)
+                        .stroke(DirtTheme.orange.opacity(0.32), lineWidth: 1)
+                )
+            }
+            .buttonStyle(.plain)
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("fuel-coverage-notice-\(notice.stageIndex + 1)")
+            .accessibilityHint("Shows only \(notice.scope) on the map")
         }
     }
 
@@ -960,9 +1047,6 @@ struct RoutePlannerCard: View {
     private func toggleStageSelection(_ index: Int) {
         withAnimation(.easeInOut(duration: 0.18)) {
             selectedStage = selectedStage == index ? nil : index
-        }
-        if selectedStage == index {
-            planner.focusStage(at: index)
         }
     }
 
@@ -1372,6 +1456,7 @@ struct StageCard<Headline: View, Detail: View>: View {
     let profileTitle: String
     let isActive: Bool
     let onToggle: () -> Void
+    var onFocus: (() -> Void)? = nil
     var endpointTitle: String? = nil
     var endpointIsFuelStation = false
     var viaSubtitle: String? = nil
@@ -1412,18 +1497,25 @@ struct StageCard<Headline: View, Detail: View>: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: DirtSpace.tight) {
-                Text("\(number)")
-                    .font(.dirtMono(14, weight: .bold))
-                    .foregroundStyle(isActive ? DirtTheme.onOrange : .white)
-                    .frame(width: 24, height: 24)
-                    .background(isActive ? DirtTheme.orange : DirtTheme.chrome)
-                    .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+                if let onFocus {
+                    Button(action: onFocus) {
+                        numberBadge
+                            .frame(width: 36, height: DirtHit.min)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Show endpoints for leg \(number)")
+                    .accessibilityHint("Shows only this leg on the map")
+                } else {
+                    numberBadge
+                }
 
                 if let endpointTitle {
                     VStack(alignment: .leading, spacing: 1) {
                         HStack(spacing: 3) {
                             if endpointIsFuelStation {
                                 Image(systemName: "fuelpump.fill")
+                                    .font(.system(size: 13.5, weight: .semibold))
                                     .foregroundStyle(DirtTheme.orange)
                             }
                             Text(endpointTitle)
@@ -1468,6 +1560,16 @@ struct StageCard<Headline: View, Detail: View>: View {
         .background(DirtTheme.rowFill)
         .clipShape(shape)
         .overlay(shape.stroke(isActive ? DirtTheme.orange : DirtTheme.hairline, lineWidth: 1))
+    }
+
+    private var numberBadge: some View {
+        Text("\(number)")
+            .font(.dirtMono(14, weight: .bold))
+            .foregroundStyle(isActive ? DirtTheme.onOrange : .white)
+            .frame(width: 24, height: 24)
+            .background(isActive ? DirtTheme.orange : DirtTheme.chrome)
+            .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
+            .contentShape(Rectangle())
     }
 
     /// Current profile lives inside the row, filling the space the metrics leave behind.

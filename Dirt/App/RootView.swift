@@ -253,12 +253,14 @@ struct RootView: View {
         }
         .modifier(KeepAwakeLifecycle())
         .overlay {
-            if let toast = app.planner.toast {
+            if app.planner.activeRouteProgressMessage == nil,
+               let toast = app.planner.toast {
                 ToastView(text: toast)
                     .transition(.opacity)
             }
         }
         .animation(.easeInOut(duration: 0.2), value: app.planner.toast)
+        .animation(.easeInOut(duration: 0.2), value: app.planner.activeRouteProgressMessage)
         .overlay(alignment: .top) {
             GroupMapNoticesHost()
             .padding(.top, 56)
@@ -940,6 +942,11 @@ struct RootView: View {
                 graphBrandButton
             } else {
                 BrandChip(minHeight: 48)
+            }
+
+            if let progress = app.planner.activeRouteProgressMessage {
+                ToastView(text: progress)
+                    .transition(.move(edge: .top).combined(with: .opacity))
             }
 
             if BuildChannel.debugRoutingGraphOverlay, app.mapState.showRoutingGraphDebug {

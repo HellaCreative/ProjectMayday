@@ -145,6 +145,11 @@ final class DirtUITests: XCTestCase {
         XCTAssertTrue((progress.value as? String)?.contains(
             "Fuel planning is off · Calculating distance"
         ) == true)
+        XCTAssertLessThan(
+            progress.frame.midX,
+            app.windows.firstMatch.frame.midX,
+            "Route progress should stay in the upper-left map chrome, not over the planner"
+        )
 
         let attachment = XCTAttachment(screenshot: app.screenshot())
         attachment.name = "Route Progress — Fuel Planning Off"

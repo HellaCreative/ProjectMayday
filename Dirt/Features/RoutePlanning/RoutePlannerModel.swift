@@ -111,6 +111,20 @@ final class RoutePlannerModel {
         }
     }
 
+    struct FuelCoverageNotice: Identifiable, Equatable {
+        enum Kind: Equatable {
+            case gap
+            case unverified
+        }
+
+        let id: String
+        let stageIndex: Int
+        let kind: Kind
+        let title: String
+        let scope: String
+        let message: String
+    }
+
     var mode: Mode = .fromHere {
         didSet { modeChanged(from: oldValue) }
     }
@@ -955,6 +969,27 @@ final class RoutePlannerModel {
         progressToastContent(for: message) != nil
     }
 
+    static func activeRouteProgressMessage(
+        fuelPlanningStatus: String?,
+        isRouting: Bool,
+        toast: String?
+    ) -> String? {
+        if let fuelPlanningStatus { return fuelPlanningStatus }
+        guard isRouting else { return nil }
+        if let toast, isPersistentProgressToast(toast) { return toast }
+        return calculatingRouteToast
+    }
+
+    /// Route-build progress is independent from transient tap feedback. A map
+    /// interaction may replace `toast`, but it must never hide the active job.
+    var activeRouteProgressMessage: String? {
+        Self.activeRouteProgressMessage(
+            fuelPlanningStatus: fuelPlanningStatus,
+            isRouting: isRouting,
+            toast: toast
+        )
+    }
+
     /// True while From here / Plan is still building the full route
     /// (including chained fuel stops). Holds the indeterminate progress notice.
     private var isAssemblingRoute = false
@@ -1193,6 +1228,35 @@ final class RoutePlannerModel {
         return itinerary.legs.compactMap { leg in
             guard case .fuelUnknown(let message) = built.riderLegStatus[leg.id] else { return nil }
             return message
+        }
+    }
+
+    /// Fuel confidence is route-level information. It identifies the exact
+    /// generated span without replacing that span's valid route metrics.
+    var fuelCoverageNotices: [FuelCoverageNotice] {
+        stages.enumerated().compactMap { index, stage in
+            let scope = "Leg \(index + 1) · \(stageEndpointTitle(at: index))"
+            if let gap = stage.fuelGap {
+                return FuelCoverageNotice(
+                    id: "\(stage.id):fuel-gap",
+                    stageIndex: index,
+                    kind: .gap,
+                    title: "Fuel range gap",
+                    scope: scope,
+                    message: gap.message
+                )
+            }
+            if let message = stage.fuelUnknown {
+                return FuelCoverageNotice(
+                    id: "\(stage.id):fuel-unverified",
+                    stageIndex: index,
+                    kind: .unverified,
+                    title: "Fuel coverage unverified",
+                    scope: scope,
+                    message: message
+                )
+            }
+            return nil
         }
     }
 
@@ -2230,6 +2294,15 @@ final class RoutePlannerModel {
     }
 
 #if DEBUG
+    /// Stable active-build state used by UI tests to verify that route
+    /// progress remains pinned under the logo instead of behaving like a
+    /// transient toast over the planning sheet.
+    func installRouteProgressFixtureForTesting(_ message: String) {
+        isRouting = true
+        fuelPlanningStatus = message
+        toast = message
+    }
+
     /// Stable, non-persistent route used only by visual/UI tests. It keeps a
     /// real ferry edge between two ordinary road runs so the shipping map and
     /// route-card presentation can be reviewed without making a network route.
@@ -2528,14 +2601,84 @@ final class RoutePlannerModel {
         )
     }
 
-    /// Frame the map on a plan stage’s start + end pins.
+    /// Show only this generated stage and frame its start + end points. The
+    /// endpoint view is intentionally tighter than the full-geometry view.
     func focusStage(at index: Int) {
         guard stages.indices.contains(index) else { return }
+        let stage = stages[index]
+        if let response = stage.response {
+            mapState.setRoute(MapState.displaySegments(
+                from: [response],
+                riderLegIDs: [stage.riderLegID]
+            ))
+        }
+        mapState.setPlannerMarkers(focusMarkers(forStageAt: index))
         var points: [RouteCoordinate] = []
-        if let start = stages[index].start { points.append(start) }
-        if let end = stages[index].end { points.append(end) }
+        if let start = stage.start { points.append(start) }
+        if let end = stage.end { points.append(end) }
         guard !points.isEmpty else { return }
         mapState.fit(points)
+        RoutingDebugLog.shared.event(
+            "map focus stage=\(index + 1) scope=endpoints title=\(stageEndpointTitle(at: index))"
+        )
+    }
+
+    /// Show only this generated stage and fit every bend of its route.
+    func focusEntireStage(at index: Int) {
+        guard stages.indices.contains(index),
+              let response = stages[index].response,
+              response.coordinates.count >= 2
+        else { return }
+        let stage = stages[index]
+        mapState.setRoute(MapState.displaySegments(
+            from: [response],
+            riderLegIDs: [stage.riderLegID]
+        ))
+        mapState.setPlannerMarkers(focusMarkers(forStageAt: index))
+        mapState.fit(response.coordinates)
+        RoutingDebugLog.shared.event(
+            "map focus stage=\(index + 1) scope=geometry points=\(response.coordinates.count) "
+                + "title=\(stageEndpointTitle(at: index))"
+        )
+    }
+
+    private func focusMarkers(forStageAt index: Int) -> [MapState.Marker] {
+        guard stages.indices.contains(index) else { return [] }
+        let stage = stages[index]
+        let labels = stageEndpointTitle(at: index)
+            .components(separatedBy: " → ")
+
+        func compactLabel(_ title: String, fallback: String) -> String {
+            if title.hasPrefix("Point ") {
+                return String(title.dropFirst("Point ".count))
+            }
+            return title.isEmpty ? fallback : title
+        }
+
+        var markers: [MapState.Marker] = []
+        if let start = stage.start {
+            let title = labels.first ?? ""
+            markers.append(MapState.Marker(
+                id: "focus-stage-\(index)-start",
+                latitude: start.latitude,
+                longitude: start.longitude,
+                label: compactLabel(title, fallback: "A"),
+                kind: title.hasPrefix("F") ? .fuel : .start,
+                isLocked: true
+            ))
+        }
+        if let end = stage.end {
+            let title = labels.count > 1 ? labels[1] : ""
+            markers.append(MapState.Marker(
+                id: "focus-stage-\(index)-end",
+                latitude: end.latitude,
+                longitude: end.longitude,
+                label: compactLabel(title, fallback: "B"),
+                kind: title.hasPrefix("F") ? .fuel : .destination,
+                isLocked: true
+            ))
+        }
+        return markers
     }
 
     // MARK: - Fuel assist
@@ -2614,8 +2757,12 @@ final class RoutePlannerModel {
     /// (respects sheet / drawer content insets). From here · Plan · Saved.
     func focusEntirePlannedRoute() {
         guard canFocusEntirePlannedRoute else { return }
+        refreshMap()
         mapState.fit(allCoordinates)
         toast = "Route overview"
+        RoutingDebugLog.shared.event(
+            "map focus scope=entire_route stages=\(stages.count) points=\(allCoordinates.count)"
+        )
     }
 
     /// True when idle planning has a drawable route worth framing.

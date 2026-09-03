@@ -12,6 +12,17 @@ private enum FuelAdvisoryIssue {
         }
     }
 
+    var logDetail: String {
+        let detail: String
+        switch self {
+        case .gap(let value), .unknown(let value):
+            detail = value
+        }
+        return detail
+            .replacingOccurrences(of: "\n", with: " ")
+            .replacingOccurrences(of: "|", with: "/")
+    }
+
     func riderMessage(hasConfirmedPump: Bool) -> String? {
         guard case .unknown = self else { return nil }
         return hasConfirmedPump
@@ -928,6 +939,8 @@ final class ItineraryBuilder {
             var excludedStations = excludedFuelStationsByLeg[index] ?? []
             var forceFuelStop = forcedFuelLegIndex == index
             var attempts = 0
+            var lastRejectedStationID: String?
+            var lastRejectedReason: String?
             func finishWithFuelAdvisory(_ issue: FuelAdvisoryIssue) async -> BuiltItinerary {
                 await buildAdvisoryRemainder(
                     itinerary: itinerary,
@@ -954,11 +967,18 @@ final class ItineraryBuilder {
                 }
                 guard !progressWatchdog.isExpired() else {
                     let message = "Fuel planning made no forward progress for 28 seconds."
+                    let diagnostic = [
+                        message,
+                        lastRejectedStationID.map { "last selected station=\($0)" },
+                        lastRejectedReason.map { "rejection=\($0)" }
+                    ].compactMap { $0 }.joined(separator: "; ")
                     RoutingDebugLog.shared.event(
                         "fuel progress timeout gen=\(itinerary.generation) "
-                            + "riderLeg=\(riderLeg.id) attempts=\(attempts) committed=\(committed.legs.count)"
+                            + "riderLeg=\(riderLeg.id) attempts=\(attempts) committed=\(committed.legs.count) "
+                            + "lastRejectedStation=\(lastRejectedStationID ?? "-") "
+                            + "lastRejectedCause=\(lastRejectedReason ?? "-")"
                     )
-                    return await finishWithFuelAdvisory(.unknown(message))
+                    return await finishWithFuelAdvisory(.unknown(diagnostic))
                 }
                 attempts += 1
                 guard attempts <= 16 else {
@@ -1375,6 +1395,8 @@ final class ItineraryBuilder {
                     onProgress(committed)
 
                     if selectedStop != nil {
+                        lastRejectedStationID = nil
+                        lastRejectedReason = nil
                         onFuelStatus("Fuel stop \(nextFuelStopNumber) added")
                         await Task.yield()
                         // Keep every committed pump excluded for the rest of
@@ -1393,6 +1415,8 @@ final class ItineraryBuilder {
                 } catch {
                     if let selectedStop {
                         excludedStations.insert(selectedStop.id)
+                        lastRejectedStationID = selectedStop.id
+                        lastRejectedReason = error.localizedDescription
                         RoutingDebugLog.shared.event(
                             "fuel feeler reject riderLeg=\(riderLeg.id) station=\(selectedStop.id) " +
                                 "reason=route_failed msg=\(error.localizedDescription)"
@@ -1457,7 +1481,7 @@ final class ItineraryBuilder {
                 + "fromLeg=\(startIndex) throughLeg=\(max(startIndex, endIndex - 1)) "
                 + "issue=\(issue.logValue) preservedPumps=\(confirmedPumpCount) "
                 + "boundary=\(String(format: "%.5f,%.5f", current.latitude, current.longitude)) "
-                + "statusScope=unverified_tail"
+                + "statusScope=unverified_tail detail=\(issue.logDetail)"
         )
 
         for index in startIndex..<endIndex {

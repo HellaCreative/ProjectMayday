@@ -46,6 +46,24 @@ struct RoutePlannerModelItineraryTests {
         #expect(RoutePlannerModel.isPersistentProgressToast("Checking range after fuel stop 2"))
     }
 
+    @Test func activeRouteProgressSurvivesUnrelatedTapFeedback() {
+        #expect(RoutePlannerModel.activeRouteProgressMessage(
+            fuelPlanningStatus: "Creating fuel stop 4",
+            isRouting: true,
+            toast: "Route overview"
+        ) == "Creating fuel stop 4")
+        #expect(RoutePlannerModel.activeRouteProgressMessage(
+            fuelPlanningStatus: nil,
+            isRouting: true,
+            toast: "Waypoint selected"
+        ) == RoutePlannerModel.calculatingRouteToast)
+        #expect(RoutePlannerModel.activeRouteProgressMessage(
+            fuelPlanningStatus: nil,
+            isRouting: false,
+            toast: "Route overview"
+        ) == nil)
+    }
+
     @Test func planModeSelectsLiveWhileOnline() async {
         let live = PlannerFakeRoutingSource(name: "live")
         let pack = PlannerFakeRoutingSource(name: "pack")
@@ -249,7 +267,8 @@ struct RoutePlannerModelItineraryTests {
         source.distanceOverrides[key(first, pump)] = 150_000
         source.distanceOverrides[key(pump, second)] = 150_000
         source.fuelStops = [fuelStop("shell-antigonish", name: "Shell Antigonish", at: pump)]
-        let model = makeModel(source: source)
+        let mapState = MapState()
+        let model = makeModel(source: source, mapState: mapState)
         model.apply(
             .replaceAll(waypoints: [first, second], profile: .dirt, allowUnknown: false, avoidMotorways: false, preferBackRoads: false),
             source: "seed"
@@ -261,6 +280,16 @@ struct RoutePlannerModelItineraryTests {
         #expect(model.stageEndpointTitle(at: 1) == "F1 → Point 2")
         #expect(model.stageFuelStationSubtitle(at: 0) == "Shell Antigonish")
         #expect(model.stages.allSatisfy { $0.profile == .dirt })
+
+        model.focusStage(at: 0)
+        #expect(mapState.routePolylineCoordinates.first == first)
+        #expect(mapState.routePolylineCoordinates.last == pump)
+        #expect(mapState.plannerMarkers.map(\.label) == ["1", "F1"])
+
+        model.focusEntirePlannedRoute()
+        #expect(mapState.routePolylineCoordinates.first == first)
+        #expect(mapState.routePolylineCoordinates.last == second)
+        #expect(mapState.plannerMarkers.count == 3)
     }
 
     @Test func twoWaypointTwoStopItineraryRendersExactlyThreeFlatRows() async throws {
@@ -506,6 +535,12 @@ struct RoutePlannerModelItineraryTests {
         #expect(model.errorMessage == nil)
         #expect(model.toast == "Route built. Fuel safety could not be verified for one or more legs.")
         #expect(model.hasRoute)
+        let notice = try #require(model.fuelCoverageNotices.first)
+        #expect(model.fuelCoverageNotices.count == 1)
+        #expect(notice.kind == .unverified)
+        #expect(notice.title == "Fuel coverage unverified")
+        #expect(notice.scope == "Leg 1 · Point 1 → Point 2")
+        #expect(notice.stageIndex == 0)
     }
 
     @Test func fuelWarningProjectsOnlyOntoUnverifiedTailStage() {
