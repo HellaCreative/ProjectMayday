@@ -57,7 +57,7 @@ const MIN_STOP_SEPARATION_M = 800;
 const MIN_FORWARD_PROGRESS_M = 8_000;
 const MIN_DESTINATION_FUEL_CLEARANCE_M = 5_000;
 /** Bumped when fuel-selection / ranking contracts change. Clients may assert. */
-const FUEL_CHAIN_SERVICE_VERSION = "2026-09-03.three-quarter-first-pump.25";
+const FUEL_CHAIN_SERVICE_VERSION = "2026-09-03.three-quarter-first-pump.26";
 /**
  * Preserve the first three quarters of each usable tank for the requested
  * ride profile. Once that boundary is crossed, commit the first sensible
@@ -68,6 +68,13 @@ const FUEL_COMFORT_LO = 0.75;
 const FUEL_COMFORT_HI = 0.75;
 /** Maximum replacement choices returned for one committed fuel anchor. */
 const MAX_STATION_ALTERNATIVES = 6;
+/**
+ * A cross-region graph-only choice is still proved by the client using the
+ * requested profile. Retain a small ranked recovery set so one seam/profile
+ * mismatch cannot consume the complete waypoint window and force another
+ * province-wide pump search.
+ */
+const GRAPH_ONLY_RECOVERY_CANDIDATES = 4;
 /** Allow a short forecourt connector, never a meaningful down-and-back fuel stem. */
 const MAX_FUEL_RETRACE_M = 1_000;
 /** Numbered waypoint on a packed pump. Lockstep: HopSearchPolicy.fuelWaypointSnapMeters. */
@@ -2504,13 +2511,17 @@ async function planFuelChainOnRuntime({
     const earlyAvailable = unique.some((row) => tankCommitBand(
       row.graphMeters, cap, usableRangeMeters
     ) === 2);
-    // Unbounded/offline callers still receive two proved alternatives. A live
-    // request may finish after its first unbeatable proof rather than spend
-    // the remaining wall-clock budget manufacturing an option the rider did
-    // not ask for yet.
-    const minimumCandidateComparisons = Number.isFinite(deadline)
-      ? 1
-      : Math.min(2, candidates.length);
+    // Profile-routed live work may finish after one unbeatable proof. A
+    // graph-only cross-region result is different: the client still has to
+    // prove the actual Dirt/Balanced/Clean route across the authored seam.
+    // Retain a few graph-valid alternatives from this already-built
+    // reachability result so one rejected pump does not trigger another full
+    // target-matching pass with only the watchdog remainder available.
+    const minimumCandidateComparisons = graphOnlyFeeler
+      ? Math.min(GRAPH_ONLY_RECOVERY_CANDIDATES, candidates.length)
+      : Number.isFinite(deadline)
+        ? 1
+        : Math.min(2, candidates.length);
     for (let startRank = 0; startRank < candidates.length; startRank += batchSize) {
       if ((abortSignal && abortSignal.aborted) || Date.now() >= deadline) {
         timeBudgetExceeded = true;
@@ -2556,7 +2567,7 @@ async function planFuelChainOnRuntime({
         // another province-scale route search merely to compare an equivalent
         // pump. Route-foundation candidates above retain all zero-search,
         // route-connected alternatives for the replacement UI.
-        if (Number.isFinite(deadline)) break;
+        if (Number.isFinite(deadline) && !graphOnlyFeeler) break;
         const remaining = candidates.slice(startRank + batch.length);
         if (!remaining.some((candidate) =>
           canUnevaluatedCandidateBeatComplete(candidate, provenComplete)
@@ -2566,7 +2577,7 @@ async function planFuelChainOnRuntime({
       // keeps routing candidates until either their profile rides are compared
       // or the remaining choices are proven unable to beat a complete winner.
       if (
-        graphOnlyFeeler && rows.length >= 2 &&
+        graphOnlyFeeler && rows.length >= minimumCandidateComparisons &&
         (watchedFit || (!watchedAvailable && (earlyFit || !earlyAvailable)))
       ) break;
     }
@@ -3175,6 +3186,7 @@ async function planCrossRegionFuelChain(body, selection, fuelOptions, dependenci
 
     const priorStopCount = allStops.length;
     const priorGraphMeterCount = graphMeters.length;
+    const regionalPrefixMeters = graphMeters.slice();
     allStops.push(...planned.stops);
     graphMeters.push(...planned.graphMeters);
     if (planned.stops.length) {
@@ -3185,7 +3197,14 @@ async function planCrossRegionFuelChain(body, selection, fuelOptions, dependenci
         planned.graphMeters.length
       );
     }
-    stationCandidates.push(...(planned.stationCandidates || []));
+    stationCandidates.push(...(planned.stationCandidates || []).map((candidate) => ({
+      ...candidate,
+      // The candidate's own `meters` value belongs to this regional segment.
+      // Carry the preceding seam minima with every alternative so the client
+      // can prove it immediately without applying the selected pump's regional
+      // budget to a different location.
+      regionalGraphMeters: regionalPrefixMeters.concat([Number(candidate.meters)])
+    })));
     totalStates += Number(planned.diagnostics && planned.diagnostics.states) || 0;
     totalPops += Number(planned.diagnostics && planned.diagnostics.dijkstraPops) || 0;
     matchedFuel += Number(planned.diagnostics && planned.diagnostics.matchedFuel) || 0;

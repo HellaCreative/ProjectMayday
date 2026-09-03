@@ -143,6 +143,46 @@ struct ItineraryBuilderTests {
         #expect(source.fuelChainRequests[0].fuel.forwardFeeler == true)
     }
 
+    @Test func crossProvinceRejectedPumpUsesRetainedAlternativeWithoutRepeatingFuelSearch() async throws {
+        let start = RouteCoordinate(longitude: -74.262727, latitude: 46.043037)
+        let destination = RouteCoordinate(longitude: -79.211817, latitude: 44.792905)
+        let rejected = RouteCoordinate(longitude: -76.680414, latitude: 45.469495)
+        let recovered = RouteCoordinate(longitude: -76.510000, latitude: 45.520000)
+        let source = FakeRoutingSource(name: "live")
+        source.supportsCombinedFuelPlanning = true
+        source.fuelStopResponses = [[fuelStop("bad-seam-pump", at: rejected)], []]
+        source.fuelWindowCompleteResponses = [false, true]
+        source.fuelGraphMeterResponses = [[211_486, 52_013], [100_000]]
+        source.stationCandidates = [
+            FuelStationCandidate(
+                id: "bad-seam-pump", meters: 52_013, dirtPct: 0,
+                departureId: "start", latitude: rejected.latitude,
+                longitude: rejected.longitude, validForward: true, rank: 0,
+                regionalGraphMeters: [211_486, 52_013]
+            ),
+            FuelStationCandidate(
+                id: "good-seam-pump", meters: 48_000, dirtPct: 0,
+                departureId: "start", latitude: recovered.latitude,
+                longitude: recovered.longitude, validForward: true, rank: 1,
+                regionalGraphMeters: [205_000, 48_000]
+            )
+        ]
+        source.failKey = key(start, rejected)
+        source.distances[key(start, recovered)] = 270_000
+        source.distances[key(recovered, destination)] = 100_000
+
+        let result = await build([start, destination], source: source, usable: 289_000)
+
+        #expect(result.legs.count == 2)
+        #expect(result.legs.first?.endsAtFuelStop?.stationID == "good-seam-pump")
+        #expect(result.legs.allSatisfy { ($0.response.distanceMeters ?? .infinity) <= 289_000 })
+        #expect(source.fuelChainRequests.count == 2)
+        #expect(source.fuelChainRequests[1].locations[0].longitude == recovered.longitude)
+        #expect(source.routeRequests.count == 2)
+        #expect(source.routeRequests[0].options?.regionalHopMinimumMeters == [211_486, 52_013])
+        #expect(source.routeRequests[1].options?.regionalHopMinimumMeters == [205_000, 48_000])
+    }
+
     @Test func combinedLiveMultiLegPlanDoesNotSpeculateOnTheNextLeg() async throws {
         let points = [point(0), point(1), point(2)]
         let source = FakeRoutingSource(name: "live")

@@ -489,6 +489,10 @@ struct FuelStationCandidate: Codable, Sendable {
     var chainMeters: Double? = nil
     var chainDirtPct: Double? = nil
     var continuationBacktrackMeters: Double? = nil
+    /// Per-region graph lower bounds from the current visible departure to
+    /// this candidate. Cross-region recovery uses these to budget the real
+    /// profile route through the same authored seams as the selected pump.
+    var regionalGraphMeters: [Double]? = nil
 }
 
 struct FuelChainResponse: Codable, Sendable {

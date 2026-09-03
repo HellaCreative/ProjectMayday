@@ -1313,113 +1313,140 @@ final class ItineraryBuilder {
                     }
                 }
 
-                let target = selectedStop?.coordinate ?? riderDestination.coordinate
                 let nextFuelStopNumber = committedFuelStopCount + 1
-                onFuelStatus(selectedStop == nil
-                    ? "No fuel stop required"
-                    : "Creating fuel stop \(nextFuelStopNumber)")
-                do {
-                    let response: RouteResponse
-                    if let planned = chain.routes?.first,
-                       (try? responseMeters(planned)) != nil {
-                        response = planned
-                    } else {
-                        response = try await source.route(routeRequest(
-                            profile: activeProfile,
-                            allowUnknown: activeProfile == .cleanest ? false : riderLeg.allowUnknown,
-                            from: current,
-                            to: target,
-                            avoidEdgeIDs: itinerary.impassableEdgeIDs,
-                            maxPathMeters: remaining,
-                            regionalHopMinimumMeters: chain.graphMeters ?? [],
-                            history: history,
-                            avoidMotorways: activeAvoidMotorways,
-                            preferBackRoads: riderLeg.preferBackRoads
+                typealias ValidationOption = (
+                    stop: FuelChainStop?,
+                    regionalMeters: [Double],
+                    plannedRoute: RouteResponse?
+                )
+                var validationOptions: [ValidationOption] = []
+                if let selectedStop {
+                    validationOptions.append((
+                        stop: selectedStop,
+                        regionalMeters: chain.graphMeters ?? [],
+                        plannedRoute: chain.routes?.first
+                    ))
+                    var retainedIDs = Set([selectedStop.id])
+                    let alternatives = (chain.stationCandidates ?? [])
+                        .filter {
+                            $0.departureId == "start"
+                                && $0.validForward == true
+                                && $0.latitude != nil
+                                && $0.longitude != nil
+                                && !excludedStations.contains($0.id)
+                        }
+                        .sorted { ($0.rank ?? .max) < ($1.rank ?? .max) }
+                    for candidate in alternatives where !retainedIDs.contains(candidate.id) {
+                        guard validationOptions.count < 6,
+                              let latitude = candidate.latitude,
+                              let longitude = candidate.longitude
+                        else { break }
+                        retainedIDs.insert(candidate.id)
+                        var regionalMeters = candidate.regionalGraphMeters ?? []
+                        if regionalMeters.isEmpty {
+                            regionalMeters = chain.graphMeters ?? []
+                            if regionalMeters.isEmpty {
+                                regionalMeters = [candidate.meters]
+                            } else {
+                                regionalMeters[regionalMeters.count - 1] = candidate.meters
+                            }
+                        }
+                        validationOptions.append((
+                            stop: FuelChainStop(
+                                id: candidate.id,
+                                latitude: latitude,
+                                longitude: longitude,
+                                name: candidate.name,
+                                brand: nil,
+                                address: nil,
+                                graphMeters: candidate.meters,
+                                dirtPercent: candidate.dirtPct
+                            ),
+                            regionalMeters: regionalMeters,
+                            plannedRoute: nil
                         ))
                     }
-                    let meters = try responseMeters(response)
-                    guard meters <= remaining + 1 else { throw RoutingError.invalidResponse }
-                    let fuelStop = selectedStop.map {
-                        FuelStop(
-                            coordinate: $0.coordinate,
-                            stationID: $0.id,
-                            name: $0.displayName,
-                            afterRiderLegID: riderLeg.id
-                        )
-                    }
-                    let resetsAtWaypoint = selectedStop == nil
-                        && waypointFuelStops[riderDestination.id] != nil
-                    let arrivalFuel = fuelStop != nil || resetsAtWaypoint
-                        ? 0
-                        : fuelUsed + meters
-                    let validFuelTargets = fuelStop == nil ? [] : (chain.stationCandidates ?? []).filter {
-                        $0.departureId == "start"
-                            && $0.validForward == true
-                            && $0.latitude != nil
-                            && $0.longitude != nil
-                    }
-                    let built = BuiltLeg(
-                        riderLegID: riderLeg.id,
-                        fromCoordinate: current,
-                        toCoordinate: target,
-                        endsAtFuelStop: fuelStop,
-                        response: response,
-                        fuelUsedOnArrivalMeters: arrivalFuel,
-                        routeProfile: activeProfile,
-                        validFuelTargets: validFuelTargets
-                    )
-                    builtLegs.append(built)
-                    history.append(response)
-                    fuelUsed = arrivalFuel
-                    current = target
-                    let completedWithUnknownDestinationFuel = selectedStop == nil
-                        && index == itinerary.legs.count - 1
-                        && finalEscapeVerificationWarning != nil
-                    statuses[riderLeg.id] = selectedStop == nil
-                        ? (completedWithUnknownDestinationFuel
-                            ? .fuelUnknown(finalEscapeVerificationWarning!)
-                            : .built)
-                        : .pending
-                    committed = replacing(
-                        riderLegID: riderLeg.id,
-                        with: builtLegs,
-                        in: committed,
-                        status: statuses[riderLeg.id] ?? .pending
-                    )
-                    progressWatchdog.recordProgress()
-                    RoutingDebugLog.shared.event(
-                        "fuel progress renewed gen=\(itinerary.generation) "
-                            + "riderLeg=\(riderLeg.id) kind=\(selectedStop == nil ? "waypoint" : "pump") "
-                            + "committed=\(committed.legs.count)"
-                    )
-                    onProgress(committed)
+                } else {
+                    validationOptions.append((
+                        stop: nil,
+                        regionalMeters: chain.graphMeters ?? [],
+                        plannedRoute: chain.routes?.first
+                    ))
+                }
 
-                    if selectedStop != nil {
-                        lastRejectedStationID = nil
-                        lastRejectedReason = nil
-                        onFuelStatus("Fuel stop \(nextFuelStopNumber) added")
-                        await Task.yield()
-                        // Keep every committed pump excluded for the rest of
-                        // this rider leg. Clearing here allowed short urban
-                        // stations to alternate forever near the destination.
-                        if let selectedStop { excludedStations.insert(selectedStop.id) }
-                        forceFuelStop = false
-                        continue
+                var validatedOption: (stop: FuelChainStop?, response: RouteResponse, meters: Double)?
+                var validationFailure: Error?
+                for (optionIndex, option) in validationOptions.enumerated() {
+                    if optionIndex == 0 {
+                        onFuelStatus(option.stop == nil
+                            ? "No fuel stop required"
+                            : "Creating fuel stop \(nextFuelStopNumber)")
+                    } else {
+                        onFuelStatus("Trying alternate fuel stop \(optionIndex)")
                     }
-                    onFuelStatus(completedWithUnknownDestinationFuel
-                        ? "Destination fuel safety not verified"
-                        : "Leg complete")
-                    break
-                } catch is CancellationError {
-                    return dropped(itinerary, committed: committed, cancelled: true)
-                } catch {
-                    if let selectedStop {
-                        excludedStations.insert(selectedStop.id)
-                        lastRejectedStationID = selectedStop.id
-                        lastRejectedReason = error.localizedDescription
+                    do {
+                        let response: RouteResponse
+                        if let planned = option.plannedRoute,
+                           (try? responseMeters(planned)) != nil {
+                            response = planned
+                        } else {
+                            response = try await source.route(routeRequest(
+                                profile: activeProfile,
+                                allowUnknown: activeProfile == .cleanest
+                                    ? false
+                                    : riderLeg.allowUnknown,
+                                from: current,
+                                to: option.stop?.coordinate ?? riderDestination.coordinate,
+                                avoidEdgeIDs: itinerary.impassableEdgeIDs,
+                                maxPathMeters: remaining,
+                                regionalHopMinimumMeters: option.regionalMeters,
+                                history: history,
+                                avoidMotorways: activeAvoidMotorways,
+                                preferBackRoads: riderLeg.preferBackRoads
+                            ))
+                        }
+                        let meters = try responseMeters(response)
+                        guard meters <= remaining + 1 else {
+                            throw RoutingError.invalidResponse
+                        }
+                        validatedOption = (option.stop, response, meters)
+                        if optionIndex > 0, let recovered = option.stop {
+                            RoutingDebugLog.shared.event(
+                                "fuel candidate recovered riderLeg=\(riderLeg.id) "
+                                    + "rejected=\(selectedStop?.id ?? "-") "
+                                    + "selected=\(recovered.id) option=\(optionIndex + 1)/\(validationOptions.count)"
+                            )
+                        }
+                        break
+                    } catch is CancellationError {
+                        return dropped(itinerary, committed: committed, cancelled: true)
+                    } catch {
+                        validationFailure = error
+                        if let rejected = option.stop {
+                            excludedStations.insert(rejected.id)
+                            lastRejectedStationID = rejected.id
+                            lastRejectedReason = error.localizedDescription
+                            RoutingDebugLog.shared.event(
+                                "fuel candidate reject riderLeg=\(riderLeg.id) "
+                                    + "station=\(rejected.id) option=\(optionIndex + 1)/\(validationOptions.count) "
+                                    + "reason=profile_route_failed msg=\(error.localizedDescription)"
+                            )
+                            continue
+                        }
+                        break
+                    }
+                }
+
+                guard let validatedOption else {
+                    if selectedStop != nil {
+                        // The server has already spent the expensive graph
+                        // search and the app has exhausted its bounded retained
+                        // candidates. A subsequent request excludes all of them;
+                        // it is never allowed to select the same failed pump.
                         RoutingDebugLog.shared.event(
-                            "fuel feeler reject riderLeg=\(riderLeg.id) station=\(selectedStop.id) " +
-                                "reason=route_failed msg=\(error.localizedDescription)"
+                            "fuel candidate shortlist exhausted riderLeg=\(riderLeg.id) "
+                                + "candidates=\(validationOptions.count) "
+                                + "last=\(lastRejectedStationID ?? "-")"
                         )
                         continue
                     }
@@ -1431,9 +1458,87 @@ final class ItineraryBuilder {
                         continue
                     }
                     return await finishWithFuelAdvisory(.gap(
-                        "No fuel-safe route to the next waypoint fits the planned range."
+                        validationFailure?.localizedDescription
+                            ?? "No fuel-safe route to the next waypoint fits the planned range."
                     ))
                 }
+
+                let chosenStop = validatedOption.stop
+                let response = validatedOption.response
+                let meters = validatedOption.meters
+                let target = chosenStop?.coordinate ?? riderDestination.coordinate
+                let fuelStop = chosenStop.map {
+                    FuelStop(
+                        coordinate: $0.coordinate,
+                        stationID: $0.id,
+                        name: $0.displayName,
+                        afterRiderLegID: riderLeg.id
+                    )
+                }
+                let resetsAtWaypoint = chosenStop == nil
+                    && waypointFuelStops[riderDestination.id] != nil
+                let arrivalFuel = fuelStop != nil || resetsAtWaypoint
+                    ? 0
+                    : fuelUsed + meters
+                let validFuelTargets = fuelStop == nil ? [] : (chain.stationCandidates ?? []).filter {
+                    $0.departureId == "start"
+                        && $0.validForward == true
+                        && $0.latitude != nil
+                        && $0.longitude != nil
+                        && !excludedStations.contains($0.id)
+                }
+                let built = BuiltLeg(
+                    riderLegID: riderLeg.id,
+                    fromCoordinate: current,
+                    toCoordinate: target,
+                    endsAtFuelStop: fuelStop,
+                    response: response,
+                    fuelUsedOnArrivalMeters: arrivalFuel,
+                    routeProfile: activeProfile,
+                    validFuelTargets: validFuelTargets
+                )
+                builtLegs.append(built)
+                history.append(response)
+                fuelUsed = arrivalFuel
+                current = target
+                let completedWithUnknownDestinationFuel = chosenStop == nil
+                    && index == itinerary.legs.count - 1
+                    && finalEscapeVerificationWarning != nil
+                statuses[riderLeg.id] = chosenStop == nil
+                    ? (completedWithUnknownDestinationFuel
+                        ? .fuelUnknown(finalEscapeVerificationWarning!)
+                        : .built)
+                    : .pending
+                committed = replacing(
+                    riderLegID: riderLeg.id,
+                    with: builtLegs,
+                    in: committed,
+                    status: statuses[riderLeg.id] ?? .pending
+                )
+                progressWatchdog.recordProgress()
+                RoutingDebugLog.shared.event(
+                    "fuel progress renewed gen=\(itinerary.generation) "
+                        + "riderLeg=\(riderLeg.id) kind=\(chosenStop == nil ? "waypoint" : "pump") "
+                        + "committed=\(committed.legs.count)"
+                )
+                onProgress(committed)
+
+                if chosenStop != nil {
+                    lastRejectedStationID = nil
+                    lastRejectedReason = nil
+                    onFuelStatus("Fuel stop \(nextFuelStopNumber) added")
+                    await Task.yield()
+                    // Keep every committed pump excluded for the rest of
+                    // this rider leg. Clearing here allowed short urban
+                    // stations to alternate forever near the destination.
+                    if let chosenStop { excludedStations.insert(chosenStop.id) }
+                    forceFuelStop = false
+                    continue
+                }
+                onFuelStatus(completedWithUnknownDestinationFuel
+                    ? "Destination fuel safety not verified"
+                    : "Leg complete")
+                break
             }
         }
 

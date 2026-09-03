@@ -931,6 +931,46 @@ objective, sensible progress toward the rider waypoint, and retained pump
 alternatives.
 The fixed-coordinate command is `npm run bench:fuel-regressions`.
 
+### Cross-region retained-pump recovery — 2026-09-03
+
+The Nova Scotia-to-Ontario device route
+(`44.764830,-63.340265` to `44.792905,-79.211817`, 289 km usable range)
+proved a final distinction between fuel-graph reachability and a rider-visible
+profile route. After five valid pumps, the fuel graph selected a Quebec-to-
+Ontario pump near `45.469495,-76.680414`; the real Dirt route then failed at
+the authored provincial seam. The client had no alternate from the completed
+fuel search, repeated a province-wide match with only five seconds left, and
+kept a 791 km unverified tail. That is recovery failure, not evidence of a
+fuel gap.
+
+Cross-region pump selection now obeys these additional laws:
+
+1. a graph-only pump is a ranked candidate, not a committed waypoint, until
+   the client proves its real Dirt, Balanced, or Clean approach within the
+   current tank;
+2. the service retains up to four ranked graph-valid candidates from the
+   already-completed search. The public response remains capped at six choices
+   for the pump-replacement interface;
+3. every retained candidate carries its own ordered regional graph minima, so
+   the client validates the alternate against the correct seam budgets rather
+   than reusing the selected pump's final segment;
+4. if the selected pump fails real profile routing, the client immediately
+   tries the retained forward candidates in rank order. Rejected candidates
+   never appear as fuel waypoints and are excluded from any later search;
+5. a successfully recovered pump is committed once, resets the fuel tank and
+   planning watchdog, and starts the next one-pump window with the full time
+   allowance. Candidate deliberation is bounded; it never expands back into a
+   search over hundreds or thousands of pumps; and
+6. exhausting the shortlist may start one fresh search with every rejected
+   station excluded. A timeout remains unknown coverage and preserves the road
+   route; only a completed proof may report a fuel gap.
+
+The fixed regression rejects the first seam-incompatible pump, commits the
+second retained pump, keeps every built hop at or below 289 km, and continues
+from that pump without repeating fuel search for the failed window. This repair
+changes neither route-profile costs nor graph, geometry, fuel, or seam pack
+bytes.
+
 Android must implement the same semantics before parity is claimed: a hard
 total request deadline, cancellation propagation, the explicit bounded
 Balanced fallback, dense forward pump matching, and proof-before-commit for

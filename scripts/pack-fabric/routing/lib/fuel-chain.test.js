@@ -758,7 +758,7 @@ test("a graph-only window takes the first final-quarter pump even when a later p
   assert.equal(result.windowComplete, false);
   assert.equal(result.stops[0].id, "first");
   assert.equal(routeCalls, 0);
-  assert.ok(result.stationCandidates.length <= 6);
+  assert.deepEqual(result.stationCandidates.map((row) => row.id), ["first", "later"]);
 });
 
 test("a rider fuel-stop override forces the first station without changing later search", async () => {
@@ -1083,6 +1083,12 @@ test("cross-region one-stop window preserves every seam minimum through the retu
     lon: -64.374146,
     name: "Esso"
   };
+  const alternate = {
+    id: "osm:alternate",
+    lat: 45.91,
+    lon: -64.40,
+    name: "Alternate"
+  };
   const destination = { lat: 46.192496, lon: -64.242925 };
   const seam = {
     lat: 45.92,
@@ -1104,7 +1110,30 @@ test("cross-region one-stop window preserves every seam minimum through the retu
       ok: true,
       stops: [pump],
       graphMeters: [8_730.8],
-      stationCandidates: [],
+      stationCandidates: [
+        {
+          id: pump.id,
+          departureId: "start",
+          latitude: pump.lat,
+          longitude: pump.lon,
+          name: pump.name,
+          meters: 8_730.8,
+          dirtPct: 0,
+          validForward: true,
+          rank: 0
+        },
+        {
+          id: alternate.id,
+          departureId: "start",
+          latitude: alternate.lat,
+          longitude: alternate.lon,
+          name: alternate.name,
+          meters: 10_500,
+          dirtPct: 0,
+          validForward: true,
+          rank: 1
+        }
+      ],
       windowComplete: false,
       diagnostics: {}
     }
@@ -1146,6 +1175,10 @@ test("cross-region one-stop window preserves every seam minimum through the retu
   assert.equal(result.windowComplete, false);
   assert.deepEqual(result.stops.map((row) => row.id), ["osm:w330696506"]);
   assert.deepEqual(result.graphMeters, [218_050.6, 8_730.8]);
+  assert.deepEqual(
+    result.stationCandidates.map((row) => row.regionalGraphMeters),
+    [[218_050.6, 8_730.8], [218_050.6, 10_500]]
+  );
   assert.equal(plannedSegments.length, 0);
 });
 
