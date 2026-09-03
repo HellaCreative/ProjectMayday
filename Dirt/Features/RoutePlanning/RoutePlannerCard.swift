@@ -3,6 +3,15 @@ import SwiftUI
 import UIKit
 import UniformTypeIdentifiers
 
+/// Intrinsic height of the route-planner story below the fixed portrait tabs.
+private enum RoutePlannerContentHeightKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
 /// Route planner, redesigned to the Figma screens page:
 /// orange tab bar → mode chips → numbered stage rows (per-stage mode +
 /// unknown-access policy) → stat chips + mix bar → icon CTAs → Clear All.
@@ -31,6 +40,9 @@ struct RoutePlannerCard: View {
     @State private var showPlanToFromHereConfirm = false
     @State private var showClearConfirm = false
     @State private var showFuelGapStartConfirm = false
+    /// Intrinsic height of the planning content below the fixed mode tabs.
+    /// Portrait uses this to hug short content, then caps the sheet and scrolls.
+    @State private var portraitPlanningContentHeight: CGFloat = 0
 
     private var planner: RoutePlannerModel { app.planner }
 
@@ -181,12 +193,20 @@ struct RoutePlannerCard: View {
 
     private var portraitShell: some View {
         GeometryReader { geo in
-            let panelHeight = min(max(360, geo.size.height * 0.72), geo.size.height - 88)
+            // Preserve the map as the primary canvas. Short planner states hug their
+            // content; longer routes stop here and scroll beneath the sticky dock.
+            let maxPanelHeight = max(220, geo.size.height * 0.56)
+            let fixedChromeHeight = 14 + (DirtHit.min + 4) + 10
+            let maxPlanningHeight = max(1, maxPanelHeight - fixedChromeHeight)
+            let measuredPlanningHeight = max(1, portraitPlanningContentHeight)
+            let planningHeight = min(measuredPlanningHeight, maxPlanningHeight)
+            let panelHeight = min(maxPanelHeight, fixedChromeHeight + planningHeight)
 
             VStack(spacing: 10) {
                 tabBar
 
-                // Tabs stay anchored while the complete planning story scrolls.
+                // Tabs and the primary navigation remain anchored. The planning
+                // story grows naturally until the map-preserving cap, then scrolls.
                 // The fixed-height stage List below remains its own sub-scroll.
                 ScrollView(.vertical) {
                     VStack(spacing: 10) {
@@ -194,7 +214,16 @@ struct RoutePlannerCard: View {
                     }
                     .frame(maxWidth: .infinity)
                     .padding(.bottom, sitsBehindDock ? DockSheetMotion.dockClearance : 14)
+                    .background {
+                        GeometryReader { content in
+                            Color.clear.preference(
+                                key: RoutePlannerContentHeightKey.self,
+                                value: content.size.height
+                            )
+                        }
+                    }
                 }
+                .frame(height: planningHeight)
                 .scrollBounceBehavior(.basedOnSize)
                 .scrollIndicators(.visible)
             }
@@ -224,6 +253,12 @@ struct RoutePlannerCard: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+            .animation(DockSheetMotion.spring, value: panelHeight)
+        }
+        .onPreferenceChange(RoutePlannerContentHeightKey.self) { height in
+            guard height > 0,
+                  abs(height - portraitPlanningContentHeight) > 0.5 else { return }
+            portraitPlanningContentHeight = height
         }
     }
 
