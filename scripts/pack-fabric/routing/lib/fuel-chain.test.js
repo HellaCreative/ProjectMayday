@@ -4,6 +4,7 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 const {
   fuelNeedForProfileRide,
+  fuelChainRequest,
   fuelSearchStartMeters,
   fuelPlanStatus,
   nearestReachableFuelDistance,
@@ -14,6 +15,62 @@ const {
   routeFirstDeadlineAfterLoad,
   stationEligibility
 } = require("./fuel-chain");
+
+test("cross-region fuel starts incrementally without measuring the whole profile ride", async () => {
+  const start = { lat: 44.764830, lon: -63.340265 };
+  const destination = { lat: 45.645111, lon: -75.907752 };
+  const pump = station("regional-prefix", -70);
+  let wholeRideCalls = 0;
+  let minimumFuelStops = null;
+  const result = await fuelChainRequest({
+    profile: "dirt",
+    locations: [start, destination],
+    accessPolicy: { motorizedPermissive: true, motorizedUnknown: false },
+    fuel: {
+      usableRangeMeters: 374_000,
+      firstLegMaxMeters: 374_000,
+      routeFirstPlan: true,
+      windowMaxStops: 4,
+      allowPartialWindow: true,
+      windowTimeBudgetMs: 20_000
+    }
+  }, {
+    routeRequest: async () => {
+      wholeRideCalls += 1;
+      throw new Error("cross-region fuel must not measure the whole profile ride first");
+    },
+    resolveChainSeamWaypoints: async () => ({
+      ok: true,
+      waypoints: [
+        { ...start, resolvedRegionId: "ns" },
+        { ...destination, resolvedRegionId: "qc" }
+      ]
+    }),
+    loadRegionFuel: async (regionId) => ({
+      regionId,
+      stations: [pump],
+      packIdentity: { regionId }
+    }),
+    loadGraphsForRequest: async () => ({ packIdentity: [] }),
+    planFuelChainOnRuntime: async (options) => {
+      minimumFuelStops = options.minimumFuelStops;
+      return {
+        ok: true,
+        stops: [pump],
+        graphMeters: [300_000],
+        stationCandidates: [],
+        windowComplete: false,
+        diagnostics: { selectedReason: "routed_prefix_timeout" }
+      };
+    }
+  });
+
+  assert.equal(result.status, "complete");
+  assert.equal(result.windowComplete, false);
+  assert.deepEqual(result.stops.map((row) => row.id), ["regional-prefix"]);
+  assert.equal(wholeRideCalls, 0);
+  assert.ok(minimumFuelStops > 0);
+});
 
 test("every riding style receives the same dense-region route-first allowance", () => {
   assert.equal(routeFirstBudgetForWindow(15_000), 10_000);
@@ -584,7 +641,9 @@ test("timed-out continuation keeps a pump whose approach was proved in time", as
     minimumFuelStops: 2,
     maxStops: 4,
     allowPartialWindow: true,
-    timeBudgetMs: 50,
+    // Leave ample room for candidate discovery even when the test runner is
+    // busy; only the mocked continuation is intended to cross the deadline.
+    timeBudgetMs: 1_000,
     routeCandidate: ({ candidate }) => {
       if (candidate.station.id === "__destination__") {
         return new Promise((resolve) => {
@@ -593,7 +652,7 @@ test("timed-out continuation keeps a pump whose approach was proved in time", as
             distanceMeters: candidate.graphMeters,
             stats: { dirtPercent: 80 },
             segments: []
-          }), 75);
+          }), 1_200);
         });
       }
       return Promise.resolve({

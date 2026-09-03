@@ -80,7 +80,10 @@ profile proves the approach to a forward pump inside that approach's deadline
 but the continuation reaches the outer window deadline, accept the routed pump
 prefix with `windowComplete=false` and resume from that pump. Never accept a
 pump whose approach itself missed its deadline, and never reinterpret an
-exhausted no-forward-station result as a timeout.
+exhausted no-forward-station result as a timeout. Do not pre-measure the entire
+multi-region profile ride before planning fuel: use the endpoint lower bound to
+seed stop count and prove each regional route and tank-limited hop as it is
+committed.
 
 Android inputs: canonical rider legs, usable range/reserve, selected source and pack identities, packed stations, completed prefix, session seed. Outputs: built stages with stable IDs, route geometry/stats per hop, locked/replaceable pump choices, progress, and `none/pending/gap/unknown/error` fuel state (`BuiltItinerary.swift:25-48`). Port `DirtTests/Itinerary/*`, JS `fuel-chain*.test.js`, `router.cross-province-fuel.test.js`, and compare against the routing oracle. Do not query Overpass to fill a planning gap; do not drop a pump onto a prebuilt polyline; do not discard completed stages during a safe edit.
 

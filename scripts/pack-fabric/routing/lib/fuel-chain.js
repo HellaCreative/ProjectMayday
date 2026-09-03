@@ -3442,6 +3442,17 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
     locationCoordinate(locations[0]),
     locationCoordinate(locations[locations.length - 1])
   );
+  // A cross-region request is already divided at topology-authored seams and
+  // every regional hop is subsequently proved with the active profile under
+  // the real tank cap. Measuring the entire multi-province Dirt/Balanced/Clean
+  // ride first is therefore redundant, and on a long ride it can consume the
+  // fuel window before the first pump is considered. The endpoint chord is a
+  // conservative minimum-stop hint only; regional route proofs still add every
+  // additional pump the actual profile geometry requires.
+  if (selection.mode === "canada-chain" && !(profileMeters >= 0)) {
+    profileMeters = directLowerBoundMeters;
+    routeFirstSkippedReason = "cross_region_incremental_lower_bound";
+  }
   // A routed ride can never be shorter than the geographic distance between
   // its endpoints. If that lower bound already exceeds the fuel remaining in
   // the tank, a full active-profile route cannot prove a zero-stop journey.

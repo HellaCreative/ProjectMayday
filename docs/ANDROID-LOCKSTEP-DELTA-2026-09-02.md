@@ -121,7 +121,7 @@ These are regression anchors, not universal route-quality targets. Run them agai
 | Nova Scotia Sept-3 fuel | `44.764830,-63.340265` → `43.678864,-65.794704` | complete one-stop Dirt chain; foundation partition; no pump profile reroutes |
 | Central Ontario Sept-3 fuel | `44.632662,-75.651839` → `44.601681,-79.308263` | complete one-stop Dirt chain; foundation partition; about 85% dirt |
 | Northern Ontario surface switch | `48.717124,-85.788718` → `49.690947,-87.041404` | reuse the useful pump across Balanced → Dirt; Dirt must exceed Balanced dirt share without remote paved hunting |
-| Long regional fuel window | `44.764830,-63.340265` → `45.645111,-75.907752` at 374 km usable | first LIVE window succeeds with one or more routed pumps and `windowComplete=false`; a continuation timeout must not erase the safe prefix |
+| Long regional fuel window | `44.764830,-63.340265` → `45.645111,-75.907752` at 374 km usable | skip the whole-route fuel prepass; first LIVE window succeeds with one or more routed pumps and `windowComplete=false`; a continuation timeout must not erase the safe prefix |
 
 For the one-stop probe, the accepted routed legs were approximately 382,484 m and 12,940 m. Exact timing varies with network and device; route choice, stop count, forward progress, and parity laws are the gates.
 

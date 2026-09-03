@@ -861,6 +861,9 @@ pack-independent laws:
    pump and resumes from it with a full tank and a fresh window. A pump whose
    own approach finishes after its deadline is never committed, and a completed
    non-timeout search that proves no forward continuation remains a real gap.
+   Cross-region fuel planning does not first measure the entire multi-province
+   profile route. It uses the endpoint lower bound only to seed the minimum stop
+   count, then proves every regional route and tank-limited hop incrementally.
 
 The diagnostics identify foundation reuse, foundation route distance and dirt
 percentage, matched and route-priority pump counts, selected pump, final chain
