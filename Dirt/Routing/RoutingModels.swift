@@ -355,6 +355,9 @@ struct FuelChainDiagnostics: Codable, Sendable {
     var stationsConsidered: Int? = nil
     var stationsInRange: Int? = nil
     var stationsMatchLimited: Bool? = nil
+    var stationCacheMatches: Int? = nil
+    var stationFreshMatches: Int? = nil
+    var targetPasses: [FuelTargetPassDiagnostic]? = nil
     let elapsedMs: Int?
     var candidateK: Int? = nil
     var stationsReachableWithinRange: Int? = nil
@@ -393,6 +396,17 @@ struct FuelChainDiagnostics: Codable, Sendable {
     var cancelled: Bool? = nil
 }
 
+struct FuelTargetPassDiagnostic: Codable, Sendable {
+    let origin: String?
+    let pool: Int?
+    let considered: Int?
+    let cacheMatches: Int?
+    let freshMatches: Int?
+    let returned: Int?
+    let limited: Bool?
+    let elapsedMs: Int?
+}
+
 struct FuelRouteAttemptDiagnostic: Codable, Sendable {
     let candidateId: String?
     let elapsedMs: Int?
@@ -413,6 +427,16 @@ struct FuelStationCandidate: Codable, Sendable {
     var remainingGraphMeters: Double? = nil
     var commitBand: Int? = nil
     var canFinish: Bool? = nil
+    var rank: Int? = nil
+    var approachElapsedMs: Int? = nil
+    var approachStatus: String? = nil
+    var approachSearchOutcome: String? = nil
+    var approachFailureReason: String? = nil
+    var continuationElapsedMs: Int? = nil
+    var continuationStatus: String? = nil
+    var backtrackMeters: Double? = nil
+    var rejectedReason: String? = nil
+    var totalElapsedMs: Int? = nil
 }
 
 struct FuelChainResponse: Codable, Sendable {

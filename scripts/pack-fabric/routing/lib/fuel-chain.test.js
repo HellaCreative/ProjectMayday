@@ -342,6 +342,39 @@ test("one-stop window does not commit a pump whose proof crosses its hard deadli
   assert.ok(result.diagnostics.slowestProfileRoutes[0].elapsedMs >= 50);
 });
 
+test("live fuel planning proves candidate routes serially", async () => {
+  let active = 0;
+  let maxActive = 0;
+  const result = await planFuelChainOnRuntime({
+    runtime: lineRuntime(),
+    stations: [station("middle", 2), station("forward", 3)],
+    start: { lat: 45, lon: 0 },
+    destination: { lat: 45, lon: 4 },
+    profile: "balanced",
+    accessPolicy: { motorizedPermissive: true, motorizedUnknown: false },
+    usableRangeMeters: 250_000,
+    firstLegMaxMeters: 250_000,
+    requireFuelStopBeforeEnd: true,
+    minimumFuelStops: 1,
+    timeBudgetMs: 1_000,
+    routeCandidate: async ({ candidate }) => {
+      active += 1;
+      maxActive = Math.max(maxActive, active);
+      await new Promise((resolve) => setTimeout(resolve, 5));
+      active -= 1;
+      return {
+        status: "complete",
+        distanceMeters: candidate.graphMeters,
+        stats: { dirtPercent: 50 },
+        segments: []
+      };
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(maxActive, 1);
+});
+
 test("a proven forward one-stop chain does not route dominated earlier pumps", async () => {
   const result = await planFuelChainOnRuntime({
     runtime: lineRuntime(),
@@ -363,7 +396,7 @@ test("a proven forward one-stop chain does not route dominated earlier pumps", a
 
   assert.equal(result.ok, true);
   const firstWindow = result.stationCandidates.filter((row) => row.departureId === "start");
-  assert.deepEqual(firstWindow.map((row) => row.id), ["f6", "f5"]);
+  assert.deepEqual(firstWindow.map((row) => row.id), ["f6"]);
 });
 
 test("a rider fuel-stop override forces the first station without changing later search", async () => {

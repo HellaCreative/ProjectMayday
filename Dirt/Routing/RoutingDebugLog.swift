@@ -123,6 +123,24 @@ final class RoutingDebugLog {
         let slowRoutes = (d?.slowestProfileRoutes ?? []).map { attempt in
             "\(attempt.candidateId ?? "-"):\(attempt.elapsedMs.map(String.init) ?? "-")ms/\(attempt.status ?? "-")"
         }.joined(separator: ",")
+        let targetPasses = (d?.targetPasses ?? []).prefix(4).map { pass in
+            "\(pass.origin ?? "-"):\(pass.pool.map(String.init) ?? "-")/"
+                + "\(pass.considered.map(String.init) ?? "-")/"
+                + "\(pass.cacheMatches.map(String.init) ?? "-")/"
+                + "\(pass.freshMatches.map(String.init) ?? "-")/"
+                + "\(pass.returned.map(String.init) ?? "-")/"
+                + "\(pass.limited == true ? 1 : 0)/"
+                + "\(pass.elapsedMs.map(String.init) ?? "-")ms"
+        }.joined(separator: ",")
+        let candidateTrace = (response.stationCandidates ?? []).prefix(6).map { candidate in
+            "#\(candidate.rank.map(String.init) ?? "-"):\(candidate.id):"
+                + "\(candidate.approachElapsedMs.map(String.init) ?? "-")ms/"
+                + "\(candidate.approachStatus ?? "-")/"
+                + "\(candidate.approachSearchOutcome ?? "-")/"
+                + "\(candidate.continuationElapsedMs.map(String.init) ?? "-")ms/"
+                + "\(candidate.continuationStatus ?? "-")/"
+                + "\(candidate.rejectedReason ?? "kept")"
+        }.joined(separator: ",")
         event(
             "FUEL diag\(request) status=\(response.status) "
                 + "strategy=\(d?.strategy ?? "-") "
@@ -158,6 +176,10 @@ final class RoutingDebugLog {
                 + "targetPool=\(d?.stationsInRange.map(String.init) ?? "-") "
                 + "targetConsidered=\(d?.stationsConsidered.map(String.init) ?? "-") "
                 + "targetLimited=\(d?.stationsMatchLimited == true ? 1 : 0) "
+                + "targetCacheMatches=\(d?.stationCacheMatches.map(String.init) ?? "-") "
+                + "targetFreshMatches=\(d?.stationFreshMatches.map(String.init) ?? "-") "
+                + "targetPasses=[\(targetPasses)] "
+                + "candidateTrace=[\(candidateTrace)] "
                 + "deadlinePhase=\(d?.deadlinePhase ?? "-") "
                 + "cancelled=\(d?.cancelled == true ? 1 : 0) "
                 + "escapeSearchMs=\(d?.destinationEscapeSearchMs.map(String.init) ?? "-") "

@@ -49,7 +49,7 @@ const MIN_STOP_SEPARATION_M = 800;
 const MIN_FORWARD_PROGRESS_M = 8_000;
 const MIN_DESTINATION_FUEL_CLEARANCE_M = 5_000;
 /** Bumped when fuel-selection / ranking contracts change. Clients may assert. */
-const FUEL_CHAIN_SERVICE_VERSION = "2026-09-03.hard-window-dense-targets-sparse-proof.14";
+const FUEL_CHAIN_SERVICE_VERSION = "2026-09-03.serial-forward-proof.15";
 /** Watch at 50%; prefer sensible equal-stop choices at 70%. Lockstep: HopSearchPolicy.swift. */
 const FUEL_COMFORT_LO = 0.50;
 const FUEL_COMFORT_HI = 0.70;
@@ -69,7 +69,7 @@ const SHORTLIST_MIN_SEPARATION_M = 15_000;
 // Dense regions can contain thousands of pumps inside one tank radius. Snap a
 // broad, directionally ordered working set instead of blocking the request on
 // every pump in the province. Sparse regions remain uncapped.
-const DENSE_TARGET_MATCH_LIMIT = 768;
+const DENSE_TARGET_MATCH_LIMIT = 192;
 const DENSE_TARGET_MIN_MATCHES = 48;
 const CLEAN_MAJOR_ROAD_CLASSES = new Set([
   "motorway", "motorway_link", "trunk", "trunk_link", "primary", "primary_link",
@@ -685,7 +685,10 @@ function prepareTargets(
     stationsMatched: 0,
     deadlineExceeded: false,
     stationsInRange: 0,
-    stationsMatchLimited: false
+    stationsMatchLimited: false,
+    stationCacheMatches: 0,
+    stationFreshMatches: 0,
+    targetPasses: []
   };
   const matchedStationIDs = new Set();
 
@@ -721,6 +724,8 @@ function prepareTargets(
     const fuelTargets = [];
     const matchStarted = Date.now();
     let newlyConsidered = 0;
+    let cacheMatches = 0;
+    let freshMatches = 0;
     for (let rowIndex = 0; rowIndex < nearby.length; rowIndex += 1) {
       if ((rowIndex & 31) === 0 && (
         (abortSignal && abortSignal.aborted) ||
@@ -736,6 +741,7 @@ function prepareTargets(
         if (cached) {
           matchedStationIDs.add(stationID);
           fuelTargets.push(cached);
+          cacheMatches += 1;
         }
         continue;
       }
@@ -776,9 +782,25 @@ function prepareTargets(
       targetCache.set(stationID, target);
       matchedStationIDs.add(stationID);
       fuelTargets.push(target);
+      freshMatches += 1;
     }
     prepareDiagnostics.stationsMatched = matchedStationIDs.size;
-    prepareDiagnostics.elapsedMs += Date.now() - matchStarted;
+    const elapsedMs = Date.now() - matchStarted;
+    prepareDiagnostics.elapsedMs += elapsedMs;
+    prepareDiagnostics.stationCacheMatches += cacheMatches;
+    prepareDiagnostics.stationFreshMatches += freshMatches;
+    prepareDiagnostics.targetPasses.push({
+      origin: `${Number(origin && origin.lat).toFixed(5)},${Number(
+        origin && (origin.lon != null ? origin.lon : origin.lng)
+      ).toFixed(5)}`,
+      pool: nearby.length,
+      considered: newlyConsidered,
+      cacheMatches,
+      freshMatches,
+      returned: fuelTargets.length,
+      limited: prepareDiagnostics.stationsMatchLimited,
+      elapsedMs
+    });
     return fuelTargets;
   }
 
@@ -1410,8 +1432,12 @@ async function planFuelChainOnRuntime({
       let row;
       let diagnostic;
       const hopCap = hopBudgetMeters(candidate.graphMeters, cap);
+      const candidateStarted = Date.now();
+      let approachElapsedMs = null;
+      let continuationElapsedMs = null;
       try {
         planningStage = "candidate_route";
+        const approachStarted = Date.now();
         const response = await evaluateProfileHop({
           candidate,
           from: currentLocation,
@@ -1424,6 +1450,7 @@ async function planFuelChainOnRuntime({
           deadlineAtMs: deadline,
           abortSignal
         });
+        approachElapsedMs = Date.now() - approachStarted;
         const meters = Number(response && response.distanceMeters);
         const dirtPct = Number(response && response.stats && response.stats.dirtPercent);
         const firstBacktrackMeters = responseBacktrackMeters(response);
@@ -1493,6 +1520,7 @@ async function planFuelChainOnRuntime({
             !(abortSignal && abortSignal.aborted)
           ) {
             planningStage = "candidate_continuation";
+            const continuationStarted = Date.now();
             const continuationResponse = await evaluateProfileHop({
               candidate: destinationCandidate(continuation.destinationMeters),
               from: candidate.location,
@@ -1505,6 +1533,7 @@ async function planFuelChainOnRuntime({
               deadlineAtMs: deadline,
               abortSignal
             });
+            continuationElapsedMs = Date.now() - continuationStarted;
             const routedContinuationMeters = Number(
               continuationResponse && continuationResponse.distanceMeters
             );
@@ -1559,11 +1588,25 @@ async function planFuelChainOnRuntime({
           validForward,
           commitBand: tankCommitBand(row.meters, cap, usableRangeMeters),
           canFinish: row.continuationResponse != null,
+          rank,
+          approachElapsedMs,
+          approachStatus: response && response.status || null,
+          approachSearchOutcome: response && response.debug && response.debug.searchOutcome || null,
+          approachFailureReason: response && response.debug && response.debug.failureReason || null,
+          continuationElapsedMs,
+          continuationStatus: row.continuationResponse && row.continuationResponse.status || null,
+          backtrackMeters: Math.round(firstBacktrackMeters),
+          rejectedReason: !fits
+            ? (response && response.status !== "complete" ? "approach_incomplete"
+              : (!Number.isFinite(meters) ? "approach_distance_missing"
+                : (meters > hopCap + 1 ? "approach_over_range" : "approach_backtrack")))
+            : (!validForward ? "continuation_unproved" : null),
+          totalElapsedMs: Date.now() - candidateStarted,
           remainingGraphMeters: Number.isFinite(candidate.remainingGraphMeters)
             ? Math.round(candidate.remainingGraphMeters)
             : null
         };
-      } catch (_) {
+      } catch (error) {
         diagnostic = {
           id: String(candidate.station.id),
           departureId: currentKey,
@@ -1576,6 +1619,16 @@ async function planFuelChainOnRuntime({
           validForward: false,
           commitBand: tankCommitBand(candidate.graphMeters, cap, usableRangeMeters),
           canFinish: false,
+          rank,
+          approachElapsedMs,
+          approachStatus: "error",
+          approachSearchOutcome: null,
+          approachFailureReason: error && error.message || "candidate_error",
+          continuationElapsedMs,
+          continuationStatus: null,
+          backtrackMeters: null,
+          rejectedReason: "candidate_error",
+          totalElapsedMs: Date.now() - candidateStarted,
           remainingGraphMeters: Number.isFinite(candidate.remainingGraphMeters)
             ? Math.round(candidate.remainingGraphMeters)
             : null
@@ -1702,16 +1755,25 @@ async function planFuelChainOnRuntime({
       return true;
     }
 
-    // Profile-route probes dominate fuel latency. Run two geographically
-    // distinct choices in parallel, then check the request deadline before the
-    // next pair. This compares up to K=6 real rides without unbounded search.
-    const batchSize = Math.min(2, Math.max(1, candidates.length));
+    // Profile-route probes dominate fuel latency. Prove the strongest graph-
+    // ranked option first and reassess before spending time on another one.
+    // Running two province-scale profile searches together made both miss the
+    // same deadline, leaving no proved pump even when the first choice was
+    // sensible. Serial proof also makes cancellation and diagnostics exact.
+    const batchSize = 1;
     const watchedAvailable = unique.some((row) => tankCommitBand(
       row.graphMeters, cap, usableRangeMeters
     ) <= 1);
     const earlyAvailable = unique.some((row) => tankCommitBand(
       row.graphMeters, cap, usableRangeMeters
     ) === 2);
+    // Unbounded/offline callers still receive two proved alternatives. A live
+    // request may finish after its first unbeatable proof rather than spend
+    // the remaining wall-clock budget manufacturing an option the rider did
+    // not ask for yet.
+    const minimumCandidateComparisons = Number.isFinite(deadline)
+      ? 1
+      : Math.min(2, candidates.length);
     for (let startRank = 0; startRank < candidates.length; startRank += batchSize) {
       if ((abortSignal && abortSignal.aborted) || Date.now() >= deadline) {
         timeBudgetExceeded = true;
@@ -1748,7 +1810,8 @@ async function planFuelChainOnRuntime({
       const requiredStopsSatisfied = depth + 1 >= Math.max(
         0, Number(minimumFuelStops) || 0
       );
-      if (provenComplete && requiredStopsSatisfied && (!watchedAvailable || tankCommitBand(
+      if (rows.length >= minimumCandidateComparisons &&
+          provenComplete && requiredStopsSatisfied && (!watchedAvailable || tankCommitBand(
         provenComplete.meters, cap, usableRangeMeters
       ) <= 1)) {
         const remaining = candidates.slice(startRank + batch.length);
@@ -2060,6 +2123,9 @@ async function planFuelChainOnRuntime({
         stationsConsidered: targets.prepareDiagnostics.stationsConsidered,
         stationsInRange: targets.prepareDiagnostics.stationsInRange,
         stationsMatchLimited: targets.prepareDiagnostics.stationsMatchLimited,
+        stationCacheMatches: targets.prepareDiagnostics.stationCacheMatches,
+        stationFreshMatches: targets.prepareDiagnostics.stationFreshMatches,
+        targetPasses: targets.prepareDiagnostics.targetPasses,
         states,
         dijkstraPops,
         matchedFuel: targets.prepareDiagnostics.stationsMatched,
@@ -2086,6 +2152,7 @@ async function planFuelChainOnRuntime({
       stops: bestPartial.stops,
       graphMeters: bestPartial.graphMeters,
       routes: [],
+      stationCandidates,
       gapMeters,
       overByMeters: Math.max(0, gapMeters - remainingCap),
       gapFrom: bestPartial.stops[bestPartial.stops.length - 1] || null,
@@ -2121,6 +2188,9 @@ async function planFuelChainOnRuntime({
       stationsConsidered: targets.prepareDiagnostics.stationsConsidered,
       stationsInRange: targets.prepareDiagnostics.stationsInRange,
       stationsMatchLimited: targets.prepareDiagnostics.stationsMatchLimited,
+      stationCacheMatches: targets.prepareDiagnostics.stationCacheMatches,
+      stationFreshMatches: targets.prepareDiagnostics.stationFreshMatches,
+      targetPasses: targets.prepareDiagnostics.targetPasses,
       strategy: "forward_graph_reachability",
       states,
       dijkstraPops,

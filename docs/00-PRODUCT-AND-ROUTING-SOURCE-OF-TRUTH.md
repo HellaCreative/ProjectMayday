@@ -734,18 +734,24 @@ bytes, route-profile objectives, fuel priorities, or rider waypoint semantics:
    only graph nodes it actually visits instead of clearing every Ontario- or
    Quebec-sized work array before the first search step;
 5. dense pump regions use a forward-oriented matching working set capped at
-   768 candidates per planning origin after at least 48 pumps have matched.
+   192 newly snapped candidates per planning origin after at least 48 pumps
+   have matched. This is a candidate-generator bound, not a reduction in the
+   live fuel sidecar or the pumps shown on the map;
    Sparse regions remain uncapped. A retained candidate still has to pass the
    current tank range, access, forward-progress, active-profile route, and
    continuation proof; and
 6. a resumable partial window may commit a pump only after both its active-
    profile approach and a sensible forward continuation are proved inside the
-   deadline. Late or unproved pumps are discarded.
+   deadline. Late or unproved pumps are discarded. Province-scale active-
+   profile candidates are proved serially in graph-rank order so two expensive
+   searches cannot consume the same CPU window and leave both unfinished.
 
 The diagnostic contract now records the route-first budget and outcome,
 profile failure reason/timing/exploration count, pumps physically in range,
-whether dense matching was limited, the exact deadline phase, and whether the
-request was cancelled. The fixed Ontario two-point fuel reproduction now
+cache-versus-fresh target matches and each target pass, every routed candidate's
+rank/timing/outcome/rejection, whether dense matching was limited, the exact
+deadline phase, and whether the request was cancelled. The fixed Ontario
+two-point fuel reproduction now
 returns a safe one-stop chain in about 12.2 seconds locally instead of 53
 seconds. The appended-leg reproduction with only 122.5 km remaining returns a
 proved, resumable pump window in about 15.1 seconds instead of reaching the
