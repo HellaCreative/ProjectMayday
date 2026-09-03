@@ -349,6 +349,10 @@ struct FuelChainStop: Codable, Sendable {
 
 struct FuelChainDiagnostics: Codable, Sendable {
     let strategy: String?
+    var selectionPolicy: String? = nil
+    var graphOnlySelection: Bool? = nil
+    var stationAlternativesLimit: Int? = nil
+    var stationAlternativesReturned: Int? = nil
     let states: Int?
     let dijkstraPops: Int?
     let matchedFuel: Int?

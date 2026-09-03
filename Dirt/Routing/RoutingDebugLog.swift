@@ -167,6 +167,10 @@ final class RoutingDebugLog {
         event(
             "FUEL diag\(request) status=\(response.status) "
                 + "strategy=\(d?.strategy ?? "-") "
+                + "fuelPolicy=\(d?.selectionPolicy ?? "-") "
+                + "graphOnly=\(d?.graphOnlySelection == true ? 1 : 0) "
+                + "alternatives=\(d?.stationAlternativesReturned.map(String.init) ?? "-")/"
+                + "\(d?.stationAlternativesLimit.map(String.init) ?? "-") "
                 + "states=\(d?.states.map(String.init) ?? "-") "
                 + "reachable=\(d?.stationsReachableWithinRange.map(String.init) ?? "-") "
                 + "candidates=\(d?.candidatesEvaluated.map(String.init) ?? response.stationCandidates.map { String($0.count) } ?? "-") "

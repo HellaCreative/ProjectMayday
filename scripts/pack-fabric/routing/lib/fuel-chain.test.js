@@ -433,9 +433,9 @@ test("a proven one-stop winner skips candidates that cannot beat its forward pro
   assert.deepEqual(firstDepartureCandidates.map((row) => row.id), ["forward", "middle"]);
 });
 
-test("fuel search begins after half the reserve-adjusted usable range", () => {
-  assert.equal(fuelSearchStartMeters(140_000, 140_000), 70_000);
-  assert.equal(fuelSearchStartMeters(100_000, 140_000), 30_000);
+test("fuel selection begins after three quarters of reserve-adjusted usable range", () => {
+  assert.equal(fuelSearchStartMeters(140_000, 140_000), 105_000);
+  assert.equal(fuelSearchStartMeters(100_000, 140_000), 65_000);
 });
 
 test("a meaningful down-and-back fuel stem is rejected", async () => {
@@ -708,7 +708,7 @@ test("live fuel planning proves candidate routes serially", async () => {
   assert.equal(maxActive, 1);
 });
 
-test("a proven forward one-stop chain does not route dominated earlier pumps", async () => {
+test("a proven first final-quarter pump does not route later alternatives", async () => {
   const result = await planFuelChainOnRuntime({
     runtime: lineRuntime(),
     stations: [
@@ -729,7 +729,36 @@ test("a proven forward one-stop chain does not route dominated earlier pumps", a
 
   assert.equal(result.ok, true);
   const firstWindow = result.stationCandidates.filter((row) => row.departureId === "start");
-  assert.deepEqual(firstWindow.map((row) => row.id), ["f6"]);
+  assert.deepEqual(firstWindow.map((row) => row.id), ["f5"]);
+});
+
+test("a graph-only window takes the first final-quarter pump even when a later pump saves a stop", async () => {
+  let routeCalls = 0;
+  const result = await planFuelChainOnRuntime({
+    runtime: lineRuntime(),
+    stations: [station("first", 1.75), station("later", 2)],
+    start: { lat: 45, lon: 0 },
+    destination: { lat: 45, lon: 4 },
+    profile: "dirt",
+    accessPolicy: { motorizedPermissive: true, motorizedUnknown: false },
+    usableRangeMeters: 170_000,
+    firstLegMaxMeters: 170_000,
+    requireFuelStopBeforeEnd: true,
+    maxStops: 1,
+    allowPartialWindow: true,
+    timeBudgetMs: 15_000,
+    graphOnlyFeeler: true,
+    routeCandidate: async () => {
+      routeCalls += 1;
+      throw new Error("graph-only selection must not route disposable candidates");
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.windowComplete, false);
+  assert.equal(result.stops[0].id, "first");
+  assert.equal(routeCalls, 0);
+  assert.ok(result.stationCandidates.length <= 6);
 });
 
 test("a rider fuel-stop override forces the first station without changing later search", async () => {
@@ -981,6 +1010,69 @@ test("NS to NB forward feeler stays graph-only while targeting the Tantramar doo
   assert.equal(calls[0].cleanMetroMultiplier, 14);
   assert.equal(calls[0].avoidMotorways, true);
   assert.deepEqual(calls[0].destination, tantramar);
+});
+
+test("cross-region incremental windows stay graph-only without a client feeler flag", async () => {
+  const start = { lat: 47.54315, lon: -68.64648 };
+  const destination = { lat: 44.26908, lon: -76.493059 };
+  const nextPump = {
+    id: "qc-next-pump",
+    lat: 47.20,
+    lon: -70.20,
+    name: "Fuel stop"
+  };
+  const calls = [];
+
+  const result = await planCrossRegionFuelChain({
+    profile: "dirt",
+    locations: [start, destination],
+    accessPolicy: { motorizedPermissive: true, motorizedUnknown: false }
+  }, {
+    mode: "canada-chain",
+    regionIds: ["qc", "on"]
+  }, {
+    usableRangeMeters: 289_000,
+    firstLegMaxMeters: 289_000,
+    windowMaxStops: 1,
+    allowPartialWindow: true,
+    windowTimeBudgetMs: 20_000,
+    forwardFeeler: false
+  }, {
+    resolveChainSeamWaypoints: async () => ({
+      ok: true,
+      waypoints: [
+        { ...start, resolvedRegionId: "qc" },
+        { lat: 46.6, lon: -74.7, role: "seam", resolvedRegionId: "qc" },
+        { ...destination, resolvedRegionId: "on" }
+      ]
+    }),
+    loadRegionFuel: async (regionId) => ({
+      stations: [nextPump],
+      packIdentity: { regionId }
+    }),
+    loadGraphsForRequest: async () => ({ packIdentity: [{ regionId: "qc" }] }),
+    planFuelChainOnRuntime: async (options) => {
+      calls.push(options);
+      return {
+        ok: true,
+        stops: [nextPump],
+        graphMeters: [210_000],
+        stationCandidates: [],
+        windowComplete: false,
+        diagnostics: {}
+      };
+    }
+  });
+
+  assert.equal(result.status, "complete");
+  assert.equal(result.windowComplete, false);
+  assert.deepEqual(result.stops.map((row) => row.id), ["qc-next-pump"]);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].graphOnlyFeeler, true);
+  assert.equal(calls[0].maxStops, 1);
+  assert.equal(result.diagnostics.selectionPolicy, "first_sensible_after_75pct");
+  assert.equal(result.diagnostics.graphOnlySelection, true);
+  assert.equal(result.diagnostics.stationAlternativesLimit, 6);
 });
 
 test("cross-region one-stop window preserves every seam minimum through the returned pump", async () => {

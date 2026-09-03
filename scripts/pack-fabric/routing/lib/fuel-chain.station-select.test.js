@@ -352,7 +352,7 @@ test("forward progress outranks an early Clean-quality pump", async () => {
 
 test("Clean rejects a full-tank lateral Gulf-class pump in favor of a corridor pump", () => {
   assert.equal(typeof FUEL_CHAIN_SERVICE_VERSION, "string");
-  assert.match(FUEL_CHAIN_SERVICE_VERSION, /foundation-route-fuel/);
+  assert.match(FUEL_CHAIN_SERVICE_VERSION, /three-quarter-first-pump/);
   // Halifax-ish → Tatamagouche-ish geometry: Wallace Gulf is nearly a full tank
   // sideways; Truro sits on the corridor with a shorter complete chain.
   const start = { lat: 44.764823, lon: -63.340271 };
@@ -438,21 +438,22 @@ test("Nova Scotia regression demotes the northwest overshoot beyond the rider wa
   assert.ok(!ranked.some((row) => row.station.id === "grotesque-overshoot"));
 });
 
-test("tank commit band watches at half range and prefers the 70 percent zone", () => {
-  assert.equal(tankCommitBand(225_000, 450_000), 1);
+test("fuel selection opens at three quarters of usable range", () => {
+  assert.equal(tankCommitBand(225_000, 450_000), 2);
+  assert.equal(tankCommitBand(337_500, 450_000), 0);
   assert.equal(tankCommitBand(360_000, 450_000), 0);
   assert.equal(tankCommitBand(200_000, 450_000), 2);
   assert.equal(tankCommitBand(449_800, 450_000), 0);
-  assert.equal(tankCommitBand(40_000, 100_000, 140_000), 1);
-  assert.equal(tankCommitBand(60_000, 100_000, 140_000), 0);
+  assert.equal(tankCommitBand(40_000, 100_000, 140_000), 2);
+  assert.equal(tankCommitBand(65_000, 100_000, 140_000), 0);
   assert.equal(tankCommitBand(20_000, 100_000, 140_000), 2);
 });
 
-test("search-open candidates preserve progress and early pumps remain fallback", () => {
+test("the first sensible pump in the final quarter wins and early pumps remain fallback", () => {
   const start = { lat: 45, lon: 0 };
   const destination = { lat: 45, lon: 5 };
   const comfort = {
-    station: { id: "comfort" },
+    station: { id: "early-fallback" },
     location: { lat: 45, lon: 1.2 },
     graphMeters: 280_000,
     remainingGraphMeters: 200_000
@@ -472,13 +473,34 @@ test("search-open candidates preserve progress and early pumps remain fallback",
   const ranked = rankForwardFuel(
     [wall, early, comfort], start, destination, 450_000, new Set(), "dirt"
   );
-  assert.deepEqual(ranked.map((row) => row.station.id), ["wall", "comfort", "early"]);
+  assert.deepEqual(ranked.map((row) => row.station.id), ["wall", "early-fallback", "early"]);
 
   const desperationOnly = rankForwardFuel(
     [wall, { ...wall, station: { id: "wall-closer" }, location: { lat: 45, lon: 1.8 }, graphMeters: 400_000 }],
     start, destination, 450_000, new Set(), "balanced"
   );
   assert.equal(desperationOnly[0].station.id, "wall-closer");
+});
+
+test("two sensible final-quarter pumps commit the nearer one", () => {
+  const start = { lat: 45, lon: 0 };
+  const destination = { lat: 45, lon: 6 };
+  const first = {
+    station: { id: "first-after-threshold" },
+    location: { lat: 45.01, lon: 3.1 },
+    graphMeters: 340_000,
+    remainingGraphMeters: 250_000
+  };
+  const later = {
+    station: { id: "later-in-window" },
+    location: { lat: 45, lon: 3.5 },
+    graphMeters: 390_000,
+    remainingGraphMeters: 200_000
+  };
+  const ranked = rankForwardFuel(
+    [later, first], start, destination, 450_000, new Set(), "dirt"
+  );
+  assert.equal(ranked[0].station.id, "first-after-threshold");
 });
 
 test("a complete one-stop chain beats a three-stop chain", () => {

@@ -11,6 +11,13 @@ private enum FuelAdvisoryIssue {
         case .unknown: "unknown"
         }
     }
+
+    func riderMessage(hasConfirmedPump: Bool) -> String? {
+        guard case .unknown = self else { return nil }
+        return hasConfirmedPump
+            ? "Fuel coverage after the last confirmed stop could not be verified. Route kept—carry extra fuel or adjust this section."
+            : "Fuel coverage on this leg could not be verified. Route kept—carry extra fuel or adjust this section."
+    }
 }
 
 struct FuelPlanningProgressWatchdog {
@@ -1029,12 +1036,22 @@ final class ItineraryBuilder {
                     break
                 }
 
+                // A cross-province request deliberately advances one real
+                // pump at a time. The regional service selects that anchor
+                // from graph reachability, this client proves the requested
+                // riding profile to it, and the next pump receives a fresh
+                // planning window. Regional seams are never fuel resets.
+                let crossesProvinceBoundary = GraphPackStore.endpointsCrossProvince([
+                    current.locationCoordinate,
+                    riderDestination.coordinate.locationCoordinate
+                ])
+
                 // A multi-stop response is only safe when every generated hop
-                // uses the same riding profile. Per-hop overrides are rider
-                // intent, so keep those builds one hop at a time while still
-                // using the live planner's route-first and cache path.
+                // uses the same riding profile and one regional runtime can
+                // return all of the corresponding route geometry.
                 let canConsumeCombinedWindow = source.supportsCombinedFuelPlanning
                     && riderLeg.hopOverrides.isEmpty
+                    && !crossesProvinceBoundary
                 let chain: FuelChainResponse
                 let requestBudgetMs = min(
                     Self.liveFuelWindowBudgetMs,
@@ -1049,6 +1066,9 @@ final class ItineraryBuilder {
                         + "used=\(Int(fuelUsed))m remaining=\(Int(remaining))m "
                         + "forceStop=\(forceFuelStop ? 1 : 0) "
                         + "requiredStation=\(requiredStationID ?? "-") "
+                        + "windowAnchor=\(builtLegs.last?.endsAtFuelStop == nil ? "rider" : "pump") "
+                        + "crossProvince=\(crossesProvinceBoundary ? 1 : 0) "
+                        + "windowStops=\(canConsumeCombinedWindow ? 4 : 1) "
                         + "budgetMs=\(requestBudgetMs)"
                 )
                 do {
@@ -1075,7 +1095,7 @@ final class ItineraryBuilder {
                         allowPartialWindow: true,
                         windowTimeBudgetMs: requestBudgetMs,
                         requiredFirstStationId: requiredStationID,
-                        forwardFeeler: false,
+                        forwardFeeler: crossesProvinceBoundary,
                         routeFirstPlan: source.supportsCombinedFuelPlanning,
                         ensureDestinationFuelEscape: source.supportsCombinedFuelPlanning
                             && index == itinerary.legs.count - 1
@@ -1429,12 +1449,15 @@ final class ItineraryBuilder {
         var firstFrom = current
         var firstPrefix = builtLegPrefix
         var fuelUsed = fuelUsedAtCurrent
+        let confirmedPumpCount = builtLegPrefix.filter { $0.endsAtFuelStop != nil }.count
+        let advisoryMessage = issue.riderMessage(hasConfirmedPump: confirmedPumpCount > 0)
 
         RoutingDebugLog.shared.event(
             "fuel advisory fallback begin gen=\(itinerary.generation) "
                 + "fromLeg=\(startIndex) throughLeg=\(max(startIndex, endIndex - 1)) "
-                + "issue=\(issue.logValue) preservedPumps="
-                + "\(builtLegPrefix.filter { $0.endsAtFuelStop != nil }.count)"
+                + "issue=\(issue.logValue) preservedPumps=\(confirmedPumpCount) "
+                + "boundary=\(String(format: "%.5f,%.5f", current.latitude, current.longitude)) "
+                + "statusScope=unverified_tail"
         )
 
         for index in startIndex..<endIndex {
@@ -1500,8 +1523,9 @@ final class ItineraryBuilder {
                             toCoordinate: destination
                         )
                         status = .gap(gap)
-                    case .unknown(let message):
-                        status = .fuelUnknown(message)
+                    case .unknown:
+                        status = .fuelUnknown(advisoryMessage ??
+                            "Fuel coverage could not be verified. Route kept—carry extra fuel.")
                     }
                 } else {
                     status = .fuelUnknown(
@@ -1518,7 +1542,8 @@ final class ItineraryBuilder {
                 RoutingDebugLog.shared.event(
                     "fuel advisory fallback committed gen=\(itinerary.generation) "
                         + "riderLeg=\(riderLeg.id) issue=\(issue.logValue) "
-                        + "meters=\(Int(meters)) remaining=\(Int(max(0, fuel.usableMeters - fuelUsed)))"
+                        + "meters=\(Int(meters)) remaining=\(Int(max(0, fuel.usableMeters - fuelUsed))) "
+                        + "statusScope=unverified_tail"
                 )
                 onProgress(committed)
                 firstFrom = destination

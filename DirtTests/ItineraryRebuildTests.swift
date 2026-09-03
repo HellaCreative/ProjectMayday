@@ -203,20 +203,20 @@ struct HopSearchPolicyTests {
         #expect(HopSearchPolicy.pass2PopCap < 8_000_000)
         #expect(HopSearchPolicy.fuelMaxTank == 1.0)
         #expect(HopSearchPolicy.fuelWaypointSnapMeters == 150)
-        #expect(HopSearchPolicy.fuelMinTank == 0.50)
-        #expect(HopSearchPolicy.fuelPreferTank == 0.70)
-        #expect(HopSearchPolicy.fuelComfortLo == 0.50)
-        #expect(HopSearchPolicy.fuelComfortHi == 0.70)
-        #expect(HopSearchPolicy.tankCommitBand(graphMeters: 315_000, tankMeters: 450_000) == 0)
-        #expect(HopSearchPolicy.tankCommitBand(graphMeters: 280_000, tankMeters: 450_000) == 1)
+        #expect(HopSearchPolicy.fuelMinTank == 0.75)
+        #expect(HopSearchPolicy.fuelPreferTank == 0.75)
+        #expect(HopSearchPolicy.fuelComfortLo == 0.75)
+        #expect(HopSearchPolicy.fuelComfortHi == 0.75)
+        #expect(HopSearchPolicy.tankCommitBand(graphMeters: 337_500, tankMeters: 450_000) == 0)
+        #expect(HopSearchPolicy.tankCommitBand(graphMeters: 280_000, tankMeters: 450_000) == 2)
         #expect(HopSearchPolicy.tankCommitBand(graphMeters: 200_000, tankMeters: 450_000) == 2)
         #expect(HopSearchPolicy.tankCommitBand(graphMeters: 449_800, tankMeters: 450_000) == 0)
         #expect(HopSearchPolicy.tankCommitBand(
-            graphMeters: 60_000, tankMeters: 100_000, usableRangeMeters: 140_000
+            graphMeters: 65_000, tankMeters: 100_000, usableRangeMeters: 140_000
         ) == 0)
         #expect(HopSearchPolicy.tankCommitBand(
             graphMeters: 40_000, tankMeters: 100_000, usableRangeMeters: 140_000
-        ) == 1)
+        ) == 2)
         #expect(HopSearchPolicy.tankCommitBand(
             graphMeters: 20_000, tankMeters: 100_000, usableRangeMeters: 140_000
         ) == 2)

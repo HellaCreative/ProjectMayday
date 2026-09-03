@@ -188,11 +188,17 @@ final class RoutePlannerModel {
         for (riderLegIndex, riderLeg) in itinerary.legs.enumerated() {
             let matches = built.legs.enumerated().filter { $0.element.riderLegID == riderLeg.id }
             var departure = riderLeg.from.uuidString
-            for (builtLegIndex, builtLeg) in matches {
+            let riderLegStatus = built.riderLegStatus[riderLeg.id] ?? .pending
+            for (matchIndex, match) in matches.enumerated() {
+                let (builtLegIndex, builtLeg) = match
                 result.append(Stage(
                     builtLeg: builtLeg,
                     riderLeg: riderLeg,
-                    status: built.riderLegStatus[riderLeg.id] ?? .pending,
+                    status: Self.projectedStatus(
+                        riderLegStatus,
+                        builtStageIndex: matchIndex,
+                        builtStageCount: matches.count
+                    ),
                     isFuelExpanded: (counts[riderLeg.id] ?? 0) > 1,
                     departureFuelStopID: departure,
                     builtLegIndex: builtLegIndex
@@ -212,6 +218,18 @@ final class RoutePlannerModel {
             }
         }
         return result
+    }
+
+    /// A fuel warning belongs to the first unverified section, not to every
+    /// pump hop generated inside its parent rider leg. Earlier built stages
+    /// remain independently usable and must keep showing their route metrics.
+    static func projectedStatus(
+        _ riderLegStatus: LegStatus,
+        builtStageIndex: Int,
+        builtStageCount: Int
+    ) -> LegStatus {
+        guard builtStageIndex == builtStageCount - 1 else { return .built }
+        return riderLegStatus
     }
 
     /// When true, `profile` / `allowUnknown` didSet skips `reroute()`.
@@ -3739,6 +3757,7 @@ final class RoutePlannerModel {
         let normalized = message.lowercased()
         if normalized.contains("fuel planning")
             || normalized.contains("fuel continuity")
+            || normalized.contains("fuel coverage")
             || normalized.contains("fuel chain") {
             return "Route built. Fuel safety could not be verified for one or more legs."
         }

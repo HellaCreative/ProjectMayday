@@ -128,6 +128,21 @@ struct ItineraryBuilderTests {
         #expect(source.fuelChainRequests[0].fuel.ensureDestinationFuelEscape == true)
     }
 
+    @Test func crossProvinceFuelPlanAdvancesOnePumpPerFreshWindow() async throws {
+        let start = RouteCoordinate(longitude: -63.340241, latitude: 44.764845)
+        let destination = RouteCoordinate(longitude: -76.493059, latitude: 44.269080)
+        let source = FakeRoutingSource(name: "live")
+        source.supportsCombinedFuelPlanning = true
+        source.distances[key(start, destination)] = 250_000
+
+        let result = await build([start, destination], source: source, usable: 289_000)
+
+        #expect(result.legs.count == 1)
+        #expect(source.fuelChainRequests.count == 1)
+        #expect(source.fuelChainRequests[0].fuel.windowMaxStops == 1)
+        #expect(source.fuelChainRequests[0].fuel.forwardFeeler == true)
+    }
+
     @Test func combinedLiveMultiLegPlanDoesNotSpeculateOnTheNextLeg() async throws {
         let points = [point(0), point(1), point(2)]
         let source = FakeRoutingSource(name: "live")
@@ -319,7 +334,7 @@ struct ItineraryBuilderTests {
         #expect(source.routeRequests.count == 1)
         #expect(source.routeRequests.first?.options?.maxPathMeters == nil)
         if case .fuelUnknown(let message) = result.riderLegStatus[itinerary.legs[0].id] {
-            #expect(message.contains("timed out"))
+            #expect(message == "Fuel coverage on this leg could not be verified. Route kept—carry extra fuel or adjust this section.")
         } else {
             Issue.record("Expected an honest unknown-fuel state")
         }
@@ -416,6 +431,43 @@ struct ItineraryBuilderTests {
         #expect(fuelMilestones.contains("Creating fuel stop 3"))
         #expect(fuelMilestones.contains("Fuel stop 3 added"))
         #expect(fuelMilestones.contains("Checking range after fuel stop 3"))
+    }
+
+    @Test func timeoutAfterThreePumpsKeepsThemAndWarnsOnlyAboutTheTail() async throws {
+        let points = [point(0), point(1)]
+        let stops = [point(0.25), point(0.5), point(0.75)]
+        let source = FakeRoutingSource(name: "live")
+        let hopPoints = [points[0]] + stops + [points[1]]
+        for index in 0..<(hopPoints.count - 1) {
+            source.distances[key(hopPoints[index], hopPoints[index + 1])] = 112_500
+        }
+        source.fuelStopResponses = stops.enumerated().map { index, stop in
+            [fuelStop("fuel-\(index + 1)", at: stop)]
+        }
+        source.fuelWindowCompleteResponses = [false, false, false]
+        source.fuelChainErrorAfterPlanCount = 3
+        source.fuelChainError = RoutingError.server("Fuel planning timed out")
+        let itinerary = makeItinerary(points)
+
+        let result = await ItineraryBuilder().build(
+            itinerary, from: 0, reuse: nil,
+            fuel: FuelRangePrefs.Snapshot(
+                tankMeters: 150_000,
+                usableMeters: 135_000, reservePercent: 10
+            ),
+            source: .fixed(source), onProgress: { _ in }
+        )
+
+        #expect(result.legs.count == 4)
+        #expect(result.legs.compactMap(\.endsAtFuelStop?.stationID)
+            == ["fuel-1", "fuel-2", "fuel-3"])
+        #expect(result.legs.last?.fromCoordinate == stops[2])
+        #expect(result.legs.last?.toCoordinate == points[1])
+        if case .fuelUnknown(let message) = result.riderLegStatus[itinerary.legs[0].id] {
+            #expect(message == "Fuel coverage after the last confirmed stop could not be verified. Route kept—carry extra fuel or adjust this section.")
+        } else {
+            Issue.record("Expected the completed tail to retain an unverified-fuel warning")
+        }
     }
 
     @Test func finalFuelLegReceivesRegionalGraphMinimaForSeamBudgeting() async throws {
@@ -1163,6 +1215,8 @@ private final class FakeRoutingSource: RoutingSource {
     var gapWhenFirstLegMaxBelow: [String: Double] = [:]
     var failKey: String?
     var fuelChainError: Error?
+    var fuelChainErrorAfterPlanCount: Int?
+    var fuelChainPlanCount = 0
     var suspendNextRoute = false
     var pendingRouteContinuation: CheckedContinuation<Void, Never>?
 
@@ -1185,7 +1239,6 @@ private final class FakeRoutingSource: RoutingSource {
 
     func fuelChain(_ req: FuelChainRequest) async throws -> FuelChainResponse {
         fuelChainRequests.append(req)
-        if let fuelChainError { throw fuelChainError }
         let pair = (
             RouteCoordinate(longitude: req.locations[0].longitude, latitude: req.locations[0].latitude),
             RouteCoordinate(longitude: req.locations[1].longitude, latitude: req.locations[1].latitude)
@@ -1203,6 +1256,13 @@ private final class FakeRoutingSource: RoutingSource {
                 firstReachableStationMeters: scripted ?? defaultDestinationEscape
             )
         }
+        fuelChainPlanCount += 1
+        if let limit = fuelChainErrorAfterPlanCount,
+           fuelChainPlanCount > limit,
+           let fuelChainError {
+            throw fuelChainError
+        }
+        if fuelChainErrorAfterPlanCount == nil, let fuelChainError { throw fuelChainError }
         if let threshold = gapWhenFirstLegMaxBelow[key(pair.0, pair.1)],
            req.fuel.firstLegMaxMeters < threshold {
             return FuelChainResponse(

@@ -501,11 +501,28 @@ struct RoutePlannerModelItineraryTests {
         #expect(model.unacknowledgedFuelGaps.isEmpty)
         #expect(model.stages.count == 1)
         #expect(model.stages[0].error == nil)
-        #expect(model.stages[0].fuelUnknown?.contains("Routing service timed out") == true)
+        #expect(model.stages[0].fuelUnknown == "Fuel coverage on this leg could not be verified. Route kept—carry extra fuel or adjust this section.")
         #expect(model.stages[0].response != nil)
         #expect(model.errorMessage == nil)
         #expect(model.toast == "Route built. Fuel safety could not be verified for one or more legs.")
         #expect(model.hasRoute)
+    }
+
+    @Test func fuelWarningProjectsOnlyOntoUnverifiedTailStage() {
+        let warning = LegStatus.fuelUnknown("Fuel coverage could not be verified")
+
+        #expect(RoutePlannerModel.projectedStatus(
+            warning, builtStageIndex: 0, builtStageCount: 4
+        ) == .built)
+        #expect(RoutePlannerModel.projectedStatus(
+            warning, builtStageIndex: 1, builtStageCount: 4
+        ) == .built)
+        #expect(RoutePlannerModel.projectedStatus(
+            warning, builtStageIndex: 2, builtStageCount: 4
+        ) == .built)
+        #expect(RoutePlannerModel.projectedStatus(
+            warning, builtStageIndex: 3, builtStageCount: 4
+        ) == warning)
     }
 }
 

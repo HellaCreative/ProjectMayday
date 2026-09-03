@@ -22,23 +22,23 @@ nonisolated enum HopSearchPolicy {
     static let balancedBuckets: Int = 20
     /// Numbered waypoint on a packed pump. Lockstep: fuel-chain.js WAYPOINT_FUEL_SNAP_METERS.
     static let fuelWaypointSnapMeters: Double = 150
-    /// Begin watching for sensible forward pumps after half of usable fuel is consumed.
-    static let fuelComfortLo: Double = 0.50
-    /// Prefer a sensible pump after 70% consumption when stop count and route
-    /// coherence are otherwise equal. This is not a mandatory stop distance.
-    static let fuelComfortHi: Double = 0.70
+    /// Preserve the first three quarters of usable fuel for the requested ride.
+    static let fuelComfortLo: Double = 0.75
+    /// At 75%, take the first sensible forward pump instead of searching for
+    /// marginally more progress. This is not a mandatory stop distance.
+    static let fuelComfortHi: Double = 0.75
     /// A generated stop must make a useful hop and leave a real final leg.
     /// Lockstep: fuel-chain.js MIN_FORWARD_PROGRESS_M / MIN_DESTINATION_FUEL_CLEARANCE_M.
     static let fuelMinimumForwardMeters: Double = 8_000
     static let fuelDestinationClearanceMeters: Double = 5_000
     /// Too-early below this. Dijkstra reachability still uses fuelMaxTank = 1.0.
-    static let fuelMinTank: Double = 0.50
-    /// Preferred refuelling zone. Candidate discovery still opens at 50%.
-    static let fuelPreferTank: Double = 0.70
+    static let fuelMinTank: Double = 0.75
+    /// Preferred refuelling zone begins with the final quarter of usable range.
+    static let fuelPreferTank: Double = 0.75
     /// The rider-entered range is already the safety limit; do not silently shave 5%.
     static let fuelMaxTank: Double = 1.0
 
-    /// 0 = preferred zone (70%+ consumed), 1 = watched zone (50–70%),
+    /// 0 = selection zone (75%+ consumed), 1 is retained for compatibility,
     /// 2 = early sparse-corridor fallback.
     /// Reachability still uses the full reserve-adjusted usable range.
     static func tankCommitBand(
