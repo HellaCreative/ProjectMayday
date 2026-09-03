@@ -730,7 +730,9 @@ bytes, route-profile objectives, fuel priorities, or rider waypoint semantics:
    but cannot finish its 50/50 preference refinement before the deadline, it
    returns that bounded connection with the explicit
    `balanced_distance_fallback` diagnostic and warning. A cancelled request
-   never uses this fallback;
+   never uses this fallback. The province-scale distance proof initializes
+   only graph nodes it actually visits instead of clearing every Ontario- or
+   Quebec-sized work array before the first search step;
 5. dense pump regions use a forward-oriented matching working set capped at
    768 candidates per planning origin after at least 48 pumps have matched.
    Sparse regions remain uncapped. A retained candidate still has to pass the

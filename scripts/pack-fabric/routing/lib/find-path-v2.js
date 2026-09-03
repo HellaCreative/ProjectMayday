@@ -1405,17 +1405,25 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
     });
   }
 
+  // Distance A* usually touches only a small fraction of a province-sized
+  // graph. Clearing every full-size work array before the first pop cost
+  // several seconds on Ontario Vercel workers. A seen bitmap gives untouched
+  // distance nodes their logical Infinity/-1 defaults without faulting every
+  // page into memory. Profile/resource searches keep their established dense
+  // array behaviour.
+  const sparseDistanceState = distanceAStar;
+  const seen = sparseDistanceState ? new Uint8Array(total) : null;
   const dist = new Float64Array(total);
-  dist.fill(Infinity);
+  if (!sparseDistanceState) dist.fill(Infinity);
   const peakProgress = new Float64Array(total);
-  peakProgress.fill(-Infinity);
+  if (!sparseDistanceState) peakProgress.fill(-Infinity);
   const prev = new Int32Array(total);
-  prev.fill(-1);
+  if (!sparseDistanceState) prev.fill(-1);
   const prevKind = new Uint8Array(total);
   const prevData = new Int32Array(total);
   const prevForward = new Uint8Array(total);
   const pathMeters = new Float64Array(total);
-  pathMeters.fill(Infinity);
+  if (!sparseDistanceState) pathMeters.fill(Infinity);
   const slots = new Uint8Array(total);
   const heap = new MinHeap();
 
@@ -1436,7 +1444,15 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
     return -1;
   }
 
+  const knownDistance = (node) =>
+    !sparseDistanceState || seen[node] === 1 ? dist[node] : Infinity;
+  const knownPreviousEdge = (node) =>
+    !sparseDistanceState || seen[node] === 1 ? prevData[node] : -1;
+
+  if (seen) seen[startNode] = 1;
   dist[startNode] = 0;
+  prev[startNode] = -1;
+  if (sparseDistanceState) prevData[startNode] = -1;
   pathMeters[startNode] = 0;
   peakProgress[startNode] = 0;
   const queuePriority = (node, pathCost) => {
@@ -1629,9 +1645,9 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
         const dirt = isDirtSurface(surfaceName, road);
         let action = considerRelax(
           cost,
-          dist[to],
+          knownDistance(to),
           ei,
-          prevData[to],
+          knownPreviousEdge(to),
           to,
           sessionSeed,
           varietyOn,
@@ -1646,6 +1662,7 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
           prevData[to] = ei;
           prevForward[to] = edgeFrom[ei] === cur.node ? 1 : 0;
           if (shouldPush(action)) {
+            if (seen) seen[to] = 1;
             dist[to] = cost;
             pathMeters[to] = newMeters;
             peakProgress[to] = newPeakProgress;
@@ -1668,9 +1685,9 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
             const newPeakProgress = peakProgress[cur.node];
             let action = considerRelax(
               cost,
-              dist[to],
+              knownDistance(to),
               -1,
-              prevData[to],
+              knownPreviousEdge(to),
               to,
               sessionSeed,
               false,
@@ -1685,6 +1702,7 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
               prevData[to] = -1;
               prevForward[to] = 1;
               if (shouldPush(action)) {
+                if (seen) seen[to] = 1;
                 dist[to] = cost;
                 pathMeters[to] = newMeters;
                 peakProgress[to] = newPeakProgress;
@@ -1775,9 +1793,9 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
         const cost = curPathCost + step;
         let action = considerRelax(
           cost,
-          dist[item.to],
+          knownDistance(item.to),
           v.ei,
-          prevData[item.to],
+          knownPreviousEdge(item.to),
           item.to,
           sessionSeed,
           varietyOn,
@@ -1792,6 +1810,7 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
           prevData[item.to] = item.id;
           prevForward[item.to] = item.forward ? 1 : 0;
           if (shouldPush(action)) {
+            if (seen) seen[item.to] = 1;
             dist[item.to] = cost;
             pathMeters[item.to] = newMeters;
             peakProgress[item.to] = newPeakProgress;
@@ -1806,7 +1825,7 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
     }
   }
 
-  if (!Number.isFinite(dist[endNode])) {
+  if (!Number.isFinite(knownDistance(endNode))) {
     if (searchOpts.diagnostics) {
       searchOpts.diagnostics.outcome = abort === "completed" ? "noPath" : abort;
       searchOpts.diagnostics.pops = pops;
