@@ -4,7 +4,7 @@ import Testing
 
 @MainActor
 struct FuelPlanningProgressWatchdogTests {
-    @Test func regularForwardProgressOutlivesTheOriginalWindow() {
+    @Test func regularForwardProgressRenewsTheInactivityWindow() {
         let start = Date(timeIntervalSinceReferenceDate: 1_000)
         var watchdog = FuelPlanningProgressWatchdog(now: start)
 
@@ -12,15 +12,15 @@ struct FuelPlanningProgressWatchdogTests {
         watchdog.recordProgress(at: start.addingTimeInterval(24))
 
         #expect(!watchdog.isExpired(at: start.addingTimeInterval(30)))
-        #expect(watchdog.remainingMilliseconds(at: start.addingTimeInterval(30)) == 14_000)
+        #expect(watchdog.remainingMilliseconds(at: start.addingTimeInterval(30)) == 22_000)
     }
 
-    @Test func twentySecondsWithoutForwardProgressExpires() {
+    @Test func twentyEightSecondsWithoutForwardProgressExpires() {
         let start = Date(timeIntervalSinceReferenceDate: 2_000)
         let watchdog = FuelPlanningProgressWatchdog(now: start)
 
-        #expect(!watchdog.isExpired(at: start.addingTimeInterval(19.999)))
-        #expect(watchdog.isExpired(at: start.addingTimeInterval(20)))
+        #expect(!watchdog.isExpired(at: start.addingTimeInterval(27.999)))
+        #expect(watchdog.isExpired(at: start.addingTimeInterval(28)))
     }
 
     @Test func newRiderBuildReceivesAnIndependentWindow() {
@@ -28,9 +28,10 @@ struct FuelPlanningProgressWatchdogTests {
         let oldBuild = FuelPlanningProgressWatchdog(now: start)
         let newBuild = FuelPlanningProgressWatchdog(now: start.addingTimeInterval(25))
 
-        #expect(oldBuild.isExpired(at: start.addingTimeInterval(25)))
+        #expect(!oldBuild.isExpired(at: start.addingTimeInterval(25)))
+        #expect(oldBuild.isExpired(at: start.addingTimeInterval(28)))
         #expect(!newBuild.isExpired(at: start.addingTimeInterval(25)))
-        #expect(newBuild.remainingMilliseconds(at: start.addingTimeInterval(25)) == 20_000)
+        #expect(newBuild.remainingMilliseconds(at: start.addingTimeInterval(25)) == 28_000)
     }
 }
 
@@ -344,7 +345,7 @@ struct ItineraryBuilderTests {
         #expect((plans.first?.fuel.windowMaxStops ?? 0) >= (plans.last?.fuel.windowMaxStops ?? 0))
         #expect(plans.allSatisfy { $0.fuel.allowPartialWindow == true })
         #expect(plans.allSatisfy { $0.fuel.forwardFeeler != true })
-        #expect(plans.allSatisfy { $0.fuel.windowTimeBudgetMs == 15_000 })
+        #expect(plans.allSatisfy { $0.fuel.windowTimeBudgetMs == 20_000 })
         #expect(plans[1].locations[0].longitude == stops[0].longitude)
         #expect(plans[2].locations[0].longitude == stops[1].longitude)
         #expect(plans[3].locations[0].longitude == stops[2].longitude)

@@ -5,7 +5,7 @@ struct FuelPlanningProgressWatchdog {
     let inactivityInterval: TimeInterval
     private(set) var deadline: Date
 
-    init(inactivityInterval: TimeInterval = 20, now: Date = Date()) {
+    init(inactivityInterval: TimeInterval = 28, now: Date = Date()) {
         self.inactivityInterval = inactivityInterval
         deadline = now.addingTimeInterval(inactivityInterval)
     }
@@ -25,6 +25,10 @@ struct FuelPlanningProgressWatchdog {
 
 @MainActor
 final class ItineraryBuilder {
+    /// Hard live window, not a delay target. Small rides still return as soon
+    /// as proved; dense Ontario/Quebec requests get enough room to prove both
+    /// sides of one pump without reaching Vercel's platform timeout.
+    private static let liveFuelWindowBudgetMs = 20_000
     private var currentGeneration: Int?
 
     func setCurrentGeneration(_ generation: Int) {
@@ -819,7 +823,7 @@ final class ItineraryBuilder {
                 }
                 guard !progressWatchdog.isExpired() else {
                     statuses[riderLeg.id] = .fuelUnknown(
-                        "Fuel planning made no forward progress for 20 seconds."
+                        "Fuel planning made no forward progress for 28 seconds."
                     )
                     RoutingDebugLog.shared.event(
                         "fuel progress timeout gen=\(itinerary.generation) "
@@ -947,7 +951,7 @@ final class ItineraryBuilder {
                     && riderLeg.hopOverrides.isEmpty
                 let chain: FuelChainResponse
                 let requestBudgetMs = min(
-                    15_000,
+                    Self.liveFuelWindowBudgetMs,
                     max(100, progressWatchdog.remainingMilliseconds())
                 )
                 RoutingDebugLog.shared.event(
@@ -1552,7 +1556,7 @@ final class ItineraryBuilder {
                         ? min(4, max(1, remainingStops + 1))
                         : nil,
                     allowPartialWindow: usesWindows,
-                    windowTimeBudgetMs: min(15_000, remainingBudgetMs),
+                    windowTimeBudgetMs: min(Self.liveFuelWindowBudgetMs, remainingBudgetMs),
                     requiredFirstStationId: requiredStationID
                 ))
             } catch {

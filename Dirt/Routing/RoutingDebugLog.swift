@@ -102,7 +102,10 @@ final class RoutingDebugLog {
         }.joined(separator: ",")
         event(
             "ROUTE diag\(request) buildMs=\(d?.buildMs.map(String.init) ?? "-") "
+                + "snapMs=\(d?.snapMs.map(String.init) ?? "-") "
                 + "searchMs=\(d?.searchMs.map(String.init) ?? response.debug?.searchMs.map(String.init) ?? "-") "
+                + "postMs=\(d?.postprocessMs.map(String.init) ?? "-") "
+                + "deadlineRemainingMs=\(d?.deadlineRemainingMs.map(String.init) ?? "-") "
                 + "pops=\(d?.pops.map(String.init) ?? response.debug?.pops.map(String.init) ?? "-") "
                 + "requestedProfile=\(d?.requestedProfile ?? "-") "
                 + "effectiveProfile=\(d?.effectiveProfile ?? "-") "
@@ -124,7 +127,14 @@ final class RoutingDebugLog {
         let d = response.diagnostics
         let request = requestID.map { " request=\($0)" } ?? ""
         let slowRoutes = (d?.slowestProfileRoutes ?? []).map { attempt in
-            "\(attempt.candidateId ?? "-"):\(attempt.elapsedMs.map(String.init) ?? "-")ms/\(attempt.status ?? "-")"
+            "\(attempt.candidateId ?? "-"):\(attempt.elapsedMs.map(String.init) ?? "-")ms/"
+                + "\(attempt.status ?? "-")/search=\(attempt.searchMs.map(String.init) ?? "-")/"
+                + "snap=\(attempt.snapMs.map(String.init) ?? "-")/"
+                + "post=\(attempt.postprocessMs.map(String.init) ?? "-")/"
+                + "pops=\(attempt.pops.map(String.init) ?? "-")/"
+                + "deadline=\(attempt.deadlineRemainingAtStartMs.map(String.init) ?? "-")→"
+                + "\(attempt.deadlineRemainingAtEndMs.map(String.init) ?? "-")/"
+                + "fallbacks=[\((attempt.fallbacks ?? []).joined(separator: ","))]"
         }.joined(separator: ",")
         let targetPasses = (d?.targetPasses ?? []).prefix(4).map { pass in
             "\(pass.origin ?? "-"):\(pass.pool.map(String.init) ?? "-")/"
@@ -137,12 +147,14 @@ final class RoutingDebugLog {
         }.joined(separator: ",")
         let candidateTrace = (response.stationCandidates ?? []).prefix(6).map { candidate in
             "#\(candidate.rank.map(String.init) ?? "-"):\(candidate.id):"
+                + "budget=\(candidate.approachBudgetMs.map(String.init) ?? "-")ms/"
                 + "\(candidate.approachElapsedMs.map(String.init) ?? "-")ms/"
                 + "\(candidate.approachStatus ?? "-")/"
                 + "\(candidate.approachSearchOutcome ?? "-")/"
                 + "\(candidate.continuationElapsedMs.map(String.init) ?? "-")ms/"
                 + "\(candidate.continuationStatus ?? "-")/"
                 + "\(candidate.continuationStrategy ?? "-")/"
+                + "remaining=\(candidate.candidateDeadlineRemainingMs.map(String.init) ?? "-")ms/"
                 + "\(candidate.rejectedReason ?? "kept")"
         }.joined(separator: ",")
         event(
@@ -177,6 +189,14 @@ final class RoutingDebugLog {
                 + "directLowerBound=\(d?.directLowerBoundMeters.map(String.init) ?? "-")m "
                 + "firstLegMax=\(d?.firstLegMaxMeters.map(String.init) ?? "-")m "
                 + "planningDataLoadMs=\(d?.planningDataLoadMs.map(String.init) ?? "-") "
+                + "routeFirstBuildMs=\(d?.routeFirstBuildMs.map(String.init) ?? "-") "
+                + "routeFirstSnapMs=\(d?.routeFirstSnapMs.map(String.init) ?? "-") "
+                + "routeFirstSearchMs=\(d?.routeFirstSearchMs.map(String.init) ?? "-") "
+                + "routeFirstPostMs=\(d?.routeFirstPostprocessMs.map(String.init) ?? "-") "
+                + "routeFirstPops=\(d?.routeFirstPops.map(String.init) ?? "-") "
+                + "routeFirstOutcome=\(d?.routeFirstSearchOutcome ?? "-") "
+                + "routeFirstFallbacks=[\((d?.routeFirstFallbacks ?? []).joined(separator: ","))] "
+                + "routeFirstAfterLoadMs=\(d?.routeFirstDeadlineRemainingAfterLoadMs.map(String.init) ?? "-") "
                 + "endpointResolutionMs=\(d?.endpointResolutionMs.map(String.init) ?? "-") "
                 + "endpointProbes=\(d?.endpointProbeCount.map(String.init) ?? "-") "
                 + "endpointSources=\(d?.endpointResolutionSources ?? "-") "

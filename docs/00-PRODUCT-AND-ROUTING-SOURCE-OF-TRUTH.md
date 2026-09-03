@@ -765,7 +765,14 @@ bytes, route-profile objectives, fuel priorities, or rider waypoint semantics:
    When an authoritative admin polygon owns a pin, endpoint resolution accepts
    that ownership without loading the same region merely to disambiguate
    overlapping province/state rectangles. Pins outside or between those
-   polygons still use eligible-road probing.
+   polygons still use eligible-road probing; and
+8. the iOS live-planning window is 20 seconds. This is a maximum, never a
+   minimum delay: a proved short ride returns immediately. For a pump candidate,
+   the approach receives only its allotted portion of the remaining window so
+   it cannot consume the continuation proof's reserved time. A pump is still
+   committed only after both sides are proved. Bounded fuel-route work skips a
+   diagnostic-only full-pack dirt-corridor scan after the route is known; normal
+   route requests retain that diagnostic.
 
 The diagnostic contract now records the route-first budget and outcome,
 profile failure reason/timing/exploration count, pumps physically in range,
@@ -775,14 +782,19 @@ deadline phase, whether route-first shared its request runtime, and whether
 candidate proofs shared that runtime, endpoint-resolution time/source/probe
 count, whether route-first was attempted or safely skipped, the direct-distance
 lower bound, the remaining first-leg range, planning-data load time, and whether
-the request was cancelled.
+the request was cancelled. It also records route-first snap/search/post-process
+timing and exploration count, the deadline remaining before and after each
+candidate route, each candidate's approach allocation, and whether the bounded
+route omitted the diagnostic-only corridor scan. These fields distinguish data
+loading, endpoint matching, graph search, result processing, and exhausted
+continuation time without changing route selection.
 The fixed Ontario
 two-point fuel reproduction now
-returns a safe one-stop chain in about 12.2 seconds locally instead of 53
+returns a safe one-stop chain in about 6.2 seconds locally instead of 53
 seconds. The appended-leg reproduction with only 122.5 km remaining returns a
-proved, resumable pump window in about 15.1 seconds instead of reaching the
+proved, resumable pump window in about 7.4 seconds instead of reaching the
 60-second platform timeout. Target preparation fell from about 14.9 seconds to
-about 2.4 seconds. Exact timings are machine-dependent; the semantic gates are
+milliseconds on the cached reproduction. Exact timings are machine-dependent; the semantic gates are
 the hard deadline, no false no-route/no-fuel result, and no unproved pump.
 
 Android must implement the same semantics before parity is claimed: a hard

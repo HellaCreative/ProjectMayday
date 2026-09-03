@@ -51,7 +51,7 @@ const MIN_STOP_SEPARATION_M = 800;
 const MIN_FORWARD_PROGRESS_M = 8_000;
 const MIN_DESTINATION_FUEL_CLEARANCE_M = 5_000;
 /** Bumped when fuel-selection / ranking contracts change. Clients may assert. */
-const FUEL_CHAIN_SERVICE_VERSION = "2026-09-03.range-gated-one-stop.20";
+const FUEL_CHAIN_SERVICE_VERSION = "2026-09-03.phase-budgeted-fuel-proof.21";
 /** Watch at 50%; prefer sensible equal-stop choices at 70%. Lockstep: HopSearchPolicy.swift. */
 const FUEL_COMFORT_LO = 0.50;
 const FUEL_COMFORT_HI = 0.70;
@@ -73,12 +73,25 @@ const SHORTLIST_MIN_SEPARATION_M = 15_000;
 // every pump in the province. Sparse regions remain uncapped.
 const DENSE_TARGET_MATCH_LIMIT = 192;
 const DENSE_TARGET_MIN_MATCHES = 48;
+// A candidate approach is not useful until the same riding profile also
+// proves the pump-to-destination continuation. Keep a small share of the
+// request alive for that second proof instead of allowing the first route to
+// consume the complete live window.
+const MIN_CONTINUATION_RESERVE_MS = 750;
+const MAX_CONTINUATION_RESERVE_MS = 2_500;
+const CONTINUATION_RESERVE_SHARE = 0.28;
 const CLEAN_MAJOR_ROAD_CLASSES = new Set([
   "motorway", "motorway_link", "trunk", "trunk_link", "primary", "primary_link",
   "freeway", "ramp", "arterial"
 ]);
 
 const MAX_RECENT_EDGE_HISTORY = 256;
+
+function finiteDiagnosticNumber(value) {
+  if (value == null || value === "") return null;
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
 
 function routeFirstBudgetForWindow(windowBudgetMs) {
   const budget = Number(windowBudgetMs);
@@ -88,6 +101,17 @@ function routeFirstBudgetForWindow(windowBudgetMs) {
   // before their legal fallback could complete. Keep a five-second minimum
   // reserve for fuel selection while treating every riding style equally.
   return Math.max(2_000, Math.min(10_000, Math.round(budget * 0.67)));
+}
+
+function candidateApproachDeadlineAtMs(deadlineAtMs, now = Date.now()) {
+  const deadline = Number(deadlineAtMs);
+  if (!Number.isFinite(deadline)) return Infinity;
+  const remaining = Math.max(0, deadline - now);
+  const reserve = Math.min(
+    MAX_CONTINUATION_RESERVE_MS,
+    Math.max(MIN_CONTINUATION_RESERVE_MS, Math.round(remaining * CONTINUATION_RESERVE_SHARE))
+  );
+  return Math.max(now, deadline - reserve);
 }
 
 function appendRecentEdge(history, edgeId) {
@@ -1235,11 +1259,19 @@ async function planFuelChainOnRuntime({
   }
 
   const defaultProfileHop = async ({
-    candidate, from, maxMeters, priorEdgeIds: evaluationHistory, arrivalEdgeId: evaluationArrival
+    candidate,
+    from,
+    maxMeters,
+    priorEdgeIds: evaluationHistory,
+    arrivalEdgeId: evaluationArrival,
+    deadlineAtMs: hopDeadlineAtMs
   }) => {
+    const activeDeadline = Number.isFinite(Number(hopDeadlineAtMs))
+      ? Number(hopDeadlineAtMs)
+      : deadline;
     if (
       (abortSignal && abortSignal.aborted) ||
-      (Number.isFinite(deadline) && Date.now() >= deadline)
+      (Number.isFinite(activeDeadline) && Date.now() >= activeDeadline)
     ) {
       timeBudgetExceeded = true;
       return {
@@ -1271,7 +1303,7 @@ async function planFuelChainOnRuntime({
         internalFuelProbe: true,
         directExtraBudgetMeters: undefined,
         maxPathMeters: maxMeters,
-        deadlineAtMs: deadline,
+        deadlineAtMs: activeDeadline,
         abortSignal
       }
     };
@@ -1295,8 +1327,13 @@ async function planFuelChainOnRuntime({
         const candidateId = options && options.candidate && options.candidate.station
           ? String(options.candidate.station.id || "-")
           : "-";
+        const attemptDeadlineAtMs = Number(options && options.deadlineAtMs);
+        const deadlineRemainingAtStartMs = Number.isFinite(attemptDeadlineAtMs)
+          ? attemptDeadlineAtMs - attemptStarted
+          : null;
         try {
           const response = await profileRoute(options);
+          const responseDiagnostics = response && response.debug && response.debug.diagnostics;
           profileRouteTimings.push({
             candidateId,
             elapsedMs: Date.now() - attemptStarted,
@@ -1306,7 +1343,28 @@ async function planFuelChainOnRuntime({
               : null,
             maxMeters: Number.isFinite(Number(options && options.maxMeters))
               ? Math.round(Number(options.maxMeters))
-              : null
+              : null,
+            deadlineRemainingAtStartMs,
+            deadlineRemainingAtEndMs: Number.isFinite(attemptDeadlineAtMs)
+              ? attemptDeadlineAtMs - Date.now()
+              : null,
+            searchMs: finiteDiagnosticNumber(
+              responseDiagnostics && responseDiagnostics.searchMs != null
+                ? responseDiagnostics.searchMs
+                : response && response.debug && response.debug.searchMs
+            ),
+            snapMs: finiteDiagnosticNumber(responseDiagnostics && responseDiagnostics.snapMs),
+            postprocessMs: finiteDiagnosticNumber(
+              responseDiagnostics && responseDiagnostics.postprocessMs
+            ),
+            pops: finiteDiagnosticNumber(
+              responseDiagnostics && responseDiagnostics.pops != null
+                ? responseDiagnostics.pops
+                : response && response.debug && response.debug.pops
+            ),
+            fallbacks: responseDiagnostics && Array.isArray(responseDiagnostics.profileFallbacks)
+              ? responseDiagnostics.profileFallbacks
+              : []
           });
           return response;
         } catch (error) {
@@ -1317,7 +1375,16 @@ async function planFuelChainOnRuntime({
             distanceMeters: null,
             maxMeters: Number.isFinite(Number(options && options.maxMeters))
               ? Math.round(Number(options.maxMeters))
-              : null
+              : null,
+            deadlineRemainingAtStartMs,
+            deadlineRemainingAtEndMs: Number.isFinite(attemptDeadlineAtMs)
+              ? attemptDeadlineAtMs - Date.now()
+              : null,
+            searchMs: null,
+            snapMs: null,
+            postprocessMs: null,
+            pops: null,
+            fallbacks: []
           });
           throw error;
         }
@@ -1441,6 +1508,10 @@ async function planFuelChainOnRuntime({
       let diagnostic;
       const hopCap = hopBudgetMeters(candidate.graphMeters, cap);
       const candidateStarted = Date.now();
+      const approachDeadlineAtMs = candidateApproachDeadlineAtMs(deadline, candidateStarted);
+      const approachBudgetMs = Number.isFinite(approachDeadlineAtMs)
+        ? Math.max(0, approachDeadlineAtMs - candidateStarted)
+        : null;
       let approachElapsedMs = null;
       let continuationElapsedMs = null;
       let continuationStrategy = null;
@@ -1456,7 +1527,7 @@ async function planFuelChainOnRuntime({
           priorEdgeIds: [...history],
           arrivalEdgeId: arrival,
           backtrackFactor,
-          deadlineAtMs: deadline,
+          deadlineAtMs: approachDeadlineAtMs,
           abortSignal
         });
         approachElapsedMs = Date.now() - approachStarted;
@@ -1626,6 +1697,7 @@ async function planFuelChainOnRuntime({
           commitBand: tankCommitBand(row.meters, cap, usableRangeMeters),
           canFinish: row.continuationResponse != null,
           rank,
+          approachBudgetMs,
           approachElapsedMs,
           approachStatus: response && response.status || null,
           approachSearchOutcome: response && response.debug && response.debug.searchOutcome || null,
@@ -1633,6 +1705,9 @@ async function planFuelChainOnRuntime({
           continuationElapsedMs,
           continuationStatus: row.continuationResponse && row.continuationResponse.status || null,
           continuationStrategy,
+          candidateDeadlineRemainingMs: Number.isFinite(deadline)
+            ? deadline - Date.now()
+            : null,
           backtrackMeters: Math.round(firstBacktrackMeters),
           rejectedReason: !fits
             ? (response && response.status !== "complete" ? "approach_incomplete"
@@ -1658,6 +1733,7 @@ async function planFuelChainOnRuntime({
           commitBand: tankCommitBand(candidate.graphMeters, cap, usableRangeMeters),
           canFinish: false,
           rank,
+          approachBudgetMs,
           approachElapsedMs,
           approachStatus: "error",
           approachSearchOutcome: null,
@@ -1665,6 +1741,9 @@ async function planFuelChainOnRuntime({
           continuationElapsedMs,
           continuationStatus: null,
           continuationStrategy,
+          candidateDeadlineRemainingMs: Number.isFinite(deadline)
+            ? deadline - Date.now()
+            : null,
           backtrackMeters: null,
           rejectedReason: "candidate_error",
           totalElapsedMs: Date.now() - candidateStarted,
@@ -2709,6 +2788,24 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
   let routeFirstAttempted = false;
   let routeFirstSkippedReason = null;
   let planningDataLoadMs = 0;
+  let routeFirstBuildMs = null;
+  let routeFirstSearchMs = null;
+  let routeFirstSnapMs = null;
+  let routeFirstPostprocessMs = null;
+  let routeFirstPops = null;
+  let routeFirstSearchOutcome = null;
+  let routeFirstFallbacks = [];
+  let routeFirstDeadlineRemainingAfterLoadMs = null;
+  const routeFirstPhaseDiagnostics = () => ({
+    routeFirstBuildMs,
+    routeFirstSearchMs,
+    routeFirstSnapMs,
+    routeFirstPostprocessMs,
+    routeFirstPops,
+    routeFirstSearchOutcome,
+    routeFirstFallbacks,
+    routeFirstDeadlineRemainingAfterLoadMs
+  });
   const directLowerBoundMeters = haversineMeters(
     locationCoordinate(locations[0]),
     locationCoordinate(locations[locations.length - 1])
@@ -2734,6 +2831,9 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
         loadFuel(locations)
       ]);
       planningDataLoadMs = Date.now() - loadStarted;
+      routeFirstDeadlineRemainingAfterLoadMs = Number.isFinite(routeFirstDeadlineAtMs)
+        ? routeFirstDeadlineAtMs - Date.now()
+        : null;
     } catch (error) {
       const message = error && error.message ? error.message : String(error);
       const corridorClip = /corridor clip/i.test(message);
@@ -2791,6 +2891,9 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
         loadFuel(locations)
       ]);
       planningDataLoadMs = Date.now() - loadStarted;
+      routeFirstDeadlineRemainingAfterLoadMs = Number.isFinite(routeFirstDeadlineAtMs)
+        ? routeFirstDeadlineAtMs - Date.now()
+        : null;
     } catch (error) {
       const message = error && error.message ? error.message : String(error);
       const corridorClip = /corridor clip/i.test(message);
@@ -2824,6 +2927,29 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
       : echoLegId(await routeOnLoadedRuntime(routeBody, selection, runtime), routeBody.legId);
     routeFirstSharedRuntime = !routeProfile;
     routeFirstMs = Date.now() - routeStarted;
+    const foundationDiagnostics = foundationRoute && foundationRoute.debug &&
+      foundationRoute.debug.diagnostics;
+    routeFirstBuildMs = finiteDiagnosticNumber(foundationDiagnostics && foundationDiagnostics.buildMs);
+    routeFirstSearchMs = finiteDiagnosticNumber(
+      foundationDiagnostics && foundationDiagnostics.searchMs != null
+        ? foundationDiagnostics.searchMs
+        : foundationRoute && foundationRoute.debug && foundationRoute.debug.searchMs
+    );
+    routeFirstSnapMs = finiteDiagnosticNumber(foundationDiagnostics && foundationDiagnostics.snapMs);
+    routeFirstPostprocessMs = finiteDiagnosticNumber(
+      foundationDiagnostics && foundationDiagnostics.postprocessMs
+    );
+    routeFirstPops = finiteDiagnosticNumber(
+      foundationDiagnostics && foundationDiagnostics.pops != null
+        ? foundationDiagnostics.pops
+        : foundationRoute && foundationRoute.debug && foundationRoute.debug.pops
+    );
+    routeFirstSearchOutcome = foundationDiagnostics && foundationDiagnostics.searchOutcome ||
+      foundationRoute && foundationRoute.debug && foundationRoute.debug.searchOutcome || null;
+    routeFirstFallbacks = foundationDiagnostics &&
+      Array.isArray(foundationDiagnostics.profileFallbacks)
+      ? foundationDiagnostics.profileFallbacks
+      : [];
     profileMeters = Number(foundationRoute && foundationRoute.distanceMeters);
     if (!foundationRoute || foundationRoute.status !== "complete" || !(profileMeters >= 0)) {
       const routeDiagnostics = foundationRoute && foundationRoute.debug &&
@@ -2860,6 +2986,7 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
           directLowerBoundMeters: Math.round(directLowerBoundMeters),
           firstLegMaxMeters: Math.round(firstLegMaxMeters),
           planningDataLoadMs,
+          ...routeFirstPhaseDiagnostics(),
           ...endpointResolutionDiagnostics,
           profileRouteFailureReason:
             routeDiagnostics && routeDiagnostics.failureReason ||
@@ -3045,6 +3172,7 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
           directLowerBoundMeters: Math.round(directLowerBoundMeters),
           firstLegMaxMeters: Math.round(firstLegMaxMeters),
           planningDataLoadMs,
+          ...routeFirstPhaseDiagnostics(),
           ...endpointResolutionDiagnostics,
           graphFetchMs: runtime.loadDiagnostics && runtime.loadDiagnostics.fetchMs,
           graphDecodeMs: runtime.loadDiagnostics && runtime.loadDiagnostics.decodeMs,
@@ -3127,6 +3255,7 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
       directLowerBoundMeters: Math.round(directLowerBoundMeters),
       firstLegMaxMeters: Math.round(firstLegMaxMeters),
       planningDataLoadMs,
+      ...routeFirstPhaseDiagnostics(),
       ...endpointResolutionDiagnostics,
       graphFetchMs: runtime.loadDiagnostics && runtime.loadDiagnostics.fetchMs,
       graphDecodeMs: runtime.loadDiagnostics && runtime.loadDiagnostics.decodeMs,

@@ -60,10 +60,24 @@ module.exports = async function handler(req, res) {
       `budgetMs=${body.fuel && body.fuel.windowTimeBudgetMs || "-"}`
     );
     const result = echoLegId(await fuelChainRequest(body), body.legId);
+    const diagnostics = result && result.diagnostics || {};
     console.log(
       `fuel request end id=${requestId} status=${result.status || "-"} ` +
       `elapsedMs=${Date.now() - started} ` +
       `stops=${Array.isArray(result.stops) ? result.stops.length : 0}`
+    );
+    console.log(
+      `fuel phases id=${requestId} endpoint=${diagnostics.endpointResolutionMs ?? "-"}ms ` +
+      `load=${diagnostics.planningDataLoadMs ?? "-"}ms ` +
+      `routeFirst=${diagnostics.routeFirstMs ?? "-"}ms ` +
+      `(snap=${diagnostics.routeFirstSnapMs ?? "-"}/search=${diagnostics.routeFirstSearchMs ?? "-"}` +
+      `/post=${diagnostics.routeFirstPostprocessMs ?? "-"}/pops=${diagnostics.routeFirstPops ?? "-"}) ` +
+      `escape=${diagnostics.destinationEscapeSearchMs ?? "-"}ms ` +
+      `targets=${diagnostics.targetPrepareMs ?? "-"}ms ` +
+      `fuelSearch=${diagnostics.elapsedMs ?? "-"}ms ` +
+      `profileRoutes=${diagnostics.profileRouteAttempts ?? "-"} ` +
+      `deadlinePhase=${diagnostics.deadlinePhase || "-"} ` +
+      `overrun=${diagnostics.windowBudgetOverrunMs ?? 0}ms`
     );
     const status = result.status === "complete" ? 200 : (result.status === "error" ? 400 : 422);
     return res.status(status).json(withServiceIdentity(result));

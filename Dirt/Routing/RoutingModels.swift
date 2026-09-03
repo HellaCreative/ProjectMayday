@@ -379,6 +379,14 @@ struct FuelChainDiagnostics: Codable, Sendable {
     var directLowerBoundMeters: Int? = nil
     var firstLegMaxMeters: Int? = nil
     var planningDataLoadMs: Int? = nil
+    var routeFirstBuildMs: Int? = nil
+    var routeFirstSearchMs: Int? = nil
+    var routeFirstSnapMs: Int? = nil
+    var routeFirstPostprocessMs: Int? = nil
+    var routeFirstPops: Int? = nil
+    var routeFirstSearchOutcome: String? = nil
+    var routeFirstFallbacks: [String]? = nil
+    var routeFirstDeadlineRemainingAfterLoadMs: Int? = nil
     var endpointResolutionMs: Int? = nil
     var endpointProbeCount: Int? = nil
     var endpointResolutionSources: String? = nil
@@ -423,6 +431,13 @@ struct FuelRouteAttemptDiagnostic: Codable, Sendable {
     let status: String?
     let distanceMeters: Double?
     let maxMeters: Double?
+    var deadlineRemainingAtStartMs: Int? = nil
+    var deadlineRemainingAtEndMs: Int? = nil
+    var searchMs: Int? = nil
+    var snapMs: Int? = nil
+    var postprocessMs: Int? = nil
+    var pops: Int? = nil
+    var fallbacks: [String]? = nil
 }
 
 struct FuelStationCandidate: Codable, Sendable {
@@ -445,6 +460,8 @@ struct FuelStationCandidate: Codable, Sendable {
     var continuationElapsedMs: Int? = nil
     var continuationStatus: String? = nil
     var continuationStrategy: String? = nil
+    var approachBudgetMs: Int? = nil
+    var candidateDeadlineRemainingMs: Int? = nil
     var backtrackMeters: Double? = nil
     var rejectedReason: String? = nil
     var totalElapsedMs: Int? = nil
@@ -702,6 +719,10 @@ struct RouteResponseDiagnostics: Codable, Sendable {
     var endpointResolutionMs: Int? = nil
     var endpointProbeCount: Int? = nil
     var endpointResolutionSources: String? = nil
+    var snapMs: Int? = nil
+    var postprocessMs: Int? = nil
+    var deadlineRemainingMs: Int? = nil
+    var corridorClipDiagnosticSkipped: Bool? = nil
     /// DEBUG ONLY. Echo of options.cleanMetroMultiplier when Clean override was applied.
     var cleanMetroMultiplier: Double? = nil
 }

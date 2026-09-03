@@ -1864,6 +1864,7 @@ async function routeOnRuntime(body, graphResolution, runtime) {
 
   const start = locations[0];
   const end = locations[locations.length - 1];
+  const snapStarted = Date.now();
   // Canada-chain seam pins (already snapped onto fabric) may use a slightly
   // larger per-endpoint match than user pins — still ≤ HARD_MATCH_CAP_M.
   const chainSeamHop = !!options.chainSeamHop;
@@ -2069,6 +2070,7 @@ async function routeOnRuntime(body, graphResolution, runtime) {
       }
     }
   }
+  const snapMs = Date.now() - snapStarted;
 
   // Snap selection is part of the routing contract. Log the final edge and
   // access class after component reconciliation so a device/server trace can
@@ -2394,7 +2396,13 @@ async function routeOnRuntime(body, graphResolution, runtime) {
   // blows past ~50/50. Also search Allow OFF (own snaps) and keep whichever mix is
   // closer to half dirt — even if that means discarding unknown entirely.
   let balancedMixChoice = null;
-  if (path && profile === "balanced" && policy.motorizedUnknown) {
+  const routeDeadlineAtMs = Number(options.deadlineAtMs);
+  const routeDeadlineOpen = () =>
+    !Number.isFinite(routeDeadlineAtMs) || Date.now() < routeDeadlineAtMs;
+  if (
+    path && profile === "balanced" && policy.motorizedUnknown &&
+    routeDeadlineOpen() && !(options.abortSignal && options.abortSignal.aborted)
+  ) {
     const policyVerified = Object.assign({}, policy, { motorizedUnknown: false });
     const startVerified = matchPoint(
       runtime, start, policyVerified, limit, avoidEdgeIds, null, profile, "start"
@@ -2421,6 +2429,7 @@ async function routeOnRuntime(body, graphResolution, runtime) {
   // Phase E1: honest Dirt% after path selection (selection used coarse dirt%).
   if (path) applyHonestReportedStats(path);
   const searchMs = Date.now() - searchStarted;
+  const postprocessStarted = Date.now();
   if (!path) {
     const failedOutcome = cleanSearchOutcome || primarySearchOutcome;
     const searchIncomplete = failedOutcome === "timeCap" || failedOutcome === "popCap";
@@ -2444,6 +2453,11 @@ async function routeOnRuntime(body, graphResolution, runtime) {
       searchOutcome: failedOutcome,
       cleanMetroMultiplier
     });
+    diagnostics.snapMs = snapMs;
+    diagnostics.postprocessMs = Date.now() - postprocessStarted;
+    diagnostics.deadlineRemainingMs = Number.isFinite(routeDeadlineAtMs)
+      ? routeDeadlineAtMs - Date.now()
+      : null;
     return {
       status: "failed",
       profile,
@@ -2557,13 +2571,20 @@ async function routeOnRuntime(body, graphResolution, runtime) {
     urbanCoreFallbackUsed || settlementFallbackUsed || !!(path.searchMeta && path.searchMeta.settlementFallbackUsed),
     cleanSearchOutcome || primarySearchOutcome
   );
-  const corridorClippedDirtMeters = clippedDirtMeters(
-    runtime,
-    startMatch.coord,
-    endMatch.coord,
-    Number.isFinite(selectedCorridor) ? selectedCorridor : 0,
-    policy
-  );
+  // This is a diagnostic-only full-pack scan. It must never consume the last
+  // part of a bounded fuel-planning window after the actual route is already
+  // proved. Normal unbounded route requests keep the richer metric.
+  const skipCorridorClipDiagnostic = options.internalFuelProbe === true ||
+    Number.isFinite(routeDeadlineAtMs);
+  const corridorClippedDirtMeters = skipCorridorClipDiagnostic
+    ? 0
+    : clippedDirtMeters(
+      runtime,
+      startMatch.coord,
+      endMatch.coord,
+      Number.isFinite(selectedCorridor) ? selectedCorridor : 0,
+      policy
+    );
   const lowDirt = isLowDirtRoute(profile, path);
   const balancedMiss = profile === "balanced"
     ? Number(path.searchMeta && path.searchMeta.balancedMiss) || 0
@@ -2588,6 +2609,12 @@ async function routeOnRuntime(body, graphResolution, runtime) {
     searchOutcome: "completed",
     cleanMetroMultiplier
   });
+  routeDiagnostics.snapMs = snapMs;
+  routeDiagnostics.postprocessMs = Date.now() - postprocessStarted;
+  routeDiagnostics.deadlineRemainingMs = Number.isFinite(routeDeadlineAtMs)
+    ? routeDeadlineAtMs - Date.now()
+    : null;
+  routeDiagnostics.corridorClipDiagnosticSkipped = skipCorridorClipDiagnostic;
 
   return {
     status: "complete",

@@ -224,6 +224,42 @@ test("refuelling resets carried fuel before evaluating the destination continuat
   assert.equal(result.diagnostics.states, 1);
 });
 
+test("a live candidate approach reserves deadline for its continuation proof", async () => {
+  const deadlines = [];
+  const result = await planFuelChainOnRuntime({
+    runtime: lineRuntime(),
+    stations: [station("mid", 1)],
+    start: { lat: 45, lon: 0 },
+    destination: { lat: 45, lon: 2 },
+    profile: "balanced",
+    accessPolicy: { motorizedPermissive: true, motorizedUnknown: false },
+    usableRangeMeters: 90_000,
+    firstLegMaxMeters: 90_000,
+    requireFuelStopBeforeEnd: true,
+    minimumFuelStops: 1,
+    timeBudgetMs: 2_000,
+    routeCandidate: ({ candidate, from, deadlineAtMs }) => {
+      deadlines.push({ id: candidate.station.id, deadlineAtMs });
+      const distanceMeters = Math.abs(candidate.location.lon - from.lon) * 78_626;
+      return Promise.resolve({
+        status: "complete",
+        distanceMeters,
+        stats: { dirtPercent: 50 },
+        segments: [{ edgeId: `${from.lon}-${candidate.location.lon}`, distanceMeters }]
+      });
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(deadlines.map((row) => row.id), ["mid", "__destination__"]);
+  assert.ok(deadlines[0].deadlineAtMs < deadlines[1].deadlineAtMs);
+  assert.ok(result.stationCandidates[0].approachBudgetMs > 0);
+  assert.ok(result.stationCandidates[0].candidateDeadlineRemainingMs > 0);
+  assert.ok(result.diagnostics.slowestProfileRoutes.every((row) =>
+    row.deadlineRemainingAtStartMs != null && row.deadlineRemainingAtEndMs != null
+  ));
+});
+
 test("unknown profile plans as Balanced", async () => {
   const unknown = await plan("scenic");
   const balanced = await plan("balanced");
@@ -316,7 +352,7 @@ test("forward progress outranks an early Clean-quality pump", async () => {
 
 test("Clean rejects a full-tank lateral Gulf-class pump in favor of a corridor pump", () => {
   assert.equal(typeof FUEL_CHAIN_SERVICE_VERSION, "string");
-  assert.match(FUEL_CHAIN_SERVICE_VERSION, /range-gated-one-stop/);
+  assert.match(FUEL_CHAIN_SERVICE_VERSION, /phase-budgeted-fuel-proof/);
   // Halifax-ish → Tatamagouche-ish geometry: Wallace Gulf is nearly a full tank
   // sideways; Truro sits on the corridor with a shorter complete chain.
   const start = { lat: 44.764823, lon: -63.340271 };
