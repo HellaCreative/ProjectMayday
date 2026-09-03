@@ -412,6 +412,15 @@ struct FuelChainDiagnostics: Codable, Sendable {
     var profileRoutePops: Int? = nil
     var deadlinePhase: String? = nil
     var cancelled: Bool? = nil
+    var foundationRouteReused: Bool? = nil
+    var foundationRouteMeters: Int? = nil
+    var foundationRouteDirtPercent: Int? = nil
+    var foundationMatchedStations: Int? = nil
+    var foundationSelectedStationId: String? = nil
+    var foundationChainMeters: Int? = nil
+    var foundationChainDirtPercent: Int? = nil
+    var profileRouteSavings: Int? = nil
+    var foundationPriorityStations: Int? = nil
 }
 
 struct FuelTargetPassDiagnostic: Codable, Sendable {
@@ -465,6 +474,13 @@ struct FuelStationCandidate: Codable, Sendable {
     var backtrackMeters: Double? = nil
     var rejectedReason: String? = nil
     var totalElapsedMs: Int? = nil
+    var candidateSource: String? = nil
+    var foundationAlongMeters: Double? = nil
+    var foundationOffRouteMeters: Double? = nil
+    var foundationPriorityCellDistance: Int? = nil
+    var chainMeters: Double? = nil
+    var chainDirtPct: Double? = nil
+    var continuationBacktrackMeters: Double? = nil
 }
 
 struct FuelChainResponse: Codable, Sendable {

@@ -744,26 +744,6 @@ final class ItineraryBuilder {
                 let nextLeg = itinerary.legs[index + 1]
                 let nextFrom = riderDestination.coordinate
                 let nextTo = itinerary.waypoints[index + 2].coordinate
-                let probe = try? await source.fuelChain(FuelChainRequest(
-                    profile: nextLeg.profile,
-                    from: nextFrom,
-                    to: nextTo,
-                    allowUnknown: nextLeg.profile == .cleanest ? false : nextLeg.allowUnknown,
-                    usableRangeMeters: fuel.usableMeters,
-                    firstLegMaxMeters: fuel.usableMeters,
-                    requireFuelStopBeforeEnd: false,
-                    minimumFuelStops: 0,
-                    profileMeters: straightLineMeters(nextFrom, nextTo),
-                    riderLegId: nextLeg.id.uuidString,
-                    avoidEdgeIds: Array(itinerary.impassableEdgeIDs),
-                    cleanMetroMultiplier: nil,
-                    avoidMotorways: nextLeg.avoidMotorways,
-                    probeFirstReachableStation: true,
-                    windowTimeBudgetMs: min(
-                        2_500,
-                        max(100, progressWatchdog.remainingMilliseconds())
-                    )
-                ))
                 // A proven profile-routed pump is preferred. When no pump is
                 // returned, use route distance only if that next leg is
                 // already built. A full on-device build may measure the next
@@ -772,16 +752,49 @@ final class ItineraryBuilder {
                 // forward construction obtains the real route, and the fuel
                 // rewind below repairs the preceding leg if the actual
                 // distance proves that an earlier stop was required.
-                if let firstPumpMeters = probe?.firstReachableStationMeters {
-                    onwardFuelMeters = firstPumpMeters
+                let cachedMeters = kept
+                    .filter { $0.riderLegID == nextLeg.id }
+                    .reduce(0.0) { $0 + ($1.response.distanceMeters ?? 0) }
+                if source.supportsCombinedFuelPlanning {
+                    // The live endpoint plans the profile route and its fuel
+                    // chain together. A speculative next-leg request here used
+                    // to cold-load another regional graph, compete with the
+                    // real request, and often time out before returning useful
+                    // information. Build the actual next leg once; the rewind
+                    // below corrects the preceding arrival reserve if needed.
+                    onwardFuelMeters = cachedMeters > 0 ? cachedMeters : nil
+                    RoutingDebugLog.shared.event(
+                        "fuel onward probe skipped gen=\(itinerary.generation) "
+                            + "riderLeg=\(riderLeg.id) nextLeg=\(nextLeg.id) "
+                            + "reason=combined_forward_rewind "
+                            + "cachedMeters=\(cachedMeters > 0 ? String(Int(cachedMeters)) : "-")"
+                    )
                 } else {
-                    let cachedMeters = kept
-                        .filter { $0.riderLegID == nextLeg.id }
-                        .reduce(0.0) { $0 + ($1.response.distanceMeters ?? 0) }
-                    if cachedMeters > 0 {
+                    let probe = try? await source.fuelChain(FuelChainRequest(
+                        profile: nextLeg.profile,
+                        from: nextFrom,
+                        to: nextTo,
+                        allowUnknown: nextLeg.profile == .cleanest ? false : nextLeg.allowUnknown,
+                        usableRangeMeters: fuel.usableMeters,
+                        firstLegMaxMeters: fuel.usableMeters,
+                        requireFuelStopBeforeEnd: false,
+                        minimumFuelStops: 0,
+                        profileMeters: straightLineMeters(nextFrom, nextTo),
+                        riderLegId: nextLeg.id.uuidString,
+                        avoidEdgeIds: Array(itinerary.impassableEdgeIDs),
+                        cleanMetroMultiplier: nil,
+                        avoidMotorways: nextLeg.avoidMotorways,
+                        probeFirstReachableStation: true,
+                        windowTimeBudgetMs: min(
+                            2_500,
+                            max(100, progressWatchdog.remainingMilliseconds())
+                        )
+                    ))
+                    if let firstPumpMeters = probe?.firstReachableStationMeters {
+                        onwardFuelMeters = firstPumpMeters
+                    } else if cachedMeters > 0 {
                         onwardFuelMeters = cachedMeters
                     } else if startIndex == 0,
-                              !source.supportsCombinedFuelPlanning,
                               let response = try? await source.route(routeRequest(
                                   profile: nextLeg.profile,
                                   allowUnknown: nextLeg.profile == .cleanest

@@ -128,6 +128,24 @@ struct ItineraryBuilderTests {
         #expect(source.fuelChainRequests[0].fuel.ensureDestinationFuelEscape == true)
     }
 
+    @Test func combinedLiveMultiLegPlanDoesNotSpeculateOnTheNextLeg() async throws {
+        let points = [point(0), point(1), point(2)]
+        let source = FakeRoutingSource(name: "live")
+        source.supportsCombinedFuelPlanning = true
+        source.distances[key(points[0], points[1])] = 100_000
+        source.distances[key(points[1], points[2])] = 100_000
+
+        let result = await build(points, source: source, usable: 300_000)
+
+        #expect(result.legs.count == 2)
+        #expect(source.routeRequests.isEmpty)
+        #expect(source.fuelChainRequests.count == 2)
+        #expect(source.fuelChainRequests.allSatisfy {
+            $0.fuel.probeFirstReachableStation != true
+        })
+        #expect(result.riderLegStatus.values.allSatisfy { $0 == .built })
+    }
+
     @Test func combinedLivePlanCommitsACompleteMultiStopWindowOnce() async throws {
         let points = [point(0), point(1)]
         let pump1 = point(0.33)

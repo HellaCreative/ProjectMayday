@@ -797,12 +797,71 @@ proved, resumable pump window in about 7.4 seconds instead of reaching the
 milliseconds on the cached reproduction. Exact timings are machine-dependent; the semantic gates are
 the hard deadline, no false no-route/no-fuel result, and no unproved pump.
 
+### Foundation-route fuel reuse and route-coherent pump selection — 2026-09-03
+
+The next device pass exposed a more fundamental source of both latency and
+route-quality drift. The planner first proved the selected Dirt/Balanced/Clean
+ride, then treated fuel insertion as permission to route the profile again to
+several pumps and back to the destination. In a dense or winding region that
+could consume the entire 20-second window. More importantly, Dirt could abandon
+an already-better route, drive a long paved approach to a remote dirt segment,
+and finish with less dirt than Balanced. Fuel planning now obeys these
+pack-independent laws:
+
+1. the completed selected-profile ride is the authoritative foundation for the
+   fuel decision. When one pump snapped to that route makes both fuel hops safe,
+   the planner partitions the existing geometry at the pump and reuses it. It
+   does not search the profile again merely because fuel was enabled;
+2. every returned partition receives its own distance, surface statistics,
+   maneuvers, restricted-distance accounting, backtrack metrics, and a bounded
+   pump-to-road access connector. All other safe pumps matched to the same
+   foundation remain available to **Choose another pump**;
+3. the 192-pump dense matching working set is ordered by proximity to the
+   actual winding foundation route before straight-chord proximity. This keeps
+   a pump beside the chosen road from being crowded out by thousands of pumps
+   that happen to be nearer the endpoint chord. Route proximity is recomputed
+   per request; it is never persisted in the reusable road-snap cache;
+4. if an exact geometry partition is unavailable, candidate selection compares
+   the complete approach-plus-continuation chain. Minimum stop count and
+   meaningful forward progress remain primary; the active profile's whole-chain
+   quality is then evaluated. A pump beside the foundation route may tolerate a
+   bounded 20 km chord-relative continuation reversal because a winding road can
+   make that diagnostic appear backward even while the route progresses. Tank
+   range, route-connected continuation proof, total chain length, and the
+   existing detour/retrace guards remain mandatory; and
+5. the LIVE iOS builder no longer sends a speculative request for the next rider
+   leg while the current combined route/fuel operation is running. It consumes a
+   cached next-leg distance when one exists; otherwise it builds forward once
+   and rewinds the prior fuel choice only if the real suffix proves it unsafe.
+   On-device planning retains its local bounded look-ahead.
+
+The diagnostics identify foundation reuse, foundation route distance and dirt
+percentage, matched and route-priority pump counts, selected pump, final chain
+distance/dirt percentage, avoided profile-route attempts, and for each pump its
+source, along-route/off-route placement, route-cell distance, full-chain
+distance/dirt percentage, and continuation backtrack. The client also records
+when speculative LIVE look-ahead was skipped in favour of forward build/rewind.
+
+Fixed production-pack reproductions now cover the reported coordinates. On the
+reference development machine, Halifax-to-southwest Nova Scotia completes in
+about 5.3 seconds with zero pump profile reroutes; central Ontario completes in
+about 4.8 seconds at 85% dirt instead of timing out; and the northern Ontario
+surface switch retains the same useful pump while Dirt improves from about 53%
+to 66% dirt. Timing is diagnostic, not a route law. The gates are a completed
+safe chain, preservation or improvement of the selected profile objective,
+sensible progress toward the rider waypoint, and retained pump alternatives.
+The fixed-coordinate command is `npm run bench:fuel-regressions`.
+
 Android must implement the same semantics before parity is claimed: a hard
 total request deadline, cancellation propagation, the explicit bounded
 Balanced fallback, dense forward pump matching, and proof-before-commit for
 partial windows. The added diagnostic fields are optional and
 forward-compatible so an older Android decoder will not break, but Android
 must emit them when its live and on-device routing twins receive this repair.
+Android receives the LIVE foundation-route repair from the shared service; its
+offline twin must also partition an already-proved profile route when safe,
+retain route-priority alternatives, rank whole chains rather than isolated pump
+approaches, and avoid concurrent speculative next-leg work.
 
 ## 11. Current product status
 

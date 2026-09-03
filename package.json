@@ -4,6 +4,7 @@
   "scripts": {
     "test": "node --test scripts/pack-fabric/bench/*.test.js scripts/pack-fabric/poi/*.test.js scripts/pack-fabric/routing/**/*.test.js scripts/pack-fabric/scripts/*.test.js",
     "bench:ns": "node scripts/pack-fabric/bench/run-ns-bench.js",
+    "bench:fuel-regressions": "node scripts/pack-fabric/bench/run-fuel-regressions.js",
     "bench:routing-oracle": "node scripts/pack-fabric/bench/run-routing-oracle.js",
     "test:phase": "npm test && npm run bench:ns"
   }

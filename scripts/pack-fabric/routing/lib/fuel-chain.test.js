@@ -59,6 +59,218 @@ test("a reachable 233 km ride goes direct when destination escape fuel fits", as
   assert.equal(result.diagnostics.selectedReason, "direct_destination");
 });
 
+test("a required one-stop plan partitions the proved profile route without rerouting it", async () => {
+  const runtime = lineRuntime();
+  const segments = runtime.data.edges.slice(0, 4).map((edge) => ({
+    edgeId: edge.i,
+    surfaceClass: "gravel",
+    surfaceLeaf: "gravel",
+    trackClass: "local",
+    accessClass: "motorized_permissive",
+    distanceMeters: edge.m,
+    geometry: edge.g
+  }));
+  const foundationRoute = {
+    status: "complete",
+    routeId: "proved-dirt",
+    profile: "dirt",
+    distanceMeters: segments.reduce((sum, segment) => sum + segment.distanceMeters, 0),
+    estimatedMovingSeconds: 7_200,
+    geometry: segments.flatMap((segment, index) => index ? segment.geometry.slice(1) : segment.geometry),
+    stats: { dirtPercent: 100, pavedPercent: 0, surfaceFamilyMode: "leaf-v3" },
+    segments,
+    maneuvers: [],
+    warnings: [],
+    debug: { searchMeta: {} }
+  };
+  let reroutes = 0;
+  const result = await planFuelChainOnRuntime({
+    runtime,
+    stations: [station("on-route", 1)],
+    start: { lat: 45, lon: 0 },
+    destination: { lat: 45, lon: 2 },
+    profile: "dirt",
+    accessPolicy: { motorizedPermissive: true, motorizedUnknown: false },
+    usableRangeMeters: 130_000,
+    firstLegMaxMeters: 130_000,
+    minimumFuelStops: 1,
+    foundationRoute,
+    routeCandidate: async () => {
+      reroutes += 1;
+      throw new Error("foundation route should have been reused");
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(reroutes, 0);
+  assert.deepEqual(result.stops.map((row) => row.id), ["on-route"]);
+  assert.equal(result.routes.length, 2);
+  assert.equal(result.diagnostics.strategy, "foundation_route_partition");
+  assert.equal(result.diagnostics.foundationRouteReused, true);
+  assert.equal(result.diagnostics.profileRouteSavings, 2);
+  assert.equal(result.stationCandidates[0].candidateSource, "foundation_route");
+  assert.ok(result.routes.every((route) => route.stats.dirtPercent === 100));
+  assert.ok(result.graphMeters.every((meters) => meters <= 130_000));
+  assert.deepEqual(
+    result.routes.flatMap((route) => route.segments)
+      .filter((segment) => !String(segment.edgeId).startsWith("fuel-access:"))
+      .map((segment) => segment.edgeId),
+    segments.map((segment) => segment.edgeId)
+  );
+});
+
+test("dense station matching prioritizes pumps on a meandering foundation route", async () => {
+  const runtime = lineRuntime();
+  const segments = runtime.data.edges.slice(0, 4).map((edge) => ({
+    edgeId: edge.i,
+    surfaceClass: "gravel",
+    surfaceLeaf: "gravel",
+    trackClass: "local",
+    accessClass: "motorized_permissive",
+    distanceMeters: edge.m,
+    geometry: edge.g
+  }));
+  const foundationRoute = {
+    status: "complete",
+    routeId: "dense-foundation",
+    profile: "dirt",
+    distanceMeters: segments.reduce((sum, segment) => sum + segment.distanceMeters, 0),
+    estimatedMovingSeconds: 7_200,
+    geometry: segments.flatMap((segment, index) => index ? segment.geometry.slice(1) : segment.geometry),
+    stats: { dirtPercent: 100, pavedPercent: 0 },
+    segments,
+    debug: { searchMeta: {} }
+  };
+  const decoys = Array.from({ length: 220 }, (_, index) => ({
+    id: `decoy-${index}`,
+    name: `decoy-${index}`,
+    lat: 45,
+    lon: 2.5
+  }));
+  const result = await planFuelChainOnRuntime({
+    runtime,
+    stations: [...decoys, station("foundation-pump", 1)],
+    start: { lat: 45, lon: 0 },
+    destination: { lat: 45, lon: 2 },
+    profile: "dirt",
+    accessPolicy: { motorizedPermissive: true, motorizedUnknown: false },
+    usableRangeMeters: 300_000,
+    firstLegMaxMeters: 300_000,
+    minimumFuelStops: 1,
+    foundationRoute
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.stops[0].id, "foundation-pump");
+  assert.equal(result.diagnostics.strategy, "foundation_route_partition");
+  assert.ok(result.diagnostics.foundationPriorityStations >= 1);
+  assert.ok(result.diagnostics.stationsConsidered <= 192);
+});
+
+test("a route-adjacent pump is not rejected by straight-chord continuation backtrack", async () => {
+  const foundationRoute = {
+    status: "complete",
+    routeId: "winding-foundation",
+    profile: "dirt",
+    distanceMeters: 157_252,
+    estimatedMovingSeconds: 7_200,
+    // Deliberately not a graph edge ID: this exercises the nearby-route
+    // candidate path rather than the exact-edge partition fast path.
+    segments: [{
+      edgeId: "foundation-only",
+      distanceMeters: 157_252,
+      surfaceClass: "gravel",
+      surfaceLeaf: "gravel",
+      trackClass: "local",
+      accessClass: "motorized_permissive",
+      geometry: [[0, 45], [2, 45]]
+    }],
+    geometry: [[0, 45], [2, 45]],
+    stats: { dirtPercent: 75, pavedPercent: 25 },
+    debug: { searchMeta: {} }
+  };
+  const result = await planFuelChainOnRuntime({
+    runtime: lineRuntime(),
+    stations: [station("route-adjacent", 1)],
+    start: { lat: 45, lon: 0 },
+    destination: { lat: 45, lon: 2 },
+    profile: "dirt",
+    accessPolicy: { motorizedPermissive: true, motorizedUnknown: false },
+    usableRangeMeters: 130_000,
+    firstLegMaxMeters: 130_000,
+    minimumFuelStops: 1,
+    foundationRoute,
+    routeCandidate: async ({ candidate }) => ({
+      status: "complete",
+      distanceMeters: candidate.station.id === "__destination__" ? 80_000 : 90_000,
+      backtrackMeters: candidate.station.id === "__destination__" ? 10_000 : 0,
+      stats: { dirtPercent: candidate.station.id === "__destination__" ? 80 : 60 },
+      segments: []
+    })
+  });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.stops.map((row) => row.id), ["route-adjacent"]);
+  assert.equal(result.stationCandidates[0].canFinish, true);
+  assert.equal(result.stationCandidates[0].foundationPriorityCellDistance, 0);
+  assert.equal(result.stationCandidates[0].continuationBacktrackMeters, 10_000);
+});
+
+test("route proximity is recomputed when a cached station snap is reused", async () => {
+  const runtime = lineRuntime();
+  const makeFoundation = (geometry) => ({
+    status: "complete",
+    routeId: "request-specific-foundation",
+    profile: "dirt",
+    distanceMeters: 110_000,
+    estimatedMovingSeconds: 7_200,
+    segments: [{
+      edgeId: "foundation-only",
+      distanceMeters: 110_000,
+      surfaceClass: "gravel",
+      surfaceLeaf: "gravel",
+      trackClass: "local",
+      accessClass: "motorized_permissive",
+      geometry
+    }],
+    geometry,
+    stats: { dirtPercent: 75, pavedPercent: 25 },
+    debug: { searchMeta: {} }
+  });
+  const options = {
+    runtime,
+    stations: [station("cached-pump", 0.5)],
+    start: { lat: 45, lon: 0 },
+    destination: { lat: 45, lon: 2 },
+    profile: "dirt",
+    accessPolicy: { motorizedPermissive: true, motorizedUnknown: false },
+    usableRangeMeters: 130_000,
+    firstLegMaxMeters: 130_000,
+    minimumFuelStops: 1,
+    routeCandidate: async ({ candidate }) => ({
+      status: "complete",
+      distanceMeters: candidate.station.id === "__destination__" ? 80_000 : 90_000,
+      backtrackMeters: 0,
+      stats: { dirtPercent: 70 },
+      segments: []
+    })
+  };
+
+  const near = await planFuelChainOnRuntime({
+    ...options,
+    foundationRoute: makeFoundation([[0, 45], [1, 45]])
+  });
+  assert.equal(near.ok, true);
+  assert.equal(near.stationCandidates[0].foundationPriorityCellDistance, 0);
+
+  const far = await planFuelChainOnRuntime({
+    ...options,
+    foundationRoute: makeFoundation([[1.5, 45], [2, 45]])
+  });
+  assert.equal(far.ok, true);
+  assert.equal(far.stationCandidates[0].foundationPriorityCellDistance, null);
+});
+
 test("destination escape stops at the nearest route-connected pump", () => {
   const result = nearestReachableFuelDistance({
     runtime: lineRuntime(),

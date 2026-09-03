@@ -23,7 +23,9 @@ const {
   resolveChainSeamWaypoints,
   routeRequest,
   routeOnRuntime,
-  echoLegId
+  echoLegId,
+  buildManeuvers,
+  aggregateRouteSurfaceStats
 } = require("./router");
 const {
   resolveGraphRequest,
@@ -43,7 +45,11 @@ function mergePackIdentities(...groups) {
   return [...byRegion.values()];
 }
 const { unpackAccess, unpackSurface } = require("./pack-v2");
-const { projectedProgressMeters, crossTrackMeters } = require("./hop-search");
+const {
+  projectedProgressMeters,
+  crossTrackMeters,
+  routeShapeMetrics
+} = require("./hop-search");
 const { resolveLocationsByEligibleEdge } = require("../regional/endpoint-resolver");
 
 const HARD_MATCH_METERS = 750;
@@ -51,7 +57,7 @@ const MIN_STOP_SEPARATION_M = 800;
 const MIN_FORWARD_PROGRESS_M = 8_000;
 const MIN_DESTINATION_FUEL_CLEARANCE_M = 5_000;
 /** Bumped when fuel-selection / ranking contracts change. Clients may assert. */
-const FUEL_CHAIN_SERVICE_VERSION = "2026-09-03.phase-budgeted-fuel-proof.21";
+const FUEL_CHAIN_SERVICE_VERSION = "2026-09-03.foundation-route-fuel.23";
 /** Watch at 50%; prefer sensible equal-stop choices at 70%. Lockstep: HopSearchPolicy.swift. */
 const FUEL_COMFORT_LO = 0.50;
 const FUEL_COMFORT_HI = 0.70;
@@ -68,6 +74,17 @@ const MAX_FUEL_CHAIN_DETOUR_ABS_M = 50_000;
 /** Soft corridor half-width; beyond this, cross-track dominates clean ranking. */
 const CORRIDOR_SOFT_WIDTH_M = 25_000;
 const SHORTLIST_MIN_SEPARATION_M = 15_000;
+/** A route-foundation pump must be on the actual selected road, not merely in its corridor. */
+const FOUNDATION_ROUTE_MATCH_M = 25;
+/** Coarse cells prioritize pumps along a proved meandering route before dense chord candidates. */
+const FOUNDATION_PRIORITY_CELL_DEGREES = 0.02;
+/**
+ * Straight-chord backtrack is a poor rejection test beside a meandering
+ * foundation route. A station in the route's own coarse cell may use a
+ * modest winding continuation; complete-chain detour limits still reject a
+ * true fuel-only excursion.
+ */
+const MAX_FOUNDATION_NEARBY_CONTINUATION_BACKTRACK_M = 20_000;
 // Dense regions can contain thousands of pumps inside one tank radius. Snap a
 // broad, directionally ordered working set instead of blocking the request on
 // every pump in the province. Sparse regions remain uncapped.
@@ -330,6 +347,429 @@ function locationCoordinate(location) {
     Number(location && (location.lon != null ? location.lon : location.lng)),
     Number(location && location.lat)
   ];
+}
+
+function routeSegmentCoordinates(segment) {
+  const rows = segment && (segment.geometry || segment.coords);
+  return Array.isArray(rows) ? rows.filter((point) =>
+    Array.isArray(point) && Number.isFinite(Number(point[0])) && Number.isFinite(Number(point[1]))
+  ).map((point) => [Number(point[0]), Number(point[1])]) : [];
+}
+
+function polylineMeasure(coords) {
+  const cumulative = [0];
+  for (let index = 1; index < coords.length; index += 1) {
+    cumulative.push(cumulative[index - 1] + haversineMeters(coords[index - 1], coords[index]));
+  }
+  return cumulative;
+}
+
+function projectOnCoordinateSegment(point, a, b) {
+  const lat = ((point[1] + a[1] + b[1]) / 3) * Math.PI / 180;
+  const scaleX = Math.max(0.01, Math.cos(lat));
+  const px = point[0] * scaleX;
+  const py = point[1];
+  const ax = a[0] * scaleX;
+  const ay = a[1];
+  const bx = b[0] * scaleX;
+  const by = b[1];
+  const dx = bx - ax;
+  const dy = by - ay;
+  const denominator = dx * dx + dy * dy;
+  const t = denominator > 0
+    ? Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / denominator))
+    : 0;
+  const coord = [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+  return { coord, t, distanceM: haversineMeters(point, coord) };
+}
+
+function projectOnCoordinatePolyline(point, coords) {
+  if (!Array.isArray(coords) || coords.length < 2) return null;
+  const cumulative = polylineMeasure(coords);
+  let best = null;
+  for (let index = 1; index < coords.length; index += 1) {
+    const projected = projectOnCoordinateSegment(point, coords[index - 1], coords[index]);
+    const segmentMeters = cumulative[index] - cumulative[index - 1];
+    const alongMeters = cumulative[index - 1] + segmentMeters * projected.t;
+    if (!best || projected.distanceM < best.distanceM) {
+      best = { ...projected, segmentIndex: index - 1, alongMeters, totalMeters: cumulative.at(-1) };
+    }
+  }
+  return best;
+}
+
+function coordinateAtPolylineMeter(coords, cumulative, meters) {
+  if (!coords.length) return null;
+  const total = cumulative.at(-1) || 0;
+  const target = Math.max(0, Math.min(total, Number(meters) || 0));
+  if (target <= 0) return coords[0].slice();
+  if (target >= total) return coords.at(-1).slice();
+  let index = 1;
+  while (index < cumulative.length && cumulative[index] < target) index += 1;
+  const before = cumulative[index - 1];
+  const span = Math.max(1e-9, cumulative[index] - before);
+  const t = (target - before) / span;
+  const a = coords[index - 1];
+  const b = coords[index];
+  return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+}
+
+function sliceCoordinatePolyline(coords, fromFraction, toFraction) {
+  if (!Array.isArray(coords) || coords.length < 2) return [];
+  const cumulative = polylineMeasure(coords);
+  const total = cumulative.at(-1) || 0;
+  if (!(total > 0)) return [coords[0].slice(), coords.at(-1).slice()];
+  const fromMeters = Math.max(0, Math.min(total, fromFraction * total));
+  const toMeters = Math.max(fromMeters, Math.min(total, toFraction * total));
+  const output = [coordinateAtPolylineMeter(coords, cumulative, fromMeters)];
+  for (let index = 1; index < coords.length - 1; index += 1) {
+    if (cumulative[index] > fromMeters && cumulative[index] < toMeters) {
+      output.push(coords[index].slice());
+    }
+  }
+  output.push(coordinateAtPolylineMeter(coords, cumulative, toMeters));
+  return output.filter((point, index) => index === 0 ||
+    point[0] !== output[index - 1][0] || point[1] !== output[index - 1][1]);
+}
+
+function appendCoordinates(target, coords) {
+  for (const coord of coords || []) {
+    const last = target.at(-1);
+    if (!last || last[0] !== coord[0] || last[1] !== coord[1]) target.push(coord.slice());
+  }
+}
+
+function foundationRouteLayout(route) {
+  const rows = [];
+  const byEdge = new Map();
+  let alongMeters = 0;
+  for (const segment of (route && route.segments) || []) {
+    const coords = routeSegmentCoordinates(segment);
+    const meters = Number(segment && segment.distanceMeters);
+    if (!(meters > 0) || coords.length < 2) continue;
+    const row = {
+      segment,
+      coords,
+      startMeters: alongMeters,
+      endMeters: alongMeters + meters,
+      meters
+    };
+    rows.push(row);
+    const edgeId = segment && segment.edgeId == null ? null : String(segment.edgeId);
+    if (edgeId) {
+      if (!byEdge.has(edgeId)) byEdge.set(edgeId, []);
+      byEdge.get(edgeId).push(row);
+    }
+    alongMeters += meters;
+  }
+  return { rows, byEdge, meters: alongMeters };
+}
+
+function foundationRouteCells(route) {
+  if (!route || !Array.isArray(route.segments)) return null;
+  const cells = new Set();
+  const cell = FOUNDATION_PRIORITY_CELL_DEGREES;
+  const add = (coord) => cells.add(
+    `${Math.floor(coord[0] / cell)}:${Math.floor(coord[1] / cell)}`
+  );
+  for (const segment of route.segments) {
+    const coords = routeSegmentCoordinates(segment);
+    for (let index = 0; index < coords.length; index += 1) {
+      const current = coords[index];
+      add(current);
+      if (index === 0) continue;
+      const previous = coords[index - 1];
+      const steps = Math.min(512, Math.ceil(Math.max(
+        Math.abs(current[0] - previous[0]),
+        Math.abs(current[1] - previous[1])
+      ) / (cell * 0.5)));
+      for (let step = 1; step < steps; step += 1) {
+        const t = step / steps;
+        add([
+          previous[0] + (current[0] - previous[0]) * t,
+          previous[1] + (current[1] - previous[1]) * t
+        ]);
+      }
+    }
+  }
+  return cells.size ? cells : null;
+}
+
+function foundationCellDistance(location, cells) {
+  if (!cells) return Infinity;
+  const cell = FOUNDATION_PRIORITY_CELL_DEGREES;
+  const x = Math.floor(Number(location.lon) / cell);
+  const y = Math.floor(Number(location.lat) / cell);
+  for (let ring = 0; ring <= 1; ring += 1) {
+    for (let dx = -ring; dx <= ring; dx += 1) {
+      for (let dy = -ring; dy <= ring; dy += 1) {
+        if (ring > 0 && Math.abs(dx) !== ring && Math.abs(dy) !== ring) continue;
+        if (cells.has(`${x + dx}:${y + dy}`)) return ring;
+      }
+    }
+  }
+  return Infinity;
+}
+
+function foundationPlacement(target, layout) {
+  const edgeId = target && target.match && target.match.edgeId == null
+    ? null
+    : String(target.match.edgeId);
+  const candidates = edgeId && layout.byEdge.get(edgeId) || [];
+  if (!candidates.length) return null;
+  const matchCoord = target.match.coord;
+  let best = null;
+  for (const row of candidates) {
+    const projected = projectOnCoordinatePolyline(matchCoord, row.coords);
+    if (!projected) continue;
+    const fraction = projected.totalMeters > 0
+      ? projected.alongMeters / projected.totalMeters
+      : 0;
+    const placement = {
+      target,
+      routeCoord: projected.coord,
+      alongMeters: row.startMeters + row.meters * fraction,
+      offRouteMeters: projected.distanceM,
+      accessMeters: Math.max(0, Number(target.match.distanceM) || 0)
+    };
+    if (!best || placement.offRouteMeters < best.offRouteMeters) best = placement;
+  }
+  return best && best.offRouteMeters <= FOUNDATION_ROUTE_MATCH_M ? best : null;
+}
+
+function fuelAccessSegment(from, to, stationId) {
+  const meters = haversineMeters(from, to);
+  if (!(meters > 0.5)) return null;
+  return {
+    edgeId: `fuel-access:${stationId}`,
+    surfaceClass: "connector",
+    trackClass: "service",
+    accessClass: "motorized_permissive",
+    structureType: "none",
+    distanceMeters: Math.round(meters),
+    accessLeg: true,
+    geometry: [from.slice(), to.slice()]
+  };
+}
+
+function sliceFoundationRoute(route, layout, fromPlacement, toPlacement) {
+  const fromMeters = fromPlacement ? fromPlacement.alongMeters : 0;
+  const toMeters = toPlacement ? toPlacement.alongMeters : layout.meters;
+  const routeSegments = [];
+  for (const row of layout.rows) {
+    const overlapStart = Math.max(fromMeters, row.startMeters);
+    const overlapEnd = Math.min(toMeters, row.endMeters);
+    if (overlapEnd <= overlapStart + 0.01) continue;
+    const fromFraction = (overlapStart - row.startMeters) / row.meters;
+    const toFraction = (overlapEnd - row.startMeters) / row.meters;
+    const geometry = sliceCoordinatePolyline(row.coords, fromFraction, toFraction);
+    if (geometry.length < 2) continue;
+    routeSegments.push({
+      ...row.segment,
+      distanceMeters: overlapEnd - overlapStart,
+      geometry,
+      ...(Object.prototype.hasOwnProperty.call(row.segment, "coords") ? { coords: geometry } : {})
+    });
+  }
+  const segments = [];
+  if (fromPlacement) {
+    const stationCoord = locationCoordinate(fromPlacement.target.location);
+    const access = fuelAccessSegment(
+      stationCoord, fromPlacement.routeCoord, fromPlacement.target.station.id
+    );
+    if (access) segments.push(access);
+  }
+  segments.push(...routeSegments);
+  if (toPlacement) {
+    const stationCoord = locationCoordinate(toPlacement.target.location);
+    const access = fuelAccessSegment(
+      toPlacement.routeCoord, stationCoord, toPlacement.target.station.id
+    );
+    if (access) segments.push(access);
+  }
+  const geometry = [];
+  for (const segment of segments) appendCoordinates(geometry, routeSegmentCoordinates(segment));
+  const onRouteMeters = Math.max(0, toMeters - fromMeters);
+  const distanceMeters = segments.reduce(
+    (sum, segment) => sum + Math.max(0, Number(segment.distanceMeters) || 0),
+    0
+  );
+  const stats = aggregateRouteSurfaceStats(routeSegments, onRouteMeters);
+  const startCoord = geometry[0] || locationCoordinate(fromPlacement && fromPlacement.target.location);
+  const endCoord = geometry.at(-1) || locationCoordinate(toPlacement && toPlacement.target.location);
+  const shape = routeShapeMetrics(geometry, startCoord, endCoord);
+  const baseMeters = Math.max(1, Number(route.distanceMeters) || layout.meters);
+  const movingSeconds = Math.max(0, Number(route.estimatedMovingSeconds) || 0) *
+    (onRouteMeters / baseMeters) + Math.max(0, distanceMeters - onRouteMeters) / 8.3;
+  const restrictedMeters = routeSegments.reduce((sum, segment) =>
+    sum + (String(segment.accessClass) === "motorized_unknown"
+      ? Math.max(0, Number(segment.distanceMeters) || 0)
+      : 0)
+  , 0);
+  const debug = route.debug || {};
+  return {
+    ...route,
+    routeId: `${route.routeId || "route"}-fuel-${Math.round(fromMeters)}-${Math.round(toMeters)}`,
+    geometry,
+    segments,
+    distanceMeters: Math.round(distanceMeters),
+    estimatedMovingSeconds: Math.round(movingSeconds),
+    estimatedElapsedSeconds: Math.round(movingSeconds * 1.15),
+    stats,
+    dirtPercent: stats.dirtPercent,
+    pavedPercent: stats.pavedPercent,
+    maneuvers: buildManeuvers(geometry),
+    backtrackMeters: shape.backwardMeters,
+    backtrackPct: shape.backwardPercent,
+    restrictedMeters: Math.round(restrictedMeters),
+    restrictedReason: restrictedMeters > 0 ? "motorized_unknown" : "none",
+    debug: {
+      ...debug,
+      searchMeta: {
+        ...(debug.searchMeta || {}),
+        routeShape: shape,
+        foundationSlice: true,
+        foundationFromMeters: Math.round(fromMeters),
+        foundationToMeters: Math.round(toMeters)
+      }
+    }
+  };
+}
+
+/**
+ * Reuse a proved profile route when one on-route pump makes the whole journey
+ * range-safe. The selected geometry is partitioned, not re-searched, so adding
+ * fuel cannot lower Dirt quality or manufacture a lateral/backtracking detour.
+ */
+function oneStopFoundationFuelPlan({
+  foundationRoute,
+  targets,
+  start,
+  firstLegMaxMeters,
+  usableRangeMeters,
+  destinationFuelUsedLimitMeters,
+  minimumFuelStops,
+  requireFuelStopBeforeEnd,
+  requiredFirstStationId,
+  preferredStationIds
+}) {
+  if (!foundationRoute || foundationRoute.status !== "complete") return null;
+  if ((Number(minimumFuelStops) || 0) > 1) return null;
+  const layout = foundationRouteLayout(foundationRoute);
+  if (!(layout.meters > 0) || !layout.rows.length) return null;
+  const firstCap = Number(firstLegMaxMeters);
+  const usable = Number(usableRangeMeters);
+  if (!(firstCap > 0) || !(usable > 0)) return null;
+  const initialFuelUsed = Math.max(0, usable - firstCap);
+  const configuredArrivalLimit = destinationFuelUsedLimitMeters == null
+    ? NaN
+    : Number(destinationFuelUsedLimitMeters);
+  const directArrivalLimit = Number.isFinite(configuredArrivalLimit)
+    ? Math.max(0, configuredArrivalLimit - initialFuelUsed)
+    : usable;
+  const directSatisfies = requireFuelStopBeforeEnd !== true &&
+    (Number(minimumFuelStops) || 0) === 0 &&
+    layout.meters <= firstCap + 1 && layout.meters <= directArrivalLimit + 1;
+  if (directSatisfies) return null;
+  const arrivalLimit = Number.isFinite(configuredArrivalLimit)
+    ? Math.min(usable, configuredArrivalLimit)
+    : usable;
+  const required = requiredFirstStationId == null ? null : String(requiredFirstStationId);
+  const preferred = new Set((preferredStationIds || []).map(String));
+  const placements = targets.fuelTargetsNear(
+    start,
+    firstCap
+  ).map((target) => foundationPlacement(target, layout)).filter(Boolean)
+    .map((placement) => ({
+      ...placement,
+      approachMeters: placement.alongMeters + placement.accessMeters,
+      continuationMeters: layout.meters - placement.alongMeters + placement.accessMeters
+    }))
+    .filter((placement) =>
+      placement.alongMeters >= MIN_FORWARD_PROGRESS_M &&
+      layout.meters - placement.alongMeters >= MIN_DESTINATION_FUEL_CLEARANCE_M &&
+      placement.approachMeters <= firstCap + 1 &&
+      placement.continuationMeters <= arrivalLimit + 1 &&
+      placement.accessMeters <= MAX_FUEL_RETRACE_M + 1 &&
+      (!required || String(placement.target.station.id) === required)
+    );
+  if (!placements.length) return null;
+  placements.sort((a, b) => {
+    const preferredDelta = (preferred.has(String(b.target.station.id)) ? 1 : 0) -
+      (preferred.has(String(a.target.station.id)) ? 1 : 0);
+    if (preferredDelta) return preferredDelta;
+    const band = tankCommitBand(a.approachMeters, firstCap, usable) -
+      tankCommitBand(b.approachMeters, firstCap, usable);
+    if (band) return band;
+    if (Math.abs(a.accessMeters - b.accessMeters) > 25) return a.accessMeters - b.accessMeters;
+    return b.alongMeters - a.alongMeters;
+  });
+  const selected = placements[0];
+  const firstRoute = sliceFoundationRoute(foundationRoute, layout, null, selected);
+  const finalRoute = sliceFoundationRoute(foundationRoute, layout, selected, null);
+  const stationCandidates = placements.map((placement, rank) => ({
+    id: String(placement.target.station.id),
+    departureId: "start",
+    latitude: Number(placement.target.location.lat),
+    longitude: Number(placement.target.location.lon),
+    name: placement.target.station.name || placement.target.station.brand || "Fuel stop",
+    meters: Math.round(placement.approachMeters),
+    graphMeters: Math.round(placement.approachMeters),
+    // Every option partitions this same already-selected profile route.  Use
+    // its whole-route quality here; borrowing the selected pump's first-slice
+    // percentage made the alternatives tray report misleading values.
+    dirtPct: Number(foundationRoute.stats && foundationRoute.stats.dirtPercent) || 0,
+    validForward: true,
+    commitBand: tankCommitBand(placement.approachMeters, firstCap, usable),
+    canFinish: true,
+    rank,
+    approachElapsedMs: 0,
+    approachStatus: "reused",
+    continuationElapsedMs: 0,
+    continuationStatus: "reused",
+    continuationStrategy: "foundation_route_partition",
+    remainingGraphMeters: Math.round(placement.continuationMeters),
+    backtrackMeters: 0,
+    rejectedReason: null,
+    totalElapsedMs: 0,
+    candidateSource: "foundation_route",
+    foundationAlongMeters: Math.round(placement.alongMeters),
+    foundationOffRouteMeters: Math.round(placement.offRouteMeters),
+    foundationPriorityCellDistance: Number.isFinite(Number(
+      placement.target.foundationCellDistance
+    )) ? Number(placement.target.foundationCellDistance) : null,
+    chainMeters: Math.round(layout.meters + placement.accessMeters * 2),
+    chainDirtPct: Number(foundationRoute.stats && foundationRoute.stats.dirtPercent) || 0,
+    continuationBacktrackMeters: 0
+  }));
+  const stop = {
+    ...selected.target.station,
+    graphMeters: firstRoute.distanceMeters,
+    dirtPercent: Number(firstRoute.stats && firstRoute.stats.dirtPercent) || 0
+  };
+  const chainMeters = Number(firstRoute.distanceMeters) + Number(finalRoute.distanceMeters);
+  const dirtMeters = Number(firstRoute.distanceMeters) * Number(firstRoute.stats.dirtPercent || 0) +
+    Number(finalRoute.distanceMeters) * Number(finalRoute.stats.dirtPercent || 0);
+  return {
+    stop,
+    routes: [firstRoute, finalRoute],
+    graphMeters: [firstRoute.distanceMeters, finalRoute.distanceMeters],
+    stationCandidates,
+    firstReachableStationMeters: Math.min(...placements.map((row) => row.approachMeters)),
+    diagnostics: {
+      strategy: "foundation_route_partition",
+      foundationRouteReused: true,
+      foundationRouteMeters: Math.round(layout.meters),
+      foundationRouteDirtPercent: Number.isFinite(Number(
+        foundationRoute.stats && foundationRoute.stats.dirtPercent
+      )) ? Number(foundationRoute.stats.dirtPercent) : null,
+      foundationMatchedStations: placements.length,
+      foundationSelectedStationId: String(selected.target.station.id),
+      foundationChainMeters: Math.round(chainMeters),
+      foundationChainDirtPercent: chainMeters > 0 ? Math.round(dirtMeters / chainMeters) : 0,
+      profileRouteSavings: 2
+    }
+  };
 }
 
 function edgeView(runtime, edgeIndex) {
@@ -663,9 +1103,10 @@ const preparedFuelTargetCache = new WeakMap();
 
 function prepareTargets(
   runtime, stations, destination, policy, profile, avoid,
-  deadlineAtMs = Infinity, abortSignal = null
+  deadlineAtMs = Infinity, abortSignal = null, foundationRoute = null
 ) {
   const started = Date.now();
+  const foundationCells = foundationRouteCells(foundationRoute);
   const destinationMatch = matchPoint(
     runtime,
     destination,
@@ -714,6 +1155,7 @@ function prepareTargets(
     stationsMatchLimited: false,
     stationCacheMatches: 0,
     stationFreshMatches: 0,
+    foundationPriorityStations: 0,
     targetPasses: []
   };
   const matchedStationIDs = new Set();
@@ -732,10 +1174,17 @@ function prepareTargets(
         ...row,
         straightMeters,
         progressMeters: projectedProgressMeters(point, originCoordinate, destinationCoordinate),
-        crossTrack: Math.abs(crossTrackMeters(point, originCoordinate, destinationCoordinate))
+        crossTrack: Math.abs(crossTrackMeters(point, originCoordinate, destinationCoordinate)),
+        foundationCellDistance: foundationCellDistance(row.location, foundationCells)
       };
     }).filter((row) => row.straightMeters <= geographicLimit)
       .sort((a, b) => {
+        const aFoundation = Number.isFinite(a.foundationCellDistance) ? 0 : 1;
+        const bFoundation = Number.isFinite(b.foundationCellDistance) ? 0 : 1;
+        if (aFoundation !== bFoundation) return aFoundation - bFoundation;
+        if (aFoundation === 0 && a.foundationCellDistance !== b.foundationCellDistance) {
+          return a.foundationCellDistance - b.foundationCellDistance;
+        }
         const aForward = a.progressMeters >= -5_000 ? 0 : 1;
         const bForward = b.progressMeters >= -5_000 ? 0 : 1;
         if (aForward !== bForward) return aForward - bForward;
@@ -746,6 +1195,10 @@ function prepareTargets(
     prepareDiagnostics.stationsInRange = Math.max(
       prepareDiagnostics.stationsInRange,
       nearby.length
+    );
+    prepareDiagnostics.foundationPriorityStations = Math.max(
+      prepareDiagnostics.foundationPriorityStations,
+      nearby.filter((row) => Number.isFinite(row.foundationCellDistance)).length
     );
     const fuelTargets = [];
     const matchStarted = Date.now();
@@ -766,7 +1219,14 @@ function prepareTargets(
       if (cached !== undefined) {
         if (cached) {
           matchedStationIDs.add(stationID);
-          fuelTargets.push(cached);
+          // The road snap is stable for this graph/policy and belongs in the
+          // cache. Proximity to the selected foundation route is request-
+          // specific, so decorate a copy instead of letting one route's cell
+          // distance leak into a later route.
+          fuelTargets.push({
+            ...cached,
+            foundationCellDistance: row.foundationCellDistance
+          });
           cacheMatches += 1;
         }
         continue;
@@ -807,7 +1267,10 @@ function prepareTargets(
       };
       targetCache.set(stationID, target);
       matchedStationIDs.add(stationID);
-      fuelTargets.push(target);
+      fuelTargets.push({
+        ...target,
+        foundationCellDistance: row.foundationCellDistance
+      });
       freshMatches += 1;
     }
     prepareDiagnostics.stationsMatched = matchedStationIDs.size;
@@ -1039,6 +1502,8 @@ function rankForwardFuel(
   const normal = forward.slice().sort((a, b) =>
     (tankCommitBand(a.graphMeters, capMeters, fullUsableRangeMeters) -
       tankCommitBand(b.graphMeters, capMeters, fullUsableRangeMeters)) ||
+      (Number.isFinite(a.foundationCellDistance) ? a.foundationCellDistance : 99) -
+        (Number.isFinite(b.foundationCellDistance) ? b.foundationCellDistance : 99) ||
       a.crossTrack - b.crossTrack || b.progressMeters - a.progressMeters ||
       a.graphMeters - b.graphMeters
   );
@@ -1170,7 +1635,7 @@ async function planFuelChainOnRuntime({
   }
 
   const targets = prepareTargets(
-    runtime, stations, destination, policy, profile, avoid, deadline, abortSignal
+    runtime, stations, destination, policy, profile, avoid, deadline, abortSignal, foundationRoute
   );
   if (!targets.destinationMatch.ok) {
     return {
@@ -1193,7 +1658,8 @@ async function planFuelChainOnRuntime({
       : null,
     profileRoutesSharedRuntime: !!graphResolution && !routeCandidate,
     targetPrepareMs: targets.prepareDiagnostics.elapsedMs,
-    targetCacheHit: targets.prepareDiagnostics.cacheHit
+    targetCacheHit: targets.prepareDiagnostics.cacheHit,
+    foundationPriorityStations: targets.prepareDiagnostics.foundationPriorityStations
   };
   const memo = new Map();
   const stationCandidates = [];
@@ -1217,6 +1683,65 @@ async function planFuelChainOnRuntime({
         (Number(minimumFuelStops) || 0) + 1
       ))
     : returnedStopLimit;
+  if (!graphOnlyFeeler && !probeFirstReachableStation && foundationRoute) {
+    planningStage = "foundation_route_partition";
+    const reusedFoundation = oneStopFoundationFuelPlan({
+      foundationRoute,
+      targets,
+      start,
+      firstLegMaxMeters,
+      usableRangeMeters,
+      destinationFuelUsedLimitMeters,
+      minimumFuelStops,
+      requireFuelStopBeforeEnd,
+      requiredFirstStationId,
+      preferredStationIds
+    });
+    if (reusedFoundation) {
+      const reusedCandidates = reusedFoundation.stationCandidates || [];
+      return {
+        ok: true,
+        stops: [reusedFoundation.stop],
+        graphMeters: reusedFoundation.graphMeters,
+        routes: reusedFoundation.routes,
+        stationCandidates: reusedCandidates,
+        firstReachableStationMeters: reusedFoundation.firstReachableStationMeters,
+        windowComplete: true,
+        diagnostics: enrichFuelDiagnostics({
+          ...fuelDecisionDiagnostics,
+          ...reusedFoundation.diagnostics,
+          targetPrepareMs: targets.prepareDiagnostics.elapsedMs,
+          targetCacheHit: targets.prepareDiagnostics.cacheHit,
+          stationsConsidered: targets.prepareDiagnostics.stationsConsidered,
+          stationsInRange: targets.prepareDiagnostics.stationsInRange,
+          stationsMatchLimited: targets.prepareDiagnostics.stationsMatchLimited,
+          stationCacheMatches: targets.prepareDiagnostics.stationCacheMatches,
+          stationFreshMatches: targets.prepareDiagnostics.stationFreshMatches,
+          foundationPriorityStations: targets.prepareDiagnostics.foundationPriorityStations,
+          targetPasses: targets.prepareDiagnostics.targetPasses,
+          states: 1,
+          dijkstraPops: 0,
+          matchedFuel: targets.prepareDiagnostics.stationsMatched,
+          candidateK: effectiveK,
+          elapsedMs: Date.now() - started,
+          maxHopMs: 0,
+          profileRouteAttempts: 0,
+          slowestProfileRoutes: [],
+          searchDeadlineOverrunMs: Number.isFinite(deadline)
+            ? Math.max(0, Date.now() - deadline)
+            : 0,
+          timeBudgetExceeded: false,
+          deadlinePhase: null,
+          cancelled: false,
+          selectedReason: "foundation_route_fuel"
+        }, {
+          stationsReachableWithinRange: reusedCandidates.length,
+          candidatesEvaluated: reusedCandidates.length,
+          stationCandidates: reusedCandidates
+        })
+      };
+    }
+  }
   const destinationGraph = boundedGraphDistances(
     runtime, targets.destinationMatch, policy, usableRangeMeters,
     avoidEdgeIds, [], null, 1, deadline, abortSignal
@@ -1547,6 +2072,7 @@ async function planFuelChainOnRuntime({
           fits,
           continuationDestinationMeters: null,
           continuationResponse: null,
+          continuationBacktrackMeters: null,
           hasForwardStation: false,
           validForward: false,
           cleanFallbackCount: 0,
@@ -1611,11 +2137,18 @@ async function planFuelChainOnRuntime({
             const routedContinuationMeters = Number(
               continuationResponse && continuationResponse.distanceMeters
             );
+            const continuationBacktrackMeters = responseBacktrackMeters(continuationResponse);
+            row.continuationBacktrackMeters = continuationBacktrackMeters;
+            const continuationBacktrackCap = Number.isFinite(Number(
+              candidate.foundationCellDistance
+            ))
+              ? MAX_FOUNDATION_NEARBY_CONTINUATION_BACKTRACK_M
+              : MAX_FUEL_RETRACE_M;
             if (
               continuationResponse && continuationResponse.status === "complete" &&
               Number.isFinite(routedContinuationMeters) &&
               routedContinuationMeters <= continuationCap + 1 &&
-              responseBacktrackMeters(continuationResponse) <= MAX_FUEL_RETRACE_M + 1
+              continuationBacktrackMeters <= continuationBacktrackCap + 1
             ) {
               row.continuationResponse = continuationResponse;
               row.continuationDestinationMeters = routedContinuationMeters;
@@ -1717,7 +2250,17 @@ async function planFuelChainOnRuntime({
           totalElapsedMs: Date.now() - candidateStarted,
           remainingGraphMeters: Number.isFinite(candidate.remainingGraphMeters)
             ? Math.round(candidate.remainingGraphMeters)
-            : null
+            : null,
+          chainMeters: row.continuationResponse
+            ? Math.round(row.meters + Number(row.continuationDestinationMeters || 0))
+            : null,
+          chainDirtPct: Number.isFinite(Number(row.chainDirtPct)) ? row.chainDirtPct : null,
+          continuationBacktrackMeters: Number.isFinite(Number(row.continuationBacktrackMeters))
+            ? Math.round(Number(row.continuationBacktrackMeters))
+            : null,
+          foundationPriorityCellDistance: Number.isFinite(Number(
+            candidate.foundationCellDistance
+          )) ? Number(candidate.foundationCellDistance) : null
         };
       } catch (error) {
         diagnostic = {
@@ -1749,7 +2292,12 @@ async function planFuelChainOnRuntime({
           totalElapsedMs: Date.now() - candidateStarted,
           remainingGraphMeters: Number.isFinite(candidate.remainingGraphMeters)
             ? Math.round(candidate.remainingGraphMeters)
-            : null
+            : null,
+          chainMeters: null,
+          continuationBacktrackMeters: null,
+          foundationPriorityCellDistance: Number.isFinite(Number(
+            candidate.foundationCellDistance
+          )) ? Number(candidate.foundationCellDistance) : null
         };
         row = {
           candidate,
@@ -1760,6 +2308,7 @@ async function planFuelChainOnRuntime({
           fits: false,
           continuationDestinationMeters: null,
           continuationResponse: null,
+          continuationBacktrackMeters: null,
           hasForwardStation: false,
           validForward: false,
           cleanFallbackCount: Infinity,
@@ -1783,6 +2332,13 @@ async function planFuelChainOnRuntime({
       const aStops = a.continuationResponse ? 1 : 2;
       const bStops = b.continuationResponse ? 1 : 2;
       if (aStops !== bStops) return aStops - bStops;
+      const aFoundationCell = Number.isFinite(Number(a.candidate.foundationCellDistance))
+        ? Number(a.candidate.foundationCellDistance)
+        : 99;
+      const bFoundationCell = Number.isFinite(Number(b.candidate.foundationCellDistance))
+        ? Number(b.candidate.foundationCellDistance)
+        : 99;
+      if (aFoundationCell !== bFoundationCell) return aFoundationCell - bFoundationCell;
       const crossDelta = Number(a.candidate.crossTrack) - Number(b.candidate.crossTrack);
       if (Number.isFinite(crossDelta) && Math.abs(crossDelta) > 2_000) return crossDelta;
       const progressDelta = hopProgress(b) - hopProgress(a);
@@ -1932,6 +2488,12 @@ async function planFuelChainOnRuntime({
           provenComplete && requiredStopsSatisfied && (!watchedAvailable || tankCommitBand(
         provenComplete.meters, cap, usableRangeMeters
       ) <= 1)) {
+        // A live request has already proved the highest-ranked, minimum-stop,
+        // forward chain. Surface is only the final tiebreaker and may not spend
+        // another province-scale route search merely to compare an equivalent
+        // pump. Route-foundation candidates above retain all zero-search,
+        // route-connected alternatives for the replacement UI.
+        if (Number.isFinite(deadline)) break;
         const remaining = candidates.slice(startRank + batch.length);
         if (!remaining.some((candidate) =>
           canUnevaluatedCandidateBeatComplete(candidate, provenComplete)
@@ -2253,6 +2815,7 @@ async function planFuelChainOnRuntime({
         stationsMatchLimited: targets.prepareDiagnostics.stationsMatchLimited,
         stationCacheMatches: targets.prepareDiagnostics.stationCacheMatches,
         stationFreshMatches: targets.prepareDiagnostics.stationFreshMatches,
+        foundationPriorityStations: targets.prepareDiagnostics.foundationPriorityStations,
         targetPasses: targets.prepareDiagnostics.targetPasses,
         states,
         dijkstraPops,
@@ -2318,6 +2881,7 @@ async function planFuelChainOnRuntime({
       stationsMatchLimited: targets.prepareDiagnostics.stationsMatchLimited,
       stationCacheMatches: targets.prepareDiagnostics.stationCacheMatches,
       stationFreshMatches: targets.prepareDiagnostics.stationFreshMatches,
+      foundationPriorityStations: targets.prepareDiagnostics.foundationPriorityStations,
       targetPasses: targets.prepareDiagnostics.targetPasses,
       strategy: "forward_graph_reachability",
       states,

@@ -24,6 +24,7 @@ Android's online planner must continue to call the shared LIVE route service. Th
 | `1c041e0` | Large-graph routing budgets scale without weakening the route objective. |
 | `a49d9d1` | DIRT route-quality recovery, urban-topology handling, and disconnected duplicate-node bridging. |
 | `b63a3bf` | Faster graph preparation, safe reuse of wide-search results, bounded low-DIRT recovery, and early completion of fuel-candidate evaluation once a winning minimum-stop plan is proven. |
+| `2026-09-03.foundation-route-fuel.23` | The selected profile route becomes the fuel foundation; an on-route one-stop plan partitions and reuses that geometry, while dense pump selection follows the winding route and ranks complete chains. |
 
 Online Android routing must not depend on a downloaded navigation pack. Downloaded packs are for offline navigation and rerouting after navigation starts.
 
@@ -57,6 +58,9 @@ Android must preserve the accepted fuel policy:
 7. Do not choose an early, backward, overshooting, or down-and-back pump when a sensible forward option exists.
 8. A rider-placed waypoint on a fuel station resets the tank because the rider is assumed to refuel there.
 9. Alternative-pump replacement must keep at least the useful evaluated candidates for that departure. Selecting another pump rebuilds the affected route because both the approach and downstream fuel state change.
+10. When a proved selected-profile route contains a safe one-stop pump, split and reuse that route instead of independently rerouting profile legs to and from the pump. Fuel insertion must not lower the selected profile's route quality.
+11. Dense pump shortlisting follows the actual foundation route before the straight endpoint chord. Any route-proximity value is request-specific and must not leak through the reusable station-snap cache.
+12. When exact partitioning is unavailable, rank the full approach-plus-continuation chain. A pump near the winding foundation may relax chord-relative continuation backtrack only within the shared bound; range, forward continuation, total-detour, and retrace guards remain mandatory.
 
 The candidate search may stop once a complete minimum-stop plan has been proven and all remaining candidates are unable to beat it on the accepted ordering. That optimization must not remove the alternatives required by “Choose another pump.”
 
@@ -71,6 +75,7 @@ Port the client-side behaviour from `effb608` and `d17a4a0`:
 - Reuse an upstream automatic pump only when its incoming fuel state and downstream reachability remain valid.
 - A rider-added fuel waypoint must be treated as a refuelling reset before validating the suffix.
 - Never keep stale automatic pumps merely because their coordinates are unchanged.
+- In LIVE mode, do not launch a speculative next-leg fuel/route request beside the current combined operation. Use a cached next-leg measurement if present; otherwise build the suffix once and rewind the preceding fuel choice only when the completed suffix proves it unsafe.
 
 ### 4. Diagnostics and release verification
 
@@ -89,6 +94,12 @@ Android diagnostics must make parity failures observable. At minimum retain:
   longest candidate hop, and fuel-window budget overrun; and
 - an explicit cancel request and cancelled/stale disposition for every route
   generation replaced by a later waypoint edit.
+- foundation-route reuse, distance, dirt percentage, matched/route-priority
+  pump counts, selected pump, final chain distance/dirt percentage, and saved
+  profile-route attempts; and
+- per pump: foundation versus routed source, along/off-route placement,
+  route-cell distance, complete-chain distance/dirt percentage, and continuation
+  backtrack, plus the client's skipped-speculative-look-ahead reason.
 
 The live verification command must require a `--region` argument and verify only the requested state, province, or routing region. Do not let an unavailable BC pack fail an Ontario, Quebec, or Nova Scotia verification.
 
@@ -102,6 +113,9 @@ These are regression anchors, not universal route-quality targets. Run them agai
 | Quebec short DIRT | Existing 67 km Quebec regression fixture | about 67,268 m; 70% dirt |
 | Ontario DIRT | Existing 372 km Ontario regression fixture | about 372,023 m; 83% dirt |
 | Nova Scotia one-stop fuel | Existing 450 km / 15% reserve regression fixture | one automatic stop at Ultramar `osm:n5288561941`; at least two viable pump choices retained |
+| Nova Scotia Sept-3 fuel | `44.764830,-63.340265` → `43.678864,-65.794704` | complete one-stop Dirt chain; foundation partition; no pump profile reroutes |
+| Central Ontario Sept-3 fuel | `44.632662,-75.651839` → `44.601681,-79.308263` | complete one-stop Dirt chain; foundation partition; about 85% dirt |
+| Northern Ontario surface switch | `48.717124,-85.788718` → `49.690947,-87.041404` | reuse the useful pump across Balanced → Dirt; Dirt must exceed Balanced dirt share without remote paved hunting |
 
 For the one-stop probe, the accepted routed legs were approximately 382,484 m and 12,940 m. Exact timing varies with network and device; route choice, stop count, forward progress, and parity laws are the gates.
 
@@ -113,6 +127,10 @@ Android is lockstep for this delta only when all of the following are true:
 - Offline unit tests cover the 1 km dirt-diversion rule, CanVec unknown access, urban fallback, duplicate-node bridging, forward-progress guard, and bounded DIRT recovery.
 - Itinerary tests cover append, insert, move, delete, profile change, Allow Unknown change, rider-added fuel waypoint, and alternative-pump replacement.
 - Fuel tests prove zero stops when safe, the minimum safe stop count otherwise, arrival fuel escape, no backward/down-and-back stop, and preservation of pump alternatives.
+- The fixed production-pack command `npm run bench:fuel-regressions` passes;
+  Android LIVE returns equivalent stop/quality semantics, and Android offline
+  has native fixtures for foundation partition, route-aware dense shortlisting,
+  surface-switch pump reuse, and non-speculative forward/rewind planning.
 - The Nova Scotia, Quebec, and Ontario fixed probes pass without changing the accepted profile objectives.
 - Android's required Pixel 7 emulator verification passes before any physical-device build.
 

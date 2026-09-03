@@ -3601,5 +3601,7 @@ module.exports = {
   routeSearchLimitMessage,
   backtrackSummary,
   restrictedSummary,
-  graphDecisionManeuvers
+  graphDecisionManeuvers,
+  buildManeuvers,
+  aggregateRouteSurfaceStats
 };
