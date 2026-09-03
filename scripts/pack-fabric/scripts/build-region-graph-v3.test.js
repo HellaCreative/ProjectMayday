@@ -33,9 +33,11 @@ test("v3 region registry drives live graph filename", () => {
   assert.equal(isV3Region("pe"), true);
   assert.equal(isV3Region("nl"), true);
   assert.equal(isV3Region("qc"), true);
+  assert.equal(isV3Region("on"), true);
   assert.equal(isV3Region("bc"), false);
   assert.equal(phoneGraphFileNameForRegion("nb"), "graph.v3.bin");
   assert.equal(phoneGraphFileNameForRegion("pe"), "graph.v3.bin");
+  assert.equal(phoneGraphFileNameForRegion("on"), "graph.v3.bin");
   assert.equal(phoneGraphFileNameForRegion("bc"), "graph.v2.bin");
 });
 
@@ -45,6 +47,7 @@ test("live remote URLs follow the v3 registry", () => {
   assert.match(remoteGraphUrl("pe"), /\/pe\/graph\.v3\.bin$/);
   assert.match(remoteGraphUrl("nl"), /\/nl\/graph\.v3\.bin$/);
   assert.match(remoteGraphUrl("qc"), /\/qc\/graph\.v3\.bin$/);
+  assert.match(remoteGraphUrl("on"), /\/on\/graph\.v3\.bin$/);
   assert.match(remoteGraphUrl("bc"), /\/bc\/graph\.v2\.bin$/);
 });
 
@@ -52,6 +55,7 @@ test("builder points at the Geofabrik extract, not an NS-only path", () => {
   assert.match(roadsSeqPath("nb"), /osm-roads\/new-brunswick\/roads\.geojsonseq$/);
   assert.match(extractHint("pe"), /clip-and-extract-osm-roads\.sh pe/);
   assert.match(extractHint("nl"), /clip-and-extract-osm-roads\.sh nl/);
+  assert.match(extractHint("on"), /clip-and-extract-osm-roads\.sh on/);
 });
 
 test("builder refuses to stamp frozen live ns/nb packs", async () => {

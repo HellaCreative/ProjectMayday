@@ -7,7 +7,7 @@ const {
   seamCorridor
 } = require("./region-polygons");
 
-test("admin polygons own Atlantic pins without stealing neighbours", () => {
+test("admin polygons own Atlantic and Ontario pins without stealing neighbours", () => {
   assert.equal(polygonOwner(-63.5752, 44.6488), "ns");
   assert.equal(polygonOwner(-64.213, 45.833), "ns");
   assert.equal(polygonOwner(-64.368, 45.918), "nb");
@@ -20,7 +20,8 @@ test("admin polygons own Atlantic pins without stealing neighbours", () => {
   assert.equal(polygonOwner(-71.2075, 46.8139), "qc");
   assert.equal(polygonOwner(-73.5673, 45.5017), "qc");
   assert.equal(polygonOwner(-57.132, 51.426), "qc");
-  assert.equal(polygonOwner(-75.6972, 45.4215), null);
+  assert.equal(polygonOwner(-75.6972, 45.4215), "on");
+  assert.equal(polygonOwner(-79.3832, 43.6532), "on");
 });
 
 test("seam corridor is the padded admin-bbox overlap", () => {
@@ -30,5 +31,6 @@ test("seam corridor is the padded admin-bbox overlap", () => {
   assert.ok(peNb.minLat < peNb.maxLat);
   assert.ok(seamCorridor("qc", "nb"));
   assert.ok(seamCorridor("qc", "nl"));
+  assert.ok(seamCorridor("qc", "on"));
   assert.equal(seamCorridor("pe", "wa"), null);
 });
