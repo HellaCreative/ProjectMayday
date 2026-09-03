@@ -100,6 +100,61 @@ test("route-first and fuel selection load one shared request runtime", async () 
   assert.equal(result.diagnostics.routeFirstSharedRuntime, true);
 });
 
+test("an unreachable direct lower bound gives the fuel search the full window", async () => {
+  const start = { lat: 45, lon: 0 };
+  const destination = { lat: 45, lon: 2.5 };
+  let originalToDestinationCalls = 0;
+  const result = await fuelChainRequest({
+    legId: "range-gated-route-first",
+    regionId: "ns",
+    locations: [start, destination],
+    profile: "balanced",
+    fuel: {
+      routeFirstPlan: true,
+      usableRangeMeters: 130_000,
+      firstLegMaxMeters: 130_000,
+      windowTimeBudgetMs: 15_000
+    }
+  }, {
+    loadGraphsForRequest: async () => ({
+      ...lineRuntime(),
+      packIdentity: [],
+      loadDiagnostics: { fetchMs: 1, decodeMs: 1, gridMs: 1 }
+    }),
+    loadFuelForLocations: async () => ({
+      ok: true,
+      stations: [station("forward-pump", 1.5)],
+      regionIds: ["ns"],
+      packIdentity: [],
+      loadDiagnostics: { fetchMs: 1, cacheHit: false }
+    }),
+    routeOnRuntime: async (body) => {
+      const from = body.locations[0];
+      const to = body.locations[1];
+      if (from.lon === start.lon && to.lon === destination.lon) {
+        originalToDestinationCalls += 1;
+      }
+      const distanceMeters = Math.abs(to.lon - from.lon) * 78_626;
+      return {
+        status: "complete",
+        distanceMeters,
+        stats: { dirtPercent: 50 },
+        segments: [{ edgeId: `${from.lon}-${to.lon}`, distanceMeters }]
+      };
+    }
+  });
+
+  assert.equal(result.status, "complete");
+  assert.equal(result.stops[0].id, "forward-pump");
+  assert.equal(originalToDestinationCalls, 0);
+  assert.equal(result.diagnostics.routeFirstAttempted, false);
+  assert.equal(
+    result.diagnostics.routeFirstSkippedReason,
+    "destination_beyond_remaining_fuel_lower_bound"
+  );
+  assert.ok(result.diagnostics.directLowerBoundMeters > 130_000);
+});
+
 test("candidate approach and continuation proofs stay on the loaded request runtime", async () => {
   let routeCalls = 0;
   const runtime = lineRuntime();
@@ -132,6 +187,41 @@ test("candidate approach and continuation proofs stay on the loaded request runt
   assert.equal(result.ok, true);
   assert.ok(routeCalls >= 2, "expected an approach and continuation proof");
   assert.equal(result.diagnostics.profileRoutesSharedRuntime, true);
+});
+
+test("refuelling resets carried fuel before evaluating the destination continuation", async () => {
+  let continuationCalls = 0;
+  const result = await planFuelChainOnRuntime({
+    runtime: lineRuntime(),
+    stations: [station("reset-pump", 0.5)],
+    start: { lat: 45, lon: 0 },
+    destination: { lat: 45, lon: 2.5 },
+    profile: "balanced",
+    accessPolicy: { motorizedPermissive: true, motorizedUnknown: false },
+    usableRangeMeters: 200_000,
+    firstLegMaxMeters: 80_000,
+    requireFuelStopBeforeEnd: true,
+    minimumFuelStops: 1,
+    destinationFuelUsedLimitMeters: 180_000,
+    routeCandidate: ({ candidate, from }) => {
+      if (candidate.station.id === "__destination__" && from.lon === 0.5) {
+        continuationCalls += 1;
+      }
+      const distanceMeters = Math.abs(candidate.location.lon - from.lon) * 78_626;
+      return Promise.resolve({
+        status: "complete",
+        distanceMeters,
+        stats: { dirtPercent: 50 },
+        segments: [{ edgeId: `${from.lon}-${candidate.location.lon}`, distanceMeters }]
+      });
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.stops.length, 1);
+  assert.equal(result.stops[0].id, "reset-pump");
+  assert.equal(continuationCalls, 1);
+  assert.equal(result.diagnostics.states, 1);
 });
 
 test("unknown profile plans as Balanced", async () => {
@@ -226,7 +316,7 @@ test("forward progress outranks an early Clean-quality pump", async () => {
 
 test("Clean rejects a full-tank lateral Gulf-class pump in favor of a corridor pump", () => {
   assert.equal(typeof FUEL_CHAIN_SERVICE_VERSION, "string");
-  assert.match(FUEL_CHAIN_SERVICE_VERSION, /polygon-owned-endpoints/);
+  assert.match(FUEL_CHAIN_SERVICE_VERSION, /range-gated-one-stop/);
   // Halifax-ish → Tatamagouche-ish geometry: Wallace Gulf is nearly a full tank
   // sideways; Truro sits on the corridor with a shorter complete chain.
   const start = { lat: 44.764823, lon: -63.340271 };

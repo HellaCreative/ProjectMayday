@@ -142,6 +142,7 @@ final class RoutingDebugLog {
                 + "\(candidate.approachSearchOutcome ?? "-")/"
                 + "\(candidate.continuationElapsedMs.map(String.init) ?? "-")ms/"
                 + "\(candidate.continuationStatus ?? "-")/"
+                + "\(candidate.continuationStrategy ?? "-")/"
                 + "\(candidate.rejectedReason ?? "kept")"
         }.joined(separator: ",")
         event(
@@ -171,6 +172,11 @@ final class RoutingDebugLog {
                 + "routeFirstBudgetMs=\(d?.routeFirstBudgetMs.map(String.init) ?? "-") "
                 + "routeFirstSharedRuntime=\(d?.routeFirstSharedRuntime == true ? 1 : 0) "
                 + "profileRoutesSharedRuntime=\(d?.profileRoutesSharedRuntime == true ? 1 : 0) "
+                + "routeFirstAttempted=\(d?.routeFirstAttempted == true ? 1 : 0) "
+                + "routeFirstSkipped=\(d?.routeFirstSkippedReason ?? "-") "
+                + "directLowerBound=\(d?.directLowerBoundMeters.map(String.init) ?? "-")m "
+                + "firstLegMax=\(d?.firstLegMaxMeters.map(String.init) ?? "-")m "
+                + "planningDataLoadMs=\(d?.planningDataLoadMs.map(String.init) ?? "-") "
                 + "endpointResolutionMs=\(d?.endpointResolutionMs.map(String.init) ?? "-") "
                 + "endpointProbes=\(d?.endpointProbeCount.map(String.init) ?? "-") "
                 + "endpointSources=\(d?.endpointResolutionSources ?? "-") "

@@ -722,33 +722,46 @@ bytes, route-profile objectives, fuel priorities, or rider waypoint semantics:
    a dense-region cold start fail sooner. The foundational route and fuel
    search share one request-scoped decoded graph/runtime, so a memory-safe
    serverless worker never reloads the same province between those phases;
-2. every large inner loop observes the same deadline and request-cancellation
+2. before route-first begins, geographic endpoint distance is used only as a
+   mathematically safe lower bound. When that lower bound already exceeds the
+   fuel remaining in the tank, a zero-stop ride is impossible, so the planner
+   skips the full destination route and gives the window to forward pump
+   discovery and proof. It does not treat straight-line distance as a routed
+   distance, choose a pump from it, or weaken any active-profile route proof;
+3. every large inner loop observes the same deadline and request-cancellation
    signal. The iOS client also enforces a true wall-clock timeout—independent of
    the networking stack's inactivity timeout—and abandoning or replacing a
    build cancels server work;
-3. reaching a time or exploration ceiling is explicitly inconclusive. It may
+4. reaching a time or exploration ceiling is explicitly inconclusive. It may
    never be reported as a disconnected route or a proven fuel gap;
-4. when Balanced has already proved a legal, access-correct road connection
+5. when Balanced has already proved a legal, access-correct road connection
    but cannot finish its 50/50 preference refinement before the deadline, it
    returns that bounded connection with the explicit
    `balanced_distance_fallback` diagnostic and warning. A cancelled request
    never uses this fallback. The province-scale distance proof initializes
    only graph nodes it actually visits instead of clearing every Ontario- or
    Quebec-sized work array before the first search step;
-5. dense pump regions use a forward-oriented matching working set capped at
+6. dense pump regions use a forward-oriented matching working set capped at
    192 newly snapped candidates per planning origin after at least 48 pumps
    have matched. This is a candidate-generator bound, not a reduction in the
    live fuel sidecar or the pumps shown on the map. Sparse regions remain
    uncapped. A retained candidate still has to pass the
    current tank range, access, forward-progress, active-profile route, and
    continuation proof; and
-6. a resumable partial window may commit a pump only after both its active-
+7. a resumable partial window may commit a pump only after both its active-
    profile approach and a sensible forward continuation are proved inside the
    deadline. Late or unproved pumps are discarded. Province-scale active-
    profile candidates are proved serially in graph-rank order so two expensive
    searches cannot consume the same CPU window and leave both unfinished. The
    approach and continuation proofs run on the same request runtime as the
    foundational route instead of reopening the province graph per candidate.
+   A candidate whose already-computed destination-rooted graph distance fits
+   the next tank proceeds directly to its active-profile continuation proof;
+   another province-wide reachability search runs only when that direct
+   continuation cannot be proved and a later pump may still be required. Once
+   that pump is proved, its continuation is evaluated from a full tank; fuel
+   consumed before the pump cannot reduce the post-refuel arrival allowance or
+   manufacture a duplicate continuation/second stop.
    When an authoritative admin polygon owns a pin, endpoint resolution accepts
    that ownership without loading the same region merely to disambiguate
    overlapping province/state rectangles. Pins outside or between those
@@ -760,7 +773,9 @@ cache-versus-fresh target matches and each target pass, every routed candidate's
 rank/timing/outcome/rejection, whether dense matching was limited, the exact
 deadline phase, whether route-first shared its request runtime, and whether
 candidate proofs shared that runtime, endpoint-resolution time/source/probe
-count, and whether the request was cancelled.
+count, whether route-first was attempted or safely skipped, the direct-distance
+lower bound, the remaining first-leg range, planning-data load time, and whether
+the request was cancelled.
 The fixed Ontario
 two-point fuel reproduction now
 returns a safe one-stop chain in about 12.2 seconds locally instead of 53

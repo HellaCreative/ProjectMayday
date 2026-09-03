@@ -374,6 +374,11 @@ struct FuelChainDiagnostics: Codable, Sendable {
     var routeFirstBudgetMs: Int? = nil
     var routeFirstSharedRuntime: Bool? = nil
     var profileRoutesSharedRuntime: Bool? = nil
+    var routeFirstAttempted: Bool? = nil
+    var routeFirstSkippedReason: String? = nil
+    var directLowerBoundMeters: Int? = nil
+    var firstLegMaxMeters: Int? = nil
+    var planningDataLoadMs: Int? = nil
     var endpointResolutionMs: Int? = nil
     var endpointProbeCount: Int? = nil
     var endpointResolutionSources: String? = nil
@@ -439,6 +444,7 @@ struct FuelStationCandidate: Codable, Sendable {
     var approachFailureReason: String? = nil
     var continuationElapsedMs: Int? = nil
     var continuationStatus: String? = nil
+    var continuationStrategy: String? = nil
     var backtrackMeters: Double? = nil
     var rejectedReason: String? = nil
     var totalElapsedMs: Int? = nil

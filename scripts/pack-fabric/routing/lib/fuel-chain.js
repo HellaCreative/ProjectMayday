@@ -51,7 +51,7 @@ const MIN_STOP_SEPARATION_M = 800;
 const MIN_FORWARD_PROGRESS_M = 8_000;
 const MIN_DESTINATION_FUEL_CLEARANCE_M = 5_000;
 /** Bumped when fuel-selection / ranking contracts change. Clients may assert. */
-const FUEL_CHAIN_SERVICE_VERSION = "2026-09-03.polygon-owned-endpoints.18";
+const FUEL_CHAIN_SERVICE_VERSION = "2026-09-03.range-gated-one-stop.20";
 /** Watch at 50%; prefer sensible equal-stop choices at 70%. Lockstep: HopSearchPolicy.swift. */
 const FUEL_COMFORT_LO = 0.50;
 const FUEL_COMFORT_HI = 0.70;
@@ -1443,6 +1443,7 @@ async function planFuelChainOnRuntime({
       const candidateStarted = Date.now();
       let approachElapsedMs = null;
       let continuationElapsedMs = null;
+      let continuationStrategy = null;
       try {
         planningStage = "candidate_route";
         const approachStarted = Date.now();
@@ -1506,33 +1507,27 @@ async function planFuelChainOnRuntime({
           }
           row.nextHistory = nextHistory;
           row.nextArrival = nextArrival;
-          const continuation = reachableFrom(
-            String(candidate.station.id), candidate.location, candidate.match, usableRangeMeters,
-            nextHistory, nextArrival
-          );
-          const forwardStations = rankForwardFuel(
-            continuation.fuel,
-            candidate.location,
-            destination,
-            usableRangeMeters,
-            new Set([...visited, String(candidate.station.id)]),
-            profile
-          );
-          row.continuationDestinationMeters = Number.isFinite(continuation.destinationMeters)
-            ? continuation.destinationMeters
-            : null;
-          if (
-            Number.isFinite(continuation.destinationMeters) &&
-            continuation.destinationMeters <= usableRangeMeters + 1 &&
-            Date.now() < deadline &&
-            !(abortSignal && abortSignal.aborted)
-          ) {
+          const configuredArrivalLimit = destinationFuelUsedLimitMeters == null
+            ? NaN
+            : Number(destinationFuelUsedLimitMeters);
+          const continuationCap = Number.isFinite(configuredArrivalLimit)
+            ? Math.min(usableRangeMeters, configuredArrivalLimit)
+            : usableRangeMeters;
+          let directContinuationAttempted = false;
+          const proveDirectContinuation = async (lowerBoundMeters) => {
+            if (
+              !Number.isFinite(lowerBoundMeters) ||
+              lowerBoundMeters > continuationCap + 1 ||
+              Date.now() >= deadline ||
+              (abortSignal && abortSignal.aborted)
+            ) return false;
+            directContinuationAttempted = true;
             planningStage = "candidate_continuation";
             const continuationStarted = Date.now();
             const continuationResponse = await evaluateProfileHop({
-              candidate: destinationCandidate(continuation.destinationMeters),
+              candidate: destinationCandidate(lowerBoundMeters),
               from: candidate.location,
-              maxMeters: usableRangeMeters,
+              maxMeters: continuationCap,
               profile,
               accessPolicy: rawPolicy,
               priorEdgeIds: [...nextHistory],
@@ -1548,7 +1543,7 @@ async function planFuelChainOnRuntime({
             if (
               continuationResponse && continuationResponse.status === "complete" &&
               Number.isFinite(routedContinuationMeters) &&
-              routedContinuationMeters <= usableRangeMeters + 1 &&
+              routedContinuationMeters <= continuationCap + 1 &&
               responseBacktrackMeters(continuationResponse) <= MAX_FUEL_RETRACE_M + 1
             ) {
               row.continuationResponse = continuationResponse;
@@ -1572,8 +1567,42 @@ async function planFuelChainOnRuntime({
                 row.firstQuality,
                 routeChainQuality(continuationResponse, avoidMotorways === true)
               );
+              return true;
             } else {
               row.continuationDestinationMeters = null;
+            }
+            return false;
+          };
+
+          // Destination-rooted graph distance is already available from the
+          // one shared destination search. When it fits the next full tank,
+          // prove that active-profile continuation immediately. Re-running a
+          // province-wide reachability search from every candidate before this
+          // proof multiplied dense Ontario work by the shortlist size.
+          continuationStrategy = "direct_remaining_graph";
+          const directProved = await proveDirectContinuation(
+            Number(candidate.remainingGraphMeters)
+          );
+          let forwardStations = [];
+          if (!directProved && Date.now() < deadline && !(abortSignal && abortSignal.aborted)) {
+            continuationStrategy += "+forward_reachability";
+            const continuation = reachableFrom(
+              String(candidate.station.id), candidate.location, candidate.match, usableRangeMeters,
+              nextHistory, nextArrival
+            );
+            forwardStations = rankForwardFuel(
+              continuation.fuel,
+              candidate.location,
+              destination,
+              usableRangeMeters,
+              new Set([...visited, String(candidate.station.id)]),
+              profile
+            );
+            row.continuationDestinationMeters = Number.isFinite(continuation.destinationMeters)
+              ? continuation.destinationMeters
+              : null;
+            if (!directContinuationAttempted) {
+              await proveDirectContinuation(Number(continuation.destinationMeters));
             }
           }
           row.hasForwardStation = forwardStations.length > 0;
@@ -1603,6 +1632,7 @@ async function planFuelChainOnRuntime({
           approachFailureReason: response && response.debug && response.debug.failureReason || null,
           continuationElapsedMs,
           continuationStatus: row.continuationResponse && row.continuationResponse.status || null,
+          continuationStrategy,
           backtrackMeters: Math.round(firstBacktrackMeters),
           rejectedReason: !fits
             ? (response && response.status !== "complete" ? "approach_incomplete"
@@ -1634,6 +1664,7 @@ async function planFuelChainOnRuntime({
           approachFailureReason: error && error.message || "candidate_error",
           continuationElapsedMs,
           continuationStatus: null,
+          continuationStrategy,
           backtrackMeters: null,
           rejectedReason: "candidate_error",
           totalElapsedMs: Date.now() - candidateStarted,
@@ -2009,11 +2040,21 @@ async function planFuelChainOnRuntime({
       const requiredStopsSatisfied = depth + 1 >= Math.max(
         0, Number(minimumFuelStops) || 0
       );
+      // `destinationLimit` above applies only to reaching B before another
+      // pump at the current depth. This candidate is itself a refuel, so its
+      // continuation starts from a full tank and must use the configured
+      // full-tank arrival allowance. Subtracting fuel consumed before this
+      // pump forced a duplicate continuation proof (and sometimes a phantom
+      // second stop) after an already-valid one-stop chain had been proved.
+      const postRefuelDestinationLimit = Number.isFinite(configuredDestinationLimit)
+        ? configuredDestinationLimit
+        : NaN;
       if (
         evaluation.continuationResponse &&
         Number.isFinite(continuationMeters) &&
         requiredStopsSatisfied &&
-        (!Number.isFinite(destinationLimit) || continuationMeters <= destinationLimit + 1)
+        (!Number.isFinite(postRefuelDestinationLimit) ||
+          continuationMeters <= postRefuelDestinationLimit + 1)
       ) {
         stationPlans.push({
           stops: [stop],
@@ -2665,7 +2706,63 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
   let runtime = null;
   let routeFirstMs = 0;
   let routeFirstSharedRuntime = false;
-  if (routeFirstPlan) {
+  let routeFirstAttempted = false;
+  let routeFirstSkippedReason = null;
+  let planningDataLoadMs = 0;
+  const directLowerBoundMeters = haversineMeters(
+    locationCoordinate(locations[0]),
+    locationCoordinate(locations[locations.length - 1])
+  );
+  // A routed ride can never be shorter than the geographic distance between
+  // its endpoints. If that lower bound already exceeds the fuel remaining in
+  // the tank, a full active-profile route cannot prove a zero-stop journey.
+  // Do not spend most of a bounded fuel window proving the impossible; load
+  // the shared data once and give the complete window to the forward pump
+  // search. The exact active-profile legs are still proved before selection.
+  const directImpossibleOnRemainingFuel = routeFirstPlan &&
+    directLowerBoundMeters > firstLegMaxMeters + 1;
+  if (directImpossibleOnRemainingFuel) {
+    routeFirstSkippedReason = "destination_beyond_remaining_fuel_lower_bound";
+    profileMeters = directLowerBoundMeters;
+    const loadStarted = Date.now();
+    try {
+      [runtime, fuel] = await Promise.all([
+        loadRuntime(selection, {
+          locations,
+          profile: body.profile
+        }),
+        loadFuel(locations)
+      ]);
+      planningDataLoadMs = Date.now() - loadStarted;
+    } catch (error) {
+      const message = error && error.message ? error.message : String(error);
+      const corridorClip = /corridor clip/i.test(message);
+      return {
+        status: "failed",
+        error: corridorClip ? "corridor_clip" : "graph_load_failed",
+        message,
+        routes: [],
+        diagnostics: {
+          totalElapsedMs: Date.now() - requestStarted,
+          windowBudgetMs,
+          windowBudgetOverrunMs: windowBudgetOverrunMs(),
+          routeFirstMs: 0,
+          routeFirstBudgetMs,
+          routeFirstSharedRuntime: false,
+          routeFirstAttempted,
+          routeFirstSkippedReason,
+          directLowerBoundMeters: Math.round(directLowerBoundMeters),
+          firstLegMaxMeters: Math.round(firstLegMaxMeters),
+          planningDataLoadMs: Date.now() - loadStarted,
+          ...endpointResolutionDiagnostics,
+          failureReason: corridorClip ? "corridor_clip" : "graph_load_failed",
+          deadlinePhase: "planning_runtime_load"
+        }
+      };
+    }
+  }
+  if (routeFirstPlan && !directImpossibleOnRemainingFuel) {
+    routeFirstAttempted = true;
     const routeBody = {
       ...body,
       options: {
@@ -2679,6 +2776,7 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
     delete routeBody.options.maxPathMeters;
     delete routeBody.options.internalFuelProbe;
     const routeStarted = Date.now();
+    const loadStarted = Date.now();
     // The same immutable runtime drives both the foundational ride and fuel
     // selection. Vercel deliberately disables cross-operation graph retention
     // for province-scale memory safety; calling routeRequest here therefore
@@ -2692,6 +2790,7 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
         }),
         loadFuel(locations)
       ]);
+      planningDataLoadMs = Date.now() - loadStarted;
     } catch (error) {
       const message = error && error.message ? error.message : String(error);
       const corridorClip = /corridor clip/i.test(message);
@@ -2707,6 +2806,11 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
           routeFirstMs: Date.now() - routeStarted,
           routeFirstBudgetMs,
           routeFirstSharedRuntime: false,
+          routeFirstAttempted,
+          routeFirstSkippedReason,
+          directLowerBoundMeters: Math.round(directLowerBoundMeters),
+          firstLegMaxMeters: Math.round(firstLegMaxMeters),
+          planningDataLoadMs: Date.now() - loadStarted,
           ...endpointResolutionDiagnostics,
           failureReason: corridorClip ? "corridor_clip" : "graph_load_failed",
           deadlinePhase: "route_first_runtime_load"
@@ -2751,6 +2855,11 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
           routeFirstMs,
           routeFirstBudgetMs,
           routeFirstSharedRuntime,
+          routeFirstAttempted,
+          routeFirstSkippedReason,
+          directLowerBoundMeters: Math.round(directLowerBoundMeters),
+          firstLegMaxMeters: Math.round(firstLegMaxMeters),
+          planningDataLoadMs,
           ...endpointResolutionDiagnostics,
           profileRouteFailureReason:
             routeDiagnostics && routeDiagnostics.failureReason ||
@@ -2931,6 +3040,11 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
           routeFirstMs,
           routeFirstBudgetMs,
           routeFirstSharedRuntime,
+          routeFirstAttempted,
+          routeFirstSkippedReason,
+          directLowerBoundMeters: Math.round(directLowerBoundMeters),
+          firstLegMaxMeters: Math.round(firstLegMaxMeters),
+          planningDataLoadMs,
           ...endpointResolutionDiagnostics,
           graphFetchMs: runtime.loadDiagnostics && runtime.loadDiagnostics.fetchMs,
           graphDecodeMs: runtime.loadDiagnostics && runtime.loadDiagnostics.decodeMs,
@@ -3008,6 +3122,11 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
       routeFirstMs,
       routeFirstBudgetMs,
       routeFirstSharedRuntime,
+      routeFirstAttempted,
+      routeFirstSkippedReason,
+      directLowerBoundMeters: Math.round(directLowerBoundMeters),
+      firstLegMaxMeters: Math.round(firstLegMaxMeters),
+      planningDataLoadMs,
       ...endpointResolutionDiagnostics,
       graphFetchMs: runtime.loadDiagnostics && runtime.loadDiagnostics.fetchMs,
       graphDecodeMs: runtime.loadDiagnostics && runtime.loadDiagnostics.decodeMs,
