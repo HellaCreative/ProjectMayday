@@ -341,6 +341,9 @@ Supabase project `xoufaiypnrgukzmdwicz`, production resolves project
 Automated tests must reject either project reference in the opposite build.
 Every development screen that shows the DIRT wordmark must also show the
 persistent `DEV` badge; production must not contain or render that badge.
+Android release automation must inspect the built APK/AAB, not only Gradle
+source, and fail if the opposite Supabase project or development marker is
+present.
 
 The shared Supabase contract also requires active-group-only authorization:
 deleted groups cannot authorize tables or Realtime, profiles are visible only

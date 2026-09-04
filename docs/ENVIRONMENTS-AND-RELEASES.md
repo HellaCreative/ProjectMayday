@@ -102,5 +102,6 @@ Never rebuild an artifact during promotion. Promote the tested bytes.
 6. Applied and database-tested the first RLS/grant hardening candidate only in development.
 7. Create a stable development Vercel deployment and development R2 manifest.
 8. Seed disposable development test users/data after Auth providers are configured.
-9. Add CI gates that reject migration drift and production endpoints in dev
-   builds, and reject development endpoints/tester unlocks in production builds.
+9. Added deterministic bundle-verification scripts that reject production
+   Supabase identity in development and development identity/tester unlocks in
+   production; wire these scripts into hosted CI when that pipeline is created.

@@ -32,6 +32,13 @@ else
   fail "unexpected bundle identifier: $bundle_id"
 fi
 
+display_name=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleDisplayName' "$info_plist")
+if [[ "$display_name" == "DIRT" ]]; then
+  pass "production display name"
+else
+  fail "unexpected production display name: $display_name"
+fi
+
 if [[ -f "$privacy_manifest" ]] && plutil -lint "$privacy_manifest" >/dev/null; then
   pass "valid app privacy manifest is bundled"
 else
@@ -55,6 +62,19 @@ if [[ -n "$tester_symbols" ]]; then
   fail "tester subscription bypass copy is present in the Release executable"
 else
   pass "tester subscription bypass copy absent from Release executable"
+fi
+
+binary_strings=$(strings "$app_bundle/Dirt")
+if grep -q 'iiiguqknqxoumlmppzfw.supabase.co' <<<"$binary_strings"; then
+  pass "production Supabase project is embedded"
+else
+  fail "production Supabase project is missing"
+fi
+
+if grep -Eq 'xoufaiypnrgukzmdwicz.supabase.co|DIRT development' <<<"$binary_strings"; then
+  fail "development identity is present in the Release executable"
+else
+  pass "development identity absent from Release executable"
 fi
 
 size_bytes=$(du -sk "$app_bundle" | awk '{print $1 * 1024}')
