@@ -44,6 +44,10 @@ target, the unsigned Release build and Xcode Release analysis passed, and the
 37 MB Release bundle passed its automated audit. Physical acceptance below is
 still intentionally open.
 
+The focused navigation, subscription, group-safety, and core integration
+suites passed again on iPhone 17 / iOS 26.5 Simulator after development/backend
+isolation at commit `ac383bd`. This does not replace the White checklist.
+
 ## Physical acceptance required on White
 
 - [ ] Start a short local route, cancel preparation, retry, and begin exactly

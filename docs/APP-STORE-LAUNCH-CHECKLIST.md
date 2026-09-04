@@ -85,12 +85,15 @@ commit, TestFlight build, server contract, and test evidence together.
 
 ### C. Groups, privacy, and safety
 
-- [ ] Supabase schema, migrations, functions, and row-level-security policy are
-      versioned and reproducible.
-- [x] Production's complete Supabase migration ledger is recovered into source;
-      fresh-project replay remains to be proven in the development environment.
-- [ ] Two-account tests prove that private group membership, live location,
-      invite codes, alerts, and profiles cannot leak across groups.
+- [x] Supabase schema, migrations, functions, and row-level-security policy are
+      versioned and reproducible from production's complete baseline in the
+      isolated development project.
+- [x] Development's hardening candidate passes a rollback-only
+      three-user/two-group database authorization matrix with no retained test
+      data; production promotion remains gated below.
+- [ ] Real multi-account development tests prove that private group membership,
+      live location, invite codes, alerts, profiles, and Realtime traffic cannot
+      leak across groups.
 - [x] Group creation uses a versioned transactional RPC in the app and migration.
 - [x] The transactional Group creation RPC is deployed and metadata-verified
       against the production schema.
@@ -210,6 +213,19 @@ Run on the exact Release candidate, not a tester-bypass build.
 
 This record is automated evidence, not a substitute for the unchecked signed,
 production-backend, StoreKit, or physical-device gates above.
+
+### Development environment delta — commit `ac383bd`
+
+- Debug and Release generic-device builds passed after compile-time Supabase
+  isolation; binary inspection found only the development project in Debug and
+  only the production project in Release.
+- The focused iPhone 17 / iOS 26.5 simulator run passed the navigation
+  reliability, subscription gate, group safety, and core integration suites.
+- Development Supabase replay plus its three-user/two-group authorization
+  matrix passed. RLS init-plan warnings are cleared; five intentional
+  authenticated transaction-RPC notices remain documented.
+- None of the two development-only hardening migrations has been promoted to
+  production.
 
 ### Reproduce the bundle audit
 
