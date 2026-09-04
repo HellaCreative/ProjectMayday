@@ -148,13 +148,14 @@ async function main() {
       const profile = run.profile;
       const profileKey = run.key;
       const started = Date.now();
-      const result = await route({
-        regionId: region,
+      const payload = {
         locations: [test.from, test.to],
         profile,
         accessPolicy: { motorizedPermissive: true, motorizedUnknown: run.allowUnknown },
         options: { sessionSeed: 42 }
-      });
+      };
+      if (!test.chain) payload.regionId = region;
+      const result = await route(payload);
       if (!result || result.status !== "complete") {
         fail(failures, test.id, profileKey, result && (result.message || result.error) || "route incomplete");
         continue;
@@ -189,8 +190,16 @@ async function main() {
         if (row.dirtPercent < minimum) {
           fail(failures, test.id, profileKey, `${row.dirtPercent}% dirt is below ${minimum}%`);
         }
-        if (row.corridorCandidates < 3) {
-          fail(failures, test.id, profileKey, "fewer than three corridor candidates were evaluated");
+        const minimumCorridors = Number.isFinite(Number(test.minimumCorridorCandidates))
+          ? Number(test.minimumCorridorCandidates)
+          : 3;
+        if (row.corridorCandidates < minimumCorridors) {
+          fail(
+            failures,
+            test.id,
+            profileKey,
+            `fewer than ${minimumCorridors} corridor candidates were evaluated`
+          );
         }
         if (Number.isFinite(row.backwardPercent)
             && row.backwardPercent > Number(test.maximumDirtBackwardPercent || Infinity)) {

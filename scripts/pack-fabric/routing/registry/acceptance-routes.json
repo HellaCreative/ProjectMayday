@@ -35,6 +35,56 @@
           "maximumDirtBackwardPercent": 25
         }
       ]
+    },
+    "mb": {
+      "fuelMinimum": 300,
+      "routes": [
+        {
+          "id": "long-steinbach-lac-du-bonnet",
+          "from": { "lat": 49.5258, "lon": -96.6845, "label": "Steinbach" },
+          "to": { "lat": 50.2536, "lon": -96.0614, "label": "Lac du Bonnet" },
+          "minimumDirtPercent": 20,
+          "minimumDirtAllowUnknownPercent": 25,
+          "balancedTolerance": 15,
+          "maximumCleanDirtPercent": 6,
+          "maximumDirtBackwardPercent": 30,
+          "minimumCorridorCandidates": 2
+        },
+        {
+          "id": "urban-portage-brandon",
+          "from": { "lat": 49.9728, "lon": -98.2926, "label": "Portage la Prairie" },
+          "to": { "lat": 49.8483, "lon": -99.95, "label": "Brandon" },
+          "minimumDirtPercent": 15,
+          "minimumDirtAllowUnknownPercent": 20,
+          "balancedTolerance": 5,
+          "maximumCleanDirtPercent": 2,
+          "maximumDirtBackwardPercent": 25,
+          "minimumCorridorCandidates": 2
+        },
+        {
+          "id": "short-brandon-dauphin",
+          "from": { "lat": 49.8483, "lon": -99.95, "label": "Brandon" },
+          "to": { "lat": 51.1494, "lon": -100.0497, "label": "Dauphin" },
+          "minimumDirtPercent": 15,
+          "minimumDirtAllowUnknownPercent": 20,
+          "balancedTolerance": 5,
+          "maximumCleanDirtPercent": 2,
+          "maximumDirtBackwardPercent": 25,
+          "minimumCorridorCandidates": 2
+        },
+        {
+          "id": "seam-kenora-falcon",
+          "chain": true,
+          "from": { "lat": 49.767, "lon": -94.4897, "label": "Kenora" },
+          "to": { "lat": 49.691, "lon": -95.247, "label": "Falcon Lake" },
+          "minimumDirtPercent": 20,
+          "minimumDirtAllowUnknownPercent": 20,
+          "balancedTolerance": 30,
+          "maximumCleanDirtPercent": 16,
+          "maximumDirtBackwardPercent": 30,
+          "minimumCorridorCandidates": 0
+        }
+      ]
     }
   }
 }
