@@ -87,6 +87,8 @@ commit, TestFlight build, server contract, and test evidence together.
 
 - [ ] Supabase schema, migrations, functions, and row-level-security policy are
       versioned and reproducible.
+- [x] Production's complete Supabase migration ledger is recovered into source;
+      fresh-project replay remains to be proven in the development environment.
 - [ ] Two-account tests prove that private group membership, live location,
       invite codes, alerts, and profiles cannot leak across groups.
 - [x] Group creation uses a versioned transactional RPC in the app and migration.

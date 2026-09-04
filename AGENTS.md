@@ -55,6 +55,9 @@ For Start Navigation, cues, HUD, and in-ride waypoints:
 For public Release gates and App Store submission:
 [docs/APP-STORE-LAUNCH-CHECKLIST.md](docs/APP-STORE-LAUNCH-CHECKLIST.md).
 
+For development/production isolation and promotion rules:
+[docs/ENVIRONMENTS-AND-RELEASES.md](docs/ENVIRONMENTS-AND-RELEASES.md).
+
 For required public-site factual alignment before submission:
 [docs/WEBSITE-LAUNCH-COPY-HANDOFF.md](docs/WEBSITE-LAUNCH-COPY-HANDOFF.md).
 

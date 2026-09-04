@@ -329,6 +329,12 @@ confirmed deletion, remove local profile, Group, entitlement/session, and
 sensitive cached state, then expose any provider-side revocation step that
 cannot be completed automatically.
 
+Android uses the same named development and production lanes defined in
+[`ENVIRONMENTS-AND-RELEASES.md`](./ENVIRONMENTS-AND-RELEASES.md). Debug and
+internal QA builds must use the isolated development Supabase/API/pack
+configuration; the production application ID must fail release verification
+if any development endpoint or tester bypass is embedded.
+
 Cancellation remains quiet; network, provider, backend, and policy failures are
 visible and recoverable. Test real production-provider authentication and
 deletion, not only mocks.

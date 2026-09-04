@@ -4,6 +4,12 @@ This folder versions the database behavior the iOS and Android apps rely on.
 Apply migrations only through the linked, reviewed Supabase project and retain
 the migration output.
 
+The full production migration history is now present here. The eight original
+migrations were recovered verbatim from Supabase's migration ledger on
+2026-09-04; the four launch migrations were already source-controlled. A fresh
+development project must replay this complete chain before it can be treated as
+a faithful test environment.
+
 ## Production status — 2026-09-04
 
 Project `dirt-mayday` (`iiiguqknqxoumlmppzfw`, Canada Central) is healthy. The
@@ -13,6 +19,7 @@ Supabase migration versions:
 - `20260904113053_delete_own_account.sql`
 - `20260904113100_create_group.sql`
 - `20260904113540_add_groups_alerts_fk_indexes.sql`
+- `20260904114232_require_group_rpcs.sql`
 
 Apple and Google sign-in providers are enabled. Metadata checks prove that the
 two public app RPCs deny anonymous execution and allow signed-in execution.
@@ -24,8 +31,10 @@ remaining findings are tracked rather than hidden:
 - the app-facing RPCs intentionally use `SECURITY DEFINER`; each must continue
   to derive identity from `auth.uid()`, use qualified objects, deny `anon`, and
   expose only the minimum signed-in operation;
-- older group helper functions and RLS policies still need a versioned
-  hardening migration and multi-account regression test;
+- direct group/member insertion is disabled; group creation and invite-code
+  joining are now restricted to their authenticated RPCs;
+- older group helper functions and the remaining RLS policies still need a
+  versioned hardening migration and multi-account regression test;
 - existing RLS expressions should use the single-evaluation `(select
   auth.uid())` form before scale; and
 - leaked-password protection is disabled and should be enabled if password or
@@ -80,11 +89,10 @@ account must still prove creation, rollback, and owner isolation end to end.
 
 ## Required Groups RLS verification
 
-The live policies were inspected on 2026-09-04 but are not fully exported into
-versioned migrations yet. The audit found one change that needs explicit
-production approval: remove direct `groups` / `group_members` inserts so group
-creation and invite-code joining are RPC-only. Test with at least three users
-in two overlapping groups and prove this matrix:
+The live policies were inspected on 2026-09-04 and their complete migration
+history is now versioned. Direct `groups` and `group_members` inserts are
+disabled, making group creation and invite-code joining RPC-only. Test with at
+least three users in two overlapping groups and prove this matrix:
 
 | Surface | Required rule |
 | --- | --- |
