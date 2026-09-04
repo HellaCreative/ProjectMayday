@@ -1,6 +1,6 @@
 # DIRT environments and release flow
 
-Status: approved direction; production isolation started 2026-09-04.
+Status: active; hosted development isolation established 2026-09-04.
 
 ## Decision
 
@@ -15,7 +15,19 @@ DIRT uses three operational lanes and two hosted backends:
 Supabase Branching is not the launch path. The current organization is on the
 Free plan, while persistent branches require Pro. A separate development
 project is simpler, long-lived, independently authenticated, and currently
-quoted by Supabase at $0/month. Creating it still requires explicit approval.
+quoted by Supabase at $0/month.
+
+## Hosted Supabase projects
+
+| Environment | Project | Project reference | Region | Data policy |
+| --- | --- | --- | --- | --- |
+| Development / QA | `dirt-mayday-dev` | `xoufaiypnrgukzmdwicz` | Canada Central | Synthetic and disposable only |
+| Production | `dirt-mayday` | `iiiguqknqxoumlmppzfw` | Canada Central | Real riders |
+
+The development project is healthy and has the same 12-version migration
+ledger, public tables, RLS policies, RPC contracts, and function definitions as
+production. It was initialized with zero Auth users and zero application rows;
+no production rider data was copied.
 
 ## Non-negotiable boundaries
 
@@ -82,10 +94,11 @@ Never rebuild an artifact during promotion. Promote the tested bytes.
 ## Immediate setup sequence
 
 1. Recovered production's complete Supabase migration history into source.
-2. Create the separate hosted development Supabase project after approval.
-3. Replay all migrations there and seed disposable test users/data.
+2. Created the separate hosted development Supabase project.
+3. Replayed and verified all migrations there without copying production data.
 4. Add environment-driven iOS configuration and the `Dirt Dev` identity.
 5. Give Android the same environment names and endpoint contract.
 6. Create a stable development Vercel deployment and development R2 manifest.
-7. Add CI gates that reject migration drift and production endpoints in dev
+7. Seed disposable development test users/data after Auth providers are configured.
+8. Add CI gates that reject migration drift and production endpoints in dev
    builds, and reject development endpoints/tester unlocks in production builds.
