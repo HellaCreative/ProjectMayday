@@ -423,7 +423,7 @@ final class GroupsViewModel {
     }
 
     func createGroup(named name: String) async {
-        guard let userID = supabase.userID, !isMutatingGroup else { return }
+        guard supabase.userID != nil, !isMutatingGroup else { return }
         let cleaned = name
             .replacingOccurrences(of: "\n", with: " ")
             .replacingOccurrences(of: "\r", with: " ")
@@ -434,45 +434,12 @@ final class GroupsViewModel {
         }
         isMutatingGroup = true
         defer { isMutatingGroup = false }
-        var createdGroupID: String?
         do {
-            struct NewGroup: Encodable {
-                let name: String
-                let owner_id: String
-            }
-            struct CreatedGroup: Decodable {
-                let id: String
-            }
-            let created: CreatedGroup = try await client
-                .from("groups")
-                .insert(NewGroup(name: cleaned, owner_id: userID))
-                .select("id")
-                .single()
-                .execute()
-                .value
-            createdGroupID = created.id
-            struct NewMember: Encodable {
-                let group_id: String
-                let user_id: String
-                let role: String
-            }
             try await client
-                .from("group_members")
-                .insert(NewMember(group_id: created.id, user_id: userID, role: "owner"))
+                .rpc("create_group", params: ["p_name": cleaned])
                 .execute()
             await refreshGroups()
         } catch {
-            // The backend currently exposes these as two writes. Compensating
-            // cleanup prevents a failed owner-membership insert from leaving an
-            // unusable orphan group until the server gains a transactional RPC.
-            if let createdGroupID {
-                _ = try? await client
-                    .from("groups")
-                    .delete()
-                    .eq("id", value: createdGroupID)
-                    .eq("owner_id", value: userID)
-                    .execute()
-            }
             errorMessage = "The group could not be created."
         }
     }
@@ -787,7 +754,7 @@ final class GroupsViewModel {
             while let self, !Task.isCancelled, self.isSharing {
                 await self.publishPresence(enabled: true)
                 await self.broadcastLocationToChannels()
-                let interval: Double = Self.isDistressStatus(self.status) ? 5 : 5
+                let interval = GroupPresenceCadencePolicy.intervalSeconds(forStatus: self.status)
                 try? await Task.sleep(for: .seconds(interval))
             }
         }
@@ -1049,23 +1016,13 @@ final class GroupsViewModel {
             createdAt: ISO8601DateFormatter().string(from: .now),
             message: message
         )
-        for (groupID, channel) in realtimeChannels {
-            var payload = broadcast
-            if let named = groups.first(where: { $0.id == groupID }) {
-                payload = AlertBroadcast(
-                    alertId: broadcast.alertId,
-                    userId: broadcast.userId,
-                    displayName: broadcast.displayName,
-                    status: broadcast.status,
-                    groupId: groupID,
-                    groupName: named.name,
-                    lng: broadcast.lng,
-                    lat: broadcast.lat,
-                    createdAt: broadcast.createdAt,
-                    message: broadcast.message
-                )
-            }
-            try? await channel.broadcast(event: "alert", message: payload)
+        let targetIDs = GroupAlertPolicy.broadcastGroupIDs(
+            targetGroupID: group.id,
+            connectedGroupIDs: realtimeChannels.keys
+        )
+        for groupID in targetIDs {
+            guard let channel = realtimeChannels[groupID] else { continue }
+            try? await channel.broadcast(event: "alert", message: broadcast)
         }
     }
 

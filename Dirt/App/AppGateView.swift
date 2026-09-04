@@ -6,7 +6,7 @@ import UIKit
 ///
 /// This used to put Sign in with Apple between the splash and the intro, which meant
 /// a fresh install went splash → sign-in and the intro never ran at all. Riders now
-/// reach the map, the coach tour and the trial window signed out; sign-in is asked for
+/// reach the map and coach tour signed out; sign-in is asked for
 /// where it is actually needed — Groups — and offered in Profile.
 ///
 /// The intro replays on every cold launch (Skip is always available) so returning
@@ -49,8 +49,7 @@ struct AppGateView: View {
         }
     }
 
-    /// No paywall here any more. The rider gets the coach tour and five real minutes
-    /// on the map first; the trial ladder starts its own clock from there.
+    /// No paywall here. The rider reaches the map before any paid action is gated.
     private func finishIntro() {
         OnboardingPrefs.markIntroComplete()
         introDone = true

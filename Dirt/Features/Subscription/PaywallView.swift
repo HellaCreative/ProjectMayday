@@ -1,7 +1,7 @@
 import StoreKit
 import SwiftUI
 
-/// The 7-day free trial offer.
+/// StoreKit-backed DIRT PRO purchase surface.
 /// Soft: dismissible system sheet. Hard: full-screen gate (Subscribe / Restore only).
 struct PaywallView: View {
     @Environment(AppEnvironment.self) private var app
@@ -16,10 +16,8 @@ struct PaywallView: View {
     private var isHard: Bool { presentation == .hard }
 
     private let perks = [
-        ("map.fill", "Full off-road basemap", "3D terrain, surface layers, and the whole DIRT map."),
-        ("point.topleft.down.to.point.bottomright.curvepath.fill", "Turn-by-turn rally cues", "Junction and curve cues with voice."),
-        ("person.2.fill", "Live group ride sharing", "See your crew and broadcast status."),
-        ("square.and.arrow.down.fill", "Offline-ready routes", "Save and export when signal drops.")
+        ("point.topleft.down.to.point.bottomright.curvepath.fill", "Unlimited ride navigation", "Ride beyond the two free starts with junction, rally, and voice cues."),
+        ("doc.badge.arrow.up", "GPX export", "Take a route into compatible devices and riding tools.")
     ]
 
     var body: some View {
@@ -30,9 +28,15 @@ struct PaywallView: View {
                 softShell { paywallBody }
             }
         }
-        .task { await subscription.refresh() }
+        .task {
+            await subscription.refresh()
+            selectAvailablePlanIfNeeded()
+        }
         .onChange(of: subscription.isSubscribed) { _, subscribed in
             if subscribed { onSubscribed() }
+        }
+        .onChange(of: subscription.products.map(\.id)) { _, _ in
+            selectAvailablePlanIfNeeded()
         }
         .interactiveDismissDisabled(isHard)
     }
@@ -111,15 +115,13 @@ struct PaywallView: View {
             .accessibilityElement(children: .combine)
             .accessibilityLabel("DIRT PRO")
 
-            Text(isHard ? "Continue with DIRT PRO" : "Start your 7-day free trial")
+            Text(headerTitle)
                 .font(.dirtUI(24, weight: .heavy))
                 .foregroundStyle(isHard ? .white : DirtTheme.ink)
                 .fixedSize(horizontal: false, vertical: true)
 
             Text(
-                isHard
-                    ? "Your free look is up. Start the trial to keep routing, cues, and crew sharing."
-                    : "Ride with everything unlocked. Cancel anytime before the trial ends and you won’t be charged."
+                headerDetail
             )
             .font(.dirtUI(14))
             .foregroundStyle(isHard ? .white.opacity(0.7) : DirtTheme.muted)
@@ -162,22 +164,36 @@ struct PaywallView: View {
             }
             .frame(maxWidth: .infinity, minHeight: DirtHit.control)
             .accessibilityLabel("Loading subscription plans")
+        } else if availablePlans.isEmpty {
+            VStack(alignment: .leading, spacing: DirtSpace.tight) {
+                Text("Plans unavailable")
+                    .font(.dirtUI(14, weight: .bold))
+                    .foregroundStyle(isHard ? .white : DirtTheme.ink)
+                Text(subscription.loadError ?? "Subscription options could not be loaded right now.")
+                    .font(.dirtUI(13))
+                    .foregroundStyle(isHard ? .white.opacity(0.7) : DirtTheme.muted)
+                Button("Try again") {
+                    Task {
+                        await subscription.loadProducts()
+                        selectAvailablePlanIfNeeded()
+                    }
+                }
+                .font(.dirtUI(13, weight: .bold))
+                .foregroundStyle(DirtTheme.orange)
+                .frame(minHeight: DirtHit.min)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         } else {
             HStack(spacing: DirtSpace.inner) {
-                planCard(
-                    .yearly,
-                    title: "Yearly",
-                    price: priceText(for: .yearly),
-                    sub: "billed annually",
-                    badge: subscription.yearlySavingsLabel ?? "Best value"
-                )
-                planCard(
-                    .monthly,
-                    title: "Monthly",
-                    price: priceText(for: .monthly),
-                    sub: "billed monthly",
-                    badge: nil
-                )
+                ForEach(availablePlans, id: \.rawValue) { plan in
+                    planCard(
+                        plan,
+                        title: plan == .yearly ? "Yearly" : "Monthly",
+                        price: displayPrice(for: plan),
+                        sub: plan == .yearly ? "per year" : "per month",
+                        badge: plan == .yearly ? subscription.yearlySavingsLabel : nil
+                    )
+                }
             }
         }
     }
@@ -262,22 +278,24 @@ struct PaywallView: View {
             }
 
             Button {
-                Task { await startTrial() }
+                Task { await subscribe() }
             } label: {
-                Text("Start free trial")
+                Text(primaryActionTitle)
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(DirtCTAStyle.brand(isLoading: subscription.purchaseInFlight))
-            .disabled(subscription.purchaseInFlight || (!subscription.hasProducts && !BuildChannel.showsTesterUnlock))
-            .accessibilityHint("Starts a 7-day free trial for the selected plan")
+            .disabled(subscription.storeOperationInFlight || (!subscription.hasProducts && !BuildChannel.showsTesterUnlock))
+            .accessibilityHint(primaryActionHint)
 
             Button {
                 Task {
-                    await subscription.restore()
-                    if subscription.isSubscribed {
-                        onSubscribed()
-                    } else {
+                    switch await subscription.restore() {
+                    case .restored:
+                        break // The entitlement change callback completes the pending action once.
+                    case .noActiveSubscription:
                         errorMessage = "No purchases found for this Apple ID."
+                    case .failed(let message):
+                        errorMessage = message
                     }
                 }
             } label: {
@@ -288,6 +306,7 @@ struct PaywallView: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .disabled(subscription.storeOperationInFlight)
 
             if presentation == .soft {
                 Button(action: onClose) {
@@ -303,7 +322,7 @@ struct PaywallView: View {
             if BuildChannel.showsTesterUnlock {
                 Button {
                     // Persists until uninstall (UserDefaults). Testers use the app
-                    // freely without exercising Save / Export / Start gates.
+                    // freely without exercising Export / Start gates.
                     app.debugBypassSubscription = true
                     onSubscribed()
                     app.planner.toast = "Paywall skipped until reinstall"
@@ -341,17 +360,22 @@ struct PaywallView: View {
 
     private var footnoteText: String {
         let price = priceText(for: selectedPlan)
-        return "7 days free, then \(price). Renews automatically until cancelled. Manage or cancel in Settings → Apple ID → Subscriptions."
+        if let duration = eligibleTrialDuration {
+            return "\(duration) free, then \(price). Renews automatically until cancelled. Manage or cancel in Settings → Apple ID → Subscriptions."
+        }
+        return "\(price). Renews automatically until cancelled. Manage or cancel in Settings → Apple ID → Subscriptions."
     }
 
     private func priceText(for plan: SubscriptionService.Plan) -> String {
-        if let product = subscription.product(for: plan) {
-            return "\(product.displayPrice)/\(plan == .yearly ? "yr" : "mo")"
-        }
-        return plan == .yearly ? "$45/yr" : "$10/mo"
+        guard let product = subscription.product(for: plan) else { return "Price unavailable" }
+        return "\(product.displayPrice) per \(plan == .yearly ? "year" : "month")"
     }
 
-    private func startTrial() async {
+    private func displayPrice(for plan: SubscriptionService.Plan) -> String {
+        subscription.product(for: plan)?.displayPrice ?? "Price unavailable"
+    }
+
+    private func subscribe() async {
         errorMessage = nil
         guard let product = subscription.product(for: selectedPlan) else {
             if BuildChannel.showsTesterUnlock {
@@ -362,11 +386,57 @@ struct PaywallView: View {
             }
             return
         }
-        let success = await subscription.purchase(product)
-        if success {
-            onSubscribed()
-        } else if let loadError = subscription.loadError {
-            errorMessage = loadError
+        switch await subscription.purchase(product) {
+        case .subscribed:
+            break // The entitlement change callback completes the pending action once.
+        case .pending:
+            errorMessage = "Your purchase is waiting for approval. DIRT PRO will unlock when the App Store completes it."
+        case .cancelled:
+            break
+        case .failed(let message):
+            errorMessage = message
         }
+    }
+
+    private var availablePlans: [SubscriptionService.Plan] {
+        [.yearly, .monthly].filter { subscription.product(for: $0) != nil }
+    }
+
+    private var eligibleTrialDuration: String? {
+        guard case let .eligible(duration) = subscription.introOfferStatus(for: selectedPlan) else {
+            return nil
+        }
+        return duration
+    }
+
+    private var headerTitle: String {
+        if isHard { return "Continue with DIRT PRO" }
+        if let duration = eligibleTrialDuration { return "Try DIRT PRO free for \(duration)" }
+        return "Unlock DIRT PRO"
+    }
+
+    private var headerDetail: String {
+        if let duration = eligibleTrialDuration {
+            return "Ride with everything unlocked. Cancel anytime before your \(duration) trial ends and you won’t be charged."
+        }
+        return "Get unlimited navigation and GPX export. Cancel anytime in your Apple subscription settings."
+    }
+
+    private var primaryActionTitle: String {
+        eligibleTrialDuration == nil ? "Subscribe" : "Start free trial"
+    }
+
+    private var primaryActionHint: String {
+        if let duration = eligibleTrialDuration {
+            return "Starts the \(duration) free trial for the selected plan"
+        }
+        return "Subscribes to the selected DIRT PRO plan"
+    }
+
+    private func selectAvailablePlanIfNeeded() {
+        guard subscription.product(for: selectedPlan) == nil,
+              let first = availablePlans.first
+        else { return }
+        selectedPlan = first
     }
 }

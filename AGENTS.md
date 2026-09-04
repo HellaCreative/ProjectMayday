@@ -45,5 +45,14 @@ For Android routing/fuel/navigation parity:
 For Start Navigation, cues, HUD, and in-ride waypoints:
 [docs/00-NAVIGATION-SOURCE-OF-TRUTH.md](docs/00-NAVIGATION-SOURCE-OF-TRUTH.md).
 
+For public Release gates and App Store submission:
+[docs/APP-STORE-LAUNCH-CHECKLIST.md](docs/APP-STORE-LAUNCH-CHECKLIST.md).
+
+For required public-site factual alignment before submission:
+[docs/WEBSITE-LAUNCH-COPY-HANDOFF.md](docs/WEBSITE-LAUNCH-COPY-HANDOFF.md).
+
+For the post-launch GPX-to-DIRT conversion milestone:
+[docs/GPX-IMPORT-TO-DIRT-PLAN.md](docs/GPX-IMPORT-TO-DIRT-PLAN.md).
+
 Then read the narrow contract relevant to the task. Phase reports and handback
 documents are historical evidence, not current instructions.

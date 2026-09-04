@@ -103,6 +103,25 @@ final class SupabaseService {
         try await client.auth.signOut()
     }
 
+    /// Permanently deletes the signed-in DIRT account through a server-owned,
+    /// fail-closed transaction. The RPC must remove the auth user and all
+    /// associated DIRT rows atomically; a client-side series of deletes would
+    /// risk reporting success after only a partial deletion.
+    func deleteAccount() async throws {
+        guard let client, userID != nil else { throw SupabaseServiceError.notReady }
+        do {
+            try await client.rpc("delete_own_account").execute()
+        } catch {
+            throw SupabaseServiceError.accountDeletionFailed
+        }
+
+        // Supabase removes the local session before attempting the logout
+        // request. The auth user no longer exists, so a 401/404 is expected and
+        // ignored by the SDK; explicitly clear our observable state as well.
+        try? await client.auth.signOut(scope: .local)
+        apply(session: nil)
+    }
+
     func updateDisplayName(_ name: String) async throws {
         guard let client, let userID else { throw SupabaseServiceError.notReady }
         let trimmed = String(name.trimmingCharacters(in: .whitespacesAndNewlines).prefix(60))
@@ -124,8 +143,14 @@ final class SupabaseService {
 
 enum SupabaseServiceError: LocalizedError {
     case notReady
+    case accountDeletionFailed
 
     var errorDescription: String? {
-        "The DIRT account service is still connecting. Try again in a moment."
+        switch self {
+        case .notReady:
+            return "The DIRT account service is still connecting. Try again in a moment."
+        case .accountDeletionFailed:
+            return "DIRT could not confirm whether account deletion completed. Live group sharing was stopped for safety. Reopen DIRT to check your sign-in state, then try again or contact support."
+        }
     }
 }

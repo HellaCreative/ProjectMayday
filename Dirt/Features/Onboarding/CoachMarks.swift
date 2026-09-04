@@ -49,7 +49,7 @@ enum CoachStep: Int, CaseIterable {
     case ride
     /// Ring the Group dock cell.
     case crew
-    /// Ring the Profile dock cell and land on the trial.
+    /// Ring the Profile dock cell and land on account and DIRT PRO controls.
     case account
 
     var target: CoachTarget {
@@ -66,7 +66,7 @@ enum CoachStep: Int, CaseIterable {
         case .dropPin: "Now pick where you're going"
         case .ride: "That's your line"
         case .crew: "Ride with your crew"
-        case .account: "Your account and trial"
+        case .account: "Your account and DIRT PRO"
         }
     }
 
@@ -81,7 +81,7 @@ enum CoachStep: Int, CaseIterable {
             case .crew:
                 "Create a group to get a code, or join with a friend's — then you'll see each other on the map. This is the one part that needs an account."
             case .account:
-                "Sign in with Apple and start your free trial in Profile. Voice cues and keep-awake live here too."
+                "Sign in with Apple and see DIRT PRO options in Profile. Voice cues and keep-awake live here too."
         }
     }
 

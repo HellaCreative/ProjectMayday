@@ -7,6 +7,8 @@ struct GroupsSheet: View {
     @State private var joinCode = ""
     @State private var showCreateDialog = false
     @State private var showJoinDialog = false
+    @State private var signInBusy = false
+    @State private var signInError: String?
 
     private var groups: GroupsViewModel { app.groups }
 
@@ -58,19 +60,30 @@ struct GroupsSheet: View {
                 .padding(.horizontal, DirtSpace.section)
 
             AppleSignInButton { result in
-                guard case let .success(credential) = result else { return }
-                Task {
-                    try? await app.supabase.signInWithApple(
-                        idToken: credential.idToken,
-                        rawNonce: credential.rawNonce,
-                        fullName: credential.fullName
-                    )
-                    await groups.refreshGroups()
-                }
+                handleSignIn(result)
             }
             .frame(minHeight: DirtHit.control)
             .padding(.horizontal, DirtSpace.section)
             .padding(.top, DirtSpace.tight)
+            .disabled(signInBusy)
+            .opacity(signInBusy ? 0.65 : 1)
+
+            if signInBusy {
+                ProgressView("Signing in…")
+                    .tint(DirtTheme.orange)
+                    .font(DirtType.helper)
+            }
+
+            if let signInError {
+                Text(signInError)
+                    .font(DirtType.helper)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(DirtTheme.danger)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, DirtSpace.section)
+                    .accessibilityLabel("Sign-in failed. \(signInError)")
+            }
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, DirtSpace.section)
@@ -79,6 +92,30 @@ struct GroupsSheet: View {
                 Color.clear.preference(key: DockSheetContentHeightKey.self, value: geo.size.height)
             }
         )
+    }
+
+    private func handleSignIn(_ result: Result<AppleCredential, Error>) {
+        switch result {
+        case let .success(credential):
+            guard !signInBusy else { return }
+            signInBusy = true
+            signInError = nil
+            Task {
+                defer { signInBusy = false }
+                do {
+                    try await app.supabase.signInWithApple(
+                        idToken: credential.idToken,
+                        rawNonce: credential.rawNonce,
+                        fullName: credential.fullName
+                    )
+                    await groups.refreshGroups()
+                } catch {
+                    signInError = AppleSignInFailure.message(from: error)
+                }
+            }
+        case let .failure(error):
+            signInError = AppleSignInFailure.message(from: error)
+        }
     }
 
     private var groupList: some View {

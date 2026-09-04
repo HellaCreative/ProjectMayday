@@ -1,23 +1,36 @@
-# DIRT iOS — Profiles & Auth
+# DIRT iOS — Profiles, Auth & DIRT PRO
 
-**Sign in with Apple is the only account path on iOS**, and it is a hard gate — the map never loads until there is an authenticated account with a screen name. A delayed 7-day trial paywall escalates on top of the map after signed-in usage. Groups depend on this: [03-GROUPS.md](./03-GROUPS.md).
+**Sign in with Apple is the only user-facing account path on iOS.** An account
+is not required to reach the map, plan routes, or save a route locally. Sign-in
+is offered in Profile and required when a rider opens Groups, where stable
+identity is necessary for membership and live sharing. Groups details:
+[03-GROUPS.md](./03-GROUPS.md).
 
-> The email-OTP methods still live in `SupabaseService` (`sendEmailCode` / `verifyEmailCode`) as a backend fallback, but there is **no OTP UI** on iOS. All user-facing sign-in is Apple-only.
+> The email-OTP methods still live in `SupabaseService`
+> (`sendEmailCode` / `verifyEmailCode`) as a backend fallback, but there is no
+> email-OTP UI on iOS.
 
 ---
 
-## Onboarding gate
+## Launch flow
 
-`Dirt/App/AppGateView.swift` is the root view and routes on every launch:
+`Dirt/App/AppGateView.swift` is the root view:
 
 ```
-bootstrap (SplashView)
-    └─ !signed in                → OnboardingView         (Sign in with Apple)
-       signed in, no screen name → DisplayNameSetupView   (pick screen name)
-       signed in, has name       → RootView               (the map)
+splash + service bootstrap
+    → intro carousel (Skip available)
+    → RootView / map
 ```
 
-`BuildChannel.showsTesterUnlock` (Debug always; Release/TestFlight while `allowPreReleaseTesterUnlock == true`) surfaces **Continue as tester** on `OnboardingView`, skip-paywall on the trial sheet, and Profile toggles. Flip `BuildChannel.allowPreReleaseTesterUnlock` to `false` before public App Store freeze — persisted unlocks clear on the next launch.
+Supabase restores a session during bootstrap when one exists, but neither a
+session nor a screen name gates the map. The intro carousel appears on each cold
+launch; its returning-rider state changes the presentation, not map access.
+
+Tester controls are compile-time restricted. `BuildChannel.showsTesterUnlock`
+is true in Debug or when a deliberately configured pre-release target includes
+the `DIRT_PRE_RELEASE_TESTER_UNLOCK` compilation condition. A normal public
+Release build has no tester escape hatch; persisted tester preferences are
+ignored and cleared outside those builds.
 
 ---
 
@@ -25,114 +38,167 @@ bootstrap (SplashView)
 
 | File | Role |
 | --- | --- |
-| `Dirt/App/AppGateView.swift` | Root router: bootstrap → Apple → screen name → map |
-| `Dirt/Features/Onboarding/OnboardingView.swift` | Signed-out hero + Sign in with Apple |
-| `Dirt/Features/Onboarding/DisplayNameSetupView.swift` | One-time screen name capture |
-| `Dirt/Features/Auth/AppleSignInButton.swift` | `SignInWithAppleButton` + nonce helper |
-| `Dirt/Persistence/SupabaseService.swift` | Bootstrap, Apple id-token sign-in, session, profile upsert |
-| `Dirt/Features/Profile/ProfileSheet.swift` | Account, subscription, legal links |
-| `Dirt/Features/Subscription/SubscriptionService.swift` | StoreKit 2 (7-day trial, $10/mo, $45/yr) |
-| `Dirt/Features/Subscription/TrialGateModel.swift` | Usage clock + trial escalation |
-| `Dirt/Features/Subscription/PaywallView.swift` | Soft/hard trial offer |
+| `Dirt/App/AppGateView.swift` | Splash/bootstrap → intro → map; no auth gate |
+| `Dirt/App/BuildChannel.swift` | Compile-time tester-control policy |
+| `Dirt/Features/Auth/AppleSignInButton.swift` | `SignInWithAppleButton`, nonce helper, shared failure presentation |
+| `Dirt/Persistence/SupabaseService.swift` | Bootstrap, Apple id-token sign-in, session, profile upsert, account-deletion RPC |
+| `Dirt/Features/Groups/GroupsSheet.swift` | Contextual Sign in with Apple requirement for Groups |
+| `Dirt/Features/Profile/ProfileSheet.swift` | Optional account sign-in, profile, deletion, DIRT PRO, legal links |
+| `Dirt/Features/Subscription/SubscriptionService.swift` | StoreKit 2 products, offers, entitlement, purchase, and restore outcomes |
+| `Dirt/Features/Subscription/TrialGateModel.swift` | Free-feature and two-free-Start policy |
+| `Dirt/Features/Subscription/PaywallView.swift` | Dismissible StoreKit-backed DIRT PRO offer |
 | `Dirt/Dirt.entitlements` | `com.apple.developer.applesignin` |
-| `Dirt/Dirt.storekit` | Local StoreKit config (attached in the Dirt scheme) |
-| `Dirt/Networking/LegalLinks.swift` | Website / privacy / terms URLs (placeholder domain) |
+| `Dirt/Dirt.storekit` | Local StoreKit test configuration attached to the Dirt scheme |
+| `Dirt/Networking/LegalLinks.swift` | Website, privacy, terms, and subscription-management URLs |
+| `supabase/migrations/20260904010000_delete_own_account.sql` | Versioned fail-closed deletion contract; production application still required |
 
 ---
 
-## Bootstrap
+## Bootstrap and session
 
 On launch, `SupabaseService.bootstrap()`:
 
-1. Builds `SupabaseClient` from `AppConfig.supabaseURL` + `AppConfig.supabasePublishableKey`
-2. Loads existing `client.auth.session` if present
-3. Subscribes to `authStateChanges` and mirrors into `userID` / `email` / `displayName`
+1. Builds `SupabaseClient` from `AppConfig.supabaseURL` and the public
+   publishable/anonymous key.
+2. Loads `client.auth.session` when present.
+3. Subscribes to `authStateChanges` and mirrors the session into `userID`,
+   `email`, and `displayName`.
 
-The publishable key is the public anon key. It belongs in the client.
+Sessions use the Supabase Swift SDK's default secure storage. `isSignedIn` is
+equivalent to `userID != nil`; IDs are normalized lowercase UUID strings.
+Display name is read from `session.user.userMetadata["display_name"]`.
 
----
-
-## Session / Keychain
-
-Sessions are persisted by the **Supabase Swift SDK’s default secure storage** (Keychain). There is no custom Keychain wrapper in app code.
-
-`isSignedIn` ≡ `userID != nil`.
-
-`userID` is `session.user.id.uuidString.lowercased()`.
-
-Display name is read from `session.user.userMetadata["display_name"]` when present.
+Never place a Supabase service-role key in the app.
 
 ---
 
-## Sign in with Apple flow
+## Sign in with Apple
 
-| Step | API | UI |
-| --- | --- | --- |
-| 1 | `AppleNonce.random()` → `request.nonce = sha256(nonce)`, `requestedScopes = [.fullName]` | `SignInWithAppleButton(.continue)` |
-| 2 | Apple returns `identityToken` (+ `fullName` on first authorization only) | — |
-| 3 | `client.auth.signInWithIdToken(.init(provider: .apple, idToken:, nonce: rawNonce))` | Spinner |
-| 4 | If no display name yet and Apple returned a name, seed it via `updateDisplayName` | — |
-| 5 | If still no screen name → `DisplayNameSetupView` | Screen name entry (2–24 chars) |
-
-**Nonce:** the raw nonce goes to Supabase; its SHA-256 goes to Apple. Supabase verifies the raw value against the JWT.
-
-**Backend prerequisite (dashboard, not code):** enable Authentication → Providers → **Apple** in Supabase with **Client IDs** including the iOS bundle id `com.mayday.dirt`. You also need a Services ID / key from Apple Developer (Sign in with Apple). Until that works end-to-end, use **Continue as tester** (`BuildChannel.allowPreReleaseTesterUnlock`). On failure, the onboarding screen now shows the underlying API error instead of a generic retry string.
-
-Primary CTAs use brand orange (not nav green) — see [06-UI-DESIGN.md](./06-UI-DESIGN.md).
-
----
-
-## Subscription & delayed trial
-
-**DIRT PRO** — 7-day free trial, then **$10/month** or **$45/year** (`com.mayday.dirt.pro.monthly` / `.pro.yearly`). StoreKit 2 via `SubscriptionService`; App Store Connect products required for production, `Dirt.storekit` for local testing.
-
-The trial paywall is **not** shown at sign-in. `TrialGateModel` counts cumulative **map-foreground seconds** (persisted on-device, `dirt_trial_*_v1`) and escalates:
-
-| # | Trigger | Dismissible |
-| --- | --- | --- |
-| 1 | 90s of map use | Yes (X / "Maybe later") |
-| 2 | next launch, **or** +5 min cumulative | Yes |
-| 3 | 3rd exposure (≈+5 min after #2) **or** 15 min cumulative — whichever first | **No — must start trial** |
-
-- Time accrues during navigation, but the gate **never interrupts an active ride** (`tick(canPresent: !navActive)`); it waits for idle.
-- A live subscription clears everything (`markSubscribed()` / `isSubscribed`).
-- On-device persistence means a reinstall resets the clock (accepted trade-off).
-- DEBUG: Profile → "Reset trial usage clock" (`resetForTesting()`).
-
----
-
-## Profile sheet (signed in)
-
-| Section | Contents |
+| Step | API / behavior |
 | --- | --- |
-| Account | Apple ID email · edit screen name → "Save screen name" · Sign out |
-| DIRT PRO | Status (Active / Not subscribed) · Manage subscription (`.manageSubscriptionsSheet`) **or** Start 7-day free trial (opens `PaywallView`) · Restore purchases |
-| About | dirtmoto.app · Privacy policy · Terms of use (all `Link`) |
-| Debug (`#if DEBUG`) | Reset trial usage clock |
+| 1 | `AppleNonce.random()`; SHA-256 nonce goes to Apple |
+| 2 | Apple returns an identity token and, on first authorization, possibly a full name |
+| 3 | Raw nonce and identity token go to `client.auth.signInWithIdToken(provider: .apple, ...)` |
+| 4 | If Apple supplied a name and the account has none, DIRT seeds the display name |
+| 5 | Profile can update auth metadata plus the matching `profiles` row |
 
-Name persist: `auth.update(user: data display_name)` then upsert `profiles { id, display_name, updated_at }`. Trimmed, max **60** chars (setup step enforces 2–24). Toast "Profile updated" via `planner.toast`.
+Every active Sign in with Apple entry point surfaces a real failure and treats
+an explicit Apple cancellation as silent. Groups and Profile must never swallow
+an authentication error.
+
+Backend prerequisite: enable the Apple provider in Supabase with client IDs
+including `com.mayday.dirt`, and configure the corresponding Apple Services ID,
+key, and redirect details. Validate this end to end in a distribution build.
+
+The current native flow sends an Apple identity token to Supabase but does not
+exchange Apple's short-lived authorization code for a server-held refresh
+token. Until the server-side token exchange and `/auth/revoke` path are deployed,
+successful deletion instructs the rider to revoke DIRT manually in Apple
+Account settings. Apple credentials and the signing private key must never be
+stored in the app.
 
 ---
 
-## Current auth surface
+## Account deletion
 
-| Item | iOS |
+Profile exposes **Delete account** for signed-in riders. The app calls only the
+versioned `delete_own_account()` RPC. That function accepts no user ID, derives
+the target from `auth.uid()`, and is intended to remove the Auth user plus DIRT
+account data atomically. If the RPC response fails or times out, the app states
+that completion could not be confirmed. It does not claim rollback because a
+response can be lost after a committed server transaction. Live group sharing
+remains stopped until the rider's account state is re-established.
+
+The migration is source-controlled but is **not proof of production setup**.
+It must be applied to staging, checked against the exported live schema and RLS,
+then applied to production before submission. The verification matrix is in
+[`../supabase/README.md`](../supabase/README.md).
+
+Deleting a DIRT account does not cancel an App Store subscription. The
+confirmation says this explicitly so the rider can manage the subscription
+through Apple separately.
+
+---
+
+## DIRT PRO access policy
+
+There is no time-based or map-time trial ladder.
+
+| Rider action | Free access |
 | --- | --- |
-| Sign in with Apple (gate before map) | Yes |
-| Email OTP UI | Removed (service methods retained) |
-| Session restore | Yes (SDK) |
+| Reach map and plan routes | Yes |
+| Save a route locally | Yes |
+| Export GPX | No; presents a dismissible DIRT PRO paywall |
+| Start navigation | First two successful ride starts are free; later Starts present the paywall |
+
+The free-Start count is stored in Keychain and is consumed only when navigation
+actually leaves preparation and begins the live ride. Subscribers do not
+consume it. The current gate uses the dismissible `.soft` presentation; the
+`.hard` paywall shell remains in the view type but is not used by the gate.
+
+StoreKit product identifiers are:
+
+- `com.mayday.dirt.pro.monthly`
+- `com.mayday.dirt.pro.yearly`
+
+Localized prices, billing periods, free-trial duration, and offer eligibility
+come from StoreKit at runtime. Do not hard-code a price or promise a seven-day
+trial in app copy or documentation. `Dirt.storekit` is only the local test
+configuration; App Store Connect remains the production source of truth.
+
+Purchase, pending approval, cancellation, verification failure, and restore
+failure are distinct outcomes. Restore must never say “No purchases found” when
+the App Store sync itself failed.
+
+---
+
+## Profile sheet
+
+| State / section | Contents |
+| --- | --- |
+| Signed out | Optional Sign in with Apple |
+| Signed in | Apple email when available, editable screen name, Sign out, Delete account |
+| DIRT PRO | Entitlement status, View DIRT PRO or Manage, Restore purchases |
+| About | Website, privacy policy, and terms links |
+| Pre-release tester tools | Visible only when `BuildChannel.showsTesterUnlock` is true |
+
+Name persistence updates auth `display_name` metadata and upserts the `profiles`
+row. The service trims input and caps it at 60 characters.
+
+---
+
+## Current release surface
+
+| Item | iOS state |
+| --- | --- |
+| Signed-out map and route planning | Yes |
+| Sign in with Apple in Profile and Groups | Yes |
+| Email OTP UI | No; service methods retained |
+| Session restore | Yes, Supabase SDK |
 | Display name → auth metadata + `profiles` | Yes |
-| Sign out | Yes |
-| 7-day trial + StoreKit subscription | Yes |
-| Manage subscription / legal links | Yes |
-| Account deletion | No |
+| Local route Save without DIRT PRO | Yes |
+| GPX export gate | Yes |
+| Two free navigation Starts, then DIRT PRO gate | Yes |
+| StoreKit-derived price and introductory offer | Yes |
+| Manage subscription and restore | Yes |
+| Public Release tester unlock | No |
+| Account-deletion UI and client contract | Yes |
+| Account-deletion RPC applied and verified in production | Pending external deployment |
 
 ---
 
 ## Starting a new agent on this area
 
-1. Read `AppGateView.swift`, `SupabaseService.swift`, then `ProfileSheet.swift` and the `Features/Subscription/` trio.
-2. Confirm profile upsert writes `display_name` on the user and `profiles` row.
-3. **Invariants:** never ship a service-role key; the map stays gated behind Apple auth + screen name; the trial gate never interrupts active navigation; usage clock is on-device only; product IDs are `com.mayday.dirt.pro.{monthly,yearly}`.
-4. **External setup still required (not code):** enable Apple provider in Supabase; create the two subscription products in App Store Connect with a 7-day free-trial intro offer; register the real `dirtmoto.app` domain + reachable privacy/terms URLs before App Store review.
-5. **Open questions:** account deletion for App Store review; whether to show trial vs paid distinctly in Profile status.
+1. Read `AppGateView.swift`, `BuildChannel.swift`, `SupabaseService.swift`,
+   `ProfileSheet.swift`, and the three files under `Features/Subscription/`.
+2. Keep these invariants: map access is signed-out; Groups requires identity;
+   local Save is free; GPX is gated; Start has two free completed entries into
+   navigation; StoreKit owns price/offer copy; public Release has no tester
+   unlock; the app never contains a service-role key.
+3. Before release, validate Apple sign-in, purchase, pending Ask to Buy,
+   cancellation, restore, expired/revoked entitlement, and account deletion on
+   real distribution builds and test accounts.
+4. External work still required: configure Apple auth in Supabase; create and
+   review the two products and any introductory offers in App Store Connect;
+   apply and verify the deletion migration; export and audit live RLS/Realtime
+   policies; confirm production website, privacy, terms, and support URLs.

@@ -2,16 +2,25 @@ import Foundation
 
 /// Build / distribution channel helpers.
 ///
-/// Tester unlock ships in **every** configuration (Debug + Release/TestFlight)
-/// until Sign in with Apple works. Flip `allowPreReleaseTesterUnlock` to
-/// `false` before public App Store freeze.
 enum BuildChannel {
-    /// Temporary. Set `false` when Apple Sign-In + trial are verified for store.
-    static let allowPreReleaseTesterUnlock = true
-
     /// Whether onboarding / Profile / paywall tester controls should appear.
-    /// Not behind `#if DEBUG` — Release archives must include this for TestFlight.
-    static var showsTesterUnlock: Bool { allowPreReleaseTesterUnlock }
+    ///
+    /// Public Release archives have no tester escape hatch. A deliberately
+    /// configured pre-release build may opt in with the
+    /// `DIRT_PRE_RELEASE_TESTER_UNLOCK` compilation condition.
+    static var showsTesterUnlock: Bool {
+        #if DEBUG || DIRT_PRE_RELEASE_TESTER_UNLOCK
+        true
+        #else
+        false
+        #endif
+    }
+
+    /// Pure policy used by focused tests so the public-release invariant cannot
+    /// regress behind a forgotten runtime flag.
+    static func testerUnlockAllowed(debugBuild: Bool, preReleaseOptIn: Bool) -> Bool {
+        debugBuild || preReleaseOptIn
+    }
 
     /// Routing-graph debug overlay. Debug builds only — not TestFlight/App Store.
     static var debugRoutingGraphOverlay: Bool {

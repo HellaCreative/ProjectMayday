@@ -597,11 +597,24 @@ final class OfflineTileManager {
         }
     }
 
-    /// Hide the prep overlay after the rider begins the trek.
-    func markPrepConsumed() {
-        if case .ready = phase {
-            phase = .idle
-            progress = 0
+    /// Hide the prep overlay after the rider begins the trek. A failed blocking
+    /// download is also consumable when the rider explicitly chooses the
+    /// degraded "live maps only" path. Returning `false` makes this an atomic
+    /// one-shot gate for Begin Ride.
+    @discardableResult
+    func markPrepConsumed() -> Bool {
+        guard Self.canConsumePrepForRide(phase) else { return false }
+        phase = .idle
+        progress = 0
+        return true
+    }
+
+    nonisolated static func canConsumePrepForRide(_ phase: Phase) -> Bool {
+        switch phase {
+        case .ready, .failed:
+            return true
+        case .idle, .downloading:
+            return false
         }
     }
 

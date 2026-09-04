@@ -52,6 +52,34 @@ enum GroupPresencePolicy {
     }
 }
 
+/// Battery-aware persistence cadence. Distress stays close to live while
+/// ordinary sharing uses the existing ten-second persisted-presence fallback.
+enum GroupPresenceCadencePolicy {
+    static let distressSeconds: Double = 5
+    static let ordinarySeconds: Double = 10
+
+    static func intervalSeconds(forStatus status: String) -> Double {
+        switch status {
+        case "breakdown", "injured", "stuck":
+            distressSeconds
+        default:
+            ordinarySeconds
+        }
+    }
+}
+
+/// A distress event belongs to the group the rider selected. Persistence and
+/// Realtime must use the same group id so a rider in multiple groups never
+/// leaks their alert onto unrelated channels.
+enum GroupAlertPolicy {
+    static func broadcastGroupIDs(
+        targetGroupID: String,
+        connectedGroupIDs: some Sequence<String>
+    ) -> [String] {
+        connectedGroupIDs.contains(targetGroupID) ? [targetGroupID] : []
+    }
+}
+
 struct GroupMemberRouteTarget: Identifiable, Equatable {
     let groupID: String
     let userID: String

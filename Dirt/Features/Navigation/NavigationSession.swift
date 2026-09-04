@@ -75,6 +75,11 @@ final class NavigationSession {
     private var deliveredCuePhases: [String: Set<NavigationCuePhase>] = [:]
     private var announcedStageApproaches: Set<String> = []
     private var announcedStageArrivals: Set<String> = []
+    /// The last accepted segment/location keep progress tied to the rider's
+    /// local part of the line. A global nearest-segment match can otherwise
+    /// jump across a loop, self-crossing, or nearby parallel road.
+    @ObservationIgnored private var lastMatchedSegmentIndex: Int?
+    @ObservationIgnored private var lastProgressLocation: CLLocation?
 
     struct SurfaceRun: Sendable {
         let startMeters: Double
@@ -133,8 +138,11 @@ final class NavigationSession {
         return max(0, Date().timeIntervalSince(startedAt))
     }
 
-    func beginPrefetch() {
+    @discardableResult
+    func beginPrefetch() -> Bool {
+        guard phase == .idle else { return false }
         phase = .prefetching
+        return true
     }
 
     func cancelPrefetch() {
@@ -174,7 +182,12 @@ final class NavigationSession {
         if !continuing {
             riddenEdgeIds = []
             startedAt = Date()
+            lastRerouteRequest = nil
         }
+        // A replacement line has its own segment indices and starts progress at
+        // zero, so continuity must be re-anchored by its first location fix.
+        lastMatchedSegmentIndex = nil
+        lastProgressLocation = nil
         offRoute = false
         offRouteStrikes = 0
         lastSurfaceAlertKey = nil
@@ -195,7 +208,9 @@ final class NavigationSession {
         phase = .active
     }
 
-    /// Cue mode changed mid-ride — rebuild geometry cues and clear speech dedupe.
+    /// Cue mode changed mid-ride. Stable maneuver identities retain their
+    /// delivered phases so a Junction cue does not replay when Rally is enabled
+    /// and Rally-only cues do not replay after switching away and back.
     func rebuildCuesForCurrentMode() {
         guard phase == .active, coordinates.count > 1 else { return }
         maneuvers = Self.resolveManeuvers(
@@ -204,7 +219,6 @@ final class NavigationSession {
             cueMode: cueMode
         )
             .sorted { ($0.alongMeters ?? 0) < ($1.alongMeters ?? 0) }
-        deliveredCuePhases = [:]
         currentCue = "Follow the route"
         currentCueMeters = nil
         currentManeuver = nil
@@ -258,15 +272,7 @@ final class NavigationSession {
         // a rider on a curved road can sit 80+ m from the nearest vertex while
         // riding directly on the surface. Same segment-projection
         // approach (`nearestProjection` / 50 m on-route).
-        guard let proj = GeoMath.nearestProjection(to: location, in: coordinates, cumulative: cumulative) else { return }
-
-        traveledMeters = proj.alongMeters
-        remainingMeters = max(0, totalMeters - traveledMeters)
-        RideEdgeSequence.appendRidden(
-            into: &riddenEdgeIds,
-            spans: edgeSpans,
-            traveledMeters: traveledMeters
-        )
+        guard let proj = projectionRespectingContinuity(for: location) else { return }
 
         // 50 m on-route threshold.
         // Three consecutive misses required before declaring off-route so GPS
@@ -274,27 +280,38 @@ final class NavigationSession {
         let wasOffRoute = offRoute || offRouteStrikes > 0
         if proj.offMeters > 50 {
             offRouteStrikes += 1
-        } else {
-            offRouteStrikes = 0
-            offRoute = false
-            if wasOffRoute { onRouteRecovered?() }
-        }
-
-        if offRouteStrikes >= 3 {
-            offRoute = true
-            currentCue = "Off route — recalculating…"
-            currentCueMeters = nil
-            currentManeuver = nil
-            followingManeuver = nil
-            followingManeuverMeters = nil
-            upcomingSurfaceAlert = nil
-            let now = Date()
-            if lastRerouteRequest == nil || now.timeIntervalSince(lastRerouteRequest!) > 20 {
-                lastRerouteRequest = now
-                onRerouteNeeded?()
+            if offRouteStrikes >= 3 {
+                offRoute = true
+                currentCue = "Off route — recalculating…"
+                currentCueMeters = nil
+                currentManeuver = nil
+                followingManeuver = nil
+                followingManeuverMeters = nil
+                upcomingSurfaceAlert = nil
+                let now = Date()
+                if lastRerouteRequest == nil || now.timeIntervalSince(lastRerouteRequest!) > 20 {
+                    lastRerouteRequest = now
+                    onRerouteNeeded?()
+                }
             }
+            // A rejected projection must never become the continuity anchor or
+            // advance progress. Otherwise repeated stationary off-route fixes
+            // can ratchet the local search window along a nearby future arm.
             return
         }
+
+        lastMatchedSegmentIndex = proj.segmentIndex
+        lastProgressLocation = location
+        traveledMeters = proj.alongMeters
+        remainingMeters = max(0, totalMeters - traveledMeters)
+        RideEdgeSequence.appendRidden(
+            into: &riddenEdgeIds,
+            spans: edgeSpans,
+            traveledMeters: traveledMeters
+        )
+        offRouteStrikes = 0
+        offRoute = false
+        if wasOffRoute { onRouteRecovered?() }
 
         updateSurfaceContext()
 
@@ -408,10 +425,87 @@ final class NavigationSession {
         deliveredCuePhases = [:]
         announcedStageApproaches = []
         announcedStageArrivals = []
+        lastRerouteRequest = nil
+        lastMatchedSegmentIndex = nil
+        lastProgressLocation = nil
         climbMeters = 0
         lastAltitudeMeters = nil
         startedAt = nil
         lastSpeedMPS = 0
+    }
+
+    /// Match only the locally reachable portion of an established route.
+    ///
+    /// The first fix still uses the global route so navigation can recover when
+    /// it begins after the rider has moved. Later fixes search a distance window
+    /// around the last accepted segment. The window grows with elapsed time,
+    /// speed, and straight-line movement, which permits background gaps and
+    /// ordinary stage transitions without letting a nearby future/previous arm
+    /// of a loop steal progress.
+    private func projectionRespectingContinuity(for location: CLLocation) -> PolylineProjection? {
+        guard let anchorSegment = lastMatchedSegmentIndex,
+              let priorLocation = lastProgressLocation,
+              coordinates.count > 1,
+              cumulative.count == coordinates.count
+        else {
+            return GeoMath.nearestProjection(
+                to: location,
+                in: coordinates,
+                cumulative: cumulative
+            )
+        }
+
+        let elapsed = max(0, location.timestamp.timeIntervalSince(priorLocation.timestamp))
+        let directMovement = location.distance(from: priorLocation)
+        let measuredSpeed = location.speed >= 0 ? location.speed : 0
+        // Speed is capped to a short recent interval. An old moving fix must
+        // not widen the window forever while the rider is stationary off-route;
+        // real long-gap progress is represented by direct displacement below.
+        let expectedMovement = measuredSpeed * min(elapsed, 30)
+
+        // Normal location updates need only a small local window. Longer gaps
+        // and real movement expand it automatically; no fixed segment count is
+        // assumed because route geometry density varies greatly.
+        let forwardAllowance = max(
+            100,
+            expectedMovement * 1.75 + 40,
+            directMovement * 1.25 + 40
+        )
+        let backwardAllowance = max(
+            50,
+            expectedMovement * 0.5 + 25,
+            directMovement * 0.5 + 25
+        )
+        let lowerAlong = max(0, traveledMeters - backwardAllowance)
+        let upperAlong = min(totalMeters, traveledMeters + forwardAllowance)
+        let finalSegment = coordinates.count - 2
+
+        var lowerSegment = min(max(0, anchorSegment), finalSegment)
+        while lowerSegment > 0, cumulative[lowerSegment] > lowerAlong {
+            lowerSegment -= 1
+        }
+
+        var upperSegment = min(max(0, anchorSegment), finalSegment)
+        while upperSegment < finalSegment, cumulative[upperSegment + 1] < upperAlong {
+            upperSegment += 1
+        }
+
+        let localCoordinates = Array(coordinates[lowerSegment...(upperSegment + 1)])
+        let baseAlong = cumulative[lowerSegment]
+        let localCumulative = Array(cumulative[lowerSegment...(upperSegment + 1)]).map {
+            $0 - baseAlong
+        }
+        guard let local = GeoMath.nearestProjection(
+            to: location,
+            in: localCoordinates,
+            cumulative: localCumulative
+        ) else { return nil }
+
+        return PolylineProjection(
+            offMeters: local.offMeters,
+            alongMeters: baseAlong + local.alongMeters,
+            segmentIndex: lowerSegment + local.segmentIndex
+        )
     }
 
     private static func fallbackStages(for ends: [Double]) -> [NavigationStage] {

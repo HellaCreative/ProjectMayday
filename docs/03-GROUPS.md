@@ -23,7 +23,7 @@ Group ride list/detail, invite codes, presence sharing, and map roster. Spec: th
 | Table | iOS usage |
 | --- | --- |
 | `group_members` | List memberships (`role` + nested `groups`); member roster with `profiles(display_name)` |
-| `groups` | Create `{ name, owner_id }`; soft-delete via RPC (`deleted_at` filtered client-side) |
+| `groups` | Read membership summaries; create/delete through RPCs (`deleted_at` filtered client-side) |
 | `rider_presence` | Upsert while sharing; select for live counts + map pins |
 | `rider_alerts` | Insert distress/route reports, fetch unresolved peer alerts, resolve dismissed/recovered alerts |
 | `profiles` | Nested select for display names (writes happen in auth/profile flow) |
@@ -32,6 +32,7 @@ Group ride list/detail, invite codes, presence sharing, and map roster. Spec: th
 
 | RPC | Args | When |
 | --- | --- | --- |
+| `create_group` | `p_name` | Atomically create group + owner membership |
 | `join_group_by_invite_code` | `p_invite_code` | Join |
 | `leave_group` | `p_group_id` | Non-owner leave |
 | `delete_group` | `p_group_id` | Owner soft-delete |
@@ -59,10 +60,10 @@ Missing, future, malformed, or stale timestamps are offline, never live.
 | --- | --- |
 | Auth gate | Sheet shows sign-in prompt if `!supabase.isSignedIn` |
 | List | Name · member count · live count; pull-to-refresh |
-| Create | Trim and validate name (1–60 chars), then insert group + owner membership; compensate by deleting the group if membership fails |
+| Create | Trim and validate name (1–60 chars), then call transactional `create_group` so group + owner membership succeed or roll back together |
 | Join | Invite code → RPC → refresh |
 | Detail | Invite code + copy; sharing controls; roster; leave/delete |
-| Start sharing | Wait for a current, accurate GPS fix, then `requestAlways` + background location; upsert every **5s** |
+| Start sharing | Wait for a current, accurate GPS fix, then `requestAlways` + background location; upsert every **10s** normally and every **5s** during distress |
 | Stop sharing | Broadcast sharing-off, upsert `sharing_enabled: false`, `status: offline`, and release only the group-sharing background-location claim |
 | Status while sharing | `available` \| `breakdown` \| `injured` \| `stuck` (picker) |
 | Roster refresh | Realtime updates with a database polling fallback while tracked (**30s** when connected, **10s** when Realtime is down) |
@@ -71,7 +72,7 @@ Missing, future, malformed, or stale timestamps are offline, never live.
 | Route to member | Sheet **or tap peer pin on map** → route to the validated last-known position while preserving stable group/member identity |
 | Stop-trigger tracking | During navigation the route stays frozen while the follower is moving. After an 8s stop, it updates if the member moved at least 100m and is still live. Resuming motion cancels/discards the update. |
 | Tracking notice | A successful update, sharing end, or safe fallback produces a persistent, dismissible navigation notice |
-| Peer alerts | Distress status and route reports are inserted, broadcast live, shown above the map, and reconciled against current presence |
+| Peer alerts | Distress status and route reports are persisted and broadcast only to the selected/tracked target group, shown above the map, and reconciled against current presence |
 | Sign out | Broadcast offline, stop sharing/tracking tasks, close channels, and clear roster/pins before auth is removed |
 | Close sheet | `onDisappear` → `closeDetail()` (reset to list) |
 
@@ -83,7 +84,7 @@ Presence upsert payload fields: `user_id`, `sharing_enabled`, `status`, `latitud
 
 Realtime uses a private Realtime channel `group:{groupId}` with presence + broadcast (`location`, `alert`, `sharing_off`).
 
-The app subscribes to the tracked group's private channel for low-latency validated location, alert, and sharing-off events. It also persists `rider_presence` every 5s while sharing and polls the database every 30s when Realtime is connected (10s when it is down), so a missed broadcast is eventually corrected. Request generations prevent old group/list responses from overwriting a newer selection.
+The app subscribes to the tracked group's private channel for low-latency validated location, alert, and sharing-off events. It persists `rider_presence` every 10s during ordinary sharing and every 5s during distress, then polls the database every 30s when Realtime is connected (10s when it is down), so a missed broadcast is eventually corrected. Request generations prevent old group/list responses from overwriting a newer selection.
 
 Location broadcasts and database rows pass the same validity checks. The app never publishes `(0,0)`, never treats a missing timestamp as live, and does not route to a stale member.
 
@@ -105,8 +106,20 @@ Planner pins and group pins have separate generations. Group movement updates on
 
 | Priority | Work |
 | --- | --- |
-| Medium | Replace client-side create compensation with one transactional backend RPC |
+| Release | Deploy and verify the versioned `create_group` RPC plus production RLS/private Realtime policies |
+| Release | Add the moderation, report, and block workflow required before Groups is public |
 | Low | Push, historical alert UI, and Live Activity hooks for peer alerts ([07-FUTURE.md](./07-FUTURE.md)) |
+
+## Launch security boundary
+
+The client is not proof that Supabase Row Level Security is correct. The live
+schema, functions, grants, policies, and private Realtime authorization must be
+exported, reviewed, and tested before release. The versioned verification matrix
+and account-deletion migration live in [`../supabase/README.md`](../supabase/README.md).
+
+Distress scope is deliberately narrow: the database row and Realtime broadcast
+use the same single target group. Membership in another connected group is not
+permission to copy an alert into that group's channel.
 
 ---
 
@@ -116,4 +129,4 @@ Planner pins and group pins have separate generations. Group movement updates on
 2. Confirm table/RPC names against the iOS docs §4 — do not invent columns.
 3. Check how rider markers are isolated from planner markers (`setGroupMarkers` / `setPlannerMarkers`).
 4. **Invariants:** groups require a signed-in session; invite codes stay 6-char lowercase alnum; live window is 120s; only fresh accurate local fixes publish; moving riders never receive a group-target reroute; do not break the `rider_presence` row shape.
-5. **Open question:** should the backend expose a transactional create-group-and-owner-membership RPC?
+5. **Release dependency:** deploy and verify `create_group`; the client no longer performs two independent writes.

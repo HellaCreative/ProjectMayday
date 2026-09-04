@@ -1,4 +1,6 @@
+import CoreLocation
 import SwiftUI
+import UIKit
 
 /// Map chrome stack:
 /// Route overview (nav) · 3D/2D · Cues · Compass · Status · Recenter.
@@ -17,6 +19,23 @@ struct MapControlStack: View {
 
     @State private var cuesOpen = false
     @State private var sharingOpen = false
+    @State private var locationRecovery: LocationRecovery?
+
+    private enum LocationRecovery: Identifiable, Equatable {
+        case denied
+        case approximate
+
+        var id: Int { self == .denied ? 0 : 1 }
+        var title: String { self == .denied ? "Location is off" : "Precise Location is off" }
+        var message: String {
+            switch self {
+            case .denied:
+                "Open Settings and allow location access so DIRT can place you on the map and navigate from where you are."
+            case .approximate:
+                "DIRT can show an approximate position, but turn on Precise Location in Settings for dependable navigation and Group sharing."
+            }
+        }
+    }
 
     private let statuses = ["available", "breakdown", "injured", "stuck"]
 
@@ -40,6 +59,17 @@ struct MapControlStack: View {
                     controlButtons
                 }
             }
+        }
+        .alert(item: $locationRecovery) { recovery in
+            Alert(
+                title: Text(recovery.title),
+                message: Text(recovery.message),
+                primaryButton: .default(Text("Open Settings")) {
+                    guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+                    UIApplication.shared.open(url)
+                },
+                secondaryButton: .cancel(Text("Not now"))
+            )
         }
         .overlay(alignment: horizontal ? .top : .trailing) {
             if cuesOpen {
@@ -239,9 +269,16 @@ struct MapControlStack: View {
     private var recenterButton: some View {
         Button {
             closePopovers()
+            if app.location.authorization == .denied || app.location.authorization == .restricted {
+                locationRecovery = .denied
+                return
+            }
             if let coordinate = app.location.currentCoordinate {
                 app.location.requestWhenInUse()
                 app.mapState.recenterOnUser(at: coordinate)
+                if app.location.accuracyAuthorization == .reducedAccuracy {
+                    locationRecovery = .approximate
+                }
             } else {
                 app.location.requestWhenInUse()
                 app.planner.toast = "Waiting for GPS fix"
@@ -259,6 +296,11 @@ struct MapControlStack: View {
                 )
         }
         .accessibilityLabel("Follow my location")
+        .accessibilityHint(
+            app.location.authorization == .denied || app.location.authorization == .restricted
+                ? "Opens location access help"
+                : "Centers the map on your current location"
+        )
     }
 
     /// Orange when follow is locked, or while the Recenter chip is up during

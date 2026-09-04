@@ -29,6 +29,7 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
     private var backgroundPurposes: Set<LocationBackgroundPurpose> = []
 
     private(set) var authorization: CLAuthorizationStatus = .notDetermined
+    private(set) var accuracyAuthorization: CLAccuracyAuthorization = .fullAccuracy
     private(set) var lastLocation: CLLocation?
     var onLocation: ((CLLocation) -> Void)?
 
@@ -42,6 +43,8 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
     override init() {
         super.init()
         manager.delegate = self
+        authorization = manager.authorizationStatus
+        accuracyAuthorization = manager.accuracyAuthorization
         manager.desiredAccuracy = kCLLocationAccuracyBest
         manager.activityType = .otherNavigation
         manager.distanceFilter = 5
@@ -145,6 +148,7 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
         let status = manager.authorizationStatus
         Task { @MainActor in
             self.authorization = status
+            self.accuracyAuthorization = manager.accuracyAuthorization
             if self.isAuthorized {
                 self.applyBackgroundUpdateState()
                 self.manager.startUpdatingLocation()
@@ -157,6 +161,7 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
         // Core Location can deliver off the main actor — hop before touching
         // @Observable nav / cue state (avoids unsafeForcedSync warnings).
         Task { @MainActor in
+            self.accuracyAuthorization = manager.accuracyAuthorization
             self.lastLocation = latest
             self.persistLastLocation(latest)
             self.onLocation?(latest)

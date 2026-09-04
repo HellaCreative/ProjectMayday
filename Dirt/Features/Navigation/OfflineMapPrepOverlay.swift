@@ -177,7 +177,7 @@ struct OfflineMapPrepOverlay: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             Button {
-                planner.startNavigation()
+                planner.retryOfflineMapPrep()
             } label: {
                 Text("TRY AGAIN")
                     .font(.dirtUI(14, weight: .heavy))
@@ -232,7 +232,7 @@ struct OfflineMapPrepOverlay: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             Button {
-                planner.startNavigation()
+                planner.retryOfflineMapPrep()
             } label: {
                 Text("TRY AGAIN")
                     .font(.dirtUI(14, weight: .heavy))

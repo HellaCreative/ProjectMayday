@@ -12,7 +12,7 @@ From the Codex iOS audit. **#2 stale routes** and **#5 failed-manifest retry** w
 | --- | --- | --- | --- |
 | High | Stale on-device routing responses can overwrite newer intent | Request generation + stage-id apply; ignore mismatched replies | **Done** |
 | High | Failed POI / network manifest `Task` sticks for the session | Clear task on failure so a later refresh retries | **Done** |
-| High | Release builds include tester auth + subscription bypass | `BuildChannel.allowPreReleaseTesterUnlock` — intentional for TestFlight; set `false` (or Store-only config) before public App Store freeze | Open |
+| High | Release builds include tester auth + subscription bypass | Debug or an explicit `DIRT_PRE_RELEASE_TESTER_UNLOCK` compilation condition only; public Release scrubs persisted bypass values | **Done** |
 | High | Live sharing can publish `(0,0)` before GPS is ready | Wait for a fresh, accurate fix; reject sentinel coordinates locally and remotely | **Done** |
 | High | Gzip decode uses a fixed 8× output ceiling | `Data.gunzipped()` — grow buffer / stream; current packs may be fine until blank provinces appear | Open |
 | Medium | `IPHONEOS_DEPLOYMENT_TARGET = 26.5` | Likely Xcode default inheritance — lower to the real minimum OS before store if reach matters | Open |
@@ -28,10 +28,10 @@ From the Codex iOS audit. **#2 stale routes** and **#5 failed-manifest retry** w
 | --- | --- | --- |
 | POI / Rider Services overlays | Overpass + fuel filter | Keep respecting `@AppStorage` prefs; existence confirmation later |
 | NSTDB / provincial road overlays | Toggles only | Same — MapLibre sources/layers per installed province pack |
-| Supabase Realtime | Private `group:{id}` channel + 10s persisted-presence fallback | Push notifications / durable alert history ([03-GROUPS.md](./03-GROUPS.md)) |
+| Supabase Realtime | Private `group:{id}` channel + 10s ordinary / 5s distress persisted presence | Push notifications / durable alert history ([03-GROUPS.md](./03-GROUPS.md)) |
 | Shared incidents | `rider_alerts` + Realtime peer banner | Historical-alert UI; optional `avoidEdgeIds` recalculate |
 | Corridor offline tiles | BBox pyramid z8–14 | True corridor / budgeted tile set closer to a true corridor |
-| GPX import | Export only | GPX import |
+| GPX import | Track/route import, traced display, local save, and continue-as-plan | Optional rider-to-track connector plus corridor-constrained DIRT rebuild and loop-direction choice |
 
 ---
 

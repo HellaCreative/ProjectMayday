@@ -120,8 +120,18 @@ struct GroupSafetyPolicyTests {
             speed: 3,
             timestamp: base
         )
-        #expect(StopTriggeredTrackingPolicy.motion(for: stopped) == .stopped)
-        #expect(StopTriggeredTrackingPolicy.motion(for: moving) == .moving)
+        let stoppedMotionMatches: Bool
+        switch StopTriggeredTrackingPolicy.motion(for: stopped) {
+        case .stopped: stoppedMotionMatches = true
+        case .moving, .uncertain: stoppedMotionMatches = false
+        }
+        let movingMotionMatches: Bool
+        switch StopTriggeredTrackingPolicy.motion(for: moving) {
+        case .moving: movingMotionMatches = true
+        case .stopped, .uncertain: movingMotionMatches = false
+        }
+        #expect(stoppedMotionMatches)
+        #expect(movingMotionMatches)
 
         let old = RouteCoordinate(longitude: -63.57, latitude: 44.65)
         let smallMove = RouteCoordinate(longitude: -63.5704, latitude: 44.65)
@@ -165,5 +175,37 @@ struct GroupSafetyPolicyTests {
         #expect(service.backgroundUpdatePurposes == [.groupSharing])
         service.setBackgroundUpdates(false, for: .groupSharing)
         #expect(service.backgroundUpdatePurposes.isEmpty)
+    }
+
+    @Test func distressAlertsOnlyBroadcastToThePersistedTargetGroup() {
+        let targets = GroupAlertPolicy.broadcastGroupIDs(
+            targetGroupID: "trail-riders",
+            connectedGroupIDs: ["trail-riders", "friends", "event-staff"]
+        )
+        #expect(targets == ["trail-riders"])
+
+        let disconnected = GroupAlertPolicy.broadcastGroupIDs(
+            targetGroupID: "trail-riders",
+            connectedGroupIDs: ["friends", "event-staff"]
+        )
+        #expect(disconnected.isEmpty)
+    }
+
+    @Test func distressPresencePublishesMoreFrequentlyThanOrdinarySharing() {
+        #expect(GroupPresenceCadencePolicy.intervalSeconds(forStatus: "available") == 10)
+        #expect(GroupPresenceCadencePolicy.intervalSeconds(forStatus: "offline") == 10)
+        #expect(GroupPresenceCadencePolicy.intervalSeconds(forStatus: "breakdown") == 5)
+        #expect(GroupPresenceCadencePolicy.intervalSeconds(forStatus: "injured") == 5)
+        #expect(GroupPresenceCadencePolicy.intervalSeconds(forStatus: "stuck") == 5)
+        #expect(GroupPresenceCadencePolicy.distressSeconds < GroupPresenceCadencePolicy.ordinarySeconds)
+    }
+
+    @Test func appleSignInFailuresRemainVisibleToTheRider() {
+        let error = NSError(
+            domain: "DIRTTests.AppleSignIn",
+            code: 1,
+            userInfo: [NSLocalizedDescriptionKey: "Apple sign-in is unavailable."]
+        )
+        #expect(AppleSignInFailure.message(from: error) == "Apple sign-in is unavailable.")
     }
 }

@@ -11,6 +11,7 @@ struct ProfileSheet: View {
     @State private var message: String?
     @State private var showManageSubscriptions = false
     @State private var showPaywall = false
+    @State private var showDeleteAccountConfirmation = false
     @State private var testerToolsOpen = false
     @State private var routeDebugBusy = false
     @State private var routeDebugStatus: String?
@@ -41,23 +42,34 @@ struct ProfileSheet: View {
                     aboutRows
 
                     if supabase.isSignedIn {
-                        Button {
-                            Task {
-                                guard !busy else { return }
-                                busy = true
-                                await app.groups.prepareForSignOut()
-                                do {
-                                    try await supabase.signOut()
-                                } catch {
-                                    message = "You could not sign out right now."
-                                    await app.groups.refreshGroups()
+                        VStack(spacing: DirtSpace.tight) {
+                            Button {
+                                Task {
+                                    guard !busy else { return }
+                                    busy = true
+                                    await app.groups.prepareForSignOut()
+                                    do {
+                                        try await supabase.signOut()
+                                    } catch {
+                                        message = "You could not sign out right now."
+                                        await app.groups.refreshGroups()
+                                    }
+                                    busy = false
                                 }
-                                busy = false
+                            } label: {
+                                Label("Sign out", systemImage: "rectangle.portrait.and.arrow.right")
                             }
-                        } label: {
-                            Label("Sign out", systemImage: "rectangle.portrait.and.arrow.right")
+                            .buttonStyle(DirtCTAStyle(fill: DirtTheme.chrome))
+
+                            Button(role: .destructive) {
+                                showDeleteAccountConfirmation = true
+                            } label: {
+                                Label("Delete account", systemImage: "person.crop.circle.badge.minus")
+                                    .frame(maxWidth: .infinity, minHeight: DirtHit.min)
+                            }
+                            .buttonStyle(.bordered)
+                            .tint(DirtTheme.danger)
                         }
-                        .buttonStyle(DirtCTAStyle(fill: DirtTheme.chrome))
                         .disabled(busy)
                     }
 
@@ -105,6 +117,14 @@ struct ProfileSheet: View {
                 ProfileShareSheet(items: [url])
             }
         }
+        .alert("Delete your DIRT account?", isPresented: $showDeleteAccountConfirmation) {
+            Button("Delete account", role: .destructive) {
+                deleteAccount()
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This permanently deletes your DIRT profile, group memberships, live sharing, alerts, and contributed ride data. It does not cancel an App Store subscription; manage that separately first.")
+        }
     }
 
     // MARK: - Account
@@ -151,17 +171,49 @@ struct ProfileSheet: View {
                 .disabled(busy || displayName.trimmingCharacters(in: .whitespaces).isEmpty)
             } else {
                 AppleSignInButton { result in
-                    if case let .success(credential) = result {
+                    switch result {
+                    case let .success(credential):
+                        guard !busy else { return }
+                        busy = true
+                        message = nil
                         Task {
-                            try? await supabase.signInWithApple(
-                                idToken: credential.idToken,
-                                rawNonce: credential.rawNonce,
-                                fullName: credential.fullName
-                            )
+                            defer { busy = false }
+                            do {
+                                try await supabase.signInWithApple(
+                                    idToken: credential.idToken,
+                                    rawNonce: credential.rawNonce,
+                                    fullName: credential.fullName
+                                )
+                            } catch {
+                                message = AppleSignInFailure.message(from: error)
+                            }
                         }
+                    case let .failure(error):
+                        message = AppleSignInFailure.message(from: error)
                     }
                 }
+                .disabled(busy)
+                .opacity(busy ? 0.65 : 1)
             }
+        }
+    }
+
+    private func deleteAccount() {
+        guard !busy else { return }
+        busy = true
+        message = nil
+        Task {
+            await app.groups.prepareForSignOut()
+            do {
+                try await supabase.deleteAccount()
+                message = "Your DIRT account was deleted. To also revoke DIRT’s Sign in with Apple access, open Settings → your name → Sign-In & Security → Sign in with Apple."
+            } catch {
+                message = error.localizedDescription
+                // A response can be lost after the server commits. Keep sharing
+                // stopped and avoid claiming either success or rollback until
+                // the rider's account state is confirmed on a fresh session.
+            }
+            busy = false
         }
     }
 
@@ -208,7 +260,7 @@ struct ProfileSheet: View {
                 Button {
                     showPaywall = true
                 } label: {
-                    Text("Start free trial")
+                    Text("View DIRT PRO")
                         .font(DirtType.cta)
                         .textCase(.uppercase)
                         .tracking(0.6)
@@ -220,8 +272,14 @@ struct ProfileSheet: View {
 
             Button("Restore purchases") {
                 Task {
-                    await subscription.restore()
-                    app.planner.toast = subscription.isSubscribed ? "Subscription restored" : "No purchases found"
+                    switch await subscription.restore() {
+                    case .restored:
+                        app.planner.toast = "Subscription restored"
+                    case .noActiveSubscription:
+                        app.planner.toast = "No purchases found"
+                    case .failed(let message):
+                        app.planner.toast = message
+                    }
                 }
             }
             .font(DirtType.helper)
@@ -229,6 +287,7 @@ struct ProfileSheet: View {
             .foregroundStyle(.white.opacity(0.65))
             .frame(maxWidth: .infinity, minHeight: DirtHit.min)
             .contentShape(Rectangle())
+            .disabled(subscription.storeOperationInFlight)
         }
         .padding(DirtSpace.row)
         .background(DirtTheme.chrome, in: RoundedRectangle(cornerRadius: DirtRadius.sheet - 6, style: .continuous))

@@ -17,7 +17,7 @@ MapLibre Native + Supabase Swift via SPM.
 | **Bundle ID** | `com.mayday.dirt` |
 | **SKU** (ASC only) | `MAYDAY-DIRT-IOS-001` |
 | Apple Team ID (`DEVELOPMENT_TEAM`) | `34XM6B4G7A` |
-| Marketing version / build | `1.0` / `1` |
+| Marketing version / build | `2` / `14` |
 | Test target bundle ID | `com.mayday.dirt.tests` |
 | UI test target bundle ID | `com.mayday.dirt.uitests` |
 
@@ -31,6 +31,9 @@ MapLibre Native + Supabase Swift via SPM.
 - Swift Package dependencies resolve automatically:
   - `maplibre-gl-native-distribution` (MapLibre Native, 6.x)
   - `supabase-swift` (2.x)
+
+Public-release gates and the App Store Connect owner checklist live in
+[`docs/APP-STORE-LAUNCH-CHECKLIST.md`](docs/APP-STORE-LAUNCH-CHECKLIST.md).
 
 ## Open in Xcode
 

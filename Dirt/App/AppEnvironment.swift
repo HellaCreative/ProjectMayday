@@ -44,7 +44,7 @@ final class AppEnvironment {
         didSet { UserDefaults.standard.set(debugBypassAuth, forKey: TesterKey.bypassAuth) }
     }
 
-    /// Treat the rider as subscribed so Save / Export / Start gates never fire.
+    /// Treat the rider as subscribed so Export / Start gates never fire.
     var debugBypassSubscription: Bool {
         didSet {
             UserDefaults.standard.set(debugBypassSubscription, forKey: TesterKey.bypassSubscription)

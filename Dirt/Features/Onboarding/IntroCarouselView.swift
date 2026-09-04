@@ -32,7 +32,7 @@ struct IntroCarouselView: View {
             case .dial:
                 "Set the mix of pavement to dirt, or go fully dirt. OSM tracks stay on. Allow unknown only opens unproven paths."
             case .crew:
-                "Find your riders on the map, route straight to a friend, message them, and get status alerts when someone stops."
+                "Share live locations with your riding group and send in-app status alerts while DIRT stays connected. Precise Location makes navigation and sharing dependable."
             }
         }
     }

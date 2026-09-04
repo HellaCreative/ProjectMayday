@@ -2898,7 +2898,7 @@ final class RoutePlannerModel {
     /// Start Navigation gates only the first rider/fuel stage corridor. Later
     /// stages are saved one at a time while riding, before the rider reaches them.
     func startNavigation() {
-        guard hasRoute else { return }
+        guard hasRoute, navigation.beginPrefetch() else { return }
 
         if let pendingGroupTracking,
            destination == pendingGroupTracking.routedCoordinate {
@@ -2919,7 +2919,6 @@ final class RoutePlannerModel {
         dismissGroupNavigationNotice()
 
         navigationStartTask?.cancel()
-        navigation.beginPrefetch()
         offline.beginNavigationPrepPresentation()
 
         // Lock pin edit for the whole prep → ride window. Pan/zoom stay free.
@@ -3031,13 +3030,19 @@ final class RoutePlannerModel {
 
     /// Called when offline prep is ready (or rider confirms after delight).
     func beginRideAfterOfflineReady() {
-        guard hasRoute else { return }
+        guard hasRoute,
+              navigation.phase == .prefetching,
+              offline.markPrepConsumed()
+        else { return }
         let coords = allCoordinates
-        guard coords.count > 1 else { return }
+        guard coords.count > 1 else {
+            navigation.cancelPrefetch()
+            mapState.unlockRouteEditingAfterPrepCancel()
+            return
+        }
 
         // Drop the gate immediately — proxy/style work used to run first and left
         // this card frozen on "BEGIN RIDE" for several seconds.
-        offline.markPrepConsumed()
 
         Task { @MainActor in
             await Task.yield()
@@ -3085,6 +3090,20 @@ final class RoutePlannerModel {
         if navigation.phase == .idle {
             mapState.unlockRouteEditingAfterPrepCancel()
         }
+    }
+
+    /// Retry is an explicit transition out of the current failed prep. Regular
+    /// Start taps remain idle-only so a double tap cannot launch overlapping
+    /// tile/pack work, while the retry buttons can intentionally create a fresh
+    /// prep session.
+    func retryOfflineMapPrep() {
+        guard hasRoute, navigation.phase == .prefetching else { return }
+        navigationStartTask?.cancel()
+        navigationStartTask = nil
+        offline.cancelPrep()
+        graphPacks.cancel()
+        navigation.cancelPrefetch()
+        startNavigation()
     }
 
     /// Along-route meters at each stage destination (for stage ETA labels).
@@ -3168,7 +3187,7 @@ final class RoutePlannerModel {
     }
 
     func skipPrefetch() {
-        offline.skip()
+        cancelOfflineMapPrep()
     }
 
     func endNavigation() {

@@ -40,7 +40,9 @@ final class MBTilesVectorProxy: @unchecked Sendable {
         try openDatabase()
 
         let params = NWParameters.tcp
-        let listener = try NWListener(using: params, on: .any)
+        params.requiredLocalEndpoint = .hostPort(host: .ipv4(.loopback), port: .any)
+        params.acceptLocalOnly = true
+        let listener = try NWListener(using: params)
         listener.newConnectionHandler = { [weak self] connection in
             guard let self else { return }
             self.queue.async { self.handle(connection) }

@@ -1389,8 +1389,6 @@ struct RoutePlannerCard: View {
 
     private func resumeAfterSubscribe(_ reason: PaywallReason) {
         switch reason {
-        case .save:
-            beginSave(planner.saveAffordance)
         case .export:
             requestExport()
         case .start:

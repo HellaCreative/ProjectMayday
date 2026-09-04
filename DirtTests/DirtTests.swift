@@ -260,7 +260,7 @@ struct DirtTests {
         #expect(required == ["ns", "nb"])
     }
 
-    @Test func routeRequestEncodesProfileAndAccessPolicy() throws {
+    @Test @MainActor func routeRequestEncodesProfileAndAccessPolicy() throws {
         let request = RouteRequest(
             profile: .balanced,
             locations: [
@@ -278,7 +278,7 @@ struct DirtTests {
         #expect(policy["motorizedUnknown"] == true)
     }
 
-    @Test func routeResponseDecodesSurfaceStatsAndSegments() throws {
+    @Test @MainActor func routeResponseDecodesSurfaceStatsAndSegments() throws {
         let json = """
         {
           "status":"complete",
@@ -308,7 +308,7 @@ struct DirtTests {
         #expect(SurfaceFamilyStats.family(of: "mystery_mix") == .unknown)
     }
 
-    @Test func routeCompositionKeepsFourFamiliesAndTwoTotalsConsistent() throws {
+    @Test @MainActor func routeCompositionKeepsFourFamiliesAndTwoTotalsConsistent() throws {
         let json = """
         {
           "status":"complete",
@@ -440,7 +440,7 @@ struct DirtTests {
         #expect(route.segments?.first?.edgeId == "edge-1")
     }
 
-    @Test func legacySummaryPreservesTotalsButNamesNonPavedUnknown() throws {
+    @Test @MainActor func legacySummaryPreservesTotalsButNamesNonPavedUnknown() throws {
         let json = """
         {"status":"complete","distanceMeters":1000,"geometry":[[-63.00,44.00],[-63.01,44.01]],"stats":{"dirtPercent":65,"pavedPercent":35}}
         """

@@ -2,9 +2,12 @@ import Foundation
 import Observation
 import Security
 
+private enum TrialGateStorageKey {
+    nonisolated static let freeStartsUsed = "dirt.paywall.freeStartsUsed.v1"
+}
+
 /// Soft paywall trigger — what the rider was trying to do when the wall came up.
 enum PaywallReason: Equatable {
-    case save
     case export
     case start
 }
@@ -19,8 +22,9 @@ enum TrialPresentation: Equatable {
 /// Freemium gate for DIRT PRO.
 ///
 /// - **Plan forever** — no clock, no map-time ladder.
-/// - **Save / Export** — soft paywall on tap until subscribed.
-/// - **Start** — two free ride tests per install, then soft paywall on every Start.
+/// - **Save locally** — always available.
+/// - **Export GPX** — soft paywall on tap until subscribed.
+/// - **Start** — two free ride tests on this device, then soft paywall on every Start.
 ///
 /// Free-start count lives in the Keychain so deleting the app does not reset it.
 @Observable
@@ -29,11 +33,8 @@ final class TrialGateModel {
     /// Full rides a non-subscriber may start before Start itself is gated.
     static let freeStartAllowance = 2
 
-    private enum KeychainKey {
-        static let freeStartsUsed = "dirt.paywall.freeStartsUsed.v1"
-    }
-
     private(set) var freeStartsUsed: Int
+    private let persistFreeStarts: (Int) -> Void
     private(set) var presentation: TrialPresentation?
     /// Why the wall is up — used for toast on dismiss and to resume after subscribe.
     private(set) var pendingReason: PaywallReason?
@@ -41,7 +42,7 @@ final class TrialGateModel {
     var isSubscribed = false {
         didSet {
             if isSubscribed { presentation = nil }
-            // `pendingReason` survives until `takePendingReason()` so Save / Export /
+            // `pendingReason` survives until `takePendingReason()` so Export or
             // Start can resume after a successful subscribe.
         }
     }
@@ -54,18 +55,27 @@ final class TrialGateModel {
         isSubscribed || freeStartsUsed < Self.freeStartAllowance
     }
 
-    init() {
-        freeStartsUsed = KeychainInt.load(KeychainKey.freeStartsUsed) ?? 0
+    init(
+        initialFreeStartsUsed: Int? = nil,
+        persistFreeStarts: @escaping (Int) -> Void = {
+            KeychainInt.save($0, for: TrialGateStorageKey.freeStartsUsed)
+        }
+    ) {
+        freeStartsUsed = max(
+            0,
+            initialFreeStartsUsed ?? KeychainInt.load(TrialGateStorageKey.freeStartsUsed) ?? 0
+        )
+        self.persistFreeStarts = persistFreeStarts
         // Scrub the old map-time ladder so leftover defaults don't confuse testers.
         Self.scrubLegacyDefaults()
     }
 
     // MARK: - Feature checks
 
-    /// Returns `true` when Save may proceed. Otherwise presents the soft wall.
+    /// Local route saving is part of the free planning experience.
     @discardableResult
     func requestSave() -> Bool {
-        gate(.save)
+        true
     }
 
     /// Returns `true` when Export may proceed. Otherwise presents the soft wall.
@@ -89,7 +99,7 @@ final class TrialGateModel {
     func consumeFreeStartIfNeeded() {
         guard !isSubscribed, freeStartsUsed < Self.freeStartAllowance else { return }
         freeStartsUsed += 1
-        KeychainInt.save(freeStartsUsed, for: KeychainKey.freeStartsUsed)
+        persistFreeStarts(freeStartsUsed)
     }
 
     // MARK: - Presentation
@@ -104,7 +114,6 @@ final class TrialGateModel {
     func dismissMessage() -> String? {
         defer { pendingReason = nil }
         switch pendingReason {
-        case .save: return "Subscribe to save routes"
         case .export: return "Subscribe to export GPX"
         case .start: return "Subscribe to start navigation"
         case nil: return nil
@@ -127,7 +136,7 @@ final class TrialGateModel {
     /// Profile tester control — restores both free Starts and clears any open wall.
     func resetForTesting() {
         freeStartsUsed = 0
-        KeychainInt.save(0, for: KeychainKey.freeStartsUsed)
+        persistFreeStarts(0)
         presentation = nil
         pendingReason = nil
         Self.scrubLegacyDefaults()
@@ -166,7 +175,7 @@ final class TrialGateModel {
 /// which is the whole point of parking the free-start counter here instead of
 /// UserDefaults.
 private enum KeychainInt {
-    static func load(_ account: String) -> Int? {
+    nonisolated static func load(_ account: String) -> Int? {
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrAccount as String: account,
@@ -183,7 +192,7 @@ private enum KeychainInt {
         return value
     }
 
-    static func save(_ value: Int, for account: String) {
+    nonisolated static func save(_ value: Int, for account: String) {
         let data = Data(String(value).utf8)
         let service = Bundle.main.bundleIdentifier ?? "com.mayday.dirt"
         let query: [String: Any] = [

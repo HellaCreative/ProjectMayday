@@ -55,6 +55,23 @@ enum AppleSignInError: LocalizedError {
     }
 }
 
+/// Shared presentation policy for every Sign in with Apple entry point.
+/// Cancellation is intentional and should stay silent; real failures must not
+/// be swallowed because Groups and Profile may be the rider's only sign-in UI.
+enum AppleSignInFailure {
+    static func message(from error: Error) -> String? {
+        if let authError = error as? ASAuthorizationError,
+           authError.code == .canceled {
+            return nil
+        }
+        let detail = error.localizedDescription.trimmingCharacters(in: .whitespacesAndNewlines)
+        if detail.isEmpty || detail == "The operation couldn’t be completed." {
+            return "Sign-in couldn't be completed. Please try again."
+        }
+        return detail
+    }
+}
+
 /// Nonce utilities for Sign in with Apple (raw value sent to Supabase, SHA-256
 /// sent to Apple).
 enum AppleNonce {
