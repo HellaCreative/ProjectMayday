@@ -135,6 +135,56 @@
           "minimumCorridorCandidates": 0
         }
       ]
+    },
+    "ab": {
+      "fuelMinimum": 400,
+      "routes": [
+        {
+          "id": "long-grande-prairie-beaverlodge",
+          "from": { "lat": 55.1708, "lon": -118.7947, "label": "Grande Prairie" },
+          "to": { "lat": 55.2136, "lon": -119.4292, "label": "Beaverlodge" },
+          "minimumDirtPercent": 15,
+          "minimumDirtAllowUnknownPercent": 20,
+          "balancedTolerance": 15,
+          "maximumCleanDirtPercent": 13,
+          "maximumDirtBackwardPercent": 30,
+          "minimumCorridorCandidates": 2
+        },
+        {
+          "id": "urban-brooks-bassano",
+          "from": { "lat": 50.5642, "lon": -111.8989, "label": "Brooks" },
+          "to": { "lat": 50.7878, "lon": -112.4644, "label": "Bassano" },
+          "minimumDirtPercent": 15,
+          "minimumDirtAllowUnknownPercent": 20,
+          "balancedTolerance": 10,
+          "maximumCleanDirtPercent": 11,
+          "maximumDirtBackwardPercent": 25,
+          "minimumCorridorCandidates": 2
+        },
+        {
+          "id": "short-taber-vauxhall",
+          "from": { "lat": 49.785, "lon": -112.146, "label": "Taber" },
+          "to": { "lat": 50.0689, "lon": -112.1067, "label": "Vauxhall" },
+          "minimumDirtPercent": 15,
+          "minimumDirtAllowUnknownPercent": 20,
+          "balancedTolerance": 15,
+          "maximumCleanDirtPercent": 6,
+          "maximumDirtBackwardPercent": 30,
+          "minimumCorridorCandidates": 2
+        },
+        {
+          "id": "seam-lloydminster-vermilion",
+          "chain": true,
+          "from": { "lat": 53.2773, "lon": -110.005, "label": "Lloydminster" },
+          "to": { "lat": 53.354, "lon": -110.858, "label": "Vermilion" },
+          "minimumDirtPercent": 10,
+          "minimumDirtAllowUnknownPercent": 15,
+          "balancedTolerance": 10,
+          "maximumCleanDirtPercent": 16,
+          "maximumDirtBackwardPercent": 30,
+          "minimumCorridorCandidates": 0
+        }
+      ]
     }
   }
 }
