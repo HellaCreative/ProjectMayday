@@ -44,6 +44,27 @@ Advisor references: [security-definer functions](https://supabase.com/docs/guide
 [RLS function evaluation](https://supabase.com/docs/guides/database/postgres/row-level-security#call-functions-with-select),
 and [leaked-password protection](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection).
 
+## Development hardening candidate — 2026-09-04
+
+The isolated `dirt-mayday-dev` project has two additional migrations under
+acceptance before production promotion:
+
+- `20260904133000_harden_identity_group_access.sql`
+- `20260904133100_move_group_authorization_helpers_private.sql`
+
+Together they restrict profile reads to self and active group peers, prevent a
+soft-deleted group from authorizing database or Realtime access, make alert
+resolution the only peer-editable alert field, stop owners from leaving an
+ownerless group, narrow client table grants, use single-evaluation Auth checks,
+and move policy helper functions out of the exposed API schema.
+
+A rollback-only three-user/two-group matrix passed in development. Supabase's
+performance advisor now reports no RLS init-plan warnings. Its security advisor
+reports only the five intentionally exposed, authenticated transaction RPCs;
+unused-index notices are expected while the development database is empty.
+Production remains on the prior 12-version baseline until device Auth and
+Groups acceptance is complete.
+
 ## Account deletion
 
 `delete_own_account()` is the only deletion entry point used by the app. It:

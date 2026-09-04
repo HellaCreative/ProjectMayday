@@ -24,10 +24,11 @@ quoted by Supabase at $0/month.
 | Development / QA | `dirt-mayday-dev` | `xoufaiypnrgukzmdwicz` | Canada Central | Synthetic and disposable only |
 | Production | `dirt-mayday` | `iiiguqknqxoumlmppzfw` | Canada Central | Real riders |
 
-The development project is healthy and has the same 12-version migration
-ledger, public tables, RLS policies, RPC contracts, and function definitions as
-production. It was initialized with zero Auth users and zero application rows;
-no production rider data was copied.
+The development project is healthy and was initialized from production's full
+12-version baseline with zero Auth users and zero application rows; no
+production rider data was copied. It now carries two additional, versioned RLS
+hardening migrations under acceptance. Production intentionally remains on the
+12-version baseline until those changes pass device Auth and Groups testing.
 
 ## Non-negotiable boundaries
 
@@ -98,7 +99,8 @@ Never rebuild an artifact during promotion. Promote the tested bytes.
 3. Replayed and verified all migrations there without copying production data.
 4. Added build-time iOS Supabase selection and the `DIRT Dev` identity.
 5. Recorded Android's matching compile-time Supabase isolation contract.
-6. Create a stable development Vercel deployment and development R2 manifest.
-7. Seed disposable development test users/data after Auth providers are configured.
-8. Add CI gates that reject migration drift and production endpoints in dev
+6. Applied and database-tested the first RLS/grant hardening candidate only in development.
+7. Create a stable development Vercel deployment and development R2 manifest.
+8. Seed disposable development test users/data after Auth providers are configured.
+9. Add CI gates that reject migration drift and production endpoints in dev
    builds, and reject development endpoints/tester unlocks in production builds.

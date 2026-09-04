@@ -342,6 +342,12 @@ Automated tests must reject either project reference in the opposite build.
 Every development screen that shows the DIRT wordmark must also show the
 persistent `DEV` badge; production must not contain or render that badge.
 
+The shared Supabase contract also requires active-group-only authorization:
+deleted groups cannot authorize tables or Realtime, profiles are visible only
+to self and active group peers, group owners delete rather than leave their
+group, and peers may change only `resolved_at` on a rider alert. Android must
+use the same RPCs and must not work around these rules with direct table writes.
+
 Cancellation remains quiet; network, provider, backend, and policy failures are
 visible and recoverable. Test real production-provider authentication and
 deletion, not only mocks.
