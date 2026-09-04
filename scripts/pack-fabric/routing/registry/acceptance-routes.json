@@ -185,6 +185,56 @@
           "minimumCorridorCandidates": 0
         }
       ]
+    },
+    "bc": {
+      "fuelMinimum": 400,
+      "routes": [
+        {
+          "id": "long-merritt-kamloops",
+          "from": { "lat": 50.1112, "lon": -120.7862, "label": "Merritt" },
+          "to": { "lat": 50.6745, "lon": -120.3273, "label": "Kamloops" },
+          "minimumDirtPercent": 15,
+          "minimumDirtAllowUnknownPercent": 20,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 2,
+          "maximumDirtBackwardPercent": 30,
+          "minimumCorridorCandidates": 2
+        },
+        {
+          "id": "urban-kelowna-vernon",
+          "from": { "lat": 49.888, "lon": -119.496, "label": "Kelowna" },
+          "to": { "lat": 50.267, "lon": -119.272, "label": "Vernon" },
+          "minimumDirtPercent": 15,
+          "minimumDirtAllowUnknownPercent": 20,
+          "balancedTolerance": 15,
+          "maximumCleanDirtPercent": 8,
+          "maximumDirtBackwardPercent": 25,
+          "minimumCorridorCandidates": 2
+        },
+        {
+          "id": "short-chilliwack-hope",
+          "from": { "lat": 49.157, "lon": -121.951, "label": "Chilliwack" },
+          "to": { "lat": 49.385, "lon": -121.442, "label": "Hope" },
+          "minimumDirtPercent": 15,
+          "minimumDirtAllowUnknownPercent": 20,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 16,
+          "maximumDirtBackwardPercent": 25,
+          "minimumCorridorCandidates": 2
+        },
+        {
+          "id": "seam-golden-lake-louise",
+          "chain": true,
+          "from": { "lat": 51.2981, "lon": -116.9647, "label": "Golden" },
+          "to": { "lat": 51.4254, "lon": -116.1773, "label": "Lake Louise" },
+          "minimumDirtPercent": 10,
+          "minimumDirtAllowUnknownPercent": 10,
+          "balancedTolerance": 40,
+          "maximumCleanDirtPercent": 8,
+          "maximumDirtBackwardPercent": 30,
+          "minimumCorridorCandidates": 0
+        }
+      ]
     }
   }
 }
