@@ -335,6 +335,13 @@ internal QA builds must use the isolated development Supabase/API/pack
 configuration; the production application ID must fail release verification
 if any development endpoint or tester bypass is embedded.
 
+The Android build-time selection must mirror iOS exactly: development resolves
+Supabase project `xoufaiypnrgukzmdwicz`, production resolves project
+`iiiguqknqxoumlmppzfw`, and no runtime preference may switch between them.
+Automated tests must reject either project reference in the opposite build.
+Every development screen that shows the DIRT wordmark must also show the
+persistent `DEV` badge; production must not contain or render that badge.
+
 Cancellation remains quiet; network, provider, backend, and policy failures are
 visible and recoverable. Test real production-provider authentication and
 deletion, not only mocks.

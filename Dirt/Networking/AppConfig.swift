@@ -6,6 +6,11 @@ import Foundation
 /// and on-device navigation recovery. Live `/api/route` is always the planning
 /// source of truth while online, regardless of installed packs. Map tiles use
 /// the Shortbread schema through Dirt's health-gated edge service. Accounts are Supabase.
+enum DirtBackendEnvironment: String, Sendable {
+    case development
+    case production
+}
+
 enum AppConfig {
     /// Must match the deployed route and fuel-chain service. A missing or stale
     /// value is rejected so device evidence cannot silently mix releases.
@@ -25,9 +30,38 @@ enum AppConfig {
         string: "https://dirt-shortbread-tiles.dirt-shortbread-edge.workers.dev/shortbread/v1/manifest.json"
     )!
 
-    /// Public Supabase project (anon key is meant for clients).
-    static let supabaseURL = URL(string: "https://iiiguqknqxoumlmppzfw.supabase.co")!
-    static let supabasePublishableKey = "sb_publishable_a8B8bxCCrXIP_4uwVxjU2g_3_95g8KM"
+    /// Build-time backend selection. This is deliberately not a runtime toggle:
+    /// a development binary cannot be switched onto real rider data.
+    #if DIRT_DEVELOPMENT
+    nonisolated static let backendEnvironment: DirtBackendEnvironment = .development
+    private nonisolated static let configuredSupabaseURL = URL(
+        string: "https://xoufaiypnrgukzmdwicz.supabase.co"
+    )!
+    private nonisolated static let expectedSupabaseHost = "xoufaiypnrgukzmdwicz.supabase.co"
+
+    /// Publishable client keys are safe to embed. Privileged Supabase keys are
+    /// never accepted by this configuration surface.
+    nonisolated static let supabasePublishableKey = "sb_publishable_nap5DKdcWCHOpbHc6gXEwQ_YU6MI7WY"
+    #else
+    nonisolated static let backendEnvironment: DirtBackendEnvironment = .production
+    private nonisolated static let configuredSupabaseURL = URL(
+        string: "https://iiiguqknqxoumlmppzfw.supabase.co"
+    )!
+    private nonisolated static let expectedSupabaseHost = "iiiguqknqxoumlmppzfw.supabase.co"
+    nonisolated static let supabasePublishableKey = "sb_publishable_a8B8bxCCrXIP_4uwVxjU2g_3_95g8KM"
+    #endif
+
+    nonisolated static let supabaseURL: URL = {
+        precondition(
+            validatesSupabaseIsolation(url: configuredSupabaseURL),
+            "DIRT build environment and Supabase project do not match."
+        )
+        return configuredSupabaseURL
+    }()
+
+    nonisolated static func validatesSupabaseIsolation(url: URL) -> Bool {
+        url.host == expectedSupabaseHost
+    }
 
     static var mapStyleURL: URL {
         MapStyleCatalog.bundledStyleURL(resource: "shortbread-style")

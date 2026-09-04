@@ -12,6 +12,15 @@ import Testing
 @testable import Dirt
 
 struct DirtTests {
+    @Test func debugBuildUsesIsolatedDevelopmentSupabase() {
+        #expect(AppConfig.backendEnvironment == .development)
+        #expect(AppConfig.supabaseURL.host == "xoufaiypnrgukzmdwicz.supabase.co")
+        #expect(AppConfig.validatesSupabaseIsolation(url: AppConfig.supabaseURL))
+        #expect(!AppConfig.validatesSupabaseIsolation(
+            url: URL(string: "https://wrong-project.supabase.co")!
+        ))
+    }
+
     @Test @MainActor func navigationPrepPublishesVisibleStateBeforePlanning() {
         let offline = OfflineTileManager()
 

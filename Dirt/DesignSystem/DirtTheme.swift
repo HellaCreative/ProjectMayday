@@ -389,11 +389,22 @@ struct BrandChip: View {
                 .italic()
                 .fontWeight(.black)
                 .foregroundStyle(DirtTheme.orange)
+            if AppConfig.backendEnvironment == .development {
+                Text("DEV")
+                    .font(.system(size: 8, weight: .black, design: .rounded))
+                    .foregroundStyle(.black)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 3)
+                    .background(DirtTheme.orange, in: Capsule())
+                    .padding(.leading, 6)
+            }
         }
         .font(.dirtUI(16, weight: .black))
         .padding(.horizontal, 12)
         .frame(maxWidth: fillsWidth ? .infinity : nil, minHeight: minHeight)
         .dirtChromeSurface(radius: DirtRadius.chip)
-        .accessibilityLabel("DIRT")
+        .accessibilityLabel(
+            AppConfig.backendEnvironment == .development ? "DIRT development" : "DIRT"
+        )
     }
 }

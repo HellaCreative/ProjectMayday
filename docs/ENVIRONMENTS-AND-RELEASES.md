@@ -96,8 +96,8 @@ Never rebuild an artifact during promotion. Promote the tested bytes.
 1. Recovered production's complete Supabase migration history into source.
 2. Created the separate hosted development Supabase project.
 3. Replayed and verified all migrations there without copying production data.
-4. Add environment-driven iOS configuration and the `Dirt Dev` identity.
-5. Give Android the same environment names and endpoint contract.
+4. Added build-time iOS Supabase selection and the `DIRT Dev` identity.
+5. Recorded Android's matching compile-time Supabase isolation contract.
 6. Create a stable development Vercel deployment and development R2 manifest.
 7. Seed disposable development test users/data after Auth providers are configured.
 8. Add CI gates that reject migration drift and production endpoints in dev
