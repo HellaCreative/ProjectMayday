@@ -12,12 +12,20 @@ import Testing
 @testable import Dirt
 
 struct DirtTests {
-    @Test func debugBuildUsesIsolatedDevelopmentSupabase() {
+    @Test func debugBuildUsesIsolatedDevelopmentBackends() {
         #expect(AppConfig.backendEnvironment == .development)
         #expect(AppConfig.supabaseURL.host == "xoufaiypnrgukzmdwicz.supabase.co")
+        #expect(AppConfig.baseURL.host == "pack-fabric.vercel.app")
+        #expect(AppConfig.routeURL.absoluteString == "https://pack-fabric.vercel.app/api/route")
+        #expect(AppConfig.liveFuelURL.absoluteString == "https://pack-fabric.vercel.app/api/fuel")
+        #expect(AppConfig.liveFuelChainURL.absoluteString == "https://pack-fabric.vercel.app/api/fuel-chain")
         #expect(AppConfig.validatesSupabaseIsolation(url: AppConfig.supabaseURL))
+        #expect(AppConfig.validatesRoutingIsolation(url: AppConfig.baseURL))
         #expect(!AppConfig.validatesSupabaseIsolation(
             url: URL(string: "https://wrong-project.supabase.co")!
+        ))
+        #expect(!AppConfig.validatesRoutingIsolation(
+            url: URL(string: "https://dirt-mayday.vercel.app")!
         ))
     }
 

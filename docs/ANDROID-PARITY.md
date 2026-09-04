@@ -339,6 +339,11 @@ The Android build-time selection must mirror iOS exactly: development resolves
 Supabase project `xoufaiypnrgukzmdwicz`, production resolves project
 `iiiguqknqxoumlmppzfw`, and no runtime preference may switch between them.
 Automated tests must reject either project reference in the opposite build.
+Routing selection is equally strict: development resolves
+`https://pack-fabric.vercel.app`, while production resolves
+`https://dirt-mayday.vercel.app`. The APK/AAB verifier must reject the opposite
+host. Promoted immutable public packs may be shared read-only; candidate pack
+prefixes must only be configured on the development routing deployment.
 Every development screen that shows the DIRT wordmark must also show the
 persistent `DEV` badge; production must not contain or render that badge.
 Android release automation must inspect the built APK/AAB, not only Gradle

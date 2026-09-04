@@ -15,15 +15,6 @@ enum AppConfig {
     /// Must match the deployed route and fuel-chain service. A missing or stale
     /// value is rejected so device evidence cannot silently mix releases.
     nonisolated static let routingServiceContract = "dirt-routing.r0.v1"
-    static let baseURL = URL(string: "https://dirt-mayday.vercel.app")!
-    static let routeURL = URL(string: "https://dirt-mayday.vercel.app/api/route")!
-    /// Candidate-aware packed fuel for live planning. The server resolves the
-    /// same regional source override as `/api/route`.
-    static let liveFuelURL = URL(string: "https://dirt-mayday.vercel.app/api/fuel")!
-    /// One bounded graph pass per committed fuel waypoint. This returns an
-    /// ordered pump chain; final ride legs still come from `/api/route`.
-    static let liveFuelChainURL = URL(string: "https://dirt-mayday.vercel.app/api/fuel-chain")!
-
     /// Candidate manifest for Dirt-hosted Shortbread tiles. The app keeps the
     /// public OSM Shortbread origin until this manifest and its R2 sample pass.
     nonisolated static let shortbreadManifestURL = URL(
@@ -34,6 +25,10 @@ enum AppConfig {
     /// a development binary cannot be switched onto real rider data.
     #if DIRT_DEVELOPMENT
     nonisolated static let backendEnvironment: DirtBackendEnvironment = .development
+    private nonisolated static let configuredRoutingBaseURL = URL(
+        string: "https://pack-fabric.vercel.app"
+    )!
+    private nonisolated static let expectedRoutingHost = "pack-fabric.vercel.app"
     private nonisolated static let configuredSupabaseURL = URL(
         string: "https://xoufaiypnrgukzmdwicz.supabase.co"
     )!
@@ -44,6 +39,10 @@ enum AppConfig {
     nonisolated static let supabasePublishableKey = "sb_publishable_nap5DKdcWCHOpbHc6gXEwQ_YU6MI7WY"
     #else
     nonisolated static let backendEnvironment: DirtBackendEnvironment = .production
+    private nonisolated static let configuredRoutingBaseURL = URL(
+        string: "https://dirt-mayday.vercel.app"
+    )!
+    private nonisolated static let expectedRoutingHost = "dirt-mayday.vercel.app"
     private nonisolated static let configuredSupabaseURL = URL(
         string: "https://iiiguqknqxoumlmppzfw.supabase.co"
     )!
@@ -59,8 +58,28 @@ enum AppConfig {
         return configuredSupabaseURL
     }()
 
+    nonisolated static let baseURL: URL = {
+        precondition(
+            validatesRoutingIsolation(url: configuredRoutingBaseURL),
+            "DIRT build environment and routing service do not match."
+        )
+        return configuredRoutingBaseURL
+    }()
+
+    nonisolated static var routeURL: URL { baseURL.appendingPathComponent("api/route") }
+    /// Candidate-aware packed fuel for live planning. The server resolves the
+    /// same regional source override as `/api/route`.
+    nonisolated static var liveFuelURL: URL { baseURL.appendingPathComponent("api/fuel") }
+    /// One bounded graph pass per committed fuel waypoint. This returns an
+    /// ordered pump chain; final ride legs still come from `/api/route`.
+    nonisolated static var liveFuelChainURL: URL { baseURL.appendingPathComponent("api/fuel-chain") }
+
     nonisolated static func validatesSupabaseIsolation(url: URL) -> Bool {
         url.host == expectedSupabaseHost
+    }
+
+    nonisolated static func validatesRoutingIsolation(url: URL) -> Bool {
+        url.scheme == "https" && url.host == expectedRoutingHost
     }
 
     static var mapStyleURL: URL {

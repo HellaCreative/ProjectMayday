@@ -77,6 +77,18 @@ else
   pass "development identity absent from Release executable"
 fi
 
+if grep -q 'dirt-mayday.vercel.app' <<<"$binary_strings"; then
+  pass "production routing service is embedded"
+else
+  fail "production routing service is missing"
+fi
+
+if grep -q 'pack-fabric.vercel.app' <<<"$binary_strings"; then
+  fail "development routing service is present in the Release executable"
+else
+  pass "development routing service absent from Release executable"
+fi
+
 size_bytes=$(du -sk "$app_bundle" | awk '{print $1 * 1024}')
 size_mb=$((size_bytes / 1024 / 1024))
 echo "INFO: uncompressed application bundle is ${size_mb} MB"

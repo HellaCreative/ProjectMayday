@@ -57,6 +57,18 @@ else
   pass "production Supabase project absent from development executable"
 fi
 
+if grep -q 'pack-fabric.vercel.app' <<<"$binary_strings"; then
+  pass "development routing service is embedded"
+else
+  fail "development routing service is missing"
+fi
+
+if grep -q 'dirt-mayday.vercel.app' <<<"$binary_strings"; then
+  fail "production routing service is present in the development executable"
+else
+  pass "production routing service absent from development executable"
+fi
+
 if [[ $failures -ne 0 ]]; then
   echo "Development verification failed with $failures issue(s)." >&2
   exit 1
