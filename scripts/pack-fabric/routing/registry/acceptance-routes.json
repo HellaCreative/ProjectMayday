@@ -67,7 +67,7 @@
           "to": { "lat": 51.1494, "lon": -100.0497, "label": "Dauphin" },
           "minimumDirtPercent": 15,
           "minimumDirtAllowUnknownPercent": 20,
-          "balancedTolerance": 5,
+          "balancedTolerance": 15,
           "maximumCleanDirtPercent": 2,
           "maximumDirtBackwardPercent": 25,
           "minimumCorridorCandidates": 2
