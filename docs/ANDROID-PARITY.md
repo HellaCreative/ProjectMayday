@@ -323,7 +323,7 @@ produce the same Supabase identity boundary and must support provider-token
 revocation where its contract requires it.
 
 Deletion uses the versioned `delete_own_account` backend RPC from
-`supabase/migrations/20260904010000_delete_own_account.sql`. The client must
+`supabase/migrations/20260904113053_delete_own_account.sql`. The client must
 fail closed: a local sign-out is never presented as successful deletion. After
 confirmed deletion, remove local profile, Group, entitlement/session, and
 sensitive cached state, then expose any provider-side revocation step that
@@ -340,7 +340,7 @@ must not create its own incompatible Group tables or client-only ownership
 rules.
 
 - Group creation calls the transactional `create_group` RPC from
-  `supabase/migrations/20260904020000_create_group.sql`.
+  `supabase/migrations/20260904113100_create_group.sql`.
 - Distress and rider-state Realtime broadcasts go only to the selected Group's
   private channel. They are never global or sent to every joined Group.
 - Normal Group location cadence is 10 seconds; active distress cadence is 5

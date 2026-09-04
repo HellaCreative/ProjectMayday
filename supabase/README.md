@@ -1,8 +1,39 @@
 # DIRT Supabase release contract
 
-This folder versions the database behavior the iOS app relies on. It is not
-evidence that the live Supabase project has been changed. Apply migrations only
-through the linked, reviewed Supabase project and retain the migration output.
+This folder versions the database behavior the iOS and Android apps rely on.
+Apply migrations only through the linked, reviewed Supabase project and retain
+the migration output.
+
+## Production status — 2026-09-04
+
+Project `dirt-mayday` (`iiiguqknqxoumlmppzfw`, Canada Central) is healthy. The
+following repository migrations are applied in production with matching
+Supabase migration versions:
+
+- `20260904113053_delete_own_account.sql`
+- `20260904113100_create_group.sql`
+- `20260904113540_add_groups_alerts_fk_indexes.sql`
+
+Apple and Google sign-in providers are enabled. Metadata checks prove that the
+two public app RPCs deny anonymous execution and allow signed-in execution.
+Real-account deletion and multi-account Groups tests remain release gates.
+
+The post-deployment advisors report no missing foreign-key indexes. Their
+remaining findings are tracked rather than hidden:
+
+- the app-facing RPCs intentionally use `SECURITY DEFINER`; each must continue
+  to derive identity from `auth.uid()`, use qualified objects, deny `anon`, and
+  expose only the minimum signed-in operation;
+- older group helper functions and RLS policies still need a versioned
+  hardening migration and multi-account regression test;
+- existing RLS expressions should use the single-evaluation `(select
+  auth.uid())` form before scale; and
+- leaked-password protection is disabled and should be enabled if password or
+  email authentication remains available at launch.
+
+Advisor references: [security-definer functions](https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable),
+[RLS function evaluation](https://supabase.com/docs/guides/database/postgres/row-level-security#call-functions-with-select),
+and [leaked-password protection](https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection).
 
 ## Account deletion
 
@@ -15,8 +46,9 @@ through the linked, reviewed Supabase project and retain the migration output.
   and track contributions; and
 - deletes `auth.users` last, so an unknown foreign key rolls everything back.
 
-Before shipping, apply `migrations/20260904010000_delete_own_account.sql` to a
-staging project first. Verify with a real Apple-authenticated test account that:
+The production function comes from
+`migrations/20260904113053_delete_own_account.sql`. Before shipping, verify with
+a disposable, Apple-authenticated test account that:
 
 1. an anonymous request cannot execute the function;
 2. one signed-in rider cannot select or delete another rider's data;
@@ -40,19 +72,19 @@ migrations.
 ## Atomic group creation
 
 `create_group(p_name)` in
-`migrations/20260904020000_create_group.sql` derives ownership from
+`migrations/20260904113100_create_group.sql` derives ownership from
 `auth.uid()`, validates the final server-side name, and inserts the group plus
-owner membership in one transaction. Deploy it before testing any build that
-contains the matching client call. Verify that anonymous callers are rejected,
-membership failure rolls back the group row, and the caller cannot choose a
-different owner.
+owner membership in one transaction. It is deployed in production. Anonymous
+execution is denied at the database grant boundary; a disposable signed-in
+account must still prove creation, rollback, and owner isolation end to end.
 
 ## Required Groups RLS verification
 
-The production policies are not exported in this repository yet, so their live
-state cannot be inferred from client code. Export and review the actual schema,
-functions, grants, and policies before launch. Test with at least three users in
-two overlapping groups and prove this matrix:
+The live policies were inspected on 2026-09-04 but are not fully exported into
+versioned migrations yet. The audit found one change that needs explicit
+production approval: remove direct `groups` / `group_members` inserts so group
+creation and invite-code joining are RPC-only. Test with at least three users
+in two overlapping groups and prove this matrix:
 
 | Surface | Required rule |
 | --- | --- |

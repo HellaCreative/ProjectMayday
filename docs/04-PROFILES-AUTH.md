@@ -50,7 +50,7 @@ ignored and cleared outside those builds.
 | `Dirt/Dirt.entitlements` | `com.apple.developer.applesignin` |
 | `Dirt/Dirt.storekit` | Local StoreKit test configuration attached to the Dirt scheme |
 | `Dirt/Networking/LegalLinks.swift` | Website, privacy, terms, and subscription-management URLs |
-| `supabase/migrations/20260904010000_delete_own_account.sql` | Versioned fail-closed deletion contract; production application still required |
+| `supabase/migrations/20260904113053_delete_own_account.sql` | Versioned fail-closed deletion contract; deployed in production 2026-09-04 |
 
 ---
 
@@ -109,9 +109,10 @@ that completion could not be confirmed. It does not claim rollback because a
 response can be lost after a committed server transaction. Live group sharing
 remains stopped until the rider's account state is re-established.
 
-The migration is source-controlled but is **not proof of production setup**.
-It must be applied to staging, checked against the exported live schema and RLS,
-then applied to production before submission. The verification matrix is in
+The migration is source-controlled and was applied to production on 2026-09-04.
+Its definition, grants, and foreign-key compatibility were checked against the
+live schema. Destructive testing with a disposable account remains required.
+The verification matrix is in
 [`../supabase/README.md`](../supabase/README.md).
 
 Deleting a DIRT account does not cancel an App Store subscription. The
@@ -183,7 +184,7 @@ row. The service trims input and caps it at 60 characters.
 | Manage subscription and restore | Yes |
 | Public Release tester unlock | No |
 | Account-deletion UI and client contract | Yes |
-| Account-deletion RPC applied and verified in production | Pending external deployment |
+| Account-deletion RPC applied and metadata-verified in production | Yes — destructive disposable-account test pending |
 
 ---
 
@@ -198,7 +199,8 @@ row. The service trims input and caps it at 60 characters.
 3. Before release, validate Apple sign-in, purchase, pending Ask to Buy,
    cancellation, restore, expired/revoked entitlement, and account deletion on
    real distribution builds and test accounts.
-4. External work still required: configure Apple auth in Supabase; create and
-   review the two products and any introductory offers in App Store Connect;
-   apply and verify the deletion migration; export and audit live RLS/Realtime
-   policies; confirm production website, privacy, terms, and support URLs.
+4. External work still required: test Apple auth and account deletion with a
+   disposable distribution account; create and review the two products and any
+   introductory offers in App Store Connect; finish and version the live
+   RLS/Realtime hardening; confirm production website, privacy, terms, and
+   support URLs.

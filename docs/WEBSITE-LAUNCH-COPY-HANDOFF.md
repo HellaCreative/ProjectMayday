@@ -42,9 +42,9 @@ Replace the current **Account deletion** paragraph with:
 > cannot access the app, email info@dirtmoto.app with subject “Delete my DIRT
 > account” from the address associated with the account.
 
-Do not publish this replacement until the versioned `delete_own_account()`
-migration in `supabase/migrations/` has been applied and verified against the
-production schema.
+The versioned `delete_own_account()` migration is applied and metadata-verified
+against the production schema. Publish this replacement only after the
+remaining destructive test succeeds with a disposable production account.
 
 ## `privacy/index.html`
 

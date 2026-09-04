@@ -47,8 +47,10 @@ commit, TestFlight build, server contract, and test evidence together.
       Apple/Supabase configuration.
 - [x] Account deletion UI and client contract are available in-app and fail
       closed rather than representing a local sign-out as deletion.
-- [ ] The versioned deletion RPC is deployed and proven to remove the account
-      plus associated production data atomically.
+- [x] The versioned deletion RPC is deployed; its definition, grants, and live
+      foreign-key compatibility are verified.
+- [ ] A disposable production test account proves deletion removes Auth and all
+      associated app data atomically without touching another account.
 - [ ] Sign in with Apple authorization codes are exchanged server-side and the
       resulting Apple token is revoked during deletion, or App Review accepts
       the documented manual-revocation fallback.
@@ -88,8 +90,8 @@ commit, TestFlight build, server contract, and test evidence together.
 - [ ] Two-account tests prove that private group membership, live location,
       invite codes, alerts, and profiles cannot leak across groups.
 - [x] Group creation uses a versioned transactional RPC in the app and migration.
-- [ ] The transactional Group creation RPC is deployed and verified against the
-      production schema.
+- [x] The transactional Group creation RPC is deployed and metadata-verified
+      against the production schema.
 - [x] Live-location cadence distinguishes distress from ordinary sharing and
       remains reasonable for battery and network use.
 - [x] Distress Realtime broadcasts use only the same selected group as the

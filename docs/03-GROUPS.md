@@ -106,7 +106,7 @@ Planner pins and group pins have separate generations. Group movement updates on
 
 | Priority | Work |
 | --- | --- |
-| Release | Deploy and verify the versioned `create_group` RPC plus production RLS/private Realtime policies |
+| Release | `create_group` is deployed and metadata-verified; finish multi-account production RLS/private Realtime tests |
 | Release | Add the moderation, report, and block workflow required before Groups is public |
 | Low | Push, historical alert UI, and Live Activity hooks for peer alerts ([07-FUTURE.md](./07-FUTURE.md)) |
 
@@ -129,4 +129,4 @@ permission to copy an alert into that group's channel.
 2. Confirm table/RPC names against the iOS docs §4 — do not invent columns.
 3. Check how rider markers are isolated from planner markers (`setGroupMarkers` / `setPlannerMarkers`).
 4. **Invariants:** groups require a signed-in session; invite codes stay 6-char lowercase alnum; live window is 120s; only fresh accurate local fixes publish; moving riders never receive a group-target reroute; do not break the `rider_presence` row shape.
-5. **Release dependency:** deploy and verify `create_group`; the client no longer performs two independent writes.
+5. **Release dependency:** `create_group` is deployed; prove it with disposable multi-account tests. The client no longer performs two independent writes.
