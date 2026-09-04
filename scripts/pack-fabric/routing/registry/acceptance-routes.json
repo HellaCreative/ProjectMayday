@@ -85,6 +85,56 @@
           "minimumCorridorCandidates": 0
         }
       ]
+    },
+    "sk": {
+      "fuelMinimum": 200,
+      "routes": [
+        {
+          "id": "long-north-battleford-lloydminster",
+          "from": { "lat": 52.7575, "lon": -108.2861, "label": "North Battleford" },
+          "to": { "lat": 53.2773, "lon": -110.005, "label": "Lloydminster" },
+          "minimumDirtPercent": 15,
+          "minimumDirtAllowUnknownPercent": 20,
+          "balancedTolerance": 10,
+          "maximumCleanDirtPercent": 2,
+          "maximumDirtBackwardPercent": 30,
+          "minimumCorridorCandidates": 2
+        },
+        {
+          "id": "urban-estevan-weyburn",
+          "from": { "lat": 49.139, "lon": -103.0, "label": "Estevan" },
+          "to": { "lat": 49.661, "lon": -103.852, "label": "Weyburn" },
+          "minimumDirtPercent": 15,
+          "minimumDirtAllowUnknownPercent": 20,
+          "balancedTolerance": 15,
+          "maximumCleanDirtPercent": 10,
+          "maximumDirtBackwardPercent": 25,
+          "minimumCorridorCandidates": 2
+        },
+        {
+          "id": "short-humboldt-melfort",
+          "from": { "lat": 52.202, "lon": -105.123, "label": "Humboldt" },
+          "to": { "lat": 52.8569, "lon": -104.6105, "label": "Melfort" },
+          "minimumDirtPercent": 15,
+          "minimumDirtAllowUnknownPercent": 20,
+          "balancedTolerance": 10,
+          "maximumCleanDirtPercent": 2,
+          "maximumDirtBackwardPercent": 25,
+          "minimumCorridorCandidates": 2
+        },
+        {
+          "id": "seam-virden-moosomin",
+          "chain": true,
+          "from": { "lat": 49.8508, "lon": -100.9317, "label": "Virden" },
+          "to": { "lat": 50.1444, "lon": -101.6689, "label": "Moosomin" },
+          "minimumDirtPercent": 10,
+          "minimumDirtAllowUnknownPercent": 15,
+          "balancedTolerance": 10,
+          "maximumCleanDirtPercent": 20,
+          "maximumDirtBackwardPercent": 30,
+          "minimumCorridorCandidates": 0
+        }
+      ]
     }
   }
 }
