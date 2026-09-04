@@ -285,6 +285,56 @@
           "minimumCorridorCandidates": 0
         }
       ]
+    },
+    "nt": {
+      "fuelMinimum": 15,
+      "routes": [
+        {
+          "id": "long-yellowknife-fort-providence",
+          "from": { "lat": 62.454, "lon": -114.3718, "label": "Yellowknife" },
+          "to": { "lat": 61.3547, "lon": -117.6531, "label": "Fort Providence" },
+          "minimumDirtPercent": 10,
+          "minimumDirtAllowUnknownPercent": 10,
+          "balancedTolerance": 35,
+          "maximumCleanDirtPercent": 4,
+          "maximumDirtBackwardPercent": 30,
+          "minimumCorridorCandidates": 2
+        },
+        {
+          "id": "urban-hay-river-fort-providence",
+          "from": { "lat": 60.8156, "lon": -115.7999, "label": "Hay River" },
+          "to": { "lat": 61.3547, "lon": -117.6531, "label": "Fort Providence" },
+          "minimumDirtPercent": 10,
+          "minimumDirtAllowUnknownPercent": 10,
+          "balancedTolerance": 40,
+          "maximumCleanDirtPercent": 4,
+          "maximumDirtBackwardPercent": 25,
+          "minimumCorridorCandidates": 2
+        },
+        {
+          "id": "short-fort-providence-behchoko",
+          "from": { "lat": 61.3547, "lon": -117.6531, "label": "Fort Providence" },
+          "to": { "lat": 62.833, "lon": -116.05, "label": "Behchoko" },
+          "minimumDirtPercent": 5,
+          "minimumDirtAllowUnknownPercent": 5,
+          "balancedTolerance": 50,
+          "maximumCleanDirtPercent": 4,
+          "maximumDirtBackwardPercent": 25,
+          "minimumCorridorCandidates": 2
+        },
+        {
+          "id": "seam-hwy35-60th",
+          "chain": true,
+          "from": { "lat": 60.002, "lon": -116.983, "label": "Highway 35 NT" },
+          "to": { "lat": 59.997, "lon": -116.983, "label": "Highway 35 AB" },
+          "minimumDirtPercent": 0,
+          "minimumDirtAllowUnknownPercent": 0,
+          "balancedTolerance": 50,
+          "maximumCleanDirtPercent": 2,
+          "maximumDirtBackwardPercent": 30,
+          "minimumCorridorCandidates": 0
+        }
+      ]
     }
   }
 }
