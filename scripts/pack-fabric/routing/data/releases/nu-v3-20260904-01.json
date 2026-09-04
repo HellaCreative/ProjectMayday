@@ -1,0 +1,29 @@
+{
+  "schemaVersion": "dirt-pack-release.v1",
+  "releaseId": "nu-v3-20260904-01",
+  "status": "live-candidate",
+  "createdAt": "2026-09-04T11:57:29.087Z",
+  "publicBase": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/candidates/nu-v3-20260904-01",
+  "regions": [
+    {
+      "id": "nu",
+      "files": [
+        {
+          "name": "graph.v3.bin",
+          "bytes": 512088,
+          "sha256": "d2b066829022f42b715e1ef507d4c4e799b28f5d486173b86ce6b89c8f351368"
+        },
+        {
+          "name": "geometry.v1.bin",
+          "bytes": 572596,
+          "sha256": "e1c3acfd0e6586b8a8008445c4bd77541830c1b709ad89204e920948918f75b4"
+        },
+        {
+          "name": "fuel.v1.json",
+          "bytes": 3553,
+          "sha256": "418e171649aee8928b757bb416b409798f9107a121e04a5194aa47a0bf6e87bb"
+        }
+      ]
+    }
+  ]
+}

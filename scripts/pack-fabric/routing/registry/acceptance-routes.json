@@ -335,6 +335,44 @@
           "minimumCorridorCandidates": 0
         }
       ]
+    },
+    "nu": {
+      "fuelMinimum": 5,
+      "routes": [
+        {
+          "id": "urban-iqaluit-south",
+          "from": { "lat": 63.7467, "lon": -68.517, "label": "Iqaluit" },
+          "to": { "lat": 63.735, "lon": -68.51, "label": "Iqaluit south" },
+          "minimumDirtPercent": 50,
+          "minimumDirtAllowUnknownPercent": 50,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 35,
+          "maximumDirtBackwardPercent": 40,
+          "minimumCorridorCandidates": 2
+        },
+        {
+          "id": "short-rankin-inlet",
+          "from": { "lat": 62.808, "lon": -92.085, "label": "Rankin Inlet" },
+          "to": { "lat": 62.817, "lon": -92.12, "label": "Rankin Inlet west" },
+          "minimumDirtPercent": 80,
+          "minimumDirtAllowUnknownPercent": 80,
+          "balancedTolerance": 50,
+          "maximumCleanDirtPercent": 80,
+          "maximumDirtBackwardPercent": 40,
+          "minimumCorridorCandidates": 2
+        },
+        {
+          "id": "short-gjoa-haven",
+          "from": { "lat": 68.626, "lon": -95.877, "label": "Gjoa Haven" },
+          "to": { "lat": 68.635, "lon": -95.85, "label": "Gjoa Haven east" },
+          "minimumDirtPercent": 80,
+          "minimumDirtAllowUnknownPercent": 80,
+          "balancedTolerance": 50,
+          "maximumCleanDirtPercent": 100,
+          "maximumDirtBackwardPercent": 40,
+          "minimumCorridorCandidates": 2
+        }
+      ]
     }
   }
 }
