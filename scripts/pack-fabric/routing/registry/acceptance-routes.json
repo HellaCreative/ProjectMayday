@@ -373,6 +373,56 @@
           "minimumCorridorCandidates": 2
         }
       ]
+    },
+    "me": {
+      "fuelMinimum": 200,
+      "routes": [
+        {
+          "id": "long-bangor-millinocket",
+          "from": { "lat": 44.8016, "lon": -68.7778, "label": "Bangor" },
+          "to": { "lat": 45.657, "lon": -68.71, "label": "Millinocket" },
+          "minimumDirtPercent": 50,
+          "minimumDirtAllowUnknownPercent": 50,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 35,
+          "maximumDirtBackwardPercent": 25,
+          "minimumCorridorCandidates": 2
+        },
+        {
+          "id": "short-skowhegan-bingham",
+          "from": { "lat": 44.765, "lon": -69.719, "label": "Skowhegan" },
+          "to": { "lat": 45.053, "lon": -69.882, "label": "Bingham" },
+          "minimumDirtPercent": 80,
+          "minimumDirtAllowUnknownPercent": 80,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 100,
+          "maximumDirtBackwardPercent": 25,
+          "minimumCorridorCandidates": 2
+        },
+        {
+          "id": "short-rangeley-stratton",
+          "from": { "lat": 44.966, "lon": -70.642, "label": "Rangeley" },
+          "to": { "lat": 45.141, "lon": -70.441, "label": "Stratton" },
+          "minimumDirtPercent": 80,
+          "minimumDirtAllowUnknownPercent": 80,
+          "balancedTolerance": 50,
+          "maximumCleanDirtPercent": 100,
+          "maximumDirtBackwardPercent": 25,
+          "minimumCorridorCandidates": 2
+        },
+        {
+          "id": "seam-calais-st-stephen",
+          "chain": true,
+          "from": { "lat": 45.16058, "lon": -67.30259, "label": "Maine at Calais seam" },
+          "to": { "lat": 45.16158, "lon": -67.30219, "label": "New Brunswick at Calais seam" },
+          "minimumDirtPercent": 0,
+          "minimumDirtAllowUnknownPercent": 0,
+          "balancedTolerance": 50,
+          "maximumCleanDirtPercent": 100,
+          "maximumDirtBackwardPercent": 40,
+          "minimumCorridorCandidates": 0
+        }
+      ]
     }
   }
 }

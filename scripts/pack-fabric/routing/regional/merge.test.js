@@ -30,6 +30,10 @@ test("Nova Scotia and Prince Edward Island use their topology-proven direct ferr
   assert.equal(points.length, 3);
   assert.deepEqual(points[1].between, ["ns", "pe"]);
 });
+
+test("Maine chains to New Brunswick across the Calais–St. Stephen land border", () => {
+  assert.deepEqual(shortestRegionPath("me", "nb"), ["me", "nb"]);
+});
 const { metroBlocks } = require("../lib/hop-search");
 
 test("Clean long-haul chaining never manufactures city-core waypoints", () => {

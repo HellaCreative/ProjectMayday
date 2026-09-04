@@ -172,13 +172,14 @@ const REGION_NEIGHBOURS = {
   "qc-sl": ["nb", "nl", "qc", "qc-west", "qc-north"],
   "qc-north": ["qc", "qc-sl", "qc-west"],
   // Confederation Bridge is a legal road link (not ferry) — NB↔PE must chain.
-  nb: ["qc", "ns", "pe"],
+  nb: ["qc", "ns", "pe", "me"],
   ns: ["nb", "pe", "nl"],
   pe: ["nb", "ns"],
   nl: ["qc", "ns"],
   yt: ["bc", "nt"],
   nt: ["yt", "bc", "ab", "sk", "nu"],
-  nu: ["nt", "mb"]
+  nu: ["nt", "mb"],
+  me: ["nb"]
 };
 
 function shortestRegionPath(from, to) {
