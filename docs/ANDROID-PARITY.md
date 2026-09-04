@@ -1,6 +1,6 @@
 # DIRT Android parity contract
 
-**Status:** active Android routing, fuel, pack, and navigation parity authority
+**Status:** active full-product Android parity authority
 
 **Reconciled:** 2026-09-03
 
@@ -8,15 +8,27 @@
 `94b467a11375e3ea3233c127b07af2ef039d0658`
 (`routing-rc1-2026-09-03`)
 
-**Accepted iOS build:** `2 (13)` on White
+**Accepted frozen-routing iOS build:** `2 (13)` on White
+
+**Current iOS engineering reference:** build `2 (14)`, commit `46c8c42`
+
+Build `2 (14)` still requires the focused physical-device navigation pass in
+`docs/NAVIGATION-PREP-REQUALIFICATION-2026-09-04.md`. Android must port its
+contract, but must not treat uncompleted iOS physical qualification as proof.
 
 **LIVE endpoint:** `https://dirt-mayday.vercel.app/api/route`
 
 **Required service contract:** `dirt-routing.r0.v1`
 
 This document replaces both dated Android catch-up documents. It defines the
-behaviour Android must match; it is not an instruction to copy Swift syntax or
-fork the shared online router into Kotlin.
+complete behaviour Android must match; it is not an instruction to copy Swift
+syntax, Apple-only APIs, or fork the shared online router into Kotlin.
+
+Parity means the rider receives the same capability, safety rule, entitlement,
+privacy boundary, failure honesty, and recovery path on both platforms. Native
+presentation and store/authentication APIs may differ. A feature is not
+finished cross-platform until the Android implementation and its equivalent
+tests are recorded here.
 
 ## 1. Authority and implementation boundary
 
@@ -27,7 +39,10 @@ Read in this order:
 3. `docs/ROUTING-FREEZE-2026-09-03.md`
 4. this document
 5. `docs/00-NAVIGATION-SOURCE-OF-TRUTH.md`
-6. current Swift, shared JavaScript, fixtures, and tests
+6. `docs/APP-STORE-LAUNCH-CHECKLIST.md`
+7. `docs/APP-PRIVACY-DATA-MAP.md`
+8. `docs/GPX-IMPORT-TO-DIRT-PLAN.md`
+9. current Swift, shared JavaScript, fixtures, and tests
 
 Android uses the shared LIVE route service whenever it is online. Server
 search, regional seams, fuel-chain selection, and current production pack bytes
@@ -38,6 +53,16 @@ presentation, edits, diagnostics, and offline routing/rerouting.
 `serviceBuild` is diagnostic and changes with legitimate server or pack-release
 commits. Record it on every response; do not hard-code it. A
 `serviceContract` mismatch is fatal.
+
+Every iOS change affecting rider-visible behaviour, stored state, backend
+contracts, entitlements, privacy, diagnostics, or acceptance tests must do one
+of two things in the same commit:
+
+1. update this contract and identify the Android equivalent; or
+2. explicitly record that the change is Apple-only and why no behavioural
+   Android counterpart exists.
+
+“Android later” is not a parity decision. It is an open delivery item.
 
 ## 2. Routing profiles and access
 
@@ -229,7 +254,7 @@ cancellation, timeout, or route-quality issue:
 Every fuel timer must be attributable to its departure anchor so logs prove that
 the window reset at each Point/F waypoint.
 
-## 9. Android acceptance gate
+## 9. Routing and navigation acceptance gate
 
 Android is aligned only when all of these pass:
 
@@ -253,14 +278,165 @@ Exact geometry may vary only when a different promoted pack identity explains
 it. Route character, stop count, edit ownership, warnings, and safety laws are
 the parity gates.
 
-## 10. Non-goals
+## 10. Subscription, paywall, and entitlement parity
+
+Android uses Google Play Billing and Android-secure storage; it does not copy
+StoreKit or Keychain code. The rider contract must nevertheless match build
+`2 (14)`:
+
+- Saving a route locally is free.
+- GPX export requires an active DIRT Pro entitlement.
+- A rider receives exactly two free navigation starts. A start is consumed
+  only when the ride becomes active—not when Start is tapped, preparation is
+  cancelled, preparation fails, or the paywall is viewed.
+- The free-start counter survives ordinary relaunch and reinstall-resistant
+  account restoration to the extent supported by the approved Android account
+  model. It must not live only in volatile view state.
+- The paywall displays the localized price, billing period, renewal terms, and
+  introductory-offer eligibility supplied by Google Play. Never hard-code a
+  price or promise an offer to an ineligible rider.
+- Pending, cancelled, failed, already-owned, and successful purchases are
+  distinct states. Purchase acknowledgement and entitlement refresh are
+  idempotent.
+- **Restore Purchases** has an Android-native equivalent that queries current
+  purchases and reports restored, no-entitlement, and store/network failure
+  truthfully.
+- Debug and tester bypasses must not exist in a public Release artifact.
+
+The entitlement source of truth must be reconciled across devices. If Android
+cannot yet share the iOS entitlement backend, launch material must describe
+platform purchases accurately rather than implying cross-platform access.
+
+Equivalent Android tests are required for every case in
+`DirtTests/SubscriptionGateTests.swift`, plus Google Play pending-purchase,
+acknowledgement, reconnect, refund/revocation, and account-switch cases.
+
+## 11. Account, authentication, and deletion parity
+
+Android must use the same Supabase user/profile model and provide the same
+account capability: sign in, visible non-cancellation errors, profile update,
+sign out, and deletion initiated inside the app.
+
+The identity-provider UI is platform-native. Do not put Sign in with Apple UI
+on Android merely to resemble iOS. The approved Android provider must still
+produce the same Supabase identity boundary and must support provider-token
+revocation where its contract requires it.
+
+Deletion uses the versioned `delete_own_account` backend RPC from
+`supabase/migrations/20260904010000_delete_own_account.sql`. The client must
+fail closed: a local sign-out is never presented as successful deletion. After
+confirmed deletion, remove local profile, Group, entitlement/session, and
+sensitive cached state, then expose any provider-side revocation step that
+cannot be completed automatically.
+
+Cancellation remains quiet; network, provider, backend, and policy failures are
+visible and recoverable. Test real production-provider authentication and
+deletion, not only mocks.
+
+## 12. Groups, location, and safety parity
+
+Android shares the Supabase migrations and row-level-security contract. It
+must not create its own incompatible Group tables or client-only ownership
+rules.
+
+- Group creation calls the transactional `create_group` RPC from
+  `supabase/migrations/20260904020000_create_group.sql`.
+- Distress and rider-state Realtime broadcasts go only to the selected Group's
+  private channel. They are never global or sent to every joined Group.
+- Normal Group location cadence is 10 seconds; active distress cadence is 5
+  seconds. Background behaviour must follow Android foreground-service and
+  permission rules without weakening the in-app privacy boundary.
+- Precise, approximate, denied, permanently denied, services-disabled, and
+  recovery-through-Settings states receive honest, actionable UI.
+- Copy must not promise messaging or push notifications until those systems
+  actually exist.
+- Owner/member/nonmember authorization, reconnect, leave, delete, invite,
+  account switching, and stale-cache isolation require multi-account tests.
+- Public Groups remain blocked on both platforms until report, block,
+  moderation, abuse-response, and support operations are implemented and
+  exercised.
+
+Android must implement equivalents of `GroupSafetyPolicyTests` and verify RLS
+against a deployed production-shaped backend. Local Kotlin guards are not a
+substitute for backend enforcement.
+
+## 13. Product surface, GPX, and design parity
+
+Android must preserve the DIRT product hierarchy and route-first experience,
+not replace it with a generic Material sample. Controls, typography, sheets,
+motion, accessibility semantics, and system integrations should feel native to
+Android while maintaining the same information priority and rider outcomes.
+
+For imported GPX files, current parity is faithful trace display and local save.
+The future GPX-to-DIRT conversion in `docs/GPX-IMPORT-TO-DIRT-PLAN.md` is one
+cross-platform milestone: original preservation, reachable entry selection,
+open/loop detection, clockwise/counter-clockwise choice, bounded graph
+alignment, fuel planning, warnings, cancellation, and recovery must be designed
+and tested for both platforms before either is called complete.
+
+Apple CarPlay is parked and has no automatic Android Auto implication. CarPlay
+and Android Auto require separate entitlement, safety, template, distraction,
+and physical-head-unit projects. Neither is a simple compatibility flag.
+
+## 14. Privacy, release, and operational parity
+
+`docs/APP-PRIVACY-DATA-MAP.md` is the current behaviour inventory, not an
+Apple-only truth. Android must reconcile every collected, transmitted, stored,
+and deleted data category against its actual implementation, then use that
+inventory for Google Play Data safety and the public privacy policy.
+
+Before public Android release, record at minimum:
+
+- production application ID, signing/app-integrity setup, version name/code,
+  target API, device/form-factor support, and Release-only configuration;
+- permissions and purpose strings for precise/approximate/background location,
+  notifications if introduced, network, files/document import, and foreground
+  navigation/location services;
+- Google Play Billing products, test accounts, purchase acknowledgement,
+  entitlement restoration, refund/revocation, and offline behaviour;
+- privacy policy, Data safety answers, account-deletion URL/flow, content
+  rating, store listing, screenshots, support contact, and review instructions;
+- production Supabase/Vercel/R2 configuration, RLS verification, migrations,
+  monitoring, backups, incident ownership, and rollback plan; and
+- signed bundle inspection proving local fixtures, development tiles, test
+  billing configuration, credentials, and bypass copy are absent.
+
+Android diagnostics must use the same privacy principle as iOS: enough context
+to reproduce source, pack, route, fuel, Group, entitlement, and navigation
+state without silently adding advertising identifiers or account-linked raw
+location telemetry.
+
+## 15. Full-product parity ledger
+
+The Android agent must keep a checked evidence ledger against this table. A row
+is complete only when implementation, automated tests, and the required real
+service/device proof exist.
+
+| iOS reference | Android-required outcome | Evidence gate |
+| --- | --- | --- |
+| Routing freeze `routing-rc1-2026-09-03` | Same LIVE contract and equivalent offline rules | Shared fixtures + Pixel emulator + physical ride |
+| Build `2 (14)` Start Navigation | First stage/current region block; rolling next-stage/region prep | Long-route transition tests + physical device |
+| `SubscriptionGateTests.swift` | Free Save, gated export, exactly two consumed ride starts | Unit/UI + Google Play test purchase/restore |
+| Account/Profile + deletion RPC | Same lifecycle and fail-closed deletion | Real provider + deployed RPC + data-removal audit |
+| Groups safety policies + `create_group` RPC | Same selected-group privacy and authorization | Multi-account RLS/Realtime/background tests |
+| `APP-PRIVACY-DATA-MAP.md` | Implementation-matched Play Data safety disclosure | Release bundle and network/storage audit |
+| `GPX-IMPORT-TO-DIRT-PLAN.md` | One cross-platform conversion contract | Shared fixtures + platform UX/device tests |
+| Release verifier/checklist | Android signed-bundle and Play Console equivalent | Clean production AAB + closed-track proof |
+
+Whenever the iOS reference changes, update the commit/build identifier above,
+reconcile this table, and identify which Android evidence became stale. Do not
+mark parity from screenshots or successful compilation alone.
+
+## 16. Non-goals
 
 - Do not change the frozen shared routing engine during Android parity work.
 - Do not fork LIVE search into Kotlin.
 - Do not rebuild or publish packs from the Android repository.
 - Do not add Direct, FTEN, longhaul, free-space joins, Overpass fuel proof,
   Network Lens, surface TTS, or silent planning downloads.
-- Do not introduce Apple/email authentication or iOS commerce into Android.
+- Do not copy Apple-only authentication, StoreKit, Keychain, or App Store APIs
+  into Android. Implement the Android-native equivalent of the same rider
+  contract.
 - Do not replace the DIRT interface with default Material composition.
 
 If Android reveals a genuine shared-contract defect, stop and report the fixed

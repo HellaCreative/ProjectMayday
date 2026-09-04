@@ -15,6 +15,11 @@ The routing/fuel engine remains on the unchanged baseline above.
 **Deferred:** CarPlay is parked. Native GPX-to-DIRT conversion and subjective
 visual redesign are separate product milestones, not hidden launch work.
 
+**Android lockstep:** this checklist is the iOS release record, but every
+cross-platform behaviour and backend contract completed here is also tracked in
+[ANDROID-PARITY.md](ANDROID-PARITY.md). An iOS launch check does not by itself
+prove Android parity.
+
 ## Release rule
 
 The public build is ready only when every **Release gate** below is green. A

@@ -4,6 +4,11 @@
 questionnaire and public policy review. This is not legal advice and does not
 replace Richard's final App Store Connect declarations.
 
+This inventory is also the starting contract for Android's Google Play Data
+safety review. The Android build must reconcile it against Android-specific
+SDKs, permissions, storage, authentication, billing, and background services;
+it must not copy these declarations without verifying its actual behaviour.
+
 ## Data leaving the device
 
 | Data | When | Destination | Linked to account | Tracking | Purpose |

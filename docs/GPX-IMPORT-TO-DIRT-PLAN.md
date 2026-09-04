@@ -4,6 +4,11 @@
 faithful traced GPX display and local save. This document does not reopen the
 frozen routing release candidate.
 
+This is one iOS/Android product contract. Platform presentation may be native,
+but neither platform is complete until both implement the same import
+preservation, entry/direction choice, graph alignment, fuel, warning, and
+recovery behaviour with equivalent evidence.
+
 ## Rider job
 
 A GPX track is evidence of a ride line, not necessarily a navigable itinerary.

@@ -39,8 +39,15 @@ Frozen routing boundary:
 For regional pack creation and promotion:
 [docs/PACK-FACTORY.md](docs/PACK-FACTORY.md).
 
-For Android routing/fuel/navigation parity:
+For full Android product parity—including routing, fuel, navigation,
+subscriptions, accounts, Groups, privacy, GPX, and release gates:
 [docs/ANDROID-PARITY.md](docs/ANDROID-PARITY.md).
+
+Any iOS change that affects rider-visible behaviour, stored state, backend
+contracts, entitlements, privacy, diagnostics, or acceptance tests must update
+the Android parity contract in the same commit, or explicitly record why the
+change has no Android counterpart. Platform-native implementation may differ;
+the outcome and safety contract may not drift.
 
 For Start Navigation, cues, HUD, and in-ride waypoints:
 [docs/00-NAVIGATION-SOURCE-OF-TRUTH.md](docs/00-NAVIGATION-SOURCE-OF-TRUTH.md).
