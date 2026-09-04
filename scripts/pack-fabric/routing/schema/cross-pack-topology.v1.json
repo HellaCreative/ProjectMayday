@@ -1,6 +1,6 @@
 {
   "schemaVersion": "cross-pack-topology.v1",
-  "generatedAt": "2026-09-04T11:27:40.701Z",
+  "generatedAt": "2026-09-04T11:35:04.747Z",
   "regions": {
     "ab": {
       "neighbors": {
@@ -6313,6 +6313,56 @@
             "remoteSurface": "paved",
             "localRoadClass": "service",
             "remoteRoadClass": "service",
+            "gapMeters": 0
+          }
+        ],
+        "yt": [
+          {
+            "coordinate": [
+              -129.0525665283203,
+              60.0000114440918
+            ],
+            "osmWayId": "vertex:-129.05257,60.00001",
+            "localEdgeId": "osm-f6b76fe38346",
+            "remoteEdgeId": "osm-566de8c87794",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 0,
+            "remoteSurface": 0,
+            "localRoadClass": "unknown",
+            "remoteRoadClass": "unknown",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -129.05250549316406,
+              60.000091552734375
+            ],
+            "osmWayId": "vertex:-129.05251,60.00009",
+            "localEdgeId": "osm-f6b76fe38346",
+            "remoteEdgeId": "osm-566de8c87794",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 0,
+            "remoteSurface": 0,
+            "localRoadClass": "unknown",
+            "remoteRoadClass": "unknown",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -129.05166625976562,
+              60.00130081176758
+            ],
+            "osmWayId": "vertex:-129.05167,60.00130",
+            "localEdgeId": "osm-f6b76fe38346",
+            "remoteEdgeId": "osm-566de8c87794",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 0,
+            "remoteSurface": 0,
+            "localRoadClass": "unknown",
+            "remoteRoadClass": "unknown",
             "gapMeters": 0
           }
         ]
@@ -35623,6 +35673,61 @@
             "remoteAccess": 1,
             "localSurface": 2,
             "remoteSurface": 2,
+            "localRoadClass": "unknown",
+            "remoteRoadClass": "unknown",
+            "gapMeters": 0
+          }
+        ]
+      },
+      "urbanCores": []
+    },
+    "yt": {
+      "neighbors": {
+        "bc": [
+          {
+            "coordinate": [
+              -129.0525665283203,
+              60.0000114440918
+            ],
+            "osmWayId": "vertex:-129.05257,60.00001",
+            "localEdgeId": "osm-566de8c87794",
+            "remoteEdgeId": "osm-f6b76fe38346",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 0,
+            "remoteSurface": 0,
+            "localRoadClass": "unknown",
+            "remoteRoadClass": "unknown",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -129.05250549316406,
+              60.000091552734375
+            ],
+            "osmWayId": "vertex:-129.05251,60.00009",
+            "localEdgeId": "osm-566de8c87794",
+            "remoteEdgeId": "osm-f6b76fe38346",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 0,
+            "remoteSurface": 0,
+            "localRoadClass": "unknown",
+            "remoteRoadClass": "unknown",
+            "gapMeters": 0
+          },
+          {
+            "coordinate": [
+              -129.05166625976562,
+              60.00130081176758
+            ],
+            "osmWayId": "vertex:-129.05167,60.00130",
+            "localEdgeId": "osm-566de8c87794",
+            "remoteEdgeId": "osm-f6b76fe38346",
+            "localAccess": 1,
+            "remoteAccess": 1,
+            "localSurface": 0,
+            "remoteSurface": 0,
             "localRoadClass": "unknown",
             "remoteRoadClass": "unknown",
             "gapMeters": 0

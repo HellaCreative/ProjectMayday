@@ -2,5 +2,5 @@
   "schemaVersion": "dirt-v3-regions.v1",
   "graphFileName": "graph.v3.bin",
   "fallbackGraphFileName": "graph.v2.bin",
-  "regions": ["ns", "nb", "pe", "nl", "qc", "on", "mb", "sk", "ab", "bc"]
+  "regions": ["ns", "nb", "pe", "nl", "qc", "on", "mb", "sk", "ab", "bc", "yt"]
 }

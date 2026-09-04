@@ -235,6 +235,56 @@
           "minimumCorridorCandidates": 0
         }
       ]
+    },
+    "yt": {
+      "fuelMinimum": 20,
+      "routes": [
+        {
+          "id": "long-whitehorse-dawson",
+          "from": { "lat": 60.7212, "lon": -135.0568, "label": "Whitehorse" },
+          "to": { "lat": 64.0601, "lon": -139.4333, "label": "Dawson" },
+          "minimumDirtPercent": 15,
+          "minimumDirtAllowUnknownPercent": 15,
+          "balancedTolerance": 40,
+          "maximumCleanDirtPercent": 8,
+          "maximumDirtBackwardPercent": 30,
+          "minimumCorridorCandidates": 2
+        },
+        {
+          "id": "urban-whitehorse-teslin",
+          "from": { "lat": 60.7212, "lon": -135.0568, "label": "Whitehorse" },
+          "to": { "lat": 60.174, "lon": -132.736, "label": "Teslin" },
+          "minimumDirtPercent": 15,
+          "minimumDirtAllowUnknownPercent": 15,
+          "balancedTolerance": 40,
+          "maximumCleanDirtPercent": 2,
+          "maximumDirtBackwardPercent": 25,
+          "minimumCorridorCandidates": 2
+        },
+        {
+          "id": "short-whitehorse-carcross",
+          "from": { "lat": 60.7212, "lon": -135.0568, "label": "Whitehorse" },
+          "to": { "lat": 60.1656, "lon": -134.7039, "label": "Carcross" },
+          "minimumDirtPercent": 15,
+          "minimumDirtAllowUnknownPercent": 20,
+          "balancedTolerance": 10,
+          "maximumCleanDirtPercent": 2,
+          "maximumDirtBackwardPercent": 25,
+          "minimumCorridorCandidates": 2
+        },
+        {
+          "id": "seam-alaska-hwy-border",
+          "chain": true,
+          "from": { "lat": 60.002, "lon": -129.052, "label": "Alaska Highway YT" },
+          "to": { "lat": 59.998, "lon": -129.052, "label": "Alaska Highway BC" },
+          "minimumDirtPercent": 0,
+          "minimumDirtAllowUnknownPercent": 0,
+          "balancedTolerance": 50,
+          "maximumCleanDirtPercent": 2,
+          "maximumDirtBackwardPercent": 30,
+          "minimumCorridorCandidates": 0
+        }
+      ]
     }
   }
 }

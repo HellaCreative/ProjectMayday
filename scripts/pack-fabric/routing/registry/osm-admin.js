@@ -17,7 +17,7 @@ const OSM_ADMIN_RELATION = {
   pe: 391115,
   qc: 61549,
   sk: 391178,
-  yt: 391209,
+  yt: 391455,
   ak: 1116270,
   al: 161950,
   ar: 161646,
