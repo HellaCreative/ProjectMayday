@@ -65,6 +65,11 @@ unused-index notices are expected while the development database is empty.
 Production remains on the prior 12-version baseline until device Auth and
 Groups acceptance is complete.
 
+The exact rollback-only check is versioned at
+`tests/authorization_matrix.sql`. Run it after a clean migration replay using a
+privileged database connection; success returns `three-user authorization
+matrix passed` and the final rollback leaves no users or app rows behind.
+
 ## Account deletion
 
 `delete_own_account()` is the only deletion entry point used by the app. It:
