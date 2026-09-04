@@ -1,5 +1,11 @@
 # Routing Regression Baseline
 
+> **Historical numeric oracle.** These August measurements remain useful for
+> detecting cascades, but they are not the current release identity or pack
+> manifest. The active release boundary is
+> [ROUTING-FREEZE-2026-09-03.md](ROUTING-FREEZE-2026-09-03.md), and Pack Factory
+> acceptance follows [PACK-FACTORY.md](PACK-FACTORY.md).
+
 Captured 2026-08-25 from the live service, then advanced after each accepted routing checkpoint.
 
 - Live `serviceBuild`: `944dba69bcdf4415ea934bd103bd8650fd181801`

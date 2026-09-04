@@ -8,7 +8,11 @@
  *
  * Reads data-raw/osm-fuel/<geofabrik-slug>/fuel.geojsonseq
  * (from extract-osm-fuel.sh) and writes app/data/packs/v1/{id}/fuel.v1.json.
- * Ship with: node scripts/pack-fabric/scripts/ship-routing.js --pack bc
+ * Upload with:
+ *   node scripts/pack-fabric/scripts/ship-routing.js \
+ *     --candidate <release-id> --pack bc
+ * Bare --pack is forbidden. Follow docs/PACK-FACTORY.md through candidate
+ * acceptance, exact-byte promotion, stable LIVE deployment, and assertion.
  */
 const fs = require("fs");
 const path = require("path");

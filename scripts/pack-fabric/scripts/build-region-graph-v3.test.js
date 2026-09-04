@@ -58,11 +58,12 @@ test("builder points at the Geofabrik extract, not an NS-only path", () => {
   assert.match(extractHint("on"), /clip-and-extract-osm-roads\.sh on/);
 });
 
-test("builder refuses to stamp frozen live ns/nb packs", async () => {
+test("builder refuses to stamp accepted V3 reference packs", async () => {
   const { buildRegionGraphV3, FROZEN_STAMPS } = require("./build-region-graph-v3");
-  assert.deepEqual([...FROZEN_STAMPS].sort(), ["nb", "ns"]);
-  await assert.rejects(() => buildRegionGraphV3("ns"), /frozen live pack 'ns'/);
-  await assert.rejects(() => buildRegionGraphV3("nb"), /frozen live pack 'nb'/);
+  assert.deepEqual([...FROZEN_STAMPS].sort(), ["nb", "nl", "ns", "on", "pe", "qc"]);
+  for (const id of FROZEN_STAMPS) {
+    await assert.rejects(() => buildRegionGraphV3(id), new RegExp(`accepted reference pack '${id}'`));
+  }
 });
 
 test("leaf dictionaries fail closed before encode", () => {

@@ -311,7 +311,7 @@ function fuelNeedForProfileRide(profileMeters, firstLegMaxMeters, usableRangeMet
   if (meters > firstHardCap + 1) {
     return Math.ceil((meters - firstHardCap) / usable);
   }
-  // Watching and the 70% preferred zone only order pumps after a stop has been
+  // Watching and the 75% preferred zone only order pumps after a stop has been
   // proven necessary. They never manufacture a stop on a reachable ride.
   return 0;
 }

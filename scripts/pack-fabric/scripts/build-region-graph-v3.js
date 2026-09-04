@@ -10,7 +10,7 @@
  *   node --max-old-space-size=8192 scripts/pack-fabric/scripts/build-region-graph-v3.js pe
  *
  * Clips the Geofabrik extract to the OSM admin polygon, then encodes.
- * Frozen live packs ns/nb cannot be rebuilt here.
+ * Accepted reference packs ns/nb/pe/nl/qc/on cannot be rebuilt here.
  *
  *   --reuse-extract   skip osmium if roads.geojsonseq already exists
  *
@@ -19,9 +19,11 @@
  *   routing/data/regions/<id>/geometry.v1.bin
  *   app/data/packs/v1/<id>/graph.v3.bin  (ship-routing source)
  *
- * Does not overwrite graph.v2.bin. After a successful stamp, always
- * `--candidate` then `--promote` that release; add the id to
- * routing/schema/v3-regions.json and `--live`.
+ * Does not overwrite graph.v2.bin. After a successful stamp, upload an
+ * immutable candidate, add the id to both V3 registries and commit, deploy the
+ * recorded candidate override for acceptance, promote those exact bytes, then
+ * deploy stable LIVE and run the region-scoped lockstep assertion. See
+ * docs/PACK-FACTORY.md for the guarded release sequence.
  */
 const fs = require("fs");
 const path = require("path");
@@ -38,7 +40,7 @@ const OSM_ROADS_ROOT = process.env.OSM_ROADS_ROOT || path.join(FABRIC, "data-raw
 const PACKS = path.join(FABRIC, "app", "data", "packs", "v1");
 const REGIONS = path.join(FABRIC, "routing", "data", "regions");
 const SEED_FIXTURES = new Set(["ns"]);
-const FROZEN_STAMPS = new Set(["ns", "nb"]);
+const FROZEN_STAMPS = new Set(["ns", "nb", "pe", "nl", "qc", "on"]);
 const MAX_LEAF_ENTRIES = 255;
 
 function roadsSeqPath(regionId) {
@@ -123,12 +125,12 @@ async function buildRegionGraphV3(regionId, { reuseExtract = false } = {}) {
   const id = source.id;
   if (FROZEN_STAMPS.has(id)) {
     throw new Error(
-      `refusing to stamp frozen live pack '${id}'. Codex owns ns/nb; rebuild only pe/nl/qc and later regions.`
+      `refusing to stamp accepted reference pack '${id}'; open a deliberate new pack revision before replacing frozen bytes`
     );
   }
   if (!isV3Region(id)) {
     console.warn(
-      `'${id}' is not in live v3-regions.json; stamping locally. Live still requests graph.v2.bin until promote.`
+      `'${id}' is not in live v3-regions.json; stamping locally. LIVE still requests graph.v2.bin until both V3 registries are updated and the committed service is deployed.`
     );
   }
 

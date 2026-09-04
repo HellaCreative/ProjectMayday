@@ -6,7 +6,8 @@
 
 **Primary engineering agent:** Codex
 
-**Last reconciled:** 2026-09-03
+**Last reconciled:** 2026-09-03 — routing release candidate frozen at
+`94b467a11375e3ea3233c127b07af2ef039d0658`
 
 **Repository:** `/Users/richardsmith/SandBox01/MAYDAYiOS/Dirt`
 
@@ -20,6 +21,10 @@ This is the only active routing authority. All earlier routing, pack-law,
 itinerary, fuel-gap, handback, phase, and stabilization documents are archived
 historical evidence. They do not retain narrower authority and cannot supersede
 or supplement this document without Richard explicitly restoring a rule here.
+
+Release boundary: [ROUTING-FREEZE-2026-09-03.md](ROUTING-FREEZE-2026-09-03.md).
+Regional replication: [PACK-FACTORY.md](PACK-FACTORY.md). Android parity:
+[ANDROID-PARITY.md](ANDROID-PARITY.md).
 
 ## 1. What DIRT is
 
@@ -213,7 +218,8 @@ The live pack is tested first. A new regional build is uploaded under an
 immutable live-candidate identity. Only after live automated and physical
 approval may those exact bytes be promoted to the downloadable manifest.
 
-Once promoted, live and downloadable routing use the same `graph.v2.bin`,
+Once promoted, live and downloadable routing use the same selected `graph.v3.bin`
+(or advertised V2 fallback for a region not yet promoted to V3),
 `geometry.v1.bin`, and `fuel.v1.json` bytes. Online versus offline describes
 delivery and availability, not two different road networks.
 
@@ -289,13 +295,15 @@ saved so automatic planning can be restored without re-entry.
 - The planner computes the minimum safe stop count from routed distance and
   reserve-adjusted usable range, then compares complete feasible chains with
   that stop count before considering ride character.
-- At 50% of reserve-adjusted usable range consumed, automatic planning begins
-  watching sensible forward pumps while continuing to build the ride. For a
-  200 km tank with 30% reserve, usable range is 140 km and watching begins at
-  70 km. Fuel already consumed advances the threshold by the same amount.
-- The 50% watch point never manufactures a stop. Seventy percent consumed is the
-  preferred refuelling zone among otherwise equal, sensible choices; it is not a
-  required stop distance or a replacement hard range.
+- The first 75% of reserve-adjusted usable range is devoted to the selected ride
+  objective. When a stop is required, the final quarter opens pump selection:
+  choose the first sensible, forward, route-connected pump instead of continuing
+  a province-wide search. Fuel already consumed advances this boundary by the
+  same amount.
+- The 75% boundary never manufactures a stop. It is the preferred beginning of
+  pump selection among otherwise equal, sensible choices, not a required stop
+  distance or a replacement hard range. An earlier pump remains valid only when
+  it is required to preserve a safe continuation through sparse geography.
 - If the destination is reachable, DIRT goes directly there with zero generated
   stops only when the fuel remaining on arrival can also reach the nearest pump
   by road from that destination. This destination-escape search is 360° because
@@ -559,8 +567,9 @@ options along the journey. Build 6 repairs this without changing pack bytes:
 
 1. a rider waypoint reachable within remaining usable range wins with zero
    generated stops only when the rider can still reach a pump by road afterward;
-2. watching opens after 50% of usable range and 70% is the preferred refuelling
-   zone, with reserve and prior consumption applied first; neither forces a stop;
+2. this historical build used an earlier 50%/70% watch/preference rule; the
+   frozen release candidate supersedes it with first-sensible pump selection
+   after 75% of usable range as defined in §6;
 3. complete-chain stop count and forward coherence precede profile quality;
 4. graph-foundation detour checks accommodate obstacles while rejecting gross
    fuel-only expansion; and
@@ -1031,15 +1040,20 @@ in-deadline routed pump prefix when a later continuation proof times out.
 
 ### Not yet accepted end to end
 
-- Exact client source SHA and immutable release ID in the physical diagnostic,
-  although service and pack byte identities are now proved.
-- Physical White acceptance of the shared route/fuel planning repair.
-- Exact identity and benchmark baseline for Cursor's rebuilt live candidates.
-- Full online/offline parity with promoted packs.
-- Cross-country long-route performance and fuel-window behaviour.
+- Android parity with the frozen iOS/shared-routing candidate.
+- Pack Factory replication and promotion for the remaining provinces,
+  territories, and states.
+- Full online/offline parity for every newly promoted regional pack.
 - Navigation-time fuel carry after the rider has already consumed fuel.
 - Complete navigation/off-route/incident recovery audit.
-- Promotion of rebuilt downloadable packs.
+
+The September 3 White pass accepted route creation at app 2 (13): short,
+single-region, cross-region, direct-in-range, automatic-fuel, stage-local edit,
+incremental long-chain, and honest remote-gap behaviour. The exact service and
+reference-pack identities are frozen in
+[ROUTING-FREEZE-2026-09-03.md](ROUTING-FREEZE-2026-09-03.md). Cross-country
+routing remains a stress case rather than the ordinary product use case, but it
+no longer blocks regional pack production.
 
 ### Work priority and stabilization gates
 
@@ -1108,6 +1122,9 @@ refactor findings are decommissioned under `docs/archive/routing/`.
 
 Pack data model / Graph-v3 build order: see `docs/PACK-DATA-V3-AUTHORITY.md`
 (authoritative for pack data).
+
+Pack production and release workflow: see `docs/PACK-FACTORY.md`. Android
+routing/fuel/navigation parity: see `docs/ANDROID-PARITY.md`.
 
 The archive is evidence, not authority. No archived instruction may drive new
 work unless Richard explicitly restores it and this document is updated in the

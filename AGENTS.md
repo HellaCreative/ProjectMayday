@@ -17,7 +17,13 @@ Packs, adapters, live `/api/route`, and ship scripts live here under `scripts/pa
 
 Vercel is API code only (`scripts/pack-fabric/api`). Packs never go on Hobby.
 
-**Pack changes must land on R2 the same turn they are stamped.** `--candidate` then `--promote`; add the id to `routing/schema/v3-regions.json` and `--live` so `/api/route` requests that same object. Xcode ships the app, not the road file. A pack that exists only on the laptop was **not** tested.
+**Pack changes must land on R2 the same turn they are stamped.** `--candidate`
+then `--promote`; add the id to both
+`scripts/pack-fabric/routing/schema/v3-regions.json` and
+`scripts/pack-fabric/routing/data/v3-regions.json`, then `--live` and
+`--assert --region <id>` so `/api/route` requests that same object. Xcode ships
+the app, not the road file. A pack that exists only on the laptop was **not**
+tested.
 
 ## Do not
 
@@ -26,6 +32,15 @@ Vercel is API code only (`scripts/pack-fabric/api`). Packs never go on Hobby.
 - Leave a pack rebuild unpublished.
 
 Read first: [docs/00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md](docs/00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md).
+
+Frozen routing boundary:
+[docs/ROUTING-FREEZE-2026-09-03.md](docs/ROUTING-FREEZE-2026-09-03.md).
+
+For regional pack creation and promotion:
+[docs/PACK-FACTORY.md](docs/PACK-FACTORY.md).
+
+For Android routing/fuel/navigation parity:
+[docs/ANDROID-PARITY.md](docs/ANDROID-PARITY.md).
 
 For Start Navigation, cues, HUD, and in-ride waypoints:
 [docs/00-NAVIGATION-SOURCE-OF-TRUTH.md](docs/00-NAVIGATION-SOURCE-OF-TRUTH.md).

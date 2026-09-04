@@ -1,45 +1,64 @@
 ---
-description: Live /api/route and PACKS download are the same fabric — never ship one without the other.
+description: LIVE and PACKS use one promoted R2 fabric; Pack Factory follows the frozen V3 contract.
 alwaysApply: true
 ---
 
 # Live and PACKS are one fabric
 
-There is **one** routing file per region: R2 `dirt-packs/{id}/graph.v2.bin` + `geometry.v1.bin`. Catalog lists all CA provinces/territories and all US states.
+Read `docs/PACK-FACTORY.md` and `docs/ROUTING-FREEZE-2026-09-03.md` before
+building or publishing a region. Cursor's Pack Factory skill is an execution aid;
+the checked-in repository contract wins on conflict.
 
-- iOS PACKS downloads that object.
-- Live `POST /api/route` loads **that same object** from R2.
-- Downloaded vs cellular is delivery, not a second road network.
-- **If we change a pack, it goes to R2, or we did not test it.** Xcode ships the app, not the road file.
-- **Always `--candidate` then `--promote` after a stamp.** A pack that only sits on the laptop cannot be tested. Do not wait to be asked.
-- Vercel Hobby is the API only (`scripts/pack-fabric/api`). Never `includeFiles` pack binaries or `longhaul.v1.json.gz`.
-- `longhaul.v1.json.gz` is a thinned highway extract. It is **not** Dirt.
+Each promoted V3 region uses the same R2 objects for LIVE and phone downloads:
 
-## When you change routing
+- `dirt-packs/{id}/graph.v3.bin`
+- `dirt-packs/{id}/geometry.v1.bin`
+- `dirt-packs/{id}/fuel.v1.json`
 
-| Change | Ship |
+Regions not yet promoted to V3 may advertise `graph.v2.bin` until their factory
+run is accepted. The two checked-in V3 registries determine which graph LIVE and
+the clients request.
+
+- Foundational regional packs are OSM-only.
+- Downloaded versus cellular is delivery, not a second road network.
+- If a pack changes, publish it through an immutable candidate and promotion or
+  it was not tested.
+- Vercel contains API code only. Never include pack binaries or
+  `longhaul.v1.json.gz` in the deployment.
+- The accepted NS/NB/PE/NL/QC/ON V3 bytes are frozen reference moulds. Do not
+  rebuild them while producing another region.
+
+## When you change routing or packs
+
+| Change | Required release action |
 | --- | --- |
-| OSM / stitches / capillary / pack rebuild | Record a release, `--candidate`, `--promote` those regions, add v3 ids to `routing/schema/v3-regions.json`, then `--live` so `/api/route` requests the same `graph.v3.bin`. Then `--assert`. |
-| Cost tables / Allow / search | Update `OnDeviceProfileCosts.swift` **and** `scripts/pack-fabric/routing/lib/profile-costs.js`, then `node scripts/pack-fabric/scripts/ship-routing.js --live`. Pack binaries unchanged. |
-| Live graph loader (`select.js`, `graph.js`) | Edit files in `scripts/pack-fabric/routing/`, then `--live`. |
+| New/rebuilt region | Follow `docs/PACK-FACTORY.md`: build graph/geometry/fuel, upload `--candidate --pack`, add both V3 registries and commit, deploy the recorded candidate override, accept, `--promote --pack`, `--live`, then region-scoped `--assert`. |
+| Cost, access, or search law | This reopens the frozen routing candidate. Update Swift and JS twins, add a fixed regression, commit, deploy LIVE, install a new app build, and obtain physical acceptance before a new freeze. |
+| Live loader only | Edit the shared pack-fabric source, commit, deploy LIVE, and assert every explicitly affected region. |
 
-A routing change that is only on the phone, or only on live, is **not shipped**.
+No routing or pack change is shipped when it exists only on the phone, only on
+LIVE, or only on the laptop.
 
-## Do not
+## Forbidden
 
-- Auto-download packs to “make live match.”
-- Leave a pack rebuild only on the laptop.
-- Leave `useLonghaulPacks = onVercel` or `preferLonghaulPacks: true` on a path that chooses the graph file.
-- Publish a second “live extract.”
-- Wire `bc-ften.js` into SUPPLEMENTS.
+- Bare `--pack` publication.
+- Replacing the remote catalog with the checked-in seed manifest.
+- Auto-downloading packs merely to make LIVE match.
+- Longhaul or a second live extract.
+- Provincial supplements in a foundational OSM-only build.
+- A router-cost/search change hidden inside Pack Factory.
+- Bulk promotion without region-by-region acceptance and identity evidence.
 
-## Commands
+## Guarded commands
 
-```
-node scripts/pack-fabric/scripts/ship-routing.js --candidate <releaseId> --pack <id>
-node scripts/pack-fabric/scripts/ship-routing.js --promote <releaseId> --pack <id>
+```sh
+node scripts/pack-fabric/scripts/ship-routing.js --candidate <release-id> --pack <region>
+node scripts/pack-fabric/scripts/ship-routing.js --candidate <release-id> <region> --live
+node scripts/pack-fabric/scripts/ship-routing.js --promote <release-id> --pack <region>
 node scripts/pack-fabric/scripts/ship-routing.js --live
-node scripts/pack-fabric/scripts/ship-routing.js --assert
+node scripts/pack-fabric/scripts/ship-routing.js --assert --region <region>
 ```
 
-Workspace: `/Users/richardsmith/SandBox01/MAYDAYiOS/Dirt`. API: `https://dirt-mayday.vercel.app/api/route`.
+Workspace: `/Users/richardsmith/SandBox01/MAYDAYiOS/Dirt`
+
+API: `https://dirt-mayday.vercel.app/api/route`

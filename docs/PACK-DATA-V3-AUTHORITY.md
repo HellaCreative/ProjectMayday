@@ -1,8 +1,10 @@
-# DIRT — Pack Data De-compression (Graph v3): Claude Build Order
+# DIRT — Graph V3 pack-data authority
 
-> **Status: AUTHORITY for pack-data / Graph-v3 (approved 2026-08-23). Ride-mode and
-> routing-law definitions remain governed by docs/00-PRODUCT-AND-ROUTING-SOURCE-OF-
-> TRUTH.md; this doc governs the pack data model and the v3 build order.** Reviewed by Codex 2026-08-23; corrections below are incorporated.
+> **Status: AUTHORITY for the Graph V3 binary/data model.** Ride-mode and routing
+> laws remain governed by `docs/00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md`.
+> Regional replication and release now follow `docs/PACK-FACTORY.md`. The V3
+> implementation is complete; the dated phase sequence below is retained only as
+> design rationale and must not be rerun as a new migration.
 
 **Supersedes the framing of `PACK-DATA-RECOVERY-V3.md`.** That doc correctly wanted
 honesty and independent dimensions, but its edge contract (`surfaceFamily =
@@ -11,8 +13,10 @@ this app is built on. This doc corrects that: **the pack's job is to preserve OS
 leaf granularity; bucketing into cheap families is the router's job, done at read
 time from the preserved leaf.**
 
-Nova Scotia only until proven. One phase at a time. Physically test between phases.
-Never stack. Restore floor stays commit `7cd5a40`.
+The format was proved through the promoted NS, NB, PE, NL, QC, and ON reference
+packs. Their accepted bytes are frozen in
+`docs/ROUTING-FREEZE-2026-09-03.md`. New regions copy that mould one at a time;
+they do not restart the original Nova Scotia migration.
 
 **DEFINITION OF DONE (every phase): DEPLOYED LIVE + VERIFIED — not "committed."** The app
 routes via the live Vercel engine (`selected=live`), so a phase is only testable once BOTH
@@ -239,10 +243,10 @@ adapter records the leaf; families are computed at read time by both engines fro
 same leaf → family table (shipped in `enumsJson` so it can never drift between
 engines).
 
-## 2. Build order (each phase independently testable; NS only)
+## 2. Historical implementation order (completed; do not execute as factory instructions)
 
-### Precondition — checkpoint the tree (before Phase B; Phase A is safe on a dirty tree)
-The worktree is currently NOT clean: HEAD `aabbd64`, ~30 modified tracked files
+### Historical precondition — checkpoint the tree
+At the time of the original migration the worktree was not clean: HEAD `aabbd64`, ~30 modified tracked files
 (including the source of truth, public manifest, NS fuel sidecar, JS + Swift routing,
 and tests), 9 untracked files, 3 stashes, plus the separate `Dirt-pack-rebuild`
 worktree. **No binary-format migration begins on top of uncommitted work.** Phase A is
@@ -323,7 +327,8 @@ is worthwhile but runs on its own track, after the surface/Clean repair lands. D
 couple it to Phases A–F.
 
 ## 3. Guardrails
-- NS only until proven. Keep prior NS bytes for rollback. Both engines byte-identical.
+- Treat the promoted NS/NB/PE/NL/QC/ON set as read-only reference bytes. New
+  regions are built and accepted one at a time. Both engines remain byte-identical.
 - Legacy CanVec `track` and `service` ways without explicit motor-access evidence
   encode as `motorized_unknown`; the source tag is provenance, never permission.
 - Access-only repairs to a frozen pack must begin with checksum-verified live

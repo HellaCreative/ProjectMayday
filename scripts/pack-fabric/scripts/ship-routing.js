@@ -6,7 +6,8 @@
  *
  *   node scripts/pack-fabric/scripts/ship-routing.js --assert --region on
  *   node scripts/pack-fabric/scripts/ship-routing.js --live
- *   node scripts/pack-fabric/scripts/ship-routing.js --candidate ns-osm-20260821-02 --pack ns --live
+ *   node scripts/pack-fabric/scripts/ship-routing.js --candidate ns-osm-20260821-02 --pack ns
+ *   node scripts/pack-fabric/scripts/ship-routing.js --candidate ns-osm-20260821-02 ns --live
  *   node scripts/pack-fabric/scripts/ship-routing.js --promote ns-osm-20260821-02 --pack ns
  *
  * --candidate uploads immutable candidate objects. It does not touch the download catalog.
@@ -432,7 +433,8 @@ async function main() {
     console.log(`Usage:
   node scripts/pack-fabric/scripts/ship-routing.js --assert --region on
   node scripts/pack-fabric/scripts/ship-routing.js --live
-  node scripts/pack-fabric/scripts/ship-routing.js --candidate ns-osm-20260821-02 --pack ns --live
+  node scripts/pack-fabric/scripts/ship-routing.js --candidate ns-osm-20260821-02 --pack ns
+  node scripts/pack-fabric/scripts/ship-routing.js --candidate ns-osm-20260821-02 ns --live
   node scripts/pack-fabric/scripts/ship-routing.js --promote ns-osm-20260821-02 --pack ns
 bare --pack is rejected; use --candidate/--promote with a recorded release id.`);
     process.exit(argv.includes("--help") ? 0 : 1);
