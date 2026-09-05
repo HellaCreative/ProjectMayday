@@ -423,6 +423,56 @@
           "minimumCorridorCandidates": 0
         }
       ]
+    },
+    "nh": {
+      "fuelMinimum": 0,
+      "routes": [
+        {
+          "id": "long-pittsburg-colebrook",
+          "from": { "lat": 45.0512, "lon": -71.3915, "label": "Pittsburg" },
+          "to": { "lat": 44.895, "lon": -71.496, "label": "Colebrook" },
+          "minimumDirtPercent": 70,
+          "minimumDirtAllowUnknownPercent": 80,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 5,
+          "maximumDirtBackwardPercent": 25,
+          "minimumCorridorCandidates": 2
+        },
+        {
+          "id": "short-berlin-gorham",
+          "from": { "lat": 44.4687, "lon": -71.1853, "label": "Berlin" },
+          "to": { "lat": 44.3878, "lon": -71.1723, "label": "Gorham" },
+          "minimumDirtPercent": 50,
+          "minimumDirtAllowUnknownPercent": 80,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 5,
+          "maximumDirtBackwardPercent": 40,
+          "minimumCorridorCandidates": 2
+        },
+        {
+          "id": "short-lincoln-woodstock",
+          "from": { "lat": 44.0456, "lon": -71.6703, "label": "Lincoln" },
+          "to": { "lat": 43.9776, "lon": -71.6854, "label": "Woodstock" },
+          "minimumDirtPercent": 0,
+          "minimumDirtAllowUnknownPercent": 0,
+          "balancedTolerance": 50,
+          "maximumCleanDirtPercent": 5,
+          "maximumDirtBackwardPercent": 25,
+          "minimumCorridorCandidates": 2
+        },
+        {
+          "id": "seam-nh-me",
+          "chain": true,
+          "from": { "lat": 43.41387176513672, "lon": -70.98682076416016, "label": "Maine at NH seam" },
+          "to": { "lat": 43.41407176513672, "lon": -70.98762076416016, "label": "New Hampshire at NH seam" },
+          "minimumDirtPercent": 0,
+          "minimumDirtAllowUnknownPercent": 0,
+          "balancedTolerance": 50,
+          "maximumCleanDirtPercent": 100,
+          "maximumDirtBackwardPercent": 40,
+          "minimumCorridorCandidates": 0
+        }
+      ]
     }
   }
 }
