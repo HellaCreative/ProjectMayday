@@ -1,6 +1,7 @@
 # DIRT environments and release flow
 
-Status: active; hosted development isolation established 2026-09-04.
+Status: active; hosted development isolation established 2026-09-04 and
+automated security evidence reconciled 2026-09-05.
 
 ## Decision
 
@@ -26,9 +27,16 @@ quoted by Supabase at $0/month.
 
 The development project is healthy and was initialized from production's full
 12-version baseline with zero Auth users and zero application rows; no
-production rider data was copied. It now carries two additional, versioned RLS
-hardening migrations under acceptance. Production intentionally remains on the
-12-version baseline until those changes pass device Auth and Groups testing.
+production rider data was copied. It now carries three additional versioned
+migrations under acceptance: rider-status expansion plus two authorization/RLS
+hardening migrations. Production intentionally remains on the 12-version
+baseline until those changes pass real client/device Auth and Groups testing.
+
+Rollback-only synthetic development matrices now pass for three-user/two-group
+RLS and private Realtime isolation, deleted-Group access loss, account-deletion
+cascades, Auth-session removal, cross-account isolation, and forced-failure
+atomicity, with zero retained rows. This is automated database evidence; it is
+not a production promotion or a substitute for hosted multi-account app tests.
 
 ## Non-negotiable boundaries
 
@@ -104,7 +112,8 @@ Neither deployment changed the frozen route engine or road/geometry objects.
 
 1. Create a feature branch and migration.
 2. Reset and replay the complete migration chain locally.
-3. Run unit, API-contract, RLS, and migration tests with synthetic users.
+3. Run unit, API-contract, RLS/private-Realtime, deletion/atomicity, and migration
+   tests with synthetic users.
 4. Merge to the development branch and deploy to development Supabase/Vercel/R2.
 5. Install `DIRT Dev` on devices; run route, Auth, Groups, subscription sandbox,
    offline, and failure-path acceptance.
@@ -124,12 +133,16 @@ Never rebuild an artifact during promotion. Promote the tested bytes.
 3. Replayed and verified all migrations there without copying production data.
 4. Added build-time iOS Supabase selection and the `DIRT Dev` identity.
 5. Recorded Android's matching compile-time Supabase isolation contract.
-6. Applied and database-tested the first RLS/grant hardening candidate only in development.
+6. Applied and rollback-tested the status/RLS/grant hardening candidates only in
+   development; production promotion remains blocked on real client/device
+   acceptance.
 7. Created and smoke-tested the stable development Vercel deployment without
    changing the production service.
 8. Use a candidate R2 prefix and development-only override whenever a pack is
    under evaluation; promoted immutable packs remain the shared read-only baseline.
 9. Seed disposable development test users/data after Auth providers are configured.
-10. Added deterministic bundle-verification scripts that reject production
-   Supabase identity in development and development identity/tester unlocks in
-   production; wire these scripts into hosted CI when that pipeline is created.
+10. Added deterministic bundle/archive verification that rejects production
+    Supabase identity in development and development identity/tester unlocks in
+    production, plus read-only launch-health verification; wire these checks into
+    hosted CI when that pipeline is created. Distribution signing and the
+    documented MapLibre package blocker remain open.

@@ -24,6 +24,11 @@ cross-platform behaviour and backend contract completed here is also tracked in
 [ANDROID-PARITY.md](ANDROID-PARITY.md). An iOS launch check does not by itself
 prove Android parity.
 
+**Evidence reconciled:** 2026-09-05. Checked items below identify whether the
+evidence is implementation, automated testing, or an accepted physical result.
+Unsigned builds and simulator tests do not close signing, App Store, real-service,
+or physical-device gates.
+
 ## Release rule
 
 The public build is ready only when every **Release gate** below is green. A
@@ -93,8 +98,12 @@ commit, TestFlight build, server contract, and test evidence together.
       versioned and reproducible from production's complete baseline in the
       isolated development project.
 - [x] Development's hardening candidate passes a rollback-only
-      three-user/two-group database authorization matrix with no retained test
-      data; production promotion remains gated below.
+      three-user/two-group authorization matrix across RLS-protected tables and
+      actual private Realtime messages, including loss of access after Group
+      deletion, with no retained test data.
+- [x] Development's deletion matrix proves member/owner cascades, Auth-session
+      removal, anonymous denial, cross-account isolation, and atomic rollback on
+      a forced foreign-key failure, with no retained test data.
 - [ ] Real multi-account development tests prove that private group membership,
       live location, invite codes, alerts, profiles, and Realtime traffic cannot
       leak across groups.
@@ -107,7 +116,12 @@ commit, TestFlight build, server contract, and test evidence together.
       persisted alert (automated policy test).
 - [ ] Multi-account staging proves distress and route alerts reach exactly the
       intended audience under live RLS and private Realtime authorization.
-- [ ] Sharing stops on request, sign-out, account deletion, and stale session.
+- [x] Sharing/session shutdown is implemented and unit-tested for explicit stop,
+      sign-out, confirmed deletion, and absent/expired Supabase sessions; stale
+      account, Realtime, polling, background-location, and overlay state is
+      cleared together.
+- [ ] Real client/device observation confirms those sharing/session shutdown
+      paths against hosted Auth and private Realtime.
 - [ ] User-generated names/content have an abuse report, block, moderation, and
       support-response path appropriate to the shipped functionality.
 - [x] Code-backed data flows, including routing/POI/tile geography and local
@@ -136,12 +150,25 @@ commit, TestFlight build, server contract, and test evidence together.
 - [x] Local `Dirt.storekit` configuration is excluded from Release.
 - [x] App privacy manifest declares precise/coarse location and the code-backed
       required-reason API usage (`CA92.1`, `C617.1`).
-- [x] `scripts/verify-ios-release.sh /path/to/Dirt.app` passes on the unsigned
-      Release build (37 MB versus 222 MB before development-resource removal).
+- [x] The clean unsigned Release bundle passed app-owned identity, resource,
+      privacy, minimum-OS, size, and development-content hygiene checks (31 MiB
+      apparent size versus 222 MB before development-resource removal), as
+      recorded in
+      [IOS-RELEASE-HYGIENE-AUDIT-2026-09-05.md](IOS-RELEASE-HYGIENE-AUDIT-2026-09-05.md).
 - [x] Minimum supported iOS version is deliberately fixed at iOS 26.0. The
       Release verifier rejects any archive whose `MinimumOSVersion` differs.
+- [x] `ThirdPartyNotices.txt` is bundled and the Release verifier rejects a
+      missing or empty notice; dependency and asset evidence is recorded in
+      [OPEN-SOURCE-NOTICE-AUDIT-2026-09-05.md](OPEN-SOURCE-NOTICE-AUDIT-2026-09-05.md).
+- [ ] Establish ownership/license provenance for the bundled SVWD03 map style
+      and sprites, and decide whether notices also need an in-app/legal-site view.
 - [ ] iPhone-only versus universal iPhone/iPad support is deliberately selected.
 - [x] Final unsigned Release build and Xcode Release static analysis pass.
+- [ ] Replace the current MapLibre device artifact with an official corrected or
+      reproducibly reviewed build whose platform metadata is iPhoneOS and whose
+      executable has a matched dSYM; rerun map regression/device qualification.
+      See
+      [IOS-RELEASE-PACKAGE-AUDIT-2026-09-05.md](IOS-RELEASE-PACKAGE-AUDIT-2026-09-05.md).
 - [ ] Signed archive, App Store validation, and export pass.
 - [ ] App size and every bundled resource are reviewed after archive thinning.
 - [ ] Export-compliance answers match the final HTTPS/cryptography usage.
@@ -149,16 +176,22 @@ commit, TestFlight build, server contract, and test evidence together.
 
 ### E. Operations
 
-- [ ] Production Supabase health, quotas, backups, restore procedure, and alert
-      ownership are documented and tested.
-- [ ] Routing service health, deployment identity, rollback, and incident owner
-      are documented.
-- [ ] Privacy-conscious crash/diagnostic collection and a support triage path
-      exist before public release.
-- [ ] Customer support can respond to billing, account deletion, unsafe route,
-      private-access, bad fuel, and Groups privacy reports.
+- [x] Read-only production health verification, dependency identity checks,
+      launch-watch defaults, incident handling, and immutable rollback rules are
+      documented in [LAUNCH-OPERATIONS-RUNBOOK.md](LAUNCH-OPERATIONS-RUNBOOK.md).
+- [ ] Run and retain strict/deep production preflight evidence for the exact
+      candidate, and assign named release, incident, backend, pack/data, and
+      support owners with backups.
+- [ ] Production Supabase quota/backup facts, alert ownership, and an isolated
+      restore drill are recorded and tested.
+- [x] A privacy-conscious support triage baseline covers billing, deletion,
+      unsafe/private routing, fuel/Rider Services data, Groups privacy, Auth, and
+      basemap reports in [SUPPORT-TRIAGE-RUNBOOK.md](SUPPORT-TRIAGE-RUNBOOK.md).
+- [ ] Decide whether the inaccessible in-memory Release diagnostic buffer stays,
+      and whether public builds need a consent/redaction-aware export path; no
+      automatic diagnostic upload exists today.
 - [ ] Internal TestFlight, external TestFlight, release-candidate soak, phased
-      release, and rollback thresholds are agreed and recorded.
+      release, and rollback thresholds are accepted by the named launch owners.
 
 ## App Store Connect — Richard
 
@@ -185,8 +218,12 @@ product decision and cannot be completed safely by an engineering agent.
       `com.mayday.dirt.pro.yearly`.
 - [ ] Confirm price, duration, territories, subscription group, localization,
       display names, descriptions, and review screenshots.
-- [x] `DIRT Dev` resolves and activates the checked-in local StoreKit
-      catalogue; `DIRT Production` excludes it and archives the public bundle.
+- [x] The checked-in local StoreKit catalogue contains the two approved product
+      IDs and yearly-only seven-day trial, its catalogue contract tests pass,
+      and `DIRT Production` excludes it.
+- [ ] The paywall visibly resolves both products in Sandbox/TestFlight. The
+      current local command-line UI run did not receive StoreKit products and is
+      not recorded as a passing paywall test.
 - [ ] Configure the seven-day introductory trial on the yearly product only
       in each launch territory; the monthly product has no introductory offer.
 - [ ] Submit the first subscription products with the app version.
@@ -222,17 +259,26 @@ Run on the exact Release candidate, not a tester-bypass build.
 
 ### Build 2 (14) engineering record
 
-- iOS unit/integration target: **259 passed, 0 failed** on iPhone 17 / iOS
-  26.5 Simulator.
-- UI coverage: all **8 logical UI tests passed across 11 executions**; two
-  Xcode accessibility-server failures from the parallel aggregate run passed
-  on immediate serial rerun. The shared scheme now keeps the UI target serial
-  to prevent that infrastructure race.
+- iOS unit/integration target: **268 passed, 0 failed, 0 skipped** on iPhone 17 /
+  iOS 26.5 Simulator in two serial runs (131.81 seconds fresh wall time; 36.40
+  seconds rerun wall time).
+- Non-paywall UI coverage: **9 logical tests passed across 12 executions, 0
+  failed, 0 skipped** in a 295.54-second serial wall-time run. The launch test
+  accounts for four device/orientation executions. Simulator state stabilization
+  is recorded at commit `95f1e83`.
+- The local StoreKit paywall UI test is **not passed**: the deterministic runner
+  reached the paywall but the local command-line run supplied no products. Real
+  Sandbox/TestFlight purchase, restore, expiry, and revocation remain open.
 - Shared routing/pack tests: **249 passed, 0 failed, 4 intentionally skipped**.
 - Unsigned Release build: passed for `generic/platform=iOS`.
 - Xcode Release static analysis: passed.
-- Release bundle audit: passed at 37 MB; privacy manifest present; development
-  map tiles, local StoreKit configuration, and tester bypass copy absent.
+- Release bundle hygiene: app-owned checks passed at 31 MiB apparent size;
+  privacy manifest and third-party notice are present, while development map
+  tiles, local StoreKit configuration, and tester-bypass copy are absent. The
+  full package is not upload-ready because MapLibre metadata/dSYM and distribution
+  signing remain unresolved.
+- The no-debugger test runner repair is recorded at commit `f3e9950`; the
+  session-shutdown and database security/deletion evidence is at `d8f345c`.
 
 This record is automated evidence, not a substitute for the unchecked signed,
 production-backend, StoreKit, or physical-device gates above.
@@ -244,11 +290,12 @@ production-backend, StoreKit, or physical-device gates above.
   only the production project in Release.
 - The focused iPhone 17 / iOS 26.5 simulator run passed the navigation
   reliability, subscription gate, group safety, and core integration suites.
-- Development Supabase replay plus its three-user/two-group authorization
-  matrix passed. RLS init-plan warnings are cleared; five intentional
-  authenticated transaction-RPC notices remain documented.
-- None of the two development-only hardening migrations has been promoted to
-  production.
+- Development Supabase replay plus the rollback-only authorization/private-
+  Realtime and deletion/session/atomicity matrices passed with zero residue.
+  RLS init-plan warnings are cleared; five intentional authenticated
+  transaction-RPC notices remain documented.
+- None of the three development-only migrations (rider-status expansion plus
+  two authorization hardening migrations) has been promoted to production.
 
 ### Reproduce the bundle audit
 
@@ -263,7 +310,10 @@ scripts/verify-ios-release.sh \
 ```
 
 The verifier intentionally fails if development map tiles, the local StoreKit
-configuration, tester-bypass copy, or the privacy manifest are wrong.
+configuration, tester-bypass copy, privacy manifest, third-party notice,
+framework platform metadata, or signing requirements are wrong. The current
+unsigned bundle is expected to remain red on the documented MapLibre artifact
+blocker until that dependency is corrected.
 
 ## Official Apple references
 

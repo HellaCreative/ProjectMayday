@@ -45,7 +45,13 @@ include a DIRT account ID.
 | Rider Services regional files | App application support | Checksum-verified campground, lodging, and liquor data retained for offline layer display; separate from routing activation |
 | Last known latitude, longitude, timestamp, and accuracy | UserDefaults | Seeds the next launch before Core Location supplies a newer fix |
 | Pending incident reports | UserDefaults queue | Uploaded only for a signed-in rider; retained locally on failure |
-| Diagnostic log | App memory/share file | Exported only when the rider explicitly invokes sharing |
+| Diagnostic log | In-memory ring buffer; explicit share file in development tester tools | Not automatically uploaded. The audited public Release has no export control or console printing; route-attempt entries can contain endpoint coordinates |
+
+The 2026-09-05 Release hygiene audit statically verified that public builds do
+not automatically upload or expose the diagnostic buffer. Product/legal still
+must decide whether the inaccessible in-memory buffer remains in App Store
+builds for support value or is disabled for data minimization. Any future public
+export needs coordinate redaction or clear disclosure and user initiation.
 
 ## Deletion contract
 
@@ -88,7 +94,12 @@ management destination.
 - [ ] Retention period for presence, alerts, incidents, and contributed tracks.
 - [ ] Whether incident/contribution records are deleted or anonymized after
       account deletion.
-- [ ] Support contact and response path for privacy/deletion requests.
+- [x] Internal privacy-conscious intake and escalation are documented in
+      [SUPPORT-TRIAGE-RUNBOOK.md](SUPPORT-TRIAGE-RUNBOOK.md).
+- [ ] Public support contact/channel and response ownership for privacy/deletion
+      requests are published and staffed.
+- [ ] Retain or disable the inaccessible in-memory Release diagnostic buffer;
+      approve disclosure/redaction before adding any public export path.
 - [ ] Supabase regional processing and subprocessors reflected in policy text.
 - [ ] Public privacy, data-use, GDPR, and subscription pages match this inventory.
 - [ ] Final App Store Connect privacy answers match both this inventory and the

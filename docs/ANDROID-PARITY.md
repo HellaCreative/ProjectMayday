@@ -10,14 +10,22 @@
 
 **Accepted frozen-routing iOS build:** `2 (13)` on White
 
-**Current iOS engineering reference:** build `2 (14)`, commit `9808936`
+**Current iOS engineering reference:** build `2 (14)`; Rider Services acceptance
+at `9808936`, account/session behaviour through `d8f345c`, and simulator-test
+infrastructure through `95f1e83`.
 
 **Latest lockstep deltas:** September 4 Groups presence hardening and rider
 status vocabulary, followed by the September 5 Rider Services packed-data
-contract frozen in `docs/RIDER-SERVICES-FREEZE-2026-09-05.md`. Both are
-implemented and automated-tested on iOS/shared development infrastructure;
-Rider Services additionally passed iOS physical testing. Android implementation,
-automation, and physical-device evidence remain open for both deltas.
+contract frozen in `docs/RIDER-SERVICES-FREEZE-2026-09-05.md`, then fail-closed
+expired-session shutdown plus rollback-only database authorization/private-
+Realtime and deletion/atomicity matrices. These are implemented and
+automated-tested on iOS/shared development infrastructure; Rider Services
+additionally passed iOS physical testing. Android implementation, automation,
+and physical-device evidence remain open for every applicable delta.
+
+The New Hampshire V3 object recorded at `d9445ed` remains a Cursor-owned pack
+candidate. This evidence reconciliation does not accept, promote, rebuild, or
+otherwise change that candidate or the frozen routing baseline.
 
 Build `2 (14)` still requires the focused physical-device navigation pass in
 `docs/NAVIGATION-PREP-REQUALIFICATION-2026-09-04.md`. Android must port its
@@ -364,6 +372,10 @@ platform purchases accurately rather than implying cross-platform access.
 Equivalent Android tests are required for every case in
 `DirtTests/SubscriptionGateTests.swift`, plus Google Play pending-purchase,
 acknowledgement, reconnect, refund/revocation, and account-switch cases.
+The iOS local catalogue contract is automated-tested, but its command-line
+paywall UI run did not receive StoreKit products and is not a passed purchase
+test. Android must likewise prove real Play test-billing behavior rather than
+inheriting status from catalogue fixtures or the iOS result.
 
 ## 11. Account, authentication, and deletion parity
 
@@ -543,6 +555,13 @@ Apple-only truth. Android must reconcile every collected, transmitted, stored,
 and deleted data category against its actual implementation, then use that
 inventory for Google Play Data safety and the public privacy policy.
 
+The iOS package/hygiene audits and launch/support runbooks record implemented
+verification and operating baselines, not Android completion. Android needs its
+own signed-AAB inspection, dependency notices/provenance, production health
+evidence, named launch owners, backup/restore proof, and Play Console/device
+qualification. The unresolved iOS MapLibre artifact/signing gates do not clear
+or replace Android's separate release-package work.
+
 Before public Android release, record at minimum:
 
 - production application ID, signing/app-integrity setup, version name/code,
@@ -579,8 +598,8 @@ service/device proof exist.
 | Routing freeze `routing-rc1-2026-09-03` | Same LIVE contract and equivalent offline rules | Shared fixtures + Pixel emulator + physical ride |
 | Build `2 (14)` Start Navigation | First stage/current region block; rolling next-stage/region prep | Long-route transition tests + physical device |
 | `SubscriptionGateTests.swift` | Free Save, gated export, exactly two consumed ride starts | Unit/UI + Google Play test purchase/restore |
-| Account/Profile + deletion RPC | Same lifecycle and fail-closed deletion | Real provider + deployed RPC + data-removal audit |
-| Groups safety policies + shared migrations/RPCs | Same selected-group privacy, current rider statuses, retained stationary presence, synchronized sharing state, and authorization | Multi-account RLS/Realtime/background tests + marker stability + physical devices |
+| Account/Profile + deletion RPC | Same lifecycle, expired-session shutdown, and fail-closed deletion | Rollback deletion/session/atomicity matrix + real provider + deployed RPC + data-removal audit |
+| Groups safety policies + shared migrations/RPCs | Same selected-group privacy, current rider statuses, retained stationary presence, synchronized sharing state, and authorization | Rollback RLS/private-Realtime matrix + hosted multi-account/background tests + marker stability + physical devices |
 | `APP-PRIVACY-DATA-MAP.md` | Implementation-matched Play Data safety disclosure | Release bundle and network/storage audit |
 | `GPX-IMPORT-TO-DIRT-PLAN.md` | One cross-platform conversion contract | Shared fixtures + platform UX/device tests |
 | Release verifier/checklist | Android signed-bundle and Play Console equivalent | Clean production AAB + closed-track proof |
