@@ -1,0 +1,24 @@
+{
+  "schemaVersion": "dirt-pack-release.v1",
+  "releaseId": "ny-v3-20260905-01",
+  "status": "live-candidate",
+  "createdAt": "2026-09-05T20:29:05.099Z",
+  "publicBase": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/candidates/ny-v3-20260905-01",
+  "regions": [
+    {
+      "id": "ny",
+      "files": [
+        {
+          "name": "graph.v3.bin",
+          "bytes": 151976908,
+          "sha256": "f8e5fdd5b1a640ea171b4239959dab924b93fb6902403a09d7d2f9affef3a3ba"
+        },
+        {
+          "name": "geometry.v1.bin",
+          "bytes": 98896472,
+          "sha256": "63b6ad179087ab35ae23032e6853548f29626cfc0322209394061f3c228fef62"
+        }
+      ]
+    }
+  ]
+}

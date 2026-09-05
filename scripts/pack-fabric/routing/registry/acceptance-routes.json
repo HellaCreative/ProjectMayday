@@ -523,6 +523,56 @@
           "minimumCorridorCandidates": 0
         }
       ]
+    },
+    "ny": {
+      "fuelMinimum": 0,
+      "routes": [
+        {
+          "id": "long-hancock-deposit",
+          "from": { "lat": 41.954, "lon": -75.2805, "label": "Hancock" },
+          "to": { "lat": 42.0617, "lon": -75.428, "label": "Deposit" },
+          "minimumDirtPercent": 60,
+          "minimumDirtAllowUnknownPercent": 60,
+          "balancedTolerance": 25,
+          "maximumCleanDirtPercent": 10,
+          "maximumDirtBackwardPercent": 40,
+          "minimumCorridorCandidates": 2
+        },
+        {
+          "id": "short-andes-margaretville",
+          "from": { "lat": 42.1887, "lon": -74.7857, "label": "Andes" },
+          "to": { "lat": 42.1487, "lon": -74.6488, "label": "Margaretville" },
+          "minimumDirtPercent": 50,
+          "minimumDirtAllowUnknownPercent": 50,
+          "balancedTolerance": 10,
+          "maximumCleanDirtPercent": 5,
+          "maximumDirtBackwardPercent": 40,
+          "minimumCorridorCandidates": 2
+        },
+        {
+          "id": "short-bovina-delhi",
+          "from": { "lat": 42.2617, "lon": -74.7846, "label": "Bovina" },
+          "to": { "lat": 42.2781, "lon": -74.9157, "label": "Delhi" },
+          "minimumDirtPercent": 60,
+          "minimumDirtAllowUnknownPercent": 60,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 5,
+          "maximumDirtBackwardPercent": 40,
+          "minimumCorridorCandidates": 2
+        },
+        {
+          "id": "seam-ny-vt",
+          "chain": true,
+          "from": { "lat": 43.10847908935547, "lon": -73.26648194580078, "label": "New York at VT seam" },
+          "to": { "lat": 43.10937908935547, "lon": -73.26598194580077, "label": "Vermont at VT seam" },
+          "minimumDirtPercent": 0,
+          "minimumDirtAllowUnknownPercent": 0,
+          "balancedTolerance": 50,
+          "maximumCleanDirtPercent": 100,
+          "maximumDirtBackwardPercent": 40,
+          "minimumCorridorCandidates": 0
+        }
+      ]
     }
   }
 }

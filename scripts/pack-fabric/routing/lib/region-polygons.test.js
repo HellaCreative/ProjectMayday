@@ -44,7 +44,9 @@ test("admin polygons own Atlantic and Ontario pins without stealing neighbours",
   assert.equal(polygonOwner(-72.2786, 42.9337), "nh");
   assert.equal(polygonOwner(-72.5754, 44.2601), "vt");
   assert.equal(polygonOwner(-73.2121, 44.4759), "vt");
-  assert.equal(polygonOwner(-71.5376, 43.2081), "nh");
+  assert.equal(polygonOwner(-73.7562, 42.6526), "ny");
+  assert.equal(polygonOwner(-78.8784, 42.8864), "ny");
+  assert.equal(polygonOwner(-73.4529, 44.6995), "ny");
 });
 
 test("seam corridor is the padded admin-bbox overlap", () => {
@@ -68,5 +70,7 @@ test("seam corridor is the padded admin-bbox overlap", () => {
   assert.ok(seamCorridor("nh", "qc"));
   assert.ok(seamCorridor("vt", "nh"));
   assert.ok(seamCorridor("vt", "qc"));
+  assert.ok(seamCorridor("ny", "vt"));
+  assert.ok(seamCorridor("ny", "qc"));
   assert.equal(seamCorridor("pe", "wa"), null);
 });
