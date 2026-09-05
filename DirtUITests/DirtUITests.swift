@@ -15,11 +15,24 @@ final class DirtUITests: XCTestCase {
         // In UI tests it is usually best to stop immediately when a failure occurs.
         continueAfterFailure = false
 
+        // Dynamic launch coverage deliberately exercises landscape. Reset the
+        // ordinary UI tests so their position assertions are order-independent.
+        XCUIDevice.shared.orientation = .portrait
+
         // In UI tests it’s important to set the initial state - such as interface orientation - required for your tests before they run. The setUp method is a good place to do this.
     }
 
     override func tearDownWithError() throws {
         // Put teardown code here. This method is called after the invocation of each test method in the class.
+    }
+
+    private func skipOnboardingIfPresented(in app: XCUIApplication) {
+        let skip = app.buttons.matching(
+            NSPredicate(format: "label IN %@", ["Skip", "Skip to map"])
+        ).firstMatch
+        if skip.waitForExistence(timeout: 3) {
+            skip.tap()
+        }
     }
 
     @MainActor
@@ -39,10 +52,7 @@ final class DirtUITests: XCTestCase {
         app.launchEnvironment["DIRT_UI_TEST_CUES"] = "1"
         app.launch()
 
-        let skipToMap = app.buttons["Skip to map"]
-        if skipToMap.waitForExistence(timeout: 3) {
-            skipToMap.tap()
-        }
+        skipOnboardingIfPresented(in: app)
 
         let cues = app.buttons["navigation-cues"]
         XCTAssertTrue(cues.waitForExistence(timeout: 8))
@@ -64,10 +74,7 @@ final class DirtUITests: XCTestCase {
         let app = XCUIApplication()
         app.launch()
 
-        let skipToMap = app.buttons["Skip to map"]
-        if skipToMap.waitForExistence(timeout: 3) {
-            skipToMap.tap()
-        }
+        skipOnboardingIfPresented(in: app)
 
         XCTAssertTrue(app.buttons["map-view-mode"].waitForExistence(timeout: 8))
 
@@ -86,10 +93,7 @@ final class DirtUITests: XCTestCase {
         let app = XCUIApplication()
         app.launch()
 
-        let skipToMap = app.buttons["Skip to map"]
-        if skipToMap.waitForExistence(timeout: 3) {
-            skipToMap.tap()
-        }
+        skipOnboardingIfPresented(in: app)
 
         let route = app.buttons["Route"]
         XCTAssertTrue(route.waitForExistence(timeout: 8))
@@ -134,10 +138,7 @@ final class DirtUITests: XCTestCase {
         app.launchEnvironment["DIRT_UI_TEST_ROUTE_PROGRESS"] = "fuel-off"
         app.launch()
 
-        let skipToMap = app.buttons["Skip to map"]
-        if skipToMap.waitForExistence(timeout: 3) {
-            skipToMap.tap()
-        }
+        skipOnboardingIfPresented(in: app)
 
         let progress = app.descendants(matching: .any)["route-progress-toast"]
         XCTAssertTrue(progress.waitForExistence(timeout: 8))
@@ -163,10 +164,7 @@ final class DirtUITests: XCTestCase {
         app.launchEnvironment["DIRT_UI_TEST_FERRY"] = "1"
         app.launch()
 
-        let skipToMap = app.buttons["Skip to map"]
-        if skipToMap.waitForExistence(timeout: 3) {
-            skipToMap.tap()
-        }
+        skipOnboardingIfPresented(in: app)
 
         let route = app.buttons["Route"]
         XCTAssertTrue(route.waitForExistence(timeout: 8))
