@@ -382,6 +382,15 @@ confirmed deletion, remove local profile, Group, entitlement/session, and
 sensitive cached state, then expose any provider-side revocation step that
 cannot be completed automatically.
 
+An absent or expired Supabase session event must immediately clear Android's
+observable account state and run the same complete Groups shutdown: cancel
+sharing and polling jobs, release background location, close private Realtime
+channels, and remove rider/alert overlays. Do not ignore an expired event while
+keeping stale signed-in state. Android must run equivalents of both rollback-
+only database regressions in `supabase/tests`: the cross-account/RLS/private-
+Realtime authorization matrix and the account-deletion isolation, session-
+cleanup, and forced-failure atomicity matrix.
+
 Android uses the same named development and production lanes defined in
 [`ENVIRONMENTS-AND-RELEASES.md`](./ENVIRONMENTS-AND-RELEASES.md). Debug and
 internal QA builds must use the isolated development Supabase/API/pack

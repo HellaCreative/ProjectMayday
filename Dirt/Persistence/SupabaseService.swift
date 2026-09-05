@@ -30,17 +30,22 @@ final class SupabaseService {
             )
         )
         self.client = client
-        if let session = try? await client.auth.session, !session.isExpired {
-            apply(session: session)
+        if let session = try? await client.auth.session {
+            applyIfActive(session: session)
         }
         Task {
             for await change in client.auth.authStateChanges {
-                if let session = change.session, session.isExpired {
-                    continue
-                }
-                apply(session: change.session)
+                applyIfActive(session: change.session)
             }
         }
+    }
+
+    private func applyIfActive(session: Session?) {
+        guard let session, SupabaseSessionPolicy.accepts(isExpired: session.isExpired) else {
+            apply(session: nil)
+            return
+        }
+        apply(session: session)
     }
 
     private func apply(session: Session?) {
@@ -138,6 +143,15 @@ final class SupabaseService {
             )
             .execute()
         displayName = trimmed
+    }
+}
+
+/// One source of truth for deciding whether auth-backed app state may remain
+/// active. In particular, an expired auth event must clear observable account
+/// state so RootView shuts down Group sharing, polling, and Realtime channels.
+enum SupabaseSessionPolicy {
+    static func accepts(isExpired: Bool) -> Bool {
+        !isExpired
     }
 }
 

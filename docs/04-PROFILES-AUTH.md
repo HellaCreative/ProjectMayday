@@ -64,6 +64,12 @@ On launch, `SupabaseService.bootstrap()`:
 3. Subscribes to `authStateChanges` and mirrors the session into `userID`,
    `email`, and `displayName`.
 
+An absent or expired session event clears that observable state immediately.
+`RootView` then invokes the existing Groups shutdown path, which cancels sharing
+and polling, releases the background-location claim, closes private Realtime
+channels, and removes Group overlays. An expired session must never be ignored
+while stale signed-in state remains visible.
+
 Sessions use the Supabase Swift SDK's default secure storage. `isSignedIn` is
 equivalent to `userID != nil`; IDs are normalized lowercase UUID strings.
 Display name is read from `session.user.userMetadata["display_name"]`.
@@ -112,8 +118,11 @@ remains stopped until the rider's account state is re-established.
 The migration is source-controlled and was applied to production on 2026-09-04.
 Its definition, grants, and foreign-key compatibility were checked against the
 live schema. Destructive testing with a disposable account remains required.
-The verification matrix is in
-[`../supabase/README.md`](../supabase/README.md).
+The rollback-only authorization and deletion matrices are in
+[`../supabase/README.md`](../supabase/README.md). They passed against the isolated
+development project on 2026-09-05, including forced-failure atomicity and Auth
+session cleanup. A real Apple-authenticated disposable-account test is still
+required before the production gate is closed.
 
 Deleting a DIRT account does not cancel an App Store subscription. The
 confirmation says this explicitly so the rider can manage the subscription

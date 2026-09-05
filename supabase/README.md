@@ -58,17 +58,23 @@ resolution the only peer-editable alert field, stop owners from leaving an
 ownerless group, narrow client table grants, use single-evaluation Auth checks,
 and move policy helper functions out of the exposed API schema.
 
-A rollback-only three-user/two-group matrix passed in development. Supabase's
-performance advisor now reports no RLS init-plan warnings. Its security advisor
-reports only the five intentionally exposed, authenticated transaction RPCs;
-unused-index notices are expected while the development database is empty.
-Production remains on the prior 12-version baseline until device Auth and
-Groups acceptance is complete.
+A rollback-only three-user/two-group matrix passed in development. It now
+exercises row isolation for profiles, groups, memberships, presence, alerts,
+route incidents, and track contributions; it also sends and reads through the
+actual private `realtime.messages` policies, proves a nonmember cannot send,
+and proves a soft-deleted group loses Realtime access. Supabase's performance
+advisor reports no RLS init-plan warnings. Its security advisor reports only
+the five intentionally exposed, authenticated transaction RPCs plus the
+project-level leaked-password warning; unused-index notices are expected while
+the development database is empty. Production remains on the prior 12-version
+baseline until device Auth and Groups acceptance is complete.
 
 The exact rollback-only check is versioned at
 `tests/authorization_matrix.sql`. Run it after a clean migration replay using a
 privileged database connection; success returns `three-user authorization
-matrix passed` and the final rollback leaves no users or app rows behind.
+matrix passed` and the final rollback leaves no users or app rows behind. It
+passed against `dirt-mayday-dev` on 2026-09-05 and a follow-up residue query
+confirmed zero synthetic users and groups.
 
 ## Account deletion
 
@@ -95,6 +101,14 @@ a disposable, Apple-authenticated test account that:
 
 Account deletion does not cancel an App Store subscription. The app states this
 before confirmation and keeps Apple's subscription-management path available.
+
+`tests/account_deletion_matrix.sql` is the rollback-only database regression.
+It proves anonymous denial, member deletion without cross-account damage,
+owner-group cascade cleanup, Auth-session cascade cleanup, and complete rollback
+when an unaccounted foreign key forces the final Auth deletion to fail. It
+passed against `dirt-mayday-dev` on 2026-09-05 and retained no synthetic rows or
+test relation. This is strong database evidence, but it does not replace the
+remaining real Apple-authenticated disposable-account test.
 
 Because the native sign-in path does not yet exchange Apple's one-time
 authorization code for a server-held refresh token, production deletion must
