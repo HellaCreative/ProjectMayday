@@ -138,8 +138,8 @@ commit, TestFlight build, server contract, and test evidence together.
       required-reason API usage (`CA92.1`, `C617.1`).
 - [x] `scripts/verify-ios-release.sh /path/to/Dirt.app` passes on the unsigned
       Release build (37 MB versus 222 MB before development-resource removal).
-- [ ] Minimum supported iOS version is deliberately selected and tested. The
-      current project value is iOS 26.5.
+- [x] Minimum supported iOS version is deliberately fixed at iOS 26.0. The
+      Release verifier rejects any archive whose `MinimumOSVersion` differs.
 - [ ] iPhone-only versus universal iPhone/iPad support is deliberately selected.
 - [x] Final unsigned Release build and Xcode Release static analysis pass.
 - [ ] Signed archive, App Store validation, and export pass.

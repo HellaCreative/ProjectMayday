@@ -15,7 +15,7 @@ From the Codex iOS audit. **#2 stale routes** and **#5 failed-manifest retry** w
 | High | Release builds include tester auth + subscription bypass | Debug or an explicit `DIRT_PRE_RELEASE_TESTER_UNLOCK` compilation condition only; public Release scrubs persisted bypass values | **Done** |
 | High | Live sharing can publish `(0,0)` before GPS is ready | Wait for a fresh, accurate fix; reject sentinel coordinates locally and remotely | **Done** |
 | High | Gzip decode uses a fixed 8× output ceiling | `Data.gunzipped()` — grow buffer / stream; current packs may be fine until blank provinces appear | Open |
-| Medium | `IPHONEOS_DEPLOYMENT_TARGET = 26.5` | Likely Xcode default inheritance — lower to the real minimum OS before store if reach matters | Open |
+| Medium | `IPHONEOS_DEPLOYMENT_TARGET = 26.0` | Richard deliberately selected iOS 26.0 as the launch minimum; the Release verifier locks the archive metadata to that value | **Done** |
 | Medium | Inconsistent HTTP response validation | Shared client: require `200..<300`, size limits, better diagnostics for R2 manifests / Overpass / pack chunks | Open |
 | Medium | Thin tests around critical state machines | Highest ROI: stale-route ordering, stage delete during route, presence coords, manifest retry, StoreKit/trial transitions | Open |
 | Low | `GPXParser` unused `var track` | Change to `let` | Open |

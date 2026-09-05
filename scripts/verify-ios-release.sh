@@ -39,6 +39,13 @@ else
   fail "unexpected production display name: $display_name"
 fi
 
+minimum_ios=$(/usr/libexec/PlistBuddy -c 'Print :MinimumOSVersion' "$info_plist")
+if [[ "$minimum_ios" == "26.0" ]]; then
+  pass "minimum supported iOS version is 26.0"
+else
+  fail "unexpected minimum supported iOS version: $minimum_ios"
+fi
+
 if [[ -f "$privacy_manifest" ]] && plutil -lint "$privacy_manifest" >/dev/null; then
   pass "valid app privacy manifest is bundled"
 else

@@ -549,6 +549,10 @@ Before public Android release, record at minimum:
 - signed bundle inspection proving local fixtures, development tiles, test
   billing configuration, credentials, and bypass copy are absent.
 
+The iOS launch minimum is deliberately fixed at iOS 26.0. That platform choice
+does not set Android's `minSdk`; Android device reach and minimum API level
+remain a separate deliberate Play-release decision.
+
 Android diagnostics must use the same privacy principle as iOS: enough context
 to reproduce source, pack, route, fuel, Group, entitlement, and navigation
 state without silently adding advertising identifiers or account-linked raw
