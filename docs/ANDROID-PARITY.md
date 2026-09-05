@@ -2,7 +2,7 @@
 
 **Status:** active full-product Android parity authority
 
-**Reconciled:** 2026-09-04
+**Reconciled:** 2026-09-05
 
 **Frozen iOS/shared-routing implementation:**
 `94b467a11375e3ea3233c127b07af2ef039d0658`
@@ -10,14 +10,14 @@
 
 **Accepted frozen-routing iOS build:** `2 (13)` on White
 
-**Current iOS engineering reference:** build `2 (14)`, commit `46c8c42`
+**Current iOS engineering reference:** build `2 (14)`, commit `9808936`
 
-**Latest lockstep delta:** September 4 Groups presence hardening and rider
-status vocabulary (`riding`, `flat_tire`, `dead_battery`, `unrepairable`,
-`injured`, `stuck`), including migration
-`20260904114500_expand_rider_statuses.sql`. This delta is implemented and
-automated-tested on iOS/dev Supabase; Android implementation evidence remains
-open.
+**Latest lockstep deltas:** September 4 Groups presence hardening and rider
+status vocabulary, followed by the September 5 Rider Services packed-data
+contract frozen in `docs/RIDER-SERVICES-FREEZE-2026-09-05.md`. Both are
+implemented and automated-tested on iOS/shared development infrastructure;
+Rider Services additionally passed iOS physical testing. Android implementation,
+automation, and physical-device evidence remain open for both deltas.
 
 Build `2 (14)` still requires the focused physical-device navigation pass in
 `docs/NAVIGATION-PREP-REQUALIFICATION-2026-09-04.md`. Android must port its
@@ -503,6 +503,11 @@ failure, and emit privacy-safe request/source/failure diagnostics. Rider
 Services storage and activation remain separate from graph/geometry/fuel so a
 missing optional sidecar cannot block Start Navigation. No account identifier
 accompanies visible bounds.
+
+**Evidence status:** the shared `/api/poi` and R2 publication are deployed and
+tested, and iOS build `2 (14)` passed physical layer testing on RED. This is an
+implementation-ready Android contract only. No Android source, emulator test,
+or physical-device result in this repository proves Android implementation.
 
 Profile is a focused full-screen destination, not a partial map overlay. It must
 hide the map and map controls, provide an explicit accessible close/back action,

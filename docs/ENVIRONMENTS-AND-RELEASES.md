@@ -86,9 +86,19 @@ Publishable Supabase keys may ship in clients; privileged secrets may not.
 | Development / QA | `pack-fabric` (non-live) | `https://pack-fabric.vercel.app` | Every response carries the tested commit in `serviceBuild` |
 | Production | `dirt-mayday` | `https://dirt-mayday.vercel.app` | Promoted only after development acceptance |
 
-Development deployment `dpl_A4ujjCfTaNhMKkyv587GikxsKKpY`, built from
-`966b65b013aaa8e4d01d728c32cdb9bbcf75a913` on 2026-09-04, passed route,
-fuel, and fuel-chain smoke checks. The production project was not redeployed.
+Rider Services source `9808936c1cdad627c1b55c2cb3ca23925345ee7d`
+was deployed on 2026-09-05 as development deployment
+`dpl_AGi1sxNXx73B8RMdjLYmDjST9KM5` and production deployment
+`dpl_fqgrapEVk7knc2Ft67MhjvkUgj34`. Both stable URLs passed packed-data health,
+Porters Lake campground/liquor, cache-source, and canonical fuel smoke checks.
+Richard subsequently confirmed the DIRT Dev physical layer result, and the
+accepted state is frozen in `docs/RIDER-SERVICES-FREEZE-2026-09-05.md`.
+
+Promoted data identities for that acceptance are pack/fuel catalog
+`9f11c79e6a103329d83184eb1d5b440ae70671529dfcdb0b17aa1533d8d46ff1`
+and separate Rider Services catalog
+`e17d1e485c986a0ebab994cd49e5637a44f6aa49fffdc19a6d6c1dbbc8117770`.
+Neither deployment changed the frozen route engine or road/geometry objects.
 
 ## Promotion flow
 

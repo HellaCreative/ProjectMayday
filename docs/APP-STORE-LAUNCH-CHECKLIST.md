@@ -15,6 +15,10 @@ The routing/fuel engine remains on the unchanged baseline above.
 **Deferred:** CarPlay is parked. Native GPX-to-DIRT conversion and subjective
 visual redesign are separate product milestones, not hidden launch work.
 
+**Rider Services candidate:** build `2 (14)`, commit `9808936`, passed the RED
+iPhone physical layer test and is frozen in
+[RIDER-SERVICES-FREEZE-2026-09-05.md](RIDER-SERVICES-FREEZE-2026-09-05.md).
+
 **Android lockstep:** this checklist is the iOS release record, but every
 cross-platform behaviour and backend contract completed here is also tracked in
 [ANDROID-PARITY.md](ANDROID-PARITY.md). An iOS launch check does not by itself
@@ -110,6 +114,20 @@ commit, TestFlight build, server contract, and test evidence together.
       last-location storage, are inventoried for disclosure.
 - [ ] Public privacy policy and App Privacy answers are reconciled with the
       bundled privacy manifest and the final archive privacy report.
+
+### C2. Map Rider Services
+
+- [x] Fuel, Campgrounds, Lodging, and Liquor pass the focused DIRT Dev physical
+      test on RED at build `2 (14)`, commit `9808936`.
+- [x] Fuel is complete for all 63 advertised regions and remains the canonical
+      routing sidecar; the accepted road and geometry bytes were not rebuilt.
+- [x] Campground, lodging, and liquor are complete for all 63 advertised
+      regions in a separate verified catalog that cannot block routing.
+- [x] Development and production `/api/poi` read DIRT-owned R2 data; neither the
+      mobile app nor either deployed endpoint contacts Overpass at runtime.
+- [x] Live catalog/object verification, Porters Lake fixtures, failure handling,
+      request coalescing, offline caching, and Android handoff are recorded in
+      the Rider Services freeze document.
 
 ### D. Production package
 

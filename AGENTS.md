@@ -36,6 +36,9 @@ Read first: [docs/00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md](docs/00-PRODUCT-AND
 Frozen routing boundary:
 [docs/ROUTING-FREEZE-2026-09-03.md](docs/ROUTING-FREEZE-2026-09-03.md).
 
+Accepted Rider Services boundary:
+[docs/RIDER-SERVICES-FREEZE-2026-09-05.md](docs/RIDER-SERVICES-FREEZE-2026-09-05.md).
+
 For regional pack creation and promotion:
 [docs/PACK-FACTORY.md](docs/PACK-FACTORY.md).
 

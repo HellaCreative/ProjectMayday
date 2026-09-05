@@ -243,6 +243,11 @@ OSM data server at runtime. Rider Services publication uploads immutable data
 objects first and publishes their manifest only after byte-count and SHA-256
 verification succeeds.
 
+The accepted iOS/shared-service identities and physical Porters Lake evidence
+are frozen in
+[RIDER-SERVICES-FREEZE-2026-09-05.md](RIDER-SERVICES-FREEZE-2026-09-05.md).
+Android requirements are documented but are not yet implemented or qualified.
+
 ## 5. Canonical itinerary and rider-facing legs
 
 ### Rider intent

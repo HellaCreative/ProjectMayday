@@ -17,7 +17,7 @@ it must not copy these declarations without verifying its actual behaviour.
 | Email address | Authentication provider supplies it | Supabase Auth | Yes | No | Authentication/account functionality |
 | Display name | Rider creates or updates a profile | Supabase Auth metadata + `profiles` | Yes | No | Profile and Groups functionality |
 | Route and fuel coordinates | Online planning sends the exact current-location/pin endpoints and nearby fuel boxes | DIRT routing/fuel service on Vercel | No account ID is included in this request payload | No | Route and fuel planning |
-| Visible geographic bounds | Rider enables fuel, campground, lodging, or liquor layers and moves the map | DIRT fuel or POI service; the POI service forwards bounded non-fuel queries to an available OSM Overpass provider | No account ID is included in this request payload | No | Map POI functionality |
+| Visible geographic bounds | Rider enables fuel, campground, lodging, or liquor layers and moves the map | Environment-selected DIRT fuel or POI service; the POI service reads checksum-verified regional files owned by DIRT on R2 | No account ID is included in this request payload | No | Map POI functionality |
 | Requested map-tile coordinates | Map display and offline preparation request the visible or first-stage tile cells | DIRT Shortbread tile service, with public OpenStreetMap fallback | No account ID is included in the tile URL | No | Basemap functionality |
 | Precise or approximate rider location | Rider deliberately enables Group sharing, sends an alert, or reports an incident; accuracy follows the rider's system permission | Supabase | Yes | No | Groups, safety, and route-quality functionality |
 | Group name, membership, role, and invite code | Create/join/use a Group | Supabase | Yes | No | Groups functionality |
@@ -42,6 +42,7 @@ include a DIRT account ID.
 | Free-navigation counter | Keychain | Survives ordinary app relaunch and reinstall behavior depends on Keychain state |
 | Supabase session | Supabase SDK/Keychain | Authentication credential |
 | Map tiles and routing packs | App caches/application support | Downloaded for maps and offline routing |
+| Rider Services regional files | App application support | Checksum-verified campground, lodging, and liquor data retained for offline layer display; separate from routing activation |
 | Last known latitude, longitude, timestamp, and accuracy | UserDefaults | Seeds the next launch before Core Location supplies a newer fix |
 | Pending incident reports | UserDefaults queue | Uploaded only for a signed-in rider; retained locally on failure |
 | Diagnostic log | App memory/share file | Exported only when the rider explicitly invokes sharing |
