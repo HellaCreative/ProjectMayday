@@ -559,18 +559,6 @@
           "maximumCleanDirtPercent": 5,
           "maximumDirtBackwardPercent": 40,
           "minimumCorridorCandidates": 2
-        },
-        {
-          "id": "seam-ny-vt",
-          "chain": true,
-          "from": { "lat": 43.10847908935547, "lon": -73.26648194580078, "label": "New York at VT seam" },
-          "to": { "lat": 43.10937908935547, "lon": -73.26598194580077, "label": "Vermont at VT seam" },
-          "minimumDirtPercent": 0,
-          "minimumDirtAllowUnknownPercent": 0,
-          "balancedTolerance": 50,
-          "maximumCleanDirtPercent": 100,
-          "maximumDirtBackwardPercent": 40,
-          "minimumCorridorCandidates": 0
         }
       ]
     }
