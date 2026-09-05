@@ -160,8 +160,10 @@ commit, TestFlight build, server contract, and test evidence together.
 - [x] `ThirdPartyNotices.txt` is bundled and the Release verifier rejects a
       missing or empty notice; dependency and asset evidence is recorded in
       [OPEN-SOURCE-NOTICE-AUDIT-2026-09-05.md](OPEN-SOURCE-NOTICE-AUDIT-2026-09-05.md).
-- [ ] Establish ownership/license provenance for the bundled SVWD03 map style
-      and sprites, and decide whether notices also need an in-app/legal-site view.
+- [ ] Resolve the pinned SVWD03/OSM Bright license evidence documented in
+      [SVWD03-STYLE-SPRITE-PROVENANCE-2026-09-05.md](SVWD03-STYLE-SPRITE-PROVENANCE-2026-09-05.md),
+      including the required notice/source/permission or replacement action and
+      whether notices also need an in-app/legal-site view.
 - [ ] iPhone-only versus universal iPhone/iPad support is deliberately selected.
 - [x] Final unsigned Release build and Xcode Release static analysis pass.
 - [ ] Replace the current MapLibre device artifact with an official corrected or

@@ -51,12 +51,17 @@ rendering or device state.
 
 ## Remaining owner gates
 
-1. **SVWD03 style and sprites:** the repository contains
-   `shortbread-style.json` and `shortbread/svwd03sprite*`, but no source,
-   author, or license record for those assets was found in tracked history.
-   The owner must document that DIRT owns them or record their upstream license
-   and required attribution. If that cannot be established, replace them with
-   assets of known provenance before submission.
+1. **SVWD03 style and sprites:** the source and exact sprite revision are now
+   traced in
+   `docs/SVWD03-STYLE-SPRITE-PROVENANCE-2026-09-05.md`. The bytes came through
+   Andy Townsend's `SomeoneElse-vector-web-display` project; its pinned root
+   license is GNU GPL version 3 text and its SVWD03 scripts state GPL version 3
+   or later. DIRT also records an OSM Bright-derived visual restyle, whose
+   pinned upstream license separates BSD 3-Clause code from CC BY 4.0 visual
+   design. This is no longer an unknown-source question, but it remains an
+   owner/legal release gate: obtain a written obligations decision and add the
+   required notices/source mechanism, permission, or known-provenance
+   replacement before submission.
 2. **Store-facing location:** the notice is now distributed inside the app
    bundle, which closes the objective binary-redistribution gap. Legal/product
    should decide whether to add a human-readable “Open Source Licenses” screen
