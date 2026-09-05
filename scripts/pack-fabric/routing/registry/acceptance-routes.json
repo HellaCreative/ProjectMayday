@@ -473,6 +473,56 @@
           "minimumCorridorCandidates": 0
         }
       ]
+    },
+    "vt": {
+      "fuelMinimum": 0,
+      "routes": [
+        {
+          "id": "long-hardwick-morrisville",
+          "from": { "lat": 44.5048, "lon": -72.3684, "label": "Hardwick" },
+          "to": { "lat": 44.5617, "lon": -72.5984, "label": "Morrisville" },
+          "minimumDirtPercent": 80,
+          "minimumDirtAllowUnknownPercent": 80,
+          "balancedTolerance": 10,
+          "maximumCleanDirtPercent": 5,
+          "maximumDirtBackwardPercent": 25,
+          "minimumCorridorCandidates": 2
+        },
+        {
+          "id": "short-st-johnsbury-lyndon",
+          "from": { "lat": 44.4192, "lon": -72.0153, "label": "St. Johnsbury" },
+          "to": { "lat": 44.5142, "lon": -72.0062, "label": "Lyndon" },
+          "minimumDirtPercent": 70,
+          "minimumDirtAllowUnknownPercent": 70,
+          "balancedTolerance": 10,
+          "maximumCleanDirtPercent": 5,
+          "maximumDirtBackwardPercent": 25,
+          "minimumCorridorCandidates": 2
+        },
+        {
+          "id": "short-middlebury-brandon",
+          "from": { "lat": 44.0153, "lon": -73.1676, "label": "Middlebury" },
+          "to": { "lat": 43.7981, "lon": -73.0876, "label": "Brandon" },
+          "minimumDirtPercent": 60,
+          "minimumDirtAllowUnknownPercent": 60,
+          "balancedTolerance": 10,
+          "maximumCleanDirtPercent": 5,
+          "maximumDirtBackwardPercent": 25,
+          "minimumCorridorCandidates": 2
+        },
+        {
+          "id": "seam-vt-nh",
+          "chain": true,
+          "from": { "lat": 44.45959908447266, "lon": -71.65265137939453, "label": "New Hampshire at VT seam" },
+          "to": { "lat": 44.46049908447266, "lon": -71.65215137939452, "label": "Vermont at VT seam" },
+          "minimumDirtPercent": 0,
+          "minimumDirtAllowUnknownPercent": 0,
+          "balancedTolerance": 50,
+          "maximumCleanDirtPercent": 100,
+          "maximumDirtBackwardPercent": 40,
+          "minimumCorridorCandidates": 0
+        }
+      ]
     }
   }
 }

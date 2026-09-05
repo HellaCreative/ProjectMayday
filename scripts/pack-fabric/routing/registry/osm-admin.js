@@ -63,7 +63,7 @@ const OSM_ADMIN_RELATION = {
   tx: 114690,
   ut: 161993,
   va: 224042,
-  vt: 60769,
+  vt: 60759,
   wa: 165479,
   wi: 165466,
   wv: 162068,
