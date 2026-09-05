@@ -500,11 +500,11 @@
           "minimumCorridorCandidates": 2
         },
         {
-          "id": "short-middlebury-brandon",
-          "from": { "lat": 44.0153, "lon": -73.1676, "label": "Middlebury" },
-          "to": { "lat": 43.7981, "lon": -73.0876, "label": "Brandon" },
-          "minimumDirtPercent": 60,
-          "minimumDirtAllowUnknownPercent": 60,
+          "id": "short-randolph-bethel",
+          "from": { "lat": 43.9251, "lon": -72.6659, "label": "Randolph" },
+          "to": { "lat": 43.8334, "lon": -72.6343, "label": "Bethel" },
+          "minimumDirtPercent": 70,
+          "minimumDirtAllowUnknownPercent": 70,
           "balancedTolerance": 10,
           "maximumCleanDirtPercent": 5,
           "maximumDirtBackwardPercent": 25,
