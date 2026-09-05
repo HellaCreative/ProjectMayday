@@ -257,6 +257,40 @@ Run on the exact Release candidate, not a tester-bypass build.
 
 ## Automated release verification
 
+### Repeatable local entry point
+
+Run `scripts/verify-launch-candidate.mjs` from the repository root. Its default
+`fast` mode runs the launch-verifier contracts plus the existing immutable-pack,
+Rider Services, catalog-repair, and fail-closed publication tests. It excludes
+the route-engine timing assertions and is local-only: it does not build, sign,
+archive, deploy, publish, contact production, use secrets, or touch a physical
+device.
+
+Use `--mode package` to add an unsigned `DIRT Production` build and pass its
+resolved `.app` to `scripts/verify-ios-release.sh`. That existing verifier is
+the authority for production identity, resources, privacy manifests, framework
+metadata, and package hygiene. Use `--mode full` to additionally run the iOS
+unit/integration target on the documented existing simulator, the complete
+serial shared routing/pack suite (including its performance-sensitive route
+assertions), and Xcode Release static analysis. Both Xcode modes disable
+automatic package resolution and use the checked-in `Package.resolved`; they
+may write ordinary build/test results to Xcode's existing DerivedData and
+simulator state.
+Resolved Swift packages must already be present in Xcode's cache; the command
+fails instead of fetching or silently updating a dependency.
+
+`--archive /absolute/path/to/Dirt.xcarchive` explicitly adds the existing signed
+archive verifier but never creates, signs, exports, validates, or uploads an
+archive. `--plan` prints the exact ordered gate without running it. Every run
+ends with a stable pass/fail/skip summary and per-step duration; a failed build
+skips only the bundle check that depends on it.
+
+Remote production health remains a separate, explicit, read-only operation in
+`scripts/verify-launch-health.mjs`; no local launch-candidate mode calls it.
+The local entry point is automated evidence only and does not close the signed
+archive, Xcode/App Store validation, generated privacy report, StoreKit,
+hosted-backend, or physical-device gates in this checklist.
+
 ### Build 2 (14) engineering record
 
 - iOS unit/integration target: **268 passed, 0 failed, 0 skipped** on iPhone 17 /
