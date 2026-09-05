@@ -478,11 +478,11 @@
       "fuelMinimum": 0,
       "routes": [
         {
-          "id": "long-hardwick-morrisville",
-          "from": { "lat": 44.5048, "lon": -72.3684, "label": "Hardwick" },
-          "to": { "lat": 44.5617, "lon": -72.5984, "label": "Morrisville" },
-          "minimumDirtPercent": 80,
-          "minimumDirtAllowUnknownPercent": 80,
+          "id": "long-lyndon-burke",
+          "from": { "lat": 44.5142, "lon": -72.0062, "label": "Lyndon" },
+          "to": { "lat": 44.5712, "lon": -71.9448, "label": "Burke" },
+          "minimumDirtPercent": 60,
+          "minimumDirtAllowUnknownPercent": 60,
           "balancedTolerance": 10,
           "maximumCleanDirtPercent": 5,
           "maximumDirtBackwardPercent": 25,
