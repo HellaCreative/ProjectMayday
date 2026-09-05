@@ -1,19 +1,11 @@
 "use strict";
 
-/**
- * Bounded campground / lodging / liquor viewport service. The phone talks to
- * DIRT, while this function handles public Overpass fallback and short-lived
- * caching. Fuel remains pack-only through /api/fuel.
- */
+/** DIRT-owned campground/lodging/liquor viewport service. No runtime OSM calls. */
 
-const OVERPASS_ENDPOINTS = [
-  "https://overpass-api.de/api/interpreter",
-  "https://overpass.kumi.systems/api/interpreter",
-  "https://overpass.private.coffee/api/interpreter"
-];
+const { loadRiderServices } = require("../poi/packed-rider-services");
+
 const GRID_DEGREES = 0.05;
 const FRESH_MS = 5 * 60 * 1000;
-const STALE_MS = 24 * 60 * 60 * 1000;
 const MAX_CACHE_ENTRIES = 64;
 const cache = new Map();
 
@@ -48,19 +40,15 @@ function normalizedBounds(body) {
   };
 }
 
-function overpassQuery(bounds) {
-  const bbox = `${bounds.minLat},${bounds.minLon},${bounds.maxLat},${bounds.maxLon}`;
-  return `[out:json][timeout:12];(` +
-    `nwr["tourism"~"^(hotel|motel|hostel|guest_house|chalet)$"](${bbox});` +
-    `nwr["tourism"~"^(camp_site|caravan_site)$"](${bbox});` +
-    `nwr["shop"="alcohol"](${bbox});` +
-    `);out center tags;`;
-}
-
 function cacheKey(bounds) {
   return [bounds.minLon, bounds.minLat, bounds.maxLon, bounds.maxLat]
     .map((value) => value.toFixed(4))
     .join(",");
+}
+
+function cached(key, now = Date.now()) {
+  const entry = cache.get(key);
+  return entry && now - entry.storedAt <= FRESH_MS ? entry.value : null;
 }
 
 function storeCache(key, value, now = Date.now()) {
@@ -69,63 +57,8 @@ function storeCache(key, value, now = Date.now()) {
   while (cache.size > MAX_CACHE_ENTRIES) cache.delete(cache.keys().next().value);
 }
 
-function cached(key, maximumAge, now = Date.now()) {
-  const entry = cache.get(key);
-  return entry && now - entry.storedAt <= maximumAge ? entry.value : null;
-}
-
-async function fetchWithTimeout(url, options, timeoutMs, fetchImpl) {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), timeoutMs);
-  try {
-    return await fetchImpl(url, { ...options, signal: controller.signal });
-  } finally {
-    clearTimeout(timer);
-  }
-}
-
-async function fetchOverpass(query, {
-  fetchImpl = fetch,
-  endpoints = OVERPASS_ENDPOINTS,
-  timeoutMs = 7000
-} = {}) {
-  const body = new URLSearchParams({ data: query }).toString();
-  const failures = [];
-  for (const endpoint of endpoints) {
-    try {
-      const response = await fetchWithTimeout(endpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded; charset=utf-8",
-          "User-Agent": "DIRT-POI/1.0 (dual-sport navigator)"
-        },
-        body
-      }, timeoutMs, fetchImpl);
-      if (!response.ok) {
-        failures.push(`${new URL(endpoint).host}:http_${response.status}`);
-        continue;
-      }
-      const text = await response.text();
-      if (text.length > 8 * 1024 * 1024) {
-        failures.push(`${new URL(endpoint).host}:response_too_large`);
-        continue;
-      }
-      const parsed = JSON.parse(text);
-      if (!Array.isArray(parsed.elements)) {
-        failures.push(`${new URL(endpoint).host}:invalid_payload`);
-        continue;
-      }
-      return { payload: { elements: parsed.elements }, endpoint };
-    } catch (error) {
-      failures.push(`${new URL(endpoint).host}:${error && error.name || "failed"}`);
-    }
-  }
-  const error = new Error("all_upstreams_failed");
-  error.failures = failures;
-  throw error;
-}
-
-async function handler(req, res) {
+async function handleRequest(req, res, dependencies = {}) {
+  const load = dependencies.loadRiderServices || loadRiderServices;
   const id = requestId(req);
   res.setHeader("X-Dirt-Request-ID", id);
   res.setHeader("Access-Control-Allow-Origin", "*");
@@ -135,9 +68,12 @@ async function handler(req, res) {
 
   if (req.method === "OPTIONS") return res.status(200).end();
   if (req.method === "GET") {
-    return res.status(200).json({ ok: true, service: "dirt-rider-services", categories: [
-      "campground", "lodging", "liquor"
-    ] });
+    return res.status(200).json({
+      ok: true,
+      service: "dirt-rider-services",
+      source: "packed-r2",
+      categories: ["campground", "lodging", "liquor"]
+    });
   }
   if (req.method !== "POST") {
     return res.status(405).json({ ok: false, error: "method_not_allowed" });
@@ -146,40 +82,34 @@ async function handler(req, res) {
   let body;
   try {
     body = typeof req.body === "string" ? JSON.parse(req.body || "{}") : (req.body || {});
-  } catch {
+  } catch (_) {
     return res.status(400).json({ ok: false, error: "invalid_json" });
   }
   const bounds = normalizedBounds(body);
   if (!bounds) return res.status(400).json({ ok: false, error: "invalid_bounds" });
 
   const key = cacheKey(bounds);
-  const fresh = cached(key, FRESH_MS);
-  if (fresh) {
-    res.setHeader("X-Dirt-POI-Source", "memory-cache");
-    return res.status(200).json(fresh);
+  const hit = cached(key);
+  if (hit) {
+    res.setHeader("X-Dirt-POI-Source", "packed-memory-cache");
+    return res.status(200).json(hit);
   }
 
   const started = Date.now();
   try {
-    const result = await fetchOverpass(overpassQuery(bounds));
-    storeCache(key, result.payload);
-    const source = new URL(result.endpoint).host;
-    res.setHeader("X-Dirt-POI-Source", source);
+    const payload = await load(bounds);
+    storeCache(key, payload);
+    res.setHeader("X-Dirt-POI-Source", "packed-r2");
     console.log(
-      `poi request complete id=${id} source=${source} ` +
-      `elements=${result.payload.elements.length} elapsedMs=${Date.now() - started}`
+      `poi request complete id=${id} source=packed-r2 ` +
+      `regions=${payload.regions.join(",")} elements=${payload.elements.length} ` +
+      `elapsedMs=${Date.now() - started}`
     );
-    return res.status(200).json(result.payload);
+    return res.status(200).json(payload);
   } catch (error) {
-    const stale = cached(key, STALE_MS);
-    if (stale) {
-      res.setHeader("X-Dirt-POI-Source", "stale-memory-cache");
-      console.warn(`poi request stale id=${id} elapsedMs=${Date.now() - started}`);
-      return res.status(200).json(stale);
-    }
     console.error(
-      `poi request failed id=${id} elapsedMs=${Date.now() - started} ` +
-      `upstreams=${Array.isArray(error.failures) ? error.failures.join(",") : "unknown"}`
+      `poi request failed id=${id} source=packed-r2 elapsedMs=${Date.now() - started} ` +
+      `error=${error && error.message || "unknown"}`
     );
     return res.status(503).json({
       ok: false,
@@ -189,9 +119,7 @@ async function handler(req, res) {
   }
 }
 
-module.exports = handler;
+module.exports = (req, res) => handleRequest(req, res);
+module.exports.handleRequest = handleRequest;
 module.exports.normalizedBounds = normalizedBounds;
-module.exports.overpassQuery = overpassQuery;
-module.exports.fetchOverpass = fetchOverpass;
 module.exports.config = { maxDuration: 30, memory: 1024 };
-

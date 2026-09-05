@@ -73,9 +73,8 @@ enum AppConfig {
     /// One bounded graph pass per committed fuel waypoint. This returns an
     /// ordered pump chain; final ride legs still come from `/api/route`.
     nonisolated static var liveFuelChainURL: URL { baseURL.appendingPathComponent("api/fuel-chain") }
-    /// Campground, lodging, and liquor viewport POIs. DIRT's service provides
-    /// bounded upstream fallback so a single public Overpass host cannot make
-    /// all three map switches fail together.
+    /// Campground, lodging, and liquor viewport POIs from checksum-verified,
+    /// DIRT-owned regional sidecars. The running app never contacts OSM.
     nonisolated static var livePOIURL: URL { baseURL.appendingPathComponent("api/poi") }
 
     nonisolated static func validatesSupabaseIsolation(url: URL) -> Bool {
@@ -98,10 +97,13 @@ enum AppConfig {
     /// Versioned graph.v2 packs. Same R2 objects live `/api/route` loads —
     /// download vs cellular is delivery, not a second fabric.
     /// Cloudflare R2 (`dirt-packs` bucket, public r2.dev URL).
-    static let packCDNBaseURL = URL(string: "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev")!
-    static var packManifestURL: URL { packCDNBaseURL.appendingPathComponent("manifest.json") }
+    nonisolated static let packCDNBaseURL = URL(string: "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev")!
+    nonisolated static var packManifestURL: URL { packCDNBaseURL.appendingPathComponent("manifest.json") }
+    nonisolated static var riderServicesManifestURL: URL {
+        packCDNBaseURL.appendingPathComponent("rider-services/v1/manifest.json")
+    }
 
-    static func packFileURL(version: String, regionId: String, fileName: String) -> URL {
+    nonisolated static func packFileURL(version: String, regionId: String, fileName: String) -> URL {
         _ = version
         return packCDNBaseURL
             .appendingPathComponent(regionId)

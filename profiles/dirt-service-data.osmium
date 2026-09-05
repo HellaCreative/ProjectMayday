@@ -1,0 +1,7 @@
+# DIRT pack-build input. The app and live API never run this against OSM.
+# Fuel uses the existing motorcycle filter after extraction. The other values
+# are normalized into rider-services.v1 regional files.
+
+nwr/amenity=fuel
+nwr/tourism=camp_site,caravan_site,hotel,motel,hostel,guest_house,chalet,bed_and_breakfast,apartment
+nwr/shop=alcohol,wine

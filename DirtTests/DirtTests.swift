@@ -19,6 +19,10 @@ struct DirtTests {
         #expect(AppConfig.routeURL.absoluteString == "https://pack-fabric.vercel.app/api/route")
         #expect(AppConfig.liveFuelURL.absoluteString == "https://pack-fabric.vercel.app/api/fuel")
         #expect(AppConfig.liveFuelChainURL.absoluteString == "https://pack-fabric.vercel.app/api/fuel-chain")
+        #expect(AppConfig.livePOIURL.absoluteString == "https://pack-fabric.vercel.app/api/poi")
+        #expect(AppConfig.riderServicesManifestURL.absoluteString.hasSuffix(
+            "/rider-services/v1/manifest.json"
+        ))
         #expect(AppConfig.validatesSupabaseIsolation(url: AppConfig.supabaseURL))
         #expect(AppConfig.validatesRoutingIsolation(url: AppConfig.baseURL))
         #expect(!AppConfig.validatesSupabaseIsolation(
@@ -236,6 +240,18 @@ struct DirtTests {
             at: url,
             expectedBytes: data.count,
             expectedSHA256: String(repeating: "0", count: 64)
+        ))
+    }
+
+    @Test func riderServicesCacheRequiresExactBytesAndSHA256() {
+        let data = Data("verified Rider Services".utf8)
+        let sha = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+        #expect(RiderServicesStore.dataMatchesIdentity(data, bytes: data.count, sha256: sha))
+        #expect(!RiderServicesStore.dataMatchesIdentity(data, bytes: data.count + 1, sha256: sha))
+        #expect(!RiderServicesStore.dataMatchesIdentity(
+            data,
+            bytes: data.count,
+            sha256: String(repeating: "0", count: 64)
         ))
     }
 

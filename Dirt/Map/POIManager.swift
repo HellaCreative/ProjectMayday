@@ -209,7 +209,7 @@ private enum POIC {
 
 /// Loads Rider Services POIs. Online planning fuel comes from the same live
 /// candidate as `/api/route`; offline fuel comes from the installed pack.
-/// Camp / lodging / liquor use DIRT's bounded OSM service for the viewport.
+/// Camp / lodging / liquor use DIRT's packed regional service for the viewport.
 /// Fuel goes through `FuelPOIFilter` at pack build time (bulk / cardlock / truck-only / closed).
 @MainActor
 final class POIManager {
@@ -227,7 +227,10 @@ final class POIManager {
     private let mapState: MapState
     private let graphPacks: GraphPackStore
     private let network: NetworkPathMonitor
+    private let riderServicesStore = RiderServicesStore()
     private var debounceTask: Task<Void, Never>?
+    private var refreshInProgress = false
+    private var refreshPending = false
     private var fuelViewportCache = FuelViewportCache()
     private var riderServiceViewportCache = RiderServiceViewportCache()
     private var lastRiderServicePaint: [POIFeature] = []
@@ -277,7 +280,8 @@ final class POIManager {
     private func liveFuelCandidates(
         from start: RouteCoordinate,
         to end: RouteCoordinate,
-        padDegrees: Double
+        padDegrees: Double,
+        timeoutInterval: TimeInterval = 30
     ) async throws -> [POIFeature] {
         struct Request: Encodable {
             let locations: [RouteLocation]
@@ -285,7 +289,7 @@ final class POIManager {
         var request = URLRequest(url: AppConfig.liveFuelURL)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.timeoutInterval = 30
+        request.timeoutInterval = timeoutInterval
         request.httpBody = try? JSONEncoder().encode(Request(locations: [
             RouteLocation(latitude: start.latitude, longitude: start.longitude, label: "A"),
             RouteLocation(latitude: end.latitude, longitude: end.longitude, label: "B")
@@ -344,11 +348,31 @@ final class POIManager {
     }
 
     private func scheduleRefresh() {
+        refreshPending = true
+        guard !refreshInProgress else {
+            RoutingDebugLog.shared.event("poi refresh queued reason=viewport-or-layer-change")
+            return
+        }
         debounceTask?.cancel()
         debounceTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: POIC.refreshDelay)
             guard !Task.isCancelled else { return }
-            await self?.performRefresh()
+            await self?.runScheduledRefresh()
+        }
+    }
+
+    /// Once a rider-service request has reached the network, let it finish.
+    /// Cancelling it only disconnects the phone; the serverless invocation can
+    /// continue, creating a request storm. Camera
+    /// or layer changes during a request collapse into one settled follow-up.
+    private func runScheduledRefresh() async {
+        guard !refreshInProgress else { return }
+        refreshInProgress = true
+        refreshPending = false
+        await performRefresh()
+        refreshInProgress = false
+        if refreshPending {
+            scheduleRefresh()
         }
     }
 
@@ -385,7 +409,8 @@ final class POIManager {
                         let live = try await liveFuelCandidates(
                             from: from,
                             to: to,
-                            padDegrees: 0
+                            padDegrees: 0,
+                            timeoutInterval: 5
                         )
                         fuelViewportCache.merge(live, coverage: queryBounds)
                         RoutingDebugLog.shared.event(
@@ -397,13 +422,12 @@ final class POIManager {
                         // successful paint; the settled camera schedules another.
                         return
                     } catch {
-                        // Online means live-only. Preserve the last successful
-                        // same-source paint instead of publishing an empty set
-                        // for a viewport the cache does not cover.
+                        // Fuel is independent from the other layer sidecars.
+                        // Preserve any cached pumps and continue so a fuel
+                        // timeout cannot suppress campground/lodging/liquor.
                         RoutingDebugLog.shared.event(
                             "fuel viewport live source unavailable preserved=\(fuelViewportCache.count)"
                         )
-                        return
                     }
                 } else {
                     let installed = graphPacks.fuelStations(
@@ -423,12 +447,45 @@ final class POIManager {
             }
             features.append(contentsOf: fuelViewportCache.features(in: queryBounds))
         }
-        let needOverpass = prefs.showCampgrounds || prefs.showLodging || prefs.showLiquor
-        if needOverpass {
+        let needRiderServices = prefs.showCampgrounds || prefs.showLodging || prefs.showLiquor
+        if needRiderServices {
             var requestFailed = false
             if !riderServiceViewportCache.covers(queryBounds) {
                 do {
-                    let raw = try await fetchOSM(bbox: bbox)
+                    let raw: [RiderServiceElement]
+                    if network.isOnline {
+                        do {
+                            raw = try await fetchRiderServices(bbox: bbox)
+                            Task { [riderServicesStore] in
+                                do {
+                                    try await riderServicesStore.refreshCache(in: queryBounds)
+                                    RoutingDebugLog.shared.event(
+                                        "poi offline cache verified source=dirt-r2"
+                                    )
+                                } catch {
+                                    RoutingDebugLog.shared.event(
+                                        "poi offline cache unavailable msg=\(error.localizedDescription)"
+                                    )
+                                }
+                            }
+                        } catch {
+                            guard let cached = await riderServicesStore.cachedElements(in: queryBounds) else {
+                                throw error
+                            }
+                            raw = cached
+                            RoutingDebugLog.shared.event(
+                                "poi viewport fallback source=verified-device-cache elements=\(cached.count)"
+                            )
+                        }
+                    } else {
+                        guard let cached = await riderServicesStore.cachedElements(in: queryBounds) else {
+                            throw _POIServiceError.offlineCacheUnavailable
+                        }
+                        raw = cached
+                        RoutingDebugLog.shared.event(
+                            "poi viewport loaded source=verified-device-cache elements=\(cached.count)"
+                        )
+                    }
                     let loaded = raw.compactMap {
                         feature(from: $0, prefs: nil, fuelOnly: false)
                     }
@@ -469,7 +526,7 @@ final class POIManager {
         mapState.updatePOIFeatures(stable)
     }
 
-    private func fetchOSM(bbox: _BBox) async throws -> [_OSMElement] {
+    private func fetchRiderServices(bbox: _BBox) async throws -> [RiderServiceElement] {
         let requestID = "poi-\(UUID().uuidString.prefix(8).lowercased())"
         var request = URLRequest(url: AppConfig.livePOIURL)
         request.httpMethod = "POST"
@@ -489,7 +546,7 @@ final class POIManager {
                 let code = (response as? HTTPURLResponse)?.statusCode ?? 0
                 throw _POIServiceError.rejected(statusCode: code)
             }
-            let decoded = try JSONDecoder().decode(_OSMResponse.self, from: data)
+            let decoded = try JSONDecoder().decode(RiderServiceResponse.self, from: data)
             let elapsed = ContinuousClock.now - started
             let source = http.value(forHTTPHeaderField: "X-Dirt-POI-Source") ?? "unknown"
             RoutingDebugLog.shared.event(
@@ -504,7 +561,7 @@ final class POIManager {
         }
     }
 
-    private func feature(from el: _OSMElement, prefs: LayerPrefsSnapshot?, fuelOnly: Bool) -> POIFeature? {
+    private func feature(from el: RiderServiceElement, prefs: LayerPrefsSnapshot?, fuelOnly: Bool) -> POIFeature? {
         let tags = el.tags ?? [:]
         guard let category = category(for: tags) else { return nil }
         if category == "fuel" { return nil }
@@ -540,10 +597,15 @@ final class POIManager {
     }
 
     private func category(for tags: [String: String]) -> String? {
+        if let packed = tags["dirt:category"],
+           ["campground", "lodging", "liquor"].contains(packed) {
+            return packed
+        }
         if tags["amenity"] == "fuel" { return "fuel" }
-        if tags["shop"] == "alcohol" { return "liquor" }
+        if ["alcohol", "wine"].contains(tags["shop"]) { return "liquor" }
         switch tags["tourism"] {
-        case "hotel", "motel", "hostel", "guest_house", "chalet": return "lodging"
+        case "hotel", "motel", "hostel", "guest_house", "chalet", "bed_and_breakfast", "apartment":
+            return "lodging"
         case "camp_site", "caravan_site": return "campground"
         default: return nil
         }
@@ -552,11 +614,14 @@ final class POIManager {
 
 nonisolated private enum _POIServiceError: LocalizedError {
     case rejected(statusCode: Int)
+    case offlineCacheUnavailable
 
     var errorDescription: String? {
         switch self {
         case let .rejected(statusCode):
             "DIRT rider-service request failed (HTTP \(statusCode))."
+        case .offlineCacheUnavailable:
+            "Rider Services have not been saved for this area yet."
         }
     }
 }
@@ -565,20 +630,20 @@ nonisolated private struct _BBox: Codable, Sendable {
     let minLon, minLat, maxLon, maxLat: Double
 }
 
-nonisolated private struct _OSMResponse: Decodable, Sendable {
-    let elements: [_OSMElement]
+nonisolated struct RiderServiceResponse: Decodable, Sendable {
+    let elements: [RiderServiceElement]
 }
 
-nonisolated private struct _OSMElement: Decodable, Sendable {
+nonisolated struct RiderServiceElement: Decodable, Sendable {
     let id: Int
     let type: String?
     let lat: Double?
     let lon: Double?
-    let center: _OSMCenter?
+    let center: RiderServiceCenter?
     let tags: [String: String]?
 }
 
-nonisolated private struct _OSMCenter: Decodable, Sendable {
+nonisolated struct RiderServiceCenter: Decodable, Sendable {
     let lat: Double
     let lon: Double
 }

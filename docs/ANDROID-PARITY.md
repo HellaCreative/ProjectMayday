@@ -493,12 +493,16 @@ Android while maintaining the same information priority and rider outcomes.
 
 Rider Services use the same environment-selected DIRT backend contract on both
 platforms. Fuel remains packed. Campground, lodging, and liquor viewport
-requests go through `/api/poi`; Android must not restore a direct dependency on
-one public Overpass host. It must debounce camera changes, request all three
+requests go through `/api/poi`, which reads checksum-verified regional files
+owned by DIRT on R2. Android must never contact public Overpass or another OSM
+data server at runtime. It must debounce camera changes, request all three
 non-fuel categories together when any is enabled, filter locally to the enabled
-switches, preserve the last successful viewport result during temporary
-upstream failure, and emit privacy-safe request/source/failure diagnostics.
-No account identifier accompanies visible bounds.
+switches, retain checksum-valid whole-region sidecars for offline display,
+preserve the last successful viewport result during temporary DIRT-service
+failure, and emit privacy-safe request/source/failure diagnostics. Rider
+Services storage and activation remain separate from graph/geometry/fuel so a
+missing optional sidecar cannot block Start Navigation. No account identifier
+accompanies visible bounds.
 
 Profile is a focused full-screen destination, not a partial map overlay. It must
 hide the map and map controls, provide an explicit accessible close/back action,

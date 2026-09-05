@@ -6,6 +6,7 @@ xcuserdata/
 
 # Pack binaries live on Cloudflare R2 — never commit them to git
 scripts/pack-fabric/app/data/packs/**/*.bin
+scripts/pack-fabric/app/data/packs/**/fuel.v1.json
 *.mbtiles
 
 # Local GIS extracts and graph.v1 intermediates
@@ -22,9 +23,13 @@ Dirt/Resources/BC.mbtiles
 # OSM fuel extract + packed chunks
 data-raw/
 
+# Generated Rider Services region files are published to R2, not Git/Vercel.
+scripts/pack-fabric/app/data/rider-services/
+
 # Local deploy caches — account ids, not source
 scripts/pack-fabric/.vercel/
 scripts/pack-fabric/.wrangler/
+scripts/pack-fabric/.env*
 
 # Shortbread edge service dependencies and generated tile archives
 scripts/shortbread-edge/node_modules/

@@ -223,6 +223,26 @@ Once promoted, live and downloadable routing use the same selected `graph.v3.bin
 `geometry.v1.bin`, and `fuel.v1.json` bytes. Online versus offline describes
 delivery and availability, not two different road networks.
 
+### Rider Services data
+
+Fuel remains the single canonical `fuel.v1.json` routing sidecar. Its contents
+serve both route fuel proof and the Fuel map layer; Rider Services must not
+create a second fuel dataset.
+
+Campground, lodging, and liquor points live in a separate, checksum-verified
+whole-region Rider Services catalog on DIRT's R2 storage. They are not graph
+files, are not part of routing-pack activation, and cannot block Start
+Navigation or invalidate an accepted graph. The app uses the environment's
+DIRT `/api/poi` reader while online and may retain verified regional sidecars
+for offline layer display. A missing Rider Services sidecar degrades only those
+three optional map layers.
+
+OSM/Geofabrik is an input to the controlled pack-build process only. Neither a
+shipping app nor a deployed DIRT endpoint contacts public Overpass or another
+OSM data server at runtime. Rider Services publication uploads immutable data
+objects first and publishes their manifest only after byte-count and SHA-256
+verification succeeds.
+
 ## 5. Canonical itinerary and rider-facing legs
 
 ### Rider intent

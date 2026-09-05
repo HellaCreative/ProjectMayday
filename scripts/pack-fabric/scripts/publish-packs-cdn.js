@@ -18,11 +18,10 @@
  *   node scripts/publish-packs-cdn.js              # ns only (merge into existing manifest)
  *   node scripts/publish-packs-cdn.js ns nb
  *   node scripts/publish-packs-cdn.js bc --local-only
- *   node scripts/publish-packs-cdn.js on --replace-manifest   # dangerous: drops other regions
  *   PACK_CDN_VERSION=v1 node scripts/publish-packs-cdn.js --all-longhaul
  *
  * Does not commit binaries (gitignored). Safe to run in CI after build-graph-v2.
- * Manifest defaults to --merge-manifest so a single-region publish cannot wipe Canada/US.
+ * Manifest is always merged so a single-region publish cannot wipe Canada/US.
  */
 const fs = require("fs");
 const path = require("path");
@@ -184,10 +183,15 @@ function syncR2() {
 
 function main() {
   const argv = process.argv.slice(2);
+  if (argv.includes("--replace-manifest")) {
+    throw new Error(
+      "--replace-manifest is permanently disabled. Use a targeted merge or the catalog repair tool."
+    );
+  }
   const regionIds = listRegionIds(argv);
   const fileNames = fileNamesForArgs(argv);
-  const merge = !argv.includes("--replace-manifest");
-  console.log("publish packs", VERSION, regionIds.join(","), merge ? "merge-manifest" : "REPLACE-manifest");
+  const merge = true;
+  console.log("publish packs", VERSION, regionIds.join(","), "merge-manifest");
   const staged = regionIds.map((id) => stageRegion(id, fileNames));
   const manifest = writeManifest(staged, { merge });
   if (argv.includes("--local-only")) {
