@@ -459,6 +459,7 @@
 				EXCLUDED_SOURCE_FILE_NAMES = (
 					BC.mbtiles,
 					Dirt.storekit,
+					README.md,
 				);
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Config/Info.plist;
