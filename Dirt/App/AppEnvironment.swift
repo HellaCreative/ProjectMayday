@@ -197,8 +197,9 @@ final class AppEnvironment {
 
         // Frame the map on the rider as soon as GPS (or a cached fix) arrives.
         let priorLocationHandler = location.onLocation
-        location.onLocation = { [mapState, graphPacks] locationFix in
+        location.onLocation = { [mapState, graphPacks, groups] locationFix in
             priorLocationHandler?(locationFix)
+            groups.receiveLocationFix(locationFix)
             mapState.consumeInitialUserLocation(locationFix.coordinate)
             Task {
                 await graphPacks.warmupActivePack(near: locationFix.coordinate)

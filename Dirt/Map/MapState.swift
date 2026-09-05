@@ -94,7 +94,8 @@ final class MapState {
         let kind: MarkerKind
         /// Callout / map name for riders (full display name).
         var subtitle: String?
-        /// Rider presence status: available | breakdown | injured | stuck.
+        /// Rider presence status: riding | flat_tire | dead_battery |
+        /// unrepairable | injured | stuck (plus legacy available/breakdown).
         var status: String?
         /// When true, map ignores drag / tap-to-relocate (From here fuel pins).
         var isLocked: Bool = false

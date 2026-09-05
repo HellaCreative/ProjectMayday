@@ -13,7 +13,7 @@ Current native stack, project wiring, and the build/signing issues that already 
 | Backend auth / DB | Supabase Swift **2.53.0** | Baked publishable config; Keychain session by SDK default |
 | Local routes | SwiftData | `SavedRoute` model only |
 | Location | Core Location | When-In-Use + Always escalate; `UIBackgroundModes = location` |
-| Networking | `URLSession` | Live `/api/route` + R2 pack CDN + OSM Overpass + Supabase |
+| Networking | `URLSession` | Live `/api/route` + `/api/poi` + R2 pack CDN + Supabase |
 
 No third-party nav SDK. MapLibre Native + SwiftUI.
 
@@ -28,7 +28,7 @@ Defined in `Dirt/Networking/AppConfig.swift`:
 | `routeURL` | `https://dirt-mayday.vercel.app/api/route` (live routing API) |
 | `supabaseURL` | `https://iiiguqknqxoumlmppzfw.supabase.co` |
 | `packCDNBaseURL` | Cloudflare R2 `pub-eb539dc7777942b889388ebb4b701697.r2.dev` |
-| `overpassURL` | `https://overpass-api.de/api/interpreter` |
+| `livePOIURL` | Build-selected DIRT `/api/poi`; server provides bounded OSM Overpass fallback |
 | `mapStyleURL` | bundled `shortbread-style.json` |
 
 There is **no staging**. Do not introduce alternate hosts without an explicit product decision.
@@ -38,7 +38,7 @@ There is **no staging**. Do not introduce alternate hosts without an explicit pr
 ## Project structure
 
 ```
-Dirt.xcodeproj          # open this (shared scheme Dirt.xcscheme)
+Dirt.xcodeproj          # open this (shared DIRT Dev / DIRT Production schemes)
 Dirt/                   # app sources (see 00-OVERVIEW)
 DirtTests/              # unit tests (bundle com.mayday.dirt.tests)
 DirtUITests/            # UI tests (bundle com.mayday.dirt.uitests)
@@ -109,10 +109,11 @@ CLI builds worked; Xcode GUI could not resolve MapLibre / Supabase products clea
 
 **Fix shipped in `e98f6d4`:**
 
-1. Added shared scheme `Dirt.xcodeproj/xcshareddata/xcschemes/Dirt.xcscheme`.
+1. Added explicit shared schemes: `DIRT Dev` for Debug testing and
+   `DIRT Production` for Release validation and archives.
 2. Normalized SPM object IDs in `project.pbxproj` (package refs + product dependencies) so IDE resolution matches the command-line graph.
 
-If Xcode again shows missing MapLibre/Supabase products: File ▸ Packages ▸ Resolve Package Versions, confirm the **Dirt** shared scheme is selected, and do not invent a second package reference.
+If Xcode again shows missing MapLibre/Supabase products: File ▸ Packages ▸ Resolve Package Versions, confirm **DIRT Dev** is selected, and do not invent a second package reference.
 
 ### 3. IPA / TestFlight gate
 
@@ -125,5 +126,5 @@ Archive ≠ distributable IPA. Automatic signing without an App Store profile bl
 1. Read [../AGENTS.md](../AGENTS.md), then `Dirt/Networking/AppConfig.swift`, `Dirt/DirtApp.swift`, `Dirt/App/AppEnvironment.swift`.
 2. Skim `Dirt.xcodeproj/project.pbxproj` SPM sections + `Package.resolved` for pinned versions.
 3. Read [../README_TESTFLIGHT.md](../README_TESTFLIGHT.md) before touching signing or CI.
-4. **Invariants:** do not add a second backend host; keep deployment target and bundle ID unless Rick asks; preserve shared `Dirt` scheme.
+4. **Invariants:** do not add a second backend host; keep deployment target and bundle IDs unless Rick asks; preserve the explicit shared `DIRT Dev` and `DIRT Production` schemes and never restore an ambiguous third scheme.
 5. **Open questions:** whether to commit DerivedData-free CI scripts; ASC API key placement for non-interactive uploads.

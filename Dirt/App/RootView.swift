@@ -76,7 +76,14 @@ enum POIActionPolicy {
 struct RootView: View {
     @Environment(AppEnvironment.self) private var app
     @Environment(\.verticalSizeClass) private var verticalSizeClass
-    @State private var activeSheet: ActiveSheet?
+    @State private var activeSheet: ActiveSheet? = {
+        #if DEBUG
+        if ProcessInfo.processInfo.environment["DIRT_UI_TEST_PROFILE"] == "1" {
+            return .profile
+        }
+        #endif
+        return nil
+    }()
     @State private var routeCardOpen = false
     /// Measured portrait planner sheet height so compact map controls sit just above it.
     @State private var portraitRouteSheetHeight: CGFloat = 0
@@ -139,6 +146,17 @@ struct RootView: View {
         )
     }
 
+    private var profilePresented: Binding<Bool> {
+        Binding(
+            get: { activeSheet == .profile },
+            set: { presented in
+                if !presented, activeSheet == .profile {
+                    activeSheet = nil
+                }
+            }
+        )
+    }
+
     /// The tour never competes with a paywall, a sheet or a live ride, and each step
     /// only shows while the state it describes is actually true — so a rider who
     /// wanders off the path sees the card again when they come back to it.
@@ -195,6 +213,10 @@ struct RootView: View {
 
     var body: some View {
         mapShell
+            .fullScreenCover(isPresented: profilePresented) {
+                ProfileSheet(onClose: dismissDockSheet)
+                    .environment(app)
+            }
             .background { rootLifecycleHooks }
     }
 
@@ -585,7 +607,7 @@ struct RootView: View {
                     .zIndex(1)
             }
 
-            if showsDock, let sheet = activeSheet, !navActive {
+            if showsDock, let sheet = activeSheet, sheet != .profile, !navActive {
                 dockSheet(sheet, landscapeDockLeading: nil)
                     .transition(DockSheetMotion.transition)
                     .zIndex(1)
@@ -675,14 +697,6 @@ struct RootView: View {
             ) {
                 LayersSheet()
             }
-        case .profile:
-            DockSheetPanel(
-                heightFraction: 0.62,
-                landscapeDockLeading: landscapeDockLeading,
-                onDismiss: dismissDockSheet
-            ) {
-                ProfileSheet()
-            }
         case .group:
             DockSheetPanel(
                 heightFraction: 0.72,
@@ -693,6 +707,8 @@ struct RootView: View {
             ) {
                 GroupsSheet(onClose: dismissDockSheet)
             }
+        case .profile:
+            EmptyView()
         }
     }
 
@@ -759,14 +775,14 @@ struct RootView: View {
                     .coachTarget(.routeCard)
                 .transition(DockSheetMotion.transition(dockLeading: dockLeading))
                 .zIndex(1)
-            } else if let sheet = activeSheet {
+            } else if let sheet = activeSheet, sheet != .profile {
                 dockSheet(sheet, landscapeDockLeading: dockLeading)
                     .transition(DockSheetMotion.transition(dockLeading: dockLeading))
                     .zIndex(1)
             }
 
             // Idle: full bottom control strip. Route sheet: recenter (+ fit plan) outside the sheet.
-            // Layers / Profile / Group: no map controls.
+            // Layers / Group: no map controls. Profile owns a full-screen cover.
             if activeSheet == nil {
                 VStack(spacing: 10) {
                     Spacer(minLength: 0)
@@ -1716,7 +1732,7 @@ struct PeerAlertStack: View {
     var body: some View {
         VStack(spacing: DirtSpace.tight) {
             ForEach(alerts.prefix(3)) { alert in
-                let isBreakdown = alert.status == "breakdown"
+                let isBreakdown = GroupsViewModel.isMechanicalDistressStatus(alert.status)
                 HStack(alignment: .center, spacing: DirtSpace.tight) {
                     Button {
                         onFocus(alert)
@@ -1763,7 +1779,7 @@ struct PeerAlertStack: View {
 
     private func background(for status: String) -> Color {
         switch status {
-        case "breakdown": return Color(dirtHex: 0xDC6803)
+        case "breakdown", "flat_tire", "dead_battery", "unrepairable": return Color(dirtHex: 0xDC6803)
         case "injured": return Color(dirtHex: 0xC1122F).opacity(0.12)
         case "stuck": return Color(dirtHex: 0x7C3AED).opacity(0.12)
         default: return DirtTheme.rowFill
@@ -1772,7 +1788,7 @@ struct PeerAlertStack: View {
 
     private func border(for status: String) -> Color {
         switch status {
-        case "breakdown": return Color(dirtHex: 0xDC6803)
+        case "breakdown", "flat_tire", "dead_battery", "unrepairable": return Color(dirtHex: 0xDC6803)
         case "injured": return Color(dirtHex: 0xC1122F).opacity(0.35)
         case "stuck": return Color(dirtHex: 0x7C3AED).opacity(0.35)
         default: return DirtTheme.hairline

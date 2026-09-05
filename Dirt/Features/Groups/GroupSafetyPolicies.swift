@@ -29,12 +29,32 @@ enum GroupPresencePolicy {
         return true
     }
 
+    /// Core Location may not issue a new timestamp while a stationary phone's
+    /// coordinate remains accurate. Accept a fresh fix once per sharing session,
+    /// then retain it for heartbeats until Core Location supplies a newer fix.
+    static func retainedPublishableFix(
+        latest: CLLocation?,
+        accepted: CLLocation?,
+        now: Date = .now
+    ) -> CLLocation? {
+        if canPublish(latest, now: now) { return latest }
+        guard let accepted,
+              isValidCoordinate(
+                latitude: accepted.coordinate.latitude,
+                longitude: accepted.coordinate.longitude
+              ),
+              accepted.horizontalAccuracy >= 0,
+              accepted.horizontalAccuracy <= maximumHorizontalAccuracy
+        else { return nil }
+        return accepted
+    }
+
     static func isLive(
         sharingEnabled: Bool,
         latitude: Double?,
         longitude: Double?,
         accuracyMeters: Double?,
-        lastSeenAt: Date?,
+        heartbeatAt: Date?,
         now: Date = .now
     ) -> Bool {
         guard sharingEnabled,
@@ -45,9 +65,9 @@ enum GroupPresencePolicy {
               accuracyMeters.isFinite,
               accuracyMeters >= 0,
               accuracyMeters <= maximumHorizontalAccuracy,
-              let lastSeenAt
+              let heartbeatAt
         else { return false }
-        let age = now.timeIntervalSince(lastSeenAt)
+        let age = now.timeIntervalSince(heartbeatAt)
         return age >= 0 && age < remoteFixMaxAge
     }
 }
@@ -59,8 +79,8 @@ enum GroupPresenceCadencePolicy {
     static let ordinarySeconds: Double = 10
 
     static func intervalSeconds(forStatus status: String) -> Double {
-        switch status {
-        case "breakdown", "injured", "stuck":
+        switch status.lowercased() {
+        case "breakdown", "flat_tire", "dead_battery", "unrepairable", "injured", "stuck":
             distressSeconds
         default:
             ordinarySeconds
@@ -154,7 +174,7 @@ enum StopTriggeredTrackingPolicy {
             latitude: target.coordinate.latitude,
             longitude: target.coordinate.longitude,
             accuracyMeters: target.accuracyMeters,
-            lastSeenAt: target.lastSeenAt,
+            heartbeatAt: target.lastSeenAt,
             now: now
         )
     }

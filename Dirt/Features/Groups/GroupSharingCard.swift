@@ -8,7 +8,7 @@ struct GroupSharingCard: View {
 
     @Environment(AppEnvironment.self) private var app
 
-    private let statuses = ["available", "breakdown", "injured", "stuck"]
+    private let statuses = GroupsViewModel.selectableStatuses
 
     private var cardShape: RoundedRectangle {
         RoundedRectangle(cornerRadius: DirtRadius.sheet, style: .continuous)
@@ -72,12 +72,12 @@ struct GroupSharingCard: View {
                     set: { groups.setStatus($0) }
                 )) {
                     ForEach(statuses, id: \.self) { status in
-                        Text(status.capitalized).tag(status)
+                        Text(GroupsViewModel.statusLabel(status)).tag(status)
                     }
                 }
             } label: {
                 HStack(spacing: DirtSpace.inner) {
-                    Text(groups.status.capitalized)
+                    Text(GroupsViewModel.statusLabel(groups.status))
                         .font(DirtType.rowTitle)
                         .foregroundStyle(groups.isSharing ? DirtTheme.ink : DirtTheme.muted)
                         .lineLimit(1)

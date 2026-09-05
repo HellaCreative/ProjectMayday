@@ -333,18 +333,22 @@ struct DirtSectionLabel: View {
     }
 }
 
-/// Title bar for a dock sheet. `DockSheetPanel` is already the container, so these
-/// sheets don't need a `NavigationStack` — and must not have one: its hosted
-/// navigation controller paints an opaque background over the panel's material.
+/// Title bar for a dock sheet or focused full-screen destination. `DockSheetPanel`
+/// is already the container for map-aware panels, so those sheets don't need a
+/// `NavigationStack` — and must not have one: its hosted navigation controller
+/// paints an opaque background over the panel's material.
 struct DirtSheetHeader: View {
     let title: String
+    var titleFont: Font = DirtType.title
     /// Shown when the sheet is displaying a pushed-feeling detail view.
     var onBack: (() -> Void)?
+    /// Shown when the surface owns the screen and needs an explicit escape.
+    var onClose: (() -> Void)?
 
     var body: some View {
         ZStack {
             Text(title)
-                .font(DirtType.title)
+                .font(titleFont)
                 .foregroundStyle(DirtTheme.ink)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
@@ -362,6 +366,21 @@ struct DirtSheetHeader: View {
                         .contentShape(Rectangle())
                     }
                     Spacer(minLength: 0)
+                }
+            }
+
+            if let onClose {
+                HStack {
+                    Spacer(minLength: 0)
+                    Button(action: onClose) {
+                        Image(systemName: "xmark")
+                            .font(.system(.body, design: .default, weight: .bold))
+                            .foregroundStyle(DirtTheme.muted)
+                            .frame(width: DirtHit.min, height: DirtHit.min)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Close")
                 }
             }
         }

@@ -2197,8 +2197,7 @@ final class DirtRiderMarkerView: MLNAnnotationView {
 
     func configure(for annotation: DirtAnnotation) {
         let status = {
-            let raw = (annotation.status ?? "available").trimmingCharacters(in: .whitespacesAndNewlines)
-            return raw.isEmpty ? "available" : raw.lowercased()
+            GroupsViewModel.normalizedStatus(annotation.status ?? "riding")
         }()
         let name = {
             let raw = annotation.label.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -2206,7 +2205,7 @@ final class DirtRiderMarkerView: MLNAnnotationView {
         }()
 
         nameLabel.text = name
-        statusLabel.text = status.replacingOccurrences(of: "_", with: " ")
+        statusLabel.text = GroupsViewModel.statusLabel(status)
         dot.backgroundColor = Self.color(for: status)
         accessibilityLabel = name
         accessibilityValue = GroupsViewModel.statusLabel(status)
@@ -2221,7 +2220,22 @@ final class DirtRiderMarkerView: MLNAnnotationView {
         let chipWidth = max(44, textWidth + padX * 2)
         let chipHeight = nameLabel.bounds.height + statusLabel.bounds.height + padY * 2 + 1
 
-        dot.frame = CGRect(x: 0, y: 0, width: 22, height: 22)
+        let markerSize: CGFloat = 22
+        let markerGap: CGFloat = 5
+        let boundsWidth = max(chipWidth, markerSize) + 8
+        let chipX = (boundsWidth - chipWidth) / 2
+        let dotX = (boundsWidth - markerSize) / 2
+
+        // Keep the identity chip above the location marker. Besides leaving the
+        // dot and road beneath it unobscured, centering the two prevents the
+        // chip from covering the beginning of the rider's name.
+        chip.frame = CGRect(x: chipX, y: 0, width: chipWidth, height: chipHeight)
+        dot.frame = CGRect(
+            x: dotX,
+            y: chip.frame.maxY + markerGap,
+            width: markerSize,
+            height: markerSize
+        )
         nameLabel.frame = CGRect(x: padX, y: padY, width: textWidth, height: nameLabel.bounds.height)
         statusLabel.frame = CGRect(
             x: padX,
@@ -2229,14 +2243,20 @@ final class DirtRiderMarkerView: MLNAnnotationView {
             width: textWidth,
             height: statusLabel.bounds.height
         )
-        chip.frame = CGRect(x: 14, y: 16, width: chipWidth, height: chipHeight)
-
-        let boundsWidth = max(chip.frame.maxX, dot.frame.maxX) + 4
         let boundsHeight = max(chip.frame.maxY, dot.frame.maxY) + 2
-        frame = CGRect(x: 0, y: 0, width: boundsWidth, height: boundsHeight)
+        // MapLibre owns this view's screen-space center. Both resizing and
+        // changing `centerOffset` can reposition an annotation view during a
+        // live refresh, so restore the map-provided center after updating its
+        // geometry. This prevents rider chips jumping to the top-left corner.
+        let mapPosition = center
+        bounds = CGRect(x: 0, y: 0, width: boundsWidth, height: boundsHeight)
 
         // Anchor the map coordinate at the center of the status dot.
-        centerOffset = CGVector(dx: boundsWidth / 2 - 11, dy: boundsHeight / 2 - 11)
+        centerOffset = CGVector(
+            dx: boundsWidth / 2 - dot.frame.midX,
+            dy: boundsHeight / 2 - dot.frame.midY
+        )
+        center = mapPosition
     }
 
     override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
@@ -2247,7 +2267,8 @@ final class DirtRiderMarkerView: MLNAnnotationView {
 
     private static func color(for status: String) -> UIColor {
         switch status {
-        case "breakdown": return UIColor(red: 0.863, green: 0.408, blue: 0.012, alpha: 1)
+        case "breakdown", "flat_tire", "dead_battery", "unrepairable":
+            return UIColor(red: 0.863, green: 0.408, blue: 0.012, alpha: 1)
         case "injured": return UIColor(red: 0.757, green: 0.071, blue: 0.184, alpha: 1)
         case "stuck": return UIColor(red: 0.486, green: 0.227, blue: 0.929, alpha: 1)
         default: return UIColor(DirtTheme.navGreen)

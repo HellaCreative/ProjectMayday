@@ -25,9 +25,35 @@ struct AppGateView: View {
         !splashFinished || !didBootstrap
     }
 
+    /// Stable, Debug-only entry point for paywall hierarchy and screenshot tests.
+    private var showsPaywallFixture: Bool {
+        #if DEBUG
+        ProcessInfo.processInfo.environment["DIRT_UI_TEST_PAYWALL"] == "1"
+        #else
+        false
+        #endif
+    }
+
+    /// Stable, Debug-only path to the real map shell for focused destination tests.
+    private var showsProfileFixture: Bool {
+        #if DEBUG
+        ProcessInfo.processInfo.environment["DIRT_UI_TEST_PROFILE"] == "1"
+        #else
+        false
+        #endif
+    }
+
     var body: some View {
         Group {
-            if showsSplash {
+            if showsPaywallFixture {
+                PaywallView(
+                    presentation: .soft,
+                    onClose: {},
+                    onSubscribed: {}
+                )
+            } else if showsProfileFixture {
+                RootView()
+            } else if showsSplash {
                 AnimatedSplashView { splashFinished = true }
             } else if !introDone {
                 IntroCarouselView(
@@ -43,6 +69,7 @@ struct AppGateView: View {
         .animation(gateAnimation, value: showsSplash)
         .animation(gateAnimation, value: introDone)
         .task {
+            guard !showsPaywallFixture, !showsProfileFixture else { return }
             Task { await app.bootstrapShortbreadTileDelivery() }
             await app.supabase.bootstrap()
             didBootstrap = true

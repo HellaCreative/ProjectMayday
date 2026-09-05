@@ -46,7 +46,7 @@ Right-edge chrome above the dock / nav HUD:
 | **3D / 2D** | Always available on the primary map; toggles basemap pitch (`45°` idle / `55°` while following) |
 | **Cues** | Navigation-only. Popover: Junction / Essential or Rally / Everything + independent Audio On/Off (`dirt_cue_mode_v1`, `dirt_cue_audio_v1`) |
 | **Compass** | Rose tracks map bearing; tap resets north-up |
-| **Rider status** | Always available on the primary map; quick group sharing + Available / Breakdown / Injured / Stuck |
+| **Rider status** | Always available on the primary map; quick group sharing + Riding / Flat Tire / Dead Battery / Unrepairable / Injured / Stuck |
 | **Route overview** | Appears beside Recenter only when an actual route polyline is painted |
 | **Recenter** | Follow my location (course-up); orange while follow is locked **or while the nav Recenter chip is up** (either control re-locks follow) |
 
@@ -70,7 +70,9 @@ No bundled custom fonts in the target today.
 - Four equal tabs: Layers · Profile · Group · Route.
 - **Only one tool open at a time** (opening one closes the others).
 - Active: orange fill + **1px white stroke** (`DirtTheme.orange` + white overlay stroke).
-- Route toggles an in-chrome planner card (not a `.sheet`); Layers/Profile/Group use SwiftUI sheets.
+- Route toggles an in-chrome planner card (not a `.sheet`); Layers and Group use
+  map-aware panels. Profile is a focused full-screen destination because none of
+  its account, subscription, preference, or legal tasks require the map.
 - Hidden while navigating.
 
 ---
@@ -79,7 +81,8 @@ No bundled custom fonts in the target today.
 
 | Surface | Presentation |
 | --- | --- |
-| Layers / Profile | `.sheet` medium+large detents |
+| Layers | Map-aware dock panel |
+| Profile | Full-screen opaque destination with an explicit Close control |
 | Groups | `.sheet` large |
 | Route planner | Floating card above dock (`DirtTheme.sheet`, 22pt radius, shadow) |
 | Nav chrome | Split top/bottom (see below) while `navigation.phase != .idle` |
@@ -154,6 +157,50 @@ No bundled custom fonts in the target today.
 | Debug sheet | Not shipped |
 | Map dirt line | Per-surface palette (access `#0a66c2`, gravel `#5d6874`, track `#7c3aed`, paved `#ffb000`, connector `#d22730`) — not brand orange; stats mix stays `#3a9dff` / `#fdb003` |
 | Forced light mode | `preferredColorScheme(.light)` |
+
+---
+
+## DIRT PRO paywall
+
+The paywall uses a three-part purchase flow rather than one long
+undifferentiated form:
+
+- The compact DIRT PRO identity, title, value proposition, and Close control
+  remain fixed at the top. The offer title is assertive but not display-sized;
+  it must leave enough room for product proof and purchase choice on one phone
+  screen.
+- Only the five feature rows scroll independently at standard text sizes. They
+  introduce DIRT-first routing, fuel-aware planning, ride navigation, live
+  groups, and GPX tools with original DIRT icon tiles and plain-language copy.
+  The standard iPhone viewport intentionally shows approximately three rows at
+  once; the remaining benefits are revealed by an obvious vertical scroll.
+  Compact icon tiles, subheadline titles, and footnote descriptions preserve
+  that three-row rhythm without truncating the supplied copy.
+  Subtle material-and-gradient fades at the top and bottom preserve spatial
+  continuity as those rows move behind the fixed regions.
+- The lower purchase panel stays anchored so the current offer, yearly/monthly
+  choice, primary action, restore action, and legal terms remain available
+  while the rider explores the product story. It uses one solid-orange action;
+  the selected plan uses a restrained orange tint and border so it is clear
+  without competing with the purchase button.
+- At Accessibility Dynamic Type sizes, the whole surface becomes one scroll so
+  enlarged content and controls can never be trapped behind the anchored panel.
+- The yearly plan is selected by default. StoreKit supplies localized prices,
+  billing periods, savings, trial duration, and trial eligibility. Only an
+  eligible rider with the yearly offer sees the seven-day trial language; the
+  monthly plan makes no trial promise.
+- Purchase copy is explicit that DIRT PRO gates unlimited navigation and GPX
+  export. Route planning and local route saving remain free.
+- The soft paywall is dismissed by its standard Close control or the system
+  sheet gesture. The purchase region contains no duplicate **Maybe later** and
+  no tester bypass. **Restore Purchases** remains present.
+- If StoreKit has not returned products, the purchase region uses one compact
+  **Plans unavailable / Retry** row instead of repeating the error, while still
+  identifying the App Store as the source of pricing and trial eligibility.
+
+The structure may take inspiration from familiar App Store purchase patterns,
+but its artwork, wording, feature hierarchy, colour, and interaction details
+remain original to DIRT.
 
 ---
 

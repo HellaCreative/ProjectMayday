@@ -191,6 +191,53 @@ final class DirtUITests: XCTestCase {
     }
 
     @MainActor
+    func testPaywallKeepsPurchaseControlsReachable() throws {
+        let app = XCUIApplication()
+        app.launchEnvironment["DIRT_UI_TEST_PAYWALL"] = "1"
+        app.launch()
+
+        XCTAssertTrue(app.descendants(matching: .any)["paywall-feature-story"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Dirt-first routes"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["paywall-purchase-panel"].exists)
+        XCTAssertTrue(app.descendants(matching: .any)["paywall-primary-action"].exists)
+        XCTAssertTrue(
+            app.descendants(matching: .any)["paywall-plan-com.mayday.dirt.pro.yearly"]
+                .waitForExistence(timeout: 8),
+            "The DEV StoreKit catalogue must publish the yearly plan"
+        )
+        XCTAssertTrue(
+            app.descendants(matching: .any)["paywall-plan-com.mayday.dirt.pro.monthly"].exists,
+            "The DEV StoreKit catalogue must publish the monthly plan"
+        )
+        XCTAssertTrue(app.buttons["Close"].exists)
+        XCTAssertFalse(app.buttons["Maybe later"].exists)
+        XCTAssertFalse(app.buttons["Skip as tester"].exists)
+
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = "DIRT PRO — Product Story and Anchored Purchase Panel"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+
+    @MainActor
+    func testProfileIsAFullScreenDestination() throws {
+        let app = XCUIApplication()
+        app.launchEnvironment["DIRT_UI_TEST_PROFILE"] = "1"
+        app.launch()
+
+        XCTAssertTrue(app.staticTexts["Profile"].waitForExistence(timeout: 5))
+        let close = app.buttons["Close"]
+        XCTAssertTrue(close.exists)
+        let route = app.buttons["Route"]
+        XCTAssertFalse(route.isHittable, "The full-screen Profile destination must block interaction with the map dock")
+
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = "Profile — Full-screen Destination"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+
+    @MainActor
     func testLaunchPerformance() throws {
         // This measures how long it takes to launch your application.
         measure(metrics: [XCTApplicationLaunchMetric()]) {

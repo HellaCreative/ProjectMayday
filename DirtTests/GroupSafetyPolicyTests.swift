@@ -1,6 +1,7 @@
 import CoreLocation
 import Foundation
 import Testing
+import UIKit
 @testable import Dirt
 
 struct GroupSafetyPolicyTests {
@@ -15,7 +16,7 @@ struct GroupSafetyPolicyTests {
             latitude: 44.65,
             longitude: -63.57,
             accuracyMeters: 12,
-            lastSeenAt: now.addingTimeInterval(-121),
+            heartbeatAt: now.addingTimeInterval(-121),
             now: now
         ))
 
@@ -34,7 +35,7 @@ struct GroupSafetyPolicyTests {
             latitude: 44.65,
             longitude: -63.57,
             accuracyMeters: 12,
-            lastSeenAt: now.addingTimeInterval(-30),
+            heartbeatAt: now.addingTimeInterval(-30),
             now: now
         ))
         #expect(!GroupPresencePolicy.isLive(
@@ -42,7 +43,7 @@ struct GroupSafetyPolicyTests {
             latitude: 44.65,
             longitude: -63.57,
             accuracyMeters: 12,
-            lastSeenAt: nil,
+            heartbeatAt: nil,
             now: now
         ))
         #expect(!GroupPresencePolicy.isLive(
@@ -50,7 +51,7 @@ struct GroupSafetyPolicyTests {
             latitude: 44.65,
             longitude: -63.57,
             accuracyMeters: 500,
-            lastSeenAt: now.addingTimeInterval(-30),
+            heartbeatAt: now.addingTimeInterval(-30),
             now: now
         ))
     }
@@ -89,6 +90,20 @@ struct GroupSafetyPolicyTests {
         #expect(!GroupPresencePolicy.canPublish(stale, now: now))
         #expect(!GroupPresencePolicy.canPublish(inaccurate, now: now))
         #expect(!GroupPresencePolicy.canPublish(nil, now: now))
+
+        // Stationary phones may keep the same Core Location timestamp. Once a
+        // fix is accepted during this sharing session, it remains usable while
+        // a separate heartbeat proves the rider is still online.
+        #expect(GroupPresencePolicy.retainedPublishableFix(
+            latest: stale,
+            accepted: valid,
+            now: now
+        ) === valid)
+        #expect(GroupPresencePolicy.retainedPublishableFix(
+            latest: stale,
+            accepted: nil,
+            now: now
+        ) == nil)
     }
 
     @Test func stopTriggeredTrackingRequiresARealStopAndMeaningfulTargetMove() {
@@ -167,6 +182,25 @@ struct GroupSafetyPolicyTests {
         #expect(state.groupMarkers.map(\.id) == ["rider:alex"])
     }
 
+    @Test @MainActor func riderMarkerRefreshPreservesItsMapPosition() {
+        let annotation = DirtAnnotation()
+        annotation.label = "Alex"
+        annotation.status = "riding"
+
+        let marker = DirtRiderMarkerView(reuseIdentifier: "test-rider")
+        marker.center = CGPoint(x: 320, y: 480)
+        marker.configure(for: annotation)
+
+        #expect(marker.center == CGPoint(x: 320, y: 480))
+        #expect(marker.bounds.width > 22)
+        #expect(marker.bounds.height > 22)
+
+        let dot = marker.subviews[0]
+        let chip = marker.subviews[1]
+        #expect(chip.frame.maxY < dot.frame.minY)
+        #expect(abs(chip.frame.midX - dot.frame.midX) < 0.5)
+    }
+
     @Test @MainActor func backgroundLocationPurposesAreIndependent() {
         let service = LocationService()
         service.setBackgroundUpdates(true, for: .navigation)
@@ -192,12 +226,29 @@ struct GroupSafetyPolicyTests {
     }
 
     @Test func distressPresencePublishesMoreFrequentlyThanOrdinarySharing() {
-        #expect(GroupPresenceCadencePolicy.intervalSeconds(forStatus: "available") == 10)
+        #expect(GroupPresenceCadencePolicy.intervalSeconds(forStatus: "riding") == 10)
+        #expect(GroupPresenceCadencePolicy.intervalSeconds(forStatus: "flat_tire") == 5)
+        #expect(GroupPresenceCadencePolicy.intervalSeconds(forStatus: "dead_battery") == 5)
+        #expect(GroupPresenceCadencePolicy.intervalSeconds(forStatus: "unrepairable") == 5)
         #expect(GroupPresenceCadencePolicy.intervalSeconds(forStatus: "offline") == 10)
         #expect(GroupPresenceCadencePolicy.intervalSeconds(forStatus: "breakdown") == 5)
         #expect(GroupPresenceCadencePolicy.intervalSeconds(forStatus: "injured") == 5)
         #expect(GroupPresenceCadencePolicy.intervalSeconds(forStatus: "stuck") == 5)
         #expect(GroupPresenceCadencePolicy.distressSeconds < GroupPresenceCadencePolicy.ordinarySeconds)
+    }
+
+    @Test func riderStatusesUseCurrentLabelsAndAcceptLegacyAvailable() {
+        #expect(GroupsViewModel.selectableStatuses == [
+            "riding", "flat_tire", "dead_battery", "unrepairable", "injured", "stuck"
+        ])
+        #expect(GroupsViewModel.normalizedStatus("available") == "riding")
+        #expect(GroupsViewModel.statusLabel("riding") == "Riding")
+        #expect(GroupsViewModel.statusLabel("flat_tire") == "Flat Tire")
+        #expect(GroupsViewModel.statusLabel("dead_battery") == "Dead Battery")
+        #expect(GroupsViewModel.isDistressStatus("flat_tire"))
+        #expect(GroupsViewModel.isDistressStatus("dead_battery"))
+        #expect(GroupsViewModel.isDistressStatus("unrepairable"))
+        #expect(!GroupsViewModel.isDistressStatus("riding"))
     }
 
     @Test func appleSignInFailuresRemainVisibleToTheRider() {

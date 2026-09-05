@@ -105,7 +105,7 @@ final class GroupsViewModel {
     private(set) var realtimeConnected = false
     /// Live peer selected from the map (or roster) — details card, not auto-route.
     var selectedPeer: SelectedGroupPeer?
-    var status = "available"
+    var status = "riding"
     /// Live-sharing card presented over the map (owned here so the map control
     /// stack can open it and `RootView` can place it as a bottom card).
     var sharingPanelOpen = false
@@ -122,6 +122,28 @@ final class GroupsViewModel {
     @ObservationIgnored private var connectingGroupIDs: Set<String> = []
     @ObservationIgnored private var groupRefreshGeneration = 0
     @ObservationIgnored private var memberRefreshGeneration = 0
+    /// Last fresh GPS fix accepted during the active sharing session. Stationary
+    /// phones may not receive a newly timestamped fix for every heartbeat.
+    @ObservationIgnored private var lastSharingFix: CLLocation?
+    /// Last trustworthy fix accepted during this app session. Stopping sharing
+    /// ends every network heartbeat immediately, but keeping the coordinate
+    /// locally lets a rider leave/rejoin a group while stationary without
+    /// waiting for Core Location to emit an identical fix again.
+    @ObservationIgnored private var lastTrustedFix: CLLocation?
+    @ObservationIgnored private var waitingForFixLogged = false
+    @ObservationIgnored private var livePresenceLogged = false
+
+    private static func sharingPreferenceKey(userID: String) -> String {
+        "dirt.groups.sharing-requested.\(userID)"
+    }
+
+    private static func sharingPreference(userID: String) -> Bool? {
+        UserDefaults.standard.object(forKey: sharingPreferenceKey(userID: userID)) as? Bool
+    }
+
+    private static func setSharingPreference(_ enabled: Bool, userID: String) {
+        UserDefaults.standard.set(enabled, forKey: sharingPreferenceKey(userID: userID))
+    }
 
     init(supabase: SupabaseService, location: LocationService, mapState: MapState) {
         self.supabase = supabase
@@ -169,8 +191,8 @@ final class GroupsViewModel {
               let groupID = mapTrackedGroupID ?? selectedGroup?.id,
               let lastSeenAt = member.lastSeenAt else { return }
         let status = {
-            let raw = (member.status ?? "available").trimmingCharacters(in: .whitespacesAndNewlines)
-            return raw.isEmpty ? "available" : raw.lowercased()
+            let raw = (member.status ?? "riding").trimmingCharacters(in: .whitespacesAndNewlines)
+            return Self.normalizedStatus(raw)
         }()
         selectedPeer = SelectedGroupPeer(
             groupID: groupID,
@@ -190,13 +212,33 @@ final class GroupsViewModel {
     }
 
     static func statusLabel(_ status: String) -> String {
-        switch status.lowercased() {
+        switch normalizedStatus(status) {
+        case "riding": return "Riding"
+        case "flat_tire": return "Flat Tire"
+        case "dead_battery": return "Dead Battery"
+        case "unrepairable": return "Unrepairable"
         case "breakdown": return "Breakdown"
         case "injured": return "Injured"
         case "stuck": return "Stuck"
         case "offline": return "Offline"
-        default: return "Available"
+        default: return "Riding"
         }
+    }
+
+    static let selectableStatuses = [
+        "riding", "flat_tire", "dead_battery", "unrepairable", "injured", "stuck"
+    ]
+
+    /// Keep older app/database values readable while all active clients move to
+    /// the clearer rider-facing vocabulary.
+    static func normalizedStatus(_ status: String) -> String {
+        let value = status.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return value.isEmpty || value == "available" ? "riding" : value
+    }
+
+    static func isMechanicalDistressStatus(_ status: String) -> Bool {
+        ["breakdown", "flat_tire", "dead_battery", "unrepairable"]
+            .contains(normalizedStatus(status))
     }
 
     static func lastSeenLabel(_ date: Date?) -> String {
@@ -252,9 +294,34 @@ final class GroupsViewModel {
         let longitude: Double?
         let accuracy_m: Double?
         let last_seen_at: String?
+        let updated_at: String?
 
         var lastSeenDate: Date? {
             last_seen_at.flatMap { ISO8601DateFormatter.flexible.parse($0) }
+        }
+
+        var heartbeatDate: Date? {
+            updated_at.flatMap { ISO8601DateFormatter.flexible.parse($0) }
+        }
+
+        var locationFix: CLLocation? {
+            guard let latitude,
+                  let longitude,
+                  let accuracy_m,
+                  let timestamp = lastSeenDate,
+                  GroupPresencePolicy.isValidCoordinate(latitude: latitude, longitude: longitude),
+                  accuracy_m >= 0,
+                  accuracy_m <= GroupPresencePolicy.maximumHorizontalAccuracy
+            else { return nil }
+            return CLLocation(
+                coordinate: CLLocationCoordinate2D(latitude: latitude, longitude: longitude),
+                altitude: 0,
+                horizontalAccuracy: accuracy_m,
+                verticalAccuracy: -1,
+                course: -1,
+                speed: -1,
+                timestamp: timestamp
+            )
         }
 
         var isLive: Bool {
@@ -263,7 +330,7 @@ final class GroupsViewModel {
                 latitude: latitude,
                 longitude: longitude,
                 accuracyMeters: accuracy_m,
-                lastSeenAt: lastSeenDate
+                heartbeatAt: heartbeatDate ?? lastSeenDate
             )
         }
     }
@@ -313,6 +380,7 @@ final class GroupsViewModel {
         let accuracy: Double?
         let status: String?
         let lastSeenAt: String?
+        let heartbeatAt: String?
         let groupId: String?
         let groupName: String?
     }
@@ -332,6 +400,11 @@ final class GroupsViewModel {
 
     private struct SharingOffBroadcast: Codable {
         let userId: String
+    }
+
+    private struct MembershipChangedBroadcast: Codable {
+        let userId: String
+        let action: String
     }
 
     // MARK: - List
@@ -367,6 +440,7 @@ final class GroupsViewModel {
                 )
             }
             let ids = summaries.map(\.id)
+            var ownPresence: PresenceRow?
             if !ids.isEmpty {
                 let memberships: [MemberCountRow] = try await client
                     .from("group_members")
@@ -377,10 +451,11 @@ final class GroupsViewModel {
                 let userIDs = Array(Set(memberships.map(\.user_id)))
                 let presence: [PresenceRow] = try await client
                     .from("rider_presence")
-                    .select("user_id,sharing_enabled,status,latitude,longitude,accuracy_m,last_seen_at")
+                    .select("user_id,sharing_enabled,status,latitude,longitude,accuracy_m,last_seen_at,updated_at")
                     .in("user_id", values: userIDs)
                     .execute()
                     .value
+                ownPresence = presence.first(where: { $0.user_id == userID })
                 let liveUsers = Set(presence.filter(\.isLive).map(\.user_id))
                 for index in summaries.indices {
                     let groupMembers = memberships.filter { $0.group_id == summaries[index].id }
@@ -391,6 +466,14 @@ final class GroupsViewModel {
             guard groupRefreshGeneration == requestGeneration,
                   supabase.userID == userID else { return }
             groups = summaries
+            // Sharing has no valid audience once the rider leaves or deletes
+            // their final group. End it immediately so the UI, persisted
+            // preference, GPS background claim, and server presence stay in
+            // agreement.
+            if summaries.isEmpty, isSharing {
+                stopSharing()
+            }
+            restoreSharingIntentIfNeeded(userID: userID, presence: ownPresence)
             let activeIDs = Set(summaries.map(\.id))
             if let tracked = mapTrackedGroupID, !activeIDs.contains(tracked) {
                 stopMapTracking()
@@ -446,6 +529,7 @@ final class GroupsViewModel {
 
     func joinGroup(code rawCode: String) async {
         guard !isMutatingGroup else { return }
+        let previousGroupIDs = Set(groups.map(\.id))
         let code = rawCode.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard code.wholeMatch(of: /[a-z0-9]{6}/) != nil else {
             errorMessage = "Invite codes are six lowercase letters or numbers."
@@ -458,6 +542,15 @@ final class GroupsViewModel {
                 .rpc("join_group_by_invite_code", params: ["p_invite_code": code])
                 .execute()
             await refreshGroups()
+            if let userID = supabase.userID {
+                for group in groups where !previousGroupIDs.contains(group.id) {
+                    await broadcastMembershipChanged(
+                        userID: userID,
+                        action: "joined",
+                        groupID: group.id
+                    )
+                }
+            }
         } catch {
             errorMessage = "No active riding group was found for that code."
         }
@@ -469,6 +562,13 @@ final class GroupsViewModel {
         defer { isMutatingGroup = false }
         do {
             try await client.rpc("leave_group", params: ["p_group_id": group.id]).execute()
+            if let userID = supabase.userID {
+                await broadcastMembershipChanged(
+                    userID: userID,
+                    action: "left",
+                    groupID: group.id
+                )
+            }
             await closeRealtimeChannel(groupID: group.id)
             stopMapTracking()
             selectedGroup = nil
@@ -532,8 +632,16 @@ final class GroupsViewModel {
         pollTask = Task { [weak self] in
             while let self, !Task.isCancelled, self.mapTrackedGroupID == groupID {
                 await self.refreshMembers(groupID: groupID)
-                // Faster when Realtime is down; slower fallback when connected.
-                let seconds: Double = self.realtimeChannels[groupID] != nil ? 30 : 10
+                // While detail is visible, keep membership joins/leaves feeling
+                // immediate even if a Realtime roster signal is missed. Once
+                // detail closes, return to the inexpensive safety heartbeat.
+                let detailIsVisible = self.selectedGroup?.id == groupID
+                let seconds: Double
+                if detailIsVisible {
+                    seconds = 5
+                } else {
+                    seconds = self.realtimeChannels[groupID] != nil ? 30 : 10
+                }
                 try? await Task.sleep(for: .seconds(seconds))
             }
         }
@@ -563,7 +671,7 @@ final class GroupsViewModel {
             let userIDs = rows.map(\.user_id)
             let presence: [PresenceRow] = userIDs.isEmpty ? [] : try await client
                 .from("rider_presence")
-                .select("user_id,sharing_enabled,status,latitude,longitude,accuracy_m,last_seen_at")
+                .select("user_id,sharing_enabled,status,latitude,longitude,accuracy_m,last_seen_at,updated_at")
                 .in("user_id", values: userIDs)
                 .execute()
                 .value
@@ -582,7 +690,7 @@ final class GroupsViewModel {
                     longitude: p?.longitude,
                     status: {
                         let raw = p?.status?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-                        return raw.isEmpty ? "available" : raw
+                        return Self.normalizedStatus(raw)
                     }(),
                     lastSeenAt: p?.lastSeenDate,
                     accuracyMeters: p?.accuracy_m
@@ -682,7 +790,9 @@ final class GroupsViewModel {
             guard member.isLive,
                   member.userID != selfID,
                   let lat = member.latitude,
-                  let lon = member.longitude else { continue }
+                  let lon = member.longitude,
+                  GroupPresencePolicy.isValidCoordinate(latitude: lat, longitude: lon)
+            else { continue }
             overlays.append(
                 MapState.Marker(
                     id: "rider:\(member.userID)",
@@ -691,7 +801,7 @@ final class GroupsViewModel {
                     label: member.displayName,
                     kind: .rider,
                     subtitle: member.displayName,
-                    status: member.status ?? "available"
+                    status: Self.normalizedStatus(member.status ?? "riding")
                 )
             )
         }
@@ -700,7 +810,12 @@ final class GroupsViewModel {
         for alert in peerAlerts where alert.userID != selfID {
             let riderID = "rider:\(alert.userID)"
             // Prefer live rider pin when present; otherwise drop an alert pin.
-            guard !liveRiderIDs.contains(riderID) else { continue }
+            guard !liveRiderIDs.contains(riderID),
+                  GroupPresencePolicy.isValidCoordinate(
+                    latitude: alert.latitude,
+                    longitude: alert.longitude
+                  )
+            else { continue }
             overlays.append(
                 MapState.Marker(
                     id: "alert:\(alert.id)",
@@ -725,7 +840,7 @@ final class GroupsViewModel {
 
     /// Status picker entry point — upserts presence and inserts/broadcasts distress alerts.
     func setStatus(_ newStatus: String) {
-        let allowed = ["available", "breakdown", "injured", "stuck"]
+        let allowed = Self.selectableStatuses
         guard allowed.contains(newStatus) else { return }
         let previous = status
         status = newStatus
@@ -735,19 +850,80 @@ final class GroupsViewModel {
             if Self.isDistressStatus(newStatus), newStatus != previous {
                 await publishDistressAlert(status: newStatus, message: nil)
             }
-            if newStatus == "available", previous != "available" {
+            if newStatus == "riding", Self.normalizedStatus(previous) != "riding" {
                 await resolveOpenAlerts()
             }
         }
     }
 
     func startSharing() {
-        guard supabase.userID != nil else { return }
+        guard let userID = supabase.userID else {
+            RoutingDebugLog.shared.event("groups sharing start rejected reason=signed_out")
+            return
+        }
+        RoutingDebugLog.shared.event(
+            "groups sharing start requested groups=\(groups.count) "
+                + "authorization=\(location.authorization.rawValue) "
+                + "accuracyAuthorization=\(location.accuracyAuthorization.rawValue)"
+        )
+        Self.setSharingPreference(true, userID: userID)
+        beginSharing(seedFix: nil)
+    }
+
+    /// Core Location may deliver the first current fix between ordinary
+    /// presence heartbeats. Publish it immediately so starting sharing never
+    /// needs an app restart (or a ten-second polling delay) to turn live.
+    func receiveLocationFix(_ fix: CLLocation) {
+        guard isSharing, isWaitingForLocation else { return }
+        guard GroupPresencePolicy.canPublish(fix) else {
+            if !waitingForFixLogged {
+                waitingForFixLogged = true
+                RoutingDebugLog.shared.event(
+                    "groups sharing fix rejected \(Self.fixDiagnostic(fix))"
+                )
+            }
+            return
+        }
+        lastSharingFix = fix
+        lastTrustedFix = fix
+        isWaitingForLocation = false
+        waitingForFixLogged = false
+        RoutingDebugLog.shared.event(
+            "groups sharing fix accepted \(Self.fixDiagnostic(fix))"
+        )
+        Task {
+            await publishPresence(enabled: true)
+            await broadcastLocationToChannels()
+        }
+    }
+
+    private func beginSharing(seedFix: CLLocation?) {
+        guard let userID = supabase.userID else {
+            RoutingDebugLog.shared.event("groups sharing begin rejected reason=signed_out")
+            return
+        }
+        lastSharingFix = GroupPresencePolicy.retainedPublishableFix(
+            latest: location.lastLocation,
+            accepted: seedFix ?? lastTrustedFix
+        )
+        if let lastSharingFix { lastTrustedFix = lastSharingFix }
         isSharing = true
-        isWaitingForLocation = !GroupPresencePolicy.canPublish(location.lastLocation)
+        isWaitingForLocation = lastSharingFix == nil
+        waitingForFixLogged = false
+        livePresenceLogged = false
+        RoutingDebugLog.shared.event(
+            "groups sharing begin hasFix=\(lastSharingFix == nil ? 0 : 1) "
+                + "seed=\(seedFix == nil ? 0 : 1)"
+        )
+        if lastSharingFix != nil {
+            updateLocalMember(userID: userID, isLive: true, status: status)
+        }
         location.requestAlways()
         location.setBackgroundUpdates(true, for: .groupSharing)
         location.startUpdates()
+        if isWaitingForLocation {
+            location.restartUpdatesForFreshFix()
+        }
         shareTask?.cancel()
         shareTask = Task { [weak self] in
             await self?.ensureRealtimeForAllGroups()
@@ -761,8 +937,16 @@ final class GroupsViewModel {
     }
 
     func stopSharing() {
+        RoutingDebugLog.shared.event("groups sharing stop requested")
+        if let userID = supabase.userID {
+            Self.setSharingPreference(false, userID: userID)
+            updateLocalMember(userID: userID, isLive: false, status: "offline")
+        }
         isSharing = false
         isWaitingForLocation = false
+        lastSharingFix = nil
+        waitingForFixLogged = false
+        livePresenceLogged = false
         shareTask?.cancel()
         shareTask = nil
         location.setBackgroundUpdates(false, for: .groupSharing)
@@ -778,7 +962,8 @@ final class GroupsViewModel {
     /// Called before auth is cleared so peers receive a final offline signal and
     /// no signed-out session keeps polling or sharing a cached location.
     func prepareForSignOut() async {
-        if supabase.userID != nil {
+        if let userID = supabase.userID {
+            Self.setSharingPreference(false, userID: userID)
             await broadcastSharingOff()
             await publishPresence(enabled: false)
         }
@@ -805,6 +990,10 @@ final class GroupsViewModel {
         channelListenTasks.values.forEach { $0.cancel() }
         isSharing = false
         isWaitingForLocation = false
+        lastSharingFix = nil
+        lastTrustedFix = nil
+        waitingForFixLogged = false
+        livePresenceLogged = false
         isLoading = false
         isMutatingGroup = false
         realtimeConnected = false
@@ -845,6 +1034,49 @@ final class GroupsViewModel {
         let last_seen_at: String
     }
 
+    /// Reconnect the UI and heartbeat loop to the rider's explicit sharing
+    /// choice after an app relaunch. Existing installs did not yet store that
+    /// choice locally, so one currently-live server row seeds the preference.
+    private func restoreSharingIntentIfNeeded(userID: String, presence: PresenceRow?) {
+        let savedIntent = Self.sharingPreference(userID: userID)
+        let shouldShare = savedIntent ?? (presence?.isLive == true)
+        if savedIntent == nil {
+            Self.setSharingPreference(shouldShare, userID: userID)
+        }
+        guard shouldShare, !isSharing, !groups.isEmpty else { return }
+        if let status = presence?.status,
+           !status.isEmpty,
+           status != "offline" {
+            self.status = Self.normalizedStatus(status)
+        }
+        beginSharing(seedFix: presence?.locationFix)
+    }
+
+    private func updateLocalMember(userID: String, isLive: Bool, status: String) {
+        guard let index = members.firstIndex(where: { $0.userID == userID }) else { return }
+        members[index].isLive = isLive
+        members[index].status = status
+        paintGroupOverlays()
+    }
+
+    /// Returns the latest trustworthy coordinate for this sharing session.
+    /// A stationary phone can keep publishing heartbeats even when Core Location
+    /// has not produced a newly timestamped coordinate.
+    private func sharingFix() -> CLLocation? {
+        let fix = GroupPresencePolicy.retainedPublishableFix(
+            latest: location.lastLocation,
+            accepted: lastSharingFix
+        )
+        lastSharingFix = fix
+        if let fix { lastTrustedFix = fix }
+        return fix
+    }
+
+    private static func fixDiagnostic(_ fix: CLLocation) -> String {
+        let ageMilliseconds = max(0, Int(Date.now.timeIntervalSince(fix.timestamp) * 1_000))
+        return "ageMs=\(ageMilliseconds) accuracyM=\(Int(fix.horizontalAccuracy.rounded()))"
+    }
+
     private func publishPresence(enabled: Bool) async {
         guard let userID = supabase.userID else { return }
         if !enabled {
@@ -860,17 +1092,31 @@ final class GroupsViewModel {
                     )
                     .eq("user_id", value: userID)
                     .execute()
+                RoutingDebugLog.shared.event("groups presence committed enabled=0")
             } catch {
                 // Realtime sharing_off still removes the live map pin.
+                let nsError = error as NSError
+                RoutingDebugLog.shared.event(
+                    "groups presence failed enabled=0 domain=\(nsError.domain) code=\(nsError.code)"
+                )
             }
             return
         }
-        let fix = location.lastLocation
-        guard GroupPresencePolicy.canPublish(fix), let fix else {
+        guard let fix = sharingFix() else {
             isWaitingForLocation = true
+            if !waitingForFixLogged {
+                waitingForFixLogged = true
+                let cached = location.lastLocation.map(Self.fixDiagnostic) ?? "none"
+                RoutingDebugLog.shared.event(
+                    "groups sharing waiting for current position cached=\(cached) "
+                        + "authorization=\(location.authorization.rawValue)"
+                )
+            }
             return
         }
         isWaitingForLocation = false
+        waitingForFixLogged = false
+        updateLocalMember(userID: userID, isLive: true, status: status)
         let payload = PresenceUpsert(
             user_id: userID,
             sharing_enabled: enabled,
@@ -887,15 +1133,26 @@ final class GroupsViewModel {
                 .from("rider_presence")
                 .upsert(payload, onConflict: "user_id")
                 .execute()
+            if !livePresenceLogged {
+                livePresenceLogged = true
+                RoutingDebugLog.shared.event(
+                    "groups presence committed enabled=1 status=\(status) \(Self.fixDiagnostic(fix))"
+                )
+            }
         } catch {
             // Transient network drop while riding; the next tick retries.
+            livePresenceLogged = false
+            let nsError = error as NSError
+            RoutingDebugLog.shared.event(
+                "groups presence failed enabled=1 domain=\(nsError.domain) code=\(nsError.code)"
+            )
         }
     }
 
     // MARK: - rider_alerts
 
     static func isDistressStatus(_ status: String) -> Bool {
-        ["breakdown", "injured", "stuck"].contains(status.lowercased())
+        isMechanicalDistressStatus(status) || ["injured", "stuck"].contains(normalizedStatus(status))
     }
 
     /// Maps local route-report categories onto the DB check constraint
@@ -951,7 +1208,7 @@ final class GroupsViewModel {
     private func reconcilePeerAlertsWithPresence() async {
         let clearUserIDs = Set(
             members
-                .filter { !Self.isDistressStatus($0.status ?? "available") }
+                .filter { !Self.isDistressStatus($0.status ?? "riding") }
                 .map(\.userID)
         )
         let stale = peerAlerts.filter { clearUserIDs.contains($0.userID) }
@@ -1087,7 +1344,7 @@ final class GroupsViewModel {
                 ?? selectedGroup?.name
                 ?? "Group"
             let presenceByUser = Dictionary(
-                uniqueKeysWithValues: members.map { ($0.userID, $0.status ?? "available") }
+                uniqueKeysWithValues: members.map { ($0.userID, Self.normalizedStatus($0.status ?? "riding")) }
             )
             var next: [PeerAlertBanner] = []
             var staleIDs: [String] = []
@@ -1194,6 +1451,7 @@ final class GroupsViewModel {
         let locationStream = channel.broadcastStream(event: "location")
         let alertStream = channel.broadcastStream(event: "alert")
         let sharingOffStream = channel.broadcastStream(event: "sharing_off")
+        let membershipChangedStream = channel.broadcastStream(event: "membership_changed")
         let presenceStream = channel.presenceChange()
 
         channelListenTasks[groupID]?.cancel()
@@ -1215,6 +1473,12 @@ final class GroupsViewModel {
                     for await message in sharingOffStream {
                         guard let self, !Task.isCancelled else { break }
                         await self.handleSharingOffMessage(message, groupID: groupID)
+                    }
+                }
+                group.addTask { [weak self] in
+                    for await message in membershipChangedStream {
+                        guard let self, !Task.isCancelled else { break }
+                        await self.handleMembershipChangedMessage(message, groupID: groupID)
                     }
                 }
                 group.addTask { [weak self] in
@@ -1260,8 +1524,7 @@ final class GroupsViewModel {
 
     private func trackOnChannel(_ channel: RealtimeChannelV2, groupID: String) async {
         guard let userID = supabase.userID,
-              let fix = location.lastLocation,
-              GroupPresencePolicy.canPublish(fix) else { return }
+              let fix = sharingFix() else { return }
         let groupName = groups.first(where: { $0.id == groupID })?.name ?? "Group"
         let payload = LocationBroadcast(
             userId: userID,
@@ -1273,6 +1536,7 @@ final class GroupsViewModel {
             accuracy: fix.horizontalAccuracy,
             status: status,
             lastSeenAt: ISO8601DateFormatter().string(from: fix.timestamp),
+            heartbeatAt: ISO8601DateFormatter().string(from: .now),
             groupId: groupID,
             groupName: groupName
         )
@@ -1282,8 +1546,7 @@ final class GroupsViewModel {
     private func broadcastLocationToChannels() async {
         guard isSharing,
               let userID = supabase.userID,
-              let fix = location.lastLocation,
-              GroupPresencePolicy.canPublish(fix) else { return }
+              let fix = sharingFix() else { return }
         for (groupID, channel) in realtimeChannels {
             let groupName = groups.first(where: { $0.id == groupID })?.name ?? "Group"
             let payload = LocationBroadcast(
@@ -1296,6 +1559,7 @@ final class GroupsViewModel {
                 accuracy: fix.horizontalAccuracy,
                 status: status,
                 lastSeenAt: ISO8601DateFormatter().string(from: fix.timestamp),
+                heartbeatAt: ISO8601DateFormatter().string(from: .now),
                 groupId: groupID,
                 groupName: groupName
             )
@@ -1312,6 +1576,12 @@ final class GroupsViewModel {
         }
     }
 
+    private func broadcastMembershipChanged(userID: String, action: String, groupID: String) async {
+        guard let channel = realtimeChannels[groupID] else { return }
+        let payload = MembershipChangedBroadcast(userId: userID, action: action)
+        try? await channel.broadcast(event: "membership_changed", message: payload)
+    }
+
     @MainActor
     private func handleLocationMessage(_ message: JSONObject, groupID: String) {
         let payload: LocationBroadcast?
@@ -1323,14 +1593,16 @@ final class GroupsViewModel {
         guard let payload, let selfID = supabase.userID, payload.userId != selfID else { return }
         guard let lat = payload.lat,
               let lng = payload.lng,
-              let lastSeenAt = payload.lastSeenAt.flatMap({ ISO8601DateFormatter.flexible.parse($0) }),
-              GroupPresencePolicy.isLive(
+              let lastSeenAt = payload.lastSeenAt.flatMap({ ISO8601DateFormatter.flexible.parse($0) })
+        else { return }
+        let heartbeatAt = payload.heartbeatAt.flatMap({ ISO8601DateFormatter.flexible.parse($0) }) ?? lastSeenAt
+        guard GroupPresencePolicy.isLive(
                 sharingEnabled: true,
                 latitude: lat,
                 longitude: lng,
                 accuracyMeters: payload.accuracy,
-                lastSeenAt: lastSeenAt
-              ) else { return }
+                heartbeatAt: heartbeatAt
+        ) else { return }
 
         let resolvedName = Self.resolvedDisplayName(
             payload.displayName
@@ -1360,7 +1632,7 @@ final class GroupsViewModel {
             members[idx].lastSeenAt = lastSeenAt
             members[idx].accuracyMeters = payload.accuracy
             if let status = payload.status, !status.isEmpty {
-                members[idx].status = status
+                members[idx].status = Self.normalizedStatus(status)
             }
             if let name = payload.displayName, !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 // displayName is let — rebuild row
@@ -1372,7 +1644,7 @@ final class GroupsViewModel {
                     isLive: true,
                     latitude: lat,
                     longitude: lng,
-                    status: payload.status ?? old.status,
+                    status: Self.normalizedStatus(payload.status ?? old.status ?? "riding"),
                     lastSeenAt: lastSeenAt,
                     accuracyMeters: payload.accuracy
                 )
@@ -1437,6 +1709,24 @@ final class GroupsViewModel {
     }
 
     @MainActor
+    private func handleMembershipChangedMessage(_ message: JSONObject, groupID: String) async {
+        let payload: MembershipChangedBroadcast?
+        if let nested = try? message["payload"]?.decode(as: MembershipChangedBroadcast.self) {
+            payload = nested
+        } else {
+            payload = try? message.decode(as: MembershipChangedBroadcast.self)
+        }
+        guard let payload, payload.userId != supabase.userID,
+              payload.action == "joined" || payload.action == "left"
+        else { return }
+
+        await refreshGroups()
+        if mapTrackedGroupID == groupID {
+            await refreshMembers(groupID: groupID)
+        }
+    }
+
+    @MainActor
     private func handlePresenceAction(_ action: any PresenceAction, groupID: String) {
         guard let selfID = supabase.userID else { return }
         let visibleGroup = mapTrackedGroupID == groupID
@@ -1444,14 +1734,16 @@ final class GroupsViewModel {
             for join in joins where join.userId != selfID {
                 guard let lat = join.lat,
                       let lng = join.lng,
-                      let seen = join.lastSeenAt.flatMap({ ISO8601DateFormatter.flexible.parse($0) }),
-                      GroupPresencePolicy.isLive(
+                      let seen = join.lastSeenAt.flatMap({ ISO8601DateFormatter.flexible.parse($0) })
+                else { continue }
+                let heartbeat = join.heartbeatAt.flatMap({ ISO8601DateFormatter.flexible.parse($0) }) ?? seen
+                guard GroupPresencePolicy.isLive(
                         sharingEnabled: true,
                         latitude: lat,
                         longitude: lng,
                         accuracyMeters: join.accuracy,
-                        lastSeenAt: seen
-                      ) else { continue }
+                        heartbeatAt: heartbeat
+                ) else { continue }
                 onPeerLocationUpdate?(
                     GroupMemberRouteTarget(
                         groupID: groupID,
@@ -1473,38 +1765,32 @@ final class GroupsViewModel {
                         isLive: true,
                         latitude: lat,
                         longitude: lng,
-                        status: join.status ?? old.status ?? "available",
+                        status: Self.normalizedStatus(join.status ?? old.status ?? "riding"),
                         lastSeenAt: seen,
                         accuracyMeters: join.accuracy
                     )
                 }
             }
         }
-        if let leaves = try? action.decodeLeaves(as: LocationBroadcast.self) {
-            for leave in leaves where leave.userId != selfID {
-                let name = members.first(where: { $0.userID == leave.userId })?.displayName
-                    ?? Self.resolvedDisplayName(leave.displayName)
-                onPeerSharingEnded?(leave.userId, name)
-                guard visibleGroup else { continue }
-                if let idx = members.firstIndex(where: { $0.userID == leave.userId }) {
-                    members[idx].isLive = false
-                    members[idx].status = "offline"
-                }
-            }
-        }
+        // Presence `sync` may contain a join and leave for the same still-connected
+        // client while Supabase reconciles a changed payload. A leave therefore
+        // is not proof that the rider stopped sharing. The explicit
+        // `sharing_off` broadcast handles a deliberate stop immediately, while
+        // the persisted heartbeat poll handles a real disconnect after expiry.
         // Also handle presence keyed by user id without full LocationBroadcast decode.
         for (key, presence) in action.joins where key != selfID {
             if let state = try? presence.decodeState(as: LocationBroadcast.self),
                let lat = state.lat,
                let lng = state.lng,
-               let seen = state.lastSeenAt.flatMap({ ISO8601DateFormatter.flexible.parse($0) }),
-               GroupPresencePolicy.isLive(
+               let seen = state.lastSeenAt.flatMap({ ISO8601DateFormatter.flexible.parse($0) }) {
+                let heartbeat = state.heartbeatAt.flatMap({ ISO8601DateFormatter.flexible.parse($0) }) ?? seen
+                guard GroupPresencePolicy.isLive(
                 sharingEnabled: true,
                 latitude: lat,
                 longitude: lng,
                 accuracyMeters: state.accuracy,
-                lastSeenAt: seen
-               ) {
+                heartbeatAt: heartbeat
+                ) else { continue }
                 onPeerLocationUpdate?(
                     GroupMemberRouteTarget(
                         groupID: groupID,
@@ -1527,20 +1813,10 @@ final class GroupsViewModel {
                     isLive: true,
                     latitude: lat,
                     longitude: lng,
-                    status: state.status ?? old.status ?? "available",
+                    status: Self.normalizedStatus(state.status ?? old.status ?? "riding"),
                     lastSeenAt: seen,
                     accuracyMeters: state.accuracy
                 )
-            }
-        }
-        for key in action.leaves.keys where key != selfID {
-            let name = members.first(where: { $0.userID == key })?.displayName
-                ?? "Group member"
-            onPeerSharingEnded?(key, name)
-            guard visibleGroup else { continue }
-            if let idx = members.firstIndex(where: { $0.userID == key }) {
-                members[idx].isLive = false
-                members[idx].status = "offline"
             }
         }
         guard visibleGroup else { return }

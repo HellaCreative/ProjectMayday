@@ -160,12 +160,17 @@ product decision and cannot be completed safely by an engineering agent.
 
 ### Subscription products
 
+- Launch pricing decision: US$9.99 monthly / US$39.99 yearly; CA$12.99
+  monthly / CA$49.99 yearly. The seven-day free trial applies to the yearly
+  product only. App Store Connect remains the production source of truth.
 - [ ] Confirm product IDs `com.mayday.dirt.pro.monthly` and
       `com.mayday.dirt.pro.yearly`.
 - [ ] Confirm price, duration, territories, subscription group, localization,
       display names, descriptions, and review screenshots.
-- [ ] Confirm whether the one-week introductory offer is desired in each
-      territory.
+- [x] `DIRT Dev` resolves and activates the checked-in local StoreKit
+      catalogue; `DIRT Production` excludes it and archives the public bundle.
+- [ ] Configure the seven-day introductory trial on the yearly product only
+      in each launch territory; the monthly product has no introductory offer.
 - [ ] Submit the first subscription products with the app version.
 
 ### Product-page material
@@ -232,7 +237,7 @@ production-backend, StoreKit, or physical-device gates above.
 Build the public configuration, then audit the produced bundle:
 
 ```bash
-xcodebuild -project Dirt.xcodeproj -scheme Dirt -configuration Release \
+xcodebuild -project Dirt.xcodeproj -scheme 'DIRT Production' \
   -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO build
 
 scripts/verify-ios-release.sh \

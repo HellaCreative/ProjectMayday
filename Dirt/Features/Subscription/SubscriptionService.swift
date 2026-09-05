@@ -63,7 +63,7 @@ final class SubscriptionService {
     init() {
         updatesTask = Task { [weak self] in
             for await update in Transaction.updates {
-                await self?.handle(verification: update)
+                await self?.handleUpdate(verification: update)
             }
         }
         Task { await refresh() }
@@ -107,6 +107,10 @@ final class SubscriptionService {
         isLoadingProducts = true
         loadError = nil
         defer { isLoadingProducts = false }
+        let bundleID = Bundle.main.bundleIdentifier ?? "unknown"
+        RoutingDebugLog.shared.event(
+            "storekit products request begin bundle=\(bundleID) ids=[\(productIDs.joined(separator: ","))]"
+        )
         do {
             let loaded = try await Product.products(for: productIDs)
             guard !loaded.isEmpty else {
@@ -115,9 +119,17 @@ final class SubscriptionService {
                     uniqueKeysWithValues: Plan.allCases.map { ($0, .unavailable) }
                 )
                 loadError = "Subscription options are unavailable right now. Try again shortly."
+                RoutingDebugLog.shared.event(
+                    "storekit products response empty bundle=\(bundleID) requested=\(productIDs.count) "
+                        + "hint=local_configuration_inactive_or_catalog_products_unavailable"
+                )
                 return
             }
             products = loaded.sorted { $0.price < $1.price }
+            RoutingDebugLog.shared.event(
+                "storekit products response loaded bundle=\(bundleID) count=\(loaded.count) "
+                    + "ids=[\(loaded.map(\.id).sorted().joined(separator: ","))]"
+            )
             await refreshIntroOfferStatuses(for: loaded)
         } catch {
             products = []
@@ -125,6 +137,11 @@ final class SubscriptionService {
                 uniqueKeysWithValues: Plan.allCases.map { ($0, .unavailable) }
             )
             loadError = "Could not load subscription options. Check your connection and try again."
+            let nsError = error as NSError
+            RoutingDebugLog.shared.event(
+                "storekit products request failed bundle=\(bundleID) domain=\(nsError.domain) "
+                    + "code=\(nsError.code) msg=\(error.localizedDescription)"
+            )
         }
     }
 
@@ -137,22 +154,44 @@ final class SubscriptionService {
         }
         operationInFlight = .purchase
         defer { operationInFlight = nil }
+        RoutingDebugLog.shared.event("storekit purchase begin product=\(product.id)")
         do {
             let result = try await product.purchase()
             switch result {
-            case let .success(verification):
-                await handle(verification: verification)
-                return isSubscribed
+            case let .success(.verified(transaction)):
+                // A verified successful purchase is the entitlement handoff.
+                // Unlock first, then finish the transaction. Re-querying
+                // currentEntitlements before unlocking can briefly return the
+                // pre-purchase snapshot in a local StoreKit session.
+                let granted = applyVerifiedEntitlement(transaction, source: "purchase")
+                await transaction.finish()
+                RoutingDebugLog.shared.event(
+                    "storekit purchase finished product=\(transaction.productID) granted=\(granted ? 1 : 0)"
+                )
+                return granted
                     ? .subscribed
-                    : .failed(message: "The App Store purchase could not be verified. Check your purchase history, then use Restore Purchases.")
+                    : .failed(message: "The App Store purchase is not currently active. Check your purchase history, then use Restore Purchases.")
+            case let .success(.unverified(_, error)):
+                let nsError = error as NSError
+                RoutingDebugLog.shared.event(
+                    "storekit purchase unverified product=\(product.id) domain=\(nsError.domain) code=\(nsError.code)"
+                )
+                return .failed(message: "The App Store purchase could not be verified. Check your purchase history, then use Restore Purchases.")
             case .userCancelled:
+                RoutingDebugLog.shared.event("storekit purchase cancelled product=\(product.id)")
                 return .cancelled
             case .pending:
+                RoutingDebugLog.shared.event("storekit purchase pending product=\(product.id)")
                 return .pending
             @unknown default:
+                RoutingDebugLog.shared.event("storekit purchase unknown product=\(product.id)")
                 return .failed(message: "The App Store returned an unknown purchase result. Try again later.")
             }
         } catch {
+            let nsError = error as NSError
+            RoutingDebugLog.shared.event(
+                "storekit purchase failed product=\(product.id) domain=\(nsError.domain) code=\(nsError.code)"
+            )
             return .failed(message: "The purchase result could not be confirmed. Check your App Store purchase history, then use Restore Purchases.")
         }
     }
@@ -164,30 +203,90 @@ final class SubscriptionService {
         }
         operationInFlight = .restore
         defer { operationInFlight = nil }
+        RoutingDebugLog.shared.event("storekit restore begin")
         do {
             try await AppStore.sync()
         } catch {
+            let nsError = error as NSError
+            RoutingDebugLog.shared.event(
+                "storekit restore failed domain=\(nsError.domain) code=\(nsError.code)"
+            )
             return .failed(message: "Purchases could not be restored. Check your connection and try again.")
         }
         await refreshEntitlements()
+        RoutingDebugLog.shared.event("storekit restore complete active=\(isSubscribed ? 1 : 0)")
         return isSubscribed ? .restored : .noActiveSubscription
     }
 
     private func refreshEntitlements() async {
-        var active = false
+        var activeProductIDs: [String] = []
+        var unverifiedCount = 0
         for await result in Transaction.currentEntitlements {
-            guard case let .verified(transaction) = result else { continue }
-            if productIDs.contains(transaction.productID), transaction.revocationDate == nil {
-                active = true
+            switch result {
+            case let .verified(transaction):
+                if transactionIsActive(transaction) {
+                    activeProductIDs.append(transaction.productID)
+                }
+            case .unverified:
+                unverifiedCount += 1
             }
         }
-        isSubscribed = active
+        isSubscribed = !activeProductIDs.isEmpty
+        RoutingDebugLog.shared.event(
+            "storekit entitlements refreshed active=\(isSubscribed ? 1 : 0) "
+                + "products=[\(activeProductIDs.sorted().joined(separator: ","))] unverified=\(unverifiedCount)"
+        )
     }
 
-    private func handle(verification: VerificationResult<Transaction>) async {
-        guard case let .verified(transaction) = verification else { return }
+    private func handleUpdate(verification: VerificationResult<Transaction>) async {
+        guard case let .verified(transaction) = verification else {
+            RoutingDebugLog.shared.event("storekit transaction update unverified")
+            return
+        }
+        _ = applyVerifiedEntitlement(transaction, source: "update")
         await transaction.finish()
+        // Updates also carry expiration, revocation, and upgrade changes. A
+        // complete refresh removes access only when no active DIRT PRO
+        // entitlement remains.
         await refreshEntitlements()
+    }
+
+    @discardableResult
+    private func applyVerifiedEntitlement(_ transaction: Transaction, source: String) -> Bool {
+        let active = transactionIsActive(transaction)
+        if active {
+            isSubscribed = true
+        }
+        RoutingDebugLog.shared.event(
+            "storekit transaction verified source=\(source) product=\(transaction.productID) "
+                + "recognized=\(productIDs.contains(transaction.productID) ? 1 : 0) "
+                + "revoked=\(transaction.revocationDate == nil ? 0 : 1) "
+                + "upgraded=\(transaction.isUpgraded ? 1 : 0) active=\(active ? 1 : 0)"
+        )
+        return active
+    }
+
+    private func transactionIsActive(_ transaction: Transaction, now: Date = .now) -> Bool {
+        Self.entitlementIsActive(
+            productID: transaction.productID,
+            revocationDate: transaction.revocationDate,
+            isUpgraded: transaction.isUpgraded,
+            expirationDate: transaction.expirationDate,
+            now: now
+        )
+    }
+
+    nonisolated static func entitlementIsActive(
+        productID: String,
+        revocationDate: Date?,
+        isUpgraded: Bool,
+        expirationDate: Date?,
+        now: Date
+    ) -> Bool {
+        guard Plan(rawValue: productID) != nil,
+              revocationDate == nil,
+              !isUpgraded else { return false }
+        return expirationDate.map { $0 > now } ?? true
     }
 
     private func refreshIntroOfferStatuses(for loaded: [Product]) async {

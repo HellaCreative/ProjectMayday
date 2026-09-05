@@ -48,7 +48,7 @@ ignored and cleared outside those builds.
 | `Dirt/Features/Subscription/TrialGateModel.swift` | Free-feature and two-free-Start policy |
 | `Dirt/Features/Subscription/PaywallView.swift` | Dismissible StoreKit-backed DIRT PRO offer |
 | `Dirt/Dirt.entitlements` | `com.apple.developer.applesignin` |
-| `Dirt/Dirt.storekit` | Local StoreKit test configuration attached to the Dirt scheme |
+| `Dirt/Dirt.storekit` | Local StoreKit test configuration attached only to `DIRT Dev` |
 | `Dirt/Networking/LegalLinks.swift` | Website, privacy, terms, and subscription-management URLs |
 | `supabase/migrations/20260904113053_delete_own_account.sql` | Versioned fail-closed deletion contract; deployed in production 2026-09-04 |
 
@@ -147,13 +147,34 @@ come from StoreKit at runtime. Do not hard-code a price or promise a seven-day
 trial in app copy or documentation. `Dirt.storekit` is only the local test
 configuration; App Store Connect remains the production source of truth.
 
+Use the **DIRT Dev** Xcode scheme for local subscription testing. It runs the
+Debug app (`com.mayday.dirt.dev`) and attaches `Dirt.storekit`. Use **DIRT
+Production** for release validation and archives; it runs the Release app
+(`com.mayday.dirt`) without a local catalogue or tester controls. No ambiguous
+generic scheme is retained.
+
 Purchase, pending approval, cancellation, verification failure, and restore
 failure are distinct outcomes. Restore must never say “No purchases found” when
 the App Store sync itself failed.
 
+A verified, recognized, non-revoked StoreKit transaction grants DIRT PRO in the
+app immediately, before the transaction is finished. Launch, restore, and
+transaction-update reconciliation still scan current entitlements so expiration,
+refund, revocation, upgrade, and cross-device changes converge correctly. Turning
+off renewal does not revoke an already-paid or trial entitlement; access remains
+active until StoreKit reports its expiration or revocation. Diagnostics record
+product IDs and outcome state, but never transaction IDs, receipts, or account
+tokens.
+
 ---
 
-## Profile sheet
+## Profile screen
+
+Profile owns the full display in both orientations. The map, dock, and map
+controls remain behind the modal and are not interactive until the rider uses
+the explicit **Close** control. The content column is capped on wide displays so
+account and preference controls remain readable rather than stretching across
+the screen.
 
 | State / section | Contents |
 | --- | --- |

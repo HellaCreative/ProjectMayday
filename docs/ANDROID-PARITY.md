@@ -2,7 +2,7 @@
 
 **Status:** active full-product Android parity authority
 
-**Reconciled:** 2026-09-03
+**Reconciled:** 2026-09-04
 
 **Frozen iOS/shared-routing implementation:**
 `94b467a11375e3ea3233c127b07af2ef039d0658`
@@ -11,6 +11,13 @@
 **Accepted frozen-routing iOS build:** `2 (13)` on White
 
 **Current iOS engineering reference:** build `2 (14)`, commit `46c8c42`
+
+**Latest lockstep delta:** September 4 Groups presence hardening and rider
+status vocabulary (`riding`, `flat_tire`, `dead_battery`, `unrepairable`,
+`injured`, `stuck`), including migration
+`20260904114500_expand_rider_statuses.sql`. This delta is implemented and
+automated-tested on iOS/dev Supabase; Android implementation evidence remains
+open.
 
 Build `2 (14)` still requires the focused physical-device navigation pass in
 `docs/NAVIGATION-PREP-REQUALIFICATION-2026-09-04.md`. Android must port its
@@ -284,6 +291,11 @@ Android uses Google Play Billing and Android-secure storage; it does not copy
 StoreKit or Keychain code. The rider contract must nevertheless match build
 `2 (14)`:
 
+- Launch pricing mirrors the iOS market position: US$9.99 monthly / US$39.99
+  yearly and CA$12.99 monthly / CA$49.99 yearly, using Google Play's localized
+  storefront prices. The seven-day free trial is attached to the yearly plan
+  only; the monthly plan has no introductory trial.
+
 - Saving a route locally is free.
 - GPX export requires an active DIRT Pro entitlement.
 - A rider receives exactly two free navigation starts. A start is consumed
@@ -295,9 +307,50 @@ StoreKit or Keychain code. The rider contract must nevertheless match build
 - The paywall displays the localized price, billing period, renewal terms, and
   introductory-offer eligibility supplied by Google Play. Never hard-code a
   price or promise an offer to an ineligible rider.
+- The paywall presents the same product story and purchase hierarchy as iOS:
+  a fixed DIRT PRO title and value proposition; DIRT-first routing, fuel-aware
+  planning, ride navigation, live groups, and GPX tools in the only scrollable
+  feature region; then an anchored purchase region containing offer summary,
+  yearly/monthly choice, purchase, restore, and legal terms. The feature region
+  uses compact, readable icon rows and shows approximately three benefits at
+  once on a standard phone, with restrained edge fades so content moves
+  smoothly behind the fixed regions. The header must not crowd out the product
+  story. At accessibility font sizes the entire surface becomes one scroll so
+  enlarged content is never obscured.
+- The yearly offer is selected by default. The selected offer must be visually
+  unambiguous but visually subordinate to the single solid purchase action; a
+  restrained brand tint and border are preferred to a second solid-orange
+  block. Trial language appears only when Google Play reports that the rider is
+  eligible for the yearly trial. Purchase copy must still state honestly that
+  DIRT Pro gates unlimited navigation and GPX export; it must not imply that
+  free route planning or local saving requires payment.
+- Android should use polished Material-native iconography and controls while
+  preserving the content order and visual hierarchy. Do not copy SwiftUI or
+  Apple-only presentation APIs merely to create pixel parity.
+- Use one top dismiss action; do not repeat it as **Maybe later** in the
+  purchase region. Never show a tester-bypass action inside the paywall,
+  including development builds. When Play products are unavailable, show one
+  compact retry state rather than duplicate failure copy.
 - Pending, cancelled, failed, already-owned, and successful purchases are
-  distinct states. Purchase acknowledgement and entitlement refresh are
-  idempotent.
+  distinct states. A verified, recognized, active purchase unlocks DIRT PRO in
+  local UI state before the purchase is acknowledged; acknowledgement and
+  later entitlement refresh are idempotent. Disabling renewal does not revoke
+  paid/trial access before Google Play reports expiration, refund, or
+  revocation.
+- Product loading diagnostics identify the active application ID, requested
+  product IDs, whether Google Play returned an empty catalogue or an error, and
+  the loaded product IDs. Diagnostics must not include purchase tokens or other
+  account secrets.
+- The Android development run configuration must attach its local Google Play
+  Billing test catalogue before app launch, and an automated paywall check must
+  fail if the monthly and yearly products are absent. Production must never
+  package or activate that local billing catalogue.
+- Expose two plainly named Android run/build choices that mirror iOS: **DIRT
+  Dev** selects the development application ID, development Supabase/API
+  configuration, visible DEV badge, tester tools, and local Play Billing test
+  catalogue; **DIRT Production** selects the production application ID and
+  services and excludes every development/test fixture. Do not leave an
+  ambiguous generic configuration that can silently target either environment.
 - **Restore Purchases** has an Android-native equivalent that queries current
   purchases and reports restored, no-entitlement, and store/network failure
   truthfully.
@@ -366,13 +419,51 @@ Android shares the Supabase migrations and row-level-security contract. It
 must not create its own incompatible Group tables or client-only ownership
 rules.
 
+Supabase is a shared service, not a platform-specific backend. Apply each
+checked-in migration exactly once to each named Supabase environment. Android
+must consume the already-migrated development or production project selected
+by its build variant; it must not rerun migrations at app startup, create an
+Android-only Supabase project, duplicate tables, or maintain a separate status
+schema. Production receives a migration only through the normal hardened
+promotion process after development qualification.
+
 - Group creation calls the transactional `create_group` RPC from
   `supabase/migrations/20260904113100_create_group.sql`.
 - Distress and rider-state Realtime broadcasts go only to the selected Group's
   private channel. They are never global or sent to every joined Group.
+- The selectable rider statuses, in presentation order, are **Riding**, **Flat
+  Tire**, **Dead Battery**, **Unrepairable**, **Injured**, and **Stuck**. Their
+  wire/database values are `riding`, `flat_tire`, `dead_battery`,
+  `unrepairable`, `injured`, and `stuck`.
+- `riding` is the ordinary/default state. The five remaining selectable values
+  are distress states and create the same selected-group-only alert behaviour.
+  Flat Tire, Dead Battery, Unrepairable, and legacy `breakdown` use the
+  mechanical/orange treatment; Injured is red and Stuck is purple.
+- During mixed-version rollout, decode legacy `available` as Riding and accept
+  legacy `breakdown` as mechanical distress. New Android writes must use the
+  current values; do not expose Available or generic Breakdown in the picker.
 - Normal Group location cadence is 10 seconds; active distress cadence is 5
   seconds. Background behaviour must follow Android foreground-service and
   permission rules without weakening the in-app privacy boundary.
+- A stationary rider remains live from the last trustworthy position while
+  sharing is enabled. Fresh heartbeats update presence without making a rider
+  flicker offline merely because Android has not delivered a new GPS sample.
+  Stop Sharing, sign-out, leaving/deletion, stale heartbeat expiry, and an
+  explicit sharing-off event still end visibility honestly.
+- If Start Sharing has only an expired cached fix, explicitly request a fresh
+  Android location while keeping the rider in a visible waiting state. Emit
+  privacy-safe diagnostics for permission/accuracy state, fix freshness and
+  accuracy, the first committed online presence, and backend write failures;
+  do not log coordinates or account identifiers.
+- The sharing button and persisted sharing intent must remain synchronized
+  across sheet reopen and process relaunch. Starting, stopping, leaving, and
+  rejoining must update both local state and peers without requiring an app
+  restart. Membership changes refresh the visible roster immediately, with a
+  short polling fallback for missed Realtime events.
+- Invite codes are case-insensitive and are presented/copied in lowercase.
+- Rider identity/status chips sit above and centered on their location marker.
+  Refreshing a marker must preserve its map coordinate and must never jump the
+  view to the screen origin.
 - Precise, approximate, denied, permanently denied, services-disabled, and
   recovery-through-Settings states receive honest, actionable UI.
 - Copy must not promise messaging or push notifications until those systems
@@ -387,12 +478,33 @@ Android must implement equivalents of `GroupSafetyPolicyTests` and verify RLS
 against a deployed production-shaped backend. Local Kotlin guards are not a
 substitute for backend enforcement.
 
+Required Android tests include current/legacy status decoding, every current
+status write, distress alert creation and resolution when returning to Riding,
+10-second Riding versus 5-second distress cadence, stationary retained-fix
+heartbeats, sharing-intent restoration, immediate stop/leave/join roster
+updates, lowercase invite entry, and marker-position preservation.
+
 ## 13. Product surface, GPX, and design parity
 
 Android must preserve the DIRT product hierarchy and route-first experience,
 not replace it with a generic Material sample. Controls, typography, sheets,
 motion, accessibility semantics, and system integrations should feel native to
 Android while maintaining the same information priority and rider outcomes.
+
+Rider Services use the same environment-selected DIRT backend contract on both
+platforms. Fuel remains packed. Campground, lodging, and liquor viewport
+requests go through `/api/poi`; Android must not restore a direct dependency on
+one public Overpass host. It must debounce camera changes, request all three
+non-fuel categories together when any is enabled, filter locally to the enabled
+switches, preserve the last successful viewport result during temporary
+upstream failure, and emit privacy-safe request/source/failure diagnostics.
+No account identifier accompanies visible bounds.
+
+Profile is a focused full-screen destination, not a partial map overlay. It must
+hide the map and map controls, provide an explicit accessible close/back action,
+scroll vertically, and cap the content width on larger Android devices. Account,
+subscription, ride preferences, destructive account deletion, tester-only tools,
+and legal links retain the same ordering and release-channel rules as iOS.
 
 For imported GPX files, current parity is faithful trace display and local save.
 The future GPX-to-DIRT conversion in `docs/GPX-IMPORT-TO-DIRT-PLAN.md` is one
@@ -445,7 +557,7 @@ service/device proof exist.
 | Build `2 (14)` Start Navigation | First stage/current region block; rolling next-stage/region prep | Long-route transition tests + physical device |
 | `SubscriptionGateTests.swift` | Free Save, gated export, exactly two consumed ride starts | Unit/UI + Google Play test purchase/restore |
 | Account/Profile + deletion RPC | Same lifecycle and fail-closed deletion | Real provider + deployed RPC + data-removal audit |
-| Groups safety policies + `create_group` RPC | Same selected-group privacy and authorization | Multi-account RLS/Realtime/background tests |
+| Groups safety policies + shared migrations/RPCs | Same selected-group privacy, current rider statuses, retained stationary presence, synchronized sharing state, and authorization | Multi-account RLS/Realtime/background tests + marker stability + physical devices |
 | `APP-PRIVACY-DATA-MAP.md` | Implementation-matched Play Data safety disclosure | Release bundle and network/storage audit |
 | `GPX-IMPORT-TO-DIRT-PLAN.md` | One cross-platform conversion contract | Shared fixtures + platform UX/device tests |
 | Release verifier/checklist | Android signed-bundle and Play Console equivalent | Clean production AAB + closed-track proof |

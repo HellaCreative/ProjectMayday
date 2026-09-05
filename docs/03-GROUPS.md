@@ -65,7 +65,7 @@ Missing, future, malformed, or stale timestamps are offline, never live.
 | Detail | Invite code + copy; sharing controls; roster; leave/delete |
 | Start sharing | Wait for a current, accurate GPS fix, then `requestAlways` + background location; upsert every **10s** normally and every **5s** during distress |
 | Stop sharing | Broadcast sharing-off, upsert `sharing_enabled: false`, `status: offline`, and release only the group-sharing background-location claim |
-| Status while sharing | `available` \| `breakdown` \| `injured` \| `stuck` (picker) |
+| Status while sharing | `riding` \| `flat_tire` \| `dead_battery` \| `unrepairable` \| `injured` \| `stuck` (picker) |
 | Roster refresh | Realtime updates with a database polling fallback while tracked (**30s** when connected, **10s** when Realtime is down) |
 | Map pins | Live peers (not self): status-colored dot + **name/status chip**; pins keep updating after sheet close while that group is tracked |
 | Focus peer | Scope button flies map to peer, closes sheet |
@@ -77,6 +77,14 @@ Missing, future, malformed, or stale timestamps are offline, never live.
 | Close sheet | `onDisappear` → `closeDetail()` (reset to list) |
 
 Presence upsert payload fields: `user_id`, `sharing_enabled`, `status`, `latitude`, `longitude`, `heading`, `speed_mps`, `accuracy_m`, `last_seen_at`.
+
+When a stationary phone has only an old cached fix, Start Sharing restarts the
+standard Core Location stream to force a newly timestamped reading. The rider
+remains in the explicit waiting state until that fix passes the shared freshness
+and accuracy policy; the app never manufactures a green/live state from an
+unpublishable coordinate. Exported diagnostics record sharing start/stop,
+authorization/accuracy mode, fix age and accuracy, first successful presence
+commit, and failed presence writes without recording coordinates or account IDs.
 
 ---
 

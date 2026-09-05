@@ -9,6 +9,8 @@ fi
 app_bundle="$1"
 info_plist="$app_bundle/Info.plist"
 executable="$app_bundle/Dirt.debug.dylib"
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+dev_scheme="$repo_root/Dirt.xcodeproj/xcshareddata/xcschemes/DIRT Dev.xcscheme"
 failures=0
 
 fail() {
@@ -67,6 +69,15 @@ if grep -q 'dirt-mayday.vercel.app' <<<"$binary_strings"; then
   fail "production routing service is present in the development executable"
 else
   pass "production routing service absent from development executable"
+fi
+
+expected_storekit_reference='identifier = "../../../Dirt/Dirt.storekit"'
+storekit_reference_count=$(grep -F -c "$expected_storekit_reference" "$dev_scheme" || true)
+if [[ "$storekit_reference_count" -eq 2 ]] \
+  && [[ -f "$(dirname "$dev_scheme")/../../../Dirt/Dirt.storekit" ]]; then
+  pass "DIRT Dev StoreKit catalogue reference resolves"
+else
+  fail "DIRT Dev StoreKit catalogue reference is missing or invalid"
 fi
 
 if [[ $failures -ne 0 ]]; then

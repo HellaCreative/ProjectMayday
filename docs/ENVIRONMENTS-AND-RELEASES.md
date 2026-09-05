@@ -72,6 +72,7 @@ Required values:
 - environment name and build identity;
 - Supabase URL and publishable key;
 - routing API base URL and routing contract;
+- rider-services `/api/poi` URL derived from that same environment base;
 - Shortbread manifest URL;
 - pack CDN base URL and manifest URL; and
 - public legal/support URLs where environment-specific testing is required.

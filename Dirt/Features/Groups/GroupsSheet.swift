@@ -279,7 +279,7 @@ struct GroupDetailView: View {
     @Environment(AppEnvironment.self) private var app
 
     private var groups: GroupsViewModel { app.groups }
-    private let statuses = ["available", "breakdown", "injured", "stuck"]
+    private let statuses = GroupsViewModel.selectableStatuses
 
     var body: some View {
         @Bindable var groups = app.groups
@@ -287,14 +287,13 @@ struct GroupDetailView: View {
             if let invite = group.inviteCode {
                 Section("Invite code") {
                     HStack(spacing: DirtSpace.inner) {
-                        Text(invite)
+                        Text(invite.lowercased())
                             .font(DirtType.metric)
                             .tracking(3)
-                            .textCase(.uppercase)
                             .foregroundStyle(DirtTheme.ink)
                         Spacer(minLength: 0)
                         Button {
-                            UIPasteboard.general.string = invite
+                            UIPasteboard.general.string = invite.lowercased()
                             app.planner.toast = "Invite code copied"
                         } label: {
                             Image(systemName: "doc.on.doc")
@@ -321,7 +320,7 @@ struct GroupDetailView: View {
                         get: { groups.status },
                         set: { groups.setStatus($0) }
                     )) {
-                        ForEach(statuses, id: \.self) { Text($0.capitalized).tag($0) }
+                        ForEach(statuses, id: \.self) { Text(GroupsViewModel.statusLabel($0)).tag($0) }
                     }
                     .font(DirtType.rowTitle)
                     Button("Stop sharing") { groups.stopSharing() }
@@ -412,7 +411,7 @@ struct GroupDetailView: View {
 
     private func memberDetail(_ member: GroupMemberRow) -> String {
         if member.isLive {
-            return "\(member.role.capitalized) · \(GroupsViewModel.statusLabel(member.status ?? "available"))"
+            return "\(member.role.capitalized) · \(GroupsViewModel.statusLabel(member.status ?? "riding"))"
         }
         let seen = GroupsViewModel.lastSeenLabel(member.lastSeenAt)
         return "\(member.role.capitalized) · Offline · Seen \(seen)"

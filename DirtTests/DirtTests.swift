@@ -862,6 +862,38 @@ struct DirtTests {
         #expect(!cache.covers(inner))
     }
 
+    @Test func riderServiceViewportCachePreservesSuccessfulNonFuelResults() {
+        let coverage = MapViewportBounds(
+            minLongitude: -64,
+            minLatitude: 44,
+            maxLongitude: -63,
+            maxLatitude: 45
+        )
+        let inner = MapViewportBounds(
+            minLongitude: -63.8,
+            minLatitude: 44.2,
+            maxLongitude: -63.2,
+            maxLatitude: 44.8
+        )
+        let campground = POIFeature(
+            id: "camp", category: "campground",
+            latitude: 44.65, longitude: -63.57,
+            name: "Camp", address: nil, brand: nil,
+            openingHours: nil, phone: nil, website: nil
+        )
+        let fuel = POIFeature(
+            id: "fuel", category: "fuel",
+            latitude: 44.66, longitude: -63.58,
+            name: "Fuel", address: nil, brand: nil,
+            openingHours: nil, phone: nil, website: nil
+        )
+        var cache = RiderServiceViewportCache()
+        cache.merge([campground, fuel], coverage: coverage)
+        #expect(cache.covers(inner))
+        #expect(cache.count == 1)
+        #expect(cache.features(in: inner).map(\.id) == ["camp"])
+    }
+
     @Test func mapStatePublishesFuelReplacementModeFromCandidateMarkers() {
         let state = MapState()
         state.setMarkers([

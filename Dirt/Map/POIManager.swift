@@ -168,6 +168,38 @@ struct FuelViewportCache {
     }
 }
 
+/// Successful campground / lodging / liquor viewport results. This is kept
+/// separate from packed fuel so a temporary upstream outage cannot erase the
+/// last trustworthy service pins already shown to the rider.
+struct RiderServiceViewportCache {
+    private(set) var successfulCoverages: [MapViewportBounds] = []
+    private var featuresByID: [String: POIFeature] = [:]
+
+    var count: Int { featuresByID.count }
+
+    func covers(_ bounds: MapViewportBounds) -> Bool {
+        successfulCoverages.contains { $0.contains(bounds) }
+    }
+
+    mutating func merge(_ features: [POIFeature], coverage: MapViewportBounds) {
+        for feature in features where feature.category != "fuel" {
+            featuresByID[feature.id] = feature
+        }
+        successfulCoverages.append(coverage)
+        if successfulCoverages.count > 24 {
+            successfulCoverages.removeFirst(successfulCoverages.count - 24)
+        }
+    }
+
+    func features(in bounds: MapViewportBounds) -> [POIFeature] {
+        featuresByID.values
+            .filter { bounds.contains(latitude: $0.latitude, longitude: $0.longitude) }
+            .sorted { lhs, rhs in
+                lhs.id == rhs.id ? lhs.displayName < rhs.displayName : lhs.id < rhs.id
+            }
+    }
+}
+
 
 private enum POIC {
     static let minZoom = 6.5
@@ -177,7 +209,7 @@ private enum POIC {
 
 /// Loads Rider Services POIs. Online planning fuel comes from the same live
 /// candidate as `/api/route`; offline fuel comes from the installed pack.
-/// Camp / lodging / liquor still use OSM Overpass for the current viewport.
+/// Camp / lodging / liquor use DIRT's bounded OSM service for the viewport.
 /// Fuel goes through `FuelPOIFilter` at pack build time (bulk / cardlock / truck-only / closed).
 @MainActor
 final class POIManager {
@@ -197,6 +229,8 @@ final class POIManager {
     private let network: NetworkPathMonitor
     private var debounceTask: Task<Void, Never>?
     private var fuelViewportCache = FuelViewportCache()
+    private var riderServiceViewportCache = RiderServiceViewportCache()
+    private var lastRiderServicePaint: [POIFeature] = []
     private let session: URLSession = {
         let cfg = URLSessionConfiguration.default
         cfg.timeoutIntervalForRequest = 30
@@ -391,12 +425,43 @@ final class POIManager {
         }
         let needOverpass = prefs.showCampgrounds || prefs.showLodging || prefs.showLiquor
         if needOverpass {
-            do {
-                let raw = try await fetchOSM(bbox: bbox)
-                features.append(contentsOf: raw.compactMap { feature(from: $0, prefs: prefs, fuelOnly: false) })
-            } catch {
-                // Keep last paint when Overpass is unreachable.
+            var requestFailed = false
+            if !riderServiceViewportCache.covers(queryBounds) {
+                do {
+                    let raw = try await fetchOSM(bbox: bbox)
+                    let loaded = raw.compactMap {
+                        feature(from: $0, prefs: nil, fuelOnly: false)
+                    }
+                    riderServiceViewportCache.merge(loaded, coverage: queryBounds)
+                    RoutingDebugLog.shared.event(
+                        "poi viewport loaded=\(loaded.count) cached=\(riderServiceViewportCache.count) " +
+                            "source=dirt-poi bounds=visible+20pct"
+                    )
+                } catch is CancellationError {
+                    // Camera motion cancelled stale work. Keep the current map
+                    // paint and let the settled viewport schedule the next load.
+                    return
+                } catch {
+                    requestFailed = true
+                    RoutingDebugLog.shared.event(
+                        "poi viewport unavailable preserved=\(riderServiceViewportCache.count) " +
+                            "source=dirt-poi msg=\(error.localizedDescription)"
+                    )
+                }
+            } else {
+                RoutingDebugLog.shared.event(
+                    "poi viewport cache hit source=dirt-poi cached=\(riderServiceViewportCache.count)"
+                )
             }
+            let riderServicePaint = (requestFailed
+                ? lastRiderServicePaint
+                : riderServiceViewportCache.features(in: queryBounds)).filter {
+                prefs.isPOIEnabled(category: $0.category)
+            }
+            if !requestFailed {
+                lastRiderServicePaint = riderServicePaint
+            }
+            features.append(contentsOf: riderServicePaint)
         }
         let stable = POIDeduper.collapseNearby(features).sorted {
             $0.category == $1.category ? $0.id < $1.id : $0.category < $1.category
@@ -405,22 +470,38 @@ final class POIManager {
     }
 
     private func fetchOSM(bbox: _BBox) async throws -> [_OSMElement] {
-        let query = """
-        [out:json][timeout:25];
-        (
-          nwr["tourism"~"^(hotel|motel|hostel|guest_house|chalet)$"](\(bbox.minLat),\(bbox.minLon),\(bbox.maxLat),\(bbox.maxLon));
-          nwr["tourism"~"^(camp_site|caravan_site)$"](\(bbox.minLat),\(bbox.minLon),\(bbox.maxLat),\(bbox.maxLon));
-          nwr["shop"="alcohol"](\(bbox.minLat),\(bbox.minLon),\(bbox.maxLat),\(bbox.maxLon));
-        );
-        out center tags;
-        """
-        var request = URLRequest(url: AppConfig.overpassURL)
+        let requestID = "poi-\(UUID().uuidString.prefix(8).lowercased())"
+        var request = URLRequest(url: AppConfig.livePOIURL)
         request.httpMethod = "POST"
-        request.setValue("application/x-www-form-urlencoded; charset=utf-8", forHTTPHeaderField: "Content-Type")
-        let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? query
-        request.httpBody = "data=\(encoded)".data(using: .utf8)
-        let (data, _) = try await session.data(for: request)
-        return try JSONDecoder().decode(_OSMResponse.self, from: data).elements
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(requestID, forHTTPHeaderField: "X-Dirt-Request-ID")
+        request.timeoutInterval = 25
+        request.httpBody = try JSONEncoder().encode(bbox)
+        RoutingDebugLog.shared.event(
+            "poi request begin id=\(requestID) categories=campground,lodging,liquor timeoutMs=25000"
+        )
+        do {
+            let started = ContinuousClock.now
+            let (data, response) = try await session.data(for: request)
+            guard let http = response as? HTTPURLResponse,
+                  (200..<300).contains(http.statusCode)
+            else {
+                let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+                throw _POIServiceError.rejected(statusCode: code)
+            }
+            let decoded = try JSONDecoder().decode(_OSMResponse.self, from: data)
+            let elapsed = ContinuousClock.now - started
+            let source = http.value(forHTTPHeaderField: "X-Dirt-POI-Source") ?? "unknown"
+            RoutingDebugLog.shared.event(
+                "poi request response id=\(requestID) http=\(http.statusCode) " +
+                    "elements=\(decoded.elements.count) upstream=\(source) elapsed=\(elapsed)"
+            )
+            return decoded.elements
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch let error as URLError where error.code == .cancelled {
+            throw CancellationError()
+        }
     }
 
     private func feature(from el: _OSMElement, prefs: LayerPrefsSnapshot?, fuelOnly: Bool) -> POIFeature? {
@@ -469,7 +550,18 @@ final class POIManager {
     }
 }
 
-nonisolated private struct _BBox: Sendable {
+nonisolated private enum _POIServiceError: LocalizedError {
+    case rejected(statusCode: Int)
+
+    var errorDescription: String? {
+        switch self {
+        case let .rejected(statusCode):
+            "DIRT rider-service request failed (HTTP \(statusCode))."
+        }
+    }
+}
+
+nonisolated private struct _BBox: Codable, Sendable {
     let minLon, minLat, maxLon, maxLat: Double
 }
 

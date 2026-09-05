@@ -117,6 +117,22 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
         manager.startUpdatingLocation()
     }
 
+    /// Force Core Location to deliver a newly timestamped fix. The map may
+    /// already have standard updates running while a stationary phone retains
+    /// an older cached location; restarting that stream asks the system for a
+    /// current reading without changing the long-running sharing policy.
+    func restartUpdatesForFreshFix() {
+        guard isAuthorized else {
+            RoutingDebugLog.shared.event(
+                "location fresh fix deferred authorization=\(authorization.rawValue)"
+            )
+            return
+        }
+        RoutingDebugLog.shared.event("location fresh fix requested")
+        manager.stopUpdatingLocation()
+        manager.startUpdatingLocation()
+    }
+
     func stopUpdates() {
         manager.stopUpdatingLocation()
     }
@@ -169,6 +185,14 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
     }
 
     nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
-        // GPS hiccups are routine while riding; keep the last known fix.
+        // GPS hiccups are routine while riding; keep the last known fix, but
+        // expose the failure so a sharing session cannot appear to stall for
+        // an unknowable reason in an exported diagnostic log.
+        let nsError = error as NSError
+        Task { @MainActor in
+            RoutingDebugLog.shared.event(
+                "location update failed domain=\(nsError.domain) code=\(nsError.code)"
+            )
+        }
     }
 }

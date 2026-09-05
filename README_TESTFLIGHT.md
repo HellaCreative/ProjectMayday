@@ -14,7 +14,8 @@ MapLibre Native + Supabase Swift via SPM.
 | --- | --- |
 | App name | DIRT (Mayday) |
 | Display name on home screen | DIRT |
-| **Bundle ID** | `com.mayday.dirt` |
+| Development bundle ID | `com.mayday.dirt.dev` |
+| Production bundle ID | `com.mayday.dirt` |
 | **SKU** (ASC only) | `MAYDAY-DIRT-IOS-001` |
 | Apple Team ID (`DEVELOPMENT_TEAM`) | `34XM6B4G7A` |
 | Marketing version / build | `2` / `14` |
@@ -41,13 +42,20 @@ Public-release gates and the App Store Connect owner checklist live in
 open /Users/richardsmith/SandBox01/MAYDAYiOS/Dirt/Dirt.xcodeproj
 ```
 
-Select the **Dirt** scheme → your iPhone (or iPhone 17 Pro simulator) → ⌘R.
+Select **DIRT Dev** for ordinary development and device testing. Select
+**DIRT Production** only when validating or archiving the public app. Then
+choose your iPhone (or an iPhone simulator) and press ⌘R.
+
+DIRT Dev uses the development backend, the `com.mayday.dirt.dev` identity, the
+orange DEV badge, tester tools, and the checked-in StoreKit catalogue. DIRT
+Production uses the production backend and `com.mayday.dirt`, has no DEV or
+tester surface, and does not attach the local StoreKit catalogue.
 
 ## Run on a device
 
 1. Open `Dirt.xcodeproj` in Xcode.
 2. Wait for SPM to resolve MapLibre + Supabase (File ▸ Packages ▸ Resolve if needed).
-3. Select the **Dirt** scheme and your connected iPhone (signing is automatic
+3. Select **DIRT Dev** and your connected iPhone (signing is automatic
    with team `34XM6B4G7A`). Device must be on **iOS 26.5+** (deployment target).
 4. Build & Run (⌘R). Grant Location "While Using" (and "Always" when you start
    navigation or group sharing).
@@ -58,12 +66,12 @@ Select the **Dirt** scheme → your iPhone (or iPhone 17 Pro simulator) → ⌘R
 cd /Users/richardsmith/SandBox01/MAYDAYiOS/Dirt
 
 # Unit tests on Simulator
-xcodebuild test -project Dirt.xcodeproj -scheme Dirt \
+xcodebuild test -project Dirt.xcodeproj -scheme 'DIRT Dev' \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' \
   CODE_SIGNING_ALLOWED=NO
 
 # Device build (generic)
-xcodebuild -project Dirt.xcodeproj -scheme Dirt \
+xcodebuild -project Dirt.xcodeproj -scheme 'DIRT Dev' \
   -destination 'generic/platform=iOS' build
 ```
 
@@ -76,7 +84,7 @@ xcodebuild -project Dirt.xcodeproj -scheme Dirt \
 cd /Users/richardsmith/SandBox01/MAYDAYiOS/Dirt
 
 # 1. Archive (already succeeds locally → build/Dirt.xcarchive)
-xcodebuild -project Dirt.xcodeproj -scheme Dirt \
+xcodebuild -project Dirt.xcodeproj -scheme 'DIRT Production' \
   -destination 'generic/platform=iOS' \
   -archivePath build/Dirt.xcarchive archive
 

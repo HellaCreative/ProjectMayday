@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Shared spring for Route / Layers / Profile / Group panels behind the dock.
+/// Shared spring for Route / Layers / Group panels behind the dock.
 enum DockSheetMotion {
     static let spring = Animation.spring(response: 0.46, dampingFraction: 0.74)
 

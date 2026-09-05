@@ -13,7 +13,7 @@ MapLibre Native integration, route paint, markers, location, and offline tile se
 | `Dirt/Map/MapStyleCatalog.swift` | Basemap IDs, style URL writer |
 | `Dirt/Map/ShortbreadTileSource.swift` | Dirt manifest validation, health gate, fallback, rollback |
 | `Dirt/Map/OfflineTileManager.swift` | Offline pack prefetch (active basemap) |
-| `Dirt/Map/POIManager.swift` | Rider Services POIs from OSM Overpass → MapState |
+| `Dirt/Map/POIManager.swift` | Rider Services POIs from DIRT `/api/poi` + packed fuel → MapState |
 | `Dirt/Map/NetworkOverlayManager.swift` | Paints nearby edges from the installed graph pack |
 | `Dirt/Map/GeoJSON+Utils.swift` | `Data.gunzipped()` gzip decompression; `LayerPrefsSnapshot` |
 | `Dirt/Networking/AppConfig.swift` | Shortbread URL + idle camera |
@@ -154,7 +154,7 @@ BC network lens is parked (`if false` in Layers). Overlay paint is the installed
 
 | | |
 |---|---|
-| **Data source** | OSM Overpass (`AppConfig.overpassURL`) |
+| **Data source** | Fuel: packed DIRT fuel service/installed pack. Campground, lodging, and liquor: build-selected DIRT `/api/poi`, which validates the viewport and provides bounded OSM Overpass fallback. |
 | **Trigger** | Map viewport change or layer pref change (350 ms debounce) |
 | **Min zoom** | 6.5 (below: source cleared) |
 | **MapLibre** | Source `dirt-poi` (GeoJSON); 4 `MLNCircleStyleLayer` (one per category) |
@@ -188,6 +188,8 @@ dirt-poi-{category}                                                ← above rou
 ## Starting a new agent on this area
 
 1. Read `MapLibreMapView.swift`, `MapState.swift`, `POIManager.swift`, `NetworkOverlayManager.swift`, `GeoJSON+Utils.swift`.
-2. Overlays paint the installed graph pack. POIs come from OSM Overpass.
+2. Overlays paint the installed graph pack. Non-fuel POIs come through DIRT's
+   `/api/poi`; the phone never depends on one public Overpass host. Preserve the
+   last successful non-fuel viewport paint during a temporary upstream outage.
 3. **Invariants:** Start-Nav-only tile prefetch; keep-through-reroute; never clear tiles on End alone; selected-route paint stays on the per-surface palette; bundled style. Do not flash NS at launch.
 4. **Open questions:** true corridor tiles vs bbox; Rich style JSON; BC lens re-enable.

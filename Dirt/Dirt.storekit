@@ -1,5 +1,5 @@
 {
-  "identifier" : "F1E2D3C4-0001-4A00-9000-DIRTPRO00001",
+  "identifier" : "001F875D-0DDB-417E-9D33-12D837667F87",
   "nonRenewingSubscriptions" : [
 
   ],
@@ -19,7 +19,7 @@
   },
   "subscriptionGroups" : [
     {
-      "id" : "A1B2C3D4-0002-4A00-9000-DIRTPRO00002",
+      "id" : "CD725BC5-8F8E-4D5A-91B2-C8C4786E0BED",
       "localizations" : [
 
       ],
@@ -32,15 +32,11 @@
           "codeOffers" : [
 
           ],
-          "displayPrice" : "10.00",
+          "displayPrice" : "9.99",
           "familyShareable" : false,
-          "groupNumber" : 1,
-          "internalID" : "A1B2C3D4-1001-4A00-9000-DIRTPRO01001",
-          "introductoryOffer" : {
-            "internalID" : "A1B2C3D4-1101-4A00-9000-DIRTPRO01101",
-            "paymentMode" : "free",
-            "subscriptionPeriod" : "P1W"
-          },
+          "groupNumber" : 2,
+          "internalID" : "42553750-A99E-482A-848C-E9EC518C4B79",
+          "introductoryOffer" : null,
           "localizations" : [
             {
               "description" : "Full DIRT access, billed monthly.",
@@ -51,8 +47,11 @@
           "productID" : "com.mayday.dirt.pro.monthly",
           "recurringSubscriptionPeriod" : "P1M",
           "referenceName" : "DIRT PRO Monthly",
-          "subscriptionGroupID" : "A1B2C3D4-0002-4A00-9000-DIRTPRO00002",
-          "type" : "RecurringSubscription"
+          "subscriptionGroupID" : "CD725BC5-8F8E-4D5A-91B2-C8C4786E0BED",
+          "type" : "RecurringSubscription",
+          "winbackOffers" : [
+
+          ]
         },
         {
           "adHocOffers" : [
@@ -61,12 +60,13 @@
           "codeOffers" : [
 
           ],
-          "displayPrice" : "45.00",
+          "displayPrice" : "39.99",
           "familyShareable" : false,
           "groupNumber" : 1,
-          "internalID" : "A1B2C3D4-2001-4A00-9000-DIRTPRO02001",
+          "internalID" : "79D758BD-1EB4-4FB4-ABA3-3953051F9E82",
           "introductoryOffer" : {
-            "internalID" : "A1B2C3D4-2101-4A00-9000-DIRTPRO02101",
+            "displayPrice" : "0",
+            "internalID" : "F86B7DBC-E1CA-4B62-9291-03810E83CDDC",
             "paymentMode" : "free",
             "subscriptionPeriod" : "P1W"
           },
@@ -80,8 +80,11 @@
           "productID" : "com.mayday.dirt.pro.yearly",
           "recurringSubscriptionPeriod" : "P1Y",
           "referenceName" : "DIRT PRO Yearly",
-          "subscriptionGroupID" : "A1B2C3D4-0002-4A00-9000-DIRTPRO00002",
-          "type" : "RecurringSubscription"
+          "subscriptionGroupID" : "CD725BC5-8F8E-4D5A-91B2-C8C4786E0BED",
+          "type" : "RecurringSubscription",
+          "winbackOffers" : [
+
+          ]
         }
       ]
     }

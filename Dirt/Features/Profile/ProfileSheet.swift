@@ -3,9 +3,11 @@ import StoreKit
 import SwiftUI
 import UIKit
 
-/// Account, Pro, ride prefs, and legal — hosted in `DockSheetPanel`.
+/// Account, Pro, ride preferences, and legal in a focused full-screen destination.
 struct ProfileSheet: View {
+    let onClose: () -> Void
     @Environment(AppEnvironment.self) private var app
+    @Environment(\.dismiss) private var dismiss
     @State private var displayName = ""
     @State private var busy = false
     @State private var message: String?
@@ -32,7 +34,11 @@ struct ProfileSheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            DirtSheetHeader(title: "Profile")
+            DirtSheetHeader(
+                title: "Profile",
+                titleFont: .system(.title2, design: .default, weight: .bold),
+                onClose: closeProfile
+            )
 
             ScrollView {
                 VStack(spacing: DirtSpace.group) {
@@ -42,7 +48,7 @@ struct ProfileSheet: View {
                     aboutRows
 
                     if supabase.isSignedIn {
-                        VStack(spacing: DirtSpace.tight) {
+                        VStack(spacing: 0) {
                             Button {
                                 Task {
                                     guard !busy else { return }
@@ -65,10 +71,15 @@ struct ProfileSheet: View {
                                 showDeleteAccountConfirmation = true
                             } label: {
                                 Label("Delete account", systemImage: "person.crop.circle.badge.minus")
-                                    .frame(maxWidth: .infinity, minHeight: DirtHit.min)
+                                    .font(DirtType.helper)
+                                    .fontWeight(.semibold)
+                                    .foregroundStyle(DirtTheme.danger)
+                                    .frame(minHeight: DirtHit.min)
+                                    .contentShape(Rectangle())
                             }
-                            .buttonStyle(.bordered)
-                            .tint(DirtTheme.danger)
+                            .buttonStyle(.plain)
+                            .padding(.top, DirtSpace.section)
+                            .accessibilityHint("Permanently deletes your DIRT account after confirmation")
                         }
                         .disabled(busy)
                     }
@@ -89,12 +100,20 @@ struct ProfileSheet: View {
                         testerFooter
                     }
                 }
+                .frame(maxWidth: 680)
+                .frame(maxWidth: .infinity)
                 .padding(.horizontal, DirtSpace.group)
                 .padding(.top, DirtSpace.tight)
                 .padding(.bottom, DirtSpace.section)
             }
             .scrollEdgeEffectStyle(.soft, for: .top)
             .scrollEdgeEffectStyle(.soft, for: .bottom)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background {
+            Rectangle()
+                .fill(DirtTheme.sheet)
+                .ignoresSafeArea()
         }
         .onAppear { displayName = supabase.displayName }
         .manageSubscriptionsSheet(isPresented: $showManageSubscriptions)
@@ -127,13 +146,18 @@ struct ProfileSheet: View {
         }
     }
 
+    private func closeProfile() {
+        onClose()
+        dismiss()
+    }
+
     // MARK: - Account
 
     private var accountSection: some View {
         VStack(alignment: .leading, spacing: DirtSpace.inner) {
             Text(signedInLine)
-                .font(DirtType.sectionLabel)
-                .tracking(1.1)
+                .font(.system(.subheadline, design: .default, weight: .bold))
+                .tracking(0.8)
                 .foregroundStyle(DirtTheme.muted)
                 .textCase(.uppercase)
                 .frame(maxWidth: .infinity)
@@ -170,6 +194,13 @@ struct ProfileSheet: View {
                 .buttonStyle(DirtCTAStyle.brand(isLoading: busy))
                 .disabled(busy || displayName.trimmingCharacters(in: .whitespaces).isEmpty)
             } else {
+                Text("Create and join groups, share your ride status with your crew, and keep your DIRT profile connected.")
+                    .font(DirtType.helper)
+                    .foregroundStyle(DirtTheme.muted)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity)
+
                 AppleSignInButton { result in
                     switch result {
                     case let .success(credential):

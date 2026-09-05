@@ -184,6 +184,11 @@
 				TargetAttributes = {
 					2B0105543014DE2B00065435 = {
 						CreatedOnToolsVersion = 26.6;
+						SystemCapabilities = {
+							com.apple.InAppPurchase = {
+								enabled = 1;
+							};
+						};
 					};
 					2B0105633014DE2D00065435 = {
 						CreatedOnToolsVersion = 26.6;

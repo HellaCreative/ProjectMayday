@@ -73,6 +73,10 @@ enum AppConfig {
     /// One bounded graph pass per committed fuel waypoint. This returns an
     /// ordered pump chain; final ride legs still come from `/api/route`.
     nonisolated static var liveFuelChainURL: URL { baseURL.appendingPathComponent("api/fuel-chain") }
+    /// Campground, lodging, and liquor viewport POIs. DIRT's service provides
+    /// bounded upstream fallback so a single public Overpass host cannot make
+    /// all three map switches fail together.
+    nonisolated static var livePOIURL: URL { baseURL.appendingPathComponent("api/poi") }
 
     nonisolated static func validatesSupabaseIsolation(url: URL) -> Bool {
         url.host == expectedSupabaseHost
@@ -103,9 +107,6 @@ enum AppConfig {
             .appendingPathComponent(regionId)
             .appendingPathComponent(fileName)
     }
-
-    /// OSM Overpass for viewport camp / lodging / liquor pins. Fuel is pack-only.
-    static let overpassURL = URL(string: "https://overpass-api.de/api/interpreter")!
 
     /// Absolute last-resort map center only when GPS has never delivered a fix
     /// (no province bias — Nova Scotia must not flash at launch).

@@ -5,6 +5,7 @@ import SwiftUI
 /// Soft: dismissible system sheet. Hard: full-screen gate (Subscribe / Restore only).
 struct PaywallView: View {
     @Environment(AppEnvironment.self) private var app
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     let presentation: TrialPresentation
     var onClose: () -> Void
     var onSubscribed: () -> Void
@@ -15,9 +16,44 @@ struct PaywallView: View {
     private var subscription: SubscriptionService { app.subscription }
     private var isHard: Bool { presentation == .hard }
 
-    private let perks = [
-        ("point.topleft.down.to.point.bottomright.curvepath.fill", "Unlimited ride navigation", "Ride beyond the two free starts with junction, rally, and voice cues."),
-        ("doc.badge.arrow.up", "GPX export", "Take a route into compatible devices and riding tools.")
+    private struct Feature: Identifiable {
+        let id: String
+        let icon: String
+        let title: String
+        let detail: String
+    }
+
+    private let features = [
+        Feature(
+            id: "dirt-routing",
+            icon: "point.topleft.down.to.point.bottomright.curvepath.fill",
+            title: "Dirt-first routes",
+            detail: "Build rides for the most rewarding dirt—not simply the shortest way there."
+        ),
+        Feature(
+            id: "fuel",
+            icon: "fuelpump.fill",
+            title: "Fuel-aware planning",
+            detail: "Place sensible fuel stops into long rides using your bike’s usable range."
+        ),
+        Feature(
+            id: "navigation",
+            icon: "location.north.line.fill",
+            title: "Ride-focused navigation",
+            detail: "Follow junction, rally, and voice cues with near-term maps prepared for the trail."
+        ),
+        Feature(
+            id: "groups",
+            icon: "person.2.wave.2.fill",
+            title: "Live rider groups",
+            detail: "Keep your crew visible and share clear riding or assistance status."
+        ),
+        Feature(
+            id: "gpx",
+            icon: "doc.badge.arrow.up.fill",
+            title: "GPX route tools",
+            detail: "Bring rides into DIRT, refine them, and export them to compatible riding devices."
+        )
     ]
 
     var body: some View {
@@ -61,23 +97,83 @@ struct PaywallView: View {
     }
 
     private var paywallBody: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: DirtSpace.row) {
-                header
-                perkList
-                planPicker
-                cta
-                legalFootnote
+        Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                ScrollView {
+                    VStack(spacing: 0) {
+                        fixedHeader
+                        featureStory
+                        purchasePanel
+                    }
+                }
+            } else {
+                VStack(spacing: 0) {
+                    fixedHeader
+                    featureScroller
+                    purchasePanel
+                }
             }
-            .padding(DirtSpace.section)
-            .frame(maxWidth: 520)
-            .frame(maxWidth: .infinity)
         }
+        .frame(maxWidth: 560)
+        .frame(maxWidth: .infinity)
         .safeAreaInset(edge: .top, spacing: 0) {
             if presentation == .soft {
                 softCloseBar
             }
         }
+    }
+
+    private var fixedHeader: some View {
+        header
+            .padding(.horizontal, DirtSpace.section)
+            .padding(.top, DirtSpace.hairGap)
+            .padding(.bottom, DirtSpace.row)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var featureStory: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            featureList
+        }
+        .padding(.horizontal, DirtSpace.section)
+        .padding(.vertical, DirtSpace.tight)
+        .accessibilityIdentifier("paywall-feature-story")
+    }
+
+    private var featureScroller: some View {
+        ZStack {
+            ScrollView {
+                featureStory
+            }
+            .scrollIndicators(.hidden)
+
+            VStack(spacing: 0) {
+                scrollFade(edge: .top)
+                Spacer(minLength: 0)
+                scrollFade(edge: .bottom)
+            }
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
+        }
+        .clipped()
+    }
+
+    private enum ScrollFadeEdge {
+        case top
+        case bottom
+    }
+
+    private func scrollFade(edge: ScrollFadeEdge) -> some View {
+        Rectangle()
+            .fill(isHard ? .ultraThinMaterial : DirtTheme.sheetMaterial)
+            .mask(
+                LinearGradient(
+                    colors: edge == .top ? [.black, .clear] : [.clear, .black],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            )
+            .frame(height: 24)
     }
 
     private var softCloseBar: some View {
@@ -102,55 +198,112 @@ struct PaywallView: View {
             HStack(spacing: 8) {
                 Text("DIRT")
                     .italic()
-                    .font(.dirtUI(22, weight: .black))
+                    .font(.dirtUI(19, weight: .black))
                     .foregroundStyle(isHard ? .white : DirtTheme.ink)
                 Text("PRO")
-                    .font(.dirtMono(11, weight: .bold))
-                    .tracking(3)
+                    .font(.dirtMono(10, weight: .bold))
+                    .tracking(2.4)
                     .foregroundStyle(DirtTheme.onOrange)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
+                    .padding(.horizontal, 7)
+                    .padding(.vertical, 3)
                     .background(DirtTheme.orange, in: Capsule())
             }
             .accessibilityElement(children: .combine)
             .accessibilityLabel("DIRT PRO")
 
             Text(headerTitle)
-                .font(.dirtUI(24, weight: .heavy))
+                .font(.system(.title2, design: .default, weight: .bold))
                 .foregroundStyle(isHard ? .white : DirtTheme.ink)
+                .tracking(-0.35)
                 .fixedSize(horizontal: false, vertical: true)
 
-            Text(
-                headerDetail
-            )
-            .font(.dirtUI(14))
-            .foregroundStyle(isHard ? .white.opacity(0.7) : DirtTheme.muted)
-            .fixedSize(horizontal: false, vertical: true)
+            Text(headerDetail)
+                .font(.system(.subheadline, design: .default, weight: .regular))
+                .foregroundStyle(isHard ? .white.opacity(0.7) : DirtTheme.muted)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
-    private var perkList: some View {
-        VStack(alignment: .leading, spacing: DirtSpace.inner) {
-            ForEach(perks, id: \.0) { icon, title, detail in
-                HStack(alignment: .top, spacing: 12) {
-                    Image(systemName: icon)
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundStyle(DirtTheme.orange)
-                        .frame(width: 24, height: 24)
-                        .accessibilityHidden(true)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(title)
-                            .font(.dirtUI(14, weight: .bold))
+    private var featureList: some View {
+        VStack(alignment: .leading, spacing: DirtSpace.tight) {
+            ForEach(Array(features.enumerated()), id: \.element.id) { index, feature in
+                HStack(alignment: .center, spacing: 12) {
+                    featureIcon(feature.icon, index: index)
+
+                    VStack(alignment: .leading, spacing: DirtSpace.hairGap) {
+                        Text(feature.title)
+                            .font(.system(.subheadline, design: .default, weight: .semibold))
                             .foregroundStyle(isHard ? .white : DirtTheme.ink)
-                        Text(detail)
-                            .font(.dirtUI(13))
+                        Text(feature.detail)
+                            .font(.system(.footnote, design: .default, weight: .regular))
                             .foregroundStyle(isHard ? .white.opacity(0.62) : DirtTheme.muted)
+                            .lineSpacing(1)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
+                .frame(minHeight: 68)
                 .accessibilityElement(children: .combine)
             }
         }
+    }
+
+    private func featureIcon(_ symbol: String, index: Int) -> some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 13, style: .continuous)
+                .fill(isHard ? .white.opacity(0.07) : DirtTheme.wash)
+            RoundedRectangle(cornerRadius: 13, style: .continuous)
+                .stroke(DirtTheme.orange.opacity(isHard ? 0.7 : 0.34), lineWidth: 1)
+            Circle()
+                .fill(DirtTheme.orange.opacity(0.14))
+                .frame(width: 36, height: 36)
+                .offset(x: index.isMultiple(of: 2) ? 8 : -8, y: -7)
+            Image(systemName: symbol)
+                .font(.system(size: 22, weight: .semibold))
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(DirtTheme.orange)
+        }
+        .frame(width: 56, height: 56)
+        .accessibilityHidden(true)
+    }
+
+    private var purchasePanel: some View {
+        VStack(alignment: .leading, spacing: DirtSpace.tight) {
+            if subscription.hasProducts {
+                purchaseSummary
+            }
+            planPicker
+            cta
+            legalFootnote
+        }
+        .padding(.horizontal, DirtSpace.section)
+        .padding(.top, DirtSpace.inner)
+        .padding(.bottom, DirtSpace.tight)
+        .background {
+            Rectangle()
+                .fill(isHard ? Color(dirtHex: 0x16181C) : DirtTheme.sheet)
+                .overlay(alignment: .top) {
+                    Rectangle()
+                        .fill(isHard ? Color.white.opacity(0.12) : DirtTheme.hairline)
+                        .frame(height: 1)
+                }
+                .shadow(color: .black.opacity(isHard ? 0.18 : 0.10), radius: 18, y: -5)
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("paywall-purchase-panel")
+    }
+
+    private var purchaseSummary: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(purchaseHeadline)
+                .font(.system(.subheadline, design: .default, weight: .semibold))
+                .foregroundStyle(isHard ? .white : DirtTheme.ink)
+                .fixedSize(horizontal: false, vertical: true)
+            Text(purchaseDetail)
+                .font(.system(.caption, design: .default, weight: .regular))
+                .foregroundStyle(isHard ? .white.opacity(0.66) : DirtTheme.muted)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .accessibilityElement(children: .combine)
     }
 
     @ViewBuilder
@@ -165,14 +318,12 @@ struct PaywallView: View {
             .frame(maxWidth: .infinity, minHeight: DirtHit.control)
             .accessibilityLabel("Loading subscription plans")
         } else if availablePlans.isEmpty {
-            VStack(alignment: .leading, spacing: DirtSpace.tight) {
+            HStack(spacing: DirtSpace.inner) {
                 Text("Plans unavailable")
                     .font(.dirtUI(14, weight: .bold))
                     .foregroundStyle(isHard ? .white : DirtTheme.ink)
-                Text(subscription.loadError ?? "Subscription options could not be loaded right now.")
-                    .font(.dirtUI(13))
-                    .foregroundStyle(isHard ? .white.opacity(0.7) : DirtTheme.muted)
-                Button("Try again") {
+                Spacer(minLength: 0)
+                Button("Retry") {
                     Task {
                         await subscription.loadProducts()
                         selectAvailablePlanIfNeeded()
@@ -183,15 +334,17 @@ struct PaywallView: View {
                 .frame(minHeight: DirtHit.min)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityElement(children: .contain)
+            .accessibilityHint(subscription.loadError ?? "Subscription options could not be loaded right now.")
         } else {
-            HStack(spacing: DirtSpace.inner) {
+            HStack(spacing: DirtSpace.tight) {
                 ForEach(availablePlans, id: \.rawValue) { plan in
                     planCard(
                         plan,
-                        title: plan == .yearly ? "Yearly" : "Monthly",
+                        title: plan == .yearly ? "12 months" : "1 month",
                         price: displayPrice(for: plan),
-                        sub: plan == .yearly ? "per year" : "per month",
-                        badge: plan == .yearly ? subscription.yearlySavingsLabel : nil
+                        sub: plan == .yearly ? "Billed yearly" : "Billed monthly",
+                        badge: plan == .yearly ? (subscription.yearlySavingsLabel ?? "Best value") : "Flexible"
                     )
                 }
             }
@@ -209,31 +362,31 @@ struct PaywallView: View {
         return Button {
             selectedPlan = plan
         } label: {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack {
-                    Text(title)
-                        .font(.dirtUI(13, weight: .bold))
-                        .foregroundStyle(planTitleColor)
-                    Spacer(minLength: 0)
-                    if let badge {
-                        Text(badge)
-                            .font(.dirtMono(10, weight: .bold))
-                            .tracking(0.3)
-                            .foregroundStyle(DirtTheme.onOrange)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 3)
-                            .background(DirtTheme.orange, in: Capsule())
-                    }
+            VStack(alignment: .center, spacing: DirtSpace.hairGap) {
+                if let badge {
+                    Text(badge)
+                        .font(.system(.caption2, design: .default, weight: .bold))
+                        .foregroundStyle(DirtTheme.orange)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
                 }
-                Text(price)
-                    .font(.dirtMono(16, weight: .bold))
+                Text(title)
+                    .font(.system(.footnote, design: .default, weight: .semibold))
                     .foregroundStyle(planTitleColor)
+                    .lineLimit(1)
+                Text(price)
+                    .font(.system(.headline, design: .rounded, weight: .bold))
+                    .foregroundStyle(planTitleColor)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
                 Text(sub)
-                    .font(.dirtUI(12))
+                    .font(.system(.caption2, design: .default, weight: .medium))
                     .foregroundStyle(planSubColor)
+                    .lineLimit(1)
             }
-            .frame(maxWidth: .infinity, minHeight: DirtHit.control, alignment: .leading)
-            .padding(DirtSpace.inner)
+            .frame(maxWidth: .infinity, minHeight: 62, alignment: .center)
+            .padding(.horizontal, DirtSpace.tight)
+            .padding(.vertical, 4)
             .background(planFill(selected: selected))
             .clipShape(RoundedRectangle(cornerRadius: DirtRadius.card, style: .continuous))
             .overlay(
@@ -244,6 +397,7 @@ struct PaywallView: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("\(title) plan, \(price)")
+        .accessibilityIdentifier("paywall-plan-\(plan.rawValue)")
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
@@ -256,10 +410,11 @@ struct PaywallView: View {
     }
 
     private func planFill(selected: Bool) -> Color {
+        if selected { return DirtTheme.orange.opacity(isHard ? 0.16 : 0.11) }
         if isHard {
-            return selected ? DirtTheme.orange.opacity(0.16) : .white.opacity(0.05)
+            return .white.opacity(0.05)
         }
-        return selected ? DirtTheme.orange.opacity(0.12) : DirtTheme.rowFill
+        return DirtTheme.rowFill
     }
 
     private func planStroke(selected: Bool) -> Color {
@@ -268,7 +423,7 @@ struct PaywallView: View {
     }
 
     private var cta: some View {
-        VStack(spacing: DirtSpace.tight) {
+        VStack(spacing: DirtSpace.hairGap) {
             if let errorMessage {
                 Text(errorMessage)
                     .font(.dirtUI(13, weight: .semibold))
@@ -285,6 +440,7 @@ struct PaywallView: View {
             }
             .buttonStyle(DirtCTAStyle.brand(isLoading: subscription.purchaseInFlight))
             .disabled(subscription.storeOperationInFlight || (!subscription.hasProducts && !BuildChannel.showsTesterUnlock))
+            .accessibilityIdentifier("paywall-primary-action")
             .accessibilityHint(primaryActionHint)
 
             Button {
@@ -308,41 +464,13 @@ struct PaywallView: View {
             .buttonStyle(.plain)
             .disabled(subscription.storeOperationInFlight)
 
-            if presentation == .soft {
-                Button(action: onClose) {
-                    Text("Maybe later")
-                        .font(.dirtUI(13, weight: .semibold))
-                        .foregroundStyle(DirtTheme.muted)
-                        .frame(maxWidth: .infinity, minHeight: DirtHit.min)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-            }
-
-            if BuildChannel.showsTesterUnlock {
-                Button {
-                    // Persists until uninstall (UserDefaults). Testers use the app
-                    // freely without exercising Export / Start gates.
-                    app.debugBypassSubscription = true
-                    onSubscribed()
-                    app.planner.toast = "Paywall skipped until reinstall"
-                } label: {
-                    Text("Skip as tester")
-                        .font(.dirtUI(12, weight: .semibold))
-                        .foregroundStyle(isHard ? .white.opacity(0.4) : DirtTheme.muted.opacity(0.8))
-                        .frame(maxWidth: .infinity, minHeight: DirtHit.min)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityHint("Hides the paywall until you delete and reinstall the app")
-            }
         }
     }
 
     private var legalFootnote: some View {
-        VStack(spacing: DirtSpace.tight) {
+        VStack(spacing: DirtSpace.hairGap) {
             Text(footnoteText)
-                .font(.dirtUI(12))
+                .font(.system(.caption2, design: .default, weight: .regular))
                 .foregroundStyle(isHard ? .white.opacity(0.5) : DirtTheme.muted)
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
@@ -351,19 +479,36 @@ struct PaywallView: View {
                 Link("Privacy", destination: LegalLinks.privacyPolicy)
                 Link("EULA", destination: LegalLinks.eula)
             }
-            .font(.dirtUI(12, weight: .semibold))
+            .font(.system(.caption2, design: .default, weight: .semibold))
             .foregroundStyle(isHard ? .white.opacity(0.65) : DirtTheme.orange)
         }
         .frame(maxWidth: .infinity)
-        .padding(.top, DirtSpace.tight)
+        .padding(.top, DirtSpace.hairGap)
     }
 
     private var footnoteText: String {
+        guard subscription.hasProducts else {
+            return "Prices and trial eligibility are supplied by the App Store."
+        }
         let price = priceText(for: selectedPlan)
         if let duration = eligibleTrialDuration {
             return "\(duration) free, then \(price). Renews automatically until cancelled. Manage or cancel in Settings → Apple ID → Subscriptions."
         }
         return "\(price). Renews automatically until cancelled. Manage or cancel in Settings → Apple ID → Subscriptions."
+    }
+
+    private var purchaseHeadline: String {
+        let price = priceText(for: selectedPlan)
+        if let duration = eligibleTrialDuration {
+            return "Try \(duration) free, then \(price)"
+        }
+        return price
+    }
+
+    private var purchaseDetail: String {
+        selectedPlan == .yearly
+            ? "Unlimited navigation and GPX export. Best value for a full riding season."
+            : "Unlimited navigation and GPX export with monthly flexibility."
     }
 
     private func priceText(for plan: SubscriptionService.Plan) -> String {

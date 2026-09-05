@@ -37,7 +37,7 @@ struct MapControlStack: View {
         }
     }
 
-    private let statuses = ["available", "breakdown", "injured", "stuck"]
+    private let statuses = GroupsViewModel.selectableStatuses
 
     private var showsNavigationOverviewButton: Bool {
         // Same window as the old PiP: active ride (prefetch has no coords yet).
@@ -427,7 +427,7 @@ struct MapControlStack: View {
                         get: { groups.status },
                         set: { groups.setStatus($0) }
                     )) {
-                        ForEach(statuses, id: \.self) { Text($0.capitalized).tag($0) }
+                        ForEach(statuses, id: \.self) { Text(GroupsViewModel.statusLabel($0)).tag($0) }
                     }
                     .pickerStyle(.menu)
                     .tint(DirtTheme.ink)
