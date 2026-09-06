@@ -7,6 +7,7 @@ const {
   rankForwardFuel,
   tankCommitBand,
   compareChainPlans,
+  fuelUrbanBoxesForRuntime,
   FUEL_CHAIN_SERVICE_VERSION,
   fuelChainRequest
 } = require("./fuel-chain");
@@ -352,7 +353,7 @@ test("forward progress outranks an early Clean-quality pump", async () => {
 
 test("Clean rejects a full-tank lateral Gulf-class pump in favor of a corridor pump", () => {
   assert.equal(typeof FUEL_CHAIN_SERVICE_VERSION, "string");
-  assert.match(FUEL_CHAIN_SERVICE_VERSION, /three-quarter-first-pump/);
+  assert.match(FUEL_CHAIN_SERVICE_VERSION, /rural-before-urban/);
   // Halifax-ish → Tatamagouche-ish geometry: Wallace Gulf is nearly a full tank
   // sideways; Truro sits on the corridor with a shorter complete chain.
   const start = { lat: 44.764823, lon: -63.340271 };
@@ -387,6 +388,33 @@ test("Clean rejects a full-tank lateral Gulf-class pump in favor of a corridor p
   assert.equal(ranked[0].station.id, "truro-corridor");
   assert.ok(!ranked.some((row) => row.station.id === gulf.station.id),
     "Gulf Wallace must not remain forward after chain-coherence gates");
+});
+
+test("Nova Scotia fuel selection avoids an unnecessary Amherst city entry", () => {
+  const start = { lat: 44.76483005523871, lon: -63.340264951978995 };
+  const destination = { lat: 45.70810262218289, lon: -65.17489787205152 };
+  const urbanBoxes = fuelUrbanBoxesForRuntime({
+    pack: { regionId: "ns", meta: { urbanCores: [], settlements: [] } }
+  });
+  const amherst = {
+    station: { id: "osm:w929984252", name: "Esso Amherst" },
+    location: { lat: 45.819160, lon: -64.232921 },
+    graphMeters: 212_347,
+    remainingGraphMeters: 9_580
+  };
+  const rural = {
+    station: { id: "coast-gas", name: "Coast Gas" },
+    location: { lat: 45.774, lon: -63.68 },
+    graphMeters: 103_396,
+    remainingGraphMeters: 158_882
+  };
+  const ranked = rankForwardFuel(
+    [amherst, rural], start, destination, 333_000, new Set(), "dirt",
+    null, 221_928, false, 333_000, urbanBoxes
+  );
+  assert.equal(ranked[0].station.id, "coast-gas");
+  assert.equal(ranked[0].urbanEntry, false);
+  assert.equal(ranked.find((row) => row.station.id === amherst.station.id).urbanEntry, true);
 });
 
 test("Dirt rejects a remote lateral pump when a forward corridor pump exists", () => {
@@ -523,6 +551,24 @@ test("a complete one-stop chain beats a three-stop chain", () => {
     }
   };
   assert.ok(compareChainPlans(town, rural, "cleanest", 130_000) < 0);
+});
+
+test("minimum stop count still outranks the rural preference", () => {
+  const urban = {
+    complete: true,
+    urbanStopCount: 1,
+    stops: [{ id: "urban" }],
+    quality: { meters: 180_000, dirtMeters: 0, cleanFallbackCount: 0,
+      cleanMajorRoadMeters: 0, backtrackMeters: 0 }
+  };
+  const rural = {
+    complete: true,
+    urbanStopCount: 0,
+    stops: [{ id: "rural-1" }, { id: "rural-2" }],
+    quality: { meters: 180_000, dirtMeters: 0, cleanFallbackCount: 0,
+      cleanMajorRoadMeters: 0, backtrackMeters: 0 }
+  };
+  assert.ok(compareChainPlans(urban, rural, "dirt", 333_000) < 0);
 });
 
 test("minimum stop count ranks first after down-and-back stems are rejected", () => {

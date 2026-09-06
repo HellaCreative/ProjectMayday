@@ -732,7 +732,7 @@ test("a proven first final-quarter pump does not route later alternatives", asyn
   assert.deepEqual(firstWindow.map((row) => row.id), ["f5"]);
 });
 
-test("a graph-only window takes the first final-quarter pump even when a later pump saves a stop", async () => {
+test("a graph-only window saves a stop before applying final-quarter ordering", async () => {
   let routeCalls = 0;
   const result = await planFuelChainOnRuntime({
     runtime: lineRuntime(),
@@ -755,10 +755,10 @@ test("a graph-only window takes the first final-quarter pump even when a later p
   });
 
   assert.equal(result.ok, true);
-  assert.equal(result.windowComplete, false);
-  assert.equal(result.stops[0].id, "first");
+  assert.equal(result.windowComplete, true);
+  assert.equal(result.stops[0].id, "later");
   assert.equal(routeCalls, 0);
-  assert.deepEqual(result.stationCandidates.map((row) => row.id), ["first", "later"]);
+  assert.deepEqual(result.stationCandidates.map((row) => row.id), ["later", "first"]);
 });
 
 test("a rider fuel-stop override forces the first station without changing later search", async () => {
@@ -1070,7 +1070,10 @@ test("cross-region incremental windows stay graph-only without a client feeler f
   assert.equal(calls.length, 1);
   assert.equal(calls[0].graphOnlyFeeler, true);
   assert.equal(calls[0].maxStops, 1);
-  assert.equal(result.diagnostics.selectionPolicy, "first_sensible_after_75pct");
+  assert.equal(
+    result.diagnostics.selectionPolicy,
+    "minimum_stops_rural_before_urban_then_75pct"
+  );
   assert.equal(result.diagnostics.graphOnlySelection, true);
   assert.equal(result.diagnostics.stationAlternativesLimit, 6);
 });
