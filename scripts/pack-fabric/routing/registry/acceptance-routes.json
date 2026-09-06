@@ -599,6 +599,44 @@
           "minimumCorridorCandidates": 2
         }
       ]
+    },
+    "mn": {
+      "fuelMinimum": 0,
+      "routes": [
+        {
+          "id": "long-ely-tower",
+          "from": { "lat": 47.9032, "lon": -91.8671, "label": "Ely" },
+          "to": { "lat": 47.8069, "lon": -92.2796, "label": "Tower" },
+          "minimumDirtPercent": 40,
+          "minimumDirtAllowUnknownPercent": 40,
+          "balancedTolerance": 30,
+          "maximumCleanDirtPercent": 15,
+          "maximumDirtBackwardPercent": 40,
+          "minimumCorridorCandidates": 2
+        },
+        {
+          "id": "short-duluth-two-harbors",
+          "from": { "lat": 46.7867, "lon": -92.1005, "label": "Duluth" },
+          "to": { "lat": 47.0227, "lon": -91.6707, "label": "Two Harbors" },
+          "minimumDirtPercent": 40,
+          "minimumDirtAllowUnknownPercent": 40,
+          "balancedTolerance": 15,
+          "maximumCleanDirtPercent": 8,
+          "maximumDirtBackwardPercent": 40,
+          "minimumCorridorCandidates": 2
+        },
+        {
+          "id": "short-two-harbors-silver-bay",
+          "from": { "lat": 47.0227, "lon": -91.6707, "label": "Two Harbors" },
+          "to": { "lat": 47.2944, "lon": -91.2577, "label": "Silver Bay" },
+          "minimumDirtPercent": 50,
+          "minimumDirtAllowUnknownPercent": 50,
+          "balancedTolerance": 15,
+          "maximumCleanDirtPercent": 8,
+          "maximumDirtBackwardPercent": 40,
+          "minimumCorridorCandidates": 2
+        }
+      ]
     }
   }
 }
