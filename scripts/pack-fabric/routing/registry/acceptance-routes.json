@@ -713,6 +713,44 @@
           "minimumCorridorCandidates": 2
         }
       ]
+    },
+    "id": {
+      "fuelMinimum": 0,
+      "routes": [
+        {
+          "id": "short-driggs-victor",
+          "from": { "lat": 43.7233, "lon": -111.1113, "label": "Driggs" },
+          "to": { "lat": 43.6027, "lon": -111.1113, "label": "Victor" },
+          "minimumDirtPercent": 70,
+          "minimumDirtAllowUnknownPercent": 70,
+          "balancedTolerance": 15,
+          "maximumCleanDirtPercent": 5,
+          "maximumDirtBackwardPercent": 40,
+          "minimumCorridorCandidates": 2
+        },
+        {
+          "id": "short-homedale-marsing",
+          "from": { "lat": 43.6171, "lon": -116.9338, "label": "Homedale" },
+          "to": { "lat": 43.5454, "lon": -116.8132, "label": "Marsing" },
+          "minimumDirtPercent": 55,
+          "minimumDirtAllowUnknownPercent": 55,
+          "balancedTolerance": 15,
+          "maximumCleanDirtPercent": 8,
+          "maximumDirtBackwardPercent": 40,
+          "minimumCorridorCandidates": 2
+        },
+        {
+          "id": "short-moscow-troy",
+          "from": { "lat": 46.7324, "lon": -117.0002, "label": "Moscow" },
+          "to": { "lat": 46.7368, "lon": -116.7699, "label": "Troy" },
+          "minimumDirtPercent": 60,
+          "minimumDirtAllowUnknownPercent": 60,
+          "balancedTolerance": 15,
+          "maximumCleanDirtPercent": 35,
+          "maximumDirtBackwardPercent": 40,
+          "minimumCorridorCandidates": 2
+        }
+      ]
     }
   }
 }
