@@ -191,7 +191,7 @@ Validate every advertised byte count and SHA-256 before atomically activating a
 download. An incomplete or mismatched download never replaces a working pack.
 
 The current V3 registry is `ns`, `nb`, `pe`, `nl`, `qc`, `on`, `mb`, `sk`,
-`ab`, `bc`, `yt`, `nt`, `nu`, `me`, `nh`, `vt`, `ny`, `mi`, `mn`, and `nd`. For those regions select
+`ab`, `bc`, `yt`, `nt`, `nu`, `me`, `nh`, `vt`, `ny`, `mi`, `mn`, `nd`, and `wa`. For those regions select
 `graph.v3.bin` with an advertised V2 fallback. Other published regions remain
 V2 until Pack Factory promotes their V3 bytes and the registry changes.
 Geometry is `geometry.v1.bin`; planning fuel is `fuel.v1.json` when advertised.

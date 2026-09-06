@@ -675,6 +675,44 @@
           "minimumCorridorCandidates": 2
         }
       ]
+    },
+    "wa": {
+      "fuelMinimum": 0,
+      "routes": [
+        {
+          "id": "long-republic-curlew",
+          "from": { "lat": 48.6482, "lon": -118.7378, "label": "Republic" },
+          "to": { "lat": 48.8502, "lon": -118.5995, "label": "Curlew" },
+          "minimumDirtPercent": 70,
+          "minimumDirtAllowUnknownPercent": 70,
+          "balancedTolerance": 15,
+          "maximumCleanDirtPercent": 5,
+          "maximumDirtBackwardPercent": 40,
+          "minimumCorridorCandidates": 2
+        },
+        {
+          "id": "short-odessa-harrington",
+          "from": { "lat": 47.3332, "lon": -118.6897, "label": "Odessa" },
+          "to": { "lat": 47.4804, "lon": -118.2555, "label": "Harrington" },
+          "minimumDirtPercent": 70,
+          "minimumDirtAllowUnknownPercent": 70,
+          "balancedTolerance": 15,
+          "maximumCleanDirtPercent": 5,
+          "maximumDirtBackwardPercent": 40,
+          "minimumCorridorCandidates": 2
+        },
+        {
+          "id": "short-colville-kettle",
+          "from": { "lat": 48.5466, "lon": -117.9055, "label": "Colville" },
+          "to": { "lat": 48.6107, "lon": -118.0555, "label": "Kettle Falls" },
+          "minimumDirtPercent": 55,
+          "minimumDirtAllowUnknownPercent": 55,
+          "balancedTolerance": 15,
+          "maximumCleanDirtPercent": 8,
+          "maximumDirtBackwardPercent": 40,
+          "minimumCorridorCandidates": 2
+        }
+      ]
     }
   }
 }
