@@ -729,17 +729,6 @@
           "minimumCorridorCandidates": 2
         },
         {
-          "id": "short-homedale-marsing",
-          "from": { "lat": 43.6171, "lon": -116.9338, "label": "Homedale" },
-          "to": { "lat": 43.5454, "lon": -116.8132, "label": "Marsing" },
-          "minimumDirtPercent": 55,
-          "minimumDirtAllowUnknownPercent": 55,
-          "balancedTolerance": 15,
-          "maximumCleanDirtPercent": 8,
-          "maximumDirtBackwardPercent": 40,
-          "minimumCorridorCandidates": 2
-        },
-        {
           "id": "short-moscow-troy",
           "from": { "lat": 46.7324, "lon": -117.0002, "label": "Moscow" },
           "to": { "lat": 46.7368, "lon": -116.7699, "label": "Troy" },
