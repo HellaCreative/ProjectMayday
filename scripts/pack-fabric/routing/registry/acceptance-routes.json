@@ -561,6 +561,44 @@
           "minimumCorridorCandidates": 2
         }
       ]
+    },
+    "mi": {
+      "fuelMinimum": 0,
+      "routes": [
+        {
+          "id": "long-grayling-mio",
+          "from": { "lat": 44.6611, "lon": -84.7147, "label": "Grayling" },
+          "to": { "lat": 44.6522, "lon": -84.1297, "label": "Mio" },
+          "minimumDirtPercent": 40,
+          "minimumDirtAllowUnknownPercent": 40,
+          "balancedTolerance": 25,
+          "maximumCleanDirtPercent": 10,
+          "maximumDirtBackwardPercent": 40,
+          "minimumCorridorCandidates": 2
+        },
+        {
+          "id": "short-gaylord-vanderbilt",
+          "from": { "lat": 45.0275, "lon": -84.6747, "label": "Gaylord" },
+          "to": { "lat": 45.1431, "lon": -84.6614, "label": "Vanderbilt" },
+          "minimumDirtPercent": 20,
+          "minimumDirtAllowUnknownPercent": 20,
+          "balancedTolerance": 30,
+          "maximumCleanDirtPercent": 10,
+          "maximumDirtBackwardPercent": 40,
+          "minimumCorridorCandidates": 2
+        },
+        {
+          "id": "short-newberry-grand-marais",
+          "from": { "lat": 46.355, "lon": -85.5104, "label": "Newberry" },
+          "to": { "lat": 46.6706, "lon": -85.9851, "label": "Grand Marais" },
+          "minimumDirtPercent": 20,
+          "minimumDirtAllowUnknownPercent": 20,
+          "balancedTolerance": 30,
+          "maximumCleanDirtPercent": 15,
+          "maximumDirtBackwardPercent": 40,
+          "minimumCorridorCandidates": 2
+        }
+      ]
     }
   }
 }
