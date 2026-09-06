@@ -637,6 +637,44 @@
           "minimumCorridorCandidates": 2
         }
       ]
+    },
+    "nd": {
+      "fuelMinimum": 0,
+      "routes": [
+        {
+          "id": "long-devils-lake-cando",
+          "from": { "lat": 48.1128, "lon": -98.8651, "label": "Devils Lake" },
+          "to": { "lat": 48.4867, "lon": -99.2096, "label": "Cando" },
+          "minimumDirtPercent": 70,
+          "minimumDirtAllowUnknownPercent": 70,
+          "balancedTolerance": 15,
+          "maximumCleanDirtPercent": 5,
+          "maximumDirtBackwardPercent": 40,
+          "minimumCorridorCandidates": 2
+        },
+        {
+          "id": "short-medora-beach",
+          "from": { "lat": 46.9139, "lon": -103.523, "label": "Medora" },
+          "to": { "lat": 46.9181, "lon": -103.9396, "label": "Beach" },
+          "minimumDirtPercent": 60,
+          "minimumDirtAllowUnknownPercent": 60,
+          "balancedTolerance": 15,
+          "maximumCleanDirtPercent": 5,
+          "maximumDirtBackwardPercent": 40,
+          "minimumCorridorCandidates": 2
+        },
+        {
+          "id": "short-williston-watford",
+          "from": { "lat": 48.147, "lon": -103.618, "label": "Williston" },
+          "to": { "lat": 47.8022, "lon": -103.2832, "label": "Watford City" },
+          "minimumDirtPercent": 50,
+          "minimumDirtAllowUnknownPercent": 50,
+          "balancedTolerance": 20,
+          "maximumCleanDirtPercent": 20,
+          "maximumDirtBackwardPercent": 40,
+          "minimumCorridorCandidates": 2
+        }
+      ]
     }
   }
 }
