@@ -981,6 +981,21 @@ final class GraphPackStore {
         }.value
     }
 
+    /// Immutable metadata view used only to rank already-reachable fuel stops.
+    /// It never changes graph topology, costs, or installed pack bytes.
+    func fuelAvoidanceBoxes(
+        from: CLLocationCoordinate2D,
+        toward: CLLocationCoordinate2D
+    ) async -> [UrbanCore.Box] {
+        await ensureActivePackAsync(for: [from, toward])
+        guard let pack = activePack else { return [] }
+        return UrbanCore.fuelAvoidanceBoxes(
+            embeddedCores: pack.urbanCores,
+            embeddedSettlements: pack.settlements,
+            regionId: pack.regionId
+        )
+    }
+
     /// Canada land/bridge neighbours and topology-proven vehicle ferries,
     /// plus bbox-touch for US / Canada–US.
     static func packsShareABorder(_ left: String, _ right: String) -> Bool {

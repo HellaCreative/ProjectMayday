@@ -381,6 +381,10 @@ final class PackRoutingSource: RoutingSource {
                 profile: req.profile,
                 allowUnknown: req.accessPolicy.motorizedUnknown
             )
+            let fuelAvoidanceBoxes = await packs.fuelAvoidanceBoxes(
+                from: current.locationCoordinate,
+                toward: end.locationCoordinate
+            )
             let ranked = FuelItinerary.rankedProgressFuel(
                 fuels: stations,
                 from: current,
@@ -398,6 +402,12 @@ final class PackRoutingSource: RoutingSource {
             // Reachability keeps the rider safe; profile quality decides which
             // safe pump is worth riding to.
             for (rank, candidate) in ranked.prefix(6).enumerated() {
+                let urbanEntry = FuelItinerary.fuelStopRequiresUrbanEntry(
+                    candidate,
+                    start: current,
+                    destination: end,
+                    boxes: fuelAvoidanceBoxes
+                )
                 let candidateCoordinate = CLLocationCoordinate2D(
                     latitude: candidate.latitude,
                     longitude: candidate.longitude
@@ -429,7 +439,8 @@ final class PackRoutingSource: RoutingSource {
                         latitude: candidate.latitude,
                         longitude: candidate.longitude,
                         name: candidate.name ?? candidate.brand,
-                        validForward: false
+                        validForward: false,
+                        urbanEntry: urbanEntry
                     ))
                     continue
                 }
@@ -528,6 +539,7 @@ final class PackRoutingSource: RoutingSource {
                     chainBacktrackMeters: firstRoute.backtrackMeters
                         + (continuationRoute?.backtrackMeters ?? 0),
                     chainStopCount: continuationRoute == nil ? 2 : 1,
+                    urbanEntry: urbanEntry,
                     progressMeters: GeoMath.progressAlongAB(from: current, to: end, point: RouteCoordinate(
                         longitude: candidate.longitude,
                         latitude: candidate.latitude
@@ -547,7 +559,8 @@ final class PackRoutingSource: RoutingSource {
                     latitude: candidate.latitude,
                     longitude: candidate.longitude,
                     name: candidate.name ?? candidate.brand,
-                    validForward: validForward
+                    validForward: validForward,
+                    urbanEntry: urbanEntry
                 ))
             }
             let required = stops.isEmpty ? req.fuel.requiredFirstStationId : nil

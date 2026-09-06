@@ -15,6 +15,7 @@ nonisolated enum FuelItinerary {
         let cleanRoutedMeters: Double
         let chainBacktrackMeters: Double
         let chainStopCount: Int
+        let urbanEntry: Bool
         let progressMeters: Double
         let directionalDetourMeters: Double
         let discoveryRank: Int
@@ -50,6 +51,7 @@ nonisolated enum FuelItinerary {
     ) -> Bool {
         if a.validForward != b.validForward { return a.validForward }
         if a.chainStopCount != b.chainStopCount { return a.chainStopCount < b.chainStopCount }
+        if a.urbanEntry != b.urbanEntry { return !a.urbanEntry }
         let aBacktrack = a.cleanRoutedMeters > 0
             ? a.chainBacktrackMeters / a.cleanRoutedMeters
             : 0
@@ -98,6 +100,24 @@ nonisolated enum FuelItinerary {
         }
         _ = tankMeters
         return a.discoveryRank < b.discoveryRank
+    }
+
+    static func fuelStopRequiresUrbanEntry(
+        _ fuel: POIFeature,
+        start: RouteCoordinate,
+        destination: RouteCoordinate,
+        boxes: [UrbanCore.Box]
+    ) -> Bool {
+        guard !boxes.isEmpty else { return false }
+        return UrbanCore.blocks(
+            point: CLLocationCoordinate2D(
+                latitude: fuel.latitude,
+                longitude: fuel.longitude
+            ),
+            start: start.locationCoordinate,
+            end: destination.locationCoordinate,
+            boxes: boxes
+        )
     }
 
     /// Watching begins at 75% consumed. An early pump remains a sparse-corridor

@@ -444,6 +444,7 @@ struct FuelItineraryTests {
             total: Double? = nil,
             backtrack: Double = 0,
             stops: Int = 1,
+            urban: Bool = false,
             detour: Double = 0,
             valid: Bool = true,
             rank: Int
@@ -458,6 +459,7 @@ struct FuelItineraryTests {
                 cleanRoutedMeters: total ?? meters,
                 chainBacktrackMeters: backtrack,
                 chainStopCount: stops,
+                urbanEntry: urban,
                 progressMeters: meters,
                 directionalDetourMeters: detour,
                 discoveryRank: rank
@@ -514,6 +516,41 @@ struct FuelItineraryTests {
             shorterWholeChain, over: shortFirstHopLongChain,
             profile: .dirt, tankMeters: 130_000
         ))
+
+        let ruralOneStop = candidate(quality, meters: 70_000, dirt: 10, urban: false, rank: 0)
+        let urbanOneStop = candidate(comfort, meters: 100_000, dirt: 95, urban: true, rank: 1)
+        #expect(FuelItinerary.prefersProfileFuelCandidate(
+            ruralOneStop, over: urbanOneStop, profile: .dirt, tankMeters: 130_000
+        ))
+
+        let urbanMinimumStops = candidate(
+            comfort, meters: 100_000, dirt: 10, stops: 1, urban: true, rank: 0
+        )
+        let ruralExtraStop = candidate(
+            quality, meters: 70_000, dirt: 95, stops: 2, urban: false, rank: 1
+        )
+        #expect(FuelItinerary.prefersProfileFuelCandidate(
+            urbanMinimumStops, over: ruralExtraStop, profile: .dirt, tankMeters: 130_000
+        ))
+    }
+
+    @Test func fuelCityPreferenceExemptsTripEndpoints() {
+        let amherst = UrbanCore.Box(
+            minLat: 45.80, maxLat: 45.86, minLon: -64.25, maxLon: -64.16, name: "Amherst"
+        )
+        let fuel = poi(
+            "amherst-fuel",
+            RouteCoordinate(longitude: -64.232921, latitude: 45.819160)
+        )
+        let ruralStart = RouteCoordinate(longitude: -63.34, latitude: 44.76)
+        let ruralEnd = RouteCoordinate(longitude: -65.17, latitude: 45.70)
+        #expect(FuelItinerary.fuelStopRequiresUrbanEntry(
+            fuel, start: ruralStart, destination: ruralEnd, boxes: [amherst]
+        ))
+        let amherstEnd = RouteCoordinate(longitude: -64.20, latitude: 45.82)
+        #expect(!FuelItinerary.fuelStopRequiresUrbanEntry(
+            fuel, start: ruralStart, destination: amherstEnd, boxes: [amherst]
+        ))
     }
 
     @Test func automaticFuelChoiceExcludesEarlyPumpWhenSearchWindowPumpIsValid() {
@@ -531,6 +568,7 @@ struct FuelItineraryTests {
                 cleanRoutedMeters: meters,
                 chainBacktrackMeters: 0,
                 chainStopCount: 1,
+                urbanEntry: false,
                 progressMeters: meters,
                 directionalDetourMeters: 0,
                 discoveryRank: 0

@@ -94,6 +94,33 @@ nonisolated enum UrbanCore {
         return fallbackSettlementsByRegion[regionId?.lowercased() ?? ""] ?? []
     }
 
+    /// Fuel-stop selection uses settlements for every ride profile. A small
+    /// buffer includes forecourts and access roads just outside a town polygon.
+    static func fuelAvoidanceBoxes(
+        embeddedCores: [Box],
+        embeddedSettlements: [Box],
+        regionId: String?,
+        bufferMeters: Double = 1_500
+    ) -> [Box] {
+        let settlements = embeddedSettlements.isEmpty
+            ? fallbackSettlementsByRegion[regionId?.lowercased() ?? ""] ?? []
+            : embeddedSettlements
+        let buffer = max(0, bufferMeters)
+        return (boxes + embeddedCores + settlements).map { box in
+            let latPad = buffer / 111_320
+            let middleLatitude = (box.minLat + box.maxLat) / 2
+            let longitudeScale = max(0.2, cos(middleLatitude * .pi / 180))
+            let lonPad = buffer / (111_320 * longitudeScale)
+            return Box(
+                minLat: box.minLat - latPad,
+                maxLat: box.maxLat + latPad,
+                minLon: box.minLon - lonPad,
+                maxLon: box.maxLon + lonPad,
+                name: box.name
+            )
+        }
+    }
+
     static func box(containing c: CLLocationCoordinate2D, boxes candidateBoxes: [Box]? = nil) -> Box? {
         (candidateBoxes ?? boxes).first { $0.contains(c) }
     }

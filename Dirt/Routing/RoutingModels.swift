@@ -429,6 +429,8 @@ struct FuelChainDiagnostics: Codable, Sendable {
     var foundationChainDirtPercent: Int? = nil
     var profileRouteSavings: Int? = nil
     var foundationPriorityStations: Int? = nil
+    var selectedUrbanEntry: Bool? = nil
+    var ruralAlternativeAvailable: Bool? = nil
 }
 
 struct FuelTargetPassDiagnostic: Codable, Sendable {
@@ -489,6 +491,8 @@ struct FuelStationCandidate: Codable, Sendable {
     var chainMeters: Double? = nil
     var chainDirtPct: Double? = nil
     var continuationBacktrackMeters: Double? = nil
+    var urbanEntry: Bool? = nil
+    var oneStopCapable: Bool? = nil
     /// Per-region graph lower bounds from the current visible departure to
     /// this candidate. Cross-region recovery uses these to budget the real
     /// profile route through the same authored seams as the selected pump.
