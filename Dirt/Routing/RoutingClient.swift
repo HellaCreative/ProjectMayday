@@ -109,6 +109,8 @@ final class RoutingClient {
         urlRequest.timeoutInterval = timeout
 
         let beginLine = "route request begin id=\(requestID) profile=\(request.profile.rawValue) "
+            + "allowUnknown=\(request.accessPolicy.motorizedUnknown ? 1 : 0) "
+            + "mapZoom=\(request.options?.mapZoom.map { String(format: "%.1f", $0) } ?? "-") "
             + "points=\(Self.coordinateSummary(request.locations)) "
             + "maxPath=\(request.options?.maxPathMeters.map { String(Int($0)) } ?? "-")m "
             + "timeoutMs=\(Int(timeout * 1_000))"
@@ -198,7 +200,10 @@ final class RoutingClient {
         urlRequest.timeoutInterval = requestedBudget ?? defaultWindowTimeout
 
         let beginLine = "fuel request begin id=\(requestID) riderLeg=\(request.fuel.riderLegId) "
-            + "profile=\(request.profile.rawValue) points=\(Self.coordinateSummary(request.locations)) "
+            + "profile=\(request.profile.rawValue) "
+            + "allowUnknown=\(request.accessPolicy.motorizedUnknown ? 1 : 0) "
+            + "mapZoom=\(request.options?.mapZoom.map { String(format: "%.1f", $0) } ?? "-") "
+            + "points=\(Self.coordinateSummary(request.locations)) "
             + "usable=\(Int(request.fuel.usableRangeMeters))m "
             + "first=\(Int(request.fuel.firstLegMaxMeters))m "
             + "minimumStops=\(request.fuel.minimumFuelStops) "

@@ -111,6 +111,15 @@ final class LiveRoutingSource: RoutingSource {
         if req.options?.maxPathMeters != nil {
             _ = cache.value(for: key)
         }
+        if let from = req.locations.first, let to = req.locations.last {
+            RoutingDebugLog.shared.routeAttempt(
+                mode: name,
+                from: (from.latitude, from.longitude),
+                to: (to.latitude, to.longitude),
+                profile: req.profile.rawValue,
+                allowUnknown: req.accessPolicy.motorizedUnknown
+            )
+        }
         let response = try await client.route(req)
         if req.options?.maxPathMeters == nil { cache.insert(response, for: key) }
         return response
@@ -131,6 +140,12 @@ final class LiveRoutingSource: RoutingSource {
             )
         }
         let response = try await client.fuelChain(request)
+        RoutingDebugLog.shared.event(
+            "FUEL allowUnknown=\(req.accessPolicy.motorizedUnknown ? 1 : 0) "
+                + "profile=\(req.profile.rawValue) "
+                + "mapZoom=\(req.options?.mapZoom.map { String(format: "%.1f", $0) } ?? "-") "
+                + "riderLeg=\(req.fuel.riderLegId)"
+        )
         if canReuseContext, response.isComplete {
             var seen = Set<String>()
             let retained = ((response.stops ?? []).map(\.id) + (response.stationCandidates ?? [])
@@ -217,7 +232,9 @@ final class PackRoutingSource: RoutingSource {
             regionalHopMinimumMeters: req.options?.regionalHopMinimumMeters ?? [],
             cleanMetroMultiplier: req.options?.cleanMetroMultiplier,
             avoidMotorways: req.options?.avoidMotorways == true,
-            preferBackRoads: req.options?.preferBackRoads == true
+            preferBackRoads: req.options?.preferBackRoads == true,
+            mapZoom: req.options?.mapZoom,
+            matchLimitMeters: req.options?.matchLimitMeters
         )
         guard case .success(let local) = result, local.coordinates.count > 1 else {
             throw RoutingError.server("No route is available on the installed pack.")
@@ -226,17 +243,38 @@ final class PackRoutingSource: RoutingSource {
             onDevice: local,
             priorEdgeIDs: Set(req.options?.priorEdgeIds ?? [])
         )
-        if let metro = req.options?.cleanMetroMultiplier {
-            response.debug = RouteResponseDebug(
-                routingRevision: nil,
-                graphMode: "on-device",
-                searchMeta: nil,
-                fallback: nil,
-                packIdentity: nil,
-                diagnostics: RouteResponseDiagnostics(cleanMetroMultiplier: metro),
-                failureReason: nil,
-                searchMs: nil,
-                pops: nil
+        var diagnostics = RouteResponseDiagnostics(
+            cleanMetroMultiplier: req.options?.cleanMetroMultiplier
+        )
+        diagnostics.allowUnknown = req.accessPolicy.motorizedUnknown
+        diagnostics.tapRadiusMeters = local.tapRadiusMeters
+        diagnostics.mapZoom = local.mapZoom ?? req.options?.mapZoom
+        diagnostics.snap = local.snapDiagnostics
+        response.debug = RouteResponseDebug(
+            routingRevision: nil,
+            graphMode: "on-device",
+            searchMeta: nil,
+            fallback: nil,
+            packIdentity: nil,
+            diagnostics: diagnostics,
+            failureReason: nil,
+            searchMs: nil,
+            pops: nil
+        )
+        RoutingDebugLog.shared.routeAttempt(
+            mode: name,
+            from: (endpoints.0.latitude, endpoints.0.longitude),
+            to: (endpoints.1.latitude, endpoints.1.longitude),
+            profile: req.profile.rawValue,
+            allowUnknown: req.accessPolicy.motorizedUnknown
+        )
+        if let snap = local.snapDiagnostics {
+            RoutingDebugLog.shared.snapSelection(
+                allowUnknown: req.accessPolicy.motorizedUnknown,
+                tapRadiusMeters: local.tapRadiusMeters,
+                mapZoom: local.mapZoom ?? req.options?.mapZoom,
+                start: snap.start,
+                end: snap.end
             )
         }
         if req.options?.maxPathMeters == nil { cache.insert(response, for: key) }

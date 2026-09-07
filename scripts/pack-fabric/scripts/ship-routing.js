@@ -24,6 +24,7 @@ const path = require("path");
 const crypto = require("crypto");
 const os = require("os");
 const { spawnSync } = require("child_process");
+const { assertPackFactoryNotPaused } = require("../routing/lib/us-v3-pause");
 
 const DIRT = path.resolve(__dirname, "../../..");
 const FABRIC = path.join(DIRT, "scripts/pack-fabric");
@@ -412,6 +413,12 @@ function liveDeployArgs(regionBaseOverrides, sourceVersion) {
   const args = ["vercel", "--prod", "--yes", "--env", "SOURCE_VERSION=" + sourceVersion];
   if (regionBaseOverrides && Object.keys(regionBaseOverrides).length) {
     args.push("--env", "R2_REGION_BASE_OVERRIDES=" + JSON.stringify(regionBaseOverrides));
+    const v4Ids = Object.keys(regionBaseOverrides).filter((id) =>
+      /\/v4\//.test(String(regionBaseOverrides[id]))
+    );
+    if (v4Ids.length) {
+      args.push("--env", "DIRT_V4_REGIONS=" + v4Ids.join(","));
+    }
   }
   return args;
 }
@@ -447,6 +454,9 @@ bare --pack is rejected; use --candidate/--promote with a recorded release id.`)
   }
   if ((opts.candidate || opts.promote) && !opts.ids.length) {
     die("candidate/promote requires at least one region");
+  }
+  if (opts.pack && (opts.candidate || opts.promote)) {
+    for (const id of opts.ids) assertPackFactoryNotPaused(id);
   }
   let liveOverrides = null;
   if (opts.candidate) {

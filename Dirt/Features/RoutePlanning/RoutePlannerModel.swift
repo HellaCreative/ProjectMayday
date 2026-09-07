@@ -736,6 +736,7 @@ final class RoutePlannerModel {
         refreshMap()
         buildTask = Task { @MainActor [weak self] in
             guard let self else { return }
+            self.itineraryBuilder.mapZoom = self.mapState.mapZoom
             let result = await self.itineraryBuilder.build(
                 requested,
                 from: legIndex,
@@ -773,6 +774,7 @@ final class RoutePlannerModel {
                 return
             }
             self.built = result
+            self.syncSnappedDestinationPin(from: result)
             self.advanceRouteBuildCamera(with: result)
             let currentGapIDs = Set(result.riderLegStatus.values.compactMap { status -> String? in
                 if case .gap(let gap) = status { return gap.id }
@@ -2174,6 +2176,33 @@ final class RoutePlannerModel {
         markers.append(contentsOf: fuelTargetMarkers)
         mapState.setPlannerMarkers(markers)
         primeNavigationTilePlanIfReady()
+    }
+
+    /// Move the destination pin to the snapped road without rebuilding.
+    /// `apply(.move)` would start another search; this only updates the visible pin.
+    private func syncSnappedDestinationPin(from result: BuiltItinerary) {
+        guard errorMessage == nil,
+              let lastLeg = result.legs.last,
+              let snapped = lastLeg.response.coordinates.last
+        else { return }
+        let snappedCoord = snapped
+        if let idx = itinerary.waypoints.indices.last {
+            let current = itinerary.waypoints[idx].coordinate
+            let moved = CLLocation(
+                latitude: current.latitude,
+                longitude: current.longitude
+            ).distance(
+                from: CLLocation(latitude: snappedCoord.latitude, longitude: snappedCoord.longitude)
+            )
+            if moved > 2 {
+                itinerary.relocateWaypoint(at: idx, to: snappedCoord)
+            }
+        }
+        destination = snappedCoord
+        RoutingDebugLog.shared.event(
+            "PIN snapped destination "
+                + String(format: "%.5f,%.5f", snappedCoord.latitude, snappedCoord.longitude)
+        )
     }
 
     private func canonicalMarkers(riderPinsLocked: Bool) -> [MapState.Marker] {

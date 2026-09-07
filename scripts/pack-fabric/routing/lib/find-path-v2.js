@@ -15,6 +15,10 @@ const {
   ROAD_CLASS_NAME
 } = require("./pack-v2");
 const {
+  compileRestrictionIndex,
+  indexedTurnAllowed
+} = require("./legal-topology/restrictions");
+const {
   surfaceMultiplier,
   classSpeedKmh,
   costPerKmView,
@@ -60,13 +64,28 @@ const {
   BALANCED_BUCKETS,
   dirtBucket,
   PASS2_TIME_MS,
-  PASS2_POP_CAP
+  PASS2_POP_CAP,
+  METRO_CORE_WALL
 } = require("./hop-search");
 
 // Regional graph runtimes reuse the same coordinate array for the lifetime of
 // a warm planning operation. Building the duplicate-node topology once avoids
 // rescanning a province-sized graph for each profile/corridor attempt.
 const coincidentSiblingCache = new WeakMap();
+
+function urbanBoxesForPack(pack) {
+  const embedded = pack && pack.meta && Array.isArray(pack.meta.urbanCores)
+    ? pack.meta.urbanCores
+    : [];
+  const rows = METRO_CORE_WALL.concat(embedded);
+  const seen = new Set();
+  return rows.filter((box) => {
+    const key = [box.minLat, box.maxLat, box.minLon, box.maxLon].join(":");
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
 
 function cachedCoincidentSiblingLists(nodeCoords, n) {
   if (!nodeCoords || typeof nodeCoords !== "object") {
@@ -87,12 +106,83 @@ const {
   ferryCrossingSeconds
 } = require("./ferry");
 const { segmentStructureFields } = require("./structure");
+const { packHasDirectedArc } = require("./travel-direction");
+
+function v4AccessCode(pack, ei, fromNode, toNode) {
+  if (!pack.edgeAccess || ei == null || ei < 0) return 0;
+  const forward = pack.edgeFrom[ei] === fromNode && pack.edgeTo[ei] === toNode;
+  return pack.edgeAccess[ei * 2 + (forward ? 0 : 1)];
+}
+
+function v4HopIllegal(pack, ei, fromNode, toNode, startEi, endEi, incomingEi) {
+  if (!pack || pack.graphBinaryVersion < 4) return false;
+  const code = v4AccessCode(pack, ei, fromNode, toNode);
+  if (code === 2 || code === 5) return true;
+  if ((code === 3 || code === 4) && ei !== startEi && ei !== endEi) return true;
+  if (incomingEi == null || incomingEi < 0 || !pack.restrictions || !pack.restrictions.length) {
+    return false;
+  }
+  return !indexedTurnAllowed(
+    compileRestrictionIndex(pack.restrictions),
+    incomingEi,
+    ei,
+    fromNode
+  );
+}
+
+function incomingUndirected(prevKind, prevData, virt, node) {
+  if (prevKind[node] === 0) return prevData[node];
+  if (prevKind[node] === 1) {
+    const v = virt[prevData[node]];
+    return v && Number.isInteger(v.ei) ? v.ei : -1;
+  }
+  return -1;
+}
+
+function buildTurnAwareState(pack, n, startNode, endNode) {
+  const identity = {
+    stateCount: n + 2,
+    graphNodeOf: (state) => state,
+    stateForArrival: (node) => node
+  };
+  if (!pack || pack.graphBinaryVersion < 4 || !pack.restrictions || !pack.restrictions.length) {
+    return identity;
+  }
+  const restrictionIndex = compileRestrictionIndex(pack.restrictions);
+  const statefulEdges = restrictionIndex.statefulIncomingEdges;
+  if (!statefulEdges || !statefulEdges.size) return identity;
+
+  const stateByArrival = new Map();
+  const nodeByExtraState = [];
+  for (let source = 0; source < n; source += 1) {
+    for (let arc = pack.nodeOffsets[source]; arc < pack.nodeOffsets[source + 1]; arc += 1) {
+      const incomingEdge = Number(pack.edgeUndirectedIndex[arc]);
+      if (!statefulEdges.has(incomingEdge)) continue;
+      const target = Number(pack.edgeTargets[arc]);
+      const key = `${target}:${incomingEdge}`;
+      if (stateByArrival.has(key)) continue;
+      stateByArrival.set(key, n + 2 + nodeByExtraState.length);
+      nodeByExtraState.push(target);
+    }
+  }
+  const graphNodeOf = (state) => {
+    if (state === startNode || state === endNode || state < n) return state;
+    return nodeByExtraState[state - (n + 2)];
+  };
+  const stateForArrival = (node, incomingEdge) =>
+    stateByArrival.get(`${node}:${Number(incomingEdge)}`) ?? node;
+  return {
+    stateCount: n + 2 + nodeByExtraState.length,
+    graphNodeOf,
+    stateForArrival
+  };
+}
 
 const MINIMUM_EARNED_DIRT_EXCURSION_METERS = 1_000;
 const MAX_SHORT_DIRT_REPAIR_PASSES = 3;
 const DIRT_BASE_SEARCH_BUDGET_MS = 3_500;
 const DIRT_MAX_SEARCH_BUDGET_MS = 18_000;
-const BALANCED_BASE_SEARCH_BUDGET_MS = 2_200;
+const BALANCED_BASE_SEARCH_BUDGET_MS = 8_000;
 const BALANCED_MAX_SEARCH_BUDGET_MS = 45_000;
 const LARGE_GRAPH_BASE_SEARCH_BUDGET_MS = 12_000;
 const CLEAN_BASE_SEARCH_BUDGET_MS = 12_000;
@@ -162,9 +252,11 @@ function profileSearchBudgetMs(profile, straightLineMeters, nodeCount) {
 }
 
 function profileSearchPopCap(profile, nodeCount, dirtComparison = false) {
-  const base = profile === "dirt" && dirtComparison
-    ? Math.ceil(PASS2_POP_CAP / 2)
-    : PASS2_POP_CAP;
+  const base = profile === "balanced"
+    ? PASS2_POP_CAP * 4
+    : profile === "dirt" && dirtComparison
+      ? Math.ceil(PASS2_POP_CAP / 2)
+      : PASS2_POP_CAP;
   return Math.ceil(base * (1 + largeGraphPressure(nodeCount)));
 }
 
@@ -842,6 +934,7 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
       ? Math.min(Number.isFinite(requestedCap) ? requestedCap : Infinity, directBudget)
       : requestedCap;
     const dirtCandidates = [];
+    const balancedCandidates = [];
     const attemptDiagnostics = [];
     let containedBaseDirtCandidate = null;
     // Keep one absolute ceiling across corridor attempts and any internal
@@ -935,9 +1028,12 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
       attemptDiagnostics.push({
         corridorMeters: Number.isFinite(width) ? width : null,
         searchObjective: rideOpts.costMode,
-        outcome: ride ? "completed" : (diagnostics.outcome || "noPath"),
+        outcome: ride
+          ? ((ride.searchMeta && ride.searchMeta.pass2Outcome) || "completed")
+          : (diagnostics.outcome || "noPath"),
         pops: diagnostics.pops || (ride && ride.searchMeta && ride.searchMeta.pops) || 0,
-        searchMs: Date.now() - attemptStarted
+        searchMs: Date.now() - attemptStarted,
+        rejections: diagnostics.rejections || null
       });
       if (!ride) continue;
       ride.searchMeta = ride.searchMeta || {};
@@ -958,6 +1054,23 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
           distanceMeters: Math.round(directShortestMeters),
           pops: Number(directShortest.searchMeta && directShortest.searchMeta.pops) || 0
         };
+      }
+      if (profile === "balanced") {
+        const quality = summarizeRouteQuality(ride, {
+          profile,
+          urbanBoxes: urbanBoxesForPack(runtime.pack)
+        });
+        balancedCandidates.push({
+          ride,
+          width,
+          quality,
+          miss: Math.abs(Number(quality.knownDirtPercent) - 50)
+        });
+        if (quality.state === "ready") {
+          ride.searchMeta.corridorCandidates = attemptDiagnostics;
+          return ride;
+        }
+        continue;
       }
       if (profile === "dirt") {
         ride.searchMeta.dirtSelection = "highest-coherent-dirt-share";
@@ -980,6 +1093,22 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
       }
       ride.searchMeta.corridorCandidates = attemptDiagnostics;
       return ride;
+    }
+    if (profile === "balanced" && balancedCandidates.length) {
+      balancedCandidates.sort((a, b) => {
+        const urbanDelta = a.quality.urbanCoreMeters - b.quality.urbanCoreMeters;
+        if (Math.abs(urbanDelta) > 100) return urbanDelta;
+        if (Math.abs(a.miss - b.miss) > 0.1) return a.miss - b.miss;
+        return Number(a.ride.distanceMeters) - Number(b.ride.distanceMeters);
+      });
+      const best = balancedCandidates[0];
+      best.ride.searchMeta = best.ride.searchMeta || {};
+      best.ride.searchMeta.corridorMeters = Number.isFinite(best.width) ? best.width : null;
+      best.ride.searchMeta.corridorWidened = Number.isFinite(best.width) && best.width > baseCorridor;
+      best.ride.searchMeta.corridorCandidates = attemptDiagnostics;
+      best.ride.searchMeta.balancedSelection = "closest-feasible-to-50-without-urban-core";
+      best.ride.searchMeta.balancedTargetMet = best.quality.state === "ready";
+      return best.ride;
     }
     if (profile === "dirt" && dirtCandidates.length) {
       const primaryBestDirt = Math.max(...dirtCandidates.map((candidate) => candidate.dirtPercent));
@@ -1090,7 +1219,7 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
       !Number.isFinite(requestedCap) || directShortestMeters <= requestedCap + 1
     );
     if (
-      profile === "balanced" && incompleteAttempt && directFitsRequest &&
+      profile === "balanced" && directFitsRequest &&
       !(searchOpts.abortSignal && searchOpts.abortSignal.aborted)
     ) {
       // A bounded Balanced preference search is allowed to lose refinement,
@@ -1100,7 +1229,9 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
       directShortest.searchMeta = directShortest.searchMeta || {};
       directShortest.searchMeta.rideObjective = "surface-balance-bounded-fallback";
       directShortest.searchMeta.balancedSearchFallbackUsed = true;
-      directShortest.searchMeta.balancedSearchFallbackReason = incompleteAttempt.outcome;
+      directShortest.searchMeta.balancedSearchFallbackReason = incompleteAttempt
+        ? incompleteAttempt.outcome
+        : "no_balanced_candidate";
       directShortest.searchMeta.corridorMeters = null;
       directShortest.searchMeta.corridorWidened = false;
       directShortest.searchMeta.corridorCandidates = attemptDiagnostics;
@@ -1151,10 +1282,10 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
   }
 
   const pack = runtime.pack;
-  const urbanBoxes =
-    pack.meta && Array.isArray(pack.meta.urbanCores) && pack.meta.urbanCores.length
-      ? pack.meta.urbanCores
-      : undefined;
+  // The embedded pack cores add precision; they do not replace the established
+  // metropolitan safety wall. Replacing the broad Halifax wall with the
+  // smaller OSM city polygon allowed routes to skim through the metro area.
+  const urbanBoxes = urbanBoxesForPack(pack);
   const settlementBoxes = settlementBoxesForPack(pack, profile);
   const geom = runtime.geom;
   const enums = runtime.enums;
@@ -1176,7 +1307,7 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
   const n = pack.nodeCount;
   const startNode = n;
   const endNode = n + 1;
-  const total = n + 2;
+  const baseTotal = n + 2;
   const regionId =
     (pack && (pack.regionId || pack.province)) ||
     (runtime.data && (runtime.data.regionId || runtime.data.province)) ||
@@ -1193,6 +1324,10 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
     edgeTo,
     nodeCoords
   } = pack;
+  const turnState = buildTurnAwareState(pack, n, startNode, endNode);
+  const total = turnState.stateCount;
+  const graphNodeOf = turnState.graphNodeOf;
+  const stateForArrival = turnState.stateForArrival;
 
   const startLL = startMatch.coord;
   const endLL = endMatch.coord;
@@ -1211,8 +1346,9 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
   function nodeLL(node) {
     if (node === startNode) return startLL;
     if (node === endNode) return endLL;
-    if (node >= 0 && node < n && nodeCoords) {
-      return [nodeCoords[node * 2], nodeCoords[node * 2 + 1]];
+    const graphNode = graphNodeOf(node);
+    if (graphNode >= 0 && graphNode < n && nodeCoords) {
+      return [nodeCoords[graphNode * 2], nodeCoords[graphNode * 2 + 1]];
     }
     return null;
   }
@@ -1268,23 +1404,45 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
   }
 
   const virtAdj = new Map();
+  const virtAdjRev = new Map();
+  function linkVirtArc(id, from, to, forward) {
+    if (from == null || to == null || from < 0 || to < 0) return;
+    if (!virtAdj.has(from)) virtAdj.set(from, []);
+    virtAdj.get(from).push({ to, id, forward });
+    if (!virtAdjRev.has(to)) virtAdjRev.set(to, []);
+    virtAdjRev.get(to).push({ to: from, id, forward: !forward });
+  }
   function linkVirt(id) {
     const v = virt[id];
-    if (!virtAdj.has(v.a)) virtAdj.set(v.a, []);
-    if (!virtAdj.has(v.b)) virtAdj.set(v.b, []);
-    virtAdj.get(v.a).push({ to: v.b, id, forward: true });
-    virtAdj.get(v.b).push({ to: v.a, id, forward: false });
+    linkVirtArc(id, v.a, v.b, true);
+    linkVirtArc(id, v.b, v.a, false);
   }
-  linkVirt(vStartA);
-  linkVirt(vStartB);
-  linkVirt(vEndA);
-  linkVirt(vEndB);
-  if (vBetween >= 0) linkVirt(vBetween);
+  if (packHasDirectedArc(pack, sB, sA, startEi)) {
+    linkVirtArc(vStartA, startNode, sA, true);
+  }
+  if (packHasDirectedArc(pack, sA, sB, startEi)) {
+    linkVirtArc(vStartB, startNode, sB, true);
+  }
+  if (packHasDirectedArc(pack, eA, eB, endEi)) {
+    linkVirtArc(vEndA, eA, endNode, false);
+  }
+  if (packHasDirectedArc(pack, eB, eA, endEi)) {
+    linkVirtArc(vEndB, eB, endNode, false);
+  }
+  if (vBetween >= 0) {
+    const alongForward = (Number(startMatch.distanceAlongM) || 0)
+      <= (Number(endMatch.distanceAlongM) || 0);
+    const betweenLegal = alongForward
+      ? packHasDirectedArc(pack, sA, sB, startEi)
+      : packHasDirectedArc(pack, sB, sA, startEi);
+    if (betweenLegal) linkVirtArc(vBetween, startNode, endNode, true);
+  }
 
   // Bridge pack duplicate nodes on continuous OSM ways for every profile.
   // A topology seam is not a surface preference: if Clean can cross the same
   // two-metre OSM join, Dirt and Balanced must see that connected road too.
-  const coincidentSiblings = cachedCoincidentSiblingLists(nodeCoords, n);
+  const coincidentSiblings =
+    pack && pack.graphBinaryVersion >= 4 ? null : cachedCoincidentSiblingLists(nodeCoords, n);
 
   const costMode = searchOpts.costMode || "profile";
   const distanceAStar = costMode === "distance";
@@ -1313,10 +1471,11 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
   const settlementFallback = profile === "cleanest"
     ? searchOpts.settlementFallback === true
     : searchOpts.settlementFallback !== false;
-  const regressionLimit = profile === "cleanest"
+  const requestedRegression = Number(searchOpts.progressRegressionMeters);
+  const regressionLimit = profile === "cleanest" || requestedRegression === Infinity
     ? Number.MAX_SAFE_INTEGER
-    : (Number.isFinite(Number(searchOpts.progressRegressionMeters))
-      ? Number(searchOpts.progressRegressionMeters)
+    : (Number.isFinite(requestedRegression)
+      ? requestedRegression
       : maxProgressRegressionMeters(profile));
   const applyAwayXt = costMode === "profile";
   // Balanced keeps centreline pull. Clean uses toward-B gravity only — no chord XT.
@@ -1331,7 +1490,7 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
   const slackToDest = isHunt
     ? fillShortestMeters({
         n,
-        total,
+        total: baseTotal,
         nodeOffsets,
         edgeTargets,
         edgeUndirectedIndex,
@@ -1342,7 +1501,7 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
         enums,
         avoid,
         virt,
-        virtAdj,
+        virtAdj: virtAdjRev,
         startLL,
         endLL,
         cityWall,
@@ -1395,6 +1554,8 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
       nodeCoords,
       startLL,
       endLL,
+      startEi,
+      endEi,
       policy,
       avoid,
       profile,
@@ -1423,7 +1584,8 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
       cleanMetroMultiplier: searchOpts.cleanMetroMultiplier,
       avoidMotorways: e4Opts.avoidMotorways,
       coincidentSiblings,
-      shortDirtPenaltyEdgeIds
+      shortDirtPenaltyEdgeIds,
+      turnState
     });
   }
 
@@ -1485,6 +1647,15 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
   heap.push({ node: startNode, cost: queuePriority(startNode, 0), pathCost: 0 });
   let pops = 0;
   let abort = "completed";
+  const rejected = searchOpts.diagnostics ? {
+    immediateReverse: 0,
+    legalTurn: 0,
+    access: 0,
+    avoid: 0,
+    geography: 0,
+    progress: 0,
+    length: 0
+  } : null;
   const configuredPopCap = Number(searchOpts.popCap);
   const configuredTimeCapMs = Number(searchOpts.timeCapMs);
   const popCap = boundedSearch
@@ -1516,29 +1687,61 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
       break;
     }
     if (cur.node === endNode) break;
+    const currentGraphNode = graphNodeOf(cur.node);
 
-    if (cur.node < n) {
-      const start = nodeOffsets[cur.node];
-      const end = nodeOffsets[cur.node + 1];
+    if (currentGraphNode < n) {
+      const start = nodeOffsets[currentGraphNode];
+      const end = nodeOffsets[currentGraphNode + 1];
       for (let i = start; i < end; i += 1) {
         const to = edgeTargets[i];
         const ei = edgeUndirectedIndex[i];
-        if (prevKind[cur.node] === 0 && prevData[cur.node] === ei) continue;
+        if (prevKind[cur.node] === 0 && prevData[cur.node] === ei) {
+          if (rejected) rejected.immediateReverse += 1;
+          continue;
+        }
+        if (v4HopIllegal(
+          pack,
+          ei,
+          currentGraphNode,
+          to,
+          startEi,
+          endEi,
+          incomingUndirected(prevKind, prevData, virt, cur.node)
+        )) {
+          if (rejected) rejected.legalTurn += 1;
+          continue;
+        }
         const attr = edgeAttrs[ei];
         const access = unpackAccess(attr);
-        if (!accessAllowed(access, policy, enums)) continue;
-        if (avoid && avoid.has(pack.edgeId(ei))) continue;
+        if (!accessAllowed(access, policy, enums)) {
+          if (rejected) rejected.access += 1;
+          continue;
+        }
+        if (avoid && avoid.has(pack.edgeId(ei))) {
+          if (rejected) rejected.avoid += 1;
+          continue;
+        }
         const toLL = nodeLL(to);
         if (blockedForRide(
           toLL, startLL, endLL, cityWall, corridorM, hardCorridor, urbanBoxes,
           settlementWall, settlementBoxes, nodeLL(cur.node)
-        )) continue;
+        )) {
+          if (rejected) rejected.geography += 1;
+          continue;
+        }
         const toProgress = projectedProgressMeters(toLL, startLL, endLL);
         const newPeakProgress = Math.max(peakProgress[cur.node], toProgress);
-        if (newPeakProgress - toProgress > regressionLimit) continue;
+        if (newPeakProgress - toProgress > regressionLimit) {
+          if (rejected) rejected.progress += 1;
+          continue;
+        }
         const edgeM = edgeMeters[ei];
         const newMeters = pathMeters[cur.node] + edgeM;
-        if (exceedsLengthSlack(newMeters, to, slackToDest, maxPathMeters)) continue;
+        if (exceedsLengthSlack(newMeters, to, slackToDest, maxPathMeters)) {
+          if (rejected) rejected.length += 1;
+          continue;
+        }
+        const toState = stateForArrival(to, ei);
         const surface = unpackSurface(attr);
         const road = ROAD_CLASS_NAME[unpackRoadClass(attr)] || "unknown";
         const surfaceName = enums.SURFACE_NAME[surface] || "unknown";
@@ -1581,7 +1784,7 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
               endOnMajorHighway,
               !pack.hasLeaves && e4Opts.avoidMotorways
             );
-            step += awayExtra(cur.node, to) * DIRT_RIDE_AWAY_SCALE;
+            step += awayExtra(cur.node, toState) * DIRT_RIDE_AWAY_SCALE;
             step += corridorCrossTrackExtra(profile, toLL, startLL, endLL, edgeM) * DIRT_RIDE_XT_SCALE;
           }
           step = applyE4LeafMult(
@@ -1592,7 +1795,7 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
             pack, ei, edgeM, toLL, startLL, endLL, startOnMajorHighway, endOnMajorHighway, e4Opts
           );
           if (toLL && applyAwayXt) {
-            step += awayExtra(cur.node, to);
+            step += awayExtra(cur.node, toState);
           }
         } else {
           step = (edgeM / 1000) * costView[surface] * roadClassMultiplier(road, profile);
@@ -1627,7 +1830,7 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
             }
           }
           if (applyAwayXt) {
-            step += awayExtra(cur.node, to);
+            step += awayExtra(cur.node, toState);
             if (toLL && applySoftCorridor) {
               step += corridorCrossTrackExtra(profile, toLL, startLL, endLL, edgeM);
             }
@@ -1667,30 +1870,30 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
         const dirt = isDirtSurface(surfaceName, road);
         let action = considerRelax(
           cost,
-          knownDistance(to),
+          knownDistance(toState),
           ei,
-          knownPreviousEdge(to),
-          to,
+          knownPreviousEdge(toState),
+          toState,
           sessionSeed,
           varietyOn,
-          slots[to],
+          slots[toState],
           dirt,
           false
         );
-        if (action === "steal" && createsCycle(prev, cur.node, to)) action = "reject";
-        if (applyRelax(action, slots, to)) {
-          prev[to] = cur.node;
-          prevKind[to] = 0;
-          prevData[to] = ei;
-          prevForward[to] = edgeFrom[ei] === cur.node ? 1 : 0;
+        if (action === "steal" && createsCycle(prev, cur.node, toState)) action = "reject";
+        if (applyRelax(action, slots, toState)) {
+          prev[toState] = cur.node;
+          prevKind[toState] = 0;
+          prevData[toState] = ei;
+          prevForward[toState] = edgeFrom[ei] === currentGraphNode ? 1 : 0;
           if (shouldPush(action)) {
-            if (seen) seen[to] = 1;
-            dist[to] = cost;
-            pathMeters[to] = newMeters;
-            peakProgress[to] = newPeakProgress;
+            if (seen) seen[toState] = 1;
+            dist[toState] = cost;
+            pathMeters[toState] = newMeters;
+            peakProgress[toState] = newPeakProgress;
             heap.push({
-              node: to,
-              cost: queuePriority(to, cost),
+              node: toState,
+              cost: queuePriority(toState, cost),
               pathCost: cost
             });
           }
@@ -1698,7 +1901,7 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
       }
       // Zero-cost transfer onto coincident duplicate nodes.
       if (coincidentSiblings) {
-        const sibs = coincidentSiblings[cur.node];
+        const sibs = coincidentSiblings[currentGraphNode];
         if (sibs) {
           for (let si = 0; si < sibs.length; si += 1) {
             const to = sibs[si];
@@ -1740,11 +1943,12 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
       }
     }
 
-    const vlist = virtAdj.get(cur.node);
+    const vlist = virtAdj.get(currentGraphNode);
     if (vlist) {
       for (let vi = 0; vi < vlist.length; vi += 1) {
         const item = vlist[vi];
         const v = virt[item.id];
+        const toState = item.to < n ? stateForArrival(item.to, v.ei) : item.to;
         const toLL = nodeLL(item.to);
         if (blockedForRide(
           toLL, startLL, endLL, cityWall, corridorM, hardCorridor, urbanBoxes,
@@ -1794,12 +1998,12 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
           );
         }
         if (costMode === "pavement") {
-          step += awayExtra(cur.node, item.to) * DIRT_RIDE_AWAY_SCALE;
+          step += awayExtra(cur.node, toState) * DIRT_RIDE_AWAY_SCALE;
           if (toLL) {
             step += corridorCrossTrackExtra(profile, toLL, startLL, endLL, v.meters) * DIRT_RIDE_XT_SCALE;
           }
         } else if (applyAwayXt) {
-          step += awayExtra(cur.node, item.to);
+          step += awayExtra(cur.node, toState);
         }
         if (toLL) {
           step *= urbanCoreFallbackMultiplier(
@@ -1815,30 +2019,30 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
         const cost = curPathCost + step;
         let action = considerRelax(
           cost,
-          knownDistance(item.to),
+          knownDistance(toState),
           v.ei,
-          knownPreviousEdge(item.to),
-          item.to,
+          knownPreviousEdge(toState),
+          toState,
           sessionSeed,
           varietyOn,
-          slots[item.to],
+          slots[toState],
           false,
           false
         );
-        if (action === "steal" && createsCycle(prev, cur.node, item.to)) action = "reject";
-        if (applyRelax(action, slots, item.to)) {
-          prev[item.to] = cur.node;
-          prevKind[item.to] = 1;
-          prevData[item.to] = item.id;
-          prevForward[item.to] = item.forward ? 1 : 0;
+        if (action === "steal" && createsCycle(prev, cur.node, toState)) action = "reject";
+        if (applyRelax(action, slots, toState)) {
+          prev[toState] = cur.node;
+          prevKind[toState] = 1;
+          prevData[toState] = item.id;
+          prevForward[toState] = item.forward ? 1 : 0;
           if (shouldPush(action)) {
-            if (seen) seen[item.to] = 1;
-            dist[item.to] = cost;
-            pathMeters[item.to] = newMeters;
-            peakProgress[item.to] = newPeakProgress;
+            if (seen) seen[toState] = 1;
+            dist[toState] = cost;
+            pathMeters[toState] = newMeters;
+            peakProgress[toState] = newPeakProgress;
             heap.push({
-              node: item.to,
-              cost: queuePriority(item.to, cost),
+              node: toState,
+              cost: queuePriority(toState, cost),
               pathCost: cost
             });
           }
@@ -2050,6 +2254,8 @@ function searchBalancedResource(ctx) {
     edgeFrom,
     startLL,
     endLL,
+    startEi = -1,
+    endEi = -1,
     policy,
     avoid,
     profile,
@@ -2078,7 +2284,8 @@ function searchBalancedResource(ctx) {
     cleanMetroMultiplier,
     avoidMotorways,
     coincidentSiblings,
-    shortDirtPenaltyEdgeIds
+    shortDirtPenaltyEdgeIds,
+    turnState
   } = ctx;
   const metroFallbackPenalty =
     resolveMetroFallbackPenalty(profile, cleanMetroMultiplier, avoidMotorways === true);
@@ -2092,7 +2299,10 @@ function searchBalancedResource(ctx) {
     return cost;
   };
   const B = BALANCED_BUCKETS;
-  const labels = (n + 2) * B;
+  const stateCount = turnState ? turnState.stateCount : n + 2;
+  const graphNodeOf = turnState ? turnState.graphNodeOf : (state) => state;
+  const stateForArrival = turnState ? turnState.stateForArrival : (node) => node;
+  const labels = stateCount * B;
   const lab = (node, b) => node * B + b;
   const nid = (label) => Math.floor(label / B);
   const dist = new Float64Array(labels);
@@ -2119,6 +2329,15 @@ function searchBalancedResource(ctx) {
     : maxProgressRegressionMeters(profile);
   let pops = 0;
   let abort = "completed";
+  const rejected = diagnostics ? {
+    immediateReverse: 0,
+    legalTurn: 0,
+    access: 0,
+    avoid: 0,
+    geography: 0,
+    progress: 0,
+    length: 0
+  } : null;
   const isHunt = Number.isFinite(maxPathMeters);
   const absoluteDeadline = Number(deadlineAtMs);
   const hasAbsoluteDeadline = Number.isFinite(absoluteDeadline);
@@ -2140,8 +2359,9 @@ function searchBalancedResource(ctx) {
   function nodeLL(node) {
     if (node === startNode) return startLL;
     if (node === endNode) return endLL;
-    if (node >= 0 && node < n && ctx.nodeCoords) {
-      return [ctx.nodeCoords[node * 2], ctx.nodeCoords[node * 2 + 1]];
+    const graphNode = graphNodeOf(node);
+    if (graphNode >= 0 && graphNode < n && ctx.nodeCoords) {
+      return [ctx.nodeCoords[graphNode * 2], ctx.nodeCoords[graphNode * 2 + 1]];
     }
     return null;
   }
@@ -2176,9 +2396,10 @@ function searchBalancedResource(ctx) {
     const cur = heap.pop();
     if (!cur || cur.g !== dist[cur.node] || cur.searchCost !== score[cur.node]) continue;
     if (cur.g > maxPathMeters) continue;
-    const node = nid(cur.node);
+    const state = nid(cur.node);
+    const node = graphNodeOf(state);
     const dirtSoFar = dirtAt[cur.node];
-    if (node === endNode) {
+    if (state === endNode) {
       const ratio = cur.g > 0 ? dirtSoFar / cur.g : 0;
       // Half a percentage point is visually and practically 50/50. Once A*
       // settles such a destination label, further expansion can only buy a
@@ -2192,22 +2413,52 @@ function searchBalancedResource(ctx) {
       for (let i = start; i < end; i += 1) {
         const to = edgeTargets[i];
         const ei = edgeUndirectedIndex[i];
-        if (prevKind[cur.node] === 0 && prevData[cur.node] === ei) continue;
+        if (prevKind[cur.node] === 0 && prevData[cur.node] === ei) {
+          if (rejected) rejected.immediateReverse += 1;
+          continue;
+        }
+        if (v4HopIllegal(
+          pack,
+          ei,
+          node,
+          to,
+          startEi,
+          endEi,
+          incomingUndirected(prevKind, prevData, virt, cur.node)
+        )) {
+          if (rejected) rejected.legalTurn += 1;
+          continue;
+        }
         const attr = edgeAttrs[ei];
         const access = unpackAccess(attr);
-        if (!accessAllowed(access, policy, enums)) continue;
-        if (avoid && avoid.has(pack.edgeId(ei))) continue;
+        if (!accessAllowed(access, policy, enums)) {
+          if (rejected) rejected.access += 1;
+          continue;
+        }
+        if (avoid && avoid.has(pack.edgeId(ei))) {
+          if (rejected) rejected.avoid += 1;
+          continue;
+        }
         const toLL = nodeLL(to);
         if (blockedForRide(
           toLL, startLL, endLL, cityWall, corridorM, hardCorridor, urbanBoxes,
           settlementWall, settlementBoxes, nodeLL(node)
-        )) continue;
+        )) {
+          if (rejected) rejected.geography += 1;
+          continue;
+        }
         const toProgress = projectedProgressMeters(toLL, startLL, endLL);
         const newPeakProgress = Math.max(peakProgress[cur.node], toProgress);
-        if (newPeakProgress - toProgress > regressionLimit) continue;
+        if (newPeakProgress - toProgress > regressionLimit) {
+          if (rejected) rejected.progress += 1;
+          continue;
+        }
         const edgeM = edgeMeters[ei];
         const newMeters = cur.g + edgeM;
-        if (exceedsLengthSlack(newMeters, to, slackToDest, maxPathMeters)) continue;
+        if (exceedsLengthSlack(newMeters, to, slackToDest, maxPathMeters)) {
+          if (rejected) rejected.length += 1;
+          continue;
+        }
         const surface = unpackSurface(attr);
         const road = ROAD_CLASS_NAME[unpackRoadClass(attr)] || "unknown";
         const surfaceName = enums.SURFACE_NAME[surface] || "unknown";
@@ -2220,7 +2471,8 @@ function searchBalancedResource(ctx) {
           : 0;
         const newDirt = dirtSoFar + addDirt;
         const b = dirtBucket(newDirt, newMeters);
-        const toLab = lab(to, b);
+        const toState = stateForArrival(to, ei);
+        const toLab = lab(toState, b);
         const settlementMult = settlementFallback && toLL
           ? settlementFallbackMultiplier(
               toLL[0], toLL[1], startLL, endLL, settlementBoxes, settlementFallbackPenalty
@@ -2276,7 +2528,8 @@ function searchBalancedResource(ctx) {
           const toProgress = projectedProgressMeters(toLL, startLL, endLL);
           const newPeakProgress = Math.max(peakProgress[cur.node], toProgress);
           if (newPeakProgress - toProgress > regressionLimit) continue;
-          const toLab = lab(to, dirtBucket(dirtSoFar, cur.g));
+          const toState = stateForArrival(to, -1);
+          const toLab = lab(toState, dirtBucket(dirtSoFar, cur.g));
           if (cur.searchCost < score[toLab]) {
             dist[toLab] = cur.g;
             score[toLab] = cur.searchCost;
@@ -2313,7 +2566,8 @@ function searchBalancedResource(ctx) {
         const newMeters = cur.g + v.meters;
         if (exceedsLengthSlack(newMeters, item.to, slackToDest, maxPathMeters)) continue;
         const b = dirtBucket(dirtSoFar, newMeters);
-        const toLab = lab(item.to, b);
+        const toState = item.to < n ? stateForArrival(item.to, v.ei) : item.to;
+        const toLab = lab(toState, b);
         const settlementMult = settlementFallback && toLL
           ? settlementFallbackMultiplier(
               toLL[0], toLL[1], startLL, endLL, settlementBoxes, settlementFallbackPenalty
@@ -2356,6 +2610,7 @@ function searchBalancedResource(ctx) {
     if (diagnostics) {
       diagnostics.outcome = abort === "completed" ? "noPath" : abort;
       diagnostics.pops = pops;
+      diagnostics.rejections = rejected;
     }
     return null;
   }
@@ -2594,6 +2849,7 @@ module.exports = {
   balancedSearchBudgetMs,
   profileSearchBudgetMs,
   profileSearchPopCap,
+  urbanBoxesForPack,
   dirtRecoveryPathCap,
   balancedCorridorMultipliers,
   applyHonestReportedStats

@@ -207,6 +207,21 @@ Source selection is simple:
 LIVE and PACKS still refer to the same promoted R2 fabric. Delivery path is not
 a second road network.
 
+Packed travel direction is independent of Dirt/Balanced/Clean. OSM `oneway`,
+roundabouts, and implied motorway/motorway-link arcs are encoded in `graph.v3`
+CSR; missing or ambiguous direction stays two-way. **V4 legal-topology packs**
+(`graph.v4.bin`, capability `legal-topology.v1`) additionally encode turn
+restrictions, barrier nodes, per-direction motorcycle access, and
+conditional/seasonal fail-closed rules. Android online planning uses the shared
+LIVE router. Offline Kotlin must **search** `graph.v4.bin` with the same
+turn-aware, access, heading-safe, and connectivity-aware snap law as Swift
+`OnDeviceRouter` / `GraphV2Pack` and JS `find-path-v4` / `legal-topology/snap`
+— decoding identity is not enough. V4 tap radius is zoom-aware and capped at
+2000 m; V4 scores stay on directed candidates through pair selection. Do not
+mix V3 and V4 packs in one search. ATV tags must not override `motorcycle=no`
+on V4. DIRT Dev installs the Nova Scotia V4 candidate; production stays on
+public V1/V3.
+
 ## 6. Start Navigation and rolling offline preparation
 
 Start Navigation must not download every province/state touched by a long

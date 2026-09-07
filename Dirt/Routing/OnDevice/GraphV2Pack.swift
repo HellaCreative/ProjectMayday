@@ -1,6 +1,8 @@
 import Foundation
 
-/// Decoded `graph.v2.bin` / `graph.v3.bin` (CSR). Same layout as `pack-fabric/routing/lib/pack-v2.js`.
+/// Decoded `graph.v2.bin` / `graph.v3.bin` / `graph.v4.bin` (CSR).
+/// V4 adds legal-topology sections; V2/V3 readers still reject V4-only safety
+/// fields by requiring magic `DG2` unless this decoder is used.
 /// Opted out of `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` so decode + Dijkstra
 /// can run on `Task.detached` without freezing the map.
 nonisolated final class GraphV2Pack: @unchecked Sendable {
@@ -28,16 +30,37 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
         let fromLeaves: Bool
     }
 
+    struct TurnRestriction: Sendable {
+        let osmRelationId: Int64
+        let kind: UInt8
+        let fromEdge: Int
+        let toEdge: Int
+        let viaNode: Int
+        let only: Bool
+        let vehicleMask: UInt16
+        let viaEdges: [Int]
+    }
+
+    private struct TurnKey: Hashable, Sendable {
+        let viaNode: Int
+        let fromEdge: Int
+    }
+
     static let magic: UInt32 = 0x3247_3244
+    static let magicV4: UInt32 = 0x3454_5244
     static let versionV2: UInt16 = 2
     static let versionV3: UInt16 = 3
+    static let versionV4: UInt16 = 4
     static let headerSizeV2 = 72
     static let headerSizeV3 = 100
     static let headerSizeV3Crossing = 104
-    /// flags bit0 = edgeFrom/edgeTo; bit1 = v3 leaf sections; bit2 = edgeCrossingSeconds.
+    static let headerSizeV4 = 140
+    /// flags bit0 = edgeFrom/edgeTo; bit1 = v3 leaf sections; bit2 = edgeCrossingSeconds; bit3 = V4 legal-topology.
     static let flagEdgeFromTo: UInt16 = 1
     static let flagV3Leaves: UInt16 = 2
     static let flagV3CrossingSeconds: UInt16 = 4
+    static let flagV4LegalTopology: UInt16 = 8
+    static let requiredV4Capability = "legal-topology.v1"
     /// Packed structure enum (lockstep regional/package.js STRUCTURE).
     static let structureNone = 0
     static let structureBridge = 1
@@ -95,6 +118,16 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
     let settlements: [UrbanCore.Box]
     private let idOffsets: [Int32]
     private let idBlob: Data
+    let legalTopology: Bool
+    let capabilities: [String]
+    /// Per-direction motorcycle access: 2 bytes per undirected edge (forward, reverse).
+    let edgeAccess: [UInt8]
+    let restrictions: [TurnRestriction]
+    let osmWayIds: [Int64]
+    private let blockedNodeTurns: [TurnKey: Set<Int>]
+    private let onlyNodeTurns: [TurnKey: Set<Int>]
+    private let blockedViaWayExits: [Int: Set<Int>]
+    private let onlyViaWayEntries: [Int: Set<Int>]
 
     var regionId: String?
     /// Optional road-shape sidecar. When present, painted routes follow the road.
@@ -104,18 +137,40 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
         self.data = data
         guard data.count >= Self.headerSizeV2 else { throw PackError.truncated }
         let magic: UInt32 = data.readUInt32LE(0)
-        guard magic == Self.magic else { throw PackError.badMagic }
+        let isV4 = magic == Self.magicV4
+        if isV4 {
+            guard data.count >= Self.headerSizeV4 else { throw PackError.truncated }
+        } else {
+            guard magic == Self.magic else { throw PackError.badMagic }
+        }
         let ver: UInt16 = data.readUInt16LE(4)
-        guard ver == Self.versionV2 || ver == Self.versionV3 else {
-            throw PackError.unsupportedVersion(ver)
+        if isV4 {
+            guard ver == Self.versionV4 else { throw PackError.unsupportedVersion(ver) }
+        } else {
+            guard ver == Self.versionV2 || ver == Self.versionV3 else {
+                throw PackError.unsupportedVersion(ver)
+            }
         }
         version = ver
         flags = data.readUInt16LE(6)
         let headerSize = Int(data.readUInt32LE(20))
-        let expectHeader = ver == Self.versionV3 ? Self.headerSizeV3 : Self.headerSizeV2
+        let expectHeader: Int
+        if isV4 {
+            expectHeader = Self.headerSizeV4
+        } else {
+            expectHeader = ver == Self.versionV3 ? Self.headerSizeV3 : Self.headerSizeV2
+        }
         // Tolerate older writers that omit headerSize field contents for v2.
         let effectiveHeader = headerSize > 0 ? headerSize : expectHeader
         guard data.count >= effectiveHeader else { throw PackError.truncated }
+        if isV4 {
+            guard (flags & Self.flagV4LegalTopology) != 0 else {
+                throw PackError.missingCapability
+            }
+            for off in [104, 108, 112, 116, 120, 124, 128, 132, 136] {
+                if data.readUInt32LE(off) == 0 { throw PackError.missingSafetySection }
+            }
+        }
 
         nodeCount = Int(data.readUInt32LE(8))
         undirectedEdgeCount = Int(data.readUInt32LE(12))
@@ -266,6 +321,96 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
         crossPackSeams = decodedSeams
         urbanCores = decodedUrbanCores
         settlements = decodedSettlements
+
+        if isV4 {
+            legalTopology = true
+            let capAt = Int(data.readUInt32LE(132))
+            let shaAt = Int(data.readUInt32LE(136))
+            guard capAt < shaAt, shaAt + 32 <= data.count else { throw PackError.truncated }
+            let capData = data.subdata(in: capAt..<shaAt)
+            let caps = (try? JSONSerialization.jsonObject(with: capData) as? [String]) ?? []
+            guard caps.contains(Self.requiredV4Capability) else {
+                throw PackError.missingCapability
+            }
+            capabilities = caps
+            let accessAt = Int(data.readUInt32LE(112))
+            let accessCount = undirectedEdgeCount * 2
+            guard accessAt + accessCount <= data.count else { throw PackError.missingSafetySection }
+            edgeAccess = Array(data.subdata(in: accessAt..<(accessAt + accessCount)))
+            let wayAt = Int(data.readUInt32LE(108))
+            var ways: [Int64] = []
+            ways.reserveCapacity(undirectedEdgeCount)
+            for i in 0..<undirectedEdgeCount {
+                ways.append(data.readInt64LE(wayAt + i * 8))
+            }
+            osmWayIds = ways
+            let restAt = Int(data.readUInt32LE(120))
+            let restCount = Int(data.readUInt32LE(restAt))
+            var parsed: [TurnRestriction] = []
+            var cursor = restAt + 4
+            parsed.reserveCapacity(restCount)
+            for _ in 0..<restCount {
+                let viaWayCount = Int(data.readUInt16LE(cursor + 10))
+                var viaEdges: [Int] = []
+                viaEdges.reserveCapacity(viaWayCount)
+                for v in 0..<viaWayCount {
+                    let edge = Int(data.readInt32LE(cursor + 32 + v * 12 + 8))
+                    if edge >= 0 { viaEdges.append(edge) }
+                }
+                parsed.append(
+                    TurnRestriction(
+                        osmRelationId: data.readInt64LE(cursor),
+                        kind: data[cursor + 8],
+                        fromEdge: Int(data.readUInt32LE(cursor + 12)),
+                        toEdge: Int(data.readUInt32LE(cursor + 16)),
+                        viaNode: Int(data.readInt32LE(cursor + 20)),
+                        only: (data[cursor + 9] & 2) != 0,
+                        vehicleMask: data.readUInt16LE(cursor + 26),
+                        viaEdges: viaEdges
+                    )
+                )
+                cursor += 32 + viaWayCount * 12
+            }
+            restrictions = parsed
+            var blockedNode: [TurnKey: Set<Int>] = [:]
+            var onlyNode: [TurnKey: Set<Int>] = [:]
+            var blockedVia: [Int: Set<Int>] = [:]
+            var onlyVia: [Int: Set<Int>] = [:]
+            for restriction in parsed where (restriction.vehicleMask & 1) != 0 {
+                if let firstVia = restriction.viaEdges.first,
+                   let lastVia = restriction.viaEdges.last {
+                    if restriction.only {
+                        onlyVia[restriction.fromEdge, default: []].insert(firstVia)
+                    } else {
+                        blockedVia[lastVia, default: []].insert(restriction.toEdge)
+                    }
+                    continue
+                }
+                let key = TurnKey(
+                    viaNode: restriction.viaNode,
+                    fromEdge: restriction.fromEdge
+                )
+                if restriction.only {
+                    onlyNode[key, default: []].insert(restriction.toEdge)
+                } else {
+                    blockedNode[key, default: []].insert(restriction.toEdge)
+                }
+            }
+            blockedNodeTurns = blockedNode
+            onlyNodeTurns = onlyNode
+            blockedViaWayExits = blockedVia
+            onlyViaWayEntries = onlyVia
+        } else {
+            legalTopology = false
+            capabilities = []
+            edgeAccess = []
+            restrictions = []
+            osmWayIds = []
+            blockedNodeTurns = [:]
+            onlyNodeTurns = [:]
+            blockedViaWayExits = [:]
+            onlyViaWayEntries = [:]
+        }
     }
 
     private static func stringArray(from value: Any?) -> [String]? {
@@ -292,6 +437,23 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
         let b = Int(idOffsets[ei + 1])
         guard a >= 0, b >= a, b <= idBlob.count else { return "" }
         return String(data: idBlob.subdata(in: a..<b), encoding: .utf8) ?? ""
+    }
+
+    /// True when the packed CSR contains a legal travel arc `from → to` on `edge`.
+    func hasDirectedArc(from: Int, to: Int, edge: Int) -> Bool {
+        guard from >= 0, from < nodeCount, to >= 0, edge >= 0, edge < undirectedEdgeCount else {
+            return false
+        }
+        let start = Int(nodeOffsets[from])
+        let end = Int(nodeOffsets[from + 1])
+        guard start >= 0, end <= edgeTargets.count, start <= end else { return false }
+        if start == end { return false }
+        for i in start..<end {
+            if Int(edgeTargets[i]) == to, Int(edgeUndirectedIndex[i]) == edge {
+                return true
+            }
+        }
+        return false
     }
 
     // MARK: - Graph-v3 leaf accessors (JS lockstep)
@@ -364,6 +526,39 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
     func crossingSeconds(_ ei: Int) -> UInt32 {
         guard hasCrossingSeconds, let arr = edgeCrossingSeconds, ei >= 0, ei < arr.count else { return 0 }
         return arr[ei]
+    }
+
+    /// Per-direction motorcycle access code (0 allowed … 2/5 deny, 3/4 endpoint-only).
+    func v4AccessCode(ei: Int, from: Int, to: Int) -> UInt8 {
+        guard legalTopology, ei >= 0, ei * 2 + 1 < edgeAccess.count else { return 0 }
+        let forward = edgeFrom?[ei] == Int32(from) && edgeTo?[ei] == Int32(to)
+        return edgeAccess[ei * 2 + (forward ? 0 : 1)]
+    }
+
+    func turnAllowed(fromEdge: Int, toEdge: Int, viaNode: Int) -> Bool {
+        let key = TurnKey(viaNode: viaNode, fromEdge: fromEdge)
+        if let only = onlyNodeTurns[key], !only.contains(toEdge) { return false }
+        if blockedNodeTurns[key]?.contains(toEdge) == true { return false }
+        if blockedViaWayExits[fromEdge]?.contains(toEdge) == true { return false }
+        if let onlyVia = onlyViaWayEntries[fromEdge], !onlyVia.contains(toEdge) { return false }
+        return true
+    }
+
+    /// Live `find-path-v2` V4 hop filter. No-ops on V2/V3.
+    func v4HopIllegal(
+        ei: Int,
+        from: Int,
+        to: Int,
+        startEi: Int,
+        endEi: Int,
+        incomingEi: Int
+    ) -> Bool {
+        guard version >= 4, legalTopology else { return false }
+        let code = Int(v4AccessCode(ei: ei, from: from, to: to))
+        if code == 2 || code == 5 { return true }
+        if (code == 3 || code == 4), ei != startEi, ei != endEi { return true }
+        if incomingEi < 0 || restrictions.isEmpty { return false }
+        return !turnAllowed(fromEdge: incomingEi, toEdge: ei, viaNode: from)
     }
 
     static func isFerryStructure(_ code: Int) -> Bool {
@@ -457,6 +652,8 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
         case truncated
         case badMagic
         case unsupportedVersion(UInt16)
+        case missingCapability
+        case missingSafetySection
     }
 }
 
@@ -474,6 +671,14 @@ private extension Data {
 
     nonisolated func readUInt16LE(_ offset: Int) -> UInt16 {
         self[offset..<offset + 2].withUnsafeBytes { $0.load(as: UInt16.self).littleEndian }
+    }
+
+    nonisolated func readInt32LE(_ offset: Int) -> Int32 {
+        self[offset..<offset + 4].withUnsafeBytes { $0.load(as: Int32.self).littleEndian }
+    }
+
+    nonisolated func readInt64LE(_ offset: Int) -> Int64 {
+        self[offset..<offset + 8].withUnsafeBytes { $0.load(as: Int64.self).littleEndian }
     }
 
     nonisolated func readInt32Array(at offset: Int, count: Int) -> [Int32] {

@@ -1,6 +1,11 @@
 import CoreLocation
 import Foundation
 
+@MainActor
+private enum DirtSnapRequestContext {
+    static var mapZoom: Double?
+}
+
 private enum FuelAdvisoryIssue {
     case gap(String)
     case unknown(String)
@@ -60,6 +65,8 @@ final class ItineraryBuilder {
     /// sides of one pump without reaching Vercel's platform timeout.
     private static let liveFuelWindowBudgetMs = 20_000
     private var currentGeneration: Int?
+    /// Current map zoom for V4 tap-radius. Set by the planner before `build`.
+    var mapZoom: Double?
 
     func setCurrentGeneration(_ generation: Int) {
         currentGeneration = generation
@@ -81,6 +88,7 @@ final class ItineraryBuilder {
         onProgress: @MainActor (BuiltItinerary) -> Void
     ) async -> BuiltItinerary {
         currentGeneration = itinerary.generation
+        DirtSnapRequestContext.mapZoom = mapZoom
         let requestedStartIndex = min(max(0, legIndex), itinerary.legs.count)
         let requestedEndIndex = throughLegIndex.map {
             min(itinerary.legs.count, max(requestedStartIndex, $0 + 1))
@@ -153,7 +161,9 @@ final class ItineraryBuilder {
                 "throughLeg=\(max(startIndex, requestedEndIndex - 1)) " +
                 "requestedFrom=\(requestedStartIndex) reusePrefix=\(kept.count) " +
                 "reuseSuffix=\(preservedSuffix.count) localEdit=\(localEdit ? 1 : 0) " +
-                "source=\(selectedSource.name)"
+                "source=\(selectedSource.name) " +
+                "allowUnknown=\(firstRequest.accessPolicy.motorizedUnknown ? 1 : 0) " +
+                "mapZoom=\(mapZoom.map { String(format: "%.1f", $0) } ?? "-")"
         )
 
         // Fuel-enabled routing is built forward from one proven anchor to the
@@ -315,7 +325,7 @@ final class ItineraryBuilder {
                 let from = itinerary.waypoints[index].coordinate
                 let to = itinerary.waypoints[index + 1].coordinate
                 let departureID = riderLeg.from.uuidString
-                let probe = try? await selectedSource.fuelChain(FuelChainRequest(
+                let probe = try? await selectedSource.fuelChain(FuelSnapPatch.applyingMapZoom(FuelChainRequest(
                     profile: riderLeg.profile,
                     from: from,
                     to: to,
@@ -340,7 +350,7 @@ final class ItineraryBuilder {
                         2_500,
                         max(100, Int(fuelProbeDeadline.timeIntervalSinceNow * 1_000))
                     )
-                ))
+                ), zoom: DirtSnapRequestContext.mapZoom))
                 if let distance = probe?.firstReachableStationMeters {
                     firstReachableFuel[index] = distance
                 }
@@ -738,7 +748,7 @@ final class ItineraryBuilder {
            !source.supportsCombinedFuelPlanning {
             onFuelStatus("Checking fuel after destination")
             do {
-                let escape = try await source.fuelChain(FuelChainRequest(
+                let escape = try await source.fuelChain(FuelSnapPatch.applyingMapZoom(FuelChainRequest(
                     profile: .cleanest,
                     from: finalWaypoint.coordinate,
                     to: finalWaypoint.coordinate,
@@ -752,7 +762,7 @@ final class ItineraryBuilder {
                     probeFirstReachableStation: true,
                     windowTimeBudgetMs: 2_500,
                     forwardFeeler: true
-                ))
+                ), zoom: DirtSnapRequestContext.mapZoom))
                 if escape.isComplete {
                     // Nil after an exhaustive full-tank probe means the
                     // destination itself has no safe fuel escape. A zero arrival
@@ -888,7 +898,7 @@ final class ItineraryBuilder {
                     )
                 } else {
                     let nextDepartureID = nextLeg.from.uuidString
-                    let probe = try? await source.fuelChain(FuelChainRequest(
+                    let probe = try? await source.fuelChain(FuelSnapPatch.applyingMapZoom(FuelChainRequest(
                         profile: nextLeg.profile,
                         from: nextFrom,
                         to: nextTo,
@@ -913,7 +923,7 @@ final class ItineraryBuilder {
                             2_500,
                             max(100, progressWatchdog.remainingMilliseconds())
                         )
-                    ))
+                    ), zoom: DirtSnapRequestContext.mapZoom))
                     if let firstPumpMeters = probe?.firstReachableStationMeters {
                         onwardFuelMeters = firstPumpMeters
                     } else if cachedMeters > 0 {
@@ -1115,7 +1125,7 @@ final class ItineraryBuilder {
                         + "budgetMs=\(requestBudgetMs)"
                 )
                 do {
-                    chain = try await source.fuelChain(FuelChainRequest(
+                    chain = try await source.fuelChain(FuelSnapPatch.applyingMapZoom(FuelChainRequest(
                         profile: activeProfile,
                         from: current,
                         to: riderDestination.coordinate,
@@ -1143,7 +1153,7 @@ final class ItineraryBuilder {
                         ensureDestinationFuelEscape: source.supportsCombinedFuelPlanning
                             && index == itinerary.legs.count - 1
                             && !finalWaypointIsFuel
-                    ))
+                    ), zoom: DirtSnapRequestContext.mapZoom))
                 } catch is CancellationError {
                     return dropped(itinerary, committed: committed, cancelled: true)
                 } catch {
@@ -1904,7 +1914,7 @@ final class ItineraryBuilder {
             )
             let chain: FuelChainResponse
             do {
-                chain = try await source.fuelChain(FuelChainRequest(
+                chain = try await source.fuelChain(FuelSnapPatch.applyingMapZoom(FuelChainRequest(
                     profile: activeProfile,
                     from: windowStart,
                     to: to,
@@ -1934,7 +1944,7 @@ final class ItineraryBuilder {
                     allowPartialWindow: usesWindows,
                     windowTimeBudgetMs: min(Self.liveFuelWindowBudgetMs, remainingBudgetMs),
                     requiredFirstStationId: requiredStationID
-                ))
+                ), zoom: DirtSnapRequestContext.mapZoom))
             } catch {
                 // A timeout, transport failure, or server error is not proof
                 // that no pump exists. Preserve the working route and surface
@@ -2419,7 +2429,8 @@ private func routeRequest(
     legIndex: Int,
     maxPathMeters: Double?,
     history: EdgeHistory = EdgeHistory(),
-    profileOverride: RouteProfile? = nil
+    profileOverride: RouteProfile? = nil,
+    mapZoom: Double? = nil
 ) -> RouteRequest {
     let leg = itinerary.legs[legIndex]
     let profile = profileOverride ?? leg.profile
@@ -2439,7 +2450,8 @@ private func routeRequest(
             departingFrom: departureID,
             effectiveProfile: profile
         ),
-        preferBackRoads: leg.preferBackRoads
+        preferBackRoads: leg.preferBackRoads,
+        mapZoom: DirtSnapRequestContext.mapZoom
     )
 }
 
@@ -2459,9 +2471,10 @@ private func routeRequest(
     directExtraBudgetMeters: Double? = nil,
     regionalHopMinimumMeters: [Double] = [],
     history: EdgeHistory = EdgeHistory(),
-    avoidMotorways: Bool = false,
-    preferBackRoads: Bool = false
-) -> RouteRequest {
+        avoidMotorways: Bool = false,
+        preferBackRoads: Bool = false,
+        mapZoom: Double? = nil
+    ) -> RouteRequest {
     RouteRequest(
         profile: profile,
         locations: [
@@ -2478,7 +2491,8 @@ private func routeRequest(
         regionalHopMinimumMeters: regionalHopMinimumMeters,
         cleanMetroMultiplier: nil,
         avoidMotorways: avoidMotorways,
-        preferBackRoads: preferBackRoads
+        preferBackRoads: preferBackRoads,
+        mapZoom: DirtSnapRequestContext.mapZoom
     )
 }
 

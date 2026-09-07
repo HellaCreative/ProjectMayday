@@ -16,17 +16,9 @@ const {
   classifyFuelFailureReason,
   enrichFuelDiagnostics
 } = require("./route-diagnostics");
-const {
-  matchPoint,
-  normalizePolicy,
-  accessAllowed,
-  resolveChainSeamWaypoints,
-  routeRequest,
-  routeOnRuntime,
-  echoLegId,
-  buildManeuvers,
-  aggregateRouteSurfaceStats
-} = require("./router");
+const { matchPoint, normalizePolicy, accessAllowed, resolveChainSeamWaypoints, routeRequest, routeOnRuntime, echoLegId, buildManeuvers, aggregateRouteSurfaceStats } = require("./router");
+const { selectConnectedSnapPair, snapEndpointRecord } = require("./legal-topology/snap");
+const { tapRadiusMeters } = require("./legal-topology/tap-radius");
 const {
   resolveGraphRequest,
   primaryRegionForPoint,
@@ -35,6 +27,7 @@ const {
 const { corridorLocationsForRoute } = require("../regional/merge");
 const { resolveProfile } = require("./profile-costs");
 const { loadFuelForLocations, loadRegionFuel } = require("./fuel-data");
+const { summarizeRouteQuality } = require("./route-quality");
 
 function mergePackIdentities(...groups) {
   const byRegion = new Map();
@@ -230,12 +223,19 @@ function routeChainQuality(response, penalizeMajorRoads) {
   const meters = Math.max(0, Number(response && response.distanceMeters) || 0);
   const dirtPercent = Number(response && response.stats && response.stats.dirtPercent);
   const clean = cleanRouteQuality(response, penalizeMajorRoads);
+  const journey = response && response.quality || {};
   return {
     meters,
     dirtMeters: meters * (Number.isFinite(dirtPercent) ? dirtPercent : 0) / 100,
     cleanFallbackCount: clean.fallbackCount,
     cleanMajorRoadMeters: clean.majorRoadMeters,
-    backtrackMeters: responseBacktrackMeters(response)
+    backtrackMeters: responseBacktrackMeters(response),
+    urbanCoreMeters: Math.max(0, Number(journey.urbanCoreMeters) || 0),
+    minimumSectionDirtPercent: Number.isFinite(Number(journey.minimumSectionDirtPercent))
+      ? Number(journey.minimumSectionDirtPercent)
+      : 0,
+    longestPavedRunMeters: Math.max(0, Number(journey.longestPavedRunMeters) || 0),
+    degradedLegs: journey.state === "degraded" ? 1 : 0
   };
 }
 
@@ -245,13 +245,29 @@ function combineChainQuality(...parts) {
     dirtMeters: total.dirtMeters + (Number(part.dirtMeters) || 0),
     cleanFallbackCount: total.cleanFallbackCount + (Number(part.cleanFallbackCount) || 0),
     cleanMajorRoadMeters: total.cleanMajorRoadMeters + (Number(part.cleanMajorRoadMeters) || 0),
-    backtrackMeters: total.backtrackMeters + (Number(part.backtrackMeters) || 0)
+    backtrackMeters: total.backtrackMeters + (Number(part.backtrackMeters) || 0),
+    urbanCoreMeters: total.urbanCoreMeters + (Number(part.urbanCoreMeters) || 0),
+    minimumSectionDirtPercent: Math.min(
+      total.minimumSectionDirtPercent,
+      Number.isFinite(Number(part.minimumSectionDirtPercent))
+        ? Number(part.minimumSectionDirtPercent)
+        : 0
+    ),
+    longestPavedRunMeters: Math.max(
+      total.longestPavedRunMeters,
+      Number(part.longestPavedRunMeters) || 0
+    ),
+    degradedLegs: total.degradedLegs + (Number(part.degradedLegs) || 0)
   }), {
     meters: 0,
     dirtMeters: 0,
     cleanFallbackCount: 0,
     cleanMajorRoadMeters: 0,
-    backtrackMeters: 0
+    backtrackMeters: 0,
+    urbanCoreMeters: 0,
+    minimumSectionDirtPercent: 100,
+    longestPavedRunMeters: 0,
+    degradedLegs: 0
   });
 }
 
@@ -274,23 +290,35 @@ function compareChainPlans(a, b, profile, firstCapMeters) {
   const aUrbanStops = Number(a.urbanStopCount) || 0;
   const bUrbanStops = Number(b.urbanStopCount) || 0;
   if (aUrbanStops !== bUrbanStops) return aUrbanStops - bUrbanStops;
+  if (Math.abs(aq.urbanCoreMeters - bq.urbanCoreMeters) > 100) {
+    return aq.urbanCoreMeters - bq.urbanCoreMeters;
+  }
+  const aFirstHop = Number(a && a.graphMeters && a.graphMeters[0]);
+  const bFirstHop = Number(b && b.graphMeters && b.graphMeters[0]);
+  const commitBand = tankCommitBand(aFirstHop, firstCapMeters) -
+    tankCommitBand(bFirstHop, firstCapMeters);
+  if (commitBand !== 0) return commitBand;
+  const tankOrder = compareTankCommit(
+    aFirstHop, a.progressMeters, bFirstHop, b.progressMeters,
+    firstCapMeters, firstCapMeters
+  );
+  if (tankOrder !== 0) return tankOrder;
   const aBacktrack = aq.meters > 0 ? aq.backtrackMeters / aq.meters : 0;
   const bBacktrack = bq.meters > 0 ? bq.backtrackMeters / bq.meters : 0;
   // A lollipop, figure-eight, or repeated approach is a ride-quality defect,
   // not an acceptable way to save one fuel stop.
   if (Math.abs(aBacktrack - bBacktrack) > 0.01) return aBacktrack - bBacktrack;
-  const aDetour = Number(a.directionalDetourMeters) || 0;
-  const bDetour = Number(b.directionalDetourMeters) || 0;
-  if (Math.abs(aDetour - bDetour) > 2_000) return aDetour - bDetour;
-  const aProgress = Number(a.progressMeters) || 0;
-  const bProgress = Number(b.progressMeters) || 0;
-  if (Math.abs(aProgress - bProgress) > 2_000) return bProgress - aProgress;
-  if (Math.abs(aq.meters - bq.meters) > 50) return aq.meters - bq.meters;
   switch (resolveProfile(profile)) {
     case "dirt": {
       const aDirt = aq.meters > 0 ? aq.dirtMeters / aq.meters * 100 : 0;
       const bDirt = bq.meters > 0 ? bq.dirtMeters / bq.meters * 100 : 0;
       if (Math.abs(aDirt - bDirt) > 0.5) return bDirt - aDirt;
+      if (Math.abs(aq.minimumSectionDirtPercent - bq.minimumSectionDirtPercent) > 2) {
+        return bq.minimumSectionDirtPercent - aq.minimumSectionDirtPercent;
+      }
+      if (Math.abs(aq.longestPavedRunMeters - bq.longestPavedRunMeters) > 2_000) {
+        return aq.longestPavedRunMeters - bq.longestPavedRunMeters;
+      }
       break;
     }
     case "balanced": {
@@ -312,7 +340,13 @@ function compareChainPlans(a, b, profile, firstCapMeters) {
     default:
       break;
   }
-  void firstCapMeters;
+  const aDetour = Number(a.directionalDetourMeters) || 0;
+  const bDetour = Number(b.directionalDetourMeters) || 0;
+  if (Math.abs(aDetour - bDetour) > 2_000) return aDetour - bDetour;
+  const aProgress = Number(a.progressMeters) || 0;
+  const bProgress = Number(b.progressMeters) || 0;
+  if (Math.abs(aProgress - bProgress) > 2_000) return bProgress - aProgress;
+  if (Math.abs(aq.meters - bq.meters) > 50) return aq.meters - bq.meters;
   return 0;
 }
 
@@ -636,7 +670,7 @@ function fuelAccessSegment(from, to, stationId) {
   };
 }
 
-function sliceFoundationRoute(route, layout, fromPlacement, toPlacement) {
+function sliceFoundationRoute(route, layout, fromPlacement, toPlacement, urbanBoxes = []) {
   const fromMeters = fromPlacement ? fromPlacement.alongMeters : 0;
   const toMeters = toPlacement ? toPlacement.alongMeters : layout.meters;
   const routeSegments = [];
@@ -691,7 +725,7 @@ function sliceFoundationRoute(route, layout, fromPlacement, toPlacement) {
       : 0)
   , 0);
   const debug = route.debug || {};
-  return {
+  const sliced = {
     ...route,
     routeId: `${route.routeId || "route"}-fuel-${Math.round(fromMeters)}-${Math.round(toMeters)}`,
     geometry,
@@ -718,6 +752,11 @@ function sliceFoundationRoute(route, layout, fromPlacement, toPlacement) {
       }
     }
   };
+  sliced.quality = summarizeRouteQuality(sliced, {
+    profile: route.profile,
+    urbanBoxes
+  });
+  return sliced;
 }
 
 /**
@@ -802,8 +841,20 @@ function oneStopFoundationFuelPlan({
     ) || a.alongMeters - b.alongMeters;
   });
   const selected = placements[0];
-  const firstRoute = sliceFoundationRoute(foundationRoute, layout, null, selected);
-  const finalRoute = sliceFoundationRoute(foundationRoute, layout, selected, null);
+  const firstRoute = sliceFoundationRoute(
+    foundationRoute, layout, null, selected, urbanBoxes
+  );
+  const finalRoute = sliceFoundationRoute(
+    foundationRoute, layout, selected, null, urbanBoxes
+  );
+  // A strong aggregate score cannot hide one poor riding leg. If the pump
+  // partitions Dirt/Balanced into a degraded slice, let the normal bounded
+  // candidate search evaluate other packed pumps instead of committing the
+  // convenient on-route shortcut.
+  const qualityAcceptable = !(
+    (foundationRoute.profile === "dirt" || foundationRoute.profile === "balanced") &&
+    (firstRoute.quality.state !== "ready" || finalRoute.quality.state !== "ready")
+  );
   const stationCandidates = placements.slice(0, MAX_STATION_ALTERNATIVES)
     .map((placement, rank) => ({
     id: String(placement.target.station.id),
@@ -869,7 +920,8 @@ function oneStopFoundationFuelPlan({
       profileRouteSavings: 2,
       selectedUrbanEntry: selected.urbanEntry,
       ruralAlternativeAvailable: placements.some((placement) => !placement.urbanEntry)
-    }
+    },
+    qualityAcceptable
   };
 }
 
@@ -1204,7 +1256,8 @@ const preparedFuelTargetCache = new WeakMap();
 
 function prepareTargets(
   runtime, stations, destination, policy, profile, avoid,
-  deadlineAtMs = Infinity, abortSignal = null, foundationRoute = null
+  deadlineAtMs = Infinity, abortSignal = null, foundationRoute = null,
+  snapMeters = HARD_MATCH_METERS, snapHints = null
 ) {
   const started = Date.now();
   const foundationCells = foundationRouteCells(foundationRoute);
@@ -1212,11 +1265,12 @@ function prepareTargets(
     runtime,
     destination,
     policy,
-    HARD_MATCH_METERS,
+    snapMeters,
     avoid,
     null,
     profile,
-    "end"
+    "end",
+    snapHints
   );
   const stationCacheKey = stations && stations.routingCacheKey;
   const avoidKey = [...avoid].sort().join(",");
@@ -1740,7 +1794,9 @@ async function planFuelChainOnRuntime({
   graphResolution = null,
   routeOnLoadedRuntime = null,
   deadlineAtMs = null,
-  abortSignal = null
+  abortSignal = null,
+  mapZoom = null,
+  matchLimitMeters = null
 }) {
   profile = resolveProfile(profile);
   const policy = normalizePolicy(rawPolicy, profile);
@@ -1753,33 +1809,76 @@ async function planFuelChainOnRuntime({
     : (searchBudgetMs != null ? started + searchBudgetMs : Infinity);
   let timeBudgetExceeded = false;
   const avoid = new Set((avoidEdgeIds || []).map(String));
-  const startMatch = matchPoint(
+  const destLat = Number(destination && destination.lat);
+  const startLat = Number(start && start.lat);
+  const snapMeters = tapRadiusMeters({
+    zoom: mapZoom,
+    lat: Number.isFinite(destLat) ? destLat : startLat,
+    requestedMeters: matchLimitMeters,
+    graphBinaryVersion: (runtime.pack && runtime.pack.graphBinaryVersion) || 3,
+    defaultMeters: HARD_MATCH_METERS
+  });
+  const intentBearing = Number.isFinite(Number(start && (start.lon ?? start.lng)))
+    && Number.isFinite(Number(destination && (destination.lon ?? destination.lng)))
+    ? require("./legal-topology/snap").bearingDeg(
+      [Number(start.lon ?? start.lng), Number(start.lat)],
+      [Number(destination.lon ?? destination.lng), Number(destination.lat)]
+    )
+    : null;
+  const startHints = { headingDeg: Number(start && start.headingDeg), intentBearingDeg: intentBearing };
+  const endHints = {
+    headingDeg: Number(destination && destination.headingDeg),
+    intentBearingDeg: intentBearing != null ? (intentBearing + 180) % 360 : null
+  };
+  let startMatch = matchPoint(
     runtime,
     start,
     policy,
-    HARD_MATCH_METERS,
+    snapMeters,
     avoid,
     null,
     profile,
-    "start"
+    "start",
+    startHints
   );
   if (!startMatch.ok) {
     return {
       ok: false,
       error: "match_failed",
-      message: "Point 1 is not close enough to an eligible road in the live pack."
+      message: "Point 1 is not close enough to an eligible road in the live pack.",
+      allowUnknown: !!policy.motorizedUnknown
     };
   }
 
   const targets = prepareTargets(
-    runtime, stations, destination, policy, profile, avoid, deadline, abortSignal, foundationRoute
+    runtime, stations, destination, policy, profile, avoid, deadline, abortSignal, foundationRoute,
+    snapMeters, endHints
   );
   if (!targets.destinationMatch.ok) {
     return {
       ok: false,
       error: "match_failed",
-      message: "Point 2 is not close enough to an eligible road in the live pack."
+      message: "Point 2 is not close enough to an eligible road in the live pack.",
+      allowUnknown: !!policy.motorizedUnknown
     };
+  }
+  if (runtime.pack && runtime.pack.graphBinaryVersion >= 4) {
+    const picked = selectConnectedSnapPair(
+      runtime.pack,
+      startMatch.candidates || [startMatch],
+      targets.destinationMatch.candidates || [targets.destinationMatch],
+      { allowUnknown: !!policy.motorizedUnknown }
+    );
+    if (!picked.ok) {
+      return {
+        ok: false,
+        error: "match_failed",
+        message: "Point 2 is not close enough to an eligible connected road in the live pack.",
+        allowUnknown: !!policy.motorizedUnknown
+      };
+    }
+    startMatch = Object.assign({}, startMatch, picked.start, { ok: true });
+    targets.destinationMatch = Object.assign({}, targets.destinationMatch, picked.end, { ok: true });
   }
 
   let states = 0;
@@ -1799,7 +1898,31 @@ async function planFuelChainOnRuntime({
     profileRoutesSharedRuntime: !!graphResolution && !routeCandidate,
     targetPrepareMs: targets.prepareDiagnostics.elapsedMs,
     targetCacheHit: targets.prepareDiagnostics.cacheHit,
-    foundationPriorityStations: targets.prepareDiagnostics.foundationPriorityStations
+    foundationPriorityStations: targets.prepareDiagnostics.foundationPriorityStations,
+    allowUnknown: !!policy.motorizedUnknown,
+    tapRadiusMeters: snapMeters,
+    mapZoom: Number.isFinite(Number(mapZoom)) ? Number(mapZoom) : null,
+    snap: {
+      start: snapEndpointRecord(
+        { lon: Number(start && (start.lon ?? start.lng)), lat: Number(start && start.lat) },
+        startMatch && startMatch.ok ? startMatch : null,
+        {
+          candidateCount: ((startMatch && startMatch.candidates) || []).length,
+          rejectionReasons: Array.from(new Set(((startMatch && startMatch.rejections) || []).map((row) => row.reason).filter(Boolean)))
+        }
+      ),
+      end: snapEndpointRecord(
+        {
+          lon: Number(destination && (destination.lon ?? destination.lng)),
+          lat: Number(destination && destination.lat)
+        },
+        targets.destinationMatch && targets.destinationMatch.ok ? targets.destinationMatch : null,
+        {
+          candidateCount: ((targets.destinationMatch && targets.destinationMatch.candidates) || []).length,
+          rejectionReasons: Array.from(new Set(((targets.destinationMatch && targets.destinationMatch.rejections) || []).map((row) => row.reason).filter(Boolean)))
+        }
+      )
+    }
   };
   const memo = new Map();
   const stationCandidates = [];
@@ -1811,6 +1934,7 @@ async function planFuelChainOnRuntime({
   const physicalStart = locationCoordinate(start);
   const physicalDestination = locationCoordinate(destination);
   const urbanBoxes = fuelUrbanBoxesForRuntime(runtime);
+  let foundationFallback = null;
   const physicalTotal = haversineMeters(physicalStart, physicalDestination);
   let planningStage = "destination_graph";
   let bestPartial = { progressMeters: 0, stops: [], graphMeters: [], location: start };
@@ -1844,7 +1968,7 @@ async function planFuelChainOnRuntime({
     });
     if (reusedFoundation) {
       const reusedCandidates = reusedFoundation.stationCandidates || [];
-      return {
+      const reusedResponse = {
         ok: true,
         stops: [reusedFoundation.stop],
         graphMeters: reusedFoundation.graphMeters,
@@ -1885,6 +2009,8 @@ async function planFuelChainOnRuntime({
           stationCandidates: reusedCandidates
         })
       };
+      if (reusedFoundation.qualityAcceptable) return reusedResponse;
+      foundationFallback = reusedResponse;
     }
   }
   const destinationGraph = boundedGraphDistances(
@@ -2506,6 +2632,48 @@ async function planFuelChainOnRuntime({
       if (!!a.candidate.urbanEntry !== !!b.candidate.urbanEntry) {
         return a.candidate.urbanEntry ? 1 : -1;
       }
+      const aq = a.chainQuality || combineChainQuality();
+      const bq = b.chainQuality || combineChainQuality();
+      if (Math.abs(aq.urbanCoreMeters - bq.urbanCoreMeters) > 100) {
+        return aq.urbanCoreMeters - bq.urbanCoreMeters;
+      }
+      // Never trade the established final-quarter fueling policy for a nicer
+      // surface mix. Profile quality decides between pumps in the same tank
+      // window; an early pump remains a sparse-corridor or urban-avoidance
+      // fallback only.
+      const commitBand = tankCommitBand(a.meters, cap, usableRangeMeters) -
+        tankCommitBand(b.meters, cap, usableRangeMeters);
+      if (commitBand !== 0) return commitBand;
+      const tankOrder = compareTankCommit(
+        a.meters, hopProgress(a), b.meters, hopProgress(b), cap, usableRangeMeters
+      );
+      if (tankOrder !== 0) return tankOrder;
+      switch (resolveProfile(profile)) {
+        case "dirt": {
+          const dirtDelta = b.chainDirtPct - a.chainDirtPct;
+          if (Math.abs(dirtDelta) > 0.5) return dirtDelta;
+          if (Math.abs(aq.minimumSectionDirtPercent - bq.minimumSectionDirtPercent) > 2) {
+            return bq.minimumSectionDirtPercent - aq.minimumSectionDirtPercent;
+          }
+          if (Math.abs(aq.longestPavedRunMeters - bq.longestPavedRunMeters) > 2_000) {
+            return aq.longestPavedRunMeters - bq.longestPavedRunMeters;
+          }
+          break;
+        }
+        case "balanced": {
+          const mixDelta = Math.abs(a.chainDirtPct - 50) - Math.abs(b.chainDirtPct - 50);
+          if (Math.abs(mixDelta) > 0.5) return mixDelta;
+          break;
+        }
+        case "cleanest": {
+          if (a.cleanFallbackCount !== b.cleanFallbackCount) {
+            return a.cleanFallbackCount - b.cleanFallbackCount;
+          }
+          break;
+        }
+        default:
+          break;
+      }
       const aFoundationCell = Number.isFinite(Number(a.candidate.foundationCellDistance))
         ? Number(a.candidate.foundationCellDistance)
         : 99;
@@ -2526,20 +2694,7 @@ async function planFuelChainOnRuntime({
       if (Number.isFinite(chainA) && Number.isFinite(chainB) &&
           Math.abs(chainA - chainB) > 1_000) return chainA - chainB;
       switch (resolveProfile(profile)) {
-        case "dirt": {
-          const dirtDelta = b.chainDirtPct - a.chainDirtPct;
-          if (Math.abs(dirtDelta) > 0.5) return dirtDelta;
-          break;
-        }
-        case "balanced": {
-          const mixDelta = Math.abs(a.chainDirtPct - 50) - Math.abs(b.chainDirtPct - 50);
-          if (Math.abs(mixDelta) > 0.5) return mixDelta;
-          break;
-        }
         case "cleanest": {
-          if (a.cleanFallbackCount !== b.cleanFallbackCount) {
-            return a.cleanFallbackCount - b.cleanFallbackCount;
-          }
           const majorShareA = a.cleanRoutedMeters > 0
             ? a.cleanMajorRoadMeters / a.cleanRoutedMeters
             : 0;
@@ -2584,6 +2739,14 @@ async function planFuelChainOnRuntime({
         return !candidate.urbanEntry;
       }
 
+      const candidateBand = tankCommitBand(
+        candidate.graphMeters, cap, usableRangeMeters
+      );
+      const winnerBand = tankCommitBand(winner.meters, cap, usableRangeMeters);
+      if (candidateBand !== winnerBand) return candidateBand < winnerBand;
+
+      if (!evaluatedProfileTargetMet(winner)) return true;
+
       const candidateCross = Number(candidate.crossTrack);
       const winnerCross = Number(winner.candidate.crossTrack);
       if (Number.isFinite(candidateCross) && Number.isFinite(winnerCross)) {
@@ -2605,6 +2768,22 @@ async function planFuelChainOnRuntime({
       // Direction and distance are still tied closely enough that profile
       // quality could decide the result. Evaluate this candidate.
       return true;
+    }
+
+    function evaluatedProfileTargetMet(row) {
+      if (!row || !row.chainQuality) return false;
+      if (row.chainQuality.urbanCoreMeters > 100) return false;
+      const dirtPercent = row.chainQuality.meters > 0
+        ? row.chainQuality.dirtMeters / row.chainQuality.meters * 100
+        : 0;
+      switch (resolveProfile(profile)) {
+        case "dirt":
+          return dirtPercent >= 70 && row.chainQuality.minimumSectionDirtPercent >= 35;
+        case "balanced":
+          return dirtPercent >= 45 && dirtPercent <= 55;
+        default:
+          return true;
+      }
     }
 
     // Profile-route probes dominate fuel latency. Prove the strongest graph-
@@ -2667,7 +2846,8 @@ async function planFuelChainOnRuntime({
         0, Number(minimumFuelStops) || 0
       );
       if (rows.length >= minimumCandidateComparisons &&
-          provenComplete && requiredStopsSatisfied && (!watchedAvailable || tankCommitBand(
+          provenComplete &&
+          requiredStopsSatisfied && (!watchedAvailable || tankCommitBand(
         provenComplete.meters, cap, usableRangeMeters
       ) <= 1)) {
         // A live request has already proved the highest-ranked, minimum-stop,
@@ -3005,11 +3185,36 @@ async function planFuelChainOnRuntime({
     return directPlan;
   }
 
-  const chain = await search(
+  let chain = await search(
     "start", start, startMatch, new Set((excludedStationIds || []).map(String)), 0,
     recentEdgeHistory((priorEdgeIds || []).map(String)),
     arrivalEdgeId == null ? null : String(arrivalEdgeId), [], []
   );
+  if (foundationFallback) {
+    const foundationPlan = {
+      stops: foundationFallback.stops || [],
+      graphMeters: foundationFallback.graphMeters || [],
+      routes: foundationFallback.routes || [],
+      quality: combineChainQuality(...(foundationFallback.routes || []).map((route) =>
+        routeChainQuality(route, avoidMotorways === true)
+      )),
+      urbanStopCount: foundationFallback.diagnostics &&
+        foundationFallback.diagnostics.selectedUrbanEntry ? 1 : 0,
+      complete: true,
+      partial: false
+    };
+    if (!chain || compareChainPlans(foundationPlan, chain, profile, firstLegMaxMeters) < 0) {
+      return {
+        ...foundationFallback,
+        diagnostics: {
+          ...(foundationFallback.diagnostics || {}),
+          selectedReason: "foundation_route_best_proved_quality",
+          profileRouteAttempts,
+          comparedProfileCandidates: stationCandidates.length
+        }
+      };
+    }
+  }
   if (!chain) {
     const routedPrefixMeters = bestPartial.graphMeters.reduce((sum, meters) => sum + Number(meters || 0), 0);
     const knownProfileMeters = profileMeters == null ? NaN : Number(profileMeters);
@@ -4100,7 +4305,9 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
     foundationRoute,
     graphResolution: selection,
     deadlineAtMs: windowDeadlineAtMs,
-    abortSignal
+    abortSignal,
+    mapZoom: options.mapZoom,
+    matchLimitMeters: options.matchLimitMeters
   });
 
   // Do not offer auxiliary fuel for an incomplete computation. A timeout is a

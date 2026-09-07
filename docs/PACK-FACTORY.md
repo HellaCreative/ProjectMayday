@@ -1,230 +1,278 @@
 # DIRT Pack Factory
 
-**Status:** canonical regional-pack production and release contract
+**Status:** canonical legal-topology migration contract.
 
-**Frozen routing mould:**
-`94b467a11375e3ea3233c127b07af2ef039d0658`
-(`routing-rc1-2026-09-03`)
+**Halt:** Do not stamp, candidate-upload, or promote V1/V2/V3 packs. Public
+`dirt-packs/{id}/graph.v3.bin` and `manifest.json` stay untouched. The only
+allowed build is **one Nova Scotia `graph.v4.bin` DEV candidate** after every
+automated gate in this file is green.
 
-Pack Factory replicates the accepted OSM-only V3 regional fabric. It creates
-data; it does not tune routing. A Pack Factory run is complete only when the
-exact tested bytes have an immutable release record, are promoted through the
-guarded ship path, are selected by LIVE and PACKS, and pass the region-scoped
-identity assertion.
+**Not a V3 restamp.** Directed travel in the NS V3 canary
+`ns-v3-dir-20260906-01` is preserved in the dirty tree. It is not the mould.
 
-Cursor's Pack Factory skill may orchestrate this process, but this repository is
-the product authority. If a skill, chat memory, or older document conflicts with
-this file, follow this file and the source documents below.
+Workspace: `/Users/richardsmith/SandBox01/MAYDAYiOS/Dirt`
+Branch: `feature/routing-itinerary-rebuild`
+Production LIVE: `https://dirt-mayday.vercel.app/api/route` (do not point at V4)
+DEV LIVE: `https://pack-fabric.vercel.app/api/route` (V4 NS canary only)
 
-## Authority order
+Frozen search/cost mould: `94b467a11375e3ea3233c127b07af2ef039d0658`. Fuel
+selection is out of scope. This migration changes **legal topology**, not Dirt /
+Balanced / Clean costs.
 
-1. `AGENTS.md`
-2. `docs/00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md`
-3. `docs/ROUTING-FREEZE-2026-09-03.md`
-4. this document
-5. `docs/PACK-DATA-V3-AUTHORITY.md` for the exact binary/data model
-6. checked-in builders, registries, tests, and guarded ship scripts
+If a skill or older prompt conflicts with this file, this file wins after
+`AGENTS.md` and `docs/00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md`.
 
-Old phase reports and handoffs are evidence only. They do not authorize a
-different schema, source, taxonomy, release path, or route objective.
+---
 
-## The reference product
+## 0. Uncommitted work preserved (2026-09-06)
 
-The frozen V3 set is `ns`, `nb`, `pe`, `nl`, `qc`, and `on`. Their immutable
-release IDs and accepted hashes are recorded in the freeze document. Those
-regions are read-only reference moulds during ordinary factory work.
+Do not reset, stash, or overwrite. Present before this migration:
 
-Every new region contains:
+- Directed-travel JS/Swift (`travel-direction`, CSR arcs, virt links, Hwy 104 proof)
+- Factory pause (`us-v3-pause.js`)
+- Android parity notes for directed travel
+- NS V3 directed canary record `ns-v3-dir-20260906-01`
+- Oneway fixtures and tests
+- Dirty V3 US seam JSON / Montana staging (unpublished; do not promote)
 
-- `graph.v3.bin` — OSM-only routable graph with lossless V3 leaves;
-- `geometry.v1.bin` — geometry paired with that exact graph;
-- `fuel.v1.json` — packed OSM fuel stations for route proof; and
-- an immutable `dirt-pack-release.v1` record containing names, byte counts, and
-  SHA-256 hashes.
+---
 
-The live service and the phone download the same promoted objects from R2.
-There is no live-only graph, downloadable-only graph, or longhaul substitute.
+## 1. What a complete pack is
 
-## Frozen input and data laws
+Rider-facing V4 objects (DEV namespace until national atomic switch):
 
-- Use the region registered in `routing/registry/geofabrik.js` and clip the
-  current Geofabrik OSM extract to the OSM administrative polygon.
-- Foundational packs are OSM-only. Do not add a provincial or commercial
-  supplement, even if an adapter exists on disk.
-- Preserve raw surface, road-class, tracktype, smoothness, layer, structure, and
-  access leaves. Families are derived at read time. Never bucket away leaf data
-  during the build.
-- Keep surface and access independent. Unknown surface is not dirt; unknown
-  access is not permission. Clean forces unknown access off.
-- Include the accepted track/path/ATV/ferry membership and topology laws from
-  the V3 authority. Do not add cycleways or synthetic connectors.
-- Dictionary cardinality fails closed above 255. Do not truncate, wrap, merge,
-  or silently remap a region to make it fit.
-- Cross-region seams use the neutral OSM fabric. A region build must not modify
-  the bytes of an already accepted neighbour.
-- Use a fresh immutable release ID for changed bytes. Never reuse a release ID
-  with different checksums.
+| File | Role |
+| --- | --- |
+| `graph.v4.bin` | Legal topology. Version 4 + capability `legal-topology.v1`. |
+| `geometry.v1.bin` | Paired polylines. Identity hashed into the graph. |
+| `fuel.v1.json` | Existing verified fuel sidecar. Do not rebuild for this canary. |
+| `pack-manifest.v2.json` | Catalog row: files, SHA-256, capabilities, provenance. |
 
-## One-region factory loop
+Public V1/V3 catalog and objects remain the rollback fabric.
 
-Work on one region at a time. A batch may prepare several local candidates, but
-candidate deployment, acceptance, and promotion remain individually auditable.
+Camping, lodging, and liquor stay in rider-services data. They never enter
+routing-pack activation. No runtime Overpass.
 
-### 1. Preflight
+`directedArcCount` is legal arcs, not `2 × undirectedEdgeCount`.
 
-- Confirm the branch and a clean or deliberately checkpointed tree.
-- Confirm the frozen reference hashes have not changed.
-- Confirm the region exists in the Geofabrik registry.
-- Add deliberate acceptance routes for the region before claiming quality.
-- Record the OSM source slug/snapshot provenance and the neighbouring seams that
-  must be exercised.
+---
 
-### 2. Build graph and geometry
+## 2. Reader rejection (JS, Swift, Kotlin)
 
-From the repository root:
+Fail closed on:
+
+- graph version ≠ 4 for a V4 loader
+- missing capability `legal-topology.v1`
+- missing or corrupt restriction, barrier, or access sections
+- graph SHA / geometry SHA mismatch
+- mixed-contract cross-region routing (V3 pack + V4 pack in one search)
+- unsupported or empty provenance
+
+A reader must never silently ignore safety data. V3 loaders must reject V4
+bytes (unsupported version / magic). V4 loaders must reject V3 bytes when
+legal-topology routing is required.
+
+Byte contract: `docs/PACK-DATA-V4-AUTHORITY.md`.
+
+---
+
+## 3. Extract (lossless OSM identity)
+
+Replace highway-LineString GeoJSONSeq as the legal source.
+
+Keep a reference-complete PBF (or OPL) that retains:
+
+- 64-bit OSM node IDs
+- ordered way-node references
+- OSM way IDs
+- restriction relation IDs and complete ordered members
+- access, direction, condition, layer, bridge, tunnel tags
+- barrier/access nodes on retained ways
+
+Coordinates are geometry, not topology identity. Do not use `coordKey5` or
+`vertex:<coordinate>` as OSM identity. Coincident coordinates connect only
+when source topology shares an OSM node or way-node membership.
+
+Halo: clip with a buffered admin polygon so border restrictions keep all
+members. Provenance must record source URL, bytes, SHA-256, OSM replication
+timestamp, clip polygon identity, tool versions, factory commit, and the
+global source-epoch policy for the later all-region fabric.
+
+GeoJSON is diagnostic only.
+
+---
+
+## 4. Legal topology laws
+
+**Direction.** `oneway=yes|true|1` forward; `-1`/`reverse` reverse; `no` both;
+untagged motorway / motorway_link / roundabout / circular imply forward.
+Direction-specific access tags can close one side. Reversible, alternating, or
+unevaluable `oneway:conditional` is **closed**, not two-way.
+
+**Motorcycle access.** Evaluate `access` → `vehicle` → `motor_vehicle` →
+`motorcycle`, including `:forward` / `:backward` and `:conditional`. More
+specific wins. `motorcycle=no|private` is a hard denial. Positive `atv` must
+never override `motorcycle=no` or `motor_vehicle=no`. ATV is a separate
+profile. Allow Unknown never reopens an explicit denial.
+
+Endpoint-only: `destination` only when the route endpoint lies on that edge;
+`customers` only for an intentionally selected service POI. Never through.
+`private`, `no`, `permit`, `delivery`, `agricultural`, `forestry` stay denied.
+`smoothness=impassable` is a hard block. `very_horrible` is preserved as a
+leaf; frozen costs are unchanged.
+
+**Barriers.** Every relevant barrier/access node is an exact graph node; split
+the way there. Explicit motorcycle/access/locked/conditional tags win. Do not
+universally block or allow every gate. Ambiguous barriers fail closed and are
+counted. Barriers cannot be bypassed by snap, stitch, seam, or a parallel road.
+
+**Turn restrictions.** Via-node, via-way, multiple-via-way; `no_left_turn`,
+`no_right_turn`, `no_straight_on`, `no_u_turn`; all `only_*`; `no_entry` /
+`no_exit`; vehicle-specific forms; `except`; conditionals. Resolve members by
+original OSM IDs. Malformed relations are rejected and reported, never guessed.
+Search is turn-aware: state includes the incoming directed arc and via-way
+progress. Node-only visited state is illegal on V4. Virtual snap arcs keep
+parent directed-arc and restriction identity.
+
+**Conditional / seasonal.** Normalize the supported subset of
+`access|vehicle|motor_vehicle|motorcycle:conditional`, directional variants,
+`oneway:conditional`, `restriction*:conditional`, `seasonal`, `winter_road`,
+`ice_road`. Same representation in JS, Swift, and Kotlin. Use the edge local
+timezone when needed (`America/Halifax` for NS). Unsupported, conflicting, or
+unevaluable relevant conditions fail closed and are reported. Never hardcode
+`seasonal: false`. Allow Unknown cannot reopen a known seasonal/conditional
+closure.
+
+**No invented connectivity.** Zero unproven runtime stitches. Remove Swift
+~150 m permissive stitches and ~100 m unknown-island stitches, and the JS
+twins, for V4. LIVE and offline may not join nearby roads because the graph is
+disconnected. Any source repair is build-time only, deterministic, proven by
+OSM identity, compatible with way continuity / grade / direction / access /
+barriers / restrictions, and fixture-covered.
+
+**Snap.** Zoom-aware tap radius from screen/map resolution (28-point finger ×
+Web Mercator meters/point). Safe upper bound is **2000 m** on V4 (covers the
+Yarmouth harbour coarse-zoom miss of ~1.7 km). V3 stays capped at 750 m.
+Score distance, local tangent, device course when reliable, and A→B / arrival
+intent. Those V4 scores stay on each directed candidate through final pair
+selection — do not collapse to an edge-index set and revert to distance-first.
+Evaluate multiple legal directed candidates for route connectivity (weak
+components). Prefer a connected candidate that can produce the requested route.
+Reject a snap that needs a connector across a median, barrier, water gap, grade
+separation, prohibited direction, or inaccessible road. Unknown trails stay
+out unless Allow Unknown is on, and that flag is logged on route-first and
+fuel-combined requests. Move the destination pin to the selected snapped point.
+Diagnostics record raw/snapped coordinates, distance, candidate count, OSM way,
+access class, component, and rejection reasons.
+
+**Seams.** Shared OSM node and way identity only. Eligible only when identity,
+way continuity, grade/layer, bridge/tunnel, direction, access, barriers, and
+restrictions agree, including boundary-spanning restrictions. Build all
+regions from one source-epoch, generate the seam matrix, then seal. Never
+rebuild a graph after hashing its seam identity. Do not promote mixed V3/V4
+public fabric.
+
+**Grade.** Bridge / tunnel / layer from OSM tags. Distinct OSM nodes that
+happen to share coordinates stay distinct.
+
+---
+
+## 5. Automated gates (must be green before NS bytes)
+
+Fixtures live under `scripts/pack-fabric/routing/fixtures/legal-topology/`
+and `DirtTests`. Highway 104 proof coordinates:
+
+- Start: `45.390440, -63.201514`
+- Westbound way `537982310` (north carriageway)
+- Eastbound way `537982311`
+- MacDonald Road probe: `45.8071, -64.1885`
+
+Required proofs:
+
+1. Forward / reverse / explicit two-way / motorway / roundabout direction
+2. Highway 104 both ways; median-safe snap with heading, conflicting heading, no heading
+3. no-left, no-right, no-straight, no-U-turn, only-turn, no-entry, no-exit
+4. Via-node, via-way, multiple-via-way
+5. Motorcycle-specific restrictions, `except`, malformed-relation rejection
+6. `motorcycle=no` defeating positive ATV tags
+7. Directional motorcycle access
+8. Destination/customer endpoint-only at the actual endpoint
+9. Allowed / blocked / type-default / ambiguous fail-closed gates
+10. `smoothness=impassable` blocked
+11. Supported conditional open/closed; unsupported fail-closed
+12. Seasonal, winter-road, ice-road
+13. Bridge/tunnel/layer and coincident-but-distinct-node crossings never joined
+14. No barrier / one-way / restriction / median bypass via snap, virt, seam, or stitch
+15. Deterministic identical hashes from identical inputs
+16. Corruption, missing capability, mixed-contract rejection
+18. Zoom-aware tap radius; Yarmouth harbour coarse-zoom prefers connected town road
+19. Divided highway heading scores survive final candidate selection
+20. Disconnected service road rejected when a connected candidate exists
+21. Unknown trail skipped unless Allow Unknown
+22. Barrier-blocked / no valid road within the 2000 m bound is a snap failure
+23. Allow Unknown logged through route-first and fuel-combined requests
+
+JS, Swift, and Kotlin must agree. Kotlin sources live at
+`scripts/pack-fabric/routing/kotlin/` until an Android app tree exists.
+
+---
+
+## 6. One NS V4 DEV canary (only after §5)
 
 ```sh
-node --max-old-space-size=8192 scripts/pack-fabric/scripts/build-region-graph-v3.js <region>
+node --test scripts/pack-fabric/routing/lib/legal-topology/*.test.js \
+  scripts/pack-fabric/routing/lib/pack-v4.test.js \
+  scripts/pack-fabric/routing/lib/pack-manifest-v2.test.js \
+  scripts/pack-fabric/routing/lib/find-path-v4.test.js
+node scripts/pack-fabric/scripts/build-region-graph-v4.js ns
 ```
 
-`--reuse-extract` is permitted only when the exact cached extract provenance is
-recorded. The builder must report V3 output, edge/node counts, and dictionary
-cardinalities. It must stage `graph.v3.bin` and `geometry.v1.bin` under
-`scripts/pack-fabric/app/data/packs/v1/<region>/`.
+Then:
 
-### 3. Build fuel
+1. Keep fuel sidecar bytes unchanged (`999e1cbd…` for current NS fuel).
+2. Report restriction / barrier / directional-access / endpoint-only /
+   conditional / impassable / grade-non-join / seam-candidate / rejected counts.
+3. Assert zero unproven stitches.
+4. Upload **only** `dirt-packs/v4/candidates/<id>/ns/` (new namespace).
+5. Point **only** pack-fabric DEV at it.
+6. Do not alter production, the public V1/V3 catalog, or another region.
+7. Stop for owner acceptance with the device test card below.
 
-Create the matching OSM fuel extract and sidecar using the registered Geofabrik
-slug and country:
+Do not build a second region until NS is physically accepted.
 
-```sh
-bash scripts/pack-fabric/scripts/extract-osm-fuel.sh <geofabrik-slug> <canada|us>
-node scripts/pack-fabric/scripts/pack-region-fuel.js <region>
-```
+---
 
-Fuel absence is not inferred from viewport markers or Overpass. The packed
-sidecar is the proof source used by LIVE and offline planning.
+## 7. Device test card (NS V4)
 
-### 4. Validate locally
+Online on DIRT Dev (DEV LIVE at pack-fabric). Offline: DIRT Dev overlays the
+Nova Scotia PACKS download onto `v4/candidates/ns-v4-legal-topology-20260906-02`
+(`graph.v4.bin`). Install NS from PACKS, then airplane mode for the last two.
+Production binaries keep the public V1/V3 catalog.
 
-At minimum:
+1. Highway 104 westbound from the Truro start through MacDonald Road — way 537982310, never 537982311.
+2. Highway 104 eastbound the other way — 537982311, never 537982310.
+3. A signed no-left or no-U-turn the pack encoded — search must not take it.
+4. A gated or conditional road — blocked when closed/ambiguous; open when tagged open.
+5. Destination-only access — reachable as the endpoint, not as a through shortcut.
+6. Grade-separated crossing — no invented turn from the overpass onto the road below.
+7. Same route offline from the installed V4 pack.
+8. Same route with no network.
 
-```sh
-npm test
-node scripts/pack-fabric/scripts/audit-region-routes.js <region> \
-  --out scripts/pack-fabric/routing/data/reports/<region>-route-acceptance.json
-```
+---
 
-The acceptance fixture must cover Dirt, Dirt with Allow Unknown, Balanced, and
-Clean; representative urban avoidance; at least one seam where applicable;
-ferry behaviour where applicable; and zero-, one-, and multi-stop fuel cases
-that make geographic sense for the region. Exact routes may differ by region,
-but the frozen route laws may not.
+## 8. After NS acceptance (do not start)
 
-Reject the candidate if it:
+Proposed all-region order: remaining Atlantic neighbours, then the rest of
+Canada, then US states west from already-accepted V3 geography. One
+source-epoch. Build every region, generate the complete seam matrix, seal one
+fabric-release manifest, then atomically switch the versioned pointer. Leave
+V1/V3 in place for rollback. Never promote mixed public fabric.
 
-- returns less dirt for Dirt than Balanced on a representative connected ride;
-- crosses a major urban core as a shortcut without the explicit last-resort
-  fallback;
-- treats unknown access as allowed when Allow Unknown is off;
-- invents a connector, crosses water without a ferry, or breaks a seam;
-- loses graph/geometry pairing or omits required fuel data;
-- exhausts a dictionary or changes an accepted region's bytes; or
-- requires a routing-cost/search change to make the pack look acceptable.
+---
 
-If the last item occurs, stop and report it as a routing-candidate decision. Do
-not hide an engine change inside Pack Factory.
+## 9. Access-law note (not a cost change)
 
-### 5. Record and upload the immutable candidate
-
-Create the immutable release record and upload its exact objects without
-deploying LIVE yet:
-
-```sh
-node scripts/pack-fabric/scripts/ship-routing.js \
-  --candidate <release-id> --pack <region>
-```
-
-This command writes the release record. Add the region exactly once to both V3
-registries so the live loader requests `graph.v3.bin`:
-
-- `scripts/pack-fabric/routing/schema/v3-regions.json`
-- `scripts/pack-fabric/routing/data/v3-regions.json`
-
-Commit the registry/fixture/report/release work so the live deployment has a
-real source identity. The binary files and raw extracts are normally
-gitignored; their immutable checksums live in the release record.
-
-### 6. Point LIVE at the recorded candidate
-
-```sh
-node scripts/pack-fabric/scripts/ship-routing.js \
-  --candidate <release-id> <region> --live
-```
-
-Without `--pack`, this re-verifies the staged files against the recorded hashes
-and deploys LIVE with a region-only candidate override. The approved download
-catalog remains unchanged. Record the returned service build and graph,
-geometry, and fuel identities.
-
-### 7. Candidate acceptance
-
-Run the fixed local and live region audit, seam probes, fuel cases, and any
-relevant shared regression suites. A new geography may add a regression; it may
-not turn an existing green reference test red. For a rider-visible or high-risk
-region, complete the physical acceptance pass before promotion.
-
-### 8. Promote the exact bytes
-
-After acceptance, verify that the staged bytes still match the release record,
-then promote:
-
-```sh
-node scripts/pack-fabric/scripts/ship-routing.js \
-  --promote <release-id> --pack <region>
-```
-
-Deploy LIVE from the committed tree without the candidate override, then prove
-that LIVE and the downloadable object are identical:
-
-```sh
-node scripts/pack-fabric/scripts/ship-routing.js --live
-node scripts/pack-fabric/scripts/ship-routing.js --assert --region <region>
-```
-
-`--assert` always requires one explicit `--region`. Bare `--pack` is forbidden.
-The ship script merges only the promoted region into the remote catalog; never
-publish the checked-in seed manifest as a replacement for the public catalog.
-
-### 9. Close the record
-
-The handoff for each region must state:
-
-- region and immutable release ID;
-- OSM source slug/snapshot provenance;
-- graph, geometry, and fuel byte counts and SHA-256 values;
-- dictionary cardinalities and graph/node counts;
-- local and LIVE acceptance results;
-- seam and fuel cases run;
-- deployed `serviceBuild` and `serviceContract`;
-- region-scoped lockstep assertion result; and
-- any honest limitation that remains.
-
-“Built locally,” “uploaded,” or “looks right” is not done.
-
-## Factory completion gate
-
-A region is complete only when all of these are true:
-
-- exact V3 artifacts exist and decode in both JS and Swift-compatible readers;
-- the immutable release record matches the tested bytes;
-- candidate tests passed without changing the frozen routing engine;
-- the exact candidate bytes were promoted;
-- both V3 registries contain the region;
-- production LIVE was redeployed from committed source;
-- `--assert --region <region>` passed; and
-- the result is recorded for Android/PACKS consumers.
-
-If any gate fails, leave the current promoted region untouched and report the
-candidate as incomplete. Never repair a failed promotion by weakening the
-router or overwriting the public catalog.
+V4 road-legal motorcycle access does **not** let `atv=yes` override
+`motorcycle=no` or `motor_vehicle=no`. That differs from the locked V3 ATV
+override. Costs, search widths, and fuel ranking are unchanged. This is
+eligibility, recorded here because the V3 authority said the opposite.

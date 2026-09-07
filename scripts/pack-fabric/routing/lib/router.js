@@ -45,8 +45,22 @@ const {
   findPathV2,
   applyHonestReportedStats,
   profileSearchBudgetMs,
-  profileSearchPopCap
+  profileSearchPopCap,
+  urbanBoxesForPack
 } = require("./find-path-v2");
+const { legalDirectedArcs } = require("./travel-direction");
+const {
+  legalSnapDetailed,
+  selectConnectedSnapPair,
+  snapEndpointRecord,
+  bearingDeg
+} = require("./legal-topology/snap");
+const {
+  tapRadiusMeters,
+  snapCapMeters,
+  V3_SNAP_CAP_M,
+  V4_SNAP_CAP_M
+} = require("./legal-topology/tap-radius");
 const { e4FlagsForProfile } = require("./road-tier");
 const { applyHonestSurfaceStats } = require("./surface-family");
 const { summarizeRouteQuality } = require("./route-quality");
@@ -152,8 +166,20 @@ function isLowDirtRoute(profile, path, threshold = 70) {
   return profile === "dirt" && Number.isFinite(dirtPercent) && dirtPercent < threshold;
 }
 
-function dirtQualityWarning(quality) {
-  if (!quality || quality.profile !== "dirt" || quality.state !== "degraded") return null;
+function routeQualityWarning(quality) {
+  if (!quality || quality.state !== "degraded") return null;
+  if (quality.profile === "balanced") {
+    const details = [`${quality.knownDirtPercent}% known Dirt`];
+    if (quality.urbanCoreMeters > 100) {
+      details.push(`${Math.max(0.1, Math.round(quality.urbanCoreMeters / 100) / 10)} km through an urban core`);
+    }
+    return {
+      code: "balanced_quality_limited",
+      message: `Balanced could not reach its 45–55% Dirt target: ${details.join(", ")}.`,
+      reasons: quality.reasons
+    };
+  }
+  if (quality.profile !== "dirt") return null;
   const details = [
     `${quality.knownDirtPercent}% known Dirt overall`,
     `${quality.minimumSectionDirtPercent}% in the weakest quarter`
@@ -452,6 +478,94 @@ function preferGiantComponentSnap(runtime) {
   return schema.startsWith("longhaul");
 }
 
+function routeSnapDiagnostics({
+  policy,
+  options,
+  limit,
+  startLon,
+  startLat,
+  endLon,
+  endLat,
+  startMatch,
+  endMatch,
+  snapSelection
+}) {
+  const startReject = [
+    ...((startMatch && startMatch.rejections) || []),
+    ...((snapSelection && snapSelection.rejections) || [])
+  ].map((row) => row.reason).filter(Boolean);
+  const endReject = [
+    ...((endMatch && endMatch.rejections) || []),
+    ...((snapSelection && snapSelection.rejections) || [])
+  ].map((row) => row.reason).filter(Boolean);
+  const startPicked = startMatch && startMatch.ok ? startMatch : null;
+  const endPicked = endMatch && endMatch.ok ? endMatch : null;
+  return {
+    allowUnknown: !!(policy && policy.motorizedUnknown),
+    tapRadiusMeters: limit,
+    mapZoom: Number.isFinite(Number(options && options.mapZoom)) ? Number(options.mapZoom) : null,
+    start: snapEndpointRecord(
+      { lon: startLon, lat: startLat },
+      startPicked,
+      {
+        candidateCount: ((startMatch && startMatch.candidates) || []).length,
+        rejectionReasons: Array.from(new Set(startReject))
+      }
+    ),
+    end: snapEndpointRecord(
+      { lon: endLon, lat: endLat },
+      endPicked,
+      {
+        candidateCount: ((endMatch && endMatch.candidates) || []).length,
+        rejectionReasons: Array.from(new Set(endReject))
+      }
+    )
+  };
+}
+
+function withSnap(diagnostics, snapDiag) {
+  if (!diagnostics) return diagnostics;
+  diagnostics.allowUnknown = snapDiag.allowUnknown;
+  diagnostics.tapRadiusMeters = snapDiag.tapRadiusMeters;
+  diagnostics.mapZoom = snapDiag.mapZoom;
+  diagnostics.snap = snapDiag;
+  return diagnostics;
+}
+
+function v4SnapToMatch(runtime, cand) {
+  const pack = runtime.pack;
+  const ei = cand.edgeIndex;
+  const attr = pack.edgeAttrs[ei];
+  const enums = runtime.enums || {};
+  const accessCode = unpackAccess(attr);
+  const surfaceCode = unpackSurface(attr);
+  const structureCode = unpackStructure(attr);
+  const roadClass = unpackRoadClass(attr);
+  return {
+    ok: true,
+    edgeIndex: ei,
+    edgeId: pack.edgeId(ei),
+    osmWayId: cand.osmWayId,
+    accessClass: cand.accessClass || (enums.ACCESS_NAME || [])[accessCode],
+    accessCode: cand.accessCode,
+    surfaceClass: (enums.SURFACE_NAME || [])[surfaceCode],
+    structureType: (enums.STRUCTURE_NAME || [])[structureCode],
+    componentId: cand.component != null ? cand.component : -1,
+    component: cand.component,
+    distanceM: cand.distanceM,
+    score: cand.score,
+    coord: [cand.lon, cand.lat],
+    lon: cand.lon,
+    lat: cand.lat,
+    segmentIndex: cand.segmentIndex,
+    distanceAlongM: cand.distanceAlongM,
+    edgeMeters: pack.edgeMeters[ei],
+    roadTrack: ROAD_CLASS_NAME[roadClass] || "unknown",
+    forward: cand.forward,
+    tangent: cand.tangent
+  };
+}
+
 function matchPoint(
   runtime,
   location,
@@ -460,7 +574,8 @@ function matchPoint(
   avoidEdgeIds,
   preferComponentId = null,
   profile = null,
-  snapRole = "any"
+  snapRole = "any",
+  snapHints = null
 ) {
   const enums = runtime.enums;
   const point = [Number(location.lon ?? location.lng), Number(location.lat)];
@@ -482,6 +597,41 @@ function matchPoint(
   const preferPavedSnap = role === "end" && prof !== "cleanest";
   const candidates = edgeCandidateIndexes(runtime, point[0], point[1], matchMeters);
   const isV2 = runtime.format === "v2";
+  if (runtime.pack && runtime.pack.graphBinaryVersion >= 4) {
+    const detailed = legalSnapDetailed(runtime.pack, runtime.geom, location, {
+      headingDeg: snapHints && snapHints.headingDeg,
+      intentBearingDeg: snapHints && snapHints.intentBearingDeg,
+      maxMeters: matchMeters,
+      candidateEdgeIndexes: candidates,
+      allowUnknown: !!(policy && policy.motorizedUnknown)
+    });
+    const avoid = avoidEdgeIds instanceof Set ? avoidEdgeIds : null;
+    const mapped = [];
+    for (const cand of detailed.candidates) {
+      const match = v4SnapToMatch(runtime, cand);
+      if (avoid && avoid.has(String(match.edgeId))) continue;
+      mapped.push(match);
+    }
+    if (!mapped.length) {
+      return {
+        ok: false,
+        reason: "no_legal_snap",
+        matchLimitMeters: matchMeters,
+        nearestMeters: detailed.rejections.length
+          ? Math.round(Math.min(...detailed.rejections.map((row) => Number(row.distanceM) || Infinity)))
+          : null,
+        candidates: [],
+        rejections: detailed.rejections,
+        snapRaw: detailed.raw
+      };
+    }
+    return {
+      ...mapped[0],
+      candidates: mapped,
+      rejections: detailed.rejections,
+      snapRaw: detailed.raw
+    };
+  }
   let bestAny = null;
   let bestGiant = null;
   for (const index of candidates) {
@@ -1280,35 +1430,48 @@ async function snapSeamWaypoint(seed, regionIds, profile) {
  * Select a topology-authored seam from the deployment index. This avoids four
  * full R2 graph downloads before a cross-region fuel plan can even begin.
  */
-function topologySeamFromIndex(seed, regionIds, index = crossPackTopology) {
+function topologySeamCandidatesFromIndex(seed, regionIds, index = crossPackTopology) {
   const ids = [...new Set((regionIds || []).map((id) => String(id).toLowerCase()))];
-  if (ids.length !== 2) {
-    return { ok: false, authoritative: false, reason: "seam_pair_required", regionIds: ids };
-  }
+  if (ids.length !== 2) return [];
   const records = (index && index.regions) || {};
   const left = records[ids[0]];
   const right = records[ids[1]];
   const leftRows = left && left.neighbors && left.neighbors[ids[1]];
   const rightRows = right && right.neighbors && right.neighbors[ids[0]];
-  if (!Array.isArray(leftRows) || !Array.isArray(rightRows)) {
-    return { ok: false, authoritative: false, reason: "seam_pair_not_indexed", regionIds: ids };
-  }
-
+  if (!Array.isArray(leftRows) || !Array.isArray(rightRows)) return [];
   const rightKeys = new Set(
     rightRows
       .filter((row) => Number(row.gapMeters) <= 2 && Array.isArray(row.coordinate))
       .map((row) => `${row.osmWayId}|${Number(row.coordinate[0]).toFixed(5)}|${Number(row.coordinate[1]).toFixed(5)}`)
   );
   const seedCoord = [Number(seed.lon != null ? seed.lon : seed.lng), Number(seed.lat)];
-  const shared = leftRows
+  return leftRows
     .filter((row) => Number(row.gapMeters) <= 2 && Array.isArray(row.coordinate))
     .filter((row) => rightKeys.has(
       `${row.osmWayId}|${Number(row.coordinate[0]).toFixed(5)}|${Number(row.coordinate[1]).toFixed(5)}`
     ))
     .filter((row) => !coordinateNearUrbanBoxes(row.coordinate, left.urbanCores || []))
     .filter((row) => !coordinateNearUrbanBoxes(row.coordinate, right.urbanCores || []))
-    .sort((a, b) => haversineMeters(seedCoord, a.coordinate) - haversineMeters(seedCoord, b.coordinate));
-  if (!shared.length) {
+    .sort((a, b) => haversineMeters(seedCoord, a.coordinate) - haversineMeters(seedCoord, b.coordinate))
+    .slice(0, 16)
+    .map((row) => ({
+      lon: Number(row.coordinate[0]),
+      lat: Number(row.coordinate[1]),
+      osmWayId: String(row.osmWayId),
+      seedDistanceM: Math.round(haversineMeters(seedCoord, row.coordinate))
+    }));
+}
+
+function topologySeamFromIndex(seed, regionIds, index = crossPackTopology) {
+  const ids = [...new Set((regionIds || []).map((id) => String(id).toLowerCase()))];
+  const records = (index && index.regions) || {};
+  if (ids.length !== 2 || !records[ids[0]] || !records[ids[1]]
+    || !records[ids[0]].neighbors || !records[ids[0]].neighbors[ids[1]]
+    || !records[ids[1]].neighbors || !records[ids[1]].neighbors[ids[0]]) {
+    return { ok: false, authoritative: false, reason: "seam_pair_not_indexed", regionIds: ids };
+  }
+  const candidates = topologySeamCandidatesFromIndex(seed, ids, index);
+  if (!candidates.length) {
     return {
       ok: false,
       authoritative: true,
@@ -1317,19 +1480,20 @@ function topologySeamFromIndex(seed, regionIds, index = crossPackTopology) {
       regionIds: ids
     };
   }
-  const best = shared[0];
+  const best = candidates[0];
   return {
     ok: true,
     authoritative: true,
-    lon: Number(best.coordinate[0]),
-    lat: Number(best.coordinate[1]),
-    seedDistanceM: Math.round(haversineMeters(seedCoord, best.coordinate)),
+    lon: best.lon,
+    lat: best.lat,
+    seedDistanceM: best.seedDistanceM,
     surfaceClass: "pack-proven",
     regionId: ids[0],
     dualCount: 2,
-    osmWayId: String(best.osmWayId),
+    osmWayId: best.osmWayId,
     seamMethod: "same-osm-way-and-vertex-index",
-    regionIds: ids
+    regionIds: ids,
+    candidates
   };
 }
 
@@ -1456,6 +1620,7 @@ async function resolveChainSeamWaypoints(waypoints, body = {}) {
       lat: snapped.lat,
       role: seed.role || "seam",
       between: Array.isArray(seed.between) ? seed.between.slice() : regionIds.slice(),
+      osmWayId: snapped.osmWayId || seed.osmWayId || null,
       seamSnapped: true
     };
     snaps.push({
@@ -1559,7 +1724,7 @@ async function routeCanadaChain(body, graphResolution) {
       }
     }
     const hopStart = waypoints[i];
-    const hopEnd = waypoints[i + 1];
+    let hopEnd = waypoints[i + 1];
     const startFam = provinceFamily(
       hopStart.resolvedRegionId || primaryRegionForPoint(
         Number(hopStart.lon != null ? hopStart.lon : hopStart.lng),
@@ -1590,7 +1755,7 @@ async function routeCanadaChain(body, graphResolution) {
         hopIndex: i
       };
     }
-    const hop = await routeRequest({
+    let hop = await routeRequest({
       ...body,
       locations: [hopStart, hopEnd],
       disableChain: true,
@@ -1599,13 +1764,42 @@ async function routeCanadaChain(body, graphResolution) {
       regionId: hopRegion || undefined,
       options: {
         ...(body.options || {}),
-        // A fuel-leg ceiling applies to the complete cross-region leg, not
-        // independently to every province hop.
         maxPathMeters: remainingPathCap == null ? (body.options || {}).maxPathMeters : remainingPathCap,
         matchLimitMeters: Math.min(500, Number((body.options || {}).matchLimitMeters) || 500),
         chainSeamHop: true
       }
     });
+    if (hop.status !== "complete" && hopEnd.seamSnapped) {
+      const alts = topologySeamCandidatesFromIndex(
+        { lon: hopEnd.lon, lat: hopEnd.lat, between: hopEnd.between },
+        hopEnd.between || inferSeamRegionIds(waypoints, i + 1)
+      ).filter((alt) => {
+        if (hopEnd.osmWayId && alt.osmWayId === String(hopEnd.osmWayId)) return false;
+        return Math.abs(alt.lat - hopEnd.lat) > 1e-5 || Math.abs(alt.lon - hopEnd.lon) > 1e-5;
+      });
+      for (const alt of alts) {
+        const retry = await routeRequest({
+          ...body,
+          locations: [hopStart, { ...hopEnd, lon: alt.lon, lat: alt.lat }],
+          disableChain: true,
+          disableLonghaul: true,
+          preferLonghaulPacks: false,
+          regionId: hopRegion || undefined,
+          options: {
+            ...(body.options || {}),
+            maxPathMeters: remainingPathCap == null ? (body.options || {}).maxPathMeters : remainingPathCap,
+            matchLimitMeters: Math.min(500, Number((body.options || {}).matchLimitMeters) || 500),
+            chainSeamHop: true
+          }
+        });
+        if (retry.status === "complete") {
+          hop = retry;
+          waypoints[i + 1] = { ...hopEnd, lon: alt.lon, lat: alt.lat, osmWayId: alt.osmWayId };
+          hopEnd = waypoints[i + 1];
+          break;
+        }
+      }
+    }
     if (hop.status !== "complete") {
       const destinationKind = hopEnd.seamSnapped
         ? `seam:${(hopEnd.between || []).join("-") || "regional"}`
@@ -1698,7 +1892,7 @@ async function routeCanadaChain(body, graphResolution) {
     geometry,
     segments
   }, { profile });
-  const qualityWarning = dirtQualityWarning(quality);
+  const qualityWarning = routeQualityWarning(quality);
   if (qualityWarning) warnings.push(qualityWarning);
   return {
     status: "complete",
@@ -1857,9 +2051,8 @@ async function routeOnRuntime(body, graphResolution, runtime) {
   const policy = normalizePolicy(body.accessPolicy, profile, body);
   const options = body.options || {};
   const matchMeters = Number(options.matchLimitMeters);
-  // Default 250 m on dense/legacy packs. Longhaul / Vercel packs are thinned —
-  // hub roads can sit ~300–500 m from a basemap click (e.g. Saint-Raymond).
-  const HARD_MATCH_CAP_M = 750;
+  const graphBinaryVersion = (runtime.pack && runtime.pack.graphBinaryVersion) || 3;
+  const HARD_MATCH_CAP_M = snapCapMeters(graphBinaryVersion);
   if (Number.isFinite(matchMeters) && matchMeters > HARD_MATCH_CAP_M) {
     return {
       status: "error",
@@ -1875,13 +2068,7 @@ async function routeOnRuntime(body, graphResolution, runtime) {
         String(graphResolution.mode || "").includes("longhaul") ||
         String(graphResolution.mode || "").includes("canada-chain")));
   const defaultMatch = longhaulGraph ? 500 : DEFAULT_MATCH_METERS;
-  let limit = Number.isFinite(matchMeters) && matchMeters > 0
-    ? matchMeters
-    : defaultMatch;
 
-  // Optional server-enforced avoidance (route incident recovery). Edge IDs are
-  // excluded from snapping AND from graph traversal. This is never a browser
-  // filter of a returned route — the alternate is computed without these edges.
   const avoidEdgeIds = new Set(
     (Array.isArray(options.avoidEdgeIds) ? options.avoidEdgeIds : [])
       .filter((id) => id != null)
@@ -1902,8 +2089,17 @@ async function routeOnRuntime(body, graphResolution, runtime) {
   const start = locations[0];
   const end = locations[locations.length - 1];
   const snapStarted = Date.now();
-  // Canada-chain seam pins (already snapped onto fabric) may use a slightly
-  // larger per-endpoint match than user pins — still ≤ HARD_MATCH_CAP_M.
+  const startLon = Number(start.lon ?? start.lng);
+  const startLat = Number(start.lat);
+  const endLon = Number(end.lon ?? end.lng);
+  const endLat = Number(end.lat);
+  let limit = tapRadiusMeters({
+    zoom: options.mapZoom,
+    lat: Number.isFinite(endLat) ? endLat : startLat,
+    requestedMeters: matchMeters,
+    graphBinaryVersion,
+    defaultMeters: defaultMatch
+  });
   const chainSeamHop = !!options.chainSeamHop;
   const startLimit =
     chainSeamHop && isChainSeamLocation(start)
@@ -1913,6 +2109,21 @@ async function routeOnRuntime(body, graphResolution, runtime) {
     chainSeamHop && isChainSeamLocation(end)
       ? Math.min(HARD_MATCH_CAP_M, Math.max(limit, SEAM_HOP_MATCH_M))
       : limit;
+  const intentBearing = Number.isFinite(startLon) && Number.isFinite(endLon)
+    ? bearingDeg([startLon, startLat], [endLon, endLat])
+    : null;
+  const startHints = {
+    headingDeg: Number.isFinite(Number(start.headingDeg))
+      ? Number(start.headingDeg)
+      : Number(start.course),
+    intentBearingDeg: intentBearing
+  };
+  const endHints = {
+    headingDeg: Number.isFinite(Number(end.headingDeg))
+      ? Number(end.headingDeg)
+      : Number(end.course),
+    intentBearingDeg: intentBearing != null ? (intentBearing + 180) % 360 : null
+  };
   let startMatch = matchPoint(
     runtime,
     start,
@@ -1921,14 +2132,25 @@ async function routeOnRuntime(body, graphResolution, runtime) {
     avoidEdgeIds,
     null,
     profile,
-    "start"
+    "start",
+    startHints
   );
-  let endMatch = matchPoint(runtime, end, policy, endLimit, avoidEdgeIds, null, profile, "end");
+  let endMatch = matchPoint(
+    runtime,
+    end,
+    policy,
+    endLimit,
+    avoidEdgeIds,
+    null,
+    profile,
+    "end",
+    endHints
+  );
   // Soft expand once within the hard cap: prefer snap-on-place over hard fail
   // when a road exists a bit beyond the default radius (thinned hubs / fat taps).
   // nearestMeters is null when the spatial index finds zero candidates inside
   // the first radius — still retry at the hard cap (QC hub coords / hinterland).
-  if (!startMatch.ok && startLimit < HARD_MATCH_CAP_M) {
+  if (graphBinaryVersion < 4 && !startMatch.ok && startLimit < HARD_MATCH_CAP_M) {
     const near = startMatch.nearestMeters;
     if (near == null || near <= HARD_MATCH_CAP_M) {
       const expanded = matchPoint(
@@ -1939,7 +2161,8 @@ async function routeOnRuntime(body, graphResolution, runtime) {
         avoidEdgeIds,
         null,
         profile,
-        "start"
+        "start",
+        startHints
       );
       if (expanded.ok) {
         startMatch = expanded;
@@ -1947,7 +2170,7 @@ async function routeOnRuntime(body, graphResolution, runtime) {
       }
     }
   }
-  if (!endMatch.ok && endLimit < HARD_MATCH_CAP_M) {
+  if (graphBinaryVersion < 4 && !endMatch.ok && endLimit < HARD_MATCH_CAP_M) {
     const near = endMatch.nearestMeters;
     if (near == null || near <= HARD_MATCH_CAP_M) {
       const expanded = matchPoint(
@@ -1958,12 +2181,31 @@ async function routeOnRuntime(body, graphResolution, runtime) {
         avoidEdgeIds,
         null,
         profile,
-        "end"
+        "end",
+        endHints
       );
       if (expanded.ok) {
         endMatch = expanded;
         limit = HARD_MATCH_CAP_M;
       }
+    }
+  }
+  let snapSelection = null;
+  if (graphBinaryVersion >= 4) {
+    const startCands = startMatch.candidates || (startMatch.ok ? [startMatch] : []);
+    const endCands = endMatch.candidates || (endMatch.ok ? [endMatch] : []);
+    snapSelection = selectConnectedSnapPair(
+      runtime.pack,
+      startCands,
+      endCands,
+      { allowUnknown: !!policy.motorizedUnknown }
+    );
+    if (snapSelection.ok) {
+      startMatch = Object.assign({}, startMatch, snapSelection.start, { ok: true });
+      endMatch = Object.assign({}, endMatch, snapSelection.end, { ok: true });
+    } else {
+      startMatch = Object.assign({}, startMatch, { ok: false, reason: snapSelection.reason });
+      endMatch = Object.assign({}, endMatch, { ok: false, reason: snapSelection.reason });
     }
   }
   // Reconcile disconnected snaps.
@@ -1975,6 +2217,7 @@ async function routeOnRuntime(body, graphResolution, runtime) {
   // NSTDB island click still yields a connected route — without the hard
   // +400m bias that stole snaps from connected forest edges in-radius.
   if (
+    graphBinaryVersion < 4 &&
     startMatch.ok &&
     endMatch.ok &&
     startMatch.componentId != null &&
@@ -2108,6 +2351,18 @@ async function routeOnRuntime(body, graphResolution, runtime) {
     }
   }
   const snapMs = Date.now() - snapStarted;
+  const snapDiag = routeSnapDiagnostics({
+    policy,
+    options,
+    limit,
+    startLon,
+    startLat,
+    endLon,
+    endLat,
+    startMatch,
+    endMatch,
+    snapSelection
+  });
 
   // Snap selection is part of the routing contract. Log the final edge and
   // access class after component reconciliation so a device/server trace can
@@ -2144,14 +2399,14 @@ async function routeOnRuntime(body, graphResolution, runtime) {
         matchLimitMeters: limit,
         fallback: null,
         failureReason,
-        diagnostics: buildRouteDiagnostics({
+        diagnostics: withSnap(buildRouteDiagnostics({
           requestedProfile: profile,
           buildMs: Date.now() - buildStarted,
           searchMs: 0,
           attempts: [],
           failureReason,
           searchOutcome: "snap_failure"
-        }),
+        }), snapDiag),
         graph: {
           edgeCount: runtime.data.edgeCount,
           nodeCount: runtime.data.nodeCount,
@@ -2189,14 +2444,14 @@ async function routeOnRuntime(body, graphResolution, runtime) {
         matchLimitMeters: limit,
         componentId: null,
         failureReason,
-        diagnostics: buildRouteDiagnostics({
+        diagnostics: withSnap(buildRouteDiagnostics({
           requestedProfile: profile,
           buildMs: Date.now() - buildStarted,
           searchMs: 0,
           attempts: [],
           failureReason,
           searchOutcome: "disconnected_components"
-        })
+        }), snapDiag)
       },
       maneuvers: [],
       segments: [],
@@ -2436,8 +2691,15 @@ async function routeOnRuntime(body, graphResolution, runtime) {
   const routeDeadlineAtMs = Number(options.deadlineAtMs);
   const routeDeadlineOpen = () =>
     !Number.isFinite(routeDeadlineAtMs) || Date.now() < routeDeadlineAtMs;
+  const currentBalancedQuality = path && profile === "balanced"
+    ? summarizeRouteQuality(path, {
+        profile,
+        urbanBoxes: urbanBoxesForPack(runtime.pack)
+      })
+    : null;
   if (
     path && profile === "balanced" && policy.motorizedUnknown &&
+    currentBalancedQuality && currentBalancedQuality.state !== "ready" &&
     routeDeadlineOpen() && !(options.abortSignal && options.abortSignal.aborted)
   ) {
     const policyVerified = Object.assign({}, policy, { motorizedUnknown: false });
@@ -2477,7 +2739,7 @@ async function routeOnRuntime(body, graphResolution, runtime) {
       searchOutcome: failedOutcome,
       attempts
     });
-    const diagnostics = buildRouteDiagnostics({
+    const diagnostics = withSnap(buildRouteDiagnostics({
       requestedProfile: profile,
       buildMs: Date.now() - buildStarted,
       searchMs,
@@ -2489,7 +2751,7 @@ async function routeOnRuntime(body, graphResolution, runtime) {
       failureReason,
       searchOutcome: failedOutcome,
       cleanMetroMultiplier
-    });
+    }), snapDiag);
     diagnostics.snapMs = snapMs;
     diagnostics.postprocessMs = Date.now() - postprocessStarted;
     diagnostics.deadlineRemainingMs = Number.isFinite(routeDeadlineAtMs)
@@ -2541,7 +2803,10 @@ async function routeOnRuntime(body, graphResolution, runtime) {
     };
   }
 
-  const quality = summarizeRouteQuality(path, { profile });
+  const quality = summarizeRouteQuality(path, {
+    profile,
+    urbanBoxes: urbanBoxesForPack(runtime.pack)
+  });
   const warnings = [];
   if (policy.motorizedUnknown) {
     warnings.push({
@@ -2585,7 +2850,7 @@ async function routeOnRuntime(body, graphResolution, runtime) {
       message: "Balanced refinement reached its planning limit. A legal, range-safe road route was kept instead of failing the ride."
     });
   }
-  const qualityWarning = dirtQualityWarning(quality);
+  const qualityWarning = routeQualityWarning(quality);
   if (qualityWarning) warnings.push(qualityWarning);
   if (startMatch.distanceM > 1 || endMatch.distanceM > 1) {
     warnings.push({
@@ -2611,20 +2876,22 @@ async function routeOnRuntime(body, graphResolution, runtime) {
     urbanCoreFallbackUsed || settlementFallbackUsed || !!(path.searchMeta && path.searchMeta.settlementFallbackUsed),
     cleanSearchOutcome || primarySearchOutcome
   );
-  // This is a diagnostic-only full-pack scan. It must never consume the last
-  // part of a bounded fuel-planning window after the actual route is already
-  // proved. Normal unbounded route requests keep the richer metric.
-  const skipCorridorClipDiagnostic = options.internalFuelProbe === true ||
-    Number.isFinite(routeDeadlineAtMs);
-  const corridorClippedDirtMeters = skipCorridorClipDiagnostic
-    ? 0
-    : clippedDirtMeters(
+  // This metric scans the entire regional pack after the route is already
+  // complete. Keep it opt-in for engineering diagnostics; it previously added
+  // several seconds to normal responses without changing the selected ride.
+  const includeCorridorClipDiagnostic =
+    options.includeCorridorClipDiagnostic === true &&
+    options.internalFuelProbe !== true &&
+    !Number.isFinite(routeDeadlineAtMs);
+  const corridorClippedDirtMeters = includeCorridorClipDiagnostic
+    ? clippedDirtMeters(
       runtime,
       startMatch.coord,
       endMatch.coord,
       Number.isFinite(selectedCorridor) ? selectedCorridor : 0,
       policy
-    );
+    )
+    : 0;
   const lowDirt = isLowDirtRoute(profile, path);
   const balancedMiss = profile === "balanced"
     ? Number(path.searchMeta && path.searchMeta.balancedMiss) || 0
@@ -2635,7 +2902,7 @@ async function routeOnRuntime(body, graphResolution, runtime) {
     (path.searchMeta && path.searchMeta.corridorCandidates) ||
     (lastSearchDiagnostics && lastSearchDiagnostics.attempts) ||
     [];
-  const routeDiagnostics = buildRouteDiagnostics({
+  const routeDiagnostics = withSnap(buildRouteDiagnostics({
     requestedProfile: profile,
     buildMs: Date.now() - buildStarted,
     searchMs,
@@ -2648,13 +2915,13 @@ async function routeOnRuntime(body, graphResolution, runtime) {
       settlementFallbackUsed || !!(path.searchMeta && path.searchMeta.settlementFallbackUsed),
     searchOutcome: "completed",
     cleanMetroMultiplier
-  });
+  }), snapDiag);
   routeDiagnostics.snapMs = snapMs;
   routeDiagnostics.postprocessMs = Date.now() - postprocessStarted;
   routeDiagnostics.deadlineRemainingMs = Number.isFinite(routeDeadlineAtMs)
     ? routeDeadlineAtMs - Date.now()
     : null;
-  routeDiagnostics.corridorClipDiagnosticSkipped = skipCorridorClipDiagnostic;
+  routeDiagnostics.corridorClipDiagnosticSkipped = !includeCorridorClipDiagnostic;
   routeDiagnostics.journeyQuality = quality;
 
   return {
@@ -2874,8 +3141,8 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds, 
     });
   }
 
-  // Packed edges are undirected in adjacency. Reverse relaxation uses the same
-  // profile cost as forward (rev 2.1). One-way direction is not packed yet.
+  // Packed edges are directed in CSR. Reverse relaxation is only legal when
+  // the pack emitted a reverse arc. Missing/ambiguous OSM direction stays two-way.
   // Stage 2: do not copy/reverse polylines here; only numeric cost fields.
   function neighbors(node) {
     const out = [];
@@ -2886,6 +3153,9 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds, 
         if (avoid && avoid.has(String(edge.i))) continue;
         const other = edge.a === node ? edge.b : edge.a;
         const forward = edge.a === node;
+        const legal = legalDirectedArcs(edge.d || edge.direction);
+        if (forward && !legal.forward) continue;
+        if (!forward && !legal.reverse) continue;
         out.push({
           to: other,
           edge: {
@@ -2970,8 +3240,9 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds, 
   // Only island → through giant (degree ≥ 2) near-touch joins are allowed.
   // Gaps remain real meters (access legs), not free-space teleports.
   // Cleanest stays on the giant pavement fabric — no stitches.
+  const legalTopology = runtime.pack && runtime.pack.graphBinaryVersion >= 4;
   let softStitchCount = 0;
-  if (policy.motorizedUnknown && profile !== "cleanest" && !geom) {
+  if (!legalTopology && policy.motorizedUnknown && profile !== "cleanest" && !geom) {
     const STITCH_M = 100;
     const padDeg = Math.max(0.04, (abMeters / 111320) * 0.35);
     const minLon = Math.min(startLL[0], endLL[0]) - padDeg;
@@ -3117,7 +3388,7 @@ function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds, 
   // NSTDB purple is the only topological bridge — Allow OFF must still join
   // white-to-white without opening unknown capillary.
   let permStitchCount = 0;
-  if (!policy.motorizedUnknown && !geom) {
+  if (!legalTopology && !policy.motorizedUnknown && !geom) {
     const JOIN_M = 150;
     const padDeg = Math.max(0.04, (abMeters / 111320) * 0.35);
     const minLon = Math.min(startLL[0], endLL[0]) - padDeg;
@@ -3638,6 +3909,7 @@ module.exports = {
   remainingChainPathCap,
   reservedChainHopCap,
   topologySeamFromIndex,
+  topologySeamCandidatesFromIndex,
   fallbackReasonFor,
   clippedDirtMeters,
   isLowDirtRoute,

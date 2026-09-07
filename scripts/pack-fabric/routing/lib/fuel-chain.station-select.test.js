@@ -571,6 +571,34 @@ test("minimum stop count still outranks the rural preference", () => {
   assert.ok(compareChainPlans(urban, rural, "dirt", 333_000) < 0);
 });
 
+test("an earlier rural stop beats a final-quarter stop that enters a city", () => {
+  const rural = {
+    complete: true,
+    urbanStopCount: 0,
+    stops: [{ id: "rural" }],
+    graphMeters: [200_000, 180_000],
+    quality: {
+      meters: 380_000, dirtMeters: 190_000, cleanFallbackCount: 0,
+      cleanMajorRoadMeters: 0, backtrackMeters: 0, urbanCoreMeters: 0,
+      minimumSectionDirtPercent: 40, longestPavedRunMeters: 10_000,
+      degradedLegs: 0
+    }
+  };
+  const city = {
+    complete: true,
+    urbanStopCount: 1,
+    stops: [{ id: "city" }],
+    graphMeters: [280_000, 100_000],
+    quality: {
+      meters: 380_000, dirtMeters: 266_000, cleanFallbackCount: 0,
+      cleanMajorRoadMeters: 0, backtrackMeters: 0, urbanCoreMeters: 8_000,
+      minimumSectionDirtPercent: 70, longestPavedRunMeters: 4_000,
+      degradedLegs: 0
+    }
+  };
+  assert.ok(compareChainPlans(rural, city, "dirt", 333_000) < 0);
+});
+
 test("minimum stop count ranks first after down-and-back stems are rejected", () => {
   const arc = {
     complete: true,

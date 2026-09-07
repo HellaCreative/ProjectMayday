@@ -53,3 +53,24 @@ test("a consistently dirt-forward ride satisfies the journey contract", () => {
   assert.equal(quality.state, "ready");
   assert.deepEqual(quality.reasons, []);
 });
+
+test("Balanced reports a target miss instead of calling a pavement route ready", () => {
+  const quality = summarizeRouteQuality({
+    profile: "balanced",
+    segments: [segment("paved", 80_000), segment("gravel", 20_000)]
+  });
+
+  assert.equal(quality.knownDirtPercent, 20);
+  assert.equal(quality.state, "degraded");
+  assert.ok(quality.reasons.includes("balanced_target_miss"));
+});
+
+test("Balanced 50/50 without an urban crossing is ready", () => {
+  const quality = summarizeRouteQuality({
+    profile: "balanced",
+    segments: [segment("paved", 50_000), segment("gravel", 50_000)]
+  });
+
+  assert.equal(quality.state, "ready");
+  assert.deepEqual(quality.reasons, []);
+});

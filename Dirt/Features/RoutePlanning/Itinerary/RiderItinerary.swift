@@ -138,6 +138,12 @@ nonisolated struct RiderItinerary: Equatable, Codable, Sendable {
         assertInvariants()
     }
 
+    /// Move a pin to the snapped road without bumping generation (no rebuild).
+    mutating func relocateWaypoint(at index: Int, to coordinate: RouteCoordinate) {
+        guard waypoints.indices.contains(index) else { return }
+        waypoints[index].coordinate = coordinate
+    }
+
     init(
         waypoints: [RiderWaypoint],
         legs: [RiderLeg],

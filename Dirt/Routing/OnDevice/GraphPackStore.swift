@@ -165,11 +165,23 @@ final class GraphPackStore {
             var isDir: ObjCBool = false
             guard fm.fileExists(atPath: regionURL.path, isDirectory: &isDir), isDir.boolValue else { continue }
             let id = regionURL.lastPathComponent.lowercased()
+            let srcV4 = regionURL.appendingPathComponent("graph.v4.bin")
             let srcGraph = regionURL.appendingPathComponent("graph.v3.bin")
             let srcGeom = regionURL.appendingPathComponent("geometry.v1.bin")
-            guard fm.fileExists(atPath: srcGraph.path) else { continue }
             let dest = regionDir(regionId: id)
             try? fm.createDirectory(at: dest, withIntermediateDirectories: true)
+            if fm.fileExists(atPath: srcV4.path), AppConfig.backendEnvironment == .development {
+                let destV4 = dest.appendingPathComponent("graph.v4.bin")
+                try? fm.removeItem(at: destV4)
+                try? fm.copyItem(at: srcV4, to: destV4)
+                if fm.fileExists(atPath: srcGeom.path) {
+                    let destGeom = dest.appendingPathComponent("geometry.v1.bin")
+                    try? fm.removeItem(at: destGeom)
+                    try? fm.copyItem(at: srcGeom, to: destGeom)
+                }
+                continue
+            }
+            guard fm.fileExists(atPath: srcGraph.path) else { continue }
             let destGraph = dest.appendingPathComponent("graph.v3.bin")
             let destGeom = dest.appendingPathComponent("geometry.v1.bin")
             // Preserve shipped/local v2 geometry before overwriting geometry.v1.bin.
@@ -212,7 +224,14 @@ final class GraphPackStore {
         guard let pack = packIfInstalled(region) else {
             return PackFormatBadge(regionId: region, format: "—", revision: "—", hasLeaves: false)
         }
-        let format = pack.hasLeaves ? "v3" : "v2"
+        let format: String
+        if pack.version >= 4 {
+            format = "v4"
+        } else if pack.hasLeaves {
+            format = "v3"
+        } else {
+            format = "v2"
+        }
         return PackFormatBadge(
             regionId: (pack.regionId ?? region).uppercased(),
             format: format,
@@ -225,10 +244,11 @@ final class GraphPackStore {
     func packRevisionLabel(regionId: String) -> String {
         let id = regionId.lowercased()
         if let files = installedPackIdentity(regionId: id) {
-            let sha = files["graph.v3.bin"] ?? files["graph.v2.bin"]
+            let sha = files["graph.v4.bin"] ?? files["graph.v3.bin"] ?? files["graph.v2.bin"]
             if let sha, sha.count >= 8 { return String(sha.prefix(8)) }
         }
         if let url = findGraphFileURL(regionId: id) {
+            if url.lastPathComponent == "graph.v4.bin" { return "v4" }
             if url.lastPathComponent == "graph.v3.bin" { return "local" }
             return lastManifestVersion
         }
@@ -249,7 +269,9 @@ final class GraphPackStore {
                 applyCatalog(published: publishedIds, sizes: [:])
                 return
             }
-            let manifest = try JSONDecoder().decode(PackManifest.self, from: data)
+            let manifest = Self.overlayDevV4IfNeeded(
+                try JSONDecoder().decode(PackManifest.self, from: data)
+            )
             lastManifestVersion = manifest.version
             manifestFilesByRegion = Dictionary(uniqueKeysWithValues: manifest.regions.map {
                 ($0.id.lowercased(), $0.files.filter { Self.phonePackFileNames.contains($0.name) })
@@ -727,7 +749,9 @@ final class GraphPackStore {
         regionalHopMinimumMeters: [Double] = [],
         cleanMetroMultiplier: Double? = nil,
         avoidMotorways: Bool = false,
-        preferBackRoads: Bool = false
+        preferBackRoads: Bool = false,
+        mapZoom: Double? = nil,
+        matchLimitMeters: Double? = nil
     ) async -> Result<OnDeviceRouter.Result, OnDeviceRouter.Failure> {
         let fromId = Self.primaryRegionId(containing: from)
         let toId = Self.primaryRegionId(containing: to)
@@ -750,7 +774,9 @@ final class GraphPackStore {
                 regionalHopMinimumMeters: regionalHopMinimumMeters,
                 cleanMetroMultiplier: cleanMetroMultiplier,
                 avoidMotorways: avoidMotorways,
-                preferBackRoads: preferBackRoads
+                preferBackRoads: preferBackRoads,
+                mapZoom: mapZoom,
+                matchLimitMeters: matchLimitMeters
             )
         }
         return await routeOnDeviceInRegion(
@@ -766,8 +792,10 @@ final class GraphPackStore {
             sessionSeed: sessionSeed,
             maxRouteMeters: maxRouteMeters,
             cleanMetroMultiplier: cleanMetroMultiplier,
-                avoidMotorways: avoidMotorways,
-                preferBackRoads: preferBackRoads
+            avoidMotorways: avoidMotorways,
+            preferBackRoads: preferBackRoads,
+            mapZoom: mapZoom,
+            matchLimitMeters: matchLimitMeters
         )
     }
 
@@ -790,7 +818,9 @@ final class GraphPackStore {
         regionalHopMinimumMeters: [Double] = [],
         cleanMetroMultiplier: Double? = nil,
         avoidMotorways: Bool = false,
-        preferBackRoads: Bool = false
+        preferBackRoads: Bool = false,
+        mapZoom: Double? = nil,
+        matchLimitMeters: Double? = nil
     ) async -> Result<OnDeviceRouter.Result, OnDeviceRouter.Failure> {
         await activateInstalledPack(regionId: left)
         guard let leftPack = activePack else { return .failure(.noPath) }
@@ -833,7 +863,9 @@ final class GraphPackStore {
                 maxRouteMeters: firstHopCap,
                 cleanMetroMultiplier: cleanMetroMultiplier,
                 avoidMotorways: avoidMotorways,
-                preferBackRoads: preferBackRoads
+                preferBackRoads: preferBackRoads,
+                mapZoom: mapZoom,
+                matchLimitMeters: matchLimitMeters
             )
             guard case .success(let first) = hop1, first.coordinates.count > 1 else {
                 if case .failure(let reason) = hop1 { lastFailure = reason }
@@ -856,7 +888,9 @@ final class GraphPackStore {
                 ),
                 cleanMetroMultiplier: cleanMetroMultiplier,
                 avoidMotorways: avoidMotorways,
-                preferBackRoads: preferBackRoads
+                preferBackRoads: preferBackRoads,
+                mapZoom: mapZoom,
+                matchLimitMeters: matchLimitMeters
             )
             guard case .success(let second) = hop2, second.coordinates.count > 1 else {
                 if case .failure(let reason) = hop2 { lastFailure = reason }
@@ -907,7 +941,9 @@ final class GraphPackStore {
         maxRouteMeters: Double? = nil,
         cleanMetroMultiplier: Double? = nil,
         avoidMotorways: Bool = false,
-        preferBackRoads: Bool = false
+        preferBackRoads: Bool = false,
+        mapZoom: Double? = nil,
+        matchLimitMeters: Double? = nil
     ) async -> Result<OnDeviceRouter.Result, OnDeviceRouter.Failure> {
         if let regionId {
             await activateInstalledPack(regionId: regionId)
@@ -923,9 +959,13 @@ final class GraphPackStore {
         let allow = allowUnknown
         let seed = sessionSeed
         let metro = cleanMetroMultiplier
+        let zoom = mapZoom
+        let matchLimit = matchLimitMeters
         return await Task.detached(priority: .userInitiated) {
             var router = OnDeviceRouter(pack: packRef)
             router.sessionSeed = seed
+            router.mapZoom = zoom
+            router.matchLimitMeters = matchLimit
             return router.routeDetailed(
                 from: start,
                 to: end,
@@ -1181,7 +1221,11 @@ final class GraphPackStore {
         if let found = findGraphFileURL(regionId: regionId) { return found }
         // Destination for a fresh download into the current manifest version.
         // Prefer v3 when present for local ride-tests; catalog still ships v2.
-        return regionDir(regionId: regionId).appendingPathComponent("graph.v3.bin")
+        return regionDir(regionId: regionId).appendingPathComponent(
+            AppConfig.backendEnvironment == .development && regionId.lowercased() == "ns"
+                ? "graph.v4.bin"
+                : "graph.v3.bin"
+        )
     }
 
     /// Prefer `graph.v3.bin` when present (Phase E1 local packs); else `graph.v2.bin`.
@@ -1189,7 +1233,12 @@ final class GraphPackStore {
     private func findGraphFileURL(regionId: String) -> URL? {
         let id = regionId.lowercased()
         let fm = FileManager.default
-        let names = ["graph.v3.bin", "graph.v2.bin"]
+        let names: [String]
+        if AppConfig.backendEnvironment == .development {
+            names = ["graph.v4.bin", "graph.v3.bin", "graph.v2.bin"]
+        } else {
+            names = ["graph.v3.bin", "graph.v2.bin"]
+        }
 
         func firstExisting(in dir: URL) -> URL? {
             for name in names {
@@ -1226,6 +1275,7 @@ final class GraphPackStore {
     nonisolated private static let phonePackFileNames: Set<String> = [
         "graph.v2.bin",
         "graph.v3.bin",
+        "graph.v4.bin",
         "geometry.v1.bin",
         "fuel.v1.json"
     ]
@@ -1429,7 +1479,9 @@ final class GraphPackStore {
             if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
                 return
             }
-            let manifest = try JSONDecoder().decode(PackManifest.self, from: manifestData)
+            let manifest = Self.overlayDevV4IfNeeded(
+                try JSONDecoder().decode(PackManifest.self, from: manifestData)
+            )
             lastManifestVersion = manifest.version
             manifestFilesByRegion = Dictionary(uniqueKeysWithValues: manifest.regions.map {
                 ($0.id.lowercased(), $0.files.filter { Self.phonePackFileNames.contains($0.name) })
@@ -1490,7 +1542,9 @@ final class GraphPackStore {
             if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
                 throw URLError(.badServerResponse)
             }
-            let manifest = try JSONDecoder().decode(PackManifest.self, from: manifestData)
+            let manifest = Self.overlayDevV4IfNeeded(
+                try JSONDecoder().decode(PackManifest.self, from: manifestData)
+            )
             lastManifestVersion = manifest.version
             manifestFilesByRegion = Dictionary(uniqueKeysWithValues: manifest.regions.map {
                 ($0.id.lowercased(), $0.files.filter { Self.phonePackFileNames.contains($0.name) })
@@ -1994,7 +2048,9 @@ final class GraphPackStore {
     }
 
     nonisolated private static func regionHasPhoneGraph(_ region: PackManifest.Region) -> Bool {
-        region.files.contains { $0.name == "graph.v3.bin" || $0.name == "graph.v2.bin" }
+        region.files.contains {
+            $0.name == "graph.v4.bin" || $0.name == "graph.v3.bin" || $0.name == "graph.v2.bin"
+        }
     }
 
     nonisolated private static func regionMatchesIdentity(
@@ -2070,5 +2126,39 @@ private struct PackManifest: Decodable, Sendable {
         var name: String
         var bytes: Int?
         var sha256: String?
+    }
+}
+
+extension GraphPackStore {
+    /// DIRT Dev overlays NS onto the V4 candidate identity. Production catalog is unchanged.
+    nonisolated private static func overlayDevV4IfNeeded(_ manifest: PackManifest) -> PackManifest {
+        #if DIRT_DEVELOPMENT
+        var next = manifest
+        let nsFiles: [PackManifest.File] = [
+            PackManifest.File(
+                name: "graph.v4.bin",
+                bytes: AppConfig.nsV4GraphBytes,
+                sha256: AppConfig.nsV4GraphSHA256
+            ),
+            PackManifest.File(
+                name: "geometry.v1.bin",
+                bytes: AppConfig.nsV4GeometryBytes,
+                sha256: AppConfig.nsV4GeometrySHA256
+            ),
+            PackManifest.File(
+                name: "fuel.v1.json",
+                bytes: AppConfig.nsV4FuelBytes,
+                sha256: AppConfig.nsV4FuelSHA256
+            )
+        ]
+        if let idx = next.regions.firstIndex(where: { $0.id.lowercased() == "ns" }) {
+            next.regions[idx] = PackManifest.Region(id: next.regions[idx].id, files: nsFiles)
+        } else {
+            next.regions.append(PackManifest.Region(id: "ns", files: nsFiles))
+        }
+        return next
+        #else
+        return manifest
+        #endif
     }
 }

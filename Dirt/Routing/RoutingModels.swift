@@ -108,6 +108,10 @@ struct RouteRequestOptions: Codable, Sendable {
     var avoidMotorways: Bool?
     /// Legacy compatibility field; Clean no longer adds a primary-road penalty.
     var preferBackRoads: Bool?
+    /// MapLibre zoom used for the V4 tap radius. Omitted on V3.
+    var mapZoom: Double?
+    /// Optional override of the zoom-aware snap radius, still capped.
+    var matchLimitMeters: Double?
 
     init(
         avoidEdgeIds: [String] = [],
@@ -120,7 +124,9 @@ struct RouteRequestOptions: Codable, Sendable {
         regionalHopMinimumMeters: [Double] = [],
         cleanMetroMultiplier: Double? = nil,
         avoidMotorways: Bool = false,
-        preferBackRoads: Bool = false
+        preferBackRoads: Bool = false,
+        mapZoom: Double? = nil,
+        matchLimitMeters: Double? = nil
     ) {
         self.avoidEdgeIds = avoidEdgeIds.isEmpty ? nil : avoidEdgeIds
         self.priorEdgeIds = priorEdgeIds.isEmpty ? nil : priorEdgeIds
@@ -138,6 +144,8 @@ struct RouteRequestOptions: Codable, Sendable {
         }
         self.avoidMotorways = avoidMotorways ? true : nil
         self.preferBackRoads = preferBackRoads ? true : nil
+        self.mapZoom = mapZoom?.isFinite == true ? mapZoom : nil
+        self.matchLimitMeters = matchLimitMeters?.isFinite == true ? matchLimitMeters : nil
     }
 }
 
@@ -162,7 +170,9 @@ struct RouteRequest: Codable, Sendable {
         regionalHopMinimumMeters: [Double] = [],
         cleanMetroMultiplier: Double? = nil,
         avoidMotorways: Bool = false,
-        preferBackRoads: Bool = false
+        preferBackRoads: Bool = false,
+        mapZoom: Double? = nil,
+        matchLimitMeters: Double? = nil
     ) {
         self.profile = profile
         self.locations = locations
@@ -175,10 +185,12 @@ struct RouteRequest: Codable, Sendable {
         let metro = profile == .cleanest ? cleanMetroMultiplier : nil
         let scopedAvoid = profile == .cleanest && avoidMotorways
         let scopedPrefer = false
+        let zoom = mapZoom?.isFinite == true ? mapZoom : nil
+        let matchLimit = matchLimitMeters?.isFinite == true ? matchLimitMeters : nil
         if avoidEdgeIds.isEmpty, priorEdgeIds.isEmpty, arrivalEdgeId == nil,
            backtrackFactor == nil, seed == nil, maxPathMeters == nil,
            directExtraBudgetMeters == nil, regionalHopMinimumMeters.isEmpty, metro == nil,
-           !scopedAvoid, !scopedPrefer {
+           !scopedAvoid, !scopedPrefer, zoom == nil, matchLimit == nil {
             options = nil
         } else {
             options = RouteRequestOptions(
@@ -192,7 +204,9 @@ struct RouteRequest: Codable, Sendable {
                 regionalHopMinimumMeters: regionalHopMinimumMeters,
                 cleanMetroMultiplier: metro,
                 avoidMotorways: scopedAvoid,
-                preferBackRoads: scopedPrefer
+                preferBackRoads: scopedPrefer,
+                mapZoom: zoom,
+                matchLimitMeters: matchLimit
             )
         }
     }
@@ -235,7 +249,7 @@ struct FuelChainRequest: Codable, Sendable {
     let locations: [RouteLocation]
     let vehicle: String
     let accessPolicy: AccessPolicy
-    let options: RouteRequestOptions?
+    var options: RouteRequestOptions?
     var fuel: FuelChainConstraint
 
     init(
@@ -265,7 +279,8 @@ struct FuelChainRequest: Codable, Sendable {
         preferredStationIds: [String] = [],
         forwardFeeler: Bool = false,
         routeFirstPlan: Bool = false,
-        ensureDestinationFuelEscape: Bool = false
+        ensureDestinationFuelEscape: Bool = false,
+        mapZoom: Double? = nil
     ) {
         self.profile = profile
         locations = [
@@ -279,8 +294,9 @@ struct FuelChainRequest: Codable, Sendable {
         )
         let metro = profile == .cleanest ? cleanMetroMultiplier : nil
         let scopedAvoid = profile == .cleanest && avoidMotorways
+        let zoom = mapZoom?.isFinite == true ? mapZoom : nil
         options = avoidEdgeIds.isEmpty && priorEdgeIds.isEmpty && arrivalEdgeId == nil
-            && backtrackFactor == nil && metro == nil && !scopedAvoid
+            && backtrackFactor == nil && metro == nil && !scopedAvoid && zoom == nil
             ? nil
             : RouteRequestOptions(
                 avoidEdgeIds: avoidEdgeIds,
@@ -288,7 +304,8 @@ struct FuelChainRequest: Codable, Sendable {
                 arrivalEdgeId: arrivalEdgeId,
                 backtrackFactor: backtrackFactor,
                 cleanMetroMultiplier: metro,
-                avoidMotorways: scopedAvoid
+                avoidMotorways: scopedAvoid,
+                mapZoom: zoom
             )
         fuel = FuelChainConstraint(
             usableRangeMeters: usableRangeMeters,
@@ -309,6 +326,17 @@ struct FuelChainRequest: Codable, Sendable {
             routeFirstPlan: routeFirstPlan ? true : nil,
             ensureDestinationFuelEscape: ensureDestinationFuelEscape ? true : nil
         )
+    }
+}
+
+struct FuelSnapPatch {
+    static func applyingMapZoom(_ request: FuelChainRequest, zoom: Double?) -> FuelChainRequest {
+        guard let zoom, zoom.isFinite else { return request }
+        var req = request
+        var opts = req.options ?? RouteRequestOptions()
+        opts.mapZoom = zoom
+        req.options = opts
+        return req
     }
 }
 
@@ -431,6 +459,10 @@ struct FuelChainDiagnostics: Codable, Sendable {
     var foundationPriorityStations: Int? = nil
     var selectedUrbanEntry: Bool? = nil
     var ruralAlternativeAvailable: Bool? = nil
+    var allowUnknown: Bool? = nil
+    var tapRadiusMeters: Double? = nil
+    var mapZoom: Double? = nil
+    var snap: RouteSnapDiagnostics? = nil
 }
 
 struct FuelTargetPassDiagnostic: Codable, Sendable {
@@ -757,6 +789,64 @@ struct RouteResponseDiagnostics: Codable, Sendable {
     var corridorClipDiagnosticSkipped: Bool? = nil
     /// DEBUG ONLY. Echo of options.cleanMetroMultiplier when Clean override was applied.
     var cleanMetroMultiplier: Double? = nil
+    var allowUnknown: Bool? = nil
+    var tapRadiusMeters: Double? = nil
+    var mapZoom: Double? = nil
+    var snap: RouteSnapDiagnostics? = nil
+}
+
+nonisolated struct RouteSnapEndpoint: Codable, Sendable {
+    var raw: SnapCoordinate?
+    var snapped: SnapCoordinate?
+    var distanceM: Int?
+    var candidateCount: Int?
+    var osmWayId: String?
+    var accessClass: String?
+    var component: Int?
+    var rejectionReasons: [String]? = nil
+}
+
+nonisolated struct SnapCoordinate: Codable, Sendable {
+    var longitude: Double
+    var latitude: Double
+
+    var routeCoordinate: RouteCoordinate {
+        RouteCoordinate(longitude: longitude, latitude: latitude)
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case lon, lng, lat, longitude, latitude
+    }
+
+    init(longitude: Double, latitude: Double) {
+        self.longitude = longitude
+        self.latitude = latitude
+    }
+
+    init(from decoder: Decoder) throws {
+        if var unkeyed = try? decoder.unkeyedContainer() {
+            longitude = try unkeyed.decode(Double.self)
+            latitude = try unkeyed.decode(Double.self)
+            return
+        }
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        latitude = try container.decodeIfPresent(Double.self, forKey: .lat)
+            ?? container.decode(Double.self, forKey: .latitude)
+        longitude = try container.decodeIfPresent(Double.self, forKey: .lon)
+            ?? container.decodeIfPresent(Double.self, forKey: .lng)
+            ?? container.decode(Double.self, forKey: .longitude)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(longitude, forKey: .lon)
+        try container.encode(latitude, forKey: .lat)
+    }
+}
+
+nonisolated struct RouteSnapDiagnostics: Codable, Sendable {
+    var start: RouteSnapEndpoint?
+    var end: RouteSnapEndpoint?
 }
 
 struct RouteResponseDebug: Codable, Sendable {

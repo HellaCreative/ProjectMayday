@@ -1,11 +1,53 @@
 import CoreLocation
 import Foundation
 
+/// Zoom-aware tap radius. Screen distance, not a second road network.
+///
+/// metersPerPoint ≈ 156543.03392 * cos(lat) / 2^zoom  (Web Mercator, 1 CSS point)
+/// A 28-point finger (~7 mm) at that resolution is the intended tap.
+///
+/// Safe upper bound: 2000 m. That covers the Yarmouth harbour coarse-zoom
+/// miss (~1.7 km to the connected town road) without province-wide fishing.
+/// V3 stays capped at 750 m (frozen).
+nonisolated enum TapRadius {
+    static let minMeters: Double = 80
+    static let defaultMeters: Double = 550
+    static let v3CapMeters: Double = 750
+    static let v4CapMeters: Double = 2_000
+    static let fingerPoints: Double = 28
+    static let mercatorMetersPerPointAtZoom0: Double = 156_543.03392
+
+    static func capMeters(graphBinaryVersion: Int) -> Double {
+        graphBinaryVersion >= 4 ? v4CapMeters : v3CapMeters
+    }
+
+    static func meters(
+        zoom: Double? = nil,
+        latitude: Double,
+        requestedMeters: Double? = nil,
+        graphBinaryVersion: Int,
+        defaultMeters: Double = TapRadius.defaultMeters
+    ) -> Double {
+        let cap = capMeters(graphBinaryVersion: graphBinaryVersion)
+        if let requested = requestedMeters, requested.isFinite, requested > 0 {
+            return min(cap, max(minMeters, requested))
+        }
+        if let zoom, zoom.isFinite, latitude.isFinite {
+            let metersPerPoint = mercatorMetersPerPointAtZoom0
+                * Darwin.cos(latitude * .pi / 180)
+                / Darwin.pow(2, zoom)
+            return min(cap, max(minMeters, fingerPoints * metersPerPoint))
+        }
+        let base = defaultMeters.isFinite && defaultMeters > 0 ? defaultMeters : Self.defaultMeters
+        return min(cap, max(minMeters, base))
+    }
+}
+
 /// On-device Dijkstra over a loaded `graph.v2` pack.
 ///
 /// Costing mirrors pack-fabric `profile-costs` surface weights.
 /// Snap is nearest **edge** (geometry polyline when available, else node chord).
-/// Mid-edge snaps route via both endpoints through virtual nodes (find-path-v2),
+/// Mid-edge snaps enter the directed CSR only along legal travel.
 /// same-edge taps return the along-edge span, and soft-stitch stubs paint
 /// tap/GPS→road projection within `preferredMatchMeters` (camp / driveway approach).
 /// Junction repairs mirror live `router.js`: permissive tip joins when Allow is OFF
@@ -72,6 +114,10 @@ nonisolated struct OnDeviceRouter {
         var backtrackReason: String? = nil
         var debugNote: String = ""
         var searchMeta: SearchMeta = SearchMeta()
+        var snapDiagnostics: RouteSnapDiagnostics? = nil
+        var allowUnknownLogged: Bool? = nil
+        var tapRadiusMeters: Double? = nil
+        var mapZoom: Double? = nil
     }
 
     struct SearchMeta: Sendable, Equatable {
@@ -138,6 +184,10 @@ nonisolated struct OnDeviceRouter {
     var pavedBias: Double = 1
     /// Planning-session seed for controlled variety. New process → new seed.
     var sessionSeed: UInt64 = 0
+    /// MapLibre zoom for V4 tap radius. Nil falls back to 550 m, capped at 2000 m.
+    var mapZoom: Double? = nil
+    /// Optional explicit snap radius, still capped by graph version.
+    var matchLimitMeters: Double? = nil
 
     /// New packs carry OSM-derived local cores. Static boxes remain a temporary
     /// compatibility fallback for older installed packs.
@@ -226,7 +276,8 @@ nonisolated struct OnDeviceRouter {
             distanceMeters: 0,
             projected: startProjected,
             distanceAlongM: startAlongM,
-            segmentIndex: 0
+            segmentIndex: 0,
+            tangentDeg: 0
         )
         let endSnap = EdgeSnap(
             edgeIndex: endEdgeIndex,
@@ -235,7 +286,8 @@ nonisolated struct OnDeviceRouter {
             distanceMeters: 0,
             projected: endProjected,
             distanceAlongM: endAlongM,
-            segmentIndex: 0
+            segmentIndex: 0,
+            tangentDeg: 0
         )
         var ctx = HopSearchContext.forProfile(.cleanest, seed: sessionSeed)
         ctx.pavedOnly = true
@@ -440,11 +492,13 @@ nonisolated struct OnDeviceRouter {
             let access = max(0, snap.distanceMeters)
             let mA = access + max(0, snap.distanceAlongM)
             let mB = access + max(0, edgeM - snap.distanceAlongM)
-            if snap.nodeA >= 0, snap.nodeA < n, mA <= maxMeters, mA < dist[snap.nodeA] {
+            if pack.hasDirectedArc(from: snap.nodeB, to: snap.nodeA, edge: snap.edgeIndex),
+               snap.nodeA >= 0, snap.nodeA < n, mA <= maxMeters, mA < dist[snap.nodeA] {
                 dist[snap.nodeA] = mA
                 heap.push(node: snap.nodeA, cost: mA)
             }
-            if snap.nodeB >= 0, snap.nodeB < n, mB <= maxMeters, mB < dist[snap.nodeB] {
+            if pack.hasDirectedArc(from: snap.nodeA, to: snap.nodeB, edge: snap.edgeIndex),
+               snap.nodeB >= 0, snap.nodeB < n, mB <= maxMeters, mB < dist[snap.nodeB] {
                 dist[snap.nodeB] = mB
                 heap.push(node: snap.nodeB, cost: mB)
             }
@@ -461,6 +515,10 @@ nonisolated struct OnDeviceRouter {
                 let ei = Int(pack.edgeUndirectedIndex[i])
                 guard ei >= 0, ei < pack.undirectedEdgeCount, toNode >= 0, toNode < n else { continue }
                 if prevEdge[cur.node] == ei { continue }
+                if pack.v4HopIllegal(
+                    ei: ei, from: cur.node, to: toNode,
+                    startEi: -1, endEi: -1, incomingEi: prevEdge[cur.node]
+                ) { continue }
                 let attr = pack.edgeAttrs[ei]
                 let access = GraphV2Pack.unpackAccess(attr)
                 if !accessAllowed(access, allowUnknown: policyUnknown, profile: profile) { continue }
@@ -491,10 +549,12 @@ nonisolated struct OnDeviceRouter {
             guard snap.edgeIndex >= 0, snap.edgeIndex < pack.undirectedEdgeCount else { continue }
             let edgeM = Double(pack.edgeMeters[snap.edgeIndex])
             let access = max(0, snap.distanceMeters)
-            if snap.nodeA >= 0, snap.nodeA < dist.count, dist[snap.nodeA].isFinite {
+            if pack.hasDirectedArc(from: snap.nodeA, to: snap.nodeB, edge: snap.edgeIndex),
+               snap.nodeA >= 0, snap.nodeA < dist.count, dist[snap.nodeA].isFinite {
                 best = min(best, dist[snap.nodeA] + access + max(0, snap.distanceAlongM))
             }
-            if snap.nodeB >= 0, snap.nodeB < dist.count, dist[snap.nodeB].isFinite {
+            if pack.hasDirectedArc(from: snap.nodeB, to: snap.nodeA, edge: snap.edgeIndex),
+               snap.nodeB >= 0, snap.nodeB < dist.count, dist[snap.nodeB].isFinite {
                 best = min(best, dist[snap.nodeB] + access + max(0, edgeM - snap.distanceAlongM))
             }
         }
@@ -565,12 +625,30 @@ nonisolated struct OnDeviceRouter {
         // Otherwise Banjo Mike–style camps lock onto NSTDB TRACK (motorized_unknown),
         // then Dijkstra with Allow off reports "no route on the eligible graph"
         // while the basemap still draws a continuous white road.
+        let v4 = pack.version >= 4 && pack.legalTopology
+        let tapMeters = TapRadius.meters(
+            zoom: mapZoom,
+            latitude: to.latitude,
+            requestedMeters: matchLimitMeters,
+            graphBinaryVersion: Int(pack.version)
+        )
+        let snapCap = v4 ? tapMeters : Self.preferredMatchMeters
+        var startRejects: [String] = []
+        var endRejects: [String] = []
         let startRaw = nearestEdgeSnaps(
-            to: from, allowUnknown: allowUnknown, profile: profile
-        ).filter { $0.distanceMeters <= Self.preferredMatchMeters }
+            to: from, allowUnknown: allowUnknown, profile: profile,
+            maxMeters: snapCap,
+            headingDeg: nil,
+            intentBearingDeg: bearingDeg(from: from, to: to),
+            rejections: &startRejects
+        ).filter { $0.distanceMeters <= snapCap }
         let endRaw = nearestEdgeSnaps(
-            to: to, allowUnknown: allowUnknown, profile: profile
-        ).filter { $0.distanceMeters <= Self.preferredMatchMeters }
+            to: to, allowUnknown: allowUnknown, profile: profile,
+            maxMeters: snapCap,
+            headingDeg: nil,
+            intentBearingDeg: bearingDeg(from: to, to: from),
+            rejections: &endRejects
+        ).filter { $0.distanceMeters <= snapCap }
         guard !startRaw.isEmpty else { return .failure(.cannotSnapStart) }
         guard !endRaw.isEmpty else { return .failure(.cannotSnapEnd) }
 
@@ -580,28 +658,69 @@ nonisolated struct OnDeviceRouter {
         }
         let coincidentSiblings = coincidentSiblingLists()
 
-        // Prefer through-roads (deg ≥ 2) at BOTH ends. House GPS and basemap-snapped
-        // B often lock onto NSTDB / OSM dead-end tips that never join the fabric.
-        // Adventure profiles: among through candidates, prefer track/resource over
-        // freeway snaps so Dirt/Balanced actually enter the new OSM capillary.
-        // Dense purple meshes can crowd yellow paved connectors out of the top of
-        // that list — diversify keeps a paved through-road in the attempt set.
-        let adventureStarts = diversifySnapCandidates(
-            preferred: throughPreferredSnaps(startRaw, profile: profile, role: .start),
-            distanceOrdered: startRaw
-        )
-        let adventureEnds = diversifySnapCandidates(
-            preferred: throughPreferredSnaps(endRaw, profile: profile, role: .end),
-            distanceOrdered: endRaw
-        )
+        let adventureStarts: [EdgeSnap]
+        let adventureEnds: [EdgeSnap]
+        var v4Pairs: [(EdgeSnap, EdgeSnap)] = []
+        if v4 {
+            let connected = selectConnectedSnapPairs(
+                starts: startRaw,
+                ends: endRaw,
+                allowUnknown: allowUnknown
+            )
+            v4Pairs = connected.pairs
+            startRejects.append(contentsOf: connected.rejectionReasons)
+            endRejects.append(contentsOf: connected.rejectionReasons)
+            guard let first = v4Pairs.first else { return .failure(.cannotSnapEnd) }
+            adventureStarts = [first.0]
+            adventureEnds = [first.1]
+        } else {
+            // Prefer through-roads (deg ≥ 2) at BOTH ends. House GPS and basemap-snapped
+            // B often lock onto NSTDB / OSM dead-end tips that never join the fabric.
+            // Adventure profiles: among through candidates, prefer track/resource over
+            // freeway snaps so Dirt/Balanced actually enter the new OSM capillary.
+            // Dense purple meshes can crowd yellow paved connectors out of the top of
+            // that list — diversify keeps a paved through-road in the attempt set.
+            adventureStarts = diversifySnapCandidates(
+                preferred: throughPreferredSnaps(startRaw, profile: profile, role: .start),
+                distanceOrdered: startRaw
+            )
+            adventureEnds = diversifySnapCandidates(
+                preferred: throughPreferredSnaps(endRaw, profile: profile, role: .end),
+                distanceOrdered: endRaw
+            )
+        }
 
         var lastFailure: Failure = .noPath
+        func attachSnap(_ result: Result, startSnap: EdgeSnap, endSnap: EdgeSnap) -> Result {
+            var out = result
+            out.allowUnknownLogged = allowUnknown
+            out.tapRadiusMeters = snapCap
+            out.mapZoom = mapZoom
+            out.snapDiagnostics = RouteSnapDiagnostics(
+                start: snapEndpoint(
+                    raw: from,
+                    snap: startSnap,
+                    candidateCount: startRaw.count,
+                    rejectionReasons: Array(Set(startRejects))
+                ),
+                end: snapEndpoint(
+                    raw: to,
+                    snap: endSnap,
+                    candidateCount: endRaw.count,
+                    rejectionReasons: Array(Set(endRejects))
+                )
+            )
+            return out
+        }
         func attempt(
             starts: [EdgeSnap],
             ends: [EdgeSnap],
             ctx: HopSearchContext
         ) -> Swift.Result<Result, Failure>? {
-            for (startSnap, endSnap) in snapAttemptPairs(starts: starts, ends: ends) {
+            let pairs = v4 && !v4Pairs.isEmpty
+                ? v4Pairs
+                : snapAttemptPairs(starts: starts, ends: ends)
+            for (startSnap, endSnap) in pairs {
                 switch routeWithSnaps(
                     from: from,
                     to: to,
@@ -614,7 +733,7 @@ nonisolated struct OnDeviceRouter {
                     coincidentSiblings: coincidentSiblings
                 ) {
                 case .success(let result):
-                    return .success(result)
+                    return .success(attachSnap(result, startSnap: startSnap, endSnap: endSnap))
                 case .failure(let reason):
                     lastFailure = reason
                     if reason != .noPath { return .failure(reason) }
@@ -627,7 +746,7 @@ nonisolated struct OnDeviceRouter {
             if let hit = attempt(starts: adventureStarts, ends: adventureEnds, ctx: ctx) {
                 return hit
             }
-            if profile == .dirt || profile == .balanced {
+            if !v4, profile == .dirt || profile == .balanced {
                 let bridgeStarts = diversifySnapCandidates(
                     preferred: throughPreferredSnaps(startRaw, profile: .balanced, role: .start),
                     distanceOrdered: startRaw
@@ -1243,6 +1362,11 @@ nonisolated struct OnDeviceRouter {
         endSnap: EdgeSnap
     ) -> Result? {
         let ei = startSnap.edgeIndex
+        let alongForward = startSnap.distanceAlongM <= endSnap.distanceAlongM
+        let legal = alongForward
+            ? pack.hasDirectedArc(from: startSnap.nodeA, to: startSnap.nodeB, edge: ei)
+            : pack.hasDirectedArc(from: startSnap.nodeB, to: startSnap.nodeA, edge: ei)
+        guard legal else { return nil }
         let poly = edgeGeometry(ei) ?? [
             coordinate(forNode: startSnap.nodeA),
             coordinate(forNode: startSnap.nodeB)
@@ -1421,23 +1545,45 @@ nonisolated struct OnDeviceRouter {
         }
 
         var virtAdj: [Int: [(to: Int, id: Int, forward: Bool)]] = [:]
+        var virtAdjRev: [Int: [(to: Int, id: Int, forward: Bool)]] = [:]
+        func linkVirtArc(_ id: Int, from: Int, to: Int, forward: Bool) {
+            guard from >= 0, to >= 0 else { return }
+            virtAdj[from, default: []].append((to: to, id: id, forward: forward))
+            virtAdjRev[to, default: []].append((to: from, id: id, forward: !forward))
+        }
         func linkVirt(_ id: Int) {
             let v = virt[id]
-            virtAdj[v.a, default: []].append((to: v.b, id: id, forward: true))
-            virtAdj[v.b, default: []].append((to: v.a, id: id, forward: false))
+            linkVirtArc(id, from: v.a, to: v.b, forward: true)
+            linkVirtArc(id, from: v.b, to: v.a, forward: false)
         }
-        linkVirt(vStartA)
-        linkVirt(vStartB)
-        linkVirt(vEndA)
-        linkVirt(vEndB)
-        if vBetween >= 0 { linkVirt(vBetween) }
+        if pack.hasDirectedArc(from: startSnap.nodeB, to: startSnap.nodeA, edge: startEi) {
+            linkVirtArc(vStartA, from: startVirt, to: startSnap.nodeA, forward: true)
+        }
+        if pack.hasDirectedArc(from: startSnap.nodeA, to: startSnap.nodeB, edge: startEi) {
+            linkVirtArc(vStartB, from: startVirt, to: startSnap.nodeB, forward: true)
+        }
+        if pack.hasDirectedArc(from: endSnap.nodeA, to: endSnap.nodeB, edge: endEi) {
+            linkVirtArc(vEndA, from: endSnap.nodeA, to: endVirt, forward: false)
+        }
+        if pack.hasDirectedArc(from: endSnap.nodeB, to: endSnap.nodeA, edge: endEi) {
+            linkVirtArc(vEndB, from: endSnap.nodeB, to: endVirt, forward: false)
+        }
+        if vBetween >= 0 {
+            let alongForward = startSnap.distanceAlongM <= endSnap.distanceAlongM
+            let betweenLegal = alongForward
+                ? pack.hasDirectedArc(from: startSnap.nodeA, to: startSnap.nodeB, edge: startEi)
+                : pack.hasDirectedArc(from: startSnap.nodeB, to: startSnap.nodeA, edge: startEi)
+            if betweenLegal {
+                linkVirtArc(vBetween, from: startVirt, to: endVirt, forward: true)
+            }
+        }
 
         // Join near-miss fabric tips so Allow OFF works
         // on NS OSM+NSTDB packs (Farm Road / driveway → public road).
         // find-path-v2 has no perm-/unknown-island stitches — Clean+leaves must
         // omit them so JS↔Swift paths stay identical (Phase E2).
         let stitches: [JunctionStitch] =
-            (profile == .cleanest && pack.hasLeaves)
+            (profile == .cleanest && pack.hasLeaves) || pack.version >= 4
             ? []
             : junctionStitches(
                 near: from,
@@ -1469,7 +1615,7 @@ nonisolated struct OnDeviceRouter {
                 nodeCount: n,
                 total: total,
                 virt: virt,
-                virtAdj: virtAdj,
+                virtAdj: virtAdjRev,
                 from: from,
                 to: to,
                 ctx: ctx,
@@ -1579,6 +1725,15 @@ nonisolated struct OnDeviceRouter {
                             continue
                         }
                     }
+                    if pack.v4HopIllegal(
+                        ei: ei, from: cur.node, to: toNode,
+                        startEi: startEi, endEi: endEi,
+                        incomingEi: incomingUndirected(
+                            prevKind: prevKind[cur.node],
+                            prevData: prevData[cur.node],
+                            virt: virt
+                        )
+                    ) { continue }
                     let attr = pack.edgeAttrs[ei]
                     let access = GraphV2Pack.unpackAccess(attr)
                     if !accessAllowed(access, allowUnknown: policyUnknown, profile: profile) { continue }
@@ -2023,6 +2178,15 @@ nonisolated struct OnDeviceRouter {
                        isBacktrack(prevKind: prevKind[cur.node], prevData: prevData[cur.node], ei: ei, virt: virt) {
                         continue
                     }
+                    if pack.v4HopIllegal(
+                        ei: ei, from: node, to: toNode,
+                        startEi: startEi, endEi: endEi,
+                        incomingEi: incomingUndirected(
+                            prevKind: prevKind[cur.node],
+                            prevData: prevData[cur.node],
+                            virt: virt
+                        )
+                    ) { continue }
                     let attr = pack.edgeAttrs[ei]
                     let access = GraphV2Pack.unpackAccess(attr)
                     if !accessAllowed(access, allowUnknown: policyUnknown, profile: profile) { continue }
@@ -2543,6 +2707,14 @@ nonisolated struct OnDeviceRouter {
         var grid: [String: [Int]] = [:]
         var eligibleSeen = Set<Int>()
         var tips: [Int] = []
+        var undirectedAdj = [Set<Int>](repeating: [], count: n)
+        for ei in 0..<pack.undirectedEdgeCount {
+            let a = Int(fromArr[ei])
+            let b = Int(toArr[ei])
+            guard a >= 0, b >= 0, a < n, b < n else { continue }
+            undirectedAdj[a].insert(b)
+            undirectedAdj[b].insert(a)
+        }
 
         func gridKey(_ lon: Double, _ lat: Double) -> String {
             "\(Int(floor(lon / cell))):\(Int(floor(lat / cell)))"
@@ -2578,14 +2750,7 @@ nonisolated struct OnDeviceRouter {
         for tip in tips {
             if out.count >= Self.maxPermissiveStitches { break }
             let ll = coordinate(forNode: tip)
-            var direct = Set<Int>()
-            let arcStart = Int(pack.nodeOffsets[tip])
-            let arcEnd = Int(pack.nodeOffsets[tip + 1])
-            if arcStart >= 0, arcEnd <= pack.edgeTargets.count {
-                for i in arcStart..<arcEnd {
-                    direct.insert(Int(pack.edgeTargets[i]))
-                }
-            }
+            let direct = undirectedAdj[tip]
             let cx = Int(floor(ll.longitude / cell))
             let cy = Int(floor(ll.latitude / cell))
             var best: Int?
@@ -2793,6 +2958,11 @@ nonisolated struct OnDeviceRouter {
                     let eid = pack.edgeId(ei)
                     if !eid.isEmpty, avoidEdgeIds.contains(eid) { continue }
                     if ctx.noBacktrack, prevEdge[cur.node] == ei { continue }
+                    if pack.v4HopIllegal(
+                        ei: ei, from: cur.node, to: toNode,
+                        startEi: startEi, endEi: endEi,
+                        incomingEi: prevEdge[cur.node]
+                    ) { continue }
                     let toLL = coordinate(forNode: toNode)
                     if hopBlocked(toLL, edgeFrom: coordinate(forNode: cur.node), from: from, to: to, ctx: ctx) {
                         continue
@@ -3428,6 +3598,15 @@ nonisolated struct OnDeviceRouter {
         var distanceAlongM: Double
         /// Segment index on the geometry polyline (or 0 for chord).
         var segmentIndex: Int
+        /// Bearing of the snapped segment, degrees clockwise from north.
+        var tangentDeg: Double
+        /// V4 directed-candidate score (distance + heading + intent). V3 leaves 0.
+        var score: Double = 0
+        var forward: Bool = true
+        var osmWayId: String? = nil
+        var accessClass: String? = nil
+        var accessCode: Int = 0
+        var component: Int = -1
     }
 
     /// Snap a seam seed onto pack fabric (cross-pack hops). Wider than pin snap.
@@ -3465,7 +3644,32 @@ nonisolated struct OnDeviceRouter {
         allowUnknown: Bool,
         profile: RouteProfile,
         maxMeters: Double = OnDeviceRouter.maxSnapMeters,
-        osmCoreOnly: Bool = false
+        osmCoreOnly: Bool = false,
+        headingDeg: Double? = nil,
+        intentBearingDeg: Double? = nil
+    ) -> [EdgeSnap] {
+        var rejections: [String] = []
+        return nearestEdgeSnaps(
+            to: point,
+            allowUnknown: allowUnknown,
+            profile: profile,
+            maxMeters: maxMeters,
+            osmCoreOnly: osmCoreOnly,
+            headingDeg: headingDeg,
+            intentBearingDeg: intentBearingDeg,
+            rejections: &rejections
+        )
+    }
+
+    private func nearestEdgeSnaps(
+        to point: CLLocationCoordinate2D,
+        allowUnknown: Bool,
+        profile: RouteProfile,
+        maxMeters: Double = OnDeviceRouter.maxSnapMeters,
+        osmCoreOnly: Bool = false,
+        headingDeg: Double? = nil,
+        intentBearingDeg: Double? = nil,
+        rejections: inout [String]
     ) -> [EdgeSnap] {
         guard let fromArr = pack.edgeFrom, let toArr = pack.edgeTo else {
             return nearestNodeFallback(to: point).map {
@@ -3477,7 +3681,8 @@ nonisolated struct OnDeviceRouter {
                         distanceMeters: 0,
                         projected: coordinate(forNode: $0),
                         distanceAlongM: 0,
-                        segmentIndex: 0
+                        segmentIndex: 0,
+                        tangentDeg: 0
                     )
                 ]
             } ?? []
@@ -3499,8 +3704,10 @@ nonisolated struct OnDeviceRouter {
             for ei in grid.edgeIndices(nearLat: lat, lon: lon, radiusCells: radius) {
                 if checked.contains(ei) { continue }
                 checked.insert(ei)
-                let access = GraphV2Pack.unpackAccess(pack.edgeAttrs[ei])
-                guard accessAllowed(access, allowUnknown: policyUnknown, profile: profile) else { continue }
+                if pack.version < 4 || !pack.legalTopology {
+                    let access = GraphV2Pack.unpackAccess(pack.edgeAttrs[ei])
+                    guard accessAllowed(access, allowUnknown: policyUnknown, profile: profile) else { continue }
+                }
                 if osmCoreOnly, !GraphV2Pack.isOsmCoreEdge(pack.edgeId(ei)) { continue }
                 let a = Int(fromArr[ei])
                 let b = Int(toArr[ei])
@@ -3541,7 +3748,8 @@ nonisolated struct OnDeviceRouter {
                             distanceMeters: d,
                             projected: proj.coord,
                             distanceAlongM: along + segM * proj.t,
-                            segmentIndex: i - 1
+                            segmentIndex: i - 1,
+                            tangentDeg: bearingDeg(from: segA, to: segB)
                         )
                         if let existing = bestByEdge[ei] {
                             if d < existing.distanceMeters {
@@ -3556,10 +3764,189 @@ nonisolated struct OnDeviceRouter {
             }
         }
 
-        return bestByEdge.values
-            .sorted { $0.distanceMeters < $1.distanceMeters }
-            .prefix(Self.maxStartSnapCandidates * 2)
-            .map { $0 }
+        let ranked = bestByEdge.values.sorted { $0.distanceMeters < $1.distanceMeters }
+        guard pack.version >= 4, pack.legalTopology else {
+            return Array(ranked.prefix(Self.maxStartSnapCandidates * 2))
+        }
+        let policyAllow = allowUnknown && profile != .cleanest
+        var scored: [EdgeSnap] = []
+        scored.reserveCapacity(ranked.count * 2)
+        for snap in ranked {
+            guard snap.edgeIndex >= 0 else { continue }
+            let dirs: [(forward: Bool, from: Int, to: Int, tangent: Double)] = [
+                (true, snap.nodeA, snap.nodeB, snap.tangentDeg),
+                (false, snap.nodeB, snap.nodeA, (snap.tangentDeg + 180).truncatingRemainder(dividingBy: 360))
+            ]
+            for dir in dirs {
+                let legal = v4DirectionLegal(
+                    ei: snap.edgeIndex,
+                    from: dir.from,
+                    to: dir.to,
+                    allowUnknown: policyAllow
+                )
+                if !legal.ok {
+                    rejections.append(legal.reason)
+                    continue
+                }
+                var score = snap.distanceMeters
+                if let headingDeg { score += angleDiffDeg(headingDeg, dir.tangent) * 0.4 }
+                if let intentBearingDeg { score += angleDiffDeg(intentBearingDeg, dir.tangent) * 0.25 }
+                var kept = snap
+                kept.tangentDeg = dir.tangent
+                kept.forward = dir.forward
+                kept.score = score
+                kept.accessCode = legal.code
+                kept.accessClass = v4AccessClassName(legal.code)
+                if snap.edgeIndex < pack.osmWayIds.count {
+                    kept.osmWayId = String(pack.osmWayIds[snap.edgeIndex])
+                }
+                scored.append(kept)
+            }
+        }
+        scored.sort { $0.score < $1.score }
+        var kept: [EdgeSnap] = []
+        for cand in scored {
+            if headingDeg != nil || intentBearingDeg != nil {
+                let heading = headingDeg ?? intentBearingDeg ?? 0
+                if let opposite = kept.first(where: { existing in
+                    existing.edgeIndex != cand.edgeIndex
+                        && existing.distanceMeters < 80
+                        && cand.distanceMeters < 80
+                        && angleDiffDeg(existing.tangentDeg, cand.tangentDeg) > 140
+                }) {
+                    if angleDiffDeg(heading, cand.tangentDeg) > 70,
+                       angleDiffDeg(heading, opposite.tangentDeg) < 40 {
+                        rejections.append("median_opposite_carriageway")
+                        continue
+                    }
+                }
+            }
+            kept.append(cand)
+            if kept.count >= 12 { break }
+        }
+        return kept
+    }
+
+    private func v4DirectionLegal(
+        ei: Int,
+        from: Int,
+        to: Int,
+        allowUnknown: Bool
+    ) -> (ok: Bool, code: Int, reason: String) {
+        guard pack.hasDirectedArc(from: from, to: to, edge: ei) else {
+            return (false, 2, "prohibited_direction")
+        }
+        let code = Int(pack.v4AccessCode(ei: ei, from: from, to: to))
+        if code == 2 { return (false, code, "inaccessible") }
+        if code == 5 { return (false, code, "impassable") }
+        if code == 1 && !allowUnknown { return (false, code, "unknown_trail") }
+        return (true, code, "")
+    }
+
+    private func v4AccessClassName(_ code: Int) -> String {
+        switch code {
+        case 0: return "motorized_verified"
+        case 1: return "motorized_unknown"
+        case 2: return "motorized_denied"
+        case 3: return "motorized_endpoint"
+        case 4: return "motorized_destination"
+        case 5: return "motorized_impassable"
+        default: return "motorized_unknown"
+        }
+    }
+
+    private func weakComponentIds(allowUnknown: Bool) -> [Int] {
+        let n = pack.nodeCount
+        guard n > 0, let fromArr = pack.edgeFrom, let toArr = pack.edgeTo else {
+            return []
+        }
+        var parent = Array(0..<n)
+        func find(_ i: Int) -> Int {
+            var x = i
+            while parent[x] != x {
+                parent[x] = parent[parent[x]]
+                x = parent[x]
+            }
+            return x
+        }
+        func union(_ a: Int, _ b: Int) {
+            guard a >= 0, b >= 0, a < n, b < n else { return }
+            let ra = find(a)
+            let rb = find(b)
+            if ra != rb { parent[rb] = ra }
+        }
+        func member(_ code: Int) -> Bool {
+            if code == 0 { return true }
+            if code == 1 { return allowUnknown }
+            if code == 3 || code == 4 { return true }
+            return false
+        }
+        for ei in 0..<pack.undirectedEdgeCount {
+            let a = Int(fromArr[ei])
+            let b = Int(toArr[ei])
+            let fwd = Int(pack.v4AccessCode(ei: ei, from: a, to: b))
+            let rev = Int(pack.v4AccessCode(ei: ei, from: b, to: a))
+            if member(fwd) || member(rev) { union(a, b) }
+        }
+        return (0..<n).map { find($0) }
+    }
+
+    private func selectConnectedSnapPairs(
+        starts: [EdgeSnap],
+        ends: [EdgeSnap],
+        allowUnknown: Bool
+    ) -> (pairs: [(EdgeSnap, EdgeSnap)], rejectionReasons: [String]) {
+        let components = weakComponentIds(allowUnknown: allowUnknown)
+        var annotatedStarts = starts
+        var annotatedEnds = ends
+        func component(of snap: EdgeSnap) -> Int {
+            guard !components.isEmpty else { return -1 }
+            let node = snap.forward ? snap.nodeA : snap.nodeB
+            guard node >= 0, node < components.count else { return -1 }
+            return components[node]
+        }
+        for i in annotatedStarts.indices {
+            annotatedStarts[i].component = component(of: annotatedStarts[i])
+        }
+        for i in annotatedEnds.indices {
+            annotatedEnds[i].component = component(of: annotatedEnds[i])
+        }
+        var pairs: [(start: EdgeSnap, end: EdgeSnap, score: Double)] = []
+        var rejects: [String] = []
+        for start in annotatedStarts {
+            for end in annotatedEnds {
+                pairs.append((start, end, start.score + end.score))
+            }
+        }
+        pairs.sort { $0.score < $1.score }
+        var kept: [(EdgeSnap, EdgeSnap)] = []
+        for pair in pairs {
+            if pair.start.component != pair.end.component {
+                rejects.append("disconnected_component")
+                continue
+            }
+            kept.append((pair.start, pair.end))
+            if kept.count >= 12 { break }
+        }
+        return (kept, rejects)
+    }
+
+    private func snapEndpoint(
+        raw: CLLocationCoordinate2D,
+        snap: EdgeSnap,
+        candidateCount: Int,
+        rejectionReasons: [String]
+    ) -> RouteSnapEndpoint {
+        RouteSnapEndpoint(
+            raw: SnapCoordinate(longitude: raw.longitude, latitude: raw.latitude),
+            snapped: SnapCoordinate(longitude: snap.projected.longitude, latitude: snap.projected.latitude),
+            distanceM: Int(snap.distanceMeters.rounded()),
+            candidateCount: candidateCount,
+            osmWayId: snap.osmWayId,
+            accessClass: snap.accessClass,
+            component: snap.component,
+            rejectionReasons: rejectionReasons
+        )
     }
 
     /// Prefer the endpoint with higher degree (mainline over spur), then closer to the far end.
@@ -3786,6 +4173,9 @@ nonisolated struct OnDeviceRouter {
 
     /// Pack duplicate nodes within `cleanCoincidentNodeMeters` share a place.
     private func coincidentSiblingLists() -> [[Int]?] {
+        if pack.version >= 4 {
+            return [[Int]?](repeating: nil, count: pack.nodeCount)
+        }
         let n = pack.nodeCount
         var lists = [[Int]?](repeating: nil, count: n)
         let epsilon = HopSearchPolicy.cleanCoincidentNodeMeters
@@ -3823,6 +4213,34 @@ nonisolated struct OnDeviceRouter {
             return virt[prevData].ei == ei
         }
         return false
+    }
+
+    private func incomingUndirected(
+        prevKind: UInt8,
+        prevData: Int,
+        virt: [VirtEdge]
+    ) -> Int {
+        if prevKind == 0 { return prevData }
+        if prevKind == 1, prevData >= 0, prevData < virt.count {
+            return virt[prevData].ei
+        }
+        return -1
+    }
+
+    private func bearingDeg(from: CLLocationCoordinate2D, to: CLLocationCoordinate2D) -> Double {
+        let lat1 = from.latitude * .pi / 180
+        let lat2 = to.latitude * .pi / 180
+        let dLon = (to.longitude - from.longitude) * .pi / 180
+        let y = sin(dLon) * cos(lat2)
+        let x = cos(lat1) * sin(lat2) - sin(lat1) * cos(lat2) * cos(dLon)
+        let deg = atan2(y, x) * 180 / .pi
+        return (deg + 360).truncatingRemainder(dividingBy: 360)
+    }
+
+    private func angleDiffDeg(_ a: Double, _ b: Double) -> Double {
+        var d = abs(a - b).truncatingRemainder(dividingBy: 360)
+        if d > 180 { d = 360 - d }
+        return d
     }
 
     private func hopBlocked(

@@ -10,9 +10,13 @@
  *   node --max-old-space-size=8192 scripts/pack-fabric/scripts/build-region-graph-v3.js pe
  *
  * Clips the Geofabrik extract to the OSM admin polygon, then encodes.
+ * Pack factory is paused for directed-travel rebuilds. Stamp, candidate
+ * upload, and promote throw until DIRT_RESUME_PACK_FACTORY=1.
+ *
  * Accepted reference packs ns/nb/pe/nl/qc/on cannot be rebuilt here.
  *
  *   --reuse-extract   skip osmium if roads.geojsonseq already exists
+ *   --canary          allow rebuilding frozen ns only, for directed-travel proof
  *
  * Writes gitignored:
  *   routing/data/regions/<id>/graph.v3.bin
@@ -30,9 +34,11 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 const osmRoads = require("../routing/adapters/osm-roads");
 const { buildRegionalGraph } = require("../routing/regional/package");
-const { encodeFromV1 } = require("../routing/lib/pack-v2");
+const { encodeFromV1, applyMetadataSidecars } = require("../routing/lib/pack-v2");
 const { geofabrikSource, geofabrikPbfUrl } = require("../routing/registry/geofabrik");
 const { isV3Region } = require("../routing/lib/v3-regions");
+const { assertPackFactoryNotPaused } = require("../routing/lib/us-v3-pause");
+const { main: validatePackedDirection } = require("./validate-pack-direction");
 
 const FABRIC = path.join(__dirname, "..");
 const DIRT = path.join(FABRIC, "../..");
@@ -111,8 +117,8 @@ function stagePackFiles(regionId, graphPath, geomPath) {
   return destDir;
 }
 
-function seedFixtures(regionId, graphPath, geomPath) {
-  if (!SEED_FIXTURES.has(regionId)) return null;
+function seedFixtures(regionId, graphPath, geomPath, { canary = false } = {}) {
+  if (canary || !SEED_FIXTURES.has(regionId)) return null;
   const seedDir = path.join(DIRT, "DirtTests", "Fixtures", "DirtLocalPacks", regionId);
   fs.mkdirSync(seedDir, { recursive: true });
   fs.copyFileSync(graphPath, path.join(seedDir, "graph.v3.bin"));
@@ -120,10 +126,21 @@ function seedFixtures(regionId, graphPath, geomPath) {
   return seedDir;
 }
 
-async function buildRegionGraphV3(regionId, { reuseExtract = false } = {}) {
+function applyRegionMetadata(graph, regionId) {
+  return applyMetadataSidecars(
+    graph,
+    path.join(REGIONS, String(regionId).toLowerCase(), "graph.v1.json.gz")
+  );
+}
+
+async function buildRegionGraphV3(regionId, { reuseExtract = false, canary = false } = {}) {
   const source = geofabrikSource(regionId);
   const id = source.id;
-  if (FROZEN_STAMPS.has(id)) {
+  assertPackFactoryNotPaused(id);
+  if (canary && id !== "ns") {
+    throw new Error("canary rebuild is only allowed for ns");
+  }
+  if (FROZEN_STAMPS.has(id) && !(canary && id === "ns")) {
     throw new Error(
       `refusing to stamp accepted reference pack '${id}'; open a deliberate new pack revision before replacing frozen bytes`
     );
@@ -144,9 +161,18 @@ async function buildRegionGraphV3(regionId, { reuseExtract = false } = {}) {
   const v2GeomRollback = path.join(outDir, "geometry.v1.v2-rollback.bin");
   const existingGeom = path.join(outDir, "geometry.v1.bin");
 
-  if (fs.existsSync(existingGeom) && fs.existsSync(v2Graph) && !fs.existsSync(v2GeomRollback)) {
+  if (fs.existsSync(v2Graph) && !fs.existsSync(v2GeomRollback) && fs.existsSync(existingGeom)) {
     fs.copyFileSync(existingGeom, v2GeomRollback);
     console.log("preserved v2 geometry →", v2GeomRollback);
+  }
+  if (canary && fs.existsSync(outGraph)) {
+    const preCanary = path.join(outDir, "graph.v3.pre-canary.bin");
+    const preCanaryGeom = path.join(outDir, "geometry.v1.pre-canary.bin");
+    if (!fs.existsSync(preCanary)) fs.copyFileSync(outGraph, preCanary);
+    if (fs.existsSync(existingGeom) && !fs.existsSync(preCanaryGeom)) {
+      fs.copyFileSync(existingGeom, preCanaryGeom);
+    }
+    console.log("preserved pre-canary NS V3 →", preCanary);
   }
   if (!fs.existsSync(v2Graph)) {
     console.warn("warning: graph.v2.bin missing — rollback pair incomplete");
@@ -169,6 +195,9 @@ async function buildRegionGraphV3(regionId, { reuseExtract = false } = {}) {
     province: id.toUpperCase(),
     lineage: { phase: "graph-v3-stamp", source: source.slug }
   });
+  // Metadata is part of routing behavior, but not road topology. Preserve the
+  // authored seam and settlement sidecars in every future v3 encoding.
+  applyRegionMetadata(graph, id);
 
   const dictionaries = leafCardinalityReport(graph.edges);
   assertLeafDictionaries(dictionaries);
@@ -180,7 +209,8 @@ async function buildRegionGraphV3(regionId, { reuseExtract = false } = {}) {
   fs.writeFileSync(outGeom, geomBuffer);
 
   const packDir = stagePackFiles(id, outGraph, outGeom);
-  const seedDir = seedFixtures(id, outGraph, outGeom);
+  const seedDir = seedFixtures(id, outGraph, outGeom, { canary });
+  const directionGate = validatePackedDirection([id]);
 
   const summary = {
     regionId: id,
@@ -194,6 +224,7 @@ async function buildRegionGraphV3(regionId, { reuseExtract = false } = {}) {
     edges: graph.edges.length,
     nodes: graph.nodeCount,
     dictionaries,
+    directionGate,
     v2Kept: fs.existsSync(v2Graph),
     v2GeomRollback: fs.existsSync(v2GeomRollback)
   };
@@ -205,10 +236,13 @@ async function main(argv = process.argv.slice(2)) {
   const regionId = String(argv.find((value) => !value.startsWith("-")) || "").toLowerCase();
   if (!regionId) {
     throw new Error(
-      "Usage: build-region-graph-v3.js <region-id> [--reuse-extract]\nExample: node --max-old-space-size=8192 scripts/pack-fabric/scripts/build-region-graph-v3.js pe"
+      "Usage: build-region-graph-v3.js <region-id> [--reuse-extract] [--canary]\nExample: node --max-old-space-size=8192 scripts/pack-fabric/scripts/build-region-graph-v3.js pe"
     );
   }
-  return buildRegionGraphV3(regionId, { reuseExtract: argv.includes("--reuse-extract") });
+  return buildRegionGraphV3(regionId, {
+    reuseExtract: argv.includes("--reuse-extract"),
+    canary: argv.includes("--canary")
+  });
 }
 
 if (require.main === module) {
@@ -222,6 +256,7 @@ module.exports = {
   FROZEN_STAMPS,
   MAX_LEAF_ENTRIES,
   assertLeafDictionaries,
+  applyRegionMetadata,
   buildRegionGraphV3,
   extractHint,
   leafCardinalityReport,

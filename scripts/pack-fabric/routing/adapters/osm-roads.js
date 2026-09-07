@@ -45,6 +45,7 @@ const {
   ferryCrossingSeconds
 } = require("../lib/ferry");
 const { structureFromTags } = require("../lib/structure");
+const { travelDirectionFromOsmTags } = require("../lib/travel-direction");
 
 const name = "osm-roads";
 
@@ -550,7 +551,7 @@ async function run(options = {}) {
           atv: leaves.atv,
           atvDesignated: leaves.atvDesignated,
           roadName: props.name || props.ref || null,
-          direction: "both",
+          direction: travelDirectionFromOsmTags(props),
           seasonal: false,
           distanceMeters,
           meta: {
@@ -591,6 +592,7 @@ async function run(options = {}) {
       "Excluded cycleway, footway/pedestrian/steps, private/no, and abandoned ways.",
       "highway=path is kept. Untagged path is motorized_unknown (Allow unknown at search). Positive atv (yes/designated/permissive) → motorized_permissive; overrides motorcycle/motor_vehicle/vehicle deny; never overrides access=private|no.",
       "Missing surface stays unknown on service/track/path; road class guides search without inventing material.",
+      "Travel direction follows OSM oneway, roundabouts, and implied motorway/motorway_link; missing or ambiguous tags stay two-way.",
       "OSM motorcycle access precedence is motorcycle > motor_vehicle > vehicle > access (atv consulted for override only).",
       "Legacy CanVec track/service imports without explicit motor access are motorized_unknown; source provenance never grants permission.",
       "route=ferry ways are timed connectors (structureType=ferry); not highway fabric."
@@ -614,5 +616,6 @@ module.exports = {
   positiveAtv,
   isLegacyCanVecImport,
   leafFieldsFromProps,
-  INCLUDE_HIGHWAY
+  INCLUDE_HIGHWAY,
+  travelDirectionFromOsmTags
 };

@@ -8,6 +8,7 @@ const {
   remainingChainPathCap,
   reservedChainHopCap,
   topologySeamFromIndex,
+  topologySeamCandidatesFromIndex,
   echoLegId
 } = require("./router");
 const { echoLegId: echoFuelLegId } = require("../../api/fuel-chain");
@@ -67,6 +68,25 @@ test("deployment seam index resolves a shared non-urban OSM vertex without loadi
   assert.equal(seam.authoritative, true);
   assert.equal(seam.osmWayId, "42");
   assert.equal(seam.seamMethod, "same-osm-way-and-vertex-index");
+});
+
+test("deployment seam index returns later shared vertices when the nearest pin is unusable", () => {
+  const near = { coordinate: [-64.27833, 45.87375], osmWayId: "one-way-104", gapMeters: 0 };
+  const later = { coordinate: [-64.26109, 45.88166], osmWayId: "two-way-shared", gapMeters: 0 };
+  const index = {
+    regions: {
+      ns: { neighbors: { nb: [near, later] }, urbanCores: [] },
+      nb: { neighbors: { ns: [near, later] }, urbanCores: [] }
+    }
+  };
+  const seed = { lon: -64.35, lat: 45.92 };
+  const candidates = topologySeamCandidatesFromIndex(seed, ["ns", "nb"], index);
+  assert.equal(candidates.length, 2);
+  assert.equal(candidates[0].osmWayId, "one-way-104");
+  assert.equal(candidates[1].osmWayId, "two-way-shared");
+  const primary = topologySeamFromIndex(seed, ["ns", "nb"], index);
+  assert.equal(primary.osmWayId, "one-way-104");
+  assert.equal(primary.candidates.length, 2);
 });
 
 test("deployment seam index rejects authored seams inside an urban wall", () => {

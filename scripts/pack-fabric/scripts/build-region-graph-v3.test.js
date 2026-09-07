@@ -6,6 +6,7 @@ const { OSM_REGION, geofabrikSource } = require("../routing/registry/geofabrik")
 const { isV3Region, phoneGraphFileNameForRegion } = require("../routing/lib/v3-regions");
 const {
   assertLeafDictionaries,
+  applyRegionMetadata,
   extractHint,
   leafCardinalityReport,
   roadsSeqPath
@@ -58,12 +59,57 @@ test("builder points at the Geofabrik extract, not an NS-only path", () => {
   assert.match(extractHint("on"), /clip-and-extract-osm-roads\.sh on/);
 });
 
+test("v3 builder carries authored urban and settlement metadata into the graph", () => {
+  const graph = {
+    bbox: [-66.5, 43.0, -59.5, 47.5],
+    crossPackSeams: null,
+    urbanCores: [],
+    settlements: []
+  };
+  applyRegionMetadata(graph, "ns");
+  assert.ok(graph.urbanCores.length > 0);
+  assert.ok(graph.settlements.some((box) => box.name === "Amherst"));
+});
+
 test("builder refuses to stamp accepted V3 reference packs", async () => {
   const { buildRegionGraphV3, FROZEN_STAMPS } = require("./build-region-graph-v3");
   assert.deepEqual([...FROZEN_STAMPS].sort(), ["nb", "nl", "ns", "on", "pe", "qc"]);
-  for (const id of FROZEN_STAMPS) {
-    await assert.rejects(() => buildRegionGraphV3(id), new RegExp(`accepted reference pack '${id}'`));
+  const previous = process.env.DIRT_RESUME_PACK_FACTORY;
+  process.env.DIRT_RESUME_PACK_FACTORY = "1";
+  try {
+    for (const id of FROZEN_STAMPS) {
+      await assert.rejects(() => buildRegionGraphV3(id), new RegExp(`accepted reference pack '${id}'`));
+    }
+  } finally {
+    if (previous == null) delete process.env.DIRT_RESUME_PACK_FACTORY;
+    else process.env.DIRT_RESUME_PACK_FACTORY = previous;
   }
+});
+
+test("canary rebuild is only allowed for frozen ns", async () => {
+  const { buildRegionGraphV3 } = require("./build-region-graph-v3");
+  const previous = process.env.DIRT_RESUME_PACK_FACTORY;
+  process.env.DIRT_RESUME_PACK_FACTORY = "1";
+  try {
+    await assert.rejects(
+      () => buildRegionGraphV3("nb", { canary: true }),
+      /canary rebuild is only allowed for ns/
+    );
+    await assert.rejects(
+      () => buildRegionGraphV3("wa", { canary: true }),
+      /canary rebuild is only allowed for ns/
+    );
+  } finally {
+    if (previous == null) delete process.env.DIRT_RESUME_PACK_FACTORY;
+    else process.env.DIRT_RESUME_PACK_FACTORY = previous;
+  }
+});
+
+test("pack factory stamp is paused for every region", async () => {
+  const { buildRegionGraphV3 } = require("./build-region-graph-v3");
+  await assert.rejects(() => buildRegionGraphV3("mt"), /Pack factory is paused/);
+  await assert.rejects(() => buildRegionGraphV3("ns", { canary: true }), /Pack factory is paused/);
+  await assert.rejects(() => buildRegionGraphV3("nb"), /Pack factory is paused/);
 });
 
 test("leaf dictionaries fail closed before encode", () => {

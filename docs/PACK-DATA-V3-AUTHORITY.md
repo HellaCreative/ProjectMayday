@@ -128,6 +128,8 @@ All multi-byte integers are **little-endian**. Magic and geometry format unchang
 | 8 | u32 | `nodeCount` |
 | 12 | u32 | `undirectedEdgeCount` |
 | 16 | u32 | `directedArcCount` |
+
+`directedArcCount` is the number of **legal travel arcs**, not `2 × undirectedEdgeCount`. Bidirectional edges emit two CSR arcs; one-way edges emit only the permitted arc. Snap/virtual entry must follow those arcs.
 | 20 | u32 | `headerSize` = **100** for v3 (v2 was 72) |
 | 24 | u32 | off `nodeOffsets` (Int32 × nodeCount+1) |
 | 28 | u32 | off `edgeTargets` (Int32 × directedArcCount) |

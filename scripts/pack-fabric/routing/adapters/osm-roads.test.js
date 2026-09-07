@@ -230,6 +230,61 @@ test("ford / tunnel / viaduct / culvert set coarse structureType from richer lea
   assert.equal(leafFieldsFromProps({ highway: "primary", bridge: "yes", layer: "1" }).layer, 1);
 });
 
+test("OSM import preserves oneway, roundabout, and motorway direction", async () => {
+  const fs = require("fs");
+  const os = require("os");
+  const path = require("path");
+  const { run, travelDirectionFromOsmTags } = require("./osm-roads");
+  assert.equal(travelDirectionFromOsmTags({ highway: "motorway" }), "forward");
+  assert.equal(travelDirectionFromOsmTags({ oneway: "-1" }), "reverse");
+  assert.equal(travelDirectionFromOsmTags({ junction: "roundabout" }), "forward");
+  assert.equal(
+    travelDirectionFromOsmTags({ highway: "motorway", oneway: "no" }),
+    "both"
+  );
+  assert.equal(
+    travelDirectionFromOsmTags({ highway: "track", surface: "dirt" }),
+    "both"
+  );
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "dirt-osm-oneway-"));
+  const seq = path.join(dir, "roads.geojsonseq");
+  const rows = [
+    {
+      type: "Feature",
+      properties: { highway: "motorway", oneway: "yes", "@id": "104e" },
+      geometry: { type: "LineString", coordinates: [[-64.1884, 45.8071], [-64.1880, 45.8071]] }
+    },
+    {
+      type: "Feature",
+      properties: { highway: "motorway", oneway: "-1", "@id": "104rev" },
+      geometry: { type: "LineString", coordinates: [[-64.1890, 45.8072], [-64.1880, 45.8072]] }
+    },
+    {
+      type: "Feature",
+      properties: { highway: "tertiary", junction: "roundabout", "@id": "rbt" },
+      geometry: {
+        type: "LineString",
+        coordinates: [[-64.19, 45.80], [-64.1905, 45.8005], [-64.19, 45.80]]
+      }
+    },
+    {
+      type: "Feature",
+      properties: { highway: "unclassified", "@id": "local" },
+      geometry: { type: "LineString", coordinates: [[-64.19, 45.80], [-64.191, 45.80]] }
+    }
+  ];
+  fs.writeFileSync(seq, rows.map((row) => JSON.stringify(row)).join("\n") + "\n");
+  const { features } = await run({ inputPath: seq, province: "NS" });
+  const motorway = features.find((row) => row.sourceFeatureId === "104e");
+  const reverse = features.find((row) => row.sourceFeatureId === "104rev");
+  const roundabout = features.find((row) => row.sourceFeatureId === "rbt");
+  const local = features.find((row) => row.sourceFeatureId === "local");
+  assert.equal(motorway.direction, "forward");
+  assert.equal(reverse.direction, "reverse");
+  assert.equal(roundabout.direction, "forward");
+  assert.equal(local.direction, "both");
+});
+
 test("createNormalizedEdge defaults leaf fields safely when omitted", () => {
   const { createNormalizedEdge } = require("../schema/edge");
   const edge = createNormalizedEdge({

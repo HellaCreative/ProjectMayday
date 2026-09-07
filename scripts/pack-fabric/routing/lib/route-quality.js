@@ -7,6 +7,8 @@ const DIRT_TARGET_PERCENT = 70;
 const DIRT_SECTION_FLOOR_PERCENT = 35;
 const DIRT_LONG_PAVED_ABSOLUTE_M = 20_000;
 const DIRT_LONG_PAVED_ROUTE_SHARE = 0.06;
+const BALANCED_MIN_DIRT_PERCENT = 45;
+const BALANCED_MAX_DIRT_PERCENT = 55;
 const DEFAULT_SECTION_COUNT = 4;
 
 const KNOWN_DIRT_SURFACES = new Set([
@@ -173,6 +175,14 @@ function summarizeRouteQuality(route, options = {}) {
     if (knownDirtPercent < DIRT_TARGET_PERCENT) reasons.push("low_overall_known_dirt");
     if (minimumSectionDirtPercent < DIRT_SECTION_FLOOR_PERCENT) reasons.push("weak_dirt_section");
     if (longestPavedRunMeters > longestPavedLimitMeters) reasons.push("long_paved_run");
+  } else if (profile === "balanced") {
+    if (urbanCoreMeters > 100) reasons.push("urban_core_crossing");
+    if (
+      knownDirtPercent < BALANCED_MIN_DIRT_PERCENT ||
+      knownDirtPercent > BALANCED_MAX_DIRT_PERCENT
+    ) {
+      reasons.push("balanced_target_miss");
+    }
   }
 
   return {
@@ -199,6 +209,8 @@ module.exports = {
   DIRT_SECTION_FLOOR_PERCENT,
   DIRT_LONG_PAVED_ABSOLUTE_M,
   DIRT_LONG_PAVED_ROUTE_SHARE,
+  BALANCED_MIN_DIRT_PERCENT,
+  BALANCED_MAX_DIRT_PERCENT,
   DEFAULT_SECTION_COUNT,
   isKnownDirtSegment,
   summarizeRouteQuality

@@ -18,6 +18,8 @@
 const zlib = require("zlib");
 const fs = require("fs");
 const path = require("path");
+const { legalDirectedArcs } = require("./travel-direction");
+const { assertEncodedDirection } = require("./validate-pack-direction");
 
 const GRAPH_MAGIC = 0x32473244; // "DG2\x02" little-endian-ish marker
 const GEOM_MAGIC = 0x4d4f4547; // "GEOM"
@@ -210,11 +212,13 @@ function encodeFromV1(data) {
   const edges = data.edges || [];
   const undirectedEdgeCount = edges.length;
 
-  // Build undirected CSR (two arcs per edge).
+  // Directed CSR: one arc per legal travel direction. Bidirectional edges
+  // still emit two arcs; oneway edges emit only the permitted arc.
   const outDegree = new Int32Array(nodeCount);
   for (const edge of edges) {
-    if (edge.a >= 0 && edge.a < nodeCount) outDegree[edge.a] += 1;
-    if (edge.b >= 0 && edge.b < nodeCount) outDegree[edge.b] += 1;
+    const legal = legalDirectedArcs(edge.d || edge.direction);
+    if (legal.forward && edge.a >= 0 && edge.a < nodeCount) outDegree[edge.a] += 1;
+    if (legal.reverse && edge.b >= 0 && edge.b < nodeCount) outDegree[edge.b] += 1;
   }
   const nodeOffsets = new Int32Array(nodeCount + 1);
   for (let i = 0; i < nodeCount; i += 1) {
@@ -304,18 +308,23 @@ function encodeFromV1(data) {
 
     const a = edge.a;
     const b = edge.b;
-    if (a >= 0 && a < nodeCount) {
+    const legal = legalDirectedArcs(edge.d || edge.direction);
+    if (legal.forward && a >= 0 && a < nodeCount) {
       const slot = cursor[a]++;
       edgeTargets[slot] = b;
       edgeUndirectedIndex[slot] = ei;
     }
-    if (b >= 0 && b < nodeCount) {
+    if (legal.reverse && b >= 0 && b < nodeCount) {
       const slot = cursor[b]++;
       edgeTargets[slot] = a;
       edgeUndirectedIndex[slot] = ei;
     }
   }
   geomOffsets[undirectedEdgeCount] = coordCount;
+  assertEncodedDirection(
+    { nodeOffsets, edgeTargets, edgeUndirectedIndex },
+    edges
+  );
 
   const nodeCoords = new Float32Array(nodeCount * 2);
   if (Array.isArray(data.nodes) && data.nodes.length === nodeCount) {
@@ -784,10 +793,10 @@ function decodeGeometryV1(buffer) {
 
 function v2PathsForV1Path(graphPath) {
   // Already a phone pack URL or file — do not path.join (breaks https://) or append .v2.bin again.
-  if (/graph\.v[23]\.bin$/i.test(graphPath)) {
+  if (/graph\.v[234]\.bin$/i.test(graphPath)) {
     return {
       graph: graphPath,
-      geom: String(graphPath).replace(/graph\.v[23]\.bin$/i, "geometry.v1.bin")
+      geom: String(graphPath).replace(/graph\.v[234]\.bin$/i, "geometry.v1.bin")
     };
   }
   // regions/ns/graph.v1.json.gz -> graph.v2.bin + geometry.v1.bin

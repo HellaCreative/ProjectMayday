@@ -19,6 +19,7 @@ const {
   unpackConfidence,
   unpackSeasonal
 } = require("./pack-v2");
+const { decodeGraphV4, GRAPH_V4_MAGIC } = require("./pack-v4");
 
 const DEFAULT_LEGACY_GRAPH_PATH = path.join(__dirname, "..", "data", "ns-graph.v1.json.gz");
 const DEFAULT_REGIONAL_NS_PATH = path.join(__dirname, "..", "data", "regions", "ns", "graph.v1.json.gz");
@@ -221,9 +222,15 @@ function v2PackIdentity(graphPath, paths, graphRaw, geomRaw, pack) {
   };
 }
 
+function decodeLoadedGraph(graphPath, graphRaw, geomRaw) {
+  if (/graph\.v4\.bin$/i.test(graphPath) || (graphRaw.length >= 4 && graphRaw.readUInt32LE(0) === GRAPH_V4_MAGIC)) {
+    return decodeGraphV4(graphRaw, geomRaw);
+  }
+  return decodeGraphV2(graphRaw);
+}
+
 function isPhonePackV2Path(graphPath) {
-  // graph.v2.bin and graph.v3.bin share the CSR decode path (v3 adds leaf sections).
-  return /graph\.v[23]\.bin$/i.test(String(graphPath || ""));
+  return /graph\.v[234]\.bin$/i.test(String(graphPath || ""));
 }
 
 async function loadV2RuntimeAsync(graphPath, started) {
@@ -247,7 +254,7 @@ async function loadV2RuntimeAsync(graphPath, started) {
   // Both decoders honour Buffer.byteOffset, so the downloaded buffers can be
   // decoded directly. Copying both files previously doubled the peak memory
   // of Ontario/Quebec cold starts before the graph was even searchable.
-  const pack = decodeGraphV2(graphRaw);
+  const pack = decodeLoadedGraph(graphPath, graphRaw, geomRaw);
   const geom = decodeGeometryV1(geomRaw);
   const decodeMs = Date.now() - decodeStarted;
   cacheStats.loads += 1;
@@ -275,7 +282,7 @@ function loadV2RuntimeSync(v1Path, started) {
   const geomRaw = fs.readFileSync(paths.geom);
   const fetchMs = Date.now() - fetchStarted;
   const decodeStarted = Date.now();
-  const pack = decodeGraphV2(graphRaw);
+  const pack = decodeLoadedGraph(v1Path, graphRaw, geomRaw);
   const geom = decodeGeometryV1(geomRaw);
   const decodeMs = Date.now() - decodeStarted;
   cacheStats.loads += 1;
@@ -592,6 +599,12 @@ async function loadGraphsForRequest(resolution, options = {}) {
         : [];
   if (!paths.length) {
     throw new Error("No graph paths in resolution");
+  }
+  const pathVersions = new Set(
+    paths.map((p) => (/graph\.v4\.bin$/i.test(String(p)) ? 4 : 3))
+  );
+  if (pathVersions.size > 1) {
+    throw new Error("mixed-contract cross-region routing");
   }
 
   const locations = options.locations || [];

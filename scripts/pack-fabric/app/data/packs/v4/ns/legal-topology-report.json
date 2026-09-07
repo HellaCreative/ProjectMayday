@@ -1,0 +1,7455 @@
+{
+  "counts": {
+    "nodes": 187330,
+    "edges": 220749,
+    "restrictions": 2132,
+    "barriers": 1590,
+    "directionalAccess": 10416,
+    "endpointOnly": 868,
+    "impassable": 60,
+    "oneWay": 10798,
+    "closedDirection": 0,
+    "unprovenStitches": 0,
+    "rejected": 1343,
+    "rejectedBy": {
+      "restriction:unknown_restriction": 22,
+      "restriction:missing_via": 7,
+      "restriction:incomplete_from_to": 33,
+      "restriction:except_motorcycle": 17,
+      "barrier:ambiguous_barrier": 96,
+      "barrier:ambiguous_gate": 1144,
+      "barrier:locked": 12,
+      "barrier:ambiguous_access_node": 2,
+      "conditional:missing_at": 3,
+      "restriction:unresolved_members": 7
+    }
+  },
+  "rejected": [
+    {
+      "kind": "restriction",
+      "osmRelationId": "4116373",
+      "reason": "unknown_restriction"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "6854241",
+      "reason": "missing_via"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "7002291",
+      "reason": "unknown_restriction"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "7002326",
+      "reason": "unknown_restriction"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "7002327",
+      "reason": "unknown_restriction"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "7002450",
+      "reason": "incomplete_from_to"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "7005390",
+      "reason": "unknown_restriction"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "7005950",
+      "reason": "missing_via"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "7050786",
+      "reason": "incomplete_from_to"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "7050788",
+      "reason": "incomplete_from_to"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "7050789",
+      "reason": "incomplete_from_to"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "7050790",
+      "reason": "incomplete_from_to"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "7057392",
+      "reason": "missing_via"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "7060027",
+      "reason": "incomplete_from_to"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "7069620",
+      "reason": "missing_via"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "7069731",
+      "reason": "incomplete_from_to"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "7072204",
+      "reason": "unknown_restriction"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "7072205",
+      "reason": "unknown_restriction"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "7072401",
+      "reason": "incomplete_from_to"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "7072420",
+      "reason": "incomplete_from_to"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "7072972",
+      "reason": "except_motorcycle"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "7074752",
+      "reason": "incomplete_from_to"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "7074753",
+      "reason": "incomplete_from_to"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "7075972",
+      "reason": "incomplete_from_to"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "7076005",
+      "reason": "incomplete_from_to"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "7090511",
+      "reason": "except_motorcycle"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "7090512",
+      "reason": "except_motorcycle"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "7090517",
+      "reason": "except_motorcycle"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "7090518",
+      "reason": "except_motorcycle"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "7090609",
+      "reason": "except_motorcycle"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "7090610",
+      "reason": "except_motorcycle"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "7090618",
+      "reason": "except_motorcycle"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "7090619",
+      "reason": "except_motorcycle"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "7090637",
+      "reason": "except_motorcycle"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "7090638",
+      "reason": "except_motorcycle"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "7090664",
+      "reason": "except_motorcycle"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "7090665",
+      "reason": "except_motorcycle"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "7343354",
+      "reason": "except_motorcycle"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "7347128",
+      "reason": "unknown_restriction"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "7347156",
+      "reason": "except_motorcycle"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "7347157",
+      "reason": "except_motorcycle"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "7392937",
+      "reason": "except_motorcycle"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "7425501",
+      "reason": "incomplete_from_to"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "7998180",
+      "reason": "incomplete_from_to"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "8704478",
+      "reason": "missing_via"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "8929297",
+      "reason": "incomplete_from_to"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "8929298",
+      "reason": "incomplete_from_to"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "9357759",
+      "reason": "incomplete_from_to"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "9357760",
+      "reason": "incomplete_from_to"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "9807597",
+      "reason": "incomplete_from_to"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "9807598",
+      "reason": "incomplete_from_to"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "9807599",
+      "reason": "incomplete_from_to"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "9807600",
+      "reason": "incomplete_from_to"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "9807601",
+      "reason": "incomplete_from_to"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "10972884",
+      "reason": "incomplete_from_to"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "14210550",
+      "reason": "missing_via"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "14210551",
+      "reason": "missing_via"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "14210578",
+      "reason": "unknown_restriction"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "14210579",
+      "reason": "unknown_restriction"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "15649316",
+      "reason": "incomplete_from_to"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "19356760",
+      "reason": "incomplete_from_to"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "20181240",
+      "reason": "unknown_restriction"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "20202362",
+      "reason": "unknown_restriction"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "20256445",
+      "reason": "unknown_restriction"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "20267386",
+      "reason": "incomplete_from_to"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "20279220",
+      "reason": "unknown_restriction"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "20279531",
+      "reason": "unknown_restriction"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "20337526",
+      "reason": "unknown_restriction"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "20341051",
+      "reason": "unknown_restriction"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "20341146",
+      "reason": "unknown_restriction"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "20346553",
+      "reason": "unknown_restriction"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "20393954",
+      "reason": "unknown_restriction"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "20671251",
+      "reason": "unknown_restriction"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "20678428",
+      "reason": "incomplete_from_to"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "20678429",
+      "reason": "incomplete_from_to"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "20678430",
+      "reason": "incomplete_from_to"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "20819627",
+      "reason": "unknown_restriction"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "20963898",
+      "reason": "incomplete_from_to"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "20963902",
+      "reason": "incomplete_from_to"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "30870189",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "5631495718",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "9586134471",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "814346712",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "834787983",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "9407631760",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "843795904",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "850194516",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "851980845",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "854075531",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "892595447",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "979161682",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "980704423",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "981645703",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "981852889",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1080070076",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1081004913",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1114320529",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1140188663",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1140178607",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1140562882",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1146151581",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1156422323",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1156500024",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1156634543",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1215956698",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1234174167",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "5720727253",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1243772856",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1246430737",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1246447780",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1156560951",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1277419602",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1277842332",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1283533694",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1317524669",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1317659928",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1318864159",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1319073139",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1319318727",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1369502638",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1370166164",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1370182908",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1375110293",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1375137209",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1375152257",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1412692387",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1416751665",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1416752324",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1418028506",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1425726057",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1426678845",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1444733008",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1444735155",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1454609189",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1454608601",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1454609998",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1454765761",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1455202587",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1455202708",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "6201586145",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1497893813",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1701660585",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1710318512",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1710850663",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1743161951",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1743673247",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "8868457954",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1743646597",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1809281249",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1812063344",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1917915157",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2471681842",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1987422972",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1987423090",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2190594031",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2293177013",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "8899295219",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2407447474",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2437877229",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2438274322",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2439493833",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2472960652",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2480742398",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2487471202",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2494010486",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2511038375",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2512377443",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2540748840",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2540749061",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2854193418",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "975360460",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3113124922",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "7403726298",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "11936915297",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "4915834606",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3520145219",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3524519725",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3534635726",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3543011721",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "11663844612",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3614037151",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3620897976",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1206820644",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13151976744",
+      "reason": "locked"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3624118048",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3634724192",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3634729235",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3634718367",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13099381577",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3634815707",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3634812792",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13073127384",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3638112210",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3726084679",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3818735634",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3818735151",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3844749026",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "7737877466",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "7534786938",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "4320106939",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13099373178",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13099373173",
+      "reason": "locked"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "4406286025",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "5866086560",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "4607874700",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "8861697725",
+      "reason": "locked"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "11868759463",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "4995047095",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "5882078388",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1848713801",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "270846896",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "979340972",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "5497475773",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1804562825",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "5604774199",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "5753550593",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "7092614239",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3563680437",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3624068737",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "6614576130",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "6640585177",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "6897172811",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13108173334",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "7100041033",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "845435028",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1370182701",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "7725470552",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1444734882",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13151382249",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "8076267735",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "4373241510",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1243816533",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "8866920675",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "8899226916",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "12272159054",
+      "reason": "ambiguous_access_node"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "10771111266",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "12463413399",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "12749185242",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "12749185260",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "12749185172",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "12749185370",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "12847244310",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "14007218138",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "17705712",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13051597872",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13051597871",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "26054561",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "5549284723",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "5012021432",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "6762208046",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "6762208047",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "7028722973",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "262145720",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13521302209",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13738422705",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3826728110",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "9865968288",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "9865968286",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "4024318321",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "778371226",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "778783662",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "5734309624",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "5638699467",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "5638699466",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3726084245",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "807358077",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "807358124",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "810127617",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "810498122",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "9586134479",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "810630480",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "810684264",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "810688046",
+      "reason": "locked"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "813385505",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "819910040",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "834673133",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "829616021",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "829615420",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "14118651545",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "837047802",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "4910366864",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "837071857",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "12002826458",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "14129314426",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "14129314425",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "7134730544",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "7134730545",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "848747702",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "7147581938",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "849193813",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "849978362",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "4757957634",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "4993670501",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "11809985008",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "850009343",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "850003977",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "4020164406",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "850025645",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "11191376856",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "5676049120",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "7110854517",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "851951739",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "851955974",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "855645693",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "867649281",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "901671979",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "906142603",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "5560669655",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "910596445",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "928659838",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "5632856634",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "970615820",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "970659176",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "970670887",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "979121143",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3624068769",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3624068076",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "979121976",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "909982811",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "980697856",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "981155732",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "981354677",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "981496865",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "981809589",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "981815827",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "988110011",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "988426966",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "988462480",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "989559762",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "989677468",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "992086046",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "992079129",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "992104241",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "995672231",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "8849532307",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1045448821",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1021022719",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1022887007",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1034468561",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1034467642",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1034544220",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1080964651",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1081015351",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1094488915",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1094814818",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13738422706",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1114320556",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "7995745682",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1114371123",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13049769335",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13049769336",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1132579351",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1132782323",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1132789688",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1132785552",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "10775523004",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1132783507",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1272316212",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1140109007",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1140182415",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1140185523",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1140181015",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1140502263",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1140510223",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1140512926",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1140528389",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1140664305",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1142884364",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1143040761",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1143086228",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1143091788",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1143080397",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1143143142",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1143149675",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1143143002",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1143201878",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1143215137",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1143463708",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1135647398",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1135643432",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1144764538",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1144918523",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1144918735",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1145142214",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1145166156",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1145184857",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1145264692",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1145246863",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1145298349",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1135537052",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1146961603",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1154234585",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1156349976",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1156370493",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1156499855",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1156498776",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "11810432308",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "7099840725",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "5064739986",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1156890419",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1157293755",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1201296138",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1201296112",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1215445613",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1215964707",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1215957260",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1215957302",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1228746439",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1230088889",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "5976152030",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1230131102",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1230124861",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1230119065",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1230172294",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1230202731",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1230197732",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1230199002",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1230199622",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1230196716",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1230204133",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1230198864",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "5720727257",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "9821230602",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1243814908",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1246392521",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1246414484",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1272316018",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1272406309",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1272405613",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1274344867",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1274345894",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1274347970",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1277419546",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1277419953",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "11069854819",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "8330788717",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "8330788721",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1277813646",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1277842595",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1297503783",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1383342207",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1317383031",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1317521034",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1317527910",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13245956566",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1317647032",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1317665754",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1318874369",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2394474615",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1319084032",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1319329472",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1320943432",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1321123861",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1323753766",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1325021890",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1325251115",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3624070241",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1361475241",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1361475227",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2474493957",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1366112279",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1366112478",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1366242758",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1367037786",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1367221278",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1615070831",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1368033798",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "5623077410",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1368060484",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1369503954",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1369514358",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "7159622783",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1369526624",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1369515928",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "7360401601",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1412692496",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1412693171",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1412693295",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1412692480",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1412692779",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1412692358",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1412694634",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1412694665",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1412694712",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1412692334",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1412692513",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1414020610",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1414020762",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1416752523",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1416752728",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1416752569",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1416750523",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1416750395",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1417252967",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1417253345",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1417672119",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1420116071",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1420149542",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1420518942",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "5933126785",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1425725416",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1425724917",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1425725396",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1425725594",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1425725198",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1425778608",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1425778593",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1425778523",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1426591532",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1426678637",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1426678644",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1427071597",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1427160494",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1428473185",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1444732288",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1444734638",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "5834584536",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1448547881",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1454609717",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1454609893",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "9464430465",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1454610004",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1454608676",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "12351355879",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1454609224",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2480481260",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1454766080",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1454765836",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1456194934",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1454954910",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1455203169",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1455201616",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3602820276",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1455932877",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1456196111",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1456195665",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1456195631",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1461507019",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "8942678356",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1480570621",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1520470226",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1561690300",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "7340543035",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1626240972",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1628610626",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1628723312",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1628762291",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "5650019589",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1689642578",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1694020237",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1694020897",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1694009394",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2334636200",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1710477917",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1710783315",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1710784513",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1710864441",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1712772747",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1714412758",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1714518691",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1714509360",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1714746447",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1715292880",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1715315233",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1715271183",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1718700331",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "12462751915",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1735877470",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1743657959",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1743672308",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1743678416",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1743678497",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "12509580093",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1744911515",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1744895032",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1744919755",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1749007264",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1773188747",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1773181144",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1794669233",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1794680701",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1802279090",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1802280628",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1804520425",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1811974351",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1811973312",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1812056391",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1812060822",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1812060818",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1812958522",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1815972287",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1815972268",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1815975687",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1820910628",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1822038243",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1830718464",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1917776220",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1917917783",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1917919858",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1917913269",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1917915534",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "5151958666",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1965820165",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1965816961",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1965819122",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "8964398865",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1965814148",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1965852825",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1965887911",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1965887102",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1987569877",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2016392424",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "4677184056",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "4677184238",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "6992986545",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "4607142023",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2190464903",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2190608855",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2190609725",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "5471973396",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "11796319627",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2293177019",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2328523038",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2328522939",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2328532998",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2328768746",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2328803410",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2328809808",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2328911998",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2329902193",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2329902563",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2329933496",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2330714040",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13095084965",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "12535226918",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2331975462",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2332245531",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2332459817",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2336718071",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2438084528",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "5893856085",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "7294396999",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "7891562088",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "7891472874",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "7891472872",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2436056788",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2436092570",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2436122702",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2438232037",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2437811821",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2437859961",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2437903111",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2437921735",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2437918583",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2437986023",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2437982801",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2438195030",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2438193373",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2438208298",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2438211294",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2438223548",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2438241440",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2438260506",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2439151887",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2439340000",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2447154610",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2471679281",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "7412916991",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2473008823",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2475548890",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2480704133",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2487422666",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2487417706",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2487470853",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2487469607",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2488378207",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2488745107",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2488834298",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2488836351",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2488836362",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2494002926",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2494008308",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2494010327",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2502250768",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2502253794",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2502255688",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2502268178",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2502272789",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2502298349",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2511030493",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "6302515495",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2637430549",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2637419037",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2637418171",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2637417586",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2800286442",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2800287564",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2800287514",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2800287563",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2840459351",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2845314590",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2845310278",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2845312781",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2854196181",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2854193293",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2705752317",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2856761330",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "7601174199",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "8346426572",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "8744063547",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "849047789",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2931596523",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "9689038428",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "9689030409",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "8942678355",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "6738631260",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "4038967417",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3510333897",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3510760301",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3510863221",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3510865364",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3510908319",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3510906272",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3510908451",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3510894884",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3510897272",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3510872577",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3510935871",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3511021648",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "11936915284",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3511082394",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3511086049",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3511384965",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3511387480",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3511381817",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3511384601",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3511410052",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3512410010",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3512409887",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3512469223",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3512471912",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3512468705",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3512462002",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3512462755",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3512499337",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3512538343",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3512723742",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3512756040",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3513010925",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3513045109",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3513800105",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3513795501",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3513867740",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3515723846",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3515113014",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3515633941",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3515610367",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3515714366",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3515996432",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3518498717",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3518571688",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3518566564",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3518566508",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3520141848",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3520291227",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3520523944",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3522007100",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3523973174",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3523973306",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3523973850",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3524367220",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3524515577",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3524534669",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3524598238",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3534572875",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3534635194",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3539337669",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3541745079",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3541661651",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3541738833",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3541675375",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3541684529",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "8048815743",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3543010546",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3543013774",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3543010826",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3542996006",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3543017545",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3545266971",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3545369774",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "4753254758",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "4914689091",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3588222690",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3588250696",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "8662815566",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3602853444",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "5338184145",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3614192566",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3618668813",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3618669187",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3618669405",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3618771375",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "12961677463",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "12961677464",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "12463487838",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1436036616",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "12463573835",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "12463573805",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "12463487844",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "12463487845",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "12463573807",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "12463573806",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "12463573804",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2542694975",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "6449659205",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3624068075",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3624116896",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3614189677",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1480631450",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3634719106",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3634719116",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3634721614",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3634724818",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13073127383",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3634773984",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3634764398",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3634768299",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3634763066",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13762192290",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3634761676",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3634763002",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3634768819",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3634815886",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "7777771388",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3634820761",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13166756118",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "9730322197",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3653095379",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "4699853754",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "962727549",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "8181441112",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1244368944",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "5849500319",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "5849671219",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "5907470291",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "972818296",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "7606964959",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3747820625",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "7089919214",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3748236157",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3748375958",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3835824667",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1812058077",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3844749029",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3846527769",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3846564260",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "9780235549",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3846669043",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3859075383",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3859691994",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3859692265",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "4852838451",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "4852838461",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3876358874",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3876358881",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3876358884",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3882472931",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3882482727",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3882495343",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3884769965",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3884769966",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3884769555",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3884803229",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "5056820098",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3892489927",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3892489934",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3934624234",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3940413471",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "10995895457",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "4976040403",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3972108033",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "4016322010",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "4020164610",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "11809985208",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "11809985213",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "4022017049",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "4040840229",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "4045860488",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13270901917",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "4270123195",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "4270123196",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13099381567",
+      "reason": "locked"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2867816101",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "4387627117",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "4387627119",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "11278613226",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "11278613225",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "11958974837",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "11958974838",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "4470458340",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "6279127169",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13049808731",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "4607874707",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13738422707",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1369515396",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "4677184042",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "6043049629",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "4701866072",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1444733992",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "4732831387",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "9514880354",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "4818183839",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "9794613082",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "4841843297",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3443045070",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "4869264272",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "5854864080",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13057629885",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13057629884",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "7294419766",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "4870017877",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "10775527332",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13051114291",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13055926656",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13055926654",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13055926655",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13755008193",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "851955626",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "40265276",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "4891773990",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "8464630186",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3680724338",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1908879446",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2474650276",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2474650859",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1416750487",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "14044525702",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "8019129668",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "4758896913",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "4976040830",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "4993254791",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "5063105613",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3874796139",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "5108253475",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "7294400702",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "6773512195",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "5192569698",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "7117322472",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "8529753923",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "12031835733",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "12031835736",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "12031835737",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "5369166933",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "5379694804",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "12685281264",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "5415385314",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "5676049524",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "5471959966",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "5555373937",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "6522075354",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "608687902",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "850213881",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "5657276412",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "5661715521",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "5670941472",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "5692515010",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "5699581728",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "10597725188",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3622958249",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "5744735452",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "5744735447",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "5746127040",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "5768797353",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1277732744",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "10614973008",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "6455439454",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "5849659772",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "5851921872",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "5866086561",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "5893673628",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "5919448856",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "5982272634",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "6001734028",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1156561581",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "6087966619",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "6279125898",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "8464630177",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "6493092584",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "6521271438",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "6551910608",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13049693351",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13049693349",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "6585224026",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "6601059242",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "6602154562",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1369503746",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "6682396671",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "6684646910",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "6696100125",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1325412424",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "6766478867",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "6770776355",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "6778306778",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "6854357986",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13738422709",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "6974768379",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "6992986546",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "6992986560",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "6992986554",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "7007074280",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "7055114751",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "7055834106",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "7055834103",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "7073924924",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "7073924957",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "7076326935",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "7089919208",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "7092614258",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "7099948446",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "7114204079",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "7127198347",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "7177986597",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "7202180440",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "7202180439",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "7340545832",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "7360561656",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "7394685645",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3883383526",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "7431119366",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "7455431741",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3896682772",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2479639971",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "7542603402",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "7995746288",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "7600393672",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "7779636587",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "9816168189",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "7837353823",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "7837353826",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "7837626226",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13277615648",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "7873000489",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1095171365",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "8072827709",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13122127098",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13374894146",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13374894147",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "8177566583",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "11401496415",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "11401496414",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "11401496413",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "8196832342",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "8196832344",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "11401496412",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "8197446293",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "8197446298",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13464779111",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "8378931341",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "8603137846",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "7601111222",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "8891099823",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "8866920776",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2330894898",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "8900873531",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "8915267236",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "8917692688",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "8933155131",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "8933155134",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "8947613518",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "2290283409",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "8967883969",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "4830960490",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "4830960474",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "9159925557",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "9159925558",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "9163745943",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "9211071904",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "9244615378",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3512493444",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "9368894205",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "9368894193",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "12463573837",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "12463573838",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "9641468455",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "9795935365",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "9795980754",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "9816168182",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "10075659791",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1917922144",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3972108025",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "9959900761",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "3536787373",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "10030753582",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "6551910609",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "10122757953",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "10155948492",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "10155948478",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1369526584",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "14076425919",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "14076425922",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "10539902165",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "10865202067",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "10865202069",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "10865202091",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "10865202094",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "12466136419",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "10946786410",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "12541712569",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "10995895369",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "11064198936",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "11064198935",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "11064198938",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "11065715236",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "11065631176",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "11103974235",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "11282173357",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "9754657279",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "11703359204",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "11703359094",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "11703322243",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13051450648",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1366111218",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "849993117",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "11810432128",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "11810431972",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "12002966866",
+      "reason": "locked"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "12031835743",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "12248233008",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "12248233009",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "12248216360",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1454609560",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "12463487739",
+      "reason": "locked"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "12463487837",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "12463487836",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "12463487835",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "12463487834",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "12463487842",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "12463573802",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "12463573841",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "12463819974",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "12466989351",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "12502910465",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "12749185286",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "12749185723",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "12749185746",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "12749185724",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "12749185745",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "12749185725",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "12749185747",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "12749185364",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "12749185463",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "12749185748",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "12749185534",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "12749185533",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "12749185547",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "12749185553",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "12879881731",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "12913209408",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "12923406982",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "12928107352",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1455933480",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1230202910",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1230202042",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13001930813",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13028683949",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "851983363",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13048190515",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13048226782",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13048241601",
+      "reason": "ambiguous_access_node"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13048217567",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13048229137",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13048253137",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13048253139",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13048298865",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13049410788",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13049649535",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13049650680",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13049671145",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13049734974",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13049774714",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13049779103",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13049767194",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13049857906",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13050333826",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13051114295",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13051576415",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13051576431",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13051558173",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13051558172",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13051558171",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13051591469",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13051609014",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13051849007",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13051849006",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13051849005",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13051849016",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13055425084",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13055582285",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13055631319",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13055631316",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13055661665",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13055933531",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13055933521",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13055933522",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13288391449",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13055933541",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13055944972",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13056062476",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13056062480",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13056096014",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13056094306",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13056080956",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13056080960",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13056080949",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13056130620",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13057370028",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13057370029",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13057629879",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13057629881",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13057629883",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13057789006",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13057789003",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13057906907",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13057894969",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13057894972",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13057970880",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13057970881",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13095084881",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13738422708",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13860477673",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13160068972",
+      "reason": "locked"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13160111860",
+      "reason": "ambiguous_barrier"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13240163394",
+      "reason": "locked"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13269435952",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13437031865",
+      "reason": "locked"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13273409545",
+      "reason": "locked"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13283635422",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13288391426",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13293835803",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13293835823",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13307675111",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13415713555",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13426785743",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13433829032",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13433829033",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13447119708",
+      "reason": "locked"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13447120002",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13453499755",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13453499774",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13459985991",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13461477151",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "5420968832",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "8297511908",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "8278568660",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13473973992",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13478829980",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13478829963",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13502004634",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13519280600",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13528416418",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13529262213",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13537235282",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13540157487",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13187893503",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13563359047",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1143074314",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13569398883",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13621908213",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13621908219",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13621908223",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13644095370",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13665147104",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13665147109",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "11810432143",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "11810432142",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "7235811614",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1472247541",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13710652696",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13720170343",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13720170344",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13720629554",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1425726029",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13729267173",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13729267171",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1710845457",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "1710845042",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13755008192",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13783644892",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13783644893",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13796195993",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13820376154",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13842081221",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13842081222",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13859817766",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13859817779",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13859817795",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13867640685",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13880616285",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13880697002",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13880697003",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13909846514",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13909803785",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13930839924",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13930839923",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13935102451",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13935102457",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13948856536",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13964014485",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13968740409",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13968748186",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "13968740431",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "14007850639",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "14007850645",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "14023453261",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "14028306494",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "14052565150",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "14052565173",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "14052565176",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "14061592533",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "14076534481",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "14076534482",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "14078262846",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "14078262843",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "14078262847",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "14078469901",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "14078445000",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "14078444998",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "14118651546",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "14119103426",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "14119103425",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "14121555622",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "14127568346",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "barrier",
+      "osmNodeId": "14144223718",
+      "reason": "ambiguous_gate"
+    },
+    {
+      "kind": "conditional",
+      "osmWayId": "584733662",
+      "reason": "missing_at",
+      "tag": "motor_vehicle:conditional"
+    },
+    {
+      "kind": "conditional",
+      "osmWayId": "584733662",
+      "reason": "missing_at",
+      "tag": "motor_vehicle:conditional"
+    },
+    {
+      "kind": "conditional",
+      "osmWayId": "660595647",
+      "reason": "missing_at",
+      "tag": "access:conditional"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "7016679",
+      "reason": "unresolved_members"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "7056763",
+      "reason": "unresolved_members"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "7056939",
+      "reason": "unresolved_members"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "7116632",
+      "reason": "unresolved_members"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "11604076",
+      "reason": "unresolved_members"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "12484529",
+      "reason": "unresolved_members"
+    },
+    {
+      "kind": "restriction",
+      "osmRelationId": "18413003",
+      "reason": "unresolved_members"
+    }
+  ],
+  "provenance": {
+    "sourceUrl": "https://download.geofabrik.de/north-america/canada/nova-scotia-latest.osm.pbf",
+    "sourceBytes": 98984679,
+    "sourceSha256": "62de0b6c1cfeffdd8844fafb7aa04686d69d705318c278d6708a1675107541b5",
+    "osmTimestamp": "2026-09-05T20:22:06Z",
+    "clipPolygonId": "ns",
+    "clipPolygonSha256": "072b7f8220172d80b7c018c8ce9e29ec88a54992d472d2c4b206daec18386cce",
+    "haloMeters": 2000,
+    "toolVersions": {
+      "osmium": "osmium version 1.19.1"
+    },
+    "legalPbfBytes": 21640255,
+    "legalPbfSha256": "d8ad48b1cedc29b0f869dc8138bb4e60f0ab409531934d0c57e5cf2122a18cc1",
+    "factoryCommit": "6d53112500d6c514cb1d29ec520bf8917e5a504d",
+    "sourceEpoch": "geofabrik:2026-09-05T20:22:06Z",
+    "regionId": "ns",
+    "timezone": "America/Halifax",
+    "urbanCores": [
+      {
+        "minLat": 44.55861,
+        "maxLat": 44.73863,
+        "minLon": -63.71247,
+        "maxLon": -63.45943,
+        "name": "Halifax",
+        "place": "city",
+        "population": 403131,
+        "radiusKm": 10,
+        "sourceId": "24922221"
+      },
+      {
+        "minLat": 44.63947,
+        "maxLat": 44.72047,
+        "minLon": -63.62899,
+        "maxLon": -63.51506,
+        "name": "Dartmouth",
+        "place": "city",
+        "population": 70000,
+        "radiusKm": 4.5,
+        "sourceId": "5907455785"
+      },
+      {
+        "minLat": 46.09771,
+        "maxLat": 46.17872,
+        "minLon": -60.25265,
+        "maxLon": -60.13574,
+        "name": "Sydney",
+        "place": "city",
+        "population": 53000,
+        "radiusKm": 4.5,
+        "sourceId": "410361983"
+      }
+    ],
+    "settlements": [
+      {
+        "minLat": 44.71419,
+        "maxLat": 44.74659,
+        "minLon": -63.68104,
+        "maxLon": -63.63543,
+        "name": "Bedford",
+        "place": "town",
+        "population": 36354,
+        "radiusKm": 1.8,
+        "sourceId": "32827187"
+      },
+      {
+        "minLat": 45.3495,
+        "maxLat": 45.3819,
+        "minLon": -63.30956,
+        "maxLon": -63.26344,
+        "name": "Truro",
+        "place": "town",
+        "population": 12954,
+        "radiusKm": 1.8,
+        "sourceId": "262409818"
+      },
+      {
+        "minLat": 45.81249,
+        "maxLat": 45.84489,
+        "minLon": -64.22731,
+        "maxLon": -64.1808,
+        "name": "Amherst",
+        "place": "town",
+        "population": 9413,
+        "radiusKm": 1.8,
+        "sourceId": "258480507"
+      },
+      {
+        "minLat": 45.06229,
+        "maxLat": 45.09469,
+        "minLon": -64.51816,
+        "maxLon": -64.47227,
+        "name": "Kentville",
+        "place": "town",
+        "population": 6630,
+        "radiusKm": 1.8,
+        "sourceId": "410364061"
+      },
+      {
+        "minLat": 43.82106,
+        "maxLat": 43.85347,
+        "minLon": -66.13816,
+        "maxLon": -66.09324,
+        "name": "Yarmouth",
+        "place": "town",
+        "population": 6518,
+        "radiusKm": 1.8,
+        "sourceId": "410366177"
+      },
+      {
+        "minLat": 45.07521,
+        "maxLat": 45.10761,
+        "minLon": -64.38746,
+        "maxLon": -64.34156,
+        "name": "Wolfville",
+        "place": "town",
+        "population": 4195,
+        "radiusKm": 1.8,
+        "sourceId": "6114402856"
+      },
+      {
+        "minLat": 45.66152,
+        "maxLat": 45.69392,
+        "minLon": -62.73141,
+        "maxLon": -62.68503,
+        "name": "Pictou",
+        "place": "town",
+        "population": 3186,
+        "radiusKm": 1.8,
+        "sourceId": "2474645423"
+      },
+      {
+        "minLat": 45.02937,
+        "maxLat": 45.06177,
+        "minLon": -64.75914,
+        "maxLon": -64.71328,
+        "name": "Berwick",
+        "place": "town",
+        "population": 2509,
+        "radiusKm": 1.8,
+        "sourceId": "3624104995"
+      },
+      {
+        "minLat": 44.36129,
+        "maxLat": 44.3937,
+        "minLon": -64.33815,
+        "maxLon": -64.29281,
+        "name": "Lunenburg",
+        "place": "town",
+        "population": 2263,
+        "radiusKm": 1.8,
+        "sourceId": "278557184"
+      },
+      {
+        "minLat": 44.43269,
+        "maxLat": 44.46509,
+        "minLon": -64.40987,
+        "maxLon": -64.36448,
+        "name": "Mahone Bay",
+        "place": "town",
+        "population": 1036,
+        "radiusKm": 1.8,
+        "sourceId": "6062444208"
+      },
+      {
+        "minLat": 46.10084,
+        "maxLat": 46.13325,
+        "minLon": -60.27011,
+        "maxLon": -60.22337,
+        "name": "Cantley Village",
+        "place": "town",
+        "population": 873,
+        "radiusKm": 1.8,
+        "sourceId": "2174658"
+      },
+      {
+        "minLat": 45.5901,
+        "maxLat": 45.62251,
+        "minLon": -61.41255,
+        "maxLon": -61.36623,
+        "name": "Mulgrave",
+        "place": "town",
+        "population": 722,
+        "radiusKm": 1.8,
+        "sourceId": "3140587346"
+      },
+      {
+        "minLat": 43.68229,
+        "maxLat": 43.71469,
+        "minLon": -65.13685,
+        "maxLon": -65.09203,
+        "name": "Lockeport",
+        "place": "town",
+        "population": 531,
+        "radiusKm": 1.8,
+        "sourceId": "6162300242"
+      },
+      {
+        "minLat": 44.72578,
+        "maxLat": 44.75818,
+        "minLon": -65.53891,
+        "maxLon": -65.49329,
+        "name": "Annapolis Royal",
+        "place": "town",
+        "population": 0,
+        "radiusKm": 1.8,
+        "sourceId": "2854081782"
+      },
+      {
+        "minLat": 45.60516,
+        "maxLat": 45.63756,
+        "minLon": -62.01366,
+        "maxLon": -61.96733,
+        "name": "Antigonish",
+        "place": "town",
+        "population": 0,
+        "radiusKm": 1.8,
+        "sourceId": "410363320"
+      },
+      {
+        "minLat": 44.82522,
+        "maxLat": 44.85762,
+        "minLon": -65.31303,
+        "maxLon": -65.26734,
+        "name": "Bridgetown",
+        "place": "town",
+        "population": 0,
+        "radiusKm": 1.8,
+        "sourceId": "3618666323"
+      },
+      {
+        "minLat": 44.36121,
+        "maxLat": 44.39362,
+        "minLon": -64.54206,
+        "maxLon": -64.49673,
+        "name": "Bridgewater",
+        "place": "town",
+        "population": 0,
+        "radiusKm": 1.8,
+        "sourceId": "3892895076"
+      },
+      {
+        "minLat": 45.32056,
+        "maxLat": 45.35297,
+        "minLon": -61.01962,
+        "maxLon": -60.97353,
+        "name": "Canso",
+        "place": "town",
+        "population": 0,
+        "radiusKm": 1.8,
+        "sourceId": "2331209935"
+      },
+      {
+        "minLat": 43.42418,
+        "maxLat": 43.45658,
+        "minLon": -65.64789,
+        "maxLon": -65.60326,
+        "name": "Clark's Harbour",
+        "place": "town",
+        "population": 0,
+        "radiusKm": 1.8,
+        "sourceId": "1146262828"
+      },
+      {
+        "minLat": 44.6574,
+        "maxLat": 44.6898,
+        "minLon": -63.51051,
+        "maxLon": -63.46495,
+        "name": "Cole Harbour",
+        "place": "town",
+        "population": 0,
+        "radiusKm": 1.8,
+        "sourceId": "1719994211"
+      },
+      {
+        "minLat": 44.6032,
+        "maxLat": 44.6356,
+        "minLon": -65.78134,
+        "maxLon": -65.73581,
+        "name": "Digby",
+        "place": "town",
+        "population": 0,
+        "radiusKm": 1.8,
+        "sourceId": "410366175"
+      },
+      {
+        "minLat": 46.19406,
+        "maxLat": 46.22647,
+        "minLon": -60.04742,
+        "maxLon": -60.00059,
+        "name": "Dominion",
+        "place": "town",
+        "population": 0,
+        "radiusKm": 1.8,
+        "sourceId": "410361990"
+      },
+      {
+        "minLat": 44.59541,
+        "maxLat": 44.62781,
+        "minLon": -63.51229,
+        "maxLon": -63.46677,
+        "name": "Eastern Passage",
+        "place": "town",
+        "population": 0,
+        "radiusKm": 1.8,
+        "sourceId": "6133632114"
+      },
+      {
+        "minLat": 45.92982,
+        "maxLat": 45.96222,
+        "minLon": -60.62425,
+        "maxLon": -60.57765,
+        "name": "Eskasoni First Nation",
+        "place": "town",
+        "population": 0,
+        "radiusKm": 1.8,
+        "sourceId": "6239105562"
+      },
+      {
+        "minLat": 44.8,
+        "maxLat": 44.8324,
+        "minLon": -63.65168,
+        "maxLon": -63.606,
+        "name": "Fall River",
+        "place": "town",
+        "population": 0,
+        "radiusKm": 1.8,
+        "sourceId": "4571117167"
+      },
+      {
+        "minLat": 46.17874,
+        "maxLat": 46.21114,
+        "minLon": -59.97961,
+        "maxLon": -59.93279,
+        "name": "Glace Bay",
+        "place": "town",
+        "population": 0,
+        "radiusKm": 1.8,
+        "sourceId": "410361987"
+      },
+      {
+        "minLat": 45.04784,
+        "maxLat": 45.08024,
+        "minLon": -64.2038,
+        "maxLon": -64.15793,
+        "name": "Hantsport",
+        "place": "town",
+        "population": 0,
+        "radiusKm": 1.8,
+        "sourceId": "2558107256"
+      },
+      {
+        "minLat": 46.21452,
+        "maxLat": 46.24692,
+        "minLon": -61.32906,
+        "maxLon": -61.28222,
+        "name": "Inverness",
+        "place": "town",
+        "population": 0,
+        "radiusKm": 1.8,
+        "sourceId": "1325087093"
+      },
+      {
+        "minLat": 44.0199,
+        "maxLat": 44.05231,
+        "minLon": -64.73984,
+        "maxLon": -64.69476,
+        "name": "Liverpool",
+        "place": "town",
+        "population": 0,
+        "radiusKm": 1.8,
+        "sourceId": "3536763326"
+      },
+      {
+        "minLat": 45.90728,
+        "maxLat": 45.93968,
+        "minLon": -59.98759,
+        "maxLon": -59.941,
+        "name": "Louisbourg",
+        "place": "town",
+        "population": 0,
+        "radiusKm": 1.8,
+        "sourceId": "1230202720"
+      },
+      {
+        "minLat": 44.75726,
+        "maxLat": 44.78966,
+        "minLon": -63.71124,
+        "maxLon": -63.6656,
+        "name": "Lower Sackville",
+        "place": "town",
+        "population": 0,
+        "radiusKm": 1.8,
+        "sourceId": "207484999"
+      },
+      {
+        "minLat": 44.78525,
+        "maxLat": 44.81765,
+        "minLon": -63.75251,
+        "maxLon": -63.70684,
+        "name": "Middle Sackville",
+        "place": "town",
+        "population": 0,
+        "radiusKm": 1.8,
+        "sourceId": "4571112635"
+      },
+      {
+        "minLat": 44.92623,
+        "maxLat": 44.95863,
+        "minLon": -65.09096,
+        "maxLon": -65.04519,
+        "name": "Middleton",
+        "place": "town",
+        "population": 0,
+        "radiusKm": 1.8,
+        "sourceId": "3618764627"
+      },
+      {
+        "minLat": 45.57075,
+        "maxLat": 45.60315,
+        "minLon": -62.67151,
+        "maxLon": -62.6252,
+        "name": "New Glasgow",
+        "place": "town",
+        "population": 0,
+        "radiusKm": 1.8,
+        "sourceId": "35722034"
+      },
+      {
+        "minLat": 46.23218,
+        "maxLat": 46.26459,
+        "minLon": -60.11078,
+        "maxLon": -60.06392,
+        "name": "New Waterford",
+        "place": "town",
+        "population": 0,
+        "radiusKm": 1.8,
+        "sourceId": "410361993"
+      },
+      {
+        "minLat": 46.19438,
+        "maxLat": 46.22679,
+        "minLon": -60.2705,
+        "maxLon": -60.22368,
+        "name": "North Sydney",
+        "place": "town",
+        "population": 0,
+        "radiusKm": 1.8,
+        "sourceId": "35618848"
+      },
+      {
+        "minLat": 45.71662,
+        "maxLat": 45.74902,
+        "minLon": -63.88255,
+        "maxLon": -63.83613,
+        "name": "Oxford",
+        "place": "town",
+        "population": 0,
+        "radiusKm": 1.8,
+        "sourceId": "2484330584"
+      },
+      {
+        "minLat": 45.38928,
+        "maxLat": 45.42168,
+        "minLon": -64.34914,
+        "maxLon": -64.30298,
+        "name": "Parrsboro",
+        "place": "town",
+        "population": 0,
+        "radiusKm": 1.8,
+        "sourceId": "2488826325"
+      },
+      {
+        "minLat": 45.60188,
+        "maxLat": 45.63429,
+        "minLon": -61.38062,
+        "maxLon": -61.3343,
+        "name": "Port Hawkesbury",
+        "place": "town",
+        "population": 0,
+        "radiusKm": 1.8,
+        "sourceId": "1917913073"
+      },
+      {
+        "minLat": 43.74775,
+        "maxLat": 43.78016,
+        "minLon": -65.34382,
+        "maxLon": -65.29895,
+        "name": "Shelburne",
+        "place": "town",
+        "population": 0,
+        "radiusKm": 1.8,
+        "sourceId": "3603048258"
+      },
+      {
+        "minLat": 45.62581,
+        "maxLat": 45.65821,
+        "minLon": -64.0805,
+        "maxLon": -64.03415,
+        "name": "Springhill",
+        "place": "town",
+        "population": 0,
+        "radiusKm": 1.8,
+        "sourceId": "279752322"
+      },
+      {
+        "minLat": 45.54125,
+        "maxLat": 45.57365,
+        "minLon": -62.68225,
+        "maxLon": -62.63598,
+        "name": "Stellarton",
+        "place": "town",
+        "population": 0,
+        "radiusKm": 1.8,
+        "sourceId": "410363597"
+      },
+      {
+        "minLat": 45.12093,
+        "maxLat": 45.15333,
+        "minLon": -63.37134,
+        "maxLon": -63.3254,
+        "name": "Stewiacke",
+        "place": "town",
+        "population": 0,
+        "radiusKm": 1.8,
+        "sourceId": "6217537387"
+      },
+      {
+        "minLat": 46.04426,
+        "maxLat": 46.07666,
+        "minLon": -60.32721,
+        "maxLon": -60.28052,
+        "name": "Sydney Forks",
+        "place": "town",
+        "population": 0,
+        "radiusKm": 1.8,
+        "sourceId": "1715266320"
+      },
+      {
+        "minLat": 46.21782,
+        "maxLat": 46.25022,
+        "minLon": -60.24741,
+        "maxLon": -60.20057,
+        "name": "Sydney Mines",
+        "place": "town",
+        "population": 0,
+        "radiusKm": 1.8,
+        "sourceId": "410363184"
+      },
+      {
+        "minLat": 46.08941,
+        "maxLat": 46.12181,
+        "minLon": -60.25002,
+        "maxLon": -60.20328,
+        "name": "Sydney River",
+        "place": "town",
+        "population": 0,
+        "radiusKm": 1.8,
+        "sourceId": "1744872520"
+      },
+      {
+        "minLat": 43.41404,
+        "maxLat": 43.44644,
+        "minLon": -65.6621,
+        "maxLon": -65.61749,
+        "name": "Town of Clark's Harbour",
+        "place": "town",
+        "population": 0,
+        "radiusKm": 1.8,
+        "sourceId": "9155831"
+      },
+      {
+        "minLat": 43.68606,
+        "maxLat": 43.71846,
+        "minLon": -65.13427,
+        "maxLon": -65.08945,
+        "name": "Town of Lockeport",
+        "place": "town",
+        "population": 0,
+        "radiusKm": 1.8,
+        "sourceId": "9150733"
+      },
+      {
+        "minLat": 43.75307,
+        "maxLat": 43.78547,
+        "minLon": -65.35165,
+        "maxLon": -65.30678,
+        "name": "Town of Shelburne",
+        "place": "town",
+        "population": 0,
+        "radiusKm": 1.8,
+        "sourceId": "9150813"
+      },
+      {
+        "minLat": 43.825,
+        "maxLat": 43.8574,
+        "minLon": -66.14215,
+        "maxLon": -66.09722,
+        "name": "Town of Yarmouth",
+        "place": "town",
+        "population": 0,
+        "radiusKm": 1.8,
+        "sourceId": "9293943"
+      },
+      {
+        "minLat": 45.59781,
+        "maxLat": 45.63022,
+        "minLon": -62.65628,
+        "maxLon": -62.60996,
+        "name": "Trenton",
+        "place": "town",
+        "population": 0,
+        "radiusKm": 1.8,
+        "sourceId": "2473002214"
+      },
+      {
+        "minLat": 44.81257,
+        "maxLat": 44.84497,
+        "minLon": -63.79214,
+        "maxLon": -63.74646,
+        "name": "Upper Sackville",
+        "place": "town",
+        "population": 0,
+        "radiusKm": 1.8,
+        "sourceId": "4571112634"
+      },
+      {
+        "minLat": 46.05496,
+        "maxLat": 46.08736,
+        "minLon": -60.93867,
+        "maxLon": -60.89196,
+        "name": "Wagmatcook First Nation",
+        "place": "town",
+        "population": 0,
+        "radiusKm": 1.8,
+        "sourceId": "33977829"
+      },
+      {
+        "minLat": 44.68528,
+        "maxLat": 44.71768,
+        "minLon": -63.49922,
+        "maxLon": -63.45363,
+        "name": "Westphal",
+        "place": "town",
+        "population": 0,
+        "radiusKm": 1.8,
+        "sourceId": "1719514157"
+      },
+      {
+        "minLat": 45.54534,
+        "maxLat": 45.57774,
+        "minLon": -62.73169,
+        "maxLon": -62.68541,
+        "name": "Westville",
+        "place": "town",
+        "population": 0,
+        "radiusKm": 1.8,
+        "sourceId": "410363598"
+      },
+      {
+        "minLat": 44.97431,
+        "maxLat": 45.00671,
+        "minLon": -64.15928,
+        "maxLon": -64.11347,
+        "name": "Windsor",
+        "place": "town",
+        "population": 0,
+        "radiusKm": 1.8,
+        "sourceId": "410366164"
+      },
+      {
+        "minLat": 44.77444,
+        "maxLat": 44.80684,
+        "minLon": -63.6689,
+        "maxLon": -63.62324,
+        "name": "Windsor Junction",
+        "place": "town",
+        "population": 0,
+        "radiusKm": 1.8,
+        "sourceId": "6171638586"
+      }
+    ]
+  },
+  "manifest": {
+    "schema": "pack-manifest.v2",
+    "fabricReleaseId": "ns-v4-legal-topology-20260906-02",
+    "regionId": "ns",
+    "capabilities": [
+      "legal-topology.v1"
+    ],
+    "graph": {
+      "name": "graph.v4.bin",
+      "bytes": 20882567,
+      "sha256": "05e321aa88462cb0de1f3bd539bcb49611f2e17d0dca01a45b73e4c7f25a9cbb"
+    },
+    "geometry": {
+      "name": "geometry.v1.bin",
+      "bytes": 23952816,
+      "sha256": "cec9cc0590aa3851af49a8f9ecd733b60645c3a472a589d4c72edbc143755840"
+    },
+    "fuel": {
+      "name": "fuel.v1.json",
+      "bytes": 143384,
+      "sha256": "999e1cbd5901b2bb28f7c09d7578abe2e7c69ad3e68c25b0b776c0172305fdd2"
+    },
+    "sourceEpoch": "geofabrik:2026-09-05T20:22:06Z",
+    "timezone": "America/Halifax"
+  },
+  "unprovenStitches": 0
+}

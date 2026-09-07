@@ -24,6 +24,18 @@ test("western Nova Scotia stays NS despite NB bbox overlap", () => {
   assert.equal(primaryRegionForPoint(-63.814, 46.162), "nb"); // Cape Jourimain — not PE
 });
 
+test("DIRT_V4_REGIONS serves graph.v4.bin only for named regions", () => {
+  const previous = process.env.DIRT_V4_REGIONS;
+  process.env.DIRT_V4_REGIONS = "ns";
+  try {
+    assert.match(remoteGraphUrl("ns"), /\/ns\/graph\.v4\.bin$/);
+    assert.match(remoteGraphUrl("nb"), /\/nb\/graph\.v3\.bin$/);
+  } finally {
+    if (previous == null) delete process.env.DIRT_V4_REGIONS;
+    else process.env.DIRT_V4_REGIONS = previous;
+  }
+});
+
 test("a deployment-scoped live candidate overrides only its named region", () => {
   const previous = process.env.R2_REGION_BASE_OVERRIDES;
   process.env.R2_REGION_BASE_OVERRIDES = JSON.stringify({

@@ -1,0 +1,37 @@
+{
+  "schemaVersion": "dirt-pack-release.v4",
+  "releaseId": "ns-v4-legal-topology-20260906-02",
+  "status": "dev-candidate",
+  "namespace": "dirt-packs/v4/candidates",
+  "createdAt": "2026-09-06T22:06:56.730Z",
+  "publicBase": "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/candidates/ns-v4-legal-topology-20260906-02",
+  "productionUntouched": true,
+  "publicV3CatalogUntouched": true,
+  "regions": [
+    {
+      "id": "ns",
+      "files": [
+        {
+          "name": "graph.v4.bin",
+          "bytes": 20882567,
+          "sha256": "05e321aa88462cb0de1f3bd539bcb49611f2e17d0dca01a45b73e4c7f25a9cbb"
+        },
+        {
+          "name": "geometry.v1.bin",
+          "bytes": 23952816,
+          "sha256": "cec9cc0590aa3851af49a8f9ecd733b60645c3a472a589d4c72edbc143755840"
+        },
+        {
+          "name": "fuel.v1.json",
+          "bytes": 143384,
+          "sha256": "999e1cbd5901b2bb28f7c09d7578abe2e7c69ad3e68c25b0b776c0172305fdd2"
+        },
+        {
+          "name": "pack-manifest.v2.json",
+          "bytes": 698,
+          "sha256": "9959e380a3342e4c10a211ad457adb2135c2fc08d389d8dc0567c7a809a355c0"
+        }
+      ]
+    }
+  ]
+}

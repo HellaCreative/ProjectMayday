@@ -531,6 +531,9 @@ function buildRegionalGraph(options = {}) {
         accessLeaf: feature.accessLeaf != null && feature.accessLeaf !== "" ? feature.accessLeaf : null,
         atv: feature.atv != null && feature.atv !== "" ? feature.atv : null,
         atvDesignated: !!feature.atvDesignated,
+        d: feature.direction === "forward" || feature.direction === "reverse"
+          ? feature.direction
+          : "both",
         xs: crossingSec > 0 ? Math.round(crossingSec) : 0,
         g: segCoords.map((c) => [Number(c[0]), Number(c[1])])
       });

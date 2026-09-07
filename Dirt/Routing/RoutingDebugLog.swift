@@ -90,7 +90,7 @@ final class RoutingDebugLog {
         )
     }
 
-    func liveRouteDiagnostics(_ response: RouteResponse, requestID: String? = nil) {
+        func liveRouteDiagnostics(_ response: RouteResponse, requestID: String? = nil) {
         let d = response.debug?.diagnostics
         let request = requestID.map { " request=\($0)" } ?? ""
         let attempts = d?.searchAttempts ?? response.debug?.searchMeta?.corridorCandidates ?? []
@@ -109,6 +109,11 @@ final class RoutingDebugLog {
                 + "pops=\(d?.pops.map(String.init) ?? response.debug?.pops.map(String.init) ?? "-") "
                 + "requestedProfile=\(d?.requestedProfile ?? "-") "
                 + "effectiveProfile=\(d?.effectiveProfile ?? "-") "
+                + "allowUnknown=\(d?.allowUnknown == true ? 1 : 0) "
+                + "tapRadius=\(d?.tapRadiusMeters.map { String(Int($0)) } ?? "-")m "
+                + "mapZoom=\(d?.mapZoom.map { String(format: "%.1f", $0) } ?? "-") "
+                + "snapStart=\(fmtSnap(d?.snap?.start)) "
+                + "snapEnd=\(fmtSnap(d?.snap?.end)) "
                 + "fallbacks=[\((d?.profileFallbacks ?? []).joined(separator: ","))] "
                 + "corridor=\(d?.corridorMeters.map { "\(Int($0))" } ?? "-") "
                 + "widened=\(d?.corridorWidened == true ? 1 : 0) "
@@ -120,6 +125,21 @@ final class RoutingDebugLog {
                 + "endpointProbes=\(d?.endpointProbeCount.map(String.init) ?? "-") "
                 + "endpointSources=\(d?.endpointResolutionSources ?? "-") "
                 + "attempts=[\(attemptText)]"
+        )
+    }
+
+    func snapSelection(
+        allowUnknown: Bool,
+        tapRadiusMeters: Double?,
+        mapZoom: Double?,
+        start: RouteSnapEndpoint?,
+        end: RouteSnapEndpoint?
+    ) {
+        event(
+            "SNAP allowUnknown=\(allowUnknown ? 1 : 0) "
+                + "tapRadius=\(tapRadiusMeters.map { String(Int($0)) } ?? "-")m "
+                + "mapZoom=\(mapZoom.map { String(format: "%.1f", $0) } ?? "-") "
+                + "start=\(fmtSnap(start)) end=\(fmtSnap(end))"
         )
     }
 
@@ -248,6 +268,11 @@ final class RoutingDebugLog {
                 + "escape=\(d?.destinationEscapeMeters.map { String(Int($0)) } ?? "-")m "
                 + "selected=\(d?.selectedReason ?? "-") "
                 + "gapReason=\(d?.gapReason ?? "-") "
+                + "allowUnknown=\(d?.allowUnknown == true ? 1 : 0) "
+                + "tapRadius=\(d?.tapRadiusMeters.map { String(Int($0)) } ?? "-")m "
+                + "mapZoom=\(d?.mapZoom.map { String(format: "%.1f", $0) } ?? "-") "
+                + "snapStart=\(fmtSnap(d?.snap?.start)) "
+                + "snapEnd=\(fmtSnap(d?.snap?.end)) "
                 + "failureReason=\(d?.failureReason ?? response.error ?? "-") "
                 + "msg=\(response.message ?? "-")"
         )
@@ -275,5 +300,17 @@ final class RoutingDebugLog {
 
     private func fmt(_ value: Double) -> String {
         String(format: "%.5f", value)
+    }
+
+    private func fmtSnap(_ endpoint: RouteSnapEndpoint?) -> String {
+        guard let endpoint else { return "-" }
+        let raw = endpoint.raw.map { "\(fmt($0.latitude)),\(fmt($0.longitude))" } ?? "-"
+        let snapped = endpoint.snapped.map { "\(fmt($0.latitude)),\(fmt($0.longitude))" } ?? "-"
+        let reasons = (endpoint.rejectionReasons ?? []).joined(separator: ",")
+        return "raw=\(raw) snapped=\(snapped) d=\(endpoint.distanceM.map(String.init) ?? "-")m "
+            + "cands=\(endpoint.candidateCount.map(String.init) ?? "-") "
+            + "way=\(endpoint.osmWayId ?? "-") access=\(endpoint.accessClass ?? "-") "
+            + "comp=\(endpoint.component.map(String.init) ?? "-") "
+            + "reject=[\(reasons)]"
     }
 }

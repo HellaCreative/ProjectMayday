@@ -105,10 +105,43 @@ enum AppConfig {
 
     nonisolated static func packFileURL(version: String, regionId: String, fileName: String) -> URL {
         _ = version
+        #if DIRT_DEVELOPMENT
+        if regionId.lowercased() == "ns", Self.nsV4CandidateFileNames.contains(fileName) {
+            return nsV4CandidateBaseURL
+                .appendingPathComponent("ns")
+                .appendingPathComponent(fileName)
+        }
+        #endif
         return packCDNBaseURL
             .appendingPathComponent(regionId)
             .appendingPathComponent(fileName)
     }
+
+    #if DIRT_DEVELOPMENT
+    /// DEV-only Nova Scotia legal-topology candidate. Never used by production.
+    nonisolated static let nsV4CandidateReleaseId = "ns-v4-legal-topology-20260906-02"
+    nonisolated static var nsV4CandidateBaseURL: URL {
+        packCDNBaseURL
+            .appendingPathComponent("v4")
+            .appendingPathComponent("candidates")
+            .appendingPathComponent(nsV4CandidateReleaseId)
+    }
+    nonisolated static let nsV4CandidateFileNames: Set<String> = [
+        "graph.v4.bin",
+        "geometry.v1.bin",
+        "fuel.v1.json",
+        "pack-manifest.v2.json"
+    ]
+    nonisolated static let nsV4GraphBytes = 20_882_567
+    nonisolated static let nsV4GraphSHA256 =
+        "05e321aa88462cb0de1f3bd539bcb49611f2e17d0dca01a45b73e4c7f25a9cbb"
+    nonisolated static let nsV4GeometryBytes = 23_952_816
+    nonisolated static let nsV4GeometrySHA256 =
+        "cec9cc0590aa3851af49a8f9ecd733b60645c3a472a589d4c72edbc143755840"
+    nonisolated static let nsV4FuelBytes = 143_384
+    nonisolated static let nsV4FuelSHA256 =
+        "999e1cbd5901b2bb28f7c09d7578abe2e7c69ad3e68c25b0b776c0172305fdd2"
+    #endif
 
     /// Absolute last-resort map center only when GPS has never delivered a fix
     /// (no province bias — Nova Scotia must not flash at launch).

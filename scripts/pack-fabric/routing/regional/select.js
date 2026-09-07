@@ -398,7 +398,19 @@ function localGraphPath(regionId, { longhaul = false } = {}) {
  * `routing/schema/v3-regions.json` is the lockstep list of regions that serve
  * graph.v3.bin. Everyone else remains graph.v2.bin until stamped and listed.
  */
+function v4RegionSet() {
+  const raw = process.env.DIRT_V4_REGIONS || "";
+  return new Set(
+    raw
+      .split(",")
+      .map((id) => String(id || "").trim().toLowerCase())
+      .filter(Boolean)
+  );
+}
+
 function phoneGraphFileName(regionId) {
+  const id = String(regionId || "").toLowerCase();
+  if (v4RegionSet().has(id)) return "graph.v4.bin";
   return phoneGraphFileNameForRegion(regionId);
 }
 
@@ -430,6 +442,8 @@ function graphPathForRegion(regionId, _opts = {}) {
       return verifiedPath;
     }
   }
+  const localV4 = path.join(__dirname, "..", "..", "app", "data", "packs", "v4", id, "graph.v4.bin");
+  if (v4RegionSet().has(id) && fs.existsSync(localV4)) return localV4;
   const localV3 = path.join(REGIONS_DIR, id, "graph.v3.bin");
   if (fs.existsSync(localV3)) return localV3;
   const localV2 = path.join(REGIONS_DIR, id, "graph.v2.bin");

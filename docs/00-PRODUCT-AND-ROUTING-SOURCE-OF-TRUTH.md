@@ -121,6 +121,13 @@ tiers belong in diagnostics, not the rider interface.
   geometry, not present-day public permission.
 - Known private or purpose-limited access is not permissive through-routing.
 - Allow Unknown opens `motorized_unknown`; it does not manufacture access.
+- Travel direction is independent of surface and road preference. V3 packs encode
+  only legal OSM travel: `oneway=yes` / `-1`, explicit two-way, roundabouts, and
+  implied `motorway` / `motorway_link`. Missing or ambiguous direction stays
+  bidirectional. **V4 packs** additionally fail-close reversible / unevaluable
+  conditional direction, encode turn restrictions and barrier nodes, and treat
+  `atv=yes` as a separate profile that cannot override `motorcycle=no`. Snap and
+  virtual start/end legs cannot enter a one-way road against traffic.
 - Clean never uses Allow Unknown.
 - Provincial/state overlays such as DRA, FTEN, NRN, NSTDB, and Access Roads are
   inactive in the foundational product. They may be evaluated later as an
