@@ -353,7 +353,6 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
         }
     }
 
-    let data: Data
     let version: UInt16
     let flags: UInt16
     let hasLeaves: Bool
@@ -408,7 +407,6 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
     var geometry: GeometryV1Pack?
 
     init(data: Data) throws {
-        self.data = data
         guard data.count >= Self.headerSizeV2 else { throw PackError.truncated }
         let magic: UInt32 = data.readUInt32LE(0)
         let isV4 = magic == Self.magicV4
