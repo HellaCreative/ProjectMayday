@@ -12,5 +12,6 @@ node_modules
 data-raw
 app/data/packs/**
 routing/data/**
+routing/candidates/**
 *.md
 *.bin
