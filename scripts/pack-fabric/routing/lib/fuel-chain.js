@@ -97,9 +97,8 @@ const FOUNDATION_PRIORITY_CELL_DEGREES = 0.02;
 const FUEL_URBAN_APPROACH_BUFFER_M = 1_500;
 /**
  * Straight-chord backtrack is a poor rejection test beside a meandering
- * foundation route. A station in the route's own coarse cell may use a
- * modest winding continuation; complete-chain detour limits still reject a
- * true fuel-only excursion.
+ * foundation route. This exception is valid only when route proximity was
+ * actually measured; a missing value must never be coerced to route cell 0.
  */
 const MAX_FOUNDATION_NEARBY_CONTINUATION_BACKTRACK_M = 20_000;
 // Dense regions can contain thousands of pumps inside one tank radius. Snap a
@@ -2447,9 +2446,9 @@ async function planFuelChainOnRuntime({
             );
             const continuationBacktrackMeters = responseBacktrackMeters(continuationResponse);
             row.continuationBacktrackMeters = continuationBacktrackMeters;
-            const continuationBacktrackCap = Number.isFinite(Number(
-              candidate.foundationCellDistance
-            ))
+            const hasMeasuredFoundationProximity = candidate.foundationCellDistance != null &&
+              Number.isFinite(Number(candidate.foundationCellDistance));
+            const continuationBacktrackCap = hasMeasuredFoundationProximity
               ? MAX_FOUNDATION_NEARBY_CONTINUATION_BACKTRACK_M
               : MAX_FUEL_RETRACE_M;
             if (

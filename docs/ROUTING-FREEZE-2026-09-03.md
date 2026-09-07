@@ -27,6 +27,13 @@ The September 3 source and production service remain the frozen rollback until
 the matching DEV service and build `2 (16)` pass physical White acceptance and
 a new freeze record is created.
 
+Build `2 (17)` supersedes that unaccepted candidate. The White-device Yarmouth
+trace proved the new shortest-plus-60-km ceiling suppressed the established Dirt
+objective, while a missing foundation-cell value was coerced to zero and let a
+13.2 km Coast Gas return pass. Build `2 (17)` removes that ceiling and fixes the
+missing-value test. It rebuilds no pack and remains DEV-only pending White
+acceptance.
+
 ## What is frozen
 
 - Dirt, Balanced, and Clean route-selection laws and their shared Swift/JS cost

@@ -10,13 +10,13 @@
 
 **Accepted frozen-routing iOS build:** `2 (13)` on White
 
-**Current iOS engineering reference:** build `2 (16)` routing candidate; Rider
+**Current iOS engineering reference:** build `2 (17)` routing candidate; Rider
 Services acceptance at `9808936`, account/session behaviour through `d8f345c`,
 and simulator-test infrastructure through `95f1e83`.
 
 **Latest lockstep deltas:** September 4 Groups presence hardening, the September
 5 frozen Rider Services packed-data contract, account/session hardening, and
-the September 6 degraded-Dirt/fuel-timeout correction for build `2 (16)`. The
+the September 7 Yarmouth Dirt/fuel correction for build `2 (17)`. The
 shared DEV service supplies the online routing change. Android must match the
 same no-op stage edit and offline routing laws; Android automation and physical-
 device evidence remain open.
@@ -96,10 +96,9 @@ of two things in the same commit:
 - Major urban cores are a strong wall and relax only as a clearly labelled
   last resort. Smaller settlements use the maximum finite ×20 avoidance cost,
   not an absolute wall.
-- Dirt remains dirt-first. Only when its best result is below the 70% ready
-  threshold may it be constrained by the degraded-route coherence envelope:
-  compare a candidate no more than 60 km beyond the shortest legal road
-  connection. A 70%+ Dirt result keeps the established objective.
+- Dirt remains dirt-first. A shortest-route-plus-60-km ceiling must not replace
+  the best legal known-Dirt candidate; build 2 (16) proved that this collapses
+  the reported Yarmouth ride into a low-Dirt road route.
 - Immediate predecessor-edge U-turns, arbitrary backward travel, down-and-back
   tourism, free-space joins, and synthetic connectors are forbidden.
 - Ferry distance/time is real. Ferry distance is excluded from dirt/paved/
@@ -114,10 +113,13 @@ the behavioural invariants and typed failures in
 
 A fuel timeout never commits the first partially routed pump blindly. Android
 must reject a partial with a known material continuation return and prefer a
-rural pump over an equally safe urban pump. Setting a stage to its already-
-effective profile must not advance the itinerary generation or restart route
-and fuel work. These build `2 (16)` deltas are pending physical White acceptance
-and make prior Android route/fuel evidence stale; no pack rebuild is implied.
+rural pump over an equally safe urban pump. A missing foundation-route proximity
+value is missing—not numeric zero—and cannot grant the winding-route exception;
+this exact coercion admitted the 13.2 km Coast Gas return. Setting a stage to its
+already-effective profile must not advance the itinerary generation or restart
+route and fuel work. These build `2 (17)` deltas are pending physical White
+acceptance and make prior Android route/fuel evidence stale; no pack rebuild is
+implied.
 
 ## 3. Canonical itinerary and visible stages
 

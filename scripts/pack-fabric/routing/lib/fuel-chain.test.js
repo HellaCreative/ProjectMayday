@@ -40,6 +40,17 @@ test("timeout partial rejects a fuel stop whose continuation proves a long retur
   assert.equal(selectSafeTimeoutPartial([canso]), null);
 });
 
+test("missing foundation proximity is not coerced to route cell zero", () => {
+  const result = selectSafeTimeoutPartial([{
+    plan: { stops: [{ id: "coast-gas" }] },
+    evaluation: {
+      candidate: { urbanEntry: false, foundationCellDistance: null },
+      continuationBacktrackMeters: 13_158
+    }
+  }]);
+  assert.equal(result, null);
+});
+
 test("timeout partial prefers a rural stop when direction is equally safe", () => {
   const town = {
     evaluation: {

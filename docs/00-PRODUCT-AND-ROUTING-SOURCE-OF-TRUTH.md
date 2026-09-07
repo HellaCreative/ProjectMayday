@@ -819,6 +819,13 @@ about 20% to 32%. It remains honestly classified as degraded at about 61% known
 Dirt, so future improvement belongs to a measured topology/surface-evidence
 audit rather than another silent fallback or province-specific weight tweak.
 
+The September 7 White-device pass rejected a later shortest-road-plus-60-km
+total-length ceiling. That different ceiling reduced the nearby Yarmouth Dirt
+case to a low-Dirt road route and therefore violated the product rule that
+shortest distance is not the Dirt objective. The proportional progress guard,
+journey-quality comparison, urban-core wall, and meaningful-excursion rule stay;
+the total-length ceiling does not.
+
 ### Hard live-planning window and dense-region repair — 2026-09-03
 
 Ontario device traces showed that fast downloads were followed by unbounded

@@ -769,8 +769,10 @@ nonisolated struct OnDeviceRouter {
         ctx.cityWall = cityWall
         ctx.pavedOnly = pavedOnly
         ctx.urbanCoreFallback = urbanCoreFallback
-        ctx.settlementWall = settlementWall
-        ctx.settlementFallback = settlementFallback
+        // Major urban cores are walls. Ordinary mapped towns are a finite
+        // avoidance cost so they do not sever otherwise valid rural routes.
+        ctx.settlementWall = false
+        ctx.settlementFallback = profile != .cleanest ? true : settlementFallback
         ctx.cleanMetroMultiplier = cleanMetroMultiplier
         let e4 = RoadTierStats.e4Flags(
             for: profile,
@@ -787,31 +789,9 @@ nonisolated struct OnDeviceRouter {
             var candidates: [(route: Result, width: Double, objective: String)] = []
             var lastBoundedFailure: Failure = .noPath
 
-            // Measure the shortest legal road connection as a coherence
-            // reference only. Dirt remains the objective, but a degraded
-            // (<70%) result cannot justify an unbounded lateral tour.
-            var shortestContext = ctx
-            shortestContext.costMode = .distance
-            shortestContext.variety = false
-            shortestContext.corridorMeters = nil
-            shortestContext.hardCorridor = false
-            shortestContext.boundedSearch = false
-            shortestContext.maxPathMeters = nil
-            shortestContext.settlementFallback = false
-            shortestContext.priorEdgeIds = []
-            shortestContext.arrivalEdgeId = nil
-            shortestContext.backtrackFactor = 1
-            let shortestReference: Result?
-            if case .success(let shortest) = runProfile(shortestContext) {
-                shortestReference = shortest
-            } else {
-                shortestReference = nil
-            }
-
             func searchDirt(
                 width: Double?,
-                costMode: HopSearchPolicy.CostMode = .pavement,
-                maxPathOverride: Double? = nil
+                costMode: HopSearchPolicy.CostMode = .pavement
             ) -> Swift.Result<Result, Failure> {
                 var hunt = ctx
                 hunt.costMode = costMode
@@ -821,7 +801,7 @@ nonisolated struct OnDeviceRouter {
                 hunt.boundedSearch = true
                 hunt.timeCapSeconds = HopSearchPolicy.dirtCandidateTimeCapSeconds
                 hunt.popCap = HopSearchPolicy.dirtCandidatePopCap
-                hunt.maxPathMeters = maxPathOverride ?? maxRouteMeters
+                hunt.maxPathMeters = maxRouteMeters
                 lastFailure = .noPath
                 let initial: Result
                 switch runProfile(hunt) {
@@ -873,48 +853,14 @@ nonisolated struct OnDeviceRouter {
             // ride merely because it contains fewer paved kilometres.
             let primaryBestDirt = candidates.map(\.route.dirtPercent).max() ?? 0
             if primaryBestDirt < 70 {
-                let coherenceCap = shortestReference.map { $0.distanceMeters + base }
-                let boundedLowDirtCap: Double?
-                switch (coherenceCap, maxRouteMeters) {
-                case let (.some(coherence), .some(hard)): boundedLowDirtCap = min(coherence, hard)
-                case let (.some(coherence), .none): boundedLowDirtCap = coherence
-                case let (.none, .some(hard)): boundedLowDirtCap = hard
-                case (.none, .none): boundedLowDirtCap = nil
-                }
-                if let boundedLowDirtCap,
-                   !candidates.contains(where: { $0.route.distanceMeters <= boundedLowDirtCap + 1 }) {
-                    switch searchDirt(
-                        width: base * 2,
-                        costMode: .pavement,
-                        maxPathOverride: boundedLowDirtCap
-                    ) {
-                    case .success(let route):
-                        candidates.append((route, base * 2, "pavementBounded"))
-                    case .failure(let failure):
-                        lastBoundedFailure = failure
-                    }
-                }
-                switch searchDirt(
-                    width: base,
-                    costMode: .balancedResource,
-                    maxPathOverride: boundedLowDirtCap
-                ) {
+                switch searchDirt(width: base, costMode: .balancedResource) {
                 case .success(let route):
                     candidates.append((route, base, "resource"))
                 case .failure(let failure):
                     lastBoundedFailure = failure
                 }
             }
-            let finalBestDirt = candidates.map(\.route.dirtPercent).max() ?? 0
-            let selectionCandidates: [(route: Result, width: Double, objective: String)]
-            if finalBestDirt < 70, let shortestReference {
-                let cap = shortestReference.distanceMeters + base
-                let bounded = candidates.filter { $0.route.distanceMeters <= cap + 1 }
-                selectionCandidates = bounded.isEmpty ? candidates : bounded
-            } else {
-                selectionCandidates = candidates
-            }
-            guard let selected = chooseDirtEnvelopeCandidate(selectionCandidates) else {
+            guard let selected = chooseDirtEnvelopeCandidate(candidates) else {
                 return .failure(lastBoundedFailure)
             }
             var route = selected.route
@@ -924,16 +870,6 @@ nonisolated struct OnDeviceRouter {
             route.searchMeta.maxCrossTrackMeters = HopSearchPolicy.maxCrossTrackMeters(
                 coordinates: route.coordinates, start: from, end: to
             )
-            if let shortestReference {
-                route.searchMeta.shortestMeters = shortestReference.distanceMeters
-                route.searchMeta.extraUsedMeters = max(
-                    0,
-                    route.distanceMeters - shortestReference.distanceMeters
-                )
-                if finalBestDirt < 70 {
-                    route.searchMeta.extraBudgetMeters = base
-                }
-            }
             let candidateSummary = candidates.map {
                 "\($0.objective)@\(Int($0.width / 1000))km:\($0.route.dirtPercent)%"
             }.joined(separator: ",")
