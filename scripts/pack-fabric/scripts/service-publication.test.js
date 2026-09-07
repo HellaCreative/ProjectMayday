@@ -2,6 +2,8 @@
 
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
 const { OSM_REGION } = require("../routing/registry/geofabrik");
 const { buildManifest } = require("./publish-rider-services");
 const { appendFuel } = require("./publish-missing-fuel");
@@ -44,4 +46,20 @@ test("fuel merge appends only missing sidecars and preserves graph identity", ()
     () => appendFuel(catalog, [{ id: "nb", file: { name: "fuel.v1.json" } }], "new"),
     /already advertises fuel/
   );
+});
+
+test("DEV functions cannot bundle generated pack bytes or local upload state", () => {
+  const root = path.resolve(__dirname, "..");
+  const config = JSON.parse(fs.readFileSync(path.join(root, "vercel.json"), "utf8"));
+  for (const name of ["api/route.js", "api/fuel.js", "api/fuel-chain.js"]) {
+    const excluded = String(config.functions[name].excludeFiles || "");
+    assert.match(excluded, /app\/data/);
+    assert.match(excluded, /routing\/data/);
+    assert.match(excluded, /routing\/candidates/);
+  }
+
+  const ignored = fs.readFileSync(path.join(root, ".vercelignore"), "utf8");
+  assert.match(ignored, /^\.wrangler$/m);
+  assert.match(ignored, /^app\/data\/rider-services\/\*\*$/m);
+  assert.match(ignored, /^routing\/candidates\/\*\*$/m);
 });
