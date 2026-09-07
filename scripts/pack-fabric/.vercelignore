@@ -1,6 +1,7 @@
 # Vercel Hobby is the route API only. Packs load from R2.
 
 .git
+.wrangler
 .temp
 temp
 *.osm.pbf
