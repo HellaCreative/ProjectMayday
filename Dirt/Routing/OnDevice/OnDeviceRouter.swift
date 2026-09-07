@@ -4641,15 +4641,28 @@ private nonisolated final class PackEdgeSpatialIndex: @unchecked Sendable {
 
 private nonisolated final class PackEdgeSpatialIndexCache: @unchecked Sendable {
     private let lock = NSLock()
-    private var grids: [ObjectIdentifier: PackEdgeSpatialIndex] = [:]
+    private var cachedKey: ObjectIdentifier?
+    private var cachedGrid: PackEdgeSpatialIndex?
 
     func grid(for pack: GraphV2Pack) -> PackEdgeSpatialIndex {
         let key = ObjectIdentifier(pack)
         lock.lock()
-        defer { lock.unlock() }
-        if let existing = grids[key] { return existing }
+        if cachedKey == key, let existing = cachedGrid {
+            lock.unlock()
+            return existing
+        }
+        lock.unlock()
+
         let built = PackEdgeSpatialIndex(pack: pack)
-        grids[key] = built
+
+        lock.lock()
+        if cachedKey == key, let existing = cachedGrid {
+            lock.unlock()
+            return existing
+        }
+        cachedKey = key
+        cachedGrid = built
+        lock.unlock()
         return built
     }
 }
