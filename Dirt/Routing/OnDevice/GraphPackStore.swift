@@ -275,9 +275,7 @@ final class GraphPackStore {
                 applyCatalog(published: publishedIds, sizes: [:])
                 return
             }
-            let manifest = Self.overlayDevV4IfNeeded(
-                try JSONDecoder().decode(PackManifest.self, from: data)
-            )
+            let manifest = try JSONDecoder().decode(PackManifest.self, from: data)
             lastManifestVersion = manifest.version
             manifestFilesByRegion = Dictionary(uniqueKeysWithValues: manifest.regions.map {
                 ($0.id.lowercased(), $0.files.filter { Self.phonePackFileNames.contains($0.name) })
@@ -1663,9 +1661,7 @@ final class GraphPackStore {
             if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
                 return
             }
-            let manifest = Self.overlayDevV4IfNeeded(
-                try JSONDecoder().decode(PackManifest.self, from: manifestData)
-            )
+            let manifest = try JSONDecoder().decode(PackManifest.self, from: manifestData)
             lastManifestVersion = manifest.version
             manifestFilesByRegion = Dictionary(uniqueKeysWithValues: manifest.regions.map {
                 ($0.id.lowercased(), $0.files.filter { Self.phonePackFileNames.contains($0.name) })
@@ -1726,9 +1722,7 @@ final class GraphPackStore {
             if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
                 throw URLError(.badServerResponse)
             }
-            let manifest = Self.overlayDevV4IfNeeded(
-                try JSONDecoder().decode(PackManifest.self, from: manifestData)
-            )
+            let manifest = try JSONDecoder().decode(PackManifest.self, from: manifestData)
             lastManifestVersion = manifest.version
             manifestFilesByRegion = Dictionary(uniqueKeysWithValues: manifest.regions.map {
                 ($0.id.lowercased(), $0.files.filter { Self.phonePackFileNames.contains($0.name) })
@@ -2310,39 +2304,5 @@ private struct PackManifest: Decodable, Sendable {
         var name: String
         var bytes: Int?
         var sha256: String?
-    }
-}
-
-extension GraphPackStore {
-    /// DIRT Dev overlays NS onto the V4 candidate identity. Production catalog is unchanged.
-    nonisolated private static func overlayDevV4IfNeeded(_ manifest: PackManifest) -> PackManifest {
-        #if DIRT_DEVELOPMENT
-        var next = manifest
-        let nsFiles: [PackManifest.File] = [
-            PackManifest.File(
-                name: "graph.v4.bin",
-                bytes: AppConfig.nsV4GraphBytes,
-                sha256: AppConfig.nsV4GraphSHA256
-            ),
-            PackManifest.File(
-                name: "geometry.v1.bin",
-                bytes: AppConfig.nsV4GeometryBytes,
-                sha256: AppConfig.nsV4GeometrySHA256
-            ),
-            PackManifest.File(
-                name: "fuel.v1.json",
-                bytes: AppConfig.nsV4FuelBytes,
-                sha256: AppConfig.nsV4FuelSHA256
-            )
-        ]
-        if let idx = next.regions.firstIndex(where: { $0.id.lowercased() == "ns" }) {
-            next.regions[idx] = PackManifest.Region(id: next.regions[idx].id, files: nsFiles)
-        } else {
-            next.regions.append(PackManifest.Region(id: "ns", files: nsFiles))
-        }
-        return next
-        #else
-        return manifest
-        #endif
     }
 }
