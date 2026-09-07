@@ -12,6 +12,7 @@ node_modules
 .env.local
 data-raw
 app/data/packs/**
+app/data/rider-services/**
 routing/data/**
 routing/candidates/**
 *.md
