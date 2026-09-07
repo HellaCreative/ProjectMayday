@@ -28,7 +28,7 @@ if [ "$needs_download" -eq 1 ]; then
   mkdir -p "$(dirname "$PBF")"
   echo "Downloading $BASE_URL/${SLUG}-latest.osm.pbf"
   curl -L --fail \
-    --retry 5 --retry-all-errors --retry-delay 3 \
+    --retry 20 --retry-all-errors --retry-delay 3 --retry-max-time 1800 \
     --connect-timeout 20 --speed-limit 1024 --speed-time 90 \
     --continue-at - \
     -o "$PBF.partial" "$BASE_URL/${SLUG}-latest.osm.pbf"
