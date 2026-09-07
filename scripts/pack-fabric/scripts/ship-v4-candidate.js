@@ -11,7 +11,8 @@
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
-const { spawnSync } = require("child_process");
+const { spawn, spawnSync } = require("child_process");
+const net = require("net");
 const { OSM_REGION } = require("../routing/registry/geofabrik");
 const { validatePackManifestV2 } = require("../routing/lib/pack-manifest-v2");
 
@@ -20,6 +21,9 @@ const FABRIC = path.join(DIRT, "scripts/pack-fabric");
 const PUBLIC_R2_BASE = process.env.R2_PUBLIC_BASE || "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev";
 const PHONE_FILES = ["graph.v4.bin", "geometry.v1.bin", "fuel.v1.json", "cross-pack-seams.v2.json"];
 const AUDIT_FILES = ["pack-manifest.v2.json", "legal-topology-report.json"];
+const WRANGLER_UPLOAD_LIMIT = 300 * 1024 * 1024;
+const MULTIPART_PART_BYTES = 32 * 1024 * 1024;
+const MULTIPART_CONFIG = path.join(FABRIC, "wrangler.multipart-upload.toml");
 
 function die(message) {
   throw new Error(message);
@@ -180,12 +184,138 @@ function putR2(item) {
   if (result.status !== 0) die(`R2 upload failed for ${item.key}`);
 }
 
-async function verifyRemote(item, publicBase) {
+function needsMultipart(item) {
+  return item.identity.bytes > WRANGLER_UPLOAD_LIMIT;
+}
+
+function delay(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+async function findFreePort() {
+  return await new Promise((resolve, reject) => {
+    const server = net.createServer();
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      const address = server.address();
+      server.close((error) => error ? reject(error) : resolve(address.port));
+    });
+  });
+}
+
+async function requestOK(url, options, attempts = 4) {
+  let lastError;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      const response = await fetch(url, options);
+      if (response.ok) return response;
+      lastError = new Error(`HTTP ${response.status}: ${await response.text()}`);
+    } catch (error) {
+      lastError = error;
+    }
+    if (attempt < attempts) await delay(500 * attempt);
+  }
+  throw lastError;
+}
+
+class MultipartUploader {
+  constructor() {
+    this.child = null;
+    this.endpoint = null;
+    this.output = "";
+  }
+
+  async start() {
+    if (this.child) return;
+    const port = await findFreePort();
+    this.endpoint = `http://127.0.0.1:${port}`;
+    this.child = spawn("npx", [
+      "wrangler", "dev", "--config", MULTIPART_CONFIG,
+      "--ip", "127.0.0.1", "--port", String(port),
+      "--show-interactive-dev-session=false", "--log-level=warn"
+    ], { cwd: FABRIC, env: process.env, stdio: ["ignore", "pipe", "pipe"] });
+    const collect = (chunk) => {
+      this.output = (this.output + chunk.toString()).slice(-12_000);
+    };
+    this.child.stdout.on("data", collect);
+    this.child.stderr.on("data", collect);
+
+    for (let attempt = 0; attempt < 120; attempt += 1) {
+      if (this.child.exitCode !== null) {
+        die(`multipart upload bridge exited early\n${this.output}`);
+      }
+      try {
+        const response = await fetch(`${this.endpoint}/__health`);
+        if (response.ok) return;
+      } catch (_) {
+        // Wrangler is still starting.
+      }
+      await delay(500);
+    }
+    die(`multipart upload bridge did not start\n${this.output}`);
+  }
+
+  url(item, action, extra = {}) {
+    const url = new URL(`${this.endpoint}/${item.key}`);
+    url.searchParams.set("action", action);
+    for (const [key, value] of Object.entries(extra)) url.searchParams.set(key, String(value));
+    return url;
+  }
+
+  async put(item) {
+    await this.start();
+    const created = await requestOK(this.url(item, "create"), { method: "POST" });
+    const { uploadId } = await created.json();
+    const parts = [];
+    const handle = fs.openSync(item.filePath, "r");
+    try {
+      const partCount = Math.ceil(item.identity.bytes / MULTIPART_PART_BYTES);
+      for (let index = 0; index < partCount; index += 1) {
+        const offset = index * MULTIPART_PART_BYTES;
+        const length = Math.min(MULTIPART_PART_BYTES, item.identity.bytes - offset);
+        const body = Buffer.allocUnsafe(length);
+        const bytesRead = fs.readSync(handle, body, 0, length, offset);
+        if (bytesRead !== length) die(`${item.key}: short read at multipart part ${index + 1}`);
+        const response = await requestOK(this.url(item, "part", {
+          uploadId,
+          partNumber: index + 1
+        }), { method: "PUT", body });
+        parts.push(await response.json());
+        console.log("PART", item.key, `${index + 1}/${partCount}`);
+      }
+      await requestOK(this.url(item, "complete", { uploadId }), {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ parts })
+      });
+    } catch (error) {
+      try {
+        await fetch(this.url(item, "abort", { uploadId }), { method: "DELETE" });
+      } catch (_) {
+        // R2 also removes abandoned multipart uploads automatically.
+      }
+      throw error;
+    } finally {
+      fs.closeSync(handle);
+    }
+  }
+
+  stop() {
+    if (this.child && this.child.exitCode === null) this.child.kill("SIGTERM");
+    this.child = null;
+  }
+}
+
+async function verifyRemote(item, publicBase, options = {}) {
   const relative = item.key.replace(/^v4\/candidates\/[^/]+\//, "");
   const response = await fetch(`${publicBase}/${relative}?verify=${Date.now()}`, { cache: "no-store" });
-  if (!response.ok || !response.body) die(`remote verification HTTP ${response.status} for ${item.key}`);
+  if (!response.ok || !response.body) {
+    if (options.allowMissing) return false;
+    die(`remote verification HTTP ${response.status} for ${item.key}`);
+  }
   const contentLength = Number(response.headers.get("content-length"));
   if (Number.isFinite(contentLength) && contentLength !== item.identity.bytes) {
+    if (options.allowMissing) return false;
     die(`remote byte mismatch for ${item.key}`);
   }
   const hash = crypto.createHash("sha256");
@@ -195,17 +325,34 @@ async function verifyRemote(item, publicBase) {
     hash.update(chunk);
   }
   if (bytes !== item.identity.bytes || hash.digest("hex") !== item.identity.sha256) {
+    if (options.allowMissing) return false;
     die(`remote identity mismatch for ${item.key}`);
   }
-  console.log("VERIFIED", item.key);
+  if (!options.quiet) console.log("VERIFIED", item.key);
+  return true;
 }
 
 async function main() {
   const options = parseArgs(process.argv.slice(2));
   const candidate = verifyLocalCandidate(options);
-  for (const item of candidate.uploads) putR2(item);
-  if (options.verify) {
-    for (const item of candidate.uploads) await verifyRemote(item, candidate.publicBase);
+  const multipart = new MultipartUploader();
+  try {
+    for (const item of candidate.uploads) {
+      if (options.verify && await verifyRemote(item, candidate.publicBase, { allowMissing: true, quiet: true })) {
+        console.log("REUSED VERIFIED", item.key);
+        continue;
+      }
+      if (needsMultipart(item)) {
+        const size = Math.round(item.identity.bytes / 1e6);
+        console.log("MULTIPART PUT", item.key, `${size}MB`);
+        await multipart.put(item);
+      } else {
+        putR2(item);
+      }
+      if (options.verify) await verifyRemote(item, candidate.publicBase);
+    }
+  } finally {
+    multipart.stop();
   }
   console.log(JSON.stringify({
     releaseId: options.candidate,
@@ -224,4 +371,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { parseArgs, verifyLocalCandidate, main };
+module.exports = { parseArgs, verifyLocalCandidate, needsMultipart, main };
