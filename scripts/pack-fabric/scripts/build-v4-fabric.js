@@ -106,7 +106,7 @@ function readJSON(file) {
   return JSON.parse(fs.readFileSync(file, "utf8"));
 }
 
-function verifyRegion(paths, id, releaseId, lock, { requireSeams = false } = {}) {
+function verifyRegion(paths, id, releaseId, lock, { requireSeams = false, factoryCommit = null } = {}) {
   const dir = path.join(paths.packRoot, id);
   const manifest = readJSON(path.join(dir, "pack-manifest.v2.json"));
   validatePackManifestV2(manifest, { requireSeams });
@@ -133,6 +133,9 @@ function verifyRegion(paths, id, releaseId, lock, { requireSeams = false } = {})
   }
   if (!report.provenance || report.provenance.sourceEpoch !== lock.fabricEpoch) {
     throw new Error(`${id}: legal-topology provenance mismatch`);
+  }
+  if (factoryCommit && report.provenance.factoryCommit !== factoryCommit) {
+    throw new Error(`${id}: pack was built by a different factory commit`);
   }
 
   const riderFile = path.join(paths.riderRoot, id, "rider-services.v1.json");
@@ -224,6 +227,7 @@ function main() {
     fs.mkdirSync(dir, { recursive: true });
   }
   const progressFile = path.join(options.root, "progress.json");
+  const factoryCommit = gitHead();
   let records = [];
   for (let index = 0; index < options.regions.length; index += 1) {
     const id = options.regions[index];
@@ -231,7 +235,7 @@ function main() {
     assertDiskSpace(options.root, id);
     let record = null;
     try {
-      record = verifyRegion(paths, id, options.releaseId, lock);
+      record = verifyRegion(paths, id, options.releaseId, lock, { factoryCommit });
       console.log(`[${index + 1}/${options.regions.length}] verified ${id} (resume)`);
     } catch (_) {
       console.log(`[${index + 1}/${options.regions.length}] building ${id} from ${lock.fabricEpoch}`);
@@ -255,7 +259,7 @@ function main() {
         DIRT_V4_FUEL_PATH: fuelOut,
         OSM_LEGAL_ROOT: paths.legalRoot
       }, { attempts: 2 });
-      record = verifyRegion(paths, id, options.releaseId, lock);
+      record = verifyRegion(paths, id, options.releaseId, lock, { factoryCommit });
       safeCleanWork(paths, source);
       console.log(`[${index + 1}/${options.regions.length}] sealed ${id}`);
     }
@@ -281,7 +285,7 @@ function main() {
     }
     topology = { ...fileIdentity(topologyFile), pairs: topologyDoc.pairs.length };
     records = options.regions.map((id) =>
-      verifyRegion(paths, id, options.releaseId, lock, { requireSeams: true })
+      verifyRegion(paths, id, options.releaseId, lock, { requireSeams: true, factoryCommit })
     );
   }
 
@@ -290,7 +294,7 @@ function main() {
     releaseId: options.releaseId,
     status: isFullFabric ? "local-candidate-sealed" : "local-partial-candidate",
     createdAt: new Date().toISOString(),
-    factoryCommit: gitHead(),
+    factoryCommit,
     sourceEpoch: lock.fabricEpoch,
     sourceLock: null,
     completeFabric: isFullFabric,
