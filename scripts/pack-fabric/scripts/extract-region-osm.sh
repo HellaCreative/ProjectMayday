@@ -59,8 +59,11 @@ else
 fi
 
 POLY_LAYER="$(basename "$POLY" .geojson)"
+# GeoJSON's GDAL driver cannot delete an existing layer in place. This is a
+# generated work file, so replace it explicitly to keep interrupted runs safe.
+rm -f "$OUT_DIR/halo.geojson"
 ogr2ogr -f GeoJSON "$OUT_DIR/halo.geojson" "$POLY" \
-  -overwrite -dialect sqlite \
+  -dialect sqlite \
   -sql "SELECT ST_Transform(ST_Buffer(ST_Transform(geometry, $BUFFER_EPSG), 2000), 4326) AS geometry FROM '$POLY_LAYER'" \
   -nln halo
 ogrinfo -ro -so "$OUT_DIR/halo.geojson" halo >/dev/null
