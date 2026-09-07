@@ -188,6 +188,10 @@ nonisolated struct OnDeviceRouter {
     var mapZoom: Double? = nil
     /// Optional explicit snap radius, still capped by graph version.
     var matchLimitMeters: Double? = nil
+    /// V4 `customers` roads are endpoint-only and open solely for an explicitly
+    /// selected service POI, never for an arbitrary rider pin.
+    var startEndpointKind: String? = nil
+    var endEndpointKind: String? = nil
 
     /// New packs carry OSM-derived local cores. Static boxes remain a temporary
     /// compatibility fallback for older installed packs.
@@ -515,13 +519,17 @@ nonisolated struct OnDeviceRouter {
                 let ei = Int(pack.edgeUndirectedIndex[i])
                 guard ei >= 0, ei < pack.undirectedEdgeCount, toNode >= 0, toNode < n else { continue }
                 if prevEdge[cur.node] == ei { continue }
-                if pack.v4HopIllegal(
-                    ei: ei, from: cur.node, to: toNode,
-                    startEi: -1, endEi: -1, incomingEi: prevEdge[cur.node]
-                ) { continue }
-                let attr = pack.edgeAttrs[ei]
-                let access = GraphV2Pack.unpackAccess(attr)
-                if !accessAllowed(access, allowUnknown: policyUnknown, profile: profile) { continue }
+                if pack.version >= 4, pack.legalTopology {
+                    // Reachability discovery is an admissible lower bound. It
+                    // may include endpoint-only edges, but never denied,
+                    // impassable, or disabled unknown directions. Exact turn
+                    // and endpoint legality is proved by the final route.
+                    let code = Int(pack.v4AccessCode(ei: ei, from: cur.node, to: toNode))
+                    if code == 2 || code == 5 || (code == 1 && !policyUnknown) { continue }
+                } else {
+                    let access = GraphV2Pack.unpackAccess(pack.edgeAttrs[ei])
+                    if !accessAllowed(access, allowUnknown: policyUnknown, profile: profile) { continue }
+                }
                 let newCost = cur.cost + Double(pack.edgeMeters[ei])
                 if newCost > maxMeters { continue }
                 if newCost < dist[toNode] {
@@ -1312,6 +1320,20 @@ nonisolated struct OnDeviceRouter {
         if startSnap.edgeIndex >= 0,
            startSnap.edgeIndex == endSnap.edgeIndex,
            abs(startSnap.distanceAlongM - endSnap.distanceAlongM) > 1 {
+            let sameEi = startSnap.edgeIndex
+            let edgeA = Int(pack.edgeFrom?[sameEi] ?? -1)
+            let edgeB = Int(pack.edgeTo?[sameEi] ?? -1)
+            let alongForward = startSnap.distanceAlongM <= endSnap.distanceAlongM
+            if !pack.v4AccessAllowed(
+                ei: sameEi,
+                from: alongForward ? edgeA : edgeB,
+                to: alongForward ? edgeB : edgeA,
+                startEi: sameEi,
+                endEi: sameEi,
+                allowUnknown: allowUnknown && profile != .cleanest,
+                startEndpointKind: startEndpointKind,
+                endEndpointKind: endEndpointKind
+            ) { return .failure(.noPath) }
             // Snapped A/B edge is always traversable under Clean law.
             if edgeBlockedByPavedOnly(
                 startSnap.edgeIndex, ctx: ctx,
@@ -1448,7 +1470,8 @@ nonisolated struct OnDeviceRouter {
         let n = pack.nodeCount
         let startVirt = n
         let endVirt = n + 1
-        let total = n + 2
+        let turnState = pack.makeV4TurnStateSpace(startNode: startVirt, endNode: endVirt)
+        let total = turnState.stateCount
         let policyUnknown = allowUnknown && profile != .cleanest
         let startEi = startSnap.edgeIndex
         let endEi = endSnap.edgeIndex
@@ -1703,9 +1726,11 @@ nonisolated struct OnDeviceRouter {
             }
             if cur.node == endVirt { break }
 
-            if cur.node < n {
-                let arcStart = Int(pack.nodeOffsets[cur.node])
-                let arcEnd = Int(pack.nodeOffsets[cur.node + 1])
+            let graphNode = turnState.graphNode(of: cur.node)
+
+            if graphNode >= 0, graphNode < n {
+                let arcStart = Int(pack.nodeOffsets[graphNode])
+                let arcEnd = Int(pack.nodeOffsets[graphNode + 1])
                 guard arcStart >= 0, arcEnd <= pack.edgeTargets.count else { continue }
 
                 for i in arcStart..<arcEnd {
@@ -1725,24 +1750,29 @@ nonisolated struct OnDeviceRouter {
                             continue
                         }
                     }
-                    if pack.v4HopIllegal(
-                        ei: ei, from: cur.node, to: toNode,
+                    if !pack.v4AccessAllowed(
+                        ei: ei, from: graphNode, to: toNode,
                         startEi: startEi, endEi: endEi,
-                        incomingEi: incomingUndirected(
-                            prevKind: prevKind[cur.node],
-                            prevData: prevData[cur.node],
-                            virt: virt
-                        )
+                        allowUnknown: policyUnknown,
+                        startEndpointKind: startEndpointKind,
+                        endEndpointKind: endEndpointKind
                     ) { continue }
+                    let toState = turnState.transition(
+                        state: cur.node, outgoingEdge: ei, toNode: toNode
+                    )
+                    if toState < 0 { continue }
                     let attr = pack.edgeAttrs[ei]
                     let access = GraphV2Pack.unpackAccess(attr)
-                    if !accessAllowed(access, allowUnknown: policyUnknown, profile: profile) { continue }
+                    if pack.version < 4,
+                       !accessAllowed(access, allowUnknown: policyUnknown, profile: profile) {
+                        continue
+                    }
                     if edgeBlockedByPavedOnly(ei, ctx: ctx, allowSnapEdges: startEi, endEi: endEi) { continue }
                     let eid = pack.edgeId(ei)
                     if !eid.isEmpty, avoidEdgeIds.contains(eid) { continue }
 
                     let toLL = coordinate(forNode: toNode)
-                    if hopBlocked(toLL, edgeFrom: coordinate(forNode: cur.node), from: from, to: to, ctx: ctx) {
+                    if hopBlocked(toLL, edgeFrom: coordinate(forNode: graphNode), from: from, to: to, ctx: ctx) {
                         continue
                     }
 
@@ -1778,7 +1808,7 @@ nonisolated struct OnDeviceRouter {
                         start: from,
                         end: to,
                         boxes: packUrbanCores,
-                        edgeFrom: coordinate(forNode: cur.node),
+                        edgeFrom: coordinate(forNode: graphNode),
                         penalty: UrbanCore.resolveCleanMetroPenalty(
                             profile: profile,
                             override: ctx.cleanMetroMultiplier,
@@ -1796,7 +1826,7 @@ nonisolated struct OnDeviceRouter {
                         )
                     }
                     if applyAway {
-                        let away = awayExtra(fromNode: cur.node, toNode: toNode)
+                        let away = awayExtra(fromNode: graphNode, toNode: toNode)
                         step += ctx.costMode == .pavement ? away * 10 : away
                         if applySoftCorridor {
                             step += OnDeviceProfileCosts.corridorCrossTrackExtra(
@@ -1824,41 +1854,41 @@ nonisolated struct OnDeviceRouter {
                     }
                     let cost = cur.cost + step
                     let newDirt = edgeIsDirt(ei)
-                    let oldDirt = prevKind[toNode] == 0 ? edgeIsDirt(prevData[toNode]) : false
+                    let oldDirt = prevKind[toState] == 0 ? edgeIsDirt(prevData[toState]) : false
                     var action = HopSearchPolicy.considerRelax(
                         newCost: cost,
-                        oldCost: dist[toNode],
+                        oldCost: dist[toState],
                         newEi: ei,
-                        oldEi: prevData[toNode],
-                        node: toNode,
+                        oldEi: prevData[toState],
+                        node: toState,
                         newIsDirt: newDirt,
                         oldIsDirt: oldDirt,
                         seed: ctx.sessionSeed,
                         variety: ctx.variety,
-                        slotsUsed: Int(slots[toNode])
+                        slotsUsed: Int(slots[toState])
                     )
-                    if action == .stealPred, HopSearchPolicy.createsCycle(prev: prev, from: cur.node, through: toNode) {
+                    if action == .stealPred, HopSearchPolicy.createsCycle(prev: prev, from: cur.node, through: toState) {
                         action = .reject
                     }
-                    if HopSearchPolicy.apply(action, slots: &slots, at: toNode) {
-                        prev[toNode] = cur.node
-                        prevKind[toNode] = 0
-                        prevData[toNode] = ei
+                    if HopSearchPolicy.apply(action, slots: &slots, at: toState) {
+                        prev[toState] = cur.node
+                        prevKind[toState] = 0
+                        prevData[toState] = ei
                         if let fromArr = pack.edgeFrom {
-                            prevForward[toNode] = Int(fromArr[ei]) == cur.node
+                            prevForward[toState] = Int(fromArr[ei]) == graphNode
                         } else {
-                            prevForward[toNode] = true
+                            prevForward[toState] = true
                         }
                         if HopSearchPolicy.shouldPush(action) {
-                            dist[toNode] = cost
-                            pathMeters[toNode] = newMeters
-                            heap.push(node: toNode, cost: cost)
+                            dist[toState] = cost
+                            pathMeters[toState] = newMeters
+                            heap.push(node: toState, cost: cost)
                         }
                     }
                 }
             }
 
-            if cur.node < n, let sibs = coincidentSiblings[cur.node] {
+            if pack.version < 4, graphNode < n, let sibs = coincidentSiblings[graphNode] {
                 for toNode in sibs {
                     let cost = cur.cost
                     let newMeters = pathMeters[cur.node]
@@ -1891,9 +1921,37 @@ nonisolated struct OnDeviceRouter {
                 }
             }
 
-            if let vlist = virtAdj[cur.node] {
+            if let vlist = virtAdj[graphNode] {
                 for item in vlist {
                     let v = virt[item.id]
+                    if pack.version >= 4, v.ei >= 0 {
+                        if item.to == endVirt,
+                           !turnState.allowsExit(state: cur.node, outgoingEdge: v.ei) {
+                            continue
+                        }
+                        let edgeA = Int(pack.edgeFrom?[v.ei] ?? -1)
+                        let edgeB = Int(pack.edgeTo?[v.ei] ?? -1)
+                        let accessFrom: Int
+                        let accessTo: Int
+                        if graphNode == startVirt, item.to < n {
+                            accessTo = item.to
+                            accessFrom = item.to == edgeA ? edgeB : edgeA
+                        } else if graphNode < n, item.to == endVirt {
+                            accessFrom = graphNode
+                            accessTo = graphNode == edgeA ? edgeB : edgeA
+                        } else {
+                            let alongForward = startSnap.distanceAlongM <= endSnap.distanceAlongM
+                            accessFrom = alongForward ? edgeA : edgeB
+                            accessTo = alongForward ? edgeB : edgeA
+                        }
+                        if !pack.v4AccessAllowed(
+                            ei: v.ei, from: accessFrom, to: accessTo,
+                            startEi: startEi, endEi: endEi,
+                            allowUnknown: policyUnknown,
+                            startEndpointKind: startEndpointKind,
+                            endEndpointKind: endEndpointKind
+                        ) { continue }
+                    }
                     if ctx.pavedOnly {
                         if v.junctionStitch { continue }
                         if v.ei >= 0,
@@ -1918,9 +1976,9 @@ nonisolated struct OnDeviceRouter {
                     } else {
                         toLL = endSnap.projected
                     }
-                    let edgeFrom = cur.node < n
-                        ? coordinate(forNode: cur.node)
-                        : (cur.node == startVirt ? startSnap.projected : endSnap.projected)
+                    let edgeFrom = graphNode < n
+                        ? coordinate(forNode: graphNode)
+                        : (graphNode == startVirt ? startSnap.projected : endSnap.projected)
                     if hopBlocked(toLL, edgeFrom: edgeFrom, from: from, to: to, ctx: ctx) {
                         continue
                     }
@@ -1954,7 +2012,7 @@ nonisolated struct OnDeviceRouter {
                         )
                     }
                     if applyAway {
-                        let away = awayExtra(fromNode: cur.node, toNode: item.to)
+                        let away = awayExtra(fromNode: graphNode, toNode: item.to)
                         step += ctx.costMode == .pavement ? away * 10 : away
                         if applySoftCorridor {
                             step += OnDeviceProfileCosts.corridorCrossTrackExtra(
@@ -1971,30 +2029,33 @@ nonisolated struct OnDeviceRouter {
                         : (v.ei >= 0 ? pack.edgeId(v.ei) : "")
                     step = backtrackPenalized(step, edgeID: virtualEdgeID, ctx: ctx)
                     let cost = cur.cost + step
+                    let toState = item.to < n && v.ei >= 0
+                        ? turnState.stateForArrival(node: item.to, incomingEdge: v.ei)
+                        : item.to
                     var action = HopSearchPolicy.considerRelax(
                         newCost: cost,
-                        oldCost: dist[item.to],
+                        oldCost: dist[toState],
                         newEi: v.ei,
-                        oldEi: prevData[item.to],
-                        node: item.to,
+                        oldEi: prevData[toState],
+                        node: toState,
                         newIsDirt: false,
                         oldIsDirt: false,
                         seed: ctx.sessionSeed,
                         variety: ctx.variety,
-                        slotsUsed: Int(slots[item.to])
+                        slotsUsed: Int(slots[toState])
                     )
-                    if action == .stealPred, HopSearchPolicy.createsCycle(prev: prev, from: cur.node, through: item.to) {
+                    if action == .stealPred, HopSearchPolicy.createsCycle(prev: prev, from: cur.node, through: toState) {
                         action = .reject
                     }
-                    if HopSearchPolicy.apply(action, slots: &slots, at: item.to) {
-                        prev[item.to] = cur.node
-                        prevKind[item.to] = 1
-                        prevData[item.to] = item.id
-                        prevForward[item.to] = item.forward
+                    if HopSearchPolicy.apply(action, slots: &slots, at: toState) {
+                        prev[toState] = cur.node
+                        prevKind[toState] = 1
+                        prevData[toState] = item.id
+                        prevForward[toState] = item.forward
                         if HopSearchPolicy.shouldPush(action) {
-                            dist[item.to] = cost
-                            pathMeters[item.to] = newMeters
-                            heap.push(node: item.to, cost: cost)
+                            dist[toState] = cost
+                            pathMeters[toState] = newMeters
+                            heap.push(node: toState, cost: cost)
                         }
                     }
                 }
@@ -2048,8 +2109,11 @@ nonisolated struct OnDeviceRouter {
                 // Coincident duplicate-node stitch — no geometry.
             } else {
                 let ei = prevData[node]
-                let aNode = parent
-                let bNode = node
+                let aNode = turnState.graphNode(of: parent)
+                let bNode = turnState.graphNode(of: node)
+                guard aNode >= 0, aNode < n, bNode >= 0, bNode < n else {
+                    return .failure(.noPath)
+                }
                 let a = coordinate(forNode: aNode)
                 let b = coordinate(forNode: bNode)
                 let m = Double(pack.edgeMeters[ei])
@@ -2124,10 +2188,11 @@ nonisolated struct OnDeviceRouter {
         let startOnMajorHighway = snapIsMajorHighwayPin(startSnap, profile: profile)
         let endOnMajorHighway = snapIsMajorHighwayPin(endSnap, profile: profile)
         let B = HopSearchPolicy.balancedBuckets
-        let totalNodes = n + 2
+        let turnState = pack.makeV4TurnStateSpace(startNode: startVirt, endNode: endVirt)
+        let totalNodes = turnState.stateCount
         let labels = totalNodes * B
         func lab(_ node: Int, _ bucket: Int) -> Int { node * B + bucket }
-        func nid(_ label: Int) -> Int { label / B }
+        func sid(_ label: Int) -> Int { label / B }
 
         var dist = [Double](repeating: .infinity, count: labels)
         var pathMeters = [Double](repeating: .infinity, count: labels)
@@ -2163,7 +2228,8 @@ nonisolated struct OnDeviceRouter {
             if cur.cost != dist[cur.node] { continue }
             let metersSoFar = pathMeters[cur.node]
             if metersSoFar > cap { continue }
-            let node = nid(cur.node)
+            let state = sid(cur.node)
+            let node = turnState.graphNode(of: state)
             let dirtSoFar = dirtAt[cur.node]
 
             if node < n {
@@ -2178,18 +2244,23 @@ nonisolated struct OnDeviceRouter {
                        isBacktrack(prevKind: prevKind[cur.node], prevData: prevData[cur.node], ei: ei, virt: virt) {
                         continue
                     }
-                    if pack.v4HopIllegal(
+                    if !pack.v4AccessAllowed(
                         ei: ei, from: node, to: toNode,
                         startEi: startEi, endEi: endEi,
-                        incomingEi: incomingUndirected(
-                            prevKind: prevKind[cur.node],
-                            prevData: prevData[cur.node],
-                            virt: virt
-                        )
+                        allowUnknown: policyUnknown,
+                        startEndpointKind: startEndpointKind,
+                        endEndpointKind: endEndpointKind
                     ) { continue }
+                    let toState = turnState.transition(
+                        state: state, outgoingEdge: ei, toNode: toNode
+                    )
+                    if toState < 0 { continue }
                     let attr = pack.edgeAttrs[ei]
                     let access = GraphV2Pack.unpackAccess(attr)
-                    if !accessAllowed(access, allowUnknown: policyUnknown, profile: profile) { continue }
+                    if pack.version < 4,
+                       !accessAllowed(access, allowUnknown: policyUnknown, profile: profile) {
+                        continue
+                    }
                     if edgeBlockedByPavedOnly(ei, ctx: ctx, allowSnapEdges: startEi, endEi: endEi) { continue }
                     let eid = pack.edgeId(ei)
                     if !eid.isEmpty, avoidEdgeIds.contains(eid) { continue }
@@ -2209,7 +2280,7 @@ nonisolated struct OnDeviceRouter {
                         : (edgeIsDirt(ei) ? edgeM : 0)
                     let newDirt = dirtSoFar + addDirt
                     let b = HopSearchPolicy.dirtBucket(dirtMeters: newDirt, pathMeters: newMeters)
-                    let toLab = lab(toNode, b)
+                    let toLab = lab(toState, b)
                     let settlementMult = ctx.settlementFallback
                         ? UrbanCore.settlementFallbackMultiplier(
                             point: toLL, start: from, end: to, boxes: settlementBoxes(for: profile),
@@ -2266,7 +2337,7 @@ nonisolated struct OnDeviceRouter {
                         oldCost: dist[toLab],
                         newEi: ei,
                         oldEi: prevData[toLab],
-                        node: toNode,
+                        node: toState,
                         newIsDirt: addDirt > 0,
                         oldIsDirt: dirtAt[toLab] > (pathMeters[toLab].isFinite ? pathMeters[toLab] * 0.4 : 0),
                         seed: ctx.sessionSeed,
@@ -2289,7 +2360,7 @@ nonisolated struct OnDeviceRouter {
                         }
                     }
                 }
-                if let siblings = coincidentSiblings[node] {
+                if pack.version < 4, let siblings = coincidentSiblings[node] {
                     for toNode in siblings {
                         let bucket = HopSearchPolicy.dirtBucket(
                             dirtMeters: dirtSoFar,
@@ -2313,6 +2384,34 @@ nonisolated struct OnDeviceRouter {
             if let vlist = virtAdj[node] {
                 for item in vlist {
                     let v = virt[item.id]
+                    if pack.version >= 4, v.ei >= 0 {
+                        if item.to == endVirt,
+                           !turnState.allowsExit(state: state, outgoingEdge: v.ei) {
+                            continue
+                        }
+                        let edgeA = Int(pack.edgeFrom?[v.ei] ?? -1)
+                        let edgeB = Int(pack.edgeTo?[v.ei] ?? -1)
+                        let accessFrom: Int
+                        let accessTo: Int
+                        if node == startVirt, item.to < n {
+                            accessTo = item.to
+                            accessFrom = item.to == edgeA ? edgeB : edgeA
+                        } else if node < n, item.to == endVirt {
+                            accessFrom = node
+                            accessTo = node == edgeA ? edgeB : edgeA
+                        } else {
+                            let alongForward = startSnap.distanceAlongM <= endSnap.distanceAlongM
+                            accessFrom = alongForward ? edgeA : edgeB
+                            accessTo = alongForward ? edgeB : edgeA
+                        }
+                        if !pack.v4AccessAllowed(
+                            ei: v.ei, from: accessFrom, to: accessTo,
+                            startEi: startEi, endEi: endEi,
+                            allowUnknown: policyUnknown,
+                            startEndpointKind: startEndpointKind,
+                            endEndpointKind: endEndpointKind
+                        ) { continue }
+                    }
                     if ctx.pavedOnly {
                         if v.junctionStitch { continue }
                         if v.ei >= 0,
@@ -2333,7 +2432,10 @@ nonisolated struct OnDeviceRouter {
                         if hopBlocked(blockedLL, edgeFrom: edgeFrom, from: from, to: to, ctx: ctx) { continue }
                     }
                     let b = HopSearchPolicy.dirtBucket(dirtMeters: dirtSoFar, pathMeters: newMeters)
-                    let toLab = lab(item.to, b)
+                    let toState = item.to < n && v.ei >= 0
+                        ? turnState.stateForArrival(node: item.to, incomingEdge: v.ei)
+                        : item.to
+                    let toLab = lab(toState, b)
                     let toLL = item.to < n ? coordinate(forNode: item.to) : endSnap.projected
                     let settlementMult = ctx.settlementFallback
                         ? UrbanCore.settlementFallbackMultiplier(
@@ -2420,7 +2522,7 @@ nonisolated struct OnDeviceRouter {
         var legs: [Leg] = []
         var label = bestLab
         var hops = 0
-        while nid(label) != startVirt {
+        while sid(label) != startVirt {
             hops += 1
             if hops > labels + 4 { return .failure(.noPath) }
             let parent = prev[label]
@@ -2460,8 +2562,8 @@ nonisolated struct OnDeviceRouter {
                 // Coincident duplicate-node stitch — no geometry.
             } else {
                 let ei = prevData[label]
-                let aNode = nid(parent)
-                let bNode = nid(label)
+                let aNode = turnState.graphNode(of: sid(parent))
+                let bNode = turnState.graphNode(of: sid(label))
                 guard aNode < n, bNode < n, ei >= 0 else {
                     label = parent
                     continue
@@ -2573,7 +2675,17 @@ nonisolated struct OnDeviceRouter {
                     guard ei >= 0, ei < pack.undirectedEdgeCount else { continue }
                     let attr = pack.edgeAttrs[ei]
                     let access = GraphV2Pack.unpackAccess(attr)
-                    if !accessAllowed(access, allowUnknown: policyUnknown, profile: profile) { continue }
+                    if pack.version >= 4, pack.legalTopology {
+                        // Transpose lower bound: actual travel is toNode ->
+                        // cur.node. Endpoint-only edges remain admissible here;
+                        // the forward search proves exact endpoint intent.
+                        let code = Int(pack.v4AccessCode(ei: ei, from: toNode, to: cur.node))
+                        if code == 2 || code == 5 || (code == 1 && !policyUnknown) { continue }
+                    } else if !accessAllowed(
+                        access, allowUnknown: policyUnknown, profile: profile
+                    ) {
+                        continue
+                    }
                     if edgeBlockedByPavedOnly(ei, ctx: ctx) { continue }
                     let eid = pack.edgeId(ei)
                     if !eid.isEmpty, avoidEdgeIds.contains(eid) { continue }

@@ -13,6 +13,29 @@ fun main(args: Array<String>) {
     check(pack.version == 4)
     check(pack.nodeOffsets.size == pack.nodeCount + 1)
     check(pack.edgeAccess.size == pack.undirectedEdgeCount * 2)
+    pack.applyCrossPackSeams(
+        GraphV4Pack.SeamSidecar(
+            schemaVersion = "dirt-cross-pack-seams.v2",
+            fabricReleaseId = "fixture-v4",
+            sourceEpoch = pack.sourceEpoch,
+            regionId = pack.regionId,
+            neighbors = mapOf(
+                "nb" to listOf(
+                    GraphV4Pack.SeamAnchor(-64.25, 45.85, "100", "100:1:2", "100:1:2", 0.0)
+                )
+            )
+        )
+    )
+    check(pack.crossPackSeams["nb"]?.size == 1)
+    try {
+        pack.applyCrossPackSeams(
+            GraphV4Pack.SeamSidecar(
+                "dirt-cross-pack-seams.v2", "fixture-v4", "wrong-epoch", pack.regionId, emptyMap()
+            )
+        )
+        error("expected mismatched seam epoch rejection")
+    } catch (_: IllegalArgumentException) {
+    }
     println("ok nodes=${pack.nodeCount} edges=${pack.undirectedEdgeCount} arcs=${pack.directedArcCount}")
 
     val west = FindPathV4.findPath(
@@ -70,11 +93,52 @@ fun main(args: Array<String>) {
         )
         val picked = LegalSnap.selectConnectedSnapPair(yPack, startCands, endCands, allowUnknown = false)
         check(picked.ok) { "yarmouth pair failed: ${picked.reason}" }
-        check(picked.end?.osmWayId != 100L) { "yarmouth snapped to disconnected pier" }
-        check(picked.end?.osmWayId == 200L || picked.end?.osmWayId == 400L) {
-            "yarmouth picked unexpected ${picked.end?.osmWayId}"
+        val pickedEnd = checkNotNull(picked.end)
+        check(pickedEnd.osmWayId != 100L) { "yarmouth snapped to disconnected pier" }
+        check(pickedEnd.osmWayId == 200L || pickedEnd.osmWayId == 400L) {
+            "yarmouth picked unexpected ${pickedEnd.osmWayId}"
         }
-        println("ok yarmouth harbour way=${picked.end?.osmWayId} radius=$radius")
+        println("ok yarmouth harbour way=${pickedEnd.osmWayId} radius=$radius")
+    }
+
+    val restrictionGraph = args.getOrNull(4)
+    val restrictionGeom = args.getOrNull(5)
+    if (restrictionGraph != null && restrictionGeom != null) {
+        val legalPack = GraphV4Pack.decode(
+            Files.readAllBytes(Path.of(restrictionGraph)),
+            Files.readAllBytes(Path.of(restrictionGeom))
+        )
+        fun edge(way: Long) = legalPack.osmWayIds.indexOf(way).also {
+            check(it >= 0) { "fixture missing OSM way $way" }
+        }
+        fun node(osm: Long) = legalPack.osmNodeIds.indexOf(osm).also {
+            check(it >= 0) { "fixture missing OSM node $osm" }
+        }
+        val from = edge(10)
+        val via = legalPack.osmWayIds.withIndex().filter { it.value == 11L }.map { it.index }
+        val to = edge(12)
+        check(via.size == 2) { "via-way fixture was not split into two edges: $via" }
+        var state = legalPack.advanceRestrictionState(emptyList(), from, via[0], node(2))
+        check(state.allowed)
+        state = legalPack.advanceRestrictionState(state.active, via[0], via[1], node(3))
+        check(state.allowed)
+        check(!legalPack.advanceRestrictionState(state.active, via[1], to, node(4)).allowed) {
+            "complete forbidden via-way turn was allowed"
+        }
+        check(legalPack.advanceRestrictionState(emptyList(), via[1], to, node(4)).allowed) {
+            "unrelated approach inherited a via-way restriction"
+        }
+
+        val destination = edge(20)
+        val customers = edge(21)
+        val unknown = edge(22)
+        check(legalPack.accessAllowed(destination, node(20), node(21), false, true))
+        check(!legalPack.accessAllowed(destination, node(20), node(21), false, true, "customers"))
+        check(!legalPack.accessAllowed(customers, node(22), node(23), false, true))
+        check(legalPack.accessAllowed(customers, node(22), node(23), false, true, "customers"))
+        check(!legalPack.accessAllowed(unknown, node(23), node(24), false, false))
+        check(legalPack.accessAllowed(unknown, node(23), node(24), true, false))
+        println("ok exact via-way and endpoint access parity")
     }
 
     GraphV4Pack.rejectMixedContract(listOf("epoch-1", "epoch-1"))

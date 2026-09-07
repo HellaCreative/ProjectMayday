@@ -112,6 +112,10 @@ struct RouteRequestOptions: Codable, Sendable {
     var mapZoom: Double?
     /// Optional override of the zoom-aware snap radius, still capped.
     var matchLimitMeters: Double?
+    /// V4 access intent. `customers` is set only for a deliberately selected
+    /// service/fuel endpoint; ordinary rider pins omit these fields.
+    var startEndpointKind: String?
+    var endEndpointKind: String?
 
     init(
         avoidEdgeIds: [String] = [],
@@ -126,7 +130,9 @@ struct RouteRequestOptions: Codable, Sendable {
         avoidMotorways: Bool = false,
         preferBackRoads: Bool = false,
         mapZoom: Double? = nil,
-        matchLimitMeters: Double? = nil
+        matchLimitMeters: Double? = nil,
+        startEndpointKind: String? = nil,
+        endEndpointKind: String? = nil
     ) {
         self.avoidEdgeIds = avoidEdgeIds.isEmpty ? nil : avoidEdgeIds
         self.priorEdgeIds = priorEdgeIds.isEmpty ? nil : priorEdgeIds
@@ -146,6 +152,8 @@ struct RouteRequestOptions: Codable, Sendable {
         self.preferBackRoads = preferBackRoads ? true : nil
         self.mapZoom = mapZoom?.isFinite == true ? mapZoom : nil
         self.matchLimitMeters = matchLimitMeters?.isFinite == true ? matchLimitMeters : nil
+        self.startEndpointKind = startEndpointKind == "customers" ? "customers" : nil
+        self.endEndpointKind = endEndpointKind == "customers" ? "customers" : nil
     }
 }
 
@@ -172,7 +180,9 @@ struct RouteRequest: Codable, Sendable {
         avoidMotorways: Bool = false,
         preferBackRoads: Bool = false,
         mapZoom: Double? = nil,
-        matchLimitMeters: Double? = nil
+        matchLimitMeters: Double? = nil,
+        startEndpointKind: String? = nil,
+        endEndpointKind: String? = nil
     ) {
         self.profile = profile
         self.locations = locations
@@ -190,7 +200,8 @@ struct RouteRequest: Codable, Sendable {
         if avoidEdgeIds.isEmpty, priorEdgeIds.isEmpty, arrivalEdgeId == nil,
            backtrackFactor == nil, seed == nil, maxPathMeters == nil,
            directExtraBudgetMeters == nil, regionalHopMinimumMeters.isEmpty, metro == nil,
-           !scopedAvoid, !scopedPrefer, zoom == nil, matchLimit == nil {
+           !scopedAvoid, !scopedPrefer, zoom == nil, matchLimit == nil,
+           startEndpointKind == nil, endEndpointKind == nil {
             options = nil
         } else {
             options = RouteRequestOptions(
@@ -206,7 +217,9 @@ struct RouteRequest: Codable, Sendable {
                 avoidMotorways: scopedAvoid,
                 preferBackRoads: scopedPrefer,
                 mapZoom: zoom,
-                matchLimitMeters: matchLimit
+                matchLimitMeters: matchLimit,
+                startEndpointKind: startEndpointKind,
+                endEndpointKind: endEndpointKind
             )
         }
     }

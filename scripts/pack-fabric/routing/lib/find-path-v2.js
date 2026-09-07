@@ -16,7 +16,8 @@ const {
 } = require("./pack-v2");
 const {
   compileRestrictionIndex,
-  indexedTurnAllowed
+  advanceRestrictionState,
+  activeKey
 } = require("./legal-topology/restrictions");
 const {
   surfaceMultiplier,
@@ -114,20 +115,32 @@ function v4AccessCode(pack, ei, fromNode, toNode) {
   return pack.edgeAccess[ei * 2 + (forward ? 0 : 1)];
 }
 
-function v4HopIllegal(pack, ei, fromNode, toNode, startEi, endEi, incomingEi) {
-  if (!pack || pack.graphBinaryVersion < 4) return false;
+function v4TransitionState(
+  pack,
+  turnState,
+  currentState,
+  ei,
+  fromNode,
+  toNode,
+  startEi,
+  endEi,
+  startEndpointKind = null,
+  endEndpointKind = null
+) {
+  if (!pack || pack.graphBinaryVersion < 4) return toNode;
   const code = v4AccessCode(pack, ei, fromNode, toNode);
-  if (code === 2 || code === 5) return true;
-  if ((code === 3 || code === 4) && ei !== startEi && ei !== endEi) return true;
-  if (incomingEi == null || incomingEi < 0 || !pack.restrictions || !pack.restrictions.length) {
-    return false;
-  }
-  return !indexedTurnAllowed(
-    compileRestrictionIndex(pack.restrictions),
-    incomingEi,
-    ei,
-    fromNode
-  );
+  if (code === 2 || code === 5) return -1;
+  const isStart = ei === startEi;
+  const isEnd = ei === endEi;
+  if (code === 3 && !(
+    (isStart && startEndpointKind !== "customers") ||
+    (isEnd && endEndpointKind !== "customers")
+  )) return -1;
+  if (code === 4 && !(
+    (isStart && startEndpointKind === "customers") ||
+    (isEnd && endEndpointKind === "customers")
+  )) return -1;
+  return turnState.transition(currentState, ei, toNode);
 }
 
 function incomingUndirected(prevKind, prevData, virt, node) {
@@ -143,7 +156,9 @@ function buildTurnAwareState(pack, n, startNode, endNode) {
   const identity = {
     stateCount: n + 2,
     graphNodeOf: (state) => state,
-    stateForArrival: (node) => node
+    stateForArrival: (node) => node,
+    transition: (_state, _edge, toNode) => toNode,
+    allowsExit: () => true
   };
   if (!pack || pack.graphBinaryVersion < 4 || !pack.restrictions || !pack.restrictions.length) {
     return identity;
@@ -153,28 +168,86 @@ function buildTurnAwareState(pack, n, startNode, endNode) {
   if (!statefulEdges || !statefulEdges.size) return identity;
 
   const stateByArrival = new Map();
-  const nodeByExtraState = [];
+  const records = [];
+  const queue = [];
+  const transitionCache = new Map();
+  function addState(node, incomingEdge, active = []) {
+    const key = `${node}:${Number(incomingEdge)}:${activeKey(active)}`;
+    const existing = stateByArrival.get(key);
+    if (existing != null) return existing;
+    const state = n + 2 + records.length;
+    stateByArrival.set(key, state);
+    records.push({ node, incomingEdge: Number(incomingEdge), active });
+    queue.push(state);
+    return state;
+  }
   for (let source = 0; source < n; source += 1) {
     for (let arc = pack.nodeOffsets[source]; arc < pack.nodeOffsets[source + 1]; arc += 1) {
       const incomingEdge = Number(pack.edgeUndirectedIndex[arc]);
       if (!statefulEdges.has(incomingEdge)) continue;
       const target = Number(pack.edgeTargets[arc]);
-      const key = `${target}:${incomingEdge}`;
-      if (stateByArrival.has(key)) continue;
-      stateByArrival.set(key, n + 2 + nodeByExtraState.length);
-      nodeByExtraState.push(target);
+      addState(target, incomingEdge, []);
+    }
+  }
+
+  for (let q = 0; q < queue.length; q += 1) {
+    const state = queue[q];
+    const record = records[state - (n + 2)];
+    const start = pack.nodeOffsets[record.node];
+    const end = pack.nodeOffsets[record.node + 1];
+    for (let arc = start; arc < end; arc += 1) {
+      const outgoingEdge = Number(pack.edgeUndirectedIndex[arc]);
+      const target = Number(pack.edgeTargets[arc]);
+      const advanced = advanceRestrictionState(
+        restrictionIndex,
+        record.active,
+        record.incomingEdge,
+        outgoingEdge,
+        record.node
+      );
+      const cacheKey = `${state}:${outgoingEdge}:${target}`;
+      if (!advanced.allowed) {
+        transitionCache.set(cacheKey, -1);
+        continue;
+      }
+      const needsState = statefulEdges.has(outgoingEdge) || advanced.active.length > 0;
+      transitionCache.set(
+        cacheKey,
+        needsState ? addState(target, outgoingEdge, advanced.active) : target
+      );
     }
   }
   const graphNodeOf = (state) => {
     if (state === startNode || state === endNode || state < n) return state;
-    return nodeByExtraState[state - (n + 2)];
+    return records[state - (n + 2)].node;
   };
   const stateForArrival = (node, incomingEdge) =>
-    stateByArrival.get(`${node}:${Number(incomingEdge)}`) ?? node;
+    stateByArrival.get(`${node}:${Number(incomingEdge)}:`) ?? node;
+  const transition = (state, outgoingEdge, toNode) => {
+    if (state < n || state === startNode || state === endNode) {
+      return statefulEdges.has(Number(outgoingEdge))
+        ? stateForArrival(toNode, outgoingEdge)
+        : toNode;
+    }
+    return transitionCache.get(`${state}:${Number(outgoingEdge)}:${Number(toNode)}`) ?? -1;
+  };
+  const allowsExit = (state, outgoingEdge) => {
+    if (state < n || state === startNode || state === endNode) return true;
+    const record = records[state - (n + 2)];
+    return advanceRestrictionState(
+      restrictionIndex,
+      record.active,
+      record.incomingEdge,
+      outgoingEdge,
+      record.node
+    ).allowed;
+  };
   return {
-    stateCount: n + 2 + nodeByExtraState.length,
+    stateCount: n + 2 + records.length,
     graphNodeOf,
-    stateForArrival
+    stateForArrival,
+    transition,
+    allowsExit
   };
 }
 
@@ -1585,7 +1658,9 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
       avoidMotorways: e4Opts.avoidMotorways,
       coincidentSiblings,
       shortDirtPenaltyEdgeIds,
-      turnState
+      turnState,
+      startEndpointKind: searchOpts.startEndpointKind,
+      endEndpointKind: searchOpts.endEndpointKind
     });
   }
 
@@ -1699,15 +1774,19 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
           if (rejected) rejected.immediateReverse += 1;
           continue;
         }
-        if (v4HopIllegal(
+        const toState = v4TransitionState(
           pack,
+          turnState,
+          cur.node,
           ei,
           currentGraphNode,
           to,
           startEi,
           endEi,
-          incomingUndirected(prevKind, prevData, virt, cur.node)
-        )) {
+          searchOpts.startEndpointKind,
+          searchOpts.endEndpointKind
+        );
+        if (toState < 0) {
           if (rejected) rejected.legalTurn += 1;
           continue;
         }
@@ -1741,7 +1820,6 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
           if (rejected) rejected.length += 1;
           continue;
         }
-        const toState = stateForArrival(to, ei);
         const surface = unpackSurface(attr);
         const road = ROAD_CLASS_NAME[unpackRoadClass(attr)] || "unknown";
         const surfaceName = enums.SURFACE_NAME[surface] || "unknown";
@@ -1948,6 +2026,11 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
       for (let vi = 0; vi < vlist.length; vi += 1) {
         const item = vlist[vi];
         const v = virt[item.id];
+        if (
+          item.to === endNode &&
+          pack.graphBinaryVersion >= 4 &&
+          !turnState.allowsExit(cur.node, v.ei)
+        ) continue;
         const toState = item.to < n ? stateForArrival(item.to, v.ei) : item.to;
         const toLL = nodeLL(item.to);
         if (blockedForRide(
@@ -2417,15 +2500,19 @@ function searchBalancedResource(ctx) {
           if (rejected) rejected.immediateReverse += 1;
           continue;
         }
-        if (v4HopIllegal(
+        const toState = v4TransitionState(
           pack,
+          turnState,
+          state,
           ei,
           node,
           to,
           startEi,
           endEi,
-          incomingUndirected(prevKind, prevData, virt, cur.node)
-        )) {
+          ctx.startEndpointKind,
+          ctx.endEndpointKind
+        );
+        if (toState < 0) {
           if (rejected) rejected.legalTurn += 1;
           continue;
         }
@@ -2471,7 +2558,6 @@ function searchBalancedResource(ctx) {
           : 0;
         const newDirt = dirtSoFar + addDirt;
         const b = dirtBucket(newDirt, newMeters);
-        const toState = stateForArrival(to, ei);
         const toLab = lab(toState, b);
         const settlementMult = settlementFallback && toLL
           ? settlementFallbackMultiplier(
@@ -2555,6 +2641,11 @@ function searchBalancedResource(ctx) {
       for (let vi = 0; vi < vlist.length; vi += 1) {
         const item = vlist[vi];
         const v = virt[item.id];
+        if (
+          item.to === endNode &&
+          pack.graphBinaryVersion >= 4 &&
+          !turnState.allowsExit(state, v.ei)
+        ) continue;
         const toLL = nodeLL(item.to);
         if (blockedForRide(
           toLL, startLL, endLL, cityWall, corridorM, hardCorridor, urbanBoxes,

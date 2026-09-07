@@ -14,7 +14,12 @@ const KIND = {
   only_straight_on: 6,
   only_u_turn: 7,
   no_entry: 8,
-  no_exit: 9
+  no_exit: 9,
+  // OSM's no-turn-on-red values are conditional on a signal phase. V4's
+  // launch contract conservatively enforces them at all times rather than
+  // ever allowing a prohibited red-light turn.
+  no_right_turn_on_red: 1,
+  no_left_turn_on_red: 0
 };
 
 const ONLY_KINDS = new Set([
@@ -30,12 +35,18 @@ function tag(tags, key) {
 }
 
 function restrictionKey(tags = {}) {
-  return (
+  const direct = (
     tag(tags, "restriction:motorcycle") ||
     tag(tags, "restriction:motor_vehicle") ||
     tag(tags, "restriction") ||
     ""
   );
+  if (direct) return direct;
+  const conditional = tag(tags, "restriction:motorcycle:conditional") ||
+    tag(tags, "restriction:motor_vehicle:conditional") ||
+    tag(tags, "restriction:conditional");
+  if (!conditional) return "";
+  return conditional.split("@")[0].trim();
 }
 
 function parseExcept(tags = {}) {
@@ -51,7 +62,7 @@ function vehicleMask(tags = {}) {
 }
 
 function exceptExemptsMotorcycle(exceptList) {
-  return exceptList.some((v) => v === "motorcycle" || v === "psv" || v === "motor_vehicle");
+  return exceptList.some((v) => v === "motorcycle" || v === "motor_vehicle" || v === "vehicle");
 }
 
 /**
@@ -139,6 +150,8 @@ function compileRestrictionIndex(restrictions) {
       onlyNodeTurns: new Map(),
       blockedViaWayExits: new Map(),
       onlyViaWayEntries: new Map(),
+      viaPatterns: [],
+      viaStarters: new Map(),
       statefulIncomingEdges: new Set()
     };
   }
@@ -150,6 +163,8 @@ function compileRestrictionIndex(restrictions) {
     onlyNodeTurns: new Map(),
     blockedViaWayExits: new Map(),
     onlyViaWayEntries: new Map(),
+    viaPatterns: [],
+    viaStarters: new Map(),
     statefulIncomingEdges: new Set()
   };
   for (const restriction of restrictions) {
@@ -161,18 +176,21 @@ function compileRestrictionIndex(restrictions) {
       : [];
     if (viaEdges.length) {
       index.statefulIncomingEdges.add(fromEdge);
-      index.statefulIncomingEdges.add(viaEdges[viaEdges.length - 1]);
-      if (restriction.only) {
-        let entry = index.onlyViaWayEntries.get(fromEdge);
-        if (!entry) {
-          entry = { allowedFirstEdges: new Set(), allowedExitEdges: new Map() };
-          index.onlyViaWayEntries.set(fromEdge, entry);
-        }
-        entry.allowedFirstEdges.add(viaEdges[0]);
-        addToSetMap(entry.allowedExitEdges, viaEdges[viaEdges.length - 1], toEdge);
-      } else {
-        addToSetMap(index.blockedViaWayExits, viaEdges[viaEdges.length - 1], toEdge);
+      const id = index.viaPatterns.length;
+      index.viaPatterns.push({
+        id,
+        fromEdge,
+        toEdge,
+        viaEdges,
+        entryNode: Number(restriction.viaNode),
+        only: restriction.only === true
+      });
+      let starters = index.viaStarters.get(fromEdge);
+      if (!starters) {
+        starters = [];
+        index.viaStarters.set(fromEdge, starters);
       }
+      starters.push(id);
       continue;
     }
 
@@ -206,11 +224,71 @@ function indexedTurnAllowed(index, fromEdge, toEdge, viaNode) {
   const blocked = index.blockedNodeTurns.get(key);
   if (blocked && blocked.has(to)) return false;
 
-  const blockedExits = index.blockedViaWayExits.get(from);
-  if (blockedExits && blockedExits.has(to)) return false;
-  const onlyEntry = index.onlyViaWayEntries.get(from);
-  if (onlyEntry && !onlyEntry.allowedFirstEdges.has(to)) return false;
   return true;
+}
+
+function activeKey(active) {
+  return (active || [])
+    .map((row) => `${Number(row.id)}:${Number(row.progress)}`)
+    .sort()
+    .join("|");
+}
+
+/**
+ * Advance exact via-way restriction progress. A via-way rule is scoped to the
+ * complete `from -> ordered via edges -> to` sequence, so traffic that merely
+ * reaches the final via edge from another road is never globally blocked.
+ */
+function advanceRestrictionState(index, active, fromEdge, toEdge, viaNode) {
+  if (!indexedTurnAllowed(index, fromEdge, toEdge, viaNode)) {
+    return { allowed: false, active: [] };
+  }
+  const from = Number(fromEdge);
+  const to = Number(toEdge);
+  const current = Array.isArray(active) ? active : [];
+  const next = [];
+
+  const activeOnly = current.filter((row) => {
+    const pattern = index.viaPatterns[row.id];
+    return pattern && pattern.only;
+  });
+  if (activeOnly.length && !activeOnly.some((row) => {
+    const pattern = index.viaPatterns[row.id];
+    const sequence = [pattern.fromEdge, ...pattern.viaEdges, pattern.toEdge];
+    return Number(sequence[row.progress + 1]) === to;
+  })) {
+    return { allowed: false, active: [] };
+  }
+
+  for (const row of current) {
+    const pattern = index.viaPatterns[row.id];
+    if (!pattern) continue;
+    const sequence = [pattern.fromEdge, ...pattern.viaEdges, pattern.toEdge];
+    const expected = Number(sequence[row.progress + 1]);
+    if (expected !== to) continue;
+    const completes = row.progress + 1 === sequence.length - 1;
+    if (completes) {
+      if (!pattern.only) return { allowed: false, active: [] };
+      continue;
+    }
+    next.push({ id: row.id, progress: row.progress + 1 });
+  }
+
+  const starters = (index.viaStarters.get(from) || []).filter((id) => {
+    const pattern = index.viaPatterns[id];
+    return !Number.isFinite(pattern.entryNode) || pattern.entryNode < 0 || pattern.entryNode === Number(viaNode);
+  });
+  const starterOnly = starters.filter((id) => index.viaPatterns[id].only);
+  if (starterOnly.length && !starterOnly.some((id) => index.viaPatterns[id].viaEdges[0] === to)) {
+    return { allowed: false, active: [] };
+  }
+  for (const id of starters) {
+    const pattern = index.viaPatterns[id];
+    if (Number(pattern.viaEdges[0]) === to) next.push({ id, progress: 1 });
+  }
+
+  const unique = new Map(next.map((row) => [`${row.id}:${row.progress}`, row]));
+  return { allowed: true, active: [...unique.values()].sort((a, b) => a.id - b.id || a.progress - b.progress) };
 }
 
 /**
@@ -249,6 +327,8 @@ module.exports = {
   restrictionAppliesToMotorcycle,
   compileRestrictionIndex,
   indexedTurnAllowed,
+  advanceRestrictionState,
+  activeKey,
   turnAllowed,
   exceptExemptsMotorcycle
 };

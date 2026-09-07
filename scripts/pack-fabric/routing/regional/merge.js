@@ -157,17 +157,18 @@ function mergeRegionalGraphs(graphs) {
  * Undirected neighbours based on shared land/ferry borders.
  */
 const REGION_NEIGHBOURS = {
-  // Land / contiguous borders plus topology-proven vehicle ferry links.
-  // A ferry pair is added only when both v3 packs publish the same routable
-  // OSM vertices in cross-pack-topology.v1.json.
-  bc: ["ab", "yt", "nt"],
-  ab: ["bc", "sk", "nt"],
-  sk: ["ab", "mb", "nt"],
-  mb: ["sk", "on", "nu"],
-  on: ["mb", "qc"],
+  // Explicit road-reachable land borders. Rectangular bounding boxes are not
+  // topology: they create false state/province neighbours across lakes and
+  // corners. Ferry-only pairs are admitted later only when both packs prove
+  // the same OSM ferry way and node.
+  bc: ["ab", "yt", "nt", "ak", "wa", "id", "mt"],
+  ab: ["bc", "sk", "nt", "mt"],
+  sk: ["ab", "mb", "mt", "nd"],
+  mb: ["sk", "on", "nd", "mn"],
+  on: ["mb", "qc", "mn", "mi", "ny"],
   // One QC province pack (OSM-only). Legacy qc-* neighbours kept so emergency
   // quadrant packs still path-find if re-enabled in select.js.
-  qc: ["on", "nb", "nl"],
+  qc: ["on", "nb", "nl", "ny", "vt", "nh", "me"],
   "qc-west": ["on", "qc", "qc-sl", "qc-north"],
   "qc-sl": ["nb", "nl", "qc", "qc-west", "qc-north"],
   "qc-north": ["qc", "qc-sl", "qc-west"],
@@ -176,10 +177,59 @@ const REGION_NEIGHBOURS = {
   ns: ["nb", "pe", "nl"],
   pe: ["nb", "ns"],
   nl: ["qc", "ns"],
-  yt: ["bc", "nt"],
-  nt: ["yt", "bc", "ab", "sk", "nu"],
-  nu: ["nt", "mb"],
-  me: ["nb"]
+  yt: ["bc", "nt", "ak"],
+  nt: ["yt", "bc", "ab"],
+  nu: [],
+  ak: ["yt", "bc"],
+  al: ["fl", "ga", "ms", "tn"],
+  ar: ["mo", "tn", "ms", "la", "tx", "ok"],
+  az: ["ca", "nv", "ut", "nm"],
+  ca: ["or", "nv", "az"],
+  co: ["wy", "ne", "ks", "ok", "nm", "ut"],
+  ct: ["ny", "ma", "ri"],
+  de: ["md", "pa", "nj"],
+  fl: ["al", "ga"],
+  ga: ["fl", "al", "tn", "nc", "sc"],
+  hi: [],
+  ia: ["mn", "wi", "il", "mo", "ne", "sd"],
+  id: ["wa", "or", "nv", "ut", "wy", "mt", "bc"],
+  il: ["wi", "ia", "mo", "ky", "in"],
+  in: ["mi", "oh", "ky", "il"],
+  ks: ["ne", "mo", "ok", "co"],
+  ky: ["il", "in", "oh", "wv", "va", "tn", "mo"],
+  la: ["tx", "ar", "ms"],
+  ma: ["ri", "ct", "ny", "vt", "nh"],
+  md: ["va", "wv", "pa", "de"],
+  me: ["nh", "qc", "nb"],
+  mi: ["wi", "in", "oh", "on"],
+  mn: ["nd", "sd", "ia", "wi", "on", "mb"],
+  mo: ["ia", "il", "ky", "tn", "ar", "ok", "ks", "ne"],
+  ms: ["la", "ar", "tn", "al"],
+  mt: ["id", "wy", "sd", "nd", "sk", "ab", "bc"],
+  nc: ["va", "tn", "ga", "sc"],
+  nd: ["mt", "sd", "mn", "mb", "sk"],
+  ne: ["sd", "ia", "mo", "ks", "co", "wy"],
+  nh: ["me", "ma", "vt", "qc"],
+  nj: ["ny", "pa", "de"],
+  nm: ["az", "co", "ok", "tx"],
+  nv: ["or", "id", "ut", "az", "ca"],
+  ny: ["pa", "nj", "ct", "ma", "vt", "qc", "on"],
+  oh: ["mi", "pa", "wv", "ky", "in"],
+  ok: ["co", "ks", "mo", "ar", "tx", "nm"],
+  or: ["wa", "id", "nv", "ca"],
+  pa: ["ny", "nj", "de", "md", "wv", "oh"],
+  ri: ["ct", "ma"],
+  sc: ["nc", "ga"],
+  sd: ["nd", "mn", "ia", "ne", "wy", "mt"],
+  tn: ["ky", "va", "nc", "ga", "al", "ms", "ar", "mo"],
+  tx: ["nm", "ok", "ar", "la"],
+  ut: ["id", "wy", "co", "az", "nv"],
+  va: ["md", "wv", "ky", "tn", "nc"],
+  vt: ["ny", "ma", "nh", "qc"],
+  wa: ["bc", "id", "or"],
+  wi: ["mi", "mn", "ia", "il"],
+  wv: ["oh", "pa", "md", "va", "ky"],
+  wy: ["mt", "sd", "ne", "co", "ut", "id"]
 };
 
 function shortestRegionPath(from, to) {
@@ -207,24 +257,9 @@ function bboxesTouch(a, b, pad = 0.15) {
   return !(a[2] + pad < b[0] || b[2] + pad < a[0] || a[3] + pad < b[1] || b[3] + pad < a[1]);
 }
 
-/**
- * Canada–Canada stays on the explicit land/bridge graph (rectangles lie).
- * US–US and Canada–US use bbox touch so we don't maintain 50-state adjacency.
- */
 function neighboursOf(id) {
   const key = String(id || "").toLowerCase();
-  const out = new Set(REGION_NEIGHBOURS[key] || []);
-  const { REGION_BBOX, US_STATE_IDS } = require("./select");
-  const bbox = REGION_BBOX[key];
-  if (!bbox) return [...out];
-  const idIsUS = US_STATE_IDS.has(key);
-  for (const [other, ob] of Object.entries(REGION_BBOX)) {
-    if (other === key) continue;
-    const otherUS = US_STATE_IDS.has(other);
-    if (!idIsUS && !otherUS) continue;
-    if (bboxesTouch(bbox, ob)) out.add(other);
-  }
-  return [...out];
+  return [...new Set(REGION_NEIGHBOURS[key] || [])];
 }
 
 function regionsForRoute(regionIds) {

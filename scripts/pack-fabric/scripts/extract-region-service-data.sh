@@ -21,8 +21,34 @@ EOF
 
 CACHE_ROOT="${OSM_PBF_CACHE:-${TMPDIR:-/tmp}/dirt-osm-poi-build/regions}"
 CACHED_PBF="$CACHE_ROOT/$SLUG/source.osm.pbf"
+RIDER_OUT="${RIDER_SERVICES_V1_OUT:-$ROOT/scripts/pack-fabric/app/data/rider-services/v1/$REGION_ID/rider-services.v1.json}"
+FUEL_OUT="${FUEL_V1_OUT:-$ROOT/scripts/pack-fabric/app/data/packs/v1/$REGION_ID/fuel.v1.json}"
 WORK_DIR=""
-if [ -f "$CACHED_PBF" ]; then
+
+# A V4 fabric may not combine independently refreshed graphs, fuel, and Rider
+# Services. When a source lock is supplied, use and verify that exact PBF.
+if [ -n "${DIRT_V4_SOURCE_LOCK:-}" ]; then
+  read -r LOCK_PATH LOCK_BYTES LOCK_SHA LOCK_TIMESTAMP <<EOF
+$(node -e '
+const fs=require("fs");
+const path=require("path");
+const lock=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
+if(lock.schema!=="dirt-osm-source-lock.v1"||!lock.fabricEpoch) throw new Error("invalid V4 source lock");
+const row=lock.regions&&lock.regions[process.argv[2]];
+if(!row) throw new Error("source lock missing "+process.argv[2]);
+process.stdout.write([path.resolve(row.cachedPath),row.sourceBytes,row.sourceSha256,row.osmTimestamp].join(" "));
+' "$DIRT_V4_SOURCE_LOCK" "$REGION_ID")
+EOF
+  PBF="$LOCK_PATH"
+  [ -f "$PBF" ] || { echo "Locked source is missing: $PBF" >&2; exit 1; }
+  ACTUAL_BYTES="$(stat -f '%z' "$PBF")"
+  ACTUAL_SHA="$(shasum -a 256 "$PBF" | awk '{print $1}')"
+  ACTUAL_TIMESTAMP="$(osmium fileinfo -g header.option.osmosis_replication_timestamp "$PBF")"
+  [ "$ACTUAL_BYTES" = "$LOCK_BYTES" ] || { echo "Locked source byte mismatch for $REGION_ID" >&2; exit 1; }
+  [ "$ACTUAL_SHA" = "$LOCK_SHA" ] || { echo "Locked source hash mismatch for $REGION_ID" >&2; exit 1; }
+  [ "$ACTUAL_TIMESTAMP" = "$LOCK_TIMESTAMP" ] || { echo "Locked source timestamp mismatch for $REGION_ID" >&2; exit 1; }
+  echo "Using source-locked PBF $PBF"
+elif [ -f "$CACHED_PBF" ]; then
   PBF="$CACHED_PBF"
   echo "Reusing cached source $PBF"
 else
@@ -43,7 +69,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-OUT_DIR="$ROOT/data-raw/osm-services/$SLUG"
+OUT_DIR="${OSM_SERVICE_WORK_ROOT:-$ROOT/data-raw/osm-services}/$SLUG"
 mkdir -p "$OUT_DIR"
 CANDIDATES="$OUT_DIR/service-candidates.osm.pbf"
 SEQUENCE="$OUT_DIR/services.geojsonseq"
@@ -62,12 +88,13 @@ RIDER_SERVICES_REGION_ID="$REGION_ID" \
 RIDER_SERVICES_SOURCE_UPDATED_AT="$SOURCE_UPDATED_AT" \
 node "$ROOT/scripts/pack-fabric/scripts/build-rider-services-pack.js" \
   "$SEQUENCE" \
-  "$ROOT/scripts/pack-fabric/app/data/rider-services/v1/$REGION_ID/rider-services.v1.json"
+  "$RIDER_OUT"
 
 if [ "$MODE" = "with-fuel" ]; then
-  FUEL_V1_OUT="$ROOT/scripts/pack-fabric/app/data/packs/v1/$REGION_ID/fuel.v1.json" \
+  FUEL_V1_OUT="$FUEL_OUT" \
   FUEL_REGION_ID="$REGION_ID" \
-  node "$ROOT/scripts/pack-fabric/scripts/build-fuel-pack.js" "$SEQUENCE"
+  FUEL_SOURCE_UPDATED_AT="$SOURCE_UPDATED_AT" \
+  node "$ROOT/scripts/pack-fabric/scripts/build-fuel-pack.js" "$SEQUENCE" "$OUT_DIR/fuel-chunks"
 fi
 
 echo "service data complete region=$REGION_ID sourceUpdatedAt=$SOURCE_UPDATED_AT"

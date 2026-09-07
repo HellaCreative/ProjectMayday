@@ -27,7 +27,11 @@ fi
 if [ "$needs_download" -eq 1 ]; then
   mkdir -p "$(dirname "$PBF")"
   echo "Downloading $BASE_URL/${SLUG}-latest.osm.pbf"
-  curl -L --fail --retry 3 -o "$PBF.partial" "$BASE_URL/${SLUG}-latest.osm.pbf"
+  curl -L --fail \
+    --retry 5 --retry-all-errors --retry-delay 3 \
+    --connect-timeout 20 --speed-limit 1024 --speed-time 90 \
+    --continue-at - \
+    -o "$PBF.partial" "$BASE_URL/${SLUG}-latest.osm.pbf"
   mv "$PBF.partial" "$PBF"
 else
   echo "Reusing fresh cached PBF (≤${MAX_AGE_HOURS}h): $PBF"

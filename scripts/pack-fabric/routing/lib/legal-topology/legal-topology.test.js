@@ -8,15 +8,18 @@ const { evaluateBarrier } = require("./barriers");
 const {
   parseRestrictionRelation,
   compileRestrictionIndex,
-  indexedTurnAllowed
+  indexedTurnAllowed,
+  advanceRestrictionState
 } = require("./restrictions");
 const {
   parseConditionalExpression,
   evaluateNormalizedRule,
-  collectConditionalRules
+  collectConditionalRules,
+  accessCodeFromRules
 } = require("./conditional");
 const { buildGraphFromOsm, countsFromGraph } = require("./osm-graph");
 const { legalSnap } = require("./snap");
+const { seamCandidates, assertSeamLegal } = require("./seams");
 const { findPathV4 } = require("./find-path-v4");
 const { encodeFromOsmGraph, decodeGraphV4, rejectMixedContract, sha256, GRAPH_V4_MAGIC } = require("../pack-v4");
 const { decodeGeometryV1, GRAPH_MAGIC, unpackSurface } = require("../pack-v2");
@@ -161,7 +164,7 @@ test("3-5. turn restrictions including via-way, motorcycle except, malformed", (
   assert.equal(malformed.ok, false);
 });
 
-test("compiled restriction index enforces node and via-way turns", () => {
+test("compiled restriction index scopes via-way turns to the complete approach", () => {
   const restrictions = [
     { fromEdge: 10, toEdge: 11, viaNode: 2, only: false, vehicleMask: 1 },
     { fromEdge: 20, toEdge: 21, viaNode: 3, only: true, vehicleMask: 1 },
@@ -174,9 +177,67 @@ test("compiled restriction index enforces node and via-way turns", () => {
   assert.equal(indexedTurnAllowed(index, 10, 12, 2), true);
   assert.equal(indexedTurnAllowed(index, 20, 21, 3), true);
   assert.equal(indexedTurnAllowed(index, 20, 22, 3), false);
-  assert.equal(indexedTurnAllowed(index, 32, 33, 9), false);
-  assert.equal(indexedTurnAllowed(index, 40, 41, 9), true);
-  assert.equal(indexedTurnAllowed(index, 40, 44, 9), false);
+  // Merely reaching the final via edge from another approach is legal.
+  assert.equal(indexedTurnAllowed(index, 32, 33, 9), true);
+
+  let state = advanceRestrictionState(index, [], 30, 31, 9);
+  assert.equal(state.allowed, true);
+  state = advanceRestrictionState(index, state.active, 31, 32, 10);
+  assert.equal(state.allowed, true);
+  assert.equal(advanceRestrictionState(index, state.active, 32, 33, 11).allowed, false);
+  assert.equal(advanceRestrictionState(index, [], 32, 33, 11).allowed, true);
+
+  state = advanceRestrictionState(index, [], 40, 41, 9);
+  assert.equal(state.allowed, true);
+  assert.equal(advanceRestrictionState(index, [], 40, 44, 9).allowed, false);
+  state = advanceRestrictionState(index, state.active, 41, 42, 10);
+  assert.equal(state.allowed, true);
+  assert.equal(advanceRestrictionState(index, state.active, 42, 44, 11).allowed, false);
+  assert.equal(advanceRestrictionState(index, state.active, 42, 43, 11).allowed, true);
+});
+
+test("via-way relation stores its exact edge chain and does not block another approach", () => {
+  const osm = {
+    nodes: [
+      node(1, 0, 0),
+      node(2, 0.001, 0),
+      node(3, 0.002, 0),
+      node(4, 0.003, 0),
+      node(5, 0.004, 0),
+      node(6, 0.001, 0.001),
+      node(7, 0.002, 0.001)
+    ],
+    ways: [
+      way(10, [1, 2], { highway: "residential" }),
+      way(11, [2, 3, 4], { highway: "residential" }),
+      way(12, [4, 5], { highway: "residential" }),
+      way(13, [6, 2], { highway: "residential" }),
+      way(14, [3, 7], { highway: "residential" })
+    ],
+    relations: [
+      rel(100, [
+        { type: "way", ref: 10, role: "from" },
+        { type: "way", ref: 11, role: "via" },
+        { type: "way", ref: 12, role: "to" }
+      ], { type: "restriction", restriction: "no_straight_on" })
+    ]
+  };
+  const { graph, pack, geom } = packed(osm);
+  assert.equal(graph.restrictions.length, 1);
+  assert.equal(graph.restrictions[0].viaEdges.length, 2);
+  assert.deepEqual(graph.restrictions[0].viaWayIds, ["11", "11"]);
+
+  const forbidden = findPathV4(pack, geom, { lat: 0, lon: 0 }, { lat: 0, lon: 0.004 }, { maxMeters: 40 });
+  assert.equal(forbidden.ok, false);
+  const otherApproach = findPathV4(
+    pack,
+    geom,
+    { lat: 0.001, lon: 0.001 },
+    { lat: 0, lon: 0.004 },
+    { maxMeters: 40 }
+  );
+  assert.equal(otherApproach.ok, true);
+  assert.ok(otherApproach.osmWayIds.includes("12"));
 });
 
 test("6. motorcycle=no defeats positive ATV", () => {
@@ -220,6 +281,10 @@ test("11-12. conditional open/closed, unsupported fail-closed, seasonal/winter/i
   assert.equal(bad.evaluable, false);
   const flags = collectConditionalRules({ seasonal: "yes", winter_road: "yes", ice_road: "yes" });
   assert.ok(flags.rules.some((r) => r.seasonal));
+  assert.equal(flags.rules.find((r) => r.seasonal).evaluable, false);
+  assert.equal(accessCodeFromRules(0, flags.rules, new Date("2026-07-15T12:00:00Z")), 5);
+  const timed = collectConditionalRules({ "motorcycle:conditional": "yes @ (Jun-Aug)" });
+  assert.equal(accessCodeFromRules(0, timed.rules, new Date("2026-07-15T12:00:00Z")), 5);
 });
 
 test("13. coincident-but-distinct OSM nodes are not joined", () => {
@@ -248,6 +313,21 @@ test("14. no stitch/median bypass; zero unproven stitches", () => {
   });
   assert.equal(graph.unprovenStitches, 0);
   assert.equal(countsFromGraph(graph).unprovenStitches, 0);
+});
+
+test("V4 seams require identical OSM edge, access, layer and safety proof", () => {
+  const { pack } = packed({
+    nodes: [node(1, 0, 0), node(2, 0.001, 0)],
+    ways: [way(10, [1, 2], { highway: "residential", surface: "paved" })]
+  });
+  const candidates = seamCandidates(pack, pack);
+  assert.ok(candidates.length >= 1);
+  assert.equal(assertSeamLegal(pack, pack, candidates[0]), true);
+
+  const changedAccess = { ...pack, edgeAccess: Buffer.from(pack.edgeAccess) };
+  changedAccess.edgeAccess[0] = 2;
+  assert.equal(seamCandidates(pack, changedAccess).length, 0);
+  assert.throws(() => assertSeamLegal(pack, changedAccess, candidates[0]));
 });
 
 test("15. deterministic identical hashes", () => {
@@ -281,7 +361,8 @@ test("16. corruption, capability, mixed-contract rejection", () => {
     graph: { name: "graph.v4.bin", bytes: 1, sha256: "a".repeat(64) },
     geometry: { name: "geometry.v1.bin", bytes: 1, sha256: "b".repeat(64) },
     fuel: { name: "fuel.v1.json", bytes: 1, sha256: "c".repeat(64) },
-    sourceEpoch: "epoch-1"
+    sourceEpoch: "epoch-1",
+    timezone: "America/Halifax"
   });
   assert.equal(validatePackManifestV2(manifest), true);
   assert.throws(() => validatePackManifestV2({ schema: "pack-manifest.v1" }));

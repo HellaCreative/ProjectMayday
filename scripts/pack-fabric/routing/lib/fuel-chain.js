@@ -2116,6 +2116,7 @@ async function planFuelChainOnRuntime({
     maxMeters,
     priorEdgeIds: evaluationHistory,
     arrivalEdgeId: evaluationArrival,
+    startEndpointKind,
     deadlineAtMs: hopDeadlineAtMs
   }) => {
     const activeDeadline = Number.isFinite(Number(hopDeadlineAtMs))
@@ -2153,6 +2154,8 @@ async function planFuelChainOnRuntime({
         cleanMetroMultiplier,
         avoidMotorways: avoidMotorways === true,
         internalFuelProbe: true,
+        startEndpointKind: startEndpointKind || null,
+        endEndpointKind: candidate.station.id === "__destination__" ? null : "customers",
         directExtraBudgetMeters: undefined,
         maxPathMeters: maxMeters,
         deadlineAtMs: activeDeadline,
@@ -2381,6 +2384,7 @@ async function planFuelChainOnRuntime({
           priorEdgeIds: [...history],
           arrivalEdgeId: arrival,
           backtrackFactor,
+          startEndpointKind: depth > 0 ? "customers" : null,
           deadlineAtMs: approachDeadlineAtMs,
           abortSignal
         });
@@ -2464,6 +2468,7 @@ async function planFuelChainOnRuntime({
               priorEdgeIds: [...nextHistory],
               arrivalEdgeId: nextArrival,
               backtrackFactor,
+              startEndpointKind: "customers",
               deadlineAtMs: deadline,
               abortSignal
             });
@@ -3035,7 +3040,8 @@ async function planFuelChainOnRuntime({
           accessPolicy: rawPolicy,
           priorEdgeIds: [...history],
           arrivalEdgeId: arrival,
-          backtrackFactor
+          backtrackFactor,
+          startEndpointKind: depth > 0 ? "customers" : null
         });
         const routedMeters = Number(response && response.distanceMeters);
         if (

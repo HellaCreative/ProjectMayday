@@ -1433,7 +1433,9 @@ final class ItineraryBuilder {
                                 regionalHopMinimumMeters: option.regionalMeters,
                                 history: history,
                                 avoidMotorways: activeAvoidMotorways,
-                                preferBackRoads: riderLeg.preferBackRoads
+                                preferBackRoads: riderLeg.preferBackRoads,
+                                startEndpointKind: builtLegs.last?.endsAtFuelStop == nil ? nil : "customers",
+                                endEndpointKind: option.stop == nil ? nil : "customers"
                             ))
                         }
                         let meters = try responseMeters(response)
@@ -2007,7 +2009,10 @@ final class ItineraryBuilder {
                         departingFrom: hopDepartureID,
                         effectiveProfile: hopProfile
                     ),
-                    preferBackRoads: riderLeg.preferBackRoads
+                    preferBackRoads: riderLeg.preferBackRoads,
+                    startEndpointKind: subIndex > 0 || departureAnchorID != riderDepartureID
+                        ? "customers" : nil,
+                    endEndpointKind: subIndex < stops.count ? "customers" : nil
                 )
                 let response = try await source.route(request)
                 guard active(itinerary) else { throw CancellationError() }
@@ -2471,9 +2476,11 @@ private func routeRequest(
     directExtraBudgetMeters: Double? = nil,
     regionalHopMinimumMeters: [Double] = [],
     history: EdgeHistory = EdgeHistory(),
-        avoidMotorways: Bool = false,
-        preferBackRoads: Bool = false,
-        mapZoom: Double? = nil
+    avoidMotorways: Bool = false,
+    preferBackRoads: Bool = false,
+    mapZoom: Double? = nil,
+    startEndpointKind: String? = nil,
+    endEndpointKind: String? = nil
     ) -> RouteRequest {
     RouteRequest(
         profile: profile,
@@ -2492,7 +2499,9 @@ private func routeRequest(
         cleanMetroMultiplier: nil,
         avoidMotorways: avoidMotorways,
         preferBackRoads: preferBackRoads,
-        mapZoom: DirtSnapRequestContext.mapZoom
+        mapZoom: DirtSnapRequestContext.mapZoom,
+        startEndpointKind: startEndpointKind,
+        endEndpointKind: endEndpointKind
     )
 }
 

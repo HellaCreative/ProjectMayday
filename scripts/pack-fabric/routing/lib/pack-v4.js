@@ -219,6 +219,10 @@ function encodeGraphV4(graph, provenance, geometryBuffer) {
   restChunks[0].writeUInt32LE(restrictions.length, 0);
   for (const r of restrictions) {
     const viaWays = r.viaWayIds || [];
+    const viaEdges = r.viaEdges || [];
+    if (viaWays.length !== viaEdges.length) {
+      throw new Error(`restriction ${r.osmRelationId || "unknown"} has mismatched via-way/edge sequence`);
+    }
     const rec = Buffer.alloc(32 + viaWays.length * 12);
     rec.writeBigInt64LE(BigInt(r.osmRelationId || 0), 0);
     rec.writeUInt8(r.kind || 0, 8);
@@ -231,7 +235,6 @@ function encodeGraphV4(graph, provenance, geometryBuffer) {
     rec.writeUInt16LE(r.vehicleMask || 7, 26);
     rec.writeInt32LE(-1, 28);
     let o = 32;
-    const viaEdges = r.viaEdges || [];
     for (let i = 0; i < viaWays.length; i += 1) {
       rec.writeBigInt64LE(BigInt(viaWays[i] || 0), o);
       rec.writeInt32LE(viaEdges[i] != null ? viaEdges[i] : -1, o + 8);
@@ -242,13 +245,18 @@ function encodeGraphV4(graph, provenance, geometryBuffer) {
   const restrictionBuf = Buffer.concat(restChunks);
 
   const conditionals = Buffer.from(
-    JSON.stringify({ rules: provenance.conditionals || [], timezone: graph.timezone || "America/Halifax" }),
+    JSON.stringify({
+      rules: graph.conditionals || provenance.conditionals || [],
+      timezone: graph.timezone || provenance.timezone || "UTC",
+      policy: "fail_closed"
+    }),
     "utf8"
   );
   const capabilities = Buffer.from(JSON.stringify([CAPABILITY]), "utf8");
   const provenanceJson = Buffer.from(
     JSON.stringify({
       ...provenance,
+      conditionals: graph.conditionals || provenance.conditionals || [],
       unprovenStitches: 0,
       rejected: graph.rejected || []
     }),

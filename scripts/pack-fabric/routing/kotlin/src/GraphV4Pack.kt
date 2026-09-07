@@ -10,6 +10,8 @@ class GraphV4Pack private constructor(
     val undirectedEdgeCount: Int,
     val directedArcCount: Int,
     val capabilities: List<String>,
+    val regionId: String,
+    val sourceEpoch: String,
     val osmNodeIds: List<Long>,
     val osmWayIds: List<Long>,
     val nodeOffsets: IntArray,
@@ -22,6 +24,26 @@ class GraphV4Pack private constructor(
     val edgeAccess: ByteArray,
     val restrictions: List<Restriction>
 ) {
+    data class SeamAnchor(
+        val longitude: Double,
+        val latitude: Double,
+        val osmWayId: String,
+        val localEdgeId: String,
+        val remoteEdgeId: String,
+        val gapMeters: Double
+    )
+
+    data class SeamSidecar(
+        val schemaVersion: String,
+        val fabricReleaseId: String,
+        val sourceEpoch: String,
+        val regionId: String,
+        val neighbors: Map<String, List<SeamAnchor>>
+    )
+
+    var crossPackSeams: Map<String, List<SeamAnchor>> = emptyMap()
+        private set
+
     data class Restriction(
         val fromEdge: Int,
         val toEdge: Int,
@@ -31,16 +53,53 @@ class GraphV4Pack private constructor(
         val viaEdges: List<Int>
     )
 
+    data class RestrictionProgress(val restrictionId: Int, val progress: Int)
+
+    data class TurnAdvance(
+        val allowed: Boolean,
+        val active: List<RestrictionProgress> = emptyList()
+    )
+
     private data class TurnKey(val viaNode: Int, val fromEdge: Int)
+
+    private data class ViaPattern(
+        val fromEdge: Int,
+        val toEdge: Int,
+        val viaEdges: List<Int>,
+        val entryNode: Int,
+        val only: Boolean
+    )
 
     private data class RestrictionIndex(
         val blockedNodeTurns: Map<TurnKey, Set<Int>>,
         val onlyNodeTurns: Map<TurnKey, Set<Int>>,
-        val blockedViaWayExits: Map<Int, Set<Int>>,
-        val onlyViaWayEntries: Map<Int, Set<Int>>
+        val viaPatterns: List<ViaPattern>,
+        val viaStarters: Map<Int, List<Int>>
     )
 
     private val restrictionIndex = compileRestrictionIndex(restrictions)
+
+    fun applyCrossPackSeams(sidecar: SeamSidecar) {
+        if (sidecar.schemaVersion != "dirt-cross-pack-seams.v2" ||
+            sidecar.fabricReleaseId.isBlank() ||
+            sidecar.regionId.lowercase() != regionId.lowercase() ||
+            sidecar.sourceEpoch != sourceEpoch
+        ) {
+            throw IllegalArgumentException("seam sidecar does not match graph identity")
+        }
+        for ((neighbor, anchors) in sidecar.neighbors) {
+            if (!Regex("^[a-z]{2}$").matches(neighbor.lowercase())) {
+                throw IllegalArgumentException("invalid seam neighbor")
+            }
+            for (anchor in anchors) {
+                if (anchor.gapMeters < 0 || anchor.gapMeters > 2 ||
+                    anchor.osmWayId.isBlank() || anchor.localEdgeId.isBlank() ||
+                    anchor.remoteEdgeId.isBlank()
+                ) throw IllegalArgumentException("invalid seam proof")
+            }
+        }
+        crossPackSeams = sidecar.neighbors.mapKeys { it.key.lowercase() }
+    }
 
     fun hasDirectedArc(from: Int, to: Int, edge: Int): Boolean {
         if (from < 0 || from >= nodeCount || edge < 0) return false
@@ -63,18 +122,82 @@ class GraphV4Pack private constructor(
         val only = restrictionIndex.onlyNodeTurns[key]
         if (only != null && !only.contains(toEdge)) return false
         if (restrictionIndex.blockedNodeTurns[key]?.contains(toEdge) == true) return false
-        if (restrictionIndex.blockedViaWayExits[fromEdge]?.contains(toEdge) == true) return false
-        val onlyVia = restrictionIndex.onlyViaWayEntries[fromEdge]
-        if (onlyVia != null && !onlyVia.contains(toEdge)) return false
         return true
     }
 
-    fun hopIllegal(ei: Int, from: Int, to: Int, startEi: Int, endEi: Int, incomingEi: Int): Boolean {
+    fun accessAllowed(
+        ei: Int,
+        from: Int,
+        to: Int,
+        allowUnknown: Boolean,
+        isEndpoint: Boolean,
+        endpointKind: String? = null
+    ): Boolean {
         val code = accessCode(ei, from, to)
-        if (code == 2 || code == 5) return true
-        if ((code == 3 || code == 4) && ei != startEi && ei != endEi) return true
-        if (incomingEi < 0 || restrictions.isEmpty()) return false
-        return !turnAllowed(fromEdge = incomingEi, toEdge = ei, viaNode = from)
+        return when (code) {
+            0 -> true
+            1 -> allowUnknown
+            3 -> isEndpoint && endpointKind != "customers"
+            4 -> isEndpoint && endpointKind == "customers"
+            else -> false
+        }
+    }
+
+    /**
+     * Advance the exact ordered via-way state for one turn. A via-way rule is
+     * active only after its own from-edge and complete ordered via sequence;
+     * arriving at the final via edge from another road remains legal.
+     */
+    fun advanceRestrictionState(
+        active: List<RestrictionProgress>,
+        fromEdge: Int,
+        toEdge: Int,
+        viaNode: Int
+    ): TurnAdvance {
+        if (!turnAllowed(fromEdge, toEdge, viaNode)) return TurnAdvance(false)
+
+        val patterns = restrictionIndex.viaPatterns
+        val current = active.filter { it.restrictionId in patterns.indices }
+        val activeOnly = current.filter { patterns[it.restrictionId].only }
+        if (activeOnly.isNotEmpty() && activeOnly.none { row ->
+                val pattern = patterns[row.restrictionId]
+                val sequence = listOf(pattern.fromEdge) + pattern.viaEdges + pattern.toEdge
+                row.progress + 1 < sequence.size && sequence[row.progress + 1] == toEdge
+            }
+        ) {
+            return TurnAdvance(false)
+        }
+
+        val next = ArrayList<RestrictionProgress>()
+        for (row in current) {
+            val pattern = patterns[row.restrictionId]
+            val sequence = listOf(pattern.fromEdge) + pattern.viaEdges + pattern.toEdge
+            if (row.progress + 1 >= sequence.size || sequence[row.progress + 1] != toEdge) continue
+            val completes = row.progress + 1 == sequence.lastIndex
+            if (completes) {
+                if (!pattern.only) return TurnAdvance(false)
+            } else {
+                next.add(RestrictionProgress(row.restrictionId, row.progress + 1))
+            }
+        }
+
+        val starters = restrictionIndex.viaStarters[fromEdge].orEmpty().filter { id ->
+            val entry = patterns[id].entryNode
+            entry < 0 || entry == viaNode
+        }
+        val starterOnly = starters.filter { patterns[it].only }
+        if (starterOnly.isNotEmpty() && starterOnly.none { patterns[it].viaEdges.firstOrNull() == toEdge }) {
+            return TurnAdvance(false)
+        }
+        for (id in starters) {
+            if (patterns[id].viaEdges.firstOrNull() == toEdge) {
+                next.add(RestrictionProgress(id, 1))
+            }
+        }
+        return TurnAdvance(
+            true,
+            next.distinct().sortedWith(compareBy({ it.restrictionId }, { it.progress }))
+        )
     }
 
     companion object {
@@ -87,25 +210,29 @@ class GraphV4Pack private constructor(
         private fun compileRestrictionIndex(restrictions: List<Restriction>): RestrictionIndex {
             val blockedNode = HashMap<TurnKey, MutableSet<Int>>()
             val onlyNode = HashMap<TurnKey, MutableSet<Int>>()
-            val blockedVia = HashMap<Int, MutableSet<Int>>()
-            val onlyVia = HashMap<Int, MutableSet<Int>>()
+            val viaPatterns = ArrayList<ViaPattern>()
+            val viaStarters = HashMap<Int, MutableList<Int>>()
             for (restriction in restrictions) {
                 if (restriction.vehicleMask and 1 == 0) continue
                 if (restriction.viaEdges.isNotEmpty()) {
-                    val first = restriction.viaEdges.first()
-                    val last = restriction.viaEdges.last()
-                    if (restriction.only) {
-                        onlyVia.getOrPut(restriction.fromEdge) { HashSet() }.add(first)
-                    } else {
-                        blockedVia.getOrPut(last) { HashSet() }.add(restriction.toEdge)
-                    }
+                    val id = viaPatterns.size
+                    viaPatterns.add(
+                        ViaPattern(
+                            restriction.fromEdge,
+                            restriction.toEdge,
+                            restriction.viaEdges,
+                            restriction.viaNode,
+                            restriction.only
+                        )
+                    )
+                    viaStarters.getOrPut(restriction.fromEdge) { ArrayList() }.add(id)
                     continue
                 }
                 val key = TurnKey(restriction.viaNode, restriction.fromEdge)
                 val target = if (restriction.only) onlyNode else blockedNode
                 target.getOrPut(key) { HashSet() }.add(restriction.toEdge)
             }
-            return RestrictionIndex(blockedNode, onlyNode, blockedVia, onlyVia)
+            return RestrictionIndex(blockedNode, onlyNode, viaPatterns, viaStarters)
         }
 
         fun decode(graph: ByteArray, geometry: ByteArray? = null): GraphV4Pack {
@@ -147,6 +274,18 @@ class GraphV4Pack private constructor(
                     throw IllegalArgumentException("graph/geometry identity mismatch")
                 }
             }
+            buf.position(128)
+            val provenanceAt = buf.int
+            if (provenanceAt >= capAt) throw IllegalArgumentException("invalid V4 provenance")
+            val provenanceJson = String(graph.copyOfRange(provenanceAt, capAt), Charsets.UTF_8)
+            fun requiredJsonString(key: String): String {
+                val match = Regex("\\\"" + Regex.escape(key) + "\\\"\\s*:\\s*\\\"([^\\\"]+)\\\"")
+                    .find(provenanceJson)
+                return match?.groupValues?.get(1)?.takeIf { it.isNotBlank() }
+                    ?: throw IllegalArgumentException("missing V4 provenance $key")
+            }
+            val regionId = requiredJsonString("regionId")
+            val sourceEpoch = requiredJsonString("sourceEpoch")
 
             fun ints(offsetField: Int, count: Int): IntArray {
                 buf.position(offsetField)
@@ -223,6 +362,8 @@ class GraphV4Pack private constructor(
                 edgeCount,
                 arcCount,
                 listOf(CAPABILITY),
+                regionId,
+                sourceEpoch,
                 osmNodeIds,
                 osmWayIds,
                 nodeOffsets,

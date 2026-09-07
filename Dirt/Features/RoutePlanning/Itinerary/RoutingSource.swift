@@ -33,6 +33,8 @@ final class RouteResponseCache {
         let cleanMetroMultiplier: Double?
         let avoidMotorways: Bool
         let preferBackRoads: Bool
+        let startEndpointKind: String?
+        let endEndpointKind: String?
 
         var description: String {
             let recentPrior = priorEdgeIDs.suffix(4).joined(separator: ",")
@@ -47,6 +49,7 @@ final class RouteResponseCache {
                 "|regional=\(regionalHopMinimumMeters.map { String($0) }.joined(separator: ","))" +
                 "|metro=\(cleanMetroMultiplier.map { String(format: "%.0f", $0) } ?? "-")" +
                 "|avoidMwy=\(avoidMotorways ? 1 : 0)|back=\(preferBackRoads ? 1 : 0)" +
+                "|startKind=\(startEndpointKind ?? "-")|endKind=\(endEndpointKind ?? "-")" +
                 "|\(sourceName)|\(packRevision)"
         }
     }
@@ -212,7 +215,9 @@ final class PackRoutingSource: RoutingSource {
             packRevision: packs.lastManifestVersion,
             cleanMetroMultiplier: req.options?.cleanMetroMultiplier,
             avoidMotorways: req.options?.avoidMotorways == true,
-            preferBackRoads: req.options?.preferBackRoads == true
+            preferBackRoads: req.options?.preferBackRoads == true,
+            startEndpointKind: req.options?.startEndpointKind,
+            endEndpointKind: req.options?.endEndpointKind
         )
         if req.options?.maxPathMeters == nil, let cached = cache.value(for: key) {
             return cached
@@ -234,7 +239,9 @@ final class PackRoutingSource: RoutingSource {
             avoidMotorways: req.options?.avoidMotorways == true,
             preferBackRoads: req.options?.preferBackRoads == true,
             mapZoom: req.options?.mapZoom,
-            matchLimitMeters: req.options?.matchLimitMeters
+            matchLimitMeters: req.options?.matchLimitMeters,
+            startEndpointKind: req.options?.startEndpointKind,
+            endEndpointKind: req.options?.endEndpointKind
         )
         guard case .success(let local) = result, local.coordinates.count > 1 else {
             throw RoutingError.server("No route is available on the installed pack.")
@@ -366,7 +373,9 @@ final class PackRoutingSource: RoutingSource {
                     regionalHopMinimumMeters: req.options?.regionalHopMinimumMeters ?? [],
                     cleanMetroMultiplier: req.options?.cleanMetroMultiplier,
                     avoidMotorways: req.options?.avoidMotorways == true,
-                    preferBackRoads: req.options?.preferBackRoads == true
+                    preferBackRoads: req.options?.preferBackRoads == true,
+                    startEndpointKind: stops.isEmpty ? nil : "customers",
+                    endEndpointKind: nil
                 )
                 if case .success(let route) = routed, route.distanceMeters <= firstCap + 1 {
                     directFallback = route.distanceMeters
@@ -464,7 +473,9 @@ final class PackRoutingSource: RoutingSource {
                     regionalHopMinimumMeters: req.options?.regionalHopMinimumMeters ?? [],
                     cleanMetroMultiplier: req.options?.cleanMetroMultiplier,
                     avoidMotorways: req.options?.avoidMotorways == true,
-                    preferBackRoads: req.options?.preferBackRoads == true
+                    preferBackRoads: req.options?.preferBackRoads == true,
+                    startEndpointKind: stops.isEmpty ? nil : "customers",
+                    endEndpointKind: "customers"
                 )
                 guard case .success(let firstRoute) = firstResult,
                       firstRoute.distanceMeters <= firstCap + 1
@@ -499,7 +510,9 @@ final class PackRoutingSource: RoutingSource {
                     regionalHopMinimumMeters: req.options?.regionalHopMinimumMeters ?? [],
                     cleanMetroMultiplier: req.options?.cleanMetroMultiplier,
                     avoidMotorways: req.options?.avoidMotorways == true,
-                    preferBackRoads: req.options?.preferBackRoads == true
+                    preferBackRoads: req.options?.preferBackRoads == true,
+                    startEndpointKind: "customers",
+                    endEndpointKind: nil
                 )
                 let continuationRoute: OnDeviceRouter.Result?
                 if case .success(let route) = continuationResult,
@@ -842,7 +855,9 @@ private func cacheKey(
         sourceName: sourceName, packRevision: packRevision,
         cleanMetroMultiplier: request.options?.cleanMetroMultiplier,
         avoidMotorways: request.options?.avoidMotorways == true,
-        preferBackRoads: request.options?.preferBackRoads == true
+        preferBackRoads: request.options?.preferBackRoads == true,
+        startEndpointKind: request.options?.startEndpointKind,
+        endEndpointKind: request.options?.endEndpointKind
     )
 }
 

@@ -14,6 +14,7 @@ scripts/pack-fabric/data-raw/
 scripts/pack-fabric/routing/data/regions/**
 !scripts/pack-fabric/routing/data/regions/README.md
 scripts/pack-fabric/routing/data/reports/**
+scripts/pack-fabric/routing/candidates/
 
 # BC OSM feasibility binaries
 experiments/bc-osm-only/out/

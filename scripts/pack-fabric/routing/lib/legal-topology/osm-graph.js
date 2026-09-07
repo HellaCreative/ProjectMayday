@@ -117,10 +117,111 @@ function isRoutableWay(way) {
   return KEEP_HIGHWAY.has(String(tags.highway || "").toLowerCase());
 }
 
+function nodesForWayEdges(edgeIndexes, edges) {
+  const nodes = new Set();
+  for (const ei of edgeIndexes || []) {
+    const edge = edges[ei];
+    if (!edge) continue;
+    nodes.add(edge.from);
+    nodes.add(edge.to);
+  }
+  return nodes;
+}
+
+function sharedWayNodes(leftEdges, rightEdges, edges) {
+  const left = nodesForWayEdges(leftEdges, edges);
+  return [...nodesForWayEdges(rightEdges, edges)].filter((node) => left.has(node));
+}
+
+/** Return the ordered edge chain on one OSM way between two graph nodes. */
+function orderedWayPath(edgeIndexes, edges, startNode, endNode) {
+  if (startNode === endNode || !edgeIndexes || !edgeIndexes.length) return null;
+  const sequence = [edges[edgeIndexes[0]].from];
+  for (const ei of edgeIndexes) {
+    const edge = edges[ei];
+    if (!edge || sequence[sequence.length - 1] !== edge.from) return null;
+    sequence.push(edge.to);
+  }
+  const starts = [];
+  const ends = [];
+  for (let i = 0; i < sequence.length; i += 1) {
+    if (sequence[i] === startNode) starts.push(i);
+    if (sequence[i] === endNode) ends.push(i);
+  }
+  const candidates = [];
+  for (const a of starts) {
+    for (const b of ends) {
+      if (a === b) continue;
+      candidates.push(a < b
+        ? edgeIndexes.slice(a, b)
+        : edgeIndexes.slice(b, a).reverse());
+    }
+  }
+  const unique = new Map(candidates.map((row) => [row.join(","), row]));
+  return unique.size === 1 ? [...unique.values()][0] : null;
+}
+
+/**
+ * Resolve an OSM via-way relation into exact graph-edge sequences. Relation
+ * member order is retained, and each member must connect to its neighbours by
+ * shared OSM node identity. Coordinate proximity is never accepted.
+ */
+function resolveViaWayPaths(restriction, wayEdgeIndex, edges) {
+  const viaWayIds = restriction.viaWayIds || [];
+  if (!viaWayIds.length) return [];
+  const chainWayIds = [restriction.fromWayId, ...viaWayIds, restriction.toWayId];
+  const junctionOptions = [];
+  for (let i = 0; i < chainWayIds.length - 1; i += 1) {
+    const shared = sharedWayNodes(
+      wayEdgeIndex.get(String(chainWayIds[i])) || [],
+      wayEdgeIndex.get(String(chainWayIds[i + 1])) || [],
+      edges
+    );
+    if (!shared.length) return [];
+    junctionOptions.push(shared);
+  }
+
+  const results = [];
+  const seen = new Set();
+  function choose(at, junctions) {
+    if (results.length > 64) return;
+    if (at < junctionOptions.length) {
+      for (const node of junctionOptions[at]) choose(at + 1, junctions.concat(node));
+      return;
+    }
+    const viaEdges = [];
+    const expandedWayIds = [];
+    for (let i = 0; i < viaWayIds.length; i += 1) {
+      const path = orderedWayPath(
+        wayEdgeIndex.get(String(viaWayIds[i])) || [],
+        edges,
+        junctions[i],
+        junctions[i + 1]
+      );
+      if (!path || !path.length) return;
+      for (const ei of path) {
+        viaEdges.push(ei);
+        expandedWayIds.push(String(viaWayIds[i]));
+      }
+    }
+    const key = `${junctions[0]}:${junctions[junctions.length - 1]}:${viaEdges.join(",")}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    results.push({
+      entryNode: junctions[0],
+      exitNode: junctions[junctions.length - 1],
+      viaEdges,
+      viaWayIds: expandedWayIds
+    });
+  }
+  choose(0, []);
+  return results;
+}
+
 function buildGraphFromOsm(osm, options = {}) {
   const timezone = options.timezone || "America/Halifax";
-  const now = options.now || new Date();
   const rejected = [];
+  const conditionals = [];
   const nodesById = new Map();
   for (const node of osm.nodes || []) {
     nodesById.set(String(node.id), node);
@@ -224,6 +325,20 @@ function buildGraphFromOsm(osm, options = {}) {
       if (graphIndex.has(ids[i])) splitAt.push(i);
     }
     const wayEdges = [];
+    const tags = way.tags || {};
+    const access = evaluateMotorcycleAccess(tags);
+    const cond = collectConditionalRules(tags, timezone);
+    const conditionalRecord = cond.rules.length
+      ? {
+          osmWayId: String(way.id),
+          rules: cond.rules,
+          policy: "fail_closed"
+        }
+      : null;
+    if (conditionalRecord) conditionals.push(conditionalRecord);
+    for (const row of cond.rejected) {
+      rejected.push({ kind: "conditional", osmWayId: String(way.id), reason: row.reason, tag: row.tag });
+    }
     for (let s = 0; s < splitAt.length - 1; s += 1) {
       const i0 = splitAt[s];
       const i1 = splitAt[s + 1];
@@ -242,16 +357,10 @@ function buildGraphFromOsm(osm, options = {}) {
         coords.push(c);
       }
       if (coords.length < 2) continue;
-      const tags = way.tags || {};
-      const access = evaluateMotorcycleAccess(tags);
-      const cond = collectConditionalRules(tags, timezone);
-      for (const row of cond.rejected) {
-        rejected.push({ kind: "conditional", osmWayId: String(way.id), reason: row.reason, tag: row.tag });
-      }
       const direction = travelDirectionV4(tags);
       const arcs = legalDirectedArcs(direction);
-      let forwardCode = accessCodeFromRules(access.forward.code, cond.rules, now);
-      let reverseCode = accessCodeFromRules(access.reverse.code, cond.rules, now);
+      let forwardCode = accessCodeFromRules(access.forward.code, cond.rules);
+      let reverseCode = accessCodeFromRules(access.reverse.code, cond.rules);
       if (blockedNodes.has(from) || blockedNodes.has(to)) {
         forwardCode = 2;
         reverseCode = 2;
@@ -305,27 +414,48 @@ function buildGraphFromOsm(osm, options = {}) {
     const viaNode = viaGraph.length ? viaGraph[0] : null;
     let fromEdges = [];
     let toEdges = [];
+    let viaPaths = [];
     if (viaNode != null) {
       fromEdges = edgeOnWayTouchingNode(r.fromWayId, viaNode);
       toEdges = edgeOnWayTouchingNode(r.toWayId, viaNode);
     } else {
-      fromEdges = wayEdgeIndex.get(String(r.fromWayId)) || [];
-      toEdges = wayEdgeIndex.get(String(r.toWayId)) || [];
+      viaPaths = resolveViaWayPaths(r, wayEdgeIndex, edges);
+      if (!viaPaths.length) {
+        rejected.push({ kind: "restriction", osmRelationId: r.osmRelationId, reason: "unresolved_via_path" });
+        continue;
+      }
     }
-    if (!fromEdges.length || !toEdges.length) {
+    if (viaNode != null && (!fromEdges.length || !toEdges.length)) {
       rejected.push({ kind: "restriction", osmRelationId: r.osmRelationId, reason: "unresolved_members" });
       continue;
     }
-    for (const fromEdge of fromEdges) {
-      for (const toEdge of toEdges) {
-        restrictions.push({
-          ...r,
-          fromEdge,
-          toEdge,
-          viaNode: viaNode == null ? -1 : viaNode,
-          viaWayCount: r.viaWayIds.length,
-          viaEdges: (r.viaWayIds || []).flatMap((id) => wayEdgeIndex.get(String(id)) || [])
-        });
+    const resolvedPaths = viaNode != null
+      ? [{ entryNode: viaNode, exitNode: viaNode, viaEdges: [], viaWayIds: [] }]
+      : viaPaths;
+    for (const path of resolvedPaths) {
+      const resolvedFrom = viaNode != null
+        ? fromEdges
+        : edgeOnWayTouchingNode(r.fromWayId, path.entryNode);
+      const resolvedTo = viaNode != null
+        ? toEdges
+        : edgeOnWayTouchingNode(r.toWayId, path.exitNode);
+      if (!resolvedFrom.length || !resolvedTo.length) {
+        rejected.push({ kind: "restriction", osmRelationId: r.osmRelationId, reason: "unresolved_members" });
+        continue;
+      }
+      for (const fromEdge of resolvedFrom) {
+        for (const toEdge of resolvedTo) {
+          restrictions.push({
+            ...r,
+            fromEdge,
+            toEdge,
+            // For a via-way restriction this is the exact entry junction.
+            viaNode: path.entryNode,
+            viaWayCount: path.viaEdges.length,
+            viaWayIds: path.viaWayIds,
+            viaEdges: path.viaEdges
+          });
+        }
       }
     }
   }
@@ -335,6 +465,7 @@ function buildGraphFromOsm(osm, options = {}) {
     edges,
     barriers,
     restrictions,
+    conditionals,
     rejected,
     timezone,
     unprovenStitches: 0
@@ -358,6 +489,7 @@ function countsFromGraph(graph) {
     nodes: graph.nodes.length,
     edges: graph.edges.length,
     restrictions: graph.restrictions.length,
+    conditionals: (graph.conditionals || []).length,
     barriers: graph.barriers.length,
     directionalAccess: directional,
     endpointOnly: endpoint,
@@ -375,5 +507,7 @@ module.exports = {
   countsFromGraph,
   KEEP_HIGHWAY,
   gradeOf,
-  haversineMeters
+  haversineMeters,
+  orderedWayPath,
+  resolveViaWayPaths
 };

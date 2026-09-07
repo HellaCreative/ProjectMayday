@@ -1135,7 +1135,9 @@ struct ItineraryBuilderTests {
                 sourceName: "live", packRevision: "test",
                 cleanMetroMultiplier: nil,
                 avoidMotorways: false,
-                preferBackRoads: false
+                preferBackRoads: false,
+                startEndpointKind: nil,
+                endEndpointKind: nil
             )
             if index == 0 { firstKey = cacheKey }
             cache.insert(response(from: from, to: to, meters: Double(index + 1)), for: cacheKey)
@@ -1153,7 +1155,8 @@ struct ItineraryBuilderTests {
                 directExtraBudgetMeters: nil, regionalHopMinimumMeters: [],
                 sourceName: "live", packRevision: "test",
                 cleanMetroMultiplier: nil, avoidMotorways: false,
-                preferBackRoads: false
+                preferBackRoads: false, startEndpointKind: nil,
+                endEndpointKind: nil
             )
         }
         #expect(cacheKey(avoid: [], seed: 1) != cacheKey(avoid: ["blocked-edge"], seed: 1))

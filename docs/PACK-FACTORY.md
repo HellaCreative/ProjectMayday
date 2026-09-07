@@ -2,10 +2,11 @@
 
 **Status:** canonical legal-topology migration contract.
 
-**Halt:** Do not stamp, candidate-upload, or promote V1/V2/V3 packs. Public
-`dirt-packs/{id}/graph.v3.bin` and `manifest.json` stay untouched. The only
-allowed build is **one Nova Scotia `graph.v4.bin` DEV candidate** after every
-automated gate in this file is green.
+**Halt production:** Do not stamp, overwrite, or promote V1/V2/V3 packs. Public
+`dirt-packs/{id}/graph.v3.bin` and `manifest.json` stay untouched. The authorized
+work is one source-locked V4 fabric covering all 13 Canadian regions and all 50
+US states. Nova Scotia is built and verified first as the mould; the factory
+then continues through all 63 regions without an intermediate production switch.
 
 **Not a V3 restamp.** Directed travel in the NS V3 canary
 `ns-v3-dir-20260906-01` is preserved in the dirty tree. It is not the mould.
@@ -45,7 +46,8 @@ Rider-facing V4 objects (DEV namespace until national atomic switch):
 | --- | --- |
 | `graph.v4.bin` | Legal topology. Version 4 + capability `legal-topology.v1`. |
 | `geometry.v1.bin` | Paired polylines. Identity hashed into the graph. |
-| `fuel.v1.json` | Existing verified fuel sidecar. Do not rebuild for this canary. |
+| `fuel.v1.json` | Verified regional fuel sidecar from the same locked OSM source. |
+| `cross-pack-seams.v2.json` | Exact legal border/ferry proofs for this region. |
 | `pack-manifest.v2.json` | Catalog row: files, SHA-256, capabilities, provenance. |
 
 Public V1/V3 catalog and objects remain the rollback fabric.
@@ -217,7 +219,7 @@ JS, Swift, and Kotlin must agree. Kotlin sources live at
 
 ---
 
-## 6. One NS V4 DEV canary (only after §5)
+## 6. NS V4 mould, then the complete candidate (only after §5)
 
 ```sh
 node --test scripts/pack-fabric/routing/lib/legal-topology/*.test.js \
@@ -229,16 +231,17 @@ node scripts/pack-fabric/scripts/build-region-graph-v4.js ns
 
 Then:
 
-1. Keep fuel sidecar bytes unchanged (`999e1cbd…` for current NS fuel).
+1. Build graph, fuel, and Rider Services from the one locked source epoch.
 2. Report restriction / barrier / directional-access / endpoint-only /
    conditional / impassable / grade-non-join / seam-candidate / rejected counts.
 3. Assert zero unproven stitches.
-4. Upload **only** `dirt-packs/v4/candidates/<id>/ns/` (new namespace).
-5. Point **only** pack-fabric DEV at it.
-6. Do not alter production, the public V1/V3 catalog, or another region.
-7. Stop for owner acceptance with the device test card below.
-
-Do not build a second region until NS is physically accepted.
+4. Verify NS locally as the mould before continuing the same factory run.
+5. Build all 63 regions; then generate every per-region seam sidecar and the
+   complete topology index. A full release cannot seal with a missing seam file,
+   mixed source epoch, unproven advertised border, or mismatched hash.
+6. Candidate-upload only to `dirt-packs/v4/candidates/<release>/`; point only
+   pack-fabric DEV at the complete immutable candidate.
+7. Do not alter production or the public V1/V3 catalog before owner acceptance.
 
 ---
 
@@ -260,13 +263,13 @@ Production binaries keep the public V1/V3 catalog.
 
 ---
 
-## 8. After NS acceptance (do not start)
+## 8. Candidate completion and later promotion
 
-Proposed all-region order: remaining Atlantic neighbours, then the rest of
-Canada, then US states west from already-accepted V3 geography. One
-source-epoch. Build every region, generate the complete seam matrix, seal one
-fabric-release manifest, then atomically switch the versioned pointer. Leave
-V1/V3 in place for rollback. Never promote mixed public fabric.
+Build order is deterministic by region ID and resume-safe. One source epoch.
+Build every region, generate the complete seam matrix, seal one fabric-release
+manifest, upload immutable candidate objects, and verify every remote identity.
+Only after device acceptance may the versioned pointer switch atomically. Leave
+V1/V3 in place for rollback. Never promote a mixed public fabric.
 
 ---
 

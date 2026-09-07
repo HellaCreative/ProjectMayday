@@ -5,7 +5,11 @@
  * No coincident-node stitches. No proximity repairs.
  */
 
-const { turnAllowed } = require("./restrictions");
+const {
+  compileRestrictionIndex,
+  advanceRestrictionState,
+  activeKey
+} = require("./restrictions");
 
 function haversineMeters(a, b) {
   const toRad = (deg) => (deg * Math.PI) / 180;
@@ -24,34 +28,11 @@ function accessCode(pack, ei, from, to) {
   return pack.edgeAccess[ei * 2 + (forward ? 0 : 1)];
 }
 
-function endpointOk(code, isEndpoint) {
+function endpointOk(code, isEndpoint, endpointKind = null) {
   if (code === 0) return true;
-  if (code === 3 || code === 4) return !!isEndpoint;
+  if (code === 3) return !!isEndpoint && endpointKind !== "customers";
+  if (code === 4) return !!isEndpoint && endpointKind === "customers";
   return false;
-}
-
-function turnPermitted(pack, cur, ei) {
-  for (const r of pack.restrictions || []) {
-    if (r.viaEdges && r.viaEdges.length) {
-      const seq = [r.fromEdge].concat(r.viaEdges);
-      const tail = (cur.pathEdges || []).slice(-seq.length);
-      const matches = tail.length === seq.length && tail.every((id, i) => id === seq[i]);
-      if (r.only && matches && ei !== r.toEdge) return false;
-      if (!r.only && matches && ei === r.toEdge) return false;
-      continue;
-    }
-    if (
-      !turnAllowed({
-        restrictions: [r],
-        fromEdge: cur.incomingEdge,
-        toEdge: ei,
-        viaNode: cur.node
-      })
-    ) {
-      return false;
-    }
-  }
-  return true;
 }
 
 function findPathV4(pack, geom, origin, dest, options = {}) {
@@ -94,17 +75,18 @@ function findPathV4(pack, geom, origin, dest, options = {}) {
   const endSnaps = [picked.end];
 
   const destEdges = new Set(endSnaps.map((s) => s.edgeIndex));
+  const restrictionIndex = compileRestrictionIndex(pack.restrictions || []);
   const n = pack.nodeCount;
   const dist = new Map();
   const prev = new Map();
   const heap = [];
-  function push(node, incomingEdge, cost, pathEdges) {
-    const key = node + ":" + incomingEdge;
+  function push(node, incomingEdge, restrictionActive, cost, pathEdges) {
+    const key = node + ":" + incomingEdge + ":" + activeKey(restrictionActive);
     const old = dist.get(key);
     if (old != null && old <= cost) return;
     dist.set(key, cost);
     prev.set(key, pathEdges);
-    heap.push({ node, incomingEdge, cost, pathEdges });
+    heap.push({ node, incomingEdge, restrictionActive, cost, pathEdges });
   }
 
   for (const snap of startSnaps) {
@@ -115,9 +97,11 @@ function findPathV4(pack, geom, origin, dest, options = {}) {
       : snap.fraction * pack.edgeMeters[snap.edgeIndex];
     const code = accessCode(pack, snap.edgeIndex, from, to);
     const isDest = destEdges.has(snap.edgeIndex);
-    if (!endpointOk(code, isDest) && code !== 0) continue;
+    const startEndpointKind = options.startEndpointKind || null;
+    const endpointKind = isDest ? options.endEndpointKind || null : startEndpointKind;
+    if (!endpointOk(code, true, endpointKind) && code !== 0) continue;
     if (code === 2 || code === 5) continue;
-    push(to, snap.edgeIndex, Math.max(1, remain), [snap.edgeIndex]);
+    push(to, snap.edgeIndex, [], Math.max(1, remain), [snap.edgeIndex]);
     if (isDest) {
       return {
         ok: true,
@@ -132,7 +116,7 @@ function findPathV4(pack, geom, origin, dest, options = {}) {
   while (heap.length) {
     heap.sort((a, b) => a.cost - b.cost);
     const cur = heap.shift();
-    const key = cur.node + ":" + cur.incomingEdge;
+    const key = cur.node + ":" + cur.incomingEdge + ":" + activeKey(cur.restrictionActive);
     if (dist.get(key) !== cur.cost) continue;
     if (cur.cost > 1e9) break;
     const start = pack.nodeOffsets[cur.node];
@@ -146,8 +130,15 @@ function findPathV4(pack, geom, origin, dest, options = {}) {
       const isDest = destEdges.has(ei);
       if (code === 2 || code === 5) continue;
       if (code === 1 && !options.allowUnknown) continue;
-      if ((code === 3 || code === 4) && !isDest) continue;
-      if (!turnPermitted(pack, cur, ei)) continue;
+      if (!endpointOk(code, isDest, options.endEndpointKind || null) && code !== 1) continue;
+      const restriction = advanceRestrictionState(
+        restrictionIndex,
+        cur.restrictionActive,
+        cur.incomingEdge,
+        ei,
+        cur.node
+      );
+      if (!restriction.allowed) continue;
       const nextCost = cur.cost + pack.edgeMeters[ei];
       const pathEdges = cur.pathEdges.concat([ei]);
       if (isDest) {
@@ -160,7 +151,7 @@ function findPathV4(pack, geom, origin, dest, options = {}) {
           unprovenStitches: 0
         };
       }
-      push(to, ei, nextCost, pathEdges);
+      push(to, ei, restriction.active, nextCost, pathEdges);
     }
   }
   return { ok: false, reason: "no_route", unprovenStitches: 0 };

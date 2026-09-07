@@ -179,6 +179,12 @@ final class GraphPackStore {
                     try? fm.removeItem(at: destGeom)
                     try? fm.copyItem(at: srcGeom, to: destGeom)
                 }
+                let srcSeams = regionURL.appendingPathComponent("cross-pack-seams.v2.json")
+                if fm.fileExists(atPath: srcSeams.path) {
+                    let destSeams = dest.appendingPathComponent("cross-pack-seams.v2.json")
+                    try? fm.removeItem(at: destSeams)
+                    try? fm.copyItem(at: srcSeams, to: destSeams)
+                }
                 continue
             }
             guard fm.fileExists(atPath: srcGraph.path) else { continue }
@@ -344,7 +350,8 @@ final class GraphPackStore {
         return Self.decodePack(
             regionId: id,
             graphURL: graphURL,
-            geometryURL: geometryFileURL(regionId: id)
+            geometryURL: geometryFileURL(regionId: id),
+            seamsURL: seamsFileURL(regionId: id)
         )
     }
 
@@ -715,7 +722,9 @@ final class GraphPackStore {
         backtrackFactor: Double = 4,
         sessionSeed: UInt64 = 0,
         maxRouteMeters: Double? = nil,
-        regionalHopMinimumMeters: [Double] = []
+        regionalHopMinimumMeters: [Double] = [],
+        startEndpointKind: String? = nil,
+        endEndpointKind: String? = nil
     ) async -> OnDeviceRouter.Result? {
         switch await routeOnDeviceDetailed(
             from: from,
@@ -728,7 +737,9 @@ final class GraphPackStore {
             backtrackFactor: backtrackFactor,
             sessionSeed: sessionSeed,
             maxRouteMeters: maxRouteMeters,
-            regionalHopMinimumMeters: regionalHopMinimumMeters
+            regionalHopMinimumMeters: regionalHopMinimumMeters,
+            startEndpointKind: startEndpointKind,
+            endEndpointKind: endEndpointKind
         ) {
         case .success(let result): return result
         case .failure: return nil
@@ -751,18 +762,24 @@ final class GraphPackStore {
         avoidMotorways: Bool = false,
         preferBackRoads: Bool = false,
         mapZoom: Double? = nil,
-        matchLimitMeters: Double? = nil
+        matchLimitMeters: Double? = nil,
+        startEndpointKind: String? = nil,
+        endEndpointKind: String? = nil
     ) async -> Result<OnDeviceRouter.Result, OnDeviceRouter.Failure> {
         let fromId = Self.primaryRegionId(containing: from)
         let toId = Self.primaryRegionId(containing: to)
         if let fromId, let toId, fromId != toId,
-           isInstalled(fromId), isInstalled(toId),
-           Self.packsShareABorder(fromId, toId) {
+           isInstalled(fromId), isInstalled(toId) {
+            let installed = Set(Self.roadReachableNeighbours.keys.filter { isInstalled($0) })
+            guard let regionPath = Self.shortestRegionPath(
+                from: fromId,
+                to: toId,
+                allowedRegionIds: installed
+            ), regionPath.count > 1 else { return .failure(.noPath) }
             return await routeOnDeviceChained(
                 from: from,
                 to: to,
-                left: fromId,
-                right: toId,
+                regions: regionPath,
                 profile: profile,
                 allowUnknown: allowUnknown,
                 avoidEdgeIds: avoidEdgeIds,
@@ -776,7 +793,9 @@ final class GraphPackStore {
                 avoidMotorways: avoidMotorways,
                 preferBackRoads: preferBackRoads,
                 mapZoom: mapZoom,
-                matchLimitMeters: matchLimitMeters
+                matchLimitMeters: matchLimitMeters,
+                startEndpointKind: startEndpointKind,
+                endEndpointKind: endEndpointKind
             )
         }
         return await routeOnDeviceInRegion(
@@ -795,18 +814,19 @@ final class GraphPackStore {
             avoidMotorways: avoidMotorways,
             preferBackRoads: preferBackRoads,
             mapZoom: mapZoom,
-            matchLimitMeters: matchLimitMeters
+            matchLimitMeters: matchLimitMeters,
+            startEndpointKind: startEndpointKind,
+            endEndpointKind: endEndpointKind
         )
     }
 
-    /// Two-pack hop: phone fabric on each side (stitches, tracks, Allow).
-    /// Each seed snaps independently onto both packs so the join can sit on
-    /// the last BC road and the first AB road instead of one shared coordinate.
+    /// Multi-pack route over factory-proven seams. Each side of a seam is
+    /// independently proven and snapped; the phone never invents a connector
+    /// from proximity or a rectangular map bound.
     private func routeOnDeviceChained(
         from: CLLocationCoordinate2D,
         to: CLLocationCoordinate2D,
-        left: String,
-        right: String,
+        regions: [String],
         profile: RouteProfile,
         allowUnknown: Bool,
         avoidEdgeIds: [String],
@@ -820,88 +840,125 @@ final class GraphPackStore {
         avoidMotorways: Bool = false,
         preferBackRoads: Bool = false,
         mapZoom: Double? = nil,
-        matchLimitMeters: Double? = nil
+        matchLimitMeters: Double? = nil,
+        startEndpointKind: String? = nil,
+        endEndpointKind: String? = nil
     ) async -> Result<OnDeviceRouter.Result, OnDeviceRouter.Failure> {
-        await activateInstalledPack(regionId: left)
-        guard let leftPack = activePack else { return .failure(.noPath) }
-        let anchors = CrossPackSeam.candidates(
-            from: from,
-            to: to,
-            anchors: leftPack.crossPackSeams[right.lowercased()] ?? [],
-            urbanCores: leftPack.urbanCores
-        )
-        guard !anchors.isEmpty else { return .failure(.noPath) }
+        guard regions.count >= 2 else { return .failure(.noPath) }
         var lastFailure: OnDeviceRouter.Failure = .noPath
-        for anchor in anchors {
-            await activateInstalledPack(regionId: right)
-            guard let rightPack = activePack else { return .failure(.noPath) }
-            guard let reverse = rightPack.crossPackSeams[left.lowercased()]?.first(where: {
-                $0.osmWayId == anchor.osmWayId
-                    && abs($0.latitude - anchor.latitude) < 0.00002
-                    && abs($0.longitude - anchor.longitude) < 0.00002
-                    && $0.gapMeters <= 2
-            }) else { continue }
-            let seam = CLLocationCoordinate2D(
-                latitude: (anchor.latitude + reverse.latitude) / 2,
-                longitude: (anchor.longitude + reverse.longitude) / 2
-            )
-            let firstHopCap = Self.reservedChainHopCap(
-                totalCapMeters: maxRouteMeters,
-                completedMeters: 0,
-                hopIndex: 0,
-                hopCount: 2,
-                minimumHopMeters: regionalHopMinimumMeters
-            )
+        var seamAttempts = 0
+        let maximumSeamAttempts = max(24, min(96, (regions.count - 1) * 8))
 
-            let hop1 = await routeOnDeviceInRegion(
-                from: from, to: seam, regionId: left,
-                profile: profile, allowUnknown: allowUnknown, avoidEdgeIds: avoidEdgeIds,
-                priorEdgeIds: priorEdgeIds,
-                arrivalEdgeId: arrivalEdgeId,
-                backtrackFactor: backtrackFactor,
-                sessionSeed: sessionSeed,
-                maxRouteMeters: firstHopCap,
-                cleanMetroMultiplier: cleanMetroMultiplier,
-                avoidMotorways: avoidMotorways,
-                preferBackRoads: preferBackRoads,
-                mapZoom: mapZoom,
-                matchLimitMeters: matchLimitMeters
-            )
-            guard case .success(let first) = hop1, first.coordinates.count > 1 else {
-                if case .failure(let reason) = hop1 { lastFailure = reason }
-                continue
+        func search(
+            regionIndex: Int,
+            current: CLLocationCoordinate2D,
+            hops: [OnDeviceRouter.Result],
+            usedEdges: Set<String>,
+            incomingEdgeId: String?,
+            completedMeters: Double
+        ) async -> OnDeviceRouter.Result? {
+            let regionId = regions[regionIndex]
+            if regionIndex == regions.count - 1 {
+                let final = await routeOnDeviceInRegion(
+                    from: current, to: to, regionId: regionId,
+                    profile: profile, allowUnknown: allowUnknown, avoidEdgeIds: avoidEdgeIds,
+                    priorEdgeIds: usedEdges, arrivalEdgeId: incomingEdgeId,
+                    backtrackFactor: backtrackFactor, sessionSeed: sessionSeed,
+                    maxRouteMeters: Self.reservedChainHopCap(
+                        totalCapMeters: maxRouteMeters,
+                        completedMeters: completedMeters,
+                        hopIndex: regionIndex,
+                        hopCount: regions.count,
+                        minimumHopMeters: regionalHopMinimumMeters
+                    ),
+                    cleanMetroMultiplier: cleanMetroMultiplier,
+                    avoidMotorways: avoidMotorways, preferBackRoads: preferBackRoads,
+                    mapZoom: mapZoom, matchLimitMeters: matchLimitMeters,
+                    startEndpointKind: regionIndex == 0 ? startEndpointKind : nil,
+                    endEndpointKind: endEndpointKind
+                )
+                guard case .success(let last) = final, last.coordinates.count > 1 else {
+                    if case .failure(let reason) = final { lastFailure = reason }
+                    return nil
+                }
+                return OnDeviceRouter.Result.concatenating(hops + [last])
             }
 
-            let hop2 = await routeOnDeviceInRegion(
-                from: seam, to: to, regionId: right,
-                profile: profile, allowUnknown: allowUnknown, avoidEdgeIds: avoidEdgeIds,
-                priorEdgeIds: priorEdgeIds.union(first.edgeIds),
-                arrivalEdgeId: first.edgeIds.last ?? arrivalEdgeId,
-                backtrackFactor: backtrackFactor,
-                sessionSeed: sessionSeed,
-                maxRouteMeters: Self.reservedChainHopCap(
-                    totalCapMeters: maxRouteMeters,
-                    completedMeters: first.distanceMeters,
-                    hopIndex: 1,
-                    hopCount: 2,
-                    minimumHopMeters: regionalHopMinimumMeters
-                ),
-                cleanMetroMultiplier: cleanMetroMultiplier,
-                avoidMotorways: avoidMotorways,
-                preferBackRoads: preferBackRoads,
-                mapZoom: mapZoom,
-                matchLimitMeters: matchLimitMeters
+            let nextRegionId = regions[regionIndex + 1]
+            await activateInstalledPack(regionId: regionId)
+            guard let localPack = activePack,
+                  localPack.regionId?.lowercased() == regionId else { return nil }
+            let anchors = CrossPackSeam.candidates(
+                from: current,
+                to: to,
+                anchors: localPack.crossPackSeams[nextRegionId] ?? [],
+                urbanCores: localPack.urbanCores
             )
-            guard case .success(let second) = hop2, second.coordinates.count > 1 else {
-                if case .failure(let reason) = hop2 { lastFailure = reason }
-                continue
-            }
+            guard !anchors.isEmpty else { return nil }
 
-            guard let merged = OnDeviceRouter.Result.concatenating([first, second]) else {
-                lastFailure = .noPath
-                continue
+            await activateInstalledPack(regionId: nextRegionId)
+            guard let remotePack = activePack,
+                  remotePack.regionId?.lowercased() == nextRegionId else { return nil }
+            let reverseAnchors = remotePack.crossPackSeams[regionId] ?? []
+
+            for anchor in anchors.prefix(8) {
+                guard seamAttempts < maximumSeamAttempts else { return nil }
+                guard let reverse = reverseAnchors.first(where: {
+                    $0.osmWayId == anchor.osmWayId
+                        && abs($0.latitude - anchor.latitude) < 0.00002
+                        && abs($0.longitude - anchor.longitude) < 0.00002
+                        && $0.gapMeters <= 2
+                }) else { continue }
+                seamAttempts += 1
+                let seam = CLLocationCoordinate2D(
+                    latitude: (anchor.latitude + reverse.latitude) / 2,
+                    longitude: (anchor.longitude + reverse.longitude) / 2
+                )
+                let hop = await routeOnDeviceInRegion(
+                    from: current, to: seam, regionId: regionId,
+                    profile: profile, allowUnknown: allowUnknown, avoidEdgeIds: avoidEdgeIds,
+                    priorEdgeIds: usedEdges, arrivalEdgeId: incomingEdgeId,
+                    backtrackFactor: backtrackFactor, sessionSeed: sessionSeed,
+                    maxRouteMeters: Self.reservedChainHopCap(
+                        totalCapMeters: maxRouteMeters,
+                        completedMeters: completedMeters,
+                        hopIndex: regionIndex,
+                        hopCount: regions.count,
+                        minimumHopMeters: regionalHopMinimumMeters
+                    ),
+                    cleanMetroMultiplier: cleanMetroMultiplier,
+                    avoidMotorways: avoidMotorways, preferBackRoads: preferBackRoads,
+                    mapZoom: mapZoom, matchLimitMeters: matchLimitMeters,
+                    startEndpointKind: regionIndex == 0 ? startEndpointKind : nil,
+                    endEndpointKind: nil
+                )
+                guard case .success(let routed) = hop, routed.coordinates.count > 1 else {
+                    if case .failure(let reason) = hop { lastFailure = reason }
+                    continue
+                }
+                if let result = await search(
+                    regionIndex: regionIndex + 1,
+                    current: seam,
+                    hops: hops + [routed],
+                    usedEdges: usedEdges.union(routed.edgeIds),
+                    incomingEdgeId: routed.edgeIds.last ?? incomingEdgeId,
+                    completedMeters: completedMeters + routed.distanceMeters
+                ) {
+                    return result
+                }
             }
-            return .success(merged)
+            return nil
+        }
+
+        if let result = await search(
+            regionIndex: 0,
+            current: from,
+            hops: [],
+            usedEdges: priorEdgeIds,
+            incomingEdgeId: arrivalEdgeId,
+            completedMeters: 0
+        ) {
+            return .success(result)
         }
         return .failure(lastFailure)
     }
@@ -943,7 +1000,9 @@ final class GraphPackStore {
         avoidMotorways: Bool = false,
         preferBackRoads: Bool = false,
         mapZoom: Double? = nil,
-        matchLimitMeters: Double? = nil
+        matchLimitMeters: Double? = nil,
+        startEndpointKind: String? = nil,
+        endEndpointKind: String? = nil
     ) async -> Result<OnDeviceRouter.Result, OnDeviceRouter.Failure> {
         if let regionId {
             await activateInstalledPack(regionId: regionId)
@@ -961,11 +1020,15 @@ final class GraphPackStore {
         let metro = cleanMetroMultiplier
         let zoom = mapZoom
         let matchLimit = matchLimitMeters
+        let startKind = startEndpointKind
+        let endKind = endEndpointKind
         return await Task.detached(priority: .userInitiated) {
             var router = OnDeviceRouter(pack: packRef)
             router.sessionSeed = seed
             router.mapZoom = zoom
             router.matchLimitMeters = matchLimit
+            router.startEndpointKind = startKind
+            router.endEndpointKind = endKind
             return router.routeDetailed(
                 from: start,
                 to: end,
@@ -1036,38 +1099,108 @@ final class GraphPackStore {
         )
     }
 
-    /// Canada land/bridge neighbours and topology-proven vehicle ferries,
-    /// plus bbox-touch for US / Canada–US.
+    /// Explicit road-reachable land/bridge borders and accepted vehicle-ferry
+    /// pairs. Rectangular map bounds are deliberately not topology: they create
+    /// false neighbours across lakes, water, and point-only state corners.
     static func packsShareABorder(_ left: String, _ right: String) -> Bool {
         let a = left.lowercased()
         let b = right.lowercased()
         if a == b { return true }
-        let canada: [String: [String]] = [
-            "bc": ["ab", "yt", "nt"],
-            "ab": ["bc", "sk", "nt"],
-            "sk": ["ab", "mb", "nt"],
-            "mb": ["sk", "on", "nu"],
-            "on": ["mb", "qc"],
-            "qc": ["on", "nb", "nl"],
-            "nb": ["qc", "ns", "pe"],
-            "ns": ["nb", "pe", "nl"],
-            "pe": ["nb", "ns"],
-            "nl": ["qc", "ns"],
-            "yt": ["bc", "nt"],
-            "nt": ["yt", "bc", "ab", "sk", "nu"],
-            "nu": ["nt", "mb"]
-        ]
-        if canada[a]?.contains(b) == true { return true }
-        if usStateBounds[a] != nil || usStateBounds[b] != nil {
-            guard let boxA = bbox(forRegionId: a), let boxB = bbox(forRegionId: b) else {
-                return false
-            }
-            let pad = 0.15
-            return !(boxA.2 + pad < boxB.0 || boxB.2 + pad < boxA.0
-                || boxA.3 + pad < boxB.1 || boxB.3 + pad < boxA.1)
-        }
-        return false
+        return roadReachableNeighbours[a]?.contains(b) == true
     }
+
+    /// Deterministic adjacency-only path. A point-corner or bbox overlap can
+    /// never enter this traversal because it is absent from the registry.
+    static func shortestRegionPath(
+        from: String,
+        to: String,
+        allowedRegionIds: Set<String>
+    ) -> [String]? {
+        let start = from.lowercased()
+        let end = to.lowercased()
+        if start == end { return [start] }
+        guard allowedRegionIds.contains(start), allowedRegionIds.contains(end) else { return nil }
+        var queue: [[String]] = [[start]]
+        var seen: Set<String> = [start]
+        while !queue.isEmpty {
+            let path = queue.removeFirst()
+            guard let current = path.last else { continue }
+            for neighbor in (roadReachableNeighbours[current] ?? []).sorted()
+            where allowedRegionIds.contains(neighbor) && !seen.contains(neighbor) {
+                let next = path + [neighbor]
+                if neighbor == end { return next }
+                seen.insert(neighbor)
+                queue.append(next)
+            }
+        }
+        return nil
+    }
+
+    private static let roadReachableNeighbours: [String: Set<String>] = [
+        "bc": ["ab", "yt", "nt", "ak", "wa", "id", "mt"],
+        "ab": ["bc", "sk", "nt", "mt"],
+        "sk": ["ab", "mb", "mt", "nd"],
+        "mb": ["sk", "on", "nd", "mn"],
+        "on": ["mb", "qc", "mn", "mi", "ny"],
+        "qc": ["on", "nb", "nl", "ny", "vt", "nh", "me"],
+        "nb": ["qc", "ns", "pe", "me"],
+        "ns": ["nb", "pe", "nl"],
+        "pe": ["nb", "ns"],
+        "nl": ["qc", "ns"],
+        "yt": ["bc", "nt", "ak"],
+        "nt": ["yt", "bc", "ab"],
+        "nu": [],
+        "ak": ["yt", "bc"],
+        "al": ["fl", "ga", "ms", "tn"],
+        "ar": ["mo", "tn", "ms", "la", "tx", "ok"],
+        "az": ["ca", "nv", "ut", "nm"],
+        "ca": ["or", "nv", "az"],
+        "co": ["wy", "ne", "ks", "ok", "nm", "ut"],
+        "ct": ["ny", "ma", "ri"],
+        "de": ["md", "pa", "nj"],
+        "fl": ["al", "ga"],
+        "ga": ["fl", "al", "tn", "nc", "sc"],
+        "hi": [],
+        "ia": ["mn", "wi", "il", "mo", "ne", "sd"],
+        "id": ["wa", "or", "nv", "ut", "wy", "mt", "bc"],
+        "il": ["wi", "ia", "mo", "ky", "in"],
+        "in": ["mi", "oh", "ky", "il"],
+        "ks": ["ne", "mo", "ok", "co"],
+        "ky": ["il", "in", "oh", "wv", "va", "tn", "mo"],
+        "la": ["tx", "ar", "ms"],
+        "ma": ["ri", "ct", "ny", "vt", "nh"],
+        "md": ["va", "wv", "pa", "de"],
+        "me": ["nh", "qc", "nb"],
+        "mi": ["wi", "in", "oh", "on"],
+        "mn": ["nd", "sd", "ia", "wi", "on", "mb"],
+        "mo": ["ia", "il", "ky", "tn", "ar", "ok", "ks", "ne"],
+        "ms": ["la", "ar", "tn", "al"],
+        "mt": ["id", "wy", "sd", "nd", "sk", "ab", "bc"],
+        "nc": ["va", "tn", "ga", "sc"],
+        "nd": ["mt", "sd", "mn", "mb", "sk"],
+        "ne": ["sd", "ia", "mo", "ks", "co", "wy"],
+        "nh": ["me", "ma", "vt", "qc"],
+        "nj": ["ny", "pa", "de"],
+        "nm": ["az", "co", "ok", "tx"],
+        "nv": ["or", "id", "ut", "az", "ca"],
+        "ny": ["pa", "nj", "ct", "ma", "vt", "qc", "on"],
+        "oh": ["mi", "pa", "wv", "ky", "in"],
+        "ok": ["co", "ks", "mo", "ar", "tx", "nm"],
+        "or": ["wa", "id", "nv", "ca"],
+        "pa": ["ny", "nj", "de", "md", "wv", "oh"],
+        "ri": ["ct", "ma"],
+        "sc": ["nc", "ga"],
+        "sd": ["nd", "mn", "ia", "ne", "wy", "mt"],
+        "tn": ["ky", "va", "nc", "ga", "al", "ms", "ar", "mo"],
+        "tx": ["nm", "ok", "ar", "la"],
+        "ut": ["id", "wy", "co", "az", "nv"],
+        "va": ["md", "wv", "ky", "tn", "nc"],
+        "vt": ["ny", "ma", "nh", "qc"],
+        "wa": ["bc", "id", "or"],
+        "wi": ["mi", "mn", "ia", "il"],
+        "wv": ["oh", "pa", "md", "va", "ky"],
+        "wy": ["mt", "sd", "ne", "co", "ut", "id"]
+    ]
 
     /// Distance to nearest **routable** pack road, or nil if none within snap radius.
     /// Unknown tracks are skipped unless `allowUnknown` (same policy as route snap).
@@ -1277,7 +1410,8 @@ final class GraphPackStore {
         "graph.v3.bin",
         "graph.v4.bin",
         "geometry.v1.bin",
-        "fuel.v1.json"
+        "fuel.v1.json",
+        "cross-pack-seams.v2.json"
     ]
 
     private func geometryFileURL(regionId: String) -> URL {
@@ -1314,6 +1448,14 @@ final class GraphPackStore {
             if fm.fileExists(atPath: sibling.path) { return sibling }
         }
         return primary
+    }
+
+    private func seamsFileURL(regionId: String) -> URL {
+        let id = regionId.lowercased()
+        if let graph = findGraphFileURL(regionId: id) {
+            return graph.deletingLastPathComponent().appendingPathComponent("cross-pack-seams.v2.json")
+        }
+        return regionDir(regionId: id).appendingPathComponent("cross-pack-seams.v2.json")
     }
 
     /// Fuel stations from installed pack sidecars in the A→B box. Offline.
@@ -1381,7 +1523,8 @@ final class GraphPackStore {
     nonisolated private static func decodePack(
         regionId: String,
         graphURL: URL,
-        geometryURL: URL
+        geometryURL: URL,
+        seamsURL: URL
     ) -> GraphV2Pack? {
         guard let data = try? Data(contentsOf: graphURL, options: [.mappedIfSafe]),
               let pack = try? GraphV2Pack(data: data) else { return nil }
@@ -1390,6 +1533,12 @@ final class GraphPackStore {
            let geomData = try? Data(contentsOf: geometryURL, options: [.mappedIfSafe]),
            let geom = try? GeometryV1Pack(data: geomData) {
             pack.geometry = geom
+        }
+        if pack.version >= 4,
+           FileManager.default.fileExists(atPath: seamsURL.path),
+           let seamData = try? Data(contentsOf: seamsURL),
+           (try? pack.applyCrossPackSeams(data: seamData)) == nil {
+            return nil
         }
         return pack
     }
@@ -1417,15 +1566,22 @@ final class GraphPackStore {
                 maybeTopUpGeometry(regionId: preferred)
             }
             maybeTopUpFuel(regionId: preferred)
+            maybeTopUpSeams(regionId: preferred)
             return
         }
 
         let graphURL = graphFileURL(regionId: preferred)
         let geometryURL = geometryFileURL(regionId: preferred)
+        let seamsURL = seamsFileURL(regionId: preferred)
         // Let SwiftUI paint “Calculating route” before we touch disk.
         await Task.yield()
         let pack = await Task.detached(priority: .userInitiated) {
-            Self.decodePack(regionId: preferred, graphURL: graphURL, geometryURL: geometryURL)
+            Self.decodePack(
+                regionId: preferred,
+                graphURL: graphURL,
+                geometryURL: geometryURL,
+                seamsURL: seamsURL
+            )
         }.value
         guard let pack else { return }
         activePack = pack
@@ -1434,6 +1590,7 @@ final class GraphPackStore {
             maybeTopUpGeometry(regionId: preferred)
         }
         maybeTopUpFuel(regionId: preferred)
+        maybeTopUpSeams(regionId: preferred)
     }
 
     /// Primary regions for each pin, then any extra bbox hits (cross-border corridors).
@@ -1470,6 +1627,33 @@ final class GraphPackStore {
             if let self {
                 self.packedFuelByRegion[id] = Self.decodeFuelFile(self.fuelFileURL(regionId: id))
             }
+        }
+    }
+
+    /// A V4 graph is not rebuilt to add cross-border proof. Its small seam
+    /// sidecar is downloaded and verified as part of the same catalog identity.
+    private func maybeTopUpSeams(regionId: String) {
+        let id = regionId.lowercased()
+        guard activePack?.regionId?.lowercased() == id,
+              activePack?.version ?? 0 >= 4,
+              manifestFilesByRegion[id]?.contains(where: { $0.name == "cross-pack-seams.v2.json" }) == true
+        else { return }
+        let seamPath = seamsFileURL(regionId: id)
+        if FileManager.default.fileExists(atPath: seamPath.path),
+           let data = try? Data(contentsOf: seamPath),
+           let pack = activePack {
+            if (try? pack.applyCrossPackSeams(data: data)) != nil { return }
+        }
+        guard downloadTasks["\(id)-seams"] == nil else { return }
+        downloadTasks["\(id)-seams"] = Task { [weak self] in
+            await self?.downloadNamedFile(regionId: id, fileName: "cross-pack-seams.v2.json")
+            self?.downloadTasks["\(id)-seams"] = nil
+            guard let self,
+                  let pack = self.activePack,
+                  pack.regionId?.lowercased() == id,
+                  let data = try? Data(contentsOf: self.seamsFileURL(regionId: id))
+            else { return }
+            try? pack.applyCrossPackSeams(data: data)
         }
     }
 

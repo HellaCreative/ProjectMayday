@@ -256,6 +256,7 @@ if (v1Out) {
     regionId,
     generatedAt: manifest.generatedAt,
     source: "openstreetmap",
+    sourceUpdatedAt: process.env.FUEL_SOURCE_UPDATED_AT || null,
     license: manifest.license,
     stations: allPois
   };

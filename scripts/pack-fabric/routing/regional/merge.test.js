@@ -2,10 +2,15 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
 const {
   corridorLocationsForRoute,
-  shortestRegionPath
+  shortestRegionPath,
+  REGION_NEIGHBOURS
 } = require("./merge");
+const { resolveGraphRequest } = require("./select");
+const { OSM_REGION } = require("../registry/geofabrik");
 
 test("Nova Scotia and Newfoundland use their topology-proven direct ferry", () => {
   assert.deepEqual(shortestRegionPath("ns", "nl"), ["ns", "nl"]);
@@ -33,6 +38,64 @@ test("Nova Scotia and Prince Edward Island use their topology-proven direct ferr
 
 test("Maine chains to New Brunswick across the Calais–St. Stephen land border", () => {
   assert.deepEqual(shortestRegionPath("me", "nb"), ["me", "nb"]);
+});
+
+test("the 63-region road-border registry is complete and symmetric", () => {
+  assert.deepEqual(Object.keys(REGION_NEIGHBOURS).filter((id) => id.length === 2).sort(), Object.keys(OSM_REGION).sort());
+  for (const [id, neighbors] of Object.entries(REGION_NEIGHBOURS)) {
+    if (id.length !== 2) continue;
+    for (const neighbor of neighbors) {
+      assert.ok(REGION_NEIGHBOURS[neighbor], `${id} references unknown ${neighbor}`);
+      assert.ok(REGION_NEIGHBOURS[neighbor].includes(id), `${id}<->${neighbor} is not symmetric`);
+    }
+  }
+  assert.deepEqual(shortestRegionPath("bc", "wa"), ["bc", "wa"]);
+  assert.deepEqual(shortestRegionPath("ns", "ny"), ["ns", "nb", "qc", "ny"]);
+  assert.equal(shortestRegionPath("az", "co").length, 3, "Four Corners is not a road seam");
+  assert.equal(shortestRegionPath("ut", "nm").length, 3, "Four Corners is not a road seam");
+});
+
+test("Swift and backend use the exact same 63-region adjacency", () => {
+  const swift = fs.readFileSync(
+    path.resolve(__dirname, "../../../../Dirt/Routing/OnDevice/GraphPackStore.swift"),
+    "utf8"
+  );
+  const block = swift.match(/private static let roadReachableNeighbours:[\s\S]*?\n    \]/);
+  assert.ok(block, "Swift adjacency registry missing");
+  const parsed = {};
+  for (const line of block[0].split("\n")) {
+    const row = line.match(/^\s*"([a-z]{2})": \[(.*)\],?$/);
+    if (!row) continue;
+    parsed[row[1]] = [...row[2].matchAll(/"([a-z]{2})"/g)].map((match) => match[1]).sort();
+  }
+  const backend = Object.fromEntries(
+    Object.entries(REGION_NEIGHBOURS)
+      .filter(([id]) => id.length === 2)
+      .map(([id, neighbors]) => [id, neighbors.filter((neighbor) => neighbor.length === 2).sort()])
+  );
+  assert.deepEqual(parsed, backend);
+});
+
+test("state/state and Canada/US requests always select the explicit chain", () => {
+  const route = (from, to) => resolveGraphRequest({
+    disableLonghaul: true,
+    locations: [
+      { lon: 0, lat: 0, resolvedRegionId: from },
+      { lon: 1, lat: 1, resolvedRegionId: to }
+    ]
+  });
+
+  const state = route("id", "mt");
+  assert.equal(state.mode, "canada-chain");
+  assert.deepEqual(state.regionIds, ["id", "mt"]);
+
+  const international = route("bc", "wa");
+  assert.equal(international.mode, "canada-chain");
+  assert.deepEqual(international.regionIds, ["bc", "wa"]);
+
+  const longInternational = route("ns", "ny");
+  assert.equal(longInternational.mode, "canada-chain");
+  assert.deepEqual(longInternational.regionIds, ["nb", "ns", "ny", "qc"]);
 });
 const { metroBlocks } = require("../lib/hop-search");
 

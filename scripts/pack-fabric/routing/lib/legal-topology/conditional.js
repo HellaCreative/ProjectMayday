@@ -160,26 +160,30 @@ function collectConditionalRules(tags = {}, timezone = "America/Halifax") {
     rules.push({
       tag: flags.iceRoad ? "ice_road" : flags.winterRoad ? "winter_road" : "seasonal",
       raw: flags.iceRoad ? tags.ice_road : flags.winterRoad ? tags.winter_road : tags.seasonal,
-      evaluable: true,
-      status: "closed",
-      spec: "winter",
+      // A generic seasonal/winter/ice flag does not say which dates are open,
+      // and those dates vary by operator and weather. Keep the evidence but
+      // fail closed until a complete conditional expression is available.
+      evaluable: false,
+      status: null,
+      spec: null,
       timezone,
-      seasonal: true
+      seasonal: true,
+      reason: "season_window_unspecified"
     });
   }
   return { rules, rejected };
 }
 
-function accessCodeFromRules(baseCode, rules, at) {
+function accessCodeFromRules(baseCode, rules) {
   if (!rules.length) return baseCode;
-  let code = baseCode;
-  for (const rule of rules) {
-    if (rule.tag.startsWith("oneway") || rule.tag.startsWith("restriction")) continue;
-    const outcome = evaluateNormalizedRule(rule, at);
-    if (outcome === "fail_closed" || outcome === "closed") return 5;
-    if (outcome === "open" && code === 5) code = baseCode;
-  }
-  return code;
+  // V4 packs must behave identically offline in JS, Swift and Kotlin. Until
+  // the pack carries a shared timezone-aware runtime evaluator, any relevant
+  // conditional access makes this direction fail closed. We never freeze a
+  // road open merely because it happened to be open at pack-build time.
+  return rules.some((rule) =>
+    !String(rule.tag || "").startsWith("oneway") &&
+    !String(rule.tag || "").startsWith("restriction")
+  ) ? 5 : baseCode;
 }
 
 module.exports = {

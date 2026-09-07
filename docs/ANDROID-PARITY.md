@@ -2,7 +2,7 @@
 
 **Status:** active full-product Android parity authority
 
-**Reconciled:** 2026-09-06
+**Reconciled:** 2026-09-07
 
 **Frozen iOS/shared-routing implementation:**
 `94b467a11375e3ea3233c127b07af2ef039d0658`
@@ -20,6 +20,13 @@ the September 7 Yarmouth Dirt/fuel correction for build `2 (17)`. The
 shared DEV service supplies the online routing change. Android must match the
 same no-op stage edit and offline routing laws; Android automation and physical-
 device evidence remain open.
+
+The September 7 V4 factory hardening is also lockstep: JS, Swift, and Kotlin
+track the exact ordered `from → via edge(s) → to` restriction state. Reaching a
+final via road from another approach must remain legal. Directional access code
+3 is allowed only at an ordinary rider endpoint; code 4 is allowed only at an
+explicit `customers` endpoint selected by fuel/Rider Services. Unknown access
+still requires Allow Unknown; denied and impassable directions never open.
 
 The New Hampshire V3 object recorded at `d9445ed` remains a Cursor-owned pack
 candidate. This evidence reconciliation does not accept, promote, rebuild, or
@@ -240,6 +247,19 @@ turn-aware, access, heading-safe, and connectivity-aware snap law as Swift
 mix V3 and V4 packs in one search. ATV tags must not override `motorcycle=no`
 on V4. DIRT Dev installs the Nova Scotia V4 candidate; production stays on
 public V1/V3.
+
+V4 regions in one release share a single locked OSM source epoch; Android must
+reject mixed epochs. Cross-region loading uses the explicit, symmetric
+63-region road/ferry adjacency registry. Bounding-box overlap is not a border,
+and point-only corners are not seams. A seam is usable only when both packs
+prove the same OSM node/way/edge identity, direction, access, layer, structure,
+barrier state, and restriction context. V4 forbids proximity stitches and
+coincident-coordinate joins. Before activation, each V4 manifest must verify
+the exact graph, geometry, fuel, seam sidecar, source epoch, release ID, region,
+and timezone. Each sealed region downloads `cross-pack-seams.v2.json` from the
+same catalog identity; iOS and Android reject it if its region or source epoch
+does not match the graph. Borders are sealed after all graphs, so adding this
+proof never requires a second graph rebuild.
 
 ## 6. Start Navigation and rolling offline preparation
 

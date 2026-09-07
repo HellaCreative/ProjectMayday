@@ -6,7 +6,7 @@ const { buildGraphFromOsm } = require("../routing/lib/legal-topology/osm-graph")
 const { encodeFromOsmGraph } = require("../routing/lib/pack-v4");
 
 const DIRT = path.resolve(__dirname, "../../..");
-const osm = {
+const highwayCanary = {
   nodes: [
     { id: 1, lon: -64.19, lat: 45.80779, tags: {} },
     { id: 2, lon: -64.21, lat: 45.80779, tags: {} },
@@ -19,15 +19,60 @@ const osm = {
   ],
   relations: []
 };
-const graph = buildGraphFromOsm(osm);
-const encoded = encodeFromOsmGraph(graph, { regionId: "fix", sourceEpoch: "fixture" });
 const dests = [
   path.join(DIRT, "DirtTests/Fixtures"),
   path.join(DIRT, "scripts/pack-fabric/routing/fixtures/legal-topology")
 ];
-for (const dir of dests) {
-  fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(path.join(dir, "legal-topology-canary.graph.v4.bin"), encoded.graphBuffer);
-  fs.writeFileSync(path.join(dir, "legal-topology-canary.geometry.v1.bin"), encoded.geomBuffer);
+
+function write(name, osm) {
+  const graph = buildGraphFromOsm(osm);
+  const encoded = encodeFromOsmGraph(graph, { regionId: "fix", sourceEpoch: "fixture" });
+  for (const dir of dests) {
+    fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, `${name}.graph.v4.bin`), encoded.graphBuffer);
+    fs.writeFileSync(path.join(dir, `${name}.geometry.v1.bin`), encoded.geomBuffer);
+  }
+  console.log("wrote", name, encoded.graphBuffer.length, encoded.geomBuffer.length);
 }
-console.log("wrote legal-topology-canary", encoded.graphBuffer.length, encoded.geomBuffer.length);
+
+write("legal-topology-canary", highwayCanary);
+
+write("legal-topology-restrictions", {
+  nodes: [
+    { id: 1, lon: 0, lat: 0, tags: {} },
+    { id: 2, lon: 0.001, lat: 0, tags: {} },
+    { id: 3, lon: 0.002, lat: 0, tags: {} },
+    { id: 4, lon: 0.003, lat: 0, tags: {} },
+    { id: 5, lon: 0.004, lat: 0, tags: {} },
+    { id: 6, lon: 0.001, lat: 0.001, tags: {} },
+    { id: 7, lon: 0.003, lat: 0.001, tags: {} },
+    { id: 8, lon: 0.002, lat: 0.001, tags: {} },
+    { id: 20, lon: 0.01, lat: 0, tags: {} },
+    { id: 21, lon: 0.011, lat: 0, tags: {} },
+    { id: 22, lon: 0.012, lat: 0, tags: {} },
+    { id: 23, lon: 0.013, lat: 0, tags: {} },
+    { id: 24, lon: 0.014, lat: 0, tags: {} }
+  ],
+  ways: [
+    { id: 10, nodeIds: [1, 2], tags: { highway: "residential" } },
+    { id: 11, nodeIds: [2, 3, 4], tags: { highway: "residential" } },
+    { id: 12, nodeIds: [4, 5], tags: { highway: "residential" } },
+    { id: 13, nodeIds: [6, 2], tags: { highway: "residential" } },
+    { id: 14, nodeIds: [4, 7], tags: { highway: "residential" } },
+    { id: 15, nodeIds: [3, 8], tags: { highway: "residential" } },
+    { id: 20, nodeIds: [20, 21], tags: { highway: "service", access: "destination" } },
+    { id: 21, nodeIds: [22, 23], tags: { highway: "service", access: "customers" } },
+    { id: 22, nodeIds: [23, 24], tags: { highway: "track", access: "unknown" } }
+  ],
+  relations: [
+    {
+      id: 100,
+      members: [
+        { type: "way", ref: 10, role: "from" },
+        { type: "way", ref: 11, role: "via" },
+        { type: "way", ref: 12, role: "to" }
+      ],
+      tags: { type: "restriction", restriction: "no_straight_on" }
+    }
+  ]
+});

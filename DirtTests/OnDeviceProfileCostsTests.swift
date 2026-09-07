@@ -408,6 +408,17 @@ struct CrossPackSeamTests {
         #expect(seams.first?.longitude == good.longitude)
         #expect(GraphPackStore.packsShareABorder("bc", "ab"))
         #expect(GraphPackStore.packsShareABorder("bc", "wa"))
+        #expect(GraphPackStore.packsShareABorder("id", "mt"))
+        #expect(GraphPackStore.packsShareABorder("me", "nb"))
+        #expect(!GraphPackStore.packsShareABorder("az", "co"))
+        #expect(!GraphPackStore.packsShareABorder("ut", "nm"))
+        let east = Set(["ns", "nb", "qc", "on", "mi", "me"])
+        #expect(GraphPackStore.shortestRegionPath(from: "ns", to: "me", allowedRegionIds: east) == ["ns", "nb", "me"])
+        #expect(GraphPackStore.shortestRegionPath(from: "ns", to: "mi", allowedRegionIds: east) == ["ns", "nb", "qc", "on", "mi"])
+        let corners = Set(["az", "ut", "nm", "co"])
+        let cornerPath = GraphPackStore.shortestRegionPath(from: "az", to: "co", allowedRegionIds: corners)
+        #expect(cornerPath?.count == 3)
+        #expect(cornerPath != ["az", "co"])
     }
 
     @Test func southernBorderCoordinatesResolveToWashingtonBeforeBCOrAlberta() {
