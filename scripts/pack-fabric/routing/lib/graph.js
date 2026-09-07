@@ -303,7 +303,10 @@ function loadV2RuntimeSync(v1Path, started) {
   );
 }
 
-function fetchBuffer(url) {
+const MAX_REMOTE_PACK_BYTES = 1024 * 1024 * 1024;
+const MAX_REMOTE_REDIRECTS = 5;
+
+function fetchBuffer(url, redirectCount = 0) {
   return new Promise((resolve, reject) => {
     let parsed;
     try {
@@ -320,6 +323,11 @@ function fetchBuffer(url) {
     lib
       .get(url, (res) => {
         if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+          res.resume();
+          if (redirectCount >= MAX_REMOTE_REDIRECTS) {
+            reject(new Error("Graph fetch exceeded redirect limit for " + url));
+            return;
+          }
           let next = res.headers.location;
           try {
             next = new URL(next, url).href;
@@ -327,10 +335,11 @@ function fetchBuffer(url) {
             reject(new Error("Graph fetch redirect to invalid URL from " + url));
             return;
           }
-          fetchBuffer(next).then(resolve, reject);
+          fetchBuffer(next, redirectCount + 1).then(resolve, reject);
           return;
         }
         if (res.statusCode !== 200) {
+          res.resume();
           reject(
             new Error(
               "Graph pack missing on CDN (HTTP " +
@@ -342,10 +351,48 @@ function fetchBuffer(url) {
           );
           return;
         }
-        const chunks = [];
-        res.on("data", (c) => chunks.push(c));
-        res.on("end", () => resolve(Buffer.concat(chunks)));
-        res.on("error", reject);
+        const declaredLength = Number(res.headers["content-length"]);
+        const hasDeclaredLength = Number.isSafeInteger(declaredLength) && declaredLength >= 0;
+        if (hasDeclaredLength && declaredLength > MAX_REMOTE_PACK_BYTES) {
+          res.resume();
+          reject(new Error(`Remote graph object exceeds ${MAX_REMOTE_PACK_BYTES} bytes for ${url}`));
+          return;
+        }
+
+        // R2 sends Content-Length. Fill one final-size buffer directly instead
+        // of retaining hundreds of network chunks and Buffer.concat()'s second
+        // full copy. California otherwise peaks near the 2 GB function ceiling
+        // before decoding even begins.
+        const output = hasDeclaredLength ? Buffer.allocUnsafe(declaredLength) : null;
+        const chunks = output ? null : [];
+        let bytes = 0;
+        let settled = false;
+        const fail = (error) => {
+          if (settled) return;
+          settled = true;
+          reject(error);
+        };
+        res.on("data", (chunk) => {
+          if (settled) return;
+          if (bytes + chunk.length > MAX_REMOTE_PACK_BYTES || (output && bytes + chunk.length > output.length)) {
+            fail(new Error("Remote graph object exceeded its safe or declared size for " + url));
+            res.destroy();
+            return;
+          }
+          if (output) chunk.copy(output, bytes);
+          else chunks.push(chunk);
+          bytes += chunk.length;
+        });
+        res.on("end", () => {
+          if (settled) return;
+          if (output && bytes !== output.length) {
+            fail(new Error(`Remote graph object was truncated for ${url}: ${bytes}/${output.length}`));
+            return;
+          }
+          settled = true;
+          resolve(output || Buffer.concat(chunks, bytes));
+        });
+        res.on("error", fail);
       })
       .on("error", reject);
   });
@@ -789,5 +836,6 @@ module.exports = {
   DEFAULT_GRAPH_PATH,
   DEFAULT_LEGACY_GRAPH_PATH,
   DEFAULT_REGIONAL_NS_PATH,
-  MAX_CACHED_PACKS
+  MAX_CACHED_PACKS,
+  fetchBuffer
 };
