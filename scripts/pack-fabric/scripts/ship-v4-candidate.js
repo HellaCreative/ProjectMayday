@@ -173,15 +173,22 @@ function verifyLocalCandidate(options) {
   };
 }
 
-function putR2(item) {
+async function putR2(item) {
   const size = item.identity.bytes / 1e6;
   console.log("PUT", item.key, size >= 1 ? `${Math.round(size)}MB` : `${Math.round(size * 1000)}KB`);
-  const result = spawnSync(
-    "npx",
-    ["wrangler", "r2", "object", "put", `dirt-packs/${item.key}`, `--file=${item.filePath}`, "--remote"],
-    { cwd: FABRIC, stdio: "inherit", env: process.env }
-  );
-  if (result.status !== 0) die(`R2 upload failed for ${item.key}`);
+  for (let attempt = 1; attempt <= 4; attempt += 1) {
+    const result = spawnSync(
+      "npx",
+      ["wrangler", "r2", "object", "put", `dirt-packs/${item.key}`, `--file=${item.filePath}`, "--remote"],
+      { cwd: FABRIC, stdio: "inherit", env: process.env }
+    );
+    if (result.status === 0) return;
+    if (attempt < 4) {
+      console.warn("RETRY", item.key, `${attempt}/3`);
+      await delay(attempt * 1000);
+    }
+  }
+  die(`R2 upload failed for ${item.key} after four attempts`);
 }
 
 function needsMultipart(item) {
@@ -347,7 +354,7 @@ async function main() {
         console.log("MULTIPART PUT", item.key, `${size}MB`);
         await multipart.put(item);
       } else {
-        putR2(item);
+        await putR2(item);
       }
       if (options.verify) await verifyRemote(item, candidate.publicBase);
     }
