@@ -52,7 +52,7 @@ Little-endian.
 | --- | --- |
 | 0 | magic u32 `0x34545244` |
 | 4 | version u16 `4` |
-| 6 | flags u16: bit0 from/to, bit1 leaves, bit2 crossing-seconds, bit3 legal-topology (**required**) |
+| 6 | flags u16: bit0 from/to, bit1 leaves, bit2 crossing-seconds, bit3 legal-topology (**required**), bit4 derived edge IDs |
 | 8 | nodeCount u32 |
 | 12 | undirectedEdgeCount u32 |
 | 16 | directedArcCount u32 |
@@ -70,6 +70,13 @@ Little-endian.
 
 Flag bit3 `FLAG_V4_LEGAL_TOPOLOGY = 8` must be set. Any of offsets 104–136
 equal to 0 is corrupt.
+
+New V4 writers set bit4 `FLAG_V4_DERIVED_EDGE_IDS = 16`. These packs omit the
+redundant UTF-8 edge-ID table and derive the exact stable identifier as
+`w<osmWayId>:<fromNodeIndex>:<toNodeIndex>` from fields already stored for every
+edge. Readers remain backward-compatible with the original explicit-ID V4
+layout. This is lossless packing: graph topology, geometry, access, barriers,
+restrictions, seam identities, and route costs do not change.
 
 `edgeAccess` codes:
 

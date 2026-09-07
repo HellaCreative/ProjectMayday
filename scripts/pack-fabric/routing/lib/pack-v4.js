@@ -434,6 +434,70 @@ function viewU32(buf, offset) {
 }
 
 /**
+ * Array-like, lazy string view over packed signed Int64 OSM ids. Large regions
+ * contain millions of repeated way ids; eagerly materializing each one as a JS
+ * string can consume more memory than the graph binary itself.
+ */
+class Int64StringView {
+  constructor(buffer, offset, length) {
+    this.buffer = buffer;
+    this.offset = offset;
+    this.length = length;
+  }
+
+  valueAt(index) {
+    if (!Number.isInteger(index) || index < 0 || index >= this.length) return undefined;
+    return this.buffer.readBigInt64LE(this.offset + index * 8).toString();
+  }
+
+  at(index) {
+    const normalized = index < 0 ? this.length + index : index;
+    return this.valueAt(normalized);
+  }
+
+  includes(value, fromIndex = 0) {
+    if (typeof value !== "string") return false;
+    let start = Math.trunc(fromIndex);
+    if (start < 0) start = Math.max(0, this.length + start);
+    for (let i = start; i < this.length; i += 1) {
+      if (this.valueAt(i) === value) return true;
+    }
+    return false;
+  }
+
+  findIndex(predicate, thisArg) {
+    for (let i = 0; i < this.length; i += 1) {
+      if (predicate.call(thisArg, this.valueAt(i), i, this)) return i;
+    }
+    return -1;
+  }
+
+  map(callback, thisArg) {
+    const out = new Array(this.length);
+    for (let i = 0; i < this.length; i += 1) {
+      out[i] = callback.call(thisArg, this.valueAt(i), i, this);
+    }
+    return out;
+  }
+
+  *[Symbol.iterator]() {
+    for (let i = 0; i < this.length; i += 1) yield this.valueAt(i);
+  }
+}
+
+function int64StringView(buffer, offset, length) {
+  const target = new Int64StringView(buffer, offset, length);
+  return new Proxy(target, {
+    get(view, property, receiver) {
+      if (typeof property === "string" && /^(0|[1-9][0-9]*)$/.test(property)) {
+        return view.valueAt(Number(property));
+      }
+      return Reflect.get(view, property, receiver);
+    }
+  });
+}
+
+/**
  * Losslessly remove the original V4 edge-id string table.  Edge identity is
  * exactly reproducible from the already-packed OSM way id and endpoints.  The
  * suffix shift is kept four-byte aligned so every typed-array section retains
@@ -519,14 +583,10 @@ function decodeGraphV4(buffer, geometryBuffer) {
   const edgeMeters = new Uint32Array(ab, base + viewU32(buf, 40), undirectedEdgeCount);
   const nodeCoords = new Float32Array(ab, base + viewU32(buf, 44), nodeCount * 2);
   const edgeAccess = buf.subarray(viewU32(buf, 112), viewU32(buf, 112) + undirectedEdgeCount * 2);
-  const osmNodeIds = [];
   const osmAt = viewU32(buf, 104);
-  for (let i = 0; i < nodeCount; i += 1) osmNodeIds.push(buf.readBigInt64LE(osmAt + i * 8).toString());
-  const osmWayIds = [];
+  const osmNodeIds = int64StringView(buf, osmAt, nodeCount);
   const wayAt = viewU32(buf, 108);
-  for (let i = 0; i < undirectedEdgeCount; i += 1) {
-    osmWayIds.push(buf.readBigInt64LE(wayAt + i * 8).toString());
-  }
+  const osmWayIds = int64StringView(buf, wayAt, undirectedEdgeCount);
   const capabilities = JSON.parse(buf.subarray(viewU32(buf, 132), viewU32(buf, 136)).toString("utf8"));
   if (!capabilities.includes(CAPABILITY)) {
     throw new Error("missing required capability legal-topology.v1");
@@ -712,6 +772,7 @@ module.exports = {
   encodeGraphV4,
   encodeFromOsmGraph,
   compactGraphV4Buffer,
+  int64StringView,
   decodeGraphV4,
   decodeGeometryV1,
   assertLegalReader,

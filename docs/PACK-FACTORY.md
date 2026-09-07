@@ -76,6 +76,12 @@ legal-topology routing is required.
 
 Byte contract: `docs/PACK-DATA-V4-AUTHORITY.md`.
 
+Sealed candidates use the lossless derived-edge-ID V4 encoding. The factory
+must not reduce size by deleting legal roads, access records, restrictions,
+barriers, seam anchors, or rider-service records. The compactor may remove only
+data exactly reproducible from other packed fields, and must rewrite and verify
+the affected manifest hashes before any DEV candidate is exposed.
+
 ---
 
 ## 3. Extract (lossless OSM identity)
