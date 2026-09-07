@@ -6,7 +6,9 @@ const path = require("node:path");
 const test = require("node:test");
 
 const root = path.resolve(__dirname, "../../../..");
-const packRoot = path.join(root, "scripts/pack-fabric/app/data/packs/v4/ns");
+const packRoot = process.env.DIRT_V4_TEST_PACK_ROOT
+  ? path.resolve(process.env.DIRT_V4_TEST_PACK_ROOT)
+  : path.join(root, "scripts/pack-fabric/app/data/packs/v4/ns");
 process.env.ROUTING_USE_REGIONAL = "1";
 process.env.ROUTING_PACKS_V2 = "1";
 process.env.ROUTING_VERIFIED_GRAPH_PATH_OVERRIDES = JSON.stringify({

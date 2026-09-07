@@ -6,8 +6,11 @@ const { decodeGraphV4, decodeGeometryV1 } = require("../routing/lib/pack-v4");
 const { findPathV4 } = require("../routing/lib/legal-topology/find-path-v4");
 
 const FABRIC = path.resolve(__dirname, "..");
-const graph = fs.readFileSync(path.join(FABRIC, "app/data/packs/v4/ns/graph.v4.bin"));
-const geomBuf = fs.readFileSync(path.join(FABRIC, "app/data/packs/v4/ns/geometry.v1.bin"));
+const packRoot = process.env.DIRT_V4_TEST_PACK_ROOT
+  ? path.resolve(process.env.DIRT_V4_TEST_PACK_ROOT)
+  : path.join(FABRIC, "app/data/packs/v4/ns");
+const graph = fs.readFileSync(path.join(packRoot, "graph.v4.bin"));
+const geomBuf = fs.readFileSync(path.join(packRoot, "geometry.v1.bin"));
 const pack = decodeGraphV4(graph, geomBuf);
 const geom = decodeGeometryV1(geomBuf);
 const west = findPathV4(
