@@ -80,9 +80,20 @@ osmium tags-filter "$CLIPPED" \
   n/barrier \
   -o "$OUT_DIR/filtered.osm.pbf" --overwrite
 
+set +e
 osmium getid "$CLIPPED" --add-referenced --overwrite \
   --id-osm-file "$OUT_DIR/filtered.osm.pbf" \
   -o "$OUT_DIR/legal-topology.osm.pbf"
+GETID_STATUS=$?
+set -e
+if [ "$GETID_STATUS" -gt 1 ] || [ ! -s "$OUT_DIR/legal-topology.osm.pbf" ]; then
+  echo "Failed to assemble legal topology for $ID" >&2
+  exit 1
+fi
+osmium fileinfo -e "$OUT_DIR/legal-topology.osm.pbf" >/dev/null
+if [ "$GETID_STATUS" -eq 1 ]; then
+  echo "Source has unresolved OSM references; retaining the valid subset so the graph builder can reject them fail-closed."
+fi
 osmium cat "$OUT_DIR/legal-topology.osm.pbf" -f opl -o "$OUT_DIR/legal-topology.opl" --overwrite
 
 python3 - <<PY
