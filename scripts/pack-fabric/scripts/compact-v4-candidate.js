@@ -11,6 +11,7 @@
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
+const { execFileSync } = require("child_process");
 const { OSM_REGION } = require("../routing/registry/geofabrik");
 const {
   FLAG_V4_DERIVED_EDGE_IDS,
@@ -18,6 +19,7 @@ const {
 } = require("../routing/lib/pack-v4");
 
 const FABRIC = path.resolve(__dirname, "..");
+const REPO = path.resolve(FABRIC, "..", "..");
 
 function die(message) {
   throw new Error(message);
@@ -75,6 +77,13 @@ function identity(file) {
 
 function sha256Buffer(buffer) {
   return crypto.createHash("sha256").update(buffer).digest("hex");
+}
+
+function currentGitCommit() {
+  return execFileSync("git", ["rev-parse", "HEAD"], {
+    cwd: REPO,
+    encoding: "utf8"
+  }).trim();
 }
 
 function compactGraphFile(file, apply) {
@@ -150,6 +159,7 @@ function main(argv = process.argv.slice(2)) {
 
   let totalBefore = 0;
   let totalAfter = 0;
+  const packagingCommit = currentGitCommit();
   const rows = [];
   for (const id of expected) {
     const dir = path.join(options.root, "packs", id);
@@ -159,8 +169,7 @@ function main(argv = process.argv.slice(2)) {
     const manifest = readJSON(manifestPath);
     const report = readJSON(reportPath);
     const outcome = compactGraphFile(graphPath, options.apply);
-    totalBefore += outcome.beforeBytes;
-    totalAfter += outcome.afterBytes;
+    let accountingBefore = outcome.beforeBytes;
 
     if (options.apply) {
       manifest.graph = identity(graphPath);
@@ -169,10 +178,12 @@ function main(argv = process.argv.slice(2)) {
       const graphBytesBefore = outcome.savedBytes > 0
         ? outcome.beforeBytes
         : (priorPackaging.graphBytesBefore || outcome.beforeBytes);
+      accountingBefore = graphBytesBefore;
       report.packaging = {
         schema: "dirt-v4-packaging.v1",
         edgeIdEncoding: "derived-osm-way-from-to",
         lossless: true,
+        toolCommit: priorPackaging.toolCommit || packagingCommit,
         graphBytesBefore,
         graphBytesAfter: outcome.afterBytes,
         savedBytes: graphBytesBefore - outcome.afterBytes
@@ -187,21 +198,35 @@ function main(argv = process.argv.slice(2)) {
         fs.unlinkSync(outcome.journalPath);
       }
     }
+    totalBefore += accountingBefore;
+    totalAfter += outcome.afterBytes;
     rows.push({ id, ...outcome });
     console.log(
       `${options.apply ? "COMPACT" : "WOULD COMPACT"} ${id} ` +
       `${Math.round(outcome.beforeBytes / 1e6)}MB -> ${Math.round(outcome.afterBytes / 1e6)}MB`
     );
   }
-  if (options.apply) writeJSONAtomic(releasePath, release);
-  console.log(JSON.stringify({
+  const summary = {
     candidate: options.candidate,
     applied: options.apply,
     regions: rows.length,
     graphBytesBefore: totalBefore,
     graphBytesAfter: totalAfter,
     savedBytes: totalBefore - totalAfter
-  }, null, 2));
+  };
+  if (options.apply) {
+    release.packaging = {
+      schema: "dirt-v4-packaging.v1",
+      edgeIdEncoding: "derived-osm-way-from-to",
+      lossless: true,
+      toolCommit: packagingCommit,
+      graphBytesBefore: totalBefore,
+      graphBytesAfter: totalAfter,
+      savedBytes: totalBefore - totalAfter
+    };
+    writeJSONAtomic(releasePath, release);
+  }
+  console.log(JSON.stringify(summary, null, 2));
 }
 
 if (require.main === module) {
