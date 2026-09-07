@@ -15,9 +15,9 @@ test("V4 ship door accepts only a sealed-fabric candidate command", () => {
   assert.throws(() => parseArgs(["--candidate", "ns-v4-legal-topology-20260906-02", "--pack"]), /release id/);
 });
 
-test("V4 ship door uses multipart transfer only above Wrangler's 300 MiB limit", () => {
-  assert.equal(needsMultipart({ identity: { bytes: 300 * 1024 * 1024 } }), false);
-  assert.equal(needsMultipart({ identity: { bytes: 300 * 1024 * 1024 + 1 } }), true);
+test("V4 ship door uses multipart transfer above the reliable direct-upload limit", () => {
+  assert.equal(needsMultipart({ identity: { bytes: 96 * 1024 * 1024 } }), false);
+  assert.equal(needsMultipart({ identity: { bytes: 96 * 1024 * 1024 + 1 } }), true);
 });
 
 test("V4 ship verification retries a transient read-back failure", async () => {

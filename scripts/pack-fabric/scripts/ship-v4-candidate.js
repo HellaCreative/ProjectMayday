@@ -21,7 +21,10 @@ const FABRIC = path.join(DIRT, "scripts/pack-fabric");
 const PUBLIC_R2_BASE = process.env.R2_PUBLIC_BASE || "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev";
 const PHONE_FILES = ["graph.v4.bin", "geometry.v1.bin", "fuel.v1.json", "cross-pack-seams.v2.json"];
 const AUDIT_FILES = ["pack-manifest.v2.json", "legal-topology-report.json"];
-const WRANGLER_UPLOAD_LIMIT = 300 * 1024 * 1024;
+// Wrangler accepts larger single requests, but Cloudflare's API gateway can time
+// them out before completion on slower links. Multipart keeps every request well
+// below that timeout while retaining an exact final-object checksum gate.
+const RELIABLE_DIRECT_UPLOAD_LIMIT = 96 * 1024 * 1024;
 const MULTIPART_PART_BYTES = 32 * 1024 * 1024;
 const MULTIPART_CONFIG = path.join(FABRIC, "wrangler.multipart-upload.toml");
 
@@ -192,7 +195,7 @@ async function putR2(item) {
 }
 
 function needsMultipart(item) {
-  return item.identity.bytes > WRANGLER_UPLOAD_LIMIT;
+  return item.identity.bytes > RELIABLE_DIRECT_UPLOAD_LIMIT;
 }
 
 function delay(milliseconds) {
