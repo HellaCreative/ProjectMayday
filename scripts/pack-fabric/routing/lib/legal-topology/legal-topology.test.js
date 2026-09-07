@@ -322,6 +322,10 @@ test("V4 seams require identical OSM edge, access, layer and safety proof", () =
   });
   const candidates = seamCandidates(pack, pack);
   assert.ok(candidates.length >= 1);
+  assert.strictEqual(
+    seamCandidates(pack, pack), candidates,
+    "the immutable pack pair must reuse its completed seam proof"
+  );
   assert.equal(assertSeamLegal(pack, pack, candidates[0]), true);
 
   const changedAccess = { ...pack, edgeAccess: Buffer.from(pack.edgeAccess) };

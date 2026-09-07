@@ -2,6 +2,12 @@
 
 /** Cross-region seams proved by shared OSM node, way and edge identity. */
 
+// Decoded packs are immutable during a seam run. Reuse a pair's deterministic
+// candidates while both pack objects are alive so selected proofs are checked
+// without rescanning two full regional graphs for every proof. Weak references
+// release the cached rows with the pair and keep continent builds memory-safe.
+const seamCandidateCache = new WeakMap();
+
 function haversineMeters(a, b) {
   const toRad = (value) => (value * Math.PI) / 180;
   const dLat = toRad(b[1] - a[1]);
@@ -79,6 +85,14 @@ function restrictionProofs(pack, node, incident) {
 }
 
 function seamCandidates(left, right) {
+  let rightCache = seamCandidateCache.get(left);
+  if (!rightCache) {
+    rightCache = new WeakMap();
+    seamCandidateCache.set(left, rightCache);
+  }
+  const cached = rightCache.get(right);
+  if (cached) return cached;
+
   const leftNodes = new Map((left.osmNodeIds || []).map((id, i) => [String(id), i]));
   const shared = [];
   for (let rightNode = 0; rightNode < (right.osmNodeIds || []).length; rightNode += 1) {
@@ -122,6 +136,7 @@ function seamCandidates(left, right) {
       });
     }
   }
+  rightCache.set(right, shared);
   return shared;
 }
 
