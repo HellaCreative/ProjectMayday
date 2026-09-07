@@ -84,9 +84,15 @@ function assertDiskSpace(at, id) {
   }
 }
 
-function run(command, args, env) {
-  const result = spawnSync(command, args, { cwd: DIRT, stdio: "inherit", env: { ...process.env, ...env } });
-  if (result.status !== 0) throw new Error(`${path.basename(args[0] || command)} failed`);
+function run(command, args, env, { attempts = 1 } = {}) {
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    const result = spawnSync(command, args, { cwd: DIRT, stdio: "inherit", env: { ...process.env, ...env } });
+    if (result.status === 0) return;
+    if (attempt < attempts) {
+      console.warn(`${path.basename(args[0] || command)} failed; retrying (${attempt + 1}/${attempts})`);
+    }
+  }
+  throw new Error(`${path.basename(args[0] || command)} failed after ${attempts} attempt(s)`);
 }
 
 function graphHeapMiB() {
@@ -236,7 +242,7 @@ function main() {
         OSM_SERVICE_WORK_ROOT: paths.serviceRoot,
         RIDER_SERVICES_V1_OUT: riderOut,
         FUEL_V1_OUT: fuelOut
-      });
+      }, { attempts: 3 });
       run(process.execPath, [
         `--max-old-space-size=${graphHeapMiB()}`,
         "--expose-gc",
@@ -248,7 +254,7 @@ function main() {
         DIRT_V4_PACK_ROOT: paths.packRoot,
         DIRT_V4_FUEL_PATH: fuelOut,
         OSM_LEGAL_ROOT: paths.legalRoot
-      });
+      }, { attempts: 2 });
       record = verifyRegion(paths, id, options.releaseId, lock);
       safeCleanWork(paths, source);
       console.log(`[${index + 1}/${options.regions.length}] sealed ${id}`);
