@@ -13,8 +13,54 @@ const {
   rankForwardFuel,
   routeFirstBudgetForWindow,
   routeFirstDeadlineAfterLoad,
+  selectSafeTimeoutPartial,
   stationEligibility
 } = require("./fuel-chain");
+
+test("timeout partial rejects a fuel stop whose continuation proves a long return", () => {
+  const canso = {
+    evaluation: {
+      candidate: { urbanEntry: true, foundationCellDistance: null },
+      continuationBacktrackMeters: 32_484
+    },
+    plan: { stops: [{ id: "canso" }] }
+  };
+  const causeway = {
+    evaluation: {
+      candidate: { urbanEntry: false, foundationCellDistance: null },
+      continuationBacktrackMeters: 36
+    },
+    plan: { stops: [{ id: "causeway" }] }
+  };
+
+  assert.equal(
+    selectSafeTimeoutPartial([canso, causeway]).plan.stops[0].id,
+    "causeway"
+  );
+  assert.equal(selectSafeTimeoutPartial([canso]), null);
+});
+
+test("timeout partial prefers a rural stop when direction is equally safe", () => {
+  const town = {
+    evaluation: {
+      candidate: { urbanEntry: true, foundationCellDistance: null },
+      continuationBacktrackMeters: null
+    },
+    plan: { stops: [{ id: "town" }] }
+  };
+  const rural = {
+    evaluation: {
+      candidate: { urbanEntry: false, foundationCellDistance: null },
+      continuationBacktrackMeters: null
+    },
+    plan: { stops: [{ id: "rural" }] }
+  };
+
+  assert.equal(
+    selectSafeTimeoutPartial([town, rural]).plan.stops[0].id,
+    "rural"
+  );
+});
 
 test("cross-region fuel starts incrementally without measuring the whole profile ride", async () => {
   const start = { lat: 44.764830, lon: -63.340265 };

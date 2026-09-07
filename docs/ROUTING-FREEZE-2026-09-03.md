@@ -17,6 +17,16 @@ Git tag `routing-rc1-2026-09-03` identifies the exact implementation commit.
 Documentation and factory safeguards may be committed after that tag without
 changing the frozen runtime behaviour.
 
+## Open DEV candidate after this freeze — 2026-09-06
+
+Richard explicitly reopened DEV routing after White-device Yarmouth and Cape
+Breton failures. Build `2 (16)` corrects degraded-Dirt meander, smaller-town
+cost, unsafe partial fuel selection, and redundant same-profile rebuilds. It
+changes Swift/shared routing code only; no pack bytes are rebuilt or promoted.
+The September 3 source and production service remain the frozen rollback until
+the matching DEV service and build `2 (16)` pass physical White acceptance and
+a new freeze record is created.
+
 ## What is frozen
 
 - Dirt, Balanced, and Clean route-selection laws and their shared Swift/JS cost

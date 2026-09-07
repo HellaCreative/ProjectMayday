@@ -34,7 +34,7 @@ const DIRT_RIDE_RESOURCE_PER_KM = Number(process.env.DIRT_RIDE_RESOURCE_PER_KM |
 const DIRT_RIDE_UNKNOWN_TRACK_PER_KM = Number(process.env.DIRT_RIDE_UNKNOWN_TRACK_PER_KM || 0.9);
 const DIRT_RIDE_XT_SCALE = Number(process.env.DIRT_RIDE_XT_SCALE || 1);
 const DIRT_RIDE_AWAY_SCALE = Number(process.env.DIRT_RIDE_AWAY_SCALE || 10);
-const SETTLEMENT_FALLBACK_MULTIPLIER = Number(process.env.SETTLEMENT_FALLBACK_MULTIPLIER || 5);
+const SETTLEMENT_FALLBACK_MULTIPLIER = Number(process.env.SETTLEMENT_FALLBACK_MULTIPLIER || 20);
 
 const METRO_CORE_WALL = [
   { minLat: 49.0, maxLat: 49.42, minLon: -123.32, maxLon: -122.7, name: "vancouver" },
@@ -133,7 +133,7 @@ function resolveMetroFallbackPenalty(profile, cleanMetroMultiplier, avoidMajorHi
     ?? (avoidMajorHighways ? 10 : 2);
 }
 
-/** Pack-derived towns share Clean's bounded 1–20 city control; adventure stays ×5. */
+/** Pack-derived towns share Clean's bounded 1–20 city control; adventure uses the maximum. */
 function resolveSettlementFallbackPenalty(
   profile, cleanMetroMultiplier, avoidMajorHighways = true
 ) {
@@ -164,7 +164,9 @@ function settlementBlocks(lon, lat, startLL, endLL, boxes = []) {
 }
 
 /** Town travel remains a finite cost, with an endpoint-inside exemption. */
-function settlementFallbackMultiplier(lon, lat, startLL, endLL, boxes = [], penalty = 5) {
+function settlementFallbackMultiplier(
+  lon, lat, startLL, endLL, boxes = [], penalty = SETTLEMENT_FALLBACK_MULTIPLIER
+) {
   const p = Number.isFinite(Number(penalty))
     ? Math.min(20, Math.max(1, Number(penalty)))
     : SETTLEMENT_FALLBACK_MULTIPLIER;

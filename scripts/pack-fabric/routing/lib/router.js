@@ -2559,8 +2559,9 @@ async function routeOnRuntime(body, graphResolution, runtime) {
   } else {
     const diagnostics = {};
     const adventureSearchOpts = Object.assign({}, searchOpts, {
-      // Major urban cores are walls. Smaller mapped towns remain a strong,
-      // finite avoidance cost so they cannot falsely disconnect rural fabric.
+      // Smaller towns remain routable because they may contain the only legal
+      // rural connection, but their maximum finite cost prevents extra Dirt
+      // from making an avoidable town crossing attractive.
       settlementWall: false,
       settlementFallback: true,
       diagnostics

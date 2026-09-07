@@ -76,7 +76,7 @@ test("Clean metro multiplier override clamps 1–20 and ignores other profiles",
   assert.equal(resolveSettlementFallbackPenalty("cleanest", null, true), 10);
   assert.equal(resolveSettlementFallbackPenalty("cleanest", null, false), 2);
   assert.equal(resolveSettlementFallbackPenalty("cleanest", 99, true), 20);
-  assert.equal(resolveSettlementFallbackPenalty("balanced", 20, true), 5);
+  assert.equal(resolveSettlementFallbackPenalty("balanced", 20, true), 20);
 });
 
 test("smaller settlements are avoided unless an endpoint is inside", () => {
@@ -84,7 +84,7 @@ test("smaller settlements are avoided unless an endpoint is inside", () => {
   const outsideA = [-122.5, 48.05];
   const outsideB = [-121.7, 48.05];
   assert.equal(settlementBlocks(-122.1, 48.05, outsideA, outsideB, [town]), true);
-  assert.equal(settlementFallbackMultiplier(-122.1, 48.05, outsideA, outsideB, [town]), 5);
+  assert.equal(settlementFallbackMultiplier(-122.1, 48.05, outsideA, outsideB, [town]), 20);
   assert.equal(settlementFallbackMultiplier(-122.1, 48.05, outsideA, outsideB, [town], 10), 10);
   assert.equal(settlementFallbackMultiplier(-122.1, 48.05, outsideA, outsideB, [town], 99), 20);
   assert.equal(settlementBlocks(-122.1, 48.05, [-122.1, 48.05], outsideB, [town]), false);

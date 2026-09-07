@@ -53,7 +53,7 @@ const MIN_STOP_SEPARATION_M = 800;
 const MIN_FORWARD_PROGRESS_M = 8_000;
 const MIN_DESTINATION_FUEL_CLEARANCE_M = 5_000;
 /** Bumped when fuel-selection / ranking contracts change. Clients may assert. */
-const FUEL_CHAIN_SERVICE_VERSION = "2026-09-06.rural-before-urban.27";
+const FUEL_CHAIN_SERVICE_VERSION = "2026-09-06.rural-before-urban-safe-timeout.28";
 const FUEL_SELECTION_POLICY = "minimum_stops_rural_before_urban_then_75pct";
 /**
  * Preserve the first three quarters of each usable tank for the requested
@@ -135,6 +135,33 @@ function routeFirstBudgetForWindow(windowBudgetMs) {
   // before their legal fallback could complete. Keep a five-second minimum
   // reserve for fuel selection while treating every riding style equally.
   return Math.max(2_000, Math.min(10_000, Math.round(budget * 0.67)));
+}
+
+function timeoutPartialBacktrackCap(evaluation) {
+  const foundationCellDistance =
+    evaluation && evaluation.candidate && evaluation.candidate.foundationCellDistance;
+  return foundationCellDistance != null && Number.isFinite(Number(foundationCellDistance))
+    ? MAX_FOUNDATION_NEARBY_CONTINUATION_BACKTRACK_M
+    : MAX_FUEL_RETRACE_M;
+}
+
+/**
+ * A deadline may shorten a proved fuel chain, but it may not turn an unsafe
+ * approach into a committed stop. Prefer a rural partial when one exists and
+ * reject any candidate whose completed continuation proves a material return
+ * toward the departure point.
+ */
+function selectSafeTimeoutPartial(routedApproachPlans) {
+  const safe = (routedApproachPlans || []).filter(({ evaluation }) => {
+    const rawBacktrack = evaluation && evaluation.continuationBacktrackMeters;
+    const backtrack = Number(rawBacktrack);
+    return rawBacktrack == null || !Number.isFinite(backtrack) ||
+      backtrack <= timeoutPartialBacktrackCap(evaluation) + 1;
+  });
+  if (!safe.length) return null;
+  return safe.find(({ evaluation }) =>
+    !evaluation.candidate.urbanEntry
+  ) || safe[0];
 }
 
 function routeFirstDeadlineAfterLoad(windowDeadlineAtMs, routeFirstBudgetMs, loadedAtMs) {
@@ -3169,11 +3196,11 @@ async function planFuelChainOnRuntime({
     // an exhausted (non-timeout) continuation still rejects the candidate.
     if (!stationPlans.length && allowPartialWindow && exceededSearchBudget() &&
         routedApproachPlans.length) {
-      // `evaluated` was already sorted by compareEvaluatedRows inside
-      // evaluatedRoutes, so preserve that order here. The comparator is local
-      // to evaluatedRoutes and intentionally is not duplicated at search scope.
-      stationPlans.push(routedApproachPlans[0].plan);
-      timeBudgetExceeded = true;
+      const safePartial = selectSafeTimeoutPartial(routedApproachPlans);
+      if (safePartial) {
+        stationPlans.push(safePartial.plan);
+        timeBudgetExceeded = true;
+      }
     }
     if (stationPlans.length) {
       stationPlans.sort((a, b) => compareChainPlans(a, b, profile, cap));
@@ -4467,5 +4494,6 @@ module.exports = {
   deriveWaypointFuelStation,
   deriveWaypointRefuels,
   WAYPOINT_FUEL_SNAP_METERS,
-  fuelChainRequest
+  fuelChainRequest,
+  selectSafeTimeoutPartial
 };

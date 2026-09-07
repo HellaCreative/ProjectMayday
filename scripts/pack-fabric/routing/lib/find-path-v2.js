@@ -886,6 +886,11 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
       ? [Infinity]
       : widthMultipliers.map((m) => baseCorridor * m).concat(Infinity);
     const requestedCap = Number(searchOpts.maxPathMeters);
+    // Balanced always uses a shortest-road envelope. Dirt keeps its established
+    // widest-corridor search, but also measures the shortest legal connection
+    // so a degraded (<70%) result cannot buy a modest surface gain with
+    // hundreds of kilometres of lateral travel.
+    const needsDirectReference = profile === "balanced" || profile === "dirt";
     const budgetedProfile = profile === "balanced";
     // Fuel planning supplies one absolute wall-clock deadline. Every helper,
     // corridor attempt and repair pass must share it; none may restart a fresh
@@ -901,7 +906,7 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
       ? Number(searchOpts.deadlineAtMs)
       : deadlineStartedAt + adaptiveBudgetMs;
     const effectiveBudgetMs = Math.max(0, outerDeadline - deadlineStartedAt);
-    const directShortest = budgetedProfile
+    const directShortest = needsDirectReference
       ? findPathV2(
           runtime, startMatch, endMatch, profile, policy, avoidEdgeIds, pavedBias,
           {
@@ -927,8 +932,9 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
         )
       : null;
     const directShortestMeters = Number(directShortest && directShortest.distanceMeters);
+    const directExtraBudget = baseCorridor;
     const directBudget = Number.isFinite(directShortestMeters)
-      ? directShortestMeters + 40_000
+      ? directShortestMeters + directExtraBudget
       : Infinity;
     const activePathCap = budgetedProfile
       ? Math.min(Number.isFinite(requestedCap) ? requestedCap : Infinity, directBudget)
@@ -1114,9 +1120,84 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
       const primaryBestDirt = Math.max(...dirtCandidates.map((candidate) => candidate.dirtPercent));
       if (primaryBestDirt < 70) {
         const primary = chooseDirtRideCandidate(dirtCandidates);
+        const coherenceCap = Number.isFinite(directShortestMeters)
+          ? directShortestMeters + directExtraBudget
+          : Infinity;
+        const boundedLowDirtCap = Math.min(
+          Number.isFinite(activePathCap) ? activePathCap : Infinity,
+          coherenceCap
+        );
+        const hasCoherentLengthCandidate = dirtCandidates.some((candidate) =>
+          !Number.isFinite(boundedLowDirtCap) ||
+          Number(candidate.ride && candidate.ride.distanceMeters) <= boundedLowDirtCap + 1
+        );
+        if (!hasCoherentLengthCandidate && Number.isFinite(boundedLowDirtCap)) {
+          const boundedDiagnostics = {};
+          const boundedOpts = {
+            ...searchOpts,
+            costMode: "pavement",
+            corridorMeters: baseCorridor * 2,
+            hardCorridor: true,
+            boundedSearch: true,
+            variety: false,
+            pavedOnly: false,
+            cityWall: searchOpts.cityWall !== false,
+            urbanCoreFallback: searchOpts.urbanCoreFallback === true,
+            progressRegressionMeters: progressRegressionForAttempt(profile, baseCorridor * 2),
+            diagnostics: boundedDiagnostics,
+            settlementWall: searchOpts.settlementWall === true,
+            settlementFallback: searchOpts.settlementFallback !== false,
+            priorEdgeIds: searchOpts.priorEdgeIds || [],
+            arrivalEdgeId: searchOpts.arrivalEdgeId == null ? null : searchOpts.arrivalEdgeId,
+            backtrackFactor: searchOpts.backtrackFactor,
+            skipShortDirtRepair: searchOpts.skipShortDirtRepair === true,
+            popCap: profileSearchPopCap(profile, graphNodeCount, true),
+            maxPathMeters: boundedLowDirtCap,
+            shortestMeters: directShortestMeters,
+            timeCapMs: Math.min(
+              7_000,
+              profileSearchBudgetMs(profile, straightLineMeters, graphNodeCount)
+            ),
+            deadlineAtMs: requestHasDeadline ? liveDeadline : undefined,
+            abortSignal: searchOpts.abortSignal
+          };
+          const boundedStarted = Date.now();
+          const boundedInitial = findPathV2(
+            runtime, startMatch, endMatch, profile, policy, avoidEdgeIds, pavedBias, boundedOpts
+          );
+          const boundedRide = repairShortDirtExcursions(
+            boundedInitial,
+            runtime,
+            startMatch,
+            endMatch,
+            profile,
+            policy,
+            avoidEdgeIds,
+            pavedBias,
+            boundedOpts
+          );
+          attemptDiagnostics.push({
+            corridorMeters: baseCorridor * 2,
+            searchObjective: "pavementBounded",
+            outcome: boundedRide ? "completed" : (boundedDiagnostics.outcome || "noPath"),
+            pops: boundedDiagnostics.pops ||
+              (boundedRide && boundedRide.searchMeta && boundedRide.searchMeta.pops) || 0,
+            searchMs: Date.now() - boundedStarted,
+            maxPathMeters: Math.round(boundedLowDirtCap)
+          });
+          if (boundedRide) {
+            boundedRide.searchMeta = boundedRide.searchMeta || {};
+            boundedRide.searchMeta.rideObjective = "earned-dirt-detour";
+            boundedRide.searchMeta.searchBudgetPolicy = "degraded-dirt-coherence";
+            boundedRide.searchMeta.dirtSelection = "highest-coherent-dirt-share";
+            dirtCandidates.push(
+              dirtCandidateSummary(boundedRide, baseCorridor * 2, "pavementBounded")
+            );
+          }
+        }
         const recoveryCap = dirtRecoveryPathCap(
           primary && primary.ride && primary.ride.distanceMeters,
-          activePathCap
+          boundedLowDirtCap
         );
         const diagnostics = {};
         const recoveryBudgetMs = Math.min(
@@ -1186,7 +1267,18 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
           );
         }
       }
-      const best = chooseDirtRideCandidate(dirtCandidates);
+      const bestDirt = Math.max(...dirtCandidates.map((candidate) => candidate.dirtPercent));
+      const coherenceCap = Number.isFinite(directShortestMeters)
+        ? directShortestMeters + directExtraBudget
+        : Infinity;
+      const coherentLengthCandidates = bestDirt < 70 && Number.isFinite(coherenceCap)
+        ? dirtCandidates.filter((candidate) =>
+            Number(candidate.ride && candidate.ride.distanceMeters) <= coherenceCap + 1
+          )
+        : [];
+      const best = chooseDirtRideCandidate(
+        coherentLengthCandidates.length ? coherentLengthCandidates : dirtCandidates
+      );
       best.ride.searchMeta.corridorMeters = best.width;
       best.ride.searchMeta.corridorWidened =
         Number.isFinite(best.width) && best.width > baseCorridor;
@@ -1219,7 +1311,7 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
       !Number.isFinite(requestedCap) || directShortestMeters <= requestedCap + 1
     );
     if (
-      profile === "balanced" && directFitsRequest &&
+      (profile === "balanced" || profile === "dirt") && directFitsRequest &&
       !(searchOpts.abortSignal && searchOpts.abortSignal.aborted)
     ) {
       // A bounded Balanced preference search is allowed to lose refinement,
@@ -1227,11 +1319,20 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
       // ride under the same access policy and hard fuel cap. Return it with an
       // explicit diagnostic rather than falsely reporting that no route exists.
       directShortest.searchMeta = directShortest.searchMeta || {};
-      directShortest.searchMeta.rideObjective = "surface-balance-bounded-fallback";
-      directShortest.searchMeta.balancedSearchFallbackUsed = true;
-      directShortest.searchMeta.balancedSearchFallbackReason = incompleteAttempt
-        ? incompleteAttempt.outcome
-        : "no_balanced_candidate";
+      directShortest.searchMeta.rideObjective = profile === "balanced"
+        ? "surface-balance-bounded-fallback"
+        : "earned-dirt-bounded-fallback";
+      if (profile === "balanced") {
+        directShortest.searchMeta.balancedSearchFallbackUsed = true;
+        directShortest.searchMeta.balancedSearchFallbackReason = incompleteAttempt
+          ? incompleteAttempt.outcome
+          : "no_balanced_candidate";
+      } else {
+        directShortest.searchMeta.dirtSearchFallbackUsed = true;
+        directShortest.searchMeta.dirtSearchFallbackReason = incompleteAttempt
+          ? incompleteAttempt.outcome
+          : "no_dirt_candidate";
+      }
       directShortest.searchMeta.corridorMeters = null;
       directShortest.searchMeta.corridorWidened = false;
       directShortest.searchMeta.corridorCandidates = attemptDiagnostics;

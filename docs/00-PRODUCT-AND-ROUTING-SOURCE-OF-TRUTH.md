@@ -1043,6 +1043,35 @@ retain route-priority alternatives, rank whole chains rather than isolated pump
 approaches, avoid concurrent speculative next-leg work, and commit only an
 in-deadline routed pump prefix when a later continuation proof times out.
 
+### Degraded-Dirt coherence and safe fuel timeout — 2026-09-06
+
+White-device routes from `44.764774,-63.340256` to Yarmouth and Cape Breton
+proved three separate runtime defects. No graph, geometry, fuel, seam, or Rider
+Services pack was rebuilt or changed by this repair.
+
+1. Smaller settlements remain routable, but Dirt and Balanced use the maximum
+   finite ×20 avoidance cost. They are not walls and endpoint-inside exemptions
+   remain unchanged.
+2. Dirt still works back from the highest meaningful known-Dirt share. When its
+   best result remains below the 70% ready threshold, however, the service and
+   offline router also compare a bounded candidate no more than 60 km beyond
+   the shortest legal road connection. A degraded result cannot justify an
+   effectively unbounded lateral tour. A 70%+ Dirt result keeps the established
+   objective and is not silently shortened.
+3. A timed-out fuel search may keep only a proved, directionally safe partial.
+   It rejects a candidate with a known material continuation return, and it
+   prefers a rural candidate over an equally safe urban candidate. The fixed
+   Cape Breton case now selects Caper Gas near the causeway rather than the
+   Canso out-and-back.
+4. Setting a Point/F stage to its already-effective profile is a no-op. It does
+   not cancel and restart the same route calculation.
+
+The exact Yarmouth and Cape Breton reproductions, the historical 70%+ Dirt
+fixtures, fuel timeout unit fixtures, and Swift itinerary tests are required
+before deployment. iOS build `2 (16)` and its matching DEV service are a
+candidate pending a physical White pass; this section does not promote or
+replace the September 3 production freeze.
+
 ## 11. Current product status
 
 ### Implemented and covered locally
@@ -1069,6 +1098,8 @@ in-deadline routed pump prefix when a later continuation proof times out.
   destination escape, bounded prior-edge history, and warm fuel/pump context.
 - Cross-profile duplicate-node topology, hard-primary urban-core avoidance,
   scored smaller-settlement avoidance, and bounded low-DIRT share recovery.
+- Degraded-Dirt distance coherence, safe partial fuel selection, and no-op
+  effective-profile edits in shared LIVE, Swift, and Android parity law.
 
 ### Not yet accepted end to end
 

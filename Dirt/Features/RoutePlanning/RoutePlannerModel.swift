@@ -1185,6 +1185,9 @@ final class RoutePlannerModel {
         guard stages.indices.contains(index) else { return }
         let stage = stages[index]
         if let stationID = stage.departureFuelStopID {
+            guard let leg = itinerary.legs.first(where: { $0.id == stage.riderLegID }),
+                  leg.effectiveProfile(departingFrom: stationID) != newProfile
+            else { return }
             RoutingDebugLog.shared.event(
                 "fuel leg override departure=\(stationID) profile=\(newProfile.rawValue) " +
                     "replanFrom=\(stationID)"
