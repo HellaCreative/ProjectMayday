@@ -326,11 +326,13 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
     static let headerSizeV3 = 100
     static let headerSizeV3Crossing = 104
     static let headerSizeV4 = 140
-    /// flags bit0 = edgeFrom/edgeTo; bit1 = v3 leaf sections; bit2 = edgeCrossingSeconds; bit3 = V4 legal-topology.
+    /// flags bit0 = edgeFrom/edgeTo; bit1 = v3 leaf sections; bit2 = edgeCrossingSeconds;
+    /// bit3 = V4 legal-topology; bit4 = derive edge ids from way/from/to.
     static let flagEdgeFromTo: UInt16 = 1
     static let flagV3Leaves: UInt16 = 2
     static let flagV3CrossingSeconds: UInt16 = 4
     static let flagV4LegalTopology: UInt16 = 8
+    static let flagV4DerivedEdgeIDs: UInt16 = 16
     static let requiredV4Capability = "legal-topology.v1"
     /// Packed structure enum (lockstep regional/package.js STRUCTURE).
     static let structureNone = 0
@@ -488,8 +490,13 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
         edgeFrom = offEdgeFrom > 0 ? data.readInt32Array(at: offEdgeFrom, count: undirectedEdgeCount) : nil
         edgeTo = offEdgeTo > 0 ? data.readInt32Array(at: offEdgeTo, count: undirectedEdgeCount) : nil
         nodeCoords = data.readFloat32Array(at: offNodeCoords, count: nodeCount * 2)
-        idOffsets = data.readInt32Array(at: offIdOffsets, count: undirectedEdgeCount + 1)
-        idBlob = data.subdata(in: offIdBlob..<offEnums)
+        if isV4, (flags & Self.flagV4DerivedEdgeIDs) != 0 {
+            idOffsets = []
+            idBlob = Data()
+        } else {
+            idOffsets = data.readInt32Array(at: offIdOffsets, count: undirectedEdgeCount + 1)
+            idBlob = data.subdata(in: offIdBlob..<offEnums)
+        }
 
         let metaEnd: Int
         if hasLeaves && offEdgeSurfaceLeaf > offMeta {
@@ -762,6 +769,11 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
 
     func edgeId(_ ei: Int) -> String {
         guard ei >= 0, ei < undirectedEdgeCount else { return "" }
+        if version == Self.versionV4, (flags & Self.flagV4DerivedEdgeIDs) != 0,
+           ei < osmWayIds.count,
+           let from = edgeFrom?[ei], let to = edgeTo?[ei] {
+            return "w\(osmWayIds[ei]):\(from):\(to)"
+        }
         let a = Int(idOffsets[ei])
         let b = Int(idOffsets[ei + 1])
         guard a >= 0, b >= a, b <= idBlob.count else { return "" }

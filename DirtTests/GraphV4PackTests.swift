@@ -61,6 +61,8 @@ struct GraphV4PackTests {
         #expect(pack.undirectedEdgeCount == 2)
         #expect(pack.osmWayIds.contains(537982310))
         #expect(pack.osmWayIds.contains(537982311))
+        #expect((pack.flags & GraphV2Pack.flagV4DerivedEdgeIDs) != 0)
+        #expect(pack.edgeId(0) == "w537982310:0:1")
     }
 
     @Test("on-device V4 search stays on the legal carriageway")
