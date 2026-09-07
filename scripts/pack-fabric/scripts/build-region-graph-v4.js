@@ -88,8 +88,16 @@ async function main() {
     provenance.settlements = sidecar.settlements || null;
   }
 
-  const osm = await parseOplFile(oplPath);
-  console.warn("parsed OSM", osm.nodes.length, "nodes", osm.ways.length, "ways", osm.relations.length, "relations");
+  const osm = await parseOplFile(oplPath, { packedNodes: true });
+  console.warn(
+    "parsed OSM",
+    osm.nodeStore ? osm.nodeStore.count : osm.nodes.length,
+    "nodes",
+    osm.ways.length,
+    "ways",
+    osm.relations.length,
+    "relations"
+  );
   const graph = buildGraphFromOsm(osm, { timezone });
   osm.nodes.length = 0;
   osm.ways.length = 0;

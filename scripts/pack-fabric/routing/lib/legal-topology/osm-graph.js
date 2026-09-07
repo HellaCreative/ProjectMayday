@@ -222,16 +222,63 @@ function buildGraphFromOsm(osm, options = {}) {
   const timezone = options.timezone || "America/Halifax";
   const rejected = [];
   const conditionals = [];
-  const nodesById = new Map();
-  for (const node of osm.nodes || []) {
-    nodesById.set(String(node.id), node);
+  const packedNodes = osm.nodeStore && typeof osm.nodeStore.indexOf === "function"
+    ? osm.nodeStore
+    : null;
+  const nodesById = packedNodes ? null : new Map();
+  if (!packedNodes) {
+    for (const node of osm.nodes || []) nodesById.set(String(node.id), node);
   }
-  const ways = (osm.ways || []).filter(isRoutableWay);
-  const wayById = new Map(ways.map((w) => [String(w.id), w]));
+  const sourceWays = osm.ways || [];
+  let ways;
+  if (packedNodes) {
+    // Compact in place so a multi-million-entry duplicate array is never made.
+    let write = 0;
+    for (const way of sourceWays) if (isRoutableWay(way)) sourceWays[write++] = way;
+    sourceWays.length = write;
+    ways = sourceWays;
+  } else {
+    ways = sourceWays.filter(isRoutableWay);
+  }
 
-  const touch = new Map();
+  const packedGraphIndex = packedNodes ? new Int32Array(packedNodes.count) : null;
+  if (packedGraphIndex) packedGraphIndex.fill(-1);
+  const graphIndex = packedNodes ? null : new Map();
+  let split = packedNodes ? new Uint8Array(packedNodes.count) : new Set();
+
+  function packedIndex(id) {
+    return packedNodes ? packedNodes.indexOf(id) : -1;
+  }
+  function nodeForId(id, knownPackedIndex = -1) {
+    if (!packedNodes) return nodesById.get(String(id));
+    const index = knownPackedIndex >= 0 ? knownPackedIndex : packedIndex(id);
+    return index >= 0 ? packedNodes.getByIndex(index) : null;
+  }
+  function markSplit(id, knownPackedIndex = -1) {
+    if (!packedNodes) {
+      split.add(String(id));
+      return;
+    }
+    const index = knownPackedIndex >= 0 ? knownPackedIndex : packedIndex(id);
+    if (index >= 0) split[index] = 1;
+  }
+  function graphNodeFor(id, knownPackedIndex = -1) {
+    if (!packedNodes) return graphIndex.get(String(id));
+    const index = knownPackedIndex >= 0 ? knownPackedIndex : packedIndex(id);
+    if (index < 0) return undefined;
+    const value = packedGraphIndex[index];
+    return value >= 0 ? value : undefined;
+  }
+
+  let touch = packedNodes ? new Uint8Array(packedNodes.count) : new Map();
   function touchNode(id) {
-    touch.set(id, (touch.get(id) || 0) + 1);
+    if (!packedNodes) {
+      const key = String(id);
+      touch.set(key, (touch.get(key) || 0) + 1);
+      return;
+    }
+    const index = packedIndex(id);
+    if (index >= 0 && touch[index] < 2) touch[index] += 1;
   }
   for (const way of ways) {
     const ids = (way.nodeIds || []).map(String);
@@ -244,23 +291,25 @@ function buildGraphFromOsm(osm, options = {}) {
     }
   }
 
-  const split = new Set();
-  for (const [id, count] of touch) {
-    if (count >= 2) split.add(id);
+  if (!packedNodes) {
+    for (const [id, count] of touch) if (count >= 2) split.add(id);
   }
   for (const way of ways) {
     const ids = (way.nodeIds || []).map(String);
+    const indexes = packedNodes ? ids.map(packedIndex) : null;
     if (ids.length) {
-      split.add(ids[0]);
-      split.add(ids[ids.length - 1]);
+      markSplit(ids[0], indexes ? indexes[0] : -1);
+      markSplit(ids[ids.length - 1], indexes ? indexes[indexes.length - 1] : -1);
     }
-    for (const id of ids) {
-      const node = nodesById.get(id);
-      if (node && isBarrierNode(node.tags || {})) split.add(id);
+    for (let i = 0; i < ids.length; i += 1) {
+      if (packedNodes && indexes[i] >= 0 && touch[indexes[i]] >= 2) markSplit(ids[i], indexes[i]);
+      const node = nodeForId(ids[i], indexes ? indexes[i] : -1);
+      if (node && isBarrierNode(node.tags || {})) markSplit(ids[i], indexes ? indexes[i] : -1);
     }
   }
 
   const restrictionParse = [];
+  const restrictionWayIds = new Set();
   for (const rel of osm.relations || []) {
     const parsed = parseRestrictionRelation(rel);
     if (!parsed.ok) {
@@ -268,15 +317,20 @@ function buildGraphFromOsm(osm, options = {}) {
       continue;
     }
     restrictionParse.push(parsed.restriction);
-    for (const id of parsed.restriction.viaNodeIds) split.add(String(id));
+    restrictionWayIds.add(String(parsed.restriction.fromWayId));
+    restrictionWayIds.add(String(parsed.restriction.toWayId));
+    for (const id of parsed.restriction.viaWayIds || []) restrictionWayIds.add(String(id));
+    for (const id of parsed.restriction.viaNodeIds) markSplit(id);
   }
+  if (packedNodes) osm.relations.length = 0;
+  touch = null;
 
   const graphNodes = [];
-  const graphIndex = new Map();
-  function addGraphNode(osmId) {
+  function addGraphNode(osmId, knownPackedIndex = -1) {
     const key = String(osmId);
-    if (graphIndex.has(key)) return graphIndex.get(key);
-    const src = nodesById.get(key);
+    const existing = graphNodeFor(key, knownPackedIndex);
+    if (existing != null) return existing;
+    const src = nodeForId(key, knownPackedIndex);
     if (!src || !Number.isFinite(src.lon) || !Number.isFinite(src.lat)) {
       rejected.push({ kind: "node", osmNodeId: key, reason: "missing_node" });
       return -1;
@@ -288,16 +342,27 @@ function buildGraphFromOsm(osm, options = {}) {
       lat: src.lat,
       tags: src.tags || {}
     });
-    graphIndex.set(key, index);
+    if (packedNodes) {
+      const packedAt = knownPackedIndex >= 0 ? knownPackedIndex : packedIndex(key);
+      if (packedAt >= 0) packedGraphIndex[packedAt] = index;
+    } else {
+      graphIndex.set(key, index);
+    }
     return index;
   }
 
-  for (const id of split) addGraphNode(id);
+  if (packedNodes) {
+    for (let i = 0; i < split.length; i += 1) if (split[i]) addGraphNode(packedNodes.getByIndex(i).id, i);
+  } else {
+    for (const id of split) addGraphNode(id);
+  }
+  split = null;
 
   const barriers = [];
-  for (const [osmId, gi] of graphIndex) {
-    const src = nodesById.get(osmId);
-    if (!src || !isBarrierNode(src.tags || {})) continue;
+  for (let gi = 0; gi < graphNodes.length; gi += 1) {
+    const src = graphNodes[gi];
+    if (!isBarrierNode(src.tags || {})) continue;
+    const osmId = src.osmNodeId;
     const ev = evaluateBarrier(src.tags || {});
     barriers.push({
       osmNodeId: osmId,
@@ -318,11 +383,13 @@ function buildGraphFromOsm(osm, options = {}) {
   const edges = [];
   const wayEdgeIndex = new Map();
 
-  for (const way of ways) {
+  for (let wayIndex = 0; wayIndex < ways.length; wayIndex += 1) {
+    const way = ways[wayIndex];
     const ids = (way.nodeIds || []).map(String);
+    const indexes = packedNodes ? ids.map(packedIndex) : null;
     const splitAt = [];
     for (let i = 0; i < ids.length; i += 1) {
-      if (graphIndex.has(ids[i])) splitAt.push(i);
+      if (graphNodeFor(ids[i], indexes ? indexes[i] : -1) != null) splitAt.push(i);
     }
     const wayEdges = [];
     const tags = way.tags || {};
@@ -344,13 +411,13 @@ function buildGraphFromOsm(osm, options = {}) {
       const i1 = splitAt[s + 1];
       const fromOsm = ids[i0];
       const toOsm = ids[i1];
-      const from = graphIndex.get(fromOsm);
-      const to = graphIndex.get(toOsm);
+      const from = graphNodeFor(fromOsm, indexes ? indexes[i0] : -1);
+      const to = graphNodeFor(toOsm, indexes ? indexes[i1] : -1);
       if (from == null || to == null || from < 0 || to < 0) continue;
       const coords = [];
       let meters = 0;
       for (let i = i0; i <= i1; i += 1) {
-        const n = nodesById.get(ids[i]);
+        const n = nodeForId(ids[i], indexes ? indexes[i] : -1);
         if (!n) continue;
         const c = [n.lon, n.lat];
         if (coords.length) meters += haversineMeters(coords[coords.length - 1], c);
@@ -395,12 +462,20 @@ function buildGraphFromOsm(osm, options = {}) {
         rt: cost.rt,
         conf: cost.conf,
         seasonal: cost.seasonal,
-        xs: cost.xs,
-        tags
+        xs: cost.xs
       });
       wayEdges.push(ei);
     }
-    wayEdgeIndex.set(String(way.id), wayEdges);
+    if (restrictionWayIds.has(String(way.id))) wayEdgeIndex.set(String(way.id), wayEdges);
+    if (packedNodes) {
+      way.nodeIds = null;
+      way.tags = null;
+      ways[wayIndex] = null;
+    }
+  }
+
+  if (packedNodes) {
+    ways.length = 0;
   }
 
   function edgeOnWayTouchingNode(wayId, graphNode) {
@@ -410,7 +485,7 @@ function buildGraphFromOsm(osm, options = {}) {
 
   const restrictions = [];
   for (const r of restrictionParse) {
-    const viaGraph = r.viaNodeIds.map((id) => graphIndex.get(String(id))).filter((v) => v != null);
+    const viaGraph = r.viaNodeIds.map((id) => graphNodeFor(id)).filter((v) => v != null);
     const viaNode = viaGraph.length ? viaGraph[0] : null;
     let fromEdges = [];
     let toEdges = [];
@@ -459,6 +534,8 @@ function buildGraphFromOsm(osm, options = {}) {
       }
     }
   }
+
+  if (packedNodes) packedNodes.clear();
 
   return {
     nodes: graphNodes,

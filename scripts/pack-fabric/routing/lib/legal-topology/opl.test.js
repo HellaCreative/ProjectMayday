@@ -6,6 +6,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const { decodeOplString, parseTags, parseOpl, parseOplFile } = require("./opl");
+const { buildGraphFromOsm } = require("./osm-graph");
 
 test("OPL percent escapes decode without URL-decoder corruption", () => {
   assert.equal(decodeOplString("MacDonald%20%Road"), "MacDonald Road");
@@ -47,4 +48,68 @@ test("streaming OPL parser preserves the in-memory legal identity", async (t) =>
   assert.deepEqual(streamed.ways, memory.ways);
   assert.deepEqual(streamed.relations, memory.relations);
   assert.deepEqual(streamed.nodes.map((row) => ({ ...row, tags: row.tags || {} })), memory.nodes);
+
+  const packed = await parseOplFile(file, { packedNodes: true });
+  assert.equal(packed.nodeStore.count, memory.nodes.length);
+  assert.deepEqual(
+    memory.nodes.map((row) => packed.nodeStore.get(row.id)),
+    memory.nodes.map((row) => ({ ...row, id: String(row.id), tags: row.tags && Object.keys(row.tags).length ? row.tags : null }))
+  );
+  assert.deepEqual(packed.ways, memory.ways);
+  assert.deepEqual(packed.relations, memory.relations);
+});
+
+test("packed-node parsing produces the same legal graph as object-node parsing", async (t) => {
+  const text = [
+    "n1 v1 dV c0 t i0 u T x-64.3 y45.7",
+    "n2 v1 dV c0 t i0 u Tbarrier=gate,access=yes x-64.2 y45.8",
+    "n3 v1 dV c0 t i0 u T x-64.1 y45.9",
+    "n4 v1 dV c0 t i0 u T x-64.0 y46.0",
+    "w10 v1 dV c0 t i0 u Thighway=track,surface=gravel Nn1,n2,n3",
+    "w11 v1 dV c0 t i0 u Thighway=residential Nn2,n4",
+    "r20 v1 dV c0 t i0 u Ttype=restriction,restriction=no_right_turn Mw10@from,n2@via,w11@to"
+  ].join("\n");
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "dirt-opl-packed-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const file = path.join(dir, "fixture.opl");
+  fs.writeFileSync(file, text);
+  const regular = buildGraphFromOsm(await parseOplFile(file));
+  const packed = buildGraphFromOsm(await parseOplFile(file, { packedNodes: true }));
+  function canonical(graph) {
+    const nodeId = (index) => graph.nodes[index].osmNodeId;
+    const edge = (index) => {
+      const row = graph.edges[index];
+      return `${row.osmWayId}:${nodeId(row.from)}:${nodeId(row.to)}`;
+    };
+    return {
+      nodes: graph.nodes.map((row) => ({ id: row.osmNodeId, lon: row.lon, lat: row.lat, tags: row.tags }))
+        .sort((a, b) => Number(a.id) - Number(b.id)),
+      edges: graph.edges.map((row) => ({
+        way: row.osmWayId,
+        from: nodeId(row.from),
+        to: nodeId(row.to),
+        meters: row.meters,
+        coords: row.coords,
+        accessForward: row.accessForward,
+        accessReverse: row.accessReverse,
+        surfaceLeaf: row.surfaceLeaf,
+        roadClassLeaf: row.roadClassLeaf
+      })).sort((a, b) => `${a.way}:${a.from}:${a.to}`.localeCompare(`${b.way}:${b.from}:${b.to}`)),
+      barriers: graph.barriers.map((row) => ({
+        osmNodeId: row.osmNodeId,
+        decision: row.decision,
+        reason: row.reason
+      })).sort((a, b) => Number(a.osmNodeId) - Number(b.osmNodeId)),
+      restrictions: graph.restrictions.map((row) => ({
+        relation: row.osmRelationId,
+        from: edge(row.fromEdge),
+        to: edge(row.toEdge),
+        via: nodeId(row.viaNode),
+        only: row.only
+      })).sort((a, b) => `${a.from}:${a.to}`.localeCompare(`${b.from}:${b.to}`)),
+      rejected: graph.rejected,
+      unprovenStitches: graph.unprovenStitches
+    };
+  }
+  assert.deepEqual(canonical(packed), canonical(regular));
 });
