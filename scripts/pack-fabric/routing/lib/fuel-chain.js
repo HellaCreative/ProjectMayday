@@ -53,7 +53,7 @@ const MIN_STOP_SEPARATION_M = 800;
 const MIN_FORWARD_PROGRESS_M = 8_000;
 const MIN_DESTINATION_FUEL_CLEARANCE_M = 5_000;
 /** Bumped when fuel-selection / ranking contracts change. Clients may assert. */
-const FUEL_CHAIN_SERVICE_VERSION = "2026-09-06.rural-before-urban-safe-timeout.28";
+const FUEL_CHAIN_SERVICE_VERSION = "2026-09-07.rural-before-urban-foundation-preserving.30";
 const FUEL_SELECTION_POLICY = "minimum_stops_rural_before_urban_then_75pct";
 /**
  * Preserve the first three quarters of each usable tank for the requested
@@ -113,6 +113,11 @@ const DENSE_TARGET_MIN_MATCHES = 48;
 const MIN_CONTINUATION_RESERVE_MS = 750;
 const MAX_CONTINUATION_RESERVE_MS = 2_500;
 const CONTINUATION_RESERVE_SHARE = 0.28;
+// A completed route proof can cross its wall-clock deadline by a few scheduler
+// ticks after the graph search has already succeeded. Accept only that tightly
+// bounded completion; it is still a complete proof and remains well inside the
+// client's transport timeout. An incomplete response never receives grace.
+const COMPLETED_CONTINUATION_GRACE_MS = 250;
 const CLEAN_MAJOR_ROAD_CLASSES = new Set([
   "motorway", "motorway_link", "trunk", "trunk_link", "primary", "primary_link",
   "freeway", "ramp", "arterial"
@@ -152,6 +157,10 @@ function timeoutPartialBacktrackCap(evaluation) {
  */
 function selectSafeTimeoutPartial(routedApproachPlans) {
   const safe = (routedApproachPlans || []).filter(({ evaluation }) => {
+    // A route to a pump is not a fuel-chain proof. The same request must also
+    // prove either the destination or a next forward pump before the current
+    // pump can become a resumable waypoint.
+    if (!evaluation || evaluation.validForward !== true) return false;
     const rawBacktrack = evaluation && evaluation.continuationBacktrackMeters;
     const backtrack = Number(rawBacktrack);
     return rawBacktrack == null || !Number.isFinite(backtrack) ||
@@ -161,6 +170,13 @@ function selectSafeTimeoutPartial(routedApproachPlans) {
   return safe.find(({ evaluation }) =>
     !evaluation.candidate.urbanEntry
   ) || safe[0];
+}
+
+function completedContinuationWithinWindow(response, deadlineAtMs, now = Date.now()) {
+  if (!response || response.status !== "complete") return false;
+  const deadline = Number(deadlineAtMs);
+  if (!Number.isFinite(deadline)) return true;
+  return Number(now) <= deadline + COMPLETED_CONTINUATION_GRACE_MS;
 }
 
 function routeFirstDeadlineAfterLoad(windowDeadlineAtMs, routeFirstBudgetMs, loadedAtMs) {
@@ -656,27 +672,47 @@ function foundationCellDistance(location, cells) {
 }
 
 function foundationPlacement(target, layout) {
-  const edgeId = target && target.match && target.match.edgeId == null
-    ? null
-    : String(target.match.edgeId);
-  const candidates = edgeId && layout.byEdge.get(edgeId) || [];
-  if (!candidates.length) return null;
-  const matchCoord = target.match.coord;
+  const matches = [];
+  const seen = new Set();
+  for (const match of [target && target.match, ...(
+    target && target.match && Array.isArray(target.match.candidates)
+      ? target.match.candidates
+      : []
+  )]) {
+    if (!match || match.edgeId == null || !Array.isArray(match.coord)) continue;
+    const key = `${String(match.edgeId)}:${Number(match.distanceAlongM) || 0}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    matches.push(match);
+  }
   let best = null;
-  for (const row of candidates) {
-    const projected = projectOnCoordinatePolyline(matchCoord, row.coords);
-    if (!projected) continue;
-    const fraction = projected.totalMeters > 0
-      ? projected.alongMeters / projected.totalMeters
-      : 0;
-    const placement = {
-      target,
-      routeCoord: projected.coord,
-      alongMeters: row.startMeters + row.meters * fraction,
-      offRouteMeters: projected.distanceM,
-      accessMeters: Math.max(0, Number(target.match.distanceM) || 0)
-    };
-    if (!best || placement.offRouteMeters < best.offRouteMeters) best = placement;
+  for (const match of matches) {
+    const rows = layout.byEdge.get(String(match.edgeId)) || [];
+    for (const row of rows) {
+      const projected = projectOnCoordinatePolyline(match.coord, row.coords);
+      if (!projected) continue;
+      const fraction = projected.totalMeters > 0
+        ? projected.alongMeters / projected.totalMeters
+        : 0;
+      const placement = {
+        // V4 snapping deliberately retains several legal directed candidates.
+        // A forecourt driveway can win the distance score even while the pump
+        // is also a legal snap to the selected route beside it. Preserve the
+        // route-matching candidate instead of discarding the Dirt foundation
+        // and independently rerouting both fuel legs.
+        target: { ...target, match },
+        routeCoord: projected.coord,
+        alongMeters: row.startMeters + row.meters * fraction,
+        offRouteMeters: projected.distanceM,
+        accessMeters: Math.max(0, Number(match.distanceM) || 0)
+      };
+      if (!best ||
+          placement.offRouteMeters < best.offRouteMeters ||
+          (placement.offRouteMeters === best.offRouteMeters &&
+            placement.accessMeters < best.accessMeters)) {
+        best = placement;
+      }
+    }
   }
   return best && best.offRouteMeters <= FOUNDATION_ROUTE_MATCH_M ? best : null;
 }
@@ -873,14 +909,11 @@ function oneStopFoundationFuelPlan({
   const finalRoute = sliceFoundationRoute(
     foundationRoute, layout, selected, null, urbanBoxes
   );
-  // A strong aggregate score cannot hide one poor riding leg. If the pump
-  // partitions Dirt/Balanced into a degraded slice, let the normal bounded
-  // candidate search evaluate other packed pumps instead of committing the
-  // convenient on-route shortcut.
-  const qualityAcceptable = !(
-    (foundationRoute.profile === "dirt" || foundationRoute.profile === "balanced") &&
-    (firstRoute.quality.state !== "ready" || finalRoute.quality.state !== "ready")
-  );
+  // A fuel waypoint partitions one already-proved ride; it does not create two
+  // unrelated route-quality decisions. A short slice can legitimately miss a
+  // whole-journey percentage threshold even though the geometry and aggregate
+  // Dirt quality are unchanged. Never discard the proved foundation merely
+  // because either partition is labelled degraded in isolation.
   const stationCandidates = placements.slice(0, MAX_STATION_ALTERNATIVES)
     .map((placement, rank) => ({
     id: String(placement.target.station.id),
@@ -946,8 +979,7 @@ function oneStopFoundationFuelPlan({
       profileRouteSavings: 2,
       selectedUrbanEntry: selected.urbanEntry,
       ruralAlternativeAvailable: placements.some((placement) => !placement.urbanEntry)
-    },
-    qualityAcceptable
+    }
   };
 }
 
@@ -1960,7 +1992,6 @@ async function planFuelChainOnRuntime({
   const physicalStart = locationCoordinate(start);
   const physicalDestination = locationCoordinate(destination);
   const urbanBoxes = fuelUrbanBoxesForRuntime(runtime);
-  let foundationFallback = null;
   const physicalTotal = haversineMeters(physicalStart, physicalDestination);
   let planningStage = "destination_graph";
   let bestPartial = { progressMeters: 0, stops: [], graphMeters: [], location: start };
@@ -2035,8 +2066,7 @@ async function planFuelChainOnRuntime({
           stationCandidates: reusedCandidates
         })
       };
-      if (reusedFoundation.qualityAcceptable) return reusedResponse;
-      foundationFallback = reusedResponse;
+      return reusedResponse;
     }
   }
   const destinationGraph = boundedGraphDistances(
@@ -2438,8 +2468,10 @@ async function planFuelChainOnRuntime({
               abortSignal
             });
             continuationElapsedMs = Date.now() - continuationStarted;
-            const continuationProvenWithinBudget =
-              !Number.isFinite(deadline) || Date.now() <= deadline;
+            const continuationProvenWithinBudget = completedContinuationWithinWindow(
+              continuationResponse,
+              deadline
+            );
             if (!continuationProvenWithinBudget) timeBudgetExceeded = true;
             const routedContinuationMeters = Number(
               continuationResponse && continuationResponse.distanceMeters
@@ -3187,12 +3219,10 @@ async function planFuelChainOnRuntime({
         });
       }
     }
-    // The visible fuel window is incremental. If the active profile fully
-    // routed a forward pump before its own deadline, a later continuation
-    // timeout must not erase that safe progress. Return only the proved
-    // approach; the next client request resumes from the pump with a full tank
-    // and a fresh planning window. This is deliberately limited to timeouts:
-    // an exhausted (non-timeout) continuation still rejects the candidate.
+    // The visible fuel window is incremental, but a route to a pump alone is
+    // not enough. A resumable timeout prefix must also have graph/profile proof
+    // of a sensible forward continuation. Otherwise return an inconclusive
+    // fuel result and preserve the road route without inventing a safe stop.
     if (!stationPlans.length && allowPartialWindow && exceededSearchBudget() &&
         routedApproachPlans.length) {
       const safePartial = selectSafeTimeoutPartial(routedApproachPlans);
@@ -3216,31 +3246,6 @@ async function planFuelChainOnRuntime({
     recentEdgeHistory((priorEdgeIds || []).map(String)),
     arrivalEdgeId == null ? null : String(arrivalEdgeId), [], []
   );
-  if (foundationFallback) {
-    const foundationPlan = {
-      stops: foundationFallback.stops || [],
-      graphMeters: foundationFallback.graphMeters || [],
-      routes: foundationFallback.routes || [],
-      quality: combineChainQuality(...(foundationFallback.routes || []).map((route) =>
-        routeChainQuality(route, avoidMotorways === true)
-      )),
-      urbanStopCount: foundationFallback.diagnostics &&
-        foundationFallback.diagnostics.selectedUrbanEntry ? 1 : 0,
-      complete: true,
-      partial: false
-    };
-    if (!chain || compareChainPlans(foundationPlan, chain, profile, firstLegMaxMeters) < 0) {
-      return {
-        ...foundationFallback,
-        diagnostics: {
-          ...(foundationFallback.diagnostics || {}),
-          selectedReason: "foundation_route_best_proved_quality",
-          profileRouteAttempts,
-          comparedProfileCandidates: stationCandidates.length
-        }
-      };
-    }
-  }
   if (!chain) {
     const routedPrefixMeters = bestPartial.graphMeters.reduce((sum, meters) => sum + Number(meters || 0), 0);
     const knownProfileMeters = profileMeters == null ? NaN : Number(profileMeters);
@@ -4249,6 +4254,9 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
       profileMeters <= firstLegMaxMeters + 1 &&
       profileMeters <= directArrivalAllowance + 1;
     if (directAllowed) {
+      const foundationDiagnostics = foundationRoute && foundationRoute.debug &&
+        foundationRoute.debug.diagnostics || {};
+      const requestPolicy = normalizePolicy(body.accessPolicy, body.profile);
       return {
         status: "complete",
         error: null,
@@ -4293,7 +4301,13 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
           fuelFetchMs: fuel.loadDiagnostics && fuel.loadDiagnostics.fetchMs,
           fuelCacheHit: fuel.loadDiagnostics && fuel.loadDiagnostics.cacheHit,
           destinationEscapeSearchMs: destinationEscapeDiagnostics && destinationEscapeDiagnostics.elapsedMs,
-          destinationEscapePops: destinationEscapeDiagnostics && destinationEscapeDiagnostics.pops
+          destinationEscapePops: destinationEscapeDiagnostics && destinationEscapeDiagnostics.pops,
+          allowUnknown: !!requestPolicy.motorizedUnknown,
+          tapRadiusMeters: foundationDiagnostics.tapRadiusMeters,
+          mapZoom: Number.isFinite(Number(options.mapZoom))
+            ? Number(options.mapZoom)
+            : foundationDiagnostics.mapZoom,
+          snap: foundationDiagnostics.snap
         }, {
           candidatesEvaluated: 0,
           stationCandidates: []
@@ -4494,5 +4508,8 @@ module.exports = {
   deriveWaypointRefuels,
   WAYPOINT_FUEL_SNAP_METERS,
   fuelChainRequest,
-  selectSafeTimeoutPartial
+  foundationPlacement,
+  foundationRouteLayout,
+  selectSafeTimeoutPartial,
+  completedContinuationWithinWindow
 };

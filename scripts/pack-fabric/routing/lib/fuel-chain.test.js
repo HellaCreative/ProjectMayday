@@ -3,9 +3,12 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 const {
+  completedContinuationWithinWindow,
   fuelNeedForProfileRide,
   fuelChainRequest,
   fuelSearchStartMeters,
+  foundationPlacement,
+  foundationRouteLayout,
   fuelPlanStatus,
   nearestReachableFuelDistance,
   planCrossRegionFuelChain,
@@ -17,10 +20,43 @@ const {
   stationEligibility
 } = require("./fuel-chain");
 
+test("foundation fuel placement retains a legal route-edge snap alternative", () => {
+  const layout = foundationRouteLayout({
+    segments: [{
+      edgeId: "route-edge",
+      distanceMeters: 100,
+      geometry: [[-64, 44], [-63.999, 44]]
+    }]
+  });
+  const target = {
+    station: { id: "pump" },
+    location: { lat: 44, lon: -63.9995 },
+    match: {
+      edgeId: "forecourt-edge",
+      coord: [-63.9995, 44],
+      distanceAlongM: 10,
+      distanceM: 2,
+      candidates: [{
+        edgeId: "route-edge",
+        coord: [-63.9995, 44],
+        distanceAlongM: 50,
+        distanceM: 12
+      }]
+    }
+  };
+
+  const placement = foundationPlacement(target, layout);
+  assert.ok(placement);
+  assert.equal(placement.target.match.edgeId, "route-edge");
+  assert.equal(placement.accessMeters, 12);
+  assert.ok(Math.abs(placement.alongMeters - 50) < 1);
+});
+
 test("timeout partial rejects a fuel stop whose continuation proves a long return", () => {
   const canso = {
     evaluation: {
       candidate: { urbanEntry: true, foundationCellDistance: null },
+      validForward: true,
       continuationBacktrackMeters: 32_484
     },
     plan: { stops: [{ id: "canso" }] }
@@ -28,6 +64,7 @@ test("timeout partial rejects a fuel stop whose continuation proves a long retur
   const causeway = {
     evaluation: {
       candidate: { urbanEntry: false, foundationCellDistance: null },
+      validForward: true,
       continuationBacktrackMeters: 36
     },
     plan: { stops: [{ id: "causeway" }] }
@@ -45,6 +82,7 @@ test("missing foundation proximity is not coerced to route cell zero", () => {
     plan: { stops: [{ id: "coast-gas" }] },
     evaluation: {
       candidate: { urbanEntry: false, foundationCellDistance: null },
+      validForward: true,
       continuationBacktrackMeters: 13_158
     }
   }]);
@@ -55,6 +93,7 @@ test("timeout partial prefers a rural stop when direction is equally safe", () =
   const town = {
     evaluation: {
       candidate: { urbanEntry: true, foundationCellDistance: null },
+      validForward: true,
       continuationBacktrackMeters: null
     },
     plan: { stops: [{ id: "town" }] }
@@ -62,6 +101,7 @@ test("timeout partial prefers a rural stop when direction is equally safe", () =
   const rural = {
     evaluation: {
       candidate: { urbanEntry: false, foundationCellDistance: null },
+      validForward: true,
       continuationBacktrackMeters: null
     },
     plan: { stops: [{ id: "rural" }] }
@@ -71,6 +111,26 @@ test("timeout partial prefers a rural stop when direction is equally safe", () =
     selectSafeTimeoutPartial([town, rural]).plan.stops[0].id,
     "rural"
   );
+});
+
+test("timeout partial never commits a pump with no proved continuation", () => {
+  const result = selectSafeTimeoutPartial([{
+    evaluation: {
+      candidate: { urbanEntry: false, foundationCellDistance: 0 },
+      validForward: false,
+      continuationBacktrackMeters: 0
+    },
+    plan: { stops: [{ id: "approach-only" }] }
+  }]);
+  assert.equal(result, null);
+});
+
+test("completed continuation receives only bounded scheduler grace", () => {
+  const completed = { status: "complete" };
+  assert.equal(completedContinuationWithinWindow(completed, 1_000, 999), true);
+  assert.equal(completedContinuationWithinWindow(completed, 1_000, 1_250), true);
+  assert.equal(completedContinuationWithinWindow(completed, 1_000, 1_251), false);
+  assert.equal(completedContinuationWithinWindow({ status: "failed" }, 1_000, 999), false);
 });
 
 test("cross-region fuel starts incrementally without measuring the whole profile ride", async () => {
@@ -685,7 +745,7 @@ test("one-stop window does not commit a pump whose proof crosses its hard deadli
   assert.ok(result.diagnostics.slowestProfileRoutes[0].elapsedMs >= 50);
 });
 
-test("timed-out continuation keeps a pump whose approach was proved in time", async () => {
+test("timed-out continuation does not keep a pump without forward proof", async () => {
   const result = await planFuelChainOnRuntime({
     runtime: lineRuntime(),
     stations: [station("f1", 1)],
@@ -709,7 +769,7 @@ test("timed-out continuation keeps a pump whose approach was proved in time", as
             distanceMeters: candidate.graphMeters,
             stats: { dirtPercent: 80 },
             segments: []
-          }), 1_200);
+          }), 1_500);
         });
       }
       return Promise.resolve({
@@ -721,15 +781,10 @@ test("timed-out continuation keeps a pump whose approach was proved in time", as
     }
   });
 
-  assert.equal(result.ok, true);
-  assert.equal(result.windowComplete, false);
-  assert.deepEqual(result.stops.map((row) => row.id), ["f1"]);
-  assert.equal(result.routes.length, 1);
-  assert.equal(result.diagnostics.selectedReason, "routed_prefix_timeout");
-  assert.equal(
-    result.diagnostics.partialReason,
-    "approach_proved_continuation_timeout"
-  );
+  assert.equal(result.ok, false);
+  assert.equal(result.error, "window_time_budget");
+  assert.deepEqual(result.stops, []);
+  assert.equal(result.diagnostics.timeBudgetExceeded, true);
 });
 
 test("live fuel planning proves candidate routes serially", async () => {

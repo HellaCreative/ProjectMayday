@@ -1072,6 +1072,19 @@ Services pack was rebuilt or changed by this repair.
    Canso out-and-back.
 4. Setting a Point/F stage to its already-effective profile is a no-op. It does
    not cancel and restart the same route calculation.
+5. A routed pump approach is not itself a safe partial fuel chain. A resumable
+   window must also prove a forward destination or pump continuation. A fully
+   completed continuation may finish at most 250 ms past the search deadline
+   to absorb scheduler granularity; an incomplete continuation receives no
+   grace and no fuel waypoint is committed.
+6. Fuel diagnostics echo the effective Allow Unknown state on direct, fuel-
+   partitioned, and incremental results. A direct result must not silently
+   report the default `false` when the request enabled it.
+7. When a packed pump can split an already-proved, range-safe route, fuel
+   insertion preserves that route's geometry and partitions it at the pump.
+   Per-leg journey-quality labels must not discard the whole route and trigger
+   two unrelated searches; a shorter partition can miss a whole-journey Dirt
+   threshold without making the selected ride worse.
 
 The exact Yarmouth and Cape Breton reproductions, the historical 70%+ Dirt
 fixtures, fuel timeout unit fixtures, and Swift itinerary tests are required

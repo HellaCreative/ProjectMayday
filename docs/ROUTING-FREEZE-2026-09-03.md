@@ -34,6 +34,14 @@ objective, while a missing foundation-cell value was coerced to zero and let a
 missing-value test. It rebuilds no pack and remains DEV-only pending White
 acceptance.
 
+The next DEV-only service candidate rejects approach-only timeout pumps, permits
+only a 250 ms scheduler allowance for a continuation that actually completed,
+reports the effective Allow Unknown value on direct fuel responses, and keeps an
+already-proved route intact when inserting an on-route fuel waypoint. A short
+partition's standalone quality label cannot replace the whole ride with two
+independent searches. It does not change route costs, pack bytes, or the
+20-second search deadline.
+
 ## What is frozen
 
 - Dirt, Balanced, and Clean route-selection laws and their shared Swift/JS cost

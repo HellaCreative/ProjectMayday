@@ -59,6 +59,8 @@ test("route-first and fuel selection load one shared request runtime", async () 
       { lat: 44.85, lon: -63.4 }
     ],
     profile: "balanced",
+    accessPolicy: { motorizedPermissive: true, motorizedUnknown: true },
+    options: { mapZoom: 9.5 },
     fuel: {
       routeFirstPlan: true,
       usableRangeMeters: 100_000,
@@ -88,7 +90,14 @@ test("route-first and fuel selection load one shared request runtime", async () 
         status: "complete",
         distanceMeters: 20_000,
         geometry: [[-63.6, 44.75], [-63.4, 44.85]],
-        debug: { packIdentity: [] }
+        debug: {
+          packIdentity: [],
+          diagnostics: {
+            tapRadiusMeters: 2_000,
+            mapZoom: 9.5,
+            snap: { start: { distanceM: 4 }, end: { distanceM: 6 } }
+          }
+        }
       };
     }
   });
@@ -99,6 +108,10 @@ test("route-first and fuel selection load one shared request runtime", async () 
   assert.equal(result.routes[0].legId, "shared-runtime-leg");
   assert.equal(result.routes[0].geometryProperties.legId, "shared-runtime-leg");
   assert.equal(result.diagnostics.routeFirstSharedRuntime, true);
+  assert.equal(result.diagnostics.allowUnknown, true);
+  assert.equal(result.diagnostics.mapZoom, 9.5);
+  assert.equal(result.diagnostics.tapRadiusMeters, 2_000);
+  assert.equal(result.diagnostics.snap.start.distanceM, 4);
 });
 
 test("an unreachable direct lower bound gives the fuel search the full window", async () => {

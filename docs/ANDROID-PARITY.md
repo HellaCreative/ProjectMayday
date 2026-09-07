@@ -112,12 +112,19 @@ the behavioural invariants and typed failures in
 `Dirt/Routing/OnDevice/OnDeviceRouter.swift` and the current JS tests.
 
 A fuel timeout never commits the first partially routed pump blindly. Android
-must reject a partial with a known material continuation return and prefer a
-rural pump over an equally safe urban pump. A missing foundation-route proximity
-value is missing—not numeric zero—and cannot grant the winding-route exception;
-this exact coercion admitted the 13.2 km Coast Gas return. Setting a stage to its
-already-effective profile must not advance the itinerary generation or restart
-route and fuel work. These build `2 (17)` deltas are pending physical White
+must reject every approach-only partial: the same window must prove either the
+destination or a next forward pump before the current pump becomes resumable.
+A completed continuation receives at most the shared 250 ms scheduler allowance;
+an incomplete continuation receives none. Android must reject a partial with a
+known material continuation return and prefer a rural pump over an equally safe
+urban pump. A missing foundation-route proximity value is missing—not numeric
+zero—and cannot grant the winding-route exception; this exact coercion admitted
+the 13.2 km Coast Gas return. Fuel diagnostics must echo the effective Allow
+Unknown state on direct and incremental results. Setting a stage to its already-
+effective profile must not advance the itinerary generation or restart route
+and fuel work. When a packed pump partitions an already-proved route, Android
+must preserve that route exactly; per-part journey-quality labels must not
+launch two replacement route searches. These post-build `2 (17)` deltas are pending physical White
 acceptance and make prior Android route/fuel evidence stale; no pack rebuild is
 implied.
 
