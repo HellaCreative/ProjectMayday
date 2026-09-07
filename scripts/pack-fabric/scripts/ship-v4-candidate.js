@@ -315,28 +315,44 @@ class MultipartUploader {
 
 async function verifyRemote(item, publicBase, options = {}) {
   const relative = item.key.replace(/^v4\/candidates\/[^/]+\//, "");
-  const response = await fetch(`${publicBase}/${relative}?verify=${Date.now()}`, { cache: "no-store" });
-  if (!response.ok || !response.body) {
-    if (options.allowMissing) return false;
-    die(`remote verification HTTP ${response.status} for ${item.key}`);
+  const attempts = options.attempts || 6;
+  const retryBaseMilliseconds = options.retryBaseMilliseconds ?? 1000;
+  const fetchFn = options.fetchFn || fetch;
+  let lastError;
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      const response = await fetchFn(`${publicBase}/${relative}?verify=${Date.now()}`, { cache: "no-store" });
+      if ((response.status === 404 || response.status === 410) && options.allowMissing) return false;
+      if (!response.ok || !response.body) {
+        throw new Error(`remote verification HTTP ${response.status} for ${item.key}`);
+      }
+      const contentLength = Number(response.headers.get("content-length"));
+      if (Number.isFinite(contentLength) && contentLength !== item.identity.bytes) {
+        if (options.allowMissing) return false;
+        throw new Error(`remote byte mismatch for ${item.key}`);
+      }
+      const hash = crypto.createHash("sha256");
+      let bytes = 0;
+      for await (const chunk of response.body) {
+        bytes += chunk.length;
+        hash.update(chunk);
+      }
+      if (bytes !== item.identity.bytes || hash.digest("hex") !== item.identity.sha256) {
+        if (options.allowMissing) return false;
+        throw new Error(`remote identity mismatch for ${item.key}`);
+      }
+      if (!options.quiet) console.log("VERIFIED", item.key);
+      return true;
+    } catch (error) {
+      lastError = error;
+      if (attempt < attempts) {
+        console.warn("VERIFY RETRY", item.key, `${attempt}/${attempts - 1}`);
+        await delay(retryBaseMilliseconds * attempt);
+      }
+    }
   }
-  const contentLength = Number(response.headers.get("content-length"));
-  if (Number.isFinite(contentLength) && contentLength !== item.identity.bytes) {
-    if (options.allowMissing) return false;
-    die(`remote byte mismatch for ${item.key}`);
-  }
-  const hash = crypto.createHash("sha256");
-  let bytes = 0;
-  for await (const chunk of response.body) {
-    bytes += chunk.length;
-    hash.update(chunk);
-  }
-  if (bytes !== item.identity.bytes || hash.digest("hex") !== item.identity.sha256) {
-    if (options.allowMissing) return false;
-    die(`remote identity mismatch for ${item.key}`);
-  }
-  if (!options.quiet) console.log("VERIFIED", item.key);
-  return true;
+  throw lastError;
 }
 
 async function main() {
@@ -378,4 +394,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { parseArgs, verifyLocalCandidate, needsMultipart, main };
+module.exports = { parseArgs, verifyLocalCandidate, needsMultipart, verifyRemote, main };
