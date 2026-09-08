@@ -1027,7 +1027,9 @@ function boundedGraphDistances(
     forEachNeighbor(runtime, current.node, (next, edgeIndex) => {
       const edge = edgeView(runtime, edgeIndex);
       if (avoid.has(edge.id)) return;
-      if (!accessAllowed(edge.access, policy, runtime.enums, null)) return;
+      if (runtime.pack?.graphBinaryVersion >= 4
+          ? !require("./v4-access-policy").allows(runtime.pack, edgeIndex, current.node, next, policy.motorizedUnknown)
+          : !accessAllowed(edge.access, policy, runtime.enums, null)) return;
       const candidateMeters = distances[current.node] + edge.meters;
       const candidateScore = current.cost + edge.meters * penalty(edge.id);
       if (candidateMeters > maxMeters || candidateScore >= scores[next]) return;
@@ -1154,7 +1156,9 @@ function nearestReachableFuelDistance({
       forEachNeighbor(runtime, current.node, (next, edgeIndex) => {
         const edge = edgeView(runtime, edgeIndex);
         if (avoid.has(edge.id)) return;
-        if (!accessAllowed(edge.access, policy, runtime.enums, null)) return;
+        if (runtime.pack?.graphBinaryVersion >= 4
+          ? !require("./v4-access-policy").allows(runtime.pack, edgeIndex, current.node, next, policy.motorizedUnknown)
+          : !accessAllowed(edge.access, policy, runtime.enums, null)) return;
         const candidate = current.cost + edge.meters;
         if (candidate > maxMeters || candidate >= best || candidate >= distances[next]) return;
         distances[next] = candidate;
@@ -3418,9 +3422,8 @@ async function planCrossRegionFuelChain(body, selection, fuelOptions, dependenci
     const endFamily = provinceFamily(
       hopEnd.resolvedRegionId || primaryRegionForPoint(endCoord[0], endCoord[1])
     );
-    const regionId = i === waypoints.length - 2
-      ? endFamily || startFamily
-      : startFamily || endFamily;
+    const regionId = require("./regional-hop-owner").regionalHopOwner(hopStart, hopEnd,
+      i === waypoints.length - 2 ? endFamily || startFamily : startFamily || endFamily);
     if (!regionId) {
       return {
         status: "failed",

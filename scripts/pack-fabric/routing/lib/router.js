@@ -1753,8 +1753,8 @@ async function routeCanadaChain(body, graphResolution) {
         Number(hopEnd.lat)
       )
     );
-    const hopRegion =
-      i === waypoints.length - 2 ? endFam || startFam : startFam || endFam;
+    const hopRegion = require("./regional-hop-owner").regionalHopOwner(hopStart, hopEnd,
+      i === waypoints.length - 2 ? endFam || startFam : startFam || endFam);
     const requestedPathCap = Number((body.options || {}).maxPathMeters);
     const remainingPathCap = reservedChainHopCap(
       body.options,

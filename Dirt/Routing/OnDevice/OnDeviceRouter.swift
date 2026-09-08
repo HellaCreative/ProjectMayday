@@ -521,7 +521,7 @@ nonisolated struct OnDeviceRouter {
                 ) { continue }
                 let attr = pack.edgeAttrs[ei]
                 let access = GraphV2Pack.unpackAccess(attr)
-                if !accessAllowed(access, allowUnknown: policyUnknown, profile: profile) { continue }
+                if !traversalAccessAllowed(ei: ei, from: cur.node, to: toNode, allowUnknown: policyUnknown, profile: profile) { continue }
                 let newCost = cur.cost + Double(pack.edgeMeters[ei])
                 if newCost > maxMeters { continue }
                 if newCost < dist[toNode] {
@@ -1736,7 +1736,7 @@ nonisolated struct OnDeviceRouter {
                     ) { continue }
                     let attr = pack.edgeAttrs[ei]
                     let access = GraphV2Pack.unpackAccess(attr)
-                    if !accessAllowed(access, allowUnknown: policyUnknown, profile: profile) { continue }
+                    if !traversalAccessAllowed(ei: ei, from: cur.node, to: toNode, allowUnknown: policyUnknown, profile: profile) { continue }
                     if edgeBlockedByPavedOnly(ei, ctx: ctx, allowSnapEdges: startEi, endEi: endEi) { continue }
                     let eid = pack.edgeId(ei)
                     if !eid.isEmpty, avoidEdgeIds.contains(eid) { continue }
@@ -2189,7 +2189,7 @@ nonisolated struct OnDeviceRouter {
                     ) { continue }
                     let attr = pack.edgeAttrs[ei]
                     let access = GraphV2Pack.unpackAccess(attr)
-                    if !accessAllowed(access, allowUnknown: policyUnknown, profile: profile) { continue }
+                    if !traversalAccessAllowed(ei: ei, from: cur.node, to: toNode, allowUnknown: policyUnknown, profile: profile) { continue }
                     if edgeBlockedByPavedOnly(ei, ctx: ctx, allowSnapEdges: startEi, endEi: endEi) { continue }
                     let eid = pack.edgeId(ei)
                     if !eid.isEmpty, avoidEdgeIds.contains(eid) { continue }
@@ -2573,7 +2573,7 @@ nonisolated struct OnDeviceRouter {
                     guard ei >= 0, ei < pack.undirectedEdgeCount else { continue }
                     let attr = pack.edgeAttrs[ei]
                     let access = GraphV2Pack.unpackAccess(attr)
-                    if !accessAllowed(access, allowUnknown: policyUnknown, profile: profile) { continue }
+                    if !traversalAccessAllowed(ei: ei, from: toNode, to: cur.node, allowUnknown: policyUnknown, profile: profile) { continue }
                     if edgeBlockedByPavedOnly(ei, ctx: ctx) { continue }
                     let eid = pack.edgeId(ei)
                     if !eid.isEmpty, avoidEdgeIds.contains(eid) { continue }
@@ -2953,7 +2953,7 @@ nonisolated struct OnDeviceRouter {
                     guard ei >= 0, ei < pack.undirectedEdgeCount else { continue }
                     let attr = pack.edgeAttrs[ei]
                     let access = GraphV2Pack.unpackAccess(attr)
-                    if !accessAllowed(access, allowUnknown: policyUnknown, profile: profile) { continue }
+                    if !traversalAccessAllowed(ei: ei, from: cur.node, to: toNode, allowUnknown: policyUnknown, profile: profile) { continue }
                     if edgeBlockedByPavedOnly(ei, ctx: ctx, allowSnapEdges: startEi, endEi: endEi) { continue }
                     let eid = pack.edgeId(ei)
                     if !eid.isEmpty, avoidEdgeIds.contains(eid) { continue }
@@ -4415,6 +4415,15 @@ nonisolated struct OnDeviceRouter {
             }
             return step
         }
+    }
+
+    private func traversalAccessAllowed(ei: Int, from: Int, to: Int, allowUnknown: Bool, profile: RouteProfile) -> Bool {
+        if pack.version >= 4, pack.legalTopology {
+            let code = pack.v4AccessCode(ei: ei, from: from, to: to)
+            // Endpoint-only access is separately scoped by v4HopIllegal.
+            return code == 0 || (code == 1 && allowUnknown && profile != .cleanest) || code == 3 || code == 4
+        }
+        return accessAllowed(GraphV2Pack.unpackAccess(pack.edgeAttrs[ei]), allowUnknown: allowUnknown, profile: profile)
     }
 
     private func accessAllowed(_ code: Int, allowUnknown: Bool, profile: RouteProfile) -> Bool {
