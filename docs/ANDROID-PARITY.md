@@ -725,3 +725,15 @@ interpret the geometry as proof of fuel coverage. Advancing to a pump invalidate
 the retained departure. Missing foundation uses the existing road fallback.
 Responses also report optional `connectionRevision` separately from graph
 release/source identity. These additions are shared API/client behavior.
+
+Connection revision `connections-v4-20260908-03` supersedes 02 for DEV and adds
+complete proven coverage for DE/NJ (1,302), NT/YT (298), and OR/WA (4,546), while
+retaining the QC/ON correction. NT/YT's crossing network is separate from NT's
+largest network; size-based audit results are not proof of a missing road.
+V4 live searches now use directional access directly, matching existing Swift
+`v4AccessAllowed`: unknown requires Allow Unknown, denied/impassable/invalid
+remain closed, and endpoint/customer codes retain their endpoint purposes.
+Legacy aggregate access is used only for legacy graphs. The reverse-distance
+lower bound likewise uses the actual predecessor-to-current V4 direction.
+No Swift access retuning was needed: its current implementation already uses
+this law and its V4 endpoint tests cover these distinctions.

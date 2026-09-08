@@ -23,7 +23,7 @@ struct DirtTests {
         #expect(AppConfig.v4CandidateReleaseId == "fabric-v4-20260907-01")
         #expect(AppConfig.packManifestURL.absoluteString ==
             "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/connections/" +
-            "connections-v4-20260908-02/manifest.json")
+            "connections-v4-20260908-03/manifest.json")
         #expect(AppConfig.riderServicesManifestURL.absoluteString ==
             "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/candidates/" +
             "fabric-v4-20260907-01/rider-services/manifest.json")

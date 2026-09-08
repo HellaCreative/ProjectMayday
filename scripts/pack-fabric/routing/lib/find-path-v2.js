@@ -125,11 +125,12 @@ function v4TransitionState(
   startEi,
   endEi,
   startEndpointKind = null,
-  endEndpointKind = null
+  endEndpointKind = null,
+  allowUnknown = false
 ) {
-  if (!pack || pack.graphBinaryVersion < 4) return toNode;
+  if (!pack || !(pack.graphBinaryVersion >= 4)) return toNode;
   const code = v4AccessCode(pack, ei, fromNode, toNode);
-  if (code === 2 || code === 5) return -1;
+  if (![0, 1, 3, 4].includes(code) || (code === 1 && !allowUnknown)) return -1;
   const isStart = ei === startEi;
   const isEnd = ei === endEi;
   if (code === 3 && !(
@@ -160,7 +161,7 @@ function buildTurnAwareState(pack, n, startNode, endNode) {
     transition: (_state, _edge, toNode) => toNode,
     allowsExit: () => true
   };
-  if (!pack || pack.graphBinaryVersion < 4 || !pack.restrictions || !pack.restrictions.length) {
+  if (!pack || !(pack.graphBinaryVersion >= 4) || !pack.restrictions || !pack.restrictions.length) {
     return identity;
   }
   const restrictionIndex = compileRestrictionIndex(pack.restrictions);
@@ -805,7 +806,13 @@ function fillShortestMeters(args) {
         const ei = incomingEdges[i];
         const attr = edgeAttrs[ei];
         const access = unpackAccess(attr);
-        if (!accessAllowed(access, policy, enums)) continue;
+        if (pack.graphBinaryVersion >= 4) {
+          // Reverse lower bound: actual travel is predecessor -> current.
+          // Endpoint access stays admissible; the forward turn-state search
+          // proves its exact purpose. Match the Swift V4 access contract.
+          const code = v4AccessCode(pack, ei, to, cur.node);
+          if (![0, 1, 3, 4].includes(code) || (code === 1 && !policy.motorizedUnknown)) continue;
+        } else if (!accessAllowed(access, policy, enums)) continue;
         if (pavedOnly) {
           const leafBlock = cleanLeafBlocked(pack, ei, true, -1, -1);
           if (leafBlock === true) continue;
@@ -1784,7 +1791,8 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
           startEi,
           endEi,
           searchOpts.startEndpointKind,
-          searchOpts.endEndpointKind
+          searchOpts.endEndpointKind,
+          policy.motorizedUnknown === true
         );
         if (toState < 0) {
           if (rejected) rejected.legalTurn += 1;
@@ -1792,7 +1800,7 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
         }
         const attr = edgeAttrs[ei];
         const access = unpackAccess(attr);
-        if (!accessAllowed(access, policy, enums)) {
+        if (!(pack.graphBinaryVersion >= 4) && !accessAllowed(access, policy, enums)) {
           if (rejected) rejected.access += 1;
           continue;
         }
@@ -2510,7 +2518,8 @@ function searchBalancedResource(ctx) {
           startEi,
           endEi,
           ctx.startEndpointKind,
-          ctx.endEndpointKind
+          ctx.endEndpointKind,
+          policy.motorizedUnknown === true
         );
         if (toState < 0) {
           if (rejected) rejected.legalTurn += 1;
@@ -2518,7 +2527,7 @@ function searchBalancedResource(ctx) {
         }
         const attr = edgeAttrs[ei];
         const access = unpackAccess(attr);
-        if (!accessAllowed(access, policy, enums)) {
+        if (!(pack.graphBinaryVersion >= 4) && !accessAllowed(access, policy, enums)) {
           if (rejected) rejected.access += 1;
           continue;
         }
@@ -2920,6 +2929,7 @@ function applyHonestReportedStats(path) {
 }
 
 module.exports = {
+  v4TransitionState,
   findPathV2,
   chooseDirtRideCandidate,
   dirtCandidateSummary,

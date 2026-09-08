@@ -128,7 +128,7 @@ enum AppConfig {
 
     #if DIRT_DEVELOPMENT
     /// Complete DEV-only V4 fabric. Production keeps its approved catalog and files.
-    nonisolated static let v4ConnectionRevision = "connections-v4-20260908-02"
+    nonisolated static let v4ConnectionRevision = "connections-v4-20260908-03"
     nonisolated static var v4ConnectionBaseURL: URL {
         packCDNBaseURL.appendingPathComponent("v4/connections")
             .appendingPathComponent(v4ConnectionRevision)

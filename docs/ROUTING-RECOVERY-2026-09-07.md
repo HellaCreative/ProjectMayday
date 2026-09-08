@@ -193,3 +193,37 @@ including the DEV environment URL checks and a regression requiring zero second
 route requests after a failed fuel proof. Saved foundation reuse is scoped to
 its original departure and does not mark fuel complete. Full fuel-quality
 recovery, 30-second atomic behavior, and physical qualification remain open.
+
+## Broader coverage and directional-access audit
+
+All 63 original graphs were hash-verified and their advertised seams checked
+against strict-access weak components, one graph per process. Four pairs lacked
+advertised access to one region's largest component: QC/ON, DE/NJ, NT/YT, OR/WA.
+Revision 03 retains all re-proven shared connections for those pairs (7,099,
+1,302, 298, 4,546 respectively). All 66 metadata objects for 03 were published
+and read-back verified. Original roads and catalogs remain unchanged. NT/YT
+has no shared main/main connection in these graphs; its proven crossings serve
+a separate network and must not be represented as universal connectivity.
+
+OR/WA Clean between packed pump locations completed: 32,871 m in 4.617 seconds.
+DE/NJ reaches NJ but Clean hits a pop cap and Balanced a time cap approaching
+station `osm:w1158884119` (39.731886,-75.460113). Inspection shows a real 13–25 m
+customer-access approach spanning multiple edges. Existing endpoint permission
+covers only the snap edge, not the connected forecourt. This is an unresolved
+routing defect, not evidence to widen public-road permissions.
+
+A separate JS/Swift discrepancy was found and corrected in JS: V4 real-edge
+search still applied aggregate access after the directional transition, while
+Swift correctly skips the aggregate table. The JS transition also now enforces
+the directional unknown gate explicitly. Reverse-distance lower bounds match
+Swift's directional interpretation. 68 focused JS tests passed. Exact Yarmouth
+at 234 km usable now completes in 23.768 seconds with two stops, 563,713 metres,
+52.3956% known Dirt. The 55% acceptance floor remains unmet; foundation partition,
+forecourt proof and full routing evolution remain incomplete.
+
+A protected DEV deployment of earlier checkpoint `53eb0d6` was built without
+moving the stable alias: `dpl_Fj9nFE9FVUNFBsb8Q9X5MCAV2ffj`, URL
+`https://pack-fabric-5yjp3j18p-goricksmith-7678s-projects.vercel.app`.
+Its health identity and short NS route passed (7,303 m, exact sealed hashes).
+It carries revision 02; do not promote it as the matching revision-03 service.
+Stable DEV remains unchanged until a later matching deployment is verified.
