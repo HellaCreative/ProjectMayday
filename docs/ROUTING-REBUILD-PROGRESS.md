@@ -454,3 +454,34 @@ this is not a completed production routing replacement.
 No service, pack or device changes; Quebec remains parked. The build plan's
 immediate execution section now reflects this milestone rather than the obsolete
 instruction to start the baseline.
+
+
+## Large-region diagnostic batch — September 8, 2026
+
+Owner explicitly requested a separate Quebec agent. Its bounded read-only audit
+covered Quebec, Ontario and California. See ROUTING-LARGE-GRAPH-AUDIT.md for
+measurements, source-history evidence and the pack-agent handoff. Cold preparation
+exceeds the current request work allowance in all three regions; Ontario also
+exceeds it during per-destination reverse bounds after preparation reuse.
+California reached 1,071 MiB process peak before route search. These are single
+process diagnostics, not successful rider-route benchmarks.
+
+Quebec's ambiguous source relation remains enforced. California has different
+ambiguities requiring independent resolution. No blanket restriction workaround,
+pack rebuild or deployment was made. The next scale implementation priority is
+bounded revision-owned preparation, then compact/reusable reverse topology.
+
+In parallel, inspected current OSM around the selected Mahone Bay Irving
+(node 5296522350). The downloaded bbox includes the station marker and matched
+Edgewater Street way 1528881625, but no returned way contains the station node.
+This does not prove physical inaccessibility: a standalone POI is normal map
+data. It does mean that snapping it to the street still cannot certify a mapped
+entrance/exit. Retain provisional station evidence; do not invent a connector.
+Snapshot: routing/candidates/rebuild-station-access-audit/mahone-bay.osm; source:
+https://api.openstreetmap.org/api/0.6/map?bbox=-64.382,44.448,-64.379,44.452
+Current source is diagnostic evidence, not an assertion of pack-snapshot identity.
+No Dirt cost settings were changed in this batch.
+
+Verification: all 135 focused replacement/pack tests passed again. The new audit
+script passes syntax checking. No runtime behavior or Android counterpart changed;
+existing deferred parity requirements remain.

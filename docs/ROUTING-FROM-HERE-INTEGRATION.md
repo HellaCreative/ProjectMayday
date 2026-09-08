@@ -87,7 +87,8 @@ The 250-network independent oracle makes 500 accelerated/plain comparisons.
 The next priorities are station-access qualification and improved Dirt candidate
 selection, then the live API adapter. Multi-region rides, Plan orchestration,
 Loop generation, navigation and physical acceptance remain unfinished. Quebec
-restriction investigation stays parked. No pack, deployment or phone change was
+restriction investigation has resumed in a separate agent; see
+[the large-graph audit](ROUTING-LARGE-GRAPH-AUDIT.md). No pack, deployment or phone change was
 made for this checkpoint.
 
 Code: `scripts/pack-fabric/routing/lib/adventure/from-here.js`.
