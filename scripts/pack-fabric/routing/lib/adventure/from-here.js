@@ -3,6 +3,7 @@ const {normalizeRequest}=require("./contracts");
 const {createReverseCostCache}=require("./reverse-cost-cache");
 const {createPreparationCache}=require("./preparation-cache");
 const {urbanAreasFromPack}=require("./urban-exposure");
+const {createStationMatchCache}=require("./station-match-cache");
 const {matchStations}=require("./station-matching");
 const {selectConnectedSnapPair}=require("../legal-topology/snap");
 const {haversineMeters}=require("../legal-topology/find-path-v4");
@@ -16,7 +17,7 @@ const {proveFuel}=require("./fuel-proof");
 // explicitly provisional station access; they never become physical entrance
 // proof. Caller supplies the experimental cost model, not a hidden final style.
 function buildFromHere({input,pack,geom,revision,stations,budget,edgeCost,objectiveId,
-  preparationCache=createPreparationCache(),reverseCostCache=createReverseCostCache(),stationRadiusMeters=150,endpointRadiusMeters=2000,maxFuelLabels=100000}) {
+  preparationCache=createPreparationCache(),reverseCostCache=createReverseCostCache(),stationMatchCache=createStationMatchCache(),stationRadiusMeters=150,endpointRadiusMeters=2000,maxFuelLabels=100000}) {
   const request=normalizeRequest(input);
   if(request.mode!=="from_here")throw new TypeError("From Here requires exactly two fixed rider anchors");
   if(typeof edgeCost!=="function"||!objectiveId)throw new TypeError("Explicit experimental objective required");
@@ -56,7 +57,8 @@ function buildFromHere({input,pack,geom,revision,stations,budget,edgeCost,object
   if(points.some(p=>!p))return incomplete(budget.snapshot().reason);
   timing.endpointMatchingMs=Math.round(performance.now()-phase);
   stage="station_matching";phase=performance.now();
-  const matched=matchStations({pack,geom,index,stations,maxMeters:stationRadiusMeters,allowUnknown,budget});
+  const matched=stationMatchCache.match({pack,geom,revision,index,stations,maxMeters:stationRadiusMeters,allowUnknown,budget});
+  provenance.stationMatchingCacheHit=matched.cacheHit;
   stationDiagnostics={sourceCount:stations.length,matchingState:matched.state,matchingRadiusMeters:stationRadiusMeters,
     records:matched.matches,accessEvidence:"legal_road_projection"};
   if(matched.state!=="complete")return incomplete(matched.reason);

@@ -138,3 +138,27 @@ test('moved pins and unknown-road settings invalidate reverse topology; cancella
  const cancelled=build(f,{...options,input:moved,budget:budget(100000,{aborted:true})});
  assert.equal(cancelled.fuel.reason,'cancelled');assert.equal(cancelled.road.state,'unverified');
 });
+test('station matching reuse preserves current metadata and rejects evidence mutation',()=>{
+ const {createStationMatchCache}=require('./station-match-cache');
+ const f=fixture(),stationMatchCache=createStationMatchCache(),options={stationMatchCache};
+ const first=build(f,options);assert.equal(first.provenance.stationMatchingCacheHit,false);
+ const renamed=f.stations.map(s=>({...s,name:'Current '+s.name}));
+ const second=build(f,{...options,stations:renamed});assert.equal(second.provenance.stationMatchingCacheHit,true);
+ assert.match(second.fuel.plannedRefills[0].station.name,/^Current /);
+ assert.throws(()=>{second.stationDiagnostics.records[0].candidates[0].distanceM=999;},TypeError);
+ assert.deepEqual(first.road.geometry,second.road.geometry);
+ for(const extra of [
+  {stations:f.stations.filter(s=>s.id!=='middle')},
+  {stations:f.stations.map(s=>({...s,lon:s.lon+.001}))},
+  {stations:[...f.stations].reverse()},
+  {revision:'updated-source'},
+  {stationRadiusMeters:100}
+ ]){build(f,options);assert.equal(build(f,{...options,...extra}).provenance.stationMatchingCacheHit,false);}
+ stationMatchCache.clear();assert.equal(stationMatchCache.diagnostics().entries,0);
+});
+test('station cache capacity bypasses caching without dropping stations',()=>{
+ const {createStationMatchCache}=require('./station-match-cache');
+ const f=fixture(),stationMatchCache=createStationMatchCache({maxStations:1});
+ for(let i=0;i<2;i++){const r=build(f,{stationMatchCache});assert.equal(r.fuel.state,'provisional_station_access');assert.equal(r.provenance.stationMatchingCacheHit,false);assert.equal(r.stationDiagnostics.records.length,2);}
+ assert.equal(stationMatchCache.diagnostics().entries,0);
+});

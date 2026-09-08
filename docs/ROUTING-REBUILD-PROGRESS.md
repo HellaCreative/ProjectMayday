@@ -576,3 +576,55 @@ removal, moved pins, changed revision/cost/unknown-road settings, cancellation,
 and capacity exhaustion. Next priority is bounded reuse of completed station
 matching and an explicit cold-preparation lifecycle. No Quebec/California
 restriction workaround, pack change, deployment or native change was made.
+
+## Reuse canonical station matching — September 8, 2026
+
+From Here now accepts a caller-owned station-match cache. One completed result
+can be retained for at most 10,000 source records (at most 120,000 candidate
+records). This is a record-count bound, not a heap-byte bound. Larger catalogs
+still match fully without caching; no station is silently dropped. Cached
+projection evidence is deeply frozen before reuse. Partial matching, interrupted
+publication and cancelled reads never become a cached success.
+
+Reuse requires identical pack/geometry instances, explicit immutable revision,
+radius, unknown-road policy and ordered station IDs/coordinates. Removing,
+relocating or reordering station records invalidates it. Current station names
+and metadata remain outside the cached evidence, so a metadata update is visible
+in the new fuel plan. Every request still performs its own fuel/turn search.
+The shared deadline includes key comparison and evidence publication work.
+
+144 focused checks pass. New tests cover evidence mutation, station deletion,
+relocation, reordering, metadata refresh, source/policy/radius changes, capacity
+bypass and cancellation/incomplete publication. All 18 NS matrix cases pass with
+geometry/stop fingerprints identical to the preceding implementation. Medians:
+normal 879 ms, short tank 226 ms, nearby 156 ms, station removed 574 ms, empty
+catalog 172 ms, unknown initial fuel 447 ms. Maximum batch RSS 316 MiB. Evidence:
+routing/candidates/rebuild-station-cache-matrix/. Three samples; pack loading
+excluded, no cleared OS cache, not service percentiles.
+
+Ontario used the same candidate03 bytes, two fixed pins, all 5,369 stations and
+explicit fuel assumptions as the previous probe. Spatial preparation separately
+prewarmed in 1,010 ms / 12.14 M operations. First normal request still failed at
+6 M work during reverse bounds (4,873 ms); retained completed preparation then
+allowed the two warm requests to finish in 563 and 500 ms. Station matching took
+12 and 8 ms instead of 3.75–3.86 seconds. Both route geometries exactly match the
+previous 16.28 km test and retain provisional destination escape. No refills are
+needed on this short ride; long-distance Ontario fueling remains unqualified.
+Process peak RSS was still 804 MiB. Evidence: rebuild-on-station-cache/.
+
+A separate eight-attempt residency diagnostic explicitly invoked GC after each
+attempt; this is measurement only, not a production fix. The first attempt still
+failed; all seven warm routes completed with unchanged geometry and fuel escape.
+After GC, heap use stayed about 74 MiB and array-buffer use 269 MiB; RSS settled
+around 649–650 MiB across attempts 3–8. There was no growing retained heap in this
+small sample, but residency remains high and concurrency is unqualified. Warm
+request times in this separate run were 518–831 ms; forced collection changes
+runtime behavior, so do not merge those timings with the ordinary probe. Evidence:
+rebuild-on-station-residency/. Both Ontario probe processes intentionally exit
+nonzero because the cold attempt remains incomplete.
+
+Next: address cold preparation as an explicit lifecycle and whole-region bounds
+work for new pins, then qualify longer Ontario routes. Reusing identical pins
+must not be advertised as eliminating new-destination preparation. No pack,
+restriction, live API or native changes; provisional station access and unfinished
+Dirt candidate quality remain outstanding.

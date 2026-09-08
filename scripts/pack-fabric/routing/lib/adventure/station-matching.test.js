@@ -35,3 +35,16 @@ test("an incomplete index cannot masquerade as zero reachable pumps",()=>{
   assert.equal(index.state,"incomplete");
   assert.throws(()=>matchStations({pack,geom,index,stations:[],maxMeters:50,budget:budget()}),/index/);
 });
+test('station cache never publishes partial matches or bypasses cancellation',()=>{
+ const {createStationMatchCache}=require('./station-match-cache');
+ const {pack,geom}=fixture(),index=buildEdgeIndex(pack,geom,budget()),cache=createStationMatchCache();
+ const args={pack,geom,index,revision:'one',stations:[{id:'pump',lon:-63.99,lat:45.0001}],maxMeters:50};
+ const interrupted=cache.match({...args,budget:budget(1)});
+ assert.equal(interrupted.state,'incomplete');assert.equal(cache.diagnostics().entries,0);
+ assert.equal(cache.match({...args,budget:budget()}).cacheHit,false);
+ const cancelled=cache.match({...args,budget:createBudget({deadlineAtMs:Date.now()+10000,maxExpansions:10000,signal:{aborted:true}})});
+ assert.equal(cancelled.reason,'cancelled');assert.deepEqual(cancelled.matches,[]);
+ assert.equal(cache.match({...args,budget:budget()}).cacheHit,true);
+ assert.equal(cache.match({...args,allowUnknown:true,budget:budget()}).cacheHit,false);
+ const other=fixture();assert.equal(cache.match({...args,...other,index:buildEdgeIndex(other.pack,other.geom,budget()),budget:budget()}).cacheHit,false);
+});

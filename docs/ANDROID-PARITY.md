@@ -735,3 +735,10 @@ Equivalent road topology may reuse costs, but fuel state and turn history remain
 request-owned. Pin, access-policy, pack revision or cost changes must invalidate
 incompatible preparation. Capacity exhaustion stays an incomplete computation.
 Native implementations remain deferred under the live-JS-first direction.
+
+The experimental JS station-match cache may reuse only completed evidence for
+unchanged source identity/coordinates, graph revision and matching policy. Cached
+road projections remain provisional, current station metadata remains current,
+and fuel estimates never come from cache. Capacity bypass must still consider
+all stations; cancellation/partial matching cannot become geographic scarcity.
+Native implementation remains deferred; only the JS experiment is tested here.
