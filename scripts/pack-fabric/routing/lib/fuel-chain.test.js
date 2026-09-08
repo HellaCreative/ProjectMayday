@@ -1309,3 +1309,40 @@ test("refuel-before-waypoint leaves enough fuel for the known next rider leg", a
   assert.equal(result.stops.at(-1).id, "late");
   assert.ok(result.graphMeters.at(-1) <= 40_000);
 });
+
+test("fuel arrival selection uses directed reachability inside a shared weak component", () => {
+  const { buildGraphFromOsm } = require("./legal-topology/osm-graph");
+  const { encodeFromOsmGraph, decodeGraphV4 } = require("./pack-v4");
+  const { boundedGraphDistances, distanceToMatch, reachableDestinationMatch } = require("./fuel-chain");
+  const graph = buildGraphFromOsm({
+    nodes: [
+      { id: 1, lon: 0, lat: 0, tags: {} },
+      { id: 2, lon: 0.01, lat: 0, tags: {} },
+      { id: 3, lon: 0.02, lat: 0.001, tags: {} },
+      { id: 4, lon: 0.025, lat: 0.001, tags: {} },
+      { id: 5, lon: 0.03, lat: 0, tags: {} }
+    ],
+    ways: [[10, [1, 2]], [20, [3, 4]], [21, [4, 2]], [30, [2, 5]]].map(([id, nodeIds]) => ({
+      id, nodeIds, tags: { highway: "primary", oneway: "yes", motor_vehicle: "yes" }
+    }))
+  });
+  const encoded = encodeFromOsmGraph(graph, { regionId: "fixture", sourceEpoch: "test" });
+  const pack = decodeGraphV4(encoded.graphBuffer, encoded.geomBuffer);
+  const runtime = { format: "v2", pack, enums: pack.enums };
+  const index = id => Array.from(pack.osmWayIds).findIndex(way => String(way) === String(id));
+  const origin = { edgeIndex: index(10), distanceAlongM: 0 };
+  const wrongDirection = { edgeIndex: index(20), distanceAlongM: 100, distanceM: 0, component: 1, score: 0 };
+  const reachable = { edgeIndex: index(30), distanceAlongM: 100, distanceM: 20, component: 1, score: 20 };
+  const target = { ...wrongDirection, candidates: [wrongDirection, reachable] };
+  const search = boundedGraphDistances(runtime, origin, { motorizedUnknown: false }, 5000);
+  assert.equal(distanceToMatch(runtime, origin, wrongDirection, search.distances), Infinity);
+  assert.ok(distanceToMatch(runtime, origin, reachable, search.distances) < 5000);
+  assert.equal(reachableDestinationMatch(runtime, origin, target, search.distances, 5000), reachable);
+  assert.equal(reachableDestinationMatch(runtime, origin, target, search.distances, 500), target,
+    "a reachable alternative outside the remaining tank cannot become a direct arrival");
+  const alreadyReachable = { ...reachable, candidates: [wrongDirection, reachable] };
+  assert.equal(reachableDestinationMatch(runtime, origin, alreadyReachable, search.distances, 5000), alreadyReachable);
+  const noAlternative = { ...target, candidates: [wrongDirection] };
+  assert.equal(reachableDestinationMatch(runtime, origin, noAlternative, search.distances, 5000), noAlternative,
+    "an inaccessible arrival remains inaccessible when no legal candidate is reachable");
+});

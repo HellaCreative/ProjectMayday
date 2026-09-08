@@ -1062,6 +1062,15 @@ function distanceToMatch(runtime, originMatch, targetMatch, distances) {
   return meters + Math.max(0, Number(targetMatch.distanceM) || 0);
 }
 
+function reachableDestinationMatch(runtime, origin, target, distances, capMeters) {
+  if (distanceToMatch(runtime, origin, target, distances) <= capMeters) return target;
+  const candidates = (target.candidates || []).filter(candidate =>
+    candidate.component === target.component &&
+    distanceToMatch(runtime, origin, candidate, distances) <= capMeters
+  ).sort((a, b) => a.score - b.score);
+  return candidates[0] || target;
+}
+
 /**
  * Find the nearest route-connected pump without flooding the whole usable
  * range. Nearby stations are matched in expanding geographic batches; the
@@ -2018,12 +2027,7 @@ async function planFuelChainOnRuntime({
       foundationFallback = reusedResponse;
     }
   }
-  const destinationGraph = boundedGraphDistances(
-    runtime, targets.destinationMatch, policy, usableRangeMeters,
-    avoidEdgeIds, [], null, 1, deadline, abortSignal
-  );
-  dijkstraPops += destinationGraph.pops;
-  if (destinationGraph.deadlineExceeded) timeBudgetExceeded = true;
+  let destinationGraph = null;
 
   function reachableFrom(currentKey, currentLocation, currentMatch, capMeters, history, arrival) {
     planningStage = "reachability_graph";
@@ -2036,6 +2040,29 @@ async function planFuelChainOnRuntime({
     );
     dijkstraPops += graph.pops;
     if (graph.deadlineExceeded) timeBudgetExceeded = true;
+    // A weak component also contains roads reachable only in the opposite
+    // direction. Reuse this completed directed search to choose a reachable
+    // arrival from the already legal, radius-limited snap candidates.
+    if (currentKey === "start" && runtime.pack?.graphBinaryVersion >= 4 && !graph.deadlineExceeded) {
+      const picked = reachableDestinationMatch(runtime, currentMatch, targets.destinationMatch, graph.distances, capMeters);
+      if (picked !== targets.destinationMatch) {
+        targets.destinationMatch = { ...targets.destinationMatch, ...picked };
+        fuelDecisionDiagnostics.destinationSnapReselected = true;
+        fuelDecisionDiagnostics.snap.end = snapEndpointRecord(
+          { lon: Number(destination.lon ?? destination.lng), lat: Number(destination.lat) },
+          targets.destinationMatch,
+          { candidateCount: targets.destinationMatch.candidates.length }
+        );
+      }
+    }
+    if (!destinationGraph) {
+      destinationGraph = boundedGraphDistances(
+        runtime, targets.destinationMatch, policy, usableRangeMeters,
+        avoidEdgeIds, [], null, 1, deadline, abortSignal
+      );
+      dijkstraPops += destinationGraph.pops;
+      if (destinationGraph.deadlineExceeded) timeBudgetExceeded = true;
+    }
     const destinationMeters = distanceToMatch(
       runtime,
       currentMatch,
@@ -4450,6 +4477,7 @@ module.exports = {
   FUEL_COMFORT_HI,
   boundedGraphDistances,
   distanceToMatch,
+  reachableDestinationMatch,
   nearestReachableFuelDistance,
   fuelPlanningSpan,
   tankCommitBand,

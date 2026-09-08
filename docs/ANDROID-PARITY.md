@@ -659,3 +659,12 @@ The four Atlantic regions use fabric-v4-20260908-01 for roads, fuel, services an
 connections. Factory corrections 2fb1b7b and ae8aa94 preserve OSM toll passage.
 Routing reader behavior remains build 20. Android must consume the same corrected
 permissions; no Android implementation or physical acceptance is claimed.
+
+
+## Pending live acceptance: ATL-03 fuel arrival selection
+
+A shared weak road component does not prove a directed arrival is reachable.
+Fuel planning must consider already-eligible nearby arrival candidates using
+the completed directed reachability search before claiming a fuel gap. Keep
+the snap radius, access permissions and carried fuel unchanged. Live JS is
+under test; Swift/Android implementation and device acceptance are deferred.
