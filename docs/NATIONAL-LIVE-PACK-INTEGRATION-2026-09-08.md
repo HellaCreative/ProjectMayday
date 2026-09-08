@@ -35,3 +35,11 @@ the previous full projection on two passes (126 comparisons), including rereads
 after eviction. No candidate filtering, rounding or routing scoring changes.
 Previous full-to-projection 552 selection checks still establish field parity;
 new per-region equality establishes loader parity. Live replay remains required.
+
+## Single-point fuel region correction
+
+Richard’s build22 Massachusetts destination (-72.66903969731547, 42.42887651518565) was assigned to NY by coarse bounding boxes. The integrated service also retained only23 administrative polygons, omitting MA. Imported the existing complete63-region OSM boundary record from main commit8dfb04f; all23 pre-existing geometries are exactly unchanged. This is service selection data, not a graph-pack rebuild.
+
+Single-point fuel lookup now applies shared polygonOwner when the owner belongs to candidate regions; explicit resolvedRegionId/regionIdHint and multi-location selection retain existing behavior. No graph download is introduced for fuel-file selection. Regression coverage includes MA exact device point, lng spelling, NS02 candidate identity, NY, VT, NH, and no mutation of input. All3 fuel tests and8 endpoint/polygon/canary tests pass locally. Hosted verification remains outstanding; stable DEV unchanged.
+
+This shared JS API correction applies equally to online clients. Swift/offline parity remains deferred under the explicit live-only instruction; Android has no client-specific implementation change here. Replacement routing scope belongs to the routing agent (NS/NB); this national data integration does not expand that engine.

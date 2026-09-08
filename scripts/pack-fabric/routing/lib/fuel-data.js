@@ -10,8 +10,11 @@ const crypto = require("crypto");
  */
 const {
   resolveGraphRequest,
+  candidateRegionsForPoint,
   graphCdnBaseUrlForRegion
 } = require("../regional/select");
+
+const { polygonOwner } = require("./region-polygons");
 
 const MAX_CACHED_FUEL_REGIONS = 6;
 const DEFAULT_FUEL_CACHE_TTL_MS = 5 * 60 * 1000;
@@ -100,7 +103,22 @@ async function loadRegionFuel(regionId) {
 }
 
 async function loadFuelForLocations(locations) {
-  const selection = resolveGraphRequest({ locations: locations || [] });
+  let fuelLocations = locations || [];
+  // A single-point pump lookup uses the same administrative ownership as
+  // route endpoints, without loading road graphs just to select a fuel file.
+  if (Array.isArray(fuelLocations) && fuelLocations.length === 1) {
+    const location = fuelLocations[0];
+    const lon = Number(location && (location.lon != null ? location.lon : location.lng));
+    const lat = Number(location && location.lat);
+    if (location && !location.resolvedRegionId && !location.regionIdHint
+        && Number.isFinite(lon) && Number.isFinite(lat)) {
+      const owner = polygonOwner(lon, lat);
+      if (owner && candidateRegionsForPoint(lon, lat).includes(owner)) {
+        fuelLocations = [{ ...location, resolvedRegionId: owner }];
+      }
+    }
+  }
+  const selection = resolveGraphRequest({ locations: fuelLocations });
   if (!selection.ok || !selection.regionIds.length) {
     return {
       ok: false,
