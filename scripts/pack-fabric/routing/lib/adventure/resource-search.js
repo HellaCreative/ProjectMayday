@@ -20,17 +20,22 @@ class Heap {
 }
 
 function searchResourcePath({graph,start,end,edgeCost,budget,fuel=null,
-  initialTurnState=null,destinationEscapeMeters=0,lowerBounds=null,acceptGoal=null,avoidanceCost=null,maxLabels=Infinity,heuristicWeight=1}) {
+  initialTurnState=null,destinationEscapeMeters=0,lowerBounds=null,acceptGoal=null,avoidanceCost=null,maxLabels=Infinity,heuristicWeight=1,preferOnwardFuel=false}) {
   if(!Number.isFinite(heuristicWeight)||heuristicWeight<1)throw new TypeError("Heuristic weight must be finite and at least one");
   if(!Number.isFinite(destinationEscapeMeters)||destinationEscapeMeters<0) throw new TypeError("A proved destination escape distance is required");
   if(maxLabels!==Infinity&&(!Number.isSafeInteger(maxLabels)||maxLabels<1))throw new TypeError("Positive label limit required");
   if(fuel!=null)validateFuel(fuel,{requireInitial:true});
+  // With onward preference enabled, approach retracing is a second priority,
+  // before surface cost. Reversal follows the immutable parent chain in O(1)
+  // per arc, including driving past a pump then turning back. Necessary access
+  // is expensive, never illegal. Pre-reversal histories may still be pruned:
+  // this is bounded candidate generation, not a global loopless-path proof.
   // Urban exposure precedes the experimental ride cost lexicographically. No
   // finite penalty lets a cheap urban shortcut beat a feasible rural ride.
   // Fewer refills break otherwise equal route costs; free fuel actions must
   // not turn every passing pump into a planned stop.
-  const compare=(a,b)=>a.avoidance-b.avoidance || a.cost-b.cost || a.refills-b.refills;
-  const heap=new Heap((a,b)=>a.avoidance-b.avoidance || a.priority-b.priority || a.refills-b.refills),frontiers=new Map();
+  const compare=(a,b)=>a.avoidance-b.avoidance || (a.retraceMeters||0)-(b.retraceMeters||0) || a.cost-b.cost || a.refills-b.refills;
+  const heap=new Heap((a,b)=>a.avoidance-b.avoidance || (a.retraceMeters||0)-(b.retraceMeters||0) || a.priority-b.priority || a.refills-b.refills),frontiers=new Map();
   if(lowerBounds && (lowerBounds.state!=="complete" || lowerBounds.target!==end || lowerBounds.graph!==graph || lowerBounds.edgeCost!==edgeCost)) throw new TypeError("Lower bounds must be complete and belong to this graph, target and cost model");
   let labels=0,dominated=0,expanded=0,labelLimitReached=false;
   const labelLimitResult=()=>({state:"incomplete",reason:"label_limit",diagnostics:{labels,dominated,expanded,maxLabels,...budget.snapshot()}});
@@ -40,20 +45,20 @@ function searchResourcePath({graph,start,end,edgeCost,budget,fuel=null,
     // Weight > 1 is explicit candidate-generation guidance: feasible results
     // retain hard constraints but no minimum-cost optimality is claimed.
     label.priority=label.cost+estimate*heuristicWeight;
-    const key=graph.stateKey(label.node,label.turnState);
+    const key=graph.stateKey(label.node,label.turnState)+(preferOnwardFuel?`|retreat:${label.retreatCursor?.labelId??0}`:"");
     const frontier=frontiers.get(key) || [];
     if(frontier.some(old=>old.active&&compare(old,label)<=0&&old.remaining>=label.remaining)) {dominated++;return;}
     if(labels>=maxLabels){labelLimitReached=true;return;}
     const kept=[];
     for(const old of frontier){if(compare(label,old)<=0&&label.remaining>=old.remaining){old.active=false;dominated++;}else kept.push(old);}
-    label.active=true;kept.push(label);frontiers.set(key,kept);labels++;heap.push(label);
+    label.labelId=labels+1;label.active=true;kept.push(label);frontiers.set(key,kept);labels++;heap.push(label);
   }
   function materialize(label,goalEvidence=null) {
     const arcs=[],visits=[];let cursor=label;
     while(cursor.parent){if(cursor.arc)arcs.push(cursor.arc);if(cursor.refill)visits.push({stationId:cursor.refill.id,atMeters:cursor.distance,...(cursor.refill.accessEvidence?{accessEvidence:cursor.refill.accessEvidence}:{})});cursor=cursor.parent;}
     arcs.reverse();visits.reverse();
     return {state:"found",arcs,visits,distanceMeters:label.distance,cost:label.cost,avoidanceCost:label.avoidance,
-      remainingUsableMeters:fuel?label.remaining:null,endTurnState:label.turnState,goalEvidence,
+      retraceMeters:label.retraceMeters||0,remainingUsableMeters:fuel?label.remaining:null,endTurnState:label.turnState,goalEvidence,
       diagnostics:{labels,dominated,expanded,...budget.snapshot()}};
   }
   if(!budget.check())return {state:"incomplete",reason:budget.snapshot().reason,diagnostics:{labels,dominated,expanded,...budget.snapshot()}};
@@ -74,7 +79,7 @@ function searchResourcePath({graph,start,end,edgeCost,budget,fuel=null,
     // Refuelling does not erase turn history.
     const station=fuel?graph.stationAt(cur.node):null;
     if(station && cur.remaining<fuel.usableRangeMeters) {
-      add({...cur,refills:cur.refills+1,remaining:fuel.usableRangeMeters,parent:cur,arc:null,refill:station});
+      add({...cur,refills:cur.refills+1,remaining:fuel.usableRangeMeters,parent:cur,arc:null,refill:station,retreatCursor:preferOnwardFuel?cur:null});
     }
     if(labelLimitReached)return labelLimitResult();
     for(const arc of graph.outgoing(cur.node)) {
@@ -86,9 +91,18 @@ function searchResourcePath({graph,start,end,edgeCost,budget,fuel=null,
       const avoidance=avoidanceCost?avoidanceCost(arc):0;
       if(!Number.isFinite(avoidance)||avoidance<0)throw new TypeError("Avoidance costs must be finite and nonnegative");
       const cost=edgeCost(arc);
+      let retreatCursor=null,retraceMeters=cur.retraceMeters||0;
+      // A continued retreat must retain its approach cursor; otherwise a tiny
+      // reversal beyond a station could reset the price of the long return.
+      const incoming=cur.retreatCursor||cur;
+      if(preferOnwardFuel&&incoming?.arc&&incoming.arc.id===arc.id&&incoming.arc.from===arc.to&&incoming.arc.to===arc.from) {
+        retraceMeters+=2*arc.distanceMeters;
+        retreatCursor=incoming.parent;
+        while(retreatCursor&&!retreatCursor.arc)retreatCursor=retreatCursor.parent;
+      }
       if(!Number.isFinite(cost)||cost<0)throw new TypeError("Search costs must be finite and nonnegative");
       add({node:arc.to,turnState:transition.state,cost:cur.cost+cost,avoidance:cur.avoidance+avoidance,refills:cur.refills,
-        remaining:fuel?Math.max(0,cur.remaining-arc.distanceMeters):Infinity,distance:cur.distance+arc.distanceMeters,parent:cur,arc,refill:null});
+        remaining:fuel?Math.max(0,cur.remaining-arc.distanceMeters):Infinity,distance:cur.distance+arc.distanceMeters,parent:cur,arc,refill:null,retreatCursor,retraceMeters});
       if(labelLimitReached)return labelLimitResult();
     }
   }

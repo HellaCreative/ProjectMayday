@@ -40,6 +40,7 @@ test("destination escape can force an extra refill before arrival",()=>{
 test("fuel refill preserves incoming turn state",()=>{
   const g=graph([["A","P",1],["P","D",1]],["P"],(state,arc)=>({allowed:!(state===0&&arc.id===1),state:arc.id}),(node,state)=>`${node}:${state}`);
   assert.equal(search(g,{fuel:{usableRangeMeters:10,initialUsableMeters:1}}).state,"exhausted");
+  assert.equal(search(g,{fuel:{usableRangeMeters:10,initialUsableMeters:1},preferOnwardFuel:true}).state,"exhausted");
 });
 test("resource exhaustion is incomplete, never disconnected or fuel gap",()=>{
   const g=graph([["A","B",1],["B","D",1]]);
@@ -124,4 +125,25 @@ test('weighted candidate guidance preserves fuel feasibility and rural priority'
  const rural=searchResourcePath({graph:g,start:0,end:3,edgeCost,budget:budget(),lowerBounds,heuristicWeight:2,avoidanceCost:a=>a.to===1?1:0});
  assert.deepEqual(rural.arcs.map(a=>a.to),[2,3]);
  assert.throws(()=>searchResourcePath({graph:g,start:0,end:3,edgeCost,budget:budget(),heuristicWeight:Infinity}),/Heuristic weight/);
+});
+
+test('fuel search prefers an onward connection when retraced dirt is priced as connecting travel',()=>{
+ const rows=[['A','J',4,0,false],['J','P',2,1,false],['P','J',2,1,false],['J','D',4,2,false],['P','K',2,3,true],['K','D',2,4,false],['P','X',1,5,false],['X','P',1,5,false]];
+ const arcs=rows.map(([from,to,distanceMeters,id,paved])=>({from,to,distanceMeters,id,paved}));
+ const make=onward=>({outgoing:n=>arcs.filter(a=>a.from===n&&(onward||a.id!==3)),stationAt:n=>n==='P'?{id:'pump'}:null,transition:()=>({allowed:true,state:null}),stateKey:n=>n});
+ const options={start:'A',end:'D',edgeCost:a=>a.distanceMeters*(a.paved?30:1),fuel:{usableRangeMeters:12,initialUsableMeters:6}};
+ const before=searchResourcePath({...options,graph:make(true),budget:budget()});
+ assert.deepEqual(before.arcs.map(a=>a.to),['J','P','J','D']);
+ const after=searchResourcePath({...options,graph:make(true),preferOnwardFuel:true,budget:budget()});
+ assert.equal(after.state,'found');assert.deepEqual(after.arcs.map(a=>a.to),['J','P','K','D']);
+ assert.equal(after.remainingUsableMeters,8);assert.equal(after.visits.length,1);
+ const necessary=searchResourcePath({...options,graph:make(false),preferOnwardFuel:true,budget:budget()});
+ assert.equal(necessary.state,'found');assert.deepEqual(necessary.arcs.map(a=>a.to),['J','P','J','D']);
+ assert.equal(necessary.remainingUsableMeters,6);
+});
+
+test("onward preference preserves incomplete search status when its label cap is reached",()=>{
+ const g=graph([["A","B",1],["B","D",1]]);
+ const result=search(g,{preferOnwardFuel:true,maxLabels:1});
+ assert.equal(result.state,"incomplete");assert.equal(result.reason,"label_limit");
 });

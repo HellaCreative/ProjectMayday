@@ -782,3 +782,19 @@ retracing, shorter actual travel, at least as good avoidance exposure and more
 fresh known dirt per actual kilometre. Physical surface totals still count all
 travel. A necessary pump is never banned just because its access retraces.
 This is currently live JavaScript DEV work; offline/native parity unqualified.
+
+### Onward fuel search supersedes pump replacement — September8 late evening
+
+Experimental shared search orders urban/motorway exposure, traced out-and-back
+travel, style cost, then equal-cost refill count. A reversal follows the stored
+approach, including passing a pump then turning back. Charge both directions of
+that return in the retrace priority. Necessary fuel access remains legal; fuel
+range, endpoint escape, and turn history remain independent hard constraints.
+The earlier one-station exclusion/percentage-veto pass is removed. No special
+station IDs or geographic direction cones implement this rule. The same policy
+applies to each region enabled in the DEV adapter. Full approach histories before
+a reversal may still be pruned: bounded candidate generation, not a global
+optimal simple-path proof. The search retains its20s deadline and30M work cap;
+Atlantic fuel-label allowance200k is empirically checked against the2GiB host.
+Physical percentages include all ridden distance. Offline/native parity awaits
+live acceptance; this entry defines the behavior Android must ultimately match.

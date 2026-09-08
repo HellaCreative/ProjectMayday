@@ -905,3 +905,63 @@ across the common base pool (base candidates still completed first). Local exact
 replay retains the same improvement.24cross plus8actualClean-preference cases and
 3unchangedNS baseline cases passed before this narrowing; rerunning relevant
 regression and hosted timing before stable publication.
+
+## Stable DEV physical retest ready — final evening deployment
+
+Stable pack-fabric.vercel.app now source6ace2323f6a6051a9f3761db55973d7548fc087e,
+exact previewmpatek5gc, ns-nb-v1, NS/NB02 unchanged. Pack owner flipped only DEV
+alias and updated national activation guard; production/phone untouched.
+Independent PUBLIC Dalhousie request verifies source, replacement strategy,
+full five-route/four-stop window, Sunny Corner, continuous geometry, all225km
+intervals and destination escape.9.550s HTTP/8.579s server,958.048809km.
+Exact hosted audit72.340%dirt/4.095km repeated; old65.610km repeated.
+Cold exact preview15.456s remains a performance flag. Six hosted reference cases
+both directions/allstyles pass7.337–8.403s. Final local24cases pass2.013–4.289s,
+819MiBpeak;168focusedJS checks pass, three NS baseline distances unchanged.
+
+Runtime commits a13f820/cd1dcd0 integrated on live945978 plus464864f diagnostics.
+No new native changes: existing DIRT Dev build23 uses the updated service.
+Device retest instructions at top of ROUTING-DEVICE-CANARY.md. Clean request
+fallback and reviewed NBcity coverage corrected, but its primary/trunk-heavy
+back-road quality remains explicitly OPEN. No broad Clean acceptance claimed.
+
+## 21:20 moved-waypoint physical failure — acceptance reopened
+
+User accepted the near-Dalhousie placement, then moved destination to
+47.743529,-64.911236 and rejected the resulting two fuel spurs. Same source6ace232
+and replacement engine confirmed, so this is not stale deployment or legacy
+fallback. Public replay1124.508km/73.826%dirt/82.243km repeated. The bounded trial
+found a fuel-valid894.565km/65.697%dirt/1.894km repeated alternative but rejected
+it because fresh-dirt ratio was65.655% versus67.555% on original. Thus successful
+fuel feasibility does not equal satisfactory route quality. Current final pool
+also ranks raw dirt share, another opportunity to select a poor-shaped ride.
+
+Previous Dalhousie improvement was too narrow; general fuel-detour acceptance
+is reopened. Do not extend pump exclusions or increase trial count as the claimed
+systemic fix. Shared search/selection must explicitly represent onward continuity
+and necessary versus avoidable repeated access. Preserve coherent integrated
+fuel search; no blanket direct-line corridor, no arbitrary destination-distance
+cap, and no shorter-all-paved substitute presented as Dirt success.
+
+Counterexample and measured fuel hops captured in
+scripts/pack-fabric/bench/fixtures/moved-waypoint-20260908.json. Generic local
+replay supports REBUILD_REQUEST_PATH. No runtime or live service changes made
+in this diagnostic follow-up. Next acceptance must cover a range of moved
+endpoints and audit whole rides, not only the one previously successful pin.
+
+## Local onward-search candidate after moved-waypoint failure
+
+Moved repeat82.243→1.621km,884.748km64.341%dirt,4pumps. Near-Dalhousie and actual
+Dalhousie repeats1.413km, approximately828.6/797.1km. Eight-waypoint sweep (actual
+three pins plus five road positions5–90km back from moved endpoint) each keeps
+>=60%dirt and<=2km repeated; all fuel intervals/final escape pass. These are
+case acceptance bounds, not new routing thresholds. Post-hoc pump exclusion
+and fresh-dirt percentage veto removed in favor of integrated approach-retrace
+priority. Outgoing legal connections from a pump compete during fuel search.
+
+Initial100k labels limited two candidates on162km-range unknown reverse ride.
+200k allows all six candidates there to finish, Balanced53.37%dirt, profile-only
+matrix peak890MiB; same20s/30M caps, host2GiB. Attempted road-trace interning did
+not resolve that limit and was removed. NS3baseline exact distances unchanged.
+Full24final and hosted verification pending; no public update yet. Generic
+history-dependent route quality remains bounded/heuristic; no global proof.
