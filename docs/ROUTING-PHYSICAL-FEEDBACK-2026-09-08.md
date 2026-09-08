@@ -78,3 +78,26 @@ and reviewed-core exposure. It still contains106.955km classified trunk and
 391.296km primary. This is NOT a Clean back-road quality pass. OSM primary/trunk
 classification alone does not establish whether the actual roads are divided
 freeways or appropriate rural highways. That review remains open.
+
+## Onward search candidate after21:20 failure
+
+Runtime candidate86f3c02 replaces the pump-exclusion pass with approach retrace
+priority inside fuel search. Hosted source df0827e60e9c04a625fd3b3155fae87220c93113:
+
+| Actual request | km | Dirt | Repeated km | Server ms |
+|---|---:|---:|---:|---:|
+| Failed moved pin |884.748|64.341%|1.621|13179 cold|
+| Previous near-Dalhousie pin |828.6|64.0%|1.413|5070|
+| Dalhousie |797.114|65.734%|1.413|4986|
+| Clean phone request |704.376|0.009%|0|4927|
+|162km usable reverse/unknown Balanced|629.684|53.371%|0.292|10152|
+
+All hosted cases retain full fuel windows, contiguous geometry, in-range fuel
+legs and destination escape; every base candidate completes fuel search.
+Eight moved-endpoint cases (3actual+5positions along the approach5–90km back)
+return1.413–1.621km repeats and>=60%dirt.24local cross cases pass, everycandidate
+fuel search completes;1.820–3.630s local,839MiBpeak.166focusedJS checks pass.
+NS3reference routes keep exact distances. Cape NSunknown comparison: priorlive
+646.013km5.670kmrepeat; newlocal647.280km4.962kmrepeat,3pumpsboth. This residual
+unknown-path retrace still needs route-quality judgment; not a universal no-loop
+proof. Clean primary/trunk preference remains open. Physical acceptance pending.

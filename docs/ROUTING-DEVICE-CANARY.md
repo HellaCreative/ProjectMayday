@@ -1,3 +1,22 @@
+# Onward fuel-search retest — existing build23
+
+Candidate source df0827e60e9c04a625fd3b3155fae87220c93113. Public activation and
+verification are recorded at the end of ROUTING-REBUILD-PROGRESS.md.
+
+Rebuild the last failed Porters Lake→New Brunswick destination (47.743529,
+-64.911236), Dirt, Allow Unknown OFF, fuel ON, same225km usable range. Then move
+the destination again. Create fresh routes; saved geometry intentionally stays
+unchanged. No Xcode installation or pack download is needed.
+
+Expected exact replay about885km/64%dirt,4fuel stops,1.6km repeated road instead
+of82.2km. The three actual pins and five nearby route positions were checked.
+This replaces the earlier one-pump repair with approach-retrace priority during
+fuel search. Earlier958km/SunnyCorner-specific instructions below are historical.
+
+Remaining flags: cold search13.2s in private test; Clean back-road preference
+unfinished; some NSunknown-path retrace remains; physical/navigation/offline
+acceptance is not established by automated route-building checks.
+
 # Dalhousie fuel-detour retest — existing build23
 
 Hosted candidate6ace2323f6a6051a9f3761db55973d7548fc087e passed exact device
