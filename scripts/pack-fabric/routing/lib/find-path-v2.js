@@ -1254,19 +1254,7 @@ function findAdventurePathWithRoadCompass(
       searchOpts.diagnostics.hunt = huntDiagnostics;
       searchOpts.diagnostics.pops = Number(ride.searchMeta.pops) || 0;
     }
-    const completedDirtPercent = Number(ride.stats && ride.stats.dirtPercent);
-    const completedCandidateIsUsable =
-      Array.isArray(ride.geometry) && ride.geometry.length >= 2 &&
-      Array.isArray(ride.segments) && ride.segments.length > 0 &&
-      Number(ride.distanceMeters) > 0 &&
-      Number.isFinite(completedDirtPercent) && completedDirtPercent >= 55 &&
-      Number(ride.searchMeta.prunedLoopMeters || 0) <= 200;
-    // Reaching the ceiling does not make a paved fallback acceptable. It also
-    // must not erase a complete, coherent, regression-floor Dirt candidate
-    // that already reached the destination. Keep that real route and report
-    // the unfinished quality proof explicitly in metadata and warnings.
-    if (!completedCandidateIsUsable) return null;
-    ride.searchMeta.searchCeilingReachedWithCompletedCandidate = true;
+    return null;
   }
   ride.searchMeta = ride.searchMeta || {};
   ride.searchMeta.rideObjective = profile === "dirt"
@@ -3316,110 +3304,72 @@ function searchBalancedResource(ctx) {
     : 0;
   const selected = eligible[selectedIndex] || qualityBest;
   if (!selected) return null;
-  function pathView(candidate) {
-    const geometry = [];
-    const segments = [];
-    let distanceMeters = 0;
-    let unknownAccessMeters = 0;
-    let movingSeconds = 0;
-    let dirtMeters = 0;
-    let pavedMeters = 0;
-    let surfaceDistanceMeters = 0;
-    const bySurfaceM = {
-      paved: 0, gravel: 0, access: 0, track: 0, unknown: 0, single: 0
-    };
-    const byAccessM = {
-      motorized_verified: 0,
-      motorized_permissive: 0,
-      motorized_unknown: 0
-    };
-    for (const edge of candidate.pruned.edges) {
-      for (const c of edge.coords) {
-        const last = geometry[geometry.length - 1];
-        if (last && last[0] === c[0] && last[1] === c[1]) continue;
-        geometry.push(c);
-      }
-      distanceMeters += edge.meters;
-      const isFerry = isFerryStructureCode(edge.structure);
-      const surfaceName = enums.SURFACE_NAME[edge.surface] || "unknown";
-      const accessName = enums.ACCESS_NAME[edge.access] || "motorized_unknown";
-      if (!isFerry) {
-        surfaceDistanceMeters += edge.meters;
-        bySurfaceM[surfaceName] = (bySurfaceM[surfaceName] || 0) + edge.meters;
-        if (isDirtSurface(surfaceName, edge.roadClass)) dirtMeters += edge.meters;
-        else pavedMeters += edge.meters;
-        if (byAccessM[accessName] != null) byAccessM[accessName] += edge.meters;
-        if (accessName === "motorized_unknown") unknownAccessMeters += edge.meters;
-        movingSeconds += ((edge.meters / 1000) / classSpeedKmh(edge.surface)) * 3600;
-      } else {
-        movingSeconds += ferrySecondsForPackEdge(pack, edge.undirectedEdgeIndex, edge.meters);
-      }
-      const structFields = segmentStructureFields({
-        structureCode: edge.structure,
-        structureLeaf: edge.structureLeaf,
-        layer: edge.layer
-      });
-      segments.push({
-        edgeId: edge.edgeId,
-        surfaceClass: surfaceName,
-        trackClass: edge.roadClass,
-        structureType: enums.STRUCTURE_NAME[edge.structure] || "none",
-        accessClass: accessName,
-        surfaceLeaf: edge.surfaceLeaf != null ? edge.surfaceLeaf : null,
-        structureLeaf: structFields.structureLeaf,
-        layer: structFields.layer,
-        crossingLabel: structFields.crossingLabel,
-        waterCrossing: structFields.waterCrossing,
-        source: null,
-        sourceRecordId: null,
-        sourceDescription: null,
-        confidence: edge.confidence,
-        seasonal: !!edge.seasonal,
-        distanceMeters: Math.round(edge.meters),
-        componentId: -1,
-        accessLeg: !!edge.accessLeg,
-        geometry: edge.coords
-      });
-    }
-    const pct = (meters) => surfaceDistanceMeters > 0
-      ? Math.round((meters / surfaceDistanceMeters) * 100)
-      : 0;
-    const view = {
-      geometry,
-      segments,
-      distanceMeters,
-      unknownAccessMeters,
-      movingSeconds,
-      profileCost: labelState.score(candidate.candidate.lab),
-      stats: {
-        pavedPercent: pct(pavedMeters),
-        gravelPercent: pct(bySurfaceM.gravel || 0),
-        accessPercent: pct((bySurfaceM.access || 0) + (bySurfaceM.resource || 0)),
-        trackPercent: pct((bySurfaceM.track || 0) + (bySurfaceM.double_track || 0)),
-        singlePercent: pct(bySurfaceM.single || 0),
-        unknownSurfacePercent: pct(bySurfaceM.unknown || 0),
-        dirtPercent: pct(dirtMeters),
-        unknownAccessPercent: pct(unknownAccessMeters),
-        permissiveAccessPercent: pct(byAccessM.motorized_permissive || 0),
-        verifiedAccessPercent: pct(byAccessM.motorized_verified || 0)
-      }
-    };
-    applyHonestReportedStats(view);
-    return view;
-  }
-  const completedPathViews = materialized.map(pathView);
-  const selectedMaterializedIndex = materialized.indexOf(selected);
-  const selectedView = completedPathViews[selectedMaterializedIndex] || pathView(selected);
-  const {
-    geometry,
-    segments,
-    distanceMeters,
-    unknownAccessMeters,
-    movingSeconds,
-    profileCost,
-    stats
-  } = selectedView;
+  const bestLab = selected.candidate.lab;
   const pruned = selected.pruned;
+  const routeEdges = pruned.edges;
+  const geometry = [];
+  const segments = [];
+  let distanceMeters = 0;
+  let unknownAccessMeters = 0;
+  let movingSeconds = 0;
+  let dirtMeters = 0;
+  let pavedMeters = 0;
+  let surfaceDistanceMeters = 0;
+  const bySurfaceM = { paved: 0, gravel: 0, access: 0, track: 0, unknown: 0, single: 0 };
+  const byAccessM = {
+    motorized_verified: 0,
+    motorized_permissive: 0,
+    motorized_unknown: 0
+  };
+  for (const edge of routeEdges) {
+    for (const c of edge.coords) {
+      const last = geometry[geometry.length - 1];
+      if (last && last[0] === c[0] && last[1] === c[1]) continue;
+      geometry.push(c);
+    }
+    distanceMeters += edge.meters;
+    const isFerry = isFerryStructureCode(edge.structure);
+    const surfaceName = enums.SURFACE_NAME[edge.surface] || "unknown";
+    const accessName = enums.ACCESS_NAME[edge.access] || "motorized_unknown";
+    if (!isFerry) {
+      surfaceDistanceMeters += edge.meters;
+      bySurfaceM[surfaceName] = (bySurfaceM[surfaceName] || 0) + edge.meters;
+      if (isDirtSurface(surfaceName, edge.roadClass)) dirtMeters += edge.meters;
+      else pavedMeters += edge.meters;
+      if (byAccessM[accessName] != null) byAccessM[accessName] += edge.meters;
+      if (accessName === "motorized_unknown") unknownAccessMeters += edge.meters;
+      movingSeconds += ((edge.meters / 1000) / classSpeedKmh(edge.surface)) * 3600;
+    } else {
+      movingSeconds += ferrySecondsForPackEdge(pack, edge.undirectedEdgeIndex, edge.meters);
+    }
+    const structFields = segmentStructureFields({
+      structureCode: edge.structure,
+      structureLeaf: edge.structureLeaf,
+      layer: edge.layer
+    });
+    segments.push({
+      edgeId: edge.edgeId,
+      surfaceClass: surfaceName,
+      trackClass: edge.roadClass,
+      structureType: enums.STRUCTURE_NAME[edge.structure] || "none",
+      accessClass: accessName,
+      surfaceLeaf: edge.surfaceLeaf != null ? edge.surfaceLeaf : null,
+      structureLeaf: structFields.structureLeaf,
+      layer: structFields.layer,
+      crossingLabel: structFields.crossingLabel,
+      waterCrossing: structFields.waterCrossing,
+      source: null,
+      sourceRecordId: null,
+      sourceDescription: null,
+      confidence: edge.confidence,
+      seasonal: !!edge.seasonal,
+      distanceMeters: Math.round(edge.meters),
+      componentId: -1,
+      accessLeg: !!edge.accessLeg,
+      geometry: edge.coords
+    });
+  }
+  const pct = (m) => (surfaceDistanceMeters > 0 ? Math.round((m / surfaceDistanceMeters) * 100) : 0);
   const settlementCrossingUsed = ctx.settlementFallback && geometry.some((point) =>
     settlementBlocks(point[0], point[1], startLL, endLL, settlementBoxes)
   );
@@ -3429,7 +3379,7 @@ function searchBalancedResource(ctx) {
     distanceMeters,
     unknownAccessMeters,
     movingSeconds,
-    profileCost,
+    profileCost: labelState.score(bestLab),
     searchMeta: {
       bidir: false,
       packFormat: pack.hasLeaves ? "v3" : "v2",
@@ -3441,7 +3391,7 @@ function searchBalancedResource(ctx) {
       forwardCandidateCount: eligible.length,
       selectedCandidateIndex: selectedIndex,
       candidateSelection: "seeded-complete-geometry-within-5-dirt-points",
-      dirtPercent: stats.dirtPercent,
+      dirtPercent: pct(dirtMeters),
       balancedCandidateBuckets: cands.map((candidate) => ({
         dirtPercent: Math.round(candidate.dirt / candidate.len * 1000) / 10,
         distanceMeters: Math.round(candidate.len)
@@ -3470,19 +3420,22 @@ function searchBalancedResource(ctx) {
       sparseLabelState: labelState.sparse,
       labelPages: labelState.pageCount(),
       settlementFallbackUsed: settlementCrossingUsed,
-      balancedMiss: profile === "balanced" ? Math.abs(stats.dirtPercent - 50) : null
+      balancedMiss: profile === "balanced" ? Math.abs(pct(dirtMeters) - 50) : null
     },
-    stats
+    // Coarse dirt% for candidate pick; honest overlay after path selection.
+    stats: {
+      pavedPercent: pct(pavedMeters),
+      gravelPercent: pct(bySurfaceM.gravel || 0),
+      accessPercent: pct((bySurfaceM.access || 0) + (bySurfaceM.resource || 0)),
+      trackPercent: pct((bySurfaceM.track || 0) + (bySurfaceM.double_track || 0)),
+      singlePercent: pct(bySurfaceM.single || 0),
+      unknownSurfacePercent: pct(bySurfaceM.unknown || 0),
+      dirtPercent: pct(dirtMeters),
+      unknownAccessPercent: pct(unknownAccessMeters),
+      permissiveAccessPercent: pct(byAccessM.motorized_permissive || 0),
+      verifiedAccessPercent: pct(byAccessM.motorized_verified || 0)
+    }
   };
-  // Fuel is part of the route. Keep the other complete Dirt/Balanced paths
-  // produced by this same search available to the in-process fuel planner so
-  // it can pick the highest-quality fuel-feasible whole line without running
-  // this expensive foundation search again. The property is deliberately
-  // non-enumerable: ordinary /api/route payloads remain unchanged.
-  Object.defineProperty(mixResult, "_completedPathViews", {
-    value: completedPathViews,
-    enumerable: false
-  });
   if (diagnostics) {
     diagnostics.outcome = abort;
     diagnostics.pops = pops;

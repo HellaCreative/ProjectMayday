@@ -338,13 +338,6 @@ The seeded 2–3 **already legal** dirt lines are the creativity. If AI is ever 
 - The 55% known-Dirt requirement is a regression floor. Dirt continues to seek
   the highest known-Dirt route inside legal access, no-retrace, fuel, and 1.5×
   coherent-distance constraints.
-- Fuel is part of the route, not a detour applied after routing. Build the
-  selected Dirt foundation once. If that exact line cannot be partitioned into
-  fuel-safe sections, rank the other complete Dirt lines produced by that same
-  search and choose the highest-known-Dirt fuel-feasible whole route. Never
-  independently stitch paved-heavy station legs onto the rejected foundation.
-- A failed fuel proof returns the already-built foundation for advisory display;
-  the client must not repeat the same direct search merely to paint that line.
 
 ### After White
 
