@@ -199,3 +199,15 @@ osm:w428976289, total stopposition226.647km. Explicit qualityflag; don't claim a
 fuelspurs eliminated. Normal225km actualClean reference has0repeat. Privatehosted
 verification pending; no stableDEV change. Bench compare-clean-backroads.js
 records original, softer, and candidate costs without changing live state.
+
+## Clean stable publication and independent public verification
+
+Owner activated exact1krqzezwv/source8be23e95, publicly checked identity andupdated
+activationguard; both02/ns-nb-v1/env unchanged. IndependentpublicClean request:
+12.984sHTTP/10.709sserver,955.802km99.999%paved4pumps0repeat. Primary/trunk199.020km,
+60%below497.986km baseline. Selectedpaved/allcandidatescomplete; fuel225km bounds,
+destinationescape, geometryjoins andbuildidentityverified. No Xcode/phonepack/
+production/GitHub change. PhysicalClean acceptance pending; guide requests fresh
+NS→NB Clean withusual250kmrange/10%reserve, inspect backroads andfuelapproaches.
+Knownshort162kmcrossreturn2.104km andCapeUnknownretrace remainflags. Public timing
+is observed, not a percentile guarantee. Prior NB~9s physical timing was accepted.

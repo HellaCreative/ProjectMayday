@@ -1,3 +1,22 @@
+# Ready for Clean device test — stable8be23e95
+
+Stable DIRT DEV uses exact1krqzezwv/source8be23e95a91c7ebe8a02bf20a6917f57ad42a4b7,
+with NS02/NB02. No reinstall or pack download. Create a fresh NS→NB From Here
+route, choose Clean, fuel ON, usual250km range/10%reserve. Inspect whether the
+paved back-road choices and fuel approaches make a good ride. Saved geometry
+is preserved; build a new route for this test.
+
+Reference PortersLake→46.792506,-67.569371:955.802km,99.999%paved,4fuelstops,
+zero repeated road. Primary/trunk use199.020km versus497.986km before (60%less).
+Public check12.984sHTTP/10.709sserver. Longer route is an explicit tradeoff;
+not a promise that all major-road connections are removed. NSCapeClean also
+passes757.037km99.88%paved3stops0repeat. Physical Clean acceptance pending.
+
+Flags:162km usable-range reversecrossClean has2.104kmfuelreturn requiringreview;
+residualCapeUnknown dirt retrace remainsopen. Normal225kmCleanreference0repeat.
+32localDirt/Balanced and4hostedDirt references retain exactgeometry/fuelstops.
+Historical handoffs follow below.
+
 # Latest device result — continuity pass, 22:36 UTC
 
 The rider accepted the new Cape Breton route to46.980210,-60.472582:

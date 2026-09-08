@@ -837,3 +837,7 @@ Clean qualification update: paved candidate alone uses explicitfuelheuristic3
 A complete response with a dirt-heavy fallback is not a qualified Clean result;
 NSCapeClean regression verifies paved selection, surface and completepool.
 Shared live-first/physical/offline qualification boundaries remain unchanged.
+
+Clean cost/guidance revision published to stableDEV8be23e95 after hosted/public
+qualification. PhysicalClean acceptance, Swift/offline/Android implementation
+andverification remain pending under live-first authorization.
