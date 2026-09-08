@@ -30,3 +30,13 @@ test('canary is opt-in and does not silently ignore unsupported recovery or mand
  assert.equal(canarySupported(base,'fuel',{}),false);assert.equal(canarySupported(base,'fuel',env),true);
  for(const extra of [{options:{avoidEdgeIds:['closed']}},{options:{arrivalEdgeId:'edge'}},{fuel:{requiredFirstStationId:'pump'}},{fuel:{minimumFuelStops:1}},{action:'debug_graph'}])assert.equal(canarySupported({...base,...extra},'fuel',env),false);
 });
+test('Atlantic opt-in exposes actual region identities and unknown-access intent',()=>{
+ const {routeResponse}=require('./live-canary');
+ const body={profile:'dirt',locations:[{},{}],accessPolicy:{motorizedUnknown:true}};
+ assert.equal(canarySupported(body,'route',{DIRT_ADVENTURE_CANARY:'ns-nb-v1'}),true);
+ assert.equal(canarySupported(body,'route',{DIRT_ADVENTURE_CANARY:'unreviewed'}),false);
+ const identities=[{regionId:'ns'},{regionId:'nb'}];
+ assert.deepEqual(routeResponse([],'dirt',identities,{},[0,0]).debug.regionIds,['ns','nb']);
+ const f=fixture(),pool=buildRideAlternatives({...f,budget:work()});
+ assert.equal(toLiveResponse(pool,{...body,fuel:{windowMaxStops:4}},'fuel',identities).diagnostics.allowUnknown,true);
+});
