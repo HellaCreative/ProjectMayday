@@ -48,3 +48,22 @@ implement live JS refinements within its isolated worktree. It must not change
 factory inputs or outputs. Known fuel failure near Montreal belongs to live
 border endpoint selection; no pack-factory alteration was established by that
 investigation. Routing corrections must not silently become factory changes.
+
+## 14:54 UTC progress and resource check
+
+Six regions verified: AB, AK, AL, AR, AZ, BC. California is actively building.
+Disk fell below the between-region 16 GiB floor while California held about
+5 GiB of active extraction scratch. Rechecked graph/geometry/fuel/seam hashes
+for all available accepted Atlantic/Quebec candidate outputs, then removed
+only their old generated legal/services scratch (about 2.9 GiB). All locked
+source PBFs, sealed outputs and California's current work are preserved.
+Cleanup record: candidate03/canary-scratch-cleanup.json. Disk remained about
+14 GiB during the active build; do not describe the resource constraint as
+fully resolved. California scratch should be reclaimed by the factory only
+after its output verifies, and the existing floor still applies before the
+next region.
+
+Routing Final Refinement reports the shared seam-membership selection fault
+reproduced and corrected locally, with 65 targeted tests and 18 regression
+requests passing; long reverse routing remains under investigation. No new
+routing preview has been accepted or deployed by this task.
