@@ -66,7 +66,7 @@ const MIN_STOP_SEPARATION_M = 800;
 const MIN_FORWARD_PROGRESS_M = 8_000;
 const MIN_DESTINATION_FUEL_CLEARANCE_M = 5_000;
 /** Bumped when fuel-selection / ranking contracts change. Clients may assert. */
-const FUEL_CHAIN_SERVICE_VERSION = "2026-09-07.rural-before-urban-foundation-preserving.30";
+const FUEL_CHAIN_SERVICE_VERSION = "2026-09-07.fuel-is-route-foundation-reuse.31";
 const FUEL_SELECTION_POLICY = "minimum_stops_rural_before_urban_then_75pct";
 /**
  * Preserve the first three quarters of each usable tank for the requested
@@ -2430,24 +2430,62 @@ async function planFuelChainOnRuntime({
     : returnedStopLimit;
   if (!graphOnlyFeeler && !probeFirstReachableStation && foundationRoute) {
     planningStage = "foundation_route_partition";
-    const reusedFoundation = foundationFuelPlan({
+    const completedRoutes = [
       foundationRoute,
-      targets,
-      start,
-      firstLegMaxMeters,
-      usableRangeMeters,
-      destinationFuelUsedLimitMeters,
-      minimumFuelStops,
-      requireFuelStopBeforeEnd,
-      requiredFirstStationId,
-      preferredStationIds,
-      excludedStationIds,
-      maxStops: searchStopLimit,
-      runtime,
-      allowUnknown: !!(policy && policy.motorizedUnknown),
-      urbanBoxes,
-      destination
-    });
+      ...(Array.isArray(foundationRoute._completedFoundationRoutes)
+        ? foundationRoute._completedFoundationRoutes
+        : [])
+    ];
+    const seenFoundations = new Set();
+    const rankedFoundations = completedRoutes.filter((route) => {
+      if (!route || route.status !== "complete" || !Array.isArray(route.segments)) return false;
+      const signature = route.segments.map((segment) => String(segment.edgeId || "")).join(">");
+      if (!signature || seenFoundations.has(signature)) return false;
+      seenFoundations.add(signature);
+      return true;
+    }).sort((a, b) =>
+      Number(b.stats && b.stats.dirtPercent || 0) -
+        Number(a.stats && a.stats.dirtPercent || 0) ||
+      Number(a.distanceMeters || Infinity) - Number(b.distanceMeters || Infinity)
+    );
+    const foundationAttempts = [];
+    let reusedFoundation = null;
+    let reusedFoundationRoute = null;
+    for (const candidateRoute of rankedFoundations) {
+      if (Number.isFinite(deadline) && Date.now() >= deadline) break;
+      targets.prepareDiagnostics.foundationPartitionFailure = null;
+      const candidatePlan = foundationFuelPlan({
+        foundationRoute: candidateRoute,
+        targets,
+        start,
+        firstLegMaxMeters,
+        usableRangeMeters,
+        destinationFuelUsedLimitMeters,
+        minimumFuelStops,
+        requireFuelStopBeforeEnd,
+        requiredFirstStationId,
+        preferredStationIds,
+        excludedStationIds,
+        maxStops: searchStopLimit,
+        runtime,
+        allowUnknown: !!(policy && policy.motorizedUnknown),
+        urbanBoxes,
+        destination
+      });
+      foundationAttempts.push({
+        routeMeters: Math.round(Number(candidateRoute.distanceMeters) || 0),
+        dirtPercent: Number(candidateRoute.stats && candidateRoute.stats.dirtPercent) || 0,
+        matchedStations: Number(targets.prepareDiagnostics.foundationPlacementCount) || 0,
+        feasible: !!candidatePlan,
+        failure: candidatePlan ? null :
+          (targets.prepareDiagnostics.foundationPartitionFailure || "no_eligible_on_route_station")
+      });
+      if (candidatePlan) {
+        reusedFoundation = candidatePlan;
+        reusedFoundationRoute = candidateRoute;
+        break;
+      }
+    }
     fuelDecisionDiagnostics.foundationLayout = targets.prepareDiagnostics.foundationLayout || null;
     fuelDecisionDiagnostics.foundationPlacementCount =
       Number(targets.prepareDiagnostics.foundationPlacementCount) || 0;
@@ -2455,6 +2493,7 @@ async function planFuelChainOnRuntime({
       targets.prepareDiagnostics.foundationPlacementAlongMeters || [];
     fuelDecisionDiagnostics.foundationPartitionFailure =
       targets.prepareDiagnostics.foundationPartitionFailure || null;
+    fuelDecisionDiagnostics.foundationCandidateAttempts = foundationAttempts;
     if (reusedFoundation) {
       const reusedCandidates = reusedFoundation.stationCandidates || [];
       const reusedResponse = {
@@ -2491,7 +2530,13 @@ async function planFuelChainOnRuntime({
           timeBudgetExceeded: false,
           deadlinePhase: null,
           cancelled: false,
-          selectedReason: "foundation_route_fuel"
+          selectedReason: reusedFoundationRoute === foundationRoute
+            ? "foundation_route_fuel"
+            : "fuel_feasible_complete_profile_candidate",
+          originalFoundationRouteMeters: Math.round(Number(foundationRoute.distanceMeters) || 0),
+          originalFoundationDirtPercent:
+            Number(foundationRoute.stats && foundationRoute.stats.dirtPercent) || 0,
+          fuelAwareFoundationAlternative: reusedFoundationRoute !== foundationRoute
         }, {
           stationsReachableWithinRange: reusedCandidates.length,
           candidatesEvaluated: reusedCandidates.length,
@@ -4797,8 +4842,9 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
 
   // Do not offer auxiliary fuel for an incomplete computation. A timeout is a
   // retryable planning failure; only an exhausted graph search proves a gap.
+  const plannedStatus = fuelPlanStatus(planned);
   return {
-    status: fuelPlanStatus(planned),
+    status: plannedStatus,
     error: planned.error || null,
     message: planned.message || null,
     serviceVersion: FUEL_CHAIN_SERVICE_VERSION,
@@ -4807,6 +4853,10 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
     stops: planned.stops || [],
     graphMeters: planned.graphMeters || [],
     routes: planned.routes || [],
+    // If fuel proof fails, give the client the exact already-built rider line
+    // for advisory display. This prevents a second identical 20-second Dirt
+    // search merely to repaint the route after an honest fuel failure.
+    foundationRoute: plannedStatus === "complete" ? undefined : foundationRoute || undefined,
     stationCandidates: planned.stationCandidates || [],
     firstReachableStationMeters: planned.firstReachableStationMeters,
     destinationEscapeMeters,

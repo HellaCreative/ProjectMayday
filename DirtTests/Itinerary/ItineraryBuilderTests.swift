@@ -128,6 +128,25 @@ struct ItineraryBuilderTests {
         #expect(source.fuelChainRequests[0].fuel.ensureDestinationFuelEscape == true)
     }
 
+    @Test func failedCombinedFuelProofReusesReturnedFoundationWithoutSearchingAgain() async throws {
+        let points = [point(0), point(1)]
+        let source = FakeRoutingSource(name: "live")
+        source.supportsCombinedFuelPlanning = true
+        source.distances[key(points[0], points[1])] = 657_000
+        source.returnFuelUnknownWithFoundation = true
+
+        let result = await build(points, source: source, usable: 234_000, profile: .dirt)
+
+        #expect(source.fuelChainRequests.count == 1)
+        #expect(source.routeRequests.isEmpty)
+        #expect(result.legs.count == 1)
+        #expect(result.legs.first?.response.distanceMeters == 657_000)
+        #expect(result.riderLegStatus.values.contains {
+            if case .fuelUnknown = $0 { return true }
+            return false
+        })
+    }
+
     @Test func crossProvinceFuelPlanAdvancesOnePumpPerFreshWindow() async throws {
         let start = RouteCoordinate(longitude: -63.340241, latitude: 44.764845)
         let destination = RouteCoordinate(longitude: -76.493059, latitude: 44.269080)
@@ -1329,6 +1348,7 @@ private final class FakeRoutingSource: RoutingSource {
     var fuelChainError: Error?
     var fuelChainErrorAfterPlanCount: Int?
     var fuelChainPlanCount = 0
+    var returnFuelUnknownWithFoundation = false
     var suspendNextRoute = false
     var pendingRouteContinuation: CheckedContinuation<Void, Never>?
 
@@ -1369,6 +1389,24 @@ private final class FakeRoutingSource: RoutingSource {
             )
         }
         fuelChainPlanCount += 1
+        if returnFuelUnknownWithFoundation,
+           let meters = distances[key(pair.0, pair.1)] {
+            return FuelChainResponse(
+                status: "unknown",
+                error: "window_time_budget",
+                message: "Fuel proof timed out.",
+                regionIds: ["test"],
+                stops: [],
+                graphMeters: nil,
+                diagnostics: FuelChainDiagnostics(
+                    strategy: "fake-timeout", states: 1, dijkstraPops: 1,
+                    matchedFuel: 0, elapsedMs: 1
+                ),
+                routes: [],
+                foundationRoute: response(from: pair.0, to: pair.1, meters: meters),
+                windowComplete: false
+            )
+        }
         if let limit = fuelChainErrorAfterPlanCount,
            fuelChainPlanCount > limit,
            let fuelChainError {

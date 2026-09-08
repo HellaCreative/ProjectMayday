@@ -974,6 +974,7 @@ final class ItineraryBuilder {
             var attempts = 0
             var lastRejectedStationID: String?
             var lastRejectedReason: String?
+            var advisoryFoundationRoute: RouteResponse?
             func finishWithFuelAdvisory(_ issue: FuelAdvisoryIssue) async -> BuiltItinerary {
                 await buildAdvisoryRemainder(
                     itinerary: itinerary,
@@ -990,6 +991,7 @@ final class ItineraryBuilder {
                     fuel: fuel,
                     source: source,
                     history: history,
+                    firstRoute: advisoryFoundationRoute,
                     onProgress: onProgress
                 )
             }
@@ -1180,6 +1182,15 @@ final class ItineraryBuilder {
                     return await finishWithFuelAdvisory(.unknown(
                         "Fuel planning unavailable: \(error.localizedDescription)"
                     ))
+                }
+
+                if let returnedFoundation = chain.foundationRoute,
+                   returnedFoundation.isComplete {
+                    advisoryFoundationRoute = returnedFoundation
+                    RoutingDebugLog.shared.event(
+                        "fuel foundation retained riderLeg=\(riderLeg.id) "
+                            + "meters=\(Int(returnedFoundation.distanceMeters ?? 0))"
+                    )
                 }
 
                 if chain.isFuelUnknown {
@@ -1612,6 +1623,7 @@ final class ItineraryBuilder {
         fuel: FuelRangePrefs.Snapshot,
         source: any RoutingSource,
         history initialHistory: EdgeHistory,
+        firstRoute: RouteResponse? = nil,
         onProgress: @MainActor (BuiltItinerary) -> Void
     ) async -> BuiltItinerary {
         var committed = initial
@@ -1650,18 +1662,27 @@ final class ItineraryBuilder {
                 effectiveProfile: profile
             )
             do {
-                let response = try await source.route(routeRequest(
-                    profile: profile,
-                    allowUnknown: allowUnknown,
-                    from: firstFrom,
-                    to: destination,
-                    routeSeed: riderLeg.routeSeed,
-                    avoidEdgeIDs: itinerary.impassableEdgeIDs,
-                    maxPathMeters: nil,
-                    history: history,
-                    avoidMotorways: avoidMotorways,
-                    preferBackRoads: riderLeg.preferBackRoads
-                ))
+                let response: RouteResponse
+                if index == startIndex, let firstRoute, firstRoute.isComplete {
+                    response = firstRoute
+                    RoutingDebugLog.shared.event(
+                        "fuel advisory foundation reused riderLeg=\(riderLeg.id) "
+                            + "meters=\(Int(firstRoute.distanceMeters ?? 0))"
+                    )
+                } else {
+                    response = try await source.route(routeRequest(
+                        profile: profile,
+                        allowUnknown: allowUnknown,
+                        from: firstFrom,
+                        to: destination,
+                        routeSeed: riderLeg.routeSeed,
+                        avoidEdgeIDs: itinerary.impassableEdgeIDs,
+                        maxPathMeters: nil,
+                        history: history,
+                        avoidMotorways: avoidMotorways,
+                        preferBackRoads: riderLeg.preferBackRoads
+                    ))
+                }
                 let meters = try responseMeters(response)
                 let resetsAtWaypoint = committed.waypointFuelStops.values.contains {
                     $0.coordinate == destination

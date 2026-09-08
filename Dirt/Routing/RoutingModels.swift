@@ -576,6 +576,10 @@ struct FuelChainResponse: Codable, Sendable {
     /// chain. There is one response per returned hop, plus the destination hop
     /// when windowComplete is true.
     var routes: [RouteResponse]? = nil
+    /// Exact rider-profile foundation already built by a failed live fuel
+    /// request. Advisory display reuses it instead of searching the same line
+    /// a second time.
+    var foundationRoute: RouteResponse? = nil
     var stationCandidates: [FuelStationCandidate]? = nil
     var firstReachableStationMeters: Double? = nil
     var destinationEscapeMeters: Double? = nil

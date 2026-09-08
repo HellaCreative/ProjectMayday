@@ -206,6 +206,11 @@ is claimed.
   required destination reserve.
 - Reuse and partition the proved profile foundation when a safe on-route pump
   exists. Do not reroute the profile repeatedly merely because fuel is enabled.
+- Fuel is part of the complete route, not a post-route detour. If the first
+  foundation cannot be partitioned safely, rank the other complete profile
+  routes produced by that same search and select the highest-quality
+  fuel-feasible line. Do not stitch independently routed paved-heavy pump legs
+  onto the rejected foundation.
 - Every rider or committed fuel anchor receives a fresh planning window. The
   prior waypoint's elapsed time never consumes the next waypoint's allowance.
 - A pump is committed only after its profile approach is proved in time. If a
@@ -215,7 +220,9 @@ is claimed.
   transport failure, missing/unreadable fuel, or incomplete proof is `unknown`.
   Never turn one into the other.
 - Fuel is advisory to geometry. If fuel proof fails, finish the road route,
-  preserve prior pumps, and attach the warning to the exact affected rider leg.
+  preserve prior pumps, attach the warning to the exact affected rider leg, and
+  reuse the foundation returned by the fuel response instead of issuing the
+  same direct route search again.
   Start and export remain available with the existing acknowledgement rules.
 - Profile or Allow Unknown edits remain inside their owning primary rider leg
   and necessary fuel boundary. Later primary rider legs remain unchanged until

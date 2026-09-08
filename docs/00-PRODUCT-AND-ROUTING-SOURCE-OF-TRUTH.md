@@ -376,9 +376,18 @@ Fuel planning constructs the itinerary linearly:
 
 `Point 1 → F1 → F2 → … → Point 2 → …`
 
-It does not generate a disposable Point 1 → Point 2 route and then force the
-rider away from and back onto that geometry. A selected pump becomes the next
-anchor; the next section is created forward from that pump.
+Fuel is part of that route, not an add-on or a detour. The planner builds the
+selected profile foundation once and first tries to partition that exact road
+line at legally accessible packed pumps. If it is not fuel-feasible, the planner
+chooses the highest-quality fuel-feasible complete profile route from the same
+search before considering a lower-quality result. It does not generate a
+disposable Point 1 → Point 2 route, repeat that search, or independently stitch
+paved-heavy station legs onto it. A selected pump becomes an ordinary forward
+anchor on the complete route.
+
+If fuel proof still cannot finish, the service returns the exact already-built
+foundation with the honest fuel warning. The client reuses that response for
+advisory display instead of repeating the same direct route search.
 
 Unchanged built sections are reused according to ownership. A visible-stage
 profile or access edit inherits the proven fuel state at that stage's departure,

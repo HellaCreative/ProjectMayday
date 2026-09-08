@@ -2652,11 +2652,15 @@ async function routeOnRuntime(body, graphResolution, runtime) {
       adventureSearchOpts
     );
     lastSearchDiagnostics = diagnostics;
+    const completedDirtAtCeiling = profile === "dirt" && path && path.searchMeta &&
+      path.searchMeta.searchCeilingReachedWithCompletedCandidate === true;
     const incompleteDirtPath = profile === "dirt" && path && path.searchMeta &&
-      path.searchMeta.timedOut === true;
+      path.searchMeta.timedOut === true && !completedDirtAtCeiling;
     primarySearchOutcome = incompleteDirtPath
       ? (path.searchMeta.pass2Outcome || diagnostics.outcome || "timeCap")
-      : path ? "completed" : (diagnostics.outcome || "noPath");
+      : completedDirtAtCeiling
+        ? (path.searchMeta.pass2Outcome || diagnostics.outcome || "timeCap")
+        : path ? "completed" : (diagnostics.outcome || "noPath");
     // Defence in depth: a Dirt response is successful only when its quality
     // search completed. Never expose a partial/paved candidate as a complete
     // Dirt route merely because it happened to reach the destination first.
@@ -2976,6 +2980,12 @@ async function routeOnRuntime(body, graphResolution, runtime) {
       message: "Balanced refinement reached its planning limit. A legal, range-safe road route was kept instead of failing the ride."
     });
   }
+  if (path.searchMeta && path.searchMeta.searchCeilingReachedWithCompletedCandidate) {
+    warnings.push({
+      code: "dirt_quality_search_ceiling",
+      message: "Dirt reached its search ceiling after completing this legal route. The route is usable, but the search did not prove that no higher-Dirt alternative exists."
+    });
+  }
   const qualityWarning = routeQualityWarning(quality);
   if (qualityWarning) warnings.push(qualityWarning);
   if (startMatch.distanceM > 1 || endMatch.distanceM > 1) {
@@ -3039,7 +3049,9 @@ async function routeOnRuntime(body, graphResolution, runtime) {
     cleanUnpavedFallbackUsed,
     settlementFallbackUsed:
       settlementFallbackUsed || !!(path.searchMeta && path.searchMeta.settlementFallbackUsed),
-    searchOutcome: "completed",
+    searchOutcome: path.searchMeta && path.searchMeta.searchCeilingReachedWithCompletedCandidate
+      ? (path.searchMeta.pass2Outcome || "timeCap")
+      : "completed",
     cleanMetroMultiplier
   }), snapDiag);
   routeDiagnostics.snapMs = snapMs;
@@ -3050,7 +3062,7 @@ async function routeOnRuntime(body, graphResolution, runtime) {
   routeDiagnostics.corridorClipDiagnosticSkipped = !includeCorridorClipDiagnostic;
   routeDiagnostics.journeyQuality = quality;
 
-  return {
+  const routeResult = {
     status: "complete",
     routeId: "route-" + Date.now().toString(36),
     profile,
@@ -3119,6 +3131,46 @@ async function routeOnRuntime(body, graphResolution, runtime) {
       }
     }
   };
+  if (Array.isArray(path._completedPathViews) && path._completedPathViews.length) {
+    const candidateRoutes = path._completedPathViews.map((candidate, index) => {
+      const candidateBacktrack = backtrackSummary(candidate, priorEdgeIds);
+      const candidateRestricted = restrictedSummary(candidate);
+      return {
+        status: "complete",
+        routeId: `${routeResult.routeId}-fuel-candidate-${index}`,
+        profile,
+        vehicle: routeResult.vehicle,
+        accessPolicy: policy,
+        geometry: candidate.geometry,
+        distanceMeters: Math.round(candidate.distanceMeters),
+        ...candidateBacktrack,
+        ...candidateRestricted,
+        estimatedMovingSeconds: Math.round(candidate.movingSeconds),
+        estimatedElapsedSeconds: Math.round(candidate.movingSeconds * 1.15),
+        stats: candidate.stats,
+        segments: candidate.segments,
+        maneuvers: [],
+        warnings: [],
+        debug: {
+          ...routeResult.debug,
+          profileCost: candidate.profileCost,
+          searchMeta: {
+            ...(routeResult.debug.searchMeta || {}),
+            fuelCandidateIndex: index,
+            dirtPercent: candidate.stats && candidate.stats.dirtPercent
+          }
+        }
+      };
+    });
+    // Internal hand-off only. The fuel endpoint calls routeOnRuntime directly
+    // and can inspect every complete path produced by that one search. Normal
+    // route JSON remains free of this potentially large array.
+    Object.defineProperty(routeResult, "_completedFoundationRoutes", {
+      value: candidateRoutes,
+      enumerable: false
+    });
+  }
+  return routeResult;
 }
 
 function findPath(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds, searchOpts) {

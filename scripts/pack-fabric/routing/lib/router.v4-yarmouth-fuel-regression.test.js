@@ -17,6 +17,17 @@ process.env.ROUTING_VERIFIED_GRAPH_PATH_OVERRIDES = JSON.stringify({
 
 const { fuelChainRequest } = require("./fuel-chain");
 
+function assertNoMeaningfulRetrace(routes) {
+  const edgeIds = routes.flatMap((route) => (route.segments || [])
+    .map((segment) => String(segment.edgeId || ""))
+    .filter(Boolean));
+  const collapsed = edgeIds.filter((edgeId, index) =>
+    index === 0 || edgeId !== edgeIds[index - 1]
+  );
+  assert.equal(new Set(collapsed).size, collapsed.length,
+    "fuel-aware route must not return to an earlier road edge");
+}
+
 test("reported V4 Yarmouth route keeps Dirt and rejects the Coast Gas return", {
   timeout: 30_000
 }, async () => {
@@ -207,4 +218,93 @@ test("reported V4 southwest route preserves its Dirt foundation around fuel", {
     })))}`);
   assert.equal(result.diagnostics.strategy, "foundation_route_partition");
   assert.equal(Number(result.diagnostics.profileRouteAttempts || 0), 0);
+});
+
+test("white-device 260 km profile reuses one Dirt search and proves its fuel-aware route", {
+  timeout: 30_000
+}, async () => {
+  const fuel = JSON.parse(fs.readFileSync(path.join(packRoot, "fuel.v1.json"), "utf8"));
+  const started = Date.now();
+  const result = await fuelChainRequest({
+    profile: "dirt",
+    locations: [
+      { lat: 44.76484, lon: -63.34023 },
+      { lat: 43.47454, lon: -65.60197 }
+    ],
+    vehicle: "dual-sport-motorcycle",
+    accessPolicy: { motorizedPermissive: true, motorizedUnknown: false },
+    fuel: {
+      usableRangeMeters: 234_000,
+      firstLegMaxMeters: 234_000,
+      routeFirstPlan: true,
+      ensureDestinationFuelEscape: true,
+      windowMaxStops: 4,
+      allowPartialWindow: true,
+      windowTimeBudgetMs: 30_000,
+      riderLegId: "white-device-v4-260km"
+    },
+    options: { routeSeed: 0, backtrackFactor: 4 }
+  }, {
+    loadFuelForLocations: async () => ({
+      ok: true,
+      regionIds: ["ns"],
+      stations: fuel.stations || [],
+      packIdentity: []
+    })
+  });
+
+  const elapsedMs = Date.now() - started;
+  assert.equal(result.status, "complete");
+  assert.equal(result.windowComplete, true);
+  assert.equal(result.diagnostics.strategy, "foundation_route_partition");
+  assert.equal(result.diagnostics.routeFirstAttempted, true);
+  assert.ok(["completed", "timeCap"].includes(result.diagnostics.routeFirstSearchOutcome),
+    "a ceiling result is valid only when the returned route is already complete and marked honestly");
+  assert.equal(Number(result.diagnostics.profileRouteAttempts || 0), 0,
+    "fuel planning must not independently reroute station legs");
+  assert.equal(result.diagnostics.originalFoundationDirtPercent, 67);
+  assert.ok(result.diagnostics.originalFoundationRouteMeters >= 650_000);
+  assert.equal(result.diagnostics.fuelAwareFoundationAlternative, true);
+
+  const attempts = result.diagnostics.foundationCandidateAttempts || [];
+  const selectedAttempt = attempts.find((attempt) => attempt.feasible);
+  assert.ok(selectedAttempt, "one complete Dirt candidate must be fuel-feasible");
+  assert.ok(attempts.slice(0, attempts.indexOf(selectedAttempt)).every((attempt) =>
+    attempt.feasible === false && attempt.dirtPercent >= selectedAttempt.dirtPercent
+  ), "every higher-dirt complete candidate must be proved infeasible first");
+
+  const routes = result.routes || [];
+  assert.equal(routes.length, (result.stops || []).length + 1);
+  assert.equal(result.stops.length, result.diagnostics.foundationMinimumFeasibleStops);
+  assert.equal(result.diagnostics.foundationMinimumStopProof, true);
+  assert.deepEqual([
+    ...(result.diagnostics.foundationConstraintIneligibleStopCounts || []),
+    ...(result.diagnostics.foundationFewerStopCountsExhausted || [])
+  ].sort((a, b) => a - b), [1],
+  "every smaller stop count must be excluded by the range lower bound or exhaustive search");
+  routes.forEach((route) => {
+    assert.ok(route.distanceMeters <= 234_001,
+      `fuel leg exceeds actual usable range: ${route.distanceMeters}m`);
+  });
+  assert.ok(
+    routes.at(-1).distanceMeters <=
+      result.diagnostics.foundationDestinationFuelUsedLimitMeters + 1,
+    "destination leg must preserve the proved reserve/escape allowance"
+  );
+  const meters = routes.reduce((sum, route) => sum + Number(route.distanceMeters || 0), 0);
+  const knownDirtPercent = routes.reduce((sum, route) => sum +
+    Number(route.distanceMeters || 0) * Number(route.stats && route.stats.dirtPercent || 0), 0
+  ) / meters;
+  assert.ok(knownDirtPercent >= 55,
+    `fuel-aware Dirt route regressed to ${knownDirtPercent.toFixed(1)}%`);
+  assertNoMeaningfulRetrace(routes);
+  assert.ok(routes.flatMap((route) => route.segments || []).every((segment) =>
+    !String(segment.edgeId || "").startsWith("fuel-access:") &&
+    segment.surfaceClass !== "connector"
+  ), "fuel-aware route must contain only packed road geometry");
+  assert.ok(elapsedMs < 30_000, `request exceeded fuel window: ${elapsedMs}ms`);
+  assert.equal(result.diagnostics.timeBudgetExceeded, false);
+  assert.ok((result.packIdentity || []).some((identity) =>
+    identity.releaseId === "fabric-v4-20260907-01"
+  ));
 });
