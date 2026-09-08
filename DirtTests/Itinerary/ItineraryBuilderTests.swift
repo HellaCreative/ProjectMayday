@@ -128,6 +128,22 @@ struct ItineraryBuilderTests {
         #expect(source.fuelChainRequests[0].fuel.ensureDestinationFuelEscape == true)
     }
 
+    @Test func atlanticDevRequestsCombinedFuelGeometry() async throws {
+        #if DIRT_DEVELOPMENT
+        let start = RouteCoordinate(longitude: -63.340241, latitude: 44.764845)
+        let destination = RouteCoordinate(longitude: -65.856301, latitude: 47.762610)
+        let source = FakeRoutingSource(name: "live")
+        source.supportsCombinedFuelPlanning = true
+        source.distances[key(start, destination)] = 250_000
+        let result = await build([start, destination], source: source, usable: 333_000)
+        #expect(result.legs.count == 1)
+        #expect(source.routeRequests.isEmpty)
+        #expect(source.fuelChainRequests.count == 1)
+        #expect(source.fuelChainRequests[0].fuel.windowMaxStops == 12)
+        #expect(source.fuelChainRequests[0].fuel.forwardFeeler == false)
+        #endif
+    }
+
     @Test func crossProvinceFuelPlanAdvancesOnePumpPerFreshWindow() async throws {
         let start = RouteCoordinate(longitude: -63.340241, latitude: 44.764845)
         let destination = RouteCoordinate(longitude: -76.493059, latitude: 44.269080)

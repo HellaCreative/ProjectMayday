@@ -1101,10 +1101,20 @@ final class ItineraryBuilder {
                 // A multi-stop response is only safe when every generated hop
                 // uses the same riding profile and one regional runtime can
                 // return all of the corresponding route geometry.
+                // DEV NS/NB uses one fuel-aware regional graph. Request its
+                // complete ordinary test itinerary rather than graph-only anchors.
+                #if DIRT_DEVELOPMENT
+                let integratedAtlantic = Set(GraphPackStore.endpointProvinceIds(containingAny: [
+                    current.locationCoordinate, riderDestination.coordinate.locationCoordinate
+                ])) == Set(["ns", "nb"])
+                #else
+                let integratedAtlantic = false
+                #endif
                 let canConsumeCombinedWindow = source.supportsCombinedFuelPlanning
                     && riderLeg.hopOverrides.isEmpty
                     && riderLeg.hopAllowUnknown.isEmpty
-                    && !crossesProvinceBoundary
+                    && (!crossesProvinceBoundary || integratedAtlantic)
+                let requestedWindowStops = canConsumeCombinedWindow ? (integratedAtlantic ? 12 : 4) : 1
                 let chain: FuelChainResponse
                 let requestBudgetMs = min(
                     Self.liveFuelWindowBudgetMs,
@@ -1121,7 +1131,7 @@ final class ItineraryBuilder {
                         + "requiredStation=\(requiredStationID ?? "-") "
                         + "windowAnchor=\(builtLegs.last?.endsAtFuelStop == nil ? "rider" : "pump") "
                         + "crossProvince=\(crossesProvinceBoundary ? 1 : 0) "
-                        + "windowStops=\(canConsumeCombinedWindow ? 4 : 1) "
+                        + "windowStops=\(requestedWindowStops) "
                         + "budgetMs=\(requestBudgetMs)"
                 )
                 do {
@@ -1144,11 +1154,11 @@ final class ItineraryBuilder {
                         arrivalEdgeId: history.arrivalEdgeID,
                         backtrackFactor: 4,
                         excludedStationIds: Array(excludedStations),
-                        windowMaxStops: canConsumeCombinedWindow ? 4 : 1,
+                        windowMaxStops: requestedWindowStops,
                         allowPartialWindow: true,
                         windowTimeBudgetMs: requestBudgetMs,
                         requiredFirstStationId: requiredStationID,
-                        forwardFeeler: crossesProvinceBoundary,
+                        forwardFeeler: crossesProvinceBoundary && !canConsumeCombinedWindow,
                         routeFirstPlan: source.supportsCombinedFuelPlanning,
                         ensureDestinationFuelEscape: source.supportsCombinedFuelPlanning
                             && index == itinerary.legs.count - 1

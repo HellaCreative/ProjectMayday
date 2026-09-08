@@ -1,0 +1,107 @@
+[
+  {
+    "id": "ns-cape-breton",
+    "reconstructedFromLogs": true,
+    "body": {
+      "profile": "dirt",
+      "locations": [
+        {
+          "lat": 44.76483570134842,
+          "lon": -63.34025875229308
+        },
+        {
+          "lat": 46.99676,
+          "lon": -60.4836
+        }
+      ],
+      "vehicle": "dual-sport-motorcycle",
+      "accessPolicy": {
+        "motorizedPermissive": true,
+        "motorizedUnknown": false
+      },
+      "options": {
+        "mapZoom": 10.5
+      },
+      "fuel": {
+        "usableRangeMeters": 333000,
+        "firstLegMaxMeters": 333000,
+        "minimumFuelStops": 0,
+        "windowMaxStops": 4,
+        "allowPartialWindow": true,
+        "windowTimeBudgetMs": 20000,
+        "routeFirstPlan": true,
+        "ensureDestinationFuelEscape": true
+      }
+    }
+  },
+  {
+    "id": "quebec-device-pin",
+    "reconstructedFromLogs": true,
+    "body": {
+      "profile": "dirt",
+      "locations": [
+        {
+          "lat": 44.76483570134842,
+          "lon": -63.34025875229308
+        },
+        {
+          "lat": 46.112541326743006,
+          "lon": -74.52358866884316
+        }
+      ],
+      "vehicle": "dual-sport-motorcycle",
+      "accessPolicy": {
+        "motorizedPermissive": true,
+        "motorizedUnknown": false
+      },
+      "options": {
+        "mapZoom": 9.6
+      },
+      "fuel": {
+        "usableRangeMeters": 333000,
+        "firstLegMaxMeters": 333000,
+        "minimumFuelStops": 0,
+        "windowMaxStops": 1,
+        "allowPartialWindow": true,
+        "windowTimeBudgetMs": 20000,
+        "routeFirstPlan": true,
+        "ensureDestinationFuelEscape": true
+      }
+    }
+  },
+  {
+    "id": "massachusetts-device-pin",
+    "reconstructedFromLogs": true,
+    "body": {
+      "profile": "dirt",
+      "locations": [
+        {
+          "lat": 44.76483570134842,
+          "lon": -63.34025875229308
+        },
+        {
+          "lat": 42.42887651518565,
+          "lon": -72.66903969731547
+        }
+      ],
+      "vehicle": "dual-sport-motorcycle",
+      "accessPolicy": {
+        "motorizedPermissive": true,
+        "motorizedUnknown": false
+      },
+      "options": {
+        "mapZoom": 10.3
+      },
+      "fuel": {
+        "usableRangeMeters": 333000,
+        "firstLegMaxMeters": 333000,
+        "minimumFuelStops": 0,
+        "windowMaxStops": 1,
+        "allowPartialWindow": true,
+        "windowTimeBudgetMs": 20000,
+        "routeFirstPlan": true,
+        "ensureDestinationFuelEscape": true
+      }
+    }
+  }
+]

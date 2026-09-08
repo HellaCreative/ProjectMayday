@@ -116,3 +116,12 @@ test("label memory guard returns incomplete with a bounded admitted label count"
   const result=search(graph([["A","B",1],["B","D",1]]),{maxLabels:1});
   assert.equal(result.state,"incomplete");assert.equal(result.reason,"label_limit");assert.equal(result.diagnostics.labels,1);
 });
+test('weighted candidate guidance preserves fuel feasibility and rural priority',()=>{
+ const g=graph([[0,1,2],[1,3,4],[0,2,3],[2,3,4]],[2]),edgeCost=a=>a.distanceMeters;
+ const lowerBounds=buildLowerBounds({graph:g,nodeCount:4,target:3,edgeCost,budget:budget()});
+ const r=searchResourcePath({graph:g,start:0,end:3,edgeCost,budget:budget(),lowerBounds,heuristicWeight:2,fuel:{usableRangeMeters:5,initialUsableMeters:3}});
+ assert.equal(r.state,'found');assert.deepEqual(r.arcs.map(a=>a.to),[2,3]);assert.equal(r.remainingUsableMeters,1);
+ const rural=searchResourcePath({graph:g,start:0,end:3,edgeCost,budget:budget(),lowerBounds,heuristicWeight:2,avoidanceCost:a=>a.to===1?1:0});
+ assert.deepEqual(rural.arcs.map(a=>a.to),[2,3]);
+ assert.throws(()=>searchResourcePath({graph:g,start:0,end:3,edgeCost,budget:budget(),heuristicWeight:Infinity}),/Heuristic weight/);
+});
