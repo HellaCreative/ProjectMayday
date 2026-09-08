@@ -16,8 +16,9 @@ const {proveFuel}=require("./fuel-proof");
 // Experimental single-region From Here integration. Road projections are
 // explicitly provisional station access; they never become physical entrance
 // proof. Caller supplies the experimental cost model, not a hidden final style.
-function buildFromHere({input,pack,geom,revision,stations,budget,edgeCost,objectiveId,
+function buildFromHere({input,pack,geom,revision,stations,budget,preparationBudget=budget,edgeCost,objectiveId,
   preparationCache=createPreparationCache(),reverseCostCache=createReverseCostCache(),stationMatchCache=createStationMatchCache(),stationRadiusMeters=150,endpointRadiusMeters=2000,maxFuelLabels=100000}) {
+  if(preparationBudget.snapshot().deadlineAtMs>budget.snapshot().deadlineAtMs)throw new TypeError("Preparation cannot outlive the request deadline");
   const request=normalizeRequest(input);
   if(request.mode!=="from_here")throw new TypeError("From Here requires exactly two fixed rider anchors");
   if(typeof edgeCost!=="function"||!objectiveId)throw new TypeError("Explicit experimental objective required");
@@ -34,7 +35,8 @@ function buildFromHere({input,pack,geom,revision,stations,budget,edgeCost,object
     return {request,provenance,road:fallback||{state:"unverified"},fuel:{state:"unverified",reason},
       stage,stationDiagnostics,timing:{...timing,totalMs:Math.round(performance.now()-at)},search:budget.snapshot()};
   }
-  const prepared=preparationCache.prepare({pack,geom,revision,areas:classification.areas,budget});
+  const prepared=preparationCache.prepare({pack,geom,revision,areas:classification.areas,budget:preparationBudget});
+  provenance.preparationWork={...preparationBudget.snapshot(),separateAllowance:preparationBudget!==budget};
   if(prepared.state!=="complete")return incomplete(prepared.reason);
   timing.preparationMs=Math.round(performance.now()-at);provenance.preparationCacheHit=prepared.cacheHit;
   const {index,urban}=prepared.prepared;
@@ -93,7 +95,7 @@ function buildFromHere({input,pack,geom,revision,stations,budget,edgeCost,object
   const reverse=reverseCostCache.prepare({graph,revision,edgeCost,budget});
   provenance.reversePreparationCacheHit=reverse.cacheHit;
   if(reverse.state!=="complete")return incomplete(reverse.reason);
-  const bounds=buildLowerBounds({graph,nodeCount:graph.nodeCount,target:end,edgeCost,budget,reverseCosts:reverse.reverseCosts});
+  const bounds=buildLowerBounds({graph,nodeCount:graph.nodeCount,target:end,edgeCost,budget,reverseCosts:reverse.reverseCosts,stopAt:start});
   if(bounds.state!=="complete")return incomplete(bounds.reason);
   timing.reverseBoundsMs=Math.round(performance.now()-phase);
   stage="fuel_search";phase=performance.now();

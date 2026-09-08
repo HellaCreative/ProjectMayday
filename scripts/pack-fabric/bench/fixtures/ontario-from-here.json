@@ -1,0 +1,7 @@
+[
+ {"id":"nearby-cold","end":{"lat":45.13,"lon":-77.83},"range":300000},
+ {"id":"new-pin","end":{"lat":45.15,"lon":-77.86},"range":300000},
+ {"id":"pembroke-short-tank","end":{"lat":45.826,"lon":-77.11},"range":120000},
+ {"id":"mattawa-short-tank","end":{"lat":46.316,"lon":-78.7},"range":180000},
+ {"id":"north-bay-short-tank","end":{"lat":46.309,"lon":-79.46},"range":180000}
+]

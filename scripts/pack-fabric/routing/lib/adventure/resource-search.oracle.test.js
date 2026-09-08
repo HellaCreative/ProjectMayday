@@ -44,7 +44,8 @@ test("250 seeded directed fuel/turn/urban graphs agree with exhaustive state enu
       fuel:{usableRangeMeters:capacity,initialUsableMeters:initial},destinationEscapeMeters:escape};
     const expected=oracle({arcs,pumps,blocked,capacity,initial,escape});
     const lowerBounds=buildLowerBounds({graph,nodeCount:6,target:5,edgeCost,budget:work()});
-    for(const bounds of [null,lowerBounds]) {
+    const capped=buildLowerBounds({graph,nodeCount:6,target:5,edgeCost,budget:work(),stopAt:0});
+    for(const bounds of [null,lowerBounds,capped]) {
       const actual=searchResourcePath({...options,lowerBounds:bounds,budget:work()});
       assert.equal(actual.state,expected?"found":"exhausted",`scenario ${scenario}, bounds ${!!bounds}`);
       if(expected) {

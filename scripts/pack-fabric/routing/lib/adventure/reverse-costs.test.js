@@ -29,3 +29,15 @@ test('reverse costs cannot be reused across graph or cost identities',()=>{
  for(const changed of [{graph:chain(4)},{edgeCost:a=>2*a.distanceMeters},{nodeCount:5},{reverseCosts:{state:'incomplete'}}])
   assert.throws(()=>buildLowerBounds({...args,target:3,reverseCosts,...changed,budget:budget()}),/Reverse costs/);
 });
+test('early reverse stopping returns exact capped bounds, never false disconnection',()=>{
+ const graph={outgoing:n=>({0:[{to:1,distanceMeters:2}],1:[{to:2,distanceMeters:3}],3:[{to:0,distanceMeters:7}],4:[]}[n]||[])};
+ const args={graph,nodeCount:5,target:2,edgeCost};
+ const exact=buildLowerBounds({...args,budget:budget()});
+ const capped=buildLowerBounds({...args,stopAt:0,budget:budget()});
+ assert.equal(capped.coverage,'capped');assert.equal(capped.capCost,5);
+ assert.deepEqual([...capped.distances],[...exact.distances].map(d=>Math.min(d,5)));
+ assert.equal(capped.distances[4],5);
+ const unreachable=buildLowerBounds({...args,stopAt:4,budget:budget()});
+ assert.equal(unreachable.coverage,'exact');assert.equal(unreachable.distances[4],Infinity);
+ const zero=buildLowerBounds({...args,stopAt:2,budget:budget()});assert.deepEqual([...zero.distances],[0,0,0,0,0]);
+});

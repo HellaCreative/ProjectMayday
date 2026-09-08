@@ -162,3 +162,14 @@ test('station cache capacity bypasses caching without dropping stations',()=>{
  for(let i=0;i<2;i++){const r=build(f,{stationMatchCache});assert.equal(r.fuel.state,'provisional_station_access');assert.equal(r.provenance.stationMatchingCacheHit,false);assert.equal(r.stationDiagnostics.records.length,2);}
  assert.equal(stationMatchCache.diagnostics().entries,0);
 });
+test('explicit cold-preparation work allowance shares the request deadline and reports its work',()=>{
+ const f=fixture(),deadlineAtMs=Date.now()+10000;
+ const preparationBudget=createBudget({deadlineAtMs,maxExpansions:100000});
+ const requestBudget=createBudget({deadlineAtMs,maxExpansions:100000});
+ const r=build(f,{preparationBudget,budget:requestBudget});
+ assert.equal(r.road.state,'complete');assert.equal(r.provenance.preparationWork.separateAllowance,true);
+ assert.ok(r.provenance.preparationWork.expansions>0);
+ assert.throws(()=>build(f,{preparationBudget:createBudget({deadlineAtMs:deadlineAtMs+1,maxExpansions:100000}),budget:requestBudget}),/outlive/);
+ const failed=build(f,{preparationBudget:createBudget({deadlineAtMs,maxExpansions:1}),budget:createBudget({deadlineAtMs,maxExpansions:100000})});
+ assert.equal(failed.stage,'preparation');assert.equal(failed.fuel.reason,'expansion_limit');assert.equal(failed.search.expansions,0);
+});

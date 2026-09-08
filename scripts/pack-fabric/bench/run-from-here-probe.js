@@ -15,7 +15,7 @@ const hash=x=>crypto.createHash("sha256").update(x).digest("hex");
 const source={graphSha256:hash(bytes),geometrySha256:hash(geometry),fuelSha256:hash(fuelBytes)},revision=`${source.graphSha256}/${source.geometrySha256}`;
 const loadMs=Math.round(performance.now()-loadAt),preparationCache=createPreparationCache(),reverseCostCache=createReverseCostCache(),stationMatchCache=createStationMatchCache();
 const ratio=Number(process.env.REBUILD_PAVEMENT_WEIGHT||10),maxWork=Number(process.env.REBUILD_MAX_WORK||6000000);
-const cases=[{id:"southwest",end:{lat:43.47454,lon:-65.60197},range:300000},
+const cases=process.env.REBUILD_CASES_FILE?JSON.parse(fs.readFileSync(process.env.REBUILD_CASES_FILE,"utf8")):[{id:"southwest",end:{lat:43.47454,lon:-65.60197},range:300000},
   {id:"southwest-short-range",end:{lat:43.47454,lon:-65.60197},range:180000},
   {id:"nearby",end:{lat:44.812,lon:-63.155},range:300000},
   {id:"station-removed",end:{lat:43.47454,lon:-65.60197},range:300000,removed:"osm:n5296522350"},
@@ -33,8 +33,9 @@ for(let repeat=1;repeat<=repeats;repeat++)for(const c of cases.filter(c=>!proces
   const end=process.env.REBUILD_END?JSON.parse(process.env.REBUILD_END):c.end;
   const request={mode:"from_here",anchors:[{id:"start",...start},{id:"destination",...end}],
     legs:[{from:"start",to:"destination",profile:"dirt",allowUnknown:false}],fuel:{fullRangeMeters:c.range,reserveFraction:.1,initialUsableMeters:c.unknownInitial?null:c.range*.9}};
-  const at=performance.now();let result;
-  try {result=buildFromHere({input:request,pack,geom,stations:c.noStations?[]:stations.filter(s=>s.id!==c.removed),revision,preparationCache,reverseCostCache,stationMatchCache,budget:createBudget({deadlineAtMs:Date.now()+20000,maxExpansions:maxWork}),
+  const at=performance.now(),deadlineAtMs=Date.now()+20000;let result;
+  const preparationBudget=process.env.REBUILD_PREPARATION_WORK?createBudget({deadlineAtMs,maxExpansions:Number(process.env.REBUILD_PREPARATION_WORK)}):undefined;
+  try {result=buildFromHere({input:request,pack,geom,stations:c.noStations?[]:stations.filter(s=>s.id!==c.removed),revision,preparationCache,reverseCostCache,stationMatchCache,preparationBudget,budget:createBudget({deadlineAtMs,maxExpansions:maxWork}),
     objectiveId:`experimental-dirt-1-other-${ratio}`,edgeCost});}
   catch(error){result={state:"error",reason:error.message,stack:error.stack};process.exitCode=1;}
   const row={case:c.id,repeat,source,loadMs,maxWork,result,elapsedMs:Math.round(performance.now()-at),processPeakRssKiB:process.resourceUsage().maxRSS};

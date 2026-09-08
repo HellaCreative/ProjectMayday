@@ -628,3 +628,67 @@ work for new pins, then qualify longer Ontario routes. Reusing identical pins
 must not be advertised as eliminating new-destination preparation. No pack,
 restriction, live API or native changes; provisional station access and unfinished
 Dirt candidate quality remain outstanding.
+
+## First-attempt Ontario builds and new destinations — September 8, 2026
+
+Reverse guidance can now stop when the request start is settled. If its settled
+cost is L, every remaining distance is at least L, so the returned heuristic is
+min(exact relaxed distance, L). Unreachable-but-unexplored nodes receive L, not
+Infinity. This preserves admissibility/consistency without excluding roads or
+limiting ride length. The forward fuel/turn search is unchanged. Saturation checks
+the shared budget every 4,096 array entries. Results distinguish capped guidance
+from exact full-graph guidance; an unreachable start still requires exhaustion.
+The independent 250-network oracle now compares plain, exact-guided and capped-
+guided searches: 750 comparisons, including urban priority, fuel and turn rules.
+
+From Here accepts an explicit preparation work budget, defaulting to its existing
+shared budget. When provided, its deadline may not exceed the request deadline.
+Cold regional index work is reported separately in provenance and included in
+request wall time. No hidden clock reset or automatic unbounded allowance was
+introduced. The Ontario experiment explicitly uses 20 M preparation work and
+6 M route work under the same 20-second deadline; default callers retain their
+existing allowance. This is phase accounting, not a claim that cold work vanished.
+
+Five Ontario requests ran with separately prewarmed indexing, then the same five
+ran in a fresh process without prewarming using the explicit preparation budget.
+Both batches completed. In the latter batch the first request included 907 ms /
+12.14 M regional preparation operations and finished in 5,683 ms. Its remaining
+request work was 4.89 M, within the unchanged 6 M route allowance. Pack decoding
+is excluded, but all preparation, station matching, routing, geometry and fuel
+proof are included. Subsequent cases changed the destination pin, invalidating
+reverse topology each time; they are not identical-request cache hits.
+
+| Ontario case from Bancroft area | Distance | Refills | Total time | Route work |
+| --- | ---: | ---: | ---: | ---: |
+| Nearby, cold | 16.28 km | 0 | 5,683 ms | 4.89 M |
+| New nearby pin | 21.18 km | 0 | 932 ms | 4.68 M |
+| Pembroke, 120 km full range | 180.39 km | 1 | 997 ms | 4.75 M |
+| Mattawa, 180 km full range | 424.39 km | 4 | 1,114 ms | 5.40 M |
+| North Bay, 180 km full range | 364.45 km | 2 | 964 ms | 5.29 M |
+
+All use a 10% protected reserve and explicitly supplied full starting tank; that
+assumption is not a new product default. Independent arithmetic checked every
+refill interval and destination escape. Both batches' road geometries and planned
+stops match. North Bay retains 16.93 km usable range above reserve with a matched
+onward station 0.84 km away by road. Access evidence remains provisional. Surface
+unknowns remain reported separately, never counted as dirt. The longer routes
+have 57–73% known dirt; this is not final Dirt-quality acceptance.
+
+Evidence: routing/candidates/rebuild-on-capped/ and rebuild-on-cold-lifecycle/
+(including validation.json). Reusable input fixture:
+bench/fixtures/ontario-from-here.json. Probe flags: REBUILD_REGION=on,
+REBUILD_START='{"lat":45.055,"lon":-77.855}', REBUILD_PREPARATION_WORK=20000000,
+REBUILD_CASES_FILE=scripts/pack-fabric/bench/fixtures/ontario-from-here.json.
+Use candidate03 REBUILD_PACK_ROOT; omit REBUILD_PREWARM for the cold measurement.
+These are single-run engineering measurements, not service percentiles.
+Peak process RSS in the integrated cold batch was 652 MiB; concurrency remains
+unqualified and the regional index/reverse topology still dominate residency.
+
+146 focused checks pass. The 18-case NS matrix also passes with unchanged route/
+stop fingerprints. Medians: normal 907 ms, short tank 237 ms, nearby 102 ms,
+station removed 586 ms, empty 157 ms, initial unknown 429 ms; peak RSS 314 MiB.
+Evidence: rebuild-capped-matrix/. Overall this batch exercised 28 real-map
+requests, including 10 Ontario requests and six longer Ontario fuel plans.
+No pack, source restriction, deployment or native changes. Next priority is
+station entrance/exit qualification and broader route-quality integration; Quebec
+and California restriction resolution remains independently outstanding.

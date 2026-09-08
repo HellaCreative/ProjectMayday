@@ -129,8 +129,9 @@ function prepareReverseCosts({graph,nodeCount,edgeCost,budget,maxBytes=256*1024*
   }
   return {state:"complete",graph,nodeCount,edgeCost,heads,chunks,chunkSize,arcCount,byteLength};
 }
-function buildLowerBounds({graph,nodeCount,target,edgeCost,budget,reverseCosts=null,maxReverseBytes}) {
+function buildLowerBounds({graph,nodeCount,target,edgeCost,budget,reverseCosts=null,maxReverseBytes,stopAt=null}) {
   if(!Number.isInteger(target)||target<0||target>=nodeCount)throw new TypeError("Valid bound target required");
+  if(stopAt!==null&&(!Number.isInteger(stopAt)||stopAt<0||stopAt>=nodeCount))throw new TypeError("Valid bound stopping node required");
   if(!budget.check())return {state:"incomplete",reason:budget.snapshot().reason};
   const reverse=reverseCosts||prepareReverseCosts({graph,nodeCount,edgeCost,budget,maxBytes:maxReverseBytes});
   if(reverseCosts&&(reverse.state!=="complete"||reverse.graph!==graph||reverse.edgeCost!==edgeCost||reverse.nodeCount!==nodeCount))throw new TypeError("Reverse costs must belong to this graph and cost model");
@@ -140,6 +141,16 @@ function buildLowerBounds({graph,nodeCount,target,edgeCost,budget,reverseCosts=n
   while((cur=heap.pop())) {
     if(cur.cost!==distances[cur.node])continue;
     if(!budget.consume())return {state:"incomplete",reason:budget.snapshot().reason};
+    if(cur.node===stopAt) {
+      // Dijkstra has proved all unsettled distances >= this cost. Saturating
+      // every bound at that floor remains admissible, including disconnected
+      // nodes. It imposes no corridor or ride-length cap on the forward search.
+      for(let n=0;n<nodeCount;n++) {
+        if(n%4096===0&&!budget.consume())return {state:"incomplete",reason:budget.snapshot().reason};
+        distances[n]=Math.min(distances[n],cur.cost);
+      }
+      return {state:"complete",target,graph,edgeCost,distances,coverage:"capped",capCost:cur.cost};
+    }
     for(let id=reverse.heads[cur.node];id!==-1;) {
       if(!budget.consume())return {state:"incomplete",reason:budget.snapshot().reason};
       const chunk=reverse.chunks[Math.floor(id/reverse.chunkSize)],offset=id%reverse.chunkSize;
@@ -147,6 +158,6 @@ function buildLowerBounds({graph,nodeCount,target,edgeCost,budget,reverseCosts=n
       if(cost<distances[from]){distances[from]=cost;heap.push({node:from,cost,priority:cost});}
     }
   }
-  return {state:"complete",target,graph,edgeCost,distances};
+  return {state:"complete",target,graph,edgeCost,distances,coverage:"exact"};
 }
 module.exports={searchResourcePath,buildLowerBounds,prepareReverseCosts};

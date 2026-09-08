@@ -742,3 +742,10 @@ road projections remain provisional, current station metadata remains current,
 and fuel estimates never come from cache. Capacity bypass must still consider
 all stations; cancellation/partial matching cannot become geographic scarcity.
 Native implementation remains deferred; only the JS experiment is tested here.
+
+The JS experiment now supports admissible capped reverse guidance: stopping
+reverse expansion at the start must never label unexplored roads unreachable or
+impose a geographic corridor. Platform equivalents must preserve fuel/turn/urban
+outcomes. An explicit cold-preparation allowance shares the request deadline and
+reports its work separately; it cannot silently reset the clock. Native parity
+implementation and device qualification remain deferred.
