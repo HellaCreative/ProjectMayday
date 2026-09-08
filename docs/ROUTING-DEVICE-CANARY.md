@@ -1,3 +1,23 @@
+# Dalhousie fuel-detour retest — existing build23
+
+Hosted candidate6ace2323f6a6051a9f3761db55973d7548fc087e passed exact device
+replays and six hosted cross-direction/style checks. Stable DEV switch/public
+verification is recorded in ROUTING-REBUILD-PROGRESS.md when complete.
+
+Create a NEW From Here route Porters Lake→Dalhousie, Dirt, Allow Unknown OFF,
+fuel ON, same vehicle range (225km usable). Do not load the old saved geometry.
+Expected local/hosted replay near958km/72%dirt, four fuel stops, last at Irving
+Sunny Corner instead of XTR Trout Brook. Repeated road falls65.610→4.095km;
+remaining retrace is still subject to physical route-quality review.
+No Xcode install or pack download is needed for this server-only update.
+
+Scope: fuel-detour correction and Clean staying on the replacement engine.
+Clean paved-back-road preference remains OPEN (large primary/trunk share).
+First cold Dalhousie server build15.456s; subsequent six hosted reference cases
+7.337–8.403s. These are individual measurements, not percentile guarantees.
+Fuel entrance/exit/current availability remains provisional, navigation/offline
+parity not qualified by this route-building test.
+
 # NS/NB physical route-building preview — build 23
 
 Current expansion: Nova Scotia, New Brunswick and trips crossing between them. Quebec/US replacement-engine integration remains deferred. The earlier NS-only instructions below describe the preserved baseline.

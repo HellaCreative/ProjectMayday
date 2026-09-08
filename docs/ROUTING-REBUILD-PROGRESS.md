@@ -905,3 +905,22 @@ across the common base pool (base candidates still completed first). Local exact
 replay retains the same improvement.24cross plus8actualClean-preference cases and
 3unchangedNS baseline cases passed before this narrowing; rerunning relevant
 regression and hosted timing before stable publication.
+
+## Stable DEV physical retest ready — final evening deployment
+
+Stable pack-fabric.vercel.app now source6ace2323f6a6051a9f3761db55973d7548fc087e,
+exact previewmpatek5gc, ns-nb-v1, NS/NB02 unchanged. Pack owner flipped only DEV
+alias and updated national activation guard; production/phone untouched.
+Independent PUBLIC Dalhousie request verifies source, replacement strategy,
+full five-route/four-stop window, Sunny Corner, continuous geometry, all225km
+intervals and destination escape.9.550s HTTP/8.579s server,958.048809km.
+Exact hosted audit72.340%dirt/4.095km repeated; old65.610km repeated.
+Cold exact preview15.456s remains a performance flag. Six hosted reference cases
+both directions/allstyles pass7.337–8.403s. Final local24cases pass2.013–4.289s,
+819MiBpeak;168focusedJS checks pass, three NS baseline distances unchanged.
+
+Runtime commits a13f820/cd1dcd0 integrated on live945978 plus464864f diagnostics.
+No new native changes: existing DIRT Dev build23 uses the updated service.
+Device retest instructions at top of ROUTING-DEVICE-CANARY.md. Clean request
+fallback and reviewed NBcity coverage corrected, but its primary/trunk-heavy
+back-road quality remains explicitly OPEN. No broad Clean acceptance claimed.
