@@ -21,3 +21,14 @@ Known separate failure retained: the street pin at (-73.1125, 46.0463) selects a
 Preview dbab1ef passed all six Quebec border routes but failed the previously accepted NB→NS test. Weak (directionless) connectivity was insufficient, and a retry discarded the filtered crossing list. The chooser now walks outgoing legal arcs from the departure and incoming legal arcs from the arrival, honors access policy, and retains its filtered alternatives during retries. Existing actual route searches remain responsible for turn restrictions and final path proof. The NB→NS regression and all Quebec border checks pass locally; a synthetic one-way fixture checks both departure and arrival.
 
 56 focused tests pass after these changes (the earlier 57-test run also included two network-dependent cross-province tests; the new focused run adds the directed fixture and excludes those two in favor of explicit candidate replays). DEV deployment enables the existing ROUTING_CHAIN_CACHE=1 setting. The compact packs use the existing three-pack LRU; connection checking and fuel hops reuse loaded packs instead of re-downloading Quebec in the same request. The default production setting is unchanged. Final live replay and stable alias verification are required before the handoff.
+
+
+## Physical acceptance and fuel follow-up
+
+Richard accepted long live routes between Halifax, Quebec and Labrador on September 8. Export `dirt-app-debug-2026-09-08T140232Z.txt` records build 8ae00633, successful route responses, and a remaining final-stage fuel gap. National rebuilding has not started.
+
+The failing fuel request fuel-1f656dd6 found 544 reachable pumps, routed six candidates completely, then rejected all six for previous-road overlap. A local replay with the four history IDs retained in the export (the original had 17) reproduces the same rejection class: 8,728 m of prior-road reuse. It is a mechanism reproduction, not an exact replay of the phone's complete history or warm candidate cache.
+
+Repair: evidenced overlap with previously committed roads remains in ranking and diagnostics but is no longer a hard fuel-feasibility veto. Unknown/unexplained retrace remains subject to the existing cap. A continuation reusing roads from the newly proposed pump approach remains subject to the fuel-stem cap, even if those roads also occur in old history. Fuel range, legal access, road packs and route search are unchanged. Live JavaScript only, per Richard; Swift/Android parity follows acceptance.
+
+Local result: previously failing location pair now returns four pumps with approach distances 266,026 / 332,654 / 321,271 / 165,784 m, all within 333,000 m. All 43 fuel-chain tests pass, including new committed-history coverage and existing meaningful fuel-stem rejection. Deployment and physical retest pending at this commit.

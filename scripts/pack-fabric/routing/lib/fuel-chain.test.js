@@ -3,6 +3,7 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 const {
+  fuelDetourBacktrackMeters,
   fuelNeedForProfileRide,
   fuelChainRequest,
   fuelSearchStartMeters,
@@ -1345,4 +1346,35 @@ test("fuel arrival selection uses directed reachability inside a shared weak com
   const noAlternative = { ...target, candidates: [wrongDirection] };
   assert.equal(reachableDestinationMatch(runtime, origin, noAlternative, search.distances, 5000), noAlternative,
     "an inaccessible arrival remains inaccessible when no legal candidate is reachable");
+});
+
+
+test("committed-road overlap is a preference, while new fuel stems still count", () => {
+  const response = { backtrackMeters: 8728, segments: [
+    { edgeId: "previous-road", distanceMeters: 8728 }
+  ] };
+  assert.equal(fuelDetourBacktrackMeters(response, ["previous-road"]), 0);
+  assert.equal(fuelDetourBacktrackMeters(response, []), 8728);
+  assert.equal(fuelDetourBacktrackMeters(response, ["previous-road"], ["previous-road"]), 8728);
+  assert.equal(fuelDetourBacktrackMeters({backtrackMeters: 8728, segments: []}, ["previous-road"]), 8728);
+});
+
+test("a reachable fuel chain survives overlap with a previous committed leg", async () => {
+  const result = await planFuelChainOnRuntime({
+    runtime: lineRuntime(), stations: [station("pump", 1)],
+    start: { lat: 45, lon: 0 }, destination: { lat: 45, lon: 2 },
+    profile: "dirt", accessPolicy: { motorizedPermissive: true, motorizedUnknown: false },
+    usableRangeMeters: 130000, firstLegMaxMeters: 130000,
+    requireFuelStopBeforeEnd: true, minimumFuelStops: 1,
+    priorEdgeIds: ["previous-road"],
+    routeCandidate: async ({candidate}) => ({
+      status: "complete", distanceMeters: candidate.graphMeters,
+      backtrackMeters: candidate.station.id === "pump" ? 8728 : 0,
+      stats: { dirtPercent: 80 },
+      segments: candidate.station.id === "pump"
+        ? [{edgeId: "previous-road", distanceMeters: 8728}] : []
+    })
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.stops[0].id, "pump");
 });

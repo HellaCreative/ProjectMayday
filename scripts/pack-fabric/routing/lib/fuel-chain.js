@@ -220,6 +220,22 @@ function responseBacktrackMeters(response) {
   return Number.isFinite(backward) && backward >= 0 ? backward : 0;
 }
 
+// Reusing roads from an already committed leg affects route preference, not
+// whether a pump exists within range. Only discount overlap evidenced by the
+// returned route; unexplained retrace and newly introduced fuel stems still count.
+function fuelDetourBacktrackMeters(response, committedEdgeIds, newApproachEdgeIds = []) {
+  const committed = new Set((committedEdgeIds || []).map(String));
+  const approach = new Set((newApproachEdgeIds || []).map(String));
+  let committedMeters = 0;
+  for (const segment of (response && response.segments) || []) {
+    const id = String(segment.edgeId);
+    if (committed.has(id) && !approach.has(id)) {
+      committedMeters += Math.max(0, Number(segment.distanceMeters) || 0);
+    }
+  }
+  return Math.max(0, responseBacktrackMeters(response) - committedMeters);
+}
+
 function routeChainQuality(response, penalizeMajorRoads) {
   const meters = Math.max(0, Number(response && response.distanceMeters) || 0);
   const dirtPercent = Number(response && response.stats && response.stats.dirtPercent);
@@ -2366,7 +2382,7 @@ async function planFuelChainOnRuntime({
         const firstBacktrackMeters = responseBacktrackMeters(response);
         const fits = response && response.status === "complete"
           && Number.isFinite(meters) && meters <= hopCap + 1
-          && firstBacktrackMeters <= MAX_FUEL_RETRACE_M + 1;
+          && fuelDetourBacktrackMeters(response, [...history]) <= MAX_FUEL_RETRACE_M + 1;
         const approachProvenWithinBudget = fits && (
           !Number.isFinite(approachDeadlineAtMs) || Date.now() <= approachDeadlineAtMs
         );
@@ -2462,7 +2478,9 @@ async function planFuelChainOnRuntime({
               continuationProvenWithinBudget &&
               Number.isFinite(routedContinuationMeters) &&
               routedContinuationMeters <= continuationCap + 1 &&
-              continuationBacktrackMeters <= continuationBacktrackCap + 1
+              fuelDetourBacktrackMeters(continuationResponse, [...history],
+                (response.segments || []).map((segment) => segment.edgeId)
+              ) <= continuationBacktrackCap + 1
             ) {
               row.continuationResponse = continuationResponse;
               row.continuationDestinationMeters = routedContinuationMeters;
@@ -4472,6 +4490,7 @@ function planItineraryFuelChain({ legs, usableRangeMeters, initialFuelUsedMeters
 }
 
 module.exports = {
+  fuelDetourBacktrackMeters,
   FUEL_CHAIN_SERVICE_VERSION,
   FUEL_COMFORT_LO,
   FUEL_COMFORT_HI,
