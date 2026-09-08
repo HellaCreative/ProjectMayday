@@ -74,6 +74,8 @@ function createProjectedGraph(pack,{points,allowUnknown=false,endpointEdges=[],b
   }
   return {
     state:"complete",nodeCount,pointNodes,stationCount:stations.size,
+    // Order determines virtual node IDs. Station identities do not alter arcs.
+    reverseTopology:Object.freeze({pack,key:JSON.stringify([allowUnknown,endpointEdges,points.map(p=>[p.edgeIndex,p.fraction])])}),
     stateKey:(node,state)=>`${node}:${state??0}`,
     transition,
     stationAt:node=>stations.get(node)||null,

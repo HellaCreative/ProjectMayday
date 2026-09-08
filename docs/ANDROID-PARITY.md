@@ -729,3 +729,9 @@ preparation reusable only for an unchanged graph/cost identity. Storage exhausti
 is an incomplete computation, never proof that no route exists. Native parity
 must preserve that outcome and exact directed-distance semantics; the storage
 layout can differ. No Swift/Android implementation or live qualification is claimed.
+
+From Here reverse preparation reuse is now integrated in the JS experiment.
+Equivalent road topology may reuse costs, but fuel state and turn history remain
+request-owned. Pin, access-policy, pack revision or cost changes must invalidate
+incompatible preparation. Capacity exhaustion stays an incomplete computation.
+Native implementations remain deferred under the live-JS-first direction.

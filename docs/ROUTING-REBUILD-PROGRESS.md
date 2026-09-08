@@ -531,3 +531,48 @@ cross-chunk reuse, storage cap, cancellation and stale-identity checks. No pack,
 restriction, live API or phone change. Next: integrate bounded revision-owned
 preparation before claiming large-region request readiness; resolve source turn
 ambiguities independently and continue station access / Dirt candidate work.
+
+## Exact projected preparation reuse — September 8, 2026
+
+From Here now accepts a caller-owned reverse-cost cache, with one entry and a
+64 MiB cap on typed reverse storage. The previous entry is released before its
+replacement is built. Reuse requires the same pack instance, explicit immutable
+revision, cost-function identity and exact ordered projected topology, including
+endpoint permissions and unknown-road policy. Each request still builds its own
+turn-state graph and fuel plan: the cache does not retain request graph state.
+The caller must treat pack/cost inputs as immutable and must not retain old cache
+results if it relies on the cache's residency bound. This is not a total RSS cap.
+
+The probe now holds stable cost/preparation objects so the short-tank case can
+reuse the preceding route's reverse preparation. All 18 NS matrix cases pass;
+all geometry/stop fingerprints match the prior implementation. Medians: normal
+886 ms, short tank 505 ms, nearby 427 ms, station removed 589 ms, no stations
+173 ms, initial fuel unknown 441 ms. Maximum batch RSS 307 MiB. Three samples,
+pack loading excluded, no cleared OS cache; these are not service percentiles.
+Evidence: routing/candidates/rebuild-reverse-cache-matrix/.
+
+A new integrated Ontario probe used candidate03, all 5,369 canonical stations,
+start (45.055,-77.855), destination (45.13,-77.83), explicit 300 km full range /
+270 km initial usable fuel, and the experimental Dirt weight 10. Spatial/urban
+preparation was explicitly prewarmed with 50 M work: 951 ms / 12.14 M operations.
+The first normal 6 M request remained incomplete during reverse bounds after
+4,809 ms; its completed reverse preparation was retained. The next two requests
+completed at 4,265 and 4,758 ms, each using 4.405 M operations and reporting a
+reverse cache hit. Both returned the same 16.28 km road, 71.1% known dirt and a
+provisional destination-fuel escape. No refill was needed on this short ride;
+this does not qualify long-distance Ontario fueling.
+
+Station matching dominated at 3.75–3.86 seconds per request. Process peak rose to
+821 MiB across the three attempts, including full station diagnostics and no
+explicit GC. This measurement is not comparable to the earlier reverse-only
+benchmark as a memory regression: it includes the spatial index, all station
+matching and full route pipeline. It is nevertheless an unresolved service
+memory concern. The probe exits nonzero because its first attempt is incomplete;
+that failure is preserved, not relabeled as success. Evidence:
+routing/candidates/rebuild-on-integrated-cache/.
+
+141 focused checks pass. New integration coverage exercises reuse, station
+removal, moved pins, changed revision/cost/unknown-road settings, cancellation,
+and capacity exhaustion. Next priority is bounded reuse of completed station
+matching and an explicit cold-preparation lifecycle. No Quebec/California
+restriction workaround, pack change, deployment or native change was made.

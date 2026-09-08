@@ -1,5 +1,6 @@
 "use strict";
 const {normalizeRequest}=require("./contracts");
+const {createReverseCostCache}=require("./reverse-cost-cache");
 const {createPreparationCache}=require("./preparation-cache");
 const {urbanAreasFromPack}=require("./urban-exposure");
 const {matchStations}=require("./station-matching");
@@ -15,7 +16,7 @@ const {proveFuel}=require("./fuel-proof");
 // explicitly provisional station access; they never become physical entrance
 // proof. Caller supplies the experimental cost model, not a hidden final style.
 function buildFromHere({input,pack,geom,revision,stations,budget,edgeCost,objectiveId,
-  preparationCache=createPreparationCache(),stationRadiusMeters=150,endpointRadiusMeters=2000,maxFuelLabels=100000}) {
+  preparationCache=createPreparationCache(),reverseCostCache=createReverseCostCache(),stationRadiusMeters=150,endpointRadiusMeters=2000,maxFuelLabels=100000}) {
   const request=normalizeRequest(input);
   if(request.mode!=="from_here")throw new TypeError("From Here requires exactly two fixed rider anchors");
   if(typeof edgeCost!=="function"||!objectiveId)throw new TypeError("Explicit experimental objective required");
@@ -87,7 +88,10 @@ function buildFromHere({input,pack,geom,revision,stations,budget,edgeCost,object
   timing.projectedGraphMs=Math.round(performance.now()-phase);
   const start=graph.pointNodes.get("anchor-0"),end=graph.pointNodes.get("anchor-1");
   stage="reverse_bounds";phase=performance.now();
-  const bounds=buildLowerBounds({graph,nodeCount:graph.nodeCount,target:end,edgeCost,budget});
+  const reverse=reverseCostCache.prepare({graph,revision,edgeCost,budget});
+  provenance.reversePreparationCacheHit=reverse.cacheHit;
+  if(reverse.state!=="complete")return incomplete(reverse.reason);
+  const bounds=buildLowerBounds({graph,nodeCount:graph.nodeCount,target:end,edgeCost,budget,reverseCosts:reverse.reverseCosts});
   if(bounds.state!=="complete")return incomplete(bounds.reason);
   timing.reverseBoundsMs=Math.round(performance.now()-phase);
   stage="fuel_search";phase=performance.now();

@@ -103,3 +103,38 @@ test("invalid fixed station coordinates cannot produce a provisional refill",()=
   const f=fixture();f.input.anchors[1].stationId="escape";f.stations[1].lat=NaN;
   assert.throws(()=>build(f),/Fixed station anchor/);
 });
+
+test('reverse preparation is reused without carrying fuel state or stale stations',()=>{
+ const {createReverseCostCache}=require('./reverse-cost-cache');
+ const f=fixture(),reverseCostCache=createReverseCostCache(),preparationCache=createPreparationCache();
+ const options={reverseCostCache,preparationCache};
+ const first=build(f,options),second=build(f,options);
+ assert.equal(first.provenance.reversePreparationCacheHit,false);assert.equal(second.provenance.reversePreparationCacheHit,true);
+ assert.deepEqual(first.road.geometry,second.road.geometry);assert.deepEqual(first.fuel,second.fuel);
+ const removed=build(f,{...options,stations:f.stations.filter(s=>s.id!=='middle')});
+ assert.equal(removed.provenance.reversePreparationCacheHit,false);assert.equal(removed.fuel.state,'unverified');
+ assert.equal(build(f,options).provenance.reversePreparationCacheHit,false);
+ assert.equal(build(f,{...options,revision:'changed'}).provenance.reversePreparationCacheHit,false);
+ assert.equal(build(f,{...options,edgeCost:a=>a.distanceMeters*2}).provenance.reversePreparationCacheHit,false);
+ reverseCostCache.clear();assert.equal(reverseCostCache.diagnostics().residentBytes,0);
+});
+test('reverse cache capacity cannot turn incomplete preparation into no route',()=>{
+ const {createReverseCostCache}=require('./reverse-cost-cache');
+ const reverseCostCache=createReverseCostCache({maxBytes:1});
+ const r=build(fixture(),{reverseCostCache});
+ assert.equal(r.fuel.reason,'reverse_storage_limit');assert.equal(r.road.state,'unverified');
+ assert.equal(reverseCostCache.diagnostics().entries,0);
+});
+test('moved pins and unknown-road settings invalidate reverse topology; cancellation cannot use a warm result',()=>{
+ const {createReverseCostCache}=require('./reverse-cost-cache');
+ const f=fixture(),reverseCostCache=createReverseCostCache(),options={reverseCostCache};
+ build(f,options);
+ const moved=structuredClone(f.input);moved.anchors[1].lon=.025;
+ const result=build(f,{...options,input:moved});assert.equal(result.provenance.reversePreparationCacheHit,false);
+ assert.equal(result.road.geometry.at(-1)[0],.025);
+ assert.equal(build(f,{...options,input:moved}).provenance.reversePreparationCacheHit,true);
+ moved.legs[0].allowUnknown=true;
+ assert.equal(build(f,{...options,input:moved}).provenance.reversePreparationCacheHit,false);
+ const cancelled=build(f,{...options,input:moved,budget:budget(100000,{aborted:true})});
+ assert.equal(cancelled.fuel.reason,'cancelled');assert.equal(cancelled.road.state,'unverified');
+});
