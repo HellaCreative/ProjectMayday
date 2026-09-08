@@ -1634,10 +1634,10 @@ final class GraphPackStore {
         let id = regionId.lowercased()
         guard activePack?.regionId?.lowercased() == id,
               activePack?.version ?? 0 >= 4,
-              manifestFilesByRegion[id]?.contains(where: { $0.name == "cross-pack-seams.v2.json" }) == true
+              let seamIdentity = manifestFilesByRegion[id]?.first(where: { $0.name == "cross-pack-seams.v2.json" })
         else { return }
         let seamPath = seamsFileURL(regionId: id)
-        if FileManager.default.fileExists(atPath: seamPath.path),
+        if Self.fileMatchesIdentity(at: seamPath, expectedBytes: seamIdentity.bytes, expectedSHA256: seamIdentity.sha256),
            let data = try? Data(contentsOf: seamPath),
            let pack = activePack {
             if (try? pack.applyCrossPackSeams(data: data)) != nil { return }
@@ -1649,6 +1649,8 @@ final class GraphPackStore {
             guard let self,
                   let pack = self.activePack,
                   pack.regionId?.lowercased() == id,
+                  let identity = self.manifestFilesByRegion[id]?.first(where: { $0.name == "cross-pack-seams.v2.json" }),
+                  Self.fileMatchesIdentity(at: self.seamsFileURL(regionId: id), expectedBytes: identity.bytes, expectedSHA256: identity.sha256),
                   let data = try? Data(contentsOf: self.seamsFileURL(regionId: id))
             else { return }
             try? pack.applyCrossPackSeams(data: data)

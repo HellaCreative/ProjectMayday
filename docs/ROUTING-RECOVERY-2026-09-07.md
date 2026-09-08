@@ -154,3 +154,33 @@ it were already part of the sealed release.
 The complete evolution remains unfinished, particularly one-operation fuel
 planning and the exact 234 km Dirt-quality regression. Do not invite physical
 qualification as if these open items have passed.
+
+## September 8 authorized continuation
+
+Richard authorized all necessary revisions and explicitly reopened the frozen
+connection boundary. The original sealed release remains unchanged. Created
+connection-only revision `connections-v4-20260908-02`: 7,099 QC/ON legal proofs,
+source topology SHA unchanged, revised catalog SHA
+`3f4c804854775490f15832784cf0942e640ca2078381b35592c5cf3e2239c184`.
+The builder no longer drops proofs after 128 southern ways. A reproducible
+one-graph-at-a-time revision tool verifies source graph hashes and matching node,
+edge, directional access, layer, structure, barrier, and restriction evidence.
+
+Retaining all proofs exposed a second failure: nearest-only shortlists exhausted
+attempts on disconnected fragments. Both runtimes now give distinct component
+pairs an attempt, prioritizing the larger network before repeats. This is an
+attempt-order policy, not a proof of directed connectivity or permission.
+The full revised QC/ON fixture completed in 16.974 seconds, 927,639 metres, on
+original graph identities. Seven new focused JS checks passed; ten focused
+V4 pack/snap iOS checks passed. The requested environment-method filter did not
+appear in the executed test count, so environment tests still need a full suite
+run. No claim of complete JS/Swift regional-path parity is made: their older
+geographic ranking and backtracking differ and remain to be reconciled.
+
+The new catalog preserves every graph/geometry/fuel identity. App DEV file URLs
+select the revision for seams only; Rider Services remains on the original
+release. Seam top-up now verifies the current catalog checksum before reusing
+an existing file and after a download attempt. Publication of the 66 metadata
+objects is in progress with read-back hashes; catalog goes last. No stable DEV
+service deployment or physical acceptance has happened at this checkpoint.
+Fuel, seed lifecycle, and remaining-road evolution work remain open.

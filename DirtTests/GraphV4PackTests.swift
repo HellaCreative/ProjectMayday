@@ -204,4 +204,21 @@ struct GraphV4PackTests {
             try pack.applyCrossPackSeams(data: JSONSerialization.data(withJSONObject: wrongEpoch))
         }
     }
+    @Test("border retry shortlist covers distinct networks before repeated fragments")
+    func seamNetworkCoverage() {
+        func anchor(_ id: String, _ network: String, _ size: Int, _ latitude: Double) -> GraphV2Pack.CrossPackSeamAnchor {
+            .init(neighborRegionId: "on", longitude: -74, latitude: latitude,
+                  osmWayId: id, localEdgeId: id, remoteEdgeId: id, gapMeters: 0,
+                  componentPair: network, networkSize: size)
+        }
+        let fragments = (0..<30).map { anchor("small-\($0)", "small", 4, 45 + Double($0) / 1000) }
+        let main = anchor("main", "main", 800000, 46)
+        let other = anchor("other", "other", 19, 45.5)
+        let point = CLLocationCoordinate2D(latitude: 45, longitude: -74)
+        let ranked = CrossPackSeam.candidates(from: point, to: point,
+            anchors: fragments + [main, other], urbanCores: [])
+        #expect(Array(ranked.prefix(3)).map(\.osmWayId) == ["main", "other", "small-0"])
+        #expect(ranked.count == 32)
+    }
+
 }

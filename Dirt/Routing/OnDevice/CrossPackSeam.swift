@@ -12,18 +12,38 @@ enum CrossPackSeam {
         anchors: [GraphV2Pack.CrossPackSeamAnchor],
         urbanCores: [UrbanCore.Box]
     ) -> [GraphV2Pack.CrossPackSeamAnchor] {
-        anchors
-            .filter { $0.gapMeters <= 2 && !$0.osmWayId.isEmpty }
+        let ordered = anchors.enumerated()
+            .filter { $0.element.gapMeters <= 2 && !$0.element.osmWayId.isEmpty }
             .filter {
                 !UrbanCore.isNear(
-                    CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude),
+                    CLLocationCoordinate2D(latitude: $0.element.latitude, longitude: $0.element.longitude),
                     boxes: urbanCores
                 )
             }
             .sorted {
-                distanceToChord($0, from: from, to: to)
-                    < distanceToChord($1, from: from, to: to)
+                let a = distanceToChord($0.element, from: from, to: to)
+                let b = distanceToChord($1.element, from: from, to: to)
+                return a == b ? $0.offset < $1.offset : a < b
             }
+        // One attempt per proven network before spending retries on that same
+        // fragment. Network size ranks attempts; normal routing proves access.
+        var seen = Set<String>()
+        var first: [(offset: Int, element: GraphV2Pack.CrossPackSeamAnchor)] = []
+        var remaining: [GraphV2Pack.CrossPackSeamAnchor] = []
+        for item in ordered {
+            let key = item.element.componentPair ?? "legacy:\(item.offset)"
+            if seen.insert(key).inserted { first.append(item) }
+            else { remaining.append(item.element) }
+        }
+        first.sort {
+            if $0.element.networkSize != $1.element.networkSize {
+                return $0.element.networkSize > $1.element.networkSize
+            }
+            let a = distanceToChord($0.element, from: from, to: to)
+            let b = distanceToChord($1.element, from: from, to: to)
+            return a == b ? $0.offset < $1.offset : a < b
+        }
+        return first.map(\.element) + remaining
     }
 
     private static func distanceToChord(

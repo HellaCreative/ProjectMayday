@@ -21,6 +21,12 @@ independently checked slices against the frozen V4 release.
   acceptance and explicit approval. No automatic production promotion.
 - The sealed 63-region V4 release and every catalog remain read-only.
 
+**September 8 authorization (supersedes the read-only pack boundary above):**
+Richard authorized the necessary routing and pack revisions to complete the
+product, including a separately versioned DEV connection correction. Preserve
+original sealed artifacts. Stable DEV publication is authorized once verified.
+Production promotion and physical acceptance are not implied.
+
 **Owner:** Richard Smith
 
 **Implementing agent:** Codex (this Cursor session does not write routing/search code)

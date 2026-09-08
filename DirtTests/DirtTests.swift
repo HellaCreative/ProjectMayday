@@ -22,11 +22,17 @@ struct DirtTests {
         #expect(AppConfig.livePOIURL.absoluteString == "https://pack-fabric.vercel.app/api/poi")
         #expect(AppConfig.v4CandidateReleaseId == "fabric-v4-20260907-01")
         #expect(AppConfig.packManifestURL.absoluteString ==
-            "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/candidates/" +
-            "fabric-v4-20260907-01/manifest.json")
+            "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/connections/" +
+            "connections-v4-20260908-02/manifest.json")
         #expect(AppConfig.riderServicesManifestURL.absoluteString ==
             "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/candidates/" +
             "fabric-v4-20260907-01/rider-services/manifest.json")
+        for name in ["graph.v4.bin", "geometry.v1.bin", "fuel.v1.json"] {
+            #expect(AppConfig.packFileURL(version: AppConfig.v4ConnectionRevision, regionId: "qc", fileName: name)
+                == AppConfig.v4CandidateBaseURL.appendingPathComponent("qc").appendingPathComponent(name))
+        }
+        #expect(AppConfig.packFileURL(version: AppConfig.v4ConnectionRevision, regionId: "qc", fileName: "cross-pack-seams.v2.json")
+            == AppConfig.v4ConnectionBaseURL.appendingPathComponent("qc/cross-pack-seams.v2.json"))
         #expect(AppConfig.validatesSupabaseIsolation(url: AppConfig.supabaseURL))
         #expect(AppConfig.validatesRoutingIsolation(url: AppConfig.baseURL))
         #expect(!AppConfig.validatesSupabaseIsolation(

@@ -79,7 +79,9 @@ const {
   resolveMetroFallbackPenalty
 } = require("./hop-search");
 const crossPackTopology = require("../schema/cross-pack-topology.v1.json");
-const crossPackTopologyV4 = require("../schema/cross-pack-topology.v2.json");
+const crossPackTopologyV4 = require("./connection-revision").connectionTopology(
+  require("../schema/cross-pack-topology.v2.json")
+);
 const { resolveLocationsByEligibleEdge } = require("../regional/endpoint-resolver");
 
 function routeSearchLimitMessage(profile) {
@@ -1460,14 +1462,15 @@ function topologySeamCandidatesFromIndex(seed, regionIds, index = null) {
       .map((row) => `${row.osmWayId}|${Number(row.coordinate[0]).toFixed(5)}|${Number(row.coordinate[1]).toFixed(5)}`)
   );
   const seedCoord = [Number(seed.lon != null ? seed.lon : seed.lng), Number(seed.lat)];
-  return leftRows
+  const eligible = leftRows
     .filter((row) => Number(row.gapMeters) <= 2 && Array.isArray(row.coordinate))
     .filter((row) => rightKeys.has(
       `${row.osmWayId}|${Number(row.coordinate[0]).toFixed(5)}|${Number(row.coordinate[1]).toFixed(5)}`
     ))
     .filter((row) => !coordinateNearUrbanBoxes(row.coordinate, left.urbanCores || []))
     .filter((row) => !coordinateNearUrbanBoxes(row.coordinate, right.urbanCores || []))
-    .sort((a, b) => haversineMeters(seedCoord, a.coordinate) - haversineMeters(seedCoord, b.coordinate))
+;
+  return require("./seam-ranking").rankSeams(eligible, row => haversineMeters(seedCoord, row.coordinate))
     .slice(0, 16)
     .map((row) => ({
       lon: Number(row.coordinate[0]),

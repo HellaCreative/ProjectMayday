@@ -6,7 +6,7 @@ const path = require("path");
 const crypto = require("crypto");
 const { decodeGraphV4 } = require("../routing/lib/pack-v4");
 const { validatePackManifestV2, SEAM_CAPABILITY } = require("../routing/lib/pack-manifest-v2");
-const { seamCandidates, assertSeamLegal } = require("../routing/lib/legal-topology/seams");
+const { seamCandidates, assertSeamLegal, edgeProofKey } = require("../routing/lib/legal-topology/seams");
 const { REGION_NEIGHBOURS } = require("../routing/regional/merge");
 
 const FABRIC = path.join(__dirname, "..");
@@ -62,21 +62,23 @@ function uniquePairs() {
   return rows.sort((a, b) => a.join("|").localeCompare(b.join("|")));
 }
 
-function selectProofs(rows, limit = 128) {
-  const traversable = rows.filter((row) =>
-    [row.edge.accessForward, row.edge.accessReverse].some((code) => code === 0 || code === 1)
-  );
-  const byWay = new Map();
-  for (const row of traversable) {
-    if (!byWay.has(row.osmWayId)) byWay.set(row.osmWayId, row);
+function selectProofs(rows) {
+  // A display shortlist is not a topology. A latitude cap (or one row per
+  // way) can discard the only crossing joining a routable component. Retain
+  // every distinct proven node/edge connection; route selection may rank it
+  // later against the actual endpoints.
+  const unique = new Map();
+  for (const row of rows) {
+    if (![row.edge.accessForward, row.edge.accessReverse].some((code) => code === 0 || code === 1)) continue;
+    const key = `${row.osmNodeId}|${edgeProofKey(row.edge)}`;
+    if (!unique.has(key)) unique.set(key, row);
   }
-  return [...byWay.values()]
-    .sort((a, b) =>
-      Number(a.coordinate[1]) - Number(b.coordinate[1]) ||
-      Number(a.coordinate[0]) - Number(b.coordinate[0]) ||
-      a.osmWayId.localeCompare(b.osmWayId)
-    )
-    .slice(0, limit);
+  return [...unique.values()].sort((a, b) =>
+    Number(a.coordinate[1]) - Number(b.coordinate[1]) ||
+    Number(a.coordinate[0]) - Number(b.coordinate[0]) ||
+    String(a.osmNodeId).localeCompare(String(b.osmNodeId)) ||
+    edgeProofKey(a.edge).localeCompare(edgeProofKey(b.edge))
+  );
 }
 
 function publicRow(row, localEdgeId, remoteEdgeId) {

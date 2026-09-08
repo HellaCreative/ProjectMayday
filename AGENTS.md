@@ -82,3 +82,14 @@ fuel-replacement ranking are one JavaScript/Swift contract. Implement behavioral
 changes together and verify both runtimes; automated passes do not replace
 White-device acceptance. Android must reproduce the accepted rider outcome,
 but no Android implementation or qualification is claimed here.
+
+## Owner authorization — September 8, 2026
+
+Richard explicitly authorized all necessary routing and pack revisions, fixes,
+and evolutions to complete the product. The prior read-only connection boundary
+is reopened: create versioned DEV corrections while preserving the original
+sealed release. Stable DIRT DEV publication is authorized after verification;
+do not ask again. Actual production and GitHub backup remain gated as above.
+Provide regular progress updates and distinguish automated verification from
+physical-device acceptance. Do not claim perfection or launch qualification
+while required checks remain open.

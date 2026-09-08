@@ -700,3 +700,20 @@ search law, pack bytes, or navigation feature. JavaScript caches already use
 object-keyed weak maps. Android must likewise key cached indexes to a live graph
 identity, not a reusable address or unrelated revision. Physical qualification
 of this recovery remains pending.
+
+## DEV connection revision — September 8, 2026
+
+DEV uses connection revision `connections-v4-20260908-02` with the unchanged
+`fabric-v4-20260907-01` road, geometry, fuel, and Rider Services bytes. Only the
+connection catalog and seam sidecars use `/v4/connections/<revision>/`.
+QC/ON now retains 7,099 proven node/edge connections. Sidecar `componentPair`
+and `networkSize` describe strict-access weak connectivity for attempt ranking,
+not permission to travel. Within the existing bounded retry window, try one
+representative per component pair, larger shared networks first, before repeated
+crossings of the same fragment; ordinary directed/turn-aware routing must prove
+every attempt. Legacy records keep their existing geographic order. JS and
+Swift both implement this coverage policy. Geographic seed/chord ordering and
+regional backtracking predate this change and are not yet fully lockstep.
+Downloaded connection files must match the selected catalog checksum before
+reuse or activation after top-up. Production continues using its accepted data.
+Android must reproduce this outcome; no Android implementation is claimed.

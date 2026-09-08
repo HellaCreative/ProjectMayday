@@ -5,7 +5,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const { writeRegionSidecars } = require("./build-v4-seams");
+const { writeRegionSidecars, selectProofs } = require("./build-v4-seams");
 const { validatePackManifestV2 } = require("../routing/lib/pack-manifest-v2");
 
 function stagedManifest(regionId) {
@@ -52,4 +52,31 @@ test("seam sealing writes a sidecar and binds its identity into every region man
     assert.equal(sidecar.regionId, id);
     assert.equal(sidecar.sourceEpoch, doc.sourceEpoch);
   }
+});
+
+function crossing(node, way, lat, accessForward = 0, accessReverse = 0) {
+  return {
+    osmNodeId: String(node), osmWayId: String(way), coordinate: [-74, lat],
+    edge: { osmWayId: String(way), fromOsmNodeId: String(node),
+      toOsmNodeId: String(node + 1), accessForward, accessReverse,
+      layer: 0, structureLeaf: null }
+  };
+}
+
+test("topology retains a northern main-network crossing beyond 128 southern proofs", () => {
+  const southern = Array.from({ length: 128 }, (_, i) => crossing(i + 1, i + 1, 45));
+  const mainNetwork = crossing(900, 900, 46);
+  const result = selectProofs([...southern, mainNetwork]);
+  assert.equal(result.length, 129);
+  assert.ok(result.includes(mainNetwork));
+  assert.deepEqual(selectProofs([mainNetwork, ...southern].reverse()), result);
+});
+
+test("distinct nodes on one OSM way remain available; duplicate proofs and denied directions do not", () => {
+  const a = crossing(1, 10, 45);
+  const b = crossing(2, 10, 46);
+  const unknown = crossing(3, 11, 47, 1, 2);
+  const denied = crossing(4, 12, 48, 2, 2);
+  const destinationOnly = crossing(5, 13, 49, 4, 4);
+  assert.deepEqual(selectProofs([a, b, { ...a }, unknown, denied, destinationOnly]), [a, b, unknown]);
 });
