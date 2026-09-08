@@ -5,7 +5,15 @@ with particular attention to province–province, province–state and state–s
 connections. Downloadable activation and phone installs are deferred until live
 acceptance. Actual production remains outside the authorized DEV publication.
 
-## Running build
+## Current status — 21:32 UTC
+
+- Build and upload processes have finished; no restart is needed. All58 new regions verified,63 assembled,138 adjacent pairs have stored connection evidence,446 uploaded objects passed exact readback.
+- National activation is not complete. City/settlement metadata is absent from62 graph packs; the optional-input factory step did not establish feature completeness. NB source-locked supplement is now under physical routing evaluation. Do not replicate its revised threshold nationally before that evidence.
+- Stable DEV is6ace232/ns-nb-v1, with bothNS/NB02 protected. The newNB classification is a separately identified service supplement; sealed graph packs remain unchanged.
+- Next national integration must retain the current accepted routing and both02 overrides, incorporate the isolated fuel ownership correction, and finish unresolved live border checks. Older national previews must never replace current stable.
+- Full detail and chronology follow; earlier “running” entries are historical.
+
+## Original build setup
 
 - Candidate: `fabric-v4-20260908-03`.
 - Build started: September 8, 2026; precise timestamp and process ID in `run.json`.
@@ -312,3 +320,46 @@ e.g. AL/GA points farther from border and BC/ID regional towns; assert response
 contains both region identities rather than counting a halo-only success.
 Continue uploaded-region checks while upload finishes. Final publication must
 use combined canary baseline, NOT old national-only b349c47.
+
+## Build22 physical regression fixtures received
+
+Routing agent reports NS canary physically fast/good with fuel. Export
+/Users/richardsmith/Downloads/dirt-app-debug-2026-09-08T200606Z.txt records QC
+fuel match_failed in segment2/3 and US fuel timeout / road safety-limit failure.
+Exact inputs reconstructed in candidate03/build22-{qc,us}-{fuel,route}-request.json.
+Keep these in combined acceptance checks, in addition to generic border cases.
+
+Confirmed MA destination42.42887651518565,-72.66903969731547 is selected as NY
+by primaryRegionForPoint and resolveGraphRequest with a single point. /api/fuel
+calls fuel-data.loadFuelForLocations -> resolveGraphRequest directly, whereas
+route uses regional/endpoint-resolver. This coarse ownership mismatch explains
+NY fuel data and is not corrected merely by enabling03. Routing agent notified
+to coordinate fix ownership before either task edits shared fuel selection.
+No such fix deployed yet. BC/ID reverse result is complete on0365c5f; forward
+FUNCTION_INVOCATION_FAILED remains an open failure.
+
+## Separate NS/NB acceptance preview
+
+Routing owner supplied reviewed2d4e394. Created isolated .build/atlantic-acceptance-preview from b9f263d and cherry-picked to94597816b960b3baeb33cf008340700d8a3589ae; git diff against2d4e394 empty. Preview https://pack-fabric-74jbm96f6-goricksmith-7678s-projects.vercel.app READY. ns-nb-v1 enabled; all five stable regions retain02, no national03 integration. Stable alias unchanged. Cross six-case live fuel verifier running; results in candidate03/atlantic-acceptance-live. Routing owner independently checks NS baseline. National upload continues separately (379 individual files verified, TX graph verified at latest snapshot).
+
+Single-point fuel national correction b090ac2 is isolated in national-live-canary and not included in this acceptance preview. It adds existing complete63-region boundary record and admin ownership for single-point pump lookup;11 focused local tests pass, hosted verification pending.
+
+### NS/NB acceptance live on stable DEV
+
+All6 hosted cross-profile/direction fuel checks passed. Server times forward Dirt15.339s, Balanced5.807s, Clean5.601s; reverse Dirt5.904s, Balanced5.864s, Clean13.449s. Routing owner independently verified exactNSbaseline3profiles, NB-only andAllowUnknown crosschecks. Preview error-level logs30min returned no entries. Aliased exact74jbm deployment/source94597816b960b3baeb33cf008340700d8a3589ae to pack-fabric.vercel.app; public/api/route confirms source and ns-nb-v1. Stable keeps all5regions02; no national03 activation. Routing owner will independently verify public routing and coordinate physical handoff.
+
+Activation guard: preserve BOTH NS02 and NB02 with current stable945978/ns-nb-v1 during physical acceptance. Old national preview0365/b090 source must not replace current stable. Next national integration must incorporate reviewed current routing and retain both overrides. Recorded candidate03/national-activation-guard.json. Routing owner independently confirmed public crossUnknown success, fullwindow/range/escape/geometry, source945978.
+
+City-classification completeness gap found:62/63 national candidate graphs have null urbanCores/settlements, NS alone populated. This feature was not established by prior verification. See NB-URBAN-CLASSIFICATION-INVESTIGATION-2026-09-08.md. No live/pack change; national candidate not qualified for city-avoidance completeness.
+
+## National upload completed; separate refinement preview ready
+
+Upload final summary: candidate03 regionCount63, objectCount446, verifiedtrue, productionUntouchedtrue. All component objects uploaded and exact readback verified, including full national topology. This establishes publication/integrity, not city-classification completeness or national live activation. City metadata omission62regions remains open.
+
+Isolated refinement preview https://pack-fabric-dnwrkggyn-goricksmith-7678s-projects.vercel.app READY, source0e26691098ed6289ee3e85222488532c881ad221 (945978 plus reviewed464864f+a13f820). Worktree atlantic-refinement-preview. NB sidecar exact SHA f0ff6558341b52ea7a869458c709aba8872808677445dc5e1c8bb81e1d989b9f verified. Prior five02/ns-nb-v1 env preserved. Ten focused integration tests pass locally; routing owner runs exactphoneClean/Dalhousie hosted replay. No stable alias change.
+
+Preview0e266 withheld: hosted geometry/fuel passed but Dalhousie used20s with6optional trials. Reviewedcd1dcd04 narrows to one shared trial. New isolated preview https://pack-fabric-mpatek5gc-goricksmith-7678s-projects.vercel.app READY, source6ace2323f6a6051a9f3761db55973d7548fc087e; service subtree equals routingowner cd1dcd04, unchanged5regions02/ns-nb-v1. Devicecase hosted timing verifier running under candidate03/atlantic-bounded-device-live. Stable945978 preserved pending results.
+
+Bounded preview6ace232 hosted devicecase verifier passed: Dalhousie15.456sserver,958.049km72.34%dirt4.095kmrepeat4stops; Clean7.572sserver704.381km3stops. Bothcompletewindow/range/escape/geometry and02 identities pass. Clean still391.296kmprimary+106.955kmtrunk; not backroad-quality acceptance. Evidence atlantic-bounded-device-live. Routing owner notified; stable unchanged.
+
+Stable DEV now exactmpatek5gc/source6ace2323f6a6051a9f3761db55973d7548fc087e after routingowner6hostedcross pass,24localmatrix pass andNS3exactbaseline. Publichealth confirms source/ns-nb-v1. BothNS/NB02 andotherstable02 overrides retained, no national03/prod/phone action. Scope fuel-detour retest andCleanrequestgate; Cleanbackroadquality remainsopen, coldDalhousie15.456s. Routingowner independently verifies publicroute and provides existingbuild23 handoff.
