@@ -23,7 +23,7 @@ function buildRideAlternatives(options) {
  const candidates=options.expandedCandidates?expandedObjectives:objectives;
  for(const objective of candidates) {
   if(!options.budget.check())break;
-  const result=buildFromHere({...options,...context,objectiveId:objective.id,edgeCost:objective.cost,dirtEntryCost:objective.id==='paved'?0:continuityMeters*(Number(objective.id.split('-')[1])-1),preferOnwardFuel:options.preferOnwardFuel===true});
+  const result=buildFromHere({...options,...context,objectiveId:objective.id,edgeCost:objective.cost,fuelHeuristicWeight:objective.id==='paved'?(options.pavedFuelHeuristicWeight??options.fuelHeuristicWeight):options.fuelHeuristicWeight,dirtEntryCost:objective.id==='paved'?0:continuityMeters*(Number(objective.id.split('-')[1])-1),preferOnwardFuel:options.preferOnwardFuel===true});
   results.push({id:objective.id,result});
   if(options.budget.snapshot().reason)break;
  }

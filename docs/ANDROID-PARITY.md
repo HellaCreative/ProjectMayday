@@ -831,3 +831,9 @@ by100fornonpaved/unknown. No access prohibition; fuel/turn/escape constraints
 unchanged. Shared pool Dirt/Balanced objectives unchanged. Localonly at this
 entry; live publication/physical acceptance recorded in routingprogress. Swift
 andAndroid replication remain deferred under live-first authorization.
+
+Clean qualification update: paved candidate alone uses explicitfuelheuristic3
+(otherobjectives retain priorweights). Same label/deadline/work bounds; no retry.
+A complete response with a dirt-heavy fallback is not a qualified Clean result;
+NSCapeClean regression verifies paved selection, surface and completepool.
+Shared live-first/physical/offline qualification boundaries remain unchanged.

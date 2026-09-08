@@ -12,7 +12,7 @@ const input={mode:'from_here',anchors:body.locations.map((p,i)=>({id:i?'b':'a',.
 const summary=[];
 for(const meters of (process.env.REBUILD_CONTINUITY_METERS||'0,500,1000').split(',').map(Number)){
  const at=performance.now(),deadlineAtMs=Date.now()+20000;
- const result=buildRideAlternatives({input,pack,geom,stations,revision:'ns02-continuity-bench',context:createRideAlternativeContext(),maxFuelLabels:400000,fuelHeuristicWeight:Number(process.env.REBUILD_CONTINUITY_WEIGHT||1),preferOnwardFuel:true,dirtContinuityMeters:meters,budget:createBudget({deadlineAtMs,maxExpansions:30000000}),preparationBudget:createBudget({deadlineAtMs,maxExpansions:20000000})});
+ const result=buildRideAlternatives({pavedFuelHeuristicWeight:process.env.REBUILD_PAVED_WEIGHT?Number(process.env.REBUILD_PAVED_WEIGHT):undefined,input,pack,geom,stations,revision:'ns02-continuity-bench',context:createRideAlternativeContext(),maxFuelLabels:400000,fuelHeuristicWeight:Number(process.env.REBUILD_CONTINUITY_WEIGHT||1),preferOnwardFuel:true,dirtContinuityMeters:meters,budget:createBudget({deadlineAtMs,maxExpansions:30000000}),preparationBudget:createBudget({deadlineAtMs,maxExpansions:20000000})});
  fs.writeFileSync(path.join(out,`${meters}.json`),JSON.stringify(result));
  const s=result.selected;let atMeters=0;const localDirt=[];
  for(const seg of s?.road.segments||[]){if(atMeters<20000&&!['asphalt','paved','concrete'].includes(seg.surfaceLeaf))localDirt.push({atMeters,edge:seg.edgeId,meters:seg.distanceMeters});atMeters+=seg.distanceMeters;}
