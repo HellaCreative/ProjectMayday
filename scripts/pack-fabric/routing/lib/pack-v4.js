@@ -23,6 +23,12 @@ const FLAG_EDGE_FROM_TO = 1;
 const FLAG_V3_LEAVES = 2;
 const FLAG_V3_CROSSING_SECONDS = 4;
 const FLAG_V4_LEGAL_TOPOLOGY = 8;
+// V4 already stores the exact OSM way id and both endpoint indexes for every
+// edge.  Persisting `w<way>:<from>:<to>` a second time as UTF-8 costs hundreds
+// of megabytes in large regions without adding information.  New V4 writers
+// derive that stable id at read time; readers remain compatible with the
+// original, explicit-string layout.
+const FLAG_V4_DERIVED_EDGE_IDS = 16;
 const CAPABILITY = "legal-topology.v1";
 
 function sha256(buf) {
@@ -113,8 +119,6 @@ function encodeGraphV4(graph, provenance, geometryBuffer) {
   const edgeAttrs = new Uint16Array(undirectedEdgeCount);
   const edgeAccess = Buffer.alloc(undirectedEdgeCount * 2);
   const osmWayIds = Buffer.alloc(undirectedEdgeCount * 8);
-  const idStrings = [];
-  let idBytesLen = 0;
   const surfaceDict = buildLeafDictionary(
     edges.map((e) => e.surfaceLeaf),
     "",
@@ -183,18 +187,11 @@ function encodeGraphV4(graph, provenance, geometryBuffer) {
     edgeAccess[ei * 2] = e.accessForward;
     edgeAccess[ei * 2 + 1] = e.accessReverse;
     osmWayIds.writeBigInt64LE(BigInt(e.osmWayId || 0), ei * 8);
-    const id = `w${e.osmWayId}:${e.from}:${e.to}`;
-    idStrings.push(id);
-    idBytesLen += Buffer.byteLength(id);
   }
-  const idOffsets = new Int32Array(undirectedEdgeCount + 1);
-  const idBlob = Buffer.alloc(idBytesLen);
-  let idAt = 0;
-  for (let i = 0; i < undirectedEdgeCount; i += 1) {
-    idOffsets[i] = idAt;
-    idAt += idBlob.write(idStrings[i], idAt);
-  }
-  idOffsets[undirectedEdgeCount] = idAt;
+  // Retain one aligned sentinel so the legacy section offsets remain valid,
+  // while omitting the redundant (edgeCount + 1) offsets and UTF-8 blob.
+  const idOffsets = new Int32Array(1);
+  const idBlob = Buffer.alloc(0);
 
   const nodeCoords = new Float32Array(nodeCount * 2);
   const osmNodeIds = Buffer.alloc(nodeCount * 8);
@@ -219,6 +216,10 @@ function encodeGraphV4(graph, provenance, geometryBuffer) {
   restChunks[0].writeUInt32LE(restrictions.length, 0);
   for (const r of restrictions) {
     const viaWays = r.viaWayIds || [];
+    const viaEdges = r.viaEdges || [];
+    if (viaWays.length !== viaEdges.length) {
+      throw new Error(`restriction ${r.osmRelationId || "unknown"} has mismatched via-way/edge sequence`);
+    }
     const rec = Buffer.alloc(32 + viaWays.length * 12);
     rec.writeBigInt64LE(BigInt(r.osmRelationId || 0), 0);
     rec.writeUInt8(r.kind || 0, 8);
@@ -231,7 +232,6 @@ function encodeGraphV4(graph, provenance, geometryBuffer) {
     rec.writeUInt16LE(r.vehicleMask || 7, 26);
     rec.writeInt32LE(-1, 28);
     let o = 32;
-    const viaEdges = r.viaEdges || [];
     for (let i = 0; i < viaWays.length; i += 1) {
       rec.writeBigInt64LE(BigInt(viaWays[i] || 0), o);
       rec.writeInt32LE(viaEdges[i] != null ? viaEdges[i] : -1, o + 8);
@@ -242,13 +242,18 @@ function encodeGraphV4(graph, provenance, geometryBuffer) {
   const restrictionBuf = Buffer.concat(restChunks);
 
   const conditionals = Buffer.from(
-    JSON.stringify({ rules: provenance.conditionals || [], timezone: graph.timezone || "America/Halifax" }),
+    JSON.stringify({
+      rules: graph.conditionals || provenance.conditionals || [],
+      timezone: graph.timezone || provenance.timezone || "UTC",
+      policy: "fail_closed"
+    }),
     "utf8"
   );
   const capabilities = Buffer.from(JSON.stringify([CAPABILITY]), "utf8");
   const provenanceJson = Buffer.from(
     JSON.stringify({
       ...provenance,
+      conditionals: graph.conditionals || provenance.conditionals || [],
       unprovenStitches: 0,
       rejected: graph.rejected || []
     }),
@@ -339,7 +344,8 @@ function encodeGraphV4(graph, provenance, geometryBuffer) {
   graphBuffer.writeUInt32LE(GRAPH_V4_MAGIC, 0);
   graphBuffer.writeUInt16LE(GRAPH_V4_VERSION, 4);
   graphBuffer.writeUInt16LE(
-    FLAG_EDGE_FROM_TO | FLAG_V3_LEAVES | FLAG_V3_CROSSING_SECONDS | FLAG_V4_LEGAL_TOPOLOGY,
+    FLAG_EDGE_FROM_TO | FLAG_V3_LEAVES | FLAG_V3_CROSSING_SECONDS |
+      FLAG_V4_LEGAL_TOPOLOGY | FLAG_V4_DERIVED_EDGE_IDS,
     6
   );
   graphBuffer.writeUInt32LE(nodeCount, 8);
@@ -427,6 +433,122 @@ function viewU32(buf, offset) {
   return buf.readUInt32LE(offset);
 }
 
+/**
+ * Array-like, lazy string view over packed signed Int64 OSM ids. Large regions
+ * contain millions of repeated way ids; eagerly materializing each one as a JS
+ * string can consume more memory than the graph binary itself.
+ */
+class Int64StringView {
+  constructor(buffer, offset, length) {
+    this.buffer = buffer;
+    this.offset = offset;
+    this.length = length;
+  }
+
+  valueAt(index) {
+    if (!Number.isInteger(index) || index < 0 || index >= this.length) return undefined;
+    return this.buffer.readBigInt64LE(this.offset + index * 8).toString();
+  }
+
+  at(index) {
+    const normalized = index < 0 ? this.length + index : index;
+    return this.valueAt(normalized);
+  }
+
+  includes(value, fromIndex = 0) {
+    if (typeof value !== "string") return false;
+    let start = Math.trunc(fromIndex);
+    if (start < 0) start = Math.max(0, this.length + start);
+    for (let i = start; i < this.length; i += 1) {
+      if (this.valueAt(i) === value) return true;
+    }
+    return false;
+  }
+
+  findIndex(predicate, thisArg) {
+    for (let i = 0; i < this.length; i += 1) {
+      if (predicate.call(thisArg, this.valueAt(i), i, this)) return i;
+    }
+    return -1;
+  }
+
+  map(callback, thisArg) {
+    const out = new Array(this.length);
+    for (let i = 0; i < this.length; i += 1) {
+      out[i] = callback.call(thisArg, this.valueAt(i), i, this);
+    }
+    return out;
+  }
+
+  *[Symbol.iterator]() {
+    for (let i = 0; i < this.length; i += 1) yield this.valueAt(i);
+  }
+}
+
+function int64StringView(buffer, offset, length) {
+  const target = new Int64StringView(buffer, offset, length);
+  return new Proxy(target, {
+    get(view, property, receiver) {
+      if (typeof property === "string" && /^(0|[1-9][0-9]*)$/.test(property)) {
+        return view.valueAt(Number(property));
+      }
+      return Reflect.get(view, property, receiver);
+    }
+  });
+}
+
+/**
+ * Losslessly remove the original V4 edge-id string table.  Edge identity is
+ * exactly reproducible from the already-packed OSM way id and endpoints.  The
+ * suffix shift is kept four-byte aligned so every typed-array section retains
+ * its required alignment.
+ */
+function compactGraphV4Buffer(buffer) {
+  const buf = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer);
+  if (viewU32(buf, 0) !== GRAPH_V4_MAGIC || buf.readUInt16LE(4) !== GRAPH_V4_VERSION) {
+    throw new Error("unsupported graph version");
+  }
+  const flags = buf.readUInt16LE(6);
+  if ((flags & FLAG_V4_DERIVED_EDGE_IDS) !== 0) {
+    return { graphBuffer: buf, savedBytes: 0, alreadyCompact: true };
+  }
+  const edgeCount = viewU32(buf, 12);
+  const idOffsetsAt = viewU32(buf, 48);
+  const idBlobAt = viewU32(buf, 52);
+  const enumsAt = viewU32(buf, 56);
+  const expectedOffsetsBytes = (edgeCount + 1) * 4;
+  if (idBlobAt - idOffsetsAt !== expectedOffsetsBytes || enumsAt < idBlobAt || enumsAt > buf.length) {
+    throw new Error("corrupt V4 edge-id sections");
+  }
+
+  const oldSpan = enumsAt - idOffsetsAt;
+  const alignmentPad = (enumsAt - idBlobAt) & 3;
+  const newSpan = 4 + alignmentPad;
+  const savedBytes = oldSpan - newSpan;
+  if (savedBytes <= 0 || (savedBytes & 3) !== 0) {
+    throw new Error("V4 edge-id compaction did not preserve alignment");
+  }
+
+  const out = Buffer.alloc(buf.length - savedBytes);
+  buf.copy(out, 0, 0, idOffsetsAt);
+  // Four-byte zero sentinel + at most three bytes of alignment padding.
+  out.fill(0, idOffsetsAt, idOffsetsAt + newSpan);
+  buf.copy(out, idOffsetsAt + newSpan, enumsAt);
+
+  out.writeUInt16LE(flags | FLAG_V4_DERIVED_EDGE_IDS, 6);
+  out.writeUInt32LE(idOffsetsAt, 48);
+  out.writeUInt32LE(idOffsetsAt + 4, 52);
+  const pointerFields = [
+    24, 28, 32, 36, 40, 44, 56, 60, 64, 68, 72, 76, 80, 84,
+    88, 92, 96, 100, 104, 108, 112, 116, 120, 124, 128, 132, 136
+  ];
+  for (const field of pointerFields) {
+    const prior = viewU32(buf, field);
+    out.writeUInt32LE(prior >= enumsAt ? prior - savedBytes : prior, field);
+  }
+  return { graphBuffer: out, savedBytes, alreadyCompact: false };
+}
+
 function decodeGraphV4(buffer, geometryBuffer) {
   const buf = Buffer.isBuffer(buffer) ? buffer : Buffer.from(buffer);
   if (viewU32(buf, 0) !== GRAPH_V4_MAGIC) {
@@ -461,14 +583,10 @@ function decodeGraphV4(buffer, geometryBuffer) {
   const edgeMeters = new Uint32Array(ab, base + viewU32(buf, 40), undirectedEdgeCount);
   const nodeCoords = new Float32Array(ab, base + viewU32(buf, 44), nodeCount * 2);
   const edgeAccess = buf.subarray(viewU32(buf, 112), viewU32(buf, 112) + undirectedEdgeCount * 2);
-  const osmNodeIds = [];
   const osmAt = viewU32(buf, 104);
-  for (let i = 0; i < nodeCount; i += 1) osmNodeIds.push(buf.readBigInt64LE(osmAt + i * 8).toString());
-  const osmWayIds = [];
+  const osmNodeIds = int64StringView(buf, osmAt, nodeCount);
   const wayAt = viewU32(buf, 108);
-  for (let i = 0; i < undirectedEdgeCount; i += 1) {
-    osmWayIds.push(buf.readBigInt64LE(wayAt + i * 8).toString());
-  }
+  const osmWayIds = int64StringView(buf, wayAt, undirectedEdgeCount);
   const capabilities = JSON.parse(buf.subarray(viewU32(buf, 132), viewU32(buf, 136)).toString("utf8"));
   if (!capabilities.includes(CAPABILITY)) {
     throw new Error("missing required capability legal-topology.v1");
@@ -515,9 +633,14 @@ function decodeGraphV4(buffer, geometryBuffer) {
     });
     cursor += 32 + viaWayCount * 12;
   }
-  const idOffsets = new Int32Array(ab, base + viewU32(buf, 48), undirectedEdgeCount + 1);
-  const idBlob = buf.subarray(viewU32(buf, 52), viewU32(buf, 56));
+  const derivesEdgeIds = (flags & FLAG_V4_DERIVED_EDGE_IDS) !== 0;
+  const idOffsets = derivesEdgeIds
+    ? null
+    : new Int32Array(ab, base + viewU32(buf, 48), undirectedEdgeCount + 1);
+  const idBlob = derivesEdgeIds ? null : buf.subarray(viewU32(buf, 52), viewU32(buf, 56));
   function edgeId(ei) {
+    if (ei < 0 || ei >= undirectedEdgeCount) return "";
+    if (derivesEdgeIds) return `w${osmWayIds[ei]}:${edgeFrom[ei]}:${edgeTo[ei]}`;
     return idBlob.toString("utf8", idOffsets[ei], idOffsets[ei + 1]);
   }
   const edgeAttrs = new Uint16Array(ab, base + viewU32(buf, 36), undirectedEdgeCount);
@@ -641,12 +764,15 @@ function rejectMixedContract(packs) {
 module.exports = {
   GRAPH_V4_MAGIC,
   GRAPH_V4_VERSION,
+  FLAG_V4_DERIVED_EDGE_IDS,
   HEADER_V4,
   FLAG_V4_LEGAL_TOPOLOGY,
   CAPABILITY,
   encodeGeometry,
   encodeGraphV4,
   encodeFromOsmGraph,
+  compactGraphV4Buffer,
+  int64StringView,
   decodeGraphV4,
   decodeGeometryV1,
   assertLegalReader,

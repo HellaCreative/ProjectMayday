@@ -10,9 +10,8 @@ nonisolated final class GeometryV1Pack: @unchecked Sendable {
     let data: Data
     let edgeCount: Int
     private let offsets: [Int32]
-    /// Interleaved lon,lat (float32 or float64 depending on flags).
-    private let coords32: [Float]?
-    private let coords64: [Double]?
+    private let coordsAt: Int
+    private let useFloat64: Bool
 
     init(data: Data) throws {
         self.data = data
@@ -22,25 +21,18 @@ nonisolated final class GeometryV1Pack: @unchecked Sendable {
         edgeCount = Int(data.readUInt32LE(8))
         let coordCount = Int(data.readUInt32LE(12))
         let flags: UInt16 = data.readUInt16LE(6)
-        let useFloat64 = (flags & 1) != 0
+        useFloat64 = (flags & 1) != 0
 
         let header = 16
         offsets = data.readInt32Array(at: header, count: edgeCount + 1)
-        var coordsAt = header + (edgeCount + 1) * 4
-        if coordsAt % 4 != 0 { coordsAt += 4 - (coordsAt % 4) }
-        if useFloat64, coordsAt % 8 != 0 { coordsAt += 8 - (coordsAt % 8) }
+        var coordinateOffset = header + (edgeCount + 1) * 4
+        if coordinateOffset % 4 != 0 { coordinateOffset += 4 - (coordinateOffset % 4) }
+        if useFloat64, coordinateOffset % 8 != 0 { coordinateOffset += 8 - (coordinateOffset % 8) }
+        coordsAt = coordinateOffset
 
         let bytesPer = useFloat64 ? 8 : 4
         let need = coordsAt + coordCount * bytesPer
         guard need <= data.count else { throw PackError.truncated }
-
-        if useFloat64 {
-            coords64 = data.readFloat64Array(at: coordsAt, count: coordCount)
-            coords32 = nil
-        } else {
-            coords32 = data.readFloat32Array(at: coordsAt, count: coordCount)
-            coords64 = nil
-        }
     }
 
     /// Polyline for undirected edge `ei` as lon/lat coordinates.
@@ -51,21 +43,29 @@ nonisolated final class GeometryV1Pack: @unchecked Sendable {
         guard start >= 0, end >= start, end % 2 == 0 else { return [] }
         var out: [CLLocationCoordinate2D] = []
         out.reserveCapacity((end - start) / 2)
-        var i = start
-        while i + 1 < end {
-            let lon: Double
-            let lat: Double
-            if let c64 = coords64 {
-                lon = c64[i]
-                lat = c64[i + 1]
-            } else if let c32 = coords32 {
-                lon = Double(c32[i])
-                lat = Double(c32[i + 1])
-            } else {
-                break
+        data.withUnsafeBytes { raw in
+            var i = start
+            while i + 1 < end {
+                let lon: Double
+                let lat: Double
+                if useFloat64 {
+                    lon = Double(bitPattern: raw.loadUnaligned(
+                        fromByteOffset: coordsAt + i * 8, as: UInt64.self
+                    ).littleEndian)
+                    lat = Double(bitPattern: raw.loadUnaligned(
+                        fromByteOffset: coordsAt + (i + 1) * 8, as: UInt64.self
+                    ).littleEndian)
+                } else {
+                    lon = Double(Float(bitPattern: raw.loadUnaligned(
+                        fromByteOffset: coordsAt + i * 4, as: UInt32.self
+                    ).littleEndian))
+                    lat = Double(Float(bitPattern: raw.loadUnaligned(
+                        fromByteOffset: coordsAt + (i + 1) * 4, as: UInt32.self
+                    ).littleEndian))
+                }
+                out.append(CLLocationCoordinate2D(latitude: lat, longitude: lon))
+                i += 2
             }
-            out.append(CLLocationCoordinate2D(latitude: lat, longitude: lon))
-            i += 2
         }
         return out
     }
@@ -98,19 +98,4 @@ private extension Data {
         }
     }
 
-    nonisolated func readFloat32Array(at offset: Int, count: Int) -> [Float] {
-        guard count > 0 else { return [] }
-        let byteCount = count * 4
-        return subdata(in: offset..<(offset + byteCount)).withUnsafeBytes { raw in
-            Array(raw.bindMemory(to: Float.self).prefix(count))
-        }
-    }
-
-    nonisolated func readFloat64Array(at offset: Int, count: Int) -> [Double] {
-        guard count > 0 else { return [] }
-        let byteCount = count * 8
-        return subdata(in: offset..<(offset + byteCount)).withUnsafeBytes { raw in
-            Array(raw.bindMemory(to: Double.self).prefix(count))
-        }
-    }
 }

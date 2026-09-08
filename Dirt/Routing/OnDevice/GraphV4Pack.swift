@@ -18,6 +18,7 @@ nonisolated final class GraphV4Pack: @unchecked Sendable {
         let viaNode: Int
         let only: Bool
         let vehicleMask: UInt16
+        let viaEdges: [Int]
     }
 
     enum PackError: Error {
@@ -109,6 +110,12 @@ nonisolated final class GraphV4Pack: @unchecked Sendable {
         var cursor = restAt + 4
         for _ in 0..<restCount {
             let viaWayCount = Int(data.readUInt16LE(cursor + 10))
+            var viaEdges: [Int] = []
+            viaEdges.reserveCapacity(viaWayCount)
+            for index in 0..<viaWayCount {
+                let edge = Int(data.readInt32LE(cursor + 32 + index * 12 + 8))
+                if edge >= 0 { viaEdges.append(edge) }
+            }
             parsed.append(
                 Restriction(
                     osmRelationId: data.readInt64LE(cursor),
@@ -117,7 +124,8 @@ nonisolated final class GraphV4Pack: @unchecked Sendable {
                     toEdge: Int(data.readUInt32LE(cursor + 16)),
                     viaNode: Int(data.readInt32LE(cursor + 20)),
                     only: (data[cursor + 9] & 2) != 0,
-                    vehicleMask: data.readUInt16LE(cursor + 26)
+                    vehicleMask: data.readUInt16LE(cursor + 26),
+                    viaEdges: viaEdges
                 )
             )
             cursor += 32 + viaWayCount * 12
@@ -130,7 +138,7 @@ nonisolated final class GraphV4Pack: @unchecked Sendable {
     }
 
     func turnAllowed(fromEdge: Int, toEdge: Int, viaNode: Int) -> Bool {
-        for r in restrictions where (r.vehicleMask & 1) != 0 {
+        for r in restrictions where (r.vehicleMask & 1) != 0 && r.viaEdges.isEmpty {
             if r.fromEdge == fromEdge, r.toEdge == toEdge, r.viaNode == viaNode, !r.only {
                 return false
             }
@@ -144,18 +152,18 @@ nonisolated final class GraphV4Pack: @unchecked Sendable {
 
 private extension Data {
     nonisolated func readUInt32LE(_ offset: Int) -> UInt32 {
-        self[offset..<offset + 4].withUnsafeBytes { $0.load(as: UInt32.self).littleEndian }
+        withUnsafeBytes { $0.loadUnaligned(fromByteOffset: offset, as: UInt32.self).littleEndian }
     }
 
     nonisolated func readUInt16LE(_ offset: Int) -> UInt16 {
-        self[offset..<offset + 2].withUnsafeBytes { $0.load(as: UInt16.self).littleEndian }
+        withUnsafeBytes { $0.loadUnaligned(fromByteOffset: offset, as: UInt16.self).littleEndian }
     }
 
     nonisolated func readInt32LE(_ offset: Int) -> Int32 {
-        self[offset..<offset + 4].withUnsafeBytes { $0.load(as: Int32.self).littleEndian }
+        withUnsafeBytes { $0.loadUnaligned(fromByteOffset: offset, as: Int32.self).littleEndian }
     }
 
     nonisolated func readInt64LE(_ offset: Int) -> Int64 {
-        self[offset..<offset + 8].withUnsafeBytes { $0.load(as: Int64.self).littleEndian }
+        withUnsafeBytes { $0.loadUnaligned(fromByteOffset: offset, as: Int64.self).littleEndian }
     }
 }

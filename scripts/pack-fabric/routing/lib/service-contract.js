@@ -14,7 +14,8 @@ function withServiceIdentity(result, environment = process.env) {
   return {
     ...payload,
     serviceContract: ROUTING_SERVICE_CONTRACT,
-    serviceBuild: serviceBuild(environment)
+    serviceBuild: serviceBuild(environment),
+    connectionRevision: environment.DIRT_V4_CONNECTION_REVISION || null
   };
 }
 

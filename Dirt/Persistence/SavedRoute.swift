@@ -12,6 +12,9 @@ final class SavedRoute {
     var pavedPercent: Int
     /// Optional Graph-v3 route runs. Existing records remain valid with nil.
     var segmentsData: Data?
+    /// Compatibility with DEV builds that saved per-leg seeds. Retain the
+    /// optional storage column while routing behavior is recovered.
+    var routeSeedsData: Data?
     var surfaceFamilyMode: String?
     var createdAt: Date
 

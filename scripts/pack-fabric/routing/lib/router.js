@@ -79,6 +79,7 @@ const {
   resolveMetroFallbackPenalty
 } = require("./hop-search");
 const crossPackTopology = require("../schema/cross-pack-topology.v1.json");
+const crossPackTopologyV4 = require("./connection-revision").connectionTopology(require("../schema/cross-pack-topology.v2.json"));
 const { resolveLocationsByEligibleEdge } = require("../regional/endpoint-resolver");
 
 function routeSearchLimitMessage(profile) {
@@ -1430,9 +1431,23 @@ async function snapSeamWaypoint(seed, regionIds, profile) {
  * Select a topology-authored seam from the deployment index. This avoids four
  * full R2 graph downloads before a cross-region fuel plan can even begin.
  */
-function topologySeamCandidatesFromIndex(seed, regionIds, index = crossPackTopology) {
+function topologyIndexFor(regionIds) {
+  const enabled = new Set(String(process.env.DIRT_V4_REGIONS || "")
+    .split(",").map((id) => id.trim().toLowerCase()).filter(Boolean));
+  const ids = [...new Set((regionIds || []).map((id) => String(id).toLowerCase()))];
+  if (
+    ids.length === 2 &&
+    ids.every((id) => enabled.has(id)) &&
+    crossPackTopologyV4.regions &&
+    ids.every((id) => crossPackTopologyV4.regions[id])
+  ) return crossPackTopologyV4;
+  return crossPackTopology;
+}
+
+function topologySeamCandidatesFromIndex(seed, regionIds, index = null) {
   const ids = [...new Set((regionIds || []).map((id) => String(id).toLowerCase()))];
   if (ids.length !== 2) return [];
+  index = index || topologyIndexFor(ids);
   const records = (index && index.regions) || {};
   const left = records[ids[0]];
   const right = records[ids[1]];
@@ -1462,8 +1477,9 @@ function topologySeamCandidatesFromIndex(seed, regionIds, index = crossPackTopol
     }));
 }
 
-function topologySeamFromIndex(seed, regionIds, index = crossPackTopology) {
+function topologySeamFromIndex(seed, regionIds, index = null) {
   const ids = [...new Set((regionIds || []).map((id) => String(id).toLowerCase()))];
+  index = index || topologyIndexFor(ids);
   const records = (index && index.regions) || {};
   if (ids.length !== 2 || !records[ids[0]] || !records[ids[1]]
     || !records[ids[0]].neighbors || !records[ids[0]].neighbors[ids[1]]
@@ -2466,7 +2482,9 @@ async function routeOnRuntime(body, graphResolution, runtime) {
     priorEdgeIds: Array.from(priorEdgeIds),
     arrivalEdgeId,
     backtrackFactor,
-    skipShortDirtRepair: options.internalFuelProbe === true
+    skipShortDirtRepair: options.internalFuelProbe === true,
+    startEndpointKind: options.startEndpointKind || null,
+    endEndpointKind: options.endEndpointKind || null
   };
   if (Number.isFinite(Number(options.deadlineAtMs))) {
     searchOpts.deadlineAtMs = Number(options.deadlineAtMs);
@@ -2559,8 +2577,9 @@ async function routeOnRuntime(body, graphResolution, runtime) {
   } else {
     const diagnostics = {};
     const adventureSearchOpts = Object.assign({}, searchOpts, {
-      // Major urban cores are walls. Smaller mapped towns remain a strong,
-      // finite avoidance cost so they cannot falsely disconnect rural fabric.
+      // Smaller towns remain routable because they may contain the only legal
+      // rural connection, but their maximum finite cost prevents extra Dirt
+      // from making an avoidable town crossing attractive.
       settlementWall: false,
       settlementFallback: true,
       diagnostics
