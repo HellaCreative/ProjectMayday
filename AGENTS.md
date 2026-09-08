@@ -69,3 +69,17 @@ For the post-launch GPX-to-DIRT conversion milestone:
 
 Then read the narrow contract relevant to the task. Phase reports and handback
 documents are historical evidence, not current instructions.
+
+## Routing evolution lockstep — DEV qualification
+
+Routing search, costs, variety seeds, forward progress, retrace rejection, and
+fuel-replacement ranking are one contract. Change JavaScript under
+`scripts/pack-fabric/routing/lib/` and Swift under `Dirt/Routing/OnDevice/` in
+the same change. A live-only or phone-only search change is a defect. The live
+services must not silently diverge from downloaded-pack routing on these laws.
+
+The current routing-evolution qualification target is the sealed DEV-only V4
+release `fabric-v4-20260907-01`. Test its graph, geometry, legal topology,
+directional access, barriers, restrictions, and V2 seam contract without
+rebuilding, modifying, uploading, or restamping any pack. Do not substitute V3,
+runtime OSM, production, or a physical device for this qualification.

@@ -874,6 +874,26 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
         return edgeAccess[ei * 2 + (forward ? 0 : 1)]
     }
 
+    /// True when this edge is the sole physical road incident to either end.
+    /// This is the only automatic non-fuel endpoint that may reuse the arrival
+    /// road: a real driveway/dead-end, not an arbitrary snapped through-road.
+    func isSingleAccessEdge(_ ei: Int) -> Bool {
+        guard ei >= 0, ei < undirectedEdgeCount,
+              let edgeFrom, let edgeTo else { return false }
+        func hasOnlyThisIncidentEdge(_ node: Int) -> Bool {
+            guard node >= 0, node + 1 < nodeOffsets.count else { return false }
+            let start = Int(nodeOffsets[node])
+            let end = Int(nodeOffsets[node + 1])
+            guard start < end else { return false }
+            for arc in start..<end where Int(edgeUndirectedIndex[arc]) != ei {
+                return false
+            }
+            return true
+        }
+        return hasOnlyThisIncidentEdge(Int(edgeFrom[ei]))
+            || hasOnlyThisIncidentEdge(Int(edgeTo[ei]))
+    }
+
     func makeV4TurnStateSpace(startNode: Int, endNode: Int) -> V4TurnStateSpace {
         V4TurnStateSpace.build(pack: self, startNode: startNode, endNode: endNode)
     }
@@ -894,8 +914,8 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
         if code == 1 { return allowUnknown }
         if code == 2 || code == 5 { return false }
         if code == 3 {
-            return (ei == startEi && startEndpointKind != "customers")
-                || (ei == endEi && endEndpointKind != "customers")
+            return (ei == startEi && startEndpointKind != "customers" && isSingleAccessEdge(ei))
+                || (ei == endEi && endEndpointKind != "customers" && isSingleAccessEdge(ei))
         }
         if code == 4 {
             return (ei == startEi && startEndpointKind == "customers")

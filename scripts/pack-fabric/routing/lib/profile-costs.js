@@ -346,8 +346,30 @@ function crossTrackMeters(point, a, b) {
   return Math.asin(Math.sin(d13) * Math.sin(t13 - t12)) * EARTH_RADIUS_M;
 }
 
+function distanceToPolylineMeters(point, coordinates) {
+  if (!point || !Array.isArray(coordinates) || coordinates.length < 2) return Infinity;
+  let best = Infinity;
+  for (let index = 1; index < coordinates.length; index += 1) {
+    const a = coordinates[index - 1];
+    const b = coordinates[index];
+    const lat0 = ((point[1] + a[1] + b[1]) / 3) * Math.PI / 180;
+    const scaleX = EARTH_RADIUS_M * Math.cos(lat0) * Math.PI / 180;
+    const scaleY = EARTH_RADIUS_M * Math.PI / 180;
+    const px = (point[0] - a[0]) * scaleX;
+    const py = (point[1] - a[1]) * scaleY;
+    const bx = (b[0] - a[0]) * scaleX;
+    const by = (b[1] - a[1]) * scaleY;
+    const denom = bx * bx + by * by;
+    const t = denom > 0 ? Math.max(0, Math.min(1, (px * bx + py * by) / denom)) : 0;
+    best = Math.min(best, Math.hypot(px - t * bx, py - t * by));
+  }
+  return best;
+}
+
 /** Corridor off-line tax. Balanced then Dirt. Clean has none. */
-function corridorCrossTrackExtra(profile, point, lineFrom, lineTo, edgeMeters) {
+function corridorCrossTrackExtra(
+  profile, point, lineFrom, lineTo, edgeMeters, landPathCoordinates
+) {
   if (!(edgeMeters > 0) || !point || !lineFrom || !lineTo) return 0;
   profile = resolveProfile(profile);
   if (profile === "cleanest") return 0;
@@ -356,7 +378,10 @@ function corridorCrossTrackExtra(profile, point, lineFrom, lineTo, edgeMeters) {
       : profile === "dirt" ? 0.005
         : 0;
   if (!k) return 0;
-  const xtKm = Math.abs(crossTrackMeters(point, lineFrom, lineTo)) / 1000;
+  const crossTrack = Array.isArray(landPathCoordinates) && landPathCoordinates.length > 1
+    ? distanceToPolylineMeters(point, landPathCoordinates)
+    : Math.abs(crossTrackMeters(point, lineFrom, lineTo));
+  const xtKm = crossTrack / 1000;
   return (edgeMeters / 1000) * xtKm * xtKm * k;
 }
 

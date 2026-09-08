@@ -28,10 +28,16 @@ const CLEAN_COINCIDENT_NODE_M = 2;
 // effectively unlimited dirt excursion. These are exchange rates, not a
 // shortest-path objective: extra dirt is welcome when it replaces meaningful
 // pavement or creates a coherent adventure chain.
-const DIRT_RIDE_PAVED_PER_KM = Number(process.env.DIRT_RIDE_PAVED_PER_KM || 150);
+// Dirt percentage is carried explicitly by the label buckets. This smaller
+// within-bucket exchange rate still prefers connected unpaved fabric without
+// letting a paved kilometre justify a large dirt loop that is later pruned.
+const DIRT_RIDE_PAVED_PER_KM = Number(process.env.DIRT_RIDE_PAVED_PER_KM || 5);
 const DIRT_RIDE_GRAVEL_PER_KM = Number(process.env.DIRT_RIDE_GRAVEL_PER_KM || 0.7);
 const DIRT_RIDE_RESOURCE_PER_KM = Number(process.env.DIRT_RIDE_RESOURCE_PER_KM || 0.5);
 const DIRT_RIDE_UNKNOWN_TRACK_PER_KM = Number(process.env.DIRT_RIDE_UNKNOWN_TRACK_PER_KM || 0.9);
+const DIRT_RIDE_SHORT_EXCURSION_MULTIPLIER = Number(
+  process.env.DIRT_RIDE_SHORT_EXCURSION_MULTIPLIER || 5
+);
 const DIRT_RIDE_XT_SCALE = Number(process.env.DIRT_RIDE_XT_SCALE || 1);
 const DIRT_RIDE_AWAY_SCALE = Number(process.env.DIRT_RIDE_AWAY_SCALE || 10);
 const SETTLEMENT_FALLBACK_MULTIPLIER = Number(process.env.SETTLEMENT_FALLBACK_MULTIPLIER || 20);
@@ -309,8 +315,56 @@ function crossTrackMeters(point, a, b) {
   return Math.asin(Math.sin(d13) * Math.sin(t13 - t12)) * EARTH_RADIUS_M;
 }
 
-function outsideCorridor(point, startLL, endLL, widthMeters) {
+/** Minimum local-planar distance from a point to a routed land polyline. */
+function projectToPolyline(point, coordinates) {
+  if (!point || !Array.isArray(coordinates) || coordinates.length < 2) return Infinity;
+  let best = Infinity;
+  let bestAlong = 0;
+  let walked = 0;
+  for (let index = 1; index < coordinates.length; index += 1) {
+    const a = coordinates[index - 1];
+    const b = coordinates[index];
+    if (!a || !b) continue;
+    const lat0 = ((point[1] + a[1] + b[1]) / 3) * Math.PI / 180;
+    const scaleX = EARTH_RADIUS_M * Math.cos(lat0) * Math.PI / 180;
+    const scaleY = EARTH_RADIUS_M * Math.PI / 180;
+    const px = (point[0] - a[0]) * scaleX;
+    const py = (point[1] - a[1]) * scaleY;
+    const bx = (b[0] - a[0]) * scaleX;
+    const by = (b[1] - a[1]) * scaleY;
+    const denom = bx * bx + by * by;
+    const t = denom > 0 ? Math.max(0, Math.min(1, (px * bx + py * by) / denom)) : 0;
+    const segmentMeters = Math.hypot(bx, by);
+    const distance = Math.hypot(px - t * bx, py - t * by);
+    if (distance < best) {
+      best = distance;
+      bestAlong = walked + t * segmentMeters;
+    }
+    walked += segmentMeters;
+  }
+  return { distanceMeters: best, alongMeters: bestAlong, totalMeters: walked };
+}
+
+function distanceToPolylineMeters(point, coordinates) {
+  const projection = projectToPolyline(point, coordinates);
+  return projection && Number.isFinite(projection.distanceMeters)
+    ? projection.distanceMeters
+    : Infinity;
+}
+
+/** Progress along the shortest legal-road reference, never the A→B chord. */
+function landPathProgressMeters(point, coordinates) {
+  const projection = projectToPolyline(point, coordinates);
+  return projection && Number.isFinite(projection.alongMeters)
+    ? projection.alongMeters
+    : -Infinity;
+}
+
+function outsideCorridor(point, startLL, endLL, widthMeters, landPathCoordinates) {
   if (!(widthMeters > 0) || !point || !startLL || !endLL) return false;
+  if (Array.isArray(landPathCoordinates) && landPathCoordinates.length > 1) {
+    return distanceToPolylineMeters(point, landPathCoordinates) > widthMeters;
+  }
   return Math.abs(crossTrackMeters(point, startLL, endLL)) > widthMeters;
 }
 
@@ -575,11 +629,14 @@ module.exports = {
   DIRT_RIDE_PAVED_PER_KM,
   DIRT_RIDE_GRAVEL_PER_KM,
   DIRT_RIDE_RESOURCE_PER_KM,
+  DIRT_RIDE_SHORT_EXCURSION_MULTIPLIER,
   DIRT_RIDE_UNKNOWN_TRACK_PER_KM,
   DIRT_RIDE_XT_SCALE,
   DIRT_RIDE_AWAY_SCALE,
   corridorMetersForProfile,
   crossTrackMeters,
+  distanceToPolylineMeters,
+  landPathProgressMeters,
   outsideCorridor,
   projectedProgressMeters,
   maxProgressRegressionMeters,

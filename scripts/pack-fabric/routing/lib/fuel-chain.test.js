@@ -9,6 +9,8 @@ const {
   fuelSearchStartMeters,
   foundationPlacement,
   foundationRouteLayout,
+  forecourtFoundationPlacement,
+  prepareFoundationTopology,
   fuelPlanStatus,
   nearestReachableFuelDistance,
   planCrossRegionFuelChain,
@@ -48,8 +50,93 @@ test("foundation fuel placement retains a legal route-edge snap alternative", ()
   const placement = foundationPlacement(target, layout);
   assert.ok(placement);
   assert.equal(placement.target.match.edgeId, "route-edge");
-  assert.equal(placement.accessMeters, 12);
+  assert.equal(placement.accessMeters, 0);
+  assert.equal(placement.snapDistanceMeters, 12);
+  assert.equal(placement.accessProof, "same-foundation-directed-edge");
   assert.ok(Math.abs(placement.alongMeters - 50) < 1);
+});
+
+test("V4 fuel access accepts separate legal one-way forecourt entrance and exit", () => {
+  const route = {
+    segments: [
+      { edgeId: "foundation-0", distanceMeters: 100, geometry: [[-0.001, 0], [0, 0]] },
+      { edgeId: "foundation-1", distanceMeters: 100, geometry: [[0, 0], [0.0003, 0]] },
+      { edgeId: "foundation-2", distanceMeters: 100, geometry: [[0.0003, 0], [0.001, 0]] }
+    ]
+  };
+  const polylines = [
+    [[-0.001, 0], [0, 0]],
+    [[0, 0], [0.0003, 0]],
+    [[0.0003, 0], [0.001, 0]],
+    [[0, 0], [0.00005, 0.0001]],
+    [[0.00005, 0.0001], [0.00015, 0.0001]],
+    [[0.00015, 0.0001], [0.0003, 0]]
+  ];
+  const edgeIds = [
+    "foundation-0", "foundation-1", "foundation-2",
+    "one-way-entry", "station-lane", "one-way-exit"
+  ];
+  const runtime = {
+    enums: {
+      SURFACE_NAME: ["paved"],
+      ACCESS_NAME: {
+        0: "motorized_verified",
+        4: "motorized_excluded"
+      },
+      STRUCTURE_NAME: ["none"]
+    },
+    geom: { polyline: (edgeIndex) => polylines[edgeIndex].map((coord) => coord.slice()) },
+    pack: {
+      graphBinaryVersion: 4,
+      undirectedEdgeCount: 6,
+      nodeCount: 6,
+      nodeCoords: new Float64Array([
+        -0.001, 0, 0, 0, 0.0003, 0, 0.001, 0,
+        0.00005, 0.0001, 0.00015, 0.0001
+      ]),
+      edgeFrom: new Uint32Array([0, 1, 2, 1, 4, 5]),
+      edgeTo: new Uint32Array([1, 2, 3, 4, 5, 2]),
+      edgeMeters: new Float32Array([100, 100, 100, 20, 20, 20]),
+      edgeAttrs: new Uint32Array(6),
+      edgeAccess: new Uint8Array([
+        0, 0, 0, 0, 0, 0,
+        0, 4, 0, 4, 0, 4
+      ]),
+      nodeOffsets: new Uint32Array([0, 1, 4, 7, 8, 10, 12]),
+      edgeTargets: new Uint32Array([1, 0, 2, 4, 1, 3, 5, 2, 1, 5, 4, 2]),
+      edgeUndirectedIndex: new Uint32Array([0, 0, 1, 3, 1, 2, 5, 2, 3, 4, 4, 5]),
+      restrictions: [],
+      edgeId: (edgeIndex) => edgeIds[edgeIndex],
+      edgeLeaves: () => ({ surfaceLeaf: "asphalt", structureLeaf: "none", layer: 0 })
+    }
+  };
+  const layout = foundationRouteLayout(route);
+  assert.equal(prepareFoundationTopology(layout, runtime), true);
+  const target = {
+    station: { id: "one-way-pump" },
+    location: { lat: 0.0001, lon: 0.0001 },
+    match: {
+      edgeId: "station-lane",
+      edgeIndex: 4,
+      forward: true,
+      coord: [0.0001, 0.0001],
+      distanceAlongM: 10,
+      distanceM: 0,
+      candidates: []
+    }
+  };
+
+  const placement = forecourtFoundationPlacement(target, layout, runtime, false);
+  assert.ok(placement);
+  assert.equal(placement.accessProof, "v4-directed-forecourt-through-path");
+  assert.deepEqual(placement.accessEdgeIds, [
+    "one-way-entry", "station-lane", "one-way-exit"
+  ]);
+  assert.equal(placement.alongMeters, 100);
+  assert.equal(placement.exitAlongMeters, 200);
+  assert.equal(placement.arrivalMeters, 30);
+  assert.equal(placement.departureMeters, 30);
+  assert.ok(placement.accessMeters <= 200);
 });
 
 test("timeout partial rejects a fuel stop whose continuation proves a long return", () => {
@@ -191,7 +278,8 @@ test("cross-region fuel starts incrementally without measuring the whole profile
 
 test("every riding style receives the same dense-region route-first allowance", () => {
   assert.equal(routeFirstBudgetForWindow(15_000), 10_000);
-  assert.equal(routeFirstBudgetForWindow(5_800), 3_886);
+  assert.equal(routeFirstBudgetForWindow(30_000), 20_000);
+  assert.equal(routeFirstBudgetForWindow(5_800), 2_000);
   assert.equal(routeFirstBudgetForWindow(null), null);
 });
 
@@ -612,11 +700,53 @@ function lineRuntime() {
       edgeGrid.get(key).push(edgeIndex);
     }
   }
+  const edgeFrom = new Uint32Array(edges.map((edge) => edge.a));
+  const edgeTo = new Uint32Array(edges.map((edge) => edge.b));
+  const edgeMeters = new Float32Array(edges.map((edge) => edge.m));
+  const edgeAttrs = new Uint32Array(edges.length);
+  const edgeAccess = new Uint8Array(edges.length * 2);
+  const nodeOffsets = new Uint32Array(nodes.length + 1);
+  const edgeTargets = [];
+  const edgeUndirectedIndex = [];
+  for (let node = 0; node < nodes.length; node += 1) {
+    nodeOffsets[node] = edgeTargets.length;
+    for (const edgeIndex of adjacency[node]) {
+      const edge = edges[edgeIndex];
+      edgeTargets.push(edge.a === node ? edge.b : edge.a);
+      edgeUndirectedIndex.push(edgeIndex);
+    }
+  }
+  nodeOffsets[nodes.length] = edgeTargets.length;
+  const pack = {
+    graphBinaryVersion: 4,
+    nodeCount: nodes.length,
+    undirectedEdgeCount: edges.length,
+    nodeCoords: new Float64Array(nodes.flat()),
+    edgeFrom,
+    edgeTo,
+    edgeMeters,
+    edgeAttrs,
+    edgeAccess,
+    nodeOffsets,
+    edgeTargets: new Uint32Array(edgeTargets),
+    edgeUndirectedIndex: new Uint32Array(edgeUndirectedIndex),
+    restrictions: [],
+    hasDirectedArc: (from, to, edgeIndex) => {
+      for (let arc = nodeOffsets[from]; arc < nodeOffsets[from + 1]; arc += 1) {
+        if (edgeTargets[arc] === to && edgeUndirectedIndex[arc] === edgeIndex) return true;
+      }
+      return false;
+    },
+    edgeId: (edgeIndex) => edges[edgeIndex].i,
+    edgeLeaves: () => ({ surfaceLeaf: "asphalt", structureLeaf: "none", layer: 0 })
+  };
   return {
     data: { nodeCount: nodes.length, nodes, edges, regionId: "fixture" },
     adjacency,
     edgeGrid,
     GRID,
+    pack,
+    geom: { polyline: (edgeIndex) => edges[edgeIndex].g.map((coord) => coord.slice()) },
     enums: {
       SURFACE_NAME: ["paved"],
       ACCESS_NAME: ["motorized_permissive"],

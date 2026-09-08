@@ -61,8 +61,55 @@ test("reported V4 Yarmouth route keeps Dirt and rejects the Coast Gas return", {
     0
   ) / meters;
   assert.ok(knownDirtPercent >= 55,
-    `known Dirt regressed to ${knownDirtPercent.toFixed(1)}%`);
+    `known Dirt regressed to ${knownDirtPercent.toFixed(1)}%; ` +
+    `strategy=${result.diagnostics.strategy}; ` +
+    `foundation=${result.diagnostics.foundationRouteDirtPercent ?? "-"}%/` +
+    `${result.diagnostics.foundationRouteMeters ?? "-"}m; ` +
+    `matched=${result.diagnostics.foundationMatchedStations ?? 0}; ` +
+    `stops=${(result.stops || []).map((stop) => stop.id).join(",")}; ` +
+    `candidates=${JSON.stringify((result.stationCandidates || []).map((candidate) => ({
+      id: candidate.id,
+      dirt: candidate.dirtPct,
+      chainDirt: candidate.chainDirtPct,
+      chainMeters: candidate.chainMeters,
+      foundationCell: candidate.foundationPriorityCellDistance,
+      backtrack: candidate.backtrackMeters,
+      continuationBacktrack: candidate.continuationBacktrackMeters,
+      urban: candidate.urbanEntry,
+      rejected: candidate.rejectedReason
+    })))}`);
   assert.equal(result.diagnostics.strategy, "foundation_route_partition");
+  assert.equal(result.stops.length, 2, "Yarmouth needs exactly two feasible fuel stops");
+  assert.equal(result.diagnostics.foundationMinimumFeasibleStops, result.stops.length);
+  assert.equal(result.diagnostics.foundationMinimumStopProof, true);
+  assert.deepEqual(result.diagnostics.foundationFewerStopCountsExhausted, [1]);
+  assert.deepEqual(
+    result.diagnostics.foundationFuelLegMeters,
+    result.routes.map((route) => route.distanceMeters)
+  );
+  result.routes.forEach((route, index) => {
+    const limit = index === 0
+      ? result.diagnostics.foundationFirstLegLimitMeters
+      : result.diagnostics.foundationFullTankLimitMeters;
+    assert.ok(route.distanceMeters <= limit + 1,
+      `fuel leg ${index + 1} exceeds ${limit}m: ${route.distanceMeters}m`);
+  });
+  assert.ok(
+    result.routes.at(-1).distanceMeters <=
+      result.diagnostics.foundationDestinationFuelUsedLimitMeters + 1,
+    "destination arrival consumed more than its reserved-fuel limit"
+  );
+  assert.ok(result.diagnostics.foundationFuelAccess.every((access) =>
+    ["same-foundation-directed-edge", "v4-directed-forecourt-through-path"]
+      .includes(access.proof) &&
+    access.arrivalMeters + access.departureMeters <= 200 + 1
+  ), "every station needs a short, legally directed V4 arrival and departure proof");
+  assert.ok(result.routes.flatMap((route) => route.segments || []).every((segment) =>
+    !String(segment.edgeId || "").startsWith("fuel-access:") &&
+    segment.surfaceClass !== "connector"
+  ), "fuel partition must not add a straight synthetic connector");
+  assert.equal(result.diagnostics.selectedUrbanEntry, false);
+  assert.equal(result.diagnostics.ruralAlternativeAvailable, true);
 });
 
 test("reported V4 Cape Breton route commits only a fully proved fuel chain", {

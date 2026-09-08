@@ -1456,7 +1456,7 @@ struct MapLibreMapView: UIViewRepresentable {
                 if pin.kind == .fuel,
                    pin.markerID == state.selectedPlannerPinID,
                    !pin.markerID.hasPrefix("fuel-target:") {
-                    state.onPlannerPinDragBegan?(pin.markerID)
+                    state.onSelectedPlannerPinTap?(pin.markerID)
                     return
                 }
                 mapView.selectAnnotation(pin, animated: true, completionHandler: nil)

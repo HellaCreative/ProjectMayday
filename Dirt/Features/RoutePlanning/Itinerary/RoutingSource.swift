@@ -25,7 +25,8 @@ final class RouteResponseCache {
         let priorEdgeIDs: [String]
         let arrivalEdgeID: String?
         let backtrackFactor: Double
-        let sessionSeed: UInt64?
+        let impassableRecovery: Bool
+        let routeSeed: UInt64?
         let directExtraBudgetMeters: Double?
         let regionalHopMinimumMeters: [Double]
         let sourceName: String
@@ -44,7 +45,8 @@ final class RouteResponseCache {
                 "|prior=\(priorEdgeIDs.count)[\(recentPrior)]" +
                 "|arrival=\(arrivalEdgeID ?? "nil")" +
                 "|backtrack=\(backtrackFactor)" +
-                "|seed=\(sessionSeed.map { String($0) } ?? "-")" +
+                "|recovery=\(impassableRecovery ? 1 : 0)" +
+                "|seed=\(routeSeed.map { String($0) } ?? "-")" +
                 "|extra=\(directExtraBudgetMeters.map { String($0) } ?? "-")" +
                 "|regional=\(regionalHopMinimumMeters.map { String($0) }.joined(separator: ","))" +
                 "|metro=\(cleanMetroMultiplier.map { String(format: "%.0f", $0) } ?? "-")" +
@@ -208,7 +210,8 @@ final class PackRoutingSource: RoutingSource {
             priorEdgeIDs: normalizedEdgeIDs(req.options?.priorEdgeIds),
             arrivalEdgeID: req.options?.arrivalEdgeId,
             backtrackFactor: req.options?.backtrackFactor ?? 4,
-            sessionSeed: req.options?.sessionSeed,
+            impassableRecovery: req.options?.impassableRecovery == true,
+            routeSeed: req.options?.routeSeed ?? req.options?.sessionSeed,
             directExtraBudgetMeters: req.options?.directExtraBudgetMeters,
             regionalHopMinimumMeters: req.options?.regionalHopMinimumMeters ?? [],
             sourceName: name,
@@ -230,9 +233,11 @@ final class PackRoutingSource: RoutingSource {
             allowUnknown: req.accessPolicy.motorizedUnknown,
             avoidEdgeIds: req.options?.avoidEdgeIds ?? [],
             priorEdgeIds: Set(req.options?.priorEdgeIds ?? []),
+            priorEdgeHistory: req.options?.priorEdgeIds ?? [],
             arrivalEdgeId: req.options?.arrivalEdgeId,
             backtrackFactor: req.options?.backtrackFactor ?? 4,
-            sessionSeed: req.options?.sessionSeed ?? 0,
+            impassableRecovery: req.options?.impassableRecovery == true,
+            sessionSeed: req.options?.routeSeed ?? req.options?.sessionSeed ?? 0,
             maxRouteMeters: req.options?.maxPathMeters,
             regionalHopMinimumMeters: req.options?.regionalHopMinimumMeters ?? [],
             cleanMetroMultiplier: req.options?.cleanMetroMultiplier,
@@ -368,7 +373,7 @@ final class PackRoutingSource: RoutingSource {
                     priorEdgeIds: carriedHistory,
                     arrivalEdgeId: carriedArrival,
                     backtrackFactor: req.options?.backtrackFactor ?? 4,
-                    sessionSeed: req.options?.sessionSeed ?? 0,
+                    sessionSeed: req.options?.routeSeed ?? req.options?.sessionSeed ?? 0,
                     maxRouteMeters: firstCap,
                     regionalHopMinimumMeters: req.options?.regionalHopMinimumMeters ?? [],
                     cleanMetroMultiplier: req.options?.cleanMetroMultiplier,
@@ -439,7 +444,7 @@ final class PackRoutingSource: RoutingSource {
                 reachableMeters: reachable,
                 tankMeters: firstCap,
                 usableRangeMeters: req.fuel.usableRangeMeters,
-                sessionSeed: 0,
+                sessionSeed: req.options?.routeSeed ?? req.options?.sessionSeed ?? 0,
                 excluding: visited
             )
             let departureID = stops.last?.id ?? "start"
@@ -468,7 +473,7 @@ final class PackRoutingSource: RoutingSource {
                     priorEdgeIds: carriedHistory,
                     arrivalEdgeId: carriedArrival,
                     backtrackFactor: req.options?.backtrackFactor ?? 4,
-                    sessionSeed: req.options?.sessionSeed ?? 0,
+                    sessionSeed: req.options?.routeSeed ?? req.options?.sessionSeed ?? 0,
                     maxRouteMeters: firstCap,
                     regionalHopMinimumMeters: req.options?.regionalHopMinimumMeters ?? [],
                     cleanMetroMultiplier: req.options?.cleanMetroMultiplier,
@@ -505,7 +510,7 @@ final class PackRoutingSource: RoutingSource {
                     priorEdgeIds: carriedHistory.union(firstRoute.edgeIds),
                     arrivalEdgeId: firstRoute.edgeIds.last ?? carriedArrival,
                     backtrackFactor: req.options?.backtrackFactor ?? 4,
-                    sessionSeed: req.options?.sessionSeed ?? 0,
+                    sessionSeed: req.options?.routeSeed ?? req.options?.sessionSeed ?? 0,
                     maxRouteMeters: destinationCap,
                     regionalHopMinimumMeters: req.options?.regionalHopMinimumMeters ?? [],
                     cleanMetroMultiplier: req.options?.cleanMetroMultiplier,
@@ -546,12 +551,12 @@ final class PackRoutingSource: RoutingSource {
                     reachableMeters: onward,
                     tankMeters: req.fuel.usableRangeMeters,
                     usableRangeMeters: req.fuel.usableRangeMeters,
-                    sessionSeed: req.options?.sessionSeed ?? 0,
+                    sessionSeed: req.options?.routeSeed ?? req.options?.sessionSeed ?? 0,
                     excluding: onwardExclusions
                 ).isEmpty
                 // A forecourt connector may repeat briefly; a meaningful
                 // down-and-back fuel stem is never a valid chain anchor.
-                let maximumFuelRetraceMeters = 1_000.0
+                let maximumFuelRetraceMeters = 200.0
                 let avoidsMeaningfulRetrace = firstRoute.backtrackMeters <= maximumFuelRetraceMeters
                     && (continuationRoute?.backtrackMeters ?? 0) <= maximumFuelRetraceMeters
                 let validForward = (continuationRoute != nil || hasOnwardPump)
@@ -849,7 +854,8 @@ private func cacheKey(
         priorEdgeIDs: normalizedEdgeIDs(request.options?.priorEdgeIds),
         arrivalEdgeID: request.options?.arrivalEdgeId,
         backtrackFactor: request.options?.backtrackFactor ?? 4,
-        sessionSeed: request.options?.sessionSeed,
+        impassableRecovery: request.options?.impassableRecovery == true,
+        routeSeed: request.options?.routeSeed ?? request.options?.sessionSeed,
         directExtraBudgetMeters: request.options?.directExtraBudgetMeters,
         regionalHopMinimumMeters: request.options?.regionalHopMinimumMeters ?? [],
         sourceName: sourceName, packRevision: packRevision,

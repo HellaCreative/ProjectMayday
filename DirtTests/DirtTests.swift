@@ -20,8 +20,19 @@ struct DirtTests {
         #expect(AppConfig.liveFuelURL.absoluteString == "https://pack-fabric.vercel.app/api/fuel")
         #expect(AppConfig.liveFuelChainURL.absoluteString == "https://pack-fabric.vercel.app/api/fuel-chain")
         #expect(AppConfig.livePOIURL.absoluteString == "https://pack-fabric.vercel.app/api/poi")
-        #expect(AppConfig.riderServicesManifestURL.absoluteString.hasSuffix(
-            "/rider-services/v1/manifest.json"
+        #expect(AppConfig.v4CandidateReleaseId == "fabric-v4-20260907-01")
+        #expect(AppConfig.packManifestURL.absoluteString ==
+            "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/candidates/" +
+            "fabric-v4-20260907-01/manifest.json")
+        #expect(AppConfig.riderServicesManifestURL.absoluteString ==
+            "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/candidates/" +
+            "fabric-v4-20260907-01/rider-services/manifest.json")
+        #expect(AppConfig.packFileURL(
+            version: AppConfig.v4CandidateReleaseId,
+            regionId: "ns",
+            fileName: "graph.v4.bin"
+        ).absoluteString.hasSuffix(
+            "/v4/candidates/fabric-v4-20260907-01/ns/graph.v4.bin"
         ))
         #expect(AppConfig.validatesSupabaseIsolation(url: AppConfig.supabaseURL))
         #expect(AppConfig.validatesRoutingIsolation(url: AppConfig.baseURL))
@@ -465,12 +476,14 @@ struct DirtTests {
             dirtPercent: 100,
             pavedPercent: 0,
             segments: [segment],
+            routeSeeds: [42, 84],
             surfaceFamilyMode: "leaf-v3"
         )
 
         #expect(route.surfaceFamilyMode == "leaf-v3")
         #expect(route.segments?.first?.surfaceLeaf == "fine_gravel")
         #expect(route.segments?.first?.edgeId == "edge-1")
+        #expect(route.routeSeeds == [42, 84])
     }
 
     @Test @MainActor func legacySummaryPreservesTotalsButNamesNonPavedUnknown() throws {

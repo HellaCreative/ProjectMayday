@@ -12,6 +12,9 @@ final class SavedRoute {
     var pavedPercent: Int
     /// Optional Graph-v3 route runs. Existing records remain valid with nil.
     var segmentsData: Data?
+    /// Rider-leg seeds used to build the stored geometry. Optional so the
+    /// SwiftData model remains compatible with routes saved before seed law.
+    var routeSeedsData: Data?
     var surfaceFamilyMode: String?
     var createdAt: Date
 
@@ -35,6 +38,16 @@ final class SavedRoute {
         }
     }
 
+    var routeSeeds: [UInt64]? {
+        get {
+            guard let routeSeedsData else { return nil }
+            return try? JSONDecoder().decode([UInt64].self, from: routeSeedsData)
+        }
+        set {
+            routeSeedsData = newValue.flatMap { try? JSONEncoder().encode($0) }
+        }
+    }
+
     init(
         id: UUID = UUID(),
         name: String,
@@ -44,6 +57,7 @@ final class SavedRoute {
         dirtPercent: Int,
         pavedPercent: Int,
         segments: [RouteSegment]? = nil,
+        routeSeeds: [UInt64]? = nil,
         surfaceFamilyMode: String? = nil,
         createdAt: Date = .now
     ) {
@@ -55,6 +69,7 @@ final class SavedRoute {
         self.dirtPercent = dirtPercent
         self.pavedPercent = pavedPercent
         segmentsData = segments.flatMap { try? JSONEncoder().encode($0) }
+        routeSeedsData = routeSeeds.flatMap { try? JSONEncoder().encode($0) }
         self.surfaceFamilyMode = surfaceFamilyMode
         self.createdAt = createdAt
     }

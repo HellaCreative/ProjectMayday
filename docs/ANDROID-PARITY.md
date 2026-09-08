@@ -135,6 +135,16 @@ launch two replacement route searches. These post-build `2 (17)` deltas are pend
 acceptance and make prior Android route/fuel evidence stale; no pack rebuild is
 implied.
 
+The September 7 routing evolution is one JS/Swift/future-Kotlin behavioural
+contract: search costs, rider-leg seeds, remaining-road progress, retrace
+rejection, and fuel replacement may not drift by runtime. Planned routes do not
+repeat road edges except explicit impassable recovery to the first usable
+junction or unavoidable departure from a true single-access endpoint. A fuel
+forecourt may use at most 200 m of real, directionally legal packed geometry;
+distinct one-way entrance and exit roads are valid, synthetic connectors and
+out-and-backs are not. This candidate is DEV-only on sealed V4 release
+`fabric-v4-20260907-01`; Android production evidence remains unchanged.
+
 ## 3. Canonical itinerary and visible stages
 
 `RiderItinerary` is the durable routing intent. Generated fuel anchors and
@@ -191,6 +201,9 @@ is claimed.
 - Otherwise rank complete chains by minimum stop count, forward/directional
   coherence, and sensible journey distance. Profile quality is a final
   tiebreaker, never permission for a random detour.
+- Prove the minimum feasible stop count by exhausting smaller counts first.
+  Every section respects carried first-tank fuel, full usable range, and the
+  required destination reserve.
 - Reuse and partition the proved profile foundation when a safe on-route pump
   exists. Do not reroute the profile repeatedly merely because fuel is enabled.
 - Every rider or committed fuel anchor receives a fresh planning window. The
@@ -204,6 +217,13 @@ is claimed.
 - Fuel is advisory to geometry. If fuel proof fails, finish the road route,
   preserve prior pumps, and attach the warning to the exact affected rider leg.
   Start and export remain available with the existing acknowledgement rules.
+- Profile or Allow Unknown edits remain inside their owning primary rider leg
+  and necessary fuel boundary. Later primary rider legs remain unchanged until
+  the rider changes them.
+- Direct routing has a 20-second maximum and complete fuel planning a 30-second
+  maximum; both return as soon as proof completes. A timeout is incomplete, not
+  a low-quality successful Dirt route. The 55% known-Dirt acceptance threshold
+  is a regression floor; Dirt still seeks the highest legal coherent result.
 
 Planning fuel comes from the promoted `fuel.v1.json` sidecars, not viewport POI
 markers or Overpass. Android consumes the LIVE fuel result online and the

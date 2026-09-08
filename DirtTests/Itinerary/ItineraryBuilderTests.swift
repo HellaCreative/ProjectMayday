@@ -512,7 +512,10 @@ struct ItineraryBuilderTests {
         #expect((plans.first?.fuel.windowMaxStops ?? 0) >= (plans.last?.fuel.windowMaxStops ?? 0))
         #expect(plans.allSatisfy { $0.fuel.allowPartialWindow == true })
         #expect(plans.allSatisfy { $0.fuel.forwardFeeler != true })
-        #expect(plans.allSatisfy { $0.fuel.windowTimeBudgetMs == 20_000 })
+        #expect(plans.allSatisfy {
+            guard let budget = $0.fuel.windowTimeBudgetMs else { return false }
+            return budget >= 25_000 && budget <= 30_000
+        })
         #expect(plans[1].locations[0].longitude == stops[0].longitude)
         #expect(plans[2].locations[0].longitude == stops[1].longitude)
         #expect(plans[3].locations[0].longitude == stops[2].longitude)
@@ -1048,6 +1051,7 @@ struct ItineraryBuilderTests {
 
         #expect(source.fuelChainRequests.count == 1)
         #expect(source.fuelChainRequests.first?.profile == .dirt)
+        #expect(source.fuelChainRequests.first?.fuel.riderLegId == editedLegID.uuidString)
         #expect(source.fuelChainRequests.first?.fuel.destinationFuelUsedLimitMeters == 150_000)
         #expect(source.routeRequests.isEmpty)
         #expect(profiled.legs[editedIndex].routeProfile == .dirt)
@@ -1077,6 +1081,9 @@ struct ItineraryBuilderTests {
         #expect(source.routeRequests.isEmpty)
         #expect(unknownAllowed.legs.compactMap(\.endsAtFuelStop?.stationID)
             == ["untouched-later-pump"])
+        #expect(unknownAllowed.legs.first {
+            $0.endsAtFuelStop?.stationID == "untouched-later-pump"
+        }?.endsAtFuelStop?.afterRiderLegID == initial.legs.last?.id)
         for index in unknownAllowed.legs.indices where index != editedIndex {
             #expect(unknownAllowed.legs[index] == profiled.legs[index])
         }
@@ -1130,7 +1137,7 @@ struct ItineraryBuilderTests {
             let cacheKey = RouteResponseCache.Key(
                 from: from, to: to, profile: .dirt, allowUnknown: false,
                 avoidEdgeIDs: [], priorEdgeIDs: [], arrivalEdgeID: nil, backtrackFactor: 4,
-                sessionSeed: nil, directExtraBudgetMeters: nil,
+                impassableRecovery: false, routeSeed: nil, directExtraBudgetMeters: nil,
                 regionalHopMinimumMeters: [],
                 sourceName: "live", packRevision: "test",
                 cleanMetroMultiplier: nil,
@@ -1151,7 +1158,7 @@ struct ItineraryBuilderTests {
             RouteResponseCache.Key(
                 from: point(0), to: point(1), profile: .dirt, allowUnknown: false,
                 avoidEdgeIDs: avoid, priorEdgeIDs: [], arrivalEdgeID: nil,
-                backtrackFactor: 4, sessionSeed: seed,
+                backtrackFactor: 4, impassableRecovery: false, routeSeed: seed,
                 directExtraBudgetMeters: nil, regionalHopMinimumMeters: [],
                 sourceName: "live", packRevision: "test",
                 cleanMetroMultiplier: nil, avoidMotorways: false,

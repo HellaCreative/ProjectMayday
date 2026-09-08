@@ -44,6 +44,7 @@ const {
   DIRT_RIDE_PAVED_PER_KM,
   DIRT_RIDE_GRAVEL_PER_KM,
   DIRT_RIDE_RESOURCE_PER_KM,
+  DIRT_RIDE_SHORT_EXCURSION_MULTIPLIER,
   DIRT_RIDE_UNKNOWN_TRACK_PER_KM,
   DIRT_RIDE_XT_SCALE,
   DIRT_RIDE_AWAY_SCALE,
@@ -55,12 +56,14 @@ const {
   settlementFallbackMultiplier,
   metroEdgeBlocks,
   outsideCorridor,
+  landPathProgressMeters,
   projectedProgressMeters,
   maxProgressRegressionMeters,
   progressRegressionForAttempt,
   coincidentSiblingLists,
   annotateCorridorMeta,
   corridorMetersForProfile,
+  varietyHash,
   VARIETY_SLOTS,
   BALANCED_BUCKETS,
   dirtBucket,
@@ -115,6 +118,22 @@ function v4AccessCode(pack, ei, fromNode, toNode) {
   return pack.edgeAccess[ei * 2 + (forward ? 0 : 1)];
 }
 
+function isSingleAccessEdge(pack, ei) {
+  if (!pack || !pack.nodeOffsets || !pack.edgeUndirectedIndex ||
+      !pack.edgeFrom || !pack.edgeTo || ei == null || ei < 0) return false;
+  const hasOnlyThisIncidentEdge = (node) => {
+    if (node == null || node < 0 || node + 1 >= pack.nodeOffsets.length) return false;
+    let sawEdge = false;
+    for (let arc = pack.nodeOffsets[node]; arc < pack.nodeOffsets[node + 1]; arc += 1) {
+      if (pack.edgeUndirectedIndex[arc] !== ei) return false;
+      sawEdge = true;
+    }
+    return sawEdge;
+  };
+  return hasOnlyThisIncidentEdge(pack.edgeFrom[ei]) ||
+    hasOnlyThisIncidentEdge(pack.edgeTo[ei]);
+}
+
 function v4TransitionState(
   pack,
   turnState,
@@ -133,8 +152,8 @@ function v4TransitionState(
   const isStart = ei === startEi;
   const isEnd = ei === endEi;
   if (code === 3 && !(
-    (isStart && startEndpointKind !== "customers") ||
-    (isEnd && endEndpointKind !== "customers")
+    (isStart && startEndpointKind !== "customers" && isSingleAccessEdge(pack, ei)) ||
+    (isEnd && endEndpointKind !== "customers" && isSingleAccessEdge(pack, ei))
   )) return -1;
   if (code === 4 && !(
     (isStart && startEndpointKind === "customers") ||
@@ -252,11 +271,25 @@ function buildTurnAwareState(pack, n, startNode, endNode) {
 }
 
 const MINIMUM_EARNED_DIRT_EXCURSION_METERS = 1_000;
+const FUEL_ENDPOINT_RETRACE_METERS = 200;
+const ENDPOINT_STUB_METERS = 8;
+// A repair re-prices every undersized excursion found on the completed
+// candidate at once. Up to three bounded passes are needed because removing
+// one set can expose a different set of paved-to-paved dirt teeth. Every pass
+// shares the same hard route deadline, so this cannot widen the 20-second
+// allowance.
 const MAX_SHORT_DIRT_REPAIR_PASSES = 3;
-const DIRT_BASE_SEARCH_BUDGET_MS = 3_500;
-const DIRT_MAX_SEARCH_BUDGET_MS = 18_000;
+const LONG_RIDE_SINGLE_REPAIR_METERS = 150_000;
+// Dirt now performs one legal-road compass pass followed by one bounded
+// surface-resource hunt. The former 3.5-second single-pass budget expired as
+// the compass finished and guaranteed a paved fallback on province-scale
+// rides. Province-scale Dirt rides may use the full twenty-second ceiling;
+// completed searches still return immediately.
+const DIRT_BASE_SEARCH_BUDGET_MS = 12_000;
+const DIRT_MAX_SEARCH_BUDGET_MS = 20_000;
+const DIRT_PROVINCE_SCALE_ROUTE_METERS = 200_000;
 const BALANCED_BASE_SEARCH_BUDGET_MS = 8_000;
-const BALANCED_MAX_SEARCH_BUDGET_MS = 45_000;
+const BALANCED_MAX_SEARCH_BUDGET_MS = 20_000;
 const LARGE_GRAPH_BASE_SEARCH_BUDGET_MS = 12_000;
 const CLEAN_BASE_SEARCH_BUDGET_MS = 12_000;
 const CLEAN_MAX_SEARCH_BUDGET_MS = 18_000;
@@ -269,6 +302,114 @@ const PROVINCE_SCALE_GRAPH_NODES = 1_500_000;
 // rides. A real fuel/tank cap always remains the harder ceiling.
 const DIRT_RECOVERY_EXTRA_METERS = 40_000;
 const DIRT_RECOVERY_DISTANCE_RATIO = 1.5;
+const BALANCED_DENSE_LABEL_LIMIT = 10_000_000;
+const BALANCED_SPARSE_PAGE_BITS = 6;
+
+/**
+ * Balanced carries multiple dirt-ratio labels per graph node. A dense table is
+ * fast for normal regions, but California's 5.5M nodes produce more than 100M
+ * possible labels and several gigabytes of mostly untouched arrays. Keep the
+ * exact same label keys and values while allocating 256-label pages only when
+ * the search reaches them.
+ */
+function createBalancedLabelState(labelCount) {
+  const sparse = labelCount > BALANCED_DENSE_LABEL_LIMIT;
+  const pageSize = 1 << BALANCED_SPARSE_PAGE_BITS;
+  const pageMask = pageSize - 1;
+  const pages = sparse ? new Map() : null;
+  let dense = null;
+
+  function makePage(length) {
+    const page = {
+      dist: new Float64Array(length),
+      score: new Float64Array(length),
+      // Distances used for A* ordering stay Float64. Dirt accumulation and
+      // corridor progress only need sub-metre precision, so Float32 avoids
+      // hundreds of megabytes of idle large-state working memory.
+      dirt: new Float32Array(length),
+      peak: new Float32Array(length),
+      prev: new Int32Array(length),
+      prevData: new Int32Array(length),
+      // bits 0..1 previous kind, bit 2 direction, bits 3..7 relax slots.
+      flags: new Uint8Array(length)
+    };
+    page.dist.fill(Infinity);
+    page.score.fill(Infinity);
+    page.peak.fill(-Infinity);
+    page.prev.fill(-1);
+    return page;
+  }
+
+  if (!sparse) dense = makePage(labelCount);
+
+  function locate(index, create = false) {
+    if (!sparse) return { page: dense, offset: index };
+    const pageIndex = Math.floor(index / pageSize);
+    let page = pages.get(pageIndex);
+    if (!page && create) {
+      const start = pageIndex * pageSize;
+      page = makePage(Math.min(pageSize, labelCount - start));
+      pages.set(pageIndex, page);
+    }
+    return { page, offset: index & pageMask };
+  }
+
+  function get(field, index, fallback) {
+    const found = locate(index, false);
+    return found.page ? found.page[field][found.offset] : fallback;
+  }
+
+  function set(field, index, value) {
+    const found = locate(index, true);
+    found.page[field][found.offset] = value;
+  }
+
+  return {
+    sparse,
+    pageCount: () => sparse ? pages.size : 1,
+    distance: (index) => get("dist", index, Infinity),
+    setDistance: (index, value) => set("dist", index, value),
+    score: (index) => get("score", index, Infinity),
+    setScore: (index, value) => set("score", index, value),
+    dirt: (index) => get("dirt", index, 0),
+    setDirt: (index, value) => set("dirt", index, value),
+    peak: (index) => get("peak", index, -Infinity),
+    setPeak: (index, value) => set("peak", index, value),
+    previous: (index) => get("prev", index, -1),
+    setPrevious: (index, value) => set("prev", index, value),
+    previousKind: (index) => get("flags", index, 0) & 0x03,
+    setPreviousKind: (index, value) => {
+      const flags = get("flags", index, 0);
+      set("flags", index, (flags & 0xfc) | (value & 0x03));
+    },
+    previousData: (index) => get("prevData", index, 0),
+    setPreviousData: (index, value) => set("prevData", index, value),
+    previousForward: (index) => (get("flags", index, 0) >>> 2) & 0x01,
+    setPreviousForward: (index, value) => {
+      const flags = get("flags", index, 0);
+      set("flags", index, (flags & 0xfb) | ((value & 0x01) << 2));
+    },
+    slots: (index) => get("flags", index, 0) >>> 3,
+    applyRelax(action, index) {
+      if (action === "reject") return false;
+      const flags = get("flags", index, 0);
+      const slots = action === "reset" ? 1 : Math.min(31, (flags >>> 3) + 1);
+      set("flags", index, (flags & 0x07) | (slots << 3));
+      return true;
+    },
+    createsCycle(from, through) {
+      let node = from;
+      let hops = 0;
+      const cap = labelCount + 2;
+      while (node >= 0 && hops < cap) {
+        if (node === through) return true;
+        node = get("prev", node, -1);
+        hops += 1;
+      }
+      return hops >= cap;
+    }
+  };
+}
 
 function largeGraphPressure(nodeCount) {
   const nodes = Math.max(0, Number(nodeCount) || 0);
@@ -284,8 +425,8 @@ function largeGraphPressure(nodeCount) {
  * Balanced's old 2.2-second wall-clock ceiling was calibrated on small packs.
  * A ride on a province-sized graph needs enough time to finish the same
  * bounded A* work on slower serverless CPU. Large graphs receive a modest
- * floor even for short rides; long rides continue to scale to the established
- * 45-second ceiling. Small regional graphs remain byte-for-byte unchanged.
+ * floor even for short rides; long rides may use the rest of the shared
+ * 20-second live-route ceiling. Small regional graphs retain their base budget.
  */
 function balancedSearchBudgetMs(straightLineMeters, nodeCount) {
   const routeMeters = Math.max(0, Number(straightLineMeters) || 0);
@@ -318,9 +459,24 @@ function profileSearchBudgetMs(profile, straightLineMeters, nodeCount) {
         (CLEAN_MAX_SEARCH_BUDGET_MS - CLEAN_BASE_SEARCH_BUDGET_MS) * graphPressure
     );
   }
+  const dirtRoutePressure = Math.min(
+    1,
+    Math.max(0, Number(straightLineMeters) || 0) / 500_000
+  );
+  if (
+    Math.max(0, Number(straightLineMeters) || 0) >= DIRT_PROVINCE_SCALE_ROUTE_METERS
+  ) {
+    return DIRT_MAX_SEARCH_BUDGET_MS;
+  }
+  // Preserve the established small-graph budget. Long-route pressure exists
+  // to keep province-scale V4 searches from timing out just short of a proved
+  // result; tiny fixture/offline graphs do not need the extra allowance.
+  const dirtPressure = graphPressure > 0
+    ? Math.max(graphPressure, dirtRoutePressure)
+    : 0;
   return Math.round(
     DIRT_BASE_SEARCH_BUDGET_MS +
-      (DIRT_MAX_SEARCH_BUDGET_MS - DIRT_BASE_SEARCH_BUDGET_MS) * graphPressure
+      (DIRT_MAX_SEARCH_BUDGET_MS - DIRT_BASE_SEARCH_BUDGET_MS) * dirtPressure
   );
 }
 
@@ -434,7 +590,12 @@ function repairShortDirtExcursions(
   let repaired = ride;
   const penaltyEdgeIds = new Set(rideOpts.shortDirtPenaltyEdgeIds || []);
   let passes = 0;
-  for (let pass = 0; pass < MAX_SHORT_DIRT_REPAIR_PASSES; pass += 1) {
+  let strictAvoidanceUsed = false;
+  let repairDeadlineExceeded = false;
+  const repairPassLimit = Number(ride.distanceMeters) > LONG_RIDE_SINGLE_REPAIR_METERS
+    ? 1
+    : MAX_SHORT_DIRT_REPAIR_PASSES;
+  for (let pass = 0; pass < repairPassLimit; pass += 1) {
     const found = shortDirtExcursionEdgeIds(repaired.segments);
     const additions = [...found].filter((edgeId) => !penaltyEdgeIds.has(edgeId));
     if (!additions.length) break;
@@ -449,15 +610,45 @@ function repairShortDirtExcursions(
       pavedBias,
       { ...rideOpts, shortDirtPenaltyEdgeIds: penaltyEdgeIds }
     );
-    if (!next) break;
+    if (!next || (next.searchMeta && next.searchMeta.timedOut === true)) {
+      repairDeadlineExceeded = !!(next && next.searchMeta && next.searchMeta.timedOut === true);
+      break;
+    }
     repaired = next;
     passes += 1;
+  }
+  // Re-pricing normally removes every optional micro-excursion. If a
+  // previously penalized tooth still wins, make one final bounded attempt
+  // with only those remaining edges excluded. Keep the existing route when
+  // they are topologically necessary; use the strict alternative only when it
+  // completes inside the same deadline and contains no replacement teeth.
+  const remaining = shortDirtExcursionEdgeIds(repaired.segments);
+  if (remaining.size && Number(ride.distanceMeters) <= LONG_RIDE_SINGLE_REPAIR_METERS) {
+    const strictAvoid = new Set(avoidEdgeIds || []);
+    for (const edgeId of remaining) strictAvoid.add(edgeId);
+    const strict = findPathV2(
+      runtime,
+      startMatch,
+      endMatch,
+      profile,
+      policy,
+      strictAvoid,
+      pavedBias,
+      { ...rideOpts, shortDirtPenaltyEdgeIds: penaltyEdgeIds }
+    );
+    if (strict && strict.searchMeta && strict.searchMeta.timedOut !== true &&
+        shortDirtExcursionEdgeIds(strict.segments).size === 0) {
+      repaired = strict;
+      strictAvoidanceUsed = true;
+    }
   }
   repaired.searchMeta = repaired.searchMeta || {};
   repaired.searchMeta.minimumEarnedDirtExcursionMeters =
     MINIMUM_EARNED_DIRT_EXCURSION_METERS;
   repaired.searchMeta.shortDirtRepairPasses = passes;
   repaired.searchMeta.shortDirtPenaltyEdgeCount = penaltyEdgeIds.size;
+  repaired.searchMeta.shortDirtStrictAvoidanceUsed = strictAvoidanceUsed;
+  repaired.searchMeta.shortDirtRepairDeadlineExceeded = repairDeadlineExceeded;
   return repaired;
 }
 
@@ -707,7 +898,8 @@ function blockedForRide(
   urbanBoxes,
   settlementWall,
   settlementBoxes,
-  fromPoint
+  fromPoint,
+  landPathCoordinates
 ) {
   if (hopBlocked(point, startLL, endLL, cityWall, urbanBoxes)) return true;
   if (
@@ -718,7 +910,9 @@ function blockedForRide(
     settlementWall && point &&
     settlementBlocks(point[0], point[1], startLL, endLL, settlementBoxes)
   ) return true;
-  return !!hardCorridor && outsideCorridor(point, startLL, endLL, corridorM);
+  return !!hardCorridor && outsideCorridor(
+    point, startLL, endLL, corridorM, landPathCoordinates
+  );
 }
 
 function fillShortestMeters(args) {
@@ -746,6 +940,7 @@ function fillShortestMeters(args) {
     settlementWall,
     settlementFallback,
     settlementBoxes,
+    landPathCoordinates,
     origin,
     capMeters,
     nodeLL,
@@ -819,7 +1014,7 @@ function fillShortestMeters(args) {
         const toLL = nodeLL(to);
         if (blockedForRide(
           toLL, startLL, endLL, cityWall, corridorM, hardCorridor, urbanBoxes,
-          settlementWall, settlementBoxes, nodeLL(cur.node)
+          settlementWall, settlementBoxes, nodeLL(cur.node), landPathCoordinates
         )) continue;
         const cand = cur.cost + edgeMeters[ei];
         if (cand > capMeters) continue;
@@ -857,7 +1052,7 @@ function fillShortestMeters(args) {
         const toLL = nodeLL(item.to);
         if (blockedForRide(
           toLL, startLL, endLL, cityWall, corridorM, hardCorridor, urbanBoxes,
-          settlementWall, settlementBoxes, nodeLL(cur.node)
+          settlementWall, settlementBoxes, nodeLL(cur.node), landPathCoordinates
         )) continue;
         const cand = cur.cost + v.meters;
         if (cand > capMeters) continue;
@@ -938,11 +1133,150 @@ function chooseDirtRideCandidate(candidates) {
   })[0];
 }
 
+/**
+ * Dirt/Balanced product search: one cheap distance path supplies both the land
+ * band and the remaining-road compass, then one resource hunt retains the
+ * forward candidate set. There is no crow-flies corridor-width ladder.
+ */
+function findAdventurePathWithRoadCompass(
+  runtime, startMatch, endMatch, profile, policy, avoidEdgeIds, pavedBias, searchOpts
+) {
+  const startedAt = Date.now();
+  const straightLineMeters = haversineMeters(startMatch.coord, endMatch.coord);
+  const graphNodeCount = Number(runtime && runtime.pack && runtime.pack.nodeCount) || 0;
+  const requestHasDeadline = Number.isFinite(Number(searchOpts.deadlineAtMs));
+  const profileDeadline = startedAt +
+    profileSearchBudgetMs(profile, straightLineMeters, graphNodeCount);
+  const deadline = requestHasDeadline
+    ? Math.min(Number(searchOpts.deadlineAtMs), profileDeadline)
+    : profileDeadline;
+  const distanceDiagnostics = {};
+  const landPath = findPathV2(
+    runtime, startMatch, endMatch, profile, policy, avoidEdgeIds, pavedBias,
+    {
+      ...searchOpts,
+      costMode: "distance",
+      corridorMeters: 0,
+      hardCorridor: false,
+      boundedSearch: true,
+      variety: false,
+      progressRegressionMeters: Number.MAX_SAFE_INTEGER,
+      settlementWall: searchOpts.settlementWall === true,
+      settlementFallback: searchOpts.settlementFallback !== false,
+      diagnostics: distanceDiagnostics,
+      timeCapMs: Math.max(1, deadline - Date.now()),
+      deadlineAtMs: deadline,
+      popCap: profileSearchPopCap(profile, graphNodeCount, false)
+    }
+  );
+  if (!landPath) {
+    if (searchOpts.diagnostics) {
+      searchOpts.diagnostics.outcome = distanceDiagnostics.outcome || "noPath";
+      searchOpts.diagnostics.landPath = distanceDiagnostics;
+    }
+    return null;
+  }
+
+  const huntDiagnostics = {};
+  const fullLandPath = landPath.geometry || [];
+  const maximumReferencePoints = 16;
+  const landPathCoordinates = fullLandPath.length <= maximumReferencePoints
+    ? fullLandPath
+    : Array.from({ length: maximumReferencePoints }, (_, index) =>
+        fullLandPath[Math.round(index * (fullLandPath.length - 1) / (maximumReferencePoints - 1))]
+      );
+  const requestedCap = Number(searchOpts.maxPathMeters);
+  const coherentDirtCap = profile === "dirt"
+    ? dirtRecoveryPathCap(
+        landPath.distanceMeters,
+        Number.isFinite(requestedCap) ? requestedCap : Infinity
+      )
+    : requestedCap;
+  const huntOptions = {
+    ...searchOpts,
+    costMode: "balancedResource",
+    shortestMeters: Number(landPath.distanceMeters) || 1,
+    landPathCoordinates,
+    roadCompass: true,
+    corridorMeters: corridorMetersForProfile(profile),
+    hardCorridor: true,
+    boundedSearch: true,
+    // Seed acts only on completed, geometrically distinct candidates.
+    variety: false,
+    progressRegressionMeters: maxProgressRegressionMeters(profile),
+    settlementWall: searchOpts.settlementWall === true,
+    settlementFallback: searchOpts.settlementFallback !== false,
+    diagnostics: huntDiagnostics,
+    timeCapMs: Math.max(1, deadline - Date.now()),
+    deadlineAtMs: deadline,
+    popCap: profile === "dirt"
+      ? Math.max(800_000, profileSearchPopCap(profile, graphNodeCount, false))
+      : profileSearchPopCap(profile, graphNodeCount, false)
+  };
+  if (Number.isFinite(coherentDirtCap)) huntOptions.maxPathMeters = coherentDirtCap;
+  else delete huntOptions.maxPathMeters;
+  const initialRide = findPathV2(
+    runtime, startMatch, endMatch, profile, policy, avoidEdgeIds, pavedBias, huntOptions
+  );
+  const ride = repairShortDirtExcursions(
+    initialRide,
+    runtime,
+    startMatch,
+    endMatch,
+    profile,
+    policy,
+    avoidEdgeIds,
+    pavedBias,
+    huntOptions
+  );
+  if (!ride) {
+    if (searchOpts.diagnostics) {
+      searchOpts.diagnostics.outcome = huntDiagnostics.outcome || "noPath";
+      searchOpts.diagnostics.landPath = distanceDiagnostics;
+      searchOpts.diagnostics.hunt = huntDiagnostics;
+    }
+    // Balanced may still disclose a legal distance fallback. Dirt may not
+    // silently turn an incomplete quality search into a paved-heavy success.
+    if (huntDiagnostics.outcome === "timeCap" || huntDiagnostics.outcome === "popCap") {
+      if (profile === "dirt") return null;
+      landPath.searchMeta = landPath.searchMeta || {};
+      landPath.searchMeta.rideObjective = "road-compass-bounded-fallback";
+      landPath.searchMeta.preferenceSearchFallbackUsed = true;
+      landPath.searchMeta.preferenceSearchFallbackReason = huntDiagnostics.outcome;
+      return landPath;
+    }
+    return null;
+  }
+  if (profile === "dirt" && ride.searchMeta && ride.searchMeta.timedOut === true) {
+    if (searchOpts.diagnostics) {
+      searchOpts.diagnostics.outcome = ride.searchMeta.pass2Outcome || "timeCap";
+      searchOpts.diagnostics.landPath = distanceDiagnostics;
+      searchOpts.diagnostics.hunt = huntDiagnostics;
+      searchOpts.diagnostics.pops = Number(ride.searchMeta.pops) || 0;
+    }
+    return null;
+  }
+  ride.searchMeta = ride.searchMeta || {};
+  ride.searchMeta.rideObjective = profile === "dirt"
+    ? "seeded-forward-dirt"
+    : "seeded-forward-balanced";
+  ride.searchMeta.landPathMeters = Math.round(Number(landPath.distanceMeters) || 0);
+  ride.searchMeta.landPathCompass = "remaining-legal-road-meters";
+  ride.searchMeta.corridorReference = "shortest-legal-road-path";
+  ride.searchMeta.searchBudgetMs = Math.max(0, deadline - startedAt);
+  return ride;
+}
+
 function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds, pavedBias, searchOpts) {
   searchOpts = searchOpts || {};
   profile = resolveProfile(profile);
   const sessionSeed = Number(searchOpts.sessionSeed) || 0;
   if (!searchOpts.costMode) {
+    if (profile !== "cleanest") {
+      return findAdventurePathWithRoadCompass(
+        runtime, startMatch, endMatch, profile, policy, avoidEdgeIds, pavedBias, searchOpts
+      );
+    }
     const baseCorridor = corridorMetersForProfile(profile);
     const straightLineMeters = haversineMeters(startMatch.coord, endMatch.coord);
     const graphNodeCount = Number(runtime && runtime.pack && runtime.pack.nodeCount) || 0;
@@ -1371,6 +1705,21 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
   const backtrackFactor = Number.isFinite(Number(searchOpts.backtrackFactor))
     ? Math.max(1, Number(searchOpts.backtrackFactor))
     : 4;
+  const rejectPriorEdges = searchOpts.rejectPriorEdges === true;
+  const recoveryAllowed = new Set(
+    (searchOpts.recoveryAllowedEdgeIds || []).map(String)
+  );
+  const permitsEndpointExit = (ei, meters) =>
+    // A rider pin may sit at the end of a single access road. Permit only the
+    // exact departure snap edge needed to reach its first junction. Fuel is a
+    // stricter customer endpoint: its packed forecourt allowance is 200 m.
+    (ei === startEi && meters <= ENDPOINT_STUB_METERS) ||
+    (ei === startEi && searchOpts.startEndpointKind !== "customers" &&
+      isSingleAccessEdge(pack, ei)) ||
+    (meters <= FUEL_ENDPOINT_RETRACE_METERS && (
+      (ei === startEi && searchOpts.startEndpointKind === "customers") ||
+      (ei === endEi && searchOpts.endEndpointKind === "customers")
+    ));
   const penalizeBacktrack = (cost, edgeId) => {
     const id = String(edgeId == null ? "" : edgeId);
     if (arrival != null && id === arrival) return cost * 12;
@@ -1415,6 +1764,9 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
     avoidMotorways: searchOpts.avoidMotorways === true,
     preferBackRoads: searchOpts.preferBackRoads === true
   });
+  const roadCompass = searchOpts.roadCompass === true
+    && Array.isArray(searchOpts.landPathCoordinates)
+    && searchOpts.landPathCoordinates.length > 1;
 
   function nodeLL(node) {
     if (node === startNode) return startLL;
@@ -1430,6 +1782,15 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
     const a = nodeLL(fromNode);
     const b = nodeLL(toNode);
     if (!a || !b) return 0;
+    if (roadCompass) {
+      const fromRemaining = remainingRoadMeters(fromNode);
+      const toRemaining = remainingRoadMeters(toNode);
+      if (Number.isFinite(fromRemaining) && Number.isFinite(toRemaining)) {
+        return approachAwayExtraCost(
+          profile, fromRemaining, toRemaining, startRoadRemainingMeters, 50, regionId
+        );
+      }
+    }
     return approachAwayExtraCost(
       profile,
       haversineMeters(a, endLL),
@@ -1584,6 +1945,7 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
         urbanBoxes,
         settlementWall,
         settlementBoxes,
+        landPathCoordinates: searchOpts.landPathCoordinates,
         origin: endNode,
         capMeters: maxPathMeters,
         nodeLL,
@@ -1605,6 +1967,25 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
         abortSignal && abortSignal.aborted ? "cancelled" : "timeout";
     }
     return null;
+  }
+
+  function remainingRoadMeters(state) {
+    if (!roadCompass) return Infinity;
+    const point = nodeLL(state);
+    const progress = landPathProgressMeters(point, searchOpts.landPathCoordinates);
+    return Number.isFinite(progress)
+      ? Math.max(0, startRoadRemainingMeters - progress)
+      : Infinity;
+  }
+  const startRoadRemainingMeters = roadCompass
+    ? lineMeters(searchOpts.landPathCoordinates)
+    : Infinity;
+  function progressMeters(state, point) {
+    if (!roadCompass) return projectedProgressMeters(point, startLL, endLL);
+    const remaining = remainingRoadMeters(state);
+    return Number.isFinite(remaining) && Number.isFinite(startRoadRemainingMeters)
+      ? startRoadRemainingMeters - remaining
+      : -Infinity;
   }
 
   if (costMode === "balancedResource") {
@@ -1641,6 +2022,8 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
       settlementFallback,
       settlementBoxes,
       corridorM,
+      landPathCoordinates: searchOpts.landPathCoordinates,
+      roadCompass,
       varietyOn,
       slackToDest,
       boundedSearch,
@@ -1652,6 +2035,8 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
       abortSignal,
       popCap: searchOpts.popCap,
       prior,
+      rejectPriorEdges,
+      recoveryAllowed,
       arrival,
       backtrackFactor,
       cleanMetroMultiplier: searchOpts.cleanMetroMultiplier,
@@ -1800,15 +2185,27 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
           if (rejected) rejected.avoid += 1;
           continue;
         }
+        if (
+          rejectPriorEdges && prior.has(String(pack.edgeId(ei))) &&
+          !recoveryAllowed.has(String(pack.edgeId(ei))) &&
+          !permitsEndpointExit(ei, edgeMeters[ei])
+        ) {
+          if (rejected) rejected.retrace = (rejected.retrace || 0) + 1;
+          continue;
+        }
         const toLL = nodeLL(to);
         if (blockedForRide(
           toLL, startLL, endLL, cityWall, corridorM, hardCorridor, urbanBoxes,
-          settlementWall, settlementBoxes, nodeLL(cur.node)
+          settlementWall, settlementBoxes, nodeLL(cur.node), searchOpts.landPathCoordinates
         )) {
           if (rejected) rejected.geography += 1;
           continue;
         }
-        const toProgress = projectedProgressMeters(toLL, startLL, endLL);
+        const toProgress = progressMeters(toState, toLL);
+        if (!Number.isFinite(toProgress)) {
+          if (rejected) rejected.progress += 1;
+          continue;
+        }
         const newPeakProgress = Math.max(peakProgress[cur.node], toProgress);
         if (newPeakProgress - toProgress > regressionLimit) {
           if (rejected) rejected.progress += 1;
@@ -1863,7 +2260,9 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
               !pack.hasLeaves && e4Opts.avoidMotorways
             );
             step += awayExtra(cur.node, toState) * DIRT_RIDE_AWAY_SCALE;
-            step += corridorCrossTrackExtra(profile, toLL, startLL, endLL, edgeM) * DIRT_RIDE_XT_SCALE;
+            step += corridorCrossTrackExtra(
+              profile, toLL, startLL, endLL, edgeM, searchOpts.landPathCoordinates
+            ) * DIRT_RIDE_XT_SCALE;
           }
           step = applyE4LeafMult(
             pack, ei, step, toLL, startLL, endLL, startOnMajorHighway, endOnMajorHighway, e4Opts
@@ -1910,7 +2309,9 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
           if (applyAwayXt) {
             step += awayExtra(cur.node, toState);
             if (toLL && applySoftCorridor) {
-              step += corridorCrossTrackExtra(profile, toLL, startLL, endLL, edgeM);
+              step += corridorCrossTrackExtra(
+                profile, toLL, startLL, endLL, edgeM, searchOpts.landPathCoordinates
+              );
             }
           }
           step = applyE4LeafMult(
@@ -2033,11 +2434,17 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
         ) continue;
         const toState = item.to < n ? stateForArrival(item.to, v.ei) : item.to;
         const toLL = nodeLL(item.to);
+        if (
+          rejectPriorEdges && prior.has(String(pack.edgeId(v.ei))) &&
+          !recoveryAllowed.has(String(pack.edgeId(v.ei))) &&
+          !permitsEndpointExit(v.ei, v.meters)
+        ) continue;
         if (blockedForRide(
           toLL, startLL, endLL, cityWall, corridorM, hardCorridor, urbanBoxes,
-          settlementWall, settlementBoxes, nodeLL(cur.node)
+          settlementWall, settlementBoxes, nodeLL(cur.node), searchOpts.landPathCoordinates
         )) continue;
-        const toProgress = projectedProgressMeters(toLL, startLL, endLL);
+        const toProgress = progressMeters(toState, toLL);
+        if (!Number.isFinite(toProgress)) continue;
         const newPeakProgress = Math.max(peakProgress[cur.node], toProgress);
         if (newPeakProgress - toProgress > regressionLimit) continue;
         const newMeters = pathMeters[cur.node] + v.meters;
@@ -2083,7 +2490,9 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
         if (costMode === "pavement") {
           step += awayExtra(cur.node, toState) * DIRT_RIDE_AWAY_SCALE;
           if (toLL) {
-            step += corridorCrossTrackExtra(profile, toLL, startLL, endLL, v.meters) * DIRT_RIDE_XT_SCALE;
+            step += corridorCrossTrackExtra(
+              profile, toLL, startLL, endLL, v.meters, searchOpts.landPathCoordinates
+            ) * DIRT_RIDE_XT_SCALE;
           }
         } else if (applyAwayXt) {
           step += awayExtra(cur.node, toState);
@@ -2351,6 +2760,8 @@ function searchBalancedResource(ctx) {
     settlementFallback,
     settlementBoxes,
     corridorM,
+    landPathCoordinates,
+    roadCompass,
     varietyOn,
     slackToDest,
     boundedSearch,
@@ -2361,9 +2772,11 @@ function searchBalancedResource(ctx) {
     deadlineAtMs,
     abortSignal,
     popCap: requestedPopCap,
-    prior,
-    arrival,
-    backtrackFactor,
+      prior,
+      arrival,
+      backtrackFactor,
+      rejectPriorEdges,
+      recoveryAllowed,
     cleanMetroMultiplier,
     avoidMotorways,
     coincidentSiblings,
@@ -2375,6 +2788,14 @@ function searchBalancedResource(ctx) {
   const settlementFallbackPenalty = resolveSettlementFallbackPenalty(
     profile, cleanMetroMultiplier, avoidMotorways === true
   );
+  const permitsEndpointExit = (ei, meters) =>
+    (ei === startEi && meters <= ENDPOINT_STUB_METERS) ||
+    (ei === startEi && ctx.startEndpointKind !== "customers" &&
+      isSingleAccessEdge(pack, ei)) ||
+    (meters <= FUEL_ENDPOINT_RETRACE_METERS && (
+      (ei === startEi && ctx.startEndpointKind === "customers") ||
+      (ei === endEi && ctx.endEndpointKind === "customers")
+    ));
   const penalizeBacktrack = (cost, edgeId) => {
     const id = String(edgeId == null ? "" : edgeId);
     if (arrival != null && id === arrival) return cost * 12;
@@ -2388,30 +2809,21 @@ function searchBalancedResource(ctx) {
   const labels = stateCount * B;
   const lab = (node, b) => node * B + b;
   const nid = (label) => Math.floor(label / B);
-  const dist = new Float64Array(labels);
-  dist.fill(Infinity);
-  const score = new Float64Array(labels);
-  score.fill(Infinity);
-  const dirtAt = new Float64Array(labels);
-  const peakProgress = new Float64Array(labels);
-  peakProgress.fill(-Infinity);
-  const prev = new Int32Array(labels);
-  prev.fill(-1);
-  const prevKind = new Uint8Array(labels);
-  const prevData = new Int32Array(labels);
-  const prevForward = new Uint8Array(labels);
-  const slots = new Uint8Array(labels);
+  const labelState = createBalancedLabelState(labels);
   const heap = new MinHeap();
   const startLab = lab(startNode, 0);
-  dist[startLab] = 0;
-  score[startLab] = 0;
-  peakProgress[startLab] = 0;
+  labelState.setDistance(startLab, 0);
+  labelState.setScore(startLab, 0);
+  labelState.setPeak(startLab, 0);
   heap.push({ node: startLab, g: 0, searchCost: 0, cost: haversineMeters(startLL, endLL) });
   const regressionLimit = Number.isFinite(Number(progressRegressionMeters))
     ? Number(progressRegressionMeters)
     : maxProgressRegressionMeters(profile);
   let pops = 0;
+  let settledDestinationLabels = 0;
+  let qualifiedDestinationLabels = 0;
   let abort = "completed";
+  let earlyQualityExit = false;
   const rejected = diagnostics ? {
     immediateReverse: 0,
     legalTurn: 0,
@@ -2450,10 +2862,41 @@ function searchBalancedResource(ctx) {
   }
 
   const abMeters = haversineMeters(startLL, endLL);
+  const startRoadRemainingMeters = roadCompass
+    ? lineMeters(landPathCoordinates)
+    : Infinity;
+  const landProgressCache = new Map();
+  function remainingRoadMeters(node) {
+    if (!roadCompass) return Infinity;
+    const key = node === startNode || node === endNode ? node : graphNodeOf(node);
+    if (landProgressCache.has(key)) return landProgressCache.get(key);
+    const progress = landPathProgressMeters(nodeLL(node), landPathCoordinates);
+    const remaining = Number.isFinite(progress)
+      ? Math.max(0, startRoadRemainingMeters - progress)
+      : Infinity;
+    landProgressCache.set(key, remaining);
+    return remaining;
+  }
+  function progressMeters(node, point) {
+    if (!roadCompass) return projectedProgressMeters(point, startLL, endLL);
+    const remaining = remainingRoadMeters(node);
+    return Number.isFinite(remaining) && Number.isFinite(startRoadRemainingMeters)
+      ? startRoadRemainingMeters - remaining
+      : -Infinity;
+  }
   function awayExtra(fromNode, toNode) {
     const a = nodeLL(fromNode);
     const b = nodeLL(toNode);
     if (!a || !b) return 0;
+    if (roadCompass) {
+      const fromRemaining = remainingRoadMeters(fromNode);
+      const toRemaining = remainingRoadMeters(toNode);
+      if (Number.isFinite(fromRemaining) && Number.isFinite(toRemaining)) {
+        return approachAwayExtraCost(
+          profile, fromRemaining, toRemaining, startRoadRemainingMeters, 50
+        );
+      }
+    }
     return approachAwayExtraCost(
       profile,
       haversineMeters(a, endLL),
@@ -2477,17 +2920,29 @@ function searchBalancedResource(ctx) {
       break;
     }
     const cur = heap.pop();
-    if (!cur || cur.g !== dist[cur.node] || cur.searchCost !== score[cur.node]) continue;
+    if (
+      !cur ||
+      cur.g !== labelState.distance(cur.node) ||
+      cur.searchCost !== labelState.score(cur.node)
+    ) continue;
     if (cur.g > maxPathMeters) continue;
     const state = nid(cur.node);
     const node = graphNodeOf(state);
-    const dirtSoFar = dirtAt[cur.node];
+    const dirtSoFar = labelState.dirt(cur.node);
     if (state === endNode) {
       const ratio = cur.g > 0 ? dirtSoFar / cur.g : 0;
       // Half a percentage point is visually and practically 50/50. Once A*
       // settles such a destination label, further expansion can only buy a
       // cosmetically smaller deviation at the cost of a much larger search.
-      if (Math.abs(ratio - 0.5) <= 0.005) break;
+      settledDestinationLabels += 1;
+      if (profile === "balanced" && ratio >= 0.45 && ratio <= 0.55) {
+        qualifiedDestinationLabels += 1;
+      }
+      if (profile === "dirt" && ratio >= 0.70) qualifiedDestinationLabels += 1;
+      if (qualifiedDestinationLabels >= 2) {
+        earlyQualityExit = true;
+        break;
+      }
       continue;
     }
     if (node < n) {
@@ -2496,7 +2951,7 @@ function searchBalancedResource(ctx) {
       for (let i = start; i < end; i += 1) {
         const to = edgeTargets[i];
         const ei = edgeUndirectedIndex[i];
-        if (prevKind[cur.node] === 0 && prevData[cur.node] === ei) {
+        if (labelState.previousKind(cur.node) === 0 && labelState.previousData(cur.node) === ei) {
           if (rejected) rejected.immediateReverse += 1;
           continue;
         }
@@ -2526,16 +2981,28 @@ function searchBalancedResource(ctx) {
           if (rejected) rejected.avoid += 1;
           continue;
         }
+        if (
+          rejectPriorEdges && prior.has(String(pack.edgeId(ei))) &&
+          !recoveryAllowed.has(String(pack.edgeId(ei))) &&
+          !permitsEndpointExit(ei, edgeMeters[ei])
+        ) {
+          if (rejected) rejected.retrace = (rejected.retrace || 0) + 1;
+          continue;
+        }
         const toLL = nodeLL(to);
         if (blockedForRide(
           toLL, startLL, endLL, cityWall, corridorM, hardCorridor, urbanBoxes,
-          settlementWall, settlementBoxes, nodeLL(node)
+          settlementWall, settlementBoxes, nodeLL(node), landPathCoordinates
         )) {
           if (rejected) rejected.geography += 1;
           continue;
         }
-        const toProgress = projectedProgressMeters(toLL, startLL, endLL);
-        const newPeakProgress = Math.max(peakProgress[cur.node], toProgress);
+        const toProgress = progressMeters(toState, toLL);
+        if (!Number.isFinite(toProgress)) {
+          if (rejected) rejected.progress += 1;
+          continue;
+        }
+        const newPeakProgress = Math.max(labelState.peak(cur.node), toProgress);
         if (newPeakProgress - toProgress > regressionLimit) {
           if (rejected) rejected.progress += 1;
           continue;
@@ -2571,36 +3038,43 @@ function searchBalancedResource(ctx) {
           : 1;
         let edgeBase = isFerryEdge
           ? ferryStepForPackEdge(pack, ei, edgeM)
-          : edgeM * settlementMult * urbanMult;
-        if (shortDirtPenalized) edgeBase *= DIRT_RIDE_PAVED_PER_KM;
+          : edgeM * settlementMult * urbanMult * (
+              profile === "dirt"
+                ? (addDirt > 0 ? DIRT_RIDE_RESOURCE_PER_KM : DIRT_RIDE_PAVED_PER_KM)
+                : 1
+            );
+        if (shortDirtPenalized) edgeBase *= DIRT_RIDE_SHORT_EXCURSION_MULTIPLIER;
         const newScore = cur.searchCost
           + penalizeBacktrack(
             edgeBase + awayExtra(node, to),
             edgeId
           );
+        const oldScore = labelState.score(toLab);
+        const oldDistance = labelState.distance(toLab);
+        const oldDirt = labelState.dirt(toLab);
         let action = considerRelax(
           newScore,
-          score[toLab],
+          oldScore,
           ei,
-          prevData[toLab],
+          labelState.previousData(toLab),
           to,
           sessionSeed,
           varietyOn,
-          slots[toLab],
+          labelState.slots(toLab),
           addDirt > 0,
-          dirtAt[toLab] > (Number.isFinite(dist[toLab]) ? dist[toLab] * 0.4 : 0)
+          oldDirt > (Number.isFinite(oldDistance) ? oldDistance * 0.4 : 0)
         );
-        if (action === "steal" && createsCycle(prev, cur.node, toLab)) action = "reject";
-        if (applyRelax(action, slots, toLab)) {
-          prev[toLab] = cur.node;
-          prevKind[toLab] = 0;
-          prevData[toLab] = ei;
-          prevForward[toLab] = edgeFrom[ei] === node ? 1 : 0;
+        if (action === "steal" && labelState.createsCycle(cur.node, toLab)) action = "reject";
+        if (labelState.applyRelax(action, toLab)) {
+          labelState.setPrevious(toLab, cur.node);
+          labelState.setPreviousKind(toLab, 0);
+          labelState.setPreviousData(toLab, ei);
+          labelState.setPreviousForward(toLab, edgeFrom[ei] === node ? 1 : 0);
           if (shouldPush(action)) {
-            dist[toLab] = newMeters;
-            score[toLab] = newScore;
-            dirtAt[toLab] = newDirt;
-            peakProgress[toLab] = newPeakProgress;
+            labelState.setDistance(toLab, newMeters);
+            labelState.setScore(toLab, newScore);
+            labelState.setDirt(toLab, newDirt);
+            labelState.setPeak(toLab, newPeakProgress);
             const h = toLL ? haversineMeters(toLL, endLL) : 0;
             heap.push({ node: toLab, g: newMeters, searchCost: newScore, cost: newScore + h });
           }
@@ -2611,20 +3085,21 @@ function searchBalancedResource(ctx) {
         for (let si = 0; si < siblings.length; si += 1) {
           const to = siblings[si];
           const toLL = nodeLL(to);
-          const toProgress = projectedProgressMeters(toLL, startLL, endLL);
-          const newPeakProgress = Math.max(peakProgress[cur.node], toProgress);
-          if (newPeakProgress - toProgress > regressionLimit) continue;
           const toState = stateForArrival(to, -1);
+          const toProgress = progressMeters(toState, toLL);
+          if (!Number.isFinite(toProgress)) continue;
+          const newPeakProgress = Math.max(labelState.peak(cur.node), toProgress);
+          if (newPeakProgress - toProgress > regressionLimit) continue;
           const toLab = lab(toState, dirtBucket(dirtSoFar, cur.g));
-          if (cur.searchCost < score[toLab]) {
-            dist[toLab] = cur.g;
-            score[toLab] = cur.searchCost;
-            dirtAt[toLab] = dirtSoFar;
-            peakProgress[toLab] = newPeakProgress;
-            prev[toLab] = cur.node;
-            prevKind[toLab] = 2;
-            prevData[toLab] = -1;
-            prevForward[toLab] = 1;
+          if (cur.searchCost < labelState.score(toLab)) {
+            labelState.setDistance(toLab, cur.g);
+            labelState.setScore(toLab, cur.searchCost);
+            labelState.setDirt(toLab, dirtSoFar);
+            labelState.setPeak(toLab, newPeakProgress);
+            labelState.setPrevious(toLab, cur.node);
+            labelState.setPreviousKind(toLab, 2);
+            labelState.setPreviousData(toLab, -1);
+            labelState.setPreviousForward(toLab, 1);
             const h = toLL ? haversineMeters(toLL, endLL) : 0;
             heap.push({
               node: toLab,
@@ -2647,12 +3122,18 @@ function searchBalancedResource(ctx) {
           !turnState.allowsExit(state, v.ei)
         ) continue;
         const toLL = nodeLL(item.to);
+        if (
+          rejectPriorEdges && prior.has(String(pack.edgeId(v.ei))) &&
+          !recoveryAllowed.has(String(pack.edgeId(v.ei))) &&
+          !permitsEndpointExit(v.ei, v.meters)
+        ) continue;
         if (blockedForRide(
           toLL, startLL, endLL, cityWall, corridorM, hardCorridor, urbanBoxes,
-          settlementWall, settlementBoxes, nodeLL(node)
+          settlementWall, settlementBoxes, nodeLL(node), landPathCoordinates
         )) continue;
-        const toProgress = projectedProgressMeters(toLL, startLL, endLL);
-        const newPeakProgress = Math.max(peakProgress[cur.node], toProgress);
+        const toProgress = progressMeters(item.to, toLL);
+        if (!Number.isFinite(toProgress)) continue;
+        const newPeakProgress = Math.max(labelState.peak(cur.node), toProgress);
         if (newPeakProgress - toProgress > regressionLimit) continue;
         const newMeters = cur.g + v.meters;
         if (exceedsLengthSlack(newMeters, item.to, slackToDest, maxPathMeters)) continue;
@@ -2674,15 +3155,15 @@ function searchBalancedResource(ctx) {
             v.meters * settlementMult * urbanMult + awayExtra(node, item.to),
             pack.edgeId(v.ei)
           );
-        if (newScore < score[toLab]) {
-          dist[toLab] = newMeters;
-          score[toLab] = newScore;
-          dirtAt[toLab] = dirtSoFar;
-          peakProgress[toLab] = newPeakProgress;
-          prev[toLab] = cur.node;
-          prevKind[toLab] = 1;
-          prevData[toLab] = item.id;
-          prevForward[toLab] = item.forward ? 1 : 0;
+        if (newScore < labelState.score(toLab)) {
+          labelState.setDistance(toLab, newMeters);
+          labelState.setScore(toLab, newScore);
+          labelState.setDirt(toLab, dirtSoFar);
+          labelState.setPeak(toLab, newPeakProgress);
+          labelState.setPrevious(toLab, cur.node);
+          labelState.setPreviousKind(toLab, 1);
+          labelState.setPreviousData(toLab, item.id);
+          labelState.setPreviousForward(toLab, item.forward ? 1 : 0);
           const h = toLL ? haversineMeters(toLL, endLL) : 0;
           heap.push({ node: toLab, g: newMeters, searchCost: newScore, cost: newScore + h });
         }
@@ -2693,9 +3174,14 @@ function searchBalancedResource(ctx) {
   const cands = [];
   for (let b = 0; b < B; b += 1) {
     const endLab = lab(endNode, b);
-    const len = dist[endLab];
+    const len = labelState.distance(endLab);
     if (!Number.isFinite(len) || len <= 0) continue;
-    cands.push({ lab: endLab, len, dirt: dirtAt[endLab], score: score[endLab] });
+    cands.push({
+      lab: endLab,
+      len,
+      dirt: labelState.dirt(endLab),
+      score: labelState.score(endLab)
+    });
   }
   if (!cands.length) {
     if (diagnostics) {
@@ -2712,11 +3198,11 @@ function searchBalancedResource(ctx) {
     for (let label = candidate.lab; nid(label) !== startNode; ) {
       hops += 1;
       if (hops > labels + 4) return null;
-      const parent = prev[label];
+      const parent = labelState.previous(label);
       if (parent < 0) return null;
-      if (prevKind[label] === 1) {
-        const v = virt[prevData[label]];
-        const forward = prevForward[label] === 1;
+      if (labelState.previousKind(label) === 1) {
+        const v = virt[labelState.previousData(label)];
+        const forward = labelState.previousForward(label) === 1;
         used.push(
           withSurfaceLeaf(
             {
@@ -2735,11 +3221,11 @@ function searchBalancedResource(ctx) {
             v.ei
           )
         );
-      } else if (prevKind[label] === 2) {
+      } else if (labelState.previousKind(label) === 2) {
         // Coincident duplicate-node stitch — no geometry.
       } else {
-        const ei = prevData[label];
-        const forward = prevForward[label] === 1;
+        const ei = labelState.previousData(label);
+        const forward = labelState.previousForward(label) === 1;
         used.push(
           withSurfaceLeaf(
             {
@@ -2764,12 +3250,25 @@ function searchBalancedResource(ctx) {
     used.reverse();
     const pruned = pruneGeographicLoops(used, (edge) => edge.coords);
     const meters = pruned.edges.reduce((sum, edge) => sum + edge.meters, 0);
-    const dirt = pruned.edges.reduce((sum, edge) => {
+    const coarseDirt = pruned.edges.reduce((sum, edge) => {
       if (isFerryStructureCode(edge.structure)) return sum;
       const surface = enums.SURFACE_NAME[edge.surface] || "unknown";
       return sum + (isDirtSurface(surface, edge.roadClass) ? edge.meters : 0);
     }, 0);
-    return { candidate, pruned, dirtPercent: meters > 0 ? dirt / meters * 100 : 0, meters };
+    const honestStats = pack.hasLeaves
+      ? applyHonestSurfaceStats(
+          {},
+          pruned.edges
+            .filter((edge) => !isFerryStructureCode(edge.structure))
+            .map((edge) => ({ meters: edge.meters, surfaceLeaf: edge.surfaceLeaf })),
+          meters,
+          true
+        )
+      : null;
+    const dirtPercent = Number.isFinite(Number(honestStats && honestStats.dirtPercent))
+      ? Number(honestStats.dirtPercent)
+      : (meters > 0 ? coarseDirt / meters * 100 : 0);
+    return { candidate, pruned, dirtPercent, meters };
   }
   const materialized = cands.map(materializeCandidate).filter(Boolean);
   materialized.sort((a, b) => {
@@ -2788,7 +3287,22 @@ function searchBalancedResource(ctx) {
     }
     return a.meters - b.meters;
   });
-  const selected = materialized[0];
+  const qualityBest = materialized[0];
+  const seenGeometry = new Set();
+  const eligible = materialized.filter((candidate) => {
+    if (!qualityBest || Math.abs(candidate.dirtPercent - qualityBest.dirtPercent) > 5.01) {
+      return false;
+    }
+    const signature = candidate.pruned.edges.map((edge) => String(edge.edgeId)).join(">");
+    if (seenGeometry.has(signature)) return false;
+    seenGeometry.add(signature);
+    candidate.geometrySignature = signature;
+    return true;
+  }).slice(0, 3);
+  const selectedIndex = eligible.length > 1 && sessionSeed !== 0
+    ? varietyHash(sessionSeed, eligible.length, 0x524f5554) % eligible.length
+    : 0;
+  const selected = eligible[selectedIndex] || qualityBest;
   if (!selected) return null;
   const bestLab = selected.candidate.lab;
   const pruned = selected.pruned;
@@ -2865,7 +3379,7 @@ function searchBalancedResource(ctx) {
     distanceMeters,
     unknownAccessMeters,
     movingSeconds,
-    profileCost: score[bestLab],
+    profileCost: labelState.score(bestLab),
     searchMeta: {
       bidir: false,
       packFormat: pack.hasLeaves ? "v3" : "v2",
@@ -2873,16 +3387,38 @@ function searchBalancedResource(ctx) {
       ellipseLabel: "balanced-resource",
       balancedResource: profile === "balanced",
       dirtResource: profile === "dirt",
+      routeSeed: sessionSeed,
+      forwardCandidateCount: eligible.length,
+      selectedCandidateIndex: selectedIndex,
+      candidateSelection: "seeded-complete-geometry-within-5-dirt-points",
       dirtPercent: pct(dirtMeters),
       balancedCandidateBuckets: cands.map((candidate) => ({
         dirtPercent: Math.round(candidate.dirt / candidate.len * 1000) / 10,
         distanceMeters: Math.round(candidate.len)
       })),
+      completedCandidateKnownDirtPercent: materialized.map((candidate) =>
+        Math.round(candidate.dirtPercent * 10) / 10
+      ),
+      highestCompletedKnownDirtPercent: materialized.length
+        ? Math.max(...materialized.map((candidate) => candidate.dirtPercent))
+        : null,
+      resourceSearchExhaustive:
+        abort === "completed" && !earlyQualityExit && heap.items.length === 0,
+      resourceSearchEarlyQualityExit: earlyQualityExit,
+      resourceSearchExit: earlyQualityExit ? "quality_threshold" : abort,
+      coherentDistanceCapMeters: Number.isFinite(Number(maxPathMeters))
+        ? Math.round(Number(maxPathMeters))
+        : null,
+      shortestLegalRoadMeters: Number.isFinite(Number(shortestMeters))
+        ? Math.round(Number(shortestMeters))
+        : null,
       prunedLoopCount: pruned.prunedLoopCount,
       prunedLoopMeters: Math.round(pruned.prunedMeters),
       pops,
       timedOut: abort === "timeCap" || abort === "popCap",
       pass2Outcome: abort,
+      sparseLabelState: labelState.sparse,
+      labelPages: labelState.pageCount(),
       settlementFallbackUsed: settlementCrossingUsed,
       balancedMiss: profile === "balanced" ? Math.abs(pct(dirtMeters) - 50) : null
     },
@@ -2900,6 +3436,11 @@ function searchBalancedResource(ctx) {
       verifiedAccessPercent: pct(byAccessM.motorized_verified || 0)
     }
   };
+  if (diagnostics) {
+    diagnostics.outcome = abort;
+    diagnostics.pops = pops;
+    diagnostics.rejections = rejected;
+  }
   return annotateCorridorMeta(mixResult, startLL, endLL, profile);
 }
 
@@ -2927,6 +3468,7 @@ module.exports = {
   MINIMUM_EARNED_DIRT_EXCURSION_METERS,
   DIRT_BASE_SEARCH_BUDGET_MS,
   DIRT_MAX_SEARCH_BUDGET_MS,
+  DIRT_PROVINCE_SCALE_ROUTE_METERS,
   BALANCED_BASE_SEARCH_BUDGET_MS,
   BALANCED_MAX_SEARCH_BUDGET_MS,
   LARGE_GRAPH_BASE_SEARCH_BUDGET_MS,
@@ -2943,5 +3485,6 @@ module.exports = {
   urbanBoxesForPack,
   dirtRecoveryPathCap,
   balancedCorridorMultipliers,
+  createBalancedLabelState,
   applyHonestReportedStats
 };

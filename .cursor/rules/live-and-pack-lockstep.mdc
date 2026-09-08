@@ -1,5 +1,5 @@
 ---
-description: LIVE and PACKS use one promoted R2 fabric; Pack Factory follows the frozen V3 contract.
+description: LIVE and PACKS stay on promoted V3 until the NS V4 legal-topology canary is accepted; then one atomic V4 fabric switch.
 alwaysApply: true
 ---
 
@@ -9,56 +9,57 @@ Read `docs/PACK-FACTORY.md` and `docs/ROUTING-FREEZE-2026-09-03.md` before
 building or publishing a region. Cursor's Pack Factory skill is an execution aid;
 the checked-in repository contract wins on conflict.
 
-Each promoted V3 region uses the same R2 objects for LIVE and phone downloads:
+**2026-09-06 halt:** Do not stamp, candidate-upload, or promote remaining V3
+regions. Public catalog objects stay:
 
-- `dirt-packs/{id}/graph.v3.bin`
+- `dirt-packs/{id}/graph.v3.bin` (or `graph.v2.bin` where not yet V3)
 - `dirt-packs/{id}/geometry.v1.bin`
 - `dirt-packs/{id}/fuel.v1.json`
 
-Regions not yet promoted to V3 may advertise `graph.v2.bin` until their factory
-run is accepted. The two checked-in V3 registries determine which graph LIVE and
-the clients request.
+The legal-topology mould is **one Nova Scotia `graph.v4.bin` DEV candidate**
+under `dirt-packs/v4/candidates/<id>/ns/`. Do not point production
+`dirt-mayday.vercel.app` at V4. Do not mix V3 and V4 in one search.
+
+After owner acceptance, every region is built to V4 from one source-epoch,
+seams are sealed, and one versioned manifest pointer switches atomically.
+V1/V3 remains rollback.
 
 - Foundational regional packs are OSM-only.
 - Downloaded versus cellular is delivery, not a second road network.
-- If a pack changes, publish it through an immutable candidate and promotion or
-  it was not tested.
-- Vercel contains API code only. Never include pack binaries or
-  `longhaul.v1.json.gz` in the deployment.
-- The accepted NS/NB/PE/NL/QC/ON V3 bytes are frozen reference moulds. Do not
-  rebuild them while producing another region.
+- Vercel contains API code only. Never include pack binaries.
 
 ## When you change routing or packs
 
 | Change | Required release action |
 | --- | --- |
-| New/rebuilt region | Follow `docs/PACK-FACTORY.md`: build graph/geometry/fuel, upload `--candidate --pack`, add both V3 registries and commit, deploy the recorded candidate override, accept, `--promote --pack`, `--live`, then region-scoped `--assert`. |
-| Cost, access, or search law | This reopens the frozen routing candidate. Update Swift and JS twins, add a fixed regression, commit, deploy LIVE, install a new app build, and obtain physical acceptance before a new freeze. |
-| Live loader only | Edit the shared pack-fabric source, commit, deploy LIVE, and assert every explicitly affected region. |
-
-No routing or pack change is shipped when it exists only on the phone, only on
-LIVE, or only on the laptop.
+| V4 legal-topology (this migration) | Follow `docs/PACK-FACTORY.md`: fixtures green, one NS V4 DEV candidate, owner acceptance, then national V4 — never a silent V3 restamp. |
+| Cost, access-as-cost, or search law | Reopens the frozen routing candidate. Not part of Pack Factory. |
+| Live loader only | Edit shared pack-fabric source, commit, deploy LIVE, assert affected regions. |
 
 ## Forbidden
 
+- Building/promoting remaining V3 regions during the V4 migration.
 - Bare `--pack` publication.
 - Replacing the remote catalog with the checked-in seed manifest.
 - Auto-downloading packs merely to make LIVE match.
 - Longhaul or a second live extract.
 - Provincial supplements in a foundational OSM-only build.
 - A router-cost/search change hidden inside Pack Factory.
-- Bulk promotion without region-by-region acceptance and identity evidence.
-
-## Guarded commands
-
-```sh
-node scripts/pack-fabric/scripts/ship-routing.js --candidate <release-id> --pack <region>
-node scripts/pack-fabric/scripts/ship-routing.js --candidate <release-id> <region> --live
-node scripts/pack-fabric/scripts/ship-routing.js --promote <release-id> --pack <region>
-node scripts/pack-fabric/scripts/ship-routing.js --live
-node scripts/pack-fabric/scripts/ship-routing.js --assert --region <region>
-```
+- Runtime proximity stitches on V4.
+- Coordinate equality as topology identity.
 
 Workspace: `/Users/richardsmith/SandBox01/MAYDAYiOS/Dirt`
 
 API: `https://dirt-mayday.vercel.app/api/route`
+
+## September 7 routing-evolution qualification
+
+Use only sealed DEV V4 release `fabric-v4-20260907-01`. Do not rebuild, modify,
+upload, restamp, or substitute its packs; do not use V3 fallback, runtime OSM,
+production, or a physical phone during automated qualification.
+
+Routing search, costs, variety seeds, forward progress, retrace rejection, and
+fuel-replacement ranking are one contract. Change JavaScript and Swift in the
+same change and prove a non-zero seed produces identical legal geometry. A
+live-only or phone-only search change is a defect. The production and DEV live
+services must not silently diverge from the downloaded-pack laws.

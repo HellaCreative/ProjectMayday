@@ -18,3 +18,10 @@ test("route and fuel APIs share one explicit service contract", () => {
 test("service build is honest when no deployment identity exists", () => {
   assert.equal(serviceBuild({}), "local-uncommitted");
 });
+
+test("an explicit qualified worktree identity wins over Vercel's base commit", () => {
+  assert.equal(serviceBuild({
+    SOURCE_VERSION: "feed123",
+    VERCEL_GIT_COMMIT_SHA: "base456"
+  }), "feed123");
+});
