@@ -992,3 +992,108 @@ remains a separate bounded-pool flag, not a proved geographic maximum. Full
 24NBcases pass at400k (691–1864ms preliminaryrun). Added diagnostics correction:
 poolComplete cannot be true when fuelcandidateverification fails. Added regression
 forlabel_limit. All167focusedchecks pass. Finalmemory/hostedNBcriticalcase pending.
+
+## Final400k candidate hosted checks pass
+
+Private67425f53c32f26bf81911331931462389205bc2b =df0827+05eecb0.
+NB-only critical162kmunknown firstrequest7.429sserver,256.158km48.491%dirt,
+0.016kmrepeat,all6candidatescomplete. Subsequent actualmoved request13.164s,
+nearDalhousie4.887s,Dalhousie4.689s,Clean4.423s,matching previously verified
+shapes/fuelproof. NB24final400k691–1986ms525MiBpeak; previouscross24completed
+below200k (thus unchanged by highercap)1.820–3.630s839MiBpeak.167focusedchecks.
+Stable reactivation requested only after allthesechecks. Retestscope remains
+225kmusable FromHere, with short-rangeNB48%dirt/Cleanbackroadquality flags open.
+
+## Physical retest ready — final public67425 verification
+
+StableDEV pack-fabric.vercel.app now source67425f53c32f26bf81911331931462389205bc2b,
+exact5bnn5yit5 preview, ns-nb-v1/BOTHNS02NB02. Ownerverifiedpublichealth andupdated
+nationalactivationguard. Independentpublic failedmoved-pin request passes:
+5.690sHTTP/4.637sserver,884.748389km,4pumps,1.621km repeated. Everycandidatefuel
+search finishes, all5legs within225km, destinationescape fits andgeometryjoins.
+No Xcodeinstall/phonepackchange/productionchange. Runtime commits86f3c02/05eecb0.
+
+Handoff: freshFromHere route to lastfailedNBdestination, Dirt/unknownOFF/fuelON,
+samevehicle range, then moveendpoint again.167focusedchecks,24cross+24NB regional
+cases and8pin sweep support this handoff; physicalride-qualityacceptance pending.
+Cleanmajor-road preference, lowdirt48.49%on162kmNBcase andresidualNSunknownretrace
+remain explicitqualityflags. No globaloptimality or offlinenavigationclaim.
+
+## Physical acceptance — 22:11 UTC, build 23
+
+The rider reported “Perfect!” after three new Porters Lake→NB Dirt builds.
+All used live source `67425f53c32f26bf81911331931462389205bc2b`, NS02/NB02,
+Allow Unknown OFF, automatic fuel ON, 250 km range with 10% reserve (225 km usable).
+
+| Destination latitude, longitude | Request time | Fuel stops | Committed legs |
+|---|---:|---:|---:|
+| 47.752778, -64.870725 | 5.513 s | 4 | 5 |
+| 48.042596, -66.476724 | 4.807 s | 3 | 4 |
+| 45.270115, -67.383511 | 5.444 s | 4 | 5 |
+
+These are three accepted physical route-building cases, including changed endpoints.
+Exact inputs and log observations are preserved in
+`scripts/pack-fabric/bench/fixtures/physical-dirt-acceptance-20260908-221107.json`.
+The installed pack01 path in the policy line does not identify the live routing
+pack: the response identity explicitly confirms both02 packs. No app reinstall
+or new deployment was needed for this acceptance.
+
+The pasted log does not include full geometry or fuel-hop distances; rider visual
+acceptance and successful responses do not independently verify navigation,
+station entrances/availability, or offline routing. Clean back-road quality is
+the next integration priority. Short-range NB dirt share and residual NS unknown
+retrace remain open. Preserve this accepted Dirt baseline while refining Clean.
+
+## Follow-up correction — Nova Scotia short diversions, 22:14 UTC
+
+The rider's close-up screenshot rejects short hooked diversions near Musquodoboit
+Harbour on a NEW NS-only route to 46.214698,-59.965492. This is separate from the
+three earlier NS→NB builds. The earlier positive feedback is not blanket routing
+acceptance. Route quality remains open and takes priority over Clean refinement.
+
+Exact public replay on source67425 confirms the diversions exist in returned
+segments, not only the renderer. Gravel service runs of70m and179m occur in the
+opening9km. The selected route reports zero repeated road metres: leaving and
+rejoining through different edges escapes the retrace check. Current per-metre
+surface costs reward short dirt without assessing continuous riding value.
+A short-run threshold alone must not reject necessary fuel/waypoint access.
+
+Device request16.488s; public replay13.677s server. Dirt-10 completes at561.496km,
+68.981%dirt,3pumps; paved and dirt-30 candidates hit label_limit. This is a separate
+search-completeness/performance failure, not evidence that dirt-10 is best possible.
+Input and observations: bench fixture `ns-short-diversions-20260908.json`.
+No scoring change or deployment made for this diagnostic capture. Next: compare
+these short branches with legal onward alternatives and qualify continuity
+handling beyond repeated-edge detection; preserve fuel and turn constraints.
+
+## Dirt continuity candidate — local qualification
+
+Short leave-and-rejoin branches are not repeated-edge problems. Added an explicit
+nonnegative dirt-entry cost to resource search, once per continuous dirt run.
+An onDirt bit participates in dominance; refill labels preserve it. The ordinary
+edge-only reverse bound remains admissible because it omits this added cost.
+Turn/access/fuel restrictions and destination escape are unchanged. The parameter
+is candidate generation guidance, not a road ban or minimum permissible dirt run.
+
+DEV candidate uses1000m continuity allowance scaled by each objective's dirt
+saving, zero charge for the paved objective, and fuel heuristic1.5 for single
+regions (cross-region remains2). No region-specific road exclusions or smoothing
+of final geometry. Actual travelled dirt percentages remain honest. Search costs
+are changed before fuel routing; no extra post-route fuel insertion pass.
+
+Exact new NS case:559.326km,68.061%dirt,zero repeated road, no dirt branches in
+opening20km; every candidate fuel search completes. Local~2.9s. Weight1 with the
+same continuity cost hit label limits; weight2 caused a4.4km NBshort-range
+regression and was rejected for single regions. Final1.5 NBmatrix all24pass;
+worst added repeat167m (total183m); cross24pass with worst added16m (total304m).
+These small repeats still require context, not an assertion every spur is removed.
+Moved NB pin856.440km63.203%dirt471mrepeat (previous1621m), allcandidatefuelcomplete.
+NS3reference styles allcomplete with zero repeats; geometry intentionally changes.
+CapeUnknown still4962m repeated, unchanged unresolved quality flag.
+
+172focused tests pass, including short-vs-long dirt choice, dominance arrival
+surface, split roads/refills, necessary short pump access and legal restrictions.
+Local bench `replay-ns-continuity.js` captures0/500/1000comparisons and optional
+qualification assertions. Evidence is under /tmp/dirt-continuity-qualified,
+/tmp/dirt-cross-continuity, /tmp/dirt-nb-continuity-weight15 and
+/tmp/dirt-moved-continuity. Private hosted verification pending; no DEV switch.

@@ -1,4 +1,5 @@
 "use strict";
+const {surfaceKind}=require("./surface");
 const {fuelCovers,validateFuel}=require("./fuel-math");
 
 // Experimental fuel-aware label-setting search. This finds a minimum additive
@@ -20,7 +21,8 @@ class Heap {
 }
 
 function searchResourcePath({graph,start,end,edgeCost,budget,fuel=null,
-  initialTurnState=null,destinationEscapeMeters=0,lowerBounds=null,acceptGoal=null,avoidanceCost=null,maxLabels=Infinity,heuristicWeight=1,preferOnwardFuel=false}) {
+  initialTurnState=null,destinationEscapeMeters=0,lowerBounds=null,acceptGoal=null,avoidanceCost=null,maxLabels=Infinity,heuristicWeight=1,preferOnwardFuel=false,dirtEntryCost=0}) {
+  if(!Number.isFinite(dirtEntryCost)||dirtEntryCost<0)throw new TypeError("Dirt entry cost must be finite and nonnegative");
   if(!Number.isFinite(heuristicWeight)||heuristicWeight<1)throw new TypeError("Heuristic weight must be finite and at least one");
   if(!Number.isFinite(destinationEscapeMeters)||destinationEscapeMeters<0) throw new TypeError("A proved destination escape distance is required");
   if(maxLabels!==Infinity&&(!Number.isSafeInteger(maxLabels)||maxLabels<1))throw new TypeError("Positive label limit required");
@@ -45,7 +47,7 @@ function searchResourcePath({graph,start,end,edgeCost,budget,fuel=null,
     // Weight > 1 is explicit candidate-generation guidance: feasible results
     // retain hard constraints but no minimum-cost optimality is claimed.
     label.priority=label.cost+estimate*heuristicWeight;
-    const key=graph.stateKey(label.node,label.turnState)+(preferOnwardFuel?`|retreat:${label.retreatCursor?.labelId??0}`:"");
+    const key=graph.stateKey(label.node,label.turnState)+(preferOnwardFuel?`|retreat:${label.retreatCursor?.labelId??0}`:"")+(dirtEntryCost?`|dirt:${label.onDirt?1:0}`:"");
     const frontier=frontiers.get(key) || [];
     if(frontier.some(old=>old.active&&compare(old,label)<=0&&old.remaining>=label.remaining)) {dominated++;return;}
     if(labels>=maxLabels){labelLimitReached=true;return;}
@@ -90,7 +92,10 @@ function searchResourcePath({graph,start,end,edgeCost,budget,fuel=null,
       if(!transition.allowed)continue;
       const avoidance=avoidanceCost?avoidanceCost(arc):0;
       if(!Number.isFinite(avoidance)||avoidance<0)throw new TypeError("Avoidance costs must be finite and nonnegative");
-      const cost=edgeCost(arc);
+      // Charge once per continuous dirt run, not once per graph edge. Fuel
+      // actions retain onDirt; station projections cannot multiply the charge.
+      const onDirt=surfaceKind(arc.surfaceLeaf)==="dirt";
+      const cost=edgeCost(arc)+(onDirt&&!cur.onDirt?dirtEntryCost:0);
       let retreatCursor=null,retraceMeters=cur.retraceMeters||0;
       // A continued retreat must retain its approach cursor; otherwise a tiny
       // reversal beyond a station could reset the price of the long return.
@@ -102,7 +107,7 @@ function searchResourcePath({graph,start,end,edgeCost,budget,fuel=null,
       }
       if(!Number.isFinite(cost)||cost<0)throw new TypeError("Search costs must be finite and nonnegative");
       add({node:arc.to,turnState:transition.state,cost:cur.cost+cost,avoidance:cur.avoidance+avoidance,refills:cur.refills,
-        remaining:fuel?Math.max(0,cur.remaining-arc.distanceMeters):Infinity,distance:cur.distance+arc.distanceMeters,parent:cur,arc,refill:null,retreatCursor,retraceMeters});
+        remaining:fuel?Math.max(0,cur.remaining-arc.distanceMeters):Infinity,distance:cur.distance+arc.distanceMeters,parent:cur,arc,refill:null,retreatCursor,retraceMeters,onDirt});
       if(labelLimitReached)return labelLimitResult();
     }
   }

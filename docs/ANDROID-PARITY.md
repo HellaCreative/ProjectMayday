@@ -795,6 +795,23 @@ station IDs or geographic direction cones implement this rule. The same policy
 applies to each region enabled in the DEV adapter. Full approach histories before
 a reversal may still be pruned: bounded candidate generation, not a global
 optimal simple-path proof. The search retains its20s deadline and30M work cap;
-Atlantic fuel-label allowance200k is empirically checked against the2GiB host.
+Atlantic fuel-label allowance400k is empirically checked against the2GiB host.
 Physical percentages include all ridden distance. Offline/native parity awaits
 live acceptance; this entry defines the behavior Android must ultimately match.
+
+Candidate-pool completeness must be false if any fuel candidate remains
+unverified, including a label limit. A valid selected route does not prove all
+style alternatives were evaluated. Label ceilings are implementation resource
+budgets; native runtimes must reproduce these diagnostics and rider outcomes
+within their own measured memory limits, not blindly copy server allocations.
+
+## September8 continuity candidate (not yet published)
+
+Shared live JS adds a nonnegative charge once per continuous dirt run during
+candidate search, scaled by objective savings over1000m. Include onDirt in search
+state/dominance and preserve it through refills and projected edge splits. Fuel
+range, legal turns, fixed anchors and destination escape remain hard constraints.
+Paved objective has no dirt-entry charge; raw surface totals stay unchanged.
+Single-region fuel guidance1.5, joined-region2; no new label/time cap. Swift and
+Android implementations remain deferred under the live-first authorization.
+This local qualification is not device or offline parity acceptance.
