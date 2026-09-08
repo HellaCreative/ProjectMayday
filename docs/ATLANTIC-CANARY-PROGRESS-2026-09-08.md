@@ -43,9 +43,9 @@ remains labelled a partial local candidate, not a complete 63-region release.
 
 ## Current live handoff and fix tracking
 
-Live DEV now uses source 5df7437f723690682ed5107a7a95d16502e7c34e at
+Live DEV now uses source 7848ba6332da26d72b9070d5efd75d880db91629 at
 https://pack-fabric.vercel.app. The verified deployment is
-pack-fabric-a7gkw84hf-goricksmith-7678s-projects.vercel.app. Its four Atlantic
+pack-fabric-5syq91ji0-goricksmith-7678s-projects.vercel.app. Its four Atlantic
 regions use fabric-v4-20260908-01, including fuel and Rider Services.
 All 33 candidate objects were uploaded and read back with matching checksums.
 The three formerly failing crossing directions passed hosted preview checks.
@@ -54,8 +54,9 @@ stable-summary.json. Speed remains an open issue, as does dirt-route quality.
 
 | Fix | Change | Evidence | Rider result |
 | --- | --- | --- | --- |
-| ATL-01 | Preserve OSM passage at toll collection points | Source tags, compact-pack tests, original/rebuilt crossing results | Pending live test |
-| ATL-02 | Retain every proven Atlantic pack connection | Four connection-builder tests and hosted crossing checks | Pending live test |
+| ATL-01 | Preserve OSM passage at toll collection points | Source tags, compact-pack tests, original/rebuilt crossing results | Richard reports toll/ferry pass; route quality excluded |
+| ATL-02 | Retain every proven Atlantic pack connection | Four connection-builder tests and hosted crossing checks | Richard reports crossing pass; route quality excluded |
+| ATL-03 | Select a reachable arrival before declaring a fuel gap | Exact failure replay; New Brunswick pump selected with low remaining fuel; 41 tests | Pending live retest |
 
 This is now a LIVE-ONLY repair cycle per Richard's explicit direction. Swift
 work and offline acceptance are deferred until live behavior is accepted. Track
@@ -74,3 +75,30 @@ then a familiar Nova Scotia Dirt route with unknown access off/on. Send the app
 debug export and comments on failures, calculation time, and unexpected roads.
 The dirt comparison is an observation of current behavior, not a claim that dirt
 selection is repaired.
+
+## ATL-03 live repair handoff
+
+The two physical exports supplied by Richard on September 8 are the evidence
+for the reported Atlantic crossing acceptance, with the remaining automatic-fuel
+failure near the NS/NB boundary. NB fuel records were present. Fuel planning
+selected an unreachable one-way arrival in the Nova Scotia part of the crossing
+and declared a gap before advancing to NB.
+
+Live fix 7848ba6 reuses the directed reachability search to choose a reachable
+arrival among the existing legal snap candidates. Same pack files, permissions,
+snap radius and fuel range. An exact replay now completes. With 50 km remaining
+on that same approach, the planner selects Aulac Circle-K Irving in NB; with
+333 km remaining it crosses without an unnecessary stop. Both passed hosted
+preview checks. Forty-one fuel-planning tests passed.
+
+Source and detailed evidence are in .build/atlantic-live-fuel on branch
+recovery/atlantic-live-fuel, under scripts/pack-fabric/routing/candidates/
+nb-fuel-20260908. This directory is an isolated checkout inside this repository
+folder. Main's unfinished routing experiments were not deployed. Swift/phone
+changes: none. Await Richard's same-route live retest with automatic fuel on.
+
+Stable DEV checks completed on 7848ba6: original failed fuel request completed
+in 3.66 seconds; the 50 km remaining-fuel case selected the NB station in
+2.25 seconds. The live Balanced approach to that selected station also completed
+at 41,282 m, within the 50,000 m remaining range. These are service checks;
+Richard's app retest remains the acceptance step.
