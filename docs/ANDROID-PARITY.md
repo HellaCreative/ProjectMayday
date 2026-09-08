@@ -676,3 +676,11 @@ Preserve V4 searched edge sequences: proximity-based or coordinate-based loop
 cutting cannot prove a legal junction or turn. Arrival snapping must score the
 direction of travel into the destination, not its opposite. Live JS is under
 verification; Swift/Android changes are deferred under the live-only direction.
+# Adventure routing replacement — September 8, 2026
+
+An isolated live-JavaScript replacement is in development; see
+`ROUTING-REBUILD-SPEC.md` and `ROUTING-REBUILD-PROGRESS.md`. No Android or
+offline implementation is claimed by the current experimental core. Accepted
+mode/anchor ownership, known-surface statistics, fuel proof states, route
+persistence, variety and recovery outcomes must be ported and verified after
+live acceptance. The new code is not wired to the deployed API or app yet.

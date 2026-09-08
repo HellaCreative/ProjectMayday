@@ -69,3 +69,37 @@ For the post-launch GPX-to-DIRT conversion milestone:
 
 Then read the narrow contract relevant to the task. Phase reports and handback
 documents are historical evidence, not current instructions.
+
+## Routing recovery — September 7, 2026
+
+The failed routing evolution commits `e92584d` and `106f5a5` were reverted
+locally. Product intent remains in `docs/ROUTING-EVOLUTION-SPEC-2026-09-07.md`,
+with recovery clarifications taking precedence. The prior implementation is
+not qualified for launch. Sealed DEV V4 `fabric-v4-20260907-01` and catalogs
+remain read-only; no V3 substitution, pack rebuild, or production publication.
+Routing search, costs, variety seeds, forward progress, retrace handling, and
+fuel-replacement ranking are one JavaScript/Swift contract. Implement behavioral
+changes together and verify both runtimes; automated passes do not replace
+White-device acceptance. Android must reproduce the accepted rider outcome,
+but no Android implementation or qualification is claimed here.
+
+## Owner authorization — September 8, 2026
+
+Richard explicitly authorized all necessary routing and pack revisions, fixes,
+and evolutions to complete the product. The prior read-only connection boundary
+is reopened: create versioned DEV corrections while preserving the original
+sealed release. Stable DIRT DEV publication is authorized after verification;
+do not ask again. Actual production and GitHub backup remain gated as above.
+Provide regular progress updates and distinguish automated verification from
+physical-device acceptance. Do not claim perfection or launch qualification
+while required checks remain open.
+
+## Owner direction — live-only Atlantic repair cycle, September 8, 2026
+
+Richard explicitly requires live JavaScript routing first. Publish verified fixes
+to stable DIRT DEV, give him an actionable live test, and track each fix and his
+results. Do not work on the Swift reader, install builds, or transfer/download
+packs onto his phone during this cycle. After the live behavior is accepted,
+apply the accepted fixes to Swift and verify parity. Do not treat future parity
+work as a prerequisite for this live canary. Production and GitHub push remain
+out of scope.

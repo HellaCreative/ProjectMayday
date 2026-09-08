@@ -1,0 +1,37 @@
+"use strict";
+const test=require("node:test"),assert=require("node:assert/strict");
+const {buildGraphFromOsm}=require("../legal-topology/osm-graph");
+const {encodeFromOsmGraph,decodeGraphV4}=require("../pack-v4");
+const {decodeGeometryV1}=require("../pack-v2");
+const {legalSnapDetailed}=require("../legal-topology/snap");
+const {buildEdgeIndex,matchStations}=require("./station-matching");
+const {createBudget}=require("./budget");
+function budget(n=10000){return createBudget({deadlineAtMs:Date.now()+10000,maxExpansions:n});}
+function fixture(){
+  const osm={nodes:[{id:1,lon:-64,lat:45},{id:2,lon:-63.98,lat:45},{id:3,lon:-64,lat:45.01},{id:4,lon:-63.98,lat:45.01}],
+    ways:[{id:10,nodeIds:[1,2],tags:{highway:"service",surface:"asphalt",access:"yes"}},
+      {id:20,nodeIds:[3,4],tags:{highway:"service",surface:"asphalt",access:"private"}}]};
+  const encoded=encodeFromOsmGraph(buildGraphFromOsm(osm),{regionId:"fixture",sourceEpoch:"fixed"});
+  return {pack:decodeGraphV4(encoded.graphBuffer,encoded.geomBuffer),geom:decodeGeometryV1(encoded.geomBuffer)};
+}
+test("indexed station candidates equal full legal projection without OSM-node identity join",()=>{
+  const {pack,geom}=fixture(),station={id:"osm:n999",lon:-63.99,lat:45.0001};
+  const index=buildEdgeIndex(pack,geom,budget());
+  const result=matchStations({pack,geom,index,stations:[station],maxMeters:50,budget:budget()});
+  const full=legalSnapDetailed(pack,geom,station,{maxMeters:50});
+  assert.equal(result.matches[0].state,"candidates");
+  assert.deepEqual(result.matches[0].candidates,full.candidates);
+  assert.equal(result.matches[0].stationId,"osm:n999");
+});
+test("missing or prohibited station access has an explicit reason, not a geographic gap",()=>{
+  const {pack,geom}=fixture(),index=buildEdgeIndex(pack,geom,budget());
+  const result=matchStations({pack,geom,index,stations:[{id:"private",lon:-63.99,lat:45.01},{id:"far",lon:-60,lat:45}],maxMeters:50,budget:budget()});
+  assert.equal(result.matches.every(row=>row.state==="rejected"),true);
+  assert.ok(Object.keys(result.matches[0].rejectionCounts).length>0);
+  assert.equal(result.matches[1].searchedEdges,0);
+});
+test("an incomplete index cannot masquerade as zero reachable pumps",()=>{
+  const {pack,geom}=fixture(),index=buildEdgeIndex(pack,geom,budget(1));
+  assert.equal(index.state,"incomplete");
+  assert.throws(()=>matchStations({pack,geom,index,stations:[],maxMeters:50,budget:budget()}),/index/);
+});
