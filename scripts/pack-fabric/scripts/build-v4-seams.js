@@ -19,6 +19,12 @@ function parseArgs(argv) {
   for (let i = 0; i < argv.length; i += 1) {
     if (argv[i] === "--root") options.root = path.resolve(argv[++i]);
     else if (argv[i] === "--output") options.output = path.resolve(argv[++i]);
+    else if (argv[i] === "--regions") {
+      options.regions = [...new Set((argv[++i] || "").split(","))].sort();
+      if (options.regions.length < 2 || options.regions.some(id => id.length !== 2 || !REGION_NEIGHBOURS[id])) {
+        throw new Error("--regions requires at least two recognized region IDs");
+      }
+    }
     else throw new Error(`unknown argument ${argv[i]}`);
   }
   return options;
@@ -46,12 +52,13 @@ function loadPack(root, id) {
   return { manifest, pack: decodeGraphV4(fs.readFileSync(graphPath), geometry) };
 }
 
-function uniquePairs() {
+function uniquePairs(regions = null) {
   const rows = [];
   const seen = new Set();
   for (const [left, neighbors] of Object.entries(REGION_NEIGHBOURS)) {
-    if (left.length !== 2) continue;
+    if (left.length !== 2 || (regions && !regions.includes(left))) continue;
     for (const right of neighbors) {
+      if (regions && !regions.includes(right)) continue;
       const pair = [left, right].sort();
       const key = pair.join("|");
       if (seen.has(key)) continue;
@@ -146,10 +153,15 @@ function main() {
     if (!cache.has(id)) cache.set(id, loadPack(options.root, id));
     return cache.get(id);
   };
-  for (const id of Object.keys(REGION_NEIGHBOURS).filter((id) => id.length === 2).sort()) {
+  const regionIds = options.regions || Object.keys(REGION_NEIGHBOURS).filter((id) => id.length === 2).sort();
+  const pairs = uniquePairs(options.regions);
+  if (regionIds.some(id => !pairs.some(pair => pair.includes(id)))) {
+    throw new Error("every selected region must have a neighbor in the selected set");
+  }
+  for (const id of regionIds) {
     doc.regions[id] = { neighbors: {} };
   }
-  for (const [leftId, rightId] of uniquePairs()) {
+  for (const [leftId, rightId] of pairs) {
     const left = get(leftId);
     const right = get(rightId);
     if (left.manifest.sourceEpoch !== right.manifest.sourceEpoch) {

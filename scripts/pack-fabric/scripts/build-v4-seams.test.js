@@ -5,7 +5,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
-const { writeRegionSidecars, selectProofs } = require("./build-v4-seams");
+const { writeRegionSidecars, selectProofs, parseArgs, uniquePairs } = require("./build-v4-seams");
 const { validatePackManifestV2 } = require("../routing/lib/pack-manifest-v2");
 
 function stagedManifest(regionId) {
@@ -21,6 +21,14 @@ function stagedManifest(regionId) {
     timezone: "America/Halifax"
   };
 }
+
+test("explicit canary includes every connection inside its selected regions", () => {
+  const { regions } = parseArgs(["--regions", "ns,nb,pe,nl"]);
+  assert.deepEqual(uniquePairs(regions), [["nb", "ns"], ["nb", "pe"], ["nl", "ns"], ["ns", "pe"]]);
+  assert.ok(uniquePairs().length > uniquePairs(regions).length);
+  assert.throws(() => parseArgs(["--regions", "ns,typo"]));
+  assert.throws(() => parseArgs(["--regions", "ns"]));
+});
 
 test("seam sealing writes a sidecar and binds its identity into every region manifest", (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "dirt-v4-seams-"));
