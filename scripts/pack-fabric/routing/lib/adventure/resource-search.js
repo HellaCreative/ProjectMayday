@@ -96,28 +96,57 @@ function searchResourcePath({graph,start,end,edgeCost,budget,fuel=null,
 // Exact reverse distances in the eligible graph, relaxing turn/fuel state.
 // This is an admissible bound for the same additive costs, not a distance cap
 // or a requirement that every next road move geographically toward the pin.
-function buildLowerBounds({graph,nodeCount,target,edgeCost,budget}) {
-  const incoming=Array.from({length:nodeCount},()=>[]);
+// Caller-owned immutable graph/cost preparation, reusable across targets only
+// while graph and cost-function identities remain unchanged. No global cache.
+// Chunked typed storage avoids millions of JS arrays/objects and growth copies.
+function prepareReverseCosts({graph,nodeCount,edgeCost,budget,maxBytes=256*1024*1024}) {
+  if(!Number.isSafeInteger(nodeCount)||nodeCount<1||nodeCount>0x7fffffff)throw new TypeError("Valid node count required");
+  if(!Number.isSafeInteger(maxBytes)||maxBytes<0)throw new TypeError("Finite reverse storage byte limit required");
+  const incomplete=reason=>({state:"incomplete",reason});
+  if(!budget.check())return incomplete(budget.snapshot().reason);
+  let byteLength=nodeCount*4;
+  if(byteLength>maxBytes)return incomplete("reverse_storage_limit");
+  const heads=new Int32Array(nodeCount);heads.fill(-1);
+  const chunks=[],chunkSize=16384;let arcCount=0;
   for(let node=0;node<nodeCount;node++) {
-    if(!budget.consume())return {state:"incomplete",reason:budget.snapshot().reason};
+    if(!budget.consume())return incomplete(budget.snapshot().reason);
     for(const arc of graph.outgoing(node)) {
-      if(!budget.consume())return {state:"incomplete",reason:budget.snapshot().reason};
+      if(!budget.consume())return incomplete(budget.snapshot().reason);
+      if(!Number.isInteger(arc.to)||arc.to<0||arc.to>=nodeCount)throw new TypeError("Arc target outside graph");
       const cost=edgeCost(arc);
       if(!Number.isFinite(cost)||cost<0)throw new TypeError("Search costs must be finite and nonnegative");
-      incoming[arc.to].push({from:node,cost});
+      if(arcCount>=0x7fffffff)return incomplete("reverse_storage_limit");
+      const offset=arcCount%chunkSize;
+      if(offset===0) {
+        if(byteLength+chunkSize*16>maxBytes)return incomplete("reverse_storage_limit");
+        chunks.push({from:new Uint32Array(chunkSize),next:new Int32Array(chunkSize),cost:new Float64Array(chunkSize)});
+        byteLength+=chunkSize*16;
+      }
+      const chunk=chunks[chunks.length-1];
+      chunk.from[offset]=node;chunk.next[offset]=heads[arc.to];chunk.cost[offset]=cost;
+      heads[arc.to]=arcCount++;
     }
   }
+  return {state:"complete",graph,nodeCount,edgeCost,heads,chunks,chunkSize,arcCount,byteLength};
+}
+function buildLowerBounds({graph,nodeCount,target,edgeCost,budget,reverseCosts=null,maxReverseBytes}) {
+  if(!Number.isInteger(target)||target<0||target>=nodeCount)throw new TypeError("Valid bound target required");
+  if(!budget.check())return {state:"incomplete",reason:budget.snapshot().reason};
+  const reverse=reverseCosts||prepareReverseCosts({graph,nodeCount,edgeCost,budget,maxBytes:maxReverseBytes});
+  if(reverseCosts&&(reverse.state!=="complete"||reverse.graph!==graph||reverse.edgeCost!==edgeCost||reverse.nodeCount!==nodeCount))throw new TypeError("Reverse costs must belong to this graph and cost model");
+  if(reverse.state!=="complete")return reverse;
   const distances=new Float64Array(nodeCount);distances.fill(Infinity);distances[target]=0;
   const heap=new Heap();heap.push({node:target,cost:0,priority:0});let cur;
   while((cur=heap.pop())) {
     if(cur.cost!==distances[cur.node])continue;
     if(!budget.consume())return {state:"incomplete",reason:budget.snapshot().reason};
-    for(const arc of incoming[cur.node]) {
+    for(let id=reverse.heads[cur.node];id!==-1;) {
       if(!budget.consume())return {state:"incomplete",reason:budget.snapshot().reason};
-      const cost=cur.cost+arc.cost;
-      if(cost<distances[arc.from]){distances[arc.from]=cost;heap.push({node:arc.from,cost,priority:cost});}
+      const chunk=reverse.chunks[Math.floor(id/reverse.chunkSize)],offset=id%reverse.chunkSize;
+      const from=chunk.from[offset],cost=cur.cost+chunk.cost[offset];id=chunk.next[offset];
+      if(cost<distances[from]){distances[from]=cost;heap.push({node:from,cost,priority:cost});}
     }
   }
   return {state:"complete",target,graph,edgeCost,distances};
 }
-module.exports={searchResourcePath,buildLowerBounds};
+module.exports={searchResourcePath,buildLowerBounds,prepareReverseCosts};

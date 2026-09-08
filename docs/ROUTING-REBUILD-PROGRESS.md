@@ -485,3 +485,49 @@ No Dirt cost settings were changed in this batch.
 Verification: all 135 focused replacement/pack tests passed again. The new audit
 script passes syntax checking. No runtime behavior or Android counterpart changed;
 existing deferred parity requirements remain.
+
+## Compact reverse preparation — September 8, 2026
+
+Replaced temporary per-node arrays/per-arc objects in reverse-bound construction
+with chunked typed storage. The default 256 MiB storage cap covers heads and
+allocated arc chunks; exhaustion returns `reverse_storage_limit` as incomplete,
+not geographic no-path. This cap does not cover pack/index residency, forward
+labels, the bounds heap or total process RSS. No search corridor was introduced.
+
+`prepareReverseCosts` now exposes caller-owned target-independent preparation.
+Reuse requires the same immutable graph, node count and cost-function identity.
+No global cache was added. From Here automatically uses compact storage but still
+prepares it per request: its projected graph changes with station/anchor positions.
+Cross-request reuse needs that graph lifecycle designed explicitly; benchmark
+reuse must not be represented as already integrated into From Here.
+
+Fresh-process Ontario comparison, same candidate03 bytes, three identical targets:
+
+| Measurement | Previous objects | Compact/reused |
+| --- | ---: | ---: |
+| Process peak RSS | 722 MiB | 384 MiB |
+| Separate reverse preparation | Included per target | 409 ms / 52.9 MiB storage |
+| Large target 753966 | 1,490 ms | 406 ms after preparation |
+| Small reachable component target 293902 | 859 ms | 1 ms after preparation |
+| Large target 587 | 1,468 ms | 407 ms after preparation |
+
+All three complete distance-array hashes match. The large target uses 4.23 M
+operations after reusable preparation, versus 8.85 M combined before. Cold compact
+preparation plus bounds still uses 8.85 M; this change does not make cold Ontario
+fit the six-million request allowance. Each implementation ran in a separate
+process, with explicit GC between targets, no cleared OS cache, no spatial index,
+no fuel search. These are single-run diagnostics, not end-to-end route timings.
+Replay: bench/run-reverse-cost-audit.js; evidence: routing/candidates/rebuild-reverse-costs/.
+
+The full NS six-case matrix ran three times: all 18 expected outcomes pass and
+all route/stop fingerprints match the preceding implementation. Normal long-route
+median 872 ms; short-range 559 ms; nearby 409 ms; station-removed 569 ms; empty
+catalog 178 ms; unknown initial fuel 445 ms. Pack loading excluded. Batch maximum
+RSS 320 MiB versus previous 382 MiB. Station access remains provisional and Dirt
+quality remains unchanged. Evidence: routing/candidates/rebuild-compact-reverse-matrix/.
+
+138 focused checks pass, including the independent fuel/turn/cost oracle and new
+cross-chunk reuse, storage cap, cancellation and stale-identity checks. No pack,
+restriction, live API or phone change. Next: integrate bounded revision-owned
+preparation before claiming large-region request readiness; resolve source turn
+ambiguities independently and continue station access / Dirt candidate work.

@@ -723,3 +723,9 @@ Equivalent route costs prefer fewer refills, empty matched station sets report a
 data/matching limitation promptly, and fuel-label limits retain advisory geometry
 with an incomplete fuel result. No native implementation or live acceptance is
 claimed; the full checkpoint is `ROUTING-FROM-HERE-INTEGRATION.md`.
+
+The experimental JS reverse search now uses bounded compact storage and exposes
+preparation reusable only for an unchanged graph/cost identity. Storage exhaustion
+is an incomplete computation, never proof that no route exists. Native parity
+must preserve that outcome and exact directed-distance semantics; the storage
+layout can differ. No Swift/Android implementation or live qualification is claimed.
