@@ -13,10 +13,12 @@ const objectives=Object.freeze([
  {id:'dirt-10',cost:a=>a.distanceMeters*highwayFactor(a)*(surfaceKind(a.surfaceLeaf)==='dirt'?1:10)},
  {id:'dirt-30',cost:a=>a.distanceMeters*highwayFactor(a)*(surfaceKind(a.surfaceLeaf)==='dirt'?1:30)}
 ]);
+const expandedObjectives=Object.freeze([...objectives,{id:'mixed-2',cost:a=>a.distanceMeters*highwayFactor(a)*(surfaceKind(a.surfaceLeaf)==='dirt'?1:2)},{id:'mixed-3',cost:a=>a.distanceMeters*highwayFactor(a)*(surfaceKind(a.surfaceLeaf)==='dirt'?1:3)},{id:'mixed-5',cost:a=>a.distanceMeters*highwayFactor(a)*(surfaceKind(a.surfaceLeaf)==='dirt'?1:5)}]);
 function createRideAlternativeContext(){return {preparationCache:createPreparationCache(),reverseCostCache:createReverseCostCache(),stationMatchCache:createStationMatchCache()};}
 function buildRideAlternatives(options) {
  const context=options.context||createRideAlternativeContext(),results=[];
- for(const objective of objectives) {
+ const candidates=options.expandedCandidates?expandedObjectives:objectives;
+ for(const objective of candidates) {
   if(!options.budget.check())break;
   const result=buildFromHere({...options,...context,objectiveId:objective.id,edgeCost:objective.cost});
   results.push({id:objective.id,result});
@@ -30,7 +32,7 @@ function buildRideAlternatives(options) {
  const selected=pool[0];
  return {state:selected?'complete':'incomplete',selected:selected?.result||null,selectedObjective:selected?.id||null,
   candidates:results.map(r=>({id:r.id,road:r.result.road.state,fuel:r.result.fuel.state,reason:r.result.fuel.reason,surface:r.result.road.surface,urbanMeters:r.result.road.urbanMeters,timing:r.result.timing})),
-  search:{...options.budget.snapshot(),poolComplete:results.length===objectives.length&&!options.budget.snapshot().reason},
+  search:{...options.budget.snapshot(),poolComplete:results.length===candidates.length&&!options.budget.snapshot().reason},
   limitations:['bounded shared candidate pool; not global best ride proof','station access may remain provisional']};
 }
 module.exports={buildRideAlternatives,createRideAlternativeContext};

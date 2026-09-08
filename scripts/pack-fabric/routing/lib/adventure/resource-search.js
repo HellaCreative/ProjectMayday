@@ -20,7 +20,8 @@ class Heap {
 }
 
 function searchResourcePath({graph,start,end,edgeCost,budget,fuel=null,
-  initialTurnState=null,destinationEscapeMeters=0,lowerBounds=null,acceptGoal=null,avoidanceCost=null,maxLabels=Infinity}) {
+  initialTurnState=null,destinationEscapeMeters=0,lowerBounds=null,acceptGoal=null,avoidanceCost=null,maxLabels=Infinity,heuristicWeight=1}) {
+  if(!Number.isFinite(heuristicWeight)||heuristicWeight<1)throw new TypeError("Heuristic weight must be finite and at least one");
   if(!Number.isFinite(destinationEscapeMeters)||destinationEscapeMeters<0) throw new TypeError("A proved destination escape distance is required");
   if(maxLabels!==Infinity&&(!Number.isSafeInteger(maxLabels)||maxLabels<1))throw new TypeError("Positive label limit required");
   if(fuel!=null)validateFuel(fuel,{requireInitial:true});
@@ -36,7 +37,9 @@ function searchResourcePath({graph,start,end,edgeCost,budget,fuel=null,
   function add(label) {
     const estimate=lowerBounds?lowerBounds.distances[label.node]:0;
     if(estimate===Infinity)return;
-    label.priority=label.cost+estimate;
+    // Weight > 1 is explicit candidate-generation guidance: feasible results
+    // retain hard constraints but no minimum-cost optimality is claimed.
+    label.priority=label.cost+estimate*heuristicWeight;
     const key=graph.stateKey(label.node,label.turnState);
     const frontier=frontiers.get(key) || [];
     if(frontier.some(old=>old.active&&compare(old,label)<=0&&old.remaining>=label.remaining)) {dominated++;return;}

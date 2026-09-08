@@ -762,3 +762,7 @@ engine and provisional station access, preserves reserve-adjusted client fuel,
 and keeps unsupported requests on the existing engine. All platforms must use
 the same shared candidate pool and preserve unknown-surface/access reporting.
 No native implementation or device acceptance is claimed by the service adapter.
+
+### NS/NB DEV integrated fuel preview — September 8, 2026
+
+The iOS DEV client requests up to 12 combined fuel/geometry legs for NS↔NB primary legs with no individual fuel-hop overrides, disabling the legacy graph-only forwardFeeler hint. Other regions and production retain existing behavior. Android must consume the same complete route/fuel geometry and validate every hop against remaining usable fuel; a province boundary never refills the tank. This is a DEV route-building contract, not offline navigation qualification. No Android implementation is claimed.

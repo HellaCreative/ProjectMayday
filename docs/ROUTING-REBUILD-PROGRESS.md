@@ -841,3 +841,31 @@ The national pack owner was told that the explicitNS02 release guard will reject
 NS03 from the canary; keepNS02 for this device review until03 is separately
 qualified and the guard deliberately revised. Do not silently switch the phone
 back to the old engine during national pack activation.
+
+## Physical feedback — build 22, September 8
+
+Richard confirms fast, good NS route creation including fuel. US and Quebec remain unacceptable on legacy cross-region routing. See ROUTING-PHYSICAL-FEEDBACK-2026-09-08.md for exact request IDs, timings, pack identities and reconstructed regression fixtures. National pack publication alone does not enable the replacement engine outside NS. Cross-region integrated fuel search is the next engine integration priority; NS02 remains pinned.
+
+## Successful physical NS toggle sequence
+
+Richard accepted the Porters Lake → Cape Breton Dirt / Allow Unknown / fuel-toggle sequence as a big win. Device HTTP times 5.532 s / 2.435 s / 4.101 s; final fuel response includes three pumps and destination on unchanged ecf746e/NS02. Screenshot captures the pre-fuel 593.5 km, 82% dirt route. Evidence and diagnostic mapping flag recorded in ROUTING-PHYSICAL-FEEDBACK-2026-09-08.md. Scope now NS + NB, including cross-region tests; QC/US deferred.
+
+## NB and cross-region preparation — September 8
+
+Added run-nb-adventure.js: 24 local cases over the recorded NB segment 46.646799,-64.87533 ↔ 47.762610,-65.856301, both directions, all three styles, Allow Unknown on/off (forced off for Clean), 333/162 km usable range. All complete with complete candidate pools and provisional station access. Individual engine times 363–924 ms exclude loading and network. Independent saved-route checks confirm every stop-to-stop distance is within usable range and destination escape fits remaining fuel. Existing 154 focused tests pass.
+
+Quality flag: Balanced returns approximately 82.6% dirt at the longer range, 67% at shorter range. The limited candidate pool does not offer a near-50/50 alternative here; connectivity/speed passes do not constitute profile-quality acceptance. Dirt remains at least as dirt-rich as Balanced for equal access/fuel conditions; Clean is 0% known dirt.
+
+Added audit-ns-nb-seams.js: all 232 NS02→NB02 seam records have reciprocal entries, matching OSM node/way/endpoints and exact node coordinates in both packs. Five records refer to restriction-bearing edges. This is identity evidence, not end-to-end crossing qualification. Runtime edgeId uses packed node indices while sidecar edge IDs use OSM node IDs, so audit reconstructs the canonical sidecar identity rather than comparing unlike IDs.
+
+Next implementation: one cross-region graph/search with remaining fuel and turn history retained across shared boundary nodes; avoid independent provincial searches that erase state or pick fuel after the ride. Keep NS device baseline and current stable deployment unchanged during integration. No NB replacement deployment yet. Evidence: routing/candidates/rebuild-nb-adventure and rebuild-ns-nb-seams.json.
+
+## NS/NB integrated preview candidate
+
+Added an exact-source in-memory join, translating regional surface/road dictionaries, deduplicating geometry-identical overlapping edges and remapping node/via-way restrictions. Same-coordinate/different-OSM nodes never connect; source-epoch, duplicate attribute/geometry and shared-node coordinate conflicts reject the join. Same-region self-loop edge geometries stay distinct. Cross-region fuel search retains one ledger and turn state. Six focused join tests include restriction crossing and no boundary refuel.
+
+The original exact search at 400k labels still exhausted short-range Dirt and peaked at ~1481 MiB. Experimental fuel-only weighted guidance (2x relaxed goal bound) at the original100k label cap completes all24 cross-region range/access/profile/direction cases, without relaxing fuel or road legality; it does not claim minimum additive cost. Six shared candidates are used only for NB or NS/NB, adding2/3/5 intermediate surface costs. NS-only retains original three candidates and exact guidance. Final expanded cross matrix passed all24 cases and stop-to-stop/destination-escape checks. Balanced remains dependent on available candidates, not guaranteed50/50.
+
+New opt-in `ns-nb-v1` accepts NS02/NB02 and both together; existing ns-v1 scope unchanged. Joined preparation cache holds one immutable pair. Full identities are returned. Generic Allow Unknown diagnostics now reflect request intent. Native DEV NS/NB requests up to12 already-built legs and disables legacy forwardFeeler for that path; other regions and Release unchanged. Native test added and Android contract updated.
+
+Existing NS local live-adapter comparison preserves597.353731/500.744731/351.170731km and3/2/1stops for Dirt/Balanced/Clean. 161 focused JS tests pass. Hosted preview, native test completion and physical acceptance remain pending.

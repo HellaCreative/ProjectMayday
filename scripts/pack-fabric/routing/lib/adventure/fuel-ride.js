@@ -7,7 +7,7 @@ const {searchResourcePath}=require("./resource-search");
 // The inexpensive road candidate is retained for advisory display. The fuel
 // search then constructs a feasible ride with refills in its state; it doesn't
 // search for pumps near that candidate and repeatedly insert new detours.
-function searchFuelRide({graph,start,end,edgeCost,budget,fuel,lowerBounds=null,initialTurnState=null,avoidanceCost=null,onRoadCandidate=null,maxFuelLabels=Infinity}) {
+function searchFuelRide({graph,start,end,edgeCost,budget,fuel,lowerBounds=null,initialTurnState=null,avoidanceCost=null,onRoadCandidate=null,maxFuelLabels=Infinity,fuelHeuristicWeight=1}) {
   if(fuel!=null)validateFuel(fuel);
   const base={graph,start,end,edgeCost,budget,lowerBounds,initialTurnState,avoidanceCost};
   const road=searchResourcePath(base);
@@ -35,7 +35,7 @@ function searchFuelRide({graph,start,end,edgeCost,budget,fuel,lowerBounds=null,i
       evidence:{stationId:graph.stationAt(finalNode).id,distanceMeters:escape.distanceMeters,arcs:escape.arcs,
         ...(graph.stationAt(finalNode).accessEvidence?{accessEvidence:graph.stationAt(finalNode).accessEvidence}:{})}};
   }
-  const result=searchResourcePath({...base,fuel,acceptGoal,maxLabels:maxFuelLabels});
+  const result=searchResourcePath({...base,fuel,acceptGoal,maxLabels:maxFuelLabels,heuristicWeight:fuelHeuristicWeight});
   if(result.state!=="found")return {road,fuel:{state:"unverified",
     reason:result.state==="incomplete"?result.reason:"no_feasible_chain_in_matched_graph"},fuelSearch:result,
     escapeSearches,search:budget.snapshot()};
