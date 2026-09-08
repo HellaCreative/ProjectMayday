@@ -43,9 +43,9 @@ remains labelled a partial local candidate, not a complete 63-region release.
 
 ## Current live handoff and fix tracking
 
-Live DEV now uses source 7848ba6332da26d72b9070d5efd75d880db91629 at
+Live DEV now uses source 28ea072a90ce2dd5aa5efe7dfe45ac64b9a284ed at
 https://pack-fabric.vercel.app. The verified deployment is
-pack-fabric-5syq91ji0-goricksmith-7678s-projects.vercel.app. Its four Atlantic
+pack-fabric-3xx0f1bev-goricksmith-7678s-projects.vercel.app. Its four Atlantic
 regions use fabric-v4-20260908-01, including fuel and Rider Services.
 All 33 candidate objects were uploaded and read back with matching checksums.
 The three formerly failing crossing directions passed hosted preview checks.
@@ -116,3 +116,34 @@ connections where roads cross at different heights remain to be checked.
 Passing those checks does not trigger another Atlantic rebuild. Rebuild only
 if the pack data itself needs correction; fix live code if it misuses correct
 data. Quebec and the remaining original packs are not qualified by this update.
+
+## Highway gate completed — live source 28ea072
+
+All six checks passed against stable pack-fabric.vercel.app after correcting
+two live-code faults: destination matching favoured the opposite direction,
+and geographic loop pruning cut a required road connection between separate
+carriageways. The V4 searched edge sequence is now preserved; arrival direction
+is no longer reversed. No pack bytes changed.
+
+Passed: westbound/eastbound beneath MacDonald Road; northbound/southbound over
+Highway 104; local road → highway and highway → local road via real ramps.
+Every returned road segment, including partial endpoint segments, was checked
+for legal direction and connected consecutive nodes. Original OSM records for
+all 50 used ways independently confirm one-way directions. The overpass uses
+separate nodes and layer 1; it does not connect directly to the carriageways.
+54 targeted JS checks passed. Both prior NB fuel regressions also passed against
+the new stable service, including selection of Aulac Circle-K Irving.
+
+Evidence and replay script: scripts/pack-fabric/routing/candidates/
+atlantic-highway-live-20260908. Original failed responses, corrected local,
+preview and stable responses, source OSM records, test summaries and deployment
+logs are retained. Source: recovery/atlantic-live-fuel, commit 28ea072. Swift and
+phone unchanged; deferred parity contracts are recorded in that commit.
+
+The defined Atlantic highway gate is passed. This establishes the tested
+behaviors, not route-quality acceptance or an exhaustive proof of every road.
+No further Atlantic rebuild is required by these checks. Quebec assessment has
+started: its original graph, geometry, fuel and connection files match their
+recorded checksums; decoding reports 1,203,111 nodes and 1,469,141 edges. This
+is only Quebec's entry integrity check, not approval of its road content or
+live routing. Quebec content and factory corrections are the next stage.
