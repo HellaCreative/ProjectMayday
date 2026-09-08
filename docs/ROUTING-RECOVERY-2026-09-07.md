@@ -227,3 +227,21 @@ moving the stable alias: `dpl_Fj9nFE9FVUNFBsb8Q9X5MCAV2ffj`, URL
 Its health identity and short NS route passed (7,303 m, exact sealed hashes).
 It carries revision 02; do not promote it as the matching revision-03 service.
 Stable DEV remains unchanged until a later matching deployment is verified.
+
+## Real customer entrance and exit recovery
+
+Both engines now admit connected, directionally legal customer-only road edges
+within a 200 m endpoint scope and validate actual customer prefix/suffix metres.
+They retain the actual turn state through the final partial edge. Selected
+pumps use proximity-only snapping, with a 2 m nearest-projection tolerance,
+instead of moving onto a better-facing public road. V4 geometry is no longer
+geographically pruned after legal search. General no-retrace qualification
+remains open; this change preserves evidence rather than hiding loops.
+
+The shared forecourt fixtures verify Clean/Balanced arrival, a separate one-way
+exit, no customer through shortcut, and rejection of a forbidden final turn.
+JavaScript's 71 focused checks and all 10 GraphV4PackTests pass. iOS result:
+`Test-DIRT Dev-2026.09.08_06-50-30--0300.xcresult`. The original DE/NJ packed
+pump request now completes in 1.106 seconds, 31,413 m, with connection revision
+03 and unchanged road/geometry bytes. This is a routing correction, not a pack
+rebuild or completed fuel-evolution qualification.

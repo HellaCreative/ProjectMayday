@@ -278,6 +278,8 @@ nonisolated enum HopSearchPolicy {
 }
 
 nonisolated struct HopSearchContext: Sendable {
+    var customerStartEdges: Set<Int> = []
+    var customerEndEdges: Set<Int> = []
     var sessionSeed: UInt64
     var profile: RouteProfile
     var costMode: HopSearchPolicy.CostMode

@@ -137,8 +137,9 @@ function legalSnapDetailed(pack, geom, location, options = {}) {
         graphBinaryVersion: pack.graphBinaryVersion || 4,
         defaultMeters: DEFAULT_SNAP_M
       });
-  const heading = Number.isFinite(options.headingDeg) ? Number(options.headingDeg) : null;
-  const intent = Number.isFinite(options.intentBearingDeg) ? Number(options.intentBearingDeg) : null;
+  const customer = options.endpointKind === "customers";
+  const heading = !customer && Number.isFinite(options.headingDeg) ? Number(options.headingDeg) : null;
+  const intent = !customer && Number.isFinite(options.intentBearingDeg) ? Number(options.intentBearingDeg) : null;
   const candidates = [];
   const rejections = [];
   const scan = Array.isArray(options.candidateEdgeIndexes)
@@ -244,7 +245,10 @@ function legalSnapDetailed(pack, geom, location, options = {}) {
     if (kept.length >= 12) break;
   }
   return {
-    candidates: kept,
+    // A selected station is a fixed anchor, not a tap that may be moved to a
+    // better-facing road. Keep only co-located nearest legal projections.
+    candidates: customer && kept.length
+      ? kept.filter(c => c.distanceM <= kept[0].distanceM + 2) : kept,
     rejections,
     radiusMeters: maxM,
     raw: { lon: point[0], lat: point[1] }

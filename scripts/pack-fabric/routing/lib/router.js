@@ -604,6 +604,7 @@ function matchPoint(
     const detailed = legalSnapDetailed(runtime.pack, runtime.geom, location, {
       headingDeg: snapHints && snapHints.headingDeg,
       intentBearingDeg: snapHints && snapHints.intentBearingDeg,
+      endpointKind: snapHints && snapHints.endpointKind,
       maxMeters: matchMeters,
       candidateEdgeIndexes: candidates,
       allowUnknown: !!(policy && policy.motorizedUnknown)
@@ -2135,13 +2136,15 @@ async function routeOnRuntime(body, graphResolution, runtime) {
     headingDeg: Number.isFinite(Number(start.headingDeg))
       ? Number(start.headingDeg)
       : Number(start.course),
-    intentBearingDeg: intentBearing
+    intentBearingDeg: intentBearing,
+    endpointKind: options.startEndpointKind
   };
   const endHints = {
     headingDeg: Number.isFinite(Number(end.headingDeg))
       ? Number(end.headingDeg)
       : Number(end.course),
-    intentBearingDeg: intentBearing != null ? (intentBearing + 180) % 360 : null
+    intentBearingDeg: intentBearing != null ? (intentBearing + 180) % 360 : null,
+    endpointKind: options.endEndpointKind
   };
   let startMatch = matchPoint(
     runtime,

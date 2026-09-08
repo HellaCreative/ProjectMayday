@@ -37,6 +37,27 @@ function write(name, osm) {
 
 write("legal-topology-canary", highwayCanary);
 
+// Real, directional forecourt geometry: separate entrance and exit, with a
+// public detour that must never be replaced by a customer-only through road.
+const forecourt = {
+  nodes: [[1,-64.005,45],[2,-64.001,45],[3,-64,45],
+    [4,-63.9998,45.0001],[5,-63.9996,45.00015],[6,-63.9994,45],
+    [7,-63.995,45],[8,-64,45.002],[9,-63.9994,45.002]]
+    .map(([id,lon,lat])=>({id,lon,lat,tags:{}})),
+  ways: [[10,[1,2,3],false],[20,[3,4],true],[21,[4,5],true],
+    [22,[5,6],true],[11,[6,7],false],[12,[3,8,9,6],false]]
+    .map(([id,nodeIds,customer])=>({id,nodeIds,tags: customer
+      ? {highway:"service",access:"customers",oneway:"yes",surface:"asphalt"}
+      : {highway:"unclassified",surface:"asphalt"}})),
+  relations: []
+};
+write("legal-topology-forecourt", forecourt);
+write("legal-topology-forecourt-blocked", {...forecourt, relations:[{
+  id:200, members:[{type:"way",ref:20,role:"from"},
+    {type:"node",ref:4,role:"via"},{type:"way",ref:21,role:"to"}],
+  tags:{type:"restriction",restriction:"no_straight_on"}
+}]});
+
 write("legal-topology-restrictions", {
   nodes: [
     { id: 1, lon: 0, lat: 0, tags: {} },

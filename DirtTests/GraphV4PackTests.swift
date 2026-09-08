@@ -5,6 +5,52 @@ import Testing
 
 @Suite("Graph V4 legal topology")
 struct GraphV4PackTests {
+    @Test("real forecourt arrival and separate exit match JavaScript")
+    func forecourtPaths() throws {
+        for profile: RouteProfile in [.cleanest, .balanced] {
+            let pack = try GraphV2Pack(data: Data(contentsOf: fixtureURL("legal-topology-forecourt.graph.v4.bin")))
+            pack.geometry = try GeometryV1Pack(data: Data(contentsOf: fixtureURL("legal-topology-forecourt.geometry.v1.bin")))
+            var router = OnDeviceRouter(pack: pack)
+            router.matchLimitMeters = 80
+            let a = CLLocationCoordinate2D(latitude: 45, longitude: -64.004)
+            let pump = CLLocationCoordinate2D(latitude: 45.0001375, longitude: -63.99965)
+            let b = CLLocationCoordinate2D(latitude: 45, longitude: -63.996)
+            for (from, to, start, end, expected) in [
+                (a, pump, false, true, [10,20,21]),
+                (pump, b, true, false, [21,22,11]),
+                (a, b, false, false, [10,12,11])
+            ] {
+                router.startEndpointKind = start ? "customers" : nil
+                router.endEndpointKind = end ? "customers" : nil
+                switch router.routeDetailed(from: from, to: to, profile: profile, allowUnknown: false, sessionSeed: 0) {
+                case .success(let result):
+                    var ways: [Int] = []
+                    for id in result.edgeIds {
+                        if let way = Int(id.split(separator: ":")[0].dropFirst()), ways.last != way { ways.append(way) }
+                    }
+                    #expect(ways == expected)
+                case .failure(let error): Issue.record("forecourt \(profile) failed: \(error)")
+                }
+            }
+        }
+    }
+
+    @Test("forbidden forecourt entrance cannot resnap to the public road")
+    func forbiddenForecourt() throws {
+        let pack = try GraphV2Pack(data: Data(contentsOf: fixtureURL("legal-topology-forecourt-blocked.graph.v4.bin")))
+        pack.geometry = try GeometryV1Pack(data: Data(contentsOf: fixtureURL("legal-topology-forecourt-blocked.geometry.v1.bin")))
+        var router = OnDeviceRouter(pack: pack)
+        router.matchLimitMeters = 80
+        router.endEndpointKind = "customers"
+        for profile: RouteProfile in [.cleanest, .balanced] {
+            let result = router.routeDetailed(
+                from: CLLocationCoordinate2D(latitude: 45, longitude: -64.004),
+                to: CLLocationCoordinate2D(latitude: 45.0001375, longitude: -63.99965),
+                profile: profile, allowUnknown: false, sessionSeed: 0)
+            if case .success = result { Issue.record("forbidden station approach was accepted") }
+        }
+    }
+
     private func fixtureURL(_ name: String) throws -> URL {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()
@@ -163,6 +209,14 @@ struct GraphV4PackTests {
             endEndpointKind: "customers"
         ))
 
+        let customerScope = pack.customerEndpointEdges(edgeIndex: customers, seeds: [(customerTo, 0)], reverse: true)
+        #expect(customerScope.contains(customers))
+        #expect(!customerScope.contains(unknown))
+        #expect(pack.v4AccessAllowed(ei: customers, from: customerFrom, to: customerTo,
+            startEi: -1, endEi: -1, allowUnknown: false, endEndpointKind: "customers", customerEndEdges: customerScope))
+        #expect(!pack.v4AccessAllowed(ei: customers, from: customerFrom, to: customerTo,
+            startEi: -1, endEi: -1, allowUnknown: false, customerEndEdges: customerScope))
+
         let unknownFrom = Int(try #require(pack.edgeFrom?[unknown]))
         let unknownTo = Int(try #require(pack.edgeTo?[unknown]))
         #expect(!pack.v4AccessAllowed(
@@ -219,6 +273,16 @@ struct GraphV4PackTests {
             anchors: fragments + [main, other], urbanCores: [])
         #expect(Array(ranked.prefix(3)).map(\.osmWayId) == ["main", "other", "small-0"])
         #expect(ranked.count == 32)
+    }
+
+    @Test("customer access must remain an endpoint run within 200 real road metres")
+    func customerRunScope() {
+        let ids: Set<String> = ["c"]
+        #expect(CustomerEndpointAccess.validRuns([("road", 100), ("c", 25)], customerIDs: ids, start: false, end: true))
+        #expect(CustomerEndpointAccess.validRuns([("c", 25), ("road", 100)], customerIDs: ids, start: true, end: false))
+        #expect(!CustomerEndpointAccess.validRuns([("road", 100), ("c", 25), ("road", 100)], customerIDs: ids, start: true, end: true))
+        #expect(!CustomerEndpointAccess.validRuns([("road", 100), ("c", 201)], customerIDs: ids, start: false, end: true))
+        #expect(!CustomerEndpointAccess.validRuns([("road", 100), ("c", 25)], customerIDs: ids, start: false, end: false))
     }
 
 }

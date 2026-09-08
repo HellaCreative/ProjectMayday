@@ -643,20 +643,28 @@ nonisolated struct OnDeviceRouter {
         let snapCap = v4 ? tapMeters : Self.preferredMatchMeters
         var startRejects: [String] = []
         var endRejects: [String] = []
-        let startRaw = nearestEdgeSnaps(
+        var startRaw = nearestEdgeSnaps(
             to: from, allowUnknown: allowUnknown, profile: profile,
             maxMeters: snapCap,
             headingDeg: nil,
-            intentBearingDeg: bearingDeg(from: from, to: to),
+            intentBearingDeg: startEndpointKind == "customers" ? nil : bearingDeg(from: from, to: to),
             rejections: &startRejects
         ).filter { $0.distanceMeters <= snapCap }
-        let endRaw = nearestEdgeSnaps(
+        var endRaw = nearestEdgeSnaps(
             to: to, allowUnknown: allowUnknown, profile: profile,
             maxMeters: snapCap,
             headingDeg: nil,
-            intentBearingDeg: bearingDeg(from: to, to: from),
+            intentBearingDeg: endEndpointKind == "customers" ? nil : bearingDeg(from: to, to: from),
             rejections: &endRejects
         ).filter { $0.distanceMeters <= snapCap }
+        // Selected pumps stay on the closest packed anchor; intent must not
+        // move a failed station entrance onto a nearby public through-road.
+        if v4, startEndpointKind == "customers", let nearest = startRaw.first?.distanceMeters {
+            startRaw = startRaw.filter { $0.distanceMeters <= nearest + 2 }
+        }
+        if v4, endEndpointKind == "customers", let nearest = endRaw.first?.distanceMeters {
+            endRaw = endRaw.filter { $0.distanceMeters <= nearest + 2 }
+        }
         guard !startRaw.isEmpty else { return .failure(.cannotSnapStart) }
         guard !endRaw.isEmpty else { return .failure(.cannotSnapEnd) }
 
@@ -1341,6 +1349,11 @@ nonisolated struct OnDeviceRouter {
             ) {
                 return .failure(.noPath)
             }
+            if pack.version >= 4,
+               pack.v4AccessCode(ei: sameEi, from: alongForward ? edgeA : edgeB, to: alongForward ? edgeB : edgeA) == 4,
+               abs(startSnap.distanceAlongM - endSnap.distanceAlongM) > CustomerEndpointAccess.limitMeters {
+                return .failure(.searchLimit("customer_access_scope"))
+            }
             if let same = sameEdgeResult(from: from, to: to, startSnap: startSnap, endSnap: endSnap) {
                 if let cap = ctx.maxPathMeters, same.distanceMeters > cap {
                     return .failure(.noPath)
@@ -1630,6 +1643,15 @@ nonisolated struct OnDeviceRouter {
             linkVirt(id)
         }
 
+        var ctx = ctx
+        if startEndpointKind == "customers" {
+            ctx.customerStartEdges = pack.customerEndpointEdges(edgeIndex: startEi,
+                seeds: (virtAdj[startVirt] ?? []).filter { $0.to < n }.map { ($0.to, virt[$0.id].meters) })
+        }
+        if endEndpointKind == "customers" {
+            ctx.customerEndEdges = pack.customerEndpointEdges(edgeIndex: endEi,
+                seeds: (virtAdjRev[endVirt] ?? []).filter { $0.to < n }.map { ($0.to, virt[$0.id].meters) }, reverse: true)
+        }
         var slackToDest: [Double]? = nil
         if let cap = ctx.maxPathMeters, cap.isFinite, cap < .greatestFiniteMagnitude / 4 {
             slackToDest = fillShortestMeters(
@@ -1642,6 +1664,7 @@ nonisolated struct OnDeviceRouter {
                 from: from,
                 to: to,
                 ctx: ctx,
+                startEi: startEi, endEi: endEi,
                 profile: profile,
                 policyUnknown: policyUnknown,
                 avoidEdgeIds: avoidEdgeIds,
@@ -1755,7 +1778,8 @@ nonisolated struct OnDeviceRouter {
                         startEi: startEi, endEi: endEi,
                         allowUnknown: policyUnknown,
                         startEndpointKind: startEndpointKind,
-                        endEndpointKind: endEndpointKind
+                        endEndpointKind: endEndpointKind,
+                        customerStartEdges: ctx.customerStartEdges, customerEndEdges: ctx.customerEndEdges
                     ) { continue }
                     let toState = turnState.transition(
                         state: cur.node, outgoingEdge: ei, toNode: toNode
@@ -1949,7 +1973,8 @@ nonisolated struct OnDeviceRouter {
                             startEi: startEi, endEi: endEi,
                             allowUnknown: policyUnknown,
                             startEndpointKind: startEndpointKind,
-                            endEndpointKind: endEndpointKind
+                            endEndpointKind: endEndpointKind,
+                        customerStartEdges: ctx.customerStartEdges, customerEndEdges: ctx.customerEndEdges
                         ) { continue }
                     }
                     if ctx.pavedOnly {
@@ -2143,6 +2168,14 @@ nonisolated struct OnDeviceRouter {
             node = parent
         }
         legs.reverse()
+        let customerIDs = Set(ctx.customerStartEdges.union(ctx.customerEndEdges).union([startEi, endEi]).filter {
+            pack.version >= 4 && ($0 * 2 + 1) < pack.edgeAccess.count &&
+                (pack.edgeAccess[$0 * 2] == 4 || pack.edgeAccess[$0 * 2 + 1] == 4)
+        }.map { pack.edgeId($0) })
+        guard CustomerEndpointAccess.validRuns(legs.map { ($0.edgeId, $0.distanceMeters) },
+            customerIDs: customerIDs, start: startEndpointKind == "customers", end: endEndpointKind == "customers") else {
+            return .failure(.searchLimit("customer_access_scope"))
+        }
 
         // Soft-stitch tap→projection stubs (connector / access surface).
         if let stub = softStitchStub(tap: from, snap: startSnap, idSuffix: "start") {
@@ -2249,7 +2282,8 @@ nonisolated struct OnDeviceRouter {
                         startEi: startEi, endEi: endEi,
                         allowUnknown: policyUnknown,
                         startEndpointKind: startEndpointKind,
-                        endEndpointKind: endEndpointKind
+                        endEndpointKind: endEndpointKind,
+                        customerStartEdges: ctx.customerStartEdges, customerEndEdges: ctx.customerEndEdges
                     ) { continue }
                     let toState = turnState.transition(
                         state: state, outgoingEdge: ei, toNode: toNode
@@ -2409,7 +2443,8 @@ nonisolated struct OnDeviceRouter {
                             startEi: startEi, endEi: endEi,
                             allowUnknown: policyUnknown,
                             startEndpointKind: startEndpointKind,
-                            endEndpointKind: endEndpointKind
+                            endEndpointKind: endEndpointKind,
+                        customerStartEdges: ctx.customerStartEdges, customerEndEdges: ctx.customerEndEdges
                         ) { continue }
                     }
                     if ctx.pavedOnly {
@@ -2597,6 +2632,14 @@ nonisolated struct OnDeviceRouter {
             label = parent
         }
         legs.reverse()
+        let customerIDs = Set(ctx.customerStartEdges.union(ctx.customerEndEdges).union([startEi, endEi]).filter {
+            pack.version >= 4 && ($0 * 2 + 1) < pack.edgeAccess.count &&
+                (pack.edgeAccess[$0 * 2] == 4 || pack.edgeAccess[$0 * 2 + 1] == 4)
+        }.map { pack.edgeId($0) })
+        guard CustomerEndpointAccess.validRuns(legs.map { ($0.edgeId, $0.distanceMeters) },
+            customerIDs: customerIDs, start: startEndpointKind == "customers", end: endEndpointKind == "customers") else {
+            return .failure(.searchLimit("customer_access_scope"))
+        }
         if let stub = softStitchStub(tap: from, snap: startSnap, idSuffix: "start") {
             legs.insert(stub, at: 0)
         }
@@ -2627,6 +2670,7 @@ nonisolated struct OnDeviceRouter {
         from: CLLocationCoordinate2D,
         to: CLLocationCoordinate2D,
         ctx: HopSearchContext,
+        startEi: Int, endEi: Int,
         profile: RouteProfile,
         policyUnknown: Bool,
         avoidEdgeIds: Set<String>,
@@ -2686,7 +2730,7 @@ nonisolated struct OnDeviceRouter {
                     ) {
                         continue
                     }
-                    if edgeBlockedByPavedOnly(ei, ctx: ctx) { continue }
+                    if edgeBlockedByPavedOnly(ei, ctx: ctx, allowSnapEdges: startEi, endEi: endEi) { continue }
                     let eid = pack.edgeId(ei)
                     if !eid.isEmpty, avoidEdgeIds.contains(eid) { continue }
                     let toLL = coordinate(forNode: toNode)
@@ -2710,7 +2754,7 @@ nonisolated struct OnDeviceRouter {
                 for item in vlist {
                     let v = virt[item.id]
                     if ctx.pavedOnly {
-                        if v.junctionStitch || (v.ei >= 0 && edgeBlockedForCleanPavement(v.ei)) { continue }
+                        if v.junctionStitch || (v.ei >= 0 && edgeBlockedByPavedOnly(v.ei, ctx: ctx, allowSnapEdges: startEi, endEi: endEi)) { continue }
                     }
                     let edgeFrom = cur.node < n
                         ? coordinate(forNode: cur.node)
@@ -3285,7 +3329,7 @@ nonisolated struct OnDeviceRouter {
         let skipGeoPrune = profile == .cleanest && pack.hasLeaves
         let hasGeometry = worked.contains { $0.coordinates.count >= 3 }
             || pack.geometry != nil
-        if hasGeometry, !worked.isEmpty, !skipGeoPrune {
+        if pack.version < 4, hasGeometry, !worked.isEmpty, !skipGeoPrune {
             let pieces = worked.map {
                 OnDevicePathPruning.EdgePiece(
                     edgeId: $0.edgeId,
@@ -4270,7 +4314,7 @@ nonisolated struct OnDeviceRouter {
         allowSnapEdges startEi: Int = -1,
         endEi: Int = -1
     ) -> Bool {
-        if ei == startEi || ei == endEi { return false }
+        if ei == startEi || ei == endEi || ctx.customerStartEdges.contains(ei) || ctx.customerEndEdges.contains(ei) { return false }
         if pack.hasLeaves, ctx.profile == .cleanest {
             return RoadTierStats.isBlockedForCleanLeaf(
                 family: pack.surfaceFamily(ei),

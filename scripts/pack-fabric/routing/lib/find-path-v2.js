@@ -109,6 +109,8 @@ const {
 const { segmentStructureFields } = require("./structure");
 const { packHasDirectedArc } = require("./travel-direction");
 
+const { customerEndpointEdges, validCustomerRuns } = require("./customer-endpoint-access");
+
 function v4AccessCode(pack, ei, fromNode, toNode) {
   if (!pack.edgeAccess || ei == null || ei < 0) return 0;
   const forward = pack.edgeFrom[ei] === fromNode && pack.edgeTo[ei] === toNode;
@@ -126,13 +128,14 @@ function v4TransitionState(
   endEi,
   startEndpointKind = null,
   endEndpointKind = null,
-  allowUnknown = false
+  allowUnknown = false,
+  customerAccess = null
 ) {
   if (!pack || !(pack.graphBinaryVersion >= 4)) return toNode;
   const code = v4AccessCode(pack, ei, fromNode, toNode);
   if (![0, 1, 3, 4].includes(code) || (code === 1 && !allowUnknown)) return -1;
-  const isStart = ei === startEi;
-  const isEnd = ei === endEi;
+  const isStart = ei === startEi || customerAccess?.start.has(ei);
+  const isEnd = ei === endEi || customerAccess?.end.has(ei);
   if (code === 3 && !(
     (isStart && startEndpointKind !== "customers") ||
     (isEnd && endEndpointKind !== "customers")
@@ -142,6 +145,17 @@ function v4TransitionState(
     (isEnd && endEndpointKind === "customers")
   )) return -1;
   return turnState.transition(currentState, ei, toNode);
+}
+
+function virtualEndpointAccessAllowed(pack, v, itemForward, startEi, endEi, options, policy, customerAccess) {
+  if (!(pack.graphBinaryVersion >= 4)) return true;
+  const forward = itemForward ? v.nativeForward : !v.nativeForward;
+  const from = forward ? pack.edgeFrom[v.ei] : pack.edgeTo[v.ei];
+  const to = forward ? pack.edgeTo[v.ei] : pack.edgeFrom[v.ei];
+  // Access only: the virtual-exit turn check below keeps the actual turn state.
+  return v4TransitionState(pack, {transition: () => 0}, 0, v.ei, from, to,
+    startEi, endEi, options.startEndpointKind, options.endEndpointKind,
+    policy.motorizedUnknown === true, customerAccess) >= 0;
 }
 
 function incomingUndirected(prevKind, prevData, virt, node) {
@@ -748,6 +762,7 @@ function fillShortestMeters(args) {
     settlementFallback,
     settlementBoxes,
     origin,
+    customerEdges = new Set(), startEi = -1, endEi = -1,
     capMeters,
     nodeLL,
     coincidentSiblings,
@@ -813,7 +828,7 @@ function fillShortestMeters(args) {
           const code = v4AccessCode(pack, ei, to, cur.node);
           if (![0, 1, 3, 4].includes(code) || (code === 1 && !policy.motorizedUnknown)) continue;
         } else if (!accessAllowed(access, policy, enums)) continue;
-        if (pavedOnly) {
+        if (pavedOnly && !customerEdges.has(ei) && ei !== startEi && ei !== endEi) {
           const leafBlock = cleanLeafBlocked(pack, ei, true, -1, -1);
           if (leafBlock === true) continue;
           if (leafBlock == null) {
@@ -851,7 +866,7 @@ function fillShortestMeters(args) {
       for (let vi = 0; vi < vlist.length; vi += 1) {
         const item = vlist[vi];
         const v = virt[item.id];
-        if (pavedOnly) {
+        if (pavedOnly && !customerEdges.has(v.ei) && v.ei !== startEi && v.ei !== endEi) {
           const leafBlock = cleanLeafBlocked(pack, v.ei, true, -1, -1);
           if (leafBlock === true) continue;
           if (leafBlock == null) {
@@ -1518,6 +1533,12 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
     if (betweenLegal) linkVirtArc(vBetween, startNode, endNode, true);
   }
 
+  virt[vStartA].nativeForward = false;
+  virt[vStartB].nativeForward = true;
+  virt[vEndA].nativeForward = false;
+  virt[vEndB].nativeForward = true;
+  if (vBetween >= 0) virt[vBetween].nativeForward = startMatch.distanceAlongM <= endMatch.distanceAlongM;
+
   // Bridge pack duplicate nodes on continuous OSM ways for every profile.
   // A topology seam is not a surface preference: if Clean can cross the same
   // two-metre OSM join, Dirt and Balanced must see that connected road too.
@@ -1551,6 +1572,19 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
   const settlementFallback = profile === "cleanest"
     ? searchOpts.settlementFallback === true
     : searchOpts.settlementFallback !== false;
+  const endpointSeeds = (adjacency, node) => (adjacency.get(node) || [])
+    .filter(item => item.to < n).map(item => ({node:item.to,meters:virt[item.id].meters}));
+  const customerAccess = {
+    start: searchOpts.startEndpointKind === "customers"
+      ? customerEndpointEdges(pack, startEi, endpointSeeds(virtAdj, startNode)) : new Set(),
+    end: searchOpts.endEndpointKind === "customers"
+      ? customerEndpointEdges(pack, endEi, endpointSeeds(virtAdjRev, endNode), true) : new Set()
+  };
+  const customerEdges = new Set([...customerAccess.start, ...customerAccess.end]);
+  const customerIds = new Set([...customerEdges, startEi, endEi]
+    .filter(ei => pack.graphBinaryVersion >= 4 &&
+      [pack.edgeAccess[ei * 2], pack.edgeAccess[ei * 2 + 1]].includes(4))
+    .map(ei => String(pack.edgeId(ei))));
   const requestedRegression = Number(searchOpts.progressRegressionMeters);
   const regressionLimit = profile === "cleanest" || requestedRegression === Infinity
     ? Number.MAX_SAFE_INTEGER
@@ -1592,6 +1626,7 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
         settlementWall,
         settlementBoxes,
         origin: endNode,
+        customerEdges, startEi, endEi,
         capMeters: maxPathMeters,
         nodeLL,
         coincidentSiblings,
@@ -1666,6 +1701,7 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
       coincidentSiblings,
       shortDirtPenaltyEdgeIds,
       turnState,
+      customerAccess, customerEdges, customerIds,
       startEndpointKind: searchOpts.startEndpointKind,
       endEndpointKind: searchOpts.endEndpointKind
     });
@@ -1792,7 +1828,8 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
           endEi,
           searchOpts.startEndpointKind,
           searchOpts.endEndpointKind,
-          policy.motorizedUnknown === true
+          policy.motorizedUnknown === true,
+          customerAccess
         );
         if (toState < 0) {
           if (rejected) rejected.legalTurn += 1;
@@ -1833,7 +1870,7 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
         const surfaceName = enums.SURFACE_NAME[surface] || "unknown";
         const structureCode = unpackStructure(attr);
         const isFerryEdge = isFerryStructureCode(structureCode);
-        const leafBlock = !isFerryEdge && profile === "cleanest"
+        const leafBlock = !isFerryEdge && profile === "cleanest" && !customerEdges.has(ei)
           ? cleanLeafBlocked(pack, ei, pavedOnly, startEi, endEi)
           : null;
         if (leafBlock === true) continue;
@@ -1843,7 +1880,7 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
           pavedOnly &&
           isBlockedForCleanPavement(surfaceName, road) &&
           ei !== startEi &&
-          ei !== endEi
+          ei !== endEi && !customerEdges.has(ei)
         ) continue;
         let step;
         if (isFerryEdge) {
@@ -2034,6 +2071,7 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
       for (let vi = 0; vi < vlist.length; vi += 1) {
         const item = vlist[vi];
         const v = virt[item.id];
+        if (!virtualEndpointAccessAllowed(pack, v, item.forward, startEi, endEi, searchOpts, policy, customerAccess)) continue;
         if (
           item.to === endNode &&
           pack.graphBinaryVersion >= 4 &&
@@ -2205,8 +2243,11 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
     node = parent;
   }
   used.reverse();
+  if (!validCustomerRuns(used, customerIds, searchOpts.startEndpointKind === "customers", searchOpts.endEndpointKind === "customers")) return null;
   // All profiles: remove geographic loops / out-and-backs after search.
-  const pruned = pruneGeographicLoops(used, (edge) => edge.coords);
+  const pruned = pack.graphBinaryVersion >= 4
+    ? { edges: used, prunedLoopCount: 0, prunedMeters: 0 }
+    : pruneGeographicLoops(used, (edge) => edge.coords);
   const routeEdges = pruned.edges;
 
   const geometry = [];
@@ -2347,6 +2388,7 @@ function searchBalancedResource(ctx) {
     endLL,
     startEi = -1,
     endEi = -1,
+    customerAccess, customerEdges, customerIds,
     policy,
     avoid,
     profile,
@@ -2519,7 +2561,8 @@ function searchBalancedResource(ctx) {
           endEi,
           ctx.startEndpointKind,
           ctx.endEndpointKind,
-          policy.motorizedUnknown === true
+          policy.motorizedUnknown === true,
+          customerAccess
         );
         if (toState < 0) {
           if (rejected) rejected.legalTurn += 1;
@@ -2650,6 +2693,7 @@ function searchBalancedResource(ctx) {
       for (let vi = 0; vi < vlist.length; vi += 1) {
         const item = vlist[vi];
         const v = virt[item.id];
+        if (!virtualEndpointAccessAllowed(pack, v, item.forward, startEi, endEi, ctx, policy, customerAccess)) continue;
         if (
           item.to === endNode &&
           pack.graphBinaryVersion >= 4 &&
@@ -2771,7 +2815,10 @@ function searchBalancedResource(ctx) {
       label = parent;
     }
     used.reverse();
-    const pruned = pruneGeographicLoops(used, (edge) => edge.coords);
+    if (!validCustomerRuns(used, customerIds, ctx.startEndpointKind === "customers", ctx.endEndpointKind === "customers")) return null;
+    const pruned = pack.graphBinaryVersion >= 4
+    ? { edges: used, prunedLoopCount: 0, prunedMeters: 0 }
+    : pruneGeographicLoops(used, (edge) => edge.coords);
     const meters = pruned.edges.reduce((sum, edge) => sum + edge.meters, 0);
     const dirt = pruned.edges.reduce((sum, edge) => {
       if (isFerryStructureCode(edge.structure)) return sum;

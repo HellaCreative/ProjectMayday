@@ -737,3 +737,18 @@ Legacy aggregate access is used only for legacy graphs. The reverse-distance
 lower bound likewise uses the actual predecessor-to-current V4 direction.
 No Swift access retuning was needed: its current implementation already uses
 this law and its V4 endpoint tests cover these distinctions.
+
+V4 selected fuel endpoints now admit a connected customer-only entrance/exit
+of at most 200 actual road metres. Directional access and the full turn state
+remain authoritative; customer roads are an endpoint prefix/suffix, never a
+through shortcut. Clean may use this real endpoint access. A selected station
+is snapped by proximity, without route-intent or heading penalties, retaining
+only projections within 2 m of the nearest legal projection. A failed entrance
+must not silently move the pump onto a nearby public road. The shared forecourt
+fixtures prove separate one-way entry/exit and rejection of a forbidden final
+turn through both engines with the same 80 m snap radius.
+
+V4 route materialization preserves the searched road geometry. Geographic loop
+pruning cannot cut across roads after turn legality was proved. This removes
+an unsafe transformation; it does not itself qualify the pending no-retrace
+search law. Android must apply these same endpoint and geometry rules.

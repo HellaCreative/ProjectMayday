@@ -890,7 +890,9 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
         endEi: Int,
         allowUnknown: Bool,
         startEndpointKind: String? = nil,
-        endEndpointKind: String? = nil
+        endEndpointKind: String? = nil,
+        customerStartEdges: Set<Int> = [],
+        customerEndEdges: Set<Int> = []
     ) -> Bool {
         guard version >= 4, legalTopology else { return true }
         let code = Int(v4AccessCode(ei: ei, from: from, to: to))
@@ -902,8 +904,8 @@ nonisolated final class GraphV2Pack: @unchecked Sendable {
                 || (ei == endEi && endEndpointKind != "customers")
         }
         if code == 4 {
-            return (ei == startEi && startEndpointKind == "customers")
-                || (ei == endEi && endEndpointKind == "customers")
+            return ((ei == startEi || customerStartEdges.contains(ei)) && startEndpointKind == "customers")
+                || ((ei == endEi || customerEndEdges.contains(ei)) && endEndpointKind == "customers")
         }
         return false
     }
