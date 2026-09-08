@@ -1842,7 +1842,7 @@ async function planFuelChainOnRuntime({
   const startHints = { headingDeg: Number(start && start.headingDeg), intentBearingDeg: intentBearing };
   const endHints = {
     headingDeg: Number(destination && destination.headingDeg),
-    intentBearingDeg: intentBearing != null ? (intentBearing + 180) % 360 : null
+    intentBearingDeg: intentBearing
   };
   let startMatch = matchPoint(
     runtime,

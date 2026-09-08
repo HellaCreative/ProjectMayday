@@ -99,3 +99,25 @@ test("LIVE router follows a one-way edge and refuses the reverse snap", async ()
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test("V4 live arrival stays on the requested one-way carriageway in both directions", async () => {
+  const { buildGraphFromOsm } = require("./legal-topology/osm-graph");
+  const { encodeFromOsmGraph } = require("./pack-v4");
+  const graph = buildGraphFromOsm({
+    nodes: [[1, 0, 45], [2, 0.01, 45], [3, 0.01, 45.0002], [4, 0, 45.0002]].map(([id, lon, lat]) => ({ id, lon, lat, tags: {} })),
+    ways: [[10, [1, 2], "motorway"], [20, [3, 4], "motorway"], [30, [2, 3], "motorway_link"], [40, [4, 1], "motorway_link"]].map(([id, nodeIds, highway]) => ({ id, nodeIds, tags: { highway, oneway: "yes", motor_vehicle: "yes", surface: "asphalt" } }))
+  });
+  const encoded = encodeFromOsmGraph(graph, { regionId: "fixture", sourceEpoch: "test" });
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "dirt-v4-arrival-"));
+  try {
+    const file = path.join(dir, "graph.v4.bin");
+    fs.writeFileSync(file, encoded.graphBuffer);fs.writeFileSync(path.join(dir, "geometry.v1.bin"), encoded.geomBuffer);
+    const runtime = loadGraphSync(file);
+    for (const [lat, a, b, way] of [[45, 0.002, 0.008, "10"], [45.0002, 0.008, 0.002, "20"]]) {
+      const result = await routeOnRuntime({ profile: "cleanest", locations: [{ lat, lon: a }, { lat, lon: b }], accessPolicy: { motorizedPermissive: true, motorizedUnknown: false }, options: { mapZoom: 14 } }, { ok: true, mode: "regional", regionIds: ["fixture"] }, runtime);
+      assert.equal(result.status, "complete");
+      assert.ok(result.distanceMeters < 600, "must not drive around the interchange to the opposite carriageway");
+      assert.ok(result.segments.filter(s => s.distanceMeters > 0).every(s => s.edgeId.startsWith(`w${way}:`)));
+    }
+  } finally { clearGraphCache(); fs.rmSync(dir, { recursive: true, force: true }); }
+});

@@ -668,3 +668,11 @@ Fuel planning must consider already-eligible nearby arrival candidates using
 the completed directed reachability search before claiming a fuel gap. Keep
 the snap radius, access permissions and carried fuel unchanged. Live JS is
 under test; Swift/Android implementation and device acceptance are deferred.
+
+
+## Deferred parity after live acceptance: ATL-04/05
+
+Preserve V4 searched edge sequences: proximity-based or coordinate-based loop
+cutting cannot prove a legal junction or turn. Arrival snapping must score the
+direction of travel into the destination, not its opposite. Live JS is under
+verification; Swift/Android changes are deferred under the live-only direction.

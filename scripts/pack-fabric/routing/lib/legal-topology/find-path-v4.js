@@ -66,7 +66,7 @@ function findPathV4(pack, geom, origin, dest, options = {}) {
   });
   const endDetailed = legalSnapDetailed(pack, geom, dest, {
     headingDeg: options.endHeadingDeg,
-    intentBearingDeg: options.intentBearingDeg != null ? (options.intentBearingDeg + 180) % 360 : null,
+    intentBearingDeg: options.intentBearingDeg,
     maxMeters: options.maxMeters,
     zoom: options.zoom,
     allowUnknown

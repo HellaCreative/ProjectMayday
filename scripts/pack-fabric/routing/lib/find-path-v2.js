@@ -2116,7 +2116,7 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
   }
   used.reverse();
   // All profiles: remove geographic loops / out-and-backs after search.
-  const pruned = pruneGeographicLoops(used, (edge) => edge.coords);
+  const pruned = pruneGeographicLoops(used, (edge) => edge.coords, { preserveTopology: pack.graphBinaryVersion >= 4 });
   const routeEdges = pruned.edges;
 
   const geometry = [];
@@ -2672,7 +2672,7 @@ function searchBalancedResource(ctx) {
       label = parent;
     }
     used.reverse();
-    const pruned = pruneGeographicLoops(used, (edge) => edge.coords);
+    const pruned = pruneGeographicLoops(used, (edge) => edge.coords, { preserveTopology: pack.graphBinaryVersion >= 4 });
     const meters = pruned.edges.reduce((sum, edge) => sum + edge.meters, 0);
     const dirt = pruned.edges.reduce((sum, edge) => {
       if (isFerryStructureCode(edge.structure)) return sum;

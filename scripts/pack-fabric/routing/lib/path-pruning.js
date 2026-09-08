@@ -212,6 +212,10 @@ function totalMeters(edges) {
  *   minLoopMeters — ignore tiny revisits (default 50)
  */
 function pruneGeographicLoops(edges, resolveCoords, options = {}) {
+  // Legal directed routes must retain the searched edge sequence. Geographic
+  // proximity cannot prove a junction or a permitted turn, even at identical
+  // coordinates (overpasses). Removing such a loop can invent a median crossing.
+  if (options.preserveTopology) return { edges, prunedLoopCount: 0, prunedMeters: 0 };
   const minLoopMeters =
     Number.isFinite(options.minLoopMeters) && options.minLoopMeters >= 0
       ? options.minLoopMeters

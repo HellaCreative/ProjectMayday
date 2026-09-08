@@ -2138,7 +2138,7 @@ async function routeOnRuntime(body, graphResolution, runtime) {
     headingDeg: Number.isFinite(Number(end.headingDeg))
       ? Number(end.headingDeg)
       : Number(end.course),
-    intentBearingDeg: intentBearing != null ? (intentBearing + 180) % 360 : null
+    intentBearingDeg: intentBearing
   };
   let startMatch = matchPoint(
     runtime,

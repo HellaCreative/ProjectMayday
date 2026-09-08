@@ -99,3 +99,27 @@ stop. 41 fuel-planner tests pass, including a one-way arrival regression.
 Swift implementation is deferred explicitly: after live acceptance, apply this
 arrival-selection contract to its fuel planner and verify parity. No phone
 changes during ATL-03. Rider acceptance remains pending the live retest.
+
+## ATL-04/05 — live highway legality checks
+
+Tests at the OSM-recorded MacDonald Road overpass on Highway 104 exposed two
+live code faults, not pack data faults: arrival matching reversed intended
+travel direction and could prefer the opposite carriageway; post-search
+geographic loop pruning cut a required return route and invented a connection
+between separate motorway edges. V4 routes now retain their searched directed
+edge sequence, and arrival matching uses the direction of arrival.
+
+Six local route checks passed after correction: west/east below the overpass,
+north/south over it, local-road-to-highway and highway-to-local-road via actual
+ramps. The checker includes partial endpoint segments, validates every directed
+edge and consecutive road junction, and checks expected crossing roads. A first
+auditor version wrongly excluded partial endpoint segments; that check was
+corrected before interpreting final results. Original OSM way records establish
+separate overpass/highway nodes and layer 1 vs ground level. Source records for
+all returned ways are retained in the main canary evidence directory.
+
+54 targeted JS checks passed including no geometric cutting of required directed
+connections and two-way live arrival tests on a divided highway fixture.
+Hosted acceptance is recorded separately after publication. No pack rebuild,
+phone installation or Swift change; apply these contracts to Swift after live
+acceptance as Richard directed. Route quality remains a separate open matter.
