@@ -749,3 +749,9 @@ impose a geographic corridor. Platform equivalents must preserve fuel/turn/urban
 outcomes. An explicit cold-preparation allowance shares the request deadline and
 reports its work separately; it cannot silently reset the clock. Native parity
 implementation and device qualification remain deferred.
+
+From Here now reports optional ride-shape diagnostics: repeated source-road
+intervals, revisited nodes and continuous known-dirt runs. They do not introduce
+new routing penalties or bans. Fuel/rider-waypoint spurs require context and
+unknown surface cannot extend known dirt. This is JS diagnostic instrumentation;
+no new native UI, routing behavior or qualification is claimed.

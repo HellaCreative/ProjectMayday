@@ -22,6 +22,7 @@ const build=(f,extra={})=>buildFromHere({...f,budget:budget(),...extra});
 test("complete encoded-map pipeline includes a supplied catalog stop and exact onward fuel proof",()=>{
   const f=fixture(),r=build(f);
   assert.equal(r.road.state,"complete");assert.equal(r.fuel.state,"provisional_station_access");
+  assert.equal(r.qualityAudit.state,"complete");assert.equal(r.qualityAudit.distanceMeters,r.road.distanceMeters);
   assert.equal(r.fuel.plannedRefills.length,1);assert.equal(r.fuel.plannedRefills[0].station.id,"middle");
   assert.equal(r.fuel.plannedRefills[0].movable,true);assert.deepEqual(r.fuel.plannedRefills[0].riderAnchorIds,[]);
   assert.ok(r.fuel.escapeUsableMeters>=0);assert.ok(r.fuel.destinationEscape.distanceMeters>0);

@@ -692,3 +692,51 @@ requests, including 10 Ontario requests and six longer Ontario fuel plans.
 No pack, source restriction, deployment or native changes. Next priority is
 station entrance/exit qualification and broader route-quality integration; Quebec
 and California restriction resolution remains independently outstanding.
+
+## Fuel access and ride-shape diagnostics — September 8, 2026
+
+Inspected current OSM neighborhoods for all five unique fuel stations selected
+by the longer Ontario fixtures. Three are represented by fuel-tagged buildings,
+two by standalone markers; none of those records alone proves station entry,
+forecourt travel and exit. Access remains provisional. This is a source-evidence
+limitation, not proof of closure or geographic fuel scarcity. Concrete findings
+and the required source-linked access contract are in
+ROUTING-STATION-ACCESS-HANDOFF.md. Raw snapshots remain local read-only evidence.
+
+Added `auditRideShape` to complete From Here results as diagnostics only. It
+measures overlap of actual source-edge intervals, revisited graph nodes and
+continuous known-dirt runs. Adjacent split pieces are not retracing; repeated
+third traversals count only their actual overlap with the prior interval union.
+Unknown surface breaks a known-dirt run. Diagnostic bins below 250 m / 1 km do
+not create new routing thresholds or rejection rules. Interrupted audits report
+incomplete, never partial metrics as a complete audit.
+
+| Saved ride | Repeated road | Revisited nodes | Dirt runs under 1 km |
+| --- | ---: | ---: | ---: |
+| Pembroke | 924 m | 4 | 4 of 25 |
+| Mattawa | 5,504 m | 9 | 13 of 48 |
+| North Bay | 0 m | 0 | 15 of 41 |
+| Southwest NS | 0 m | 0 | 22 of 42 |
+| Nearby NS | 0 m | 0 | 8 of 8 |
+
+Every revisit interval in the two retracing Ontario cases contains a planned
+fuel stop. The largest enclosed spans are 1.848 km for the Killaloe fuel stop
+and 11.008 km for the Rutherglen Esso. This supports fuel-spur context rather
+than a dirt-percentage farming loop; it does not prove those stops or spurs are
+the best available choices. A blanket retrace rejection would conflict with the
+accepted fuel/waypoint access rule. Short dirt runs alone do not prove a needless
+diversion either: they need comparison against a coherent alternative.
+
+151 focused checks pass, including partial-edge overlap, repeat traversals,
+continuous surface runs, cancellation and From Here audit integration. All 18
+NS matrix cases pass with unchanged route/stop fingerprints. Timings remain
+comparable: normal 878 ms, short tank 230 ms, nearby 101 ms, removed station
+580 ms. Evidence: rebuild-quality-audit-matrix/. Audit evidence:
+rebuild-on-access/ride-quality.json. Replay saved rides with
+bench/audit-built-rides.js; this audit does not rebuild routes.
+
+No access evidence was upgraded to verified, no scoring weights changed, and
+nothing deployed. Next routing priority is coherent alternative generation and
+comparison using these diagnostics, while pack/access evidence work addresses
+station associations. A successful fuel arithmetic test is still not complete
+station-access or rider-quality acceptance.

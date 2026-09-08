@@ -11,6 +11,7 @@ const {pointFromMatch,materializeRoute}=require("./route-geometry");
 const {createProjectedGraph}=require("./projected-graph");
 const {buildLowerBounds}=require("./resource-search");
 const {searchFuelRide}=require("./fuel-ride");
+const {auditRideShape}=require("./ride-shape-audit");
 const {proveFuel}=require("./fuel-proof");
 
 // Experimental single-region From Here integration. Road projections are
@@ -117,8 +118,9 @@ function buildFromHere({input,pack,geom,revision,stations,budget,preparationBudg
     const riderAnchorIds=request.anchors.filter((a,i)=>a.stationId===v.stationId&&v.atMeters===(i===0?0:road.distanceMeters)).map(a=>a.id);
     return {...v,riderAnchorIds,movable:riderAnchorIds.length===0,station:stationById.get(v.stationId),roadMatch:bindingById.get(v.stationId)?.match||null};
   });
+  const qualityAudit=auditRideShape({segments:road.segments,budget});
   timing.geometryAndProofMs=Math.round(performance.now()-phase);
-  return {request,provenance,road,fuel:{...proof,plannedRefills:stops,destinationEscape:escape},stage:"complete",
+  return {request,provenance,road,qualityAudit,fuel:{...proof,plannedRefills:stops,destinationEscape:escape},stage:"complete",
     stationDiagnostics,timing:{...timing,totalMs:Math.round(performance.now()-at)},
     search:{...budget.snapshot(),fuelSearch:result.road.diagnostics,escapeSearches:result.escapeSearches},
     limitations:["nearest eligible road projection does not prove station entrance/exit or operation",
