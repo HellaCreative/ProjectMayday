@@ -60,3 +60,29 @@ Stable DEV returned `complete` with a pump on the formerly blocked northern stag
 The endpoint-to-nearest-pump graph estimate is 197,842 m. Direct live road routes from the last selected Essence pump to the endpoint and back both complete at 285,076 m, leaving insufficient fuel for the return within 333,000 m usable. This verifies a range problem for that selected final pump/endpoint pair, not an exhaustive assertion that no other physical pump exists. Earlier blanket rejection and this later destination-escape requirement must not be conflated.
 
 Actionable physical test: fully close/reopen the existing app to clear the old in-memory result, recreate the same northern route online with automatic fuel enabled, and check that it now inserts pumps beyond the former failure point. Send debug export and comments, including the location of any remaining warning. No install or pack download. Pack connections remain physically accepted; overall fuel coverage and Gaspé onward planning remain open.
+
+
+## 14:35:57Z export — pack versus live-service investigation
+
+Richard confirms multiple-province routing remains successful but Quebec fuel
+creation is intermittent in Dirt and Clean, including a pin near Montreal.
+The near-Montreal request fuel-635153a0 fails in NB segment 2/3 during connected
+endpoint selection, before looking for Quebec stations. Several other requests
+have the same failure. Some road requests also fail at a seam; do not portray
+all crossings as universally successful merely because other physical tests pass.
+
+Read-only local reproduction with current deployed code and unchanged accepted
+packs reproduces that failure. Changing only the diagnostic choice to the next
+already-stored NB/QC crossing returns a fuel-planning window. A wholly Quebec
+request from 47.54409,-68.63365 to 45.36288,-72.93782 returns complete with Esso
+at 46.654717,-70.809615 and distances 259,848 / 259,290 m. This isolates the
+failure to live selection rather than absent Quebec pump data; it is not a
+claim that all of Quebec or all fuel plans have passed.
+
+Factory requirements are frozen for remaining-region replication in PACK-FACTORY.
+No product code, deployment or pack bytes changed this turn. The remaining 58
+packs have not yet started rebuilding. Richard's order is factory replication
+first, then live routing/fuel fixes while that build runs. Evidence is under
+quebec-fuel-20260908: montreal-investigation, montreal-alternative-investigation,
+and quebec-interior-investigation JSON and scripts. These are diagnostic local
+replays, not new physical acceptance or an exact reproduction of server cache.

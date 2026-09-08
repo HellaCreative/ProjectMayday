@@ -25,6 +25,33 @@ If a skill or older prompt conflicts with this file, this file wins after
 
 ---
 
+## September 8 replication boundary — Atlantic and Quebec canary
+
+Richard directs pack replication ahead of further routing/fuel-selection repairs.
+The factory requirements proven by the Atlantic and Quebec canaries are the
+replication baseline: source-locked OSM, corrected toll handling without opening
+actual prohibitions, directed legal roads and turns, unchanged source surfaces,
+paired geometry, canonical fuel, rider-service layers, lossless storage, and
+source-identified shared border/ferry records. Preserve sealed originals and
+accepted NS/NB/PE/NL/QC road, geometry, fuel and service bytes from
+`fabric-v4-20260908-02`. Build remaining regions under a new candidate release;
+checksums, legal/source comparisons and connection checks still apply to each
+new output before publication. This freezes the recipe, not unbuilt outputs.
+
+The September 8 14:35:57Z phone export does not establish a fuel extraction or
+compression defect. A local reproduction of the near-Montreal request fails
+while selecting connected border endpoints in NB, before Quebec fuel search.
+Selecting the next existing border candidate in the diagnostic replay allows
+planning to proceed with unchanged packs. A separate wholly Quebec replay
+returns an Esso fuel stop and two legs of 259,848 / 259,290 m within 333,000 m.
+Previous-road reuse and crossing selection belong to live service repair, not
+factory requirements. No routing patch or deployment accompanies this finding.
+
+Track remaining fuel/crossing failures separately. Resume their implementation
+only after the remaining-pack rebuild is underway, per Richard. Reopen factory
+requirements if source or output evidence actually demonstrates a data defect;
+do not equate a failed planner with a missing or damaged pack.
+
 ## 0. Uncommitted work preserved (2026-09-06)
 
 Do not reset, stash, or overwrite. Present before this migration:
