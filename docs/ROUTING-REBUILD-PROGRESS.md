@@ -881,3 +881,7 @@ Independent publicstable health confirms94597816/ns-nb-v1; real unauthenticated 
 All38native ItineraryBuilder tests pass (the addedtest initially expected literalfalse, butserializer correctlyomitsdisabled forwardFeeler; corrected assertion checks nottrue).162focusedJS tests pass. Signeddevice23 build andeightDEVbundlechecks pass. Install/launchverification follows.
 
 Later source464864f adds diagnosticweight reporting and tests only; hosted94597816 intentionally stays the exactverified artifact. New NS/NB routebuilding remains a device acceptance candidate; offline reroute parity, physicalpumpaccess and longerthan12stopcontinuations are not qualified by these checks.
+
+## Device23 installed and running
+
+Xcode installed DIRT Dev2(23) on White; device inventory independently confirms bundlecom.mayday.dirt.dev/version2/build23. Initial Xcode launch terminated withsignal9 (cause not established). Direct devicectl launch then succeeded and device process inventory confirms Dirt running (PID5088). Public stable source945978/ns-nb-v1 and both02packs verified beforehand. No packs downloaded. Physical NS/NB route-building test is ready; rider acceptance remains pending.
