@@ -869,3 +869,30 @@ The original exact search at 400k labels still exhausted short-range Dirt and pe
 New opt-in `ns-nb-v1` accepts NS02/NB02 and both together; existing ns-v1 scope unchanged. Joined preparation cache holds one immutable pair. Full identities are returned. Generic Allow Unknown diagnostics now reflect request intent. Native DEV NS/NB requests up to12 already-built legs and disables legacy forwardFeeler for that path; other regions and Release unchanged. Native test added and Android contract updated.
 
 Existing NS local live-adapter comparison preserves597.353731/500.744731/351.170731km and3/2/1stops for Dirt/Balanced/Clean. 161 focused JS tests pass. Hosted preview, native test completion and physical acceptance remain pending.
+
+## Hosted and public NS/NB verification — September 8
+
+Exact acceptance preview/source94597816b960b3baeb33cf008340700d8a3589ae (stablebaseb9f263d plus2d4e394) published to stable DEV by the pack owner after error-log query returned no entries. Flag ns-nb-v1, allfiveexistingregions02, NS/NB02 preserved, no national03/production change.
+
+Six hosted cross tests passed bothdirections/allprofiles at225kmusable, full12stopwindow, per-hop range, contiguousgeometry and destinationescape. Server times5.6–15.3s; forwardDirt1054.84km73.51%/6stops, Balanced630.41km46.68%/2stops, reverseBalanced609.89km44.60%/2stops. Additional UnknownDirt forward completes7stops6.665s; NB-onlyDirt2stops3.593s. Independent3styleNS exactbaseline holds.
+
+Independent publicstable health confirms94597816/ns-nb-v1; real unauthenticated unknownDirtNSNB request completed7stops,9.85sHTTP/8.537sserver, fullwindow, expected02identities, range andescapechecks. Evidence in rebuild-atlantic-public, rebuild-atlantic-extra, rebuild-atlantic-ns-regression; owner's sixcase responses in maincandidate03/atlantic-acceptance-live.
+
+All38native ItineraryBuilder tests pass (the addedtest initially expected literalfalse, butserializer correctlyomitsdisabled forwardFeeler; corrected assertion checks nottrue).162focusedJS tests pass. Signeddevice23 build andeightDEVbundlechecks pass. Install/launchverification follows.
+
+Later source464864f adds diagnosticweight reporting and tests only; hosted94597816 intentionally stays the exactverified artifact. New NS/NB routebuilding remains a device acceptance candidate; offline reroute parity, physicalpumpaccess and longerthan12stopcontinuations are not qualified by these checks.
+
+## Device23 installed and running
+
+Xcode installed DIRT Dev2(23) on White; device inventory independently confirms bundlecom.mayday.dirt.dev/version2/build23. Initial Xcode launch terminated withsignal9 (cause not established). Direct devicectl launch then succeeded and device process inventory confirms Dirt running (PID5088). Public stable source945978/ns-nb-v1 and both02packs verified beforehand. No packs downloaded. Physical NS/NB route-building test is ready; rider acceptance remains pending.
+
+## Evening physical feedback follow-up (local, not yet published)
+
+168 focused JS checks pass. Added exact phone Clean avoidMotorways gate test,
+synthetic alternate/mandatory motorway cases, fuel alternative safety/fixed-anchor
+checks and full source geometry road-class reporting. Exact Dalhousie automated
+replay replaces65.610km retrace with4.095km using Sunny Corner, still72.340%dirt,
+all fuel intervals/final escape verified. NS/NB24-case expanded regression in
+progress. Clean legacy fallback repaired locally; NB city classification missing
+in original02 confirmed with pack owner and source-locked supplement under test.
+Clean primary/trunk back-road preference remains open. No live/phone changes yet.

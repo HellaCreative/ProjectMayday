@@ -1,0 +1,749 @@
+{
+  "schemaVersion": "urban-cores.v1",
+  "regionId": "nb",
+  "revision": "nb-urban-review-20260908-01",
+  "status": "local-review-only",
+  "source": "OpenStreetMap place=city|town nodes",
+  "method": "population-scaled-core-radius",
+  "policy": {
+    "minimumPopulation": 20000,
+    "placeTypes": [
+      "city",
+      "town"
+    ],
+    "scope": "Routing workshop review; not the previously frozen factory threshold",
+    "radiusKm": "population >=1000000:18; >=500000:14; >=200000:10; >=100000:5.5; >=50000:4.5; otherwise city:3.5, town:1.8",
+    "boxFormula": "lat +/- radiusKm/111.1; lon +/- radiusKm/(111.1*max(0.2,cos(lat*pi/180))); bounds rounded to5 decimals",
+    "missingPopulation": "Unclassified, separately listed; no assumed population",
+    "ownership": "Shared polygonOwner must equal nb; neighbouring and unresolved points separately excluded",
+    "limitation": "Place-node classification, not measured OSM urban boundaries; area-only place features not assessed"
+  },
+  "provenance": {
+    "sourceUrl": "https://download.geofabrik.de/north-america/canada/new-brunswick-latest.osm.pbf",
+    "sourceSha256": "8b91a1af07eafcc7a35e8d8eadb4a17a37db01f08e544a3eea5616a6ac6745e5",
+    "osmTimestamp": "2026-09-06T20:21:35Z",
+    "fabricEpoch": "geofabrik-capture-20260907T123015Z",
+    "extractSha256": "20fa09cd0d1b1272f70d8dc42ebf124574d20059d576b514b0c5603bee770486",
+    "boundarySha256": "84fa51a81300bf9dd48d7663551637b841ad9b0ca7e716069b9729e9fbfdac2d"
+  },
+  "cores": [
+    {
+      "minLat": 46.05806,
+      "maxLat": 46.13907,
+      "minLon": -64.85884,
+      "maxLon": -64.74201,
+      "name": "Moncton",
+      "place": "city",
+      "population": 79470,
+      "radiusKm": 4.5,
+      "sourceId": "node/204466183",
+      "populationYear": "2021",
+      "populationSource": "wikipedia",
+      "coordinate": [
+        -64.8004265,
+        46.0985679
+      ]
+    },
+    {
+      "minLat": 45.23226,
+      "maxLat": 45.31327,
+      "minLon": -66.12035,
+      "maxLon": -66.00524,
+      "name": "Saint John",
+      "place": "city",
+      "population": 69895,
+      "radiusKm": 4.5,
+      "sourceId": "node/129999186",
+      "populationYear": "2021",
+      "populationSource": "wikipedia",
+      "coordinate": [
+        -66.0627914,
+        45.272764
+      ]
+    },
+    {
+      "minLat": 45.92273,
+      "maxLat": 46.00374,
+      "minLon": -66.70151,
+      "maxLon": -66.58497,
+      "name": "Fredericton",
+      "place": "city",
+      "population": 63116,
+      "radiusKm": 4.5,
+      "sourceId": "node/204462923",
+      "populationYear": "2021",
+      "populationSource": "wikipedia",
+      "coordinate": [
+        -66.6432432,
+        45.9632311
+      ]
+    },
+    {
+      "minLat": 46.08048,
+      "maxLat": 46.11288,
+      "minLon": -64.7591,
+      "maxLon": -64.71237,
+      "name": "Dieppe",
+      "place": "town",
+      "population": 28114,
+      "radiusKm": 1.8,
+      "sourceId": "node/1756239979",
+      "populationYear": "2021",
+      "populationSource": "wikipedia",
+      "coordinate": [
+        -64.7357347,
+        46.0966797
+      ]
+    }
+  ],
+  "settlements": [
+    {
+      "minLat": 47.34752,
+      "maxLat": 47.37992,
+      "minLon": -68.3528,
+      "maxLon": -68.30496,
+      "name": "Edmundston",
+      "place": "town",
+      "population": 16437,
+      "radiusKm": 1.8,
+      "sourceId": "node/34699332",
+      "populationYear": "2021",
+      "populationSource": "wikipedia",
+      "coordinate": [
+        -68.3288825,
+        47.3637203
+      ]
+    },
+    {
+      "minLat": 47.0136,
+      "maxLat": 47.046,
+      "minLon": -65.49419,
+      "maxLon": -65.44665,
+      "name": "Miramichi",
+      "place": "town",
+      "population": 17692,
+      "radiusKm": 1.8,
+      "sourceId": "node/204466916",
+      "populationYear": "2021",
+      "populationSource": "wikipedia",
+      "coordinate": [
+        -65.4704158,
+        47.0298004
+      ]
+    },
+    {
+      "minLat": 45.37242,
+      "maxLat": 45.40482,
+      "minLon": -66.01941,
+      "maxLon": -65.97327,
+      "name": "Rothesay",
+      "place": "town",
+      "population": 11977,
+      "radiusKm": 1.8,
+      "sourceId": "node/204473230",
+      "populationYear": "2021",
+      "populationSource": "census",
+      "coordinate": [
+        -65.9963384,
+        45.3886223
+      ]
+    },
+    {
+      "minLat": 45.98075,
+      "maxLat": 46.01315,
+      "minLon": -67.25992,
+      "maxLon": -67.21327,
+      "name": "Nackawic",
+      "place": "town",
+      "population": 962,
+      "radiusKm": 1.8,
+      "sourceId": "node/204476334",
+      "populationYear": "2021",
+      "populationSource": "wikipedia",
+      "coordinate": [
+        -67.2365953,
+        45.9969507
+      ]
+    },
+    {
+      "minLat": 46.13414,
+      "maxLat": 46.16655,
+      "minLon": -67.59686,
+      "maxLon": -67.55008,
+      "name": "Woodstock",
+      "place": "town",
+      "population": 5254,
+      "radiusKm": 1.8,
+      "sourceId": "node/204477237",
+      "populationYear": null,
+      "populationSource": null,
+      "coordinate": [
+        -67.573471,
+        46.150346
+      ]
+    },
+    {
+      "minLat": 47.60107,
+      "maxLat": 47.64067,
+      "minLon": -65.68313,
+      "maxLon": -65.62438,
+      "name": "Bathurst",
+      "place": "city",
+      "population": 12157,
+      "radiusKm": 2.2,
+      "sourceId": "node/204480457",
+      "populationYear": "2021",
+      "populationSource": "wikipedia",
+      "coordinate": [
+        -65.6537546,
+        47.6208671
+      ]
+    },
+    {
+      "minLat": 45.11136,
+      "maxLat": 45.14376,
+      "minLon": -66.84995,
+      "maxLon": -66.80402,
+      "name": "St. George",
+      "place": "town",
+      "population": 1579,
+      "radiusKm": 1.8,
+      "sourceId": "node/204489251",
+      "populationYear": "2021",
+      "populationSource": "census",
+      "coordinate": [
+        -66.8269836,
+        45.1275604
+      ]
+    },
+    {
+      "minLat": 45.17647,
+      "maxLat": 45.20887,
+      "minLon": -67.299,
+      "maxLon": -67.25302,
+      "name": "St. Stephen",
+      "place": "town",
+      "population": 4510,
+      "radiusKm": 1.8,
+      "sourceId": "node/204489936",
+      "populationYear": null,
+      "populationSource": null,
+      "coordinate": [
+        -67.2760077,
+        45.1926679
+      ]
+    },
+    {
+      "minLat": 47.2307,
+      "maxLat": 47.2631,
+      "minLon": -65.10059,
+      "maxLon": -65.05286,
+      "name": "Neguac",
+      "place": "town",
+      "population": 1684,
+      "radiusKm": 1.8,
+      "sourceId": "node/410325801",
+      "populationYear": null,
+      "populationSource": null,
+      "coordinate": [
+        -65.0767222,
+        47.2469012
+      ]
+    },
+    {
+      "minLat": 47.49955,
+      "maxLat": 47.53195,
+      "minLon": -64.93677,
+      "maxLon": -64.8888,
+      "name": "Tracadie-Sheila",
+      "place": "town",
+      "population": 16114,
+      "radiusKm": 1.8,
+      "sourceId": "node/410325802",
+      "populationYear": null,
+      "populationSource": null,
+      "coordinate": [
+        -64.9127856,
+        47.515751
+      ]
+    },
+    {
+      "minLat": 47.7778,
+      "maxLat": 47.8102,
+      "minLon": -64.96278,
+      "maxLon": -64.91455,
+      "name": "Caraquet",
+      "place": "town",
+      "population": 4248,
+      "radiusKm": 1.8,
+      "sourceId": "node/410330373",
+      "populationYear": null,
+      "populationSource": null,
+      "coordinate": [
+        -64.9386632,
+        47.7939976
+      ]
+    },
+    {
+      "minLat": 47.98846,
+      "maxLat": 48.02087,
+      "minLon": -66.70081,
+      "maxLon": -66.65238,
+      "name": "Campbellton",
+      "place": "town",
+      "population": 7047,
+      "radiusKm": 1.8,
+      "sourceId": "node/1308285493",
+      "populationYear": null,
+      "populationSource": null,
+      "coordinate": [
+        -66.6765986,
+        48.0046634
+      ]
+    },
+    {
+      "minLat": 46.4369,
+      "maxLat": 46.4693,
+      "minLon": -67.63036,
+      "maxLon": -67.58332,
+      "name": "Florenceville-Bristol",
+      "place": "town",
+      "population": 2000,
+      "radiusKm": 1.8,
+      "sourceId": "node/6369154465",
+      "populationYear": null,
+      "populationSource": null,
+      "coordinate": [
+        -67.6068386,
+        46.4531007
+      ]
+    },
+    {
+      "minLat": 45.05873,
+      "maxLat": 45.09113,
+      "minLon": -67.07464,
+      "maxLon": -67.02875,
+      "name": "Saint Andrews",
+      "place": "town",
+      "population": 2048,
+      "radiusKm": 1.8,
+      "sourceId": "node/6369232587",
+      "populationYear": "2021",
+      "populationSource": "census",
+      "coordinate": [
+        -67.0516937,
+        45.0749302
+      ]
+    }
+  ],
+  "missingPopulation": [
+    {
+      "sourceId": "node/34705955",
+      "name": "Saint-Léonard",
+      "place": "town",
+      "population": null,
+      "populationRaw": null,
+      "populationYear": null,
+      "populationSource": null,
+      "coordinate": [
+        -67.9244707,
+        47.1651978
+      ],
+      "owner": "nb"
+    },
+    {
+      "sourceId": "node/34706110",
+      "name": "Saint-Quentin",
+      "place": "town",
+      "population": null,
+      "populationRaw": null,
+      "populationYear": null,
+      "populationSource": null,
+      "coordinate": [
+        -67.3906756,
+        47.5129555
+      ],
+      "owner": "nb"
+    },
+    {
+      "sourceId": "node/204469820",
+      "name": "Riverview",
+      "place": "town",
+      "population": null,
+      "populationRaw": null,
+      "populationYear": null,
+      "populationSource": null,
+      "coordinate": [
+        -64.8033246,
+        46.0612076
+      ],
+      "owner": "nb"
+    },
+    {
+      "sourceId": "node/204472728",
+      "name": "Hampton",
+      "place": "town",
+      "population": null,
+      "populationRaw": null,
+      "populationYear": null,
+      "populationSource": null,
+      "coordinate": [
+        -65.8271995,
+        45.5258486
+      ],
+      "owner": "nb"
+    },
+    {
+      "sourceId": "node/204473556",
+      "name": "Grand Bay - Westfield",
+      "place": "town",
+      "population": null,
+      "populationRaw": null,
+      "populationYear": null,
+      "populationSource": null,
+      "coordinate": [
+        -66.2025166,
+        45.3221951
+      ],
+      "owner": "nb"
+    },
+    {
+      "sourceId": "node/204484685",
+      "name": "Perth-Andover",
+      "place": "town",
+      "population": null,
+      "populationRaw": null,
+      "populationYear": null,
+      "populationSource": null,
+      "coordinate": [
+        -67.7057484,
+        46.7384475
+      ],
+      "owner": "nb"
+    },
+    {
+      "sourceId": "node/279743125",
+      "name": "Dorchester",
+      "place": "town",
+      "population": null,
+      "populationRaw": null,
+      "populationYear": null,
+      "populationSource": null,
+      "coordinate": [
+        -64.5170033,
+        45.8992863
+      ],
+      "owner": "nb"
+    },
+    {
+      "sourceId": "node/410320949",
+      "name": "Shediac",
+      "place": "town",
+      "population": null,
+      "populationRaw": null,
+      "populationYear": null,
+      "populationSource": null,
+      "coordinate": [
+        -64.5492146,
+        46.219454
+      ],
+      "owner": "nb"
+    },
+    {
+      "sourceId": "node/410323802",
+      "name": "Bouctouche",
+      "place": "town",
+      "population": null,
+      "populationRaw": null,
+      "populationYear": null,
+      "populationSource": null,
+      "coordinate": [
+        -64.7236147,
+        46.4735119
+      ],
+      "owner": "nb"
+    },
+    {
+      "sourceId": "node/410323805",
+      "name": "Richibucto",
+      "place": "town",
+      "population": null,
+      "populationRaw": null,
+      "populationYear": null,
+      "populationSource": null,
+      "coordinate": [
+        -64.867452,
+        46.6742757
+      ],
+      "owner": "nb"
+    },
+    {
+      "sourceId": "node/410325804",
+      "name": "Shippagan",
+      "place": "town",
+      "population": null,
+      "populationRaw": null,
+      "populationYear": null,
+      "populationSource": null,
+      "coordinate": [
+        -64.7181216,
+        47.7418049
+      ],
+      "owner": "nb"
+    },
+    {
+      "sourceId": "node/410325805",
+      "name": "Lamèque",
+      "place": "town",
+      "population": null,
+      "populationRaw": null,
+      "populationYear": null,
+      "populationSource": null,
+      "coordinate": [
+        -64.6473971,
+        47.7951097
+      ],
+      "owner": "nb"
+    },
+    {
+      "sourceId": "node/410335039",
+      "name": "Beresford",
+      "place": "town",
+      "population": null,
+      "populationRaw": null,
+      "populationYear": null,
+      "populationSource": null,
+      "coordinate": [
+        -65.7032868,
+        47.7047087
+      ],
+      "owner": "nb"
+    },
+    {
+      "sourceId": "node/410338814",
+      "name": "Kedgwick",
+      "place": "town",
+      "population": null,
+      "populationRaw": null,
+      "populationYear": null,
+      "populationSource": null,
+      "coordinate": [
+        -67.3468372,
+        47.6463746
+      ],
+      "owner": "nb"
+    },
+    {
+      "sourceId": "node/410339279",
+      "name": "Wolastoqiyik Neqotkuk / Tobique First Nation",
+      "place": "town",
+      "population": null,
+      "populationRaw": null,
+      "populationYear": null,
+      "populationSource": null,
+      "coordinate": [
+        -67.7064837,
+        46.7707148
+      ],
+      "owner": "nb"
+    },
+    {
+      "sourceId": "node/832149865",
+      "name": "Grand-Sault / Grand Falls",
+      "place": "town",
+      "population": null,
+      "populationRaw": null,
+      "populationYear": null,
+      "populationSource": null,
+      "coordinate": [
+        -67.7407527,
+        47.047563
+      ],
+      "owner": "nb"
+    },
+    {
+      "sourceId": "node/1211118194",
+      "name": "Dalhousie",
+      "place": "town",
+      "population": null,
+      "populationRaw": null,
+      "populationYear": null,
+      "populationSource": null,
+      "coordinate": [
+        -66.369555,
+        48.0634448
+      ],
+      "owner": "nb"
+    },
+    {
+      "sourceId": "node/1246484328",
+      "name": "Oromocto",
+      "place": "town",
+      "population": null,
+      "populationRaw": null,
+      "populationYear": null,
+      "populationSource": null,
+      "coordinate": [
+        -66.471212,
+        45.8474496
+      ],
+      "owner": "nb"
+    },
+    {
+      "sourceId": "node/1277834775",
+      "name": "Minto",
+      "place": "town",
+      "population": null,
+      "populationRaw": null,
+      "populationYear": null,
+      "populationSource": null,
+      "coordinate": [
+        -66.0784986,
+        46.0776889
+      ],
+      "owner": "nb"
+    },
+    {
+      "sourceId": "node/1498609041",
+      "name": "Saint-Jacques",
+      "place": "town",
+      "population": null,
+      "populationRaw": null,
+      "populationYear": null,
+      "populationSource": null,
+      "coordinate": [
+        -68.3927908,
+        47.4285484
+      ],
+      "owner": "nb"
+    },
+    {
+      "sourceId": "node/1510092839",
+      "name": "Quispamsis",
+      "place": "town",
+      "population": null,
+      "populationRaw": null,
+      "populationYear": null,
+      "populationSource": null,
+      "coordinate": [
+        -65.9551378,
+        45.4287577
+      ],
+      "owner": "nb"
+    },
+    {
+      "sourceId": "node/1608066724",
+      "name": "Sussex",
+      "place": "town",
+      "population": null,
+      "populationRaw": null,
+      "populationYear": null,
+      "populationSource": null,
+      "coordinate": [
+        -65.5104239,
+        45.7234763
+      ],
+      "owner": "nb"
+    },
+    {
+      "sourceId": "node/1636085922",
+      "name": "Centreville",
+      "place": "town",
+      "population": null,
+      "populationRaw": null,
+      "populationYear": null,
+      "populationSource": null,
+      "coordinate": [
+        -67.7116323,
+        46.4308087
+      ],
+      "owner": "nb"
+    },
+    {
+      "sourceId": "node/1638448412",
+      "name": "Hartland",
+      "place": "town",
+      "population": null,
+      "populationRaw": null,
+      "populationYear": null,
+      "populationSource": null,
+      "coordinate": [
+        -67.5257163,
+        46.2999976
+      ],
+      "owner": "nb"
+    },
+    {
+      "sourceId": "node/1655385826",
+      "name": "Saint-Antoine",
+      "place": "town",
+      "population": null,
+      "populationRaw": null,
+      "populationYear": null,
+      "populationSource": null,
+      "coordinate": [
+        -64.7525247,
+        46.3628036
+      ],
+      "owner": "nb"
+    },
+    {
+      "sourceId": "node/3863573267",
+      "name": "Sackville",
+      "place": "town",
+      "population": null,
+      "populationRaw": null,
+      "populationYear": null,
+      "populationSource": null,
+      "coordinate": [
+        -64.3655256,
+        45.8999177
+      ],
+      "owner": "nb"
+    }
+  ],
+  "excludedByOwnership": [
+    {
+      "sourceId": "node/158853506",
+      "name": "Eastport",
+      "place": "town",
+      "population": 1288,
+      "populationRaw": "1288",
+      "populationYear": "2020",
+      "populationSource": "Census",
+      "coordinate": [
+        -66.9846372,
+        44.9050394
+      ],
+      "owner": "me"
+    },
+    {
+      "sourceId": "node/158856142",
+      "name": "Lubec",
+      "place": "town",
+      "population": 1237,
+      "populationRaw": "1237",
+      "populationYear": "2020",
+      "populationSource": "Census",
+      "coordinate": [
+        -66.983501,
+        44.861172
+      ],
+      "owner": "me"
+    },
+    {
+      "sourceId": "node/158876069",
+      "name": "Baileyville",
+      "place": "town",
+      "population": 1318,
+      "populationRaw": "1318",
+      "populationYear": "2020",
+      "populationSource": "Census",
+      "coordinate": [
+        -67.4050134,
+        45.1549515
+      ],
+      "owner": "me"
+    }
+  ]
+}

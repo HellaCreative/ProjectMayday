@@ -40,3 +40,24 @@ test('Atlantic opt-in exposes actual region identities and unknown-access intent
  const f=fixture(),pool=buildRideAlternatives({...f,budget:work()});
  assert.equal(toLiveResponse(pool,{...body,fuel:{windowMaxStops:4}},'fuel',identities).diagnostics.allowUnknown,true);
 });
+
+test('phone Clean highway preference stays in the replacement engine',()=>{
+ const body={profile:'cleanest',locations:[{lat:44.764843,lon:-63.340218},{lat:46.792506,lon:-67.569371}],options:{avoidMotorways:true,mapZoom:10.7},fuel:{usableRangeMeters:225000,firstLegMaxMeters:225000,windowMaxStops:12,forwardFeeler:false}};
+ assert.equal(canarySupported(body,'fuel',{DIRT_ADVENTURE_CANARY:'ns-nb-v1'}),true);
+ assert.equal(canarySupported({...body,options:{...body.options,arrivalEdgeId:'turn-context'}},'fuel',{DIRT_ADVENTURE_CANARY:'ns-nb-v1'}),false);
+});
+
+test('Clean avoids a motorway shortcut but keeps an unavoidable motorway connection',()=>{
+ for(const alternative of [true,false]) {
+  const nodes=[{id:1,lon:-63.30,lat:44.7},{id:2,lon:-63.29,lat:44.7},{id:3,lon:-63.28,lat:44.7},{id:4,lon:-63.27,lat:44.7},{id:5,lon:-63.285,lat:44.72}];
+  const ways=[{id:10,nodeIds:[1,2],tags:{highway:'residential',surface:'asphalt'}},{id:11,nodeIds:[2,3],tags:{highway:'motorway',surface:'asphalt',oneway:'no'}},{id:12,nodeIds:[3,4],tags:{highway:'residential',surface:'asphalt'}}];
+  if(alternative)ways.push({id:13,nodeIds:[2,5,3],tags:{highway:'unclassified',surface:'asphalt'}});
+  const encoded=encodeFromOsmGraph(buildGraphFromOsm({nodes,ways}),{regionId:'ns',sourceEpoch:'test'});
+  const options={pack:decodeGraphV4(encoded.graphBuffer,encoded.geomBuffer),geom:decodeGeometryV1(encoded.geomBuffer),revision:`motorway-${alternative}`,stations:[],input:{mode:'from_here',anchors:[{id:'a',lat:44.7,lon:-63.30},{id:'b',lat:44.7,lon:-63.27}],legs:[{from:'a',to:'b',profile:'clean'}],fuel:null},avoidMotorways:true,budget:work()};
+  const result=buildRideAlternatives(options);
+  assert.equal(result.state,'complete');assert.equal(result.search.poolComplete,true);
+  assert.equal(result.selected.road.urbanMeters,0);
+  assert.equal(result.selected.road.motorwayMeters>0,!alternative);
+  assert.equal(result.selected.road.surface.pavedPercent,100);
+ }
+});

@@ -766,3 +766,19 @@ No native implementation or device acceptance is claimed by the service adapter.
 ### NS/NB DEV integrated fuel preview — September 8, 2026
 
 The iOS DEV client requests up to 12 combined fuel/geometry legs for NS↔NB primary legs with no individual fuel-hop overrides, disabling the legacy graph-only forwardFeeler hint. Other regions and production retain existing behavior. Android must consume the same complete route/fuel geometry and validate every hop against remaining usable fuel; a province boundary never refills the tank. This is a DEV route-building contract, not offline navigation qualification. No Android implementation is claimed.
+
+### Atlantic DEV phone feedback correction — September8 evening
+
+Live canary must honor ordinary Clean avoidMotorways preference rather than
+silently route through legacy. Avoidance exposure includes motorway/ramp and
+reviewed city boxes; legal unavoidable connections remain possible. The NB
+source-locked city/town>=20k classification supplement is a versioned DEV review,
+not a mutation of sealed02 packs or proof of complete urban coverage.
+
+Generated fuel stop alternatives must preserve full range/escape/turn legality,
+fixed anchors and the existing deadline. Substantial fuel-linked retracing may
+trigger one alternative per shared objective; replacing it requires less
+retracing, shorter actual travel, at least as good avoidance exposure and more
+fresh known dirt per actual kilometre. Physical surface totals still count all
+travel. A necessary pump is never banned just because its access retraces.
+This is currently live JavaScript DEV work; offline/native parity unqualified.

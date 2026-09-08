@@ -63,7 +63,7 @@ function materializeRoute({pack,geom,result,budget}) {
       geometry.push(...coords.slice(1));
     } else geometry.push(...coords);
     segments.push({edgeIndex:arc.id,edgeId:pack.edgeId(arc.id),fromNode:arc.from,toNode:arc.to,
-      fromFraction:from,toFraction:to,distanceMeters:arc.distanceMeters,surfaceLeaf:arc.surfaceLeaf,accessClass:({0:"motorized_verified",1:"motorized_unknown",2:"motorized_denied",3:"motorized_endpoint",4:"motorized_destination",5:"motorized_impassable"})[pack.edgeAccess?.[arc.id*2+(to>from?0:1)]]||"motorized_unknown",geometry:coords});
+      fromFraction:from,toFraction:to,distanceMeters:arc.distanceMeters,surfaceLeaf:arc.surfaceLeaf,roadClassLeaf:arc.roadClassLeaf,accessClass:({0:"motorized_verified",1:"motorized_unknown",2:"motorized_denied",3:"motorized_endpoint",4:"motorized_destination",5:"motorized_impassable"})[pack.edgeAccess?.[arc.id*2+(to>from?0:1)]]||"motorized_unknown",geometry:coords});
   }
   const surface=summarizeSurface(segments,budget);
   if(!surface)return {state:"unverified",reason:budget.snapshot().reason};
