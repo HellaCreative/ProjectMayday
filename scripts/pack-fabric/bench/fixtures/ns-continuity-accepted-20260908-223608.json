@@ -1,0 +1,45 @@
+{
+  "id": "physical-ns-continuity-20260908-223608",
+  "status": "rider_accepted_route_build",
+  "source": "User-pasted log exported 2026-09-08T22:36:08Z; rider: Looks really good. Pass",
+  "serviceBuild": "9c15324e6ace23df668c6061e2d4ba2a04b99bc8",
+  "app": "2 (23)",
+  "request": {
+    "mode": "fromHere",
+    "profile": "dirt",
+    "locations": [
+      {
+        "lat": 44.764827,
+        "lon": -63.340263
+      },
+      {
+        "lat": 46.98021,
+        "lon": -60.472582
+      }
+    ],
+    "allowUnknown": false,
+    "mapZoom": 11.2,
+    "automaticFuel": true,
+    "fullRangeMeters": 250000,
+    "reservePercent": 10,
+    "usableRangeMeters": 225000,
+    "firstLegMaxMeters": 225000,
+    "windowMaxStops": 4,
+    "ensureDestinationFuelEscape": true
+  },
+  "observed": {
+    "requestId": "fuel-b6585486",
+    "elapsedMs": 5793,
+    "httpStatus": 200,
+    "status": "complete",
+    "fuelStops": 3,
+    "committedLegs": 4,
+    "selectedObjective": "dirt-10",
+    "packRelease": "fabric-v4-20260908-02",
+    "snappedDestination": {
+      "lat": 46.98019,
+      "lon": -60.47261
+    }
+  },
+  "scope": "Rider visual route-building acceptance after continuity fix, at a different Cape Breton pin from the original failure. No route distance, dirt percentage, repeated-edge measurement, or navigation qualification is inferred from this log."
+}

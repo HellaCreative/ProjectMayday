@@ -819,3 +819,8 @@ This local qualification is not device or offline parity acceptance.
 Continuity candidate published to stable DEV9c15324 after hosted/public checks.
 Physical acceptance and Swift/Android parity remain pending. This supersedes the
 publication status (not the behavior description) in the candidate entry above.
+
+Continuity live behavior received rider visual acceptance at22:36UTC on app2(23),
+NS-only Dirt/unknownOFF/fuelON, destination46.980210,-60.472582. This accepts that
+live route build; Swift/offline/Android implementation and verification remain
+outstanding, and Clean refinement remains the next live repair priority.

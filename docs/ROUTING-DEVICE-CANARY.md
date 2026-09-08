@@ -1,3 +1,15 @@
+# Latest device result — continuity pass, 22:36 UTC
+
+The rider accepted the new Cape Breton route to46.980210,-60.472582:
+“Looks really good. Pass”. Updated live9c15324/NS02, app2(23), Dirt,
+Allow Unknown OFF, automatic fuel ON, 225km usable range. Completed in5.793s
+with3fuel stops and4legs. This is an additional destination, not the exact
+original failing pin. Exact inputs are saved in the accepted continuity fixture.
+
+Next live priority is Clean back-road quality. LargerNB latency and residual
+CapeUnknown retrace remain open. Earlier retest instructions below are history;
+no repeat of this accepted device test is requested.
+
 # Ready for device retest — short dirt diversions
 
 Stable DIRT DEV now uses source `9c15324e6ace23df668c6061e2d4ba2a04b99bc8`

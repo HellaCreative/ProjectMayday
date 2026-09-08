@@ -159,3 +159,18 @@ pass. No Xcode install, phonepack transfer, production publication or GitHubpush
 Physical handoff: fresh sameCapeBretonpin,Dirt,unknownOFF,fuelON250km/10%reserve;
 inspect MusquodoboitHarbour hooks. Physical acceptance pending, not implied by
 our automated checks. LargeNB latency/Cleanquality/CapeUnknownrepeat remainopen.
+
+## Physical continuity pass — 22:36 UTC
+
+Rider: “Looks really good. Pass”. App2(23), live9c15324, NS02, Dirt,
+unknownOFF, automaticfuelON250km/10%reserve. Requestfuel-b6585486 completes in
+5.793s with3pumps+destination (4committedlegs), selecteddirt-10. Origin44.764827,
+-63.340263; destination46.980210,-60.472582, snapped46.98019,-60.47261.
+This is a different CapeBreton pin from the original hooks failure, providing
+another rider-accepted route build. Exact observations are preserved in bench
+fixture `ns-continuity-accepted-20260908-223608.json`.
+
+Acceptance covers this route's visual quality and build behavior. The pasted log
+does not establish distance/dirt percentage/repeat metres or navigation outcomes.
+Next live priority: Clean paved back-road quality, preserving the accepted
+continuity behavior. LargerNB latency and CapeUnknown retrace remain open.
