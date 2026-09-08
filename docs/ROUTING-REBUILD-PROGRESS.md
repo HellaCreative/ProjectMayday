@@ -992,3 +992,29 @@ remains a separate bounded-pool flag, not a proved geographic maximum. Full
 24NBcases pass at400k (691–1864ms preliminaryrun). Added diagnostics correction:
 poolComplete cannot be true when fuelcandidateverification fails. Added regression
 forlabel_limit. All167focusedchecks pass. Finalmemory/hostedNBcriticalcase pending.
+
+## Final400k candidate hosted checks pass
+
+Private67425f53c32f26bf81911331931462389205bc2b =df0827+05eecb0.
+NB-only critical162kmunknown firstrequest7.429sserver,256.158km48.491%dirt,
+0.016kmrepeat,all6candidatescomplete. Subsequent actualmoved request13.164s,
+nearDalhousie4.887s,Dalhousie4.689s,Clean4.423s,matching previously verified
+shapes/fuelproof. NB24final400k691–1986ms525MiBpeak; previouscross24completed
+below200k (thus unchanged by highercap)1.820–3.630s839MiBpeak.167focusedchecks.
+Stable reactivation requested only after allthesechecks. Retestscope remains
+225kmusable FromHere, with short-rangeNB48%dirt/Cleanbackroadquality flags open.
+
+## Physical retest ready — final public67425 verification
+
+StableDEV pack-fabric.vercel.app now source67425f53c32f26bf81911331931462389205bc2b,
+exact5bnn5yit5 preview, ns-nb-v1/BOTHNS02NB02. Ownerverifiedpublichealth andupdated
+nationalactivationguard. Independentpublic failedmoved-pin request passes:
+5.690sHTTP/4.637sserver,884.748389km,4pumps,1.621km repeated. Everycandidatefuel
+search finishes, all5legs within225km, destinationescape fits andgeometryjoins.
+No Xcodeinstall/phonepackchange/productionchange. Runtime commits86f3c02/05eecb0.
+
+Handoff: freshFromHere route to lastfailedNBdestination, Dirt/unknownOFF/fuelON,
+samevehicle range, then moveendpoint again.167focusedchecks,24cross+24NB regional
+cases and8pin sweep support this handoff; physicalride-qualityacceptance pending.
+Cleanmajor-road preference, lowdirt48.49%on162kmNBcase andresidualNSunknownretrace
+remain explicitqualityflags. No globaloptimality or offlinenavigationclaim.

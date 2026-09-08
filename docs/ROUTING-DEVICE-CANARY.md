@@ -1,6 +1,6 @@
 # Onward fuel-search retest — existing build23
 
-Candidate source df0827e60e9c04a625fd3b3155fae87220c93113. Public activation and
+Final candidate source67425f53c32f26bf81911331931462389205bc2b (supersedes the reverted df0827 trial). Public activation and
 verification are recorded at the end of ROUTING-REBUILD-PROGRESS.md.
 
 Rebuild the last failed Porters Lake→New Brunswick destination (47.743529,
@@ -14,7 +14,7 @@ This replaces the earlier one-pump repair with approach-retrace priority during
 fuel search. Earlier958km/SunnyCorner-specific instructions below are historical.
 
 Remaining flags: cold search13.2s in private test; Clean back-road preference
-unfinished; some NSunknown-path retrace remains; physical/navigation/offline
+unfinished; short-range NB can still return48%dirt; some NSunknown-path retrace remains; physical/navigation/offline
 acceptance is not established by automated route-building checks.
 
 # Dalhousie fuel-detour retest — existing build23
