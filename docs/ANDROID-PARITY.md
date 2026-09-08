@@ -717,3 +717,11 @@ regional backtracking predate this change and are not yet fully lockstep.
 Downloaded connection files must match the selected catalog checksum before
 reuse or activation after top-up. Production continues using its accepted data.
 Android must reproduce this outcome; no Android implementation is claimed.
+
+An incomplete live fuel response may include `foundationRoute`, the completed
+road line for that exact request. Reuse it only for advisory display at the
+same departure and destination; retain the fuel-unknown/gap status and never
+interpret the geometry as proof of fuel coverage. Advancing to a pump invalidates
+the retained departure. Missing foundation uses the existing road fallback.
+Responses also report optional `connectionRevision` separately from graph
+release/source identity. These additions are shared API/client behavior.

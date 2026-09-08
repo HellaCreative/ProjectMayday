@@ -1421,3 +1421,22 @@ test("refuel-before-waypoint leaves enough fuel for the known next rider leg", a
   assert.equal(result.stops.at(-1).id, "late");
   assert.ok(result.graphMeters.at(-1) <= 40_000);
 });
+
+test("incomplete fuel proof returns its completed foundation without qualifying it for fuel", async () => {
+  const foundation = { status: "complete", distanceMeters: 300000, profile: "dirt",
+    geometry: [[-63.34,44.76],[-63.28,44.74]], segments: [], stats: { dirtPercent: 80 } };
+  let searches = 0;
+  const result = await fuelChainRequest({
+    profile: "dirt", locations: [{lat:44.76,lon:-63.34},{lat:44.74,lon:-63.28}],
+    accessPolicy: {motorizedPermissive:true,motorizedUnknown:false},
+    fuel: {usableRangeMeters:150000,firstLegMaxMeters:150000,routeFirstPlan:true,windowTimeBudgetMs:20000}
+  }, {
+    loadGraphsForRequest: async () => lineRuntime(),
+    loadFuelForLocations: async () => ({ok:true,stations:[],regionIds:["ns"],packIdentity:[]}),
+    routeRequest: async () => { searches += 1; return foundation; }
+  });
+  assert.notEqual(result.status,"complete");
+  assert.equal(result.foundationRoute,foundation);
+  assert.equal(searches,1);
+  assert.deepEqual(result.stops,[]);
+});

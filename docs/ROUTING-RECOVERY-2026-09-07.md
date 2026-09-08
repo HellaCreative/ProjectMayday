@@ -184,3 +184,12 @@ an existing file and after a download attempt. Publication of the 66 metadata
 objects is in progress with read-back hashes; catalog goes last. No stable DEV
 service deployment or physical acceptance has happened at this checkpoint.
 Fuel, seed lifecycle, and remaining-road evolution work remain open.
+
+The connection publication completed: all 66 remote metadata objects were
+read back and SHA-256 verified, with catalog published last. No production
+catalog or original candidate object was overwritten. The foundation-advisory
+reuse slice passes all 47 JS fuel checks and 81 iOS itinerary/general checks,
+including the DEV environment URL checks and a regression requiring zero second
+route requests after a failed fuel proof. Saved foundation reuse is scoped to
+its original departure and does not mark fuel complete. Full fuel-quality
+recovery, 30-second atomic behavior, and physical qualification remain open.

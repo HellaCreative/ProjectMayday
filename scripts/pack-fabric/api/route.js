@@ -30,6 +30,7 @@ module.exports = async function handler(req, res) {
       engine: "dirt-node-astar",
       serviceContract: ROUTING_SERVICE_CONTRACT,
       serviceBuild: serviceBuild(),
+      connectionRevision: process.env.DIRT_V4_CONNECTION_REVISION || null,
       note: "BC foundational pack is OSM-only; DRA/FTEN are inactive. Other regional stacks remain recorded in routing/registry/sources.json."
     });
   }

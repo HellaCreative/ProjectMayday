@@ -18,3 +18,9 @@ test("route and fuel APIs share one explicit service contract", () => {
 test("service build is honest when no deployment identity exists", () => {
   assert.equal(serviceBuild({}), "local-uncommitted");
 });
+
+test("responses identify the selected connection revision independently of road release", () => {
+  assert.equal(withServiceIdentity({}, {}).connectionRevision, null);
+  assert.equal(withServiceIdentity({}, {DIRT_V4_CONNECTION_REVISION:"connections-v4-20260908-02"}).connectionRevision,
+    "connections-v4-20260908-02");
+});

@@ -4200,6 +4200,7 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
       status: "unknown",
       error: "fuel_data_unavailable",
       message: "Live fuel data is unavailable for this part of the route.",
+      foundationRoute: foundationRoute?.status === "complete" ? foundationRoute : null,
       stops: []
     };
   }
@@ -4368,6 +4369,8 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
     stops: planned.stops || [],
     graphMeters: planned.graphMeters || [],
     routes: planned.routes || [],
+    foundationRoute: fuelPlanStatus(planned) !== "complete" && foundationRoute?.status === "complete"
+      ? foundationRoute : null,
     stationCandidates: planned.stationCandidates || [],
     firstReachableStationMeters: planned.firstReachableStationMeters,
     destinationEscapeMeters,

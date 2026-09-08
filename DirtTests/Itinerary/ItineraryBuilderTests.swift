@@ -442,6 +442,24 @@ struct ItineraryBuilderTests {
         }
     }
 
+    @Test func incompleteFuelProofReusesFoundationWithoutASecondRouteRequest() async throws {
+        let points = [point(0), point(1)]
+        let source = FakeRoutingSource(name: "live")
+        source.supportsCombinedFuelPlanning = true
+        source.fuelFailureFoundation = response(from: points[0], to: points[1], meters: 300_000)
+        let itinerary = makeItinerary(points)
+        let result = await ItineraryBuilder().build(itinerary, from: 0, reuse: nil,
+            fuel: FuelRangePrefs.Snapshot(tankMeters: 150_000, usableMeters: 150_000, reservePercent: 0),
+            source: .fixed(source), onProgress: { _ in })
+        #expect(source.routeRequests.isEmpty)
+        #expect(result.legs.count == 1)
+        #expect(result.legs.first?.response.distanceMeters == 300_000)
+        #expect(result.legs.compactMap(\.endsAtFuelStop).isEmpty)
+        if case .fuelUnknown = result.riderLegStatus[itinerary.legs[0].id] {} else {
+            Issue.record("A retained road foundation must not be presented as fuel-qualified")
+        }
+    }
+
     @Test func provenFuelGapKeepsCompleteRouteAndReportsExactOverage() async throws {
         let points = [point(0), point(1)]
         let source = FakeRoutingSource(name: "live")
@@ -1319,6 +1337,7 @@ private final class FakeRoutingSource: RoutingSource {
     var firstReachableStationMeters: [String: Double] = [:]
     var gapWhenFirstLegMaxBelow: [String: Double] = [:]
     var failKey: String?
+    var fuelFailureFoundation: RouteResponse?
     var fuelChainError: Error?
     var fuelChainErrorAfterPlanCount: Int?
     var fuelChainPlanCount = 0
@@ -1360,6 +1379,11 @@ private final class FakeRoutingSource: RoutingSource {
                 ),
                 firstReachableStationMeters: scripted ?? defaultDestinationEscape
             )
+        }
+        if let fuelFailureFoundation {
+            return FuelChainResponse(status: "unknown", error: "window_time_budget",
+                message: "Fuel proof timed out", regionIds: ["test"], stops: [], graphMeters: [],
+                diagnostics: nil, foundationRoute: fuelFailureFoundation, windowComplete: false)
         }
         fuelChainPlanCount += 1
         if let limit = fuelChainErrorAfterPlanCount,

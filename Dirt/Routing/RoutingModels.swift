@@ -556,6 +556,9 @@ struct FuelChainResponse: Codable, Sendable {
     /// chain. There is one response per returned hop, plus the destination hop
     /// when windowComplete is true.
     var routes: [RouteResponse]? = nil
+    /// A completed road foundation retained after an incomplete fuel proof.
+    /// This is advisory geometry, never a fuel-qualified route.
+    var foundationRoute: RouteResponse? = nil
     var stationCandidates: [FuelStationCandidate]? = nil
     var firstReachableStationMeters: Double? = nil
     var destinationEscapeMeters: Double? = nil
