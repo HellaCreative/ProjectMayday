@@ -28,7 +28,7 @@ function routeResponse(segments,profile,identity,diagnostics,point=null) {
 function toLiveResponse(pool,body,kind,identity) {
  const r=pool.selected;
  if(!r)return {status:'unknown',error:'adventure_search_incomplete',message:'Route search did not complete. No fuel gap has been proved.',diagnostics:{strategy:'adventure-preview-v1',reason:pool.search.reason},stops:[],routes:[],windowComplete:false};
- const diagnostics={allowUnknown:body.profile!=='cleanest'&&body.accessPolicy?.motorizedUnknown===true,mapZoom:body.options?.mapZoom,strategy:'adventure-preview-v1',selectedReason:pool.selectedObjective,adventure:{candidates:pool.candidates,search:pool.search,quality:r.qualityAudit,fuelState:r.fuel.state},packIdentity:identity};
+ const diagnostics={allowUnknown:body.profile!=='cleanest'&&body.accessPolicy?.motorizedUnknown===true,mapZoom:body.options?.mapZoom,strategy:'adventure-preview-v1',selectedReason:pool.selectedObjective,adventure:{fuelHeuristicWeight:r.provenance.fuelHeuristicWeight,candidates:pool.candidates,search:pool.search,quality:r.qualityAudit,fuelState:r.fuel.state},packIdentity:identity};
  if(kind==='route')return routeResponse(r.road.segments,body.profile,identity,diagnostics);
  if(!['provisional_station_access','verified'].includes(r.fuel.state))return {status:'unknown',error:r.fuel.reason||'fuel_unverified',message:'Road found, but fuel planning remains unverified.',routes:[routeResponse(r.road.segments,body.profile,identity,diagnostics)],stops:[],windowComplete:true,diagnostics};
  const visits=r.fuel.plannedRefills;
