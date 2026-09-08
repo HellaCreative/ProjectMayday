@@ -32,7 +32,7 @@ function toLiveResponse(pool,body,kind,identity) {
  const visits=r.fuel.plannedRefills;
  if(visits.some(v=>v.atMeters<=1e-6||v.atMeters>=r.road.distanceMeters-1e-6))return null;
  const maxStops=body.fuel.windowMaxStops??visits.length;
- if(!Number.isSafeInteger(maxStops)||maxStops<0||(maxStops===0&&visits.length>0))return null;
+ if(!Number.isSafeInteger(maxStops)||maxStops<0||(maxStops===0&&visits.length>0)||(!body.fuel.allowPartialWindow&&visits.length>maxStops))return null;
  const kept=visits.slice(0,maxStops),complete=kept.length===visits.length;
  const boundaries=kept.map(v=>v.atMeters);if(complete)boundaries.push(r.road.distanceMeters);
  const routes=[];let at=0,index=0;
@@ -64,7 +64,9 @@ async function adventureCanaryRequest(body,kind,{environment=process.env,load=nu
  const input={mode:'from_here',anchors:body.locations.map((p,i)=>({id:`rider-${i}`,lat:p.lat,lon:p.lon})),legs:[{from:'rider-0',to:'rider-1',profile,allowUnknown:profile!=='clean'&&body.accessPolicy?.motorizedUnknown===true}],
   fuel:kind==='fuel'?{fullRangeMeters:body.fuel.usableRangeMeters,reserveFraction:0,initialUsableMeters:body.fuel.firstLegMaxMeters}:null};
  const signal=body.options?.abortSignal;
- const pool=buildRideAlternatives({input,pack:data.pack,geom:data.geom,revision,stations:data.stations.filter(s=>!excluded.has(s.id)),context,
+ const {tapRadiusMeters}=require('../legal-topology/snap');
+ const endpointRadiusMeters=tapRadiusMeters({zoom:body.options?.mapZoom,lat:body.locations[0].lat,requestedMeters:body.options?.matchLimitMeters,graphBinaryVersion:4});
+ const pool=buildRideAlternatives({input,pack:data.pack,geom:data.geom,revision,stations:data.stations.filter(s=>!excluded.has(s.id)),context,endpointRadiusMeters,
   budget:createBudget({deadlineAtMs,maxExpansions:30000000,signal}),preparationBudget:createBudget({deadlineAtMs,maxExpansions:20000000,signal})});
  const response=toLiveResponse(pool,body,kind,identity);
  if(response){response.debug={...(response.debug||{}),adventureTotalMs:Date.now()-started};response.legId=body.legId;}
