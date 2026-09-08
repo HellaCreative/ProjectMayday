@@ -1,0 +1,44 @@
+{
+  "id": "ns-clean-search-limit-20260908",
+  "source": "Clean variant of physical NS hooks request; local replay of private6d61061 candidate",
+  "failedBuild": "6d61061e2e0c51a48f5f389a5743d68e9a4549a3",
+  "request": {
+    "profile": "cleanest",
+    "locations": [
+      {
+        "lat": 44.764835,
+        "lon": -63.340265
+      },
+      {
+        "lat": 46.214698,
+        "lon": -59.965492
+      }
+    ],
+    "accessPolicy": {
+      "motorizedPermissive": true,
+      "motorizedUnknown": false
+    },
+    "options": {
+      "mapZoom": 11.6,
+      "avoidMotorways": true
+    },
+    "fuel": {
+      "usableRangeMeters": 225000,
+      "firstLegMaxMeters": 225000,
+      "minimumFuelStops": 0,
+      "windowMaxStops": 4,
+      "allowPartialWindow": true,
+      "windowTimeBudgetMs": 20000,
+      "routeFirstPlan": true,
+      "ensureDestinationFuelEscape": true,
+      "forwardFeeler": false
+    }
+  },
+  "observedFailure": {
+    "pavedFuel": "unverified",
+    "reason": "label_limit",
+    "selectedPavedPercent": 30.57021370382809,
+    "poolComplete": false
+  },
+  "requiredOutcome": "Complete all fuel candidates, select paved objective, retain >99% paved, no repeated road and full fuel/escape/geometry proof. A feasible dirt-heavy fallback does not pass Clean qualification."
+}
