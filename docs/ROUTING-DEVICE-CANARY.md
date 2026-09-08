@@ -43,7 +43,8 @@ The canary is off unless the deployment sets DIRT_ADVENTURE_CANARY=ns-v1.
 
 Verified preview: pack-fabric-42ltrerz7-goricksmith-7678s-projects.vercel.app.
 Source: ecf746ef8497df49c996c0853fe84743de331f7f.
-The actual stable publication and readback are recorded in the progress log.
+Stable DEV at https://pack-fabric.vercel.app now serves those exact bytes.
+Independent public readback and all three profile/fuel checks passed.
 Service contract stays dirt-routing.r0.v1; replacement responses identify
 adventure-shared-candidates / adventure-preview-v1. No phone install, downloaded
 pack change, production publication or national candidate03 switch is required.

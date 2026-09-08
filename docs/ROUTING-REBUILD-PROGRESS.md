@@ -817,3 +817,27 @@ confirmation and public stable readback still required before device handoff.
 Device scope, precise pins/settings and remaining UI gaps are documented in
 ROUTING-DEVICE-CANARY.md. No UI edit required for this initial From Here comparison;
 future UI changes use the requested Impeccable skill and incumbent DIRT tokens.
+
+## Stable DEV ready for physical route review — September 8, 2026
+
+The pack-refinement owner moved pack-fabric.vercel.app to the EXACT verified
+preview dpl_6vK7hFKuwQbAs6HF6BYSMdrfFE2b / source
+ ecf746ef8497df49c996c0853fe84743de331f7f. Accepted02 data, the five-region
+configuration, rider-services base and empty connection revision were preserved.
+No production, national03, phone installation or downloaded-pack change occurred.
+
+Independent unauthenticated public checks then passed the address the installed
+DIRT Dev app uses: health reports ecf746e/ns-v1; Dirt/Balanced/Clean fuel chains
+complete with3/2/1stops, exactNS02 identity, contiguous geometry, usable-range
+limits and destination escape. Public HTTP times were3.58/2.05/1.87s; server
+processing1.48/1.47/1.37s with warm data. These are individual checks, not service
+percentiles. Evidence: routing/candidates/rebuild-live-preview/stable/.
+
+The first physical route-building review is now available. Follow
+ROUTING-DEVICE-CANARY.md. No device acceptance or navigation qualification is
+claimed until Richard tests. Fuel access remains provisional, Dirt quality is
+still bounded by the current candidate pool, and newer UI flows remain unfinished.
+The national pack owner was told that the explicitNS02 release guard will reject
+NS03 from the canary; keepNS02 for this device review until03 is separately
+qualified and the guard deliberately revised. Do not silently switch the phone
+back to the old engine during national pack activation.
