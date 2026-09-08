@@ -17,8 +17,9 @@ for(const probeCase of ["southwest","urban-anchor","nb-constricted"])for(let rep
     const file=path.join(destination,`${direction}.json`);
     if(!fs.existsSync(file))continue;
     const r=JSON.parse(fs.readFileSync(file));
-    rows.push({probeCase,repeat,direction,state:r.route.state,reason:r.route.reason||null,timing:r.timing,loadMs:r.loadMs,
-      processPeakRssKiB:r.processPeakRssKiB,routeFingerprint:r.routeFingerprint,urban:r.urban,surface:r.route.surface,
+    rows.push({probeCase,repeat,direction,state:r.route?.state||r.state,reason:r.route?.reason||r.reason||null,stage:r.stage||null,
+      timing:r.timing||{totalMs:r.totalMs},loadMs:r.loadMs,
+      processPeakRssKiB:r.processPeakRssKiB,routeFingerprint:r.routeFingerprint,urban:r.urban,surface:r.route?.surface||null,
       graphSha256:r.graphSha256,geometrySha256:r.geometrySha256,diagnostics:r.diagnostics});
   }
   console.log(JSON.stringify({probeCase,repeat,exit:child.status}));
@@ -30,7 +31,7 @@ for(const probeCase of ["southwest","urban-anchor","nb-constricted"])for(const d
     urbanAreasPresent:set.length>0&&set.every(r=>r.urban?.areaCount>0),
     urbanClassificationQualified:set.length>0&&set.every(r=>r.urban?.classificationComplete===true),
     minMs:times[0]??null,medianMs:times[1]??null,maxMs:times.at(-1)??null,
-    stableGeometry:new Set(set.map(r=>r.routeFingerprint)).size===1&&set.length===3,
+    stableGeometry:set.every(r=>r.state==="complete"&&r.routeFingerprint)&&new Set(set.map(r=>r.routeFingerprint)).size===1&&set.length===3,
     maxProcessRssMiB:set.length?Math.round(Math.max(...set.map(r=>r.processPeakRssKiB))/1024):null});
 }
 const result={limitations:["three fresh processes per case; OS cache not cleared","forward and reverse share a process; RSS is process high-water mark, not per-search memory","timings exclude pack loading, include rebuilding matching/urban indexes","real fuel access and final ride objectives are not integrated"],rows,groups,failures};

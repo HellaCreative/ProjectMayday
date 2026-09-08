@@ -211,3 +211,46 @@ individual geometry artifacts, pack hashes and process logs. Run the matrix with
 an explicit `REBUILD_PACK_ROOT`; optional `REBUILD_MATRIX_OUTPUT` preserves
 separate experiment sets. No runtime policy tuning, deployment or device change
 was made during this testing step.
+
+## Fifth step — Quebec scale and explicit failure reporting
+
+Added the `qc-urban-anchor` projected probe (Montreal coordinate to an eastern
+Quebec coordinate). The supplied sealed QC graph contains 1,203,111 nodes and
+1,469,141 edges. Both directional attempts exhausted the unchanged 6-million
+work budget during road-index construction, before route search. Times to this
+incomplete result were 444 and 441 ms; those are **not route-return timings**.
+Pack loading took 113 ms. Evidence: `routing/candidates/rebuild-qc-probe/`.
+
+A separate diagnostic raised only the benchmark's work allowance to 50 million,
+retaining its 15-second deadline. It passed indexing but stopped while creating
+the graph, after 11,221,987 operations and 857/845 ms respectively. This is not a
+passing enlarged-budget route. Peak process RSS was about 368 MiB across those
+two failed attempts; later search memory remains unmeasured. The default work
+allowance is unchanged. Evidence: `routing/candidates/rebuild-qc-diagnostic/`.
+
+The restriction audit found one ambiguous entry among 16,474 QC restrictions:
+OSM relation `7111448` resolves both `fromEdge` and the first `viaEdges` entry to
+edge `318695` (endpoints `1113889` and `164`), with `toEdge:547118`. The adapter
+cannot determine its directed entry from that representation and intentionally
+rejects it. No claim is made yet that the original OSM relation is wrong; source
+resolution versus adapter interpretation needs investigation. No restriction
+was dropped, no permissions relaxed, and no factory bytes changed.
+
+Added a regression preserving this failure and returning the exact relation,
+edge and shared-node identifiers in structured diagnostics. The benchmark now
+writes stage-specific artifacts for interrupted or failed preparation, exits
+nonzero for incomplete routes, and supports an explicit diagnostic-only
+`REBUILD_MAX_WORK` override. Matrix parsing handles these artifacts without
+mistaking them for complete routes or crashing on absent geometry.
+
+Verification: 75 replacement tests plus eight existing V4 snap/pack checks pass
+(83 total). A forced-interruption matrix (`REBUILD_MAX_WORK=1`, separate output
+`rebuild-forced-interruption`) exercised all 18 attempts: all reported incomplete
+preparation, zero completed routes, and the matrix correctly exited nonzero.
+This is a test of honest failure reporting, not 18 new successful rides.
+
+Next: separate reusable graph preparation from per-request work without hiding
+its time/memory cost; investigate the exact QC restriction against source and
+packed representation. The existing city-anchor ride-quality concern, missing
+NB urban definitions and real fuel-access qualification remain open. No service
+or device deployment occurred.

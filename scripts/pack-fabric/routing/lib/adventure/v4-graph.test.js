@@ -43,3 +43,12 @@ test("destination-only access is scoped to explicit endpoint edges",()=>{
   assert.equal(route(p,0,1).state,"exhausted");
   assert.equal(route(p,0,1,{endpointEdges:[0]}).state,"found");
 });
+
+test("Quebec repeated approach/via edge is an actionable restriction error, never silently dropped",()=>{
+  const p=pack([[0,1],[1,2]],[{osmRelationId:"7111448",fromEdge:0,viaEdges:[0],toEdge:1,viaNode:0,only:true}]);
+  assert.throws(()=>createV4Graph(p),error=>{
+    assert.equal(error.code,"ambiguous_via_way_entry");
+    assert.deepEqual(error.details,{relationId:"7111448",fromEdge:0,viaEdge:0,sharedNodes:[0,1]});
+    return true;
+  });
+});

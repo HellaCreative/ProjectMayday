@@ -24,7 +24,8 @@ function createV4Graph(pack,{allowUnknown=false,endpointEdges=[],stations=new Ma
     const first=sequence[0],next=sequence[1];
     const shared=[pack.edgeFrom[first],pack.edgeTo[first]].filter(node=>node===pack.edgeFrom[next]||node===pack.edgeTo[next]);
     // Ambiguous attachment needs a richer source representation; never guess.
-    if(shared.length!==1)throw new Error("Ambiguous via-way entry");
+    if(shared.length!==1)throw Object.assign(new Error(`Ambiguous via-way entry in restriction ${restriction.osmRelationId||"unknown"}`),
+      {code:"ambiguous_via_way_entry",details:{relationId:restriction.osmRelationId||null,fromEdge:first,viaEdge:next,sharedNodes:shared}});
     const group=`${shared[0]}:${first}`;
     const id=rules.length;rules.push({sequence,only:restriction.only===true,group});
     const list=starts.get(group)||[];list.push(id);starts.set(group,list);
