@@ -1184,3 +1184,19 @@ geometry/refills unchanged. NB Clean repeats0; cross162km reverseClean repeats
 2.104km, explicit unresolved qualityflag (supersedes prior1.370kmstress note).
 Actual225kmClean955.802km99.999%paved0repeat. Revised privatehosted checks pending;
 no stable change yet. No claim that all route quality or fuelspurs are solved.
+
+## Final Clean private qualification —8be23e95
+
+Exact1krqzezwv/source8be23e95a91c7ebe8a02bf20a6917f57ad42a4b7.
+NSClean757.037km99.88%paved3stops0repeat,12.022sserverfirstNSrequest; allcandidate
+fuel searches complete, selectedpaved. ActualNBClean955.802km99.999%paved4stops
+0repeat,6.797sserver; primary/trunk199.020km (old497.986km). ThreeNBDirt andNSDirt
+hosted geometry/stops EXACTmatch stable9c15324. NSDirt8.144sserver, NBfirstjoined
+14.824s, following8.094/8.516s. Everycasefuel/escape/joins/poolcomplete passes.
+
+Final48localcases fuelchecks pass,32Dirt/Balanced exactunchanged;175focusedchecks.
+SingleNS3reference profiles completepool/fullwindows/escape/joins; Dirt/Balanced
+unchanged, Clean596.543km0repeat. Short162reversecrossClean2.104kmfuelreturn stays
+flagged; normal225kmreference0repeat. Requested stableactivation onlyafterthese
+checks; publicverification andphysicalhandoff recorded next. Summaries persisted
+in routing/candidates/rebuild-clean-backroads-verification.
