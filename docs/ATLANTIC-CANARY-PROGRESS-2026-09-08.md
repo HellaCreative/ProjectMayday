@@ -102,3 +102,17 @@ in 3.66 seconds; the 50 km remaining-fuel case selected the NB station in
 2.25 seconds. The live Balanced approach to that selected station also completed
 at 41,282 m, within the 50,000 m remaining range. These are service checks;
 Richard's app retest remains the acceptance step.
+
+## Physical acceptance update — export 2026-09-08T124852Z
+
+Richard confirms routes between all Atlantic provinces work both with and
+without automatic fuel stops, including the corrected fuel planning. All
+toggled layers were visible. Route quality is explicitly excluded from this
+acceptance. The export records live service 7848ba6 with the same Atlantic
+fabric-v4-20260908-01 objects. ATL-03 is accepted for this reported outcome.
+
+One-way highway travel, correct use of ramps/underpasses, and no invented
+connections where roads cross at different heights remain to be checked.
+Passing those checks does not trigger another Atlantic rebuild. Rebuild only
+if the pack data itself needs correction; fix live code if it misuses correct
+data. Quebec and the remaining original packs are not qualified by this update.
