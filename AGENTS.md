@@ -93,3 +93,13 @@ do not ask again. Actual production and GitHub backup remain gated as above.
 Provide regular progress updates and distinguish automated verification from
 physical-device acceptance. Do not claim perfection or launch qualification
 while required checks remain open.
+
+## Owner direction — live-only Atlantic repair cycle, September 8, 2026
+
+Richard explicitly requires live JavaScript routing first. Publish verified fixes
+to stable DIRT DEV, give him an actionable live test, and track each fix and his
+results. Do not work on the Swift reader, install builds, or transfer/download
+packs onto his phone during this cycle. After the live behavior is accepted,
+apply the accepted fixes to Swift and verify parity. Do not treat future parity
+work as a prerequisite for this live canary. Production and GitHub push remain
+out of scope.

@@ -10,6 +10,8 @@ test("V4 ship door accepts only a sealed-fabric candidate command", () => {
   assert.equal(parsed.candidate, "fabric-v4-20260907-01");
   assert.equal(parsed.pack, true);
   assert.equal(parsed.verify, true);
+  assert.deepEqual(parseArgs(["--candidate", "fabric-v4-20260908-01", "--pack", "--regions", "ns,nb,pe,nl"]).regions, ["nb", "nl", "ns", "pe"]);
+  assert.throws(() => parseArgs(["--candidate", "fabric-v4-20260908-01", "--pack", "--regions", "ns,typo"]));
   assert.throws(() => parseArgs(["--candidate", "fabric-v4-20260907-01", "--pack", "--live"]), /forbidden/);
   assert.throws(() => parseArgs(["--candidate", "fabric-v4-20260907-01", "--pack", "--promote"]), /forbidden/);
   assert.throws(() => parseArgs(["--candidate", "ns-v4-legal-topology-20260906-02", "--pack"]), /release id/);

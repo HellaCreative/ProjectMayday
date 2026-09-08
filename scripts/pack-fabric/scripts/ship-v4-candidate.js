@@ -66,6 +66,12 @@ function parseArgs(argv) {
     else if (value === "--root") options.root = path.resolve(argv[++i]);
     else if (value === "--pack") options.pack = true;
     else if (value === "--verify") options.verify = true;
+    else if (value === "--regions") {
+      options.regions = [...new Set((argv[++i] || "").split(","))].sort();
+      if (options.regions.length < 2 || options.regions.some(id => !OSM_REGION[id])) {
+        die("--regions requires at least two recognized region IDs");
+      }
+    }
     else die(`unknown argument ${value}`);
   }
   if (!options.candidate || !options.pack) {
@@ -84,13 +90,22 @@ function readJSON(file) {
 
 function verifyLocalCandidate(options) {
   const release = readJSON(path.join(options.root, "release.json"));
-  const expectedIds = Object.keys(OSM_REGION).sort();
+  const expectedIds = options.regions || Object.keys(OSM_REGION).sort();
   const actualIds = (release.regions || []).map((row) => row.id).sort();
-  if (release.releaseId !== options.candidate || release.status !== "local-candidate-sealed" ||
-      !release.completeFabric || JSON.stringify(actualIds) !== JSON.stringify(expectedIds)) {
-    die("candidate is not a sealed 63-region fabric");
+  const expectedStatus = options.regions ? "local-partial-candidate" : "local-candidate-sealed";
+  if (release.releaseId !== options.candidate || release.status !== expectedStatus ||
+      (!options.regions && !release.completeFabric) || JSON.stringify(actualIds) !== JSON.stringify(expectedIds)) {
+    die("candidate does not match the explicitly selected sealed region set");
   }
   if (!release.topology || !release.topology.sha256) die("candidate has no sealed topology index");
+  const topologyFile = path.join(options.root, "cross-pack-topology.v2.json");
+  const topologyIdentity = identity(topologyFile);
+  const topology = readJSON(topologyFile);
+  if (topologyIdentity.sha256 !== release.topology.sha256 || topologyIdentity.bytes !== release.topology.bytes ||
+      topology.fabricReleaseId !== release.releaseId || topology.sourceEpoch !== release.sourceEpoch ||
+      JSON.stringify(Object.keys(topology.regions).sort()) !== JSON.stringify(expectedIds)) {
+    die("candidate topology identity or selected regions mismatch");
+  }
 
   const catalog = {
     version: options.candidate,

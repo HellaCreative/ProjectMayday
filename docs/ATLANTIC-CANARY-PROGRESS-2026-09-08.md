@@ -41,10 +41,36 @@ proven connections within it. Four connection-builder tests pass. The rebuilt
 Atlantic connection index contains NB/NS, NB/PE, NL/NS and NS/PE. The release
 remains labelled a partial local candidate, not a complete 63-region release.
 
-## Still required before offering this as an iPhone canary
+## Current live handoff and fix tracking
 
-Check source-to-pack road/access/dirt details, fuel and layers; exercise internal
-Nova Scotia journeys; validate the Swift reader against these exact packs; ship
-and verify a matched DEV canary and install it on the phone. Do not claim a
-finished product from the eight crossing results. Quebec follows Atlantic
-physical acceptance, as Richard requested.
+Live DEV now uses source 5df7437f723690682ed5107a7a95d16502e7c34e at
+https://pack-fabric.vercel.app. The verified deployment is
+pack-fabric-a7gkw84hf-goricksmith-7678s-projects.vercel.app. Its four Atlantic
+regions use fabric-v4-20260908-01, including fuel and Rider Services.
+All 33 candidate objects were uploaded and read back with matching checksums.
+The three formerly failing crossing directions passed hosted preview checks.
+Stable results are recorded in the evidence folder as *-stable.json and
+stable-summary.json. Speed remains an open issue, as does dirt-route quality.
+
+| Fix | Change | Evidence | Rider result |
+| --- | --- | --- | --- |
+| ATL-01 | Preserve OSM passage at toll collection points | Source tags, compact-pack tests, original/rebuilt crossing results | Pending live test |
+| ATL-02 | Retain every proven Atlantic pack connection | Four connection-builder tests and hosted crossing checks | Pending live test |
+
+This is now a LIVE-ONLY repair cycle per Richard's explicit direction. Swift
+work and offline acceptance are deferred until live behavior is accepted. Track
+subsequent JS changes here for later parity; do not make parity work delay live
+tests. Quebec follows Atlantic acceptance.
+
+Before Richard's stop instruction arrived, build 21 was installed on the white
+iPhone and the four candidate packs were copied into its application cache.
+The app was not launched by the agent. No further phone operation was performed
+after the instruction. The existing routing policy chooses live when online,
+regardless of whether packs are installed. No Swift routing behavior was changed
+in build 21; its configuration points to the Atlantic candidate.
+
+Test with internet connected: the four Atlantic connections in both directions,
+then a familiar Nova Scotia Dirt route with unknown access off/on. Send the app
+debug export and comments on failures, calculation time, and unexpected roads.
+The dirt comparison is an observation of current behavior, not a claim that dirt
+selection is repaired.
