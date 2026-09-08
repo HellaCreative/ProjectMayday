@@ -965,3 +965,30 @@ matrix peak890MiB; same20s/30M caps, host2GiB. Attempted road-trace interning di
 not resolve that limit and was removed. NS3baseline exact distances unchanged.
 Full24final and hosted verification pending; no public update yet. Generic
 history-dependent route quality remains bounded/heuristic; no global proof.
+
+## Onward candidate verification complete; DEV alias requested
+
+Private df0827e60e9c04a625fd3b3155fae87220c93113 passed4actualdevice requests and
+critical162km reverseunknown Balanced case (allcandidatescomplete). Full24local
+pass1.820–3.630s839MiBpeak,8pinsweep pass,166focusedchecks. Cold movedrequest
+13.179s; followingactualcases4.927–5.070s; difficultshortreverse10.152s. NS3exact
+baseline unchanged; CapeUnknown retrace improves5.670→4.962km at3stops. Clean
+backroad preference stillopen. Stable switch requested only after thesechecks;
+publicverification andphysicalhandoff recorded next. Runtime revision86f3c02;
+service subtree matches private df0827. No Xcode/phone/packchanges.
+
+## Onward rollout held and reverted for NB-only final check
+
+Public df0827 moved replay passed884.748km/4stops/1.621kmrepeat,7.822sHTTP/
+6.522sserver. However NB-only matrix, newly run with actual onboard policy,
+found162kmunknownforward dirt-30 label_limit at200k (othercandidateDirt48.49%).
+Restored stableDEV6ace232 via packowner before physicalhandoff; both02 preserved.
+Owner publiclyverified rollback. Do not treat df0827 ascurrentstable.
+
+400k cap allows every NBcandidate tofinish under same20s/30M caps. The completed
+strong-Dirt candidate ALSO yields48.49%, so the initial assertion that the limit
+caused the low surface share was not established. Short-range NB surface quality
+remains a separate bounded-pool flag, not a proved geographic maximum. Full
+24NBcases pass at400k (691–1864ms preliminaryrun). Added diagnostics correction:
+poolComplete cannot be true when fuelcandidateverification fails. Added regression
+forlabel_limit. All167focusedchecks pass. Finalmemory/hostedNBcriticalcase pending.

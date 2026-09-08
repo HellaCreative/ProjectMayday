@@ -61,3 +61,9 @@ test('Clean avoids a motorway shortcut but keeps an unavoidable motorway connect
   assert.equal(result.selected.road.surface.pavedPercent,100);
  }
 });
+
+test('a truncated fuel candidate cannot report a fully evaluated ride pool',()=>{
+ const f=fixture(),pool=buildRideAlternatives({...f,maxFuelLabels:1,budget:work()});
+ assert.equal(pool.search.poolComplete,false);
+ assert.ok(pool.candidates.some(c=>c.reason==='label_limit'));
+});

@@ -14,11 +14,11 @@ for(const usable of [333000,162000])for(const allowUnknown of [false,true])for(c
  const anchors=[{id:'a',...(reverse?end:start)},{id:'b',...(reverse?start:end)}];
  const input={mode:'from_here',anchors,legs:[{from:'a',to:'b',profile,allowUnknown:profile==='clean'?false:allowUnknown}],fuel:{fullRangeMeters:usable/.9,reserveFraction:.1,initialUsableMeters:usable}};
  const deadlineAtMs=Date.now()+20000,at=performance.now();
- const result=buildRideAlternatives({input,pack,geom,stations,expandedCandidates:true,revision:JSON.stringify(identity),context,budget:createBudget({deadlineAtMs,maxExpansions:30000000}),preparationBudget:createBudget({deadlineAtMs,maxExpansions:20000000})});
+ const result=buildRideAlternatives({input,pack,geom,stations,preferOnwardFuel:true,maxFuelLabels:Number(process.env.REBUILD_FUEL_LABELS||400000),additionalUrbanAreas:require('../routing/lib/adventure/nb-urban-review-20260908-01.json').cores,expandedCandidates:true,revision:JSON.stringify(identity),context,budget:createBudget({deadlineAtMs,maxExpansions:30000000}),preparationBudget:createBudget({deadlineAtMs,maxExpansions:20000000})});
  const selected=result.selected,id=`${usable}-${allowUnknown?'unknown':'known'}-${reverse?'reverse':'forward'}-${profile}`;
  fs.writeFileSync(path.join(output,id+'.json'),JSON.stringify({identity,input,result}));
- const row={id,usable,allowUnknown,reverse,profile,ms:Math.round(performance.now()-at),state:result.state,fuel:selected?.fuel.state,km:selected?.road.surface?.distanceMeters/1000,dirtPercent:selected?.road.surface?.knownDirtPercent,stops:selected?.fuel.plannedRefills?.length,search:result.search};summary.push(row);console.log(JSON.stringify(row));
- assert.equal(result.state,'complete');assert.equal(selected.fuel.state,'provisional_station_access');assert.equal(result.search.poolComplete,true);
+ const row={peakRssMiB:Math.round(process.resourceUsage().maxRSS/1024),id,usable,allowUnknown,reverse,profile,ms:Math.round(performance.now()-at),state:result.state,fuel:selected?.fuel.state,km:selected?.road.surface?.distanceMeters/1000,dirtPercent:selected?.road.surface?.knownDirtPercent,stops:selected?.fuel.plannedRefills?.length,search:result.search};summary.push(row);console.log(JSON.stringify(row));
+ assert.equal(result.state,'complete');assert.equal(selected.fuel.state,'provisional_station_access');assert.equal(result.search.poolComplete,true);assert.ok(result.candidates.every(c=>c.fuel==='provisional_station_access'));
  let previous=0;for(const stop of selected.fuel.plannedRefills){assert.ok(stop.atMeters>=previous);assert.ok(stop.atMeters-previous<=usable+1e-6);previous=stop.atMeters;}
  const remaining=usable-(selected.road.distanceMeters-previous);assert.ok(remaining>=-1e-6);assert.ok(selected.fuel.destinationEscape.distanceMeters<=remaining+1e-6);
 

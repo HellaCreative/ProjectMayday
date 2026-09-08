@@ -1,3 +1,58 @@
+# Onward fuel-search retest — existing build23
+
+Candidate source df0827e60e9c04a625fd3b3155fae87220c93113. Public activation and
+verification are recorded at the end of ROUTING-REBUILD-PROGRESS.md.
+
+Rebuild the last failed Porters Lake→New Brunswick destination (47.743529,
+-64.911236), Dirt, Allow Unknown OFF, fuel ON, same225km usable range. Then move
+the destination again. Create fresh routes; saved geometry intentionally stays
+unchanged. No Xcode installation or pack download is needed.
+
+Expected exact replay about885km/64%dirt,4fuel stops,1.6km repeated road instead
+of82.2km. The three actual pins and five nearby route positions were checked.
+This replaces the earlier one-pump repair with approach-retrace priority during
+fuel search. Earlier958km/SunnyCorner-specific instructions below are historical.
+
+Remaining flags: cold search13.2s in private test; Clean back-road preference
+unfinished; some NSunknown-path retrace remains; physical/navigation/offline
+acceptance is not established by automated route-building checks.
+
+# Dalhousie fuel-detour retest — existing build23
+
+Hosted candidate6ace2323f6a6051a9f3761db55973d7548fc087e passed exact device
+replays and six hosted cross-direction/style checks. Stable DEV switch/public
+verification is recorded in ROUTING-REBUILD-PROGRESS.md when complete.
+
+Create a NEW From Here route Porters Lake→Dalhousie, Dirt, Allow Unknown OFF,
+fuel ON, same vehicle range (225km usable). Do not load the old saved geometry.
+Expected local/hosted replay near958km/72%dirt, four fuel stops, last at Irving
+Sunny Corner instead of XTR Trout Brook. Repeated road falls65.610→4.095km;
+remaining retrace is still subject to physical route-quality review.
+No Xcode install or pack download is needed for this server-only update.
+
+Scope: fuel-detour correction and Clean staying on the replacement engine.
+Clean paved-back-road preference remains OPEN (large primary/trunk share).
+First cold Dalhousie server build15.456s; subsequent six hosted reference cases
+7.337–8.403s. These are individual measurements, not percentile guarantees.
+Fuel entrance/exit/current availability remains provisional, navigation/offline
+parity not qualified by this route-building test.
+
+# NS/NB physical route-building preview — build 23
+
+Current expansion: Nova Scotia, New Brunswick and trips crossing between them. Quebec/US replacement-engine integration remains deferred. The earlier NS-only instructions below describe the preserved baseline.
+
+## Next test
+
+Use DIRT Dev 2 (23) on White, with connectivity on. Build from Porters Lake to northern NB at latitude47.762610, longitude-65.856301 (or a rider-selected NB destination). Tested full range250km with10%reserve gives225km usable. Compare Dirt, Balanced and Clean; test Allow Unknown on Dirt, then fuel off/on. NS/NB DEV requests up to12 prebuilt fuel hops, so it consumes the integrated geometry rather than separately routing every fuel leg.
+
+Acceptance checks: plausible continuous crossing, interesting style-appropriate roads, sensible fuel stops, responsive completion; save/reopen preserves the ride. This is route-building review. Physical station access/current pump availability and offline rerouting/navigation remain unqualified; no routing-pack download is required for this online test.
+
+Hosted preview94597816b960b3baeb33cf008340700d8a3589ae at pack-fabric-74jbm96f6-goricksmith-7678s-projects.vercel.app passed6cross cases (bothdirections,3profiles,225kmusable), additional crossUnknown and NB-only checks, and exact3styleNS regression. All returned full fuel windows with in-range hops, contiguous geometry and destination escape. Local final24case cross matrix and24NB matrix passed;162focusedJS/38nativeitinerarytests pass. Hosted cross times5.6–15.3s; extra unknown6.7s/NB3.6s. Do not advertise local subsecond timing as hosted performance.
+
+NS/NB both pinned to fabric-v4-20260908-02; flagns-nb-v1. Stable alias confirmation and actual device installation are recorded in the progress log after completion.
+
+---
+
 # Replacement routing: first physical-device review
 
 The first canary uses the installed **DIRT Dev** app's existing controls. It is

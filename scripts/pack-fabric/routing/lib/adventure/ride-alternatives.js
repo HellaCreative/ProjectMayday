@@ -24,7 +24,7 @@ function buildRideAlternatives(options) {
   results.push({id:objective.id,result});
   if(options.budget.snapshot().reason)break;
  }
- const poolComplete=results.length===candidates.length&&!options.budget.snapshot().reason;
+ const poolComplete=results.length===candidates.length&&!options.budget.snapshot().reason&&results.every(r=>['provisional_station_access','verified','not_requested'].includes(r.result.fuel.state));
  const profile=options.input.legs[0].profile;
  const roads=results.filter(r=>r.result.road.state==='complete');
  const feasible=roads.filter(r=>['provisional_station_access','verified','not_requested'].includes(r.result.fuel.state));

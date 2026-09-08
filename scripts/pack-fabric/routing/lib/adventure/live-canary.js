@@ -83,7 +83,7 @@ async function adventureCanaryRequest(body,kind,{environment=process.env,load=nu
  const signal=body.options?.abortSignal;
  const {tapRadiusMeters}=require('../legal-topology/snap');
  const endpointRadiusMeters=tapRadiusMeters({zoom:body.options?.mapZoom,lat:body.locations[0].lat,requestedMeters:body.options?.matchLimitMeters,graphBinaryVersion:4});
- const pool=buildRideAlternatives({preferOnwardFuel:true,additionalUrbanAreas:resolution.regionIds.includes('nb')?require('./nb-urban-review-20260908-01.json').cores:[],avoidMotorways:body.options?.avoidMotorways===true,input,pack:data.pack,geom:data.geom,revision,stations:data.stations.filter(s=>!excluded.has(s.id)),context,endpointRadiusMeters,expandedCandidates:resolution.regionIds.includes('nb'),maxFuelLabels:200000,fuelHeuristicWeight:resolution.regionIds.length>1?2:1,
+ const pool=buildRideAlternatives({preferOnwardFuel:true,additionalUrbanAreas:resolution.regionIds.includes('nb')?require('./nb-urban-review-20260908-01.json').cores:[],avoidMotorways:body.options?.avoidMotorways===true,input,pack:data.pack,geom:data.geom,revision,stations:data.stations.filter(s=>!excluded.has(s.id)),context,endpointRadiusMeters,expandedCandidates:resolution.regionIds.includes('nb'),maxFuelLabels:400000,fuelHeuristicWeight:resolution.regionIds.length>1?2:1,
   budget:createBudget({deadlineAtMs,maxExpansions:30000000,signal}),preparationBudget:createBudget({deadlineAtMs,maxExpansions:20000000,signal})});
  const response=toLiveResponse(pool,body,kind,identity);
  if(response){response.debug={...(response.debug||{}),adventureTotalMs:Date.now()-started};response.legId=body.legId;}
