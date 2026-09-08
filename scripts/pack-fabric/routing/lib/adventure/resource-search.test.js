@@ -100,3 +100,19 @@ test("negative urban rewards and unfinished rural searches cannot claim necessar
   assert.throws(()=>search(g,{avoidanceCost:()=>-1}),/nonnegative/);
   assert.equal(search(g,{avoidanceCost:()=>1,budget:budget(1)}).state,"incomplete");
 });
+
+test("fuel search does not schedule every passing pump when no refill is needed",()=>{
+  const g=graph([["A","P",2],["P","Q",2],["Q","D",2]],["P","Q"]);
+  const result=search(g,{fuel:{usableRangeMeters:10,initialUsableMeters:10}});
+  assert.deepEqual(result.visits,[]);
+});
+test("equivalent road geometry uses only the necessary number of planned refills",()=>{
+  const g=graph([["A","P",2],["P","Q",2],["Q","D",4]],["P","Q"]);
+  const result=search(g,{fuel:{usableRangeMeters:6,initialUsableMeters:6}});
+  assert.equal(result.visits.length,1);assert.ok(["pump-P","pump-Q"].includes(result.visits[0].stationId));
+});
+
+test("label memory guard returns incomplete with a bounded admitted label count",()=>{
+  const result=search(graph([["A","B",1],["B","D",1]]),{maxLabels:1});
+  assert.equal(result.state,"incomplete");assert.equal(result.reason,"label_limit");assert.equal(result.diagnostics.labels,1);
+});

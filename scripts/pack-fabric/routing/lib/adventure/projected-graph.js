@@ -6,7 +6,7 @@ const {createV4Graph}=require("./v4-graph");
 // At an interior projection the rider must continue in the same legal direction.
 // A mapped junction/dead end can permit reversal; a POI projection alone cannot
 // invent a turnaround or let a turn restriction disappear midway along an edge.
-function createProjectedGraph(pack,{points,allowUnknown=false,endpointEdges=[],budget}) {
+function createProjectedGraph(pack,{points,allowUnknown=false,endpointEdges=[],budget,allowProvisionalStations=false}) {
   const base=createV4Graph(pack,{allowUnknown,endpointEdges});
   const byEdge=new Map(),pointNodes=new Map(),virtual=new Map(),stations=new Map();
   let nodeCount=pack.nodeCount;
@@ -24,9 +24,9 @@ function createProjectedGraph(pack,{points,allowUnknown=false,endpointEdges=[],b
     if(!position){position={fraction,node:nodeCount++};list.push(position);virtual.set(position.node,{edge,position});}
     pointNodes.set(point.id,position.node);
     if(point.station) {
-      // The caller must supply explicit station association evidence. Candidate
-      // projection discovery by itself never becomes a planned fuel reset.
-      if(!point.station.id||point.station.accessEvidence!=="verified")throw new TypeError("Station access evidence required");
+      // Verified bindings remain the default. Explicit experimental opt-in
+      // preserves road projections as provisional evidence, never verified.
+      if(!point.station.id||!(point.station.accessEvidence==="verified"||(allowProvisionalStations===true&&point.station.accessEvidence==="legal_road_projection")))throw new TypeError("Station access evidence required");
       const existing=stations.get(position.node);
       if(existing&&existing.id!==point.station.id)throw new TypeError("Ambiguous station identity at projected point");
       stations.set(position.node,point.station);
@@ -73,7 +73,7 @@ function createProjectedGraph(pack,{points,allowUnknown=false,endpointEdges=[],b
     return virtual.has(arc.to)?{allowed:true,state:transit(result.state,arc.id,forward)}:result;
   }
   return {
-    state:"complete",nodeCount,pointNodes,
+    state:"complete",nodeCount,pointNodes,stationCount:stations.size,
     stateKey:(node,state)=>`${node}:${state??0}`,
     transition,
     stationAt:node=>stations.get(node)||null,

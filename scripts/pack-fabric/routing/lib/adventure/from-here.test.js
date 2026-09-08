@@ -1,0 +1,105 @@
+"use strict";
+const test=require("node:test"),assert=require("node:assert/strict");
+const {buildGraphFromOsm}=require("../legal-topology/osm-graph");
+const {encodeFromOsmGraph,decodeGraphV4}=require("../pack-v4");
+const {decodeGeometryV1}=require("../pack-v2");
+const {buildFromHere}=require("./from-here");
+const {createBudget}=require("./budget");
+const {createPreparationCache}=require("./preparation-cache");
+const {proveFuel}=require("./fuel-proof");
+const {createProjectedGraph}=require("./projected-graph");
+const budget=(maxExpansions=100000,signal)=>createBudget({deadlineAtMs:Date.now()+10000,maxExpansions,signal});
+function fixture({oneway=false}={}) {
+  const nodes=Array.from({length:5},(_,i)=>({id:i+1,lon:i*.01,lat:0}));
+  const ways=Array.from({length:4},(_,i)=>({id:10+i,nodeIds:[i+1,i+2],tags:{highway:"unclassified",surface:"gravel",access:"yes",...(oneway?{oneway:"yes"}:{})}}));
+  const encoded=encodeFromOsmGraph(buildGraphFromOsm({nodes,ways}),{regionId:"fixture",sourceEpoch:"fixed"});
+  return {pack:decodeGraphV4(encoded.graphBuffer,encoded.geomBuffer),geom:decodeGeometryV1(encoded.geomBuffer),revision:"fixture-1",
+    stations:[{id:"middle",lat:0,lon:.015,name:"Midpoint Fuel"},{id:"escape",lat:0,lon:.04,name:"Exit Fuel"}],
+    edgeCost:a=>a.distanceMeters,objectiveId:"test-distance",input:{mode:"from_here",anchors:[{id:"a",lat:0,lon:0},{id:"b",lat:0,lon:.03}],
+      legs:[{from:"a",to:"b",profile:"dirt"}],fuel:{fullRangeMeters:3000,reserveFraction:0,initialUsableMeters:2500}}};
+}
+const build=(f,extra={})=>buildFromHere({...f,budget:budget(),...extra});
+test("complete encoded-map pipeline includes a supplied catalog stop and exact onward fuel proof",()=>{
+  const f=fixture(),r=build(f);
+  assert.equal(r.road.state,"complete");assert.equal(r.fuel.state,"provisional_station_access");
+  assert.equal(r.fuel.plannedRefills.length,1);assert.equal(r.fuel.plannedRefills[0].station.id,"middle");
+  assert.equal(r.fuel.plannedRefills[0].movable,true);assert.deepEqual(r.fuel.plannedRefills[0].riderAnchorIds,[]);
+  assert.ok(r.fuel.escapeUsableMeters>=0);assert.ok(r.fuel.destinationEscape.distanceMeters>0);
+  assert.deepEqual(r.road.geometry[0],[0,0]);assert.deepEqual(r.road.geometry.at(-1),[.03,0]);
+  assert.deepEqual(r.request.anchors.map(a=>[a.lon,a.lat]),[[0,0],[.03,0]]);
+});
+test("no station records retains a complete road without claiming geographic scarcity",()=>{
+  const r=build(fixture(),{stations:[]});assert.equal(r.road.state,"complete");
+  assert.equal(r.fuel.state,"unverified");assert.equal(r.fuel.reason,"no_station_bindings");
+  assert.equal(r.stationDiagnostics.sourceCount,0);
+});
+test("unknown initial range retains a road and does not create a full-tank fuel plan",()=>{
+  const f=fixture();f.input.fuel.initialUsableMeters=null;const r=build(f);
+  assert.equal(r.road.state,"complete");assert.equal(r.fuel.reason,"initial_fuel_unknown");
+});
+test("station source removal invalidates fuel planning even when road preparation is reused",()=>{
+  const f=fixture(),preparationCache=createPreparationCache();const a=build(f,{preparationCache});
+  const b=build(f,{preparationCache,stations:f.stations.filter(s=>s.id!=="middle")});
+  assert.equal(a.fuel.state,"provisional_station_access");assert.equal(b.provenance.preparationCacheHit,true);
+  assert.equal(b.road.state,"complete");assert.equal(b.fuel.state,"unverified");
+});
+test("coincident station records remain diagnostic alternatives instead of breaking graph creation",()=>{
+  const f=fixture();f.stations.splice(1,0,{...f.stations[0],id:"other-record"});const r=build(f);
+  assert.equal(r.road.state,"complete");assert.equal(r.stationDiagnostics.coincidentAlternatives.length,1);
+  assert.equal(r.fuel.plannedRefills.length,1);
+});
+test("fixed fuel destination is preserved and explicitly refilled",()=>{
+  const f=fixture();f.input.anchors[1]={id:"b",lat:0,lon:.04,stationId:"escape"};const r=build(f);
+  assert.equal(r.road.state,"complete");assert.equal(r.fuel.plannedRefills.at(-1).stationId,"escape");
+  assert.equal(r.fuel.plannedRefills.at(-1).movable,false);assert.deepEqual(r.fuel.plannedRefills.at(-1).riderAnchorIds,["b"]);
+  assert.equal(r.fuel.departureUsableMeters,3000);assert.ok(Math.abs(r.road.geometry.at(-1)[0]-.04)<1e-8);assert.equal(r.request.anchors[1].lon,.04);
+});
+test("provisional projection is opt-in and can never masquerade as verified station access",()=>{
+  const f=fixture(),point={id:"pump",edgeIndex:0,fraction:.5,station:{id:"pump",accessEvidence:"legal_road_projection"}};
+  assert.throws(()=>createProjectedGraph(f.pack,{points:[point],budget:budget()}),/Station access/);
+  assert.throws(()=>createProjectedGraph(f.pack,{points:[point],budget:budget(),allowProvisionalStations:"false"}),/Station access/);
+  const options={usableRangeMeters:10,initialUsableMeters:1,segments:[{distanceMeters:1}],
+    visits:[{id:"p",stationId:"pump",atMeters:1,refuel:true,legalStationVisit:true,accessEvidence:"legal_road_projection"}],
+    destinationEscape:{state:"verified",stationId:"pump",distanceMeters:0}};
+  assert.equal(proveFuel({...options,budget:budget()}).state,"unverified");
+  assert.equal(proveFuel({...options,allowProvisionalStations:true,budget:budget()}).state,"provisional_station_access");
+  assert.equal(proveFuel({...options,visits:[],destinationEscape:{...options.destinationEscape,accessEvidence:"legal_road_projection"},budget:budget()}).state,"unverified");
+});
+test("one-way reverse request cannot become legal through station projections",()=>{
+  const f=fixture({oneway:true});f.input.anchors.reverse();f.input.legs=[{from:"b",to:"a",profile:"dirt"}];const r=build(f);
+  assert.equal(r.road.state,"unverified");assert.equal(r.fuel.state,"unverified");
+});
+test("cancelled or undersized requests report incomplete preparation honestly",()=>{
+  const f=fixture(),controller=new AbortController();controller.abort();
+  assert.equal(build(f,{budget:budget(100,controller.signal)}).fuel.reason,"cancelled");
+  assert.equal(build(f,{budget:budget(1)}).fuel.reason,"expansion_limit");
+});
+test("station identity cannot move a rider anchor to a distant pump",()=>{
+  const f=fixture();f.input.anchors[1].stationId="escape";
+  assert.throws(()=>build(f),/Fixed station anchor/);
+});
+
+test("insufficient starting fuel changes the searched road path to include a reachable pump",()=>{
+  const nodes=[{id:1,lon:0,lat:0},{id:2,lon:.03,lat:0},{id:3,lon:.005,lat:.01}];
+  const ways=[[1,2],[1,3],[3,2]].map((nodeIds,i)=>({id:100+i,nodeIds,tags:{highway:"unclassified",surface:"gravel",access:"yes"}}));
+  const encoded=encodeFromOsmGraph(buildGraphFromOsm({nodes,ways}),{regionId:"fixture",sourceEpoch:"fixed"});
+  const f=fixture();f.pack=decodeGraphV4(encoded.graphBuffer,encoded.geomBuffer);f.geom=decodeGeometryV1(encoded.geomBuffer);
+  f.stations=[{id:"branch",lat:.01,lon:.005},{id:"destination",lat:0,lon:.03}];f.input.anchors[1].stationId="destination";
+  f.input.fuel={fullRangeMeters:6000,reserveFraction:0,initialUsableMeters:6000};const full=build(f);
+  f.input.fuel={fullRangeMeters:3000,reserveFraction:0,initialUsableMeters:2500};const low=build(f);
+  assert.equal(full.fuel.state,"provisional_station_access");assert.equal(low.fuel.state,"provisional_station_access");
+  assert.deepEqual(full.fuel.plannedRefills.map(v=>v.stationId),["destination"]);
+  assert.deepEqual(low.fuel.plannedRefills.map(v=>v.stationId),["branch","destination"]);
+  assert.ok(low.road.distanceMeters>full.road.distanceMeters);
+});
+
+test("fuel label cap preserves already materialized advisory geometry without a no-fuel claim",()=>{
+  const r=build(fixture(),{maxFuelLabels:1});
+  assert.equal(r.road.state,"complete");assert.ok(r.road.geometry.length>1);
+  assert.equal(r.fuel.state,"unverified");assert.equal(r.fuel.reason,"label_limit");
+});
+
+test("invalid fixed station coordinates cannot produce a provisional refill",()=>{
+  const f=fixture();f.input.anchors[1].stationId="escape";f.stations[1].lat=NaN;
+  assert.throws(()=>build(f),/Fixed station anchor/);
+});

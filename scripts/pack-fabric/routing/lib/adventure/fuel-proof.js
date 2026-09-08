@@ -5,9 +5,10 @@ const {fuelCovers,validateFuel}=require("./fuel-math");
 // and destination escape distances must come from legal road proofs tied to
 // this candidate. This function neither searches for pumps nor reroutes.
 function proveFuel({ segments, visits, usableRangeMeters, initialUsableMeters,
-  destinationEscape, budget }) {
+  destinationEscape, budget, allowProvisionalStations=false }) {
   validateFuel({usableRangeMeters,initialUsableMeters});
   if (initialUsableMeters == null) return { state: "unverified", reason: "initial_fuel_unknown" };
+  let provisional=false;
   let total = 0;
   for (const segment of segments) {
     if (!budget.consume()) return { state:"unverified", reason:budget.snapshot().reason };
@@ -29,7 +30,10 @@ function proveFuel({ segments, visits, usableRangeMeters, initialUsableMeters,
     if (visit.atMeters === total && destinationArrival === null) destinationArrival = remaining;
     const arrival = { visitId:visit.id, atMeters:visit.atMeters, arrivalUsableMeters:remaining };
     if (visit.refuel === true) {
-      if (!visit.stationId || visit.legalStationVisit !== true) return { state:"unverified", reason:"station_visit_unproved", visitId:visit.id, arrivals };
+      const projectionVisit=visit.accessEvidence==="legal_road_projection";
+      const provisionalVisit=allowProvisionalStations===true&&projectionVisit;
+      if (!visit.stationId || (projectionVisit?!provisionalVisit:visit.legalStationVisit !== true)) return { state:"unverified", reason:"station_visit_unproved", visitId:visit.id, arrivals };
+      provisional ||= provisionalVisit;
       remaining = usableRangeMeters;
     }
     arrivals.push({ ...arrival, departureUsableMeters:remaining, refuel:visit.refuel === true });
@@ -39,12 +43,13 @@ function proveFuel({ segments, visits, usableRangeMeters, initialUsableMeters,
   remaining = Math.max(0,remaining-(total-at));
   const arrivalUsableMeters = destinationArrival ?? remaining;
   if (!budget.check()) return {state:"unverified",reason:budget.snapshot().reason,arrivals};
-  if (!destinationEscape || destinationEscape.state !== "verified" || !destinationEscape.stationId ||
+  const provisionalEscape=allowProvisionalStations===true&&destinationEscape?.state==="provisional_station_access"&&destinationEscape?.accessEvidence==="legal_road_projection";
+  if (!destinationEscape || ((destinationEscape.state !== "verified"||destinationEscape.accessEvidence==="legal_road_projection")&&!provisionalEscape) || !destinationEscape.stationId ||
       !Number.isFinite(destinationEscape.distanceMeters) || destinationEscape.distanceMeters < 0) {
     return {state:"unverified",reason:"destination_escape_unproved",arrivalUsableMeters,departureUsableMeters:remaining,arrivals};
   }
   if (!fuelCovers(remaining,destinationEscape.distanceMeters)) return {state:"gap_on_candidate",reason:"destination_escape_unreachable",
     shortfallMeters:destinationEscape.distanceMeters-remaining,arrivalUsableMeters,departureUsableMeters:remaining,arrivals};
-  return {state:"verified",arrivalUsableMeters,departureUsableMeters:remaining,escapeUsableMeters:Math.max(0,remaining-destinationEscape.distanceMeters),arrivals};
+  return {state:provisional||provisionalEscape?"provisional_station_access":"verified",arrivalUsableMeters,departureUsableMeters:remaining,escapeUsableMeters:Math.max(0,remaining-destinationEscape.distanceMeters),arrivals};
 }
 module.exports = { proveFuel };

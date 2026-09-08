@@ -82,4 +82,16 @@ Deliverable: rider-facing integration and explicit per-platform acceptance. Exit
 
 ## Immediate next execution
 
-Start Milestone 1. The documents are now concrete enough to compare against code. No further broad questionnaire is needed. Ask only when a scenario exposes an unresolved product choice affecting the selected architecture or its acceptance.
+The baseline and core experiments are recorded in `ROUTING-REBUILD-PROGRESS.md`.
+A single-region From Here integration now constructs exact road geometry with
+fuel-state search, provisional mapped-station bindings and destination escape.
+See `ROUTING-FROM-HERE-INTEGRATION.md` for the measured milestone. This advances
+the Milestone 3 experiment and part of Milestone 4; it does not complete the API
+replacement, final profile selection, multi-region routing or station-access
+qualification. Quebec restriction work is parked at the owner's request.
+
+Next prioritize station access evidence and coherent Dirt candidate selection,
+then the live API adapter. Preserve the explicit provisional fuel state until
+access qualifies. Continue batching full-flow tests rather than treating unit
+test count as replacement completion. Ask only when concrete comparisons expose
+an unresolved product choice affecting architecture or acceptance.

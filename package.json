@@ -3,6 +3,8 @@
   "private": true,
   "scripts": {
     "test": "node --test --test-concurrency=1 scripts/pack-fabric/bench/*.test.js scripts/pack-fabric/poi/*.test.js scripts/pack-fabric/routing/**/*.test.js scripts/pack-fabric/routing/lib/adventure/*.test.js scripts/pack-fabric/scripts/*.test.js",
+    "bench:from-here": "node scripts/pack-fabric/bench/run-from-here-probe.js",
+    "bench:from-here-matrix": "node scripts/pack-fabric/bench/run-from-here-matrix.js",
     "bench:rebuild-matrix": "node scripts/pack-fabric/bench/run-rebuild-matrix.js",
     "test:adventure": "node --test scripts/pack-fabric/routing/lib/adventure/*.test.js",
     "bench:rebuild": "node scripts/pack-fabric/bench/run-rebuild-baseline.js",

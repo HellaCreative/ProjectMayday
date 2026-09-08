@@ -8,23 +8,23 @@ const work=()=>createBudget({deadlineAtMs:Date.now()+10000,maxExpansions:100000}
 // incoming-edge state. No Pareto pruning, heap or heuristic from the engine.
 function oracle({arcs,pumps,blocked,capacity,initial,escape}) {
   const states=new Map();
-  const put=(node,incoming,fuel,urban,cost)=>{
+  const put=(node,incoming,fuel,urban,cost,refills)=>{
     const key=`${node}/${incoming}/${fuel}`,old=states.get(key);
-    if(old&&(old.urban<urban||(old.urban===urban&&old.cost<=cost)))return false;
-    states.set(key,{node,incoming,fuel,urban,cost});return true;
+    if(old&&(old.urban<urban||(old.urban===urban&&(old.cost<cost||(old.cost===cost&&old.refills<=refills)))))return false;
+    states.set(key,{node,incoming,fuel,urban,cost,refills});return true;
   };
-  put(0,-1,initial,0,0);
+  put(0,-1,initial,0,0,0);
   let changed=true;
   while(changed) {
     changed=false;
     for(const s of [...states.values()]) {
-      if(pumps.has(s.node))changed=put(s.node,s.incoming,capacity,s.urban,s.cost)||changed;
+      if(pumps.has(s.node))changed=put(s.node,s.incoming,capacity,s.urban,s.cost,s.refills+1)||changed;
       for(const a of arcs)if(a.from===s.node&&a.distanceMeters<=s.fuel&&!blocked.has(`${s.incoming}/${a.id}`)) {
-        changed=put(a.to,a.id,s.fuel-a.distanceMeters,s.urban+a.urban,s.cost+a.cost)||changed;
+        changed=put(a.to,a.id,s.fuel-a.distanceMeters,s.urban+a.urban,s.cost+a.cost,s.refills)||changed;
       }
     }
   }
-  return [...states.values()].filter(s=>s.node===5&&s.fuel>=escape).sort((a,b)=>a.urban-b.urban||a.cost-b.cost)[0]||null;
+  return [...states.values()].filter(s=>s.node===5&&s.fuel>=escape).sort((a,b)=>a.urban-b.urban||a.cost-b.cost||a.refills-b.refills)[0]||null;
 }
 test("250 seeded directed fuel/turn/urban graphs agree with exhaustive state enumeration",()=>{
   let seed=9182026;const rand=n=>{seed=(Math.imul(seed,1664525)+1013904223)>>>0;return seed%n;};
@@ -50,6 +50,7 @@ test("250 seeded directed fuel/turn/urban graphs agree with exhaustive state enu
       if(expected) {
         assert.deepEqual([actual.avoidanceCost,actual.cost],[expected.urban,expected.cost],`scenario ${scenario}`);
         assert.ok(actual.remainingUsableMeters>=escape);
+        assert.equal(actual.visits.length,expected.refills,`refill count, scenario ${scenario}`);
         let node=0,incoming=-1,fuel=initial,meters=0;
         for(const a of actual.arcs) {
           if(actual.visits.some(v=>v.atMeters===meters&&v.stationId===`pump-${node}`))fuel=capacity;

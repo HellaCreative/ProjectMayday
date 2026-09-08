@@ -714,3 +714,12 @@ malformed/nonfinite fuel and rejects missing waypoint/leg entries or invalid
 identities. Future platform adapters must present input errors separately from
 incomplete search or geographic infeasibility. Completed road geometry remains
 available when fuel proof is interrupted. No native implementation is claimed.
+
+The single-region From Here experiment now integrates canonical station matching,
+fuel-state search, geometry and destination escape. Provisional road projections
+must remain distinguishable from verified station entrance/exit evidence. Fixed
+fuel anchors remain non-movable; generated fuel stops carry separate ownership.
+Equivalent route costs prefer fewer refills, empty matched station sets report a
+data/matching limitation promptly, and fuel-label limits retain advisory geometry
+with an incomplete fuel result. No native implementation or live acceptance is
+claimed; the full checkpoint is `ROUTING-FROM-HERE-INTEGRATION.md`.

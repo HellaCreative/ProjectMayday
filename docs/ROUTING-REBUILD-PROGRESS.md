@@ -413,3 +413,44 @@ pass (119 total), including the 500 independent search/oracle comparisons. No
 performance claim or full-app qualification follows from this correctness round.
 Quebec remains parked. Pack bytes, service deployment and phone state are
 unchanged. All original integration and rider-acceptance gaps remain tracked.
+
+## Tenth step — batched From Here integration milestone
+
+The individual core pieces now run through `adventure/from-here.js` against real
+NS roads and the canonical 671-record station file. See
+[the integration checkpoint](ROUTING-FROM-HERE-INTEGRATION.md) for the full results,
+qualification boundaries and exact replay artifacts.
+
+Three six-case runs produced 18 complete road results with the expected fuel
+states and stable geometry/stops. Standard long ride median: 959 ms with one
+planned refill; shorter tank range: 629 ms with three; removed original station
+record: 633 ms with two alternative stops. Empty data and unknown initial fuel
+retain roads with unverified fuel. The failed empty-data experiment (18 seconds,
+~1.2 GiB) is preserved; the final empty-data case returned in 233 ms median. Final
+batch process RSS peaked at 382 MiB. Timings exclude loading; no live-service
+percentiles or concurrency qualification are claimed.
+
+New search behavior uses fewer refills only after equal urban exposure and equal
+experimental road cost, preserving early refills when needed. The independent
+250-network oracle also verifies this third objective. A supplied-station count
+of zero skips futile fuel search, and the integrated experiment caps admitted fuel
+labels at 100,000 with explicit incomplete results and retained advisory geometry.
+The road candidate is materialized before fuel work can consume the remaining
+budget. Pack/projection restrictions and fixed anchors remain intact.
+
+The graph and proof accept road-only station associations only through explicit
+experimental opt-in. Evidence survives visits, fixed-destination refills and
+escape; provisional access cannot produce a verified fuel result. Coincident road
+matches remain alternatives, not asserted duplicate facilities. These changes
+allow honest integration testing without fabricating station entrance proof.
+
+A separate stronger preference experiment improved the long ride from 49.6% to
+60.6% known dirt (596.8 km, three stops). Audited routes had zero repeated road
+intervals/revisited graph nodes. Nearby Dirt quality remains poor. Preference
+weights, coherent candidate selection and station access are still unqualified;
+this is not a completed production routing replacement.
+
+135 focused checks pass (127 replacement plus eight existing V4 snap/pack checks).
+No service, pack or device changes; Quebec remains parked. The build plan's
+immediate execution section now reflects this milestone rather than the obsolete
+instruction to start the baseline.
