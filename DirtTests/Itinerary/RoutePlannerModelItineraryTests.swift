@@ -357,8 +357,12 @@ struct RoutePlannerModelItineraryTests {
         await model.waitForCanonicalBuildForTesting()
 
         let riderLeg = try #require(model.itinerary.legs.first)
-        #expect(riderLeg.hopOverrides[riderLeg.from.uuidString] == .dirt)
+        // Returning the first section to the rider-leg default removes its
+        // redundant override, while the later section keeps its own profile.
+        #expect(riderLeg.profile == .dirt)
+        #expect(riderLeg.hopOverrides[riderLeg.from.uuidString] == nil)
         #expect(riderLeg.hopOverrides["irving"] == .balanced)
+        #expect(model.stages.map(\.profile) == [.dirt, .balanced, .dirt])
     }
 
     @Test func cleanFuelHopInsideDirtRouteOwnsItsHighwayPolicyAndPropagatesItToRequests() async throws {

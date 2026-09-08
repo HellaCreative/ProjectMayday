@@ -690,3 +690,13 @@ fuel-replacement ranking are one JavaScript/Swift contract. Implement behavioral
 changes together and verify both runtimes; automated passes do not replace
 White-device acceptance. Android must reproduce the accepted rider outcome,
 but no Android implementation or qualification is claimed here.
+
+### Pack lookup lifetime recovery
+
+iOS now retains a weak reference to the exact graph object alongside its spatial
+lookup, preventing a reused memory address from selecting an unloaded graph's
+lookup. This restores the existing snapping contract; it changes no costs,
+search law, pack bytes, or navigation feature. JavaScript caches already use
+object-keyed weak maps. Android must likewise key cached indexes to a live graph
+identity, not a reusable address or unrelated revision. Physical qualification
+of this recovery remains pending.
