@@ -49,3 +49,18 @@ test("unknown starting fuel retains the road and does not claim a full tank",()=
   assert.equal(result.road.state,"found");
   assert.equal(result.fuel.reason,"initial_fuel_unknown");
 });
+
+test("integrated fuel planning prefers rural pumps even when the urban pump is nearer",()=>{
+  const g=graph([["A","U",1],["U","D",1],["A","R",3],["R","D",3],["D","Q",1]],["U","R","Q"]);
+  const result=ride(g,{fuel:{usableRangeMeters:8,initialUsableMeters:3},avoidanceCost:a=>a.to==="U"?1:0});
+  assert.equal(result.fuel.state,"verified_on_supplied_station_access");
+  assert.deepEqual(result.road.arcs.map(a=>a.to),["R","D"]);
+  assert.deepEqual(result.road.visits,[{stationId:"pump-R",atMeters:3}]);
+});
+test("necessary urban fuel access is allowed without erasing a legal complete ride",()=>{
+  const g=graph([["A","U",2],["U","D",4],["A","R",4],["R","D",4],["D","Q",1]],["U","Q"]);
+  const result=ride(g,{fuel:{usableRangeMeters:8,initialUsableMeters:3},avoidanceCost:a=>a.to==="U"?2:0});
+  assert.equal(result.fuel.state,"verified_on_supplied_station_access");
+  assert.deepEqual(result.road.arcs.map(a=>a.to),["U","D"]);
+  assert.equal(result.road.avoidanceCost,2);
+});

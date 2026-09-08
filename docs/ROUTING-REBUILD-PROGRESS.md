@@ -102,3 +102,63 @@ At a candidate destination arrival, it verifies a legal road path to a station u
 If no feasible chain is found in the supplied matched graph, or its work budget expires, the complete advisory road route remains available. The result does not claim the region has no fuel. Unknown initial fuel remains explicit. These capabilities are tested on constructed legal graphs with supplied station associations; real-world station access proof and full multi-primary-leg integration are still pending.
 
 58 replacement-core tests now pass, with eight existing V4 snap/pack checks also exercised in the final focused run. The known unrelated legacy timezone-fixture failure is unchanged. No live or physical-device qualification is claimed.
+
+## Third implementation step — urban exposure separate from ride cost
+
+Added `urban-exposure.js` and extended the experimental resource search with a
+lexicographic objective: minimize metres inside supplied urban areas first,
+then the existing experimental positive ride cost. This is not an arbitrary
+finite city penalty that a sufficiently cheap shortcut can overcome. Fuel
+feasibility still participates in label dominance: a rural arrival without
+enough fuel cannot erase a necessary urban fuel alternative. Required urban
+passage remains traversable, without restarting search or prompting the rider.
+An interrupted search remains incomplete; it does not prove urban necessity.
+
+Urban exposure uses complete source polylines, including exact partial-edge
+positions. Roads whose endpoints are outside but whose geometry crosses a core
+are detected. Overlapping Halifax/Dartmouth boxes count each metre once.
+Curved roads that actually skirt the box are not charged for their endpoint
+chord. Existing mapped major-core boxes are used explicitly; the 57 NS
+settlement records are **not** silently converted into exclusions. They include
+rural towns that the rider welcomes. Larger-town classification and suitable
+berths still require review; the result carries `classificationComplete:false`.
+
+The first full geometry scan exhausted the existing 6-million-operation shared
+budget. Reusing the road index already built for matching reduced detailed
+urban examination to 43,873 of 220,770 NS edges. The final runs used the original
+budget without increasing it. This is reusable geometry work, not an extra
+profile-dependent settlement scan.
+
+Single local replay results, decoding excluded, fuel not requested:
+
+| Case | Total | Urban indexing | Known dirt | Urban metres |
+| --- | ---: | ---: | ---: | ---: |
+| Southwest NS forward | 593 ms | 97 ms | 49.57% | 0 |
+| Southwest NS reverse | 719 ms | 98 ms | 49.69% | 0 |
+| Halifax rider anchor → Porters Lake | 741 ms | 96 ms | 12.56% | 11,519 |
+| Porters Lake → Halifax rider anchor | 1,222 ms | 98 ms | 11.88% | 11,313 |
+
+The urban-anchor runs demonstrate automatic urban entry/exit, **not** acceptable
+ride quality. They produce approximately 143 km rides with little known dirt.
+Strictly minimizing every metre of unavoidable urban passage before considering
+ride character may be too aggressive around a rider's urban anchor. This is a
+concrete comparison to address in candidate selection; do not adopt it as final
+product tuning. The southwest runs also show the experimental additive weights
+are not yet meeting the Dirt objective. Neither speed nor the presence of a
+complete road route constitutes quality acceptance.
+
+Evidence in `routing/candidates/rebuild-urban-probe/` and
+`routing/candidates/rebuild-urban-anchor-probe/`. Replay the existing projected
+probe with `REBUILD_URBAN=1`; add `REBUILD_PROBE_CASE=urban-anchor` for the second
+case, with an explicit `REBUILD_PROBE_OUTPUT` to preserve prior results.
+
+73 replacement tests and eight existing V4 snap/pack checks pass. New regressions
+cover rural detours versus urban shortcuts, necessary urban passage, urban fuel
+needed for onward continuation, preferred rural pumps, exact geometry exposure,
+index/full-scan agreement, budget interruption and lower-bound compatibility.
+
+Real station entrance/exit association remains unfinished: no proximity match
+has been promoted to a verified physical refill. This step improves orchestration
+with supplied station bindings only. Final profile candidate objectives, wider
+settlement classification, multi-leg/Loop integration and live qualification
+remain open. No deployment or pack mutation was performed.

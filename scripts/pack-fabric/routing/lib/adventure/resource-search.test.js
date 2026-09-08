@@ -72,3 +72,31 @@ test("partial or mismatched lower bounds cannot turn unknown reachability into n
   const complete=buildLowerBounds({graph:g,nodeCount:2,target:1,edgeCost,budget:budget()});
   assert.throws(()=>searchResourcePath({graph:g,start:0,end:1,edgeCost:a=>a.distanceMeters*2,budget:budget(),lowerBounds:complete}),/Lower bounds/);
 });
+
+test("urban shortcut never beats a feasible rural route through a finite penalty",()=>{
+  const g=graph([["A","C",1],["C","D",1],["A","R",1000000],["R","D",1000000]]);
+  const result=search(g,{avoidanceCost:a=>a.to==="C"?1:0});
+  assert.deepEqual(result.arcs.map(a=>a.to),["R","D"]);assert.equal(result.avoidanceCost,0);
+});
+test("unavoidable urban passage completes and minimizes urban exposure first",()=>{
+  const g=graph([["A","C",1],["C","D",1],["A","R",10],["R","D",10]]);
+  const result=search(g,{avoidanceCost:a=>a.to==="C"?5:a.to==="R"?2:0});
+  assert.deepEqual(result.arcs.map(a=>a.to),["R","D"]);assert.equal(result.avoidanceCost,2);
+});
+test("rural low-fuel arrival cannot erase an urban arrival needed for onward fuel",()=>{
+  const g=graph([["A","J",3],["A","P",2],["P","J",2],["J","D",4]],["P"]);
+  const result=search(g,{avoidanceCost:a=>a.to==="P"?2:0,fuel:{usableRangeMeters:8,initialUsableMeters:4}});
+  assert.equal(result.state,"found");assert.deepEqual(result.arcs.map(a=>a.to),["P","J","D"]);
+  assert.equal(result.avoidanceCost,2);
+});
+test("reverse ride-cost bound cannot make an urban shortcut win",()=>{
+  const g=graph([[0,1,1],[1,3,1],[0,2,100],[2,3,100]]),edgeCost=a=>a.distanceMeters;
+  const work=budget(),lowerBounds=buildLowerBounds({graph:g,nodeCount:4,target:3,edgeCost,budget:work});
+  const result=searchResourcePath({graph:g,start:0,end:3,edgeCost,budget:work,lowerBounds,avoidanceCost:a=>a.to===1?1:0});
+  assert.deepEqual(result.arcs.map(a=>a.to),[2,3]);
+});
+test("negative urban rewards and unfinished rural searches cannot claim necessary passage",()=>{
+  const g=graph([["A","D",1]]);
+  assert.throws(()=>search(g,{avoidanceCost:()=>-1}),/nonnegative/);
+  assert.equal(search(g,{avoidanceCost:()=>1,budget:budget(1)}).state,"incomplete");
+});

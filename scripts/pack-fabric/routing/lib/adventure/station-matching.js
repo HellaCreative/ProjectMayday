@@ -21,7 +21,18 @@ function buildEdgeIndex(pack,geom,budget) {
       const key=`${x}:${y}`,list=cells.get(key)||[];list.push(edge);cells.set(key,list);
     }
   }
-  return {state:"complete",pack,geom,query(station,radiusMeters){
+  return {state:"complete",pack,geom,queryBox(box,work){
+    const edges=new Set(broad);
+    for(let x=Math.floor(box.minLon/size);x<=Math.floor(box.maxLon/size);x++)
+      for(let y=Math.floor(box.minLat/size);y<=Math.floor(box.maxLat/size);y++) {
+        if(!work.consume())return null;
+        for(const edge of cells.get(`${x}:${y}`)||[]) {
+          if(!work.consume())return null;
+          edges.add(edge);
+        }
+      }
+    return [...edges];
+  },query(station,radiusMeters){
     const lat=station.lat,lon=station.lon;
     const dy=radiusMeters/110000,dx=Math.min(180,dy/Math.max(.00001,Math.cos((Math.abs(lat)+dy)*Math.PI/180)));
     const edges=new Set(broad);

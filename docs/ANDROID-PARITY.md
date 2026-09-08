@@ -684,3 +684,10 @@ offline implementation is claimed by the current experimental core. Accepted
 mode/anchor ownership, known-surface statistics, fuel proof states, route
 persistence, variety and recovery outcomes must be ported and verified after
 live acceptance. The new code is not wired to the deployed API or app yet.
+
+The replacement experiment now distinguishes urban exposure from surface cost,
+counts exposure on exact directed partial road geometry, and retains fuel-state
+alternatives when an urban pump is necessary. Small settlement records are not
+blanket exclusions. The strict ordering around required urban anchors remains
+under evaluation; do not port the experimental tuning as an accepted policy.
+No iOS/Android implementation or device qualification is claimed in this step.

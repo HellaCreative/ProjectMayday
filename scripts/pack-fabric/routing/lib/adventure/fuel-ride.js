@@ -6,8 +6,8 @@ const {searchResourcePath}=require("./resource-search");
 // The inexpensive road candidate is retained for advisory display. The fuel
 // search then constructs a feasible ride with refills in its state; it doesn't
 // search for pumps near that candidate and repeatedly insert new detours.
-function searchFuelRide({graph,start,end,edgeCost,budget,fuel,lowerBounds=null,initialTurnState=null}) {
-  const base={graph,start,end,edgeCost,budget,lowerBounds,initialTurnState};
+function searchFuelRide({graph,start,end,edgeCost,budget,fuel,lowerBounds=null,initialTurnState=null,avoidanceCost=null}) {
+  const base={graph,start,end,edgeCost,budget,lowerBounds,initialTurnState,avoidanceCost};
   const road=searchResourcePath(base);
   if(road.state!=="found")return {road,fuel:{state:"unverified",reason:road.reason},search:budget.snapshot()};
   if(!fuel)return {road,fuel:{state:"not_requested"},search:budget.snapshot()};

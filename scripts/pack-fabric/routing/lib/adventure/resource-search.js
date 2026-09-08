@@ -5,25 +5,28 @@
 // A label owns turn-history state and remaining fuel; a cheaper arrival with
 // less fuel cannot discard a more expensive arrival that can finish the ride.
 class Heap {
-  constructor() { this.items=[]; }
+  constructor(compare=(a,b)=>a.priority-b.priority) { this.items=[];this.compare=compare; }
   push(value) {
     const a=this.items;let i=a.length;a.push(value);
-    while(i>0) {const p=(i-1)>>1;if(a[p].priority<=value.priority) break;a[i]=a[p];i=p;}a[i]=value;
+    while(i>0) {const p=(i-1)>>1;if(this.compare(a[p],value)<=0) break;a[i]=a[p];i=p;}a[i]=value;
   }
   pop() {
     const a=this.items;if(!a.length)return null;
     const first=a[0],last=a.pop();if(!a.length)return first;
-    let i=0;while(i*2+1<a.length){let c=i*2+1;if(c+1<a.length&&a[c+1].priority<a[c].priority)c++;
-      if(last.priority<=a[c].priority)break;a[i]=a[c];i=c;}a[i]=last;return first;
+    let i=0;while(i*2+1<a.length){let c=i*2+1;if(c+1<a.length&&this.compare(a[c+1],a[c])<0)c++;
+      if(this.compare(last,a[c])<=0)break;a[i]=a[c];i=c;}a[i]=last;return first;
   }
 }
 
 function searchResourcePath({graph,start,end,edgeCost,budget,fuel=null,
-  initialTurnState=null,destinationEscapeMeters=0,lowerBounds=null,acceptGoal=null}) {
+  initialTurnState=null,destinationEscapeMeters=0,lowerBounds=null,acceptGoal=null,avoidanceCost=null}) {
   if(!Number.isFinite(destinationEscapeMeters)||destinationEscapeMeters<0) throw new TypeError("A proved destination escape distance is required");
   if(fuel && (!(fuel.usableRangeMeters>0)||!Number.isFinite(fuel.usableRangeMeters)||
       !Number.isFinite(fuel.initialUsableMeters)||fuel.initialUsableMeters<0||fuel.initialUsableMeters>fuel.usableRangeMeters)) throw new TypeError("Invalid fuel assumptions");
-  const heap=new Heap(),frontiers=new Map();
+  // Urban exposure precedes the experimental ride cost lexicographically. No
+  // finite penalty lets a cheap urban shortcut beat a feasible rural ride.
+  const compare=(a,b)=>a.avoidance-b.avoidance || a.cost-b.cost;
+  const heap=new Heap((a,b)=>a.avoidance-b.avoidance || a.priority-b.priority),frontiers=new Map();
   if(lowerBounds && (lowerBounds.state!=="complete" || lowerBounds.target!==end || lowerBounds.graph!==graph || lowerBounds.edgeCost!==edgeCost)) throw new TypeError("Lower bounds must be complete and belong to this graph, target and cost model");
   let labels=0,dominated=0,expanded=0;
   function add(label) {
@@ -32,20 +35,20 @@ function searchResourcePath({graph,start,end,edgeCost,budget,fuel=null,
     label.priority=label.cost+estimate;
     const key=graph.stateKey(label.node,label.turnState);
     const frontier=frontiers.get(key) || [];
-    if(frontier.some(old=>old.active&&old.cost<=label.cost&&old.remaining>=label.remaining)) {dominated++;return;}
+    if(frontier.some(old=>old.active&&compare(old,label)<=0&&old.remaining>=label.remaining)) {dominated++;return;}
     const kept=[];
-    for(const old of frontier){if(label.cost<=old.cost&&label.remaining>=old.remaining){old.active=false;dominated++;}else kept.push(old);}
+    for(const old of frontier){if(compare(label,old)<=0&&label.remaining>=old.remaining){old.active=false;dominated++;}else kept.push(old);}
     label.active=true;kept.push(label);frontiers.set(key,kept);labels++;heap.push(label);
   }
   function materialize(label,goalEvidence=null) {
     const arcs=[],visits=[];let cursor=label;
     while(cursor.parent){if(cursor.arc)arcs.push(cursor.arc);if(cursor.refill)visits.push({stationId:cursor.refill.id,atMeters:cursor.distance});cursor=cursor.parent;}
     arcs.reverse();visits.reverse();
-    return {state:"found",arcs,visits,distanceMeters:label.distance,cost:label.cost,
+    return {state:"found",arcs,visits,distanceMeters:label.distance,cost:label.cost,avoidanceCost:label.avoidance,
       remainingUsableMeters:fuel?label.remaining:null,endTurnState:label.turnState,goalEvidence,
       diagnostics:{labels,dominated,expanded,...budget.snapshot()}};
   }
-  add({node:start,turnState:initialTurnState,remaining:fuel?fuel.initialUsableMeters:Infinity,cost:0,distance:0,parent:null});
+  add({node:start,turnState:initialTurnState,remaining:fuel?fuel.initialUsableMeters:Infinity,cost:0,avoidance:0,distance:0,parent:null});
   let cur;
   while((cur=heap.pop())) {
     if(!cur.active)continue;
@@ -69,9 +72,11 @@ function searchResourcePath({graph,start,end,edgeCost,budget,fuel=null,
       if(fuel&&arc.distanceMeters>cur.remaining)continue;
       const transition=graph.transition(cur.turnState,arc);
       if(!transition.allowed)continue;
+      const avoidance=avoidanceCost?avoidanceCost(arc):0;
+      if(!Number.isFinite(avoidance)||avoidance<0)throw new TypeError("Avoidance costs must be finite and nonnegative");
       const cost=edgeCost(arc);
       if(!Number.isFinite(cost)||cost<0)throw new TypeError("Search costs must be finite and nonnegative");
-      add({node:arc.to,turnState:transition.state,cost:cur.cost+cost,
+      add({node:arc.to,turnState:transition.state,cost:cur.cost+cost,avoidance:cur.avoidance+avoidance,
         remaining:fuel?cur.remaining-arc.distanceMeters:Infinity,distance:cur.distance+arc.distanceMeters,parent:cur,arc,refill:null});
     }
   }
