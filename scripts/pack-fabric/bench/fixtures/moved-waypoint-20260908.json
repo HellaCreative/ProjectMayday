@@ -1,0 +1,66 @@
+{
+  "id": "physical-moved-nb-waypoint-20260908-212021",
+  "status": "failing_rider_acceptance",
+  "sourceLog": "/Users/richardsmith/Downloads/dirt-app-debug-2026-09-08T212021Z.txt",
+  "serviceBuild": "6ace2323f6a6051a9f3761db55973d7548fc087e",
+  "request": {
+    "profile": "dirt",
+    "locations": [
+      {
+        "lat": 44.76481,
+        "lon": -63.340233
+      },
+      {
+        "lat": 47.743529,
+        "lon": -64.911236
+      }
+    ],
+    "accessPolicy": {
+      "motorizedPermissive": true,
+      "motorizedUnknown": false
+    },
+    "options": {
+      "mapZoom": 8.6,
+      "avoidMotorways": false
+    },
+    "fuel": {
+      "usableRangeMeters": 225000,
+      "firstLegMaxMeters": 225000,
+      "minimumFuelStops": 0,
+      "windowMaxStops": 12,
+      "allowPartialWindow": true,
+      "windowTimeBudgetMs": 20000,
+      "routeFirstPlan": true,
+      "ensureDestinationFuelEscape": true,
+      "forwardFeeler": false
+    }
+  },
+  "observed": {
+    "distanceMeters": 1124508.388760023,
+    "repeatedRoadMeters": 82243,
+    "dirtPercent": 73.82630563702857,
+    "fuelSpurTrial": {
+      "stationId": "osm:n5300901045",
+      "accepted": false,
+      "originalRepeatedMeters": 82243,
+      "alternativeRepeatedMeters": 1894,
+      "alternativeState": "provisional_station_access"
+    }
+  },
+  "counterfactual": {
+    "method": "exclude generated Trout Brook station for one integrated search; diagnostic only, not a production blacklist",
+    "distanceMeters": 894565.388760023,
+    "repeatedRoadMeters": 1894,
+    "dirtPercent": 65.69681852040189,
+    "fuelState": "provisional_station_access",
+    "hopMeters": [
+      209317.10363080993,
+      211641.198394651,
+      166379.87678683695,
+      212760.3177160764,
+      94466.89223164879
+    ],
+    "destinationEscapeMeters": 5974.838191583405
+  },
+  "requiredOutcome": "Whole-ride onward continuity must govern candidate generation and selection. A dirt percentage advantage does not justify demonstrated avoidable fuel spurs. Preserve legal turns, fixed anchors, fuel range and destination escape. Qualify endpoint perturbations before another handoff."
+}

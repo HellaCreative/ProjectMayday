@@ -924,3 +924,27 @@ No new native changes: existing DIRT Dev build23 uses the updated service.
 Device retest instructions at top of ROUTING-DEVICE-CANARY.md. Clean request
 fallback and reviewed NBcity coverage corrected, but its primary/trunk-heavy
 back-road quality remains explicitly OPEN. No broad Clean acceptance claimed.
+
+## 21:20 moved-waypoint physical failure — acceptance reopened
+
+User accepted the near-Dalhousie placement, then moved destination to
+47.743529,-64.911236 and rejected the resulting two fuel spurs. Same source6ace232
+and replacement engine confirmed, so this is not stale deployment or legacy
+fallback. Public replay1124.508km/73.826%dirt/82.243km repeated. The bounded trial
+found a fuel-valid894.565km/65.697%dirt/1.894km repeated alternative but rejected
+it because fresh-dirt ratio was65.655% versus67.555% on original. Thus successful
+fuel feasibility does not equal satisfactory route quality. Current final pool
+also ranks raw dirt share, another opportunity to select a poor-shaped ride.
+
+Previous Dalhousie improvement was too narrow; general fuel-detour acceptance
+is reopened. Do not extend pump exclusions or increase trial count as the claimed
+systemic fix. Shared search/selection must explicitly represent onward continuity
+and necessary versus avoidable repeated access. Preserve coherent integrated
+fuel search; no blanket direct-line corridor, no arbitrary destination-distance
+cap, and no shorter-all-paved substitute presented as Dirt success.
+
+Counterexample and measured fuel hops captured in
+scripts/pack-fabric/bench/fixtures/moved-waypoint-20260908.json. Generic local
+replay supports REBUILD_REQUEST_PATH. No runtime or live service changes made
+in this diagnostic follow-up. Next acceptance must cover a range of moved
+endpoints and audit whole rides, not only the one previously successful pin.
