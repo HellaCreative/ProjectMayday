@@ -24,3 +24,14 @@ service worktree. Keep DIRT_V4_CONNECTION_REVISION empty (old overlay is not for
 this release). Set DIRT_V4_REGIONS to all 63 and base overrides to candidate03
 only in a verified preview, then coordinated stable DEV activation. Full upload
 and live route checks are pending. No production or downloads authorized.
+
+## Memory correction
+
+Preview ef34451 completed AB/BC but Vercel killed both AL/GA requests for memory
+exhaustion. Whole-national lookup retention is removed: 63 region gzip files
+retain the exact projected content and are loaded through a three-region LRU.
+Header remains immediately available. All 63 decoded regions compare equal to
+the previous full projection on two passes (126 comparisons), including rereads
+after eviction. No candidate filtering, rounding or routing scoring changes.
+Previous full-to-projection 552 selection checks still establish field parity;
+new per-region equality establishes loader parity. Live replay remains required.
