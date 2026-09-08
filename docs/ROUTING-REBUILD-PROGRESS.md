@@ -162,3 +162,52 @@ has been promoted to a verified physical refill. This step improves orchestratio
 with supplied station bindings only. Final profile candidate objectives, wider
 settlement classification, multi-leg/Loop integration and live qualification
 remain open. No deployment or pack mutation was performed.
+
+## Fourth step — repeated real-map tests and independent search verification
+
+Added `bench/run-rebuild-matrix.js` (`npm run bench:rebuild-matrix`). Three fresh
+processes per case each search forward and reverse, using the same sealed NS/NB
+pack root, urban exposure enabled, and unchanged 15-second / 6-million-operation
+budgets. All 18 requests completed and all six directional requests reproduced
+the same exact edge/fraction geometry across their three runs.
+
+| Request | Minimum | Median of 3 | Maximum |
+| --- | ---: | ---: | ---: |
+| Southwest NS forward | 637 ms | 663 ms | 687 ms |
+| Southwest NS reverse | 817 ms | 846 ms | 861 ms |
+| Halifax → Porters Lake | 815 ms | 853 ms | 855 ms |
+| Porters Lake → Halifax | 1,308 ms | 1,326 ms | 1,504 ms |
+| Moncton → Shediac | 345 ms | 357 ms | 361 ms |
+| Shediac → Moncton | 322 ms | 326 ms | 326 ms |
+
+These timings include rebuilding matching and urban indexes, but exclude pack
+loading and physical fuel-access integration. OS file caches were not cleared.
+Three samples are not service latency percentiles. Process high-water RSS ranged
+from 159 to 354 MiB across the groups; reverse runs share a process with forward
+runs, so these are not isolated per-search memory measurements. Dense Quebec/
+Ontario behaviour and service concurrency remain untested.
+
+**Coverage finding:** this NB V4 pack has no embedded urban cores or settlement
+records. Its roughly 25 km Moncton/Shediac routes are paved and are not evidence
+of either urban avoidance or acceptable Dirt quality. The explicit incomplete
+classification diagnostics caught this omission. Do not silently treat zero
+recorded urban metres as proof that a route avoids cities. No pack bytes were
+changed. NS route-quality concerns from the prior step persist unchanged.
+
+Added an independent exhaustive finite-state oracle test over 250 reproducible
+generated directed networks. It enumerates exact incoming-edge and fuel states
+without the engine's Pareto pruning, heap or reverse heuristic. Each network is
+compared with both plain and accelerated search: 500 result comparisons covering
+fuel shortages, refill opportunities, turn restrictions, urban exposure and
+destination escape reserves. Feasibility and the ordered objective agree in all
+cases. Successful returned routes are also replayed for legal turns and fuel
+consumption. These constructed tests do not verify real-world station access.
+
+74 replacement tests plus eight existing V4 snap/pack checks pass (82 total).
+The matrix's success exit is a road-completion/repeatability gate, not a profile,
+urban-data, fuel or release-acceptance gate. It reports urban data coverage
+separately. Evidence: `routing/candidates/rebuild-test-matrix/summary.json` with
+individual geometry artifacts, pack hashes and process logs. Run the matrix with
+an explicit `REBUILD_PACK_ROOT`; optional `REBUILD_MATRIX_OUTPUT` preserves
+separate experiment sets. No runtime policy tuning, deployment or device change
+was made during this testing step.
