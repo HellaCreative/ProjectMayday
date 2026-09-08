@@ -1097,3 +1097,19 @@ Local bench `replay-ns-continuity.js` captures0/500/1000comparisons and optional
 qualification assertions. Evidence is under /tmp/dirt-continuity-qualified,
 /tmp/dirt-cross-continuity, /tmp/dirt-nb-continuity-weight15 and
 /tmp/dirt-moved-continuity. Private hosted verification pending; no DEV switch.
+
+## Continuity hosted qualification — source9c15324
+
+Private r2w1bfpj7/source9c15324e6ace23df668c6061e2d4ba2a04b99bc8 =67425+d14a5a7.
+Exact NS hooks559.326km68.061%dirt0repeat3stops,9.591sserver onfirstNSrequest.
+Moved NB856.440km63.203%0.471kmrepeat4stops15.120s firstjoined; nearDalhousie
+807.840km62.361%0.471repeat7.981s; Dalhousie776.358km64.101%0.471repeat7.542s.
+Clean unchanged704.376km0repeat7.628s; criticalNB162unknown273.298km50.394%
+0.183repeat4.881s. All six pass complete candidate pools, fuel intervals,
+destination escape, geometry joins and response pack identities. Test-specific
+NS assertion verifies no dirt runs in first20km and>65%dirt, not a global rule.
+
+Final localcross24:2.449–4.916s1185MiBpeak; NB24:0.715–1.572s349MiBpeak.
+Hosted joined latency increased; correctness improves but speed remains a flag.
+Evidence summaries preserved in routing/candidates/rebuild-continuity-verification.
+Requested stableDEV activation after checks; public confirmation recorded next.
