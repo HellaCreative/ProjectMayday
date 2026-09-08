@@ -703,3 +703,8 @@ must use consistent floating-point boundary handling without spending protected
 reserve. Cancelled/deadline-expired searches cannot be labelled no-path even when
 no forward labels remain. These JS corrections have regression coverage; native
 implementation and rider acceptance remain deferred under the live-first scope.
+
+Fuel proof now reports destination arrival fuel separately from planned departure
+fuel after a station refill, including unverified onward escape. Future native
+consumers must preserve that distinction and must not treat a planned refill as
+confirmation of fuel actually obtained. No mobile implementation is claimed.

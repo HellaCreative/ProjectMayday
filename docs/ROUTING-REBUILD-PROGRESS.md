@@ -351,3 +351,35 @@ pass (97 total), including the independent 250-network / 500-comparison fuel
 oracle. No new speed claims are made from this correctness round. The restriction,
 city-anchor ride quality, missing urban definitions and physical fuel-access
 qualification remain open. No deployment, pack mutation or phone change.
+
+## Eighth step — fuel-stop and waypoint handoff checks
+
+Added ten focused tests in `adventure/fuel-stops.test.js`. Two initial failures
+identified the same reporting inconsistency: final fuel proof called the
+post-refill amount `arrivalUsableMeters` when the destination was a fuel stop.
+The route search already distinguished arrival and departure correctly.
+
+Final proof now captures the destination arrival before its planned refill and
+returns separate `arrivalUsableMeters` and `departureUsableMeters`. Escape proof
+uses the planned departure amount. The distinction remains explicit when escape
+is unproved or exceeds usable range, including a zero-distance station endpoint.
+This changes reporting, not route geometry, station selection or reserve policy.
+
+Passing tests also cover a necessary generated pump shortly before a fixed fuel
+destination (both planned refills retained); fuel carried through an ordinary
+waypoint; a fixed station waypoint providing a full planned tank to the following
+search; a station marker without a planned refill not resetting proof; explicit
+refill at a zero-distance full-tank destination; and incoming turn history carried
+through a waypoint into a separate search.
+
+These are constructed-graph tests with explicit supplied station bindings.
+Manually carrying state between two searches is not a completed multi-primary-leg
+planner or a proof that future-leg feasibility back-propagates to earlier choices.
+Neither passing a map marker in these proofs nor a planned refill confirms that
+a navigating rider physically obtained fuel.
+
+Final verification: 99 replacement tests plus eight existing V4 snap/pack checks
+pass (107 total). The independent fuel-search oracle remains green. Quebec
+restriction investigation stayed parked. Real station access, full multi-leg/
+Loop orchestration, ride quality, app navigation and live/device acceptance
+remain unfinished. No deployment or pack changes were made.
