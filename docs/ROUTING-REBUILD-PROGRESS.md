@@ -896,3 +896,12 @@ all fuel intervals/final escape verified. NS/NB24-case expanded regression in
 progress. Clean legacy fallback repaired locally; NB city classification missing
 in original02 confirmed with pack owner and source-locked supplement under test.
 Clean primary/trunk back-road preference remains open. No live/phone changes yet.
+
+Hosted preview0e266910 replay confirmed corrected Dalhousie958.049km/72.340%dirt/
+4.095km repeated and full fuel proof, plus Clean stays in replacement engine.
+However cold Dalhousie exhausted20s while performing multiple optional quality
+trials. Not published. Reduced expansion to ONE trial for the worst fuel circuit
+across the common base pool (base candidates still completed first). Local exact
+replay retains the same improvement.24cross plus8actualClean-preference cases and
+3unchangedNS baseline cases passed before this narrowing; rerunning relevant
+regression and hosted timing before stable publication.

@@ -1,0 +1,20 @@
+"use strict";
+const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict'),{spawnSync}=require('node:child_process');
+const {summarizeSurface}=require('../routing/lib/adventure/surface'),{auditRideShape}=require('../routing/lib/adventure/ride-shape-audit'),{createBudget}=require('../routing/lib/adventure/budget');
+const deployment=process.env.REBUILD_DEPLOYMENT;if(!deployment)throw Error('REBUILD_DEPLOYMENT required');
+const output=process.env.REBUILD_LIVE_OUTPUT||'routing/candidates/rebuild-device-live';fs.mkdirSync(output,{recursive:true});
+const cases=[{id:'dalhousie',profile:'dirt',locations:[{lat:44.764831,lon:-63.340263},{lat:47.986597,lon:-66.328424}],zoom:11.2},{id:'clean-phone',profile:'cleanest',locations:[{lat:44.76484254584986,lon:-63.34021846556175},{lat:46.792506,lon:-67.569371}],zoom:10.7}],summary=[];
+for(const c of cases) {
+ const body={profile:c.profile,locations:c.locations,accessPolicy:{motorizedPermissive:true,motorizedUnknown:false},options:{mapZoom:c.zoom,avoidMotorways:c.profile==='cleanest'},fuel:{usableRangeMeters:225000,firstLegMaxMeters:225000,minimumFuelStops:0,windowMaxStops:12,allowPartialWindow:true,windowTimeBudgetMs:20000,routeFirstPlan:true,ensureDestinationFuelEscape:true,forwardFeeler:false}};
+ const file=path.resolve(output,c.id+'-request.json');fs.writeFileSync(file,JSON.stringify(body));const at=Date.now();
+ const run=spawnSync('vercel',['curl','/api/fuel-chain','--deployment',deployment,'--','--silent','--show-error','--max-time','30','--request','POST','--header','Content-Type: application/json','--data-binary','@'+file],{encoding:'utf8',timeout:45000,maxBuffer:30*1024*1024});
+ fs.writeFileSync(path.join(output,c.id+'-response.json'),run.stdout||'');assert.equal(run.status,0,run.stderr);const r=JSON.parse(run.stdout);
+ assert.equal(r.status,'complete',r.message);assert.equal(r.diagnostics.strategy,'adventure-preview-v1');assert.equal(r.windowComplete,true);assert.equal(r.routes.length,r.stops.length+1);assert.ok(r.packIdentity.every(p=>p.releaseId==='fabric-v4-20260908-02'));
+ for(let i=0;i<r.routes.length;i++){assert.ok(r.routes[i].distanceMeters<=225000+1e-6);if(i)assert.deepEqual(r.routes[i].geometry[0],r.routes[i-1].geometry.at(-1));}
+ assert.ok(r.routes.at(-1).distanceMeters+r.destinationEscapeMeters<=225000+1e-6);
+ const segments=r.routes.flatMap(r=>r.segments),surface=summarizeSurface(segments),shape=auditRideShape({segments,budget:createBudget({deadlineAtMs:Date.now()+10000,maxExpansions:1000000})});
+ assert.equal(shape.state,'complete');if(c.id==='dalhousie'){assert.ok(shape.repeatedRoadMeters<5000);assert.ok(surface.knownDirtPercent>70);assert.ok(r.stops.some(s=>s.id==='osm:n5300904581'||s.address?.includes('Sunny Corner')));}
+ const classes={};for(const s of segments)classes[s.roadClassLeaf]=(classes[s.roadClassLeaf]||0)+s.distanceMeters;
+ const row={id:c.id,build:r.serviceBuild,httpIncludingCliMs:Date.now()-at,serverMs:r.debug.adventureTotalMs,km:surface.distanceMeters/1000,dirt:surface.knownDirtPercent,repeatKm:shape.repeatedRoadMeters/1000,stops:r.stops.map(s=>({id:s.id,address:s.address})),classes};summary.push(row);console.log(JSON.stringify(row));
+}
+fs.writeFileSync(path.join(output,'summary.json'),JSON.stringify({deployment,summary},null,2));

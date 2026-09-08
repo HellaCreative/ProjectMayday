@@ -777,7 +777,7 @@ not a mutation of sealed02 packs or proof of complete urban coverage.
 
 Generated fuel stop alternatives must preserve full range/escape/turn legality,
 fixed anchors and the existing deadline. Substantial fuel-linked retracing may
-trigger one alternative per shared objective; replacing it requires less
+trigger one alternative for the worst circuit in the shared pool; replacing it requires less
 retracing, shorter actual travel, at least as good avoidance exposure and more
 fresh known dirt per actual kilometre. Physical surface totals still count all
 travel. A necessary pump is never banned just because its access retraces.
