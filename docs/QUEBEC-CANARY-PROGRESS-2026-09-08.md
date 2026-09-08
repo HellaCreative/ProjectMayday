@@ -38,3 +38,25 @@ The fuel service created the EKO stop in Lévis. Its actual approach route is 20
 The exact verified preview was assigned to stable DEV, then checked directly without preview tooling. All six Quebec border requests, NB→NS regression, Quebec fuel creation, a fuel approach and NB→QC fuel planning passed against stable. Direct road-request timings ranged from about 1.3 to 13.7 seconds in this run; fuel creation and cross-border fuel each took about 7.4 seconds. Performance is improved by reuse but is not qualified as instant or finished.
 
 Richard can now use the existing online DIRT DEV app to test Quebec within the province and across NB/Labrador, with fuel off/on, and inspect layers. No new app install or pack download is required. Ask for the debug export and comments. The wider rebuild has not started; preserve the physical Quebec gate and the open endpoint-access issue.
+
+
+## Physical result and fuel repair — September 8, afternoon
+
+Richard reports successful long live routes Halifax–Quebec, Nova Scotia–Labrador and Labrador–Quebec. Treat this as physical acceptance of the tested connections, not blanket fuel or national pack acceptance. His 14:02:32Z export identifies a remaining final-stage fuel failure.
+
+The last northern Quebec fuel request found 544 reachable stations, routed six, and rejected all for prior-road overlap. The repair preserves overlap penalties in route ranking but does not reject a pump solely for evidenced reuse of roads from an already committed leg. New pump approach/return stems remain checked; legal access and the 333 km usable range remain unchanged.
+
+Live JS repair commit: `b3cb2fa2a9ef32f1f8f3b47ed860eb30ab792fdc`, stable DEV alias `pack-fabric.vercel.app`. Packs remain `fabric-v4-20260908-02`; no rebuild, Swift work or phone install. All 43 fuel-chain tests pass. Preview reproductions now find fuel on the failing northern stage, and NB–QC / QC–NL fuel checks pass. Only four of the original 17 prior-road IDs are present in the export, so this reproduces the failure mechanism, not the full original phone history. Local replay selected four stops within range; live windows return fewer stops within the 20-second budget.
+
+The earlier Gaspé-to-north-shore route still reports an onward-chain failure in the reconstructed request. Do not call all fuel planning repaired. Northern endpoint coverage is being checked through subsequent windows; Richard's retest is still required. National 58-region rebuild has not started.
+
+Evidence: `scripts/pack-fabric/routing/candidates/quebec-fuel-20260908/` contains input/export provenance, before/after candidate responses, protected preview requests, source identity and stable readback.
+
+
+### Stable readback and onward check
+
+Stable DEV returned `complete` with a pump on the formerly blocked northern stage in 19,280 ms, exact build b3cb2fa. Following subsequent live windows found Petro-Canada, Cree Construction and Essence (four stops including Aux Écluses). A later window still reports a gap after those stops, so the entire northern itinerary is NOT accepted as fuel-covered.
+
+The endpoint-to-nearest-pump graph estimate is 197,842 m. Direct live road routes from the last selected Essence pump to the endpoint and back both complete at 285,076 m, leaving insufficient fuel for the return within 333,000 m usable. This verifies a range problem for that selected final pump/endpoint pair, not an exhaustive assertion that no other physical pump exists. Earlier blanket rejection and this later destination-escape requirement must not be conflated.
+
+Actionable physical test: fully close/reopen the existing app to clear the old in-memory result, recreate the same northern route online with automatic fuel enabled, and check that it now inserts pumps beyond the former failure point. Send debug export and comments, including the location of any remaining warning. No install or pack download. Pack connections remain physically accepted; overall fuel coverage and Gaspé onward planning remain open.
