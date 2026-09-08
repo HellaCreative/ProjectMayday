@@ -26,15 +26,3 @@ Live API: `scripts/pack-fabric/api/route.js` +
 Bare `--pack` is forbidden. After candidate acceptance, promote the recorded
 bytes, update both V3 registries, redeploy LIVE, and verify with
 `node scripts/pack-fabric/scripts/ship-routing.js --assert --region <id>`.
-
-## Search-law lockstep
-
-Routing search, costs, variety seeds, forward progress, retrace rejection, and
-fuel-replacement ranking are one JavaScript/Swift contract. Every behavioural
-change here must land with its on-device twin and a shared non-zero-seed
-fixture; a live-only or phone-only change is a defect.
-
-Routing-evolution tests currently use only sealed DEV V4 release
-`fabric-v4-20260907-01`. Never rebuild, edit, upload, restamp, or silently
-replace those bytes; never fall back to V3 or runtime OSM for a V4 result. Vercel
-deployments contain API code only.

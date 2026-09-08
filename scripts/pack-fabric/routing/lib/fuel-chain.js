@@ -28,11 +28,6 @@ const { corridorLocationsForRoute } = require("../regional/merge");
 const { resolveProfile } = require("./profile-costs");
 const { loadFuelForLocations, loadRegionFuel } = require("./fuel-data");
 const { summarizeRouteQuality } = require("./route-quality");
-const {
-  compileRestrictionIndex,
-  advanceRestrictionState,
-  activeKey
-} = require("./legal-topology/restrictions");
 
 function mergePackIdentities(...groups) {
   const byRegion = new Map();
@@ -42,15 +37,7 @@ function mergePackIdentities(...groups) {
   }
   return [...byRegion.values()];
 }
-const {
-  ROAD_CLASS_NAME,
-  unpackAccess,
-  unpackSurface,
-  unpackStructure,
-  unpackRoadClass,
-  unpackConfidence,
-  unpackSeasonal
-} = require("./pack-v2");
+const { unpackAccess, unpackSurface } = require("./pack-v2");
 const {
   projectedProgressMeters,
   crossTrackMeters,
@@ -86,7 +73,7 @@ const MAX_STATION_ALTERNATIVES = 6;
  */
 const GRAPH_ONLY_RECOVERY_CANDIDATES = 4;
 /** Allow a short forecourt connector, never a meaningful down-and-back fuel stem. */
-const MAX_FUEL_RETRACE_M = 200;
+const MAX_FUEL_RETRACE_M = 1_000;
 /** Numbered waypoint on a packed pump. Lockstep: HopSearchPolicy.fuelWaypointSnapMeters. */
 const WAYPOINT_FUEL_SNAP_METERS = 150;
 /** Clean rejects pumps whose full chain exceeds foundation by this much. */
@@ -137,7 +124,6 @@ const CLEAN_MAJOR_ROAD_CLASSES = new Set([
 ]);
 
 const MAX_RECENT_EDGE_HISTORY = 256;
-const MAX_FUEL_PLANNING_BUDGET_MS = 30_000;
 
 function finiteDiagnosticNumber(value) {
   if (value == null || value === "") return null;
@@ -152,13 +138,7 @@ function routeFirstBudgetForWindow(windowBudgetMs) {
   // Balanced and Clean less time than Dirt made dense-region cold starts fail
   // before their legal fallback could complete. Keep a five-second minimum
   // reserve for fuel selection while treating every riding style equally.
-  // Live routing allows the active-profile foundation up to twenty seconds.
-  // Keep at least five seconds for station matching and chain proof when the
-  // enclosing fuel window is large enough to provide it.
-  return Math.max(
-    2_000,
-    Math.min(20_000, Math.max(2_000, budget - 5_000), Math.round(budget * 0.67))
-  );
+  return Math.max(2_000, Math.min(10_000, Math.round(budget * 0.67)));
 }
 
 function timeoutPartialBacktrackCap(evaluation) {
@@ -691,53 +671,6 @@ function foundationCellDistance(location, cells) {
   return Infinity;
 }
 
-function prepareFoundationTopology(layout, runtime) {
-  const pack = runtime && runtime.pack;
-  const geom = runtime && runtime.geom;
-  if (!layout || !pack || pack.graphBinaryVersion < 4 || !geom) return false;
-  const needed = new Set(layout.byEdge.keys());
-  const byId = new Map();
-  for (let ei = 0; ei < pack.undirectedEdgeCount && byId.size < needed.size; ei += 1) {
-    const id = String(pack.edgeId(ei));
-    if (needed.has(id)) byId.set(id, ei);
-  }
-  for (const row of layout.rows) {
-    const edgeId = String(row.segment.edgeId || "");
-    const ei = byId.get(edgeId);
-    if (!Number.isInteger(ei)) return false;
-    const full = geom.polyline(ei);
-    if (!Array.isArray(full) || full.length < 2) return false;
-    const forwardDistance = haversineMeters(row.coords[0], full[0]) +
-      haversineMeters(row.coords.at(-1), full.at(-1));
-    const reverseDistance = haversineMeters(row.coords[0], full.at(-1)) +
-      haversineMeters(row.coords.at(-1), full[0]);
-    row.edgeIndex = ei;
-    row.forward = forwardDistance <= reverseDistance;
-    row.entryNode = row.forward ? pack.edgeFrom[ei] : pack.edgeTo[ei];
-    row.exitNode = row.forward ? pack.edgeTo[ei] : pack.edgeFrom[ei];
-  }
-  layout.foundationEdgeIndexes = new Set(layout.rows.map((row) => row.edgeIndex));
-  layout.junctions = [];
-  layout.junctionsByNode = new Map();
-  for (let index = 1; index < layout.rows.length; index += 1) {
-    const incoming = layout.rows[index - 1];
-    const outgoing = layout.rows[index];
-    if (incoming.exitNode !== outgoing.entryNode) continue;
-    const node = incoming.exitNode;
-    const junction = {
-      node,
-      alongMeters: outgoing.startMeters,
-      incomingEdgeIndex: incoming.edgeIndex,
-      outgoingEdgeIndex: outgoing.edgeIndex,
-      coord: [pack.nodeCoords[node * 2], pack.nodeCoords[node * 2 + 1]]
-    };
-    layout.junctions.push(junction);
-    if (!layout.junctionsByNode.has(node)) layout.junctionsByNode.set(node, []);
-    layout.junctionsByNode.get(node).push(junction);
-  }
-  return true;
-}
-
 function foundationPlacement(target, layout) {
   const matches = [];
   const seen = new Set();
@@ -747,8 +680,7 @@ function foundationPlacement(target, layout) {
       : []
   )]) {
     if (!match || match.edgeId == null || !Array.isArray(match.coord)) continue;
-    const key = `${String(match.edgeId)}:${Number(match.distanceAlongM) || 0}:` +
-      `${match.forward === false ? 0 : 1}`;
+    const key = `${String(match.edgeId)}:${Number(match.distanceAlongM) || 0}`;
     if (seen.has(key)) continue;
     seen.add(key);
     matches.push(match);
@@ -757,10 +689,6 @@ function foundationPlacement(target, layout) {
   for (const match of matches) {
     const rows = layout.byEdge.get(String(match.edgeId)) || [];
     for (const row of rows) {
-      if (Number.isInteger(row.edgeIndex) && Number.isInteger(match.edgeIndex) &&
-          row.edgeIndex !== match.edgeIndex) continue;
-      if (typeof row.forward === "boolean" && typeof match.forward === "boolean" &&
-          row.forward !== match.forward) continue;
       const projected = projectOnCoordinatePolyline(match.coord, row.coords);
       if (!projected) continue;
       const fraction = projected.totalMeters > 0
@@ -775,15 +703,8 @@ function foundationPlacement(target, layout) {
         target: { ...target, match },
         routeCoord: projected.coord,
         alongMeters: row.startMeters + row.meters * fraction,
-        exitAlongMeters: row.startMeters + row.meters * fraction,
         offRouteMeters: projected.distanceM,
-        accessMeters: 0,
-        arrivalMeters: 0,
-        departureMeters: 0,
-        arrivalSegments: [],
-        departureSegments: [],
-        snapDistanceMeters: Math.max(0, Number(match.distanceM) || 0),
-        accessProof: "same-foundation-directed-edge"
+        accessMeters: Math.max(0, Number(match.distanceM) || 0)
       };
       if (!best ||
           placement.offRouteMeters < best.offRouteMeters ||
@@ -796,217 +717,23 @@ function foundationPlacement(target, layout) {
   return best && best.offRouteMeters <= FOUNDATION_ROUTE_MATCH_M ? best : null;
 }
 
-function fuelArcAccessAllowed(runtime, ei, from, to, allowUnknown) {
-  const pack = runtime.pack;
-  const forward = pack.edgeFrom[ei] === from && pack.edgeTo[ei] === to;
-  const code = pack.edgeAccess ? pack.edgeAccess[ei * 2 + (forward ? 0 : 1)] : 0;
-  const name = (runtime.enums.ACCESS_NAME || [])[code];
-  if (name === "motorized_verified") return true;
-  if (name === "motorized_permissive") return true;
-  if (name === "motorized_unknown") return allowUnknown === true;
-  return false;
-}
-
-function packedAccessSegment(runtime, step, fromFraction = 0, toFraction = 1) {
-  const pack = runtime.pack;
-  const ei = step.edgeIndex;
-  const forward = pack.edgeFrom[ei] === step.from && pack.edgeTo[ei] === step.to;
-  const raw = runtime.geom.polyline(ei);
-  const oriented = forward ? raw : raw.slice().reverse();
-  const geometry = sliceCoordinatePolyline(oriented, fromFraction, toFraction);
-  const distanceMeters = Number(pack.edgeMeters[ei]) * Math.max(0, toFraction - fromFraction);
-  if (!(distanceMeters > 0.01) || geometry.length < 2) return null;
-  const attr = pack.edgeAttrs[ei];
-  const accessCode = pack.edgeAccess
-    ? pack.edgeAccess[ei * 2 + (forward ? 0 : 1)]
-    : unpackAccess(attr);
-  const leaves = typeof pack.edgeLeaves === "function" ? pack.edgeLeaves(ei) : {};
+function fuelAccessSegment(from, to, stationId) {
+  const meters = haversineMeters(from, to);
+  if (!(meters > 0.5)) return null;
   return {
-    edgeId: String(pack.edgeId(ei)),
-    surfaceClass: (runtime.enums.SURFACE_NAME || [])[unpackSurface(attr)] || "unknown",
-    trackClass: ROAD_CLASS_NAME[unpackRoadClass(attr)] || "unknown",
-    structureType: (runtime.enums.STRUCTURE_NAME || [])[unpackStructure(attr)] || "none",
-    accessClass: (runtime.enums.ACCESS_NAME || [])[accessCode] || "motorized_unknown",
-    surfaceLeaf: leaves.surfaceLeaf == null ? null : leaves.surfaceLeaf,
-    structureLeaf: leaves.structureLeaf == null ? null : leaves.structureLeaf,
-    layer: Number(leaves.layer) || 0,
-    confidence: unpackConfidence(attr),
-    seasonal: !!unpackSeasonal(attr),
-    distanceMeters,
+    edgeId: `fuel-access:${stationId}`,
+    surfaceClass: "connector",
+    trackClass: "service",
+    accessClass: "motorized_permissive",
+    structureType: "none",
+    distanceMeters: Math.round(meters),
     accessLeg: true,
-    geometry
+    geometry: [from.slice(), to.slice()]
   };
-}
-
-function splitForecourtPath(runtime, path, stationMatch) {
-  const arrivalSegments = [];
-  const departureSegments = [];
-  let passedStation = false;
-  for (const step of path) {
-    const isStationEdge = !passedStation && step.edgeIndex === stationMatch.edgeIndex &&
-      ((runtime.pack.edgeFrom[step.edgeIndex] === step.from) === (stationMatch.forward !== false));
-    if (!isStationEdge) {
-      const segment = packedAccessSegment(runtime, step);
-      if (segment) (passedStation ? departureSegments : arrivalSegments).push(segment);
-      continue;
-    }
-    const edgeMeters = Math.max(1e-9, Number(runtime.pack.edgeMeters[step.edgeIndex]) || 0);
-    const rawFraction = Math.max(
-      0,
-      Math.min(1, (Number(stationMatch.distanceAlongM) || 0) / edgeMeters)
-    );
-    const orientedFraction = stationMatch.forward === false ? 1 - rawFraction : rawFraction;
-    const arrival = packedAccessSegment(runtime, step, 0, orientedFraction);
-    const departure = packedAccessSegment(runtime, step, orientedFraction, 1);
-    if (arrival) arrivalSegments.push(arrival);
-    if (departure) departureSegments.push(departure);
-    passedStation = true;
-  }
-  if (!passedStation) return null;
-  const meters = (segments) => segments.reduce(
-    (sum, segment) => sum + Math.max(0, Number(segment.distanceMeters) || 0), 0
-  );
-  return {
-    arrivalSegments,
-    departureSegments,
-    arrivalMeters: meters(arrivalSegments),
-    departureMeters: meters(departureSegments)
-  };
-}
-
-/**
- * Prove a packed forecourt as one directed through-path. It may use distinct
- * one-way entrance and exit edges; it may not reverse an edge, return to its
- * entry junction, invent a free-space connector, or exceed 200 routed metres.
- */
-function forecourtFoundationPlacement(target, layout, runtime, allowUnknown) {
-  const pack = runtime && runtime.pack;
-  if (!pack || pack.graphBinaryVersion < 4 || !pack.edgeFrom || !pack.edgeTo ||
-      !pack.nodeOffsets || !pack.edgeUndirectedIndex || !runtime.geom ||
-      !layout.foundationEdgeIndexes || !layout.junctionsByNode) return null;
-  const restrictionIndex = compileRestrictionIndex(pack.restrictions || []);
-  const matches = [];
-  const seen = new Set();
-  for (const match of [target && target.match, ...(
-    target && target.match && Array.isArray(target.match.candidates)
-      ? target.match.candidates
-      : []
-  )]) {
-    if (!match || !Number.isInteger(match.edgeIndex) || !Array.isArray(match.coord) ||
-        Math.max(0, Number(match.distanceM) || 0) > MAX_FUEL_RETRACE_M + 1 ||
-        layout.foundationEdgeIndexes.has(match.edgeIndex)) continue;
-    const key = `${match.edgeIndex}:${match.forward === false ? 0 : 1}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    matches.push(match);
-  }
-  let best = null;
-  for (const match of matches) {
-    const stationFrom = match.forward === false
-      ? pack.edgeTo[match.edgeIndex] : pack.edgeFrom[match.edgeIndex];
-    const stationTo = match.forward === false
-      ? pack.edgeFrom[match.edgeIndex] : pack.edgeTo[match.edgeIndex];
-    const entryCandidates = layout.junctions.filter((junction) =>
-      haversineMeters(junction.coord, match.coord) <= MAX_FUEL_RETRACE_M + 1
-    );
-    for (const entry of entryCandidates) {
-      const heap = new MinHeap();
-      const seenStates = new Map();
-      heap.push({
-        node: entry.node,
-        cost: 0,
-        lastEdge: entry.incomingEdgeIndex,
-        restrictions: [],
-        stationMatch: null,
-        path: [],
-        usedEdges: new Set()
-      });
-      while (heap.items.length) {
-        const current = heap.pop();
-        if (!current || current.cost > MAX_FUEL_RETRACE_M + 1) continue;
-        const stationKey = current.stationMatch
-          ? `${current.stationMatch.edgeIndex}:${current.stationMatch.forward === false ? 0 : 1}`
-          : "-";
-        const key = `${current.node}:${current.lastEdge}:${stationKey}:${activeKey(current.restrictions)}`;
-        if ((seenStates.get(key) ?? Infinity) <= current.cost) continue;
-        seenStates.set(key, current.cost);
-
-        if (current.stationMatch) {
-          for (const exit of layout.junctionsByNode.get(current.node) || []) {
-            if (exit.alongMeters <= entry.alongMeters + 1) continue;
-            const turn = advanceRestrictionState(
-              restrictionIndex,
-              current.restrictions,
-              current.lastEdge,
-              exit.outgoingEdgeIndex,
-              current.node
-            );
-            if (!turn.allowed) continue;
-            const split = splitForecourtPath(runtime, current.path, current.stationMatch);
-            if (!split) continue;
-            const placement = {
-              target: { ...target, match: current.stationMatch },
-              routeCoord: entry.coord,
-              exitRouteCoord: exit.coord,
-              alongMeters: entry.alongMeters,
-              exitAlongMeters: exit.alongMeters,
-              offRouteMeters: Math.max(0, current.cost -
-                (exit.alongMeters - entry.alongMeters)),
-              accessMeters: current.cost,
-              arrivalMeters: split.arrivalMeters,
-              departureMeters: split.departureMeters,
-              arrivalSegments: split.arrivalSegments,
-              departureSegments: split.departureSegments,
-              snapDistanceMeters: Math.max(0, Number(current.stationMatch.distanceM) || 0),
-              accessEdgeIds: current.path.map((step) => String(pack.edgeId(step.edgeIndex))),
-              accessProof: "v4-directed-forecourt-through-path"
-            };
-            if (!best || placement.accessMeters < best.accessMeters ||
-                (placement.accessMeters === best.accessMeters &&
-                  placement.offRouteMeters < best.offRouteMeters)) best = placement;
-          }
-        }
-
-        for (let arc = pack.nodeOffsets[current.node]; arc < pack.nodeOffsets[current.node + 1]; arc += 1) {
-          const edgeIndex = pack.edgeUndirectedIndex[arc];
-          const next = pack.edgeTargets[arc];
-          if (layout.foundationEdgeIndexes.has(edgeIndex) ||
-              current.usedEdges.has(edgeIndex) ||
-              edgeIndex === current.lastEdge ||
-              !fuelArcAccessAllowed(runtime, edgeIndex, current.node, next, allowUnknown)) continue;
-          const turn = advanceRestrictionState(
-            restrictionIndex,
-            current.restrictions,
-            current.lastEdge,
-            edgeIndex,
-            current.node
-          );
-          if (!turn.allowed) continue;
-          const nextCost = current.cost + Math.max(0, Number(pack.edgeMeters[edgeIndex]) || 0);
-          if (nextCost > MAX_FUEL_RETRACE_M + 1) continue;
-          let stationMatch = current.stationMatch;
-          if (!stationMatch && edgeIndex === match.edgeIndex &&
-              current.node === stationFrom && next === stationTo) stationMatch = match;
-          const usedEdges = new Set(current.usedEdges);
-          usedEdges.add(edgeIndex);
-          heap.push({
-            node: next,
-            cost: nextCost,
-            lastEdge: edgeIndex,
-            restrictions: turn.active,
-            stationMatch,
-            path: current.path.concat({ edgeIndex, from: current.node, to: next }),
-            usedEdges
-          });
-        }
-      }
-    }
-  }
-  return best;
 }
 
 function sliceFoundationRoute(route, layout, fromPlacement, toPlacement, urbanBoxes = []) {
-  const fromMeters = fromPlacement ? fromPlacement.exitAlongMeters : 0;
+  const fromMeters = fromPlacement ? fromPlacement.alongMeters : 0;
   const toMeters = toPlacement ? toPlacement.alongMeters : layout.meters;
   const routeSegments = [];
   for (const row of layout.rows) {
@@ -1025,9 +752,21 @@ function sliceFoundationRoute(route, layout, fromPlacement, toPlacement, urbanBo
     });
   }
   const segments = [];
-  if (fromPlacement) segments.push(...(fromPlacement.departureSegments || []));
+  if (fromPlacement) {
+    const stationCoord = locationCoordinate(fromPlacement.target.location);
+    const access = fuelAccessSegment(
+      stationCoord, fromPlacement.routeCoord, fromPlacement.target.station.id
+    );
+    if (access) segments.push(access);
+  }
   segments.push(...routeSegments);
-  if (toPlacement) segments.push(...(toPlacement.arrivalSegments || []));
+  if (toPlacement) {
+    const stationCoord = locationCoordinate(toPlacement.target.location);
+    const access = fuelAccessSegment(
+      toPlacement.routeCoord, stationCoord, toPlacement.target.station.id
+    );
+    if (access) segments.push(access);
+  }
   const geometry = [];
   for (const segment of segments) appendCoordinates(geometry, routeSegmentCoordinates(segment));
   const onRouteMeters = Math.max(0, toMeters - fromMeters);
@@ -1035,14 +774,14 @@ function sliceFoundationRoute(route, layout, fromPlacement, toPlacement, urbanBo
     (sum, segment) => sum + Math.max(0, Number(segment.distanceMeters) || 0),
     0
   );
-  const stats = aggregateRouteSurfaceStats(segments, distanceMeters);
+  const stats = aggregateRouteSurfaceStats(routeSegments, onRouteMeters);
   const startCoord = geometry[0] || locationCoordinate(fromPlacement && fromPlacement.target.location);
   const endCoord = geometry.at(-1) || locationCoordinate(toPlacement && toPlacement.target.location);
   const shape = routeShapeMetrics(geometry, startCoord, endCoord);
   const baseMeters = Math.max(1, Number(route.distanceMeters) || layout.meters);
   const movingSeconds = Math.max(0, Number(route.estimatedMovingSeconds) || 0) *
     (onRouteMeters / baseMeters) + Math.max(0, distanceMeters - onRouteMeters) / 8.3;
-  const restrictedMeters = segments.reduce((sum, segment) =>
+  const restrictedMeters = routeSegments.reduce((sum, segment) =>
     sum + (String(segment.accessClass) === "motorized_unknown"
       ? Math.max(0, Number(segment.distanceMeters) || 0)
       : 0)
@@ -1083,16 +822,11 @@ function sliceFoundationRoute(route, layout, fromPlacement, toPlacement, urbanBo
 }
 
 /**
- * Reuse a proved profile route when on-route pumps can make the whole journey
+ * Reuse a proved profile route when one on-route pump makes the whole journey
  * range-safe. The selected geometry is partitioned, not re-searched, so adding
  * fuel cannot lower Dirt quality or manufacture a lateral/backtracking detour.
- *
- * The fewest valid stops wins. This matters when the mathematically minimum
- * stop count has no pump in its narrow range-overlap band: two pumps on the
- * selected ride are preferable to abandoning that ride and independently
- * routing paved-heavy legs to an unrelated one-pump chain.
  */
-function foundationFuelPlan({
+function oneStopFoundationFuelPlan({
   foundationRoute,
   targets,
   start,
@@ -1103,17 +837,13 @@ function foundationFuelPlan({
   requireFuelStopBeforeEnd,
   requiredFirstStationId,
   preferredStationIds,
-  excludedStationIds,
-  maxStops,
-  runtime,
-  allowUnknown,
   urbanBoxes = [],
   destination
 }) {
   if (!foundationRoute || foundationRoute.status !== "complete") return null;
+  if ((Number(minimumFuelStops) || 0) > 1) return null;
   const layout = foundationRouteLayout(foundationRoute);
   if (!(layout.meters > 0) || !layout.rows.length) return null;
-  if (!prepareFoundationTopology(layout, runtime)) return null;
   const firstCap = Number(firstLegMaxMeters);
   const usable = Number(usableRangeMeters);
   if (!(firstCap > 0) || !(usable > 0)) return null;
@@ -1133,32 +863,14 @@ function foundationFuelPlan({
     : usable;
   const required = requiredFirstStationId == null ? null : String(requiredFirstStationId);
   const preferred = new Set((preferredStationIds || []).map(String));
-  const excluded = new Set((excludedStationIds || []).map(String));
-  const foundationTargets = targets.fuelTargetsNear(
+  const placements = targets.fuelTargetsNear(
     start,
-    // A multi-stop partition needs pumps across the complete selected ride,
-    // not only those geographically reachable on the first tank. The target
-    // preparation still ranks actual foundation cells first and remains
-    // bounded, so this does not turn into an all-pack routing search.
-    Math.max(firstCap, usable, layout.meters)
-  );
-  targets.prepareDiagnostics.foundationLayout = {
-    meters: Math.round(layout.meters),
-    rows: layout.rows.length,
-    edgeIds: layout.byEdge.size,
-    targets: foundationTargets.length,
-    exactTargetEdges: foundationTargets.filter((target) => [
-      target.match,
-      ...((target.match && target.match.candidates) || [])
-    ].some((match) => match && layout.byEdge.has(String(match.edgeId)))).length
-  };
-  const placements = foundationTargets.map((target) => foundationPlacement(target, layout)
-    || forecourtFoundationPlacement(target, layout, runtime, allowUnknown)).filter(Boolean)
+    firstCap
+  ).map((target) => foundationPlacement(target, layout)).filter(Boolean)
     .map((placement) => ({
       ...placement,
-      approachMeters: placement.alongMeters + placement.arrivalMeters,
-      continuationMeters: layout.meters - placement.exitAlongMeters +
-        placement.departureMeters,
+      approachMeters: placement.alongMeters + placement.accessMeters,
+      continuationMeters: layout.meters - placement.alongMeters + placement.accessMeters,
       urbanEntry: fuelStopRequiresUrbanEntry(
         placement.target.location,
         locationCoordinate(start),
@@ -1168,201 +880,89 @@ function foundationFuelPlan({
     }))
     .filter((placement) =>
       placement.alongMeters >= MIN_FORWARD_PROGRESS_M &&
-      layout.meters - placement.exitAlongMeters >= MIN_DESTINATION_FUEL_CLEARANCE_M &&
+      layout.meters - placement.alongMeters >= MIN_DESTINATION_FUEL_CLEARANCE_M &&
+      placement.approachMeters <= firstCap + 1 &&
+      placement.continuationMeters <= arrivalLimit + 1 &&
       placement.accessMeters <= MAX_FUEL_RETRACE_M + 1 &&
-      placement.snapDistanceMeters <= MAX_FUEL_RETRACE_M + 1 &&
-      !excluded.has(String(placement.target.station.id))
-    )
-    .sort((a, b) => a.alongMeters - b.alongMeters ||
-      a.accessMeters - b.accessMeters ||
-      String(a.target.station.id).localeCompare(String(b.target.station.id)));
-  targets.prepareDiagnostics.foundationPlacementCount = placements.length;
-  targets.prepareDiagnostics.foundationPlacementAlongMeters = placements.map((placement) => ({
-    id: String(placement.target.station.id),
-    along: Math.round(placement.alongMeters),
-    access: Math.round(placement.accessMeters)
-  }));
-  if (!placements.length) return null;
-
-  const minimumStops = Math.max(
-    requireFuelStopBeforeEnd === true ? 1 : 0,
-    Number(minimumFuelStops) || 0
-  );
-  const stopLimit = Math.max(0, Math.min(12, Number(maxStops) || 12));
-  if (minimumStops > stopLimit) return null;
-  const legMeters = (from, to) => from
-    ? from.departureMeters + (to.alongMeters - from.exitAlongMeters) + to.arrivalMeters
-    : to.alongMeters + to.arrivalMeters;
-  const finishMeters = (from) =>
-    from.departureMeters + layout.meters - from.exitAlongMeters;
-  const stateRank = (state) => [
-    state.urbanStops,
-    -state.preferredStops,
-    state.commitPenalty,
-    state.accessMeters,
-    -state.path.at(-1).alongMeters
-  ];
-  const compareState = (a, b) => {
-    const left = stateRank(a);
-    const right = stateRank(b);
-    for (let index = 0; index < left.length; index += 1) {
-      if (left[index] !== right[index]) return left[index] - right[index];
-    }
-    return String(a.path.map((row) => row.target.station.id).join("|"))
-      .localeCompare(String(b.path.map((row) => row.target.station.id).join("|")));
-  };
-  let frontier = [{
-    lastIndex: -1,
-    path: [],
-    urbanStops: 0,
-    preferredStops: 0,
-    commitPenalty: 0,
-    accessMeters: 0
-  }];
-  let complete = [];
-  const exhaustedFewerStopCounts = [];
-  const constraintIneligibleStopCounts = [];
-  for (let depth = 1; depth <= stopLimit; depth += 1) {
-    const nextByPlacement = new Map();
-    for (const state of frontier) {
-      const previous = state.path.at(-1) || null;
-      const cap = previous ? usable : firstCap;
-      for (let index = state.lastIndex + 1; index < placements.length; index += 1) {
-        const placement = placements[index];
-        if (previous && placement.alongMeters - previous.exitAlongMeters < MIN_STOP_SEPARATION_M) {
-          continue;
-        }
-        if (!previous && required && String(placement.target.station.id) !== required) continue;
-        const meters = legMeters(previous, placement);
-        if (meters > cap + 1) continue;
-        const next = {
-          lastIndex: index,
-          path: state.path.concat(placement),
-          urbanStops: state.urbanStops + (placement.urbanEntry ? 1 : 0),
-          preferredStops: state.preferredStops +
-            (preferred.has(String(placement.target.station.id)) ? 1 : 0),
-          commitPenalty: state.commitPenalty + Math.abs(meters / cap - FUEL_COMFORT_HI),
-          accessMeters: state.accessMeters + placement.accessMeters
-        };
-        const existing = nextByPlacement.get(index);
-        if (!existing || compareState(next, existing) < 0) nextByPlacement.set(index, next);
-      }
-    }
-    frontier = [...nextByPlacement.values()];
-    const feasibleAtDepth = frontier.filter((state) =>
-      finishMeters(state.path.at(-1)) <= arrivalLimit + 1
+      (!required || String(placement.target.station.id) === required)
     );
-    if (depth < minimumStops) {
-      constraintIneligibleStopCounts.push(depth);
-    } else {
-      complete = feasibleAtDepth;
-      if (complete.length) break;
-      exhaustedFewerStopCounts.push(depth);
-    }
-    if (!frontier.length) break;
-  }
-  if (!complete.length) {
-    targets.prepareDiagnostics.foundationPartitionFailure = {
-      arrivalLimit: Math.round(arrivalLimit),
-      firstCap: Math.round(firstCap),
-      usable: Math.round(usable),
-      minimumStops,
-      stopLimit,
-      finalFrontier: frontier.length
-    };
-    return null;
-  }
-  complete.sort(compareState);
-  const selectedState = complete[0];
-  const selectedPlacements = selectedState.path;
-  const selected = selectedPlacements[0];
-  const routeBoundaries = [null, ...selectedPlacements, null];
-  const routes = [];
-  for (let index = 0; index < routeBoundaries.length - 1; index += 1) {
-    routes.push(sliceFoundationRoute(
-      foundationRoute,
-      layout,
-      routeBoundaries[index],
-      routeBoundaries[index + 1],
-      urbanBoxes
-    ));
-  }
-  const graphMeters = routes.map((route) => route.distanceMeters);
-  if (graphMeters.some((meters, index) =>
-    meters > (index === 0 ? firstCap : usable) + 1
-  )) return null;
-  if (graphMeters.at(-1) > arrivalLimit + 1) return null;
-  const chainMeters = graphMeters.reduce((sum, meters) => sum + Number(meters), 0);
-  const detourCap = Math.max(
-    layout.meters * MAX_FUEL_CHAIN_DETOUR_RATIO,
-    layout.meters + MAX_FUEL_CHAIN_DETOUR_ABS_M
+  if (!placements.length) return null;
+  placements.sort((a, b) => {
+    const preferredDelta = (preferred.has(String(b.target.station.id)) ? 1 : 0) -
+      (preferred.has(String(a.target.station.id)) ? 1 : 0);
+    if (preferredDelta) return preferredDelta;
+    if (a.urbanEntry !== b.urbanEntry) return a.urbanEntry ? 1 : -1;
+    const band = tankCommitBand(a.approachMeters, firstCap, usable) -
+      tankCommitBand(b.approachMeters, firstCap, usable);
+    if (band) return band;
+    if (Math.abs(a.accessMeters - b.accessMeters) > 25) return a.accessMeters - b.accessMeters;
+    return compareTankCommit(
+      a.approachMeters, a.alongMeters,
+      b.approachMeters, b.alongMeters,
+      firstCap, usable
+    ) || a.alongMeters - b.alongMeters;
+  });
+  const selected = placements[0];
+  const firstRoute = sliceFoundationRoute(
+    foundationRoute, layout, null, selected, urbanBoxes
   );
-  if (chainMeters > detourCap + 1) return null;
+  const finalRoute = sliceFoundationRoute(
+    foundationRoute, layout, selected, null, urbanBoxes
+  );
   // A fuel waypoint partitions one already-proved ride; it does not create two
   // unrelated route-quality decisions. A short slice can legitimately miss a
   // whole-journey percentage threshold even though the geometry and aggregate
   // Dirt quality are unchanged. Never discard the proved foundation merely
   // because either partition is labelled degraded in isolation.
-  const stationCandidates = complete.slice(0, MAX_STATION_ALTERNATIVES)
-    .map((state, rank) => {
-      const placement = state.path[0];
-      const candidateChainMeters = layout.meters + state.path.reduce((sum, row) =>
-        sum + row.arrivalMeters + row.departureMeters -
-          (row.exitAlongMeters - row.alongMeters), 0
-      );
-      return {
-        id: String(placement.target.station.id),
-        departureId: "start",
-        latitude: Number(placement.target.location.lat),
-        longitude: Number(placement.target.location.lon),
-        name: placement.target.station.name || placement.target.station.brand || "Fuel stop",
-        meters: Math.round(placement.approachMeters),
-        graphMeters: Math.round(placement.approachMeters),
-        // Every option partitions this same already-selected profile route. Use
-        // its whole-route quality here; borrowing the selected pump's first-slice
-        // percentage made the alternatives tray report misleading values.
-        dirtPct: Number(foundationRoute.stats && foundationRoute.stats.dirtPercent) || 0,
-        validForward: true,
-        commitBand: tankCommitBand(placement.approachMeters, firstCap, usable),
-        canFinish: true,
-        rank,
-        approachElapsedMs: 0,
-        approachStatus: "reused",
-        continuationElapsedMs: 0,
-        continuationStatus: "reused",
-        continuationStrategy: "foundation_route_partition",
-        remainingGraphMeters: Math.round(placement.continuationMeters),
-        backtrackMeters: 0,
-        rejectedReason: null,
-        totalElapsedMs: 0,
-        candidateSource: "foundation_route",
-        foundationAlongMeters: Math.round(placement.alongMeters),
-        foundationOffRouteMeters: Math.round(placement.offRouteMeters),
-        foundationAccessProof: placement.accessProof || "same-foundation-directed-edge",
-        foundationSnapDistanceMeters: Math.round(placement.snapDistanceMeters),
-        foundationAccessEdgeIds: placement.accessEdgeIds || [],
-        foundationPriorityCellDistance: Number.isFinite(Number(
-          placement.target.foundationCellDistance
-        )) ? Number(placement.target.foundationCellDistance) : null,
-        chainMeters: Math.round(candidateChainMeters),
-        chainDirtPct: Number(foundationRoute.stats && foundationRoute.stats.dirtPercent) || 0,
-        continuationBacktrackMeters: 0,
-        urbanEntry: placement.urbanEntry,
-        foundationStopIds: state.path.map((row) => String(row.target.station.id))
-      };
-    });
-  const stops = selectedPlacements.map((placement, index) => ({
-    ...placement.target.station,
-    graphMeters: routes[index].distanceMeters,
-    dirtPercent: Number(routes[index].stats && routes[index].stats.dirtPercent) || 0
-  }));
-  const dirtMeters = routes.reduce((sum, route) =>
-    sum + Number(route.distanceMeters) * Number(route.stats && route.stats.dirtPercent || 0), 0
-  );
+  const stationCandidates = placements.slice(0, MAX_STATION_ALTERNATIVES)
+    .map((placement, rank) => ({
+    id: String(placement.target.station.id),
+    departureId: "start",
+    latitude: Number(placement.target.location.lat),
+    longitude: Number(placement.target.location.lon),
+    name: placement.target.station.name || placement.target.station.brand || "Fuel stop",
+    meters: Math.round(placement.approachMeters),
+    graphMeters: Math.round(placement.approachMeters),
+    // Every option partitions this same already-selected profile route.  Use
+    // its whole-route quality here; borrowing the selected pump's first-slice
+    // percentage made the alternatives tray report misleading values.
+    dirtPct: Number(foundationRoute.stats && foundationRoute.stats.dirtPercent) || 0,
+    validForward: true,
+    commitBand: tankCommitBand(placement.approachMeters, firstCap, usable),
+    canFinish: true,
+    rank,
+    approachElapsedMs: 0,
+    approachStatus: "reused",
+    continuationElapsedMs: 0,
+    continuationStatus: "reused",
+    continuationStrategy: "foundation_route_partition",
+    remainingGraphMeters: Math.round(placement.continuationMeters),
+    backtrackMeters: 0,
+    rejectedReason: null,
+    totalElapsedMs: 0,
+    candidateSource: "foundation_route",
+    foundationAlongMeters: Math.round(placement.alongMeters),
+    foundationOffRouteMeters: Math.round(placement.offRouteMeters),
+    foundationPriorityCellDistance: Number.isFinite(Number(
+      placement.target.foundationCellDistance
+    )) ? Number(placement.target.foundationCellDistance) : null,
+    chainMeters: Math.round(layout.meters + placement.accessMeters * 2),
+    chainDirtPct: Number(foundationRoute.stats && foundationRoute.stats.dirtPercent) || 0,
+    continuationBacktrackMeters: 0,
+    urbanEntry: placement.urbanEntry
+    }));
+  const stop = {
+    ...selected.target.station,
+    graphMeters: firstRoute.distanceMeters,
+    dirtPercent: Number(firstRoute.stats && firstRoute.stats.dirtPercent) || 0
+  };
+  const chainMeters = Number(firstRoute.distanceMeters) + Number(finalRoute.distanceMeters);
+  const dirtMeters = Number(firstRoute.distanceMeters) * Number(firstRoute.stats.dirtPercent || 0) +
+    Number(finalRoute.distanceMeters) * Number(finalRoute.stats.dirtPercent || 0);
   return {
-    stops,
-    routes,
-    graphMeters,
+    stop,
+    routes: [firstRoute, finalRoute],
+    graphMeters: [firstRoute.distanceMeters, finalRoute.distanceMeters],
     stationCandidates,
     firstReachableStationMeters: Math.min(...placements.map((row) => row.approachMeters)),
     diagnostics: {
@@ -1374,32 +974,11 @@ function foundationFuelPlan({
       )) ? Number(foundationRoute.stats.dirtPercent) : null,
       foundationMatchedStations: placements.length,
       foundationSelectedStationId: String(selected.target.station.id),
-      foundationSelectedStationIds: selectedPlacements.map((placement) =>
-        String(placement.target.station.id)
-      ),
-      foundationStopCount: selectedPlacements.length,
-      foundationMinimumFeasibleStops: selectedPlacements.length,
-      foundationFewerStopCountsExhausted: exhaustedFewerStopCounts,
-      foundationConstraintIneligibleStopCounts: constraintIneligibleStopCounts,
-      foundationMinimumStopProof: true,
-      foundationFirstLegLimitMeters: Math.round(firstCap),
-      foundationFullTankLimitMeters: Math.round(usable),
-      foundationDestinationFuelUsedLimitMeters: Math.round(arrivalLimit),
-      foundationFuelLegMeters: graphMeters.slice(),
-      foundationFuelAccess: selectedPlacements.map((placement) => ({
-        stationId: String(placement.target.station.id),
-        proof: placement.accessProof,
-        arrivalMeters: Math.round(placement.arrivalMeters),
-        departureMeters: Math.round(placement.departureMeters),
-        edgeIds: (placement.accessEdgeIds || []).slice()
-      })),
       foundationChainMeters: Math.round(chainMeters),
       foundationChainDirtPercent: chainMeters > 0 ? Math.round(dirtMeters / chainMeters) : 0,
       profileRouteSavings: 2,
       selectedUrbanEntry: selected.urbanEntry,
-      ruralAlternativeAvailable: complete.some((state) =>
-        state.path.some((placement) => !placement.urbanEntry)
-      )
+      ruralAlternativeAvailable: placements.some((placement) => !placement.urbanEntry)
     }
   };
 }
@@ -2430,7 +2009,7 @@ async function planFuelChainOnRuntime({
     : returnedStopLimit;
   if (!graphOnlyFeeler && !probeFirstReachableStation && foundationRoute) {
     planningStage = "foundation_route_partition";
-    const reusedFoundation = foundationFuelPlan({
+    const reusedFoundation = oneStopFoundationFuelPlan({
       foundationRoute,
       targets,
       start,
@@ -2441,25 +2020,14 @@ async function planFuelChainOnRuntime({
       requireFuelStopBeforeEnd,
       requiredFirstStationId,
       preferredStationIds,
-      excludedStationIds,
-      maxStops: searchStopLimit,
-      runtime,
-      allowUnknown: !!(policy && policy.motorizedUnknown),
       urbanBoxes,
       destination
     });
-    fuelDecisionDiagnostics.foundationLayout = targets.prepareDiagnostics.foundationLayout || null;
-    fuelDecisionDiagnostics.foundationPlacementCount =
-      Number(targets.prepareDiagnostics.foundationPlacementCount) || 0;
-    fuelDecisionDiagnostics.foundationPlacementAlongMeters =
-      targets.prepareDiagnostics.foundationPlacementAlongMeters || [];
-    fuelDecisionDiagnostics.foundationPartitionFailure =
-      targets.prepareDiagnostics.foundationPartitionFailure || null;
     if (reusedFoundation) {
       const reusedCandidates = reusedFoundation.stationCandidates || [];
       const reusedResponse = {
         ok: true,
-        stops: reusedFoundation.stops,
+        stops: [reusedFoundation.stop],
         graphMeters: reusedFoundation.graphMeters,
         routes: reusedFoundation.routes,
         stationCandidates: reusedCandidates,
@@ -3242,12 +2810,6 @@ async function planFuelChainOnRuntime({
 
       if (!evaluatedProfileTargetMet(winner)) return true;
 
-      // Clean's product rule is the first proved pump in the final-quarter
-      // window. Once it completes safely, a later pump in the same band cannot
-      // beat it merely by being farther through the tank. Dirt and Balanced
-      // still compare profile quality within the band.
-      if (resolveProfile(profile) === "cleanest") return false;
-
       const candidateCross = Number(candidate.crossTrack);
       const winnerCross = Number(winner.candidate.crossTrack);
       if (Number.isFinite(candidateCross) && Number.isFinite(winnerCross)) {
@@ -3351,11 +2913,12 @@ async function planFuelChainOnRuntime({
           requiredStopsSatisfied && (!watchedAvailable || tankCommitBand(
         provenComplete.meters, cap, usableRangeMeters
       ) <= 1)) {
-        // A proved chain may stop the search only when the remaining bounded
-        // shortlist cannot beat it. In particular, do not freeze a paved-heavy
-        // Dirt chain merely because it was the first one proved inside a live
-        // deadline; an earlier rural pump can be the choice that preserves the
-        // requested ride profile without adding another fuel stop.
+        // A live request has already proved the highest-ranked, minimum-stop,
+        // forward chain. Surface is only the final tiebreaker and may not spend
+        // another province-scale route search merely to compare an equivalent
+        // pump. Route-foundation candidates above retain all zero-search,
+        // route-connected alternatives for the replacement UI.
+        if (Number.isFinite(deadline) && !graphOnlyFeeler) break;
         const remaining = candidates.slice(startRank + batch.length);
         if (!remaining.some((candidate) =>
           canUnevaluatedCandidateBeatComplete(candidate, provenComplete)
@@ -4254,7 +3817,7 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
   }
   const rawFuelOptions = body.fuel || {};
   const windowBudgetMs = Number(rawFuelOptions.windowTimeBudgetMs) > 0
-    ? Math.min(MAX_FUEL_PLANNING_BUDGET_MS, Number(rawFuelOptions.windowTimeBudgetMs))
+    ? Number(rawFuelOptions.windowTimeBudgetMs)
     : null;
   const windowDeadlineAtMs = windowBudgetMs == null
     ? Infinity
@@ -4273,9 +3836,7 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
   const forwardFeeler = rawFuelOptions.forwardFeeler === true;
   const routeFirstPlan = rawFuelOptions.routeFirstPlan === true && !forwardFeeler &&
     selection.mode !== "canada-chain";
-  let fuelOptions = windowBudgetMs == null
-    ? rawFuelOptions
-    : { ...rawFuelOptions, windowTimeBudgetMs: windowBudgetMs };
+  let fuelOptions = rawFuelOptions;
   const usableRangeMeters = Number(fuelOptions.usableRangeMeters);
   const firstLegMaxMeters = Number(fuelOptions.firstLegMaxMeters || usableRangeMeters);
   if (!(usableRangeMeters > 0) || !(firstLegMaxMeters > 0)) {
@@ -4291,13 +3852,13 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
       locations,
       usableRangeMeters,
       firstLegMaxMeters,
-      rawFuelOptions: fuelOptions,
+      rawFuelOptions,
       dependencies
     });
   }
 
-  let profileMeters = fuelOptions.profileMeters == null
-    ? NaN : Number(fuelOptions.profileMeters);
+  let profileMeters = rawFuelOptions.profileMeters == null
+    ? NaN : Number(rawFuelOptions.profileMeters);
   let foundationRoute = null;
   let fuel = null;
   let runtime = null;
@@ -4608,7 +4169,7 @@ async function fuelChainRequest(body = {}, dependencies = {}) {
     };
   }
   fuelOptions = {
-    ...fuelOptions,
+    ...rawFuelOptions,
     profileMeters,
     requireFuelStopBeforeEnd: !!rawFuelOptions.requireFuelStopBeforeEnd || stopsNeeded > 0,
     minimumFuelStops: Math.max(
@@ -4955,8 +4516,6 @@ module.exports = {
   fuelChainRequest,
   foundationPlacement,
   foundationRouteLayout,
-  prepareFoundationTopology,
-  forecourtFoundationPlacement,
   selectSafeTimeoutPartial,
   completedContinuationWithinWindow
 };

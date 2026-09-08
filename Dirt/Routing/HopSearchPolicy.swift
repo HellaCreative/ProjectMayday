@@ -20,13 +20,6 @@ nonisolated enum HopSearchPolicy {
     static let balancedDirtHi: Double = 0.55
     /// Ratio buckets (5% each). Meter-span buckets were coarser than the 10-point band.
     static let balancedBuckets: Int = 20
-    static func maximumProgressRegressionMeters(for profile: RouteProfile) -> Double {
-        switch profile {
-        case .dirt: return 15_000
-        case .balanced: return 10_000
-        case .cleanest: return .greatestFiniteMagnitude
-        }
-    }
     /// Numbered waypoint on a packed pump. Lockstep: fuel-chain.js WAYPOINT_FUEL_SNAP_METERS.
     static let fuelWaypointSnapMeters: Double = 150
     /// Preserve the first three quarters of usable fuel for the requested ride.
@@ -70,32 +63,15 @@ nonisolated enum HopSearchPolicy {
     static let pass2PopCap: Int = 400_000
     static let dirtCandidateTimeCapSeconds: Double = 7
     static let dirtCandidatePopCap: Int = 200_000
-    /// Dirt ratio is carried by the label buckets. This within-bucket weight
-    /// prefers unpaved fabric without rewarding large loops that are pruned.
-    static let dirtRidePavedPerKm: Double = 5
+    static let dirtRidePavedPerKm: Double = 150
     static let dirtRideGravelPerKm: Double = 0.7
     static let dirtRideResourcePerKm: Double = 0.5
     static let dirtRideUnknownTrackPerKm: Double = 0.9
-    static let dirtRideShortExcursionMultiplier: Double = 5
     /// Optional paved-to-paved Dirt excursions must earn this much continuous,
     /// explicitly known unpaved riding. Unknown surface contributes zero.
     static let minimumEarnedDirtExcursionMeters: Double = 1_000
     /// Bound the retry cost when successive tiny alternatives are discovered.
-    /// Short rides may need more than one pass because re-pricing the first
-    /// tooth can expose another. Province-scale rides stay at one pass.
-    /// Lockstep: find-path-v2.js MAX_SHORT_DIRT_REPAIR_PASSES /
-    /// LONG_RIDE_SINGLE_REPAIR_METERS.
     static let maximumShortDirtRepairPasses: Int = 3
-    static let longRideSingleRepairMeters: Double = 150_000
-
-    static func dirtRecoveryPathCap(
-        landPathMeters: Double,
-        activePathCap: Double? = nil
-    ) -> Double {
-        let coherent = max(landPathMeters + 40_000, landPathMeters * 1.5)
-        guard let activePathCap, activePathCap.isFinite else { return coherent }
-        return min(activePathCap, coherent)
-    }
 
     enum CostMode: Sendable {
         /// Existing profile weight tables (Clean and legacy/fallback searches).
@@ -109,15 +85,14 @@ nonisolated enum HopSearchPolicy {
     }
 
     static func hash(_ seed: UInt64, _ node: Int, _ ei: Int) -> UInt64 {
-        // Exact UInt32 twin of hop-search.js varietyHash. Route seeds stay
-        // UInt64 in storage; both engines intentionally mix their low 32 bits.
-        var x = UInt32(truncatingIfNeeded: seed)
-        x &+= UInt32(truncatingIfNeeded: node) &* 2_654_435_761
-        x &+= UInt32(truncatingIfNeeded: ei) &* 1_597_334_677
-        x ^= x >> 16
-        x &*= 2_246_822_519
-        x ^= x >> 13
-        return UInt64(x)
+        var x = seed &* 6_364_136_223_846_793_005 &+ UInt64(truncatingIfNeeded: node) &* 0x9E37_79B9_7F4A_7C15
+        x ^= UInt64(truncatingIfNeeded: ei) &* 0xBF58_476D_1CE4_E5B9
+        x ^= x >> 30
+        x &*= 0xBF58_476D_1CE4_E5B9
+        x ^= x >> 27
+        x &*= 0x94D0_49BB_1331_11EB
+        x ^= x >> 31
+        return x
     }
 
     /// Bucket by running dirt ratio so a longer same-dirt path is not dominated
@@ -275,54 +250,6 @@ nonisolated enum HopSearchPolicy {
         }
     }
 
-    static func compactLandPath(
-        _ coordinates: [CLLocationCoordinate2D],
-        maximumPoints: Int = 16
-    ) -> [CLLocationCoordinate2D] {
-        guard maximumPoints > 1, coordinates.count > maximumPoints else { return coordinates }
-        return (0..<maximumPoints).map { index in
-            let position = Double(index) * Double(coordinates.count - 1)
-                / Double(maximumPoints - 1)
-            return coordinates[Int(position.rounded())]
-        }
-    }
-
-    /// Local-planar projection shared in substance with hop-search.js. The
-    /// polyline is the shortest legal road path, not the A→B airplane chord.
-    static func landPathProjection(
-        point: CLLocationCoordinate2D,
-        coordinates: [CLLocationCoordinate2D]
-    ) -> (offMeters: Double, alongMeters: Double, totalMeters: Double)? {
-        guard coordinates.count > 1 else { return nil }
-        let earth = 6_371_000.0
-        var best = Double.infinity
-        var bestAlong = 0.0
-        var walked = 0.0
-        for index in 1..<coordinates.count {
-            let a = coordinates[index - 1]
-            let b = coordinates[index]
-            let lat0 = ((point.latitude + a.latitude + b.latitude) / 3) * .pi / 180
-            let scaleX = earth * cos(lat0) * .pi / 180
-            let scaleY = earth * .pi / 180
-            let px = (point.longitude - a.longitude) * scaleX
-            let py = (point.latitude - a.latitude) * scaleY
-            let bx = (b.longitude - a.longitude) * scaleX
-            let by = (b.latitude - a.latitude) * scaleY
-            let denominator = bx * bx + by * by
-            let fraction = denominator > 0
-                ? max(0, min(1, (px * bx + py * by) / denominator))
-                : 0
-            let segmentMeters = hypot(bx, by)
-            let offMeters = hypot(px - fraction * bx, py - fraction * by)
-            if offMeters < best {
-                best = offMeters
-                bestAlong = walked + fraction * segmentMeters
-            }
-            walked += segmentMeters
-        }
-        return (best, bestAlong, walked)
-    }
-
     static func routeShape(
         coordinates: [CLLocationCoordinate2D],
         start: CLLocationCoordinate2D,
@@ -370,20 +297,11 @@ nonisolated struct HopSearchContext: Sendable {
     var variety: Bool
     var corridorMeters: Double?
     var hardCorridor: Bool
-    /// Down-sampled shortest legal-road geometry used by the land-path band
-    /// and remaining-road progress compass for Dirt/Balanced.
-    var landPathCoordinates: [CLLocationCoordinate2D]
-    var roadCompass: Bool
     var boundedSearch: Bool
     var timeCapSeconds: Double?
     var popCap: Int?
     /// Soft continuity signal from already-built itinerary legs. Never a wall.
     var priorEdgeIds: Set<String>
-    /// Prior rider-leg edges are deleted from the primary search. A caller may
-    /// open only the recent suffix required for explicit obstruction recovery.
-    var rejectPriorEdges: Bool
-    /// Explicit recovery may traverse only this newest suffix of prior edges.
-    var recoveryAllowedEdgeIds: Set<String>
     var arrivalEdgeId: String?
     var backtrackFactor: Double
     /// Dirt edges already found in sub-kilometre optional excursions. These
@@ -412,14 +330,10 @@ nonisolated struct HopSearchContext: Sendable {
             variety: profile != .cleanest,
             corridorMeters: HopSearchPolicy.corridorMeters(for: profile),
             hardCorridor: false,
-            landPathCoordinates: [],
-            roadCompass: false,
             boundedSearch: false,
             timeCapSeconds: nil,
             popCap: nil,
             priorEdgeIds: [],
-            rejectPriorEdges: false,
-            recoveryAllowedEdgeIds: [],
             arrivalEdgeId: nil,
             backtrackFactor: 4,
             shortDirtPenaltyEdgeIds: [],

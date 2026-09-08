@@ -623,12 +623,7 @@ final class RoutePlannerModel {
 
     private func applyImmediately(_ action: ItineraryAction, source: String) {
         let before = itinerary
-        let fuel = FuelRangePrefs.snapshot
-        let change = reduce(
-            before,
-            action,
-            automaticFuelEnabled: fuel.automaticPlanningEnabled && fuel.usableMeters > 0
-        )
+        let change = reduce(before, action)
         guard change.itinerary != before else { return }
         itinerary = change.itinerary
         RoutingDebugLog.shared.event(
@@ -1007,6 +1002,9 @@ final class RoutePlannerModel {
     /// True while From here / Plan is still building the full route
     /// (including chained fuel stops). Holds the indeterminate progress notice.
     private var isAssemblingRoute = false
+    /// Stable within this app process; a fresh launch can pick a different near-equal corridor.
+    let planningSessionSeed: UInt64 = UInt64.random(in: 1...9_007_199_254_740_991)
+
     func handleMapTap(_ coordinate: CLLocationCoordinate2D) {
         guard navigation.phase == .idle else { return }
         let point = RouteCoordinate(longitude: coordinate.longitude, latitude: coordinate.latitude)
@@ -1747,29 +1745,6 @@ final class RoutePlannerModel {
         refreshMap()
     }
 
-    /// Handles a real second tap without conflating it with MapLibre's
-    /// annotation re-selection during redraw. Tapping the active F again is
-    /// the rider-facing cancel gesture for replacement mode.
-    func tapSelectedPlannerPin(markerID: String) {
-        guard markerID.hasPrefix("fuel:") else { return }
-        if activeFuelDragMarkerID == markerID {
-            cancelFuelReplacement()
-        } else {
-            beginPlannerPinDrag(markerID: markerID)
-            if activeFuelDragMarkerID == markerID {
-                toast = "Choose a highlighted pump"
-            }
-        }
-    }
-
-    func cancelFuelReplacement() {
-        fuelTargetMarkers = []
-        activeFuelDragMarkerID = nil
-        mapState.selectPlannerPin(nil)
-        if toast == "Choose a highlighted pump" { toast = nil }
-        refreshMap()
-    }
-
     func canReplaceFuelStop(at stageIndex: Int) -> Bool {
         guard stages.indices.contains(stageIndex),
               let builtLegIndex = stages[stageIndex].builtLegIndex
@@ -1787,15 +1762,9 @@ final class RoutePlannerModel {
               built.legs[builtLegIndex].endsAtFuelStop != nil
         else { return }
         let markerID = "fuel:\(built.legs[builtLegIndex].riderLegID.uuidString):\(builtLegIndex)"
-        if activeFuelDragMarkerID == markerID {
-            cancelFuelReplacement()
-            return
-        }
         mapState.selectPlannerPin(markerID)
         beginPlannerPinDrag(markerID: markerID)
-        if activeFuelDragMarkerID == markerID {
-            toast = "Choose a highlighted pump"
-        }
+        toast = "Choose a highlighted pump"
     }
 
     func selectFuelTarget(markerID: String) {
@@ -2325,7 +2294,6 @@ final class RoutePlannerModel {
         existing.dirtPercent = aggregateDirtPercent
         existing.pavedPercent = aggregatePavedPercent
         existing.segments = activeResponses.flatMap { $0.segments ?? [] }
-        existing.routeSeeds = itinerary.legs.map(\.routeSeed)
         existing.surfaceFamilyMode = activeSurfaceFamilyMode
         try? context.save()
         savedRouteOrigin = SavedRouteOrigin(id: existing.id, name: existing.name)
@@ -2341,7 +2309,6 @@ final class RoutePlannerModel {
             dirtPercent: aggregateDirtPercent,
             pavedPercent: aggregatePavedPercent,
             segments: activeResponses.flatMap { $0.segments ?? [] },
-            routeSeeds: itinerary.legs.map(\.routeSeed),
             surfaceFamilyMode: activeSurfaceFamilyMode
         )
         context.insert(route)
@@ -3306,12 +3273,6 @@ final class RoutePlannerModel {
         let useProfile = profile ?? self.profile
         let useAllow = allowUnknown ?? self.allowUnknown
         let online = networkOnline ?? network.isOnline
-        let routeSeed = itinerary.legs.indices.first(where: {
-            itinerary.waypoints.indices.contains($0 + 1)
-                && itinerary.waypoints[$0 + 1].coordinate == to
-        }).map { itinerary.legs[$0].routeSeed } ?? itinerary.legs.first?.routeSeed ?? 0
-        let riddenHistory = RideEdgeSequence.sanitize(navigation.riddenEdgeIds)
-        let impassableRecovery = !avoidEdgeIds.isEmpty
         let fromCL = CLLocationCoordinate2D(latitude: from.latitude, longitude: from.longitude)
         let toCL = CLLocationCoordinate2D(latitude: to.latitude, longitude: to.longitude)
 
@@ -3322,11 +3283,7 @@ final class RoutePlannerModel {
             profile: useProfile,
             allowUnknown: useAllow,
             avoidEdgeIds: avoidEdgeIds,
-            priorEdgeIds: Set(riddenHistory),
-            priorEdgeHistory: riddenHistory,
-            arrivalEdgeId: riddenHistory.last,
-            impassableRecovery: impassableRecovery,
-            sessionSeed: routeSeed
+            sessionSeed: planningSessionSeed
         ), local.coordinates.count > 1 {
             return makeOnDeviceRouteResponse(local)
         }
@@ -3349,11 +3306,8 @@ final class RoutePlannerModel {
                 RouteLocation(latitude: to.latitude, longitude: to.longitude, label: "B")
             ],
             allowUnknown: useAllow,
-            routeSeed: routeSeed,
             avoidEdgeIds: avoidEdgeIds,
-            priorEdgeIds: riddenHistory,
-            arrivalEdgeId: riddenHistory.last,
-            impassableRecovery: impassableRecovery,
+            sessionSeed: planningSessionSeed,
             cleanMetroMultiplier: nil,
             avoidMotorways: avoidMotorways,
             preferBackRoads: preferBackRoads

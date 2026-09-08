@@ -11,8 +11,7 @@ nonisolated struct ItineraryChange: Equatable, Sendable {
 
 nonisolated func reduce(
     _ itinerary: RiderItinerary,
-    _ action: ItineraryAction,
-    automaticFuelEnabled: Bool = true
+    _ action: ItineraryAction
 ) -> ItineraryChange {
     switch action {
     case .append(let coordinate):
@@ -40,7 +39,7 @@ nonisolated func reduce(
         let split = itinerary.legs[legIndex]
         var waypoints = itinerary.waypoints
         waypoints.insert(RiderWaypoint(coordinate: coordinate), at: legIndex + 1)
-        var legs = rebuiltLegs(
+        let legs = rebuiltLegs(
             waypoints: waypoints,
             preserving: itinerary.legs,
             fallbackProfile: split.profile,
@@ -48,19 +47,7 @@ nonisolated func reduce(
             fallbackAvoidMotorways: split.avoidMotorways,
             fallbackPreferBackRoads: split.preferBackRoads
         )
-        let rebuildThrough = automaticFuelEnabled ? nil : min(legIndex + 1, legs.count - 1)
-        refreshRouteSeeds(
-            in: &legs,
-            from: legIndex,
-            through: rebuildThrough
-        )
-        return changed(
-            itinerary,
-            waypoints: waypoints,
-            legs: legs,
-            rebuildFrom: legIndex,
-            rebuildThrough: rebuildThrough
-        )
+        return changed(itinerary, waypoints: waypoints, legs: legs, rebuildFrom: legIndex)
 
     case .move(let waypointID, let coordinate):
         guard let waypointIndex = itinerary.waypoints.firstIndex(where: { $0.id == waypointID }),
@@ -69,19 +56,11 @@ nonisolated func reduce(
         var waypoints = itinerary.waypoints
         waypoints[waypointIndex].coordinate = coordinate
         let rebuildIndex = itinerary.legs.isEmpty ? nil : max(0, waypointIndex - 1)
-        let rebuildThrough: Int? = {
-            guard rebuildIndex != nil else { return nil }
-            if waypointIndex == 0 || automaticFuelEnabled { return nil }
-            return min(waypointIndex, itinerary.legs.count - 1)
-        }()
-        var legs = itinerary.legs
-        refreshRouteSeeds(in: &legs, from: rebuildIndex, through: rebuildThrough)
         return changed(
             itinerary,
             waypoints: waypoints,
-            legs: legs,
-            rebuildFrom: rebuildIndex,
-            rebuildThrough: rebuildThrough
+            legs: itinerary.legs,
+            rebuildFrom: rebuildIndex
         )
 
     case .delete(let waypointID):
@@ -96,7 +75,7 @@ nonisolated func reduce(
             }
             return itinerary.legs.last
         }()
-        var legs = rebuiltLegs(
+        let legs = rebuiltLegs(
             waypoints: waypoints,
             preserving: itinerary.legs,
             fallbackProfile: fallbackLeg?.profile ?? .balanced,
@@ -105,15 +84,7 @@ nonisolated func reduce(
             fallbackPreferBackRoads: fallbackLeg?.preferBackRoads ?? false
         )
         let joinedIndex = legs.isEmpty ? nil : min(max(0, waypointIndex - 1), legs.count - 1)
-        let rebuildThrough = automaticFuelEnabled ? nil : joinedIndex
-        refreshRouteSeeds(in: &legs, from: joinedIndex, through: rebuildThrough)
-        return changed(
-            itinerary,
-            waypoints: waypoints,
-            legs: legs,
-            rebuildFrom: joinedIndex,
-            rebuildThrough: rebuildThrough
-        )
+        return changed(itinerary, waypoints: waypoints, legs: legs, rebuildFrom: joinedIndex)
 
     case .setProfile(let legID, let profile):
         var legs = itinerary.legs
@@ -212,7 +183,6 @@ nonisolated func reduce(
         else { return unchanged(itinerary) }
         var legs = itinerary.legs
         legs[index].fuelStopOverrides[departureAnchorID] = stationID
-        legs[index].routeSeed = RiderLeg.mintRouteSeed()
         return changed(
             itinerary,
             waypoints: itinerary.waypoints,
@@ -230,7 +200,6 @@ nonisolated func reduce(
         else { return unchanged(itinerary) }
         var legs = itinerary.legs
         legs[index].fuelStopOverrides.removeAll()
-        legs[index].routeSeed = RiderLeg.mintRouteSeed()
         return changed(
             itinerary,
             waypoints: itinerary.waypoints,
@@ -346,19 +315,6 @@ nonisolated func reduce(
             legs: itinerary.legs,
             rebuildFrom: 0
         )
-    }
-}
-
-private nonisolated func refreshRouteSeeds(
-    in legs: inout [RiderLeg],
-    from start: Int?,
-    through end: Int?
-) {
-    guard let start, legs.indices.contains(start) else { return }
-    let last = min(end ?? (legs.count - 1), legs.count - 1)
-    guard start <= last else { return }
-    for index in start...last {
-        legs[index].routeSeed = RiderLeg.mintRouteSeed()
     }
 }
 

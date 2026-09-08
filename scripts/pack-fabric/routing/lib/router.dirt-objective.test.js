@@ -38,7 +38,7 @@ for (const [index, leg] of legs.entries()) {
     assert.equal(result.status, "complete");
     assert.ok(result.stats.dirtPercent >= 70, `received ${result.stats.dirtPercent}% dirt`);
     assert.equal(result.lowDirt, false);
-    assert.ok(Date.now() - started < 12_000, "route must complete under twelve seconds");
+    assert.ok(Date.now() - started < 3000, "route must complete under three seconds");
   });
 }
 
@@ -48,24 +48,12 @@ test("Nova Scotia Balanced objective stays within five points of 50/50", async (
   assert.equal(result.status, "complete");
   assert.ok(result.stats.dirtPercent >= 45 && result.stats.dirtPercent <= 55,
     `received ${result.stats.dirtPercent}% dirt`);
-  assert.ok(Date.now() - started < 12_000, "route must complete under twelve seconds");
+  assert.ok(Date.now() - started < 3000, "route must complete under three seconds");
 });
 
 test("a completed low-scoring Dirt route is flagged instead of discarded", () => {
   assert.equal(isLowDirtRoute("dirt", { stats: { dirtPercent: 30 } }), true);
   assert.equal(isLowDirtRoute("balanced", { stats: { dirtPercent: 30 } }), false);
-});
-
-test("an expired Dirt quality search reports degradation instead of a paved success", async () => {
-  const result = await routeRequest({
-    ...request("dirt", legs[0]),
-    options: { deadlineAtMs: Date.now() - 1 }
-  });
-  assert.equal(result.status, "failed");
-  assert.equal(result.error, "search_limit");
-  assert.ok((result.warnings || []).some((warning) => warning.code === "search_limit"));
-  assert.deepEqual(result.segments, []);
-  assert.equal(result.debug.fallback, null);
 });
 
 test("Dirt objective remains above 70 percent under a 237.5 km tank cap", async () => {
@@ -102,7 +90,7 @@ test("Balanced and Clean keep their surface contracts under the same cap", async
   assert.ok(clean.stats.dirtPercent <= 15, `Clean received ${clean.stats.dirtPercent}% dirt`);
 });
 
-test("Dirt stays within the coherent mix band without Halifax or short dirt teeth", {
+test("Dirt beats Balanced without routing through Halifax or collecting short dirt teeth", {
   timeout: 30_000
 }, async () => {
   const locations = [
@@ -125,15 +113,17 @@ test("Dirt stays within the coherent mix band without Halifax or short dirt teet
   assert.equal(dirt.status, "complete");
   assert.equal(balanced.status, "complete");
   assert.ok(
-    dirt.stats.dirtPercent + 5 >= balanced.stats.dirtPercent,
-    `Dirt ${dirt.stats.dirtPercent}% fell outside five points of Balanced ${balanced.stats.dirtPercent}%`
+    dirt.stats.dirtPercent >= balanced.stats.dirtPercent,
+    `Dirt ${dirt.stats.dirtPercent}% fell below Balanced ${balanced.stats.dirtPercent}%`
   );
   assert.equal(dirt.debug.searchMeta.urbanCoreFallbackUsed, undefined);
   assert.equal(balanced.debug.searchMeta.urbanCoreFallbackUsed, undefined);
   assert.equal(shortDirtExcursionEdgeIds(dirt.segments).size, 0);
-  assert.equal(dirt.debug.searchMeta.landPathCompass, "remaining-legal-road-meters");
-  assert.equal(dirt.debug.searchMeta.corridorReference, "shortest-legal-road-path");
-  assert.equal(dirt.debug.searchMeta.corridorCandidates, undefined);
+  assert.equal(dirt.debug.searchMeta.corridorCandidates[1].outcome, "reused");
+  assert.ok(
+    dirt.debug.searchMeta.corridorCandidates[2].maxPathMeters <= 92_000,
+    "low-DIRT recovery must not spend the complete tank range on a short ride"
+  );
 
   const start = [locations[0].lon, locations[0].lat];
   const end = [locations[1].lon, locations[1].lat];

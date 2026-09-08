@@ -357,8 +357,7 @@ struct RoutePlannerModelItineraryTests {
         await model.waitForCanonicalBuildForTesting()
 
         let riderLeg = try #require(model.itinerary.legs.first)
-        #expect(riderLeg.profile == .dirt)
-        #expect(riderLeg.hopOverrides[riderLeg.from.uuidString] == nil)
+        #expect(riderLeg.hopOverrides[riderLeg.from.uuidString] == .dirt)
         #expect(riderLeg.hopOverrides["irving"] == .balanced)
     }
 
@@ -521,9 +520,8 @@ struct RoutePlannerModelItineraryTests {
         #expect(model.canReplaceFuelStop(at: 0))
         model.selectFuelWaypoint(at: 0)
         #expect(mapState.hasFuelReplacementCandidates)
-        // A deliberate second tap on the selected F pin exits replacement mode.
-        model.selectFuelWaypoint(at: 0)
-        #expect(!mapState.hasFuelReplacementCandidates)
+        // Marker redraw reselects the active F pin. Replacement mode must stay
+        // open rather than treating that callback as a dismissal tap.
         model.selectFuelWaypoint(at: 0)
         #expect(mapState.hasFuelReplacementCandidates)
         model.selectFuelTarget(markerID: "fuel-target:alternate")

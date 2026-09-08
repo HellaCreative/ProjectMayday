@@ -8,7 +8,6 @@ const {
   MINIMUM_EARNED_DIRT_EXCURSION_METERS,
   DIRT_BASE_SEARCH_BUDGET_MS,
   DIRT_MAX_SEARCH_BUDGET_MS,
-  DIRT_PROVINCE_SCALE_ROUTE_METERS,
   BALANCED_BASE_SEARCH_BUDGET_MS,
   BALANCED_MAX_SEARCH_BUDGET_MS,
   LARGE_GRAPH_BASE_SEARCH_BUDGET_MS,
@@ -18,8 +17,7 @@ const {
   profileSearchBudgetMs,
   profileSearchPopCap,
   dirtRecoveryPathCap,
-  balancedCorridorMultipliers,
-  createBalancedLabelState
+  balancedCorridorMultipliers
 } = require("./find-path-v2");
 
 function segment(edgeId, surfaceClass, distanceMeters, structureType = "none") {
@@ -52,37 +50,6 @@ function candidate({
     lateralMeters: lateral
   };
 }
-
-test("large Balanced label state allocates reached pages and preserves sentinels", () => {
-  const state = createBalancedLabelState(10_000_001);
-  assert.equal(state.sparse, true);
-  assert.equal(state.pageCount(), 0);
-  assert.equal(state.distance(9_000_000), Infinity);
-  assert.equal(state.score(9_000_000), Infinity);
-  assert.equal(state.previous(9_000_000), -1);
-  assert.equal(state.peak(9_000_000), -Infinity);
-
-  state.setDistance(9_000_000, 1234.5);
-  state.setScore(9_000_000, 987.25);
-  state.setDirt(9_000_000, 456.75);
-  state.setPeak(9_000_000, 321);
-  state.setPrevious(9_000_000, 8_999_999);
-  state.setPreviousData(9_000_000, 42);
-  state.setPreviousForward(9_000_000, 1);
-  assert.equal(state.distance(9_000_000), 1234.5);
-  assert.equal(state.score(9_000_000), 987.25);
-  assert.equal(state.dirt(9_000_000), 456.75);
-  assert.equal(state.peak(9_000_000), 321);
-  assert.equal(state.previous(9_000_000), 8_999_999);
-  assert.equal(state.previousData(9_000_000), 42);
-  assert.equal(state.previousForward(9_000_000), 1);
-  assert.equal(state.applyRelax("reset", 9_000_000), true);
-  assert.equal(state.slots(9_000_000), 1);
-  assert.equal(state.applyRelax("improve", 9_000_000), true);
-  assert.equal(state.slots(9_000_000), 2);
-  assert.equal(state.createsCycle(9_000_000, 8_999_999), true);
-  assert.ok(state.pageCount() < 3);
-});
 
 test("Dirt prefers consistent journey quality when aggregate dirt is effectively tied", () => {
   const frontLoadedPavement = candidate({
@@ -175,7 +142,7 @@ test("route endpoint dirt remains eligible for pins and necessary connectors", (
   assert.equal(edges.size, 0);
 });
 
-test("ordinary Balanced routes keep the established bounded search budget", () => {
+test("ordinary Balanced routes keep the established search budget and corridor ladder", () => {
   assert.equal(
     balancedSearchBudgetMs(250_000, 250_000),
     BALANCED_BASE_SEARCH_BUDGET_MS
@@ -188,8 +155,7 @@ test("ordinary Balanced routes keep the established bounded search budget", () =
 
 test("long routes on province-sized graphs receive a bounded adaptive search budget", () => {
   const budget = balancedSearchBudgetMs(1_016_620, 1_470_000);
-  assert.ok(budget > BALANCED_BASE_SEARCH_BUDGET_MS,
-    `expected an adaptive province-scale budget, got ${budget}`);
+  assert.ok(budget >= 40_000, `expected Ontario-scale budget, got ${budget}`);
   assert.ok(budget <= BALANCED_MAX_SEARCH_BUDGET_MS);
   assert.deepEqual(
     balancedCorridorMultipliers(1_016_620),
@@ -214,17 +180,6 @@ test("short routes on province-sized graphs do not inherit small-region ceilings
   );
   assert.ok(profileSearchPopCap("dirt", nodes, true) > 200_000);
   assert.ok(profileSearchPopCap("balanced", nodes) > 400_000);
-});
-
-test("province-scale Dirt rides may use the full ceiling without making it a delay", () => {
-  assert.equal(
-    profileSearchBudgetMs("dirt", DIRT_PROVINCE_SCALE_ROUTE_METERS, 750_000),
-    DIRT_MAX_SEARCH_BUDGET_MS
-  );
-  assert.ok(
-    profileSearchBudgetMs("dirt", DIRT_PROVINCE_SCALE_ROUTE_METERS - 1, 750_000) <
-      DIRT_MAX_SEARCH_BUDGET_MS
-  );
 });
 
 test("small graphs retain established profile budgets and exploration caps", () => {

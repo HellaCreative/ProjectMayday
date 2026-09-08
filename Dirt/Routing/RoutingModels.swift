@@ -96,10 +96,6 @@ struct RouteRequestOptions: Codable, Sendable {
     var priorEdgeIds: [String]?
     var arrivalEdgeId: String?
     var backtrackFactor: Double?
-    /// True only for the rider-triggered impassable-road recovery flow.
-    var impassableRecovery: Bool?
-    var routeSeed: UInt64?
-    /// Decode compatibility for requests produced before rider-leg seeds.
     var sessionSeed: UInt64?
     var maxPathMeters: Double?
     var directExtraBudgetMeters: Double?
@@ -126,8 +122,6 @@ struct RouteRequestOptions: Codable, Sendable {
         priorEdgeIds: [String] = [],
         arrivalEdgeId: String? = nil,
         backtrackFactor: Double? = nil,
-        impassableRecovery: Bool = false,
-        routeSeed: UInt64? = nil,
         sessionSeed: UInt64? = nil,
         maxPathMeters: Double? = nil,
         directExtraBudgetMeters: Double? = nil,
@@ -144,8 +138,6 @@ struct RouteRequestOptions: Codable, Sendable {
         self.priorEdgeIds = priorEdgeIds.isEmpty ? nil : priorEdgeIds
         self.arrivalEdgeId = arrivalEdgeId
         self.backtrackFactor = backtrackFactor
-        self.impassableRecovery = impassableRecovery ? true : nil
-        self.routeSeed = routeSeed
         self.sessionSeed = sessionSeed
         self.maxPathMeters = maxPathMeters
         self.directExtraBudgetMeters = directExtraBudgetMeters
@@ -176,13 +168,10 @@ struct RouteRequest: Codable, Sendable {
         profile: RouteProfile,
         locations: [RouteLocation],
         allowUnknown: Bool,
-        routeSeed: UInt64 = 0,
         avoidEdgeIds: [String] = [],
         priorEdgeIds: [String] = [],
         arrivalEdgeId: String? = nil,
         backtrackFactor: Double? = nil,
-        impassableRecovery: Bool = false,
-        /// Legacy call-site compatibility. New planned routes pass routeSeed.
         sessionSeed: UInt64 = 0,
         maxPathMeters: Double? = nil,
         directExtraBudgetMeters: Double? = nil,
@@ -202,18 +191,14 @@ struct RouteRequest: Codable, Sendable {
             motorizedPermissive: true,
             motorizedUnknown: profile == .cleanest ? false : allowUnknown
         )
-        let seed = routeSeed == 0 ? nil : min(routeSeed, RiderLeg.maximumRouteSeed)
-        let legacySeed = seed == nil && sessionSeed != 0
-            ? min(sessionSeed, RiderLeg.maximumRouteSeed)
-            : nil
+        let seed = sessionSeed == 0 ? nil : sessionSeed
         let metro = profile == .cleanest ? cleanMetroMultiplier : nil
         let scopedAvoid = profile == .cleanest && avoidMotorways
         let scopedPrefer = false
         let zoom = mapZoom?.isFinite == true ? mapZoom : nil
         let matchLimit = matchLimitMeters?.isFinite == true ? matchLimitMeters : nil
         if avoidEdgeIds.isEmpty, priorEdgeIds.isEmpty, arrivalEdgeId == nil,
-           backtrackFactor == nil, !impassableRecovery,
-           seed == nil, legacySeed == nil, maxPathMeters == nil,
+           backtrackFactor == nil, seed == nil, maxPathMeters == nil,
            directExtraBudgetMeters == nil, regionalHopMinimumMeters.isEmpty, metro == nil,
            !scopedAvoid, !scopedPrefer, zoom == nil, matchLimit == nil,
            startEndpointKind == nil, endEndpointKind == nil {
@@ -224,9 +209,7 @@ struct RouteRequest: Codable, Sendable {
                 priorEdgeIds: priorEdgeIds,
                 arrivalEdgeId: arrivalEdgeId,
                 backtrackFactor: backtrackFactor,
-                impassableRecovery: impassableRecovery,
-                routeSeed: seed,
-                sessionSeed: legacySeed,
+                sessionSeed: seed,
                 maxPathMeters: maxPathMeters,
                 directExtraBudgetMeters: directExtraBudgetMeters,
                 regionalHopMinimumMeters: regionalHopMinimumMeters,
@@ -294,7 +277,6 @@ struct FuelChainRequest: Codable, Sendable {
         destinationFuelUsedLimitMeters: Double? = nil,
         profileMeters: Double,
         riderLegId: String,
-        routeSeed: UInt64 = 0,
         avoidEdgeIds: [String] = [],
         cleanMetroMultiplier: Double? = nil,
         avoidMotorways: Bool = false,
@@ -326,16 +308,14 @@ struct FuelChainRequest: Codable, Sendable {
         let metro = profile == .cleanest ? cleanMetroMultiplier : nil
         let scopedAvoid = profile == .cleanest && avoidMotorways
         let zoom = mapZoom?.isFinite == true ? mapZoom : nil
-        let seed = routeSeed == 0 ? nil : min(routeSeed, RiderLeg.maximumRouteSeed)
         options = avoidEdgeIds.isEmpty && priorEdgeIds.isEmpty && arrivalEdgeId == nil
-            && backtrackFactor == nil && seed == nil && metro == nil && !scopedAvoid && zoom == nil
+            && backtrackFactor == nil && metro == nil && !scopedAvoid && zoom == nil
             ? nil
             : RouteRequestOptions(
                 avoidEdgeIds: avoidEdgeIds,
                 priorEdgeIds: priorEdgeIds,
                 arrivalEdgeId: arrivalEdgeId,
                 backtrackFactor: backtrackFactor,
-                routeSeed: seed,
                 cleanMetroMultiplier: metro,
                 avoidMotorways: scopedAvoid,
                 mapZoom: zoom

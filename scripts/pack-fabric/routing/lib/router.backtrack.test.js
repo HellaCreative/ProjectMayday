@@ -3,7 +3,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { findPathV2 } = require("./find-path-v2");
-const { backtrackSummary, firstUsableRecovery } = require("./router");
+const { backtrackSummary } = require("./router");
 const { packAttrs } = require("./pack-v2");
 
 function runtimeWithAlternative(includeAlternative) {
@@ -74,7 +74,7 @@ function runtimeWithAlternative(includeAlternative) {
   };
 }
 
-function route(runtime, options = {}) {
+function route(runtime) {
   const start = {
     edgeIndex: 0, edgeId: "arrival", coord: [0.009, 0], segmentIndex: 0,
     distanceAlongM: 1_000, edgeMeters: 1_000, roadTrack: "local"
@@ -96,65 +96,25 @@ function route(runtime, options = {}) {
       boundedSearch: false,
       corridorMeters: 0,
       hardCorridor: false,
-      priorEdgeIds: options.priorEdgeIds || ["arrival"],
+      priorEdgeIds: ["arrival"],
       arrivalEdgeId: "arrival",
-      backtrackFactor: 4,
-      rejectPriorEdges: options.rejectPriorEdges === true,
-      startEndpointKind: options.startEndpointKind || null,
-      endEndpointKind: options.endEndpointKind || null
+      backtrackFactor: 4
     }
   );
 }
 
 test("arrival-edge penalty takes an alternative exit when one exists", () => {
-  const result = route(runtimeWithAlternative(true), { rejectPriorEdges: true });
+  const result = route(runtimeWithAlternative(true));
   assert.ok(result);
   assert.ok(result.segments.some((segment) => segment.edgeId === "alternative-a"));
   const summary = backtrackSummary(result, ["arrival"]);
   assert.equal(summary.backtrackPct, 0);
 });
 
-test("the exact departure edge remains available at a literal single-access endpoint", () => {
-  const result = route(runtimeWithAlternative(false), { rejectPriorEdges: true });
+test("arrival-edge penalty remains soft at a literal dead end", () => {
+  const result = route(runtimeWithAlternative(false));
   assert.ok(result);
   const summary = backtrackSummary(result, ["arrival"]);
   assert.ok(summary.backtrackPct > 0);
   assert.equal(summary.backtrackReason, "dead_end_or_only_connector");
-});
-
-test("a proved no-path route does not reopen a two-kilometre prior fuel approach", () => {
-  const result = route(runtimeWithAlternative(false), {
-    rejectPriorEdges: true,
-    priorEdgeIds: ["old-corridor"],
-    endEndpointKind: "customers"
-  });
-  assert.equal(result, null);
-});
-
-test("explicit recovery opens only the suffix reaching the first usable junction", () => {
-  const history = ["oldest", "junction-3", "junction-2", "junction-1", "arrival"];
-  const attempts = [];
-  const result = firstUsableRecovery(history, (allowed, count) => {
-    attempts.push(count);
-    return allowed.has("junction-2")
-      ? { path: { edgeIds: [...allowed] }, diagnostics: { outcome: "completed" } }
-      : { path: null, diagnostics: { outcome: "noPath" } };
-  });
-
-  assert.ok(result && result.path);
-  assert.equal(result.allowedHistoryCount, 3);
-  assert.deepEqual([...result.allowedEdgeIds], ["junction-2", "junction-1", "arrival"]);
-  assert.ok(attempts.includes(4), "exponential probe should establish a usable upper bound");
-});
-
-test("explicit recovery does not widen after an unproved search limit", () => {
-  const result = firstUsableRecovery(["older", "arrival"], (_allowed, count) => (
-    count === 1
-      ? { path: null, diagnostics: { outcome: "searchLimit" } }
-      : { path: { edgeIds: ["older"] }, diagnostics: { outcome: "completed" } }
-  ));
-
-  assert.equal(result.path, null);
-  assert.equal(result.outcome, "searchLimit");
-  assert.equal(result.allowedHistoryCount, 1);
 });

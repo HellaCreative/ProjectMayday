@@ -11,17 +11,9 @@ nonisolated struct RiderWaypoint: Identifiable, Equatable, Codable, Sendable {
 }
 
 nonisolated struct RiderLeg: Identifiable, Equatable, Codable, Sendable {
-    /// JavaScript's largest exactly representable integer. Keeping route seeds
-    /// inside this range makes the live router and Swift router consume the
-    /// same value without precision loss.
-    static let maximumRouteSeed: UInt64 = 9_007_199_254_740_991
-
     let id: UUID
     let from: UUID
     let to: UUID
-    /// Stable variety identity for this rider-owned leg. Generated fuel hops
-    /// inherit this seed; process-lifetime state must never replace it.
-    var routeSeed: UInt64
     var profile: RouteProfile
     var allowUnknown: Bool
     /// Internal inverse of the Clean "Allow major highways" control.
@@ -46,7 +38,6 @@ nonisolated struct RiderLeg: Identifiable, Equatable, Codable, Sendable {
     init(
         from: UUID,
         to: UUID,
-        routeSeed: UInt64? = nil,
         profile: RouteProfile,
         allowUnknown: Bool,
         avoidMotorways: Bool = true,
@@ -59,7 +50,6 @@ nonisolated struct RiderLeg: Identifiable, Equatable, Codable, Sendable {
         id = RiderItinerary.legID(from: from, to: to)
         self.from = from
         self.to = to
-        self.routeSeed = Self.normalizedRouteSeed(routeSeed)
         self.profile = profile
         self.allowUnknown = profile == .cleanest ? false : allowUnknown
         self.avoidMotorways = profile == .cleanest ? avoidMotorways : false
@@ -96,7 +86,7 @@ nonisolated struct RiderLeg: Identifiable, Equatable, Codable, Sendable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, from, to, routeSeed, profile, allowUnknown, avoidMotorways, preferBackRoads
+        case id, from, to, profile, allowUnknown, avoidMotorways, preferBackRoads
         case hopOverrides, hopAvoidMotorways, hopAllowUnknown, fuelStopOverrides
     }
 
@@ -105,9 +95,6 @@ nonisolated struct RiderLeg: Identifiable, Equatable, Codable, Sendable {
         id = try container.decode(UUID.self, forKey: .id)
         from = try container.decode(UUID.self, forKey: .from)
         to = try container.decode(UUID.self, forKey: .to)
-        routeSeed = Self.normalizedRouteSeed(
-            try container.decodeIfPresent(UInt64.self, forKey: .routeSeed)
-        )
         profile = try container.decode(RouteProfile.self, forKey: .profile)
         allowUnknown = try container.decode(Bool.self, forKey: .allowUnknown)
         avoidMotorways = try container.decodeIfPresent(Bool.self, forKey: .avoidMotorways)
@@ -132,15 +119,6 @@ nonisolated struct RiderLeg: Identifiable, Equatable, Codable, Sendable {
         fuelStopOverrides = try container.decodeIfPresent(
             [String: String].self, forKey: .fuelStopOverrides
         ) ?? [:]
-    }
-
-    static func mintRouteSeed() -> UInt64 {
-        UInt64.random(in: 1...maximumRouteSeed)
-    }
-
-    private static func normalizedRouteSeed(_ seed: UInt64?) -> UInt64 {
-        guard let seed, seed > 0 else { return mintRouteSeed() }
-        return min(seed, maximumRouteSeed)
     }
 }
 

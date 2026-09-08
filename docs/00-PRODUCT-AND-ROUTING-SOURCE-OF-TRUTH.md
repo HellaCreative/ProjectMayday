@@ -1175,40 +1175,6 @@ coverage for a Gate 1 repair; Gate 2; Gate 3; Gate 4; then Gate 5.
 
 ## 12. Change discipline
 
-### 12.1 Routing-engine lockstep and current DEV boundary
-
-Routing search, costs, variety seeds, remaining-road forward progress, retrace
-rejection, and fuel-replacement ranking are one cross-runtime contract. A
-behavioural change must update the shared JavaScript engine and the on-device
-Swift engine together. Same sealed graph, seed, endpoints, profile, Allow
-Unknown state, and avoided edges must produce the same legal path; a live-only
-or phone-only change is a defect.
-
-The September 7 evolution candidate is qualified only against sealed DEV V4
-release `fabric-v4-20260907-01`. Its pack bytes are immutable. There is no V3
-fallback, runtime OSM, production deployment, catalog change, or pack rebuild
-in this work.
-
-Planned rider-leg geometry does not repeat road edges. Retrace opens only for an
-explicitly reported impassable road back to the first usable junction, or for
-the unavoidable exit from a true single-access endpoint. Fuel may use at most
-200 m of real packed, directionally legal forecourt geometry; a separate
-one-way entrance and exit is valid, but a synthetic connector, illegal U-turn,
-or fuel-only out-and-back is not.
-
-Fuel planning first preserves the selected profile foundation, then proves the
-minimum feasible stop count in increasing order. Every section must respect
-the carried first-tank limit, the full-tank limit, and destination reserve.
-Changing profile or Allow Unknown on one primary rider leg may rebuild that leg
-and its necessary fuel boundary only; later primary rider legs remain byte-for-
-byte unchanged until the rider edits them.
-
-The direct-route ceiling is 20 seconds and the complete fuel-planning ceiling
-is 30 seconds. These are maximums, not target waits. Dirt maximizes known dirt
-inside the legal, no-retrace, fuel, and 1.5× coherent-distance constraints; 55%
-is a regression floor, not a target. A resource-limit result is reported as
-incomplete and never repainted as a successful paved Dirt route.
-
 1. Device feedback produces a reviewable diagnosis before code changes.
 2. Richard approves the proposed behavioural correction before implementation.
 3. Pack bytes and routing/search code do not change in the same repair.

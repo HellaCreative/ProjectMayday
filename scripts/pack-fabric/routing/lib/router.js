@@ -215,65 +215,6 @@ function backtrackSummary(path, priorEdgeIds) {
   };
 }
 
-/**
- * Explicit obstruction recovery is monotonic: permit the most-recent ridden
- * edge(s), never the whole history at once, and stop at the smallest suffix
- * that can reach B. That suffix ends at the first useful junction. Exponential
- * probing keeps the common one-edge recovery cheap; binary refinement avoids
- * a linear walk through a long ride history.
- */
-function firstUsableRecovery(priorEdgeHistory, attempt) {
-  const history = (Array.isArray(priorEdgeHistory) ? priorEdgeHistory : [])
-    .filter((id) => id != null && String(id).length > 0)
-    .map(String)
-    .slice(-256);
-  if (!history.length || typeof attempt !== "function") return null;
-
-  const run = (allowedHistoryCount) => {
-    const count = Math.max(1, Math.min(history.length, allowedHistoryCount));
-    const allowedEdgeIds = new Set(history.slice(-count));
-    const result = attempt(allowedEdgeIds, count) || {};
-    return {
-      path: result.path || null,
-      diagnostics: result.diagnostics || null,
-      outcome: result.outcome || (result.diagnostics && result.diagnostics.outcome) || "noPath",
-      allowedHistoryCount: count,
-      allowedEdgeIds
-    };
-  };
-
-  let lastProvedFailure = 0;
-  let upper = 1;
-  let best = null;
-  while (true) {
-    const probe = run(upper);
-    if (probe.path) {
-      best = probe;
-      break;
-    }
-    if (probe.outcome !== "noPath") return probe;
-    lastProvedFailure = upper;
-    if (upper >= history.length) return probe;
-    upper = Math.min(history.length, upper * 2);
-  }
-
-  let low = lastProvedFailure + 1;
-  let high = best.allowedHistoryCount - 1;
-  while (low <= high) {
-    const mid = Math.floor((low + high) / 2);
-    const probe = run(mid);
-    if (probe.path) {
-      best = probe;
-      high = mid - 1;
-    } else if (probe.outcome === "noPath") {
-      low = mid + 1;
-    } else {
-      return probe;
-    }
-  }
-  return best;
-}
-
 function restrictedSummary(path) {
   const meters = ((path && path.segments) || []).reduce((sum, segment) =>
     String(segment.accessClass || "") === "motorized_restricted"
@@ -2149,11 +2090,11 @@ async function routeOnRuntime(body, graphResolution, runtime) {
       .filter((id) => id != null)
       .map((id) => String(id))
   );
-  const priorEdgeHistory =
+  const priorEdgeIds = new Set(
     (Array.isArray(options.priorEdgeIds) ? options.priorEdgeIds : []).slice(-256)
       .filter((id) => id != null)
-      .map((id) => String(id));
-  const priorEdgeIds = new Set(priorEdgeHistory);
+      .map((id) => String(id))
+  );
   const arrivalEdgeId = options.arrivalEdgeId == null
     ? null
     : String(options.arrivalEdgeId);
@@ -2537,14 +2478,10 @@ async function routeOnRuntime(body, graphResolution, runtime) {
 
   const searchStarted = Date.now();
   const searchOpts = {
-    // routeSeed is rider-leg state. sessionSeed remains decode-compatible for
-    // older clients but is never the source of new route variety.
-    sessionSeed: Number(options.routeSeed != null ? options.routeSeed : options.sessionSeed) || 0,
+    sessionSeed: Number(options.sessionSeed) || 0,
     priorEdgeIds: Array.from(priorEdgeIds),
-    rejectPriorEdges: priorEdgeIds.size > 0,
     arrivalEdgeId,
     backtrackFactor,
-    impassableRecovery: options.impassableRecovery === true,
     skipShortDirtRepair: options.internalFuelProbe === true,
     startEndpointKind: options.startEndpointKind || null,
     endEndpointKind: options.endEndpointKind || null
@@ -2652,15 +2589,7 @@ async function routeOnRuntime(body, graphResolution, runtime) {
       adventureSearchOpts
     );
     lastSearchDiagnostics = diagnostics;
-    const incompleteDirtPath = profile === "dirt" && path && path.searchMeta &&
-      path.searchMeta.timedOut === true;
-    primarySearchOutcome = incompleteDirtPath
-      ? (path.searchMeta.pass2Outcome || diagnostics.outcome || "timeCap")
-      : path ? "completed" : (diagnostics.outcome || "noPath");
-    // Defence in depth: a Dirt response is successful only when its quality
-    // search completed. Never expose a partial/paved candidate as a complete
-    // Dirt route merely because it happened to reach the destination first.
-    if (incompleteDirtPath) path = null;
+    primarySearchOutcome = path ? "completed" : (diagnostics.outcome || "noPath");
     // A city wall may sever the only mountain-valley or border connection.
     // Only a proved no-path result (never a timeout/pop cap) may relax it, and
     // the relaxed search still charges the prohibitive urban-core multiplier.
@@ -2774,42 +2703,6 @@ async function routeOnRuntime(body, graphResolution, runtime) {
       }
     }
   }
-  // Prior ridden edges remain deleted from ordinary route construction. A
-  // proved no-path result is still no permission to turn a planned ride into
-  // an out-and-back. Obstruction recovery is a separate, explicit rider flow.
-  const provedRecoveryNeedsRetrace = !path
-    && options.impassableRecovery === true
-    && priorEdgeIds.size > 0
-    && ((profile === "cleanest" && cleanSearchOutcome === "noPath")
-      || (profile !== "cleanest" && lastSearchDiagnostics?.outcome === "noPath"));
-  if (provedRecoveryNeedsRetrace) {
-    const recovery = firstUsableRecovery(priorEdgeHistory, (allowedEdgeIds) => {
-      const recoveryDiagnostics = {};
-      const recoveredPath = findPath(
-        runtime, startMatch, endMatch, profile, policy, avoidEdgeIds,
-        Object.assign({}, searchOpts, {
-          rejectPriorEdges: true,
-          recoveryAllowedEdgeIds: Array.from(allowedEdgeIds),
-          variety: false,
-          diagnostics: recoveryDiagnostics
-        })
-      );
-      return {
-        path: recoveredPath,
-        diagnostics: recoveryDiagnostics,
-        outcome: recoveryDiagnostics.outcome
-      };
-    });
-    path = recovery && recovery.path;
-    lastSearchDiagnostics = recovery && recovery.diagnostics;
-    if (path && recovery) {
-      path.searchMeta = path.searchMeta || {};
-      path.searchMeta.retraceFallbackUsed = true;
-      path.searchMeta.retraceFallbackReason = "explicit-impassable-first-usable-junction";
-      path.searchMeta.recoveryHistoryEdgeCount = recovery.allowedHistoryCount;
-      path.searchMeta.recoveryAllowedEdgeCount = recovery.allowedEdgeIds.size;
-    }
-  }
   // Balanced + Allow ON: unknown dirt usually wins under normal surface weights and
   // blows past ~50/50. Also search Allow OFF (own snaps) and keep whichever mix is
   // closer to half dirt — even if that means discarding unknown entirely.
@@ -2887,7 +2780,7 @@ async function routeOnRuntime(body, graphResolution, runtime) {
       status: "failed",
       profile,
       accessPolicy: policy,
-      error: searchIncomplete ? "search_limit" : "no_route",
+      error: "no_route",
       message: searchIncomplete
         ? routeSearchLimitMessage(profile)
         : "No route on the eligible graph",
@@ -4041,7 +3934,6 @@ module.exports = {
   isLowDirtRoute,
   routeSearchLimitMessage,
   backtrackSummary,
-  firstUsableRecovery,
   restrictedSummary,
   graphDecisionManeuvers,
   buildManeuvers,

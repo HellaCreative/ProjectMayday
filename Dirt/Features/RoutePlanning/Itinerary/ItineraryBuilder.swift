@@ -63,7 +63,7 @@ final class ItineraryBuilder {
     /// Hard live window, not a delay target. Small rides still return as soon
     /// as proved; dense Ontario/Quebec requests get enough room to prove both
     /// sides of one pump without reaching Vercel's platform timeout.
-    private static let liveFuelWindowBudgetMs = 30_000
+    private static let liveFuelWindowBudgetMs = 20_000
     private var currentGeneration: Int?
     /// Current map zoom for V4 tap-radius. Set by the planner before `build`.
     var mapZoom: Double?
@@ -339,7 +339,6 @@ final class ItineraryBuilder {
                     minimumFuelStops: 0,
                     profileMeters: meters,
                     riderLegId: riderLeg.id.uuidString,
-                    routeSeed: riderLeg.routeSeed,
                     avoidEdgeIds: Array(itinerary.impassableEdgeIDs),
                     cleanMetroMultiplier: nil,
                     avoidMotorways: riderLeg.avoidsMajorHighways(
@@ -367,7 +366,7 @@ final class ItineraryBuilder {
 
         // Actual construction always receives its complete budget regardless
         // of whether an optional look-ahead probe succeeded, failed, or timed out.
-        let fuelDeadline = fuelReplan ? Date().addingTimeInterval(30) : .distantFuture
+        let fuelDeadline = fuelReplan ? Date().addingTimeInterval(20) : .distantFuture
 
         let onwardFuelDistance = distanceToNextFuelOpportunity(
             itinerary: itinerary,
@@ -390,7 +389,7 @@ final class ItineraryBuilder {
             if fuelReplan, Date() >= fuelDeadline {
                 let failedIndex = min(max(0, finalStartIndex), itinerary.legs.count - 1)
                 let failedID = itinerary.legs[failedIndex].id
-                let message = "Fuel planning reached its 30-second itinerary budget."
+                let message = "Fuel planning reached its 20-second itinerary budget."
                 committed = fuelAttemptBase
                 var markedUnknown = false
                 for index in finalStartIndex..<lastBuildable {
@@ -448,8 +447,7 @@ final class ItineraryBuilder {
                     excludedStationIDs: excludedStationsByLeg[index] ?? [],
                     resumeAfterStation: index == startIndex ? resume?.station : nil,
                     fuelDeadline: fuelDeadline,
-                    foundationProfile: baselineProfiles[index] ?? riderLeg.profile,
-                    defaultProfile: riderLeg.profile,
+                    defaultProfile: baselineProfiles[index] ?? riderLeg.profile,
                     onHop: { partial in
                         committed = replacing(
                             riderLegID: riderLeg.id,
@@ -761,7 +759,6 @@ final class ItineraryBuilder {
                     minimumFuelStops: 0,
                     profileMeters: 0,
                     riderLegId: "destination-escape",
-                    routeSeed: itinerary.legs.last?.routeSeed ?? 0,
                     probeFirstReachableStation: true,
                     windowTimeBudgetMs: 2_500,
                     forwardFeeler: true
@@ -915,7 +912,6 @@ final class ItineraryBuilder {
                         minimumFuelStops: 0,
                         profileMeters: straightLineMeters(nextFrom, nextTo),
                         riderLegId: nextLeg.id.uuidString,
-                        routeSeed: nextLeg.routeSeed,
                         avoidEdgeIds: Array(itinerary.impassableEdgeIDs),
                         cleanMetroMultiplier: nil,
                         avoidMotorways: nextLeg.avoidsMajorHighways(
@@ -941,7 +937,6 @@ final class ItineraryBuilder {
                                   ),
                                   from: nextFrom,
                                   to: nextTo,
-                                  routeSeed: nextLeg.routeSeed,
                                   avoidEdgeIDs: itinerary.impassableEdgeIDs,
                                   maxPathMeters: nil,
                                   history: EdgeHistory(),
@@ -1059,7 +1054,6 @@ final class ItineraryBuilder {
                        allowUnknown: activeAllowUnknown,
                        from: current,
                        to: riderDestination.coordinate,
-                       routeSeed: riderLeg.routeSeed,
                        avoidEdgeIDs: itinerary.impassableEdgeIDs,
                        maxPathMeters: remaining,
                        history: history,
@@ -1143,7 +1137,6 @@ final class ItineraryBuilder {
                         destinationFuelUsedLimitMeters: arrivalFuelLimit,
                         profileMeters: straightLineMeters(current, riderDestination.coordinate),
                         riderLegId: riderLeg.id.uuidString,
-                        routeSeed: riderLeg.routeSeed,
                         avoidEdgeIds: Array(itinerary.impassableEdgeIDs),
                         cleanMetroMultiplier: nil,
                         avoidMotorways: activeAvoidMotorways,
@@ -1435,7 +1428,6 @@ final class ItineraryBuilder {
                                 allowUnknown: activeAllowUnknown,
                                 from: current,
                                 to: option.stop?.coordinate ?? riderDestination.coordinate,
-                                routeSeed: riderLeg.routeSeed,
                                 avoidEdgeIDs: itinerary.impassableEdgeIDs,
                                 maxPathMeters: remaining,
                                 regionalHopMinimumMeters: option.regionalMeters,
@@ -1655,7 +1647,6 @@ final class ItineraryBuilder {
                     allowUnknown: allowUnknown,
                     from: firstFrom,
                     to: destination,
-                    routeSeed: riderLeg.routeSeed,
                     avoidEdgeIDs: itinerary.impassableEdgeIDs,
                     maxPathMeters: nil,
                     history: history,
@@ -1768,7 +1759,6 @@ final class ItineraryBuilder {
         excludedStationIDs: Set<String>,
         resumeAfterStation: FuelStop?,
         fuelDeadline: Date,
-        foundationProfile: RouteProfile,
         defaultProfile: RouteProfile,
         onHop: @MainActor ([BuiltLeg]) -> Void
     ) async throws -> [BuiltLeg] {
@@ -1793,7 +1783,6 @@ final class ItineraryBuilder {
                 ),
                 from: from,
                 to: to,
-                routeSeed: riderLeg.routeSeed,
                 avoidEdgeIDs: itinerary.impassableEdgeIDs,
                 maxPathMeters: nil,
                 history: history,
@@ -1809,7 +1798,6 @@ final class ItineraryBuilder {
         let meters = try responseMeters(effectiveBaseline)
         guard fuel.usableMeters > 0 else {
             let finalResponse = baselineHistory == history && resumeAfterStation == nil
-                && foundationProfile == activeProfile
                 ? effectiveBaseline
                 : try await source.route(routeRequest(
                     profile: activeProfile,
@@ -1819,7 +1807,6 @@ final class ItineraryBuilder {
                     ),
                     from: from,
                     to: to,
-                    routeSeed: riderLeg.routeSeed,
                     avoidEdgeIDs: itinerary.impassableEdgeIDs,
                     maxPathMeters: nil,
                     history: history,
@@ -1862,57 +1849,24 @@ final class ItineraryBuilder {
             && destinationFuelUsedLimitMeters.map { arrivalWithoutPump > $0 + 1 } == true)
 
         if meters <= firstComfortCap + 1, !requirePumpBeforeWaypoint {
-            let visibleResponse: RouteResponse?
-            if foundationProfile == activeProfile,
-               baselineHistory == history,
-               resumeAfterStation == nil {
-                visibleResponse = effectiveBaseline
-            } else if let profiled = try? await source.route(routeRequest(
-                profile: activeProfile,
-                allowUnknown: allowUnknown(
-                    for: activeProfile,
-                    departingFrom: initialDepartureID
-                ),
-                from: from,
-                to: to,
-                routeSeed: riderLeg.routeSeed,
-                avoidEdgeIDs: itinerary.impassableEdgeIDs,
-                maxPathMeters: firstComfortCap,
-                history: history,
-                avoidMotorways: riderLeg.avoidsMajorHighways(
-                    departingFrom: initialDepartureID,
-                    effectiveProfile: activeProfile
-                ),
-                preferBackRoads: riderLeg.preferBackRoads
-            )), (try? responseMeters(profiled)) != nil {
-                visibleResponse = profiled
-            } else {
-                // The Clean foundation proved connectivity, but it never earns
-                // permission to paint a Clean ride. Continue into fuel-window
-                // planning, which routes every visible hop in the rider profile.
-                visibleResponse = nil
-            }
-            if let visibleResponse, visibleResponse.isComplete {
-                let visibleMeters = try responseMeters(visibleResponse)
-                let arrival = waypointFuelReset == nil ? fuelUsedAtStart + visibleMeters : 0
-                if let reset = waypointFuelReset {
-                    RoutingDebugLog.shared.event(
-                        "fuel reset riderLeg=\(riderLeg.id) station=\(reset.stationID ?? "unknown") source=waypoint"
-                    )
-                }
+            let arrival = waypointFuelReset == nil ? fuelUsedAtStart + meters : 0
+            if let reset = waypointFuelReset {
                 RoutingDebugLog.shared.event(
-                    "fuel carry riderLeg=\(riderLeg.id) used=\(Int(arrival))"
+                    "fuel reset riderLeg=\(riderLeg.id) station=\(reset.stationID ?? "unknown") source=waypoint"
                 )
-                return [BuiltLeg(
-                    riderLegID: riderLeg.id,
-                    fromCoordinate: from,
-                    toCoordinate: to,
-                    endsAtFuelStop: nil,
-                    response: visibleResponse,
-                    fuelUsedOnArrivalMeters: arrival,
-                    routeProfile: activeProfile
-                )]
             }
+            RoutingDebugLog.shared.event(
+                "fuel carry riderLeg=\(riderLeg.id) used=\(Int(arrival))"
+            )
+            return [BuiltLeg(
+                riderLegID: riderLeg.id,
+                fromCoordinate: from,
+                toCoordinate: to,
+                endsAtFuelStop: nil,
+                response: effectiveBaseline,
+                fuelUsedOnArrivalMeters: arrival,
+                routeProfile: activeProfile
+            )]
         }
 
         var output: [BuiltLeg] = []
@@ -1935,7 +1889,7 @@ final class ItineraryBuilder {
         while true {
             let remainingBudgetMs = Int(fuelDeadline.timeIntervalSinceNow * 1_000)
             guard remainingBudgetMs > 0 else {
-                throw RoutingError.server("Fuel planning reached its 30-second itinerary budget.")
+                throw RoutingError.server("Fuel planning reached its 20-second itinerary budget.")
             }
             windowIndex += 1
             guard windowIndex <= 16 else {
@@ -1976,7 +1930,6 @@ final class ItineraryBuilder {
                         : nil,
                     profileMeters: remainingProfileMeters,
                     riderLegId: riderLeg.id.uuidString,
-                    routeSeed: riderLeg.routeSeed,
                     avoidEdgeIds: Array(itinerary.impassableEdgeIDs),
                     cleanMetroMultiplier: nil,
                     avoidMotorways: activeAvoidMotorways,
@@ -2049,7 +2002,6 @@ final class ItineraryBuilder {
                     allowUnknown: hopAllowUnknown,
                     from: points[subIndex],
                     to: points[subIndex + 1],
-                    routeSeed: riderLeg.routeSeed,
                     avoidEdgeIDs: itinerary.impassableEdgeIDs,
                     maxPathMeters: cap,
                     history: sublegHistory,
@@ -2496,7 +2448,6 @@ private func routeRequest(
         ),
         from: itinerary.waypoints[legIndex].coordinate,
         to: itinerary.waypoints[legIndex + 1].coordinate,
-        routeSeed: leg.routeSeed,
         avoidEdgeIDs: itinerary.impassableEdgeIDs,
         maxPathMeters: maxPathMeters,
         history: history,
@@ -2520,7 +2471,6 @@ private func routeRequest(
     allowUnknown: Bool,
     from: RouteCoordinate,
     to: RouteCoordinate,
-    routeSeed: UInt64 = 0,
     avoidEdgeIDs: Set<String>,
     maxPathMeters: Double?,
     directExtraBudgetMeters: Double? = nil,
@@ -2539,7 +2489,6 @@ private func routeRequest(
             RouteLocation(latitude: to.latitude, longitude: to.longitude, label: "Point 2")
         ],
         allowUnknown: allowUnknown,
-        routeSeed: routeSeed,
         avoidEdgeIds: Array(avoidEdgeIDs),
         priorEdgeIds: history.edgeIDs,
         arrivalEdgeId: history.arrivalEdgeID,
