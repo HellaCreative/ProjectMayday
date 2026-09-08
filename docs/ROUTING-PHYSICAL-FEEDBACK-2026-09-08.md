@@ -126,3 +126,25 @@ acceptance and successful responses do not independently verify navigation,
 station entrances/availability, or offline routing. Clean back-road quality is
 the next integration priority. Short-range NB dirt share and residual NS unknown
 retrace remain open. Preserve this accepted Dirt baseline while refining Clean.
+
+## Follow-up correction — Nova Scotia short diversions, 22:14 UTC
+
+The rider's close-up screenshot rejects short hooked diversions near Musquodoboit
+Harbour on a NEW NS-only route to 46.214698,-59.965492. This is separate from the
+three earlier NS→NB builds. The earlier positive feedback is not blanket routing
+acceptance. Route quality remains open and takes priority over Clean refinement.
+
+Exact public replay on source67425 confirms the diversions exist in returned
+segments, not only the renderer. Gravel service runs of70m and179m occur in the
+opening9km. The selected route reports zero repeated road metres: leaving and
+rejoining through different edges escapes the retrace check. Current per-metre
+surface costs reward short dirt without assessing continuous riding value.
+A short-run threshold alone must not reject necessary fuel/waypoint access.
+
+Device request16.488s; public replay13.677s server. Dirt-10 completes at561.496km,
+68.981%dirt,3pumps; paved and dirt-30 candidates hit label_limit. This is a separate
+search-completeness/performance failure, not evidence that dirt-10 is best possible.
+Input and observations: bench fixture `ns-short-diversions-20260908.json`.
+No scoring change or deployment made for this diagnostic capture. Next: compare
+these short branches with legal onward alternatives and qualify continuity
+handling beyond repeated-edge detection; preserve fuel and turn constraints.

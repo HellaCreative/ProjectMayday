@@ -1,3 +1,12 @@
+# Current qualification — short-diversion failure remains open
+
+The 22:14 UTC NS-only Cape Breton test exposed short dirt diversions around
+Musquodoboit Harbour. Exact replay confirms they are in route geometry even
+though repeated-road distance is zero. Two candidate searches also hit their
+label limit. This takes priority over Clean refinement. No new fix is deployed.
+The earlier three NS→NB observations below remain historical positive feedback,
+not blanket acceptance of route quality.
+
 # Latest device result — accepted September 8, 22:11 UTC
 
 The rider accepted three NS→NB From Here Dirt builds on app 2 (23), using live

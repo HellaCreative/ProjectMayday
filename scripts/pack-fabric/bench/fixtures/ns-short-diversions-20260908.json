@@ -1,0 +1,80 @@
+{
+  "id": "physical-ns-short-diversions-20260908-221435",
+  "status": "failing_rider_route_quality",
+  "source": "User screenshot near Musquodoboit Harbour and pasted log exported 2026-09-08T22:14:35Z",
+  "serviceBuild": "67425f53c32f26bf81911331931462389205bc2b",
+  "request": {
+    "profile": "dirt",
+    "locations": [
+      {
+        "lat": 44.764835,
+        "lon": -63.340265
+      },
+      {
+        "lat": 46.214698,
+        "lon": -59.965492
+      }
+    ],
+    "accessPolicy": {
+      "motorizedPermissive": true,
+      "motorizedUnknown": false
+    },
+    "options": {
+      "mapZoom": 11.6,
+      "avoidMotorways": false
+    },
+    "fuel": {
+      "usableRangeMeters": 225000,
+      "firstLegMaxMeters": 225000,
+      "minimumFuelStops": 0,
+      "windowMaxStops": 4,
+      "allowPartialWindow": true,
+      "windowTimeBudgetMs": 20000,
+      "routeFirstPlan": true,
+      "ensureDestinationFuelEscape": true,
+      "forwardFeeler": false
+    }
+  },
+  "deviceObserved": {
+    "requestId": "fuel-0715f4cc",
+    "elapsedMs": 16488,
+    "selectedObjective": "dirt-10",
+    "fuelStops": 3,
+    "committedLegs": 4
+  },
+  "hostedReplay": {
+    "serverMs": 13677,
+    "selectedSurface": {
+      "distanceMeters": 561496.2210882127,
+      "knownDirtMeters": 387323,
+      "pavedMeters": 168220.22108821262,
+      "unknownSurfaceMeters": 5953,
+      "knownDirtPercent": 68.98051766926325,
+      "pavedPercent": 29.959279291709557,
+      "unknownSurfacePercent": 1.0602030390271793,
+      "longestDirtRunMeters": 58591
+    },
+    "repeatedRoadMeters": 0,
+    "incompleteCandidates": [
+      {
+        "id": "paved",
+        "reason": "label_limit"
+      },
+      {
+        "id": "dirt-30",
+        "reason": "label_limit"
+      }
+    ],
+    "shortGravelServiceEdges": [
+      "w543993215:121209:121210",
+      "w543993222:121213:121212",
+      "w543993222:121211:121213"
+    ],
+    "serviceRunMeters": [
+      70,
+      179
+    ]
+  },
+  "requiredOutcome": "Avoid needless short leave-and-rejoin dirt diversions while preserving worthwhile continuous dirt, necessary fuel access, fixed rider anchors, legal turns and fuel feasibility. Zero repeated metres alone is not a route-quality pass. Investigate candidate label limits without merely increasing the cap.",
+  "limitations": "Short-run length identifies review candidates, not a universal rejection threshold. Replay is server output; no navigation was tested."
+}
