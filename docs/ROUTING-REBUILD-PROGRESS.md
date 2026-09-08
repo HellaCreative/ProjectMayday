@@ -1164,3 +1164,23 @@ osm:w428976289, total stopposition226.647km. Explicit qualityflag; don't claim a
 fuelspurs eliminated. Normal225km actualClean reference has0repeat. Privatehosted
 verification pending; no stableDEV change. Bench compare-clean-backroads.js
 records original, softer, and candidate costs without changing live state.
+
+## Clean candidate held, then revised after NS hosted failure
+
+Private6d61061 cross4requests passed, but NS hooks pavedcandidate hitlabel_limit.
+Earlier local geometry-only comparison had not asserted poolComplete for this
+specificNS case; hostedgate caught it beforeactivation. Clean at the samepin with
+avoidMotorways also failed atweight2 and selected dirt-heavy feasible fallback.
+That is a failed Clean outcome, not geographic proof. Stable9c15324 stayed live.
+
+Explicit paved-candidate fuel guidance3 now completes NSCapeClean at757.037km,
+99.88%paved,3pumps,0repeat; NSDirt unchanged. Otherobjectives retain previousweights.
+Same400klabel/20sdeadline/workcaps. This is bounded heuristic guidance, not global
+optimality; no extra retries or caps. New hosted NSClean regression assertspaved
+candidate selected,>99%paved,0repeat andcompletepool.175focusedchecks pass.
+
+Final24cross+24NB againpass fuel/escape/allcandidatechecks;32Dirt/Balanced exact
+geometry/refills unchanged. NB Clean repeats0; cross162km reverseClean repeats
+2.104km, explicit unresolved qualityflag (supersedes prior1.370kmstress note).
+Actual225kmClean955.802km99.999%paved0repeat. Revised privatehosted checks pending;
+no stable change yet. No claim that all route quality or fuelspurs are solved.
