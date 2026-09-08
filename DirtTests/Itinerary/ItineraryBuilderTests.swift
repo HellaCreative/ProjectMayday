@@ -140,7 +140,7 @@ struct ItineraryBuilderTests {
         #expect(source.routeRequests.isEmpty)
         #expect(source.fuelChainRequests.count == 1)
         #expect(source.fuelChainRequests[0].fuel.windowMaxStops == 12)
-        #expect(source.fuelChainRequests[0].fuel.forwardFeeler == false)
+        #expect(source.fuelChainRequests[0].fuel.forwardFeeler != true)
         #endif
     }
 
