@@ -16,11 +16,13 @@ const objectives=Object.freeze([
 const expandedObjectives=Object.freeze([...objectives,{id:'mixed-2',cost:a=>a.distanceMeters*highwayFactor(a)*(surfaceKind(a.surfaceLeaf)==='dirt'?1:2)},{id:'mixed-3',cost:a=>a.distanceMeters*highwayFactor(a)*(surfaceKind(a.surfaceLeaf)==='dirt'?1:3)},{id:'mixed-5',cost:a=>a.distanceMeters*highwayFactor(a)*(surfaceKind(a.surfaceLeaf)==='dirt'?1:5)}]);
 function createRideAlternativeContext(){return {preparationCache:createPreparationCache(),reverseCostCache:createReverseCostCache(),stationMatchCache:createStationMatchCache()};}
 function buildRideAlternatives(options) {
+ const continuityMeters=options.dirtContinuityMeters??0;
+ if(!Number.isFinite(continuityMeters)||continuityMeters<0)throw new TypeError("Continuity distance must be finite and nonnegative");
  const context=options.context||createRideAlternativeContext(),results=[];
  const candidates=options.expandedCandidates?expandedObjectives:objectives;
  for(const objective of candidates) {
   if(!options.budget.check())break;
-  const result=buildFromHere({...options,...context,objectiveId:objective.id,edgeCost:objective.cost,preferOnwardFuel:options.preferOnwardFuel===true});
+  const result=buildFromHere({...options,...context,objectiveId:objective.id,edgeCost:objective.cost,dirtEntryCost:objective.id==='paved'?0:continuityMeters*(Number(objective.id.split('-')[1])-1),preferOnwardFuel:options.preferOnwardFuel===true});
   results.push({id:objective.id,result});
   if(options.budget.snapshot().reason)break;
  }

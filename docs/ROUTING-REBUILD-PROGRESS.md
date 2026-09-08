@@ -1065,3 +1065,35 @@ Input and observations: bench fixture `ns-short-diversions-20260908.json`.
 No scoring change or deployment made for this diagnostic capture. Next: compare
 these short branches with legal onward alternatives and qualify continuity
 handling beyond repeated-edge detection; preserve fuel and turn constraints.
+
+## Dirt continuity candidate — local qualification
+
+Short leave-and-rejoin branches are not repeated-edge problems. Added an explicit
+nonnegative dirt-entry cost to resource search, once per continuous dirt run.
+An onDirt bit participates in dominance; refill labels preserve it. The ordinary
+edge-only reverse bound remains admissible because it omits this added cost.
+Turn/access/fuel restrictions and destination escape are unchanged. The parameter
+is candidate generation guidance, not a road ban or minimum permissible dirt run.
+
+DEV candidate uses1000m continuity allowance scaled by each objective's dirt
+saving, zero charge for the paved objective, and fuel heuristic1.5 for single
+regions (cross-region remains2). No region-specific road exclusions or smoothing
+of final geometry. Actual travelled dirt percentages remain honest. Search costs
+are changed before fuel routing; no extra post-route fuel insertion pass.
+
+Exact new NS case:559.326km,68.061%dirt,zero repeated road, no dirt branches in
+opening20km; every candidate fuel search completes. Local~2.9s. Weight1 with the
+same continuity cost hit label limits; weight2 caused a4.4km NBshort-range
+regression and was rejected for single regions. Final1.5 NBmatrix all24pass;
+worst added repeat167m (total183m); cross24pass with worst added16m (total304m).
+These small repeats still require context, not an assertion every spur is removed.
+Moved NB pin856.440km63.203%dirt471mrepeat (previous1621m), allcandidatefuelcomplete.
+NS3reference styles allcomplete with zero repeats; geometry intentionally changes.
+CapeUnknown still4962m repeated, unchanged unresolved quality flag.
+
+172focused tests pass, including short-vs-long dirt choice, dominance arrival
+surface, split roads/refills, necessary short pump access and legal restrictions.
+Local bench `replay-ns-continuity.js` captures0/500/1000comparisons and optional
+qualification assertions. Evidence is under /tmp/dirt-continuity-qualified,
+/tmp/dirt-cross-continuity, /tmp/dirt-nb-continuity-weight15 and
+/tmp/dirt-moved-continuity. Private hosted verification pending; no DEV switch.
