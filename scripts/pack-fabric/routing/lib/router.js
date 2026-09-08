@@ -79,7 +79,7 @@ const {
   resolveMetroFallbackPenalty
 } = require("./hop-search");
 const crossPackTopology = require("../schema/cross-pack-topology.v1.json");
-const crossPackTopologyV4 = require("./connection-revision").connectionTopology(require("../schema/cross-pack-topology.v2.json"));
+const crossPackTopologyV4 = require("./connection-revision").connectionTopology(require("./national-connection-index"));
 const { resolveLocationsByEligibleEdge } = require("../regional/endpoint-resolver");
 
 function routeSearchLimitMessage(profile) {
