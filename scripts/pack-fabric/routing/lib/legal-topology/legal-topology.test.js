@@ -273,6 +273,35 @@ test("10. smoothness=impassable blocked", () => {
   assert.equal(evaluateMotorcycleAccess({ smoothness: "impassable" }).forward.code, 2);
 });
 
+test("toll collection preserves road passage through the final compact pack", () => {
+  for (const tags of [
+    { highway: "primary", surface: "asphalt" },
+    { highway: "service", access: "yes", surface: "asphalt" },
+    { route: "ferry", motor_vehicle: "yes" }
+  ]) {
+    const { pack, geom } = packed({
+      nodes: [node(1, -63, 46), node(2, -62.99, 46, { barrier: "toll_booth" }), node(3, -62.98, 46)],
+      ways: [way(10, [1, 2, 3], tags)]
+    });
+    assert.equal(pack.barriers[0].decisionCode, 0);
+    for (const [origin, dest] of [
+      [{ lon: -62.998, lat: 46 }, { lon: -62.982, lat: 46 }],
+      [{ lon: -62.982, lat: 46 }, { lon: -62.998, lat: 46 }]
+    ]) assert.equal(findPathV4(pack, geom, origin, dest, { maxMeters: 50, startHeadingDeg: dest.lon > origin.lon ? 90 : 270 }).ok, true);
+  }
+});
+
+test("a toll booth does not override an explicit closure", () => {
+  for (const restriction of [{ access: "private" }, { motorcycle: "no" }, { locked: "yes" }]) {
+    const { pack } = packed({
+      nodes: [node(1, -63, 46), node(2, -62.99, 46, { barrier: "toll_booth", ...restriction }), node(3, -62.98, 46)],
+      ways: [way(10, [1, 2, 3], { highway: "primary" })]
+    });
+    assert.notEqual(pack.barriers[0].decisionCode, 0);
+    assert.equal(pack.directedArcCount, 0);
+  }
+});
+
 test("11-12. conditional open/closed, unsupported fail-closed, seasonal/winter/ice", () => {
   const winter = parseConditionalExpression("no @ winter");
   assert.equal(evaluateNormalizedRule(winter, new Date("2026-01-15T12:00:00Z")), "closed");

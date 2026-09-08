@@ -285,3 +285,14 @@ V4 road-legal motorcycle access does **not** let `atv=yes` override
 `motorcycle=no` or `motor_vehicle=no`. That differs from the locked V3 ATV
 override. Costs, search widths, and fuel ranking are unchanged. This is
 eligibility, recorded here because the V3 authority said the opposite.
+
+
+## Atlantic canary: toll collection — September 8, 2026
+
+`barrier=toll_booth` without an explicit closure is a passable payment point,
+not an ambiguous closed barrier. Explicit access, locked, and conditional
+restrictions retain precedence. The shared factory must preserve passage through
+bridge and ferry payment points in the final compact pack. JS, Swift and Android
+read the resulting packed permission; no client-specific geographic override is
+allowed. Factory tests cover passage both ways and explicit closures. Android
+implementation or physical acceptance is not claimed by this correction.

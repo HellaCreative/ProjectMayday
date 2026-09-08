@@ -20,6 +20,9 @@ const ALWAYS_BLOCK = new Set([
   "planter"
 ]);
 const ALWAYS_ALLOW_IF_UNTAGGED = new Set([
+  // Collection points permit passage subject to payment. Explicit access,
+  // locked and conditional restrictions are still evaluated first.
+  "toll_booth",
   "cattle_grid",
   "entrance",
   "border_control",

@@ -752,3 +752,14 @@ V4 route materialization preserves the searched road geometry. Geographic loop
 pruning cannot cut across roads after turn legality was proved. This removes
 an unsafe transformation; it does not itself qualify the pending no-retrace
 search law. Android must apply these same endpoint and geometry rules.
+
+
+## Atlantic canary: toll collection — September 8, 2026
+
+`barrier=toll_booth` without an explicit closure is a passable payment point,
+not an ambiguous closed barrier. Explicit access, locked, and conditional
+restrictions retain precedence. The shared factory must preserve passage through
+bridge and ferry payment points in the final compact pack. JS, Swift and Android
+read the resulting packed permission; no client-specific geographic override is
+allowed. Factory tests cover passage both ways and explicit closures. Android
+implementation or physical acceptance is not claimed by this correction.
