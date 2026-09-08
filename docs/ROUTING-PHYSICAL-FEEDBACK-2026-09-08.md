@@ -60,7 +60,7 @@ blacklist. Never move fixed station anchors; interrupted/infeasible alternatives
 cannot replace originals. Accept only shorter alternatives with less retracing,
 no more avoidance exposure, and higher fresh-known-dirt distance per actual
 kilometre travelled. Display surface percentages remain actual physical totals.
-One trial per objective under the same request deadline/work cap; residual
+One trial for the worst circuit in the shared pool under the same request deadline/work cap; residual
 retrace and other alternatives remain possible. 1km repeated-road trigger is
 an investigation threshold, not a prohibition on necessary fuel access.
 

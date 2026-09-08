@@ -13,10 +13,11 @@ const {pack,geom}=joined,identity=regions.map(r=>({regionId:r.pack.regionId,sha:
 const stationMap=new Map();for(const r of regions)for(const station of r.stations){const prior=stationMap.get(station.id);if(prior&&(prior.lat!==station.lat||prior.lon!==station.lon))throw Error('Conflicting station coordinates');stationMap.set(station.id,station);}
 const stations=[...stationMap.values()],start={lat:44.764834,lon:-63.340240},end={lat:47.762610,lon:-65.856301},summary=[];
 for(const usable of [333000,162000])for(const allowUnknown of [false,true])for(const reverse of [false,true])for(const profile of ['dirt','balanced','clean']) {
+ if(process.env.REBUILD_PROFILE&&profile!==process.env.REBUILD_PROFILE)continue;
  const anchors=[{id:'a',...(reverse?end:start)},{id:'b',...(reverse?start:end)}];
  const input={mode:'from_here',anchors,legs:[{from:'a',to:'b',profile,allowUnknown:profile==='clean'?false:allowUnknown}],fuel:{fullRangeMeters:usable/.9,reserveFraction:.1,initialUsableMeters:usable}};
  const deadlineAtMs=Date.now()+20000,at=performance.now();
- const result=buildRideAlternatives({input,pack,geom,stations,fuelSpurAlternatives:true,additionalUrbanAreas:require('../routing/lib/adventure/nb-urban-review-20260908-01.json').cores,expandedCandidates:true,maxFuelLabels:100000,fuelHeuristicWeight:2,revision:JSON.stringify(identity),context,budget:createBudget({deadlineAtMs,maxExpansions:30000000}),preparationBudget:createBudget({deadlineAtMs,maxExpansions:20000000})});
+ const result=buildRideAlternatives({input,pack,geom,stations,avoidMotorways:profile==='clean',fuelSpurAlternatives:true,additionalUrbanAreas:require('../routing/lib/adventure/nb-urban-review-20260908-01.json').cores,expandedCandidates:true,maxFuelLabels:100000,fuelHeuristicWeight:2,revision:JSON.stringify(identity),context,budget:createBudget({deadlineAtMs,maxExpansions:30000000}),preparationBudget:createBudget({deadlineAtMs,maxExpansions:20000000})});
  const selected=result.selected,id=`${usable}-${allowUnknown?'unknown':'known'}-${reverse?'reverse':'forward'}-${profile}`;
  fs.writeFileSync(path.join(output,id+'.json'),JSON.stringify({identity,input,result}));
  const row={peakRssMiB:Math.round(process.resourceUsage().maxRSS/1024),id,usable,allowUnknown,reverse,profile,ms:Math.round(performance.now()-at),state:result.state,fuel:selected?.fuel.state,km:selected?.road.surface?.distanceMeters/1000,dirtPercent:selected?.road.surface?.knownDirtPercent,stops:selected?.fuel.plannedRefills?.length,search:result.search};summary.push(row);console.log(JSON.stringify(row));
@@ -25,5 +26,5 @@ for(const usable of [333000,162000])for(const allowUnknown of [false,true])for(c
  const remaining=usable-(selected.road.distanceMeters-previous);assert.ok(remaining>=-1e-6);assert.ok(selected.fuel.destinationEscape.distanceMeters<=remaining+1e-6);
 
 }
-for(const usable of [333000,162000])for(const allowUnknown of [false,true])for(const reverse of [false,true]) {const rows=summary.filter(r=>r.usable===usable&&r.allowUnknown===allowUnknown&&r.reverse===reverse);assert.ok(rows[0].dirtPercent>=rows[1].dirtPercent);assert.ok(rows[1].dirtPercent>=rows[2].dirtPercent);}
+for(const usable of [333000,162000])for(const allowUnknown of [false,true])for(const reverse of [false,true]) {const rows=summary.filter(r=>r.usable===usable&&r.allowUnknown===allowUnknown&&r.reverse===reverse);if(rows.length!==3)continue;assert.ok(rows[0].dirtPercent>=rows[1].dirtPercent);assert.ok(rows[1].dirtPercent>=rows[2].dirtPercent);}
 fs.writeFileSync(path.join(output,'summary.json'),JSON.stringify({identity,summary},null,2));

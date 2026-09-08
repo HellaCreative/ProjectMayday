@@ -28,7 +28,8 @@ function buildRideAlternatives(options) {
  const poolComplete=results.length===candidates.length&&!options.budget.snapshot().reason;
  // Establish every base candidate before spending the remaining deadline on
  // quality trials. An interrupted trial cannot replace a feasible original.
- if(options.fuelSpurAlternatives)for(const row of results) {
+ const spurRows=options.fuelSpurAlternatives?results.filter(r=>fuelSpurStation(r.result)).sort((a,b)=>b.result.qualityAudit.repeatedRoadMeters-a.result.qualityAudit.repeatedRoadMeters).slice(0,1):[];
+ for(const row of spurRows) {
   const stationId=fuelSpurStation(row.result);
   if(!stationId)continue;
   if(!options.budget.check())break;
