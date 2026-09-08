@@ -755,3 +755,10 @@ intervals, revisited nodes and continuous known-dirt runs. They do not introduce
 new routing penalties or bans. Fuel/rider-waypoint spurs require context and
 unknown surface cannot extend known dirt. This is JS diagnostic instrumentation;
 no new native UI, routing behavior or qualification is claimed.
+
+A DEV-only NS candidate02 canary can now return the replacement's complete
+route/fuel hops through the existing route/fuel-chain contract. It labels the
+engine and provisional station access, preserves reserve-adjusted client fuel,
+and keeps unsupported requests on the existing engine. All platforms must use
+the same shared candidate pool and preserve unknown-surface/access reporting.
+No native implementation or device acceptance is claimed by the service adapter.

@@ -1177,3 +1177,16 @@ Owner requested these two repairs without profile tuning or pack rebuilds. Route
 46 focused JS tests passed; device build succeeded. Exact NS→Maine replay advances past the formerly wrong NS graph in hop 2; it now fails hop 3 because all 128 supplied ME/NB seam anchors lie at latitude 44.8108–44.8952, on the island network, with no connected candidate to the Maine destination. No stored pack objects or seam metadata changed. This remaining coverage issue is not declared fixed. Build 20 is a bounded progress test, not complete cross-border qualification.
 
 The existing unloaded-pack cache identity fix (3da6de4) is retained: a cached spatial index must belong to the same live pack instance. This prevents stale road indexes and crashes after pack switches. Native one-way fixture exposed the missing rollback compatibility fix.
+
+## September 8 owner-directed replacement canary
+
+Richard authorized a clean routing replacement and clarified product intent in
+ROUTING-REBUILD-SPEC.md and the current conversation. The isolated replacement
+canary is single-region From Here on accepted NS candidate02, through the current
+live route/fuel-chain contract. Its shared candidate pool, fuel arithmetic,
+preparation budgets and remaining evidence limits are tracked in
+ROUTING-REBUILD-PROGRESS.md. It is not full replacement qualification. The old
+frozen algorithms remain the fallback outside the explicit DEV canary scope.
+Loop, richer exploration/variation controls and actual refuel confirmation remain
+unimplemented UI/behavior milestones. Continue to live DEV device testing without
+repeated approval; production publication and GitHub push remain outside scope.

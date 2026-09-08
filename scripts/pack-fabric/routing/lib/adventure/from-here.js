@@ -101,7 +101,7 @@ function buildFromHere({input,pack,geom,revision,stations,budget,preparationBudg
   timing.reverseBoundsMs=Math.round(performance.now()-phase);
   stage="fuel_search";phase=performance.now();
   const result=searchFuelRide({graph,start,end,edgeCost,budget,fuel:request.fuel,lowerBounds:bounds,avoidanceCost:urban.urbanMeters,maxFuelLabels,
-    onRoadCandidate:road=>{const rendered=materializeRoute({pack,geom,result:road,budget});if(rendered.state==="complete")fallback=rendered;}});
+    onRoadCandidate:road=>{const rendered=materializeRoute({pack,geom,result:road,budget});if(rendered.state==="complete"){rendered.urbanMeters=road.avoidanceCost;fallback=rendered;}}});
   timing.searchAndAdvisoryMs=Math.round(performance.now()-phase);
   if(result.road.state!=="found")return incomplete(result.road.reason);
   if(!["provisional_station_access","verified_on_supplied_station_access"].includes(result.fuel.state)) {
@@ -110,6 +110,7 @@ function buildFromHere({input,pack,geom,revision,stations,budget,preparationBudg
   stage="geometry_and_fuel_proof";phase=performance.now();
   const road=materializeRoute({pack,geom,result:result.road,budget});
   if(road.state!=="complete")return incomplete(road.reason);
+  road.urbanMeters=result.road.avoidanceCost;
   const escape=result.fuel.destinationEscape;
   const proof=proveFuel({...request.fuel,segments:road.segments,visits:result.road.visits.map((v,i)=>({...v,id:`fuel-${i}`,refuel:true,
     legalStationVisit:v.accessEvidence==="verified"})),allowProvisionalStations:true,budget,

@@ -1,3 +1,4 @@
+const {adventureCanaryRequest}=require("../routing/lib/adventure/live-canary");
 /**
  * Thin Vercel handler for Phase 2B routing.
  * Loads the prebuilt offline graph once per warm isolate.
@@ -26,6 +27,7 @@ module.exports = async function handler(req, res) {
   if (req.method === "GET") {
     return res.status(200).json({
       ok: true,
+      adventureCanary: process.env.DIRT_ADVENTURE_CANARY || null,
       service: "dirt-route",
       engine: "dirt-node-astar",
       serviceContract: ROUTING_SERVICE_CONTRACT,
@@ -54,7 +56,7 @@ module.exports = async function handler(req, res) {
       `route request begin id=${requestId} profile=${body.profile || "-"} ` +
       `locations=${Array.isArray(body.locations) ? body.locations.length : 0}`
     );
-    const result = await routeRequest(body);
+    const result = await adventureCanaryRequest(body,"route") || await routeRequest(body);
     console.log(
       `route request end id=${requestId} status=${result.status || "-"} ` +
       `elapsedMs=${Date.now() - started}`

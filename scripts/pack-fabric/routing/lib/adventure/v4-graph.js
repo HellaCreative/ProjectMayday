@@ -71,7 +71,7 @@ function createV4Graph(pack,{allowUnknown=false,endpointEdges=[],stations=new Ma
         const id=pack.edgeUndirectedIndex[offset],to=pack.edgeTargets[offset];
         const endpoint=endpoints.has(id)?id:-1;
         if(!allows(pack,id,node,to,allowUnknown,endpoint,endpoint))continue;
-        yield {id,from:node,to,distanceMeters:pack.edgeMeters[id],surfaceLeaf:pack.enums.surfaceLeafNames[pack.edgeSurfaceLeaf[id]] || null};
+        yield {id,from:node,to,roadClassLeaf:pack.enums.roadClassLeafNames?.[pack.edgeRoadClassLeaf[id]]||null,distanceMeters:pack.edgeMeters[id],surfaceLeaf:pack.enums.surfaceLeafNames[pack.edgeSurfaceLeaf[id]] || null};
       }
     },
     diagnostics:()=>({turnStates:states.length,cachedTransitions:transitionCache.size})

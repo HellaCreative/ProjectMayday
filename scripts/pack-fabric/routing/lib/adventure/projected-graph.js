@@ -51,7 +51,7 @@ function createProjectedGraph(pack,{points,allowUnknown=false,endpointEdges=[],b
     return `transit:${id}`;
   }
   function partial(edge,a,b) {
-    return {id:edge,from:a.node,to:b.node,distanceMeters:pack.edgeMeters[edge]*Math.abs(b.fraction-a.fraction),
+    return {id:edge,from:a.node,to:b.node,roadClassLeaf:pack.enums.roadClassLeafNames?.[pack.edgeRoadClassLeaf[edge]]||null,distanceMeters:pack.edgeMeters[edge]*Math.abs(b.fraction-a.fraction),
       surfaceLeaf:pack.enums.surfaceLeafNames[pack.edgeSurfaceLeaf[edge]]||null,
       fromFraction:a.fraction,toFraction:b.fraction};
   }

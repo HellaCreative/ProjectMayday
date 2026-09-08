@@ -740,3 +740,43 @@ nothing deployed. Next routing priority is coherent alternative generation and
 comparison using these diagnostics, while pack/access evidence work addresses
 station associations. A successful fuel arithmetic test is still not complete
 station-access or rider-quality acceptance.
+
+## Device-test canary integration — September 8, 2026
+
+Owner approved continued work without batch permission until a physical-device
+test is available, and requested Impeccable for UI changes. The current app can
+already consume combined fuel-chain routes. This first canary therefore uses
+existing From Here pins, profile and fuel controls; Loop, exploration controls,
+per-fuel-leg overrides and navigation fuel-confirmation UI remain future work.
+Impeccable was loaded for UI review; no UI replacement or native edit was made.
+
+Added a shared three-candidate pool (paved, Dirt weight10, Dirt weight30), each
+with integrated fuel search. Surface selection uses the same feasible pool for
+Dirt/Balanced/Clean, preserving urban exposure priority. A common experimental
+motorway factor8 favors backroads while permitting connectors. These are bounded
+candidate generators, not global optimum claims or final tuning. Known surface
+and unknown access remain separate in the app-compatible response.
+
+The opt-in `DIRT_ADVENTURE_CANARY=ns-v1` adapter only handles two-pin single-region
+NS requests on accepted candidate02. It preserves the existing service contract
+and partitions the already-built road at fuel visits into app-consumable route
+hops. It does not re-route each hop. API usable/initial fuel values are already
+reserve-adjusted by the client; the adapter preserves them without subtracting
+reserve twice. The adapter retains `provisional_station_access` and a DEV warning;
+these tests concern route review, not physical fuel-station/navigation acceptance.
+
+Required fuel replacements, mandatory stops, arrival-edge/recovery history,
+impassable-edge exclusions, path caps, motorway prohibition, cross-region and
+other unsupported cases stay on the existing engine. Station exclusions are
+honored by filtering the canonical source before matching. Responses carry the
+replacement engine identity only when it actually ran. Generated window prefixes
+honor the requested maximum stops. Stable DEV and pack activation remain owned
+in coordination with the pack-refinement task; isolated preview first.
+
+Local real NS API-compatible calls all completed: Dirt597.35km/60.58%known dirt/
+3stops in1.30s; Balanced500.74km/51.77%known dirt/2stops in0.74s;
+Clean351.17km/98.51%known paved/1stop in0.68s. Pack loading excluded, three different
+profile requests in one process. All candidates had zero measured embedded-major-
+core exposure in this fixture. Unknown surface remains explicitly reported.
+Evidence: routing/candidates/rebuild-live-canary/. 154 focused checks pass,
+including candidate sharing and app-compatible fuel-hop partitioning.

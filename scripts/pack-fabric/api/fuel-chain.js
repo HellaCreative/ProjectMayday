@@ -1,3 +1,4 @@
+const {adventureCanaryRequest}=require("../routing/lib/adventure/live-canary");
 "use strict";
 
 const { fuelChainRequest } = require("../routing/lib/fuel-chain.js");
@@ -30,6 +31,7 @@ module.exports = async function handler(req, res) {
     const { FUEL_CHAIN_SERVICE_VERSION } = require("../routing/lib/fuel-chain.js");
     return res.status(200).json({
       ok: true,
+      adventureCanary: process.env.DIRT_ADVENTURE_CANARY || null,
       service: "dirt-live-fuel-chain",
       strategy: "forward-graph-reachability",
       serviceContract: ROUTING_SERVICE_CONTRACT,
@@ -59,7 +61,7 @@ module.exports = async function handler(req, res) {
       `locations=${Array.isArray(body.locations) ? body.locations.length : 0} ` +
       `budgetMs=${body.fuel && body.fuel.windowTimeBudgetMs || "-"}`
     );
-    const result = echoLegId(await fuelChainRequest(body), body.legId);
+    const result = echoLegId(await adventureCanaryRequest(body,"fuel") || await fuelChainRequest(body), body.legId);
     const diagnostics = result && result.diagnostics || {};
     console.log(
       `fuel request end id=${requestId} status=${result.status || "-"} ` +
