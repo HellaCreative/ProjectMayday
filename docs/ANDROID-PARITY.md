@@ -652,3 +652,10 @@ Owner requested these two repairs without profile tuning or pack rebuilds. Route
 46 focused JS tests passed; device build succeeded. Exact NS→Maine replay advances past the formerly wrong NS graph in hop 2; it now fails hop 3 because all 128 supplied ME/NB seam anchors lie at latitude 44.8108–44.8952, on the island network, with no connected candidate to the Maine destination. No stored pack objects or seam metadata changed. This remaining coverage issue is not declared fixed. Build 20 is a bounded progress test, not complete cross-border qualification.
 
 The existing unloaded-pack cache identity fix (3da6de4) is retained: a cached spatial index must belong to the same live pack instance. This prevents stale road indexes and crashes after pack switches. Native one-way fixture exposed the missing rollback compatibility fix.
+
+## Atlantic DEV canary build 21
+
+The four Atlantic regions use fabric-v4-20260908-01 for roads, fuel, services and
+connections. Factory corrections 2fb1b7b and ae8aa94 preserve OSM toll passage.
+Routing reader behavior remains build 20. Android must consume the same corrected
+permissions; no Android implementation or physical acceptance is claimed.
