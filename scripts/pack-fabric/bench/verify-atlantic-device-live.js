@@ -20,6 +20,7 @@ for(const c of cases) {
  assert.equal(shape.state,'complete');if(c.id==='ns-hooks'){assert.equal(shape.repeatedRoadMeters,0);assert.ok(surface.knownDirtPercent>65);assert.equal(shape.dirtRuns.filter(run=>run.startMeters<20000).length,0);}if(['moved','near-dalhousie','dalhousie'].includes(c.id)){assert.ok(shape.repeatedRoadMeters<2000);assert.ok(surface.knownDirtPercent>60);}
  assert.equal(r.diagnostics.adventure.search.poolComplete,true);assert.ok(r.diagnostics.adventure.candidates.every(c=>c.fuel==='provisional_station_access'));
  const classes={};for(const s of segments)classes[s.roadClassLeaf]=(classes[s.roadClassLeaf]||0)+s.distanceMeters;
+ if(process.env.REBUILD_CLEAN_BACKROADS&&c.id==='clean-phone'){assert.ok(surface.pavedPercent>99.9);assert.equal(shape.repeatedRoadMeters,0);assert.ok(['primary','primary_link','trunk','trunk_link'].reduce((n,k)=>n+(classes[k]||0),0)<250000);}
  const row={id:c.id,build:r.serviceBuild,httpIncludingCliMs:Date.now()-at,serverMs:r.debug.adventureTotalMs,km:surface.distanceMeters/1000,dirt:surface.knownDirtPercent,repeatKm:shape.repeatedRoadMeters/1000,stops:r.stops.map(s=>({id:s.id,address:s.address})),classes};summary.push(row);console.log(JSON.stringify(row));
 }
 fs.writeFileSync(path.join(output,'summary.json'),JSON.stringify({deployment,summary},null,2));
