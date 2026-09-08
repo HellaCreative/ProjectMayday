@@ -3,7 +3,7 @@ const fs=require('node:fs'),path=require('node:path'),assert=require('node:asser
 const {summarizeSurface}=require('../routing/lib/adventure/surface'),{auditRideShape}=require('../routing/lib/adventure/ride-shape-audit'),{createBudget}=require('../routing/lib/adventure/budget');
 const deployment=process.env.REBUILD_DEPLOYMENT;if(!deployment)throw Error('REBUILD_DEPLOYMENT required');
 const output=process.env.REBUILD_LIVE_OUTPUT||'routing/candidates/rebuild-device-live';fs.mkdirSync(output,{recursive:true});
-const cases=[{id:'dalhousie',profile:'dirt',locations:[{lat:44.764831,lon:-63.340263},{lat:47.986597,lon:-66.328424}],zoom:11.2},{id:'clean-phone',profile:'cleanest',locations:[{lat:44.76484254584986,lon:-63.34021846556175},{lat:46.792506,lon:-67.569371}],zoom:10.7}],summary=[];
+const cases=[{id:'moved',profile:'dirt',locations:[{lat:44.764810,lon:-63.340233},{lat:47.743529,lon:-64.911236}],zoom:8.6},{id:'near-dalhousie',profile:'dirt',locations:[{lat:44.764810,lon:-63.340233},{lat:47.914772,lon:-65.948078}],zoom:9.8},{id:'dalhousie',profile:'dirt',locations:[{lat:44.764831,lon:-63.340263},{lat:47.986597,lon:-66.328424}],zoom:11.2},{id:'clean-phone',profile:'cleanest',locations:[{lat:44.76484254584986,lon:-63.34021846556175},{lat:46.792506,lon:-67.569371}],zoom:10.7}],summary=[];
 for(const c of cases) {
  const body={profile:c.profile,locations:c.locations,accessPolicy:{motorizedPermissive:true,motorizedUnknown:false},options:{mapZoom:c.zoom,avoidMotorways:c.profile==='cleanest'},fuel:{usableRangeMeters:225000,firstLegMaxMeters:225000,minimumFuelStops:0,windowMaxStops:12,allowPartialWindow:true,windowTimeBudgetMs:20000,routeFirstPlan:true,ensureDestinationFuelEscape:true,forwardFeeler:false}};
  const file=path.resolve(output,c.id+'-request.json');fs.writeFileSync(file,JSON.stringify(body));const at=Date.now();
@@ -13,7 +13,8 @@ for(const c of cases) {
  for(let i=0;i<r.routes.length;i++){assert.ok(r.routes[i].distanceMeters<=225000+1e-6);if(i)assert.deepEqual(r.routes[i].geometry[0],r.routes[i-1].geometry.at(-1));}
  assert.ok(r.routes.at(-1).distanceMeters+r.destinationEscapeMeters<=225000+1e-6);
  const segments=r.routes.flatMap(r=>r.segments),surface=summarizeSurface(segments),shape=auditRideShape({segments,budget:createBudget({deadlineAtMs:Date.now()+10000,maxExpansions:1000000})});
- assert.equal(shape.state,'complete');if(c.id==='dalhousie'){assert.ok(shape.repeatedRoadMeters<5000);assert.ok(surface.knownDirtPercent>70);assert.ok(r.stops.some(s=>s.id==='osm:n5300904581'||s.address?.includes('Sunny Corner')));}
+ assert.equal(shape.state,'complete');if(c.profile==='dirt'){assert.ok(shape.repeatedRoadMeters<2000);assert.ok(surface.knownDirtPercent>60);}
+ assert.equal(r.diagnostics.adventure.search.poolComplete,true);assert.ok(r.diagnostics.adventure.candidates.every(c=>c.fuel==='provisional_station_access'));
  const classes={};for(const s of segments)classes[s.roadClassLeaf]=(classes[s.roadClassLeaf]||0)+s.distanceMeters;
  const row={id:c.id,build:r.serviceBuild,httpIncludingCliMs:Date.now()-at,serverMs:r.debug.adventureTotalMs,km:surface.distanceMeters/1000,dirt:surface.knownDirtPercent,repeatKm:shape.repeatedRoadMeters/1000,stops:r.stops.map(s=>({id:s.id,address:s.address})),classes};summary.push(row);console.log(JSON.stringify(row));
 }

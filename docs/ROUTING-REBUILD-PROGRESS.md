@@ -948,3 +948,20 @@ scripts/pack-fabric/bench/fixtures/moved-waypoint-20260908.json. Generic local
 replay supports REBUILD_REQUEST_PATH. No runtime or live service changes made
 in this diagnostic follow-up. Next acceptance must cover a range of moved
 endpoints and audit whole rides, not only the one previously successful pin.
+
+## Local onward-search candidate after moved-waypoint failure
+
+Moved repeat82.243→1.621km,884.748km64.341%dirt,4pumps. Near-Dalhousie and actual
+Dalhousie repeats1.413km, approximately828.6/797.1km. Eight-waypoint sweep (actual
+three pins plus five road positions5–90km back from moved endpoint) each keeps
+>=60%dirt and<=2km repeated; all fuel intervals/final escape pass. These are
+case acceptance bounds, not new routing thresholds. Post-hoc pump exclusion
+and fresh-dirt percentage veto removed in favor of integrated approach-retrace
+priority. Outgoing legal connections from a pump compete during fuel search.
+
+Initial100k labels limited two candidates on162km-range unknown reverse ride.
+200k allows all six candidates there to finish, Balanced53.37%dirt, profile-only
+matrix peak890MiB; same20s/30M caps, host2GiB. Attempted road-trace interning did
+not resolve that limit and was removed. NS3baseline exact distances unchanged.
+Full24final and hosted verification pending; no public update yet. Generic
+history-dependent route quality remains bounded/heuristic; no global proof.
