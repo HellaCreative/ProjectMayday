@@ -148,3 +148,14 @@ Input and observations: bench fixture `ns-short-diversions-20260908.json`.
 No scoring change or deployment made for this diagnostic capture. Next: compare
 these short branches with legal onward alternatives and qualify continuity
 handling beyond repeated-edge detection; preserve fuel and turn constraints.
+
+## Stable continuity candidate ready for physical retest
+
+Owner activated exact r2w1bfpj7/source9c15324, preserved both02/ns-nb-v1/allenv,
+updated guard and publicly checked identity. Independent public NSrequest:
+7.554sHTTP/6.978sserver,559.326km3stops0repeated, no dirt runs in opening20km.
+Everycandidatefuelcomplete; all225km intervals, destinationescape andgeometryjoins
+pass. No Xcode install, phonepack transfer, production publication or GitHubpush.
+Physical handoff: fresh sameCapeBretonpin,Dirt,unknownOFF,fuelON250km/10%reserve;
+inspect MusquodoboitHarbour hooks. Physical acceptance pending, not implied by
+our automated checks. LargeNB latency/Cleanquality/CapeUnknownrepeat remainopen.

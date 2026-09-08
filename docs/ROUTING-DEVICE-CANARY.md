@@ -1,3 +1,19 @@
+# Ready for device retest — short dirt diversions
+
+Stable DIRT DEV now uses source `9c15324e6ace23df668c6061e2d4ba2a04b99bc8`
+(exact r2w1bfpj7 deployment), NS02/NB02. No app installation or pack download.
+Create a fresh From Here route from Porters Lake to the same Cape Breton pin
+(46.214698,-59.965492), Dirt, Allow Unknown OFF, fuel ON, 250km range/10%reserve.
+Expect about559km,68%dirt,3fuel stops. Inspect the opening stretch around
+Musquodoboit Harbour: the short dirt hooks in the screenshot should be gone.
+Saved routes keep their original geometry; rebuild to test this change.
+
+Independent public replay:7.554sHTTP/6.978sserver, no opening20km dirt branches,
+zero repeated road, allcandidatefuelcomplete, fuel/escape/joins pass.
+Physical acceptance is pending. Larger NB builds measured7.5–15.1sserver;
+Clean back-road quality and residual CapeUnknown retrace remain open.
+Historical handoffs and reports follow below.
+
 # Current qualification — short-diversion failure remains open
 
 The 22:14 UTC NS-only Cape Breton test exposed short dirt diversions around

@@ -815,3 +815,7 @@ Paved objective has no dirt-entry charge; raw surface totals stay unchanged.
 Single-region fuel guidance1.5, joined-region2; no new label/time cap. Swift and
 Android implementations remain deferred under the live-first authorization.
 This local qualification is not device or offline parity acceptance.
+
+Continuity candidate published to stable DEV9c15324 after hosted/public checks.
+Physical acceptance and Swift/Android parity remain pending. This supersedes the
+publication status (not the behavior description) in the candidate entry above.
