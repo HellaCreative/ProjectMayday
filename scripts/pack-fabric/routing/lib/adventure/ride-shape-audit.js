@@ -13,7 +13,7 @@ function auditRideShape({segments,budget}) {
   if(hi===lo)throw new TypeError('Positive distance requires a nonzero edge interval');
   const prior=seen.get(s.edgeIndex)||[];let overlap=0;
   for(const [a,b] of prior){if(!budget.consume())return {state:'incomplete',reason:budget.snapshot().reason};overlap+=Math.max(0,Math.min(b,hi)-Math.max(a,lo));}
-  if(overlap>1e-12)repeated.push({edgeIndex:s.edgeIndex,atMeters:at,distanceMeters:length*overlap/(hi-lo)});
+  if(overlap>1e-12)repeated.push({edgeIndex:s.edgeIndex,atMeters:at,distanceMeters:length*overlap/(hi-lo),surfaceKind:surfaceKind(s.surfaceLeaf)});
   const merged=[];let left=lo,right=hi;
   for(const [a,b] of prior){if(b<left)merged.push([a,b]);else if(a>right){merged.push([left,right]);left=a;right=b;}else{left=Math.min(left,a);right=Math.max(right,b);}}
   merged.push([left,right]);seen.set(s.edgeIndex,merged);
@@ -26,7 +26,7 @@ function auditRideShape({segments,budget}) {
   at+=length;
  }
  if(run)dirtRuns.push(run);
- return {state:'complete',distanceMeters:at,repeatedRoadMeters:repeated.reduce((sum,r)=>sum+r.distanceMeters,0),repeatedIntervals:repeated,revisitedNodes:revisited,
+ return {state:'complete',distanceMeters:at,repeatedRoadMeters:repeated.reduce((sum,r)=>sum+r.distanceMeters,0),repeatedKnownDirtMeters:repeated.filter(r=>r.surfaceKind==='dirt').reduce((sum,r)=>sum+r.distanceMeters,0),repeatedIntervals:repeated,revisitedNodes:revisited,
   dirtRuns,shortDirtRunCounts:{under250Meters:dirtRuns.filter(r=>r.distanceMeters<250).length,under1000Meters:dirtRuns.filter(r=>r.distanceMeters<1000).length},
   limitations:['diagnostic bins are not routing thresholds','fuel and rider-waypoint spurs require context','short dirt runs alone do not prove needless diversions']};
 }

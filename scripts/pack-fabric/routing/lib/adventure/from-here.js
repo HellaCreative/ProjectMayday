@@ -18,7 +18,7 @@ const {proveFuel}=require("./fuel-proof");
 // explicitly provisional station access; they never become physical entrance
 // proof. Caller supplies the experimental cost model, not a hidden final style.
 function buildFromHere({input,pack,geom,revision,stations,budget,preparationBudget=budget,edgeCost,objectiveId,
-  preparationCache=createPreparationCache(),reverseCostCache=createReverseCostCache(),stationMatchCache=createStationMatchCache(),stationRadiusMeters=150,endpointRadiusMeters=2000,maxFuelLabels=100000,fuelHeuristicWeight=1}) {
+  preparationCache=createPreparationCache(),reverseCostCache=createReverseCostCache(),stationMatchCache=createStationMatchCache(),stationRadiusMeters=150,endpointRadiusMeters=2000,maxFuelLabels=100000,fuelHeuristicWeight=1,avoidMotorways=false,additionalUrbanAreas=[]}) {
   if(preparationBudget.snapshot().deadlineAtMs>budget.snapshot().deadlineAtMs)throw new TypeError("Preparation cannot outlive the request deadline");
   const request=normalizeRequest(input);
   if(request.mode!=="from_here")throw new TypeError("From Here requires exactly two fixed rider anchors");
@@ -29,7 +29,7 @@ function buildFromHere({input,pack,geom,revision,stations,budget,preparationBudg
     if(typeof station?.id!=="string"||!station.id||stationById.has(station.id))throw new TypeError("Unique canonical station identities required");
     stationById.set(station.id,station);
   }
-  const timing={},at=performance.now(),classification=urbanAreasFromPack(pack),allowUnknown=request.legs[0].allowUnknown;
+  const timing={},at=performance.now(),classification=urbanAreasFromPack(pack,{additionalAreas:additionalUrbanAreas}),allowUnknown=request.legs[0].allowUnknown;
   let stage="preparation",fallback=null,stationDiagnostics=null;
   const provenance={revision,objectiveId,maxFuelLabels,fuelHeuristicWeight,regionId:pack.regionId||pack.meta?.regionId,classification:classification.evidence};
   function incomplete(reason) {
@@ -41,6 +41,15 @@ function buildFromHere({input,pack,geom,revision,stations,budget,preparationBudg
   if(prepared.state!=="complete")return incomplete(prepared.reason);
   timing.preparationMs=Math.round(performance.now()-at);provenance.preparationCacheHit=prepared.cacheHit;
   const {index,urban}=prepared.prepared;
+  const isMotorway=arc=>/^(motorway|motorway_link|freeway)$/.test(arc.roadClassLeaf||"");
+  // Minimize exposure before ride cost. Necessary connections stay available;
+  // a shorter motorway is never a reason to abandon a zero-exposure connection.
+  const avoidanceCost=avoidMotorways?arc=>isMotorway(arc)?arc.distanceMeters:urban.urbanMeters(arc):urban.urbanMeters;
+  function recordExposure(road,result) {
+    road.avoidanceMeters=result.avoidanceCost;
+    road.urbanMeters=result.arcs.reduce((sum,arc)=>sum+urban.urbanMeters(arc),0);
+    road.motorwayMeters=result.arcs.reduce((sum,arc)=>sum+(isMotorway(arc)?arc.distanceMeters:0),0);
+  }
   stage="endpoint_matching";let phase=performance.now();
   const endpoints=matchStations({pack,geom,index,stations:request.anchors,maxMeters:endpointRadiusMeters,allowUnknown,budget});
   if(endpoints.state!=="complete")return incomplete(endpoints.reason);
@@ -100,8 +109,8 @@ function buildFromHere({input,pack,geom,revision,stations,budget,preparationBudg
   if(bounds.state!=="complete")return incomplete(bounds.reason);
   timing.reverseBoundsMs=Math.round(performance.now()-phase);
   stage="fuel_search";phase=performance.now();
-  const result=searchFuelRide({graph,start,end,edgeCost,budget,fuel:request.fuel,lowerBounds:bounds,avoidanceCost:urban.urbanMeters,maxFuelLabels,fuelHeuristicWeight,
-    onRoadCandidate:road=>{const rendered=materializeRoute({pack,geom,result:road,budget});if(rendered.state==="complete"){rendered.urbanMeters=road.avoidanceCost;fallback=rendered;}}});
+  const result=searchFuelRide({graph,start,end,edgeCost,budget,fuel:request.fuel,lowerBounds:bounds,avoidanceCost,maxFuelLabels,fuelHeuristicWeight,
+    onRoadCandidate:road=>{const rendered=materializeRoute({pack,geom,result:road,budget});if(rendered.state==="complete"){recordExposure(rendered,road);fallback=rendered;}}});
   timing.searchAndAdvisoryMs=Math.round(performance.now()-phase);
   if(result.road.state!=="found")return incomplete(result.road.reason);
   if(!["provisional_station_access","verified_on_supplied_station_access"].includes(result.fuel.state)) {
@@ -110,7 +119,7 @@ function buildFromHere({input,pack,geom,revision,stations,budget,preparationBudg
   stage="geometry_and_fuel_proof";phase=performance.now();
   const road=materializeRoute({pack,geom,result:result.road,budget});
   if(road.state!=="complete")return incomplete(road.reason);
-  road.urbanMeters=result.road.avoidanceCost;
+  recordExposure(road,result.road);
   const escape=result.fuel.destinationEscape;
   const proof=proveFuel({...request.fuel,segments:road.segments,visits:result.road.visits.map((v,i)=>({...v,id:`fuel-${i}`,refuel:true,
     legalStationVisit:v.accessEvidence==="verified"})),allowProvisionalStations:true,budget,

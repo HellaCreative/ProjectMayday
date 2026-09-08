@@ -4,7 +4,7 @@ const deployment=process.env.REBUILD_DEPLOYMENT;if(!deployment)throw Error('REBU
 const output=process.env.REBUILD_LIVE_OUTPUT||'routing/candidates/rebuild-atlantic-live';fs.mkdirSync(output,{recursive:true});
 const start={lat:44.764834,lon:-63.340240},end={lat:47.762610,lon:-65.856301},summary=[];
 for(const reverse of [false,true])for(const profile of ['dirt','balanced','cleanest']) {
- const id=`${reverse?'reverse':'forward'}-${profile}`,body={profile,locations:reverse?[end,start]:[start,end],accessPolicy:{motorizedPermissive:true,motorizedUnknown:false},options:{mapZoom:10.3},fuel:{usableRangeMeters:225000,firstLegMaxMeters:225000,minimumFuelStops:0,windowMaxStops:12,allowPartialWindow:true,windowTimeBudgetMs:20000,routeFirstPlan:true,ensureDestinationFuelEscape:true,forwardFeeler:false}};
+ const id=`${reverse?'reverse':'forward'}-${profile}`,body={profile,locations:reverse?[end,start]:[start,end],accessPolicy:{motorizedPermissive:true,motorizedUnknown:false},options:{mapZoom:10.3,avoidMotorways:profile==='cleanest'},fuel:{usableRangeMeters:225000,firstLegMaxMeters:225000,minimumFuelStops:0,windowMaxStops:12,allowPartialWindow:true,windowTimeBudgetMs:20000,routeFirstPlan:true,ensureDestinationFuelEscape:true,forwardFeeler:false}};
  const request=path.resolve(output,id+'-request.json');fs.writeFileSync(request,JSON.stringify(body));
  const at=Date.now(),run=spawnSync('vercel',['curl','/api/fuel-chain','--deployment',deployment,'--','--silent','--show-error','--max-time','25','--request','POST','--header','Content-Type: application/json','--data-binary','@'+request],{encoding:'utf8',timeout:45000,maxBuffer:24*1024*1024});
  fs.writeFileSync(path.join(output,id+'-response.json'),run.stdout||'');assert.equal(run.status,0,run.stderr);

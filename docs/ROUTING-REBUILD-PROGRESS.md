@@ -885,3 +885,14 @@ Later source464864f adds diagnosticweight reporting and tests only; hosted945978
 ## Device23 installed and running
 
 Xcode installed DIRT Dev2(23) on White; device inventory independently confirms bundlecom.mayday.dirt.dev/version2/build23. Initial Xcode launch terminated withsignal9 (cause not established). Direct devicectl launch then succeeded and device process inventory confirms Dirt running (PID5088). Public stable source945978/ns-nb-v1 and both02packs verified beforehand. No packs downloaded. Physical NS/NB route-building test is ready; rider acceptance remains pending.
+
+## Evening physical feedback follow-up (local, not yet published)
+
+168 focused JS checks pass. Added exact phone Clean avoidMotorways gate test,
+synthetic alternate/mandatory motorway cases, fuel alternative safety/fixed-anchor
+checks and full source geometry road-class reporting. Exact Dalhousie automated
+replay replaces65.610km retrace with4.095km using Sunny Corner, still72.340%dirt,
+all fuel intervals/final escape verified. NS/NB24-case expanded regression in
+progress. Clean legacy fallback repaired locally; NB city classification missing
+in original02 confirmed with pack owner and source-locked supplement under test.
+Clean primary/trunk back-road preference remains open. No live/phone changes yet.

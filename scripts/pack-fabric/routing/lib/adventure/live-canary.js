@@ -11,7 +11,7 @@ function canarySupported(body,kind,environment=process.env) {
  if(!['ns-v1','ns-nb-v1'].includes(environment.DIRT_ADVENTURE_CANARY)||body.action||body.locations?.length!==2||!['dirt','balanced','cleanest'].includes(body.profile))return false;
  const o=body.options||{},f=body.fuel||{};
  if(body.accessPolicy?.motorizedPermissive===false)return false;
- if(o.avoidEdgeIds?.length||o.arrivalEdgeId||o.priorEdgeIds?.length||o.maxPathMeters!=null||o.regionalHopMinimumMeters?.length||o.avoidMotorways||o.cleanMetroMultiplier!=null)return false;
+ if(o.avoidEdgeIds?.length||o.arrivalEdgeId||o.priorEdgeIds?.length||o.maxPathMeters!=null||o.regionalHopMinimumMeters?.length||o.cleanMetroMultiplier!=null)return false;
  if(kind==='fuel'&&(f.requiredFirstStationId||f.requireFuelStopBeforeEnd||f.minimumFuelStops>0||f.destinationFuelUsedLimitMeters!=null||f.forwardFeeler||f.probeFirstReachableStation))return false;
  return true;
 }
@@ -83,7 +83,7 @@ async function adventureCanaryRequest(body,kind,{environment=process.env,load=nu
  const signal=body.options?.abortSignal;
  const {tapRadiusMeters}=require('../legal-topology/snap');
  const endpointRadiusMeters=tapRadiusMeters({zoom:body.options?.mapZoom,lat:body.locations[0].lat,requestedMeters:body.options?.matchLimitMeters,graphBinaryVersion:4});
- const pool=buildRideAlternatives({input,pack:data.pack,geom:data.geom,revision,stations:data.stations.filter(s=>!excluded.has(s.id)),context,endpointRadiusMeters,expandedCandidates:resolution.regionIds.includes('nb'),maxFuelLabels:100000,fuelHeuristicWeight:resolution.regionIds.length>1?2:1,
+ const pool=buildRideAlternatives({fuelSpurAlternatives:resolution.regionIds.includes('nb'),additionalUrbanAreas:resolution.regionIds.includes('nb')?require('./nb-urban-review-20260908-01.json').cores:[],avoidMotorways:body.options?.avoidMotorways===true,input,pack:data.pack,geom:data.geom,revision,stations:data.stations.filter(s=>!excluded.has(s.id)),context,endpointRadiusMeters,expandedCandidates:resolution.regionIds.includes('nb'),maxFuelLabels:100000,fuelHeuristicWeight:resolution.regionIds.length>1?2:1,
   budget:createBudget({deadlineAtMs,maxExpansions:30000000,signal}),preparationBudget:createBudget({deadlineAtMs,maxExpansions:20000000,signal})});
  const response=toLiveResponse(pool,body,kind,identity);
  if(response){response.debug={...(response.debug||{}),adventureTotalMs:Date.now()-started};response.legId=body.legId;}
