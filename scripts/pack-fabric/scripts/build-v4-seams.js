@@ -69,6 +69,15 @@ function uniquePairs(regions = null) {
   return rows.sort((a, b) => a.join("|").localeCompare(b.join("|")));
 }
 
+function assertNeighborCoverage(regionIds, pairs) {
+  for (const id of regionIds) {
+    if (!Array.isArray(REGION_NEIGHBOURS[id])) throw new Error(`unknown region ${id}`);
+    if (REGION_NEIGHBOURS[id].length && !pairs.some(pair => pair.includes(id))) {
+      throw new Error(`selected region ${id} must have a neighbor in the selected set`);
+    }
+  }
+}
+
 function selectProofs(rows) {
   // A display shortlist is not a topology. A latitude cap (or one row per
   // way) can discard the only crossing joining a routable component. Retain
@@ -155,9 +164,7 @@ function main() {
   };
   const regionIds = options.regions || Object.keys(REGION_NEIGHBOURS).filter((id) => id.length === 2).sort();
   const pairs = uniquePairs(options.regions);
-  if (regionIds.some(id => !pairs.some(pair => pair.includes(id)))) {
-    throw new Error("every selected region must have a neighbor in the selected set");
-  }
+  assertNeighborCoverage(regionIds, pairs);
   for (const id of regionIds) {
     doc.regions[id] = { neighbors: {} };
   }
@@ -198,4 +205,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { main, parseArgs, uniquePairs, selectProofs, writeRegionSidecars };
+module.exports = { assertNeighborCoverage, main, parseArgs, uniquePairs, selectProofs, writeRegionSidecars };

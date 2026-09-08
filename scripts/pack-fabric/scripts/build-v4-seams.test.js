@@ -88,3 +88,14 @@ test("distinct nodes on one OSM way remain available; duplicate proofs and denie
   const destinationOnly = crossing(5, 13, 49, 4, 4);
   assert.deepEqual(selectProofs([a, b, { ...a }, unknown, denied, destinationOnly]), [a, b, unknown]);
 });
+
+
+test("national coverage permits declared isolated packs but not missing required neighbors", () => {
+  const {assertNeighborCoverage, uniquePairs} = require("./build-v4-seams");
+  const {REGION_NEIGHBOURS} = require("../routing/regional/merge");
+  const ids=Object.keys(REGION_NEIGHBOURS).filter(id=>id.length===2);
+  assert.doesNotThrow(()=>assertNeighborCoverage(ids,uniquePairs()));
+  assert.doesNotThrow(()=>assertNeighborCoverage(["hi","nu"],[]));
+  assert.throws(()=>assertNeighborCoverage(["ns","qc"],[]),/must have a neighbor/);
+  assert.throws(()=>assertNeighborCoverage(["zz"],[]),/unknown region/);
+});
