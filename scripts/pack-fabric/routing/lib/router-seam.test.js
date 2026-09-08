@@ -104,3 +104,31 @@ test("deployment seam index rejects authored seams inside an urban wall", () => 
   assert.equal(seam.authoritative, true);
   assert.equal(seam.reason, "no_non_urban_shared_osm_seam");
 });
+
+
+test("V4 border selection follows the rider endpoints instead of a distant preset crossing", () => {
+  const row = (osmWayId, lon, access) => ({ osmWayId, coordinate: [lon, 48], gapMeters: 0, edge: { accessForward: access, accessReverse: access } });
+  const rows = [row("distant-preset", -69, 0), row("near-public-bridge", -66, 0), row("near-unknown", -65.99, 1), row("closed", -66, 2)];
+  const index = { regions: { qc: { neighbors: { nb: rows } }, nb: { neighbors: { qc: rows } } } };
+  for (const [start, end] of [[[-66.01, 47.99], [-65.99, 48.01]], [[-65.99, 48.01], [-66.01, 47.99]]]) {
+    const seed = { lon: -69, lat: 48, routeStart: { lon: start[0], lat: start[1] }, routeEnd: { lon: end[0], lat: end[1] } };
+    const strict = topologySeamCandidatesFromIndex(seed, ["qc", "nb"], index);
+    assert.equal(strict[0].osmWayId, "near-public-bridge");
+    assert.ok(!strict.some(row => ["near-unknown", "closed"].includes(row.osmWayId)));
+    const unknown = topologySeamCandidatesFromIndex({ ...seed, allowUnknown: true }, ["qc", "nb"], index);
+    assert.ok(unknown.some(row => row.osmWayId === "near-unknown"));
+    assert.ok(!unknown.some(row => row.osmWayId === "closed"));
+  }
+});
+
+test("shared halo fragments do not qualify as a connection to the rider's road network", () => {
+  const { buildGraphFromOsm } = require("./legal-topology/osm-graph");
+  const { encodeFromOsmGraph, decodeGraphV4 } = require("./pack-v4");
+  const graph = buildGraphFromOsm({ nodes: [[1, 0], [2, 0.01], [3, 0.02], [4, 0.03]].map(([id, lon]) => ({ id, lon, lat: 48, tags: {} })), ways: [[10, [1, 2]], [20, [3, 4]]].map(([id, nodeIds]) => ({ id, nodeIds, tags: { highway: "secondary", motor_vehicle: "yes" } })) });
+  const encoded = encodeFromOsmGraph(graph, { regionId: "fixture", sourceEpoch: "test" });
+  const pack = decodeGraphV4(encoded.graphBuffer, encoded.geomBuffer);
+  const candidates = [{ osmNodeId: "3", osmWayId: "20" }, { osmNodeId: "2", osmWayId: "10" }];
+  const pinIndex = Array.from({ length: pack.edgeCount }, (_, i) => i).find(i => String(pack.osmWayIds[i]) === "10");
+  const { pinConnectedSeamCandidates } = require("./router");
+  assert.deepEqual(pinConnectedSeamCandidates(pack, candidates, [{ edgeIndex: pinIndex }], false), [candidates[1]]);
+});

@@ -1460,19 +1460,32 @@ function topologySeamCandidatesFromIndex(seed, regionIds, index = null) {
       .map((row) => `${row.osmWayId}|${Number(row.coordinate[0]).toFixed(5)}|${Number(row.coordinate[1]).toFixed(5)}`)
   );
   const seedCoord = [Number(seed.lon != null ? seed.lon : seed.lng), Number(seed.lat)];
+  const anchors = [seed.routeStart, seed.routeEnd].filter(point =>
+    point && Number.isFinite(Number(point.lon)) && Number.isFinite(Number(point.lat))
+  ).map(point => [Number(point.lon), Number(point.lat)]);
+  const score = row => anchors.length === 2
+    ? anchors.reduce((sum, point) => sum + haversineMeters(point, row.coordinate), 0)
+    : haversineMeters(seedCoord, row.coordinate);
+  const eligible = row => {
+    if (!row.edge) return true; // Legacy indexes have no V4 access proof.
+    const allowed = code => code === 0 || (code === 1 && seed.allowUnknown === true);
+    return allowed(row.edge.accessForward) || allowed(row.edge.accessReverse);
+  };
   return leftRows
+    .filter(eligible)
     .filter((row) => Number(row.gapMeters) <= 2 && Array.isArray(row.coordinate))
     .filter((row) => rightKeys.has(
       `${row.osmWayId}|${Number(row.coordinate[0]).toFixed(5)}|${Number(row.coordinate[1]).toFixed(5)}`
     ))
     .filter((row) => !coordinateNearUrbanBoxes(row.coordinate, left.urbanCores || []))
     .filter((row) => !coordinateNearUrbanBoxes(row.coordinate, right.urbanCores || []))
-    .sort((a, b) => haversineMeters(seedCoord, a.coordinate) - haversineMeters(seedCoord, b.coordinate))
-    .slice(0, 16)
+    .sort((a, b) => score(a) - score(b))
+    .slice(0, seed.allCandidates ? undefined : 16)
     .map((row) => ({
       lon: Number(row.coordinate[0]),
       lat: Number(row.coordinate[1]),
       osmWayId: String(row.osmWayId),
+      osmNodeId: row.osmNodeId == null ? null : String(row.osmNodeId),
       seedDistanceM: Math.round(haversineMeters(seedCoord, row.coordinate))
     }));
 }
@@ -1513,11 +1526,50 @@ function topologySeamFromIndex(seed, regionIds, index = null) {
   };
 }
 
+function pinConnectedSeamCandidates(pack, candidates, pinCandidates, allowUnknown) {
+  const components = require("./legal-topology/snap").weakComponentIds(pack, allowUnknown);
+  const pinComponents = new Set(pinCandidates.map(candidate => components[pack.edgeFrom[candidate.edgeIndex]]));
+  const wantedNodes = new Set(candidates.map(candidate => candidate.osmNodeId));
+  const connectedNodes = new Set();
+  for (let node = 0; node < pack.nodeCount; node += 1) {
+    if (!pinComponents.has(components[node])) continue;
+    const osmId = String(pack.osmNodeIds[node]);
+    if (wantedNodes.has(osmId)) connectedNodes.add(osmId);
+  }
+  return candidates.filter(candidate => connectedNodes.has(candidate.osmNodeId));
+}
+
 async function topologySeamWaypoint(seed, regionIds) {
   const ids = [...new Set((regionIds || []).map((id) => String(id).toLowerCase()))];
   if (ids.length !== 2) return { ok: false, reason: "seam_pair_required", regionIds: ids };
   const indexed = topologySeamFromIndex(seed, ids);
-  if (indexed.authoritative) return indexed;
+  if (indexed.authoritative) {
+    if (!indexed.ok || !seed.routeStart || !seed.routeEnd ||
+        !topologyIndexFor(ids).fabricReleaseId) return indexed;
+    // Shared halo roads can be isolated fragments in the neighbouring pack.
+    // Check their connection to each actual pin before choosing the handoff.
+    let candidates = topologySeamCandidatesFromIndex({ ...seed, allCandidates: true }, ids);
+    for (const id of ids) {
+      const anchor = [seed.routeStart, seed.routeEnd].find(point => {
+        const owner = point.resolvedRegionId || point.regionIdHint ||
+          primaryRegionForPoint(Number(point.lon), Number(point.lat));
+        return provinceFamily(owner) === id;
+      });
+      if (!anchor) continue; // Intermediate regions are checked by their hops.
+      try {
+        const resolution = resolveGraphRequest({ regionId: id, locations: [anchor], disableChain: true });
+        const runtime = await loadGraphsForRequest(resolution, { locations: [anchor], profile: "balanced" });
+        const pack = runtime.pack;
+        const match = matchPoint(runtime, anchor,
+          { motorizedPermissive: true, motorizedUnknown: seed.allowUnknown === true },
+          2000, null, null, "balanced");
+        candidates = pinConnectedSeamCandidates(pack, candidates, match.candidates || [], seed.allowUnknown === true);
+      } finally { releaseSeamProbeMemory(); }
+      if (!candidates.length) return { ...indexed, ok: false, reason: "no_pin_connected_shared_seam" };
+    }
+    const best = candidates[0];
+    return { ...indexed, ...best, candidates: candidates.slice(0, 16) };
+  }
   const rowsByRegion = new Map();
   const coresByRegion = new Map();
   try {
@@ -1613,7 +1665,12 @@ async function resolveChainSeamWaypoints(waypoints, body = {}) {
       };
     }
 
-    const snapped = await snapSeamWaypoint(seed, regionIds, profile);
+    const snapped = await snapSeamWaypoint({
+      ...seed,
+      routeStart: out[i - 1],
+      routeEnd: out[i + 1],
+      allowUnknown: profile !== "cleanest" && !!(body.accessPolicy && body.accessPolicy.motorizedUnknown)
+    }, regionIds, profile);
     if (!snapped.ok) {
       return {
         ok: false,
@@ -1787,7 +1844,9 @@ async function routeCanadaChain(body, graphResolution) {
     });
     if (hop.status !== "complete" && hopEnd.seamSnapped) {
       const alts = topologySeamCandidatesFromIndex(
-        { lon: hopEnd.lon, lat: hopEnd.lat, between: hopEnd.between },
+        { lon: hopEnd.lon, lat: hopEnd.lat, between: hopEnd.between,
+          routeStart: hopStart, routeEnd: waypoints[i + 2],
+          allowUnknown: profile !== "cleanest" && !!(body.accessPolicy && body.accessPolicy.motorizedUnknown) },
         hopEnd.between || inferSeamRegionIds(waypoints, i + 1)
       ).filter((alt) => {
         if (hopEnd.osmWayId && alt.osmWayId === String(hopEnd.osmWayId)) return false;
@@ -3929,6 +3988,7 @@ module.exports = {
   reservedChainHopCap,
   topologySeamFromIndex,
   topologySeamCandidatesFromIndex,
+  pinConnectedSeamCandidates,
   fallbackReasonFor,
   clippedDirtMeters,
   isLowDirtRoute,
