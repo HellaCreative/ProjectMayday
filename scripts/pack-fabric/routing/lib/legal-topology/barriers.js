@@ -79,8 +79,8 @@ function evaluateBarrier(tags = {}) {
   if (ALWAYS_BLOCK.has(barrier) && access.forward.code !== 0) {
     return { decision: "block", reason: "type_default_block", barrier };
   }
-  if (ALWAYS_ALLOW_IF_UNTAGGED.has(barrier) && access.forward.code === 1) {
-    return { decision: "allow", reason: "type_default_allow", barrier };
+  if (ALWAYS_ALLOW_IF_UNTAGGED.has(barrier) && [0, 1].includes(access.forward.code)) {
+    return { decision: "allow", reason: access.forward.code === 0 ? "access_yes" : "type_default_allow", barrier };
   }
   if (GATE_LIKE.has(barrier)) {
     if (access.forward.code === 0) return { decision: "allow", reason: "access_yes", barrier };

@@ -763,3 +763,7 @@ bridge and ferry payment points in the final compact pack. JS, Swift and Android
 read the resulting packed permission; no client-specific geographic override is
 allowed. Factory tests cover passage both ways and explicit closures. Android
 implementation or physical acceptance is not claimed by this correction.
+
+Explicit `access=yes` or `motor_vehicle=yes` at these passable payment points
+must also remain passable. Destination/customer-only access does not become
+unrestricted through access.
