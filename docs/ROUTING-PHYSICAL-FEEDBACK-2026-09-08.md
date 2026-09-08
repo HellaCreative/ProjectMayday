@@ -174,3 +174,28 @@ Acceptance covers this route's visual quality and build behavior. The pasted log
 does not establish distance/dirt percentage/repeat metres or navigation outcomes.
 Next live priority: Clean paved back-road quality, preserving the accepted
 continuity behavior. LargerNB latency and CapeUnknown retrace remain open.
+
+## Clean back-road candidate — local comparison
+
+Rider additionally accepts NB Dirt: approximately9seconds and good-looking route.
+That is acceptable observed timing, not a blanket guarantee for cold/largecases.
+
+Clean's previous paved candidate treated primary/trunk like secondary/tertiary.
+New candidate cost prefers secondary/tertiary/local paved roads: primary/link4,
+trunk/link8,motorway/link/freeway32,service6,other1; nonpaved/unknown multiplier100.
+These are relative search costs, no road bans. The service cost avoids parking/
+service shortcuts; necessary fuel/anchor/highway access remains legal. Dirt and
+mixed candidate objectives are untouched; shared pool surface selection remains.
+
+ActualClean comparison:704.376km→962.273km, primary/trunk(includinglinks)497.986→
+193.197km;99.999%paved,8m mappednonpaved,zero repeatedroad,4fuelstops. First softer
+surfaceweight30trial retained14.161kmunknown and1.065kmrepeat; not selected.
+48localmatrixcases pass fuel/escape/allcandidatechecks. All32Dirt/Balanced cases
+retain exact geometry and plannedrefills against continuitybaseline. NSreported
+hooks route also retains exactpublicgeometry/stops.175focused tests pass.
+
+Short162kmusable crossClean has1.370km repeated paved approach at Irving
+osm:w428976289, total stopposition226.647km. Explicit qualityflag; don't claim all
+fuelspurs eliminated. Normal225km actualClean reference has0repeat. Privatehosted
+verification pending; no stableDEV change. Bench compare-clean-backroads.js
+records original, softer, and candidate costs without changing live state.
