@@ -780,3 +780,40 @@ profile requests in one process. All candidates had zero measured embedded-major
 core exposure in this fixture. Unknown surface remains explicitly reported.
 Evidence: routing/candidates/rebuild-live-canary/. 154 focused checks pass,
 including candidate sharing and app-compatible fuel-hop partitioning.
+
+## Verified live preview — September 8, 2026
+
+Preview READY: https://pack-fabric-42ltrerz7-goricksmith-7678s-projects.vercel.app
+Deployment dpl_6vK7hFKuwQbAs6HF6BYSMdrfFE2b; exact deployed source
+ ecf746ef8497df49c996c0853fe84743de331f7f. Framework: Vercel Node functions;
+reported build-output creation1s. Accepted02 five-region configuration and rider
+services were explicitly preserved; connection revision empty; canary NS-only.
+No national03 or production change. Local later commits may contain evidence
+scripts/docs only; the deployment identity above identifies runtime bytes.
+
+Actual app-compatible preview POSTs passed Dirt/Balanced/Clean. The cold Dirt
+server request took6,132ms including data load, Balanced1,575ms and Clean1,464ms.
+CLI/protection overhead is excluded from those server measurements. Exact output
+geometry/surface matched the local canary; all returned hops are contiguous,
+within270km usable range, and retain enough fuel for destination escape. A162km
+usable-range request returned four stops over588.64km, all hops within range.
+Plain /api/route also returns the replacement's61%dirt geometry. Fuel access
+remains provisional; this is route review, not station or navigation acceptance.
+
+Fallback/non-route comparisons against previous stable b3cb2fa passed:
+NB→NS Clean route45.883,-64.305→45.828,-64.21 completes10,753m with identical
+geometry and legacy chain engine. A supported-road NS Clean request with the
+unsupported avoidMotorways control completes239,482m with identical legacy
+geometry on both deployments. An initial alternate fallback fixture failed
+matching on both, so it was not presented as a successful route test. Fuel data
+contains the same671NS stations and identities; rider-services POI payloads match.
+The preview error-log query for the preceding hour returned no entries.
+
+Evidence: routing/candidates/rebuild-live-preview/{smoke,fallback,config.json,
+errors.jsonl}. Replay API tests with bench/verify-adventure-live.js and
+REBUILD_DEPLOYMENT set. The pack-refinement owner received the verified exact
+preview/config/results for a coordinated stable DEV alias move. Publication
+confirmation and public stable readback still required before device handoff.
+Device scope, precise pins/settings and remaining UI gaps are documented in
+ROUTING-DEVICE-CANARY.md. No UI edit required for this initial From Here comparison;
+future UI changes use the requested Impeccable skill and incumbent DIRT tokens.
