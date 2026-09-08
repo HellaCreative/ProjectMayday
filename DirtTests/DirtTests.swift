@@ -20,9 +20,13 @@ struct DirtTests {
         #expect(AppConfig.liveFuelURL.absoluteString == "https://pack-fabric.vercel.app/api/fuel")
         #expect(AppConfig.liveFuelChainURL.absoluteString == "https://pack-fabric.vercel.app/api/fuel-chain")
         #expect(AppConfig.livePOIURL.absoluteString == "https://pack-fabric.vercel.app/api/poi")
-        #expect(AppConfig.riderServicesManifestURL.absoluteString.hasSuffix(
-            "/rider-services/v1/manifest.json"
-        ))
+        #expect(AppConfig.v4CandidateReleaseId == "fabric-v4-20260907-01")
+        #expect(AppConfig.packManifestURL.absoluteString ==
+            "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/candidates/" +
+            "fabric-v4-20260907-01/manifest.json")
+        #expect(AppConfig.riderServicesManifestURL.absoluteString ==
+            "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev/v4/candidates/" +
+            "fabric-v4-20260907-01/rider-services/manifest.json")
         #expect(AppConfig.validatesSupabaseIsolation(url: AppConfig.supabaseURL))
         #expect(AppConfig.validatesRoutingIsolation(url: AppConfig.baseURL))
         #expect(!AppConfig.validatesSupabaseIsolation(

@@ -677,3 +677,16 @@ mark parity from screenshots or successful compilation alone.
 If Android reveals a genuine shared-contract defect, stop and report the fixed
 reproduction against the frozen baseline. Reopening the iOS/shared routing
 candidate is a separate, explicit decision.
+
+## Routing recovery — September 7, 2026
+
+The failed routing evolution commits `e92584d` and `106f5a5` were reverted
+locally. Product intent remains in `docs/ROUTING-EVOLUTION-SPEC-2026-09-07.md`,
+with recovery clarifications taking precedence. The prior implementation is
+not qualified for launch. Sealed DEV V4 `fabric-v4-20260907-01` and catalogs
+remain read-only; no V3 substitution, pack rebuild, or production publication.
+Routing search, costs, variety seeds, forward progress, retrace handling, and
+fuel-replacement ranking are one JavaScript/Swift contract. Implement behavioral
+changes together and verify both runtimes; automated passes do not replace
+White-device acceptance. Android must reproduce the accepted rider outcome,
+but no Android implementation or qualification is claimed here.
