@@ -815,3 +815,19 @@ Paved objective has no dirt-entry charge; raw surface totals stay unchanged.
 Single-region fuel guidance1.5, joined-region2; no new label/time cap. Swift and
 Android implementations remain deferred under the live-first authorization.
 This local qualification is not device or offline parity acceptance.
+
+Continuity candidate published to stable DEV9c15324 after hosted/public checks.
+Physical acceptance and Swift/Android parity remain pending. This supersedes the
+publication status (not the behavior description) in the candidate entry above.
+
+Continuity live behavior received rider visual acceptance at22:36UTC on app2(23),
+NS-only Dirt/unknownOFF/fuelON, destination46.980210,-60.472582. This accepts that
+live route build; Swift/offline/Android implementation and verification remain
+outstanding, and Clean refinement remains the next live repair priority.
+
+Clean back-road candidate: paved objective uses positive road-class factors
+primary/link4,trunk/link8,motorway/link/freeway32,service6,otherwise1, multiplied
+by100fornonpaved/unknown. No access prohibition; fuel/turn/escape constraints
+unchanged. Shared pool Dirt/Balanced objectives unchanged. Localonly at this
+entry; live publication/physical acceptance recorded in routingprogress. Swift
+andAndroid replication remain deferred under live-first authorization.

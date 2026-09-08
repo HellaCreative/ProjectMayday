@@ -1,6 +1,7 @@
 "use strict";
 const {buildFromHere}=require('./from-here');
 const {surfaceKind,compareSurface}=require('./surface');
+const {pavedBackroadCost}=require('./paved-backroad-cost');
 const {createPreparationCache}=require('./preparation-cache');
 const {createReverseCostCache}=require('./reverse-cost-cache');
 const {createStationMatchCache}=require('./station-match-cache');
@@ -9,7 +10,7 @@ const {createStationMatchCache}=require('./station-match-cache');
 // from the same fuel-feasible pool. No global optimality is claimed.
 const highwayFactor=a=>/^(motorway|motorway_link|freeway)$/.test(a.roadClassLeaf||"")?8:1;
 const objectives=Object.freeze([
- {id:'paved',cost:a=>a.distanceMeters*highwayFactor(a)*(surfaceKind(a.surfaceLeaf)==='paved'?1:30)},
+ {id:'paved',cost:pavedBackroadCost},
  {id:'dirt-10',cost:a=>a.distanceMeters*highwayFactor(a)*(surfaceKind(a.surfaceLeaf)==='dirt'?1:10)},
  {id:'dirt-30',cost:a=>a.distanceMeters*highwayFactor(a)*(surfaceKind(a.surfaceLeaf)==='dirt'?1:30)}
 ]);

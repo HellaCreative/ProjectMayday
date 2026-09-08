@@ -1097,3 +1097,70 @@ Local bench `replay-ns-continuity.js` captures0/500/1000comparisons and optional
 qualification assertions. Evidence is under /tmp/dirt-continuity-qualified,
 /tmp/dirt-cross-continuity, /tmp/dirt-nb-continuity-weight15 and
 /tmp/dirt-moved-continuity. Private hosted verification pending; no DEV switch.
+
+## Continuity hosted qualification — source9c15324
+
+Private r2w1bfpj7/source9c15324e6ace23df668c6061e2d4ba2a04b99bc8 =67425+d14a5a7.
+Exact NS hooks559.326km68.061%dirt0repeat3stops,9.591sserver onfirstNSrequest.
+Moved NB856.440km63.203%0.471kmrepeat4stops15.120s firstjoined; nearDalhousie
+807.840km62.361%0.471repeat7.981s; Dalhousie776.358km64.101%0.471repeat7.542s.
+Clean unchanged704.376km0repeat7.628s; criticalNB162unknown273.298km50.394%
+0.183repeat4.881s. All six pass complete candidate pools, fuel intervals,
+destination escape, geometry joins and response pack identities. Test-specific
+NS assertion verifies no dirt runs in first20km and>65%dirt, not a global rule.
+
+Final localcross24:2.449–4.916s1185MiBpeak; NB24:0.715–1.572s349MiBpeak.
+Hosted joined latency increased; correctness improves but speed remains a flag.
+Evidence summaries preserved in routing/candidates/rebuild-continuity-verification.
+Requested stableDEV activation after checks; public confirmation recorded next.
+
+## Stable continuity candidate ready for physical retest
+
+Owner activated exact r2w1bfpj7/source9c15324, preserved both02/ns-nb-v1/allenv,
+updated guard and publicly checked identity. Independent public NSrequest:
+7.554sHTTP/6.978sserver,559.326km3stops0repeated, no dirt runs in opening20km.
+Everycandidatefuelcomplete; all225km intervals, destinationescape andgeometryjoins
+pass. No Xcode install, phonepack transfer, production publication or GitHubpush.
+Physical handoff: fresh sameCapeBretonpin,Dirt,unknownOFF,fuelON250km/10%reserve;
+inspect MusquodoboitHarbour hooks. Physical acceptance pending, not implied by
+our automated checks. LargeNB latency/Cleanquality/CapeUnknownrepeat remainopen.
+
+## Physical continuity pass — 22:36 UTC
+
+Rider: “Looks really good. Pass”. App2(23), live9c15324, NS02, Dirt,
+unknownOFF, automaticfuelON250km/10%reserve. Requestfuel-b6585486 completes in
+5.793s with3pumps+destination (4committedlegs), selecteddirt-10. Origin44.764827,
+-63.340263; destination46.980210,-60.472582, snapped46.98019,-60.47261.
+This is a different CapeBreton pin from the original hooks failure, providing
+another rider-accepted route build. Exact observations are preserved in bench
+fixture `ns-continuity-accepted-20260908-223608.json`.
+
+Acceptance covers this route's visual quality and build behavior. The pasted log
+does not establish distance/dirt percentage/repeat metres or navigation outcomes.
+Next live priority: Clean paved back-road quality, preserving the accepted
+continuity behavior. LargerNB latency and CapeUnknown retrace remain open.
+
+## Clean back-road candidate — local comparison
+
+Rider additionally accepts NB Dirt: approximately9seconds and good-looking route.
+That is acceptable observed timing, not a blanket guarantee for cold/largecases.
+
+Clean's previous paved candidate treated primary/trunk like secondary/tertiary.
+New candidate cost prefers secondary/tertiary/local paved roads: primary/link4,
+trunk/link8,motorway/link/freeway32,service6,other1; nonpaved/unknown multiplier100.
+These are relative search costs, no road bans. The service cost avoids parking/
+service shortcuts; necessary fuel/anchor/highway access remains legal. Dirt and
+mixed candidate objectives are untouched; shared pool surface selection remains.
+
+ActualClean comparison:704.376km→962.273km, primary/trunk(includinglinks)497.986→
+193.197km;99.999%paved,8m mappednonpaved,zero repeatedroad,4fuelstops. First softer
+surfaceweight30trial retained14.161kmunknown and1.065kmrepeat; not selected.
+48localmatrixcases pass fuel/escape/allcandidatechecks. All32Dirt/Balanced cases
+retain exact geometry and plannedrefills against continuitybaseline. NSreported
+hooks route also retains exactpublicgeometry/stops.175focused tests pass.
+
+Short162kmusable crossClean has1.370km repeated paved approach at Irving
+osm:w428976289, total stopposition226.647km. Explicit qualityflag; don't claim all
+fuelspurs eliminated. Normal225km actualClean reference has0repeat. Privatehosted
+verification pending; no stableDEV change. Bench compare-clean-backroads.js
+records original, softer, and candidate costs without changing live state.

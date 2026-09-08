@@ -101,3 +101,101 @@ NS3reference routes keep exact distances. Cape NSunknown comparison: priorlive
 646.013km5.670kmrepeat; newlocal647.280km4.962kmrepeat,3pumpsboth. This residual
 unknown-path retrace still needs route-quality judgment; not a universal no-loop
 proof. Clean primary/trunk preference remains open. Physical acceptance pending.
+
+## Physical acceptance — 22:11 UTC, build 23
+
+The rider reported “Perfect!” after three new Porters Lake→NB Dirt builds.
+All used live source `67425f53c32f26bf81911331931462389205bc2b`, NS02/NB02,
+Allow Unknown OFF, automatic fuel ON, 250 km range with 10% reserve (225 km usable).
+
+| Destination latitude, longitude | Request time | Fuel stops | Committed legs |
+|---|---:|---:|---:|
+| 47.752778, -64.870725 | 5.513 s | 4 | 5 |
+| 48.042596, -66.476724 | 4.807 s | 3 | 4 |
+| 45.270115, -67.383511 | 5.444 s | 4 | 5 |
+
+These are three accepted physical route-building cases, including changed endpoints.
+Exact inputs and log observations are preserved in
+`scripts/pack-fabric/bench/fixtures/physical-dirt-acceptance-20260908-221107.json`.
+The installed pack01 path in the policy line does not identify the live routing
+pack: the response identity explicitly confirms both02 packs. No app reinstall
+or new deployment was needed for this acceptance.
+
+The pasted log does not include full geometry or fuel-hop distances; rider visual
+acceptance and successful responses do not independently verify navigation,
+station entrances/availability, or offline routing. Clean back-road quality is
+the next integration priority. Short-range NB dirt share and residual NS unknown
+retrace remain open. Preserve this accepted Dirt baseline while refining Clean.
+
+## Follow-up correction — Nova Scotia short diversions, 22:14 UTC
+
+The rider's close-up screenshot rejects short hooked diversions near Musquodoboit
+Harbour on a NEW NS-only route to 46.214698,-59.965492. This is separate from the
+three earlier NS→NB builds. The earlier positive feedback is not blanket routing
+acceptance. Route quality remains open and takes priority over Clean refinement.
+
+Exact public replay on source67425 confirms the diversions exist in returned
+segments, not only the renderer. Gravel service runs of70m and179m occur in the
+opening9km. The selected route reports zero repeated road metres: leaving and
+rejoining through different edges escapes the retrace check. Current per-metre
+surface costs reward short dirt without assessing continuous riding value.
+A short-run threshold alone must not reject necessary fuel/waypoint access.
+
+Device request16.488s; public replay13.677s server. Dirt-10 completes at561.496km,
+68.981%dirt,3pumps; paved and dirt-30 candidates hit label_limit. This is a separate
+search-completeness/performance failure, not evidence that dirt-10 is best possible.
+Input and observations: bench fixture `ns-short-diversions-20260908.json`.
+No scoring change or deployment made for this diagnostic capture. Next: compare
+these short branches with legal onward alternatives and qualify continuity
+handling beyond repeated-edge detection; preserve fuel and turn constraints.
+
+## Stable continuity candidate ready for physical retest
+
+Owner activated exact r2w1bfpj7/source9c15324, preserved both02/ns-nb-v1/allenv,
+updated guard and publicly checked identity. Independent public NSrequest:
+7.554sHTTP/6.978sserver,559.326km3stops0repeated, no dirt runs in opening20km.
+Everycandidatefuelcomplete; all225km intervals, destinationescape andgeometryjoins
+pass. No Xcode install, phonepack transfer, production publication or GitHubpush.
+Physical handoff: fresh sameCapeBretonpin,Dirt,unknownOFF,fuelON250km/10%reserve;
+inspect MusquodoboitHarbour hooks. Physical acceptance pending, not implied by
+our automated checks. LargeNB latency/Cleanquality/CapeUnknownrepeat remainopen.
+
+## Physical continuity pass — 22:36 UTC
+
+Rider: “Looks really good. Pass”. App2(23), live9c15324, NS02, Dirt,
+unknownOFF, automaticfuelON250km/10%reserve. Requestfuel-b6585486 completes in
+5.793s with3pumps+destination (4committedlegs), selecteddirt-10. Origin44.764827,
+-63.340263; destination46.980210,-60.472582, snapped46.98019,-60.47261.
+This is a different CapeBreton pin from the original hooks failure, providing
+another rider-accepted route build. Exact observations are preserved in bench
+fixture `ns-continuity-accepted-20260908-223608.json`.
+
+Acceptance covers this route's visual quality and build behavior. The pasted log
+does not establish distance/dirt percentage/repeat metres or navigation outcomes.
+Next live priority: Clean paved back-road quality, preserving the accepted
+continuity behavior. LargerNB latency and CapeUnknown retrace remain open.
+
+## Clean back-road candidate — local comparison
+
+Rider additionally accepts NB Dirt: approximately9seconds and good-looking route.
+That is acceptable observed timing, not a blanket guarantee for cold/largecases.
+
+Clean's previous paved candidate treated primary/trunk like secondary/tertiary.
+New candidate cost prefers secondary/tertiary/local paved roads: primary/link4,
+trunk/link8,motorway/link/freeway32,service6,other1; nonpaved/unknown multiplier100.
+These are relative search costs, no road bans. The service cost avoids parking/
+service shortcuts; necessary fuel/anchor/highway access remains legal. Dirt and
+mixed candidate objectives are untouched; shared pool surface selection remains.
+
+ActualClean comparison:704.376km→962.273km, primary/trunk(includinglinks)497.986→
+193.197km;99.999%paved,8m mappednonpaved,zero repeatedroad,4fuelstops. First softer
+surfaceweight30trial retained14.161kmunknown and1.065kmrepeat; not selected.
+48localmatrixcases pass fuel/escape/allcandidatechecks. All32Dirt/Balanced cases
+retain exact geometry and plannedrefills against continuitybaseline. NSreported
+hooks route also retains exactpublicgeometry/stops.175focused tests pass.
+
+Short162kmusable crossClean has1.370km repeated paved approach at Irving
+osm:w428976289, total stopposition226.647km. Explicit qualityflag; don't claim all
+fuelspurs eliminated. Normal225km actualClean reference has0repeat. Privatehosted
+verification pending; no stableDEV change. Bench compare-clean-backroads.js
+records original, softer, and candidate costs without changing live state.
