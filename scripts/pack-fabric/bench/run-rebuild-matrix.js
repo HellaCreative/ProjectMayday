@@ -19,7 +19,7 @@ for(const probeCase of ["southwest","urban-anchor","nb-constricted"])for(let rep
     const r=JSON.parse(fs.readFileSync(file));
     rows.push({probeCase,repeat,direction,state:r.route?.state||r.state,reason:r.route?.reason||r.reason||null,stage:r.stage||null,
       timing:r.timing||{totalMs:r.totalMs},loadMs:r.loadMs,
-      processPeakRssKiB:r.processPeakRssKiB,routeFingerprint:r.routeFingerprint,urban:r.urban,surface:r.route?.surface||null,
+      processPeakRssKiB:r.processPeakRssKiB,preparationCacheHit:r.preparationCacheHit??false,routeFingerprint:r.routeFingerprint,urban:r.urban,surface:r.route?.surface||null,
       graphSha256:r.graphSha256,geometrySha256:r.geometrySha256,diagnostics:r.diagnostics});
   }
   console.log(JSON.stringify({probeCase,repeat,exit:child.status}));

@@ -691,3 +691,9 @@ alternatives when an urban pump is necessary. Small settlement records are not
 blanket exclusions. The strict ordering around required urban anchors remains
 under evaluation; do not port the experimental tuning as an accepted policy.
 No iOS/Android implementation or device qualification is claimed in this step.
+
+Reusable graph preparation is now an experimental JS optimization. It is keyed
+by exact loaded data/revision and urban bounds, retains completed data only, and
+preserves route geometry in local comparisons. No new rider-facing contract is
+introduced; native caching implementation and memory qualification remain
+platform-specific work after live routing acceptance.

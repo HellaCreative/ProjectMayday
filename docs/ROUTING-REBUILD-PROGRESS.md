@@ -254,3 +254,68 @@ its time/memory cost; investigate the exact QC restriction against source and
 packed representation. The existing city-anchor ride-quality concern, missing
 NB urban definitions and real fuel-access qualification remain open. No service
 or device deployment occurred.
+
+## Sixth step — reusable preparation, unchanged routes, upstream restriction evidence
+
+Added `adventure/preparation-cache.js`. It retains only completed spatial/urban
+indexes and requires the same graph instance, geometry instance, immutable byte
+revision identity and urban bounds. Default capacity is one prepared graph;
+completed new entries evict old references, and explicit unloading clears them.
+Interrupted builds cannot become cache hits or evict the working entry. Cached
+work cannot override cancellation. Route-specific endpoints, style costs, fuel
+state, turn history and reverse bounds are not cached. This is a bounded entry
+count, not a verified byte-memory limit or a deployed service cache.
+
+The benchmark enables this with `REBUILD_PREPARED=1`. Cold request preparation
+still consumes its existing shared budget. An explicit optional
+`REBUILD_PREWARM_WORK` prepares before requests and records that separate time,
+work and memory in `preparation.json`; it must not conceal cold-start cost.
+Production lifecycle/concurrency and shared asynchronous preparation remain
+unfinished. No request deadline or default work limit was raised.
+
+Three-process NS/NB matrix, 18 complete routes:
+
+| Directional request | Median with reusable preparation | Earlier median without reuse |
+| --- | ---: | ---: |
+| Southwest NS forward (cold preparation) | 583 ms | 663 ms |
+| Southwest NS reverse (reused preparation) | 428 ms | 846 ms |
+| Halifax → Porters Lake (cold preparation) | 775 ms | 853 ms |
+| Porters Lake → Halifax (reused preparation) | 836 ms | 1,326 ms |
+| Moncton → Shediac (cold preparation) | 299 ms | 357 ms |
+| Shediac → Moncton (reused preparation) | 186 ms | 326 ms |
+
+All 18 exact edge/fraction fingerprints match the earlier matrix, and all nine
+reverse requests report a preparation cache hit. Changes in cold-run timing are
+not attributed to caching; these are separate local batches, not controlled
+service percentiles. Timings exclude pack loading and physical fuel integration.
+Peak process RSS across groups reached 363 MiB. Existing urban-data and ride-
+quality limitations are unchanged. Evidence: `rebuild-prepared-matrix/`.
+
+QC explicit prewarming completed in 808 ms with 11,221,354 operations, using a
+separate 50-million diagnostic allowance. Its normal 6-million-budget requests
+then used only 633 operations before the same restriction error, in 77/36 ms.
+These are **failure timings**, not successful Quebec routes. Preparation is
+reusable; first-use preparation under the original 6-million allowance remains
+insufficient. Later QC bounds/search time and memory still cannot be measured.
+Evidence: `rebuild-prepared-qc/`, including separate preparation accounting.
+
+### Quebec restriction source check
+
+The [current OSM source relation](https://api.openstreetmap.org/api/0.6/relation/7111448.json),
+retrieved in this step, is version 2, timestamp `2025-08-17T13:26:18Z`. It declares:
+
+- `restriction=only_straight_on`;
+- from way `111771059`;
+- via way `111771059` (the same way);
+- to way `465413249`.
+
+The repeated approach/via identity exists in the upstream record; it is not
+solely introduced by assigning packed edge indices. This does **not** establish
+a safe interpretation, absolve all source-resolution issues, or justify dropping
+it. The source snapshot is preserved in the QC evidence directory. The original
+reader rejection remains; factory/source investigation can proceed independently
+without changing sealed packs during these experiments.
+
+80 replacement tests plus eight existing V4 snap/pack checks pass (88 total),
+including five new cache invalidation, eviction, interruption and cancellation
+regressions. No live API, pack or phone change was made.

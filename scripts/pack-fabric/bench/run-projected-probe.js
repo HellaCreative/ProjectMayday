@@ -10,6 +10,7 @@ const {pointFromMatch,materializeRoute}=require("../routing/lib/adventure/route-
 const {createBudget}=require("../routing/lib/adventure/budget");
 const {buildLowerBounds,searchResourcePath}=require("../routing/lib/adventure/resource-search");
 const {urbanAreasFromPack,buildUrbanExposure}=require("../routing/lib/adventure/urban-exposure");
+const {createPreparationCache}=require("../routing/lib/adventure/preparation-cache");
 const {surfaceKind}=require("../routing/lib/adventure/surface");
 const root=process.env.REBUILD_PACK_ROOT;
 if(!root)throw new Error("REBUILD_PACK_ROOT required");
@@ -27,6 +28,18 @@ const pack=decodeGraphV4(bytes,geometryBytes),geom=decodeGeometryV1(geometryByte
 const loadMs=Math.round(performance.now()-loadAt);
 const urbanEnabled=process.env.REBUILD_URBAN==="1";
 const maxWork=Number(process.env.REBUILD_MAX_WORK||6000000);
+const classification=urbanEnabled?urbanAreasFromPack(pack):null;
+const revision=crypto.createHash("sha256").update(bytes).update(geometryBytes).digest("hex");
+const preparationCache=process.env.REBUILD_PREPARED==="1"?createPreparationCache():null;
+const preparationOptions={pack,geom,revision,areas:classification?.areas||[]};
+if(preparationCache&&process.env.REBUILD_PREWARM_WORK) {
+  const at=performance.now(),budget=createBudget({deadlineAtMs:Date.now()+15000,maxExpansions:Number(process.env.REBUILD_PREWARM_WORK)});
+  const prepared=preparationCache.prepare({...preparationOptions,budget});
+  const evidence={state:prepared.state,stage:prepared.stage,reason:prepared.reason,totalMs:Math.round(performance.now()-at),
+    budget:budget.snapshot(),processPeakRssKiB:process.resourceUsage().maxRSS,revision,
+    note:"Explicit prewarming outside request budget; this cost must not be hidden as free cold-start work"};
+  fs.writeFileSync(path.join(output,"preparation.json"),JSON.stringify(evidence,null,2));console.log(JSON.stringify(evidence));
+}
 const rows=[];
 for(const reversed of [false,true]) {
   const totalAt=performance.now(),budget=createBudget({deadlineAtMs:Date.now()+15000,maxExpansions:maxWork});
@@ -36,7 +49,9 @@ for(const reversed of [false,true]) {
       {resultState:value?.state==="incomplete"?"incomplete":"failed",reason:value?.reason||"not_complete"});
   }
   try {
-  const index=buildEdgeIndex(pack,geom,budget);
+  const preparation=preparationCache?preparationCache.prepare({...preparationOptions,budget}):null;
+  if(preparation)requireComplete(preparation);
+  const index=preparation?preparation.prepared.index:buildEdgeIndex(pack,geom,budget);
   requireComplete(index);
   stage="endpoint_matching";
   const matched=matchStations({pack,geom,index,stations:locations,maxMeters:2000,budget});
@@ -50,8 +65,7 @@ for(const reversed of [false,true]) {
   const edgeCost=arc=>arc.distanceMeters*(surfaceKind(arc.surfaceLeaf)==="dirt"?1:10);
   const matchingMs=performance.now()-totalAt,urbanAt=performance.now();
   stage="urban_index";
-  const classification=urbanEnabled?urbanAreasFromPack(pack):null;
-  const urban=urbanEnabled?buildUrbanExposure({pack,geom,areas:classification.areas,budget,index}):null;
+  const urban=urbanEnabled?(preparation?preparation.prepared.urban:buildUrbanExposure({pack,geom,areas:classification.areas,budget,index})):null;
   if(urban)requireComplete(urban);
   const urbanMs=performance.now()-urbanAt,boundsAt=performance.now();
   stage="reverse_bounds";
@@ -63,7 +77,7 @@ for(const reversed of [false,true]) {
   const materializeAt=performance.now();
   stage="geometry";
   const route=materializeRoute({pack,geom,result,budget});
-  const row={probeCase,region,maxWork,graphSize:{nodes:pack.nodeCount,edges:pack.edgeCount},reversed,loadMs,processPeakRssKiB:process.resourceUsage().maxRSS,request:{locations:reversed?locations.slice().reverse():locations},
+  const row={probeCase,region,maxWork,preparationCacheHit:preparation?.cacheHit??false,graphSize:{nodes:pack.nodeCount,edges:pack.edgeCount},reversed,loadMs,processPeakRssKiB:process.resourceUsage().maxRSS,request:{locations:reversed?locations.slice().reverse():locations},
     limitations:["experimental dirt weights, not final profile objective",urbanEnabled?"embedded major cores only; large-town classification and berth unqualified":"urban avoidance not applied","fuel not requested/proved", "one connected endpoint pair, no alternate-pair retry"],
     graphSha256:crypto.createHash("sha256").update(bytes).digest("hex"),geometrySha256:crypto.createHash("sha256").update(geometryBytes).digest("hex"),
     urban:urban?{...urban.diagnostics,...classification.evidence,routeUrbanMeters:result.avoidanceCost}:null,
@@ -73,7 +87,7 @@ for(const reversed of [false,true]) {
     endpointMatches:{start:picked.start,end:picked.end},route,diagnostics:result.diagnostics};
   if(route.state!=="complete")process.exitCode=1;
   rows.push(row);fs.writeFileSync(path.join(output,`${reversed?"reverse":"forward"}.json`),JSON.stringify(row));
-  console.log(JSON.stringify({reversed,state:route.state,timing:row.timing,urban:row.urban,surface:route.surface}));
+  console.log(JSON.stringify({reversed,state:route.state,timing:row.timing,preparationCacheHit:row.preparationCacheHit,urban:row.urban,surface:route.surface}));
   } catch(error) {
     const row={probeCase,region,maxWork,reversed,stage,state:error.resultState||"error",reason:error.reason||error.message,errorCode:error.code||null,errorDetails:error.details||null,
       graphSize:{nodes:pack.nodeCount,edges:pack.edgeCount},loadMs,totalMs:Math.round(performance.now()-totalAt),
