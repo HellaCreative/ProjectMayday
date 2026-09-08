@@ -1,4 +1,5 @@
 "use strict";
+const {fuelCovers}=require("./fuel-math");
 
 // Verifies the exact proposed geometry, not station proximity. Station visits
 // and destination escape distances must come from legal road proofs tied to
@@ -20,7 +21,7 @@ function proveFuel({ segments, visits, usableRangeMeters, initialUsableMeters,
     if (!budget.consume()) return { state:"unverified", reason:budget.snapshot().reason, arrivals };
     if (!Number.isFinite(visit.atMeters) || visit.atMeters < at || visit.atMeters > total) throw new TypeError("Unordered or off-route visit");
     const distance = visit.atMeters - at;
-    if (distance > remaining + 1e-6) return { state:"gap_on_candidate", reason:"unreachable_visit", visitId:visit.id,
+    if (!fuelCovers(remaining,distance)) return { state:"gap_on_candidate", reason:"unreachable_visit", visitId:visit.id,
       shortfallMeters:distance-remaining, arrivals };
     remaining = Math.max(0,remaining-distance);
     const arrival = { visitId:visit.id, atMeters:visit.atMeters, arrivalUsableMeters:remaining };
@@ -31,14 +32,14 @@ function proveFuel({ segments, visits, usableRangeMeters, initialUsableMeters,
     arrivals.push({ ...arrival, departureUsableMeters:remaining, refuel:visit.refuel === true });
     at = visit.atMeters;
   }
-  if (total-at > remaining + 1e-6) return { state:"gap_on_candidate", reason:"destination_unreachable", shortfallMeters:total-at-remaining, arrivals };
+  if (!fuelCovers(remaining,total-at)) return { state:"gap_on_candidate", reason:"destination_unreachable", shortfallMeters:total-at-remaining, arrivals };
   remaining = Math.max(0,remaining-(total-at));
   if (!budget.check()) return {state:"unverified",reason:budget.snapshot().reason,arrivals};
   if (!destinationEscape || destinationEscape.state !== "verified" || !destinationEscape.stationId ||
       !Number.isFinite(destinationEscape.distanceMeters) || destinationEscape.distanceMeters < 0) {
     return {state:"unverified",reason:"destination_escape_unproved",arrivalUsableMeters:remaining,arrivals};
   }
-  if (destinationEscape.distanceMeters > remaining + 1e-6) return {state:"gap_on_candidate",reason:"destination_escape_unreachable",
+  if (!fuelCovers(remaining,destinationEscape.distanceMeters)) return {state:"gap_on_candidate",reason:"destination_escape_unreachable",
     shortfallMeters:destinationEscape.distanceMeters-remaining,arrivalUsableMeters:remaining,arrivals};
   return {state:"verified",arrivalUsableMeters:remaining,escapeUsableMeters:Math.max(0,remaining-destinationEscape.distanceMeters),arrivals};
 }

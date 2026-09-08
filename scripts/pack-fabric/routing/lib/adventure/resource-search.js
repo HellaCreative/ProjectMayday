@@ -1,4 +1,5 @@
 "use strict";
+const {fuelCovers}=require("./fuel-math");
 
 // Experimental fuel-aware label-setting search. This finds a minimum additive
 // exploration cost, NOT the globally highest dirt percentage or a 50/50 ride.
@@ -48,6 +49,7 @@ function searchResourcePath({graph,start,end,edgeCost,budget,fuel=null,
       remainingUsableMeters:fuel?label.remaining:null,endTurnState:label.turnState,goalEvidence,
       diagnostics:{labels,dominated,expanded,...budget.snapshot()}};
   }
+  if(!budget.check())return {state:"incomplete",reason:budget.snapshot().reason,diagnostics:{labels,dominated,expanded,...budget.snapshot()}};
   add({node:start,turnState:initialTurnState,remaining:fuel?fuel.initialUsableMeters:Infinity,cost:0,avoidance:0,distance:0,parent:null});
   let cur;
   while((cur=heap.pop())) {
@@ -55,7 +57,7 @@ function searchResourcePath({graph,start,end,edgeCost,budget,fuel=null,
     if(!budget.consume()) return {state:"incomplete",reason:budget.snapshot().reason,diagnostics:{labels,dominated,expanded,...budget.snapshot()}};
     expanded++;
     const atGoal=typeof end==="function"?end(cur.node):cur.node===end;
-    if(atGoal&&(!fuel||cur.remaining>=destinationEscapeMeters)) {
+    if(atGoal&&(!fuel||fuelCovers(cur.remaining,destinationEscapeMeters))) {
       const verdict=acceptGoal?acceptGoal({node:cur.node,turnState:cur.turnState,remainingUsableMeters:cur.remaining}):{accepted:true};
       if(!budget.check())return {state:"incomplete",reason:budget.snapshot().reason,diagnostics:{labels,dominated,expanded,...budget.snapshot()}};
       if(verdict.accepted)return materialize(cur,verdict.evidence??null);
@@ -69,7 +71,7 @@ function searchResourcePath({graph,start,end,edgeCost,budget,fuel=null,
     for(const arc of graph.outgoing(cur.node)) {
       if(!budget.consume())return {state:"incomplete",reason:budget.snapshot().reason,diagnostics:{labels,dominated,expanded,...budget.snapshot()}};
       if(!Number.isFinite(arc.distanceMeters)||arc.distanceMeters<0)throw new TypeError("Invalid arc length");
-      if(fuel&&arc.distanceMeters>cur.remaining)continue;
+      if(fuel&&!fuelCovers(cur.remaining,arc.distanceMeters))continue;
       const transition=graph.transition(cur.turnState,arc);
       if(!transition.allowed)continue;
       const avoidance=avoidanceCost?avoidanceCost(arc):0;
@@ -77,9 +79,10 @@ function searchResourcePath({graph,start,end,edgeCost,budget,fuel=null,
       const cost=edgeCost(arc);
       if(!Number.isFinite(cost)||cost<0)throw new TypeError("Search costs must be finite and nonnegative");
       add({node:arc.to,turnState:transition.state,cost:cur.cost+cost,avoidance:cur.avoidance+avoidance,
-        remaining:fuel?cur.remaining-arc.distanceMeters:Infinity,distance:cur.distance+arc.distanceMeters,parent:cur,arc,refill:null});
+        remaining:fuel?Math.max(0,cur.remaining-arc.distanceMeters):Infinity,distance:cur.distance+arc.distanceMeters,parent:cur,arc,refill:null});
     }
   }
+  if(!budget.check())return {state:"incomplete",reason:budget.snapshot().reason,diagnostics:{labels,dominated,expanded,...budget.snapshot()}};
   return {state:"exhausted",reason:fuel?"no_fuel_feasible_path_in_supplied_graph":"no_path_in_supplied_graph",
     diagnostics:{labels,dominated,expanded,...budget.snapshot()}};
 }

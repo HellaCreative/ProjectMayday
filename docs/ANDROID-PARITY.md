@@ -697,3 +697,9 @@ by exact loaded data/revision and urban bounds, retains completed data only, and
 preserves route geometry in local comparisons. No new rider-facing contract is
 introduced; native caching implementation and memory qualification remain
 platform-specific work after live routing acceptance.
+
+Pending replacement acceptance: fuel search, destination escape and final proof
+must use consistent floating-point boundary handling without spending protected
+reserve. Cancelled/deadline-expired searches cannot be labelled no-path even when
+no forward labels remain. These JS corrections have regression coverage; native
+implementation and rider acceptance remain deferred under the live-first scope.

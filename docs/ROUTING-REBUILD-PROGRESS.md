@@ -319,3 +319,35 @@ without changing sealed packs during these experiments.
 80 replacement tests plus eight existing V4 snap/pack checks pass (88 total),
 including five new cache invalidation, eviction, interruption and cancellation
 regressions. No live API, pack or phone change was made.
+
+## Seventh step — quick boundary checks; Quebec investigation parked
+
+Owner explicitly asked to park the restriction investigation and pursue smaller
+checks. No further Quebec source/pack investigation was performed this step.
+
+Added nine focused boundary tests. Four initially failed, exposing two issues:
+
+1. Final fuel proof already tolerated one micrometre of floating-point distance
+   rounding, but road search and destination escape used strict comparisons.
+   Decimal segments could therefore be verified by proof but rejected by search.
+   `fuel-math.js` now supplies the existing tolerance consistently across those
+   phases, and subtraction clamps rounding-only negatives to zero. A genuine
+   one-millimetre shortfall remains rejected. Rider reserve settings are unchanged.
+2. A cancelled request could return `exhausted` when reverse bounds skipped an
+   unreachable start, or cancellation occurred at the final outgoing-road check.
+   Search now checks cancellation/deadline both before starting and before
+   declaring exhaustion. It returns incomplete/cancelled instead of no path.
+
+Other checks passed without policy changes: zero usable fuel permits a refill
+only when already at a supplied station; candidate ordering cannot alter the
+Dirt/Balanced/Clean choice or mutate its pool; changing a primary-leg input does
+not mutate prior normalized legs or fixed anchors; all eight Loop directions and
+both target kinds preserve first-fuel and unknown-starting-fuel intent through
+JSON serialization. These are core input/storage-shape checks, **not** app save/
+reopen, Loop generation, navigation or physical station acceptance.
+
+Final verification: 89 replacement tests plus eight existing V4 snap/pack checks
+pass (97 total), including the independent 250-network / 500-comparison fuel
+oracle. No new speed claims are made from this correctness round. The restriction,
+city-anchor ride quality, missing urban definitions and physical fuel-access
+qualification remain open. No deployment, pack mutation or phone change.

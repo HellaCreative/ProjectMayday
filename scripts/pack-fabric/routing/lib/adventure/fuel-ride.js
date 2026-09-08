@@ -1,4 +1,5 @@
 "use strict";
+const {fuelCovers}=require("./fuel-math");
 
 const {searchResourcePath}=require("./resource-search");
 
@@ -27,7 +28,7 @@ function searchFuelRide({graph,start,end,edgeCost,budget,fuel,lowerBounds=null,i
     }
     if(escape.state!=="found")return {accepted:false};
     const finalNode=escape.arcs.length?escape.arcs[escape.arcs.length-1].to:node;
-    return {accepted:escape.distanceMeters<=remainingUsableMeters,
+    return {accepted:fuelCovers(remainingUsableMeters,escape.distanceMeters),
       evidence:{stationId:graph.stationAt(finalNode).id,distanceMeters:escape.distanceMeters,arcs:escape.arcs}};
   }
   const result=searchResourcePath({...base,fuel,acceptGoal});
