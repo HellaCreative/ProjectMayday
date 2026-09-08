@@ -101,3 +101,28 @@ NS3reference routes keep exact distances. Cape NSunknown comparison: priorlive
 646.013km5.670kmrepeat; newlocal647.280km4.962kmrepeat,3pumpsboth. This residual
 unknown-path retrace still needs route-quality judgment; not a universal no-loop
 proof. Clean primary/trunk preference remains open. Physical acceptance pending.
+
+## Physical acceptance — 22:11 UTC, build 23
+
+The rider reported “Perfect!” after three new Porters Lake→NB Dirt builds.
+All used live source `67425f53c32f26bf81911331931462389205bc2b`, NS02/NB02,
+Allow Unknown OFF, automatic fuel ON, 250 km range with 10% reserve (225 km usable).
+
+| Destination latitude, longitude | Request time | Fuel stops | Committed legs |
+|---|---:|---:|---:|
+| 47.752778, -64.870725 | 5.513 s | 4 | 5 |
+| 48.042596, -66.476724 | 4.807 s | 3 | 4 |
+| 45.270115, -67.383511 | 5.444 s | 4 | 5 |
+
+These are three accepted physical route-building cases, including changed endpoints.
+Exact inputs and log observations are preserved in
+`scripts/pack-fabric/bench/fixtures/physical-dirt-acceptance-20260908-221107.json`.
+The installed pack01 path in the policy line does not identify the live routing
+pack: the response identity explicitly confirms both02 packs. No app reinstall
+or new deployment was needed for this acceptance.
+
+The pasted log does not include full geometry or fuel-hop distances; rider visual
+acceptance and successful responses do not independently verify navigation,
+station entrances/availability, or offline routing. Clean back-road quality is
+the next integration priority. Short-range NB dirt share and residual NS unknown
+retrace remain open. Preserve this accepted Dirt baseline while refining Clean.

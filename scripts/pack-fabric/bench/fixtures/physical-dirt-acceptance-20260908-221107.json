@@ -1,0 +1,77 @@
+{
+  "id": "physical-dirt-acceptance-20260908-221107",
+  "status": "rider_accepted_route_builds",
+  "source": "User-pasted diagnostic log, started 2026-09-08T22:09:42Z, exported 2026-09-08T22:11:07Z; user response: Perfect!",
+  "serviceBuild": "67425f53c32f26bf81911331931462389205bc2b",
+  "strategy": "adventure-preview-v1",
+  "selectedObjective": "dirt-30",
+  "packReleases": {
+    "ns": "fabric-v4-20260908-02",
+    "nb": "fabric-v4-20260908-02"
+  },
+  "app": "2 (23)",
+  "commonRequest": {
+    "origin": {
+      "lat": 44.764835,
+      "lon": -63.340265
+    },
+    "mode": "fromHere",
+    "profile": "dirt",
+    "allowUnknown": false,
+    "automaticFuel": true,
+    "fullRangeMeters": 250000,
+    "reservePercent": 10,
+    "usableRangeMeters": 225000,
+    "firstLegMaxMeters": 225000,
+    "windowMaxStops": 12,
+    "ensureDestinationFuelEscape": true
+  },
+  "cases": [
+    {
+      "requestId": "fuel-9abc64f8",
+      "destination": {
+        "lat": 47.752778,
+        "lon": -64.870725
+      },
+      "mapZoom": 9.7,
+      "observed": {
+        "httpStatus": 200,
+        "requestElapsedMs": 5513,
+        "fuelStops": 4,
+        "committedLegs": 5,
+        "status": "complete"
+      }
+    },
+    {
+      "requestId": "fuel-9e493216",
+      "destination": {
+        "lat": 48.042596,
+        "lon": -66.476724
+      },
+      "mapZoom": 8.4,
+      "observed": {
+        "httpStatus": 200,
+        "requestElapsedMs": 4807,
+        "fuelStops": 3,
+        "committedLegs": 4,
+        "status": "complete"
+      }
+    },
+    {
+      "requestId": "fuel-14fd17e2",
+      "destination": {
+        "lat": 45.270115,
+        "lon": -67.383511
+      },
+      "mapZoom": 9.7,
+      "observed": {
+        "httpStatus": 200,
+        "requestElapsedMs": 5444,
+        "fuelStops": 4,
+        "committedLegs": 5,
+        "status": "complete"
+      }
+    }
+  ],
+  "scope": "Physical route-building and rider visual acceptance. Log does not contain full geometry, road percentages, fuel-hop distances, or navigation results. Timings and stop counts are observations, not exact invariants for future routes."
+}

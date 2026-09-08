@@ -1,3 +1,16 @@
+# Latest device result — accepted September 8, 22:11 UTC
+
+The rider accepted three NS→NB From Here Dirt builds on app 2 (23), using live
+source `67425f53c32f26bf81911331931462389205bc2b` and NS02/NB02 packs.
+Request times were 5.513, 4.807 and 5.444 seconds, with four, three and four fuel
+stops respectively. Allow Unknown was OFF; fuel was ON with 225 km usable range.
+Exact destinations and evidence are in `ROUTING-PHYSICAL-FEEDBACK-2026-09-08.md`
+and the `physical-dirt-acceptance-20260908-221107.json` bench fixture.
+
+This accepts those route builds; Clean back-road quality remains the next focus.
+Navigation and offline behavior were not tested in this session. Instructions
+below are historical handoffs, not a request to repeat the accepted tests.
+
 # Onward fuel-search retest — existing build23
 
 Final candidate source67425f53c32f26bf81911331931462389205bc2b (supersedes the reverted df0827 trial). Public activation and
