@@ -19,7 +19,7 @@ class Heap {
 }
 
 function searchResourcePath({graph,start,end,edgeCost,budget,fuel=null,
-  initialTurnState=null,destinationEscapeMeters=0,lowerBounds=null}) {
+  initialTurnState=null,destinationEscapeMeters=0,lowerBounds=null,acceptGoal=null}) {
   if(!Number.isFinite(destinationEscapeMeters)||destinationEscapeMeters<0) throw new TypeError("A proved destination escape distance is required");
   if(fuel && (!(fuel.usableRangeMeters>0)||!Number.isFinite(fuel.usableRangeMeters)||
       !Number.isFinite(fuel.initialUsableMeters)||fuel.initialUsableMeters<0||fuel.initialUsableMeters>fuel.usableRangeMeters)) throw new TypeError("Invalid fuel assumptions");
@@ -37,12 +37,13 @@ function searchResourcePath({graph,start,end,edgeCost,budget,fuel=null,
     for(const old of frontier){if(label.cost<=old.cost&&label.remaining>=old.remaining){old.active=false;dominated++;}else kept.push(old);}
     label.active=true;kept.push(label);frontiers.set(key,kept);labels++;heap.push(label);
   }
-  function materialize(label) {
+  function materialize(label,goalEvidence=null) {
     const arcs=[],visits=[];let cursor=label;
     while(cursor.parent){if(cursor.arc)arcs.push(cursor.arc);if(cursor.refill)visits.push({stationId:cursor.refill.id,atMeters:cursor.distance});cursor=cursor.parent;}
     arcs.reverse();visits.reverse();
     return {state:"found",arcs,visits,distanceMeters:label.distance,cost:label.cost,
-      remainingUsableMeters:fuel?label.remaining:null,diagnostics:{labels,dominated,expanded,...budget.snapshot()}};
+      remainingUsableMeters:fuel?label.remaining:null,endTurnState:label.turnState,goalEvidence,
+      diagnostics:{labels,dominated,expanded,...budget.snapshot()}};
   }
   add({node:start,turnState:initialTurnState,remaining:fuel?fuel.initialUsableMeters:Infinity,cost:0,distance:0,parent:null});
   let cur;
@@ -50,7 +51,12 @@ function searchResourcePath({graph,start,end,edgeCost,budget,fuel=null,
     if(!cur.active)continue;
     if(!budget.consume()) return {state:"incomplete",reason:budget.snapshot().reason,diagnostics:{labels,dominated,expanded,...budget.snapshot()}};
     expanded++;
-    if(cur.node===end&&(!fuel||cur.remaining>=destinationEscapeMeters))return materialize(cur);
+    const atGoal=typeof end==="function"?end(cur.node):cur.node===end;
+    if(atGoal&&(!fuel||cur.remaining>=destinationEscapeMeters)) {
+      const verdict=acceptGoal?acceptGoal({node:cur.node,turnState:cur.turnState,remainingUsableMeters:cur.remaining}):{accepted:true};
+      if(!budget.check())return {state:"incomplete",reason:budget.snapshot().reason,diagnostics:{labels,dominated,expanded,...budget.snapshot()}};
+      if(verdict.accepted)return materialize(cur,verdict.evidence??null);
+    }
     // Station membership must mean a legal visit to the physical station,
     // never a nearby map marker. Refuelling doesn't erase turn history.
     const station=fuel?graph.stationAt(cur.node):null;

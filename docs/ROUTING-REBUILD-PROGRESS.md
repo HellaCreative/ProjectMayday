@@ -66,3 +66,39 @@ GraphHopper's [custom-model documentation](https://github.com/graphhopper/graphh
 5. Run complete regression and DEV rider acceptance before replacing/removing the old orchestrator. App navigation/HUD and offline parity remain later stages.
 
 No user decision is currently required to continue the engineering experiments. Unresolved policy choices remain in the specification and will be raised only with concrete route comparisons.
+
+## Second implementation step — exact projected road positions
+
+Added `projected-graph.js` and `route-geometry.js`, plus their regression tests and `bench/run-projected-probe.js`.
+
+- Endpoint and station positions split an existing road edge in memory, retaining its original identity and distance. No connection is created between close or coincident but disconnected roads.
+- Partial traversal preserves legal direction and node/via-way restrictions through every split piece. An interior projection cannot invent a U-turn; a genuine mapped junction or dead end retains its legal movements.
+- Refilling at a supplied verified station binding does not clear direction or restriction history. Unverified station candidates cannot be supplied as a refill binding.
+- Geometry is reconstructed from exact source polylines, in travel order, including curved and partial sections. Disconnected arcs or nonjoining geometry are rejected instead of drawing a straight connector.
+- Snap distances are normalised against actual polyline length, avoiding rounding drift at endpoints. The search retains authoritative pack lengths for range accounting.
+- Search results retain arrival turn state for subsequent-leg/escape integration.
+
+The Southwest NS probe now uses the original requested coordinates, with eligible connected endpoint matching, and reconstructs the resulting full road geometry. Both directions matched their geometry endpoints exactly to the selected projections:
+
+| Direction | Index/matching | Reverse bound | Search | Geometry | Total |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Forward | 219 ms | 205 ms | 22 ms | 22 ms | 469 ms |
+| Reverse | 206 ms | 163 ms | 17 ms | 21 ms | 407 ms |
+
+Graph decoding occurs before this measured interval. These are single local observations, not latency percentiles or an equivalent full comparison with the live service. Forward: 422.66 km, 53.81% known dirt; reverse: 419.66 km, 53.16% known dirt. Urban avoidance and fuel are **not** applied, and the weight is still experimental. This is not a Dirt-quality acceptance result or a deployed route.
+
+Evidence: `scripts/pack-fabric/routing/candidates/rebuild-projected-probe/{forward,reverse}.json`. Replay with the same `REBUILD_PACK_ROOT` and `npm run bench:projected-probe`.
+
+52 replacement-core tests pass. Added cases cover same-edge endpoints, one-way reversal prevention, station refilling on an existing directed edge, no invented midpoint turnaround, coincident disconnected roads, full via-way restriction history, partial/curved geometry and actual endpoint projection.
+
+Next integration boundary: the graph can now represent a verified station visit, but the current POI-to-road candidates do not themselves prove the station's physical entrance/exit. Preserve their offsets and alternatives as evidence; select/validate real road access before enabling those refills in rider-facing fuel plans. Multi-leg continuation, destination escape, urban classification and final candidate selection remain unfinished.
+
+### Destination escape integration on supplied station access
+
+Added `fuel-ride.js`. It preserves a low-cost road candidate for advisory display, then searches with fuel state and planned refills integrated into the search. This is not the old repeated pump-insertion/profile-reroute loop. Both phases share graph data, optional reverse bounds and the same work budget; this orchestration is still experimental and its duplicated road/fuel work needs comparison against the other planned search design.
+
+At a candidate destination arrival, it verifies a legal road path to a station using the actual incoming turn state. Escape results are cached by that state. The fuel search rejects an arrival that cannot support this exit, permitting an upstream refill/alternative arrival instead. A destination that is a supplied station explicitly receives a planned refill; arrival range and post-refill departure range are separate.
+
+If no feasible chain is found in the supplied matched graph, or its work budget expires, the complete advisory road route remains available. The result does not claim the region has no fuel. Unknown initial fuel remains explicit. These capabilities are tested on constructed legal graphs with supplied station associations; real-world station access proof and full multi-primary-leg integration are still pending.
+
+58 replacement-core tests now pass, with eight existing V4 snap/pack checks also exercised in the final focused run. The known unrelated legacy timezone-fixture failure is unchanged. No live or physical-device qualification is claimed.

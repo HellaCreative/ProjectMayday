@@ -6,6 +6,7 @@
     "test:adventure": "node --test scripts/pack-fabric/routing/lib/adventure/*.test.js",
     "bench:rebuild": "node scripts/pack-fabric/bench/run-rebuild-baseline.js",
     "bench:resource-probe": "node scripts/pack-fabric/bench/run-resource-probe.js",
+    "bench:projected-probe": "node scripts/pack-fabric/bench/run-projected-probe.js",
     "bench:ns": "node scripts/pack-fabric/bench/run-ns-bench.js",
     "bench:fuel-regressions": "node scripts/pack-fabric/bench/run-fuel-regressions.js",
     "bench:routing-oracle": "node scripts/pack-fabric/bench/run-routing-oracle.js",
