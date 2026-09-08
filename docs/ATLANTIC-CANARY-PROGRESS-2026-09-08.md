@@ -147,3 +147,8 @@ started: its original graph, geometry, fuel and connection files match their
 recorded checksums; decoding reports 1,203,111 nodes and 1,469,141 edges. This
 is only Quebec's entry integrity check, not approval of its road content or
 live routing. Quebec content and factory corrections are the next stage.
+
+
+## Quebec follow-on — stable DEV updated
+
+The Quebec canary is now available live under source `8ae00633d26d60ab8b35234eb3bc01eb40be2932`, release `fabric-v4-20260908-02`. The accepted Atlantic graph/geometry/fuel bytes were reused unchanged; connection sidecars include Quebec. All eight Atlantic crossing replays pass after the shared directed-crossing chooser correction. See [Quebec canary progress](QUEBEC-CANARY-PROGRESS-2026-09-08.md) for initial failures, the regression caught before publication, final verification, timing limits, and the separate Sorel driveway-pin failure still open. Quebec physical acceptance and the wider rebuild remain pending.
