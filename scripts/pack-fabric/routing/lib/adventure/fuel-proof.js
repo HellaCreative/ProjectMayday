@@ -1,19 +1,19 @@
 "use strict";
-const {fuelCovers}=require("./fuel-math");
+const {fuelCovers,validateFuel}=require("./fuel-math");
 
 // Verifies the exact proposed geometry, not station proximity. Station visits
 // and destination escape distances must come from legal road proofs tied to
 // this candidate. This function neither searches for pumps nor reroutes.
 function proveFuel({ segments, visits, usableRangeMeters, initialUsableMeters,
   destinationEscape, budget }) {
-  if (!(Number.isFinite(usableRangeMeters) && usableRangeMeters > 0)) throw new TypeError("Invalid usable range");
-  if (!Number.isFinite(initialUsableMeters)) return { state: "unverified", reason: "initial_fuel_unknown" };
-  if (initialUsableMeters < 0 || initialUsableMeters > usableRangeMeters) throw new TypeError("Invalid initial usable fuel");
+  validateFuel({usableRangeMeters,initialUsableMeters});
+  if (initialUsableMeters == null) return { state: "unverified", reason: "initial_fuel_unknown" };
   let total = 0;
   for (const segment of segments) {
     if (!budget.consume()) return { state:"unverified", reason:budget.snapshot().reason };
     if (!Number.isFinite(segment.distanceMeters) || segment.distanceMeters < 0) throw new TypeError("Invalid segment length");
     total += segment.distanceMeters;
+    if (!Number.isFinite(total)) throw new TypeError("Invalid aggregate distance");
   }
   let remaining = initialUsableMeters, at = 0, destinationArrival = null;
   const arrivals = [];

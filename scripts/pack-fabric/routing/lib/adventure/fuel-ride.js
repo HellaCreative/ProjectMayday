@@ -1,5 +1,5 @@
 "use strict";
-const {fuelCovers}=require("./fuel-math");
+const {fuelCovers,validateFuel}=require("./fuel-math");
 
 const {searchResourcePath}=require("./resource-search");
 
@@ -8,6 +8,7 @@ const {searchResourcePath}=require("./resource-search");
 // search then constructs a feasible ride with refills in its state; it doesn't
 // search for pumps near that candidate and repeatedly insert new detours.
 function searchFuelRide({graph,start,end,edgeCost,budget,fuel,lowerBounds=null,initialTurnState=null,avoidanceCost=null}) {
+  if(fuel!=null)validateFuel(fuel);
   const base={graph,start,end,edgeCost,budget,lowerBounds,initialTurnState,avoidanceCost};
   const road=searchResourcePath(base);
   if(road.state!=="found")return {road,fuel:{state:"unverified",reason:road.reason},search:budget.snapshot()};

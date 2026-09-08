@@ -383,3 +383,33 @@ pass (107 total). The independent fuel-search oracle remains green. Quebec
 restriction investigation stayed parked. Real station access, full multi-leg/
 Loop orchestration, ride quality, app navigation and live/device acceptance
 remain unfinished. No deployment or pack changes were made.
+
+## Ninth step — invalid inputs and incomplete-result behavior
+
+Added twelve tests in `adventure/input-outcomes.test.js`. Five initial test groups
+exposed input-boundary gaps: sparse waypoint/leg arrays could omit entries;
+station objects could become invented string IDs; generation objects could stay
+mutable inside an otherwise frozen request; falsy malformed fuel settings could
+be treated as no request; nonfinite initial fuel could be treated as merely
+unknown; and summed distances could overflow into nonfinite reports.
+
+Request normalization now rejects missing records and malformed identities/fuel
+settings, retaining valid string or numeric station IDs and fixed coordinates.
+Shared `validateFuel` supplies consistent validation to search, single-leg fuel
+orchestration, candidate selection and final proof. Only absent/null initial fuel
+means unknown. Invalid settings are rejected before search work starts, including
+when no candidates are available. Surface summaries and proof reject aggregate
+distance overflow as invalid data. These are internal typed errors; API/UI error
+translation remains part of the still-unimplemented replacement adapter.
+
+Incomplete-result tests passed without selection-policy changes: partially
+assessed pools keep a completed road candidate while marking search incomplete;
+interrupted fuel proof retains that road with fuel unverified; empty/unproved
+pools do not claim geographic disconnection; cancellation selects no unexamined
+candidate. This does not establish geographic fuel gaps or validate real POIs.
+
+Final verification: 111 replacement tests plus eight existing V4 snap/pack checks
+pass (119 total), including the 500 independent search/oracle comparisons. No
+performance claim or full-app qualification follows from this correctness round.
+Quebec remains parked. Pack bytes, service deployment and phone state are
+unchanged. All original integration and rider-acceptance gaps remain tracked.

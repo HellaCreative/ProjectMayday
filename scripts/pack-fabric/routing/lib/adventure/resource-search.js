@@ -1,5 +1,5 @@
 "use strict";
-const {fuelCovers}=require("./fuel-math");
+const {fuelCovers,validateFuel}=require("./fuel-math");
 
 // Experimental fuel-aware label-setting search. This finds a minimum additive
 // exploration cost, NOT the globally highest dirt percentage or a 50/50 ride.
@@ -22,8 +22,7 @@ class Heap {
 function searchResourcePath({graph,start,end,edgeCost,budget,fuel=null,
   initialTurnState=null,destinationEscapeMeters=0,lowerBounds=null,acceptGoal=null,avoidanceCost=null}) {
   if(!Number.isFinite(destinationEscapeMeters)||destinationEscapeMeters<0) throw new TypeError("A proved destination escape distance is required");
-  if(fuel && (!(fuel.usableRangeMeters>0)||!Number.isFinite(fuel.usableRangeMeters)||
-      !Number.isFinite(fuel.initialUsableMeters)||fuel.initialUsableMeters<0||fuel.initialUsableMeters>fuel.usableRangeMeters)) throw new TypeError("Invalid fuel assumptions");
+  if(fuel!=null)validateFuel(fuel,{requireInitial:true});
   // Urban exposure precedes the experimental ride cost lexicographically. No
   // finite penalty lets a cheap urban shortcut beat a feasible rural ride.
   const compare=(a,b)=>a.avoidance-b.avoidance || a.cost-b.cost;

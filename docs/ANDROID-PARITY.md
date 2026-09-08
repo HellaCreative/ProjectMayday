@@ -708,3 +708,9 @@ Fuel proof now reports destination arrival fuel separately from planned departur
 fuel after a station refill, including unverified onward escape. Future native
 consumers must preserve that distinction and must not treat a planned refill as
 confirmation of fuel actually obtained. No mobile implementation is claimed.
+
+Replacement request validation now distinguishes absent starting fuel from
+malformed/nonfinite fuel and rejects missing waypoint/leg entries or invalid
+identities. Future platform adapters must present input errors separately from
+incomplete search or geographic infeasibility. Completed road geometry remains
+available when fuel proof is interrupted. No native implementation is claimed.

@@ -21,6 +21,7 @@ function summarizeSurface(segments, budget = null) {
     longestDirtRunMeters = Math.max(longestDirtRunMeters, run);
   }
   const distanceMeters = meters.dirt + meters.paved + meters.unknown;
+  if (!Number.isFinite(distanceMeters)) throw new TypeError("Invalid aggregate distance");
   const percent = value => distanceMeters ? value / distanceMeters * 100 : 0;
   return Object.freeze({ distanceMeters, knownDirtMeters: meters.dirt,
     pavedMeters: meters.paved, unknownSurfaceMeters: meters.unknown,

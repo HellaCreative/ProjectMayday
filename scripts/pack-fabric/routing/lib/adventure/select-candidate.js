@@ -1,6 +1,7 @@
 "use strict";
 
 const { summarizeSurface, compareSurface } = require("./surface");
+const {validateFuel}=require("./fuel-math");
 const { proveFuel } = require("./fuel-proof");
 
 // Shared pool prevents the selector itself from hiding a Balanced-discovered
@@ -8,6 +9,7 @@ const { proveFuel } = require("./fuel-proof");
 // obligations; only explicitly admissible, legally proved candidates enter.
 function selectCandidate({profile,candidates,fuel,budget}) {
   if (!["dirt","balanced","clean"].includes(profile)) throw new TypeError("Unknown profile");
+  if(fuel!=null)validateFuel(fuel);
   const evaluated = [], rejected = [];
   for (const candidate of candidates) {
     if (!budget.consume()) break;
