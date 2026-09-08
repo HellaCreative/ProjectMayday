@@ -1526,13 +1526,42 @@ function topologySeamFromIndex(seed, regionIds, index = null) {
   };
 }
 
-function pinConnectedSeamCandidates(pack, candidates, pinCandidates, allowUnknown) {
-  const components = require("./legal-topology/snap").weakComponentIds(pack, allowUnknown);
-  const pinComponents = new Set(pinCandidates.map(candidate => components[pack.edgeFrom[candidate.edgeIndex]]));
+function pinConnectedSeamCandidates(pack, candidates, pinCandidates, allowUnknown, arrival = false) {
+  const { allows } = require("./v4-access-policy");
+  let offsets = pack.nodeOffsets, targets = pack.edgeTargets, edges = pack.edgeUndirectedIndex;
+  if (arrival) {
+    // Walk legal incoming arcs from the destination, never assume roads are two-way.
+    const counts = new Uint32Array(pack.nodeCount + 1);
+    for (const target of targets) counts[target + 1] += 1;
+    for (let n = 1; n < counts.length; n += 1) counts[n] += counts[n - 1];
+    const cursor = counts.slice(), reverseTargets = new Uint32Array(targets.length), reverseEdges = new Uint32Array(edges.length);
+    for (let from = 0; from < pack.nodeCount; from += 1) {
+      for (let arc = offsets[from]; arc < offsets[from + 1]; arc += 1) {
+        const at = cursor[targets[arc]]++;
+        reverseTargets[at] = from;
+        reverseEdges[at] = edges[arc];
+      }
+    }
+    offsets = counts; targets = reverseTargets; edges = reverseEdges;
+  }
+  const visited = new Uint8Array(pack.nodeCount), queue = new Uint32Array(pack.nodeCount);
+  let head = 0, tail = 0;
+  const add = node => { if (!visited[node]) { visited[node] = 1; queue[tail++] = node; } };
+  for (const pin of pinCandidates) {
+    const forward = pin.forward !== false;
+    add((arrival === forward ? pack.edgeFrom : pack.edgeTo)[pin.edgeIndex]);
+  }
+  while (head < tail) {
+    const node = queue[head++];
+    for (let arc = offsets[node]; arc < offsets[node + 1]; arc += 1) {
+      const next = targets[arc];
+      if (allows(pack, edges[arc], arrival ? next : node, arrival ? node : next, allowUnknown)) add(next);
+    }
+  }
   const wantedNodes = new Set(candidates.map(candidate => candidate.osmNodeId));
   const connectedNodes = new Set();
   for (let node = 0; node < pack.nodeCount; node += 1) {
-    if (!pinComponents.has(components[node])) continue;
+    if (!visited[node]) continue;
     const osmId = String(pack.osmNodeIds[node]);
     if (wantedNodes.has(osmId)) connectedNodes.add(osmId);
   }
@@ -1563,8 +1592,8 @@ async function topologySeamWaypoint(seed, regionIds) {
         const match = matchPoint(runtime, anchor,
           { motorizedPermissive: true, motorizedUnknown: seed.allowUnknown === true },
           2000, null, null, "balanced");
-        candidates = pinConnectedSeamCandidates(pack, candidates, match.candidates || [], seed.allowUnknown === true);
-      } finally { releaseSeamProbeMemory(); }
+        candidates = pinConnectedSeamCandidates(pack, candidates, match.candidates || [], seed.allowUnknown === true, anchor === seed.routeEnd);
+      } finally { if (!chainCacheEnabled()) releaseSeamProbeMemory(); }
       if (!candidates.length) return { ...indexed, ok: false, reason: "no_pin_connected_shared_seam" };
     }
     const best = candidates[0];
@@ -1694,7 +1723,8 @@ async function resolveChainSeamWaypoints(waypoints, body = {}) {
       role: seed.role || "seam",
       between: Array.isArray(seed.between) ? seed.between.slice() : regionIds.slice(),
       osmWayId: snapped.osmWayId || seed.osmWayId || null,
-      seamSnapped: true
+      seamSnapped: true,
+      seamCandidates: snapped.candidates || []
     };
     snaps.push({
       index: i,
@@ -1775,8 +1805,9 @@ async function routeCanadaChain(body, graphResolution) {
     };
   }
   waypoints = seamResolved.waypoints;
-  // Seam probes inflate full province packs; reclaim before hop merges.
-  releaseSeamProbeMemory();
+  // Retain the bounded pack cache when explicitly enabled; the compact V4
+  // canary otherwise downloads the same Quebec files again for the actual hop.
+  if (!useChainCache) releaseSeamProbeMemory();
 
   const parts = [];
   let totalMeters = 0;
@@ -1843,13 +1874,13 @@ async function routeCanadaChain(body, graphResolution) {
       }
     });
     if (hop.status !== "complete" && hopEnd.seamSnapped) {
-      const alts = topologySeamCandidatesFromIndex(
+      const alts = (hopEnd.seamCandidates && hopEnd.seamCandidates.length
+        ? hopEnd.seamCandidates : topologySeamCandidatesFromIndex(
         { lon: hopEnd.lon, lat: hopEnd.lat, between: hopEnd.between,
           routeStart: hopStart, routeEnd: waypoints[i + 2],
           allowUnknown: profile !== "cleanest" && !!(body.accessPolicy && body.accessPolicy.motorizedUnknown) },
         hopEnd.between || inferSeamRegionIds(waypoints, i + 1)
-      ).filter((alt) => {
-        if (hopEnd.osmWayId && alt.osmWayId === String(hopEnd.osmWayId)) return false;
+      )).filter((alt) => {
         return Math.abs(alt.lat - hopEnd.lat) > 1e-5 || Math.abs(alt.lon - hopEnd.lon) > 1e-5;
       });
       for (const alt of alts) {
@@ -1871,6 +1902,11 @@ async function routeCanadaChain(body, graphResolution) {
           hop = retry;
           waypoints[i + 1] = { ...hopEnd, lon: alt.lon, lat: alt.lat, osmWayId: alt.osmWayId };
           hopEnd = waypoints[i + 1];
+          const snapRecord = seamResolved.snaps.find(row => row.index === i + 1);
+          if (snapRecord) {
+            snapRecord.to = { lon: alt.lon, lat: alt.lat };
+            snapRecord.osmWayId = alt.osmWayId;
+          }
           break;
         }
       }

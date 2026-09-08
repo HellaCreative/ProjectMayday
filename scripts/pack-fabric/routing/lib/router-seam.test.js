@@ -132,3 +132,18 @@ test("shared halo fragments do not qualify as a connection to the rider's road n
   const { pinConnectedSeamCandidates } = require("./router");
   assert.deepEqual(pinConnectedSeamCandidates(pack, candidates, [{ edgeIndex: pinIndex }], false), [candidates[1]]);
 });
+
+
+test("border reachability distinguishes departure from arrival on a one-way road", () => {
+  const { buildGraphFromOsm } = require("./legal-topology/osm-graph");
+  const { encodeFromOsmGraph, decodeGraphV4 } = require("./pack-v4");
+  const graph = buildGraphFromOsm({ nodes: [[1, 0], [2, 0.01], [3, 0.02]].map(([id, lon]) => ({ id, lon, lat: 48, tags: {} })), ways: [{ id: 10, nodeIds: [1, 2], tags: { highway: "secondary", oneway: "yes" } }, { id: 20, nodeIds: [2, 3], tags: { highway: "secondary", oneway: "yes" } }] });
+  const encoded = encodeFromOsmGraph(graph, { regionId: "fixture", sourceEpoch: "test" });
+  const pack = decodeGraphV4(encoded.graphBuffer, encoded.geomBuffer);
+  const candidates = [{ osmNodeId: "1" }, { osmNodeId: "3" }];
+  const pinIndex = Array.from({ length: pack.edgeCount }, (_, i) => i).find(i => String(pack.osmWayIds[i]) === "10");
+  const { pinConnectedSeamCandidates } = require("./router");
+  const pin = [{ edgeIndex: pinIndex, forward: true }];
+  assert.deepEqual(pinConnectedSeamCandidates(pack, candidates, pin, false, false), [candidates[1]]);
+  assert.deepEqual(pinConnectedSeamCandidates(pack, candidates, pin, false, true), [candidates[0]]);
+});

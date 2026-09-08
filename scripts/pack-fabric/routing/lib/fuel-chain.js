@@ -12,7 +12,7 @@ const { allows: v4DirectionAllowed } = require("./v4-access-policy");
  * score those candidates before a pump is committed, and the caller renders
  * the selected point 1 -> F1 -> ... -> point 2 legs.
  */
-const { loadGraphsForRequest, clearGraphCache } = require("./graph");
+const { loadGraphsForRequest, clearGraphCache, chainCacheEnabled } = require("./graph");
 const {
   classifyFuelFailureReason,
   enrichFuelDiagnostics
@@ -3461,7 +3461,7 @@ async function planCrossRegionFuelChain(body, selection, fuelOptions, dependenci
       };
     }
 
-    clearGraphCache();
+    if (!chainCacheEnabled()) clearGraphCache();
     const resolution = resolveGraphRequest({
       ...body,
       regionId,
