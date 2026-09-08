@@ -1,3 +1,4 @@
+const { allows: v4DirectionAllowed } = require("./v4-access-policy");
 "use strict";
 
 /**
@@ -732,7 +733,7 @@ function fillShortestMeters(args) {
         const ei = incomingEdges[i];
         const attr = edgeAttrs[ei];
         const access = unpackAccess(attr);
-        if (pack.graphBinaryVersion >= 4 ? !require("./v4-access-policy").allows(pack, ei, to, cur.node, policy.motorizedUnknown) : !accessAllowed(access, policy, enums)) continue;
+        if (pack.graphBinaryVersion >= 4 ? !v4DirectionAllowed(pack, ei, to, cur.node, policy.motorizedUnknown) : !accessAllowed(access, policy, enums)) continue;
         if (pavedOnly) {
           const leafBlock = cleanLeafBlocked(pack, ei, true, -1, -1);
           if (leafBlock === true) continue;
@@ -1713,7 +1714,7 @@ function findPathV2(runtime, startMatch, endMatch, profile, policy, avoidEdgeIds
         }
         const attr = edgeAttrs[ei];
         const access = unpackAccess(attr);
-        if (pack.graphBinaryVersion >= 4 ? !require("./v4-access-policy").allows(pack, ei, currentGraphNode, to, policy.motorizedUnknown, startEi, endEi) : !accessAllowed(access, policy, enums)) {
+        if (pack.graphBinaryVersion >= 4 ? !v4DirectionAllowed(pack, ei, currentGraphNode, to, policy.motorizedUnknown, startEi, endEi) : !accessAllowed(access, policy, enums)) {
           if (rejected) rejected.access += 1;
           continue;
         }
@@ -2431,7 +2432,7 @@ function searchBalancedResource(ctx) {
         }
         const attr = edgeAttrs[ei];
         const access = unpackAccess(attr);
-        if (pack.graphBinaryVersion >= 4 ? !require("./v4-access-policy").allows(pack, ei, node, to, policy.motorizedUnknown, startEi, endEi) : !accessAllowed(access, policy, enums)) {
+        if (pack.graphBinaryVersion >= 4 ? !v4DirectionAllowed(pack, ei, node, to, policy.motorizedUnknown, startEi, endEi) : !accessAllowed(access, policy, enums)) {
           if (rejected) rejected.access += 1;
           continue;
         }

@@ -1,3 +1,4 @@
+const { allows: v4DirectionAllowed } = require("./v4-access-policy");
 "use strict";
 
 /**
@@ -1028,7 +1029,7 @@ function boundedGraphDistances(
       const edge = edgeView(runtime, edgeIndex);
       if (avoid.has(edge.id)) return;
       if (runtime.pack?.graphBinaryVersion >= 4
-          ? !require("./v4-access-policy").allows(runtime.pack, edgeIndex, current.node, next, policy.motorizedUnknown)
+          ? !v4DirectionAllowed(runtime.pack, edgeIndex, current.node, next, policy.motorizedUnknown)
           : !accessAllowed(edge.access, policy, runtime.enums, null)) return;
       const candidateMeters = distances[current.node] + edge.meters;
       const candidateScore = current.cost + edge.meters * penalty(edge.id);
@@ -1157,7 +1158,7 @@ function nearestReachableFuelDistance({
         const edge = edgeView(runtime, edgeIndex);
         if (avoid.has(edge.id)) return;
         if (runtime.pack?.graphBinaryVersion >= 4
-          ? !require("./v4-access-policy").allows(runtime.pack, edgeIndex, current.node, next, policy.motorizedUnknown)
+          ? !v4DirectionAllowed(runtime.pack, edgeIndex, current.node, next, policy.motorizedUnknown)
           : !accessAllowed(edge.access, policy, runtime.enums, null)) return;
         const candidate = current.cost + edge.meters;
         if (candidate > maxMeters || candidate >= best || candidate >= distances[next]) return;
