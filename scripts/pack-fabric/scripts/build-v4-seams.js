@@ -194,7 +194,9 @@ function main() {
   }
   writeRegionSidecars(options.root, doc);
   fs.mkdirSync(path.dirname(options.output), { recursive: true });
-  fs.writeFileSync(options.output, JSON.stringify(doc, null, 2) + "\n");
+  // National proof data exceeds the JS string limit when expanded with indentation.
+  // Compact JSON preserves every field and connection without that expansion.
+  fs.writeFileSync(options.output, JSON.stringify(doc) + "\n");
   console.log(JSON.stringify({ output: options.output, pairs: doc.pairs.length, sourceEpoch: doc.sourceEpoch }, null, 2));
 }
 
