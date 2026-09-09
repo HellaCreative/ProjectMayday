@@ -41,3 +41,6 @@ body{background:#eef0eb}.studio{max-width:1120px;margin:auto;padding:36px 28px;d
 
 /* Primary navigation is a stationary layer above all sheet motion. */
 .primary-nav{position:absolute;left:0;right:0;bottom:0;z-index:20;height:72px;box-sizing:border-box;margin:0;padding:8px 10px 12px;background:rgba(235,242,240,.96);border-radius:20px 20px 0 0;transform:none!important;animation:none!important;transition:none!important}.primary-nav *{animation:none!important;transition:none!important}.primary-nav button:active:not(:disabled){transform:none}.phone:not([data-screen=navigation])>.sheet{margin-bottom:72px}.phone[data-screen=profile]>.sheet{height:calc(100% - 104px)}.phone[data-screen=map]>.minimized-sheet{height:0;min-height:0;padding:0;border:0;box-shadow:none}.phone:not([data-screen=profile]):not([data-screen=settings]):not([data-screen=navigation])>.sheet{max-height:min(60%,calc(100% - 492px))}.phone>.departing-sheet{margin-bottom:0}
+/* Three clear depth layers: map, frosted sheet, stationary navigation. */
+.sheet{box-shadow:0 -8px 28px rgba(22,35,29,.16),inset 0 1px 0 rgba(255,255,255,.8)}
+.primary-nav{background:#fff;border-radius:0;box-shadow:0 -4px 16px rgba(22,35,29,.14)}
