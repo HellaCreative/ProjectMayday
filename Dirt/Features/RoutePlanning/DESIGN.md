@@ -42,7 +42,7 @@ Frontmatter neutral colors record the light appearance. Native semantic tokens r
 
 ## Typography
 
-Use native system type: tab icons use semibold body and tab titles use caption, bold when selected and medium otherwise. Loop control labels use native subheadline; the distance value adds semibold weight and monospaced digits. Summary and error copy use `DirtType.helper`.
+Use native system type: tab icons use semibold body and tab titles use caption, bold when selected and medium otherwise. Loop control labels use native subheadline; the distance value adds semibold weight and monospaced digits. Setup error copy uses `DirtType.helper`.
 
 **The Readable Tab Rule.** Only planning-tab typography is capped at `xxxLarge`. The visible short label “Plan” retains “Plan a route” as its accessibility name and native large-content viewer label. Every tab exposes selected state. The form remains outside that cap and continues scaling with Dynamic Type.
 
@@ -66,7 +66,7 @@ Use the existing continuous rounded sheet family and compact control shapes. The
 
 - **Planning tabs:** From here (`location`), Loop (`arrow.triangle.2.circlepath`), Plan (`point.topleft.down.to.point.bottomright.curvepath`), Saved (`bookmark`). Keep all four visible. Entering Loop confirms replacement when an itinerary or route exists.
 - **Loop setup:** the ride starts and ends at the rider’s current GPS location. Direction is an eight-point compass menu (North, Northeast, East, Southeast, South, Southwest, West, Northwest), initially North. Distance spans 50–500 total kilometres in 25-kilometre steps, initially 100 km, with visible “km” and an accessibility value in kilometres. Surface is a native menu bound to the existing route profiles. There are no start, map-pin, or “towards” setup controls.
-- **Loop generation:** Create Loop remains available without placing pins and uses `DirtCTAStyle.brand()` with dark `onOrange` text. Tapping checks location authorization and availability, showing an actionable permission or waiting-for-location error if needed. Routing disables setup controls, displays progress and offers Cancel. Summary and error copy remain inline; generated routes retain existing stages, statistics and route actions. The label remains Create Loop after a result.
+- **Loop generation:** Create Loop remains available without placing pins and uses `DirtCTAStyle.brand()` with dark `onOrange` text. Tapping checks location authorization and availability, showing an actionable permission or waiting-for-location error if needed. Routing disables setup controls, displays progress and offers Cancel. When a loop finishes, setup, summary, statistics and creation/actions controls are replaced by the legs and a bottom Clear button. Clear immediately resets the route and restores setup in the Loop tab, retaining direction, distance and surface selections. Setup errors remain inline.
 - **Create Return Route:** remains an action for an eligible open itinerary. It adds a route back to the starting point; it is distinct from the dedicated Loop setup.
 
 ## Do's and Don'ts

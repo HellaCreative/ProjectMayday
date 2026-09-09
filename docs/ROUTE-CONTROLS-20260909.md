@@ -41,3 +41,8 @@ Create Loop is available without placing pins. It requests/checks location autho
 At accessibility text sizes, the control and progress rows stack vertically; menu controls expose their labels and values, and the distance slider announces kilometres. Create Loop uses the shared brand style with dark text on orange. The existing compact four-tab glass treatment and bottom dock are retained. Richard approved that glass/icon-title/orange-active language as the baseline for all future UI; root DESIGN.md records that direction without authorizing a global redesign.
 
 Verification for this simplification: nine focused tests passed. The final simulator and signed iPhone builds succeeded, and development verification passed. Normal layout, compass selections, active Create Loop and permission feedback were inspected; maximum-text rows reflow without overlap. Full maximum-text scrolling was not established through simulator automation. Testing is iPhone-only; no iPad testing, Android qualification or physical-device acceptance is claimed here. Earlier verification above applies to its stated revision and does not qualify this final UI change.
+
+
+## Loop result view — 2026-09-09
+
+After generation completes, Loop displays its legs and a bottom Clear button. Setup fields, creation button, summary, statistics and other route actions are hidden in this result view. Clear directly resets the route and restores the Loop setup, preserving the rider's direction, distance and surface selections. The tab menu stays available. No simulator was launched for this change; signed iPhone build verification is recorded separately.

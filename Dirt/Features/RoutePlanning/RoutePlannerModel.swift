@@ -2043,6 +2043,8 @@ final class RoutePlannerModel {
             endNavigation()
         }
         invalidateInFlightRoutes()
+        loopRunID = nil
+        loopSummary = nil
         destination = nil
         destinationName = nil
         fromHereResponse = nil

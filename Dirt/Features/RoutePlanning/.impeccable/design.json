@@ -53,6 +53,11 @@
       "name": "Create Return Route",
       "kind": "button",
       "description": "Existing action for eligible open itineraries, using rowFill and the control radius."
+    },
+    {
+      "name": "Loop result",
+      "kind": "custom",
+      "description": "Completed loop shows legs and bottom Clear only. Clear immediately removes the loop and returns to setup with direction/distance/surface retained."
     }
   ],
   "narrative": {

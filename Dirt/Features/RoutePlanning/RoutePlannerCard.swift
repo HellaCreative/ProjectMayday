@@ -390,6 +390,15 @@ struct RoutePlannerCard: View {
     }
 
     @ViewBuilder private var loopContent: some View {
+        if planner.hasRoute && !planner.isRouting {
+            stageList
+            clearAllButton
+        } else {
+            loopSetupContent
+        }
+    }
+
+    private var loopSetupContent: some View {
         VStack(spacing: 12) {
             VStack(spacing: 8) {
                 loopControlLayout {
@@ -458,11 +467,6 @@ struct RoutePlannerCard: View {
             if let error = planner.errorMessage {
                 Text(error).font(DirtType.helper).foregroundStyle(DirtTheme.danger)
             }
-        }
-        if planner.hasRoute {
-            stageList
-            statsRow
-            ctaRow
         }
     }
 
@@ -1522,13 +1526,13 @@ struct RoutePlannerCard: View {
 
     private var clearAllButton: some View {
         Button {
-            if shouldConfirmClear {
+            if shouldConfirmClear && !planner.showingLoop {
                 showClearConfirm = true
             } else {
                 performClear()
             }
         } label: {
-            Text("Clear route")
+            Text(planner.showingLoop ? "Clear" : "Clear route")
                 .font(DirtType.cta)
                 .foregroundStyle(DirtTheme.danger)
                 .padding(.horizontal, 16)
