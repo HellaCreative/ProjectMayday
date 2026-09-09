@@ -12,3 +12,7 @@ body{background:#eef0eb}.studio{max-width:1120px;margin:auto;padding:36px 28px;d
 .phone:not([data-screen=profile]):not([data-screen=settings]):not([data-screen=navigation]) .sheet{max-height:60%}.picker-options{position:fixed;inset:auto;margin:0;width:210px;max-height:364px;border:0;background:#fafbf7;box-shadow:0 12px 30px #20302030}.picker-options:popover-open{display:block}.picker-options button{min-height:44px}
 
 .saved-preview-actions .continue-planning{background:#c45e00;color:white;flex:1.35}.saved-preview-actions button{white-space:nowrap;padding-left:8px;padding-right:8px}
+
+.rider-name{display:block;min-height:44px;border:0;background:none;padding:0;text-align:left;font:inherit;font-weight:650;color:inherit;cursor:pointer}.rider-back{justify-content:flex-start;gap:8px;margin-bottom:8px}.rider-back .icon{transform:rotate(180deg)}.rider-location{padding:8px 0 20px;display:grid;gap:8px}.rider-location span,.rider-location small{font-size:12px;color:#596359}.rider-location strong{font-size:16px}
+
+.rider-details-header{display:block}.rider-details-header .rider-back{width:auto;border:0;padding:0;min-height:44px}.rider-details-header h3{margin:0}.rider-details-header p{margin:6px 0 0}

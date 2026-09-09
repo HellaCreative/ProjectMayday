@@ -17,3 +17,5 @@ HTML only. Invite is pinned between group metadata and the scrolling rider list;
 Dropdown review: Loop order is Direction, Surface, Distance. All shared choice lists now open as floating overlays, including per-leg surfaces, without resizing the sheet or displacing controls. Lists close on outside click or Escape. HTML only.
 
 Saved route review: read-only details with View on Map and prominent Continue Planning only. No return, clear, save, export, start or per-leg editing until continuing to Plan.
+
+Groups rider details: clickable names open a compact drawer with sample location/update status, View on Map and Route to Rider. Back returns to the roster. Location data and map/route actions remain illustrative; native behavior unchanged.
