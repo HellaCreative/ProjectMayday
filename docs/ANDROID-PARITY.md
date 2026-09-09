@@ -861,3 +861,11 @@ present the pulse as percentage complete. Reduce Motion keeps a static bar.
 ### Open Terrain refinement — build 28
 
 Profile uses the enclosing glass sheet without an additional opaque white backing. Zoom +/− buttons retain white fill and black icons, with a 40% black neutral-grey border (#999999). From Here’s initial Surface picker uses the same menu field as Loop (white fill, #D8DADD border, 8pt radius); selecting a surface does not expand the sheet. Route leg disclosure fields share that visual treatment while preserving their existing detail expansion and controls.
+
+### Loop and waypoint refinement — build 29
+
+Loop generation tries six closed four-leg circuits around a centre in the selected compass sector, with both travel directions and a wider alternative. Later candidates calibrate distance from the first completed road circuit. The last two keep the selected outward profile and use Clean on the final two legs; display those actual leg profiles. Rank complete fuel-checked circuits by distance error, repeated geometry, signed-area/convex-hull fill, and reused pumps. Reject fill below 0.35, shared roads above max(3 km, 15% of circuit), and distances outside 50–150% of requested. No candidate passing these gates means a clear failure, not an out-and-back labelled a loop. Ordinary routing and fuel replacement remain unchanged.
+
+Adding a waypoint on an existing leg in From Here, Loop or Plan creates a provisional selected pin without route requests. Drag changes only its draft coordinate. Show “Is this where you want to place this waypoint?” with Yes/No; No retains the editable pin, and the next drag release reopens confirmation. Yes inserts once and rebuilds. From Here converts to the editable plan at confirmation. Clear/mode changes invalidate the draft. Saved previews and navigation remain non-editable. Selected waypoint pans have priority over competing map gestures; genuine cancellation does not commit the move.
+
+Layers uses Profile-height glass presentation with a top-right X; the existing Layers navigation toggle also closes it. Active route-tool tabs use the dark navigation surface, white labels/icons, and rounded corners.

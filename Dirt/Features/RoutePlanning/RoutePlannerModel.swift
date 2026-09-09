@@ -180,14 +180,22 @@ final class RoutePlannerModel {
         buildTask = Task { @MainActor [weak self] in
             guard let self else { return }
             var winner: (RiderItinerary, BuiltItinerary, Double, Double, Double)?
-            for index in 0..<3 {
+            var distanceScale = 1.0
+            for index in 0..<6 {
                 guard !Task.isCancelled, self.loopRunID == runID, self.showingLoop else { return }
-                self.fuelPlanningStatus = "Finding loop \(index + 1) of 3"
-                let adjustedTarget = index == 2 ? target * min(1.35, max(0.65, target / max(winner?.3 ?? target, 1))) : target
-                let candidate = reduce(RiderItinerary(), .replaceAll(
+                self.fuelPlanningStatus = "Finding loop \(index + 1) of 6"
+                let adjustedTarget = index >= 2 ? (target * min(1.35, max(0.4, 1 / max(distanceScale, 0.01))) / 1000).rounded() * 1000 : target
+                var candidate = reduce(RiderItinerary(), .replaceAll(
                     waypoints: LoopPlan.anchors(start: start, direction: direction, targetMeters: adjustedTarget, variant: index),
                     profile: selectedProfile, allowUnknown: selectedAllow,
                     avoidMotorways: self.avoidMotorways, preferBackRoads: self.preferBackRoads)).itinerary
+                // Keep the outward surface choice; try a cleaner return when
+                // dirt-led circuits would fold back over the same corridor.
+                if index >= 4, selectedProfile != .cleanest {
+                    for leg in Array(candidate.legs.suffix(2)) {
+                        candidate = reduce(candidate, .setProfile(legID: leg.id, .cleanest)).itinerary
+                    }
+                }
                 let builder = ItineraryBuilder()
                 builder.mapZoom = 7
                 let result = await RidePreferenceContext.$current.withValue(preferences) {
@@ -196,10 +204,15 @@ final class RoutePlannerModel {
                 guard !Task.isCancelled, self.loopRunID == runID, self.showingLoop else { return }
                 guard !result.legs.isEmpty, candidate.legs.allSatisfy({ result.riderLegStatus[$0.id] == .built }) else { continue }
                 let distance = result.legs.reduce(0) { $0 + ($1.response.distanceMeters ?? 0) }
+                if index < 2, distanceScale == 1 { distanceScale = distance / max(adjustedTarget, 1) }
                 let repeated = LoopPlan.repeatedMeters(paths: result.legs.map { $0.response.coordinates })
                 let stops = result.legs.compactMap { $0.endsAtFuelStop?.stationID }
+                let fill = LoopPlan.circuitFill(paths: result.legs.map { $0.response.coordinates })
+                let accepted = LoopPlan.acceptable(distance: distance, repeated: repeated, fill: fill, target: target)
+                RoutingDebugLog.shared.event("loop candidate=\(index + 1) distance=\(Int(distance)) repeated=\(Int(repeated)) fill=\(String(format: "%.2f", fill)) accepted=\(accepted)")
+                guard accepted else { continue }
                 let score = LoopPlan.score(distance: distance, repeated: repeated, target: target,
-                                           reusedStops: stops.count - Set(stops).count)
+                                           reusedStops: stops.count - Set(stops).count, fill: fill)
                 if winner == nil || score < winner!.2 { winner = (candidate, result, score, distance, repeated) }
             }
             guard !Task.isCancelled, self.loopRunID == runID else { return }
@@ -216,7 +229,7 @@ final class RoutePlannerModel {
                 self.toast = "Loop ready"
                 self.mapState.fit(winner.1.legs.flatMap { $0.response.coordinates })
             } else {
-                self.errorMessage = "No loop found. Try another direction or distance."
+                self.errorMessage = "No clean circuit found without substantial backtracking. Try another direction or distance."
             }
             self.refreshMap()
         }
@@ -1161,7 +1174,7 @@ final class RoutePlannerModel {
         source: String = "tap"
     ) {
         guard navigation.phase == .idle,
-              mode == .plan,
+              mode == .plan || mode == .fromHere,
               !isRouting,
               fuelPlanningStatus == nil,
               !stages.isEmpty
@@ -1184,15 +1197,29 @@ final class RoutePlannerModel {
         }
         guard let nearest else { return }
         let resolvedRiderLegID = stages[nearest.index].riderLegID
-        apply(.insert(afterLegID: resolvedRiderLegID, coordinate: nearest.point), source: source)
-        guard let insertedIndex = itinerary.legs.firstIndex(where: { $0.id == resolvedRiderLegID }),
-              itinerary.waypoints.indices.contains(insertedIndex + 1)
-        else { return }
-        mapState.selectPlannerPin("wp:\(itinerary.waypoints[insertedIndex + 1].id.uuidString)")
-        toast = "Waypoint added — drag it to shape this leg"
-        RoutingDebugLog.shared.event(
-            "ui route waypoint inserted stage=\(nearest.index) offset=\(Int(nearest.meters))m"
-        )
+        waypointPlacement = (resolvedRiderLegID, nearest.point)
+        showsWaypointPlacementConfirmation = true
+        refreshMap()
+        mapState.selectPlannerPin("waypoint-draft")
+        RoutingDebugLog.shared.event("ui waypoint placement draft leg=\(resolvedRiderLegID)")
+    }
+
+    var waypointPlacement: (legID: UUID, coordinate: RouteCoordinate)?
+    var showsWaypointPlacementConfirmation = false
+
+    func keepMovingWaypoint() {
+        showsWaypointPlacementConfirmation = false
+        toast = "Drag the waypoint to your preferred location"
+    }
+
+    func confirmWaypointPlacement() {
+        guard let draft = waypointPlacement, navigation.phase == .idle, !isRouting,
+              itinerary.legs.contains(where: { $0.id == draft.legID }) else { return }
+        waypointPlacement = nil
+        showsWaypointPlacementConfirmation = false
+        if mode == .fromHere { switchToPlanKeepingFromHere() }
+        apply(.insert(afterLegID: draft.legID, coordinate: draft.coordinate), source: "confirmedPlacement")
+        RoutingDebugLog.shared.event("ui waypoint placement confirmed leg=\(draft.legID)")
     }
 
     func handleMapLongPress(_ coordinate: CLLocationCoordinate2D) {
@@ -1685,6 +1712,8 @@ final class RoutePlannerModel {
 
     /// Invalidate every in-flight planner route (clear / mode convert / wipe).
     private func invalidateInFlightRoutes(cancelPlanRebuildTask: Bool = true) {
+        waypointPlacement = nil
+        showsWaypointPlacementConfirmation = false
         cancelFuelReplacement()
         fromHereIntentGeneration += 1
         fromHereRouteDebounceTask?.cancel()
@@ -1819,6 +1848,13 @@ final class RoutePlannerModel {
             moveFuelStop(markerID: markerID, to: rawCoordinate)
             return
         }
+        if markerID == "waypoint-draft", let draft = waypointPlacement {
+            waypointPlacement = (draft.legID, RouteCoordinate(longitude: rawCoordinate.longitude, latitude: rawCoordinate.latitude))
+            showsWaypointPlacementConfirmation = true
+            refreshMap()
+            mapState.selectPlannerPin(markerID)
+            return
+        }
         let raw = RouteCoordinate(longitude: rawCoordinate.longitude, latitude: rawCoordinate.latitude)
         let snapped = snapToRouteNetwork(raw)
         switch mode {
@@ -1852,8 +1888,11 @@ final class RoutePlannerModel {
         guard markerID.hasPrefix("fuel:"),
               let context = fuelMoveContext(markerID: markerID)
         else {
-            cancelFuelReplacement()
-            refreshMap()
+            // Do not redraw/reselect the annotation while its pan is beginning.
+            // The selected waypoint already has its editing chrome.
+            if activeFuelDragMarkerID != nil {
+                cancelFuelReplacement()
+            }
             return
         }
         cancelFuelReplacement()
@@ -2136,6 +2175,8 @@ final class RoutePlannerModel {
 
 
     func clearRoute() {
+        waypointPlacement = nil
+        showsWaypointPlacementConfirmation = false
         if navigation.phase != .idle {
             endNavigation()
         }
@@ -2169,6 +2210,8 @@ final class RoutePlannerModel {
 
     /// Switch tabs without the keep/clear confirmation (Saved, or empty drafts).
     func selectMode(_ newMode: Mode) {
+        waypointPlacement = nil
+        showsWaypointPlacementConfirmation = false
         cancelFuelReplacement()
         if showingLoop {
             invalidateInFlightRoutes()
@@ -2413,6 +2456,10 @@ final class RoutePlannerModel {
                     )
                 )
             }
+        }
+        if let draft = waypointPlacement {
+            markers.append(MapState.Marker(id: "waypoint-draft", latitude: draft.coordinate.latitude,
+                longitude: draft.coordinate.longitude, label: "+", kind: .stage))
         }
         markers.append(contentsOf: fuelTargetMarkers)
         mapState.setPlannerMarkers(markers)

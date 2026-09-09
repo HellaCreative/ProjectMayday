@@ -1817,6 +1817,12 @@ final class DirtAnnotation: MLNPointAnnotation {
 
 /// Teardrop stage pin: dark body + orange circle + white number,
 /// bottom-anchored so the pin tip sits on the map coordinate.
+/// A selected, editable waypoint owns its one-finger pan. Map gestures must
+/// not cancel it after it has begun; system cancellation still ends the drag.
+private final class DirtPinPanGestureRecognizer: UIPanGestureRecognizer {
+    override func canBePrevented(by preventingGestureRecognizer: UIGestureRecognizer) -> Bool { false }
+}
+
 final class DirtPlannerPinView: MLNAnnotationView {
     static let pinWidth: CGFloat = 36
     static let pinHeight: CGFloat = 44
@@ -1831,6 +1837,7 @@ final class DirtPlannerPinView: MLNAnnotationView {
     private var isFuelCandidate = false
     private var isSelectedForEditing = false
     private var isCustomDragging = false
+    private var dragOrigin: CLLocationCoordinate2D?
     private var savedMapScrollEnabled = true
     private var savedMapRotateEnabled = true
 
@@ -1903,7 +1910,7 @@ final class DirtPlannerPinView: MLNAnnotationView {
         candidateIconView.isHidden = true
         addSubview(candidateIconView)
 
-        let pan = UIPanGestureRecognizer(target: self, action: #selector(handlePinPan(_:)))
+        let pan = DirtPinPanGestureRecognizer(target: self, action: #selector(handlePinPan(_:)))
         pan.maximumNumberOfTouches = 1
         pan.delegate = self
         addGestureRecognizer(pan)
@@ -2011,6 +2018,11 @@ final class DirtPlannerPinView: MLNAnnotationView {
         }
     }
 
+    override func gestureRecognizerShouldBegin(_ gestureRecognizer: UIGestureRecognizer) -> Bool {
+        guard let annotation = annotation as? DirtAnnotation else { return false }
+        return isSelectedForEditing && onDragEnded != nil && annotation.kind != .fuel
+    }
+
     @objc private func handlePinPan(_ gesture: UIPanGestureRecognizer) {
         // Terminal events must always release MapLibre, even when a state update
         // removed the annotation/callback while the finger was still down.
@@ -2023,6 +2035,10 @@ final class DirtPlannerPinView: MLNAnnotationView {
             let shouldNotify = gesture.state == .ended && isCustomDragging
             let markerID = dirtAnnotation?.markerID
             let coordinate = dirtAnnotation?.coordinate
+            if !shouldNotify, let origin = dragOrigin {
+                dirtAnnotation?.coordinate = origin
+            }
+            dragOrigin = nil
             restoreMapGestures(reason: "pinDrag\(gesture.state.rawValue)")
             if shouldNotify, let markerID, let coordinate {
                 RoutingDebugLog.shared.event("map pinPan end markerID=\(markerID)")
@@ -2048,6 +2064,7 @@ final class DirtPlannerPinView: MLNAnnotationView {
         case .began:
             guard isSelectedForEditing else { return }
             RoutingDebugLog.shared.event("map pinPan begin markerID=\(dirtAnnotation.markerID)")
+            dragOrigin = dirtAnnotation.coordinate
             isCustomDragging = true
             savedMapScrollEnabled = mapView.isScrollEnabled
             savedMapRotateEnabled = mapView.isRotateEnabled
@@ -2132,6 +2149,7 @@ final class DirtPlannerPinView: MLNAnnotationView {
 }
 
 extension DirtPlannerPinView: UIGestureRecognizerDelegate {
+
     func gestureRecognizer(
         _ gestureRecognizer: UIGestureRecognizer,
         shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer

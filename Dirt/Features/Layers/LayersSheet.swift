@@ -4,6 +4,7 @@ import SwiftUI
 /// Toggle changes bump `app.mapState.layerPrefsGeneration` so the MapLibre
 /// coordinator can apply visibility on the live style.
 struct LayersSheet: View {
+    var onClose: (() -> Void)? = nil
     @Environment(AppEnvironment.self) private var app
     @State private var offlinePacksOpen = false
     @State private var busyPacks: Set<String> = []
@@ -21,7 +22,7 @@ struct LayersSheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            DirtSheetHeader(title: "Layers")
+            DirtSheetHeader(title: "Layers", onClose: onClose)
             layersList
         }
     }

@@ -283,6 +283,25 @@ struct RootView: View {
             }
         }
         .modifier(KeepAwakeLifecycle())
+        .overlay(alignment: .top) {
+            if app.planner.showsWaypointPlacementConfirmation, !navActive {
+                VStack(spacing: 12) {
+                    Text("Is this where you want to place this waypoint?")
+                        .font(.headline)
+                    HStack(spacing: 12) {
+                        Button("No") { app.planner.keepMovingWaypoint() }
+                            .buttonStyle(.bordered)
+                        Button("Yes") { app.planner.confirmWaypointPlacement() }
+                            .buttonStyle(.borderedProminent).tint(DirtTheme.orange)
+                    }
+                }
+                .padding(16)
+                .frame(maxWidth: 280)
+                .background(DirtTheme.sheetMaterial, in: RoundedRectangle(cornerRadius: 16))
+                .padding(.top, 68)
+            }
+        }
+
         .overlay {
             if app.planner.activeRouteProgressMessage == nil,
                let toast = app.planner.toast {
@@ -700,12 +719,11 @@ struct RootView: View {
         switch sheet {
         case .layers:
             DockSheetPanel(
-                heightFraction: 0.46,
-                fitsContent: true,
+                heightFraction: 1,
                 landscapeDockLeading: landscapeDockLeading,
                 onDismiss: dismissDockSheet
             ) {
-                LayersSheet()
+                LayersSheet(onClose: dismissDockSheet)
             }
         case .group:
             DockSheetPanel(
