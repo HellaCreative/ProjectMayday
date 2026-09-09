@@ -46,6 +46,16 @@ struct RoutePlannerModelItineraryTests {
         #expect(RoutePlannerModel.isPersistentProgressToast("Checking range after fuel stop 2"))
     }
 
+    @Test func loopSearchUsesPersistentAnimatedProgressContent() {
+        for number in 1...3 {
+            let message = "Finding loop \(number) of 3"
+            #expect(RoutePlannerModel.isPersistentProgressToast(message))
+            #expect(RoutePlannerModel.progressToastContent(for: message)?.title == message)
+            #expect(RoutePlannerModel.progressToastContent(for: message)?.detail == "Comparing roads for your round trip")
+        }
+        #expect(!RoutePlannerModel.isPersistentProgressToast("Route overview"))
+    }
+
     @Test func activeRouteProgressSurvivesUnrelatedTapFeedback() {
         #expect(RoutePlannerModel.activeRouteProgressMessage(
             fuelPlanningStatus: "Creating fuel stop 4",

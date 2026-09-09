@@ -1072,6 +1072,12 @@ final class RoutePlannerModel {
                 detail: "Creating the route to your waypoint"
             )
         default:
+            if message.hasPrefix("Finding loop ") {
+                return ProgressToastContent(
+                    title: message,
+                    detail: "Comparing roads for your round trip"
+                )
+            }
             if message.hasPrefix("Creating fuel stop ") {
                 return ProgressToastContent(
                     title: message,

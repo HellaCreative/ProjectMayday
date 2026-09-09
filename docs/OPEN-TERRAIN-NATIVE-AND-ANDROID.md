@@ -88,3 +88,10 @@ Supersedes the original thin-frost treatment: dropdown fields are opaque white,
 with a light-grey #D8DADD 1pt/dp border. Sheets use regular system material;
 the HTML preview uses 92% white tint. The controls and sheet geometry do not
 change. Apply these contrast values before assessing Android visual parity.
+
+### Approved dark navigation — build 27
+
+Supersedes the white primary-nav surface: use #202820 (the approved HTML logo
+pill color), white idle icon/title, orange active selection with white content,
+and the existing closed-route orange outline. Navigation stays fixed. Route
+build feedback always includes its indeterminate thumper, including loop searches.

@@ -977,7 +977,7 @@ struct RootView: View {
             }
 
             if let progress = app.planner.activeRouteProgressMessage {
-                ToastView(text: progress)
+                ToastView(text: progress, isBuildingRoute: true)
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
 
@@ -1196,7 +1196,7 @@ struct RootView: View {
         .dirtDenseChrome()
         .background {
             ZStack {
-                Rectangle().fill(Color.white)
+                Rectangle().fill(DirtTheme.navigationSurface)
             }
         }
         .clipShape(
@@ -1502,7 +1502,7 @@ struct RootView: View {
         .padding(.horizontal, 8)
         .padding(.top, 8)
         .padding(.bottom, max(homeIndicatorInset, 10))
-        .background(Color.white)
+        .background(DirtTheme.navigationSurface)
         .shadow(color: .black.opacity(0.14), radius: 16, y: -4)
         .padding(.bottom, -homeIndicatorInset)
 
@@ -1540,7 +1540,7 @@ struct RootView: View {
             switch self {
             case .open: .white
             case .armed: DirtTheme.orange
-            case .idle: DirtTheme.ink
+            case .idle: .white
             }
         }
 
@@ -1665,9 +1665,14 @@ private struct KeepAwakeLifecycle: ViewModifier {
 
 struct ToastView: View {
     let text: String
+    var isBuildingRoute = false
 
     private var progress: RoutePlannerModel.ProgressToastContent? {
         RoutePlannerModel.progressToastContent(for: text)
+            ?? (isBuildingRoute ? RoutePlannerModel.ProgressToastContent(
+                title: text,
+                detail: "Finding roads and checking your route"
+            ) : nil)
     }
 
     private var isSuccess: Bool {
@@ -1688,7 +1693,7 @@ struct ToastView: View {
                     RouteBuildPistonIndicator()
                         .accessibilityHidden(true)
                 }
-                .frame(minWidth: 240, maxWidth: 300, alignment: .leading)
+                .frame(minWidth: 200, maxWidth: 240, alignment: .leading)
                 .accessibilityElement(children: .ignore)
                 .accessibilityIdentifier("route-progress-toast")
                 .accessibilityLabel(progress.title)

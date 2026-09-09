@@ -848,3 +848,12 @@ swipe actions. The portrait routing sheet can grow until the top of the zoom
 stack aligns with the logo top (6pt below safe-area top). Reserve the 360pt
 control stack plus 10pt sheet gap; short content continues to hug its contents.
 Android should derive equivalent geometry from control sizes and safe insets.
+
+### Dark primary navigation and route progress — build 27
+
+Approved HTML dark navigation is now native: #202820 surface, white idle
+icons/titles, orange active background with white content; existing closed-route
+orange outline remains. All active build messages use the indeterminate orange
+thumper card, including loop-candidate status and previously unrecognized
+status text. Known statuses retain their specific explanatory detail. Do not
+present the pulse as percentage complete. Reduce Motion keeps a static bar.

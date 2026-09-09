@@ -47,6 +47,7 @@ enum DirtTheme {
     static let onOrange = Color(dirtHex: 0x16181C)
     /// Dock “route still on map” while the planner sheet is minimized (not selected).
     static let orangeSoft = Color(dirtHex: 0xFFB35C)
+    static let navigationSurface = Color(dirtHex: 0x202820)
     static let chrome = Color(dirtHex: 0x16181C)
     static let chromeBorder = Color.white.opacity(0.12)
     static let ink = Color(dirtLight: 0x16181C, dark: 0xF2F4F7)
