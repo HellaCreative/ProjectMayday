@@ -1422,3 +1422,35 @@ Next promising exact-equivalent join optimization: canonical duplicate-edge Map 
 Limit canonical duplicate-edge lookup/storage to edges whose two source nodes occur in multiple regions. The completed node pass establishes this before processing edges. Keep all source edges, IDs, geometry, aliases, same-region parallels, restrictions and cross-region conflict validation unchanged. Full real NS/NB structural digest matches the original trusted join: b70d296b3daaeb7f1ccbc29eb2777d0558a91005aac9e43d9ffbab930233a4b4; 353088 nodes,416884 edges,739038 arcs.192 adventure and22 topology tests pass. Separate-process three-run local median817ms versus preceding950ms and original1085ms; this does not establish hosted cold reliability. Evidence /tmp/dirt-shared-seam-{comparison,times}.json and /tmp/dirt-shared-seam-{tests,topology}.log.
 
 Layered on private7117e36; private cold qualification next. Stable56308d4 remains unchanged. No route objective, deadline, candidate coverage, fuel/access/turn constraint or native code changes.
+
+## Shared endpoint indexing hosted qualification —6cb2770
+
+Privatepx2p5tl27 and independent untouched a25vvrcli, exactsource6cb27706cf0aa07d040c35ae278ecae984f754f2/runtime52c95b34: cold Clean passes19.378s and19.435s. Data4.983/5.494s; join3.441/3.579s; search14.392/13.938s. Accepted586.972545km,3pumps,0repeat preserved.16 hosted requests pass: two independent coldClean, baseline6, device4, hooks1, coarsepins unknown162 Dirt/Balanced/Balanced3. Exact source/releases asserted throughout; baseline6 geometry and fuel-stop IDs exactly match56308d4.192 adventure+22 topology pass. Evidence /tmp/dirt-shared-seam-hosted-{cold,cold2,multi,device,hooks,target}.
+
+Requesting DEV promotion of exactqualifiedpx2p5tl27; rollback56308d4. This qualifies a measured performance improvement, NOT universal cold-start reliability: both cold runs have less than1s headroom. Follow with independent public DEV source/route checks. Production/native/GitHub unchanged.
+
+## Public DEV performance publication verified
+
+Owner promoted EXACTpx2p5tl27/source6cb27706cf0aa07d040c35ae278ecae984f754f2; no rebuild/config drift. Independent public coarsepins unknown162 Dirt/Balanced/Balanced3, strict near-Dalhousie and Clean final-fuel all pass, exactsource/releases/full pool asserted. Canary and parity authority updated. Rollback56308d4 retained. Production/native/GitHub unchanged.
+
+No running tests or pending promotion. Continue overnight from qualified52c95b34 runtime; do not repeat baseline matrices without new changes/evidence. Cold headroom remains narrow despite2controlled passes; future useful work is profiling search reuse/preparation or additional genuinely different stress cases while preserving core pool/fuel proofs. Full-itinerary history and persistent per-pin intent remain native-contract limits, not solved by server guesses. Heartbeat remains active until morning08:00Halifax, then concise handoff/pause.
+
+## Additional reverse/edited-waypoint stress batch — stable6cb2770
+
+Benchmark now supports REBUILD_MULTI_REVERSE=1 and explicit REBUILD_MULTI_POINTS JSON, validates coordinates, preserves rider-selected Yarmouth pump refill by coordinate rather than ordinal, and asserts exact geometry joins between primary legs. No runtime change.
+
+New local+hosted passes: reversedYarmouth180km usable Balanced/Dirt/Balanced,3legs929.511/365.521/597.310km at hosted9.553/2.796/6.665s; user's finaleditedpins180km Clean/Balanced/Dirt,3legs553.290/234.737/799.535km at1.588/3.349/7.754s. All6have0 within-primary-leg repeated road meters, exact adjacent geometry, full pool/fuel carry/escape assertions. Exactsource6cb2770 and releases02 asserted. Evidence /tmp/dirt-overnight-{hosted-,}{reverse-yarmouth180,edited-coarse180}. Whole-itinerary novelty is still NOT established by these within-leg metrics.
+
+New reproducible failures: reversedcoarsepins162km usable Balanced/Dirt/Balanced completes first2legs, then fails third with dirt-30 label_limit (hosted9.832s, below20s). ReversedInverness180km allClean fails firstleg with dirt-30 label_limit (hosted11.688s). Shared full-pool gate properly prevents declaring complete when a core candidate is unproved. Both exact failing requests also fail on previous stable56308d4 with dirt-30 label_limit, so do not roll back the verified performance improvement for these pre-existing cases. Evidence /tmp/dirt-overnight-{hosted-,}{reverse-coarse162,reverse-inverness180}, /tmp/dirt-reverse162-previous-stable.json, /tmp/dirt-reverse-inverness180-previous-stable.json.
+
+Attempted private LOCAL-only optimization: on label exhaustion, compute directed distance to any bound station/destination and prune provably dry labels in same-budget retry. Reversecoarse162still failed; both runtime file edits fully reverted. No deployment or retained fuel-bound helper. Stable runtime remains52c95b34/source6cb2770. Do not repeat this failed idea without new evidence.
+
+Next priority: investigate dirt-30 label growth on the saved exact requests, maxFuelLabels400000 in live-canary, preserving shared candidates, fuel/turn/arrival proofs and20s budget. Search memory/frontier diagnostics may help distinguish low-fuel Pareto growth from approach history. Do not raise limits or drop candidates merely to pass. No active tests/pending owner actions. Heartbeat remains active before08:00Halifax; morning handoff must include these2new failure shapes.
+
+## Continuation label-limit recovery — local qualified, private next
+
+Trace on savedreversecoarse162thirdleg:400000 generated labels,220620expanded,160767statekeys,186852active,max frontier20; broad search rather than a single huge Pareto bucket. Exact uncapped reverse-bound retry did not solve either savedfailure and was reverted. Diagnostic console instrumentation also reverted.
+
+A single directed retry (guidance3) with unchanged cost objective,400000labelcap, original20s/expansion budget recovers the continuation. Limit scope to non-paved CONTINUATIONS after label_limit; all profiles still evaluate the same core pool and cannot report complete without all fuel proofs. No fresh-route retry: experimental freshInverness recovery retained13723m fuelrepeat (approach refinement hit label_limit), so that behavior was rejected. Deferred winner refinement experiment provided no improvement and was reverted.
+
+193 focused tests pass, including retry cannot bypass label limit/incomplete pool. Reversecoarse162full3legs now locallycomplete, all0repeat; local savedthirdleg variantsDirt/Balanced/Clean have identical recovered candidate surfaces/repeats and selected0repeat. Six baselineInverness/Yarmouth geometries ANDstopIDs exactly unchanged. Evidence /tmp/dirt-continuation-retry-{reverse162,baseline,dirt.json,cleanest.json,tests.log}; temptrace /tmp/dirt-label-trace.err. Stable6cb2770 remains while private qualification runs. FreshreverseInverness180 remains open; do not retry that rejected fresh heuristic expansion.

@@ -41,13 +41,22 @@ function buildRideAlternatives(options) {
  // Focus optional fresh Dirt refinements without increasing label/time limits.
  // Continuations retain their already-qualified heuristic.
  // Prove the fuel ride first for every leg; advisory search runs only on failure.
- const build=(objective,refine,budget=options.budget)=>buildFromHere({...options,...context,budget,fuelFirst:true,preparationBudget:budget===options.budget?options.preparationBudget:budget,objectiveId:objective.id,edgeCost:objective.cost,fuelHeuristicWeight:refine&&!continuation&&objective.id!=='paved'?3:objective.id==='paved'?(options.pavedFuelHeuristicWeight??options.fuelHeuristicWeight):options.fuelHeuristicWeight,dirtEntryCost:objective.id==='paved'?0:continuityMeters*(Number(objective.id.split('-')[1])-1),preferOnwardFuel:options.preferOnwardFuel===true,retainFuelApproach:refine});
+ const build=(objective,refine,budget=options.budget,guidance=null)=>buildFromHere({...options,...context,budget,fuelFirst:true,preparationBudget:budget===options.budget?options.preparationBudget:budget,objectiveId:objective.id,edgeCost:objective.cost,fuelHeuristicWeight:guidance??(refine&&!continuation&&objective.id!=='paved'?3:objective.id==='paved'?(options.pavedFuelHeuristicWeight??options.fuelHeuristicWeight):options.fuelHeuristicWeight),dirtEntryCost:objective.id==='paved'?0:continuityMeters*(Number(objective.id.split('-')[1])-1),preferOnwardFuel:options.preferOnwardFuel===true,retainFuelApproach:refine});
  for(const objective of candidates) {
   if(!options.budget.check())break;
   // Preserve the accepted fresh-route behavior. For continuations, finish
   // the shared comparison before spending work on approach refinements.
-  const result=build(objective,!continuation&&objective.id==='paved');
-  results.push({id:objective.id,result});
+  let result=build(objective,!continuation&&objective.id==='paved'),retry=null;
+  // Recover a bounded continuation search with the same objective and hard
+  // constraints. Guidance changes ordering only; the request budget and label
+  // cap remain shared/unchanged, and every core candidate must still be proved.
+  // Fresh rides retain their qualified search/quality behavior.
+  if(continuation&&objective.id!=='paved'&&result.fuel.reason==='label_limit'&&options.fuelHeuristicWeight<3&&options.budget.check()) {
+    retry={reason:'label_limit',fromHeuristicWeight:options.fuelHeuristicWeight,heuristicWeight:3,firstAttemptMs:result.timing?.totalMs};
+    result=build(objective,false,options.budget,3);
+    retry.state=result.fuel.state;
+  }
+  results.push({id:objective.id,result,retry});
   if(options.budget.snapshot().reason)break;
  }
  // All profiles refine the same set of potential winners in the same order.
@@ -80,7 +89,7 @@ function buildRideAlternatives(options) {
  pool.sort(rank);
  const selected=pool[0];
  return {state:selected?'complete':'incomplete',selected:selected?.result||null,selectedObjective:selected?.id||null,
-  candidates:results.map(r=>({id:r.id,road:r.result.road.state,fuel:r.result.fuel.state,reason:r.result.fuel.reason,surface:r.result.road.surface,urbanMeters:r.result.road.urbanMeters,timing:r.result.timing,repeatedRoadMeters:r.result.qualityAudit?.repeatedRoadMeters,approachRefinement:r.refinement||r.result.search?.fuelSearch?.approachRefinement})),
+  candidates:results.map(r=>({id:r.id,road:r.result.road.state,fuel:r.result.fuel.state,reason:r.result.fuel.reason,searchRetry:r.retry,surface:r.result.road.surface,urbanMeters:r.result.road.urbanMeters,timing:r.result.timing,repeatedRoadMeters:r.result.qualityAudit?.repeatedRoadMeters,approachRefinement:r.refinement||r.result.search?.fuelSearch?.approachRefinement})),
   search:{...options.budget.snapshot(),poolComplete},
   limitations:['bounded shared candidate pool; not global best ride proof','station access may remain provisional']};
 }
