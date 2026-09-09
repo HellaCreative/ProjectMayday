@@ -904,3 +904,12 @@ the accepted logo animation and carousel unchanged, including ambient/mute and
 Reduce Motion behavior. Playback follows the existing splash window rather than
 extending onboarding to the recording length. Production resource verification
 requires firtbike.mp3; the old synthetic asset and generator are removed.
+
+### Production surface-network control
+
+The logo remains tappable in production to toggle the viewport surface network
+using installed pack surface data and the existing live fallback. Only the
+technical graph inspection HUD remains development-only. Tester links and
+subscription bypasses remain prohibited in public Release. The live fallback
+currently supplies coarse access information when no pack is installed; do not
+represent that fallback as verified surface leaves.

@@ -109,7 +109,7 @@ final class RoutingGraphDebugManager {
     }
 
     private func performRefresh() async {
-        guard BuildChannel.debugRoutingGraphOverlay, mapState.showRoutingGraphDebug else {
+        guard mapState.showRoutingGraphDebug else {
             mapState.updateDebugGraphFeatures([], status: nil, capped: false)
             return
         }

@@ -981,18 +981,14 @@ struct RootView: View {
             )
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(app.mapState.showRoutingGraphDebug ? "Hide routing graph" : "Show routing graph")
-        .accessibilityHint("Toggles the graph overlay and legend")
+        .accessibilityLabel(app.mapState.showRoutingGraphDebug ? "Hide surface network" : "Show surface network")
+        .accessibilityHint("Shows or hides nearby road surfaces")
     }
 
     @ViewBuilder
     private var idleBrandStack: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if BuildChannel.debugRoutingGraphOverlay {
-                graphBrandButton
-            } else {
-                BrandChip(minHeight: 48)
-            }
+            graphBrandButton
 
             if let progress = app.planner.activeRouteProgressMessage {
                 ToastView(text: progress, isBuildingRoute: true)
