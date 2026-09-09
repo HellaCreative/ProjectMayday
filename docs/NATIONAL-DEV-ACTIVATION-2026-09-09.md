@@ -27,7 +27,7 @@ fabric-v4-20260908-03 road fabric and its original locked OSM sources.
 - National crossing lookup retains every existing proof with bounded memory;
   exact regional ownership fixes fuel-file selection at overlapping boundaries.
 
-223 local routing/legal/metadata checks pass. All 63 regional data revisions
+223 local routing/legal/metadata checks pass. Six accepted NS/NB baseline legs retain exact geometry and fuel-stop identities against the previous frozen results. All 63 regional data revisions
 have local byte-identity evidence. Hosted qualification and publication status
 live under the candidate's release/upload/verification records; these local
 passes do not constitute physical-device acceptance.
