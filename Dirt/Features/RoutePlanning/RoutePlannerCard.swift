@@ -204,7 +204,10 @@ struct RoutePlannerCard: View {
         GeometryReader { geo in
             // Preserve the map as the primary canvas. Short planner states hug their
             // content; longer routes stop here and scroll beneath the sticky dock.
-            let maxPanelHeight = max(160, min(geo.size.height * 0.46, geo.size.height - 380))
+            // Six 50pt control rows + five 10pt gaps + the extra zoom gap.
+            // Leave the same 6pt top inset as the DIRT logo above the stack.
+            let controlsHeight: CGFloat = 360
+            let maxPanelHeight = max(160, geo.size.height - controlsHeight - DockSheetMotion.portraitRouteControlsGap - 6)
             let fixedChromeHeight = 14 + min(planningTabHeight, 76) + 10 + 10
             let maxPlanningHeight = max(1, maxPanelHeight - fixedChromeHeight)
             let measuredPlanningHeight = max(1, portraitPlanningContentHeight)
@@ -234,7 +237,7 @@ struct RoutePlannerCard: View {
                 }
                 .frame(height: planningHeight)
                 .scrollBounceBehavior(.basedOnSize)
-                .scrollIndicators(.visible)
+                .scrollIndicators(.hidden)
             }
             .padding(.horizontal, 14)
             .padding(.top, 14)
@@ -312,7 +315,7 @@ struct RoutePlannerCard: View {
                 .frame(maxWidth: .infinity)
             }
             .scrollBounceBehavior(.basedOnSize)
-            .scrollIndicators(.visible)
+            .scrollIndicators(.hidden)
         }
         .padding(.vertical, 12)
         .padding(.leading, dockLeading ? dockClearance + 10 : 14)
@@ -783,7 +786,7 @@ struct RoutePlannerCard: View {
             .listRowSpacing(10)
             .frame(height: selectedStage == nil ? collapsedHeight : bandHeight)
             .scrollBounceBehavior(.basedOnSize)
-            .scrollIndicators(.visible)
+            .scrollIndicators(.hidden)
             .onAppear {
                 if let last = planner.stages.last?.id {
                     proxy.scrollTo(last, anchor: .bottom)

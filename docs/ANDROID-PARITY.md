@@ -840,3 +840,11 @@ Dropdown fields use opaque white with a 1pt/dp light-grey (#D8DADD) border.
 Sheets use a more opaque system material (iOS regularMaterial; HTML white tint
 92%) to improve map-backed contrast. Preserve overlay dropdown behavior and
 all existing actions. Apply the same contrast revision on Android.
+
+### Routing sheet space — build 26
+
+Hide routing scroll indicators while preserving vertical scrolling and leg
+swipe actions. The portrait routing sheet can grow until the top of the zoom
+stack aligns with the logo top (6pt below safe-area top). Reserve the 360pt
+control stack plus 10pt sheet gap; short content continues to hug its contents.
+Android should derive equivalent geometry from control sizes and safe insets.
