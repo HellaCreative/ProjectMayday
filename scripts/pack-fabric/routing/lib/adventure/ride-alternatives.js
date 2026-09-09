@@ -21,8 +21,10 @@ function buildRideAlternatives(options) {
  const continuityMeters=options.dirtContinuityMeters??0;
  if(!Number.isFinite(continuityMeters)||continuityMeters<0)throw new TypeError("Continuity distance must be finite and nonnegative");
  const context=options.context||createRideAlternativeContext(),results=[];
- const candidates=options.expandedCandidates?expandedObjectives:objectives;
  const continuation=!!options.arrivalHistory?.priorEdgeIds?.length;
+ // Four distinct continuation objectives retain paved, moderate mixed, and
+ // both dirt strengths. Fresh-route candidate coverage remains unchanged.
+ const candidates=continuation?[...objectives,expandedObjectives[3]]:options.expandedCandidates?expandedObjectives:objectives;
  const profile=options.input.legs[0].profile;
  const rankFor=profile=>(a,b)=>(a.result.road.avoidanceMeters??a.result.road.urbanMeters??0)-(b.result.road.avoidanceMeters??b.result.road.urbanMeters??0)||compareSurface(profile,a.result.road.surface,b.result.road.surface)||a.id.localeCompare(b.id);
  const rank=rankFor(profile);
@@ -44,7 +46,7 @@ function buildRideAlternatives(options) {
   const attempted=new Set();
   while(options.budget.check()) {
    const feasible=results.filter(r=>feasibleResult(r.result));
-   const winners=['clean','dirt','balanced'].map(p=>feasible.slice().sort(rankFor(p))[0]);
+   const winners=['clean','dirt','balanced'].map(p=>feasible.slice().sort(rankFor(p))[0]).sort((a,b)=>a.result.road.distanceMeters-b.result.road.distanceMeters||a.id.localeCompare(b.id));
    const best=winners.find(r=>r&&!attempted.has(r.id)&&r.result.qualityAudit?.repeatedRoadMeters>0);
    if(!best)break;
    attempted.add(best.id);
