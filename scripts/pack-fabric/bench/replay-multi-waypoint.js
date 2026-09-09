@@ -14,7 +14,7 @@ const cases={coarsepins:[[44.804135,-63.097441],[43.566279,-65.491539],[44.66076
  if(name==='coarsepins'&&!process.env.REBUILD_MULTI_CASE)continue;
  const usable=Number(process.env.REBUILD_MULTI_USABLE||225000),profiles=(process.env.REBUILD_MULTI_PROFILES||'balanced,balanced,balanced').split(',');let remaining=usable,history=[];const results=[];
  for(let i=0;i<pts.length-1;i++){
-  const request={profile:profiles[i]||'balanced',locations:pts.slice(i,i+2).map(([lat,lon])=>({lat,lon})),accessPolicy:{motorizedPermissive:true,motorizedUnknown:false},options:{mapZoom:Number(process.env.REBUILD_MULTI_ZOOM||9.6),...(history.length?{arrivalEdgeId:history.at(-1).id,priorEdgeIds:history.map(s=>s.id),backtrackFactor:4}:{})},fuel:{usableRangeMeters:usable,firstLegMaxMeters:remaining,minimumFuelStops:0,windowMaxStops:12,allowPartialWindow:true,windowTimeBudgetMs:20000,routeFirstPlan:true,ensureDestinationFuelEscape:i===pts.length-2,forwardFeeler:false}};
+  const request={profile:profiles[i]||'balanced',locations:pts.slice(i,i+2).map(([lat,lon])=>({lat,lon})),accessPolicy:{motorizedPermissive:true,motorizedUnknown:process.env.REBUILD_MULTI_UNKNOWN==='1'},options:{mapZoom:Number(process.env.REBUILD_MULTI_ZOOM||9.6),...(history.length?{arrivalEdgeId:history.at(-1).id,priorEdgeIds:history.map(s=>s.id),backtrackFactor:4}:{})},fuel:{usableRangeMeters:usable,firstLegMaxMeters:remaining,minimumFuelStops:0,windowMaxStops:12,allowPartialWindow:true,windowTimeBudgetMs:20000,routeFirstPlan:true,ensureDestinationFuelEscape:i===pts.length-2,forwardFeeler:false}};
   const at=Date.now();let r;
   if(process.env.REBUILD_DEPLOYMENT){
     const requestFile=path.resolve(output,`${name}-${i}-request.json`);fs.writeFileSync(requestFile,JSON.stringify(request));
