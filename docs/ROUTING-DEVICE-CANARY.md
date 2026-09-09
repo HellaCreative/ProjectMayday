@@ -1,3 +1,20 @@
+# Ready for final Clean fuel retest — stable edc55fdb
+
+Build a fresh From Here route from Porters Lake to the same destination
+47.047134,-64.891699. Choose Clean, fuel ON,250km range/10% reserve.
+No reinstall or pack download. Saved routes retain their original geometry.
+
+Stable DEV now uses exact3wcw1w2vh/sourceedc55fdb42af4bb3c4dd6972ecdaabf8e4ba88c5,
+NS02/NB02. The reported22.703km repeated fuel approach is gone. Expected route
+586.973km with3stops; third generated pump changes to Esso in Rogersville.
+First two fuel legs stay unchanged. Public replay11.246s total/10.339s server,
+zero repeated road, full fuel and destination escape checks passed.
+
+Flags: first fresh hosted request18.975s; repeat10.983s. Existing2.866km dirt
+near the endpoint remains, not proved unavoidable. This correction is qualified
+for the paved candidate; broader Dirt history refinement is not qualified.
+Physical acceptance is pending. Earlier handoffs below are historical.
+
 # Ready for Clean device test — stable8be23e95
 
 Stable DIRT DEV uses exact1krqzezwv/source8be23e95a91c7ebe8a02bf20a6917f57ad42a4b7,

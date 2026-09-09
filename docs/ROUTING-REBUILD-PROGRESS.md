@@ -1224,3 +1224,11 @@ Always retaining all histories failed regional label limits; retaining station e
 Exact latest request now locally returns 586.973 km, 99.512% paved, zero repeated road and three stops in 4.803 seconds. First two fuel legs remain unchanged; third generated station changes to `osm:n5301512825`. The existing 2,866 m dirt section near the destination remains. Do not assert its necessity without a separate surface-data/legal-alternative investigation. Evidence: `/tmp/dirt-clean-f3-refine`, `/tmp/dirt-cross-refine`, `/tmp/dirt-nb-refine`, `/tmp/dirt-ns-refine`. Fixture: `scripts/pack-fabric/bench/fixtures/clean-final-fuel-20260909.json`.
 
 Private hosted verification and stable DEV publication are pending. App/phone packs/Swift/production/GitHub are unchanged. Physical acceptance is still required after publication.
+
+## September 9 UTC — final fuel correction live on DEV
+
+Stable `https://pack-fabric.vercel.app` now points to exact `pack-fabric-3wcw1w2vh-goricksmith-7678s-projects.vercel.app`, source `edc55fdb42af4bb3c4dd6972ecdaabf8e4ba88c5` (stable8be23 + local fa08b4e). BOTH02 and ns-nb-v1 unchanged. Public exact replay returned HTTP200 in 11.246s, server10.339s: 586.973km, three pumps, zero repeated road, complete candidate pool, all fuel intervals/destination escape/geometry joins pass. Diagnostics explicitly show refinement22,703m→0. Third pump is Esso,11107 Rue Principale,Rogersville (`osm:n5301512825`).
+
+Private hosted exact request passed twice: first18.975s server, repeat10.983s. NSClean10.486s/757.037km/0repeat; three earlier NB Dirt references7.737–9.128s; prior NBClean6.916s/955.802km/0repeat. All hosted candidate and fuel checks pass. Evidence `/tmp/dirt-final-fuel-public.json`, `/tmp/dirt-final-fuel-hosted`, `/tmp/dirt-final-fuel-hosted-repeat`, `/tmp/dirt-fuel-refine-hosted-ns`, `/tmp/dirt-fuel-refine-hosted-nb`.
+
+Physical retest: build a fresh From Here route to the same pin47.047134,-64.891699, Clean, automaticfuelON,250km/10%. No reinstall or pack download. Saved route geometry remains stable. Device acceptance remains pending; 19s first-request latency and broader Dirt history qualification remain open. No production/GitHub/phone-pack/Swift changes.
