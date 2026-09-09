@@ -29,9 +29,10 @@ function joinV4(regions,{budget}) {
    if(!budget.consume())fail(budget.snapshot().reason);
    const a=nodeMaps[region][pack.edgeFrom[i]],b=nodeMaps[region][pack.edgeTo[i]];
    const key=`${pack.osmWayIds[i]}:${nodeIds[a]}:${nodeIds[b]}`;
-   const peers=canonical.get(key)||[];
-   let edge=peers.find(e=>{const src=sources[e];return src.region!==region&&JSON.stringify(regions[src.region].geom.polyline(src.edge))===JSON.stringify(geom.polyline(i));});
-   if(edge===undefined&&peers.some(e=>sources[e].region!==region)&&a!==b)fail('shared edge geometry mismatch');
+   const existing=canonical.get(key);
+   const peers=existing===undefined?null:Array.isArray(existing)?existing:[existing];
+   let edge=peers?.find(e=>{const src=sources[e];return src.region!==region&&JSON.stringify(regions[src.region].geom.polyline(src.edge))===JSON.stringify(geom.polyline(i));});
+   if(edge===undefined&&peers?.some(e=>sources[e].region!==region)&&a!==b)fail('shared edge geometry mismatch');
    if(edge!==undefined) {
     const src=sources[edge],old=regions[src.region].pack;
     for(const field of ['edgeMeters','edgeLayer','edgeGrade','edgeFlags'])if(old[field]?.[src.edge]!==pack[field]?.[i])fail(`duplicate edge ${key} ${field} mismatch: ${old[field]?.[src.edge]} vs ${pack[field]?.[i]}, regions ${src.region}/${region}`);
@@ -39,21 +40,35 @@ function joinV4(regions,{budget}) {
     if(access[edge*2]!==pack.edgeAccess[i*2]||access[edge*2+1]!==pack.edgeAccess[i*2+1])fail('duplicate access mismatch');
     if(JSON.stringify(regions[src.region].geom.polyline(src.edge))!==JSON.stringify(geom.polyline(i)))fail('duplicate geometry mismatch');
    } else {
-    edge=sources.length;canonical.set(key,[...peers,edge]);sources.push({region,edge:i});ids.push(`${key}#${edge}`);
+    edge=sources.length;canonical.set(key,peers?[...peers,edge]:edge);sources.push({region,edge:i});ids.push(`${key}#${edge}`);
     from.push(a);to.push(b);meters.push(pack.edgeMeters[i]);access.push(pack.edgeAccess[2*i],pack.edgeAccess[2*i+1]);surface.push(surfaceNames.indexOf(pack.enums.surfaceLeafNames[pack.edgeSurfaceLeaf[i]]));road.push(roadNames.indexOf(pack.enums.roadClassLeafNames[pack.edgeRoadClassLeaf[i]]));
    }
    (aliases[edge]??=[]).push(pack.edgeId(i));
    map[i]=edge;
   }
  });
- const adjacency=Array.from({length:nodeIds.length},()=>new Map());
+ // Reserve CSR slots using source degrees, then deduplicate only within each
+ // node's short adjacency list. Avoid allocating one Map per joined node.
+ const capacities=new Int32Array(nodeIds.length);
+ regions.forEach(({pack},region)=>{for(let n=0;n<pack.nodeCount;n++)capacities[nodeMaps[region][n]]+=pack.nodeOffsets[n+1]-pack.nodeOffsets[n];});
+ const starts=new Int32Array(nodeIds.length+1);
+ for(let n=0;n<nodeIds.length;n++)starts[n+1]=starts[n]+capacities[n];
+ const targetsStorage=new Int32Array(starts[nodeIds.length]),edgesStorage=new Int32Array(starts[nodeIds.length]),counts=new Int32Array(nodeIds.length);
  regions.forEach(({pack},region)=>{for(let n=0;n<pack.nodeCount;n++)for(let j=pack.nodeOffsets[n];j<pack.nodeOffsets[n+1];j++) {
   if(!budget.consume())fail(budget.snapshot().reason);
-  const edge=edgeMaps[region][pack.edgeUndirectedIndex[j]],target=nodeMaps[region][pack.edgeTargets[j]];
-  adjacency[nodeMaps[region][n]].set(edge,target);
+  const node=nodeMaps[region][n],edge=edgeMaps[region][pack.edgeUndirectedIndex[j]],target=nodeMaps[region][pack.edgeTargets[j]];
+  const end=starts[node]+counts[node];let at=starts[node];
+  while(at<end&&edgesStorage[at]!==edge)at++;
+  // Match Map.set semantics: retain insertion order and replace a duplicate's target.
+  edgesStorage[at]=edge;targetsStorage[at]=target;if(at===end)counts[node]++;
  }});
- const offsets=new Int32Array(nodeIds.length+1),targets=[],edgeIndices=[];
- adjacency.forEach((arcs,n)=>{for(const [edge,target] of arcs){edgeIndices.push(edge);targets.push(target);}offsets[n+1]=targets.length;});
+ const offsets=new Int32Array(nodeIds.length+1);let used=0;
+ for(let n=0;n<nodeIds.length;n++){
+  const end=starts[n]+counts[n];
+  for(let at=starts[n];at<end;at++){edgesStorage[used]=edgesStorage[at];targetsStorage[used++]=targetsStorage[at];}
+  offsets[n+1]=used;
+ }
+ const targets=targetsStorage.subarray(0,used),edgeIndices=edgesStorage.subarray(0,used);
  const restrictions=[],seenRestrictions=new Set();
  regions.forEach(({pack},region)=>{for(const r of pack.restrictions||[]) {
   const mapped={...r,fromEdge:edgeMaps[region][r.fromEdge],toEdge:edgeMaps[region][r.toEdge],viaEdges:(r.viaEdges||[]).map(e=>edgeMaps[region][e])};
