@@ -7,12 +7,20 @@ const {searchResourcePath}=require("./resource-search");
 // The inexpensive road candidate is retained for advisory display. The fuel
 // search then constructs a feasible ride with refills in its state; it doesn't
 // search for pumps near that candidate and repeatedly insert new detours.
-function searchFuelRide({graph,start,end,edgeCost,budget,fuel,lowerBounds=null,initialTurnState=null,avoidanceCost=null,onRoadCandidate=null,maxFuelLabels=Infinity,fuelHeuristicWeight=1,preferOnwardFuel=false,retainFuelApproach=false,dirtEntryCost=0}) {
+function searchFuelRide({graph,start,end,edgeCost,budget,fuel,lowerBounds=null,initialTurnState=null,avoidanceCost=null,onRoadCandidate=null,maxFuelLabels=Infinity,fuelHeuristicWeight=1,preferOnwardFuel=false,retainFuelApproach=false,dirtEntryCost=0,fuelFirst=false}) {
   if(fuel!=null)validateFuel(fuel);
   const base={graph,start,end,edgeCost,budget,lowerBounds,initialTurnState,avoidanceCost,dirtEntryCost};
-  const road=searchResourcePath(base);
-  if(road.state!=="found")return {road,fuel:{state:"unverified",reason:road.reason},search:budget.snapshot()};
-  if(onRoadCandidate)onRoadCandidate(road);
+  let road;
+  function advisory(){
+    if(!road){road=searchResourcePath(base);if(road.state==='found'&&onRoadCandidate)onRoadCandidate(road);}
+    return road;
+  }
+  // Continuations already have a retained itinerary. Search the actual fuel
+  // problem first; an advisory road is needed only if that cannot be proved.
+  if(!fuelFirst||!fuel||!Number.isFinite(fuel.initialUsableMeters)||graph.stationCount===0) {
+    advisory();
+    if(road.state!=="found")return {road,fuel:{state:"unverified",reason:road.reason},search:budget.snapshot()};
+  }
   if(!fuel)return {road,fuel:{state:"not_requested"},search:budget.snapshot()};
   if(!Number.isFinite(fuel.initialUsableMeters))return {road,fuel:{state:"unverified",reason:"initial_fuel_unknown"},search:budget.snapshot()};
   if(graph.stationCount===0)return {road,fuel:{state:"unverified",reason:"no_station_bindings"},search:budget.snapshot()};
@@ -37,7 +45,7 @@ function searchFuelRide({graph,start,end,edgeCost,budget,fuel,lowerBounds=null,i
   }
   const searchOptions={...base,fuel,acceptGoal,maxLabels:maxFuelLabels,heuristicWeight:fuelHeuristicWeight,preferOnwardFuel};
   let result=searchResourcePath(searchOptions);
-  if(result.state!=="found")return {road,fuel:{state:"unverified",
+  if(result.state!=="found")return {road:advisory(),fuel:{state:"unverified",
     reason:result.state==="incomplete"?result.reason:"no_feasible_chain_in_matched_graph"},fuelSearch:result,
     escapeSearches,search:budget.snapshot()};
   // Spend the extra approach-history search only on a completed candidate
@@ -63,6 +71,7 @@ function searchFuelRide({graph,start,end,edgeCost,budget,fuel,lowerBounds=null,i
       result.diagnostics.approachRefinement=refinement;
     }
   }
+  if(fuelFirst&&onRoadCandidate)onRoadCandidate(result);
   // A required destination at a station explicitly plans a refill even when
   // arrival fuel was already enough to satisfy the zero-distance escape.
   const arrivalUsableMeters=result.remainingUsableMeters;
