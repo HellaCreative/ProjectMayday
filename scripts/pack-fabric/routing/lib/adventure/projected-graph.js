@@ -74,6 +74,12 @@ function createProjectedGraph(pack,{points,allowUnknown=false,endpointEdges=[],b
   }
   return {
     state:"complete",nodeCount,pointNodes,stationCount:stations.size,
+    seedArrival(arcs,pointId) {
+      const result=base.seedArrival(arcs);if(!result.allowed||!arcs.length)return result;
+      const node=pointNodes.get(pointId),last=arcs.at(-1),mid=virtual.get(node);
+      if(mid){if(mid.edge!==last.id)return {allowed:false};return {allowed:true,state:transit(result.state,last.id,last.from===pack.edgeFrom[last.id])};}
+      return last.to===node?result:{allowed:false};
+    },
     // Order determines virtual node IDs. Station identities do not alter arcs.
     reverseTopology:Object.freeze({pack,key:JSON.stringify([allowUnknown,endpointEdges,points.map(p=>[p.edgeIndex,p.fraction])])}),
     stateKey:(node,state)=>`${node}:${state??0}`,

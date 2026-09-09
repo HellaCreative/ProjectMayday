@@ -845,3 +845,21 @@ andverification remain pending under live-first authorization.
 ## Pending live qualification: Clean station exit/rejoin, September 9 UTC
 
 A legal fuel exit can rejoin a previously ridden approach beyond the immediate reversal cursor. Clean candidate refinement must detect that repetition in either direction, re-search with fuel and legal turn state intact, and preserve fixed rider anchors. Generated pumps can change. The live-only prototype conditionally re-searches repeated paved candidates and exposes refinement failure; histories are bounded, not a global optimality guarantee. Dirt/Balanced history refinement and native parity are not qualified. No Android implementation or device acceptance is claimed. See ROUTING-REBUILD-PROGRESS.md for the exact fixture and local results.
+
+## September 9 UTC — final fuel correction live on DEV
+
+Stable `https://pack-fabric.vercel.app` now points to exact `pack-fabric-3wcw1w2vh-goricksmith-7678s-projects.vercel.app`, source `edc55fdb42af4bb3c4dd6972ecdaabf8e4ba88c5` (stable8be23 + local fa08b4e). BOTH02 and ns-nb-v1 unchanged. Public exact replay returned HTTP200 in 11.246s, server10.339s: 586.973km, three pumps, zero repeated road, complete candidate pool, all fuel intervals/destination escape/geometry joins pass. Diagnostics explicitly show refinement22,703m→0. Third pump is Esso,11107 Rue Principale,Rogersville (`osm:n5301512825`).
+
+Private hosted exact request passed twice: first18.975s server, repeat10.983s. NSClean10.486s/757.037km/0repeat; three earlier NB Dirt references7.737–9.128s; prior NBClean6.916s/955.802km/0repeat. All hosted candidate and fuel checks pass. Evidence `/tmp/dirt-final-fuel-public.json`, `/tmp/dirt-final-fuel-hosted`, `/tmp/dirt-final-fuel-hosted-repeat`, `/tmp/dirt-fuel-refine-hosted-ns`, `/tmp/dirt-fuel-refine-hosted-nb`.
+
+Physical retest: build a fresh From Here route to the same pin47.047134,-64.891699, Clean, automaticfuelON,250km/10%. No reinstall or pack download. Saved route geometry remains stable. Device acceptance remains pending; 19s first-request latency and broader Dirt history qualification remain open. No production/GitHub/phone-pack/Swift changes.
+
+## September 9 — waypoint arrival integration, local qualification
+
+User explicitly approved replacing legacy routing throughout the multi-waypoint flow. Local implementation now resolves prior source-road IDs across regional/joined packs, reconstructs a continuous directed history suffix, seeds node/via-way restrictions conservatively, and preserves direction through interior projections. Unknown/ambiguous context returns incomplete. Covered Atlantic unsupported controls no longer silently fall through to the older engine. Other regions/admin actions retain existing dispatch. Missing source history is not silently treated as a free turn.
+
+Continuation candidates use a positive fourfold recent-road cost, preserving necessary returns; the existing app sends only30km/256deduplicated edge IDs. This is NOT whole-itinerary variety. Continuations use the six-objective candidate pool and conditional fuel-approach refinement. Refinement can hit a label limit and retain the earlier feasible candidate with explicit diagnostics; no claim all candidates are loopless. Two-way/profile changes and truncated restrictions need physical qualification beyond local tests.
+
+Local full replays: Inverness and Yarmouth four anchors, all three primary legs new-engine-only, complete pools, fuel carry-forward/escape/geometry joins pass. Extra Yarmouth Dirt→Balanced→Clean run at162km usable passes. Selected Inverness circuits removed. Yarmouth continuation258.261km still overlaps108.943km of the earlier leg (prior edge IDs, same regional pack); the30km history limit cannot prove whole-ride novelty. This remains an open quality issue, not a pass claim. Evidence `/tmp/dirt-multi-arrival-final`, `/tmp/dirt-multi-arrival-styles`; reproducible `bench/replay-multi-waypoint.js` supports private deployment replay.
+
+No stable publication yet. Swift/app/phone packs/production/GitHub unchanged. Arrival restriction and graph mapping changes require native parity after live acceptance. Required pump overrides and other advanced controls remain explicitly unsupported in the opted-in Atlantic new-engine flow rather than using legacy routing.

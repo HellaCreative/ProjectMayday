@@ -22,7 +22,7 @@ function joinV4(regions,{budget}) {
   }
  });
  if(!sharedNodes)fail('no shared source nodes');
- const from=[],to=[],meters=[],access=[],surface=[],road=[],ids=[];
+ const from=[],to=[],meters=[],access=[],surface=[],road=[],ids=[],aliases=[];
  regions.forEach(({pack,geom},region)=>{
   const map=new Int32Array(pack.edgeCount);edgeMaps.push(map);
   for(let i=0;i<pack.edgeCount;i++) {
@@ -42,6 +42,7 @@ function joinV4(regions,{budget}) {
     edge=sources.length;canonical.set(key,[...peers,edge]);sources.push({region,edge:i});ids.push(`${key}#${edge}`);
     from.push(a);to.push(b);meters.push(pack.edgeMeters[i]);access.push(pack.edgeAccess[2*i],pack.edgeAccess[2*i+1]);surface.push(surfaceNames.indexOf(pack.enums.surfaceLeafNames[pack.edgeSurfaceLeaf[i]]));road.push(roadNames.indexOf(pack.enums.roadClassLeafNames[pack.edgeRoadClassLeaf[i]]));
    }
+   (aliases[edge]??=[]).push(pack.edgeId(i));
    map[i]=edge;
   }
  });
@@ -66,7 +67,7 @@ function joinV4(regions,{budget}) {
   nodeCount:nodeIds.length,edgeCount:sources.length,undirectedEdgeCount:sources.length,directedArcCount:targets.length,
   nodeCoords:Float32Array.from(coords),osmNodeIds:nodeIds,osmWayIds:sources.map(s=>regions[s.region].pack.osmWayIds[s.edge]),
   nodeOffsets:offsets,edgeTargets:Int32Array.from(targets),edgeUndirectedIndex:Int32Array.from(edgeIndices),edgeFrom:Int32Array.from(from),edgeTo:Int32Array.from(to),edgeMeters:Uint32Array.from(meters),edgeAccess:Uint8Array.from(access),edgeSurfaceLeaf:Uint8Array.from(surface),edgeRoadClassLeaf:Uint8Array.from(road),restrictions,
-  edgeId:e=>ids[e],edgeLeaves:e=>{const s=sources[e];return regions[s.region].pack.edgeLeaves(s.edge);},
+  edgeId:e=>ids[e],edgeAliases:e=>aliases[e],edgeLeaves:e=>{const s=sources[e];return regions[s.region].pack.edgeLeaves(s.edge);},
   hasDirectedArc(a,b,e){for(let i=offsets[a];i<offsets[a+1];i++)if(this.edgeTargets[i]===b&&this.edgeUndirectedIndex[i]===e)return true;return false;}};
  const geom={polyline(e){const s=sources[e];return regions[s.region].geom.polyline(s.edge);}};
  return {pack,geom,sources,nodeMaps,edgeMaps,diagnostics:{sharedNodes,duplicateEdges:regions.reduce((n,r)=>n+r.pack.edgeCount,0)-sources.length}};

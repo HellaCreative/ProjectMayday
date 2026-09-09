@@ -23,9 +23,9 @@ function buildRideAlternatives(options) {
  const candidates=options.expandedCandidates?expandedObjectives:objectives;
  for(const objective of candidates) {
   if(!options.budget.check())break;
-  // Extra approach history is qualified only for paved candidates, and only
-  // attempted when the completed fuel route repeats a road (see fuel-ride).
-  const result=buildFromHere({...options,...context,objectiveId:objective.id,edgeCost:objective.cost,fuelHeuristicWeight:objective.id==='paved'?(options.pavedFuelHeuristicWeight??options.fuelHeuristicWeight):options.fuelHeuristicWeight,dirtEntryCost:objective.id==='paved'?0:continuityMeters*(Number(objective.id.split('-')[1])-1),preferOnwardFuel:options.preferOnwardFuel===true,retainFuelApproach:objective.id==='paved'});
+  // Refine paved candidates and waypoint continuations only when their
+  // completed fuel route repeats a road (see fuel-ride).
+  const result=buildFromHere({...options,...context,objectiveId:objective.id,edgeCost:objective.cost,fuelHeuristicWeight:objective.id==='paved'?(options.pavedFuelHeuristicWeight??options.fuelHeuristicWeight):options.fuelHeuristicWeight,dirtEntryCost:objective.id==='paved'?0:continuityMeters*(Number(objective.id.split('-')[1])-1),preferOnwardFuel:options.preferOnwardFuel===true,retainFuelApproach:objective.id==='paved'||!!options.arrivalHistory?.priorEdgeIds?.length});
   results.push({id:objective.id,result});
   if(options.budget.snapshot().reason)break;
  }
