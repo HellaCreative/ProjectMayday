@@ -7,6 +7,10 @@ const context=createRideAlternativeContext();
 let joinedCache=null;
 const {joinV4}=require('./join-v4');
 const warning={code:'adventure_preview',message:'DEV routing preview. Fuel stops are planned from mapped station locations; entrances, exits and current availability are not verified.'};
+// Region order remains deterministic even when independent I/O finishes out of order.
+async function loadRegionRows(regionIds,loadRegion) {
+ return Promise.all(regionIds.map(regionId=>loadRegion(regionId)));
+}
 function canarySupported(body,kind,environment=process.env) {
  if(!['ns-v1','ns-nb-v1'].includes(environment.DIRT_ADVENTURE_CANARY)||body.action||body.locations?.length!==2||!['dirt','balanced','cleanest'].includes(body.profile))return false;
  const o=body.options||{},f=body.fuel||{};
@@ -64,12 +68,11 @@ async function adventureCanaryRequest(body,kind,{environment=process.env,load=nu
  const deadlineAtMs=started+Math.min(20000,Math.max(100,window));
  const data=load?await load(resolution):await (async()=>{
   const {loadGraphsForRequest}=require('../graph'),{loadRegionFuel}=require('../fuel-data');
-  const rows=[];
-  for(const regionId of resolution.regionIds) {
+  const rows=await loadRegionRows(resolution.regionIds,async regionId=>{
    const single=resolveGraphRequest({regionId});
    const [runtime,fuel]=await Promise.all([loadGraphsForRequest(single,{locations:body.locations,profile:body.profile}),loadRegionFuel(regionId)]);
-   rows.push({...runtime,stations:fuel.stations,identity:runtime.packIdentity.map(p=>({...p,...fuel.packIdentity}))});
-  }
+   return {...runtime,stations:fuel.stations,identity:runtime.packIdentity.map(p=>({...p,...fuel.packIdentity}))};
+  });
   if(rows.length===1)return rows[0];
   if(rows.some(r=>r.identity.some(p=>p.releaseId!=='fabric-v4-20260908-02')))return {pack:{graphBinaryVersion:0}};
   const key=JSON.stringify(rows.flatMap(r=>r.identity));
@@ -81,6 +84,7 @@ async function adventureCanaryRequest(body,kind,{environment=process.env,load=nu
   }
   return joinedCache.data;
  })();
+ const dataReadyAt=Date.now();
  if(data.pack.graphBinaryVersion!==4)return {status:'unknown',error:'adventure_pack_unqualified',routes:[],stops:[],windowComplete:false,diagnostics:{strategy:'adventure-preview-v1'}};
  const identity=data.identity||data.packIdentity||[],revision=identity.map(p=>`${p.graphSha256}/${p.geometrySha256}`).join('|');
  if(!identity.length||!revision||identity.some(p=>p.releaseId!=='fabric-v4-20260908-02'))return {status:'unknown',error:'adventure_pack_unqualified',routes:[],stops:[],windowComplete:false,diagnostics:{strategy:'adventure-preview-v1'}};
@@ -92,8 +96,9 @@ async function adventureCanaryRequest(body,kind,{environment=process.env,load=nu
  const endpointRadiusMeters=waypointRadiusMeters({zoom:body.options?.mapZoom,lat:body.locations[0].lat,requestedMeters:body.options?.matchLimitMeters,graphBinaryVersion:4});
  const pool=buildRideAlternatives({arrivalHistory:{priorEdgeIds:body.options?.priorEdgeIds||[],arrivalEdgeId:body.options?.arrivalEdgeId},pavedFuelHeuristicWeight:3,dirtContinuityMeters:1000,preferOnwardFuel:true,additionalUrbanAreas:resolution.regionIds.includes('nb')?require('./nb-urban-review-20260908-01.json').cores:[],avoidMotorways:body.options?.avoidMotorways===true,input,pack:data.pack,geom:data.geom,revision,stations:data.stations.filter(s=>!excluded.has(s.id)),context,endpointRadiusMeters,expandedCandidates:resolution.regionIds.includes('nb')||!!body.options?.priorEdgeIds?.length,maxFuelLabels:400000,fuelHeuristicWeight:resolution.regionIds.length>1?2:1.5,
   budget:createBudget({deadlineAtMs,maxExpansions:30000000,signal}),preparationBudget:createBudget({deadlineAtMs,maxExpansions:20000000,signal})});
+ const searchDoneAt=Date.now();
  const response=toLiveResponse(pool,body,kind,identity);
- if(response){response.debug={...(response.debug||{}),adventureTotalMs:Date.now()-started};response.legId=body.legId;}
+ if(response){response.debug={...(response.debug||{}),adventureTotalMs:Date.now()-started,adventureDataMs:dataReadyAt-started,adventureSearchMs:searchDoneAt-dataReadyAt,adventureResponseMs:Date.now()-searchDoneAt};response.legId=body.legId;}
  return response;
 }
-module.exports={adventureCanaryRequest,canarySupported,toLiveResponse,routeResponse};
+module.exports={adventureCanaryRequest,canarySupported,toLiveResponse,routeResponse,loadRegionRows};

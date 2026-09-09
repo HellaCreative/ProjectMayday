@@ -1340,3 +1340,29 @@ Next bounded work: before accepting an optional candidate replacement, re-rank t
 Optional repetition refinements now re-rank the shared pool for all three styles before accepting a replacement. Reject a replacement if any resulting style winner has more repeated road distance or urban/avoidance exposure. This prevents the near-Dalhousie regression where improving one objective exposed a worse winner. Fresh-route optional refinements share one four-second allowance, prioritizing the largest repeat; continuation limits remain unchanged. The directed fresh refinement experiment remains private until hosted qualification.
 
 189 focused tests pass. Local coarsepins Dirt/Balanced/Balanced, unknown enabled,162km usable passes all three legs and removes the first3491m repeat; final291.77m remains. Strict near-Dalhousie retains its accepted471m repeat (7.444s local). Full Inverness/Yarmouth six-primary-leg regression passes with fuel carry, joins and full pools. Evidence /tmp/dirt-winner-guard-{target,nb,baseline}. Stable DEV93826d remains unchanged pending private qualification; no native parity implementation is claimed. The failedbc639776 preview must not be promoted.
+
+## Winner guard private qualification — source56308d4, publication held
+
+Private https://pack-fabric-q194y7yik-goricksmith-7678s-projects.vercel.app (56308d4f9d45d74c72be1065f87213e68725f819, runtime23bd403) passed15 hosted requests after isolated retry: target3, baseline6, device4 including strict471m near-Dalhousie, final-fuel1, NS-hooks1. Exact source and Atlantic02 identities checked. All runs preserve required fuel/geometry assertions. Target first repeat is0; final291.77m remains.
+
+Initial concurrent test batches produced one Clean final-fuel deadline at20s. The identical isolated request passed13.772s. Isolated near-Dalhousie passed13.927s; immediately subsequent stable93826d control passed18.525s. Thus current timings do NOT establish a refinement-induced slowdown; latency varies and concurrency is a possible contributor, not a proved cause. Do not infer a speed regression from the earlier19.778s concurrent private run. Keep stable93826d while checking reproducibility/performance before promotion. Owner has been told to hold alias. Evidence /tmp/dirt-winner-hosted-{target,baseline,nb,final,final-isolated,hooks,nb-isolated} and /tmp/dirt-winner-stable-nb-control.
+
+Next overnight pass: perform controlled sequential comparison of the Clean final-fuel and near-Dalhousie cases, or otherwise investigate request-budget variability before any promotion. Do not weaken fuel/pool assertions or blindly enlarge budgets. If qualified, request owner promotion then independently verify public source/target/regression. Existing Clean-after-unknown departure, native per-pin persistence and broader itinerary-history limits remain unresolved. Automation remains active through08:00 Halifax handoff; no user input needed.
+
+## Controlled follow-up 04:11 UTC
+
+Clean final-fuel timed out on an isolated private request and on accepted stable93826d immediately afterward. Subsequent alternating private/stable/private/stable results: complete13.974s, unknown20.034s, complete14.015s, complete14.345s. Existing stable also exhibits this intermittent deadline; simultaneous tests are not its sole cause. This remains a reliability issue, not claimed fixed by winner refinement. The private refinement preserves the accepted route whenever this query completes.
+
+New local coarsepins Balanced/Cleanest/Dirt180km passes all three legs with zero within-leg repetition, fuel carry and joins. Initial test invocation used invalid API profile clean; corrected to cleanest and added an explicit benchmark profile assertion. Invalid invocation is not a runtime failure or counted pass. Evidence /tmp/dirt-overnight-coarse-bcd180-corrected and /tmp/dirt-serial2-*.
+
+Based on prior15 private hosted checks, strict NB quality comparison and controlled baseline comparison, requested owner promotion of exact56308d4/q194y7yik with93826d rollback retained. Public verification pending. This advances the3491m repetition fix only; existing intermittent Clean deadline,291.77m rider-deadend return, Clean-after-unknown transition and native context/pin persistence remain open.
+
+## Public winner refinement qualified — 56308d4
+
+StableDEV exactq194y7yik/source56308d4f9d45d74c72be1065f87213e68725f819 now independently passes public coarsepins Dirt/Balanced/Balanced162km unknown-on (three legs) and strict near-Dalhousie471m ceiling. Source/BOTH02 identities, full pools, fuel carry, geometry joins and escape verified. Evidence /tmp/dirt-winner-public-{target,nb}. Runtime23bd403; rollback93826d retained. New device handoff prepended to ROUTING-DEVICE-CANARY.md. No native/production/GitHub/pack changes; no physical acceptance claimed.
+
+Continue overnight on the intermittent Clean deadline and other documented gaps; do not repeat completed basic qualification without a new reason. Deadline also occurred on prior93826d, so it is not attributed to winner refinement. Current latest stable is56308d4, superseding the earlier hold notices. Automation remains active until08:00 Halifax handoff.
+
+## Concurrent Atlantic data loading — local, not deployed
+
+Covered cross-province canary requests start independent NS/NB graph+fuel loads concurrently, retaining requested region order and rejecting any load failure rather than returning a partial list. Joining, pack identity checks, arrival/fuel/access contracts and the20s deadline are unchanged. New debug timings separate data loading/joining, candidate search, and response assembly. This targets avoidable serial I/O; no claim yet that it fixes the intermittent Clean deadline.191 focused tests pass, including load ordering and failure propagation. Private hosted qualification required before stable promotion. Stable56308d4 remains protected.
