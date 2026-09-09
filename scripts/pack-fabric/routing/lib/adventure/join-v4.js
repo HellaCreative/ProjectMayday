@@ -9,6 +9,7 @@ function joinV4(regions,{budget}) {
  for(const {pack} of regions)if(pack.graphBinaryVersion!==4||!pack.provenance?.sourceEpoch||pack.provenance.sourceEpoch!==first.provenance.sourceEpoch)fail('incompatible source epoch or dictionaries');
  const surfaceNames=[...new Set(regions.flatMap(r=>r.pack.enums.surfaceLeafNames))],roadNames=[...new Set(regions.flatMap(r=>r.pack.enums.roadClassLeafNames))];
  const nodes=new Map(),coords=[],nodeMaps=[],edgeMaps=[],sources=[],canonical=new Map(),nodeIds=[];
+ const shared=new Uint8Array(regions.reduce((n,r)=>n+r.pack.nodeCount,0));
  let sharedNodes=0;
  regions.forEach(({pack},region)=>{
   const map=new Int32Array(pack.nodeCount),seen=new Set();nodeMaps.push(map);
@@ -16,7 +17,7 @@ function joinV4(regions,{budget}) {
    if(!budget.consume())fail(budget.snapshot().reason);
    const id=String(pack.osmNodeIds[i]);if(!id||id==='0'||seen.has(id))fail('ambiguous source node identity');seen.add(id);
    let n=nodes.get(id);const xy=[pack.nodeCoords[2*i],pack.nodeCoords[2*i+1]];
-   if(n!==undefined){if(coords[2*n]!==xy[0]||coords[2*n+1]!==xy[1])fail('shared node coordinate mismatch');sharedNodes++;}
+   if(n!==undefined){if(coords[2*n]!==xy[0]||coords[2*n+1]!==xy[1])fail('shared node coordinate mismatch');sharedNodes++;shared[n]=1;}
    else {n=nodeIds.length;nodes.set(id,n);nodeIds.push(id);coords.push(...xy);}
    map[i]=n;
   }
@@ -29,7 +30,9 @@ function joinV4(regions,{budget}) {
    if(!budget.consume())fail(budget.snapshot().reason);
    const a=nodeMaps[region][pack.edgeFrom[i]],b=nodeMaps[region][pack.edgeTo[i]];
    const key=`${pack.osmWayIds[i]}:${nodeIds[a]}:${nodeIds[b]}`;
-   const existing=canonical.get(key);
+   // Only roads with two shared source nodes can have a cross-region duplicate.
+   const canShare=shared[a]&&shared[b];
+   const existing=canShare?canonical.get(key):undefined;
    const peers=existing===undefined?null:Array.isArray(existing)?existing:[existing];
    let edge=peers?.find(e=>{const src=sources[e];return src.region!==region&&JSON.stringify(regions[src.region].geom.polyline(src.edge))===JSON.stringify(geom.polyline(i));});
    if(edge===undefined&&peers?.some(e=>sources[e].region!==region)&&a!==b)fail('shared edge geometry mismatch');
@@ -40,7 +43,7 @@ function joinV4(regions,{budget}) {
     if(access[edge*2]!==pack.edgeAccess[i*2]||access[edge*2+1]!==pack.edgeAccess[i*2+1])fail('duplicate access mismatch');
     if(JSON.stringify(regions[src.region].geom.polyline(src.edge))!==JSON.stringify(geom.polyline(i)))fail('duplicate geometry mismatch');
    } else {
-    edge=sources.length;canonical.set(key,peers?[...peers,edge]:edge);sources.push({region,edge:i});ids.push(`${key}#${edge}`);
+    edge=sources.length;if(canShare)canonical.set(key,peers?[...peers,edge]:edge);sources.push({region,edge:i});ids.push(`${key}#${edge}`);
     from.push(a);to.push(b);meters.push(pack.edgeMeters[i]);access.push(pack.edgeAccess[2*i],pack.edgeAccess[2*i+1]);surface.push(surfaceNames.indexOf(pack.enums.surfaceLeafNames[pack.edgeSurfaceLeaf[i]]));road.push(roadNames.indexOf(pack.enums.roadClassLeafNames[pack.edgeRoadClassLeaf[i]]));
    }
    (aliases[edge]??=[]).push(pack.edgeId(i));
