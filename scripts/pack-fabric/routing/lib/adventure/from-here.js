@@ -44,8 +44,9 @@ function buildFromHere({input,pack,geom,revision,stations,budget,preparationBudg
   const isMotorway=arc=>/^(motorway|motorway_link|freeway)$/.test(arc.roadClassLeaf||"");
   // Minimize exposure before ride cost. Necessary connections stay available;
   // a shorter motorway is never a reason to abandon a zero-exposure connection.
+  edgeCost=require("./ride-preferences").preferenceEdgeCost(edgeCost,ridePreferences);
   const avoidanceCost=ridePreferences
-    ? arc=>(ridePreferences.avoidHighways&&/^(motorway|trunk|primary)(?:_link)?$|^freeway$/.test(arc.roadClassLeaf||""))?arc.distanceMeters:(ridePreferences.avoidCities?urban.urbanMeters(arc):0)
+    ? (ridePreferences.avoidCities?urban.urbanMeters:()=>0)
     : avoidMotorways?arc=>isMotorway(arc)?arc.distanceMeters:urban.urbanMeters(arc):urban.urbanMeters;
   function recordExposure(road,result) {
     road.avoidanceMeters=result.avoidanceCost;
