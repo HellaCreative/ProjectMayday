@@ -25,3 +25,5 @@ Return-action decision: remove Create Return Route throughout the preview. Loop 
 Groups follow-up supersedes rider drawer: details expand directly beneath the selected rider. Same rider toggles closed; another rider replaces the expansion. Compact location/status rows and two small actions retain touch targets. HTML accordion interactions verified.
 
 Rider grouping refinement: chevrons removed, whole name/status row toggles details, tighter 60px rows. Expanded rider header and details share a subtle background and boundary so ownership is clear. Sharing remains a separate button.
+
+Map controls: use exported Apple symbols matching native MapControlStack (safari, person.crop.circle, dot.scope, route curve) and native fuel/settings symbols. Right stack remains on map-facing screens; View Route is beside recenter when a route exists. Fuel/settings appear only with routing tools. 50px controls and 10px gaps match native layout. No simulator used; native files unchanged.
