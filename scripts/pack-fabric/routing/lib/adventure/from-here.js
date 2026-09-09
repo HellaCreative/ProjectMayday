@@ -65,14 +65,33 @@ function buildFromHere({input,pack,geom,revision,stations,budget,preparationBudg
     provenance.priorRoadPreference={edges:prior.size,factor:4};
   }
   let startCandidates=history.edges.length?(endpoints.matches[0].candidates||[]).filter(c=>c.edgeIndex===history.edges.at(-1)):endpoints.matches[0].candidates||[];
-  let picked=selectConnectedSnapPair(pack,startCandidates,endpoints.matches[1].candidates,{allowUnknown});
+  const endCandidates=endpoints.matches[1].candidates||[];
+  let picked=selectConnectedSnapPair(pack,startCandidates,endCandidates,{allowUnknown});
   // The app recognizes a rider waypoint at a mapped pump within 150 m.
   // Such a point is a fixed service destination, not a broad area selection.
   const fixedFuel=request.anchors.map(a=>Boolean(a.stationId)||stations.some(s=>
     haversineMeters([a.lon,a.lat],[s.lon,s.lat])<=stationRadiusMeters));
+  let startComponentRecovery=false;
+  // Candidate caps can hide a nearby connected road behind several isolated
+  // edges. Re-query against the destination components without changing the
+  // allowed radius, access checks, fixed fuel stop or exact arrival edge.
+  function recoverStart() {
+    if(picked.ok||fixedFuel[0]||history.edges.length||!endCandidates.length)return null;
+    const components=weakComponentIds(pack,allowUnknown);
+    const endComponents=new Set(endCandidates.map(c=>components[pack.edgeFrom[c.edgeIndex]]));
+    const starts=matchStations({pack,geom,index,stations:[request.anchors[0]],maxMeters:radius,allowUnknown,budget,
+      eligibleEdge:e=>endComponents.has(components[pack.edgeFrom[e]])});
+    if(starts.state==='complete') {
+      picked=selectConnectedSnapPair(pack,starts.matches[0].candidates,endCandidates,{allowUnknown});
+      startComponentRecovery=picked.ok;
+    }
+    return starts;
+  }
+  const recovered=recoverStart();
+  if(recovered&&recovered.state!=='complete')return incomplete(recovered.reason);
   let attempts=1;
   while(!picked.ok&&radius<endpointRadiusMeters) {
-    if(fixedFuel[1]&&startCandidates.length)break;
+    if(fixedFuel[1]&&startCandidates.length&&(!endCandidates.length||fixedFuel[0]||history.edges.length))break;
     if(!budget.check())return incomplete(budget.snapshot().reason);
     radius=Math.min(endpointRadiusMeters,radius*2);attempts++;
     if(!startCandidates.length&&!fixedFuel[0]){
@@ -87,8 +106,10 @@ function buildFromHere({input,pack,geom,revision,stations,budget,preparationBudg
       eligibleEdge:e=>allowed.has(components[pack.edgeFrom[e]])});
     if(ends.state!=='complete')return incomplete(ends.reason);
     picked=selectConnectedSnapPair(pack,startCandidates,ends.matches[0].candidates,{allowUnknown});
+    const recovered=recoverStart();
+    if(recovered&&recovered.state!=='complete')return incomplete(recovered.reason);
   }
-  provenance.waypointSnap={attempts,radiusMeters:radius,maximumMeters:endpointRadiusMeters,
+  provenance.waypointSnap={attempts,startComponentRecovery,radiusMeters:radius,maximumMeters:endpointRadiusMeters,
     ...(picked.ok?{startDistanceMeters:picked.start.distanceM,endDistanceMeters:picked.end.distanceM}:{})};
   if(!picked.ok)return incomplete(`endpoint_${picked.reason}`);
   const selected=[picked.start,picked.end];

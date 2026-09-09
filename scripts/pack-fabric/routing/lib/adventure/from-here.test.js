@@ -213,3 +213,54 @@ test('wide area arrival continues on the same previously selected road',()=>{
  assert.equal(next.road.state,'complete');assert.deepEqual(next.road.geometry[0],first.road.geometry.at(-1));
  assert.equal(next.fuel.state,'provisional_station_access');
 });
+
+function isolatedStartFixture(){
+ const nodes=[{id:1,lon:0,lat:0},{id:2,lon:.005,lat:0},{id:3,lon:0,lat:.025},{id:4,lon:.15,lat:.025},{id:5,lon:0,lat:.015},{id:6,lon:.15,lat:.015}];
+ const ways=[{id:10,nodeIds:[1,2],tags:{highway:'unclassified',surface:'gravel',access:'yes'}},
+  {id:11,nodeIds:[3,4],tags:{highway:'unclassified',surface:'asphalt',access:'yes'}},
+  {id:12,nodeIds:[5,6],tags:{highway:'unclassified',surface:'asphalt',motor_vehicle:'no'}}];
+ const encoded=encodeFromOsmGraph(buildGraphFromOsm({nodes,ways}),{regionId:'fixture',sourceEpoch:'fixed'});
+ const f=fixture();f.pack=decodeGraphV4(encoded.graphBuffer,encoded.geomBuffer);f.geom=decodeGeometryV1(encoded.geomBuffer);
+ f.stations=[{id:'end-pump',lon:.15,lat:.025}];f.input.anchors=[{id:'a',lon:0,lat:0},{id:'b',lon:.15,lat:.025}];
+ f.input.fuel={fullRangeMeters:30000,reserveFraction:0,initialUsableMeters:30000};return f;
+}
+test('coarse start can leave an isolated nearby road for a connected eligible road',()=>{
+ const f=isolatedStartFixture();
+ assert.notEqual(build(f,{endpointRadiusMeters:2000}).road.state,'complete');
+ const r=build(f,{endpointRadiusMeters:6000});
+ assert.equal(r.road.state,'complete');assert.equal(r.fuel.state,'provisional_station_access');
+ assert.ok(Math.abs(r.road.geometry[0][0])<1e-8&&Math.abs(r.road.geometry[0][1]-.025)<1e-8);
+ assert.ok(Math.abs(r.road.geometry.at(-1)[0]-.15)<1e-8&&Math.abs(r.road.geometry.at(-1)[1]-.025)<1e-8);
+ assert.ok(r.provenance.waypointSnap.startDistanceMeters>2700);
+ assert.ok(r.road.segments.every(s=>s.geometry.every(p=>Math.abs(p[1]-.025)<1e-8)));
+});
+test('coarse connected-road recovery cannot move a fixed fuel start off its isolated road',()=>{
+ const f=isolatedStartFixture();f.stations.push({id:'start-pump',lon:0,lat:0});f.input.anchors[0].stationId='start-pump';
+ assert.notEqual(build(f,{endpointRadiusMeters:6000}).road.state,'complete');
+});
+
+test('connected-road area recovery cannot switch away from a prior arrival road',()=>{
+ const f=isolatedStartFixture(),previous=structuredClone(f.input);previous.fuel=null;
+ previous.anchors=[{id:'a',lon:.005,lat:0},{id:'b',lon:0,lat:0}];
+ const road=build(f,{input:previous}).road;assert.equal(road.state,'complete');
+ const ids=road.segments.map(s=>s.edgeId);
+ const next=build(f,{endpointRadiusMeters:6000,arrivalHistory:{priorEdgeIds:ids,arrivalEdgeId:ids.at(-1)}});
+ assert.notEqual(next.road.state,'complete');
+});
+
+test('isolated candidates cannot crowd a connected road out of an explicit snap radius',()=>{
+ const nodes=[{id:1,lon:0,lat:0},{id:100,lon:0,lat:.008},{id:101,lon:.15,lat:.008}],ways=[];
+ for(let i=0;i<16;i++){
+  nodes.push({id:i+2,lon:.001*Math.cos(i*Math.PI/8),lat:.001*Math.sin(i*Math.PI/8)});
+  ways.push({id:i+10,nodeIds:[1,i+2],tags:{highway:'unclassified',surface:'gravel',access:'yes'}});
+ }
+ ways.push({id:100,nodeIds:[100,101],tags:{highway:'unclassified',surface:'asphalt',access:'yes'}});
+ const encoded=encodeFromOsmGraph(buildGraphFromOsm({nodes,ways}),{regionId:'fixture',sourceEpoch:'fixed'});
+ const f=isolatedStartFixture();f.pack=decodeGraphV4(encoded.graphBuffer,encoded.geomBuffer);f.geom=decodeGeometryV1(encoded.geomBuffer);
+ f.stations[0].lat=.008;f.input.anchors[1].lat=.008;
+ assert.notEqual(build(f,{endpointRadiusMeters:500}).road.state,'complete');
+ const r=build(f,{endpointRadiusMeters:1000});
+ assert.equal(r.road.state,'complete');assert.equal(r.provenance.waypointSnap.attempts,1);
+ assert.equal(r.provenance.waypointSnap.radiusMeters,1000);assert.equal(r.provenance.waypointSnap.startComponentRecovery,true);
+ assert.ok(r.provenance.waypointSnap.startDistanceMeters>880&&r.provenance.waypointSnap.startDistanceMeters<900);
+});
