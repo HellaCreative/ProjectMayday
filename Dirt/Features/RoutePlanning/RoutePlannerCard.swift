@@ -204,7 +204,7 @@ struct RoutePlannerCard: View {
         GeometryReader { geo in
             // Preserve the map as the primary canvas. Short planner states hug their
             // content; longer routes stop here and scroll beneath the sticky dock.
-            let maxPanelHeight = max(220, geo.size.height * 0.56)
+            let maxPanelHeight = max(160, min(geo.size.height * 0.46, geo.size.height - 380))
             let fixedChromeHeight = 14 + min(planningTabHeight, 76) + 10 + 10
             let maxPlanningHeight = max(1, maxPanelHeight - fixedChromeHeight)
             let measuredPlanningHeight = max(1, portraitPlanningContentHeight)
@@ -247,9 +247,9 @@ struct RoutePlannerCard: View {
                     .fill(DirtTheme.sheetMaterial)
                     .overlay(portraitSurfaceShape.stroke(DirtTheme.hairline, lineWidth: 1))
                     .shadow(
-                        color: sitsBehindDock ? .clear : .black.opacity(0.18),
-                        radius: sitsBehindDock ? 0 : 14,
-                        y: sitsBehindDock ? 0 : -2
+                        color: .black.opacity(0.16),
+                        radius: 28,
+                        y: -8
                     )
                     .ignoresSafeArea(edges: sitsBehindDock ? .bottom : [])
             }
@@ -420,6 +420,20 @@ struct RoutePlannerCard: View {
                 }
                 .frame(minHeight: DirtHit.min)
                 Divider()
+                loopControlLayout {
+                    Text("Surface")
+                    if !dynamicTypeSize.isAccessibilitySize { Spacer() }
+                    Picker("Surface", selection: Binding(get: { planner.profile }, set: { planner.profile = $0 })) {
+                        ForEach(RouteProfile.allCases) { profile in
+                            Label(profile.title, systemImage: DirtSurfaceIcon.symbol(for: profile.title)).tag(profile)
+                        }
+                    }
+                    .pickerStyle(.menu).labelsHidden().accessibilityLabel("Surface")
+                    .accessibilityValue(planner.profile.title)
+                    .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(minHeight: DirtHit.min)
+                Divider()
                 VStack(spacing: 0) {
                     loopControlLayout {
                         Text("Distance")
@@ -431,27 +445,13 @@ struct RoutePlannerCard: View {
                         .accessibilityValue("\(Int(planner.loopDistanceKM)) kilometres")
                         .frame(minHeight: DirtHit.min)
                 }
-                Divider()
-                loopControlLayout {
-                    Text("Surface")
-                    if !dynamicTypeSize.isAccessibilitySize { Spacer() }
-                    Picker("Surface", selection: Binding(get: { planner.profile }, set: { planner.profile = $0 })) {
-                        ForEach(RouteProfile.allCases) { profile in
-                            Text(profile.title).tag(profile)
-                        }
-                    }
-                    .pickerStyle(.menu).labelsHidden().accessibilityLabel("Surface")
-                    .accessibilityValue(planner.profile.title)
-                    .fixedSize(horizontal: false, vertical: true)
-                }
-                .frame(minHeight: DirtHit.min)
             }
             .fixedSize(horizontal: false, vertical: true)
             .font(.subheadline)
             .foregroundStyle(DirtTheme.ink)
             .tint(DirtTheme.action)
             .padding(.horizontal, 14).padding(.vertical, 6)
-            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: DirtRadius.control))
+
             .disabled(planner.isRouting)
 
             if planner.isRouting {
@@ -494,7 +494,6 @@ struct RoutePlannerCard: View {
     // MARK: - From here
 
     @ViewBuilder private var fromHereContent: some View {
-        if planner.canCloseLoop { returnRouteButton }
         if planner.hasRoute {
             if planner.hasFuelAssistedPlan {
                 stageList
@@ -646,20 +645,7 @@ struct RoutePlannerCard: View {
 
     // MARK: - Plan
 
-    private var returnRouteButton: some View {
-        Button { planner.closeLoop() } label: {
-            Label("Create Return Route", systemImage: "arrow.uturn.backward")
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(DirtTheme.action)
-                .frame(maxWidth: .infinity, minHeight: DirtHit.min)
-                .background(DirtTheme.rowFill, in: RoundedRectangle(cornerRadius: DirtRadius.control))
-        }
-        .buttonStyle(.plain)
-        .accessibilityHint("Adds a route back to the starting point")
-    }
-
     @ViewBuilder private var planContent: some View {
-        if planner.canCloseLoop { returnRouteButton }
 
         // Mode chips live per-stage (tap a stage to expand). Hide the top row
         // until the first stage exists so empty Plan stays clean.
@@ -693,9 +679,16 @@ struct RoutePlannerCard: View {
             loadedTrackCard
             fuelCoverageNotices
             ferryNotice
-            ctaRow
-            continuePlanningButton
-            clearAllButton
+            HStack(spacing: 8) {
+                Button {
+                    planner.focusEntirePlannedRoute()
+                    isOpen = false
+                } label: {
+                    Label("View on map", systemImage: "map")
+                }
+                .buttonStyle(DirtSecondaryButtonStyle())
+                continuePlanningButton
+            }
         } else {
             SavedRoutesList(showImport: true)
         }
@@ -767,16 +760,8 @@ struct RoutePlannerCard: View {
             _ = planner.continuePlanningFromSavedTrack()
         } label: {
             Label("Continue planning", systemImage: "arrow.triangle.branch")
-                .font(DirtType.cta)
-                .foregroundStyle(DirtTheme.action)
-                .frame(maxWidth: .infinity, minHeight: DirtHit.min)
-                .background(DirtTheme.rowFill, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .stroke(DirtTheme.orange.opacity(0.45), lineWidth: 1)
-                )
         }
-        .buttonStyle(.plain)
+        .buttonStyle(DirtCTAStyle.brand())
         .accessibilityHint("Keeps this line and lets you add more waypoints")
     }
 
@@ -1404,9 +1389,7 @@ struct RoutePlannerCard: View {
                 .font(.dirtUI(9, weight: .heavy))
                 .foregroundStyle(DirtTheme.muted)
         }
-        .padding(8)
-        .background(DirtTheme.rowFill)
-        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .padding(.vertical, 8)
     }
 
     private var mixBar: some View {
@@ -1433,7 +1416,7 @@ struct RoutePlannerCard: View {
                         beginSave(affordance)
                     } label: {
                         ctaLabel(
-                            affordance == .create ? "SAVE" : "UPDATE",
+                            affordance == .create ? "Save" : "Update",
                             icon: "square.and.arrow.down",
                             fill: DirtTheme.chrome
                         )
@@ -1447,7 +1430,7 @@ struct RoutePlannerCard: View {
                 Button {
                     requestStart()
                 } label: {
-                    ctaLabel("START", icon: "play.fill", fill: DirtTheme.navGreen)
+                    ctaLabel("Start ride", icon: "play.fill", fill: DirtTheme.navGreen)
                 }
                 .frame(width: showsSave ? max(unit - 8, 0) : pair * 0.58)
             }
@@ -1459,7 +1442,7 @@ struct RoutePlannerCard: View {
         Button {
             requestExport()
         } label: {
-            ctaLabel("EXPORT GPX", icon: "doc.badge.arrow.up", fill: DirtTheme.exportGray)
+            ctaLabel("Export", icon: "doc.badge.arrow.up", fill: DirtTheme.exportGray)
                 .opacity(planner.hasRoute ? 1 : 0.45)
         }
         .buttonStyle(.plain)

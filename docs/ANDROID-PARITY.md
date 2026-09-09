@@ -823,3 +823,13 @@ The approved planner icon/title tabs remain the visual reference. Selected tabs 
 ### Environment and subscription badge — September 9, 2026
 
 The existing DIRT wordmark size is preserved. Development builds show DEV regardless of sign-in or subscription. Production shows PRO only when the subscription service reports an active subscription, and FREE otherwise. Signing in alone does not grant PRO. The badge is presentation only; entitlement enforcement and tester bypass logic are unchanged. Accessibility names include the edition. Android must expose the same environment/entitlement distinction. The expanded Open Terrain HTML screens are design previews, not a native UI or navigation behavior change.
+
+## Open Terrain native UI — September 9, 2026
+
+The approved cross-platform visual and interaction contract is now
+[OPEN-TERRAIN-NATIVE-AND-ANDROID.md](OPEN-TERRAIN-NATIVE-AND-ANDROID.md).
+It records the HTML authority, tokens, navigation/sheet motion, per-screen
+states, Groups expansion, Saved preview boundaries, map zoom controls and
+Android icon/acceptance mappings. Preserve existing routing, fuel replacement,
+privacy and navigation semantics while applying it. Android delivery and
+physical visual acceptance are still open.

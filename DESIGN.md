@@ -51,3 +51,7 @@ Use compact SF Symbol and title combinations for related navigation choices, cle
 - **Do** preserve native accessibility labels, selected states and adaptive form layouts.
 - **Don't** change routing or navigation behavior during visual refinement.
 - **Don't** infer platform qualification from design documentation; this iteration is iPhone-only.
+
+### Native implementation addendum — September 9, 2026
+
+Open Terrain now has a native implementation in the local working tree. The approved [HTML and CSS](experiments/ui-directions-20260909/open-terrain.html) and [native/Android contract](docs/OPEN-TERRAIN-NATIVE-AND-ANDROID.md) take precedence over the earlier orange, material and unchanged-dock descriptions above for this replacement. They remain visual authority; the earlier frontmatter is a historical baseline, not an updated native token export. Current implementation boundaries and unresolved differences are recorded in [Open Terrain implementation status](docs/OPEN-TERRAIN-IMPLEMENTATION-STATUS.md). Source implementation does not establish physical White iPhone visual acceptance or Android implementation/acceptance.

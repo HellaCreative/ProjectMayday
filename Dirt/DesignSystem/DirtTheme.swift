@@ -31,11 +31,11 @@ extension Color {
 
 /// DIRT chrome tokens.
 enum DirtTheme {
-    static let orange = Color(dirtHex: 0xFF7A00)
-    static let orangeHover = Color(dirtHex: 0xE56A00)
-    static let orangePressed = Color(dirtHex: 0xB85C00)
+    static let orange = Color(dirtHex: 0xFF8000)
+    static let orangeHover = Color(dirtHex: 0xF07800)
+    static let orangePressed = Color(dirtHex: 0xFF8000)
     /// Orange text and symbols on light surfaces; lighter counterpart in dark mode.
-    static let action = Color(dirtLight: 0xB85C00, dark: 0xFFB35C)
+    static let action = orange
     /// The foreground for anything filled with `orange`. Measured on #FF7A00: white is
     /// **2.61:1** and fails AA at every text size, this is **6.80:1**.
     ///
@@ -62,7 +62,7 @@ enum DirtTheme {
     /// Sheets sit on system material so the map still reads underneath — translucency
     /// here is orientation, not decoration. `.thin` keeps terrain legible through the
     /// panel; `.regular` washed out to near-white over bright basemaps.
-    static let sheetMaterial: Material = .thinMaterial
+    static let sheetMaterial: Material = .ultraThinMaterial
     /// Map controls and dock: thin material carrying a dark scrim, so white glyphs
     /// keep contrast over snow, water, and satellite imagery alike.
     static let chromeMaterial: Material = .ultraThinMaterial
@@ -71,7 +71,7 @@ enum DirtTheme {
 
     /// Rows and cards layered on a material sheet. Translucent so the sheet still
     /// reads as one surface instead of an opaque slab pasted over the map.
-    static let rowFill = Color(dirtLight: 0xFFFFFF, dark: 0x2B3037, opacity: 0.50)
+    static let rowFill = Color(dirtLight: 0xFFFFFF, dark: 0x2B3037, opacity: 0.18)
     /// Nav HUD primary text on chrome (Figma `--panel/2`).
     static let panelText = Color(dirtHex: 0xEEF3F7)
     /// Nav HUD metric values on chrome (Figma `--bg`).
@@ -384,17 +384,14 @@ struct DirtSheetHeader: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Back")
-            } else if onClose != nil {
-                Color.clear.frame(width: DirtHit.min, height: DirtHit.min)
-                    .accessibilityHidden(true)
             }
 
             Text(title)
                 .font(titleFont)
                 .foregroundStyle(DirtTheme.ink)
-                .multilineTextAlignment(.center)
+                .multilineTextAlignment(.leading)
                 .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity)
+                .frame(maxWidth: .infinity, alignment: .leading)
                 .accessibilityAddTraits(.isHeader)
 
             if let onClose {
@@ -459,5 +456,18 @@ struct BrandChip: View {
         .accessibilityLabel(
             AppConfig.backendEnvironment == .development ? "DIRT development" : "DIRT \(edition.lowercased())"
         )
+    }
+}
+
+/// One surface vocabulary across route controls and navigation.
+enum DirtSurfaceIcon {
+    static func symbol(for title: String) -> String {
+        let value = title.lowercased()
+        if value.contains("ferry") { return "ferry" }
+        if value.contains("unknown") { return "questionmark.diamond" }
+        if value.contains("gravel") { return "circle.grid.3x3" }
+        if value.contains("dirt") || value.contains("loose") || value.contains("sand") { return "mountain.2" }
+        if value.contains("balanced") { return "arrow.triangle.branch" }
+        return "road.lanes"
     }
 }

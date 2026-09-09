@@ -84,7 +84,7 @@ struct OfflinePacksSheet: View {
     }
 
     private func installedRow(_ row: GraphPackStore.InstalledPackManagementRow) -> some View {
-        VStack(alignment: .leading, spacing: DirtSpace.inner) {
+        HStack(spacing: DirtSpace.inner) {
             VStack(alignment: .leading, spacing: DirtSpace.hairGap) {
                 Text(row.title)
                     .font(DirtType.rowTitle)
@@ -96,6 +96,7 @@ struct OfflinePacksSheet: View {
                     .font(DirtType.metricInline)
                     .foregroundStyle(DirtTheme.muted)
             }
+            Spacer(minLength: 0)
             HStack(spacing: DirtSpace.row) {
                 if busyIDs.contains(row.id) || packs.managementInFlight.contains(row.id) {
                     ProgressView().tint(DirtTheme.orange)
