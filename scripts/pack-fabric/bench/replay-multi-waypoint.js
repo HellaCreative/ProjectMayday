@@ -8,10 +8,10 @@ const data={};for(const id of (process.env.REBUILD_DEPLOYMENT?[]:['ns','nb'])){c
 let combined;
 function load(resolution){if(resolution.regionIds.length===1)return data[resolution.regionIds[0]];
  if(!combined){const rows=['ns','nb'].map(id=>data[id]);const joined=joinV4(rows,{budget:createBudget({deadlineAtMs:Date.now()+20000,maxExpansions:20000000})});combined={...joined,stations:[...new Map(rows.flatMap(r=>r.stations).map(s=>[s.id,s])).values()],identity:rows.flatMap(r=>r.identity)};}return combined;}
-const cases={neardalhousie:[[44.764810,-63.340233],[47.914772,-65.948078]],coarsepins:[[44.804135,-63.097441],[43.566279,-65.491539],[44.660761,-65.520139],[46.851988,-65.123190]],inverness:[[44.738289,-63.315088],[45.929257,-59.953773],[46.478234,-61.082533],[48.065038,-66.428275]],yarmouth:[[45.251114,-61.187782],[43.839237,-66.119184],[44.360924,-64.459705],[47.625592,-65.517018]]};
+const cases={finalfuel:[[44.764793,-63.340250],[47.047134,-64.891699]],neardalhousie:[[44.764810,-63.340233],[47.914772,-65.948078]],coarsepins:[[44.804135,-63.097441],[43.566279,-65.491539],[44.660761,-65.520139],[46.851988,-65.123190]],inverness:[[44.738289,-63.315088],[45.929257,-59.953773],[46.478234,-61.082533],[48.065038,-66.428275]],yarmouth:[[45.251114,-61.187782],[43.839237,-66.119184],[44.360924,-64.459705],[47.625592,-65.517018]]};
 (async()=>{for(const [name,pts] of Object.entries(cases)){
  if(process.env.REBUILD_MULTI_CASE&&process.env.REBUILD_MULTI_CASE!==name)continue;
- if(['coarsepins','neardalhousie'].includes(name)&&!process.env.REBUILD_MULTI_CASE)continue;
+ if(['coarsepins','neardalhousie','finalfuel'].includes(name)&&!process.env.REBUILD_MULTI_CASE)continue;
  const usable=Number(process.env.REBUILD_MULTI_USABLE||225000),profiles=(process.env.REBUILD_MULTI_PROFILES||'balanced,balanced,balanced').split(',');let remaining=usable,history=[];const results=[];
  assert.ok(profiles.every(p=>['dirt','balanced','cleanest'].includes(p)),'Use API profiles dirt, balanced, or cleanest');
  for(let i=0;i<pts.length-1;i++){
