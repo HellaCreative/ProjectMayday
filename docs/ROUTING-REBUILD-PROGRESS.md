@@ -1428,3 +1428,9 @@ Layered on private7117e36; private cold qualification next. Stable56308d4 remain
 Privatepx2p5tl27 and independent untouched a25vvrcli, exactsource6cb27706cf0aa07d040c35ae278ecae984f754f2/runtime52c95b34: cold Clean passes19.378s and19.435s. Data4.983/5.494s; join3.441/3.579s; search14.392/13.938s. Accepted586.972545km,3pumps,0repeat preserved.16 hosted requests pass: two independent coldClean, baseline6, device4, hooks1, coarsepins unknown162 Dirt/Balanced/Balanced3. Exact source/releases asserted throughout; baseline6 geometry and fuel-stop IDs exactly match56308d4.192 adventure+22 topology pass. Evidence /tmp/dirt-shared-seam-hosted-{cold,cold2,multi,device,hooks,target}.
 
 Requesting DEV promotion of exactqualifiedpx2p5tl27; rollback56308d4. This qualifies a measured performance improvement, NOT universal cold-start reliability: both cold runs have less than1s headroom. Follow with independent public DEV source/route checks. Production/native/GitHub unchanged.
+
+## Public DEV performance publication verified
+
+Owner promoted EXACTpx2p5tl27/source6cb27706cf0aa07d040c35ae278ecae984f754f2; no rebuild/config drift. Independent public coarsepins unknown162 Dirt/Balanced/Balanced3, strict near-Dalhousie and Clean final-fuel all pass, exactsource/releases/full pool asserted. Canary and parity authority updated. Rollback56308d4 retained. Production/native/GitHub unchanged.
+
+No running tests or pending promotion. Continue overnight from qualified52c95b34 runtime; do not repeat baseline matrices without new changes/evidence. Cold headroom remains narrow despite2controlled passes; future useful work is profiling search reuse/preparation or additional genuinely different stress cases while preserving core pool/fuel proofs. Full-itinerary history and persistent per-pin intent remain native-contract limits, not solved by server guesses. Heartbeat remains active until morning08:00Halifax, then concise handoff/pause.

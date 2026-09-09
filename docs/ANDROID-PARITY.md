@@ -937,3 +937,7 @@ This is layered on private82ac4c1's join/loading/fuel-first changes. Stable56308
 ### Private JS join allocation refinement (overnight September9)
 
 Canonical cross-region duplicate-edge indexing now needs only edges whose two source endpoint nodes are shared across regions, as established by the completed node pass. All roads and source identities remain present; full NS/NB structural digest equals the original join.192 adventure and22 topology tests pass. This is a private performance experiment pending hosted qualification, layered on unpublished loading/join/fuel-first/visitor changes. Stable DEV remains56308d4. No Android/native implementation or new behavioral contract is claimed.
+
+### Qualified DEV performance update —6cb2770
+
+Previously private concurrent regional loading, exact seam joining, direct reverse-bound traversal and fresh fuel-first orchestration now run on stable DEV6cb27706cf0aa07d040c35ae278ecae984f754f2/runtime52c95b34. Both Atlantic02 retained.214 local and16 private hosted checks pass; two independent cold requests19.378/19.435s. Independent public target3/NB/Clean pass. Same roads, candidate pool, access/turn/fuel rules and20s deadline; no native implementation claimed. Narrow cold headroom and previously documented native history/per-pin/unknown-arrival limits remain. Rollback56308d4 retained.

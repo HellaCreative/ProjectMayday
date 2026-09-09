@@ -1,10 +1,12 @@
-# Current stable DEV — winner guard, 9 September 2026
+# Current stable DEV — routing performance, 9 September 2026
 
-Stable `https://pack-fabric.vercel.app` resolves to `pack-fabric-q194y7yik`, source `56308d4f9d45d74c72be1065f87213e68725f819`, with BOTH Atlantic `fabric-v4-20260908-02`. Runtime worktree23bd403. Public target three-leg replay and strict near-Dalhousie comparison pass with exact identities, full pools, fuel carry, joins and escape checks. Evidence `/tmp/dirt-winner-public-target` and `/tmp/dirt-winner-public-nb`.
+Stable `https://pack-fabric.vercel.app` resolves to exact `pack-fabric-px2p5tl27`, source `6cb27706cf0aa07d040c35ae278ecae984f754f2`, runtime worktree52c95b34. BOTH Atlantic packs remain `fabric-v4-20260908-02`, flag `ns-nb-v1`. Rollback `56308d4f9d45d74c72be1065f87213e68725f819` / `pack-fabric-q194y7yik` retained. Production, native app and phone packs unchanged.
 
-This adds the fresh-route fuel repetition refinement: the identified3491m first-leg repeat becomes0, and refinement cannot increase any profile winner's repeated-road distance or urban exposure. Wider area snapping and exact arrival-edge continuation remain included. Saved geometry remains unchanged; a fresh route exercises the update. No installation or phone pack transfer is needed. Rollback93826d is retained.
+Adds concurrent regional loading, exact-equivalent seam join/reverse-bound traversal optimizations, and fresh-leg fuel-first orchestration. Full shared candidate pool,20s deadline, fuel/access/turn constraints remain unchanged. Includes preceding fresh fuel-repeat winner guard, wider area snapping and exact arrival-edge continuation. Saved geometry remains unchanged; fresh routes exercise the update.
 
-Open: intermittent20s Clean final-fuel deadline was reproduced on both this candidate and the preceding stable version; not fixed. A291.77m return at a fixed rider dead end, Clean departure after unknown-access arrival, per-waypoint coordinate/zoom persistence, and overlap beyond native30km history remain open. Automated qualification does not imply physical acceptance or release readiness. No physical input required overnight.
+192 adventure +22 topology tests pass.16 private hosted requests pass, including two independent untouched cold Clean deployments at19.378s and19.435s. Six baseline legs retain exact accepted geometry and fuel-stop IDs. Independent public DEV target3, strict near-Dalhousie and Clean final-fuel pass with exact source/releases and required full pool/fuel/shape assertions. Evidence `/tmp/dirt-shared-seam-hosted-*` and `/tmp/dirt-shared-seam-public-*`.
+
+Flags: cold headroom remains under1s in those controlled runs; this is measured improvement, not a universal timeout fix. Whole-itinerary overlap beyond native30km history, per-pin coordinate/precision persistence, Clean departure after unknown-access arrival and the291.77m rider-dead-end return remain open. Automated qualification does not imply physical acceptance or release readiness. No physical input required overnight.
 
 All handoffs below are historical and superseded by the current source above.
 
