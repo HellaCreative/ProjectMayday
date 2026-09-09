@@ -1356,3 +1356,9 @@ Clean final-fuel timed out on an isolated private request and on accepted stable
 New local coarsepins Balanced/Cleanest/Dirt180km passes all three legs with zero within-leg repetition, fuel carry and joins. Initial test invocation used invalid API profile clean; corrected to cleanest and added an explicit benchmark profile assertion. Invalid invocation is not a runtime failure or counted pass. Evidence /tmp/dirt-overnight-coarse-bcd180-corrected and /tmp/dirt-serial2-*.
 
 Based on prior15 private hosted checks, strict NB quality comparison and controlled baseline comparison, requested owner promotion of exact56308d4/q194y7yik with93826d rollback retained. Public verification pending. This advances the3491m repetition fix only; existing intermittent Clean deadline,291.77m rider-deadend return, Clean-after-unknown transition and native context/pin persistence remain open.
+
+## Public winner refinement qualified — 56308d4
+
+StableDEV exactq194y7yik/source56308d4f9d45d74c72be1065f87213e68725f819 now independently passes public coarsepins Dirt/Balanced/Balanced162km unknown-on (three legs) and strict near-Dalhousie471m ceiling. Source/BOTH02 identities, full pools, fuel carry, geometry joins and escape verified. Evidence /tmp/dirt-winner-public-{target,nb}. Runtime23bd403; rollback93826d retained. New device handoff prepended to ROUTING-DEVICE-CANARY.md. No native/production/GitHub/pack changes; no physical acceptance claimed.
+
+Continue overnight on the intermittent Clean deadline and other documented gaps; do not repeat completed basic qualification without a new reason. Deadline also occurred on prior93826d, so it is not attributed to winner refinement. Current latest stable is56308d4, superseding the earlier hold notices. Automation remains active until08:00 Halifax handoff.

@@ -1,3 +1,13 @@
+# Current stable DEV — winner guard, 9 September 2026
+
+Stable `https://pack-fabric.vercel.app` resolves to `pack-fabric-q194y7yik`, source `56308d4f9d45d74c72be1065f87213e68725f819`, with BOTH Atlantic `fabric-v4-20260908-02`. Runtime worktree23bd403. Public target three-leg replay and strict near-Dalhousie comparison pass with exact identities, full pools, fuel carry, joins and escape checks. Evidence `/tmp/dirt-winner-public-target` and `/tmp/dirt-winner-public-nb`.
+
+This adds the fresh-route fuel repetition refinement: the identified3491m first-leg repeat becomes0, and refinement cannot increase any profile winner's repeated-road distance or urban exposure. Wider area snapping and exact arrival-edge continuation remain included. Saved geometry remains unchanged; a fresh route exercises the update. No installation or phone pack transfer is needed. Rollback93826d is retained.
+
+Open: intermittent20s Clean final-fuel deadline was reproduced on both this candidate and the preceding stable version; not fixed. A291.77m return at a fixed rider dead end, Clean departure after unknown-access arrival, per-waypoint coordinate/zoom persistence, and overlap beyond native30km history remain open. Automated qualification does not imply physical acceptance or release readiness. No physical input required overnight.
+
+All handoffs below are historical and superseded by the current source above.
+
 # Atlantic multi-waypoint engine handoff — stable a518fd38
 
 Stable DEV points to `pack-fabric-9pibwupnx`, source
