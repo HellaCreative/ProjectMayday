@@ -89,3 +89,21 @@ test('covered rides with unqualified pack data never fall back to the retired en
   assert.equal(result.status,'unknown');assert.equal(result.error,'adventure_pack_unqualified');
  }
 });
+
+test('waypoint continuations keep one candidate pool for all riding styles',()=>{
+ const f=fixture();
+ // Obtain history and its waypoint from a completed road, just as the client
+ // does. Do not assume the encoder's node numbering or coordinate precision.
+ const first=buildRideAlternatives({...f,budget:work()}).selected.road.segments;
+ const startSegment=first.findIndex((s,i)=>i>0&&s.geometry.length>1);
+ const previous=first.slice(0,startSegment+1),last=previous.at(-1),pools=[];
+ const [lon,lat]=last.geometry.at(-1);
+ for(const profile of ['clean','dirt','balanced']){
+  const input=structuredClone(f.input);Object.assign(input.anchors[0],{lon,lat});input.legs[0].profile=profile;
+  input.fuel.initialUsableMeters=5000;
+  const result=buildRideAlternatives({...f,input,expandedCandidates:true,preferOnwardFuel:true,arrivalHistory:{priorEdgeIds:previous.map(s=>s.edgeId),arrivalEdgeId:last.edgeId},budget:work()});
+  assert.equal(result.search.poolComplete,true,JSON.stringify(result.candidates));
+  pools.push(result.candidates.map(c=>({id:c.id,surface:c.surface,repeat:c.repeatedRoadMeters})));
+ }
+ assert.deepEqual(pools[0],pools[1]);assert.deepEqual(pools[1],pools[2]);
+});

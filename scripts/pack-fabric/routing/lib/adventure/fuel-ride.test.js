@@ -84,3 +84,13 @@ test('an onward fuel route does not pay for an unnecessary history refinement',(
  assert.equal(result.fuel.state,'verified_on_supplied_station_access');
  assert.equal(result.road.diagnostics.approachRefinement,undefined);
 });
+
+test('fuel-first continuation preserves the proved ride while avoiding a redundant road search',()=>{
+ const g=graph([['A','P',3],['P','D',4],['D','Q',4]],['P','Q']);
+ const baseline=ride(g),continuation=ride(g,{fuelFirst:true});
+ assert.deepEqual(continuation.road.arcs,baseline.road.arcs);
+ assert.deepEqual(continuation.fuel,baseline.fuel);
+ assert.ok(continuation.search.expansions<baseline.search.expansions);
+ const gap=ride(graph([['A','D',12]]),{fuelFirst:true});
+ assert.equal(gap.road.state,'found');assert.equal(gap.fuel.state,'unverified');
+});
