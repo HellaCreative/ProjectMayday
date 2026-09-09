@@ -203,3 +203,13 @@ test('rider waypoint at a mapped fuel POI is not broadened into an area destinat
  assert.notEqual(r.road.state,'complete');
  assert.equal(r.provenance.waypointSnap.attempts,1);
 });
+
+test('wide area arrival continues on the same previously selected road',()=>{
+ const f=fixture();f.input.anchors[1].lat=.04;
+ const first=build(f,{endpointRadiusMeters:6000});assert.equal(first.road.state,'complete');
+ const prior=first.road.segments.map(s=>s.edgeId);
+ f.input.anchors[0]={id:'a',lat:.04,lon:.03};f.input.anchors[1]={id:'b',lat:0,lon:.04};
+ const next=build(f,{endpointRadiusMeters:6000,arrivalHistory:{priorEdgeIds:prior,arrivalEdgeId:prior.at(-1)}});
+ assert.equal(next.road.state,'complete');assert.deepEqual(next.road.geometry[0],first.road.geometry.at(-1));
+ assert.equal(next.fuel.state,'provisional_station_access');
+});

@@ -75,8 +75,9 @@ function buildFromHere({input,pack,geom,revision,stations,budget,preparationBudg
     if(fixedFuel[1]&&startCandidates.length)break;
     if(!budget.check())return incomplete(budget.snapshot().reason);
     radius=Math.min(endpointRadiusMeters,radius*2);attempts++;
-    if(!startCandidates.length&&!history.edges.length&&!fixedFuel[0]){
-      const starts=matchStations({pack,geom,index,stations:[request.anchors[0]],maxMeters:radius,allowUnknown,budget});
+    if(!startCandidates.length&&!fixedFuel[0]){
+      const starts=matchStations({pack,geom,index,stations:[request.anchors[0]],maxMeters:radius,allowUnknown,budget,
+        eligibleEdge:history.edges.length?e=>e===history.edges.at(-1):null});
       if(starts.state!=='complete')return incomplete(starts.reason);
       startCandidates=starts.matches[0].candidates||[];
     }
