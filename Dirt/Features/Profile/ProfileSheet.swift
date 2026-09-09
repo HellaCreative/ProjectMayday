@@ -263,16 +263,15 @@ struct ProfileSheet: View {
             HStack {
                 Text("DIRT PRO")
                     .font(DirtType.sectionLabel)
-                    .tracking(1.1)
-                    .foregroundStyle(.white.opacity(0.72))
+                    .foregroundStyle(DirtTheme.muted)
                 Spacer()
                 Text(subscription.isSubscribed ? "Active" : "Not subscribed")
                     .font(DirtType.chip)
                     .fontWeight(.bold)
-                    .foregroundStyle(subscription.isSubscribed ? .white : .white.opacity(0.85))
+                    .foregroundStyle(subscription.isSubscribed ? .white : DirtTheme.muted)
                     .padding(.horizontal, DirtSpace.inner)
                     .padding(.vertical, DirtSpace.tight)
-                    .background(subscription.isSubscribed ? DirtTheme.navGreen : .white.opacity(0.12))
+                    .background(subscription.isSubscribed ? DirtTheme.navGreen : DirtTheme.wash)
                     .clipShape(Capsule())
             }
 
@@ -281,24 +280,15 @@ struct ProfileSheet: View {
                     showManageSubscriptions = true
                 } label: {
                     Text("Manage")
-                        .font(DirtType.cta)
-                        .tracking(0.6)
-                        .foregroundStyle(.white)
-                        .frame(maxWidth: .infinity, minHeight: DirtHit.min)
-                        .background(.white.opacity(0.12), in: RoundedRectangle(cornerRadius: DirtRadius.chip, style: .continuous))
                 }
+                .buttonStyle(DirtSecondaryButtonStyle())
             } else {
                 Button {
                     showPaywall = true
                 } label: {
                     Text("View DIRT PRO")
-                        .font(DirtType.cta)
-                        .textCase(.uppercase)
-                        .tracking(0.6)
-                        .foregroundStyle(DirtTheme.onOrange)
-                        .frame(maxWidth: .infinity, minHeight: DirtHit.min)
-                        .background(DirtTheme.orange, in: RoundedRectangle(cornerRadius: DirtRadius.chip, style: .continuous))
                 }
+                .buttonStyle(DirtCTAStyle.brand())
             }
 
             Button("Restore purchases") {
@@ -315,13 +305,13 @@ struct ProfileSheet: View {
             }
             .font(DirtType.helper)
             .fontWeight(.semibold)
-            .foregroundStyle(.white.opacity(0.65))
+            .foregroundStyle(DirtTheme.action)
             .frame(maxWidth: .infinity, minHeight: DirtHit.min)
             .contentShape(Rectangle())
             .disabled(subscription.storeOperationInFlight)
         }
         .padding(DirtSpace.row)
-        .background(DirtTheme.chrome, in: RoundedRectangle(cornerRadius: DirtRadius.sheet - 6, style: .continuous))
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: DirtRadius.card, style: .continuous))
     }
 
     // MARK: - Ride prefs
@@ -388,7 +378,7 @@ struct ProfileSheet: View {
                 }
                 .font(DirtType.chip)
                 .fontWeight(.bold)
-                .foregroundStyle(DirtTheme.orange)
+                .foregroundStyle(DirtTheme.action)
             }
         }
         .padding(DirtSpace.row)
@@ -483,7 +473,7 @@ struct ProfileSheet: View {
         HStack(spacing: DirtSpace.inner) {
             Image(systemName: systemImage)
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(DirtTheme.orange)
+                .foregroundStyle(DirtTheme.action)
                 .frame(width: 24)
             Text(title)
                 .font(DirtType.rowTitle)
@@ -583,7 +573,7 @@ struct ProfileSheet: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .foregroundStyle(DirtTheme.orange)
+            .foregroundStyle(DirtTheme.action)
             .disabled(routeDebugBusy)
 
             Button("Copy app log") {
@@ -591,7 +581,7 @@ struct ProfileSheet: View {
                 app.planner.toast = "App log copied"
             }
             .font(.dirtUI(13, weight: .semibold))
-            .foregroundStyle(DirtTheme.orange)
+            .foregroundStyle(DirtTheme.action)
             .frame(maxWidth: .infinity, minHeight: DirtHit.min, alignment: .leading)
             .contentShape(Rectangle())
             .buttonStyle(.plain)

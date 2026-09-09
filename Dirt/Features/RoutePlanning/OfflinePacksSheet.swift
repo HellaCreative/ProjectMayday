@@ -43,7 +43,7 @@ struct OfflinePacksSheet: View {
                     Button("Done") { isPresented = false }
                         .font(DirtType.rowTitle)
                         .fontWeight(.semibold)
-                        .foregroundStyle(DirtTheme.orange)
+                        .foregroundStyle(DirtTheme.action)
                         .frame(minWidth: DirtHit.min, minHeight: DirtHit.min)
                 }
             }
@@ -84,20 +84,19 @@ struct OfflinePacksSheet: View {
     }
 
     private func installedRow(_ row: GraphPackStore.InstalledPackManagementRow) -> some View {
-        HStack(alignment: .center, spacing: DirtSpace.inner) {
+        VStack(alignment: .leading, spacing: DirtSpace.inner) {
             VStack(alignment: .leading, spacing: DirtSpace.hairGap) {
                 Text(row.title)
                     .font(DirtType.rowTitle)
                     .foregroundStyle(DirtTheme.ink)
                 Text(row.revisionLabel)
                     .font(DirtType.helper)
-                    .foregroundStyle(row.revisionState == .stale ? DirtTheme.orange : DirtTheme.muted)
+                    .foregroundStyle(row.revisionState == .stale ? DirtTheme.action : DirtTheme.muted)
                 Text(sizeLabel(bytes: row.bytes))
                     .font(DirtType.metricInline)
-                    .foregroundStyle(DirtTheme.muted.opacity(0.9))
+                    .foregroundStyle(DirtTheme.muted)
             }
-            Spacer(minLength: DirtSpace.tight)
-            VStack(spacing: DirtSpace.tight) {
+            HStack(spacing: DirtSpace.row) {
                 if busyIDs.contains(row.id) || packs.managementInFlight.contains(row.id) {
                     ProgressView().tint(DirtTheme.orange)
                         .frame(minWidth: DirtHit.min, minHeight: DirtHit.min)
@@ -105,7 +104,7 @@ struct OfflinePacksSheet: View {
                 } else {
                     if row.revisionState == .stale {
                         Button("Update") { perform(row.id, update: true) }
-                            .foregroundStyle(DirtTheme.orange)
+                            .foregroundStyle(DirtTheme.action)
                             .frame(minWidth: DirtHit.min, minHeight: DirtHit.min)
                     }
                     Button("Delete", role: .destructive) { perform(row.id, update: false) }
@@ -121,12 +120,12 @@ struct OfflinePacksSheet: View {
         .padding(DirtSpace.inner)
         .frame(minHeight: DirtHit.control)
         .background(
-            DirtTheme.orange.opacity(0.08),
+            DirtTheme.rowFill,
             in: RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous)
         )
         .overlay(
             RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous)
-                .stroke(DirtTheme.orange.opacity(0.35), lineWidth: 1)
+                .stroke(DirtTheme.hairline, lineWidth: 1)
         )
     }
 

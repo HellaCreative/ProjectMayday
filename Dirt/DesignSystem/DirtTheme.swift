@@ -33,7 +33,9 @@ extension Color {
 enum DirtTheme {
     static let orange = Color(dirtHex: 0xFF7A00)
     static let orangeHover = Color(dirtHex: 0xE56A00)
-    static let orangePressed = Color(dirtHex: 0xC25400)
+    static let orangePressed = Color(dirtHex: 0xB85C00)
+    /// Orange text and symbols on light surfaces; lighter counterpart in dark mode.
+    static let action = Color(dirtLight: 0xB85C00, dark: 0xFFB35C)
     /// The foreground for anything filled with `orange`. Measured on #FF7A00: white is
     /// **2.61:1** and fails AA at every text size, this is **6.80:1**.
     ///
@@ -145,8 +147,8 @@ enum DirtHit {
 /// Dynamic Type–aware semantic scale. Adopt these in sheets instead of fixed
 /// `dirtUI(_:)` / `dirtMono(_:)` sizes so text follows the rider's reading size.
 enum DirtType {
-    /// Small all-caps group header ("DISPLAY", "OFFLINE MAPS").
-    static let sectionLabel: Font = .system(.caption2, design: .default, weight: .bold)
+    /// Quiet, readable group heading.
+    static let sectionLabel: Font = .system(.footnote, design: .default, weight: .semibold)
     /// Sheet or drawer title.
     static let title: Font = .system(.title3, design: .default, weight: .bold)
     /// Primary row label.
@@ -156,7 +158,7 @@ enum DirtType {
     /// Chip / segment label.
     static let chip: Font = .system(.footnote, design: .default, weight: .semibold)
     /// Primary call to action.
-    static let cta: Font = .system(.subheadline, design: .default, weight: .heavy)
+    static let cta: Font = .system(.subheadline, design: .default, weight: .semibold)
     /// Headline metric (distance, dirt %).
     static let metric: Font = .system(.title3, design: .monospaced, weight: .bold)
     /// Inline metric beside a label.
@@ -268,8 +270,8 @@ struct DirtCTAStyle: ButtonStyle {
                 }
             }
             .font(DirtType.cta)
-            .textCase(.uppercase)
-            .tracking(0.6)
+            .multilineTextAlignment(.center)
+            .padding(.vertical, DirtSpace.inner)
             .frame(maxWidth: .infinity, minHeight: DirtHit.min)
             .padding(.horizontal, DirtSpace.row)
             .background(fill.opacity(configuration.isPressed ? 0.78 : 1))
@@ -278,6 +280,33 @@ struct DirtCTAStyle: ButtonStyle {
             .opacity(isEnabled ? 1 : 0.45)
             .contentShape(RoundedRectangle(cornerRadius: DirtRadius.chip, style: .continuous))
             .animation(.easeOut(duration: 0.16), value: configuration.isPressed)
+        }
+    }
+}
+
+struct DirtSecondaryButtonStyle: ButtonStyle {
+    var foreground: Color = DirtTheme.action
+
+    func makeBody(configuration: Configuration) -> some View {
+        Surface(configuration: configuration, foreground: foreground)
+    }
+
+    private struct Surface: View {
+        let configuration: Configuration
+        let foreground: Color
+        @Environment(\.isEnabled) private var isEnabled
+
+        var body: some View {
+            configuration.label
+                .font(DirtType.rowTitle)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, DirtSpace.row)
+                .padding(.vertical, DirtSpace.inner)
+                .frame(maxWidth: .infinity, minHeight: DirtHit.min)
+                .foregroundStyle(foreground)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: DirtRadius.control))
+                .opacity(isEnabled ? (configuration.isPressed ? 0.72 : 1) : 0.45)
+                .contentShape(RoundedRectangle(cornerRadius: DirtRadius.control))
         }
     }
 }
@@ -319,16 +348,14 @@ struct DirtChipStyle: ButtonStyle {
     }
 }
 
-/// Compact uppercase section label for dock sheets ("DISPLAY", "FUEL RANGE").
+/// Section heading shared by dock sheets and full-screen forms.
 struct DirtSectionLabel: View {
     let title: String
 
     var body: some View {
         Text(title)
             .font(DirtType.sectionLabel)
-            .tracking(1.1)
             .foregroundStyle(DirtTheme.muted)
-            .textCase(.uppercase)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
@@ -346,47 +373,49 @@ struct DirtSheetHeader: View {
     var onClose: (() -> Void)?
 
     var body: some View {
-        ZStack {
+        HStack(spacing: DirtSpace.inner) {
+            if let onBack {
+                Button(action: onBack) {
+                    Image(systemName: "chevron.backward")
+                        .font(.body.weight(.semibold))
+                        .foregroundStyle(DirtTheme.action)
+                        .frame(width: DirtHit.min, height: DirtHit.min)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Back")
+            } else if onClose != nil {
+                Color.clear.frame(width: DirtHit.min, height: DirtHit.min)
+                    .accessibilityHidden(true)
+            }
+
             Text(title)
                 .font(titleFont)
                 .foregroundStyle(DirtTheme.ink)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-
-            if let onBack {
-                HStack {
-                    Button(action: onBack) {
-                        HStack(spacing: DirtSpace.hairGap) {
-                            Image(systemName: "chevron.backward")
-                            Text("Back")
-                        }
-                        .font(DirtType.rowTitle)
-                        .foregroundStyle(DirtTheme.orange)
-                        .frame(minWidth: DirtHit.min, minHeight: DirtHit.min, alignment: .leading)
-                        .contentShape(Rectangle())
-                    }
-                    Spacer(minLength: 0)
-                }
-            }
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity)
+                .accessibilityAddTraits(.isHeader)
 
             if let onClose {
-                HStack {
-                    Spacer(minLength: 0)
-                    Button(action: onClose) {
-                        Image(systemName: "xmark")
-                            .font(.system(.body, design: .default, weight: .bold))
-                            .foregroundStyle(DirtTheme.muted)
-                            .frame(width: DirtHit.min, height: DirtHit.min)
-                            .contentShape(Rectangle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Close")
+                Button(action: onClose) {
+                    Image(systemName: "xmark")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(DirtTheme.muted)
+                        .frame(width: DirtHit.min, height: DirtHit.min)
+                        .background(DirtTheme.rowFill, in: Circle())
+                        .contentShape(Circle())
                 }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Close")
+            } else if onBack != nil {
+                Color.clear.frame(width: DirtHit.min, height: DirtHit.min)
+                    .accessibilityHidden(true)
             }
         }
         .frame(maxWidth: .infinity, minHeight: DirtHit.min)
         .padding(.horizontal, DirtSpace.row)
-        .padding(.bottom, DirtSpace.tight)
+        .padding(.bottom, DirtSpace.inner)
     }
 }
 

@@ -120,7 +120,7 @@ struct LayersSheet: View {
                 HStack(spacing: DirtSpace.inner) {
                     Image(systemName: "square.stack.3d.up.fill")
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(DirtTheme.orange)
+                        .foregroundStyle(DirtTheme.action)
                         .frame(width: 22)
                     VStack(alignment: .leading, spacing: DirtSpace.hairGap) {
                         Text("Downloaded maps")
@@ -168,7 +168,7 @@ struct LayersSheet: View {
                 Spacer(minLength: DirtSpace.tight)
                 if selectedStyle == style {
                     Image(systemName: "checkmark.circle.fill")
-                        .foregroundStyle(DirtTheme.orange)
+                        .foregroundStyle(DirtTheme.action)
                         .accessibilityLabel("Selected")
                 }
             }

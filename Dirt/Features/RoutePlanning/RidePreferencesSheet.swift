@@ -17,12 +17,20 @@ struct RidePreferencesSheet: View {
             DirtSheetHeader(title: "Your ride", onClose: { dismiss() })
             ScrollView {
                 VStack(alignment: .leading, spacing: DirtSpace.group) {
-                    Text("Shape the journey")
-                        .font(DirtType.title).foregroundStyle(DirtTheme.ink)
-                    Text("These choices apply to the whole route, including the roads between fuel stops. Custom choices currently need online planning.")
-                        .font(DirtType.helper).foregroundStyle(DirtTheme.muted)
+                    VStack(alignment: .leading, spacing: DirtSpace.tight) {
+                        Text("Shape the journey")
+                            .font(DirtType.title).foregroundStyle(DirtTheme.ink)
+                        Text("These choices apply to the whole route, including the roads between fuel stops. Custom choices currently need online planning.")
+                            .font(DirtType.helper).foregroundStyle(DirtTheme.muted)
+                    }
                     VStack(alignment: .leading, spacing: DirtSpace.inner) {
-                        Text("Ride wander").font(DirtType.rowTitle)
+                        HStack {
+                            Text("Ride wander").font(DirtType.rowTitle)
+                            Spacer()
+                            Text("\(Int(draft.wander * 100))%")
+                                .font(DirtType.metricInline).foregroundStyle(DirtTheme.muted)
+                                .accessibilityHidden(true)
+                        }
                         Slider(value: $draft.wander, in: 0...1, step: 0.05)
                             .tint(DirtTheme.orange)
                             .accessibilityLabel("Ride wander")
@@ -35,8 +43,9 @@ struct RidePreferencesSheet: View {
                     }
                     .padding(DirtSpace.row)
                     .background(DirtTheme.rowFill, in: RoundedRectangle(cornerRadius: DirtRadius.control))
-                    VStack(spacing: DirtSpace.group) {
+                    VStack(spacing: DirtSpace.row) {
                         Toggle("Avoid cities and towns", isOn: $draft.avoidCities)
+                        Divider()
                         Toggle("Avoid highways", isOn: $draft.avoidHighways)
                     }
                     .font(DirtType.rowTitle)
@@ -53,7 +62,7 @@ struct RidePreferencesSheet: View {
             } label: {
                 Text("Apply to route").frame(maxWidth: .infinity)
             }
-            .buttonStyle(DirtCTAStyle(fill: DirtTheme.orange))
+            .buttonStyle(DirtCTAStyle.brand())
             .padding(DirtSpace.group)
         }
         .background(DirtTheme.sheetMaterial)

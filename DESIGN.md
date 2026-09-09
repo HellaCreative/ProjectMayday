@@ -3,7 +3,7 @@ name: DIRT Future UI Baseline
 description: User-approved native glass and compact control direction for future UI work.
 colors:
   orange: "#FF7A00"
-  orangePressed: "#C25400"
+  orangePressed: "#B85C00"
   onOrange: "#16181C"
 rounded:
   chip: "10px"
@@ -17,13 +17,13 @@ rounded:
 
 **Creative North Star: "Map-first DIRT"**
 
-Richard approved the route planner’s glass surfaces, compact icon-and-title tabs and orange active treatment as the baseline for all future UI work. Preserve this native visual language when adding or revising interfaces. This is a forward-looking design direction, not authorization to redesign existing screens globally.
+Richard approved the route planner’s glass surfaces, compact icon-and-title tabs and orange active treatment as the baseline for all future UI work. Preserve this native visual language when adding or revising interfaces. The September 9 visual consistency pass extends this treatment across existing application sheets and shared controls, while preserving established behavior.
 
 Implementation examples live in [RoutePlannerCard.swift](Dirt/Features/RoutePlanning/RoutePlannerCard.swift); shared tokens live in [DirtTheme.swift](Dirt/DesignSystem/DirtTheme.swift). The [scoped planner reference](Dirt/Features/RoutePlanning/DESIGN.md) records its particular layout and behavior. [Product and routing authority](docs/00-PRODUCT-AND-ROUTING-SOURCE-OF-TRUTH.md) remains unchanged.
 
 ## Colors
 
-Use existing DIRT semantic colors. The approved planning-tab treatment uses deep `orangePressed` for selected icons and titles, a light translucent `rowFill` selected surface and muted inactive content. Orange-filled primary actions use dark `onOrange` foreground through the brand button style. Native appearance-aware neutral tokens remain authoritative.
+Use existing DIRT semantic colors. The approved planning-tab treatment uses appearance-aware deep-orange `action` for selected icons and titles, a light translucent `rowFill` selected surface and muted inactive content. Orange-filled primary actions use dark `onOrange` foreground through the brand button style. Native appearance-aware neutral tokens remain authoritative.
 
 ## Typography
 
@@ -49,5 +49,5 @@ Use compact SF Symbol and title combinations for related navigation choices, cle
 
 - **Do** use the approved glass, compact icon-and-title and orange active treatment as the baseline for future UI.
 - **Do** preserve native accessibility labels, selected states and adaptive form layouts.
-- **Don't** treat this baseline as a request for a global redesign.
+- **Don't** change routing or navigation behavior during visual refinement.
 - **Don't** infer platform qualification from design documentation; this iteration is iPhone-only.

@@ -3,7 +3,7 @@ name: DIRT Route Planner
 description: Scoped reference for the implemented map-first route planner.
 colors:
   orange: "#FF7A00"
-  orangePressed: "#C25400"
+  orangePressed: "#B85C00"
   ink-light: "#16181C"
   muted-light: "#616872"
   rowFill-light: "rgba(255,255,255,0.5)"
@@ -36,7 +36,7 @@ The recorded values describe source implementation. Nine focused tests and final
 
 ## Colors
 
-The existing brand orange marks actions. The deeper `orangePressed` token marks the selected planning tab and Loop setup controls. Unselected tabs use `muted`; the selected tab gains `rowFill` behind its icon and title.
+The existing brand orange marks actions. The appearance-aware deep-orange `action` token marks the selected planning tab and Loop setup controls. Unselected tabs use `muted`; the selected tab gains `rowFill` behind its icon and title.
 
 Frontmatter neutral colors record the light appearance. Native semantic tokens retain their appearance-aware values; do not replace those tokens with these extracted literals in SwiftUI. The material's final color depends on the map beneath it.
 

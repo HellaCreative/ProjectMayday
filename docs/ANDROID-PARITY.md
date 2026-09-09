@@ -813,3 +813,8 @@ Richard accepted fuel-stop replacement on White and explicitly froze it. Preserv
 ### Atlantic request hardening — September 9, 2026
 
 Accepted NS/NB route results, incomplete results and failures must never silently switch to compatibility routing. Cancelled requests return no stale geometry and cannot start a second engine. Malformed JSON/container input returns a client error. Both accepted Atlantic pack revisions require exact graph/geometry/fuel identities, not just a release name. Legacy routing remains available only outside new-engine coverage or for its still-supported operations; PE/NL and offline behavior are not newly qualified. No change to the frozen fuel-replacement interaction, navigation, route costs or UI.
+
+
+### Shared visual consistency — September 9, 2026
+
+The approved planner icon/title tabs remain the visual reference. Selected tabs and light-surface text actions use deep orange (#B85C00; dark appearance #FFB35C), with neutral native glass surfaces. Bright orange filled actions retain dark text. Shared CTA type is sentence case and semibold; headers reserve separate 44-point back/close targets and allow wrapping. Pack actions sit below pack details on neutral cards; Profile subscription management uses the shared glass/secondary-action treatment; Group Create/Join stack at accessibility text sizes. Ride wander now also displays its existing percentage. Port this hierarchy and spacing using native Android equivalents. Routing, fuel replacement, navigation and account operations are unchanged. Native visual acceptance on White remains pending; no simulator was launched for this pass.

@@ -372,7 +372,7 @@ struct RoutePlannerCard: View {
                 Text(title == "Plan a route" ? "Plan" : title).font(.caption.weight(selected ? .bold : .medium))
                     .lineLimit(2).multilineTextAlignment(.center)
             }
-            .foregroundStyle(selected ? DirtTheme.orangePressed : DirtTheme.muted)
+            .foregroundStyle(selected ? DirtTheme.action : DirtTheme.muted)
             .frame(maxWidth: .infinity, minHeight: min(planningTabHeight, 76))
             .background(selected ? DirtTheme.rowFill : .clear, in: RoundedRectangle(cornerRadius: 10))
         }
@@ -449,7 +449,7 @@ struct RoutePlannerCard: View {
             .fixedSize(horizontal: false, vertical: true)
             .font(.subheadline)
             .foregroundStyle(DirtTheme.ink)
-            .tint(DirtTheme.orangePressed)
+            .tint(DirtTheme.action)
             .padding(.horizontal, 14).padding(.vertical, 6)
             .background(.regularMaterial, in: RoundedRectangle(cornerRadius: DirtRadius.control))
             .disabled(planner.isRouting)
@@ -461,7 +461,7 @@ struct RoutePlannerCard: View {
                     if !dynamicTypeSize.isAccessibilitySize { Spacer() }
                     Button("Cancel") { planner.selectMode(.plan) }.frame(minHeight: DirtHit.min)
                 }
-                .font(.subheadline).tint(DirtTheme.orangePressed)
+                .font(.subheadline).tint(DirtTheme.action)
             } else {
                 Button("Create Loop") { planner.generateLoop() }
                     .buttonStyle(DirtCTAStyle.brand())
@@ -607,7 +607,7 @@ struct RoutePlannerCard: View {
                     } label: {
                         Text("Try again")
                             .font(DirtType.cta)
-                            .foregroundStyle(DirtTheme.orange)
+                            .foregroundStyle(DirtTheme.action)
                             .frame(maxWidth: .infinity, minHeight: DirtHit.min)
                             .background(DirtTheme.rowFill)
                             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
@@ -650,7 +650,7 @@ struct RoutePlannerCard: View {
         Button { planner.closeLoop() } label: {
             Label("Create Return Route", systemImage: "arrow.uturn.backward")
                 .font(.subheadline.weight(.semibold))
-                .foregroundStyle(DirtTheme.orangePressed)
+                .foregroundStyle(DirtTheme.action)
                 .frame(maxWidth: .infinity, minHeight: DirtHit.min)
                 .background(DirtTheme.rowFill, in: RoundedRectangle(cornerRadius: DirtRadius.control))
         }
@@ -709,7 +709,7 @@ struct RoutePlannerCard: View {
             HStack(spacing: DirtSpace.tight) {
                 Image(systemName: "point.topleft.down.to.point.bottomright.curvepath")
                     .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(DirtTheme.orange)
+                    .foregroundStyle(DirtTheme.action)
                 Text(loadedTrackName)
                     .font(DirtType.rowTitle)
                     .fontWeight(.bold)
@@ -768,7 +768,7 @@ struct RoutePlannerCard: View {
         } label: {
             Label("Continue planning", systemImage: "arrow.triangle.branch")
                 .font(DirtType.cta)
-                .foregroundStyle(DirtTheme.orange)
+                .foregroundStyle(DirtTheme.action)
                 .frame(maxWidth: .infinity, minHeight: DirtHit.min)
                 .background(DirtTheme.rowFill, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
                 .overlay(
@@ -903,7 +903,7 @@ struct RoutePlannerCard: View {
                     if let notice = planner.profileAvailabilityNotice(at: index) {
                         Label(notice, systemImage: "exclamationmark.triangle.fill")
                             .font(DirtType.helper)
-                            .foregroundStyle(DirtTheme.orange)
+                            .foregroundStyle(DirtTheme.action)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     if stage.endsAtFuelStop, planner.canReplaceFuelStop(at: index) {
@@ -916,7 +916,7 @@ struct RoutePlannerCard: View {
                                 .frame(maxWidth: .infinity, minHeight: DirtHit.min)
                         }
                         .buttonStyle(.plain)
-                        .foregroundStyle(DirtTheme.orange)
+                        .foregroundStyle(DirtTheme.action)
                         .background(DirtTheme.wash, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                     }
                     profileSegments(active: stage.profile) { profile in
@@ -952,7 +952,7 @@ struct RoutePlannerCard: View {
                             )
                             .font(DirtType.chip)
                             .fontWeight(.bold)
-                            .foregroundStyle(DirtTheme.orange)
+                            .foregroundStyle(DirtTheme.action)
                             .frame(maxWidth: .infinity, minHeight: DirtHit.min)
                             .background(DirtTheme.wash, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
                         }
@@ -1000,7 +1000,7 @@ struct RoutePlannerCard: View {
                           ? "fuelpump.slash.fill"
                           : "fuelpump.fill")
                         .font(.system(.headline, weight: .bold))
-                        .foregroundStyle(DirtTheme.orange)
+                        .foregroundStyle(DirtTheme.action)
                         .frame(width: 24, height: 24)
                         .accessibilityHidden(true)
 
@@ -1011,7 +1011,7 @@ struct RoutePlannerCard: View {
                         Text(notice.scope)
                             .font(DirtType.chip)
                             .fontWeight(.bold)
-                            .foregroundStyle(DirtTheme.orange)
+                            .foregroundStyle(DirtTheme.action)
                         Text(notice.message)
                             .font(DirtType.helper)
                             .foregroundStyle(DirtTheme.ink.opacity(0.76))
@@ -1078,7 +1078,7 @@ struct RoutePlannerCard: View {
             if showsWarning {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .font(DirtType.metricInline)
-                    .foregroundStyle(DirtTheme.orange)
+                    .foregroundStyle(DirtTheme.action)
             }
         }
         .lineLimit(1)
@@ -1665,7 +1665,7 @@ struct StageCard<Headline: View, Detail: View>: View {
                             if endpointIsFuelStation {
                                 Image(systemName: "fuelpump.fill")
                                     .font(.system(size: 13.5, weight: .semibold))
-                                    .foregroundStyle(DirtTheme.orange)
+                                    .foregroundStyle(DirtTheme.action)
                             }
                             Text(endpointTitle)
                                 .font(.dirtUI(10.5, weight: .bold))

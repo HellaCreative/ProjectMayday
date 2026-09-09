@@ -3,6 +3,7 @@ import SwiftUI
 struct GroupsSheet: View {
     let onClose: () -> Void
     @Environment(AppEnvironment.self) private var app
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var newGroupName = ""
     @State private var joinCode = ""
     @State private var showCreateDialog = false
@@ -148,7 +149,9 @@ struct GroupsSheet: View {
                     }
                 }
 
-                HStack(spacing: DirtSpace.inner) {
+                (dynamicTypeSize.isAccessibilitySize
+                    ? AnyLayout(VStackLayout(spacing: DirtSpace.inner))
+                    : AnyLayout(HStackLayout(spacing: DirtSpace.inner))) {
                     Button {
                         showCreateDialog = true
                     } label: {
@@ -161,7 +164,7 @@ struct GroupsSheet: View {
                     } label: {
                         Label("Join", systemImage: "arrow.right.square.fill")
                     }
-                    .buttonStyle(DirtCTAStyle(fill: DirtTheme.chrome))
+                    .buttonStyle(DirtSecondaryButtonStyle())
                 }
                 .disabled(groups.isMutatingGroup)
                 .padding(.top, DirtSpace.tight)
@@ -298,7 +301,7 @@ struct GroupDetailView: View {
                         } label: {
                             Image(systemName: "doc.on.doc")
                                 .font(.system(size: 15, weight: .semibold))
-                                .foregroundStyle(DirtTheme.orange)
+                                .foregroundStyle(DirtTheme.action)
                                 .frame(width: DirtHit.min, height: DirtHit.min)
                                 .contentShape(Rectangle())
                         }
