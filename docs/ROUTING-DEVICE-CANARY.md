@@ -6,7 +6,7 @@ Adds concurrent regional loading, exact-equivalent seam join/reverse-bound trave
 
 192 adventure +22 topology tests pass.16 private hosted requests pass, including two independent untouched cold Clean deployments at19.378s and19.435s. Six baseline legs retain exact accepted geometry and fuel-stop IDs. Independent public DEV target3, strict near-Dalhousie and Clean final-fuel pass with exact source/releases and required full pool/fuel/shape assertions. Evidence `/tmp/dirt-shared-seam-hosted-*` and `/tmp/dirt-shared-seam-public-*`.
 
-Flags: cold headroom remains under1s in those controlled runs; this is measured improvement, not a universal timeout fix. Whole-itinerary overlap beyond native30km history, per-pin coordinate/precision persistence, Clean departure after unknown-access arrival and the291.77m rider-dead-end return remain open. Automated qualification does not imply physical acceptance or release readiness. No physical input required overnight.
+Flags: additional reverse-route stress tests exposed dirt-30 search-label exhaustion on reversed coarsepins162km (third leg) and reversed Inverness180km (first leg), reproduced on previous stable56308d4 too. These remain incomplete; see latest progress evidence. Cold headroom remains under1s in those controlled runs; this is measured improvement, not a universal timeout fix. Whole-itinerary overlap beyond native30km history, per-pin coordinate/precision persistence, Clean departure after unknown-access arrival and the291.77m rider-dead-end return remain open. Automated qualification does not imply physical acceptance or release readiness. No physical input required overnight.
 
 All handoffs below are historical and superseded by the current source above.
 
