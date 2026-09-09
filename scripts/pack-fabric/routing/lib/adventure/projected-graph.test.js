@@ -89,3 +89,11 @@ test("splitting a via-way preserves path history but does not invent history at 
   assert.equal(route(graph).state,"exhausted");
   assert.equal(route(graph,"middle","b").state,"found");
 });
+
+test('waypoint interior arrival cannot invent an immediate reversal',()=>{
+ const p=pack(),g=createProjectedGraph(p,{points:[{id:'a',edgeIndex:0,fraction:.4},{id:'b',edgeIndex:0,fraction:.7}],budget:budget()});
+ const initial=g.seedArrival([{id:0,from:p.edgeFrom[0],to:p.edgeTo[0]}],'a');
+ assert.equal(initial.allowed,true);
+ for(const arc of g.outgoing(g.pointNodes.get('a')))assert.equal(g.transition(initial.state,arc).allowed,arc.toFraction>arc.fromFraction);
+ const r=route(g,'a','b',{initialTurnState:initial.state});assert.equal(r.state,'found');
+});

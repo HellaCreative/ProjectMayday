@@ -18,7 +18,7 @@ const {proveFuel}=require("./fuel-proof");
 // explicitly provisional station access; they never become physical entrance
 // proof. Caller supplies the experimental cost model, not a hidden final style.
 function buildFromHere({input,pack,geom,revision,stations,budget,preparationBudget=budget,edgeCost,objectiveId,
-  preparationCache=createPreparationCache(),reverseCostCache=createReverseCostCache(),stationMatchCache=createStationMatchCache(),stationRadiusMeters=150,endpointRadiusMeters=2000,maxFuelLabels=100000,fuelHeuristicWeight=1,avoidMotorways=false,additionalUrbanAreas=[],preferOnwardFuel=false,retainFuelApproach=false,dirtEntryCost=0}) {
+  preparationCache=createPreparationCache(),reverseCostCache=createReverseCostCache(),stationMatchCache=createStationMatchCache(),stationRadiusMeters=150,endpointRadiusMeters=2000,maxFuelLabels=100000,fuelHeuristicWeight=1,avoidMotorways=false,additionalUrbanAreas=[],preferOnwardFuel=false,retainFuelApproach=false,dirtEntryCost=0,arrivalHistory=null}) {
   if(preparationBudget.snapshot().deadlineAtMs>budget.snapshot().deadlineAtMs)throw new TypeError("Preparation cannot outlive the request deadline");
   const request=normalizeRequest(input);
   if(request.mode!=="from_here")throw new TypeError("From Here requires exactly two fixed rider anchors");
@@ -53,7 +53,18 @@ function buildFromHere({input,pack,geom,revision,stations,budget,preparationBudg
   stage="endpoint_matching";let phase=performance.now();
   const endpoints=matchStations({pack,geom,index,stations:request.anchors,maxMeters:endpointRadiusMeters,allowUnknown,budget});
   if(endpoints.state!=="complete")return incomplete(endpoints.reason);
-  const picked=selectConnectedSnapPair(pack,endpoints.matches[0].candidates,endpoints.matches[1].candidates,{allowUnknown});
+  const {resolveHistory,directedArrival}=require('./arrival-history');
+  const history=resolveHistory(pack,arrivalHistory?.priorEdgeIds||[],arrivalHistory?.arrivalEdgeId,budget);
+  if(history.state!=='complete')return incomplete(history.reason);
+  if(history.edges.length){
+    const prior=new Set(history.edges),baseCost=edgeCost;
+    // Positive cost discourages recently ridden roads without rewarding a
+    // circuit or forbidding a necessary return from a fixed rider waypoint.
+    edgeCost=arc=>baseCost(arc)*(prior.has(arc.id)?4:1);
+    provenance.priorRoadPreference={edges:prior.size,factor:4};
+  }
+  const startCandidates=history.edges.length?endpoints.matches[0].candidates.filter(c=>c.edgeIndex===history.edges.at(-1)):endpoints.matches[0].candidates;
+  const picked=selectConnectedSnapPair(pack,startCandidates,endpoints.matches[1].candidates,{allowUnknown});
   if(!picked.ok)return incomplete(`endpoint_${picked.reason}`);
   const selected=[picked.start,picked.end];
   const points=request.anchors.map((anchor,i)=> {
@@ -101,6 +112,11 @@ function buildFromHere({input,pack,geom,revision,stations,budget,preparationBudg
   if(graph.state!=="complete")return incomplete(graph.reason);
   timing.projectedGraphMs=Math.round(performance.now()-phase);
   const start=graph.pointNodes.get("anchor-0"),end=graph.pointNodes.get("anchor-1");
+  const arrival=directedArrival(pack,history.edges,points[0]);
+  if(arrival.state!=='complete')return incomplete(arrival.reason);
+  const initial=graph.seedArrival(arrival.arcs,'anchor-0');
+  if(!initial.allowed)return incomplete('arrival_restriction_context_unproved');
+  provenance.arrivalHistoryEdges=arrival.arcs.length;
   stage="reverse_bounds";phase=performance.now();
   const reverse=reverseCostCache.prepare({graph,revision,edgeCost,budget});
   provenance.reversePreparationCacheHit=reverse.cacheHit;
@@ -109,7 +125,7 @@ function buildFromHere({input,pack,geom,revision,stations,budget,preparationBudg
   if(bounds.state!=="complete")return incomplete(bounds.reason);
   timing.reverseBoundsMs=Math.round(performance.now()-phase);
   stage="fuel_search";phase=performance.now();
-  const result=searchFuelRide({graph,start,end,edgeCost,budget,fuel:request.fuel,lowerBounds:bounds,avoidanceCost,maxFuelLabels,fuelHeuristicWeight,preferOnwardFuel,retainFuelApproach,dirtEntryCost,
+  const result=searchFuelRide({graph,start,end,initialTurnState:initial.state,edgeCost,budget,fuel:request.fuel,lowerBounds:bounds,avoidanceCost,maxFuelLabels,fuelHeuristicWeight,preferOnwardFuel,retainFuelApproach,dirtEntryCost,
     onRoadCandidate:road=>{const rendered=materializeRoute({pack,geom,result:road,budget});if(rendered.state==="complete"){recordExposure(rendered,road);fallback=rendered;}}});
   timing.searchAndAdvisoryMs=Math.round(performance.now()-phase);
   if(result.road.state!=="found")return incomplete(result.road.reason);

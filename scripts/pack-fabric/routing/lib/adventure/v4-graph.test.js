@@ -52,3 +52,16 @@ test("Quebec repeated approach/via edge is an actionable restriction error, neve
     return true;
   });
 });
+
+test('waypoint arrival preserves node and via-way restrictions',()=>{
+ const p=pack([[0,1],[1,2],[2,3],[4,1]],[{fromEdge:0,viaEdges:[1],toEdge:2,only:false}]);
+ const g=createV4Graph(p);
+ const state=g.seedArrival([{id:0,from:0,to:1},{id:1,from:1,to:2}]);
+ assert.equal(state.allowed,true);assert.equal(g.transition(state.state,{id:2,from:2,to:3}).allowed,false);
+ const other=g.seedArrival([{id:3,from:4,to:1},{id:1,from:1,to:2}]);
+ assert.equal(g.transition(other.state,{id:2,from:2,to:3}).allowed,true);
+ const truncated=g.seedArrival([{id:1,from:1,to:2}]);
+ assert.equal(g.transition(truncated.state,{id:2,from:2,to:3}).allowed,false);
+ const node=createV4Graph(pack([[0,1],[1,2]],[{fromEdge:0,toEdge:1,viaNode:1,only:false}]));
+ assert.equal(node.transition(node.seedArrival([{id:0,from:0,to:1}]).state,{id:1,from:1,to:2}).allowed,false);
+});

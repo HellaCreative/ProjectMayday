@@ -28,7 +28,7 @@ test('live fuel response partitions the selected ride without rerouting or chang
 test('canary is opt-in and does not silently ignore unsupported recovery or mandatory fuel controls',()=>{
  const base={profile:'dirt',locations:[{},{}],fuel:{usableRangeMeters:1000,firstLegMaxMeters:1000}},env={DIRT_ADVENTURE_CANARY:'ns-v1'};
  assert.equal(canarySupported(base,'fuel',{}),false);assert.equal(canarySupported(base,'fuel',env),true);
- for(const extra of [{options:{avoidEdgeIds:['closed']}},{options:{arrivalEdgeId:'edge'}},{fuel:{requiredFirstStationId:'pump'}},{fuel:{minimumFuelStops:1}},{action:'debug_graph'}])assert.equal(canarySupported({...base,...extra},'fuel',env),false);
+ for(const extra of [{options:{avoidEdgeIds:['closed']}},{fuel:{requiredFirstStationId:'pump'}},{fuel:{minimumFuelStops:1}},{action:'debug_graph'}])assert.equal(canarySupported({...base,...extra},'fuel',env),false);
 });
 test('Atlantic opt-in exposes actual region identities and unknown-access intent',()=>{
  const {routeResponse}=require('./live-canary');
@@ -44,7 +44,7 @@ test('Atlantic opt-in exposes actual region identities and unknown-access intent
 test('phone Clean highway preference stays in the replacement engine',()=>{
  const body={profile:'cleanest',locations:[{lat:44.764843,lon:-63.340218},{lat:46.792506,lon:-67.569371}],options:{avoidMotorways:true,mapZoom:10.7},fuel:{usableRangeMeters:225000,firstLegMaxMeters:225000,windowMaxStops:12,forwardFeeler:false}};
  assert.equal(canarySupported(body,'fuel',{DIRT_ADVENTURE_CANARY:'ns-nb-v1'}),true);
- assert.equal(canarySupported({...body,options:{...body.options,arrivalEdgeId:'turn-context'}},'fuel',{DIRT_ADVENTURE_CANARY:'ns-nb-v1'}),false);
+ assert.equal(canarySupported({...body,options:{...body.options,arrivalEdgeId:'turn-context',priorEdgeIds:['turn-context']}},'fuel',{DIRT_ADVENTURE_CANARY:'ns-nb-v1'}),true);
 });
 
 test('Clean avoids a motorway shortcut but keeps an unavoidable motorway connection',()=>{
@@ -66,4 +66,10 @@ test('a truncated fuel candidate cannot report a fully evaluated ride pool',()=>
  const f=fixture(),pool=buildRideAlternatives({...f,maxFuelLabels:1,budget:work()});
  assert.equal(pool.search.poolComplete,false);
  assert.ok(pool.candidates.some(c=>c.reason==='label_limit'));
+});
+
+test('unsupported Atlantic ride controls report incomplete rather than switching engines',async()=>{
+ const {adventureCanaryRequest}=require('./live-canary');
+ const result=await adventureCanaryRequest({profile:'balanced',locations:[{lat:44.7648,lon:-63.3402},{lat:45.9,lon:-60}],options:{avoidEdgeIds:['closed']}},'fuel',{environment:{DIRT_ADVENTURE_CANARY:'ns-nb-v1'},load:()=>{throw Error('must not load');}});
+ assert.equal(result.status,'unknown');assert.equal(result.error,'adventure_unsupported_controls');assert.equal(result.diagnostics.strategy,'adventure-preview-v1');
 });

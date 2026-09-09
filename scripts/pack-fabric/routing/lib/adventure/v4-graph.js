@@ -63,6 +63,18 @@ function createV4Graph(pack,{allowUnknown=false,endpointEdges=[],stations=new Ma
     transitionCache.set(cacheKey,result);return result;
   }
   return {
+    seedArrival(arcs) {
+      if(!arcs.length)return {allowed:true,state:0};
+      // Include restrictions that could have begun before the retained suffix.
+      // This can conservatively reject an uncertain passage, never permit one
+      // by forgetting its history. Completed suffix transitions refine it.
+      const active=[];
+      for(let id=0;id<rules.length;id++)for(let pos=1;pos<rules[id].sequence.length;pos++)
+        if(rules[id].sequence[pos]===arcs[0].id)active.push([id,pos]);
+      let state=intern(-1,active);
+      for(const arc of arcs){const result=transition(state,arc);if(!result.allowed)return result;state=result.state;}
+      return {allowed:true,state};
+    },
     stateKey:(node,state)=>`${node}:${state??0}`,
     transition,
     stationAt:node=>stations.get(node)||null,

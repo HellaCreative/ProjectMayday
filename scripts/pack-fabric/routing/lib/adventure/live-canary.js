@@ -11,7 +11,7 @@ function canarySupported(body,kind,environment=process.env) {
  if(!['ns-v1','ns-nb-v1'].includes(environment.DIRT_ADVENTURE_CANARY)||body.action||body.locations?.length!==2||!['dirt','balanced','cleanest'].includes(body.profile))return false;
  const o=body.options||{},f=body.fuel||{};
  if(body.accessPolicy?.motorizedPermissive===false)return false;
- if(o.avoidEdgeIds?.length||o.arrivalEdgeId||o.priorEdgeIds?.length||o.maxPathMeters!=null||o.regionalHopMinimumMeters?.length||o.cleanMetroMultiplier!=null)return false;
+ if(o.avoidEdgeIds?.length||o.maxPathMeters!=null||o.regionalHopMinimumMeters?.length||o.cleanMetroMultiplier!=null)return false;
  if(kind==='fuel'&&(f.requiredFirstStationId||f.requireFuelStopBeforeEnd||f.minimumFuelStops>0||f.destinationFuelUsedLimitMeters!=null||f.forwardFeeler||f.probeFirstReachableStation))return false;
  return true;
 }
@@ -32,9 +32,9 @@ function toLiveResponse(pool,body,kind,identity) {
  if(kind==='route')return routeResponse(r.road.segments,body.profile,identity,diagnostics);
  if(!['provisional_station_access','verified'].includes(r.fuel.state))return {status:'unknown',error:r.fuel.reason||'fuel_unverified',message:'Road found, but fuel planning remains unverified.',routes:[routeResponse(r.road.segments,body.profile,identity,diagnostics)],stops:[],windowComplete:true,diagnostics};
  const visits=r.fuel.plannedRefills;
- if(visits.some(v=>v.atMeters<=1e-6||v.atMeters>=r.road.distanceMeters-1e-6))return null;
+ if(visits.some(v=>v.atMeters<=1e-6||v.atMeters>=r.road.distanceMeters-1e-6))return {status:'unknown',error:'adventure_endpoint_refill_unqualified',routes:[],stops:[],windowComplete:false,diagnostics};
  const maxStops=body.fuel.windowMaxStops??visits.length;
- if(!Number.isSafeInteger(maxStops)||maxStops<0||(maxStops===0&&visits.length>0)||(!body.fuel.allowPartialWindow&&visits.length>maxStops))return null;
+ if(!Number.isSafeInteger(maxStops)||maxStops<0||(maxStops===0&&visits.length>0)||(!body.fuel.allowPartialWindow&&visits.length>maxStops))return {status:'unknown',error:'adventure_fuel_window_unsupported',routes:[],stops:[],windowComplete:false,diagnostics};
  const kept=visits.slice(0,maxStops),complete=kept.length===visits.length;
  const boundaries=kept.map(v=>v.atMeters);if(complete)boundaries.push(r.road.distanceMeters);
  const routes=[];let at=0,index=0;
@@ -47,8 +47,15 @@ function toLiveResponse(pool,body,kind,identity) {
   fuelAccessEvidence:r.fuel.state};
 }
 async function adventureCanaryRequest(body,kind,{environment=process.env,load=null}={}) {
- if(!canarySupported(body,kind,environment))return null;
- if(kind==='fuel'&&(!Number.isFinite(body.fuel?.usableRangeMeters)||body.fuel.usableRangeMeters<=0||!Number.isFinite(body.fuel.firstLegMaxMeters)||body.fuel.firstLegMaxMeters<0||body.fuel.firstLegMaxMeters>body.fuel.usableRangeMeters))return null;
+ if(!canarySupported(body,kind,environment)){
+  // Within the opted-in Atlantic ride flow, unsupported context is an explicit
+  // incomplete result, never a silent switch to the retired engine.
+  if(body.action||!['ns-v1','ns-nb-v1'].includes(environment.DIRT_ADVENTURE_CANARY)||body.locations?.length!==2||!['dirt','balanced','cleanest'].includes(body.profile))return null;
+  const r=require('../../regional/select').resolveGraphRequest(body),enabled=environment.DIRT_ADVENTURE_CANARY==='ns-nb-v1'?['ns','nb']:['ns'];
+  if(!r.ok||!r.regionIds.length||r.regionIds.some(id=>!enabled.includes(id)))return null;
+  return {status:'unknown',error:'adventure_unsupported_controls',message:'This route request needs controls not yet supported by the new engine.',routes:[],stops:[],windowComplete:false,diagnostics:{strategy:'adventure-preview-v1',reason:'unsupported_controls'}};
+ }
+ if(kind==='fuel'&&(!Number.isFinite(body.fuel?.usableRangeMeters)||body.fuel.usableRangeMeters<=0||!Number.isFinite(body.fuel.firstLegMaxMeters)||body.fuel.firstLegMaxMeters<0||body.fuel.firstLegMaxMeters>body.fuel.usableRangeMeters))return {status:'unknown',error:'adventure_invalid_fuel',routes:[],stops:[],windowComplete:false,diagnostics:{strategy:'adventure-preview-v1'}};
  const {resolveGraphRequest}=require('../../regional/select');
  const resolution=resolveGraphRequest(body);
  const enabled=environment.DIRT_ADVENTURE_CANARY==='ns-nb-v1'?['ns','nb']:['ns'];
@@ -83,7 +90,7 @@ async function adventureCanaryRequest(body,kind,{environment=process.env,load=nu
  const signal=body.options?.abortSignal;
  const {tapRadiusMeters}=require('../legal-topology/snap');
  const endpointRadiusMeters=tapRadiusMeters({zoom:body.options?.mapZoom,lat:body.locations[0].lat,requestedMeters:body.options?.matchLimitMeters,graphBinaryVersion:4});
- const pool=buildRideAlternatives({pavedFuelHeuristicWeight:3,dirtContinuityMeters:1000,preferOnwardFuel:true,additionalUrbanAreas:resolution.regionIds.includes('nb')?require('./nb-urban-review-20260908-01.json').cores:[],avoidMotorways:body.options?.avoidMotorways===true,input,pack:data.pack,geom:data.geom,revision,stations:data.stations.filter(s=>!excluded.has(s.id)),context,endpointRadiusMeters,expandedCandidates:resolution.regionIds.includes('nb'),maxFuelLabels:400000,fuelHeuristicWeight:resolution.regionIds.length>1?2:1.5,
+ const pool=buildRideAlternatives({arrivalHistory:{priorEdgeIds:body.options?.priorEdgeIds||[],arrivalEdgeId:body.options?.arrivalEdgeId},pavedFuelHeuristicWeight:3,dirtContinuityMeters:1000,preferOnwardFuel:true,additionalUrbanAreas:resolution.regionIds.includes('nb')?require('./nb-urban-review-20260908-01.json').cores:[],avoidMotorways:body.options?.avoidMotorways===true,input,pack:data.pack,geom:data.geom,revision,stations:data.stations.filter(s=>!excluded.has(s.id)),context,endpointRadiusMeters,expandedCandidates:resolution.regionIds.includes('nb')||!!body.options?.priorEdgeIds?.length,maxFuelLabels:400000,fuelHeuristicWeight:resolution.regionIds.length>1?2:1.5,
   budget:createBudget({deadlineAtMs,maxExpansions:30000000,signal}),preparationBudget:createBudget({deadlineAtMs,maxExpansions:20000000,signal})});
  const response=toLiveResponse(pool,body,kind,identity);
  if(response){response.debug={...(response.debug||{}),adventureTotalMs:Date.now()-started};response.legId=body.legId;}
