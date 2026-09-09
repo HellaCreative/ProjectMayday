@@ -57,7 +57,7 @@
     {
       "name": "Loop result",
       "kind": "custom",
-      "description": "Completed loop shows legs and bottom Clear only. Clear immediately removes the loop and returns to setup with direction/distance/surface retained."
+      "description": "Completed loop shows legs, standard route details/notices/statistics and Save/Export/Start actions, followed by Clear route. Clear immediately removes the loop and returns to setup with direction/distance/surface retained."
     }
   ],
   "narrative": {

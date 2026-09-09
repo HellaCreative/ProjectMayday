@@ -392,6 +392,11 @@ struct RoutePlannerCard: View {
     @ViewBuilder private var loopContent: some View {
         if planner.hasRoute && !planner.isRouting {
             stageList
+            routingStatus
+            fuelCoverageNotices
+            ferryNotice
+            statsRow
+            ctaRow
             clearAllButton
         } else {
             loopSetupContent
@@ -1532,7 +1537,7 @@ struct RoutePlannerCard: View {
                 performClear()
             }
         } label: {
-            Text(planner.showingLoop ? "Clear" : "Clear route")
+            Text("Clear route")
                 .font(DirtType.cta)
                 .foregroundStyle(DirtTheme.danger)
                 .padding(.horizontal, 16)

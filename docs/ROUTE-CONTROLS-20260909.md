@@ -46,3 +46,8 @@ Verification for this simplification: nine focused tests passed. The final simul
 ## Loop result view — 2026-09-09
 
 After generation completes, Loop displays its legs and a bottom Clear button. Setup fields, creation button, summary, statistics and other route actions are hidden in this result view. Clear directly resets the route and restores the Loop setup, preserving the rider's direction, distance and surface selections. The tab menu stays available. No simulator was launched for this change; signed iPhone build verification is recorded separately.
+
+
+### Loop result correction
+
+Completed Loop retains the standard route result: legs, routing/fuel/ferry notices, route statistics and Save/Export/Start actions, followed by Clear route. Only Loop creation controls remain hidden. Clear continues to restore setup with prior selections. This supersedes the legs-only result above.
