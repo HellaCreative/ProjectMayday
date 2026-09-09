@@ -16,3 +16,13 @@ test('history orientation uses a continuous source suffix and refuses ambiguous 
  assert.equal(directedArrival(pack,[1],{edgeIndex:1,fraction:.5}).reason,'arrival_direction_unknown');
  assert.equal(directedArrival(pack,[1],{edgeIndex:2,fraction:0}).reason,'arrival_snap_mismatch');
 });
+
+test('history lookup constructs only requested way aliases and preserves cached IDs across eviction',()=>{
+ let aliases=0;const n=4200;
+ const p={edgeCount:n,edgeFrom:Array.from({length:n},(_,i)=>i),edgeTo:Array.from({length:n},(_,i)=>i+1),osmWayIds:Array.from({length:n},(_,i)=>String(i)),edgeId:e=>{aliases++;return `w${e}:${e}:${e+1}`;}};
+ const id=e=>`w${e}:${e}:${e+1}`;
+ const first=resolveHistory(p,[id(0)],id(0),budget());assert.deepEqual(first.edges,[0]);assert.equal(aliases,1);
+ assert.deepEqual(resolveHistory(p,[id(0)],id(0),budget()).edges,[0]);assert.equal(aliases,1);
+ for(let at=1;at<4096;at+=255){const ids=Array.from({length:Math.min(255,4096-at)},(_,i)=>id(at+i));assert.equal(resolveHistory(p,ids,ids.at(-1),budget()).state,'complete');}
+ assert.deepEqual(resolveHistory(p,[id(0),id(4096)],id(4096),budget()).edges,[0,4096]);
+});

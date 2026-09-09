@@ -6,11 +6,27 @@ function resolveHistory(pack,ids,arrivalId,budget) {
  if(!arrivalId&&!ids?.length)return {state:'complete',edges:[]};
  if(typeof arrivalId!=='string'||!Array.isArray(ids)||ids.length>256||ids.some(id=>typeof id!=='string')||ids.at(-1)!==arrivalId)return {state:'incomplete',reason:'arrival_history_invalid'};
  let index=indexes.get(pack);
- if(!index){index=new Map();for(let e=0;e<pack.edgeCount;e++){
-  if(!budget.consume())return {state:'incomplete',reason:budget.snapshot().reason};
-  for(const id of new Set([pack.edgeId(e),...(pack.edgeAliases?.(e)||[]),...(pack.osmNodeIds&&pack.osmWayIds?[`${pack.osmWayIds[e]}:${pack.osmNodeIds[pack.edgeFrom[e]]}:${pack.osmNodeIds[pack.edgeTo[e]]}`]:[])])){if(index.has(id)&&index.get(id)!==e)index.set(id,null);else if(!index.has(id))index.set(id,e);}
- }indexes.set(pack,index);}
- const edges=ids.map(id=>index.get(id)??index.get(id.replace(/#\d+$/,'')));
+ if(!index){index=new Map();indexes.set(pack,index);}
+ const pending=[...new Set(ids)].filter(id=>!index.has(id));
+ if(pending.length){
+  const targets=new Map(),found=new Map();
+  for(const id of pending){for(const variant of new Set([id,id.replace(/#\d+$/,'')])){const originals=targets.get(variant)||[];originals.push(id);targets.set(variant,originals);}}
+  const numeric=pending.every(id=>/^w?\d+:/.test(id));
+  const ways=new Set(pending.map(id=>id.split(':')[0].replace(/^w/,'')));
+  for(let e=0;e<pack.edgeCount;e++){
+   if(!budget.consume())return {state:'incomplete',reason:budget.snapshot().reason};
+   // Native and joined IDs both carry an OSM way identity. Only construct
+   // aliases for requested ways, instead of retaining millions of strings.
+   if(numeric&&pack.osmWayIds&&!ways.has(String(pack.osmWayIds[e])))continue;
+   const aliases=[pack.edgeId(e),...(pack.edgeAliases?.(e)||[])];
+   if(pack.osmNodeIds&&pack.osmWayIds)aliases.push(`${pack.osmWayIds[e]}:${pack.osmNodeIds[pack.edgeFrom[e]]}:${pack.osmNodeIds[pack.edgeTo[e]]}`);
+   for(const alias of aliases)for(const id of targets.get(alias)||[]){if(found.has(id)&&found.get(id)!==e)found.set(id,null);else if(!found.has(id))found.set(id,e);}
+  }
+  // Cache only fully scanned requested identities, bounded per pack instance.
+  if(index.size+pending.length>4096){const retained=ids.filter(id=>index.has(id)).map(id=>[id,index.get(id)]);index.clear();for(const [id,e] of retained)index.set(id,e);}
+  for(const id of pending)index.set(id,found.get(id)??null);
+ }
+ const edges=ids.map(id=>index.get(id));
  if(edges.at(-1)==null)return {state:'incomplete',reason:'arrival_edge_not_in_graph'};
  // Earlier history can be outside this region. Seed restrictions conservatively
  // at the start of the continuous known suffix rather than invent connectivity.
