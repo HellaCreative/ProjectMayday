@@ -869,3 +869,7 @@ Loop generation tries six closed four-leg circuits around a centre in the select
 Adding a waypoint on an existing leg in From Here, Loop or Plan creates a provisional selected pin without route requests. Drag changes only its draft coordinate. Show “Is this where you want to place this waypoint?” with Yes/No; No retains the editable pin, and the next drag release reopens confirmation. Yes inserts once and rebuilds. From Here converts to the editable plan at confirmation. Clear/mode changes invalidate the draft. Saved previews and navigation remain non-editable. Selected waypoint pans have priority over competing map gestures; genuine cancellation does not commit the move.
 
 Layers uses Profile-height glass presentation with a top-right X; the existing Layers navigation toggle also closes it. Active route-tool tabs use the dark navigation surface, white labels/icons, and rounded corners.
+
+### Full-height Layers containment — build 30
+
+While the full-height Layers or Profile sheet is open, suppress the floating map-control stack, rather than trying to place it above the full-height panel. Keep the sheet header/X within the safe viewport and the primary navigation fixed at the bottom. The list scrolls inside the sheet. This avoids control-stack padding increasing the parent layout beyond the screen.

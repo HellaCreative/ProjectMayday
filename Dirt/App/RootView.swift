@@ -642,7 +642,7 @@ struct RootView: View {
             }
 
             // Fuel range (leading) + recenter / fit plan (trailing) above route sheet.
-            if showsDock, (routeCardOpen || activeSheet != nil), activeSheet != .profile, !navActive {
+            if showsDock, (routeCardOpen || activeSheet != nil), activeSheet != .profile, activeSheet != .layers, !navActive {
                 HStack(alignment: .bottom, spacing: 10) {
                     if routeCardOpen {
                         fuelRangeButton
