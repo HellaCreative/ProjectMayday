@@ -73,3 +73,19 @@ test('unsupported Atlantic ride controls report incomplete rather than switching
  const result=await adventureCanaryRequest({profile:'balanced',locations:[{lat:44.7648,lon:-63.3402},{lat:45.9,lon:-60}],options:{avoidEdgeIds:['closed']}},'fuel',{environment:{DIRT_ADVENTURE_CANARY:'ns-nb-v1'},load:()=>{throw Error('must not load');}});
  assert.equal(result.status,'unknown');assert.equal(result.error,'adventure_unsupported_controls');assert.equal(result.diagnostics.strategy,'adventure-preview-v1');
 });
+
+test('an unfinished comparison cannot silently ship the first feasible candidate',()=>{
+ const pool=buildRideAlternatives({...fixture(),budget:work()});
+ pool.search.poolComplete=false;pool.search.reason='deadline';
+ const response=toLiveResponse(pool,{profile:'balanced',fuel:{}},'fuel',[]);
+ assert.equal(response.status,'unknown');assert.equal(response.error,'adventure_search_incomplete');assert.equal(response.windowComplete,false);
+});
+
+test('covered rides with unqualified pack data never fall back to the retired engine',async()=>{
+ const {adventureCanaryRequest}=require('./live-canary');
+ const body={profile:'balanced',locations:[{lat:44.7648,lon:-63.3402},{lat:45.9,lon:-60}],fuel:{usableRangeMeters:225000,firstLegMaxMeters:225000}};
+ for(const data of [{pack:{graphBinaryVersion:3}},{pack:{graphBinaryVersion:4},identity:[]}]){
+  const result=await adventureCanaryRequest(body,'fuel',{environment:{DIRT_ADVENTURE_CANARY:'ns-nb-v1'},load:async()=>data});
+  assert.equal(result.status,'unknown');assert.equal(result.error,'adventure_pack_unqualified');
+ }
+});

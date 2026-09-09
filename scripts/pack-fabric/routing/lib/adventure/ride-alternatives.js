@@ -1,5 +1,6 @@
 "use strict";
 const {buildFromHere}=require('./from-here');
+const {createRefinementBudget}=require('./budget');
 const {surfaceKind,compareSurface}=require('./surface');
 const {pavedBackroadCost}=require('./paved-backroad-cost');
 const {createPreparationCache}=require('./preparation-cache');
@@ -21,23 +22,47 @@ function buildRideAlternatives(options) {
  if(!Number.isFinite(continuityMeters)||continuityMeters<0)throw new TypeError("Continuity distance must be finite and nonnegative");
  const context=options.context||createRideAlternativeContext(),results=[];
  const candidates=options.expandedCandidates?expandedObjectives:objectives;
+ const continuation=!!options.arrivalHistory?.priorEdgeIds?.length;
+ const profile=options.input.legs[0].profile;
+ const rankFor=profile=>(a,b)=>(a.result.road.avoidanceMeters??a.result.road.urbanMeters??0)-(b.result.road.avoidanceMeters??b.result.road.urbanMeters??0)||compareSurface(profile,a.result.road.surface,b.result.road.surface)||a.id.localeCompare(b.id);
+ const rank=rankFor(profile);
+ const feasibleResult=r=>r.road.state==='complete'&&['provisional_station_access','verified','not_requested'].includes(r.fuel.state);
+ const build=(objective,refine,budget=options.budget)=>buildFromHere({...options,...context,budget,preparationBudget:budget===options.budget?options.preparationBudget:budget,objectiveId:objective.id,edgeCost:objective.cost,fuelHeuristicWeight:objective.id==='paved'?(options.pavedFuelHeuristicWeight??options.fuelHeuristicWeight):options.fuelHeuristicWeight,dirtEntryCost:objective.id==='paved'?0:continuityMeters*(Number(objective.id.split('-')[1])-1),preferOnwardFuel:options.preferOnwardFuel===true,retainFuelApproach:refine});
  for(const objective of candidates) {
   if(!options.budget.check())break;
-  // Refine paved candidates and waypoint continuations only when their
-  // completed fuel route repeats a road (see fuel-ride).
-  const result=buildFromHere({...options,...context,objectiveId:objective.id,edgeCost:objective.cost,fuelHeuristicWeight:objective.id==='paved'?(options.pavedFuelHeuristicWeight??options.fuelHeuristicWeight):options.fuelHeuristicWeight,dirtEntryCost:objective.id==='paved'?0:continuityMeters*(Number(objective.id.split('-')[1])-1),preferOnwardFuel:options.preferOnwardFuel===true,retainFuelApproach:objective.id==='paved'||!!options.arrivalHistory?.priorEdgeIds?.length});
+  // Preserve the accepted fresh-route behavior. For continuations, finish
+  // the shared comparison before spending work on approach refinements.
+  const result=build(objective,!continuation&&objective.id==='paved');
   results.push({id:objective.id,result});
   if(options.budget.snapshot().reason)break;
  }
+ // All profiles refine the same set of potential winners in the same order.
+ // This preserves a shared candidate pool: Balanced cannot gain a candidate
+ // that Dirt never had the opportunity to select. Optional refinement has its
+ // own short limit, charged to the original request's work/clock budget.
+ if(continuation&&results.length===candidates.length&&results.every(r=>feasibleResult(r.result))) {
+  const attempted=new Set();
+  while(options.budget.check()) {
+   const feasible=results.filter(r=>feasibleResult(r.result));
+   const winners=['clean','dirt','balanced'].map(p=>feasible.slice().sort(rankFor(p))[0]);
+   const best=winners.find(r=>r&&!attempted.has(r.id)&&r.result.qualityAudit?.repeatedRoadMeters>0);
+   if(!best)break;
+   attempted.add(best.id);
+   const budget=createRefinementBudget(options.budget,{maxMilliseconds:2000});
+   if(!budget.check())break;
+   const refined=build(candidates.find(c=>c.id===best.id),true,budget);
+   if(feasibleResult(refined))best.result=refined;
+   else best.refinement={state:'incomplete',reason:budget.snapshot().reason||refined.fuel.reason};
+  }
+ }
  const poolComplete=results.length===candidates.length&&!options.budget.snapshot().reason&&results.every(r=>['provisional_station_access','verified','not_requested'].includes(r.result.fuel.state));
- const profile=options.input.legs[0].profile;
  const roads=results.filter(r=>r.result.road.state==='complete');
  const feasible=roads.filter(r=>['provisional_station_access','verified','not_requested'].includes(r.result.fuel.state));
  const pool=feasible.length?feasible:roads;
- pool.sort((a,b)=>(a.result.road.avoidanceMeters??a.result.road.urbanMeters??0)-(b.result.road.avoidanceMeters??b.result.road.urbanMeters??0)||compareSurface(profile,a.result.road.surface,b.result.road.surface)||a.id.localeCompare(b.id));
+ pool.sort(rank);
  const selected=pool[0];
  return {state:selected?'complete':'incomplete',selected:selected?.result||null,selectedObjective:selected?.id||null,
-  candidates:results.map(r=>({id:r.id,road:r.result.road.state,fuel:r.result.fuel.state,reason:r.result.fuel.reason,surface:r.result.road.surface,urbanMeters:r.result.road.urbanMeters,timing:r.result.timing,repeatedRoadMeters:r.result.qualityAudit?.repeatedRoadMeters,approachRefinement:r.result.search?.fuelSearch?.approachRefinement})),
+  candidates:results.map(r=>({id:r.id,road:r.result.road.state,fuel:r.result.fuel.state,reason:r.result.fuel.reason,surface:r.result.road.surface,urbanMeters:r.result.road.urbanMeters,timing:r.result.timing,repeatedRoadMeters:r.result.qualityAudit?.repeatedRoadMeters,approachRefinement:r.refinement||r.result.search?.fuelSearch?.approachRefinement})),
   search:{...options.budget.snapshot(),poolComplete},
   limitations:['bounded shared candidate pool; not global best ride proof','station access may remain provisional']};
 }

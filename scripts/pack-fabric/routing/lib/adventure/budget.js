@@ -24,4 +24,12 @@ function createBudget({ deadlineAtMs, maxExpansions, signal, now = Date.now }) {
     snapshot() { check(); return { deadlineAtMs, expansions, maxExpansions, reason }; }
   });
 }
-module.exports = { createBudget };
+// Optional quality work may stop before the request limit. Its expansions
+// still belong to the parent; a local timeout must not erase a proved route.
+function createRefinementBudget(parent,{maxMilliseconds=2000,now=Date.now}={}) {
+ const deadline=Math.min(parent.snapshot().deadlineAtMs-250,now()+maxMilliseconds);
+ let reason=null;
+ function check(){if(reason)return false;if(!parent.check())reason=parent.snapshot().reason;else if(now()>=deadline)reason='refinement_deadline';return reason===null;}
+ return {check,consume(){return check()&&parent.consume();},snapshot(){check();return {...parent.snapshot(),deadlineAtMs:deadline,reason};}};
+}
+module.exports = { createBudget, createRefinementBudget };
