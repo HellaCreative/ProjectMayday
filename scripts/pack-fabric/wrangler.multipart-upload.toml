@@ -1,0 +1,8 @@
+name = "dirt-v4-candidate-multipart-local"
+main = "scripts/r2-multipart-upload-worker.js"
+compatibility_date = "2026-09-07"
+
+[[r2_buckets]]
+binding = "PACKS"
+bucket_name = "dirt-packs"
+remote = true

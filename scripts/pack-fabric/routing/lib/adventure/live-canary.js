@@ -3,6 +3,7 @@ const {buildRideAlternatives,createRideAlternativeContext}=require('./ride-alter
 const {createBudget}=require('./budget');
 const {summarizeSurface,surfaceKind}=require('./surface');
 const {withServiceIdentity}=require('../service-contract');
+const {qualifiedPack,nbSupplement}=require('./pack-revision-qualification');
 const context=createRideAlternativeContext();
 let joinedCache=null;
 const {joinV4}=require('./join-v4');
@@ -77,7 +78,7 @@ async function adventureCanaryRequest(body,kind,{environment=process.env,load=nu
    return {...runtime,stations:fuel.stations,identity:runtime.packIdentity.map(p=>({...p,...fuel.packIdentity}))};
   });
   if(rows.length===1)return rows[0];
-  if(rows.some(r=>r.identity.some(p=>p.releaseId!=='fabric-v4-20260908-02')))return {pack:{graphBinaryVersion:0}};
+  if(rows.some(r=>r.identity.some(p=>!qualifiedPack(p))))return {pack:{graphBinaryVersion:0}};
   const key=JSON.stringify(rows.flatMap(r=>r.identity));
   if(!joinedCache||joinedCache.key!==key||rows.some((r,i)=>joinedCache.inputs[i]!==r.pack)) {
    joinedCache=null;
@@ -92,14 +93,14 @@ async function adventureCanaryRequest(body,kind,{environment=process.env,load=nu
  const dataReadyAt=Date.now();
  if(data.pack.graphBinaryVersion!==4)return {status:'unknown',error:'adventure_pack_unqualified',routes:[],stops:[],windowComplete:false,diagnostics:{strategy:'adventure-preview-v1'}};
  const identity=data.identity||data.packIdentity||[],revision=identity.map(p=>`${p.graphSha256}/${p.geometrySha256}`).join('|');
- if(!identity.length||!revision||identity.some(p=>p.releaseId!=='fabric-v4-20260908-02'))return {status:'unknown',error:'adventure_pack_unqualified',routes:[],stops:[],windowComplete:false,diagnostics:{strategy:'adventure-preview-v1'}};
+ if(!identity.length||!revision||identity.some(p=>!qualifiedPack(p)))return {status:'unknown',error:'adventure_pack_unqualified',routes:[],stops:[],windowComplete:false,diagnostics:{strategy:'adventure-preview-v1'}};
  const excluded=new Set(body.fuel?.excludedStationIds||[]),profile=body.profile==='cleanest'?'clean':body.profile;
  const input={mode:'from_here',anchors:body.locations.map((p,i)=>({id:`rider-${i}`,lat:p.lat,lon:p.lon})),legs:[{from:'rider-0',to:'rider-1',profile,allowUnknown:profile!=='clean'&&body.accessPolicy?.motorizedUnknown===true}],
   fuel:kind==='fuel'?{fullRangeMeters:body.fuel.usableRangeMeters,reserveFraction:0,initialUsableMeters:body.fuel.firstLegMaxMeters}:null};
  const signal=body.options?.abortSignal;
  const {waypointRadiusMeters}=require('./waypoint-radius');
  const endpointRadiusMeters=waypointRadiusMeters({zoom:body.options?.mapZoom,lat:body.locations[0].lat,requestedMeters:body.options?.matchLimitMeters,graphBinaryVersion:4});
- const pool=buildRideAlternatives({arrivalHistory:{priorEdgeIds:body.options?.priorEdgeIds||[],arrivalEdgeId:body.options?.arrivalEdgeId},pavedFuelHeuristicWeight:3,dirtContinuityMeters:1000,preferOnwardFuel:true,additionalUrbanAreas:resolution.regionIds.includes('nb')?require('./nb-urban-review-20260908-01.json').cores:[],avoidMotorways:body.options?.avoidMotorways===true,input,pack:data.pack,geom:data.geom,revision,stations:data.stations.filter(s=>!excluded.has(s.id)),context,endpointRadiusMeters,expandedCandidates:resolution.regionIds.includes('nb')||!!body.options?.priorEdgeIds?.length,maxFuelLabels:400000,fuelHeuristicWeight:resolution.regionIds.length>1?2:1.5,
+ const pool=buildRideAlternatives({arrivalHistory:{priorEdgeIds:body.options?.priorEdgeIds||[],arrivalEdgeId:body.options?.arrivalEdgeId},pavedFuelHeuristicWeight:3,dirtContinuityMeters:1000,preferOnwardFuel:true,additionalUrbanAreas:nbSupplement(identity,require('./nb-urban-review-20260908-01.json').cores),avoidMotorways:body.options?.avoidMotorways===true,input,pack:data.pack,geom:data.geom,revision,stations:data.stations.filter(s=>!excluded.has(s.id)),context,endpointRadiusMeters,expandedCandidates:resolution.regionIds.includes('nb')||!!body.options?.priorEdgeIds?.length,maxFuelLabels:400000,fuelHeuristicWeight:resolution.regionIds.length>1?2:1.5,
   budget:createBudget({deadlineAtMs,maxExpansions:30000000,signal}),preparationBudget:createBudget({deadlineAtMs,maxExpansions:20000000,signal})});
  const searchDoneAt=Date.now();
  const response=toLiveResponse(pool,body,kind,identity);

@@ -45,12 +45,24 @@ function main() {
   provenance.sourceEpoch = `geofabrik:${provenance.osmTimestamp}`;
   provenance.regionId = regionId;
   provenance.timezone = "America/Halifax";
-  const urbanPath = path.join(FABRIC, "routing", "data", "regions", regionId, "urban-cores.v1.json");
-  if (fs.existsSync(urbanPath)) {
-    const sidecar = JSON.parse(fs.readFileSync(urbanPath, "utf8"));
-    provenance.urbanCores = sidecar.cores || sidecar.urbanCores || null;
-    provenance.settlements = sidecar.settlements || null;
+  if (!sourceLock) throw new Error("City classification requires the same locked source as the road graph");
+  const urbanRoot = process.env.DIRT_V4_URBAN_ROOT
+    ? path.resolve(process.env.DIRT_V4_URBAN_ROOT)
+    : path.join(legalRoot, "locked-place-records");
+  const urbanPath = path.join(urbanRoot, regionId, "urban-cores.v1.json");
+  if (!fs.existsSync(urbanPath)) {
+    require("./extract-locked-place-records").extract(sourceLock.path, urbanRoot, [regionId]);
+    const sidecar = require("./build-locked-urban").build(path.join(urbanRoot, regionId, "place-records.json"));
+    fs.writeFileSync(urbanPath, JSON.stringify(sidecar, null, 2) + "\n");
   }
+  const urban = JSON.parse(fs.readFileSync(urbanPath, "utf8"));
+  if (urban.regionId !== regionId || urban.provenance?.sourceSha256 !== sourceLock.region.sourceSha256 ||
+      !Array.isArray(urban.cores) || !Array.isArray(urban.settlements) || urban.completeness?.sourceNodePassComplete !== true) {
+    throw new Error(`${regionId}: city classification is missing, incomplete, or from a different source`);
+  }
+  provenance.urbanCores = urban.cores;
+  provenance.settlements = urban.settlements;
+  provenance.urbanClassification = { revision: urban.revision, sha256: shaFile(urbanPath), policy: urban.policy, completeness: urban.completeness };
 
   const osm = parseOpl(opl);
   console.warn("parsed OSM", osm.nodes.length, "nodes", osm.ways.length, "ways", osm.relations.length, "relations");
