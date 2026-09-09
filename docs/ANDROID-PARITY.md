@@ -803,3 +803,8 @@ Match the current iPhone contract: start/end at current authorized GPS location;
 From Here, Loop and Plan a Route share the same fuel-stop replacement interaction. Tapping an F pin or fuel stage checks up to six canonical stations within 25 km. Highlight a station only after its replacement itinerary has a proved incoming fuel hop and complete onward continuation; preserve every upstream built leg. Tapping a highlighted station commits that checked itinerary. Never freely drag a fuel pin. Route edits, mode changes and navigation invalidate pending checks and cached choices. Failed or stale checks leave the original route intact.
 
 The live NS/NB adventure service supports an explicit required first station, with no intervening refill before that station and continuous onward geometry. Feasibility of an individually proved replacement may be accepted even if another surface-objective comparison is incomplete; normal route candidate-pool requirements remain unchanged. Mapped station access remains provisional. This does not qualify offline parity or Android implementation.
+
+
+### Fuel replacement acceptance freeze — September 9, 2026
+
+Richard accepted fuel-stop replacement on White and explicitly froze it. Preserve the shared From Here/Loop/Plan a Route interaction and checked replacement/upstream-preservation contract above. Baselines: iOS904f11f, live476230d4bfa3ed8b5fed16514e2908266b691b63. Future engine changes must preserve this accepted behavior; no Android implementation or offline qualification is implied.
