@@ -949,3 +949,7 @@ After a non-paved continuation candidate reaches its existing label limit, a sin
 ### Qualified DEV continuation recovery —4da3822
 
 Private continuation recovery described above is now stable DEV4da3822dd7d37f6dde7720d61668aba1d7e883f8/runtimecfc8c3d, exactbz4kvcmdt, BOTHAtlantic02/ns-nb-v1.193+22local,19privatehosted and7independentpublic checks pass; rollback6cb2770 retained. No native parity implementation claimed. FreshreverseInverness180label failure and previoushistory/per-pin/unknown-arrival limits remainopen. Saved builtgeometry unchanged.
+
+### Private connected-start snap recovery
+
+When ordinary endpoint candidate lists have no connected pair, re-query the start against eligible components represented at the destination, within the current allowed radius; retry under existing coarse-area expansion only as needed. Never move a fixed fuel start or change an incoming arrival road. Preserve valid near pairs, destination projections, access rules and explicit radius caps; no artificial connector. Expose waypointSnap.startComponentRecovery.197+22local checks and realNS500m/3.2km cases pass; pending private hosted qualification. Stable4da3822 unchanged. No native parity claim.
