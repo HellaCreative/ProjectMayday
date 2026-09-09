@@ -18,7 +18,7 @@ const {proveFuel}=require("./fuel-proof");
 // explicitly provisional station access; they never become physical entrance
 // proof. Caller supplies the experimental cost model, not a hidden final style.
 function buildFromHere({input,pack,geom,revision,stations,budget,preparationBudget=budget,edgeCost,objectiveId,
-  preparationCache=createPreparationCache(),reverseCostCache=createReverseCostCache(),stationMatchCache=createStationMatchCache(),stationRadiusMeters=150,endpointRadiusMeters=2000,maxFuelLabels=100000,fuelHeuristicWeight=1,avoidMotorways=false,additionalUrbanAreas=[],preferOnwardFuel=false,retainFuelApproach=false,dirtEntryCost=0,arrivalHistory=null,fuelFirst=false}) {
+  preparationCache=createPreparationCache(),reverseCostCache=createReverseCostCache(),stationMatchCache=createStationMatchCache(),stationRadiusMeters=150,endpointRadiusMeters=2000,maxFuelLabels=100000,fuelHeuristicWeight=1,avoidMotorways=false,ridePreferences=null,additionalUrbanAreas=[],preferOnwardFuel=false,retainFuelApproach=false,dirtEntryCost=0,arrivalHistory=null,fuelFirst=false}) {
   if(preparationBudget.snapshot().deadlineAtMs>budget.snapshot().deadlineAtMs)throw new TypeError("Preparation cannot outlive the request deadline");
   const request=normalizeRequest(input);
   if(request.mode!=="from_here")throw new TypeError("From Here requires exactly two fixed rider anchors");
@@ -44,7 +44,9 @@ function buildFromHere({input,pack,geom,revision,stations,budget,preparationBudg
   const isMotorway=arc=>/^(motorway|motorway_link|freeway)$/.test(arc.roadClassLeaf||"");
   // Minimize exposure before ride cost. Necessary connections stay available;
   // a shorter motorway is never a reason to abandon a zero-exposure connection.
-  const avoidanceCost=avoidMotorways?arc=>isMotorway(arc)?arc.distanceMeters:urban.urbanMeters(arc):urban.urbanMeters;
+  const avoidanceCost=ridePreferences
+    ? arc=>(ridePreferences.avoidHighways&&/^(motorway|trunk|primary)(?:_link)?$|^freeway$/.test(arc.roadClassLeaf||""))?arc.distanceMeters:(ridePreferences.avoidCities?urban.urbanMeters(arc):0)
+    : avoidMotorways?arc=>isMotorway(arc)?arc.distanceMeters:urban.urbanMeters(arc):urban.urbanMeters;
   function recordExposure(road,result) {
     road.avoidanceMeters=result.avoidanceCost;
     road.urbanMeters=result.arcs.reduce((sum,arc)=>sum+urban.urbanMeters(arc),0);

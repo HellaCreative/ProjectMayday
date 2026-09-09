@@ -52,6 +52,11 @@ function toLiveResponse(pool,body,kind,identity) {
   fuelAccessEvidence:r.fuel.state};
 }
 async function adventureCanaryRequest(body,kind,{environment=process.env,load=null}={}) {
+ if(body.options?.ridePreferences!=null) {
+  const r=require('../../regional/select').resolveGraphRequest(body);
+  if(!canarySupported(body,kind,environment)||!r.ok||!r.regionIds.length||r.regionIds.some(id=>!(environment.DIRT_ADVENTURE_CANARY==='ns-nb-v1'?['ns','nb']:['ns']).includes(id)))
+   return {status:'unknown',error:'ride_preferences_unavailable',message:'Custom ride settings are not available for this route yet.',routes:[],stops:[],windowComplete:false};
+ }
  if(!canarySupported(body,kind,environment)){
   // Within the opted-in Atlantic ride flow, unsupported context is an explicit
   // incomplete result, never a silent switch to the retired engine.
@@ -65,6 +70,9 @@ async function adventureCanaryRequest(body,kind,{environment=process.env,load=nu
  const resolution=resolveGraphRequest(body);
  const enabled=environment.DIRT_ADVENTURE_CANARY==='ns-nb-v1'?['ns','nb']:['ns'];
  if(!resolution.ok||!resolution.regionIds.length||resolution.regionIds.length>enabled.length||resolution.regionIds.some(id=>!enabled.includes(id)))return null;
+ let ridePreferences;
+ try {ridePreferences=require('./ride-preferences').validatePreferences(body.options?.ridePreferences);}
+ catch {return {status:'unknown',error:'invalid_ride_preferences',message:'The ride settings are invalid.',routes:[],stops:[],windowComplete:false};}
  const started=Date.now(),window=Number(body.fuel?.windowTimeBudgetMs||20000);
  const deadlineAtMs=started+Math.min(20000,Math.max(100,window));
  const loadTiming={regions:[],joinMs:0,joinCacheHit:false};
@@ -100,7 +108,7 @@ async function adventureCanaryRequest(body,kind,{environment=process.env,load=nu
  const signal=body.options?.abortSignal;
  const {waypointRadiusMeters}=require('./waypoint-radius');
  const endpointRadiusMeters=waypointRadiusMeters({zoom:body.options?.mapZoom,lat:body.locations[0].lat,requestedMeters:body.options?.matchLimitMeters,graphBinaryVersion:4});
- const pool=buildRideAlternatives({arrivalHistory:{priorEdgeIds:body.options?.priorEdgeIds||[],arrivalEdgeId:body.options?.arrivalEdgeId},pavedFuelHeuristicWeight:3,dirtContinuityMeters:1000,preferOnwardFuel:true,additionalUrbanAreas:nbSupplement(identity,require('./nb-urban-review-20260908-01.json').cores),avoidMotorways:body.options?.avoidMotorways===true,input,pack:data.pack,geom:data.geom,revision,stations:data.stations.filter(s=>!excluded.has(s.id)),context,endpointRadiusMeters,expandedCandidates:resolution.regionIds.includes('nb')||!!body.options?.priorEdgeIds?.length,maxFuelLabels:400000,fuelHeuristicWeight:resolution.regionIds.length>1?2:1.5,
+ const pool=buildRideAlternatives({ridePreferences,arrivalHistory:{priorEdgeIds:body.options?.priorEdgeIds||[],arrivalEdgeId:body.options?.arrivalEdgeId},pavedFuelHeuristicWeight:3,dirtContinuityMeters:1000,preferOnwardFuel:true,additionalUrbanAreas:nbSupplement(identity,require('./nb-urban-review-20260908-01.json').cores),avoidMotorways:body.options?.avoidMotorways===true,input,pack:data.pack,geom:data.geom,revision,stations:data.stations.filter(s=>!excluded.has(s.id)),context,endpointRadiusMeters,expandedCandidates:resolution.regionIds.includes('nb')||!!body.options?.priorEdgeIds?.length,maxFuelLabels:400000,fuelHeuristicWeight:resolution.regionIds.length>1?2:1.5,
   budget:createBudget({deadlineAtMs,maxExpansions:30000000,signal}),preparationBudget:createBudget({deadlineAtMs,maxExpansions:20000000,signal})});
  const searchDoneAt=Date.now();
  const response=toLiveResponse(pool,body,kind,identity);

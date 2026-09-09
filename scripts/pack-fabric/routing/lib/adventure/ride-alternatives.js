@@ -1,4 +1,5 @@
 "use strict";
+const {wanderCandidates}=require('./ride-preferences');
 const {buildFromHere}=require('./from-here');
 const {createRefinementBudget}=require('./budget');
 const {surfaceKind,compareSurface}=require('./surface');
@@ -85,7 +86,7 @@ function buildRideAlternatives(options) {
  const poolComplete=results.length===candidates.length&&!options.budget.snapshot().reason&&results.every(r=>['provisional_station_access','verified','not_requested'].includes(r.result.fuel.state));
  const roads=results.filter(r=>r.result.road.state==='complete');
  const feasible=roads.filter(r=>['provisional_station_access','verified','not_requested'].includes(r.result.fuel.state));
- const pool=feasible.length?feasible:roads;
+ const pool=wanderCandidates(feasible.length?feasible:roads,options.ridePreferences?.wander??1);
  pool.sort(rank);
  const selected=pool[0];
  return {state:selected?'complete':'incomplete',selected:selected?.result||null,selectedObjective:selected?.id||null,
