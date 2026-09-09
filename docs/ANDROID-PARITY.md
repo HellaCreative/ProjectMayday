@@ -953,3 +953,7 @@ Private continuation recovery described above is now stable DEV4da3822dd7d37f6dd
 ### Private connected-start snap recovery
 
 When ordinary endpoint candidate lists have no connected pair, re-query the start against eligible components represented at the destination, within the current allowed radius; retry under existing coarse-area expansion only as needed. Never move a fixed fuel start or change an incoming arrival road. Preserve valid near pairs, destination projections, access rules and explicit radius caps; no artificial connector. Expose waypointSnap.startComponentRecovery.197+22local checks and realNS500m/3.2km cases pass; pending private hosted qualification. Stable4da3822 unchanged. No native parity claim.
+
+### Qualified DEV connected-start snapping — f2da612
+
+Connected-start recovery is now stable DEV sourcef2da612ae73dd175123430391010b48f0d9408a7/runtime0496982, exactqu663xg1q, both Atlantic02/ns-nb-v1.197+22 local,22 private hosted and8 independent public checks pass. Existing radius/access/arrival/fixed-pump restrictions remain. No native parity implementation claimed; per-pin persistence and other documented contract limits remain. Rollback4da3822 protected.
