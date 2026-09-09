@@ -546,6 +546,28 @@ struct RoutePlannerCard: View {
     // MARK: - Plan
 
     @ViewBuilder private var planContent: some View {
+        VStack(alignment: .leading, spacing: DirtSpace.tight) {
+            Button {
+                planner.closeLoop()
+            } label: {
+                Label("Loop back to start", systemImage: "arrow.triangle.2.circlepath")
+                    .font(DirtType.rowTitle)
+                    .foregroundStyle(planner.canCloseLoop ? DirtTheme.orange : DirtTheme.muted)
+                    .frame(maxWidth: .infinity, minHeight: DirtHit.min)
+                    .background(DirtTheme.rowFill, in: RoundedRectangle(cornerRadius: DirtRadius.control))
+            }
+            .buttonStyle(.plain)
+            .disabled(!planner.canCloseLoop)
+            .accessibilityHint("Adds a routed return to point 1, including fuel stops when needed")
+            if planner.itinerary.waypoints.count < 2 {
+                Text("Add two points to create a loop back to point 1.")
+                    .font(DirtType.helper).foregroundStyle(DirtTheme.muted)
+            } else if RoutePlannerModel.loopReturnPoint(in: planner.itinerary) == nil {
+                Text("Your route already returns to its start.")
+                    .font(DirtType.helper).foregroundStyle(DirtTheme.muted)
+            }
+        }
+
         // Mode chips live per-stage (tap a stage to expand). Hide the top row
         // until the first stage exists so empty Plan stays clean.
         if planner.stages.isEmpty {
@@ -557,19 +579,6 @@ struct RoutePlannerCard: View {
             stageList
         }
 
-        if planner.canCloseLoop {
-            Button {
-                planner.closeLoop()
-            } label: {
-                Label("Loop back to start", systemImage: "arrow.triangle.2.circlepath")
-                    .font(DirtType.rowTitle)
-                    .foregroundStyle(DirtTheme.orange)
-                    .frame(maxWidth: .infinity, minHeight: DirtHit.min)
-                    .background(DirtTheme.rowFill, in: RoundedRectangle(cornerRadius: DirtRadius.control))
-            }
-            .buttonStyle(.plain)
-            .accessibilityHint("Adds a routed return to point 1, including fuel stops when needed")
-        }
 
         routingStatus
 

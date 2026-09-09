@@ -783,3 +783,7 @@ Wander narrows the proven shared candidate pool by distance before applying surf
 ### September 9 — national DEV catalog wiring
 
 DEV catalog, graph, geometry, fuel, cross-pack seams and Rider Services now use the same immutable `v4/candidates/fabric-v4-20260909-01` namespace. Production URLs remain unchanged. This catalog switch follows Richard’s explicit DEV-now direction while national uploads/checks continue; incomplete uploads or server-memory failures remain tracked and are not a claim of nationwide qualification. Android DEV must select the same namespace. Existing navigation keeps its pinned installed revision.
+
+### September 9 — Loop discoverability correction
+
+Keep Loop back to start at the top of Plan a route, above the leg list. Show it disabled before two points exist with an explanation, and identify an already closed route. Do not hide the feature until eligible or bury it beneath fuel stages. Route-building behavior is unchanged.
