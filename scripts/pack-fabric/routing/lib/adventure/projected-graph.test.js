@@ -97,3 +97,13 @@ test('waypoint interior arrival cannot invent an immediate reversal',()=>{
  for(const arc of g.outgoing(g.pointNodes.get('a')))assert.equal(g.transition(initial.state,arc).allowed,arc.toFraction>arc.fromFraction);
  const r=route(g,'a','b',{initialTurnState:initial.state});assert.equal(r.state,'found');
 });
+
+test('direct arc visitor preserves projection order and stops on cancellation',()=>{
+ for(const oneway of [false,true])for(const allowUnknown of [false,true]){
+  const graph=createProjectedGraph(pack(oneway),{allowUnknown,points:[{id:'a',edgeIndex:0,fraction:.2},{id:'b',edgeIndex:0,fraction:.7}],budget:budget()});
+  for(let node=0;node<graph.nodeCount;node++){
+   const expected=[...graph.outgoing(node)],actual=[];graph.forEachOutgoing(node,arc=>actual.push(arc));assert.deepEqual(actual,expected);
+   let calls=0;graph.forEachOutgoing(node,()=>{calls++;return false;});assert.equal(calls,Math.min(1,expected.length));
+  }
+ }
+});

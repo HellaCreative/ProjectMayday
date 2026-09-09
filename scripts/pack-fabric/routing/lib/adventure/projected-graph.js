@@ -85,6 +85,21 @@ function createProjectedGraph(pack,{points,allowUnknown=false,endpointEdges=[],b
     stateKey:(node,state)=>`${node}:${state??0}`,
     transition,
     stationAt:node=>stations.get(node)||null,
+    forEachOutgoing(node,visit) {
+      const mid=virtual.get(node);
+      if(mid) {
+        const list=byEdge.get(mid.edge),directions=permissions.get(mid.edge);
+        if(directions.forward&&mid.index+1<list.length&&visit(partial(mid.edge,mid.position,list[mid.index+1]))===false)return false;
+        if(directions.reverse&&mid.index>0&&visit(partial(mid.edge,mid.position,list[mid.index-1]))===false)return false;
+        return;
+      }
+      return base.forEachOutgoing(node,arc=>{
+        const list=byEdge.get(arc.id);
+        if(!list)return visit(arc);
+        if(node===pack.edgeFrom[arc.id])return visit(partial(arc.id,list[0],list[1]));
+        else return visit(partial(arc.id,list[list.length-1],list[list.length-2]));
+      });
+    },
     *outgoing(node) {
       const mid=virtual.get(node);
       if(mid) {

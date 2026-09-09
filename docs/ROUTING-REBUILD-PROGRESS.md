@@ -1404,3 +1404,9 @@ Private dto4bulvk/source82ac4c1878cacc6a45c0ea9e8c2e6abbe578d1f9 passes15 hosted
 Independent second untouched deployment fy0rnzzur, exactsame82ac4c1/config, still fails coldClean20s: data6.560s,join4.619s,search13.440s. This is insufficient cold-start headroom, despite the15 passes. No promotion; stable56308d4 remains. Evidence /tmp/dirt-fuel-first-hosted-{cold,cold2,multi,device,hooks,target}. No running tests or pending publication. More work remains; do not pause heartbeat yet.
 
 Next investigate repeated reverse-bound preparation across shared candidates or other exact-equivalent work sharing. Avoid reintroducing rejected heuristic4/5 (22.703km repeat), dropping core candidates, weakening fuel/turn/access proof or enlarging20s deadline. Current runtime67bc630 includes private join/loading changes; accepted stable still23bd403. Overnight work should advance from this evidence rather than repeat all15 checks without a code change.
+
+## Direct arc traversal for bound preparation — local
+
+Reverse-cost preparation can visit projected/base road arcs directly instead of passing every arc through nested generators. Forward route search is unchanged. The direct visitor preserves arc order/projection fields and cancellation; generic graphs keep the iterator fallback. Identical full NS/NB reverse heads/from/next/cost digests for paved and distance-weighted costs. Five-run local medians improve approximately135→93ms and120→77ms. Evidence /tmp/dirt-visitor-{comparison,times}.192 focused tests pass including projected arc equivalence and visitor cancellation. Local Clean final-fuel retains exact accepted geometry with zero repeat in5.440s.
+
+This is layered on private82ac4c1's join/loading/fuel-first changes. Stable56308d4 remains protected. Private cold request needed; do not claim fresh-load reliability from local speed measurements. No deadline, candidate pool, access, turn or fuel contract changes; no native implementation claimed.
