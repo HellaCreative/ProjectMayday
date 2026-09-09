@@ -52,3 +52,5 @@ body{background:#eef0eb}.studio{max-width:1120px;margin:auto;padding:36px 28px;d
 .primary-nav button.active{background:var(--dirt-brand-orange);color:#fff}
 .primary-nav button.route-present{border-color:var(--dirt-brand-orange);color:var(--dirt-text-orange)}
 .tabs button.selected{color:var(--dirt-text-orange)}
+
+.primary-nav .nav-selection{position:absolute;background:#ff8000;border-radius:12px;pointer-events:none;z-index:0}.primary-nav button{position:relative;z-index:1}.primary-nav button.active{background:transparent}
