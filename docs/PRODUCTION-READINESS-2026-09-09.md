@@ -28,3 +28,12 @@ although arm64 Mach-O targets IOS. Design resources now excluded in project;
 rebuild verification pending. MapLibre metadata/distribution dSYM remain open.
 Pack agent also found graph.js/fuel-data.js releaseId parsing only accepts
 /candidates/: add /releases/ parsing with identity tests before servicepromotion.
+
+19:12 progress: production prefix copy complete and verified by pack agent.
+AppConfig production catalog/file/services paths now pinned there (pending
+next Release build). Engine graph+fuel release parsing now supports both
+namespaces while preserving legacy candidate provenance;6focusedtests pass.
+All63 verified admission identities imported into service checkout.211adventure
+regressions pass. Activation remains NS/NB-only: DO NOT claim national engine
+qualification from these tests. Next: national opt-in coverage and3+join tests,
+real regional routes/memory/fuel/legal probes, Swift parity and package fixes.

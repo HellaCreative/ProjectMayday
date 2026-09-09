@@ -102,14 +102,14 @@ enum AppConfig {
         #if DIRT_DEVELOPMENT
         v4CandidateBaseURL.appendingPathComponent("manifest.json")
         #else
-        packCDNBaseURL.appendingPathComponent("manifest.json")
+        v4ProductionBaseURL.appendingPathComponent("manifest.json")
         #endif
     }
     nonisolated static var riderServicesManifestURL: URL {
         #if DIRT_DEVELOPMENT
         v4CandidateBaseURL.appendingPathComponent("rider-services/manifest.json")
         #else
-        packCDNBaseURL.appendingPathComponent("rider-services/v1/manifest.json")
+        v4ProductionBaseURL.appendingPathComponent("rider-services/manifest.json")
         #endif
     }
 
@@ -120,10 +120,15 @@ enum AppConfig {
             .appendingPathComponent(regionId.lowercased())
             .appendingPathComponent(fileName)
         #else
-        return packCDNBaseURL
-            .appendingPathComponent(regionId)
+        return v4ProductionBaseURL
+            .appendingPathComponent(regionId.lowercased())
             .appendingPathComponent(fileName)
         #endif
+    }
+
+    /// Immutable production bytes verified against the accepted national pack audit.
+    nonisolated static var v4ProductionBaseURL: URL {
+        packCDNBaseURL.appendingPathComponent("v4/releases/fabric-v4-20260909-01")
     }
 
     #if DIRT_DEVELOPMENT

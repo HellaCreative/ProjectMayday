@@ -913,3 +913,11 @@ technical graph inspection HUD remains development-only. Tester links and
 subscription bypasses remain prohibited in public Release. The live fallback
 currently supplies coarse access information when no pack is installed; do not
 represent that fallback as verified surface leaves.
+
+### Production pack release preparation
+
+Production catalog, regional graph/geometry/fuel files, and Rider Services
+now target v4/releases/fabric-v4-20260909-01 on the existing R2 host. DEV keeps
+its candidate namespace. Android must use the same immutable release and hashes;
+do not mix the root legacy catalog/files with V4. National engine activation
+is still under qualification and is not implied by this path preparation.
