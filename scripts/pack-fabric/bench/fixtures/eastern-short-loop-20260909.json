@@ -1,0 +1,53 @@
+{
+  "name": "Short Eastern Shore mixed-profile closed loop",
+  "points": [
+    [
+      44.764835,
+      -63.340265
+    ],
+    [
+      44.738289,
+      -63.315088
+    ],
+    [
+      44.786802,
+      -63.126647
+    ],
+    [
+      44.764835,
+      -63.340265
+    ]
+  ],
+  "usableRangeMeters": 90000,
+  "allowUnknown": false,
+  "variants": [
+    {
+      "reverse": false,
+      "profiles": [
+        "cleanest",
+        "balanced",
+        "dirt"
+      ],
+      "mapZoom": 6.6
+    },
+    {
+      "reverse": true,
+      "profiles": [
+        "dirt",
+        "balanced",
+        "cleanest"
+      ],
+      "mapZoom": 11
+    }
+  ],
+  "verifiedSource": "f2da612ae73dd175123430391010b48f0d9408a7",
+  "observed": {
+    "allSixLegsComplete": true,
+    "exactClosureBothDirections": true,
+    "plannedFuelStops": 0,
+    "waypointDepartureRepeatMeters": 734.324194206785,
+    "repeatEdge": "w156997578:58613:58562",
+    "turnNode": 58562
+  },
+  "qualification": "Fuel carry, joins, shared core pool and closure pass; waypoint turnaround shape remains flagged, not physically accepted."
+}
