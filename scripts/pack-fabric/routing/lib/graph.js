@@ -168,10 +168,7 @@ function sha256(buffer) {
   return crypto.createHash("sha256").update(buffer).digest("hex");
 }
 
-function releaseIdFromGraphPath(graphPath) {
-  const match = String(graphPath || "").match(/\/candidates\/([^/]+)\//i);
-  return match ? decodeURIComponent(match[1]) : null;
-}
+const { packReleaseId: releaseIdFromGraphPath } = require("./pack-release-id");
 
 function v2PackIdentity(graphPath, paths, graphRaw, geomRaw, pack) {
   return {

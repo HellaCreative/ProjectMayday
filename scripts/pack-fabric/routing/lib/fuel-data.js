@@ -1,6 +1,7 @@
 "use strict";
 
 const crypto = require("crypto");
+const { packReleaseId } = require("./pack-release-id");
 
 /**
  * Candidate-aware packed fuel loader shared by the live fuel list and the
@@ -56,13 +57,12 @@ async function fetchRegionFuel(id, url) {
   }
   const bytes = Buffer.from(await response.arrayBuffer());
   const payload = JSON.parse(bytes.toString("utf8"));
-  const releaseMatch = url.match(/\/candidates\/([^/]+)\//i);
   return {
     regionId: id,
     stations: Array.isArray(payload && payload.stations) ? payload.stations : [],
     packIdentity: {
       regionId: id,
-      releaseId: releaseMatch ? decodeURIComponent(releaseMatch[1]) : null,
+      releaseId: packReleaseId(url),
       fuelSource: url,
       fuelBytes: bytes.length,
       fuelSha256: crypto.createHash("sha256").update(bytes).digest("hex")
