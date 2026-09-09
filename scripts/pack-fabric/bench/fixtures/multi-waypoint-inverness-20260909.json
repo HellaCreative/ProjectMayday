@@ -1,0 +1,170 @@
+{
+  "id": "multi-waypoint-inverness-20260909",
+  "status": "reproduced_not_fixed",
+  "serviceBuild": "edc55fdb42af4bb3c4dd6972ecdaabf8e4ba88c5",
+  "riderAnchors": [
+    [
+      44.738289,
+      -63.315088
+    ],
+    [
+      45.929257,
+      -59.953773
+    ],
+    [
+      46.478234,
+      -61.082533
+    ],
+    [
+      48.065038,
+      -66.428275
+    ]
+  ],
+  "profile": "balanced",
+  "allowUnknown": false,
+  "usableRangeMeters": 225000,
+  "observations": {
+    "finalBuildSeconds": 95,
+    "firstLegStrategy": "adventure-preview-v1",
+    "laterLegStrategies": [
+      "forward_graph_reachability",
+      "forward_graph_reachability_across_seams",
+      "route_first_direct"
+    ],
+    "carryForwardUsableMeters": [
+      212506,
+      52232
+    ],
+    "departureMeters": 50228,
+    "comparisonMeters": 48129,
+    "smallClosedCircuitMeters": 664,
+    "largerClosedWalkMeters": 8444,
+    "replayCaveat": "Coordinates reconstructed from six-decimal logs. Derived history matches 61 IDs and logged arrival edge; optional customer endpoint access hint not included in isolated departure replay. Comparison changes prior-road penalty only and is not a qualified production fix."
+  },
+  "departureRequest": {
+    "profile": "balanced",
+    "locations": [
+      {
+        "lat": 46.478234,
+        "lon": -61.082533
+      },
+      {
+        "lat": 46.232103,
+        "lon": -61.304569
+      }
+    ],
+    "accessPolicy": {
+      "motorizedPermissive": true,
+      "motorizedUnknown": false
+    },
+    "options": {
+      "mapZoom": 9.6,
+      "priorEdgeIds": [
+        "w117549986:41118:41016",
+        "w117549734:41106:41118",
+        "w117549912:41131:41106",
+        "w117549736:41063:41131",
+        "w117549715:41085:41063",
+        "w117549806:41115:41085",
+        "w117550085:41062:41115",
+        "w117549720:41101:41062",
+        "w117549595:41107:41101",
+        "w117549566:41102:41107",
+        "w117550300:41102:41075",
+        "w117549590:41075:41086",
+        "w117550225:41086:41123",
+        "w117550021:41123:41132",
+        "w117549579:41132:41136",
+        "w117549599:41136:41114",
+        "w117549599:41114:40842",
+        "w117515063:40842:40862",
+        "w117515076:40862:40859",
+        "w117515193:40859:40847",
+        "w117515040:40847:40897",
+        "w117518622:40897:40989",
+        "w117518532:40989:40899",
+        "w117519141:40899:40961",
+        "w117518741:40961:40877",
+        "w117518770:40877:40893",
+        "w117518265:40893:40902",
+        "w117518297:40902:40946",
+        "w117518585:40946:40901",
+        "w117518329:40901:40969",
+        "w117518453:40969:40943",
+        "w117518203:40943:40930",
+        "w117513796:40930:40833",
+        "w117513536:40833:40753",
+        "w117513216:40753:40705",
+        "w117513688:40705:40791",
+        "w117513912:40791:40720",
+        "w117513988:40720:40824",
+        "w117513983:40824:40727",
+        "w117513106:40727:40710",
+        "w117514066:40710:40785",
+        "w117513071:40785:40777",
+        "w117513850:40777:40806",
+        "w117512686:40825:40806",
+        "w117512686:40829:40825",
+        "w117512686:40821:40829",
+        "w117512686:40714:40821",
+        "w117512686:40723:40714",
+        "w117512686:40752:40723",
+        "w117512686:40754:40752",
+        "w117512686:40693:40754",
+        "w483385791:40790:40693",
+        "w117513863:40790:40749",
+        "w117513520:40749:40835",
+        "w117513483:40835:40744",
+        "w1240479607:40744:40717",
+        "w117513364:40717:40701",
+        "w117513363:40701:151405",
+        "w117513363:151405:40761",
+        "w117513984:40761:40738",
+        "w117513698:40738:40713"
+      ],
+      "arrivalEdgeId": "w117513698:40738:40713",
+      "backtrackFactor": 4,
+      "maxPathMeters": 52232,
+      "regionalHopMinimumMeters": [
+        38575.75961392152,
+        192164.28254819414,
+        148587.32197578202,
+        39011.89342447123,
+        170670.9445228295,
+        135443.59368019472
+      ]
+    }
+  },
+  "comparisonRequest": {
+    "profile": "balanced",
+    "locations": [
+      {
+        "lat": 46.478234,
+        "lon": -61.082533
+      },
+      {
+        "lat": 46.232103,
+        "lon": -61.304569
+      }
+    ],
+    "accessPolicy": {
+      "motorizedPermissive": true,
+      "motorizedUnknown": false
+    },
+    "options": {
+      "mapZoom": 9.6,
+      "priorEdgeIds": [],
+      "arrivalEdgeId": "w117513698:40738:40713",
+      "backtrackFactor": 1,
+      "maxPathMeters": 52232,
+      "regionalHopMinimumMeters": [
+        38575.75961392152,
+        192164.28254819414,
+        148587.32197578202,
+        39011.89342447123,
+        170670.9445228295,
+        135443.59368019472
+      ]
+    }
+  }
+}
