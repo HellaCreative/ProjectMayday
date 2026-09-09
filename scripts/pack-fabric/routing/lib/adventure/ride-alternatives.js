@@ -29,7 +29,9 @@ function buildRideAlternatives(options) {
  const rankFor=profile=>(a,b)=>(a.result.road.avoidanceMeters??a.result.road.urbanMeters??0)-(b.result.road.avoidanceMeters??b.result.road.urbanMeters??0)||compareSurface(profile,a.result.road.surface,b.result.road.surface)||a.id.localeCompare(b.id);
  const rank=rankFor(profile);
  const feasibleResult=r=>r.road.state==='complete'&&['provisional_station_access','verified','not_requested'].includes(r.fuel.state);
- const build=(objective,refine,budget=options.budget)=>buildFromHere({...options,...context,budget,fuelFirst:continuation,preparationBudget:budget===options.budget?options.preparationBudget:budget,objectiveId:objective.id,edgeCost:objective.cost,fuelHeuristicWeight:objective.id==='paved'?(options.pavedFuelHeuristicWeight??options.fuelHeuristicWeight):options.fuelHeuristicWeight,dirtEntryCost:objective.id==='paved'?0:continuityMeters*(Number(objective.id.split('-')[1])-1),preferOnwardFuel:options.preferOnwardFuel===true,retainFuelApproach:refine});
+ // Focus optional fresh Dirt refinements without increasing label/time limits.
+ // Continuations retain their already-qualified heuristic.
+ const build=(objective,refine,budget=options.budget)=>buildFromHere({...options,...context,budget,fuelFirst:continuation,preparationBudget:budget===options.budget?options.preparationBudget:budget,objectiveId:objective.id,edgeCost:objective.cost,fuelHeuristicWeight:refine&&!continuation&&objective.id!=='paved'?3:objective.id==='paved'?(options.pavedFuelHeuristicWeight??options.fuelHeuristicWeight):options.fuelHeuristicWeight,dirtEntryCost:objective.id==='paved'?0:continuityMeters*(Number(objective.id.split('-')[1])-1),preferOnwardFuel:options.preferOnwardFuel===true,retainFuelApproach:refine});
  for(const objective of candidates) {
   if(!options.budget.check())break;
   // Preserve the accepted fresh-route behavior. For continuations, finish
@@ -42,7 +44,7 @@ function buildRideAlternatives(options) {
  // This preserves a shared candidate pool: Balanced cannot gain a candidate
  // that Dirt never had the opportunity to select. Optional refinement has its
  // own short limit, charged to the original request's work/clock budget.
- if(continuation&&results.length===candidates.length&&results.every(r=>feasibleResult(r.result))) {
+ if(results.length===candidates.length&&results.every(r=>feasibleResult(r.result))) {
   const attempted=new Set();
   while(options.budget.check()) {
    const feasible=results.filter(r=>feasibleResult(r.result));
@@ -53,7 +55,11 @@ function buildRideAlternatives(options) {
    const budget=createRefinementBudget(options.budget,{maxMilliseconds:4000});
    if(!budget.check())break;
    const refined=build(candidates.find(c=>c.id===best.id),true,budget);
-   if(feasibleResult(refined))best.result=refined;
+   // Refinement may use a more directed heuristic, so compare against the
+   // original candidate as well as the refinement's internal baseline.
+   if(feasibleResult(refined)&&refined.qualityAudit.repeatedRoadMeters<best.result.qualityAudit.repeatedRoadMeters&&
+      (refined.road.avoidanceMeters??refined.road.urbanMeters??0)<=(best.result.road.avoidanceMeters??best.result.road.urbanMeters??0))best.result=refined;
+   else if(feasibleResult(refined))best.refinement={state:'complete',reason:'no_improvement',accepted:false};
    else best.refinement={state:'incomplete',reason:budget.snapshot().reason||refined.fuel.reason};
   }
  }
