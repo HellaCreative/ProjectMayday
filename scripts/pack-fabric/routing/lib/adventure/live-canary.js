@@ -66,11 +66,14 @@ async function adventureCanaryRequest(body,kind,{environment=process.env,load=nu
  if(!resolution.ok||!resolution.regionIds.length||resolution.regionIds.length>enabled.length||resolution.regionIds.some(id=>!enabled.includes(id)))return null;
  const started=Date.now(),window=Number(body.fuel?.windowTimeBudgetMs||20000);
  const deadlineAtMs=started+Math.min(20000,Math.max(100,window));
+ const loadTiming={regions:[],joinMs:0,joinCacheHit:false};
  const data=load?await load(resolution):await (async()=>{
   const {loadGraphsForRequest}=require('../graph'),{loadRegionFuel}=require('../fuel-data');
   const rows=await loadRegionRows(resolution.regionIds,async regionId=>{
+   const regionStarted=Date.now();
    const single=resolveGraphRequest({regionId});
    const [runtime,fuel]=await Promise.all([loadGraphsForRequest(single,{locations:body.locations,profile:body.profile}),loadRegionFuel(regionId)]);
+   loadTiming.regions.push({regionId,elapsedMs:Date.now()-regionStarted});
    return {...runtime,stations:fuel.stations,identity:runtime.packIdentity.map(p=>({...p,...fuel.packIdentity}))};
   });
   if(rows.length===1)return rows[0];
@@ -78,10 +81,12 @@ async function adventureCanaryRequest(body,kind,{environment=process.env,load=nu
   const key=JSON.stringify(rows.flatMap(r=>r.identity));
   if(!joinedCache||joinedCache.key!==key||rows.some((r,i)=>joinedCache.inputs[i]!==r.pack)) {
    joinedCache=null;
+   const joinStarted=Date.now();
    const joined=joinV4(rows,{budget:createBudget({deadlineAtMs,maxExpansions:20000000})});
    const stationMap=new Map();for(const row of rows)for(const station of row.stations){const prior=stationMap.get(station.id);if(prior&&(prior.lat!==station.lat||prior.lon!==station.lon))throw Error('Conflicting canonical station coordinates');stationMap.set(station.id,station);}
+   loadTiming.joinMs=Date.now()-joinStarted;
    joinedCache={key,inputs:rows.map(r=>r.pack),data:{pack:joined.pack,geom:joined.geom,stations:[...stationMap.values()],identity:rows.flatMap(r=>r.identity)}};
-  }
+  }else loadTiming.joinCacheHit=true;
   return joinedCache.data;
  })();
  const dataReadyAt=Date.now();
@@ -98,7 +103,7 @@ async function adventureCanaryRequest(body,kind,{environment=process.env,load=nu
   budget:createBudget({deadlineAtMs,maxExpansions:30000000,signal}),preparationBudget:createBudget({deadlineAtMs,maxExpansions:20000000,signal})});
  const searchDoneAt=Date.now();
  const response=toLiveResponse(pool,body,kind,identity);
- if(response){response.debug={...(response.debug||{}),adventureTotalMs:Date.now()-started,adventureDataMs:dataReadyAt-started,adventureSearchMs:searchDoneAt-dataReadyAt,adventureResponseMs:Date.now()-searchDoneAt};response.legId=body.legId;}
+ if(response){response.debug={...(response.debug||{}),adventureTotalMs:Date.now()-started,adventureDataMs:dataReadyAt-started,adventureLoad:loadTiming,adventureSearchMs:searchDoneAt-dataReadyAt,adventureResponseMs:Date.now()-searchDoneAt};response.legId=body.legId;}
  return response;
 }
 module.exports={adventureCanaryRequest,canarySupported,toLiveResponse,routeResponse,loadRegionRows};
