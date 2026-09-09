@@ -787,3 +787,7 @@ DEV catalog, graph, geometry, fuel, cross-pack seams and Rider Services now use 
 ### September 9 — Loop discoverability correction
 
 Keep Loop back to start at the top of Plan a route, above the leg list. Show it disabled before two points exist with an explanation, and identify an already closed route. Do not hide the feature until eligible or bury it beneath fuel stages. Route-building behavior is unchanged.
+
+### September 9 — dedicated Loop and return journeys
+
+Routing tabs use icon/title controls on system light material with orange selection: From here, Loop, Plan a route, Saved. Create Return Route belongs to From here and Plan for an open itinerary; it preserves outbound stops and appends home. Dedicated Loop takes a start, a map-picked direction guide and total distance (50–500km), independent of tank range. It compares three complete circuits, carries fuel between legs and ranks target-distance error, repeated geometry and reused stations. Generated guides are not a promise of exact distance; show actual distance and shared-road estimate. Only complete verified builds are accepted. Cancellation cannot publish an obsolete circuit; draft replacement asks in-app before discarding an existing plan. Optional preferDifferentRoads strengthens positive prior-road costs on live NS/NB and is saved with preferences; absent requests retain accepted behavior. No nationwide/offline Loop qualification is claimed.

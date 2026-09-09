@@ -134,6 +134,109 @@ final class RoutePlannerModel {
     var mode: Mode = .fromHere {
         didSet { modeChanged(from: oldValue) }
     }
+    var showingLoop = false
+    var loopDistanceKM: Double = 100
+    var loopStart: RouteCoordinate?
+    var loopDirection: RouteCoordinate?
+    var loopPickingStart = false
+    var loopSummary: String?
+    private var loopRunID: UUID?
+
+    func selectLoop() {
+        switchToPlanClearing()
+        showingLoop = true
+        fuelPlanningStatus = nil
+        isAssemblingRoute = false
+        loopSummary = nil
+        if loopStart == nil, let fix = locationService.currentCoordinate {
+            loopStart = RouteCoordinate(longitude: fix.longitude, latitude: fix.latitude)
+        }
+        refreshMap()
+    }
+
+    func useCurrentLoopStart() {
+        guard let fix = locationService.currentCoordinate else {
+            toast = "Location unavailable — select a start on the map"
+            loopPickingStart = true
+            return
+        }
+        loopStart = RouteCoordinate(longitude: fix.longitude, latitude: fix.latitude)
+        loopPickingStart = false
+        refreshMap()
+    }
+
+    private func setLoopMapPoint(_ point: RouteCoordinate) {
+        guard !isRouting else { return }
+        if loopPickingStart || loopStart == nil {
+            loopStart = point
+            loopPickingStart = false
+        } else {
+            loopDirection = point
+        }
+        refreshMap()
+    }
+
+    func generateLoop() {
+        guard navigation.phase == .idle, !isRouting,
+              let start = loopStart, let direction = loopDirection else { return }
+        invalidateInFlightRoutes()
+        let runID = UUID()
+        loopRunID = runID
+        isRouting = true
+        isAssemblingRoute = true
+        errorMessage = nil
+        loopSummary = nil
+        let target = loopDistanceKM * 1000
+        let selectedProfile = profile, selectedAllow = allowUnknown
+        var preferences = displayedRidePreferences
+        preferences.preferDifferentRoads = true
+        let fuel = FuelRangePrefs.snapshot
+        let policy = routingSourcePolicy
+        buildTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            var winner: (RiderItinerary, BuiltItinerary, Double, Double, Double)?
+            for index in 0..<3 {
+                guard !Task.isCancelled, self.loopRunID == runID, self.showingLoop else { return }
+                self.fuelPlanningStatus = "Finding loop \(index + 1) of 3"
+                let adjustedTarget = index == 2 ? target * min(1.35, max(0.65, target / max(winner?.3 ?? target, 1))) : target
+                let candidate = reduce(RiderItinerary(), .replaceAll(
+                    waypoints: LoopPlan.anchors(start: start, direction: direction, targetMeters: adjustedTarget, variant: index),
+                    profile: selectedProfile, allowUnknown: selectedAllow,
+                    avoidMotorways: self.avoidMotorways, preferBackRoads: self.preferBackRoads)).itinerary
+                let builder = ItineraryBuilder()
+                builder.mapZoom = 7
+                let result = await RidePreferenceContext.$current.withValue(preferences) {
+                    await builder.build(candidate, from: 0, reuse: nil, fuel: fuel, source: policy, onProgress: { _ in })
+                }
+                guard !Task.isCancelled, self.loopRunID == runID, self.showingLoop else { return }
+                guard !result.legs.isEmpty, candidate.legs.allSatisfy({ result.riderLegStatus[$0.id] == .built }) else { continue }
+                let distance = result.legs.reduce(0) { $0 + ($1.response.distanceMeters ?? 0) }
+                let repeated = LoopPlan.repeatedMeters(paths: result.legs.map { $0.response.coordinates })
+                let stops = result.legs.compactMap { $0.endsAtFuelStop?.stationID }
+                let score = LoopPlan.score(distance: distance, repeated: repeated, target: target,
+                                           reusedStops: stops.count - Set(stops).count)
+                if winner == nil || score < winner!.2 { winner = (candidate, result, score, distance, repeated) }
+            }
+            guard !Task.isCancelled, self.loopRunID == runID else { return }
+            self.isRouting = false
+            self.isAssemblingRoute = false
+            self.fuelPlanningStatus = nil
+            if let winner {
+                self.ridePreferences = preferences
+                self.itinerary = winner.0
+                self.built = winner.1
+                self.destination = start
+                self.routeIdentity = "loop:\(runID.uuidString)"
+                self.loopSummary = "Requested \(Int(target / 1000)) km · Ride \(Int(winner.3 / 1000)) km · About \(Int(winner.4 / 1000)) km shared roads"
+                self.toast = "Loop ready"
+                self.mapState.fit(winner.1.legs.flatMap { $0.response.coordinates })
+            } else {
+                self.errorMessage = "No complete loop found in that direction. Try another area or a different distance."
+            }
+            self.refreshMap()
+        }
+    }
+
     var profile: RouteProfile = .dirt {
         didSet {
             guard oldValue != profile else { return }
@@ -1025,6 +1128,7 @@ final class RoutePlannerModel {
     func handleMapTap(_ coordinate: CLLocationCoordinate2D) {
         guard navigation.phase == .idle else { return }
         let point = RouteCoordinate(longitude: coordinate.longitude, latitude: coordinate.latitude)
+        if showingLoop { setLoopMapPoint(point); return }
         switch mode {
         case .fromHere:
             // First pin: short tap point 2. After off-graph GPS recovery: tap point 1.
@@ -1088,6 +1192,7 @@ final class RoutePlannerModel {
     func handleMapLongPress(_ coordinate: CLLocationCoordinate2D) {
         guard navigation.phase == .idle else { return }
         let point = RouteCoordinate(longitude: coordinate.longitude, latitude: coordinate.latitude)
+        if showingLoop { setLoopMapPoint(point); return }
         switch mode {
         case .plan:
             appendPlanPoint(point)
@@ -1914,7 +2019,7 @@ final class RoutePlannerModel {
     }
 
     var canCloseLoop: Bool {
-        mode == .plan && navigation.phase == .idle && Self.loopReturnPoint(in: itinerary) != nil
+        (mode == .plan || mode == .fromHere) && navigation.phase == .idle && Self.loopReturnPoint(in: itinerary) != nil
     }
 
     static func loopReturnPoint(in itinerary: RiderItinerary) -> RouteCoordinate? {
@@ -1928,7 +2033,11 @@ final class RoutePlannerModel {
 
     func closeLoop() {
         guard canCloseLoop, let start = Self.loopReturnPoint(in: itinerary) else { return }
-        apply(.append(coordinate: start), source: "closeLoop")
+        if mode == .fromHere { switchToPlanKeepingFromHere() }
+        var preferences = displayedRidePreferences
+        preferences.preferDifferentRoads = true
+        ridePreferences = preferences
+        apply(.append(coordinate: start), source: "returnRoute")
     }
 
     // MARK: - Clear / mode
@@ -1976,6 +2085,15 @@ final class RoutePlannerModel {
 
     /// Switch tabs without the keep/clear confirmation (Saved, or empty drafts).
     func selectMode(_ newMode: Mode) {
+        if showingLoop {
+            invalidateInFlightRoutes()
+            showingLoop = false
+            loopRunID = nil
+            errorMessage = nil
+            fuelPlanningStatus = nil
+            isAssemblingRoute = false
+            refreshMap()
+        }
         guard newMode != mode else { return }
         mode = newMode
     }
@@ -2195,6 +2313,16 @@ final class RoutePlannerModel {
             }
         case .plan:
             markers.append(contentsOf: canonicalMarkers(riderPinsLocked: false))
+        }
+        if showingLoop {
+            if let loopStart {
+                markers.append(MapState.Marker(id: "loop-start", latitude: loopStart.latitude, longitude: loopStart.longitude,
+                    label: "Start", kind: .start, isLocked: true))
+            }
+            if let loopDirection {
+                markers.append(MapState.Marker(id: "loop-direction", latitude: loopDirection.latitude, longitude: loopDirection.longitude,
+                    label: "Toward", kind: .destination, isLocked: true))
+            }
         }
         if fuelPlanningStatus != nil {
             for (index, stop) in fuelPreviewStops.enumerated() {

@@ -1,6 +1,6 @@
 # Route controls — September 9, 2026
 
-Implemented: Loop appends the current plan’s first waypoint; full-screen ride settings beside fuel offer wander and city/highway avoidance; downloaded packs have Update and working Delete across cached revisions. Replacement packs are staged and verified before switching. Navigation protection is checked again after awaits before deleting or publishing a replacement.
+Initial implementation (superseded by the dedicated Loop section below): Loop appends the current plan’s first waypoint; full-screen ride settings beside fuel offer wander and city/highway avoidance; downloaded packs have Update and working Delete across cached revisions. Replacement packs are staged and verified before switching. Navigation protection is checked again after awaits before deleting or publishing a replacement.
 
 Verification: 19 Swift tests passed in RidePreferencesTests and PackFirstRoutingTests, including Loop identity/rebuild boundary, optional payload isolation, old options decoding, and deletion of old/current NS revisions without deleting NB. Simulator settings layout checked in portrait and landscape, including cancelling edits. No physical-device installation or acceptance is claimed.
 
@@ -11,3 +11,23 @@ Historical release hold (superseded below): the pack-owner task is uploading/ver
 ## Coordinated DEV activation
 
 Richard authorized DEV-now rollout while remaining national uploads/checks continue. Combined service source `a64270857b2e246edaf135fffa50d82fbba3b66e` is active at `pack-fabric.vercel.app`, preview https://pack-fabric-p2fgmm4id-goricksmith-7678s-projects.vercel.app. It preserves national source3e40760 plus optional preferences. 204 adventure tests and63 Swift tests passed. Combined hosted default NS geometry/fuel hash exactly matches accepted baseline; direct custom route completes. Main app catalog and all pack file/seam URLs updated in9858a1c to the09candidate. Catalog publication still belongs to pack-owner task. No physical-device install occurred. Existing national OOM and incomplete-upload issues remain recorded in dev-activation.json.
+
+
+## Dedicated Loop and Create Return Route
+
+The Route mode strip now uses compact SF Symbol/title tabs on system material, with dark orange selection: From here, Loop, Plan a route, Saved. The existing bottom app dock is preserved. Start actions adapt to large text, and the distance slider exposes kilometres to accessibility.
+
+Create Return Route is available for an open From Here or planner itinerary with at least two distinct endpoints. It keeps the outbound legs and appends the start. It requests a stronger positive preference against recently ridden roads, without forbidding unavoidable access roads.
+
+Loop has its own setup: current or map-selected start, a map-selected direction guide, 50–500 km total target distance, existing ride style/settings, and Create Loop. The direction tap guides the search rather than becoming a required destination. Three candidate circuits run through the canonical itinerary/fuel builder. The third adjusts its size using measured results; incomplete candidates are discarded. Ranking combines distance error, whole-circuit shared-road estimate and reused stations. Actual distance and estimated shared kilometres are shown. Changing direction or distance requires rebuilding. Leaving during a search cancels it; stale results cannot replace the current plan.
+
+Backend source 993258b6c51720e0219fcb4e3467a2e714aaf06f adds optional preferDifferentRoads on the combined national-controls source. It increases existing prior-road cost from 4 to 16 only for opted-in requests. Default hosted southwest NS fixture remains exactly 469779.4375069987 metres, two pumps, geometry SHA256 9f50ad7c5cf45d8a2221a97230157ba816aed3e3deea0936a28dcb36cdf3d29c.
+
+Hosted NS candidate evidence: a 150 km target produced complete 187.5, 275.0 and 235.9 km circuits, all closing on identical snapped start/end coordinates and satisfying each fuel range cap. Shared-road estimates were 12.6, 18.2 and 12.7 km respectively. The feedback-adjusted candidate was incomplete and rejected, retaining the 187.5 km winner. This is evidence of bounded candidate selection, not a promise of exact target distance or zero overlap. Recent-road cost uses the existing bounded arrival history; whole-circuit ranking also measures earlier overlap.
+
+Qualification remains live NS/NB for personalized routing and Loop. No national/offline Loop parity or physical-device acceptance is claimed. Navigation algorithms are unchanged. Phone installation remains Richard’s Xcode step.
+
+
+Final verification: 22 Swift tests passed in LoopPlanTests, RidePreferencesTests and PackFirstRoutingTests; 205 adventure engine tests passed. Signed iPhone DEV build succeeded and verify-ios-development.sh passed. Impeccable reviewer scored the three accessibility corrections resolved: reflowing start actions, kilometre slider value, and readable tab sizing at maximum text size. The visible planner label is shortened to Plan; its full accessibility label remains Plan a route. No broad accessibility certification is claimed. Richard requested iPhone-only testing; the temporary iPad simulator was shut down and deleted.
+
+DEV alias pack-fabric.vercel.app now points to preview https://pack-fabric-63bnz1smh-goricksmith-7678s-projects.vercel.app (993258b). Stable POST fuel-chain returned complete and the expected candidate09 NS identity. Activation and guard records preserve previous activations, ongoing uploads and known memory failure. Production was not changed and the phone was not installed.

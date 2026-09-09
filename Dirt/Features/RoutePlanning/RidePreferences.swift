@@ -2,6 +2,7 @@ import Foundation
 
 /// A route-build snapshot; nil keeps the accepted profile defaults.
 nonisolated struct RidePreferences: Codable, Equatable, Hashable, Sendable {
+    var preferDifferentRoads: Bool?
     var wander: Double = 1
     var avoidCities: Bool = true
     var avoidHighways: Bool = false

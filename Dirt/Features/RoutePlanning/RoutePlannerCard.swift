@@ -26,6 +26,7 @@ struct RoutePlannerCard: View {
     @Environment(\.modelContext) private var modelContext
 
     @State private var showSaveDialog = false
+    @State private var showLoopReplaceConfirm = false
     @State private var saveName = ""
     /// GPX share sheet — only presented after the export gate allows it.
     @State private var exportShareURL: URL?
@@ -43,6 +44,7 @@ struct RoutePlannerCard: View {
     /// Intrinsic height of the planning content below the fixed mode tabs.
     /// Portrait uses this to hug short content, then caps the sheet and scrolls.
     @State private var portraitPlanningContentHeight: CGFloat = 0
+    @ScaledMetric(relativeTo: .caption) private var planningTabHeight: CGFloat = 54
 
     private var planner: RoutePlannerModel { app.planner }
 
@@ -63,6 +65,12 @@ struct RoutePlannerCard: View {
             } else {
                 portraitShell
             }
+        }
+        .confirmationDialog("Start a new loop?", isPresented: $showLoopReplaceConfirm, titleVisibility: .visible) {
+            Button("Start a new loop") { planner.selectLoop() }
+            Button("Cancel", role: .cancel) { }
+        } message: {
+            Text("This replaces the current unsaved plan. Saved rides are kept.")
         }
         .alert("Unknown access is not permission", isPresented: $showUnknownAck) {
             Button("I understand — continue", role: .destructive) {
@@ -196,7 +204,7 @@ struct RoutePlannerCard: View {
             // Preserve the map as the primary canvas. Short planner states hug their
             // content; longer routes stop here and scroll beneath the sticky dock.
             let maxPanelHeight = max(220, geo.size.height * 0.56)
-            let fixedChromeHeight = 14 + (DirtHit.min + 4) + 10
+            let fixedChromeHeight = 14 + min(planningTabHeight, 76) + 10 + 10
             let maxPlanningHeight = max(1, maxPanelHeight - fixedChromeHeight)
             let measuredPlanningHeight = max(1, portraitPlanningContentHeight)
             let planningHeight = min(measuredPlanningHeight, maxPlanningHeight)
@@ -328,55 +336,119 @@ struct RoutePlannerCard: View {
 
     @ViewBuilder
     private var plannerModeContent: some View {
-        switch planner.mode {
-        case .fromHere:
-            fromHereContent
-        case .plan:
-            planContent
-        case .saved:
-            savedContent
+        if planner.showingLoop {
+            loopContent
+        } else {
+            switch planner.mode {
+            case .fromHere: fromHereContent
+            case .plan: planContent
+            case .saved: savedContent
+            }
         }
     }
 
     // MARK: - Tabs
 
     private var tabBar: some View {
-        HStack(spacing: 2) {
-            ForEach(RoutePlannerModel.Mode.allCases) { mode in
-                Button {
-                    requestMode(mode)
-                } label: {
-                    Text(mode.rawValue)
-                        .font(DirtType.rowTitle)
-                        // Unselected labels sit straight on the orange track, so they
-                        // carry ink too; the white pill and weight mark the selection.
-                        .fontWeight(planner.mode == mode ? .bold : .semibold)
-                        .foregroundStyle(planner.mode == mode ? DirtTheme.ink : DirtTheme.onOrange)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: DirtHit.min)
-                        .background(
-                            planner.mode == mode
-                                ? AnyShapeStyle(.white)
-                                : AnyShapeStyle(.clear)
-                        )
-                        .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
-                        .shadow(
-                            color: planner.mode == mode ? .black.opacity(0.12) : .clear,
-                            radius: 1,
-                            y: 1
-                        )
-                }
+        HStack(spacing: 4) {
+            planningTab("From here", icon: "location", selected: !planner.showingLoop && planner.mode == .fromHere) { requestMode(.fromHere) }
+            planningTab("Loop", icon: "arrow.triangle.2.circlepath", selected: planner.showingLoop) {
+                guard !planner.showingLoop else { return }
+                if !planner.itinerary.waypoints.isEmpty || planner.hasRoute { showLoopReplaceConfirm = true }
+                else { planner.selectLoop() }
             }
+            planningTab("Plan a route", icon: "point.topleft.down.to.point.bottomright.curvepath", selected: !planner.showingLoop && planner.mode == .plan) { requestMode(.plan) }
+            planningTab("Saved", icon: "bookmark", selected: !planner.showingLoop && planner.mode == .saved) { requestMode(.saved) }
         }
-        .padding(2)
-        .background(DirtTheme.orange)
-        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+        .padding(5)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: DirtRadius.control))
+    }
+
+    private func planningTab(_ title: String, icon: String, selected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 5) {
+                Image(systemName: icon).font(.body.weight(.semibold))
+                Text(title == "Plan a route" ? "Plan" : title).font(.caption.weight(selected ? .bold : .medium))
+                    .lineLimit(2).multilineTextAlignment(.center)
+            }
+            .foregroundStyle(selected ? DirtTheme.orangePressed : DirtTheme.muted)
+            .frame(maxWidth: .infinity, minHeight: min(planningTabHeight, 76))
+            .background(selected ? DirtTheme.rowFill : .clear, in: RoundedRectangle(cornerRadius: 10))
+        }
+        .buttonStyle(.plain)
+        .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
+        .accessibilityLabel(title)
+        .accessibilityShowsLargeContentViewer { Label(title, systemImage: icon) }
+        .accessibilityAddTraits(selected ? .isSelected : [])
+    }
+
+    @ViewBuilder private var loopContent: some View {
+        VStack(alignment: .leading, spacing: DirtSpace.group) {
+            ViewThatFits(in: .horizontal) {
+                HStack { Text("Start").font(DirtType.rowTitle); Spacer(); loopStartActions }
+                VStack(alignment: .leading) { Text("Start").font(DirtType.rowTitle); loopStartActions }
+            }
+            .font(.subheadline.weight(.semibold)).tint(DirtTheme.orangePressed)
+            .disabled(planner.isRouting)
+            Text(planner.loopPickingStart || planner.loopStart == nil
+                 ? "Tap the map to choose where your loop starts."
+                 : planner.loopDirection == nil ? "Tap an area on the map to guide your ride in that direction."
+                 : "Start and direction selected. The direction pin guides the ride; it is not a required stop.")
+                .font(DirtType.helper).foregroundStyle(DirtTheme.muted)
+            VStack(alignment: .leading, spacing: DirtSpace.inner) {
+                HStack {
+                    Text("Ride distance").font(DirtType.rowTitle)
+                    Spacer()
+                    Text("\(Int(planner.loopDistanceKM)) km").font(.headline).monospacedDigit()
+                }
+                Slider(value: Binding(get: { planner.loopDistanceKM }, set: { planner.loopDistanceKM = $0 }), in: 50...500, step: 25)
+                    .tint(DirtTheme.orangePressed).accessibilityLabel("Total loop distance")
+                    .accessibilityValue("\(Int(planner.loopDistanceKM)) kilometres")
+                    .disabled(planner.isRouting)
+                Text("Total ride length, not fuel range. Actual distance follows the available roads.")
+                    .font(DirtType.helper).foregroundStyle(DirtTheme.muted)
+            }
+            fromHereProfileHeader
+                .disabled(planner.isRouting)
+            if planner.isRouting {
+                HStack { ProgressView(); Text(planner.fuelPlanningStatus ?? "Finding a loop") }
+                Button("Cancel") { planner.selectMode(.plan) }
+            } else {
+                Button(planner.loopSummary == nil ? "Create Loop" : "Find another loop") { planner.generateLoop() }
+                    .buttonStyle(DirtCTAStyle(fill: DirtTheme.orange))
+                    .disabled(planner.loopStart == nil || planner.loopDirection == nil)
+            }
+            if let summary = planner.loopSummary {
+                Text(summary).font(DirtType.helper).foregroundStyle(DirtTheme.ink)
+            }
+            if let error = planner.errorMessage { Text(error).font(DirtType.helper).foregroundStyle(DirtTheme.danger) }
+        }
+        if planner.hasRoute {
+            stageList
+            statsRow
+            ctaRow
+        }
     }
 
     /// Confirm before abandoning a From here pin or a multi-stage plan.
+    private var loopStartActions: some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 16) { loopStartButtons }
+                .fixedSize(horizontal: true, vertical: false)
+            VStack(alignment: .leading, spacing: 4) { loopStartButtons }
+        }
+    }
+
+    @ViewBuilder private var loopStartButtons: some View {
+        Button("Here") { planner.useCurrentLoopStart() }
+            .frame(minWidth: DirtHit.min, minHeight: DirtHit.min)
+        Button("Choose on map") { planner.loopPickingStart = true }
+            .frame(minHeight: DirtHit.min)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
     private func requestMode(_ mode: RoutePlannerModel.Mode) {
+        if planner.showingLoop { planner.selectMode(mode); return }
         guard mode != planner.mode else { return }
         if planner.mode == .fromHere, mode == .plan, planner.hasFromHereDraft {
             showFromHereToPlanConfirm = true
@@ -394,6 +466,7 @@ struct RoutePlannerCard: View {
     // MARK: - From here
 
     @ViewBuilder private var fromHereContent: some View {
+        if planner.canCloseLoop { returnRouteButton }
         if planner.hasRoute {
             if planner.hasFuelAssistedPlan {
                 stageList
@@ -545,28 +618,20 @@ struct RoutePlannerCard: View {
 
     // MARK: - Plan
 
-    @ViewBuilder private var planContent: some View {
-        VStack(alignment: .leading, spacing: DirtSpace.tight) {
-            Button {
-                planner.closeLoop()
-            } label: {
-                Label("Loop back to start", systemImage: "arrow.triangle.2.circlepath")
-                    .font(DirtType.rowTitle)
-                    .foregroundStyle(planner.canCloseLoop ? DirtTheme.orange : DirtTheme.muted)
-                    .frame(maxWidth: .infinity, minHeight: DirtHit.min)
-                    .background(DirtTheme.rowFill, in: RoundedRectangle(cornerRadius: DirtRadius.control))
-            }
-            .buttonStyle(.plain)
-            .disabled(!planner.canCloseLoop)
-            .accessibilityHint("Adds a routed return to point 1, including fuel stops when needed")
-            if planner.itinerary.waypoints.count < 2 {
-                Text("Add two points to create a loop back to point 1.")
-                    .font(DirtType.helper).foregroundStyle(DirtTheme.muted)
-            } else if RoutePlannerModel.loopReturnPoint(in: planner.itinerary) == nil {
-                Text("Your route already returns to its start.")
-                    .font(DirtType.helper).foregroundStyle(DirtTheme.muted)
-            }
+    private var returnRouteButton: some View {
+        Button { planner.closeLoop() } label: {
+            Label("Create Return Route", systemImage: "arrow.uturn.backward")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(DirtTheme.orangePressed)
+                .frame(maxWidth: .infinity, minHeight: DirtHit.min)
+                .background(DirtTheme.rowFill, in: RoundedRectangle(cornerRadius: DirtRadius.control))
         }
+        .buttonStyle(.plain)
+        .accessibilityHint("Adds a route back to the starting point")
+    }
+
+    @ViewBuilder private var planContent: some View {
+        if planner.canCloseLoop { returnRouteButton }
 
         // Mode chips live per-stage (tap a stage to expand). Hide the top row
         // until the first stage exists so empty Plan stays clean.
