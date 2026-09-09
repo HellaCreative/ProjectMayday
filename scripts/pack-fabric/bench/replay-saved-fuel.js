@@ -5,6 +5,7 @@ const {spawnSync}=require('node:child_process');
 const {auditRideShape}=require('../routing/lib/adventure/ride-shape-audit');
 const {createBudget}=require('../routing/lib/adventure/budget');
 const {summarizeSurface}=require('../routing/lib/adventure/surface');
+const {haversineMeters}=require('../routing/lib/legal-topology/find-path-v4');
 const deployment=process.env.REBUILD_DEPLOYMENT,source=process.env.REBUILD_EXPECT_SOURCE;
 assert.ok(deployment&&source&&process.env.REBUILD_SAVED_REQUEST,'Deployment, exact source and saved request required');
 const request=JSON.parse(fs.readFileSync(process.env.REBUILD_SAVED_REQUEST));
@@ -19,6 +20,12 @@ assert.equal(r.diagnostics.strategy,'adventure-preview-v1');assert.equal(r.windo
 assert.equal(r.diagnostics.adventure.search.poolComplete,true);
 assert.ok(r.packIdentity.length&&r.packIdentity.every(p=>p.releaseId==='fabric-v4-20260908-02'));
 assert.equal(r.routes.length,r.stops.length+1);
+if(process.env.REBUILD_EXPECT_START_RECOVERY==='1'){
+ const snap=r.diagnostics.adventure.waypointSnap;
+ assert.equal(snap.startComponentRecovery,true);assert.ok(snap.radiusMeters<=snap.maximumMeters);
+ const moved=haversineMeters([request.locations[0].lon,request.locations[0].lat],r.routes[0].geometry[0]);
+ assert.ok(moved<=snap.maximumMeters+1e-6);assert.ok(Math.abs(moved-snap.startDistanceMeters)<.1);
+}
 for(let i=0;i<r.routes.length;i++){
  assert.ok(r.routes[i].distanceMeters<=(i?request.fuel.usableRangeMeters:request.fuel.firstLegMaxMeters)+1e-6);
  if(i)assert.deepEqual(r.routes[i].geometry[0],r.routes[i-1].geometry.at(-1));
