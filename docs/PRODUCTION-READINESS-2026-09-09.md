@@ -20,3 +20,11 @@ toggle now ungated for Release; technical HUD stays DEV. Current live fallback
 is coarse access without installed pack leaves, not full surface information.
 Release build/check in progress; no TestFlight upload or production activation
 claimed. Do not let overnight continuation skip these open items.
+
+Release build completed. Binary checks confirm production endpoints and no
+tester-bypass copy. Bundle check found4failures: DESIGN.md forbidden+unexpected,
+design.json unexpected, and MapLibre device plist incorrectly says Simulator
+although arm64 Mach-O targets IOS. Design resources now excluded in project;
+rebuild verification pending. MapLibre metadata/distribution dSYM remain open.
+Pack agent also found graph.js/fuel-data.js releaseId parsing only accepts
+/candidates/: add /releases/ parsing with identity tests before servicepromotion.

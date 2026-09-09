@@ -460,6 +460,8 @@
 					BC.mbtiles,
 					Dirt.storekit,
 					README.md,
+					DESIGN.md,
+					design.json,
 				);
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Config/Info.plist;
