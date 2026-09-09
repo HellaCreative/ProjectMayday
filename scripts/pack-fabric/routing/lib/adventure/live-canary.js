@@ -12,8 +12,13 @@ const warning={code:'adventure_preview',message:'DEV routing preview. Fuel stops
 async function loadRegionRows(regionIds,loadRegion) {
  return Promise.all(regionIds.map(regionId=>loadRegion(regionId)));
 }
+function enabledRegions(environment) {
+ const mode=environment.DIRT_ADVENTURE_CANARY;
+ if(mode==='national-v1')return Object.keys(require('./verified-pack-revisions.json')['fabric-v4-20260909-01']);
+ return mode==='ns-nb-v1'?['ns','nb']:mode==='ns-v1'?['ns']:[];
+}
 function canarySupported(body,kind,environment=process.env) {
- if(!['ns-v1','ns-nb-v1'].includes(environment.DIRT_ADVENTURE_CANARY)||body.action||body.locations?.length!==2||!['dirt','balanced','cleanest'].includes(body.profile))return false;
+ if(!enabledRegions(environment).length||body.action||body.locations?.length!==2||!['dirt','balanced','cleanest'].includes(body.profile))return false;
  const o=body.options||{},f=body.fuel||{};
  if(body.accessPolicy?.motorizedPermissive===false)return false;
  if(o.avoidEdgeIds?.length||o.maxPathMeters!=null||o.regionalHopMinimumMeters?.length||o.cleanMetroMultiplier!=null)return false;
@@ -54,21 +59,21 @@ function toLiveResponse(pool,body,kind,identity,{allowProvenSelection=false}={})
 async function adventureCanaryRequest(body,kind,{environment=process.env,load=null}={}) {
  if(body.options?.ridePreferences!=null) {
   const r=require('../../regional/select').resolveGraphRequest(body);
-  if(!canarySupported(body,kind,environment)||!r.ok||!r.regionIds.length||r.regionIds.some(id=>!(environment.DIRT_ADVENTURE_CANARY==='ns-nb-v1'?['ns','nb']:['ns']).includes(id)))
+  if(!canarySupported(body,kind,environment)||!r.ok||!r.regionIds.length||r.regionIds.some(id=>!enabledRegions(environment).includes(id)))
    return {status:'unknown',error:'ride_preferences_unavailable',message:'Custom ride settings are not available for this route yet.',routes:[],stops:[],windowComplete:false};
  }
  if(!canarySupported(body,kind,environment)){
   // Within the opted-in Atlantic ride flow, unsupported context is an explicit
   // incomplete result, never a silent switch to the retired engine.
-  if(body.action||!['ns-v1','ns-nb-v1'].includes(environment.DIRT_ADVENTURE_CANARY)||body.locations?.length!==2||!['dirt','balanced','cleanest'].includes(body.profile))return null;
-  const r=require('../../regional/select').resolveGraphRequest(body),enabled=environment.DIRT_ADVENTURE_CANARY==='ns-nb-v1'?['ns','nb']:['ns'];
+  if(body.action||!enabledRegions(environment).length||body.locations?.length!==2||!['dirt','balanced','cleanest'].includes(body.profile))return null;
+  const r=require('../../regional/select').resolveGraphRequest(body),enabled=enabledRegions(environment);
   if(!r.ok||!r.regionIds.length||r.regionIds.some(id=>!enabled.includes(id)))return null;
   return {status:'unknown',error:'adventure_unsupported_controls',message:'This route request needs controls not yet supported by the new engine.',routes:[],stops:[],windowComplete:false,diagnostics:{strategy:'adventure-preview-v1',reason:'unsupported_controls'}};
  }
  if(kind==='fuel'&&(!Number.isFinite(body.fuel?.usableRangeMeters)||body.fuel.usableRangeMeters<=0||!Number.isFinite(body.fuel.firstLegMaxMeters)||body.fuel.firstLegMaxMeters<0||body.fuel.firstLegMaxMeters>body.fuel.usableRangeMeters))return {status:'unknown',error:'adventure_invalid_fuel',routes:[],stops:[],windowComplete:false,diagnostics:{strategy:'adventure-preview-v1'}};
  const {resolveGraphRequest}=require('../../regional/select');
  const resolution=resolveGraphRequest(body);
- const enabled=environment.DIRT_ADVENTURE_CANARY==='ns-nb-v1'?['ns','nb']:['ns'];
+ const enabled=enabledRegions(environment);
  if(!resolution.ok||!resolution.regionIds.length||resolution.regionIds.length>enabled.length||resolution.regionIds.some(id=>!enabled.includes(id)))return null;
  let ridePreferences;
  try {ridePreferences=require('./ride-preferences').validatePreferences(body.options?.ridePreferences);}
@@ -121,4 +126,4 @@ async function adventureCanaryRequest(body,kind,{environment=process.env,load=nu
  if(response){response.debug={...(response.debug||{}),adventureTotalMs:Date.now()-started,adventureDataMs:dataReadyAt-started,adventureLoad:loadTiming,adventureSearchMs:searchDoneAt-dataReadyAt,adventureResponseMs:Date.now()-searchDoneAt};response.legId=body.legId;}
  return response;
 }
-module.exports={adventureCanaryRequest,canarySupported,toLiveResponse,routeResponse,loadRegionRows};
+module.exports={adventureCanaryRequest,canarySupported,toLiveResponse,routeResponse,loadRegionRows,enabledRegions};

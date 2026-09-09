@@ -35,3 +35,19 @@ test('cross-region search carries fuel without refilling at the boundary',()=>{
  const complete=searchResourcePath({...options,budget:budget(),fuel:{usableRangeMeters:distance+1,initialUsableMeters:distance+1}});
  assert.equal(complete.state,'found');assert.ok(Math.abs(complete.distanceMeters-distance)<1e-6);
 });
+
+test('three-region chain retains intermediate graph and boundary restrictions',()=>{
+ const n=[...nodes,{id:5,lon:-63.96,lat:46}];
+ const parts=[region('a',n.slice(0,2),[way(10,1,2)]),region('b',n.slice(1,4),[way(20,2,3),way(30,3,4)]),region('c',n.slice(3),[way(40,4,5)])];
+ parts[1].pack.restrictions=[{fromEdge:0,toEdge:1,viaNode:parts[1].pack.edgeTo[0],only:false,viaEdges:[]}];
+ const r=joinV4(parts,{budget:budget()}),g=createV4Graph(r.pack);
+ assert.equal(r.pack.nodeCount,5);assert.equal(r.pack.edgeCount,4);
+ const incoming=r.edgeMaps[1][0],outgoing=r.edgeMaps[1][1];
+ const turn=g.transition(0,{id:incoming,from:r.pack.edgeFrom[incoming],to:r.pack.edgeTo[incoming]});
+ assert.equal(turn.allowed,true);
+ assert.equal(g.transition(turn.state,{id:outgoing,from:r.pack.edgeFrom[outgoing],to:r.pack.edgeTo[outgoing]}).allowed,false);
+ assert.equal(r.pack.regionIds.length,3);
+});
+test('repeated region cannot be joined twice',()=>{
+ const parts=fixtures();assert.throws(()=>joinV4([parts[0],parts[0]],{budget:budget()}),/Duplicate source region/);
+});

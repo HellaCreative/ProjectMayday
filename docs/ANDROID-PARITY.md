@@ -959,3 +959,12 @@ When ordinary endpoint candidate lists have no connected pair, re-query the star
 ### Atlantic request hardening — September 9, 2026
 
 Accepted NS/NB route results, incomplete results and failures must never silently switch to compatibility routing. Cancelled requests return no stale geometry and cannot start a second engine. Malformed JSON/container input returns a client error. Both accepted Atlantic pack revisions require exact graph/geometry/fuel identities, not just a release name. Legacy routing remains available only outside new-engine coverage or for its still-supported operations; PE/NL and offline behavior are not newly qualified. No change to the frozen fuel-replacement interaction, navigation, route costs or UI.
+
+## National engine qualification candidate — September 9
+
+The opt-in national-v1 service mode uses only the audited63 release identities.
+Existing NS/NB opt-in behavior is retained. Multi-pack joining now accepts3+
+regions and rejects repeated region inputs; shared-node identity and restriction
+remapping remain mandatory. This is an unactivated qualification candidate, not
+national service acceptance. Preserve the same admission/restriction behavior
+in Android. Production/candidate paths preserve one release ID and exact hashes.

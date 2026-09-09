@@ -1,0 +1,1 @@
+{"profile":"balanced","locations":[{"lat":46.2382,"lon":-63.1311},{"lat":46.395,"lon":-63.788}],"options":{"mapZoom":9},"accessPolicy":{"motorizedUnknown":false},"fuel":{"usableRangeMeters":225000,"firstLegMaxMeters":225000,"windowMaxStops":4,"windowTimeBudgetMs":20000,"ensureDestinationFuelEscape":true}}

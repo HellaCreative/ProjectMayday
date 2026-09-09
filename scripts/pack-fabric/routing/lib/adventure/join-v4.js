@@ -1,9 +1,10 @@
 "use strict";
-// In-memory two-pack view. Join exact shared OSM nodes only, never proximity.
+// In-memory multi-pack view. Join exact shared OSM nodes only, never proximity.
 // Canonical duplicate edges collapse before restrictions are remapped, so crossing
 // an overlap cannot escape a restriction by choosing the other pack's edge copy.
 function joinV4(regions,{budget}) {
- if(regions.length!==2)throw new TypeError('Exactly two source regions required');
+ if(regions.length<2)throw new TypeError('At least two source regions required');
+ if(new Set(regions.map(r=>r.pack.regionId)).size!==regions.length)throw new TypeError('Duplicate source region');
  const fail=message=>{throw new Error(`V4 join: ${message}`);};
  const first=regions[0].pack;
  for(const {pack} of regions)if(pack.graphBinaryVersion!==4||!pack.provenance?.sourceEpoch||pack.provenance.sourceEpoch!==first.provenance.sourceEpoch)fail('incompatible source epoch or dictionaries');

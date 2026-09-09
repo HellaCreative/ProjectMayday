@@ -122,3 +122,12 @@ test('directed continuation retry cannot bypass label limits or declare an incom
 });
 
 test("new engine accepts explicit fuel replacement control",()=>{assert.equal(canarySupported({locations:[{},{}],profile:"balanced",fuel:{requiredFirstStationId:"pump"}},"fuel",{DIRT_ADVENTURE_CANARY:"ns-nb-v1"}),true)});
+
+test('national opt-in admits exactly the audited 63 regions and preserves Atlantic gate',()=>{
+ const {enabledRegions}=require('./live-canary');
+ const national=enabledRegions({DIRT_ADVENTURE_CANARY:'national-v1'});
+ assert.equal(national.length,63);assert.ok(national.includes('ca'));assert.ok(national.includes('qc'));assert.ok(national.includes('hi'));
+ assert.deepEqual(enabledRegions({DIRT_ADVENTURE_CANARY:'ns-nb-v1'}),['ns','nb']);
+ assert.deepEqual(enabledRegions({}),[]);
+ assert.equal(canarySupported({profile:'balanced',locations:[{},{}]},'route',{DIRT_ADVENTURE_CANARY:'national-v1'}),true);
+});
