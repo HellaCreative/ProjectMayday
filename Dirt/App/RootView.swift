@@ -1144,6 +1144,7 @@ struct RootView: View {
                     .frame(minHeight: 34)
                     .background(DirtTheme.wash, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                 }
+                .dirtDropdownSurface()
                 .accessibilityLabel("Fuel safety reserve")
                 .accessibilityValue("\(Int(mapFuelReservePercent)) percent")
             }

@@ -62,7 +62,7 @@ enum DirtTheme {
     /// Sheets sit on system material so the map still reads underneath — translucency
     /// here is orientation, not decoration. `.thin` keeps terrain legible through the
     /// panel; `.regular` washed out to near-white over bright basemaps.
-    static let sheetMaterial: Material = .ultraThinMaterial
+    static let sheetMaterial: Material = .regularMaterial
     /// Map controls and dock: thin material carrying a dark scrim, so white glyphs
     /// keep contrast over snow, water, and satellite imagery alike.
     static let chromeMaterial: Material = .ultraThinMaterial
@@ -469,5 +469,15 @@ enum DirtSurfaceIcon {
         if value.contains("dirt") || value.contains("loose") || value.contains("sand") { return "mountain.2" }
         if value.contains("balanced") { return "arrow.triangle.branch" }
         return "road.lanes"
+    }
+}
+
+/// Opaque dropdown affordance: the field stays legible above map-backed sheets.
+extension View {
+    func dirtDropdownSurface() -> some View {
+        padding(.horizontal, 10)
+            .frame(minHeight: 36)
+            .background(Color.white, in: RoundedRectangle(cornerRadius: 8))
+            .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color(dirtHex: 0xD8DADD), lineWidth: 1))
     }
 }

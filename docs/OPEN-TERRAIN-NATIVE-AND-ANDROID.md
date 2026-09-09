@@ -81,3 +81,10 @@ Use the provided prototype map icon reference assets to match silhouette and str
 Native entry points: `RootView`, `DirtTheme`, `DockSheetPanel`, `MapControlStack`, `RoutePlannerCard`, `GroupsSheet`, `LayersSheet`, `ProfileSheet`, `NavigationHUD`. Actual zoom is dispatched through MapState.CameraCommand and MapLibreMapView. Do not copy HTML mock data, toasts or simulated state.
 
 Check normal and rapid tab switching, reopening existing routes, empty/long lists, stale/offline members, failed pack management, cancelled route builds, accessibility text sizes, VoiceOver/TalkBack labels, Reduce Motion, landscape and safe-area overlap. Verify +/− during follow and free pan, saved preview versus continued plan, and fuel replacement in all routing modes. Native build success is not physical-device visual acceptance. No simulators are authorized for this work; White iPhone review remains the visual acceptance point. Android implementation and device acceptance remain open, not claimed by this handoff.
+
+### Approved contrast adjustment — September 9, build 25
+
+Supersedes the original thin-frost treatment: dropdown fields are opaque white,
+with a light-grey #D8DADD 1pt/dp border. Sheets use regular system material;
+the HTML preview uses 92% white tint. The controls and sheet geometry do not
+change. Apply these contrast values before assessing Android visual parity.

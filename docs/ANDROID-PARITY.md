@@ -833,3 +833,10 @@ states, Groups expansion, Saved preview boundaries, map zoom controls and
 Android icon/acceptance mappings. Preserve existing routing, fuel replacement,
 privacy and navigation semantics while applying it. Android delivery and
 physical visual acceptance are still open.
+
+### Open Terrain contrast revision — build 25
+
+Dropdown fields use opaque white with a 1pt/dp light-grey (#D8DADD) border.
+Sheets use a more opaque system material (iOS regularMaterial; HTML white tint
+92%) to improve map-backed contrast. Preserve overlay dropdown behavior and
+all existing actions. Apply the same contrast revision on Android.

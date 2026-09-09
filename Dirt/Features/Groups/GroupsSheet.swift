@@ -396,6 +396,7 @@ struct GroupDetailView: View {
                                 Button(GroupsViewModel.statusLabel(status)) { groups.setStatus(status) }
                             }
                         } label: { Label("Status", systemImage: "slider.horizontal.3") }
+                        .dirtDropdownSurface()
                         .disabled(!groups.isSharing)
                         Spacer()
                         Button(groups.isSharing ? "Stop sharing" : "Start sharing") {

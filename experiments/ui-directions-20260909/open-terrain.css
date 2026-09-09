@@ -54,3 +54,8 @@ body{background:#eef0eb}.studio{max-width:1120px;margin:auto;padding:36px 28px;d
 .tabs button.selected{color:var(--dirt-text-orange)}
 
 .primary-nav .nav-selection{position:absolute;background:#ff8000;border-radius:12px;pointer-events:none;z-index:0}.primary-nav button{position:relative;z-index:1}.primary-nav button.active{background:transparent}
+
+/* Native review: stronger contrast on sheets and all dropdown fields. */
+.sheet,.phone[data-screen=navigation] .nav-sheet{background:rgba(250,252,250,.92)}
+.picker-options,select,.picker>summary{background:#fff;border:1px solid #d8dadd;border-radius:8px}
+.picker>summary{padding:8px 10px}

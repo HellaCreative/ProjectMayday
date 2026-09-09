@@ -450,6 +450,7 @@ struct MapControlStack: View {
                         ForEach(statuses, id: \.self) { Text(GroupsViewModel.statusLabel($0)).tag($0) }
                     }
                     .pickerStyle(.menu)
+                    .dirtDropdownSurface()
                     .tint(DirtTheme.ink)
                     .disabled(!groups.isSharing)
                 }

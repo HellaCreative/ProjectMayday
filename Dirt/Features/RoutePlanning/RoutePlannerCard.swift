@@ -414,7 +414,7 @@ struct RoutePlannerCard: View {
                             Text(direction.rawValue).tag(direction)
                         }
                     }
-                    .pickerStyle(.menu).labelsHidden().accessibilityLabel("Direction")
+                    .pickerStyle(.menu).dirtDropdownSurface().labelsHidden().accessibilityLabel("Direction")
                     .accessibilityValue(planner.loopDirection.rawValue)
                     .fixedSize(horizontal: false, vertical: true)
                 }
@@ -428,7 +428,7 @@ struct RoutePlannerCard: View {
                             Label(profile.title, systemImage: DirtSurfaceIcon.symbol(for: profile.title)).tag(profile)
                         }
                     }
-                    .pickerStyle(.menu).labelsHidden().accessibilityLabel("Surface")
+                    .pickerStyle(.menu).dirtDropdownSurface().labelsHidden().accessibilityLabel("Surface")
                     .accessibilityValue(planner.profile.title)
                     .fixedSize(horizontal: false, vertical: true)
                 }
@@ -1167,11 +1167,11 @@ struct RoutePlannerCard: View {
             .foregroundStyle(DirtTheme.ink)
             .padding(.horizontal, 12)
             .frame(minHeight: DirtHit.min)
-            .background(DirtTheme.rowFill)
+            .background(Color.white)
             .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 4, style: .continuous)
-                    .stroke(DirtTheme.hairline, lineWidth: 1)
+                    .stroke(Color(dirtHex: 0xD8DADD), lineWidth: 1)
             )
             .contentShape(Rectangle())
         }
@@ -1715,15 +1715,15 @@ struct StageCard<Headline: View, Detail: View>: View {
                 .font(.system(size: 9, weight: .black))
                 .rotationEffect(.degrees(isActive ? 180 : 0))
         }
-        .foregroundStyle(isActive ? DirtTheme.onOrange : DirtTheme.ink)
+        .foregroundStyle(DirtTheme.ink)
         .padding(.horizontal, 10)
         .frame(height: 30)
-        .background(isActive ? DirtTheme.orange : DirtTheme.wash)
+        .background(Color.white)
         .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 4, style: .continuous)
                 .stroke(
-                    isActive ? DirtTheme.onOrange.opacity(0.25) : DirtTheme.hairline,
+                    Color(dirtHex: 0xD8DADD),
                     lineWidth: 1
                 )
         )

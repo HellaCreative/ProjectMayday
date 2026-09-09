@@ -57,7 +57,7 @@ struct GroupSharingCard: View {
         .padding(DirtSpace.row)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(DirtTheme.sheetMaterial, in: cardShape)
-        .overlay(cardShape.stroke(DirtTheme.hairline, lineWidth: 1))
+        .overlay(cardShape.stroke(Color(dirtHex: 0xD8DADD), lineWidth: 1))
         .clipShape(cardShape)
         .shadow(color: .black.opacity(0.22), radius: 16, y: 6)
     }
@@ -88,10 +88,10 @@ struct GroupSharingCard: View {
                 }
                 .padding(.horizontal, DirtSpace.row)
                 .frame(maxWidth: .infinity, minHeight: DirtHit.min)
-                .background(DirtTheme.rowFill, in: RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous))
+                .background(Color.white, in: RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: DirtRadius.control, style: .continuous)
-                        .stroke(DirtTheme.hairline, lineWidth: 1)
+                        .stroke(Color(dirtHex: 0xD8DADD), lineWidth: 1)
                 )
                 .contentShape(Rectangle())
             }
