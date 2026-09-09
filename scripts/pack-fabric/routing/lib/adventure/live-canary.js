@@ -30,9 +30,9 @@ function routeResponse(segments,profile,identity,diagnostics,point=null) {
   stats:{unknownAccessPercent:Math.round(segments.filter(s=>s.accessClass==="motorized_unknown").reduce((n,s)=>n+s.distanceMeters,0)/Math.max(1,surface.distanceMeters)*100),dirtPercent:Math.round(surface.knownDirtPercent),pavedPercent:Math.round(surface.pavedPercent),unknownSurfacePercent:Math.round(surface.unknownSurfacePercent),surfaceFamilyMode:'leaf-v3'},
   warnings:[warning],maneuvers:[],debug:{routingRevision:'adventure-preview-v1',engine:'adventure-shared-candidates',regionIds:identity.map(p=>p.regionId),packIdentity:identity,diagnostics}});
 }
-function toLiveResponse(pool,body,kind,identity) {
+function toLiveResponse(pool,body,kind,identity,{allowProvenSelection=false}={}) {
  const r=pool.selected;
- if(!r||!pool.search.poolComplete)return {status:'unknown',error:'adventure_search_incomplete',message:'Route search did not complete. No fuel gap has been proved.',diagnostics:{strategy:'adventure-preview-v1',reason:pool.search.reason,adventure:{candidates:pool.candidates,search:pool.search}},stops:[],routes:[],windowComplete:false};
+ if(!r||(!pool.search.poolComplete&&!allowProvenSelection))return {status:'unknown',error:'adventure_search_incomplete',message:'Route search did not complete. No fuel gap has been proved.',diagnostics:{strategy:'adventure-preview-v1',reason:pool.search.reason,adventure:{candidates:pool.candidates,search:pool.search}},stops:[],routes:[],windowComplete:false};
  const diagnostics={allowUnknown:body.profile!=='cleanest'&&body.accessPolicy?.motorizedUnknown===true,mapZoom:body.options?.mapZoom,strategy:'adventure-preview-v1',selectedReason:pool.selectedObjective,adventure:{waypointSnap:r.provenance.waypointSnap,dirtEntryCost:r.provenance.dirtEntryCost,fuelHeuristicWeight:r.provenance.fuelHeuristicWeight,candidates:pool.candidates,search:pool.search,quality:r.qualityAudit,fuelState:r.fuel.state},packIdentity:identity};
  if(kind==='route')return routeResponse(r.road.segments,body.profile,identity,diagnostics);
  if(!['provisional_station_access','verified'].includes(r.fuel.state))return {status:'unknown',error:r.fuel.reason||'fuel_unverified',message:'Road found, but fuel planning remains unverified.',routes:[routeResponse(r.road.segments,body.profile,identity,diagnostics)],stops:[],windowComplete:true,diagnostics};

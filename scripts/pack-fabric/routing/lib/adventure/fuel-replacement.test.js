@@ -38,3 +38,10 @@ test('replacement returns no partial geometry on unproved continuation',()=>{
  options:{...f,budget:work()},identity:[],routeResponse,toLiveResponse,build:o=>{if(++calls===1){assert.deepEqual(o.stations.map(s=>s.id),["pump"]);return buildRideAlternatives(o)}return {search:{poolComplete:false}}}});
  assert.equal(result.error,'replacement_continuation_unproved');assert.deepEqual(result.routes,[]);
 });
+
+test('explicit replacement accepts an individually proved ride when another objective is unproved',()=>{
+ const f=fixture();f.input.fuel.initialUsableMeters=2000;
+ const result=buildFuelReplacement({body:{profile:'balanced',fuel:{requiredFirstStationId:'pump',usableRangeMeters:5000,firstLegMaxMeters:2000,windowMaxStops:4}},
+ options:{...f,budget:work()},identity:[],routeResponse,toLiveResponse,build:o=>{const pool=buildRideAlternatives(o);return {...pool,search:{...pool.search,poolComplete:false}}}});
+ assert.equal(result.status,'complete');assert.equal(result.diagnostics.adventure.search.poolComplete,false);
+});

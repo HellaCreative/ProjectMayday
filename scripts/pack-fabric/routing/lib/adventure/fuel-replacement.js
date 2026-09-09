@@ -3,6 +3,8 @@ const {buildRideAlternatives}=require('./ride-alternatives');
 const {haversineMeters}=require('../legal-topology/find-path-v4');
 
 // A replacement is an explicit first refill, followed by a proved continuation.
+// Replacement establishes feasibility of the rider-selected pump, not a complete
+// comparison of every surface objective. Only individually proved roads qualify.
 // Both searches share the caller's work/deadline budget and existing objectives.
 function buildFuelReplacement({body,options,identity,routeResponse,toLiveResponse,build=buildRideAlternatives}) {
  const fail=(reason,detail=null)=>({status:'unknown',error:reason,message:'This fuel stop could not be verified for this route.',routes:[],stops:[],windowComplete:false,diagnostics:{strategy:'adventure-preview-v1',reason,replacementDetail:detail}});
@@ -13,7 +15,7 @@ function buildFuelReplacement({body,options,identity,routeResponse,toLiveRespons
  const leg=options.input.legs[0];
  const first=build({...options,stations:[station],input:{...options.input,anchors:[start,pump],legs:[{...leg,to:pump.id}]}});
  const a=first.selected;
- if(!first.search.poolComplete||!a||!['verified','provisional_station_access'].includes(a.fuel.state))return fail('replacement_approach_unproved',{search:first.search,candidates:first.candidates});
+ if(!a||a.road.state!=='complete'||!['verified','provisional_station_access'].includes(a.fuel.state))return fail('replacement_approach_unproved',{search:first.search,candidates:first.candidates});
  const meters=a.road.distanceMeters,last=a.road.geometry.at(-1);
  if(!Number.isFinite(meters)||meters<=0||meters>body.fuel.firstLegMaxMeters+1e-6||!last||haversineMeters(last,[station.lon,station.lat])>150||
     a.fuel.plannedRefills.some(v=>v.atMeters>1e-6&&v.atMeters<meters-1e-6))return fail('replacement_outside_remaining_range');
@@ -22,7 +24,7 @@ function buildFuelReplacement({body,options,identity,routeResponse,toLiveRespons
   input:{...options.input,anchors:[{...pump,lat:last[1],lon:last[0]},end],legs:[{...leg,from:pump.id}],fuel:{...options.input.fuel,initialUsableMeters:body.fuel.usableRangeMeters}}});
  const maxStops=body.fuel.windowMaxStops;
  if(maxStops!=null&&maxStops<1)return fail('replacement_window_unavailable');
- const tail=toLiveResponse(next,{...body,fuel:{...body.fuel,firstLegMaxMeters:body.fuel.usableRangeMeters,windowMaxStops:maxStops==null?undefined:maxStops-1}},'fuel',identity);
+ const tail=toLiveResponse(next,{...body,fuel:{...body.fuel,firstLegMaxMeters:body.fuel.usableRangeMeters,windowMaxStops:maxStops==null?undefined:maxStops-1}},'fuel',identity,{allowProvenSelection:true});
  if(tail.status!=='complete'||!tail.windowComplete)return fail('replacement_continuation_unproved',{error:tail.error,search:next.search,candidates:next.candidates});
  const head=routeResponse(a.road.segments,body.profile,identity,{strategy:'adventure-preview-v1',selectedReason:first.selectedObjective});
  const tailStart=tail.routes[0]?.geometry?.[0];
