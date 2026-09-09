@@ -100,7 +100,7 @@ enum AppConfig {
     nonisolated static let packCDNBaseURL = URL(string: "https://pub-eb539dc7777942b889388ebb4b701697.r2.dev")!
     nonisolated static var packManifestURL: URL {
         #if DIRT_DEVELOPMENT
-        v4ConnectionBaseURL.appendingPathComponent("manifest.json")
+        v4CandidateBaseURL.appendingPathComponent("manifest.json")
         #else
         packCDNBaseURL.appendingPathComponent("manifest.json")
         #endif
@@ -116,7 +116,7 @@ enum AppConfig {
     nonisolated static func packFileURL(version: String, regionId: String, fileName: String) -> URL {
         _ = version
         #if DIRT_DEVELOPMENT
-        return (fileName == "cross-pack-seams.v2.json" ? v4ConnectionBaseURL : v4CandidateBaseURL)
+        return v4CandidateBaseURL
             .appendingPathComponent(regionId.lowercased())
             .appendingPathComponent(fileName)
         #else
@@ -128,12 +128,11 @@ enum AppConfig {
 
     #if DIRT_DEVELOPMENT
     /// Complete DEV-only V4 fabric. Production keeps its approved catalog and files.
-    nonisolated static let v4ConnectionRevision = "connections-v4-20260908-03"
+    nonisolated static let v4ConnectionRevision = v4CandidateReleaseId
     nonisolated static var v4ConnectionBaseURL: URL {
-        packCDNBaseURL.appendingPathComponent("v4/connections")
-            .appendingPathComponent(v4ConnectionRevision)
+        v4CandidateBaseURL
     }
-    nonisolated static let v4CandidateReleaseId = "fabric-v4-20260907-01"
+    nonisolated static let v4CandidateReleaseId = "fabric-v4-20260909-01"
     nonisolated static var v4CandidateBaseURL: URL {
         packCDNBaseURL
             .appendingPathComponent("v4")
