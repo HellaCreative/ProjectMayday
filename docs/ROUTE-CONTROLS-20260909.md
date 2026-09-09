@@ -51,3 +51,12 @@ After generation completes, Loop displays its legs and a bottom Clear button. Se
 ### Loop result correction
 
 Completed Loop retains the standard route result: legs, routing/fuel/ferry notices, route statistics and Save/Export/Start actions, followed by Clear route. Only Loop creation controls remain hidden. Clear continues to restore setup with prior selections. This supersedes the legs-only result above.
+
+
+## Fuel-stop replacement restoration — 2026-09-09
+
+Tap an F pin or its route row in From Here, Loop or Plan a Route. Nearby alternatives appear progressively only after the entire forward itinerary validates, preserving upstream geometry. Tap an alternative to commit the checked result. The app checks the nearest six different canonical stations within 25 km; pending checks cancel on route changes, tab changes or navigation. Original routes remain intact when a candidate cannot be proved. Fuel pins are fixed station anchors, never freely draggable.
+
+The NS/NB live adventure service now supports requiredFirstStationId with a fuel-bounded approach that cannot refuel at another station first, followed by a proved continuous continuation. An explicitly chosen pump needs individual route feasibility rather than completed comparisons of every alternative objective; normal route selection is unchanged. Station entrances and availability remain provisional mapped evidence.
+
+Verification: 212 JavaScript tests pass, including fuel limits, canonical identity, disconnected/unproved continuation rejection and default comparison behavior. Hosted short and long swaps pass exact geometry continuity, fuel-range and destination escape checks; the longer replacement has hops of 218.934 km and 60.477 km on 225 km usable range. Unchanged default Atlantic request reproduces identical geometry and fuel stops. Stable DEV source 476230d4bfa3ed8b5fed16514e2908266b691b63 includes the separately verified BC–WA memory repair and preserves all63 candidate09 regions. Signed generic iPhone build and development isolation checks pass. No simulator was started, no build installed onto White, and physical-device or offline acceptance is not claimed. Evidence: scripts/pack-fabric/routing/candidates/fabric-v4-20260909-01/fuel-replacement-verification/summary.json.

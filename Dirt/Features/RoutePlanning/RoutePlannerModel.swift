@@ -403,6 +403,20 @@ final class RoutePlannerModel {
     private(set) var fuelPlanNotice: String?
     private var fuelTargetMarkers: [MapState.Marker] = []
     private var activeFuelDragMarkerID: String?
+    private var fuelReplacementTask: Task<Void, Never>?
+    private var fuelReplacementRunID: UUID?
+    private var checkedFuelReplacements: [String: (original: RiderItinerary, proposed: RiderItinerary, built: BuiltItinerary)] = [:]
+
+    private func cancelFuelReplacement() {
+        fuelReplacementTask?.cancel()
+        fuelReplacementTask = nil
+        fuelReplacementRunID = nil
+        checkedFuelReplacements = [:]
+        fuelTargetMarkers = []
+        activeFuelDragMarkerID = nil
+        mapState.selectPlannerPin(nil)
+    }
+
     /// Current fuel-build milestone. The primary toast is its only animated UI.
     private(set) var fuelPlanningStatus: String?
     /// Tentative, route-connected pumps revealed as the chain search advances.
@@ -724,6 +738,7 @@ final class RoutePlannerModel {
     }
 
     private func applyImmediately(_ action: ItineraryAction, source: String) {
+        cancelFuelReplacement()
         let before = itinerary
         let change = reduce(before, action)
         guard change.itinerary != before else { return }
@@ -1664,6 +1679,7 @@ final class RoutePlannerModel {
 
     /// Invalidate every in-flight planner route (clear / mode convert / wipe).
     private func invalidateInFlightRoutes(cancelPlanRebuildTask: Bool = true) {
+        cancelFuelReplacement()
         fromHereIntentGeneration += 1
         fromHereRouteDebounceTask?.cancel()
         buildTask?.cancel()
@@ -1816,6 +1832,7 @@ final class RoutePlannerModel {
     }
 
     func beginPlannerPinDrag(markerID: String) {
+        guard navigation.phase == .idle, !isRouting else { return }
         if markerID.hasPrefix("fuel-target:") {
             selectFuelTarget(markerID: markerID)
             return
@@ -1823,17 +1840,19 @@ final class RoutePlannerModel {
         // MapLibre re-selects the active annotation after markers are redrawn.
         // Treat that callback as idempotent; toggling here made replacement
         // candidates flash briefly and then disappear before a rider could tap.
-        if activeFuelDragMarkerID == markerID, !fuelTargetMarkers.isEmpty {
+        if activeFuelDragMarkerID == markerID {
             return
         }
         guard markerID.hasPrefix("fuel:"),
               let context = fuelMoveContext(markerID: markerID)
         else {
-            fuelTargetMarkers = []
-            activeFuelDragMarkerID = nil
+            cancelFuelReplacement()
+            refreshMap()
             return
         }
+        cancelFuelReplacement()
         activeFuelDragMarkerID = markerID
+        mapState.selectPlannerPin(markerID)
         fuelTargetMarkers = context.leg.validFuelTargets.compactMap { candidate in
             guard candidate.validForward == true,
                   let latitude = candidate.latitude,
@@ -1849,7 +1868,62 @@ final class RoutePlannerModel {
                 isLocked: true
             )
         }
+        if fuelTargetMarkers.isEmpty {
+            loadFuelReplacements(markerID: markerID)
+        }
         refreshMap()
+    }
+
+    private func loadFuelReplacements(markerID: String) {
+        guard let context = fuelMoveContext(markerID: markerID), let original = built,
+              let stop = context.leg.endsAtFuelStop,
+              let legIndex = itinerary.legs.firstIndex(where: { $0.id == context.riderLeg.id }),
+              let stopIndex = original.legs.firstIndex(where: { $0 == context.leg }) else { return }
+        let runID = UUID(), requested = itinerary, preferences = ridePreferences
+        let fuel = FuelRangePrefs.snapshot, zoom = mapState.mapZoom
+        fuelReplacementRunID = runID
+        toast = "Checking nearby fuel stops"
+        fuelReplacementTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            do {
+                let stations = try await self.routing.fuelStations(near: stop.coordinate, within: 25_000)
+                    .filter { $0.id != stop.stationID }.prefix(6)
+                for station in stations {
+                    guard !Task.isCancelled, self.fuelReplacementRunID == runID,
+                          self.itinerary == requested, self.navigation.phase == .idle else { return }
+                    let change = reduce(requested, .setFuelStopOverride(legID: context.riderLeg.id,
+                        departureAnchorID: context.departureAnchorID, stationID: station.id))
+                    let builder = ItineraryBuilder()
+                    builder.mapZoom = zoom
+                    let result = await RidePreferenceContext.$current.withValue(preferences) {
+                        await builder.build(change.itinerary, from: legIndex, reuse: original, fuel: fuel,
+                            source: self.routingSourcePolicy, replanFromStationID: change.replanFromStationID,
+                            onProgress: { _ in })
+                    }
+                    guard !Task.isCancelled, self.fuelReplacementRunID == runID,
+                          self.itinerary == requested, self.navigation.phase == .idle else { return }
+                    guard change.itinerary.legs.allSatisfy({ result.riderLegStatus[$0.id] == .built }),
+                          result.legs.count > stopIndex,
+                          Array(result.legs.prefix(stopIndex)) == Array(original.legs.prefix(stopIndex)),
+                          result.legs[stopIndex].endsAtFuelStop?.stationID == station.id else { continue }
+                    self.checkedFuelReplacements[station.id] = (requested, change.itinerary, result)
+                    self.fuelTargetMarkers.append(MapState.Marker(id: "fuel-target:\(station.id)",
+                        latitude: station.latitude, longitude: station.longitude, label: "•", kind: .fuel,
+                        subtitle: station.displayName, isLocked: true))
+                    self.toast = "Choose a highlighted pump"
+                    self.refreshMap()
+                    self.mapState.fit([stop.coordinate] + self.fuelTargetMarkers.map {
+                        RouteCoordinate(longitude: $0.longitude, latitude: $0.latitude)
+                    })
+                }
+                guard self.fuelReplacementRunID == runID else { return }
+                self.toast = self.fuelTargetMarkers.isEmpty
+                    ? "No verified alternatives nearby" : "Choose a highlighted pump"
+            } catch {
+                guard !Task.isCancelled, self.fuelReplacementRunID == runID else { return }
+                self.toast = "Couldn’t check nearby fuel stops. Tap another pin, then try again."
+            }
+        }
     }
 
     func canReplaceFuelStop(at stageIndex: Int) -> Bool {
@@ -1858,7 +1932,7 @@ final class RoutePlannerModel {
         else { return false }
         return stages[stageIndex].endsAtFuelStop
             && built?.legs.indices.contains(builtLegIndex) == true
-            && built?.legs[builtLegIndex].validFuelTargets.isEmpty == false
+            && navigation.phase == .idle && !isRouting
     }
 
     func selectFuelWaypoint(at stageIndex: Int) {
@@ -1871,7 +1945,7 @@ final class RoutePlannerModel {
         let markerID = "fuel:\(built.legs[builtLegIndex].riderLegID.uuidString):\(builtLegIndex)"
         mapState.selectPlannerPin(markerID)
         beginPlannerPinDrag(markerID: markerID)
-        toast = "Choose a highlighted pump"
+        if !fuelTargetMarkers.isEmpty { toast = "Choose a highlighted pump" }
     }
 
     func selectFuelTarget(markerID: String) {
@@ -1880,6 +1954,21 @@ final class RoutePlannerModel {
               let context = fuelMoveContext(markerID: activeFuelDragMarkerID)
         else { return }
         let stationID = String(markerID.dropFirst("fuel-target:".count))
+        guard navigation.phase == .idle, !isRouting else { return }
+        if let checked = checkedFuelReplacements[stationID], checked.original == itinerary {
+            cancelFuelReplacement()
+            itinerary = checked.proposed
+            built = checked.built
+            syncSnappedDestinationPin(from: checked.built)
+            errorMessage = nil
+            fuelPlanNotice = nil
+            acknowledgedFuelGapIDs = []
+            mapState.selectPlannerPin(nil)
+            toast = "Fuel stop updated"
+            refreshMap()
+            RoutingDebugLog.shared.event("fuel replacement committed station=\(stationID) gen=\(itinerary.generation)")
+            return
+        }
         guard context.leg.validFuelTargets.contains(where: {
             $0.id == stationID && $0.validForward == true
         }) else { return }
@@ -1942,6 +2031,8 @@ final class RoutePlannerModel {
         guard parts.count >= 3,
               let index = Int(parts[2]),
               let built, built.legs.indices.contains(index),
+              UUID(uuidString: String(parts[1])) == built.legs[index].riderLegID,
+              built.legs[index].endsAtFuelStop != nil,
               let riderLeg = itinerary.legs.first(where: { $0.id == built.legs[index].riderLegID })
         else { return nil }
         let previousStop = index > 0 && built.legs[index - 1].riderLegID == riderLeg.id
@@ -2072,6 +2163,7 @@ final class RoutePlannerModel {
 
     /// Switch tabs without the keep/clear confirmation (Saved, or empty drafts).
     func selectMode(_ newMode: Mode) {
+        cancelFuelReplacement()
         if showingLoop {
             invalidateInFlightRoutes()
             showingLoop = false
@@ -2371,7 +2463,7 @@ final class RoutePlannerModel {
                     label: "F\(fuelOrdinal)",
                     kind: .fuel,
                     subtitle: stop.name,
-                    isLocked: leg.validFuelTargets.isEmpty
+                    isLocked: true
                 )
             )
         }
@@ -3074,6 +3166,8 @@ final class RoutePlannerModel {
     /// stages are saved one at a time while riding, before the rider reaches them.
     func startNavigation() {
         guard hasRoute, navigation.beginPrefetch() else { return }
+        cancelFuelReplacement()
+        refreshMap()
 
         if let pendingGroupTracking,
            destination == pendingGroupTracking.routedCoordinate {

@@ -279,9 +279,17 @@ final class RoutingClient {
         near point: RouteCoordinate,
         within meters: Double
     ) async throws -> FuelChainStop? {
+        try await fuelStations(near: point, within: meters).first
+    }
+
+    func fuelStations(
+        near point: RouteCoordinate,
+        within meters: Double
+    ) async throws -> [FuelChainStop] {
         let requestID = Self.diagnosticRequestID("fueldata")
         let started = Date()
         let pad = max(0.002, meters / 111_000)
+        let longitudePad = pad / max(0.01, cos(point.latitude * .pi / 180))
         struct Request: Encodable { let locations: [RouteLocation] }
         var request = URLRequest(url: AppConfig.liveFuelURL)
         request.httpMethod = "POST"
@@ -289,8 +297,8 @@ final class RoutingClient {
         request.setValue(requestID, forHTTPHeaderField: "X-Dirt-Request-ID")
         request.timeoutInterval = 30
         request.httpBody = try JSONEncoder().encode(Request(locations: [
-            RouteLocation(latitude: point.latitude - pad, longitude: point.longitude - pad, label: "Fuel box 1"),
-            RouteLocation(latitude: point.latitude + pad, longitude: point.longitude + pad, label: "Fuel box 2")
+            RouteLocation(latitude: point.latitude - pad, longitude: point.longitude - longitudePad, label: "Fuel box 1"),
+            RouteLocation(latitude: point.latitude + pad, longitude: point.longitude + longitudePad, label: "Fuel box 2")
         ]))
         let beginLine = "fuel data request begin id=\(requestID) "
             + "point=\(String(format: "%.5f,%.5f", point.latitude, point.longitude)) "
@@ -340,16 +348,13 @@ final class RoutingClient {
                 )
             )
         }
-        return FuelItinerary.nearestFuelStation(
-            to: point,
-            stations: PackedFuel.decode(data),
-            within: meters
-        ).map { hit in
-            FuelChainStop(
-                id: hit.station.id, latitude: hit.station.latitude, longitude: hit.station.longitude,
-                name: hit.station.name, brand: hit.station.brand, address: hit.station.address,
-                graphMeters: 0
-            )
-        }
+        let origin = CLLocation(latitude: point.latitude, longitude: point.longitude)
+        return PackedFuel.decode(data).compactMap { station -> (FuelChainStop, Double)? in
+            let distance = origin.distance(from: CLLocation(latitude: station.latitude, longitude: station.longitude))
+            guard distance <= meters else { return nil }
+            return (FuelChainStop(id: station.id, latitude: station.latitude, longitude: station.longitude,
+                name: station.name, brand: station.brand, address: station.address, graphMeters: 0), distance)
+        }.sorted { $0.1 < $1.1 }.map { $0.0 }
+
     }
 }

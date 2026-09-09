@@ -796,3 +796,10 @@ Routing tabs use icon/title controls on system light material with orange select
 ## Loop setup simplification — 2026-09-09
 
 Match the current iPhone contract: start/end at current authorized GPS location; Direction menu North, Northeast, East, Southeast, South, Southwest, West, Northwest (default North); total distance 50–500 km in 25 km steps; existing Surface profiles; Create Loop. Remove start/map/towards setup and setup pins. Missing location produces inline feedback, not a permanently disabled button. Keep existing fuel validation and return-route behavior. The compact native glass/icon-title/orange-active planner treatment is the approved baseline for future UI; see root DESIGN.md. Android implementation/qualification is not claimed.
+
+
+### September 9 — checked fuel-stop replacement
+
+From Here, Loop and Plan a Route share the same fuel-stop replacement interaction. Tapping an F pin or fuel stage checks up to six canonical stations within 25 km. Highlight a station only after its replacement itinerary has a proved incoming fuel hop and complete onward continuation; preserve every upstream built leg. Tapping a highlighted station commits that checked itinerary. Never freely drag a fuel pin. Route edits, mode changes and navigation invalidate pending checks and cached choices. Failed or stale checks leave the original route intact.
+
+The live NS/NB adventure service supports an explicit required first station, with no intervening refill before that station and continuous onward geometry. Feasibility of an individually proved replacement may be accepted even if another surface-objective comparison is incomplete; normal route candidate-pool requirements remain unchanged. Mapped station access remains provisional. This does not qualify offline parity or Android implementation.
