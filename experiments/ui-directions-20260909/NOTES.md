@@ -21,3 +21,5 @@ Saved route review: read-only details with View on Map and prominent Continue Pl
 Groups rider details: clickable names open a compact drawer with sample location/update status, View on Map and Route to Rider. Back returns to the roster. Location data and map/route actions remain illustrative; native behavior unchanged.
 
 Return-action decision: remove Create Return Route throughout the preview. Loop owns automatic round trips; Plan supports manually chosen outbound/return waypoints; From Here can start a new return journey on arrival. Supersedes earlier persistent-return decision. Native app unchanged.
+
+Groups follow-up supersedes rider drawer: details expand directly beneath the selected rider. Same rider toggles closed; another rider replaces the expansion. Compact location/status rows and two small actions retain touch targets. HTML accordion interactions verified.
