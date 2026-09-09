@@ -35,6 +35,6 @@ test('replacement rejects insufficient remaining fuel and unknown identity',()=>
 test('replacement returns no partial geometry on unproved continuation',()=>{
  const f=fixture();f.input.fuel.initialUsableMeters=2000;let calls=0;
  const result=buildFuelReplacement({body:{profile:'balanced',fuel:{requiredFirstStationId:'pump',usableRangeMeters:5000,firstLegMaxMeters:2000,windowMaxStops:4}},
- options:{...f,budget:work()},identity:[],routeResponse,toLiveResponse,build:o=>++calls===1?buildRideAlternatives(o):{search:{poolComplete:false}}});
+ options:{...f,budget:work()},identity:[],routeResponse,toLiveResponse,build:o=>{if(++calls===1){assert.deepEqual(o.stations.map(s=>s.id),["pump"]);return buildRideAlternatives(o)}return {search:{poolComplete:false}}}});
  assert.equal(result.error,'replacement_continuation_unproved');assert.deepEqual(result.routes,[]);
 });

@@ -11,7 +11,7 @@ function buildFuelReplacement({body,options,identity,routeResponse,toLiveRespons
  const [start,end]=options.input.anchors;
  const pump={id:'replacement',lat:station.lat,lon:station.lon,stationId:station.id};
  const leg=options.input.legs[0];
- const first=build({...options,input:{...options.input,anchors:[start,pump],legs:[{...leg,to:pump.id}]}});
+ const first=build({...options,stations:[station],input:{...options.input,anchors:[start,pump],legs:[{...leg,to:pump.id}]}});
  const a=first.selected;
  if(!first.search.poolComplete||!a||!['verified','provisional_station_access'].includes(a.fuel.state))return fail('replacement_approach_unproved');
  const meters=a.road.distanceMeters,last=a.road.geometry.at(-1);
