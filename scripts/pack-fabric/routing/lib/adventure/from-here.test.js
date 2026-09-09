@@ -174,3 +174,23 @@ test('explicit cold-preparation work allowance shares the request deadline and r
  const failed=build(f,{preparationBudget:createBudget({deadlineAtMs,maxExpansions:1}),budget:createBudget({deadlineAtMs,maxExpansions:100000})});
  assert.equal(failed.stage,'preparation');assert.equal(failed.fuel.reason,'expansion_limit');assert.equal(failed.search.expansions,0);
 });
+
+test('a coarse off-road waypoint expands to the connected road without widening pump access',()=>{
+ const f=fixture();f.input.anchors[1].lat=.04;
+ const narrow=build(f);assert.notEqual(narrow.road.state,'complete');
+ const wide=build(f,{endpointRadiusMeters:6000});
+ assert.equal(wide.road.state,'complete');assert.equal(wide.fuel.state,'provisional_station_access');
+ assert.ok(wide.provenance.waypointSnap.attempts>1);
+ assert.ok(wide.provenance.waypointSnap.endDistanceMeters>4000);
+ assert.deepEqual(wide.road.geometry.at(-1),[.03,0]);
+ assert.equal(wide.fuel.plannedRefills[0].station.lat,0);
+ // A distant fuel POI must not acquire a synthetic entrance from this change.
+ f.stations[0].lat=.04;
+ const noPump=build(f,{endpointRadiusMeters:6000});assert.equal(noPump.fuel.state,'unverified');
+});
+
+test('wider allowed radius preserves an already successful waypoint projection',()=>{
+ const f=fixture(),a=build(f),b=build(f,{endpointRadiusMeters:20000});
+ assert.deepEqual(b.road.geometry,a.road.geometry);assert.deepEqual(b.fuel.plannedRefills,a.fuel.plannedRefills);
+ assert.equal(b.provenance.waypointSnap.attempts,1);
+});

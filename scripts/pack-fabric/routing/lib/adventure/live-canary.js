@@ -28,7 +28,7 @@ function routeResponse(segments,profile,identity,diagnostics,point=null) {
 function toLiveResponse(pool,body,kind,identity) {
  const r=pool.selected;
  if(!r||!pool.search.poolComplete)return {status:'unknown',error:'adventure_search_incomplete',message:'Route search did not complete. No fuel gap has been proved.',diagnostics:{strategy:'adventure-preview-v1',reason:pool.search.reason,adventure:{candidates:pool.candidates,search:pool.search}},stops:[],routes:[],windowComplete:false};
- const diagnostics={allowUnknown:body.profile!=='cleanest'&&body.accessPolicy?.motorizedUnknown===true,mapZoom:body.options?.mapZoom,strategy:'adventure-preview-v1',selectedReason:pool.selectedObjective,adventure:{dirtEntryCost:r.provenance.dirtEntryCost,fuelHeuristicWeight:r.provenance.fuelHeuristicWeight,candidates:pool.candidates,search:pool.search,quality:r.qualityAudit,fuelState:r.fuel.state},packIdentity:identity};
+ const diagnostics={allowUnknown:body.profile!=='cleanest'&&body.accessPolicy?.motorizedUnknown===true,mapZoom:body.options?.mapZoom,strategy:'adventure-preview-v1',selectedReason:pool.selectedObjective,adventure:{waypointSnap:r.provenance.waypointSnap,dirtEntryCost:r.provenance.dirtEntryCost,fuelHeuristicWeight:r.provenance.fuelHeuristicWeight,candidates:pool.candidates,search:pool.search,quality:r.qualityAudit,fuelState:r.fuel.state},packIdentity:identity};
  if(kind==='route')return routeResponse(r.road.segments,body.profile,identity,diagnostics);
  if(!['provisional_station_access','verified'].includes(r.fuel.state))return {status:'unknown',error:r.fuel.reason||'fuel_unverified',message:'Road found, but fuel planning remains unverified.',routes:[routeResponse(r.road.segments,body.profile,identity,diagnostics)],stops:[],windowComplete:true,diagnostics};
  const visits=r.fuel.plannedRefills;
@@ -88,8 +88,8 @@ async function adventureCanaryRequest(body,kind,{environment=process.env,load=nu
  const input={mode:'from_here',anchors:body.locations.map((p,i)=>({id:`rider-${i}`,lat:p.lat,lon:p.lon})),legs:[{from:'rider-0',to:'rider-1',profile,allowUnknown:profile!=='clean'&&body.accessPolicy?.motorizedUnknown===true}],
   fuel:kind==='fuel'?{fullRangeMeters:body.fuel.usableRangeMeters,reserveFraction:0,initialUsableMeters:body.fuel.firstLegMaxMeters}:null};
  const signal=body.options?.abortSignal;
- const {tapRadiusMeters}=require('../legal-topology/snap');
- const endpointRadiusMeters=tapRadiusMeters({zoom:body.options?.mapZoom,lat:body.locations[0].lat,requestedMeters:body.options?.matchLimitMeters,graphBinaryVersion:4});
+ const {waypointRadiusMeters}=require('./waypoint-radius');
+ const endpointRadiusMeters=waypointRadiusMeters({zoom:body.options?.mapZoom,lat:body.locations[0].lat,requestedMeters:body.options?.matchLimitMeters,graphBinaryVersion:4});
  const pool=buildRideAlternatives({arrivalHistory:{priorEdgeIds:body.options?.priorEdgeIds||[],arrivalEdgeId:body.options?.arrivalEdgeId},pavedFuelHeuristicWeight:3,dirtContinuityMeters:1000,preferOnwardFuel:true,additionalUrbanAreas:resolution.regionIds.includes('nb')?require('./nb-urban-review-20260908-01.json').cores:[],avoidMotorways:body.options?.avoidMotorways===true,input,pack:data.pack,geom:data.geom,revision,stations:data.stations.filter(s=>!excluded.has(s.id)),context,endpointRadiusMeters,expandedCandidates:resolution.regionIds.includes('nb')||!!body.options?.priorEdgeIds?.length,maxFuelLabels:400000,fuelHeuristicWeight:resolution.regionIds.length>1?2:1.5,
   budget:createBudget({deadlineAtMs,maxExpansions:30000000,signal}),preparationBudget:createBudget({deadlineAtMs,maxExpansions:20000000,signal})});
  const response=toLiveResponse(pool,body,kind,identity);
