@@ -968,3 +968,7 @@ regions and rejects repeated region inputs; shared-node identity and restriction
 remapping remain mandatory. This is an unactivated qualification candidate, not
 national service acceptance. Preserve the same admission/restriction behavior
 in Android. Production/candidate paths preserve one release ID and exact hashes.
+
+Joined graph identity allocation may be lazy: route edge IDs and overlapping
+source aliases must remain identical to eager composition. This is a memory
+optimization only; no geometry, fuel ranking or restriction policy change.

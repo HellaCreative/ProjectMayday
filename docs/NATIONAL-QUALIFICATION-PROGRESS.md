@@ -17,3 +17,12 @@ Remaining:3+realregion, long/crosscountry/state/province routes, fuel replacemen
 customsettings, runtime deadlines/cache behavior, hosted exactrelease deployment,
 Swift offline parity and release archive/signing. Do not activate national based
 only on these two successful smokes. Accepted Loop/navigation/fuel behavior frozen.
+
+## Memory refinement
+
+Joined edge IDs and source aliases are now materialized on demand instead of
+allocating strings and one array for every edge. Overlap aliases retain all
+source identities.214existing adventure tests pass; dedicated lazy-ID coverage
+added and passed. Same VT/NH route:600496KiB peakRSS versus1089296KiB before
+(~45% less),3879ms versus5017ms. Geometry and distance identical. This is one
+controlled sample, not a national memory ceiling. Larger regions remain open.

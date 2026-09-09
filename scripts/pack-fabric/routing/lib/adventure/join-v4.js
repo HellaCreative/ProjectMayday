@@ -24,7 +24,7 @@ function joinV4(regions,{budget}) {
   }
  });
  if(!sharedNodes)fail('no shared source nodes');
- const from=[],to=[],meters=[],access=[],surface=[],road=[],ids=[],aliases=[];
+ const from=[],to=[],meters=[],access=[],surface=[],road=[],aliases=new Map();
  regions.forEach(({pack,geom},region)=>{
   const map=new Int32Array(pack.edgeCount);edgeMaps.push(map);
   for(let i=0;i<pack.edgeCount;i++) {
@@ -44,10 +44,16 @@ function joinV4(regions,{budget}) {
     if(access[edge*2]!==pack.edgeAccess[i*2]||access[edge*2+1]!==pack.edgeAccess[i*2+1])fail('duplicate access mismatch');
     if(JSON.stringify(regions[src.region].geom.polyline(src.edge))!==JSON.stringify(geom.polyline(i)))fail('duplicate geometry mismatch');
    } else {
-    edge=sources.length;if(canShare)canonical.set(key,peers?[...peers,edge]:edge);sources.push({region,edge:i});ids.push(`${key}#${edge}`);
+    edge=sources.length;if(canShare)canonical.set(key,peers?[...peers,edge]:edge);sources.push({region,edge:i});
     from.push(a);to.push(b);meters.push(pack.edgeMeters[i]);access.push(pack.edgeAccess[2*i],pack.edgeAccess[2*i+1]);surface.push(surfaceNames.indexOf(pack.enums.surfaceLeafNames[pack.edgeSurfaceLeaf[i]]));road.push(roadNames.indexOf(pack.enums.roadClassLeafNames[pack.edgeRoadClassLeaf[i]]));
    }
-   (aliases[edge]??=[]).push(pack.edgeId(i));
+   // Most edges have one source. Retain extra aliases only at overlaps and
+   // materialize string identities when a route actually asks for them.
+   const original=sources[edge];
+   if(original.region!==region||original.edge!==i) {
+    if(!aliases.has(edge))aliases.set(edge,[original]);
+    aliases.get(edge).push({region,edge:i});
+   }
    map[i]=edge;
   }
  });
@@ -86,7 +92,8 @@ function joinV4(regions,{budget}) {
   nodeCount:nodeIds.length,edgeCount:sources.length,undirectedEdgeCount:sources.length,directedArcCount:targets.length,
   nodeCoords:Float32Array.from(coords),osmNodeIds:nodeIds,osmWayIds:sources.map(s=>regions[s.region].pack.osmWayIds[s.edge]),
   nodeOffsets:offsets,edgeTargets:Int32Array.from(targets),edgeUndirectedIndex:Int32Array.from(edgeIndices),edgeFrom:Int32Array.from(from),edgeTo:Int32Array.from(to),edgeMeters:Uint32Array.from(meters),edgeAccess:Uint8Array.from(access),edgeSurfaceLeaf:Uint8Array.from(surface),edgeRoadClassLeaf:Uint8Array.from(road),restrictions,
-  edgeId:e=>ids[e],edgeAliases:e=>aliases[e],edgeLeaves:e=>{const s=sources[e];return regions[s.region].pack.edgeLeaves(s.edge);},
+  edgeId:e=>{const s=sources[e];return `${regions[s.region].pack.osmWayIds[s.edge]}:${nodeIds[from[e]]}:${nodeIds[to[e]]}#${e}`;},
+  edgeAliases:e=>(aliases.get(e)||[sources[e]]).map(s=>regions[s.region].pack.edgeId(s.edge)),edgeLeaves:e=>{const s=sources[e];return regions[s.region].pack.edgeLeaves(s.edge);},
   hasDirectedArc(a,b,e){for(let i=offsets[a];i<offsets[a+1];i++)if(this.edgeTargets[i]===b&&this.edgeUndirectedIndex[i]===e)return true;return false;}};
  const geom={polyline(e){const s=sources[e];return regions[s.region].geom.polyline(s.edge);}};
  return {pack,geom,sources,nodeMaps,edgeMaps,diagnostics:{sharedNodes,duplicateEdges:regions.reduce((n,r)=>n+r.pack.edgeCount,0)-sources.length}};

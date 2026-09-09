@@ -51,3 +51,16 @@ test('three-region chain retains intermediate graph and boundary restrictions',(
 test('repeated region cannot be joined twice',()=>{
  const parts=fixtures();assert.throws(()=>joinV4([parts[0],parts[0]],{budget:budget()}),/Duplicate source region/);
 });
+
+test('lazy identities retain canonical names and every overlapping source alias',()=>{
+ const parts=fixtures(),r=joinV4(parts,{budget:budget()});
+ for(let regionIndex=0;regionIndex<parts.length;regionIndex++){
+  const source=parts[regionIndex].pack;
+  for(let edge=0;edge<source.edgeCount;edge++){
+   const joined=r.edgeMaps[regionIndex][edge];
+   assert.ok(r.pack.edgeAliases(joined).includes(source.edgeId(edge)));
+   const a=r.pack.osmNodeIds[r.pack.edgeFrom[joined]],b=r.pack.osmNodeIds[r.pack.edgeTo[joined]];
+   assert.equal(r.pack.edgeId(joined),`${source.osmWayIds[edge]}:${a}:${b}#${joined}`);
+  }
+ }
+});
