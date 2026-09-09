@@ -1,6 +1,6 @@
 # DIRT overnight routing handoff — September 9, 2026
 
-Working report, last updated before the morning handoff. Automated results are not physical-device acceptance.
+Final report for the completed overnight automated sweep. Overnight automation is paused. Automated results are not physical-device acceptance.
 
 ## Ready on DEV
 
