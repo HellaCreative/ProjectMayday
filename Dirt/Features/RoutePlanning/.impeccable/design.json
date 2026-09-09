@@ -1,6 +1,6 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-09-09T14:34:02.832526+00:00",
+  "generatedAt": "2026-09-09T14:54:53.634231+00:00",
   "title": "Design System: DIRT Route Planner",
   "extensions": {
     "shadows": [
@@ -19,7 +19,8 @@
       "tabScaledMinimumHeightPoints": 54,
       "tabHeightCapPoints": 76,
       "largeContentViewer": true,
-      "verification": "Final maximum-text iPhone capture verified: reviewer scored start-action reflow, kilometre announcement and tab sizing resolved (ship at that scope). No other platform acceptance claimed."
+      "verification": "Nine focused tests and final simulator/signed iPhone builds passed; development checks passed. Impeccable bounded review: ship. Normal controls and permission feedback inspected; maximum-text rows reflow, scrolling unverified. No physical-device or other platform acceptance claimed.",
+      "loopControlLayout": "Horizontal normally; leading-aligned vertical stack at accessibility Dynamic Type sizes."
     }
   },
   "components": [
@@ -29,19 +30,24 @@
       "description": "Four native icon-and-title buttons: From here, Loop, Plan, Saved. Plan accessibility name: Plan a route. Selected foreground orangePressed with rowFill surface."
     },
     {
-      "name": "Loop start",
-      "kind": "custom",
-      "description": "Here and Choose on map actions adapt from horizontal layout to a vertical stack."
+      "name": "Loop direction",
+      "kind": "input",
+      "description": "Native menu: eight compass points, initially North; start and end use current GPS location."
     },
     {
       "name": "Loop distance",
       "kind": "input",
-      "description": "Native slider, 50\u2013500 total kilometres in 25-kilometre steps, with visible km and spoken kilometres."
+      "description": "Native slider, 50\u2013500 total kilometres in 25-kilometre steps, initially 100 km, with visible km and spoken kilometres."
+    },
+    {
+      "name": "Loop surface",
+      "kind": "input",
+      "description": "Native menu bound to existing route profiles; accessible label and selected value."
     },
     {
       "name": "Loop generation",
       "kind": "button",
-      "description": "Existing orange DirtCTAStyle: Create Loop or Find another loop; requires start and direction. This source snapshot does not certify contrast."
+      "description": "Create Loop uses DirtCTAStyle.brand() and remains available without pins. Authorization and current-location errors appear inline. Progress offers Cancel."
     },
     {
       "name": "Create Return Route",
@@ -57,7 +63,13 @@
       "Four equally weighted icon-and-title planning tabs.",
       "Adaptive form content with explicit distance units."
     ],
-    "rules": [],
+    "rules": [
+      {
+        "name": "The Readable Tab Rule",
+        "body": "Only planning-tab typography is capped at `xxxLarge`. The visible short label \u201cPlan\u201d retains \u201cPlan a route\u201d as its accessibility name and native large-content viewer label. Every tab exposes selected state. The form remains outside that cap and continues scaling with Dynamic Type.",
+        "section": "typography"
+      }
+    ],
     "dos": [
       "Do preserve native material, semantic theme tokens, and map context.",
       "Do keep complete accessibility labels and explicit distance units.",

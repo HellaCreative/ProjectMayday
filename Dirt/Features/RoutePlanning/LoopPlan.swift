@@ -1,6 +1,18 @@
 import CoreLocation
 import Foundation
 
+/// Clockwise compass choices; north is the default without any map interaction.
+nonisolated enum LoopDirection: String, CaseIterable, Identifiable {
+    case north = "North", northeast = "Northeast", east = "East", southeast = "Southeast"
+    case south = "South", southwest = "Southwest", west = "West", northwest = "Northwest"
+
+    var id: String { rawValue }
+    var bearing: Double { Double(Self.allCases.firstIndex(of: self)!) * .pi / 4 }
+    func guide(from start: RouteCoordinate) -> RouteCoordinate {
+        LoopPlan.point(from: start, meters: 10_000, bearing: bearing)
+    }
+}
+
 /// Candidate geometry only; every segment is subsequently routed and fuel-checked.
 nonisolated enum LoopPlan {
     static func bearing(from a: RouteCoordinate, toward b: RouteCoordinate) -> Double {

@@ -136,9 +136,7 @@ final class RoutePlannerModel {
     }
     var showingLoop = false
     var loopDistanceKM: Double = 100
-    var loopStart: RouteCoordinate?
-    var loopDirection: RouteCoordinate?
-    var loopPickingStart = false
+    var loopDirection: LoopDirection = .north
     var loopSummary: String?
     private var loopRunID: UUID?
 
@@ -148,37 +146,24 @@ final class RoutePlannerModel {
         fuelPlanningStatus = nil
         isAssemblingRoute = false
         loopSummary = nil
-        if loopStart == nil, let fix = locationService.currentCoordinate {
-            loopStart = RouteCoordinate(longitude: fix.longitude, latitude: fix.latitude)
-        }
-        refreshMap()
-    }
-
-    func useCurrentLoopStart() {
-        guard let fix = locationService.currentCoordinate else {
-            toast = "Location unavailable — select a start on the map"
-            loopPickingStart = true
-            return
-        }
-        loopStart = RouteCoordinate(longitude: fix.longitude, latitude: fix.latitude)
-        loopPickingStart = false
-        refreshMap()
-    }
-
-    private func setLoopMapPoint(_ point: RouteCoordinate) {
-        guard !isRouting else { return }
-        if loopPickingStart || loopStart == nil {
-            loopStart = point
-            loopPickingStart = false
-        } else {
-            loopDirection = point
-        }
+        locationService.requestWhenInUse()
+        locationService.startUpdates()
         refreshMap()
     }
 
     func generateLoop() {
-        guard navigation.phase == .idle, !isRouting,
-              let start = loopStart, let direction = loopDirection else { return }
+        guard navigation.phase == .idle, !isRouting else { return }
+        guard locationService.isAuthorized else {
+            locationService.requestWhenInUse()
+            errorMessage = "Allow location access in Settings to create a loop from where you are."
+            return
+        }
+        guard let start = locationService.currentCoordinate else {
+            locationService.startUpdates()
+            errorMessage = "Waiting for your location. Try again in a moment."
+            return
+        }
+        let direction = loopDirection.guide(from: start)
         invalidateInFlightRoutes()
         let runID = UUID()
         loopRunID = runID
@@ -231,7 +216,7 @@ final class RoutePlannerModel {
                 self.toast = "Loop ready"
                 self.mapState.fit(winner.1.legs.flatMap { $0.response.coordinates })
             } else {
-                self.errorMessage = "No complete loop found in that direction. Try another area or a different distance."
+                self.errorMessage = "No loop found. Try another direction or distance."
             }
             self.refreshMap()
         }
@@ -1128,7 +1113,7 @@ final class RoutePlannerModel {
     func handleMapTap(_ coordinate: CLLocationCoordinate2D) {
         guard navigation.phase == .idle else { return }
         let point = RouteCoordinate(longitude: coordinate.longitude, latitude: coordinate.latitude)
-        if showingLoop { setLoopMapPoint(point); return }
+        if showingLoop { return }
         switch mode {
         case .fromHere:
             // First pin: short tap point 2. After off-graph GPS recovery: tap point 1.
@@ -1192,7 +1177,7 @@ final class RoutePlannerModel {
     func handleMapLongPress(_ coordinate: CLLocationCoordinate2D) {
         guard navigation.phase == .idle else { return }
         let point = RouteCoordinate(longitude: coordinate.longitude, latitude: coordinate.latitude)
-        if showingLoop { setLoopMapPoint(point); return }
+        if showingLoop { return }
         switch mode {
         case .plan:
             appendPlanPoint(point)
@@ -2313,16 +2298,6 @@ final class RoutePlannerModel {
             }
         case .plan:
             markers.append(contentsOf: canonicalMarkers(riderPinsLocked: false))
-        }
-        if showingLoop {
-            if let loopStart {
-                markers.append(MapState.Marker(id: "loop-start", latitude: loopStart.latitude, longitude: loopStart.longitude,
-                    label: "Start", kind: .start, isLocked: true))
-            }
-            if let loopDirection {
-                markers.append(MapState.Marker(id: "loop-direction", latitude: loopDirection.latitude, longitude: loopDirection.longitude,
-                    label: "Toward", kind: .destination, isLocked: true))
-            }
         }
         if fuelPlanningStatus != nil {
             for (index, stop) in fuelPreviewStops.enumerated() {

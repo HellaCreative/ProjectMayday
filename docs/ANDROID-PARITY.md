@@ -791,3 +791,8 @@ Keep Loop back to start at the top of Plan a route, above the leg list. Show it 
 ### September 9 — dedicated Loop and return journeys
 
 Routing tabs use icon/title controls on system light material with orange selection: From here, Loop, Plan a route, Saved. Create Return Route belongs to From here and Plan for an open itinerary; it preserves outbound stops and appends home. Dedicated Loop takes a start, a map-picked direction guide and total distance (50–500km), independent of tank range. It compares three complete circuits, carries fuel between legs and ranks target-distance error, repeated geometry and reused stations. Generated guides are not a promise of exact distance; show actual distance and shared-road estimate. Only complete verified builds are accepted. Cancellation cannot publish an obsolete circuit; draft replacement asks in-app before discarding an existing plan. Optional preferDifferentRoads strengthens positive prior-road costs on live NS/NB and is saved with preferences; absent requests retain accepted behavior. No nationwide/offline Loop qualification is claimed.
+
+
+## Loop setup simplification — 2026-09-09
+
+Match the current iPhone contract: start/end at current authorized GPS location; Direction menu North, Northeast, East, Southeast, South, Southwest, West, Northwest (default North); total distance 50–500 km in 25 km steps; existing Surface profiles; Create Loop. Remove start/map/towards setup and setup pins. Missing location produces inline feedback, not a permanently disabled button. Keep existing fuel validation and return-route behavior. The compact native glass/icon-title/orange-active planner treatment is the approved baseline for future UI; see root DESIGN.md. Android implementation/qualification is not claimed.

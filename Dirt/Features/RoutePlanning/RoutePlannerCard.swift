@@ -22,6 +22,7 @@ struct RoutePlannerCard: View {
     var sitsBehindDock: Bool = false
     /// Figma landscape-primary side drawer. `true` = dock leading; `false` = dock trailing.
     var landscapeDockLeading: Bool? = nil
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @Environment(AppEnvironment.self) private var app
     @Environment(\.modelContext) private var modelContext
 
@@ -382,69 +383,87 @@ struct RoutePlannerCard: View {
         .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
+    private var loopControlLayout: AnyLayout {
+        dynamicTypeSize.isAccessibilitySize
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 4))
+            : AnyLayout(HStackLayout())
+    }
+
     @ViewBuilder private var loopContent: some View {
-        VStack(alignment: .leading, spacing: DirtSpace.group) {
-            ViewThatFits(in: .horizontal) {
-                HStack { Text("Start").font(DirtType.rowTitle); Spacer(); loopStartActions }
-                VStack(alignment: .leading) { Text("Start").font(DirtType.rowTitle); loopStartActions }
-            }
-            .font(.subheadline.weight(.semibold)).tint(DirtTheme.orangePressed)
-            .disabled(planner.isRouting)
-            Text(planner.loopPickingStart || planner.loopStart == nil
-                 ? "Tap the map to choose where your loop starts."
-                 : planner.loopDirection == nil ? "Tap an area on the map to guide your ride in that direction."
-                 : "Start and direction selected. The direction pin guides the ride; it is not a required stop.")
-                .font(DirtType.helper).foregroundStyle(DirtTheme.muted)
-            VStack(alignment: .leading, spacing: DirtSpace.inner) {
-                HStack {
-                    Text("Ride distance").font(DirtType.rowTitle)
-                    Spacer()
-                    Text("\(Int(planner.loopDistanceKM)) km").font(.headline).monospacedDigit()
+        VStack(spacing: 12) {
+            VStack(spacing: 8) {
+                loopControlLayout {
+                    Text("Direction")
+                    if !dynamicTypeSize.isAccessibilitySize { Spacer() }
+                    Picker("Direction", selection: Binding(get: { planner.loopDirection }, set: { planner.loopDirection = $0 })) {
+                        ForEach(LoopDirection.allCases) { direction in
+                            Text(direction.rawValue).tag(direction)
+                        }
+                    }
+                    .pickerStyle(.menu).labelsHidden().accessibilityLabel("Direction")
+                    .accessibilityValue(planner.loopDirection.rawValue)
+                    .fixedSize(horizontal: false, vertical: true)
                 }
-                Slider(value: Binding(get: { planner.loopDistanceKM }, set: { planner.loopDistanceKM = $0 }), in: 50...500, step: 25)
-                    .tint(DirtTheme.orangePressed).accessibilityLabel("Total loop distance")
-                    .accessibilityValue("\(Int(planner.loopDistanceKM)) kilometres")
-                    .disabled(planner.isRouting)
-                Text("Total ride length, not fuel range. Actual distance follows the available roads.")
-                    .font(DirtType.helper).foregroundStyle(DirtTheme.muted)
+                .frame(minHeight: DirtHit.min)
+                Divider()
+                VStack(spacing: 0) {
+                    loopControlLayout {
+                        Text("Distance")
+                        if !dynamicTypeSize.isAccessibilitySize { Spacer() }
+                        Text("\(Int(planner.loopDistanceKM)) km").fontWeight(.semibold).monospacedDigit()
+                    }
+                    Slider(value: Binding(get: { planner.loopDistanceKM }, set: { planner.loopDistanceKM = $0 }), in: 50...500, step: 25)
+                        .accessibilityLabel("Total loop distance")
+                        .accessibilityValue("\(Int(planner.loopDistanceKM)) kilometres")
+                        .frame(minHeight: DirtHit.min)
+                }
+                Divider()
+                loopControlLayout {
+                    Text("Surface")
+                    if !dynamicTypeSize.isAccessibilitySize { Spacer() }
+                    Picker("Surface", selection: Binding(get: { planner.profile }, set: { planner.profile = $0 })) {
+                        ForEach(RouteProfile.allCases) { profile in
+                            Text(profile.title).tag(profile)
+                        }
+                    }
+                    .pickerStyle(.menu).labelsHidden().accessibilityLabel("Surface")
+                    .accessibilityValue(planner.profile.title)
+                    .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(minHeight: DirtHit.min)
             }
-            fromHereProfileHeader
-                .disabled(planner.isRouting)
+            .fixedSize(horizontal: false, vertical: true)
+            .font(.subheadline)
+            .foregroundStyle(DirtTheme.ink)
+            .tint(DirtTheme.orangePressed)
+            .padding(.horizontal, 14).padding(.vertical, 6)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: DirtRadius.control))
+            .disabled(planner.isRouting)
+
             if planner.isRouting {
-                HStack { ProgressView(); Text(planner.fuelPlanningStatus ?? "Finding a loop") }
-                Button("Cancel") { planner.selectMode(.plan) }
+                loopControlLayout {
+                    ProgressView()
+                    Text(planner.fuelPlanningStatus ?? "Creating loop")
+                    if !dynamicTypeSize.isAccessibilitySize { Spacer() }
+                    Button("Cancel") { planner.selectMode(.plan) }.frame(minHeight: DirtHit.min)
+                }
+                .font(.subheadline).tint(DirtTheme.orangePressed)
             } else {
-                Button(planner.loopSummary == nil ? "Create Loop" : "Find another loop") { planner.generateLoop() }
-                    .buttonStyle(DirtCTAStyle(fill: DirtTheme.orange))
-                    .disabled(planner.loopStart == nil || planner.loopDirection == nil)
+                Button("Create Loop") { planner.generateLoop() }
+                    .buttonStyle(DirtCTAStyle.brand())
             }
             if let summary = planner.loopSummary {
                 Text(summary).font(DirtType.helper).foregroundStyle(DirtTheme.ink)
             }
-            if let error = planner.errorMessage { Text(error).font(DirtType.helper).foregroundStyle(DirtTheme.danger) }
+            if let error = planner.errorMessage {
+                Text(error).font(DirtType.helper).foregroundStyle(DirtTheme.danger)
+            }
         }
         if planner.hasRoute {
             stageList
             statsRow
             ctaRow
         }
-    }
-
-    /// Confirm before abandoning a From here pin or a multi-stage plan.
-    private var loopStartActions: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(spacing: 16) { loopStartButtons }
-                .fixedSize(horizontal: true, vertical: false)
-            VStack(alignment: .leading, spacing: 4) { loopStartButtons }
-        }
-    }
-
-    @ViewBuilder private var loopStartButtons: some View {
-        Button("Here") { planner.useCurrentLoopStart() }
-            .frame(minWidth: DirtHit.min, minHeight: DirtHit.min)
-        Button("Choose on map") { planner.loopPickingStart = true }
-            .frame(minHeight: DirtHit.min)
-            .fixedSize(horizontal: false, vertical: true)
     }
 
     private func requestMode(_ mode: RoutePlannerModel.Mode) {

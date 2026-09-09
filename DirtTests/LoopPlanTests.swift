@@ -3,6 +3,19 @@ import Testing
 @testable import Dirt
 
 @Suite struct LoopPlanTests {
+    @Test func compassChoicesGenerateClosedCircuitsFromCurrentStart() {
+        let start = RouteCoordinate(longitude: -63.33, latitude: 44.76)
+        #expect(LoopDirection.allCases.map(\.rawValue) == ["North", "Northeast", "East", "Southeast", "South", "Southwest", "West", "Northwest"])
+        for (index, direction) in LoopDirection.allCases.enumerated() {
+            let guide = direction.guide(from: start)
+            let bearing = LoopPlan.bearing(from: start, toward: guide)
+            let expected = Double(index) * Double.pi / 4
+            #expect(abs(atan2(sin(bearing - expected), cos(bearing - expected))) < 0.000001)
+            let circuit = LoopPlan.anchors(start: start, direction: guide, targetMeters: 100_000, variant: 0)
+            #expect(circuit.first == start && circuit.last == start)
+        }
+    }
+
     @Test func candidatesCloseAndFollowSelectedDirection() {
         let start = RouteCoordinate(longitude: -63, latitude: 44)
         let north = RouteCoordinate(longitude: -63, latitude: 45)
