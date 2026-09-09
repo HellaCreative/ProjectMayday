@@ -1,0 +1,698 @@
+[
+  {
+    "region": "ns",
+    "id": "area",
+    "lat": 44.2,
+    "lon": -65.4,
+    "distanceMeters": 17394.17563784752,
+    "road": {
+      "lat": 44.06804656982422,
+      "lon": -65.51705932617188
+    },
+    "edgeIndex": 97189
+  },
+  {
+    "region": "ns",
+    "id": "area",
+    "lat": 44.3,
+    "lon": -65.4,
+    "distanceMeters": 14816.25690786111,
+    "road": {
+      "lat": 44.416690826416016,
+      "lon": -65.4899673461914
+    },
+    "edgeIndex": 110719
+  },
+  {
+    "region": "ns",
+    "id": "area",
+    "lat": 44.1,
+    "lon": -65.3,
+    "distanceMeters": 14636.15495520343,
+    "road": {
+      "lat": 44.048152923583984,
+      "lon": -65.46839904785156
+    },
+    "edgeIndex": 97185
+  },
+  {
+    "region": "ns",
+    "id": "area",
+    "lat": 46.95,
+    "lon": -60.9,
+    "distanceMeters": 14283.25226003043,
+    "road": {
+      "lat": 46.862571716308594,
+      "lon": -60.76225280761719
+    },
+    "edgeIndex": 43319
+  },
+  {
+    "region": "ns",
+    "id": "area",
+    "lat": 44.2,
+    "lon": -65.5,
+    "distanceMeters": 13939.424740320263,
+    "road": {
+      "lat": 44.139774322509766,
+      "lon": -65.65328216552734
+    },
+    "edgeIndex": 97053
+  },
+  {
+    "region": "ns",
+    "id": "area",
+    "lat": 44.2,
+    "lon": -65.3,
+    "distanceMeters": 13579.570059840167,
+    "road": {
+      "lat": 44.284847259521484,
+      "lon": -65.1773910522461
+    },
+    "edgeIndex": 111373
+  },
+  {
+    "region": "ns",
+    "id": "area",
+    "lat": 44.1,
+    "lon": -65.2,
+    "distanceMeters": 12074.092462098544,
+    "road": {
+      "lat": 44.134220123291016,
+      "lon": -65.05645751953125
+    },
+    "edgeIndex": 97292
+  },
+  {
+    "region": "ns",
+    "id": "area",
+    "lat": 44.3,
+    "lon": -65.5,
+    "distanceMeters": 11745.633507143402,
+    "road": {
+      "lat": 44.34836959838867,
+      "lon": -65.63126373291016
+    },
+    "edgeIndex": 96682
+  },
+  {
+    "region": "ns",
+    "id": "area",
+    "lat": 44.3,
+    "lon": -65.3,
+    "distanceMeters": 9903.037974329918,
+    "road": {
+      "lat": 44.284847259521484,
+      "lon": -65.1773910522461
+    },
+    "edgeIndex": 111373
+  },
+  {
+    "region": "ns",
+    "id": "area",
+    "lat": 46.95,
+    "lon": -60.8,
+    "distanceMeters": 9582.882935894551,
+    "road": {
+      "lat": 46.87314224243164,
+      "lon": -60.74292755126953
+    },
+    "edgeIndex": 43319
+  },
+  {
+    "region": "ns",
+    "id": "area",
+    "lat": 44.2,
+    "lon": -65.2,
+    "distanceMeters": 9507.428128032163,
+    "road": {
+      "lat": 44.282928466796875,
+      "lon": -65.17093658447266
+    },
+    "edgeIndex": 111373
+  },
+  {
+    "region": "ns",
+    "id": "area",
+    "lat": 46.75,
+    "lon": -60.5,
+    "distanceMeters": 9473.315018156534,
+    "road": {
+      "lat": 46.70355224609375,
+      "lon": -60.395809173583984
+    },
+    "edgeIndex": 43963
+  },
+  {
+    "region": "ns",
+    "id": "area",
+    "lat": 46.95,
+    "lon": -60.7,
+    "distanceMeters": 9093.721624704316,
+    "road": {
+      "lat": 46.87339782714844,
+      "lon": -60.74192810058594
+    },
+    "edgeIndex": 143751
+  },
+  {
+    "region": "nb",
+    "id": "area",
+    "lat": 47.4,
+    "lon": -66.8,
+    "distanceMeters": 8463.355759293736,
+    "road": {
+      "lat": 47.3276481628418,
+      "lon": -66.7651138305664
+    },
+    "edgeIndex": 103029
+  },
+  {
+    "region": "ns",
+    "id": "area",
+    "lat": 44.2,
+    "lon": -65.1,
+    "distanceMeters": 8097.038979801909,
+    "road": {
+      "lat": 44.134220123291016,
+      "lon": -65.05645751953125
+    },
+    "edgeIndex": 97292
+  },
+  {
+    "region": "ns",
+    "id": "area",
+    "lat": 46.95,
+    "lon": -60.6,
+    "distanceMeters": 7941.6093538503765,
+    "road": {
+      "lat": 46.90137481689453,
+      "lon": -60.52340316772461
+    },
+    "edgeIndex": 43080
+  },
+  {
+    "region": "ns",
+    "id": "area",
+    "lat": 44.2,
+    "lon": -65.6,
+    "distanceMeters": 7931.365318507679,
+    "road": {
+      "lat": 44.139774322509766,
+      "lon": -65.65328216552734
+    },
+    "edgeIndex": 97053
+  },
+  {
+    "region": "ns",
+    "id": "area",
+    "lat": 44.1,
+    "lon": -65.4,
+    "distanceMeters": 7913.845050702299,
+    "road": {
+      "lat": 44.049591064453125,
+      "lon": -65.46993255615234
+    },
+    "edgeIndex": 97185
+  },
+  {
+    "region": "nb",
+    "id": "area",
+    "lat": 47.4,
+    "lon": -66.7,
+    "distanceMeters": 7876.772810650531,
+    "road": {
+      "lat": 47.470577239990234,
+      "lon": -66.70896911621094
+    },
+    "edgeIndex": 65588
+  },
+  {
+    "region": "ns",
+    "id": "area",
+    "lat": 46.75,
+    "lon": -60.6,
+    "distanceMeters": 7423.999954174197,
+    "road": {
+      "lat": 46.814308166503906,
+      "lon": -60.6262092590332
+    },
+    "edgeIndex": 130338
+  },
+  {
+    "region": "ns",
+    "id": "area",
+    "lat": 44.4,
+    "lon": -65.3,
+    "distanceMeters": 7396.929914302146,
+    "road": {
+      "lat": 44.4166145324707,
+      "lon": -65.20983123779297
+    },
+    "edgeIndex": 141204
+  },
+  {
+    "region": "ns",
+    "id": "area",
+    "lat": 44.4,
+    "lon": -65.4,
+    "distanceMeters": 6092.375428574759,
+    "road": {
+      "lat": 44.43764114379883,
+      "lon": -65.45574188232422
+    },
+    "edgeIndex": 142741
+  },
+  {
+    "region": "ns",
+    "id": "area",
+    "lat": 46.75,
+    "lon": -60.7,
+    "distanceMeters": 6007.255878590939,
+    "road": {
+      "lat": 46.80397033691406,
+      "lon": -60.70353317260742
+    },
+    "edgeIndex": 43324
+  },
+  {
+    "region": "ns",
+    "id": "area",
+    "lat": 46.85,
+    "lon": -60.9,
+    "distanceMeters": 5753.861250186697,
+    "road": {
+      "lat": 46.822021484375,
+      "lon": -60.836368560791016
+    },
+    "edgeIndex": 43388
+  },
+  {
+    "region": "ns",
+    "id": "area",
+    "lat": 44.1,
+    "lon": -65.1,
+    "distanceMeters": 5153.739319091433,
+    "road": {
+      "lat": 44.134220123291016,
+      "lon": -65.05645751953125
+    },
+    "edgeIndex": 97292
+  },
+  {
+    "region": "ns",
+    "id": "area",
+    "lat": 46.65,
+    "lon": -60.5,
+    "distanceMeters": 4988.485264937571,
+    "road": {
+      "lat": 46.632423400878906,
+      "lon": -60.43988037109375
+    },
+    "edgeIndex": 192990
+  },
+  {
+    "region": "nb",
+    "id": "area",
+    "lat": 47.1,
+    "lon": -66.2,
+    "distanceMeters": 4685.476534556027,
+    "road": {
+      "lat": 47.12346649169922,
+      "lon": -66.14857482910156
+    },
+    "edgeIndex": 86771
+  },
+  {
+    "region": "ns",
+    "id": "area",
+    "lat": 44.3,
+    "lon": -65.6,
+    "distanceMeters": 4621.253270207799,
+    "road": {
+      "lat": 44.31594467163086,
+      "lon": -65.65363311767578
+    },
+    "edgeIndex": 96705
+  },
+  {
+    "region": "nb",
+    "id": "area",
+    "lat": 47.4,
+    "lon": -66.6,
+    "distanceMeters": 4502.561224743053,
+    "road": {
+      "lat": 47.37861633300781,
+      "lon": -66.54920959472656
+    },
+    "edgeIndex": 65604
+  },
+  {
+    "region": "ns",
+    "id": "area",
+    "lat": 46.55,
+    "lon": -60.8,
+    "distanceMeters": 4442.834949409301,
+    "road": {
+      "lat": 46.527008056640625,
+      "lon": -60.75249481201172
+    },
+    "edgeIndex": 44626
+  },
+  {
+    "region": "nb",
+    "id": "area",
+    "lat": 46.9,
+    "lon": -66.7,
+    "distanceMeters": 4280.532436338973,
+    "road": {
+      "lat": 46.8802490234375,
+      "lon": -66.65164947509766
+    },
+    "edgeIndex": 181342
+  },
+  {
+    "region": "ns",
+    "id": "area",
+    "lat": 44.1,
+    "lon": -65,
+    "distanceMeters": 4279.415974679894,
+    "road": {
+      "lat": 44.09824752807617,
+      "lon": -64.94646453857422
+    },
+    "edgeIndex": 140362
+  },
+  {
+    "region": "nb",
+    "id": "area",
+    "lat": 46.9,
+    "lon": -66.8,
+    "distanceMeters": 4239.229833166495,
+    "road": {
+      "lat": 46.86199953682719,
+      "lon": -66.79550782615733
+    },
+    "edgeIndex": 70951
+  },
+  {
+    "region": "nb",
+    "id": "area",
+    "lat": 47.3,
+    "lon": -66.4,
+    "distanceMeters": 4137.70271853406,
+    "road": {
+      "lat": 47.2633056640625,
+      "lon": -66.40911102294922
+    },
+    "edgeIndex": 86740
+  },
+  {
+    "region": "nb",
+    "id": "area",
+    "lat": 47.3,
+    "lon": -66.3,
+    "distanceMeters": 3830.6116135720545,
+    "road": {
+      "lat": 47.306095123291016,
+      "lon": -66.25
+    },
+    "edgeIndex": 86738
+  },
+  {
+    "region": "ns",
+    "id": "area",
+    "lat": 44.1,
+    "lon": -65.5,
+    "distanceMeters": 3801.546065496561,
+    "road": {
+      "lat": 44.06842041015625,
+      "lon": -65.51823425292969
+    },
+    "edgeIndex": 97189
+  },
+  {
+    "region": "ns",
+    "id": "area",
+    "lat": 46.65,
+    "lon": -60.9,
+    "distanceMeters": 3626.458406061778,
+    "road": {
+      "lat": 46.64543533325195,
+      "lon": -60.94704055786133
+    },
+    "edgeIndex": 144708
+  },
+  {
+    "region": "nb",
+    "id": "area",
+    "lat": 46.9,
+    "lon": -66.5,
+    "distanceMeters": 3535.9495410786467,
+    "road": {
+      "lat": 46.93083953857422,
+      "lon": -66.4886474609375
+    },
+    "edgeIndex": 71528
+  },
+  {
+    "region": "nb",
+    "id": "area",
+    "lat": 46.9,
+    "lon": -65.9,
+    "distanceMeters": 3520.2270604528676,
+    "road": {
+      "lat": 46.930572509765625,
+      "lon": -65.91203308105469
+    },
+    "edgeIndex": 76164
+  },
+  {
+    "region": "ns",
+    "id": "area",
+    "lat": 46.65,
+    "lon": -60.6,
+    "distanceMeters": 3485.789363004219,
+    "road": {
+      "lat": 46.63664627075195,
+      "lon": -60.64131164550781
+    },
+    "edgeIndex": 44101
+  },
+  {
+    "region": "nb",
+    "id": "area",
+    "lat": 47.1,
+    "lon": -66.6,
+    "distanceMeters": 3483.5423340011043,
+    "road": {
+      "lat": 47.125,
+      "lon": -66.57225799560547
+    },
+    "edgeIndex": 86841
+  },
+  {
+    "region": "nb",
+    "id": "area",
+    "lat": 47.1,
+    "lon": -66.7,
+    "distanceMeters": 3261.6860901593345,
+    "road": {
+      "lat": 47.099300384521484,
+      "lon": -66.65692138671875
+    },
+    "edgeIndex": 86848
+  },
+  {
+    "region": "nb",
+    "id": "area",
+    "lat": 47.5,
+    "lon": -66.1,
+    "distanceMeters": 3140.592107143527,
+    "road": {
+      "lat": 47.47175598144531,
+      "lon": -66.0999755859375
+    },
+    "edgeIndex": 86663
+  },
+  {
+    "region": "ns",
+    "id": "area",
+    "lat": 46.85,
+    "lon": -60.7,
+    "distanceMeters": 3052.400424269987,
+    "road": {
+      "lat": 46.83060073852539,
+      "lon": -60.7283935546875
+    },
+    "edgeIndex": 43327
+  },
+  {
+    "region": "nb",
+    "id": "area",
+    "lat": 47,
+    "lon": -66.4,
+    "distanceMeters": 3033.0011378937847,
+    "road": {
+      "lat": 46.99791717529297,
+      "lon": -66.36012268066406
+    },
+    "edgeIndex": 71535
+  },
+  {
+    "region": "ns",
+    "id": "area",
+    "lat": 46.65,
+    "lon": -60.8,
+    "distanceMeters": 2992.0740736711978,
+    "road": {
+      "lat": 46.62339401245117,
+      "lon": -60.80585861206055
+    },
+    "edgeIndex": 44640
+  },
+  {
+    "region": "nb",
+    "id": "area",
+    "lat": 47.2,
+    "lon": -66.6,
+    "distanceMeters": 2907.6734453383447,
+    "road": {
+      "lat": 47.221771240234375,
+      "lon": -66.62132263183594
+    },
+    "edgeIndex": 86855
+  },
+  {
+    "region": "nb",
+    "id": "area",
+    "lat": 46.9,
+    "lon": -66.3,
+    "distanceMeters": 2738.76190224213,
+    "road": {
+      "lat": 46.87537003194661,
+      "lon": -66.30018065991237
+    },
+    "edgeIndex": 71540
+  },
+  {
+    "region": "nb",
+    "id": "area",
+    "lat": 47.2,
+    "lon": -66.5,
+    "distanceMeters": 2638.536280371042,
+    "road": {
+      "lat": 47.22276306152344,
+      "lon": -66.4901351928711
+    },
+    "edgeIndex": 86837
+  },
+  {
+    "region": "ns",
+    "id": "area",
+    "lat": 46.95,
+    "lon": -60.5,
+    "distanceMeters": 2596.0509540238063,
+    "road": {
+      "lat": 46.944732666015625,
+      "lon": -60.46668243408203
+    },
+    "edgeIndex": 43018
+  },
+  {
+    "region": "ns",
+    "id": "area",
+    "lat": 46.65,
+    "lon": -60.7,
+    "distanceMeters": 2553.959128468248,
+    "road": {
+      "lat": 46.64698028564453,
+      "lon": -60.666831970214844
+    },
+    "edgeIndex": 44102
+  },
+  {
+    "region": "ns",
+    "id": "area",
+    "lat": 44.3,
+    "lon": -65.2,
+    "distanceMeters": 2465.1687009275242,
+    "road": {
+      "lat": 44.284847259521484,
+      "lon": -65.1773910522461
+    },
+    "edgeIndex": 111373
+  },
+  {
+    "region": "nb",
+    "id": "area",
+    "lat": 47,
+    "lon": -66.6,
+    "distanceMeters": 2308.5340422368736,
+    "road": {
+      "lat": 47.018821716308594,
+      "lon": -66.58715057373047
+    },
+    "edgeIndex": 86839
+  },
+  {
+    "region": "nb",
+    "id": "area",
+    "lat": 47.1,
+    "lon": -65.9,
+    "distanceMeters": 2260.7572318572456,
+    "road": {
+      "lat": 47.08473205566406,
+      "lon": -65.88027954101562
+    },
+    "edgeIndex": 80027
+  },
+  {
+    "region": "nb",
+    "id": "area",
+    "lat": 47.5,
+    "lon": -66,
+    "distanceMeters": 2199.8973225951204,
+    "road": {
+      "lat": 47.51000213623047,
+      "lon": -66.0252685546875
+    },
+    "edgeIndex": 86631
+  },
+  {
+    "region": "ns",
+    "id": "area",
+    "lat": 44.2,
+    "lon": -65,
+    "distanceMeters": 2184.2178417854216,
+    "road": {
+      "lat": 44.189918518066406,
+      "lon": -64.97648620605469
+    },
+    "edgeIndex": 115467
+  },
+  {
+    "region": "ns",
+    "id": "area",
+    "lat": 46.85,
+    "lon": -60.5,
+    "distanceMeters": 2151.3336132877394,
+    "road": {
+      "lat": 46.869346618652344,
+      "lon": -60.5002555847168
+    },
+    "edgeIndex": 87624
+  },
+  {
+    "region": "ns",
+    "id": "area",
+    "lat": 44.4,
+    "lon": -65.5,
+    "distanceMeters": 2019.8033333646686,
+    "road": {
+      "lat": 44.416690826416016,
+      "lon": -65.4899673461914
+    },
+    "edgeIndex": 110719
+  }
+]

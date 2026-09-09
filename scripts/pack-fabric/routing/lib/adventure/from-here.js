@@ -5,7 +5,7 @@ const {createPreparationCache}=require("./preparation-cache");
 const {urbanAreasFromPack}=require("./urban-exposure");
 const {createStationMatchCache}=require("./station-match-cache");
 const {matchStations}=require("./station-matching");
-const {selectConnectedSnapPair}=require("../legal-topology/snap");
+const {selectConnectedSnapPair,weakComponentIds}=require("../legal-topology/snap");
 const {haversineMeters}=require("../legal-topology/find-path-v4");
 const {pointFromMatch,materializeRoute}=require("./route-geometry");
 const {createProjectedGraph}=require("./projected-graph");
@@ -51,7 +51,8 @@ function buildFromHere({input,pack,geom,revision,stations,budget,preparationBudg
     road.motorwayMeters=result.arcs.reduce((sum,arc)=>sum+(isMotorway(arc)?arc.distanceMeters:0),0);
   }
   stage="endpoint_matching";let phase=performance.now();
-  const endpoints=matchStations({pack,geom,index,stations:request.anchors,maxMeters:endpointRadiusMeters,allowUnknown,budget});
+  let radius=Math.min(2000,endpointRadiusMeters);
+  let endpoints=matchStations({pack,geom,index,stations:request.anchors,maxMeters:radius,allowUnknown,budget});
   if(endpoints.state!=="complete")return incomplete(endpoints.reason);
   const {resolveHistory,directedArrival}=require('./arrival-history');
   const history=resolveHistory(pack,arrivalHistory?.priorEdgeIds||[],arrivalHistory?.arrivalEdgeId,budget);
@@ -63,8 +64,26 @@ function buildFromHere({input,pack,geom,revision,stations,budget,preparationBudg
     edgeCost=arc=>baseCost(arc)*(prior.has(arc.id)?4:1);
     provenance.priorRoadPreference={edges:prior.size,factor:4};
   }
-  const startCandidates=history.edges.length?endpoints.matches[0].candidates.filter(c=>c.edgeIndex===history.edges.at(-1)):endpoints.matches[0].candidates;
-  const picked=selectConnectedSnapPair(pack,startCandidates,endpoints.matches[1].candidates,{allowUnknown});
+  let startCandidates=history.edges.length?(endpoints.matches[0].candidates||[]).filter(c=>c.edgeIndex===history.edges.at(-1)):endpoints.matches[0].candidates||[];
+  let picked=selectConnectedSnapPair(pack,startCandidates,endpoints.matches[1].candidates,{allowUnknown});
+  let attempts=1;
+  while(!picked.ok&&radius<endpointRadiusMeters) {
+    if(!budget.check())return incomplete(budget.snapshot().reason);
+    radius=Math.min(endpointRadiusMeters,radius*2);attempts++;
+    if(!startCandidates.length&&!history.edges.length){
+      const starts=matchStations({pack,geom,index,stations:[request.anchors[0]],maxMeters:radius,allowUnknown,budget});
+      if(starts.state!=='complete')return incomplete(starts.reason);
+      startCandidates=starts.matches[0].candidates||[];
+    }
+    const components=weakComponentIds(pack,allowUnknown);
+    const allowed=new Set(startCandidates.map(c=>components[pack.edgeFrom[c.edgeIndex]]));
+    const ends=matchStations({pack,geom,index,stations:[request.anchors[1]],maxMeters:radius,allowUnknown,budget,
+      eligibleEdge:e=>allowed.has(components[pack.edgeFrom[e]])});
+    if(ends.state!=='complete')return incomplete(ends.reason);
+    picked=selectConnectedSnapPair(pack,startCandidates,ends.matches[0].candidates,{allowUnknown});
+  }
+  provenance.waypointSnap={attempts,radiusMeters:radius,maximumMeters:endpointRadiusMeters,
+    ...(picked.ok?{startDistanceMeters:picked.start.distanceM,endDistanceMeters:picked.end.distanceM}:{})};
   if(!picked.ok)return incomplete(`endpoint_${picked.reason}`);
   const selected=[picked.start,picked.end];
   const points=request.anchors.map((anchor,i)=> {

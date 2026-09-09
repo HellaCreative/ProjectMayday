@@ -47,7 +47,7 @@ function buildEdgeIndex(pack,geom,budget) {
   }};
 }
 
-function matchStations({pack,geom,stations,index,maxMeters,allowUnknown=false,budget}) {
+function matchStations({pack,geom,stations,index,maxMeters,allowUnknown=false,budget,eligibleEdge=null}) {
   if(index?.state!=="complete" || index.pack!==pack || index.geom!==geom)throw new TypeError("Matching index belongs to a different graph");
   if(!Number.isFinite(maxMeters)||maxMeters<=0)throw new TypeError("Explicit station matching radius required");
   const matches=[];
@@ -56,7 +56,8 @@ function matchStations({pack,geom,stations,index,maxMeters,allowUnknown=false,bu
     if(!station.id || !Number.isFinite(station.lat)||Math.abs(station.lat)>90||!Number.isFinite(station.lon)||Math.abs(station.lon)>180) {
       matches.push({stationId:station.id??null,state:"rejected",reason:"invalid_station_coordinates"});continue;
     }
-    const candidateEdgeIndexes=index.query(station,maxMeters);
+    const queried=index.query(station,maxMeters);
+    const candidateEdgeIndexes=eligibleEdge?queried.filter(eligibleEdge):queried;
     const candidates=[],counts={};
     // No bearing hints are used for stationary POIs. The nearest twelve from
     // each chunk contain every possible member of the nearest twelve overall.
