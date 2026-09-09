@@ -19,3 +19,5 @@ Dropdown review: Loop order is Direction, Surface, Distance. All shared choice l
 Saved route review: read-only details with View on Map and prominent Continue Planning only. No return, clear, save, export, start or per-leg editing until continuing to Plan.
 
 Groups rider details: clickable names open a compact drawer with sample location/update status, View on Map and Route to Rider. Back returns to the roster. Location data and map/route actions remain illustrative; native behavior unchanged.
+
+Return-action decision: remove Create Return Route throughout the preview. Loop owns automatic round trips; Plan supports manually chosen outbound/return waypoints; From Here can start a new return journey on arrival. Supersedes earlier persistent-return decision. Native app unchanged.
