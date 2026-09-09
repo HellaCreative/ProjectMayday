@@ -23,7 +23,9 @@ function buildRideAlternatives(options) {
  const candidates=options.expandedCandidates?expandedObjectives:objectives;
  for(const objective of candidates) {
   if(!options.budget.check())break;
-  const result=buildFromHere({...options,...context,objectiveId:objective.id,edgeCost:objective.cost,fuelHeuristicWeight:objective.id==='paved'?(options.pavedFuelHeuristicWeight??options.fuelHeuristicWeight):options.fuelHeuristicWeight,dirtEntryCost:objective.id==='paved'?0:continuityMeters*(Number(objective.id.split('-')[1])-1),preferOnwardFuel:options.preferOnwardFuel===true});
+  // Extra approach history is qualified only for paved candidates, and only
+  // attempted when the completed fuel route repeats a road (see fuel-ride).
+  const result=buildFromHere({...options,...context,objectiveId:objective.id,edgeCost:objective.cost,fuelHeuristicWeight:objective.id==='paved'?(options.pavedFuelHeuristicWeight??options.fuelHeuristicWeight):options.fuelHeuristicWeight,dirtEntryCost:objective.id==='paved'?0:continuityMeters*(Number(objective.id.split('-')[1])-1),preferOnwardFuel:options.preferOnwardFuel===true,retainFuelApproach:objective.id==='paved'});
   results.push({id:objective.id,result});
   if(options.budget.snapshot().reason)break;
  }
@@ -35,7 +37,7 @@ function buildRideAlternatives(options) {
  pool.sort((a,b)=>(a.result.road.avoidanceMeters??a.result.road.urbanMeters??0)-(b.result.road.avoidanceMeters??b.result.road.urbanMeters??0)||compareSurface(profile,a.result.road.surface,b.result.road.surface)||a.id.localeCompare(b.id));
  const selected=pool[0];
  return {state:selected?'complete':'incomplete',selected:selected?.result||null,selectedObjective:selected?.id||null,
-  candidates:results.map(r=>({id:r.id,road:r.result.road.state,fuel:r.result.fuel.state,reason:r.result.fuel.reason,surface:r.result.road.surface,urbanMeters:r.result.road.urbanMeters,timing:r.result.timing,repeatedRoadMeters:r.result.qualityAudit?.repeatedRoadMeters})),
+  candidates:results.map(r=>({id:r.id,road:r.result.road.state,fuel:r.result.fuel.state,reason:r.result.fuel.reason,surface:r.result.road.surface,urbanMeters:r.result.road.urbanMeters,timing:r.result.timing,repeatedRoadMeters:r.result.qualityAudit?.repeatedRoadMeters,approachRefinement:r.result.search?.fuelSearch?.approachRefinement})),
   search:{...options.budget.snapshot(),poolComplete},
   limitations:['bounded shared candidate pool; not global best ride proof','station access may remain provisional']};
 }

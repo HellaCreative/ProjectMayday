@@ -211,3 +211,15 @@ production/GitHub change. PhysicalClean acceptance pending; guide requests fresh
 NS→NB Clean withusual250kmrange/10%reserve, inspect backroads andfuelapproaches.
 Knownshort162kmcrossreturn2.104km andCapeUnknownretrace remainflags. Public timing
 is observed, not a percentile guarantee. Prior NB~9s physical timing was accepted.
+
+## September 9 UTC — Clean final fuel exit/rejoin regression (local qualification)
+
+Latest physical feedback on service `8be23e95a91c7ebe8a02bf20a6917f57ad42a4b7` is a partial fail for Clean: Porters Lake (44.764793,-63.340250) to (47.047134,-64.891699). Replay proves 22,703 m of repeated road around the final Shell station. The station exit rejoins the earlier approach beyond the immediate reversal cursor. Device 20,334 ms includes 14 seconds backgrounded; server replay was 13,644 ms.
+
+The qualified local correction retains approach history during a second, complete fuel-aware search only when a paved candidate repeats roads. It does not insert pumps or splice geometry after construction. Distinct final station entry roads remain separate frontier states; histories sharing an entry can still be pruned. This is bounded candidate generation, not proof of globally optimal or loopless routing. Fuel, legal turn and destination escape checks are unchanged. A failed refinement preserves the prior feasible candidate and exposes its reason; shared request exhaustion remains visible.
+
+Always retaining all histories failed regional label limits; retaining station entries on every search still failed NS Clean. Neither prototype was published. Broader Dirt/Balanced use remains unqualified. The final gated version passes 48 regional cases (24 NS/NB and 24 NB), all candidates complete, all fuel/escape checks and style ordering. All 32 selected Dirt/Balanced geometries and refills match the prior qualified matrix. 171 focused adventure tests pass, including exit/rejoin in either direction and integrated fuel refinement. NS Clean reference remains 757.037 km with all candidates fuel-complete.
+
+Exact latest request now locally returns 586.973 km, 99.512% paved, zero repeated road and three stops in 4.803 seconds. First two fuel legs remain unchanged; third generated station changes to `osm:n5301512825`. The existing 2,866 m dirt section near the destination remains. Do not assert its necessity without a separate surface-data/legal-alternative investigation. Evidence: `/tmp/dirt-clean-f3-refine`, `/tmp/dirt-cross-refine`, `/tmp/dirt-nb-refine`, `/tmp/dirt-ns-refine`. Fixture: `scripts/pack-fabric/bench/fixtures/clean-final-fuel-20260909.json`.
+
+Private hosted verification and stable DEV publication are pending. App/phone packs/Swift/production/GitHub are unchanged. Physical acceptance is still required after publication.

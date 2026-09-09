@@ -841,3 +841,7 @@ Shared live-first/physical/offline qualification boundaries remain unchanged.
 Clean cost/guidance revision published to stableDEV8be23e95 after hosted/public
 qualification. PhysicalClean acceptance, Swift/offline/Android implementation
 andverification remain pending under live-first authorization.
+
+## Pending live qualification: Clean station exit/rejoin, September 9 UTC
+
+A legal fuel exit can rejoin a previously ridden approach beyond the immediate reversal cursor. Clean candidate refinement must detect that repetition in either direction, re-search with fuel and legal turn state intact, and preserve fixed rider anchors. Generated pumps can change. The live-only prototype conditionally re-searches repeated paved candidates and exposes refinement failure; histories are bounded, not a global optimality guarantee. Dirt/Balanced history refinement and native parity are not qualified. No Android implementation or device acceptance is claimed. See ROUTING-REBUILD-PROGRESS.md for the exact fixture and local results.

@@ -13,7 +13,7 @@ const {pack,geom}=joined,identity=regions.map(r=>({regionId:r.pack.regionId,sha:
 const stationMap=new Map();for(const r of regions)for(const station of r.stations){const prior=stationMap.get(station.id);if(prior&&(prior.lat!==station.lat||prior.lon!==station.lon))throw Error('Conflicting station coordinates');stationMap.set(station.id,station);}
 const stations=[...stationMap.values()],start={lat:44.764834,lon:-63.340240},end={lat:47.762610,lon:-65.856301},summary=[];
 const dalhousie=process.env.REBUILD_DEVICE_CASE==='dalhousie';
-for(const avoidMotorways of (dalhousie?[false]:[false,true])) {
+for(const avoidMotorways of (process.env.REBUILD_AVOID_MOTORWAYS?[process.env.REBUILD_AVOID_MOTORWAYS==='true']:dalhousie?[false]:[false,true])) {
  const input={mode:'from_here',anchors:[{id:'a',lat:44.76484254584986,lon:-63.34021846556175},{id:'b',lat:46.792506,lon:-67.569371}],legs:[{from:'a',to:'b',profile:'clean',allowUnknown:false}],fuel:{fullRangeMeters:225000,reserveFraction:0,initialUsableMeters:225000}};
  if(dalhousie){input.anchors=[{id:'a',lat:44.764831,lon:-63.340263},{id:'b',lat:47.986597,lon:-66.328424}];input.legs[0].profile='dirt';}
  if(process.env.REBUILD_REQUEST_PATH){const body=JSON.parse(fs.readFileSync(process.env.REBUILD_REQUEST_PATH));input.anchors=body.locations.map((p,i)=>({id:i?'b':'a',...p}));input.legs[0].profile=body.profile==='cleanest'?'clean':body.profile;input.legs[0].allowUnknown=body.accessPolicy?.motorizedUnknown===true;}

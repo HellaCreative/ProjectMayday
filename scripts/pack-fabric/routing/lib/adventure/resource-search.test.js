@@ -147,3 +147,35 @@ test("onward preference preserves incomplete search status when its label cap is
  const result=search(g,{preferOnwardFuel:true,maxLabels:1});
  assert.equal(result.state,"incomplete");assert.equal(result.reason,"label_limit");
 });
+
+test('legal station exit that rejoins an earlier junction cannot hide the fuel approach retrace',()=>{
+ const arcs=[
+  {id:0,from:'A',to:'J',distanceMeters:2},
+  {id:1,from:'J',to:'K',distanceMeters:10},
+  {id:2,from:'K',to:'P',distanceMeters:1},
+  {id:3,from:'P',to:'X',distanceMeters:.1},
+  {id:4,from:'X',to:'K',distanceMeters:.1},
+  {id:1,from:'K',to:'J',distanceMeters:10},
+  {id:5,from:'J',to:'D',distanceMeters:18},
+  {id:6,from:'A',to:'P',distanceMeters:8}
+ ];
+ const g={outgoing:n=>arcs.filter(a=>a.from===n),stateKey:n=>n,transition:()=>({allowed:true,state:null}),stationAt:n=>n==='P'?{id:'pump'}:null};
+ const r=search(g,{edgeCost:a=>a.distanceMeters*(a.id===6?8:1),fuel:{initialUsableMeters:19,usableRangeMeters:40},preferOnwardFuel:true,retainFuelApproach:true});
+ assert.equal(r.state,'found');assert.deepEqual(r.arcs.map(a=>a.to),['P','X','K','J','D']);assert.equal(r.retraceMeters,0);assert.equal(r.visits.length,1);
+ // If the direct approach does not exist, the legal fuel detour must remain
+ // available. The preference must not turn necessary access into disconnection.
+ const only={...g,outgoing:n=>g.outgoing(n).filter(a=>a.id!==6)};
+ const necessary=search(only,{fuel:{initialUsableMeters:19,usableRangeMeters:40},preferOnwardFuel:true,retainFuelApproach:true});
+ assert.equal(necessary.state,'found');assert.equal(necessary.retraceMeters,20);
+});
+
+
+test('station exit rejoining the approach in the same direction also counts repetition',()=>{
+ const arcs=[{id:0,from:'A',to:'J',distanceMeters:2},{id:1,from:'J',to:'K',distanceMeters:10},
+ {id:2,from:'K',to:'P',distanceMeters:1},{id:3,from:'P',to:'X',distanceMeters:.1},
+ {id:4,from:'X',to:'J',distanceMeters:.1},{id:5,from:'K',to:'D',distanceMeters:18},
+ {id:6,from:'A',to:'P',distanceMeters:8}];
+ const g={outgoing:n=>arcs.filter(a=>a.from===n),stateKey:n=>n,transition:()=>({allowed:true,state:null}),stationAt:n=>n==='P'?{id:'pump'}:null};
+ const r=search(g,{edgeCost:a=>a.distanceMeters*(a.id===6?8:1),fuel:{initialUsableMeters:19,usableRangeMeters:40},preferOnwardFuel:true,retainFuelApproach:true});
+ assert.equal(r.state,'found');assert.deepEqual(r.arcs.map(a=>a.to),['P','X','J','K','D']);assert.equal(r.retraceMeters,0);
+});
