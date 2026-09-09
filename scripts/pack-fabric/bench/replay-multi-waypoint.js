@@ -23,7 +23,8 @@ const cases={coarsepins:[[44.804135,-63.097441],[43.566279,-65.491539],[44.66076
   }else r=await adventureCanaryRequest(request,'fuel',{environment:{DIRT_ADVENTURE_CANARY:'ns-nb-v1'},load});
   fs.writeFileSync(path.join(output,`${name}-${i}.json`),JSON.stringify({request,response:r}));
   console.log(JSON.stringify({name,leg:i+1,ms:Date.now()-at,status:r?.status,strategy:r?.diagnostics?.strategy,reason:r?.error,km:r?.routes?.reduce((n,s)=>n+s.distanceMeters,0)/1000,candidates:r?.diagnostics?.adventure?.candidates}));
-  assert.equal(r?.status,'complete');assert.equal(r.diagnostics.strategy,'adventure-preview-v1');assert.equal(r.windowComplete,true);assert.equal(r.diagnostics.adventure.search.poolComplete,true);
+  assert.equal(r?.status,'complete');
+  if(process.env.REBUILD_MULTI_FIRST_REPEAT_FREE==='1'&&i===0)assert.equal(r.diagnostics.adventure.quality.repeatedRoadMeters,0,'first primary leg must not retain the reproduced fuel repeats');assert.equal(r.diagnostics.strategy,'adventure-preview-v1');assert.equal(r.windowComplete,true);assert.equal(r.diagnostics.adventure.search.poolComplete,true);
   if(name==='inverness'&&i===2&&profiles.every(p=>p==='balanced'))assert.equal(r.diagnostics.adventure.quality.repeatedRoadMeters,0,'Inverness continuation must not retain the reproduced fuel circuit');
   for(let j=0;j<r.routes.length;j++){const route=r.routes[j];assert.ok(route.distanceMeters<=(j?usable:remaining)+1e-5);if(j)assert.deepEqual(route.geometry[0],r.routes[j-1].geometry.at(-1));for(const s of route.segments){history=history.filter(h=>h.id!==s.edgeId);history.push({id:s.edgeId,meters:Math.max(1,s.distanceMeters)});while(history.length>1&&(history.length>256||history.reduce((n,h)=>n+h.meters,0)>30000))history.shift();}}
   remaining=r.stops.length?usable-r.routes.at(-1).distanceMeters:remaining-r.routes.reduce((n,s)=>n+s.distanceMeters,0);
