@@ -1,3 +1,33 @@
+# Atlantic multi-waypoint engine handoff — stable a518fd38
+
+Stable DEV points to `pack-fabric-9pibwupnx`, source
+`a518fd385ac2e6d794e29c1b445f96daba17e816`, with NS/NB
+`fabric-v4-20260908-02`. Public chained verification passes all six primary legs on this exact source.
+
+Next physical test: online, create a fresh **Plan a Route** itinerary with your
+multiple Nova Scotia/New Brunswick waypoints, **Balanced**, fuel ON,
+250 km range / 10% reserve. The four-waypoint Inverness itinerary is the
+primary regression reference. No Xcode installation or phone pack download.
+Saving/reopening an existing built route preserves its existing geometry;
+create a new route to exercise this update.
+
+The replacement now accepts subsequent rider-leg arrival/recent-road context
+and remaining fuel. Covered unsupported requests report incomplete instead
+of silently changing engines. Private full Inverness and Yarmouth replays,
+a mixed-style 162 km usable-range itinerary, and six accepted single-leg
+regressions passed. The Inverness final-leg circuit is absent in the selected
+Balanced route. 182 focused tests pass. Physical acceptance is still pending.
+
+Open flags: the broader Yarmouth overlap with an earlier primary leg remains;
+the app supplies only the last 30 km of road history. Some optional unselected
+candidate refinements remain incomplete. The hardest hosted leg takes about
+20 seconds on the service. Offline parity, required initial fuel/recovery
+controls and full-itinerary novelty are not qualified by this update.
+Production and phone-installed packs are unchanged.
+
+Earlier handoffs below are historical; the user accepted the prior Clean fuel
+correction before these multi-waypoint tests.
+
 # Ready for final Clean fuel retest — stable edc55fdb
 
 Build a fresh From Here route from Porters Lake to the same destination
