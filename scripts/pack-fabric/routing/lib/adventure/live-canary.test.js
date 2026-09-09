@@ -28,7 +28,7 @@ test('live fuel response partitions the selected ride without rerouting or chang
 test('canary is opt-in and does not silently ignore unsupported recovery or mandatory fuel controls',()=>{
  const base={profile:'dirt',locations:[{},{}],fuel:{usableRangeMeters:1000,firstLegMaxMeters:1000}},env={DIRT_ADVENTURE_CANARY:'ns-v1'};
  assert.equal(canarySupported(base,'fuel',{}),false);assert.equal(canarySupported(base,'fuel',env),true);
- for(const extra of [{options:{avoidEdgeIds:['closed']}},{fuel:{requiredFirstStationId:'pump'}},{fuel:{minimumFuelStops:1}},{action:'debug_graph'}])assert.equal(canarySupported({...base,...extra},'fuel',env),false);
+ for(const extra of [{options:{avoidEdgeIds:['closed']}},{fuel:{minimumFuelStops:1}},{action:'debug_graph'}])assert.equal(canarySupported({...base,...extra},'fuel',env),false);
 });
 test('Atlantic opt-in exposes actual region identities and unknown-access intent',()=>{
  const {routeResponse}=require('./live-canary');
@@ -120,3 +120,5 @@ test('directed continuation retry cannot bypass label limits or declare an incom
  assert.ok(retried.every(c=>c.reason==='label_limit'&&c.fuel==='unverified'));
  assert.equal(toLiveResponse(result,{profile:'dirt',fuel:{}},'fuel',[]).status,'unknown');
 });
+
+test("new engine accepts explicit fuel replacement control",()=>{assert.equal(canarySupported({locations:[{},{}],profile:"balanced",fuel:{requiredFirstStationId:"pump"}},"fuel",{DIRT_ADVENTURE_CANARY:"ns-nb-v1"}),true)});
