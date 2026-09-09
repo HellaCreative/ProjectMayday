@@ -40,7 +40,8 @@ function buildRideAlternatives(options) {
  const feasibleResult=r=>r.road.state==='complete'&&['provisional_station_access','verified','not_requested'].includes(r.fuel.state);
  // Focus optional fresh Dirt refinements without increasing label/time limits.
  // Continuations retain their already-qualified heuristic.
- const build=(objective,refine,budget=options.budget)=>buildFromHere({...options,...context,budget,fuelFirst:continuation,preparationBudget:budget===options.budget?options.preparationBudget:budget,objectiveId:objective.id,edgeCost:objective.cost,fuelHeuristicWeight:refine&&!continuation&&objective.id!=='paved'?3:objective.id==='paved'?(options.pavedFuelHeuristicWeight??options.fuelHeuristicWeight):options.fuelHeuristicWeight,dirtEntryCost:objective.id==='paved'?0:continuityMeters*(Number(objective.id.split('-')[1])-1),preferOnwardFuel:options.preferOnwardFuel===true,retainFuelApproach:refine});
+ // Prove the fuel ride first for every leg; advisory search runs only on failure.
+ const build=(objective,refine,budget=options.budget)=>buildFromHere({...options,...context,budget,fuelFirst:true,preparationBudget:budget===options.budget?options.preparationBudget:budget,objectiveId:objective.id,edgeCost:objective.cost,fuelHeuristicWeight:refine&&!continuation&&objective.id!=='paved'?3:objective.id==='paved'?(options.pavedFuelHeuristicWeight??options.fuelHeuristicWeight):options.fuelHeuristicWeight,dirtEntryCost:objective.id==='paved'?0:continuityMeters*(Number(objective.id.split('-')[1])-1),preferOnwardFuel:options.preferOnwardFuel===true,retainFuelApproach:refine});
  for(const objective of candidates) {
   if(!options.budget.check())break;
   // Preserve the accepted fresh-route behavior. For continuations, finish
