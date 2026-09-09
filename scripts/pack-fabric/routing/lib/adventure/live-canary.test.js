@@ -107,3 +107,16 @@ test('waypoint continuations keep one candidate pool for all riding styles',()=>
  }
  assert.deepEqual(pools[0],pools[1]);assert.deepEqual(pools[1],pools[2]);
 });
+
+test('directed continuation retry cannot bypass label limits or declare an incomplete pool proved',()=>{
+ const f=fixture(),segments=buildRideAlternatives({...f,budget:work()}).selected.road.segments;
+ const previous=segments.slice(0,2),last=previous.at(-1),[lon,lat]=last.geometry.at(-1);
+ const input=structuredClone(f.input);Object.assign(input.anchors[0],{lon,lat});input.fuel.initialUsableMeters=5000;
+ const result=buildRideAlternatives({...f,input,maxFuelLabels:1,fuelHeuristicWeight:1.5,preferOnwardFuel:true,
+  arrivalHistory:{priorEdgeIds:previous.map(s=>s.edgeId),arrivalEdgeId:last.edgeId},budget:work()});
+ assert.equal(result.search.poolComplete,false);
+ const retried=result.candidates.filter(c=>c.searchRetry);
+ assert.ok(retried.length>0);
+ assert.ok(retried.every(c=>c.reason==='label_limit'&&c.fuel==='unverified'));
+ assert.equal(toLiveResponse(result,{profile:'dirt',fuel:{}},'fuel',[]).status,'unknown');
+});

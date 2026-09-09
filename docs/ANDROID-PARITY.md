@@ -941,3 +941,7 @@ Canonical cross-region duplicate-edge indexing now needs only edges whose two so
 ### Qualified DEV performance update —6cb2770
 
 Previously private concurrent regional loading, exact seam joining, direct reverse-bound traversal and fresh fuel-first orchestration now run on stable DEV6cb27706cf0aa07d040c35ae278ecae984f754f2/runtime52c95b34. Both Atlantic02 retained.214 local and16 private hosted checks pass; two independent cold requests19.378/19.435s. Independent public target3/NB/Clean pass. Same roads, candidate pool, access/turn/fuel rules and20s deadline; no native implementation claimed. Narrow cold headroom and previously documented native history/per-pin/unknown-arrival limits remain. Rollback56308d4 retained.
+
+### Private continuation search recovery
+
+After a non-paved continuation candidate reaches its existing label limit, a single more directed search (heuristic3) may retry the SAME objective with unchanged labelcap and original request time/expansion budget. Hard fuel/turn/access/history rules remain; shared full-pool gate unchanged. Fresh legs and paved candidates retain prior behavior. Diagnostic searchRetry records initial guidance/time and outcome.193local tests and real reverse162km continuation regression pass; prior6baseline geometries unchanged. Pending private hosted qualification; stable6cb2770 unchanged and no native implementation claimed. FreshreverseInverness180 label limit remains unresolved.
