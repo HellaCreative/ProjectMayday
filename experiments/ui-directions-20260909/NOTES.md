@@ -23,3 +23,5 @@ Groups rider details: clickable names open a compact drawer with sample location
 Return-action decision: remove Create Return Route throughout the preview. Loop owns automatic round trips; Plan supports manually chosen outbound/return waypoints; From Here can start a new return journey on arrival. Supersedes earlier persistent-return decision. Native app unchanged.
 
 Groups follow-up supersedes rider drawer: details expand directly beneath the selected rider. Same rider toggles closed; another rider replaces the expansion. Compact location/status rows and two small actions retain touch targets. HTML accordion interactions verified.
+
+Rider grouping refinement: chevrons removed, whole name/status row toggles details, tighter 60px rows. Expanded rider header and details share a subtle background and boundary so ownership is clear. Sharing remains a separate button.
