@@ -1184,3 +1184,43 @@ geometry/refills unchanged. NB Clean repeats0; cross162km reverseClean repeats
 2.104km, explicit unresolved qualityflag (supersedes prior1.370kmstress note).
 Actual225kmClean955.802km99.999%paved0repeat. Revised privatehosted checks pending;
 no stable change yet. No claim that all route quality or fuelspurs are solved.
+
+## Final Clean private qualification —8be23e95
+
+Exact1krqzezwv/source8be23e95a91c7ebe8a02bf20a6917f57ad42a4b7.
+NSClean757.037km99.88%paved3stops0repeat,12.022sserverfirstNSrequest; allcandidate
+fuel searches complete, selectedpaved. ActualNBClean955.802km99.999%paved4stops
+0repeat,6.797sserver; primary/trunk199.020km (old497.986km). ThreeNBDirt andNSDirt
+hosted geometry/stops EXACTmatch stable9c15324. NSDirt8.144sserver, NBfirstjoined
+14.824s, following8.094/8.516s. Everycasefuel/escape/joins/poolcomplete passes.
+
+Final48localcases fuelchecks pass,32Dirt/Balanced exactunchanged;175focusedchecks.
+SingleNS3reference profiles completepool/fullwindows/escape/joins; Dirt/Balanced
+unchanged, Clean596.543km0repeat. Short162reversecrossClean2.104kmfuelreturn stays
+flagged; normal225kmreference0repeat. Requested stableactivation onlyafterthese
+checks; publicverification andphysicalhandoff recorded next. Summaries persisted
+in routing/candidates/rebuild-clean-backroads-verification.
+
+## Clean stable publication and independent public verification
+
+Owner activated exact1krqzezwv/source8be23e95, publicly checked identity andupdated
+activationguard; both02/ns-nb-v1/env unchanged. IndependentpublicClean request:
+12.984sHTTP/10.709sserver,955.802km99.999%paved4pumps0repeat. Primary/trunk199.020km,
+60%below497.986km baseline. Selectedpaved/allcandidatescomplete; fuel225km bounds,
+destinationescape, geometryjoins andbuildidentityverified. No Xcode/phonepack/
+production/GitHub change. PhysicalClean acceptance pending; guide requests fresh
+NS→NB Clean withusual250kmrange/10%reserve, inspect backroads andfuelapproaches.
+Knownshort162kmcrossreturn2.104km andCapeUnknownretrace remainflags. Public timing
+is observed, not a percentile guarantee. Prior NB~9s physical timing was accepted.
+
+## September 9 UTC — Clean final fuel exit/rejoin regression (local qualification)
+
+Latest physical feedback on service `8be23e95a91c7ebe8a02bf20a6917f57ad42a4b7` is a partial fail for Clean: Porters Lake (44.764793,-63.340250) to (47.047134,-64.891699). Replay proves 22,703 m of repeated road around the final Shell station. The station exit rejoins the earlier approach beyond the immediate reversal cursor. Device 20,334 ms includes 14 seconds backgrounded; server replay was 13,644 ms.
+
+The qualified local correction retains approach history during a second, complete fuel-aware search only when a paved candidate repeats roads. It does not insert pumps or splice geometry after construction. Distinct final station entry roads remain separate frontier states; histories sharing an entry can still be pruned. This is bounded candidate generation, not proof of globally optimal or loopless routing. Fuel, legal turn and destination escape checks are unchanged. A failed refinement preserves the prior feasible candidate and exposes its reason; shared request exhaustion remains visible.
+
+Always retaining all histories failed regional label limits; retaining station entries on every search still failed NS Clean. Neither prototype was published. Broader Dirt/Balanced use remains unqualified. The final gated version passes 48 regional cases (24 NS/NB and 24 NB), all candidates complete, all fuel/escape checks and style ordering. All 32 selected Dirt/Balanced geometries and refills match the prior qualified matrix. 171 focused adventure tests pass, including exit/rejoin in either direction and integrated fuel refinement. NS Clean reference remains 757.037 km with all candidates fuel-complete.
+
+Exact latest request now locally returns 586.973 km, 99.512% paved, zero repeated road and three stops in 4.803 seconds. First two fuel legs remain unchanged; third generated station changes to `osm:n5301512825`. The existing 2,866 m dirt section near the destination remains. Do not assert its necessity without a separate surface-data/legal-alternative investigation. Evidence: `/tmp/dirt-clean-f3-refine`, `/tmp/dirt-cross-refine`, `/tmp/dirt-nb-refine`, `/tmp/dirt-ns-refine`. Fixture: `scripts/pack-fabric/bench/fixtures/clean-final-fuel-20260909.json`.
+
+Private hosted verification and stable DEV publication are pending. App/phone packs/Swift/production/GitHub are unchanged. Physical acceptance is still required after publication.

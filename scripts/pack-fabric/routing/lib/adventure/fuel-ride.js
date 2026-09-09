@@ -7,7 +7,7 @@ const {searchResourcePath}=require("./resource-search");
 // The inexpensive road candidate is retained for advisory display. The fuel
 // search then constructs a feasible ride with refills in its state; it doesn't
 // search for pumps near that candidate and repeatedly insert new detours.
-function searchFuelRide({graph,start,end,edgeCost,budget,fuel,lowerBounds=null,initialTurnState=null,avoidanceCost=null,onRoadCandidate=null,maxFuelLabels=Infinity,fuelHeuristicWeight=1,preferOnwardFuel=false,dirtEntryCost=0}) {
+function searchFuelRide({graph,start,end,edgeCost,budget,fuel,lowerBounds=null,initialTurnState=null,avoidanceCost=null,onRoadCandidate=null,maxFuelLabels=Infinity,fuelHeuristicWeight=1,preferOnwardFuel=false,retainFuelApproach=false,dirtEntryCost=0}) {
   if(fuel!=null)validateFuel(fuel);
   const base={graph,start,end,edgeCost,budget,lowerBounds,initialTurnState,avoidanceCost,dirtEntryCost};
   const road=searchResourcePath(base);
@@ -35,10 +35,34 @@ function searchFuelRide({graph,start,end,edgeCost,budget,fuel,lowerBounds=null,i
       evidence:{stationId:graph.stationAt(finalNode).id,distanceMeters:escape.distanceMeters,arcs:escape.arcs,
         ...(graph.stationAt(finalNode).accessEvidence?{accessEvidence:graph.stationAt(finalNode).accessEvidence}:{})}};
   }
-  const result=searchResourcePath({...base,fuel,acceptGoal,maxLabels:maxFuelLabels,heuristicWeight:fuelHeuristicWeight,preferOnwardFuel});
+  const searchOptions={...base,fuel,acceptGoal,maxLabels:maxFuelLabels,heuristicWeight:fuelHeuristicWeight,preferOnwardFuel};
+  let result=searchResourcePath(searchOptions);
   if(result.state!=="found")return {road,fuel:{state:"unverified",
     reason:result.state==="incomplete"?result.reason:"no_feasible_chain_in_matched_graph"},fuelSearch:result,
     escapeSearches,search:budget.snapshot()};
+  // Spend the extra approach-history search only on a completed candidate
+  // containing repeated roads. Refills remain part of that new search, never
+  // inserted into finished geometry. Preserve the feasible result if the
+  // bounded refinement cannot improve it; diagnostics expose that outcome.
+  if(retainFuelApproach&&preferOnwardFuel) {
+    const repetition=route=>{
+      const seen=new Set();let meters=0;
+      for(const arc of route.arcs){
+        const key=JSON.stringify([arc.id,...[arc.from,arc.to].sort()]);
+        if(seen.has(key))meters+=arc.distanceMeters;else seen.add(key);
+      }
+      return meters;
+    };
+    const before=repetition(result);
+    if(before>0) {
+      const refined=searchResourcePath({...searchOptions,retainFuelApproach:true});
+      const after=refined.state==='found'?repetition(refined):null;
+      const accepted=after!==null&&after<before&&refined.avoidanceCost<=result.avoidanceCost;
+      const refinement={state:refined.state,reason:refined.reason??null,beforeMeters:before,afterMeters:after,accepted};
+      if(accepted)result=refined;
+      result.diagnostics.approachRefinement=refinement;
+    }
+  }
   // A required destination at a station explicitly plans a refill even when
   // arrival fuel was already enough to satisfy the zero-distance escape.
   const arrivalUsableMeters=result.remainingUsableMeters;

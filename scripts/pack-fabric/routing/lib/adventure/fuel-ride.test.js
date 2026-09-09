@@ -64,3 +64,23 @@ test("necessary urban fuel access is allowed without erasing a legal complete ri
   assert.deepEqual(result.road.arcs.map(a=>a.to),["U","D"]);
   assert.equal(result.road.avoidanceCost,2);
 });
+
+test('fuel refinement rebuilds an exit-and-rejoin route with the same fuel and escape constraints',()=>{
+ const arcs=[{id:0,from:'A',to:'J',distanceMeters:2},{id:1,from:'J',to:'K',distanceMeters:10},
+ {id:2,from:'K',to:'P',distanceMeters:1},{id:3,from:'P',to:'X',distanceMeters:.1},
+ {id:4,from:'X',to:'K',distanceMeters:.1},{id:1,from:'K',to:'J',distanceMeters:10},
+ {id:5,from:'J',to:'D',distanceMeters:18},{id:6,from:'A',to:'P',distanceMeters:8},
+ {id:7,from:'D',to:'Q',distanceMeters:1}];
+ const g={outgoing:n=>arcs.filter(a=>a.from===n),stateKey:n=>n,transition:()=>({allowed:true,state:null}),stationAt:n=>['P','Q'].includes(n)?{id:n}:null};
+ const result=ride(g,{edgeCost:a=>a.distanceMeters*(a.id===6?8:1),fuel:{initialUsableMeters:19,usableRangeMeters:40},preferOnwardFuel:true,retainFuelApproach:true});
+ assert.equal(result.fuel.state,'verified_on_supplied_station_access');
+ assert.deepEqual(result.road.arcs.map(a=>a.to),['P','X','K','J','D']);
+ assert.deepEqual(result.road.diagnostics.approachRefinement,{state:'found',reason:null,beforeMeters:10,afterMeters:0,accepted:true});
+ assert.equal(result.fuel.destinationEscape.distanceMeters,1);
+ assert.ok(result.fuel.arrivalUsableMeters>=1);
+});
+test('an onward fuel route does not pay for an unnecessary history refinement',()=>{
+ const result=ride(graph([['A','P',3],['P','D',4],['D','Q',4]],['P','Q']),{preferOnwardFuel:true,retainFuelApproach:true});
+ assert.equal(result.fuel.state,'verified_on_supplied_station_access');
+ assert.equal(result.road.diagnostics.approachRefinement,undefined);
+});

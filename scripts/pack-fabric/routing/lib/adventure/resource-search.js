@@ -21,7 +21,7 @@ class Heap {
 }
 
 function searchResourcePath({graph,start,end,edgeCost,budget,fuel=null,
-  initialTurnState=null,destinationEscapeMeters=0,lowerBounds=null,acceptGoal=null,avoidanceCost=null,maxLabels=Infinity,heuristicWeight=1,preferOnwardFuel=false,dirtEntryCost=0}) {
+  initialTurnState=null,destinationEscapeMeters=0,lowerBounds=null,acceptGoal=null,avoidanceCost=null,maxLabels=Infinity,heuristicWeight=1,preferOnwardFuel=false,retainFuelApproach=false,dirtEntryCost=0}) {
   if(!Number.isFinite(dirtEntryCost)||dirtEntryCost<0)throw new TypeError("Dirt entry cost must be finite and nonnegative");
   if(!Number.isFinite(heuristicWeight)||heuristicWeight<1)throw new TypeError("Heuristic weight must be finite and at least one");
   if(!Number.isFinite(destinationEscapeMeters)||destinationEscapeMeters<0) throw new TypeError("A proved destination escape distance is required");
@@ -30,8 +30,11 @@ function searchResourcePath({graph,start,end,edgeCost,budget,fuel=null,
   // With onward preference enabled, approach retracing is a second priority,
   // before surface cost. Reversal follows the immutable parent chain in O(1)
   // per arc, including driving past a pump then turning back. Necessary access
-  // is expensive, never illegal. Pre-reversal histories may still be pruned:
-  // this is bounded candidate generation, not a global loopless-path proof.
+  // is expensive, never illegal. Preserve the last station entry in the frontier
+  // so different pump approaches can compete after a legal exit rejoins a road.
+  // Histories sharing that entry can still be pruned: this is bounded candidate
+  // generation, not a global loopless-path proof. Full history keys multiply
+  // labels too far on regional graphs; fuel and turn feasibility remain exact.
   // Urban exposure precedes the experimental ride cost lexicographically. No
   // finite penalty lets a cheap urban shortcut beat a feasible rural ride.
   // Fewer refills break otherwise equal route costs; free fuel actions must
@@ -39,6 +42,23 @@ function searchResourcePath({graph,start,end,edgeCost,budget,fuel=null,
   const compare=(a,b)=>a.avoidance-b.avoidance || (a.retraceMeters||0)-(b.retraceMeters||0) || a.cost-b.cost || a.refills-b.refills;
   const heap=new Heap((a,b)=>a.avoidance-b.avoidance || (a.retraceMeters||0)-(b.retraceMeters||0) || a.priority-b.priority || a.refills-b.refills),frontiers=new Map();
   if(lowerBounds && (lowerBounds.state!=="complete" || lowerBounds.target!==end || lowerBounds.graph!==graph || lowerBounds.edgeCost!==edgeCost)) throw new TypeError("Lower bounds must be complete and belong to this graph, target and cost model");
+  const fuelApproachIndexes=new WeakMap();
+  // A legal station exit can rejoin the approach a few junctions away. Retain
+  // the approach history so that this does not hide a repeated road.
+  // Index lazily, charge the work to the request budget, and never infer roads.
+  function approachIndex(approach) {
+    if(!approach)return null;
+    let index=fuelApproachIndexes.get(approach);
+    if(!index){
+      index=new Map();
+      for(let cursor=approach;cursor;cursor=cursor.parent){
+        if(!budget.consume())return null;
+        if(cursor.arc){const key=`${cursor.node}:${cursor.arc.id}:${cursor.arc.from}`;if(!index.has(key))index.set(key,cursor);}
+      }
+      fuelApproachIndexes.set(approach,index);
+    }
+    return index;
+  }
   let labels=0,dominated=0,expanded=0,labelLimitReached=false;
   const labelLimitResult=()=>({state:"incomplete",reason:"label_limit",diagnostics:{labels,dominated,expanded,maxLabels,...budget.snapshot()}});
   function add(label) {
@@ -47,7 +67,8 @@ function searchResourcePath({graph,start,end,edgeCost,budget,fuel=null,
     // Weight > 1 is explicit candidate-generation guidance: feasible results
     // retain hard constraints but no minimum-cost optimality is claimed.
     label.priority=label.cost+estimate*heuristicWeight;
-    const key=graph.stateKey(label.node,label.turnState)+(preferOnwardFuel?`|retreat:${label.retreatCursor?.labelId??0}`:"")+(dirtEntryCost?`|dirt:${label.onDirt?1:0}`:"");
+    if(!budget.check())return;
+    const key=graph.stateKey(label.node,label.turnState)+(preferOnwardFuel?`|retreat:${label.retreatCursor?.labelId??0}`:"")+(retainFuelApproach?`|approach:${label.fuelApproach?.arc?`${label.fuelApproach.arc.from}:${label.fuelApproach.arc.id}:${label.fuelApproach.node}`:"none"}`:"")+(dirtEntryCost?`|dirt:${label.onDirt?1:0}`:"");
     const frontier=frontiers.get(key) || [];
     if(frontier.some(old=>old.active&&compare(old,label)<=0&&old.remaining>=label.remaining)) {dominated++;return;}
     if(labels>=maxLabels){labelLimitReached=true;return;}
@@ -81,7 +102,7 @@ function searchResourcePath({graph,start,end,edgeCost,budget,fuel=null,
     // Refuelling does not erase turn history.
     const station=fuel?graph.stationAt(cur.node):null;
     if(station && cur.remaining<fuel.usableRangeMeters) {
-      add({...cur,refills:cur.refills+1,remaining:fuel.usableRangeMeters,parent:cur,arc:null,refill:station,retreatCursor:preferOnwardFuel?cur:null});
+      add({...cur,refills:cur.refills+1,remaining:fuel.usableRangeMeters,parent:cur,arc:null,refill:station,retreatCursor:preferOnwardFuel?cur:null,fuelApproach:preferOnwardFuel&&retainFuelApproach?cur:null});
     }
     if(labelLimitReached)return labelLimitResult();
     for(const arc of graph.outgoing(cur.node)) {
@@ -99,15 +120,21 @@ function searchResourcePath({graph,start,end,edgeCost,budget,fuel=null,
       let retreatCursor=null,retraceMeters=cur.retraceMeters||0;
       // A continued retreat must retain its approach cursor; otherwise a tiny
       // reversal beyond a station could reset the price of the long return.
-      const incoming=cur.retreatCursor||cur;
-      if(preferOnwardFuel&&incoming?.arc&&incoming.arc.id===arc.id&&incoming.arc.from===arc.to&&incoming.arc.to===arc.from) {
+      let incoming=cur.retreatCursor||cur;
+      const reverses=arrival=>arrival?.arc&&arrival.arc.id===arc.id&&arrival.arc.from===arc.to&&arrival.arc.to===arc.from;
+      if(preferOnwardFuel&&!reverses(incoming)&&cur.fuelApproach)incoming=approachIndex(cur.fuelApproach)?.get(`${arc.from}:${arc.id}:${arc.to}`);
+      if(!budget.check())return {state:"incomplete",reason:budget.snapshot().reason,diagnostics:{labels,dominated,expanded,...budget.snapshot()}};
+      if(preferOnwardFuel&&reverses(incoming)) {
         retraceMeters+=2*arc.distanceMeters;
         retreatCursor=incoming.parent;
         while(retreatCursor&&!retreatCursor.arc)retreatCursor=retreatCursor.parent;
       }
+      // A station exit may also join the old approach in its original
+      // direction. Repeating that road is still repetition, not new riding.
+      else if(preferOnwardFuel&&cur.fuelApproach&&approachIndex(cur.fuelApproach)?.has(`${arc.to}:${arc.id}:${arc.from}`))retraceMeters+=2*arc.distanceMeters;
       if(!Number.isFinite(cost)||cost<0)throw new TypeError("Search costs must be finite and nonnegative");
       add({node:arc.to,turnState:transition.state,cost:cur.cost+cost,avoidance:cur.avoidance+avoidance,refills:cur.refills,
-        remaining:fuel?Math.max(0,cur.remaining-arc.distanceMeters):Infinity,distance:cur.distance+arc.distanceMeters,parent:cur,arc,refill:null,retreatCursor,retraceMeters,onDirt});
+        remaining:fuel?Math.max(0,cur.remaining-arc.distanceMeters):Infinity,distance:cur.distance+arc.distanceMeters,parent:cur,arc,refill:null,retreatCursor,retraceMeters,onDirt,fuelApproach:cur.fuelApproach});
       if(labelLimitReached)return labelLimitResult();
     }
   }
