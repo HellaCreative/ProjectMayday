@@ -16,4 +16,10 @@ function wanderCandidates(rows,wander=1) {
  const limit=low+(high-low)*wander;
  return eligible.filter(r=>r.result.road.distanceMeters<=limit+1e-6);
 }
-module.exports={validatePreferences,wanderCandidates};
+const highwayCosts=new WeakMap();
+function preferenceEdgeCost(base,preferences) {
+ if(!preferences?.avoidHighways)return base;
+ if(!highwayCosts.has(base))highwayCosts.set(base,arc=>base(arc)*(/^(motorway|trunk|primary)(?:_link)?$|^freeway$/.test(arc.roadClassLeaf||"")?10:1));
+ return highwayCosts.get(base);
+}
+module.exports={validatePreferences,wanderCandidates,preferenceEdgeCost};
